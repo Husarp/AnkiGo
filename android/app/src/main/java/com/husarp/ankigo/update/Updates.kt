@@ -43,7 +43,7 @@ object Updates {
 
     sealed interface Phase {
         data object Idle : Phase
-        data class Downloading(val percent: Int) : Phase
+        data class Downloading(val percent: Int, val done: Long = 0, val total: Long = -1, val elapsedMs: Long = 1) : Phase
         data object NeedsPermission : Phase      // Android's "install unknown apps" screen is open
         data object Ready : Phase                // downloaded while the app was in the background; installs on return
         data object Installing : Phase           // handed to Android's installer
@@ -231,7 +231,8 @@ object Updates {
         try {
             if (c.responseCode != 200) throw HttpStatus(c.responseCode)
             val total = c.contentLengthLong.takeIf { it > 0 } ?: latest.apkSize
-            var done = 0L; var shown = -1
+            val started = android.os.SystemClock.elapsedRealtime()
+            var done = 0L; var shown = -1; var lastShown = 0L
             c.inputStream.use { inp ->
                 part.outputStream().use { out ->
                     val buf = ByteArray(64 * 1024)
@@ -239,7 +240,7 @@ object Updates {
                         val n = inp.read(buf); if (n < 0) break
                         out.write(buf, 0, n); done += n
                         val pct = if (total > 0) (done * 100 / total).toInt().coerceIn(0, 100) else 0
-                        if (pct != shown) { shown = pct; change { it.copy(phase = Phase.Downloading(pct)) } }
+                        if (pct != shown || android.os.SystemClock.elapsedRealtime() - lastShown >= 250) { shown = pct; lastShown = android.os.SystemClock.elapsedRealtime(); change { it.copy(phase = Phase.Downloading(pct, done, total, android.os.SystemClock.elapsedRealtime() - started)) } }
                     }
                 }
             }

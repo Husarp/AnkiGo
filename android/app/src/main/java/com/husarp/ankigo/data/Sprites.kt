@@ -107,6 +107,9 @@ internal class ByteLru<V : Any>(private val maxBytes: Long, private val sizeOf: 
  * item icons from PokeAPI sprites/items/{id}.png. PokeAPI URLs are pinned to DataStore.SPRITES_COMMIT.
  */
 object Sprites {
+    fun enabled(ctx: Context) = !ctx.getSharedPreferences("firstrun", 0).getBoolean("skipSprites", false)
+    fun setEnabled(ctx: Context, enabled: Boolean) = ctx.getSharedPreferences("firstrun", 0).edit().putBoolean("skipSprites", !enabled).apply()
+
     private const val RETRY_MISSING_MS = 7L * 24 * 3600 * 1000
     private const val IMAGE_CACHE_BYTES = 24L * 1024 * 1024
     private const val BITMAP_CACHE_BYTES = 16L * 1024 * 1024
@@ -136,6 +139,7 @@ object Sprites {
     fun fetch(ctx: Context, sp: Species, kind: SpriteKind, shiny: Boolean, cb: (File?) -> Unit) {
         val done = cached(ctx, sp, kind, shiny)
         if (done != null) { main.post { cb(done) }; return }
+        if (!enabled(ctx)) { main.post { cb(null) }; return }
         val key = File(folder(ctx, kind), baseName(sp.num, shiny)).path
         enqueue(key, { fetchBlocking(ctx, sp, kind, shiny) }) { cb(it as File?) }
     }
@@ -143,6 +147,7 @@ object Sprites {
     /** Blocking variant (background threads only). */
     fun fetchBlocking(ctx: Context, sp: Species, kind: SpriteKind, shiny: Boolean): File? {
         cached(ctx, sp, kind, shiny)?.let { return it }
+        if (!enabled(ctx)) return null
         val base = File(folder(ctx, kind), baseName(sp.num, shiny))
         return download(base, SpriteUrls.battle(sp, kind, shiny))
     }
@@ -192,6 +197,7 @@ object Sprites {
     fun fetchStatic(ctx: Context, num: Int, shiny: Boolean, cb: (Bitmap?) -> Unit) {
         val file = staticFile(ctx, num, shiny)
         diskBitmap(file)?.let { main.post { cb(it) }; return }
+        if (!enabled(ctx)) { main.post { cb(null) }; return }
         enqueue(file.path, {
             download(File(file.parentFile, baseName(num, shiny)), listOf(SpriteUrls.static(num, shiny)))
             diskBitmap(file)
@@ -199,9 +205,11 @@ object Sprites {
     }
 
     /** Blocking, parallel (6 threads): downloads every missing static PNG of [nums]. progress(done, total). Returns failures. */
-    fun downloadStatics(ctx: Context, nums: List<Int>, progress: (Int, Int) -> Unit): Int {
+    fun downloadStatics(ctx: Context, nums: List<Int>, bytesProgress: ((Long, Long) -> Unit)? = null, progress: (Int, Int) -> Unit): Int {
         val total = nums.size
         val todo = nums.filter { !staticFile(ctx, it).isFile }
+        val transferred = java.util.concurrent.atomic.AtomicLong(0)
+        val estimate = todo.size * 1500L
         val done = AtomicInteger(total - todo.size)
         val failures = AtomicInteger(0)
         if (todo.isEmpty()) { progress(total, total); return 0 }
@@ -213,11 +221,17 @@ object Sprites {
             Thread {
                 try {
                     while (true) {
+                        if (!enabled(ctx)) break
                         val num = queue.poll() ?: break
                         val file = staticFile(ctx, num)
                         val base = File(file.parentFile, baseName(num, false))
                         // one retry for network trouble; a "not found" is final
-                        val ok = download(base, listOf(SpriteUrls.static(num, false)), retries = 1) != null
+                        var seen = 0L
+                        val ok = download(base, listOf(SpriteUrls.static(num, false)), retries = 1, progress = { n, _ ->
+                            val delta = (n - seen).coerceAtLeast(0); seen = n
+                            val bytes = transferred.addAndGet(delta)
+                            bytesProgress?.invoke(bytes, maxOf(estimate, bytes))
+                        }) != null
                         if (!ok) failures.incrementAndGet()
                         progress(done.incrementAndGet(), total)
                     }
@@ -237,6 +251,7 @@ object Sprites {
     fun fetchItem(ctx: Context, item: String, cb: (Bitmap?) -> Unit) {
         val file = itemFile(ctx, item)
         diskBitmap(file)?.let { main.post { cb(it) }; return }
+        if (!enabled(ctx)) { main.post { cb(null) }; return }
         enqueue(file.path, {
             download(File(file.parentFile, item), listOf(SpriteUrls.item(item)))
             diskBitmap(file)
@@ -290,7 +305,7 @@ object Sprites {
      * Tries [urls] in order and saves the first valid hit as `<base>.gif|png`. If every URL answered "not found" a
      * `.missing` marker is written (no retry for 7 days); network errors leave no marker so a later call tries again.
      */
-    private fun download(base: File, urls: List<String>, retries: Int = 0): File? {
+    private fun download(base: File, urls: List<String>, retries: Int = 0, progress: ((Long, Long) -> Unit)? = null): File? {
         val marker = missingMarker(base)
         if (marker.isFile && System.currentTimeMillis() - marker.lastModified() < RETRY_MISSING_MS) return null
         base.parentFile?.mkdirs()
@@ -299,7 +314,7 @@ object Sprites {
             var bytes: ByteArray? = null
             var attempt = 0
             while (true) {
-                try { bytes = Http.get(url); break } catch (_: IOException) {
+                try { bytes = Http.get(url, progress = progress); break } catch (_: IOException) {
                     if (attempt++ >= retries) { networkError = true; break }
                 }
             }

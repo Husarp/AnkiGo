@@ -54,6 +54,7 @@ internal object SettingsJobs {
     fun startAnimations(ctx: Context, species: List<Species>) {
         if (anim.running) return
         val app = ctx.applicationContext
+        Sprites.setEnabled(app, true)
         anim.begin("Starting…")
         Thread {
             try {
@@ -91,8 +92,9 @@ internal object SettingsJobs {
         Thread {
             try {
                 DataStore.clear(app)
+                val begun = android.os.SystemClock.elapsedRealtime()
                 val r = DataStore.download(app) { d, t, name ->
-                    data.progress(if (t > 0) d.toFloat() / t else 0f, if (name == "Building") "Building the Pokémon list…" else "Downloading game data…")
+                    data.progress(if (t > 0) d.toFloat() / t else 0f, if (name == "Building") "Building the Pokémon list…" else "Game data (total estimated) · ${DisplayNumbers.progress(d, t, android.os.SystemClock.elapsedRealtime() - begun)}")
                 }
                 if (r.isSuccess) data.done() else data.fail(r.exceptionOrNull()?.message ?: "The download failed.")
             } catch (e: Throwable) {
@@ -192,6 +194,43 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val wc = buildWindowsCard()
         windowsCard = wc
         content.addView(wc)
+        content.addView(Form.sect(this, "Study"))
+        content.addView(Form.cardOf(this, listOf(
+            Form.switchRow(this, "Tapping a deck opens AnkiDroid", "Off: study inside AnkiGo", getSharedPreferences("study", 0).getBoolean("inAnkiDroid", false)) {
+                getSharedPreferences("study", 0).edit().putBoolean("inAnkiDroid", it).apply()
+            },
+            Form.switchRow(this, "Remove battle animations", "Also follows Android's Remove animations setting", getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) {
+                getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", it).apply()
+            },
+            Form.switchRow(this, "Vibrate on answer", null, getSharedPreferences("study", 0).getBoolean("haptic", true)) {
+                getSharedPreferences("study", 0).edit().putBoolean("haptic", it).apply()
+            },
+            Form.switchRow(this, "Read battle log with TalkBack", "Turn off to keep the card reading uninterrupted", getSharedPreferences("study", 0).getBoolean("speakBattle", true)) {
+                getSharedPreferences("study", 0).edit().putBoolean("speakBattle", it).apply()
+            },
+            Form.stepperRow(this, "Card text size", null, getSharedPreferences("study", 0).getInt("zoom", 100), 80, 150, 10, { "$it%" }) {
+                getSharedPreferences("study", 0).edit().putInt("zoom", it).apply()
+            },
+            Form.row(this, "Cards with missing media", getSharedPreferences("study", 0).getString("missing", "Ask"), null) {
+                Pickers.showPlain(android.app.AlertDialog.Builder(this).setItems(arrayOf("Ask", "Always open in AnkiDroid", "Answer anyway")) { _, i ->
+                    getSharedPreferences("study", 0).edit().putString("missing", listOf("Ask", "Always open in AnkiDroid", "Answer anyway")[i]).apply(); render()
+                }.create())
+            },
+            Form.row(this, "Import a media copy (.apkg)", "Optional; use a legacy-format export with media", null) {
+                host.startForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)) { code, intent ->
+                    val uri = intent?.data
+                    if (code == android.app.Activity.RESULT_OK && uri != null) Thread { com.husarp.ankigo.Media.importApkg(applicationContext, uri) }.start()
+                }
+            },
+            Form.row(this, "Pick AnkiDroid media folder", "Choose collection.media in the public AnkiDroid folder", null) {
+                host.startForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)) { code, intent ->
+                    val uri = intent?.data
+                    if (code == android.app.Activity.RESULT_OK && uri != null) {
+                        runCatching { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); com.husarp.ankigo.Media.setTree(this, uri) }
+                    }
+                }
+            },
+        )))
         content.addView(Form.sect(this, "Data and pictures"))
         val dc = buildDataCard()
         dataCard = dc
@@ -403,6 +442,14 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(14))
         }
+        actions.addView(Form.secondary(this, "Download pictures (about 1 MB)") {
+            Sprites.setEnabled(this, true)
+            getSharedPreferences("firstrun", 0).edit().putBoolean("studyOnly", false).apply()
+            val activity = Ui.findActivity(this)
+            if (activity != null) activity.startActivity(Intent(activity, FirstRunActivity::class.java))
+            else Ui.toast(this, "Open Settings full screen to download pictures")
+        })
+        actions.addView(Form.switchRow(this, "Download pictures as needed", "Off: use placeholders", Sprites.enabled(this)) { Sprites.setEnabled(this, it) })
         // battle animations
         val animBtn = Form.secondary(this, "Download all battle animations (about 80 MB)") { startAnimations() }
         Form.enable(animBtn, !anim.running && !dat.running)

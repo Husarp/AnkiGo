@@ -31,6 +31,22 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         data class Status(val ok: Boolean, val text: String) : Event()
     }
 
+    private val own = OwnAnswers()
+    fun expectOwn(id: Long, rep: Int) = own.expect(id, rep, SystemClock.elapsedRealtime())
+    fun cancelOwn(id: Long, rep: Int) = own.cancel(id, rep)
+    fun absorbOwn(row: CardState, done: () -> Unit) {
+        val w = worker
+        if (w == null) { main.post(done); return }
+        w.post {
+            own.consume(row.id, row.reps - 1, row.reps, SystemClock.elapsedRealtime())
+            val old = cards[row.id]
+            if (old == null || old.reps <= row.reps) cards[row.id] = row
+            prevRated = prevRated + row.id
+            refreshSnapshot()
+            main.post(done)
+        }
+    }
+
     // ---- state below is only touched on the worker thread (except the @Volatile ones) ----
     private val main = Handler(Looper.getMainLooper())
     private var thread: HandlerThread? = null
@@ -116,7 +132,14 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
             base.forEach { cards[it.id] = it }
             prevRated = Anki.searchCards(ctx, "rated:1", arrayOf("_id")).mapNotNull { it["_id"]?.toLongOrNull() }.toSet()
             prevHot = base.filter { it.id in prevRated && it.queue in LEARN_QUEUES }.map { it.id }.toSet()
-            val missed = catchUp(restored, base, prevRated, ::stepsFor, System.currentTimeMillis() / 1000)
+            val missed = catchUp(restored, base, prevRated, ::stepsFor, System.currentTimeMillis() / 1000).toMutableList()
+            for (n in base) {
+                val from = restored?.get(n.id)?.reps ?: (n.reps - 1)
+                repeat(own.consume(n.id, from, n.reps, SystemClock.elapsedRealtime())) {
+                    val i = missed.indexOfFirst { it.cardId == n.id }
+                    if (i >= 0) missed.removeAt(i)
+                }
+            }
             refreshSnapshot()
             Report.log("LIVE", "watching: baseline ${base.size} cards in ${SystemClock.elapsedRealtime() - t0} ms; rated today=${prevRated.size}; catch-up answers=${missed.size}; AnkiDroid=${Anki.pkg}")
             if (missed.isNotEmpty()) main.post { missed.forEach(onEvent) }
@@ -173,7 +196,7 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         val have = read.map { it.id }.toSet()
         val extra = ((rated - prevRated) + (prevRated - rated) + (if (full) emptySet() else prevHot)) - have
         for (id in extra) {
-            Anki.rows(ctx.contentResolver.query(Anki.uri("cards/$id"), CardState.COLS, null, null, null)).firstOrNull()?.let { CardState.from(it) }?.let { read += it }
+            Anki.cardById(ctx, id)?.let { CardState.from(it) }?.let { read += it }
         }
         if (rated != prevRated) dirty = true
         prevRated = rated
@@ -195,12 +218,16 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         val d = n.reps - p.reps
         if (d == 0) return
         if (d < 0) { out += Event.Undo(n.id, -d); return }
+        val suppressed = own.consume(n.id, p.reps, n.reps, SystemClock.elapsedRealtime())
+        val remaining = d - suppressed
+        if (remaining <= 0) return
         val g0 = if (old == null && n.reps > 1) Guess(0, GUESS, "no earlier state for this card")
+        else if (suppressed > 0) Guess(0, GUESS, "own and external answers in the same poll")
         else inferButton(p, n, stepsFor(n), System.currentTimeMillis() / 1000)
         // Several answers between polls: only the first can be inferred, and only as a guess.
         val guess = if (d > 1) g0.copy(conf = GUESS) else g0
         out += Event.Answer(n.id, guess.button, guess.conf, false)
-        repeat(d - 1) { out += Event.Answer(n.id, 0, GUESS, false) }
+        repeat(remaining - 1) { out += Event.Answer(n.id, 0, GUESS, false) }
     }
 
     /** Today's rated cards only; encoded off the hot path (only when something changed). */
@@ -213,8 +240,7 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         val did = if (c.odid != 0L) c.odid else c.did
         if (stepsCache.containsKey(did)) return stepsCache[did]
         val s = try {
-            val row = Anki.rows(ctx.contentResolver.query(Anki.uri("decks/$did"), arrayOf("deck_id", "options"), null, null, null)).firstOrNull()
-            val o = JSONObject(row?.get("options") ?: "{}")
+            val o = JSONObject(Anki.deckOptions(ctx, did))
             fun delays(k: String) = o.optJSONObject(k)?.optJSONArray("delays")?.let { a -> (0 until a.length()).map { a.getDouble(it) } }
             val learn = delays("new")
             val ints = o.optJSONObject("new")?.optJSONArray("ints")

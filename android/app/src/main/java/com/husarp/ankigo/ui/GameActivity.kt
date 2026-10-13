@@ -121,9 +121,16 @@ class GameActivity : Activity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent) }
+
     override fun onResume() {
         super.onResume()
         Updates.onResume(this)
+        val reviewDeck = intent.getLongExtra("reviewDeck", 0)
+        if (reviewDeck != 0L) {
+            intent.removeExtra("reviewDeck")
+            window.decorView.post { runCatching { startActivity(Anki.reviewIntent(reviewDeck)) }.onFailure { Ui.toast(this, "Open AnkiDroid once first") } }
+        }
         internalNav = false
         updatePipParams()
         FloatBattleService.startIfWanted(this)
@@ -283,6 +290,9 @@ class GameActivity : Activity() {
         when (status) {
             GameRepo.Status.LOADING -> showMessage("Loading…")
             GameRepo.Status.NEED_DATA, GameRepo.Status.NEED_STARTER -> {
+                if (getSharedPreferences("firstrun", 0).getBoolean("studyOnly", false)) {
+                    startActivity(Intent(this, StudyDecksActivity::class.java)); finish(); return
+                }
                 if (firstRunCanceled) {
                     showCard("Setup isn't finished",
                         "AnkiGo needs the game data and your first Pokémon before it can start.",

@@ -214,6 +214,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         logLp.height = if (on) dpi(26) else dpi(52)
         if (on) logLp.setMargins(dpi(6), dpi(3), dpi(6), dpi(3)) else logLp.setMargins(dpi(10), dpi(8), dpi(10), 0)
         logBox.setPadding(if (on) dpi(10) else dpi(14), if (on) dpi(2) else dpi(8), dpi(8), if (on) dpi(2) else dpi(8))
+        logText.accessibilityLiveRegion = if (context.getSharedPreferences("study", 0).getBoolean("speakBattle", true)) View.ACCESSIBILITY_LIVE_REGION_POLITE else View.ACCESSIBILITY_LIVE_REGION_NONE
         logText.maxLines = if (on) 1 else 2
         logText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (on) 11f else logSize)
         logPill?.visibility = if (on) GONE else VISIBLE
@@ -367,7 +368,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         arena.setPlayerInfo(m.uid, m.shownName, m.level)
         arena.setPlayerHp(m.hp, if (sp != null) StatCalc.maxHp(data, m) else max(m.hp, 1), false)
         val need = Progression.xpToNext(data, m)
-        arena.setPlayerXp(if (need > 0) m.xp.toFloat() / need else 1f, false)
+        arena.setPlayerXp(m.xp, need, false)
         if (sp != null) {
             val key = "${m.species}:${m.shiny}"
             if (key != playerKey) { playerKey = key; PanelSprites.show(context, arena.playerSprite, sp, SpriteKind.BACK, m.shiny, true) }

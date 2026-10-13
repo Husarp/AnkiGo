@@ -71,6 +71,7 @@ object Media {
 
     fun find(ctx: Context, rawName: String): Found? {
         val name = Uri.decode(rawName)
+        if (name.isBlank() || name.contains('/') || name.contains('\\') || name == "." || name == "..") return null
         for (d in candidateDirs(ctx)) {
             val f = File(d, name)
             try {
@@ -145,6 +146,7 @@ object Media {
                         val e = z.nextEntry ?: break
                         val target = m.optString(e.name, "")
                         if (target.isNotEmpty()) {
+                            if (target.contains('/') || target.contains('\\') || target == "." || target == "..") continue
                             File(ownDir(ctx), target).outputStream().use { z.copyTo(it) }
                             n++
                         }

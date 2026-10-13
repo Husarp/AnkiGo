@@ -1,11 +1,16 @@
 # AnkiGo
 
-A personal Pokémon companion for [AnkiDroid](https://github.com/ankidroid/Anki-Android). Run it in split
-screen next to AnkiDroid: while you study there, AnkiGo follows your answers and turns them into a game.
+A personal Pokémon companion for [AnkiDroid](https://github.com/ankidroid/Anki-Android). Study inside AnkiGo, or run it next to AnkiDroid in split screen, picture-in-picture or a floating window. Answers turn into a game.
 
 ## Current state
 
-0.3.0: the game, plus three additions:
+0.4.0 adds in-app study: a Study tab with deck counts, card HTML/CSS, cloze and type-in, offline MathJax, readable media, answer intervals, verified writes and card actions. Each verified answer feeds the same game once. AnkiDroid 2.24+ and its database permission are required; flags need 2.25+.
+
+For pictures and sound, pick the public `collection.media` folder used by the F-Droid/GitHub AnkiDroid build, or import a legacy `.apkg` media copy. Cards with unavailable media offer AnkiDroid or “Answer anyway”. Play Store AnkiDroid can keep media private on Android 11+.
+
+HP and XP show numbers. Sprite downloads are optional, with type-coloured placeholders and downloads available later in Settings. Without game data, studying and diagnostics still work. Updates show asset size and byte/speed progress; game and picture downloads show estimated totals.
+
+Existing features remain:
 
 - **Import from Ankimon (PC).** In Anki, use Ankimon's menu *Game → Export Save File…*, copy the `.db` file to
   the phone, then *Settings → Import Ankimon save…* in AnkiGo. You see what will change before anything does
@@ -27,7 +32,7 @@ Anki add-on, with a simpler battle engine.
 
 No Pokémon pictures or data are part of this repository or the APK. On first start AnkiGo downloads the game
 data (about 4 MB, from [PokeAPI](https://pokeapi.co) and [Pokémon Showdown](https://pokemonshowdown.com)) and
-small pictures (about 1 MB); battle animations download as you meet new Pokémon. Pokémon and Pokémon names
+optional small pictures (about 1 MB); battle animations download as you meet new Pokémon when picture downloads are enabled. Pokémon and Pokémon names
 are © Nintendo / Creatures / GAME FREAK.
 
 The step-0 test screens (live watch, checks, report) are under Settings → Diagnostics.
@@ -38,8 +43,8 @@ The step-0 test screens (live watch, checks, report) are under Settings → Diag
 2. Download the newest `AnkiGo-X.Y.Z.apk` from [Releases](https://github.com/Husarp/AnkiGo/releases) and
    open it on the phone (allow "Install unknown apps" for your browser or Files app when Android asks).
 3. Open AnkiGo and allow access to AnkiDroid when it asks. AnkiGo needs AnkiDroid's API permission
-   ("read and write to the AnkiDroid database") to see your answers. The game only reads; it never changes your cards.
-4. Put AnkiDroid and AnkiGo in split screen (AnkiDroid on top) and study as usual.
+   ("read and write to the AnkiDroid database") to show and answer cards through AnkiDroid’s scheduler. Companion mode only reads answers.
+4. Open Study and tap a deck to study here, or use the A button to study in AnkiDroid with AnkiGo as the companion.
 
 After that, AnkiGo updates itself: it shows a banner when a new version is out, downloads it and hands it
 to Android's installer (Android asks you to confirm each update).

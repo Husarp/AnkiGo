@@ -162,15 +162,9 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         val text = placeholderText ?: return
         val d = placeholderDiameter(vw, vh)
         if (d <= 0f) return
-        circlePaint.color = placeholderColor
-        circlePaint.colorFilter = if (silhouette) PorterDuffColorFilter(silhouetteColor, PorterDuff.Mode.SRC_IN) else null
-        val cx = vw / 2f
-        val cy = vh - d / 2f
-        canvas.drawOval(RectF(cx - d / 2, cy - d / 2, cx + d / 2, cy + d / 2), circlePaint)
-        if (silhouette) return
-        textPaint.textSize = d * 0.42f
-        val baseline = cy - (textPaint.ascent() + textPaint.descent()) / 2f
-        canvas.drawText(text.take(2), cx, baseline, textPaint)
+        val drawable = com.husarp.ankigo.ui.SpritePlaceholder(placeholderColor)
+        drawable.setBounds(((vw-d)/2).toInt(), (vh-d).toInt(), ((vw+d)/2).toInt(), vh)
+        drawable.draw(canvas)
     }
 
     // ---- animation: runs only while attached and shown ----
@@ -184,7 +178,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
 
     private fun updateAnimation() {
         val img = image
-        val run = img != null && img.animated && isAttachedToWindow && windowVisibility == VISIBLE && isShown
+        val run = android.animation.ValueAnimator.areAnimatorsEnabled() && !context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false) && img != null && img.animated && isAttachedToWindow && windowVisibility == VISIBLE && isShown
         if (run) schedule() else { removeCallbacks(tick); ticking = false }
     }
 

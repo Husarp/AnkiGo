@@ -272,10 +272,10 @@ object WidgetRender {
         fun sprite(num: Int, shiny: Boolean, name: String, x: Float, y: Float, size: Float) {
             val b = Sprites.staticBitmap(spriteCtx, num, shiny)
             if (b == null) {
-                fill.shader = null; fill.color = col(R.color.ag_s1)
-                canvas.drawCircle(x + size / 2, y + size / 2, size * 0.36f, fill)
-                val letters = name.take(2).ifEmpty { "?" }.replaceFirstChar { it.uppercase() }
-                line(letters, x + size / 2, y + size / 2 - size * 0.2f, size * 0.4f, paint(size * 0.28f, 900, R.color.ag_text), Paint.Align.CENTER)
+                val type = com.husarp.ankigo.GameRepo.data?.species?.get(num)?.types?.firstOrNull() ?: com.husarp.ankigo.game.Type.NORMAL
+                val placeholder = SpritePlaceholder(Ui.typeColor(type))
+                placeholder.setBounds((x*k).toInt(), (y*k).toInt(), ((x+size)*k).toInt(), ((y+size)*k).toInt())
+                canvas.save(); canvas.scale(1f/k, 1f/k); placeholder.draw(canvas); canvas.restore()
                 return
             }
             canvas.drawBitmap(b, Rect(0, 0, b.width, b.height), RectF(x, y, x + size, y + size), pixel)
@@ -283,7 +283,8 @@ object WidgetRender {
 
         /** Same sprite as a flat silhouette: ag_text at the mockup's strength (R.integer.ag_sil of 255). */
         fun silhouette(num: Int, shiny: Boolean, x: Float, y: Float, size: Float) {
-            val b = Sprites.staticBitmap(spriteCtx, num, shiny) ?: return
+            val b = Sprites.staticBitmap(spriteCtx, num, shiny)
+            if (b == null) { sprite(num, shiny, "?", x, y, size); return }
             val p = Paint().apply {
                 isFilterBitmap = false; isAntiAlias = false
                 colorFilter = PorterDuffColorFilter(col(R.color.ag_text), PorterDuff.Mode.SRC_IN)

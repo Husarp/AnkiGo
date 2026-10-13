@@ -19,6 +19,7 @@ import com.husarp.ankigo.R
  */
 object BottomNav {
     enum class Tab(val label: String, @DrawableRes val icon: Int, val screen: Class<out Activity>) {
+        STUDY("Study", R.drawable.ic_study, StudyDecksActivity::class.java),
         BATTLE("Battle", R.drawable.ic_battle, GameActivity::class.java),
         TEAM("Team", R.drawable.ic_team, TeamActivity::class.java),
         DEX("Pokédex", R.drawable.ic_dex, DexActivity::class.java),

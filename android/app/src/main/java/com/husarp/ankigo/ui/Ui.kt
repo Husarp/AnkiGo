@@ -194,7 +194,8 @@ object Ui {
             view.setImageDrawable(pixelBitmap(ctx, have))
             return
         }
-        view.setImageDrawable(null)
+        val type = com.husarp.ankigo.GameRepo.data?.species?.get(num)?.types?.firstOrNull() ?: Type.NORMAL
+        view.setImageDrawable(SpritePlaceholder(typeColor(type)))
         Sprites.fetchStatic(ctx, num, shiny) { bmp ->
             if (bmp != null && view.getTag(R.id.ag_tag_sprite) == key) view.setImageDrawable(pixelBitmap(ctx, bmp))
         }

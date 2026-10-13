@@ -39,7 +39,7 @@ object LiveSession {
     private lateinit var app: Context
 
     /** Created by the first start. Once it exists its snapshot means something (it is what the game saves). */
-    private var detector: LiveDetector? = null
+    @Volatile private var detector: LiveDetector? = null
     private val holders: MutableSet<Any> = Collections.newSetFromMap(IdentityHashMap())
     private val sinks = ArrayList<Sink>()
     private val pauseListeners = ArrayList<(Boolean) -> Unit>()
@@ -98,6 +98,28 @@ object LiveSession {
         val d = detector ?: LiveDetector(app) { onLive(it) }.also { detector = it }
         if (d.running) return
         d.start(st.liveSnapshot, st.liveDay, g.dayKey())
+    }
+
+    fun expectOwn(row: com.husarp.ankigo.CardState) { detector?.expectOwn(row.id, row.reps + 1) }
+    fun cancelOwn(row: com.husarp.ankigo.CardState) { detector?.cancelOwn(row.id, row.reps + 1) }
+
+    /** Verified own answers use the exact button and absorb their state before saving the game. */
+    fun ownAnswer(ctx: Context, row: com.husarp.ankigo.CardState, button: Int, done: (List<GameEvent>) -> Unit) {
+        app = ctx.applicationContext
+        val finish = {
+            flushCatchUp()
+            val events = act { g ->
+                saveSnapshotInto(g)
+                if (detector == null) {
+                    val map = runCatching { decode(g.state.liveSnapshot ?: "[]") }.getOrDefault(emptyMap())
+                    g.state.liveSnapshot = encode(map + (row.id to row)); g.state.liveDay = g.dayKey()
+                }
+                g.tick() + g.onAnswer(GameAnswer(row.id, button, System.currentTimeMillis(), false))
+            }
+            deliver(events)
+            done(events)
+        }
+        detector?.absorbOwn(row, finish) ?: finish()
     }
 
     // ---------------------------------------------------------------- pause

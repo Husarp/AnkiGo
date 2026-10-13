@@ -71,7 +71,7 @@ class EventPlayer(private val panel: BattlePanelView) {
                 return
             }
             val answers = queue.count { it is Item.Ev && it.e is GameEvent.Counted } + if (item is Item.Ev && item.e is GameEvent.Counted) 1 else 0
-            if (answers >= SKIP_AT) { skipAll(item); continue }
+            if (answers >= SKIP_AT || !android.animation.ValueAnimator.areAnimatorsEnabled() || panel.context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) { skipAll(item); continue }
             factor = if (answers >= SLOW_AT) 0.5 else 1.0
             val ms = when (item) {
                 is Item.Act -> {
@@ -233,11 +233,11 @@ class EventPlayer(private val panel: BattlePanelView) {
                 val frac = if (e.xpForLevel > 0) e.xpInLevel.toFloat() / e.xpForLevel else 1f
                 if (e.level > arena.playerLevel || frac < arena.xpShown - 0.001f) {
                     // grew a level: fill the bar, then restart at the new level's progress
-                    arena.setPlayerXp(1f, true)
-                    after(450) { arena.setPlayerXp(0f, false); arena.setPlayerXp(frac, true) }
+                    arena.setPlayerXp(e.xpForLevel, e.xpForLevel, true)
+                    after(450) { arena.setPlayerXp(0, e.xpForLevel, false); arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
                     return d(950)
                 }
-                arena.setPlayerXp(frac, true)
+                arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true)
                 return d(600)
             }
             is GameEvent.LevelUp -> {

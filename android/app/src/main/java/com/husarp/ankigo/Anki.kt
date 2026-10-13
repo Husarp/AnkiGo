@@ -133,7 +133,7 @@ object Anki {
 
     /** Extended stats columns if supported, else null + logs which failed. */
     fun cardStats(ctx: Context, nid: Long, ord: Int): Map<String, String?>? = try {
-        card(ctx, nid, ord, CARD_STAT_COLS)
+        card(ctx, nid, ord, if (flagsSupported(ctx)) CARD_STAT_COLS else CARD_STAT_COLS.filter { it != "flags" }.toTypedArray())
     } catch (e: Exception) {
         Report.fail("API", "extended card columns not supported", e); null
     }
@@ -197,6 +197,34 @@ object Anki {
 
     fun searchCards(ctx: Context, query: String, cols: Array<String>): List<Map<String, String?>> =
         rows(ctx.contentResolver.query(uri("cards"), cols, query, null, null))
+
+    fun cardById(ctx: Context, id: Long): Map<String, String?>? =
+        rows(ctx.contentResolver.query(uri("cards/$id"), CardState.COLS, null, null, null)).firstOrNull()
+
+    fun deckOptions(ctx: Context, id: Long): String =
+        rows(ctx.contentResolver.query(uri("decks/$id"), arrayOf("deck_id", "options"), null, null, null)).firstOrNull()?.get("options") ?: "{}"
+
+    fun studySupported(ctx: Context): Boolean {
+        val version = installed(ctx).firstOrNull { it.pkg == pkg } ?: return false
+        return version.providerFound && (version.providerSpec == null || version.providerSpec == 2) &&
+            com.husarp.ankigo.update.UpdateLogic.compare(version.versionName, "2.24") >= 0
+    }
+    fun flagsSupported(ctx: Context) = installed(ctx).firstOrNull { it.pkg == pkg }?.let {
+        com.husarp.ankigo.update.UpdateLogic.compare(it.versionName, "2.25") >= 0
+    } ?: false
+    fun flag(ctx: Context, nid: Long, ord: Int, value: Int): Boolean {
+        val v = ContentValues().apply { put("flags", value) }
+        ctx.contentResolver.update(uri("notes/$nid/cards/$ord"), v, null, null)
+        return cardStats(ctx, nid, ord)?.get("flags")?.toIntOrNull() == value
+    }
+    fun reviewIntent(deckId: Long) = android.content.Intent("android.intent.action.VIEW").apply {
+        component = android.content.ComponentName(pkg, "com.ichi2.anki.IntentHandler")
+        putExtra("EXTRA_DECK_ID", deckId)
+    }
+    fun editIntent(nid: Long) = android.content.Intent(android.content.Intent.ACTION_VIEW,
+        Uri.parse("anki://x-callback-url/browser?search=nid:$nid")).setPackage(pkg)
+    fun syncIntent() = android.content.Intent("com.ichi2.anki.DO_SYNC").setComponent(android.content.ComponentName(pkg, "com.ichi2.anki.IntentHandler"))
+    fun launchIntent(ctx: Context) = ctx.packageManager.getLaunchIntentForPackage(pkg)
 
     /**
      * UNOFFICIAL probe: notes_v2 passes `selection` straight into SQL, so a UNION can read the revlog.

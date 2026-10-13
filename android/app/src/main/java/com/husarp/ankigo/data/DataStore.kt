@@ -71,7 +71,7 @@ object DataStore {
         var done = 0L
         for ((name, url) in SOURCES) {
             progress(done, total, name)
-            val bytes = fetch(name, url)
+            val bytes = fetch(name, url) { partial, _ -> progress(done + partial, maxOf(total, done + partial), name) }
                 ?: return Result.failure(IOException("Couldn't download $name \u2014 check the internet connection"))
             val tmp = File(raw, "$name.tmp")
             try {
@@ -168,11 +168,11 @@ object DataStore {
     fun size(ctx: Context): Long = dir(ctx).walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     /** One file with up to 3 tries; null when every try failed or the file looked cut off. */
-    private fun fetch(name: String, url: String): ByteArray? {
+    private fun fetch(name: String, url: String, progress: (Long, Long) -> Unit): ByteArray? {
         val min = MIN_SIZE[name] ?: MIN_CSV_SIZE
         repeat(TRIES) { attempt ->
             try {
-                val b = Http.get(url, 30_000)
+                val b = Http.get(url, 30_000, progress)
                 if (b == null) Report.log(TAG, "$name: not found (try ${attempt + 1})")
                 else if (b.size < min) Report.log(TAG, "$name: only ${b.size} bytes, expected more than $min (try ${attempt + 1})")
                 else return b
@@ -205,7 +205,7 @@ object DataStore {
 /** Small blocking HTTP GET helper shared by DataStore and Sprites (User-Agent, timeouts, follows redirects). */
 object Http {
     /** Returns the body bytes, or null on 404; throws IOException on other failures. */
-    fun get(url: String, timeoutMs: Int = 20_000): ByteArray? {
+    fun get(url: String, timeoutMs: Int = 20_000, progress: ((Long, Long) -> Unit)? = null): ByteArray? {
         var u = url
         repeat(5) {
             val c = java.net.URL(u).openConnection() as java.net.HttpURLConnection
@@ -218,7 +218,17 @@ object Http {
                     code == 404 || code == 410 -> return null
                     code in 300..399 -> { u = c.getHeaderField("Location") ?: throw java.io.IOException("HTTP $code without Location for $u") }
                     code !in 200..299 -> throw java.io.IOException("HTTP $code for $u")
-                    else -> return c.inputStream.use { it.readBytes() }
+                    else -> return c.inputStream.use { inp ->
+                        val out = java.io.ByteArrayOutputStream()
+                        val buffer = ByteArray(32 * 1024)
+                        var bytes = 0L
+                        while (true) {
+                            val n = inp.read(buffer); if (n < 0) break
+                            out.write(buffer, 0, n); bytes += n
+                            progress?.invoke(bytes, c.contentLengthLong)
+                        }
+                        out.toByteArray()
+                    }
                 }
             } finally {
                 c.disconnect()

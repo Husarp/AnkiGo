@@ -59,6 +59,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val eName = Ui.text(ctx, 14f, 900, R.color.ag_text).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
     private val eLevel = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val eTypes = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+    private val eHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0)
     private val eHp = BarView(ctx)
     private val enemyCard = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
@@ -138,18 +139,19 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         enemyCard.addView(eRow, LinearLayout.LayoutParams(-1, -2))
         enemyCard.addView(eTypes, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dpi(4) })
         enemyCard.addView(eHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
+        enemyCard.addView(eHpText)
         enemyBlock.addView(enemyCard, LinearLayout.LayoutParams(-1, -2))
         enemyBlock.addView(catchTag, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = -dpi(6) })
         catchTag.setOnClickListener { onCatchTagTap() }
 
-        // player card: name + Lv, HP bar, "58 / 71" + "XP 62%", XP bar
+        // player card: name + Lv, HP bar, "58 / 71" + "XP 640 / 1000", XP bar
         val pRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         pRow.addView(pName, LinearLayout.LayoutParams(0, -2, 1f))
         pRow.addView(pLevel, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(5) })
         playerCard.addView(pRow, LinearLayout.LayoutParams(-1, -2))
         playerCard.addView(pHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
         pNums.addView(pHpText, LinearLayout.LayoutParams(0, -2, 1f))
-        pNums.addView(pXpText, LinearLayout.LayoutParams(-2, -2))
+        playerCard.addView(pXpText, LinearLayout.LayoutParams(-1, -2))
         playerCard.addView(pNums, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(3) })
         pXp.setTrackColor(Ui.c(ctx, R.color.ag_s0))
         playerCard.addView(pXp, LinearLayout.LayoutParams(-1, dpi(3)).also { it.topMargin = dpi(4) })
@@ -210,6 +212,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        if (!ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) return
         if (bobs.isEmpty()) {
             bobs += bob(enemyHolder, 1600)
             bobs += bob(playerHolder, 1900)
@@ -221,7 +224,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
         bobs.forEach {
-            if (visibility == VISIBLE) { if (it.isPaused) it.resume() else if (!it.isStarted) it.start() }
+            if (visibility == VISIBLE && ValueAnimator.areAnimatorsEnabled() && !context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) { if (it.isPaused) it.resume() else if (!it.isStarted) it.start() }
             else if (it.isStarted && !it.isPaused) it.pause()
         }
     }
@@ -270,6 +273,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun setEnemyHp(hp: Int, max: Int, animate: Boolean) {
         val f = if (max > 0) hp.toFloat() / max else 0f
         eHp.set(f, Ui.hpColor(context, f), animate)
+        eHpText.text = DisplayNumbers.hp(hp, max)
     }
 
     /**
@@ -342,12 +346,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         }
     }
 
-    /** XP bar (3 dp, sky) and the "XP 62%" label. */
-    fun setPlayerXp(frac: Float, animate: Boolean) {
-        val f = frac.coerceIn(0f, 1f)
+    /** XP bar (3 dp, sky) and the "XP 640 / 1000" label. */
+    fun setPlayerXp(current: Int, needed: Int, animate: Boolean) {
+        val f = (if (needed > 0) current.toFloat() / needed else 1f).coerceIn(0f, 1f)
         pXpShown = f
         pXp.set(f, Ui.c(context, R.color.ag_sky), animate)
-        pXpText.text = "XP ${(f * 100f + 0.0001f).toInt()}%"
+        pXpText.text = DisplayNumbers.xp(current, needed)
     }
 
     val xpShown: Float get() = pXpShown

@@ -46,19 +46,22 @@ internal object FirstRunJob {
         Thread {
             try {
                 if (!DataStore.hasData(app)) {
+                    val begun = android.os.SystemClock.elapsedRealtime()
                     val r = DataStore.download(app) { done, total, name ->
                         val f = if (total > 0) done.toFloat() / total else 0f
-                        job.progress(f * 0.8f, if (name == "Building") "Building the Pokémon list…" else "Downloading game data…")
+                        job.progress(f * 0.8f, if (name == "Building") "Building the Pokémon list…" else "Game data · ${DisplayNumbers.progress(done, total, android.os.SystemClock.elapsedRealtime() - begun)}")
                     }
                     if (r.isFailure) { job.fail(r.exceptionOrNull()?.message ?: "Couldn't download the game data"); return@Thread }
                 }
                 val data = DataStore.load(app)
                 if (data == null) { job.fail("Couldn't read the game data. Try again."); return@Thread }
+                if (!Sprites.enabled(app)) { job.done(); return@Thread }
                 val nums = speciesNums(data, gens)
                 job.progress(0.8f, "Downloading pictures…")
-                val failed = Sprites.downloadStatics(app, nums) { d, t ->
-                    job.progress(0.8f + 0.2f * (if (t > 0) d.toFloat() / t else 1f), "Downloading pictures $d / $t")
-                }
+                val begun = android.os.SystemClock.elapsedRealtime()
+                val failed = Sprites.downloadStatics(app, nums, bytesProgress = { d, t ->
+                    job.progress(0.8f + 0.2f * (if (t > 0) d.toFloat() / t else 1f), "Pictures (total estimated) · ${DisplayNumbers.progress(d, t, android.os.SystemClock.elapsedRealtime() - begun)}")
+                }) { _, _ -> }
                 if (failed > nums.size / 10) job.fail("Many pictures didn't download. Check the internet connection and try again.")
                 else job.done()
             } catch (e: Throwable) {
@@ -161,7 +164,7 @@ class FirstRunActivity : Activity() {
 
     private fun staticsOk(): Boolean {
         val d = GameRepo.data ?: return false
-        return staticsMostlyPresent(this, speciesNums(d, gens()))
+        return !Sprites.enabled(this) || staticsMostlyPresent(this, speciesNums(d, gens()))
     }
 
     /** The first step that isn't done yet. */
@@ -214,8 +217,8 @@ class FirstRunActivity : Activity() {
 
     private fun stepAnki() {
         header("AnkiGo", 1)
-        content.addView(Form.body(this, "Study in AnkiDroid; every answer is a move in a Pokémon battle down here.", 15), Form.lp(this, 10))
-        content.addView(Form.body(this, "AnkiGo only reads which cards you answer. It never changes your cards or decks.", 13, R.color.ag_sub0), Form.lp(this, 8))
+        content.addView(Form.body(this, "Study here or in AnkiDroid; every answer charges a Pokémon battle.", 15), Form.lp(this, 10))
+        content.addView(Form.body(this, "When you study here, AnkiGo sends your answers to AnkiDroid’s scheduler. Companion mode reads your answers.", 13, R.color.ag_sub0), Form.lp(this, 8))
         if (Anki.installed(this).isEmpty()) {
             val card = Ui.card(this).apply { setPadding(dp(16), dp(14), dp(16), dp(14)) }
             card.addView(Ui.text(this, 16f, 800, R.color.ag_text).apply { text = "Install AnkiDroid first" })
@@ -261,6 +264,25 @@ class FirstRunActivity : Activity() {
     private fun stepDownload() {
         header("Getting the game ready", 2)
         content.addView(Form.body(this, "Pokémon data (about 4.3 MB) and pictures (about 1 MB). Battle animations download as you meet new Pokémon.", 14), Form.lp(this, 10))
+        actions.addView(Form.secondary(this, "Skip pictures for now") {
+            Sprites.setEnabled(this, false)
+            if (DataStore.hasData(this)) GameRepo.load(this) { goTo(openStep()) }
+            else {
+                content.addView(Form.body(this, "Game data is still needed for battles. You can study and use diagnostics without it."))
+            }
+        }, Form.lp(this, 8))
+        actions.addView(Form.secondary(this, "Study without the game") {
+            Sprites.setEnabled(this, false)
+            prefs.edit().putBoolean("studyOnly", true).apply()
+            startActivity(Intent(this, StudyDecksActivity::class.java)); finish()
+        }, Form.lp(this, 8))
+        val network = getSystemService(android.net.ConnectivityManager::class.java)
+        val connection = when {
+            network.activeNetwork == null -> "Offline. Skip pictures now; download them later in Settings."
+            network.isActiveNetworkMetered -> "Mobile or metered data. You can skip pictures and download them later on Wi-Fi."
+            else -> "Pictures are optional; download them later in Settings if you skip."
+        }
+        content.addView(Form.body(this, connection, 12), Form.lp(this, 8))
         when (job.state) {
             BgJob.State.IDLE -> { FirstRunJob.start(this, gens()) } // begin() pings, which renders again
             BgJob.State.RUNNING -> {

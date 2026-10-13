@@ -56,7 +56,7 @@ private class UpdateProgress(ctx: Context) : LinearLayout(ctx) {
         text.setTextColor(if (p is Updates.Phase.Failed) Color.rgb(176, 0, 32) else Color.DKGRAY)
         text.text = when (p) {
             Updates.Phase.Idle -> ""
-            is Updates.Phase.Downloading -> { bar.progress = p.percent; "Downloading… ${p.percent}%" }
+            is Updates.Phase.Downloading -> { bar.progress = p.percent; com.husarp.ankigo.ui.DisplayNumbers.progress(p.done, p.total, p.elapsedMs) }
             Updates.Phase.NeedsPermission -> "Allow \"Install unknown apps\" for AnkiGo, then come back - the update carries on by itself."
             Updates.Phase.Ready -> "Downloaded - Android's installer opens now."
             Updates.Phase.Installing -> "Confirm the update in Android's window."
@@ -84,7 +84,7 @@ class UpdateBanner(ctx: Context) : UpdatesView(ctx) {
         val show = latest != null && Updates.bannerVisible(s, Updates.current(context))
         visibility = if (show) View.VISIBLE else View.GONE
         if (!show) return
-        title.text = "Update available: AnkiGo ${latest!!.version}"
+        title.text = "Update ${latest!!.version} · ${com.husarp.ankigo.ui.DisplayNumbers.size(latest.apkSize)}"
         updateBtn.isEnabled = s.phase !is Updates.Phase.Downloading
         progress.render(s)
     }
@@ -122,8 +122,8 @@ class UpdateSection(ctx: Context) : UpdatesView(ctx) {
     }
     override fun render(s: Updates.State) {
         checkBtn.isEnabled = !s.checking
-        message.text = s.message ?: ""
-        message.visibility = if (s.message == null) View.GONE else View.VISIBLE
+        message.text = if (Updates.available(s, cur)) "Update ${s.latest!!.version} · ${com.husarp.ankigo.ui.DisplayNumbers.size(s.latest.apkSize)}" else s.message ?: ""
+        message.visibility = if (s.message == null && !Updates.available(s, cur)) View.GONE else View.VISIBLE
         getBtn.visibility = if (Updates.available(s, cur)) View.VISIBLE else View.GONE
         getBtn.isEnabled = s.phase !is Updates.Phase.Downloading
         progress.render(s)
