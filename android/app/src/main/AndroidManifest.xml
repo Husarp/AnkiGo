@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- AnkiDroid API permission: one per AnkiDroid package id we may talk to
+         (stable, GitHub "Parallel" A/B builds, debug builds). -->
+    <uses-permission android:name="com.ichi2.anki.permission.READ_WRITE_DATABASE" />
+    <uses-permission android:name="com.ichi2.anki.A.permission.READ_WRITE_DATABASE" />
+    <uses-permission android:name="com.ichi2.anki.B.permission.READ_WRITE_DATABASE" />
+    <uses-permission android:name="com.ichi2.anki.debug.permission.READ_WRITE_DATABASE" />
+
+    <!-- Media probes: legacy storage read (<= Android 12) and "All files access" (11+). -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <!-- MathJax from CDN -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- In-app updater: hand the downloaded APK to Android's installer (asks "install unknown apps" once). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <queries>
+        <package android:name="com.ichi2.anki" />
+        <package android:name="com.ichi2.anki.A" />
+        <package android:name="com.ichi2.anki.B" />
+        <package android:name="com.ichi2.anki.debug" />
+        <provider android:authorities="com.ichi2.anki.flashcards" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="anki" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
+
+    <application
+        android:label="AnkiGo"
+        android:icon="@drawable/ic_launcher"
+        android:requestLegacyExternalStorage="true"
+        android:resizeableActivity="true"
+        android:theme="@android:style/Theme.Material.Light.DarkActionBar"
+        tools:targetApi="35">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Live watch: meant for the bottom half of a split screen next to AnkiDroid.
+             Don't restart on resize so the watch keeps its state. -->
+        <activity
+            android:name=".LiveWatchActivity"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:exported="false" />
+
+        <activity
+            android:name=".StudyActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false" />
+
+        <!-- Settings → Updates: check for updates, GET UPDATE, GITHUB. -->
+        <activity
+            android:name=".update.UpdatesActivity"
+            android:label="Updates"
+            android:exported="false" />
+
+        <receiver
+            android:name=".MotivationWidget"
+            android:label="AnkiGo motivation"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_motivation" />
+        </receiver>
+
+        <receiver
+            android:name=".StudyWidget"
+            android:label="AnkiGo study"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_study" />
+        </receiver>
+
+        <!-- Shares the downloaded update APK (in the cache) with Android's package installer. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>

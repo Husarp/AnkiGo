@@ -1,0 +1,23 @@
+# Local-only notes and agent files (kept in the Vault, never in the repo)
+PLAN.md
+docs/
+.claude/
+CLAUDE.md
+AGENTS.md
+.mcp.json
+.loki/
+
+# Build output and local settings
+**/build/
+.gradle/
+.kotlin/
+local.properties
+.idea/
+*.iml
+
+# Builds and signing keys
+*.apk
+*.aab
+*.jks
+*.keystore
+*signing.properties
