@@ -64,13 +64,14 @@ class MainActivity : Activity() {
         row("Share report" to { share() }, "Copy report" to { copy() }, "Clear log" to { Report.clear(); logView.text = "" })
         root.addView(buttons)
 
-        logView = TextView(this).apply { textSize = 10f; typeface = Typeface.MONOSPACE; setTextIsSelectable(true) }
+        // not selectable: a focused log made fullScroll pan the whole window up, hiding the buttons (Copy report covers copying)
+        logView = TextView(this).apply { textSize = 10f; typeface = Typeface.MONOSPACE }
         logScroll = ScrollView(this).apply { addView(logView) }
         root.addView(logScroll, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
 
         logView.text = Report.all().takeLast(20000)
-        Report.listener = { line -> main.post { logView.append(line + "\n"); logScroll.post { logScroll.fullScroll(ScrollView.FOCUS_DOWN) } } }
+        Report.listener = { line -> main.post { logView.append(line + "\n"); logScroll.post { logScroll.scrollTo(0, logView.height) } } }
         Report.log("C12b", "=== AnkiGo started; Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
         refreshHeader(log = true)
     }
