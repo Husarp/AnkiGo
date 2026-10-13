@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android backup (Android 11 and older): only the game save, never the downloaded data or sprites. -->
+<full-backup-content>
+    <include domain="file" path="game/" />
+</full-backup-content>

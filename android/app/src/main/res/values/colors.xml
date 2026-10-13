@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AnkiGo game colours: Catppuccin Latte (light), tokens from docs/design/mockup.html -->
+    <color name="ag_base">#eff1f5</color>
+    <color name="ag_mantle">#e6e9ef</color>
+    <color name="ag_crust">#dce0e8</color>
+    <color name="ag_s0">#ccd0da</color>
+    <color name="ag_s1">#bcc0cc</color>
+    <color name="ag_s2">#acb0be</color>
+    <color name="ag_ov">#9ca0b0</color>
+    <color name="ag_text">#4c4f69</color>
+    <color name="ag_sub1">#5c5f77</color>
+    <color name="ag_sub0">#6c6f85</color>
+    <color name="ag_red">#d20f39</color>
+    <color name="ag_peach">#fe640b</color>
+    <color name="ag_yellow">#df8e1d</color>
+    <color name="ag_green">#40a02b</color>
+    <color name="ag_teal">#179299</color>
+    <color name="ag_blue">#1e66f5</color>
+    <color name="ag_sky">#04a5e5</color>
+    <color name="ag_lav">#7287fd</color>
+    <color name="ag_mauve">#8839ef</color>
+    <color name="ag_pink">#ea76cb</color>
+    <color name="ag_card">#ffffff</color>
+    <color name="ag_arena_top">#dfe6f5</color>
+    <color name="ag_arena_bot">#e9efe3</color>
+    <color name="ag_plat">#c9d3bf</color>
+    <color name="ag_plat2">#cfd7e8</color>
+    <!-- Silhouette strength: the mockup's sil value (0.30) as 0-255; used as grey level and alpha. -->
+    <integer name="ag_sil">77</integer>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Card behind the game widgets (T15): ag_base (light/dark by the night qualifier), 24dp corners as the mockup's .w. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/ag_base" />
+    <corners android:radius="24dp" />
+</shape>

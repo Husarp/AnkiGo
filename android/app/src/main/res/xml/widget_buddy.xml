@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TICKET T15 owns this file. Small widget: the main Pokémon in a progress ring, with the streak. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="110dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="2"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_buddy"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />

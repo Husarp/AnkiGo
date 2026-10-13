@@ -41,16 +41,36 @@
         android:requestLegacyExternalStorage="true"
         android:resizeableActivity="true"
         android:theme="@style/AppTheme"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         tools:targetApi="35">
 
+        <!-- The game panel: meant for the bottom half of a split screen next to AnkiDroid.
+             Don't restart on resize so live detection and the battle animation keep running. -->
         <activity
-            android:name=".MainActivity"
-            android:exported="true">
+            android:name=".ui.GameActivity"
+            android:theme="@style/GameTheme"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity android:name=".ui.FirstRunActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".ui.TeamActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".ui.DexActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".ui.ShopActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".ui.SettingsActivity" android:theme="@style/GameTheme" android:exported="false" />
+
+        <!-- Settings -> Diagnostics: the step-0 checks, LIVE watch and the report. -->
+        <activity
+            android:name=".DiagnosticsActivity"
+            android:label="Diagnostics"
+            android:exported="false" />
 
         <!-- Live watch: meant for the bottom half of a split screen next to AnkiDroid.
              Don't restart on resize so the watch keeps its state. -->
@@ -71,9 +91,10 @@
             android:label="Updates"
             android:exported="false" />
 
+        <!-- Wide widget: the next wild Pokémon as a silhouette, today's progress, the team. -->
         <receiver
             android:name=".MotivationWidget"
-            android:label="AnkiGo motivation"
+            android:label="AnkiGo: a wild one is waiting"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -81,6 +102,19 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_motivation" />
+        </receiver>
+
+        <!-- Small widget: your main Pokémon with today's progress ring and streak. -->
+        <receiver
+            android:name=".ui.BuddyWidget"
+            android:label="AnkiGo buddy"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_buddy" />
         </receiver>
 
         <receiver

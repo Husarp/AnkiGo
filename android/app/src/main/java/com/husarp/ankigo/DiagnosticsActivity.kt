@@ -28,7 +28,8 @@ import com.husarp.ankigo.update.UpdateBanner
 import com.husarp.ankigo.update.Updates
 import com.husarp.ankigo.update.UpdatesActivity
 
-class MainActivity : Activity() {
+/** The step-0 test screen (C-checks, LIVE watch, report), now reached from Settings -> Diagnostics. */
+class DiagnosticsActivity : Activity() {
     private val bg = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var header: TextView
@@ -39,8 +40,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         Report.init(this)
         Anki.load(this)
-        // A fresh start (not a rotation): the update banner may show again, and an installed update's APK goes.
-        if (savedInstanceState == null) Updates.onAppStart(this)
+        title = "Diagnostics"
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16) }
         header = TextView(this).apply { textSize = 12f; setBackgroundColor(Color.rgb(230, 240, 255)); setPadding(12, 12, 12, 12) }

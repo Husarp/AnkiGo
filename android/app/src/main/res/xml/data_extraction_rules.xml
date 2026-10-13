@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ cloud backup and device transfer: only the game save (filesDir/game). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="file" path="game/" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="file" path="game/" />
+    </device-transfer>
+</data-extraction-rules>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- View tag key used by Ui.itemIcon / Ui.staticSprite to drop late sprite downloads for a recycled ImageView. -->
+    <item name="ag_tag_sprite" type="id" />
+</resources>

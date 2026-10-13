@@ -4,4 +4,19 @@
     <style name="AppTheme" parent="@android:style/Theme.Material.Light.DarkActionBar">
         <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
     </style>
+
+    <!-- The game screens (no action bar; Catppuccin Latte from colors.xml). values-night swaps in the dark parent. -->
+    <style name="GameTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+        <item name="android:windowBackground">@color/ag_base</item>
+        <item name="android:statusBarColor">@color/ag_mantle</item>
+        <item name="android:navigationBarColor">@color/ag_mantle</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:colorAccent">@color/ag_mauve</item>
+        <item name="android:colorPrimary">@color/ag_mantle</item>
+        <item name="android:colorPrimaryDark">@color/ag_mantle</item>
+        <item name="android:textColorPrimary">@color/ag_text</item>
+        <item name="android:textColorSecondary">@color/ag_sub0</item>
+    </style>
 </resources>

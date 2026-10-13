@@ -6,20 +6,22 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.text.Html
 import android.view.View
 import android.widget.RemoteViews
+import com.husarp.ankigo.ui.WidgetRender
 
 object Widgets {
     fun refreshAll(ctx: Context) {
-        for (cls in listOf(MotivationWidget::class.java, StudyWidget::class.java)) {
+        for (cls in listOf(MotivationWidget::class.java, com.husarp.ankigo.ui.BuddyWidget::class.java, StudyWidget::class.java)) {
             val ids = AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, cls))
             if (ids.isNotEmpty()) ctx.sendBroadcast(Intent(ctx, cls).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE).putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
         }
     }
 
     fun openApp(ctx: Context): PendingIntent =
-        PendingIntent.getActivity(ctx, 0, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        PendingIntent.getActivity(ctx, 0, Intent(ctx, com.husarp.ankigo.ui.GameActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
 
     fun bcast(ctx: Context, cls: Class<*>, action: String, code: Int, ease: Int = 0): PendingIntent =
         PendingIntent.getBroadcast(ctx, code, Intent(ctx, cls).setAction(action).putExtra("ease", ease),
@@ -32,35 +34,16 @@ object Widgets {
     }
 }
 
-/** C8a: motivation widget — sprite placeholder + today's count. */
+/** Wide game widget (4x2): the next wild Pokémon as a silhouette, today's goal, the team. Drawn by ui/WidgetRender. */
 class MotivationWidget : AppWidgetProvider() {
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
-        Report.init(ctx); Anki.load(ctx)
         val pr = goAsync()
-        Thread {
-            try {
-                val here = Local.todayCount(ctx)
-                val anki = if (Anki.hasPermission(ctx)) Anki.reviewsTodayViaRevlog(ctx) else null
-                val due = try {
-                    if (Anki.hasPermission(ctx)) Anki.decks(ctx).filter { !it.name.contains("::") }.sumOf { it.total } else null
-                } catch (_: Exception) { null }
-                val sprites = listOf("🦊", "🐉", "🐢", "🦉")
-                val rv = RemoteViews(ctx.packageName, R.layout.widget_motivation)
-                rv.setTextViewText(R.id.m_sprite, sprites[(here / 10) % sprites.size])
-                rv.setTextViewText(R.id.m_title, if (due != null && due > 0) "A wild Pokémon is waiting!" else "All done for now")
-                rv.setTextViewText(R.id.m_count, "Today: $here in AnkiGo" + (anki?.let { " · $it total in Anki" } ?: "") + (due?.let { "\nDue now: $it" } ?: ""))
-                // tap = refresh now (the widget has no other way to learn about reviews done in AnkiDroid)
-                rv.setOnClickPendingIntent(R.id.m_root, PendingIntent.getBroadcast(ctx, 10,
-                    Intent(ctx, MotivationWidget::class.java).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE).putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-                ids.forEach { mgr.updateAppWidget(it, rv) }
-                Report.log("C8", "motivation widget updated: here=$here ankiToday=$anki due=$due")
-            } catch (e: Exception) {
-                Report.fail("C8", "motivation widget update", e)
-            } finally {
-                pr.finish()
-            }
-        }.start()
+        WidgetRender.async(pr) { WidgetRender.update(ctx, mgr, ids, WidgetRender.Kind.WIDE) }
+    }
+
+    override fun onAppWidgetOptionsChanged(ctx: Context, mgr: AppWidgetManager, id: Int, newOptions: Bundle?) {
+        val pr = goAsync()
+        WidgetRender.async(pr) { WidgetRender.update(ctx, mgr, intArrayOf(id), WidgetRender.Kind.WIDE) }
     }
 }
 

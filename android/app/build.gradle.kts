@@ -7,7 +7,7 @@ plugins {
 
 // The app's version: the one place it is written. versionCode must grow with every release or Android
 // refuses the update, so it comes from the version: 0.1.0 -> 100, 1.2.3 -> 10203.
-val appVersion = "0.1.1"
+val appVersion = "0.2.0"
 val (vMajor, vMinor, vPatch) = appVersion.split('.').map { it.toInt() }
 
 android {
@@ -56,4 +56,6 @@ dependencies {
     // FileProvider: hands the downloaded update APK to Android's installer.
     implementation("androidx.core:core-ktx:1.13.1")
     testImplementation("junit:junit:4.13.2")
+    // org.json is part of Android but only stubs exist in JVM unit tests; the real library for tests.
+    testImplementation("org.json:json:20240303")
 }
