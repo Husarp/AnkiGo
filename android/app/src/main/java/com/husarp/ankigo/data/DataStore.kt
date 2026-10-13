@@ -133,6 +133,30 @@ object DataStore {
         return null
     }
 
+    /**
+     * Blocking (background thread): PokeAPI form id -> base species number, for the forms numbered above 10000
+     * (from the downloaded pokemon.csv: id, identifier, species_id, ...). Empty when the file is missing or unreadable.
+     */
+    fun formBaseMap(ctx: Context): Map<Int, Int> {
+        val f = File(rawDir(ctx), "pokemon.csv")
+        if (!f.isFile) return emptyMap()
+        return try {
+            val out = HashMap<Int, Int>()
+            f.useLines { lines ->
+                for (line in lines.drop(1)) { // header row
+                    val cols = line.split(',')
+                    val id = cols.getOrNull(0)?.toIntOrNull() ?: continue
+                    val base = cols.getOrNull(2)?.toIntOrNull() ?: continue
+                    if (id > 10000) out[id] = base
+                }
+            }
+            out
+        } catch (e: IOException) {
+            Report.fail(TAG, "reading pokemon.csv for form names", e)
+            emptyMap()
+        }
+    }
+
     /** Deletes the downloaded data (Settings -> re-download). */
     @Synchronized
     fun clear(ctx: Context) {

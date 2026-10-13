@@ -223,6 +223,22 @@ class SaveStoreTest {
         assertEquals(emptyList<File>(), SaveStore(File(tmp.root, "nothing")).backups())
     }
 
+    @Test fun backupsAlsoListSaveBeforeFilesNewestFirstAfterTheSnapshots() {
+        val st = store(); val s = state()
+        s.day = "2026-10-13"; st.save(s); st.save(s) // second save makes save.bak
+        val json = SaveCodec.encode(s)
+        file("save.before-restore-1000.json").writeText(json)
+        file("save.before-ankimon-3000.json").writeText(json)
+        file("save.before-restore-2000.json").writeText(json)
+        file("save.before-x.json").writeText(json) // no stamp: not ours
+        assertEquals(
+            listOf("save.bak", "save-2026-10-13.json", "save.before-ankimon-3000.json", "save.before-restore-2000.json", "save.before-restore-1000.json"),
+            st.backups().map { it.name },
+        )
+        // listing them must not change what load() picks
+        assertEquals(s.seq, store().load().state!!.seq)
+    }
+
     @Test fun readDecodesWithoutTouchingTheCurrentSaveAndReturnsNullForInvalid() {
         val st = store(); val s = state(cash = 9)
         st.save(s)

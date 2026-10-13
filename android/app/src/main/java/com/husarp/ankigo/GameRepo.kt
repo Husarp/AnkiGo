@@ -260,9 +260,10 @@ object GameRepo {
 
     /**
      * Replaces the current state (restore backup / import), keeping the old one as a backup first
-     * (dir/save.before-restore-<millis>.json). Get [newState] from SaveStore.restore so its seq is above every file on disk.
+     * (dir/save.before-<backupTag>-<millis>.json; "restore" by default, "ankimon" for the Ankimon import).
+     * Get [newState] from SaveStore.restore so its seq is above every file on disk.
      */
-    fun replaceState(ctx: Context, newState: GameState) {
+    fun replaceState(ctx: Context, newState: GameState, backupTag: String = "restore") {
         requireMain()
         val app = ctx.applicationContext
         saveNow(app)
@@ -270,7 +271,7 @@ object GameRepo {
             try {
                 val dir = saveDir(app)
                 if (!dir.isDirectory) dir.mkdirs()
-                File(dir, "save.before-restore-${System.currentTimeMillis()}.json").writeText(SaveCodec.encode(old), Charsets.UTF_8)
+                File(dir, "save.before-${backupTag.filter { it.isLetterOrDigit() }.ifEmpty { "restore" }}-${System.currentTimeMillis()}.json").writeText(SaveCodec.encode(old), Charsets.UTF_8)
             } catch (e: IOException) {
                 Report.fail(TAG, "could not keep the old save before restoring", e)
             }

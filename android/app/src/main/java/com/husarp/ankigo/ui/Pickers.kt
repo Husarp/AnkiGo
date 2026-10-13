@@ -1,28 +1,21 @@
 package com.husarp.ankigo.ui
 
-import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PorterDuff
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.BaseAdapter
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.ScrollView
-import android.widget.TextView
-import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
-import com.husarp.ankigo.game.ActionResult
 import com.husarp.ankigo.game.Category
-import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.GameState
@@ -30,139 +23,46 @@ import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Type
-import com.husarp.ankigo.update.Updates
 import java.util.Locale
 
-// TICKET T14 owns this file: base class of the Team / Pokédex / Shop screens, dialog pickers and small shared widgets.
-
-/**
- * Shared frame of the three between-battle screens: app bar, body, bottom nav (own tab selected), Updates hooks,
- * GameRepo listener (re-render after every change) and the "game not ready yet" message.
- * Subclasses build their views once ([buildBar], [buildBody]) and fill them in [render] (only called when the game is READY).
- */
-abstract class GameScreen : Activity() {
-    abstract val tab: BottomNav.Tab
-    protected abstract fun buildBar(): View
-    protected abstract fun buildBody(): View
-    protected abstract fun render()
-
-    val data: GameData get() = GameRepo.data!!
-    val state: GameState get() = GameRepo.state!!
-
-    private val handler = Handler(Looper.getMainLooper())
-    private val renderNow = Runnable { doRender() }
-    private val listener: () -> Unit = { requestRender() }
-    private lateinit var content: View
-    private lateinit var notReady: TextView
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        val bar = buildBar()
-        content = buildBody()
-        notReady = Ui.text(this, 14f, 700, R.color.ag_sub0).apply {
-            gravity = Gravity.CENTER
-            setPadding(Ui.dp(this@GameScreen, 24), Ui.dp(this@GameScreen, 24), Ui.dp(this@GameScreen, 24), Ui.dp(this@GameScreen, 24))
-        }
-        val body = FrameLayout(this).apply {
-            addView(content, FrameLayout.LayoutParams(-1, -1))
-            addView(notReady, FrameLayout.LayoutParams(-1, -1))
-        }
-        setContentView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Ui.c(this@GameScreen, R.color.ag_base))
-            addView(bar, LinearLayout.LayoutParams(-1, -2))
-            addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
-            addView(BottomNav.create(this@GameScreen, tab), LinearLayout.LayoutParams(-1, -2))
-        })
-        GameRepo.load(this) { requestRender() }
-    }
-
-    override fun onResume() {
-        super.onResume()
-        Updates.onResume(this)
-        GameRepo.addListener(listener)
-        requestRender()
-    }
-
-    override fun onPause() {
-        GameRepo.removeListener(listener)
-        Updates.onPause(this)
-        super.onPause()
-    }
-
-    override fun onDestroy() {
-        handler.removeCallbacks(renderNow)
-        super.onDestroy()
-    }
-
-    /** Re-renders once per message-loop turn, however many changes came in. */
-    fun requestRender() {
-        handler.removeCallbacks(renderNow)
-        handler.post(renderNow)
-    }
-
-    private fun doRender() {
-        if (isFinishing || isDestroyed) return
-        val ok = GameRepo.status == GameRepo.Status.READY && GameRepo.data != null && GameRepo.state != null
-        content.visibility = if (ok) View.VISIBLE else View.GONE
-        notReady.visibility = if (ok) View.GONE else View.VISIBLE
-        notReady.text = when (GameRepo.status) {
-            GameRepo.Status.LOADING -> "Loading…"
-            GameRepo.Status.NEED_DATA -> "Finish the first-run download on the Battle tab first."
-            GameRepo.Status.NEED_STARTER -> "Pick your starter on the Battle tab first."
-            GameRepo.Status.SAVE_ERROR -> "The save couldn't be read. Open the Battle tab for options."
-            GameRepo.Status.READY -> "Something went wrong loading the game."
-        }
-        if (ok) render()
-    }
-
-    /** Runs an action through GameRepo (saves + notifies), shows its message, re-renders. */
-    fun act(f: (Game) -> ActionResult): ActionResult {
-        val r = GameRepo.run(this, f)
-        report(r.message, r.events)
-        requestRender()
-        return r
-    }
-
-    /** Message toast (+ earned badges); an evolution gets a small dialog with the new sprite instead. */
-    fun report(message: String, events: List<GameEvent> = emptyList()) {
-        val evo = events.filterIsInstance<GameEvent.Evolved>().firstOrNull()
-        val badges = events.filterIsInstance<GameEvent.BadgeEarned>().joinToString { it.title }
-        if (evo != null) {
-            Pickers.evolved(this, evo, state.mon(evo.uid)?.shiny == true)
-            if (badges.isNotEmpty()) Ui.toast(this, "Badge: $badges")
-        } else {
-            Ui.toast(this, message + if (badges.isNotEmpty()) "\nBadge: $badges" else "")
-        }
-    }
-}
+// TICKET T14 owns this file: dialog pickers and small shared widgets of the Team / Pokédex / Shop screens (the page frame is in Pages.kt).
 
 /** Dialogs: choose from a list, confirm, pick a Pokémon / item / move. */
 object Pickers {
+    /** Shows [dialog] with the rounded card background. */
     fun show(dialog: AlertDialog) {
-        dialog.show()
+        showPlain(dialog)
         dialog.window?.setBackgroundDrawable(Ui.rounded(Ui.c(dialog.context, R.color.ag_card), 18, dialog.context))
     }
 
+    /** Shows [dialog] with the default dialog look. Both variants work in an Activity and over other apps (floating card). */
+    fun showPlain(dialog: AlertDialog) {
+        // Without an Activity there is no window to hang the dialog on: make it an overlay window (needs the overlay permission).
+        if (Ui.findActivity(dialog.context) == null) {
+            dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+        }
+        dialog.show()
+    }
+
     /** A plain list of text choices. */
-    fun choose(a: Activity, title: String, labels: List<String>, onPick: (Int) -> Unit) {
+    fun choose(a: Context, title: String, labels: List<String>, onPick: (Int) -> Unit) {
         show(AlertDialog.Builder(a).setTitle(title)
             .setItems(labels.toTypedArray()) { _, i -> onPick(i) }
             .setNegativeButton("Cancel", null).create())
     }
 
-    fun confirm(a: Activity, title: String, message: String, yes: String = "OK", onYes: () -> Unit) {
+    fun confirm(a: Context, title: String, message: String, yes: String = "OK", onYes: () -> Unit) {
         show(AlertDialog.Builder(a).setTitle(title).setMessage(message)
             .setPositiveButton(yes) { _, _ -> onYes() }
             .setNegativeButton("Cancel", null).create())
     }
 
-    fun info(a: Activity, title: String, view: View) {
+    fun info(a: Context, title: String, view: View) {
         show(AlertDialog.Builder(a).setTitle(title).setView(view).setPositiveButton("Close", null).create())
     }
 
     /** A list of [n] custom rows ([bind] builds row i); picking one closes the dialog and calls [onPick]. */
-    fun rows(a: Activity, title: String, n: Int, bind: (Int) -> View, onPick: (Int) -> Unit) {
+    fun rows(a: Context, title: String, n: Int, bind: (Int) -> View, onPick: (Int) -> Unit) {
         lateinit var dlg: AlertDialog
         val list = ListView(a).apply {
             divider = null
@@ -180,26 +80,26 @@ object Pickers {
     }
 
     /** Pick one of [mons]; [sub] is the second line of each row (HP, "can evolve"...). */
-    fun pickMon(a: Activity, title: String, data: GameData, mons: List<Mon>, sub: (Mon) -> String, onPick: (Mon) -> Unit) {
+    fun pickMon(a: Context, title: String, data: GameData, mons: List<Mon>, sub: (Mon) -> String, onPick: (Mon) -> Unit) {
         rows(a, title, mons.size, { Bits.monRow(a, data, mons[it], sub(mons[it])) }) { onPick(mons[it]) }
     }
 
     /** Pick one of the bag items [ids] (icon, name, note, ×owned). */
-    fun pickItem(a: Activity, title: String, state: GameState, ids: List<String>, onPick: (String) -> Unit) {
+    fun pickItem(a: Context, title: String, state: GameState, ids: List<String>, onPick: (String) -> Unit) {
         rows(a, title, ids.size, { Bits.itemRow(a, ids[it], state.count(ids[it]).let { n -> "×$n" }) }) { onPick(ids[it]) }
     }
 
     /** Pick one of the Pokémon's moves (returns its index 0..3). */
-    fun pickMove(a: Activity, title: String, data: GameData, mon: Mon, onPick: (Int) -> Unit) {
+    fun pickMove(a: Context, title: String, data: GameData, mon: Mon, onPick: (Int) -> Unit) {
         rows(a, title, mon.moves.size, { Bits.moveRow(a, data, mon.moves[it]) }, onPick)
     }
 
     /** Pick one of the move ids (TMs). */
-    fun pickMoveId(a: Activity, title: String, data: GameData, moves: List<String>, onPick: (String) -> Unit) {
+    fun pickMoveId(a: Context, title: String, data: GameData, moves: List<String>, onPick: (String) -> Unit) {
         rows(a, title, moves.size, { Bits.moveRow(a, data, moves[it]) }) { onPick(moves[it]) }
     }
 
-    fun evolved(a: Activity, ev: GameEvent.Evolved, shiny: Boolean) {
+    fun evolved(a: Context, ev: GameEvent.Evolved, shiny: Boolean) {
         val col = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL

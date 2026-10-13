@@ -31,6 +31,7 @@ import com.husarp.ankigo.data.Sprites
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.save.SaveStore
 import java.io.File
@@ -106,7 +107,7 @@ object WidgetLogic {
             today = today, goal = goal, streak = streak,
             atRisk = hour >= RISK_HOUR && today < goal && streak > 0,
             cash = s.cash, balls = s.bag.filterKeys { it.endsWith("-ball") }.values.sumOf { max(0, it) },
-            team = s.teamMons().take(6).map { WidgetMon(it.species, it.name, it.level, it.shiny, hpFrac(it.hp, maxHp(it))) },
+            team = s.teamMons().take(6).map { WidgetMon(it.species, it.shownName, it.level, it.shiny, hpFrac(it.hp, maxHp(it))) },
         )
     }
 

@@ -98,8 +98,14 @@ class SaveStore(val dir: File) {
     /** prepare + write in one go (tests, onStop). */
     fun save(state: GameState, now: Long = System.currentTimeMillis()) = write(prepare(state, now), state.day)
 
-    /** save.bak, then the snapshots, newest first (for "Restore backup"). */
-    fun backups(): List<File> = synchronized(LOCK) { listOfNotNull(bakFile.takeIf { it.isFile }) + snapshots() }
+    /**
+     * For "Restore a backup": save.bak, then the snapshots (newest first), then the save.before-* files (kept by
+     * GameRepo.replaceState before a restore/import), newest first. The before-* files are simply appended, not mixed
+     * into the snapshot order.
+     */
+    fun backups(): List<File> = synchronized(LOCK) {
+        listOfNotNull(bakFile.takeIf { it.isFile }) + snapshots() + beforeFiles()
+    }
 
     /** Decodes a backup/export without touching the current save; null if invalid. */
     fun read(file: File): GameState? = try {
@@ -197,6 +203,11 @@ class SaveStore(val dir: File) {
     private fun snapshots(): List<File> =
         snapDir.listFiles { f -> f.isFile && SNAPSHOT.matches(f.name) }.orEmpty().sortedByDescending { it.name }
 
+    /** save.before-<tag>-<millis>.json files, newest first (the stamp is the last number in the name). */
+    private fun beforeFiles(): List<File> =
+        dir.listFiles { f -> f.isFile && BEFORE.matches(f.name) }.orEmpty()
+            .sortedByDescending { BEFORE.matchEntire(it.name)?.groupValues?.get(1)?.toLongOrNull() ?: 0L }
+
     /** Renames [f] to save.corrupt-<millis>.json. Returns text for the problem list. */
     private fun moveAside(f: File): String {
         val now = System.currentTimeMillis()
@@ -225,6 +236,7 @@ class SaveStore(val dir: File) {
         val LOCK = Any()
         const val KEEP_SNAPSHOTS = 7
         val SNAPSHOT = Regex("save-[0-9A-Za-z_-]{1,40}\\.json")
+        val BEFORE = Regex("save\\.before-[A-Za-z0-9]{1,20}-([0-9]{1,18})\\.json")
         val SAFE_DAY = Regex("[0-9A-Za-z_-]{1,40}")
     }
 }

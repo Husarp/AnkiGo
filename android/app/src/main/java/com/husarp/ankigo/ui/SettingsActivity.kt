@@ -1,11 +1,15 @@
 package com.husarp.ankigo.ui
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.PorterDuff
-import android.os.Bundle
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.text.InputFilter
 import android.view.Gravity
 import android.view.View
@@ -27,9 +31,13 @@ import com.husarp.ankigo.game.Settings as GameSettings
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.save.SaveCodec
 import com.husarp.ankigo.game.save.SaveFormatException
+import com.husarp.ankigo.game.shownName
+import com.husarp.ankigo.overlay.FloatBattleService
+import com.husarp.ankigo.overlay.Overlay
 import com.husarp.ankigo.update.Updates
 import com.husarp.ankigo.update.UpdatesActivity
 import java.io.File
+import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -95,10 +103,14 @@ internal object SettingsJobs {
 }
 
 /** Game options, data and pictures, save backups, Updates, Diagnostics and About. */
-class SettingsActivity : Activity() {
+class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
+    override val tab: BottomNav.Tab? = null
+    override val needsGame = false
+
     private lateinit var scroll: ScrollView
     private lateinit var content: LinearLayout
     private var dataCard: LinearLayout? = null
+    private var windowsCard: LinearLayout? = null
     private var nameEdit: EditText? = null
     private var dialog: AlertDialog? = null
     private var handledDataDone = false
@@ -108,59 +120,61 @@ class SettingsActivity : Activity() {
     private var dataBar: ProgressBlock? = null
 
     private fun dp(v: Int) = Ui.dp(this, v)
-    private val state: GameState? get() = GameRepo.state
+    private val loaded: GameState? get() = GameRepo.state
+    private val main = Handler(Looper.getMainLooper())
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(Ui.appBar(this, "Settings", back = true))
+    // Attached in onShow, detached in onGone only if still ours (a recreated page may have taken over the job screens).
+    private val animListener: () -> Unit = { onAnim() }
+    private val dataListener: () -> Unit = { onData() }
+
+    override fun buildBar(): View =
+        Ui.appBar(this, "Settings", back = host.hostActivity != null, onBack = { host.closePage() })
+
+    override fun buildBody(): View {
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), 0, dp(16), dp(28))
         }
         scroll = ScrollView(this).apply { addView(content) }
-        root.addView(scroll, Form.lp(h = 0, weight = 1f))
-        setContentView(root)
+        live = WeakReference(this)
         render()
-        if (state == null) GameRepo.load(this) { render() }
+        if (loaded == null) GameRepo.load(this) { if (alive) render() }
+        return scroll
     }
 
-    override fun onStart() {
-        super.onStart()
-        SettingsJobs.anim.listener = { onAnim() }
-        SettingsJobs.data.listener = { onData() }
+    override fun onShow() {
+        super.onShow()
+        SettingsJobs.anim.listener = animListener
+        SettingsJobs.data.listener = dataListener
         if (SettingsJobs.data.state == BgJob.State.DONE) onData() // finished while this screen was away
+        rebuildWindows() // the overlay permission may have changed in Android's settings meanwhile
     }
 
-    override fun onResume() {
-        super.onResume()
-        Updates.onResume(this)
-    }
-
-    override fun onPause() {
+    override fun onHide() {
         saveName()
-        Updates.onPause(this)
-        super.onPause()
+        super.onHide()
     }
 
-    override fun onStop() {
-        SettingsJobs.anim.listener = null
-        SettingsJobs.data.listener = null
-        super.onStop()
-    }
-
-    override fun onDestroy() {
+    override fun onGone() {
+        if (SettingsJobs.anim.listener === animListener) SettingsJobs.anim.listener = null
+        if (SettingsJobs.data.listener === dataListener) SettingsJobs.data.listener = null
+        if (live?.get() === this) live = null
         dialog?.dismiss()
-        super.onDestroy()
+        super.onGone()
+    }
+
+    /** Runs [f] on the main thread now (or posts it from another thread). */
+    private fun runOnUi(f: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) f() else main.post(f)
     }
 
     // ---------- page ----------
 
-    private fun render() {
+    override fun render() {
         saveName()
         content.removeAllViews()
         animBar = null; dataBar = null; nameEdit = null
-        val st = state
+        val st = loaded
         if (st != null) {
             content.addView(Form.sect(this, "Game"))
             content.addView(gameCard(st.settings))
@@ -174,6 +188,10 @@ class SettingsActivity : Activity() {
                 Form.row(this, "The game isn't loaded", "Its options show here once it is. Data and backups below still work.", null),
             )))
         }
+        content.addView(Form.sect(this, "When you leave AnkiGo"))
+        val wc = buildWindowsCard()
+        windowsCard = wc
+        content.addView(wc)
         content.addView(Form.sect(this, "Data and pictures"))
         val dc = buildDataCard()
         dataCard = dc
@@ -230,14 +248,14 @@ class SettingsActivity : Activity() {
         // trainer name
         val field = EditText(this).apply {
             setText(s.trainerName)
-            typeface = Ui.font(this@SettingsActivity, 700)
+            typeface = Ui.font(this@SettingsPage, 700)
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Ui.c(this@SettingsActivity, R.color.ag_text))
+            setTextColor(Ui.c(this@SettingsPage, R.color.ag_text))
             gravity = Gravity.END or Gravity.CENTER_VERTICAL
             setSingleLine()
             filters = arrayOf(InputFilter.LengthFilter(16))
             imeOptions = EditorInfo.IME_ACTION_DONE
-            background = Ui.rounded(Ui.c(this@SettingsActivity, R.color.ag_mantle), 10, this@SettingsActivity)
+            background = Ui.rounded(Ui.c(this@SettingsPage, R.color.ag_mantle), 10, this@SettingsPage)
             setPadding(dp(10), dp(8), dp(10), dp(8))
             minWidth = dp(130)
             setOnEditorActionListener { v, action, _ ->
@@ -248,9 +266,9 @@ class SettingsActivity : Activity() {
         nameEdit = field
         rows += Form.row(this, "Trainer name", null, field)
 
-        val holder = state?.mon(s.xpShareUid)
+        val holder = loaded?.mon(s.xpShareUid)
         rows += Form.row(this, "Exp. Share holder", "Change it in Team.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
-            text = holder?.let { "${it.name} Lv ${it.level}" } ?: "Nobody"
+            text = holder?.let { "${it.shownName} Lv ${it.level}" } ?: "Nobody"
         })
         rows += Form.row(this, "Wishlist", "Always caught. Tap ☆ in the Pokédex to add or remove.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
             text = "${s.wishlist.size}"
@@ -260,7 +278,7 @@ class SettingsActivity : Activity() {
 
     private fun saveName() {
         val field = nameEdit ?: return
-        val s = state?.settings ?: return
+        val s = loaded?.settings ?: return
         val name = field.text.toString().trim().ifEmpty { "Trainer" }
         if (name != s.trainerName) edit { it.trainerName = name }
         if (field.text.toString() != name) field.setText(name)
@@ -276,7 +294,7 @@ class SettingsActivity : Activity() {
         val rows = options.map { (mode, label) ->
             val tick = ImageView(this).apply {
                 setImageResource(R.drawable.ic_check)
-                setColorFilter(Ui.c(this@SettingsActivity, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
+                setColorFilter(Ui.c(this@SettingsPage, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
                 visibility = if (s.autoMode == mode) View.VISIBLE else View.INVISIBLE
                 layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
             }
@@ -296,6 +314,75 @@ class SettingsActivity : Activity() {
         Form.switchRow(this, "Starter", null, s.protectStarter) { v -> edit { it.protectStarter = v } },
     ))
 
+    // ---------- windows: picture-in-picture, floating battle, floating screens ----------
+
+    /** Leave mode (one at a time), floating screens in split screen, and the overlay permission. Works without a game. */
+    private fun buildWindowsCard(): LinearLayout {
+        val mode = AppPrefs.leaveMode(this)
+        val options = listOf(
+            Triple(LeaveMode.OFF, "Nothing", null),
+            Triple(LeaveMode.PIP, "Picture-in-picture", "Default. A small battle window with Open and Pause buttons."),
+            Triple(LeaveMode.FLOAT, "Floating battle window",
+                "Move and resize it over AnkiDroid. Needs “Display over other apps” and shows a notification while it runs."),
+        )
+        val ticks = HashMap<LeaveMode, ImageView>()
+        val rows = mutableListOf<View>()
+        for ((m, label, sub) in options) {
+            val tick = ImageView(this).apply {
+                setImageResource(R.drawable.ic_check)
+                setColorFilter(Ui.c(this@SettingsPage, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
+                visibility = if (m == mode) View.VISIBLE else View.INVISIBLE
+                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+            }
+            ticks[m] = tick
+            rows += Form.row(this, label, sub, tick) {
+                setLeaveMode(m)
+                ticks.forEach { (k, t) -> t.visibility = if (k == m) View.VISIBLE else View.INVISIBLE }
+            }
+        }
+        rows += Form.switchRow(this, "Floating screens in split screen",
+            "Team, Pokédex, Shop and Settings open in a small window over AnkiDroid, so the battle stays visible.",
+            AppPrefs.floatScreens(this)) { v -> AppPrefs.setFloatScreens(this, v) }
+        val allowed = Overlay.canDraw(this)
+        val state = Ui.text(this, 13f, 800, if (allowed) R.color.ag_green else R.color.ag_mauve).apply {
+            text = if (allowed) "Allowed" else "Allow…"
+        }
+        rows += Form.row(this, "Display over other apps", "Needed for the floating windows. Picture-in-picture works without it.", state) {
+            askOverlay()
+        }
+        return Form.cardOf(this, rows)
+    }
+
+    private fun rebuildWindows() {
+        val old = windowsCard ?: return
+        val parent = old.parent as? ViewGroup ?: return
+        val i = parent.indexOfChild(old)
+        parent.removeViewAt(i)
+        val fresh = buildWindowsCard()
+        windowsCard = fresh
+        parent.addView(fresh, i)
+    }
+
+    private fun setLeaveMode(m: LeaveMode) {
+        AppPrefs.setLeaveMode(this, m)
+        if (m != LeaveMode.FLOAT) { FloatBattleService.stop(this); return }
+        if (!Overlay.canDraw(this)) { askOverlay(); return }
+        // Android 13+: the floating battle's notification (with Pause and Stop) needs this permission.
+        val a = host.hostActivity
+        if (a != null && Build.VERSION.SDK_INT >= 33 &&
+            a.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            a.requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIFY)
+        }
+        FloatBattleService.startIfWanted(this)
+    }
+
+    private fun askOverlay() {
+        if (Overlay.canDraw(this)) { Ui.toast(this, "Already allowed. You can turn it off in Android's settings."); return }
+        val a = host.hostActivity
+        if (a != null) Overlay.ask(a, "AnkiGo can show the battle and its screens in small windows over AnkiDroid.")
+        else Overlay.openSettings(this)
+    }
+
     // ---------- data and pictures ----------
 
     private fun buildDataCard(): LinearLayout {
@@ -304,11 +391,11 @@ class SettingsActivity : Activity() {
         animBar = null; dataBar = null
         val box = Ui.card(this)
         box.addView(Form.row(this, "Game data", null, Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
-            text = sizeText(DataStore.size(this@SettingsActivity))
+            text = sizeText(DataStore.size(this@SettingsPage))
         }))
         box.addView(Form.divider(this))
         box.addView(Form.row(this, "Pictures", null, Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
-            text = sizeText(Sprites.size(this@SettingsActivity))
+            text = sizeText(Sprites.size(this@SettingsPage))
         }))
         box.addView(Form.divider(this))
 
@@ -387,7 +474,7 @@ class SettingsActivity : Activity() {
     private fun startAnimations() {
         val data = GameRepo.data ?: DataStore.load(this)
         if (data == null) { Ui.toast(this, "Download the game data first"); return }
-        val gens = state?.settings?.gens?.toSet() ?: com.husarp.ankigo.game.Tuning.DEFAULT_GENS
+        val gens = loaded?.settings?.gens?.toSet() ?: com.husarp.ankigo.game.Tuning.DEFAULT_GENS
         val list = data.species.values.filter { it.gen in gens }.sortedBy { it.num }
         SettingsJobs.startAnimations(this, list)
     }
@@ -417,7 +504,7 @@ class SettingsActivity : Activity() {
     private val dateFmt get() = SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault())
 
     private fun saveCard(): View {
-        val st = state
+        val st = loaded
         val last = if (st == null || st.savedAt == 0L) "Not saved yet" else "${dateFmt.format(Date(st.savedAt))} (#${st.seq})"
         val box = Ui.card(this)
         box.addView(Form.row(this, "Last saved", null, Ui.text(this, 13f, 800, R.color.ag_sub1).apply { text = last }))
@@ -431,44 +518,51 @@ class SettingsActivity : Activity() {
         btns.addView(export)
         btns.addView(Form.secondary(this, "Import save…") { startImport() }, Form.lp(this, 8))
         btns.addView(Form.secondary(this, "Restore a backup…") { listBackups() }, Form.lp(this, 8))
-        btns.addView(Form.body(this, "Importing or restoring keeps your current game as a backup first.", 12, R.color.ag_sub0), Form.lp(this, 8))
+        val ankimon = Form.secondary(this, "Import Ankimon save (.db)…") { startAnkimonImport() }
+        Form.enable(ankimon, st != null)
+        btns.addView(ankimon, Form.lp(this, 8))
+        btns.addView(Form.body(this, "Importing or restoring keeps your current game as a backup first. " +
+            "Ankimon: in Anki use Game → Export Save File…, copy the file to this phone and pick it here; it only adds.",
+            12, R.color.ag_sub0), Form.lp(this, 8))
         box.addView(btns)
         return box
     }
 
     private fun startExport() {
-        if (state == null) return
+        if (loaded == null) return
         val day = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val i = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/json")
             .putExtra(Intent.EXTRA_TITLE, "ankigo-save-$day.json")
-        try { startActivityForResult(i, REQ_EXPORT) } catch (_: Exception) { Ui.toast(this, "No file picker found on this phone") }
+        try {
+            host.startForResult(i) { code, data -> picked(REQ_EXPORT, code, data) }
+        } catch (_: Exception) { Ui.toast(this, "No file picker found on this phone") }
+    }
+
+    /** Ankimon (PC) save: picker -> preview -> backup + merge. Dialogs go to the newest live Settings page (rotation-safe). */
+    private fun startAnkimonImport() {
+        AnkimonImportFlow.start(this, { i, cb -> host.startForResult(i, cb) },
+            ui = { live?.get()?.takeIf { it.alive } },
+            onDone = { imported -> if (imported) live?.get()?.takeIf { it.alive }?.render() })
     }
 
     private fun startImport() {
         val i = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
-        try { startActivityForResult(i, REQ_IMPORT) } catch (_: Exception) { Ui.toast(this, "No file picker found on this phone") }
+        try {
+            host.startForResult(i) { code, data -> picked(REQ_IMPORT, code, data) }
+        } catch (_: Exception) { Ui.toast(this, "No file picker found on this phone") }
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        val uri = data?.data ?: return
-        if (resultCode != RESULT_OK) return
-        when (requestCode) {
-            REQ_EXPORT -> {
-                val st = state ?: return
-                val text = SaveCodec.encode(st) // on the main thread, which owns the state
-                val app = applicationContext
-                Thread {
-                    val ok = try {
-                        app.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray(Charsets.UTF_8)) }
-                        true
-                    } catch (e: Exception) { false }
-                    runOnUiThread { Ui.toast(app, if (ok) "Save exported" else "Couldn't write the file") }
-                }.start()
-            }
-            REQ_IMPORT -> readImport(uri)
-        }
+    private fun export(uri: android.net.Uri) {
+        val st = loaded ?: return
+        val text = SaveCodec.encode(st) // on the main thread, which owns the state
+        val app = applicationContext
+        Thread {
+            val ok = try {
+                app.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                true
+            } catch (e: Exception) { false }
+            runOnUi { Ui.toast(app, if (ok) "Save exported" else "Couldn't write the file") }
+        }.start()
     }
 
     /** Reads and checks the picked file off the main thread; shows what is in it before anything changes. */
@@ -488,8 +582,8 @@ class SettingsActivity : Activity() {
             } catch (e: Exception) {
                 problem = "Couldn't read that file."
             }
-            runOnUiThread {
-                if (isFinishing) return@runOnUiThread
+            runOnUi {
+                if (!alive) return@runOnUi
                 val st = parsed
                 val body = text
                 if (st == null || body == null) {
@@ -514,14 +608,19 @@ class SettingsActivity : Activity() {
         Thread {
             val store = GameRepo.store(app)
             val found = store.backups().mapNotNull { f -> store.read(f)?.let { Backup(f, it) } }
-            runOnUiThread {
-                if (isFinishing) return@runOnUiThread
+            runOnUi {
+                if (!alive) return@runOnUi
                 if (found.isEmpty()) {
                     info("No backups yet", "Backups appear after the game has been saved a few times.")
-                    return@runOnUiThread
+                    return@runOnUi
                 }
                 val labels = found.map { b ->
-                    val kind = if (b.file.name == "save.bak") "previous save" else "daily copy"
+                    val kind = when {
+                        b.file.name == "save.bak" -> "previous save"
+                        b.file.name.startsWith("save.before-ankimon") -> "before the Ankimon import"
+                        b.file.name.startsWith("save.before-") -> "before a restore or import"
+                        else -> "daily copy"
+                    }
                     val date = if (b.state.savedAt > 0) dateFmt.format(Date(b.state.savedAt)) else b.file.name
                     "$date · #${b.state.seq} · ${b.state.mons.size} Pokémon\n($kind)"
                 }.toTypedArray<CharSequence>()
@@ -529,7 +628,7 @@ class SettingsActivity : Activity() {
                 dialog = AlertDialog.Builder(this).setTitle("Restore a backup").setItems(labels) { _, which ->
                     val b = found[which]
                     confirm("Restore this backup?", describe(b.state) + "\n\nYour current game is kept as a backup.", "Restore") { applyRestore(null, b.file) }
-                }.setNegativeButton("Cancel", null).show()
+                }.setNegativeButton("Cancel", null).create().also { Pickers.showPlain(it) }
             }
         }.start()
     }
@@ -548,16 +647,16 @@ class SettingsActivity : Activity() {
                 restored = store.restore(source)
                 if (file == null) source.delete()
             } catch (_: Exception) { }
-            runOnUiThread {
+            runOnUi {
                 val st = restored
                 if (st == null) {
-                    if (!isFinishing) info("Couldn't restore", "The file couldn't be read. Nothing was changed.")
-                    return@runOnUiThread
+                    if (alive) info("Couldn't restore", "The file couldn't be read. Nothing was changed.")
+                    return@runOnUi
                 }
                 GameRepo.state?.let { cur -> if (st.seq < cur.seq) st.seq = cur.seq }
                 GameRepo.replaceState(app, st)
                 Ui.toast(app, "Restored: ${st.settings.trainerName}, ${st.mons.size} Pokémon")
-                if (!isFinishing) render()
+                if (alive) render()
             }
         }.start()
     }
@@ -568,22 +667,22 @@ class SettingsActivity : Activity() {
         val chevron = { ImageView(this).apply {
             setImageResource(R.drawable.ic_back)
             rotation = 180f
-            setColorFilter(Ui.c(this@SettingsActivity, R.color.ag_sub0), PorterDuff.Mode.SRC_IN)
+            setColorFilter(Ui.c(this@SettingsPage, R.color.ag_sub0), PorterDuff.Mode.SRC_IN)
             layoutParams = LinearLayout.LayoutParams(dp(18), dp(18))
         } }
         return Form.cardOf(this, listOf(
             Form.row(this, "Updates · version ${Updates.current(this)}", "Check for a new AnkiGo", chevron()) {
-                startActivity(Intent(this, UpdatesActivity::class.java))
+                startScreen(Intent(this, UpdatesActivity::class.java))
             },
             Form.row(this, "Diagnostics", "LIVE watch, checks and the report", chevron()) {
-                startActivity(Intent(this, DiagnosticsActivity::class.java))
+                startScreen(Intent(this, DiagnosticsActivity::class.java))
             },
         ))
     }
 
     private fun aboutCard(): View {
         val box = Ui.card(this).apply { setPadding(dp(14), dp(12), dp(14), dp(14)) }
-        box.addView(Ui.text(this, 14f, 800, R.color.ag_text).apply { text = "AnkiGo ${Updates.current(this@SettingsActivity)}" })
+        box.addView(Ui.text(this, 14f, 800, R.color.ag_text).apply { text = "AnkiGo ${Updates.current(this@SettingsPage)}" })
         box.addView(Form.body(this,
             "Pokémon and Pokémon names © Nintendo / Creatures / GAME FREAK. Data: PokeAPI, Pokémon Showdown. " +
                 "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL).", 12, R.color.ag_sub0), Form.lp(this, 6))
@@ -595,17 +694,40 @@ class SettingsActivity : Activity() {
     private fun confirm(title: String, message: String, yes: String, onYes: () -> Unit) {
         dialog?.dismiss()
         dialog = AlertDialog.Builder(this).setTitle(title).setMessage(message)
-            .setPositiveButton(yes) { _, _ -> onYes() }.setNegativeButton("Cancel", null).show()
+            .setPositiveButton(yes) { _, _ -> onYes() }.setNegativeButton("Cancel", null).create().also { Pickers.showPlain(it) }
     }
 
     private fun info(title: String, message: String) {
         dialog?.dismiss()
-        dialog = AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).show()
+        dialog = AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).create().also { Pickers.showPlain(it) }
     }
 
     companion object {
+        /** The newest Settings page, for picker results that arrive after the Activity was recreated. */
+        private var live: WeakReference<SettingsPage>? = null
+
+        /**
+         * File picker result. Lives here (captures no page) and looks the newest page up in [live], so it still works when
+         * the Activity was recreated (rotation, split-screen resize) while the picker was open.
+         */
+        private fun picked(request: Int, resultCode: Int, data: Intent?) {
+            val uri = data?.data ?: return
+            if (resultCode != Activity.RESULT_OK) return
+            val page = live?.get()?.takeIf { it.alive } ?: return
+            when (request) {
+                REQ_EXPORT -> page.export(uri)
+                REQ_IMPORT -> page.readImport(uri)
+            }
+        }
+
         private const val REQ_EXPORT = 11
         private const val REQ_IMPORT = 12
+        private const val REQ_NOTIFY = 13
         private const val MAX_IMPORT_BYTES = 64 * 1024 * 1024
     }
+}
+
+/** The Settings screen as its own Activity: a thin shell around [SettingsPage]. */
+class SettingsActivity : PageActivity() {
+    override fun createPage(): GamePage = SettingsPage(this, this)
 }

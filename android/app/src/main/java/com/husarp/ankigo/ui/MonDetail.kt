@@ -1,6 +1,6 @@
 package com.husarp.ankigo.ui
 
-import android.app.Activity
+import android.content.Context
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
@@ -12,6 +12,7 @@ import com.husarp.ankigo.game.Evolution
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
@@ -64,20 +65,20 @@ object MonDetail {
 
     fun date(ms: Long): String = SimpleDateFormat("d MMM yyyy", Locale.ENGLISH).format(Date(ms))
 
-    private fun line(a: Activity, label: String, value: String): View = LinearLayout(a).apply {
+    private fun line(a: Context, label: String, value: String): View = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
         addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = label }, LinearLayout.LayoutParams(Ui.dp(a, 84), -2))
         addView(Ui.text(a, 12f, 800, R.color.ag_text).apply { text = value }, LinearLayout.LayoutParams(0, -2, 1f))
         setPadding(0, Ui.dp(a, 2), 0, Ui.dp(a, 2))
     }
 
-    private fun heading(a: Activity, text: String): TextView = Ui.text(a, 11f, 900, R.color.ag_sub0).apply {
+    private fun heading(a: Context, text: String): TextView = Ui.text(a, 11f, 900, R.color.ag_sub0).apply {
         this.text = text.uppercase()
         letterSpacing = 0.06f
         setPadding(0, Ui.dp(a, 12), 0, Ui.dp(a, 4))
     }
 
-    fun show(a: Activity, data: GameData, mon: Mon) {
+    fun show(a: Context, data: GameData, mon: Mon) {
         val sp = data.sp(mon.species)
         val stats = StatCalc.stats(sp, mon)
         val col = LinearLayout(a).apply {
@@ -89,7 +90,7 @@ object MonDetail {
         Ui.staticSprite(a, mon.species, mon.shiny, img)
         col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, 96), Ui.dp(a, 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply {
-            text = (if (mon.shiny) "★ " else "") + mon.name + "  " + Bits.genderSign(mon.gender)
+            text = (if (mon.shiny) "★ " else "") + mon.shownName + "  " + Bits.genderSign(mon.gender)
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(-1, -2))
         col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
@@ -102,6 +103,7 @@ object MonDetail {
         })
 
         col.addView(heading(a, "About"))
+        if (mon.shownName != mon.name) col.addView(line(a, "Species", mon.name))
         col.addView(line(a, "Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }))
         col.addView(line(a, "Held item", mon.heldItem?.let { Items.name(it) } ?: "none"))
         col.addView(line(a, "Friendship", mon.friendship.toString()))

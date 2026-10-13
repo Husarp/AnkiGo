@@ -173,7 +173,12 @@ class Mon(
     var caughtAt: Long = 0,
     var defeats: Int = 0,           // wild Pokémon defeated while this one was the main
     var tier: Tier = Tier.NORMAL,   // tier it was met in
+    var nickname: String? = null,   // player-given name (Ankimon import); null = none
+    var ankimonId: String? = null,  // Ankimon's individual_id when imported from an Ankimon save (re-import matches on it)
 )
+
+/** The name to show for an owned Pokémon: its nickname when it has one, else the species name. */
+val Mon.shownName: String get() = nickname?.takeIf { it.isNotBlank() } ?: name
 
 /** Per-battle state of one side (resets for every new wild Pokémon and when someone faints). */
 class BattleSide(

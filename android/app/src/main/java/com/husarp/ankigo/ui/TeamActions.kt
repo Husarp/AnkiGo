@@ -5,11 +5,12 @@ import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.ItemUse
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.shownName
 
 // TICKET T14 owns this file: the per-Pokémon action menu (team + box) and the item / TM flows behind it.
 // The Bag tab reuses [useItem], [giveItemTo] and [teach].
 
-internal class MonActions(private val s: GameScreen) {
+internal class MonActions(private val s: GamePage) {
     private val data get() = s.data
     private val state get() = s.state
 
@@ -33,7 +34,7 @@ internal class MonActions(private val s: GameScreen) {
             }
         } else if (main != null) {
             // Team full: the main goes to the box and this one takes its place at the front.
-            add("Make main (${main.name} goes to the box)") {
+            add("Make main (${main.shownName} goes to the box)") {
                 s.act { g ->
                     g.toBox(main.uid).let { r1 ->
                         if (!r1.ok) r1 else g.toTeam(mon.uid).let { r2 -> if (r2.ok) g.setMain(mon.uid) else r2 }
@@ -51,12 +52,12 @@ internal class MonActions(private val s: GameScreen) {
         }
         add("Details") { MonDetail.show(s, data, mon) }
         add("Release…") { release(mon) }
-        Pickers.choose(s, "${if (mon.shiny) "★ " else ""}${mon.name}  Lv ${mon.level}", labels) { acts[it]() }
+        Pickers.choose(s, "${if (mon.shiny) "★ " else ""}${mon.shownName}  Lv ${mon.level}", labels) { acts[it]() }
     }
 
     private fun release(mon: Mon) {
-        Pickers.confirm(s, "Release ${mon.name}?", "${mon.name} (Lv ${mon.level}) will be gone for good.", "Release…") {
-            Pickers.confirm(s, "Really release ${mon.name}?", "This can't be undone.", "Release") {
+        Pickers.confirm(s, "Release ${mon.shownName}?", "${mon.shownName} (Lv ${mon.level}) will be gone for good.", "Release…") {
+            Pickers.confirm(s, "Really release ${mon.shownName}?", "This can't be undone.", "Release") {
                 s.act { it.release(mon.uid) }
             }
         }
@@ -68,7 +69,7 @@ internal class MonActions(private val s: GameScreen) {
         val held = state.bag.keys.filter { Items.def(it)?.kind == ItemKind.HELD && state.count(it) > 0 && it != mon.heldItem }
             .sortedBy { Items.name(it) }
         if (held.isEmpty()) { Ui.toast(s, "No held items in the bag"); return }
-        Pickers.pickItem(s, "Give to ${mon.name}", state, held) { giveItemTo(mon, it) }
+        Pickers.pickItem(s, "Give to ${mon.shownName}", state, held) { giveItemTo(mon, it) }
     }
 
     fun giveItemTo(mon: Mon, item: String) { useItem(mon, item) }
@@ -81,15 +82,15 @@ internal class MonActions(private val s: GameScreen) {
             val kind = Items.def(it)?.kind
             (kind == ItemKind.HEAL || kind == ItemKind.EVOLUTION) && ItemUse.canUse(data, state, it, mon)
         }.sortedBy { Items.name(it) }
-        if (usable.isEmpty()) { Ui.toast(s, "Nothing in the bag helps ${mon.name} right now"); return }
-        Pickers.pickItem(s, "Use on ${mon.name}", state, usable) { useItem(mon, it) }
+        if (usable.isEmpty()) { Ui.toast(s, "Nothing in the bag helps ${mon.shownName} right now"); return }
+        Pickers.pickItem(s, "Use on ${mon.shownName}", state, usable) { useItem(mon, it) }
     }
 
     /** Uses [item] on [mon] (evolution items ask first). */
     fun useItem(mon: Mon, item: String) {
         val kind = Items.def(item)?.kind
         if (kind == ItemKind.EVOLUTION) {
-            Pickers.confirm(s, "Use ${Items.name(item)}?", "Use ${Items.name(item)} on ${mon.name}?", "Use") { runUse(item, mon.uid) }
+            Pickers.confirm(s, "Use ${Items.name(item)}?", "Use ${Items.name(item)} on ${mon.shownName}?", "Use") { runUse(item, mon.uid) }
         } else {
             runUse(item, mon.uid)
         }
@@ -103,8 +104,8 @@ internal class MonActions(private val s: GameScreen) {
 
     private fun teachMenu(mon: Mon) {
         val tms = tmsFor(mon)
-        if (tms.isEmpty()) { Ui.toast(s, "${mon.name} can't learn any of your TMs"); return }
-        Pickers.pickMoveId(s, "Teach ${mon.name}", data, tms) { teach(mon, it) }
+        if (tms.isEmpty()) { Ui.toast(s, "${mon.shownName} can't learn any of your TMs"); return }
+        Pickers.pickMoveId(s, "Teach ${mon.shownName}", data, tms) { teach(mon, it) }
     }
 
     /** Owned TMs this Pokémon's species can learn and doesn't know yet, by move name. */
@@ -120,7 +121,7 @@ internal class MonActions(private val s: GameScreen) {
             s.act { ItemUse.teachTm(it.data, it.state, move, mon.uid, null) }
         } else {
             val name = data.move(move)?.name ?: move
-            Pickers.pickMove(s, "${mon.name} knows 4 moves. Forget one for $name?", data, mon) { i ->
+            Pickers.pickMove(s, "${mon.shownName} knows 4 moves. Forget one for $name?", data, mon) { i ->
                 s.act { ItemUse.teachTm(it.data, it.state, move, mon.uid, i) }
             }
         }

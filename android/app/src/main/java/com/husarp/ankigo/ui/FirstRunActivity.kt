@@ -90,6 +90,7 @@ class FirstRunActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        live = java.lang.ref.WeakReference(this)
         Anki.load(this)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@FirstRunActivity, R.color.ag_base)) }
         content = LinearLayout(this).apply {
@@ -129,6 +130,20 @@ class FirstRunActivity : Activity() {
     override fun onStop() {
         job.listener = null
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (live?.get() === this) live = null
+        super.onDestroy()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQ_ANKIMON) return
+        val cb = pendingPick ?: return
+        pendingPick = null
+        cb(resultCode, data)
     }
 
     override fun onResume() {
@@ -305,6 +320,35 @@ class FirstRunActivity : Activity() {
         val btn = Form.primary(this, if (sp != null) "Choose ${sp.name}" else "Tap a Pokémon") { choose(selNum) }
         Form.enable(btn, sp != null && !picking)
         actions.addView(btn)
+        val ankimon = Form.secondary(this, "I play Ankimon on PC: import my save") { importAnkimon() }
+        Form.enable(ankimon, !picking)
+        actions.addView(ankimon, Form.lp(this, 8))
+    }
+
+    /** Ankimon import instead of a starter: the picker result may arrive after a rotation, so nothing here captures `this`. */
+    private fun importAnkimon() {
+        if (picking) return
+        AnkimonImportFlow.start(
+            applicationContext,
+            launch = { intent, cb ->
+                pendingPick = cb
+                try {
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(intent, REQ_ANKIMON)
+                } catch (e: Exception) {
+                    pendingPick = null
+                    throw e
+                }
+            },
+            ui = { live?.get() },
+            onDone = { imported -> live?.get()?.afterImport(imported) },
+        )
+    }
+
+    /** Imported a save that came with a team: the starter question is answered, go on as if a starter was picked. */
+    private fun afterImport(imported: Boolean) {
+        if (step != 3) return
+        if (imported && GameRepo.state?.starterChosen == true) goTo(4) else render()
     }
 
     private fun starterCard(data: GameData, num: Int): View {
@@ -385,6 +429,9 @@ class FirstRunActivity : Activity() {
 
     companion object {
         private const val REQ_ANKI = 1
+        private const val REQ_ANKIMON = 2
+        private var live: java.lang.ref.WeakReference<FirstRunActivity>? = null
+        private var pendingPick: ((Int, Intent?) -> Unit)? = null
     }
 }
 

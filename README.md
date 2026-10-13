@@ -5,10 +5,25 @@ screen next to AnkiDroid: while you study there, AnkiGo follows your answers and
 
 ## Current state
 
-0.2.0: the first version of the game. Every answer you give in AnkiDroid becomes part of an Ankimon-style
-battle in AnkiGo's panel (two answers make one round): catch and collect Pokémon, level them up, evolve
-them, fill the Pokédex, earn coins for the daily shop. Nothing needs a tap while you study. The rules follow
-the [Ankimon](https://github.com/h0tp-ftw/ankimon) Anki add-on, with a simpler battle engine.
+0.3.0: the game, plus three additions:
+
+- **Import from Ankimon (PC).** In Anki, use Ankimon's menu *Game → Export Save File…*, copy the `.db` file to
+  the phone, then *Settings → Import Ankimon save…* in AnkiGo. You see what will change before anything does
+  ("adds 37 Pokémon, upgrades 4"). The import only adds: Pokémon you don't have yet are added, ones imported earlier
+  are upgraded if the file has them further along, the Pokédex is combined, and for items and coins the higher number
+  is kept, so importing the same file twice changes nothing. Nicknames and EVs come along; gens 1–8 (gen 9 when it is
+  switched on). Your current game is backed up first and can be restored under *Restore a backup*.
+- **Picture-in-picture.** When you leave AnkiGo, the battle shrinks into a small picture-in-picture window and keeps
+  following your answers (buttons: Open, Pause/Resume). Settings → *When you leave AnkiGo*.
+- **Floating windows** (optional, needs Android's "Display over other apps"): in split screen, Team, Pokédex, Shop and
+  Settings open in a small window you can move and resize over AnkiDroid, so the battle stays visible. Instead of
+  picture-in-picture you can also choose a floating battle window; it keeps running with a notification while AnkiGo
+  isn't in front.
+
+The game itself: every answer you give in AnkiDroid becomes part of an Ankimon-style battle in AnkiGo's panel (two
+answers make one round): catch and collect Pokémon, level them up, evolve them, fill the Pokédex, earn coins for the
+daily shop. Nothing needs a tap while you study. The rules follow the [Ankimon](https://github.com/h0tp-ftw/ankimon)
+Anki add-on, with a simpler battle engine.
 
 No Pokémon pictures or data are part of this repository or the APK. On first start AnkiGo downloads the game
 data (about 4 MB, from [PokeAPI](https://pokeapi.co) and [Pokémon Showdown](https://pokemonshowdown.com)) and

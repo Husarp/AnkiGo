@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import android.content.Context
 import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
@@ -20,7 +21,7 @@ import com.husarp.ankigo.game.Species
 
 // TICKET T14 owns this file: the Pokédex (mockup frame D).
 // One ListView: header = hero card + progress + filter chips, rows = 4 cells each (recycled, so ~1000 entries scroll smoothly).
-class DexActivity : GameScreen() {
+class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
     override val tab = BottomNav.Tab.DEX
 
     private lateinit var appBar: AppBar
@@ -34,7 +35,7 @@ class DexActivity : GameScreen() {
         override fun getItem(position: Int): Any = position
         override fun getItemId(position: Int) = position.toLong()
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val row = (convertView as? CellRow) ?: CellRow(this@DexActivity, COLS, 1.08f, 6, 12) { f -> makeCell(f) }
+            val row = (convertView as? CellRow) ?: CellRow(this@DexPage, COLS, 1.08f, 6, 12) { f -> makeCell(f) }
             for (c in 0 until COLS) bindCell(row.cells[c], shown.getOrNull(position * COLS + c))
             return row
         }
@@ -48,16 +49,16 @@ class DexActivity : GameScreen() {
     override fun buildBody(): View {
         header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(Ui.dp(this@DexActivity, 12), 0, Ui.dp(this@DexActivity, 12), Ui.dp(this@DexActivity, 6))
+            setPadding(Ui.dp(this@DexPage, 12), 0, Ui.dp(this@DexPage, 12), Ui.dp(this@DexPage, 6))
         }
         list = ListView(this).apply {
             divider = null
             dividerHeight = 0
             setSelector(ColorDrawable(Color.TRANSPARENT))
-            setPadding(0, 0, 0, Ui.dp(this@DexActivity, 12))
+            setPadding(0, 0, 0, Ui.dp(this@DexPage, 12))
             clipToPadding = false
             addHeaderView(header, null, false)
-            adapter = this@DexActivity.adapter
+            adapter = this@DexPage.adapter
         }
         return list
     }
@@ -96,12 +97,12 @@ class DexActivity : GameScreen() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(Ui.dp(this@DexActivity, 14), Ui.dp(this@DexActivity, 12), Ui.dp(this@DexActivity, 14), Ui.dp(this@DexActivity, 12))
+            setPadding(Ui.dp(this@DexPage, 14), Ui.dp(this@DexPage, 12), Ui.dp(this@DexPage, 14), Ui.dp(this@DexPage, 12))
             // mauve 22 % over the card colour, fading to the card colour (mockup .dexhero gradient)
             background = android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
-                intArrayOf(Bits.blend(Ui.c(this@DexActivity, R.color.ag_mauve), Ui.c(this@DexActivity, R.color.ag_card), 0.22f), Ui.c(this@DexActivity, R.color.ag_card)),
-            ).apply { cornerRadius = Ui.dp(this@DexActivity, 16f) }
+                intArrayOf(Bits.blend(Ui.c(this@DexPage, R.color.ag_mauve), Ui.c(this@DexPage, R.color.ag_card), 0.22f), Ui.c(this@DexPage, R.color.ag_card)),
+            ).apply { cornerRadius = Ui.dp(this@DexPage, 16f) }
         }
         val img = ImageView(this)
         Ui.staticSprite(this, mon.species, mon.shiny, img)
@@ -129,7 +130,7 @@ class DexActivity : GameScreen() {
         val seen = enabled.count { it.num in st.seen || it.num in st.caught }
         val total = enabled.size.coerceAtLeast(1)
         val card = Ui.card(this).apply {
-            setPadding(Ui.dp(this@DexActivity, 12), Ui.dp(this@DexActivity, 10), Ui.dp(this@DexActivity, 12), Ui.dp(this@DexActivity, 10))
+            setPadding(Ui.dp(this@DexPage, 12), Ui.dp(this@DexPage, 10), Ui.dp(this@DexPage, 12), Ui.dp(this@DexPage, 10))
         }
         val nums = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
         fun big(n: Int, tone: Int) = Ui.text(this, 22f, 900, tone).apply { text = n.toString() }
@@ -166,8 +167,8 @@ class DexActivity : GameScreen() {
             row.addView(Ui.text(this, 12f, 800, if (on) R.color.ag_crust else R.color.ag_sub1).apply {
                 text = label
                 maxLines = 1
-                setPadding(Ui.dp(this@DexActivity, 10), Ui.dp(this@DexActivity, 5), Ui.dp(this@DexActivity, 10), Ui.dp(this@DexActivity, 5))
-                background = Ui.rounded(Ui.c(this@DexActivity, if (on) R.color.ag_mauve else R.color.ag_mantle), 10, this@DexActivity)
+                setPadding(Ui.dp(this@DexPage, 10), Ui.dp(this@DexPage, 5), Ui.dp(this@DexPage, 10), Ui.dp(this@DexPage, 5))
+                background = Ui.rounded(Ui.c(this@DexPage, if (on) R.color.ag_mauve else R.color.ag_mantle), 10, this@DexPage)
                 setOnClickListener { filter = key; requestRender(); list.setSelection(0) }
             }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6) })
         }
@@ -232,4 +233,9 @@ class DexActivity : GameScreen() {
     }
 
     private companion object { const val COLS = 4 }
+}
+
+/** The Dex screen as its own Activity: a thin shell around [DexPage]. */
+class DexActivity : PageActivity() {
+    override fun createPage(): GamePage = DexPage(this, this)
 }

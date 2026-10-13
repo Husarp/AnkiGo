@@ -2,11 +2,19 @@ package com.husarp.ankigo.ui
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.PendingIntent
+import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.content.res.Configuration
+import android.graphics.drawable.Icon
+import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.os.SystemClock
+import android.util.Rational
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -26,25 +34,29 @@ import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Outcome
 import com.husarp.ankigo.game.Tuning
-import com.husarp.ankigo.live.LiveDetector
+import com.husarp.ankigo.live.LiveSession
+import com.husarp.ankigo.overlay.FloatBattleService
+import com.husarp.ankigo.overlay.FloatPage
+import com.husarp.ankigo.overlay.FloatScreens
+import com.husarp.ankigo.overlay.Overlay
 import com.husarp.ankigo.update.UpdateBanner
 import com.husarp.ankigo.update.Updates
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.husarp.ankigo.game.Answer as GameAnswer
 
 /**
  * The AnkiGo battle panel (launcher): meant for the bottom half of a split screen next to AnkiDroid, also fine full screen.
- * Nothing needs a tap while you study: [LiveDetector] sees each answer in AnkiDroid, [Game] turns it into battle
+ * Nothing needs a tap while you study: [LiveSession] sees each answer in AnkiDroid, [Game] turns it into battle
  * events and [EventPlayer] shows them on the [BattlePanelView]. Loading, first-run and save-error screens live here too.
+ * Leaving the app with LeaveMode.PIP puts the compact battle into picture-in-picture (Open and Pause/Resume buttons);
+ * the activity is only paused there, so live detection keeps running.
  */
 class GameActivity : Activity() {
-    private val handler = Handler(Looper.getMainLooper())
     private lateinit var content: FrameLayout
     private lateinit var nav: View
-    private lateinit var detector: LiveDetector
+    private lateinit var bannerHolder: FrameLayout   // holds the update banner so PiP can hide it whatever the banner decides
 
     private var panel: BattlePanelView? = null
     private var player: EventPlayer? = null
@@ -53,12 +65,19 @@ class GameActivity : Activity() {
     private var loading = false
     private var firstRunCanceled = false
     private var destroyed = false
-    private var detectorUsed = false        // detector.start was called, so its snapshot means something
+    private var inPip = false
+    private var internalNav = false          // we are opening one of our own screens: that is not "leaving" (no PiP)
+    private var pipReceiver: BroadcastReceiver? = null
+    private val pauseListener: (Boolean) -> Unit = { p -> panel?.setPaused(p); updatePipParams() }
 
-    private val pendingCatchUp = ArrayList<GameAnswer>()
-    private var flushPosted = false
-    private var lastWidgets = 0L
-    private var widgetsPosted = false
+    /** The panel as a [LiveSession] sink: attached while the activity is started, so a stopped one queues no animations. */
+    private val liveSink = object : LiveSession.Sink {
+        override fun onGameEvents(events: List<GameEvent>) { player?.enqueue(events) }
+        override fun onLogLine(kind: LogKind, pill: String, text: String, redraw: Boolean) {
+            player?.enqueueAction { if (redraw) panel?.renderAll(); panel?.setLog(kind, pill, text) }
+        }
+        override fun onStatus(ok: Boolean, text: String, canGrant: Boolean) { panel?.setStatus(ok, text, canGrant) }
+    }
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -67,13 +86,13 @@ class GameActivity : Activity() {
         Report.init(this)
         Anki.load(this)
         if (savedInstanceState == null) Updates.onAppStart(this)
-        detector = LiveDetector(this) { onLive(it) }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Ui.c(this@GameActivity, R.color.ag_base))
         }
-        root.addView(UpdateBanner(this), LinearLayout.LayoutParams(-1, -2))
+        bannerHolder = FrameLayout(this).apply { addView(UpdateBanner(this@GameActivity), FrameLayout.LayoutParams(-1, -2)) }
+        root.addView(bannerHolder, LinearLayout.LayoutParams(-1, -2))
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         nav = BottomNav.create(this, BottomNav.Tab.BATTLE).also { it.visibility = View.GONE }
@@ -81,25 +100,33 @@ class GameActivity : Activity() {
         // The bottom bar only fits a tall window; in a split-screen half the ⋯ menu is the way out.
         root.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
             val tall = v.height / resources.displayMetrics.density >= 560f
-            val want = if (tall) View.VISIBLE else View.GONE
+            val want = if (tall && !inPip) View.VISIBLE else View.GONE
             if (nav.visibility != want) nav.visibility = want
         }
         setContentView(root)
         showMessage("Loading…")
+        registerPipReceiver()
     }
 
     override fun onStart() {
         super.onStart()
         started = true
+        BattleScreen.setVisible(this, true)
+        LiveSession.addPauseListener(pauseListener)
+        panel?.setPaused(LiveSession.paused)
         if (bound) {
             panel?.renderAll()
-            startDetection()
+            LiveSession.addSink(liveSink)
+            LiveSession.hold(this, this)
         }
     }
 
     override fun onResume() {
         super.onResume()
         Updates.onResume(this)
+        internalNav = false
+        updatePipParams()
+        FloatBattleService.startIfWanted(this)
         if (bound) {
             val events = act { it.tick() }
             if (events.isEmpty()) { if (player?.idle != false) panel?.renderAll() } else handleEvents(events)
@@ -115,11 +142,13 @@ class GameActivity : Activity() {
 
     override fun onStop() {
         started = false
+        BattleScreen.setVisible(this, false)
+        LiveSession.removePauseListener(pauseListener)
+        LiveSession.removeSink(liveSink)
         if (bound) {
-            detector.stop()
-            flushCatchUp()
+            LiveSession.saveSnapshot()
+            LiveSession.release(this, this)
             player?.clear()
-            saveSnapshot()
             GameRepo.saveNow(this)
             Widgets.refreshAll(this)
         }
@@ -128,10 +157,96 @@ class GameActivity : Activity() {
 
     override fun onDestroy() {
         destroyed = true
-        detector.stop()
+        BattleScreen.setVisible(this, false)
+        pipReceiver?.let { try { unregisterReceiver(it) } catch (e: IllegalArgumentException) { } }
+        pipReceiver = null
+        LiveSession.removePauseListener(pauseListener)
+        LiveSession.removeSink(liveSink)
+        LiveSession.release(this, this) // in case onStop didn't run
         player?.clear()
-        handler.removeCallbacksAndMessages(null)
         super.onDestroy()
+    }
+
+    // ---------------------------------------------------------------- picture-in-picture
+
+    /** PiP applies only for LeaveMode.PIP, with a loaded game, on a device that has it, and not while opening our own screens. */
+    private fun pipWanted(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && bound && !internalNav &&
+            AppPrefs.leaveMode(this) == LeaveMode.PIP &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    private fun pipActions(): List<RemoteAction> {
+        fun action(icon: Int, title: String, pi: PendingIntent) =
+            RemoteAction(Icon.createWithResource(this, icon), title, title, pi)
+        val open = PendingIntent.getActivity(this, 0,
+            Intent(this, GameActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val toggle = if (LiveSession.paused) {
+            action(R.drawable.ic_play, "Resume", pipBroadcast(ACTION_RESUME, 2))
+        } else {
+            action(R.drawable.ic_pause, "Pause", pipBroadcast(ACTION_PAUSE, 1))
+        }
+        return listOf(action(R.drawable.ic_open, "Open", open), toggle)
+    }
+
+    private fun pipBroadcast(action: String, code: Int): PendingIntent =
+        PendingIntent.getBroadcast(this, code, Intent(action).setPackage(packageName),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+    private fun pipParams(): PictureInPictureParams {
+        val b = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(3, 2))
+            .setActions(pipActions())
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) b.setAutoEnterEnabled(pipWanted())
+        return b.build()
+    }
+
+    /** Keeps the PiP params (auto-enter, buttons) current. Call when the game binds, on resume and when pause changes. */
+    private fun updatePipParams() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || destroyed) return
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return
+        try {
+            setPictureInPictureParams(pipParams())
+        } catch (t: Throwable) {
+            Report.fail("PANEL", "pip params", t)
+        }
+    }
+
+    /** API 26-30: leaving by Home/Recents enters PiP by hand (API 31+ does it through auto-enter). */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S || !pipWanted() || inPip) return
+        try {
+            enterPictureInPictureMode(pipParams())
+        } catch (t: Throwable) {
+            Report.fail("PANEL", "enter pip", t)
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPip = isInPictureInPictureMode
+        panel?.setCompact(inPip)
+        bannerHolder.visibility = if (inPip) View.GONE else View.VISIBLE
+        // the layout listener re-decides the bottom bar by height; force it now so it doesn't flash in PiP
+        if (inPip) nav.visibility = View.GONE else content.requestLayout()
+    }
+
+    /** The PiP buttons Pause and Resume come back as broadcasts (the Open button starts this activity directly). */
+    private fun registerPipReceiver() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                when (intent.action) {
+                    ACTION_PAUSE -> LiveSession.setPaused(this@GameActivity, true)
+                    ACTION_RESUME -> LiveSession.setPaused(this@GameActivity, false)
+                }
+            }
+        }
+        val f = IntentFilter().apply { addAction(ACTION_PAUSE); addAction(ACTION_RESUME) }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(r, f, Context.RECEIVER_NOT_EXPORTED)
+        else registerReceiver(r, f)
+        pipReceiver = r
     }
 
     @Deprecated("Deprecated in Java")
@@ -149,7 +264,7 @@ class GameActivity : Activity() {
         if (requestCode != REQ_PERMISSION) return
         val ok = grantResults.firstOrNull() == 0
         Report.log("PANEL", "permission ${permissions.firstOrNull()}: ${if (ok) "granted" else "denied"}")
-        if (bound && started) { detector.stop(); startDetection() }
+        if (bound && started) LiveSession.restart(this)
     }
 
     // ---------------------------------------------------------------- loading the game
@@ -173,7 +288,7 @@ class GameActivity : Activity() {
                         "AnkiGo needs the game data and your first Pokémon before it can start.",
                         "Continue setup" to { firstRunCanceled = false; onStatus(GameRepo.status) })
                 } else {
-                    startActivityForResult(Intent(this, FirstRunActivity::class.java), REQ_FIRST_RUN)
+                    startActivityForResult(Intent(this, FirstRunActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION), REQ_FIRST_RUN)
                 }
             }
             GameRepo.Status.SAVE_ERROR -> showSaveError()
@@ -186,10 +301,12 @@ class GameActivity : Activity() {
         if (GameRepo.game == null) { showMessage("Loading…"); return }
         player?.clear()
         val p = BattlePanelView(this)
-        p.onGrant = { requestPermissions(arrayOf(Anki.permission), REQ_PERMISSION) }
+        p.onGrant = { internalNav = true; updatePipParams(); requestPermissions(arrayOf(Anki.permission), REQ_PERMISSION) }
         p.onMenu = { showMenu(it) }
         p.onBalls = { showBallDialog() }
         p.arena.onCatchTagTap = { toggleCatch() }
+        p.setPaused(LiveSession.paused)
+        if (inPip) p.setCompact(true)
         panel = p
         player = EventPlayer(p)
         content.removeAllViews()
@@ -197,7 +314,11 @@ class GameActivity : Activity() {
         bound = true
         p.renderAll()
         handleEvents(act { it.ensureEncounter() })
-        if (started) startDetection()
+        if (started) {
+            LiveSession.addSink(liveSink)
+            LiveSession.hold(this, this)
+        }
+        updatePipParams()
     }
 
     // ---------------------------------------------------------------- simple screens (loading, errors)
@@ -305,31 +426,11 @@ class GameActivity : Activity() {
         emptyList()
     }
 
-    /** Hands events to the player; some of them change what the widgets show. */
+    /** Hands the events of this screen's own actions to the player; some of them change what the widgets show. */
     private fun handleEvents(events: List<GameEvent>) {
         if (events.isEmpty()) return
         player?.enqueue(events)
-        if (changesWidgets(events)) refreshWidgetsSoon()
-    }
-
-    private fun changesWidgets(events: List<GameEvent>) = events.any {
-        it is GameEvent.Caught || it is GameEvent.Defeated || it is GameEvent.MainHealed || it is GameEvent.Evolved || it is GameEvent.DayChanged
-    }
-
-    /** Widgets refresh at most once per 20 s; a refresh that is too early is postponed, not dropped. */
-    private fun refreshWidgetsSoon() {
-        val wait = WIDGET_EVERY_MS - (SystemClock.elapsedRealtime() - lastWidgets)
-        if (wait <= 0) {
-            lastWidgets = SystemClock.elapsedRealtime()
-            Widgets.refreshAll(this)
-        } else if (!widgetsPosted) {
-            widgetsPosted = true
-            handler.postDelayed({
-                widgetsPosted = false
-                lastWidgets = SystemClock.elapsedRealtime()
-                if (!destroyed) Widgets.refreshAll(this)
-            }, wait)
-        }
+        LiveSession.refreshWidgetsFor(this, events)
     }
 
     private fun showMenu(anchor: View) {
@@ -341,15 +442,33 @@ class GameActivity : Activity() {
         m.menu.add(0, 5, 4, "Switch main")
         m.setOnMenuItemClickListener { item ->
             when (item.itemId) {
-                1 -> startActivity(Intent(this, TeamActivity::class.java))
-                2 -> startActivity(Intent(this, DexActivity::class.java))
-                3 -> startActivity(Intent(this, ShopActivity::class.java))
-                4 -> startActivity(Intent(this, SettingsActivity::class.java))
+                1 -> openScreen(FloatPage.TEAM, TeamActivity::class.java)
+                2 -> openScreen(FloatPage.DEX, DexActivity::class.java)
+                3 -> openScreen(FloatPage.SHOP, ShopActivity::class.java)
+                4 -> openScreen(FloatPage.SETTINGS, SettingsActivity::class.java)
                 5 -> switchMain()
             }
             true
         }
         m.show()
+    }
+
+    /**
+     * In split screen (with "floating screens" on) the screen opens as a floating card over AnkiDroid so the battle
+     * stays visible; if the overlay permission is missing it is explained once and the screen comes back after it is
+     * granted. Full screen, or anything else: the normal Activity.
+     */
+    private fun openScreen(page: FloatPage, cls: Class<*>) {
+        if (isInMultiWindowMode && AppPrefs.floatScreens(this)) {
+            if (Overlay.canDraw(this)) {
+                if (FloatScreens.open(this, page)) return
+            } else if (Overlay.askOnce(this, "Team, Pokédex, Shop and Settings can open in a small window over AnkiDroid, so the battle stays visible.")) {
+                return
+            }
+        }
+        internalNav = true
+        updatePipParams()
+        startActivity(Intent(this, cls).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
     }
 
     private fun switchMain() {
@@ -396,91 +515,10 @@ class GameActivity : Activity() {
         })
     }
 
-    // ---------------------------------------------------------------- live detection
-
-    private fun startDetection() {
-        val st = GameRepo.state ?: return
-        val g = GameRepo.game ?: return
-        if (detector.running) return
-        detectorUsed = true
-        detector.start(st.liveSnapshot, st.liveDay, g.dayKey())
-    }
-
-    /** Copies the detector's card map into the state, so the save and the game agree on what was counted. */
-    private fun saveSnapshot() {
-        if (!detectorUsed) return
-        val st = GameRepo.state ?: return
-        st.liveSnapshot = detector.snapshot()
-        st.liveDay = GameRepo.game?.dayKey()
-    }
-
-    private fun saveSnapshotInto(g: Game) {
-        if (!detectorUsed) return
-        g.state.liveSnapshot = detector.snapshot()
-        g.state.liveDay = g.dayKey()
-    }
-
-    private fun onLive(e: LiveDetector.Event) {
-        if (destroyed || !bound) return
-        when (e) {
-            is LiveDetector.Event.Status ->
-                panel?.setStatus(e.ok, e.text, !e.ok && e.text.contains("permission", ignoreCase = true))
-            is LiveDetector.Event.Answer -> onAnswer(e)
-            is LiveDetector.Event.Undo -> {
-                val done = try {
-                    GameRepo.run(this) { g -> saveSnapshotInto(g); g.onUndo(e.cardId, e.count) }
-                    true
-                } catch (t: Throwable) {
-                    Report.fail("PANEL", "undo", t)
-                    false
-                }
-                if (done) player?.enqueueAction { panel?.setLog(LogKind.NEUTRAL, "UNDO", "Undo in AnkiDroid: the redo won't count twice") }
-            }
-        }
-    }
-
-    private fun onAnswer(e: LiveDetector.Event.Answer) {
-        val a = GameAnswer(e.cardId, e.button, System.currentTimeMillis(), e.catchUp)
-        if (e.catchUp) {
-            // Answers made while AnkiGo was closed arrive in one burst: no animation, one summary line.
-            pendingCatchUp += a
-            if (!flushPosted) { flushPosted = true; handler.post { flushPosted = false; flushCatchUp() } }
-            return
-        }
-        flushCatchUp()
-        handleEvents(act { g -> saveSnapshotInto(g); g.tick() + g.onAnswer(a) })
-        // The detector refreshes its map a moment after delivering; save the fresh one too.
-        handler.removeCallbacks(snapshotLater)
-        handler.postDelayed(snapshotLater, 1500)
-    }
-
-    private val snapshotLater = Runnable {
-        if (destroyed || !bound) return@Runnable
-        saveSnapshot()
-        GameRepo.scheduleSave(this)
-    }
-
-    private fun flushCatchUp() {
-        if (pendingCatchUp.isEmpty()) return
-        val batch = pendingCatchUp.toList()
-        pendingCatchUp.clear()
-        val events = act { g -> saveSnapshotInto(g); g.tick() + batch.flatMap { g.onAnswer(it) } }
-        var won = 0; var caught = 0; var cash = 0
-        for (ev in events) when (ev) {
-            is GameEvent.Defeated -> won++
-            is GameEvent.Caught -> caught++
-            is GameEvent.Cash -> cash += ev.amount
-            else -> {}
-        }
-        val n = batch.size
-        val text = "Caught up $n answer${if (n == 1) "" else "s"} made while AnkiGo was closed: $won won, $caught caught, +$cash ₽"
-        player?.enqueueAction { panel?.renderAll(); panel?.setLog(LogKind.SYS, "CAUGHT UP", text) }
-        if (changesWidgets(events)) refreshWidgetsSoon()
-    }
-
     private companion object {
         const val REQ_FIRST_RUN = 1
         const val REQ_PERMISSION = 2
-        const val WIDGET_EVERY_MS = 20_000L
+        const val ACTION_PAUSE = "com.husarp.ankigo.PIP_PAUSE"
+        const val ACTION_RESUME = "com.husarp.ankigo.PIP_RESUME"
     }
 }

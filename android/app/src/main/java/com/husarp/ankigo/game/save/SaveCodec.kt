@@ -111,6 +111,7 @@ object SaveCodec {
         list("moves", m.moves)
         kv("hp", m.hp); kv("friendship", m.friendship); kv("heldItem", m.heldItem); kv("caughtAt", m.caughtAt)
         kv("defeats", m.defeats); kv("tier", m.tier.name)
+        kv("nickname", m.nickname); kv("ankimonId", m.ankimonId)
     }
 
     private fun writeSide(w: W, s: BattleSide) = w.obj {
@@ -176,6 +177,7 @@ object SaveCodec {
             hp = o.int("hp", 1), friendship = o.int("friendship", 0), heldItem = o.strOrNull("heldItem"),
             caughtAt = o.long("caughtAt", 0), defeats = o.int("defeats", 0),
             tier = enumOr(o.strOrNull("tier"), Tier.NORMAL),
+            nickname = o.strOrNull("nickname"), ankimonId = o.strOrNull("ankimonId"),
         )
     }
 

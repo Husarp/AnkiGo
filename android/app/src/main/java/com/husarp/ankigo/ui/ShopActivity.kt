@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import android.content.Context
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
@@ -14,7 +15,7 @@ import java.util.Calendar
 
 // TICKET T14 owns this file: the daily shop and the bag (mockup frame E). The Bag tab lives in ShopBag.kt.
 // Ankimon has no always-in-stock list: today's items and TMs are all there is (reroll costs 100).
-class ShopActivity : GameScreen() {
+class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
     override val tab = BottomNav.Tab.SHOP
 
     private lateinit var appBar: AppBar
@@ -52,8 +53,8 @@ class ShopActivity : GameScreen() {
         return ScrollView(ctx).apply { addView(col) }
     }
 
-    override fun onResume() {
-        super.onResume()
+    override fun onShow() {
+        super.onShow()
         // New game day: roll the day over and restock once (not in render(), which GameRepo's listener would loop on).
         if (GameRepo.status == GameRepo.Status.READY && GameRepo.state != null && GameRepo.data != null) {
             GameRepo.run(this) { g ->
@@ -154,4 +155,9 @@ class ShopActivity : GameScreen() {
             act { g -> Shop.reroll(g.data, g.state, g.rng) }
         }
     }
+}
+
+/** The Shop screen as its own Activity: a thin shell around [ShopPage]. */
+class ShopActivity : PageActivity() {
+    override fun createPage(): GamePage = ShopPage(this, this)
 }

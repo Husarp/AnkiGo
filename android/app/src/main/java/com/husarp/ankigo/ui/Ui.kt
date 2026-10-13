@@ -2,6 +2,7 @@ package com.husarp.ankigo.ui
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -120,17 +121,29 @@ object Ui {
         }
 
     /**
-     * Screen title bar (mockup `.appbar`): optional back arrow (finishes [activity]), title 22 sp / 900, and an optional
-     * right-hand pill, which can carry a tinted icon (Shop: coin + balance).
+     * Screen title bar (mockup `.appbar`): optional back arrow, title 22 sp / 900, and an optional right-hand pill, which
+     * can carry a tinted icon (Shop: coin + balance). The back arrow calls [onBack]; by default it finishes the Activity
+     * found in [ctx].
      */
     fun appBar(
-        activity: Activity,
+        ctx: Context,
         title: String,
         pillText: String? = null,
         back: Boolean = false,
         @DrawableRes pillIconRes: Int = 0,
         @ColorRes pillIconColorRes: Int = R.color.ag_yellow,
-    ): AppBar = AppBar(activity, title, pillText, back, pillIconRes, pillIconColorRes)
+        onBack: (() -> Unit)? = null,
+    ): AppBar = AppBar(ctx, title, pillText, back, pillIconRes, pillIconColorRes, onBack)
+
+    /** The Activity behind [ctx] (unwraps ContextWrappers, e.g. a page), or null when there is none (floating card). */
+    fun findActivity(ctx: Context): Activity? {
+        var c: Context? = ctx
+        while (c != null) {
+            if (c is Activity) return c
+            c = (c as? ContextWrapper)?.baseContext
+        }
+        return null
+    }
 
     // ---------- images ----------
 
@@ -270,14 +283,15 @@ class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int) : Li
 
 /** The screen title bar built by [Ui.appBar]. */
 class AppBar(
-    private val activity: Activity,
+    ctx: Context,
     title: String,
     pillText: String?,
     back: Boolean,
     @DrawableRes pillIconRes: Int,
     @ColorRes pillIconColorRes: Int,
-) : LinearLayout(activity) {
-    val titleView: TextView = Ui.text(activity, 22f, 900, R.color.ag_text).apply {
+    onBack: (() -> Unit)? = null,
+) : LinearLayout(ctx) {
+    val titleView: TextView = Ui.text(ctx, 22f, 900, R.color.ag_text).apply {
         text = title
         letterSpacing = -0.014f
         maxLines = 1
@@ -291,31 +305,31 @@ class AppBar(
     init {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setBackgroundColor(Ui.c(activity, R.color.ag_base))
-        setPadding(Ui.dp(activity, 16), Ui.dp(activity, 12), Ui.dp(activity, 16), Ui.dp(activity, 10))
+        setBackgroundColor(Ui.c(ctx, R.color.ag_base))
+        setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 12), Ui.dp(ctx, 16), Ui.dp(ctx, 10))
         if (back) {
-            addView(ImageView(activity).apply {
+            addView(ImageView(ctx).apply {
                 setImageResource(R.drawable.ic_back)
-                setColorFilter(Ui.c(activity, R.color.ag_text), PorterDuff.Mode.SRC_IN)
-                setPadding(Ui.dp(activity, 4), Ui.dp(activity, 4), Ui.dp(activity, 4), Ui.dp(activity, 4))
+                setColorFilter(Ui.c(ctx, R.color.ag_text), PorterDuff.Mode.SRC_IN)
+                setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4))
                 contentDescription = "Back"
-                layoutParams = LayoutParams(Ui.dp(activity, 32), Ui.dp(activity, 32)).also { it.marginEnd = Ui.dp(activity, 6) }
-                setOnClickListener { activity.finish() }
+                layoutParams = LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32)).also { it.marginEnd = Ui.dp(ctx, 6) }
+                setOnClickListener { if (onBack != null) onBack() else Ui.findActivity(ctx)?.finish() }
             })
         }
         addView(titleView)
         if (pillText != null) {
-            val tv = Ui.text(activity, 12f, 800, if (pillIconRes != 0) R.color.ag_text else R.color.ag_sub1).apply { text = pillText }
-            val box = LinearLayout(activity).apply {
+            val tv = Ui.text(ctx, 12f, 800, if (pillIconRes != 0) R.color.ag_text else R.color.ag_sub1).apply { text = pillText }
+            val box = LinearLayout(ctx).apply {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(Ui.dp(activity, 9), Ui.dp(activity, 5), Ui.dp(activity, 9), Ui.dp(activity, 5))
-                background = Ui.rounded(Ui.c(activity, R.color.ag_mantle), 10, activity)
+                setPadding(Ui.dp(ctx, 9), Ui.dp(ctx, 5), Ui.dp(ctx, 9), Ui.dp(ctx, 5))
+                background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx)
                 if (pillIconRes != 0) {
-                    addView(ImageView(activity).apply {
+                    addView(ImageView(ctx).apply {
                         setImageResource(pillIconRes)
-                        setColorFilter(Ui.c(activity, pillIconColorRes), PorterDuff.Mode.SRC_IN)
-                        layoutParams = LayoutParams(Ui.dp(activity, 14), Ui.dp(activity, 14)).also { it.marginEnd = Ui.dp(activity, 4) }
+                        setColorFilter(Ui.c(ctx, pillIconColorRes), PorterDuff.Mode.SRC_IN)
+                        layoutParams = LayoutParams(Ui.dp(ctx, 14), Ui.dp(ctx, 14)).also { it.marginEnd = Ui.dp(ctx, 4) }
                     })
                 }
                 addView(tv)

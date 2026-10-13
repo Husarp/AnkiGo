@@ -15,7 +15,7 @@ import com.husarp.ankigo.game.Progression
 
 // TICKET T14 owns this file: the Bag tab of the Shop screen (owned items grouped, then TMs) and what a tap does.
 
-internal class BagActions(private val s: GameScreen, private val mons: MonActions) {
+internal class BagActions(private val s: GamePage, private val mons: MonActions) {
     private val data get() = s.data
     private val state get() = s.state
 

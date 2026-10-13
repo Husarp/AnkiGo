@@ -33,6 +33,7 @@ import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Progression
+import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.StatCalc
 import java.util.Locale
 import kotlin.math.max
@@ -92,6 +93,31 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         setPadding(dpi(14), dpi(8), dpi(10), dpi(8))
     }
     private var accentAnim: ValueAnimator? = null
+    private var logSize = 13f
+    private var compact = false
+    private var paused = false
+    private var statusOk = true
+
+    // ---- layout parts kept so setCompact can rearrange them ----
+    private val column = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    private val footer = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dpi(10), dpi(8), dpi(10), dpi(8))
+    }
+    private val scroll = ScrollView(ctx).apply {
+        isFillViewport = true
+        isVerticalScrollBarEnabled = false
+        overScrollMode = OVER_SCROLL_NEVER
+    }
+    private val logLp = LinearLayout.LayoutParams(-1, dpi(52)).also { it.setMargins(dpi(10), dpi(8), dpi(10), 0) }
+
+    /** "Paused" pill over the arena (compact mode only). */
+    private val pausedPill = Ui.text(ctx, 10f, 900, R.color.ag_crust).apply {
+        text = "Paused"
+        setPadding(dpi(8), dpi(2), dpi(8), dpi(2))
+        background = Ui.rounded(Ui.c(ctx, R.color.ag_peach), 8, ctx)
+        visibility = GONE
+    }
 
     // ---- footer ----
     private val goalBar = BarView(ctx).apply {
@@ -141,38 +167,67 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         ballChip.setOnClickListener { onBalls() }
         ballChip.contentDescription = "Poké Balls"
 
-        val footer = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dpi(10), dpi(8), dpi(10), dpi(8))
-        }
         footer.addView(goalRow, LinearLayout.LayoutParams(-1, -2))
         footer.addView(chips, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(4) })
 
-        val column = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         column.addView(strip, LinearLayout.LayoutParams(-1, -2))
         column.addView(arena, LinearLayout.LayoutParams(-1, 0, 1f))
-        column.addView(logBox, LinearLayout.LayoutParams(-1, dpi(52)).also { it.setMargins(dpi(10), dpi(8), dpi(10), 0) })
+        column.addView(logBox, logLp)
         column.addView(footer, LinearLayout.LayoutParams(-1, -2))
 
         // A very short window scrolls instead of squeezing the arena below ~140 dp.
-        val scroll = ScrollView(ctx).apply {
-            isFillViewport = true
-            isVerticalScrollBarEnabled = false
-            overScrollMode = OVER_SCROLL_NEVER
-            addView(column, ViewGroup.LayoutParams(-1, -2))
-        }
+        scroll.addView(column, ViewGroup.LayoutParams(-1, -2))
         addView(scroll, LayoutParams(-1, -1))
         addView(overlay, LayoutParams(-1, -1))
+        addView(pausedPill, LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).also { it.topMargin = dpi(6) })
     }
 
     // ---------------------------------------------------------------- strip
 
     /** Red strip above the arena while detection has a problem; [canGrant] adds the "Grant" button. */
     fun setStatus(ok: Boolean, text: String, canGrant: Boolean) {
-        strip.visibility = if (ok) GONE else VISIBLE
+        statusOk = ok
+        strip.visibility = if (ok || compact) GONE else VISIBLE
         stripText.text = text
         grant.visibility = if (canGrant) VISIBLE else GONE
     }
+
+    /**
+     * Compact battle-only layout for picture-in-picture and the floating battle window: the arena and a one-line log
+     * only (no status strip, goal bar, menu or chips). False = the normal panel. (TICKET T25 implements it.)
+     */
+    fun setCompact(on: Boolean) {
+        if (compact == on) return
+        compact = on
+        arena.setCompact(on)
+        // The normal panel scrolls below ~140 dp; the compact one just fills the window.
+        if (on) {
+            scroll.removeView(column)
+            addView(column, 0, LayoutParams(-1, -1))
+        } else {
+            removeView(column)
+            scroll.addView(column, ViewGroup.LayoutParams(-1, -2))
+        }
+        scroll.visibility = if (on) GONE else VISIBLE
+        strip.visibility = if (on || statusOk) GONE else VISIBLE
+        footer.visibility = if (on) GONE else VISIBLE
+        logLp.height = if (on) dpi(26) else dpi(52)
+        if (on) logLp.setMargins(dpi(6), dpi(3), dpi(6), dpi(3)) else logLp.setMargins(dpi(10), dpi(8), dpi(10), 0)
+        logBox.setPadding(if (on) dpi(10) else dpi(14), if (on) dpi(2) else dpi(8), dpi(8), if (on) dpi(2) else dpi(8))
+        logText.maxLines = if (on) 1 else 2
+        logText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (on) 11f else logSize)
+        logPill?.visibility = if (on) GONE else VISIBLE
+        logBox.layoutParams = logLp
+        updatePausedPill()
+    }
+
+    /** Shows a small "Paused" pill over the arena while paused (compact mode only; the normal panel has the strip). */
+    fun setPaused(p: Boolean) {
+        paused = p
+        updatePausedPill()
+    }
+
+    private fun updatePausedPill() { pausedPill.visibility = if (compact && paused) VISIBLE else GONE }
 
     // ---------------------------------------------------------------- log
 
@@ -184,8 +239,10 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         logPill?.let { logBox.removeView(it) }
         val p = Ui.pill(context, pill, kind.tone)
         logBox.addView(p, 0, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(8) })
+        p.visibility = if (compact) GONE else VISIBLE
         logPill = p
-        logText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (text.length > 64) 12f else 13f)
+        logSize = if (text.length > 64) 12f else 13f
+        logText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (compact) 11f else logSize)
         logText.text = PanelText.rich(context, text)
         val to = Ui.c(context, kind.border)
         accentAnim?.cancel()
@@ -307,7 +364,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
             return
         }
         val sp = data.species[m.species]
-        arena.setPlayerInfo(m.uid, m.name, m.level)
+        arena.setPlayerInfo(m.uid, m.shownName, m.level)
         arena.setPlayerHp(m.hp, if (sp != null) StatCalc.maxHp(data, m) else max(m.hp, 1), false)
         val need = Progression.xpToNext(data, m)
         arena.setPlayerXp(if (need > 0) m.xp.toFloat() / need else 1f, false)

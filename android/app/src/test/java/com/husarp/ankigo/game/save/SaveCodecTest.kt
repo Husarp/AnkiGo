@@ -28,6 +28,7 @@ class SaveCodecTest {
         moves = mutableListOf("tackle", "growl", "thunderbolt", "quickattack").take(1 + i % 4).toMutableList(),
         hp = 17 + i, friendship = 70 + i, heldItem = if (i % 2 == 0) "everstone" else null, caughtAt = 1_700_000_000_000L + i,
         defeats = i * 3, tier = Tier.entries[i % Tier.entries.size],
+        nickname = if (i % 2 == 0) "Nick \"$i\" ♥" else null, ankimonId = if (i % 3 == 0) "a1b2-$i" else null,
     )
 
     private fun fullState(): GameState {
@@ -92,6 +93,8 @@ class SaveCodecTest {
         assertEquals(listOf("tackle", "growl"), m.moves); assertNull(m.heldItem)
         assertEquals(Tier.entries[1], m.tier); assertEquals(1_700_000_000_001L, m.caughtAt)
         assertEquals("everstone", b.mons[1].heldItem); assertEquals(true, b.mons[1].shiny)
+        assertNull(m.nickname); assertEquals("Nick \"2\" ♥", b.mons[1].nickname)
+        assertNull(m.ankimonId); assertEquals("a1b2-3", b.mons[2].ankimonId)
         assertEquals('M', b.mons[2].gender); assertEquals('N', b.mons[3].gender)
         assertEquals(listOf("u3", "u1", "u5"), b.team)
         assertEquals(mapOf("poke-ball" to 12, "rare-candy" to 3, "potion" to 0), b.bag)

@@ -18,6 +18,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- In-app updater: hand the downloaded APK to Android's installer (asks "install unknown apps" once). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Floating windows (Team, Pokédex, Shop, Settings, battle) over AnkiDroid: "Display over other apps", asked once. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Floating battle window: a foreground service keeps live detection running while AnkiGo isn't in front. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
         <package android:name="com.ichi2.anki" />
@@ -53,6 +59,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -65,6 +72,24 @@
         <activity android:name=".ui.DexActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.ShopActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.SettingsActivity" android:theme="@style/GameTheme" android:exported="false" />
+
+        <!-- Runs a file picker for a screen shown in a floating window (no Activity of its own there). -->
+        <activity
+            android:name=".overlay.ResultActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <!-- Floating battle window (Settings → "When you leave AnkiGo" → Floating battle window). specialUse: no other
+             type fits (it follows AnkiDroid answers live), and dataSync is limited to 6 hours a day on Android 15. -->
+        <service
+            android:name=".overlay.FloatBattleService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Shows a floating game window over AnkiDroid that reacts live to the user's flashcard answers; it polls AnkiDroid's content provider once a second while the user studies." />
+        </service>
 
         <!-- Settings -> Diagnostics: the step-0 checks, LIVE watch and the report. -->
         <activity

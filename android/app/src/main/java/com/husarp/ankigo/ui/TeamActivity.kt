@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
@@ -14,6 +15,7 @@ import android.widget.TextView
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Badges
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Trainer
@@ -21,7 +23,7 @@ import com.husarp.ankigo.game.Trainer
 // TICKET T14 owns this file: trainer card, team and box (mockup frame C).
 // The list is one ListView: header = trainer card + team rows + "Box" title, rows = 6 box cells each (recycled).
 // No drag and drop (framework Views have no easy drag list): the order is changed with Move up / Move down in the tap menu.
-class TeamActivity : GameScreen() {
+class TeamPage(base: Context, host: PageHost) : GamePage(base, host) {
     override val tab = BottomNav.Tab.TEAM
 
     private lateinit var appBar: AppBar
@@ -35,7 +37,7 @@ class TeamActivity : GameScreen() {
         override fun getItem(position: Int): Any = position
         override fun getItemId(position: Int) = position.toLong()
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val row = (convertView as? CellRow) ?: CellRow(this@TeamActivity, COLS, 1f, 4, 12) { f -> makeCell(f) }
+            val row = (convertView as? CellRow) ?: CellRow(this@TeamPage, COLS, 1f, 4, 12) { f -> makeCell(f) }
             for (c in 0 until COLS) bindCell(row.cells[c], box.getOrNull(position * COLS + c))
             return row
         }
@@ -49,16 +51,16 @@ class TeamActivity : GameScreen() {
     override fun buildBody(): View {
         header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(Ui.dp(this@TeamActivity, 12), 0, Ui.dp(this@TeamActivity, 12), 0)
+            setPadding(Ui.dp(this@TeamPage, 12), 0, Ui.dp(this@TeamPage, 12), 0)
         }
         list = ListView(this).apply {
             divider = null
             dividerHeight = 0
             setSelector(ColorDrawable(Color.TRANSPARENT))
-            setPadding(0, 0, 0, Ui.dp(this@TeamActivity, 12))
+            setPadding(0, 0, 0, Ui.dp(this@TeamPage, 12))
             clipToPadding = false
             addHeaderView(header, null, false)
-            adapter = this@TeamActivity.adapter
+            adapter = this@TeamPage.adapter
         }
         return list
     }
@@ -80,7 +82,7 @@ class TeamActivity : GameScreen() {
     private fun trainerCard(): View {
         val st = state
         val card = Ui.card(this).apply {
-            setPadding(Ui.dp(this@TeamActivity, 14), Ui.dp(this@TeamActivity, 12), Ui.dp(this@TeamActivity, 14), Ui.dp(this@TeamActivity, 12))
+            setPadding(Ui.dp(this@TeamPage, 14), Ui.dp(this@TeamPage, 12), Ui.dp(this@TeamPage, 14), Ui.dp(this@TeamPage, 12))
         }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(Ui.text(this, 17f, 900, R.color.ag_text).apply { text = st.settings.trainerName; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -109,13 +111,13 @@ class TeamActivity : GameScreen() {
     private fun showBadges() {
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(Ui.dp(this@TeamActivity, 22), Ui.dp(this@TeamActivity, 8), Ui.dp(this@TeamActivity, 22), Ui.dp(this@TeamActivity, 8))
+            setPadding(Ui.dp(this@TeamPage, 22), Ui.dp(this@TeamPage, 8), Ui.dp(this@TeamPage, 22), Ui.dp(this@TeamPage, 8))
         }
         for ((id, title) in Badges.TITLES) {
             val got = id in state.badges
             col.addView(Ui.text(this, 14f, if (got) 800 else 600, if (got) R.color.ag_green else R.color.ag_sub0).apply {
                 text = (if (got) "✓  " else "○  ") + title
-                setPadding(0, Ui.dp(this@TeamActivity, 5), 0, Ui.dp(this@TeamActivity, 5))
+                setPadding(0, Ui.dp(this@TeamPage, 5), 0, Ui.dp(this@TeamPage, 5))
             })
         }
         Pickers.info(this, "Badges ${state.badges.size}/${Badges.TITLES.size}", Bits.scroll(this, col))
@@ -141,7 +143,7 @@ class TeamActivity : GameScreen() {
 
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         val r1 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        r1.addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = mon.name; maxLines = 1 })
+        r1.addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = mon.shownName; maxLines = 1 })
         if (isMain) r1.addView(Ui.pill(ctx, "MAIN", R.color.ag_mauve), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 6) })
         if (mon.shiny) r1.addView(Ui.text(ctx, 13f, 900, R.color.ag_yellow).apply { text = "★" }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 5) })
         mon.heldItem?.let { held ->
@@ -205,4 +207,9 @@ class TeamActivity : GameScreen() {
     }
 
     private companion object { const val COLS = 6 }
+}
+
+/** The Team screen as its own Activity: a thin shell around [TeamPage]. */
+class TeamActivity : PageActivity() {
+    override fun createPage(): GamePage = TeamPage(this, this)
 }

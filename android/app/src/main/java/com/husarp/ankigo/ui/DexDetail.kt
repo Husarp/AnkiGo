@@ -14,7 +14,7 @@ import com.husarp.ankigo.game.Stat
 object DexDetail {
     private val LABELS = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
 
-    fun show(a: GameScreen, sp: Species) {
+    fun show(a: GamePage, sp: Species) {
         val data = a.data
         val state = a.state
         val caught = sp.num in state.caught
@@ -81,13 +81,13 @@ object DexDetail {
         Pickers.info(a, sp.name, Bits.scroll(a, col))
     }
 
-    private fun heading(a: GameScreen, text: String): TextView = Ui.text(a, 11f, 900, R.color.ag_sub0).apply {
+    private fun heading(a: GamePage, text: String): TextView = Ui.text(a, 11f, 900, R.color.ag_sub0).apply {
         this.text = text.uppercase()
         letterSpacing = 0.06f
         setPadding(0, Ui.dp(a, 12), 0, Ui.dp(a, 4))
     }
 
-    private fun line(a: GameScreen, label: String, value: String): LinearLayout = LinearLayout(a).apply {
+    private fun line(a: GamePage, label: String, value: String): LinearLayout = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
         setPadding(0, Ui.dp(a, 2), 0, Ui.dp(a, 2))
         addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = label }, LinearLayout.LayoutParams(Ui.dp(a, 60), -2))

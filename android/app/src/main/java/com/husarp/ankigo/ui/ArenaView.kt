@@ -16,6 +16,7 @@ import android.text.Spanned
 import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -81,6 +82,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val pHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val pXpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val pXp = BarView(ctx)
+    private val pNums = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
     private val playerCard = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         background = Ui.rounded(translucentCard(ctx), 12, ctx)
@@ -114,6 +116,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private var ballOnField = false
     var onCatchTagTap: () -> Unit = {}
 
+    private var compact = false
     private val live = LinkedHashSet<Animator>()
     private val floats = ArrayList<View>()
     private val bobs = ArrayList<ObjectAnimator>()
@@ -145,7 +148,6 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         pRow.addView(pLevel, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(5) })
         playerCard.addView(pRow, LinearLayout.LayoutParams(-1, -2))
         playerCard.addView(pHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
-        val pNums = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
         pNums.addView(pHpText, LinearLayout.LayoutParams(0, -2, 1f))
         pNums.addView(pXpText, LinearLayout.LayoutParams(-2, -2))
         playerCard.addView(pNums, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(3) })
@@ -174,7 +176,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val ref = Ui.dp(context, 212f)
-        val minH = Ui.dp(context, 140f).toInt()
+        val minH = Ui.dp(context, if (compact) 70f else 140f).toInt()
         val hMode = MeasureSpec.getMode(heightMeasureSpec)
         val hSize = MeasureSpec.getSize(heightMeasureSpec)
         val h = when (hMode) {
@@ -185,7 +187,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val w = MeasureSpec.getSize(widthMeasureSpec)
         // Sprite boxes and platforms follow the arena height; a tall window pushes the wild one a bit lower so the
         // two sides don't sit in opposite corners.
-        val s = (h / ref).coerceIn(0.66f, 1.5f)
+        val s = (h / ref).coerceIn(if (compact) 0.45f else 0.66f, 1.5f)
         val extra = max(0f, h - ref * s)
         val down = (extra * 0.3f).toInt()
         fun px(v: Float) = (Ui.dp(context, v) * s).toInt()
@@ -193,9 +195,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         place(platPlayer, px(180f), px(40f), Gravity.BOTTOM or Gravity.LEFT, px(4f), 0, 0, -px(8f))
         place(enemyHolder, px(110f), px(100f), Gravity.TOP or Gravity.RIGHT, 0, px(12f) + down, px(42f), 0)
         place(playerHolder, px(140f), px(128f), Gravity.BOTTOM or Gravity.LEFT, px(22f), 0, 0, px(6f))
-        val infoMax = ((w - dpi(30)) / 2).coerceAtLeast(dpi(120))
-        place(enemyBlock, min(dpi(166), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(10), dpi(10), 0, 0)
-        place(playerCard, min(dpi(170), infoMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(10), dpi(12))
+        val infoMax = ((w - dpi(30)) / 2).coerceAtLeast(dpi(if (compact) 100 else 120))
+        val edge = if (compact) 6 else 10
+        place(enemyBlock, min(dpi(if (compact) 130 else 166), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(edge), dpi(edge), 0, 0)
+        place(playerCard, min(dpi(if (compact) 130 else 170), infoMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(edge), dpi(if (compact) 6 else 12))
         super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
     }
 
@@ -274,7 +277,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      * auto rule will do when the wild one faints. Tapping it flips the choice (the activity handles the tap).
      */
     fun setCatchTag(willCatch: Boolean, isNew: Boolean, visible: Boolean = true) {
-        catchTag.visibility = if (visible) VISIBLE else INVISIBLE
+        catchTag.visibility = if (compact) GONE else if (visible) VISIBLE else INVISIBLE
         val (text, mauve) = when {
             willCatch && isNew -> "NEW · will catch" to true
             willCatch -> "will catch" to true
@@ -283,6 +286,29 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         }
         catchTag.text = text
         catchTag.setTextColor(Ui.c(context, if (mauve) R.color.ag_mauve else R.color.ag_sub0))
+    }
+
+    /**
+     * Small-window look (picture-in-picture, floating battle): the info cards keep only name, level and HP bar (no type
+     * chips, catch tag, HP/XP numbers or XP bar), so the two cards never collide in a ~240x130 dp window.
+     */
+    fun setCompact(on: Boolean) {
+        if (compact == on) return
+        compact = on
+        val small = if (on) GONE else VISIBLE
+        eTypes.visibility = small
+        pNums.visibility = small
+        pXp.visibility = small
+        if (on) catchTag.visibility = GONE
+        val name = if (on) 12f else 14f
+        val lvl = if (on) 11f else 12f
+        for (t in listOf(eName, pName)) t.setTextSize(TypedValue.COMPLEX_UNIT_SP, name)
+        for (t in listOf(eLevel, pLevel)) t.setTextSize(TypedValue.COMPLEX_UNIT_SP, lvl)
+        val padV = if (on) 5 else 7
+        for (c in listOf(enemyCard, playerCard)) c.setPadding(dpi(10), dpi(padV), dpi(10), dpi(if (on) 6 else 8))
+        bannerTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (on) 15f else 20f)
+        banner.minimumWidth = dpi(if (on) 110 else 170)
+        requestLayout()
     }
 
     // ---------------------------------------------------------------- player side
