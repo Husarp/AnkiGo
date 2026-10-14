@@ -1,6 +1,7 @@
 package com.husarp.ankigo.shots
 
 import android.content.Context
+import android.view.View
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.Density
 import com.husarp.ankigo.ui.AppPrefs
@@ -37,20 +38,23 @@ class LaneAShots {
     }
 
     /**
-     * Fires the two damage numbers once the real layout is done: the arena is laid out (and rescaled) by Paparazzi after the
-     * view is attached, and floatNumber places a number by the arena's size, so it must not run on the unattached view.
-     * Each layout pass re-posts the runnable, so only the last (settled) layout triggers it.
+     * Fires the two damage numbers on the arena's first real layout: floatNumber places a number by the arena's size, so it
+     * must not run on the unattached view. (A posted runnable never runs in the renderer, so it is called straight from
+     * the layout listener, once.)
      */
     private fun hitAfterLayout(arena: ArenaView) {
-        val r = Runnable { hit(arena) }
+        var done = false
         arena.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-            if (v.width > 0 && v.height > 0) { v.removeCallbacks(r); v.post(r) }
+            if (!done && v.width > 0 && v.height > 0) { done = true; hit(arena) }
         }
     }
 
     private fun hit(arena: ArenaView) {
         arena.floatNumber(onPlayer = false, "\u221231", FloatStyle.DAMAGE)
         arena.floatNumber(onPlayer = true, "\u221212", FloatStyle.DAMAGE)
+        // Added during a layout pass: lay the arena out once more so the two new children get their size.
+        arena.measure(View.MeasureSpec.makeMeasureSpec(arena.width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(arena.height, View.MeasureSpec.EXACTLY))
+        arena.layout(arena.left, arena.top, arena.right, arena.bottom)
     }
 
     // ---------------------------------------------------------------- full screens
