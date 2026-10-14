@@ -25,9 +25,12 @@ import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Type
 
 // TICKET T14 owns this file: the Pokédex (mockup frame D).
-// One ListView: header = hero card + progress + filters (segmented, search + sort, chips), rows = 4 cells each (recycled, so ~1000 entries scroll smoothly).
-class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
+// Standalone it is a page of its own; given a [pickHost] it is embedded as the Pokédex section of the Team tab (TeamPage
+// builds [embeddedBody], calls [renderEmbedded] and owns the bar). One ListView: header = hero card + progress + filters (segmented, search + sort, chips), rows = 4 cells each (recycled, so ~1000 entries scroll smoothly).
+class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = null) : GamePage(base, host) {
     override val tab = BottomNav.Tab.DEX
+
+    private val embedded get() = pickHost != null
 
     private lateinit var appBar: AppBar
     private lateinit var list: ListView
@@ -92,10 +95,28 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
         return list
     }
 
+    /** The right-hand app bar pill: the enabled generations. */
+    fun pillText(): String {
+        val gens = state.settings.gens.sorted()
+        return if (gens.isEmpty()) "No gens" else if (gens.size == 1) "Gen ${gens[0]}" else "Gen ${gens.first()}–${gens.last()}"
+    }
+
+    /** The body for the Team tab (no bar). */
+    internal fun embeddedBody(): View = buildBody()
+
+    /** Draws the embedded page; the Team tab calls this on every render. */
+    internal fun renderEmbedded() = render()
+
+    /** Pick mode or ticks changed: bind the visible cells again. */
+    internal fun refreshCells() = adapter.notifyDataSetChanged()
+
+    /** A filter changed: an embedded page draws itself (nobody listens for it), a standalone one asks to be drawn. */
+    private fun redraw() { if (embedded) render() else requestRender() }
+
     override fun render() {
         val st = state
         val gens = st.settings.gens.sorted()
-        appBar.setPill(if (gens.isEmpty()) "No gens" else if (gens.size == 1) "Gen ${gens[0]}" else "Gen ${gens.first()}–${gens.last()}")
+        if (!embedded) appBar.setPill(pillText())
         val enabled = data.species.values.filter { it.gen in st.settings.gens }.sortedBy { it.num }
         // drop selections that no longer exist (a gen switched off in Settings)
         if (filter.gens.any { it !in st.settings.gens }) filter = filter.copy(gens = filter.gens.filter { it in st.settings.gens }.toSet())
@@ -210,7 +231,7 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
                 maxLines = 1
                 setPadding(0, Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12)) // 42 dp segments in a 48 dp control
                 background = if (on) Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx) else null
-                setOnClickListener { filter = filter.copy(owned = key); requestRender(); list.setSelection(0) }
+                setOnClickListener { filter = filter.copy(owned = key); redraw(); list.setSelection(0) }
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }
     }
@@ -228,6 +249,8 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
             setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 8))
             setText(filter.query)
+            Ui.tintEdit(this)
+            backgroundTintList = null // tintEdit tints the underline of a plain field; this one has its own rounded fill
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) { filter = filter.copy(query = s?.toString().orEmpty()); refilter() }
                 override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) = Unit
@@ -244,7 +267,7 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
             setOnClickListener {
                 val sorts = DexSort.entries
                 Pickers.choose(ctx, "Sort by", sorts.map { it.label }) { i ->
-                    filter = filter.copy(sort = sorts[i]); requestRender(); list.setSelection(0)
+                    filter = filter.copy(sort = sorts[i]); redraw(); list.setSelection(0)
                 }
             }
         }
@@ -252,7 +275,7 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
             maxLines = 1
             visibility = View.GONE
             Ui.touchPill(this, Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx), 36, 12)
-            setOnClickListener { filtersOpen = !filtersOpen; requestRender() }
+            setOnClickListener { filtersOpen = !filtersOpen; redraw() }
         }
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -272,7 +295,7 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
             maxLines = 1
             setTextColor(if (on) ink else Ui.c(ctx, R.color.ag_sub1))
             Ui.touchPill(this, Ui.rounded(if (on) fill else Ui.c(ctx, R.color.ag_mantle), 10, ctx), 28, 10) // 48 dp touch height
-            setOnClickListener { onClick(); requestRender(); list.setSelection(0) }
+            setOnClickListener { onClick(); redraw(); list.setSelection(0) }
         }
     }
 
@@ -300,7 +323,7 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     // ---- grid cells (mockup .dexgrid) ----
 
-    private class Cell(val num: TextView, val img: ImageView, val name: TextView, val dot: View, val star: TextView)
+    private class Cell(val num: TextView, val img: ImageView, val name: TextView, val dot: View, val star: TextView, val check: ImageView)
 
     private fun makeCell(f: SquareFrame) {
         val ctx = this
@@ -326,7 +349,11 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
         // wishlist mark under the number
         val star = Ui.text(ctx, 10f, 900, R.color.ag_yellow).apply { text = "★" }
         f.addView(star, FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.TOP).also { it.leftMargin = Ui.dp(ctx, 6); it.topMargin = Ui.dp(ctx, 17) })
-        f.tag = Cell(num, img, name, dot, star)
+        val check = PickKit.badge(ctx)
+        f.addView(check, FrameLayout.LayoutParams(Ui.dp(ctx, 20), Ui.dp(ctx, 20), Gravity.END or Gravity.TOP).also {
+            it.rightMargin = Ui.dp(ctx, 3); it.topMargin = Ui.dp(ctx, 3)
+        })
+        f.tag = Cell(num, img, name, dot, star, check)
     }
 
     private val greyed = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
@@ -344,7 +371,13 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
         val seen = caught || sp.num in st.seen
         cell.num.text = "#%03d".format(sp.baseNum)
         cell.star.visibility = if (sp.num in st.settings.wishlist) View.VISIBLE else View.GONE
-        cell.dot.visibility = if (caught) View.VISIBLE else View.GONE
+        val picking = pickHost?.picking == true
+        val pick = ComparePick.Dex(sp.num)
+        val picked = picking && seen && pickHost?.isPicked(pick) == true
+        f.background = PickKit.cardBg(this, 12, picked)
+        // while picking, seen entries show the tick badge where the "caught" dot sits
+        cell.dot.visibility = if (caught && !(picking && seen)) View.VISIBLE else View.GONE
+        PickKit.bindBadge(cell.check, picking && seen, picked)
         Ui.staticSprite(this, sp.num, false, cell.img, silhouette = !seen)
         if (seen && !caught) {
             // seen only: grey sprite (mockup .seen)
@@ -354,14 +387,18 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
         cell.name.text = if (seen) sp.name else "???"
         cell.name.setTextColor(Ui.c(this, when { caught -> R.color.ag_sub1; seen -> R.color.ag_sub0; else -> R.color.ag_ov }))
         f.setOnClickListener {
-            if (seen) DexDetail.show(this, sp) else Ui.toast(this, "Not seen yet")
+            when {
+                !seen -> Ui.toast(this, "Not seen yet")
+                picking -> pickHost?.togglePick(pick)
+                else -> DexDetail.show(this, sp)
+            }
         }
     }
 
     private companion object { const val COLS = 4 }
 }
 
-/** The Dex screen as its own Activity: a thin shell around [DexPage]. */
+/** The Pokédex opens as the Pokédex section of the Team tab (the bottom bar highlights Team). */
 class DexActivity : PageActivity() {
-    override fun createPage(): GamePage = DexPage(this, this)
+    override fun createPage(): GamePage = TeamPage(this, this, TeamSection.DEX)
 }
