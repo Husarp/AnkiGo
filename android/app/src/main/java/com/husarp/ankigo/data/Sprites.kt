@@ -222,13 +222,13 @@ object Sprites {
     }
 
     /** Blocking, parallel (6 threads): downloads every missing static PNG of [nums]. progress(done, total). Returns failures. */
-    fun downloadStatics(ctx: Context, nums: List<Int>, bytesProgress: ((Long, Long) -> Unit)? = null, progress: (Int, Int) -> Unit): Int {
+    fun downloadStatics(ctx: Context, nums: List<Int>, bytesProgress: ((Long, Long) -> Unit)? = null, stop: () -> Boolean = { false }, progress: (Int, Int) -> Unit): Int {
         Report.init(ctx)
         val firstError = java.util.concurrent.atomic.AtomicReference<String?>(null)
         val get: HttpGet = { url, p ->
             try { realGet(url, p) } catch (e: IOException) { firstError.compareAndSet(null, "${e.javaClass.simpleName}: ${e.message}"); throw e }
         }
-        val failed = downloadStatics(File(dir(ctx), "static"), { enabled(ctx) }, nums, bytesProgress, progress, get)
+        val failed = downloadStatics(File(dir(ctx), "static"), { enabled(ctx) && !stop() }, nums, bytesProgress, progress, get)
         // shows in Settings -> Diagnostics, so a failing phone says why
         Report.log("PICS", "static pictures: $failed of ${nums.size} failed" + (firstError.get()?.let { ", first network error $it" } ?: ""))
         return failed
