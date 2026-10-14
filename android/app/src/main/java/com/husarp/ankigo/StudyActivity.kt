@@ -39,7 +39,6 @@ import com.husarp.ankigo.study.StudyLoop
 import com.husarp.ankigo.study.StudyTiming
 import com.husarp.ankigo.study.TtsRules
 import com.husarp.ankigo.ui.*
-import com.husarp.ankigo.update.Updates
 import org.json.JSONObject
 import java.util.concurrent.Executors
 
@@ -232,9 +231,12 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         panel = BattlePanelView(this)
         events = EventPlayer(panel)
         events.muted = { SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev) }
-        panel.onMenu = { if (events.idle) AlertDialog.Builder(this).setItems(arrayOf("Team", "Bag / Shop", "Pokédex", "Settings")) { _, i ->
-            startActivity(Intent(this, listOf(TeamActivity::class.java, ShopActivity::class.java, DexActivity::class.java, SettingsActivity::class.java)[i]))
-        }.showCard() }
+        panel.onMenu = { anchor ->
+            if (events.idle) AppMenu(anchor)
+                .item(0, "Team", R.drawable.ic_team).item(1, "Bag / Shop", R.drawable.ic_shop)
+                .item(2, "Pokédex", R.drawable.ic_book).item(3, "Settings", R.drawable.ic_settings)
+                .show { i -> startActivity(Intent(this, listOf(TeamActivity::class.java, ShopActivity::class.java, DexActivity::class.java, SettingsActivity::class.java)[i])) }
+        }
         panel.onBalls = { throwBall() }
         panel.arena.onCatchTagTap = {
             val game = GameRepo.game
@@ -354,14 +356,14 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     override fun onStart() { super.onStart(); started = true; BattleScreen.setVisible(this, true); LiveSession.addSink(sink); LiveSession.hold(this, this) }
     override fun onStop() { started = false; LiveSession.removeSink(sink); LiveSession.release(this, this); BattleScreen.setVisible(this, false); super.onStop() }
     override fun onResume() {
-        super.onResume(); background = false; Updates.onResume(this); FloatBattleService.startIfWanted(this)
+        super.onResume(); background = false; FloatBattleService.startIfWanted(this)
         if (shownAt != 0L) shownAt = SystemClock.elapsedRealtime()
         swipeOn = prefs.getBoolean("swipe", false); if (::swipe.isInitialized) updateSwipe()
         if (::web.isInitialized && (finished || card != null && !locked)) loadNext()
         syncTiming()
     }
     override fun onPause() {
-        pauseClock(); background = true; syncTiming(); stopAudio(); Updates.onPause(this); super.onPause()
+        pauseClock(); background = true; syncTiming(); stopAudio(); super.onPause()
     }
     private fun pauseClock() { if (shownAt != 0L) elapsed += SystemClock.elapsedRealtime() - shownAt; shownAt = 0 }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (::countdown.isInitialized) syncTiming() }

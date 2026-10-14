@@ -7,13 +7,13 @@ import android.widget.LinearLayout
 import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.R
 import com.husarp.ankigo.ui.Ui
-import com.husarp.ankigo.update.UpdateBanner
+import com.husarp.ankigo.update.UpdateOverlay
 import com.husarp.ankigo.update.updatesScreen
 import com.husarp.ankigo.update.Updates
 import org.junit.Rule
 import org.junit.Test
 
-/** Updates screen (app bar + UpdateSection cards) and the main-screen UpdateBanner in every state. Updates' state is set by reflection. */
+/** Updates screen (app bar + UpdateSection cards) and the floating UpdateBanner in every state. Updates' state is set by reflection. */
 class UpdateShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
 
@@ -33,13 +33,11 @@ class UpdateShots {
 
     private fun banner(ctx: Context): View {
         val ss = ShotCtx(ctx)
-        val b = UpdateBanner(ss)
-        b.render(Updates.state)
-        return LinearLayout(ss).apply {
+        val content = LinearLayout(ss).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Ui.c(ss, R.color.ag_base))
-            addView(b, LinearLayout.LayoutParams(-1, -2))
         }
+        return UpdateOverlay(ss, content).also { it.banner.animated = false }
     }
 
     private fun sectionShot(name: String, s: Updates.State) {

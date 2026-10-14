@@ -212,9 +212,10 @@ object MonDetail {
 
         if (page == null) { Pickers.info(a, "Details", Bits.scroll(a, col)); return }
         lateinit var dlg: AlertDialog
-        val more = DetailParts.secondaryButton(a, "More options") {
-            dlg.dismiss()
-            MonActions(page).menu(mon)
+        lateinit var more: View
+        more = DetailParts.secondaryButton(a, "More options") {
+            // the menu hangs on this button, so the details close only once a row was tapped
+            MonActions(page).menu(mon, more) { dlg.dismiss() }
         }
         val margins = { it: LinearLayout.LayoutParams -> it.setMargins(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 4)) }
         val box: View

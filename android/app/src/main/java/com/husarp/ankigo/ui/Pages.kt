@@ -20,7 +20,6 @@ import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.GameState
-import com.husarp.ankigo.update.Updates
 
 // TICKET T21 owns this file: Team / Pokédex / Shop / Settings as "pages" that live in an Activity or a floating card (T24).
 
@@ -171,7 +170,7 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
 
 /**
  * Thin Activity around one [GamePage]: content = page + the bottom bar (when the page has a tab). Forwards the lifecycle
- * (resume -> onShow, pause -> onHide, destroy -> onGone), the Updates hooks, and activity results to [startForResult] callbacks.
+ * (resume -> onShow, pause -> onHide, destroy -> onGone), and activity results to [startForResult] callbacks.
  */
 abstract class PageActivity : AgActivity(), PageHost {
     /** Builds the page; the Activity is the base context and the host: `MyPage(this, this)`. */
@@ -222,7 +221,6 @@ abstract class PageActivity : AgActivity(), PageHost {
 
     override fun onResume() {
         super.onResume()
-        Updates.onResume(this)
         page.onShow()
     }
 
@@ -233,7 +231,6 @@ abstract class PageActivity : AgActivity(), PageHost {
 
     override fun onPause() {
         page.onHide()
-        Updates.onPause(this)
         super.onPause()
     }
 

@@ -3,12 +3,12 @@ package com.husarp.ankigo.overlay
 import android.content.Context
 import android.view.Gravity
 import android.widget.ImageView
-import android.widget.PopupMenu
 import android.widget.TextView
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.live.LiveSession
+import com.husarp.ankigo.ui.AppMenu
 import com.husarp.ankigo.ui.BattlePanelView
 import com.husarp.ankigo.ui.EventPlayer
 import com.husarp.ankigo.ui.StatsActivity
@@ -34,7 +34,7 @@ internal class FloatBattleView(
     private var panel: BattlePanelView? = null
     private var player: EventPlayer? = null
     private var message: TextView? = null
-    private var menu: PopupMenu? = null
+    private var menu: AppMenu? = null
     private var attached = false
 
     /** The panel as a [LiveSession] sink; same wiring as GameActivity's. */
@@ -144,29 +144,33 @@ internal class FloatBattleView(
         }
     }
 
+    /** The ⋯ menu: [AppMenu] hung on the header button's window (the overlay), same entries as the battle screen's. */
     private fun showMenu() {
-        val m = PopupMenu(window.context, menuButton)
-        m.menu.add(0, 1, 0, "Team")
-        m.menu.add(0, 2, 1, "Pokédex")
-        m.menu.add(0, 3, 2, "Shop")
-        m.menu.add(0, 4, 3, "Settings")
-        m.menu.add(0, 5, 4, "Stats")
-        m.setOnMenuItemClickListener { item ->
-            if (item.itemId == 5) { // no Activity here: its own task
+        val m = AppMenu(menuButton)
+        fillMenu(m)
+        menu = m
+        m.show { id ->
+            menu = null
+            if (id == 5) { // no Activity here: its own task
                 app.startActivity(android.content.Intent(app, StatsActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                return@setOnMenuItemClickListener true
+                return@show
             }
-            val page = when (item.itemId) {
+            val page = when (id) {
                 1 -> FloatPage.TEAM
                 2 -> FloatPage.DEX
                 3 -> FloatPage.SHOP
                 else -> FloatPage.SETTINGS
             }
             if (!FloatScreens.open(app, page)) Ui.toast(app, "Turn on “Display over other apps” for AnkiGo to open this here")
-            true
         }
-        m.setOnDismissListener { if (menu === m) menu = null }
-        menu = m
-        m.show()
+    }
+
+    /** The five entries (also read by the screenshots). */
+    internal fun fillMenu(m: AppMenu) {
+        m.item(1, "Team", R.drawable.ic_team)
+        m.item(2, "Pokédex", R.drawable.ic_book)
+        m.item(3, "Shop", R.drawable.ic_shop)
+        m.item(4, "Settings", R.drawable.ic_settings)
+        m.item(5, "Stats", R.drawable.ic_stats)
     }
 }

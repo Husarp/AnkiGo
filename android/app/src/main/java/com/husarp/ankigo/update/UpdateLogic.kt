@@ -1,9 +1,12 @@
 package com.husarp.ankigo.update
 
+import java.time.Instant
+import java.time.ZoneId
+
 /**
  * The updater's pure logic (no Android), unit-tested in UpdateLogicTest.
  * APP-STANDARDS sections 2 and 3: compare versions as numbers, find the APK by its ".apk" ending,
- * ask GitHub at most every 5 minutes, and a banner ✕ that hides until the next app start.
+ * ask GitHub at most every 5 minutes, and a banner ✕ that hides until the next day (local date).
  */
 object UpdateLogic {
     const val MIN_CHECK_GAP_MS = 5 * 60_000L
@@ -58,17 +61,17 @@ object UpdateLogic {
     fun mayCheck(nowMs: Long, lastMs: Long, gapMs: Long = MIN_CHECK_GAP_MS): Boolean =
         lastMs == 0L || nowMs - lastMs >= gapMs || nowMs < lastMs
 
-    /** The banner's ✕: hides it until the app is next started (not when coming back from another app). */
-    class BannerGate {
-        var dismissed = false
-            private set
+    /** The "closed on" day while the banner was never closed. */
+    const val NO_DAY = Long.MIN_VALUE
 
-        fun dismiss() { dismissed = true }
+    /** The local calendar day (`LocalDate.toEpochDay()`) of [nowMs] in [zone]. */
+    fun dayOf(nowMs: Long, zone: ZoneId = ZoneId.systemDefault()): Long =
+        Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate().toEpochDay()
 
-        /** A fresh app start (not a return from another app, not a rotation): the banner may show again. */
-        fun onAppStart() { dismissed = false }
+    /** The banner's ✕ hides it for the rest of that local day: it is hidden only on the day it was closed. */
+    fun bannerHidden(dismissedDay: Long, today: Long): Boolean = dismissedDay == today
 
-        fun visible(latest: String?, current: String): Boolean =
-            !dismissed && latest != null && isNewer(latest, current)
-    }
+    /** The banner shows when a newer version is known and ✕ wasn't tapped today. */
+    fun bannerVisible(latest: String?, current: String, dismissedDay: Long, today: Long): Boolean =
+        latest != null && isNewer(latest, current) && !bannerHidden(dismissedDay, today)
 }

@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.R
 import com.husarp.ankigo.game.ActionResult
 import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.ItemUse
@@ -15,25 +16,27 @@ internal class MonActions(private val s: GamePage) {
     private val data get() = s.data
     private val state get() = s.state
 
-    /** The action dialog of one Pokémon, from a team row or a box cell. */
-    fun menu(mon: Mon) {
-        val labels = mutableListOf<String>()
+    /** The action menu of one Pokémon, from a team row or a box cell, as an [AppMenu] under [anchor]. */
+    fun menu(mon: Mon, anchor: android.view.View, onPick: () -> Unit = {}) {
+        val m = AppMenu(anchor).header("${if (mon.shiny) "★ " else ""}${mon.shownName}  Lv ${mon.level}")
         val acts = mutableListOf<() -> Unit>()
-        fun add(label: String, f: () -> Unit) { labels += label; acts += f }
+        fun add(label: String, @androidx.annotation.DrawableRes icon: Int, danger: Boolean = false, f: () -> Unit) {
+            m.item(acts.size, label, icon, danger = danger); acts += f
+        }
 
         val idx = state.team.indexOf(mon.uid)
         val main = state.main
         if (idx >= 0) {
-            if (idx > 0) add("Make main") { s.act { it.setMain(mon.uid) } }
-            if (state.team.size > 1) add("Send to box") { s.act { it.toBox(mon.uid) } }
+            if (idx > 0) add("Make main", R.drawable.ic_star) { s.act { it.setMain(mon.uid) } }
+            if (state.team.size > 1) add("Send to box", R.drawable.ic_team) { s.act { it.toBox(mon.uid) } }
         } else if (state.team.size < 6) {
-            add("Add to team") { s.act { it.toTeam(mon.uid) } }
-            add("Make main") {
+            add("Add to team", R.drawable.ic_team) { s.act { it.toTeam(mon.uid) } }
+            add("Make main", R.drawable.ic_star) {
                 s.act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.setMain(mon.uid) else r } }
             }
         } else if (main != null) {
             // Team full: the main goes to the box and this one takes its place at the front.
-            add("Make main (${main.shownName} goes to the box)") {
+            add("Make main (${main.shownName} goes to the box)", R.drawable.ic_star) {
                 s.act { g ->
                     g.toBox(main.uid).let { r1 ->
                         if (!r1.ok) r1 else g.toTeam(mon.uid).let { r2 -> if (r2.ok) g.setMain(mon.uid) else r2 }
@@ -41,17 +44,17 @@ internal class MonActions(private val s: GamePage) {
                 }
             }
         }
-        add("Give item…") { giveItem(mon) }
-        mon.heldItem?.let { held -> add("Take ${Items.name(held)}") { s.act { ItemUse.takeHeld(it.state, mon.uid) } } }
-        add("Use item…") { useItem(mon) }
-        add("Teach TM…") { teachMenu(mon) }
+        add("Give item…", R.drawable.ic_gift) { giveItem(mon) }
+        mon.heldItem?.let { held -> add("Take ${Items.name(held)}", R.drawable.ic_gift) { s.act { ItemUse.takeHeld(it.state, mon.uid) } } }
+        add("Use item…", R.drawable.ic_ball) { useItem(mon) }
+        add("Teach TM…", R.drawable.ic_tm) { teachMenu(mon) }
         if (mon.uid != main?.uid) {
-            if (state.settings.xpShareUid == mon.uid) add("Exp. Share holder: turn off") { s.act { it.setXpShare(null) } }
-            else add("Make Exp. Share holder") { s.act { it.setXpShare(mon.uid) } }
+            if (state.settings.xpShareUid == mon.uid) add("Exp. Share holder: turn off", R.drawable.ic_up) { s.act { it.setXpShare(null) } }
+            else add("Make Exp. Share holder", R.drawable.ic_up) { s.act { it.setXpShare(mon.uid) } }
         }
-        add("Rename…") { rename(mon) }
-        add("Release…") { release(mon) }
-        Pickers.choose(s, "${if (mon.shiny) "★ " else ""}${mon.shownName}  Lv ${mon.level}", labels) { acts[it]() }
+        add("Rename…", R.drawable.ic_pencil) { rename(mon) }
+        add("Release…", R.drawable.ic_trash, danger = true) { release(mon) }
+        m.show { onPick(); acts[it]() }
     }
 
     /** The rename dialog (menu "Rename…" and the pencil in the details); [onDone] runs after a rename was saved. */

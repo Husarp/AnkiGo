@@ -10,8 +10,15 @@ import android.graphics.drawable.InsetDrawable
 import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewTreeObserver
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -96,18 +103,38 @@ private class UpdateProgress(ctx: Context) : LinearLayout(ctx) {
     }
 }
 
-/** Main-screen banner: a card with the new version, UPDATE and ✕ (hides it until the app is next started). */
+/**
+ * The update banner: a slim card floating over the top of a screen (see [UpdateOverlay]); it never pushes the layout.
+ * It slides in when it appears; while idle it slides away again after 8 s (or on a swipe up) and stays away for this
+ * screen visit. While downloading / failed / waiting for Android it stays. ✕ hides it until tomorrow.
+ */
 class UpdateBanner(ctx: Context) : UpdatesView(ctx) {
     private val title = Ui.text(ctx, 14f, 900, R.color.ag_text).apply { maxLines = 1 }
     private val subtitle = Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = "New version of AnkiGo"; maxLines = 1 }
     private val updateBtn = pillButton(ctx, "UPDATE", true, 13f, 32, 14) { Updates.update(ctx) }
     private val progress = UpdateProgress(ctx)
+    private val handler = Handler(Looper.getMainLooper())
+    private var timerArmed = false
+    private val autoHide = Runnable { timerArmed = false; if (Updates.state.phase == Updates.Phase.Idle) slideAway() }
+    private val slop = Ui.dp(ctx, 24)
+    private var downY = 0f
+    /** Slid away (auto-hide or swipe) for this screen visit; [resetAway] on the next return to the screen. */
+    private var away = false
+    /** Switched off from outside (picture-in-picture). */
+    var suppressed = false
+        set(v) { field = v; render(Updates.state) }
+    /** False in the screenshots (no animation, no timer): the banner is drawn at its final position. */
+    var animated = true
+
     init {
-        setBackgroundColor(Ui.c(ctx, R.color.ag_base))
-        setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 6))
+        // the shadow of the card lives in this view's padding, so nothing above it may clip
+        clipChildren = false
+        clipToPadding = false
+        setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 8))
         val card = LinearLayout(ctx).apply {
             orientation = VERTICAL
             setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 6), Ui.dp(ctx, 4), Ui.dp(ctx, 6))
+            elevation = Ui.dp(ctx, 6f)
             background = GradientDrawable().apply {
                 setColor(Ui.c(ctx, R.color.ag_card))
                 cornerRadius = Ui.dp(ctx, 14f)
@@ -132,21 +159,91 @@ class UpdateBanner(ctx: Context) : UpdatesView(ctx) {
             setPadding(pad, pad, pad, pad)
             contentDescription = "Close"
             isClickable = true
-            setOnClickListener { Updates.dismissBanner() }
+            setOnClickListener { Updates.dismissBanner(ctx) }
         }, LayoutParams(Ui.dp(ctx, 44), Ui.dp(ctx, 48)))
         card.addView(row)
         card.addView(progress, LayoutParams(-1, -2).also { it.marginEnd = Ui.dp(ctx, 8); it.bottomMargin = Ui.dp(ctx, 6) })
         addView(card, LayoutParams(-1, -2))
+        visibility = View.GONE
     }
+
+    /** A new visit to the screen (it came back to the front): the banner may slide in again. */
+    fun resetAway() { away = false; render(Updates.state) }
+
+    private fun slideAway() {
+        stopTimer()
+        away = true
+        if (!animated || visibility != View.VISIBLE) { visibility = View.GONE; return }
+        animate().translationY(-(height + Ui.dp(context, 8)).toFloat()).setDuration(200).setInterpolator(AccelerateInterpolator())
+            .withEndAction { if (away) visibility = View.GONE }.start()
+    }
+
+    private fun slideIn() {
+        if (!animated) { translationY = 0f; return }
+        animate().cancel()
+        translationY = -Ui.dp(context, 400f)   // out of sight until the first layout tells the real height
+        val vto = viewTreeObserver
+        vto.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (vto.isAlive) vto.removeOnPreDrawListener(this) else viewTreeObserver.removeOnPreDrawListener(this)
+                translationY = -(height + Ui.dp(context, 8)).toFloat()
+                animate().translationY(0f).setDuration(250).setInterpolator(DecelerateInterpolator()).start()
+                return true
+            }
+        })
+    }
+
+    private fun restartTimer() {
+        stopTimer()
+        if (animated && visibility == View.VISIBLE && Updates.state.phase == Updates.Phase.Idle) { timerArmed = true; handler.postDelayed(autoHide, 8_000L) }
+    }
+
+    private fun stopTimer() { timerArmed = false; handler.removeCallbacks(autoHide) }
+
+    override fun onInterceptTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { downY = e.rawY; restartTimer() }
+            MotionEvent.ACTION_MOVE -> if (downY - e.rawY > slop) { slideAway(); return true }
+        }
+        return false
+    }
+
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_MOVE && downY - e.rawY > slop) slideAway()
+        return true
+    }
+
+    override fun onDetachedFromWindow() { stopTimer(); super.onDetachedFromWindow() }
+
     override fun render(s: Updates.State) {
         val latest = s.latest
-        val show = latest != null && Updates.bannerVisible(s, Updates.current(context))
-        visibility = if (show) View.VISIBLE else View.GONE
-        if (!show) return
+        if (away && s.phase != Updates.Phase.Idle) away = false   // progress and failures stay in view
+        val show = latest != null && !suppressed && Updates.bannerVisible(context, s, Updates.current(context))
+        if (!show) {
+            stopTimer()
+            animate().cancel()
+            visibility = View.GONE
+            return
+        }
         title.text = "Update ${latest!!.version} · ${DisplayNumbers.size(latest.apkSize)}"
         subtitle.visibility = if (s.phase == Updates.Phase.Idle) View.VISIBLE else View.GONE
         Form.enable(updateBtn, s.phase !is Updates.Phase.Downloading)
         progress.render(s)
+        if (away) return
+        if (visibility != View.VISIBLE) { visibility = View.VISIBLE; slideIn() }
+        if (s.phase != Updates.Phase.Idle) stopTimer() else if (!timerArmed) restartTimer()
+    }
+}
+
+/**
+ * A screen's content plus the floating [UpdateBanner] on top of it ([com.husarp.ankigo.ui.AgActivity.setContentView]
+ * wraps every AnkiGo screen in one). The banner overlays the content (top, wrap height); it doesn't move it.
+ */
+class UpdateOverlay(ctx: Context, content: View) : FrameLayout(ctx) {
+    val banner = UpdateBanner(ctx)
+    init {
+        addView(content, LayoutParams(-1, -1))
+        addView(banner, LayoutParams(-1, -2, Gravity.TOP))
     }
 }
 
@@ -212,7 +309,4 @@ class UpdatesActivity : com.husarp.ankigo.ui.AgActivity() {
         title = "Updates"
         setContentView(updatesScreen(this))
     }
-
-    override fun onResume() { super.onResume(); Updates.onResume(this) }
-    override fun onPause() { Updates.onPause(this); super.onPause() }
 }

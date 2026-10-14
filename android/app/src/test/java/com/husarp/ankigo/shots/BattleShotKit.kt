@@ -37,7 +37,11 @@ object BattleShotKit {
      */
     fun bound(ctx: Context): Built = build(ctx).also {
         it.call("bind")
-        if (ctx.resources.configuration.screenHeightDp >= 560) (it.field("nav") as View).visibility = View.VISIBLE
+        if (ctx.resources.configuration.screenHeightDp >= 560) {
+            (it.field("nav") as View).visibility = View.VISIBLE
+            (it.field("topBar") as View).visibility = View.VISIBLE
+            it.panel?.setFooterTools(false)
+        }
     }
 
     /** Picture-in-picture, as onPictureInPictureModeChanged(true) sets it up. */
@@ -45,9 +49,14 @@ object BattleShotKit {
         b.setField("inPip", true)
         b.panel?.setCompact(true)
         if (paused) b.panel?.setPaused(true)
-        (b.field("bannerHolder") as View).visibility = View.GONE
         (b.field("nav") as View).visibility = View.GONE
+        (b.field("topBar") as View).visibility = View.GONE
+        b.panel?.setFooterTools(true)
     }
+
+    /** The screen's view under the floating update banner, at its final (slid-in) position, as AgActivity.setContentView does it. */
+    fun withBanner(ctx: Context, content: View): View =
+        com.husarp.ankigo.update.UpdateOverlay(ctx, content).also { it.banner.animated = false }
 
     /** Replaces the Updates state (the updater's private field); [reset] puts the default back. */
     fun setUpdates(state: Updates.State) {

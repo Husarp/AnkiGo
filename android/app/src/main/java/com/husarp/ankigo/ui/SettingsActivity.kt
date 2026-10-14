@@ -960,7 +960,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         box.addView(Ui.text(this, 14f, 800, R.color.ag_text).apply { text = "AnkiGo ${Updates.current(this@SettingsPage)}" })
         box.addView(Form.body(this,
             "Pokémon and Pokémon names © Nintendo / Creatures / GAME FREAK. Data: PokeAPI, Pokémon Showdown. " +
-                "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL).", 12, R.color.ag_sub0), Form.lp(this, 6))
+                "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0).", 12, R.color.ag_sub0), Form.lp(this, 6))
         return box
     }
 

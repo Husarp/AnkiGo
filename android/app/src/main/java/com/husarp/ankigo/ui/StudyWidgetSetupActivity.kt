@@ -17,6 +17,7 @@ import java.util.concurrent.Executors
  * the default (most cards due) is marked. Tapping a row saves the deck for this widget id, redraws the widget and finishes.
  */
 class StudyWidgetSetupActivity : AgActivity() {
+    override val showsUpdateBanner = false
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var content: LinearLayout
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID

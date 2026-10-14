@@ -421,7 +421,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             alpha = if (mon.hp <= 0) 0.55f else 1f
             layoutParams = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 6) }
             setOnClickListener { if (pickOn) togglePick(pick) else MonDetail.show(ctx, data, mon) }
-            setOnLongClickListener { actions.menu(mon); true }
+            setOnLongClickListener { actions.menu(mon, it); true }
         }
         val img = ImageView(ctx)
         MonPreview.show(ctx, mon.species, mon.shiny, img)
@@ -571,7 +571,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         PickKit.bindBadge(cell.check, pickOn, picked)
         f.alpha = if (mon.hp <= 0) 0.55f else 1f
         f.setOnClickListener { if (pickOn) togglePick(pick) else MonDetail.show(this, data, mon) }
-        f.setOnLongClickListener { actions.menu(mon); true }
+        f.setOnLongClickListener { actions.menu(mon, it); true }
     }
 
     private companion object {

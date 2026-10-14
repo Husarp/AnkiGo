@@ -52,4 +52,4 @@ to Android's installer (Android asks you to confirm each update).
 ## Credits
 
 Icons: AnkiGo's own, plus some from [Material Symbols](https://github.com/google/material-design-icons) by Google
-(Apache License 2.0).
+(Apache License 2.0), e.g. the bottom bar's crossed swords (Battle) and closed book (Team / Pokédex).
