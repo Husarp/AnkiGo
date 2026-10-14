@@ -119,6 +119,7 @@ object Pickers {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setTextColor(Ui.c(a, R.color.ag_text))
             setHintTextColor(Ui.c(a, R.color.ag_ov))
+            Ui.tintEdit(this)
             setSingleLine()
             filters = arrayOf(android.text.InputFilter.LengthFilter(max))
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS

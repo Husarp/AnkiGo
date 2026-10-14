@@ -8,6 +8,18 @@ object Tuning {
     /** Longest nickname (same as the Ankimon import). */
     const val NICKNAME_MAX = 20
 
+    // ---- Checking AnkiDroid (AnkiGo; LiveDetector / LiveSession) ----
+    /** Live watch: one light poll this often while the battle (panel, floating window, picture-in-picture) is running. */
+    const val LIVE_POLL_MS = 1_000L
+    /** Every this many polls one is a full read of today's rated cards. */
+    const val LIVE_FULL_EVERY = 10
+    /** A full re-read at least this often while the battle runs, whatever else happens (catches anything a light poll missed). */
+    const val LIVE_RECHECK_MS = 30_000L
+    /** Retry after "AnkiDroid not found" / permission missing. */
+    const val LIVE_RETRY_MS = 5_000L
+    /** Retry after an unexpected AnkiDroid error (old version, provider failure). */
+    const val LIVE_RETRY_SLOW_MS = 30_000L
+
     // ---- Answers and rounds (Ankimon ankimon_tracker.py / battle_loop.py) ----
     /** Points per button: index = button (0 unknown counts as Good). */
     val POINTS = intArrayOf(10, 0, 5, 10, 20)

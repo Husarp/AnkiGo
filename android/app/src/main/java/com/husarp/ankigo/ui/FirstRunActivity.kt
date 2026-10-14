@@ -79,7 +79,7 @@ internal object FirstRunJob {
  * First start, one activity whose steps swap in place: 1 AnkiDroid access, 2 data + pictures download, 3 starter,
  * 4 split-screen hint. Starts at the first step that isn't done and finishes with RESULT_OK after step 4.
  */
-class FirstRunActivity : Activity() {
+class FirstRunActivity : AgActivity() {
     private val job get() = FirstRunJob.job
     private val prefs by lazy { getSharedPreferences("firstrun", MODE_PRIVATE) }
 

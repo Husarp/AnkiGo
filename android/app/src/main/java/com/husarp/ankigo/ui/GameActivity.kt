@@ -53,7 +53,7 @@ import java.util.Locale
  * Leaving the app with LeaveMode.PIP puts the compact battle into picture-in-picture (Open and Pause/Resume buttons);
  * the activity is only paused there, so live detection keeps running.
  */
-class GameActivity : Activity() {
+class GameActivity : AgActivity() {
     private lateinit var content: FrameLayout
     private lateinit var nav: View
     private lateinit var bannerHolder: FrameLayout   // holds the update banner so PiP can hide it whatever the banner decides

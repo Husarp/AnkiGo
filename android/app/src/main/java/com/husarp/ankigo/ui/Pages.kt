@@ -173,7 +173,7 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
  * Thin Activity around one [GamePage]: content = page + the bottom bar (when the page has a tab). Forwards the lifecycle
  * (resume -> onShow, pause -> onHide, destroy -> onGone), the Updates hooks, and activity results to [startForResult] callbacks.
  */
-abstract class PageActivity : Activity(), PageHost {
+abstract class PageActivity : AgActivity(), PageHost {
     /** Builds the page; the Activity is the base context and the host: `MyPage(this, this)`. */
     abstract fun createPage(): GamePage
 

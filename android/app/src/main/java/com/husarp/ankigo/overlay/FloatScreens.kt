@@ -35,7 +35,7 @@ object FloatScreens {
 
     private val tabs = listOf(
         Tab(FloatPage.TEAM, R.drawable.ic_team, "Team", TeamActivity::class.java),
-        Tab(FloatPage.DEX, R.drawable.ic_dex, "Pokédex", DexActivity::class.java),
+        Tab(FloatPage.DEX, R.drawable.ic_book, "Pokédex", DexActivity::class.java),
         Tab(FloatPage.SHOP, R.drawable.ic_shop, "Shop", ShopActivity::class.java),
         Tab(FloatPage.SETTINGS, R.drawable.ic_settings, "Settings", SettingsActivity::class.java),
     )

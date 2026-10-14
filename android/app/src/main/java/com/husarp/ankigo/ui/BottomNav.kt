@@ -13,17 +13,19 @@ import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 
 /**
- * The 5-tab bottom bar (mockup `.bnav`): Study / Battle / Team / Pokédex / Shop. The selected tab is mauve with its icon on a
- * 20 % mauve pill. Tapping another tab opens its screen (brought to front, no animation) and closes the current one
- * unless that is the Battle screen, so Back from any tab ends up on Battle.
+ * The 5-tab bottom bar (mockup `.bnav`): Study / Battle / Team / Shop / Settings. Team holds Team, Box and Pokédex as
+ * sections; [Tab.DEX] is not in the bar (a Pokédex screen highlights Team). The selected tab is in the accent colour with
+ * its icon on a 20 % accent pill. Tapping another tab opens its screen (brought to front, no animation) and closes the
+ * current one unless that is the Battle screen, so Back from any tab ends up on Battle.
  */
 object BottomNav {
-    enum class Tab(val label: String, @DrawableRes val icon: Int, val screen: Class<out Activity>) {
+    enum class Tab(val label: String, @DrawableRes val icon: Int, val screen: Class<out Activity>, val inBar: Boolean = true) {
         STUDY("Study", R.drawable.ic_study, StudyDecksActivity::class.java),
-        BATTLE("Battle", R.drawable.ic_battle, GameActivity::class.java),
+        BATTLE("Battle", R.drawable.ic_swords, GameActivity::class.java),
         TEAM("Team", R.drawable.ic_team, TeamActivity::class.java),
-        DEX("Pokédex", R.drawable.ic_dex, DexActivity::class.java),
+        DEX("Pokédex", R.drawable.ic_book, DexActivity::class.java, inBar = false),
         SHOP("Shop", R.drawable.ic_shop, ShopActivity::class.java),
+        SETTINGS("Settings", R.drawable.ic_settings, SettingsActivity::class.java),
     }
 
     /** Builds the bar for [activity], with [current] highlighted. Add it at the bottom of the screen. */
@@ -34,8 +36,8 @@ object BottomNav {
             orientation = LinearLayout.HORIZONTAL
             setPadding(Ui.dp(activity, 6), Ui.dp(activity, 6), Ui.dp(activity, 6), Ui.dp(activity, 2))
         }
-        for (tab in Tab.entries) {
-            val on = tab == current
+        for (tab in Tab.entries.filter { it.inBar }) {
+            val on = tab == current || (current == Tab.DEX && tab == Tab.TEAM)
             val tint = if (on) col else idle
             val icon = ImageView(activity).apply {
                 setImageResource(tab.icon)

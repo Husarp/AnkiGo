@@ -44,6 +44,15 @@ enum class Size(val wDp: Int, val hDp: Int) {
     TABLET(800, 1280),
     /** Landscape tablet. */
     TABLET_LAND(1280, 800),
+    /** Short split-screen halves (battle must scale, not drop parts). */
+    SPLIT_SHORT(412, 300),
+    SPLIT_TINY(412, 250),
+    /** Picture-in-picture 16:9 small / medium and 1:1. */
+    PIP_169(240, 135),
+    PIP_169M(320, 180),
+    PIP_11(200, 200),
+    /** Floating battle window default size (FloatBattleView 240 x 190). */
+    FLOATB(240, 190),
 }
 
 enum class Theme(val night: NightMode) { LIGHT(NightMode.NOTNIGHT), DARK(NightMode.NIGHT) }

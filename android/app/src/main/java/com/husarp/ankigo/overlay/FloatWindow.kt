@@ -37,7 +37,7 @@ class FloatWindow(
     private val onClose: () -> Unit,
 ) {
     /** Themed application context: build the content with it. */
-    val context: Context = ContextThemeWrapper(ctx.applicationContext, R.style.GameTheme)
+    val context: Context = ContextThemeWrapper(com.husarp.ankigo.ui.AppLook.wrap(ctx.applicationContext), R.style.GameTheme)
 
     private val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val minW = Ui.dp(context, minWdp)

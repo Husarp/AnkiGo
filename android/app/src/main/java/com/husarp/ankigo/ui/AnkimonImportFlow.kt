@@ -216,6 +216,7 @@ object AnkimonImportFlow {
             textSize = 13f
             setTextColor(Ui.c(c, R.color.ag_text))
             isChecked = defaultTeam
+            Ui.tintCheck(this)
         }
         col.addView(box, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 10) })
         col.addView(Ui.text(c, 12f, 600, R.color.ag_sub0).apply {

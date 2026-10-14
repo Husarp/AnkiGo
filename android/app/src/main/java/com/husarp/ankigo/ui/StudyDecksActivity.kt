@@ -18,7 +18,7 @@ import com.husarp.ankigo.update.Updates
 import java.util.concurrent.Executors
 
 /** AnkiDroid's own tree counts already include child decks and daily limits. */
-class StudyDecksActivity : Activity() {
+class StudyDecksActivity : AgActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var content: LinearLayout
     private lateinit var appBar: AppBar

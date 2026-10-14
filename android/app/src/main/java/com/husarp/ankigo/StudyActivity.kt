@@ -43,7 +43,7 @@ import org.json.JSONObject
 import java.util.concurrent.Executors
 
 /** Study through AnkiDroid's scheduler, awarding game progress only after a verified answer. */
-class StudyActivity : Activity() {
+class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val prefs by lazy { getSharedPreferences("study", 0) }

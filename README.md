@@ -18,8 +18,8 @@ Existing features remain:
   are upgraded if the file has them further along, the Pokédex is combined, and for items and coins the higher number
   is kept, so importing the same file twice changes nothing. Nicknames and EVs come along; gens 1–8 (gen 9 when it is
   switched on). Your current game is backed up first and can be restored under *Restore a backup*.
-- **Picture-in-picture.** When you leave AnkiGo, the battle shrinks into a small picture-in-picture window and keeps
-  following your answers (buttons: Open, Pause/Resume). Settings → *When you leave AnkiGo*.
+- **Picture-in-picture.** Tap *Pop out* on the battle (or choose it in Settings for every time you leave AnkiGo) and the
+  battle shrinks into a small picture-in-picture window that keeps following your answers (buttons: Open, Pause/Resume).
 - **Floating windows** (optional, needs Android's "Display over other apps"): in split screen, Team, Pokédex, Shop and
   Settings open in a small window you can move and resize over AnkiDroid, so the battle stays visible. Instead of
   picture-in-picture you can also choose a floating battle window; it keeps running with a notification while AnkiGo
@@ -48,3 +48,8 @@ The step-0 test screens (live watch, checks, report) are under Settings → Diag
 
 After that, AnkiGo updates itself: it shows a banner when a new version is out, downloads it and hands it
 to Android's installer (Android asks you to confirm each update).
+
+## Credits
+
+Icons: AnkiGo's own, plus some from [Material Symbols](https://github.com/google/material-design-icons) by Google
+(Apache License 2.0).
