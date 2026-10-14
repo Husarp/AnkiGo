@@ -20,8 +20,10 @@ class SpriteUrlsTest {
             SpriteUrls.battle(pika, SpriteKind.FRONT, false))
     }
 
+    private val sdApi = "${api}pokemon/other/showdown/"
+
     @Test fun frontChainSkipsPokeApiGifAfter649() {
-        assertEquals(listOf("${sd}gen5ani/froakie.gif", "${sd}gen5/froakie.png", "${api}pokemon/656.png"),
+        assertEquals(listOf("${sd}gen5ani/froakie.gif", "${sd}ani/froakie.gif", "${sdApi}656.gif", "${sd}gen5/froakie.png", "${api}pokemon/656.png"),
             SpriteUrls.battle(froakie, SpriteKind.FRONT, false))
         assertEquals("${bw}649.gif", SpriteUrls.battle(TestData.species(649, "genesect"), SpriteKind.FRONT, false)[0])
     }
@@ -29,7 +31,7 @@ class SpriteUrlsTest {
     @Test fun backChains() {
         assertEquals(listOf("${bw}back/25.gif", "${sd}gen5ani-back/pikachu.gif", "${sd}gen5-back/pikachu.png"),
             SpriteUrls.battle(pika, SpriteKind.BACK, false))
-        assertEquals(listOf("${sd}gen5ani-back/froakie.gif", "${sd}gen5-back/froakie.png"),
+        assertEquals(listOf("${sd}gen5ani-back/froakie.gif", "${sd}ani-back/froakie.gif", "${sdApi}back/656.gif", "${sd}gen5-back/froakie.png"),
             SpriteUrls.battle(froakie, SpriteKind.BACK, false))
     }
 
@@ -44,13 +46,17 @@ class SpriteUrlsTest {
     private val raticateAlola = TestData.species(10092, "raticatealola").copy(spriteId = "raticate-alola", form = "Alola", baseNum = 20)
 
     @Test fun regionalFormChainsUseTheSpriteIdAndSkipTheBwGif() {
-        assertEquals(listOf("${sd}gen5ani/raticate-alola.gif", "${sd}gen5/raticate-alola.png", "${api}pokemon/10092.png"),
+        assertEquals(listOf("${sd}gen5ani/raticate-alola.gif", "${sd}ani/raticate-alola.gif", "${sdApi}10092.gif",
+            "${sd}gen5/raticate-alola.png", "${api}pokemon/10092.png"),
             SpriteUrls.battle(raticateAlola, SpriteKind.FRONT, false))
-        assertEquals(listOf("${sd}gen5ani-back/raticate-alola.gif", "${sd}gen5-back/raticate-alola.png"),
+        assertEquals(listOf("${sd}gen5ani-back/raticate-alola.gif", "${sd}ani-back/raticate-alola.gif", "${sdApi}back/10092.gif",
+            "${sd}gen5-back/raticate-alola.png"),
             SpriteUrls.battle(raticateAlola, SpriteKind.BACK, false))
-        assertEquals(listOf("${sd}gen5ani-shiny/raticate-alola.gif", "${sd}gen5-shiny/raticate-alola.png", "${api}pokemon/shiny/10092.png"),
+        assertEquals(listOf("${sd}gen5ani-shiny/raticate-alola.gif", "${sd}ani-shiny/raticate-alola.gif", "${sdApi}shiny/10092.gif",
+            "${sd}gen5-shiny/raticate-alola.png", "${api}pokemon/shiny/10092.png"),
             SpriteUrls.battle(raticateAlola, SpriteKind.FRONT, true))
-        assertEquals(listOf("${sd}gen5ani-back-shiny/raticate-alola.gif", "${sd}gen5-back-shiny/raticate-alola.png"),
+        assertEquals(listOf("${sd}gen5ani-back-shiny/raticate-alola.gif", "${sd}ani-back-shiny/raticate-alola.gif", "${sdApi}back/shiny/10092.gif",
+            "${sd}gen5-back-shiny/raticate-alola.png"),
             SpriteUrls.battle(raticateAlola, SpriteKind.BACK, true))
         assertEquals("${api}pokemon/10092.png", SpriteUrls.static(raticateAlola.num, false))
     }
@@ -98,10 +104,24 @@ class SpriteUrlsGen9Test {
     private val sd = "https://play.pokemonshowdown.com/sprites/"
     private val sprigatito = TestData.species(906, "sprigatito")
 
-    @Test fun gen9FrontEndsWithStillPictures() {
-        assertEquals(listOf("${sd}gen5ani/sprigatito.gif", "${sd}gen5/sprigatito.png", "${api}pokemon/906.png"),
+    private val sdApi = "${api}pokemon/other/showdown/"
+
+    @Test fun gen9TriesPixelThen3dAnimationsBeforeStillPictures() {
+        assertEquals(listOf("${sd}gen5ani/sprigatito.gif", "${sd}ani/sprigatito.gif", "${sdApi}906.gif", "${sd}gen5/sprigatito.png", "${api}pokemon/906.png"),
             SpriteUrls.battle(sprigatito, SpriteKind.FRONT, false))
-        assertEquals(listOf("${sd}gen5ani-back/sprigatito.gif", "${sd}gen5-back/sprigatito.png"),
+        assertEquals(listOf("${sd}gen5ani-back/sprigatito.gif", "${sd}ani-back/sprigatito.gif", "${sdApi}back/906.gif", "${sd}gen5-back/sprigatito.png"),
             SpriteUrls.battle(sprigatito, SpriteKind.BACK, false))
+        assertEquals(listOf("${sd}gen5ani-back-shiny/sprigatito.gif", "${sd}ani-back-shiny/sprigatito.gif", "${sdApi}back/shiny/906.gif",
+            "${sd}gen5-back-shiny/sprigatito.png"),
+            SpriteUrls.battle(sprigatito, SpriteKind.BACK, true))
+    }
+
+    @Test fun oldPokemonNeverGetThe3dModels() {
+        for (num in listOf(1, 25, 151, 493, 649)) {
+            for (kind in SpriteKind.values()) for (shiny in listOf(false, true)) {
+                val urls = SpriteUrls.battle(TestData.species(num, "x$num"), kind, shiny)
+                assertTrue(urls.toString(), urls.none { Regex("/ani(-[a-z-]+)?/").containsMatchIn(it) || "other/showdown" in it })
+            }
+        }
     }
 }

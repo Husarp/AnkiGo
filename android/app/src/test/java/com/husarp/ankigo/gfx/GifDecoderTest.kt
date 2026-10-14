@@ -260,4 +260,61 @@ class GifDecoderTest {
         val g = GifDecoder.decode(gif(2, 2, pal, Img(1, 1, 3, 3, IntArray(9) { 1 })))
         assertEquals(listOf(0, 0, 0, RED), g.frames[0].pixels.toList())
     }
+    // ---- 3D model GIFs (Showdown ani/): many frames, every one disposal 2 or 3, partial rects, transparency ----
+
+    @Test fun overTheBudgetEveryOtherFrameIsKeptAndPlaysAsLong() {
+        val frames = (0 until 5).map { Img(0, 0, 2, 2, IntArray(4) { _ -> 1 + it % 3 }, delayCs = 4) }.toTypedArray()
+        val all = GifDecoder.decode(gif(2, 2, pal, *frames))
+        assertEquals(5, all.frames.size)
+        val cut = GifDecoder.decode(gif(2, 2, pal, *frames), maxPixels = 12) // 5 x 4 px = 20 > 12: step 2
+        assertEquals(3, cut.frames.size)
+        assertEquals(listOf(RED, BLUE, GREEN), cut.frames.map { it.pixels[0] }) // frames 0, 2, 4
+        assertEquals(listOf(80, 80, 40), cut.frames.map { it.delayMs })
+        assertEquals(all.frames.sumOf { it.delayMs }, cut.frames.sumOf { it.delayMs })
+        // a budget smaller than one frame keeps just the first one
+        assertEquals(1, GifDecoder.decode(gif(2, 2, pal, *frames), maxPixels = 1).frames.size)
+    }
+
+    @Test fun skippedFramesStillComposeTheCanvas() {
+        // frame 1 (skipped) paints the right pixel; frame 2 (kept) only the left one, so the kept picture has both
+        val bytes = gif(2, 1, pal,
+            Img(0, 0, 2, 1, intArrayOf(1, 1), disposal = 1),
+            Img(1, 0, 1, 1, intArrayOf(2), disposal = 1),
+            Img(0, 0, 1, 1, intArrayOf(3), disposal = 1))
+        val g = GifDecoder.decode(bytes, maxPixels = 4)
+        assertEquals(2, g.frames.size)
+        assertEquals(listOf(BLUE, GREEN), g.frames[1].pixels.toList())
+    }
+
+    @Test fun hugeCanvasIsRefused() {
+        val bytes = gif(2000, 2000, pal, Img(0, 0, 1, 1, intArrayOf(1)))
+        try { GifDecoder.decode(bytes); fail("expected a refusal") } catch (e: IllegalArgumentException) {
+            assertTrue(e.message, e.message!!.contains("too big"))
+        }
+    }
+
+    @Test fun manyRestorePreviousFramesWithTransparentPartialRects() {
+        // like the 3D GIFs: every frame disposal 3 (restore to the blank canvas), a moving 1x1 dot, index 0 transparent
+        val n = 40
+        val frames = (0 until n).map { k -> Img(k % 4, 0, 1, 1, intArrayOf(1 + k % 3), disposal = 3, transparent = 0) }.toTypedArray()
+        val g = GifDecoder.decode(gif(4, 1, pal, *frames))
+        assertEquals(n, g.frames.size)
+        for (k in 0 until n) {
+            val expect = IntArray(4).also { it[k % 4] = pal[1 + k % 3] }
+            assertEquals("frame $k", expect.toList(), g.frames[k].pixels.toList())
+        }
+    }
+
+    @Test fun manyClearToBackgroundFrames() {
+        // disposal 2 on a partial rect clears only that rect; the pixels outside stay from frame 0
+        val bytes = gif(3, 1, pal,
+            Img(0, 0, 3, 1, intArrayOf(1, 1, 1), disposal = 1),
+            Img(1, 0, 1, 1, intArrayOf(2), disposal = 2),
+            Img(2, 0, 1, 1, intArrayOf(3), disposal = 2),
+            Img(0, 0, 1, 1, intArrayOf(0), disposal = 2, transparent = 0))
+        val g = GifDecoder.decode(bytes)
+        assertEquals(listOf(RED, GREEN, RED), g.frames[1].pixels.toList())
+        assertEquals(listOf(RED, 0, BLUE), g.frames[2].pixels.toList())
+        assertEquals(listOf(RED, 0, 0), g.frames[3].pixels.toList())
+    }
 }

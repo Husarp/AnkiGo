@@ -33,9 +33,14 @@ class SpriteImage(val frames: List<Bitmap>, val delays: IntArray) {
 /**
  * Sprite download + cache (noBackupFilesDir/sprites). Battle sprites are fetched on demand with a fallback chain
  * (first that exists wins; a "not found" result is remembered for 7 days):
- *  FRONT:  PokeAPI BW animated (#1-649) -> Showdown gen5ani -> Showdown gen5 static -> PokeAPI static
- *  BACK:   PokeAPI BW animated back (#1-649) -> Showdown gen5ani-back -> Showdown gen5-back -> (none: caller mirrors FRONT)
- *  shiny variants of each (PokeAPI .../shiny/, Showdown gen5ani-shiny, gen5ani-back-shiny, gen5-shiny, gen5-back-shiny).
+ *  FRONT:  PokeAPI BW animated (#1-649) -> Showdown gen5ani -> [3D] Showdown ani -> PokeAPI other/showdown
+ *          -> Showdown gen5 static -> PokeAPI static
+ *  BACK:   PokeAPI BW animated back (#1-649) -> Showdown gen5ani-back -> [3D] Showdown ani-back -> PokeAPI
+ *          other/showdown/back -> Showdown gen5-back -> (none: caller mirrors FRONT)
+ *  shiny variants of each (PokeAPI .../shiny/, Showdown gen5ani-shiny, ani-shiny, gen5ani-back-shiny, ani-back-shiny, ...).
+ * The Gen-5 pixel animations come first so a Pokémon that has one keeps that look; the [3D] model animations
+ * (Showdown's, mirrored by PokeAPI under the national number / form id) fill the rest of gens 6-9 and the regional
+ * forms. They are never used for a base species #1-649, which always has the pixel ones.
  * Static 96x96 PNGs (Pokédex, team, widgets) come from PokeAPI sprites/pokemon/{num}.png (shiny/{num}.png);
  * item icons from PokeAPI sprites/items/{id}.png. PokeAPI URLs are pinned to DataStore.SPRITES_COMMIT.
  */
@@ -48,26 +53,25 @@ internal object SpriteUrls {
 
     /**
      * URLs to try in order; the first that exists wins. Empty when the chain ends with "none" (BACK without any hit).
-     * Showdown file names are [Species.spriteId] ("raticate-alola"), PokeAPI ones the number (regional forms: pokemon id > 10000, no BW gif).
+     * Showdown file names are [Species.spriteId] ("raticate-alola", "tauros-paldeacombat"), PokeAPI ones the number
+     * (regional forms: pokemon id > 10000, no BW gif; PokeAPI's other/showdown copy uses the same id).
      */
     fun battle(sp: Species, kind: SpriteKind, shiny: Boolean): List<String> {
         val api = pokeApi()
         val out = ArrayList<String>()
         val bw = sp.num <= 649
-        if (kind == SpriteKind.FRONT) {
-            val s = if (shiny) "shiny/" else ""
-            val suf = if (shiny) "-shiny" else ""
-            if (bw) out += "${api}pokemon/versions/generation-v/black-white/animated/$s${sp.num}.gif"
-            out += "${SHOWDOWN}gen5ani$suf/${sp.spriteId}.gif"
-            out += "${SHOWDOWN}gen5$suf/${sp.spriteId}.png"
-            out += "${api}pokemon/$s${sp.num}.png"
-        } else {
-            val s = if (shiny) "shiny/" else ""
-            val suf = if (shiny) "-shiny" else ""
-            if (bw) out += "${api}pokemon/versions/generation-v/black-white/animated/back/$s${sp.num}.gif"
-            out += "${SHOWDOWN}gen5ani-back$suf/${sp.spriteId}.gif"
-            out += "${SHOWDOWN}gen5-back$suf/${sp.spriteId}.png"
+        val s = if (shiny) "shiny/" else ""
+        val suf = if (shiny) "-shiny" else ""
+        val back = if (kind == SpriteKind.BACK) "back/" else ""
+        val dash = if (kind == SpriteKind.BACK) "-back" else ""
+        if (bw) out += "${api}pokemon/versions/generation-v/black-white/animated/$back$s${sp.num}.gif"
+        out += "${SHOWDOWN}gen5ani$dash$suf/${sp.spriteId}.gif"
+        if (!bw) {
+            out += "${SHOWDOWN}ani$dash$suf/${sp.spriteId}.gif"
+            out += "${api}pokemon/other/showdown/$back$s${sp.num}.gif"
         }
+        out += "${SHOWDOWN}gen5$dash$suf/${sp.spriteId}.png"
+        if (kind == SpriteKind.FRONT) out += "${api}pokemon/$s${sp.num}.png"
         return out
     }
 
@@ -116,9 +120,14 @@ internal class ByteLru<V : Any>(private val maxBytes: Long, private val sizeOf: 
 /**
  * Sprite download + cache (noBackupFilesDir/sprites). Battle sprites are fetched on demand with a fallback chain
  * (first that exists wins; a "not found" result is remembered for 7 days):
- *  FRONT:  PokeAPI BW animated (#1-649) -> Showdown gen5ani -> Showdown gen5 static -> PokeAPI static
- *  BACK:   PokeAPI BW animated back (#1-649) -> Showdown gen5ani-back -> Showdown gen5-back -> (none: caller mirrors FRONT)
- *  shiny variants of each (PokeAPI .../shiny/, Showdown gen5ani-shiny, gen5ani-back-shiny, gen5-shiny, gen5-back-shiny).
+ *  FRONT:  PokeAPI BW animated (#1-649) -> Showdown gen5ani -> [3D] Showdown ani -> PokeAPI other/showdown
+ *          -> Showdown gen5 static -> PokeAPI static
+ *  BACK:   PokeAPI BW animated back (#1-649) -> Showdown gen5ani-back -> [3D] Showdown ani-back -> PokeAPI
+ *          other/showdown/back -> Showdown gen5-back -> (none: caller mirrors FRONT)
+ *  shiny variants of each (PokeAPI .../shiny/, Showdown gen5ani-shiny, ani-shiny, gen5ani-back-shiny, ani-back-shiny, ...).
+ * The Gen-5 pixel animations come first so a Pokémon that has one keeps that look; the [3D] model animations
+ * (Showdown's, mirrored by PokeAPI under the national number / form id) fill the rest of gens 6-9 and the regional
+ * forms. They are never used for a base species #1-649, which always has the pixel ones.
  * Static 96x96 PNGs (Pokédex, team, widgets) come from PokeAPI sprites/pokemon/{num}.png (shiny/{num}.png);
  * item icons from PokeAPI sprites/items/{id}.png. PokeAPI URLs are pinned to DataStore.SPRITES_COMMIT.
  */
@@ -129,6 +138,10 @@ object Sprites {
     private const val RETRY_MISSING_MS = 7L * 24 * 3600 * 1000
     private const val IMAGE_CACHE_BYTES = 24L * 1024 * 1024
     private const val BITMAP_CACHE_BYTES = 16L * 1024 * 1024
+    /** A sprite file bigger than this is skipped like a missing one (the largest 3D animation is ~0.6 MB). */
+    internal const val MAX_SPRITE_BYTES = 2_000_000
+    /** Decoded frames kept per sprite (pixels; x4 bytes): long 3D animations keep every 2nd/3rd frame instead. */
+    internal const val DECODE_MAX_PIXELS = 2_000_000L
 
     private val main by lazy { Handler(Looper.getMainLooper()) }
     private val pool by lazy {
@@ -139,7 +152,24 @@ object Sprites {
     private val images = ByteLru<SpriteImage>(IMAGE_CACHE_BYTES) { img -> img.frames.sumOf { it.byteCount.toLong() } }
     private val bitmaps = ByteLru<Bitmap>(BITMAP_CACHE_BYTES) { it.byteCount.toLong() }
 
-    fun dir(ctx: Context): File = File(ctx.noBackupFilesDir, "sprites")
+    fun dir(ctx: Context): File = File(ctx.noBackupFilesDir, "sprites").also { if (!upgraded) upgradeBattleCache(it) }
+
+    @Volatile private var upgraded = false
+
+    /**
+     * Once per sprite folder: drops the still battle pictures and "not found" notes that older versions saved for
+     * Pokémon without a Gen-5 animation (gens 6-9, regional forms), so they are fetched again and get the 3D animation.
+     * GIFs, the static pictures and item icons stay.
+     */
+    @Synchronized internal fun upgradeBattleCache(dir: File) {
+        upgraded = true
+        val mark = File(dir, ".battle-v2")
+        if (mark.isFile) return
+        for (sub in listOf("front", "back")) {
+            File(dir, sub).listFiles()?.forEach { if (it.name.endsWith(".png") || it.name.endsWith(".missing")) it.delete() }
+        }
+        try { dir.mkdirs(); mark.writeText("1") } catch (_: IOException) { }
+    }
 
     private fun baseName(num: Int, shiny: Boolean) = if (shiny) "${num}s" else "$num"
     private fun folder(ctx: Context, kind: SpriteKind) = File(dir(ctx), if (kind == SpriteKind.FRONT) "front" else "back")
@@ -181,7 +211,7 @@ object Sprites {
         val img = try {
             val bytes = file.readBytes()
             if (SpriteUrls.isGif(bytes)) {
-                val gif = GifDecoder.decode(bytes)
+                val gif = GifDecoder.decode(bytes, DECODE_MAX_PIXELS)
                 SpriteImage(
                     gif.frames.map { Bitmap.createBitmap(it.pixels, gif.width, gif.height, Bitmap.Config.ARGB_8888) },
                     IntArray(gif.frames.size) { gif.frames[it].delayMs },
@@ -358,6 +388,7 @@ object Sprites {
             }
             if (bytes == null) continue
             if (!SpriteUrls.validFor(url, bytes)) { networkError = true; continue } // an error page, not "not found"
+            if (bytes.size > MAX_SPRITE_BYTES) continue // too big to keep: counts as not there
             val ext = if (url.endsWith(".gif")) "gif" else "png"
             val target = File(base.parentFile, "${base.name}.$ext")
             val tmp = File(base.parentFile, "${base.name}.$ext.${System.nanoTime()}.tmp")

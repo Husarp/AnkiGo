@@ -11,11 +11,16 @@ object GifDecoder {
     /** Thrown internally when the data ends in the middle of a block. */
     private class Truncated : Exception()
 
+    /** Largest canvas accepted (width*height); bigger files are refused instead of risking an out-of-memory. */
+    const val MAX_CANVAS_PIXELS = 1024 * 1024
+
     /**
-     * Throws IllegalArgumentException on data that isn't a GIF, or that is cut off before the first frame is complete.
-     * A file that is cut off later returns the frames decoded so far.
+     * Throws IllegalArgumentException on data that isn't a GIF, that is cut off before the first frame is complete, or
+     * whose canvas is over [MAX_CANVAS_PIXELS]. A file that is cut off later returns the frames decoded so far.
+     * [maxPixels] caps the kept frames (frames x width x height): over it, only every 2nd (3rd, ...) frame is kept and
+     * shown for the skipped frames' time too, so a long 3D animation plays at the same speed with less memory.
      */
-    fun decode(bytes: ByteArray): Gif {
+    fun decode(bytes: ByteArray, maxPixels: Long = Long.MAX_VALUE): Gif {
         require(bytes.size >= 13) { "not a GIF (too short)" }
         require(bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte() && bytes[2] == 'F'.code.toByte() &&
             bytes[3] == '8'.code.toByte() && (bytes[4] == '7'.code.toByte() || bytes[4] == '9'.code.toByte()) &&
@@ -31,14 +36,42 @@ object GifDecoder {
             val packed = r.u8()
             r.u8(); r.u8() // background colour index + aspect ratio: the background is treated as transparent
             require(width > 0 && height > 0) { "GIF without size" }
+            require(width.toLong() * height <= MAX_CANVAS_PIXELS) { "GIF too big (${width}x$height)" }
             if (packed and 0x80 != 0) globalTable = readTable(r, 1 shl ((packed and 7) + 1))
-            return decodeFrames(r, width, height, globalTable, frames)
+            val count = countFrames(bytes, r.pos)
+            val perFrame = width.toLong() * height
+            val step = if (count * perFrame <= maxPixels) 1 else ((count * perFrame + maxPixels - 1) / maxPixels.coerceAtLeast(perFrame)).toInt()
+            return decodeFrames(r, width, height, globalTable, frames, step.coerceAtLeast(1))
         } catch (e: Truncated) {
             throw IllegalArgumentException("GIF is cut off before the first frame")
         }
     }
 
-    private fun decodeFrames(r: Reader, width: Int, height: Int, globalTable: IntArray?, frames: ArrayList<Frame>): Gif {
+    /** Number of image blocks from [start] (just after the global colour table), without decoding them. */
+    private fun countFrames(bytes: ByteArray, start: Int): Int {
+        val r = Reader(bytes)
+        r.pos = start
+        var n = 0
+        try {
+            while (true) {
+                when (r.u8()) {
+                    0x21 -> { r.u8(); r.skipSubBlocks() }
+                    0x2C -> {
+                        r.pos += 8
+                        val packed = r.u8()
+                        if (packed and 0x80 != 0) r.pos += 3 * (1 shl ((packed and 7) + 1))
+                        r.u8(); r.skipSubBlocks(); n++
+                    }
+                    else -> return n
+                }
+            }
+        } catch (_: Truncated) {
+            return n
+        }
+    }
+
+    private fun decodeFrames(r: Reader, width: Int, height: Int, globalTable: IntArray?, frames: ArrayList<Frame>, step: Int): Gif {
+        var index = 0 // image blocks seen; only every [step]th becomes a frame, the others add their time to it
         val canvas = IntArray(width * height)
         var previous: IntArray? = null // canvas before the last frame was drawn (disposal 3)
         var lastDisposal = 0
@@ -84,7 +117,8 @@ object GifDecoder {
                         previous = if (disposal == 3) canvas.copyOf() else null
                         val indices = lzwDecode(data, minCode, w * h)
                         draw(canvas, width, height, left, top, w, h, interlaced, indices, table, transparent)
-                        frames.add(Frame(canvas.copyOf(), delayMs))
+                        if (index++ % step == 0) frames.add(Frame(canvas.copyOf(), delayMs))
+                        else frames[frames.size - 1] = frames.last().let { Frame(it.pixels, it.delayMs + delayMs) }
                         lastDisposal = disposal
                         lastRect = intArrayOf(left, top, w, h)
                         // The control block only applies to the next image.
