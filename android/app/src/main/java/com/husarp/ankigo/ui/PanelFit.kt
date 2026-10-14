@@ -171,7 +171,7 @@ internal object ArenaGeo {
     private const val ART = 0.85f
     private const val A_MIN = 0.6f
 
-    /** The corner layout keeps the sprites at 85 % of the mockup's size at least; under that the middle layout gives them more room. */
+    /** The under, beside and corner layouts keep the sprites at 85 % of the mockup's size at least; under that the middle layout gives them more room. */
     private const val A_CORNERS = 0.85f
     private const val EPS = 0.5f
 
@@ -249,7 +249,7 @@ internal object ArenaGeo {
         val aMax = max(base, min(0.4f * h / 128f, min(0.6f * w / 140f, 4f)))
         val k0 = min(w / 300f, h / 430f).coerceIn(1f, 1.4f)
         val low = min(base, A_CORNERS)
-        val found = if (own) search(aMax, 1f, k0) { a, k -> under(w, h, c, a, k) } ?: search(aMax, low, k0) { a, k -> beside(w, h, c, ref, a, k) }
+        val found = if (own) search(aMax, low, k0) { a, k -> under(w, h, c, a, k) } ?: search(aMax, low, k0) { a, k -> beside(w, h, c, ref, a, k) }
         else search(aMax, low, k0) { a, k -> corners(w, h, c, ref, a, k) }
         return found ?: middle(w, h, c, ref)
     }
