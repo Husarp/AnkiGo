@@ -141,6 +141,7 @@ class GameActivity : AgActivity() {
         updatePipParams()
         FloatBattleService.startIfWanted(this)
         if (bound) {
+            panel?.refreshPrefs()   // Settings may have changed the card layout / compact cards while we were away
             val events = act { it.tick() }
             if (events.isEmpty()) { if (player?.idle != false) panel?.renderAll() } else handleEvents(events)
         } else {

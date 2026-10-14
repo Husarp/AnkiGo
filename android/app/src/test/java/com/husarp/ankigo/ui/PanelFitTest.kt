@@ -5,13 +5,14 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.ceil
+import kotlin.math.min
 
 // TICKET U-05: the battle panel's scale, step-out order, text floor and card layout, in pure maths.
 class PanelFitTest {
     private fun fit(
         w: Int, h: Int, small: Boolean = false, statsBarSmall: Boolean = true, compact: Boolean = false,
-        strip: Boolean = false, corner: Float = 0f, tools: Boolean = true,
-    ) = PanelFit.decide(w.toFloat(), h.toFloat(), small, statsBarSmall, compact, strip, corner, tools)
+        strip: Boolean = false, corner: Float = 0f, tools: Boolean = true, own: Boolean = false,
+    ) = PanelFit.decide(w.toFloat(), h.toFloat(), small, statsBarSmall, compact, strip, corner, tools, own)
 
     /** What the window keeps: the stats bar (S), the log line (L), the XP numbers (X). */
     private fun kept(f: PanelFit.Fit) = (if (f.stats) "S" else "-") + (if (f.log) "L" else "-") + (if (f.xp) "X" else "-")
@@ -64,7 +65,7 @@ class PanelFitTest {
         assertEquals(8f, fit(412, 869).floorSp, 0f)
         for ((w, h) in listOf(412 to 250, 320 to 180, 240 to 190, 340 to 480, 200 to 200)) for (small in listOf(false, true)) {
             val f = fit(w, h, small = small)
-            assertEquals(ceil(80f / f.scale) / 10f, f.floorSp, 0.0501f)
+            assertEquals(ceil(8f / f.scale * 10f) / 10f, f.floorSp, 0.0501f)
             // a 9 sp chip, a 14 sp name, anything: drawn at least 8 sp on screen
             for (base in listOf(9f, 10f, 11f, 12f, 14f)) assertTrue("$w x $h base $base", TextMath.at(base, f.floorSp) * f.scale >= 8f - 0.001f)
         }
@@ -81,17 +82,32 @@ class PanelFitTest {
     // ---------------------------------------------------------------- step-out order at the listed sizes
 
     @Test fun smallWindowsFullCards() {
-        // what stays (S stats bar, L log line, X xp numbers) for picture-in-picture / floating windows, stats bar pref on
-        val expect = listOf(
-            Triple(200, 200, "-LX"), Triple(240, 135, "--X"), Triple(320, 180, "-LX"), Triple(240, 190, "-LX"),
-            Triple(340, 480, "SLX"), Triple(412, 250, "SLX"), Triple(412, 400, "SLX"), Triple(412, 869, "SLX"),
-        )
+        // what stays (S stats bar, L log line, X xp numbers) for floating windows with the full cards (pref off), stats bar pref on;
+        // a small window under 260 dp on its short side never gets them (see the next tests)
+        val expect = listOf(Triple(340, 480, "SLX"), Triple(412, 400, "SLX"), Triple(412, 869, "SLX"))
         for ((w, h, parts) in expect) {
             val f = fit(w, h, small = true)
             assertEquals("$w x $h", parts, kept(f))
             assertTrue("$w x $h ok", f.ok)
+            assertFalse(f.compactCards)
             assertFalse(f.tools)
             assertEquals(1, f.logLines)
+        }
+    }
+
+    @Test fun smallWindowsUnder260UseCompactCardsWhateverThePref() {
+        // picture-in-picture sizes: compact cards even with the pref off, and the same decision as with the pref on
+        for ((w, h) in listOf(240 to 135, 320 to 180, 200 to 200, 240 to 190, 412 to 250, 259 to 700)) {
+            val off = fit(w, h, small = true, compact = false)
+            assertTrue("$w x $h", off.compactCards)
+            assertTrue("$w x $h ok", off.ok)
+            assertEquals("$w x $h", fit(w, h, small = true, compact = true), off)
+        }
+        // not in a normal window, and not from 260 dp on: the pref decides
+        for ((w, h) in listOf(240 to 135, 200 to 200)) assertFalse(fit(w, h, small = false, compact = false).compactCards)
+        for ((w, h) in listOf(340 to 480, 260 to 260, 412 to 400)) {
+            assertFalse("$w x $h", fit(w, h, small = true, compact = false).compactCards)
+            assertTrue("$w x $h", fit(w, h, small = true, compact = true).compactCards)
         }
     }
 
@@ -186,8 +202,8 @@ class PanelFitTest {
 
     // ---------------------------------------------------------------- cards: corners or the middle column
 
-    private fun plan(w: Float, h: Float, compact: Boolean = false, floor: Float = 8f, xp: Boolean = true) =
-        ArenaGeo.plan(w, h, ArenaGeo.cards(floor, compact, xp), compact)
+    private fun plan(w: Float, h: Float, compact: Boolean = false, floor: Float = 8f, xp: Boolean = true, own: Boolean = false) =
+        ArenaGeo.plan(w, h, ArenaGeo.cards(floor, compact, xp), compact, own)
 
     private fun noCardCoversASprite(p: ArenaGeo.Plan, tag: String) {
         for ((card, name) in listOf(p.wildCard to "wild card", p.playerCard to "player card")) {
@@ -277,5 +293,118 @@ class PanelFitTest {
         assertTrue(plan(400f, stack + 13f).fits)
         assertFalse(plan(400f, stack + 6f).fits)
         assertFalse(plan(200f, 400f).fits) // 200 dp cannot hold a 170 dp column and two sprites
+    }
+
+    // ---------------------------------------------------------------- the arena grows; each card under its own Pokemon
+
+    /** Everything inside the arena, no card on a sprite's picture or on the other card, the two pictures apart. */
+    private fun nothingOverlaps(p: ArenaGeo.Plan, w: Float, h: Float, tag: String) {
+        noCardCoversASprite(p, tag)
+        assertFalse("$tag: the two pictures touch", p.wildSprite.art().hits(p.playerSprite.art()))
+        for (b in listOf(p.wildCard, p.playerCard, p.wildSprite.art(), p.playerSprite.art()))
+            assertTrue("$tag: outside the arena", b.x >= -0.01f && b.y >= -0.01f && b.right <= w + 0.01f && b.bottom <= h + 0.01f)
+    }
+
+    @Test fun tallPhoneArenaGrowsAndEachCardSitsUnderItsOwnPokemon() {
+        // the phone's arena (the 412 x 869 window less the log, the stats bar and the bottom bar) and a shorter one
+        for ((w, h) in listOf(412f to 680f, 412f to 600f)) {
+            val p = plan(w, h, own = true)
+            assertEquals("$w x $h", ArenaGeo.Layout.UNDER, p.layout)
+            assertTrue(p.fits && !p.middle)
+            assertTrue("$w x $h: a ${p.a}", p.a > 1.5f)
+            nothingOverlaps(p, w, h, "$w x $h")
+            // the wild card in the right half under the wild sprite (right-aligned with it), ours in the left half with our sprite right above it
+            assertTrue(p.wildCard.x + p.wildCard.w / 2 > w / 2 && p.playerCard.x + p.playerCard.w / 2 < w / 2)
+            assertTrue(p.wildCard.y >= p.wildSprite.bottom && p.wildCard.y < p.wildSprite.bottom + 6f)
+            assertEquals(p.wildSprite.right, p.wildCard.right, 0.01f)
+            assertTrue(p.playerSprite.bottom <= p.playerCard.y && p.playerCard.y < p.playerSprite.bottom + 6f)
+            assertEquals(p.playerSprite.x, p.playerCard.x, 0.01f)
+            assertTrue(p.wildSprite.bottom < p.playerSprite.y + p.playerSprite.h / 2)
+        }
+        // the free height also makes the cards bigger (up to 1.4 x), the sprites first
+        val tall = plan(412f, 680f, own = true)
+        assertTrue("k ${tall.k}", tall.k > 1.2f)
+        assertEquals(tall.wildCard.w, ArenaGeo.cards(8f, false, true).wildW * tall.k, 0.01f)
+        assertTrue(plan(412f, 869f, own = true).a >= tall.a)
+    }
+
+    @Test fun classicCornersGrowToo() {
+        val p = plan(412f, 600f, own = false)
+        assertEquals(ArenaGeo.Layout.CORNERS, p.layout)
+        assertTrue("a ${p.a}", p.a >= 1.4f)
+        nothingOverlaps(p, 412f, 600f, "corners")
+        assertTrue(p.wildCard.x < 103f && p.wildCard.y < 20f)
+        assertTrue(p.playerCard.right > 412f * 0.7f && p.playerCard.bottom > 600f - 20f)
+    }
+
+    @Test fun shortArenasKeepEachCardWithItsPokemonOrTheMiddleColumn() {
+        // the split-screen arena (about 212 dp): the wild group top-right, ours bottom-left, the sprites a bit under the mockup's size
+        for (h in listOf(213f, 230f, 267f)) {
+            val p = plan(412f, h, own = true)
+            assertEquals("h=$h", ArenaGeo.Layout.UNDER, p.layout)
+            assertTrue("h=$h a ${p.a}", p.a >= 0.85f)
+            nothingOverlaps(p, 412f, h, "412 x $h")
+        }
+        // narrow and short: the cards beside the Pokemon (the wild card in the top row, ours in the bottom row)
+        val b = plan(310f, 220f, own = true)
+        assertEquals(ArenaGeo.Layout.BESIDE, b.layout)
+        assertTrue(b.fits)
+        nothingOverlaps(b, 310f, 220f, "beside")
+        assertTrue(b.wildCard.y < 12f && b.wildCard.right <= b.wildSprite.art().x + 0.01f)
+        assertTrue(b.playerCard.bottom > 220f - 14f && b.playerCard.x >= b.playerSprite.art().right - 0.01f)
+        // too short for any of that: the middle column as before (also when the pref is off)
+        for (own in listOf(true, false)) for ((w, h) in listOf(412f to 200f, 344f to 200f)) {
+            val p = plan(w, h, own = own)
+            assertTrue("$w x $h own=$own", p.middle && p.fits)
+            assertEquals(1f, p.k, 0f)
+        }
+    }
+
+    @Test fun tabletSpritesStayUnderFortyPercentOfTheHeightAndCardsUnderOnePointFour() {
+        for (own in listOf(true, false)) for ((w, h) in listOf(800f to 1100f, 1200f to 800f, 600f to 1000f, 1000f to 1600f)) {
+            val p = plan(w, h, own = own)
+            assertTrue("$w x $h own=$own: ${p.layout}", p.fits && !p.middle)
+            assertTrue("$w x $h a ${p.a}", p.a <= 0.4f * h / 128f + 0.001f && p.a <= 4f && p.a >= 1.5f)
+            assertTrue("$w x $h k ${p.k}", p.k <= 1.4f + 0.001f && p.k >= 1f)
+            nothingOverlaps(p, w, h, "$w x $h own=$own")
+        }
+        val t = plan(800f, 1100f, own = true)
+        assertTrue(t.a > 3f && t.k > 1.3f)
+    }
+
+    @Test fun narrowAndTinyArenasStillGetTheMiddleColumn() {
+        // as before (the classic rule): 200 dp cannot hold a 170 dp column and two sprites
+        assertFalse(plan(200f, 400f, own = false).fits)
+        for ((w, h) in listOf(160f to 120f, 100f to 60f, 60f to 40f)) assertTrue("$w x $h", plan(w, h, own = true).middle)
+    }
+
+    @Test fun anArenaNeverGetsWorseThanTheClassicLayout() {
+        for (compact in listOf(false, true)) for (floor in listOf(8f, 14f)) for (w in 200..900 step 20) for (h in 100..900 step 20) {
+            val c = ArenaGeo.cards(floor, compact, true)
+            val own = ArenaGeo.plan(w.toFloat(), h.toFloat(), c, compact, true)
+            val classic = ArenaGeo.plan(w.toFloat(), h.toFloat(), c, compact, false)
+            val tag = "$w x $h compact=$compact floor=$floor"
+            if (classic.fits) assertTrue("$tag: classic fits, own does not", own.fits)
+            if (classic.layout != ArenaGeo.Layout.MIDDLE) assertTrue("$tag: classic has no middle column, own has", !own.middle)
+            if (own.layout != ArenaGeo.Layout.MIDDLE) { assertTrue(tag, own.fits); assertTrue(tag, own.k in 1f..1.4001f) }
+        }
+    }
+
+    @Test fun ownPlansAreCleanAndTheSpritesNeverShrinkUnderTheClassicSize() {
+        for (own in listOf(true, false)) for (compact in listOf(false, true)) for (floor in listOf(8f, 14f)) for (w in 200..900 step 20) for (h in 100..1000 step 20) {
+            val p = plan(w.toFloat(), h.toFloat(), compact, floor, own = own)
+            if (!p.fits || p.middle) continue
+            val tag = "$w x $h own=$own compact=$compact floor=$floor ${p.layout}"
+            nothingOverlaps(p, w.toFloat(), h.toFloat(), tag)
+            assertTrue(tag, p.a >= min((h / ArenaGeo.refH(compact)).coerceIn(0.66f, 1.5f), 0.85f) - 0.001f)
+        }
+    }
+
+    @Test fun everyWindowStillFitsWithCardsUnderTheirOwnPokemon() {
+        for (small in listOf(false, true)) for (compact in listOf(false, true)) for (statsBar in listOf(true, false)) {
+            for (w in 160..900 step 20) for (h in 120..900 step 20) {
+                assertTrue("$w x $h small=$small compact=$compact", fit(w, h, small, statsBar, compact, own = true).ok)
+            }
+        }
     }
 }

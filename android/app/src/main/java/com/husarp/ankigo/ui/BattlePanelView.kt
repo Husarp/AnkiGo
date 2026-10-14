@@ -109,6 +109,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var study = false
     private var statsBarSmall = true
     private var compactCards = false
+    private var cardsOwn = true
     private var applied: PanelFit.Fit? = null
     private var fit = PanelFit.Fit(1f, 0f, 0f, 0f, stats = true, log = true, xp = true, tools = true, logLines = 2, compactCards = false, middle = false, ok = true)
     private val chargePips = StudyUi.row(ctx).apply { visibility = GONE }
@@ -227,15 +228,15 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         scaler.layout(0, 0, scaler.measuredWidth, scaler.measuredHeight)
     }
 
-    private data class Asked(val w: Float, val h: Float, val small: Boolean, val statsBar: Boolean, val compact: Boolean, val strip: Boolean, val corner: Float, val tools: Boolean)
+    private data class Asked(val w: Float, val h: Float, val small: Boolean, val statsBar: Boolean, val compact: Boolean, val strip: Boolean, val corner: Float, val tools: Boolean, val own: Boolean)
     private var asked: Asked? = null
     private var answer: PanelFit.Fit? = null
 
     /** [PanelFit.decide] for this window and these prefs; the last answer is kept while nothing changes (measure runs often). */
     private fun decide(w: Float, h: Float): PanelFit.Fit {
-        val a = Asked(w, h, small, statsBarSmall, compactCards, !statusOk, if (small) cornerClearance / resources.displayMetrics.density else 0f, toolsWanted)
+        val a = Asked(w, h, small, statsBarSmall, compactCards, !statusOk, if (small) cornerClearance / resources.displayMetrics.density else 0f, toolsWanted, cardsOwn)
         answer?.let { if (a == asked) return it }
-        return PanelFit.decide(a.w, a.h, a.small, a.statsBar, a.compact, a.strip, a.corner, a.tools).also { asked = a; answer = it }
+        return PanelFit.decide(a.w, a.h, a.small, a.statsBar, a.compact, a.strip, a.corner, a.tools, a.own).also { asked = a; answer = it }
     }
 
     /** Applies a decision: which parts show, the text floor, the log's height. Does nothing when it did not change. */
@@ -271,10 +272,12 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     /** The window's decision, for tests: scale, parts, card layout. */
     internal val currentFit: PanelFit.Fit get() = fit
 
-    /** Re-reads the two battle panel prefs (stats bar in small windows, compact stat cards) and lays out again. */
+    /** Re-reads the battle panel prefs (stats bar in small windows, compact stat cards, cards under their own Pokémon) and lays out again. */
     fun refreshPrefs() {
         statsBarSmall = AppPrefs.statsBarSmall(context)
         compactCards = AppPrefs.compactCards(context)
+        cardsOwn = AppPrefs.cardsUnderOwn(context)
+        arena.cardsUnderOwn = cardsOwn
         applied = null
         requestLayout()
     }
