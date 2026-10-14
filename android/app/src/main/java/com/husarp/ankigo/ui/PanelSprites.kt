@@ -38,6 +38,10 @@ internal object PanelSprites {
                     if (img != null) {
                         view.mirror = mirrored
                         view.setImage(img)
+                    } else {
+                        // A damaged file must not leave the previous Pokémon's picture under the new one's name.
+                        view.setImage(null)
+                        view.setPlaceholder(sp.name.take(2), Ui.typeColor(sp.types.firstOrNull() ?: com.husarp.ankigo.game.Type.NORMAL))
                     }
                 }
             }

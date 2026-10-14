@@ -34,6 +34,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         // An undo whose redo never came must not swallow a real answer days later.
         state.redo.clear()
         Shop.ensureToday(data, state)
+        refreshNext() // the daily goal count restarted: the predicted next one changes with it
         return listOf(GameEvent.DayChanged(today))
     }
 
@@ -79,6 +80,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val n = state.settings.cardsPerRound.coerceIn(1, 4)
         if (battle.answers < n) {
             events += GameEvent.Charge(battle.tally, battle.answers, n)
+            refreshNext()
             return events
         }
 
@@ -100,6 +102,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             state.battle = null
         }
         events += ensureEncounter() // no-op while a fight is still going
+        refreshNext()
         return events
     }
 
@@ -130,10 +133,10 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (state.battle != null) return emptyList()
         val main = state.main ?: return emptyList()
         val now = clock()
-        val level = Encounters.wildLevel(main.level, rng)
-        val preRolled = state.nextSpecies?.takeIf { Encounters.isValid(data, state, it, level) }
-            ?.let { Encounters.Roll(it, state.nextTier, state.nextShiny) }
-        val roll = preRolled ?: Encounters.roll(data, state, level, rng)
+        // Ankimon rolls the wild one when it appears, with that moment's state; the seed only fixes the random draws.
+        val r = state.nextSeed?.let { Random(it) } ?: rng
+        val level = Encounters.wildLevel(main.level, r)
+        val roll = Encounters.roll(data, state, level, r)
 
         val wild = Encounters.makeWild(data, roll, level, rng, now)
         val newSpecies = roll.species !in state.caught
@@ -143,11 +146,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         wild.hp = encounterHp
         state.battle = Battle(wild, roll.tier, startedAt = now, wildMaxHp = encounterHp.takeIf { it != fullHp })
 
-        // Pre-roll the one after this (widget silhouette, sprite prefetch).
-        val upcoming = Encounters.roll(data, state, Encounters.wildLevel(main.level, rng), rng)
-        state.nextSpecies = upcoming.species
-        state.nextTier = upcoming.tier
-        state.nextShiny = upcoming.shiny
+        // Seed of the one after this; the prediction (widget silhouette, sprite prefetch) follows the current state.
+        state.nextSeed = rng.nextLong()
+        refreshNext()
 
         return listOf(
             GameEvent.Encounter(
@@ -155,6 +156,20 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 wild.hp, encounterHp, willCatch(), newSpecies,
             ),
         )
+    }
+
+    /**
+     * Prediction of the next encounter (nextSpecies/Tier/Shiny): the same level and roll a fight starting now would get from
+     * [GameState.nextSeed]. Only a preview; the real roll happens when the encounter appears (ensureEncounter).
+     */
+    private fun refreshNext() {
+        val seed = state.nextSeed ?: return
+        val main = state.main ?: return
+        val r = Random(seed)
+        val upcoming = Encounters.roll(data, state, Encounters.wildLevel(main.level, r), r)
+        state.nextSpecies = upcoming.species
+        state.nextTier = upcoming.tier
+        state.nextShiny = upcoming.shiny
     }
 
     /** What the auto rule will do when the current wild one faints (for the "NEW · will catch" tag). */
@@ -223,6 +238,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (main != null && main.uid != oldMain) {
             state.battle?.player = BattleSide()
             events += GameEvent.MainChanged(main.uid, main.name)
+            refreshNext() // the wild level follows the main's level
         }
         return ActionResult(true, message, events)
     }
@@ -243,9 +259,16 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return changed(message, old)
     }
 
+    /** Why [cycleMain] can't work right now (shown under the greyed menu item), or null when it can. */
+    fun cycleMainBlocker(): String? = when {
+        state.team.isEmpty() -> "Pick your first Pokémon first"
+        state.team.size < 2 -> "Needs 2+ Pokémon in your team"
+        else -> null
+    }
+
     /** Ankimon team cycle: the next team member becomes the main. */
     fun cycleMain(): ActionResult {
-        if (state.team.size < 2) return ActionResult(false, "You need at least two Pokémon in your team.")
+        cycleMainBlocker()?.let { return ActionResult(false, it) }
         val old = state.team.first()
         // Ankimon cycles the first 3 only: [A,B,C,D] -> [B,C,A,D].
         state.team.add(minOf(3, state.team.size) - 1, state.team.removeAt(0))

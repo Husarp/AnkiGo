@@ -22,6 +22,17 @@ object Encounters {
     /** Fossil Pokémon: never wild, only from fossil items (Ankimon UNAVAILABLE < 10000). */
     val FOSSILS: Set<Int> = listOf(138..142, 345..348, 408..411, 564..567, 696..699, 880..883)
         .flatMap { it.toList() }.toSet()
+    /**
+     * Ankimon's LEGENDARY list (encounter_data.py) differs from PokeAPI's flags: Type: Null (772), Walking Wake (1009),
+     * Iron Leaves (1010), Gouging Fire (1020), Raging Bolt (1021), Iron Boulder (1022), Iron Crown (1023) are Legendary
+     * there, whatever the data's is_legendary flag says.
+     */
+    val LEGENDARY_EXTRA: Set<Int> = setOf(772, 1009, 1010, 1020, 1021, 1022, 1023)
+    /**
+     * Never wild: Ankimon only lists the Zygarde-50% / 10% forms (ids 10119 / 10181) as Legendary, which AnkiGo doesn't
+     * have, so the base Zygarde (718) never spawns.
+     */
+    val NEVER_WILD: Set<Int> = setOf(718)
     /** Capture requirements for base forms (Ankimon PREREQUISITES): species -> all of these caught. 1024 is in [ANY_PREREQUISITES]. */
     val PREREQUISITES: Map<Int, Set<Int>> = mapOf(
         150 to setOf(151), 249 to setOf(144, 145, 146), 250 to setOf(243, 244, 245), 384 to setOf(382, 383),
@@ -87,11 +98,12 @@ object Encounters {
 
     private fun add(p: MutableMap<Tier, Double>, t: Tier, d: Double) { p[t] = (p[t] ?: 0.0) + d }
 
-    /** The tier a species belongs to for pools (NORMAL/BABY/ULTRA/LEGENDARY/MYTHICAL/STARTER), or null if never wild (fossils). */
+    /** The tier a species belongs to for pools (NORMAL/BABY/ULTRA/LEGENDARY/MYTHICAL/STARTER), or null if never wild (fossils, Zygarde). */
     fun tierOf(sp: Species): Tier? = when {
         sp.baseNum in STARTERS -> Tier.STARTER
-        sp.baseNum in FOSSILS -> null
+        sp.baseNum in FOSSILS || sp.baseNum in NEVER_WILD -> null
         sp.baseNum in ULTRA_BEASTS -> Tier.ULTRA
+        sp.baseNum in LEGENDARY_EXTRA -> Tier.LEGENDARY
         sp.isMythical -> Tier.MYTHICAL
         sp.isLegendary -> Tier.LEGENDARY
         sp.isBaby -> Tier.BABY
@@ -128,17 +140,6 @@ object Encounters {
         return data.species.values.asSequence()
             .filter { it.form == null && tierOf(it) == tier && it.gen in settings.gens && minLevel(data, it) <= wildLevel && prerequisitesMet(it.num, caught) }
             .map { it.num }.sorted().toList()
-    }
-
-    /** True if [species] may appear at [wildLevel] with the current settings/collection (for a pre-rolled next encounter). */
-    fun isValid(data: GameData, state: GameState, species: Int, wildLevel: Int): Boolean {
-        val sp = data.species[species] ?: return false
-        val tier = tierOf(sp) ?: return false
-        if (tier == Tier.STARTER && !Tuning.STARTER_TIER_ENABLED) return false
-        val gens = state.settings.gens
-        // a regional form needs its base species' generation as well as its own
-        if (sp.form != null && data.species[sp.baseNum]?.gen?.let { it in gens } != true) return false
-        return sp.gen in gens && minLevel(data, sp) <= wildLevel && prerequisitesMet(sp.baseNum, state.caught)
     }
 
     /**

@@ -208,6 +208,42 @@ class StatsTest {
         assertEquals(50, sum.heatmap.columns.last()[2]!!.reviews)
     }
 
+    @Test fun heatmapFromAnyDayCountMap() {
+        val counts = mapOf("2026-10-14" to 100, "2026-10-13" to 60, "2026-10-12" to 24, "2026-06-15" to 7, "2026-06-14" to 999, "2026-10-15" to 50)
+        val h = StudyStats.heatmapFromCounts(counts, 100, "2026-10-14", 18)
+        val last = h.columns.last()
+        assertEquals(4, last[2]!!.level); assertEquals(100, last[2]!!.reviews)   // today reaches the goal
+        assertEquals(3, last[1]!!.level)                                          // 60 of 100
+        assertEquals(1, last[0]!!.level)                                          // 24 of 100
+        assertEquals(7, h.columns.first()[0]!!.reviews)                           // Monday of the first week
+        assertNull(last[3])                                                       // a count for a future day is not drawn
+        assertEquals(100 + 60 + 24 + 7, h.total)                                  // 06-14 is before the first column, 10-15 is after today
+        assertEquals(1, StudyStats.heatmapFromCounts(counts, 400, "2026-10-14", 18).columns.last()[1]!!.level)
+        assertEquals(0, StudyStats.heatmapFromCounts(emptyMap(), 100, "2026-10-14", 4).total)
+        assertTrue(StudyStats.heatmapFromCounts(counts, 100, "bad", 18).columns.isEmpty())
+    }
+
+    @Test fun theStateHeatmapIsTheMapHeatmapOfItsHistory() {
+        val s = mapState(80)
+        s.history["2026-10-13"] = DayLog(reviews = 60); s.history["2026-09-01"] = DayLog(reviews = 15)
+        val viaState = StudyStats.heatmap(s, "2026-10-14", 18, todayReviews = 33)
+        val viaMap = StudyStats.heatmapFromCounts(mapOf("2026-10-13" to 60, "2026-09-01" to 15, "2026-10-14" to 33), 80, "2026-10-14", 18)
+        assertEquals(viaMap.total, viaState.total)
+        assertEquals(viaMap.monthLabels, viaState.monthLabels)
+        assertEquals(
+            viaMap.columns.flatten().map { it?.let { c -> Triple(c.day, c.reviews, c.level) } },
+            viaState.columns.flatten().map { it?.let { c -> Triple(c.day, c.reviews, c.level) } },
+        )
+    }
+
+    @Test fun dayTotalsFromCounts() {
+        val t = StudyStats.dayTotals(listOf(100, 0, 50, 0, 7))
+        assertEquals(3, t.daysStudied); assertEquals(52, t.avgPerDay); assertEquals(100, t.bestDay) // 157 / 3 = 52.3
+        val none = StudyStats.dayTotals(listOf(0, 0))
+        assertEquals(0, none.daysStudied); assertEquals(0, none.avgPerDay); assertEquals(0, none.bestDay)
+        assertEquals(0, StudyStats.dayTotals(emptyList()).daysStudied)
+    }
+
     @Test fun monthLabelsSitOnTheColumnThatStartsAMonth() {
         val h = StudyStats.heatmap(mapState(), "2026-10-14", 18)
         assertEquals(listOf(0 to "Jun", 3 to "Jul", 7 to "Aug", 12 to "Sep", 16 to "Oct"), h.monthLabels)

@@ -214,12 +214,23 @@ object Progression {
     }
 
     /**
-     * The evolution [item] triggers on [mon], or null: ITEM with that item; TRADE with that held item; a TRADE
-     * without an item, or OTHER, with "linking-cord". Everstone blocks.
+     * The evolution [item] triggers on [mon] at [now], or null: ITEM with that item; TRADE with that held item; a TRADE
+     * without an item, or OTHER, with "linking-cord"; a day/night-bound one (Razor Claw, Razor Fang, Oval Stone) only at
+     * that time (Ankimon evolution_time_allows). Everstone blocks.
      */
-    fun itemEvolution(data: GameData, mon: Mon, item: String): Evolution? {
-        if (mon.heldItem == EVERSTONE) return null
-        return data.sp(mon.species).evolutions.firstOrNull { e ->
+    fun itemEvolution(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis()): Evolution? =
+        itemEvolutions(data, mon, item).firstOrNull { timeOk(it, now) }
+
+    /** "day" or "night" when the time of day is the ONLY thing keeping [item] from evolving [mon] now (Ankimon item_evolution_time_requirement), else null. */
+    fun itemEvolutionTimeNeeded(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis()): String? =
+        if (itemEvolution(data, mon, item, now) != null) null else itemEvolutionAnyTime(data, mon, item)?.time
+
+    /** The evolution [item] triggers on [mon] whatever the time of day. */
+    fun itemEvolutionAnyTime(data: GameData, mon: Mon, item: String): Evolution? = itemEvolutions(data, mon, item).firstOrNull()
+
+    private fun itemEvolutions(data: GameData, mon: Mon, item: String): List<Evolution> {
+        if (mon.heldItem == EVERSTONE) return emptyList()
+        return data.sp(mon.species).evolutions.filter { e ->
             data.species.containsKey(e.to) && genderOk(e, mon) && when (e.kind) {
                 EvoKind.ITEM -> e.item == item
                 EvoKind.TRADE -> if (e.item != null) e.item == item else item == LINKING_CORD
@@ -282,23 +293,29 @@ object Progression {
 object Catching {
     /** Ankimon's protected kinds (each a setting): legendary, mythical, ultra beast, starter, regional form (by the base number). */
     fun isProtected(settings: Settings, sp: Species, tier: Tier): Boolean =
-        ((sp.isLegendary || tier == Tier.LEGENDARY) && settings.protectLegendary) ||
+        ((sp.isLegendary || tier == Tier.LEGENDARY || sp.baseNum in Encounters.LEGENDARY_EXTRA) && settings.protectLegendary) ||
             ((sp.isMythical || tier == Tier.MYTHICAL) && settings.protectMythical) ||
             ((tier == Tier.ULTRA || sp.baseNum in Encounters.ULTRA_BEASTS) && settings.protectUltra) ||
             (sp.baseNum in Encounters.STARTERS && settings.protectStarter) ||
             (sp.form != null && settings.protectRegional)
 
     /**
-     * What happens when the wild one faints (Ankimon automatic_battle, never a dialog): wishlist -> CATCH;
-     * battle.override if set; mode 1 CATCH; mode 2 CATCH if shiny or protected else DEFEAT;
+     * What happens when the wild one faints (Ankimon handle_enemy_faint, never a dialog): the one-off battle.override
+     * first (CATCH -> CATCH; DEFEAT -> DEFEAT, except a protected kind is caught anyway); then the wishlist -> CATCH;
+     * then the automatic mode: mode 1 CATCH; mode 2 CATCH if shiny or protected else DEFEAT;
      * mode 3 CATCH if the species was never caught, or shiny, or protected, else DEFEAT.
      */
     fun decide(data: GameData, state: GameState, battle: Battle): Outcome {
         val settings = state.settings
         val wild = battle.wild
+        val protected = isProtected(settings, data.sp(wild.species), battle.tier)
+        when (battle.override) {
+            Outcome.CATCH -> return Outcome.CATCH
+            Outcome.DEFEAT -> return if (protected) Outcome.CATCH else Outcome.DEFEAT
+            null -> {}
+        }
         if (wild.species in settings.wishlist) return Outcome.CATCH
-        battle.override?.let { return it }
-        val special = wild.shiny || isProtected(settings, data.sp(wild.species), battle.tier)
+        val special = wild.shiny || protected
         return when (settings.autoMode) {
             1 -> Outcome.CATCH
             2 -> if (special) Outcome.CATCH else Outcome.DEFEAT

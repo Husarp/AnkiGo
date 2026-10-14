@@ -454,14 +454,28 @@ class GameActivity : Activity() {
         LiveSession.refreshWidgetsFor(this, events)
     }
 
+    /** The ⋯ menu entries. "Next team member as main" is greyed with the reason under it when it can't work. */
+    internal fun addMenuItems(menu: android.view.Menu) {
+        menu.add(0, 1, 0, "Team")
+        menu.add(0, 2, 1, "Pokédex")
+        menu.add(0, 3, 2, "Shop")
+        menu.add(0, 4, 3, "Settings")
+        val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
+        menu.add(0, 5, 4, "Next team member as main").isEnabled = blocker == null
+        if (blocker != null) {
+            // A second, greyed line right under it says why.
+            val reason = android.text.SpannableString(blocker).apply {
+                setSpan(android.text.style.RelativeSizeSpan(0.8f), 0, length, 0)
+                setSpan(android.text.style.ForegroundColorSpan(Ui.c(this@GameActivity, R.color.ag_sub0)), 0, length, 0)
+            }
+            menu.add(0, 7, 5, reason).isEnabled = false
+        }
+        menu.add(0, 6, 6, "Stats")
+    }
+
     private fun showMenu(anchor: View) {
         val m = PopupMenu(this, anchor)
-        m.menu.add(0, 1, 0, "Team")
-        m.menu.add(0, 2, 1, "Pokédex")
-        m.menu.add(0, 3, 2, "Shop")
-        m.menu.add(0, 4, 3, "Settings")
-        m.menu.add(0, 5, 4, "Switch main")
-        m.menu.add(0, 6, 5, "Stats")
+        addMenuItems(m.menu)
         m.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> openScreen(FloatPage.TEAM, TeamActivity::class.java)
@@ -501,8 +515,9 @@ class GameActivity : Activity() {
     private fun switchMain() {
         val r = try { GameRepo.run(this) { it.cycleMain() } } catch (t: Throwable) { Report.fail("PANEL", "cycleMain", t); return }
         if (r.message.isNotEmpty()) Ui.toast(this, r.message)
+        // The new main shows at once, not after the animations still waiting; then the short "Go, X!" plays.
+        if (r.events.any { it is GameEvent.MainChanged }) player?.finishNow()
         handleEvents(r.events)
-        player?.enqueueAction { panel?.refreshPlayer() }
     }
 
     /** Optional: pick a ball to throw at the wild Pokémon, with each ball's chance. */

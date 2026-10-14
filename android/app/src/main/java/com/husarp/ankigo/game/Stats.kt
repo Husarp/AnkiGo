@@ -77,16 +77,26 @@ object StudyStats {
         val live = state.day == today
         val todayReviews = if (live) max(state.reviewsToday, state.history[today]?.reviews ?: 0) else state.history[today]?.reviews ?: 0
         val streak = streak(state, today)
-        val studied = state.history.values.filter { it.reviews > 0 }
-        val sum = studied.sumOf { it.reviews.toLong() }
+        val totals = dayTotals(state.history.values.map { it.reviews })
         return Summary(
             today = today, reviewsToday = todayReviews, goal = goal, streak = streak,
             heatmap = heatmap(state, today, weeks, todayReviews),
             reviews = state.totalReviews, battlesWon = state.defeats + state.catches, catches = state.catches,
             shinies = state.mons.count { it.shiny }, evolutions = state.evolutions, bestCombo = state.bestCardStreak,
-            daysStudied = studied.size,
-            avgPerDay = if (studied.isEmpty()) 0 else ((sum + studied.size / 2) / studied.size).toInt(),
-            bestDay = studied.maxOfOrNull { it.reviews } ?: 0,
+            daysStudied = totals.daysStudied, avgPerDay = totals.avgPerDay, bestDay = totals.bestDay,
+        )
+    }
+
+    class DayTotals(val daysStudied: Int, val avgPerDay: Int, val bestDay: Int)
+
+    /** Days with any study, the average per study day (rounded) and the best day, from per-day counts (AnkiGo's own or AnkiDroid's). */
+    fun dayTotals(counts: Collection<Int>): DayTotals {
+        val studied = counts.filter { it > 0 }
+        val sum = studied.sumOf { it.toLong() }
+        return DayTotals(
+            studied.size,
+            if (studied.isEmpty()) 0 else ((sum + studied.size / 2) / studied.size).toInt(),
+            studied.maxOrNull() ?: 0,
         )
     }
 
@@ -101,8 +111,14 @@ object StudyStats {
 
     /** The heatmap of the last [weeks] weeks ending with the week of [today]. [todayReviews] overrides today's cell. */
     fun heatmap(state: GameState, today: String, weeks: Int, todayReviews: Int? = null): Heatmap {
+        val counts = state.history.mapValues { it.value.reviews }.toMutableMap()
+        if (todayReviews != null) counts[today] = todayReviews
+        return heatmapFromCounts(counts, state.settings.dailyAverage, today, weeks)
+    }
+
+    /** The same heatmap from any per-day count map (date "yyyy-MM-dd" -> count, e.g. the cards AnkiDroid says were studied); heat levels are measured against [goal]. */
+    fun heatmapFromCounts(counts: Map<String, Int>, goal: Int, today: String, weeks: Int): Heatmap {
         val t = parse(today) ?: return Heatmap(emptyList(), emptyList(), 0)
-        val goal = state.settings.dailyAverage
         val first = t.with(DayOfWeek.MONDAY).minusWeeks((weeks - 1).toLong())
         var total = 0
         val columns = (0 until weeks).map { w ->
@@ -110,7 +126,7 @@ object StudyStats {
                 val date = first.plusDays((w * 7 + d).toLong())
                 if (date.isAfter(t)) null else {
                     val key = date.toString()
-                    val r = if (date == t && todayReviews != null) todayReviews else state.history[key]?.reviews ?: 0
+                    val r = counts[key] ?: 0
                     total += r
                     Cell(key, r, level(r, goal))
                 }

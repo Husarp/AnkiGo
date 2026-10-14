@@ -189,6 +189,7 @@ class BattleSide(
     val boosts: IntArray = IntArray(7), // atk def spa spd spe accuracy evasion, each -6..+6
     var status: String? = null,         // "par" "brn" "psn" "tox" "slp" "frz"
     var statusTurns: Int = 0,           // sleep turns left / toxic counter
+    val charged: MutableSet<String> = mutableSetOf(), // charge moves (ids) already charged in this fight
 )
 
 enum class Outcome { CATCH, DEFEAT }
@@ -246,6 +247,7 @@ class GameState(
     var nextSpecies: Int? = null,        // pre-rolled next encounter (widget silhouette, sprite prefetch)
     var nextTier: Tier = Tier.NORMAL,
     var nextShiny: Boolean = false,
+    var nextSeed: Long? = null,          // random seed of the next encounter (null on old saves)
     var day: String = "",                // current game day "yyyy-MM-dd" (a day starts at settings.dayStartHour)
     var reviewsToday: Int = 0,
     var cashToday: Int = 0,

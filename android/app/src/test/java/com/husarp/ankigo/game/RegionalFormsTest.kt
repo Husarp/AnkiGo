@@ -120,10 +120,8 @@ class RegionalFormsTest {
         val d = world(deep, formOf(deep, 10169, 8, "Galar"))
         val st = stateOf(d)
         assertEquals(emptyList<Int>(), Encounters.eligibleForms(d, st.settings, 249, 100, st.caught))
-        assertFalse(Encounters.isValid(d, st, 10169, 100))
         st.caught += setOf(144, 145, 146)
         assertEquals(listOf(10169), Encounters.eligibleForms(d, st.settings, 249, 100, st.caught))
-        assertTrue(Encounters.isValid(d, st, 10169, 100))
     }
 
     // ---- random numbers ----
@@ -172,26 +170,11 @@ class RegionalFormsTest {
         assertTrue(sawSwap && sawKeep)
     }
 
-    // ---- the pre-rolled next encounter ----
-
-    @Test fun isValidAcceptsAFormWithTheSameChecks() {
-        val d = world(ratty, formOf(ratty, 10091, 7, evoLevel = 36))
-        val st = stateOf(d)
-        assertFalse(Encounters.isValid(d, st, 10091, 35)) // level gate of the form
-        assertTrue(Encounters.isValid(d, st, 10091, 36))
-        st.settings.gens.remove(7)
-        assertFalse(Encounters.isValid(d, st, 10091, 36)) // region generation off
-        st.settings.gens += 7; st.settings.gens.remove(1)
-        assertFalse(Encounters.isValid(d, st, 10091, 36)) // base species' generation off
-        assertFalse(Encounters.isValid(d, st, 10095, 36)) // unknown id
-    }
-
     @Test fun aStarterLineFormIsNeverWild() {
         val starter = TestData.species(157, "Flamer")
         val d = world(starter, formOf(starter, 10233, 8, "Hisui"))
         val st = stateOf(d)
         assertEquals(Tier.STARTER, Encounters.tierOf(d.sp(10233))) // by the base number
-        assertFalse(Encounters.isValid(d, st, 10233, 100))
         assertEquals(listOf(157), Encounters.pool(d, Tier.STARTER, st.settings, 100, st.caught)) // the base species only, never the form
     }
 

@@ -44,7 +44,8 @@ object TypeChart {
 /**
  * "Same feel, simpler engine": Ankimon's damage formula, 18 types, STAB, accuracy/evasion, crits, stat stages,
  * simple non-volatile statuses (par/brn/psn/tox/slp/frz), drain/recoil/heal, multi-hit, fixed damage, OHKO.
- * No abilities, held-item battle effects, weather, terrain, volatile statuses, two-turn/recharge moves.
+ * No abilities, held-item battle effects, weather, terrain, volatile statuses, recharge moves.
+ * Charge moves (Solar Beam, Fly...) only charge the first time they are picked in a fight (Tuning.CHARGE_MOVES).
  */
 object BattleEngine {
     data class DamageResult(val damage: Int, val effectiveness: Double, val crit: Boolean)
@@ -188,6 +189,7 @@ object BattleEngine {
             if (move == null) { if (mon(p).hp > 0 && mon(!p).hp > 0) events += GameEvent.Splash(wild.name); return }
             if (mon(p).hp <= 0 || mon(!p).hp <= 0) return
             if (!canAct(p, move)) return
+            if (move.id in Tuning.CHARGE_MOVES && side(p).charged.add(move.id)) { fx(p, chargeText(p, move)); return }
             val saved = out
             val buffer = ArrayList<GameEvent>()
             out = buffer
@@ -195,6 +197,30 @@ object BattleEngine {
             out = saved
             events += attack
             events += buffer
+            if (move.id in Tuning.CHARGE_CLEARS_AFTER_USE) side(p).charged.remove(move.id)
+        }
+
+        /** The games' line for the charge turn of [move]. */
+        private fun chargeText(p: Boolean, move: Move): String {
+            val n = mon(p).name
+            return when (move.id) {
+                "solarbeam", "solarblade" -> "$n absorbed light!"
+                "fly" -> "$n flew up high!"
+                "bounce" -> "$n sprang up!"
+                "dig" -> "$n burrowed its way under the ground!"
+                "dive" -> "$n hid underwater!"
+                "phantomforce", "shadowforce" -> "$n vanished instantly!"
+                "skullbash" -> "$n tucked in its head!"
+                "skyattack" -> "$n became cloaked in a harsh light!"
+                "razorwind" -> "$n whipped up a whirlwind!"
+                "freezeshock" -> "$n became cloaked in a freezing light!"
+                "iceburn" -> "$n became cloaked in freezing air!"
+                "meteorbeam" -> "$n is overflowing with space power!"
+                "electroshot" -> "$n absorbed electricity!"
+                "geomancy" -> "$n is absorbing power!"
+                "skydrop" -> "$n took ${mon(!p).name} into the sky!"
+                else -> "$n is charging up!"
+            }
         }
 
         /**

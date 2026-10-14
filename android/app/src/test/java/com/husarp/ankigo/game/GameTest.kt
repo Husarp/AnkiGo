@@ -329,6 +329,27 @@ class GameTest {
         assertFalse(g.willCatch())
     }
 
+    @Test fun defeatTapBeatsTheWishlistButNotProtection() {
+        val g = game()
+        g.state.caught += 25
+        g.fight(species = 25, hp = 1) // wishlisted
+        g.setOverride(Outcome.DEFEAT)
+        assertFalse(g.willCatch())
+        g.answer(3)
+        val ev = g.answer(3)
+        assertEquals(1, ev.of<GameEvent.Defeated>().size)
+        assertTrue(ev.of<GameEvent.Caught>().isEmpty())
+
+        val h = game()
+        h.fight(species = 150, level = 5, hp = 1, tier = Tier.LEGENDARY)
+        h.setOverride(Outcome.DEFEAT)
+        assertTrue(h.willCatch()) // protected: still caught
+        h.answer(3)
+        val ev2 = h.answer(3)
+        assertEquals(1, ev2.of<GameEvent.Caught>().size)
+        assertTrue(ev2.of<GameEvent.Defeated>().isEmpty())
+    }
+
     @Test fun fullTeamSendsTheCatchToTheBox() {
         val g = game(state = roster(6))
         g.fight(species = 129, hp = 1)
@@ -516,35 +537,110 @@ class GameTest {
         assertSame(w, g.state.battle!!.wild)
     }
 
-    @Test fun encounterUsesTheValidPreRolledNextOne() {
+    /** A seed whose draws (wild level of a [mainLevel] main, then the roll) give a roll that satisfies [pred] in [st]. */
+    private fun seedRolling(st: GameState, mainLevel: Int = 20, pred: (Encounters.Roll) -> Boolean): Long =
+        (0L..20_000L).first { val r = Random(it); pred(Encounters.roll(data, st, Encounters.wildLevel(mainLevel, r), r)) }
+
+    @Test fun encounterIsRolledFromTheSeedAndTheNextSeedIsDrawn() {
         val g = game()
         val s = g.state
-        s.nextSpecies = 54; s.nextTier = Tier.NORMAL; s.nextShiny = true
+        s.caught += 16
+        s.nextSeed = seedRolling(s) { it.species == 54 && it.tier == Tier.NORMAL }
+        val seed = s.nextSeed!!
         val ev = g.ensureEncounter().single() as GameEvent.Encounter
-        assertEquals(54, ev.species); assertTrue(ev.shiny); assertTrue(ev.newSpecies); assertTrue(ev.willCatch)
-        assertEquals(54, s.battle!!.wild.species); assertTrue(s.battle!!.wild.shiny)
+        assertEquals(54, ev.species); assertTrue(ev.newSpecies); assertTrue(ev.willCatch)
+        assertEquals(Encounters.wildLevel(20, Random(seed)), ev.level)
+        assertEquals(54, s.battle!!.wild.species)
         assertTrue(54 in s.seen)
         assertEquals(ev.maxHp, ev.hp)
-        assertTrue(ev.level in 17..23) // main 20 +-3
         assertEquals(ev.level, s.battle!!.wild.level)
-        // and the next one was rolled again
+        assertNotNull(s.nextSeed); assertTrue(s.nextSeed != seed) // a new seed for the one after
         assertNotNull(s.nextSpecies)
-        assertTrue(Encounters.isValid(data, s, s.nextSpecies!!, 23))
     }
 
-    @Test fun encounterRerollsAnInvalidPreRolledOne() {
+    @Test fun predictionEqualsTheEncounterWhenNothingChanged() {
         val g = game()
-        g.state.nextSpecies = 150 // a legendary needs Lv 50
+        val s = g.state
+        g.ensureEncounter() // first one: from the game rng (no seed yet), then the seed and prediction are set
+        assertNotNull(s.nextSeed)
+        repeat(30) {
+            val predicted = Triple(s.nextSpecies, s.nextTier, s.nextShiny)
+            val seed = s.nextSeed!!
+            s.battle = null
+            val ev = g.ensureEncounter().single() as GameEvent.Encounter
+            assertEquals(predicted, Triple(ev.species, ev.tier, ev.shiny))
+            assertEquals(Encounters.wildLevel(20, Random(seed)), ev.level)
+        }
+    }
+
+    @Test fun anOldSaveWithoutASeedUsesTheGameRngAndThenGetsOne() {
+        val g = game()
+        assertNull(g.state.nextSeed)
+        g.ensureEncounter()
+        assertNotNull(g.state.nextSeed); assertNotNull(g.state.nextSpecies)
+    }
+
+    @Test fun aNewDayDoesNotUseTheStaleRareRoll() {
+        val g = game()
+        val s = g.state
+        s.reviewsToday = 100 // the daily goal is 100: the rare tiers are open today
+        s.caught += 16
+        val seed = seedRolling(s) { it.tier == Tier.BABY }
+        s.nextSeed = seed
+        s.nextTier = Tier.BABY; s.nextSpecies = 172 // yesterday's prediction
+        now += day(1)
+        val events = g.answer(3)
+        val ev = events.of<GameEvent.Encounter>().first()
+        assertEquals(Tier.NORMAL, ev.tier) // reviewsToday restarted at 0: below 40 % of the goal, only Normal
+        assertTrue(ev.species != 172)
+        assertEquals(1, s.reviewsToday)
+    }
+
+    @Test fun theDayChangeRefreshesThePrediction() {
+        val g = game()
+        val s = g.state
+        s.reviewsToday = 100
+        s.caught += 16
+        s.nextSeed = seedRolling(s) { it.tier == Tier.BABY }
+        s.nextTier = Tier.BABY; s.nextSpecies = 172
+        g.fight()
+        now += day(1)
+        g.tick()
+        assertEquals(Tier.NORMAL, s.nextTier)
+        assertTrue(s.nextSpecies != 172)
+    }
+
+    @Test fun aMainLevelChangeMovesTheWildLevel() {
+        val g = game()
+        val s = g.state
+        s.nextSeed = 123L
+        s.main!!.level = 60
         val ev = g.ensureEncounter().single() as GameEvent.Encounter
-        assertTrue(ev.species != 150)
-        assertTrue(Encounters.isValid(data, g.state, ev.species, ev.level))
+        assertEquals(Encounters.wildLevel(60, Random(123L)), ev.level)
+        assertTrue(ev.level in 57..63)
+    }
+
+    @Test fun changingTheMainRefreshesThePrediction() {
+        val g = game(state = roster(2))
+        val s = g.state
+        s.main!!.level = 20; s.mon("t1")!!.level = 90
+        s.caught += setOf(16, 54)
+        fun rollAt(seed: Long, level: Int): Encounters.Roll { val r = Random(seed); return Encounters.roll(data, s, Encounters.wildLevel(level, r), r) }
+        val seed = (0L..20_000L).first { rollAt(it, 20).species != rollAt(it, 90).species }
+        s.nextSeed = seed
+        s.nextSpecies = null
+        assertTrue(g.cycleMain().ok)
+        val expected = rollAt(seed, 90)
+        assertEquals(expected.species, s.nextSpecies)
+        assertEquals(expected.tier, s.nextTier)
     }
 
     @Test fun encounterOfAKnownSpeciesIsNotNewAndWillBeDefeated() {
         val g = game()
-        g.state.nextSpecies = 16
         g.state.caught += 16
+        g.state.nextSeed = seedRolling(g.state) { it.species == 16 }
         val ev = g.ensureEncounter().single() as GameEvent.Encounter
+        assertEquals(16, ev.species)
         assertFalse(ev.newSpecies); assertFalse(ev.willCatch)
     }
 
@@ -681,6 +777,19 @@ class GameTest {
         assertEquals(1, b.answers); assertEquals(10, b.tally) // the charge carries on
     }
 
+    @Test fun changingTheMainMidFightDropsTheChargedMoves() {
+        val g = game(state = roster(3))
+        g.fight()
+        g.state.battle!!.player.charged += "solarbeam"
+        g.state.battle!!.enemy.charged += "fly"
+        assertTrue(g.setMain("t2").ok)
+        assertTrue(g.state.battle!!.player.charged.isEmpty())
+        assertEquals(setOf("fly"), g.state.battle!!.enemy.charged) // the wild one keeps its charge
+        g.state.battle!!.player.charged += "dig"
+        assertTrue(g.cycleMain().ok)
+        assertTrue(g.state.battle!!.player.charged.isEmpty())
+    }
+
     @Test fun cycleMainRotatesTheFirstThree() {
         val g = game(state = roster(4))
         assertTrue(g.cycleMain().ok)
@@ -696,6 +805,51 @@ class GameTest {
         val one = game(state = roster(1))
         assertFalse(one.cycleMain().ok)
         assertEquals(listOf("t0"), one.state.team)
+    }
+
+    @Test fun cycleMainBlockerSaysWhyOrIsNull() {
+        assertEquals("Needs 2+ Pokémon in your team", game(state = roster(1)).cycleMainBlocker())
+        assertNull(game(state = roster(2)).cycleMainBlocker())
+        assertNull(game(state = roster(6, 3)).cycleMainBlocker())
+        val noTeam = roster(2); noTeam.team.clear()
+        assertEquals("Pick your first Pokémon first", game(state = noTeam).cycleMainBlocker())
+    }
+
+    @Test fun cycleMainFailsWithTheBlockerReasonAndChangesNothing() {
+        val one = game(state = roster(1))
+        val r = one.cycleMain()
+        assertFalse(r.ok)
+        assertEquals("Needs 2+ Pokémon in your team", r.message)
+        assertTrue(r.events.isEmpty())
+        assertEquals(listOf("t0"), one.state.team)
+        val none = roster(2); none.team.clear()
+        val g = game(state = none)
+        assertEquals("Pick your first Pokémon first", g.cycleMain().message)
+        assertTrue(g.state.team.isEmpty())
+    }
+
+    @Test fun cycleMainWithTwoSwapsAndNamesTheNewMain() {
+        val g = game(state = roster(2))
+        val r = g.cycleMain()
+        assertTrue(r.ok)
+        assertEquals(listOf("t1", "t0"), g.state.team)
+        assertEquals("${g.state.mon("t1")!!.name} is your main now.", r.message)
+        assertEquals(listOf<GameEvent>(GameEvent.MainChanged("t1", g.state.mon("t1")!!.name)), r.events)
+    }
+
+    @Test fun cycleMainWithFourGivesBCAD() {
+        val g = game(state = roster(4))
+        assertTrue(g.cycleMain().ok)
+        assertEquals(listOf("t1", "t2", "t0", "t3"), g.state.team)
+    }
+
+    @Test fun cycleMainBetweenFightsHasNoBattleToReset() {
+        val g = game(state = roster(3))
+        g.state.battle = null
+        val r = g.cycleMain()
+        assertTrue(r.ok)
+        assertNull(g.state.battle)
+        assertEquals(1, r.events.of<GameEvent.MainChanged>().size)
     }
 
     @Test fun moveInTeamShiftsAndClamps() {

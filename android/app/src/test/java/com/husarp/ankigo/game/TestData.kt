@@ -71,6 +71,8 @@ object TestData {
         Move("moonblast", "Moonblast", Type.FAIRY, Category.SPECIAL, 95, 100),
         Move("hypnosis", "Hypnosis", Type.PSYCHIC, Category.STATUS, 0, 60, status = "slp"),
         Move("toxic", "Toxic", Type.POISON, Category.STATUS, 0, 90, status = "tox"),
+        Move("solarbeam", "Solar Beam", Type.GRASS, Category.SPECIAL, 120, 100),
+        Move("fly", "Fly", Type.FLYING, Category.PHYSICAL, 90, 100),
     ).associateBy { it.id }
 
     /** Medium growth (n^3) for rate 2, fast (0.8 n^3) for rate 3, slow (1.25 n^3) for rate 1. */

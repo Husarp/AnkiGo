@@ -551,6 +551,85 @@ class BattleEngineTest {
         assertEquals(e1, e2)
     }
 
+    // ---------------------------------------------------------------- charge moves (poke-engine charge flag)
+
+    @Test fun chargeMoveChargesFirstThenHits() {
+        val main = mon(19, 20, "solarbeam"); val wild = mon(150, 100, "splash")
+        val b = battle(wild)
+        val before = wild.hp
+        val ev1 = round(main, wild, acts = false, b = b)
+        assertEquals(before, wild.hp)
+        assertTrue(ev1.attacks().isEmpty())
+        assertEquals(listOf("Ratty absorbed light!"), ev1.effects())
+        assertTrue(ev1.filterIsInstance<Effect>().single().onPlayer)
+        assertEquals(setOf("solarbeam"), b.player.charged)
+        val ev2 = round(main, wild, acts = false, b = b)
+        assertEquals(1, ev2.attacks().size)
+        assertTrue(wild.hp < before)
+    }
+
+    @Test fun solarBeamStaysChargedAndKeepsHitting() {
+        val main = mon(19, 20, "solarbeam"); val wild = mon(150, 100, "splash")
+        val b = battle(wild)
+        round(main, wild, acts = false, b = b)
+        for (i in 1..3) {
+            val hp = wild.hp
+            val ev = round(main, wild, acts = false, b = b)
+            assertEquals(1, ev.attacks().size)
+            assertTrue(wild.hp < hp)
+            assertEquals(setOf("solarbeam"), b.player.charged)
+        }
+    }
+
+    @Test fun flyLosesTheChargeAfterTheHitAndChargesAgain() {
+        val main = mon(19, 20, "fly"); val wild = mon(150, 100, "splash")
+        val b = battle(wild)
+        val before = wild.hp
+        assertEquals(listOf("Ratty flew up high!"), round(main, wild, acts = false, b = b).effects())
+        assertEquals(before, wild.hp)
+        assertEquals(1, round(main, wild, acts = false, b = b).attacks().size)
+        assertTrue(b.player.charged.isEmpty())
+        val hp = wild.hp
+        val ev = round(main, wild, acts = false, b = b)
+        assertEquals(listOf("Ratty flew up high!"), ev.effects())
+        assertTrue(ev.attacks().isEmpty())
+        assertEquals(hp, wild.hp)
+        assertEquals(setOf("fly"), b.player.charged)
+    }
+
+    @Test fun anyUseCountsEvenAMissAndTheWildOneChargesToo() {
+        val main = mon(19, 20, "tackle"); val wild = mon(150, 100, "solarbeam")
+        val b = battle(wild)
+        val mainHp = main.hp
+        val ev1 = round(main, wild, b = b)
+        assertEquals(listOf("Mindlord absorbed light!"), ev1.effects().filter { "absorbed" in it })
+        assertFalse(ev1.filterIsInstance<Effect>().first { "absorbed" in it.text }.onPlayer)
+        assertEquals(mainHp, main.hp)
+        assertEquals(setOf("solarbeam"), b.enemy.charged); assertTrue(b.player.charged.isEmpty())
+        round(main, wild, b = b)
+        assertTrue(main.hp < mainHp)
+    }
+
+    @Test fun aSleepingUserCannotCharge() {
+        val main = mon(19, 20, "solarbeam"); val wild = mon(150, 100, "splash")
+        val b = battle(wild); b.player.status = "slp"
+        for (s in 1..40) round(main, wild, acts = false, seed = s, b = b)
+        // whenever it woke up it charged (once), and never hit before that
+        assertTrue(b.player.charged.isEmpty() || b.player.charged == setOf("solarbeam"))
+        val asleep = battle(mon(150, 100, "splash")); asleep.player.status = "slp"
+        val ev = BattleEngine.playRound(data, asleep, main, 1.0, false, object : Random() {
+            override fun nextBits(bitCount: Int) = 0x7FFFFFFF shr (31 - bitCount) // never wakes
+        })
+        assertTrue(ev.effects().contains("Ratty is fast asleep."))
+        assertTrue(asleep.player.charged.isEmpty())
+    }
+
+    @Test fun chargeTablesMatchPokeEngine() {
+        assertEquals(17, Tuning.CHARGE_MOVES.size)
+        assertTrue(Tuning.CHARGE_CLEARS_AFTER_USE.all { it in Tuning.CHARGE_MOVES })
+        assertEquals(6, Tuning.CHARGE_CLEARS_AFTER_USE.size)
+    }
+
     // ---------------------------------------------------------------- status rules (poke-engine) and Effect.status
 
     private val leafmon = TestData.species(5, "Leafmon", listOf(Type.GRASS), TestData.stats(100, 50, 50, 50, 50, 50))
