@@ -165,7 +165,7 @@ object WidgetRender {
             val dark = render(ctx, kind, snap, w, h, night = true)
             rv.setImageViewBitmap(kind.imgLight, light)
             rv.setImageViewBitmap(kind.imgDark, dark)
-            rv.setOnClickPendingIntent(kind.root, Widgets.openApp(ctx))
+            rv.setOnClickPendingIntent(kind.root, if (kind == Kind.WIDE) Widgets.openStudyOrBattle(ctx) else Widgets.openApp(ctx))
             mgr.updateAppWidget(id, rv)
         }
     }
