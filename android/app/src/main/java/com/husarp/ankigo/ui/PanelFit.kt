@@ -9,20 +9,28 @@ import kotlin.math.min
  * [Fit.virtualH] and draws that scaled by [Fit.scale], so sprites, texts, bars, pills, log and chips all shrink together.
  *
  * - Scale: `s = min(1, w / REF_W, h / REF_H)`, where REF_* is the smallest window the chosen set of parts looks right in
- *   unscaled (stats bar 384 dp wide, arena 344, a 212 dp arena + log + stats bar). Never above 1.
+ *   unscaled: 376 dp wide (the stats bar's five chips; 340 dp for the arena alone) and 212 dp of arena + log card + stats
+ *   bar (about 347 dp; the arena is 180 dp with compact cards). Never above 1.
  * - Text floor: nothing is drawn under [MIN_SP] on screen. A text that would fall under it is drawn at the virtual size
- *   `max(design, MIN_SP / s)` ([Fit.floorSp]); the virtual window grows with 1 / s, so it mostly still fits.
- * - Step-out: only when the raised texts do not fit the window, parts leave in a fixed order: (1) stats bar, (2) log
- *   line, (3) XP numbers. Pokémon and both HP (bar and numbers) always stay; the last resort is a smaller scale.
+ *   `max(design, MIN_SP / s)` ([Fit.floorSp]); the virtual window grows with 1 / s, so it mostly still fits. If it does
+ *   not, the scale shrinks a little more (down to [S_MIN], where the 14 sp names reach the floor too).
+ * - Step-out: only when it still does not fit, parts leave in a fixed order: (1) stats bar, (2) log line, (3) XP numbers.
+ *   Pokémon and both HP (bar and numbers) always stay; the last resort is a smaller scale.
  * - Cards: [ArenaGeo] puts the stat cards in the corners (wild top-left, ours bottom-right) as long as no card covers a
- *   sprite, otherwise in the middle column between the two sprites.
+ *   sprite (the sprites may shrink to 85 % for that), otherwise in the middle column between the two sprites.
  */
 object PanelFit {
     /** No text is drawn under this many sp on screen. */
     const val MIN_SP = 8f
 
-    /** Smallest unscaled width (virtual dp) of the stats bar: its five chips (calibrated against the real views) + 20 dp padding. */
-    const val REF_W_STATS = 385f
+    /** Smallest unscaled width (virtual dp) of the stats bar: its chips row (356 dp, measured on the real views) + 20 dp padding. */
+    const val REF_W_STATS = 376f
+
+    /**
+     * The smallest scale before parts step out: about 8 / 14, where the biggest text (the 14 sp names) reaches the floor.
+     * Under it every text sits on the floor, so shrinking further only makes the pictures smaller.
+     */
+    private const val S_MIN = 0.55f
 
     /** The last resort stops shrinking here: a window this small is hopeless anyway. */
     private const val MIN_SCALE = 0.2f
@@ -51,9 +59,15 @@ object PanelFit {
     /**
      * Decides for a window of [w] x [h] dp. [small]: picture-in-picture or floating battle (no menu and tool buttons, one
      * log line, stats bar only with [statsBarSmall]). [strip]: the red status-problem strip shows above the arena.
-     * [corner]: dp (on screen) kept free at the bottom-right corner for a resize grip.
+     * [corner]: dp (on screen) kept free at the bottom-right corner for a resize grip. [footerTools]: the menu and tool
+     * buttons are wanted in the goal row (never in small windows).
      */
-    fun decide(w: Float, h: Float, small: Boolean, statsBarSmall: Boolean, compactCards: Boolean, strip: Boolean = false, corner: Float = 0f): Fit {
+    fun decide(
+        w: Float, h: Float, small: Boolean, statsBarSmall: Boolean, compactCards: Boolean,
+        strip: Boolean = false, corner: Float = 0f, footerTools: Boolean = true,
+    ): Fit {
+        if (w < 1f || h < 1f) return Fit(1f, w, h, MIN_SP, stats = false, log = false, xp = false, tools = false, logLines = 1, compactCards = compactCards, middle = false, ok = false)
+        val tools = footerTools && !small
         val steps = ArrayList<Shown>()
         if (!small || statsBarSmall) steps += Shown(stats = true, log = true, xp = true)
         steps += Shown(stats = false, log = true, xp = true)
@@ -61,7 +75,7 @@ object PanelFit {
         steps += Shown(stats = false, log = false, xp = false)
         var f: Fit? = null
         for ((i, p) in steps.withIndex()) {
-            f = evaluate(w, h, p, small, compactCards, strip, corner, shrinkToFit = i == steps.lastIndex)
+            f = evaluate(w, h, p, small, tools, compactCards, strip, corner, last = i == steps.lastIndex)
             if (f.ok) break
         }
         return f!!
@@ -70,20 +84,25 @@ object PanelFit {
     /** Which of the parts that can step out are shown. */
     internal class Shown(val stats: Boolean, val log: Boolean, val xp: Boolean)
 
-    /** One step: the scale from the reference size, then the fit test; the last step shrinks further until it fits. */
-    private fun evaluate(w: Float, h: Float, p: Shown, small: Boolean, compact: Boolean, strip: Boolean, corner: Float, shrinkToFit: Boolean): Fit {
-        var s = min(1f, min(w / refW(p, compact), h / refH(p, small, compact, strip)))
+    /**
+     * One step: the scale from the reference size; when the raised texts do not fit, a little smaller (0.97 x) while
+     * it stays at least [S_MIN]. A step that cannot get there is not ok (the next part steps out); the last step goes on
+     * down to [MIN_SCALE], so the cards never cover a sprite.
+     */
+    private fun evaluate(w: Float, h: Float, p: Shown, small: Boolean, tools: Boolean, compact: Boolean, strip: Boolean, corner: Float, last: Boolean): Fit {
+        var s = max(MIN_SCALE, min(1f, min(w / refW(p, compact), h / refH(p, small, tools, compact, strip))))
         while (true) {
-            val f = at(w, h, s, p, small, compact, strip, corner)
-            if (f.ok || !shrinkToFit || s <= MIN_SCALE) return f
-            s *= 0.94f
+            val f = at(w, h, s, p, small, tools, compact, strip, corner)
+            if (f.ok && (s >= S_MIN || last)) return f
+            val next = s * 0.97f
+            if (next < (if (last) MIN_SCALE else S_MIN)) return if (last) f else f.copy(ok = false)
+            s = next
         }
     }
 
-    private fun at(w: Float, h: Float, s: Float, p: Shown, small: Boolean, compact: Boolean, strip: Boolean, corner: Float): Fit {
+    private fun at(w: Float, h: Float, s: Float, p: Shown, small: Boolean, tools: Boolean, compact: Boolean, strip: Boolean, corner: Float): Fit {
         val floor = Math.ceil((MIN_SP / s * 10f).toDouble()).toFloat() / 10f
         val lines = if (small) 1 else 2
-        val tools = !small
         val vw = w / s
         val vh = h / s
         val arenaH = vh - (if (strip) Heights.strip(floor) else 0f) - (if (p.log) Heights.log(lines, floor) else 0f) -
@@ -97,9 +116,9 @@ object PanelFit {
     internal fun refW(p: Shown, compact: Boolean): Float = max(if (p.stats) REF_W_STATS else 0f, ArenaGeo.refW(compact, p.xp))
 
     /** The smallest unscaled height for these parts (virtual dp): the 212 dp arena (180 with compact cards) + the parts around it. */
-    internal fun refH(p: Shown, small: Boolean, compact: Boolean, strip: Boolean): Float =
+    internal fun refH(p: Shown, small: Boolean, tools: Boolean, compact: Boolean, strip: Boolean): Float =
         ArenaGeo.refH(compact) + (if (strip) Heights.strip(0f) else 0f) + (if (p.log) Heights.log(if (small) 1 else 2, 0f) else 0f) +
-            (if (p.stats) Heights.footer(0f, !small) else 0f)
+            (if (p.stats) Heights.footer(0f, tools) else 0f)
 
     /** Heights (virtual dp) of the panel's parts at text floor [floor]; the views are built to these numbers. */
     internal object Heights {
@@ -115,8 +134,8 @@ object PanelFit {
 
         fun chipH(floor: Float) = TextMath.line(TextMath.at(11f, floor)) + 8f
 
-        /** Width of the chips row: five chips with 18 dp padding and label margin each, 4 dp gaps, icons and label texts. */
-        fun chips(floor: Float) = 5f * 22f + 4f * 5f + 5f * 13f * TextMath.at(11f, floor) / 11f + 190f * TextMath.at(11f, floor) / 11f
+        /** Width of the chips row: 20 dp gaps and 18 dp padding + label margin per chip (110 dp), plus icons and label texts (246 dp at 11 sp). */
+        fun chips(floor: Float) = 110f + 246f * TextMath.at(11f, floor) / 11f
     }
 }
 
@@ -146,6 +165,10 @@ internal object ArenaGeo {
     private const val ART = 0.85f
     private const val A_MIN = 0.6f
 
+    /** The corner layout keeps the sprites at 85 % of the mockup's size at least; under that the middle layout gives them more room. */
+    private const val A_CORNERS = 0.85f
+    private const val EPS = 0.5f
+
     class Box(val x: Float, val y: Float, val w: Float, val h: Float) {
         val right get() = x + w
         val bottom get() = y + h
@@ -173,7 +196,7 @@ internal object ArenaGeo {
 
     fun refH(compact: Boolean) = if (compact) 180f else 212f
 
-    /** Cards + the two sprites at A_MIN, in the middle column: 344 dp (full cards), 302 dp (compact cards). */
+    /** Cards + the two sprites at A_MIN, in the middle column: 340 dp (full cards), 310 dp (compact cards). */
     fun refW(compact: Boolean, xp: Boolean): Float {
         val c = cards(0f, compact, xp)
         return max(c.wildW, c.playerW) + 250f * A_MIN + 2f * MID_EDGE + 2f * MID_GAP
@@ -189,36 +212,41 @@ internal object ArenaGeo {
         if (compact) {
             // name + Lv, then a thin HP bar with the small HP number next to it
             val h = 5f + TextMath.line(TextMath.at(14f, floor)) + 3f + max(5f * bar, TextMath.line(TextMath.at(10f, floor))) + 6f
-            return Cards(128f * k, h, 0f, 128f * k, h)
+            return Cards(140f * k, h, 0f, 140f * k, h)
         }
         val wild = 7f + TextMath.line(TextMath.at(14f, floor)) + (4f + TextMath.line(TextMath.at(9f, floor)) + 2f) + (6f + 7f * bar) + TextMath.line(TextMath.at(11f, floor)) + 8f
         val tag = TextMath.line(TextMath.at(10f, floor)) + 12f
         val player = 7f + TextMath.line(TextMath.at(14f, floor)) + (6f + 7f * bar) + (3f + TextMath.line(TextMath.at(11f, floor))) + (4f + 3f * bar) + 8f
-        return Cards(166f * k, wild, tag, (if (xp) 170f else 132f) * k, player)
+        // the wild card is also as wide as its type chips: the two longest (ELECTRIC + FIGHTING) are 94 dp of text at 9 sp, grown with the floor
+        val chips = 49f + 11f * max(9f, floor)
+        return Cards(max(166f * k, chips), wild, tag, (if (xp) 170f else 132f) * k, player)
     }
 
     /**
-     * Corner layout when no card covers a sprite (the mockup's look); otherwise the middle layout. [w] x [h] is the arena.
+     * Corner layout when no card covers a sprite (the mockup's look; the sprites shrink a little before the corners give
+     * up, never under [A_CORNERS]); otherwise the middle layout. [w] x [h] is the arena.
      */
     fun plan(w: Float, h: Float, c: Cards, compact: Boolean): Plan {
         val ref = refH(compact)
-        val corners = corners(w, h, c, ref)
+        val tallest = (h / ref).coerceIn(0.66f, 1.5f)
+        var a = tallest
+        var corners = corners(w, h, c, ref, a)
+        while (!corners.fits && a > min(tallest, A_CORNERS)) {
+            a = max(min(tallest, A_CORNERS), a - 0.05f)
+            corners = corners(w, h, c, ref, a)
+        }
         return if (corners.fits) corners else middle(w, h, c, ref)
     }
 
-    private fun corners(w: Float, h: Float, c: Cards, ref: Float): Plan {
-        val a = (h / ref).coerceIn(0.66f, 1.5f)
+    private fun corners(w: Float, h: Float, c: Cards, ref: Float, a: Float): Plan {
         val down = max(0f, h - ref * a) * 0.75f
-        val infoMax = max((w - 30f) / 2f, 120f)
-        val ww = min(c.wildW, infoMax)
-        val pw = min(c.playerW, infoMax)
-        val wild = Box(10f, 10f, ww, c.wildH + c.tagH)
-        val player = Box(w - 10f - pw, h - 12f - c.playerH, pw, c.playerH)
+        val wild = Box(10f, 10f, c.wildW, c.wildH + c.tagH)
+        val player = Box(w - 10f - c.playerW, h - 12f - c.playerH, c.playerW, c.playerH)
         val wildSprite = Box(w - 42f * a - 110f * a, 12f * a + down, 110f * a, 100f * a)
         val playerSprite = Box(22f * a, h - 6f * a - 128f * a, 140f * a, 128f * a)
         val wildPlat = Box(w - 22f * a - 150f * a, 92f * a + down, 150f * a, 30f * a)
         val playerPlat = Box(4f * a, h + 8f * a - 40f * a, 180f * a, 40f * a)
-        val clear = !wild.hits(wildSprite.art()) && !wild.hits(playerSprite.art()) && !player.hits(wildSprite.art()) &&
+        val clear = wild.right <= w && player.x >= 0f && !wild.hits(wildSprite.art()) && !wild.hits(playerSprite.art()) && !player.hits(wildSprite.art()) &&
             !player.hits(playerSprite.art()) && !wild.hits(player)
         return Plan(false, clear, wild, player, wildSprite, playerSprite, wildPlat, playerPlat, a)
     }
@@ -241,9 +269,9 @@ internal object ArenaGeo {
         val top = max(MID_EDGE, (h - stack) / 2f)
         val wild = Box(cx, top, cw, c.wildH + c.tagH)
         val player = Box(cx, top + c.wildH + c.tagH + 6f, cw, c.playerH)
-        val wildPlat = Box(wildSprite.x - 6f * a, wildSprite.y + 80f * a, 122f * a, 30f * a)
+        val wildPlat = Box(min(wildSprite.x - 6f * a, w - 122f * a), wildSprite.y + 80f * a, 122f * a, 30f * a)
         val playerPlat = Box(0f, h + 8f * a - 40f * a, playerSprite.right + 10f * a, 40f * a)
-        val fits = a >= A_MIN - EPS / 100f && stack + 2f * MID_EDGE <= h + EPS && right - left >= cw - EPS
+        val fits = a >= A_MIN - 0.005f && stack + 2f * MID_EDGE <= h + EPS && right - left >= cw - EPS
         return Plan(true, fits, wild, player, wildSprite, playerSprite, wildPlat, playerPlat, a)
     }
 }

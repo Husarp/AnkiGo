@@ -134,7 +134,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // The panel's decisions ([configure]) and what the study layouts want ([setCompact], [setStudyStrip]).
     private var floorSp = 0f
     private var cardsCompact = false
-    private var xpShown = true
+    private var xpOn = true
     private var wantTypes = true
     private var wantXpText = true
     private var wantXpBar = true
@@ -226,7 +226,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** The normal arena: sprites, platforms and cards from [ArenaGeo], which also decides corners or middle column. */
     private fun layoutPlan(w: Int, h: Int) {
         val d = Ui.dp(context, 1f)
-        val p = ArenaGeo.plan(w / d, h / d, ArenaGeo.cards(floorSp, cardsCompact, xpShown), cardsCompact)
+        val p = ArenaGeo.plan(w / d, h / d, ArenaGeo.cards(floorSp, cardsCompact, xpOn), cardsCompact)
         plan = p
         fun put(v: View, b: ArenaGeo.Box, wrapHeight: Boolean = false) =
             place(v, (b.w * d).toInt(), if (wrapHeight) -2 else (b.h * d).toInt(), Gravity.TOP or Gravity.LEFT, (b.x * d).toInt(), (b.y * d).toInt(), 0, 0)
@@ -331,7 +331,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         } else name
         eLevel.text = "Lv $level"
         eTypes.removeAllViews()
-        for (t in types) eTypes.addView(Ui.typeChip(context, t).also { TextFloor.apply(it, floorSp) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
+        for (t in types) eTypes.addView(Ui.typeChip(context, t).also { it.maxLines = 1; TextFloor.apply(it, floorSp) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
     }
 
     fun setEnemyHp(hp: Int, max: Int, animate: Boolean) {
@@ -400,10 +400,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      * a thin HP bar with the HP number beside it), and whether the XP numbers show.
      */
     fun configure(floor: Float, compactCards: Boolean, xp: Boolean) {
-        if (floor == floorSp && compactCards == cardsCompact && xp == xpShown) return
+        if (floor == floorSp && compactCards == cardsCompact && xp == xpOn) return
         floorSp = floor
         cardsCompact = compactCards
-        xpShown = xp
+        xpOn = xp
         updateCards()
     }
 
@@ -413,7 +413,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         fun vis(on: Boolean) = if (on) VISIBLE else GONE
         eTypes.visibility = vis(wantTypes && full)
         eTypeRow.visibility = vis(wantTypes && full)
-        pXpText.visibility = vis(wantXpText && full && xpShown)
+        pXpText.visibility = vis(wantXpText && full && xpOn)
         pXp.visibility = vis(wantXpBar && full)
         catchTag.visibility = if (compact || cardsCompact) GONE else tagVis
         val hpSp = if (cardsCompact || studyStrip) 10f else 11f

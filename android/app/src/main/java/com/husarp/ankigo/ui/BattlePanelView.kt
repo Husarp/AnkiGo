@@ -127,14 +127,19 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     }
     private val logLp = LinearLayout.LayoutParams(-1, dpi(52)).also { it.setMargins(dpi(10), dpi(8), dpi(10), 0) }
 
-    /** "Paused" pill at the start of the one-line log (small windows and the study strip; it replaces the log pill). */
-    private val pausedPill = Ui.text(ctx, 10f, 900, R.color.ag_crust).apply {
+    private fun newPausedPill() = Ui.text(context, 10f, 900, R.color.ag_crust).apply {
         text = "Paused"
         textSize = 9.5f
         setPadding(dpi(7), dpi(1), dpi(7), dpi(1))
-        background = Ui.rounded(Ui.c(ctx, R.color.ag_peach), 7, ctx)
+        background = Ui.rounded(Ui.c(context, R.color.ag_peach), 7, context)
         visibility = GONE
     }
+
+    /** "Paused" pill at the start of the one-line log (small windows and the study strip; it replaces the log pill). */
+    private val pausedPill = newPausedPill()
+
+    /** The same pill over the arena's top-left corner while paused and the log line has stepped out (the smallest windows). */
+    private val pausedBadge = newPausedPill()
 
     // ---- footer ----
     private val goalBar = BarView(ctx).apply {
@@ -194,6 +199,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
         scaler.addView(column, LayoutParams(-1, -1))
         scaler.addView(overlay, LayoutParams(-1, -1))
+        scaler.addView(pausedBadge, LayoutParams(-2, -2, Gravity.TOP or Gravity.START).also { it.setMargins(dpi(6), dpi(6), 0, 0) })
         addView(scaler, LayoutParams(-1, -1))
         refreshPrefs()
     }
@@ -209,7 +215,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val w = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) dpi(PanelFit.REF_W_STATS.toInt()) else MeasureSpec.getSize(widthMeasureSpec)
         val h = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) dpi(340) else MeasureSpec.getSize(heightMeasureSpec)
         val f = if (legacy) PanelFit.Fit(1f, w / d, h / d, 0f, stats = false, log = true, xp = true, tools = false, logLines = 1, compactCards = compactCards, middle = false, ok = true)
-        else PanelFit.decide(w / d, h / d, small, statsBarSmall, compactCards, strip = !statusOk, corner = if (small) cornerClearance / d else 0f)
+        else decide(w / d, h / d)
         apply(f)
         scaler.measure(MeasureSpec.makeMeasureSpec((w / f.scale).roundToInt(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec((h / f.scale).roundToInt(), MeasureSpec.EXACTLY))
         scaler.pivotX = 0f; scaler.pivotY = 0f
@@ -219,6 +225,17 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         scaler.layout(0, 0, scaler.measuredWidth, scaler.measuredHeight)
+    }
+
+    private data class Asked(val w: Float, val h: Float, val small: Boolean, val statsBar: Boolean, val compact: Boolean, val strip: Boolean, val corner: Float, val tools: Boolean)
+    private var asked: Asked? = null
+    private var answer: PanelFit.Fit? = null
+
+    /** [PanelFit.decide] for this window and these prefs; the last answer is kept while nothing changes (measure runs often). */
+    private fun decide(w: Float, h: Float): PanelFit.Fit {
+        val a = Asked(w, h, small, statsBarSmall, compactCards, !statusOk, if (small) cornerClearance / resources.displayMetrics.density else 0f, toolsWanted)
+        answer?.let { if (a == asked) return it }
+        return PanelFit.decide(a.w, a.h, a.small, a.statsBar, a.compact, a.strip, a.corner, a.tools).also { asked = a; answer = it }
     }
 
     /** Applies a decision: which parts show, the text floor, the log's height. Does nothing when it did not change. */
@@ -244,7 +261,8 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
             logBox.layoutParams = logLp
             logText.maxLines = f.logLines
         }
-        for (v in listOf(strip, logBox, footer)) TextFloor.apply(v, f.floorSp)
+        for (v in listOf(strip, logBox, footer, pausedBadge)) TextFloor.apply(v, f.floorSp)
+        updatePausedPill()
         requestLayout()
     }
 
@@ -426,7 +444,10 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         logPill?.visibility = if (small && paused) GONE else VISIBLE
     }
 
-    private fun updatePausedPill() { pausedPill.visibility = if ((small || legacy) && paused) VISIBLE else GONE }
+    private fun updatePausedPill() {
+        pausedPill.visibility = if ((small || legacy) && paused) VISIBLE else GONE
+        pausedBadge.visibility = if (small && paused && !fit.log) VISIBLE else GONE
+    }
 
     // ---------------------------------------------------------------- log
 
@@ -516,12 +537,14 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         TextFloor.set(tv, 13f, fit.floorSp)
         tv.text = text
         tv.setShadowLayer(Ui.dp(context, 6f), 0f, Ui.dp(context, 1f), Ui.c(context, R.color.ag_base))
-        // Screen coordinates are scaled; the overlay sits inside the scaled container, so convert back to its own dp.
-        val a = IntArray(2); val b = IntArray(2)
-        coinChip.getLocationOnScreen(a); overlay.getLocationOnScreen(b)
+        // The overlay sits inside the scaled container: its position is the chip's layout offset in that container's own dp,
+        // not a screen coordinate (those are scaled).
+        var x = 0; var y = 0
+        var c: View? = coinChip
+        while (c != null && c !== scaler) { x += c.left; y += c.top; c = c.parent as? View }
         val lp = LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT)
-        lp.leftMargin = ((a[0] - b[0]) / fit.scale).roundToInt() + dpi(6)
-        lp.topMargin = ((a[1] - b[1]) / fit.scale).roundToInt() - dpi(14)
+        lp.leftMargin = x + dpi(6)
+        lp.topMargin = y - dpi(14)
         overlay.addView(tv, lp)
         tv.animate().translationY(-Ui.dp(context, 34f)).alpha(0f).setDuration(1000)
             .withEndAction { overlay.removeView(tv) }.start()
