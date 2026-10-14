@@ -277,7 +277,8 @@ internal object ArenaGeo {
     private fun clear(w: Float, h: Float, wild: Box, player: Box, wildSprite: Box, playerSprite: Box): Boolean {
         val wa = wildSprite.art()
         val pa = playerSprite.art()
-        return inside(w, h, wild) && inside(w, h, player) && inside(w, h, wa) && inside(w, h, pa) &&
+        // the wild block wraps its height (card + catch tag): 4 dp of slack at the bottom for font differences
+        return inside(w, h - 4f, wild) && inside(w, h, player) && inside(w, h, wa) && inside(w, h, pa) &&
             !wild.hits(wa) && !wild.hits(pa) && !player.hits(wa) && !player.hits(pa) && !wild.hits(player) && !wa.hits(pa)
     }
 
