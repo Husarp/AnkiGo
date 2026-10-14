@@ -4,7 +4,6 @@ import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextView
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Species
@@ -13,7 +12,8 @@ import com.husarp.ankigo.game.Stat
 // TICKET T14 owns this file: the dialog of one seen/caught Pokédex entry.
 
 object DexDetail {
-    private val LABELS = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
+    /** Base stat that fills a bar (the best bases go above it and stay full). */
+    private const val BASE_MAX = 160
 
     fun show(a: GamePage, sp: Species) {
         val data = a.data
@@ -25,7 +25,7 @@ object DexDetail {
         }
         val img = ImageView(a)
         MonPreview.show(a, sp.num, false, img)
-        col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, 96), Ui.dp(a, 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+        col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, if (DetailParts.compact(a)) 72 else 96), Ui.dp(a, if (DetailParts.compact(a)) 72 else 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply { text = sp.name; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
         col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
             text = "#%03d · Gen %d · %s".format(sp.baseNum, sp.gen, if (caught) "caught" else "seen")
@@ -35,29 +35,19 @@ object DexDetail {
             it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = Ui.dp(a, 6)
         })
 
-        col.addView(heading(a, "Base stats"))
-        Stat.entries.forEachIndexed { i, s ->
-            val v = sp.base[s]
-            col.addView(LinearLayout(a).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, Ui.dp(a, 2), 0, Ui.dp(a, 2))
-                addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = LABELS[i] }, LinearLayout.LayoutParams(Ui.dp(a, 34), -2))
-                addView(Ui.text(a, 12f, 900, R.color.ag_text).apply { text = v.toString(); gravity = Gravity.END }, LinearLayout.LayoutParams(Ui.dp(a, 30), -2))
-                val bar = BarView(a)
-                bar.set(v / 160f, Ui.c(a, R.color.ag_mauve), false)
-                addView(bar, LinearLayout.LayoutParams(0, Ui.dp(a, 5), 1f).also { it.marginStart = Ui.dp(a, 8) })
-            })
+        val compact = DetailParts.compact(a)
+        col.addView(DetailParts.header(a, R.drawable.ic_stats, "Base stats", compact))
+        Stat.entries.forEach { s ->
+            col.addView(DetailParts.statRow(a, s, sp.base[s], DetailMath.fraction(sp.base[s], BASE_MAX), 0, null, compact))
         }
-        col.addView(Ui.text(a, 11f, 800, R.color.ag_sub0).apply { text = "Total ${sp.base.total}" },
-            LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 2) })
+        col.addView(DetailParts.totalRow(a, sp.base.total, null))
 
-        col.addView(heading(a, "Evolution"))
+        col.addView(DetailParts.header(a, R.drawable.ic_update, "Evolution", compact))
         MonDetail.evolvesFrom(data, sp)?.let { col.addView(line(a, "From", it)) }
         val into = MonDetail.evolvesInto(data, sp)
         if (into.isEmpty()) col.addView(line(a, "Into", "fully evolved")) else into.forEach { col.addView(line(a, "Into", it)) }
 
-        col.addView(heading(a, "In your collection"))
+        col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))
         col.addView(line(a, "Owned", state.mons.count { it.species == sp.num }.toString()))
 
         // wishlist star toggle: wishlisted species are always caught by the auto rule
@@ -88,12 +78,6 @@ object DexDetail {
         col.addView(hint, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
         Pickers.info(a, sp.name, Bits.scroll(a, col))
-    }
-
-    private fun heading(a: GamePage, text: String): TextView = Ui.text(a, 11f, 900, R.color.ag_sub0).apply {
-        this.text = text.uppercase()
-        letterSpacing = 0.06f
-        setPadding(0, Ui.dp(a, 12), 0, Ui.dp(a, 4))
     }
 
     private fun line(a: GamePage, label: String, value: String): LinearLayout = LinearLayout(a).apply {

@@ -1,11 +1,12 @@
 package com.husarp.ankigo.ui
 
+import android.app.AlertDialog
 import android.content.Context
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextView
+import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.EvoKind
 import com.husarp.ankigo.game.Evolution
@@ -25,8 +26,6 @@ import java.util.Locale
 // TICKET T14 owns this file: the Details dialog of one Pokémon and the evolution texts shared with the Pokédex.
 
 object MonDetail {
-    private val STAT_LABELS = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
-
     /** "Lv 16", "Thunder Stone", "Linking Cord", "Friendship", "knows Mimic" (+ day/night, other conditions). */
     fun method(data: GameData, e: Evolution): String {
         val base = when (e.kind) {
@@ -65,94 +64,199 @@ object MonDetail {
 
     fun date(ms: Long): String = SimpleDateFormat("d MMM yyyy", Locale.ENGLISH).format(Date(ms))
 
-    private fun line(a: Context, label: String, value: String): View = LinearLayout(a).apply {
-        orientation = LinearLayout.HORIZONTAL
-        addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = label }, LinearLayout.LayoutParams(Ui.dp(a, 84), -2))
-        addView(Ui.text(a, 12f, 800, R.color.ag_text).apply { text = value }, LinearLayout.LayoutParams(0, -2, 1f))
-        setPadding(0, Ui.dp(a, 2), 0, Ui.dp(a, 2))
-    }
-
-    private fun heading(a: Context, text: String): TextView = Ui.text(a, 11f, 900, R.color.ag_sub0).apply {
-        this.text = text.uppercase()
-        letterSpacing = 0.06f
-        setPadding(0, Ui.dp(a, 12), 0, Ui.dp(a, 4))
+    /** Training table: header + IV row + EV row, one column per stat. */
+    private fun trainingTable(a: Context, iv: List<Int>, ev: List<Int>): View = LinearLayout(a).apply {
+        orientation = LinearLayout.VERTICAL
+        fun row(label: String, cells: List<String>, head: Boolean) = LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, Ui.dp(a, 2), 0, Ui.dp(a, 2))
+            addView(Ui.text(a, 11f, 800, R.color.ag_sub0).apply { text = label }, LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
+            cells.forEach { c ->
+                val t = if (head) Ui.text(a, 11f, 900, R.color.ag_sub0) else Ui.text(a, 12f, 800, R.color.ag_text)
+                addView(t.apply { text = c; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, -2, 1f))
+            }
+        }
+        addView(row("", DetailMath.LABELS, true))
+        addView(row("IV", iv.map { it.toString() }, false))
+        addView(row("EV", ev.map { it.toString() }, false))
     }
 
     fun show(a: Context, data: GameData, mon: Mon) {
+        val page = a as? GamePage
         val sp = data.sp(mon.species)
         val stats = StatCalc.stats(sp, mon)
+        val compact = DetailParts.compact(a)
+        val pad = if (compact) 16 else 20
         val col = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(Ui.dp(a, 20), Ui.dp(a, 6), Ui.dp(a, 20), Ui.dp(a, 6))
+            setPadding(Ui.dp(a, pad), Ui.dp(a, 4), Ui.dp(a, pad), Ui.dp(a, 8))
         }
-        // header: big sprite, name, #num, types, Lv / gender / nature
+
+        // header: sprite, name + pencil, #num / Lv / nature / gender, types, all tags
         val img = ImageView(a)
         MonPreview.show(a, mon.species, mon.shiny, img)
-        col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, 96), Ui.dp(a, 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
-        col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply {
-            text = (if (mon.shiny) "★ " else "") + mon.shownName + "  " + Bits.genderSign(mon.gender)
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(-1, -2))
-        col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
-            text = "#%03d · Lv %d · %s".format(sp.baseNum, mon.level, mon.nature.label)
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(-1, -2))
-        col.addView(Bits.typeRow(a, sp.types), LinearLayout.LayoutParams(-2, -2).also {
-            it.gravity = Gravity.CENTER_HORIZONTAL
-            it.topMargin = Ui.dp(a, 6)
-        })
-
-        col.addView(heading(a, "About"))
-        if (mon.shownName != mon.name) col.addView(line(a, "Species", mon.name))
-        col.addView(line(a, "Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }))
-        col.addView(line(a, "Held item", mon.heldItem?.let { Items.name(it) } ?: "none"))
-        col.addView(line(a, "Friendship", mon.friendship.toString()))
-        col.addView(line(a, "Caught", if (mon.caughtAt > 0) date(mon.caughtAt) else "–"))
-        col.addView(line(a, "Defeats", mon.defeats.toString()))
-        val xpLine = if (mon.level >= Tuning.MAX_LEVEL) "Max level" else "${mon.xp} / ${Progression.xpToNext(data, mon)} to Lv ${mon.level + 1}"
-        col.addView(line(a, "XP", xpLine))
-
-        // stats with IVs and EVs; nature plus/minus coloured
-        col.addView(heading(a, "Stats · IV · EV"))
-        val iv = mon.ivs.toList()
-        val ev = mon.evs.toList()
-        Stat.entries.forEachIndexed { i, s ->
-            val tone = when {
-                mon.nature.plus == s -> R.color.ag_green
-                mon.nature.minus == s -> R.color.ag_red
-                else -> R.color.ag_text
+        val spriteDp = if (compact) 64 else 96
+        val nameText = Ui.text(a, if (compact) 18f else 20f, 900, R.color.ag_text).apply {
+            text = (if (mon.shiny) "★ " else "") + mon.shownName
+            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            // leave room for the pencil (and the sprite when it sits beside the text): the dialog is at most about 88 % of the window wide
+            maxWidth = Ui.dp(a, ((a.resources.configuration.screenWidthDp * 0.88f).toInt() - 2 * pad - 48 - 8 - if (compact) spriteDp + 12 else 0).coerceAtLeast(100))
+        }
+        val nameRow = LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = if (compact) Gravity.CENTER_VERTICAL else Gravity.CENTER
+            addView(nameText, LinearLayout.LayoutParams(-2, -2))
+        }
+        if (page != null) {
+            val pencil = ImageView(a).apply {
+                setImageResource(R.drawable.ic_pencil)
+                setColorFilter(Ui.c(a, R.color.ag_sub1), android.graphics.PorterDuff.Mode.SRC_IN)
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                setPadding(Ui.dp(a, 15), Ui.dp(a, 15), Ui.dp(a, 15), Ui.dp(a, 15))
+                contentDescription = "Rename"
+                setOnClickListener {
+                    MonActions(page).rename(mon) {
+                        GameRepo.state?.mon(mon.uid)?.let { m -> nameText.text = (if (m.shiny) "★ " else "") + m.shownName }
+                    }
+                }
             }
-            val value = stats[s]
+            nameRow.addView(pencil, LinearLayout.LayoutParams(Ui.dp(a, 48), Ui.dp(a, 48)))
+        }
+        val numText = Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
+            text = "#%03d · Lv %d · %s %s".format(sp.baseNum, mon.level, mon.nature.label, Bits.genderSign(mon.gender))
+            if (!compact) gravity = Gravity.CENTER
+        }
+        val typeRow = Bits.typeRow(a, sp.types)
+        if (compact) {
+            // sprite beside name / number / types: saves height in the floating card and split screen
+            val side = LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(nameRow, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(a, 4) })
+                addView(numText, LinearLayout.LayoutParams(-2, -2))
+                addView(typeRow, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 4) })
+            }
             col.addView(LinearLayout(a).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, Ui.dp(a, 2), 0, Ui.dp(a, 2))
-                addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = STAT_LABELS[i] }, LinearLayout.LayoutParams(Ui.dp(a, 34), -2))
-                addView(Ui.text(a, 12f, 900, tone).apply { text = value.toString(); gravity = Gravity.END }, LinearLayout.LayoutParams(Ui.dp(a, 34), -2))
-                val bar = BarView(a)
-                bar.set((value / 300f), Ui.c(a, R.color.ag_mauve), false)
-                addView(bar, LinearLayout.LayoutParams(0, Ui.dp(a, 5), 1f).also {
-                    it.marginStart = Ui.dp(a, 8); it.marginEnd = Ui.dp(a, 8)
-                })
-                addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply { text = "${iv[i]} · ${ev[i]}" }, LinearLayout.LayoutParams(Ui.dp(a, 62), -2))
+                addView(img, LinearLayout.LayoutParams(Ui.dp(a, spriteDp), Ui.dp(a, spriteDp)))
+                addView(side, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 12) })
+            }, LinearLayout.LayoutParams(-1, -2))
+        } else {
+            col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, spriteDp), Ui.dp(a, spriteDp)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+            col.addView(nameRow, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(a, 8) })
+            col.addView(numText, LinearLayout.LayoutParams(-1, -2))
+            col.addView(typeRow, LinearLayout.LayoutParams(-2, -2).also {
+                it.gravity = Gravity.CENTER_HORIZONTAL
+                it.topMargin = Ui.dp(a, 4)
             })
         }
+        val tags = GameRepo.state?.let { MonTags.of(data, it, mon) }.orEmpty()
+        if (tags.isNotEmpty()) {
+            val flow = FlowRow(a, Ui.dp(a, 4))
+            tags.take(8).forEach { flow.addView(MonTags.pill(a, it)) }
+            col.addView(flow, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
+        }
 
-        col.addView(heading(a, "Moves"))
-        if (mon.moves.isEmpty()) col.addView(line(a, "", "none"))
+        // HP and XP, numbers
+        val maxHp = stats.hp
+        val hpFrac = mon.hp.toFloat() / maxHp.coerceAtLeast(1)
+        col.addView(barLine(a, "HP", "${mon.hp} / $maxHp", hpFrac, Ui.hpColor(a, hpFrac), 7),
+            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
+        val need = Progression.xpToNext(data, mon)
+        val maxed = mon.level >= Tuning.MAX_LEVEL || need <= 0
+        col.addView(barLine(a, "XP", if (maxed) "Max level" else "XP ${mon.xp} / $need", if (maxed) 1f else mon.xp.toFloat() / need,
+            Ui.c(a, R.color.ag_sky), 5), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+
+        // stats
+        col.addView(DetailParts.header(a, R.drawable.ic_stats, "Stats", compact))
+        val max = DetailMath.monStatMax(mon.level)
+        Stat.entries.forEach { s ->
+            col.addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), DetailMath.natureDir(mon.nature, s), sp.base[s], compact))
+        }
+        col.addView(DetailParts.totalRow(a, stats.total, sp.base.total))
+
+        // moves
+        col.addView(DetailParts.header(a, R.drawable.ic_swords, "Moves", compact))
+        if (mon.moves.isEmpty()) col.addView(DetailParts.line(a, "", "none", compact = compact))
         for (m in mon.moves) {
+            if (compact) { col.addView(DetailParts.compactMoveRow(a, data, m)); continue }
             val row = Bits.moveRow(a, data, m)
-            row.setPadding(0, Ui.dp(a, 4), 0, Ui.dp(a, 4))
+            row.setPadding(0, Ui.dp(a, 5), 0, Ui.dp(a, 5))
             col.addView(row)
         }
 
-        col.addView(heading(a, "Evolution"))
-        val from = evolvesFrom(data, sp)
-        if (from != null) col.addView(line(a, "From", from))
-        val into = evolvesInto(data, sp)
-        if (into.isEmpty()) col.addView(line(a, "Into", "fully evolved"))
-        else into.forEach { col.addView(line(a, "Into", it)) }
+        // training
+        col.addView(DetailParts.header(a, R.drawable.ic_up, "Training", compact))
+        col.addView(DetailParts.line(a, "Nature", "${mon.nature.label} · ${DetailMath.natureEffect(mon.nature)}", 56, compact))
+        col.addView(trainingTable(a, mon.ivs.toList(), mon.evs.toList()), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 4) })
 
-        Pickers.info(a, "Details", Bits.scroll(a, col))
+        // info
+        col.addView(DetailParts.header(a, R.drawable.ic_book, "Info", compact))
+        if (mon.shownName != mon.name) col.addView(DetailParts.line(a, "Species", mon.name, compact = compact))
+        col.addView(DetailParts.line(a, "Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }, compact = compact))
+        col.addView(heldLine(a, mon, compact))
+        col.addView(DetailParts.line(a, "Friendship", mon.friendship.toString(), compact = compact))
+        col.addView(DetailParts.line(a, "Caught", if (mon.caughtAt > 0) date(mon.caughtAt) else "–", compact = compact))
+        col.addView(DetailParts.line(a, "Defeats", mon.defeats.toString(), compact = compact))
+
+        // evolution
+        col.addView(DetailParts.header(a, R.drawable.ic_update, "Evolution", compact))
+        tags.firstOrNull { it.kind == TagKind.CAN_EVOLVE }?.let {
+            col.addView(MonTags.pill(a, it.copy(label = "Can evolve now")), LinearLayout.LayoutParams(-2, -2).also { p -> p.bottomMargin = Ui.dp(a, 4) })
+        }
+        evolvesFrom(data, sp)?.let { col.addView(DetailParts.line(a, "From", it, 56, compact)) }
+        val into = evolvesInto(data, sp)
+        if (into.isEmpty()) col.addView(DetailParts.line(a, "Into", "fully evolved", 56, compact))
+        else into.forEach { col.addView(DetailParts.line(a, "Into", it, 56, compact)) }
+
+        if (page == null) { Pickers.info(a, "Details", Bits.scroll(a, col)); return }
+        lateinit var dlg: AlertDialog
+        val more = DetailParts.secondaryButton(a, "More options") {
+            dlg.dismiss()
+            MonActions(page).menu(mon)
+        }
+        val margins = { it: LinearLayout.LayoutParams -> it.setMargins(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 4)) }
+        val box: View
+        if (compact) {
+            // little room: the button is the last thing of the scrolling content
+            col.addView(more, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 14) })
+            box = Bits.scroll(a, col)
+        } else {
+            // "More options" stays visible under the scrolling details
+            box = LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(Bits.scroll(a, col), LinearLayout.LayoutParams(-1, 0, 1f))
+                addView(more, LinearLayout.LayoutParams(-1, -2).also(margins))
+            }
+        }
+        dlg = AlertDialog.Builder(a).setTitle("Details").setView(box).setPositiveButton("Close", null).create()
+        Pickers.show(dlg)
+    }
+
+    /** "HP   47 / 58" with a coloured bar between label and number. */
+    private fun barLine(a: Context, label: String, value: String, frac: Float, color: Int, barDp: Int): View = LinearLayout(a).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = label }, LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
+        val bar = BarView(a)
+        bar.set(frac, color, false)
+        addView(bar, LinearLayout.LayoutParams(0, Ui.dp(a, barDp), 1f).also { it.marginStart = Ui.dp(a, 6); it.marginEnd = Ui.dp(a, 10) })
+        addView(Ui.text(a, 12f, 900, R.color.ag_text).apply { text = value; gravity = Gravity.END }, LinearLayout.LayoutParams(-2, -2))
+    }
+
+    private fun heldLine(a: Context, mon: Mon, compact: Boolean): View {
+        val held = mon.heldItem ?: return DetailParts.line(a, "Held item", "none", compact = compact)
+        return LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, Ui.dp(a, 1), 0, Ui.dp(a, 1))
+            addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Held item" }, LinearLayout.LayoutParams(Ui.dp(a, 84), -2))
+            val icon = ImageView(a)
+            Ui.itemIcon(a, held, icon)
+            addView(icon, LinearLayout.LayoutParams(Ui.dp(a, 22), Ui.dp(a, 22)))
+            addView(Ui.text(a, 12f, 800, R.color.ag_text).apply { text = Items.name(held) },
+                LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 6) })
+        }
     }
 }
