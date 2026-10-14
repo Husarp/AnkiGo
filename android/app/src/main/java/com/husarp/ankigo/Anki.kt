@@ -208,6 +208,15 @@ object Anki {
     fun searchCards(ctx: Context, query: String, cols: Array<String>): List<Map<String, String?>> =
         rows(ctx.contentResolver.query(uri("cards"), cols, query, null, null))
 
+    /**
+     * How many cards match the Anki search [query] (AnkiDroid 2.24+, FlashCardsContract cards URI). With the projection
+     * exactly ["_id"] AnkiDroid answers from a lazy cursor whose count is the number of matches without loading a single
+     * card, so never ask for other columns here. An invalid search throws IllegalArgumentException, a missing permission
+     * SecurityException; both are for the caller to handle. No provider -> 0.
+     */
+    fun countCards(ctx: Context, query: String): Int =
+        ctx.contentResolver.query(uri("cards"), arrayOf("_id"), query, null, null)?.use { it.count } ?: 0
+
     fun cardById(ctx: Context, id: Long): Map<String, String?>? =
         rows(ctx.contentResolver.query(uri("cards/$id"), CardState.COLS, null, null, null)).firstOrNull()
 

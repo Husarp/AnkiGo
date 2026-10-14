@@ -38,10 +38,10 @@ class HeatmapView(ctx: Context) : View(ctx) {
     private val leftW = Ui.dp(ctx, 18f)
     private val topH = Ui.dp(ctx, 16f)
 
-    fun set(heatmap: StudyStats.Heatmap, today: String) {
+    fun set(heatmap: StudyStats.Heatmap, today: String, noun: String = "Reviews") {
         map = heatmap
         todayKey = today
-        contentDescription = "Reviews in the last ${heatmap.columns.size} weeks: ${heatmap.total}"
+        contentDescription = "$noun in the last ${heatmap.columns.size} weeks: ${heatmap.total}"
         requestLayout()
         invalidate()
     }
