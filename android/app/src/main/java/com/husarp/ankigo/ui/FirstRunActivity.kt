@@ -64,7 +64,9 @@ internal object FirstRunJob {
                 val begun = android.os.SystemClock.elapsedRealtime()
                 Sprites.downloadStatics(app, nums, bytesProgress = { d, t ->
                     job.progress(0.8f + 0.2f * (if (t > 0) d.toFloat() / t else 1f), "Pictures (total estimated) · ${DisplayNumbers.progress(d, t, android.os.SystemClock.elapsedRealtime() - begun)}")
-                }) { _, _ -> }
+                }, stop = { job.cancelled }) { _, _ -> }
+                // Cancel (only Settings offers it): what was downloaded is kept
+                if (job.cancelled) { job.done("Stopped. What was downloaded is kept."); return@Thread }
                 // same rule as the step check (openStep): "done" must mean the step is really done, or the screen bounces back to step 2
                 if (Sprites.enabled(app) && !staticsMostlyPresent(app, nums)) job.fail("Many pictures didn't download. Check the internet connection and try again.")
                 else job.done()

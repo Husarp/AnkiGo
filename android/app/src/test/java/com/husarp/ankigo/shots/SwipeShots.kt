@@ -87,10 +87,17 @@ class SwipeShots {
         }
     }
 
+    private fun studyPage(ctx: Context): View {
+        val sp = SettingsPage(ShotCtx(ctx), NoHost)
+        val v = pageScreen(ShotCtx(ctx), sp)
+        sp.open(com.husarp.ankigo.ui.SettingsSection.STUDY) // the Study section of the Settings tab
+        return v
+    }
+
     @Test fun settingsRow() {
         val phone = Variant("phone", 412, 900); val tablet = Variant("tablet", 800, 1000)
         paparazzi.shootPage("swipe-settings", listOf(phone, tablet)) { ctx ->
-            ToStudy(ctx, pageScreen(ShotCtx(ctx), SettingsPage(ShotCtx(ctx), NoHost)))
+            ToStudy(ctx, studyPage(ctx))
         }
     }
 }

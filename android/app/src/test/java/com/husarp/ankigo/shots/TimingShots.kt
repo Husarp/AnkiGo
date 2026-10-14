@@ -98,12 +98,19 @@ class TimingShots {
         }
     }
 
+    private fun studyPage(ctx: Context): View {
+        val sp = SettingsPage(ShotCtx(ctx), NoHost)
+        val v = pageScreen(ShotCtx(ctx), sp)
+        sp.open(com.husarp.ankigo.ui.SettingsSection.STUDY) // the Study section of the Settings tab
+        return v
+    }
+
     @Test fun settingsRows() {
         val phone = Variant("phone", 412, 1100); val tablet = Variant("tablet", 800, 1100)
-        paparazzi.shootPage("timing-settings", listOf(phone, tablet)) { ctx -> ToStudy(ctx, pageScreen(ShotCtx(ctx), SettingsPage(ShotCtx(ctx), NoHost))) }
+        paparazzi.shootPage("timing-settings", listOf(phone, tablet)) { ctx -> ToStudy(ctx, studyPage(ctx)) }
         paparazzi.shootPage("timing-settings-auto", listOf(phone)) { ctx ->
             ctx.getSharedPreferences("study", 0).edit().putBoolean("autoAdvance", true).putString("timer", "Always").apply()
-            ToStudy(ctx, pageScreen(ShotCtx(ctx), SettingsPage(ShotCtx(ctx), NoHost)))
+            ToStudy(ctx, studyPage(ctx))
         }
     }
 }

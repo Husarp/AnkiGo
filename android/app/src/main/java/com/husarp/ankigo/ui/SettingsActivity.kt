@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.PorterDuff
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.InputFilter
@@ -16,6 +17,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -34,6 +36,7 @@ import com.husarp.ankigo.game.save.SaveFormatException
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.overlay.FloatBattleService
 import com.husarp.ankigo.overlay.Overlay
+import com.husarp.ankigo.sound.SoundPrefs
 import com.husarp.ankigo.update.Updates
 import com.husarp.ankigo.update.UpdatesActivity
 import java.io.File
@@ -104,22 +107,31 @@ internal object SettingsJobs {
     }
 }
 
-/** Game options, data and pictures, save backups, Updates, Diagnostics and About. */
+/**
+ * The Settings tab: a home list of sections (icon, title, one summary line); a tap opens the section in place
+ * (back arrow in the app bar). Works without a loaded game.
+ */
 class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
-    override val tab: BottomNav.Tab? = null
+    override val tab: BottomNav.Tab? = BottomNav.Tab.SETTINGS
     override val needsGame = false
 
     private lateinit var scroll: ScrollView
     private lateinit var content: LinearLayout
+    private lateinit var barHolder: FrameLayout
     private var dataCard: LinearLayout? = null
     private var windowsCard: LinearLayout? = null
     private var nameEdit: EditText? = null
     private var dialog: AlertDialog? = null
     private var handledDataDone = false
 
+    /** The open section, or null on the home list. */
+    var section: SettingsSection? = null
+        private set
+
     // views of the data card that the download jobs update
     private var animBar: ProgressBlock? = null
     private var dataBar: ProgressBlock? = null
+    private var picBar: ProgressBlock? = null
 
     private fun dp(v: Int) = Ui.dp(this, v)
     private val loaded: GameState? get() = GameRepo.state
@@ -128,9 +140,39 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     // Attached in onShow, detached in onGone only if still ours (a recreated page may have taken over the job screens).
     private val animListener: () -> Unit = { onAnim() }
     private val dataListener: () -> Unit = { onData() }
+    private val picListener: () -> Unit = { onPics() }
 
-    override fun buildBar(): View =
-        Ui.appBar(this, "Settings", back = host.hostActivity != null, onBack = { host.closePage() })
+    // interface size: applied once the player stops pressing + / -
+    private var pendingScale: Int? = null
+    private val applyScale = Runnable { flushScale(recreate = true) }
+
+    override fun buildBar(): View {
+        barHolder = FrameLayout(this)
+        rebuildBar()
+        return barHolder
+    }
+
+    private fun rebuildBar() {
+        val s = section
+        barHolder.removeAllViews()
+        barHolder.addView(Ui.appBar(this, s?.title ?: "Settings", back = s != null, onBack = { goHome() }),
+            FrameLayout.LayoutParams(-1, -2))
+    }
+
+    /** Back from a section to the list. False when already on the list (the caller goes on with its own back). */
+    fun goHome(): Boolean {
+        if (section == null) return false
+        open(null)
+        return true
+    }
+
+    /** Opens [s] (null = the list). */
+    fun open(s: SettingsSection?) {
+        saveName()
+        section = s
+        render()
+        if (::scroll.isInitialized) scroll.scrollTo(0, 0)
+    }
 
     override fun buildBody(): View {
         content = LinearLayout(this).apply {
@@ -148,19 +190,24 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         super.onShow()
         SettingsJobs.anim.listener = animListener
         SettingsJobs.data.listener = dataListener
+        FirstRunJob.job.listener = picListener
         if (SettingsJobs.data.state == BgJob.State.DONE) onData() // finished while this screen was away
+        if (picsFromSettings && FirstRunJob.job.state != BgJob.State.RUNNING) onPics()
         rebuildWindows() // the overlay permission may have changed in Android's settings meanwhile
     }
 
     override fun onHide() {
         saveName()
+        flushScale(recreate = false)
         super.onHide()
     }
 
     override fun onGone() {
         if (SettingsJobs.anim.listener === animListener) SettingsJobs.anim.listener = null
         if (SettingsJobs.data.listener === dataListener) SettingsJobs.data.listener = null
+        if (FirstRunJob.job.listener === picListener) FirstRunJob.job.listener = null
         if (live?.get() === this) live = null
+        main.removeCallbacks(applyScale)
         dialog?.dismiss()
         super.onGone()
     }
@@ -175,27 +222,130 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     override fun render() {
         saveName()
         content.removeAllViews()
-        animBar = null; dataBar = null; nameEdit = null
+        animBar = null; dataBar = null; picBar = null; nameEdit = null; dataCard = null; windowsCard = null
+        rebuildBar()
         val st = loaded
-        if (st != null) {
-            content.addView(Form.sect(this, "Game"))
-            content.addView(gameCard(st.settings))
-            content.addView(Form.sect(this, "When a wild Pokémon faints"))
-            content.addView(faintCard(st.settings))
-            content.addView(Form.sect(this, "Always catch", "even with \"Defeat\""))
-            content.addView(protectCard(st.settings))
-        } else {
-            content.addView(Form.sect(this, "Game"))
-            content.addView(Form.cardOf(this, listOf(
-                Form.row(this, "The game isn't loaded", "Its options show here once it is. Data and backups below still work.", null),
-            )))
+        when (section) {
+            null -> home()
+            SettingsSection.LOOK -> {
+                content.addView(Form.sect(this, "Theme, accent and size"))
+                content.addView(lookCard())
+            }
+            SettingsSection.GAME -> if (st != null) {
+                content.addView(Form.sect(this, "Game"))
+                content.addView(gameCard(st.settings))
+                content.addView(Form.sect(this, "When a wild Pokémon faints"))
+                content.addView(faintCard(st.settings))
+                content.addView(Form.sect(this, "Always catch", "even with \"Defeat\""))
+                content.addView(protectCard(st.settings))
+            } else {
+                content.addView(Form.cardOf(this, listOf(
+                    Form.row(this, "The game isn't loaded", "Its options show here once it is. Data and backups still work.", null),
+                )), Form.lp(this, 12))
+            }
+            SettingsSection.STUDY -> content.addView(studyCard(), Form.lp(this, 12))
+            SettingsSection.BATTLE -> battleSection()
+            SettingsSection.SOUND -> content.addView(soundCard(this), Form.lp(this, 12))
+            SettingsSection.DOWNLOADS -> {
+                val dc = buildDataCard()
+                dataCard = dc
+                content.addView(dc, Form.lp(this, 12))
+            }
+            SettingsSection.ANKIMON -> content.addView(ankimonCard(), Form.lp(this, 12))
+            SettingsSection.SAVE -> content.addView(saveCard(), Form.lp(this, 12))
+            SettingsSection.ABOUT -> content.addView(aboutCard(), Form.lp(this, 12))
+            SettingsSection.UPDATES, SettingsSection.DIAGNOSTICS -> home() // these start their own screens; never open in place
         }
-        content.addView(Form.sect(this, "When you leave AnkiGo"))
-        val wc = buildWindowsCard()
-        windowsCard = wc
-        content.addView(wc)
-        content.addView(Form.sect(this, "Study"))
-        content.addView(Form.cardOf(this, listOf(
+    }
+
+    // ---------- home ----------
+
+    private val dateFmt get() = SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault())
+
+    private fun summaryOf(s: SettingsSection): String {
+        val st = loaded?.settings
+        val study = getSharedPreferences("study", 0)
+        return when (s) {
+            SettingsSection.LOOK -> SettingsSummary.look(AppPrefs.theme(this), AppPrefs.accent(this), AppPrefs.uiScale(this))
+            SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, st.cardsPerRound, st.dailyAverage)
+            SettingsSection.STUDY -> SettingsSummary.study(study.getBoolean("inAnkiDroid", false), study.getBoolean("swipe", false), study.getInt("zoom", 100))
+            SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this))
+            SettingsSection.SOUND -> SettingsSummary.sound(SoundPrefs.battleSounds(this), SoundPrefs.cries(this), SoundPrefs.volume(this))
+            SettingsSection.DOWNLOADS -> SettingsSummary.downloads(DataStore.size(this), Sprites.size(this),
+                SettingsJobs.anim.running || SettingsJobs.data.running || FirstRunJob.job.running)
+            SettingsSection.ANKIMON -> "Import a PC save · export one back"
+            SettingsSection.SAVE -> loaded.let { SettingsSummary.save(it?.savedAt, it?.seq) { t -> dateFmt.format(Date(t)) } }
+            SettingsSection.UPDATES -> SettingsSummary.updates(Updates.current(this))
+            SettingsSection.DIAGNOSTICS -> "LIVE watch, checks and the report"
+            SettingsSection.ABOUT -> "AnkiGo ${Updates.current(this)} · credits"
+        }
+    }
+
+    private fun home() {
+        SettingsSection.GROUPS.forEachIndexed { i, group ->
+            content.addView(SettingsHome.group(this, group.map { s ->
+                SettingsHome.row(this, s, summaryOf(s)) { choose(s) }
+            }), Form.lp(this, if (i == 0) 4 else 14))
+        }
+    }
+
+    private fun choose(s: SettingsSection) {
+        when (s) {
+            SettingsSection.UPDATES -> startScreen(Intent(this, UpdatesActivity::class.java))
+            SettingsSection.DIAGNOSTICS -> startScreen(Intent(this, DiagnosticsActivity::class.java))
+            else -> open(s)
+        }
+    }
+
+    // ---------- look ----------
+
+    private fun lookCard(): View {
+        val themes = ThemeMode.entries
+        val accents = Accent.entries
+        val theme = Form.stackRow(this, "Theme", null, Form.segmented(this, themes.map { it.label }, themes.indexOf(AppPrefs.theme(this))) { i ->
+            AppLook.setTheme(this, themes[i]); looked()
+        })
+        val current = AppPrefs.accent(this)
+        val accent = Form.stackRow(this, "Accent", null,
+            Form.swatches(this, accents.map { it.label to getColor(it.res) }, accents.indexOf(current)) { i ->
+                AppLook.setAccent(this, accents[i]); looked()
+            },
+            right = Ui.text(this, 13f, 800, R.color.ag_sub1).apply { text = current.label })
+        val scales = AppLook.SCALES
+        val size = Form.stepperRow(this, "Interface size", "Text, cards and Pokémon get bigger or smaller together.",
+            scales.indexOf(AppPrefs.uiScale(this)).coerceAtLeast(0), 0, scales.lastIndex, 1, { "${scales[it]} %" }) { i ->
+            pendingScale = scales[i]
+            main.removeCallbacks(applyScale)
+            main.postDelayed(applyScale, SCALE_DELAY_MS)
+        }
+        return Form.cardOf(this, listOf(theme, accent, size))
+    }
+
+    /** The look changed: this screen recreates itself (Activity) or tells the player the window needs reopening (floating card). */
+    private fun looked() {
+        val a = host.hostActivity
+        if (a != null) main.post { if (alive) a.recreate() }
+        else {
+            Ui.toast(this, "Applies when you reopen the window")
+            render()
+        }
+    }
+
+    private fun flushScale(recreate: Boolean) {
+        val v = pendingScale ?: return
+        pendingScale = null
+        main.removeCallbacks(applyScale)
+        AppLook.setScale(this, v)
+        if (recreate) looked()
+    }
+
+    /** Remembers the open section across an Activity recreation (look change, rotation). */
+    fun restoreSection(name: String?) {
+        section = SettingsSection.byName(name)?.takeIf { it.opens }
+        if (::content.isInitialized) render()
+    }
+
+    private fun studyCard(): View = Form.cardOf(this, listOf(
             Form.switchRow(this, "Tapping a deck opens AnkiDroid", "Off: study inside AnkiGo", getSharedPreferences("study", 0).getBoolean("inAnkiDroid", false)) {
                 getSharedPreferences("study", 0).edit().putBoolean("inAnkiDroid", it).apply()
             },
@@ -249,20 +399,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                     }
                 }
             },
-        )))
-        content.addView(Form.sect(this, "Sound"))
-        content.addView(soundCard(this))
-        content.addView(Form.sect(this, "Data and pictures"))
-        val dc = buildDataCard()
-        dataCard = dc
-        content.addView(dc)
-        content.addView(Form.sect(this, "Save"))
-        content.addView(saveCard())
-        content.addView(Form.sect(this, "App"))
-        content.addView(appCard())
-        content.addView(Form.sect(this, "About"))
-        content.addView(aboutCard())
-    }
+    ))
 
     // ---------- game ----------
 
@@ -316,7 +453,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             setSingleLine()
             filters = arrayOf(InputFilter.LengthFilter(16))
             imeOptions = EditorInfo.IME_ACTION_DONE
+            Ui.tintEdit(this) // accent cursor, selection and handles
             background = Ui.rounded(Ui.c(this@SettingsPage, R.color.ag_mantle), 10, this@SettingsPage)
+            backgroundTintList = null // the field keeps its own fill; tintEdit's underline tint would paint it
             setPadding(dp(10), dp(8), dp(10), dp(8))
             minWidth = dp(130)
             setOnEditorActionListener { v, action, _ ->
@@ -376,14 +515,30 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         Form.switchRow(this, "Regional form", null, s.protectRegional) { v -> edit { it.protectRegional = v } },
     ))
 
-    // ---------- windows: picture-in-picture, floating battle, floating screens ----------
+    // ---------- battle panel & windows ----------
 
-    /** Leave mode (one at a time), floating screens in split screen, and the overlay permission. Works without a game. */
-    private fun buildWindowsCard(): LinearLayout {
+    private fun battleSection() {
+        content.addView(Form.sect(this, "When you leave AnkiGo"))
+        content.addView(leaveCard())
+        content.addView(Form.sect(this, "Small battle windows"))
+        content.addView(Form.cardOf(this, listOf(
+            Form.switchRow(this, "Show stats bar in small windows", "Picture-in-picture and the floating battle; off gives the battle more room",
+                AppPrefs.statsBarSmall(this)) { AppPrefs.setStatsBarSmall(this, it) },
+            Form.switchRow(this, "Compact stat cards", "Only name and HP on the battle cards",
+                AppPrefs.compactCards(this)) { AppPrefs.setCompactCards(this, it) },
+        )))
+        content.addView(Form.sect(this, "Floating screens"))
+        val wc = buildWindowsCard()
+        windowsCard = wc
+        content.addView(wc)
+    }
+
+    /** Leave mode (one at a time). */
+    private fun leaveCard(): LinearLayout {
         val mode = AppPrefs.leaveMode(this)
         val options = listOf(
-            Triple(LeaveMode.OFF, "Nothing", null),
-            Triple(LeaveMode.PIP, "Picture-in-picture", "Default. A small battle window with Open and Pause buttons."),
+            Triple(LeaveMode.OFF, "Nothing", "Default."),
+            Triple(LeaveMode.PIP, "Picture-in-picture", "A small battle window; or use Pop out on the battle any time."),
             Triple(LeaveMode.FLOAT, "Floating battle window",
                 "Move and resize it over AnkiDroid. Needs “Display over other apps” and shows a notification while it runs."),
         )
@@ -402,6 +557,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 ticks.forEach { (k, t) -> t.visibility = if (k == m) View.VISIBLE else View.INVISIBLE }
             }
         }
+        return Form.cardOf(this, rows)
+    }
+
+    /** Floating screens in split screen, and the overlay permission. */
+    private fun buildWindowsCard(): LinearLayout {
+        val rows = mutableListOf<View>()
         rows += Form.switchRow(this, "Floating screens in split screen",
             "Team, Pokédex, Shop and Settings open in a small window over AnkiDroid, so the battle stays visible.",
             AppPrefs.floatScreens(this)) { v -> AppPrefs.setFloatScreens(this, v) }
@@ -465,19 +626,27 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(14))
         }
-        actions.addView(Form.secondary(this, "Download pictures (about 1 MB)") {
-            Sprites.setEnabled(this, true)
-            getSharedPreferences("firstrun", 0).edit().putBoolean("studyOnly", false).apply()
-            val activity = Ui.findActivity(this)
-            if (activity != null) activity.startActivity(Intent(activity, FirstRunActivity::class.java))
-            else Ui.toast(this, "Open Settings full screen to download pictures")
-        })
+        val picJob = FirstRunJob.job
+        val picBusy = picJob.running
+        val picBtn = Form.secondary(this, if (picJob.state == BgJob.State.FAILED && picsFromSettings) "Try again: download pictures" else "Download pictures (about 1 MB)") { startPictures() }
+        Form.enable(picBtn, !picBusy && !anim.running && !dat.running)
+        actions.addView(picBtn)
+        if (picsFromSettings) when (picJob.state) {
+            BgJob.State.RUNNING -> {
+                val p = ProgressBlock(this).also { it.show(picJob.fraction, picJob.label) }
+                picBar = p
+                actions.addView(p, Form.lp(this, 10))
+                actions.addView(Form.secondary(this, "Cancel", R.color.ag_red) { picJob.cancel() }, Form.lp(this, 8))
+            }
+            BgJob.State.FAILED -> actions.addView(Form.body(this, picJob.error ?: "Failed.", 12, R.color.ag_red), Form.lp(this, 8))
+            else -> {}
+        }
         // the row has its own 14 dp padding: pull it out of the buttons' padding so its text lines up with the other rows
         actions.addView(Form.switchRow(this, "Download pictures as needed", "Off: use placeholders", Sprites.enabled(this)) { Sprites.setEnabled(this, it) },
             LinearLayout.LayoutParams(-1, -2).also { it.setMargins(-dp(14), 0, -dp(14), 0) })
         // battle animations
         val animBtn = Form.secondary(this, "Download all battle animations (about 80 MB)") { startAnimations() }
-        Form.enable(animBtn, !anim.running && !dat.running)
+        Form.enable(animBtn, !anim.running && !dat.running && !picBusy)
         actions.addView(animBtn)
         when (anim.state) {
             BgJob.State.RUNNING -> {
@@ -492,7 +661,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
         // data again
         val dataBtn = Form.secondary(this, "Download game data again") { confirmRedownload() }
-        Form.enable(dataBtn, !dat.running && !anim.running)
+        Form.enable(dataBtn, !dat.running && !anim.running && !picBusy)
         actions.addView(dataBtn, Form.lp(this, 10))
         when (dat.state) {
             BgJob.State.RUNNING -> {
@@ -543,6 +712,31 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         rebuildData()
     }
 
+    private fun onPics() {
+        val j = FirstRunJob.job
+        if (!picsFromSettings) { rebuildData(); return }
+        val b = picBar
+        if (j.state == BgJob.State.RUNNING && b != null) { b.show(j.fraction, j.label); return }
+        if (j.state == BgJob.State.DONE) {
+            picsFromSettings = false
+            val stopped = j.label.startsWith("Stopped")
+            j.reset()
+            Ui.toast(applicationContext, if (stopped) "Picture download stopped" else "Pictures downloaded")
+        }
+        rebuildData()
+    }
+
+    /** The Downloads button: the first-run download job (data is skipped when present), run from here, no first-run screen. */
+    private fun startPictures() {
+        if (FirstRunJob.job.running) return
+        if (FirstRunJob.job.state == BgJob.State.FAILED) FirstRunJob.job.reset()
+        Sprites.setEnabled(this, true)
+        getSharedPreferences("firstrun", 0).edit().putBoolean("studyOnly", false).apply()
+        picsFromSettings = true
+        val gens = loaded?.settings?.gens?.toSet() ?: com.husarp.ankigo.game.Tuning.DEFAULT_GENS
+        FirstRunJob.start(this, gens) // its first update re-draws the card with the progress
+    }
+
     private fun startAnimations() {
         val data = GameRepo.data ?: DataStore.load(this)
         if (data == null) { Ui.toast(this, "Download the game data first"); return }
@@ -565,15 +759,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
     }
 
-    private fun sizeText(bytes: Long): String = when {
-        bytes >= 1_000_000 -> String.format(Locale.US, "%.1f MB", bytes / 1_000_000.0)
-        bytes >= 1_000 -> "${bytes / 1_000} KB"
-        else -> "$bytes B"
-    }
+    private fun sizeText(bytes: Long): String = SettingsSummary.bytes(bytes)
 
     // ---------- save ----------
-
-    private val dateFmt get() = SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault())
 
     private fun saveCard(): View {
         val st = loaded
@@ -590,15 +778,29 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         btns.addView(export)
         btns.addView(Form.secondary(this, "Import save…") { startImport() }, Form.lp(this, 8))
         btns.addView(Form.secondary(this, "Restore a backup…") { listBackups() }, Form.lp(this, 8))
+        btns.addView(Form.body(this, "Importing or restoring keeps your current game as a backup first.",
+            12, R.color.ag_sub0), Form.lp(this, 8))
+        box.addView(btns)
+        return box
+    }
+
+    private fun ankimonCard(): View {
+        val st = loaded
+        val box = Ui.card(this)
+        val btns = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+        }
         val ankimon = Form.secondary(this, "Import Ankimon save (.db)…") { startAnkimonImport() }
         Form.enable(ankimon, st != null)
-        btns.addView(ankimon, Form.lp(this, 8))
+        btns.addView(ankimon)
         val ankimonOut = Form.secondary(this, "Export for Ankimon (PC)…") { startAnkimonExport() }
         Form.enable(ankimonOut, st != null)
         btns.addView(ankimonOut, Form.lp(this, 8))
-        btns.addView(Form.body(this, "Importing or restoring keeps your current game as a backup first. " +
-            "Ankimon: import your PC save here (it only adds); export writes a file for Ankimon's Game → Import Save File… on the PC.",
+        btns.addView(Form.body(this, "Import your PC save here (it only adds, and your current game is kept as a backup first). " +
+            "Export writes a file for Ankimon's Game → Import Save File… on the PC.",
             12, R.color.ag_sub0), Form.lp(this, 8))
+        if (st == null) btns.addView(Form.body(this, "Both need the game to be loaded.", 12, R.color.ag_sub0), Form.lp(this, 4))
         box.addView(btns)
         return box
     }
@@ -746,24 +948,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         }.start()
     }
 
-    // ---------- app + about ----------
-
-    private fun appCard(): View {
-        val chevron = { ImageView(this).apply {
-            setImageResource(R.drawable.ic_back)
-            rotation = 180f
-            setColorFilter(Ui.c(this@SettingsPage, R.color.ag_sub0), PorterDuff.Mode.SRC_IN)
-            layoutParams = LinearLayout.LayoutParams(dp(18), dp(18))
-        } }
-        return Form.cardOf(this, listOf(
-            Form.row(this, "Updates · version ${Updates.current(this)}", "Check for a new AnkiGo", chevron()) {
-                startScreen(Intent(this, UpdatesActivity::class.java))
-            },
-            Form.row(this, "Diagnostics", "LIVE watch, checks and the report", chevron()) {
-                startScreen(Intent(this, DiagnosticsActivity::class.java))
-            },
-        ))
-    }
+    // ---------- about ----------
 
     private fun aboutCard(): View {
         val box = Ui.card(this).apply { setPadding(dp(14), dp(12), dp(14), dp(14)) }
@@ -791,6 +976,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         /** The newest Settings page, for picker results that arrive after the Activity was recreated. */
         private var live: WeakReference<SettingsPage>? = null
 
+        /** True while the picture download (the first-run job) was started from Settings, so the first-run screen keeps its own job state. */
+        @Volatile internal var picsFromSettings = false
+
+        private const val SCALE_DELAY_MS = 700L
+
         /**
          * File picker result. Lives here (captures no page) and looks the newest page up in [live], so it still works when
          * the Activity was recreated (rotation, split-screen resize) while the picker was open.
@@ -812,7 +1002,29 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     }
 }
 
-/** The Settings screen as its own Activity: a thin shell around [SettingsPage]. */
+/** The Settings screen as its own Activity (the Settings tab): a thin shell around [SettingsPage]. */
 class SettingsActivity : PageActivity() {
-    override fun createPage(): GamePage = SettingsPage(this, this)
+    private var restore: String? = null
+    private var settingsPage: SettingsPage? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        restore = savedInstanceState?.getString("section")
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun createPage(): GamePage = SettingsPage(this, this).also {
+        it.restoreSection(restore)
+        settingsPage = it
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        settingsPage?.section?.let { outState.putString("section", it.name) }
+    }
+
+    /** Back inside a section goes to the list first. */
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (settingsPage?.goHome() != true) super.onBackPressed()
+    }
 }
