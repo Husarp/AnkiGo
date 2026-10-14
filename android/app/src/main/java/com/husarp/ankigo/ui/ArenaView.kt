@@ -67,6 +67,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val eNums = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private val eHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0)
     private val eHp = BarView(ctx)
+    private val eHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }   // HP bar + numbers (side by side on compact cards)
     private val enemyCard = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         background = Ui.rounded(translucentCard(ctx), 12, ctx)
@@ -90,11 +91,15 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val pXpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val pXp = BarView(ctx)
     private val pNums = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+    private val pHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     private val playerCard = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         background = Ui.rounded(translucentCard(ctx), 12, ctx)
         setPadding(dpi(10), dpi(7), dpi(10), dpi(8))
     }
+
+    private val eRow = NameRow(ctx, eName, eLevel)
+    private val pRow = NameRow(ctx, pName, pLevel)
 
     // ---- catch moment ----
     private val stars = PanelStars(ctx).apply { visibility = GONE }
@@ -125,6 +130,20 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     private var compact = false
     private var studyStrip = false
+
+    // The panel's decisions ([configure]) and what the study layouts want ([setCompact], [setStudyStrip]).
+    private var floorSp = 0f
+    private var cardsCompact = false
+    private var xpShown = true
+    private var wantTypes = true
+    private var wantXpText = true
+    private var wantXpBar = true
+    private var tagVis = VISIBLE
+    private var plan: ArenaGeo.Plan? = null
+
+    /** True while the two stat cards sit in the middle column between the sprites (the corner layout would cover one). */
+    val middleLayout: Boolean get() = plan?.middle == true
+
     private val live = LinkedHashSet<Animator>()
     private val floats = ArrayList<View>()
     private val bobs = ArrayList<ObjectAnimator>()
@@ -140,32 +159,32 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         playerHolder.addView(playerSprite, FrameLayout.LayoutParams(-1, -1))
 
         // enemy card: name + Lv, type chips, HP bar (no numbers)
-        val eRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         eRow.addView(eName, LinearLayout.LayoutParams(0, -2, 1f))
         eRow.addView(eLevel, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(5) })
         enemyCard.addView(eRow, LinearLayout.LayoutParams(-1, -2))
         eTypeRow.addView(eTypes, LinearLayout.LayoutParams(-2, -2))
         eTypeRow.addView(ePill, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(3) })
         enemyCard.addView(eTypeRow, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dpi(4) })
-        enemyCard.addView(eHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
+        eHpBox.addView(eHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
         eNums.addView(eHpText, LinearLayout.LayoutParams(0, -2, 1f))
         eNums.addView(ePillHp, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(4) })
-        enemyCard.addView(eNums, LinearLayout.LayoutParams(-1, -2))
+        eHpBox.addView(eNums, LinearLayout.LayoutParams(-1, -2))
+        enemyCard.addView(eHpBox, LinearLayout.LayoutParams(-1, -2))
         enemyBlock.addView(enemyCard, LinearLayout.LayoutParams(-1, -2))
         enemyBlock.addView(catchTag, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = -dpi(6) })
         catchTag.setOnClickListener { onCatchTagTap() }
 
         // player card: name + Lv, HP bar, one row "58 / 71" left + "XP 640 / 1000" right, XP bar
-        val pRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         pRow.addView(pName, LinearLayout.LayoutParams(0, -2, 1f))
         pRow.addView(pPill, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(4) })
         pRow.addView(pLevel, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(5) })
         playerCard.addView(pRow, LinearLayout.LayoutParams(-1, -2))
-        playerCard.addView(pHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
+        pHpBox.addView(pHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
         pNums.addView(pHpText, LinearLayout.LayoutParams(0, -2, 1f))
         pNums.addView(pPillHp, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(4) })
         pNums.addView(pXpText, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(6) })
-        playerCard.addView(pNums, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(3) })
+        pHpBox.addView(pNums, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(3) })
+        playerCard.addView(pHpBox, LinearLayout.LayoutParams(-1, -2))
         pXp.setTrackColor(Ui.c(ctx, R.color.ag_s0))
         playerCard.addView(pXp, LinearLayout.LayoutParams(-1, dpi(3)).also { it.topMargin = dpi(4) })
 
@@ -190,7 +209,6 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // ---------------------------------------------------------------- layout
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val ref = Ui.dp(context, 212f)
         val minH = Ui.dp(context, if (compact) 70f else 140f).toInt()
         val hMode = MeasureSpec.getMode(heightMeasureSpec)
         val hSize = MeasureSpec.getSize(heightMeasureSpec)
@@ -200,6 +218,29 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             else -> minH
         }
         val w = MeasureSpec.getSize(widthMeasureSpec)
+        if (compact || studyStrip) layoutStudy(w, h) else layoutPlan(w, h)
+        fitEnemyPill(enemyBlock.layoutParams.width)
+        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
+    }
+
+    /** The normal arena: sprites, platforms and cards from [ArenaGeo], which also decides corners or middle column. */
+    private fun layoutPlan(w: Int, h: Int) {
+        val d = Ui.dp(context, 1f)
+        val p = ArenaGeo.plan(w / d, h / d, ArenaGeo.cards(floorSp, cardsCompact, xpShown), cardsCompact)
+        plan = p
+        fun put(v: View, b: ArenaGeo.Box, wrapHeight: Boolean = false) =
+            place(v, (b.w * d).toInt(), if (wrapHeight) -2 else (b.h * d).toInt(), Gravity.TOP or Gravity.LEFT, (b.x * d).toInt(), (b.y * d).toInt(), 0, 0)
+        put(platEnemy, p.wildPlat)
+        put(platPlayer, p.playerPlat)
+        put(enemyHolder, p.wildSprite)
+        put(playerHolder, p.playerSprite)
+        put(enemyBlock, p.wildCard, wrapHeight = true)
+        put(playerCard, p.playerCard, wrapHeight = true)
+    }
+
+    /** The study strips' own geometry (the approved mockup values), unchanged. */
+    private fun layoutStudy(w: Int, h: Int) {
+        val ref = Ui.dp(context, 212f)
         // Sprite boxes and platforms follow the arena height; a tall window pushes the wild one a bit lower so the
         // two sides don't sit in opposite corners.
         val s = (h / ref).coerceIn(if (compact) 0.45f else 0.66f, 1.5f)
@@ -225,8 +266,6 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             place(enemyBlock, min(dpi(138), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
             place(playerCard, min(dpi(142), infoMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(8), dpi(8))
         }
-        fitEnemyPill(enemyBlock.layoutParams.width)
-        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
     }
 
     private fun place(v: View, w: Int, h: Int, gravity: Int, left: Int, top: Int, right: Int, bottom: Int) {
@@ -292,7 +331,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         } else name
         eLevel.text = "Lv $level"
         eTypes.removeAllViews()
-        for (t in types) eTypes.addView(Ui.typeChip(context, t), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
+        for (t in types) eTypes.addView(Ui.typeChip(context, t).also { TextFloor.apply(it, floorSp) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
     }
 
     fun setEnemyHp(hp: Int, max: Int, animate: Boolean) {
@@ -306,7 +345,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      * auto rule will do when the wild one faints. Tapping it flips the choice (the activity handles the tap).
      */
     fun setCatchTag(willCatch: Boolean, isNew: Boolean, visible: Boolean = true) {
-        catchTag.visibility = if (compact) GONE else if (visible) VISIBLE else INVISIBLE
+        tagVis = if (visible) VISIBLE else INVISIBLE
+        catchTag.visibility = if (compact || cardsCompact) GONE else tagVis
         val (text, mauve) = when {
             willCatch && isNew -> "NEW · will catch" to true
             willCatch -> "will catch" to true
@@ -318,52 +358,102 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /**
-     * Small-window look (picture-in-picture, floating battle): the info cards keep name, level, HP bar and HP numbers
-     * (no type chips, catch tag, XP text or XP bar), so the two cards never collide in a ~240x130 dp window.
+     * The study strips' compact look (narrow split-screen strip): the info cards keep name, level, HP bar and HP numbers
+     * (no type chips, catch tag, XP text or XP bar). Picture-in-picture and the floating battle do not use it any more:
+     * they show the normal arena, scaled by the panel ([configure]).
      */
     fun setCompact(on: Boolean) {
         if (compact == on) return
         compact = on
-        val small = if (on) GONE else VISIBLE
-        eTypes.visibility = small
-        eTypeRow.visibility = small
-        pXpText.visibility = small
-        pXp.visibility = small
-        if (on) catchTag.visibility = GONE
+        wantTypes = !on
+        wantXpText = !on
+        wantXpBar = !on
         val name = if (on) 12f else 14f
         val lvl = if (on) 11f else 12f
-        for (t in listOf(eName, pName)) t.setTextSize(TypedValue.COMPLEX_UNIT_SP, name)
-        for (t in listOf(eLevel, pLevel)) t.setTextSize(TypedValue.COMPLEX_UNIT_SP, lvl)
+        for (t in listOf(eName, pName)) sz(t, name)
+        for (t in listOf(eLevel, pLevel)) sz(t, lvl)
         val padV = if (on) 5 else 7
         for (c in listOf(enemyCard, playerCard)) c.setPadding(dpi(10), dpi(padV), dpi(10), dpi(if (on) 6 else 8))
-        bannerTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (on) 15f else 20f)
+        sz(bannerTitle, if (on) 15f else 20f)
         banner.minimumWidth = dpi(if (on) 110 else 170)
-        updateStatusPills()
-        requestLayout()
+        updateCards()
     }
 
-    /** Restores the type and numeric rows hidden by PiP compact mode, with the study mockup's metrics. */
+    /** Restores the type and numeric rows hidden by [setCompact], with the study mockup's metrics. */
     fun setStudyStrip(on: Boolean) {
         studyStrip = on
-        eTypes.visibility = VISIBLE
-        eTypeRow.visibility = VISIBLE
-        pNums.visibility = VISIBLE
-        pXpText.visibility = VISIBLE
-        pXp.visibility = if (on) GONE else VISIBLE
-        for (t in listOf(eName, pName)) t.textSize = if (on) 12.5f else 14f
-        updateStatusPills()
-        for (t in listOf(eLevel, pLevel)) t.textSize = if (on) 11f else 12f
-        for (t in listOf(eHpText, pHpText, pXpText)) t.textSize = if (on) 10f else 11f
+        wantTypes = true
+        wantXpText = true
+        wantXpBar = !on
+        for (t in listOf(eName, pName)) sz(t, if (on) 12.5f else 14f)
+        for (t in listOf(eLevel, pLevel)) sz(t, if (on) 11f else 12f)
         for (c in listOf(enemyCard, playerCard)) {
             c.elevation = Ui.dp(context, 2f)
             c.background = Ui.rounded(translucentCard(context), if (on) 10 else 12, context)
             c.setPadding(dpi(if (on) 8 else 10), dpi(if (on) 5 else 7), dpi(if (on) 8 else 10), dpi(if (on) 6 else 8))
         }
-        for (bar in listOf(eHp, pHp)) (bar.layoutParams as LinearLayout.LayoutParams).apply {
-            height = dpi(if (on) 6 else 7); topMargin = dpi(if (on) 4 else 6)
-        }
+        updateCards()
+    }
+
+    /**
+     * What the panel decided for this window ([PanelFit.Fit]): the text floor in sp, compact stat cards (the pref: name +
+     * a thin HP bar with the HP number beside it), and whether the XP numbers show.
+     */
+    fun configure(floor: Float, compactCards: Boolean, xp: Boolean) {
+        if (floor == floorSp && compactCards == cardsCompact && xp == xpShown) return
+        floorSp = floor
+        cardsCompact = compactCards
+        xpShown = xp
+        updateCards()
+    }
+
+    /** Applies the card flags: what shows, the HP rows' shape, the text floor. Cheap; called whenever a flag changes. */
+    private fun updateCards() {
+        val full = !cardsCompact
+        fun vis(on: Boolean) = if (on) VISIBLE else GONE
+        eTypes.visibility = vis(wantTypes && full)
+        eTypeRow.visibility = vis(wantTypes && full)
+        pXpText.visibility = vis(wantXpText && full && xpShown)
+        pXp.visibility = vis(wantXpBar && full)
+        catchTag.visibility = if (compact || cardsCompact) GONE else tagVis
+        val hpSp = if (cardsCompact || studyStrip) 10f else 11f
+        for (t in listOf(eHpText, pHpText, pXpText)) sz(t, hpSp)
+        hpRow(eHpBox, eHp, eNums, eHpText, 0)
+        hpRow(pHpBox, pHp, pNums, pHpText, 3)
+        (pXp.layoutParams as LinearLayout.LayoutParams).height = dpf(3f * TextMath.bar(floorSp))
+        eRow.tight = cardsCompact
+        pRow.tight = cardsCompact
+        updateStatusPills()
+        TextFloor.apply(this, floorSp)
         requestLayout()
     }
+
+    /** Full card: the HP bar with the numbers under it. Compact card: bar and small number on one line. */
+    private fun hpRow(box: LinearLayout, bar: BarView, nums: LinearLayout, text: TextView, numsTop: Int) {
+        val k = TextMath.bar(floorSp)
+        val barLp = bar.layoutParams as LinearLayout.LayoutParams
+        val numsLp = nums.layoutParams as LinearLayout.LayoutParams
+        val textLp = text.layoutParams as LinearLayout.LayoutParams
+        if (cardsCompact) {
+            box.orientation = LinearLayout.HORIZONTAL
+            box.gravity = Gravity.CENTER_VERTICAL
+            barLp.width = 0; barLp.weight = 1f; barLp.height = dpf(5f * k); barLp.topMargin = 0; barLp.marginEnd = dpi(6)
+            numsLp.width = -2; numsLp.topMargin = 0
+            textLp.width = -2; textLp.weight = 0f
+        } else {
+            box.orientation = LinearLayout.VERTICAL
+            box.gravity = Gravity.START
+            barLp.width = -1; barLp.weight = 0f; barLp.marginEnd = 0
+            barLp.height = dpf((if (studyStrip) 6f else 7f) * k); barLp.topMargin = dpi(if (studyStrip) 4 else 6)
+            numsLp.width = -1; numsLp.topMargin = dpi(numsTop)
+            textLp.width = 0; textLp.weight = 1f
+        }
+        bar.layoutParams = barLp
+        nums.layoutParams = numsLp
+        text.layoutParams = textLp
+    }
+
+    private fun sz(tv: TextView, sp: Float) = TextFloor.set(tv, sp, floorSp)
 
     // ---------------------------------------------------------------- status pills
 
@@ -493,6 +583,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             FloatStyle.MISS -> 13f to R.color.ag_sub0
         }
         val tv = Ui.text(context, size, 900, colorRes)
+        TextFloor.set(tv, size, floorSp)
         tv.text = text
         tv.setShadowLayer(Ui.dp(context, 6f), 0f, Ui.dp(context, 1f), Ui.c(context, R.color.ag_base))
         tv.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
@@ -650,6 +741,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun dpi(v: Int) = Ui.dp(context, v)
+    private fun dpf(v: Float) = (v * resources.displayMetrics.density + 0.5f).toInt()
 
     companion object {
         private fun translucentCard(ctx: Context): Int = (Ui.c(ctx, R.color.ag_card) and 0x00FFFFFF) or (0xEB shl 24)
@@ -663,6 +755,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
  * "Galarian Darmanitan" stay readable. The scale is worked out from the text at full width, so a second pass keeps it.
  */
 private class FitName(ctx: Context) : TextView(ctx) {
+    /** The width of the name at full letter width. */
+    fun naturalWidth(): Int = kotlin.math.ceil(paint.measureText(text, 0, text.length) / textScaleX.toDouble()).toInt() + compoundPaddingLeft + compoundPaddingRight
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         val t = text
@@ -687,6 +782,33 @@ private class FitName(ctx: Context) : TextView(ctx) {
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }
+    }
+}
+
+/**
+ * The name line of an info card: name, (status pill), "Lv". On compact cards [tight] keeps "Lv" only when the name still
+ * fits at its full letter width next to it; otherwise "Lv" is left out rather than shrinking the name.
+ */
+private class NameRow(ctx: Context, private val name: FitName, private val level: TextView) : LinearLayout(ctx) {
+    var tight = false
+        set(v) { field = v; if (!v) level.visibility = VISIBLE; requestLayout() }
+
+    init { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        if (tight && name.text.isNotEmpty()) {
+            val un = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+            var others = 0
+            for (i in 0 until childCount) {
+                val c = getChildAt(i)
+                if (c === name || (c !== level && c.visibility == GONE)) continue
+                c.measure(un, un)
+                others += c.measuredWidth + (c.layoutParams as MarginLayoutParams).marginStart
+            }
+            val avail = MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
+            level.visibility = if (name.naturalWidth() + others <= avail) VISIBLE else GONE
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
     }
 }
 

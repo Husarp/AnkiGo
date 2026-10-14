@@ -15,16 +15,15 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextUtils
 import android.text.style.ForegroundColorSpan
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.annotation.ColorRes
+import androidx.annotation.DrawableRes
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.data.SpriteKind
@@ -39,6 +38,7 @@ import com.husarp.ankigo.game.StatCalc
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /** Colour family of a log line: the border and the pill (mockup `.log.again` ... `.log.sys`). */
 enum class LogKind(@ColorRes val tone: Int, @ColorRes val border: Int) {
@@ -52,8 +52,12 @@ enum class LogKind(@ColorRes val tone: Int, @ColorRes val border: Int) {
 
 /**
  * The AnkiGo battle panel (mockup frames A/B below the AnkiDroid half): status strip, [arena], one log card and the
- * footer (goal bar, menu, chips). It only draws; [EventPlayer] tells it what happened and [renderAll] redraws
- * everything from the saved game state.
+ * footer (goal bar, tool buttons, menu, chips). It only draws; [EventPlayer] tells it what happened and [renderAll]
+ * redraws everything from the saved game state.
+ *
+ * Whatever the window size, the panel is laid out at a virtual size and drawn scaled by one factor ([PanelFit]): all
+ * parts shrink together, texts keep an 8 sp floor, and only in a window too small even for that do the stats bar, the
+ * log line and the XP numbers step out, in that order. Nothing scrolls.
  */
 class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     val arena = ArenaView(ctx)
@@ -95,9 +99,18 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     }
     private var accentAnim: ValueAnimator? = null
     private var logSize = 13f
-    private var compact = false
+
+    // ---- modes ----
+    /** Picture-in-picture or floating battle ([setCompact] outside the study screens): the normal panel, scaled. */
+    private var small = false
+    /** The study strip ([setStudyLayout]): the old stripped-down look (one log line, no footer), never scaled. */
+    private var legacy = false
     private var cornerClearance = 0
     private var study = false
+    private var statsBarSmall = true
+    private var compactCards = false
+    private var applied: PanelFit.Fit? = null
+    private var fit = PanelFit.Fit(1f, 0f, 0f, 0f, stats = true, log = true, xp = true, tools = true, logLines = 2, compactCards = false, middle = false, ok = true)
     private val chargePips = StudyUi.row(ctx).apply { visibility = GONE }
     private val studyCharge = StudyCharge()
     private val pips = List(4) { View(ctx) }
@@ -105,20 +118,16 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var paused = false
     private var statusOk = true
 
-    // ---- layout parts kept so setCompact can rearrange them ----
+    // ---- layout parts: the column is laid out at the virtual size and drawn scaled inside [scaler] ----
+    private val scaler = FrameLayout(ctx)
     private val column = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     private val footer = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dpi(10), dpi(8), dpi(10), dpi(8))
-    }
-    private val scroll = ScrollView(ctx).apply {
-        isFillViewport = true
-        isVerticalScrollBarEnabled = false
-        overScrollMode = OVER_SCROLL_NEVER
+        setPadding(dpi(10), dpi(9), dpi(10), dpi(9))
     }
     private val logLp = LinearLayout.LayoutParams(-1, dpi(52)).also { it.setMargins(dpi(10), dpi(8), dpi(10), 0) }
 
-    /** "Paused" pill at the start of the one-line log (compact mode only; it replaces the hidden log pill). */
+    /** "Paused" pill at the start of the one-line log (small windows and the study strip; it replaces the log pill). */
     private val pausedPill = Ui.text(ctx, 10f, 900, R.color.ag_crust).apply {
         text = "Paused"
         textSize = 9.5f
@@ -132,7 +141,12 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         setGradient(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_pink))
     }
     private val goalText = Ui.text(ctx, 12f, 900, R.color.ag_text).apply { maxLines = 1 }
-    private val menuButton = FrameLayout(ctx)
+    private val goalBarLp = LinearLayout.LayoutParams(0, dpi(8), 1f).also { it.marginEnd = dpi(8) }
+    private val goalRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    /** The tool buttons and the menu button, which show and hide together ([setFooterTools], and never in small windows). */
+    private val tools = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    private var toolsWanted = true
+    private val menuButton = iconButton(R.drawable.ic_menu, "Menu: Team, Pokédex, Shop, Settings") { onMenu(it) }
     private val comboChip = Ui.chip(ctx, R.drawable.ic_bolt, R.color.ag_sub0)
     private val streakChip = Ui.chip(ctx, R.drawable.ic_flame, R.color.ag_red)
     private val coinChip = Ui.chip(ctx, R.drawable.ic_coin, R.color.ag_yellow)
@@ -159,23 +173,14 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
         setLog(LogKind.NEUTRAL, "READY", "Waiting for your first answer in AnkiDroid.", pop = false)
 
-        // footer
-        val menuIcon = ImageView(ctx).apply {
-            setImageResource(R.drawable.ic_menu)
-            setColorFilter(Ui.c(ctx, R.color.ag_sub0), PorterDuff.Mode.SRC_IN)
-            setPadding(dpi(5), dpi(5), dpi(5), dpi(5))
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 8, ctx)
-        }
-        menuButton.addView(menuIcon, LayoutParams(dpi(26), dpi(26), Gravity.CENTER))
-        menuButton.contentDescription = "Menu: Team, Pokédex, Shop, Settings"
-        menuButton.setOnClickListener { onMenu(menuButton) }
-        val goalRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        goalRow.addView(goalBar, LinearLayout.LayoutParams(0, dpi(8), 1f).also { it.marginEnd = dpi(8) })
+        // footer: goal bar, goal text, tool buttons, menu; then the chips
+        goalRow.addView(goalBar, goalBarLp)
         goalRow.addView(goalText, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(4) })
-        goalRow.addView(menuButton, LinearLayout.LayoutParams(dpi(34), dpi(30)))
+        tools.addView(menuButton, buttonLp())
+        goalRow.addView(tools, LinearLayout.LayoutParams(-2, -2))
 
         chips.addView(comboChip); chips.addView(streakChip); chips.addView(coinChip); chips.addView(itemChip); chips.addView(ballChip)
-        chips.hideOrder = listOf(itemChip, streakChip) // least important first
+        chips.hideOrder = listOf(itemChip, streakChip) // least important first (only when even the scaled row is too wide)
         ballChip.setOnClickListener { onBalls() }
         ballChip.contentDescription = "Poké Balls"
 
@@ -187,10 +192,108 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         column.addView(logBox, logLp)
         column.addView(footer, LinearLayout.LayoutParams(-1, -2))
 
-        // A very short window scrolls instead of squeezing the arena below ~140 dp.
-        scroll.addView(column, ViewGroup.LayoutParams(-1, -2))
-        addView(scroll, LayoutParams(-1, -1))
-        addView(overlay, LayoutParams(-1, -1))
+        scaler.addView(column, LayoutParams(-1, -1))
+        scaler.addView(overlay, LayoutParams(-1, -1))
+        addView(scaler, LayoutParams(-1, -1))
+        refreshPrefs()
+    }
+
+    // ---------------------------------------------------------------- scaling
+
+    /**
+     * Lays the column out at the window's size divided by the scale and draws it scaled (pivot at the corner), so
+     * touches still land on the right view. [PanelFit] decides scale, parts and card layout from the window.
+     */
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val d = resources.displayMetrics.density
+        val w = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) dpi(PanelFit.REF_W_STATS.toInt()) else MeasureSpec.getSize(widthMeasureSpec)
+        val h = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) dpi(340) else MeasureSpec.getSize(heightMeasureSpec)
+        val f = if (legacy) PanelFit.Fit(1f, w / d, h / d, 0f, stats = false, log = true, xp = true, tools = false, logLines = 1, compactCards = compactCards, middle = false, ok = true)
+        else PanelFit.decide(w / d, h / d, small, statsBarSmall, compactCards, strip = !statusOk, corner = if (small) cornerClearance / d else 0f)
+        apply(f)
+        scaler.measure(MeasureSpec.makeMeasureSpec((w / f.scale).roundToInt(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec((h / f.scale).roundToInt(), MeasureSpec.EXACTLY))
+        scaler.pivotX = 0f; scaler.pivotY = 0f
+        scaler.scaleX = f.scale; scaler.scaleY = f.scale
+        setMeasuredDimension(w, h)
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        scaler.layout(0, 0, scaler.measuredWidth, scaler.measuredHeight)
+    }
+
+    /** Applies a decision: which parts show, the text floor, the log's height. Does nothing when it did not change. */
+    private fun apply(f: PanelFit.Fit) {
+        fit = f
+        if (f == applied) return
+        applied = f
+        arena.configure(f.floorSp, f.compactCards, f.xp)
+        strip.visibility = if (statusOk || legacy) GONE else VISIBLE
+        stripText.maxLines = if (small) 1 else 2
+        footer.visibility = if (f.stats) VISIBLE else GONE
+        logBox.visibility = if (f.log) VISIBLE else GONE
+        tools.visibility = if (f.tools && toolsWanted) VISIBLE else GONE
+        val k = TextMath.bar(f.floorSp)
+        goalBarLp.height = dpf(8f * k)
+        goalBar.layoutParams = goalBarLp
+        // clearance for a resize grip over the bottom-right corner: the footer's end, or the log's when no footer shows
+        val clear = if (small) (cornerClearance / f.scale).roundToInt() else 0
+        footer.setPadding(dpi(10), dpi(9), dpi(10) + if (f.stats) clear else 0, dpi(9))
+        if (!legacy) {
+            logLp.height = dpf(TextMath.logBox(f.logLines, f.floorSp))
+            logLp.setMargins(dpi(10), dpi(8), dpi(10) + if (f.stats) 0 else clear, 0)
+            logBox.layoutParams = logLp
+            logText.maxLines = f.logLines
+        }
+        for (v in listOf(strip, logBox, footer)) TextFloor.apply(v, f.floorSp)
+        requestLayout()
+    }
+
+    private fun dpf(v: Float) = (v * resources.displayMetrics.density + 0.5f).toInt()
+
+    /** The window's decision, for tests: scale, parts, card layout. */
+    internal val currentFit: PanelFit.Fit get() = fit
+
+    /** Re-reads the two battle panel prefs (stats bar in small windows, compact stat cards) and lays out again. */
+    fun refreshPrefs() {
+        statsBarSmall = AppPrefs.statsBarSmall(context)
+        compactCards = AppPrefs.compactCards(context)
+        applied = null
+        requestLayout()
+    }
+
+    // ---------------------------------------------------------------- footer tool buttons
+
+    /** A small rounded icon button like the menu button: a 48 dp touch height around the 26 dp look. */
+    private fun iconButton(@DrawableRes icon: Int, description: String, onClick: (View) -> Unit): View {
+        val box = FrameLayout(context)
+        box.addView(ImageView(context).apply {
+            setImageResource(icon)
+            setColorFilter(Ui.c(context, R.color.ag_sub0), PorterDuff.Mode.SRC_IN)
+            setPadding(dpi(5), dpi(5), dpi(5), dpi(5))
+            background = Ui.rounded(Ui.c(context, R.color.ag_mantle), 8, context)
+        }, LayoutParams(dpi(26), dpi(26), Gravity.CENTER))
+        box.contentDescription = description
+        box.setOnClickListener { onClick(box) }
+        return box
+    }
+
+    private fun buttonLp() = LinearLayout.LayoutParams(dpi(40), dpi(48)).also { it.setMargins(0, -dpi(9), 0, -dpi(9)) }
+
+    /**
+     * Adds a small icon button to the goal row, before the menu button (it looks like the menu button). Returns the
+     * button. Tool buttons show and hide with the menu button ([setFooterTools]) and are never shown in small windows.
+     */
+    fun addToolButton(@DrawableRes icon: Int, description: String, onClick: (View) -> Unit): View {
+        val b = iconButton(icon, description, onClick)
+        tools.addView(b, tools.indexOfChild(menuButton), buttonLp())
+        return b
+    }
+
+    /** Shows or hides the tool buttons and the menu button together; the goal bar, goal text and chips stay. */
+    fun setFooterTools(visible: Boolean) {
+        toolsWanted = visible
+        applied = null
+        requestLayout()
     }
 
     // ---------------------------------------------------------------- strip
@@ -198,51 +301,68 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     /** Red strip above the arena while detection has a problem; [canGrant] adds the "Grant" button. */
     fun setStatus(ok: Boolean, text: String, canGrant: Boolean) {
         statusOk = ok
-        strip.visibility = if (ok || compact) GONE else VISIBLE
+        strip.visibility = if (ok || legacy) GONE else VISIBLE
         stripText.text = text
         grant.visibility = if (canGrant) VISIBLE else GONE
+        requestLayout()
     }
 
     /**
-     * Compact battle-only layout for picture-in-picture and the floating battle window: the arena and a one-line log
-     * only (no status strip, goal bar, menu or chips). False = the normal panel. (TICKET T25 implements it.)
+     * Small-window mode for picture-in-picture and the floating battle window: the same parts as the normal panel,
+     * scaled to the window ([PanelFit]); no menu or tool buttons, one log line, the stats bar only with
+     * [AppPrefs.statsBarSmall]. False = the normal panel. On the study screens it is the old stripped-down strip.
      */
     fun setCompact(on: Boolean) {
-        if (compact == on) return
-        compact = on
+        if (study) setLegacy(on) else setSmall(on)
+    }
+
+    private fun setSmall(on: Boolean) {
+        if (small == on) return
+        small = on
+        applyLogLook()
+        updatePausedPill()
+        applied = null
+        requestLayout()
+    }
+
+    /** Log card paddings, line count and pill for the current mode. */
+    private fun applyLogLook() {
+        val one = small || legacy
+        logText.accessibilityLiveRegion = if (context.getSharedPreferences("study", 0).getBoolean("speakBattle", true)) View.ACCESSIBILITY_LIVE_REGION_POLITE else View.ACCESSIBILITY_LIVE_REGION_NONE
+        logText.maxLines = if (one) 1 else 2
+        if (!legacy) logBox.setPadding(dpi(14), dpi(if (small) 4 else 8), dpi(10), dpi(if (small) 4 else 8))
+        logPill?.visibility = if (small && paused) GONE else VISIBLE
+        TextFloor.set(logText, if (legacy) 12f else logSize, fit.floorSp)
+    }
+
+    /** The study strip: the old compact look (one 26 dp log line, no footer, no strip), at scale 1. */
+    private fun setLegacy(on: Boolean) {
+        if (legacy == on) return
+        legacy = on
         arena.setCompact(on)
-        // The normal panel scrolls below ~140 dp; the compact one just fills the window.
-        if (on) {
-            scroll.removeView(column)
-            addView(column, 0, LayoutParams(-1, -1))
-        } else {
-            removeView(column)
-            scroll.addView(column, ViewGroup.LayoutParams(-1, -2))
-        }
-        scroll.visibility = if (on) GONE else VISIBLE
         strip.visibility = if (on || statusOk) GONE else VISIBLE
-        footer.visibility = if (on) GONE else VISIBLE
         logLp.height = if (on) dpi(26) else dpi(52)
         if (on) logLp.setMargins(dpi(6), dpi(3), dpi(6) + cornerClearance, dpi(3)) else logLp.setMargins(dpi(10), dpi(8), dpi(10), 0)
         logBox.setPadding(if (on) dpi(10) else dpi(14), if (on) dpi(2) else dpi(8), dpi(8), if (on) dpi(2) else dpi(8))
-        logText.accessibilityLiveRegion = if (context.getSharedPreferences("study", 0).getBoolean("speakBattle", true)) View.ACCESSIBILITY_LIVE_REGION_POLITE else View.ACCESSIBILITY_LIVE_REGION_NONE
-        logText.maxLines = if (on) 1 else 2
-        logText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (on) 11f else logSize)
-        logPill?.visibility = if (on) GONE else VISIBLE
+        applyLogLook()
         logBox.layoutParams = logLp
         updatePausedPill()
+        applied = null
+        requestLayout()
     }
 
     /**
-     * Extra space [px] kept free at the right end of the compact log line, for a resize grip drawn over the bottom-right
-     * corner (the floating battle window). 0 = none (picture-in-picture).
+     * Extra space [px] kept free at the right end of the bottom row (the stats bar, or the log line when there is none),
+     * for a resize grip drawn over the bottom-right corner (the floating battle window). 0 = none (picture-in-picture).
      */
     fun setCornerClearance(px: Int) {
         cornerClearance = px
-        if (compact) { logLp.setMargins(dpi(6), dpi(3), dpi(6) + px, dpi(3)); logBox.layoutParams = logLp }
+        if (legacy) { logLp.setMargins(dpi(6), dpi(3), dpi(6) + px, dpi(3)); logBox.layoutParams = logLp }
+        applied = null
+        requestLayout()
     }
 
-    /** Study-only presentation; PiP and floating windows retain the existing compact layout. */
+    /** Study-only presentation; PiP and floating windows scale the normal panel instead. */
     fun setStudyLayout(small: Boolean, mini: Boolean) {
         study = true
         setCompact(small)
@@ -253,7 +373,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         if (small) {
             logLp.setMargins(0, 0, 0, 0)
             logBox.setPadding(dpi(12), dpi(5), dpi(10), dpi(5))
-            logText.textSize = 12f
+            TextFloor.set(logText, 12f, 0f)
             logBg.cornerRadius = 0f
         } else logBg.cornerRadius = Ui.dp(context, 12f)
         logPill?.let { styleStudyPill(it) }
@@ -291,21 +411,22 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private fun styleStudyPill(p: TextView) {
         if (!study) return
         p.visibility = VISIBLE
-        if (compact) {
+        if (legacy) {
             (p.background as? android.graphics.drawable.GradientDrawable)?.cornerRadius = Ui.dp(context, 6f)
-            p.textSize = 9.5f
+            TextFloor.set(p, 9.5f, 0f)
             p.setPadding(dpi(6), dpi(2), dpi(6), dpi(2))
             (p.layoutParams as LinearLayout.LayoutParams).marginEnd = dpi(7)
         }
     }
 
-    /** Shows a small "Paused" pill over the arena while paused (compact mode only; the normal panel has the strip). */
+    /** Shows a small "Paused" pill in the log while paused (small windows and the study strip; the normal panel has the strip). */
     fun setPaused(p: Boolean) {
         paused = p
         updatePausedPill()
+        logPill?.visibility = if (small && paused) GONE else VISIBLE
     }
 
-    private fun updatePausedPill() { pausedPill.visibility = if (compact && paused) VISIBLE else GONE }
+    private fun updatePausedPill() { pausedPill.visibility = if ((small || legacy) && paused) VISIBLE else GONE }
 
     // ---------------------------------------------------------------- log
 
@@ -317,11 +438,12 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         logPill?.let { logBox.removeView(it) }
         val p = Ui.pill(context, pill, kind.tone)
         logBox.addView(p, 0, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(8) })
-        p.visibility = if (compact) GONE else VISIBLE
+        p.visibility = if (small && paused) GONE else VISIBLE
         logPill = p
+        TextFloor.apply(p, fit.floorSp)
         styleStudyPill(p)
         logSize = if (text.length > 64) 12f else 13f
-        logText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (compact) { if (study) 12f else 11f } else logSize)
+        TextFloor.set(logText, if (legacy) 12f else logSize, fit.floorSp)
         logText.text = PanelText.rich(context, text)
         val to = Ui.c(context, kind.border)
         accentAnim?.cancel()
@@ -391,13 +513,15 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     /** "+40 ₽" floats up from the coin chip. */
     fun floatAtCoins(text: String) {
         val tv = Ui.text(context, 13f, 900, R.color.ag_yellow)
+        TextFloor.set(tv, 13f, fit.floorSp)
         tv.text = text
         tv.setShadowLayer(Ui.dp(context, 6f), 0f, Ui.dp(context, 1f), Ui.c(context, R.color.ag_base))
+        // Screen coordinates are scaled; the overlay sits inside the scaled container, so convert back to its own dp.
         val a = IntArray(2); val b = IntArray(2)
         coinChip.getLocationOnScreen(a); overlay.getLocationOnScreen(b)
         val lp = LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT)
-        lp.leftMargin = a[0] - b[0] + dpi(6)
-        lp.topMargin = a[1] - b[1] - dpi(14)
+        lp.leftMargin = ((a[0] - b[0]) / fit.scale).roundToInt() + dpi(6)
+        lp.topMargin = ((a[1] - b[1]) / fit.scale).roundToInt() - dpi(14)
         overlay.addView(tv, lp)
         tv.animate().translationY(-Ui.dp(context, 34f)).alpha(0f).setDuration(1000)
             .withEndAction { overlay.removeView(tv) }.start()
