@@ -11,6 +11,7 @@ import com.husarp.ankigo.Report
  * missing, error) opens the battle. Translucent, out of recents, finishes itself.
  */
 class WidgetTapActivity : AgActivity() {
+    override val showsUpdateBanner = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Anki.load(this)

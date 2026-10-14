@@ -82,6 +82,7 @@ internal object FirstRunJob {
  * 4 split-screen hint. Starts at the first step that isn't done and finishes with RESULT_OK after step 4.
  */
 class FirstRunActivity : AgActivity() {
+    override val showsUpdateBanner = false
     private val job get() = FirstRunJob.job
     private val prefs by lazy { getSharedPreferences("firstrun", MODE_PRIVATE) }
 

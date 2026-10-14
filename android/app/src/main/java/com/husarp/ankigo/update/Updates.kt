@@ -37,6 +37,7 @@ object Updates {
     private const val TIMEOUT_MS = 10_000
     private const val PREFS = "updates"
     private const val KEY_CHECK = "checkUpdates"
+    private const val KEY_HIDDEN_DAY = "bannerHiddenDay"
 
     /** The newest Android version on GitHub. [page] is its release page. */
     data class Latest(val version: String, val apkName: String, val apkUrl: String, val apkSize: Long, val page: String)
@@ -55,7 +56,6 @@ object Updates {
         val pageUrl: String = RELEASES_PAGE,     // the page of the release carrying the newest APK, for GITHUB
         val checking: Boolean = false,
         val message: String? = null,             // answer to a manual CHECK NOW
-        val bannerHidden: Boolean = false,
         val phase: Phase = Phase.Idle,
     )
 
@@ -64,7 +64,6 @@ object Updates {
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newCachedThreadPool()
-    private val gate = UpdateLogic.BannerGate()
     @Volatile private var lastCheckMs = 0L
     @Volatile private var pendingApk: File? = null
     /** The app's screen while it is in front: Android's screens are opened from it (same task, so Back returns
@@ -91,15 +90,17 @@ object Updates {
         if (on) autoCheck(ctx)
     }
 
-    /** The main-screen banner. (State.bannerHidden mirrors the gate so the screen redraws when ✕ is tapped.) */
-    fun bannerVisible(s: State, current: String): Boolean = gate.visible(s.latest?.version, current)
+    /** The banner shows for a newer version unless ✕ was tapped today (the day is kept in the prefs, so a restart keeps it hidden). */
+    fun bannerVisible(ctx: Context, s: State, current: String): Boolean =
+        UpdateLogic.bannerVisible(s.latest?.version, current, hiddenDay(ctx), UpdateLogic.dayOf(System.currentTimeMillis()))
+
+    private fun hiddenDay(ctx: Context): Long =
+        ctx.getSharedPreferences(PREFS, 0).getLong(KEY_HIDDEN_DAY, UpdateLogic.NO_DAY)
 
     fun available(s: State, current: String): Boolean = s.latest != null && UpdateLogic.isNewer(s.latest.version, current)
 
-    /** A fresh start of the app (not a return, not a rotation): the banner may show again; old APKs go. */
+    /** A fresh start of the app (not a return, not a rotation): old APKs go. (The banner's day rule is not reset.) */
     fun onAppStart(ctx: Context) {
-        gate.onAppStart()
-        change { it.copy(bannerHidden = false) }
         marker(ctx).delete()   // a fresh start is not a return from the "install unknown apps" screen
         // an old failure, or an installer that was left without installing, doesn't carry over to a fresh start
         change { if (it.phase is Phase.Failed || it.phase == Phase.Installing) it.copy(phase = Phase.Idle) else it }
@@ -137,7 +138,11 @@ object Updates {
 
     fun onPause(activity: Activity) { if (front?.get() === activity) front = null }
 
-    fun dismissBanner() { gate.dismiss(); change { it.copy(bannerHidden = true) } }
+    /** ✕ on the banner: hidden until tomorrow (local date). `change {}` redraws every banner. */
+    fun dismissBanner(ctx: Context) {
+        ctx.getSharedPreferences(PREFS, 0).edit().putLong(KEY_HIDDEN_DAY, UpdateLogic.dayOf(System.currentTimeMillis())).apply()
+        change { it }
+    }
 
     /** Automatic check: only when switched on, at most every 5 minutes, silent when it fails. */
     fun autoCheck(ctx: Context) {

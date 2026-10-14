@@ -15,7 +15,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import com.husarp.ankigo.*
 import com.husarp.ankigo.overlay.FloatBattleService
-import com.husarp.ankigo.update.Updates
 import java.util.concurrent.Executors
 
 /** AnkiDroid's own tree counts already include child decks and daily limits. */
@@ -58,8 +57,7 @@ class StudyDecksActivity : AgActivity() {
     }
     override fun onStart() { super.onStart(); BattleScreen.setVisible(this, true) }
     override fun onStop() { BattleScreen.setVisible(this, false); super.onStop() }
-    override fun onResume() { super.onResume(); Updates.onResume(this); FloatBattleService.startIfWanted(this); refresh() }
-    override fun onPause() { Updates.onPause(this); super.onPause() }
+    override fun onResume() { super.onResume(); FloatBattleService.startIfWanted(this); refresh() }
     override fun onDestroy() { generation++; io.shutdown(); super.onDestroy() }
     private fun refresh() {
         val token = ++generation

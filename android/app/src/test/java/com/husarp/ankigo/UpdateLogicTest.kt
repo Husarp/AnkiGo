@@ -1,5 +1,7 @@
 package com.husarp.ankigo
 
+import java.time.LocalDateTime
+import java.time.ZoneId
 import com.husarp.ankigo.update.UpdateLogic
 import com.husarp.ankigo.update.UpdateLogic.Asset
 import org.junit.Assert.assertEquals
@@ -64,15 +66,51 @@ class UpdateLogicTest {
         assertTrue(UpdateLogic.mayCheck(t - 1, t))                    // clock went back: don't get stuck
     }
 
-    @Test fun closingTheBannerHidesItUntilTheNextStart() {
-        val g = UpdateLogic.BannerGate()
-        assertTrue(g.visible("0.5.12", "0.5.11"))
-        assertFalse(g.visible("0.5.11", "0.5.11"))
-        assertFalse(g.visible(null, "0.5.11"))
-        g.dismiss()
-        assertFalse(g.visible("0.5.12", "0.5.11"))                   // coming back from another app: still hidden
-        assertFalse(g.visible("0.5.13", "0.5.11"))
-        g.onAppStart()
-        assertTrue(g.visible("0.5.12", "0.5.11"))                    // fresh start: back again, never hidden for good
+    private val warsaw = ZoneId.of("Europe/Warsaw")
+    private fun ms(y: Int, mo: Int, d: Int, h: Int, mi: Int) =
+        LocalDateTime.of(y, mo, d, h, mi).atZone(warsaw).toInstant().toEpochMilli()
+    private fun day(y: Int, mo: Int, d: Int, h: Int, mi: Int) = UpdateLogic.dayOf(ms(y, mo, d, h, mi), warsaw)
+
+    @Test fun neverClosedBannerIsVisibleWhenNewer() {
+        val today = day(2026, 10, 14, 12, 0)
+        assertTrue(UpdateLogic.bannerVisible("0.5.12", "0.5.11", UpdateLogic.NO_DAY, today))
+    }
+
+    @Test fun noNewerVersionMeansNoBanner() {
+        val today = day(2026, 10, 14, 12, 0)
+        assertFalse(UpdateLogic.bannerVisible("0.5.11", "0.5.11", UpdateLogic.NO_DAY, today))
+        assertFalse(UpdateLogic.bannerVisible("0.5.10", "0.5.11", UpdateLogic.NO_DAY, today))
+        assertFalse(UpdateLogic.bannerVisible(null, "0.5.11", UpdateLogic.NO_DAY, today))
+    }
+
+    @Test fun closedTodayStaysHiddenAllDayAndAcrossRestarts() {
+        val closed = day(2026, 10, 14, 9, 0)
+        // the rule takes no app-start input: a restart or a return from another app later that day is the same call
+        assertTrue(UpdateLogic.bannerHidden(closed, day(2026, 10, 14, 9, 1)))
+        assertFalse(UpdateLogic.bannerVisible("0.5.12", "0.5.11", closed, day(2026, 10, 14, 23, 59)))
+        assertFalse(UpdateLogic.bannerVisible("0.5.13", "0.5.11", closed, day(2026, 10, 14, 0, 0)))
+    }
+
+    @Test fun closedYesterdayIsVisibleAgain() {
+        val closed = day(2026, 10, 13, 12, 0)
+        assertTrue(UpdateLogic.bannerVisible("0.5.12", "0.5.11", closed, day(2026, 10, 14, 8, 0)))
+    }
+
+    @Test fun closedAt2359IsVisibleAtMidnight() {
+        val closed = day(2026, 10, 14, 23, 59)
+        assertFalse(UpdateLogic.bannerVisible("0.5.12", "0.5.11", closed, day(2026, 10, 14, 23, 59)))
+        assertTrue(UpdateLogic.bannerVisible("0.5.12", "0.5.11", closed, day(2026, 10, 15, 0, 0)))
+    }
+
+    @Test fun dstChangeNightsStillRollOverAtLocalMidnight() {
+        // Warsaw: clocks go forward 2026-03-29 (02:00 -> 03:00) and back 2026-10-25 (03:00 -> 02:00)
+        val springClosed = day(2026, 3, 28, 23, 59)
+        assertFalse(UpdateLogic.bannerVisible("0.5.12", "0.5.11", springClosed, day(2026, 3, 28, 23, 59)))
+        assertTrue(UpdateLogic.bannerVisible("0.5.12", "0.5.11", springClosed, day(2026, 3, 29, 0, 0)))
+        val springSunday = day(2026, 3, 29, 1, 59)
+        assertFalse(UpdateLogic.bannerVisible("0.5.12", "0.5.11", springSunday, day(2026, 3, 29, 3, 0)))   // same day across the gap
+        val autumnClosed = day(2026, 10, 25, 2, 30)   // the repeated hour: still the 25th
+        assertFalse(UpdateLogic.bannerVisible("0.5.12", "0.5.11", autumnClosed, UpdateLogic.dayOf(ms(2026, 10, 25, 23, 0), warsaw)))
+        assertTrue(UpdateLogic.bannerVisible("0.5.12", "0.5.11", autumnClosed, day(2026, 10, 26, 0, 0)))
     }
 }

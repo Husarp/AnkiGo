@@ -39,7 +39,6 @@ import com.husarp.ankigo.overlay.FloatBattleService
 import com.husarp.ankigo.overlay.FloatPage
 import com.husarp.ankigo.overlay.FloatScreens
 import com.husarp.ankigo.overlay.Overlay
-import com.husarp.ankigo.update.UpdateBanner
 import com.husarp.ankigo.update.Updates
 import java.io.File
 import java.text.SimpleDateFormat
@@ -56,7 +55,6 @@ import java.util.Locale
 class GameActivity : AgActivity() {
     private lateinit var content: FrameLayout
     private lateinit var nav: View
-    private lateinit var bannerHolder: FrameLayout   // holds the update banner so PiP can hide it whatever the banner decides
 
     private var panel: BattlePanelView? = null
     private var player: EventPlayer? = null
@@ -99,8 +97,6 @@ class GameActivity : AgActivity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Ui.c(this@GameActivity, R.color.ag_base))
         }
-        bannerHolder = FrameLayout(this).apply { addView(UpdateBanner(this@GameActivity), FrameLayout.LayoutParams(-1, -2)) }
-        root.addView(bannerHolder, LinearLayout.LayoutParams(-1, -2))
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         nav = BottomNav.create(this, BottomNav.Tab.BATTLE).also { it.visibility = View.GONE }
@@ -131,7 +127,6 @@ class GameActivity : AgActivity() {
 
     override fun onResume() {
         super.onResume()
-        Updates.onResume(this)
         val reviewDeck = intent.getLongExtra("reviewDeck", 0)
         if (reviewDeck != 0L) {
             intent.removeExtra("reviewDeck")
@@ -149,7 +144,6 @@ class GameActivity : AgActivity() {
     }
 
     override fun onPause() {
-        Updates.onPause(this)
         super.onPause()
     }
 
@@ -240,7 +234,6 @@ class GameActivity : AgActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
         panel?.setCompact(inPip)
-        bannerHolder.visibility = if (inPip) View.GONE else View.VISIBLE
         // the layout listener re-decides the bottom bar by height; force it now so it doesn't flash in PiP
         if (inPip) nav.visibility = View.GONE else content.requestLayout()
     }

@@ -89,22 +89,22 @@ class BattleShots {
     /** nosprites: battle-mid with no sprite files at all (sprite download skipped): placeholders instead of pictures. */
     @Test fun noSprites() = paparazzi.shootWith("nosprites", sizes, sprites = false) { ctx -> BattleShotKit.bound(ctx).root }
 
-    /** banner: battle-mid with the update banner (a newer version found). */
+    /** banner: battle-mid with the floating update banner (a newer version found). */
     @Test fun banner() = paparazzi.shootWith("banner", sizes) { ctx ->
         BattleShotKit.setUpdates(BattleShotKit.newer())
-        BattleShotKit.bound(ctx).root
+        BattleShotKit.withBanner(ctx, BattleShotKit.bound(ctx).root)
     }
 
     /** banner-downloading: the banner while the update downloads (66 %). */
     @Test fun bannerDownloading() = paparazzi.shootWith("banner-downloading", sizes) { ctx ->
         BattleShotKit.setUpdates(BattleShotKit.newer(Updates.Phase.Downloading(66, 1_468_006, 2_202_009, 1700)))
-        BattleShotKit.bound(ctx).root
+        BattleShotKit.withBanner(ctx, BattleShotKit.bound(ctx).root)
     }
 
     /** banner-failed: the banner after a failed update (TRY AGAIN + GITHUB). */
     @Test fun bannerFailed() = paparazzi.shootWith("banner-failed", sizes) { ctx ->
         BattleShotKit.setUpdates(BattleShotKit.newer(Updates.Phase.Failed("No internet connection.")))
-        BattleShotKit.bound(ctx).root
+        BattleShotKit.withBanner(ctx, BattleShotKit.bound(ctx).root)
     }
 
     /** pip: the picture-in-picture window (compact battle: arena + one-line log, no banner, no bottom bar). */

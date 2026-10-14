@@ -4,8 +4,12 @@ import android.app.Activity
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
 import androidx.annotation.ColorRes
 import com.husarp.ankigo.R
+import com.husarp.ankigo.update.UpdateOverlay
+import com.husarp.ankigo.update.Updates
 
 /** Accent colour choices (Settings → Look): each is one of the palette's own colours, so light and dark both fit. */
 enum class Accent(val label: String, @ColorRes val res: Int) {
@@ -80,6 +84,18 @@ object AppLook {
 abstract class AgActivity : Activity() {
     private var lookGeneration = -1
 
+    /** False on trampolines and the first-run screen: no floating update banner there. */
+    open val showsUpdateBanner: Boolean = true
+    /** The screen's content + floating update banner (null when [showsUpdateBanner] is off or before setContentView). */
+    protected var updateOverlay: UpdateOverlay? = null
+        private set
+
+    private fun overlay(view: View): View =
+        if (showsUpdateBanner) UpdateOverlay(this, view).also { updateOverlay = it } else view
+
+    override fun setContentView(view: View) = super.setContentView(overlay(view))
+    override fun setContentView(view: View, params: ViewGroup.LayoutParams) = super.setContentView(overlay(view), params)
+
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLook.wrap(newBase))
     }
@@ -91,9 +107,22 @@ abstract class AgActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        Updates.onResume(this)   // every screen: check at launch and every return, carry on a waiting install
+        updateOverlay?.banner?.resetAway()
         if (lookGeneration != AppLook.generation) {
             lookGeneration = AppLook.generation
             recreate()
         }
+    }
+
+    override fun onPause() {
+        Updates.onPause(this)
+        super.onPause()
+    }
+
+    /** Picture-in-picture is too small for the banner. */
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        updateOverlay?.banner?.suppressed = isInPictureInPictureMode
     }
 }

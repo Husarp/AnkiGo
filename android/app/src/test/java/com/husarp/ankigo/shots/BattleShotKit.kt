@@ -45,9 +45,12 @@ object BattleShotKit {
         b.setField("inPip", true)
         b.panel?.setCompact(true)
         if (paused) b.panel?.setPaused(true)
-        (b.field("bannerHolder") as View).visibility = View.GONE
         (b.field("nav") as View).visibility = View.GONE
     }
+
+    /** The screen's view under the floating update banner, at its final (slid-in) position, as AgActivity.setContentView does it. */
+    fun withBanner(ctx: Context, content: View): View =
+        com.husarp.ankigo.update.UpdateOverlay(ctx, content).also { it.banner.animated = false }
 
     /** Replaces the Updates state (the updater's private field); [reset] puts the default back. */
     fun setUpdates(state: Updates.State) {

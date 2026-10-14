@@ -25,7 +25,6 @@ import java.util.concurrent.Executors
 import com.husarp.ankigo.ui.Form
 import com.husarp.ankigo.ui.Ui
 import com.husarp.ankigo.ui.showCard
-import com.husarp.ankigo.update.UpdateBanner
 import com.husarp.ankigo.update.Updates
 import com.husarp.ankigo.update.UpdatesActivity
 
@@ -54,7 +53,6 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
     internal fun buildContent(): LinearLayout {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@DiagnosticsActivity, R.color.ag_base)) }
         root.addView(Ui.appBar(this, "Diagnostics", back = true))
-        root.addView(UpdateBanner(this), LinearLayout.LayoutParams(-1, -2))
         val body = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 4), Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 12))
@@ -100,12 +98,10 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
     // that was waiting on Android's "install unknown apps" screen.
     override fun onResume() {
         super.onResume()
-        Updates.onResume(this)
         refreshHeader(log = false)
     }
 
     override fun onPause() {
-        Updates.onPause(this)
         super.onPause()
     }
 
