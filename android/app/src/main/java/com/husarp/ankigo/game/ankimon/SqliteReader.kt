@@ -3,7 +3,7 @@ package com.husarp.ankigo.game.ankimon
 import java.io.File
 import java.nio.charset.Charset
 
-// TICKET T19 owns this file.
+// TICKET T19 owns this file; T51 added image() and moved the CREATE TABLE parsing to SqlSchema.
 
 /** The bytes are not a readable SQLite 3 database (wrong header, cut off, damaged, or a kind of table we don't read). */
 class SqliteFormatException(message: String) : java.io.IOException(message)
@@ -22,9 +22,6 @@ class SqliteReader(private val b: ByteArray) {
         private val MAGIC = "SQLite format 3\u0000".toByteArray(Charsets.ISO_8859_1)
         private const val MAX_DEPTH = 40       // a real b-tree of a few GB is far shallower
         private const val MAX_COLUMNS = 2_000  // SQLite's own hard limit is 32767; saves have a handful
-        private val CONSTRAINT_WORDS = setOf(
-            "CONSTRAINT", "PRIMARY", "NOT", "NULL", "UNIQUE", "CHECK", "DEFAULT", "COLLATE", "REFERENCES", "GENERATED", "AS",
-        )
 
         /** Reads [file] fully; refuses files over [maxBytes] (default 64 MB). */
         fun open(file: File, maxBytes: Long = 64L shl 20): SqliteReader {
@@ -36,7 +33,8 @@ class SqliteReader(private val b: ByteArray) {
 
     private class TableInfo(val name: String, val root: Int, val sql: String?)
 
-    private class ColumnDef(val name: String, val virtual: Boolean, val rowidAlias: Boolean, val real: Boolean)
+    /** One `sqlite_master` row (the root page stays here: the writer gives every b-tree new pages). */
+    private class MasterRow(val type: String?, val name: String?, val tblName: String?, val root: Int, val sql: String?)
 
     private val pageSize: Int
     private val usable: Int
@@ -45,6 +43,7 @@ class SqliteReader(private val b: ByteArray) {
     private var payloadBudget = 0L                            // see walkTable
     private val master = LinkedHashMap<String, TableInfo>() // lower-case name -> table
     private val tableOrder = mutableListOf<String>()        // names as declared, type = table, not sqlite_*
+    private val masterRows = mutableListOf<MasterRow>()     // every sqlite_master row, in file order
 
     init {
         if (b.size < 100) throw SqliteFormatException("Not a SQLite file (too short)")
@@ -76,7 +75,7 @@ class SqliteReader(private val b: ByteArray) {
     /** Declared column names of [table], in order (virtual generated columns included). Unknown table -> empty. */
     fun columns(table: String): List<String> {
         val t = master[table.lowercase()] ?: return emptyList()
-        return guard { columnDefs(t.sql).map { it.name } }
+        return guard { SqlSchema.parseTable(t.sql).columns.map { it.name } }
     }
 
     /**
@@ -87,23 +86,83 @@ class SqliteReader(private val b: ByteArray) {
         val t = master[table.lowercase()] ?: return emptyList()
         if (limit <= 0) return emptyList()
         return guard {
-            val sql = t.sql ?: throw SqliteFormatException("Table ${t.name} has no definition")
-            if (Regex("""\bWITHOUT\s+ROWID\b""", RegexOption.IGNORE_CASE).containsMatchIn(afterColumns(sql))) {
-                throw SqliteFormatException("Table ${t.name} is WITHOUT ROWID, which this reader doesn't support")
-            }
-            val stored = columnDefs(sql).filter { !it.virtual }
+            val def = SqlSchema.parseTable(t.sql)
+            if (def.withoutRowid) throw SqliteFormatException("Table ${t.name} is WITHOUT ROWID, which this reader doesn't support")
+            val stored = def.storedColumns
             val out = ArrayList<Map<String, Any?>>()
             walkTable(t.root, limit) { rowid, record ->
                 val row = LinkedHashMap<String, Any?>()
                 for ((i, c) in stored.withIndex()) {
-                    val v = if (c.rowidAlias) rowid else record.getOrNull(i)
+                    val v = if (i == def.storedAlias) rowid else record.getOrNull(i)
                     // SQLite stores a REAL that is a whole number as an integer; the column's type brings it back.
-                    row[c.name] = if (c.real && v is Long) v.toDouble() else v
+                    row[c.name] = if (c.affinity == SqlSchema.Affinity.REAL && v is Long) v.toDouble() else v
                 }
                 out += row
             }
             out
         }
+    }
+
+    /**
+     * The whole database as plain values (see [SqliteImage]): every `sqlite_master` row in file order and every row of every
+     * table, internal ones (sqlite_sequence, sqlite_stat1) included. Records shorter than their table (columns added later
+     * by ALTER TABLE ADD COLUMN) are completed with the column's DEFAULT, as SQLite itself reads them.
+     * Throws [SqliteFormatException] for what can't be copied faithfully: WITHOUT ROWID and virtual tables, a row with more
+     * values than columns, a default that is an expression and is needed to complete a row, more than [maxRows] rows
+     * in all, tables that share their pages, a damaged file.
+     */
+    fun image(maxRows: Int = 500_000): SqliteImage = guard {
+        val objects = ArrayList<SqlObject>()
+        val tables = LinkedHashMap<String, SqlTable>()
+        var rowsLeft = maxRows
+        var payloads = 0L // healthy tables never share a byte, so all payloads together fit in the file
+        for (m in masterRows) {
+            val type = m.type
+            val name = m.name
+            val tbl = m.tblName
+            if (type == null || name == null || tbl == null) bad("A row of sqlite_master is damaged")
+            objects += SqlObject(type, name, tbl, m.sql)
+            if (type != "table") continue
+            val t = readTable(m, rowsLeft)
+            rowsLeft -= t.rows.size
+            payloads += b.size + 4096L - payloadBudget
+            if (payloads > b.size + 4096L) bad("The tables overlap (damaged file)")
+            if (tables.put(name.lowercase(), t) != null) bad("Table $name is listed twice")
+        }
+        SqliteImage(objects, tables, pageSize, u32(60).toInt(), u32(68).toInt())
+    }
+
+    private fun readTable(m: MasterRow, rowsLeft: Int): SqlTable {
+        val name = m.name!!
+        val def = SqlSchema.parseTable(m.sql)
+        if (def.withoutRowid) bad("Table $name is WITHOUT ROWID, which can't be copied")
+        val stored = def.storedColumns
+        val alias = def.storedAlias
+        val pads = arrayOfNulls<Any>(stored.size)
+        val padded = BooleanArray(stored.size)
+        fun pad(i: Int): Any? {
+            if (!padded[i]) {
+                val c = stored[i]
+                if (c.hasDefault) {
+                    if (c.defaultProblem != null) bad("A row of $name is shorter than the table and ${c.name} has a ${c.defaultProblem}")
+                    pads[i] = try { SqlValues.apply(c.default, c.affinity) } catch (e: IllegalArgumentException) { bad("Default of $name.${c.name}: ${e.message}") }
+                }
+                padded[i] = true
+            }
+            return pads[i]
+        }
+        val rows = ArrayList<SqlRow>()
+        walkTable(m.root, minOf(rowsLeft, Int.MAX_VALUE - 1) + 1) { rowid, rec ->
+            if (rows.size >= rowsLeft) bad("The database has more rows than the limit")
+            if (rec.size > stored.size) bad("A row of $name has more values than the table has columns")
+            val v = ArrayList<Any?>(stored.size)
+            for (i in stored.indices) {
+                val x = if (i == alias) rowid else if (i < rec.size) rec[i] else pad(i)
+                v += if (stored[i].affinity == SqlSchema.Affinity.REAL && x is Long) x.toDouble() else x
+            }
+            rows += SqlRow(rowid, v)
+        }
+        return SqlTable(name, stored.map { it.name }, alias, rows)
     }
 
     // ---- error safety net ---------------------------------------------------------------------------------------
@@ -165,6 +224,7 @@ class SqliteReader(private val b: ByteArray) {
             val name = r.getOrNull(1) as? String
             val root = (r.getOrNull(3) as? Long)?.toInt() ?: 0
             val sql = r.getOrNull(4) as? String
+            masterRows += MasterRow(type, name, r.getOrNull(2) as? String, root, sql)
             if (type == "table" && !name.isNullOrBlank() && !name.startsWith("sqlite_", ignoreCase = true)) {
                 if (master.putIfAbsent(name.lowercase(), TableInfo(name, root, sql)) == null) tableOrder += name
             }
@@ -283,195 +343,5 @@ class SqliteReader(private val b: ByteArray) {
             }
         }
         return out
-    }
-
-    // ---- CREATE TABLE parsing ------------------------------------------------------------------------------------
-
-    /** Text with comments turned into spaces, quotes kept (SQLite stores the CREATE statement as typed). */
-    private fun stripComments(sql: String): String {
-        val sb = StringBuilder()
-        var i = 0
-        while (i < sql.length) {
-            val ch = sql[i]
-            when {
-                ch == '\'' || ch == '"' || ch == '`' || ch == '[' -> {
-                    val close = if (ch == '[') ']' else ch
-                    var j = i + 1
-                    while (j < sql.length) {
-                        if (sql[j] == close) {
-                            if (close != ']' && j + 1 < sql.length && sql[j + 1] == close) { j += 2; continue } // doubled quote
-                            break
-                        }
-                        j++
-                    }
-                    val e = minOf(j, sql.length - 1)
-                    sb.append(sql, i, e + 1)
-                    i = e + 1
-                }
-                ch == '-' && sql.startsWith("--", i) -> {
-                    while (i < sql.length && sql[i] != '\n') i++
-                    sb.append(' ')
-                }
-                ch == '/' && sql.startsWith("/*", i) -> {
-                    val e = sql.indexOf("*/", i + 2)
-                    i = if (e < 0) sql.length else e + 2
-                    sb.append(' ')
-                }
-                else -> { sb.append(ch); i++ }
-            }
-        }
-        return sb.toString()
-    }
-
-    /** Index just past the quoted run starting at [i] (which holds the opening quote). */
-    private fun skipQuoted(s: String, i: Int): Int {
-        val open = s[i]
-        val close = if (open == '[') ']' else open
-        var j = i + 1
-        while (j < s.length) {
-            if (s[j] == close) {
-                if (close != ']' && j + 1 < s.length && s[j + 1] == close) { j += 2; continue }
-                return j + 1
-            }
-            j++
-        }
-        return s.length
-    }
-
-    private fun isQuote(ch: Char) = ch == '\'' || ch == '"' || ch == '`' || ch == '['
-
-    /** Index of the first '(' outside quotes, or -1. */
-    private fun firstParen(s: String): Int {
-        var i = 0
-        while (i < s.length) {
-            val ch = s[i]
-            if (isQuote(ch)) { i = skipQuoted(s, i); continue }
-            if (ch == '(') return i
-            i++
-        }
-        return -1
-    }
-
-    /** Index of the ')' that closes the '(' at [open]. */
-    private fun matchParen(s: String, open: Int): Int {
-        var depth = 0
-        var i = open
-        while (i < s.length) {
-            val ch = s[i]
-            if (isQuote(ch)) { i = skipQuoted(s, i); continue }
-            if (ch == '(') depth++
-            if (ch == ')' && --depth == 0) return i
-            i++
-        }
-        bad("Unbalanced parentheses in a table definition")
-    }
-
-    /** The text after the column list (for WITHOUT ROWID / STRICT). */
-    private fun afterColumns(sql: String): String {
-        val s = stripComments(sql)
-        val open = firstParen(s)
-        if (open < 0) return ""
-        return s.substring(matchParen(s, open) + 1)
-    }
-
-    /** Splits [s] on commas that are outside quotes and parentheses. */
-    private fun splitTop(s: String): List<String> {
-        val parts = ArrayList<String>()
-        var depth = 0
-        var start = 0
-        var i = 0
-        while (i < s.length) {
-            val ch = s[i]
-            if (isQuote(ch)) { i = skipQuoted(s, i); continue }
-            if (ch == '(') depth++
-            if (ch == ')') depth--
-            if (ch == ',' && depth == 0) { parts += s.substring(start, i); start = i + 1 }
-            i++
-        }
-        parts += s.substring(start)
-        return parts
-    }
-
-    /** First token of [s]: an unquoted word, or a quoted identifier with the quotes removed. Returns (token, wasQuoted, rest). */
-    private fun firstToken(s: String): Triple<String, Boolean, String> {
-        val t = s.trimStart()
-        if (t.isEmpty()) return Triple("", false, "")
-        if (isQuote(t[0])) {
-            val end = skipQuoted(t, 0)
-            val close = if (t[0] == '[') ']' else t[0]
-            val inner = t.substring(1, maxOf(1, end - 1))
-            return Triple(if (close == ']') inner else inner.replace("$close$close", "$close"), true, t.substring(end))
-        }
-        var j = 0
-        while (j < t.length && !t[j].isWhitespace() && t[j] != '(' && t[j] != ',') j++
-        return Triple(t.substring(0, j), false, t.substring(j))
-    }
-
-    private fun columnDefs(sql: String?): List<ColumnDef> {
-        if (sql == null) bad("A table has no definition")
-        val s = stripComments(sql)
-        val open = firstParen(s)
-        if (open < 0) bad("A table definition has no column list")
-        val body = s.substring(open + 1, matchParen(s, open))
-        val defs = ArrayList<ColumnDef>()
-        val types = HashMap<String, String>()
-        var tablePk: String? = null
-        for (seg in splitTop(body)) {
-            val (name, quoted, rest) = firstToken(seg)
-            if (name.isEmpty()) continue
-            if (!quoted && name.uppercase() in setOf("CONSTRAINT", "PRIMARY", "UNIQUE", "CHECK", "FOREIGN")) {
-                // A single-column "PRIMARY KEY(x)" makes x the rowid alias when x is declared INTEGER.
-                val m = Regex("""^\s*(?:CONSTRAINT\s+\S+\s+)?PRIMARY\s+KEY\s*\(([^,()]*)\)""", RegexOption.IGNORE_CASE).find(seg)
-                if (m != null) tablePk = firstToken(m.groupValues[1]).first
-                continue
-            }
-            val top = topLevelWords(rest)
-            val typeEnd = top.indexOfFirst { it.uppercase() in CONSTRAINT_WORDS }
-            val type = (if (typeEnd < 0) top else top.take(typeEnd)).joinToString(" ") { it.uppercase() }
-            types[name.lowercase()] = type
-            val generated = generatedKind(rest)
-            val pk = top.windowed(2).any { it[0].equals("PRIMARY", true) && it[1].equals("KEY", true) }
-            defs += ColumnDef(
-                name, virtual = generated == Generated.VIRTUAL, rowidAlias = pk && type == "INTEGER" && generated == null,
-                real = listOf("REAL", "FLOA", "DOUB").any { it in type },
-            )
-        }
-        if (defs.size > MAX_COLUMNS) bad("Too many columns")
-        if (tablePk != null && defs.none { it.rowidAlias }) {
-            val pk = tablePk
-            if (types[pk.lowercase()] == "INTEGER") {
-                return defs.map { if (it.name.equals(pk, true)) ColumnDef(it.name, it.virtual, true, it.real) else it }
-            }
-        }
-        return defs
-    }
-
-    private enum class Generated { VIRTUAL, STORED }
-
-    /** The words of a column definition that sit outside parentheses and quotes (quoted runs and (...) become one word each). */
-    private fun topLevelWords(s: String): List<String> {
-        val words = ArrayList<String>()
-        val cur = StringBuilder()
-        fun flush() { if (cur.isNotEmpty()) { words += cur.toString(); cur.clear() } }
-        var i = 0
-        while (i < s.length) {
-            val ch = s[i]
-            when {
-                isQuote(ch) -> { val e = skipQuoted(s, i); flush(); words += "'q'"; i = e }
-                ch == '(' -> { val e = matchParen(s, i); flush(); words += "(...)"; i = e + 1 }
-                ch.isWhitespace() || ch == ',' -> { flush(); i++ }
-                else -> { cur.append(ch); i++ }
-            }
-        }
-        flush()
-        return words
-    }
-
-    /** `[GENERATED ALWAYS] AS (expr) [STORED|VIRTUAL]` -> which kind, or null for an ordinary column. */
-    private fun generatedKind(def: String): Generated? {
-        val w = topLevelWords(def)
-        val i = w.indexOfFirst { it.equals("AS", true) }
-        if (i < 0 || w.getOrNull(i + 1) != "(...)") return null
-        return if (w.getOrNull(i + 2)?.equals("STORED", true) == true) Generated.STORED else Generated.VIRTUAL
     }
 }

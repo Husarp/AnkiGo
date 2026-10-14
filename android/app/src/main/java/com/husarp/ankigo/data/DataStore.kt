@@ -157,6 +157,14 @@ object DataStore {
         }
     }
 
+    /** Blocking (background thread): the text of a downloaded raw file (e.g. "items.csv"), or null when missing or unreadable. */
+    fun rawText(ctx: Context, name: String): String? {
+        if (name.contains('/') || name.contains('\\')) return null
+        val f = File(rawDir(ctx), name)
+        if (!f.isFile) return null
+        return try { f.readText() } catch (e: IOException) { Report.fail(TAG, "reading $name", e); null }
+    }
+
     /** Deletes the downloaded data (Settings -> re-download). */
     @Synchronized
     fun clear(ctx: Context) {

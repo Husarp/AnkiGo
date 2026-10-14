@@ -12,6 +12,7 @@ import android.widget.LinearLayout
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.Report
+import com.husarp.ankigo.data.AnkimonFiles
 import com.husarp.ankigo.data.DataStore
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
@@ -44,7 +45,11 @@ object AnkimonImportFlow {
 
     /** What the background read found. */
     private sealed class Read {
-        class Ok(val save: AnkimonSave, val formBase: Map<Int, Int>) : Read()
+        class Ok(val save: AnkimonSave, val formBase: Map<Int, Int>) : Read() {
+            /** The cache copy the save was read from; it lives until kept or discarded (null in tests). */
+            var file: File? = null
+            fun discard() { file?.delete() }
+        }
         class Problem(val title: String, val message: String) : Read()
     }
 
@@ -90,7 +95,9 @@ object AnkimonImportFlow {
     }
 
     private fun readFile(app: Context, uri: Uri): Read {
-        val copy = File(app.cacheDir, "ankimon-import.db")
+        sweepStale(app)
+        val copy = File.createTempFile("ankimon-import-", ".db", app.cacheDir)
+        var keep = false
         try {
             var size = 0L
             val input = app.contentResolver.openInputStream(uri) ?: throw IOException("no input stream")
@@ -107,7 +114,8 @@ object AnkimonImportFlow {
                 }
             }
             val save = AnkimonSaveReader.read(SqliteReader.open(copy, MAX_BYTES))
-            return Read.Ok(save, DataStore.formBaseMap(app))
+            keep = true
+            return Read.Ok(save, DataStore.formBaseMap(app)).also { it.file = copy }
         } catch (e: NotAnkimonException) {
             return Read.Problem("Import failed", NOT_ANKIMON)
         } catch (e: SqliteFormatException) {
@@ -118,8 +126,14 @@ object AnkimonImportFlow {
         } catch (e: OutOfMemoryError) {
             return Read.Problem("Import failed", "That file is too big to be an Ankimon save.\n\nNothing was changed.")
         } finally {
-            copy.delete()
+            if (!keep) copy.delete()
         }
+    }
+
+    /** Cache copies left behind by a screen that died mid-import (older than an hour). */
+    private fun sweepStale(app: Context) {
+        val old = System.currentTimeMillis() - 3_600_000L
+        app.cacheDir.listFiles { f -> f.name.startsWith("ankimon-import-") && f.lastModified() < old }?.forEach { it.delete() }
     }
 
     // ---- step 2: preview ----
@@ -138,7 +152,7 @@ object AnkimonImportFlow {
 
     private fun afterRead(app: Context, result: Read, ui: () -> Context?, onDone: (Boolean) -> Unit) {
         val c = liveUi(app, ui)
-        if (c == null) { onDone(false); return }
+        if (c == null) { (result as? Read.Ok)?.discard(); onDone(false); return }
         when (result) {
             is Read.Problem -> {
                 info(c, result.title, result.message)
@@ -164,17 +178,19 @@ object AnkimonImportFlow {
     private fun preview(app: Context, c: Context, read: Read.Ok, ui: () -> Context?, onDone: (Boolean) -> Unit) {
         val data = GameRepo.data
         val state = GameRepo.state
-        if (data == null || state == null) { Ui.toast(app, "Load the game first"); onDone(false); return }
+        if (data == null || state == null) { read.discard(); Ui.toast(app, "Load the game first"); onDone(false); return }
         val now = System.currentTimeMillis()
         val defaultTeam = state.mons.size <= 1
         val first = trial(data, state, read, defaultTeam, now)
         val other = trial(data, state, read, !defaultTeam, now)
         if (first == null || other == null) {
+            read.discard()
             info(c, "Import failed", "Couldn't read that file.\n\nNothing was changed.")
             onDone(false)
             return
         }
         if (first.summary() == "nothing new" && other.summary() == "nothing new") {
+            keepCopy(app, read, "Couldn't keep a copy for exporting back") // the PC's newest state is already in the game
             info(c, "Nothing new in this file", "Everything in it is already in your game.")
             onDone(false)
             return
@@ -222,13 +238,15 @@ object AnkimonImportFlow {
             if (r != null) fill(r)
         }
 
+        var taken = false // apply() owns the cache copy from the Import tap on
         val dialog = AlertDialog.Builder(c).setTitle("Import from Ankimon?").setView(Bits.scroll(c, col))
             .setPositiveButton("Import") { _, _ ->
                 val live = liveUi(app, ui)
-                if (live != null) apply(app, read, box.isChecked, now, onDone) else onDone(false)
+                if (live != null) { taken = true; apply(app, read, box.isChecked, now, onDone) } else onDone(false)
             }
             .setNegativeButton("Cancel") { _, _ -> onDone(false) }
             .setOnCancelListener { onDone(false) }
+            .setOnDismissListener { if (!taken) read.discard() }
             .create()
         Pickers.show(dialog)
     }
@@ -242,7 +260,7 @@ object AnkimonImportFlow {
     private fun apply(app: Context, read: Read.Ok, useTeam: Boolean, now: Long, onDone: (Boolean) -> Unit) {
         val data = GameRepo.data
         val state = GameRepo.state
-        if (data == null || state == null) { Ui.toast(app, "Load the game first"); onDone(false); return }
+        if (data == null || state == null) { read.discard(); Ui.toast(app, "Load the game first"); onDone(false); return }
         val report: ImportReport
         val merged: GameState
         try {
@@ -250,6 +268,7 @@ object AnkimonImportFlow {
             report = AnkimonMerge.merge(data, merged, read.save, { read.formBase[it] }, useTeam, now)
         } catch (e: Exception) {
             Report.fail(TAG, "merging the Ankimon save", e)
+            read.discard()
             Ui.toast(app, "Couldn't import. Nothing was changed.")
             onDone(false)
             return
@@ -257,11 +276,26 @@ object AnkimonImportFlow {
         try { GameRepo.replaceState(app, merged, backupTag = "ankimon") }
         catch (e: Exception) {
             Report.fail(TAG, "backing up before import", e)
+            read.discard()
             Ui.toast(app, "Couldn't back up the current game. Nothing was changed.")
             onDone(false)
             return
         }
+        keepCopy(app, read, "Imported, but couldn't keep a copy for exporting back")
         Ui.toast(app, "Imported: ${report.added} new, ${report.upgraded} upgraded")
         onDone(true)
+    }
+
+    /**
+     * Keeps the cache copy as the file the export builds on ([AnkimonFiles.keep], atomic) and deletes the cache copy,
+     * off the main thread. A failure only shows [failToast]; it never fails the import.
+     */
+    private fun keepCopy(app: Context, read: Read.Ok, failToast: String) {
+        val file = read.file ?: return
+        Thread {
+            val ok = AnkimonFiles.keep(app, file)
+            file.delete()
+            if (!ok) main.post { Ui.toast(app, failToast) }
+        }.apply { name = "ankimon-keep"; isDaemon = true }.start()
     }
 }

@@ -53,6 +53,7 @@ object SaveCodec {
             kv("liveDay", state.liveDay); kv("liveSnapshot", state.liveSnapshot)
             kv("starterChosen", state.starterChosen); kv("catches", state.catches); kv("defeats", state.defeats)
             kv("evolutions", state.evolutions)
+            list("releasedAnkimon", state.releasedAnkimon) // insertion order (oldest first), not sorted
             key("settings"); writeSettings(this, state.settings)
         }
         return w.toString()
@@ -268,6 +269,7 @@ object SaveCodec {
         s.liveDay = o.strOrNull("liveDay"); s.liveSnapshot = o.strOrNull("liveSnapshot")
         s.starterChosen = o.bool("starterChosen", false)
         s.catches = o.int("catches", 0); s.defeats = o.int("defeats", 0); s.evolutions = o.int("evolutions", 0)
+        o.strList("releasedAnkimon")?.let { s.releasedAnkimon += it }
         readSettings(o.optJSONObject("settings"), s.settings)
         // Decoded and filled with defaults, so it is a current-schema state now.
         s.schema = GameState.SCHEMA

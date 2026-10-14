@@ -8,6 +8,8 @@ import kotlin.random.Random
 
 // TICKET T11 owns this file. Public signatures are fixed (the UI calls them); add private helpers freely.
 
+private const val RELEASED_KEPT = 5_000 // how many released Ankimon ids the game remembers (GameState.releasedAnkimon)
+
 /**
  * The game controller: turns AnkiDroid answers into Ankimon rounds and between-battle actions into state changes.
  * Single-threaded: call everything on the main thread; the caller saves after each call (GameRepo does).
@@ -299,7 +301,16 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.team.remove(uid)
         state.mons.remove(mon)
         if (state.settings.xpShareUid == uid) state.settings.xpShareUid = null
+        rememberReleased(mon.ankimonId ?: mon.uid)
         return changed("${mon.name} was released.", old)
+    }
+
+    /** The Ankimon export removes released Pokémon from the PC save: remember the id (newest 5 000 kept). */
+    private fun rememberReleased(id: String) {
+        val set = state.releasedAnkimon
+        set.remove(id)
+        set.add(id)
+        while (set.size > RELEASED_KEPT) set.remove(set.first())
     }
 
     /**

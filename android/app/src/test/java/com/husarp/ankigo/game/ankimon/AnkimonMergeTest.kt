@@ -274,6 +274,7 @@ class AnkimonMergeTest {
     @Test fun importingTheSameSaveTwiceChangesNothing() {
         val formBase = { n: Int -> if (n == 10100) 25 else null }
         val state = TestData.state(data, species = 133, level = 20)
+        state.mons[0].uid = "own-start"; state.team[0] = "own-start" // an Ankimon id now also matches a Pokémon's uid (T52): don't clash with "main"
         state.cash = 100
         state.bag["poke-ball"] = 5
         val first = merge(richSave(), state, useTeam = true, formBase = formBase)

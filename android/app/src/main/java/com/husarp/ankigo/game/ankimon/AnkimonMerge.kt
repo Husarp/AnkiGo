@@ -70,11 +70,11 @@ object AnkimonMerge {
      * [useTeam]: Ankimon's team becomes the team (old members stay in the box).
      */
     fun merge(data: GameData, state: GameState, save: AnkimonSave, formBase: (Int) -> Int?, useTeam: Boolean, now: Long): ImportReport {
-        val nameIndex = HashMap<String, Int>()
-        for (sp in data.species.values.sortedBy { it.num }) nameIndex.putIfAbsent(letters(sp.name), sp.num)
+        val nameIndex = nameIndex(data)
 
+        // A phone-caught Pokémon that was exported to the PC comes back under its uid (see AnkimonExport): match both.
         val byAnkimonId = HashMap<String, Mon>()
-        for (m in state.mons) m.ankimonId?.let { byAnkimonId.putIfAbsent(it, m) }
+        for (m in state.mons) byAnkimonId.putIfAbsent(m.ankimonId ?: m.uid, m)
         val takenUids = state.mons.mapTo(HashSet()) { it.uid }
 
         var added = 0
@@ -85,11 +85,12 @@ object AnkimonMerge {
 
         for (m in save.mons) {
             val label = m.name ?: m.id?.let { "#$it" } ?: "Pokémon ${m.individualId.take(8)}"
+            val existing = byAnkimonId[m.individualId]
+            if (existing == null && m.individualId in state.releasedAnkimon) { skipped += "$label: released on this phone"; continue }
             val (sp, reason) = resolveSpecies(data, state, m, formBase, nameIndex)
             if (sp == null) { skipped += "$label: $reason"; continue }
             importedSpecies += sp.num
             val attackMoves = attackMoves(data, m)
-            val existing = byAnkimonId[m.individualId]
             if (existing == null) {
                 val mon = buildMon(data, m, sp, newUid(m.individualId, takenUids), now, attackMoves)
                 state.mons += mon
@@ -106,7 +107,7 @@ object AnkimonMerge {
         if (state.team.isNotEmpty()) state.starterChosen = true
 
         // Pokédex: union; regional forms stay themselves, other forms count as their base species; only species this game knows.
-        fun dex(ids: Collection<Int>) = ids.mapNotNull { n -> (if (n > 10000 && !isRegional(data, n)) formBase(n) else n)?.takeIf { it in data.species } }
+        fun dex(ids: Collection<Int>) = ids.mapNotNull { dexId(data, formBase, it) }
         val newCaught = dex(save.caught) + importedSpecies
         val newSeen = dex(save.seen) + newCaught
         val seenBefore = state.seen.size
@@ -139,9 +140,23 @@ object AnkimonMerge {
 
     // ---- species ------------------------------------------------------------------------------------------------
 
+    /** Lower-case letters-only species name -> species number (the lowest number wins), for finding a form by its Ankimon name. */
+    internal fun nameIndex(data: GameData): Map<String, Int> {
+        val index = HashMap<String, Int>()
+        for (sp in data.species.values.sortedBy { it.num }) index.putIfAbsent(letters(sp.name), sp.num)
+        return index
+    }
+
     private fun resolveSpecies(
         data: GameData, state: GameState, m: AnkimonMon, formBase: (Int) -> Int?, nameIndex: Map<String, Int>,
     ): Pair<Species?, String> {
+        val (sp, reason) = speciesFor(data, m, formBase, nameIndex)
+        if (sp != null && sp.gen >= 9 && 9 !in state.settings.gens) return null to "gen 9: turn on generation 9 in Settings to import it"
+        return sp to reason
+    }
+
+    /** The species the import would give [m] (before the generation setting is applied), or null and the reason. */
+    internal fun speciesFor(data: GameData, m: AnkimonMon, formBase: (Int) -> Int?, nameIndex: Map<String, Int>): Pair<Species?, String> {
         val id = m.id
         if (id == null || id <= 0) return null to "no species number"
         var num: Int? = id
@@ -150,9 +165,12 @@ object AnkimonMerge {
             if (num == null) return null to "form $id isn't known"
         }
         val sp = data.species[num] ?: return null to "species #$num isn't in AnkiGo's data"
-        if (sp.gen >= 9 && 9 !in state.settings.gens) return null to "gen 9: turn on generation 9 in Settings to import it"
         return sp to ""
     }
+
+    /** The species number a Pokédex entry [n] of an Ankimon save counts as here (regional forms stay, other forms -> base species), or null. */
+    internal fun dexId(data: GameData, formBase: (Int) -> Int?, n: Int): Int? =
+        (if (n > 10000 && !isRegional(data, n)) formBase(n) else n)?.takeIf { it in data.species }
 
     /** True when [id] is a regional form this game has (its species entry carries a form name). */
     private fun isRegional(data: GameData, id: Int) = data.species[id]?.form != null
@@ -177,10 +195,10 @@ object AnkimonMerge {
     }
 
     /** The file's attacks that AnkiGo knows (normalised to Showdown ids), distinct, at most 4. May be empty. */
-    private fun attackMoves(data: GameData, m: AnkimonMon): List<String> =
+    internal fun attackMoves(data: GameData, m: AnkimonMon): List<String> =
         m.attacks.map { letters(it) }.filter { it in data.moves }.distinct().take(4)
 
-    private fun buildMon(data: GameData, m: AnkimonMon, sp: Species, uid: String, now: Long, attackMoves: List<String>): Mon {
+    internal fun buildMon(data: GameData, m: AnkimonMon, sp: Species, uid: String, now: Long, attackMoves: List<String>): Mon {
         val level = (m.level ?: 1).coerceIn(1, Tuning.MAX_LEVEL)
         val ivs = Stats.of(STAT_KEYS.map { (m.iv[it] ?: 15).coerceIn(0, 31) })
         val evs = Stats.of(capEvs(STAT_KEYS.map { (m.ev[it] ?: 0).coerceIn(0, Tuning.EV_STAT_CAP) }))
@@ -318,7 +336,7 @@ object AnkimonMerge {
     private fun letters(s: String): String = s.lowercase().filter { it in 'a'..'z' || it in '0'..'9' }
 
     /** The id AnkiGo uses for an Ankimon item name ("Poké Ball", "poke_ball" -> "poke-ball"), or null if AnkiGo has no such item. */
-    private fun itemKey(name: String): String? {
+    internal fun itemKey(name: String): String? {
         val plain = Normalizer.normalize(name, Normalizer.Form.NFD).filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
         val id = plain.trim().lowercase().replace(' ', '-').replace('_', '-').filter { it in 'a'..'z' || it in '0'..'9' || it == '-' }
         if (Items.def(id) != null) return id
@@ -327,7 +345,7 @@ object AnkimonMerge {
     }
 
     /** A TM item is named after its move ("thunderbolt"); older exports may write "TM24 Thunderbolt". */
-    private fun tmMove(data: GameData, name: String): String? {
+    internal fun tmMove(data: GameData, name: String): String? {
         val id = letters(name)
         if (id in data.moves) return id
         return id.replace(Regex("^tm\\d*"), "").takeIf { it in data.moves }

@@ -269,6 +269,7 @@ class GameState(
     var catches: Int = 0,
     var defeats: Int = 0,
     var evolutions: Int = 0,
+    val releasedAnkimon: MutableSet<String> = linkedSetOf(), // ankimonId ?: uid of Pokémon released here (newest 5 000): the export removes them from the PC save
     val settings: Settings = Settings(),
 ) {
     fun mon(uid: String?): Mon? = mons.firstOrNull { it.uid == uid }

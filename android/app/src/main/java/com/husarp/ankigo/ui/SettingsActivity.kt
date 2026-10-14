@@ -593,8 +593,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val ankimon = Form.secondary(this, "Import Ankimon save (.db)…") { startAnkimonImport() }
         Form.enable(ankimon, st != null)
         btns.addView(ankimon, Form.lp(this, 8))
+        val ankimonOut = Form.secondary(this, "Export for Ankimon (PC)…") { startAnkimonExport() }
+        Form.enable(ankimonOut, st != null)
+        btns.addView(ankimonOut, Form.lp(this, 8))
         btns.addView(Form.body(this, "Importing or restoring keeps your current game as a backup first. " +
-            "Ankimon: in Anki use Game → Export Save File…, copy the file to this phone and pick it here; it only adds.",
+            "Ankimon: import your PC save here (it only adds); export writes a file for Ankimon's Game → Import Save File… on the PC.",
             12, R.color.ag_sub0), Form.lp(this, 8))
         box.addView(btns)
         return box
@@ -615,6 +618,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         AnkimonImportFlow.start(this, { i, cb -> host.startForResult(i, cb) },
             ui = { live?.get()?.takeIf { it.alive } },
             onDone = { imported -> if (imported) live?.get()?.takeIf { it.alive }?.render() })
+    }
+
+    /** Ankimon (PC) export: warning -> "save as" picker -> build + write + check. Same rotation-safe dialogs as the import. */
+    private fun startAnkimonExport() {
+        AnkimonExportFlow.start(this, { i, cb -> host.startForResult(i, cb) }, ui = { live?.get()?.takeIf { it.alive } })
     }
 
     private fun startImport() {
