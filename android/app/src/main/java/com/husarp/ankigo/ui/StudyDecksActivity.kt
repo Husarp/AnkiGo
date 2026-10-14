@@ -41,7 +41,7 @@ class StudyDecksActivity : Activity() {
         appBar.addView(StudyUi.iconButton(this, R.drawable.ic_settings, "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) }, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)))
         root.addView(appBar)
         content = StudyUi.column(this).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
-        val scroll = ScrollView(this).apply { addView(content) }
+        val scroll = ScrollView(this).apply { addView(content, android.widget.FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
         var down = 0f
         scroll.setOnTouchListener { _, e ->
             if (e.actionMasked == MotionEvent.ACTION_DOWN) down = e.y

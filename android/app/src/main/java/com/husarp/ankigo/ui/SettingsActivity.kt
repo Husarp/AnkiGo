@@ -205,12 +205,31 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.switchRow(this, "Vibrate on answer", null, getSharedPreferences("study", 0).getBoolean("haptic", true)) {
                 getSharedPreferences("study", 0).edit().putBoolean("haptic", it).apply()
             },
+            Form.switchRow(this, "Swipe to answer", "Answer side: ← Again · ↓ Hard · → Good · ↑ Easy", getSharedPreferences("study", 0).getBoolean("swipe", false)) {
+                getSharedPreferences("study", 0).edit().putBoolean("swipe", it).apply()
+            },
             Form.switchRow(this, "Read battle log with TalkBack", "Turn off to keep the card reading uninterrupted", getSharedPreferences("study", 0).getBoolean("speakBattle", true)) {
                 getSharedPreferences("study", 0).edit().putBoolean("speakBattle", it).apply()
             },
             Form.stepperRow(this, "Card text size", null, getSharedPreferences("study", 0).getInt("zoom", 100), 80, 150, 10, { "$it%" }) {
                 getSharedPreferences("study", 0).edit().putInt("zoom", it).apply()
             },
+            Form.row(this, "Answer timer", getSharedPreferences("study", 0).getString("timer", com.husarp.ankigo.study.StudyTiming.AS_DECK), null) {
+                Pickers.showPlain(android.app.AlertDialog.Builder(this).setItems(com.husarp.ankigo.study.StudyTiming.TIMER_MODES.toTypedArray()) { _, i ->
+                    getSharedPreferences("study", 0).edit().putString("timer", com.husarp.ankigo.study.StudyTiming.TIMER_MODES[i]).apply(); render()
+                }.create())
+            },
+            Form.switchRow(this, "Auto-advance", "Uses the deck's auto-advance seconds and action; if the deck has none, the times below", getSharedPreferences("study", 0).getBoolean("autoAdvance", false)) {
+                getSharedPreferences("study", 0).edit().putBoolean("autoAdvance", it).apply(); render()
+            },
+            Form.stepperRow(this, "Show the answer after", null, getSharedPreferences("study", 0).getInt("autoQuestionSecs", com.husarp.ankigo.study.StudyTiming.OWN_QUESTION),
+                com.husarp.ankigo.study.StudyTiming.MIN_SECS, com.husarp.ankigo.study.StudyTiming.MAX_SECS, 1, { "$it s" }) {
+                getSharedPreferences("study", 0).edit().putInt("autoQuestionSecs", it).apply()
+            }.also { Form.enable(it, getSharedPreferences("study", 0).getBoolean("autoAdvance", false)) },
+            Form.stepperRow(this, "Then act after", "The deck's answer action: bury (default), Again, Hard, Good or a reminder", getSharedPreferences("study", 0).getInt("autoAnswerSecs", com.husarp.ankigo.study.StudyTiming.OWN_ANSWER),
+                com.husarp.ankigo.study.StudyTiming.MIN_SECS, com.husarp.ankigo.study.StudyTiming.MAX_SECS, 1, { "$it s" }) {
+                getSharedPreferences("study", 0).edit().putInt("autoAnswerSecs", it).apply()
+            }.also { Form.enable(it, getSharedPreferences("study", 0).getBoolean("autoAdvance", false)) },
             Form.row(this, "Cards with missing media", getSharedPreferences("study", 0).getString("missing", "Ask"), null) {
                 Pickers.showPlain(android.app.AlertDialog.Builder(this).setItems(arrayOf("Ask", "Always open in AnkiDroid", "Answer anyway")) { _, i ->
                     getSharedPreferences("study", 0).edit().putString("missing", listOf("Ask", "Always open in AnkiDroid", "Answer anyway")[i]).apply(); render()

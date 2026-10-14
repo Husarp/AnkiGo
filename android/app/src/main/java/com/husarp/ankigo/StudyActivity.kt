@@ -21,6 +21,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewGroup
 import android.webkit.*
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -30,7 +31,12 @@ import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.overlay.FloatBattleService
 import com.husarp.ankigo.sound.SoundPrefs
 import com.husarp.ankigo.sound.SoundRules
+import com.husarp.ankigo.study.CardSpeech
+import com.husarp.ankigo.study.JsApi
+import com.husarp.ankigo.study.AutoAdvance
 import com.husarp.ankigo.study.StudyLoop
+import com.husarp.ankigo.study.StudyTiming
+import com.husarp.ankigo.study.TtsRules
 import com.husarp.ankigo.ui.*
 import com.husarp.ankigo.update.Updates
 import org.json.JSONObject
@@ -48,6 +54,8 @@ class StudyActivity : Activity() {
     private lateinit var cardColumn: LinearLayout
     private lateinit var side: LinearLayout
     private lateinit var web: WebView
+    private lateinit var swipe: SwipeFrame
+    private var swipeOn = false   // the "Swipe to answer" setting, read when the screen resumes
     private lateinit var notice: LinearLayout
     private lateinit var noticeScroll: ScrollView
     private lateinit var answerDivider: View
@@ -58,6 +66,7 @@ class StudyActivity : Activity() {
     private lateinit var gap: View
     private lateinit var topBar: LinearLayout
     private lateinit var subtitle: TextView
+    private lateinit var subRow: LinearLayout   // the title's second line; the timer pill moves in here when the top bar is narrow
     private lateinit var queueCounts: LinearLayout
     private lateinit var cardSurface: LinearLayout
     private lateinit var summaryBar: AppBar
@@ -81,13 +90,29 @@ class StudyActivity : Activity() {
     private var elapsed = 0L
     private var background = true
     private var maxTime = 60_000L
+    private var opts = StudyTiming.Options()   // the deck's time options (timer pill, auto-advance)
+    private var sideNo = 0                     // counts up per card side shown: a countdown belongs to one side
+    private var pageReady = false              // this side's page finished loading
+    private var autoFired = -1                 // the side whose auto-advance already acted
+    private var frozenAt = -1L                 // the timer pill's value once the answer is shown (deck: stop timer on answer)
+    private var timerRed = false
+    private lateinit var timerPill: TextView
+    private lateinit var countdown: CountdownBar
+    private val auto = AutoAdvance(main, { if (reduceMotion()) 1000L else 66L }, { countdown.fraction = it }, { fireAuto() })
+    private val timerTick = Runnable { refreshTimer() }
     private var allowAt = Long.MAX_VALUE
     private var heightMode = 1
     private var audio: MediaPlayer? = null
-    private var sounds = emptyList<String>()
+    private var avAuto = emptyList<TtsRules.Av>()  // sounds and speech that play by themselves on this side
+    private var avAll = emptyList<TtsRules.Av>()   // every sound/speech button of the page, by number
+    private var speech: CardSpeech? = null         // created on the first card with speech
+    private var ttsCard = TtsRules.NONE
+    private var voiceNote: String? = null          // "No Japanese voice on this phone"
+    private var mediaArgs = Triple(0, 0, false)
+    private var audioBusy = false                  // the AV queue is playing
     private var audioNow = false   // the card on screen has sound (its question or answer)
     private var audioPrev = false  // the card just answered had sound; its battle events play while the next card loads
-    private val soundQueue = ArrayDeque<String>()
+    private val soundQueue = ArrayDeque<TtsRules.Av>()
     private val counts = IntArray(4)
     private var totalTime = 0L
     private var coins = 0; private var xp = 0; private var met = 0; private var defeated = 0
@@ -113,7 +138,7 @@ class StudyActivity : Activity() {
         Anki.load(this)
         deckId = intent.getLongExtra("deckId", 0); deckName = intent.getStringExtra("deckName") ?: "Deck"
         prefs.edit().putLong("lastDeck", deckId).putString("lastName", deckName).apply()
-        heightMode = prefs.getInt("height", 1).coerceIn(0, 2)
+        heightMode = prefs.getInt("height", if (resources.configuration.smallestScreenWidthDp >= com.husarp.ankigo.study.StudyLayout.TABLET_DP) 0 else 1).coerceIn(0, 2)
         setContentView(buildContent())
         setupWeb(); layout()
         if (savedInstanceState != null) {
@@ -156,8 +181,14 @@ class StudyActivity : Activity() {
         val title = StudyUi.column(this)
         header = StudyUi.ellipsis(StudyUi.label(this, deckName.substringAfterLast("::"), 15, R.color.ag_text, 900))
         subtitle = StudyUi.ellipsis(StudyUi.label(this, "Loading…", 10, R.color.ag_sub0, 800))
-        title.addView(header); title.addView(subtitle)
+        subRow = StudyUi.row(this); subRow.addView(subtitle, StudyUi.lp(0, -2, 1f))
+        title.addView(header); title.addView(subRow)
         top.addView(title, StudyUi.lp(0, -2, 1f).also { it.marginStart = Ui.dp(this, 6); it.marginEnd = Ui.dp(this, 6) })
+        timerPill = StudyUi.label(this, "0:00", 11.5f, R.color.ag_sub1, 900).apply {
+            gravity = Gravity.CENTER; fontFeatureSettings = "tnum"; visibility = View.GONE
+            setPadding(Ui.dp(context, 7), Ui.dp(context, 3), Ui.dp(context, 7), Ui.dp(context, 3))
+        }; styleTimer(false)
+        top.addView(timerPill, StudyUi.lp(-2).also { it.marginEnd = Ui.dp(this, 8) })
         queueCounts = StudyUi.row(this); top.addView(queueCounts)
         top.addView(StudyUi.iconButton(this, R.drawable.ic_more_vert, "Card actions") { actions() }, StudyUi.lp(Ui.dp(this, 34), Ui.dp(this, 34)).also { it.marginStart = Ui.dp(this, 6) })
         topBar.addView(top, StudyUi.lp(-1, Ui.dp(this, 45)))
@@ -166,8 +197,11 @@ class StudyActivity : Activity() {
         summaryBar = Ui.appBar(this, deckName.substringAfterLast("::"), "done").apply { visibility = View.GONE }
         cardColumn.addView(summaryBar)
         cardSurface = StudyUi.column(this).apply { setBackgroundColor(Ui.c(context, R.color.ag_anki_bg)) }
+        countdown = CountdownBar(this).apply { visibility = View.GONE }
+        cardSurface.addView(countdown, StudyUi.lp(-1, Ui.dp(this, 3)))
         web = WebView(this).apply { setBackgroundColor(Ui.c(context, R.color.ag_anki_bg)) }
-        cardSurface.addView(web, StudyUi.lp(-1, 0, 1f))
+        swipe = SwipeFrame(this, web).also { it.onSwipe = { ease -> answer(ease) } }
+        cardSurface.addView(swipe, StudyUi.lp(-1, 0, 1f))
         notice = StudyUi.column(this).apply { visibility = View.GONE }
         noticeScroll = object : ScrollView(this) {
             override fun onMeasure(w: Int, h: Int) {
@@ -227,32 +261,36 @@ class StudyActivity : Activity() {
     }
     override fun onConfigurationChanged(config: Configuration) { super.onConfigurationChanged(config); actionSheet?.dismiss(); layout() }
     private fun layout() {
-        val wide = !finished && resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val tablet = resources.configuration.smallestScreenWidthDp >= 600
+        val plan = studyPlan()
+        val wide = plan.columns
         body.orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
         // A split-screen window (e.g. 412x400 dp) counts as landscape but is too narrow for a 42% battle column
         // (~170 dp: info cards cover the sprites). There the columns are 50/50 and the arena keeps a fixed, width-sized
         // height (the sprites scale with the arena height) so both cards fit beside the sprites; the answers stay at the bottom.
-        val narrow = wide && !tablet && resources.configuration.screenWidthDp < 560
-        cardColumn.layoutParams = if (wide) StudyUi.lp(0, -1, if (narrow) .5f else .58f) else StudyUi.lp(-1, 0, 1f)
-        side.layoutParams = if (wide) StudyUi.lp(0, -1, if (narrow) .5f else .42f) else StudyUi.lp(-1, -2)
-        val mode = if (wide) { if (tablet) 0 else 1 } else heightMode
+        val narrow = plan.narrow
+        cardColumn.layoutParams = if (wide) StudyUi.lp(0, -1, plan.cardShare) else StudyUi.lp(-1, 0, 1f)
+        side.layoutParams = if (wide) StudyUi.lp(0, -1, plan.sideShare) else StudyUi.lp(-1, -2)
+        val mode = plan.mode ?: heightMode
         panel.setStudyLayout(mode != 0, mode == 2)
         // Compact info cards (name, level, HP bar) on the study strip's sprite geometry: full cards cannot sit beside the sprites in ~200 dp.
         if (narrow) { panel.arena.setCompact(false); panel.arena.setCompact(true) }
         panel.layoutParams = when {
             narrow -> StudyUi.lp(-1, Ui.dp(this, 170))
             wide -> StudyUi.lp(-1, 0, 1f)
-            else -> StudyUi.lp(-1, Ui.dp(this, when(mode) { 0 -> 220; 2 -> 34; else -> 180 }))
+            else -> StudyUi.lp(-1, Ui.dp(this, plan.panelDp(mode)))
         }
         gap.layoutParams = StudyUi.lp(-1, 0, if (narrow) 1f else 0f)
         answerDivider.visibility = if (finished) View.VISIBLE else View.GONE
         panel.visibility = if (finished || GameRepo.game == null) View.GONE else View.VISIBLE
-        handleBar.visibility = if (finished || wide || GameRepo.game == null) View.GONE else View.VISIBLE
+        handleBar.visibility = if (finished || !plan.handle || GameRepo.game == null) View.GONE else View.VISIBLE
         side.setPadding(if (wide) Ui.dp(this, 1) else 0, 0, 0, 0)
         side.setBackgroundColor(Ui.c(this, if (wide) R.color.ag_s0 else R.color.ag_base))
         updateHandle()
+        placeTimer()
         if (card != null && !finished) showButtons()
+    }
+    private fun studyPlan(): com.husarp.ankigo.study.StudyLayout.Plan = resources.configuration.let {
+        com.husarp.ankigo.study.StudyLayout.plan(it.screenWidthDp, it.smallestScreenWidthDp, it.orientation == Configuration.ORIENTATION_LANDSCAPE, finished)
     }
     private fun updateHandle() { handle.text = listOf("FULL", "STRIP", "MINI")[heightMode] }
     override fun onStart() { super.onStart(); started = true; BattleScreen.setVisible(this, true); LiveSession.addSink(sink); LiveSession.hold(this, this) }
@@ -260,29 +298,106 @@ class StudyActivity : Activity() {
     override fun onResume() {
         super.onResume(); background = false; Updates.onResume(this); FloatBattleService.startIfWanted(this)
         if (shownAt != 0L) shownAt = SystemClock.elapsedRealtime()
+        swipeOn = prefs.getBoolean("swipe", false); if (::swipe.isInitialized) updateSwipe()
         if (::web.isInitialized && (finished || card != null && !locked)) loadNext()
+        syncTiming()
     }
     override fun onPause() {
-        pauseClock(); background = true; stopAudio(); Updates.onPause(this); super.onPause()
+        pauseClock(); background = true; syncTiming(); stopAudio(); Updates.onPause(this); super.onPause()
     }
     private fun pauseClock() { if (shownAt != 0L) elapsed += SystemClock.elapsedRealtime() - shownAt; shownAt = 0 }
-    override fun onDestroy() { generation++; main.removeCallbacksAndMessages(null); events.clear(); actionSheet?.dismiss(); stopAudio(); web.destroy(); io.shutdown(); super.onDestroy() }
+    override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (::countdown.isInitialized) syncTiming() }
+
+    // ---- visible answer timer and auto-advance (the rules are in study/StudyTiming.kt)
+    private fun styleTimer(red: Boolean) {
+        timerRed = red
+        timerPill.setTextColor(Ui.c(this, if (red) R.color.ag_red else R.color.ag_sub1))
+        timerPill.background = Ui.rounded(if (red) StudyUi.blend(Ui.c(this, R.color.ag_red), Ui.c(this, R.color.ag_s0), .16f) else Ui.c(this, R.color.ag_s0), 9, this)
+    }
+    /** The pill sits before the counts; in a narrow card column (split screen) it moves to the title's second line so the deck name keeps its room. */
+    private fun placeTimer() {
+        val narrow = resources.configuration.screenWidthDp * studyPlan().cardShare < 300
+        val top = queueCounts.parent as ViewGroup
+        val want: ViewGroup = if (narrow) subRow else top
+        if (timerPill.parent === want) return
+        (timerPill.parent as? ViewGroup)?.removeView(timerPill)
+        if (narrow) want.addView(timerPill, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
+        else want.addView(timerPill, want.indexOfChild(queueCounts), StudyUi.lp(-2).also { it.marginEnd = Ui.dp(this, 8) })
+    }
+    private fun reduceMotion() = !android.animation.ValueAnimator.areAnimatorsEnabled() || prefs.getBoolean("reduceMotion", false)
+    private fun autoOn() = prefs.getBoolean("autoAdvance", false)
+    private fun autoPlan(): StudyTiming.Plan? {
+        val c = card ?: return null
+        return if (finished) null else StudyTiming.plan(opts, flipped, autoOn(), prefs.getInt("autoQuestionSecs", StudyTiming.OWN_QUESTION), prefs.getInt("autoAnswerSecs", StudyTiming.OWN_ANSWER), c.buttons)
+    }
+    private fun syncTiming() { if (::countdown.isInitialized) { refreshTimer(); syncAuto() } }
+    internal fun refreshTimer() {
+        main.removeCallbacks(timerTick)
+        val shown = card != null && !finished && !(locked && notice.visibility == View.VISIBLE) &&
+            StudyTiming.timerShown(prefs.getString("timer", StudyTiming.AS_DECK), opts.showTimer)
+        timerPill.visibility = if (shown) View.VISIBLE else View.GONE
+        subtitle.visibility = if (shown && timerPill.parent === subRow) View.GONE else View.VISIBLE   // narrow bar: the pill takes the subtitle's place
+        if (!shown) return
+        val ms = if (frozenAt >= 0) frozenAt else StudyTiming.taken(elapsed, shownAt, SystemClock.elapsedRealtime(), maxTime)
+        val red = StudyTiming.atMax(ms, maxTime)
+        if (red != timerRed) styleTimer(red)
+        timerPill.text = StudyTiming.clock(ms); timerPill.contentDescription = StudyTiming.timerDescription(ms)
+        if (!background && shownAt != 0L && frozenAt < 0 && !red) main.postDelayed(timerTick, 1000)
+    }
+    /** Colour and spoken text of the countdown bar for [plan] (the bar's fill is set by the countdown). */
+    internal fun styleCountdown(plan: StudyTiming.Plan) {
+        countdown.tone = Ui.c(this, when (plan.act) {
+            StudyTiming.Act.SHOW_ANSWER -> R.color.ag_mauve; StudyTiming.Act.AGAIN -> R.color.ag_red; StudyTiming.Act.HARD -> R.color.ag_peach
+            StudyTiming.Act.GOOD -> R.color.ag_green; StudyTiming.Act.BURY -> R.color.ag_sub0; StudyTiming.Act.REMINDER -> R.color.ag_yellow
+        })
+        countdown.contentDescription = StudyTiming.describe(plan)
+    }
+    private fun syncAuto() {
+        countdown.visibility = if (autoOn()) View.VISIBLE else View.GONE
+        val plan = autoPlan()
+        val run = plan != null && autoFired != sideNo &&
+            StudyTiming.mayRun(pageReady, !background, hasWindowFocus(), locked, mediaBlocked, actionSheet != null, audioBusy, opts.waitForAudio)
+        if (plan == null || !run) { auto.stop(); return }
+        if (auto.running && auto.side == sideNo) return
+        styleCountdown(plan); auto.start(sideNo, plan.millis)
+    }
+    /** The countdown reached zero: act through the same functions a tap uses (they keep every safety check). */
+    private fun fireAuto() {
+        val plan = autoPlan() ?: return
+        autoFired = sideNo
+        when (plan.act) {
+            StudyTiming.Act.SHOW_ANSWER -> flip()
+            StudyTiming.Act.BURY -> writeAction("bury")
+            StudyTiming.Act.AGAIN, StudyTiming.Act.HARD, StudyTiming.Act.GOOD -> answer(plan.ease)
+            StudyTiming.Act.REMINDER -> {
+                Ui.toast(this, StudyTiming.reminder(flipped))
+                if (prefs.getBoolean("haptic", true)) web.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            }
+        }
+    }
+    override fun onDestroy() { generation++; main.removeCallbacksAndMessages(null); events.clear(); actionSheet?.dismiss(); stopAudio(); speech?.shutdown(); web.destroy(); io.shutdown(); super.onDestroy() }
     private fun setupWeb() {
         web.settings.javaScriptEnabled = true
         web.settings.allowFileAccess = false; web.settings.allowContentAccess = false
         web.settings.textZoom = prefs.getInt("zoom", 100).coerceIn(80, 150)
         web.addJavascriptInterface(object {
-            @JavascriptInterface fun play(name: String) { main.post { playSounds(listOf(name)) } }
+            @JavascriptInterface fun play(name: String) { main.post { playAv(listOf(TtsRules.Av(file = name))) } }
+            @JavascriptInterface fun speak(i: Int) { main.post { avAll.getOrNull(i)?.let { playAv(listOf(it)) } } }
             @JavascriptInterface fun flip() { main.post { this@StudyActivity.flip() } }
             @JavascriptInterface fun actions() { main.post { this@StudyActivity.actions() } }
             @JavascriptInterface fun mathjax(s: String) {}
             @JavascriptInterface fun jsError(s: String) {}
         }, "AnkiGo")
+        web.addJavascriptInterface(object {
+            @JavascriptInterface fun call(page: Int, endpoint: String, data: String): String = jsCall(page, endpoint, data)
+        }, "AnkiGoJs")
         web.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
                 if (!flipped && card != null && !background && shownAt == 0L) shownAt = SystemClock.elapsedRealtime()
+                pageReady = true; syncTiming()
             }
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
+                JsApi.signal(req.url.toString())?.let { a -> main.post { if (jsSnap != null) jsDo(a) }; return true }
                 if (req.url.scheme in listOf("http", "https") && req.url.host != "ankigo.media") runCatching { startActivity(Intent(Intent.ACTION_VIEW, req.url)) }
                 return true
             }
@@ -297,13 +412,14 @@ class StudyActivity : Activity() {
     }
     private fun loadNext() {
         stopAudio()
-        audioPrev = audioNow; audioNow = false
+        audioPrev = audioNow; audioNow = false; voiceNote = null; ttsCard = TtsRules.NONE
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
-        finished = false; locked = true; card = null
+        finished = false; locked = true; card = null; pageReady = false; jsSnap = null
         topBar.visibility = View.VISIBLE; summaryBar.visibility = View.GONE; cardSurface.visibility = View.VISIBLE
-        web.visibility = View.VISIBLE; buttons.removeAllViews(); showNotice(false)
+        web.visibility = View.VISIBLE; buttons.removeAllViews(); showNotice(false); updateSwipe()
         buttons.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8))
-        layout()
+        buttons.layoutParams = StudyUi.lp(-1)
+        layout(); syncTiming()
         val token = ++generation
         io.execute {
             val result = runCatching {
@@ -331,7 +447,8 @@ class StudyActivity : Activity() {
                     return@runCatching
                 }
                 val html = Anki.card(this, n.nid, n.ord) ?: kotlin.error("Open AnkiDroid once, then retry.")
-                val state = Anki.card(this, n.nid, n.ord, CardState.COLS + "ord") ?: kotlin.error("Couldn't read this card's scheduling state.")
+                val flagsOk = Anki.flagsSupported(this)
+                val state = Anki.card(this, n.nid, n.ord, CardState.COLS + "ord" + "original_due" + (if (flagsOk) arrayOf("flags") else emptyArray())) ?: kotlin.error("Couldn't read this card's scheduling state.")
                 check(CardState.from(state) != null) { "AnkiDroid didn't provide the card's review count." }
                 val note = Anki.note(this, n.nid)
                 val model = note?.let { Anki.model(this, it.mid) }
@@ -341,20 +458,26 @@ class StudyActivity : Activity() {
                 val missing = files.filter { Media.open(this, it)?.use { false } ?: true }
                 val blocked = missing.filterNot { CardMedia.isSound(it) }
                 val unsupported = CardMedia.unsupported(q + a)
+                // {{tts}} text and language are not in the API's HTML (only [anki:play:..]): rebuild them from the template
+                val spoken = if (note != null && model != null && (q + a).contains("[anki:play:")) runCatching {
+                    TtsRules.templateFor(Anki.templates(this, note.mid), n.ord, model.type == 1)?.let { TtsRules.card(it, fieldMap, n.ord) }
+                }.getOrNull() ?: TtsRules.NONE else TtsRules.NONE
                 val options = JSONObject(Anki.deckOptions(this, deckId))
                 main.post {
                     if (!valid(token)) return@post
                     finished = false; card = n; stats = state; question = q; answerHtml = a; css = model?.css ?: ""; fields = fieldMap
-                    audioNow = SoundRules.cardHasAudio(q, a)
-                    maxTime = options.optLong("maxTaken", 60).coerceAtLeast(1) * 1000
+                    audioNow = SoundRules.cardHasAudio(q, a); ttsCard = spoken
+                    opts = StudyTiming.parse(options); maxTime = opts.maxMs
                     val d = decks.firstOrNull { it.id == deckId }
                     modelName = model?.name ?: ""
                     cardName = state["card_name"] ?: "Card ${n.ord + 1}"
                     header.text = deckName.substringAfterLast("::")
                     subtitle.text = "$cardName · card ${counts.sum() + 1}"
                     showQueueCounts(d, state["queue"]?.toIntOrNull())
+                    jsBase = JsApi.snapshot(state, n.buttons, n.nextTimes, Triple(d?.new ?: 0, d?.learn ?: 0, d?.review ?: 0), note?.tags ?: "",
+                        decks.firstOrNull { it.id == (state["deck_id"]?.toLongOrNull() ?: deckId) }?.name ?: deckName, flagsOk)
                     mediaBlocked = (blocked.isNotEmpty() || unsupported) && prefs.getString("missing", "Ask") != "Answer anyway"
-                    layout(); showQuestion(); mediaNotice(blocked.size, missing.size - blocked.size, unsupported)
+                    layout(); showQuestion(); mediaNotice(blocked.size, missing.size - blocked.size, unsupported); checkVoices(token)
                     if (mediaBlocked && prefs.getString("missing", "Ask") == "Always open in AnkiDroid") openAnki()
                 }
             }
@@ -373,30 +496,36 @@ class StudyActivity : Activity() {
     }
     private fun valid(token: Int) = !isDestroyed && token == generation
     private fun page(content: String, side: String, typed: String?) = CardHtml.build(content, css, card!!.ord, side, typed,
-        dark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES) { fields[it] }
+        dark = isNight(), speech = if (side == "q") ttsCard.question else ttsCard.answer, jsPage = jsShow(side == "a")) { fields[it] }
     private fun showQuestion() {
         val key = card!!.nid to card!!.ord
         if (timedCard != key) elapsed = 0
         timedCard = key
-        flipped = false; shownAt = 0; locked = false
-        val page = page(question, "q", null); sounds = page.sounds
+        flipped = false; shownAt = 0; locked = false; sideNo++; pageReady = false; frozenAt = -1
+        val page = page(question, "q", null); avAuto = page.autoplay; avAll = page.av
         web.loadDataWithBaseURL(CardHtml.BASE, page.html, "text/html", "UTF-8", null)
-        showButtons(); playSounds(sounds)
+        showButtons(); playAv(avAuto); syncTiming()
     }
     private fun flip() {
         if (locked || flipped || mediaBlocked || card == null) return
-        locked = true
+        locked = true; syncTiming()
         web.evaluateJavascript("document.getElementById('typeans')?.value || ''") { raw ->
             if (isDestroyed || card == null) return@evaluateJavascript
             val typed = runCatching { org.json.JSONArray("[$raw]").getString(0) }.getOrDefault("")
-            val page = page(answerHtml, "a", typed); sounds = page.sounds
-            flipped = true; locked = false; allowAt = SystemClock.elapsedRealtime() + 300
+            val page = page(answerHtml, "a", typed); avAuto = page.autoplay; avAll = page.av
+            flipped = true; locked = false; sideNo++; pageReady = false; allowAt = SystemClock.elapsedRealtime() + 300
+            if (opts.stopTimerOnAnswer) frozenAt = StudyTiming.taken(elapsed, shownAt, SystemClock.elapsedRealtime(), maxTime)
             web.loadDataWithBaseURL(CardHtml.BASE, page.html, "text/html", "UTF-8", null)
-            web.announceForAccessibility("Answer shown"); showButtons(); playSounds(sounds)
+            web.announceForAccessibility("Answer shown"); showButtons(); playAv(avAuto); syncTiming()
         }
     }
+    /** Swipe-to-answer is on for the answer side only; the hint stays while the card is up, a swipe works only while answering is allowed. */
+    private fun updateSwipe() {
+        val showing = swipeOn && flipped && card != null && !finished && !mediaBlocked
+        swipe.setState(showing && !locked, card?.buttons ?: 4, showing)
+    }
     private fun showButtons() {
-        buttons.removeAllViews()
+        buttons.removeAllViews(); updateSwipe()
         val enabled = !locked && !mediaBlocked
         if (!flipped) {
             buttons.addView(StudyUi.answer(this, "Show answer", null, R.color.ag_mauve, enabled) { flip() }, StudyUi.lp(-1, Ui.dp(this, 48)))
@@ -404,7 +533,7 @@ class StudyActivity : Activity() {
         }
         val n = card ?: return
         val labels = when (n.buttons) { 2 -> listOf("Again", "Good"); 3 -> listOf("Again", "Good", "Easy"); else -> listOf("Again", "Hard", "Good", "Easy") }
-        val wide = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && resources.configuration.smallestScreenWidthDp < 600
+        val wide = studyPlan().answerRows == 2
         var row = StudyUi.row(this)
         buttons.addView(row)
         labels.forEachIndexed { i, label ->
@@ -422,7 +551,7 @@ class StudyActivity : Activity() {
         val state = CardState.from(before) ?: return
         pauseClock(); val took = elapsed.coerceAtMost(maxTime)
         if (prefs.getBoolean("haptic", true)) web.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-        locked = true; showButtons()
+        locked = true; showButtons(); syncTiming()
         io.execute {
             val result = runCatching {
                 StudyLoop(object : StudyLoop.Provider {
@@ -491,15 +620,14 @@ class StudyActivity : Activity() {
     }
     /** The card column is only ~200 dp wide in a split-screen window: the notice's two main buttons stack there instead of squeezing. */
     private fun stackNoticeButtons(): Boolean {
-        val land = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val share = if (!land) 1f else if (resources.configuration.screenWidthDp < 560) .5f else .58f
-        return resources.configuration.screenWidthDp * share < 300
+        return resources.configuration.screenWidthDp * studyPlan().cardShare < 300
     }
     private fun noticeButtons() = if (stackNoticeButtons()) StudyUi.column(this) else StudyUi.row(this)
     private fun noticeGap() = StudyUi.lp(-2).also { if (stackNoticeButtons()) { it.width = -1; it.topMargin = Ui.dp(this, 6) } else it.marginStart = Ui.dp(this, 6) }
     private fun mediaNotice(pictures: Int, sound: Int, unsupported: Boolean) {
+        mediaArgs = Triple(pictures, sound, unsupported)
         notice.removeAllViews(); styleNotice()
-        showNotice(pictures > 0 || sound > 0 || unsupported)
+        showNotice(pictures > 0 || sound > 0 || unsupported || voiceNote != null)
         if (pictures > 0 || unsupported) {
             val heading = StudyUi.row(this)
             heading.addView(StudyUi.icon(this, R.drawable.ic_alert, R.color.ag_peach), StudyUi.lp(Ui.dp(this, 16), Ui.dp(this, 16)).also { it.marginEnd = Ui.dp(this, 6) })
@@ -508,14 +636,38 @@ class StudyActivity : Activity() {
             notice.addView(StudyUi.label(this, "The Play Store build keeps pictures private. This card is next in AnkiDroid too: answer there and AnkiGo counts it.", 11.5f, R.color.ag_sub0), StudyUi.spaced(this, 3))
             val row = noticeButtons()
             row.addView(StudyUi.smallButton(this, "Open in AnkiDroid", true) { openAnki() })
-            row.addView(StudyUi.smallButton(this, "Answer anyway") { mediaBlocked = false; showNotice(false); showButtons() }, noticeGap())
+            row.addView(StudyUi.smallButton(this, "Answer anyway") { mediaBlocked = false; showNotice(false); showButtons(); syncTiming() }, noticeGap())
             notice.addView(row, StudyUi.spaced(this, 8))
             notice.addView(StudyUi.label(this, "For readable pictures, use F-Droid / GitHub and grant the media folder in Settings. Sync in AnkiDroid, install the other build, then sync back.", 11.5f, R.color.ag_sub0), StudyUi.spaced(this, 6))
             val links = StudyUi.row(this)
             links.addView(StudyUi.smallButton(this, "F-Droid") { openUrl("https://f-droid.org/packages/com.ichi2.anki/") })
             links.addView(StudyUi.smallButton(this, "GitHub") { openUrl("https://github.com/ankidroid/Anki-Android/releases") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
             notice.addView(links, StudyUi.spaced(this, 4))
-        } else notice.addView(StudyUi.label(this, "$sound sound file${if (sound == 1) "" else "s"} unavailable here", 11.5f, R.color.ag_sub0))
+        } else {
+            if (sound > 0) notice.addView(StudyUi.label(this, "$sound sound file${if (sound == 1) "" else "s"} unavailable here", 11.5f, R.color.ag_sub0))
+            voiceNote?.let { note ->
+                notice.addView(StudyUi.label(this, note, 11.5f, R.color.ag_sub0), if (sound > 0) StudyUi.spaced(this, 6) else StudyUi.lp(-2))
+                val row = StudyUi.row(this)
+                row.addView(StudyUi.smallButton(this, "Voice settings") { voiceSettings() })
+                notice.addView(row, StudyUi.spaced(this, 6))
+            }
+        }
+    }
+    /** A card with speech needs a voice for its language: say so (never blocking) when the phone has none. The pictures banner wins. */
+    private fun checkVoices(token: Int) {
+        val langs = ttsCard.languages
+        if (langs.isEmpty()) return
+        val engine = speech ?: CardSpeech(this).also { speech = it }
+        engine.missing(langs) { gone ->
+            if (!valid(token) || card == null || gone != null && gone.isEmpty()) return@missing
+            val names = gone?.map { java.util.Locale.forLanguageTag(it).getDisplayLanguage(java.util.Locale.ENGLISH).ifEmpty { it } }?.distinct() ?: emptyList()
+            voiceNote = TtsRules.missingVoiceNote(names)
+            if (mediaArgs.first == 0 && !mediaArgs.third) mediaNotice(mediaArgs.first, mediaArgs.second, mediaArgs.third)
+        }
+    }
+    private fun voiceSettings() {
+        for (action in listOf("com.android.settings.TTS_SETTINGS", android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
+            if (runCatching { startActivity(Intent(action)) }.isSuccess) return
     }
     private fun showError(message: String) {
         locked = true; notice.removeAllViews(); styleNotice(); showNotice(true)
@@ -523,7 +675,7 @@ class StudyActivity : Activity() {
         val row = StudyUi.row(this)
         row.addView(StudyUi.smallButton(this, "Retry / reload", true) { loadNext() })
         row.addView(StudyUi.smallButton(this, "Open in AnkiDroid") { openAnki() }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
-        notice.addView(row, StudyUi.spaced(this, 8)); showButtons()
+        notice.addView(row, StudyUi.spaced(this, 8)); showButtons(); syncTiming()
     }
     private fun throwBall() {
         if (!events.idle) return
@@ -549,7 +701,8 @@ class StudyActivity : Activity() {
         }
         dialog.show()
         dialog.window?.setLayout(minOf(resources.displayMetrics.widthPixels, Ui.dp(this, 600)), -2)
-        dialog.setOnDismissListener { if (actionSheet === dialog) actionSheet = null }
+        dialog.setOnDismissListener { if (actionSheet === dialog) actionSheet = null; syncTiming() }
+        syncTiming()
     }
     /** The card-actions sheet's content (the dialog around it is made by [actions]); [dismiss] closes that dialog. */
     internal fun actionSheetContent(dismiss: () -> Unit): View {
@@ -599,7 +752,7 @@ class StudyActivity : Activity() {
         }
         action(R.drawable.ic_edit, "Edit note", "Opens AnkiDroid's browser on this note, tap it to edit") { edit() }
         action(R.drawable.ic_open, "Continue in AnkiDroid", "Same deck; the battle keeps counting") { openAnki() }
-        action(R.drawable.ic_sound, "Replay sound") { playSounds(sounds) }
+        action(R.drawable.ic_sound, "Replay sound") { playAv(avAuto) }
         sheet.addView(StudyUi.line(this), StudyUi.lp(-1, Ui.dp(this, 1)).also { it.setMargins(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4)) })
         action(R.drawable.ic_trash, "Delete note…", "Asks first. Deletes all cards of this note", danger = true) { confirmDelete() }
         action(R.drawable.ic_undo, "Undo…", "Not possible in AnkiGo. Use Undo in AnkiDroid", faded = true) {
@@ -614,7 +767,7 @@ class StudyActivity : Activity() {
     }
     private fun writeAction(action: String, flag: Int = 0) {
         val c = card ?: return
-        locked = true; showButtons()
+        locked = true; showButtons(); syncTiming()
         io.execute {
             val result = runCatching {
                 Anki.selectDeck(this, deckId)
@@ -659,7 +812,7 @@ class StudyActivity : Activity() {
         }
     }
     private fun summary(decks: List<Anki.Deck>, learn: Int, fresh: Int) {
-        finished = true; card = null; locked = true; buttons.removeAllViews(); showNotice(false)
+        finished = true; card = null; locked = true; buttons.removeAllViews(); showNotice(false); syncTiming()
         topBar.visibility = View.GONE; summaryBar.visibility = View.VISIBLE; cardSurface.visibility = View.GONE
         val n = counts.sum()
         val why = when { learn > 0 -> "$learn learning cards come back in a few minutes."; fresh > 0 -> "Daily new-card limit reached · $fresh new cards left."; else -> "All available cards studied." }
@@ -754,9 +907,10 @@ class StudyActivity : Activity() {
         goalRow.addView(StudyUi.label(this, if (today >= goal) "Goal done · $today" else "$today / $goal", 12, R.color.ag_text, 900))
         goalRow.addView(Ui.chip(this, R.drawable.ic_flame, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
         summary.addView(goalRow, StudyUi.spaced(this, 6))
-        summaryView = ScrollView(this).apply { addView(summary); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
+        summaryView = ScrollView(this).apply { addView(summary, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
         val next = decks.firstOrNull { it.id != deckId && it.total > 0 }
         buttons.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 10))
+        buttons.layoutParams = LinearLayout.LayoutParams(StudyUi.pageWidth(this), -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
         if (next != null) buttons.addView(StudyUi.primary(this, "Next deck: ${next.name} · ${next.total} due") {
             startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", next.id).putExtra("deckName", next.name)); finish()
         })
@@ -790,11 +944,20 @@ class StudyActivity : Activity() {
         }
     }
     private fun openUrl(url: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
-    private fun stopAudio() { soundQueue.clear(); audio?.release(); audio = null }
-    private fun playSounds(names: List<String>) { stopAudio(); soundQueue.addAll(names); playNextSound() }
+    private fun stopAudio() {
+        soundQueue.clear(); audio?.release(); audio = null; speech?.stop()
+        if (audioBusy) { audioBusy = false; audioIdle() }
+    }
+    /** The AV queue (sound files and speech, in order) just emptied or was stopped. */
+    private fun audioIdle() { main.post { syncTiming() } }
+    private fun playAv(items: List<TtsRules.Av>) { stopAudio(); soundQueue.addAll(items); audioBusy = items.isNotEmpty(); playNextSound() }
     private fun playNextSound() {
-        val name = soundQueue.removeFirstOrNull() ?: return
-        val found = Media.find(this, name) ?: return playNextSound()
+        val next = soundQueue.removeFirstOrNull() ?: return run { if (audioBusy) { audioBusy = false; audioIdle() } }
+        next.speech?.let { item ->
+            (speech ?: CardSpeech(this).also { speech = it }).speak(item) { playNextSound() }
+            return
+        }
+        val found = Media.find(this, next.file ?: return playNextSound()) ?: return playNextSound()
         try {
             val p = MediaPlayer(); audio = p
             if (found.file != null) p.setDataSource(found.file.absolutePath) else p.setDataSource(this, found.uri!!)
@@ -809,6 +972,45 @@ class StudyActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 1 && grantResults.firstOrNull() == 0) { LiveSession.restart(this); loadNext() }
     }
+    // ---- Card JavaScript API (study/JsApi.kt + JsApiScript.kt): scripts read a snapshot; every action goes through flip / answer / writeAction ----
+    @Volatile private var jsSnap: JsApi.Snapshot? = null   // what card scripts may read, rebuilt on the main thread whenever a side is shown
+    private var jsBase = JsApi.Snapshot()                   // the shown card's data (counts, scheduling, tags, deck name), set in loadNext
+    private var jsPageSeq = 0
+    private var jsLang = java.util.Locale.getDefault().toLanguageTag(); private var jsRate = 1f; private var jsPitch = 1f
+    private fun isNight() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+    /** A side is about to load: publish its snapshot and return the page token its scripts must present. */
+    private fun jsShow(answer: Boolean): Int {
+        val metered = runCatching { (getSystemService(CONNECTIVITY_SERVICE) as android.net.ConnectivityManager).isActiveNetworkMetered }.getOrDefault(false)
+        jsSnap = jsBase.copy(page = ++jsPageSeq, answer = answer, night = isNight(), metered = metered)
+        return jsPageSeq
+    }
+    /** Runs on the WebView's bridge thread: answers from the snapshot only, and hands any action to the main thread. */
+    private fun jsCall(page: Int, endpoint: String, data: String): String {
+        val reply = JsApi.call(page, endpoint, data, jsSnap, speech?.isSpeaking == true)
+        reply.action?.let { a -> main.post { if (jsSnap?.page == page) jsDo(a) } }
+        return reply.text
+    }
+    private fun jsDo(a: JsApi.Action) {
+        when (a) {
+            JsApi.Action.ShowAnswer -> flip()
+            is JsApi.Action.Answer -> if (!flipped) flip() else JsApi.easeFor(card?.buttons ?: 4, a.rating)?.let { answer(it) }
+            JsApi.Action.Bury -> jsWrite("bury", 0)
+            JsApi.Action.Suspend -> jsWrite("suspend", 0)
+            is JsApi.Action.Flag -> jsWrite("flag", a.value)
+            is JsApi.Action.Toast -> android.widget.Toast.makeText(applicationContext, a.text, if (a.short) android.widget.Toast.LENGTH_SHORT else android.widget.Toast.LENGTH_LONG).show()
+            is JsApi.Action.Speak -> {
+                val say = TtsRules.Av(speech = TtsRules.Item(a.text, jsLang, jsRate, jsPitch))
+                if (a.add && audioBusy) soundQueue.add(say) else playAv(listOf(say))
+            }
+            JsApi.Action.StopSpeech -> stopAudio()
+            is JsApi.Action.Language -> jsLang = a.tag
+            is JsApi.Action.Pitch -> jsPitch = a.value
+            is JsApi.Action.SpeechRate -> jsRate = a.value
+            is JsApi.Action.Scrollbar -> if (a.horizontal) web.isHorizontalScrollBarEnabled = a.on else web.isVerticalScrollBarEnabled = a.on
+        }
+    }
+    /** Bury / suspend / flag from card JavaScript: same function as the action sheet, and only when the card is idle (it locks the screen itself). */
+    private fun jsWrite(action: String, flag: Int) { if (!locked && !mediaBlocked && card != null && !finished) writeAction(action, flag) }
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (web.hasFocus() && event.isPrintingKey && keyCode !in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_4) return super.onKeyUp(keyCode, event)
         if (keyCode == KeyEvent.KEYCODE_SPACE || keyCode == KeyEvent.KEYCODE_ENTER) { flip(); return true }

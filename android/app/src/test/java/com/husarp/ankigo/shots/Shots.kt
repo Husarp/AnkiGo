@@ -40,6 +40,10 @@ enum class Size(val wDp: Int, val hDp: Int) {
     FLOATBATTLE(320, 300),
     /** Picture-in-picture window (16:9-ish). */
     PIP(240, 136),
+    /** Portrait tablet (study frame G, tablet variant; smallest width >= 600 dp). */
+    TABLET(800, 1280),
+    /** Landscape tablet. */
+    TABLET_LAND(1280, 800),
 }
 
 enum class Theme(val night: NightMode) { LIGHT(NightMode.NOTNIGHT), DARK(NightMode.NIGHT) }

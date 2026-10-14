@@ -8,7 +8,8 @@ object CardMedia {
         return (api + refs).filter { it.isNotBlank() && !it.contains("://") && !it.startsWith("data:") && !it.startsWith("#") }.distinct()
     }
     fun isSound(name: String) = name.substringAfterLast('.').lowercase() in setOf("mp3", "ogg", "oga", "wav", "m4a")
-    fun unsupported(html: String) = listOf("[anki:play:", "image-occlusion", "imageOcclusion", "anki.").any { html.contains(it, true) }
+    /** Card content AnkiGo can't show at all (blocks answering until the user chooses). Speech and image occlusion work now, so nothing is left. */
+    fun unsupported(html: String) = emptyList<String>().any { html.contains(it, true) }
     fun clozeExpected(field: String, ord: Int): String =
         Regex("""\{\{c${ord + 1}::(.*?)(?:::[^{}]*?)?}}""", RegexOption.DOT_MATCHES_ALL).findAll(field).joinToString(", ") { it.groupValues[1] }
     /** Character comparison keeps right, wrong and missing letters separately visible. */

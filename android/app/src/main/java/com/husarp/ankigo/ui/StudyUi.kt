@@ -19,6 +19,9 @@ import com.husarp.ankigo.R
 internal object StudyUi {
     fun lp(w: Int = -1, h: Int = -2, weight: Float = 0f) = LinearLayout.LayoutParams(w, h, weight)
     fun spaced(ctx: Context, top: Int, w: Int = -1) = lp(w).also { it.topMargin = Ui.dp(ctx, top) }
+    /** Width in px for a one-column page: capped on tablets (so it is not stretched), MATCH_PARENT on phones. Centre it with gravity. */
+    fun pageWidth(ctx: Context): Int = com.husarp.ankigo.study.StudyLayout.contentMaxDp(ctx.resources.configuration.smallestScreenWidthDp)
+        .let { if (it > 0) minOf(Ui.dp(ctx, it), ctx.resources.displayMetrics.widthPixels) else -1 }
     fun column(ctx: Context) = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     fun row(ctx: Context) = LinearLayout(ctx).apply { gravity = Gravity.CENTER_VERTICAL }
     fun label(ctx: Context, text: String, size: Number = 13, tone: Int = R.color.ag_sub1, weight: Int = 700) =

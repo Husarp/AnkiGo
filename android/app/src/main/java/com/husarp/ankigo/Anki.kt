@@ -165,6 +165,16 @@ object Anki {
         }
     }
 
+    private val templateCache = HashMap<String, List<com.husarp.ankigo.study.TtsRules.Template>>()
+    /** The card templates (question/answer format) of a note type; only read for cards that have speech. */
+    fun templates(ctx: Context, mid: Long): List<com.husarp.ankigo.study.TtsRules.Template> {
+        templateCache["$pkg/$mid"]?.let { return it }
+        val rows = rows(ctx.contentResolver.query(uri("models/$mid/templates"), null, null, null, null))
+        val out = rows.map { com.husarp.ankigo.study.TtsRules.Template(it["ord"]?.toIntOrNull() ?: 0, it["question_format"] ?: "", it["answer_format"] ?: "") }
+        if (out.isNotEmpty()) templateCache["$pkg/$mid"] = out
+        return out
+    }
+
     /** ease 1..4. Returns update count (AnkiDroid swallows errors and still returns 1, so callers verify). */
     fun answer(ctx: Context, nid: Long, ord: Int, ease: Int, timeTakenMs: Long, deckId: Long = 0): Int {
         // Known trap (AnkiWatch, AnkiDroid #18270): the schedule query only selects the deck temporarily,

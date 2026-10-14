@@ -21,6 +21,6 @@ class CardMediaTest {
     @Test fun comparisonAndUnsupportedCards() {
         val html = CardMedia.comparison("abx", "abcd") { it }
         assertTrue(html.contains("#16803c")); assertTrue(html.contains("#c53030")); assertTrue(html.contains("#999"))
-        assertTrue(CardMedia.unsupported("[anki:play:q:0]")); assertFalse(CardMedia.unsupported("ordinary card"))
+        assertFalse(CardMedia.unsupported("[anki:play:q:0]")); assertFalse(CardMedia.unsupported("ordinary card"))
     }
 }

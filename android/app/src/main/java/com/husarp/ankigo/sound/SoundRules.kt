@@ -63,9 +63,9 @@ object SoundRules {
     /** Volume 0.0..1.0 from the in-app percentage. */
     fun volume(pct: Int) = pct.coerceIn(0, 100) / 100f
 
-    private val CARD_SOUND = Regex("""\[sound:.+?]|<audio\b""", RegexOption.IGNORE_CASE)
+    private val CARD_SOUND = Regex("""\[sound:.+?]|\[anki:play:[qa]:\d+]|\[anki:tts\b|<audio\b""", RegexOption.IGNORE_CASE)
 
-    /** A card "has audio" when its question or answer has a [sound:...] reference or an audio tag. */
+    /** A card "has audio" when its question or answer has a [sound:...] reference, speech ([anki:play:...] / [anki:tts]) or an audio tag. */
     fun cardHasAudio(question: String, answer: String) = CARD_SOUND.containsMatchIn(question) || CARD_SOUND.containsMatchIn(answer)
 
     /** "Quiet on cards with sound": the card being shown, or the one just answered (its events play while the next card loads), has audio. */
