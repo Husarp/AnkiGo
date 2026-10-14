@@ -14,9 +14,9 @@ internal object FloatGeometry {
         return Box(fit(b.x, 0, screenW - w), fit(b.y, 0, screenH - h), w, h)
     }
 
-    /** First-use position: centred horizontally, its centre at two thirds of the screen height (lower third). */
+    /** First-use position: centred on the whole display (screen = full display, not the split-screen half). */
     fun default(screenW: Int, screenH: Int, w: Int, h: Int, minW: Int, minH: Int): Box =
-        clamp(Box((screenW - w) / 2, screenH * 2 / 3 - h / 2, w, h), screenW, screenH, minW, minH)
+        clamp(Box((screenW - w) / 2, (screenH - h) / 2, w, h), screenW, screenH, minW, minH)
 
     fun move(start: Box, dx: Int, dy: Int, screenW: Int, screenH: Int, minW: Int, minH: Int): Box =
         clamp(start.copy(x = start.x + dx, y = start.y + dy), screenW, screenH, minW, minH)
