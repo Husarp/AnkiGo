@@ -67,4 +67,23 @@ class AnkimonFilesTest {
         assertEquals("ankimon-save-trainer-2026-10-14.db", AnkimonFiles.exportName("../ /.", "2026-10-14"))
         assertEquals("ankimon-save-Łukasz-1-2026-10-14.db", AnkimonFiles.exportName("Łukasz-1", "2026-10-14"))
     }
+
+    @Test fun forgetDeletesOnlyTheKeptFileAndIsFineWhenThereIsNone() {
+        val dir = File(tmp.root, "ankimon")
+        assertTrue(AnkimonFiles.forgetIn(dir))                      // nothing kept, no folder: fine
+        AnkimonFiles.keepInto(dir, file("a.db", byteArrayOf(1, 2)))
+        AnkimonFiles.saveReplacedIn(dir, ByteArrayInputStream(byteArrayOf(5)), 1_000L)
+        assertTrue(AnkimonFiles.forgetIn(dir))
+        assertNull(AnkimonFiles.keptIn(dir))
+        assertEquals(listOf("replaced-1000.db"), dir.list()!!.toList()) // the saved copies stay
+        assertTrue(AnkimonFiles.forgetIn(dir))                      // again: still fine
+    }
+
+    @Test fun theKeptFileIsOlderThanTheGameOnlyWhenBothDatesAreKnownAndTheGameCameLater() {
+        assertTrue(AnkimonFiles.keptBeforeGame(1_000L, 2_000L))
+        assertFalse(AnkimonFiles.keptBeforeGame(2_000L, 1_000L))    // imported into the current game
+        assertFalse(AnkimonFiles.keptBeforeGame(1_000L, 1_000L))
+        assertFalse(AnkimonFiles.keptBeforeGame(null, 2_000L))      // nothing kept
+        assertFalse(AnkimonFiles.keptBeforeGame(1_000L, 0L))        // an old save without a start date
+    }
 }

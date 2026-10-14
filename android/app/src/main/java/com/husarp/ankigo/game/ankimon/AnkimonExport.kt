@@ -560,7 +560,7 @@ object AnkimonExport {
             if (mode != null && text(config[mode, "value"])?.trim('"')?.trim()?.lowercase() != "classic") return
             val row = config.rows.firstOrNull { text(config[it, "key"]) == "trainer.xp_share" }
             if (want == null) {
-                if (row != null && before.xpShare in ids.values) config.rows.remove(row)
+                if (row != null && before.xpShare in ids.values.toHashSet()) config.rows.remove(row) // toHashSet: an IdentityHashMap compares its values by identity
                 return
             }
             val value = if (PyJson.isValue(want)) PyJson.quote(want) else want
