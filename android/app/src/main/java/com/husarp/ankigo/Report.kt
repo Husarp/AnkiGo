@@ -28,9 +28,11 @@ object Report {
     }
 
     fun ok(tag: String, msg: String) = log(tag, "OK   $msg")
-    fun fail(tag: String, msg: String) = log(tag, "FAIL $msg")
-    fun fail(tag: String, msg: String, e: Throwable) =
+    fun fail(tag: String, msg: String) { GameLog.error(tag); log(tag, "FAIL $msg") }
+    fun fail(tag: String, msg: String, e: Throwable) {
+        GameLog.error(tag, e)
         log(tag, "FAIL $msg -> ${e.javaClass.simpleName}: ${e.message}")
+    }
 
     fun all(): String = try {
         file?.readText() ?: ""

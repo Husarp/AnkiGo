@@ -172,7 +172,7 @@ object GameRepo {
         requireMain()
         val g = current ?: return emptyList()
         try {
-            return f(g)
+            return f(g).also { GameLog.events(it) }
         } catch (e: Exception) {
             // A bug in one action must not take the whole app down while studying; the state stays as it is.
             Report.fail(TAG, "action failed", e)
@@ -187,7 +187,15 @@ object GameRepo {
         requireMain()
         val g = current ?: error("The game is not loaded")
         try {
-            return f(g)
+            return f(g).also { result ->
+                when (result) {
+                    is com.husarp.ankigo.game.ActionResult -> GameLog.events(result.events)
+                    is List<*> -> GameLog.events(result.filterIsInstance<GameEvent>())
+                }
+            }
+        } catch (e: Exception) {
+            GameLog.error("GAME", e)
+            throw e
         } finally {
             afterChange(ctx)
         }
@@ -269,14 +277,14 @@ object GameRepo {
         saveNow(app)
         held?.let { old ->
             try {
-                val dir = saveDir(app)
-                if (!dir.isDirectory) dir.mkdirs()
-                File(dir, "save.before-${backupTag.filter { it.isLetterOrDigit() }.ifEmpty { "restore" }}-${System.currentTimeMillis()}.json").writeText(SaveCodec.encode(old), Charsets.UTF_8)
+                store(app).backupBeforeReplace(old, backupTag)
             } catch (e: IOException) {
                 Report.fail(TAG, "could not keep the old save before restoring", e)
+                throw IOException("Could not back up the current game; nothing was replaced", e)
             }
             if (newState.seq < old.seq) newState.seq = old.seq // prepare() bumps it, so the restored game wins on disk
         }
+        GameLog.imported(backupTag, newState.mons.size, newState.seq)
         held = newState
         error = null
         rebuild()

@@ -125,11 +125,12 @@ object SaveCodec {
         key("player"); writeSide(this, b.player)
         key("enemy"); writeSide(this, b.enemy)
         kv("tally", b.tally); kv("answers", b.answers); kv("override", b.override?.name); kv("rounds", b.rounds)
-        kv("startedAt", b.startedAt)
+        kv("startedAt", b.startedAt); kv("wildMaxHp", b.wildMaxHp)
     }
 
     private fun writeSettings(w: W, s: Settings) = w.obj {
         list("gens", s.gens.sorted())
+        kv("fasterStart", s.fasterStart)
         kv("cardsPerRound", s.cardsPerRound); kv("autoMode", s.autoMode)
         kv("protectLegendary", s.protectLegendary); kv("protectMythical", s.protectMythical)
         kv("protectUltra", s.protectUltra); kv("protectStarter", s.protectStarter)
@@ -193,10 +194,12 @@ object SaveCodec {
             tally = o.int("tally", 0), answers = o.int("answers", 0),
             override = o.strOrNull("override")?.let { n -> Outcome.entries.firstOrNull { it.name == n } },
             rounds = o.int("rounds", 0), startedAt = o.long("startedAt", 0),
+            wildMaxHp = o.intOrNull("wildMaxHp")?.coerceAtLeast(1),
         )
     }
 
     private fun readSettings(o: JSONObject?, s: Settings) {
+        s.fasterStart = o?.bool("fasterStart", false) ?: false // preserve the pace of existing saves
         if (o == null) return
         o.intList("gens")?.let { s.gens.clear(); s.gens.addAll(it) }
         s.cardsPerRound = o.int("cardsPerRound", s.cardsPerRound)

@@ -45,7 +45,7 @@ object AppPrefs {
 
 /**
  * Whether one of AnkiGo's own screens is in front (the battle screen, full, split or picture-in-picture, or Team,
- * Pokédex, Shop, Settings). Each screen marks itself in onStart/onStop; the floating battle window hides itself while
+ * Pokédex, Shop, Settings, setup, updates and diagnostics). AnkiGoApp tracks all Activity starts/stops; legacy screen hooks are idempotent. The floating battle ends while
  * any is visible, so it never covers AnkiGo itself. Listeners run on the main thread.
  */
 object BattleScreen {

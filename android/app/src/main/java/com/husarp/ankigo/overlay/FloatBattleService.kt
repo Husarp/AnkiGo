@@ -12,6 +12,8 @@ import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.Report
@@ -24,8 +26,8 @@ import com.husarp.ankigo.ui.Ui
 
 /**
  * Foreground service behind the floating battle window (LeaveMode.FLOAT): keeps live detection running while AnkiGo
- * isn't in front and shows the compact battle in a movable, resizable window over other apps while the battle screen
- * (GameActivity) isn't visible. Type specialUse (declared in the manifest) because no other type fits.
+ * isn't in front and shows the compact battle in a movable, resizable window over other apps while none of AnkiGo's Activities
+ * is visible. Type specialUse (declared in the manifest) because no other type fits.
  */
 class FloatBattleService : Service() {
     private var view: FloatBattleView? = null
@@ -33,6 +35,15 @@ class FloatBattleService : Service() {
     private var destroyed = false
     private var wasReady = false
     private var lastNote: String? = null
+    private val main = Handler(Looper.getMainLooper())
+    private val healthCheck = object : Runnable {
+        override fun run() {
+            if (stopping || destroyed) return
+            sync() // permission can be revoked while idle, without a game event
+            updateNotification()
+            if (!stopping) main.postDelayed(this, 1000)
+        }
+    }
 
     private val battleListener: (Boolean) -> Unit = { sync() }
     private val gameListener: () -> Unit = { sync(); updateNotification() }
@@ -74,10 +85,16 @@ class FloatBattleService : Service() {
             updateNotification()
         }
         sync()
+        if (!stopping) main.postDelayed(healthCheck, 1000)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         goForeground() // every start request has to be answered with startForeground
+        if (stopping) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         when (intent?.action) {
             ACTION_PAUSE -> LiveSession.setPaused(this, !LiveSession.paused)
             ACTION_STOP -> finish()
@@ -87,6 +104,7 @@ class FloatBattleService : Service() {
 
     override fun onDestroy() {
         destroyed = true
+        main.removeCallbacks(healthCheck)
         stopping = true
         if (instance === this) instance = null
         BattleScreen.removeListener(battleListener)
@@ -96,6 +114,8 @@ class FloatBattleService : Service() {
         view?.destroy() // removes the sink and the window
         view = null
         LiveSession.release(this, this)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        getSystemService(NotificationManager::class.java).cancel(NOTE_ID)
         GameRepo.saveNow(this)
         super.onDestroy()
     }
@@ -110,8 +130,8 @@ class FloatBattleService : Service() {
         val ready = GameRepo.status == GameRepo.Status.READY
         if (ready && !wasReady) LiveSession.hold(this, this)
         wasReady = ready
-        if (BattleScreen.visible) {
-            v.hide() // the real battle screen is in front
+        if (!FloatBattlePolicy.shouldRun(true, Overlay.canDraw(this), BattleScreen.visible, ready)) {
+            finish()
         } else if (!v.show()) {
             Report.fail("FLOAT", "window could not be shown (overlay permission?), stopping")
             finish()
@@ -121,6 +141,9 @@ class FloatBattleService : Service() {
     private fun finish() {
         if (stopping) return
         stopping = true
+        view?.hide()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        getSystemService(NotificationManager::class.java).cancel(NOTE_ID)
         stopSelf()
     }
 
@@ -164,7 +187,7 @@ class FloatBattleService : Service() {
 
     /** Re-posts the notification when its text or the pause state changed (answers change it often). */
     private fun updateNotification() {
-        if (stopping) return
+        if (stopping || view?.isShowing != true) return
         val key = noteKey()
         if (key == lastNote) return
         lastNote = key
@@ -201,7 +224,7 @@ class FloatBattleService : Service() {
             )
             .addAction(action(R.drawable.ic_open, "Open", openPending()))
             .addAction(action(R.drawable.ic_close, "Stop", servicePending(ACTION_STOP, 2)))
-        if (Build.VERSION.SDK_INT >= 31) b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+        if (Build.VERSION.SDK_INT >= 31) b.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_DEFERRED)
         return b.build()
     }
 
@@ -233,11 +256,12 @@ class FloatBattleService : Service() {
 
         /**
          * Starts the service if LeaveMode is FLOAT and the overlay permission is granted; otherwise does nothing.
-         * Call from the foreground (GameActivity.onStart), where Android allows starting a foreground service.
+         * Called at the Activity-to-background transition, within Android's recent-visible-Activity exemption.
          */
         fun startIfWanted(ctx: Context) {
             val app = ctx.applicationContext
-            if (AppPrefs.leaveMode(app) != LeaveMode.FLOAT || !Overlay.canDraw(app)) return
+            if (!FloatBattlePolicy.shouldRun(AppPrefs.leaveMode(app) == LeaveMode.FLOAT,
+                    Overlay.canDraw(app), BattleScreen.visible, GameRepo.status == GameRepo.Status.READY)) return
             try {
                 app.startForegroundService(Intent(app, FloatBattleService::class.java))
             } catch (e: Exception) {

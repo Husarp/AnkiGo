@@ -58,6 +58,13 @@ object Tuning {
     const val DEFAULT_MIN_FRIENDSHIP = 160
     const val DAY_FROM_HOUR = 6         // day 6:00-18:00, night otherwise
     const val NIGHT_FROM_HOUR = 18
+    /** AnkiGo optional early pace: 40% wild HP until the lead reaches level 15. Other stats/rewards stay Ankimon's. */
+    const val FASTER_START_BELOW_LEVEL = 15
+    const val FASTER_START_HP_FACTOR = 0.40
+    fun wildHp(fullHp: Int, leadLevel: Int, fasterStart: Boolean): Int =
+        if (fasterStart && leadLevel < FASTER_START_BELOW_LEVEL)
+            kotlin.math.ceil(fullHp * FASTER_START_HP_FACTOR).toInt().coerceAtLeast(1)
+        else fullHp
     const val STARTER_LEVEL = 5
     const val FOSSIL_LEVEL = 5
 

@@ -43,6 +43,7 @@
     </queries>
 
     <application
+        android:name=".AnkiGoApp"
         android:label="AnkiGo"
         android:icon="@drawable/ic_launcher"
         android:requestLegacyExternalStorage="true"

@@ -403,7 +403,12 @@ class GameActivity : Activity() {
                     runOnUiThread {
                         if (destroyed) return@runOnUiThread
                         if (st == null) { Ui.toast(this, "That backup couldn't be read"); return@runOnUiThread }
-                        GameRepo.replaceState(this, st)
+                        try { GameRepo.replaceState(this, st) }
+                        catch (e: Exception) {
+                            Report.fail("GAME", "backing up before restore", e)
+                            Ui.toast(this, "Couldn't back up the current game. Nothing was changed.")
+                            return@runOnUiThread
+                        }
                         startLoad()
                     }
                 }.start()

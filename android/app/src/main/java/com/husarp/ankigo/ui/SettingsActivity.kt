@@ -253,6 +253,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     private fun gameCard(s: GameSettings): View {
         val rows = mutableListOf<View>()
+        rows += Form.switchRow(this, "Faster start", "Shorter wild battles while your lead is below Lv 15. Applies to the next encounter; off keeps Ankimon's HP.", s.fasterStart) { v -> edit { it.fasterStart = v } }
 
         // generations
         val gensBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -701,7 +702,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                     return@runOnUi
                 }
                 GameRepo.state?.let { cur -> if (st.seq < cur.seq) st.seq = cur.seq }
-                GameRepo.replaceState(app, st)
+                try { GameRepo.replaceState(app, st) }
+                catch (e: Exception) {
+                    com.husarp.ankigo.Report.fail("GAME", "backing up before restore", e)
+                    if (alive) info("Couldn't restore", "Couldn't back up the current game. Nothing was changed.")
+                    return@runOnUi
+                }
                 Ui.toast(app, "Restored: ${st.settings.trainerName}, ${st.mons.size} Pokémon")
                 if (alive) render()
             }

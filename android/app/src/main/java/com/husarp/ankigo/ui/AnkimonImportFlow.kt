@@ -254,7 +254,13 @@ object AnkimonImportFlow {
             onDone(false)
             return
         }
-        GameRepo.replaceState(app, merged, backupTag = "ankimon")
+        try { GameRepo.replaceState(app, merged, backupTag = "ankimon") }
+        catch (e: Exception) {
+            Report.fail(TAG, "backing up before import", e)
+            Ui.toast(app, "Couldn't back up the current game. Nothing was changed.")
+            onDone(false)
+            return
+        }
         Ui.toast(app, "Imported: ${report.added} new, ${report.upgraded} upgraded")
         onDone(true)
     }

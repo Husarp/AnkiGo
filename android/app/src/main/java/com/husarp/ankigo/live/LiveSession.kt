@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import com.husarp.ankigo.GameLog
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.Widgets
@@ -108,6 +109,7 @@ object LiveSession {
         app = ctx.applicationContext
         val finish = {
             flushCatchUp()
+            GameLog.answer("study", row.id, button)
             val events = act { g ->
                 saveSnapshotInto(g)
                 if (detector == null) {
@@ -214,6 +216,7 @@ object LiveSession {
     }
 
     private fun onAnswer(e: LiveDetector.Event.Answer) {
+        GameLog.answer(if (e.catchUp) "catch-up" else "live", e.cardId, e.button)
         val a = GameAnswer(e.cardId, e.button, System.currentTimeMillis(), e.catchUp)
         if (e.catchUp) {
             // Answers made while AnkiGo wasn't watching arrive in one burst: no animation, one summary line.

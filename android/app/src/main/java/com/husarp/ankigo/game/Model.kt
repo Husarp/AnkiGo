@@ -199,7 +199,10 @@ class Battle(
     var override: Outcome? = null,  // one-off catch/defeat choice for this fight (optional tap)
     var rounds: Int = 0,
     var startedAt: Long = 0,
-)
+    var wildMaxHp: Int? = null,     // encounter-only pace override; never carried into a caught Pokémon
+) {
+    fun maxWildHp(data: GameData): Int = wildMaxHp?.coerceAtLeast(1) ?: StatCalc.maxHp(data, wild)
+}
 
 class Settings(
     val gens: MutableSet<Int> = Tuning.DEFAULT_GENS.toMutableSet(),
@@ -214,6 +217,7 @@ class Settings(
     var dayStartHour: Int = Tuning.DAY_START_HOUR,
     var xpShareUid: String? = null,                     // Ankimon "classic" Exp. Share holder (null = off)
     var trainerName: String = "Trainer",
+    var fasterStart: Boolean = true, // new games only; old saves decode missing key as false
 )
 
 class GameState(

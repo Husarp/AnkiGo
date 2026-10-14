@@ -21,7 +21,7 @@ class MiniBattleView(ctx: Context) : LinearLayout(ctx) {
             Ui.staticSprite(context, mon.species, mon.shiny, image)
             addView(image, LayoutParams(Ui.dp(context, 40), Ui.dp(context, 40)))
             val col = LinearLayout(context).apply { orientation = VERTICAL }
-            val max = StatCalc.maxHp(data, mon)
+            val max = if (mon === st.battle?.wild) st.battle!!.maxWildHp(data) else StatCalc.maxHp(data, mon)
             col.addView(Ui.text(context, 10f, 800, R.color.ag_text).apply { text = DisplayNumbers.hp(mon.hp, max) })
             col.addView(BarView(context).apply { val f = if(max > 0) mon.hp.toFloat()/max else 0f; set(f, Ui.hpColor(context, f), false) }, LayoutParams(-1, Ui.dp(context, 5)))
             addView(col, LayoutParams(0, -2, 1f))

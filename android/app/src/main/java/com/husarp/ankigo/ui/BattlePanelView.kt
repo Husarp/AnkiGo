@@ -416,7 +416,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val sp = data.species[w.species]
         arena.setEnemyShown(true)
         arena.setEnemyInfo(w.name, w.level, w.shiny, sp?.types.orEmpty())
-        arena.setEnemyHp(w.hp, if (sp != null) StatCalc.maxHp(data, w) else max(w.hp, 1), false)
+        arena.setEnemyHp(w.hp, if (sp != null) b.maxWildHp(data) else max(w.hp, 1), false)
         arena.setCatchTag(willCatchNow(), w.species !in st.caught)
         if (sp != null) {
             val key = "${w.species}:${w.shiny}"

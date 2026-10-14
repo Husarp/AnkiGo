@@ -61,7 +61,7 @@ class DiagnosticsActivity : Activity() {
         row("LIVE watch (study in AnkiDroid, split screen)" to { startActivity(Intent(this, LiveWatchActivity::class.java)) })
         row("C8 Pin motivation widget" to { pin(MotivationWidget::class.java) }, "C8 Pin study widget" to { pin(StudyWidget::class.java) })
         row("Updates (version ${Updates.current(this)})" to { startActivity(Intent(this, UpdatesActivity::class.java)) })
-        row("Share report" to { share() }, "Copy report" to { copy() }, "Clear log" to { Report.clear(); logView.text = "" })
+        row("Share report" to { share() }, "Copy report" to { copy() }, "Clear log" to { Report.clear(); GameLog.clear(); logView.text = "" })
         root.addView(buttons)
 
         // not selectable: a focused log made fullScroll pan the whole window up, hiding the buttons (Copy report covers copying)
@@ -351,7 +351,9 @@ class DiagnosticsActivity : Activity() {
     }
 
     // ---------- report ----------
-    private fun fullReport() = "AnkiGo report\n" + header.text + "\n\n" + Report.all()
+    private fun fullReport() = "AnkiGo report\n" + header.text + "\n\n" + sharedReport()
+
+    private fun sharedReport() = Report.all() + "\n\n=== GAME EVENTS (last 500; ids only) ===\n" + GameLog.all()
 
     private fun share() {
         startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, "AnkiGo report").putExtra(Intent.EXTRA_TEXT, fullReport().takeLast(400_000)), "Share report"))

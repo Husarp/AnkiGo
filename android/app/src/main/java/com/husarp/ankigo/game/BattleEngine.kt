@@ -145,7 +145,7 @@ object BattleEngine {
         val wild = battle.wild
         val events = ArrayList<GameEvent>()
         private var out: MutableList<GameEvent> = events
-        private val maxHp = intArrayOf(StatCalc.maxHp(data, wild), StatCalc.maxHp(data, main)) // [0] wild, [1] main
+        private val maxHp = intArrayOf(battle.maxWildHp(data), StatCalc.maxHp(data, main)) // [0] wild, [1] main
         private val fainted = BooleanArray(2)
 
         private fun mon(p: Boolean) = if (p) main else wild

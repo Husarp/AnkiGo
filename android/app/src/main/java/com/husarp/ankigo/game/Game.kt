@@ -133,7 +133,10 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val wild = Encounters.makeWild(data, roll, level, rng, now)
         val newSpecies = roll.species !in state.caught
         state.seen += roll.species
-        state.battle = Battle(wild, roll.tier, startedAt = now)
+        val fullHp = StatCalc.maxHp(data, wild)
+        val encounterHp = Tuning.wildHp(fullHp, main.level, state.settings.fasterStart)
+        wild.hp = encounterHp
+        state.battle = Battle(wild, roll.tier, startedAt = now, wildMaxHp = encounterHp.takeIf { it != fullHp })
 
         // Pre-roll the one after this (widget silhouette, sprite prefetch).
         val upcoming = Encounters.roll(data, state, Encounters.wildLevel(main.level, rng), rng)
@@ -144,7 +147,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return listOf(
             GameEvent.Encounter(
                 wild.species, wild.name, wild.level, wild.shiny, roll.tier,
-                wild.hp, StatCalc.maxHp(data, wild), willCatch(), newSpecies,
+                wild.hp, encounterHp, willCatch(), newSpecies,
             ),
         )
     }

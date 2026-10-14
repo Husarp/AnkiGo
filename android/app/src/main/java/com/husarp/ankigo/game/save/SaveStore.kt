@@ -107,6 +107,23 @@ class SaveStore(val dir: File) {
         listOfNotNull(bakFile.takeIf { it.isFile }) + snapshots() + beforeFiles()
     }
 
+    /** Durable backup before replacing the loaded state; failure aborts the import/restore. */
+    fun backupBeforeReplace(state: GameState, tag: String, now: Long = System.currentTimeMillis()): File = synchronized(LOCK) {
+        if (!dir.isDirectory && !dir.mkdirs() && !dir.isDirectory) throw IOException("Cannot create save backup folder")
+        val safeTag = tag.filter { it.isLetterOrDigit() }.take(20).ifEmpty { "restore" }
+        var stamp = now
+        var target = File(dir, "save.before-$safeTag-$stamp.json")
+        while (target.exists()) { stamp++; target = File(dir, "save.before-$safeTag-$stamp.json") }
+        val temp = File(target.path + ".tmp")
+        try {
+            FileOutputStream(temp).use { out ->
+                out.write(SaveCodec.encode(state).toByteArray(Charsets.UTF_8)); out.flush(); out.fd.sync()
+            }
+            moveReplace(temp, target)
+        } catch (e: IOException) { temp.delete(); throw e }
+        target
+    }
+
     /** Decodes a backup/export without touching the current save; null if invalid. */
     fun read(file: File): GameState? = try {
         SaveCodec.decode(file.readText(Charsets.UTF_8))
