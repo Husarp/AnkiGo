@@ -142,17 +142,6 @@ object Encounters {
             .map { it.num }.sorted().toList()
     }
 
-    /** True if [species] may appear at [wildLevel] with the current settings/collection (for a pre-rolled next encounter). */
-    fun isValid(data: GameData, state: GameState, species: Int, wildLevel: Int): Boolean {
-        val sp = data.species[species] ?: return false
-        val tier = tierOf(sp) ?: return false
-        if (tier == Tier.STARTER && !Tuning.STARTER_TIER_ENABLED) return false
-        val gens = state.settings.gens
-        // a regional form needs its base species' generation as well as its own
-        if (sp.form != null && data.species[sp.baseNum]?.gen?.let { it in gens } != true) return false
-        return sp.gen in gens && minLevel(data, sp) <= wildLevel && prerequisitesMet(sp.baseNum, state.caught)
-    }
-
     /**
      * Forms that may replace the picked base species [num] now (Ankimon _variant_eligible): the base species' generation
      * and the form's region generation both on, the form's own minimum level reached, the capture requirements met.

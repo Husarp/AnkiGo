@@ -214,10 +214,21 @@ object Progression {
     }
 
     /**
-     * The evolution [item] triggers on [mon], or null: ITEM with that item; TRADE with that held item; a TRADE
-     * without an item, or OTHER, with "linking-cord". Everstone blocks.
+     * The evolution [item] triggers on [mon] at [now], or null: ITEM with that item; TRADE with that held item; a TRADE
+     * without an item, or OTHER, with "linking-cord"; a day/night-bound one (Razor Claw, Razor Fang, Oval Stone) only at
+     * that time (Ankimon evolution_time_allows). Everstone blocks.
      */
-    fun itemEvolution(data: GameData, mon: Mon, item: String): Evolution? {
+    fun itemEvolution(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis()): Evolution? =
+        itemEvolutionAnyTime(data, mon, item)?.takeIf { timeOk(it, now) }
+
+    /** "day" or "night" when the time of day is the ONLY thing keeping [item] from evolving [mon] now (Ankimon item_evolution_time_requirement), else null. */
+    fun itemEvolutionTimeNeeded(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis()): String? {
+        val e = itemEvolutionAnyTime(data, mon, item) ?: return null
+        return if (timeOk(e, now)) null else e.time
+    }
+
+    /** The evolution [item] triggers on [mon] whatever the time of day. */
+    fun itemEvolutionAnyTime(data: GameData, mon: Mon, item: String): Evolution? {
         if (mon.heldItem == EVERSTONE) return null
         return data.sp(mon.species).evolutions.firstOrNull { e ->
             data.species.containsKey(e.to) && genderOk(e, mon) && when (e.kind) {

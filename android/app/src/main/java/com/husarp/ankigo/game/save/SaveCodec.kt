@@ -36,7 +36,7 @@ object SaveCodec {
             kv("cash", state.cash); kv("trainerLevel", state.trainerLevel); kv("trainerXp", state.trainerXp)
             list("seen", state.seen.sorted()); list("caught", state.caught.sorted())
             key("battle"); state.battle.let { if (it == null) value(null) else writeBattle(this, it) }
-            kv("nextSpecies", state.nextSpecies); kv("nextTier", state.nextTier.name); kv("nextShiny", state.nextShiny)
+            kv("nextSpecies", state.nextSpecies); kv("nextTier", state.nextTier.name); kv("nextShiny", state.nextShiny); kv("nextSeed", state.nextSeed)
             kv("day", state.day); kv("reviewsToday", state.reviewsToday); kv("cashToday", state.cashToday)
             kv("itemCountdown", state.itemCountdown)
             list("buttonsToday", state.buttonsToday.toList())
@@ -256,6 +256,7 @@ object SaveCodec {
         s.nextSpecies = o.intOrNull("nextSpecies")
         s.nextTier = enumOr(o.strOrNull("nextTier"), Tier.NORMAL)
         s.nextShiny = o.bool("nextShiny", false)
+        s.nextSeed = if (o.has2("nextSeed")) o.getLong("nextSeed") else null
         s.day = o.str("day", ""); s.reviewsToday = o.int("reviewsToday", 0); s.cashToday = o.int("cashToday", 0)
         s.itemCountdown = o.int("itemCountdown", 0)
         o.intArray("buttonsToday", s.buttonsToday.size).copyInto(s.buttonsToday)

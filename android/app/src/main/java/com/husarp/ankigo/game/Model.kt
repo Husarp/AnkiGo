@@ -247,6 +247,7 @@ class GameState(
     var nextSpecies: Int? = null,        // pre-rolled next encounter (widget silhouette, sprite prefetch)
     var nextTier: Tier = Tier.NORMAL,
     var nextShiny: Boolean = false,
+    var nextSeed: Long? = null,          // random seed of the next encounter (null on old saves)
     var day: String = "",                // current game day "yyyy-MM-dd" (a day starts at settings.dayStartHour)
     var reviewsToday: Int = 0,
     var cashToday: Int = 0,

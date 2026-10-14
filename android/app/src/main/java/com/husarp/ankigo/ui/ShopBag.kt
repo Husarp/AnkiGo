@@ -86,7 +86,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions)
                 Pickers.pickMon(s, "${Items.name(item)} on…", data, team, { Bits.hpText(data, it) }) { mons.runUse(item, it.uid) }
             }
             ItemKind.EVOLUTION -> {
-                val ok = candidates().filter { ItemUse.canUse(data, state, item, it) }
+                val ok = candidates().filter { ItemUse.canUse(data, state, item, it) || Progression.itemEvolutionTimeNeeded(data, it, item) != null } // time-blocked ones stay, hinted "(night)"
                 if (ok.isEmpty()) { Ui.toast(s, "No Pokémon can use ${Items.name(item)} right now"); return }
                 Pickers.pickMon(s, "${Items.name(item)} on…", data, ok, { mon -> evoHint(item, mon) }) { mons.useItem(it, item) }
             }
@@ -110,7 +110,9 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions)
     private fun candidates(): List<Mon> = state.teamMons() + state.boxMons().sortedWith(compareBy({ it.species }, { it.level }))
 
     private fun evoHint(item: String, mon: Mon): String =
-        Progression.itemEvolution(data, mon, item)?.let { "→ ${data.sp(it.to).name}" } ?: "Lv ${mon.level}"
+        Progression.itemEvolutionAnyTime(data, mon, item)?.let { e ->
+            "→ ${data.sp(e.to).name}" + (Progression.itemEvolutionTimeNeeded(data, mon, item)?.let { " ($it)" } ?: "")
+        } ?: "Lv ${mon.level}"
 
     private fun throwBall(ball: String) {
         val battle = state.battle

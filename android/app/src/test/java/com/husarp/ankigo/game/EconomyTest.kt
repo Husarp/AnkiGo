@@ -449,6 +449,54 @@ class EconomyTest {
         assertTrue(16 in s.badges)
     }
 
+    private fun clock(hour: Int): Long = java.util.Calendar.getInstance().apply {
+        set(2026, java.util.Calendar.OCTOBER, 13, hour, 0, 0); set(java.util.Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+    private fun timedWorld(item: String, time: String): Pair<GameData, GameState> {
+        val d = TestData.data(listOf(
+            TestData.species(10, "Sneasel", evolutions = listOf(Evolution(11, EvoKind.ITEM, item = item, time = time))),
+            TestData.species(11, "Weavile", prevo = 10),
+        ))
+        return d to TestData.state(d, 10, 30)
+    }
+
+    @Test fun timedItemEvolutionWorksOnlyAtTheRightTime() {
+        val (d, s) = timedWorld("razor-claw", "night")
+        Economy.give(s, "razor-claw")
+        assertFalse(ItemUse.canUse(d, s, "razor-claw", s.main, clock(10)))
+        assertTrue(ItemUse.canUse(d, s, "razor-claw", s.main, clock(22)))
+        val day = ItemUse.use(d, s, "razor-claw", "main", TestData.rng(), clock(10))
+        assertFalse(day.ok); assertEquals("Sneasel evolves with Razor Claw only at night.", day.message)
+        assertEquals(1, s.count("razor-claw")); assertEquals(10, s.main!!.species); assertTrue(day.events.isEmpty())
+        val night = ItemUse.use(d, s, "razor-claw", "main", TestData.rng(), clock(22))
+        assertTrue(night.ok); assertEquals(11, s.main!!.species); assertEquals(0, s.count("razor-claw"))
+    }
+
+    @Test fun dayOnlyItemSaysSo() {
+        val (d, s) = timedWorld("oval-stone", "day")
+        Economy.give(s, "oval-stone")
+        val r = ItemUse.use(d, s, "oval-stone", "main", TestData.rng(), clock(22))
+        assertFalse(r.ok); assertEquals("Sneasel evolves with Oval Stone only during the day.", r.message)
+        assertEquals(1, s.count("oval-stone"))
+        assertTrue(ItemUse.use(d, s, "oval-stone", "main", TestData.rng(), clock(10)).ok)
+    }
+
+    @Test fun plainStoneAndEverstoneAtAnyHour() {
+        for (h in listOf(10, 22)) {
+            val s = state()
+            Economy.give(s, "thunder-stone")
+            assertTrue(ItemUse.canUse(data, s, "thunder-stone", s.main, clock(h)))
+            assertTrue(ItemUse.use(data, s, "thunder-stone", "main", TestData.rng(), clock(h)).ok)
+        }
+        val (d, s) = timedWorld("razor-claw", "night")
+        s.main!!.heldItem = "everstone"
+        Economy.give(s, "razor-claw")
+        val r = ItemUse.use(d, s, "razor-claw", "main", TestData.rng(), clock(22))
+        assertFalse(r.ok); assertEquals("It won't have any effect.", r.message)
+        assertEquals(1, s.count("razor-claw"))
+    }
+
     @Test fun wrongStoneKeepsItem() {
         val s = state()
         Economy.give(s, "moon-stone")

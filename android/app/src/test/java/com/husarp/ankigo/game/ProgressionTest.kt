@@ -481,6 +481,31 @@ class ProgressionTest {
         assertEquals(135, Progression.itemEvolution(data, eevee, "thunder-stone")?.to)
     }
 
+    @Test fun itemEvolutionsRespectDayAndNight() {
+        val (d, _, m) = custom(Evolution(11, EvoKind.ITEM, item = "razor-claw", time = "night"))
+        assertEquals(11, Progression.itemEvolution(d, m, "razor-claw", at(22))?.to)
+        assertNull(Progression.itemEvolution(d, m, "razor-claw", at(10)))
+        assertEquals("night", Progression.itemEvolutionTimeNeeded(d, m, "razor-claw", at(10)))
+        assertNull(Progression.itemEvolutionTimeNeeded(d, m, "razor-claw", at(22)))
+        assertEquals(11, Progression.itemEvolutionAnyTime(d, m, "razor-claw")?.to)
+        assertNull(Progression.itemEvolutionTimeNeeded(d, m, "razor-fang", at(10))) // wrong item: time is not the problem
+        val (d2, _, m2) = custom(Evolution(11, EvoKind.ITEM, item = "oval-stone", time = "day"))
+        assertEquals(11, Progression.itemEvolution(d2, m2, "oval-stone", at(10))?.to)
+        assertNull(Progression.itemEvolution(d2, m2, "oval-stone", at(22)))
+        assertEquals("day", Progression.itemEvolutionTimeNeeded(d2, m2, "oval-stone", at(22)))
+        m2.heldItem = "everstone"
+        assertNull(Progression.itemEvolutionTimeNeeded(d2, m2, "oval-stone", at(22))) // Everstone blocks outright
+        assertNull(Progression.itemEvolution(d2, m2, "oval-stone", at(10)))
+    }
+
+    @Test fun plainStonesIgnoreTheClock() {
+        val (_, pika) = st(25, 20)
+        for (h in listOf(3, 10, 22)) {
+            assertEquals(26, Progression.itemEvolution(data, pika, "thunder-stone", at(h))?.to)
+            assertNull(Progression.itemEvolutionTimeNeeded(data, pika, "thunder-stone", at(h)))
+        }
+    }
+
     @Test fun tradeWithItemAndOther() {
         val (d, _, m) = custom(Evolution(11, EvoKind.TRADE, item = "kings-rock"))
         assertEquals(11, Progression.itemEvolution(d, m, "kings-rock")?.to)

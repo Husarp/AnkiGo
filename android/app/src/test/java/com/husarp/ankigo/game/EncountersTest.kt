@@ -177,7 +177,7 @@ class EncountersTest {
         assertEquals((47..53).toSet(), seen)
     }
 
-    // ---- pool / isValid ----
+    // ---- pool ----
 
     private fun extraWorld(extra: List<Species> = emptyList()): GameData {
         val base = world.species.values.toList()
@@ -237,26 +237,6 @@ class EncountersTest {
         val p = Encounters.pool(d, Tier.NORMAL, s, 100, emptySet())
         assertFalse(138 in p)
         assertFalse(4 in p)
-    }
-
-    @Test fun isValidChecks() {
-        val st = TestData.state(world, 25, 20)
-        st.caught.clear()
-        assertTrue(Encounters.isValid(world, st, 19, 5))
-        assertFalse(Encounters.isValid(world, st, 64, 15))
-        assertTrue(Encounters.isValid(world, st, 64, 16))
-        assertFalse(Encounters.isValid(world, st, 2, 100))       // #2 is a starter line: off while the starter tier is off
-        assertFalse(Encounters.isValid(world, st, 150, 100))     // 151 not caught
-        st.caught += 151
-        assertTrue(Encounters.isValid(world, st, 150, 50))
-        assertFalse(Encounters.isValid(world, st, 150, 49))
-        st.settings.gens.remove(1)
-        assertFalse(Encounters.isValid(world, st, 19, 50))
-        assertFalse(Encounters.isValid(world, st, 9999, 50))
-        val d = extraWorld(listOf(TestData.species(138), TestData.species(4)))
-        val st2 = TestData.state(d, 25, 20)
-        assertFalse(Encounters.isValid(d, st2, 138, 100)) // fossil
-        assertFalse(Encounters.isValid(d, st2, 4, 100))   // starter tier is off
     }
 
     // ---- roll ----

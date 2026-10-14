@@ -253,12 +253,12 @@ object ItemUse {
         if (uid != null) state.mon(uid) else if (defaultMain) state.main else null
 
     /** Can [item] be used on [mon] right now (heal: hurt; evolution item: Progression.itemEvolution != null; held: anyone)? */
-    fun canUse(data: GameData, state: GameState, item: String, mon: Mon?): Boolean {
+    fun canUse(data: GameData, state: GameState, item: String, mon: Mon?, now: Long = System.currentTimeMillis()): Boolean {
         val def = Items.def(item) ?: return false
         if (state.count(item) <= 0) return false
         return when (def.kind) {
             ItemKind.HEAL -> (mon ?: state.main)?.let { it.hp < StatCalc.maxHp(data, it) } ?: false
-            ItemKind.EVOLUTION -> mon != null && Progression.itemEvolution(data, mon, item) != null
+            ItemKind.EVOLUTION -> mon != null && Progression.itemEvolution(data, mon, item, now) != null
             ItemKind.HELD -> mon != null && mon.heldItem != item
             ItemKind.FOSSIL -> data.species.containsKey(def.fossil)
             ItemKind.BALL, ItemKind.ESCAPE -> false
@@ -289,7 +289,14 @@ object ItemUse {
             }
             ItemKind.EVOLUTION -> {
                 val mon = target(state, targetUid, false) ?: return ActionResult(false, "Choose a Pokémon first.")
-                val evo = Progression.itemEvolution(data, mon, item) ?: return ActionResult(false, "It won't have any effect.")
+                val evo = Progression.itemEvolution(data, mon, item, now) ?: return ActionResult(
+                    false,
+                    when (Progression.itemEvolutionTimeNeeded(data, mon, item, now)) {
+                        "night" -> "${mon.name} evolves with $name only at night."
+                        "day" -> "${mon.name} evolves with $name only during the day."
+                        else -> "It won't have any effect."
+                    },
+                )
                 val from = mon.name
                 Economy.take(state, item)
                 Progression.evolve(data, state, mon, evo, rng, events)
