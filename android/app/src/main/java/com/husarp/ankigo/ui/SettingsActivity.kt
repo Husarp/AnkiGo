@@ -269,7 +269,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             SettingsSection.LOOK -> SettingsSummary.look(AppPrefs.theme(this), AppPrefs.accent(this), AppPrefs.uiScale(this))
             SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, st.cardsPerRound, st.dailyAverage)
             SettingsSection.STUDY -> SettingsSummary.study(study.getBoolean("inAnkiDroid", false), study.getBoolean("swipe", false), study.getInt("zoom", 100))
-            SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this))
+            SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this), AppPrefs.cardsUnderOwn(this))
             SettingsSection.SOUND -> SettingsSummary.sound(SoundPrefs.battleSounds(this), SoundPrefs.cries(this), SoundPrefs.volume(this))
             SettingsSection.DOWNLOADS -> SettingsSummary.downloads(DataStore.size(this), Sprites.size(this),
                 SettingsJobs.anim.running || SettingsJobs.data.running || FirstRunJob.job.running)
@@ -520,6 +520,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private fun battleSection() {
         content.addView(Form.sect(this, "When you leave AnkiGo"))
         content.addView(leaveCard())
+        content.addView(Form.sect(this, "Battle panel"))
+        content.addView(Form.cardOf(this, listOf(
+            Form.switchRow(this, "Stat card under its own Pokémon", "Off: the classic game layout, each card on the opposite side",
+                AppPrefs.cardsUnderOwn(this)) { AppPrefs.setCardsUnderOwn(this, it) },
+        )))
         content.addView(Form.sect(this, "Small battle windows"))
         content.addView(Form.cardOf(this, listOf(
             Form.switchRow(this, "Show stats bar in small windows", "Picture-in-picture and the floating battle; off gives the battle more room",

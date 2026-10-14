@@ -61,6 +61,7 @@ class SettingsShots {
         paparazzi.shootPage("settings-battle", variants) { ctx ->
             AppPrefs.setLeaveMode(ctx, LeaveMode.PIP)
             AppPrefs.setCompactCards(ctx, true)
+            AppPrefs.setCardsUnderOwn(ctx, false)   // the new switch shows "off" here and "on" in the default shot below
             page(ctx, SettingsSection.BATTLE)
         }
         paparazzi.shootPage("settings-battle-default", listOf(Variants.PHONE)) { page(it, SettingsSection.BATTLE) }

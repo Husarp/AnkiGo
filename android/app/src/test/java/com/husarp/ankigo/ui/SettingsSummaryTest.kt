@@ -27,6 +27,7 @@ class SettingsSummaryTest {
         assertEquals("On leaving: Nothing", SettingsSummary.battle(LeaveMode.OFF, true, false))
         assertEquals("On leaving: Picture-in-picture · compact cards · no stats bar when small",
             SettingsSummary.battle(LeaveMode.PIP, false, true))
+        assertEquals("On leaving: Nothing · classic cards", SettingsSummary.battle(LeaveMode.OFF, true, false, false))
     }
 
     @Test fun soundLine() {

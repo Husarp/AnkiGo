@@ -613,11 +613,15 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val drawn = spr.drawnHeight()
         val top = if (drawn > 0) max(holder.top - dpi(8), holder.bottom - drawn - dpi(8)) else holder.top + dpi(6)
         val lp = LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT)
-        lp.leftMargin = holder.left + (holder.width - tv.measuredWidth) / 2
-        lp.topMargin = top
+        // Not laid out yet (no size): the old free-floating start. Otherwise keep the whole rise inside the arena.
+        val spot = if (width > 0 && height > 0)
+            FloatSpot.place(holder.left + (holder.width - tv.measuredWidth) / 2, top, width, height, tv.measuredWidth, tv.measuredHeight, dpi(34))
+        else FloatSpot.Spot(holder.left + (holder.width - tv.measuredWidth) / 2, top, dpi(34))
+        lp.leftMargin = spot.left
+        lp.topMargin = spot.top
         addView(tv, lp)
         floats += tv
-        tv.animate().translationY(-Ui.dp(context, 34f)).alpha(0f).setDuration(1000).setInterpolator(DecelerateInterpolator())
+        tv.animate().translationY(-spot.rise.toFloat()).alpha(0f).setDuration(1000).setInterpolator(DecelerateInterpolator())
             .withEndAction { removeView(tv); floats -= tv }.start()
     }
 

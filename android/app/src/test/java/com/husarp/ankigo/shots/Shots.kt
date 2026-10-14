@@ -53,6 +53,10 @@ enum class Size(val wDp: Int, val hDp: Int) {
     PIP_11(200, 200),
     /** Floating battle window default size (FloatBattleView 240 x 190). */
     FLOATB(240, 190),
+    /** Tall modern phone (lane A). */
+    TALL(412, 915),
+    /** Small phone (lane A). */
+    SMALL(360, 640),
 }
 
 enum class Theme(val night: NightMode) { LIGHT(NightMode.NOTNIGHT), DARK(NightMode.NIGHT) }

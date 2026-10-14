@@ -70,8 +70,9 @@ object SettingsSummary {
         LeaveMode.FLOAT -> "Floating battle window"
     }
 
-    fun battle(mode: LeaveMode, statsBarSmall: Boolean, compact: Boolean): String =
-        "On leaving: ${leave(mode)}" + (if (compact) " · compact cards" else "") + (if (!statsBarSmall) " · no stats bar when small" else "")
+    fun battle(mode: LeaveMode, statsBarSmall: Boolean, compact: Boolean, cardsOwn: Boolean = true): String =
+        "On leaving: ${leave(mode)}" + (if (compact) " · compact cards" else "") + (if (!cardsOwn) " · classic cards" else "") +
+            (if (!statsBarSmall) " · no stats bar when small" else "")
 
     fun sound(battle: Boolean, cries: Boolean, volume: Int): String = when {
         !battle && !cries -> "Off"
