@@ -161,6 +161,22 @@ object DetailParts {
             LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
     }
 
+    /** Move line for small windows: type chip, then the name over the small power / accuracy line (nothing gets cut). */
+    fun compactMoveRow(a: Context, data: com.husarp.ankigo.game.GameData, id: String): View {
+        val m = data.move(id) ?: return Ui.text(a, 13f, 800, R.color.ag_text).apply { text = id }
+        return LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, Ui.dp(a, 3), 0, Ui.dp(a, 3))
+            addView(Ui.typeChip(a, m.type), LinearLayout.LayoutParams(Ui.dp(a, 62), -2))
+            addView(LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(Ui.text(a, 14f, 800, R.color.ag_text).apply { text = m.name; maxLines = 1 })
+                addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply { text = Bits.moveStats(data, id); maxLines = 1 })
+            }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 8) })
+        }
+    }
+
     /** Full-width secondary button (48 dp). */
     fun secondaryButton(a: Context, label: String, onClick: () -> Unit): TextView = Ui.text(a, 14f, 900, R.color.ag_text).apply {
         text = label

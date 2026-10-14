@@ -87,20 +87,21 @@ object MonDetail {
         val sp = data.sp(mon.species)
         val stats = StatCalc.stats(sp, mon)
         val compact = DetailParts.compact(a)
+        val pad = if (compact) 16 else 20
         val col = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 8))
+            setPadding(Ui.dp(a, pad), Ui.dp(a, 4), Ui.dp(a, pad), Ui.dp(a, 8))
         }
 
         // header: sprite, name + pencil, #num / Lv / nature / gender, types, all tags
         val img = ImageView(a)
         MonPreview.show(a, mon.species, mon.shiny, img)
         val spriteDp = if (compact) 64 else 96
-        val nameText = Ui.text(a, 20f, 900, R.color.ag_text).apply {
+        val nameText = Ui.text(a, if (compact) 18f else 20f, 900, R.color.ag_text).apply {
             text = (if (mon.shiny) "★ " else "") + mon.shownName
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             // leave room for the pencil (and the sprite when it sits beside the text): the dialog is at most about 88 % of the window wide
-            maxWidth = Ui.dp(a, ((a.resources.configuration.screenWidthDp * 0.88f).toInt() - 40 - 56 - if (compact) spriteDp + 12 else 0).coerceAtLeast(100))
+            maxWidth = Ui.dp(a, ((a.resources.configuration.screenWidthDp * 0.88f).toInt() - 2 * pad - 48 - 8 - if (compact) spriteDp + 12 else 0).coerceAtLeast(100))
         }
         val nameRow = LinearLayout(a).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -179,8 +180,9 @@ object MonDetail {
         col.addView(DetailParts.header(a, R.drawable.ic_swords, "Moves", compact))
         if (mon.moves.isEmpty()) col.addView(DetailParts.line(a, "", "none", compact = compact))
         for (m in mon.moves) {
+            if (compact) { col.addView(DetailParts.compactMoveRow(a, data, m)); continue }
             val row = Bits.moveRow(a, data, m)
-            row.setPadding(0, Ui.dp(a, if (compact) 3 else 5), 0, Ui.dp(a, if (compact) 3 else 5))
+            row.setPadding(0, Ui.dp(a, 5), 0, Ui.dp(a, 5))
             col.addView(row)
         }
 

@@ -3,6 +3,7 @@ package com.husarp.ankigo.shots
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ScrollView
 import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.GameRepo
@@ -24,10 +25,11 @@ class DetailShots {
     private val st get() = GameRepo.state!!
     private val gd get() = GameRepo.data!!
 
-    private fun findScroll(v: View): ScrollView? {
-        if (v is ScrollView) return v
-        if (v is ViewGroup) for (i in 0 until v.childCount) findScroll(v.getChildAt(i))?.let { return it }
-        return null
+    /** All ScrollViews of the tree (the dialog has its own, empty one for the message). */
+    private fun scrolls(v: View, out: MutableList<ScrollView> = ArrayList()): List<ScrollView> {
+        if (v is ScrollView) out += v
+        if (v is ViewGroup) for (i in 0 until v.childCount) scrolls(v.getChildAt(i), out)
+        return out
     }
 
     /** One render per scroll position in [slices] (0 = top, 1 = bottom): the dialog scrolls, so a tall one needs several. */
@@ -36,13 +38,16 @@ class DetailShots {
             paparazzi.shootPage("$name-s$k", variants) { ctx ->
                 val d = DialogShots.capture { open(ctx) } ?: error("no dialog was shown")
                 val scene = DialogShots.scene(ctx, d)
-                findScroll(scene)?.let { sc ->
-                    sc.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                        val range = (sc.getChildAt(0).height - sc.height).coerceAtLeast(0)
-                        sc.scrollTo(0, (range * frac).toInt())
+                object : FrameLayout(ctx) {
+                    // scrolls right before drawing, when every size is final: the details' ScrollView is the one with most content
+                    override fun dispatchDraw(canvas: android.graphics.Canvas) {
+                        scrolls(scene).maxByOrNull { it.getChildAt(0)?.height ?: 0 }?.let { sc ->
+                            val range = (sc.getChildAt(0).height - sc.height).coerceAtLeast(0)
+                            sc.scrollTo(0, (range * frac).toInt())
+                        }
+                        super.dispatchDraw(canvas)
                     }
-                }
-                scene
+                }.apply { addView(scene, FrameLayout.LayoutParams(-1, -1)) }
             }
         }
     }
