@@ -111,6 +111,34 @@ class EncountersTest {
         assertEquals(Tier.NORMAL, t(19))
     }
 
+    @Test fun ankimonLegendaryListOverridesTheFlags() {
+        fun t(num: Int, l: Boolean = false) = Encounters.tierOf(TestData.species(num, isLegendary = l))
+        assertEquals(Tier.LEGENDARY, t(772))
+        assertEquals(Tier.LEGENDARY, t(1009))
+        listOf(772, 1009, 1010, 1020, 1021, 1022, 1023).forEach { assertEquals(Tier.LEGENDARY, t(it)); assertEquals(Tier.LEGENDARY, t(it, true)) }
+        assertEquals(7, Encounters.LEGENDARY_EXTRA.size)
+        assertEquals(Tier.LEGENDARY, t(150, true)) // a regular legendary is unchanged
+        assertEquals(Tier.NORMAL, t(773))
+        assertNull(t(718, true)); assertNull(t(718, false))
+        val data = TestData.data(listOf(TestData.species(772), TestData.species(1009)))
+        assertEquals(50, Encounters.minLevel(data, data.sp(772)))
+        assertEquals(50, Encounters.minLevel(data, data.sp(1009)))
+    }
+
+    @Test fun zygardeNeverSpawns() {
+        val data = TestData.data(listOf(
+            TestData.species(718, isLegendary = true), TestData.species(772), TestData.species(1009), TestData.species(150, isLegendary = true),
+        ))
+        val s = Settings().also { it.gens.addAll(1..9) }
+        val all = Tier.entries.flatMap { Encounters.pool(data, it, s, 100, setOf(716, 717)) }
+        assertFalse(718 in all)
+        assertEquals(listOf(150, 772, 1009), Encounters.pool(data, Tier.LEGENDARY, s, 100, setOf(151)).sorted())
+        assertTrue(Encounters.pool(data, Tier.LEGENDARY, s, 49, emptySet()).isEmpty())
+        val st = GameState().also { it.settings.gens.addAll(1..9); it.caught += setOf(716, 717) }
+        assertFalse(Encounters.isValid(data, st, 718, 100))
+        assertTrue(Encounters.isValid(data, st, 772, 100))
+    }
+
     @Test fun listSizes() {
         assertEquals(81, Encounters.STARTERS.size)
         assertEquals(11, Encounters.ULTRA_BEASTS.size)

@@ -37,6 +37,21 @@ object Tuning {
     val THAW_IF_USES = setOf("scald", "flamewheel", "sacredfire", "flareblitz", "fusionflare", "steameruption", "scorchingsands")
     /** Besides every damaging Fire move, these also thaw a frozen target they hit (THAW_IF_HIT_BY). */
     val THAW_IF_HIT_BY = setOf("scald", "steameruption", "scorchingsands")
+    /**
+     * Charge moves (poke-engine `charge` flag, 17 of them): the first time one is picked in a fight the user only charges
+     * (no damage, no accuracy roll), the next time it hits. The charge is kept on that side for the rest of the fight.
+     */
+    val CHARGE_MOVES = setOf(
+        "bounce", "dig", "dive", "electroshot", "fly", "freezeshock", "geomancy", "iceburn", "meteorbeam", "phantomforce",
+        "razorwind", "shadowforce", "skullbash", "skyattack", "skydrop", "solarbeam", "solarblade",
+    )
+    /**
+     * These lose the charge after the hit (poke-engine after_move); every other charge move keeps it, so e.g. Solar Beam
+     * charges once per fight and then hits whenever it is picked (copied from Ankimon). NOT copied: poke-engine also makes
+     * a side that charged one of these untouchable until it uses the move again. A wild one only moves after weak answers
+     * and could stay untouchable for dozens of cards, so AnkiGo does not model that.
+     */
+    val CHARGE_CLEARS_AFTER_USE = setOf("fly", "bounce", "dig", "dive", "phantomforce", "shadowforce")
     /** Powder moves fail against Grass types (poke-engine POWDER flag). */
     val POWDER_MOVES = setOf("sleeppowder", "stunspore", "poisonpowder", "spore", "powder", "ragepowder", "magicpowder")
 

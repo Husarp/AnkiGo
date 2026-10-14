@@ -566,11 +566,12 @@ class ProgressionTest {
         assertEquals(Outcome.CATCH, Catching.decide(data, s, battleOf(16, shiny = true)))
         assertEquals(Outcome.CATCH, Catching.decide(data, s, battleOf(150)))
         assertEquals(Outcome.CATCH, Catching.decide(data, s, battleOf(16, Tier.ULTRA)))
-        // wishlist (Pikachu 25 in default list) beats everything, including a DEFEAT override
+        // the one-off override beats the wishlist (Ankimon handle_enemy_faint): wishlisted Pikachu 25 can be defeated
         s.settings.autoMode = 2
         val pika = battleOf(25)
-        pika.override = Outcome.DEFEAT
         assertEquals(Outcome.CATCH, Catching.decide(data, s, pika))
+        pika.override = Outcome.DEFEAT
+        assertEquals(Outcome.DEFEAT, Catching.decide(data, s, pika))
         // override beats the mode
         val b = battleOf(16)
         b.override = Outcome.CATCH
@@ -579,6 +580,35 @@ class ProgressionTest {
         val c = battleOf(16)
         c.override = Outcome.DEFEAT
         assertEquals(Outcome.DEFEAT, Catching.decide(data, s, c))
+    }
+
+    @Test fun defeatOverrideStillCatchesAProtectedKind() {
+        val s = TestData.state(data, 25, 20)
+        s.caught += listOf(150, 151, 16)
+        s.settings.autoMode = 2
+        val legend = battleOf(150, Tier.LEGENDARY); legend.override = Outcome.DEFEAT
+        assertEquals(Outcome.CATCH, Catching.decide(data, s, legend))
+        val ultra = battleOf(16, Tier.ULTRA); ultra.override = Outcome.DEFEAT
+        assertEquals(Outcome.CATCH, Catching.decide(data, s, ultra))
+        // protection off: the defeat goes through
+        s.settings.protectLegendary = false
+        assertEquals(Outcome.DEFEAT, Catching.decide(data, s, legend))
+        // a CATCH override on a known species catches in any mode
+        val known = battleOf(16); known.override = Outcome.CATCH
+        assertEquals(Outcome.CATCH, Catching.decide(data, s, known))
+        // a wishlisted protected one with no override is caught
+        s.settings.wishlist += 150
+        legend.override = null
+        assertEquals(Outcome.CATCH, Catching.decide(data, s, legend))
+    }
+
+    @Test fun legendaryExtraSpeciesAreProtectedEvenWithoutTheFlag() {
+        val s = Settings()
+        val nul = TestData.species(772, isLegendary = false)
+        assertTrue(Catching.isProtected(s, nul, Tier.NORMAL))
+        s.protectLegendary = false
+        assertFalse(Catching.isProtected(s, nul, Tier.NORMAL))
+        assertFalse(Catching.isProtected(Settings(), TestData.species(773), Tier.NORMAL))
     }
 
     @Test fun ballChances() {

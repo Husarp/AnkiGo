@@ -122,6 +122,7 @@ object SaveCodec {
     private fun writeSide(w: W, s: BattleSide) = w.obj {
         list("boosts", s.boosts.toList())
         kv("status", s.status); kv("statusTurns", s.statusTurns)
+        list("charged", s.charged.sorted())
     }
 
     private fun writeBattle(w: W, b: Battle) = w.obj {
@@ -189,7 +190,10 @@ object SaveCodec {
     }
 
     private fun readSide(o: JSONObject?): BattleSide =
-        if (o == null) BattleSide() else BattleSide(o.intArray("boosts", 7), o.strOrNull("status"), o.int("statusTurns", 0))
+        if (o == null) BattleSide() else BattleSide(
+            o.intArray("boosts", 7), o.strOrNull("status"), o.int("statusTurns", 0),
+            (o.strList("charged") ?: emptyList()).toMutableSet(),
+        )
 
     /** A battle is transient; one without a readable wild Pokémon is dropped (the next answer starts a new one). */
     private fun readBattle(o: JSONObject): Battle? {

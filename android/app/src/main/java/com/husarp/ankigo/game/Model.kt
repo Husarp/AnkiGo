@@ -189,6 +189,7 @@ class BattleSide(
     val boosts: IntArray = IntArray(7), // atk def spa spd spe accuracy evasion, each -6..+6
     var status: String? = null,         // "par" "brn" "psn" "tox" "slp" "frz"
     var statusTurns: Int = 0,           // sleep turns left / toxic counter
+    val charged: MutableSet<String> = mutableSetOf(), // charge moves (ids) already charged in this fight
 )
 
 enum class Outcome { CATCH, DEFEAT }

@@ -43,7 +43,7 @@ class SaveCodecTest {
         val wild = mon(9, "Wildmon", 'M')
         s.battle = Battle(
             wild = wild, tier = Tier.LEGENDARY,
-            player = BattleSide(intArrayOf(1, -2, 3, -4, 5, -6, 0), "par", 0),
+            player = BattleSide(intArrayOf(1, -2, 3, -4, 5, -6, 0), "par", 0, mutableSetOf("solarbeam", "fly")),
             enemy = BattleSide(intArrayOf(0, 0, 0, 0, 0, 2, -1), "slp", 3),
             tally = 25, answers = 3, override = Outcome.CATCH, rounds = 4, startedAt = 1_800_000_000_000L,
         )
@@ -104,6 +104,7 @@ class SaveCodecTest {
         assertEquals("Wildmon", bt.wild.name); assertEquals(Tier.LEGENDARY, bt.tier); assertEquals(Outcome.CATCH, bt.override)
         assertArrayEquals(intArrayOf(1, -2, 3, -4, 5, -6, 0), bt.player.boosts)
         assertEquals("par", bt.player.status); assertEquals("slp", bt.enemy.status); assertEquals(3, bt.enemy.statusTurns)
+        assertEquals(setOf("solarbeam", "fly"), bt.player.charged); assertTrue(bt.enemy.charged.isEmpty())
         assertEquals(25, bt.tally); assertEquals(3, bt.answers); assertEquals(4, bt.rounds); assertEquals(1_800_000_000_000L, bt.startedAt)
         assertEquals(133, b.nextSpecies); assertEquals(Tier.BABY, b.nextTier); assertTrue(b.nextShiny)
         assertArrayEquals(intArrayOf(1, 2, 3, 4, 5), b.buttonsToday)
@@ -162,6 +163,15 @@ class SaveCodecTest {
         assertEquals(Tier.NORMAL, b.nextTier); assertEquals("", b.day); assertEquals(5, b.buttonsToday.size)
         assertEquals(Tier.NORMAL, b.mons[0].tier); assertEquals(Nature.HARDY, b.mons[0].nature)
         assertEquals(Stats.ZERO, b.mons[0].evs); assertTrue(b.mons[0].moves.isEmpty())
+    }
+
+    @Test fun anOldBattleSideWithoutChargedDecodesToEmpty() {
+        val b = SaveCodec.decode(
+            """{"schema":1,"mons":[{"uid":"a","species":1,"level":1}],
+               |"battle":{"wild":{"uid":"w","species":1,"level":1},"player":{"boosts":[1,2],"status":"par"}}}""".trimMargin(),
+        )
+        assertTrue(b.battle!!.player.charged.isEmpty()); assertTrue(b.battle!!.enemy.charged.isEmpty())
+        assertEquals("par", b.battle!!.player.status)
     }
 
     @Test fun shortAndLongArraysAreFittedNotRejected() {

@@ -282,23 +282,29 @@ object Progression {
 object Catching {
     /** Ankimon's protected kinds (each a setting): legendary, mythical, ultra beast, starter, regional form (by the base number). */
     fun isProtected(settings: Settings, sp: Species, tier: Tier): Boolean =
-        ((sp.isLegendary || tier == Tier.LEGENDARY) && settings.protectLegendary) ||
+        ((sp.isLegendary || tier == Tier.LEGENDARY || sp.baseNum in Encounters.LEGENDARY_EXTRA) && settings.protectLegendary) ||
             ((sp.isMythical || tier == Tier.MYTHICAL) && settings.protectMythical) ||
             ((tier == Tier.ULTRA || sp.baseNum in Encounters.ULTRA_BEASTS) && settings.protectUltra) ||
             (sp.baseNum in Encounters.STARTERS && settings.protectStarter) ||
             (sp.form != null && settings.protectRegional)
 
     /**
-     * What happens when the wild one faints (Ankimon automatic_battle, never a dialog): wishlist -> CATCH;
-     * battle.override if set; mode 1 CATCH; mode 2 CATCH if shiny or protected else DEFEAT;
+     * What happens when the wild one faints (Ankimon handle_enemy_faint, never a dialog): the one-off battle.override
+     * first (CATCH -> CATCH; DEFEAT -> DEFEAT, except a protected kind is caught anyway); then the wishlist -> CATCH;
+     * then the automatic mode: mode 1 CATCH; mode 2 CATCH if shiny or protected else DEFEAT;
      * mode 3 CATCH if the species was never caught, or shiny, or protected, else DEFEAT.
      */
     fun decide(data: GameData, state: GameState, battle: Battle): Outcome {
         val settings = state.settings
         val wild = battle.wild
+        val protected = isProtected(settings, data.sp(wild.species), battle.tier)
+        when (battle.override) {
+            Outcome.CATCH -> return Outcome.CATCH
+            Outcome.DEFEAT -> return if (protected) Outcome.CATCH else Outcome.DEFEAT
+            null -> {}
+        }
         if (wild.species in settings.wishlist) return Outcome.CATCH
-        battle.override?.let { return it }
-        val special = wild.shiny || isProtected(settings, data.sp(wild.species), battle.tier)
+        val special = wild.shiny || protected
         return when (settings.autoMode) {
             1 -> Outcome.CATCH
             2 -> if (special) Outcome.CATCH else Outcome.DEFEAT

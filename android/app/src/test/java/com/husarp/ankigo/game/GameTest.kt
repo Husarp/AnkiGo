@@ -329,6 +329,27 @@ class GameTest {
         assertFalse(g.willCatch())
     }
 
+    @Test fun defeatTapBeatsTheWishlistButNotProtection() {
+        val g = game()
+        g.state.caught += 25
+        g.fight(species = 25, hp = 1) // wishlisted
+        g.setOverride(Outcome.DEFEAT)
+        assertFalse(g.willCatch())
+        g.answer(3)
+        val ev = g.answer(3)
+        assertEquals(1, ev.of<GameEvent.Defeated>().size)
+        assertTrue(ev.of<GameEvent.Caught>().isEmpty())
+
+        val h = game()
+        h.fight(species = 150, level = 5, hp = 1, tier = Tier.LEGENDARY)
+        h.setOverride(Outcome.DEFEAT)
+        assertTrue(h.willCatch()) // protected: still caught
+        h.answer(3)
+        val ev2 = h.answer(3)
+        assertEquals(1, ev2.of<GameEvent.Caught>().size)
+        assertTrue(ev2.of<GameEvent.Defeated>().isEmpty())
+    }
+
     @Test fun fullTeamSendsTheCatchToTheBox() {
         val g = game(state = roster(6))
         g.fight(species = 129, hp = 1)
@@ -679,6 +700,19 @@ class GameTest {
         assertTrue(b.player.boosts.all { it == 0 } && b.player.status == null)
         assertEquals(-1, b.enemy.boosts[1])
         assertEquals(1, b.answers); assertEquals(10, b.tally) // the charge carries on
+    }
+
+    @Test fun changingTheMainMidFightDropsTheChargedMoves() {
+        val g = game(state = roster(3))
+        g.fight()
+        g.state.battle!!.player.charged += "solarbeam"
+        g.state.battle!!.enemy.charged += "fly"
+        assertTrue(g.setMain("t2").ok)
+        assertTrue(g.state.battle!!.player.charged.isEmpty())
+        assertEquals(setOf("fly"), g.state.battle!!.enemy.charged) // the wild one keeps its charge
+        g.state.battle!!.player.charged += "dig"
+        assertTrue(g.cycleMain().ok)
+        assertTrue(g.state.battle!!.player.charged.isEmpty())
     }
 
     @Test fun cycleMainRotatesTheFirstThree() {
