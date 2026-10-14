@@ -874,6 +874,111 @@ class AnkimonExportTest {
         assertTrue(img.mains().isEmpty())
     }
 
+    // ---- Exp. Share holder ----------------------------------------------------------------------------------------------
+
+    @Test fun theExpShareHolderFollowsThePhoneAndAnUnchangedOneKeepsTheFilesText() {
+        val img = rich()
+        img.put("config", "trainer.xp_share", "\"m-leaf\"")                 // quoted: the file's own text
+        val st = stateOf(img)
+        assertEquals(monOf(st, "m-leaf").uid, st.settings.xpShareUid)         // the import took it
+        val config = img.rowsOf("config")
+        export(st, img)
+        assertEquals(config, img.rowsOf("config"))                             // same holder: untouched
+        st.settings.xpShareUid = monOf(st, "m-spark").uid
+        export(st, img)
+        assertEquals("m-spark", img.kv("config", "trainer.xp_share"))
+        val phone = caught(); st.mons += phone; st.settings.xpShareUid = phone.uid // a phone catch holds it: its uid is the id
+        export(st, img)
+        assertEquals("u-new", img.kv("config", "trainer.xp_share"))
+        assertEquals(1, img.rowsOf("config").count { it["key"] == "trainer.xp_share" })
+        st.settings.xpShareUid = null
+        export(st, img)
+        assertNull(img.kv("config", "trainer.xp_share"))                       // off: the row goes
+        export(st, img)
+        assertNull(img.kv("config", "trainer.xp_share"))
+        st.settings.xpShareUid = monOf(st, "m-bird").uid
+        export(st, img)                                                         // no row yet: it is added
+        assertEquals("m-bird", img.kv("config", "trainer.xp_share"))
+        assertEquals("Ash", img.kv("config", "trainer.name"))                  // other settings stay
+        assertEquals("\"SECRET-TOKEN\"", img.kv("config", "sync.token"))
+    }
+
+    @Test fun aHolderAnkiGoDoesNotHaveKeepsItsRowUntilThePhoneChoosesAnother() {
+        val img = rich()
+        img.addMon("m-gen9", false, json("m-gen9", 906, "level" to 5))
+        img.put("config", "trainer.xp_share", "m-gen9")
+        val st = stateOf(img)
+        assertNull(st.settings.xpShareUid)                                     // not in the game: the import sets nothing
+        assertTrue(st.mons.none { it.ankimonId == "m-gen9" })
+        val config = img.rowsOf("config"); val gen9 = img.dataOf("m-gen9")
+        export(st, img)
+        assertEquals(config, img.rowsOf("config"))                             // phone has none, file's holder unknown: row stays
+        assertEquals(gen9, img.dataOf("m-gen9"))
+        st.settings.xpShareUid = monOf(st, "m-leaf").uid
+        export(st, img)
+        assertEquals("m-leaf", img.kv("config", "trainer.xp_share"))           // the player chose another one
+        assertEquals(gen9, img.dataOf("m-gen9"))
+    }
+
+    @Test fun ankimonsOrasModeAndAnUnreadableModeAreLeftAlone() {
+        for (mode in listOf("oras", "\"oras\"")) {
+            val img = rich()
+            img.put("config", "trainer.xp_share_mode", mode)
+            img.put("config", "trainer.xp_share", "m-leaf")
+            val st = stateOf(img)
+            assertNull(st.settings.xpShareUid)                                  // everyone shares: no single holder
+            val config = img.rowsOf("config")
+            st.settings.xpShareUid = monOf(st, "m-spark").uid
+            export(st, img)
+            assertEquals(config, img.rowsOf("config"))
+            st.settings.xpShareUid = null
+            export(st, img)
+            assertEquals(config, img.rowsOf("config"))
+        }
+        val img = rich()                                                         // explicit "classic" works like no mode row
+        img.put("config", "trainer.xp_share_mode", "classic")
+        val st = stateOf(img)
+        st.settings.xpShareUid = monOf(st, "m-spark").uid
+        export(st, img)
+        assertEquals("m-spark", img.kv("config", "trainer.xp_share"))
+    }
+
+    @Test fun aFreshSaveGetsTheHolderToo() {
+        val st = playedGame()
+        val none = AnkimonSchema.fresh()
+        export(st, none, fresh = true)
+        assertNull(none.kv("config", "trainer.xp_share"))
+        st.settings.xpShareUid = "u-b"
+        val result = AnkimonExport.build(data, st, null, refs, NOW)
+        assertEquals(emptyList<String>(), AnkimonExport.verify(result))
+        assertEquals("u-b", readAll(result.bytes).xpShare)
+        val back = GameState()
+        AnkimonMerge.merge(data, back, readAll(result.bytes), { refs.forms[it] }, true, NOW)
+        assertEquals(back.mons.single { it.ankimonId == "u-b" }.uid, back.settings.xpShareUid)
+    }
+
+    @Test fun theExpShareHolderRoundTripsThroughExportAndReImportInEveryState() {
+        val src = rich()
+        src.put("config", "trainer.xp_share", "m-leaf")
+        val kept = SqliteWriter.write(src)
+        val st = fileState(kept)
+        val phone = caught("u-phone"); st.mons += phone; st.seen += phone.species; st.caught += phone.species
+        val holders = listOf("m-leaf" to monOf(st, "m-leaf").uid, "m-bird" to monOf(st, "m-bird").uid, "u-phone" to "u-phone", null to null)
+        for ((id, uid) in holders) {
+            st.settings.xpShareUid = uid
+            val result = AnkimonExport.build(data, st, kept, refs, NOW)
+            assertEquals(emptyList<String>(), AnkimonExport.verify(result))
+            assertEquals(id, readAll(result.bytes).xpShare)
+            val saved = SaveCodec.encode(st)
+            val rep = AnkimonMerge.merge(data, st, readAll(result.bytes), { refs.forms[it] }, true, NOW)
+            assertEquals(id, "nothing new", rep.summary())                       // re-import: nothing new...
+            assertEquals(id, saved, SaveCodec.encode(st))                        // ...and nothing changes
+            assertTrue(id, result.bytes.contentEquals(AnkimonExport.build(data, st, kept, refs, NOW).bytes)) // twice: same bytes
+            val second = AnkimonExport.build(data, st, result.bytes, refs, NOW)  // built on its own output: same again
+            assertTrue(id, result.bytes.contentEquals(second.bytes))
+        }
+    }
+
     // ---- the import side ---------------------------------------------------------------------------------------------
 
     @Test fun reImportingAnExportChangesNothingAndMatchesPhoneCatchesByUid() {

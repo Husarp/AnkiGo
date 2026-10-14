@@ -266,6 +266,26 @@ class AnkimonSaveTest {
         assertNull(cash("null"))
     }
 
+    @Test fun theExpShareHolderIsReadInClassicModeOnly() {
+        fun holder(value: Any?, mode: Any? = null): String? {
+            val config = listOfNotNull(
+                mapOf("key" to "trainer.xp_share", "value" to value),
+                mode?.let { mapOf("key" to "trainer.xp_share_mode", "value" to it) },
+            )
+            return parse(listOf(monRow("a", 0L, "{}")), config = config).xpShare
+        }
+        assertEquals("a1b2-c3", holder("a1b2-c3"))          // Ankimon writes str(value): plain text
+        assertEquals("a1b2-c3", holder("\"a1b2-c3\""))
+        assertEquals("a1b2-c3", holder(" a1b2-c3 ", "classic"))
+        assertEquals("a1b2-c3", holder("a1b2-c3", "\"classic\""))
+        assertNull(holder("None"))                           // str(None): turned off
+        assertNull(holder("null"))
+        assertNull(holder(""))
+        assertNull(holder(null))
+        assertNull(holder("a1b2-c3", "oras"))                // the whole team shares: no single holder
+        assertNull(parse(listOf(monRow("a", 0L, "{}"))).xpShare)
+    }
+
     // ---- not an Ankimon save ----------------------------------------------------------------------------------------
 
     @Test fun noPokemonTableIsNotAnAnkimonSave() {

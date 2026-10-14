@@ -191,7 +191,7 @@ object AnkimonImportFlow {
         }
         if (first.summary() == "nothing new" && other.summary() == "nothing new") {
             keepCopy(app, read, "Couldn't keep a copy for exporting back") // the PC's newest state is already in the game
-            info(c, "Nothing new in this file", "Everything in it is already in your game.")
+            info(c, "Nothing new in this file", "Everything in it is already in your game." + (notInFileLine(first.notInFile)?.let { "\n\n$it" } ?: ""))
             onDone(false)
             return
         }
@@ -209,7 +209,9 @@ object AnkimonImportFlow {
         }
         val summary = Ui.text(c, 15f, 800, R.color.ag_text)
         val skipped = Ui.text(c, 12f, 600, R.color.ag_sub1)
+        val missing = Ui.text(c, 13f, 700, R.color.ag_sub1).apply { setLineSpacing(0f, 1.1f) }
         col.addView(summary)
+        col.addView(missing, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 8) })
         col.addView(skipped, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 8) })
         val box = CheckBox(c).apply {
             text = "Use my Ankimon team (your current team goes to the box)"
@@ -226,6 +228,9 @@ object AnkimonImportFlow {
 
         fun fill(r: ImportReport) {
             summary.text = r.summary().replaceFirstChar { it.uppercase() }
+            val gone = notInFileLine(r.notInFile)
+            missing.visibility = if (gone == null) android.view.View.GONE else android.view.View.VISIBLE
+            missing.text = gone ?: ""
             val lines = r.skipped + read.save.problems
             skipped.visibility = if (lines.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
             skipped.text = (if (lines.isEmpty()) "" else "Skipped:\n") + lines.take(SHOW_SKIPPED).joinToString("\n") +
@@ -250,6 +255,13 @@ object AnkimonImportFlow {
             .setOnDismissListener { if (!taken) read.discard() }
             .create()
         Pickers.show(dialog)
+    }
+
+    /** The preview line for Pokémon the phone has but the PC file doesn't (the import never removes them); null for none. */
+    internal fun notInFileLine(n: Int): String? = when {
+        n <= 0 -> null
+        n == 1 -> "1 Pokémon you have on the phone is not in this PC save (released on the PC?). It stays on the phone."
+        else -> "$n Pokémon you have on the phone are not in this PC save (released on the PC?). They stay on the phone."
     }
 
     // ---- step 3: apply ----

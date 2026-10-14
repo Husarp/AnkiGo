@@ -35,6 +35,8 @@ data class ImportReport(
     val itemsRaised: Map<String, Pair<Int, Int>>,    // item id -> (before, after), only where it went up
     val tmsAdded: Int,
     val teamChanged: Boolean,
+    val xpShareChanged: Boolean = false,             // the file's Exp. Share holder became the game's
+    val notInFile: Int = 0,                          // Pokémon on the phone that were on the PC once but aren't in this file (they stay)
 ) {
     /** One short line, e.g. "adds 37 Pokémon, upgrades 4; Pokédex +12; ₽ 3,100 → 12,400; 5 items" ("nothing new" when empty). */
     fun summary(): String {
@@ -50,6 +52,7 @@ data class ImportReport(
         if (itemsRaised.isNotEmpty()) parts += if (itemsRaised.size == 1) "1 item" else "${itemsRaised.size} items"
         if (tmsAdded > 0) parts += if (tmsAdded == 1) "1 TM" else "$tmsAdded TMs"
         if (teamChanged) parts += "new team"
+        if (xpShareChanged) parts += "Exp. Share holder"
         return if (parts.isEmpty()) "nothing new" else parts.joinToString("; ")
     }
 
@@ -71,6 +74,7 @@ object AnkimonMerge {
      */
     fun merge(data: GameData, state: GameState, save: AnkimonSave, formBase: (Int) -> Int?, useTeam: Boolean, now: Long): ImportReport {
         val nameIndex = nameIndex(data)
+        val notInFile = notInFile(state, save)
 
         // A phone-caught Pokémon that was exported to the PC comes back under its uid (see AnkimonExport): match both.
         val byAnkimonId = HashMap<String, Mon>()
@@ -104,6 +108,11 @@ object AnkimonMerge {
         }
 
         val teamChanged = mergeTeam(state, save, byAnkimonId, useTeam)
+        // The file's Exp. Share holder, when it is in the game: with Ankimon's team, or when the phone has none.
+        val holder = save.xpShare?.let { byAnkimonId[it] }
+        val phoneHolder = state.settings.xpShareUid?.let { state.mon(it) }
+        val xpShareChanged = holder != null && holder !== phoneHolder && (useTeam || phoneHolder == null)
+        if (xpShareChanged) state.settings.xpShareUid = holder!!.uid
         if (state.team.isNotEmpty()) state.starterChosen = true
 
         // Pokédex: union; regional forms stay themselves, other forms count as their base species; only species this game knows.
@@ -135,7 +144,21 @@ object AnkimonMerge {
             added = added, upgraded = upgraded, unchanged = unchanged, skipped = skipped,
             seenAdded = state.seen.size - seenBefore, caughtAdded = state.caught.size - caughtBefore,
             cashBefore = cashBefore, cashAfter = state.cash, itemsRaised = raised, tmsAdded = tmsAdded, teamChanged = teamChanged,
+            xpShareChanged = xpShareChanged, notInFile = notInFile,
         )
+    }
+
+    /**
+     * Pokémon on the phone that were on the PC once but that [save] doesn't have (released or traded on the PC, or an
+     * older file). The import never removes them; the preview says so. "Once on the PC": imported from Ankimon, or caught
+     * on the phone no later than the newest phone catch the file holds (the file came after an export that had it).
+     */
+    internal fun notInFile(state: GameState, save: AnkimonSave): Int {
+        val inFile = save.mons.mapTo(HashSet()) { it.individualId }
+        val lastExported = state.mons.filter { it.ankimonId == null && it.uid in inFile }.maxOfOrNull { it.caughtAt }
+        return state.mons.count { m ->
+            (m.ankimonId ?: m.uid) !in inFile && (m.ankimonId != null || (lastExported != null && m.caughtAt <= lastExported))
+        }
     }
 
     // ---- species ------------------------------------------------------------------------------------------------

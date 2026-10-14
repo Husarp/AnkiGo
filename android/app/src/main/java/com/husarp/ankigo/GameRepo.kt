@@ -3,6 +3,7 @@ package com.husarp.ankigo
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.husarp.ankigo.data.AnkimonFiles
 import com.husarp.ankigo.data.DataStore
 import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameData
@@ -297,7 +298,7 @@ object GameRepo {
      * (save.abandoned-<millis>.json for save.json, ...-bak.json, ...-tmp.json; the snapshots folder keeps its snapshots as
      * snapshots.abandoned-<millis>) because SaveStore.load would otherwise bring an older save back to life.
      */
-    fun startNewGame(ctx: Context) {
+    fun startNewGame(ctx: Context, forgetAnkimon: Boolean = false) {
         requireMain()
         val app = ctx.applicationContext
         saveNow(app) // a running game is saved first, so what gets set aside is its latest state
@@ -307,6 +308,7 @@ object GameRepo {
         moveAside(File(dir, "save.bak"), File(dir, "save.abandoned-$stamp-bak.json"))
         moveAside(File(dir, "save.json.tmp"), File(dir, "save.abandoned-$stamp-tmp.json"))
         moveAside(File(dir, "snapshots"), File(dir, "snapshots.abandoned-$stamp"))
+        if (forgetAnkimon) AnkimonFiles.forget(app) // else a later export still builds on the old import (its warning says so)
         held = GameState(createdAt = stamp)
         error = null
         rebuild()

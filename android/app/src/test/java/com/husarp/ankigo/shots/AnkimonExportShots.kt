@@ -34,6 +34,7 @@ class AnkimonExportShots {
         dialog("export-warning-kept") { AnkimonExportFlow.warningDialog(it, keptAt, {}, {}) }
         dialog("export-warning-fresh") { AnkimonExportFlow.warningDialog(it, null, {}, {}) }
         dialog("export-warning-nocopy") { AnkimonExportFlow.warningDialog(it, null, {}, {}, noCopy = true) }
+        dialog("export-warning-oldgame") { AnkimonExportFlow.warningDialog(it, keptAt, {}, {}, oldGame = true) }
         dialog("export-progress") { ctx -> AnkimonExportFlow.progressDialog(ctx).also { it.set(0.55f, "Checking the file…") }.dialog }
         dialog("export-success") { AnkimonExportFlow.successDialog(it, report()) }
         dialog("export-success-notes") { AnkimonExportFlow.successDialog(it, report(released = 2, untouched = 14)) }
@@ -41,6 +42,18 @@ class AnkimonExportShots {
         dialog("export-failed") { AnkimonExportFlow.failureDialog(it, "The file didn't pass the checks, so it was not written.") }
         dialog("export-failed-write") {
             AnkimonExportFlow.failureDialog(it, "Couldn't write the file, or it didn't read back the same. Don't use the file you picked; it may be incomplete.", nothingChanged = false)
+        }
+    }
+
+    /** "Start a new game" last step: with a kept Ankimon file (box on, box off) and without one. */
+    @Test fun startOverDialogs() {
+        dialog("startover-kept-on") { AnkimonExportFlow.startOverDialog(it, keptAt) {} }
+        dialog("startover-nokept") { AnkimonExportFlow.startOverDialog(it, null) {} }
+        paparazzi.shootPage("startover-kept-off") { ctx ->
+            val d = DialogShots.capture { com.husarp.ankigo.ui.Pickers.show(AnkimonExportFlow.startOverDialog(ctx, keptAt) {}) } ?: error("no dialog was shown")
+            val scene = DialogShots.scene(ctx, d)
+            (find(scene) { it is android.widget.CheckBox } as android.widget.CheckBox).isChecked = false
+            scene
         }
     }
 

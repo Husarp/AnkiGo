@@ -307,6 +307,14 @@ class PagesShots {
 
     @Test fun ankimonImport() {
         dialog("pages-dlg-ankimon-preview", phoneTall) { ctx -> ankimonPreview(ctx) }
+        dialog("pages-dlg-ankimon-preview-notinfile", phoneSplit) { ctx ->
+            st.mons.take(3).forEachIndexed { i, m -> m.ankimonId = "pc-gone-$i" } // on the phone from an earlier import, not in this file
+            ankimonPreview(ctx)
+        }
+        dialog("pages-dlg-ankimon-nothingnew-notinfile", phoneSplit) { ctx ->
+            call(AnkimonImportFlow, "info", ctx, "Nothing new in this file",
+                "Everything in it is already in your game.\n\n" + AnkimonImportFlow.notInFileLine(3))
+        }
         dialog("pages-dlg-ankimon-failed") { ctx ->
             call(AnkimonImportFlow, "info", ctx, "Import failed",
                 "This is not an Ankimon save file. In Anki use Ankimon's menu Game → Export Save File… and pick that file.")
