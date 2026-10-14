@@ -41,17 +41,17 @@ class FloatGeometryTest {
         assertEquals(Box(0, 0, 250, 180), FloatGeometry.clamp(Box(40, 40, 300, 200), 250, 180, minW, minH))
     }
 
-    @Test fun defaultIsCentredInLowerThird() {
+    @Test fun defaultIsCentredOnDisplay() {
         val b = FloatGeometry.default(sw, sh, 600, 800, minW, minH)
         assertEquals(240, b.x)
-        assertEquals(sh * 2 / 3 - 400, b.y)
+        assertEquals((sh - 800) / 2, b.y)
         assertEquals(600, b.w)
         assertEquals(800, b.h)
     }
 
     @Test fun defaultTallWindowIsClamped() {
         val b = FloatGeometry.default(sw, sh, 600, 2000, minW, minH)
-        assertEquals(200, b.y)
+        assertEquals(100, b.y)
     }
 
     @Test fun moveClampsAtEdges() {
@@ -72,5 +72,27 @@ class FloatGeometryTest {
         // only 100 px of room right of x=980, but min width is 300: the window moves left rather than leave the screen
         val b = FloatGeometry.resize(Box(980, 100, 100, 300), 0, 0, sw, sh, minW, minH)
         assertEquals(Box(780, 100, 300, 300), b)
+    }
+
+    // Split screen: display 1080x2340, app half 1080x1150. Geometry is given the whole display.
+    @Test fun splitScreenDefaultCentredOnWholeDisplay() {
+        val b = FloatGeometry.default(1080, 2340, 700, 900, minW, minH)
+        assertEquals(Box(190, 720, 700, 900), b)
+    }
+
+    @Test fun splitScreenDragToLowerHalfStays() {
+        val s = Box(100, 100, 600, 700)
+        assertEquals(Box(100, 1600, 600, 700), FloatGeometry.move(s, 0, 1500, 1080, 2340, minW, minH))
+        assertEquals(Box(100, 1600, 600, 700), FloatGeometry.clamp(Box(100, 1600, 600, 700), 1080, 2340, minW, minH))
+    }
+
+    @Test fun splitScreenResizeAcrossDivider() {
+        val s = Box(100, 800, 600, 300)
+        assertEquals(Box(100, 800, 600, 1000), FloatGeometry.resize(s, 0, 700, 1080, 2340, minW, minH))
+        assertEquals(Box(100, 800, 980, 1540), FloatGeometry.resize(s, 9999, 9999, 1080, 2340, minW, minH))
+    }
+
+    @Test fun rotationOfSplitDisplayReclamps() {
+        assertEquals(Box(1040, 380, 600, 700), FloatGeometry.clamp(Box(1040, 1600, 600, 700), 2340, 1080, minW, minH))
     }
 }

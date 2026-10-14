@@ -119,6 +119,7 @@ object Pickers {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setTextColor(Ui.c(a, R.color.ag_text))
             setHintTextColor(Ui.c(a, R.color.ag_ov))
+            Ui.tintEdit(this)
             setSingleLine()
             filters = arrayOf(android.text.InputFilter.LengthFilter(max))
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
@@ -247,6 +248,19 @@ object Bits {
     fun textTile(ctx: Context, label: String, color: Int, sizeDp: Int = 40): FrameLayout = FrameLayout(ctx).apply {
         background = Ui.rounded(blend(color, Ui.c(ctx, R.color.ag_mantle), 0.35f), 10, ctx)
         addView(Ui.text(ctx, 12f, 900, R.color.ag_text).apply { text = label }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+        layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, sizeDp), Ui.dp(ctx, sizeDp))
+    }
+
+    /** TM tile: the TM disc tinted with the move's type colour on a soft tile; [typeColor] null (unknown move) = grey. */
+    fun tmTile(ctx: Context, typeColor: Int?, sizeDp: Int = 40): FrameLayout = FrameLayout(ctx).apply {
+        val col = typeColor ?: Ui.c(ctx, R.color.ag_sub0)
+        background = Ui.rounded(blend(col, Ui.c(ctx, R.color.ag_mantle), 0.18f), 10, ctx)
+        val img = ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_tm)
+            setColorFilter(col, android.graphics.PorterDuff.Mode.SRC_IN)
+        }
+        val inner = Ui.dp(ctx, sizeDp * 3 / 5)
+        addView(img, FrameLayout.LayoutParams(inner, inner, Gravity.CENTER))
         layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, sizeDp), Ui.dp(ctx, sizeDp))
     }
 

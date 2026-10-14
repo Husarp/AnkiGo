@@ -162,6 +162,7 @@ class FormsShots {
             val ctx = ShotCtx(base)
             val page = SettingsPage(ctx, NoHost)
             val v = pageScreen(ctx, page)
+            page.open(com.husarp.ankigo.ui.SettingsSection.GAME)
             val dm = ctx.resources.displayMetrics
             v.measure(View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY))
             v.layout(0, 0, dm.widthPixels, dm.heightPixels)

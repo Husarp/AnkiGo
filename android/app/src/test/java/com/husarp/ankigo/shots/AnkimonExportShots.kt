@@ -47,13 +47,14 @@ class AnkimonExportShots {
     /** The Settings page cut down to the save card (its header + the card), so the new button and note are in the picture. */
     @Test fun settingsSaveCard() {
         paparazzi.shootPage("export-settings-save", listOf(Variants.PHONE)) { ctx ->
-            val screen = pageScreen(ShotCtx(ctx), SettingsPage(ShotCtx(ctx), NoHost))
+            val sp = SettingsPage(ShotCtx(ctx), NoHost)
+            val screen = pageScreen(ShotCtx(ctx), sp)
+            sp.open(com.husarp.ankigo.ui.SettingsSection.ANKIMON)
             val button = find(screen) { it is TextView && it.text.toString().startsWith("Export for Ankimon") }!!
             var card: View = button
             while (card.parent !is LinearLayout || (card.parent as View).parent !is ScrollView) card = card.parent as View
             val content = card.parent as LinearLayout
-            val at = content.indexOfChild(card)
-            val keep = listOf(content.getChildAt(at - 1), card)
+            val keep = listOf(card)
             content.removeAllViews()
             keep.forEach { content.addView(it) }
             screen

@@ -33,6 +33,7 @@ import com.husarp.ankigo.sound.SoundPrefs
 import com.husarp.ankigo.sound.SoundRules
 import com.husarp.ankigo.study.CardSpeech
 import com.husarp.ankigo.study.JsApi
+import com.husarp.ankigo.study.PanelHeight
 import com.husarp.ankigo.study.AutoAdvance
 import com.husarp.ankigo.study.StudyLoop
 import com.husarp.ankigo.study.StudyTiming
@@ -43,7 +44,7 @@ import org.json.JSONObject
 import java.util.concurrent.Executors
 
 /** Study through AnkiDroid's scheduler, awarding game progress only after a verified answer. */
-class StudyActivity : Activity() {
+class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val prefs by lazy { getSharedPreferences("study", 0) }
@@ -101,7 +102,9 @@ class StudyActivity : Activity() {
     private val auto = AutoAdvance(main, { if (reduceMotion()) 1000L else 66L }, { countdown.fraction = it }, { fireAuto() })
     private val timerTick = Runnable { refreshTimer() }
     private var allowAt = Long.MAX_VALUE
-    private var heightMode = 1
+    private var heightMode = 1   // the panel's look (0 full, 1 strip, 2 mini), derived from panelDp
+    private var panelDp = -1      // the battle panel's height in dp (stacked layout); -1 = the preset of heightMode
+    private var appliedBodyDp = -1
     private var audio: MediaPlayer? = null
     private var avAuto = emptyList<TtsRules.Av>()  // sounds and speech that play by themselves on this side
     private var avAll = emptyList<TtsRules.Av>()   // every sound/speech button of the page, by number
@@ -138,7 +141,9 @@ class StudyActivity : Activity() {
         Anki.load(this)
         deckId = intent.getLongExtra("deckId", 0); deckName = intent.getStringExtra("deckName") ?: "Deck"
         prefs.edit().putLong("lastDeck", deckId).putString("lastName", deckName).apply()
-        heightMode = prefs.getInt("height", if (resources.configuration.smallestScreenWidthDp >= com.husarp.ankigo.study.StudyLayout.TABLET_DP) 0 else 1).coerceIn(0, 2)
+        val tablet = resources.configuration.smallestScreenWidthDp >= com.husarp.ankigo.study.StudyLayout.TABLET_DP
+        panelDp = PanelHeight.restore(prefs.getInt("panelDp", -1), prefs.getInt("height", -1), tablet)
+        if (!prefs.contains("panelDp")) prefs.edit().putInt("panelDp", panelDp).apply()   // the old 0/1/2 pref, migrated once
         setContentView(buildContent())
         setupWeb(); layout()
         if (savedInstanceState != null) {
@@ -215,14 +220,15 @@ class StudyActivity : Activity() {
         side = StudyUi.column(this)
         handleBar = FrameLayout(this).apply {
             setBackgroundColor(Ui.c(context, R.color.ag_mantle))
-            contentDescription = "Battle height: Full, Strip, Mini"
-            setOnClickListener { heightMode = (heightMode + 1) % 3; prefs.edit().putInt("height", heightMode).apply(); layout() }
+            contentDescription = "Battle panel height. Drag up or down to resize, tap to switch between Full, Strip and Mini"
+            setOnClickListener { setPanelDp(PanelHeight.tap(currentPanelDp(), isTablet()), save = true) }
+            setOnTouchListener(handleDrag())
         }
         handleBar.addView(View(this).apply { background = Ui.rounded(Ui.c(context, R.color.ag_ov), 2, context) }, FrameLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 4), Gravity.CENTER))
         handleBar.addView(StudyUi.line(this), FrameLayout.LayoutParams(-1, Ui.dp(this, 1), Gravity.TOP))
         handle = StudyUi.label(this, "STRIP", 9, R.color.ag_sub0, 900).apply { letterSpacing = .055f; gravity = Gravity.CENTER_VERTICAL }
         handleBar.addView(handle, FrameLayout.LayoutParams(-2, -1, Gravity.RIGHT).also { it.rightMargin = Ui.dp(this, 10) })
-        side.addView(handleBar, StudyUi.lp(-1, Ui.dp(this, 16)))
+        side.addView(handleBar, StudyUi.lp(-1, Ui.dp(this, PanelHeight.BAR)))
         panel = BattlePanelView(this)
         events = EventPlayer(panel)
         events.muted = { SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev) }
@@ -247,6 +253,11 @@ class StudyActivity : Activity() {
         side.addView(answerDivider)
         side.addView(buttons)
         body.addView(cardColumn); body.addView(side)
+        // The window's real height is known only after the first layout (and changes in split screen): keep the panel inside it.
+        body.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
+            val dp = ((bottom - top) / resources.displayMetrics.density).toInt()
+            if (dp != appliedBodyDp && panelDp > 0 && studyPlan().handle && !finished) main.post { if (!isDestroyed) setPanelDp(panelDp, save = false) }
+        }
         root.addView(body, StudyUi.lp(-1, 0, 1f))
         return root
     }
@@ -270,19 +281,24 @@ class StudyActivity : Activity() {
         val narrow = plan.narrow
         cardColumn.layoutParams = if (wide) StudyUi.lp(0, -1, plan.cardShare) else StudyUi.lp(-1, 0, 1f)
         side.layoutParams = if (wide) StudyUi.lp(0, -1, plan.sideShare) else StudyUi.lp(-1, -2)
-        val mode = plan.mode ?: heightMode
+        val mode = plan.mode ?: PanelHeight.mode(panelHeightDp(plan), plan.panelDp(0))
+        heightMode = mode
         panel.setStudyLayout(mode != 0, mode == 2)
         // Compact info cards (name, level, HP bar) on the study strip's sprite geometry: full cards cannot sit beside the sprites in ~200 dp.
         if (narrow) { panel.arena.setCompact(false); panel.arena.setCompact(true) }
         panel.layoutParams = when {
             narrow -> StudyUi.lp(-1, Ui.dp(this, 170))
             wide -> StudyUi.lp(-1, 0, 1f)
-            else -> StudyUi.lp(-1, Ui.dp(this, plan.panelDp(mode)))
+            else -> StudyUi.lp(-1, Ui.dp(this, panelHeightDp(plan)))
         }
         gap.layoutParams = StudyUi.lp(-1, 0, if (narrow) 1f else 0f)
         answerDivider.visibility = if (finished) View.VISIBLE else View.GONE
         panel.visibility = if (finished || GameRepo.game == null) View.GONE else View.VISIBLE
         handleBar.visibility = if (finished || !plan.handle || GameRepo.game == null) View.GONE else View.VISIBLE
+        if (!finished) {   // the answer row has one fixed height whatever it holds, so nothing above it moves between cards
+            buttons.layoutParams = StudyUi.lp(-1, Ui.dp(this, PanelHeight.buttonsDp(plan.answerRows)))
+            buttons.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8)); buttons.gravity = Gravity.CENTER_VERTICAL
+        }
         side.setPadding(if (wide) Ui.dp(this, 1) else 0, 0, 0, 0)
         side.setBackgroundColor(Ui.c(this, if (wide) R.color.ag_s0 else R.color.ag_base))
         updateHandle()
@@ -292,7 +308,49 @@ class StudyActivity : Activity() {
     private fun studyPlan(): com.husarp.ankigo.study.StudyLayout.Plan = resources.configuration.let {
         com.husarp.ankigo.study.StudyLayout.plan(it.screenWidthDp, it.smallestScreenWidthDp, it.orientation == Configuration.ORIENTATION_LANDSCAPE, finished)
     }
-    private fun updateHandle() { handle.text = listOf("FULL", "STRIP", "MINI")[heightMode] }
+    private fun updateHandle() { handle.text = PanelHeight.label(currentPanelDp(), isTablet()) }
+    private fun isTablet() = resources.configuration.smallestScreenWidthDp >= com.husarp.ankigo.study.StudyLayout.TABLET_DP
+    /** The panel height (dp) before it is clamped to the window: the saved/dragged one, else the preset of [heightMode]. */
+    private fun currentPanelDp() = if (panelDp > 0) panelDp else PanelHeight.preset(isTablet(), heightMode)
+    /** The height the panel really gets: [currentPanelDp] kept inside the window (the card area keeps its minimum). */
+    private fun panelHeightDp(plan: com.husarp.ankigo.study.StudyLayout.Plan): Int {
+        val bodyPx = if (::body.isInitialized && body.height > 0) body.height else Ui.dp(this, resources.configuration.screenHeightDp - 24)
+        appliedBodyDp = (bodyPx / resources.displayMetrics.density).toInt()
+        return PanelHeight.clamp(currentPanelDp(), PanelHeight.maxDp(appliedBodyDp, PanelHeight.buttonsDp(plan.answerRows)))
+    }
+    /** Moves the battle panel to [dp] (clamped): resizes it and switches its look; [save] also remembers the height. */
+    private fun setPanelDp(dp: Int, save: Boolean) {
+        val plan = studyPlan()
+        panelDp = dp
+        val shown = panelHeightDp(plan)
+        if (save) { panelDp = shown; prefs.edit().putInt("panelDp", shown).apply() }
+        val mode = PanelHeight.mode(shown, plan.panelDp(0))
+        if (mode != heightMode) { heightMode = mode; panel.setStudyLayout(mode != 0, mode == 2) }
+        panel.layoutParams = StudyUi.lp(-1, Ui.dp(this, shown))
+        updateHandle()
+    }
+    /** Drag the bar like a split-screen divider: the panel follows the finger, on release it snaps to a preset within reach. */
+    private fun handleDrag() = object : View.OnTouchListener {
+        private var downY = 0f; private var startDp = 0; private var dragging = false
+        override fun onTouch(v: View, e: android.view.MotionEvent): Boolean {
+            when (e.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> { downY = e.rawY; startDp = panelHeightDp(studyPlan()); dragging = false }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val dy = e.rawY - downY
+                    if (!dragging && Math.abs(dy) > android.view.ViewConfiguration.get(this@StudyActivity).scaledTouchSlop) {
+                        dragging = true; v.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    if (dragging) setPanelDp(startDp - (dy / resources.displayMetrics.density).toInt(), save = false)
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    if (dragging) setPanelDp(PanelHeight.snap(panelHeightDp(studyPlan()), isTablet()), save = true) else v.performClick()
+                    dragging = false
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> { if (dragging) setPanelDp(panelHeightDp(studyPlan()), save = true); dragging = false }
+            }
+            return true
+        }
+    }
     override fun onStart() { super.onStart(); started = true; BattleScreen.setVisible(this, true); LiveSession.addSink(sink); LiveSession.hold(this, this) }
     override fun onStop() { started = false; LiveSession.removeSink(sink); LiveSession.release(this, this); BattleScreen.setVisible(this, false); super.onStop() }
     override fun onResume() {
@@ -414,11 +472,11 @@ class StudyActivity : Activity() {
         stopAudio()
         audioPrev = audioNow; audioNow = false; voiceNote = null; ttsCard = TtsRules.NONE
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
+        // The answer row keeps its place while the next card loads: the old buttons stay, disabled (the summary's buttons go).
+        if (finished) buttons.removeAllViews() else disableButtons(buttons)
         finished = false; locked = true; card = null; pageReady = false; jsSnap = null
         topBar.visibility = View.VISIBLE; summaryBar.visibility = View.GONE; cardSurface.visibility = View.VISIBLE
-        web.visibility = View.VISIBLE; buttons.removeAllViews(); showNotice(false); updateSwipe()
-        buttons.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8))
-        buttons.layoutParams = StudyUi.lp(-1)
+        web.visibility = View.VISIBLE; showNotice(false); updateSwipe()
         layout(); syncTiming()
         val token = ++generation
         io.execute {
@@ -523,6 +581,10 @@ class StudyActivity : Activity() {
     private fun updateSwipe() {
         val showing = swipeOn && flipped && card != null && !finished && !mediaBlocked
         swipe.setState(showing && !locked, card?.buttons ?: 4, showing)
+    }
+    private fun disableButtons(v: View) {
+        if (v !== buttons) { v.isEnabled = false; if (v.isClickable) v.alpha = .55f }
+        if (v is ViewGroup) for (i in 0 until v.childCount) disableButtons(v.getChildAt(i))
     }
     private fun showButtons() {
         buttons.removeAllViews(); updateSwipe()

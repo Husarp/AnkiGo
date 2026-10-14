@@ -10,7 +10,7 @@ object StudyLayout {
         val sideShare get() = 1f - cardShare
         val handle get() = mode == null
         /** Height (dp) of the stacked battle panel for [mode] (0 full, 1 strip, 2 mini); tablets get taller Full and Strip. */
-        fun panelDp(mode: Int) = when (mode) { 0 -> if (tablet) 400 else 220; 2 -> 34; else -> if (tablet) 240 else 180 }
+        fun panelDp(mode: Int) = PanelHeight.preset(tablet, mode)
     }
 
     const val TABLET_DP = 600

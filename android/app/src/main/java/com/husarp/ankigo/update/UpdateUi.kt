@@ -206,7 +206,7 @@ internal fun updatesScreen(ctx: Context): View {
 }
 
 /** The Updates settings screen, opened from the main screen. */
-class UpdatesActivity : Activity() {
+class UpdatesActivity : com.husarp.ankigo.ui.AgActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = "Updates"

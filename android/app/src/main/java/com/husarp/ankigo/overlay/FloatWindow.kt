@@ -37,7 +37,7 @@ class FloatWindow(
     private val onClose: () -> Unit,
 ) {
     /** Themed application context: build the content with it. */
-    val context: Context = ContextThemeWrapper(ctx.applicationContext, R.style.GameTheme)
+    val context: Context = ContextThemeWrapper(com.husarp.ankigo.ui.AppLook.wrap(ctx.applicationContext), R.style.GameTheme)
 
     private val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val minW = Ui.dp(context, minWdp)
@@ -209,10 +209,13 @@ class FloatWindow(
         v.setPadding(p, p, p, p)
     }
 
-    /** Whole-display size in px (overlay windows are laid out against the full screen, see [BASE_FLAGS]). */
+    /**
+     * Whole-display size in px (overlay windows are laid out against the full screen, see [BASE_FLAGS]).
+     * Uses maximumWindowMetrics: currentWindowMetrics would be only the app's half in split screen.
+     */
     private fun screenSize(): Pair<Int, Int> {
         if (Build.VERSION.SDK_INT >= 30) {
-            val b = wm.currentWindowMetrics.bounds
+            val b = wm.maximumWindowMetrics.bounds
             return b.width() to b.height()
         }
         val m = android.util.DisplayMetrics()

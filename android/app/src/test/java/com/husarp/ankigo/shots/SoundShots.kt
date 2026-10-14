@@ -34,16 +34,10 @@ class SoundShots {
     }
 
     private fun soundSlice(ctx: Context): View {
-        val tallDp = 3600
-        val page = pageScreen(ShotCtx(ctx), SettingsPage(ShotCtx(ctx), NoHost))
-        val frame = FrameLayout(ctx)
-        frame.addView(page, FrameLayout.LayoutParams(-1, Ui.dp(ctx, tallDp)))
-        val dm = ctx.resources.displayMetrics
-        frame.measure(View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, tallDp), View.MeasureSpec.EXACTLY))
-        frame.layout(0, 0, dm.widthPixels, Ui.dp(ctx, tallDp))
-        val title = findText(page, "SOUND") ?: error("no SOUND section in Settings")
-        page.translationY = -(topIn(title, frame) - Ui.dp(ctx, 6)).toFloat()
-        return FrameLayout(ctx).apply { addView(frame) }
+        val sp = SettingsPage(ShotCtx(ctx), NoHost)
+        val page = pageScreen(ShotCtx(ctx), sp)
+        sp.open(com.husarp.ankigo.ui.SettingsSection.SOUND) // the Sound section of the Settings tab
+        return page
     }
 
     private fun reset(ctx: Context) {

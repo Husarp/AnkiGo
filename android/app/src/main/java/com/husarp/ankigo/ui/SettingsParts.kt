@@ -11,6 +11,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Switch
 import android.widget.TextView
@@ -120,15 +121,72 @@ internal object Form {
     fun switchRow(ctx: Context, title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit): LinearLayout {
         val sw = Switch(ctx).apply {
             isChecked = checked
-            val on = Ui.c(ctx, R.color.ag_mauve)
-            val off = Ui.c(ctx, R.color.ag_s2)
-            val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
-            trackTintList = ColorStateList(states, intArrayOf(on, off))
-            thumbTintList = ColorStateList.valueOf(0xFFFFFFFF.toInt())
+            Ui.tintSwitch(this)
             setOnCheckedChangeListener { _, v -> onChange(v) }
         }
         return row(ctx, title, sub, sw, onClick = { sw.toggle() })
     }
+
+    /** A settings row with its [control] under the title (and grey [sub]) instead of beside it: segmented pills, swatches. */
+    fun stackRow(ctx: Context, title: String, sub: String?, control: View, right: View? = null): LinearLayout =
+        LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 11), Ui.dp(ctx, 14), Ui.dp(ctx, 6))
+            val head = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(Ui.text(ctx, 14f, 700, R.color.ag_text).apply { text = title }, lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                if (right != null) addView(right)
+            }
+            addView(head)
+            if (sub != null) addView(body(ctx, sub, 12f, R.color.ag_sub0).apply { tag = "sub" }, lp(ctx, 2))
+            addView(control, lp(ctx, 2))
+        }
+
+    /** Equal-width pills, one selected (mauve = the accent). Drawn with [toggleChip], so no platform radio buttons. */
+    fun segmented(ctx: Context, labels: List<String>, selected: Int, onPick: (Int) -> Unit): LinearLayout =
+        LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            val chips = ArrayList<TextView>()
+            labels.forEachIndexed { i, label ->
+                val chip = toggleChip(ctx, label, i == selected) {
+                    chips.forEachIndexed { k, c -> setChip(c, k == i) }
+                    onPick(i)
+                }
+                chip.isSelected = i == selected
+                chips += chip
+                addView(chip, lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i > 0) it.marginStart = Ui.dp(ctx, 6) })
+            }
+        }
+
+    /** Round colour swatches (the palette's own colours, not the chosen accent); the picked one has a ring and a tick. */
+    fun swatches(ctx: Context, colors: List<Pair<String, Int>>, selected: Int, onPick: (Int) -> Unit): LinearLayout =
+        LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            colors.forEachIndexed { i, (label, color) ->
+                val on = i == selected
+                val cell = FrameLayout(ctx).apply {
+                    contentDescription = if (on) "$label, selected" else label
+                    isClickable = true
+                    setOnClickListener { onPick(i) }
+                }
+                if (on) cell.addView(View(ctx).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(0)
+                        setStroke(Ui.dp(ctx, 2), Ui.c(ctx, R.color.ag_text))
+                    }
+                }, FrameLayout.LayoutParams(Ui.dp(ctx, 40), Ui.dp(ctx, 40), Gravity.CENTER))
+                cell.addView(View(ctx).apply {
+                    background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
+                }, FrameLayout.LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32), Gravity.CENTER))
+                if (on) cell.addView(android.widget.ImageView(ctx).apply {
+                    setImageResource(R.drawable.ic_check)
+                    setColorFilter(Ui.c(ctx, R.color.ag_crust), android.graphics.PorterDuff.Mode.SRC_IN)
+                }, FrameLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18), Gravity.CENTER))
+                addView(cell, lp(0, Ui.dp(ctx, 48), 1f))
+            }
+        }
 
     /** "- value +" control. Holding a button repeats. [format] turns the value into the label. */
     fun stepperRow(

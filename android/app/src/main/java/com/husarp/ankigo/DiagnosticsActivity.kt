@@ -30,7 +30,7 @@ import com.husarp.ankigo.update.Updates
 import com.husarp.ankigo.update.UpdatesActivity
 
 /** The step-0 test screen (C-checks, LIVE watch, report), now reached from Settings -> Diagnostics. */
-class DiagnosticsActivity : Activity() {
+class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
     private val bg = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var header: TextView

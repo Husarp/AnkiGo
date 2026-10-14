@@ -40,8 +40,40 @@ object Ui {
     fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
     fun dp(ctx: Context, v: Float): Float = v * ctx.resources.displayMetrics.density
 
-    /** Colour int of a `@color/ag_*` resource (follows light/dark). */
-    fun c(ctx: Context, @ColorRes res: Int): Int = ctx.getColor(res)
+    /** Colour int of a `@color/ag_*` resource (follows light/dark). `ag_mauve` is the accent: it gives the chosen [Accent]. */
+    fun c(ctx: Context, @ColorRes res: Int): Int = ctx.getColor(if (res == R.color.ag_mauve) AppLook.accentRes(ctx) else res)
+
+    // ---------- framework controls: always app colours, never the system accent ----------
+
+    /** Switch thumb/track in the accent (on) and `ag_s1`/`ag_s0` (off). */
+    fun tintSwitch(sw: android.widget.Switch) {
+        val ctx = sw.context
+        val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+        val acc = c(ctx, R.color.ag_mauve)
+        sw.thumbTintList = android.content.res.ColorStateList(states, intArrayOf(acc, c(ctx, R.color.ag_card)))
+        sw.trackTintList = android.content.res.ColorStateList(states, intArrayOf((acc and 0x00FFFFFF) or 0x88000000.toInt(), c(ctx, R.color.ag_s1)))
+    }
+
+    /** Check box in the accent (checked) and `ag_ov` (unchecked). */
+    fun tintCheck(cb: android.widget.CompoundButton) {
+        val ctx = cb.context
+        val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+        cb.buttonTintList = android.content.res.ColorStateList(states, intArrayOf(c(ctx, R.color.ag_mauve), c(ctx, R.color.ag_ov)))
+    }
+
+    /** Text field: accent underline, selection and handles; no system colours. */
+    fun tintEdit(et: android.widget.EditText) {
+        val ctx = et.context
+        val acc = c(ctx, R.color.ag_mauve)
+        et.backgroundTintList = android.content.res.ColorStateList.valueOf(acc)
+        et.highlightColor = (acc and 0x00FFFFFF) or 0x55000000
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            et.textCursorDrawable?.mutate()?.let { it.setTint(acc); et.textCursorDrawable = it }
+            et.textSelectHandle?.mutate()?.let { it.setTint(acc); et.setTextSelectHandle(it) }
+            et.textSelectHandleLeft?.mutate()?.let { it.setTint(acc); et.setTextSelectHandleLeft(it) }
+            et.textSelectHandleRight?.mutate()?.let { it.setTint(acc); et.setTextSelectHandleRight(it) }
+        }
+    }
 
     /** Nunito at [weight] (400, 600, 700, 800 or 900), cached; falls back to the system font if the asset can't load. */
     fun font(ctx: Context, weight: Int): Typeface = fonts.getOrPut(weight) {

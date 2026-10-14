@@ -85,6 +85,19 @@ object LiveSession {
         GameRepo.saveNow(app)
     }
 
+    /**
+     * The player entered or left AnkiGo: read AnkiDroid once more now, so nothing done a moment ago is missed.
+     * Running detector: one full read (coalesced). Held but not running (stopped by an error, a permission problem
+     * or a finished retry): start it again. Nobody holds the session: nothing (release() already flushed and saved;
+     * answers made later are caught up by the next start).
+     */
+    fun recheck(ctx: Context) {
+        app = ctx.applicationContext
+        if (holders.isEmpty()) return
+        val d = detector
+        if (d != null && d.running) d.recheck() else start() // start() itself ignores paused / game not READY
+    }
+
     /** Stop + start again (after the AnkiDroid permission was granted). */
     fun restart(ctx: Context) {
         app = ctx.applicationContext

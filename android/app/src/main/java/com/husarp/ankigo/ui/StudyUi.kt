@@ -53,7 +53,7 @@ internal object StudyUi {
         background = ripple(ctx, Ui.rounded(Color.TRANSPARENT, 10, ctx))
         contentDescription = description; setOnClickListener { action() }
     }
-    private fun ripple(ctx: Context, shape: GradientDrawable) = RippleDrawable(
+    fun ripple(ctx: Context, shape: GradientDrawable) = RippleDrawable(
         ColorStateList.valueOf((Ui.c(ctx, R.color.ag_ov) and 0x00ffffff) or 0x33000000), shape, null)
 
     /** Mockup .mini: compact secondary actions, not settings-form buttons. */

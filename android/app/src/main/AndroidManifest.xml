@@ -81,6 +81,24 @@
 
         <activity android:name=".ui.StudyDecksActivity" android:theme="@style/GameTheme" android:exported="false" />
 
+        <!-- Study widget deck picker: the launcher starts it when the widget is added / reconfigured; AnkiGo starts it from "Change deck". -->
+        <activity
+            android:name=".ui.StudyWidgetSetupActivity"
+            android:theme="@style/GameTheme"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Motivation widget tap: no UI; opens the Study tab when cards are due, else the battle. -->
+        <activity
+            android:name=".ui.WidgetTapActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:exported="false" />
+
         <!-- Runs a file picker for a screen shown in a floating window (no Activity of its own there). -->
         <activity
             android:name=".overlay.ResultActivity"

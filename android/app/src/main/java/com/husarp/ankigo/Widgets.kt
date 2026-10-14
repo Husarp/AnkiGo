@@ -10,11 +10,15 @@ import android.os.Bundle
 import android.text.Html
 import android.view.View
 import android.widget.RemoteViews
+import com.husarp.ankigo.ui.StudyWidgetPrefs
+import com.husarp.ankigo.ui.StudyWidgetSetupActivity
 import com.husarp.ankigo.ui.WidgetRender
 
 object Widgets {
-    fun refreshAll(ctx: Context) {
+    /** [study] = false skips the study widgets (the answer a study widget just gave must not reset the others). */
+    fun refreshAll(ctx: Context, study: Boolean = true) {
         for (cls in listOf(MotivationWidget::class.java, com.husarp.ankigo.ui.BuddyWidget::class.java, StudyWidget::class.java)) {
+            if (!study && cls == StudyWidget::class.java) continue
             val ids = AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, cls))
             if (ids.isNotEmpty()) ctx.sendBroadcast(Intent(ctx, cls).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE).putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
         }
@@ -22,6 +26,10 @@ object Widgets {
 
     fun openApp(ctx: Context): PendingIntent =
         PendingIntent.getActivity(ctx, 0, Intent(ctx, com.husarp.ankigo.ui.GameActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+
+    /** The motivation widget's tap: a trampoline decides at tap time between the Study tab (cards due) and the battle. */
+    fun openStudyOrBattle(ctx: Context): PendingIntent =
+        PendingIntent.getActivity(ctx, 0, Intent(ctx, com.husarp.ankigo.ui.WidgetTapActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
 
     fun bcast(ctx: Context, cls: Class<*>, action: String, code: Int, ease: Int = 0): PendingIntent =
         PendingIntent.getBroadcast(ctx, code, Intent(ctx, cls).setAction(action).putExtra("ease", ease),
@@ -47,22 +55,34 @@ class MotivationWidget : AppWidgetProvider() {
     }
 }
 
-/** C8b: study widget — simple text card, Show answer, Again / Good. */
+/** C8b: study widget — simple text card, Show answer, Again / Good. Deck and card state are per widget id (ui/StudyWidgetPrefs). */
 class StudyWidget : AppWidgetProvider() {
     companion object {
         const val SHOW = "com.husarp.ankigo.W_SHOW"
         const val ANSWER = "com.husarp.ankigo.W_ANSWER"
         const val NEXT = "com.husarp.ankigo.W_NEXT"
+
+        /** Intent that opens the deck picker for one widget. */
+        fun setupIntent(ctx: Context, id: Int) = Intent(ctx, StudyWidgetSetupActivity::class.java)
+            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+        /** Asks one widget to redraw (used after the setup screen saved a deck). */
+        fun requestUpdate(ctx: Context, id: Int) {
+            ctx.sendBroadcast(Intent(ctx, StudyWidget::class.java).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                .putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(id)))
+        }
     }
 
     override fun onReceive(ctx: Context, intent: Intent) {
         when (intent.action) {
             SHOW, ANSWER, NEXT -> {
+                val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+                if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
                 Report.init(ctx); Anki.load(ctx)
                 val pr = goAsync()
                 Thread {
                     try {
-                        handle(ctx, intent.action!!, intent.getIntExtra("ease", 0))
+                        handle(ctx, intent.action!!, intent.getIntExtra("ease", 0), id)
                     } catch (e: Exception) {
                         Report.fail("C8", "study widget ${intent.action}", e)
                     } finally {
@@ -79,85 +99,116 @@ class StudyWidget : AppWidgetProvider() {
         val pr = goAsync()
         Thread {
             try {
-                handle(ctx, NEXT, 0)
-            } catch (e: Exception) {
-                Report.fail("C8", "study widget update", e)
+                for (id in ids) {
+                    try {
+                        handle(ctx, NEXT, 0, id)
+                    } catch (e: Exception) {
+                        Report.fail("C8", "study widget update $id", e)
+                    }
+                }
             } finally {
                 pr.finish()
             }
         }.start()
     }
 
-    private fun handle(ctx: Context, action: String, ease: Int) {
+    override fun onDeleted(ctx: Context, appWidgetIds: IntArray) {
+        StudyWidgetPrefs.forget(ctx.getSharedPreferences("spike", 0), appWidgetIds)
+    }
+
+    private fun handle(ctx: Context, action: String, ease: Int, id: Int) {
         val p = ctx.getSharedPreferences("spike", 0)
+        val mgr = AppWidgetManager.getInstance(ctx)
+        StudyWidgetPrefs.prepare(p, mgr.getAppWidgetIds(ComponentName(ctx, StudyWidget::class.java)))
         val rv = RemoteViews(ctx.packageName, R.layout.widget_study)
-        rv.setOnClickPendingIntent(R.id.s_show, Widgets.bcast(ctx, StudyWidget::class.java, SHOW, 1))
-        rv.setOnClickPendingIntent(R.id.s_again, Widgets.bcast(ctx, StudyWidget::class.java, ANSWER, 2, 1))
-        rv.setOnClickPendingIntent(R.id.s_hard, Widgets.bcast(ctx, StudyWidget::class.java, ANSWER, 6, 2))
-        rv.setOnClickPendingIntent(R.id.s_good, Widgets.bcast(ctx, StudyWidget::class.java, ANSWER, 3, 3))
-        rv.setOnClickPendingIntent(R.id.s_easy, Widgets.bcast(ctx, StudyWidget::class.java, ANSWER, 7, 4))
-        rv.setOnClickPendingIntent(R.id.s_refresh, Widgets.bcast(ctx, StudyWidget::class.java, NEXT, 4))
-        rv.setOnClickPendingIntent(R.id.s_open, PendingIntent.getActivity(ctx, 5,
-            Intent(ctx, StudyActivity::class.java).putExtra("deckId", p.getLong("studyDeck", 0)).putExtra("deckName", p.getString("studyDeckName", "?"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+        fun key(f: String) = StudyWidgetPrefs.key(id, f)
+        fun b(a: String, n: Int, e: Int = 0): PendingIntent = PendingIntent.getBroadcast(ctx, id * 10 + n,
+            Intent(ctx, StudyWidget::class.java).setAction(a).putExtra("ease", e).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val setup = PendingIntent.getActivity(ctx, id * 10 + 6, setupIntent(ctx, id), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        rv.setOnClickPendingIntent(R.id.s_show, b(SHOW, 1))
+        rv.setOnClickPendingIntent(R.id.s_again, b(ANSWER, 2, 1))
+        rv.setOnClickPendingIntent(R.id.s_hard, b(ANSWER, 3, 2))
+        rv.setOnClickPendingIntent(R.id.s_good, b(ANSWER, 4, 3))
+        rv.setOnClickPendingIntent(R.id.s_easy, b(ANSWER, 5, 4))
+        rv.setOnClickPendingIntent(R.id.s_refresh, b(NEXT, 7))
+        rv.setOnClickPendingIntent(R.id.s_deck, setup)
+        rv.setOnClickPendingIntent(R.id.s_change_deck, setup)
+        rv.setOnClickPendingIntent(R.id.s_change, setup)
 
         if (!Anki.hasPermission(ctx)) {
-            show(ctx, rv, "Open AnkiGo and grant the AnkiDroid permission first.", false, false); return
+            show(ctx, rv, id, "Open AnkiGo and grant the AnkiDroid permission first.", showBtn = false, answerBtns = false); return
         }
-        var deckId = p.getLong("studyDeck", 0)
-        var deckName = p.getString("studyDeckName", null)
+        var deckId = StudyWidgetPrefs.deckId(p, id)
+        var deckName = StudyWidgetPrefs.deckName(p, id)
         if (deckId == 0L) {
-            Anki.selectedDeck(ctx).firstOrNull()?.let { deckId = it["deck_id"]?.toLongOrNull() ?: 0; deckName = it["deck_name"] }
+            // Added without setup (or nothing migrated): the deck with the most cards due, never an empty one.
+            val pick = StudyWidgetPrefs.mostDue(Anki.decks(ctx))
+            if (pick != null) {
+                deckId = pick.id; deckName = pick.name
+                StudyWidgetPrefs.setDeck(p, id, deckId, pick.name)
+            }
         }
-        rv.setTextViewText(R.id.s_deck, (deckName ?: "?").substringAfterLast("::"))
+        if (deckId == 0L) {
+            rv.setTextViewText(R.id.s_deck, "Choose a deck")
+            show(ctx, rv, id, "Nothing due in AnkiDroid.", showBtn = false, answerBtns = false, changeBtn = true); return
+        }
+        val leaf = (deckName ?: "?").substringAfterLast("::")
+        rv.setTextViewText(R.id.s_deck, leaf)
+        rv.setOnClickPendingIntent(R.id.s_open, PendingIntent.getActivity(ctx, id * 10 + 8,
+            Intent(ctx, StudyActivity::class.java).putExtra("deckId", deckId).putExtra("deckName", deckName ?: "?")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
 
         if (action == ANSWER) {
-            val nid = p.getLong("w_nid", 0); val ord = p.getInt("w_ord", 0)
-            val took = System.currentTimeMillis() - p.getLong("w_start", System.currentTimeMillis())
+            val nid = p.getLong(key(StudyWidgetPrefs.NID), 0); val ord = p.getInt(key(StudyWidgetPrefs.ORD), 0)
+            val took = System.currentTimeMillis() - p.getLong(key(StudyWidgetPrefs.START), System.currentTimeMillis())
             if (nid == 0L) return
+            // Anki.answer only answers the top card of the deck's queue (returns 0 if another widget/app moved on): never count it then.
             val n = Anki.answer(ctx, nid, ord, ease, took, deckId)
-            Local.recordReview(ctx, nid, ord, ease, took, "widget")
-            Report.log("C8", "widget answer nid=$nid ord=$ord ease=$ease took=${took}ms rows=$n")
-            Widgets.refreshAll(ctx) // motivation widget count
+            if (n > 0) Local.recordReview(ctx, nid, ord, ease, took, "widget")
+            Report.log("C8", "widget $id answer nid=$nid ord=$ord ease=$ease took=${took}ms rows=$n")
+            Widgets.refreshAll(ctx, study = false) // motivation widget count; the other study widgets keep their card
         }
 
         if (action == SHOW) {
-            val nid = p.getLong("w_nid", 0); val ord = p.getInt("w_ord", 0)
+            val nid = p.getLong(key(StudyWidgetPrefs.NID), 0); val ord = p.getInt(key(StudyWidgetPrefs.ORD), 0)
             val c = Anki.card(ctx, nid, ord, arrayOf("question", "answer", "answer_pure"))
             val ans = Widgets.plain(c?.get("answer_pure") ?: c?.get("answer") ?: "?")
-            show(ctx, rv, p.getString("w_q", "") + "\n―――\n" + ans, false, true)
-            Report.log("C8", "widget show answer nid=$nid")
+            show(ctx, rv, id, p.getString(key(StudyWidgetPrefs.Q), "") + "\n―――\n" + ans, showBtn = false, answerBtns = true)
+            Report.log("C8", "widget $id show answer nid=$nid")
             return
         }
 
         // NEXT (or after answer): fetch next card
         val next = Anki.nextCards(ctx, deckId, 1).firstOrNull()
         if (next == null) {
-            show(ctx, rv, "No cards due in this deck. 🎉", false, false); return
+            p.edit().apply { StudyWidgetPrefs.cardKeysOf(id).forEach { remove(it) } }.apply()
+            show(ctx, rv, id, "Nothing due in $leaf", showBtn = false, answerBtns = false, changeBtn = true); return
         }
         val c = Anki.card(ctx, next.nid, next.ord, arrayOf("question", "answer"))
         val qHtml = c?.get("question") ?: ""
         val complex = next.media.isNotEmpty() || qHtml.contains("[[type:") || qHtml.contains("<img", true) ||
             qHtml.contains("\\(") || qHtml.contains("image-occlusion", true) || qHtml.contains("[anki:play")
         val qText = Widgets.plain(qHtml)
-        p.edit().putLong("w_nid", next.nid).putInt("w_ord", next.ord).putLong("w_start", System.currentTimeMillis()).putString("w_q", qText).apply()
+        p.edit().putLong(key(StudyWidgetPrefs.NID), next.nid).putInt(key(StudyWidgetPrefs.ORD), next.ord)
+            .putLong(key(StudyWidgetPrefs.START), System.currentTimeMillis()).putString(key(StudyWidgetPrefs.Q), qText).apply()
         if (complex) {
-            show(ctx, rv, "This card has media / math / type-in.\nTap 'Open' to study it in the app.", false, false)
-            Report.log("C8", "widget: nid=${next.nid} is not a simple text card -> open app")
+            show(ctx, rv, id, "This card has media / math / type-in.\nTap 'Open' to study it in the app.", showBtn = false, answerBtns = false)
+            Report.log("C8", "widget $id: nid=${next.nid} is not a simple text card -> open app")
         } else {
-            show(ctx, rv, qText, true, false)
-            Report.log("C8", "widget showing question nid=${next.nid} ord=${next.ord}")
+            show(ctx, rv, id, qText, showBtn = true, answerBtns = false)
+            Report.log("C8", "widget $id showing question nid=${next.nid} ord=${next.ord}")
         }
     }
 
-    private fun show(ctx: Context, rv: RemoteViews, text: String, showBtn: Boolean, answerBtns: Boolean) {
+    private fun show(ctx: Context, rv: RemoteViews, id: Int, text: String, showBtn: Boolean, answerBtns: Boolean, changeBtn: Boolean = false) {
         rv.setTextViewText(R.id.s_text, text)
         rv.setViewVisibility(R.id.s_show, if (showBtn) View.VISIBLE else View.GONE)
+        rv.setViewVisibility(R.id.s_change, if (changeBtn) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.s_again, if (answerBtns) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.s_hard, if (answerBtns) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.s_good, if (answerBtns) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.s_easy, if (answerBtns) View.VISIBLE else View.GONE)
-        val mgr = AppWidgetManager.getInstance(ctx)
-        mgr.getAppWidgetIds(ComponentName(ctx, StudyWidget::class.java)).forEach { mgr.updateAppWidget(it, rv) }
+        AppWidgetManager.getInstance(ctx).updateAppWidget(id, rv)
     }
 }

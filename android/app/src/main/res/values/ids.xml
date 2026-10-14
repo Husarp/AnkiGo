@@ -2,4 +2,6 @@
 <resources>
     <!-- View tag key used by Ui.itemIcon / Ui.staticSprite to drop late sprite downloads for a recycled ImageView. -->
     <item name="ag_tag_sprite" type="id" />
+    <!-- View tag key: a TextView's design text size (sp) before the battle panel's small-window text floor raised it. -->
+    <item name="ag_tag_base_sp" type="id" />
 </resources>
