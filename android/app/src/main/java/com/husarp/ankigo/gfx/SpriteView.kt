@@ -21,7 +21,8 @@ import kotlin.math.roundToInt
 // TICKET T03 owns this file. Public members are fixed (the battle panel / screens use them); add private helpers freely.
 
 /**
- * Draws a pixel-art sprite crisply (nearest-neighbour, integer device-pixel scale), animated if it has frames,
+ * Draws a pixel-art sprite crisply (nearest-neighbour, integer device-pixel scale; 3D animations bigger than pixel art
+ * are scaled to the room and smoothed), animated if it has frames,
  * bottom-centred in the view. Effects for the battle panel: [flash] (white-ish hit flash), [silhouette],
  * [mirror] (used when only a front sprite exists for the player's back view), and a placeholder (type-coloured
  * circle + text) when there's no image yet. Animation runs only while attached and visible.
@@ -47,7 +48,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     private var placeholderColor = 0
     private var ticking = false
 
-    // Nearest-neighbour: no bilinear filtering, no anti-aliasing.
+    // Nearest-neighbour: no bilinear filtering (except for 3D animations, see [scale]), no anti-aliasing.
     private val paint = Paint().apply { isFilterBitmap = false; isAntiAlias = false; isDither = false }
     private val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -87,17 +88,9 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         return 0
     }
 
-    /**
-     * Device pixels per sprite pixel: [scaleDp] * density floored to a whole number (>= 1); reduced to fit the view,
-     * and only fractional (below 1) if even 1 does not fit.
-     */
-    private fun scaleFor(img: SpriteImage, vw: Int, vh: Int): Float {
-        if (vw <= 0 || vh <= 0) return 0f
-        val wanted = maxOf(1, floor(scaleDp * resources.displayMetrics.density).toInt())
-        val fit = min(vw.toFloat() / img.width, vh.toFloat() / img.height)
-        val whole = min(wanted, floor(fit).toInt())
-        return if (whole >= 1) whole.toFloat() else fit
-    }
+    /** Device pixels per sprite pixel for this view ([scale]). */
+    private fun scaleFor(img: SpriteImage, vw: Int, vh: Int): Float =
+        scale(img.width, img.height, vw, vh, maxOf(1, floor(scaleDp * resources.displayMetrics.density).toInt()))
 
     private fun placeholderDiameter(vw: Int, vh: Int): Float =
         min(min(vw, vh) * 0.8f, 72f * resources.displayMetrics.density).coerceAtLeast(0f)
@@ -135,6 +128,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         src.set(0, 0, bmp.width, bmp.height)
         dst.set(left, top, left + dw, top + dh)
         paint.colorFilter = currentFilter()
+        paint.isFilterBitmap = !pixelArt(bmp.width, bmp.height)
         val save = canvas.save()
         if (mirror) canvas.scale(-1f, 1f, vw / 2f, vh / 2f)
         canvas.drawBitmap(bmp, src, dst, paint)
@@ -186,4 +180,25 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     override fun onDetachedFromWindow() { removeCallbacks(tick); ticking = false; super.onDetachedFromWindow() }
     override fun onVisibilityChanged(changedView: View, visibility: Int) { super.onVisibilityChanged(changedView, visibility); updateAnimation() }
     override fun onWindowVisibilityChanged(visibility: Int) { super.onWindowVisibilityChanged(visibility); updateAnimation() }
+
+    internal companion object {
+        /** Gen-5 pixel art is at most 96 x 96; Showdown's 3D animations are often bigger. */
+        private const val PIXEL_ART_MAX = 96
+
+        fun pixelArt(w: Int, h: Int) = w <= PIXEL_ART_MAX && h <= PIXEL_ART_MAX
+
+        /**
+         * Device pixels per sprite pixel for a [w] x [h] picture in a [vw] x [vh] view, at most [wanted]. Pixel art: a
+         * whole number reduced to fit the view, and only fractional (below 1) if even 1 does not fit. A bigger picture
+         * (a 3D animation, not pixel art) takes the room up to [wanted], fractional (drawn smoothed), so a big Pokémon
+         * isn't left at 1x in a corner of its space.
+         */
+        fun scale(w: Int, h: Int, vw: Int, vh: Int, wanted: Int): Float {
+            if (vw <= 0 || vh <= 0) return 0f
+            val fit = min(vw.toFloat() / w, vh.toFloat() / h)
+            if (!pixelArt(w, h)) return min(wanted.toFloat(), fit)
+            val whole = min(wanted, floor(fit).toInt())
+            return if (whole >= 1) whole.toFloat() else fit
+        }
+    }
 }
