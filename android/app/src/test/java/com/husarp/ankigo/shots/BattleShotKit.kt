@@ -37,7 +37,11 @@ object BattleShotKit {
      */
     fun bound(ctx: Context): Built = build(ctx).also {
         it.call("bind")
-        if (ctx.resources.configuration.screenHeightDp >= 560) (it.field("nav") as View).visibility = View.VISIBLE
+        if (ctx.resources.configuration.screenHeightDp >= 560) {
+            (it.field("nav") as View).visibility = View.VISIBLE
+            (it.field("topBar") as View).visibility = View.VISIBLE
+            it.panel?.setFooterTools(false)
+        }
     }
 
     /** Picture-in-picture, as onPictureInPictureModeChanged(true) sets it up. */
@@ -47,6 +51,8 @@ object BattleShotKit {
         if (paused) b.panel?.setPaused(true)
         (b.field("bannerHolder") as View).visibility = View.GONE
         (b.field("nav") as View).visibility = View.GONE
+        (b.field("topBar") as View).visibility = View.GONE
+        b.panel?.setFooterTools(true)
     }
 
     /** Replaces the Updates state (the updater's private field); [reset] puts the default back. */
