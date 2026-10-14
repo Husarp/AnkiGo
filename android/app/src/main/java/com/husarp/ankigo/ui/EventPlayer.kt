@@ -104,6 +104,7 @@ class EventPlayer(private val panel: BattlePanelView) {
         take(first)
         while (queue.isNotEmpty()) take(queue.removeFirst())
         panel.cancelAnimations()
+        events.forEach { panel.observeStudyEvent(it) }
         panel.renderAll()
         acts.forEach { it() }
         if (events.isNotEmpty()) panel.setLog(LogKind.SYS, "FAST", summary(events))
@@ -182,6 +183,7 @@ class EventPlayer(private val panel: BattlePanelView) {
     private fun play(e: GameEvent): Long {
         val st = GameRepo.state
         val data = GameRepo.data
+        panel.observeStudyEvent(e)
         when (e) {
             is GameEvent.Counted -> {
                 lastButton = e.button

@@ -5,7 +5,11 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
 import android.view.MotionEvent
+import android.view.Gravity
 import android.view.View
+import android.graphics.Color
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import com.husarp.ankigo.*
@@ -17,6 +21,7 @@ import java.util.concurrent.Executors
 class StudyDecksActivity : Activity() {
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var content: LinearLayout
+    private lateinit var appBar: AppBar
     private val prefs by lazy { getSharedPreferences("study", 0) }
     private var decks = emptyList<Anki.Deck>()
     private var folded = emptySet<String>()
@@ -26,12 +31,11 @@ class StudyDecksActivity : Activity() {
         Anki.load(this)
         folded = prefs.getStringSet("folded", emptySet())!!.toSet()
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@StudyDecksActivity, R.color.ag_base)) }
-        val bar = LinearLayout(this)
-        bar.addView(Ui.text(this, 26f, 900, R.color.ag_text).apply { text = "Study" }, Form.lp(0, -2, 1f))
-        bar.addView(Form.secondary(this, "↻") { refresh() }.apply { contentDescription = "Refresh decks" })
-        bar.addView(Form.secondary(this, "Settings") { startActivity(Intent(this@StudyDecksActivity, SettingsActivity::class.java)) })
-        root.addView(bar)
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(Ui.dp(context, 14), 0, Ui.dp(context, 14), Ui.dp(context, 12)) }
+        appBar = Ui.appBar(this, "Study", "AnkiDroid")
+        appBar.addView(StudyUi.iconButton(this, R.drawable.ic_sync, "Refresh decks") { refresh() }, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)))
+        appBar.addView(StudyUi.iconButton(this, R.drawable.ic_settings, "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) }, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)))
+        root.addView(appBar)
+        content = StudyUi.column(this).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
         val scroll = ScrollView(this).apply { addView(content) }
         var down = 0f
         scroll.setOnTouchListener { _, e ->
@@ -39,7 +43,7 @@ class StudyDecksActivity : Activity() {
             if (e.actionMasked == MotionEvent.ACTION_UP && scroll.scrollY == 0 && e.y - down > Ui.dp(this, 80)) refresh()
             false
         }
-        root.addView(scroll, Form.lp(-1, 0, 1f))
+        root.addView(scroll, StudyUi.lp(-1, 0, 1f))
         root.addView(BottomNav.create(this, BottomNav.Tab.STUDY))
         setContentView(root)
         GameRepo.load(this) { if (!isDestroyed) render() }
@@ -51,15 +55,15 @@ class StudyDecksActivity : Activity() {
     override fun onDestroy() { generation++; io.shutdown(); super.onDestroy() }
     private fun refresh() {
         val token = ++generation
-        content.removeAllViews(); content.addView(Form.body(this, "Loading decks…"))
+        content.removeAllViews(); content.addView(StudyUi.label(this, "Loading decks…"))
         io.execute {
             val result = runCatching { if (!Anki.hasPermission(this)) error("Allow AnkiGo to use AnkiDroid first."); Anki.decks(this) }
             runOnUiThread {
                 if (isDestroyed || token != generation) return@runOnUiThread
                 result.onSuccess { decks = it.sortedBy { d -> d.name }; render() }.onFailure {
-                    content.removeAllViews(); content.addView(Form.body(this, it.message ?: "Open AnkiDroid once, then refresh."))
-                    content.addView(Form.primary(this, "Allow AnkiDroid access") { requestPermissions(arrayOf(Anki.permission), 1) })
-                    content.addView(Form.secondary(this, "Open AnkiDroid") { Anki.launchIntent(this)?.let { startActivity(it) } })
+                    content.removeAllViews(); content.addView(StudyUi.label(this, it.message ?: "Open AnkiDroid once, then refresh."))
+                    content.addView(StudyUi.primary(this, "Allow AnkiDroid access") { requestPermissions(arrayOf(Anki.permission), 1) })
+                    content.addView(StudyUi.smallButton(this, "Open AnkiDroid") { Anki.launchIntent(this)?.let { startActivity(it) } })
                 }
             }
         }
@@ -67,39 +71,104 @@ class StudyDecksActivity : Activity() {
     private fun render() {
         if (!::content.isInitialized) return
         content.removeAllViews()
-        if (GameRepo.data == null) content.addView(Form.body(this, "Study and diagnostics work without game data. Download about 4.3 MB in Settings to play battles.", 13))
-        val last = decks.firstOrNull { it.id == prefs.getLong("lastDeck", 0) }
-        if (last != null) content.addView(Form.primary(this, "Continue · ${last.name} · ${last.total} due") { open(last) }, Form.lp(this, 12))
-        GameRepo.state?.let { st ->
-            val row = LinearLayout(this)
-            val num = st.nextSpecies ?: st.battle?.wild?.species
-            if (num != null) row.addView(android.widget.ImageView(this).apply { Ui.staticSprite(context, num, false, this, true) }, Form.lp(Ui.dp(this, 56), Ui.dp(this, 56)))
-            row.addView(Form.body(this, "A wild Pokémon is waiting\n${st.reviewsToday} / ${st.settings.dailyAverage} today"), Form.lp(0, -2, 1f))
-            content.addView(row, Form.lp(this, 12))
+        val installed = Anki.installed(this).firstOrNull { it.pkg == Anki.pkg }
+        appBar.setPill(installed?.let { "AnkiDroid ${it.versionName}${if (Anki.studySupported(this)) " ✓" else ""}" } ?: "AnkiDroid needed")
+        appBar.pill?.apply {
+            setTextColor(Ui.c(this@StudyDecksActivity, if (Anki.studySupported(this@StudyDecksActivity)) R.color.ag_green else R.color.ag_sub0))
         }
-        content.addView(Form.sect(this, "Decks", "tap = here · A = AnkiDroid"))
-        if (decks.isEmpty()) content.addView(Form.body(this, "No decks found. Open AnkiDroid once, then refresh."))
+        val last = decks.firstOrNull { it.id == prefs.getLong("lastDeck", 0) }
+        if (last != null) {
+            val resume = StudyUi.row(this).apply {
+                background = StudyUi.gradient(context, R.color.ag_mauve, .24f, 16)
+                setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 12), Ui.dp(context, 10))
+                setOnClickListener { open(last) }; contentDescription = "Continue ${last.name}, ${last.total} due"
+            }
+            val text = StudyUi.column(this)
+            text.addView(StudyUi.label(this, "CONTINUE", 11, R.color.ag_sub0, 900).apply { letterSpacing = .055f })
+            text.addView(StudyUi.ellipsis(StudyUi.label(this, last.name.substringAfterLast("::"), 18, R.color.ag_text, 900)))
+            val whenStudied = prefs.getLong("lastStudied:${last.id}", 0)
+            val ago = ((System.currentTimeMillis() - whenStudied).coerceAtLeast(0) / 60000)
+            val recency = when { whenStudied == 0L -> ""; ago == 0L -> " · last studied just now"; ago < 60 -> " · last studied $ago min ago"; ago < 1440 -> " · last studied ${ago / 60} h ago"; else -> " · last studied ${ago / 1440} days ago" }
+            text.addView(StudyUi.label(this, "${last.total} due$recency", 12, R.color.ag_sub0), StudyUi.spaced(this, 2))
+            resume.addView(text, StudyUi.lp(0, -2, 1f))
+            resume.addView(StudyUi.iconButton(this, R.drawable.ic_play, "Continue ${last.name}") { open(last) }.apply {
+                setColorFilter(Ui.c(context, R.color.ag_base))
+                setPadding(Ui.dp(context, 12), Ui.dp(context, 12), Ui.dp(context, 12), Ui.dp(context, 12))
+                background = Ui.rounded(Ui.c(context, R.color.ag_mauve), 14, context)
+            }, StudyUi.lp(Ui.dp(this, 46), Ui.dp(this, 46)).also { it.marginStart = Ui.dp(this, 10) })
+            content.addView(resume)
+        }
+        GameRepo.state?.takeIf { GameRepo.data != null }?.let { st ->
+            val teaser = StudyUi.row(this).apply {
+                background = Ui.rounded(Ui.c(context, R.color.ag_card), 14, context)
+                setPadding(Ui.dp(context, 10), Ui.dp(context, 6), Ui.dp(context, 10), Ui.dp(context, 6))
+            }
+            val num = st.nextSpecies ?: st.battle?.wild?.species
+            teaser.addView(ImageView(this).apply {
+                background = Ui.rounded(Ui.c(context, R.color.ag_mantle), 12, context)
+                if (num != null) Ui.staticSprite(context, num, false, this, true)
+                contentDescription = "Waiting wild Pokémon"
+            }, StudyUi.lp(Ui.dp(this, 44), Ui.dp(this, 44)).also { it.marginEnd = Ui.dp(this, 8) })
+            val goal = st.settings.dailyAverage.coerceAtLeast(1)
+            val text = StudyUi.column(this)
+            text.addView(StudyUi.label(this, "A wild Pokémon is waiting · ${(goal - st.reviewsToday).coerceAtLeast(0)} answers left today", 12, R.color.ag_sub1, 800).apply {
+                val rich = android.text.SpannableStringBuilder(this.text)
+                rich.setSpan(android.text.style.ForegroundColorSpan(Ui.c(context, R.color.ag_text)), 0, "A wild Pokémon is waiting".length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                this.text = rich
+            })
+            text.addView(BarView(this).apply {
+                setGradient(Ui.c(context, R.color.ag_mauve), Ui.c(context, R.color.ag_pink))
+                set(st.reviewsToday.toFloat() / goal, Ui.c(context, R.color.ag_mauve), false)
+            }, StudyUi.spaced(this, 4).also { it.height = Ui.dp(this, 6) })
+            teaser.addView(text, StudyUi.lp(0, -2, 1f))
+            content.addView(teaser, StudyUi.spaced(this, 8))
+        }
+        if (GameRepo.data == null) content.addView(StudyUi.label(this, "Study works without game data. Download battle data in Settings to play.", 12), StudyUi.spaced(this, 8))
+        content.addView(StudyUi.section(this, "Decks", "tap = here · A = AnkiDroid"))
+        val columns = StudyUi.row(this).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, 40), Ui.dp(context, 3)) }
+        listOf("New" to R.color.ag_blue, "Lrn" to R.color.ag_red, "Due" to R.color.ag_green).forEach { (name, tone) ->
+            columns.addView(StudyUi.label(this, name, 9.5f, tone, 900).apply { gravity = Gravity.END }, StudyUi.lp(Ui.dp(this, 28), -2))
+        }
+        content.addView(columns)
+        if (decks.isEmpty()) content.addView(StudyUi.label(this, "No decks found. Open AnkiDroid once, then refresh."))
         for (deck in decks) {
             val ancestors = deck.name.split("::").dropLast(1).runningReduce { a, b -> "$a::$b" }
             if (ancestors.any { it in folded }) continue
             val children = decks.any { it.name.startsWith(deck.name + "::") }
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; minimumHeight = Ui.dp(context, 56); gravity = android.view.Gravity.CENTER_VERTICAL; alpha = if (deck.total == 0) 0.5f else 1f }
-            row.setPadding(Ui.dp(this, ancestors.size * 12), 0, 0, 0)
-            if (children) row.addView(Form.secondary(this, if (deck.name in folded) "›" else "⌄") {
+            val row = StudyUi.row(this).apply {
+                background = Ui.rounded(Ui.c(context, R.color.ag_card), 12, context)
+                setPadding(Ui.dp(context, 6), Ui.dp(context, 8), Ui.dp(context, 6), Ui.dp(context, 8))
+                alpha = if (deck.total == 0) .55f else 1f
+                setOnClickListener { open(deck) }
+            }
+            val chev = if (children) StudyUi.iconButton(this, if (deck.name in folded) R.drawable.ic_back else R.drawable.ic_down, "${if (deck.name in folded) "Expand" else "Fold"} ${deck.name}") {
                 folded = if (deck.name in folded) folded - deck.name else folded + deck.name
                 prefs.edit().putStringSet("folded", folded).apply(); render()
-            }.apply { contentDescription = "Fold ${deck.name}" })
-            row.addView(Form.body(this, deck.name.substringAfterLast("::") + if (deck.dyn) " · Filtered" else "", 14, R.color.ag_text).apply {
-                minimumHeight = Ui.dp(context, 48); gravity = android.view.Gravity.CENTER_VERTICAL; setOnClickListener { open(deck) }
-            }, Form.lp(0, -2, 1f))
+            }.apply { setPadding(Ui.dp(context, 2), Ui.dp(context, 2), Ui.dp(context, 2), Ui.dp(context, 2)); if (deck.name in folded) rotation = 180f } else View(this)
+            row.addView(chev, StudyUi.lp(Ui.dp(this, 18), Ui.dp(this, 18)).also { it.marginEnd = Ui.dp(this, 6) })
+            val name = StudyUi.row(this)
+            name.addView(StudyUi.ellipsis(StudyUi.label(this, deck.name.substringAfterLast("::"), 14, R.color.ag_text, 800)), StudyUi.lp(0, -2, 1f))
+            if (deck.dyn) name.addView(StudyUi.label(this, "FILTERED", 9, R.color.ag_teal, 900).apply {
+                background = Ui.rounded((Ui.c(context, R.color.ag_teal) and 0x00ffffff) or 0x29000000, 5, context)
+                setPadding(Ui.dp(context, 5), Ui.dp(context, 1), Ui.dp(context, 5), Ui.dp(context, 1))
+            }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 5) })
+            row.addView(name, StudyUi.lp(0, -2, 1f).also { it.marginEnd = Ui.dp(this, 6) })
             listOf(deck.new to R.color.ag_blue, deck.learn to R.color.ag_red, deck.review to R.color.ag_green).forEachIndexed { i, (n, color) ->
-                row.addView(Ui.text(this, 13f, 800, if (n == 0) R.color.ag_sub0 else color).apply {
-                    text = n.coerceAtLeast(0).toString(); minWidth = Ui.dp(context, 28)
-                    contentDescription = "${listOf("New", "Learn", "Review")[i]} $n"; setOnClickListener { open(deck) }
-                })
+                row.addView(StudyUi.label(this, n.coerceAtLeast(0).toString(), 13, if (n == 0) R.color.ag_ov else color, if (n == 0) 700 else 900).apply {
+                    gravity = Gravity.END; contentDescription = "${listOf("New", "Learn", "Review")[i]} $n"
+                }, StudyUi.lp(Ui.dp(this, 28), -2))
             }
-            row.addView(Form.secondary(this, "A", R.color.ag_blue) { companion(deck) }.apply { contentDescription = "Study ${deck.name} in AnkiDroid" })
-            content.addView(row); content.addView(Form.divider(this))
+            val companion = FrameLayout(this).apply {
+                background = Ui.rounded(Ui.c(context, R.color.ag_mantle), 9, context)
+                contentDescription = "Study ${deck.name} in AnkiDroid"
+                setOnClickListener { companion(deck) }
+                addView(StudyUi.label(context, "A", 11, R.color.ag_text, 900).apply {
+                    setTextColor(Color.WHITE); gravity = Gravity.CENTER
+                    background = Ui.rounded(0xff3f51b5.toInt(), 5, context)
+                }, FrameLayout.LayoutParams(Ui.dp(context, 18), Ui.dp(context, 18), Gravity.CENTER))
+            }
+            row.addView(companion, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)).also { it.marginStart = Ui.dp(this, 4) })
+            content.addView(row, StudyUi.lp().also { it.marginStart = Ui.dp(this, ancestors.size * 16); it.bottomMargin = Ui.dp(this, 5) })
         }
     }
     private fun open(deck: Anki.Deck) {

@@ -13,7 +13,7 @@ import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 
 /**
- * The 4-tab bottom bar (mockup `.bnav`): Battle / Team / Pokédex / Shop. The selected tab is mauve with its icon on a
+ * The 5-tab bottom bar (mockup `.bnav`): Study / Battle / Team / Pokédex / Shop. The selected tab is mauve with its icon on a
  * 20 % mauve pill. Tapping another tab opens its screen (brought to front, no animation) and closes the current one
  * unless that is the Battle screen, so Back from any tab ends up on Battle.
  */
@@ -44,7 +44,7 @@ object BottomNav {
             }
             val pillBox = FrameLayout(activity).apply {
                 if (on) background = Ui.rounded((col and 0x00FFFFFF) or 0x33000000, 10, activity)
-                layoutParams = LinearLayout.LayoutParams(Ui.dp(activity, 46), Ui.dp(activity, 24))
+                layoutParams = LinearLayout.LayoutParams(Ui.dp(activity, 38), Ui.dp(activity, 24))
                 addView(icon)
             }
             val label = Ui.text(activity, 10f, 800, R.color.ag_sub0).apply {

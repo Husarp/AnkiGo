@@ -28,6 +28,7 @@ import androidx.annotation.ColorRes
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.data.SpriteKind
+import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.ItemKind
@@ -95,6 +96,11 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var accentAnim: ValueAnimator? = null
     private var logSize = 13f
     private var compact = false
+    private var study = false
+    private val chargePips = StudyUi.row(ctx).apply { visibility = GONE }
+    private val studyCharge = StudyCharge()
+    private val pips = List(4) { View(ctx) }
+
     private var paused = false
     private var statusOk = true
 
@@ -145,6 +151,9 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
         // log
         logBox.addView(logText, LinearLayout.LayoutParams(0, -2, 1f))
+        pips.forEachIndexed { i, pip -> chargePips.addView(pip, LinearLayout.LayoutParams(dpi(10), dpi(10)).also { if (i > 0) it.marginStart = dpi(4) }) }
+        logBox.addView(chargePips, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(7) })
+
         setLog(LogKind.NEUTRAL, "READY", "Waiting for your first answer in AnkiDroid.", pop = false)
 
         // footer
@@ -222,6 +231,63 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         updatePausedPill()
     }
 
+    /** Study-only presentation; PiP and floating windows retain the existing compact layout. */
+    fun setStudyLayout(small: Boolean, mini: Boolean) {
+        study = true
+        setCompact(small)
+        arena.setStudyStrip(small)
+        arena.visibility = if (mini) GONE else VISIBLE
+        chargePips.visibility = VISIBLE
+        logLp.height = dpi(if (small) 34 else 52)
+        if (small) {
+            logLp.setMargins(0, 0, 0, 0)
+            logBox.setPadding(dpi(12), dpi(5), dpi(10), dpi(5))
+            logText.textSize = 12f
+            logBg.cornerRadius = 0f
+        } else logBg.cornerRadius = Ui.dp(context, 12f)
+        logPill?.let { styleStudyPill(it) }
+        logBox.layoutParams = logLp
+        renderCharge()
+    }
+
+    /** Charge colours follow the same event queue as attacks, so quick answers cannot jump the visuals ahead. */
+    fun observeStudyEvent(event: GameEvent) {
+        if (!study) return
+        studyCharge.observe(event, GameRepo.state?.settings?.cardsPerRound ?: 2)
+        renderCharge()
+    }
+
+    /** One pending answer can be reconstructed exactly from the saved tally; multiple choices stay neutral. */
+    fun restoreStudyCharge() {
+        val battle = GameRepo.state?.battle
+        studyCharge.restore(battle?.answers ?: 0, battle?.tally ?: 0, GameRepo.state?.settings?.cardsPerRound ?: 2)
+        renderCharge()
+    }
+
+    private fun renderCharge() {
+        val filled = studyCharge.filled
+        pips.forEachIndexed { i, v ->
+            v.visibility = if (i < studyCharge.goal) VISIBLE else GONE
+            val button = filled.getOrNull(i)
+            val tone = when (button) { 1 -> R.color.ag_red; 2 -> R.color.ag_peach; 3 -> R.color.ag_green; 4 -> R.color.ag_blue; 0 -> R.color.ag_ov; else -> R.color.ag_s0 }
+            v.background = Ui.rounded(Ui.c(context, tone), 5, context).apply {
+                if (button == null) setStroke(Ui.dp(context, 1.5f).toInt(), Ui.c(context, R.color.ag_s1))
+            }
+        }
+        chargePips.contentDescription = "Battle charge ${filled.size} of ${studyCharge.goal}"
+    }
+
+    private fun styleStudyPill(p: TextView) {
+        if (!study) return
+        p.visibility = VISIBLE
+        if (compact) {
+            (p.background as? android.graphics.drawable.GradientDrawable)?.cornerRadius = Ui.dp(context, 6f)
+            p.textSize = 9.5f
+            p.setPadding(dpi(6), dpi(2), dpi(6), dpi(2))
+            (p.layoutParams as LinearLayout.LayoutParams).marginEnd = dpi(7)
+        }
+    }
+
     /** Shows a small "Paused" pill over the arena while paused (compact mode only; the normal panel has the strip). */
     fun setPaused(p: Boolean) {
         paused = p
@@ -242,8 +308,9 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         logBox.addView(p, 0, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(8) })
         p.visibility = if (compact) GONE else VISIBLE
         logPill = p
+        styleStudyPill(p)
         logSize = if (text.length > 64) 12f else 13f
-        logText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (compact) 11f else logSize)
+        logText.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (compact) { if (study) 12f else 11f } else logSize)
         logText.text = PanelText.rich(context, text)
         val to = Ui.c(context, kind.border)
         accentAnim?.cancel()
@@ -460,6 +527,9 @@ private class PanelAccentCard(private val card: Int, accent: Int, private val ra
     private val path = Path()
     private val rect = RectF()
 
+    var cornerRadius: Float = radius
+        set(v) { field = v; invalidateSelf() }
+
     var accent: Int = accent
         set(v) { field = v; invalidateSelf() }
 
@@ -467,7 +537,8 @@ private class PanelAccentCard(private val card: Int, accent: Int, private val ra
         val b = bounds
         rect.set(b)
         paint.color = accent
-        canvas.drawRoundRect(rect, radius, radius, paint)
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
+        val radius = cornerRadius
         val inner = max(radius - bar, 0f)
         rect.set(b.left + bar, b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat())
         path.rewind()

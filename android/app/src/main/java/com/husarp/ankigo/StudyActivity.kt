@@ -2,6 +2,15 @@ package com.husarp.ankigo
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.Dialog
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
+import android.text.Html
+import android.view.Gravity
+import android.view.Window
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.content.Intent
 import android.content.res.Configuration
 import android.media.MediaPlayer
@@ -38,11 +47,22 @@ class StudyActivity : Activity() {
     private lateinit var side: LinearLayout
     private lateinit var web: WebView
     private lateinit var notice: LinearLayout
+    private lateinit var noticeScroll: ScrollView
+    private lateinit var answerDivider: View
     private lateinit var buttons: LinearLayout
     private lateinit var header: TextView
     private lateinit var handle: TextView
+    private lateinit var handleBar: FrameLayout
+    private lateinit var topBar: LinearLayout
+    private lateinit var subtitle: TextView
+    private lateinit var queueCounts: LinearLayout
+    private lateinit var cardSurface: LinearLayout
+    private lateinit var summaryBar: AppBar
+    private var actionSheet: Dialog? = null
+    private var modelName = ""
+    private var cardName = ""
+
     private lateinit var panel: BattlePanelView
-    private lateinit var mini: MiniBattleView
     private var summaryView: View? = null
     private lateinit var events: EventPlayer
     private var card: Anki.Review? = null
@@ -69,6 +89,11 @@ class StudyActivity : Activity() {
     private var levels = 0; private var evolutions = 0
     private val caught = arrayListOf<String>()
     private val items = arrayListOf<String>()
+    // Presentation-only session details: never used to calculate rewards or send provider writes.
+    private val rewardMons = arrayListOf<JSONObject>()
+    private val teamProgress = linkedMapOf<String, JSONObject>()
+    private val initialLevels = linkedMapOf<String, Int>()
+    private val foundItems = arrayListOf<String>()
     private var finished = false
     private var started = false
     private val sink = object : LiveSession.Sink {
@@ -85,21 +110,47 @@ class StudyActivity : Activity() {
         prefs.edit().putLong("lastDeck", deckId).putString("lastName", deckName).apply()
         heightMode = prefs.getInt("height", 1).coerceIn(0, 2)
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@StudyActivity, R.color.ag_base)) }
-        val top = LinearLayout(this)
-        top.addView(Form.secondary(this, "‹") { finish() }.apply { contentDescription = "Back to decks" })
-        header = Ui.text(this, 14f, 800, R.color.ag_text).apply { text = deckName; gravity = android.view.Gravity.CENTER_VERTICAL }
-        top.addView(header, Form.lp(0, -1, 1f))
-        top.addView(Form.secondary(this, "⋮") { actions() }.apply { contentDescription = "Card actions" })
-        root.addView(top, Form.lp(-1, Ui.dp(this, 48)))
         body = LinearLayout(this)
-        cardColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        notice = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE; setPadding(Ui.dp(context, 12), Ui.dp(context, 6), Ui.dp(context, 12), Ui.dp(context, 6)) }
-        web = WebView(this)
-        cardColumn.addView(notice)
-        cardColumn.addView(web, Form.lp(-1, 0, 1f))
-        side = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        handle = Form.secondary(this, "Strip") { heightMode = (heightMode + 1) % 3; prefs.edit().putInt("height", heightMode).apply(); layout() }
-        side.addView(handle, Form.lp(-1, Ui.dp(this, 48)))
+        cardColumn = StudyUi.column(this)
+        topBar = StudyUi.column(this)
+        val top = StudyUi.row(this).apply { setPadding(Ui.dp(context, 4), 0, Ui.dp(context, 6), 0) }
+        top.addView(StudyUi.iconButton(this, R.drawable.ic_back, "Back to decks") { finish() }, StudyUi.lp(Ui.dp(this, 34), Ui.dp(this, 34)))
+        val title = StudyUi.column(this)
+        header = StudyUi.ellipsis(StudyUi.label(this, deckName.substringAfterLast("::"), 15, R.color.ag_text, 900))
+        subtitle = StudyUi.ellipsis(StudyUi.label(this, "Loading…", 10, R.color.ag_sub0, 800))
+        title.addView(header); title.addView(subtitle)
+        top.addView(title, StudyUi.lp(0, -2, 1f).also { it.marginStart = Ui.dp(this, 6); it.marginEnd = Ui.dp(this, 6) })
+        queueCounts = StudyUi.row(this); top.addView(queueCounts)
+        top.addView(StudyUi.iconButton(this, R.drawable.ic_menu, "Card actions") { actions() }, StudyUi.lp(Ui.dp(this, 34), Ui.dp(this, 34)).also { it.marginStart = Ui.dp(this, 6) })
+        topBar.addView(top, StudyUi.lp(-1, Ui.dp(this, 45)))
+        topBar.addView(StudyUi.line(this))
+        cardColumn.addView(topBar)
+        summaryBar = Ui.appBar(this, deckName.substringAfterLast("::"), "done").apply { visibility = View.GONE }
+        cardColumn.addView(summaryBar)
+        cardSurface = StudyUi.column(this).apply { setBackgroundColor(Ui.c(context, R.color.ag_anki_bg)) }
+        web = WebView(this).apply { setBackgroundColor(Ui.c(context, R.color.ag_anki_bg)) }
+        cardSurface.addView(web, StudyUi.lp(-1, 0, 1f))
+        notice = StudyUi.column(this).apply { visibility = View.GONE }
+        noticeScroll = object : ScrollView(this) {
+            override fun onMeasure(w: Int, h: Int) {
+                if (notice.visibility == View.GONE) { super.onMeasure(w, View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.EXACTLY)); return }
+                val available = View.MeasureSpec.getSize(h)
+                super.onMeasure(w, View.MeasureSpec.makeMeasureSpec((available * .55f).toInt(), View.MeasureSpec.AT_MOST))
+            }
+        }.apply { visibility = View.GONE; isVerticalScrollBarEnabled = false; addView(notice) }
+        cardSurface.addView(noticeScroll, StudyUi.lp().also { it.setMargins(Ui.dp(this, 8), 0, Ui.dp(this, 8), Ui.dp(this, 8)) })
+        cardColumn.addView(cardSurface, StudyUi.lp(-1, 0, 1f))
+        side = StudyUi.column(this)
+        handleBar = FrameLayout(this).apply {
+            setBackgroundColor(Ui.c(context, R.color.ag_mantle))
+            contentDescription = "Battle height: Full, Strip, Mini"
+            setOnClickListener { heightMode = (heightMode + 1) % 3; prefs.edit().putInt("height", heightMode).apply(); layout() }
+        }
+        handleBar.addView(View(this).apply { background = Ui.rounded(Ui.c(context, R.color.ag_ov), 2, context) }, FrameLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 4), Gravity.CENTER))
+        handleBar.addView(StudyUi.line(this), FrameLayout.LayoutParams(-1, Ui.dp(this, 1), Gravity.TOP))
+        handle = StudyUi.label(this, "STRIP", 9, R.color.ag_sub0, 900).apply { letterSpacing = .055f; gravity = Gravity.CENTER_VERTICAL }
+        handleBar.addView(handle, FrameLayout.LayoutParams(-2, -1, Gravity.RIGHT).also { it.rightMargin = Ui.dp(this, 10) })
+        side.addView(handleBar, StudyUi.lp(-1, Ui.dp(this, 16)))
         panel = BattlePanelView(this)
         events = EventPlayer(panel)
         panel.onMenu = { if (events.idle) AlertDialog.Builder(this).setItems(arrayOf("Team", "Bag / Shop", "Pokédex", "Settings")) { _, i ->
@@ -115,20 +166,41 @@ class StudyActivity : Activity() {
         }
         panel.onGrant = { requestPermissions(arrayOf(Anki.permission), 1) }
         side.addView(panel)
-        mini = MiniBattleView(this); side.addView(mini, Form.lp(-1, Ui.dp(this, 48)))
-        buttons = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(Ui.dp(context, 6), Ui.dp(context, 4), Ui.dp(context, 6), Ui.dp(context, 6)) }
+        buttons = StudyUi.column(this).apply { setPadding(Ui.dp(context, 8), Ui.dp(context, 8), Ui.dp(context, 8), Ui.dp(context, 8)) }
+        buttons.setBackgroundColor(Ui.c(this, R.color.ag_base))
+        answerDivider = StudyUi.line(this).apply { visibility = View.GONE }
+        side.addView(answerDivider)
         side.addView(buttons)
         body.addView(cardColumn); body.addView(side)
-        root.addView(body, Form.lp(-1, 0, 1f)); setContentView(root)
+        root.addView(body, StudyUi.lp(-1, 0, 1f)); setContentView(root)
         setupWeb(); layout()
         if (savedInstanceState != null) {
             savedInstanceState.getIntArray("counts")?.copyInto(counts)
             totalTime = savedInstanceState.getLong("totalTime"); coins = savedInstanceState.getInt("coins"); xp = savedInstanceState.getInt("xp")
             met = savedInstanceState.getInt("met"); defeated = savedInstanceState.getInt("defeated"); levels = savedInstanceState.getInt("levels"); evolutions = savedInstanceState.getInt("evolutions")
             caught += savedInstanceState.getStringArrayList("caught").orEmpty(); items += savedInstanceState.getStringArrayList("items").orEmpty()
+            foundItems += savedInstanceState.getStringArrayList("foundItems").orEmpty()
+            runCatching {
+                val saved = JSONObject(savedInstanceState.getString("studyResults") ?: "{}")
+                val mons = saved.optJSONArray("mons")
+                if (mons != null) repeat(mons.length()) { rewardMons += mons.getJSONObject(it) }
+                val progress = saved.optJSONObject("progress")
+                progress?.keys()?.forEach { teamProgress[it] = progress.getJSONObject(it) }
+                val starts = saved.optJSONObject("initialLevels")
+                starts?.keys()?.forEach { initialLevels[it] = starts.getInt(it) }
+            }
         }
         GameRepo.load(this) {
-            if (!isDestroyed) { panel.renderAll(); if (GameRepo.game != null) { val initial = GameRepo.act(this) { g -> g.tick() + g.ensureEncounter() }; events.enqueue(initial); record(initial) }; if (started) LiveSession.hold(this, this); loadNext() }
+            if (!isDestroyed) {
+                GameRepo.state?.teamMons()?.forEach { mon -> initialLevels.putIfAbsent(mon.uid, mon.level) }
+                panel.renderAll(); panel.restoreStudyCharge()
+                if (GameRepo.game != null) {
+                    val initial = GameRepo.act(this) { g -> g.tick() + g.ensureEncounter() }
+                    events.enqueue(initial); record(initial)
+                }
+                if (started) LiveSession.hold(this, this)
+                loadNext()
+            }
         }
     }
     override fun onSaveInstanceState(out: Bundle) {
@@ -136,25 +208,29 @@ class StudyActivity : Activity() {
         out.putIntArray("counts", counts); out.putLong("totalTime", totalTime); out.putInt("coins", coins); out.putInt("xp", xp)
         out.putInt("met", met); out.putInt("defeated", defeated); out.putInt("levels", levels); out.putInt("evolutions", evolutions)
         out.putStringArrayList("caught", caught); out.putStringArrayList("items", items)
+        out.putStringArrayList("foundItems", foundItems)
+        out.putString("studyResults", JSONObject().put("mons", org.json.JSONArray(rewardMons))
+            .put("progress", JSONObject(teamProgress.toMap())).put("initialLevels", JSONObject(initialLevels.toMap())).toString())
     }
-    override fun onConfigurationChanged(config: Configuration) { super.onConfigurationChanged(config); layout() }
+    override fun onConfigurationChanged(config: Configuration) { super.onConfigurationChanged(config); actionSheet?.dismiss(); layout() }
     private fun layout() {
-        val wide = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val wide = !finished && resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val tablet = resources.configuration.smallestScreenWidthDp >= 600
         body.orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-        cardColumn.layoutParams = if (wide) Form.lp(0, -1, 0.6f) else Form.lp(-1, 0, 1f)
-        side.layoutParams = if (wide) Form.lp(0, -1, 0.4f) else Form.lp(-1, -2)
-        panel.setCompact(heightMode != 0)
-        panel.layoutParams = Form.lp(-1, Ui.dp(this, if (heightMode == 0) 220 else 150))
-        panel.visibility = if(heightMode == 2) View.GONE else View.VISIBLE
-        mini.visibility = if(heightMode == 2) View.VISIBLE else View.GONE
-        mini.render()
+        cardColumn.layoutParams = if (wide) StudyUi.lp(0, -1, .58f) else StudyUi.lp(-1, 0, 1f)
+        side.layoutParams = if (wide) StudyUi.lp(0, -1, .42f) else StudyUi.lp(-1, -2)
+        val mode = if (wide) { if (tablet) 0 else 1 } else heightMode
+        panel.setStudyLayout(mode != 0, mode == 2)
+        panel.layoutParams = if (wide) StudyUi.lp(-1, 0, 1f) else StudyUi.lp(-1, Ui.dp(this, when(mode) { 0 -> 220; 2 -> 34; else -> 180 }))
+        answerDivider.visibility = if (finished) View.VISIBLE else View.GONE
+        panel.visibility = if (finished || GameRepo.game == null) View.GONE else View.VISIBLE
+        handleBar.visibility = if (finished || wide || GameRepo.game == null) View.GONE else View.VISIBLE
+        side.setPadding(if (wide) Ui.dp(this, 1) else 0, 0, 0, 0)
+        side.setBackgroundColor(Ui.c(this, if (wide) R.color.ag_s0 else R.color.ag_base))
         updateHandle()
+        if (card != null && !finished) showButtons()
     }
-    private fun updateHandle() {
-        if (::mini.isInitialized) mini.render()
-        val pending = GameRepo.state?.battle?.answers ?: 0
-        handle.text = "${listOf("Full", "Strip", "Mini")[heightMode]} · ${if (pending > 0) "● ○" else "○ ○"}"
-    }
+    private fun updateHandle() { handle.text = listOf("FULL", "STRIP", "MINI")[heightMode] }
     override fun onStart() { super.onStart(); started = true; BattleScreen.setVisible(this, true); LiveSession.addSink(sink); LiveSession.hold(this, this) }
     override fun onStop() { started = false; LiveSession.removeSink(sink); LiveSession.release(this, this); BattleScreen.setVisible(this, false); super.onStop() }
     override fun onResume() {
@@ -166,7 +242,7 @@ class StudyActivity : Activity() {
         pauseClock(); background = true; stopAudio(); Updates.onPause(this); super.onPause()
     }
     private fun pauseClock() { if (shownAt != 0L) elapsed += SystemClock.elapsedRealtime() - shownAt; shownAt = 0 }
-    override fun onDestroy() { generation++; main.removeCallbacksAndMessages(null); events.clear(); stopAudio(); web.destroy(); io.shutdown(); super.onDestroy() }
+    override fun onDestroy() { generation++; main.removeCallbacksAndMessages(null); events.clear(); actionSheet?.dismiss(); stopAudio(); web.destroy(); io.shutdown(); super.onDestroy() }
     private fun setupWeb() {
         web.settings.javaScriptEnabled = true
         web.settings.allowFileAccess = false; web.settings.allowContentAccess = false
@@ -189,14 +265,20 @@ class StudyActivity : Activity() {
             override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): WebResourceResponse? {
                 if (req.url.host != "ankigo.media") return WebResourceResponse("text/plain", "UTF-8", "".byteInputStream())
                 val name = req.url.path?.trimStart('/') ?: return null
-                val stream = if (name.startsWith("mathjax/")) runCatching { assets.open(name) }.getOrNull() else Media.open(this@StudyActivity, name)
-                if (stream == null) return WebResourceResponse("image/svg+xml", "UTF-8", "<svg xmlns='http://www.w3.org/2000/svg' width='180' height='90'><rect width='180' height='90' fill='#ddd'/><text x='10' y='48' fill='#555'>Picture unavailable</text></svg>".byteInputStream())
+                val stream = if (name.startsWith("mathjax/") || name == "fonts/Nunito.ttf") runCatching { assets.open(name) }.getOrNull() else Media.open(this@StudyActivity, name)
+                if (stream == null) return WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", emptyMap(), "".byteInputStream())
                 return WebResourceResponse(android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.')) ?: "application/octet-stream", null, stream)
             }
         }
     }
     private fun loadNext() {
-        stopAudio(); summaryView?.let { cardColumn.removeView(it) }; summaryView = null; web.visibility = View.VISIBLE; locked = true; card = null; buttons.removeAllViews(); notice.visibility = View.GONE
+        stopAudio()
+        summaryView?.let { cardColumn.removeView(it) }; summaryView = null
+        finished = false; locked = true; card = null
+        topBar.visibility = View.VISIBLE; summaryBar.visibility = View.GONE; cardSurface.visibility = View.VISIBLE
+        web.visibility = View.VISIBLE; buttons.removeAllViews(); showNotice(false)
+        buttons.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8))
+        layout()
         val token = ++generation
         io.execute {
             val result = runCatching {
@@ -206,7 +288,7 @@ class StudyActivity : Activity() {
                 var problem: Exception? = null
                 repeat(3) {
                     if (next == null) try {
-                        if (it > 0) { main.post { if(valid(token)) header.text = "$deckName · Waking AnkiDroid…" }; Thread.sleep(250) }
+                        if (it > 0) { main.post { if(valid(token)) subtitle.text = "Waking AnkiDroid…" }; Thread.sleep(250) }
                         next = Anki.nextCards(this, deckId, 1).firstOrNull(); problem = null } catch (e: Exception) { problem = e }
                 }
                 problem?.let { throw it }
@@ -240,18 +322,21 @@ class StudyActivity : Activity() {
                     finished = false; card = n; stats = state; question = q; answerHtml = a; css = model?.css ?: ""; fields = fieldMap
                     maxTime = options.optLong("maxTaken", 60).coerceAtLeast(1) * 1000
                     val d = decks.firstOrNull { it.id == deckId }
-                    val line = android.text.SpannableStringBuilder("$deckName\n")
+                    modelName = model?.name ?: ""
+                    cardName = state["card_name"] ?: "Card ${n.ord + 1}"
+                    header.text = deckName.substringAfterLast("::")
+                    subtitle.text = "$cardName · card ${counts.sum() + 1}"
+                    queueCounts.removeAllViews()
                     val queue = state["queue"]?.toIntOrNull()
-                    listOf("New ${d?.new ?: 0}" to R.color.ag_blue, "Learn ${d?.learn ?: 0}" to R.color.ag_red, "Review ${d?.review ?: 0}" to R.color.ag_green).forEachIndexed { i, (label, color) ->
-                        val from = line.length; line.append(label)
-                        line.setSpan(android.text.style.ForegroundColorSpan(Ui.c(this, color)), from, line.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                        val current = when(queue) { 0 -> 0; 1, 3 -> 1; else -> 2 }
-                        if (i == current) line.setSpan(android.text.style.UnderlineSpan(), from, line.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                        if (i != 2) line.append(" · ")
+                    val current = when (queue) { 0 -> 0; 1, 3 -> 1; else -> 2 }
+                    listOf((d?.new ?: 0) to R.color.ag_blue, (d?.learn ?: 0) to R.color.ag_red, (d?.review ?: 0) to R.color.ag_green).forEachIndexed { i, (number, color) ->
+                        queueCounts.addView(StudyUi.label(this, number.toString(), 14, color, 900).apply {
+                            if (i == current) paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
+                            contentDescription = "${listOf("New", "Learn", "Review")[i]} $number${if (i == current) ", current" else ""}"
+                        }, StudyUi.lp(-2).also { if (i > 0) it.marginStart = Ui.dp(this, 7) })
                     }
-                    header.text = line
                     mediaBlocked = (blocked.isNotEmpty() || unsupported) && prefs.getString("missing", "Ask") != "Answer anyway"
-                    showQuestion(); mediaNotice(blocked.size, missing.size - blocked.size, unsupported)
+                    layout(); showQuestion(); mediaNotice(blocked.size, missing.size - blocked.size, unsupported)
                     if (mediaBlocked && prefs.getString("missing", "Ask") == "Always open in AnkiDroid") openAnki()
                 }
             }
@@ -284,23 +369,22 @@ class StudyActivity : Activity() {
     }
     private fun showButtons() {
         buttons.removeAllViews()
-        if (!flipped) { buttons.addView(Form.primary(this, "Show answer") { flip() }.apply { minimumHeight = Ui.dp(context, 64); isEnabled = !locked && !mediaBlocked }); return }
+        val enabled = !locked && !mediaBlocked
+        if (!flipped) {
+            buttons.addView(StudyUi.answer(this, "Show answer", null, R.color.ag_mauve, enabled) { flip() }, StudyUi.lp(-1, Ui.dp(this, 48)))
+            return
+        }
         val n = card ?: return
         val labels = when (n.buttons) { 2 -> listOf("Again", "Good"); 3 -> listOf("Again", "Good", "Easy"); else -> listOf("Again", "Hard", "Good", "Easy") }
         val wide = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && resources.configuration.smallestScreenWidthDp < 600
-        var row = LinearLayout(this)
+        var row = StudyUi.row(this)
         buttons.addView(row)
         labels.forEachIndexed { i, label ->
-            if (wide && i == 2) { row = LinearLayout(this); buttons.addView(row) }
+            if (wide && i == 2) { row = StudyUi.row(this); buttons.addView(row, StudyUi.spaced(this, 6)) }
             val ease = i + 1
             val color = when(label) { "Again" -> R.color.ag_red; "Hard" -> R.color.ag_peach; "Good" -> R.color.ag_green; else -> R.color.ag_blue }
-            val interval = n.nextTimes.getOrElse(i) { "" }
-            row.addView(Form.secondary(this, "$label\n$interval", color) { answer(ease) }.apply {
-                minimumHeight = Ui.dp(context, 64)
-                setTextColor(Ui.c(context, if(resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES) R.color.ag_crust else R.color.ag_card))
-                background = Ui.rounded(Ui.c(context, color), 12, context)
-                contentDescription = "$label, next in $interval"; isEnabled = !locked && !mediaBlocked
-            }, Form.lp(0, -2, 1f))
+            row.addView(StudyUi.answer(this, label, n.nextTimes.getOrElse(i) { "" }, color, enabled) { answer(ease) },
+                StudyUi.lp(0, Ui.dp(this, if (wide) 40 else 48), 1f).also { if (row.childCount > 0) it.marginStart = Ui.dp(this, 6) })
         }
     }
     private fun answer(ease: Int) {
@@ -326,6 +410,7 @@ class StudyActivity : Activity() {
                         StudyLoop.Status.SAVED -> {
                             val button = com.husarp.ankigo.study.StudyRules.gameButton(c.buttons, ease)
                             counts[button - 1]++; totalTime += took; timedCard = null
+                            prefs.edit().putLong("lastStudied:$deckId", System.currentTimeMillis()).apply()
                             Local.recordReview(this, c.nid, c.ord, ease, took, "app")
                             val fresh = CardState.from(r.row!!)!!
                             LiveSession.ownAnswer(this, fresh, button) { record(it); if (!isDestroyed) loadNext() }
@@ -341,34 +426,68 @@ class StudyActivity : Activity() {
         for (e in list) when (e) {
             is GameEvent.Cash -> coins += e.amount
             is GameEvent.XpGained -> xp += e.xp
-            is GameEvent.LevelUp -> levels++
-            is GameEvent.Evolved -> evolutions++
-            is GameEvent.Caught -> caught += e.name
-            is GameEvent.Defeated -> defeated++
+            is GameEvent.LevelUp -> {
+                levels++
+                val mon = GameRepo.state?.mon(e.uid)
+                val progress = teamProgress.getOrPut(e.uid) { JSONObject().put("start", initialLevels[e.uid] ?: e.level - 1) }
+                progress.put("name", mon?.name ?: e.name).put("level", mon?.level ?: e.level).put("species", mon?.species ?: 0).put("shiny", mon?.shiny ?: false)
+            }
+            is GameEvent.Evolved -> {
+                evolutions++
+                val mon = GameRepo.state?.mon(e.uid)
+                val progress = teamProgress.getOrPut(e.uid) { JSONObject().put("start", initialLevels[e.uid] ?: mon?.level ?: 0) }
+                progress.put("fromName", e.from).put("name", e.to).put("species", e.toSpecies).put("level", mon?.level ?: 0).put("shiny", mon?.shiny ?: false).put("evolved", true)
+            }
+            is GameEvent.Caught -> {
+                caught += e.name
+                rewardMons += JSONObject().put("species", e.species).put("name", e.name).put("shiny", e.shiny).put("caught", true)
+            }
+            is GameEvent.Defeated -> {
+                defeated++
+                rewardMons += JSONObject().put("species", e.species).put("name", e.name).put("caught", false)
+            }
             is GameEvent.Encounter -> met++
-            is GameEvent.ItemFound -> items += "${e.count} ${e.item}"
+            is GameEvent.ItemFound -> { items += "${e.count} ${e.item}"; foundItems += e.item }
             else -> {}
         }
     }
+    private fun showNotice(show: Boolean) {
+        notice.visibility = if (show) View.VISIBLE else View.GONE
+        noticeScroll.visibility = notice.visibility
+    }
+    private fun styleNotice() {
+        notice.setPadding(Ui.dp(this, 11), Ui.dp(this, 9), Ui.dp(this, 11), Ui.dp(this, 10))
+        notice.background = Ui.rounded(StudyUi.blend(Ui.c(this, R.color.ag_peach), Ui.c(this, R.color.ag_card), .14f), 14, this).apply {
+            setStroke(Ui.dp(this@StudyActivity, 1), (Ui.c(this@StudyActivity, R.color.ag_peach) and 0x00ffffff) or 0x73000000)
+        }
+    }
     private fun mediaNotice(pictures: Int, sound: Int, unsupported: Boolean) {
-        notice.removeAllViews()
-        notice.visibility = if (pictures > 0 || sound > 0 || unsupported) View.VISIBLE else View.GONE
+        notice.removeAllViews(); styleNotice()
+        showNotice(pictures > 0 || sound > 0 || unsupported)
         if (pictures > 0 || unsupported) {
-            notice.addView(Form.body(this, if (unsupported) "This card needs AnkiDroid" else "$pictures picture${if (pictures == 1) " can't" else "s can't"} be shown here", 13, R.color.ag_red))
-            notice.addView(Form.body(this, "Get AnkiDroid from F-Droid or GitHub and pictures work here. Sync in AnkiDroid, install the other build, sync back.", 12))
-            val links = LinearLayout(this)
-            links.addView(Form.secondary(this, "F-Droid") { openUrl("https://f-droid.org/packages/com.ichi2.anki/") })
-            links.addView(Form.secondary(this, "GitHub") { openUrl("https://github.com/ankidroid/Anki-Android/releases") }); notice.addView(links)
-            val row = LinearLayout(this)
-            row.addView(Form.secondary(this, "Open in AnkiDroid") { openAnki() }, Form.lp(0, -2, 1f))
-            row.addView(Form.secondary(this, "Answer anyway") { mediaBlocked = false; notice.visibility = View.GONE; showButtons() }, Form.lp(0, -2, 1f)); notice.addView(row)
-        } else notice.addView(Form.body(this, "$sound sound file${if (sound == 1) "" else "s"} unavailable here", 12))
+            val heading = StudyUi.row(this)
+            heading.addView(StudyUi.icon(this, R.drawable.ic_alert, R.color.ag_peach), StudyUi.lp(Ui.dp(this, 16), Ui.dp(this, 16)).also { it.marginEnd = Ui.dp(this, 6) })
+            heading.addView(StudyUi.label(this, if (unsupported) "This card needs AnkiDroid" else "$pictures picture${if (pictures == 1) " can't" else "s can't"} be shown here", 13, R.color.ag_text, 900), StudyUi.lp(0, -2, 1f))
+            notice.addView(heading)
+            notice.addView(StudyUi.label(this, "The Play Store build keeps pictures private. This card is next in AnkiDroid too: answer there and AnkiGo counts it.", 11.5f, R.color.ag_sub0), StudyUi.spaced(this, 3))
+            val row = StudyUi.row(this)
+            row.addView(StudyUi.smallButton(this, "Open in AnkiDroid", true) { openAnki() })
+            row.addView(StudyUi.smallButton(this, "Answer anyway") { mediaBlocked = false; showNotice(false); showButtons() }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
+            notice.addView(row, StudyUi.spaced(this, 8))
+            notice.addView(StudyUi.label(this, "For readable pictures, use F-Droid / GitHub and grant the media folder in Settings. Sync in AnkiDroid, install the other build, then sync back.", 11.5f, R.color.ag_sub0), StudyUi.spaced(this, 6))
+            val links = StudyUi.row(this)
+            links.addView(StudyUi.smallButton(this, "F-Droid") { openUrl("https://f-droid.org/packages/com.ichi2.anki/") })
+            links.addView(StudyUi.smallButton(this, "GitHub") { openUrl("https://github.com/ankidroid/Anki-Android/releases") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
+            notice.addView(links, StudyUi.spaced(this, 4))
+        } else notice.addView(StudyUi.label(this, "$sound sound file${if (sound == 1) "" else "s"} unavailable here", 11.5f, R.color.ag_sub0))
     }
     private fun showError(message: String) {
-        locked = true; notice.removeAllViews(); notice.visibility = View.VISIBLE
-        notice.addView(Form.body(this, message, 14, R.color.ag_red))
-        notice.addView(Form.primary(this, "Retry / reload") { loadNext() })
-        notice.addView(Form.secondary(this, "Open in AnkiDroid") { openAnki() })
+        locked = true; notice.removeAllViews(); styleNotice(); showNotice(true)
+        notice.addView(StudyUi.label(this, message, 13, R.color.ag_red, 900))
+        val row = StudyUi.row(this)
+        row.addView(StudyUi.smallButton(this, "Retry / reload", true) { loadNext() })
+        row.addView(StudyUi.smallButton(this, "Open in AnkiDroid") { openAnki() }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
+        notice.addView(row, StudyUi.spaced(this, 8)); showButtons()
     }
     private fun throwBall() {
         if (!events.idle) return
@@ -382,20 +501,75 @@ class StudyActivity : Activity() {
     }
     private fun actions() {
         if (locked || card == null) return
-        val choices = arrayListOf("Bury card", "Suspend card", "Edit note", "Continue in AnkiDroid", "Replay sound", "Delete note…", "Undo…")
-        if (Anki.flagsSupported(this)) choices += "Flag…"
-        AlertDialog.Builder(this).setTitle("Card actions").setItems(choices.toTypedArray()) { _, i ->
-            when(i) {
-                0 -> writeAction("bury")
-                1 -> writeAction("suspend")
-                2 -> edit()
-                3 -> openAnki()
-                4 -> playSounds(sounds)
-                5 -> confirmDelete()
-                6 -> AlertDialog.Builder(this).setMessage("AnkiGo can't undo answers, bury, suspend or delete. Use Undo in AnkiDroid. The battle doesn't rewind; a redo won't count twice.").setPositiveButton("Open AnkiDroid") { _, _ -> openAnki() }.setNegativeButton("Back", null).show()
-                7 -> AlertDialog.Builder(this).setItems(arrayOf("None", "Red", "Orange", "Green", "Blue", "Pink", "Turquoise", "Purple")) { _, flag -> writeAction("flag", flag) }.show()
+        actionSheet?.dismiss()
+        val dialog = Dialog(this).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
+        actionSheet = dialog
+        val sheet = StudyUi.column(this).apply {
+            background = GradientDrawable().apply {
+                setColor(Ui.c(context, R.color.ag_base))
+                val r = Ui.dp(context, 22f); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
             }
-        }.show()
+            setPadding(Ui.dp(context, 8), Ui.dp(context, 6), Ui.dp(context, 8), Ui.dp(context, 10))
+        }
+        sheet.addView(View(this).apply { background = Ui.rounded(Ui.c(context, R.color.ag_ov), 2, context) },
+            StudyUi.lp(Ui.dp(this, 40), Ui.dp(this, 4)).also { it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = Ui.dp(this, 4); it.bottomMargin = Ui.dp(this, 8) })
+        val who = StudyUi.column(this).apply { setPadding(Ui.dp(context, 10), 0, Ui.dp(context, 10), Ui.dp(context, 6)) }
+        val preview = Html.fromHtml(question.replace(Regex("<script\\b[^>]*>.*?</script>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)), ""), 0).toString().trim().replace(Regex("\\s+"), " ")
+        who.addView(StudyUi.ellipsis(StudyUi.label(this, preview.ifEmpty { cardName }.take(120), 14, R.color.ag_text, 900)))
+        who.addView(StudyUi.ellipsis(StudyUi.label(this, "$modelName · Card ${(card?.ord ?: 0) + 1} · $deckName", 11, R.color.ag_sub0, 800)))
+        sheet.addView(who)
+        fun action(icon: Int, title: String, sub: String? = null, danger: Boolean = false, faded: Boolean = false, block: () -> Unit) {
+            val row = StudyUi.row(this).apply {
+                setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8))
+                background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(Ui.c(context, R.color.ag_mantle)), Ui.rounded(Color.TRANSPARENT, 12, context), null)
+                if (faded) alpha = .6f
+                setOnClickListener { dialog.dismiss(); block() }
+            }
+            row.addView(StudyUi.icon(this, icon, if (danger) R.color.ag_red else R.color.ag_sub1), StudyUi.lp(Ui.dp(this, 20), Ui.dp(this, 20)).also { it.marginEnd = Ui.dp(this, 12) })
+            val text = StudyUi.column(this)
+            text.addView(StudyUi.label(this, title, 14, if (danger) R.color.ag_red else R.color.ag_text, 800))
+            if (sub != null) text.addView(StudyUi.label(this, sub, 10.5f, if (danger) R.color.ag_red else R.color.ag_sub0))
+            row.addView(text, StudyUi.lp(0, -2, 1f)); sheet.addView(row)
+        }
+        action(R.drawable.ic_bury, "Bury card", "Back tomorrow") { writeAction("bury") }
+        action(R.drawable.ic_pause, "Suspend card", "Unsuspend later in AnkiDroid's browser") { writeAction("suspend") }
+        if (Anki.flagsSupported(this)) {
+            val flags = StudyUi.row(this).apply { setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8)) }
+            flags.addView(StudyUi.icon(this, R.drawable.ic_flag), StudyUi.lp(Ui.dp(this, 20), Ui.dp(this, 20)).also { it.marginEnd = Ui.dp(this, 12) })
+            flags.addView(StudyUi.label(this, "Flag", 14, R.color.ag_text, 800), StudyUi.lp(0, -2, 1f))
+            val names = listOf("None", "Red", "Orange", "Green", "Blue", "Pink", "Turquoise", "Purple")
+            val colors = listOf(R.color.ag_s0, R.color.ag_red, R.color.ag_peach, R.color.ag_green, R.color.ag_blue, R.color.ag_pink, R.color.ag_teal, R.color.ag_mauve)
+            colors.forEachIndexed { i, tone ->
+                flags.addView(StudyUi.label(this, if (i == 0) "×" else "", 12, R.color.ag_sub0, 900).apply {
+                    gravity = Gravity.CENTER; background = Ui.rounded(Ui.c(context, tone), 8, context)
+                    contentDescription = "Flag ${names[i]}"; isFocusable = true
+                    setOnClickListener { dialog.dismiss(); writeAction("flag", i) }
+                }, StudyUi.lp(Ui.dp(this, 16), Ui.dp(this, 16)).also { it.marginStart = Ui.dp(this, 7) })
+            }
+            sheet.addView(flags)
+        }
+        action(R.drawable.ic_edit, "Edit note", "Opens AnkiDroid's browser on this note, tap it to edit") { edit() }
+        action(R.drawable.ic_open, "Continue in AnkiDroid", "Same deck; the battle keeps counting") { openAnki() }
+        action(R.drawable.ic_sound, "Replay sound") { playSounds(sounds) }
+        sheet.addView(StudyUi.line(this), StudyUi.lp(-1, Ui.dp(this, 1)).also { it.setMargins(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4)) })
+        action(R.drawable.ic_trash, "Delete note…", "Asks first. Deletes all cards of this note", danger = true) { confirmDelete() }
+        action(R.drawable.ic_undo, "Undo…", "Not possible in AnkiGo. Use Undo in AnkiDroid", faded = true) {
+            AlertDialog.Builder(this).setMessage("AnkiGo can't undo answers, bury, suspend or delete. Use Undo in AnkiDroid. The battle doesn't rewind; a redo won't count twice.").setPositiveButton("Open AnkiDroid") { _, _ -> openAnki() }.setNegativeButton("Back", null).show()
+        }
+        val scroll = object : ScrollView(this) {
+            override fun onMeasure(w: Int, h: Int) {
+                super.onMeasure(w, View.MeasureSpec.makeMeasureSpec((resources.displayMetrics.heightPixels * .85f).toInt(), View.MeasureSpec.AT_MOST))
+            }
+        }.apply { isVerticalScrollBarEnabled = false; addView(sheet) }
+        dialog.setContentView(scroll); dialog.setCanceledOnTouchOutside(true)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(.48f); setGravity(Gravity.BOTTOM)
+        }
+        dialog.show()
+        dialog.window?.setLayout(minOf(resources.displayMetrics.widthPixels, Ui.dp(this, 600)), -2)
+        dialog.setOnDismissListener { if (actionSheet === dialog) actionSheet = null }
     }
     private fun writeAction(action: String, flag: Int = 0) {
         val c = card ?: return
@@ -444,40 +618,119 @@ class StudyActivity : Activity() {
         }
     }
     private fun summary(decks: List<Anki.Deck>, learn: Int, fresh: Int) {
-        finished = true; card = null; locked = true; buttons.removeAllViews(); notice.visibility = View.GONE
+        finished = true; card = null; locked = true; buttons.removeAllViews(); showNotice(false)
+        topBar.visibility = View.GONE; summaryBar.visibility = View.VISIBLE; cardSurface.visibility = View.GONE
         val n = counts.sum()
-        val why = when { learn > 0 -> "Learning cards come back in a few minutes"; fresh > 0 -> "Daily new-card limit reached, $fresh new cards left"; else -> "Done for today" }
+        val why = when { learn > 0 -> "$learn learning cards come back in a few minutes."; fresh > 0 -> "Daily new-card limit reached · $fresh new cards left."; else -> "All available cards studied." }
         val st = GameRepo.state
-        web.visibility = View.GONE
-        val summary = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(Ui.dp(context, 16), Ui.dp(context, 12), Ui.dp(context, 16), Ui.dp(context, 12)) }
-        summary.addView(Ui.text(this, 23f, 900, R.color.ag_mauve).apply { text = why })
-        summary.addView(Form.body(this, "$n cards · ${totalTime / 60000} minutes · ${if(n > 0) (n-counts[0])*100/n else 0}% correct", 15), Form.lp(this, 12))
-        val stack = LinearLayout(this)
-        counts.forEachIndexed { i, value ->
-            if (value > 0) stack.addView(View(this).apply { setBackgroundColor(Ui.c(context, listOf(R.color.ag_red, R.color.ag_peach, R.color.ag_green, R.color.ag_blue)[i])) }, Form.lp(0, Ui.dp(this, 8), value.toFloat()))
+        val summary = StudyUi.column(this).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
+        val hero = StudyUi.row(this).apply {
+            background = StudyUi.gradient(context, R.color.ag_green, .22f, 16)
+            setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 12), Ui.dp(context, 10))
         }
-        summary.addView(stack, Form.lp(this, 8))
-        summary.addView(Form.body(this, "Again ${counts[0]} · Hard ${counts[1]} · Good ${counts[2]} · Easy ${counts[3]}", 12), Form.lp(this, 6))
-        summary.addView(Form.sect(this, "Battle results", "$met met"))
-        val sprites = LinearLayout(this)
-        caught.forEach { name ->
-            val sp = GameRepo.data?.species?.values?.firstOrNull { it.name == name }
-            if (sp != null) sprites.addView(android.widget.ImageView(this).apply { Ui.staticSprite(context, sp.num, false, this); contentDescription = "Caught $name" }, Form.lp(Ui.dp(this, 48), Ui.dp(this, 48)))
+        st?.main?.let { mon -> hero.addView(ImageView(this).apply {
+            Ui.staticSprite(context, mon.species, mon.shiny, this); contentDescription = mon.name
+        }, StudyUi.lp(Ui.dp(this, 72), Ui.dp(this, 72)).also { it.marginStart = -Ui.dp(this, 4); it.marginEnd = Ui.dp(this, 4); it.topMargin = -Ui.dp(this, 6); it.bottomMargin = -Ui.dp(this, 6) }) }
+        val heroText = StudyUi.column(this)
+        heroText.addView(StudyUi.label(this, "Done for today!", 20, R.color.ag_text, 900))
+        val evolvedLine = teamProgress.values.filter { it.optBoolean("evolved") }.joinToString("\n") { "${it.optString("fromName")} evolved into ${it.optString("name")}." }
+        heroText.addView(StudyUi.label(this, listOf(evolvedLine, why).filter { it.isNotEmpty() }.joinToString("\n"), 12, R.color.ag_sub0), StudyUi.spaced(this, 2))
+        hero.addView(heroText, StudyUi.lp(0, -2, 1f)); summary.addView(hero)
+        val stats = StudyUi.row(this)
+        listOf(n.toString() to "cards", "${totalTime / 60000} min" to "studied", "${if(n > 0) (n - counts[0]) * 100 / n else 0}%" to "correct").forEachIndexed { i, (value, name) ->
+            stats.addView(StudyUi.column(this).apply {
+                gravity = Gravity.CENTER; background = Ui.rounded(Ui.c(context, R.color.ag_card), 12, context)
+                setPadding(Ui.dp(context, 8), Ui.dp(context, 7), Ui.dp(context, 8), Ui.dp(context, 7))
+                addView(StudyUi.label(context, value, 19, R.color.ag_text, 900))
+                addView(StudyUi.label(context, name, 10.5f, R.color.ag_sub0, 800))
+            }, StudyUi.lp(0, -2, 1f).also { if (i > 0) it.marginStart = Ui.dp(this, 6) })
         }
-        summary.addView(android.widget.HorizontalScrollView(this).apply { addView(sprites) })
-        summary.addView(Form.body(this, "$defeated defeated · ${caught.size} caught\n${caught.joinToString()}\n+$xp XP · $levels level-ups · $evolutions evolutions\n+$coins ₽\nFound: ${items.joinToString().ifEmpty { "No items" }}", 14))
-        summary.addView(Form.sect(this, "Today's goal", "${st?.streakDays ?: 0} day streak"))
-        val today = st?.reviewsToday ?: 0; val goal = st?.settings?.dailyAverage ?: 100
-        summary.addView(Form.body(this, "$today / $goal"))
-        summary.addView(BarView(this).apply { set(today.toFloat()/goal.coerceAtLeast(1), Ui.c(context, R.color.ag_mauve), false) }, Form.lp(-1, Ui.dp(this, 8)))
-        summaryView = ScrollView(this).apply { addView(summary) }.also { cardColumn.addView(it, Form.lp(-1, 0, 1f)) }
+        summary.addView(stats, StudyUi.spaced(this, 8))
+        val tones = listOf(R.color.ag_red, R.color.ag_peach, R.color.ag_green, R.color.ag_blue)
+        val stack = StudyUi.row(this).apply { background = Ui.rounded(Ui.c(context, R.color.ag_s0), 5, context); clipToOutline = true }
+        counts.forEachIndexed { i, value -> if (value > 0) stack.addView(View(this).apply { setBackgroundColor(Ui.c(context, tones[i])) }, StudyUi.lp(0, -1, value.toFloat())) }
+        summary.addView(stack, StudyUi.spaced(this, 8).also { it.height = Ui.dp(this, 10) })
+        val legend = StudyUi.row(this)
+        counts.forEachIndexed { i, value -> legend.addView(StudyUi.label(this, "${listOf("Again", "Hard", "Good", "Easy")[i]} $value", 10.5f, R.color.ag_sub0, 800).apply { gravity = if(i == 0) Gravity.START else if(i == 3) Gravity.END else Gravity.CENTER }, StudyUi.lp(0, -2, 1f)) }
+        summary.addView(legend, StudyUi.spaced(this, 4))
+        summary.addView(StudyUi.section(this, "Battle results", "$met met"))
+        if (rewardMons.isNotEmpty()) {
+            val sprites = StudyUi.row(this).apply {
+                background = Ui.rounded(Ui.c(context, R.color.ag_card), 14, context)
+                setPadding(Ui.dp(context, 6), Ui.dp(context, 6), Ui.dp(context, 6), Ui.dp(context, 4))
+            }
+            rewardMons.forEach { mon ->
+                sprites.addView(StudyUi.column(this).apply {
+                    gravity = Gravity.CENTER
+                    val caughtHere = mon.optBoolean("caught")
+                    addView(ImageView(context).apply {
+                        Ui.staticSprite(context, mon.getInt("species"), mon.optBoolean("shiny"), this)
+                        if (!caughtHere) { alpha = .7f; colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(.3f) }) }
+                        contentDescription = "${if (caughtHere) "Caught" else "Defeated"} ${mon.optString("name") }"
+                    }, StudyUi.lp(Ui.dp(context, 42), Ui.dp(context, 42)).also { it.topMargin = -Ui.dp(context, 4); it.bottomMargin = -Ui.dp(context, 6) })
+                    addView(StudyUi.label(context, if (caughtHere) "CAUGHT" else "XP", 8, if (caughtHere) R.color.ag_mauve else R.color.ag_sub0, 900))
+                }, StudyUi.lp(Ui.dp(this, 46), -2))
+            }
+            summary.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(sprites) })
+        }
+        val results = StudyUi.column(this).apply {
+            background = Ui.rounded(Ui.c(context, R.color.ag_card), 14, context)
+            setPadding(Ui.dp(context, 10), Ui.dp(context, 4), Ui.dp(context, 10), Ui.dp(context, 4))
+        }
+        fun result(icon: Int, label: String, value: String, tone: Int, species: Int = 0, item: String? = null, shiny: Boolean = false) {
+            if (results.childCount > 0) results.addView(StudyUi.line(this))
+            val row = StudyUi.row(this).apply { setPadding(0, Ui.dp(context, 5), 0, Ui.dp(context, 5)) }
+            val image = if (species > 0 || item != null) ImageView(this).apply {
+                if (species > 0) Ui.staticSprite(context, species, shiny, this) else Ui.itemIcon(context, item!!, this)
+            } else StudyUi.icon(this, icon, tone)
+            row.addView(image, StudyUi.lp(Ui.dp(this, 22), Ui.dp(this, 22)).also { it.marginEnd = Ui.dp(this, 8) })
+            row.addView(StudyUi.label(this, label, 12.5f, R.color.ag_text, 800), StudyUi.lp(0, -2, 1f))
+            row.addView(StudyUi.label(this, value, 12.5f, R.color.ag_text, 900).apply { gravity = Gravity.END }, StudyUi.lp(0, -2, 1f))
+            results.addView(row)
+        }
+        result(R.drawable.ic_bolt, "XP for the team", "+$xp", R.color.ag_sky)
+        teamProgress.values.forEach { mon ->
+            val from = mon.optInt("start"); val to = mon.optInt("level")
+            result(R.drawable.ic_star, "${mon.optString("name")} Lv $from${if (to != from) " → $to" else ""}", if (mon.optBoolean("evolved")) "evolved" else "level up", R.color.ag_mauve, mon.optInt("species"), shiny = mon.optBoolean("shiny"))
+        }
+        result(R.drawable.ic_battle, "Defeated / caught", "$defeated / ${caught.size}", R.color.ag_sub1)
+        result(R.drawable.ic_coin, "Coins", "+$coins ₽", R.color.ag_yellow)
+        if (foundItems.isEmpty()) result(R.drawable.ic_gift, "Found", "No items", R.color.ag_teal)
+        else foundItems.distinct().forEach { item -> result(R.drawable.ic_gift, "Found", com.husarp.ankigo.game.Items.name(item), R.color.ag_teal, item = item) }
+        summary.addView(results, StudyUi.spaced(this, 6))
+        val today = st?.reviewsToday ?: 0; val goal = (st?.settings?.dailyAverage ?: 100).coerceAtLeast(1)
+        val goalRow = StudyUi.row(this).apply {
+            background = Ui.rounded(Ui.c(context, R.color.ag_card), 12, context)
+            setPadding(Ui.dp(context, 10), Ui.dp(context, 7), Ui.dp(context, 10), Ui.dp(context, 7))
+        }
+        goalRow.addView(BarView(this).apply {
+            setGradient(Ui.c(context, R.color.ag_mauve), Ui.c(context, R.color.ag_pink))
+            set(today.toFloat() / goal, Ui.c(context, R.color.ag_mauve), false)
+        }, StudyUi.lp(0, Ui.dp(this, 8), 1f).also { it.marginEnd = Ui.dp(this, 8) })
+        goalRow.addView(StudyUi.label(this, if (today >= goal) "Goal done · $today" else "$today / $goal", 12, R.color.ag_text, 900))
+        goalRow.addView(Ui.chip(this, R.drawable.ic_flame, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
+        summary.addView(goalRow, StudyUi.spaced(this, 6))
+        summaryView = ScrollView(this).apply { addView(summary); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
         val next = decks.firstOrNull { it.id != deckId && it.total > 0 }
-        if (next != null) buttons.addView(Form.primary(this, "Next deck · ${next.name} · ${next.total}") {
+        buttons.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 10))
+        if (next != null) buttons.addView(StudyUi.primary(this, "Next deck: ${next.name} · ${next.total} due") {
             startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", next.id).putExtra("deckName", next.name)); finish()
         })
-        buttons.addView(Form.secondary(this, "Back to decks") { finish() })
-        buttons.addView(Form.secondary(this, "Sync now") { runCatching { startActivity(Anki.syncIntent()) }.onFailure { Ui.toast(this, "Open AnkiDroid to sync") } })
-        buttons.addView(Form.secondary(this, "Custom study in AnkiDroid") { openAnki() })
+        else buttons.addView(StudyUi.primary(this, "Custom study in AnkiDroid") { openAnki() })
+        val navigation = StudyUi.row(this)
+        navigation.addView(StudyUi.smallButton(this, "Back to decks") { finish() }, StudyUi.lp(0, -2, 1f))
+        val sync = StudyUi.row(this).apply {
+            gravity = Gravity.CENTER
+            background = Ui.rounded(Ui.c(context, R.color.ag_s0), 10, context)
+            setPadding(Ui.dp(context, 10), Ui.dp(context, 7), Ui.dp(context, 10), Ui.dp(context, 7))
+            contentDescription = "Sync now"; isFocusable = true
+            setOnClickListener { runCatching { startActivity(Anki.syncIntent()) }.onFailure { Ui.toast(this@StudyActivity, "Open AnkiDroid to sync") } }
+        }
+        sync.addView(StudyUi.icon(this, R.drawable.ic_sync, R.color.ag_text), StudyUi.lp(Ui.dp(this, 14), Ui.dp(this, 14)).also { it.marginEnd = Ui.dp(this, 5) })
+        sync.addView(StudyUi.label(this, "Sync now", 12, R.color.ag_text, 900))
+        navigation.addView(sync, StudyUi.lp(0, -2, 1f).also { it.marginStart = Ui.dp(this, 6) })
+        buttons.addView(navigation, StudyUi.spaced(this, 6))
+        layout()
         if (learn > 0) main.postDelayed({ recheckLearning() }, 30_000)
     }
     private fun recheckLearning() {
@@ -487,7 +740,7 @@ class StudyActivity : Activity() {
             val available = runCatching { Anki.selectDeck(this, deckId); Anki.nextCards(this, deckId, 1).isNotEmpty() }.getOrDefault(false)
             main.post {
                 if (!valid(token) || !finished || background) return@post
-                if (available) buttons.addView(Form.primary(this, "Continue · learning cards are ready") { loadNext() })
+                if (available) buttons.addView(StudyUi.primary(this, "Continue · learning cards are ready") { loadNext() })
                 else main.postDelayed({ recheckLearning() }, 30_000)
             }
         }

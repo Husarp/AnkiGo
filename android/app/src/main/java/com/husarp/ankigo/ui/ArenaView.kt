@@ -118,6 +118,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     var onCatchTagTap: () -> Unit = {}
 
     private var compact = false
+    private var studyStrip = false
     private val live = LinkedHashSet<Animator>()
     private val floats = ArrayList<View>()
     private val bobs = ArrayList<ObjectAnimator>()
@@ -201,6 +202,17 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val edge = if (compact) 6 else 10
         place(enemyBlock, min(dpi(if (compact) 130 else 166), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(edge), dpi(edge), 0, 0)
         place(playerCard, min(dpi(if (compact) 130 else 170), infoMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(edge), dpi(if (compact) 6 else 12))
+        if (studyStrip) {
+            // Approved 146 dp strip geometry, scaled only when landscape supplies extra arena height.
+            val scale = (h / Ui.dp(context, 146f)).coerceIn(.6f, 1.5f)
+            fun sp(v: Int) = (dpi(v) * scale).toInt()
+            place(platEnemy, sp(120), sp(24), Gravity.TOP or Gravity.RIGHT, 0, sp(70), sp(16), 0)
+            place(platPlayer, sp(150), sp(34), Gravity.BOTTOM or Gravity.LEFT, 0, 0, 0, -sp(10))
+            place(enemyHolder, sp(96), sp(80), Gravity.TOP or Gravity.RIGHT, 0, sp(4), sp(26), 0)
+            place(playerHolder, sp(116), sp(96), Gravity.BOTTOM or Gravity.LEFT, sp(14), 0, 0, sp(2))
+            place(enemyBlock, min(dpi(138), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
+            place(playerCard, min(dpi(142), infoMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(8), dpi(8))
+        }
         super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
     }
 
@@ -312,6 +324,27 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         for (c in listOf(enemyCard, playerCard)) c.setPadding(dpi(10), dpi(padV), dpi(10), dpi(if (on) 6 else 8))
         bannerTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (on) 15f else 20f)
         banner.minimumWidth = dpi(if (on) 110 else 170)
+        requestLayout()
+    }
+
+    /** Restores the type and numeric rows hidden by PiP compact mode, with the study mockup's metrics. */
+    fun setStudyStrip(on: Boolean) {
+        studyStrip = on
+        eTypes.visibility = VISIBLE
+        pNums.visibility = VISIBLE
+        pXpText.visibility = VISIBLE
+        pXp.visibility = if (on) GONE else VISIBLE
+        for (t in listOf(eName, pName)) t.textSize = if (on) 12.5f else 14f
+        for (t in listOf(eLevel, pLevel)) t.textSize = if (on) 11f else 12f
+        for (t in listOf(eHpText, pHpText, pXpText)) t.textSize = if (on) 10f else 11f
+        for (c in listOf(enemyCard, playerCard)) {
+            c.elevation = Ui.dp(context, 2f)
+            c.background = Ui.rounded(translucentCard(context), if (on) 10 else 12, context)
+            c.setPadding(dpi(if (on) 8 else 10), dpi(if (on) 5 else 7), dpi(if (on) 8 else 10), dpi(if (on) 6 else 8))
+        }
+        for (bar in listOf(eHp, pHp)) (bar.layoutParams as LinearLayout.LayoutParams).apply {
+            height = dpi(if (on) 6 else 7); topMargin = dpi(if (on) 4 else 6)
+        }
         requestLayout()
     }
 

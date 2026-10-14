@@ -28,4 +28,9 @@
     <color name="ag_plat2">#cfd7e8</color>
     <!-- Silhouette strength: the mockup's sil value (0.30) as 0-255; used as grey level and alpha. -->
     <integer name="ag_sil">77</integer>
+    <color name="ag_anki_bg">#fafafa</color>
+    <color name="ag_anki_bar">#ffffff</color>
+    <color name="ag_anki_text">#202124</color>
+    <color name="ag_anki_sub">#5f6368</color>
+    <color name="ag_anki_line">#e3e3e3</color>
 </resources>
