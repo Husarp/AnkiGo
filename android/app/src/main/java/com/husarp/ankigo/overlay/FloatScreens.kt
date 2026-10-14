@@ -11,7 +11,6 @@ import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.ui.DexActivity
-import com.husarp.ankigo.ui.DexPage
 import com.husarp.ankigo.ui.GamePage
 import com.husarp.ankigo.ui.PageHost
 import com.husarp.ankigo.ui.SettingsActivity
@@ -20,6 +19,7 @@ import com.husarp.ankigo.ui.ShopActivity
 import com.husarp.ankigo.ui.ShopPage
 import com.husarp.ankigo.ui.TeamActivity
 import com.husarp.ankigo.ui.TeamPage
+import com.husarp.ankigo.ui.TeamSection
 import com.husarp.ankigo.ui.Ui
 
 /** The screens that can open in a floating window over other apps. */
@@ -121,7 +121,7 @@ object FloatScreens {
 
     private fun build(which: FloatPage, ctx: Context): GamePage = when (which) {
         FloatPage.TEAM -> TeamPage(ctx, host)
-        FloatPage.DEX -> DexPage(ctx, host)
+        FloatPage.DEX -> TeamPage(ctx, host, TeamSection.DEX) // the Pokédex section of the Team tab
         FloatPage.SHOP -> ShopPage(ctx, host)
         FloatPage.SETTINGS -> SettingsPage(ctx, host)
     }
