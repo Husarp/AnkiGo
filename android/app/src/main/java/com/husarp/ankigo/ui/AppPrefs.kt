@@ -58,6 +58,11 @@ object AppPrefs {
 
     fun setCompactCards(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("compactCards", on).apply()
 
+    /** Each battle stat card sits under (or next to) its own Pokémon; off = the classic game layout (opposite sides). Default on. */
+    fun cardsUnderOwn(ctx: Context): Boolean = prefs(ctx).getBoolean("cardsUnderOwn", true)
+
+    fun setCardsUnderOwn(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("cardsUnderOwn", on).apply()
+
     /** App theme (Settings → Look). Default: follow the system. Applied by [AppLook]; change it through [AppLook.setTheme]. */
     fun theme(ctx: Context): ThemeMode =
         ThemeMode.entries.firstOrNull { it.name == prefs(ctx).getString("theme", null) } ?: ThemeMode.SYSTEM

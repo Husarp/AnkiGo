@@ -141,6 +141,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private var tagVis = VISIBLE
     private var plan: ArenaGeo.Plan? = null
 
+    /** Each stat card under (or next to) its own Pokémon ([AppPrefs.cardsUnderOwn]); false = the classic layout (opposite sides). */
+    var cardsUnderOwn: Boolean = true
+        set(v) { if (field != v) { field = v; requestLayout() } }
+
     /** True while the two stat cards sit in the middle column between the sprites (the corner layout would cover one). */
     val middleLayout: Boolean get() = plan?.middle == true
 

@@ -109,6 +109,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var study = false
     private var statsBarSmall = true
     private var compactCards = false
+    private var cardsOwn = true
     private var applied: PanelFit.Fit? = null
     private var fit = PanelFit.Fit(1f, 0f, 0f, 0f, stats = true, log = true, xp = true, tools = true, logLines = 2, compactCards = false, middle = false, ok = true)
     private val chargePips = StudyUi.row(ctx).apply { visibility = GONE }
@@ -271,10 +272,12 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     /** The window's decision, for tests: scale, parts, card layout. */
     internal val currentFit: PanelFit.Fit get() = fit
 
-    /** Re-reads the two battle panel prefs (stats bar in small windows, compact stat cards) and lays out again. */
+    /** Re-reads the battle panel prefs (stats bar in small windows, compact stat cards, cards under their own Pokémon) and lays out again. */
     fun refreshPrefs() {
         statsBarSmall = AppPrefs.statsBarSmall(context)
         compactCards = AppPrefs.compactCards(context)
+        cardsOwn = AppPrefs.cardsUnderOwn(context)
+        arena.cardsUnderOwn = cardsOwn
         applied = null
         requestLayout()
     }
