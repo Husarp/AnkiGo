@@ -230,14 +230,14 @@ class PanelFitShots {
             val catchTag = field(arena, "catchTag") as View
             var chipsW = 0f
             for (i in 0 until chips.childCount) chipsW += dp(chips.getChildAt(i).measuredWidth)
-            val cards = ArenaGeo.cards(floor, false, true)
+            val cards = ArenaGeo.cards(floor, f.compactCards, true)
             val rows = listOf(
                 Triple("log box", dp(logBox.height), if (f.log) PanelFit.Heights.log(f.logLines, floor) - 8f else 0f),
                 Triple("footer", dp(footer.height), if (f.stats) PanelFit.Heights.footer(floor, f.tools) else 0f),
                 Triple("chips width", if (f.stats) chipsW + 20f else 0f, if (f.stats) PanelFit.Heights.chips(floor) else 0f),
                 Triple("wild card", dp(enemyCard.height), cards.wildH),
                 Triple("player card", dp(playerCard.height), cards.playerH),
-                Triple("tag (view)", dp(catchTag.height), cards.tagH + 6f),
+                Triple("tag (view)", dp(catchTag.height), if (f.compactCards) 0f else cards.tagH + 6f),
             )
             out.append("$name  scale=${f.scale} floor=$floor virtual=${f.virtualW}x${f.virtualH} middle=${f.middle} ok=${f.ok}  arena=${dp(arena.height)}\n")
             for ((what, real, model) in rows) {

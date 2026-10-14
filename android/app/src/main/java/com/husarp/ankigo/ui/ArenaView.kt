@@ -148,6 +148,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** True while the two stat cards sit in the middle column between the sprites (the corner layout would cover one). */
     val middleLayout: Boolean get() = plan?.middle == true
 
+    /** How much bigger than their normal size the two stat cards are drawn (1 in the study layouts). */
+    val cardScale: Float get() = if (compact || studyStrip) 1f else plan?.k ?: 1f
+
     private val live = LinkedHashSet<Animator>()
     private val floats = ArrayList<View>()
     private val bobs = ArrayList<ObjectAnimator>()
@@ -227,23 +230,39 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
     }
 
-    /** The normal arena: sprites, platforms and cards from [ArenaGeo], which also decides corners or middle column. */
+    /**
+     * The normal arena: sprites, platforms and cards from [ArenaGeo], which decides under / beside / corners / middle and
+     * how much the sprites and cards grow. The sprites are drawn as big as their holder allows (whole device pixels, so
+     * pixel art stays sharp); a card is laid out at its normal width and drawn [ArenaGeo.Plan.k] times bigger from its corner.
+     */
     private fun layoutPlan(w: Int, h: Int) {
         val d = Ui.dp(context, 1f)
-        val p = ArenaGeo.plan(w / d, h / d, ArenaGeo.cards(floorSp, cardsCompact, xpOn), cardsCompact)
+        val p = ArenaGeo.plan(w / d, h / d, ArenaGeo.cards(floorSp, cardsCompact, xpOn), cardsCompact, cardsUnderOwn)
         plan = p
-        fun put(v: View, b: ArenaGeo.Box, wrapHeight: Boolean = false) =
-            place(v, (b.w * d).toInt(), if (wrapHeight) -2 else (b.h * d).toInt(), Gravity.TOP or Gravity.LEFT, (b.x * d).toInt(), (b.y * d).toInt(), 0, 0)
+        for (s in listOf(enemySprite, playerSprite)) if (s.scaleDp != BIG_SPRITE_DP) s.scaleDp = BIG_SPRITE_DP
+        fun put(v: View, b: ArenaGeo.Box, wrapHeight: Boolean = false, k: Float = 1f) {
+            place(v, (b.w / k * d).toInt(), if (wrapHeight) -2 else (b.h * d).toInt(), Gravity.TOP or Gravity.LEFT, (b.x * d).toInt(), (b.y * d).toInt(), 0, 0)
+            scaleFrom(v, k)
+        }
         put(platEnemy, p.wildPlat)
         put(platPlayer, p.playerPlat)
         put(enemyHolder, p.wildSprite)
         put(playerHolder, p.playerSprite)
-        put(enemyBlock, p.wildCard, wrapHeight = true)
-        put(playerCard, p.playerCard, wrapHeight = true)
+        put(enemyBlock, p.wildCard, wrapHeight = true, k = p.k)
+        put(playerCard, p.playerCard, wrapHeight = true, k = p.k)
+    }
+
+    /** Draws [v] [k] times bigger around its top-left corner (touches still land on the right view). */
+    private fun scaleFrom(v: View, k: Float) {
+        v.pivotX = 0f; v.pivotY = 0f
+        v.scaleX = k; v.scaleY = k
     }
 
     /** The study strips' own geometry (the approved mockup values), unchanged. */
     private fun layoutStudy(w: Int, h: Int) {
+        for (s in listOf(enemySprite, playerSprite)) if (s.scaleDp != 2f) s.scaleDp = 2f
+        scaleFrom(enemyBlock, 1f)
+        scaleFrom(playerCard, 1f)
         val ref = Ui.dp(context, 212f)
         // Sprite boxes and platforms follow the arena height; a tall window pushes the wild one a bit lower so the
         // two sides don't sit in opposite corners.
@@ -748,6 +767,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun dpf(v: Float) = (v * resources.displayMetrics.density + 0.5f).toInt()
 
     companion object {
+        /** dp per sprite pixel in the normal arena: the holder is the limit (the study layouts keep 2). */
+        private const val BIG_SPRITE_DP = 8f
         private fun translucentCard(ctx: Context): Int = (Ui.c(ctx, R.color.ag_card) and 0x00FFFFFF) or (0xEB shl 24)
         private fun oval(color: Int) = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
     }
