@@ -25,7 +25,7 @@ object StudyDeckKit {
 
     fun build(
         ctx: Context, decks: List<Anki.Deck> = this.decks, ankiVersion: String? = "2.24.0",
-        folded: Set<String> = emptySet(), lastDeck: Long = 2, problem: String? = null, granted: Boolean = true,
+        expanded: Set<Long> = emptySet(), lastDeck: Long = 2, problem: String? = null, granted: Boolean = true,
     ): View {
         val ss = ShotCtx(ctx, ankiVersion = ankiVersion, granted = granted)
         val act = attach(StudyDecksActivity(), ss)
@@ -34,7 +34,7 @@ object StudyDeckKit {
         val root = act.buildContent()
         if (problem != null) { act.showAccessProblem(problem); return root }
         setField(act, "decks", decks.sortedBy { it.name })
-        setField(act, "folded", folded)
+        setField(act, "expanded", expanded)
         call(act, "render")
         return root
     }

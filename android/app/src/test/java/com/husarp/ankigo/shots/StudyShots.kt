@@ -24,7 +24,7 @@ class StudyShots {
     @Test fun deckPicker() {
         val both = listOf(Size.PHONE, Size.SPLIT)
         paparazzi.shootWith("studydecks-list", both) { StudyDeckKit.build(it) }
-        paparazzi.shootWith("studydecks-folded", both) { StudyDeckKit.build(it, folded = setOf("Languages")) }
+        paparazzi.shootWith("studydecks-expanded", both) { StudyDeckKit.build(it, expanded = setOf(4L)) }
         paparazzi.shootWith("studydecks-nogame", both, FakeGame.Scenario.NO_DATA) { StudyDeckKit.build(it) }
         paparazzi.shootWith("studydecks-nodecks", both) { StudyDeckKit.build(it, decks = emptyList(), lastDeck = 0) }
         paparazzi.shootWith("studydecks-ankinotinstalled", both) { StudyDeckKit.build(it, decks = emptyList(), ankiVersion = null, lastDeck = 0) }

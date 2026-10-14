@@ -8,6 +8,7 @@ import android.view.MotionEvent
 import android.view.Gravity
 import android.view.View
 import android.graphics.Color
+import android.graphics.drawable.Drawable
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -24,12 +25,15 @@ class StudyDecksActivity : AgActivity() {
     private lateinit var appBar: AppBar
     private val prefs by lazy { getSharedPreferences("study", 0) }
     private var decks = emptyList<Anki.Deck>()
-    private var folded = emptySet<String>()
+    private var expanded = emptySet<Long>()
+    private var ankiIcon: Drawable? = null
+    private var ankiIconLoaded = false
     private var generation = 0
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Anki.load(this)
-        folded = prefs.getStringSet("folded", emptySet())!!.toSet()
+        expanded = DeckTree.decode(prefs.getStringSet("expandedDecks", null))
+        if (prefs.contains("folded")) prefs.edit().remove("folded").apply() // old by-name folding, replaced by expandedDecks
         setContentView(buildContent())
         GameRepo.load(this) { if (!isDestroyed) render() }
     }
@@ -64,7 +68,7 @@ class StudyDecksActivity : AgActivity() {
             val result = runCatching { if (!Anki.hasPermission(this)) error("Allow AnkiGo to use AnkiDroid first."); Anki.decks(this) }
             runOnUiThread {
                 if (isDestroyed || token != generation) return@runOnUiThread
-                result.onSuccess { decks = it.sortedBy { d -> d.name }; render() }.onFailure { showAccessProblem(it.message) }
+                result.onSuccess { decks = it.sortedBy { d -> d.name }; pruneExpanded(); render() }.onFailure { showAccessProblem(it.message) }
             }
         }
     }
@@ -72,6 +76,16 @@ class StudyDecksActivity : AgActivity() {
         content.removeAllViews(); content.addView(StudyUi.label(this, message ?: "Open AnkiDroid once, then refresh.", 13).apply { setPadding(Ui.dp(context, 4), Ui.dp(context, 8), Ui.dp(context, 4), 0) })
         content.addView(StudyUi.primary(this, "Allow AnkiDroid access") { requestPermissions(arrayOf(Anki.permission), 1) }, StudyUi.spaced(this, 12))
         content.addView(StudyUi.smallButton(this, "Open AnkiDroid") { Anki.launchIntent(this)?.let { startActivity(it) } }, StudyUi.spaced(this, 6))
+    }
+    /** Forget expanded decks that no longer exist (only after a successful, non-empty read). */
+    private fun pruneExpanded() {
+        val kept = DeckTree.prune(expanded, decks)
+        if (kept != expanded) { expanded = kept; prefs.edit().putStringSet("expandedDecks", DeckTree.encode(kept)).apply() }
+    }
+    /** AnkiDroid's own launcher icon, read once per screen; null when it is not installed or the icon can't be read. */
+    private fun ankiDroidIcon(): Drawable? {
+        if (!ankiIconLoaded) { ankiIconLoaded = true; ankiIcon = runCatching { packageManager.getApplicationIcon(Anki.pkg) }.getOrNull() }
+        return ankiIcon
     }
     private fun render() {
         if (!::content.isInitialized) return
@@ -129,52 +143,72 @@ class StudyDecksActivity : AgActivity() {
             content.addView(teaser, StudyUi.spaced(this, 8))
         }
         if (GameRepo.data == null) content.addView(StudyUi.label(this, "Study works without game data. Download battle data in Settings to play.", 12), StudyUi.spaced(this, 8))
-        content.addView(StudyUi.section(this, "Decks", "tap = here · A = AnkiDroid"))
-        val columns = StudyUi.row(this).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, 40), Ui.dp(context, 3)) }
+        content.addView(StudyUi.section(this, "Decks", "tap = study here · ↗ = in AnkiDroid"))
+        val columns = StudyUi.row(this).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, 50), Ui.dp(context, 3)) }
         listOf("New" to R.color.ag_blue, "Lrn" to R.color.ag_red, "Due" to R.color.ag_green).forEach { (name, tone) ->
             columns.addView(StudyUi.label(this, name, 9.5f, tone, 900).apply { gravity = Gravity.END }, StudyUi.lp(Ui.dp(this, 28), -2))
         }
         content.addView(columns)
         if (decks.isEmpty()) content.addView(StudyUi.label(this, "No decks found. Open AnkiDroid once, then refresh."))
-        for (deck in decks) {
-            val ancestors = deck.name.split("::").dropLast(1).runningReduce { a, b -> "$a::$b" }
-            if (ancestors.any { it in folded }) continue
-            val children = decks.any { it.name.startsWith(deck.name + "::") }
+        for (r in DeckTree.rows(decks, expanded)) {
+            val deck = r.deck
             val row = StudyUi.row(this).apply {
                 background = Ui.rounded(Ui.c(context, R.color.ag_card), 12, context)
-                setPadding(Ui.dp(context, 6), Ui.dp(context, 8), Ui.dp(context, 6), Ui.dp(context, 8))
+                setPadding(0, 0, Ui.dp(context, 2), 0)
+                minimumHeight = Ui.dp(context, 52)
                 alpha = if (deck.total == 0) .55f else 1f
                 setOnClickListener { open(deck) }
             }
-            val chev = if (children) StudyUi.iconButton(this, if (deck.name in folded) R.drawable.ic_back else R.drawable.ic_down, "${if (deck.name in folded) "Expand" else "Fold"} ${deck.name}") {
-                folded = if (deck.name in folded) folded - deck.name else folded + deck.name
-                prefs.edit().putStringSet("folded", folded).apply(); render()
-            }.apply { setPadding(Ui.dp(context, 2), Ui.dp(context, 2), Ui.dp(context, 2), Ui.dp(context, 2)); if (deck.name in folded) rotation = 180f } else View(this)
-            row.addView(chev, StudyUi.lp(Ui.dp(this, 18), Ui.dp(this, 18)).also { it.marginEnd = Ui.dp(this, 6) })
+            // left part: arrow (parents) or empty space (leaves, so names line up); the whole 48 dp-wide strip toggles, never studies
+            val zone = FrameLayout(this)
+            if (r.hasChildren) {
+                zone.contentDescription = "${if (r.expanded) "Fold" else "Expand"} ${deck.name}"
+                zone.setOnClickListener {
+                    expanded = DeckTree.toggle(expanded, deck.id)
+                    prefs.edit().putStringSet("expandedDecks", DeckTree.encode(expanded)).apply(); render()
+                }
+                zone.addView(StudyUi.icon(this, if (r.expanded) R.drawable.ic_expand else R.drawable.ic_chevron, R.color.ag_sub1),
+                    FrameLayout.LayoutParams(Ui.dp(this, 30), Ui.dp(this, 30), Gravity.CENTER))
+            }
+            row.addView(zone, StudyUi.lp(Ui.dp(this, 48), -1))
             val name = StudyUi.row(this)
             name.addView(StudyUi.ellipsis(StudyUi.label(this, deck.name.substringAfterLast("::"), 14, R.color.ag_text, 800)), StudyUi.lp(0, -2, 1f))
             if (deck.dyn) name.addView(StudyUi.label(this, "FILTERED", 9, R.color.ag_teal, 900).apply {
                 background = Ui.rounded((Ui.c(context, R.color.ag_teal) and 0x00ffffff) or 0x29000000, 5, context)
                 setPadding(Ui.dp(context, 5), Ui.dp(context, 1), Ui.dp(context, 5), Ui.dp(context, 1))
             }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 5) })
-            row.addView(name, StudyUi.lp(0, -2, 1f).also { it.marginEnd = Ui.dp(this, 6) })
+            row.addView(name, StudyUi.lp(0, -2, 1f).also { it.marginEnd = Ui.dp(this, 6); it.topMargin = Ui.dp(this, 8); it.bottomMargin = Ui.dp(this, 8) })
             listOf(deck.new to R.color.ag_blue, deck.learn to R.color.ag_red, deck.review to R.color.ag_green).forEachIndexed { i, (n, color) ->
                 row.addView(StudyUi.label(this, n.coerceAtLeast(0).toString(), 13, if (n == 0) R.color.ag_ov else color, if (n == 0) 700 else 900).apply {
                     gravity = Gravity.END; contentDescription = "${listOf("New", "Learn", "Review")[i]} $n"
                 }, StudyUi.lp(Ui.dp(this, 28), -2))
             }
-            val companion = FrameLayout(this).apply {
-                background = Ui.rounded(Ui.c(context, R.color.ag_mantle), 9, context)
-                contentDescription = "Study ${deck.name} in AnkiDroid"
-                setOnClickListener { companion(deck) }
-                addView(StudyUi.label(context, "A", 11, R.color.ag_text, 900).apply {
-                    setTextColor(Color.WHITE); gravity = Gravity.CENTER
-                    background = Ui.rounded(0xff3f51b5.toInt(), 5, context)
-                }, FrameLayout.LayoutParams(Ui.dp(context, 18), Ui.dp(context, 18), Gravity.CENTER))
-            }
-            row.addView(companion, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)).also { it.marginStart = Ui.dp(this, 4) })
-            content.addView(row, StudyUi.lp().also { it.marginStart = Ui.dp(this, ancestors.size * 16); it.bottomMargin = Ui.dp(this, 5) })
+            row.addView(companionButton(deck), StudyUi.lp(Ui.dp(this, 48), Ui.dp(this, 48)))
+            content.addView(row, StudyUi.lp().also { it.marginStart = Ui.dp(this, r.depth * 16); it.bottomMargin = Ui.dp(this, 5) })
         }
+    }
+    /** "Study in AnkiDroid": AnkiDroid's own icon (fallback: a neutral book glyph) with a small "opens another app" badge. */
+    private fun companionButton(deck: Anki.Deck): View = FrameLayout(this).apply {
+        contentDescription = "Study ${deck.name} in AnkiDroid"
+        tooltipText = "Study in AnkiDroid"
+        background = StudyUi.ripple(context, Ui.rounded(Color.TRANSPARENT, 12, context))
+        setOnClickListener { companion(deck) }
+        val icon = ankiDroidIcon()
+        if (icon != null) {
+            addView(ImageView(context).apply {
+                setImageDrawable(icon.constantState?.newDrawable(resources)?.mutate() ?: icon)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }, FrameLayout.LayoutParams(Ui.dp(context, 26), Ui.dp(context, 26), Gravity.CENTER))
+        } else {
+            addView(FrameLayout(context).apply {
+                background = Ui.rounded(Ui.c(context, R.color.ag_mantle), 8, context)
+                addView(StudyUi.icon(context, R.drawable.ic_study, R.color.ag_sub1), FrameLayout.LayoutParams(Ui.dp(context, 18), Ui.dp(context, 18), Gravity.CENTER))
+            }, FrameLayout.LayoutParams(Ui.dp(context, 26), Ui.dp(context, 26), Gravity.CENTER))
+        }
+        addView(FrameLayout(context).apply {
+            background = Ui.rounded(Ui.c(context, R.color.ag_mantle), 8, context)
+            addView(StudyUi.icon(context, R.drawable.ic_open, R.color.ag_text), FrameLayout.LayoutParams(Ui.dp(context, 10), Ui.dp(context, 10), Gravity.CENTER))
+        }, FrameLayout.LayoutParams(Ui.dp(context, 16), Ui.dp(context, 16), Gravity.TOP or Gravity.START).also { it.leftMargin = Ui.dp(context, 29); it.topMargin = Ui.dp(context, 3) })
     }
     private fun open(deck: Anki.Deck) {
         if (prefs.getBoolean("inAnkiDroid", false)) { companion(deck); return }
