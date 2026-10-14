@@ -50,6 +50,9 @@ class LaneAShots {
     }
 
     private fun hit(arena: ArenaView) {
+        run { val d = arena.resources.displayMetrics.density
+          for (n in listOf("enemyBlock","playerCard")) { val f = ArenaView::class.java.getDeclaredField(n); f.isAccessible = true; val v = f.get(arena) as View
+            println("DBG ${arena.width/d}x${arena.height/d} $n y=${v.top/d} h=${v.height/d} sc=${v.scaleX} bottom=${(v.top+v.height*v.scaleY)/d}") } }
         arena.floatNumber(onPlayer = false, "\u221231", FloatStyle.DAMAGE)
         arena.floatNumber(onPlayer = true, "\u221212", FloatStyle.DAMAGE)
         // Added during a layout pass: lay the arena out once more so the two new children get their size.
