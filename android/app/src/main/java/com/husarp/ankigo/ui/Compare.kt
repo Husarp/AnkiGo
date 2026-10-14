@@ -55,16 +55,16 @@ internal class CompareLook(ctx: Context, columns: Int) {
     private val visible = ((viewportDp - labelDp) / 150).coerceIn(2, 4)
     /** Columns beyond [visible] leave a sliver of the next one showing, so it is clear the table scrolls. */
     val colDp: Float = (viewportDp - labelDp) / (if (columns > visible) visible + 0.3f else min(columns, visible).toFloat())
-    val heightDp = (hDp - (if (tight) 130 else 170)).coerceIn(200, 760)
+    val heightDp = (hDp - (if (tight) 40 else 170)).coerceIn(200, 760)
 
     val valueSp = if (tight) 11f else 13f
     val subSp = if (tight) 10f else 10.5f
     val labelSp = if (tight) 10f else 11f
     val nameSp = if (tight) 11f else 13f
     val titleSp = if (tight) 16f else 18f
-    val spriteDp = if (tight) 36 else 52
+    val spriteDp = if (tight) 32 else 52
     val rowMinDp = if (tight) 30 else 36
-    val headerDp = spriteDp + (if (tight) 22 else 28)
+    val headerDp = spriteDp + (if (tight) 20 else 28)
 }
 
 /** The content of the dialog: title + Now / Fully evolved switch + the scrolling table. */
@@ -376,7 +376,7 @@ private class TableGrid(private val page: GamePage, private val look: CompareLoo
                     }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
                 }
             }
-            is Cell.TypeChips -> box.addView(Bits.typeRow(ctx, cell.types))
+            is Cell.TypeChips -> box.addView(Bits.typeRow(ctx, cell.types), LinearLayout.LayoutParams(-2, -2))
             is Cell.Moves -> {
                 if (cell.moves.isEmpty()) box.addView(Ui.text(ctx, look.valueSp, 700, R.color.ag_sub0).apply { text = "none" })
                 cell.moves.forEachIndexed { i, m ->
