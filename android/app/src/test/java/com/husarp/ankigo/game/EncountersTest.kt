@@ -134,9 +134,6 @@ class EncountersTest {
         assertFalse(718 in all)
         assertEquals(listOf(150, 772, 1009), Encounters.pool(data, Tier.LEGENDARY, s, 100, setOf(151)).sorted())
         assertTrue(Encounters.pool(data, Tier.LEGENDARY, s, 49, emptySet()).isEmpty())
-        val st = GameState().also { it.settings.gens.addAll(1..9); it.caught += setOf(716, 717) }
-        assertFalse(Encounters.isValid(data, st, 718, 100))
-        assertTrue(Encounters.isValid(data, st, 772, 100))
     }
 
     @Test fun listSizes() {

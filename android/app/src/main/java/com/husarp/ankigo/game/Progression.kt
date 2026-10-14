@@ -219,18 +219,18 @@ object Progression {
      * that time (Ankimon evolution_time_allows). Everstone blocks.
      */
     fun itemEvolution(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis()): Evolution? =
-        itemEvolutionAnyTime(data, mon, item)?.takeIf { timeOk(it, now) }
+        itemEvolutions(data, mon, item).firstOrNull { timeOk(it, now) }
 
     /** "day" or "night" when the time of day is the ONLY thing keeping [item] from evolving [mon] now (Ankimon item_evolution_time_requirement), else null. */
-    fun itemEvolutionTimeNeeded(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis()): String? {
-        val e = itemEvolutionAnyTime(data, mon, item) ?: return null
-        return if (timeOk(e, now)) null else e.time
-    }
+    fun itemEvolutionTimeNeeded(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis()): String? =
+        if (itemEvolution(data, mon, item, now) != null) null else itemEvolutionAnyTime(data, mon, item)?.time
 
     /** The evolution [item] triggers on [mon] whatever the time of day. */
-    fun itemEvolutionAnyTime(data: GameData, mon: Mon, item: String): Evolution? {
-        if (mon.heldItem == EVERSTONE) return null
-        return data.sp(mon.species).evolutions.firstOrNull { e ->
+    fun itemEvolutionAnyTime(data: GameData, mon: Mon, item: String): Evolution? = itemEvolutions(data, mon, item).firstOrNull()
+
+    private fun itemEvolutions(data: GameData, mon: Mon, item: String): List<Evolution> {
+        if (mon.heldItem == EVERSTONE) return emptyList()
+        return data.sp(mon.species).evolutions.filter { e ->
             data.species.containsKey(e.to) && genderOk(e, mon) && when (e.kind) {
                 EvoKind.ITEM -> e.item == item
                 EvoKind.TRADE -> if (e.item != null) e.item == item else item == LINKING_CORD
