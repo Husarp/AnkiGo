@@ -266,9 +266,10 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
             Ui.touchPill(this, Ui.rounded(Bits.blend(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_mantle), 0.22f), 12, ctx), 36, 12)
             setOnClickListener {
                 val sorts = DexSort.entries
-                Pickers.choose(ctx, "Sort by", sorts.map { it.label }) { i ->
-                    filter = filter.copy(sort = sorts[i]); redraw(); list.setSelection(0)
-                }
+                val m = AppMenu(this).header("Sort by")
+                // the current sort carries a check; the others keep a blank icon so the labels line up
+                sorts.forEachIndexed { i, so -> m.item(i, so.label, if (so == filter.sort) R.drawable.ic_check else R.drawable.ic_blank) }
+                m.show { i -> filter = filter.copy(sort = sorts[i]); redraw(); list.setSelection(0) }
             }
         }
         filtersPill = Ui.text(ctx, 12f, 800, R.color.ag_text).apply {

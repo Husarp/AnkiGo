@@ -232,9 +232,12 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         panel = BattlePanelView(this)
         events = EventPlayer(panel)
         events.muted = { SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev) }
-        panel.onMenu = { if (events.idle) AlertDialog.Builder(this).setItems(arrayOf("Team", "Bag / Shop", "Pokédex", "Settings")) { _, i ->
-            startActivity(Intent(this, listOf(TeamActivity::class.java, ShopActivity::class.java, DexActivity::class.java, SettingsActivity::class.java)[i]))
-        }.showCard() }
+        panel.onMenu = { anchor ->
+            if (events.idle) AppMenu(anchor)
+                .item(0, "Team", R.drawable.ic_team).item(1, "Bag / Shop", R.drawable.ic_shop)
+                .item(2, "Pokédex", R.drawable.ic_book).item(3, "Settings", R.drawable.ic_settings)
+                .show { i -> startActivity(Intent(this, listOf(TeamActivity::class.java, ShopActivity::class.java, DexActivity::class.java, SettingsActivity::class.java)[i])) }
+        }
         panel.onBalls = { throwBall() }
         panel.arena.onCatchTagTap = {
             val game = GameRepo.game
