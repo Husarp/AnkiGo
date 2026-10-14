@@ -1,8 +1,6 @@
 package com.husarp.ankigo.shots
 
 import android.content.Context
-import android.view.View
-import android.view.View.MeasureSpec
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.Density
 import com.husarp.ankigo.ui.AppPrefs
@@ -38,19 +36,21 @@ class LaneAShots {
         return p
     }
 
-    /** Lays [v] out at the render size so [ArenaView.floatNumber] sees a real arena (it places the number by the arena's size). */
-    private fun settle(ctx: Context, v: View): View {
-        val dm = ctx.resources.displayMetrics
-        repeat(2) {
-            v.measure(MeasureSpec.makeMeasureSpec(dm.widthPixels, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(dm.heightPixels, MeasureSpec.EXACTLY))
-            v.layout(0, 0, dm.widthPixels, dm.heightPixels)
+    /**
+     * Fires the two damage numbers once the real layout is done: the arena is laid out (and rescaled) by Paparazzi after the
+     * view is attached, and floatNumber places a number by the arena's size, so it must not run on the unattached view.
+     * Each layout pass re-posts the runnable, so only the last (settled) layout triggers it.
+     */
+    private fun hitAfterLayout(arena: ArenaView) {
+        val r = Runnable { hit(arena) }
+        arena.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            if (v.width > 0 && v.height > 0) { v.removeCallbacks(r); v.post(r) }
         }
-        return v
     }
 
     private fun hit(arena: ArenaView) {
-        arena.floatNumber(onPlayer = false, "−31", FloatStyle.DAMAGE)
-        arena.floatNumber(onPlayer = true, "−12", FloatStyle.DAMAGE)
+        arena.floatNumber(onPlayer = false, "\u221231", FloatStyle.DAMAGE)
+        arena.floatNumber(onPlayer = true, "\u221212", FloatStyle.DAMAGE)
     }
 
     // ---------------------------------------------------------------- full screens
@@ -72,15 +72,14 @@ class LaneAShots {
     @Test fun damageFull() = paparazzi.shootWith("la-dmg", listOf(Size.PHONE, Size.SPLIT, Size.SPLIT_TINY), offsetMillis = 300) { ctx ->
         prefs(ctx, true)
         val b = BattleShotKit.bound(ctx)
-        settle(ctx, b.root)
-        hit(b.arena!!)
+        hitAfterLayout(b.arena!!)
         b.root
     }
 
     @Test fun damageSmall() = paparazzi.shootWith("la-dmg", smallSizes.filter { it != Size.PIP_11 } + Size.PIP_11, offsetMillis = 300) { ctx ->
         prefs(ctx, true)
-        val p = settle(ctx, bare(ctx)) as BattlePanelView
-        hit(p.arena)
+        val p = bare(ctx)
+        hitAfterLayout(p.arena)
         p
     }
 
