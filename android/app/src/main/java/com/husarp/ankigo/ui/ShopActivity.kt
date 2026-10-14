@@ -132,7 +132,7 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
             } else {
                 Bits.buyButton(ctx, Tuning.TM_PRICE, st.cash >= Tuning.TM_PRICE) { buyTm(move) }
             }
-            val tile = if (m != null) Bits.textTile(ctx, "TM", Ui.typeColor(m.type)) else Bits.textTile(ctx, "TM", Ui.c(ctx, R.color.ag_sub0))
+            val tile = Bits.tmTile(ctx, m?.let { Ui.typeColor(it.type) })
             val mid = Bits.bodyText(ctx, Items.tmName(data, move), Bits.moveStats(data, move))
             if (m != null) mid.addView(Bits.typeRow(ctx, listOf(m.type)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
             content.addView(Bits.cardRow(ctx, tile, mid, right))

@@ -251,6 +251,19 @@ object Bits {
         layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, sizeDp), Ui.dp(ctx, sizeDp))
     }
 
+    /** TM tile: the TM disc tinted with the move's type colour on a soft tile; [typeColor] null (unknown move) = grey. */
+    fun tmTile(ctx: Context, typeColor: Int?, sizeDp: Int = 40): FrameLayout = FrameLayout(ctx).apply {
+        val col = typeColor ?: Ui.c(ctx, R.color.ag_sub0)
+        background = Ui.rounded(blend(col, Ui.c(ctx, R.color.ag_mantle), 0.18f), 10, ctx)
+        val img = ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_tm)
+            setColorFilter(col, android.graphics.PorterDuff.Mode.SRC_IN)
+        }
+        val inner = Ui.dp(ctx, sizeDp * 3 / 5)
+        addView(img, FrameLayout.LayoutParams(inner, inner, Gravity.CENTER))
+        layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, sizeDp), Ui.dp(ctx, sizeDp))
+    }
+
     fun blend(over: Int, under: Int, a: Float): Int {
         fun ch(shift: Int) = (((over shr shift) and 0xFF) * a + ((under shr shift) and 0xFF) * (1 - a)).toInt()
         return Color.rgb(ch(16), ch(8), ch(0))
