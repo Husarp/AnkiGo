@@ -114,7 +114,7 @@ class MenuShots {
             val b = BattleShotKit.bound(ctx)
             val m = MenuKit.capture { b.call("showMenu", b.root) }
             val tall = ctx.resources.configuration.screenHeightDp >= 560
-            if (tall) MenuKit.over(ctx, b.root, m, Gravity.TOP, 50) else MenuKit.over(ctx, b.root, m, Gravity.BOTTOM, 36)
+            if (tall) MenuKit.over(ctx, b.root, m, Gravity.TOP, 50) else MenuKit.over(ctx, b.root, m, Gravity.BOTTOM, 56)
         }
     }
 

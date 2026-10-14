@@ -94,10 +94,17 @@ class AppMenu(private val anchor: View) {
             card.addView(View(ctx).apply { setBackgroundColor(Ui.c(ctx, R.color.ag_s0)) }, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 1)).also { it.topMargin = Ui.dp(ctx, 2); it.bottomMargin = Ui.dp(ctx, 4) })
         }
         for (r in rows) card.addView(rowView(ctx, r), LinearLayout.LayoutParams(-1, -2))
-        val scroll = ScrollView(ctx).apply { isVerticalScrollBarEnabled = false; addView(card, FrameLayout.LayoutParams(-1, -2)) }
+        val scroll = ScrollView(ctx).apply { isVerticalScrollBarEnabled = false; addView(card, FrameLayout.LayoutParams(-2, -2)) }
         val pad = Ui.dp(ctx, PAD_DP)
         // card shadow needs space around it in the frame
-        return FrameLayout(ctx).apply {
+        val cap = Ui.dp(ctx, MAX_DP + 2 * PAD_DP)
+        return object : FrameLayout(ctx) {
+            /** The card is at most 300 dp wide (long labels wrap), whoever measures it. */
+            override fun onMeasure(w: Int, h: Int) {
+                val size = MeasureSpec.getSize(w)
+                super.onMeasure(if (MeasureSpec.getMode(w) == MeasureSpec.UNSPECIFIED || size > cap) MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST) else w, h)
+            }
+        }.apply {
             clipChildren = false; clipToPadding = false
             setPadding(pad, pad, pad, pad)
             addView(scroll, FrameLayout.LayoutParams(-2, -2))
