@@ -209,10 +209,13 @@ class FloatWindow(
         v.setPadding(p, p, p, p)
     }
 
-    /** Whole-display size in px (overlay windows are laid out against the full screen, see [BASE_FLAGS]). */
+    /**
+     * Whole-display size in px (overlay windows are laid out against the full screen, see [BASE_FLAGS]).
+     * Uses maximumWindowMetrics: currentWindowMetrics would be only the app's half in split screen.
+     */
     private fun screenSize(): Pair<Int, Int> {
         if (Build.VERSION.SDK_INT >= 30) {
-            val b = wm.currentWindowMetrics.bounds
+            val b = wm.maximumWindowMetrics.bounds
             return b.width() to b.height()
         }
         val m = android.util.DisplayMetrics()
