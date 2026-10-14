@@ -511,6 +511,17 @@ class ProgressionTest {
         assertEquals("Leafling", ev0.from); assertEquals("Leafbud", ev0.to); assertEquals(2, ev0.toSpecies)
     }
 
+    @Test fun evolveDropsANicknameEqualToTheOldSpeciesNameOnly() {
+        val (s, m) = st(1, 16, listOf("tackle"))
+        m.nickname = "leafLING"
+        Progression.evolve(data, s, m, data.sp(1).evolutions[0], Random(1), ev())
+        assertNull(m.nickname); assertEquals("Leafbud", m.shownName)
+        val (s2, m2) = st(1, 16, listOf("tackle"))
+        m2.nickname = "Bud"
+        Progression.evolve(data, s2, m2, data.sp(1).evolutions[0], Random(1), ev())
+        assertEquals("Bud", m2.nickname); assertEquals("Bud", m2.shownName)
+    }
+
     // ---- Catching ----
 
     private fun battleOf(species: Int, tier: Tier = Tier.NORMAL, shiny: Boolean = false): Battle {

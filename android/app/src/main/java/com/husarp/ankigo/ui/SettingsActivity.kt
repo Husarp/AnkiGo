@@ -231,6 +231,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 }
             },
         )))
+        content.addView(Form.sect(this, "Sound"))
+        content.addView(soundCard(this))
         content.addView(Form.sect(this, "Data and pictures"))
         val dc = buildDataCard()
         dataCard = dc
@@ -257,7 +259,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
         // generations
         val gensBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        gensBox.addView(Form.row(this, "Generations", "At least one. Default 1–8, like Ankimon.", null))
+        gensBox.addView(Form.row(this, "Generations", "At least one. Default 1–8, like Ankimon. Gen 9 uses still pictures.", null))
         val chipRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(14), 0, dp(14), dp(4)) // chips are 48 dp touch height around a 32 dp look
@@ -310,7 +312,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         rows += Form.row(this, "Exp. Share holder", "Change it in Team.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
             text = holder?.let { "${it.shownName} Lv ${it.level}" } ?: "Nobody"
         })
-        rows += Form.row(this, "Wishlist", "Always caught. Tap ☆ in the Pokédex to add or remove.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
+        rows += Form.row(this, "Wishlist", "Always caught, and met twice as often within its rarity. Tap ☆ in the Pokédex to add or remove.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
             text = "${s.wishlist.size}"
         })
         return Form.cardOf(this, rows)
@@ -352,6 +354,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         Form.switchRow(this, "Mythical", null, s.protectMythical) { v -> edit { it.protectMythical = v } },
         Form.switchRow(this, "Ultra Beast", null, s.protectUltra) { v -> edit { it.protectUltra = v } },
         Form.switchRow(this, "Starter", null, s.protectStarter) { v -> edit { it.protectStarter = v } },
+        Form.switchRow(this, "Regional form", null, s.protectRegional) { v -> edit { it.protectRegional = v } },
     ))
 
     // ---------- windows: picture-in-picture, floating battle, floating screens ----------

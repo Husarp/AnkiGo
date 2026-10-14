@@ -153,7 +153,7 @@ object BattleEngine {
         private fun maxHpOf(p: Boolean) = maxHp[if (p) 1 else 0]
         private fun types(p: Boolean) = data.sp(mon(p).species).types
 
-        private fun fx(p: Boolean, text: String) { out += GameEvent.Effect(p, text, mon(p).hp, maxHpOf(p)) }
+        private fun fx(p: Boolean, text: String) { out += GameEvent.Effect(p, text, mon(p).hp, maxHpOf(p), side(p).status) }
 
         private fun checkFaint(p: Boolean) {
             val i = if (p) 1 else 0
@@ -187,7 +187,7 @@ object BattleEngine {
         private fun act(p: Boolean, move: Move?) {
             if (move == null) { if (mon(p).hp > 0 && mon(!p).hp > 0) events += GameEvent.Splash(wild.name); return }
             if (mon(p).hp <= 0 || mon(!p).hp <= 0) return
-            if (!canAct(p)) return
+            if (!canAct(p, move)) return
             val saved = out
             val buffer = ArrayList<GameEvent>()
             out = buffer
@@ -197,18 +197,30 @@ object BattleEngine {
             events += buffer
         }
 
-        /** Sleep / freeze / paralysis checks. */
-        private fun canAct(p: Boolean): Boolean {
+        /**
+         * Sleep / freeze / paralysis checks (poke-engine): a sleeper wakes with [Tuning.WAKE_CHANCE] each time it tries
+         * to move and then acts at once; a frozen one thaws with [Tuning.FREEZE_THAW], or surely when it uses a thaw move.
+         */
+        private fun canAct(p: Boolean, move: Move): Boolean {
             val s = side(p)
             val n = mon(p).name
             when (s.status) {
-                "slp" -> if (s.statusTurns > 0) { s.statusTurns--; fx(p, "$n is fast asleep."); return false }
-                         else { s.status = null; fx(p, "$n woke up!") }
-                "frz" -> if (rng.nextDouble() < Tuning.FREEZE_THAW) { s.status = null; fx(p, "$n thawed out!") }
+                "slp" -> if (rng.nextDouble() < Tuning.WAKE_CHANCE) { s.status = null; fx(p, "$n woke up!") }
+                         else { fx(p, "$n is fast asleep."); return false }
+                "frz" -> if (move.id in Tuning.THAW_IF_USES || rng.nextDouble() < Tuning.FREEZE_THAW) { s.status = null; fx(p, "$n thawed out!") }
                          else { fx(p, "$n is frozen solid!"); return false }
                 "par" -> if (rng.nextDouble() < Tuning.PARA_SKIP) { fx(p, "$n is fully paralyzed!"); return false }
             }
             return true
+        }
+
+        /** A damaging Fire move (or Scald and friends) that hit a frozen target thaws it. */
+        private fun thawByHit(tp: Boolean, move: Move) {
+            val s = side(tp)
+            if (s.status != "frz" || mon(tp).hp <= 0) return
+            if (move.type != Type.FIRE && move.id !in Tuning.THAW_IF_HIT_BY) return
+            s.status = null
+            fx(tp, "${mon(tp).name} thawed out!")
         }
 
         private fun attackEvent(
@@ -253,6 +265,7 @@ object BattleEngine {
             }
             if (move.selfDestruct) { u.hp = 0 }
             if (hit && u.hp > 0) move.selfBoosts?.let { boost(p, it) }
+            if (hit && total > 0) thawByHit(!p, move)
             if (hit && t.hp > 0) move.secondary?.let { sec ->
                 if (rng.nextInt(100) < sec.chance) {
                     sec.status?.let { setStatus(!p, it, move.type) }
@@ -271,6 +284,10 @@ object BattleEngine {
 
         private fun statusMove(p: Boolean, move: Move): GameEvent {
             val self = move.target in SELF_TARGETS
+            if (move.id in Tuning.POWDER_MOVES && Type.GRASS in types(!p)) {
+                fx(p, "It doesn't affect ${mon(!p).name}…")
+                return attackEvent(p, move, failed = true)
+            }
             if (!self && move.accuracy != null && !accuracyHit(p, move)) return attackEvent(p, move, missed = true)
             val tp = if (self) p else !p
             var parts = 0; var applied = false
@@ -311,7 +328,7 @@ object BattleEngine {
             val s = side(tp)
             if (s.status != null || mon(tp).hp <= 0 || !canHave(status, tp, moveType)) return false
             s.status = status
-            s.statusTurns = if (status == "slp") rng.nextInt(Tuning.SLEEP_TURNS.first, Tuning.SLEEP_TURNS.last + 1) else 0
+            s.statusTurns = 0
             val n = mon(tp).name
             fx(tp, when (status) {
                 "par" -> "$n was paralyzed!"
@@ -365,7 +382,7 @@ object BattleEngine {
 
         private fun hurtEvent(p: Boolean, amount: Int, text: String) {
             mon(p).hp = maxOf(0, mon(p).hp - amount)
-            events += GameEvent.Effect(p, text, mon(p).hp, maxHpOf(p))
+            events += GameEvent.Effect(p, text, mon(p).hp, maxHpOf(p), side(p).status)
         }
     }
 }

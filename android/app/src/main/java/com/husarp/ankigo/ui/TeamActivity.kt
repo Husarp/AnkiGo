@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.view.Gravity
@@ -95,7 +96,17 @@ class TeamPage(base: Context, host: PageHost) : GamePage(base, host) {
             setOnClickListener { showBadges() }
             addView(badges, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
         }
-        if (short) top.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6); it.topMargin = -Ui.dp(this, 12); it.bottomMargin = -Ui.dp(this, 12) })
+        // Stats chip (T40): same 48 dp touch height as Badges, opens the Stats screen
+        val statsBox = FrameLayout(this).apply {
+            minimumHeight = Ui.dp(this@TeamPage, 48)
+            isClickable = true
+            setOnClickListener { startScreen(Intent(this@TeamPage, StatsActivity::class.java)) }
+            addView(Ui.chip(this@TeamPage, R.drawable.ic_flame, R.color.ag_peach).also { it.setText("Stats") }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
+        }
+        if (short) {
+            top.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6); it.topMargin = -Ui.dp(this, 12); it.bottomMargin = -Ui.dp(this, 12) })
+            top.addView(statsBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6); it.topMargin = -Ui.dp(this, 12); it.bottomMargin = -Ui.dp(this, 12) })
+        }
         top.addView(Ui.chip(this, R.drawable.ic_coin, R.color.ag_yellow).also { it.setText(Bits.fmt(st.cash)) })
         card.addView(top)
 
@@ -110,7 +121,12 @@ class TeamPage(base: Context, host: PageHost) : GamePage(base, host) {
         bar.set(st.trainerXp.toFloat() / need.coerceAtLeast(1), Ui.c(this, R.color.ag_mauve), false)
         card.addView(bar, LinearLayout.LayoutParams(-1, Ui.dp(this, 7)).also { it.topMargin = Ui.dp(this, 7) })
 
-        if (!short) card.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(this, 2); it.bottomMargin = -Ui.dp(this, 8) })
+        if (!short) {
+            val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            chips.addView(badgesBox, LinearLayout.LayoutParams(-2, -2))
+            chips.addView(statsBox, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(this, 8) })
+            card.addView(chips, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(this, 2); it.bottomMargin = -Ui.dp(this, 8) })
+        }
         return card
     }
 

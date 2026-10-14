@@ -403,7 +403,7 @@ class BattleEngineTest {
         val b3 = battle(mon(25, 20, "thunderwave")); b3.player.status = "brn"
         round(mon(19, 20, "tackle"), b3.wild, b = b3, seed = 2)
         assertEquals("brn", b3.player.status)
-        // Toxic vs Poison type is immune; Hypnosis puts to sleep with 1..3 turns
+        // Toxic vs Poison type is immune; Hypnosis puts to sleep (no turn counter: each move attempt may wake)
         val b4 = battle(mon(19, 20, "toxic"))
         round(mon(92, 20, "lick"), b4.wild, b = b4, seed = 2)
         assertNull(b4.player.status)
@@ -411,7 +411,7 @@ class BattleEngineTest {
         for (s in 1..40) {
             val b5 = battle(mon(92, 20, "hypnosis"))
             round(mon(19, 20, "tackle"), b5.wild, b = b5, seed = s)
-            if (b5.player.status == "slp") { slept++; assertTrue(b5.player.statusTurns in 0..2) }
+            if (b5.player.status == "slp") { slept++; assertEquals(0, b5.player.statusTurns) }
         }
         assertTrue(slept in 10..35)
         assertNotNull(ev2)
@@ -460,16 +460,17 @@ class BattleEngineTest {
         assertEquals(0.2, thawed.toDouble() / n, 0.04)
     }
 
-    @Test fun sleepLastsItsTurnsThenWakes() {
-        val main = mon(19, 20, "tackle"); val wild = mon(150, 100, "splash")
-        val b = battle(wild); b.player.status = "slp"; b.player.statusTurns = 2
-        val e1 = round(main, wild, acts = false, b = b)
-        assertTrue(e1.effects().contains("Ratty is fast asleep.")); assertEquals(0, e1.attacks().size)
-        val e2 = round(main, wild, acts = false, b = b)
-        assertTrue(e2.effects().contains("Ratty is fast asleep.")); assertEquals(0, e2.attacks().size)
-        val e3 = round(main, wild, acts = false, b = b)
-        assertTrue(e3.effects().contains("Ratty woke up!")); assertEquals(1, e3.attacks().size)
-        assertNull(b.player.status)
+    @Test fun sleeperWakesWithTheWakeChanceAndActsThatTurn() {
+        var woke = 0
+        val n = 1500
+        for (s in 1..n) {
+            val main = mon(19, 20, "tackle"); val wild = mon(150, 100, "splash")
+            val b = battle(wild); b.player.status = "slp"
+            val ev = round(main, wild, acts = false, seed = s, b = b)
+            if (ev.effects().contains("Ratty woke up!")) { woke++; assertEquals(1, ev.attacks().size); assertNull(b.player.status) }
+            else { assertTrue(ev.effects().contains("Ratty is fast asleep.")); assertEquals(0, ev.attacks().size); assertEquals("slp", b.player.status) }
+        }
+        assertEquals(Tuning.WAKE_CHANCE, woke.toDouble() / n, 0.04)
     }
 
     @Test fun burnPoisonAndToxicAtEndOfTurn() {
@@ -548,5 +549,105 @@ class BattleEngineTest {
         val e1 = round(mon(19, 20, "tackle", "bodyslam"), mon(16, 20, "tackle", "growl"), seed = 9)
         val e2 = round(mon(19, 20, "tackle", "bodyslam"), mon(16, 20, "tackle", "growl"), seed = 9)
         assertEquals(e1, e2)
+    }
+
+    // ---------------------------------------------------------------- status rules (poke-engine) and Effect.status
+
+    private val leafmon = TestData.species(5, "Leafmon", listOf(Type.GRASS), TestData.stats(100, 50, 50, 50, 50, 50))
+    private val extraMoves = TestData.MOVES + listOf(
+        Move("scald", "Scald", Type.WATER, Category.SPECIAL, 80, 100),
+        Move("flamewheel", "Flame Wheel", Type.FIRE, Category.PHYSICAL, 60, 100),
+        Move("sleeppowder", "Sleep Powder", Type.GRASS, Category.STATUS, 0, 100, status = "slp"),
+        Move("stunspore", "Stun Spore", Type.GRASS, Category.STATUS, 0, 100, status = "par"),
+    ).associateBy { it.id }
+    private val data2 = TestData.data(data.species.values.toList() + leafmon, extraMoves)
+    private fun mon2(sp: Int, lv: Int, vararg moves: String) = TestData.mon(data2, sp, lv, moves.toList())
+    private fun round2(main: Mon, b: Battle, acts: Boolean = false, seed: Int = 1) =
+        BattleEngine.playRound(data2, b, main, 1.0, acts, Random(seed))
+
+    @Test fun frozenTargetThawsWhenHitByAFireMove() {
+        for (s in 1..30) {
+            val wild = mon2(150, 100, "splash")
+            val b = Battle(wild, Tier.NORMAL); b.enemy.status = "frz"
+            val ev = round2(mon2(19, 20, "flamewheel"), b, seed = s) // no burn side effect
+            assertNull(b.enemy.status)
+            val thaw = ev.filterIsInstance<Effect>().first { it.text == "Mindlord thawed out!" }
+            assertFalse(thaw.onPlayer); assertNull(thaw.status)
+        }
+        // a Water Gun doesn't thaw, Scald does
+        val b2 = Battle(mon2(150, 100, "splash"), Tier.NORMAL); b2.enemy.status = "frz"
+        round2(mon2(19, 20, "watergun"), b2)
+        assertEquals("frz", b2.enemy.status)
+        val b3 = Battle(mon2(150, 100, "splash"), Tier.NORMAL); b3.enemy.status = "frz"
+        round2(mon2(19, 20, "scald"), b3)
+        assertNull(b3.enemy.status)
+    }
+
+    @Test fun frozenUserOfAThawMoveThawsAndActs() {
+        for (s in 1..60) {
+            val b = Battle(mon2(150, 100, "splash"), Tier.NORMAL); b.player.status = "frz"
+            val ev = round2(mon2(19, 20, if (s % 2 == 0) "scald" else "flamewheel"), b, seed = s)
+            assertTrue(ev.effects().contains("Ratty thawed out!"))
+            assertEquals(1, ev.attacks().size)
+            assertNull(b.player.status)
+        }
+        // Ember is not a thaw move: stays frozen on most tries
+        var frozen = 0
+        for (s in 1..100) {
+            val b = Battle(mon2(150, 100, "splash"), Tier.NORMAL); b.player.status = "frz"
+            round2(mon2(19, 20, "ember"), b, seed = s)
+            if (b.player.status == "frz") frozen++
+        }
+        assertTrue(frozen > 60)
+    }
+
+    @Test fun powderMovesFailAgainstGrassTypes() {
+        for (s in 1..30) {
+            val grass = Battle(mon2(19, 20, "sleeppowder"), Tier.NORMAL)
+            val ev = round2(mon2(5, 20, "tackle"), grass, acts = true, seed = s)
+            assertNull(grass.player.status)
+            val powder = ev.attacks().first { !it.byPlayer }
+            assertTrue(powder.failed)
+            assertTrue(ev.effects().contains("It doesn't affect Leafmon…"))
+        }
+        // against a non-Grass target it still works (Stun Spore from a Normal user)
+        var par = 0
+        for (s in 1..40) {
+            val b = Battle(mon2(5, 20, "stunspore"), Tier.NORMAL)
+            round2(mon2(19, 20, "tackle"), b, acts = true, seed = s)
+            if (b.player.status == "par") par++
+        }
+        assertTrue(par > 25)
+    }
+
+    @Test fun effectEventCarriesTheSidesStatus() {
+        // set: Thunder Wave from the wild one paralyses our main
+        var seen = false
+        for (s in 1..40) {
+            val b = battle(mon(25, 20, "thunderwave"))
+            val ev = round(mon(19, 20, "tackle"), b.wild, b = b, seed = s)
+            val e = ev.filterIsInstance<Effect>().firstOrNull { it.text == "Ratty was paralyzed!" } ?: continue
+            assertTrue(e.onPlayer); assertEquals("par", e.status); seen = true; break
+        }
+        assertTrue(seen)
+        // damage at end of turn still shows the status; the stat change of the other side shows none
+        val burn = mon(19, 40, "tackle"); val bb = battle(mon(150, 60, "splash")); bb.player.status = "brn"
+        val ev = round(burn, bb.wild, acts = false, b = bb)
+        assertEquals("brn", ev.filterIsInstance<Effect>().first { it.text.contains("burn") }.status)
+        // woke up / thawed: null
+        val sl = battle(mon(150, 100, "splash")); sl.player.status = "slp"
+        for (s in 1..50) {
+            sl.player.status = "slp"
+            val e = round(mon(19, 20, "tackle"), sl.wild, acts = false, b = sl, seed = s).filterIsInstance<Effect>()
+            e.firstOrNull { it.text.endsWith("woke up!") }?.let { assertNull(it.status) }
+            e.firstOrNull { it.text.endsWith("fast asleep.") }?.let { assertEquals("slp", it.status) }
+        }
+        // "tox" is carried raw (the panel shows it as PSN)
+        for (s in 1..40) {
+            val b = battle(mon(19, 20, "toxic"))
+            val ev = round(mon(150, 100, "splash"), b.wild, b = b, seed = s)
+            val e = ev.filterIsInstance<Effect>().firstOrNull { it.text.endsWith("badly poisoned!") } ?: continue
+            assertEquals("tox", e.status); break
+        }
     }
 }

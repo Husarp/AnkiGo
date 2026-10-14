@@ -13,6 +13,7 @@ enum class DexSort(val label: String) { NUMBER("Number"), NAME("Name"), LAST_CAU
  * - [owned]: Owned = at least one of that species in the team or box now; Not owned = the rest (seen-only and never met).
  * - [gens]: multi-select, empty = every enabled gen. [types]: any of the species' types. [wishlistOnly]: only the wishlist.
  * - [query]: name (contains) or number (prefix of "25" or of the padded "025"; a leading "#" is ignored), case-insensitive.
+ *   The number is the national one ([Species.baseNum]): "19" also finds Alolan Rattata. Sorted by number, a form follows its base species.
  */
 data class DexFilter(
     val owned: DexOwned = DexOwned.ALL,
@@ -39,13 +40,13 @@ data class DexFilter(
                     DexOwned.OWNED -> sp.num in lastCaught
                     DexOwned.NOT_OWNED -> sp.num !in lastCaught
                 } &&
-                (q.isEmpty() || sp.name.lowercase().contains(q) || (digits && numMatches(sp.num, q)))
+                (q.isEmpty() || sp.name.lowercase().contains(q) || (digits && numMatches(sp.baseNum, q)))
         }
         return when (sort) {
-            DexSort.NUMBER -> out.sortedBy { it.num }
+            DexSort.NUMBER -> out.sortedWith(compareBy({ it.baseNum }, { it.num }))
             DexSort.NAME -> out.sortedWith(compareBy({ it.name.lowercase() }, { it.num }))
             // owned first, newest first; the rest after, by number
-            DexSort.LAST_CAUGHT -> out.sortedWith(compareBy<Species>({ if (it.num in lastCaught) 0 else 1 }, { -(lastCaught[it.num] ?: 0L) }, { it.num }))
+            DexSort.LAST_CAUGHT -> out.sortedWith(compareBy<Species>({ if (it.num in lastCaught) 0 else 1 }, { -(lastCaught[it.num] ?: 0L) }, { it.baseNum }, { it.num }))
         }
     }
 

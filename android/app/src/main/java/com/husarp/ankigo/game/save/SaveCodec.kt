@@ -2,6 +2,7 @@ package com.husarp.ankigo.game.save
 
 import com.husarp.ankigo.game.Battle
 import com.husarp.ankigo.game.BattleSide
+import com.husarp.ankigo.game.DayLog
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Nature
@@ -41,6 +42,10 @@ object SaveCodec {
             list("buttonsToday", state.buttonsToday.toList())
             kv("cardStreak", state.cardStreak); kv("bestCardStreak", state.bestCardStreak)
             kv("streakDays", state.streakDays); kv("lastGoalDay", state.lastGoalDay); kv("totalReviews", state.totalReviews)
+            kv("bestStreakDays", state.bestStreakDays)
+            key("history"); obj {
+                for ((k, v) in state.history.toSortedMap()) { key(k); arr { value(v.reviews); value(v.won); value(v.caught); value(v.shinies) } }
+            }
             list("badges", state.badges.sorted())
             kv("shopDay", state.shopDay)
             list("shopItems", state.shopItems); list("shopTms", state.shopTms)
@@ -134,6 +139,7 @@ object SaveCodec {
         kv("cardsPerRound", s.cardsPerRound); kv("autoMode", s.autoMode)
         kv("protectLegendary", s.protectLegendary); kv("protectMythical", s.protectMythical)
         kv("protectUltra", s.protectUltra); kv("protectStarter", s.protectStarter)
+        kv("protectRegional", s.protectRegional)
         list("wishlist", s.wishlist.sorted())
         kv("dailyAverage", s.dailyAverage); kv("dayStartHour", s.dayStartHour)
         kv("xpShareUid", s.xpShareUid); kv("trainerName", s.trainerName)
@@ -208,11 +214,24 @@ object SaveCodec {
         s.protectMythical = o.bool("protectMythical", s.protectMythical)
         s.protectUltra = o.bool("protectUltra", s.protectUltra)
         s.protectStarter = o.bool("protectStarter", s.protectStarter)
+        s.protectRegional = o.bool("protectRegional", s.protectRegional)
         o.intList("wishlist")?.let { s.wishlist.clear(); s.wishlist.addAll(it) }
         s.dailyAverage = o.int("dailyAverage", s.dailyAverage)
         s.dayStartHour = o.int("dayStartHour", s.dayStartHour)
         s.xpShareUid = o.strOrNull("xpShareUid")
         s.trainerName = o.str("trainerName", s.trainerName)
+    }
+
+    /** History is a day -> [reviews, won, caught, shinies] object. An old save has none: today's count seeds today. */
+    private fun readHistory(h: JSONObject?, s: GameState) {
+        if (h == null) {
+            if (s.day.isNotEmpty() && s.reviewsToday > 0) s.history[s.day] = DayLog(reviews = s.reviewsToday)
+            return
+        }
+        for (k in h.keys()) {
+            val a = h.optJSONArray(k) ?: continue
+            s.history[k] = DayLog(a.optInt(0), a.optInt(1), a.optInt(2), a.optInt(3))
+        }
     }
 
     private fun readState(o: JSONObject, schema: Int, monsJson: JSONArray): GameState {
@@ -239,6 +258,8 @@ object SaveCodec {
         s.cardStreak = o.int("cardStreak", 0); s.bestCardStreak = o.int("bestCardStreak", 0)
         s.streakDays = o.int("streakDays", 0); s.lastGoalDay = o.strOrNull("lastGoalDay")
         s.totalReviews = o.long("totalReviews", 0)
+        s.bestStreakDays = o.int("bestStreakDays", s.streakDays)
+        readHistory(o.optJSONObject("history"), s)
         o.intList("badges")?.let { s.badges += it }
         s.shopDay = o.strOrNull("shopDay")
         o.strList("shopItems")?.let { s.shopItems += it }

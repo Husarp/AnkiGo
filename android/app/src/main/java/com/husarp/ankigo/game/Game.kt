@@ -36,7 +36,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     }
 
     /** One answer from AnkiDroid -> bookkeeping + (every cardsPerRound answers) one battle round. */
-    fun onAnswer(a: Answer): List<GameEvent> {
+    fun onAnswer(a: Answer): List<GameEvent> = answer(a).also { StudyStats.record(state, it) }
+
+    private fun answer(a: Answer): List<GameEvent> {
         val events = tick().toMutableList()
 
         val pending = state.redo[a.cardId] ?: 0
@@ -61,6 +63,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (state.reviewsToday >= state.settings.dailyAverage && state.lastGoalDay != state.day) {
             state.streakDays = if (state.lastGoalDay == previousDay(state.day)) state.streakDays + 1 else 1
             state.lastGoalDay = state.day
+            state.bestStreakDays = maxOf(state.bestStreakDays, state.streakDays)
             events += GameEvent.Info("Daily goal reached!")
         }
 
@@ -172,6 +175,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         } else {
             events += GameEvent.Info("${battle.wild.name} broke free!")
         }
+        StudyStats.record(state, events)
         return events
     }
 
@@ -296,6 +300,22 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.mons.remove(mon)
         if (state.settings.xpShareUid == uid) state.settings.xpShareUid = null
         return changed("${mon.name} was released.", old)
+    }
+
+    /**
+     * Gives [uid] a nickname (Ankimon: free text on the Pokémon). The text is trimmed, inner whitespace collapsed, control
+     * characters dropped and cut to [Tuning.NICKNAME_MAX]; blank or equal to the species name (ignoring case) removes it.
+     */
+    fun rename(uid: String, text: String): ActionResult {
+        val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
+        val clean = text.filterNot { it.isISOControl() && !it.isWhitespace() }
+            .trim().replace(Regex("\\s+"), " ").take(Tuning.NICKNAME_MAX).trim()
+        if (clean.isEmpty() || clean.equals(mon.name, ignoreCase = true)) {
+            mon.nickname = null
+            return ActionResult(true, "${mon.name}'s nickname was removed.")
+        }
+        mon.nickname = clean
+        return ActionResult(true, "${mon.name} is now called $clean.")
     }
 
     /** The day before [day] ("yyyy-MM-dd"), or null if [day] isn't a date. */

@@ -562,4 +562,33 @@ class EconomyTest {
         assertFalse(ItemUse.teachTm(tmData, s, "thunderbolt", "ghost", null).ok)
         assertEquals(listOf("tackle", "thunderbolt"), s.main!!.moves)
     }
+
+    @Test fun buyingTheSameTmTwiceIsRefusedAndKeepsTheMoney() {
+        val s = state()
+        s.shopDay = s.day; s.shopTms += "thunderbolt"; s.cash = 2500
+        assertTrue(Shop.buyTm(data, s, "thunderbolt").ok)
+        assertEquals(1500, s.cash)
+        assertFalse(Shop.buyTm(data, s, "thunderbolt").ok)
+        assertEquals(1500, s.cash); assertEquals(1, s.tms.count { it == "thunderbolt" })
+    }
+
+    @Test fun oneTmTeachesEveryPokemonAndStays() {
+        val s = tmState("tackle")
+        val other = TestData.mon(tmData, 25, 12, listOf("growl", "tackle", "lick", "watergun"), "other")
+        s.mons += other
+        s.tms += "thunderbolt"
+        assertTrue(ItemUse.teachTm(tmData, s, "thunderbolt", "main", null).ok)
+        assertTrue("thunderbolt" in s.tms)
+        assertTrue(ItemUse.teachTm(tmData, s, "thunderbolt", "other", 1).ok)
+        assertTrue("thunderbolt" in s.tms)
+        assertEquals(listOf("growl", "thunderbolt", "lick", "watergun"), other.moves)
+        assertTrue("thunderbolt" in s.main!!.moves)
+    }
+
+    @Test fun tmForAMoveTheSpeciesCannotLearnLeavesEverythingAlone() {
+        val s = tmState("tackle", "growl", "lick", "watergun")
+        s.tms += "earthquake"
+        val r = ItemUse.teachTm(tmData, s, "earthquake", "main", 0)
+        assertFalse(r.ok); assertEquals(listOf("tackle", "growl", "lick", "watergun"), s.main!!.moves); assertTrue(r.events.isEmpty())
+    }
 }

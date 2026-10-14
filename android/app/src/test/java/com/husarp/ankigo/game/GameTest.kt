@@ -779,6 +779,39 @@ class GameTest {
         assertTrue(25 in g.state.caught) // the Pokédex keeps it
     }
 
+    // ---- rename ----
+
+    @Test fun renameCleansAndCutsTheText() {
+        val g = game()
+        val r = g.rename("main", "  Zappy \t  the\u0007  Great   and Powerful Mouse  ")
+        assertTrue(r.ok)
+        val n = g.state.main!!.nickname!!
+        assertTrue(n.length <= Tuning.NICKNAME_MAX)
+        assertEquals("Zappy the Great and", n)
+        assertEquals("Sparkmouse is now called Zappy the Great and.", r.message)
+        assertEquals("Zappy the Great and", g.state.main!!.shownName)
+    }
+
+    @Test fun renameBlankOrSpeciesNameRemovesTheNickname() {
+        val g = game()
+        g.rename("main", "Zap")
+        assertEquals("Zap", g.state.main!!.shownName)
+        assertEquals("Sparkmouse's nickname was removed.", g.rename("main", "   ").message)
+        assertNull(g.state.main!!.nickname)
+        g.rename("main", "Zap")
+        assertTrue(g.rename("main", "sPARKmouse").ok)
+        assertNull(g.state.main!!.nickname); assertEquals("Sparkmouse", g.state.main!!.shownName)
+        assertFalse(g.rename("ghost", "X").ok)
+    }
+
+    @Test fun renameDoesNotTouchTheBattle() {
+        val g = game()
+        val w = g.fight()
+        val hp = w.hp; val answers = g.state.battle!!.answers
+        g.rename("main", "Zap")
+        assertEquals(hp, g.state.battle!!.wild.hp); assertEquals(answers, g.state.battle!!.answers)
+    }
+
     // ---- the big one ----
 
     private fun checkInvariants(g: Game, step: Int) {

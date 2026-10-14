@@ -237,6 +237,8 @@ object Progression {
     fun evolve(data: GameData, state: GameState, mon: Mon, evo: Evolution, rng: Random, events: MutableList<GameEvent>) {
         val sp = data.sp(evo.to)
         val from = mon.name
+        // Ankimon evolution_window.py: a nickname equal to the old species name follows the species.
+        if (mon.nickname?.equals(from, ignoreCase = true) == true) mon.nickname = null
         mon.species = sp.num
         mon.name = sp.name
         mon.hp = StatCalc.maxHp(data, mon)
@@ -278,12 +280,13 @@ object Progression {
 }
 
 object Catching {
-    /** Ankimon's protected kinds (each a setting): legendary, mythical, ultra beast, starter. */
+    /** Ankimon's protected kinds (each a setting): legendary, mythical, ultra beast, starter, regional form (by the base number). */
     fun isProtected(settings: Settings, sp: Species, tier: Tier): Boolean =
         ((sp.isLegendary || tier == Tier.LEGENDARY) && settings.protectLegendary) ||
             ((sp.isMythical || tier == Tier.MYTHICAL) && settings.protectMythical) ||
-            ((tier == Tier.ULTRA || sp.num in Encounters.ULTRA_BEASTS) && settings.protectUltra) ||
-            (sp.num in Encounters.STARTERS && settings.protectStarter)
+            ((tier == Tier.ULTRA || sp.baseNum in Encounters.ULTRA_BEASTS) && settings.protectUltra) ||
+            (sp.baseNum in Encounters.STARTERS && settings.protectStarter) ||
+            (sp.form != null && settings.protectRegional)
 
     /**
      * What happens when the wild one faints (Ankimon automatic_battle, never a dialog): wishlist -> CATCH;

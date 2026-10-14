@@ -9,6 +9,7 @@ import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.StatCalc
+import com.husarp.ankigo.sound.GameSound
 import com.husarp.ankigo.ui.PanelText.em
 import java.util.Locale
 import kotlin.math.max
@@ -153,6 +154,17 @@ class EventPlayer(private val panel: BattlePanelView) {
         return false
     }
     private val ctx get() = panel.context
+
+    /** True while game sounds must stay quiet (the study screen sets this when the card has audio). */
+    var muted: () -> Boolean = { false }
+
+    init { GameSound.warm(panel.context) }
+
+    /** Battle sound / cry of [e] (never throws, never waits). A wild one that is about to be caught does not "faint" first. */
+    private fun sound(e: GameEvent) {
+        if (e is GameEvent.Fainted && !e.player && willBeCaught()) return
+        GameSound.onEvent(panel.context, e, muted(), arena.ballShown)
+    }
     private fun log(kind: LogKind, pill: String, text: String) = panel.setLog(kind, pill, text)
 
     private fun label(b: Int) = when (b) { 1 -> "AGAIN"; 2 -> "HARD"; 3 -> "GOOD"; 4 -> "EASY"; else -> "OK" }
@@ -184,6 +196,7 @@ class EventPlayer(private val panel: BattlePanelView) {
         val st = GameRepo.state
         val data = GameRepo.data
         panel.observeStudyEvent(e)
+        sound(e)
         when (e) {
             is GameEvent.Counted -> {
                 lastButton = e.button
@@ -208,6 +221,7 @@ class EventPlayer(private val panel: BattlePanelView) {
             }
             is GameEvent.Effect -> {
                 log(LogKind.SYS, "EFFECT", e.text)
+                if (e.onPlayer) arena.setPlayerStatus(e.status) else arena.setEnemyStatus(e.status)
                 if (e.maxHp > 0) {
                     if (e.onPlayer) arena.setPlayerHp(e.hp, e.maxHp, true) else arena.setEnemyHp(e.hp, e.maxHp, true)
                 }
@@ -262,6 +276,8 @@ class EventPlayer(private val panel: BattlePanelView) {
             is GameEvent.Evolved -> return playEvolved(e)
             is GameEvent.MainHealed -> {
                 log(LogKind.AGAIN, "FAINT", "${em(e.name)} fainted… it's back at full HP. The wild one ran off.")
+                arena.setPlayerStatus(null)
+                arena.setEnemyStatus(null)
                 arena.enemyLeave(d(450))
                 if (e.uid == arena.playerUid) {
                     arena.enter(true, d(450))
@@ -277,6 +293,7 @@ class EventPlayer(private val panel: BattlePanelView) {
             }
             is GameEvent.MainChanged -> {
                 log(LogKind.SYS, "SWITCH", "Go, ${em(e.name)}!")
+                arena.setPlayerStatus(null)
                 panel.refreshPlayer()
                 arena.enter(true, d(450))
                 return d(800)
@@ -364,6 +381,8 @@ class EventPlayer(private val panel: BattlePanelView) {
     private fun playEncounter(e: GameEvent.Encounter): Long {
         val sp = GameRepo.data?.species?.get(e.species)
         arena.resetEnemySide()
+        arena.setEnemyStatus(null)
+        arena.setPlayerStatus(null)
         arena.setEnemyShown(true)
         arena.setEnemyCardShown(true)
         arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty())

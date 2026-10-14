@@ -105,6 +105,46 @@ object Pickers {
             .setNegativeButton("Cancel", null).create())
     }
 
+    /**
+     * One-line text input in the dialog look: Nunito field on `ag_mantle`, [hint], [initial] text cut to [max] characters,
+     * IME Done = Save. [onSave] gets the raw text; [neutral] adds a third button (label + action) such as "Use species name".
+     * Over other apps the dialog is its own overlay window with default (focusable) flags, so the keyboard works there
+     * without touching the floating card's own focus toggle.
+     */
+    fun input(a: Context, title: String, hint: String, initial: String, max: Int, save: String = "Save",
+              neutral: Pair<String, () -> Unit>? = null, onSave: (String) -> Unit) {
+        val field = android.widget.EditText(a).apply {
+            this.hint = hint
+            typeface = Ui.font(a, 700)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setTextColor(Ui.c(a, R.color.ag_text))
+            setHintTextColor(Ui.c(a, R.color.ag_ov))
+            setSingleLine()
+            filters = arrayOf(android.text.InputFilter.LengthFilter(max))
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
+            background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 12, a)
+            setPadding(Ui.dp(a, 14), Ui.dp(a, 10), Ui.dp(a, 14), Ui.dp(a, 10))
+            setText(initial)
+            setSelection(text.length)
+        }
+        val box = FrameLayout(a).apply {
+            setPadding(Ui.dp(a, 24), Ui.dp(a, 8), Ui.dp(a, 24), Ui.dp(a, 0))
+            addView(field, FrameLayout.LayoutParams(-1, Ui.dp(a, 44)))
+        }
+        val b = AlertDialog.Builder(a).setTitle(title).setView(box)
+            .setPositiveButton(save) { _, _ -> onSave(field.text.toString()) }
+            .setNegativeButton("Cancel", null)
+        neutral?.let { (label, act) -> b.setNeutralButton(label) { _, _ -> act() } }
+        val dlg = b.create()
+        field.setOnEditorActionListener { _, action, _ ->
+            if (action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) { dlg.dismiss(); onSave(field.text.toString()); true } else false
+        }
+        show(dlg)
+        dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        field.requestFocus()
+    }
+
     fun info(a: Context, title: String, view: View) {
         show(AlertDialog.Builder(a).setTitle(title).setView(view).setPositiveButton("Close", null).create())
     }

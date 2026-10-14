@@ -74,6 +74,7 @@
         <activity android:name=".ui.DexActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.ShopActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.SettingsActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".ui.StatsActivity" android:theme="@style/GameTheme" android:exported="false" />
 
         <activity android:name=".ui.StudyDecksActivity" android:theme="@style/GameTheme" android:exported="false" />
 

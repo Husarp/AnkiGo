@@ -1,6 +1,7 @@
 package com.husarp.ankigo.game.data
 
 import com.husarp.ankigo.game.Category
+import com.husarp.ankigo.game.Encounters
 import com.husarp.ankigo.game.EvoKind
 import com.husarp.ankigo.game.Evolution
 import com.husarp.ankigo.game.GameData
@@ -32,7 +33,7 @@ object Parsers {
         val itemsCsv: String,      // PokeAPI items.csv (cost)
     )
 
-    private const val CACHE_FORMAT = 1
+    private const val CACHE_FORMAT = 2 // 2: regional forms (form, baseNum, spriteId on every species)
     private const val MAX_NUM = 1025
     private val HALF_HP_MOVES = setOf("superfang", "naturesmadness", "ruination")
     private val SKIPPED_NONSTANDARD = setOf("CAP", "Future", "Gmax")
@@ -45,7 +46,8 @@ object Parsers {
         val moves = buildMoves(json("moves.json", src.movesJson))
         val learn = json("learnsets.json", src.learnsetsJson)
         val speciesRows = csv(src.speciesCsv).associateBy { it["id"]?.toIntOrNull() }
-        val baseExp = csv(src.pokemonCsv).associate { (it["id"]?.toIntOrNull() ?: -1) to (it["base_experience"]?.toIntOrNull() ?: 1) }
+        val pokemonRows = csv(src.pokemonCsv)
+        val baseExp = pokemonRows.associate { (it["id"]?.toIntOrNull() ?: -1) to (it["base_experience"]?.toIntOrNull() ?: 1) }
         val effort = HashMap<Int, IntArray>()
         for (r in csv(src.statsCsv)) {
             val id = r["pokemon_id"]?.toIntOrNull() ?: continue
@@ -77,6 +79,11 @@ object Parsers {
         }
         val numByName = HashMap<String, Int>()
         for ((num, p) in base) numByName[p.second.optString("name")] = num
+        val forms = regionalFormEntries(dex, pokemonRows, base.keys)
+        val formNumByName = HashMap<String, Int>()
+        for ((id, f) in forms) formNumByName[f.entry.optString("name")] = id
+        /** The Showdown entry of a base species or a regional form. */
+        fun entryOf(num: Int): JSONObject = base[num]?.second ?: forms.getValue(num).entry
 
         val species = LinkedHashMap<Int, Species>()
         for (num in base.keys.sorted()) {
@@ -88,7 +95,7 @@ object Parsers {
             if (types.isEmpty()) fail("pokedex.json: no types on $id")
             val bs = e.optJSONObject("baseStats") ?: fail("pokedex.json: no baseStats on $id")
             val abilities = e.optJSONObject("abilities")?.let { a -> listOf("0", "1").mapNotNull { k -> a.optString(k, "").takeIf { it.isNotEmpty() } } } ?: emptyList()
-            val prevo = e.optString("prevo", "").takeIf { it.isNotEmpty() }?.let { numByName[it] }
+            val prevo = e.optString("prevo", "").takeIf { it.isNotEmpty() }?.let { numByName[it] ?: formNumByName[it] } // Perrserker <- Meowth-Galar
             val ev = effort[num] ?: IntArray(6)
             val evolutions = (e.optJSONArray("evos")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList())
                 .mapNotNull { name -> numByName[name]?.let { to -> evolution(to, base.getValue(to).second, happiness[to]) } }
@@ -117,8 +124,44 @@ object Parsers {
             val (lm, tm) = learnset(ls, moves.keys)
             species[num] = s.copy(levelMoves = lm, tmMoves = tm)
         }
-
         if (species.size < 1000) fail("Game data looks wrong: only ${species.size} species found (need 1000+). Showdown's pokedex.json may have changed.")
+
+        // Regional forms (never fatal: a form whose data is missing is simply left out).
+        for ((id, f) in forms) {
+            val b0 = species[f.baseNum] ?: continue
+            val e = f.entry
+            val srow = speciesRows[f.baseNum]
+            val ev = effort[id] ?: IntArray(6)
+            val bs = e.getJSONObject("baseStats")
+            val ls = learn.optJSONObject(f.key)?.optJSONObject("learnset")
+            val (lm, tm) = if (ls != null) learnset(ls, moves.keys) else b0.levelMoves to b0.tmMoves
+            val formName = e.optString("forme")
+            val baseSpecies = e.optString("baseSpecies", "").ifEmpty { b0.name }
+            species[id] = Species(
+                num = id, id = f.key, name = "${REGION_ADJECTIVE.getValue(f.region)} ${b0.name}",
+                gen = Encounters.REGION_GEN.getValue(f.region),
+                types = formTypes(e)!!, // checked when the form was found
+                base = Stats(bs.getInt("hp"), bs.getInt("atk"), bs.getInt("def"), bs.getInt("spa"), bs.getInt("spd"), bs.getInt("spe")),
+                maleRatio = if (e.has("genderRatio") || e.has("gender")) maleRatio(e) else maleRatio(entryOf(f.baseNum)),
+                abilities = e.optJSONObject("abilities")?.let { a -> listOf("0", "1").mapNotNull { k -> a.optString(k, "").takeIf { it.isNotEmpty() } } } ?: emptyList(),
+                prevo = e.optString("prevo", "").takeIf { it.isNotEmpty() }?.let { numByName[it] ?: formNumByName[it] },
+                evolutions = (e.optJSONArray("evos")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList())
+                    .mapNotNull { name -> (numByName[name] ?: formNumByName[name])?.let { to ->
+                        evolution(to, entryOf(to), happiness[if (to > MAX_NUM) forms.getValue(to).baseNum else to])
+                    } },
+                baseExp = baseExp[id] ?: 1,
+                growthRate = srow?.get("growth_rate_id")?.toIntOrNull() ?: b0.growthRate,
+                evYield = Stats.of(ev.toList()),
+                isBaby = srow?.get("is_baby") == "1",
+                isLegendary = srow?.get("is_legendary") == "1",
+                isMythical = srow?.get("is_mythical") == "1",
+                levelMoves = lm, tmMoves = tm,
+                evoLevel = if (e.has("evoLevel")) e.optInt("evoLevel") else null,
+                evoType = e.optString("evoType", "").takeIf { it.isNotEmpty() },
+                form = formName, baseNum = f.baseNum, spriteId = toId(baseSpecies) + "-" + toId(formName),
+            )
+        }
+
         if (moves.size < 700) fail("Game data looks wrong: only ${moves.size} moves found (need 700+). Showdown's moves.json may have changed.")
         if (growth.size != 6 || growth.values.any { it[100] == 0 }) fail("Game data looks wrong: experience.csv needs 6 growth rates of 100 levels.")
         if (prices.size < 1000) fail("Game data looks wrong: only ${prices.size} item prices found (need 1000+).")
@@ -132,6 +175,40 @@ object Parsers {
         num <= 721 -> 6; num <= 809 -> 7; num <= 905 -> 8; else -> 9
     }
 
+    private val REGION_ADJECTIVE = mapOf("alola" to "Alolan", "galar" to "Galarian", "hisui" to "Hisuian", "paldea" to "Paldean")
+
+    /** A regional form found in the downloaded files: its Showdown key and entry, the national number of its base species, its region. */
+    private class FormEntry(val key: String, val entry: JSONObject, val baseNum: Int, val region: String)
+
+    private fun formTypes(e: JSONObject): List<Type>? {
+        val a = e.optJSONArray("types") ?: return null
+        val out = (0 until a.length()).map { Type.parse(a.optString(it)) ?: return null }
+        return out.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * The regional forms (Encounters.REGIONAL_FORMS, PokeAPI pokemon ids) that both source files describe: pokemon.csv names the
+     * form ("tauros-paldea-combat-breed"), Showdown's key is that identifier without "-standard" / "-breed" and without
+     * punctuation. A form without a pokemon.csv row, a Showdown entry with a "forme", valid types and stats, or whose base
+     * species isn't in [baseNums] is left out; the build never fails because of one.
+     */
+    private fun regionalFormEntries(dex: JSONObject, rows: List<Map<String, String>>, baseNums: Set<Int>): Map<Int, FormEntry> {
+        val byId = HashMap<Int, Map<String, String>>()
+        for (r in rows) r["id"]?.toIntOrNull()?.let { byId[it] = r }
+        val out = LinkedHashMap<Int, FormEntry>()
+        for ((region, ids) in Encounters.REGIONAL_FORMS) for (id in ids) {
+            val row = byId[id] ?: continue
+            val key = toId(row["identifier"].orEmpty().removeSuffix("-standard").removeSuffix("-breed"))
+            val e = dex.optJSONObject(key) ?: continue
+            val bs = e.optJSONObject("baseStats")
+            if (!e.has("forme") || formTypes(e) == null || bs == null || listOf("hp", "atk", "def", "spa", "spd", "spe").any { !bs.has(it) }) continue
+            val baseNum = row["species_id"]?.toIntOrNull() ?: e.optInt("num", 0)
+            if (baseNum !in baseNums) continue
+            out[id] = FormEntry(key, e, baseNum, region)
+        }
+        return out
+    }
+
     private fun maleRatio(e: JSONObject): Double? {
         e.optJSONObject("genderRatio")?.let { return it.optDouble("M", 0.5) }
         return when (e.optString("gender", "")) { "M" -> 1.0; "F" -> 0.0; "N" -> null; else -> 0.5 }
@@ -142,6 +219,9 @@ object Parsers {
 
     /** Showdown move name -> id: "Ancient Power" -> "ancientpower". */
     private fun moveId(name: String) = name.lowercase().filter { it in 'a'..'z' || it in '0'..'9' }
+
+    /** Showdown toID: lower case, letters and digits only ("Farfetch’d" -> "farfetchd", "Paldea-Combat" -> "paldeacombat"). */
+    private fun toId(name: String) = moveId(name)
 
     /** The way the pre-evolution turns into [to], built from the evolved species' own Showdown fields. */
     private fun evolution(to: Int, e: JSONObject, happiness: Int?): Evolution {
@@ -341,6 +421,7 @@ object Parsers {
             s.num, s.id, s.name, s.gen, JSONArray(s.types.map { it.name }), JSONArray(s.base.toList()), s.maleRatio ?: nul(),
             JSONArray(s.abilities), s.prevo ?: nul(), evos, s.baseExp, s.growthRate, JSONArray(s.evYield.toList()), flags,
             lm, JSONArray(s.tmMoves.sorted()), s.evoLevel ?: nul(), s.evoType ?: nul(),
+            s.form ?: nul(), s.baseNum, s.spriteId,
         ))
     }
 
@@ -369,6 +450,7 @@ object Parsers {
             levelMoves = (0 until lm.length() / 2).map { LevelMove(lm.getInt(it * 2), lm.getString(it * 2 + 1)) },
             tmMoves = strs(a.getJSONArray(15)).toSet(),
             evoLevel = optI(a, 16), evoType = optS(a, 17),
+            form = optS(a, 18), baseNum = a.getInt(19), spriteId = a.getString(20),
         )
     }
 

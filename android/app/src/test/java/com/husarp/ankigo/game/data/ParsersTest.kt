@@ -489,7 +489,7 @@ id,evolved_species_id,evolution_trigger_id,version_group_id,is_default,trigger_i
 
     @Test fun cacheRoundTripIsExact() {
         val json = Parsers.encodeCache(data)
-        assertTrue(json.contains("\"format\":1"))
+        assertTrue(json.contains("\"format\":2"))
         val back = Parsers.decodeCache(json)
         assertEquals(data.builtAt, back.builtAt)
         assertEquals(data.species, back.species)
@@ -508,9 +508,9 @@ id,evolved_species_id,evolution_trigger_id,version_group_id,is_default,trigger_i
 
     @Test fun cacheRejectsOtherFormatsAndGarbage() {
         val json = Parsers.encodeCache(data)
-        assertTrue(fails { Parsers.decodeCache(json.replace("\"format\":1", "\"format\":2")) }.contains("format"))
+        assertTrue(fails { Parsers.decodeCache(json.replace("\"format\":2", "\"format\":1")) }.contains("format"))
         assertTrue(fails { Parsers.decodeCache("not json") }.isNotEmpty())
-        assertTrue(fails { Parsers.decodeCache("{\"format\":1}") }.contains("damaged"))
+        assertTrue(fails { Parsers.decodeCache("{\"format\":2}") }.contains("damaged"))
         assertTrue(fails { Parsers.decodeCache(json.take(json.length / 2)) }.isNotEmpty())
     }
 

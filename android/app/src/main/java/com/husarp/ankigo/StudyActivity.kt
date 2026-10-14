@@ -28,6 +28,8 @@ import android.widget.TextView
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.overlay.FloatBattleService
+import com.husarp.ankigo.sound.SoundPrefs
+import com.husarp.ankigo.sound.SoundRules
 import com.husarp.ankigo.study.StudyLoop
 import com.husarp.ankigo.ui.*
 import com.husarp.ankigo.update.Updates
@@ -83,6 +85,8 @@ class StudyActivity : Activity() {
     private var heightMode = 1
     private var audio: MediaPlayer? = null
     private var sounds = emptyList<String>()
+    private var audioNow = false   // the card on screen has sound (its question or answer)
+    private var audioPrev = false  // the card just answered had sound; its battle events play while the next card loads
     private val soundQueue = ArrayDeque<String>()
     private val counts = IntArray(4)
     private var totalTime = 0L
@@ -187,6 +191,7 @@ class StudyActivity : Activity() {
         side.addView(handleBar, StudyUi.lp(-1, Ui.dp(this, 16)))
         panel = BattlePanelView(this)
         events = EventPlayer(panel)
+        events.muted = { SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev) }
         panel.onMenu = { if (events.idle) AlertDialog.Builder(this).setItems(arrayOf("Team", "Bag / Shop", "Pokédex", "Settings")) { _, i ->
             startActivity(Intent(this, listOf(TeamActivity::class.java, ShopActivity::class.java, DexActivity::class.java, SettingsActivity::class.java)[i]))
         }.showCard() }
@@ -292,6 +297,7 @@ class StudyActivity : Activity() {
     }
     private fun loadNext() {
         stopAudio()
+        audioPrev = audioNow; audioNow = false
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
         finished = false; locked = true; card = null
         topBar.visibility = View.VISIBLE; summaryBar.visibility = View.GONE; cardSurface.visibility = View.VISIBLE
@@ -339,6 +345,7 @@ class StudyActivity : Activity() {
                 main.post {
                     if (!valid(token)) return@post
                     finished = false; card = n; stats = state; question = q; answerHtml = a; css = model?.css ?: ""; fields = fieldMap
+                    audioNow = SoundRules.cardHasAudio(q, a)
                     maxTime = options.optLong("maxTaken", 60).coerceAtLeast(1) * 1000
                     val d = decks.firstOrNull { it.id == deckId }
                     modelName = model?.name ?: ""

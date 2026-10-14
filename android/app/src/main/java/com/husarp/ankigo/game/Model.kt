@@ -84,7 +84,7 @@ data class Species(
     val base: Stats,
     val maleRatio: Double?,         // chance to be male; null = genderless
     val abilities: List<String>,    // normal abilities only (no hidden ones; Ankimon never gives wild hidden abilities)
-    val prevo: Int?,                // base-form pre-evolution, null if none (regional-form prevos are dropped)
+    val prevo: Int?,                // pre-evolution, null if none (a regional form where the line is regional: Perrserker.prevo = Meowth-Galar)
     val evolutions: List<Evolution>,
     val baseExp: Int,               // PokeAPI pokemon.base_experience (min 1)
     val growthRate: Int,            // PokeAPI growth_rate_id (1..6), key into GameData.growth
@@ -96,6 +96,10 @@ data class Species(
     val tmMoves: Set<String>,        // TM-learnable moves ("<gen>M" codes) for the same generation
     val evoLevel: Int?,              // Showdown evoLevel of THIS species (for Ankimon's wild minimum level)
     val evoType: String?,            // Showdown evoType of THIS species ("useItem", "trade", "levelFriendship", ...)
+    // Regional forms (Alolan/Galarian/Hisuian/Paldean): num = PokeAPI pokemon id (> 10000), these three tell it from a base species.
+    val form: String? = null,        // Showdown "forme" ("Alola", "Paldea-Combat"); null for a base species
+    val baseNum: Int = num,          // national Pokédex number (= num for a base species)
+    val spriteId: String = id,       // Showdown sprite file name ("raticate-alola"); = id for a base species
 )
 
 data class Secondary(
@@ -136,7 +140,7 @@ data class Move(
 }
 
 class GameData(
-    val species: Map<Int, Species>,           // base forms 1..1025
+    val species: Map<Int, Species>,           // base forms 1..1025 + regional forms keyed by PokeAPI pokemon id (> 10000)
     val moves: Map<String, Move>,             // Showdown id -> move (Max/Z/CAP moves left out)
     val growth: Map<Int, IntArray>,           // growth rate id -> total XP to reach level L at index L (1..100; index 0 = 0)
     val itemPrices: Map<String, Int>,         // PokeAPI item id -> official price (0 = never sold)
@@ -212,6 +216,7 @@ class Settings(
     var protectMythical: Boolean = true,
     var protectUltra: Boolean = true,
     var protectStarter: Boolean = true,
+    var protectRegional: Boolean = true,                // Ankimon battle.auto_catch_regional: regional forms are always caught
     val wishlist: MutableSet<Int> = Tuning.DEFAULT_WISHLIST.toMutableSet(),
     var dailyAverage: Int = Tuning.DAILY_AVERAGE,       // Ankimon "daily average": the daily goal, also drives rarity
     var dayStartHour: Int = Tuning.DAY_START_HOUR,
@@ -219,6 +224,9 @@ class Settings(
     var trainerName: String = "Trainer",
     var fasterStart: Boolean = true, // new games only; old saves decode missing key as false
 )
+
+/** One game day of study for the Stats screen (AnkiGo's own log; see Stats.kt). */
+class DayLog(var reviews: Int = 0, var won: Int = 0, var caught: Int = 0, var shinies: Int = 0)
 
 class GameState(
     var schema: Int = SCHEMA,
@@ -247,6 +255,8 @@ class GameState(
     var bestCardStreak: Int = 0,
     var streakDays: Int = 0,             // days in a row with the daily goal reached, ending at lastGoalDay
     var lastGoalDay: String? = null,
+    var bestStreakDays: Int = 0,         // longest goal streak ever
+    val history: MutableMap<String, DayLog> = mutableMapOf(), // game day "yyyy-MM-dd" -> that day's log (kept 400 days)
     var totalReviews: Long = 0,
     val badges: MutableSet<Int> = mutableSetOf(),
     var shopDay: String? = null,

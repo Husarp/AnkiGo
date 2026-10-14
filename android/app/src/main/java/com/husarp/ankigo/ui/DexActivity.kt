@@ -146,7 +146,7 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
         card.addView(img, LinearLayout.LayoutParams(Ui.dp(this, 84), Ui.dp(this, 84)).also { it.marginEnd = Ui.dp(this, 10) })
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(Ui.text(this, 12f, 900, R.color.ag_sub0).apply {
-            text = "#%03d · %s".format(sp.num, if (last != null) "last caught" else "your main")
+            text = "#%03d · %s".format(sp.baseNum, if (last != null) "last caught" else "your main")
         })
         col.addView(Ui.text(this, 20f, 900, R.color.ag_text).apply { text = (if (mon.shiny) "★ " else "") + mon.name })
         col.addView(Bits.typeRow(this, sp.types), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(this, 4) })
@@ -300,7 +300,7 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     // ---- grid cells (mockup .dexgrid) ----
 
-    private class Cell(val num: TextView, val img: ImageView, val name: TextView, val dot: View)
+    private class Cell(val num: TextView, val img: ImageView, val name: TextView, val dot: View, val star: TextView)
 
     private fun makeCell(f: SquareFrame) {
         val ctx = this
@@ -311,6 +311,8 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             gravity = Gravity.CENTER
+            // a long regional-form name ("Galarian Darmanitan") shrinks a little before it is cut off
+            setAutoSizeTextTypeUniformWithConfiguration(8, 10, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
         }
         val dot = View(ctx).apply { background = Ui.rounded(Ui.c(ctx, R.color.ag_green), 4, ctx) }
         f.addView(img, FrameLayout.LayoutParams(Ui.dp(ctx, 68), Ui.dp(ctx, 68), Gravity.CENTER_HORIZONTAL or Gravity.TOP).also { it.topMargin = Ui.dp(ctx, 4) })
@@ -321,7 +323,10 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
         f.addView(dot, FrameLayout.LayoutParams(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Gravity.END or Gravity.TOP).also {
             it.rightMargin = Ui.dp(ctx, 6); it.topMargin = Ui.dp(ctx, 6)
         })
-        f.tag = Cell(num, img, name, dot)
+        // wishlist mark under the number
+        val star = Ui.text(ctx, 10f, 900, R.color.ag_yellow).apply { text = "★" }
+        f.addView(star, FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.TOP).also { it.leftMargin = Ui.dp(ctx, 6); it.topMargin = Ui.dp(ctx, 17) })
+        f.tag = Cell(num, img, name, dot, star)
     }
 
     private val greyed = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
@@ -337,7 +342,8 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
         val st = state
         val caught = sp.num in st.caught
         val seen = caught || sp.num in st.seen
-        cell.num.text = "#%03d".format(sp.num)
+        cell.num.text = "#%03d".format(sp.baseNum)
+        cell.star.visibility = if (sp.num in st.settings.wishlist) View.VISIBLE else View.GONE
         cell.dot.visibility = if (caught) View.VISIBLE else View.GONE
         Ui.staticSprite(this, sp.num, false, cell.img, silhouette = !seen)
         if (seen && !caught) {

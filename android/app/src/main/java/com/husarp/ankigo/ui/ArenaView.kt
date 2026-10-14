@@ -56,9 +56,15 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val platPlayer = View(ctx).apply { background = oval(Ui.c(ctx, R.color.ag_plat)) }
 
     // ---- enemy info card + catch tag (one block so the tag always sits under the card) ----
-    private val eName = Ui.text(ctx, 14f, 900, R.color.ag_text).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+    private val eName = FitName.make(ctx)
     private val eLevel = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val eTypes = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+    private val eTypeRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    private val ePill = StatusPill.create(ctx)      // after the type chips
+    private val ePillHp = StatusPill.create(ctx)   // right end of the HP line, where the chips are hidden or full
+    private val pPill = StatusPill.create(ctx)      // in the name row before "Lv"
+    private val pPillHp = StatusPill.create(ctx)   // right end of the HP line, where the XP text is hidden (small windows)
+    private val eNums = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private val eHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0)
     private val eHp = BarView(ctx)
     private val enemyCard = LinearLayout(ctx).apply {
@@ -77,7 +83,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val enemyBlock = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
 
     // ---- player info card ----
-    private val pName = Ui.text(ctx, 14f, 900, R.color.ag_text).apply { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
+    private val pName = FitName.make(ctx)
     private val pLevel = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val pHp = BarView(ctx)
     private val pHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { maxLines = 1 }
@@ -138,9 +144,13 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         eRow.addView(eName, LinearLayout.LayoutParams(0, -2, 1f))
         eRow.addView(eLevel, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(5) })
         enemyCard.addView(eRow, LinearLayout.LayoutParams(-1, -2))
-        enemyCard.addView(eTypes, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dpi(4) })
+        eTypeRow.addView(eTypes, LinearLayout.LayoutParams(-2, -2))
+        eTypeRow.addView(ePill, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(3) })
+        enemyCard.addView(eTypeRow, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dpi(4) })
         enemyCard.addView(eHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
-        enemyCard.addView(eHpText)
+        eNums.addView(eHpText, LinearLayout.LayoutParams(0, -2, 1f))
+        eNums.addView(ePillHp, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(4) })
+        enemyCard.addView(eNums, LinearLayout.LayoutParams(-1, -2))
         enemyBlock.addView(enemyCard, LinearLayout.LayoutParams(-1, -2))
         enemyBlock.addView(catchTag, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = -dpi(6) })
         catchTag.setOnClickListener { onCatchTagTap() }
@@ -148,10 +158,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         // player card: name + Lv, HP bar, one row "58 / 71" left + "XP 640 / 1000" right, XP bar
         val pRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         pRow.addView(pName, LinearLayout.LayoutParams(0, -2, 1f))
+        pRow.addView(pPill, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(4) })
         pRow.addView(pLevel, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(5) })
         playerCard.addView(pRow, LinearLayout.LayoutParams(-1, -2))
         playerCard.addView(pHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
         pNums.addView(pHpText, LinearLayout.LayoutParams(0, -2, 1f))
+        pNums.addView(pPillHp, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(4) })
         pNums.addView(pXpText, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(6) })
         playerCard.addView(pNums, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(3) })
         pXp.setTrackColor(Ui.c(ctx, R.color.ag_s0))
@@ -213,6 +225,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             place(enemyBlock, min(dpi(138), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
             place(playerCard, min(dpi(142), infoMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(8), dpi(8))
         }
+        fitEnemyPill(enemyBlock.layoutParams.width)
         super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
     }
 
@@ -313,6 +326,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         compact = on
         val small = if (on) GONE else VISIBLE
         eTypes.visibility = small
+        eTypeRow.visibility = small
         pXpText.visibility = small
         pXp.visibility = small
         if (on) catchTag.visibility = GONE
@@ -324,6 +338,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         for (c in listOf(enemyCard, playerCard)) c.setPadding(dpi(10), dpi(padV), dpi(10), dpi(if (on) 6 else 8))
         bannerTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, if (on) 15f else 20f)
         banner.minimumWidth = dpi(if (on) 110 else 170)
+        updateStatusPills()
         requestLayout()
     }
 
@@ -331,10 +346,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun setStudyStrip(on: Boolean) {
         studyStrip = on
         eTypes.visibility = VISIBLE
+        eTypeRow.visibility = VISIBLE
         pNums.visibility = VISIBLE
         pXpText.visibility = VISIBLE
         pXp.visibility = if (on) GONE else VISIBLE
         for (t in listOf(eName, pName)) t.textSize = if (on) 12.5f else 14f
+        updateStatusPills()
         for (t in listOf(eLevel, pLevel)) t.textSize = if (on) 11f else 12f
         for (t in listOf(eHpText, pHpText, pXpText)) t.textSize = if (on) 10f else 11f
         for (c in listOf(enemyCard, playerCard)) {
@@ -346,6 +363,46 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             height = dpi(if (on) 6 else 7); topMargin = dpi(if (on) 4 else 6)
         }
         requestLayout()
+    }
+
+    // ---------------------------------------------------------------- status pills
+
+    private var enemyStatus: String? = null
+    private var playerStatus: String? = null
+
+    /** Status label (BRN PAR SLP PSN FRZ) on the wild card; null clears it. Raw engine ids ("tox" shows as PSN). */
+    fun setEnemyStatus(status: String?) { enemyStatus = status; updateStatusPills() }
+
+    /** Status label on our card; null clears it. */
+    fun setPlayerStatus(status: String?) { playerStatus = status; updateStatusPills() }
+
+    /** True when two long type chips leave no room for the pill: it then sits on the HP line instead. */
+    private var pillOnHpLine = false
+
+    /**
+     * Wild pill: after the type chips; on the HP line when the chips are hidden (small windows) or leave no room.
+     * Our pill: in the name row; on the HP line when the XP text is hidden (small windows: the card is too narrow
+     * for name + pill + "Lv").
+     */
+    private fun updateStatusPills() {
+        val after = eTypes.visibility == VISIBLE && !pillOnHpLine
+        StatusPill.apply(ePill, if (after) enemyStatus else null)
+        StatusPill.apply(ePillHp, if (after) null else enemyStatus)
+        val inName = pXpText.visibility == VISIBLE
+        StatusPill.apply(pPill, if (inName) playerStatus else null)
+        StatusPill.apply(pPillHp, if (inName) null else playerStatus)
+    }
+
+    /** Decides from the wild card's width ([cardWidth], px) whether the pill fits after the type chips. */
+    private fun fitEnemyPill(cardWidth: Int) {
+        if (enemyStatus == null || eTypes.visibility != VISIBLE || cardWidth <= 0) { if (pillOnHpLine) { pillOnHpLine = false; updateStatusPills() }; return }
+        val unspec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        eTypes.measure(unspec, unspec)
+        ePill.measure(unspec, unspec)
+        val inner = cardWidth - enemyCard.paddingLeft - enemyCard.paddingRight
+        val need = eTypes.measuredWidth + dpi(3) + ePill.measuredWidth
+        val onHp = need > inner
+        if (onHp != pillOnHpLine) { pillOnHpLine = onHp; updateStatusPills() }
     }
 
     // ---------------------------------------------------------------- player side
@@ -601,6 +658,38 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 }
 
 /** Six twinkling 4-point stars over the arena (mockup `.stars`, 1.6 s loop, staggered by 0.25 s). */
+/**
+ * The one-line name of an info card: narrows its letters (down to 80 %) before it has to end in "…", so long names like
+ * "Galarian Darmanitan" stay readable. The scale is worked out from the text at full width, so a second pass keeps it.
+ */
+private class FitName(ctx: Context) : TextView(ctx) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        val t = text
+        val avail = measuredWidth - compoundPaddingLeft - compoundPaddingRight
+        if (avail <= 0 || t.isNullOrEmpty()) return
+        val full = paint.measureText(t, 0, t.length) / textScaleX
+        val want = if (full <= avail) 1f else max(MIN_SCALE, avail / full)
+        if (kotlin.math.abs(want - textScaleX) > 0.005f) {
+            textScaleX = want
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        }
+    }
+
+    companion object {
+        private const val MIN_SCALE = 0.8f
+
+        fun make(ctx: Context) = FitName(ctx).apply {
+            typeface = Ui.font(ctx, 900)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(Ui.c(ctx, R.color.ag_text))
+            includeFontPadding = false
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+        }
+    }
+}
+
 private class PanelStars(ctx: Context) : View(ctx) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Ui.c(ctx, R.color.ag_yellow) }
     private val path = Path()

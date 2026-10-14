@@ -461,6 +461,7 @@ class GameActivity : Activity() {
         m.menu.add(0, 3, 2, "Shop")
         m.menu.add(0, 4, 3, "Settings")
         m.menu.add(0, 5, 4, "Switch main")
+        m.menu.add(0, 6, 5, "Stats")
         m.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> openScreen(FloatPage.TEAM, TeamActivity::class.java)
@@ -468,6 +469,11 @@ class GameActivity : Activity() {
                 3 -> openScreen(FloatPage.SHOP, ShopActivity::class.java)
                 4 -> openScreen(FloatPage.SETTINGS, SettingsActivity::class.java)
                 5 -> switchMain()
+                6 -> { // always its own Activity, also in split screen
+                    internalNav = true
+                    updatePipParams()
+                    startActivity(Intent(this, StatsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
+                }
             }
             true
         }

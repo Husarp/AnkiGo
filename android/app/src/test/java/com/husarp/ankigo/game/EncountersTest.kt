@@ -323,3 +323,63 @@ class EncountersTest {
         assertTrue(shapes.any { s -> s.toList().distinct().size > 3 })
     }
 }
+
+/** Wishlist weighting (T42) and generation 9 pools, made-up species. */
+class WishlistWeightTest {
+    private val normals = (30..39).map { TestData.species(it) }          // 10 plain Normal species
+    private val d = TestData.data(normals + TestData.species(19, "Ratty"))
+    private fun st(wish: Set<Int>): GameState = TestData.state(d, 30, 20).also { s -> s.settings.wishlist.clear(); s.settings.wishlist.addAll(wish) }
+
+    private fun counts(state: GameState, n: Int = 30_000, seed: Int = 5): Map<Int, Int> {
+        val rng = Random(seed); val m = HashMap<Int, Int>()
+        repeat(n) { m.merge(Encounters.roll(d, state, 20, rng).species, 1, Int::plus) }
+        return m
+    }
+
+    @Test fun weightConstantIsTwo() = assertEquals(2, Tuning.WISHLIST_WEIGHT)
+
+    @Test fun wishlistedSpeciesIsMetAboutTwiceAsOften() {
+        val c = counts(st(setOf(33)))
+        val pool = 11 // 30..39 + 19
+        val expected = 30_000 * 2.0 / (pool + 1)
+        assertEquals(expected, c.getValue(33).toDouble(), expected * 0.1)
+        assertEquals(30_000 * 1.0 / (pool + 1), c.getValue(34).toDouble(), expected * 0.15)
+    }
+
+    @Test fun noWishlistedSpeciesInPoolKeepsTheOldPicks() {
+        val pool = Encounters.pool(d, Tier.NORMAL, Settings(), 20, setOf(30))
+        val a = Random(9); val b = Random(9)
+        repeat(200) { assertEquals(pool[a.nextInt(pool.size)], Encounters.pickFrom(d, pool, setOf(999, 25), b)) }
+        val c = Random(9); val e = Random(9)
+        repeat(200) { assertEquals(pool[c.nextInt(pool.size)], Encounters.pickFrom(d, pool, emptySet(), e)) }
+    }
+
+    @Test fun wishlistedFormBoostsItsBaseSpecies() {
+        val base = d.species.getValue(33)
+        val form = base.copy(num = 10091, id = "alolan33", name = "Alolan 33", gen = 7, form = "Alola", baseNum = 33)
+        val d2 = TestData.data(normals + TestData.species(19, "Ratty") + form)
+        val pool = Encounters.pool(d2, Tier.NORMAL, Settings(), 20, setOf(30))
+        val rng = Random(2); var hits = 0; val n = 20_000
+        repeat(n) { if (Encounters.pickFrom(d2, pool, setOf(10091), rng) == 33) hits++ }
+        assertEquals(n * 2.0 / (pool.size + 1), hits.toDouble(), n * 0.2 / pool.size)
+    }
+
+    @Test fun gen9PoolSkipsStartersAndHonoursPrerequisites() {
+        val sp = listOf(
+            TestData.species(906, "Grassstarter"), TestData.species(950, "Nine"), TestData.species(1007, "Cobalt", isLegendary = true),
+            TestData.species(1014, "Okidogi", isLegendary = true), TestData.species(1015, "Munkidori", isLegendary = true),
+            TestData.species(1016, "Fezandipiti", isLegendary = true), TestData.species(1024, "Terapagos", isLegendary = true),
+            TestData.species(1025, "Pecharunt", isMythical = true),
+        )
+        val d9 = TestData.data(sp)
+        val s = Settings(gens = mutableSetOf(9))
+        assertEquals(listOf(950), Encounters.pool(d9, Tier.NORMAL, s, 100, emptySet()))
+        assertTrue(Encounters.pool(d9, Tier.STARTER, s, 100, emptySet()).contains(906))
+        assertEquals(listOf(1007, 1014, 1015, 1016), Encounters.pool(d9, Tier.LEGENDARY, s, 100, emptySet()))
+        assertEquals(emptyList<Int>(), Encounters.pool(d9, Tier.MYTHICAL, s, 100, setOf(1014, 1015)))
+        assertEquals(listOf(1025), Encounters.pool(d9, Tier.MYTHICAL, s, 100, setOf(1014, 1015, 1016)))
+        assertTrue(1024 !in Encounters.pool(d9, Tier.LEGENDARY, s, 100, emptySet()))
+        assertTrue(1024 in Encounters.pool(d9, Tier.LEGENDARY, s, 100, setOf(1008)))
+        assertTrue(1024 in Encounters.pool(d9, Tier.LEGENDARY, s, 100, setOf(1007)))
+    }
+}

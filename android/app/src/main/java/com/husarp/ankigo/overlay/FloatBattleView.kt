@@ -11,6 +11,7 @@ import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.ui.BattlePanelView
 import com.husarp.ankigo.ui.EventPlayer
+import com.husarp.ankigo.ui.StatsActivity
 import com.husarp.ankigo.ui.LogKind
 import com.husarp.ankigo.ui.Ui
 
@@ -49,7 +50,7 @@ internal class FloatBattleView(
         window.compactHeader = true
         window.setTitle("AnkiGo")
         pauseButton = window.addHeaderButton(R.drawable.ic_pause, "Pause", { onTogglePause() })
-        menuButton = window.addHeaderButton(R.drawable.ic_menu, "Menu: Team, Pokédex, Shop, Settings", { showMenu() })
+        menuButton = window.addHeaderButton(R.drawable.ic_menu, "Menu: Team, Pokédex, Shop, Settings, Stats", { showMenu() })
         window.addHeaderButton(R.drawable.ic_open, "Open AnkiGo", { onOpenGame() })
     }
 
@@ -149,7 +150,12 @@ internal class FloatBattleView(
         m.menu.add(0, 2, 1, "Pokédex")
         m.menu.add(0, 3, 2, "Shop")
         m.menu.add(0, 4, 3, "Settings")
+        m.menu.add(0, 5, 4, "Stats")
         m.setOnMenuItemClickListener { item ->
+            if (item.itemId == 5) { // no Activity here: its own task
+                app.startActivity(android.content.Intent(app, StatsActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                return@setOnMenuItemClickListener true
+            }
             val page = when (item.itemId) {
                 1 -> FloatPage.TEAM
                 2 -> FloatPage.DEX

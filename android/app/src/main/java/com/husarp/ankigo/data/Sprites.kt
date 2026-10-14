@@ -46,7 +46,10 @@ internal object SpriteUrls {
     /** The same repo files at the same commit through jsDelivr (identical bytes, checked), for when raw.githubusercontent.com refuses us. */
     private fun jsDelivr() = "https://cdn.jsdelivr.net/gh/PokeAPI/sprites@${DataStore.SPRITES_COMMIT}/sprites/"
 
-    /** URLs to try in order; the first that exists wins. Empty when the chain ends with "none" (BACK without any hit). */
+    /**
+     * URLs to try in order; the first that exists wins. Empty when the chain ends with "none" (BACK without any hit).
+     * Showdown file names are [Species.spriteId] ("raticate-alola"), PokeAPI ones the number (regional forms: pokemon id > 10000, no BW gif).
+     */
     fun battle(sp: Species, kind: SpriteKind, shiny: Boolean): List<String> {
         val api = pokeApi()
         val out = ArrayList<String>()
@@ -55,15 +58,15 @@ internal object SpriteUrls {
             val s = if (shiny) "shiny/" else ""
             val suf = if (shiny) "-shiny" else ""
             if (bw) out += "${api}pokemon/versions/generation-v/black-white/animated/$s${sp.num}.gif"
-            out += "${SHOWDOWN}gen5ani$suf/${sp.id}.gif"
-            out += "${SHOWDOWN}gen5$suf/${sp.id}.png"
+            out += "${SHOWDOWN}gen5ani$suf/${sp.spriteId}.gif"
+            out += "${SHOWDOWN}gen5$suf/${sp.spriteId}.png"
             out += "${api}pokemon/$s${sp.num}.png"
         } else {
             val s = if (shiny) "shiny/" else ""
             val suf = if (shiny) "-shiny" else ""
             if (bw) out += "${api}pokemon/versions/generation-v/black-white/animated/back/$s${sp.num}.gif"
-            out += "${SHOWDOWN}gen5ani-back$suf/${sp.id}.gif"
-            out += "${SHOWDOWN}gen5-back$suf/${sp.id}.png"
+            out += "${SHOWDOWN}gen5ani-back$suf/${sp.spriteId}.gif"
+            out += "${SHOWDOWN}gen5-back$suf/${sp.spriteId}.png"
         }
         return out
     }

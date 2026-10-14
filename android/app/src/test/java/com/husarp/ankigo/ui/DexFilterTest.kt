@@ -3,6 +3,8 @@ package com.husarp.ankigo.ui
 import com.husarp.ankigo.game.TestData
 import com.husarp.ankigo.game.Type
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DexFilterTest {
@@ -78,6 +80,49 @@ class DexFilterTest {
     @Test fun sortByLastCaughtPutsOwnedNewestFirstThenTheRestByNumber() {
         assertEquals(listOf(25, 152, 1, 4, 125, 252), run(DexFilter(sort = DexSort.LAST_CAUGHT)))
         assertEquals(listOf(25, 152, 1), run(DexFilter(sort = DexSort.LAST_CAUGHT, owned = DexOwned.OWNED)))
+    }
+
+    // ---- regional forms: the number shown is the base species' number ----
+
+    private val withForms = all + listOf(
+        TestData.species(19, "Ratty"),
+        TestData.species(10091, "Alolan Ratty", gen = 7).copy(form = "Alola", baseNum = 19),
+        TestData.species(10250, "Paldean Hornbull", gen = 9).copy(form = "Paldea-Combat", baseNum = 128),
+        TestData.species(128, "Hornbull"),
+    )
+    private val allGens = (1..9).toSet()
+
+    private fun runForms(f: DexFilter) = f.apply(withForms, last, wish, allGens).map { it.num }
+
+    @Test fun sortByNumberPutsAFormRightAfterItsBaseSpecies() {
+        assertEquals(listOf(1, 4, 19, 10091, 25, 125, 128, 10250, 152, 252), runForms(DexFilter()))
+    }
+
+    @Test fun searchByNumberMatchesTheBaseNumberOfAForm() {
+        assertEquals(listOf(19, 10091), runForms(DexFilter(query = "19")))
+        assertEquals(listOf(19, 10091), runForms(DexFilter(query = "#019")))
+        assertEquals(listOf(128, 10250), runForms(DexFilter(query = "128")))
+        assertEquals(emptyList<Int>(), runForms(DexFilter(query = "10091"))) // the PokeAPI id is not a Pokédex number
+    }
+
+    @Test fun searchByNameFindsTheForm() {
+        assertEquals(listOf(10091), runForms(DexFilter(query = "alolan")))
+        assertEquals(listOf(10091, 10250), runForms(DexFilter(query = "an"))) // Alolan Ratty, Paldean Hornbull (+ no others)
+    }
+
+    @Test fun theGenFilterUsesTheFormsOwnGeneration() {
+        assertEquals(listOf(10091), runForms(DexFilter(gens = setOf(7))))
+        assertEquals(listOf(10250), runForms(DexFilter(gens = setOf(9))))
+        // gen 7 switched off: the Alolan form disappears even though its base species (gen 1) is shown
+        val noSeven = DexFilter().apply(withForms, last, wish, allGens - 7).map { it.num }
+        assertTrue(19 in noSeven)
+        assertFalse(10091 in noSeven)
+    }
+
+    @Test fun sortByLastCaughtKeepsAFormAfterItsBaseWhenBothAreNotOwned() {
+        val lastForms = mapOf(10250 to 900L)
+        val out = DexFilter(sort = DexSort.LAST_CAUGHT).apply(withForms, lastForms, wish, allGens).map { it.num }
+        assertEquals(listOf(10250, 1, 4, 19, 10091, 25, 125, 128, 152, 252), out)
     }
 
     @Test fun activeFlag() {

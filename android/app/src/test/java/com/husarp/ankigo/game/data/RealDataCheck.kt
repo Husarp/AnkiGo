@@ -32,7 +32,8 @@ class RealDataCheck {
         val t0 = System.currentTimeMillis()
         val d = Parsers.build(src!!)
         val ms = System.currentTimeMillis() - t0
-        assertEquals(1025, d.species.size)
+        assertEquals(1025, d.species.keys.count { it <= 1025 })
+        assertEquals(57, d.species.values.count { it.form != null }) // the regional forms (Alolan, Galarian, Hisuian, Paldean)
         assertTrue(d.moves.size > 800)
 
         // Pikachu: prevo Pichu (172), Thunder Stone -> Raichu (26); Raichu-Alola is dropped

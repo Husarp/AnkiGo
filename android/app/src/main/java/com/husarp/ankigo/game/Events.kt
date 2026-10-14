@@ -44,8 +44,11 @@ sealed class GameEvent {
     /** The wild one did nothing because the round went well (Ankimon: Splash). */
     data class Splash(val name: String) : GameEvent()
 
-    /** Side effects: status applied/healed, stat stage change, can't move, burn/poison damage, drain/recoil text. */
-    data class Effect(val onPlayer: Boolean, val text: String, val hp: Int, val maxHp: Int) : GameEvent()
+    /**
+     * Side effects: status applied/healed, stat stage change, can't move, burn/poison damage, drain/recoil text.
+     * [status] = the affected side's status after this effect ("par" "brn" "psn" "tox" "slp" "frz", null = none).
+     */
+    data class Effect(val onPlayer: Boolean, val text: String, val hp: Int, val maxHp: Int, val status: String? = null) : GameEvent()
 
     data class Fainted(val player: Boolean, val name: String) : GameEvent()
 

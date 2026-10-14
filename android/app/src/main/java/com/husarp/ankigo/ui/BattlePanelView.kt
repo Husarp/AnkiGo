@@ -420,6 +420,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val b = st.battle
         if (b == null) {
             arena.setEnemyShown(false)
+            arena.setEnemyStatus(null)
             enemyKey = null
             return
         }
@@ -427,6 +428,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val sp = data.species[w.species]
         arena.setEnemyShown(true)
         arena.setEnemyInfo(w.name, w.level, w.shiny, sp?.types.orEmpty())
+        arena.setEnemyStatus(b.enemy.status)
         arena.setEnemyHp(w.hp, if (sp != null) b.maxWildHp(data) else max(w.hp, 1), false)
         arena.setCatchTag(willCatchNow(), w.species !in st.caught)
         if (sp != null) {
@@ -439,11 +441,13 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val m = st.main
         if (m == null) {
             arena.setPlayerInfo(null, "", 0)
+            arena.setPlayerStatus(null)
             playerKey = null
             return
         }
         val sp = data.species[m.species]
         arena.setPlayerInfo(m.uid, m.shownName, m.level)
+        arena.setPlayerStatus(st.battle?.player?.status)
         arena.setPlayerHp(m.hp, if (sp != null) StatCalc.maxHp(data, m) else max(m.hp, 1), false)
         val need = Progression.xpToNext(data, m)
         arena.setPlayerXp(m.xp, need, false)

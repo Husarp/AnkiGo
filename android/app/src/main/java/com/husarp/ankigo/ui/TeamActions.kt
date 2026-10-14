@@ -5,6 +5,7 @@ import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.ItemUse
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.shownName
 
 // TICKET T14 owns this file: the per-Pokémon action menu (team + box) and the item / TM flows behind it.
@@ -50,9 +51,17 @@ internal class MonActions(private val s: GamePage) {
             if (state.settings.xpShareUid == mon.uid) add("Exp. Share holder: turn off") { s.act { it.setXpShare(null) } }
             else add("Make Exp. Share holder") { s.act { it.setXpShare(mon.uid) } }
         }
+        add("Rename…") { rename(mon) }
         add("Details") { MonDetail.show(s, data, mon) }
         add("Release…") { release(mon) }
         Pickers.choose(s, "${if (mon.shiny) "★ " else ""}${mon.shownName}  Lv ${mon.level}", labels) { acts[it]() }
+    }
+
+    private fun rename(mon: Mon) {
+        Pickers.input(s, "Rename ${mon.shownName}", mon.name, mon.nickname.orEmpty(), Tuning.NICKNAME_MAX,
+            neutral = if (mon.nickname != null) "Use species name" to { s.act { it.rename(mon.uid, "") } } else null) { text ->
+            s.act { it.rename(mon.uid, text) }
+        }
     }
 
     private fun release(mon: Mon) {

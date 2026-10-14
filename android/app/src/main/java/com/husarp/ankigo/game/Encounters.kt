@@ -33,6 +33,21 @@ object Encounters {
     /** Capture requirements where ANY one of the species is enough (Terapagos-style special case: 1024). */
     val ANY_PREREQUISITES: Map<Int, Set<Int>> = mapOf(1024 to setOf(1007, 1008))
 
+    /**
+     * Regional forms by region, as PokeAPI pokemon ids (Ankimon REGIONAL_FORMS: totems and Zen Darmanitan left out).
+     * They are never in a tier pool: a wild base species turns into one of its forms (see [roll]).
+     */
+    val REGIONAL_FORMS: Map<String, List<Int>> = mapOf(
+        "alola" to listOf(10091, 10092) + (10100..10115),
+        "galar" to (10161..10177).toList() + listOf(10179, 10180),
+        "hisui" to (10229..10244).toList(),
+        "paldea" to (10250..10253).toList(),
+    )
+    /** The generation each region came with: a form needs that generation switched on too. */
+    val REGION_GEN: Map<String, Int> = mapOf("alola" to 7, "galar" to 8, "hisui" to 8, "paldea" to 9)
+    /** Every form id, in a fixed order. */
+    val FORM_IDS: List<Int> = REGIONAL_FORMS.values.flatten()
+
     private val RARE_BOOSTS = listOf(
         Tier.LEGENDARY to 0.5, Tier.ULTRA to 1.5, Tier.MEGA to 0.5, Tier.GMAX to 0.5, Tier.STARTER to 0.5, Tier.MYTHICAL to 0.2,
     )
@@ -74,9 +89,9 @@ object Encounters {
 
     /** The tier a species belongs to for pools (NORMAL/BABY/ULTRA/LEGENDARY/MYTHICAL/STARTER), or null if never wild (fossils). */
     fun tierOf(sp: Species): Tier? = when {
-        sp.num in STARTERS -> Tier.STARTER
-        sp.num in FOSSILS -> null
-        sp.num in ULTRA_BEASTS -> Tier.ULTRA
+        sp.baseNum in STARTERS -> Tier.STARTER
+        sp.baseNum in FOSSILS -> null
+        sp.baseNum in ULTRA_BEASTS -> Tier.ULTRA
         sp.isMythical -> Tier.MYTHICAL
         sp.isLegendary -> Tier.LEGENDARY
         sp.isBaby -> Tier.BABY
@@ -111,7 +126,7 @@ object Encounters {
     fun pool(data: GameData, tier: Tier, settings: Settings, wildLevel: Int, caught: Set<Int>): List<Int> {
         if (tier == Tier.MEGA || tier == Tier.GMAX) return emptyList()
         return data.species.values.asSequence()
-            .filter { tierOf(it) == tier && it.gen in settings.gens && minLevel(data, it) <= wildLevel && prerequisitesMet(it.num, caught) }
+            .filter { it.form == null && tierOf(it) == tier && it.gen in settings.gens && minLevel(data, it) <= wildLevel && prerequisitesMet(it.num, caught) }
             .map { it.num }.sorted().toList()
     }
 
@@ -120,13 +135,49 @@ object Encounters {
         val sp = data.species[species] ?: return false
         val tier = tierOf(sp) ?: return false
         if (tier == Tier.STARTER && !Tuning.STARTER_TIER_ENABLED) return false
-        return sp.gen in state.settings.gens && minLevel(data, sp) <= wildLevel && prerequisitesMet(species, state.caught)
+        val gens = state.settings.gens
+        // a regional form needs its base species' generation as well as its own
+        if (sp.form != null && data.species[sp.baseNum]?.gen?.let { it in gens } != true) return false
+        return sp.gen in gens && minLevel(data, sp) <= wildLevel && prerequisitesMet(sp.baseNum, state.caught)
     }
 
     /**
-     * Rolls tier (from state.reviewsToday, settings.dailyAverage, trainerLevel, main level), then a uniform random species
-     * from that tier's pool at [wildLevel]; an empty rare pool falls back to NORMAL, an empty NORMAL to Rattata (19).
-     * MEGA/GMAX rolls resolve to NORMAL. Shiny 1/4096.
+     * Forms that may replace the picked base species [num] now (Ankimon _variant_eligible): the base species' generation
+     * and the form's region generation both on, the form's own minimum level reached, the capture requirements met.
+     */
+    fun eligibleForms(data: GameData, settings: Settings, num: Int, wildLevel: Int, caught: Set<Int>): List<Int> {
+        if (data.species[num]?.gen?.let { it in settings.gens } != true) return emptyList()
+        return FORM_IDS.filter { id ->
+            val f = data.species[id]
+            f != null && f.baseNum == num && f.gen in settings.gens && minLevel(data, f) <= wildLevel && prerequisitesMet(num, caught)
+        }
+    }
+
+    /**
+     * Picks from the rolled tier's [pool]. AnkiGo's own small addition inside Ankimon's rules (Ankimon has no wishlist weighting):
+     * a wishlisted species weighs [Tuning.WISHLIST_WEIGHT], every other 1; a wishlisted regional form counts for its base species.
+     * Tier roll, level gates, generations and capture requirements are untouched. With no wishlisted species in the pool this is
+     * exactly `pool[rng.nextInt(pool.size)]`. Example (Normal pool, gens 1-8, wild Lv 20: 398 species): a wishlisted
+     * species goes from 1 in 398 (0.25 %) to 2 in 399 (0.50 %) per Normal encounter (Lv 5: 338, Lv 50: 587, Lv 100: 696;
+     * with gen 9: 395 / 459 / 668 / 795).
+     */
+    internal fun pickFrom(data: GameData, pool: List<Int>, wishlist: Set<Int>, rng: Random): Int {
+        if (wishlist.isEmpty()) return pool[rng.nextInt(pool.size)]
+        val bases = wishlist.mapTo(HashSet()) { data.species[it]?.baseNum ?: it }
+        val extra = pool.count { it in bases } * (Tuning.WISHLIST_WEIGHT - 1)
+        if (extra == 0) return pool[rng.nextInt(pool.size)]
+        var r = rng.nextInt(pool.size + extra)
+        for (n in pool) {
+            r -= if (n in bases) Tuning.WISHLIST_WEIGHT else 1
+            if (r < 0) return n
+        }
+        return pool.last()
+    }
+
+    /**
+     * Rolls tier (from state.reviewsToday, settings.dailyAverage, trainerLevel, main level), then a random species (uniform, wishlisted ones
+     * twice as likely, see [pickFrom]) from that tier's pool at [wildLevel]; an empty rare pool falls back to NORMAL, an empty NORMAL to Rattata (19).
+     * The pick may then turn into one of its regional forms ([eligibleForms]). MEGA/GMAX rolls resolve to NORMAL. Shiny 1/4096.
      */
     fun roll(data: GameData, state: GameState, wildLevel: Int, rng: Random): Roll {
         val pct = tierPercentages(state.reviewsToday, state.settings.dailyAverage, state.trainerLevel, state.main?.level ?: 1)
@@ -144,8 +195,11 @@ object Encounters {
             tier = Tier.NORMAL
             species = pool(data, tier, state.settings, wildLevel, state.caught)
         }
-        val num = if (species.isEmpty()) 19 else species[rng.nextInt(species.size)]
-        return Roll(num, tier, rng.nextInt(Tuning.SHINY_ODDS) == 0)
+        val num = if (species.isEmpty()) 19 else pickFrom(data, species, state.settings.wishlist, rng)
+        // Regional form: FORM_SWAP_CHANCE per eligible form (Ankimon 7 %); no random number is used when there is none.
+        val forms = eligibleForms(data, state.settings, num, wildLevel, state.caught)
+        val picked = if (forms.isNotEmpty() && rng.nextDouble() < Tuning.FORM_SWAP_CHANCE * forms.size) forms[rng.nextInt(forms.size)] else num
+        return Roll(picked, tier, rng.nextInt(Tuning.SHINY_ODDS) == 0)
     }
 
     /** Builds the wild Mon (Progression.newMon) with a random EV spread worth level*5.1 (max 252/stat, 510 total). */

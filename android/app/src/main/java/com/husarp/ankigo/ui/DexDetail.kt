@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import android.view.Gravity
+import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -27,7 +28,7 @@ object DexDetail {
         col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, 96), Ui.dp(a, 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply { text = sp.name; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
         col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
-            text = "#%03d · Gen %d · %s".format(sp.num, sp.gen, if (caught) "caught" else "seen")
+            text = "#%03d · Gen %d · %s".format(sp.baseNum, sp.gen, if (caught) "caught" else "seen")
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(-1, -2))
         col.addView(Bits.typeRow(a, sp.types), LinearLayout.LayoutParams(-2, -2).also {
@@ -65,7 +66,14 @@ object DexDetail {
             setPadding(Ui.dp(a, 12), Ui.dp(a, 9), Ui.dp(a, 12), Ui.dp(a, 9))
             background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 10, a)
         }
-        fun label() { star.text = if (sp.num in a.state.settings.wishlist) "★  On your wishlist" else "☆  Add to wishlist" }
+        val hint = Ui.text(a, 11f, 700, R.color.ag_sub0).apply {
+            text = "Always caught, and met twice as often within its rarity."
+        }
+        fun label() {
+            val on = sp.num in a.state.settings.wishlist
+            star.text = if (on) "★  On your wishlist" else "☆  Add to wishlist"
+            hint.visibility = if (on) View.VISIBLE else View.GONE
+        }
         label()
         star.setOnClickListener {
             GameRepo.run(a) { g ->
@@ -77,6 +85,7 @@ object DexDetail {
             a.requestRender()
         }
         col.addView(star, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
+        col.addView(hint, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
         Pickers.info(a, sp.name, Bits.scroll(a, col))
     }

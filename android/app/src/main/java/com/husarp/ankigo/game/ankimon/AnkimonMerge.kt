@@ -65,7 +65,8 @@ object AnkimonMerge {
     /**
      * Merges [save] into [state] IN PLACE (the UI runs it on a copy for the preview, then again on a fresh copy to apply).
      * Never removes anything. Deterministic: same inputs -> same state (no randomness; uids derived from individual_id).
-     * [formBase]: PokeAPI form id (> 10000) -> base species number, null if unknown.
+     * [formBase]: PokeAPI form id (> 10000) -> base species number, null if unknown. A form id that is a regional form in
+     * [data] (Alolan, Galarian, Hisuian, Paldean) stays that form; every other form id (Mega, Deoxys...) maps to its base species.
      * [useTeam]: Ankimon's team becomes the team (old members stay in the box).
      */
     fun merge(data: GameData, state: GameState, save: AnkimonSave, formBase: (Int) -> Int?, useTeam: Boolean, now: Long): ImportReport {
@@ -104,8 +105,8 @@ object AnkimonMerge {
         val teamChanged = mergeTeam(state, save, byAnkimonId, useTeam)
         if (state.team.isNotEmpty()) state.starterChosen = true
 
-        // Pokédex: union; forms count as their base species; only species this game knows.
-        fun dex(ids: Collection<Int>) = ids.mapNotNull { n -> (if (n > 10000) formBase(n) else n)?.takeIf { it in data.species } }
+        // Pokédex: union; regional forms stay themselves, other forms count as their base species; only species this game knows.
+        fun dex(ids: Collection<Int>) = ids.mapNotNull { n -> (if (n > 10000 && !isRegional(data, n)) formBase(n) else n)?.takeIf { it in data.species } }
         val newCaught = dex(save.caught) + importedSpecies
         val newSeen = dex(save.seen) + newCaught
         val seenBefore = state.seen.size
@@ -144,7 +145,7 @@ object AnkimonMerge {
         val id = m.id
         if (id == null || id <= 0) return null to "no species number"
         var num: Int? = id
-        if (id > 10000) {
+        if (id > 10000 && !isRegional(data, id)) {
             num = formBase(id)?.takeIf { it in data.species } ?: speciesByName(m.name, nameIndex)
             if (num == null) return null to "form $id isn't known"
         }
@@ -152,6 +153,9 @@ object AnkimonMerge {
         if (sp.gen >= 9 && 9 !in state.settings.gens) return null to "gen 9: turn on generation 9 in Settings to import it"
         return sp to ""
     }
+
+    /** True when [id] is a regional form this game has (its species entry carries a form name). */
+    private fun isRegional(data: GameData, id: Int) = data.species[id]?.form != null
 
     /** "Charizard-Mega-X" -> Charizard: the longest leading run of words (split at '-' and spaces) that is a species name. */
     private fun speciesByName(name: String?, index: Map<String, Int>): Int? {

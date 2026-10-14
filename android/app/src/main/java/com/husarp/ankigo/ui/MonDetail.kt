@@ -94,7 +94,7 @@ object MonDetail {
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(-1, -2))
         col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
-            text = "#%03d · Lv %d · %s".format(sp.num, mon.level, mon.nature.label)
+            text = "#%03d · Lv %d · %s".format(sp.baseNum, mon.level, mon.nature.label)
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(-1, -2))
         col.addView(Bits.typeRow(a, sp.types), LinearLayout.LayoutParams(-2, -2).also {

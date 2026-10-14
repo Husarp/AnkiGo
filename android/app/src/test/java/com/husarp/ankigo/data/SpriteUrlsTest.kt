@@ -40,6 +40,27 @@ class SpriteUrlsTest {
             SpriteUrls.battle(pika, SpriteKind.BACK, true))
     }
 
+    // regional form: Showdown file names use spriteId ("raticate-alola"), PokeAPI ones the pokemon id (10092)
+    private val raticateAlola = TestData.species(10092, "raticatealola").copy(spriteId = "raticate-alola", form = "Alola", baseNum = 20)
+
+    @Test fun regionalFormChainsUseTheSpriteIdAndSkipTheBwGif() {
+        assertEquals(listOf("${sd}gen5ani/raticate-alola.gif", "${sd}gen5/raticate-alola.png", "${api}pokemon/10092.png"),
+            SpriteUrls.battle(raticateAlola, SpriteKind.FRONT, false))
+        assertEquals(listOf("${sd}gen5ani-back/raticate-alola.gif", "${sd}gen5-back/raticate-alola.png"),
+            SpriteUrls.battle(raticateAlola, SpriteKind.BACK, false))
+        assertEquals(listOf("${sd}gen5ani-shiny/raticate-alola.gif", "${sd}gen5-shiny/raticate-alola.png", "${api}pokemon/shiny/10092.png"),
+            SpriteUrls.battle(raticateAlola, SpriteKind.FRONT, true))
+        assertEquals(listOf("${sd}gen5ani-back-shiny/raticate-alola.gif", "${sd}gen5-back-shiny/raticate-alola.png"),
+            SpriteUrls.battle(raticateAlola, SpriteKind.BACK, true))
+        assertEquals("${api}pokemon/10092.png", SpriteUrls.static(raticateAlola.num, false))
+    }
+
+    @Test fun aBaseSpeciesSpriteIdIsItsShowdownId() {
+        assertEquals("pikachu", pika.spriteId)
+        assertEquals(pika.id, pika.spriteId)
+        assertEquals(25, pika.baseNum)
+    }
+
     @Test fun staticAndItemUrls() {
         assertEquals("${api}pokemon/25.png", SpriteUrls.static(25, false))
         assertEquals("${api}pokemon/shiny/25.png", SpriteUrls.static(25, true))
@@ -69,5 +90,18 @@ class SpriteUrlsTest {
         lru.put("d", "dddddd")
         assertNull(lru.get("c")) // 2 + 4 + 6 = 12 > 10: the least recent (c) goes
         assertNotNull(lru.get("a")); assertNotNull(lru.get("d"))
+    }
+}
+
+class SpriteUrlsGen9Test {
+    private val api = "https://raw.githubusercontent.com/PokeAPI/sprites/${DataStore.SPRITES_COMMIT}/sprites/"
+    private val sd = "https://play.pokemonshowdown.com/sprites/"
+    private val sprigatito = TestData.species(906, "sprigatito")
+
+    @Test fun gen9FrontEndsWithStillPictures() {
+        assertEquals(listOf("${sd}gen5ani/sprigatito.gif", "${sd}gen5/sprigatito.png", "${api}pokemon/906.png"),
+            SpriteUrls.battle(sprigatito, SpriteKind.FRONT, false))
+        assertEquals(listOf("${sd}gen5ani-back/sprigatito.gif", "${sd}gen5-back/sprigatito.png"),
+            SpriteUrls.battle(sprigatito, SpriteKind.BACK, false))
     }
 }

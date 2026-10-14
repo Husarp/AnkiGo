@@ -5,6 +5,9 @@ package com.husarp.ankigo.game
  * unless the comment says "AnkiGo". Change them here only.
  */
 object Tuning {
+    /** Longest nickname (same as the Ankimon import). */
+    const val NICKNAME_MAX = 20
+
     // ---- Answers and rounds (Ankimon ankimon_tracker.py / battle_loop.py) ----
     /** Points per button: index = button (0 unknown counts as Good). */
     val POINTS = intArrayOf(10, 0, 5, 10, 20)
@@ -28,7 +31,14 @@ object Tuning {
     const val PARA_SKIP = 0.25
     const val PARA_SPEED = 0.5
     const val FREEZE_THAW = 0.2
-    val SLEEP_TURNS = 1..3
+    /** Sleep (poke-engine): no turn counter, each move attempt wakes the sleeper with this chance and it acts at once. */
+    const val WAKE_CHANCE = 0.33
+    /** A frozen Pokémon that uses one of these moves thaws and acts (poke-engine THAW_IF_USES). */
+    val THAW_IF_USES = setOf("scald", "flamewheel", "sacredfire", "flareblitz", "fusionflare", "steameruption", "scorchingsands")
+    /** Besides every damaging Fire move, these also thaw a frozen target they hit (THAW_IF_HIT_BY). */
+    val THAW_IF_HIT_BY = setOf("scald", "steameruption", "scorchingsands")
+    /** Powder moves fail against Grass types (poke-engine POWDER flag). */
+    val POWDER_MOVES = setOf("sleeppowder", "stunspore", "poisonpowder", "spore", "powder", "ragepowder", "magicpowder")
 
     // ---- Catching ----
     /** Ankimon "automatic_battle" mode used because AnkiGo never asks during study: 3 = catch species you don't have. */
@@ -87,6 +97,10 @@ object Tuning {
     val TIER_MIN_LEVEL = mapOf(Tier.MYTHICAL to 75, Tier.LEGENDARY to 50, Tier.ULTRA to 30, Tier.STARTER to 30)
     /** A wild form that evolves by anything but level only appears at this level (Ankimon). AnkiGo fix: not for baby-line basics. */
     const val NON_LEVEL_EVO_MIN_LEVEL = 100
+    /** Regional forms: a picked base species turns into one of its eligible forms with this chance PER eligible form (Ankimon 7 %). */
+    const val FORM_SWAP_CHANCE = 0.07
+    /** Weight of a wishlisted species inside its rolled tier's pool (others 1). AnkiGo addition, not Ankimon. */
+    const val WISHLIST_WEIGHT = 2
     const val DAILY_AVERAGE = 100
     const val DAY_START_HOUR = 4
     const val TRAINER_BONUS_FROM_LEVEL = 10 // trainer level above this adds the rare bonus once more
