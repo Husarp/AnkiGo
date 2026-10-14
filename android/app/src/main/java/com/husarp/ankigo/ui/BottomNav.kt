@@ -13,7 +13,7 @@ import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 
 /**
- * The 5-tab bottom bar (mockup `.bnav`): Study / Battle / Team / Shop / Settings. Team holds Team, Box and Pokédex as
+ * The 5-tab bottom bar (mockup `.bnav`): Study / Battle (crossed swords) / Team (closed book) / Shop / Settings. Team holds Team, Box and Pokédex as
  * sections; [Tab.DEX] is not in the bar (a Pokédex screen highlights Team). The selected tab is in the accent colour with
  * its icon on a 20 % accent pill. Tapping another tab opens its screen (brought to front, no animation) and closes the
  * current one unless that is the Battle screen, so Back from any tab ends up on Battle.
@@ -22,7 +22,7 @@ object BottomNav {
     enum class Tab(val label: String, @DrawableRes val icon: Int, val screen: Class<out Activity>, val inBar: Boolean = true) {
         STUDY("Study", R.drawable.ic_study, StudyDecksActivity::class.java),
         BATTLE("Battle", R.drawable.ic_swords, GameActivity::class.java),
-        TEAM("Team", R.drawable.ic_team, TeamActivity::class.java),
+        TEAM("Team", R.drawable.ic_book, TeamActivity::class.java),
         DEX("Pokédex", R.drawable.ic_book, DexActivity::class.java, inBar = false),
         SHOP("Shop", R.drawable.ic_shop, ShopActivity::class.java),
         SETTINGS("Settings", R.drawable.ic_settings, SettingsActivity::class.java),
