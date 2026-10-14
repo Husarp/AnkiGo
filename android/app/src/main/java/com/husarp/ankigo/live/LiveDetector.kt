@@ -11,6 +11,7 @@ import com.husarp.ankigo.GUESS
 import com.husarp.ankigo.Guess
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.Steps
+import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.inferButton
 import org.json.JSONObject
 
@@ -64,6 +65,11 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
     private val stepsCache = HashMap<Long, Steps?>()
     private var tickNo = 0
     private var errors = 0
+    /** elapsedRealtime of the last successful full read (baseline or full poll); LivePolicy.isFull uses it. */
+    private var lastFullMs = 0L
+    /** The baseline of this session is done: only then may a poll compare cards (it needs the baseline to know "before"). */
+    private var ready = false
+    private val recheckGate = RecheckGate()
     private var dirty = false
 
     /**
@@ -93,6 +99,21 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         w.post { startSession(g, restored) }
     }
 
+    /**
+     * Reads all of today's rated cards once, now (on the worker thread, through the same compare() path as every poll,
+     * so nothing is counted twice). Does nothing while stopped or before the baseline is done. Several requests before
+     * it runs are one. Safe from any thread.
+     */
+    fun recheck() {
+        val w = worker ?: return
+        val g = gen
+        if (!active || !recheckGate.tryQueue(g)) return
+        w.post {
+            recheckGate.done()
+            if (alive(g) && ready) pollOnce(true, SystemClock.elapsedRealtime())
+        }
+    }
+
     /** Stops the loop; the thread stays for reuse. A poll already running finishes and still delivers its events. */
     fun stop() {
         active = false
@@ -118,12 +139,12 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         if (!alive(g)) return
         val w = worker!!
         cards.clear(); stepsCache.clear(); lastStatus = null; problem = false
-        prevRated = emptySet(); prevHot = emptySet(); tickNo = 0; errors = 0; dirty = false
+        prevRated = emptySet(); prevHot = emptySet(); tickNo = 0; errors = 0; dirty = false; ready = false
         if (Anki.installed(ctx).none { it.pkg == Anki.pkg }) {
-            status(false, "AnkiDroid not found"); w.postDelayed({ startSession(g, restored) }, 5_000); return
+            status(false, "AnkiDroid not found"); w.postDelayed({ startSession(g, restored) }, Tuning.LIVE_RETRY_MS); return
         }
         if (!Anki.hasPermission(ctx)) {
-            status(false, "Allow AnkiGo to use AnkiDroid (permission missing)"); w.postDelayed({ startSession(g, restored) }, 5_000); return
+            status(false, "Allow AnkiGo to use AnkiDroid (permission missing)"); w.postDelayed({ startSession(g, restored) }, Tuning.LIVE_RETRY_MS); return
         }
         try {
             val t0 = SystemClock.elapsedRealtime()
@@ -144,14 +165,16 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
             Report.log("LIVE", "watching: baseline ${base.size} cards in ${SystemClock.elapsedRealtime() - t0} ms; rated today=${prevRated.size}; catch-up answers=${missed.size}; AnkiDroid=${Anki.pkg}")
             if (missed.isNotEmpty()) main.post { missed.forEach(onEvent) }
             status(true, OK_TEXT)
+            lastFullMs = SystemClock.elapsedRealtime() // the baseline read everything
+            ready = true
             if (alive(g)) w.post { tick(g) }
         } catch (e: SecurityException) {
             status(false, "Allow AnkiGo to use AnkiDroid (permission missing)")
-            w.postDelayed({ startSession(g, restored) }, 5_000)
+            w.postDelayed({ startSession(g, restored) }, Tuning.LIVE_RETRY_MS)
         } catch (e: Exception) {
             Report.fail("LIVE", "baseline failed (cards URI needs AnkiDroid 2.24+)", e)
             status(false, "AnkiGo needs AnkiDroid 2.24 or newer")
-            w.postDelayed({ startSession(g, restored) }, 30_000)
+            w.postDelayed({ startSession(g, restored) }, Tuning.LIVE_RETRY_SLOW_MS)
         }
     }
 
@@ -160,10 +183,17 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         if (!alive(g)) return
         val t0 = SystemClock.elapsedRealtime()
         tickNo++
-        val full = tickNo % 10 == 0
+        pollOnce(LivePolicy.isFull(tickNo, t0, lastFullMs), t0)
+        val dt = SystemClock.elapsedRealtime() - t0
+        if (alive(g)) worker?.postDelayed({ tick(g) }, LivePolicy.nextDelay(dt))
+    }
+
+    /** One poll (light or full) with its event delivery and error handling; used by tick() and recheck(). Worker thread. */
+    private fun pollOnce(full: Boolean, nowMs: Long) {
         try {
             val out = ArrayList<Event>()
             poll(full, out)
+            if (full) lastFullMs = nowMs
             // Snapshot first: the game saves it together with the answers these events produce (no double catch-up).
             if (dirty) refreshSnapshot()
             if (out.isNotEmpty()) main.post { out.forEach(onEvent) }
@@ -176,14 +206,12 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
                 status(false, "AnkiDroid poll error: ${e.javaClass.simpleName}")
             }
         }
-        val dt = SystemClock.elapsedRealtime() - t0
-        if (alive(g)) worker?.postDelayed({ tick(g) }, (1000 - dt).coerceAtLeast(100))
     }
 
     /**
      * Light tick (default): rated:1 ids only (provider fast path) + full columns for `rated:1 is:learn`
      * (cards that can come back today) + single reads for cards that entered/left those sets.
-     * Full tick (every 10th): full columns for all of rated:1.
+     * Full tick (every LIVE_FULL_EVERY-th, or LIVE_RECHECK_MS since the last one, or a recheck()): full columns for all of rated:1.
      */
     private fun poll(full: Boolean, out: MutableList<Event>) {
         val rated = Anki.searchCards(ctx, "rated:1", arrayOf("_id")).mapNotNull { it["_id"]?.toLongOrNull() }.toSet()
