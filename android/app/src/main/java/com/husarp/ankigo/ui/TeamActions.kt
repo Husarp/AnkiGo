@@ -25,8 +25,6 @@ internal class MonActions(private val s: GamePage) {
         val main = state.main
         if (idx >= 0) {
             if (idx > 0) add("Make main") { s.act { it.setMain(mon.uid) } }
-            if (idx > 0) add("Move up") { s.act { it.moveInTeam(mon.uid, -1) } }
-            if (idx < state.team.size - 1) add("Move down") { s.act { it.moveInTeam(mon.uid, 1) } }
             if (state.team.size > 1) add("Send to box") { s.act { it.toBox(mon.uid) } }
         } else if (state.team.size < 6) {
             add("Add to team") { s.act { it.toTeam(mon.uid) } }
@@ -52,15 +50,17 @@ internal class MonActions(private val s: GamePage) {
             else add("Make Exp. Share holder") { s.act { it.setXpShare(mon.uid) } }
         }
         add("Rename…") { rename(mon) }
-        add("Details") { MonDetail.show(s, data, mon) }
         add("Release…") { release(mon) }
         Pickers.choose(s, "${if (mon.shiny) "★ " else ""}${mon.shownName}  Lv ${mon.level}", labels) { acts[it]() }
     }
 
-    private fun rename(mon: Mon) {
+    /** The rename dialog (menu "Rename…" and the pencil in the details); [onDone] runs after a rename was saved. */
+    @JvmOverloads
+    fun rename(mon: Mon, onDone: () -> Unit = {}) {
         Pickers.input(s, "Rename ${mon.shownName}", mon.name, mon.nickname.orEmpty(), Tuning.NICKNAME_MAX,
-            neutral = if (mon.nickname != null) "Use species name" to { s.act { it.rename(mon.uid, "") } } else null) { text ->
+            neutral = if (mon.nickname != null) "Use species name" to { s.act { it.rename(mon.uid, "") }; onDone() } else null) { text ->
             s.act { it.rename(mon.uid, text) }
+            onDone()
         }
     }
 
