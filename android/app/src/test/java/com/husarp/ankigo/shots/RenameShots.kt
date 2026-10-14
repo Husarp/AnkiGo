@@ -27,7 +27,9 @@ class RenameShots {
             st.mon("t1")!!.nickname = "Zappy the Great"
             call(MonActions(TeamPage(ctx, NoHost)), "rename", st.mon("t1")!!)
         }
-        dialog("rename-menu") { ctx -> MonActions(TeamPage(ctx, NoHost)).menu(st.mon("t3")!!) }
+        paparazzi.shootPage("rename-menu") { ctx ->
+            MenuKit.scene(ctx, MenuKit.capture { MonActions(TeamPage(ctx, NoHost)).menu(st.mon("t3")!!, View(ctx)) })
+        }
         paparazzi.shootPage("rename-team") { ctx ->
             st.mon("t1")!!.nickname = "Zappy"; st.mon("t3")!!.nickname = "Mr. Longest Nick Ever 1"
             pageScreen(ctx, TeamPage(ctx, NoHost)) as View

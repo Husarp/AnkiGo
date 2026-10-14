@@ -276,8 +276,11 @@ class PagesShots {
         }
         dialog("pages-dlg-pickmove") { ctx -> Pickers.pickMove(ctx, "Forget which move?", gd, st.mon("t1")!!) {} }
         dialog("pages-dlg-choose") { ctx -> Pickers.choose(ctx, "Pick one", listOf("Ask", "Always open in AnkiDroid", "Answer anyway")) {} }
-        dialog("pages-dlg-monmenu") { ctx -> MonActions(TeamPage(ctx, NoHost)).menu(st.mon("t3")!!) }
-        dialog("pages-dlg-monmenu-main") { ctx -> MonActions(TeamPage(ctx, NoHost)).menu(st.mon("t1")!!) }
+        for ((name, uid) in listOf("pages-dlg-monmenu" to "t3", "pages-dlg-monmenu-main" to "t1")) {
+            paparazzi.shootPage(name, phoneSplit) { ctx ->
+                MenuKit.scene(ctx, MenuKit.capture { MonActions(TeamPage(ctx, NoHost)).menu(st.mon(uid)!!, View(ctx)) })
+            }
+        }
         dialog("pages-dlg-badges", phoneTall) { ctx -> call(TeamPage(ctx, NoHost), "showBadges") }
     }
 

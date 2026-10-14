@@ -3,6 +3,7 @@ package com.husarp.ankigo.shots
 import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.game.GameEvent
+import com.husarp.ankigo.ui.AppMenu
 import com.husarp.ankigo.ui.Ui
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -57,22 +58,26 @@ class NextMainShots {
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         var b = BattleShotKit.bound(ctx)
-        var menu = android.widget.PopupMenu(ctx, b.root).menu
-        b.activity.addMenuItems(menu)
-        var titles = (0 until menu.size()).map { menu.getItem(it).title.toString() }
-        assertEquals(listOf("Team", "Pokédex", "Shop", "Settings", "Next team member as main", "Stats"), titles)
-        assertTrue(menu.findItem(5).isEnabled)
+        var rows = menuRows(b)
+        assertEquals(listOf("Team", "Pokédex", "Shop", "Settings", "Next team member as main", "Stats"), rows.map { it.second })
+        assertTrue(rows.first { it.first == 5 }.third)
 
         FakeGame.scenario = FakeGame.Scenario.EMPTY
         FakeGame.install(ctx)
         b = BattleShotKit.bound(ctx)
-        menu = android.widget.PopupMenu(ctx, b.root).menu
-        b.activity.addMenuItems(menu)
-        titles = (0 until menu.size()).map { menu.getItem(it).title.toString() }
-        assertEquals(listOf("Team", "Pokédex", "Shop", "Settings", "Next team member as main", "Needs 2+ Pokémon in your team", "Stats"), titles)
-        assertFalse(menu.findItem(5).isEnabled)
-        assertFalse(menu.findItem(7).isEnabled)
-        assertEquals("Stats", menu.getItem(menu.size() - 1).title.toString())
+        val m = AppMenu(b.root)
+        b.activity.fillMenu(m)
+        rows = m.describe()
+        assertEquals(listOf("Team", "Pokédex", "Shop", "Settings", "Next team member as main", "Stats"), rows.map { it.second })
+        assertFalse(rows.first { it.first == 5 }.third)
+        assertEquals("Needs 2+ Pokémon in your team", m.subOf(5))
+        assertEquals("Stats", rows.last().second)
+    }
+
+    private fun menuRows(b: BattleShotKit.Built): List<Triple<Int, String, Boolean>> {
+        val m = AppMenu(b.root)
+        b.activity.fillMenu(m)
+        return m.describe()
     }
 
     /** The tap while three events (about 2.4 s of animation) are still queued. */

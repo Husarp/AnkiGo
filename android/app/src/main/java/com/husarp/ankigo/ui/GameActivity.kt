@@ -19,7 +19,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.PopupMenu
+import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
 import com.husarp.ankigo.Anki
@@ -55,6 +55,7 @@ import java.util.Locale
 class GameActivity : AgActivity() {
     private lateinit var content: FrameLayout
     private lateinit var nav: View
+    private lateinit var topBar: View        // slim "Battle" bar with Stats and ⋯; only in a tall window
 
     private var panel: BattlePanelView? = null
     private var player: EventPlayer? = null
@@ -97,6 +98,8 @@ class GameActivity : AgActivity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Ui.c(this@GameActivity, R.color.ag_base))
         }
+        topBar = buildTopBar().also { it.visibility = View.GONE }
+        root.addView(topBar, LinearLayout.LayoutParams(-1, -2))
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         nav = BottomNav.create(this, BottomNav.Tab.BATTLE).also { it.visibility = View.GONE }
@@ -106,8 +109,30 @@ class GameActivity : AgActivity() {
             val tall = v.height / resources.displayMetrics.density >= 560f
             val want = if (tall && !inPip) View.VISIBLE else View.GONE
             if (nav.visibility != want) nav.visibility = want
+            if (topBar.visibility != want) { topBar.visibility = want; panel?.setFooterTools(want != View.VISIBLE) }
         }
         return root
+    }
+
+    /** The slim top bar of a tall window: title "Battle" and the Stats and ⋯ buttons (a short window has them in the panel footer). */
+    private fun buildTopBar(): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setBackgroundColor(Ui.c(this@GameActivity, R.color.ag_base))
+        setPadding(Ui.dp(this@GameActivity, 16), Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 8), Ui.dp(this@GameActivity, 4))
+        addView(Ui.text(this@GameActivity, 18f, 900, R.color.ag_text).apply { text = "Battle"; maxLines = 1; letterSpacing = -0.014f }, LinearLayout.LayoutParams(0, -2, 1f))
+        addView(topButton(R.drawable.ic_stats, "Stats") { openStats() })
+        addView(topButton(R.drawable.ic_more_vert, "Menu") { showMenu(it) })
+    }
+
+    private fun topButton(icon: Int, description: String, onClick: (View) -> Unit): View = ImageView(this).apply {
+        setImageResource(icon)
+        setColorFilter(Ui.c(this@GameActivity, R.color.ag_sub1), android.graphics.PorterDuff.Mode.SRC_IN)
+        contentDescription = description
+        val p = Ui.dp(this@GameActivity, 12)
+        setPadding(p, p, p, p)
+        layoutParams = LinearLayout.LayoutParams(Ui.dp(this@GameActivity, 48), Ui.dp(this@GameActivity, 48))
+        setOnClickListener(onClick)
     }
 
     override fun onStart() {
@@ -235,7 +260,7 @@ class GameActivity : AgActivity() {
         inPip = isInPictureInPictureMode
         panel?.setCompact(inPip)
         // the layout listener re-decides the bottom bar by height; force it now so it doesn't flash in PiP
-        if (inPip) nav.visibility = View.GONE else content.requestLayout()
+        if (inPip) { nav.visibility = View.GONE; topBar.visibility = View.GONE; panel?.setFooterTools(true) } else content.requestLayout()
     }
 
     /** The PiP buttons Pause and Resume come back as broadcasts (the Open button starts this activity directly). */
@@ -312,6 +337,8 @@ class GameActivity : AgActivity() {
         val p = BattlePanelView(this)
         p.onGrant = { internalNav = true; updatePipParams(); requestPermissions(arrayOf(Anki.permission), REQ_PERMISSION) }
         p.onMenu = { showMenu(it) }
+        p.addToolButton(R.drawable.ic_stats, "Stats") { openStats() }
+        p.setFooterTools(topBar.visibility != View.VISIBLE)
         p.onBalls = { showBallDialog() }
         p.arena.onCatchTagTap = { toggleCatch() }
         p.setPaused(LiveSession.paused)
@@ -448,43 +475,36 @@ class GameActivity : AgActivity() {
     }
 
     /** The ⋯ menu entries. "Next team member as main" is greyed with the reason under it when it can't work. */
-    internal fun addMenuItems(menu: android.view.Menu) {
-        menu.add(0, 1, 0, "Team")
-        menu.add(0, 2, 1, "Pokédex")
-        menu.add(0, 3, 2, "Shop")
-        menu.add(0, 4, 3, "Settings")
+    internal fun fillMenu(m: AppMenu) {
+        m.item(1, "Team", R.drawable.ic_team)
+        m.item(2, "Pokédex", R.drawable.ic_book)
+        m.item(3, "Shop", R.drawable.ic_shop)
+        m.item(4, "Settings", R.drawable.ic_settings)
         val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
-        menu.add(0, 5, 4, "Next team member as main").isEnabled = blocker == null
-        if (blocker != null) {
-            // A second, greyed line right under it says why.
-            val reason = android.text.SpannableString(blocker).apply {
-                setSpan(android.text.style.RelativeSizeSpan(0.8f), 0, length, 0)
-                setSpan(android.text.style.ForegroundColorSpan(Ui.c(this@GameActivity, R.color.ag_sub0)), 0, length, 0)
-            }
-            menu.add(0, 7, 5, reason).isEnabled = false
-        }
-        menu.add(0, 6, 6, "Stats")
+        m.item(5, "Next team member as main", R.drawable.ic_swap, enabled = blocker == null, sub = blocker)
+        m.item(6, "Stats", R.drawable.ic_stats)
     }
 
     private fun showMenu(anchor: View) {
-        val m = PopupMenu(this, anchor)
-        addMenuItems(m.menu)
-        m.setOnMenuItemClickListener { item ->
-            when (item.itemId) {
+        val m = AppMenu(anchor)
+        fillMenu(m)
+        m.show { id ->
+            when (id) {
                 1 -> openScreen(FloatPage.TEAM, TeamActivity::class.java)
                 2 -> openScreen(FloatPage.DEX, DexActivity::class.java)
                 3 -> openScreen(FloatPage.SHOP, ShopActivity::class.java)
                 4 -> openScreen(FloatPage.SETTINGS, SettingsActivity::class.java)
                 5 -> switchMain()
-                6 -> { // always its own Activity, also in split screen
-                    internalNav = true
-                    updatePipParams()
-                    startActivity(Intent(this, StatsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
-                }
+                6 -> openStats()
             }
-            true
         }
-        m.show()
+    }
+
+    /** Stats are always their own Activity, also in split screen. */
+    private fun openStats() {
+        internalNav = true
+        updatePipParams()
+        startActivity(Intent(this, StatsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
     }
 
     /**

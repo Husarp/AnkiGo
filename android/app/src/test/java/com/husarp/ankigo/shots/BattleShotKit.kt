@@ -37,7 +37,11 @@ object BattleShotKit {
      */
     fun bound(ctx: Context): Built = build(ctx).also {
         it.call("bind")
-        if (ctx.resources.configuration.screenHeightDp >= 560) (it.field("nav") as View).visibility = View.VISIBLE
+        if (ctx.resources.configuration.screenHeightDp >= 560) {
+            (it.field("nav") as View).visibility = View.VISIBLE
+            (it.field("topBar") as View).visibility = View.VISIBLE
+            it.panel?.setFooterTools(false)
+        }
     }
 
     /** Picture-in-picture, as onPictureInPictureModeChanged(true) sets it up. */
@@ -46,6 +50,8 @@ object BattleShotKit {
         b.panel?.setCompact(true)
         if (paused) b.panel?.setPaused(true)
         (b.field("nav") as View).visibility = View.GONE
+        (b.field("topBar") as View).visibility = View.GONE
+        b.panel?.setFooterTools(true)
     }
 
     /** The screen's view under the floating update banner, at its final (slid-in) position, as AgActivity.setContentView does it. */
