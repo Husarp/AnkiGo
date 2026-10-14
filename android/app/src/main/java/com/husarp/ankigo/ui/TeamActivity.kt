@@ -297,6 +297,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
                 else -> "Tap for details · hold for actions"
             }
             setPadding(Ui.dp(ctx, 4), 0, Ui.dp(ctx, 4), Ui.dp(ctx, 8))
+            if (Ui.shortWindow(ctx)) visibility = View.GONE // split screen: no room for the hint line
         })
         return col
     }
@@ -327,6 +328,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         boxHeader.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply {
             text = if (pickOn) "Tap a Pokémon to tick it for Compare." else "Tap for details · hold for actions"
             setPadding(Ui.dp(this@TeamPage, 4), 0, Ui.dp(this@TeamPage, 4), Ui.dp(this@TeamPage, 8))
+            visibility = if (box.isEmpty() || Ui.shortWindow(this@TeamPage)) View.GONE else View.VISIBLE
         })
         if (box.isEmpty()) {
             boxHeader.addView(Ui.text(this, 13f, 700, R.color.ag_sub0).apply {
@@ -438,7 +440,12 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         // types, then the tags (most useful first) as many as fit in the rest of the line, at most 3
         val r2 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         r2.addView(Bits.typeRow(ctx, data.sp(mon.species).types))
-        val tags = FitRow(ctx).apply { MonTags.of(data, state, mon).take(3).forEach { addView(MonTags.pill(ctx, it), LinearLayout.LayoutParams(-2, -2).also { lp -> lp.marginStart = Ui.dp(ctx, 4) }) } }
+        val tags = FitRow(ctx).apply {
+            MonTags.of(data, state, mon).take(3).forEach { t ->
+                addView(if (t.kind == TagKind.HELD && t.item != null) heldChip(t) else MonTags.pill(ctx, t),
+                    LinearLayout.LayoutParams(-2, -2).also { lp -> lp.marginStart = Ui.dp(ctx, 4) })
+            }
+        }
         r2.addView(tags, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 3) })
         body.addView(r2, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
 
@@ -464,6 +471,18 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             row.addView(badge, LinearLayout.LayoutParams(Ui.dp(ctx, 26), Ui.dp(ctx, 26)).also { it.marginStart = Ui.dp(ctx, 6) })
         }
         return row
+    }
+
+    /** The held-item tag in a row: just the item icon on the neutral pill (the label is in the details), so it always fits. */
+    private fun heldChip(tag: MonTag): View {
+        val ctx = this
+        return LinearLayout(ctx).apply {
+            gravity = Gravity.CENTER
+            contentDescription = tag.label
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_s0), 7, ctx)
+            setPadding(Ui.dp(ctx, 5), Ui.dp(ctx, 2), Ui.dp(ctx, 5), Ui.dp(ctx, 2))
+            addView(ImageView(ctx).also { Ui.itemIcon(ctx, tag.item!!, it) }, LinearLayout.LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)))
+        }
     }
 
     /** An Edit-mode arrow: 48 dp touch, 36 dp look; greyed out and dead at the ends. */

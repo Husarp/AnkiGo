@@ -250,6 +250,7 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
             setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 8))
             setText(filter.query)
             Ui.tintEdit(this)
+            backgroundTintList = null // tintEdit tints the underline of a plain field; this one has its own rounded fill
             addTextChangedListener(object : TextWatcher {
                 override fun afterTextChanged(s: Editable?) { filter = filter.copy(query = s?.toString().orEmpty()); refilter() }
                 override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) = Unit

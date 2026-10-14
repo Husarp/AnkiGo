@@ -25,6 +25,8 @@ class TeamTabShots {
         st.mon("t2")?.level = 33
         st.settings.xpShareUid = "t3"
         st.mon("t4")?.caughtAt = System.currentTimeMillis()
+        st.mon("b2")?.heldItem = "everstone"; st.mon("b7")?.heldItem = "amulet-coin"
+        st.mon("b3")?.let { it.shiny = true }; st.mon("b5")?.hp = 0
     }
 
     private fun page(ctx: Context, v: Variant, section: TeamSection, edit: Boolean = false, pick: List<ComparePick>? = null): View {
@@ -34,7 +36,7 @@ class TeamTabShots {
         return if (v === FLOAT) p.root.also { p.onShow() } else pageScreen(ctx, p)
     }
 
-    private val picks = listOf(ComparePick.Owned("t1"), ComparePick.Owned("b3"), ComparePick.Dex(150))
+    private val picks = listOf(ComparePick.Owned("t1"), ComparePick.Owned("b3"), ComparePick.Dex(16))
 
     private fun shoot(name: String, section: TeamSection, edit: Boolean = false, pick: List<ComparePick>? = null,
                       vs: List<Variant> = sizes, scenario: FakeGame.Scenario = FakeGame.Scenario.MID_GAME, withSprites: Boolean = true) {
