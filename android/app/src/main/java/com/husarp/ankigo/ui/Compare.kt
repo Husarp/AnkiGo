@@ -251,7 +251,14 @@ private class TableGrid(private val page: GamePage, private val look: CompareLoo
             setPadding(dp(8), dp(4), dp(2), dp(4))
         }, FrameLayout.LayoutParams(-1, -1))
         addView(line(), FrameLayout.LayoutParams(dp(1), -1, Gravity.END))
-        stickyX += this
+        sticky(this)
+    }
+
+    /** Keeps [v] at the left edge while the table scrolls sideways, drawn over the columns that pass under it. */
+    private fun sticky(v: View) {
+        stickyX += v
+        v.z = 2f
+        v.outlineProvider = null
     }
 
     private fun headRow(): View {
@@ -260,7 +267,7 @@ private class TableGrid(private val page: GamePage, private val look: CompareLoo
         row.addView(FrameLayout(ctx).apply {
             setBackgroundColor(bandA)
             addView(line(), FrameLayout.LayoutParams(dp(1), -1, Gravity.END))
-            stickyX += this
+            sticky(this)
         }, LinearLayout.LayoutParams(labelPx, h))
         for (col in table.columns) {
             val cell = LinearLayout(ctx).apply {
@@ -376,7 +383,13 @@ private class TableGrid(private val page: GamePage, private val look: CompareLoo
                     }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
                 }
             }
-            is Cell.TypeChips -> box.addView(Bits.typeRow(ctx, cell.types), LinearLayout.LayoutParams(-2, -2))
+            is Cell.TypeChips ->
+                if (look.colDp < 130f && cell.types.size > 1) {
+                    // two chips don't fit side by side in a narrow column
+                    cell.types.forEachIndexed { i, t ->
+                        box.addView(Ui.typeChip(ctx, t), LinearLayout.LayoutParams(-2, -2).also { if (i > 0) it.topMargin = dp(3) })
+                    }
+                } else box.addView(Bits.typeRow(ctx, cell.types), LinearLayout.LayoutParams(-2, -2))
             is Cell.Moves -> {
                 if (cell.moves.isEmpty()) box.addView(Ui.text(ctx, look.valueSp, 700, R.color.ag_sub0).apply { text = "none" })
                 cell.moves.forEachIndexed { i, m ->

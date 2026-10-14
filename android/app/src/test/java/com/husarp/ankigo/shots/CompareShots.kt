@@ -45,11 +45,15 @@ class CompareShots {
     /** Scrolls the table once it has been laid out (the renderer lays out once, then draws). */
     private fun scrollAfterLayout(scene: View, x: Int, y: Int) {
         val h = find(scene, { it is HorizontalScrollView }).first() as HorizontalScrollView
-        val v = find(scene, { it is ScrollView }).first() as ScrollView
+        val v = h.parent as ScrollView
         h.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
             override fun onLayoutChange(view: View?, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
                 h.removeOnLayoutChangeListener(this)
-                h.scrollTo(x, 0); v.scrollTo(0, y)
+                // one whole column (the table stops on columns), n = 4
+                val cfg = h.resources.configuration
+                val tight = cfg.screenWidthDp < 380 || cfg.screenHeightDp < 520
+                val label = (if (tight) 54 else 62) * 2
+                h.scrollTo(x * ((h.getChildAt(0).width - label) / 4), 0); v.scrollTo(0, y)
             }
         })
     }
@@ -67,7 +71,9 @@ class CompareShots {
         listOf(Variants.PHONE))
 
     @Test fun scrolled() {
-        shoot("compare-scrolled", mixedFour, listOf(Variants.PHONE, float)) { scrollAfterLayout(it, 420, 520) }
+        shoot("compare-scrolled", mixedFour, listOf(Variants.PHONE, float)) { scrollAfterLayout(it, 1, 520) }
+        shoot("compare-bottom", ownedTwo, listOf(Variants.PHONE, float)) { scrollAfterLayout(it, 0, 3000) }
+        shoot("compare-scrolled-end", mixedFour, listOf(Variants.PHONE), after = { scrollAfterLayout(it, 2, 0) })
     }
 
     @Test fun dexOnly() = shoot("compare-dex", listOf(ComparePick.Dex(25), ComparePick.Dex(133)), listOf(Variants.PHONE)) { clickFinal(it) }
