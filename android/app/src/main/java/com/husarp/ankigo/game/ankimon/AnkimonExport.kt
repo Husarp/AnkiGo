@@ -322,6 +322,7 @@ object AnkimonExport {
             teamAndMain()
             itemsAndTms()
             cash()
+            xpShare()
             pokedex("pokedex_seen", before.seen, state.seen)
             pokedex("pokedex_caught", before.caught, state.caught)
             if (fresh) {
@@ -547,6 +548,25 @@ object AnkimonExport {
             else if (before.cash != want) config[row, "value"] = want.toString()
         }
 
+        /**
+         * Ankimon's classic Exp. Share holder (config `trainer.xp_share`, the holder's individual_id as plain text) follows
+         * the phone's. Equal to what the import read -> untouched. Turned off on the phone -> the row goes (as on release),
+         * but only when the file's holder is a Pokémon AnkiGo has. Ankimon's "oras" mode (no single holder) is left alone.
+         */
+        fun xpShare() {
+            val want = state.settings.xpShareUid?.let { state.mon(it) }?.let { ids[it] }
+            if (want == before.xpShare) return
+            val mode = config.rows.firstOrNull { text(config[it, "key"]) == "trainer.xp_share_mode" }
+            if (mode != null && text(config[mode, "value"])?.trim('"')?.trim()?.lowercase() != "classic") return
+            val row = config.rows.firstOrNull { text(config[it, "key"]) == "trainer.xp_share" }
+            if (want == null) {
+                if (row != null && before.xpShare in ids.values) config.rows.remove(row)
+                return
+            }
+            val value = if (PyJson.isValue(want)) PyJson.quote(want) else want
+            if (row == null) config.insert(mapOf("key" to "trainer.xp_share", "value" to value)) else config[row, "value"] = value
+        }
+
         /** Species the file's list has no entry for (a form entry counts as its species) are appended, sorted; else the text stays. */
         fun pokedex(key: String, fileIds: Set<Int>, ours: Set<Int>) {
             val have = fileIds.mapNotNullTo(HashSet()) { AnkimonMerge.dexId(data, formBase, it) }
@@ -651,6 +671,7 @@ object AnkimonExport {
             if (got.mons.size != want.mons || got.mons.sumOf { it.hashCode() } != want.monsHash) problems += "The Pokémon don't read back as written"
             if (got.team != want.rest.team) problems += "The team doesn't read back as written"
             if (got.cash != want.rest.cash) problems += "The cash doesn't read back as written"
+            if (got.xpShare != want.rest.xpShare) problems += "The Exp. Share holder doesn't read back as written"
             if (got.seen != want.rest.seen || got.caught != want.rest.caught) problems += "The Pokédex doesn't read back as written"
             if (got.items != want.rest.items || got.tms.sorted() != want.rest.tms.sorted()) problems += "The items don't read back as written"
         }

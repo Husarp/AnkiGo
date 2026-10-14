@@ -39,6 +39,19 @@ object AnkimonFiles {
         Report.fail(TAG, "keeping the imported Ankimon file", e); false
     }
 
+    /**
+     * Forgets the kept Ankimon file ("Start a new game" -> "Also forget the imported Ankimon save"): a later export then
+     * builds a fresh Ankimon save from the new game. False (and logged) when it couldn't be deleted.
+     */
+    @Synchronized
+    fun forget(ctx: Context): Boolean = forgetIn(dir(ctx)).also { if (!it) Report.fail(TAG, "forgetting the imported Ankimon file") }
+
+    /**
+     * True when the kept file is older than the game (the game was started anew after the import): an export would put
+     * the new game's money and items on top of the PC's old Pokémon. [createdAt] 0 (an old save) never counts.
+     */
+    fun keptBeforeGame(keptAt: Long?, createdAt: Long): Boolean = keptAt != null && createdAt > 0 && keptAt < createdAt
+
     /** Saves what an export is about to overwrite as `replaced-<now>.db` (null when [old] is empty) and prunes to the newest 3. */
     fun saveReplaced(ctx: Context, old: InputStream, now: Long): File? = saveReplacedIn(dir(ctx), old, now)
 
@@ -62,6 +75,11 @@ object AnkimonFiles {
         } finally {
             tmp.delete() // gone after a rename; removes the leftover after a failure
         }
+    }
+
+    internal fun forgetIn(dir: File): Boolean {
+        val f = File(dir, KEPT)
+        return !f.exists() || f.delete()
     }
 
     internal fun saveReplacedIn(dir: File, old: InputStream, now: Long): File? {

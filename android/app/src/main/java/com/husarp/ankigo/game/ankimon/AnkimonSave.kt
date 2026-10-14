@@ -40,6 +40,7 @@ data class AnkimonSave(
     val seen: Set<Int>,
     val caught: Set<Int>,
     val problems: List<String>,      // rows that were skipped while reading, one short line each
+    val xpShare: String? = null,     // classic Exp. Share holder (config trainer.xp_share); null when off or Ankimon's "oras" mode
 )
 
 /** The file is a valid database but not an Ankimon save. */
@@ -53,6 +54,7 @@ object AnkimonSaveReader {
     private const val MAX_DEX_ENTRIES = 5_000
     private const val NOT_ANKIMON = "This is not an Ankimon save file"
     private val STAT_KEYS = listOf("hp", "atk", "def", "spa", "spd", "spe")
+    private val CONFIG_KEYS = setOf("trainer.cash", "trainer.xp_share", "trainer.xp_share_mode")
 
     /**
      * From plain rows per table (the mapping layer; tests feed maps directly). Needs table `captured_pokemon`.
@@ -92,10 +94,13 @@ object AnkimonSaveReader {
             }
         }
 
-        // Only the trainer's cash; every other config value (tokens, names, settings) is never looked at.
-        val cash = tables["config"].orEmpty().firstOrNull { text(it["key"]) == "trainer.cash" }?.let { cashValue(it["value"]) }
+        // Only the trainer's cash and the Exp. Share holder; every other config value (tokens, names, settings) is never looked at.
+        val config = tables["config"].orEmpty()
+        fun cfg(key: String) = config.firstOrNull { text(it["key"]) == key }?.get("value")
+        val cash = cfg("trainer.cash")?.let { cashValue(it) }
+        val xpShare = xpShareValue(cfg("trainer.xp_share"), cfg("trainer.xp_share_mode"))
 
-        return AnkimonSave(mons.values.toList(), team, items, tms, cash, seen, caught, problems)
+        return AnkimonSave(mons.values.toList(), team, items, tms, cash, seen, caught, problems, xpShare)
     }
 
     /**
@@ -117,7 +122,7 @@ object AnkimonSaveReader {
             tables["user_data"] = db.rows("user_data", 10_000).filter { text(it["key"]) in setOf("pokedex_seen", "pokedex_caught") }
         }
         if ("config" in names) {
-            tables["config"] = db.rows("config", 10_000).filter { text(it["key"]) == "trainer.cash" }
+            tables["config"] = db.rows("config", 10_000).filter { text(it["key"]) in CONFIG_KEYS }
         }
         return parse(tables)
     }
@@ -190,6 +195,18 @@ object AnkimonSaveReader {
             else -> int(v)
         } ?: return null
         return n.coerceAtLeast(0)
+    }
+
+    /**
+     * Ankimon stores the holder's individual_id as plain text (Settings.set -> str(value)); "turned off" is the text
+     * "None" (str(None)) or no row. Only Ankimon's "classic" mode (the default) has one holder, as AnkiGo does.
+     */
+    internal fun xpShareValue(value: Any?, mode: Any?): String? {
+        val m = text(mode)?.trim('"')?.trim()?.lowercase()
+        if (m != null && m != "classic") return null
+        val id = text(value)?.trim('"')?.trim() ?: return null
+        if (id.equals("none", ignoreCase = true) || id == "null" || id.length > MAX_ID_LENGTH) return null
+        return id
     }
 
     // ---- loose value coercion -----------------------------------------------------------------------------------

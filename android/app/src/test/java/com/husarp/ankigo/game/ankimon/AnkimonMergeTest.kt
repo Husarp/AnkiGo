@@ -779,4 +779,47 @@ class AnkimonMergeTest {
         val again = merge(save, state, useTeam = true)
         assertEquals(0, again.added + again.upgraded)
     }
+
+    // ---- lane C: Exp. Share holder and Pokémon the file lacks -------------------------------------------------------
+
+    @Test fun theFilesExpShareHolderBecomesTheGamesWhenThePhoneHasNoneOrTakesAnkimonsTeam() {
+        val save = sv(am("p-1", 1, level = 5, main = true), am("p-2", 4, level = 5), team = listOf("p-1", "p-2")).copy(xpShare = "p-2")
+        val st = GameState()
+        val r = merge(save, st)
+        assertTrue(r.xpShareChanged)
+        assertTrue(r.summary(), r.summary().endsWith("Exp. Share holder"))
+        assertEquals(st.mons.single { it.ankimonId == "p-2" }.uid, st.settings.xpShareUid)
+        assertEquals("nothing new", merge(save, st).summary())               // again: nothing new
+
+        val phone = GameState()
+        val own = owned(phone, "p-9", 7, 5); phone.settings.xpShareUid = own.uid
+        assertFalse(merge(save, phone).xpShareChanged)                         // the phone's own holder stays...
+        assertEquals(own.uid, phone.settings.xpShareUid)
+        assertTrue(merge(save, phone, useTeam = true).xpShareChanged)          // ...unless Ankimon's team is taken too
+        assertEquals(phone.mons.single { it.ankimonId == "p-2" }.uid, phone.settings.xpShareUid)
+    }
+
+    @Test fun anExpShareHolderTheGameCantHaveChangesNothing() {
+        val st = GameState()
+        val r = merge(sv(am("p-1", 1, level = 5), am("p-gen9", 906, level = 5)).copy(xpShare = "p-gen9"), st)
+        assertFalse(r.xpShareChanged)
+        assertNull(st.settings.xpShareUid)
+        assertFalse(merge(sv(am("p-1", 1, level = 5)).copy(xpShare = "not-there"), st).xpShareChanged)
+    }
+
+    @Test fun pokemonThePcFileLacksAreCountedAndKept() {
+        val st = GameState()
+        owned(st, "gone-on-pc", 1, 5)                                         // imported once, not in the file now
+        owned(st, "still-there", 4, 5)
+        val exported = TestData.mon(data, 7, 5, listOf("tackle"), "u-exported").also { it.caughtAt = 2_000L }; st.mons += exported
+        val releasedOnPc = TestData.mon(data, 16, 5, listOf("tackle"), "u-old").also { it.caughtAt = 1_000L }; st.mons += releasedOnPc
+        val newer = TestData.mon(data, 19, 5, listOf("tackle"), "u-newer").also { it.caughtAt = 3_000L }; st.mons += newer // never exported
+        val save = sv(am("still-there", 4, level = 5), am("u-exported", 7, level = 5))
+        val r = merge(save, st)
+        assertEquals(2, r.notInFile)                                           // gone-on-pc and u-old
+        assertEquals(5, st.mons.size)                                          // nothing removed
+        assertEquals("nothing new", r.summary())
+        // A file without any of the phone's own catches can't tell which of them went to the PC: only imported ones count.
+        assertEquals(1, AnkimonMerge.notInFile(st, sv(am("still-there", 4, level = 5))))
+    }
 }

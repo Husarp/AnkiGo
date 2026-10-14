@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -74,7 +75,10 @@ object AnkimonExportFlow {
         if (c == null) { onDone(false); return }
         // Imported with an older AnkiGo (no kept copy): a fresh save would drop what only the PC has, so say it plainly.
         val noCopy = GameRepo.state?.mons?.any { it.ankimonId != null } == true
-        val dialog = warningDialog(c, AnkimonFiles.keptAt(app), { choose(app, launch, ui, onDone) }, { onDone(false) }, noCopy)
+        val keptAt = AnkimonFiles.keptAt(app)
+        // A new game was started on the phone after the import, and the kept file was not forgotten then.
+        val oldGame = AnkimonFiles.keptBeforeGame(keptAt, GameRepo.state?.createdAt ?: 0)
+        val dialog = warningDialog(c, keptAt, { choose(app, launch, ui, onDone) }, { onDone(false) }, noCopy, oldGame)
         Pickers.show(dialog)
     }
 
@@ -247,11 +251,16 @@ object AnkimonExportFlow {
     private fun noBreaks(line: String): String =
         line.split(" · ").mapIndexed { i, p -> if (i == 0) p else p.replace(' ', '\u00A0') }.joinToString(" · ")
 
-    internal fun baseLine(keptAt: Long?, noCopy: Boolean = false): String =
-        if (keptAt == null && noCopy) "AnkiGo has no copy of your Ankimon save yet (imports before version 0.7.0 didn't keep one). " +
+    private fun day(t: Long) = SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(t))
+
+    internal fun baseLine(keptAt: Long?, noCopy: Boolean = false, oldGame: Boolean = false): String =
+        if (keptAt != null && oldGame) "You started a new game after importing your Ankimon save on ${day(keptAt)}. " +
+            "This file is still built on that save: the PC keeps the Pokémon it had and gets this game's Pokémon too, " +
+            "but its money, items and team become this game's."
+        else if (keptAt == null && noCopy) "AnkiGo has no copy of your Ankimon save yet (imports before version 0.7.0 didn't keep one). " +
             "Import your Ankimon save again first: otherwise this file has only what AnkiGo knows, and badges, trainer level, " +
             "settings and Pokémon AnkiGo can't show are lost on the PC."
-        else if (keptAt != null) "Based on the Ankimon save you imported on ${SimpleDateFormat("d MMM yyyy", Locale.US).format(Date(keptAt))}, " +
+        else if (keptAt != null) "Based on the Ankimon save you imported on ${day(keptAt)}, " +
             "with your AnkiGo Pokémon, team, items, money and Pokédex written in."
         else "You haven't imported an Ankimon save, so this makes a new Ankimon save with your AnkiGo Pokémon, team, items, money and Pokédex."
 
@@ -277,11 +286,13 @@ object AnkimonExportFlow {
             LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(c, 10) })
     }
 
-    internal fun warningDialog(c: Context, keptAt: Long?, onChoose: () -> Unit, onCancel: () -> Unit, noCopy: Boolean = false): AlertDialog {
+    internal fun warningDialog(
+        c: Context, keptAt: Long?, onChoose: () -> Unit, onCancel: () -> Unit, noCopy: Boolean = false, oldGame: Boolean = false,
+    ): AlertDialog {
         val col = column(c)
-        val risky = keptAt == null && noCopy
+        val risky = (keptAt == null && noCopy) || (keptAt != null && oldGame)
         col.addView(warningPanel(c, WARNING, 13f))
-        col.addView(Ui.text(c, 14f, if (risky) 800 else 700, if (risky) R.color.ag_text else R.color.ag_sub1).apply { text = baseLine(keptAt, noCopy); setLineSpacing(0f, 1.15f) },
+        col.addView(Ui.text(c, 14f, if (risky) 800 else 700, if (risky) R.color.ag_text else R.color.ag_sub1).apply { text = baseLine(keptAt, noCopy, oldGame); setLineSpacing(0f, 1.15f) },
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 14) })
         col.addView(Ui.text(c, 12f, 600, R.color.ag_sub0).apply { text = "Your AnkiGo game isn't changed." },
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 10) })
@@ -290,6 +301,39 @@ object AnkimonExportFlow {
             .setNegativeButton("Cancel") { _, _ -> onCancel() }
             .setOnCancelListener { onCancel() }
             .create()
+    }
+
+    /**
+     * The last step of "Start a new game". With a kept Ankimon file it also asks whether to forget it (default yes):
+     * yes -> a later export builds a fresh Ankimon save; no -> it still builds on the old import (said here and in the
+     * export warning). [onStart] gets the answer (false when there is no kept file).
+     */
+    internal fun startOverDialog(c: Context, keptAt: Long?, onStart: (forgetAnkimon: Boolean) -> Unit): AlertDialog {
+        val b = AlertDialog.Builder(c).setTitle("Really start over?")
+        val gone = "Your Pokémon, items and progress are gone from the game. Are you sure?"
+        if (keptAt == null) return b.setMessage(gone).setPositiveButton("Start over") { _, _ -> onStart(false) }.setNegativeButton("Cancel", null).create()
+        val col = column(c)
+        col.addView(Ui.text(c, 14f, 700, R.color.ag_sub1).apply { text = gone; setLineSpacing(0f, 1.15f) })
+        val box = CheckBox(c).apply {
+            text = "Also forget the imported Ankimon save"
+            textSize = 14f
+            typeface = Ui.font(c, 800)
+            setTextColor(Ui.c(c, R.color.ag_text))
+            isChecked = true
+            Ui.tintCheck(this)
+        }
+        col.addView(box, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 12) })
+        val note = Ui.text(c, 12f, 600, R.color.ag_sub0).apply { setLineSpacing(0f, 1.12f) }
+        fun fill(on: Boolean) {
+            note.text = if (on) "A later export for Ankimon then makes a fresh Ankimon save from the new game only."
+            else "A later export still builds on the save you imported on ${day(keptAt)}: the PC keeps those Pokémon, but its money, items and team become the new game's."
+        }
+        fill(true)
+        box.setOnCheckedChangeListener { _, on -> fill(on) }
+        col.addView(note, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 4); it.marginStart = Ui.dp(c, 4) })
+        return b.setView(Bits.scroll(c, col))
+            .setPositiveButton("Start over") { _, _ -> onStart(box.isChecked) }
+            .setNegativeButton("Cancel", null).create()
     }
 
     /** The progress dialog (not cancelable); [set] moves the bar and the one-line label. */

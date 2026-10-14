@@ -27,6 +27,7 @@ import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.Widgets
+import com.husarp.ankigo.data.AnkimonFiles
 import com.husarp.ankigo.game.Catching
 import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameEvent
@@ -426,13 +427,10 @@ class GameActivity : AgActivity() {
         AlertDialog.Builder(this).setTitle("Start a new game?")
             .setMessage("You begin with nothing. Your old save files stay on disk, but the game won't use them.")
             .setPositiveButton("Continue") { _, _ ->
-                AlertDialog.Builder(this).setTitle("Really start over?")
-                    .setMessage("Your Pokémon, items and progress are gone from the game. Are you sure?")
-                    .setPositiveButton("Start over") { _, _ ->
-                        GameRepo.startNewGame(this)
-                        startLoad()
-                    }
-                    .setNegativeButton("Cancel", null).showCard()
+                Pickers.show(AnkimonExportFlow.startOverDialog(this, AnkimonFiles.keptAt(this)) { forget ->
+                    GameRepo.startNewGame(this, forgetAnkimon = forget)
+                    startLoad()
+                })
             }
             .setNegativeButton("Cancel", null).showCard()
     }
