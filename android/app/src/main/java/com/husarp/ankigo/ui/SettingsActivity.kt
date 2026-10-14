@@ -260,7 +260,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         gensBox.addView(Form.row(this, "Generations", "At least one. Default 1–8, like Ankimon.", null))
         val chipRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(14), 0, dp(14), dp(12))
+            setPadding(dp(14), 0, dp(14), dp(4)) // chips are 48 dp touch height around a 32 dp look
         }
         for (g in 1..9) {
             lateinit var chip: TextView
@@ -450,7 +450,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             if (activity != null) activity.startActivity(Intent(activity, FirstRunActivity::class.java))
             else Ui.toast(this, "Open Settings full screen to download pictures")
         })
-        actions.addView(Form.switchRow(this, "Download pictures as needed", "Off: use placeholders", Sprites.enabled(this)) { Sprites.setEnabled(this, it) })
+        // the row has its own 14 dp padding: pull it out of the buttons' padding so its text lines up with the other rows
+        actions.addView(Form.switchRow(this, "Download pictures as needed", "Off: use placeholders", Sprites.enabled(this)) { Sprites.setEnabled(this, it) },
+            LinearLayout.LayoutParams(-1, -2).also { it.setMargins(-dp(14), 0, -dp(14), 0) })
         // battle animations
         val animBtn = Form.secondary(this, "Download all battle animations (about 80 MB)") { startAnimations() }
         Form.enable(animBtn, !anim.running && !dat.running)

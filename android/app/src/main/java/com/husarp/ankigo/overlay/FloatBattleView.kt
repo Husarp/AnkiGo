@@ -115,6 +115,7 @@ internal class FloatBattleView(
             if (panel != null) return
             val p = BattlePanelView(window.context)
             p.setCompact(true)
+            p.setCornerClearance(Ui.dp(window.context, 26)) // keeps the log clear of the resize grip
             p.onGrant = { onOpenGame() } // the permission dialog needs an activity
             panel = p
             player = EventPlayer(p)

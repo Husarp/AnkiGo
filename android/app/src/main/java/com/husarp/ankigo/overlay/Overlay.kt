@@ -9,6 +9,7 @@ import android.net.Uri
 import android.provider.Settings
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.ui.AppPrefs
+import com.husarp.ankigo.ui.showCard
 
 /** The "Display over other apps" permission (needed for floating windows): check, open Android's page, explain once. */
 object Overlay {
@@ -41,7 +42,7 @@ object Overlay {
             )
             .setPositiveButton("Allow") { _, _ -> openSettings(activity) }
             .setNegativeButton("Not now", null)
-            .show()
+            .showCard()
     }
 
     /**

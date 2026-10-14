@@ -87,7 +87,7 @@ object MonDetail {
         }
         // header: big sprite, name, #num, types, Lv / gender / nature
         val img = ImageView(a)
-        Ui.staticSprite(a, mon.species, mon.shiny, img)
+        MonPreview.show(a, mon.species, mon.shiny, img)
         col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, 96), Ui.dp(a, 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply {
             text = (if (mon.shiny) "★ " else "") + mon.shownName + "  " + Bits.genderSign(mon.gender)

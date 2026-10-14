@@ -98,6 +98,7 @@
         <!-- Settings -> Diagnostics: the step-0 checks, LIVE watch and the report. -->
         <activity
             android:name=".DiagnosticsActivity"
+            android:theme="@style/GameTheme"
             android:label="Diagnostics"
             android:exported="false" />
 
@@ -118,6 +119,7 @@
         <!-- Settings → Updates: check for updates, GET UPDATE, GITHUB. -->
         <activity
             android:name=".update.UpdatesActivity"
+            android:theme="@style/GameTheme"
             android:label="Updates"
             android:exported="false" />
 

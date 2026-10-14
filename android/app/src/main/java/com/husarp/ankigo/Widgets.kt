@@ -109,7 +109,7 @@ class StudyWidget : AppWidgetProvider() {
         if (deckId == 0L) {
             Anki.selectedDeck(ctx).firstOrNull()?.let { deckId = it["deck_id"]?.toLongOrNull() ?: 0; deckName = it["deck_name"] }
         }
-        rv.setTextViewText(R.id.s_deck, deckName ?: "?")
+        rv.setTextViewText(R.id.s_deck, (deckName ?: "?").substringAfterLast("::"))
 
         if (action == ANSWER) {
             val nid = p.getLong("w_nid", 0); val ord = p.getInt("w_ord", 0)

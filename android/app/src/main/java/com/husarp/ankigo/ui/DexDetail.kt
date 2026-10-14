@@ -23,7 +23,7 @@ object DexDetail {
             setPadding(Ui.dp(a, 20), Ui.dp(a, 6), Ui.dp(a, 20), Ui.dp(a, 6))
         }
         val img = ImageView(a)
-        Ui.staticSprite(a, sp.num, false, img)
+        MonPreview.show(a, sp.num, false, img)
         col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, 96), Ui.dp(a, 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply { text = sp.name; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
         col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {

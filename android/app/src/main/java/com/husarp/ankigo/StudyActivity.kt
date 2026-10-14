@@ -53,6 +53,7 @@ class StudyActivity : Activity() {
     private lateinit var header: TextView
     private lateinit var handle: TextView
     private lateinit var handleBar: FrameLayout
+    private lateinit var gap: View
     private lateinit var topBar: LinearLayout
     private lateinit var subtitle: TextView
     private lateinit var queueCounts: LinearLayout
@@ -109,6 +110,39 @@ class StudyActivity : Activity() {
         deckId = intent.getLongExtra("deckId", 0); deckName = intent.getStringExtra("deckName") ?: "Deck"
         prefs.edit().putLong("lastDeck", deckId).putString("lastName", deckName).apply()
         heightMode = prefs.getInt("height", 1).coerceIn(0, 2)
+        setContentView(buildContent())
+        setupWeb(); layout()
+        if (savedInstanceState != null) {
+            savedInstanceState.getIntArray("counts")?.copyInto(counts)
+            totalTime = savedInstanceState.getLong("totalTime"); coins = savedInstanceState.getInt("coins"); xp = savedInstanceState.getInt("xp")
+            met = savedInstanceState.getInt("met"); defeated = savedInstanceState.getInt("defeated"); levels = savedInstanceState.getInt("levels"); evolutions = savedInstanceState.getInt("evolutions")
+            caught += savedInstanceState.getStringArrayList("caught").orEmpty(); items += savedInstanceState.getStringArrayList("items").orEmpty()
+            foundItems += savedInstanceState.getStringArrayList("foundItems").orEmpty()
+            runCatching {
+                val saved = JSONObject(savedInstanceState.getString("studyResults") ?: "{}")
+                val mons = saved.optJSONArray("mons")
+                if (mons != null) repeat(mons.length()) { rewardMons += mons.getJSONObject(it) }
+                val progress = saved.optJSONObject("progress")
+                progress?.keys()?.forEach { teamProgress[it] = progress.getJSONObject(it) }
+                val starts = saved.optJSONObject("initialLevels")
+                starts?.keys()?.forEach { initialLevels[it] = starts.getInt(it) }
+            }
+        }
+        GameRepo.load(this) {
+            if (!isDestroyed) {
+                GameRepo.state?.teamMons()?.forEach { mon -> initialLevels.putIfAbsent(mon.uid, mon.level) }
+                panel.renderAll(); panel.restoreStudyCharge()
+                if (GameRepo.game != null) {
+                    val initial = GameRepo.act(this) { g -> g.tick() + g.ensureEncounter() }
+                    events.enqueue(initial); record(initial)
+                }
+                if (started) LiveSession.hold(this, this)
+                loadNext()
+            }
+        }
+    }
+    /** The screen's views, without the Activity setup; split out of onCreate so the design screenshots can build them. */
+    internal fun buildContent(): View {
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@StudyActivity, R.color.ag_base)) }
         body = LinearLayout(this)
         cardColumn = StudyUi.column(this)
@@ -121,7 +155,7 @@ class StudyActivity : Activity() {
         title.addView(header); title.addView(subtitle)
         top.addView(title, StudyUi.lp(0, -2, 1f).also { it.marginStart = Ui.dp(this, 6); it.marginEnd = Ui.dp(this, 6) })
         queueCounts = StudyUi.row(this); top.addView(queueCounts)
-        top.addView(StudyUi.iconButton(this, R.drawable.ic_menu, "Card actions") { actions() }, StudyUi.lp(Ui.dp(this, 34), Ui.dp(this, 34)).also { it.marginStart = Ui.dp(this, 6) })
+        top.addView(StudyUi.iconButton(this, R.drawable.ic_more_vert, "Card actions") { actions() }, StudyUi.lp(Ui.dp(this, 34), Ui.dp(this, 34)).also { it.marginStart = Ui.dp(this, 6) })
         topBar.addView(top, StudyUi.lp(-1, Ui.dp(this, 45)))
         topBar.addView(StudyUi.line(this))
         cardColumn.addView(topBar)
@@ -155,7 +189,7 @@ class StudyActivity : Activity() {
         events = EventPlayer(panel)
         panel.onMenu = { if (events.idle) AlertDialog.Builder(this).setItems(arrayOf("Team", "Bag / Shop", "Pokédex", "Settings")) { _, i ->
             startActivity(Intent(this, listOf(TeamActivity::class.java, ShopActivity::class.java, DexActivity::class.java, SettingsActivity::class.java)[i]))
-        }.show() }
+        }.showCard() }
         panel.onBalls = { throwBall() }
         panel.arena.onCatchTagTap = {
             val game = GameRepo.game
@@ -166,42 +200,16 @@ class StudyActivity : Activity() {
         }
         panel.onGrant = { requestPermissions(arrayOf(Anki.permission), 1) }
         side.addView(panel)
+        gap = View(this).apply { setBackgroundColor(Ui.c(context, R.color.ag_base)) }
+        side.addView(gap, StudyUi.lp(-1, 0, 0f))
         buttons = StudyUi.column(this).apply { setPadding(Ui.dp(context, 8), Ui.dp(context, 8), Ui.dp(context, 8), Ui.dp(context, 8)) }
         buttons.setBackgroundColor(Ui.c(this, R.color.ag_base))
         answerDivider = StudyUi.line(this).apply { visibility = View.GONE }
         side.addView(answerDivider)
         side.addView(buttons)
         body.addView(cardColumn); body.addView(side)
-        root.addView(body, StudyUi.lp(-1, 0, 1f)); setContentView(root)
-        setupWeb(); layout()
-        if (savedInstanceState != null) {
-            savedInstanceState.getIntArray("counts")?.copyInto(counts)
-            totalTime = savedInstanceState.getLong("totalTime"); coins = savedInstanceState.getInt("coins"); xp = savedInstanceState.getInt("xp")
-            met = savedInstanceState.getInt("met"); defeated = savedInstanceState.getInt("defeated"); levels = savedInstanceState.getInt("levels"); evolutions = savedInstanceState.getInt("evolutions")
-            caught += savedInstanceState.getStringArrayList("caught").orEmpty(); items += savedInstanceState.getStringArrayList("items").orEmpty()
-            foundItems += savedInstanceState.getStringArrayList("foundItems").orEmpty()
-            runCatching {
-                val saved = JSONObject(savedInstanceState.getString("studyResults") ?: "{}")
-                val mons = saved.optJSONArray("mons")
-                if (mons != null) repeat(mons.length()) { rewardMons += mons.getJSONObject(it) }
-                val progress = saved.optJSONObject("progress")
-                progress?.keys()?.forEach { teamProgress[it] = progress.getJSONObject(it) }
-                val starts = saved.optJSONObject("initialLevels")
-                starts?.keys()?.forEach { initialLevels[it] = starts.getInt(it) }
-            }
-        }
-        GameRepo.load(this) {
-            if (!isDestroyed) {
-                GameRepo.state?.teamMons()?.forEach { mon -> initialLevels.putIfAbsent(mon.uid, mon.level) }
-                panel.renderAll(); panel.restoreStudyCharge()
-                if (GameRepo.game != null) {
-                    val initial = GameRepo.act(this) { g -> g.tick() + g.ensureEncounter() }
-                    events.enqueue(initial); record(initial)
-                }
-                if (started) LiveSession.hold(this, this)
-                loadNext()
-            }
-        }
+        root.addView(body, StudyUi.lp(-1, 0, 1f))
+        return root
     }
     override fun onSaveInstanceState(out: Bundle) {
         super.onSaveInstanceState(out)
@@ -217,11 +225,22 @@ class StudyActivity : Activity() {
         val wide = !finished && resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val tablet = resources.configuration.smallestScreenWidthDp >= 600
         body.orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-        cardColumn.layoutParams = if (wide) StudyUi.lp(0, -1, .58f) else StudyUi.lp(-1, 0, 1f)
-        side.layoutParams = if (wide) StudyUi.lp(0, -1, .42f) else StudyUi.lp(-1, -2)
+        // A split-screen window (e.g. 412x400 dp) counts as landscape but is too narrow for a 42% battle column
+        // (~170 dp: info cards cover the sprites). There the columns are 50/50 and the arena keeps a fixed, width-sized
+        // height (the sprites scale with the arena height) so both cards fit beside the sprites; the answers stay at the bottom.
+        val narrow = wide && !tablet && resources.configuration.screenWidthDp < 560
+        cardColumn.layoutParams = if (wide) StudyUi.lp(0, -1, if (narrow) .5f else .58f) else StudyUi.lp(-1, 0, 1f)
+        side.layoutParams = if (wide) StudyUi.lp(0, -1, if (narrow) .5f else .42f) else StudyUi.lp(-1, -2)
         val mode = if (wide) { if (tablet) 0 else 1 } else heightMode
         panel.setStudyLayout(mode != 0, mode == 2)
-        panel.layoutParams = if (wide) StudyUi.lp(-1, 0, 1f) else StudyUi.lp(-1, Ui.dp(this, when(mode) { 0 -> 220; 2 -> 34; else -> 180 }))
+        // Compact info cards (name, level, HP bar) on the study strip's sprite geometry: full cards cannot sit beside the sprites in ~200 dp.
+        if (narrow) { panel.arena.setCompact(false); panel.arena.setCompact(true) }
+        panel.layoutParams = when {
+            narrow -> StudyUi.lp(-1, Ui.dp(this, 170))
+            wide -> StudyUi.lp(-1, 0, 1f)
+            else -> StudyUi.lp(-1, Ui.dp(this, when(mode) { 0 -> 220; 2 -> 34; else -> 180 }))
+        }
+        gap.layoutParams = StudyUi.lp(-1, 0, if (narrow) 1f else 0f)
         answerDivider.visibility = if (finished) View.VISIBLE else View.GONE
         panel.visibility = if (finished || GameRepo.game == null) View.GONE else View.VISIBLE
         handleBar.visibility = if (finished || wide || GameRepo.game == null) View.GONE else View.VISIBLE
@@ -326,21 +345,23 @@ class StudyActivity : Activity() {
                     cardName = state["card_name"] ?: "Card ${n.ord + 1}"
                     header.text = deckName.substringAfterLast("::")
                     subtitle.text = "$cardName · card ${counts.sum() + 1}"
-                    queueCounts.removeAllViews()
-                    val queue = state["queue"]?.toIntOrNull()
-                    val current = when (queue) { 0 -> 0; 1, 3 -> 1; else -> 2 }
-                    listOf((d?.new ?: 0) to R.color.ag_blue, (d?.learn ?: 0) to R.color.ag_red, (d?.review ?: 0) to R.color.ag_green).forEachIndexed { i, (number, color) ->
-                        queueCounts.addView(StudyUi.label(this, number.toString(), 14, color, 900).apply {
-                            if (i == current) paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
-                            contentDescription = "${listOf("New", "Learn", "Review")[i]} $number${if (i == current) ", current" else ""}"
-                        }, StudyUi.lp(-2).also { if (i > 0) it.marginStart = Ui.dp(this, 7) })
-                    }
+                    showQueueCounts(d, state["queue"]?.toIntOrNull())
                     mediaBlocked = (blocked.isNotEmpty() || unsupported) && prefs.getString("missing", "Ask") != "Answer anyway"
                     layout(); showQuestion(); mediaNotice(blocked.size, missing.size - blocked.size, unsupported)
                     if (mediaBlocked && prefs.getString("missing", "Ask") == "Always open in AnkiDroid") openAnki()
                 }
             }
             result.onFailure { main.post { if (valid(token)) showError(it.message ?: "Open AnkiDroid once, then retry.") } }
+        }
+    }
+    internal fun showQueueCounts(d: Anki.Deck?, queue: Int?) {
+        queueCounts.removeAllViews()
+        val current = when (queue) { 0 -> 0; 1, 3 -> 1; else -> 2 }
+        listOf((d?.new ?: 0) to R.color.ag_blue, (d?.learn ?: 0) to R.color.ag_red, (d?.review ?: 0) to R.color.ag_green).forEachIndexed { i, (number, color) ->
+            queueCounts.addView(StudyUi.label(this, number.toString(), 14, color, 900).apply {
+                if (i == current) paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
+                contentDescription = "${listOf("New", "Learn", "Review")[i]} $number${if (i == current) ", current" else ""}"
+            }, StudyUi.lp(-2).also { if (i > 0) it.marginStart = Ui.dp(this, 7) })
         }
     }
     private fun valid(token: Int) = !isDestroyed && token == generation
@@ -461,6 +482,14 @@ class StudyActivity : Activity() {
             setStroke(Ui.dp(this@StudyActivity, 1), (Ui.c(this@StudyActivity, R.color.ag_peach) and 0x00ffffff) or 0x73000000)
         }
     }
+    /** The card column is only ~200 dp wide in a split-screen window: the notice's two main buttons stack there instead of squeezing. */
+    private fun stackNoticeButtons(): Boolean {
+        val land = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val share = if (!land) 1f else if (resources.configuration.screenWidthDp < 560) .5f else .58f
+        return resources.configuration.screenWidthDp * share < 300
+    }
+    private fun noticeButtons() = if (stackNoticeButtons()) StudyUi.column(this) else StudyUi.row(this)
+    private fun noticeGap() = StudyUi.lp(-2).also { if (stackNoticeButtons()) { it.width = -1; it.topMargin = Ui.dp(this, 6) } else it.marginStart = Ui.dp(this, 6) }
     private fun mediaNotice(pictures: Int, sound: Int, unsupported: Boolean) {
         notice.removeAllViews(); styleNotice()
         showNotice(pictures > 0 || sound > 0 || unsupported)
@@ -470,9 +499,9 @@ class StudyActivity : Activity() {
             heading.addView(StudyUi.label(this, if (unsupported) "This card needs AnkiDroid" else "$pictures picture${if (pictures == 1) " can't" else "s can't"} be shown here", 13, R.color.ag_text, 900), StudyUi.lp(0, -2, 1f))
             notice.addView(heading)
             notice.addView(StudyUi.label(this, "The Play Store build keeps pictures private. This card is next in AnkiDroid too: answer there and AnkiGo counts it.", 11.5f, R.color.ag_sub0), StudyUi.spaced(this, 3))
-            val row = StudyUi.row(this)
+            val row = noticeButtons()
             row.addView(StudyUi.smallButton(this, "Open in AnkiDroid", true) { openAnki() })
-            row.addView(StudyUi.smallButton(this, "Answer anyway") { mediaBlocked = false; showNotice(false); showButtons() }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
+            row.addView(StudyUi.smallButton(this, "Answer anyway") { mediaBlocked = false; showNotice(false); showButtons() }, noticeGap())
             notice.addView(row, StudyUi.spaced(this, 8))
             notice.addView(StudyUi.label(this, "For readable pictures, use F-Droid / GitHub and grant the media folder in Settings. Sync in AnkiDroid, install the other build, then sync back.", 11.5f, R.color.ag_sub0), StudyUi.spaced(this, 6))
             val links = StudyUi.row(this)
@@ -497,13 +526,26 @@ class StudyActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Throw a ball").setItems(balls.map { "${com.husarp.ankigo.game.Items.name(it)} ×${st.count(it)}" }.toTypedArray()) { _, i ->
             val result = GameRepo.act(this) { it.throwBall(balls[i]) }
             record(result); events.enqueue(result); LiveSession.refreshWidgetsFor(this, result)
-        }.setNegativeButton("Cancel", null).show()
+        }.setNegativeButton("Cancel", null).showCard()
     }
     private fun actions() {
         if (locked || card == null) return
         actionSheet?.dismiss()
         val dialog = Dialog(this).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
         actionSheet = dialog
+        val scroll = actionSheetContent { dialog.dismiss() }
+        dialog.setContentView(scroll); dialog.setCanceledOnTouchOutside(true)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(.48f); setGravity(Gravity.BOTTOM)
+        }
+        dialog.show()
+        dialog.window?.setLayout(minOf(resources.displayMetrics.widthPixels, Ui.dp(this, 600)), -2)
+        dialog.setOnDismissListener { if (actionSheet === dialog) actionSheet = null }
+    }
+    /** The card-actions sheet's content (the dialog around it is made by [actions]); [dismiss] closes that dialog. */
+    internal fun actionSheetContent(dismiss: () -> Unit): View {
         val sheet = StudyUi.column(this).apply {
             background = GradientDrawable().apply {
                 setColor(Ui.c(context, R.color.ag_base))
@@ -523,7 +565,7 @@ class StudyActivity : Activity() {
                 setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8))
                 background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(Ui.c(context, R.color.ag_mantle)), Ui.rounded(Color.TRANSPARENT, 12, context), null)
                 if (faded) alpha = .6f
-                setOnClickListener { dialog.dismiss(); block() }
+                setOnClickListener { dismiss(); block() }
             }
             row.addView(StudyUi.icon(this, icon, if (danger) R.color.ag_red else R.color.ag_sub1), StudyUi.lp(Ui.dp(this, 20), Ui.dp(this, 20)).also { it.marginEnd = Ui.dp(this, 12) })
             val text = StudyUi.column(this)
@@ -543,7 +585,7 @@ class StudyActivity : Activity() {
                 flags.addView(StudyUi.label(this, if (i == 0) "×" else "", 12, R.color.ag_sub0, 900).apply {
                     gravity = Gravity.CENTER; background = Ui.rounded(Ui.c(context, tone), 8, context)
                     contentDescription = "Flag ${names[i]}"; isFocusable = true
-                    setOnClickListener { dialog.dismiss(); writeAction("flag", i) }
+                    setOnClickListener { dismiss(); writeAction("flag", i) }
                 }, StudyUi.lp(Ui.dp(this, 16), Ui.dp(this, 16)).also { it.marginStart = Ui.dp(this, 7) })
             }
             sheet.addView(flags)
@@ -554,22 +596,14 @@ class StudyActivity : Activity() {
         sheet.addView(StudyUi.line(this), StudyUi.lp(-1, Ui.dp(this, 1)).also { it.setMargins(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4)) })
         action(R.drawable.ic_trash, "Delete note…", "Asks first. Deletes all cards of this note", danger = true) { confirmDelete() }
         action(R.drawable.ic_undo, "Undo…", "Not possible in AnkiGo. Use Undo in AnkiDroid", faded = true) {
-            AlertDialog.Builder(this).setMessage("AnkiGo can't undo answers, bury, suspend or delete. Use Undo in AnkiDroid. The battle doesn't rewind; a redo won't count twice.").setPositiveButton("Open AnkiDroid") { _, _ -> openAnki() }.setNegativeButton("Back", null).show()
+            AlertDialog.Builder(this).setMessage("AnkiGo can't undo answers, bury, suspend or delete. Use Undo in AnkiDroid. The battle doesn't rewind; a redo won't count twice.").setPositiveButton("Open AnkiDroid") { _, _ -> openAnki() }.setNegativeButton("Back", null).showCard()
         }
         val scroll = object : ScrollView(this) {
             override fun onMeasure(w: Int, h: Int) {
                 super.onMeasure(w, View.MeasureSpec.makeMeasureSpec((resources.displayMetrics.heightPixels * .85f).toInt(), View.MeasureSpec.AT_MOST))
             }
         }.apply { isVerticalScrollBarEnabled = false; addView(sheet) }
-        dialog.setContentView(scroll); dialog.setCanceledOnTouchOutside(true)
-        dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setDimAmount(.48f); setGravity(Gravity.BOTTOM)
-        }
-        dialog.show()
-        dialog.window?.setLayout(minOf(resources.displayMetrics.widthPixels, Ui.dp(this, 600)), -2)
-        dialog.setOnDismissListener { if (actionSheet === dialog) actionSheet = null }
+        return scroll
     }
     private fun writeAction(action: String, flag: Int = 0) {
         val c = card ?: return
@@ -595,7 +629,7 @@ class StudyActivity : Activity() {
             main.post { if (!isDestroyed) {
                 locked = false
                 AlertDialog.Builder(this).setTitle("Delete note?").setMessage("Deletes the note and all its ${count ?: "associated"} cards. AnkiGo can't undo this.")
-                    .setPositiveButton("Delete") { _, _ -> writeAction("delete") }.setNegativeButton("Cancel", null).show()
+                    .setPositiveButton("Delete") { _, _ -> writeAction("delete") }.setNegativeButton("Cancel", null).showCard()
             } }
         }
     }
@@ -629,7 +663,7 @@ class StudyActivity : Activity() {
             setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 12), Ui.dp(context, 10))
         }
         st?.main?.let { mon -> hero.addView(ImageView(this).apply {
-            Ui.staticSprite(context, mon.species, mon.shiny, this); contentDescription = mon.name
+            com.husarp.ankigo.ui.MonPreview.show(context, mon.species, mon.shiny, this); contentDescription = mon.name
         }, StudyUi.lp(Ui.dp(this, 72), Ui.dp(this, 72)).also { it.marginStart = -Ui.dp(this, 4); it.marginEnd = Ui.dp(this, 4); it.topMargin = -Ui.dp(this, 6); it.bottomMargin = -Ui.dp(this, 6) }) }
         val heroText = StudyUi.column(this)
         heroText.addView(StudyUi.label(this, "Done for today!", 20, R.color.ag_text, 900))
@@ -641,8 +675,8 @@ class StudyActivity : Activity() {
             stats.addView(StudyUi.column(this).apply {
                 gravity = Gravity.CENTER; background = Ui.rounded(Ui.c(context, R.color.ag_card), 12, context)
                 setPadding(Ui.dp(context, 8), Ui.dp(context, 7), Ui.dp(context, 8), Ui.dp(context, 7))
-                addView(StudyUi.label(context, value, 19, R.color.ag_text, 900))
-                addView(StudyUi.label(context, name, 10.5f, R.color.ag_sub0, 800))
+                addView(StudyUi.label(context, value, 19, R.color.ag_text, 900).apply { gravity = Gravity.CENTER })
+                addView(StudyUi.label(context, name, 10.5f, R.color.ag_sub0, 800).apply { gravity = Gravity.CENTER })
             }, StudyUi.lp(0, -2, 1f).also { if (i > 0) it.marginStart = Ui.dp(this, 6) })
         }
         summary.addView(stats, StudyUi.spaced(this, 8))
@@ -659,6 +693,7 @@ class StudyActivity : Activity() {
                 background = Ui.rounded(Ui.c(context, R.color.ag_card), 14, context)
                 setPadding(Ui.dp(context, 6), Ui.dp(context, 6), Ui.dp(context, 6), Ui.dp(context, 4))
             }
+            val spread = rewardMons.size <= 7
             rewardMons.forEach { mon ->
                 sprites.addView(StudyUi.column(this).apply {
                     gravity = Gravity.CENTER
@@ -668,10 +703,12 @@ class StudyActivity : Activity() {
                         if (!caughtHere) { alpha = .7f; colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(.3f) }) }
                         contentDescription = "${if (caughtHere) "Caught" else "Defeated"} ${mon.optString("name") }"
                     }, StudyUi.lp(Ui.dp(context, 42), Ui.dp(context, 42)).also { it.topMargin = -Ui.dp(context, 4); it.bottomMargin = -Ui.dp(context, 6) })
-                    addView(StudyUi.label(context, if (caughtHere) "CAUGHT" else "XP", 8, if (caughtHere) R.color.ag_mauve else R.color.ag_sub0, 900))
-                }, StudyUi.lp(Ui.dp(this, 46), -2))
+                    addView(StudyUi.label(context, if (caughtHere) "CAUGHT" else "XP", 8, if (caughtHere) R.color.ag_mauve else R.color.ag_sub0, 900).apply { gravity = Gravity.CENTER })
+                }, if (spread) StudyUi.lp(0, -2, 1f) else StudyUi.lp(Ui.dp(this, 46), -2))
             }
-            summary.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(sprites) })
+            // Up to 7 sprites spread over the full card width (as in the mockup); more scroll sideways.
+            if (spread) summary.addView(sprites)
+            else summary.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(sprites) })
         }
         val results = StudyUi.column(this).apply {
             background = Ui.rounded(Ui.c(context, R.color.ag_card), 14, context)

@@ -86,6 +86,16 @@ class TeamPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(Ui.text(this, 17f, 900, R.color.ag_text).apply { text = st.settings.trainerName; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
+        val short = Ui.shortWindow(this) // split screen: badges go next to the coins, saving a row
+        val badges = Ui.chip(this, R.drawable.ic_star, R.color.ag_yellow).apply { setText("Badges ${st.badges.size}/${Badges.TITLES.size}") }
+        // 48 dp touch height around the small chip
+        val badgesBox = FrameLayout(this).apply {
+            minimumHeight = Ui.dp(this@TeamPage, 48)
+            isClickable = true
+            setOnClickListener { showBadges() }
+            addView(badges, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
+        }
+        if (short) top.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6); it.topMargin = -Ui.dp(this, 12); it.bottomMargin = -Ui.dp(this, 12) })
         top.addView(Ui.chip(this, R.drawable.ic_coin, R.color.ag_yellow).also { it.setText(Bits.fmt(st.cash)) })
         card.addView(top)
 
@@ -100,11 +110,7 @@ class TeamPage(base: Context, host: PageHost) : GamePage(base, host) {
         bar.set(st.trainerXp.toFloat() / need.coerceAtLeast(1), Ui.c(this, R.color.ag_mauve), false)
         card.addView(bar, LinearLayout.LayoutParams(-1, Ui.dp(this, 7)).also { it.topMargin = Ui.dp(this, 7) })
 
-        val badges = Ui.chip(this, R.drawable.ic_star, R.color.ag_yellow).apply {
-            setText("Badges ${st.badges.size}/${Badges.TITLES.size}")
-            setOnClickListener { showBadges() }
-        }
-        card.addView(badges, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(this, 9) })
+        if (!short) card.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(this, 2); it.bottomMargin = -Ui.dp(this, 8) })
         return card
     }
 
@@ -138,7 +144,7 @@ class TeamPage(base: Context, host: PageHost) : GamePage(base, host) {
             setOnClickListener { actions.menu(mon) }
         }
         val img = ImageView(ctx)
-        Ui.staticSprite(ctx, mon.species, mon.shiny, img)
+        MonPreview.show(ctx, mon.species, mon.shiny, img)
         row.addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 56), Ui.dp(ctx, 56)))
 
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }

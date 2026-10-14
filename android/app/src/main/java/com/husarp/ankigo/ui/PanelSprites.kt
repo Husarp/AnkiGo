@@ -17,7 +17,8 @@ import java.util.concurrent.Executors
  * Only the newest request per view counts (a tag on the view), so a slow download never overwrites a newer sprite.
  */
 internal object PanelSprites {
-    private val pool = Executors.newSingleThreadExecutor { r -> Thread(r, "panel-sprites").apply { isDaemon = true } }
+    /** Decodes off the main thread; a var only so the design screenshots can decode in place. */
+    internal var pool: java.util.concurrent.Executor = Executors.newSingleThreadExecutor { r -> Thread(r, "panel-sprites").apply { isDaemon = true } }
     private val main = Handler(Looper.getMainLooper())
 
     /**

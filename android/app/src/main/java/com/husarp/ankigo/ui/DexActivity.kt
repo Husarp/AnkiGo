@@ -5,11 +5,15 @@ import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.drawable.ColorDrawable
+import android.text.Editable
 import android.text.TextUtils
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import android.widget.BaseAdapter
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
@@ -18,16 +22,26 @@ import android.widget.ListView
 import android.widget.TextView
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Species
+import com.husarp.ankigo.game.Type
 
 // TICKET T14 owns this file: the Pokédex (mockup frame D).
-// One ListView: header = hero card + progress + filter chips, rows = 4 cells each (recycled, so ~1000 entries scroll smoothly).
+// One ListView: header = hero card + progress + filters (segmented, search + sort, chips), rows = 4 cells each (recycled, so ~1000 entries scroll smoothly).
 class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
     override val tab = BottomNav.Tab.DEX
 
     private lateinit var appBar: AppBar
     private lateinit var list: ListView
     private lateinit var header: LinearLayout
-    private var filter = "all"
+    private lateinit var topBox: LinearLayout     // hero + progress, rebuilt on every render
+    private lateinit var segBox: LinearLayout     // All / Owned / Not owned
+    private lateinit var chipsBox: LinearLayout   // Wishlist + gen chips, type chips
+    private lateinit var search: EditText         // built once so typing keeps focus
+    private lateinit var sortPill: TextView
+    private lateinit var filtersPill: TextView   // short windows only: shows / hides the chip rows
+    private var filtersOpen = false
+    private lateinit var emptyView: TextView
+    // Kept while the page lives. Search + sort re-filter in place (render would rebuild the header and drop the keyboard).
+    private var filter = DexFilter()
     private var shown: List<Species> = emptyList()
 
     private val adapter = object : BaseAdapter() {
@@ -51,6 +65,21 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(this@DexPage, 12), 0, Ui.dp(this@DexPage, 12), Ui.dp(this@DexPage, 6))
         }
+        topBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        segBox = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        chipsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        emptyView = Ui.text(this, 13f, 700, R.color.ag_sub0).apply {
+            text = "No Pokémon match"
+            gravity = Gravity.CENTER
+            visibility = View.GONE
+            setPadding(0, Ui.dp(this@DexPage, 24), 0, Ui.dp(this@DexPage, 12))
+        }
+        header.addView(topBox)
+        val gapTop = if (Ui.shortWindow(this)) 6 else 12 // a short window (split screen) packs the header tighter
+        header.addView(segBox, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, gapTop) })
+        header.addView(searchRow(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, gapTop - 4) })
+        header.addView(chipsBox, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 2) })
+        header.addView(emptyView)
         list = ListView(this).apply {
             divider = null
             dividerHeight = 0
@@ -68,23 +97,31 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
         val gens = st.settings.gens.sorted()
         appBar.setPill(if (gens.isEmpty()) "No gens" else if (gens.size == 1) "Gen ${gens[0]}" else "Gen ${gens.first()}–${gens.last()}")
         val enabled = data.species.values.filter { it.gen in st.settings.gens }.sortedBy { it.num }
-        val keys = listOf("all" to "All", "caught" to "Caught", "missing" to "Missing", "wish" to "Wishlist") +
-            gens.map { "gen$it" to "Gen $it" }
-        if (keys.none { it.first == filter }) filter = "all"
-        shown = enabled.filter {
-            when {
-                filter == "caught" -> it.num in st.caught
-                filter == "missing" -> it.num !in st.caught
-                filter == "wish" -> it.num in st.settings.wishlist
-                filter.startsWith("gen") -> it.gen == filter.removePrefix("gen").toInt()
-                else -> true
-            }
-        }
+        // drop selections that no longer exist (a gen switched off in Settings)
+        if (filter.gens.any { it !in st.settings.gens }) filter = filter.copy(gens = filter.gens.filter { it in st.settings.gens }.toSet())
+        refilter()
 
-        header.removeAllViews()
-        hero()?.let { header.addView(it) }
-        header.addView(progress(enabled))
-        header.addView(filters(keys), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, 12) })
+        topBox.removeAllViews()
+        if (!Ui.shortWindow(this)) hero()?.let { topBox.addView(it) } // no room for the "last caught" card in a short window
+        topBox.addView(progress(enabled, compact = Ui.shortWindow(this)))
+        segBox.removeAllViews()
+        segmented()
+        sortPill.text = "↕ ${filter.sort.label}"
+        chipsBox.removeAllViews()
+        filters(gens)
+        // a short window keeps only the progress line, the segmented control and the search row; "Filters" opens the chip rows
+        val short = Ui.shortWindow(this)
+        filtersPill.visibility = if (short) View.VISIBLE else View.GONE
+        chipsBox.visibility = if (!short || filtersOpen) View.VISIBLE else View.GONE
+        val active = filter.gens.size + filter.types.size + (if (filter.wishlistOnly) 1 else 0)
+        filtersPill.text = "Filters" + (if (active > 0) " · $active" else "") + (if (filtersOpen) " ▴" else " ▾")
+    }
+
+    /** Recomputes the grid from [filter] and shows the "No Pokémon match" line when it is empty. */
+    private fun refilter() {
+        val st = state
+        shown = filter.apply(data.species.values.toList(), DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens)
+        emptyView.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
         adapter.notifyDataSetChanged()
     }
 
@@ -105,7 +142,7 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
             ).apply { cornerRadius = Ui.dp(this@DexPage, 16f) }
         }
         val img = ImageView(this)
-        Ui.staticSprite(this, mon.species, mon.shiny, img)
+        MonPreview.show(this, mon.species, mon.shiny, img)
         card.addView(img, LinearLayout.LayoutParams(Ui.dp(this, 84), Ui.dp(this, 84)).also { it.marginEnd = Ui.dp(this, 10) })
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(Ui.text(this, 12f, 900, R.color.ag_sub0).apply {
@@ -124,16 +161,17 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     // ---- progress ----
 
-    private fun progress(enabled: List<Species>): View {
+    private fun progress(enabled: List<Species>, compact: Boolean = false): View {
         val st = state
         val caught = enabled.count { it.num in st.caught }
         val seen = enabled.count { it.num in st.seen || it.num in st.caught }
         val total = enabled.size.coerceAtLeast(1)
         val card = Ui.card(this).apply {
-            setPadding(Ui.dp(this@DexPage, 12), Ui.dp(this@DexPage, 10), Ui.dp(this@DexPage, 12), Ui.dp(this@DexPage, 10))
+            val v = if (compact) 6 else 10
+            setPadding(Ui.dp(this@DexPage, 12), Ui.dp(this@DexPage, v), Ui.dp(this@DexPage, 12), Ui.dp(this@DexPage, v))
         }
         val nums = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.BOTTOM }
-        fun big(n: Int, tone: Int) = Ui.text(this, 22f, 900, tone).apply { text = n.toString() }
+        fun big(n: Int, tone: Int) = Ui.text(this, if (compact) 17f else 22f, 900, tone).apply { text = n.toString() }
         fun small(s: String) = Ui.text(this, 12f, 700, R.color.ag_sub0).apply { text = s }
         val gap = Ui.dp(this, 4)
         nums.addView(big(caught, R.color.ag_text))
@@ -154,28 +192,110 @@ class DexPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
         bars.addView(seenBar, FrameLayout.LayoutParams(-1, Ui.dp(this, 8)))
         bars.addView(caughtBar, FrameLayout.LayoutParams(-1, Ui.dp(this, 8)))
-        card.addView(bars, LinearLayout.LayoutParams(-1, Ui.dp(this, 8)).also { it.topMargin = Ui.dp(this, 6) })
-        return card.also { it.layoutParams = LinearLayout.LayoutParams(-1, -2).also { lp -> lp.topMargin = Ui.dp(this, 12) } }
+        card.addView(bars, LinearLayout.LayoutParams(-1, Ui.dp(this, 8)).also { it.topMargin = Ui.dp(this, if (compact) 4 else 6) })
+        return card.also { it.layoutParams = LinearLayout.LayoutParams(-1, -2).also { lp -> lp.topMargin = Ui.dp(this, if (compact) 6 else 12) } }
     }
 
-    // ---- filter chips ----
+    // ---- filters ----
 
-    private fun filters(keys: List<Pair<String, String>>): View {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        for ((key, label) in keys) {
-            val on = key == filter
-            row.addView(Ui.text(this, 12f, 800, if (on) R.color.ag_crust else R.color.ag_sub1).apply {
+    private fun segmented() {
+        val ctx = this
+        segBox.background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
+        segBox.setPadding(Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3))
+        for ((key, label) in listOf(DexOwned.ALL to "All", DexOwned.OWNED to "Owned", DexOwned.NOT_OWNED to "Not owned")) {
+            val on = filter.owned == key
+            segBox.addView(Ui.text(ctx, 12f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply {
                 text = label
+                gravity = Gravity.CENTER
                 maxLines = 1
-                setPadding(Ui.dp(this@DexPage, 10), Ui.dp(this@DexPage, 5), Ui.dp(this@DexPage, 10), Ui.dp(this@DexPage, 5))
-                background = Ui.rounded(Ui.c(this@DexPage, if (on) R.color.ag_mauve else R.color.ag_mantle), 10, this@DexPage)
-                setOnClickListener { filter = key; requestRender(); list.setSelection(0) }
-            }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6) })
+                setPadding(0, Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12)) // 42 dp segments in a 48 dp control
+                background = if (on) Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx) else null
+                setOnClickListener { filter = filter.copy(owned = key); requestRender(); list.setSelection(0) }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
         }
+    }
+
+    private fun searchRow(): View {
+        val ctx = this
+        search = EditText(ctx).apply {
+            hint = "Search name or number"
+            typeface = Ui.font(ctx, 700)
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTextColor(Ui.c(ctx, R.color.ag_text))
+            setHintTextColor(Ui.c(ctx, R.color.ag_ov))
+            setSingleLine()
+            imeOptions = EditorInfo.IME_ACTION_SEARCH
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
+            setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 8))
+            setText(filter.query)
+            addTextChangedListener(object : TextWatcher {
+                override fun afterTextChanged(s: Editable?) { filter = filter.copy(query = s?.toString().orEmpty()); refilter() }
+                override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) = Unit
+            })
+            setOnEditorActionListener { v, action, _ ->
+                if (action == EditorInfo.IME_ACTION_SEARCH) { v.clearFocus(); true } else false
+            }
+        }
+        sortPill = Ui.text(ctx, 12f, 800, R.color.ag_text).apply {
+            maxLines = 1
+            gravity = Gravity.CENTER
+            Ui.touchPill(this, Ui.rounded(Bits.blend(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_mantle), 0.22f), 12, ctx), 36, 12)
+            setOnClickListener {
+                val sorts = DexSort.entries
+                Pickers.choose(ctx, "Sort by", sorts.map { it.label }) { i ->
+                    filter = filter.copy(sort = sorts[i]); requestRender(); list.setSelection(0)
+                }
+            }
+        }
+        filtersPill = Ui.text(ctx, 12f, 800, R.color.ag_text).apply {
+            maxLines = 1
+            visibility = View.GONE
+            Ui.touchPill(this, Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx), 36, 12)
+            setOnClickListener { filtersOpen = !filtersOpen; requestRender() }
+        }
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(search, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(filtersPill, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
+            addView(sortPill, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
+        }
+    }
+
+    /** One filter chip; [tint] = the selected colour (default mauve) with its text colour. */
+    private fun chip(label: String, on: Boolean, tint: Pair<Int, Int>? = null, onClick: () -> Unit): TextView {
+        val ctx = this
+        val (fill, ink) = tint ?: (Ui.c(ctx, R.color.ag_mauve) to Ui.c(ctx, R.color.ag_crust))
+        return Ui.text(ctx, 12f, 800, R.color.ag_sub1).apply {
+            text = label
+            maxLines = 1
+            setTextColor(if (on) ink else Ui.c(ctx, R.color.ag_sub1))
+            Ui.touchPill(this, Ui.rounded(if (on) fill else Ui.c(ctx, R.color.ag_mantle), 10, ctx), 28, 10) // 48 dp touch height
+            setOnClickListener { onClick(); requestRender(); list.setSelection(0) }
+        }
+    }
+
+    private fun chipRow(chips: List<View>): View {
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        for (c in chips) row.addView(c, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6) })
         return HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
             addView(row)
         }
+    }
+
+    private fun <T> Set<T>.toggle(v: T) = if (v in this) this - v else this + v
+
+    private fun filters(gens: List<Int>) {
+        val f = filter
+        val firstRow = listOf(chip("Wishlist", f.wishlistOnly) { filter = filter.copy(wishlistOnly = !filter.wishlistOnly) }) +
+            gens.map { g -> chip("Gen $g", g in f.gens) { filter = filter.copy(gens = filter.gens.toggle(g)) } }
+        chipsBox.addView(chipRow(firstRow))
+        val types = Type.entries.map { t ->
+            chip(t.label, t in f.types, Ui.typeColor(t) to Ui.typeTextColor(t)) { filter = filter.copy(types = filter.types.toggle(t)) }
+        }
+        chipsBox.addView(chipRow(types), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 4) }) // chips are 48 dp touch rows
     }
 
     // ---- grid cells (mockup .dexgrid) ----

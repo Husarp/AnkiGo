@@ -7,7 +7,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
-import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
@@ -15,7 +14,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -24,6 +22,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.Executors
+import com.husarp.ankigo.ui.Form
+import com.husarp.ankigo.ui.Ui
+import com.husarp.ankigo.ui.showCard
 import com.husarp.ankigo.update.UpdateBanner
 import com.husarp.ankigo.update.Updates
 import com.husarp.ankigo.update.UpdatesActivity
@@ -41,17 +42,38 @@ class DiagnosticsActivity : Activity() {
         Report.init(this)
         Anki.load(this)
         title = "Diagnostics"
+        setContentView(buildContent())
 
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 16, 16, 16) }
-        header = TextView(this).apply { textSize = 12f; setBackgroundColor(Color.rgb(230, 240, 255)); setPadding(12, 12, 12, 12) }
+        logView.text = Report.all().takeLast(20000)
+        Report.listener = { line -> main.post { logView.append(line + "\n"); logScroll.post { logScroll.scrollTo(0, logView.height) } } }
+        Report.log("C12b", "=== AnkiGo started; Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
+        refreshHeader(log = true)
+    }
+
+    /** The screen's views; onCreate sets them as the Activity's content. */
+    internal fun buildContent(): LinearLayout {
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@DiagnosticsActivity, R.color.ag_base)) }
+        root.addView(Ui.appBar(this, "Diagnostics", back = true))
         root.addView(UpdateBanner(this), LinearLayout.LayoutParams(-1, -2))
-        root.addView(header)
+        val body = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 4), Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 12))
+        }
+        root.addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
 
+        // status card
+        header = Ui.text(this, 12f, 700, R.color.ag_sub1).apply { setLineSpacing(0f, 1.15f) }
+        body.addView(Ui.card(this).apply { setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 12), Ui.dp(context, 10)); addView(header) })
+
+        val gap = Ui.dp(this, 6)
         val buttons = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fun row(vararg items: Pair<String, () -> Unit>) {
             val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            for ((label, f) in items) r.addView(Button(this).apply { text = label; textSize = 11f; isAllCaps = false; setOnClickListener { f() } }, LinearLayout.LayoutParams(0, -2, 1f))
-            buttons.addView(r)
+            items.forEachIndexed { i, (label, f) ->
+                r.addView(Form.secondary(this, label, onPage = true) { f() }.apply { textSize = 12f; minHeight = Ui.dp(context, 48) },
+                    LinearLayout.LayoutParams(0, -1, 1f).also { if (i > 0) it.marginStart = gap })
+            }
+            buttons.addView(r, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap })
         }
         row("Switch AnkiDroid target" to { pickTarget() }, "Grant AnkiDroid permission" to { askPermission() })
         row("C1 Decks + counts" to { c1() }, "C2–C5 Study a deck…" to { pickDeckAndStudy() })
@@ -62,18 +84,16 @@ class DiagnosticsActivity : Activity() {
         row("C8 Pin motivation widget" to { pin(MotivationWidget::class.java) }, "C8 Pin study widget" to { pin(StudyWidget::class.java) })
         row("Updates (version ${Updates.current(this)})" to { startActivity(Intent(this, UpdatesActivity::class.java)) })
         row("Share report" to { share() }, "Copy report" to { copy() }, "Clear log" to { Report.clear(); GameLog.clear(); logView.text = "" })
-        root.addView(buttons)
+        body.addView(buttons, LinearLayout.LayoutParams(-1, -2))
 
         // not selectable: a focused log made fullScroll pan the whole window up, hiding the buttons (Copy report covers copying)
-        logView = TextView(this).apply { textSize = 10f; typeface = Typeface.MONOSPACE }
-        logScroll = ScrollView(this).apply { addView(logView) }
-        root.addView(logScroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
-
-        logView.text = Report.all().takeLast(20000)
-        Report.listener = { line -> main.post { logView.append(line + "\n"); logScroll.post { logScroll.scrollTo(0, logView.height) } } }
-        Report.log("C12b", "=== AnkiGo started; Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
-        refreshHeader(log = true)
+        logView = Ui.text(this, 11f, 600, R.color.ag_sub1).apply { typeface = Typeface.MONOSPACE; setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8)) }
+        logScroll = ScrollView(this).apply {
+            background = Ui.rounded(Ui.c(this@DiagnosticsActivity, R.color.ag_mantle), 12, this@DiagnosticsActivity)
+            addView(logView)
+        }
+        body.addView(logScroll, LinearLayout.LayoutParams(-1, 0, 1f).also { it.topMargin = Ui.dp(this, 10) })
+        return root
     }
 
     // Launch and every return to the app: check for updates (at most every 5 min) and carry on an install
@@ -124,7 +144,7 @@ class DiagnosticsActivity : Activity() {
         val list = (inst + Anki.KNOWN.filter { it !in inst }).toTypedArray()
         AlertDialog.Builder(this).setTitle("AnkiDroid package to test").setItems(list.map { if (it in inst) it else "$it (not installed)" }.toTypedArray()) { _, w ->
             Anki.select(this, list[w]); Report.log("C12b", "target switched to ${list[w]}"); refreshHeader(log = true)
-        }.show()
+        }.showCard()
     }
 
     private fun askPermission() {
@@ -163,7 +183,7 @@ class DiagnosticsActivity : Activity() {
                 AlertDialog.Builder(this).setTitle("Pick a deck")
                     .setItems(decks.map { "${it.name}  [${it.learn}/${it.review}/${it.new}]" }.toTypedArray()) { _, w ->
                         startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", decks[w].id).putExtra("deckName", decks[w].name))
-                    }.show()
+                    }.showCard()
             }
         } catch (e: Exception) {
             Report.fail("C2", "deck list", e)

@@ -3,11 +3,12 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("app.cash.paparazzi")
 }
 
 // The app's version: the one place it is written. versionCode must grow with every release or Android
 // refuses the update, so it comes from the version: 0.1.0 -> 100, 1.2.3 -> 10203.
-val appVersion = "0.4.2"
+val appVersion = "0.4.3"
 val (vMajor, vMinor, vPatch) = appVersion.split('.').map { it.toInt() }
 
 android {
@@ -50,6 +51,13 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
+}
+
+// The screenshot-test library (Paparazzi) brings a newer Kotlin standard library into the unit tests only; let the
+// test sources compile against it. The app itself is not affected.
+tasks.withType<Test>().configureEach { reports.html.required.set(false) }
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    if (name.contains("UnitTest")) compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
 }
 
 dependencies {

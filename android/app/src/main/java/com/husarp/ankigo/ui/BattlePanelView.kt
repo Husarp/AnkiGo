@@ -96,6 +96,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var accentAnim: ValueAnimator? = null
     private var logSize = 13f
     private var compact = false
+    private var cornerClearance = 0
     private var study = false
     private val chargePips = StudyUi.row(ctx).apply { visibility = GONE }
     private val studyCharge = StudyCharge()
@@ -117,11 +118,12 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     }
     private val logLp = LinearLayout.LayoutParams(-1, dpi(52)).also { it.setMargins(dpi(10), dpi(8), dpi(10), 0) }
 
-    /** "Paused" pill over the arena (compact mode only). */
+    /** "Paused" pill at the start of the one-line log (compact mode only; it replaces the hidden log pill). */
     private val pausedPill = Ui.text(ctx, 10f, 900, R.color.ag_crust).apply {
         text = "Paused"
-        setPadding(dpi(8), dpi(2), dpi(8), dpi(2))
-        background = Ui.rounded(Ui.c(ctx, R.color.ag_peach), 8, ctx)
+        textSize = 9.5f
+        setPadding(dpi(7), dpi(1), dpi(7), dpi(1))
+        background = Ui.rounded(Ui.c(ctx, R.color.ag_peach), 7, ctx)
         visibility = GONE
     }
 
@@ -150,6 +152,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         strip.addView(grant, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(8) })
 
         // log
+        logBox.addView(pausedPill, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(6) })
         logBox.addView(logText, LinearLayout.LayoutParams(0, -2, 1f))
         pips.forEachIndexed { i, pip -> chargePips.addView(pip, LinearLayout.LayoutParams(dpi(10), dpi(10)).also { if (i > 0) it.marginStart = dpi(4) }) }
         logBox.addView(chargePips, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(7) })
@@ -188,7 +191,6 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         scroll.addView(column, ViewGroup.LayoutParams(-1, -2))
         addView(scroll, LayoutParams(-1, -1))
         addView(overlay, LayoutParams(-1, -1))
-        addView(pausedPill, LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).also { it.topMargin = dpi(6) })
     }
 
     // ---------------------------------------------------------------- strip
@@ -221,7 +223,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         strip.visibility = if (on || statusOk) GONE else VISIBLE
         footer.visibility = if (on) GONE else VISIBLE
         logLp.height = if (on) dpi(26) else dpi(52)
-        if (on) logLp.setMargins(dpi(6), dpi(3), dpi(6), dpi(3)) else logLp.setMargins(dpi(10), dpi(8), dpi(10), 0)
+        if (on) logLp.setMargins(dpi(6), dpi(3), dpi(6) + cornerClearance, dpi(3)) else logLp.setMargins(dpi(10), dpi(8), dpi(10), 0)
         logBox.setPadding(if (on) dpi(10) else dpi(14), if (on) dpi(2) else dpi(8), dpi(8), if (on) dpi(2) else dpi(8))
         logText.accessibilityLiveRegion = if (context.getSharedPreferences("study", 0).getBoolean("speakBattle", true)) View.ACCESSIBILITY_LIVE_REGION_POLITE else View.ACCESSIBILITY_LIVE_REGION_NONE
         logText.maxLines = if (on) 1 else 2
@@ -229,6 +231,15 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         logPill?.visibility = if (on) GONE else VISIBLE
         logBox.layoutParams = logLp
         updatePausedPill()
+    }
+
+    /**
+     * Extra space [px] kept free at the right end of the compact log line, for a resize grip drawn over the bottom-right
+     * corner (the floating battle window). 0 = none (picture-in-picture).
+     */
+    fun setCornerClearance(px: Int) {
+        cornerClearance = px
+        if (compact) { logLp.setMargins(dpi(6), dpi(3), dpi(6) + px, dpi(3)); logBox.layoutParams = logLp }
     }
 
     /** Study-only presentation; PiP and floating windows retain the existing compact layout. */

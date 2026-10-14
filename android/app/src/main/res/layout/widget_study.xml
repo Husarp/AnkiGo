@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Study widget (T34): app card (ag_base, 24dp), leaf deck name, 40dp icon buttons, mauve Show answer pill, coloured answer pills.
+     RemoteViews can't use Nunito, so sans-serif-medium/bold with the ag_* colours (both palettes by the night qualifier). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
+    android:background="@drawable/widget_game_bg"
     android:orientation="vertical"
-    android:padding="10dp">
+    android:padding="12dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:gravity="center_vertical"
         android:orientation="horizontal">
 
         <TextView
@@ -16,23 +19,36 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
             android:text="AnkiGo study"
-            android:textColor="#CCDDFF"
-            android:textSize="12sp" />
+            android:textColor="@color/ag_sub0"
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
-        <Button
+        <ImageButton
             android:id="@+id/s_refresh"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="↻"
-            android:textSize="12sp" />
-
-        <Button
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/widget_icon_btn"
+            android:contentDescription="s_refresh"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_sync"
+            android:tint="@color/ag_text" />
+        <ImageButton
             android:id="@+id/s_open"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="Open"
-            android:textSize="12sp" />
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/widget_icon_btn"
+            android:contentDescription="s_open"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_open"
+            android:tint="@color/ag_text" />
     </LinearLayout>
 
     <TextView
@@ -40,9 +56,11 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif-medium"
         android:gravity="center"
-        android:text="Tap ↻ to load a card"
-        android:textColor="#FFFFFF"
+        android:text="Tap refresh to load a card"
+        android:textColor="@color/ag_text"
         android:textSize="16sp" />
 
     <LinearLayout
@@ -50,43 +68,83 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal">
 
-        <Button
+        <TextView
             android:id="@+id/s_show"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
             android:layout_weight="1"
-            android:text="Show answer" />
-
-        <Button
+            android:background="@drawable/widget_pill_mauve"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxLines="1"
+            android:text="Show answer"
+            android:textColor="@color/ag_base"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+        <TextView
             android:id="@+id/s_again"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="0dp"
             android:layout_weight="1"
+            android:background="@drawable/widget_pill_red"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxLines="1"
             android:text="Again"
+            android:textColor="@color/ag_base"
+            android:textSize="13sp"
+            android:textStyle="bold"
             android:visibility="gone" />
-
-        <Button
+        <TextView
             android:id="@+id/s_hard"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:background="@drawable/widget_pill_peach"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxLines="1"
             android:text="Hard"
+            android:textColor="@color/ag_base"
+            android:textSize="13sp"
+            android:textStyle="bold"
             android:visibility="gone" />
-
-        <Button
+        <TextView
             android:id="@+id/s_good"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:background="@drawable/widget_pill_green"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxLines="1"
             android:text="Good"
+            android:textColor="@color/ag_base"
+            android:textSize="13sp"
+            android:textStyle="bold"
             android:visibility="gone" />
-
-        <Button
+        <TextView
             android:id="@+id/s_easy"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="40dp"
+            android:layout_marginStart="6dp"
             android:layout_weight="1"
+            android:background="@drawable/widget_pill_blue"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:maxLines="1"
             android:text="Easy"
+            android:textColor="@color/ag_base"
+            android:textSize="13sp"
+            android:textStyle="bold"
             android:visibility="gone" />
     </LinearLayout>
 </LinearLayout>

@@ -4,6 +4,8 @@ import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PorterDuff
+import android.graphics.drawable.InsetDrawable
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +16,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.ScrollView
+import android.widget.TextView
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.GameData
@@ -29,19 +32,64 @@ import java.util.Locale
 
 /** Dialogs: choose from a list, confirm, pick a Pokémon / item / move. */
 object Pickers {
-    /** Shows [dialog] with the rounded card background. */
-    fun show(dialog: AlertDialog) {
-        showPlain(dialog)
-        dialog.window?.setBackgroundDrawable(Ui.rounded(Ui.c(dialog.context, R.color.ag_card), 18, dialog.context))
-    }
+    /** Screenshot tests set this to take a dialog instead of showing it (a renderer has no window for it). Null in the app. */
+    internal var intercept: ((AlertDialog) -> Unit)? = null
 
-    /** Shows [dialog] with the default dialog look. Both variants work in an Activity and over other apps (floating card). */
-    fun showPlain(dialog: AlertDialog) {
+    /**
+     * Shows [dialog] the app's way: rounded card, Nunito title / message / buttons, 48 dp list rows ([style]). Every dialog
+     * of the game screens goes through here. Works in an Activity and over other apps (floating card).
+     */
+    fun show(dialog: AlertDialog) {
+        dialog.window?.setBackgroundDrawable(Ui.rounded(Ui.c(dialog.context, R.color.ag_card), 18, dialog.context))
+        intercept?.let { it(dialog); return }
         // Without an Activity there is no window to hang the dialog on: make it an overlay window (needs the overlay permission).
         if (Ui.findActivity(dialog.context) == null) {
             dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
         dialog.show()
+        style(dialog)
+    }
+
+    /** Same as [show] (kept for the Settings calls). */
+    fun showPlain(dialog: AlertDialog) = show(dialog)
+
+    /**
+     * Gives an already created dialog the app's typography: title Nunito 18/900, message 14/700, buttons 14/900 in mauve
+     * (cancel-type buttons in `ag_sub1`, no ALL-CAPS) and `setItems` rows 15/700 at least 48 dp tall. Needs the dialog's views
+     * (after `show()`, or after Dialog.create() in the screenshot tests).
+     */
+    internal fun style(d: AlertDialog) {
+        val ctx = d.context
+        val titleId = ctx.resources.getIdentifier("alertTitle", "id", "android")
+        if (titleId != 0) d.findViewById<TextView>(titleId)?.apply {
+            typeface = Ui.font(ctx, 900); setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f); setTextColor(Ui.c(ctx, R.color.ag_text))
+        }
+        d.findViewById<TextView>(android.R.id.message)?.apply {
+            typeface = Ui.font(ctx, 700); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); setTextColor(Ui.c(ctx, R.color.ag_sub1))
+            setLineSpacing(0f, 1.15f)
+        }
+        for (which in listOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL)) {
+            d.getButton(which)?.apply {
+                isAllCaps = false
+                typeface = Ui.font(ctx, 900); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                setTextColor(Ui.c(ctx, if (which == AlertDialog.BUTTON_POSITIVE) R.color.ag_mauve else R.color.ag_sub1))
+                minHeight = Ui.dp(ctx, 48)
+            }
+        }
+        // setItems rows (the platform's text1 TextViews); custom rows ([rows]) are not touched
+        d.listView?.let { lv ->
+            fun row(v: View) {
+                if (v is TextView && v.id == android.R.id.text1) v.apply {
+                    typeface = Ui.font(ctx, 700); setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    setTextColor(Ui.c(ctx, R.color.ag_text)); minHeight = Ui.dp(ctx, 48); gravity = Gravity.CENTER_VERTICAL
+                }
+            }
+            lv.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
+                override fun onChildViewAdded(parent: View, child: View) = row(child)
+                override fun onChildViewRemoved(parent: View, child: View) {}
+            })
+            for (i in 0 until lv.childCount) row(lv.getChildAt(i))
+        }
     }
 
     /** A plain list of text choices. */
@@ -67,11 +115,14 @@ object Pickers {
         val list = ListView(a).apply {
             divider = null
             dividerHeight = 0
+            // rows carry 12 dp (start) and 16 dp (end) of their own: with this the content lines up with the dialog title (24 dp)
+            setPadding(Ui.dp(a, 12), 0, Ui.dp(a, 8), 0)
+            clipToPadding = false
             adapter = object : BaseAdapter() {
                 override fun getCount() = n
                 override fun getItem(position: Int): Any = position
                 override fun getItemId(position: Int) = position.toLong()
-                override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View = bind(position)
+                override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View = bind(position).also { it.minimumHeight = Ui.dp(a, 48) }
             }
             setOnItemClickListener { _, _, p, _ -> dlg.dismiss(); onPick(p) }
         }
@@ -106,7 +157,7 @@ object Pickers {
             setPadding(Ui.dp(a, 16), Ui.dp(a, 8), Ui.dp(a, 16), Ui.dp(a, 4))
         }
         val img = ImageView(a)
-        Ui.staticSprite(a, ev.toSpecies, shiny, img)
+        MonPreview.show(a, ev.toSpecies, shiny, img)
         col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, 112), Ui.dp(a, 112)))
         col.addView(Ui.text(a, 15f, 800, R.color.ag_text).apply {
             text = "${ev.from} evolved into ${ev.to}!"
@@ -115,6 +166,9 @@ object Pickers {
         show(AlertDialog.Builder(a).setTitle("Evolution").setView(col).setPositiveButton("Nice", null).create())
     }
 }
+
+/** Builds and shows the dialog through [Pickers.show] (the app's dialog look). */
+fun AlertDialog.Builder.showCard() = Pickers.show(create())
 
 /** Small widgets shared by the three screens. */
 object Bits {
@@ -201,7 +255,7 @@ object Bits {
         setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 2), Ui.dp(ctx, 16), Ui.dp(ctx, 2))
         alpha = if (mon.hp <= 0) 0.55f else 1f
         val img = ImageView(ctx)
-        Ui.staticSprite(ctx, mon.species, mon.shiny, img)
+        MonPreview.show(ctx, mon.species, mon.shiny, img)
         addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
         addView(bodyText(ctx, (if (mon.shiny) "★ " else "") + mon.name, sub))
         addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { text = "Lv ${mon.level}" })
@@ -215,7 +269,7 @@ object Bits {
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 9), Ui.dp(ctx, 16), Ui.dp(ctx, 9))
+            setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 9), Ui.dp(ctx, 16), Ui.dp(ctx, 9))
             if (m == null) {
                 addView(Ui.text(ctx, 14f, 800, R.color.ag_text).apply { text = id })
                 return@apply
@@ -234,12 +288,23 @@ object Bits {
         return "Pow $pow · Acc ${m.accuracy ?: "—"} · $cat"
     }
 
-    /** Buy button (mockup `.buy`): coin + price on a yellow-tinted mantle, faded when [enabled] is false. */
-    fun buyButton(ctx: Context, price: Int, enabled: Boolean, onClick: () -> Unit): LinearLayout = LinearLayout(ctx).apply {
+    /**
+     * Buy button (mockup `.buy`): coin + price on a yellow-tinted mantle, faded when [enabled] is false. The pill is 30 dp
+     * tall inside a 48 dp touch height; [compact] drops the extra touch height (the shop tile is tappable as a whole).
+     */
+    fun buyButton(ctx: Context, price: Int, enabled: Boolean, compact: Boolean = false, onClick: () -> Unit): LinearLayout = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(Ui.dp(ctx, 9), Ui.dp(ctx, 7), Ui.dp(ctx, 9), Ui.dp(ctx, 7))
-        background = Ui.rounded(blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f), 10, ctx)
+        gravity = Gravity.CENTER
+        val fill = Ui.rounded(blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f), 10, ctx)
+        if (compact) {
+            background = fill
+            setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 7), Ui.dp(ctx, 12), Ui.dp(ctx, 7))
+        } else {
+            val inset = Ui.dp(ctx, 9)
+            background = InsetDrawable(fill, 0, inset, 0, inset)
+            minimumHeight = Ui.dp(ctx, 48)
+            setPadding(Ui.dp(ctx, 9), 0, Ui.dp(ctx, 9), 0)
+        }
         alpha = if (enabled) 1f else 0.45f
         addView(ImageView(ctx).apply {
             setImageResource(R.drawable.ic_coin)

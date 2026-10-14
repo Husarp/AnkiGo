@@ -3,6 +3,7 @@ package com.husarp.ankigo.ui
 import android.content.Context
 import android.view.Gravity
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -39,7 +40,7 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
             setPadding(Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3))
             for (t in listOf(tabShop, tabBag)) {
-                t.setPadding(0, Ui.dp(ctx, 7), 0, Ui.dp(ctx, 7))
+                t.setPadding(0, Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12)) // 42 dp tabs in a 48 dp control
                 addView(t, LinearLayout.LayoutParams(0, -2, 1f))
             }
         }
@@ -94,34 +95,31 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
     private fun fillShop() {
         val ctx = this
         val st = state
-        // Section "Today's items": title, "new in N h", reroll button.
+        // Section "Today's specials": title, "new in N h", reroll button (48 dp touch height, 28 dp look).
         val head = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 12), 0, Ui.dp(ctx, 6))
-            addView(Ui.text(ctx, 12f, 900, R.color.ag_sub0).apply { text = "TODAY'S ITEMS"; letterSpacing = 0.058f })
+            setPadding(Ui.dp(ctx, 4), 0, 0, 0)
+            addView(Ui.text(ctx, 12f, 900, R.color.ag_sub0).apply { text = "TODAY'S SPECIALS"; letterSpacing = 0.058f })
             addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = "  new in ${hoursToNewDay()} h" }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(Ui.text(ctx, 11f, 900, R.color.ag_text).apply {
                 text = "Reroll ${Tuning.REROLL_PRICE} ₽"
-                setPadding(Ui.dp(ctx, 9), Ui.dp(ctx, 6), Ui.dp(ctx, 9), Ui.dp(ctx, 6))
-                background = Ui.rounded(Bits.blend(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_mantle), 0.22f), 10, ctx)
+                Ui.touchPill(this, Ui.rounded(Bits.blend(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_mantle), 0.22f), 10, ctx), 28, 9)
                 alpha = if (st.cash >= Tuning.REROLL_PRICE) 1f else 0.45f
                 setOnClickListener { reroll() }
             })
         }
-        content.addView(head)
+        content.addView(head, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         if (st.shopItems.isEmpty()) content.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Nothing in the shop yet." })
-        for (item in st.shopItems) {
-            val price = data.price(item)
-            val buy = Bits.buyButton(ctx, price, st.cash >= price) { buyItem(item) }
-            val own = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = "×${st.count(item)}" }
-            val right = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(own, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 6) })
-                addView(buy)
+        // the specials as equal tiles in rows of three (mockup E)
+        for (chunk in st.shopItems.chunked(3)) {
+            val tiles = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+            for (i in 0 until 3) {
+                val item = chunk.getOrNull(i)
+                val lp = LinearLayout.LayoutParams(0, -1, 1f).also { if (i > 0) it.marginStart = Ui.dp(ctx, 8) }
+                tiles.addView(if (item != null) specialTile(item) else View(ctx), lp)
             }
-            content.addView(Bits.cardRow(ctx, Bits.itemTile(ctx, item), Bits.bodyText(ctx, Items.name(item), Items.def(item)?.note), right))
+            content.addView(tiles, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 8) })
         }
 
         content.addView(Bits.sect(ctx, "Today's TMs", "${Bits.fmt(Tuning.TM_PRICE)} ₽ each, never used up"))
@@ -139,6 +137,37 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
             if (m != null) mid.addView(Bits.typeRow(ctx, listOf(m.type)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
             content.addView(Bits.cardRow(ctx, tile, mid, right))
         }
+    }
+
+    /** One of today's specials (mockup `.spec`): icon, name, note, price pill, "×N" owned in the corner. The whole tile buys. */
+    private fun specialTile(item: String): View {
+        val ctx = this
+        val st = state
+        val price = data.price(item)
+        val tile = FrameLayout(ctx).apply {
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
+            isClickable = true
+            setOnClickListener { buyItem(item) }
+        }
+        val col = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(Ui.dp(ctx, 6), Ui.dp(ctx, 10), Ui.dp(ctx, 6), Ui.dp(ctx, 8))
+        }
+        col.addView(Bits.itemTile(ctx, item, 44))
+        col.addView(Ui.text(ctx, 12f, 900, R.color.ag_text).apply {
+            text = Items.name(item); gravity = Gravity.CENTER; maxLines = 2
+        }, Form.lp(ctx, 7))
+        col.addView(Ui.text(ctx, 10.5f, 700, R.color.ag_sub0).apply {
+            text = Items.def(item)?.note.orEmpty(); gravity = Gravity.CENTER; maxLines = 2
+        }, Form.lp(ctx, 2))
+        col.addView(View(ctx), LinearLayout.LayoutParams(1, 0, 1f)) // price pills line up at the bottom of equal tiles
+        col.addView(Bits.buyButton(ctx, price, st.cash >= price, compact = true) { buyItem(item) },
+            LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 8) })
+        tile.addView(col, FrameLayout.LayoutParams(-1, -1))
+        tile.addView(Ui.text(ctx, 10f, 800, R.color.ag_sub0).apply { text = "×${st.count(item)}" },
+            FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.TOP).also { it.topMargin = Ui.dp(ctx, 7); it.rightMargin = Ui.dp(ctx, 8) })
+        return tile
     }
 
     private fun buyItem(item: String) {

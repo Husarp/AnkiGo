@@ -41,13 +41,16 @@ internal object Form {
             setOnClickListener { onClick() }
         }
 
-    /** Quiet button on `ag_mantle`; [tone] colours the text (e.g. red for destructive ones). */
-    fun secondary(ctx: Context, label: String, @ColorRes tone: Int = R.color.ag_text, onClick: () -> Unit): TextView =
+    /**
+     * Quiet button on `ag_mantle` (inside a card); [tone] colours the text (e.g. red for destructive ones). [onPage] = the button sits
+     * on the page colour, not in a card: it is filled with `ag_s0` then, since `ag_mantle` is darker than the page in the dark palette.
+     */
+    fun secondary(ctx: Context, label: String, @ColorRes tone: Int = R.color.ag_text, onPage: Boolean = false, onClick: () -> Unit): TextView =
         Ui.text(ctx, 13f, 800, tone).apply {
             text = label
             gravity = Gravity.CENTER
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 11), Ui.dp(ctx, 14), Ui.dp(ctx, 11))
-            background = ripple(ctx, Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 11, ctx))
+            background = ripple(ctx, Ui.rounded(Ui.c(ctx, if (onPage) R.color.ag_s0 else R.color.ag_mantle), 11, ctx))
             isClickable = true
             setOnClickListener { onClick() }
         }
@@ -149,9 +152,10 @@ internal object Form {
         fun stepButton(sign: String, d: Int) = Ui.text(ctx, 18f, 900, R.color.ag_text).apply {
             text = sign
             gravity = Gravity.CENTER
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx)
-            minWidth = Ui.dp(ctx, 38)
-            minHeight = Ui.dp(ctx, 38)
+            // 38 dp look inside a 48 x 48 dp touch area
+            background = android.graphics.drawable.InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx), Ui.dp(ctx, 5))
+            minWidth = Ui.dp(ctx, 48)
+            minHeight = Ui.dp(ctx, 48)
             contentDescription = if (d > 0) "More" else "Less"
             attachRepeat { change(d * step) }
         }
@@ -191,22 +195,20 @@ internal object Form {
         }
     }
 
-    /** Small selectable pill (generation chips): mauve when on. */
+    /** Small selectable pill (generation chips): mauve when on. 32 dp look inside a 48 dp touch height. */
     fun toggleChip(ctx: Context, label: String, on: Boolean, onClick: () -> Unit): TextView =
         Ui.text(ctx, 13f, 800, if (on) R.color.ag_crust else R.color.ag_text).apply {
             text = label
-            gravity = Gravity.CENTER
-            setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8))
-            background = Ui.rounded(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_mantle), 10, ctx)
             isClickable = true
             setOnClickListener { onClick() }
+            setChip(this, on)
         }
 
     /** Recolours a chip made by [toggleChip] after its state changed. */
     fun setChip(chip: TextView, on: Boolean) {
         val ctx = chip.context
         chip.setTextColor(Ui.c(ctx, if (on) R.color.ag_crust else R.color.ag_text))
-        chip.background = Ui.rounded(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_mantle), 10, ctx)
+        Ui.touchPill(chip, Ui.rounded(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_mantle), 10, ctx), 32, 4)
     }
 }
 

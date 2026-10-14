@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
+import com.husarp.ankigo.Report
 import com.husarp.ankigo.gfx.GifDecoder
 import com.husarp.ankigo.game.Species
 import java.io.File
@@ -16,6 +17,11 @@ import java.util.concurrent.atomic.AtomicInteger
 // TICKET T03 owns this file. Public signatures are fixed; add private helpers freely.
 
 enum class SpriteKind { FRONT, BACK }
+
+/** One HTTP GET: the body, null for "not found", IOException for trouble. The real one is [Http.get]; tests pass a fake. */
+internal typealias HttpGet = (url: String, progress: ((Long, Long) -> Unit)?) -> ByteArray?
+
+private val realGet: HttpGet = { url, progress -> Http.get(url, progress = progress) }
 
 /** A decoded sprite: one frame for PNGs, several for animated GIFs. Bitmaps are ARGB_8888 at native pixel size. */
 class SpriteImage(val frames: List<Bitmap>, val delays: IntArray) {
@@ -37,6 +43,8 @@ class SpriteImage(val frames: List<Bitmap>, val delays: IntArray) {
 internal object SpriteUrls {
     private const val SHOWDOWN = "https://play.pokemonshowdown.com/sprites/"
     private fun pokeApi() = "https://raw.githubusercontent.com/PokeAPI/sprites/${DataStore.SPRITES_COMMIT}/sprites/"
+    /** The same repo files at the same commit through jsDelivr (identical bytes, checked), for when raw.githubusercontent.com refuses us. */
+    private fun jsDelivr() = "https://cdn.jsdelivr.net/gh/PokeAPI/sprites@${DataStore.SPRITES_COMMIT}/sprites/"
 
     /** URLs to try in order; the first that exists wins. Empty when the chain ends with "none" (BACK without any hit). */
     fun battle(sp: Species, kind: SpriteKind, shiny: Boolean): List<String> {
@@ -61,6 +69,11 @@ internal object SpriteUrls {
     }
 
     fun static(num: Int, shiny: Boolean) = "${pokeApi()}pokemon/${if (shiny) "shiny/" else ""}$num.png"
+
+    /** Static picture URLs to try in order: GitHub raw, then the same file from jsDelivr (raw may throttle or refuse a burst of ~900 requests). */
+    fun staticChain(num: Int, shiny: Boolean) =
+        listOf(static(num, shiny), "${jsDelivr()}pokemon/${if (shiny) "shiny/" else ""}$num.png")
+
     fun item(id: String) = "${pokeApi()}items/$id.png"
 
     fun isGif(b: ByteArray) = b.size > 6 && b[0] == 'G'.code.toByte() && b[1] == 'I'.code.toByte() &&
@@ -187,8 +200,9 @@ object Sprites {
     }
 
     /** The static PNG file path (may not exist yet). */
-    fun staticFile(ctx: Context, num: Int, shiny: Boolean = false): File =
-        File(File(dir(ctx), "static"), baseName(num, shiny) + ".png")
+    fun staticFile(ctx: Context, num: Int, shiny: Boolean = false): File = staticFileIn(File(dir(ctx), "static"), num, shiny)
+
+    private fun staticFileIn(staticDir: File, num: Int, shiny: Boolean = false): File = File(staticDir, baseName(num, shiny) + ".png")
 
     /** Decoded static PNG from disk (LRU cached), or null if not downloaded. Never touches the network. */
     fun staticBitmap(ctx: Context, num: Int, shiny: Boolean = false): Bitmap? = diskBitmap(staticFile(ctx, num, shiny))
@@ -199,15 +213,30 @@ object Sprites {
         diskBitmap(file)?.let { main.post { cb(it) }; return }
         if (!enabled(ctx)) { main.post { cb(null) }; return }
         enqueue(file.path, {
-            download(File(file.parentFile, baseName(num, shiny)), listOf(SpriteUrls.static(num, shiny)))
+            download(File(file.parentFile, baseName(num, shiny)), SpriteUrls.staticChain(num, shiny))
             diskBitmap(file)
         }) { cb(it as Bitmap?) }
     }
 
     /** Blocking, parallel (6 threads): downloads every missing static PNG of [nums]. progress(done, total). Returns failures. */
     fun downloadStatics(ctx: Context, nums: List<Int>, bytesProgress: ((Long, Long) -> Unit)? = null, progress: (Int, Int) -> Unit): Int {
+        Report.init(ctx)
+        val firstError = java.util.concurrent.atomic.AtomicReference<String?>(null)
+        val get: HttpGet = { url, p ->
+            try { realGet(url, p) } catch (e: IOException) { firstError.compareAndSet(null, "${e.javaClass.simpleName}: ${e.message}"); throw e }
+        }
+        val failed = downloadStatics(File(dir(ctx), "static"), { enabled(ctx) }, nums, bytesProgress, progress, get)
+        // shows in Settings -> Diagnostics, so a failing phone says why
+        Report.log("PICS", "static pictures: $failed of ${nums.size} failed" + (firstError.get()?.let { ", first network error $it" } ?: ""))
+        return failed
+    }
+
+    internal fun downloadStatics(
+        staticDir: File, enabled: () -> Boolean, nums: List<Int>, bytesProgress: ((Long, Long) -> Unit)? = null,
+        progress: (Int, Int) -> Unit, get: HttpGet = realGet,
+    ): Int {
         val total = nums.size
-        val todo = nums.filter { !staticFile(ctx, it).isFile }
+        val todo = nums.filter { !staticFileIn(staticDir, it).isFile }
         val transferred = java.util.concurrent.atomic.AtomicLong(0)
         val estimate = todo.size * 1500L
         val done = AtomicInteger(total - todo.size)
@@ -215,23 +244,23 @@ object Sprites {
         if (todo.isEmpty()) { progress(total, total); return 0 }
         progress(done.get(), total)
         val queue = java.util.concurrent.ConcurrentLinkedQueue(todo)
+        val preferred = AtomicInteger(0) // the host that worked last goes first, so a throttled one isn't asked for every picture
         val workers = minOf(6, todo.size)
         val latch = CountDownLatch(workers)
         repeat(workers) {
             Thread {
                 try {
                     while (true) {
-                        if (!enabled(ctx)) break
+                        if (!enabled()) break
                         val num = queue.poll() ?: break
-                        val file = staticFile(ctx, num)
-                        val base = File(file.parentFile, baseName(num, false))
-                        // one retry for network trouble; a "not found" is final
+                        val base = File(staticDir, baseName(num, false))
+                        // one retry for network trouble; every picture of the list exists, so an old "not found" note doesn't count
                         var seen = 0L
-                        val ok = download(base, listOf(SpriteUrls.static(num, false)), retries = 1, progress = { n, _ ->
+                        val ok = download(base, SpriteUrls.staticChain(num, false), retries = 1, progress = { n, _ ->
                             val delta = (n - seen).coerceAtLeast(0); seen = n
                             val bytes = transferred.addAndGet(delta)
                             bytesProgress?.invoke(bytes, maxOf(estimate, bytes))
-                        }) != null
+                        }, get = get, ignoreMissing = true, preferred = preferred) != null
                         if (!ok) failures.incrementAndGet()
                         progress(done.incrementAndGet(), total)
                     }
@@ -303,22 +332,29 @@ object Sprites {
 
     /**
      * Tries [urls] in order and saves the first valid hit as `<base>.gif|png`. If every URL answered "not found" a
-     * `.missing` marker is written (no retry for 7 days); network errors leave no marker so a later call tries again.
+     * `.missing` marker is written (no retry for 7 days, unless [ignoreMissing]); network errors and answers that
+     * aren't a picture (an error page) leave no marker so a later call tries again. [preferred] (shared by the callers
+     * of one batch) holds the index of the URL that worked last; that one is tried first next time.
      */
-    private fun download(base: File, urls: List<String>, retries: Int = 0, progress: ((Long, Long) -> Unit)? = null): File? {
+    internal fun download(
+        base: File, urls: List<String>, retries: Int = 0, progress: ((Long, Long) -> Unit)? = null, get: HttpGet = realGet,
+        ignoreMissing: Boolean = false, preferred: AtomicInteger? = null,
+    ): File? {
         val marker = missingMarker(base)
-        if (marker.isFile && System.currentTimeMillis() - marker.lastModified() < RETRY_MISSING_MS) return null
+        if (!ignoreMissing && marker.isFile && System.currentTimeMillis() - marker.lastModified() < RETRY_MISSING_MS) return null
         base.parentFile?.mkdirs()
         var networkError = false
-        for (url in urls) {
+        val first = preferred?.get() ?: 0
+        for (url in urls.indices.map { urls[(first + it) % urls.size] }) {
             var bytes: ByteArray? = null
             var attempt = 0
             while (true) {
-                try { bytes = Http.get(url, progress = progress); break } catch (_: IOException) {
+                try { bytes = get(url, progress); break } catch (_: IOException) {
                     if (attempt++ >= retries) { networkError = true; break }
                 }
             }
-            if (bytes == null || !SpriteUrls.validFor(url, bytes)) continue
+            if (bytes == null) continue
+            if (!SpriteUrls.validFor(url, bytes)) { networkError = true; continue } // an error page, not "not found"
             val ext = if (url.endsWith(".gif")) "gif" else "png"
             val target = File(base.parentFile, "${base.name}.$ext")
             val tmp = File(base.parentFile, "${base.name}.$ext.${System.nanoTime()}.tmp")
@@ -329,6 +365,7 @@ object Sprites {
                 tmp.delete(); networkError = true; continue
             }
             marker.delete()
+            preferred?.set(urls.indexOf(url))
             return target
         }
         if (!networkError) {

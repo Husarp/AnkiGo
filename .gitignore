@@ -21,3 +21,6 @@ local.properties
 *.jks
 *.keystore
 *signing.properties
+
+# Local render-test sprites (Pokémon art, never in the public repo)
+android/app/sprites/

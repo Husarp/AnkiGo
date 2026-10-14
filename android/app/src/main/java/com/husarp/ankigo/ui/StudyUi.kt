@@ -75,8 +75,8 @@ internal object StudyUi {
         return column(ctx).apply {
             gravity = Gravity.CENTER
             background = ripple(ctx, Ui.rounded(Ui.c(ctx, tone), 12, ctx))
-            addView(label(ctx, text, if (interval == null) 15 else 14, R.color.ag_text, 900).apply { setTextColor(ink) })
-            if (interval != null) addView(label(ctx, interval, 11, R.color.ag_text, 800).apply { setTextColor(ink); alpha = .92f })
+            addView(label(ctx, text, if (interval == null) 15 else 14, R.color.ag_text, 900).apply { setTextColor(ink); gravity = Gravity.CENTER }, lp(-1, -2))
+            if (interval != null) addView(label(ctx, interval, 11, R.color.ag_text, 800).apply { setTextColor(ink); alpha = .92f; gravity = Gravity.CENTER }, lp(-1, -2))
             isEnabled = enabled; alpha = if (enabled) 1f else .55f
             contentDescription = if (interval == null) text else "$text, next in $interval"
             isFocusable = true

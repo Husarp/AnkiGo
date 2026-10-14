@@ -14,6 +14,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -108,6 +109,19 @@ object Ui {
         background = rounded(c(ctx, R.color.ag_card), 14, ctx)
     }
 
+    /**
+     * Small pill with a 48 dp touch height and an unchanged look: [fill] is drawn [visualDp] tall in the middle of a view that is
+     * at least 48 dp tall; [hPadDp] is the side padding. Call it again to change the fill (it resets the padding).
+     */
+    fun touchPill(tv: TextView, fill: Drawable, visualDp: Int, hPadDp: Int) {
+        val ctx = tv.context
+        val inset = dp(ctx, (48 - visualDp) / 2)
+        tv.background = InsetDrawable(fill, 0, inset, 0, inset)
+        tv.minHeight = dp(ctx, 48)
+        tv.gravity = Gravity.CENTER
+        tv.setPadding(dp(ctx, hPadDp), 0, dp(ctx, hPadDp), 0) // after the background, which resets padding
+    }
+
     /** Chip with a tinted icon and a number/text, tinted by [colorRes] (mockup `.chip`). */
     fun chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes colorRes: Int): Chip = Chip(ctx, iconRes, colorRes)
 
@@ -134,6 +148,9 @@ object Ui {
         @ColorRes pillIconColorRes: Int = R.color.ag_yellow,
         onBack: (() -> Unit)? = null,
     ): AppBar = AppBar(ctx, title, pillText, back, pillIconRes, pillIconColorRes, onBack)
+
+    /** True in a short window (split screen, landscape): under 560 dp tall, so pages drop their big headers. */
+    fun shortWindow(ctx: Context): Boolean = ctx.resources.configuration.screenHeightDp in 1..559
 
     /** The Activity behind [ctx] (unwraps ContextWrappers, e.g. a page), or null when there is none (floating card). */
     fun findActivity(ctx: Context): Activity? {
@@ -175,9 +192,9 @@ object Ui {
 
     /**
      * Shows the 96x96 static sprite of Pokédex number [num] in [view] (downloads it if missing; the view stays empty
-     * until then). [silhouette] draws it as the grey "never met" shape (mockup `.unseen`).
+     * until then; with [download] false it never starts a download). [silhouette] draws it as the grey "never met" shape (mockup `.unseen`).
      */
-    fun staticSprite(ctx: Context, num: Int, shiny: Boolean, view: ImageView, silhouette: Boolean = false) {
+    fun staticSprite(ctx: Context, num: Int, shiny: Boolean, view: ImageView, silhouette: Boolean = false, download: Boolean = true) {
         val key = "mon:$num:$shiny"
         view.setTag(R.id.ag_tag_sprite, key)
         view.scaleType = ImageView.ScaleType.FIT_CENTER
@@ -196,6 +213,7 @@ object Ui {
         }
         val type = com.husarp.ankigo.GameRepo.data?.species?.get(num)?.types?.firstOrNull() ?: Type.NORMAL
         view.setImageDrawable(SpritePlaceholder(typeColor(type)))
+        if (!download) return
         Sprites.fetchStatic(ctx, num, shiny) { bmp ->
             if (bmp != null && view.getTag(R.id.ag_tag_sprite) == key) view.setImageDrawable(pixelBitmap(ctx, bmp))
         }
@@ -312,9 +330,12 @@ class AppBar(
             addView(ImageView(ctx).apply {
                 setImageResource(R.drawable.ic_back)
                 setColorFilter(Ui.c(ctx, R.color.ag_text), PorterDuff.Mode.SRC_IN)
-                setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4))
                 contentDescription = "Back"
-                layoutParams = LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32)).also { it.marginEnd = Ui.dp(ctx, 6) }
+                // 48 dp touch area around the 32 dp look: the view is 8 dp bigger on each side and pulled back by margins
+                setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 12), Ui.dp(ctx, 12), Ui.dp(ctx, 12))
+                layoutParams = LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)).also {
+                    it.setMargins(-Ui.dp(ctx, 8), -Ui.dp(ctx, 8), Ui.dp(ctx, 6) - Ui.dp(ctx, 8), -Ui.dp(ctx, 8))
+                }
                 setOnClickListener { if (onBack != null) onBack() else Ui.findActivity(ctx)?.finish() }
             })
         }

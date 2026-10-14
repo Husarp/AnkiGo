@@ -145,14 +145,14 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         enemyBlock.addView(catchTag, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = -dpi(6) })
         catchTag.setOnClickListener { onCatchTagTap() }
 
-        // player card: name + Lv, HP bar, "58 / 71" + "XP 640 / 1000", XP bar
+        // player card: name + Lv, HP bar, one row "58 / 71" left + "XP 640 / 1000" right, XP bar
         val pRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         pRow.addView(pName, LinearLayout.LayoutParams(0, -2, 1f))
         pRow.addView(pLevel, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(5) })
         playerCard.addView(pRow, LinearLayout.LayoutParams(-1, -2))
         playerCard.addView(pHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
         pNums.addView(pHpText, LinearLayout.LayoutParams(0, -2, 1f))
-        playerCard.addView(pXpText, LinearLayout.LayoutParams(-1, -2))
+        pNums.addView(pXpText, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(6) })
         playerCard.addView(pNums, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(3) })
         pXp.setTrackColor(Ui.c(ctx, R.color.ag_s0))
         playerCard.addView(pXp, LinearLayout.LayoutParams(-1, dpi(3)).also { it.topMargin = dpi(4) })
@@ -192,7 +192,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         // two sides don't sit in opposite corners.
         val s = (h / ref).coerceIn(if (compact) 0.45f else 0.66f, 1.5f)
         val extra = max(0f, h - ref * s)
-        val down = (extra * 0.3f).toInt()
+        val down = (extra * 0.75f).toInt()
         fun px(v: Float) = (Ui.dp(context, v) * s).toInt()
         place(platEnemy, px(150f), px(30f), Gravity.TOP or Gravity.RIGHT, 0, px(92f) + down, px(22f), 0)
         place(platPlayer, px(180f), px(40f), Gravity.BOTTOM or Gravity.LEFT, px(4f), 0, 0, -px(8f))
@@ -305,15 +305,15 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /**
-     * Small-window look (picture-in-picture, floating battle): the info cards keep only name, level and HP bar (no type
-     * chips, catch tag, HP/XP numbers or XP bar), so the two cards never collide in a ~240x130 dp window.
+     * Small-window look (picture-in-picture, floating battle): the info cards keep name, level, HP bar and HP numbers
+     * (no type chips, catch tag, XP text or XP bar), so the two cards never collide in a ~240x130 dp window.
      */
     fun setCompact(on: Boolean) {
         if (compact == on) return
         compact = on
         val small = if (on) GONE else VISIBLE
         eTypes.visibility = small
-        pNums.visibility = small
+        pXpText.visibility = small
         pXp.visibility = small
         if (on) catchTag.visibility = GONE
         val name = if (on) 12f else 14f

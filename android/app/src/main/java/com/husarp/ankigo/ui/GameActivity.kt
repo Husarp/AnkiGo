@@ -87,6 +87,14 @@ class GameActivity : Activity() {
         Anki.load(this)
         if (savedInstanceState == null) Updates.onAppStart(this)
 
+        val root = buildContent()
+        setContentView(root)
+        showMessage("Loading…")
+        registerPipReceiver()
+    }
+
+    /** The screen's View tree (banner, content holder, bottom bar). Split out of onCreate so screenshots can build it. */
+    internal fun buildContent(): View {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Ui.c(this@GameActivity, R.color.ag_base))
@@ -103,9 +111,7 @@ class GameActivity : Activity() {
             val want = if (tall && !inPip) View.VISIBLE else View.GONE
             if (nav.visibility != want) nav.visibility = want
         }
-        setContentView(root)
-        showMessage("Loading…")
-        registerPipReceiver()
+        return root
     }
 
     override fun onStart() {
@@ -389,7 +395,7 @@ class GameActivity : Activity() {
                 val labels = found.map { (f, st) -> "${fmt.format(Date(f.lastModified()))}  ·  save #${st.seq}  ·  ${st.mons.size} Pokémon" }
                 AlertDialog.Builder(this).setTitle("Restore a backup")
                     .setItems(labels.toTypedArray()) { _, i -> confirmRestore(found[i].first, labels[i]) }
-                    .setNegativeButton("Cancel", null).show()
+                    .setNegativeButton("Cancel", null).showCard()
             }
         }.start()
     }
@@ -413,7 +419,7 @@ class GameActivity : Activity() {
                     }
                 }.start()
             }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).showCard()
     }
 
     private fun confirmNewGame() {
@@ -426,9 +432,9 @@ class GameActivity : Activity() {
                         GameRepo.startNewGame(this)
                         startLoad()
                     }
-                    .setNegativeButton("Cancel", null).show()
+                    .setNegativeButton("Cancel", null).showCard()
             }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).showCard()
     }
 
     // ---------------------------------------------------------------- game actions
@@ -505,7 +511,7 @@ class GameActivity : Activity() {
         val labels = balls.map { "${Items.name(it)}  ×${st.count(it)}  ·  ${Catching.ballChance(it, types)}%" }
         AlertDialog.Builder(this).setTitle("Throw a ball")
             .setItems(labels.toTypedArray()) { _, i -> handleEvents(act { it.throwBall(balls[i]) }) }
-            .setNegativeButton("Cancel", null).show()
+            .setNegativeButton("Cancel", null).showCard()
     }
 
     /** Optional: tap the catch tag to flip catch <-> defeat for this fight. */

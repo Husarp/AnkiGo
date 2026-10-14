@@ -31,9 +31,12 @@ import com.husarp.ankigo.game.Tuning
 internal fun speciesNums(data: GameData, gens: Set<Int>): List<Int> =
     data.species.values.filter { it.gen in gens }.map { it.num }.sorted()
 
+/** True when all but a few (5 %) of [total] static pictures are there; the rest load on demand. */
+internal fun picturesMostlyThere(missing: Int, total: Int): Boolean = missing <= total / 20
+
 /** True when all but a few (5 %) static pictures of [nums] are on disk; the rest load on demand. */
 internal fun staticsMostlyPresent(ctx: Context, nums: List<Int>): Boolean =
-    nums.count { !Sprites.staticFile(ctx, it).isFile } <= nums.size / 20
+    picturesMostlyThere(nums.count { !Sprites.staticFile(ctx, it).isFile }, nums.size)
 
 /** The first-run download (data, then pictures). Lives here, not in the activity, so rotating the screen doesn't restart it. */
 internal object FirstRunJob {
@@ -59,10 +62,11 @@ internal object FirstRunJob {
                 val nums = speciesNums(data, gens)
                 job.progress(0.8f, "Downloading pictures…")
                 val begun = android.os.SystemClock.elapsedRealtime()
-                val failed = Sprites.downloadStatics(app, nums, bytesProgress = { d, t ->
+                Sprites.downloadStatics(app, nums, bytesProgress = { d, t ->
                     job.progress(0.8f + 0.2f * (if (t > 0) d.toFloat() / t else 1f), "Pictures (total estimated) · ${DisplayNumbers.progress(d, t, android.os.SystemClock.elapsedRealtime() - begun)}")
                 }) { _, _ -> }
-                if (failed > nums.size / 10) job.fail("Many pictures didn't download. Check the internet connection and try again.")
+                // same rule as the step check (openStep): "done" must mean the step is really done, or the screen bounces back to step 2
+                if (Sprites.enabled(app) && !staticsMostlyPresent(app, nums)) job.fail("Many pictures didn't download. Check the internet connection and try again.")
                 else job.done()
             } catch (e: Throwable) {
                 job.fail("Download stopped: ${e.message ?: e.javaClass.simpleName}")
@@ -95,6 +99,20 @@ class FirstRunActivity : Activity() {
         super.onCreate(savedInstanceState)
         live = java.lang.ref.WeakReference(this)
         Anki.load(this)
+        setContentView(buildContent())
+
+        if (savedInstanceState != null) {
+            step = savedInstanceState.getInt("step")
+            selGen = savedInstanceState.getInt("gen", 1)
+            selNum = savedInstanceState.getInt("num", 0)
+            denied = savedInstanceState.getBoolean("denied")
+        }
+        render()
+        if (step == 0) GameRepo.load(this) { goTo(openStep()) }
+    }
+
+    /** The screen's views (content + actions); onCreate sets them as the Activity's content. */
+    internal fun buildContent(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@FirstRunActivity, R.color.ag_base)) }
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -106,16 +124,7 @@ class FirstRunActivity : Activity() {
         }
         root.addView(ScrollView(this).apply { addView(content) }, Form.lp(h = 0, weight = 1f))
         root.addView(actions)
-        setContentView(root)
-
-        if (savedInstanceState != null) {
-            step = savedInstanceState.getInt("step")
-            selGen = savedInstanceState.getInt("gen", 1)
-            selNum = savedInstanceState.getInt("num", 0)
-            denied = savedInstanceState.getBoolean("denied")
-        }
-        render()
-        if (step == 0) GameRepo.load(this) { goTo(openStep()) }
+        return root
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -232,11 +241,11 @@ class FirstRunActivity : Activity() {
             actions.addView(Form.primary(this, "Allow access to AnkiDroid") {
                 requestPermissions(arrayOf(Anki.permission), REQ_ANKI)
             })
-            if (denied) actions.addView(Form.secondary(this, "Open app settings") {
+            if (denied) actions.addView(Form.secondary(this, "Open app settings", onPage = true) {
                 runCatching { startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
             }, Form.lp(this, 8))
         }
-        actions.addView(Form.secondary(this, "Skip for now", R.color.ag_sub0) {
+        actions.addView(Form.secondary(this, "Skip for now", R.color.ag_sub0, onPage = true) {
             prefs.edit().putBoolean("skipPerm", true).apply()
             goTo(openStep())
         }, Form.lp(this, 8))
@@ -264,14 +273,14 @@ class FirstRunActivity : Activity() {
     private fun stepDownload() {
         header("Getting the game ready", 2)
         content.addView(Form.body(this, "Pokémon data (about 4.3 MB) and pictures (about 1 MB). Battle animations download as you meet new Pokémon.", 14), Form.lp(this, 10))
-        actions.addView(Form.secondary(this, "Skip pictures for now") {
+        actions.addView(Form.secondary(this, "Skip pictures for now", onPage = true) {
             Sprites.setEnabled(this, false)
             if (DataStore.hasData(this)) GameRepo.load(this) { goTo(openStep()) }
             else {
                 content.addView(Form.body(this, "Game data is still needed for battles. You can study and use diagnostics without it."))
             }
         }, Form.lp(this, 8))
-        actions.addView(Form.secondary(this, "Study without the game") {
+        actions.addView(Form.secondary(this, "Study without the game", onPage = true) {
             Sprites.setEnabled(this, false)
             prefs.edit().putBoolean("studyOnly", true).apply()
             startActivity(Intent(this, StudyDecksActivity::class.java)); finish()
@@ -330,7 +339,7 @@ class FirstRunActivity : Activity() {
             }
             chips.addView(chip, Form.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i > 0) it.marginStart = dp(5) })
         }
-        content.addView(GenScroller(this, chips), Form.lp(this, 14))
+        content.addView(GenScroller(this, chips), Form.lp(this, 6)) // chips are 48 dp touch height around a 32 dp look
 
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         Encounters.STARTER_CHOICES.getValue(selGen).forEachIndexed { i, num ->
@@ -342,7 +351,7 @@ class FirstRunActivity : Activity() {
         val btn = Form.primary(this, if (sp != null) "Choose ${sp.name}" else "Tap a Pokémon") { choose(selNum) }
         Form.enable(btn, sp != null && !picking)
         actions.addView(btn)
-        val ankimon = Form.secondary(this, "I play Ankimon on PC: import my save") { importAnkimon() }
+        val ankimon = Form.secondary(this, "I play Ankimon on PC: import my save", onPage = true) { importAnkimon() }
         Form.enable(ankimon, !picking)
         actions.addView(ankimon, Form.lp(this, 8))
     }

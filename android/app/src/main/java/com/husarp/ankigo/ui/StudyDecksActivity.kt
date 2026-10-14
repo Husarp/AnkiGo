@@ -30,6 +30,11 @@ class StudyDecksActivity : Activity() {
         super.onCreate(savedInstanceState)
         Anki.load(this)
         folded = prefs.getStringSet("folded", emptySet())!!.toSet()
+        setContentView(buildContent())
+        GameRepo.load(this) { if (!isDestroyed) render() }
+    }
+    /** The screen's views (app bar, deck list, bottom bar); split out of onCreate so the design screenshots can build them. */
+    internal fun buildContent(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@StudyDecksActivity, R.color.ag_base)) }
         appBar = Ui.appBar(this, "Study", "AnkiDroid")
         appBar.addView(StudyUi.iconButton(this, R.drawable.ic_sync, "Refresh decks") { refresh() }, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)))
@@ -45,8 +50,7 @@ class StudyDecksActivity : Activity() {
         }
         root.addView(scroll, StudyUi.lp(-1, 0, 1f))
         root.addView(BottomNav.create(this, BottomNav.Tab.STUDY))
-        setContentView(root)
-        GameRepo.load(this) { if (!isDestroyed) render() }
+        return root
     }
     override fun onStart() { super.onStart(); BattleScreen.setVisible(this, true) }
     override fun onStop() { BattleScreen.setVisible(this, false); super.onStop() }
@@ -60,13 +64,14 @@ class StudyDecksActivity : Activity() {
             val result = runCatching { if (!Anki.hasPermission(this)) error("Allow AnkiGo to use AnkiDroid first."); Anki.decks(this) }
             runOnUiThread {
                 if (isDestroyed || token != generation) return@runOnUiThread
-                result.onSuccess { decks = it.sortedBy { d -> d.name }; render() }.onFailure {
-                    content.removeAllViews(); content.addView(StudyUi.label(this, it.message ?: "Open AnkiDroid once, then refresh."))
-                    content.addView(StudyUi.primary(this, "Allow AnkiDroid access") { requestPermissions(arrayOf(Anki.permission), 1) })
-                    content.addView(StudyUi.smallButton(this, "Open AnkiDroid") { Anki.launchIntent(this)?.let { startActivity(it) } })
-                }
+                result.onSuccess { decks = it.sortedBy { d -> d.name }; render() }.onFailure { showAccessProblem(it.message) }
             }
         }
+    }
+    internal fun showAccessProblem(message: String?) {
+        content.removeAllViews(); content.addView(StudyUi.label(this, message ?: "Open AnkiDroid once, then refresh.", 13).apply { setPadding(Ui.dp(context, 4), Ui.dp(context, 8), Ui.dp(context, 4), 0) })
+        content.addView(StudyUi.primary(this, "Allow AnkiDroid access") { requestPermissions(arrayOf(Anki.permission), 1) }, StudyUi.spaced(this, 12))
+        content.addView(StudyUi.smallButton(this, "Open AnkiDroid") { Anki.launchIntent(this)?.let { startActivity(it) } }, StudyUi.spaced(this, 6))
     }
     private fun render() {
         if (!::content.isInitialized) return
@@ -175,7 +180,7 @@ class StudyDecksActivity : Activity() {
         if (prefs.getBoolean("inAnkiDroid", false)) { companion(deck); return }
         if (deck.total == 0) {
             AlertDialog.Builder(this).setMessage("Nothing due. Custom study is in AnkiDroid.")
-                .setPositiveButton("Open in AnkiDroid") { _, _ -> companion(deck) }.setNegativeButton("Back", null).show(); return
+                .setPositiveButton("Open in AnkiDroid") { _, _ -> companion(deck) }.setNegativeButton("Back", null).showCard(); return
         }
         startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", deck.id).putExtra("deckName", deck.name))
     }
