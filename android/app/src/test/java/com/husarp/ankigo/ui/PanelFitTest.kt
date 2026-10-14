@@ -10,8 +10,8 @@ import kotlin.math.ceil
 class PanelFitTest {
     private fun fit(
         w: Int, h: Int, small: Boolean = false, statsBarSmall: Boolean = true, compact: Boolean = false,
-        strip: Boolean = false, corner: Float = 0f, tools: Boolean = true,
-    ) = PanelFit.decide(w.toFloat(), h.toFloat(), small, statsBarSmall, compact, strip, corner, tools)
+        strip: Boolean = false, corner: Float = 0f, tools: Boolean = true, own: Boolean = false,
+    ) = PanelFit.decide(w.toFloat(), h.toFloat(), small, statsBarSmall, compact, strip, corner, tools, own)
 
     /** What the window keeps: the stats bar (S), the log line (L), the XP numbers (X). */
     private fun kept(f: PanelFit.Fit) = (if (f.stats) "S" else "-") + (if (f.log) "L" else "-") + (if (f.xp) "X" else "-")
@@ -186,8 +186,8 @@ class PanelFitTest {
 
     // ---------------------------------------------------------------- cards: corners or the middle column
 
-    private fun plan(w: Float, h: Float, compact: Boolean = false, floor: Float = 8f, xp: Boolean = true) =
-        ArenaGeo.plan(w, h, ArenaGeo.cards(floor, compact, xp), compact)
+    private fun plan(w: Float, h: Float, compact: Boolean = false, floor: Float = 8f, xp: Boolean = true, own: Boolean = false) =
+        ArenaGeo.plan(w, h, ArenaGeo.cards(floor, compact, xp), compact, own)
 
     private fun noCardCoversASprite(p: ArenaGeo.Plan, tag: String) {
         for ((card, name) in listOf(p.wildCard to "wild card", p.playerCard to "player card")) {

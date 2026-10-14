@@ -228,15 +228,15 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         scaler.layout(0, 0, scaler.measuredWidth, scaler.measuredHeight)
     }
 
-    private data class Asked(val w: Float, val h: Float, val small: Boolean, val statsBar: Boolean, val compact: Boolean, val strip: Boolean, val corner: Float, val tools: Boolean)
+    private data class Asked(val w: Float, val h: Float, val small: Boolean, val statsBar: Boolean, val compact: Boolean, val strip: Boolean, val corner: Float, val tools: Boolean, val own: Boolean)
     private var asked: Asked? = null
     private var answer: PanelFit.Fit? = null
 
     /** [PanelFit.decide] for this window and these prefs; the last answer is kept while nothing changes (measure runs often). */
     private fun decide(w: Float, h: Float): PanelFit.Fit {
-        val a = Asked(w, h, small, statsBarSmall, compactCards, !statusOk, if (small) cornerClearance / resources.displayMetrics.density else 0f, toolsWanted)
+        val a = Asked(w, h, small, statsBarSmall, compactCards, !statusOk, if (small) cornerClearance / resources.displayMetrics.density else 0f, toolsWanted, cardsOwn)
         answer?.let { if (a == asked) return it }
-        return PanelFit.decide(a.w, a.h, a.small, a.statsBar, a.compact, a.strip, a.corner, a.tools).also { asked = a; answer = it }
+        return PanelFit.decide(a.w, a.h, a.small, a.statsBar, a.compact, a.strip, a.corner, a.tools, a.own).also { asked = a; answer = it }
     }
 
     /** Applies a decision: which parts show, the text floor, the log's height. Does nothing when it did not change. */
