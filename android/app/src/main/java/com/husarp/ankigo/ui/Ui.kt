@@ -221,8 +221,12 @@ object Ui {
 
     /** Short message toast (a plain system Toast: custom toast views are ignored on newer Android). */
     fun toast(ctx: Context, text: String) {
-        Toast.makeText(ctx.applicationContext, text, Toast.LENGTH_SHORT).show()
+        lastToast = text
+        try { Toast.makeText(ctx.applicationContext, text, Toast.LENGTH_SHORT).show() } catch (e: RuntimeException) { /* no toast service (screenshots) */ }
     }
+
+    /** The newest toast text; the screenshot tests read it (the renderer has no toast service). */
+    internal var lastToast: String? = null
 
     /** Fallback item icon: `ag_mantle` disc with the item's initials ("poke-ball" -> "PB", "potion" -> "PO"). */
     private class LetterBadge(private val ctx: Context, item: String) : Drawable() {

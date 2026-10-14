@@ -61,6 +61,20 @@ class EventPlayer(private val panel: BattlePanelView) {
         panel.cancelAnimations()
     }
 
+    /**
+     * Ends everything playing or waiting at once and draws the saved state (the numbers in the dropped events are
+     * already in it), for a tap whose result must show right away. Events enqueued afterwards play as usual.
+     */
+    fun finishNow() {
+        val events = ArrayList<GameEvent>()
+        val acts = ArrayList<() -> Unit>()
+        while (queue.isNotEmpty()) queue.removeFirst().let { if (it is Item.Ev) events += it.e else if (it is Item.Act) acts += it.block }
+        clear()
+        events.forEach { panel.observeStudyEvent(it) }
+        panel.renderAll()
+        acts.forEach { it() }
+    }
+
     // ---------------------------------------------------------------- queue
 
     private fun pump() {

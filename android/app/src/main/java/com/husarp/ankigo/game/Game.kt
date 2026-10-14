@@ -257,9 +257,16 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return changed(message, old)
     }
 
+    /** Why [cycleMain] can't work right now (shown under the greyed menu item), or null when it can. */
+    fun cycleMainBlocker(): String? = when {
+        state.team.isEmpty() -> "Pick your first Pokémon first"
+        state.team.size < 2 -> "Needs 2+ Pokémon in your team"
+        else -> null
+    }
+
     /** Ankimon team cycle: the next team member becomes the main. */
     fun cycleMain(): ActionResult {
-        if (state.team.size < 2) return ActionResult(false, "You need at least two Pokémon in your team.")
+        cycleMainBlocker()?.let { return ActionResult(false, it) }
         val old = state.team.first()
         // Ankimon cycles the first 3 only: [A,B,C,D] -> [B,C,A,D].
         state.team.add(minOf(3, state.team.size) - 1, state.team.removeAt(0))

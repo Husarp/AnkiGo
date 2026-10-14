@@ -807,6 +807,51 @@ class GameTest {
         assertEquals(listOf("t0"), one.state.team)
     }
 
+    @Test fun cycleMainBlockerSaysWhyOrIsNull() {
+        assertEquals("Needs 2+ Pokémon in your team", game(state = roster(1)).cycleMainBlocker())
+        assertNull(game(state = roster(2)).cycleMainBlocker())
+        assertNull(game(state = roster(6, 3)).cycleMainBlocker())
+        val noTeam = roster(2); noTeam.team.clear()
+        assertEquals("Pick your first Pokémon first", game(state = noTeam).cycleMainBlocker())
+    }
+
+    @Test fun cycleMainFailsWithTheBlockerReasonAndChangesNothing() {
+        val one = game(state = roster(1))
+        val r = one.cycleMain()
+        assertFalse(r.ok)
+        assertEquals("Needs 2+ Pokémon in your team", r.message)
+        assertTrue(r.events.isEmpty())
+        assertEquals(listOf("t0"), one.state.team)
+        val none = roster(2); none.team.clear()
+        val g = game(state = none)
+        assertEquals("Pick your first Pokémon first", g.cycleMain().message)
+        assertTrue(g.state.team.isEmpty())
+    }
+
+    @Test fun cycleMainWithTwoSwapsAndNamesTheNewMain() {
+        val g = game(state = roster(2))
+        val r = g.cycleMain()
+        assertTrue(r.ok)
+        assertEquals(listOf("t1", "t0"), g.state.team)
+        assertEquals("${g.state.mon("t1")!!.name} is your main now.", r.message)
+        assertEquals(listOf<GameEvent>(GameEvent.MainChanged("t1", g.state.mon("t1")!!.name)), r.events)
+    }
+
+    @Test fun cycleMainWithFourGivesBCAD() {
+        val g = game(state = roster(4))
+        assertTrue(g.cycleMain().ok)
+        assertEquals(listOf("t1", "t2", "t0", "t3"), g.state.team)
+    }
+
+    @Test fun cycleMainBetweenFightsHasNoBattleToReset() {
+        val g = game(state = roster(3))
+        g.state.battle = null
+        val r = g.cycleMain()
+        assertTrue(r.ok)
+        assertNull(g.state.battle)
+        assertEquals(1, r.events.of<GameEvent.MainChanged>().size)
+    }
+
     @Test fun moveInTeamShiftsAndClamps() {
         val g = game(state = roster(4))
         val a = g.moveInTeam("t2", -1)

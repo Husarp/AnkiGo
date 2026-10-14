@@ -488,6 +488,8 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     fun prefetch(st: GameState, data: GameData) {
         st.nextSpecies?.let { n -> data.species[n]?.let { PanelSprites.prefetch(context, it, st.nextShiny, false) } }
         st.main?.let { m -> data.species[m.species]?.let { PanelSprites.prefetch(context, it, m.shiny, true) } }
+        // "Next team member as main" brings the second one next: have its sprite ready.
+        st.team.getOrNull(1)?.let { st.mon(it) }?.let { m -> data.species[m.species]?.let { PanelSprites.prefetch(context, it, m.shiny, true) } }
     }
 
     private fun willCatchNow(): Boolean = try { GameRepo.game?.willCatch() ?: false } catch (e: Exception) { false }
