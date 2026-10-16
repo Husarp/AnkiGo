@@ -240,18 +240,26 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         events = EventPlayer(panel)
         events.muted = { SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev) }
         panel.onMenu = { anchor ->
-            if (events.idle) AppMenu(anchor)
-                .item(0, "Team", R.drawable.ic_team).item(1, "Bag / Shop", R.drawable.ic_shop)
-                .item(2, "Pokédex", R.drawable.ic_book).item(3, "Settings", R.drawable.ic_settings)
-                .show { i -> startActivity(Intent(this, listOf(TeamActivity::class.java, ShopActivity::class.java, DexActivity::class.java, SettingsActivity::class.java)[i])) }
+            if (events.idle) {
+                val m = AppMenu(anchor)
+                    .item(0, "Team", R.drawable.ic_team).item(1, "Bag / Shop", R.drawable.ic_shop)
+                    .item(2, "Pokédex", R.drawable.ic_book).item(3, "Settings", R.drawable.ic_settings).item(4, "Battle log", R.drawable.ic_swords)
+                // one-off catch <-> defeat for this fight, only while a wild Pokémon is on stage; the label says what a tap does
+                val will = if (GameRepo.state?.battle != null) try { GameRepo.game?.willCatch() } catch (t: Throwable) { null } else null
+                if (will != null) m.item(5, if (will) "Defeat it instead (XP)" else "Catch this one", R.drawable.ic_ball)
+                val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
+                m.item(6, "Switch Pokémon", R.drawable.ic_swap, enabled = blocker == null, sub = blocker)
+                m.show { i ->
+                    if (i == 5) toggleCatch()
+                    else if (i == 6) switchPokemon()
+                    else startActivity(Intent(this, listOf(TeamActivity::class.java, ShopActivity::class.java, DexActivity::class.java, SettingsActivity::class.java, com.husarp.ankigo.ui.BattleLogActivity::class.java)[i]))
+                }
+            }
         }
         panel.onBalls = { throwBall() }
-        panel.arena.onCatchTagTap = {
-            val game = GameRepo.game
-            if (events.idle && game != null) {
-                GameRepo.run(this) { it.setOverride(if (game.willCatch()) com.husarp.ankigo.game.Outcome.DEFEAT else com.husarp.ankigo.game.Outcome.CATCH) }
-                panel.renderAll()
-            }
+        panel.arena.onPlayerTap = { // PLAN 86: the Team screen with the main's details
+            val uid = GameRepo.state?.main?.uid
+            if (events.idle && uid != null) startActivity(Intent(this, TeamActivity::class.java).putExtra(TeamActivity.EXTRA_SHOW_UID, uid))
         }
         panel.onGrant = { requestPermissions(arrayOf(Anki.permission), 1) }
         side.addView(panel)
@@ -270,6 +278,33 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
         root.addView(body, StudyUi.lp(-1, 0, 1f))
         return root
+    }
+    /** The ⋯ entry "Switch Pokémon": the team as a grid popup; the picked one becomes the main. */
+    private fun switchPokemon() {
+        val data = GameRepo.data ?: return
+        val st = GameRepo.state ?: return
+        if (!events.idle) return
+        com.husarp.ankigo.ui.SwitchPopup.show(this, data, st) { uid ->
+            if (!events.idle || GameRepo.state?.main?.uid == uid) return@show
+            val r = GameRepo.run(this) { it.setMain(uid) }
+            if (r.message.isNotEmpty()) Ui.toast(this, r.message)
+            record(r.events); events.enqueue(r.events); LiveSession.refreshWidgetsFor(this, r.events)
+        }
+    }
+    /** The ⋯ entry "Catch this one" / "Defeat it instead (XP)": flips the auto rule for this fight only. */
+    private fun toggleCatch() {
+        val game = GameRepo.game ?: return
+        if (!events.idle || GameRepo.state?.battle == null) return
+        val before = try { game.willCatch() } catch (t: Throwable) { return }
+        GameRepo.run(this) { it.setOverride(if (before) com.husarp.ankigo.game.Outcome.DEFEAT else com.husarp.ankigo.game.Outcome.CATCH) }
+        val after = game.willCatch()
+        panel.renderAll()
+        Ui.toast(this, when {
+            after != before && after -> "Will catch it"
+            after != before -> "Will defeat it instead (XP)"
+            after -> "This one is always caught"
+            else -> "No change"
+        })
     }
     override fun onSaveInstanceState(out: Bundle) {
         super.onSaveInstanceState(out)
@@ -452,6 +487,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             @JavascriptInterface fun play(name: String) { main.post { playAv(listOf(TtsRules.Av(file = name))) } }
             @JavascriptInterface fun speak(i: Int) { main.post { avAll.getOrNull(i)?.let { playAv(listOf(it)) } } }
             @JavascriptInterface fun flip() { main.post { this@StudyActivity.flip() } }
+            @JavascriptInterface fun unflip() { main.post { this@StudyActivity.unflip() } }
             @JavascriptInterface fun actions() { main.post { this@StudyActivity.actions() } }
             @JavascriptInterface fun mathjax(s: String) {}
             @JavascriptInterface fun jsError(s: String) {}
@@ -616,7 +652,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     private fun valid(token: Int) = !isDestroyed && token == generation
     private fun page(content: String, side: String, typed: String?) = CardHtml.build(content, css, card!!.ord, side, typed,
-        dark = isNight(), speech = if (side == "q") ttsCard.question else ttsCard.answer, jsPage = jsShow(side == "a")) { fields[it] }
+        dark = isNight(), speech = if (side == "q") ttsCard.question else ttsCard.answer, jsPage = jsShow(side == "a"),
+        tapShow = prefs.getBoolean("tapShow", true), tapHide = prefs.getBoolean("tapHide", false)) { fields[it] }
     private fun showQuestion() {
         val key = card!!.nid to card!!.ord
         if (timedCard != key) elapsed = 0
@@ -638,6 +675,12 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             web.loadDataWithBaseURL(CardHtml.BASE, page.html, "text/html", "UTF-8", null)
             web.announceForAccessibility("Answer shown"); showButtons(); playAv(avAuto); syncTiming()
         }
+    }
+    /** Tap-to-hide: back to the question side, as a fresh render of it. Only while the answer is up, nothing is saving, and not right after it appeared (a double tap). */
+    private fun unflip() {
+        if (!flipped || locked || card == null || finished || SystemClock.elapsedRealtime() < allowAt) return
+        pauseClock()   // the time so far counts for the card; showQuestion keeps it for the same card
+        showQuestion()
     }
     /** Swipe-to-answer is on for the answer side only; the hint stays while the card is up, a swipe works only while answering is allowed. */
     private fun updateSwipe() {
@@ -702,6 +745,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                             // to settle this answer, so no poll counts it twice) and its battle run alongside; the summary waits for it.
                             val inFlight = pending.start()
                             main.postDelayed({ inFlight.finish() }, PendingAnswers.MAX_WAIT_MS)
+                            com.husarp.ankigo.ui.BattleLog.front(fresh.id, question) // the Battle log shows the card's front
                             LiveSession.ownAnswer(this, fresh, button, { absorbMs, gameMs ->
                                 timing.put(AnswerTiming.ABSORB, absorbMs)
                                 if (timing.put(AnswerTiming.GAME, gameMs)) Report.log("STUDY", timing.line())
@@ -1042,8 +1086,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             setPadding(Ui.dp(context, 10), Ui.dp(context, 7), Ui.dp(context, 10), Ui.dp(context, 7))
         }
         goalRow.addView(BarView(this).apply {
-            setGradient(Ui.c(context, R.color.ag_mauve), Ui.c(context, R.color.ag_pink))
-            set(today.toFloat() / goal, Ui.c(context, R.color.ag_mauve), false)
+            setMeaning(BarMeaning.GOAL, today.toFloat() / goal, false)
         }, StudyUi.lp(0, Ui.dp(this, 8), 1f).also { it.marginEnd = Ui.dp(this, 8) })
         goalRow.addView(StudyUi.label(this, if (today >= goal) "Goal done · $today" else "$today / $goal", 12, R.color.ag_text, 900))
         goalRow.addView(Ui.chip(this, R.drawable.ic_flame, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })

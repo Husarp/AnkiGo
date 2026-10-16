@@ -27,7 +27,7 @@ import com.husarp.ankigo.game.Type
 // TICKET T14 owns this file: the Pokédex (mockup frame D).
 // Standalone it is a page of its own; given a [pickHost] it is embedded as the Pokédex section of the Team tab (TeamPage
 // builds [embeddedBody], calls [renderEmbedded] and owns the bar). One ListView: header = hero card + progress + filters (segmented, search + sort, chips), rows = 4 cells each (recycled, so ~1000 entries scroll smoothly).
-class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = null) : GamePage(base, host) {
+class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = null) : GamePage(base, host) {
     override val tab = BottomNav.Tab.DEX
 
     private val embedded get() = pickHost != null
@@ -193,10 +193,12 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
         col.addView(Bits.typeRow(this, sp.types), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(this, 4) })
         val caught = if (mon.caughtAt > 0) "Caught ${MonDetail.date(mon.caughtAt)} · " else ""
         col.addView(Ui.text(this, 12f, 700, R.color.ag_sub0).apply {
-            text = "${caught}Lv ${mon.level} now\n${MonDetail.nextEvoLine(data, sp)}"
+            text = LevelTier.line(this@DexPage, caught, mon.level, " now\n${MonDetail.nextEvoLine(data, sp)}")
             setLineSpacing(0f, 1.1f)
         }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(this, 4) })
         card.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
+        // opens that Pokémon's details (taps tick instead while picking for Compare)
+        card.setOnClickListener { if (pickHost?.picking != true) MonDetail.show(this, data, mon) }
         return card
     }
 
@@ -223,13 +225,12 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
         nums.addView(small("of ${enabled.size}"), LinearLayout.LayoutParams(-2, -2).also { it.bottomMargin = Ui.dp(this, 3) })
         card.addView(nums)
 
-        // two layers: seen (ag_s2) under caught (mauve -> pink)
+        // two layers: seen (ag_s2) under caught (the collection colour)
         val bars = FrameLayout(this)
         val seenBar = BarView(this).also { it.set(seen.toFloat() / total, Ui.c(this, R.color.ag_s2), false) }
         val caughtBar = BarView(this).also {
             it.setTrackColor(0)
-            it.setGradient(Ui.c(this, R.color.ag_mauve), Ui.c(this, R.color.ag_pink))
-            it.set(caught.toFloat() / total, Ui.c(this, R.color.ag_mauve), false)
+            it.setMeaning(BarMeaning.COLLECTION, caught.toFloat() / total, false)
         }
         bars.addView(seenBar, FrameLayout.LayoutParams(-1, Ui.dp(this, 8)))
         bars.addView(caughtBar, FrameLayout.LayoutParams(-1, Ui.dp(this, 8)))
@@ -344,7 +345,7 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
 
     // ---- grid cells (mockup .dexgrid) ----
 
-    private class Cell(val num: TextView, val img: ImageView, val name: TextView, val dot: View, val star: TextView, val check: ImageView) {
+    private class Cell(val num: TextView, val img: ImageView, val name: TextView, val star: TextView, val check: ImageView) {
         var sp: Species? = null
     }
 
@@ -360,14 +361,10 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
             // a long regional-form name ("Galarian Darmanitan") shrinks a little before it is cut off
             setAutoSizeTextTypeUniformWithConfiguration(8, 10, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
         }
-        val dot = View(ctx).apply { background = Ui.rounded(Ui.c(ctx, R.color.ag_green), 4, ctx) }
         f.addView(img, FrameLayout.LayoutParams(Ui.dp(ctx, 68), Ui.dp(ctx, 68), Gravity.CENTER_HORIZONTAL or Gravity.TOP).also { it.topMargin = Ui.dp(ctx, 4) })
         f.addView(num, FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.TOP).also { it.leftMargin = Ui.dp(ctx, 6); it.topMargin = Ui.dp(ctx, 4) })
         f.addView(name, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM).also {
             it.bottomMargin = Ui.dp(ctx, 4); it.leftMargin = Ui.dp(ctx, 2); it.rightMargin = Ui.dp(ctx, 2)
-        })
-        f.addView(dot, FrameLayout.LayoutParams(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Gravity.END or Gravity.TOP).also {
-            it.rightMargin = Ui.dp(ctx, 6); it.topMargin = Ui.dp(ctx, 6)
         })
         // wishlist mark under the number
         val star = Ui.text(ctx, 10f, 900, R.color.ag_yellow).apply { text = "★" }
@@ -376,12 +373,12 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
         f.addView(check, FrameLayout.LayoutParams(Ui.dp(ctx, 20), Ui.dp(ctx, 20), Gravity.END or Gravity.TOP).also {
             it.rightMargin = Ui.dp(ctx, 3); it.topMargin = Ui.dp(ctx, 3)
         })
-        f.tag = Cell(num, img, name, dot, star, check)
+        f.tag = Cell(num, img, name, star, check)
     }
 
     private val greyed = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
 
-    /** The tick part of a cell: frame stroke, badge, and the "caught" dot it replaces while picking. */
+    /** The tick part of a cell: frame stroke and badge. */
     private fun bindPick(f: SquareFrame) {
         val cell = f.tag as Cell
         val sp = cell.sp ?: return
@@ -391,8 +388,6 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
         val picking = pickHost?.picking == true
         val picked = picking && seen && pickHost?.isPicked(ComparePick.Dex(sp.num)) == true
         f.background = PickKit.cardBg(this, 12, picked)
-        // while picking, seen entries show the tick badge where the "caught" dot sits
-        cell.dot.visibility = if (caught && !(picking && seen)) View.VISIBLE else View.GONE
         PickKit.bindBadge(cell.check, picking && seen, picked)
     }
 

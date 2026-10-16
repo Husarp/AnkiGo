@@ -341,14 +341,14 @@ class WishlistWeightTest {
         return m
     }
 
-    @Test fun weightConstantIsTwo() = assertEquals(2, Tuning.WISHLIST_WEIGHT)
+    @Test fun weightConstantIsOne() = assertEquals(1, Tuning.WISHLIST_WEIGHT)
 
-    @Test fun wishlistedSpeciesIsMetAboutTwiceAsOften() {
+    @Test fun wishlistedSpeciesIsMetNoMoreOftenThanOthers() {
         val c = counts(st(setOf(33)))
         val pool = 11 // 30..39 + 19
-        val expected = 30_000 * 2.0 / (pool + 1)
-        assertEquals(expected, c.getValue(33).toDouble(), expected * 0.1)
-        assertEquals(30_000 * 1.0 / (pool + 1), c.getValue(34).toDouble(), expected * 0.15)
+        val expected = 30_000 * 1.0 / (pool + 1)
+        assertEquals(expected, c.getValue(33).toDouble(), expected * 0.15)
+        assertEquals(expected, c.getValue(34).toDouble(), expected * 0.15)
     }
 
     @Test fun noWishlistedSpeciesInPoolKeepsTheOldPicks() {
@@ -359,14 +359,14 @@ class WishlistWeightTest {
         repeat(200) { assertEquals(pool[c.nextInt(pool.size)], Encounters.pickFrom(d, pool, emptySet(), e)) }
     }
 
-    @Test fun wishlistedFormBoostsItsBaseSpecies() {
+    @Test fun wishlistedFormDoesNotBoostItsBaseSpecies() {
         val base = d.species.getValue(33)
         val form = base.copy(num = 10091, id = "alolan33", name = "Alolan 33", gen = 7, form = "Alola", baseNum = 33)
         val d2 = TestData.data(normals + TestData.species(19, "Ratty") + form)
         val pool = Encounters.pool(d2, Tier.NORMAL, Settings(), 20, setOf(30))
         val rng = Random(2); var hits = 0; val n = 20_000
         repeat(n) { if (Encounters.pickFrom(d2, pool, setOf(10091), rng) == 33) hits++ }
-        assertEquals(n * 2.0 / (pool.size + 1), hits.toDouble(), n * 0.2 / pool.size)
+        assertEquals(n.toDouble() / pool.size, hits.toDouble(), n * 0.2 / pool.size)
     }
 
     @Test fun gen9PoolSkipsStartersAndHonoursPrerequisites() {

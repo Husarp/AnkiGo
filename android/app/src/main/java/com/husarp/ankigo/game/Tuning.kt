@@ -31,6 +31,8 @@ object Tuning {
     // ---- Battle (poke-engine, simplified) ----
     const val STAB = 1.5
     const val CRIT_MULT = 1.5
+    /** AnkiGo: critical hits switched off (Ankimon has none). false = no crit rolls at all, also for willCrit moves. */
+    const val CRITS = false
     /** AnkiGo: crit chance by crit stage (1 = normal). Ankimon's engine has no crits; added on request. */
     val CRIT_CHANCE = doubleArrayOf(0.0, 1.0 / 24, 1.0 / 8, 1.0 / 2, 1.0)
     const val ROLL_MIN = 85 // damage roll 85..100 %
@@ -68,6 +70,8 @@ object Tuning {
     val POWDER_MOVES = setOf("sleeppowder", "stunspore", "poisonpowder", "spore", "powder", "ragepowder", "magicpowder")
 
     // ---- Catching ----
+    /** AnkiGo: a catch by the auto rule gives this part of the defeat XP (before Exp. Share / Lucky Egg). */
+    const val CATCH_XP_PART = 0.5
     /** Ankimon "automatic_battle" mode used because AnkiGo never asks during study: 3 = catch species you don't have. */
     const val DEFAULT_AUTO_MODE = 3
     val DEFAULT_WISHLIST = setOf(25, 133) // Pikachu, Eevee
@@ -126,8 +130,8 @@ object Tuning {
     const val NON_LEVEL_EVO_MIN_LEVEL = 100
     /** Regional forms: a picked base species turns into one of its eligible forms with this chance PER eligible form (Ankimon 7 %). */
     const val FORM_SWAP_CHANCE = 0.07
-    /** Weight of a wishlisted species inside its rolled tier's pool (others 1). AnkiGo addition, not Ankimon. */
-    const val WISHLIST_WEIGHT = 2
+    /** Weight of a wishlisted species inside its rolled tier's pool (others 1). 1 = wishlisted species are met no more often (Ankimon). */
+    const val WISHLIST_WEIGHT = 1
     const val DAILY_AVERAGE = 100
     const val DAY_START_HOUR = 4
     const val TRAINER_BONUS_FROM_LEVEL = 10 // trainer level above this adds the rare bonus once more

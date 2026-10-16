@@ -261,6 +261,32 @@ class ProgressionTest {
         assertTrue(m.friendship in 5..9)
     }
 
+    @Test fun rewardCatchIsHalfTheDefeatXp() {
+        assertEquals(0.5, Tuning.CATCH_XP_PART, 0.0)
+        val (s, m) = st(1, 5)
+        val e = ev()
+        Progression.rewardCatch(data, s, m, wild16(10), noon, Random(1), e)
+        assertEquals(36, e.of<GameEvent.XpGained>().single().xp) // half of 72
+        assertEquals(0, m.defeats); assertEquals(Stats.ZERO, m.evs)
+    }
+
+    @Test fun rewardCatchHalfIsTakenBeforeExpShareAndLuckyEgg() {
+        val (s, m) = st(1, 5)
+        val h = TestData.mon(data, 16, 5, uid = "holder")
+        s.mons += h; s.team += h.uid
+        s.settings.xpShareUid = "holder"
+        val e = ev()
+        Progression.rewardCatch(data, s, m, wild16(10), noon, Random(1), e)
+        val xs = e.of<GameEvent.XpGained>()
+        assertEquals(18, xs[0].xp); assertEquals(18, xs[1].xp) // 72 -> 36 -> 18 each
+
+        val (s2, m2) = st(1, 5)
+        m2.heldItem = "lucky-egg"
+        val e2 = ev()
+        Progression.rewardCatch(data, s2, m2, wild16(10), noon, Random(1), e2)
+        assertEquals(54, e2.of<GameEvent.XpGained>().single().xp) // 36 * 1.5
+    }
+
     @Test fun friendshipGainSeededAndSootheBell() {
         val (s, m) = st(1, 5)
         val expected = Tuning.FRIENDSHIP_GAIN.random(Random(7))

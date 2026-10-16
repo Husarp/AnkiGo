@@ -7,6 +7,25 @@ import java.util.concurrent.CopyOnWriteArrayList
 /** What AnkiGo shows when you leave its battle screen: nothing, picture-in-picture, or the floating battle window. Only one at a time. */
 enum class LeaveMode { OFF, PIP, FLOAT }
 
+/** One-time move of "PiP on leave" to "nothing" (PLAN 24): the old key "leaveMode" is only read while "leaveModeV2" is missing. */
+object LeaveModeMigration {
+    const val KEY = "leaveModeV2"
+
+    private fun parse(s: String?): LeaveMode? = LeaveMode.entries.firstOrNull { it.name == s }
+
+    /** The mode to use: V2 when set; else the old value with PIP turned into OFF (FLOAT and OFF stay; nothing stored = OFF). */
+    fun resolve(v2: String?, old: String?): LeaveMode =
+        parse(v2) ?: parse(old)?.takeIf { it != LeaveMode.PIP } ?: LeaveMode.OFF
+
+    /** True while V2 is missing or unreadable: the resolved value is to be written. */
+    fun needsWrite(v2: String?): Boolean = parse(v2) == null
+}
+
+/** Which window "Pop out" opens (PLAN 24): the floating one when the leave mode is FLOAT or the device has no PiP, else PiP. */
+object PopOutPlan {
+    fun useFloat(mode: LeaveMode, pipAvailable: Boolean): Boolean = mode == LeaveMode.FLOAT || !pipAvailable
+}
+
 /** App theme: follow Android, or always light / dark. */
 enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
 
@@ -20,13 +39,19 @@ object AppPrefs {
         ctx.applicationContext.getSharedPreferences("ankigo_ui", Context.MODE_PRIVATE)
 
     /**
-     * Default: nothing (0.8: picture-in-picture is no longer automatic; the battle panel has a "Pop out" button instead).
-     * A mode the player picked before stays as it was.
+     * Default: nothing (picture-in-picture is no longer automatic; the battle has a "Pop out" button instead).
+     * Existing installs that had PiP on leave are moved to nothing once (key "leaveModeV2", see [LeaveModeMigration]);
+     * after that the player's choice, PiP included, sticks.
      */
-    fun leaveMode(ctx: Context): LeaveMode =
-        LeaveMode.entries.firstOrNull { it.name == prefs(ctx).getString("leaveMode", null) } ?: LeaveMode.OFF
+    fun leaveMode(ctx: Context): LeaveMode {
+        val p = prefs(ctx)
+        val v2 = p.getString(LeaveModeMigration.KEY, null)
+        val mode = LeaveModeMigration.resolve(v2, p.getString("leaveMode", null))
+        if (LeaveModeMigration.needsWrite(v2)) p.edit().putString(LeaveModeMigration.KEY, mode.name).apply()
+        return mode
+    }
 
-    fun setLeaveMode(ctx: Context, mode: LeaveMode) = prefs(ctx).edit().putString("leaveMode", mode.name).apply()
+    fun setLeaveMode(ctx: Context, mode: LeaveMode) = prefs(ctx).edit().putString(LeaveModeMigration.KEY, mode.name).apply()
 
     /** Team, Pokédex, Shop and Settings open as floating windows while AnkiGo is in split screen (needs the overlay permission). */
     fun floatScreens(ctx: Context): Boolean = prefs(ctx).getBoolean("floatScreens", true)
@@ -63,6 +88,21 @@ object AppPrefs {
 
     fun setCardsUnderOwn(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("cardsUnderOwn", on).apply()
 
+    /** Our Pokémon's sprite box is as big as the wild one's, not enlarged (Settings → Battle). Default off. */
+    fun playerSameSize(ctx: Context): Boolean = prefs(ctx).getBoolean("playerSameSize", false)
+
+    fun setPlayerSameSize(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("playerSameSize", on).apply()
+
+    /** Our Pokémon shows its front sprite, mirrored to face the wild one, instead of the back sprite. Default off. */
+    fun playerFront(ctx: Context): Boolean = prefs(ctx).getBoolean("playerFront", false)
+
+    fun setPlayerFront(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("playerFront", on).apply()
+
+    /** The Box collapses copies of one species into one "×N" tile (Team → Box "Group duplicates" switch). Default on. */
+    fun boxGrouped(ctx: Context): Boolean = prefs(ctx).getBoolean("boxGrouped", true)
+
+    fun setBoxGrouped(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("boxGrouped", on).apply()
+
     /** App theme (Settings → Look). Default: follow the system. Applied by [AppLook]; change it through [AppLook.setTheme]. */
     fun theme(ctx: Context): ThemeMode =
         ThemeMode.entries.firstOrNull { it.name == prefs(ctx).getString("theme", null) } ?: ThemeMode.SYSTEM
@@ -70,6 +110,10 @@ object AppPrefs {
     /** Accent colour (Settings → Look). Default: mauve, the mockup's accent. Change it through [AppLook.setAccent]. */
     fun accent(ctx: Context): Accent =
         Accent.entries.firstOrNull { it.name == prefs(ctx).getString("accent", null) } ?: Accent.MAUVE
+
+    /** Progress bar colours (Settings → Look): by meaning (default), accent or gradient. Change it through [AppLook.setBarStyle]; read by [BarTones]. */
+    fun barStyle(ctx: Context): BarStyle =
+        BarStyle.entries.firstOrNull { it.name == prefs(ctx).getString("barStyle", null) } ?: BarStyle.MEANING
 
     /** Interface size in percent ([AppLook.SCALES], default 100): text, cards and sprites together. Change it through [AppLook.setScale]. */
     fun uiScale(ctx: Context): Int = prefs(ctx).getInt("uiScale", 100).let { if (it in AppLook.SCALES) it else 100 }

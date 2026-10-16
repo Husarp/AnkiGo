@@ -39,6 +39,9 @@ interface PickHost {
     val picking: Boolean
     fun isPicked(p: ComparePick): Boolean
     fun togglePick(p: ComparePick)
+
+    /** Compare from a Pokémon's menu: picking mode on with [uid] already ticked. */
+    fun startPickWith(uid: String)
 }
 
 /** The sections of the Team tab. */

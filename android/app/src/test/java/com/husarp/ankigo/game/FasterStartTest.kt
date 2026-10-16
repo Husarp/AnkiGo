@@ -58,7 +58,8 @@ class FasterStartTest {
         assertEquals(StatCalc.maxHp(data, caught), caught.hp)
     }
     @Test fun oldSavesKeepAnkimonPaceAndTheirExistingBattle() {
-        assertTrue(GameState().settings.fasterStart)
+        assertFalse(Settings().fasterStart)
+        assertFalse(GameState().settings.fasterStart)
         val state = TestData.state(data, 1, 5)
         state.battle = Battle(TestData.mon(data, 16, 5), Tier.NORMAL)
         val old = JSONObject(SaveCodec.encode(state))
@@ -71,8 +72,24 @@ class FasterStartTest {
         old.remove("settings")
         assertFalse(SaveCodec.decode(old.toString()).settings.fasterStart)
     }
+    @Test fun oldFasterStartKeyIsIgnoredAndTheNewKeyRoundTrips() {
+        val state = TestData.state(data, 1, 5)
+        state.settings.fasterStart = true
+        // old save: fasterStart true under the old key only -> off
+        val old = JSONObject(SaveCodec.encode(state))
+        old.getJSONObject("settings").remove("fasterStartV2")
+        old.getJSONObject("settings").put("fasterStart", true)
+        assertFalse(SaveCodec.decode(old.toString()).settings.fasterStart)
+        // new key round-trips both ways and the old key is no longer written
+        val json = SaveCodec.encode(state)
+        assertFalse(JSONObject(json).getJSONObject("settings").has("fasterStart"))
+        assertTrue(SaveCodec.decode(json).settings.fasterStart)
+        state.settings.fasterStart = false
+        assertFalse(SaveCodec.decode(SaveCodec.encode(state)).settings.fasterStart)
+    }
     @Test fun togglingDoesNotResizeAnOngoingFight() {
         val state = TestData.state(data, 1, 5)
+        state.settings.fasterStart = true
         val game = Game(data, state, Random(6)) { 1_800_000_000_000L }
         game.ensureEncounter()
         val hp = state.battle!!.wild.hp

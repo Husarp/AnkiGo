@@ -45,7 +45,6 @@ class PanelFitTest {
             assertEquals(412f / f.scale, f.virtualW, 0.5f)
             assertEquals(h / f.scale, f.virtualH, 0.5f)
             assertTrue(f.ok)
-            assertTrue("the cards use the middle column here", f.middle)
         }
         // the height is about what the parts need: a 212 dp arena + the log card + the stats bar (about 347 dp)
         assertEquals(300f / 347f, fit(412, 300).scale, 0.02f)
@@ -194,8 +193,8 @@ class PanelFitTest {
         assertEquals(75f, PanelFit.Heights.footer(8f, true), 0.5f)
         assertEquals(356f, PanelFit.Heights.chips(8f), 0.5f)
         val c = ArenaGeo.cards(8f, false, true)
-        assertEquals(80.4f, c.wildH, 0.5f)
-        assertEquals(72.1f, c.playerH, 0.5f)
+        assertEquals(94.4f, c.wildH, 0.5f)    // 80.4 + the 14 dp status row under the HP bar (item 95)
+        assertEquals(83.1f, c.playerH, 0.5f)  // 72.1 + the row, which takes the place of the 3 dp gap above the numbers
         assertEquals(166f, c.wildW, 0f)
         assertEquals(170f, c.playerW, 0f)
     }
@@ -226,7 +225,7 @@ class PanelFitTest {
     }
 
     @Test fun shortArenaUsesTheMiddleColumn() {
-        for ((w, h) in listOf(412f to 213f, 477f to 213f, 573f to 211f, 377f to 212f, 344f to 200f)) {
+        for ((w, h) in listOf(412f to 200f, 477f to 200f, 573f to 200f, 377f to 200f, 344f to 200f)) {
             val p = plan(w, h)
             assertTrue("$w x $h", p.middle)
             noCardCoversASprite(p, "$w x $h")
@@ -244,14 +243,14 @@ class PanelFitTest {
         // same width, only the height changes: corners while the cards clear the sprites, the middle column when they do not
         assertFalse(plan(412f, 300f).middle)
         assertFalse(plan(412f, 230f).middle)
-        assertTrue(plan(412f, 213f).middle)
+        assertTrue(plan(412f, 190f).middle)
         // same short arena, smaller cards: compact cards keep the corners where the full cards could not
-        assertFalse(plan(412f, 213f, compact = true).middle)
+        assertFalse(plan(412f, 190f, compact = true).middle)
         // wider does not help a short arena: the cards still reach into the sprites' height
-        assertTrue(plan(700f, 213f).middle)
+        assertTrue(plan(700f, 190f).middle)
         // bigger text (a raised floor) makes the cards bigger: the corners give up earlier
-        assertFalse(plan(412f, 230f, floor = 8f).middle)
-        assertTrue(plan(412f, 230f, floor = 14f).middle)
+        assertFalse(plan(412f, 210f, floor = 8f).middle)
+        assertTrue(plan(412f, 210f, floor = 14f).middle)
     }
 
     @Test fun cornersShrinkTheSpritesALittleBeforeGivingUp() {
@@ -265,14 +264,27 @@ class PanelFitTest {
     @Test fun cardsFollowTheTextFloor() {
         val normal = ArenaGeo.cards(8f, false, true)
         val raised = ArenaGeo.cards(16f, false, true)
-        assertTrue(raised.wildW > normal.wildW && raised.wildH > normal.wildH && raised.playerH > normal.playerH && raised.tagH > normal.tagH)
-        // compact cards: name + thin HP bar, no types, no tag, no XP
+        assertTrue(raised.wildW > normal.wildW && raised.wildH > normal.wildH && raised.playerH > normal.playerH)
+        // compact cards: name + thin HP bar, no types, no XP
         val compact = ArenaGeo.cards(8f, true, true)
-        assertEquals(0f, compact.tagH, 0f)
-        assertTrue(compact.wildH < normal.wildH * 0.65f && compact.playerH < normal.playerH * 0.7f)
+        assertTrue(compact.wildH < normal.wildH * 0.65f && compact.playerH < normal.playerH * 0.75f)
         assertTrue(compact.wildW < normal.wildW)
         // the XP numbers are what makes our card wide
         assertTrue(ArenaGeo.cards(8f, false, false).playerW < normal.playerW)
+    }
+
+    @Test fun statusRowIsPartOfEveryCardAndGrowsWithTheText() {
+        // item 95: the badge row under the HP bar (14 dp, 12 on compact cards) is reserved in every card, even with no status
+        assertEquals(14f, ArenaGeo.statusRow(8f, false), 0f)
+        assertEquals(12f, ArenaGeo.statusRow(8f, true), 0f)
+        assertEquals(21f, ArenaGeo.statusRow(18f, false), 0.01f)
+        for (compact in listOf(false, true)) {
+            val small = ArenaGeo.cards(8f, compact, true)
+            val big = ArenaGeo.cards(18f, compact, true)
+            val grow = ArenaGeo.statusRow(18f, compact) - ArenaGeo.statusRow(8f, compact)
+            assertTrue("compact=$compact wild", big.wildH - small.wildH > grow)
+            assertTrue("compact=$compact player", big.playerH - small.playerH > grow)
+        }
     }
 
     @Test fun planIsCleanWhereverItSaysItFits() {
@@ -289,7 +301,7 @@ class PanelFitTest {
 
     @Test fun middleLayoutFitsWhenTheStackAndTheSpritesDo() {
         val c = ArenaGeo.cards(8f, false, true)
-        val stack = c.wildH + c.tagH + 6f + c.playerH
+        val stack = c.wildH + 6f + c.playerH
         assertTrue(plan(400f, stack + 13f).fits)
         assertFalse(plan(400f, stack + 6f).fits)
         assertFalse(plan(200f, 400f).fits) // 200 dp cannot hold a 170 dp column and two sprites
@@ -353,7 +365,7 @@ class PanelFitTest {
         assertTrue(b.wildCard.y < 12f && b.wildCard.right <= b.wildSprite.art().x + 0.01f)
         assertTrue(b.playerCard.bottom > 220f - 14f && b.playerCard.x >= b.playerSprite.art().right - 0.01f)
         // too short for any of that: the middle column as before (also when the pref is off)
-        for (own in listOf(true, false)) for ((w, h) in listOf(412f to 200f, 344f to 200f)) {
+        for (own in listOf(true, false)) for ((w, h) in listOf(344f to 200f)) {
             val p = plan(w, h, own = own)
             assertTrue("$w x $h own=$own", p.middle && p.fits)
             assertEquals(1f, p.k, 0f)
@@ -405,6 +417,42 @@ class PanelFitTest {
             for (w in 160..900 step 20) for (h in 120..900 step 20) {
                 assertTrue("$w x $h small=$small compact=$compact", fit(w, h, small, statsBar, compact, own = true).ok)
             }
+        }
+    }
+
+    // ---------------------------------------------------------------- our sprite as big as the wild one's
+
+    @Test fun sameSizeKeepsEveryPlanCleanAndOurBoxEqualToTheWildOne() {
+        for (own in listOf(true, false)) for (compact in listOf(false, true)) for (floor in listOf(8f, 14f)) for (w in 160..900 step 20) for (h in 100..1000 step 20) {
+            val c = ArenaGeo.cards(floor, compact, true)
+            val tag = "$w x $h own=$own compact=$compact floor=$floor"
+            val normal = ArenaGeo.plan(w.toFloat(), h.toFloat(), c, compact, own)
+            val same = ArenaGeo.plan(w.toFloat(), h.toFloat(), c, compact, own, same = true)
+            if (normal.fits) assertTrue("$tag: fits normally, not with the option", same.fits)
+            if (!same.fits || same.middle) continue
+            nothingOverlaps(same, w.toFloat(), h.toFloat(), "$tag ${same.layout}")
+            assertEquals(tag, same.wildSprite.w, same.playerSprite.w, 0.001f)
+            assertEquals(tag, same.wildSprite.h, same.playerSprite.h, 0.001f)
+        }
+    }
+
+    @Test fun sameSizeMiddleColumnAlsoKeepsTheBoxesEqual() {
+        for ((w, h) in listOf(160f to 120f, 100f to 60f, 240f to 136f, 320f to 300f)) for (own in listOf(true, false)) {
+            val p = ArenaGeo.plan(w, h, ArenaGeo.cards(8f, false, true), false, own, same = true)
+            if (p.middle) {
+                assertEquals("$w x $h", p.wildSprite.w, p.playerSprite.w, 0.001f)
+                assertEquals("$w x $h", p.wildSprite.h, p.playerSprite.h, 0.001f)
+                assertFalse("$w x $h: pictures touch", p.wildSprite.art().hits(p.playerSprite.art()))
+            }
+        }
+    }
+
+    @Test fun sameSizeAtTheWindowSizes() {
+        // the arenas of PHONE, SPLIT, LAND, FLOAT, FLOATBATTLE and PIP (the window less the log, the bars and the tools)
+        for ((w, h) in listOf(412f to 640f, 412f to 260f, 869f to 200f, 340f to 330f, 320f to 130f, 240f to 80f)) for (own in listOf(true, false)) {
+            val p = ArenaGeo.plan(w, h, ArenaGeo.cards(8f, false, true), false, own, same = true)
+            if (p.fits && !p.middle) nothingOverlaps(p, w, h, "$w x $h own=$own")
+            assertTrue("$w x $h own=$own: neither fits nor falls back to the middle column", p.fits || p.middle)
         }
     }
 }

@@ -52,9 +52,28 @@ internal class MonActions(private val s: GamePage) {
             if (state.settings.xpShareUid == mon.uid) add("Exp. Share holder: turn off", R.drawable.ic_up) { s.act { it.setXpShare(null) } }
             else add("Make Exp. Share holder", R.drawable.ic_up) { s.act { it.setXpShare(mon.uid) } }
         }
+        if (BuddyWidgetPrefs.widgetIds(s).isNotEmpty()) add("Show on Buddy widget", R.drawable.ic_open) { showOnBuddyWidget(mon) }
+        add("Compare", R.drawable.ic_compare) {
+            // inside the Team tab (its own page, or the Pokédex section it hosts) the picking starts right there
+            val host: PickHost? = s as? TeamPage ?: (s as? DexPage)?.pickHost
+            if (host != null) host.startPickWith(mon.uid)
+            else s.startScreen(android.content.Intent(s, TeamActivity::class.java).putExtra(TeamActivity.EXTRA_PICK_UID, mon.uid))
+        }
+        if (mon.favourite) add("Remove from favourites", R.drawable.ic_heart) { s.act { it.setFavourite(mon.uid, false) } }
+        else add("Add to favourites", R.drawable.ic_heart_outline) { s.act { it.setFavourite(mon.uid, true) } }
         add("Rename…", R.drawable.ic_pencil) { rename(mon) }
-        add("Release…", R.drawable.ic_trash, danger = true) { release(mon) }
+        if (mon.favourite) { m.item(acts.size, "Release…", R.drawable.ic_trash, enabled = false, sub = "Remove ${mon.shownName} from favourites first.", danger = true); acts += {} }
+        else add("Release…", R.drawable.ic_trash, danger = true) { release(mon) }
         m.show { onPick(); acts[it]() }
+    }
+
+    /** Puts [mon] on the Buddy widget(s): with several widgets they all get it (each can be changed on its own from the widget's Reconfigure). */
+    private fun showOnBuddyWidget(mon: Mon) {
+        val ids = BuddyWidgetPrefs.widgetIds(s)
+        if (ids.isEmpty()) { Ui.toast(s, "No Buddy widget on your home screen"); return }
+        BuddyWidgetPrefs.setAll(s.getSharedPreferences("spike", 0), ids, mon.uid)
+        com.husarp.ankigo.Widgets.refreshAll(s, study = false)
+        Ui.toast(s, if (ids.size == 1) "${mon.shownName} is on the Buddy widget" else "${mon.shownName} is on all ${ids.size} Buddy widgets")
     }
 
     /** The rename dialog (menu "Rename…" and the pencil in the details); [onDone] runs after a rename was saved. */

@@ -23,9 +23,9 @@ internal object PanelSprites {
 
     /**
      * Shows [sp] in [view]. [kind] FRONT for the wild one, BACK for our main; with [mirrorFrontIfNoBack] a species without
-     * a back sprite shows its front sprite mirrored instead.
+     * a back sprite shows its front sprite mirrored instead. [flipFront]: [kind] FRONT is shown mirrored (our Pokémon from the front).
      */
-    fun show(ctx: Context, view: SpriteView, sp: Species, kind: SpriteKind, shiny: Boolean, mirrorFrontIfNoBack: Boolean) {
+    fun show(ctx: Context, view: SpriteView, sp: Species, kind: SpriteKind, shiny: Boolean, mirrorFrontIfNoBack: Boolean, flipFront: Boolean = false) {
         val token = Any()
         view.setTag(R.id.ag_tag_sprite, token)
         fun current() = view.getTag(R.id.ag_tag_sprite) === token
@@ -55,11 +55,11 @@ internal object PanelSprites {
 
         val static = Sprites.staticFile(ctx, sp.num, shiny)
         val source = com.husarp.ankigo.study.StudyRules.spriteSource(Sprites.cached(ctx, sp, kind, shiny) != null, static.isFile)
-        if (source == com.husarp.ankigo.study.StudyRules.SpriteSource.STATIC) load(static, kind == SpriteKind.BACK)
+        if (source == com.husarp.ankigo.study.StudyRules.SpriteSource.STATIC) load(static, kind == SpriteKind.BACK || flipFront)
         val cached = Sprites.cached(ctx, sp, kind, shiny)
         if (cached != null) {
             // Cached: keep the old picture for the few ms the decode takes instead of flashing the placeholder.
-            load(cached, false)
+            load(cached, flipFront)
             return
         }
         view.mirror = false
@@ -67,15 +67,21 @@ internal object PanelSprites {
         view.setPlaceholder(sp.name.take(2), Ui.typeColor(sp.types.firstOrNull() ?: com.husarp.ankigo.game.Type.NORMAL))
         Sprites.fetch(ctx, sp, kind, shiny) { f ->
             if (!current()) return@fetch
-            if (f != null) load(f, false)
+            if (f != null) load(f, flipFront)
             else if (kind == SpriteKind.BACK && mirrorFrontIfNoBack) fallbackFront()
         }
     }
 
-    /** Downloads (and decodes into the memory cache) a sprite ahead of time. [back] = the main's view (BACK sprite, FRONT as the fallback). */
+    /** Our main's picture: the back sprite, or with [AppPrefs.playerFront] the front sprite mirrored to face the wild one. */
+    fun showMain(ctx: Context, view: SpriteView, sp: Species, shiny: Boolean) {
+        if (AppPrefs.playerFront(ctx)) show(ctx, view, sp, SpriteKind.FRONT, shiny, false, flipFront = true)
+        else show(ctx, view, sp, SpriteKind.BACK, shiny, true)
+    }
+
+    /** Downloads (and decodes into the memory cache) a sprite ahead of time. [back] = the main's view (BACK sprite, FRONT as the fallback; just FRONT with [AppPrefs.playerFront]). */
     fun prefetch(ctx: Context, sp: Species, shiny: Boolean, back: Boolean) {
         fun warm(f: File?) { if (f != null) pool.execute { Sprites.decode(f) } }
-        if (!back) {
+        if (!back || AppPrefs.playerFront(ctx)) {
             Sprites.fetch(ctx, sp, SpriteKind.FRONT, shiny) { warm(it) }
             return
         }

@@ -54,8 +54,11 @@ object FloatScreens {
         }
     }
 
-    /** Opens [page] in the floating card (creates the card, or switches it to [page]). Main thread. False if it can't (no permission). */
-    fun open(ctx: Context, page: FloatPage): Boolean {
+    /**
+     * Opens [page] in the floating card (creates the card, or switches it to [page]). Main thread. False if it can't (no permission).
+     * [showUid] (Team only): also opens that Pokémon's details (tap on your Pokémon in a battle).
+     */
+    fun open(ctx: Context, page: FloatPage, showUid: String? = null): Boolean {
         if (!Overlay.canDraw(ctx)) return false
         if (window?.isShowing == false) teardown() // the window removed itself (e.g. permission revoked): start clean
         val w = window ?: create(ctx).also { window = it }
@@ -63,7 +66,7 @@ object FloatScreens {
             teardown()
             return false
         }
-        showPage(w, page)
+        showPage(w, page, showUid)
         return true
     }
 
@@ -98,11 +101,14 @@ object FloatScreens {
         return w
     }
 
-    private fun showPage(w: FloatWindow, which: FloatPage) {
-        if (current == which && page != null) return
+    private fun showPage(w: FloatWindow, which: FloatPage, showUid: String? = null) {
+        if (current == which && page != null) {
+            if (showUid != null) (page as? TeamPage)?.showDetailsOnce(showUid)
+            return
+        }
         discardPage()
         val p = try {
-            build(which, w.context)
+            build(which, w.context).also { if (showUid != null) (it as? TeamPage)?.showDetailsOnce(showUid) }
         } catch (e: Exception) {
             Report.fail("floatscreens", "build $which", e)
             close()

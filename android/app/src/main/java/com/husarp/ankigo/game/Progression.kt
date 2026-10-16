@@ -174,11 +174,12 @@ object Progression {
     /**
      * AnkiGo: XP for a wild Pokémon the auto rule CATCHES at 0 HP (Tuning.CATCH_GIVES_XP). Ankimon gives none, but there
      * you choose catch or defeat by hand; with the choice automatic, catching every new species would starve the team
-     * of XP for weeks. Same XP as a defeat (Exp. Share, Lucky Egg) and the level-evolution check; no EVs, friendship,
+     * of XP for weeks. Half the defeat XP (Tuning.CATCH_XP_PART; Exp. Share, Lucky Egg) and the level-evolution check; no EVs, friendship,
      * defeat count or trainer XP (those stay defeat-only, as in Ankimon).
      */
     fun rewardCatch(data: GameData, state: GameState, main: Mon, wild: Mon, now: Long, rng: Random, events: MutableList<GameEvent>) {
-        val xp = xpForDefeat(data.sp(wild.species), wild.level)
+        val defeatXp = xpForDefeat(data.sp(wild.species), wild.level)
+        val xp = if (defeatXp >= 1) maxOf(1, (defeatXp * Tuning.CATCH_XP_PART).toInt()) else defeatXp
         val holder = state.settings.xpShareUid?.let { state.mon(it) }?.takeIf { it.uid != main.uid }
         val half = (xp * Tuning.XP_SHARE_PART).toInt()
         var mainXp = if (holder != null) half else xp

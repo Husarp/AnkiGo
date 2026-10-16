@@ -229,7 +229,6 @@ class PanelFitShots {
             val arena = p.arena
             val enemyCard = field(arena, "enemyCard") as View
             val playerCard = field(arena, "playerCard") as View
-            val catchTag = field(arena, "catchTag") as View
             var chipsW = 0f
             for (i in 0 until chips.childCount) chipsW += dp(chips.getChildAt(i).measuredWidth)
             val cards = ArenaGeo.cards(floor, f.compactCards, true)
@@ -239,7 +238,6 @@ class PanelFitShots {
                 Triple("chips width", if (f.stats) chipsW + 20f else 0f, if (f.stats) PanelFit.Heights.chips(floor) else 0f),
                 Triple("wild card", dp(enemyCard.height), cards.wildH),
                 Triple("player card", dp(playerCard.height), cards.playerH),
-                Triple("tag (view)", dp(catchTag.height), if (f.compactCards) 0f else cards.tagH + 6f),
             )
             out.append("$name  scale=${f.scale} floor=$floor virtual=${f.virtualW}x${f.virtualH} middle=${f.middle} ok=${f.ok}  arena=${dp(arena.height)}\n")
             for ((what, real, model) in rows) {

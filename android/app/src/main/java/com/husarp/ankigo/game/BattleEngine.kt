@@ -104,7 +104,7 @@ object BattleEngine {
         if (fixed != null) return DamageResult(if (eff > 0) fixed else 0, eff, false)
 
         val physical = move.category == Category.PHYSICAL
-        val crit = forceCrit ?: (move.willCrit || rng.nextDouble() < Tuning.CRIT_CHANCE[move.critRatio.coerceIn(0, 4)])
+        val crit = forceCrit ?: (Tuning.CRITS && (move.willCrit || rng.nextDouble() < Tuning.CRIT_CHANCE[move.critRatio.coerceIn(0, 4)]))
         val aStats = StatCalc.stats(aSp, attacker)
         val dStats = StatCalc.stats(dSp, defender)
         var aStage = aSide.boosts[if (physical) 0 else 2]

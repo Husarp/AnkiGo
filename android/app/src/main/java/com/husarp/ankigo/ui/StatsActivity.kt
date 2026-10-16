@@ -121,8 +121,7 @@ class StatsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
         val goalRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val bar = BarView(this)
-        bar.setGradient(Ui.c(this, R.color.ag_mauve), Ui.c(this, R.color.ag_pink))
-        bar.set(minOf(1f, s.reviewsToday.toFloat() / s.goal), Ui.c(this, R.color.ag_mauve), false)
+        bar.setMeaning(BarMeaning.GOAL, minOf(1f, s.reviewsToday.toFloat() / s.goal), false)
         goalRow.addView(bar, LinearLayout.LayoutParams(0, dp(8), 1f).also { it.marginEnd = dp(10) })
         goalRow.addView(Ui.text(this, 12f, 900, R.color.ag_text).apply { text = goalText(s); maxLines = 1 })
         card.addView(goalRow, lp(16))

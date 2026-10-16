@@ -28,9 +28,9 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.data.DataStore
 import com.husarp.ankigo.data.SpriteKind
 import com.husarp.ankigo.data.Sprites
+import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Settings as GameSettings
-import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.save.SaveCodec
 import com.husarp.ankigo.game.save.SaveFormatException
 import com.husarp.ankigo.game.shownName
@@ -53,14 +53,20 @@ internal object SettingsJobs {
     val anim = BgJob()
     val data = BgJob()
 
-    /** Front + back battle sprites of [species] with 4 parallel workers; [BgJob.cancel] stops it early. */
-    fun startAnimations(ctx: Context, species: List<Species>) {
+    /**
+     * Front + back battle sprites of every species of [gens] with 4 parallel workers; [BgJob.cancel] stops it early.
+     * [preloaded] is the game data when it is already in memory; otherwise it is read here, off the main thread.
+     */
+    fun startAnimations(ctx: Context, gens: Set<Int>, preloaded: GameData?) {
         if (anim.running) return
         val app = ctx.applicationContext
         Sprites.setEnabled(app, true)
         anim.begin("Starting…")
         Thread {
             try {
+                val data = preloaded ?: DataStore.load(app)
+                if (data == null) { anim.fail("Download the game data first."); return@Thread }
+                val species = data.species.values.filter { it.gen in gens }.sortedBy { it.num }
                 val queue = ConcurrentLinkedQueue(species.flatMap { listOf(it to SpriteKind.FRONT, it to SpriteKind.BACK) })
                 val total = queue.size
                 val done = AtomicInteger()
@@ -190,6 +196,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         super.onShow()
         SettingsJobs.anim.listener = animListener
         SettingsJobs.data.listener = dataListener
+        if (SettingsJobs.anim.state != BgJob.State.IDLE) onAnim() // progress / result that changed while this screen was away
         FirstRunJob.job.listener = picListener
         if (SettingsJobs.data.state == BgJob.State.DONE) onData() // finished while this screen was away
         if (picsFromSettings && FirstRunJob.job.state != BgJob.State.RUNNING) onPics()
@@ -318,7 +325,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             main.removeCallbacks(applyScale)
             main.postDelayed(applyScale, SCALE_DELAY_MS)
         }
-        return Form.cardOf(this, listOf(theme, accent, size))
+        val bars = BarStyle.entries
+        val barStyle = Form.stackRow(this, "Progress bars", "XP blue, goals orange, Pokédex teal; or all in the accent, or a gradient.",
+            Form.segmented(this, bars.map { it.label }, bars.indexOf(AppPrefs.barStyle(this))) { i ->
+                AppLook.setBarStyle(this, bars[i]); looked()
+            })
+        return Form.cardOf(this, listOf(theme, accent, barStyle, size))
     }
 
     /** The look changed: this screen recreates itself (Activity) or tells the player the window needs reopening (floating card). */
@@ -352,6 +364,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.switchRow(this, "Remove battle animations", "Also follows Android's Remove animations setting", getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) {
                 getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", it).apply()
             },
+            Form.switchRow(this, "Tap the card to show the answer", "Off: use the Show answer button, a key or a swipe", getSharedPreferences("study", 0).getBoolean("tapShow", true)) {
+                getSharedPreferences("study", 0).edit().putBoolean("tapShow", it).apply(); render()
+            },
+            Form.switchRow(this, "Tap again to hide the answer", "Tap the answer to read the question again", getSharedPreferences("study", 0).getBoolean("tapHide", false)) {
+                getSharedPreferences("study", 0).edit().putBoolean("tapHide", it).apply()
+            }.also { Form.enable(it, getSharedPreferences("study", 0).getBoolean("tapShow", true)) },
             Form.switchRow(this, "Vibrate on answer", null, getSharedPreferences("study", 0).getBoolean("haptic", true)) {
                 getSharedPreferences("study", 0).edit().putBoolean("haptic", it).apply()
             },
@@ -411,7 +429,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     private fun gameCard(s: GameSettings): View {
         val rows = mutableListOf<View>()
-        rows += Form.switchRow(this, "Faster start", "Shorter wild battles while your lead is below Lv 15. Applies to the next encounter; off keeps Ankimon's HP.", s.fasterStart) { v -> edit { it.fasterStart = v } }
+        rows += Form.switchRow(this, "Faster start", "Shorter wild battles while your lead is below Lv 15. Off by default. Applies to the next encounter; off keeps Ankimon's HP.", s.fasterStart) { v -> edit { it.fasterStart = v } }
 
         // generations
         val gensBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -470,7 +488,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         rows += Form.row(this, "Exp. Share holder", "Change it in Team.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
             text = holder?.let { "${it.shownName} Lv ${it.level}" } ?: "Nobody"
         })
-        rows += Form.row(this, "Wishlist", "Always caught, and met twice as often within its rarity. Tap ☆ in the Pokédex to add or remove.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
+        rows += Form.row(this, "Wishlist", "Always caught by the auto rule. Tap ☆ in the Pokédex to add or remove.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
             text = "${s.wishlist.size}"
         })
         return Form.cardOf(this, rows)
@@ -524,6 +542,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         content.addView(Form.cardOf(this, listOf(
             Form.switchRow(this, "Stat card under its own Pokémon", "Off: the classic game layout, each card on the opposite side",
                 AppPrefs.cardsUnderOwn(this)) { AppPrefs.setCardsUnderOwn(this, it) },
+            Form.switchRow(this, "Same size as the wild one", "Your Pokémon is not drawn bigger than the wild one",
+                AppPrefs.playerSameSize(this)) { AppPrefs.setPlayerSameSize(this, it) },
+            Form.switchRow(this, "Show my Pokémon from the front", "Front picture, turned to face the wild one, instead of the back picture",
+                AppPrefs.playerFront(this)) { AppPrefs.setPlayerFront(this, it) },
         )))
         content.addView(Form.sect(this, "Small battle windows"))
         content.addView(Form.cardOf(this, listOf(
@@ -542,7 +564,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private fun leaveCard(): LinearLayout {
         val mode = AppPrefs.leaveMode(this)
         val options = listOf(
-            Triple(LeaveMode.OFF, "Nothing", "Default."),
+            Triple(LeaveMode.OFF, "Nothing", "Default. Use Pop out on the battle any time."),
             Triple(LeaveMode.PIP, "Picture-in-picture", "A small battle window; or use Pop out on the battle any time."),
             Triple(LeaveMode.FLOAT, "Floating battle window",
                 "Move and resize it over AnkiDroid. Needs “Display over other apps” and shows a notification while it runs."),
@@ -743,11 +765,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     }
 
     private fun startAnimations() {
-        val data = GameRepo.data ?: DataStore.load(this)
-        if (data == null) { Ui.toast(this, "Download the game data first"); return }
         val gens = loaded?.settings?.gens?.toSet() ?: com.husarp.ankigo.game.Tuning.DEFAULT_GENS
-        val list = data.species.values.filter { it.gen in gens }.sortedBy { it.num }
-        SettingsJobs.startAnimations(this, list)
+        SettingsJobs.startAnimations(this, gens, GameRepo.data) // reads the data off the main thread when it isn't in memory
     }
 
     private fun confirmRedownload() {

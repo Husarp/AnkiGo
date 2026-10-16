@@ -119,7 +119,7 @@ object SaveCodec {
         list("moves", m.moves)
         kv("hp", m.hp); kv("friendship", m.friendship); kv("heldItem", m.heldItem); kv("caughtAt", m.caughtAt)
         kv("defeats", m.defeats); kv("tier", m.tier.name)
-        kv("nickname", m.nickname); kv("ankimonId", m.ankimonId)
+        kv("nickname", m.nickname); kv("ankimonId", m.ankimonId); kv("favourite", m.favourite)
     }
 
     private fun writeUnsupported(w: W, u: UnsupportedMon) = w.obj {
@@ -144,7 +144,7 @@ object SaveCodec {
 
     private fun writeSettings(w: W, s: Settings) = w.obj {
         list("gens", s.gens.sorted())
-        kv("fasterStart", s.fasterStart)
+        kv("fasterStartV2", s.fasterStart)
         kv("cardsPerRound", s.cardsPerRound); kv("autoMode", s.autoMode)
         kv("protectLegendary", s.protectLegendary); kv("protectMythical", s.protectMythical)
         kv("protectUltra", s.protectUltra); kv("protectStarter", s.protectStarter)
@@ -194,6 +194,7 @@ object SaveCodec {
             caughtAt = o.long("caughtAt", 0), defeats = o.int("defeats", 0),
             tier = enumOr(o.strOrNull("tier"), Tier.NORMAL),
             nickname = o.strOrNull("nickname"), ankimonId = o.strOrNull("ankimonId"),
+            favourite = o.bool("favourite", false),
         )
     }
 
@@ -223,7 +224,7 @@ object SaveCodec {
     }
 
     private fun readSettings(o: JSONObject?, s: Settings) {
-        s.fasterStart = o?.bool("fasterStart", false) ?: false // preserve the pace of existing saves
+        s.fasterStart = o?.bool("fasterStartV2", false) ?: false // old "fasterStart" key ignored: existing saves switch it off once
         if (o == null) return
         o.intList("gens")?.let { s.gens.clear(); s.gens.addAll(it) }
         s.cardsPerRound = o.int("cardsPerRound", s.cardsPerRound)

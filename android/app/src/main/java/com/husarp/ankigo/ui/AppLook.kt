@@ -51,6 +51,11 @@ object AppLook {
         generation++
     }
 
+    fun setBarStyle(ctx: Context, style: BarStyle) {
+        AppPrefs.putLook(ctx, "barStyle", style.name)
+        generation++
+    }
+
     fun setScale(ctx: Context, percent: Int) {
         AppPrefs.putScale(ctx, percent)
         generation++

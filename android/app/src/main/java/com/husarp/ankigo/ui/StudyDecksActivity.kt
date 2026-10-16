@@ -40,8 +40,6 @@ class StudyDecksActivity : AgActivity() {
     internal fun buildContent(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@StudyDecksActivity, R.color.ag_base)) }
         appBar = Ui.appBar(this, "Study", "AnkiDroid")
-        appBar.addView(StudyUi.iconButton(this, R.drawable.ic_sync, "Refresh decks") { refresh(true) }, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)))
-        appBar.addView(StudyUi.iconButton(this, R.drawable.ic_settings, "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) }, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)))
         root.addView(appBar)
         content = StudyUi.column(this).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
         val scroll = ScrollView(this).apply { addView(content, android.widget.FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
@@ -132,14 +130,13 @@ class StudyDecksActivity : AgActivity() {
                 this.text = rich
             })
             text.addView(BarView(this).apply {
-                setGradient(Ui.c(context, R.color.ag_mauve), Ui.c(context, R.color.ag_pink))
-                set(st.reviewsToday.toFloat() / goal, Ui.c(context, R.color.ag_mauve), false)
+                setMeaning(BarMeaning.GOAL, st.reviewsToday.toFloat() / goal, false)
             }, StudyUi.spaced(this, 4).also { it.height = Ui.dp(this, 6) })
             teaser.addView(text, StudyUi.lp(0, -2, 1f))
             content.addView(teaser, StudyUi.spaced(this, 8))
         }
         if (GameRepo.data == null) content.addView(StudyUi.label(this, "Study works without game data. Download battle data in Settings to play.", 12), StudyUi.spaced(this, 8))
-        content.addView(StudyUi.section(this, "Decks", "tap = study here · ↗ = in AnkiDroid"))
+        content.addView(StudyUi.section(this, "Decks"))
         val columns = StudyUi.row(this).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, 50), Ui.dp(context, 3)) }
         val countWidth = DeckCounts.columnWidth(this, decks)
         DeckCounts.addHeader(columns, this, countWidth)

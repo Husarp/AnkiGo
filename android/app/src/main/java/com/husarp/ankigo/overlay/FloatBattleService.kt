@@ -22,6 +22,7 @@ import com.husarp.ankigo.ui.AppPrefs
 import com.husarp.ankigo.ui.BattleScreen
 import com.husarp.ankigo.ui.GameActivity
 import com.husarp.ankigo.ui.LeaveMode
+import com.husarp.ankigo.ui.LeaveModeMigration
 
 /**
  * Foreground service behind the floating battle window (LeaveMode.FLOAT): keeps live detection running while AnkiGo
@@ -33,6 +34,7 @@ class FloatBattleService : Service() {
     private var stopping = false     // stopSelf() asked for; nothing else should start
     private var destroyed = false
     private var wasReady = false
+    private var seenHidden = false   // a Pop out waits for AnkiGo to leave the screen once before it may end
     private var lastNote: String? = null
     private val main = Handler(Looper.getMainLooper())
     private val healthCheck = object : Runnable {
@@ -122,10 +124,13 @@ class FloatBattleService : Service() {
     private fun sync() {
         val v = view ?: return
         if (stopping) return
-        if (AppPrefs.leaveMode(this) != LeaveMode.FLOAT) { finish(); return }
+        if (!BattleScreen.visible) seenHidden = true
+        else if (popOut && seenHidden) popOut = false // the player came back: a Pop out is over
+        if (AppPrefs.leaveMode(this) != LeaveMode.FLOAT && !popOut) { finish(); return }
         val ready = GameRepo.status == GameRepo.Status.READY
         if (ready && !wasReady) LiveSession.hold(this, this)
         wasReady = ready
+        if (popOut && BattleScreen.visible && !seenHidden) { v.hide(); return } // Pop out just asked: wait until the app is gone
         if (!FloatBattlePolicy.shouldRun(true, Overlay.canDraw(this), BattleScreen.visible, ready)) {
             finish()
         } else if (!v.show()) {
@@ -135,6 +140,7 @@ class FloatBattleService : Service() {
     }
 
     private fun finish() {
+        popOut = false
         if (stopping) return
         stopping = true
         view?.hide()
@@ -243,9 +249,28 @@ class FloatBattleService : Service() {
         private const val ACTION_STOP = "com.husarp.ankigo.float.STOP"
         /** AppPrefs' SharedPreferences file and key: watched here so a setting change away from FLOAT ends the service. */
         private const val PREFS_FILE = "ankigo_ui"
-        private const val PREF_LEAVE_MODE = "leaveMode"
+        private const val PREF_LEAVE_MODE = LeaveModeMigration.KEY
 
         @Volatile private var instance: FloatBattleService? = null
+
+        /** On-demand floating window ("Pop out" with leave mode not FLOAT): keeps the service alive until the player is back in AnkiGo. */
+        @Volatile private var popOut = false
+
+        /**
+         * Pop out: shows the floating window once, whatever the leave mode, as soon as AnkiGo's screens are gone
+         * (the caller moves the task to the back). Needs the overlay permission and a loaded game; otherwise does nothing.
+         */
+        fun startPopOut(ctx: Context) {
+            val app = ctx.applicationContext
+            if (!Overlay.canDraw(app) || GameRepo.status != GameRepo.Status.READY) return
+            popOut = true
+            try {
+                app.startForegroundService(Intent(app, FloatBattleService::class.java))
+            } catch (e: Exception) {
+                popOut = false
+                Report.fail("FLOAT", "start service (pop out)", e)
+            }
+        }
 
         private fun openIntent(ctx: Context) =
             Intent(ctx, GameActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)

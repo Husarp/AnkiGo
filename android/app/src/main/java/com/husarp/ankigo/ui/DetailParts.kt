@@ -121,6 +121,28 @@ object DetailParts {
         }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 6) })
     }
 
+    /** Popup with the explanation [i] (reuses the app's small info dialog). */
+    fun showInfo(a: Context, i: StatInfoText) {
+        val body = Ui.text(a, 14f, 700, R.color.ag_text).apply {
+            text = i.text
+            setPadding(Ui.dp(a, 24), Ui.dp(a, 4), Ui.dp(a, 24), Ui.dp(a, 8))
+        }
+        Pickers.info(a, i.title, body)
+    }
+
+    /** Makes [v] open the popup for [i] (touch area at least 30 dp tall). */
+    fun tapInfo(v: View, i: StatInfoText): View = v.apply {
+        minimumHeight = Ui.dp(context, 30)
+        contentDescription = "${i.title}: ${i.text}"
+        setOnClickListener { showInfo(context, i) }
+    }
+
+    /** Small grey "Tap a stat name ..." line at the top of a stats block. */
+    fun statHint(a: Context): View = Ui.text(a, 11f, 700, R.color.ag_ov).apply {
+        text = StatInfo.HINT
+        setPadding(0, 0, 0, Ui.dp(a, 2))
+    }
+
     /** "Label   value" line for the Info / Evolution sections. */
     fun line(a: Context, label: String, value: CharSequence, labelDp: Int = 84, compact: Boolean = false): LinearLayout = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -138,7 +160,8 @@ object DetailParts {
         gravity = Gravity.CENTER_VERTICAL
         val v = Ui.dp(a, if (compact) 2 else 3)
         setPadding(0, v, 0, v)
-        addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = DetailMath.LABELS[stat.ordinal] }, LinearLayout.LayoutParams(Ui.dp(a, 32), -2))
+        addView(tapInfo(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = DetailMath.LABELS[stat.ordinal]; gravity = Gravity.CENTER_VERTICAL }, StatInfo.of(stat)),
+            LinearLayout.LayoutParams(Ui.dp(a, 32), -2))
         addView(Ui.text(a, 13f, 900, R.color.ag_text).apply { text = value.toString(); gravity = Gravity.END }, LinearLayout.LayoutParams(Ui.dp(a, 34), -2))
         addView(Ui.text(a, 11f, 900, if (dir > 0) R.color.ag_green else R.color.ag_red).apply {
             text = DetailMath.arrow(dir); gravity = Gravity.CENTER
@@ -155,7 +178,8 @@ object DetailParts {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, Ui.dp(a, 4), 0, 0)
-        addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Total" }, LinearLayout.LayoutParams(Ui.dp(a, 66), -2))
+        addView(tapInfo(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Total"; gravity = Gravity.CENTER_VERTICAL }, StatInfo.TOTAL),
+            LinearLayout.LayoutParams(Ui.dp(a, 66), -2))
         addView(Ui.text(a, 13f, 900, R.color.ag_text).apply { text = total.toString() }, LinearLayout.LayoutParams(0, -2, 1f))
         if (base != null) addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = base.toString(); gravity = Gravity.END },
             LinearLayout.LayoutParams(Ui.dp(a, 28), -2))

@@ -312,8 +312,16 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return ActionResult(true, "${mon.name} holds the Exp. Share.")
     }
 
+    /** Marks / unmarks an owned Pokémon (not an unsupported one) as a favourite. */
+    fun setFavourite(uid: String, on: Boolean): ActionResult {
+        val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
+        mon.favourite = on
+        return ActionResult(true, if (on) "${mon.shownName} is a favourite now." else "${mon.shownName} is no longer a favourite.")
+    }
+
     fun release(uid: String): ActionResult {
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
+        if (mon.favourite) return ActionResult(false, "Remove ${mon.shownName} from favourites first.")
         if (state.mons.size <= 1) return ActionResult(false, "You can't release your only Pokémon.")
         if (state.team.size == 1 && state.team[0] == uid) {
             return ActionResult(false, "Put another Pokémon in your team before releasing ${mon.name}.")

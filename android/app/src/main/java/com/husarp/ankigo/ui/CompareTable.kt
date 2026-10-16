@@ -24,7 +24,7 @@ data class Matchup(val type: Type, val mult: Double) {
 /** What one table cell shows. Only [Text] can be the best value of its row. */
 sealed class Cell {
     /** A value; [sub] are small grey lines under it. "—" (no value) is a Text with [empty]. */
-    data class Text(val text: String, val best: Boolean = false, val sub: List<String> = emptyList()) : Cell() {
+    data class Text(val text: String, val best: Boolean = false, val sub: List<String> = emptyList(), val level: Int? = null) : Cell() {
         val empty: Boolean get() = text == DASH
     }
     data class TypeChips(val types: List<Type>) : Cell()
@@ -120,7 +120,7 @@ object CompareTable {
 
     private fun numeric(key: String, label: String, values: List<Int?>, section: String? = null, fmt: (Int) -> String = { it.toString() }): CompareRow {
         val best = bestIndexes(values)
-        return CompareRow(key, label, values.mapIndexed { i, v -> Cell.Text(v?.let(fmt) ?: DASH, best = i in best) }, section)
+        return CompareRow(key, label, values.mapIndexed { i, v -> Cell.Text(v?.let(fmt) ?: DASH, best = i in best, level = if (key == "level") v else null) }, section)
     }
 
     fun matchups(types: List<Type>): Triple<List<Matchup>, List<Matchup>, List<Matchup>> {

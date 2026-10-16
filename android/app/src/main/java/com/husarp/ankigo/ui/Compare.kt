@@ -68,6 +68,8 @@ internal class CompareLook(ctx: Context, columns: Int) {
 }
 
 /** The content of the dialog: title + Now / Fully evolved switch + the scrolling table. */
+private val TAP_SECTIONS = setOf("Stats", "Base stats", "Build")
+
 internal class CompareView(private val page: GamePage, private val picks: List<ComparePick>) : LinearLayout(page) {
     val columns: Int = CompareTable.build(page.data, page.state, picks, false).columns.size
     val look = CompareLook(page, columns)
@@ -243,7 +245,7 @@ private class TableGrid(private val page: GamePage, private val look: CompareLoo
 
     private fun line(): View = View(ctx).apply { setBackgroundColor(c(R.color.ag_s0)) }
 
-    private fun labelCell(text: String, bg: Int): View = FrameLayout(ctx).apply {
+    private fun labelCell(text: String, bg: Int, info: StatInfoText? = null): View = FrameLayout(ctx).apply {
         setBackgroundColor(bg)
         addView(Ui.text(ctx, look.labelSp, 800, R.color.ag_sub0).apply {
             this.text = text
@@ -252,6 +254,10 @@ private class TableGrid(private val page: GamePage, private val look: CompareLoo
         }, FrameLayout.LayoutParams(-1, -1))
         addView(line(), FrameLayout.LayoutParams(dp(1), -1, Gravity.END))
         sticky(this)
+        if (info != null) {
+            contentDescription = "${info.title}: ${info.text}"
+            setOnClickListener { DetailParts.showInfo(ctx, info) }
+        }
     }
 
     /** Keeps [v] at the left edge while the table scrolls sideways, drawn over the columns that pass under it. */
@@ -335,7 +341,7 @@ private class TableGrid(private val page: GamePage, private val look: CompareLoo
     private fun sectionBar(title: String): View = LinearLayout(ctx).apply {
         setBackgroundColor(c(R.color.ag_mantle))
         addView(Ui.text(ctx, look.labelSp - 0.5f, 900, R.color.ag_sub0).apply {
-            text = title.uppercase()
+            text = title.uppercase() + if (title in TAP_SECTIONS) " · TAP A NAME" else ""
             letterSpacing = 0.06f
             setPadding(dp(8), dp(6), dp(8), dp(4))
             stickyX += this
@@ -348,7 +354,7 @@ private class TableGrid(private val page: GamePage, private val look: CompareLoo
             orientation = LinearLayout.HORIZONTAL
             minimumHeight = minH
             setBackgroundColor(bg)
-            addView(labelCell(row.label, bg), LinearLayout.LayoutParams(labelPx, -1))
+            addView(labelCell(row.label, bg, StatInfo.forKey(row.key)), LinearLayout.LayoutParams(labelPx, -1))
             for (cell in row.cells) addView(cellView(cell, minH), LinearLayout.LayoutParams(colPx, -2))
         }
     }
@@ -373,6 +379,7 @@ private class TableGrid(private val page: GamePage, private val look: CompareLoo
                     box.addView(Ui.text(ctx, look.valueSp, if (cell.best) 900 else 700, if (cell.best) R.color.ag_mauve else R.color.ag_text).apply {
                         text = cell.text
                         gravity = Gravity.CENTER
+                        cell.level?.let { setTextColor(LevelTier.color(ctx, it)) } // level cells wear their tier colour
                         if (cell.best) {
                             background = Ui.rounded(Bits.blend(c(R.color.ag_mauve), c(R.color.ag_card), 0.2f), 8, ctx)
                             setPadding(dp(8), dp(2), dp(8), dp(2))

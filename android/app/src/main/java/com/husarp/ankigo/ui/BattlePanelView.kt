@@ -110,6 +110,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var statsBarSmall = true
     private var compactCards = false
     private var cardsOwn = true
+    private var playerFront = false
     private var applied: PanelFit.Fit? = null
     private var fit = PanelFit.Fit(1f, 0f, 0f, 0f, stats = true, log = true, xp = true, tools = true, logLines = 2, compactCards = false, middle = false, ok = true)
     private val chargePips = StudyUi.row(ctx).apply { visibility = GONE }
@@ -143,9 +144,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private val pausedBadge = newPausedPill()
 
     // ---- footer ----
-    private val goalBar = BarView(ctx).apply {
-        setGradient(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_pink))
-    }
+    private val goalBar = BarView(ctx)
     private val goalText = Ui.text(ctx, 12f, 900, R.color.ag_text).apply { maxLines = 1 }
     private val goalBarLp = LinearLayout.LayoutParams(0, dpi(8), 1f).also { it.marginEnd = dpi(8) }
     private val goalRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
@@ -278,6 +277,8 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         compactCards = AppPrefs.compactCards(context)
         cardsOwn = AppPrefs.cardsUnderOwn(context)
         arena.cardsUnderOwn = cardsOwn
+        arena.playerSameSize = AppPrefs.playerSameSize(context)
+        AppPrefs.playerFront(context).let { if (it != playerFront) { playerFront = it; playerKey = null } }   // the main's picture loads again
         applied = null
         requestLayout()
     }
@@ -490,7 +491,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     /** Goal bar + "84 / 100 today" (or "Goal done · 112"). */
     fun setGoal(today: Int, goal: Int, animate: Boolean) {
         val g = max(goal, 1)
-        goalBar.set(min(1f, today.toFloat() / g), Ui.c(context, R.color.ag_mauve), animate)
+        goalBar.setMeaning(BarMeaning.GOAL, min(1f, today.toFloat() / g), animate)
         val sub = Ui.c(context, R.color.ag_sub0)
         val sb = SpannableStringBuilder()
         if (today >= g) {
@@ -580,7 +581,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         arena.setEnemyInfo(w.name, w.level, w.shiny, sp?.types.orEmpty())
         arena.setEnemyStatus(b.enemy.status)
         arena.setEnemyHp(w.hp, if (sp != null) b.maxWildHp(data) else max(w.hp, 1), false)
-        arena.setCatchTag(willCatchNow(), w.species !in st.caught)
+        arena.setNewTag(w.species !in st.caught)
         if (sp != null) {
             val key = "${w.species}:${w.shiny}"
             if (key != enemyKey) { enemyKey = key; PanelSprites.show(context, arena.enemySprite, sp, SpriteKind.FRONT, w.shiny, false) }
@@ -603,7 +604,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         arena.setPlayerXp(m.xp, need, false)
         if (sp != null) {
             val key = "${m.species}:${m.shiny}"
-            if (key != playerKey) { playerKey = key; PanelSprites.show(context, arena.playerSprite, sp, SpriteKind.BACK, m.shiny, true) }
+            if (key != playerKey) { playerKey = key; PanelSprites.showMain(context, arena.playerSprite, sp, m.shiny) }
         }
     }
 
@@ -641,8 +642,6 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         // "Next team member as main" brings the second one next: have its sprite ready.
         st.team.getOrNull(1)?.let { st.mon(it) }?.let { m -> data.species[m.species]?.let { PanelSprites.prefetch(context, it, m.shiny, true) } }
     }
-
-    private fun willCatchNow(): Boolean = try { GameRepo.game?.willCatch() ?: false } catch (e: Exception) { false }
 
     fun cancelAnimations() {
         arena.cancelAnimations()

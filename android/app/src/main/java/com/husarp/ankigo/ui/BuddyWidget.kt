@@ -12,6 +12,10 @@ class BuddyWidget : AppWidgetProvider() {
         WidgetRender.async(pr) { WidgetRender.update(ctx, mgr, ids, WidgetRender.Kind.BUDDY) }
     }
 
+    override fun onDeleted(ctx: Context, appWidgetIds: IntArray) {
+        BuddyWidgetPrefs.forget(ctx.getSharedPreferences("spike", 0), appWidgetIds)
+    }
+
     override fun onAppWidgetOptionsChanged(ctx: Context, mgr: AppWidgetManager, id: Int, newOptions: Bundle?) {
         val pr = goAsync()
         WidgetRender.async(pr) { WidgetRender.update(ctx, mgr, intArrayOf(id), WidgetRender.Kind.BUDDY) }

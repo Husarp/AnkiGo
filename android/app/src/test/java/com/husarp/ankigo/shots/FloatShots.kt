@@ -58,7 +58,7 @@ class FloatShots {
     private fun screen(ctx: Context, which: FloatPage): View {
         call(FloatScreens, "teardown")
         val w = call(FloatScreens, "create", Context::class.java to self(ctx)) as FloatWindow
-        call(FloatScreens, "showPage", FloatWindow::class.java to w, FloatPage::class.java to which)
+        call(FloatScreens, "showPage", FloatWindow::class.java to w, FloatPage::class.java to which, String::class.java to null)
         return rootOf(w)
     }
 

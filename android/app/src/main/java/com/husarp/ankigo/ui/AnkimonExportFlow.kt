@@ -338,8 +338,7 @@ object AnkimonExportFlow {
 
     /** The progress dialog (not cancelable); [set] moves the bar and the one-line label. */
     internal class ExportProgress(val dialog: AlertDialog, private val bar: BarView, private val label: TextView) {
-        private val color = Ui.c(dialog.context, R.color.ag_mauve)
-        fun set(fraction: Float, text: String) { bar.set(fraction, color, true); label.text = text }
+        fun set(fraction: Float, text: String) { bar.setMeaning(BarMeaning.PROGRESS, fraction, true); label.text = text }
     }
 
     internal fun progressDialog(c: Context): ExportProgress {

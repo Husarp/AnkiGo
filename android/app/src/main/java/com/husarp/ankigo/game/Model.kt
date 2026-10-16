@@ -179,6 +179,7 @@ class Mon(
     var tier: Tier = Tier.NORMAL,   // tier it was met in
     var nickname: String? = null,   // player-given name (Ankimon import); null = none
     var ankimonId: String? = null,  // Ankimon's individual_id when imported from an Ankimon save (re-import matches on it)
+    var favourite: Boolean = false, // player's favourite: kept in the AnkiGo save and backups only (not written into the Ankimon file); can't be released
 )
 
 /**
@@ -240,7 +241,7 @@ class Settings(
     var dayStartHour: Int = Tuning.DAY_START_HOUR,
     var xpShareUid: String? = null,                     // Ankimon "classic" Exp. Share holder (null = off)
     var trainerName: String = "Trainer",
-    var fasterStart: Boolean = true, // new games only; old saves decode missing key as false
+    var fasterStart: Boolean = false, // off by default; saved as fasterStartV2 (the old fasterStart key is ignored, so old saves start off)
 )
 
 /** One game day of study for the Stats screen (AnkiGo's own log; see Stats.kt). */
@@ -296,6 +297,14 @@ class GameState(
     val main: Mon? get() = mon(team.firstOrNull())
     fun teamMons(): List<Mon> = team.mapNotNull { mon(it) }
     fun boxMons(): List<Mon> = mons.filter { it.uid !in team }
+
+    /** Favourites for the Favourites section: team members first (team order), then by species number, then level (high first). */
+    fun favouriteMons(): List<Mon> {
+        val fav = mons.filter { it.favourite }
+        val inTeam = team.mapNotNull { uid -> fav.firstOrNull { it.uid == uid } }
+        val rest = fav.filter { it.uid !in team }.sortedWith(compareBy<Mon> { it.species }.thenByDescending { it.level })
+        return inTeam + rest
+    }
     fun count(item: String) = bag[item] ?: 0
 
     companion object { const val SCHEMA = 1 }

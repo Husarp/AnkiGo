@@ -16,7 +16,9 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Status pills (BRN PAR SLP PSN FRZ) on both info cards in every panel mode.
+ * Status badges (round colour badges in their own row under the HP bar: poison, burn, paralysis, sleep, freeze) on both
+ * info cards in every panel mode (R2-V12 replaced the old BRN PAR SLP PSN FRZ text pills; R2V12Shots has the card geometry
+ * checks, the gallery and the tap bubble).
  * PNGs: status-parbrn, status-slppsn, status-frz (full panel, PHONE + SPLIT), status-longnames (dual long types, long
  * name), status-study (study strip), status-float (floating battle), status-pip (picture-in-picture).
  */

@@ -127,13 +127,17 @@ class BattleEngineTest {
         assertEquals(33, dmg(a, d, "tackle", aSide = aUp).damage)
     }
 
-    @Test fun critRatesFollowTheTable() {
+    @Test fun critsAreOffByDefault() {
+        assertFalse(Tuning.CRITS)
         val a = mon(19, 20); val d = mon(16, 20)
         val rng = Random(7)
-        fun rate(move: Move, n: Int = 6000) = (1..n).count { BattleEngine.damage(data, a, BattleSide(), d, BattleSide(), move, rng).crit }.toDouble() / n
-        assertEquals(1.0 / 24, rate(data.move("tackle")!!), 0.012)
-        assertEquals(1.0 / 8, rate(data.move("slash")!!), 0.02)
-        assertEquals(1.0, rate(data.move("tackle")!!.copy(willCrit = true), 200), 0.0)
+        fun count(move: Move, n: Int = 6000) = (1..n).count { BattleEngine.damage(data, a, BattleSide(), d, BattleSide(), move, rng).crit }
+        assertEquals(0, count(data.move("tackle")!!))
+        assertEquals(0, count(data.move("slash")!!)) // high crit ratio
+        assertEquals(0, count(data.move("tackle")!!.copy(willCrit = true), 200))
+        assertEquals(0, count(data.move("tackle")!!.copy(critRatio = 4), 200))
+        // the test hook still forces a crit
+        assertTrue(BattleEngine.damage(data, a, BattleSide(), d, BattleSide(), data.move("tackle")!!, rng, forceCrit = true).crit)
     }
 
     @Test fun fixedLevelHalfHpAndOhkoDamage() {

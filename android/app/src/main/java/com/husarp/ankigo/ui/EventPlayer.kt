@@ -401,7 +401,7 @@ class EventPlayer(private val panel: BattlePanelView) {
         arena.setEnemyCardShown(true)
         arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty())
         arena.setEnemyHp(e.hp, e.maxHp, false)
-        arena.setCatchTag(e.willCatch, e.newSpecies)
+        arena.setNewTag(e.newSpecies)
         if (sp != null) {
             PanelSprites.show(ctx, arena.enemySprite, sp, SpriteKind.FRONT, e.shiny, false)
             panel.noteEnemySprite(e.species, e.shiny)
@@ -475,7 +475,7 @@ class EventPlayer(private val panel: BattlePanelView) {
             val mon = GameRepo.state?.mon(e.uid)
             val sp = data?.species?.get(e.toSpecies)
             if (sp != null && mon != null) {
-                PanelSprites.show(ctx, arena.playerSprite, sp, SpriteKind.BACK, mon.shiny, true)
+                PanelSprites.showMain(ctx, arena.playerSprite, sp, mon.shiny)
                 panel.notePlayerSprite(sp.num, mon.shiny)
                 arena.setPlayerName(e.to)
                 arena.setPlayerHp(mon.hp, maxHpOf(e.uid), true)

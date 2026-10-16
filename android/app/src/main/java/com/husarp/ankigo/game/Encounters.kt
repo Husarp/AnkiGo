@@ -177,7 +177,7 @@ object Encounters {
 
     /**
      * Rolls tier (from state.reviewsToday, settings.dailyAverage, trainerLevel, main level), then a random species (uniform, wishlisted ones
-     * twice as likely, see [pickFrom]) from that tier's pool at [wildLevel]; an empty rare pool falls back to NORMAL, an empty NORMAL to Rattata (19).
+     * weighted by [Tuning.WISHLIST_WEIGHT], see [pickFrom]) from that tier's pool at [wildLevel]; an empty rare pool falls back to NORMAL, an empty NORMAL to Rattata (19).
      * The pick may then turn into one of its regional forms ([eligibleForms]). MEGA/GMAX rolls resolve to NORMAL. Shiny 1/4096.
      */
     fun roll(data: GameData, state: GameState, wildLevel: Int, rng: Random): Roll {

@@ -36,4 +36,15 @@
     <color name="ag_anki_text">#e8eaed</color>
     <color name="ag_anki_sub">#9aa0a6</color>
     <color name="ag_anki_line">#3c4043</color>
+    <!-- level tiers (item 58): bronze, silver, gold, emerald, sapphire, ruby, amethyst, platinum, diamond, master -->
+    <color name="ag_tier_0">#e0a370</color>
+    <color name="ag_tier_1">#c5cde0</color>
+    <color name="ag_tier_2">#f5cf63</color>
+    <color name="ag_tier_3">#7fe0a8</color>
+    <color name="ag_tier_4">#8fb6ff</color>
+    <color name="ag_tier_5">#ff8fa8</color>
+    <color name="ag_tier_6">#cfa6ff</color>
+    <color name="ag_tier_7">#a9d4de</color>
+    <color name="ag_tier_8">#8ee6ff</color>
+    <color name="ag_tier_9">#ff9ad0</color>
 </resources>

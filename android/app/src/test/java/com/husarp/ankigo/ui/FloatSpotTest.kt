@@ -39,4 +39,17 @@ class FloatSpotTest {
         val s = FloatSpot.place(50, 400, 300, 200, 40, 24, 68)
         assertEquals(176, s.top)
     }
+
+    // Bigger float (27 sp outlined ~ 90x46 px at 2.6x density) at the small sizes: stays inside, rise shrinks.
+    @Test fun bigFloatInsideAtPip() {
+        val s = FloatSpot.place(150, 90, 240, 136, 90, 46, 88)
+        assertTrue(s.left >= 0 && s.left + 90 <= 240)
+        assertTrue(s.top - s.rise >= 0 && s.top + 46 <= 136)
+    }
+
+    @Test fun bigFloatInsideAtFloatBattle() {
+        val s = FloatSpot.place(260, 10, 320, 300, 90, 46, 88)
+        assertTrue(s.left >= 0 && s.left + 90 <= 320)
+        assertTrue(s.top - s.rise >= 0 && s.top + 46 <= 300)
+    }
 }

@@ -46,7 +46,7 @@ import kotlin.math.sqrt
 // TICKET T15 owns this file: draws the two game widgets (mockup frame F) into bitmaps.
 
 /** One team member as the widgets show it. [hpFrac] is 0..1. */
-data class WidgetMon(val species: Int, val name: String, val level: Int, val shiny: Boolean, val hpFrac: Float)
+data class WidgetMon(val species: Int, val name: String, val level: Int, val shiny: Boolean, val hpFrac: Float, val uid: String = "")
 
 /** Everything the widgets show, read from a save (never written back). */
 data class WidgetSnapshot(
@@ -59,6 +59,10 @@ data class WidgetSnapshot(
     val cash: Int,
     val balls: Int,
     val team: List<WidgetMon>,
+    /** The Pokémon some Buddy widget was told to show (by uid); only the uids asked for in [WidgetLogic.summarize]. */
+    val picked: Map<String, WidgetMon> = emptyMap(),
+    /** The Pokémon the Buddy widget being drawn shows; null = the main. See [forBuddy]. */
+    val buddy: WidgetMon? = null,
 ) {
     /** No main yet: the player hasn't picked a starter. */
     val hasStarter get() = team.isNotEmpty()
@@ -66,6 +70,12 @@ data class WidgetSnapshot(
     val left get() = max(0, goal - today)
     val progress get() = if (goal <= 0) 1f else (today.toFloat() / goal).coerceIn(0f, 1f)
     val main get() = team.firstOrNull()
+
+    /** The Pokémon the Buddy widget draws: the chosen one, or the main. */
+    val buddyMon get() = buddy ?: main
+
+    /** This snapshot for one Buddy widget with [choice] (a uid or [BuddyWidgetPrefs.MAIN]); a Pokémon that is gone falls back to the main. */
+    fun forBuddy(choice: String) = copy(buddy = if (choice == BuddyWidgetPrefs.MAIN) null else picked[choice])
 }
 
 /** Where the wide widget's parts go (dp); see [WidgetLogic.wideGeometry]. */
@@ -94,7 +104,7 @@ object WidgetLogic {
      * Builds the snapshot. [maxHp] gives a mon's max HP (null = unknown, the bar then shows full).
      * Daily numbers count as 0 when the save is from an earlier game day; a streak that already lapsed shows 0.
      */
-    fun summarize(s: GameState, now: Long, zone: ZoneId = ZoneId.systemDefault(), maxHp: (Mon) -> Int? = { null }): WidgetSnapshot {
+    fun summarize(s: GameState, now: Long, zone: ZoneId = ZoneId.systemDefault(), extraUids: Set<String> = emptySet(), maxHp: (Mon) -> Int? = { null }): WidgetSnapshot {
         val dayKey = dayKey(now, s.settings.dayStartHour, zone)
         val today = if (s.day == dayKey) s.reviewsToday else 0
         val goal = s.settings.dailyAverage
@@ -107,9 +117,12 @@ object WidgetLogic {
             today = today, goal = goal, streak = streak,
             atRisk = hour >= RISK_HOUR && today < goal && streak > 0,
             cash = s.cash, balls = s.bag.filterKeys { it.endsWith("-ball") }.values.sumOf { max(0, it) },
-            team = s.teamMons().take(6).map { WidgetMon(it.species, it.shownName, it.level, it.shiny, hpFrac(it.hp, maxHp(it))) },
+            team = s.teamMons().take(6).map { widgetMon(it, maxHp) },
+            picked = extraUids.mapNotNull { s.mon(it) }.associate { it.uid to widgetMon(it, maxHp) },
         )
     }
+
+    private fun widgetMon(m: Mon, maxHp: (Mon) -> Int?) = WidgetMon(m.species, m.shownName, m.level, m.shiny, hpFrac(m.hp, maxHp(m)), m.uid)
 
     /**
      * Wide widget layout for a [w] x [h] dp widget with [teamCount] team sprites: the silhouette tile takes the height
@@ -157,12 +170,15 @@ object WidgetRender {
     /** Draws and pushes every id of one widget kind. Blocking: call from a background thread. */
     fun update(ctx: Context, mgr: AppWidgetManager, ids: IntArray, kind: Kind) {
         if (ids.isEmpty()) return
-        val snap = snapshot(ctx)
+        val prefs = ctx.getSharedPreferences("spike", 0)
+        val choices = if (kind == Kind.BUDDY) ids.associateWith { BuddyWidgetPrefs.choice(prefs, it) } else emptyMap()
+        val snap = snapshot(ctx, choices.values.filter { it != BuddyWidgetPrefs.MAIN }.toSet())
         for (id in ids) {
             val (w, h) = sizeDp(ctx, mgr.getAppWidgetOptions(id), kind)
             val rv = RemoteViews(ctx.packageName, kind.layout)
-            val light = render(ctx, kind, snap, w, h, night = false)
-            val dark = render(ctx, kind, snap, w, h, night = true)
+            val shown = choices[id]?.let { snap?.forBuddy(it) } ?: snap
+            val light = render(ctx, kind, shown, w, h, night = false)
+            val dark = render(ctx, kind, shown, w, h, night = true)
             rv.setImageViewBitmap(kind.imgLight, light)
             rv.setImageViewBitmap(kind.imgDark, dark)
             rv.setOnClickPendingIntent(kind.root, if (kind == Kind.WIDE) Widgets.openStudyOrBattle(ctx) else Widgets.openApp(ctx))
@@ -182,7 +198,7 @@ object WidgetRender {
      * The game as the widgets show it: the loaded game if there is one, else a read-only look at the save files
      * (never SaveStore.load, never a write). Null when there is no readable save yet.
      */
-    fun snapshot(ctx: Context): WidgetSnapshot? {
+    fun snapshot(ctx: Context, extraUids: Set<String> = emptySet()): WidgetSnapshot? {
         val now = System.currentTimeMillis()
         var data: GameData? = null
         var dataTried = false
@@ -197,13 +213,13 @@ object WidgetRender {
         val live = runCatching { GameRepo.state }.getOrNull()
         if (live != null) {
             try {
-                return WidgetLogic.summarize(live, now, maxHp = maxHp)
+                return WidgetLogic.summarize(live, now, extraUids = extraUids, maxHp = maxHp)
             } catch (_: Exception) { /* read the file instead */ }
         }
         val dir = GameRepo.saveDir(ctx)
         val store = SaveStore(dir)
         val st = store.read(File(dir, "save.json")) ?: store.read(File(dir, "save.bak")) ?: return null
-        return WidgetLogic.summarize(st, now, maxHp = maxHp)
+        return WidgetLogic.summarize(st, now, extraUids = extraUids, maxHp = maxHp)
     }
 
     /** One widget bitmap, [wDp] x [hDp] of layout, in the light or dark colours. [snap] null = no save yet. */
@@ -321,7 +337,9 @@ object WidgetRender {
             roundRect(x, y, x + w, y + 7f, 3.5f, col(R.color.ag_s0))
             val fw = if (progress <= 0f) 0f else max(7f, w * progress)
             if (fw > 0f) {
-                fill.shader = LinearGradient(x, 0f, x + fw, 0f, col(R.color.ag_mauve), col(R.color.ag_pink), Shader.TileMode.CLAMP)
+                val f = BarTones.fill(ctx, BarMeaning.GOAL)
+                val to = f.gradientTo
+                if (to != null) fill.shader = LinearGradient(x, 0f, x + fw, 0f, f.color, to, Shader.TileMode.CLAMP) else fill.color = f.color
                 canvas.drawRoundRect(x, y, x + fw, y + 7f, 3.5f, 3.5f, fill)
                 fill.shader = null
             }
@@ -408,7 +426,7 @@ object WidgetRender {
 
         fun buddy(s: WidgetSnapshot?, w: Float, h: Float) {
             val pad = 8f
-            val main = s?.main
+            val main = s?.buddyMon
             val nameH = 17f
             val streakH = 14f
             val textH = nameH + 2f + streakH
@@ -432,9 +450,13 @@ object WidgetRender {
                 return
             }
             if (s.progress > 0f) {
-                val sweep = SweepGradient(cx, cy, col(R.color.ag_mauve), col(R.color.ag_pink))
-                sweep.setLocalMatrix(android.graphics.Matrix().apply { setRotate(-90f, cx, cy) })
-                ringPaint.shader = sweep
+                val f = BarTones.fill(ctx, BarMeaning.GOAL)
+                val to = f.gradientTo
+                if (to != null) {
+                    val sweep = SweepGradient(cx, cy, f.color, to)
+                    sweep.setLocalMatrix(android.graphics.Matrix().apply { setRotate(-90f, cx, cy) })
+                    ringPaint.shader = sweep
+                } else ringPaint.color = f.color
                 canvas.drawArc(oval, -90f, 360f * s.progress, false, ringPaint)
             }
             val inner = ring * 0.8333f
@@ -442,8 +464,16 @@ object WidgetRender {
 
             val maxW = w - 2 * pad
             val ny = top + ring + 4f
-            val (nm, np) = fitted("${main.name} · Lv ${main.level}", maxW, 13f, 9f, 900, R.color.ag_text)
-            line(nm, cx, ny, nameH, np, Paint.Align.CENTER)
+            val lvTxt = "Lv ${main.level}"
+            val (nm, np) = fitted("${main.name} · $lvTxt", maxW, 13f, 9f, 900, R.color.ag_text)
+            if (nm.endsWith(lvTxt)) {
+                // "Name · " in the text colour, "Lv N" in its tier colour, the pair centred as one line
+                val head = nm.removeSuffix(lvTxt)
+                val x0 = cx - np.measureText(nm) / 2f
+                line(head, x0, ny, nameH, np, Paint.Align.LEFT)
+                val lp = TextPaint(np).apply { color = col(LevelTier.colorRes(main.level)) }
+                line(lvTxt, x0 + np.measureText(head), ny, nameH, lp, Paint.Align.LEFT)
+            } else line(nm, cx, ny, nameH, np, Paint.Align.CENTER)
             val sy = ny + nameH + 2f
             if (s.streak > 0) {
                 val txt = "${s.streak}-day streak"

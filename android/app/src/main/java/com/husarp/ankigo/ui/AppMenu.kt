@@ -24,7 +24,7 @@ import com.husarp.ankigo.R
  * Use: `AppMenu(anchor).header("Title").item(1, "Team", R.drawable.ic_team).show { id -> … }`.
  */
 class AppMenu(private val anchor: View) {
-    private class Row(val id: Int, val label: String, @DrawableRes val icon: Int, val enabled: Boolean, val sub: String?, val danger: Boolean)
+    private class Row(val id: Int, val label: String, @DrawableRes val icon: Int, val enabled: Boolean, val sub: String?, val danger: Boolean, val dividerAfter: Boolean = false)
 
     private val rows = ArrayList<Row>()
     private var title: String? = null
@@ -35,8 +35,8 @@ class AppMenu(private val anchor: View) {
     fun header(title: String, sub: String? = null): AppMenu { this.title = title; titleSub = sub; return this }
 
     /** One row. A disabled row is dimmed and not clickable (its [sub] line stays readable); [danger] tints it red. */
-    fun item(id: Int, label: String, @DrawableRes icon: Int, enabled: Boolean = true, sub: String? = null, danger: Boolean = false): AppMenu {
-        rows.add(Row(id, label, icon, enabled, sub, danger))
+    fun item(id: Int, label: String, @DrawableRes icon: Int, enabled: Boolean = true, sub: String? = null, danger: Boolean = false, dividerAfter: Boolean = false): AppMenu {
+        rows.add(Row(id, label, icon, enabled, sub, danger, dividerAfter))
         return this
     }
 
@@ -105,7 +105,10 @@ class AppMenu(private val anchor: View) {
             })
             card.addView(View(ctx).apply { setBackgroundColor(Ui.c(ctx, R.color.ag_s0)) }, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 1)).also { it.topMargin = Ui.dp(ctx, 2); it.bottomMargin = Ui.dp(ctx, 4) })
         }
-        for (r in rows) card.addView(rowView(ctx, r), LinearLayout.LayoutParams(-1, -2))
+        for (r in rows) {
+            card.addView(rowView(ctx, r), LinearLayout.LayoutParams(-1, -2))
+            if (r.dividerAfter) card.addView(View(ctx).apply { setBackgroundColor(Ui.c(ctx, R.color.ag_s0)) }, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 1)).also { it.topMargin = Ui.dp(ctx, 2); it.bottomMargin = Ui.dp(ctx, 4) })
+        }
         val scroll = ScrollView(ctx).apply { isVerticalScrollBarEnabled = false; addView(card, FrameLayout.LayoutParams(-2, -2)) }
         val pad = Ui.dp(ctx, PAD_DP)
         // card shadow needs space around it in the frame

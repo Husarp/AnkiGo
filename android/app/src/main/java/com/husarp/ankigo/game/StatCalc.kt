@@ -19,6 +19,14 @@ object StatCalc {
         other(sp.base.spe, mon.ivs.spe, mon.evs.spe, mon.level, mon.nature.mult(Stat.SPE)),
     )
 
+    /**
+     * Lowest and highest value a species can have in [stat] at [level] (Dex details): min = IV 0, EV 0, hindering nature;
+     * max = IV 31, EV 252, helping nature. HP has no nature.
+     */
+    fun range(base: Int, stat: Stat, level: Int = 100): IntRange =
+        if (stat == Stat.HP) hp(base, 0, 0, level)..hp(base, 31, 252, level)
+        else other(base, 0, 0, level, 0.9)..other(base, 31, 252, level, 1.1)
+
     fun stats(data: GameData, mon: Mon): Stats = stats(data.sp(mon.species), mon)
     fun maxHp(data: GameData, mon: Mon): Int = stats(data, mon).hp
 }

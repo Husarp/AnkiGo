@@ -243,8 +243,8 @@ class GameTest {
         assertEquals(54, caught.species); assertTrue(caught.newSpecies); assertTrue(caught.toTeam); assertNull(caught.ball)
         assertEquals(12, caught.level)
         assertTrue(ev.of<GameEvent.Fainted>().any { !it.player })
-        // AnkiGo (Tuning.CATCH_GIVES_XP): a 0-HP catch gives the defeat XP to the main, but it is no defeat
-        assertEquals(Progression.xpForDefeat(data.sp(54), 12), ev.of<GameEvent.XpGained>().single { it.uid == s.main!!.uid }.xp)
+        // AnkiGo (Tuning.CATCH_GIVES_XP): a 0-HP catch gives half the defeat XP to the main, but it is no defeat
+        assertEquals((Progression.xpForDefeat(data.sp(54), 12) * Tuning.CATCH_XP_PART).toInt(), ev.of<GameEvent.XpGained>().single { it.uid == s.main!!.uid }.xp)
         assertTrue(ev.of<GameEvent.Defeated>().isEmpty())
         assertEquals(1, s.catches); assertEquals(0, s.defeats)
         assertTrue(54 in s.caught && 54 in s.seen)

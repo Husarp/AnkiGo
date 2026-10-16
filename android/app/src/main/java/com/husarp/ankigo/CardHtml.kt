@@ -47,13 +47,28 @@ list.forEach(function(it){
     fun esc(s: String) = Html.escapeHtml(s)
 
     /**
+     * The tap listener of a side: the question side shows the answer when [tapShow] is on; the answer side goes back to the
+     * question when [tapShow] and [tapHide] are both on. Taps on inputs, links, buttons and the like are left alone.
+     */
+    fun tapScript(side: String, tapShow: Boolean, tapHide: Boolean): String {
+        val call = when {
+            !tapShow -> return ""
+            side == "q" -> "AnkiGo.flip()"
+            tapHide -> "AnkiGo.unflip()"
+            else -> return ""
+        }
+        return "document.addEventListener('click',function(e){if(!e.target.closest('input,a,button,textarea,select'))$call});"
+    }
+
+    /**
      * @param side "q" or "a"
      * @param typed what the user typed (answer side), or null
      * @param speech the card's speech slots for this side (TtsRules), bound to the page's play references in order
      * @param jsPage the page token card JavaScript must present (JsApi): calls from an older page are ignored
+     * @param tapShow, tapHide the tap settings (Settings → Study), see [tapScript]
      * @param fieldValue resolves a type-in field name to its expected value
      */
-    fun build(content: String, css: String, ord: Int, side: String, typed: String?, dark: Boolean = false, speech: List<TtsRules.Item> = emptyList(), jsPage: Int = 0, fieldValue: (String) -> String?): Page {
+    fun build(content: String, css: String, ord: Int, side: String, typed: String?, dark: Boolean = false, speech: List<TtsRules.Item> = emptyList(), jsPage: Int = 0, tapShow: Boolean = true, tapHide: Boolean = false, fieldValue: (String) -> String?): Page {
         val notes = ArrayList<String>()
         var body = content
 
@@ -135,8 +150,8 @@ window.onerror=function(m,s,l){try{AnkiGo.jsError(m+' @'+s+':'+l)}catch(e){}};
 </script>
 ${if (body.contains("\\(") || body.contains("\\[")) """<script async src="https://ankigo.media/mathjax/tex-mml-chtml.js"
  onload="AnkiGo.mathjax('loaded')" onerror="AnkiGo.mathjax('FAILED')"></script>""" else ""}
-</head><body class="card card${ord + 1} chrome${if (dark) " nightMode night_mode" else ""}"><div id="qa">$body</div>${if (side == "q") "<div class=\"ag-hint\">Tap the card to show the answer</div>" else ""}<script>$UNFIX_JS</script><script>
-${if (side == "q") "document.addEventListener('click',function(e){if(!e.target.closest('input,a,button,textarea,select'))AnkiGo.flip()});" else ""}
+</head><body class="card card${ord + 1} chrome${if (dark) " nightMode night_mode" else ""}"><div id="qa">$body</div>${if (side == "q" && tapShow) "<div class=\"ag-hint\">Tap the card to show the answer</div>" else ""}<script>$UNFIX_JS</script><script>
+${tapScript(side, tapShow, tapHide)}
 document.addEventListener('contextmenu',function(e){e.preventDefault();AnkiGo.actions()});
 document.querySelectorAll('img').forEach(function(i){
  i.onerror=function(){

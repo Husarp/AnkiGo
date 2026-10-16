@@ -13,7 +13,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * "Next team member as main" in the battle menu (GameActivity.switchMain).
+ * "Switch Pokémon" in the battle menu (GameActivity.switchMain).
  * PNGs: nextmain-before, nextmain-now (right after the tap), nextmain-done (after the switch animation),
  * nextmain-busy-now / nextmain-busy-done (the tap while a long animation queue is still playing).
  */
@@ -30,14 +30,14 @@ class NextMainShots {
     /** nextmain-now: 60 ms after the tap: the new main's card (name, level, HP, XP) and sprite are already there. */
     @Test fun now() = paparazzi.shootWith("nextmain-now", sizes, offsetMillis = 60) { ctx ->
         val b = BattleShotKit.bound(ctx)
-        b.call("switchMain")
+        b.call("switchMain", "t2")
         b.root
     }
 
     /** nextmain-done: 2 s after the tap, the switch animation is over. */
     @Test fun done() = paparazzi.shootWith("nextmain-done", sizes, offsetMillis = 2000) { ctx ->
         val b = BattleShotKit.bound(ctx)
-        b.call("switchMain")
+        b.call("switchMain", "t2")
         b.root
     }
 
@@ -47,7 +47,7 @@ class NextMainShots {
         val b = BattleShotKit.bound(Shots.files(paparazzi.context))
         b.player!!.enqueue(listOf(GameEvent.Info("one"), GameEvent.Info("two"), GameEvent.Info("three")))
         assertFalse(b.player!!.idle)
-        b.call("switchMain")
+        b.call("switchMain", "t2")
         assertEquals("t2", b.arena!!.playerUid)
         assertEquals("t2", GameRepo.state!!.main!!.uid)
         assertEquals("${GameRepo.state!!.main!!.name} is your main now.", Ui.lastToast)
@@ -59,7 +59,9 @@ class NextMainShots {
         FakeGame.install(ctx)
         var b = BattleShotKit.bound(ctx)
         var rows = menuRows(b)
-        assertEquals(listOf("Team", "Pokédex", "Shop", "Settings", "Next team member as main", "Stats"), rows.map { it.second })
+        // with a wild Pokémon on stage the last entry flips catch <-> defeat (its label says what a tap does)
+        assertEquals(listOf("Pop out", "Team", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log"), rows.filter { it.first != 9 }.map { it.second })
+        assertTrue(rows.first { it.first == 9 }.second in listOf("Catch this one", "Defeat it instead (XP)"))
         assertTrue(rows.first { it.first == 5 }.third)
 
         FakeGame.scenario = FakeGame.Scenario.EMPTY
@@ -68,10 +70,11 @@ class NextMainShots {
         val m = AppMenu(b.root)
         b.activity.fillMenu(m)
         rows = m.describe()
-        assertEquals(listOf("Team", "Pokédex", "Shop", "Settings", "Next team member as main", "Stats"), rows.map { it.second })
+        assertEquals(listOf("Pop out", "Team", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log"), rows.filter { it.first != 9 }.map { it.second })
         assertFalse(rows.first { it.first == 5 }.third)
         assertEquals("Needs 2+ Pokémon in your team", m.subOf(5))
-        assertEquals("Stats", rows.last().second)
+        assertEquals("Pop out", rows.first().second)
+        assertEquals("Small battle window over other apps", m.subOf(8))
     }
 
     private fun menuRows(b: BattleShotKit.Built): List<Triple<Int, String, Boolean>> {
@@ -83,7 +86,7 @@ class NextMainShots {
     /** The tap while three events (about 2.4 s of animation) are still queued. */
     private fun busy(b: BattleShotKit.Built) {
         b.player!!.enqueue(listOf(GameEvent.Info("one"), GameEvent.Info("two"), GameEvent.Info("three")))
-        b.call("switchMain")
+        b.call("switchMain", "t2")
     }
 
     /** nextmain-busy-now: 300 ms after the tap, the queue still plays: the panel must show the new main already. */

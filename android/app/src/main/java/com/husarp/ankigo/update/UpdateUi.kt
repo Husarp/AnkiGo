@@ -25,10 +25,12 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.annotation.ColorRes
 import com.husarp.ankigo.R
+import com.husarp.ankigo.ui.BarMeaning
 import com.husarp.ankigo.ui.BarView
 import com.husarp.ankigo.ui.DisplayNumbers
 import com.husarp.ankigo.ui.Form
 import com.husarp.ankigo.ui.Ui
+import com.husarp.ankigo.ui.setMeaning
 
 private fun open(ctx: Context, url: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
@@ -92,7 +94,7 @@ private class UpdateProgress(ctx: Context) : LinearLayout(ctx) {
         text.text = when (p) {
             Updates.Phase.Idle -> ""
             is Updates.Phase.Downloading -> {
-                bar.set(p.percent / 100f, Ui.c(context, R.color.ag_mauve), false)
+                bar.setMeaning(BarMeaning.PROGRESS, p.percent / 100f, false)
                 DisplayNumbers.progress(p.done, p.total, p.elapsedMs)
             }
             Updates.Phase.NeedsPermission -> "Allow \"Install unknown apps\" for AnkiGo, then come back - the update carries on by itself."

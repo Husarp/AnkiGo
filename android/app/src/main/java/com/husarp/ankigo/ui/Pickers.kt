@@ -312,7 +312,7 @@ object Bits {
         MonPreview.show(ctx, mon.species, mon.shiny, img)
         addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
         addView(bodyText(ctx, (if (mon.shiny) "★ " else "") + mon.name, sub))
-        addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { text = "Lv ${mon.level}" })
+        addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { LevelTier.style(this, mon.level) })
     }
 
     fun hpText(data: GameData, mon: Mon): String = "HP ${mon.hp}/${StatCalc.maxHp(data, mon)}"

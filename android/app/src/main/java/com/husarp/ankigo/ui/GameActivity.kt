@@ -57,6 +57,8 @@ class GameActivity : AgActivity() {
     private lateinit var content: FrameLayout
     private lateinit var nav: View
     private lateinit var topBar: View        // slim "Battle" bar with Stats and ⋯; only in a tall window
+    private lateinit var continueSlot: FrameLayout // "Continue studying" bar under the top bar (PLAN 92); empty/gone unless a deck is due
+    private var continueDeck: Anki.Deck? = null
 
     private var panel: BattlePanelView? = null
     private var player: EventPlayer? = null
@@ -108,6 +110,8 @@ class GameActivity : AgActivity() {
         }
         topBar = buildTopBar().also { it.visibility = View.GONE }
         root.addView(topBar, LinearLayout.LayoutParams(-1, -2))
+        continueSlot = FrameLayout(this).also { it.visibility = View.GONE }
+        root.addView(continueSlot, LinearLayout.LayoutParams(-1, -2))
         content = FrameLayout(this)
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         nav = BottomNav.create(this, BottomNav.Tab.BATTLE).also { it.visibility = View.GONE }
@@ -118,17 +122,19 @@ class GameActivity : AgActivity() {
             val want = if (tall && !inPip) View.VISIBLE else View.GONE
             if (nav.visibility != want) nav.visibility = want
             if (topBar.visibility != want) { topBar.visibility = want; panel?.setFooterTools(want != View.VISIBLE) }
+            updateContinueVisibility()
         }
         return root
     }
 
-    /** The slim top bar of a tall window: title "Battle" and the Stats and ⋯ buttons (a short window has them in the panel footer). */
+    /** The slim top bar of a tall window: title "Battle" and the Pop out, Stats and ⋯ buttons (a short window has them in the panel footer). */
     private fun buildTopBar(): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setBackgroundColor(Ui.c(this@GameActivity, R.color.ag_base))
         setPadding(Ui.dp(this@GameActivity, 16), Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 8), Ui.dp(this@GameActivity, 4))
         addView(Ui.text(this@GameActivity, 18f, 900, R.color.ag_text).apply { text = "Battle"; maxLines = 1; letterSpacing = -0.014f }, LinearLayout.LayoutParams(0, -2, 1f))
+        addView(topButton(R.drawable.ic_pip, "Pop out: small battle window") { popOut() })
         addView(topButton(R.drawable.ic_stats, "Stats") { openStats() })
         addView(topButton(R.drawable.ic_more_vert, "Menu") { showMenu(it) })
     }
@@ -156,6 +162,58 @@ class GameActivity : AgActivity() {
         }
     }
 
+    /** The Continue bar shows only under the top bar (tall window), never in PiP, and only while a deck is due. */
+    private fun updateContinueVisibility() {
+        val want = if (continueDeck != null && topBar.visibility == View.VISIBLE && !inPip) View.VISIBLE else View.GONE
+        if (continueSlot.visibility != want) continueSlot.visibility = want
+    }
+
+    /** Shows the Continue bar for [deck] (null removes it). */
+    internal fun setContinueDeck(deck: Anki.Deck?) {
+        continueDeck = deck
+        continueSlot.removeAllViews()
+        if (deck != null) continueSlot.addView(ContinueBar.build(this, deck, { openContinue(deck) }, { ContinueBar.hideToday(this); continueGen++; setContinueDeck(null) }))
+        updateContinueVisibility()
+    }
+
+    /** Which Continue load may still apply its result: bumped by every new load and by the × (so a late result is dropped). */
+    private var continueGen = 0
+
+    /** Reads AnkiDroid's deck list off the main thread; no permission or no AnkiDroid means no bar. Never blocks the battle. */
+    private fun loadContinue() {
+        val gen = ++continueGen
+        if (!Anki.hasPermission(this) || Anki.installed(this).none { it.pkg == Anki.pkg }) { setContinueDeck(null); return }
+        Thread {
+            val deck = runCatching { ContinueBar.pick(this, Anki.decks(this)) }.getOrNull()
+            runOnUiThread {
+                if (destroyed || gen != continueGen) return@runOnUiThread
+                // the × may have been tapped while the thread ran: the hidden-day rule is checked again here
+                setContinueDeck(deck?.takeIf { ContinueBar.hiddenDay(this) != ContinueBar.today() })
+            }
+        }.start()
+    }
+
+    /** Like the Study tab's CONTINUE card: "Tapping a deck opens AnkiDroid" is honoured. */
+    private fun openContinue(deck: Anki.Deck) {
+        if (getSharedPreferences("study", 0).getBoolean("inAnkiDroid", false)) {
+            // we come back to the battle (that is where the bar is): an older Study hand-over must not send the next resume or Back to the Study tab
+            studyReturn.ownScreenOpened()
+            Thread {
+                val ok = runCatching { Anki.selectDeck(this, deck.id) }.isSuccess
+                runOnUiThread {
+                    if (destroyed) return@runOnUiThread
+                    if (ok) runCatching { startActivity(Anki.reviewIntent(deck.id)) }.onFailure { Ui.toast(this, "Open AnkiDroid once first") }
+                    else Ui.toast(this, "Couldn't select this deck")
+                }
+            }.start()
+            return
+        }
+        studyReturn.ownScreenOpened()
+        internalNav = true
+        updatePipParams()
+        startActivity(Intent(this, com.husarp.ankigo.StudyActivity::class.java).putExtra("deckId", deck.id).putExtra("deckName", deck.name))
+    }
+
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent) }
 
     override fun onResume() {
@@ -174,6 +232,7 @@ class GameActivity : AgActivity() {
         internalNav = false
         updatePipParams()
         FloatBattleService.startIfWanted(this)
+        loadContinue()
         if (bound) {
             panel?.refreshPrefs()   // Settings may have changed the card layout / compact cards while we were away
             val events = act { it.tick() }
@@ -270,6 +329,41 @@ class GameActivity : AgActivity() {
         }
     }
 
+    private fun pipAvailable(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+
+    private fun enterPip() {
+        try {
+            enterPictureInPictureMode(pipParams())
+        } catch (t: Throwable) {
+            Report.fail("PANEL", "pop out pip", t)
+            Ui.toast(this, "Could not open picture-in-picture")
+        }
+    }
+
+    /**
+     * Pop out (PLAN 24): the battle as a floating window when the leave mode is FLOAT or the device has no PiP,
+     * else as picture-in-picture. Works with any leave mode, is not "leaving" (internalNav / studyReturn untouched),
+     * does nothing when already in PiP. The floating window needs the overlay permission (explained once; if it was
+     * explained before and is still missing, PiP is used when the device has it).
+     */
+    fun popOut() {
+        if (inPip || !bound || destroyed) return
+        val pip = pipAvailable()
+        if (PopOutPlan.useFloat(AppPrefs.leaveMode(this), pip)) {
+            if (!Overlay.canDraw(this)) {
+                if (Overlay.askOnce(this, "The floating battle window shows your battle over AnkiDroid while you study.")) return
+                if (pip) { enterPip(); return }
+                Ui.toast(this, "Allow “Display over other apps” in Settings to pop out")
+                return
+            }
+            FloatBattleService.startPopOut(this)
+            moveTaskToBack(true)
+        } else {
+            enterPip()
+        }
+    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
@@ -277,6 +371,7 @@ class GameActivity : AgActivity() {
         panel?.setCompact(inPip)
         // the layout listener re-decides the bottom bar by height; force it now so it doesn't flash in PiP
         if (inPip) { nav.visibility = View.GONE; topBar.visibility = View.GONE; panel?.setFooterTools(true) } else content.requestLayout()
+        updateContinueVisibility()
     }
 
     /** The PiP buttons Pause and Resume come back as broadcasts (the Open button starts this activity directly). */
@@ -353,10 +448,11 @@ class GameActivity : AgActivity() {
         val p = BattlePanelView(this)
         p.onGrant = { internalNav = true; updatePipParams(); requestPermissions(arrayOf(Anki.permission), REQ_PERMISSION) }
         p.onMenu = { showMenu(it) }
+        p.addToolButton(R.drawable.ic_pip, "Pop out: small battle window") { popOut() }
         p.addToolButton(R.drawable.ic_stats, "Stats") { openStats() }
         p.setFooterTools(topBar.visibility != View.VISIBLE)
         p.onBalls = { showBallDialog() }
-        p.arena.onCatchTagTap = { toggleCatch() }
+        p.arena.onPlayerTap = { openMainDetails() }
         p.setPaused(LiveSession.paused)
         if (inPip) p.setCompact(true)
         panel = p
@@ -487,15 +583,18 @@ class GameActivity : AgActivity() {
         LiveSession.refreshWidgetsFor(this, events)
     }
 
-    /** The ⋯ menu entries. "Next team member as main" is greyed with the reason under it when it can't work. */
+    /** The ⋯ menu entries. "Switch Pokémon" is greyed with the reason under it when it can't work. */
     internal fun fillMenu(m: AppMenu) {
+        m.item(8, "Pop out", R.drawable.ic_pip, sub = "Small battle window over other apps", dividerAfter = true)
         m.item(1, "Team", R.drawable.ic_team)
         m.item(2, "Pokédex", R.drawable.ic_book)
         m.item(3, "Shop", R.drawable.ic_shop)
         m.item(4, "Settings", R.drawable.ic_settings)
         val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
-        m.item(5, "Next team member as main", R.drawable.ic_swap, enabled = blocker == null, sub = blocker)
+        m.item(5, "Switch Pokémon", R.drawable.ic_swap, enabled = blocker == null, sub = blocker)
         m.item(6, "Stats", R.drawable.ic_stats)
+        m.item(7, "Battle log", R.drawable.ic_swords)
+        catchMenuLabel()?.let { m.item(9, it, R.drawable.ic_ball) }
     }
 
     private fun showMenu(anchor: View) {
@@ -507,8 +606,11 @@ class GameActivity : AgActivity() {
                 2 -> openScreen(FloatPage.DEX, DexActivity::class.java)
                 3 -> openScreen(FloatPage.SHOP, ShopActivity::class.java)
                 4 -> openScreen(FloatPage.SETTINGS, SettingsActivity::class.java)
-                5 -> switchMain()
+                5 -> openSwitchPopup()
                 6 -> openStats()
+                7 -> openStats(BattleLogActivity::class.java)
+                9 -> toggleCatch()
+                8 -> popOut()
             }
         }
     }
@@ -526,11 +628,11 @@ class GameActivity : AgActivity() {
     }
 
     /** Stats are always their own Activity, also in split screen. */
-    private fun openStats() {
+    private fun openStats(screen: Class<*> = StatsActivity::class.java) {
         studyReturn.ownScreenOpened()
         internalNav = true
         updatePipParams()
-        startActivity(Intent(this, StatsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
+        startActivity(Intent(this, screen).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
     }
 
     /**
@@ -538,10 +640,10 @@ class GameActivity : AgActivity() {
      * stays visible; if the overlay permission is missing it is explained once and the screen comes back after it is
      * granted. Full screen, or anything else: the normal Activity.
      */
-    private fun openScreen(page: FloatPage, cls: Class<*>) {
+    private fun openScreen(page: FloatPage, cls: Class<*>, showUid: String? = null) {
         if (isInMultiWindowMode && AppPrefs.floatScreens(this)) {
             if (Overlay.canDraw(this)) {
-                if (FloatScreens.open(this, page)) return
+                if (FloatScreens.open(this, page, showUid)) return
             } else if (Overlay.askOnce(this, "Team, Pokédex, Shop and Settings can open in a small window over AnkiDroid, so the battle stays visible.")) {
                 return
             }
@@ -549,11 +651,26 @@ class GameActivity : AgActivity() {
         studyReturn.ownScreenOpened()
         internalNav = true
         updatePipParams()
-        startActivity(Intent(this, cls).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
+        startActivity(Intent(this, cls).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION).also { if (showUid != null) it.putExtra(TeamActivity.EXTRA_SHOW_UID, showUid) })
     }
 
-    private fun switchMain() {
-        val r = try { GameRepo.run(this) { it.cycleMain() } } catch (t: Throwable) { Report.fail("PANEL", "cycleMain", t); return }
+    /** Tap on our Pokémon (PLAN 86): the Team screen with its details; not while an animation plays or without a main. */
+    private fun openMainDetails() {
+        if (inPip || player?.idle == false) return
+        val uid = GameRepo.state?.main?.uid ?: return
+        openScreen(FloatPage.TEAM, TeamActivity::class.java, uid)
+    }
+
+    /** "Switch Pokémon" (PLAN 99): the team as a grid popup; the picked one becomes the main. */
+    private fun openSwitchPopup() {
+        val data = GameRepo.data ?: return
+        val st = GameRepo.state ?: return
+        SwitchPopup.show(this, data, st) { switchMain(it) }
+    }
+
+    private fun switchMain(uid: String) {
+        if (GameRepo.state?.main?.uid == uid) return
+        val r = try { GameRepo.run(this) { it.setMain(uid) } } catch (t: Throwable) { Report.fail("PANEL", "setMain", t); return }
         if (r.message.isNotEmpty()) Ui.toast(this, r.message)
         // The new main shows at once, not after the animations still waiting; then the short "Go, X!" plays.
         if (r.events.any { it is GameEvent.MainChanged }) player?.finishNow()
@@ -575,10 +692,16 @@ class GameActivity : AgActivity() {
             .setNegativeButton("Cancel", null).showCard()
     }
 
-    /** Optional: tap the catch tag to flip catch <-> defeat for this fight. */
+    /** The ⋯ entry that flips catch <-> defeat for this fight: its label says what a tap will do; null when no wild Pokémon is on stage. */
+    private fun catchMenuLabel(): String? {
+        if (GameRepo.state?.battle == null) return null
+        val will = try { GameRepo.game?.willCatch() } catch (t: Throwable) { null } ?: return null
+        return if (will) "Defeat it instead (XP)" else "Catch this one"
+    }
+
+    /** One-off: flip catch <-> defeat for this fight (the ⋯ menu entry). */
     private fun toggleCatch() {
-        val st = GameRepo.state ?: return
-        val battle = st.battle ?: return
+        if (GameRepo.state?.battle == null) return
         val g = GameRepo.game ?: return
         val before = try { g.willCatch() } catch (t: Throwable) { return }
         try {
@@ -588,7 +711,6 @@ class GameActivity : AgActivity() {
             return
         }
         val after = g.willCatch()
-        panel?.arena?.setCatchTag(after, battle.wild.species !in st.caught)
         Ui.toast(this, when {
             after != before && after -> "Will catch it"
             after != before -> "Will defeat it instead (XP)"

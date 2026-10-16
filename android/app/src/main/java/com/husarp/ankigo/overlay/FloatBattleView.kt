@@ -118,6 +118,7 @@ internal class FloatBattleView(
             p.setCompact(true)
             p.setCornerClearance(Ui.dp(window.context, 26)) // keeps the log clear of the resize grip
             p.onGrant = { onOpenGame() } // the permission dialog needs an activity
+            p.arena.onPlayerTap = { openMainDetails() }
             panel = p
             player = EventPlayer(p)
             message = null
@@ -144,6 +145,13 @@ internal class FloatBattleView(
         }
     }
 
+    /** Tap on our Pokémon (PLAN 86): the Team floating page with its details; not while an animation plays or without a main. */
+    private fun openMainDetails() {
+        val uid = GameRepo.state?.main?.uid ?: return
+        if (player?.idle == false) return
+        if (!FloatScreens.open(app, FloatPage.TEAM, uid)) Ui.toast(app, "Turn on “Display over other apps” for AnkiGo to open this here")
+    }
+
     /** The ⋯ menu: [AppMenu] hung on the header button's window (the overlay), same entries as the battle screen's. */
     private fun showMenu() {
         val m = AppMenu(menuButton)
@@ -151,8 +159,8 @@ internal class FloatBattleView(
         menu = m
         m.show { id ->
             menu = null
-            if (id == 5) { // no Activity here: its own task
-                app.startActivity(android.content.Intent(app, StatsActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            if (id == 5 || id == 6) { // no Activity here: its own task
+                app.startActivity(android.content.Intent(app, if (id == 5) StatsActivity::class.java else com.husarp.ankigo.ui.BattleLogActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
                 return@show
             }
             val page = when (id) {
@@ -172,5 +180,6 @@ internal class FloatBattleView(
         m.item(3, "Shop", R.drawable.ic_shop)
         m.item(4, "Settings", R.drawable.ic_settings)
         m.item(5, "Stats", R.drawable.ic_stats)
+        m.item(6, "Battle log", R.drawable.ic_swords)
     }
 }

@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -283,7 +284,7 @@ internal class ProgressBlock(ctx: Context) : LinearLayout(ctx) {
 
     fun show(fraction: Float, text: String) {
         label.text = text
-        bar.set(fraction, Ui.c(context, R.color.ag_mauve), false)
+        bar.setMeaning(BarMeaning.PROGRESS, fraction, false)
     }
 }
 
@@ -307,6 +308,7 @@ internal class BgJob {
     @Volatile var listener: (() -> Unit)? = null
 
     private val main = Handler(Looper.getMainLooper())
+    private val gate = UpdateGate(UPDATE_GAP_MS)
 
     val running get() = state == State.RUNNING
 
@@ -315,12 +317,44 @@ internal class BgJob {
         ping()
     }
 
-    fun progress(f: Float, text: String) { fraction = f.coerceIn(0f, 1f); label = text; ping() }
+    fun progress(f: Float, text: String) { fraction = f.coerceIn(0f, 1f); label = text; ping(urgent = false) }
     fun done(text: String = "") { fraction = 1f; label = text; state = State.DONE; ping() }
     fun fail(message: String) { error = message; state = State.FAILED; ping() }
     fun cancel() { cancelled = true }
     /** Back to IDLE after the screen has shown a finished/failed result. */
     fun reset() { state = State.IDLE; error = null; cancelled = false; ping() }
 
-    private fun ping() { main.post { listener?.invoke() } }
+    /**
+     * Tells the screen to re-read the fields. At most one message is waiting at any time, and progress ticks are
+     * spaced [UPDATE_GAP_MS] apart, so workers finishing hundreds of files a second can't flood the main thread.
+     */
+    private fun ping(urgent: Boolean = true) {
+        val delay = gate.request(SystemClock.uptimeMillis(), urgent)
+        if (delay < 0) return
+        main.postDelayed({
+            gate.fired(SystemClock.uptimeMillis())
+            listener?.invoke()
+        }, delay)
+    }
+
+    companion object { const val UPDATE_GAP_MS = 100L }
+}
+
+/**
+ * Decides when a screen update is posted: one at a time, and (unless urgent) not sooner than [minGapMs] after the last
+ * one ran. Pure, so it can be tested without a Looper.
+ */
+internal class UpdateGate(private val minGapMs: Long) {
+    private var last = Long.MIN_VALUE / 2
+    private var waiting = false
+
+    /** Delay in ms for the post the caller must make now, or -1 when an update is already waiting (it reads the latest state). */
+    @Synchronized fun request(now: Long, urgent: Boolean): Long {
+        if (waiting) return -1
+        waiting = true
+        return if (urgent) 0 else (last + minGapMs - now).coerceIn(0, minGapMs)
+    }
+
+    /** Call when the posted update starts running. */
+    @Synchronized fun fired(now: Long) { waiting = false; last = now }
 }

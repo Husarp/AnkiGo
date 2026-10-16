@@ -78,12 +78,23 @@
         <activity android:name=".ui.ShopActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.SettingsActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.StatsActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".ui.BattleLogActivity" android:theme="@style/GameTheme" android:exported="false" />
 
         <activity android:name=".ui.StudyDecksActivity" android:theme="@style/GameTheme" android:exported="false" />
 
         <!-- Study widget deck picker: the launcher starts it when the widget is added / reconfigured; AnkiGo starts it from "Change deck". -->
         <activity
             android:name=".ui.StudyWidgetSetupActivity"
+            android:theme="@style/GameTheme"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- Buddy widget Pokémon picker: started by the launcher when the widget is added / reconfigured. -->
+        <activity
+            android:name=".ui.BuddyWidgetSetupActivity"
             android:theme="@style/GameTheme"
             android:exported="true">
             <intent-filter>
