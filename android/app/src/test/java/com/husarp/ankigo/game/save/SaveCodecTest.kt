@@ -57,6 +57,8 @@ class SaveCodecTest {
         s.redo[9_999_999_999_999L] = 2; s.redo[42L] = 1; s.redo[-7L] = 3
         s.liveDay = "2026-10-13"
         s.liveSnapshot = "{\"cards\":{\"1\":\"a \\\"q\\\"\"}}\nline2\r\n\ttab é ♀   end"
+        s.unsupported += com.husarp.ankigo.game.UnsupportedMon("u-1", 4000, "Futuremon", "Fu \"Z\"", 33, true, "species #4000 isn't in AnkiGo's data", "{\"id\": 4000, \"name\": \"futuremon\"}")
+        s.unsupported += com.husarp.ankigo.game.UnsupportedMon("u-2", null, "#?", null, 1, false, "no species number", null)
         s.starterChosen = true; s.catches = 11; s.defeats = 22; s.evolutions = 3
         val st = s.settings
         st.gens.clear(); st.gens += setOf(1, 3, 9)
@@ -140,6 +142,31 @@ class SaveCodecTest {
         val s = fullState()
         s.battle!!.override = null
         assertNull(SaveCodec.decode(SaveCodec.encode(s)).battle!!.override)
+    }
+
+    @Test fun unsupportedPokemonSurviveSaveAndLoadWithTheirRawData() {
+        val b = SaveCodec.decode(SaveCodec.encode(fullState()))
+        assertEquals(listOf("u-1", "u-2"), b.unsupported.map { it.ankimonId })
+        val u = b.unsupported[0]
+        assertEquals(4000, u.speciesId); assertEquals("Futuremon", u.name); assertEquals("Fu \"Z\"", u.nickname)
+        assertEquals(33, u.level); assertTrue(u.shiny); assertEquals("{\"id\": 4000, \"name\": \"futuremon\"}", u.raw)
+        assertNull(b.unsupported[1].speciesId); assertNull(b.unsupported[1].raw)
+    }
+
+    @Test fun anOldSaveWithoutUnsupportedLoadsWithNone() {
+        val o = JSONObject(SaveCodec.encode(fullState()))
+        o.remove("unsupported")
+        val b = SaveCodec.decode(o.toString())
+        assertEquals(5, b.mons.size)
+        assertTrue(b.unsupported.isEmpty())
+    }
+
+    @Test fun anUnreadableUnsupportedEntryIsSkippedNotFatal() {
+        val o = JSONObject(SaveCodec.encode(fullState()))
+        o.getJSONArray("unsupported").put(JSONObject().put("name", "no id"))
+        val b = SaveCodec.decode(o.toString())
+        assertEquals(listOf("u-1", "u-2"), b.unsupported.map { it.ankimonId })
+        assertEquals(5, b.mons.size)
     }
 
     @Test fun unknownFieldsAreIgnored() {

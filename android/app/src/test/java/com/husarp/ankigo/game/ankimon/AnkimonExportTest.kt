@@ -312,7 +312,7 @@ class AnkimonExportTest {
         assertEquals("[\"Tackle\", \"Moon Hammer\", \"Quick Attack\"]", members(img.dataOf("fake"))["attacks"])
         monOf(st, "fake").moves += "slash"
         export(st, img)
-        assertEquals("[\"tackle\", \"quickattack\", \"slash\"]", members(img.dataOf("fake"))["attacks"])
+        assertEquals("[\"tackle\", \"quickattack\", \"slash\", \"Moon Hammer\"]", members(img.dataOf("fake"))["attacks"]) // a move AnkiGo doesn't know stays while there is room
     }
 
     @Test fun anEvolvedPokemonGetsItsNewSpeciesAndADefaultNicknameFollows() { // "leaf-ling" is a default one for Ankimon (_normalize_nick)

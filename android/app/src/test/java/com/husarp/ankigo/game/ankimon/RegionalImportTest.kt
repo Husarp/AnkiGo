@@ -66,8 +66,10 @@ class RegionalImportTest {
         val state = GameState().also { it.settings.gens.remove(9) }
         val (r, st) = run(save(am("p", 10250, "Tauros-Paldea-Combat")), state)
         assertTrue(st.mons.isEmpty())
-        assertEquals(1, r.skipped.size)
-        assertTrue(r.skipped.single().contains("generation 9"))
+        assertTrue(r.skipped.isEmpty())
+        assertEquals(1, r.unsupported.size)
+        assertTrue(r.unsupported.single().contains("generation 9"))
+        assertEquals(1, st.unsupported.size)
         val (r2, st2) = run(save(am("p", 10250, "Tauros-Paldea-Combat")), GameState().also { it.settings.gens += 9 })
         assertEquals(10250, st2.mons.single().species)
         assertEquals(1, r2.added)

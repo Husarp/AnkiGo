@@ -14,6 +14,33 @@ object CardHtml {
     private const val SPEAKER = "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" aria-hidden=\"true\"><path fill=\"#fff\" d=\"M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 8v8a4.5 4.5 0 0 0 2.5-4zM14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z\"/></svg>"
     private val TYPE = Regex("""\[\[type:(.+?)]]""")
 
+    /**
+     * Notes with a footer/header styled position:fixed or sticky: on a phone that floats over the text (and the footer
+     * vanishes or hides lines on a long card). Such an element goes back into normal flow, so it scrolls with the card;
+     * one that sat in the lower half of the view (a footer) is moved after the text and pushed to the bottom of a short
+     * card, like AnkiDroid shows it, without covering anything. Others (headers, plain elements) are untouched.
+     */
+    const val UNFIX_JS = """(function(){
+var body=document.body,qa=document.getElementById('qa');if(!qa)return;
+var vh=window.innerHeight||document.documentElement.clientHeight,list=[];
+body.querySelectorAll('*').forEach(function(el){
+ if(el.closest('.ag-hint'))return;
+ var p=getComputedStyle(el).position;if(p!=='fixed'&&p!=='sticky')return;
+ for(var i=0;i<list.length;i++)if(list[i].el.contains(el))return;
+ var r=el.getBoundingClientRect();
+ list.push({el:el,bottom:p==='fixed'&&r.top+r.height/2>vh/2});
+});
+if(!list.length)return;
+var anchor=qa.nextSibling;
+list.forEach(function(it){
+ var el=it.el,s=el.style;
+ s.setProperty('position','static','important');
+ ['top','bottom','left','right','inset','transform'].forEach(function(k){s.setProperty(k,'auto','important')});
+ s.setProperty('transform','none','important');
+ if(it.bottom){s.setProperty('margin-top','auto','important');body.insertBefore(el,anchor);qa.style.margin='auto 0 0'}
+});
+})();"""
+
     /** [av] = every sound and speech of the page in document order (a button's number is its index); [autoplay] = the part that plays by itself; [sounds] = the sound files of that part. */
     data class Page(val html: String, val sounds: List<String>, val notes: List<String>, val av: List<TtsRules.Av> = emptyList(), val autoplay: List<TtsRules.Av> = emptyList())
 
@@ -108,7 +135,7 @@ window.onerror=function(m,s,l){try{AnkiGo.jsError(m+' @'+s+':'+l)}catch(e){}};
 </script>
 ${if (body.contains("\\(") || body.contains("\\[")) """<script async src="https://ankigo.media/mathjax/tex-mml-chtml.js"
  onload="AnkiGo.mathjax('loaded')" onerror="AnkiGo.mathjax('FAILED')"></script>""" else ""}
-</head><body class="card card${ord + 1} chrome${if (dark) " nightMode night_mode" else ""}"><div id="qa">$body</div>${if (side == "q") "<div class=\"ag-hint\">Tap the card to show the answer</div>" else ""}<script>
+</head><body class="card card${ord + 1} chrome${if (dark) " nightMode night_mode" else ""}"><div id="qa">$body</div>${if (side == "q") "<div class=\"ag-hint\">Tap the card to show the answer</div>" else ""}<script>$UNFIX_JS</script><script>
 ${if (side == "q") "document.addEventListener('click',function(e){if(!e.target.closest('input,a,button,textarea,select'))AnkiGo.flip()});" else ""}
 document.addEventListener('contextmenu',function(e){e.preventDefault();AnkiGo.actions()});
 document.querySelectorAll('img').forEach(function(i){

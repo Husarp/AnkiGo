@@ -47,6 +47,11 @@ class StudyTimingTest {
         assertEquals("12:00", StudyTiming.clock(720_000)); assertEquals("0:00", StudyTiming.clock(-5))
         assertEquals("Answer time 0:07", StudyTiming.timerDescription(7_000))
     }
+    @Test fun clockIsMinutesAndSecondsNeverPlainSeconds() {
+        assertEquals("1:23", StudyTiming.clock(83_000)); assertEquals("0:59", StudyTiming.clock(59_999)); assertEquals("1:00", StudyTiming.clock(60_000))
+        assertEquals("59:59", StudyTiming.clock(3_599_000)); assertEquals("60:00", StudyTiming.clock(3_600_000)) // the deck's longest max time
+        assertEquals("Answer time 1:23", StudyTiming.timerDescription(83_000))
+    }
     @Test fun takenIsBankedPlusRunningAndCapped() {
         assertEquals(5_000L, StudyTiming.taken(5_000, 0, 99_000, 60_000))            // paused: only what is banked
         assertEquals(8_000L, StudyTiming.taken(5_000, 10_000, 13_000, 60_000))       // running

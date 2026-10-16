@@ -108,7 +108,12 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
     internal fun renderEmbedded() = render()
 
     /** Pick mode or ticks changed: bind the visible cells again. */
-    internal fun refreshCells() = adapter.notifyDataSetChanged()
+    internal fun refreshCells() {
+        for (i in 0 until list.childCount) {
+            val row = list.getChildAt(i) as? CellRow ?: continue // the header view is not a CellRow
+            for (f in row.cells) bindPick(f)
+        }
+    }
 
     /** A filter changed: an embedded page draws itself (nobody listens for it), a standalone one asks to be drawn. */
     private fun redraw() { if (embedded) render() else requestRender() }
@@ -123,7 +128,7 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
         refilter()
 
         topBox.removeAllViews()
-        if (!Ui.shortWindow(this)) hero()?.let { topBox.addView(it) } // no room for the "last caught" card in a short window
+        if (!Ui.shortWindow(this)) cachedHero()?.let { topBox.addView(it) } // no room for the "last caught" card in a short window
         topBox.addView(progress(enabled, compact = Ui.shortWindow(this)))
         segBox.removeAllViews()
         segmented()
@@ -147,6 +152,21 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
     }
 
     // ---- hero ----
+
+    // The hero card keeps its running sprite animation across filter changes: it is rebuilt only when what it shows changed.
+    private var heroView: View? = null
+    private var heroKey: List<Any?>? = null
+
+    private fun cachedHero(): View? {
+        val last = state.mons.maxByOrNull { it.caughtAt }
+        val mon = last ?: state.main
+        val key = if (mon == null) null else listOf(mon.uid, mon.species, mon.shiny, mon.level, mon.name, mon.caughtAt, last == null)
+        if (key != heroKey || (key != null && heroView == null)) {
+            heroKey = key
+            heroView = hero()
+        }
+        return heroView
+    }
 
     private fun hero(): View? {
         val last = state.mons.maxByOrNull { it.caughtAt }
@@ -324,7 +344,9 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
 
     // ---- grid cells (mockup .dexgrid) ----
 
-    private class Cell(val num: TextView, val img: ImageView, val name: TextView, val dot: View, val star: TextView, val check: ImageView)
+    private class Cell(val num: TextView, val img: ImageView, val name: TextView, val dot: View, val star: TextView, val check: ImageView) {
+        var sp: Species? = null
+    }
 
     private fun makeCell(f: SquareFrame) {
         val ctx = this
@@ -359,8 +381,24 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
 
     private val greyed = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
 
+    /** The tick part of a cell: frame stroke, badge, and the "caught" dot it replaces while picking. */
+    private fun bindPick(f: SquareFrame) {
+        val cell = f.tag as Cell
+        val sp = cell.sp ?: return
+        val st = state
+        val caught = sp.num in st.caught
+        val seen = caught || sp.num in st.seen
+        val picking = pickHost?.picking == true
+        val picked = picking && seen && pickHost?.isPicked(ComparePick.Dex(sp.num)) == true
+        f.background = PickKit.cardBg(this, 12, picked)
+        // while picking, seen entries show the tick badge where the "caught" dot sits
+        cell.dot.visibility = if (caught && !(picking && seen)) View.VISIBLE else View.GONE
+        PickKit.bindBadge(cell.check, picking && seen, picked)
+    }
+
     private fun bindCell(f: SquareFrame, sp: Species?) {
         val cell = f.tag as Cell
+        cell.sp = sp
         if (sp == null) {
             f.visibility = View.INVISIBLE
             f.setOnClickListener(null)
@@ -374,11 +412,7 @@ class DexPage(base: Context, host: PageHost, private val pickHost: PickHost? = n
         cell.star.visibility = if (sp.num in st.settings.wishlist) View.VISIBLE else View.GONE
         val picking = pickHost?.picking == true
         val pick = ComparePick.Dex(sp.num)
-        val picked = picking && seen && pickHost?.isPicked(pick) == true
-        f.background = PickKit.cardBg(this, 12, picked)
-        // while picking, seen entries show the tick badge where the "caught" dot sits
-        cell.dot.visibility = if (caught && !(picking && seen)) View.VISIBLE else View.GONE
-        PickKit.bindBadge(cell.check, picking && seen, picked)
+        bindPick(f)
         Ui.staticSprite(this, sp.num, false, cell.img, silhouette = !seen)
         if (seen && !caught) {
             // seen only: grey sprite (mockup .seen)

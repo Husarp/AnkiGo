@@ -8,7 +8,6 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -20,7 +19,7 @@ import com.husarp.ankigo.R
 
 /**
  * The app's own ⋯ menu: a rounded `ag_card` popup with Nunito rows and tinted icons, anchored under the tapped view
- * (right-aligned; PopupWindow flips it above when there is no room). Works in an Activity and in an overlay window
+ * (right-aligned; [MenuPlacement] flips it above, slides it sideways and scrolls it so it never leaves the screen). Works in an Activity and in an overlay window
  * (floating battle / cards), because a PopupWindow hangs on the anchor's window.
  * Use: `AppMenu(anchor).header("Title").item(1, "Team", R.drawable.ic_team).show { id -> … }`.
  */
@@ -51,15 +50,28 @@ class AppMenu(private val anchor: View) {
         intercept?.let { it(this); return }
         val ctx = anchor.context
         val card = content(ctx)
-        val maxW = Ui.dp(ctx, MAX_DP + 2 * PAD_DP)
+        // Everything in the anchor window's coordinates; the visible display frame (screen minus system bars, or the split / PiP
+        // window) is the box the menu must stay inside.
+        val frame = android.graphics.Rect().also { anchor.getWindowVisibleDisplayFrame(it) }
+        val onScreen = IntArray(2).also { anchor.getLocationOnScreen(it) }
+        val inWindow = IntArray(2).also { anchor.getLocationInWindow(it) }
+        val dx = onScreen[0] - inWindow[0]
+        val dy = onScreen[1] - inWindow[1]
+        val bounds = MenuPlacement.Box(frame.left - dx, frame.top - dy, frame.right - dx, frame.bottom - dy)
+        val maxW = minOf(Ui.dp(ctx, MAX_DP + 2 * PAD_DP), bounds.width)
         card.measure(View.MeasureSpec.makeMeasureSpec(maxW, View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-        val pw = PopupWindow(card, card.measuredWidth, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        val pad = Ui.dp(ctx, PAD_DP)
+        val spot = MenuPlacement.place(
+            MenuPlacement.Box(inWindow[0], inWindow[1], inWindow[0] + anchor.width, inWindow[1] + anchor.height),
+            card.measuredWidth, card.measuredHeight, bounds, pad, Ui.dp(ctx, MIN_ROOM_DP),
+        )
+        val pw = PopupWindow(card, spot.width, spot.height, true)
         pw.setBackgroundDrawable(ColorDrawable(0))
         pw.isOutsideTouchable = true
+        pw.setIsClippedToScreen(true)
         pw.setOnDismissListener { if (window === pw) window = null }
         window = pw
-        val pad = Ui.dp(ctx, PAD_DP)
-        pw.showAsDropDown(anchor, pad, -pad / 2, Gravity.END)
+        pw.showAtLocation(anchor, Gravity.TOP or Gravity.START, spot.x, spot.y)
     }
 
     private var picked: (Int) -> Unit = {}
@@ -143,6 +155,7 @@ class AppMenu(private val anchor: View) {
         private const val MIN_DP = 200
         private const val MAX_DP = 300
         private const val PAD_DP = 10
+        private const val MIN_ROOM_DP = 140
 
         /** Screenshot / unit tests set this to take a menu instead of showing it (a renderer has no window for it). Null in the app. */
         internal var intercept: ((AppMenu) -> Unit)? = null

@@ -232,9 +232,14 @@ object AnkimonImportFlow {
             missing.visibility = if (gone == null) android.view.View.GONE else android.view.View.VISIBLE
             missing.text = gone ?: ""
             val lines = r.skipped + read.save.problems
-            skipped.visibility = if (lines.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
-            skipped.text = (if (lines.isEmpty()) "" else "Skipped:\n") + lines.take(SHOW_SKIPPED).joinToString("\n") +
-                if (lines.size > SHOW_SKIPPED) "\nand ${lines.size - SHOW_SKIPPED} more" else ""
+            fun block(title: String, l: List<String>) = if (l.isEmpty()) "" else
+                "$title\n" + l.take(SHOW_SKIPPED).joinToString("\n") + if (l.size > SHOW_SKIPPED) "\nand ${l.size - SHOW_SKIPPED} more" else ""
+            val text = listOf(
+                block("Kept as Not supported yet (they stay safe and turn into Pokémon when AnkiGo knows them):", r.unsupported),
+                block("Skipped:", lines),
+            ).filter { it.isNotEmpty() }.joinToString("\n\n")
+            skipped.visibility = if (text.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+            skipped.text = text
         }
         fill(firstReport)
         box.setOnCheckedChangeListener { _, on ->

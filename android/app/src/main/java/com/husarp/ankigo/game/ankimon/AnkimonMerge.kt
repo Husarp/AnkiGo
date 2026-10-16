@@ -13,6 +13,7 @@ import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.Tier
 import com.husarp.ankigo.game.Tuning
+import com.husarp.ankigo.game.UnsupportedMon
 import java.text.Normalizer
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -27,7 +28,7 @@ data class ImportReport(
     val added: Int,
     val upgraded: Int,
     val unchanged: Int,
-    val skipped: List<String>,                       // "<name or #id>: <reason>"
+    val skipped: List<String>,                       // "<name or #id>: <reason>": not imported at all (released on this phone)
     val seenAdded: Int,
     val caughtAdded: Int,
     val cashBefore: Int,
@@ -37,6 +38,7 @@ data class ImportReport(
     val teamChanged: Boolean,
     val xpShareChanged: Boolean = false,             // the file's Exp. Share holder became the game's
     val notInFile: Int = 0,                          // Pokémon on the phone that were on the PC once but aren't in this file (they stay)
+    val unsupported: List<String> = emptyList(),     // "<name or #id>: <reason>": newly kept as "Not supported yet" (raw data kept, shown greyed)
 ) {
     /** One short line, e.g. "adds 37 Pokémon, upgrades 4; Pokédex +12; ₽ 3,100 → 12,400; 5 items" ("nothing new" when empty). */
     fun summary(): String {
@@ -46,6 +48,7 @@ data class ImportReport(
             added > 0 -> parts += "adds $added Pokémon"
             upgraded > 0 -> parts += "upgrades $upgraded Pokémon"
         }
+        if (unsupported.isNotEmpty()) parts += "keeps ${unsupported.size} as Not supported yet"
         val dex = maxOf(seenAdded, caughtAdded)
         if (dex > 0) parts += "Pokédex +$dex"
         if (cashAfter != cashBefore) parts += "₽ ${money(cashBefore)} → ${money(cashAfter)}"
@@ -85,6 +88,7 @@ object AnkimonMerge {
         var upgraded = 0
         var unchanged = 0
         val skipped = mutableListOf<String>()
+        val keptUnsupported = mutableListOf<String>()
         val importedSpecies = LinkedHashSet<Int>()
 
         for (m in save.mons) {
@@ -92,7 +96,16 @@ object AnkimonMerge {
             val existing = byAnkimonId[m.individualId]
             if (existing == null && m.individualId in state.releasedAnkimon) { skipped += "$label: released on this phone"; continue }
             val (sp, reason) = resolveSpecies(data, state, m, formBase, nameIndex)
-            if (sp == null) { skipped += "$label: $reason"; continue }
+            if (sp == null) {
+                if (existing != null) { unchanged++; continue } // already a Pokémon here: it stays as it is
+                when (keepUnsupported(state, m, reason)) {
+                    Kept.NEW -> keptUnsupported += "$label: $reason"
+                    Kept.FULL -> skipped += "$label: too many Pokémon AnkiGo can't use yet"
+                    Kept.SAME -> {}
+                }
+                continue
+            }
+            state.unsupported.removeAll { it.ankimonId == m.individualId } // known now: it becomes a normal Pokémon below
             importedSpecies += sp.num
             val attackMoves = attackMoves(data, m)
             if (existing == null) {
@@ -106,6 +119,9 @@ object AnkimonMerge {
                 if (upgrade(data, existing, fileMon, attackMoves)) upgraded++ else unchanged++
             }
         }
+
+        // Kept ones from an earlier import that are known now (this file doesn't need to have them).
+        added += reviveUnsupported(data, state, formBase, now)
 
         val teamChanged = mergeTeam(state, save, byAnkimonId, useTeam)
         // The file's Exp. Share holder, when it is in the game: with Ankimon's team, or when the phone has none.
@@ -144,8 +160,58 @@ object AnkimonMerge {
             added = added, upgraded = upgraded, unchanged = unchanged, skipped = skipped,
             seenAdded = state.seen.size - seenBefore, caughtAdded = state.caught.size - caughtBefore,
             cashBefore = cashBefore, cashAfter = state.cash, itemsRaised = raised, tmsAdded = tmsAdded, teamChanged = teamChanged,
-            xpShareChanged = xpShareChanged, notInFile = notInFile,
+            xpShareChanged = xpShareChanged, notInFile = notInFile, unsupported = keptUnsupported,
         )
+    }
+
+    // ---- "Not supported yet" ---------------------------------------------------------------------------------------
+
+    /** Most "Not supported yet" Pokémon the game keeps; more would only grow the save (their rows stay in the kept Ankimon file). */
+    const val MAX_UNSUPPORTED = 5_000
+
+    private enum class Kept { NEW, SAME, FULL }
+
+    /** Keeps [m] as a "Not supported yet" entry (replacing an older entry of the same Pokémon). NEW: first time seen; SAME: already kept. */
+    private fun keepUnsupported(state: GameState, m: AnkimonMon, reason: String): Kept {
+        val old = state.unsupported.indexOfFirst { it.ankimonId == m.individualId }
+        if (old < 0 && state.unsupported.size >= MAX_UNSUPPORTED) return Kept.FULL
+        val entry = UnsupportedMon(
+            ankimonId = m.individualId, speciesId = m.id, name = m.name ?: m.id?.let { "#$it" } ?: "Pokémon ${m.individualId.take(8)}",
+            nickname = m.nickname?.take(NICKNAME_MAX), level = (m.level ?: 1).coerceAtLeast(1), shiny = m.shiny, reason = reason,
+            raw = m.raw ?: state.unsupported.getOrNull(old)?.raw, // a file read without raw rows must not wipe what is kept
+        )
+        if (old >= 0) state.unsupported[old] = entry else state.unsupported += entry
+        return if (old >= 0) Kept.SAME else Kept.NEW
+    }
+
+    /**
+     * Turns every "Not supported yet" entry whose species AnkiGo knows now (data update, generation switched on) into a
+     * normal Pokémon, from its raw Ankimon data. Entries without raw data wait for the next import of the file. Returns how many
+     * became Pokémon. Pure and deterministic (same uid as an import of the same row would give).
+     */
+    fun reviveUnsupported(data: GameData, state: GameState, formBase: (Int) -> Int?, now: Long): Int {
+        if (state.unsupported.isEmpty()) return 0
+        val nameIndex = nameIndex(data)
+        val haveIds = HashSet<String>().also { s -> for (m in state.mons) s += m.ankimonId ?: m.uid }
+        val takenUids = state.mons.mapTo(HashSet()) { it.uid }
+        var revived = 0
+        val iter = state.unsupported.iterator()
+        while (iter.hasNext()) {
+            val u = iter.next()
+            if (u.ankimonId in haveIds) { iter.remove(); continue } // already a Pokémon (e.g. an older import): never twice
+            val raw = u.raw ?: continue
+            val m = AnkimonSaveReader.monFromRaw(u.ankimonId, raw) ?: continue
+            val (sp, _) = resolveSpecies(data, state, m, formBase, nameIndex)
+            if (sp == null) continue
+            val mon = buildMon(data, m, sp, newUid(m.individualId, takenUids), now, attackMoves(data, m))
+            state.mons += mon
+            takenUids += mon.uid
+            state.seen += sp.num
+            state.caught += sp.num
+            iter.remove()
+            revived++
+        }
+        return revived
     }
 
     /**

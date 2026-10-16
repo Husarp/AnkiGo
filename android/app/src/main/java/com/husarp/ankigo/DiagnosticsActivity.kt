@@ -79,6 +79,7 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
         row("C3 Media: pick media folder" to { pickTree() }, "C3 Media: import .apkg" to { pickApkg() })
         row("C6 Stats probe" to { c6() }, "C7 Snapshot" to { snapshot() }, "C7 Compare" to { compare() })
         row("LIVE watch (study in AnkiDroid, split screen)" to { startActivity(Intent(this, LiveWatchActivity::class.java)) })
+        row("Pictures: owned Pokémon without one" to { checkPictures() })
         row("C8 Pin motivation widget" to { pin(MotivationWidget::class.java) }, "C8 Pin study widget" to { pin(StudyWidget::class.java) })
         row("Updates (version ${Updates.current(this)})" to { startActivity(Intent(this, UpdatesActivity::class.java)) })
         row("Share report" to { share() }, "Copy report" to { copy() }, "Clear log" to { Report.clear(); GameLog.clear(); logView.text = "" })
@@ -157,6 +158,29 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             if (results.getOrNull(i) == 0) Report.ok("C1", "permission granted: $p") else Report.fail("C1", "permission denied: $p (if no dialog appeared: is AnkiDroid installed BEFORE this app? reinstall AnkiGo)")
         }
         refreshHeader(log = true)
+    }
+
+    // ---------- pictures ----------
+    /** Lists the owned Pokémon (box and team) with no usable Pokédex picture, then tries each again and says why it failed. */
+    private fun checkPictures() = bg.execute {
+        val tag = "PICS"
+        try {
+            val state = GameRepo.state
+            val data = GameRepo.data
+            if (state == null || data == null) { Report.log(tag, "the game isn't loaded yet; open the game once and try again"); return@execute }
+            val keys = state.mons.map { it.species to it.shiny }
+            val gaps = com.husarp.ankigo.data.Sprites.pictureGaps(this, keys)
+            val name = { n: Int -> data.species[n]?.name ?: "?" }
+            if (gaps.isEmpty()) { Report.ok(tag, "all ${keys.distinct().size} owned Pokémon (by kind) have a picture"); return@execute }
+            Report.log(tag, "${gaps.size} of ${keys.distinct().size} owned kinds have no usable picture:")
+            com.husarp.ankigo.data.Sprites.describeGaps(gaps, name).forEach { Report.log(tag, "  $it") }
+            for (g in gaps) {
+                val r = com.husarp.ankigo.data.Sprites.retryStatic(this, g.num, g.shiny)
+                Report.log(tag, "  retry #${g.num} ${name(g.num)}${if (g.shiny) " (shiny)" else ""}: $r")
+            }
+        } catch (e: Exception) {
+            Report.fail(tag, "picture check", e)
+        }
     }
 
     // ---------- C1 ----------

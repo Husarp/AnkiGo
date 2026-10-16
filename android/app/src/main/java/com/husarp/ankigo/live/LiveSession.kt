@@ -47,6 +47,13 @@ object LiveSession {
     private var lastStatus: Pair<Boolean, String>? = null
 
     private val pendingCatchUp = ArrayList<GameAnswer>()
+
+    /**
+     * Own answers (the card as it is after the answer) whose game step has not run yet: added in [ownAnswer], removed when
+     * the step starts. Saves leave them out of the snapshot (the game has not counted them), and a detector that starts
+     * meanwhile gets them as already known, so a restart neither loses nor counts them twice.
+     */
+    private val pendingOwn = ArrayList<com.husarp.ankigo.CardState>()
     private var flushPosted = false
     private var lastWidgets = 0L
     private var widgetsPosted = false
@@ -111,17 +118,27 @@ object LiveSession {
         val g = GameRepo.game ?: return
         val d = detector ?: LiveDetector(app) { onLive(it) }.also { detector = it }
         if (d.running) return
-        d.start(st.liveSnapshot, st.liveDay, g.dayKey())
+        val today = g.dayKey()
+        if (pendingOwn.isEmpty()) d.start(st.liveSnapshot, st.liveDay, today)
+        else d.start(withPendingOwn(st.liveSnapshot.takeIf { st.liveDay == today }, pendingOwn), today, today)
     }
 
     fun expectOwn(row: com.husarp.ankigo.CardState) { detector?.expectOwn(row.id, row.reps + 1) }
     fun cancelOwn(row: com.husarp.ankigo.CardState) { detector?.cancelOwn(row.id, row.reps + 1) }
 
-    /** Verified own answers use the exact button and absorb their state before saving the game. */
-    fun ownAnswer(ctx: Context, row: com.husarp.ankigo.CardState, button: Int, done: (List<GameEvent>) -> Unit) {
+    /**
+     * Verified own answers use the exact button and absorb their state before saving the game: the game step runs once
+     * the detector has settled the answer (so a poll cannot count it again), and [done] gets its events. The caller does
+     * not have to wait for [done] to go on (the study screen loads the next card at once). [onTiming] gets the
+     * milliseconds this call waited for the detector and the game step took, just before [done].
+     */
+    fun ownAnswer(ctx: Context, row: com.husarp.ankigo.CardState, button: Int, onTiming: (absorbMs: Long, gameMs: Long) -> Unit = { _, _ -> }, done: (List<GameEvent>) -> Unit) {
         app = ctx.applicationContext
+        val asked = SystemClock.elapsedRealtime()
         val finish = {
+            val absorbed = SystemClock.elapsedRealtime()
             flushCatchUp()
+            pendingOwn.remove(row) // from here on the snapshot saved below contains this answer, and the step counts it
             GameLog.answer("study", row.id, button)
             val events = act { g ->
                 saveSnapshotInto(g)
@@ -132,8 +149,10 @@ object LiveSession {
                 g.tick() + g.onAnswer(GameAnswer(row.id, button, System.currentTimeMillis(), false))
             }
             deliver(events)
+            onTiming(absorbed - asked, SystemClock.elapsedRealtime() - absorbed)
             done(events)
         }
+        pendingOwn += row
         detector?.absorbOwn(row, finish) ?: finish()
     }
 
@@ -195,13 +214,14 @@ object LiveSession {
     fun saveSnapshot() {
         val d = detector ?: return
         val st = GameRepo.state ?: return
-        st.liveSnapshot = d.snapshot()
+        if (pendingCatchUp.isNotEmpty()) return // not counted yet: flushCatchUp saves the snapshot together with them
+        st.liveSnapshot = withoutPendingOwn(d.snapshot(), pendingOwn)
         st.liveDay = GameRepo.game?.dayKey()
     }
 
     private fun saveSnapshotInto(g: Game) {
         val d = detector ?: return
-        g.state.liveSnapshot = d.snapshot()
+        g.state.liveSnapshot = withoutPendingOwn(d.snapshot(), pendingOwn)
         g.state.liveDay = g.dayKey()
     }
 

@@ -213,6 +213,8 @@ class PanelFitShots {
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx)
             prefs(ctx, false)
+            // The streak chip shows "12 days" only while the goal day is today/yesterday; pin it so the row width doesn't depend on the date.
+            com.husarp.ankigo.GameRepo.game?.let { g -> com.husarp.ankigo.GameRepo.state?.lastGoalDay = g.dayKey() }
             val small = size.wDp < 400
             val p = if (small) bare(ctx) else BattlePanelView(ctx).also { it.renderAll() }
             val frame = android.widget.FrameLayout(ctx).apply { addView(p, android.widget.FrameLayout.LayoutParams(-1, -1)) }

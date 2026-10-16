@@ -22,7 +22,6 @@ import com.husarp.ankigo.ui.AppPrefs
 import com.husarp.ankigo.ui.BattleScreen
 import com.husarp.ankigo.ui.GameActivity
 import com.husarp.ankigo.ui.LeaveMode
-import com.husarp.ankigo.ui.Ui
 
 /**
  * Foreground service behind the floating battle window (LeaveMode.FLOAT): keeps live detection running while AnkiGo
@@ -64,10 +63,7 @@ class FloatBattleService : Service() {
         if (stopping) return
         val v = FloatBattleView(
             this,
-            onClose = {
-                Ui.toast(this, "Floating battle closed. It comes back when you open AnkiGo again.")
-                finish()
-            },
+            onClose = { finish() },
             onTogglePause = { LiveSession.setPaused(this, !LiveSession.paused) },
             onOpenGame = { openGame() },
         )
@@ -210,7 +206,7 @@ class FloatBattleService : Service() {
     private fun buildNotification(): Notification {
         val paused = LiveSession.paused
         val b = Notification.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_battle)
+            .setSmallIcon(R.drawable.ic_swords)
             .setContentTitle(if (paused) "AnkiGo is paused" else "AnkiGo is following your answers")
             .setContentText(noteText())
             .setContentIntent(openPending())

@@ -45,13 +45,36 @@ object Ui {
 
     // ---------- framework controls: always app colours, never the system accent ----------
 
-    /** Switch thumb/track in the accent (on) and `ag_s1`/`ag_s0` (off). */
+    /**
+     * Material-style switch: 52x32 dp pill. Off: light fill + 2 dp outline, small 16 dp knob left. On: accent fill, no outline,
+     * big 24 dp knob right. The knob is a custom drawable of fixed size (26x32 dp, so the Switch measures 52 dp wide) that draws the 16/24 dp circle itself, so nothing jumps. Disabled = same look, faded.
+     */
     fun tintSwitch(sw: android.widget.Switch) {
         val ctx = sw.context
-        val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
         val acc = c(ctx, R.color.ag_mauve)
-        sw.thumbTintList = android.content.res.ColorStateList(states, intArrayOf(acc, c(ctx, R.color.ag_card)))
-        sw.trackTintList = android.content.res.ColorStateList(states, intArrayOf((acc and 0x00FFFFFF) or 0x88000000.toInt(), c(ctx, R.color.ag_s1)))
+        val fill = c(ctx, R.color.ag_sw_track)
+        val line = c(ctx, R.color.ag_sw_line)
+        val knobOn = c(ctx, R.color.ag_sw_knob_on)
+        val fade = 100
+        fun track(on: Boolean, enabled: Boolean) = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(ctx, 16f)
+            setSize(dp(ctx, 52), dp(ctx, 32))
+            if (on) setColor(acc) else { setColor(fill); setStroke(dp(ctx, 2), line) }
+            if (!enabled) alpha = fade
+        }
+        val chk = android.R.attr.state_checked
+        val en = android.R.attr.state_enabled
+        sw.trackDrawable = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(chk, en), track(true, true))
+            addState(intArrayOf(chk), track(true, false))
+            addState(intArrayOf(en), track(false, true))
+            addState(intArrayOf(), track(false, false))
+        }
+        sw.thumbDrawable = SwitchKnob(ctx, fill = line, onFill = knobOn, fade = fade)
+        sw.thumbTintList = null
+        sw.trackTintList = null
+        sw.showText = false
     }
 
     /** Check box in the accent (checked) and `ag_ov` (unchecked). */
@@ -403,4 +426,35 @@ class AppBar(
 
     /** Changes the pill text (no-op when the bar has no pill). */
     fun setPill(text: String) { pill?.text = text }
+}
+
+/** Switch knob: fixed 26x32 dp box, draws a 16 dp circle (off, left) or a 24 dp circle (on, right) in it. */
+private class SwitchKnob(ctx: Context, private val fill: Int, private val onFill: Int, private val fade: Int) : Drawable() {
+    private val d = ctx.resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var on = false
+    private var enabled = true
+
+    override fun getIntrinsicWidth() = (26 * d + 0.5f).toInt()
+    override fun getIntrinsicHeight() = (32 * d + 0.5f).toInt()
+    override fun isStateful() = true
+    override fun onStateChange(state: IntArray): Boolean {
+        val o = state.contains(android.R.attr.state_checked)
+        val e = state.contains(android.R.attr.state_enabled)
+        val changed = o != on || e != enabled
+        on = o; enabled = e
+        return changed
+    }
+    override fun draw(canvas: Canvas) {
+        val r = (if (on) 12f else 8f) * d
+        // Switch moves the 26 dp box 20 dp... the circle sits 3 dp inside the travel ends so it spans 4..28 (off: 8..24 from the left)
+        val cx = bounds.exactCenterX() + (if (on) -3f else 3f) * d
+        paint.color = if (on) onFill else fill
+        paint.alpha = if (enabled) 255 else fade
+        canvas.drawCircle(cx, bounds.exactCenterY(), r, paint)
+    }
+    override fun setAlpha(a: Int) {}
+    override fun setColorFilter(cf: android.graphics.ColorFilter?) {}
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity() = PixelFormat.TRANSLUCENT
 }

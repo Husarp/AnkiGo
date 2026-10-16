@@ -9,6 +9,7 @@ import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.GameState
+import com.husarp.ankigo.game.ankimon.AnkimonMerge
 import com.husarp.ankigo.game.save.SaveCodec
 import com.husarp.ankigo.game.save.SaveStore
 import java.io.File
@@ -113,6 +114,16 @@ object GameRepo {
                 saveError = "The save could not be read (${e.message ?: e.javaClass.simpleName})."
             }
             saveRead = true
+        }
+        // "Not supported yet" Pokémon whose species this version knows become normal Pokémon (PLAN 67). Before anything shares the state.
+        val loaded = save?.state
+        if (data != null && loaded != null && loaded.unsupported.isNotEmpty()) {
+            try {
+                val forms = DataStore.formBaseMap(app)
+                AnkimonMerge.reviveUnsupported(data, loaded, { forms[it] }, System.currentTimeMillis()) // saved with the next save
+            } catch (e: Throwable) {
+                Report.fail(TAG, "turning Not supported yet Pokémon into Pokémon", e)
+            }
         }
         val result = Loaded(data, save, saveError)
         handler.post { applyLoaded(result) }

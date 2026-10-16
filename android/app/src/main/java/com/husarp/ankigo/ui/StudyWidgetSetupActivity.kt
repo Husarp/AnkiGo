@@ -75,9 +75,8 @@ class StudyWidgetSetupActivity : AgActivity() {
             .apply { setPadding(Ui.dp(context, 4), Ui.dp(context, 4), Ui.dp(context, 4), 0) })
         content.addView(StudyUi.section(this, "Decks", if (default != null) "default = most cards due" else null))
         val columns = StudyUi.row(this).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, 8), Ui.dp(context, 3)) }
-        listOf("New" to R.color.ag_blue, "Lrn" to R.color.ag_red, "Due" to R.color.ag_green).forEach { (name, tone) ->
-            columns.addView(StudyUi.label(this, name, 9.5f, tone, 900).apply { gravity = Gravity.END }, StudyUi.lp(Ui.dp(this, 28), -2))
-        }
+        val countWidth = DeckCounts.columnWidth(this, decks)
+        DeckCounts.addHeader(columns, this, countWidth)
         content.addView(columns)
         if (decks.isEmpty()) content.addView(StudyUi.label(this, "No decks found. Open AnkiDroid once, then try again."))
         for (deck in decks) {
@@ -101,11 +100,7 @@ class StudyWidgetSetupActivity : AgActivity() {
             val parent = deck.name.substringBeforeLast("::", "")
             if (parent.isNotEmpty()) text.addView(StudyUi.ellipsis(StudyUi.label(this, parent.replace("::", " › "), 11, R.color.ag_sub0, 700)), StudyUi.spaced(this, 1))
             row.addView(text, StudyUi.lp(0, -2, 1f).also { it.marginEnd = Ui.dp(this, 6) })
-            listOf(deck.new to R.color.ag_blue, deck.learn to R.color.ag_red, deck.review to R.color.ag_green).forEachIndexed { i, (n, color) ->
-                row.addView(StudyUi.label(this, n.coerceAtLeast(0).toString(), 13, if (n == 0) R.color.ag_ov else color, if (n == 0) 700 else 900).apply {
-                    gravity = Gravity.END; contentDescription = "${listOf("New", "Learn", "Review")[i]} $n"
-                }, StudyUi.lp(Ui.dp(this, 28), -2))
-            }
+            DeckCounts.addTo(row, this, deck, countWidth)
             content.addView(row, StudyUi.lp().also { it.bottomMargin = Ui.dp(this, 5) })
         }
     }

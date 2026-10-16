@@ -319,6 +319,7 @@ object AnkimonExport {
                     refresh(row, id, mon, sp)
                 }
             }
+            restoreUnsupported(nextRowid)
             teamAndMain()
             itemsAndTms()
             cash()
@@ -331,6 +332,27 @@ object AnkimonExport {
             }
             tidyTeam()
             return finish(baseRows)
+        }
+
+        // ---- "Not supported yet" ---------------------------------------------------------------------------------
+
+        /**
+         * Pokémon AnkiGo can't use yet stay in the kept file untouched (they aren't in state.mons, so nothing above looks at
+         * them). Only when the file lacks the row (no kept file, or a different one) is it written back from the raw text
+         * the game kept, exactly as it was. Never when the Pokémon was released, never twice.
+         */
+        fun restoreUnsupported(firstRowid: Long) {
+            var rowid = maxOf(firstRowid, (mons.rows.maxOfOrNull { it.rowid } ?: 0L) + 1)
+            val ours = ids.values.toHashSet() // not values.contains: an IdentityHashMap compares its values by identity
+            for (u in state.unsupported) {
+                val raw = u.raw ?: continue
+                if (u.ankimonId in rowsById || u.ankimonId in state.releasedAnkimon || u.ankimonId in ours) continue
+                val values = mons.columns.map { c ->
+                    when (c.lowercase()) { "individual_id" -> u.ankimonId; "is_main" -> 0L; "data" -> raw; else -> null }
+                }.toMutableList<Any?>()
+                rowsById[u.ankimonId] = SqlRow(rowid++, values).also { mons.rows += it }
+                added++
+            }
         }
 
         // ---- released on the phone -------------------------------------------------------------------------------
@@ -421,7 +443,7 @@ object AnkimonExport {
             if (mon.gender != file.gender) c["gender"] = mon.gender.toString()
             if (mon.shiny != file.shiny) c["shiny"] = mon.shiny
             if (mon.ability != file.ability) c["ability"] = abilityName(mon)
-            if (mon.moves != file.moves) c["attacks"] = mon.moves.take(4)
+            if (mon.moves != file.moves) c["attacks"] = attacks(am, mon)
             // The import cuts friendship at 255, Ankimon doesn't: add AnkiGo's change to what the file really had.
             if (mon.friendship != file.friendship) c["friendship"] = maxOf(0, (am.friendship ?: file.friendship) + mon.friendship - file.friendship)
             if (mon.heldItem != file.heldItem) { c["held_item"] = mon.heldItem; c["everstone"] = mon.heldItem == "everstone" }
@@ -440,6 +462,13 @@ object AnkimonExport {
                 c["stats"] = statMap(st); c["cp"] = cp(base, mon.ivs, mon.evs, level); c["hp"] = st.hp; c["current_hp"] = st.hp
             }
             return c
+        }
+
+        /** AnkiGo's moves, then the file's moves AnkiGo doesn't know (as the file wrote them) while there is room (Ankimon holds 4). */
+        fun attacks(am: AnkimonMon, mon: Mon): List<String> {
+            val mine = mon.moves.take(4)
+            val unknown = am.attacks.filter { a -> a.lowercase().filter { it in 'a'..'z' || it in '0'..'9' } !in data.moves }.distinct()
+            return mine + unknown.take(4 - mine.size)
         }
 
         /** The row's own base_stats when it has all six as positive whole numbers. */
@@ -657,7 +686,7 @@ object AnkimonExport {
 
         /** The file read back through the import's reader must hold what the export meant to write. */
         fun checkReadBack(db: SqliteReader) {
-            val got = AnkimonSaveReader.read(db)
+            val got = AnkimonSaveReader.read(db, keepRaw = false)
             val want = result.readBack
             val r = result.report
             if (want == null) {

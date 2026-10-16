@@ -21,6 +21,9 @@
     <color name="ag_lav">#b4befe</color>
     <color name="ag_mauve">#cba6f7</color>
     <color name="ag_pink">#f5c2e7</color>
+    <color name="ag_sw_track">#313244</color>
+    <color name="ag_sw_line">#9399b2</color>
+    <color name="ag_sw_knob_on">#1e1e2e</color>
     <color name="ag_card">#262637</color>
     <color name="ag_arena_top">#262a40</color>
     <color name="ag_arena_bot">#232a2c</color>

@@ -10,6 +10,7 @@ import com.husarp.ankigo.game.Outcome
 import com.husarp.ankigo.game.Settings
 import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.Tier
+import com.husarp.ankigo.game.UnsupportedMon
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -30,6 +31,7 @@ object SaveCodec {
             kv("schema", state.schema) // first, so a reader can check it before anything else
             kv("seq", state.seq); kv("savedAt", state.savedAt); kv("createdAt", state.createdAt)
             key("mons"); arr { state.mons.forEach { writeMon(this, it) } }
+            key("unsupported"); arr { state.unsupported.forEach { writeUnsupported(this, it) } }
             list("team", state.team)
             key("bag"); obj { for ((k, v) in state.bag.toSortedMap()) kv(k, v) }
             list("tms", state.tms.sorted())
@@ -120,6 +122,11 @@ object SaveCodec {
         kv("nickname", m.nickname); kv("ankimonId", m.ankimonId)
     }
 
+    private fun writeUnsupported(w: W, u: UnsupportedMon) = w.obj {
+        kv("ankimonId", u.ankimonId); kv("speciesId", u.speciesId); kv("name", u.name); kv("nickname", u.nickname)
+        kv("level", u.level); kv("shiny", u.shiny); kv("reason", u.reason); kv("raw", u.raw)
+    }
+
     private fun writeSide(w: W, s: BattleSide) = w.obj {
         list("boosts", s.boosts.toList())
         kv("status", s.status); kv("statusTurns", s.statusTurns)
@@ -190,6 +197,12 @@ object SaveCodec {
         )
     }
 
+    private fun readUnsupported(o: JSONObject): UnsupportedMon = UnsupportedMon(
+        ankimonId = o.getString("ankimonId"), speciesId = o.intOrNull("speciesId"), name = o.str("name", ""),
+        nickname = o.strOrNull("nickname"), level = o.int("level", 1), shiny = o.bool("shiny", false),
+        reason = o.str("reason", ""), raw = o.strOrNull("raw"),
+    )
+
     private fun readSide(o: JSONObject?): BattleSide =
         if (o == null) BattleSide() else BattleSide(
             o.intArray("boosts", 7), o.strOrNull("status"), o.int("statusTurns", 0),
@@ -244,6 +257,13 @@ object SaveCodec {
         s.schema = schema
         s.seq = o.long("seq", 0); s.savedAt = o.long("savedAt", 0); s.createdAt = o.long("createdAt", 0)
         for (i in 0 until monsJson.length()) s.mons += readMon(monsJson.getJSONObject(i))
+        // "Not supported yet" Pokémon (an old save has none). An unreadable entry is skipped: its row is still in the kept Ankimon file.
+        o.optJSONArray("unsupported")?.let { a ->
+            for (i in 0 until a.length()) {
+                val u = try { readUnsupported(a.getJSONObject(i)) } catch (e: Exception) { null } ?: continue
+                if (s.unsupported.none { it.ankimonId == u.ankimonId }) s.unsupported += u
+            }
+        }
         // A uid that isn't in mons leaves the team; the Pokémon themselves are never touched.
         val known = s.mons.map { it.uid }.toSet()
         s.team += (o.strList("team") ?: emptyList()).filter { it in known }

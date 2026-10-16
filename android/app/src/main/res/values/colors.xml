@@ -21,6 +21,10 @@
     <color name="ag_lav">#7287fd</color>
     <color name="ag_mauve">#8839ef</color>
     <color name="ag_pink">#ea76cb</color>
+    <!-- Switch (settings): off track fill, off outline + knob, on knob -->
+    <color name="ag_sw_track">#e6e9ef</color>
+    <color name="ag_sw_line">#7c7f93</color>
+    <color name="ag_sw_knob_on">#ffffff</color>
     <color name="ag_card">#ffffff</color>
     <color name="ag_arena_top">#dfe6f5</color>
     <color name="ag_arena_bot">#e9efe3</color>

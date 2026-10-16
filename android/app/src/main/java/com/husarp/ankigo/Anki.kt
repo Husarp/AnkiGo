@@ -20,6 +20,16 @@ object Anki {
     data class Installed(val pkg: String, val versionName: String, val versionCode: Long, val providerSpec: Int?, val providerFound: Boolean)
     data class Deck(val id: Long, val name: String, val learn: Int, val review: Int, val new: Int, val dyn: Boolean) {
         val total get() = learn + review + new
+
+        companion object {
+            /** A deck from one row of the selected-deck URI (columns as strings). deck_count is JSON [learn, review, new], like [decks]. Null without an id or counts. */
+            fun from(row: Map<String, String?>): Deck? {
+                val id = row["deck_id"]?.toLongOrNull() ?: return null
+                val counts = try { JSONArray(row["deck_count"] ?: return null) } catch (_: org.json.JSONException) { return null }
+                val dyn = row["deck_dyn"]
+                return Deck(id, row["deck_name"] ?: "?", counts.optInt(0), counts.optInt(1), counts.optInt(2), dyn == "1" || dyn == "true")
+            }
+        }
     }
     data class Review(val nid: Long, val ord: Int, val buttons: Int, val nextTimes: List<String>, val media: List<String>)
     data class Note(val id: Long, val mid: Long, val fields: List<String>, val tags: String)
@@ -106,6 +116,9 @@ object Anki {
     }
 
     fun selectedDeck(ctx: Context): List<Map<String, String?>> = rows(ctx.contentResolver.query(uri("selected_deck"), null, null, null, null))
+
+    /** The selected deck with its counts (one deck, not the whole list like [decks]); null when there are none. */
+    fun selectedDeckInfo(ctx: Context): Deck? = selectedDeck(ctx).firstOrNull()?.let { Deck.from(it) }
 
     fun nextCards(ctx: Context, deckId: Long, limit: Int = 1): List<Review> {
         val c = ctx.contentResolver.query(uri("schedule"), null, "limit=?, deckID=?", arrayOf(limit.toString(), deckId.toString()), null)

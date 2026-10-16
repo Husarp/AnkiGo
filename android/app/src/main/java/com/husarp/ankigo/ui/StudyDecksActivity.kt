@@ -4,7 +4,6 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
-import android.view.MotionEvent
 import android.view.Gravity
 import android.view.View
 import android.graphics.Color
@@ -22,6 +21,7 @@ class StudyDecksActivity : AgActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var content: LinearLayout
     private lateinit var appBar: AppBar
+    private lateinit var pull: PullRefreshLayout
     private val prefs by lazy { getSharedPreferences("study", 0) }
     private var decks = emptyList<Anki.Deck>()
     private var expanded = emptySet<Long>()
@@ -40,18 +40,13 @@ class StudyDecksActivity : AgActivity() {
     internal fun buildContent(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@StudyDecksActivity, R.color.ag_base)) }
         appBar = Ui.appBar(this, "Study", "AnkiDroid")
-        appBar.addView(StudyUi.iconButton(this, R.drawable.ic_sync, "Refresh decks") { refresh() }, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)))
+        appBar.addView(StudyUi.iconButton(this, R.drawable.ic_sync, "Refresh decks") { refresh(true) }, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)))
         appBar.addView(StudyUi.iconButton(this, R.drawable.ic_settings, "Settings") { startActivity(Intent(this, SettingsActivity::class.java)) }, StudyUi.lp(Ui.dp(this, 30), Ui.dp(this, 30)))
         root.addView(appBar)
         content = StudyUi.column(this).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
         val scroll = ScrollView(this).apply { addView(content, android.widget.FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
-        var down = 0f
-        scroll.setOnTouchListener { _, e ->
-            if (e.actionMasked == MotionEvent.ACTION_DOWN) down = e.y
-            if (e.actionMasked == MotionEvent.ACTION_UP && scroll.scrollY == 0 && e.y - down > Ui.dp(this, 80)) refresh()
-            false
-        }
-        root.addView(scroll, StudyUi.lp(-1, 0, 1f))
+        pull = PullRefreshLayout(this, scroll).apply { onRefresh = { refresh(true) } }
+        root.addView(pull, StudyUi.lp(-1, 0, 1f))
         root.addView(BottomNav.create(this, BottomNav.Tab.STUDY))
         return root
     }
@@ -59,13 +54,16 @@ class StudyDecksActivity : AgActivity() {
     override fun onStop() { BattleScreen.setVisible(this, false); super.onStop() }
     override fun onResume() { super.onResume(); FloatBattleService.startIfWanted(this); refresh() }
     override fun onDestroy() { generation++; io.shutdown(); super.onDestroy() }
-    private fun refresh() {
+    /** [byUser]: pulled down or the refresh button: the spinner shows. Otherwise (screen came back) a shown list stays until the new one is there. */
+    private fun refresh(byUser: Boolean = false) {
         val token = ++generation
-        content.removeAllViews(); content.addView(StudyUi.label(this, "Loading decks…"))
+        if (byUser) pull.setRefreshing(true)
+        if (decks.isEmpty()) { content.removeAllViews(); content.addView(StudyUi.label(this, "Loading decks…")) }
         io.execute {
             val result = runCatching { if (!Anki.hasPermission(this)) error("Allow AnkiGo to use AnkiDroid first."); Anki.decks(this) }
             runOnUiThread {
                 if (isDestroyed || token != generation) return@runOnUiThread
+                pull.setRefreshing(false)
                 result.onSuccess { decks = it.sortedBy { d -> d.name }; pruneExpanded(); render() }.onFailure { showAccessProblem(it.message) }
             }
         }
@@ -143,9 +141,8 @@ class StudyDecksActivity : AgActivity() {
         if (GameRepo.data == null) content.addView(StudyUi.label(this, "Study works without game data. Download battle data in Settings to play.", 12), StudyUi.spaced(this, 8))
         content.addView(StudyUi.section(this, "Decks", "tap = study here · ↗ = in AnkiDroid"))
         val columns = StudyUi.row(this).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, 50), Ui.dp(context, 3)) }
-        listOf("New" to R.color.ag_blue, "Lrn" to R.color.ag_red, "Due" to R.color.ag_green).forEach { (name, tone) ->
-            columns.addView(StudyUi.label(this, name, 9.5f, tone, 900).apply { gravity = Gravity.END }, StudyUi.lp(Ui.dp(this, 28), -2))
-        }
+        val countWidth = DeckCounts.columnWidth(this, decks)
+        DeckCounts.addHeader(columns, this, countWidth)
         content.addView(columns)
         if (decks.isEmpty()) content.addView(StudyUi.label(this, "No decks found. Open AnkiDroid once, then refresh."))
         for (r in DeckTree.rows(decks, expanded)) {
@@ -176,11 +173,7 @@ class StudyDecksActivity : AgActivity() {
                 setPadding(Ui.dp(context, 5), Ui.dp(context, 1), Ui.dp(context, 5), Ui.dp(context, 1))
             }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 5) })
             row.addView(name, StudyUi.lp(0, -2, 1f).also { it.marginEnd = Ui.dp(this, 6); it.topMargin = Ui.dp(this, 8); it.bottomMargin = Ui.dp(this, 8) })
-            listOf(deck.new to R.color.ag_blue, deck.learn to R.color.ag_red, deck.review to R.color.ag_green).forEachIndexed { i, (n, color) ->
-                row.addView(StudyUi.label(this, n.coerceAtLeast(0).toString(), 13, if (n == 0) R.color.ag_ov else color, if (n == 0) 700 else 900).apply {
-                    gravity = Gravity.END; contentDescription = "${listOf("New", "Learn", "Review")[i]} $n"
-                }, StudyUi.lp(Ui.dp(this, 28), -2))
-            }
+            DeckCounts.addTo(row, this, deck, countWidth)
             row.addView(companionButton(deck), StudyUi.lp(Ui.dp(this, 48), Ui.dp(this, 48)))
             content.addView(row, StudyUi.lp().also { it.marginStart = Ui.dp(this, r.depth * 16); it.bottomMargin = Ui.dp(this, 5) })
         }

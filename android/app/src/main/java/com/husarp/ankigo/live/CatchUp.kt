@@ -78,3 +78,33 @@ fun catchUp(
     }
     return out
 }
+
+/**
+ * [snapshot] plus the own answers [rows] whose game step has not run yet (each card as it is after the answer), for a
+ * detector that starts meanwhile: its baseline then counts nothing for them, the absorb still waiting counts each once.
+ * No or unreadable snapshot = empty. A card the snapshot already has at the same or a later rep is left alone.
+ */
+fun withPendingOwn(snapshot: String?, rows: List<CardState>): String? {
+    if (rows.isEmpty()) return snapshot
+    val map = LinkedHashMap(snapshot?.let { runCatching { decode(it) }.getOrNull() } ?: emptyMap())
+    for (r in rows) if ((map[r.id]?.reps ?: -1) < r.reps) map[r.id] = r
+    return encode(map)
+}
+
+/**
+ * [snapshot] as it must be saved while the own answers [rows] (each card as it is after the answer) are not counted by
+ * the game yet: those cards are taken back by one rep per row the snapshot already contains (a card that was new
+ * before leaves the map). A restart before the game step then catches each up once; rows the snapshot has not reached
+ * yet change nothing. Unreadable snapshot: returned as it is.
+ */
+fun withoutPendingOwn(snapshot: String, rows: List<CardState>): String {
+    if (rows.isEmpty()) return snapshot
+    val map = try { LinkedHashMap(decode(snapshot)) } catch (e: Exception) { return snapshot }
+    for ((id, mine) in rows.groupBy { it.id }) {
+        val e = map[id] ?: continue
+        val back = e.reps - mine.count { it.reps <= e.reps }
+        if (back == e.reps) continue
+        if (back <= 0) map.remove(id) else map[id] = e.copy(reps = back)
+    }
+    return encode(map)
+}

@@ -278,8 +278,10 @@ class AnkimonMergeTest {
         state.cash = 100
         state.bag["poke-ball"] = 5
         val first = merge(richSave(), state, useTeam = true, formBase = formBase)
-        assertEquals(4, first.added) // main, leaf, bird, form (future gen 9 and unknown are skipped)
-        assertEquals(2, first.skipped.size)
+        assertEquals(4, first.added) // main, leaf, bird, form (future gen 9 and unknown are kept as Not supported yet)
+        assertEquals(2, first.unsupported.size)
+        assertEquals(2, state.unsupported.size)
+        assertEquals(0, first.skipped.size)
         val afterFirst = SaveCodec.encode(state)
 
         val second = merge(richSave(), state, useTeam = true, formBase = formBase)
@@ -491,7 +493,7 @@ class AnkimonMergeTest {
         assertEquals(listOf(25, 1, 16, 230, 201), state.mons.map { it.species })
         assertEquals(listOf("Sparkmouse", "Leafling", "Birdie", "Mr. Test", "Hen"), state.mons.map { it.name })
         assertEquals(5, r.added)
-        assertEquals(listOf("Zzz-Form: form 10200 isn't known", "#10201: form 10201 isn't known"), r.skipped)
+        assertEquals(listOf("Zzz-Form: form 10200 isn't known", "#10201: form 10201 isn't known"), r.unsupported)
         assertTrue(25 in state.caught && 230 in state.caught)
     }
 
@@ -500,7 +502,8 @@ class AnkimonMergeTest {
         val save = sv(am("g9", 906, name = "Futuremon"), am("g8", 905, name = "Gen8mon"))
         val r = merge(save, state)
         assertEquals(listOf("Gen8mon"), state.mons.map { it.name })
-        assertEquals(listOf("Futuremon: gen 9: turn on generation 9 in Settings to import it"), r.skipped)
+        assertEquals(listOf("Futuremon: gen 9: turn on generation 9 in Settings to import it"), r.unsupported)
+        assertEquals(listOf("Futuremon"), state.unsupported.map { it.name })
         assertFalse(906 in state.caught)
 
         state.settings.gens += 9
@@ -508,6 +511,7 @@ class AnkimonMergeTest {
         assertEquals(1, r2.added)
         assertEquals(1, r2.unchanged)
         assertEquals(emptyList<String>(), r2.skipped)
+        assertTrue(state.unsupported.isEmpty()) // it became a normal Pokémon
         assertTrue(906 in state.caught)
     }
 
@@ -530,8 +534,10 @@ class AnkimonMergeTest {
                 "Charmeleon: species #4 isn't in AnkiGo's data", "Zero: no species number", "#-3: no species number",
                 "Nameless: no species number", "Pokémon e: no species number", "#4000: species #4000 isn't in AnkiGo's data",
             ),
-            r.skipped,
+            r.unsupported,
         )
+        assertTrue(r.skipped.isEmpty())
+        assertEquals(6, state.unsupported.size)
         assertEquals(1, r.added)
     }
 
@@ -704,7 +710,7 @@ class AnkimonMergeTest {
             am("up", 1, level = 9), am("same", 1, level = 5), am("new1", 16), am("new2", 16), am("bad", 4, name = "Bad"),
         ), state)
         assertEquals(2, r.added); assertEquals(1, r.upgraded); assertEquals(1, r.unchanged)
-        assertEquals(listOf("Bad: species #4 isn't in AnkiGo's data"), r.skipped)
+        assertEquals(listOf("Bad: species #4 isn't in AnkiGo's data"), r.unsupported)
         assertEquals(4, state.mons.size)
     }
 

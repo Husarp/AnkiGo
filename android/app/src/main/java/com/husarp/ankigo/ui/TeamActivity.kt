@@ -39,6 +39,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private lateinit var teamCol: LinearLayout
     private lateinit var boxList: ListView
     private lateinit var boxHeader: LinearLayout
+    private lateinit var unsupportedBox: LinearLayout // "Not supported yet" (PLAN 67), the end of the Box list
     private lateinit var dexBody: View
     private lateinit var pickBar: LinearLayout
     private lateinit var pickHint: TextView
@@ -47,15 +48,14 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private val dexPage by lazy { DexPage(this, host, this) }
     private var box: List<Mon> = emptyList()
 
-    private var section: TeamSection = start ?: TeamSection.of(prefs().getString(PREF_SECTION, null))
+    // The Team tab always opens on Team (R1-02): the section chosen inside a visit is kept only while this page lives.
+    private var section: TeamSection = start ?: TeamSection.TEAM
     private var editing = false
     private var pickOn = false
     private val picks = PickSet()
 
     override val picking: Boolean get() = pickOn
     override fun isPicked(p: ComparePick): Boolean = picks.has(p)
-
-    private fun prefs() = applicationContext.getSharedPreferences("ankigo_ui", Context.MODE_PRIVATE)
 
     private val adapter = object : BaseAdapter() {
         override fun getCount() = (box.size + COLS - 1) / COLS
@@ -102,6 +102,10 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             orientation = LinearLayout.VERTICAL
             setPadding(gap, 0, gap, 0)
         }
+        unsupportedBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(gap, Ui.dp(this@TeamPage, 8), gap, 0)
+        }
         boxList = ListView(this).apply {
             divider = null
             dividerHeight = 0
@@ -109,6 +113,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             setPadding(0, 0, 0, gap)
             clipToPadding = false
             addHeaderView(boxHeader, null, false)
+            addFooterView(unsupportedBox, null, false)
             adapter = this@TeamPage.adapter
         }
         dexBody = dexPage.embeddedBody()
@@ -156,6 +161,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         drawBar(team.size)
         drawTeam(team)
         drawBoxHeader()
+        UnsupportedBox.bind(unsupportedBox, st)
         adapter.notifyDataSetChanged()
         dexPage.renderEmbedded()
         teamScroll.visibility = if (section == TeamSection.TEAM) View.VISIBLE else View.GONE
@@ -170,11 +176,10 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         if (s == section) return
         section = s
         editing = false
-        prefs().edit().putString(PREF_SECTION, s.name).apply()
         requestRender()
     }
 
-    /** Test hook: opens the page on [s] without saving it as the remembered section. */
+    /** Test hook: opens the page on [s]. */
     internal fun preset(s: TeamSection = section, edit: Boolean = false, pick: List<ComparePick>? = null) {
         section = s
         editing = edit
@@ -246,10 +251,20 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         refreshPicks()
     }
 
-    /** A tick changed: redraw the rows and cells (not the whole page) and the bottom bar. */
+    /**
+     * A tick changed: update only the tick (frame + badge) of the rows and cells, and the pick bar. The rows are not rebuilt
+     * (that would restart their running sprite animations) and the lists are not re-bound.
+     */
     private fun refreshPicks() {
-        drawTeam(state.teamMons())
-        adapter.notifyDataSetChanged()
+        for ((uid, r) in teamRows) {
+            val picked = picks.has(ComparePick.Owned(uid))
+            r.row.background = PickKit.cardBg(this, 14, picked)
+            PickKit.bindBadge(r.badge, true, picked)
+        }
+        for (i in 0 until boxList.childCount) {
+            val row = boxList.getChildAt(i) as? CellRow ?: continue
+            for (f in row.cells) bindPick(f)
+        }
         dexPage.refreshCells()
         drawPickBar()
     }
@@ -268,7 +283,13 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     // ---- team section ----
 
+    private class TeamRow(val row: View, val badge: ImageView)
+
+    /** The team rows by uid, for [refreshPicks]; only filled while picking (the badge exists then). */
+    private val teamRows = HashMap<String, TeamRow>()
+
     private fun drawTeam(team: List<Mon>) {
+        teamRows.clear()
         teamCol.removeAllViews()
         teamCol.addView(trainerCard())
         teamCol.addView(teamHeader(team.size))
@@ -469,6 +490,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             val badge = PickKit.badge(ctx)
             PickKit.bindBadge(badge, true, picked)
             row.addView(badge, LinearLayout.LayoutParams(Ui.dp(ctx, 26), Ui.dp(ctx, 26)).also { it.marginStart = Ui.dp(ctx, 6) })
+            teamRows[mon.uid] = TeamRow(row, badge)
         }
         return row
     }
@@ -525,7 +547,9 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     // ---- box cells (mockup .boxgrid) ----
 
-    private class Cell(val img: ImageView, val lv: TextView, val star: TextView, val held: ImageView, val check: ImageView)
+    private class Cell(val img: ImageView, val lv: TextView, val star: TextView, val held: ImageView, val check: ImageView) {
+        var uid: String? = null
+    }
 
     private fun makeCell(f: SquareFrame) {
         val ctx = this
@@ -551,8 +575,18 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         f.tag = Cell(img, lv, star, held, check)
     }
 
+    /** The tick part of a box cell: frame stroke + badge. */
+    private fun bindPick(f: SquareFrame) {
+        val cell = f.tag as Cell
+        val uid = cell.uid ?: return
+        val picked = pickOn && picks.has(ComparePick.Owned(uid))
+        f.background = PickKit.cardBg(this, 10, picked)
+        PickKit.bindBadge(cell.check, pickOn, picked)
+    }
+
     private fun bindCell(f: SquareFrame, mon: Mon?) {
         val cell = f.tag as Cell
+        cell.uid = mon?.uid
         if (mon == null) {
             f.visibility = View.INVISIBLE
             f.setOnClickListener(null)
@@ -561,14 +595,12 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         }
         f.visibility = View.VISIBLE
         val pick = ComparePick.Owned(mon.uid)
-        val picked = pickOn && picks.has(pick)
-        f.background = PickKit.cardBg(this, 10, picked)
+        bindPick(f)
         Ui.staticSprite(this, mon.species, mon.shiny, cell.img)
         cell.lv.text = mon.level.toString()
         cell.star.visibility = if (mon.shiny) View.VISIBLE else View.GONE
         val item = mon.heldItem
         if (item != null) { Ui.itemIcon(this, item, cell.held); cell.held.visibility = View.VISIBLE } else cell.held.visibility = View.GONE
-        PickKit.bindBadge(cell.check, pickOn, picked)
         f.alpha = if (mon.hp <= 0) 0.55f else 1f
         f.setOnClickListener { if (pickOn) togglePick(pick) else MonDetail.show(this, data, mon) }
         f.setOnLongClickListener { actions.menu(mon, it); true }
@@ -576,7 +608,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     private companion object {
         const val COLS = 6
-        const val PREF_SECTION = "teamSection"
     }
 }
 

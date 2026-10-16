@@ -28,7 +28,13 @@ data class AnkimonMon(
     val capturedDate: String?,       // "yyyy-MM-dd HH:mm:ss"
     val defeated: Int?,
     val tier: String?,
-)
+) {
+    /**
+     * The row's `data` text exactly as stored, kept so a Pokémon AnkiGo can't use yet ("Not supported yet") loses nothing.
+     * Null when the reader was not asked to keep it (whatever the size). Not part of equals/hashCode/copy.
+     */
+    var raw: String? = null
+}
 
 /** What AnkiGo takes from an Ankimon save. Nothing else of the file is kept (live saves can hold tokens in `config`). */
 data class AnkimonSave(
@@ -60,14 +66,14 @@ object AnkimonSaveReader {
      * From plain rows per table (the mapping layer; tests feed maps directly). Needs table `captured_pokemon`.
      * Missing other tables are fine and read as empty.
      */
-    fun parse(tables: Map<String, List<Map<String, Any?>>>): AnkimonSave {
+    fun parse(tables: Map<String, List<Map<String, Any?>>>, keepRaw: Boolean = false): AnkimonSave {
         val monRows = tables["captured_pokemon"] ?: throw NotAnkimonException(NOT_ANKIMON)
         val problems = mutableListOf<String>()
 
         val mons = LinkedHashMap<String, AnkimonMon>()
         for (row in monRows) {
             if (mons.size >= MAX_MONS) { problems += "More than $MAX_MONS Pokémon: only the first $MAX_MONS were read"; break }
-            val mon = parseMon(row, problems) ?: continue
+            val mon = parseMon(row, problems, keepRaw) ?: continue
             mons.putIfAbsent(mon.individualId, mon) // duplicate ids: the first wins
         }
 
@@ -108,7 +114,7 @@ object AnkimonSaveReader {
      * Throws [NotAnkimonException] when the file has no `captured_pokemon` table with a `data` column,
      * [SqliteFormatException] when the file is damaged.
      */
-    fun read(db: SqliteReader): AnkimonSave {
+    fun read(db: SqliteReader, keepRaw: Boolean = true): AnkimonSave {
         val names = db.tableNames().map { it.lowercase() }.toSet()
         if ("captured_pokemon" !in names || "data" !in db.columns("captured_pokemon").map { it.lowercase() }) {
             throw NotAnkimonException(NOT_ANKIMON)
@@ -124,12 +130,16 @@ object AnkimonSaveReader {
         if ("config" in names) {
             tables["config"] = db.rows("config", 10_000).filter { text(it["key"]) in CONFIG_KEYS }
         }
-        return parse(tables)
+        return parse(tables, keepRaw) // the import keeps the raw rows of Pokémon it can't use yet
     }
 
     // ---- one Pokémon --------------------------------------------------------------------------------------------
 
-    private fun parseMon(row: Map<String, Any?>, problems: MutableList<String>): AnkimonMon? {
+    /** The Pokémon of a raw row `data` text (as kept for a "Not supported yet" entry), or null when it doesn't read. */
+    internal fun monFromRaw(individualId: String, raw: String): AnkimonMon? =
+        parseMon(mapOf("individual_id" to individualId, "data" to raw), mutableListOf(), keepRaw = true)
+
+    private fun parseMon(row: Map<String, Any?>, problems: MutableList<String>, keepRaw: Boolean): AnkimonMon? {
         val rowId = text(row["individual_id"])
         val json = text(row["data"])?.let { obj(it) }
         if (json == null) {
@@ -139,7 +149,7 @@ object AnkimonSaveReader {
         val id = rowId ?: text(json.opt("individual_id"))
         if (id == null) { problems += "A Pokémon without an id was skipped"; return null }
         if (id.length > MAX_ID_LENGTH) { problems += "A Pokémon with an oversized id was skipped"; return null }
-        return AnkimonMon(
+        val mon = AnkimonMon(
             individualId = id,
             isMain = bool(row["is_main"]),
             id = int(json.opt("id")),
@@ -161,6 +171,8 @@ object AnkimonSaveReader {
             defeated = int(json.opt("pokemon_defeated")),
             tier = text(json.opt("tier")),
         )
+        if (keepRaw) mon.raw = rawText(row["data"])
+        return mon
     }
 
     private fun stats(v: Any?): Map<String, Int> {
@@ -219,6 +231,9 @@ object AnkimonSaveReader {
         is ByteArray -> String(v, Charsets.UTF_8).trim().ifEmpty { null }
         else -> null
     }
+
+    /** The stored text exactly (no trimming). */
+    private fun rawText(v: Any?): String? = when (v) { is String -> v; is ByteArray -> String(v, Charsets.UTF_8); else -> null }
 
     /** Numbers, floats and numeric strings -> Int (rounded, clamped to the Int range); booleans and the rest -> null. */
     private fun int(v: Any?): Int? {

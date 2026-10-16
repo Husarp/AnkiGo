@@ -7,12 +7,9 @@ import android.os.Looper
 import android.os.SystemClock
 import com.husarp.ankigo.Anki
 import com.husarp.ankigo.CardState
-import com.husarp.ankigo.GUESS
-import com.husarp.ankigo.Guess
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.Steps
 import com.husarp.ankigo.game.Tuning
-import com.husarp.ankigo.inferButton
 import org.json.JSONObject
 
 // TICKET T09 owns this package. Public signatures are fixed; add private helpers freely.
@@ -32,19 +29,42 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         data class Status(val ok: Boolean, val text: String) : Event()
     }
 
-    private val own = OwnAnswers()
-    fun expectOwn(id: Long, rep: Int) = own.expect(id, rep, SystemClock.elapsedRealtime())
-    fun cancelOwn(id: Long, rep: Int) = own.cancel(id, rep)
+    private val ledger = CardLedger()
+    fun expectOwn(id: Long, rep: Int) = ledger.own.expect(id, rep, SystemClock.elapsedRealtime())
+    fun cancelOwn(id: Long, rep: Int) = ledger.own.cancel(id, rep)
+
+    /** Own answers waiting to be absorbed, oldest first: they keep their order whatever else is queued on the worker. */
+    private val absorbQueue = java.util.concurrent.ConcurrentLinkedQueue<Pair<CardState, () -> Unit>>()
+
+    /**
+     * An own answer was saved and verified. On the worker thread (so the card map is never touched from two threads) the
+     * detector settles it and remembers [row]; then [done] runs on the main thread, and only then may the game step save
+     * the snapshot (it contains the answered card, so a restart cannot count the answer a second time). The work goes to
+     * the FRONT of the worker's queue: it waits only for a poll that is already running, not for ticks or rechecks
+     * queued behind it. Several waiting answers are absorbed in the order they were made. Before the session's baseline
+     * is read it waits for it (the baseline's catch-up settles own answers itself), and a stop() or start() clearing the
+     * queue does not lose it: the answer is already saved in AnkiDroid, so the game must still count it once. [done]
+     * runs with [snapshot] set to the map right after this answer (and not yet any later one).
+     */
     fun absorbOwn(row: CardState, done: () -> Unit) {
         val w = worker
         if (w == null) { main.post(done); return }
-        w.post {
-            own.consume(row.id, row.reps - 1, row.reps, SystemClock.elapsedRealtime())
-            val old = cards[row.id]
-            if (old == null || old.reps <= row.reps) cards[row.id] = row
+        absorbQueue.add(row to done)
+        w.postAtFrontOfQueue(drain)
+    }
+
+    private val drain = Runnable { drainAbsorbs() }
+
+    /** Worker thread. */
+    private fun drainAbsorbs() {
+        if (!ready) return // the baseline of this session is not read yet: startSession drains right after it
+        while (true) {
+            val (row, done) = absorbQueue.poll() ?: return
+            ledger.absorb(row, SystemClock.elapsedRealtime())
             prevRated = prevRated + row.id
             refreshSnapshot()
-            main.post(done)
+            val snap = snapshotJson // the map as of this answer: the game step saves exactly this
+            main.post { deliveredSnapshot = snap; done() }
         }
     }
 
@@ -56,10 +76,17 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
     @Volatile private var active = false
     /** Bumped by start() and stop(): a loop from an older generation ends itself. */
     @Volatile private var gen = 0
-    @Volatile private var snapshotJson = encode(emptyMap())
+    /** Worker thread: the newest card map. Never read by the game directly, see [deliveredSnapshot]. */
+    private var snapshotJson = encode(emptyMap())
+    /**
+     * Main thread: the card map as of the last thing handed to the game (a poll's events, the baseline's catch-up, an own
+     * answer's `done`), or the snapshot this session started from. Each worker->main post carries the map as it was when
+     * the post was made and sets this before delivering, so a save never contains an answer whose game step has not run
+     * (the worker may already have absorbed or polled further).
+     */
+    @Volatile private var deliveredSnapshot = encode(emptyMap())
     private var lastStatus: Pair<Boolean, String>? = null
     private var problem = false
-    private val cards = HashMap<Long, CardState>()
     private var prevRated: Set<Long> = emptySet()
     private var prevHot: Set<Long> = emptySet()
     private val stepsCache = HashMap<Long, Steps?>()
@@ -68,15 +95,15 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
     /** elapsedRealtime of the last successful full read (baseline or full poll); LivePolicy.isFull uses it. */
     private var lastFullMs = 0L
     /** The baseline of this session is done: only then may a poll compare cards (it needs the baseline to know "before"). */
-    private var ready = false
+    @Volatile private var ready = false
     private val recheckGate = RecheckGate()
-    private var dirty = false
 
     /**
      * Starts watching. [snapshot] is the card map saved with the game ([snapshotDay] its game day): when it is from
      * [today], answers made while AnkiGo wasn't watching are emitted first as catchUp answers (cards whose reps grew;
      * cards rated today that the snapshot didn't know count once). With no snapshot for today, every card rated today
-     * counts once (catchUp). Safe to call again after stop().
+     * counts once (catchUp). Safe to call again after stop(). Own answers still waiting for their game step must be in
+     * [snapshot] already (the caller adds them with withPendingOwn): the baseline then neither counts nor settles them.
      */
     fun start(snapshot: String?, snapshotDay: String?, today: String) {
         Report.init(ctx)
@@ -84,8 +111,9 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         val restored = if (snapshot != null && snapshotDay == today) {
             try { decode(snapshot) } catch (e: Exception) { Report.fail("LIVE", "saved snapshot unreadable", e); null }
         } else null
-        // Until the first baseline works, hand back what we were given so a save can't wipe it.
-        snapshotJson = if (restored != null) snapshot!! else encode(emptyMap())
+        // Until the first delivery, hand back what we were given so a save can't wipe it.
+        deliveredSnapshot = if (restored != null) snapshot!! else encode(emptyMap())
+        ready = false // an absorb arriving before this session's baseline waits for it, not for the old session's map
         val w = synchronized(this) {
             if (worker == null) {
                 thread = HandlerThread("live-detector").also { it.start() }
@@ -97,6 +125,7 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         active = true
         w.removeCallbacksAndMessages(null)
         w.post { startSession(g, restored) }
+        if (absorbQueue.isNotEmpty()) w.post(drain) // after the session's baseline: an answer made before the restart is still counted
     }
 
     /**
@@ -118,11 +147,14 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
     fun stop() {
         active = false
         gen++
-        worker?.removeCallbacksAndMessages(null)
+        worker?.let {
+            it.removeCallbacksAndMessages(null)
+            if (absorbQueue.isNotEmpty()) it.postAtFrontOfQueue(drain) // an own answer already saved must still reach the game
+        }
     }
 
-    /** The current card map (today's rated cards) as JSON, for saving with the game. Thread-safe. */
-    fun snapshot(): String = snapshotJson
+    /** The card map (today's rated cards) as JSON that matches the answers handed to the game so far, for saving with it. */
+    fun snapshot(): String = deliveredSnapshot
 
     val running: Boolean get() = active
 
@@ -138,8 +170,8 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
     private fun startSession(g: Int, restored: Map<Long, CardState>?) {
         if (!alive(g)) return
         val w = worker!!
-        cards.clear(); stepsCache.clear(); lastStatus = null; problem = false
-        prevRated = emptySet(); prevHot = emptySet(); tickNo = 0; errors = 0; dirty = false; ready = false
+        ledger.cards.clear(); stepsCache.clear(); lastStatus = null; problem = false
+        prevRated = emptySet(); prevHot = emptySet(); tickNo = 0; errors = 0; ledger.dirty = false; ready = false
         if (Anki.installed(ctx).none { it.pkg == Anki.pkg }) {
             status(false, "AnkiDroid not found"); w.postDelayed({ startSession(g, restored) }, Tuning.LIVE_RETRY_MS); return
         }
@@ -150,23 +182,27 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
             val t0 = SystemClock.elapsedRealtime()
             // Baseline: everything that can be answered today, so we know each card's state BEFORE its answer.
             val base = Anki.searchCards(ctx, "rated:1 OR is:due OR is:learn", CardState.COLS).mapNotNull { CardState.from(it) }
-            base.forEach { cards[it.id] = it }
+            // A newer start() redoes this baseline from its own snapshot: nothing of this one may reach the game or settle an own
+            // answer (the new baseline and the absorb still waiting do it, once).
+            if (active && g != gen) return
+            base.forEach { ledger.cards[it.id] = it }
             prevRated = Anki.searchCards(ctx, "rated:1", arrayOf("_id")).mapNotNull { it["_id"]?.toLongOrNull() }.toSet()
             prevHot = base.filter { it.id in prevRated && it.queue in LEARN_QUEUES }.map { it.id }.toSet()
             val missed = catchUp(restored, base, prevRated, ::stepsFor, System.currentTimeMillis() / 1000).toMutableList()
             for (n in base) {
                 val from = restored?.get(n.id)?.reps ?: (n.reps - 1)
-                repeat(own.consume(n.id, from, n.reps, SystemClock.elapsedRealtime())) {
+                repeat(ledger.own.consume(n.id, from, n.reps, SystemClock.elapsedRealtime())) {
                     val i = missed.indexOfFirst { it.cardId == n.id }
                     if (i >= 0) missed.removeAt(i)
                 }
             }
             refreshSnapshot()
             Report.log("LIVE", "watching: baseline ${base.size} cards in ${SystemClock.elapsedRealtime() - t0} ms; rated today=${prevRated.size}; catch-up answers=${missed.size}; AnkiDroid=${Anki.pkg}")
-            if (missed.isNotEmpty()) main.post { missed.forEach(onEvent) }
+            if (missed.isNotEmpty()) { val snap = snapshotJson; main.post { deliveredSnapshot = snap; missed.forEach(onEvent) } }
             status(true, OK_TEXT)
             lastFullMs = SystemClock.elapsedRealtime() // the baseline read everything
             ready = true
+            drainAbsorbs()
             if (alive(g)) w.post { tick(g) }
         } catch (e: SecurityException) {
             status(false, "Allow AnkiGo to use AnkiDroid (permission missing)")
@@ -195,8 +231,8 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
             poll(full, out)
             if (full) lastFullMs = nowMs
             // Snapshot first: the game saves it together with the answers these events produce (no double catch-up).
-            if (dirty) refreshSnapshot()
-            if (out.isNotEmpty()) main.post { out.forEach(onEvent) }
+            if (ledger.dirty) refreshSnapshot()
+            if (out.isNotEmpty()) { val snap = snapshotJson; main.post { deliveredSnapshot = snap; out.forEach(onEvent) } }
             errors = 0
             if (problem) { problem = false; status(true, OK_TEXT) }
         } catch (e: Exception) {
@@ -226,42 +262,16 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
         for (id in extra) {
             Anki.cardById(ctx, id)?.let { CardState.from(it) }?.let { read += it }
         }
-        if (rated != prevRated) dirty = true
+        if (rated != prevRated) ledger.dirty = true
         prevRated = rated
         prevHot = read.filter { it.id in rated && it.queue in LEARN_QUEUES }.map { it.id }.toSet()
-        for (n in read) compare(n, out)
-    }
-
-    private fun compare(n: CardState, out: MutableList<Event>) {
-        val old = cards[n.id]
-        if (old != n) dirty = true
-        cards[n.id] = n
-        // No earlier state: a new card answered for the first time (reps=1) starts from "new";
-        // anything else (e.g. review-ahead) counts as one answer with an unknown button.
-        val p = old ?: when {
-            n.id !in prevRated || n.reps < 1 -> return
-            n.reps == 1 -> CardState.fresh(n)
-            else -> n.copy(reps = n.reps - 1)
-        }
-        val d = n.reps - p.reps
-        if (d == 0) return
-        if (d < 0) { out += Event.Undo(n.id, -d); return }
-        val suppressed = own.consume(n.id, p.reps, n.reps, SystemClock.elapsedRealtime())
-        val remaining = d - suppressed
-        if (remaining <= 0) return
-        val g0 = if (old == null && n.reps > 1) Guess(0, GUESS, "no earlier state for this card")
-        else if (suppressed > 0) Guess(0, GUESS, "own and external answers in the same poll")
-        else inferButton(p, n, stepsFor(n), System.currentTimeMillis() / 1000)
-        // Several answers between polls: only the first can be inferred, and only as a guess.
-        val guess = if (d > 1) g0.copy(conf = GUESS) else g0
-        out += Event.Answer(n.id, guess.button, guess.conf, false)
-        repeat(remaining - 1) { out += Event.Answer(n.id, 0, GUESS, false) }
+        val nowMs = SystemClock.elapsedRealtime(); val nowSec = System.currentTimeMillis() / 1000
+        for (n in read) ledger.compare(n, prevRated, ::stepsFor, nowMs, nowSec, out)
     }
 
     /** Today's rated cards only; encoded off the hot path (only when something changed). */
     private fun refreshSnapshot() {
-        dirty = false
-        snapshotJson = encode(cards.filterKeys { it in prevRated })
+        snapshotJson = ledger.snapshot(prevRated)
     }
 
     private fun stepsFor(c: CardState): Steps? {

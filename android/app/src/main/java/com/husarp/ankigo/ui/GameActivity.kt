@@ -67,6 +67,7 @@ class GameActivity : AgActivity() {
     private var destroyed = false
     private var inPip = false
     private var internalNav = false          // we are opening one of our own screens: that is not "leaving" (no PiP)
+    private val studyReturn = StudyReturn()  // "Study in AnkiDroid" round trip: back lands on the Study tab
     private var pipReceiver: BroadcastReceiver? = null
     private val pauseListener: (Boolean) -> Unit = { p -> panel?.setPaused(p); updatePipParams() }
 
@@ -86,11 +87,17 @@ class GameActivity : AgActivity() {
         Report.init(this)
         Anki.load(this)
         if (savedInstanceState == null) Updates.onAppStart(this)
+        studyReturn.restore(savedInstanceState?.getIntArray("studyReturn"))
 
         val root = buildContent()
         setContentView(root)
         showMessage("Loading…")
         registerPipReceiver()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putIntArray("studyReturn", studyReturn.toInts())
     }
 
     /** The screen's View tree (banner, content holder, bottom bar). Split out of onCreate so screenshots can build it. */
@@ -156,7 +163,13 @@ class GameActivity : AgActivity() {
         val reviewDeck = intent.getLongExtra("reviewDeck", 0)
         if (reviewDeck != 0L) {
             intent.removeExtra("reviewDeck")
-            window.decorView.post { runCatching { startActivity(Anki.reviewIntent(reviewDeck)) }.onFailure { Ui.toast(this, "Open AnkiDroid once first") } }
+            studyReturn.requested()
+            window.decorView.post {
+                studyReturn.ankiStarting()
+                runCatching { startActivity(Anki.reviewIntent(reviewDeck)) }.onFailure { studyReturn.ankiFailed(); Ui.toast(this, "Open AnkiDroid once first") }
+            }
+        } else if (studyReturn.resumed(inPip)) {
+            startActivity(Intent(this, StudyDecksActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         }
         internalNav = false
         updatePipParams()
@@ -260,6 +273,7 @@ class GameActivity : AgActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
+        if (inPip) studyReturn.pipEntered()
         panel?.setCompact(inPip)
         // the layout listener re-decides the bottom bar by height; force it now so it doesn't flash in PiP
         if (inPip) { nav.visibility = View.GONE; topBar.visibility = View.GONE; panel?.setFooterTools(true) } else content.requestLayout()
@@ -499,8 +513,21 @@ class GameActivity : AgActivity() {
         }
     }
 
+    /** Back from the battle that was opened for "Study in AnkiDroid" (e.g. expanded from PiP) returns to the Study tab. */
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (studyReturn.back()) {
+            startActivity(Intent(this, StudyDecksActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+            finish()
+        } else {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
+        }
+    }
+
     /** Stats are always their own Activity, also in split screen. */
     private fun openStats() {
+        studyReturn.ownScreenOpened()
         internalNav = true
         updatePipParams()
         startActivity(Intent(this, StatsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
@@ -519,6 +546,7 @@ class GameActivity : AgActivity() {
                 return
             }
         }
+        studyReturn.ownScreenOpened()
         internalNav = true
         updatePipParams()
         startActivity(Intent(this, cls).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))

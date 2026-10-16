@@ -181,6 +181,23 @@ class Mon(
     var ankimonId: String? = null,  // Ankimon's individual_id when imported from an Ankimon save (re-import matches on it)
 )
 
+/**
+ * A Pokémon of an Ankimon save that AnkiGo can't use yet (species/form not in its data, or generation 9 switched off):
+ * kept as "Not supported yet" with the name/level from the save and the row's raw Ankimon data, so nothing is lost.
+ * It is not in [GameState.mons], so it can't fight, join the team, be compared, released or traded. It becomes a normal
+ * Pokémon automatically once its species is known (AnkimonMerge.reviveUnsupported: on load and on the next import).
+ */
+class UnsupportedMon(
+    val ankimonId: String,      // Ankimon's individual_id
+    val speciesId: Int?,        // the file's species/form number (null when the file has none)
+    val name: String,           // name from the save, or "#<id>"
+    val nickname: String?,
+    val level: Int,
+    val shiny: Boolean,
+    val reason: String,         // why it isn't usable yet, e.g. "species #1500 isn't in AnkiGo's data"
+    val raw: String?,           // the row's raw Ankimon `data` JSON, as stored (null when it was too big to keep here)
+)
+
 /** The name to show for an owned Pokémon: its nickname when it has one, else the species name. */
 val Mon.shownName: String get() = nickname?.takeIf { it.isNotBlank() } ?: name
 
@@ -235,6 +252,7 @@ class GameState(
     var savedAt: Long = 0,
     var createdAt: Long = 0,
     val mons: MutableList<Mon> = mutableListOf(),      // everything caught (team + box)
+    val unsupported: MutableList<UnsupportedMon> = mutableListOf(), // Ankimon Pokémon AnkiGo can't use yet (kept, shown greyed in the Box)
     val team: MutableList<String> = mutableListOf(),   // uids, max 6; team[0] is the main (the one that fights)
     val bag: MutableMap<String, Int> = mutableMapOf(), // item id -> count
     val tms: MutableSet<String> = mutableSetOf(),      // owned TMs (Showdown move ids); never used up

@@ -136,6 +136,11 @@ object Sprites {
     fun setEnabled(ctx: Context, enabled: Boolean) = ctx.getSharedPreferences("firstrun", 0).edit().putBoolean("skipSprites", !enabled).apply()
 
     private const val RETRY_MISSING_MS = 7L * 24 * 3600 * 1000
+    /**
+     * How long a "not found" is remembered for a picture that must exist (every Pokédex picture, every FRONT sprite: the chain
+     * ends with PokeAPI's still). An answer like that is a hiccup (CDN, throttle), so it is tried again within the hour.
+     */
+    private const val RETRY_EXPECTED_MS = 3600L * 1000
     private const val IMAGE_CACHE_BYTES = 24L * 1024 * 1024
     private const val BITMAP_CACHE_BYTES = 16L * 1024 * 1024
     /** A sprite file bigger than this is skipped like a missing one (the largest 3D animation is ~0.6 MB). */
@@ -164,11 +169,19 @@ object Sprites {
     @Synchronized internal fun upgradeBattleCache(dir: File) {
         upgraded = true
         val mark = File(dir, ".battle-v2")
-        if (mark.isFile) return
-        for (sub in listOf("front", "back")) {
-            File(dir, sub).listFiles()?.forEach { if (it.name.endsWith(".png") || it.name.endsWith(".missing")) it.delete() }
+        if (!mark.isFile) {
+            for (sub in listOf("front", "back")) {
+                File(dir, sub).listFiles()?.forEach { if (it.name.endsWith(".png") || it.name.endsWith(".missing")) it.delete() }
+            }
+            try { dir.mkdirs(); mark.writeText("1") } catch (_: IOException) { }
         }
-        try { dir.mkdirs(); mark.writeText("1") } catch (_: IOException) { }
+        // Every Pokédex picture exists, so a "not found" note in static/ is always a wrong one (version 0.2.0 saved one for an
+        // error page; a note blocked the picture for 7 days). Dropped once; the pictures themselves stay.
+        val staticMark = File(dir, ".static-v2")
+        if (!staticMark.isFile) {
+            File(dir, "static").listFiles()?.forEach { if (it.name.endsWith(".missing")) it.delete() }
+            try { dir.mkdirs(); staticMark.writeText("1") } catch (_: IOException) { }
+        }
     }
 
     private fun baseName(num: Int, shiny: Boolean) = if (shiny) "${num}s" else "$num"
@@ -195,7 +208,7 @@ object Sprites {
         cached(ctx, sp, kind, shiny)?.let { return it }
         if (!enabled(ctx)) return null
         val base = File(folder(ctx, kind), baseName(sp.num, shiny))
-        return download(base, SpriteUrls.battle(sp, kind, shiny))
+        return download(base, SpriteUrls.battle(sp, kind, shiny), retryMissingMs = if (kind == SpriteKind.FRONT) RETRY_EXPECTED_MS else RETRY_MISSING_MS)
     }
 
     /** Starts front+back downloads in the background (next encounter, new catch). */
@@ -246,7 +259,7 @@ object Sprites {
         diskBitmap(file)?.let { main.post { cb(it) }; return }
         if (!enabled(ctx)) { main.post { cb(null) }; return }
         enqueue(file.path, {
-            download(File(file.parentFile, baseName(num, shiny)), SpriteUrls.staticChain(num, shiny))
+            download(File(file.parentFile, baseName(num, shiny)), SpriteUrls.staticChain(num, shiny), retryMissingMs = RETRY_EXPECTED_MS)
             diskBitmap(file)
         }) { cb(it as Bitmap?) }
     }
@@ -304,6 +317,55 @@ object Sprites {
         }
         latch.await()
         return failures.get()
+    }
+
+    /** One owned Pokémon (or a shiny one) whose Pokédex picture is not usable: [noteAgeMs] is the age of a "not found" note, [broken] a file that doesn't decode. */
+    internal class PictureGap(val num: Int, val shiny: Boolean, val noteAgeMs: Long?, val broken: Boolean)
+
+    /** The pictures of [keys] (species number, shiny) that are missing from [staticDir] or can't be decoded ([decodes]). */
+    internal fun pictureGaps(
+        staticDir: File, keys: Collection<Pair<Int, Boolean>>, now: Long = System.currentTimeMillis(), decodes: (File) -> Boolean = { true },
+    ): List<PictureGap> = keys.distinct().sortedBy { it.first }.mapNotNull { (num, shiny) ->
+        val f = staticFileIn(staticDir, num, shiny)
+        val broken = f.isFile && !decodes(f)
+        if (f.isFile && !broken) return@mapNotNull null
+        val marker = missingMarker(File(staticDir, baseName(num, shiny)))
+        PictureGap(num, shiny, if (marker.isFile) (now - marker.lastModified()).coerceAtLeast(0) else null, broken)
+    }
+
+    /** Gaps of the Pokémon in [keys] on this phone (Diagnostics). */
+    internal fun pictureGaps(ctx: Context, keys: Collection<Pair<Int, Boolean>>): List<PictureGap> =
+        pictureGaps(File(dir(ctx), "static"), keys, decodes = { diskBitmap(it) != null })
+
+    /** One Diagnostics line per gap: "#1018 Archaludon: no picture, 'not found' note from 3 days ago". */
+    internal fun describeGaps(gaps: List<PictureGap>, nameOf: (Int) -> String): List<String> = gaps.map { g ->
+        val what = if (g.broken) "picture file can't be read" else "no picture on the phone"
+        val note = g.noteAgeMs?.let { ", a 'not found' note from ${ageText(it)} blocks the download" } ?: ""
+        "#${g.num} ${nameOf(g.num)}${if (g.shiny) " (shiny)" else ""}: $what$note"
+    }
+
+    private fun ageText(ms: Long): String = when {
+        ms < 3600_000L -> "${ms / 60_000} min ago"
+        ms < 86_400_000L -> "${ms / 3600_000} h ago"
+        else -> "${ms / 86_400_000L} days ago"
+    }
+
+    /**
+     * Tries the picture again right now, ignoring any "not found" note (blocking, background thread only), and says what happened:
+     * "downloaded", "network problem: ...", "not found on both hosts" or "downloaded but can't be read".
+     */
+    fun retryStatic(ctx: Context, num: Int, shiny: Boolean): String {
+        var error: String? = null
+        val get: HttpGet = { url, p -> try { realGet(url, p) } catch (e: IOException) { error = "${e.javaClass.simpleName}: ${e.message}"; throw e } }
+        val file = staticFile(ctx, num, shiny)
+        file.delete()
+        val got = download(File(file.parentFile, baseName(num, shiny)), SpriteUrls.staticChain(num, shiny), retries = 1, get = get, ignoreMissing = true)
+        return when {
+            got != null && diskBitmap(file) != null -> "downloaded"
+            got != null -> { file.delete(); "downloaded but can't be read" }
+            error != null -> "network problem: $error"
+            else -> "not found on both hosts"
+        }
     }
 
     /** Item icon from disk (LRU), or null. */
@@ -371,10 +433,10 @@ object Sprites {
      */
     internal fun download(
         base: File, urls: List<String>, retries: Int = 0, progress: ((Long, Long) -> Unit)? = null, get: HttpGet = realGet,
-        ignoreMissing: Boolean = false, preferred: AtomicInteger? = null,
+        ignoreMissing: Boolean = false, preferred: AtomicInteger? = null, retryMissingMs: Long = RETRY_MISSING_MS,
     ): File? {
         val marker = missingMarker(base)
-        if (!ignoreMissing && marker.isFile && System.currentTimeMillis() - marker.lastModified() < RETRY_MISSING_MS) return null
+        if (!ignoreMissing && marker.isFile && System.currentTimeMillis() - marker.lastModified() < retryMissingMs) return null
         base.parentFile?.mkdirs()
         var networkError = false
         val first = preferred?.get() ?: 0
@@ -394,7 +456,7 @@ object Sprites {
             val tmp = File(base.parentFile, "${base.name}.$ext.${System.nanoTime()}.tmp")
             try {
                 tmp.writeBytes(bytes)
-                if (!tmp.renameTo(target)) { tmp.delete(); continue }
+                if (!tmp.renameTo(target)) { tmp.delete(); networkError = true; continue } // a disk problem is not "not found" either
             } catch (_: IOException) {
                 tmp.delete(); networkError = true; continue
             }
