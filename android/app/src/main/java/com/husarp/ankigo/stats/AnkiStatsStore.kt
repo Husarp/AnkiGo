@@ -85,6 +85,7 @@ object AnkiStatsStore {
         io.execute {
             try {
                 work(app, today, dayStartHour)
+                AchievementFeed.maybeFeed(app) // R4-07: study time + new cards learned -> achievements (throttled, own thread)
             } catch (t: Throwable) { // a background thread must never take the app down
                 Report.fail("STATS", "refresh", t)
                 update { it.copy(access = AnkiAccess.ERROR, message = failureText(t), historyRunning = false) }

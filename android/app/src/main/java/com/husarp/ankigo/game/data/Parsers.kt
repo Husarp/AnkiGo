@@ -33,7 +33,7 @@ object Parsers {
         val itemsCsv: String,      // PokeAPI items.csv (cost)
     )
 
-    private const val CACHE_FORMAT = 2 // 2: regional forms (form, baseNum, spriteId on every species)
+    private const val CACHE_FORMAT = 3 // 3: height, weight, hidden ability (R4-04); 2: regional forms (form, baseNum, spriteId on every species)
     private const val MAX_NUM = 1025
     private val HALF_HP_MOVES = setOf("superfang", "naturesmadness", "ruination")
     private val SKIPPED_NONSTANDARD = setOf("CAP", "Future", "Gmax")
@@ -117,6 +117,7 @@ object Parsers {
                 levelMoves = emptyList(), tmMoves = emptySet(), // filled below
                 evoLevel = if (e.has("evoLevel")) e.optInt("evoLevel") else null,
                 evoType = e.optString("evoType", "").takeIf { it.isNotEmpty() },
+                heightM = positive(e, "heightm"), weightKg = positive(e, "weightkg"), hiddenAbility = hidden(e),
             )
         }
         for ((num, s) in species.entries.toList()) {
@@ -159,6 +160,8 @@ object Parsers {
                 evoLevel = if (e.has("evoLevel")) e.optInt("evoLevel") else null,
                 evoType = e.optString("evoType", "").takeIf { it.isNotEmpty() },
                 form = formName, baseNum = f.baseNum, spriteId = toId(baseSpecies) + "-" + toId(formName),
+                heightM = positive(e, "heightm") ?: b0.heightM, weightKg = positive(e, "weightkg") ?: b0.weightKg,
+                hiddenAbility = if (e.optJSONObject("abilities") != null) hidden(e) else b0.hiddenAbility,
             )
         }
 
@@ -208,6 +211,12 @@ object Parsers {
         }
         return out
     }
+
+    /** A Showdown number that must be above 0 (heightm / weightkg); null when missing or not a positive number. */
+    private fun positive(e: JSONObject, key: String): Double? = if (e.has(key)) e.optDouble(key, 0.0).takeIf { it > 0.0 && it.isFinite() } else null
+
+    /** The hidden ability (abilities.H), or null. */
+    private fun hidden(e: JSONObject): String? = e.optJSONObject("abilities")?.optString("H", "")?.takeIf { it.isNotEmpty() }
 
     private fun maleRatio(e: JSONObject): Double? {
         e.optJSONObject("genderRatio")?.let { return it.optDouble("M", 0.5) }
@@ -407,6 +416,7 @@ object Parsers {
     private fun intList(a: JSONArray) = (0 until a.length()).map { a.getInt(it) }
     private fun optI(a: JSONArray, i: Int): Int? = if (a.isNull(i)) null else a.getInt(i)
     private fun optS(a: JSONArray, i: Int): String? = if (a.isNull(i)) null else a.getString(i)
+    private fun optD(a: JSONArray, i: Int): Double? = if (i >= a.length() || a.isNull(i)) null else a.getDouble(i)
 
     private fun encodeSpecies(s: Species): JSONArray {
         val evos = JSONArray()
@@ -422,6 +432,7 @@ object Parsers {
             JSONArray(s.abilities), s.prevo ?: nul(), evos, s.baseExp, s.growthRate, JSONArray(s.evYield.toList()), flags,
             lm, JSONArray(s.tmMoves.sorted()), s.evoLevel ?: nul(), s.evoType ?: nul(),
             s.form ?: nul(), s.baseNum, s.spriteId,
+            s.heightM ?: nul(), s.weightKg ?: nul(), s.hiddenAbility ?: nul(),
         ))
     }
 
@@ -451,6 +462,8 @@ object Parsers {
             tmMoves = strs(a.getJSONArray(15)).toSet(),
             evoLevel = optI(a, 16), evoType = optS(a, 17),
             form = optS(a, 18), baseNum = a.getInt(19), spriteId = a.getString(20),
+            // entries written before format 3 are shorter: the fields stay null
+            heightM = optD(a, 21), weightKg = optD(a, 22), hiddenAbility = optS(a, 23),
         )
     }
 

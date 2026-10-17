@@ -257,7 +257,7 @@ class PagesShots {
         dialog("pages-dlg-evolved") { ctx ->
             Pickers.evolved(ctx, GameEvent.Evolved("t2", gd.sp(2).name, gd.sp(3).name, 3), false)
         }
-        dialog("pages-dlg-confirm") { ctx -> Pickers.confirm(ctx, "Reroll the shop?", "New items and TMs for 100 ₽.", "Reroll") {} }
+        dialog("pages-dlg-confirm") { ctx -> Pickers.confirm(ctx, "Refresh the shop?", "New items and TMs for 100 ₽.", "Refresh") {} }
         dialog("pages-dlg-release") { ctx -> Pickers.confirm(ctx, "Release Sparkmouse?", "Sparkmouse (Lv 26) will be gone for good.", "Release…") {} }
         dialog("pages-dlg-pickitem") { ctx -> Pickers.pickItem(ctx, "Use which item?", st, listOf("potion", "super-potion", "thunder-stone", "rare-candy")) {} }
         dialog("pages-dlg-pickball") { ctx -> Pickers.pickItem(ctx, "Throw which ball?", st, listOf("poke-ball", "great-ball", "ultra-ball")) {} }
@@ -271,7 +271,6 @@ class PagesShots {
                 MenuKit.scene(ctx, MenuKit.capture { MonActions(TeamPage(ctx, NoHost)).menu(st.mon(uid)!!, View(ctx)) })
             }
         }
-        dialog("pages-dlg-badges", phoneTall) { ctx -> call(TeamPage(ctx, NoHost), "showBadges") }
     }
 
     // ---------- Ankimon import dialogs ----------

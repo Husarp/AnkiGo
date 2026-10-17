@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 
@@ -24,7 +25,7 @@ import com.husarp.ankigo.R
  * Use: `AppMenu(anchor).header("Title").item(1, "Team", R.drawable.ic_team).show { id -> … }`.
  */
 class AppMenu(private val anchor: View) {
-    private class Row(val id: Int, val label: String, @DrawableRes val icon: Int, val enabled: Boolean, val sub: String?, val danger: Boolean, val dividerAfter: Boolean = false)
+    private class Row(val id: Int, val label: String, @DrawableRes val icon: Int, val enabled: Boolean, val sub: String?, val danger: Boolean, val dividerAfter: Boolean = false, @ColorRes val tone: Int = 0)
 
     private val rows = ArrayList<Row>()
     private var title: String? = null
@@ -34,9 +35,9 @@ class AppMenu(private val anchor: View) {
     /** Optional title (and a small line under it) above the rows. */
     fun header(title: String, sub: String? = null): AppMenu { this.title = title; titleSub = sub; return this }
 
-    /** One row. A disabled row is dimmed and not clickable (its [sub] line stays readable); [danger] tints it red. */
-    fun item(id: Int, label: String, @DrawableRes icon: Int, enabled: Boolean = true, sub: String? = null, danger: Boolean = false, dividerAfter: Boolean = false): AppMenu {
-        rows.add(Row(id, label, icon, enabled, sub, danger, dividerAfter))
+    /** One row. A disabled row is dimmed and not clickable (its [sub] line stays readable); [danger] tints it red; [tone] (a colour res) tints only the icon. */
+    fun item(id: Int, label: String, @DrawableRes icon: Int, enabled: Boolean = true, sub: String? = null, danger: Boolean = false, dividerAfter: Boolean = false, @ColorRes tone: Int = 0): AppMenu {
+        rows.add(Row(id, label, icon, enabled, sub, danger, dividerAfter, tone))
         return this
     }
 
@@ -127,7 +128,7 @@ class AppMenu(private val anchor: View) {
     }
 
     private fun rowView(ctx: Context, r: Row): View {
-        val tint = Ui.c(ctx, if (r.danger) R.color.ag_red else R.color.ag_sub1)
+        val tint = Ui.c(ctx, if (r.danger) R.color.ag_red else if (r.tone != 0) r.tone else R.color.ag_sub1)
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL

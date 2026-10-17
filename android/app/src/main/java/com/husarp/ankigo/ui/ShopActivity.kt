@@ -15,9 +15,11 @@ import com.husarp.ankigo.game.Tuning
 import java.util.Calendar
 
 // TICKET T14 owns this file: the daily shop and the bag (mockup frame E). The Bag tab lives in ShopBag.kt.
-// Ankimon has no always-in-stock list: today's items and TMs are all there is (reroll costs 100).
-class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
-    override val tab = BottomNav.Tab.SHOP
+// Ankimon has no always-in-stock list: today's items and TMs are all there is (a refresh costs 100).
+// Standalone it is a page of its own (ShopActivity, the floating card); given [embedded] it is the Shop section of the
+// Pokémon tab (TeamPage builds [embeddedBody], calls [renderEmbedded] and owns the bar, like the Pokédex section).
+class ShopPage(base: Context, host: PageHost, private val embedded: Boolean = false) : GamePage(base, host) {
+    override val tab = BottomNav.Tab.POKEMON
 
     private lateinit var appBar: AppBar
     private lateinit var content: LinearLayout
@@ -29,16 +31,28 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
     override fun buildBar(): View {
         appBar = Ui.appBar(this, "Shop", "0", pillIconRes = R.drawable.ic_coin)
         // "?" opens the guide chapter about money (R3-V3b)
-        appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) {
-            com.husarp.ankigo.help.HelpActivity.open(host.hostActivity ?: this, chapter = com.husarp.ankigo.help.GameGuide.MONEY)
-        }
+        appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) { openMoneyHelp() }
         return appBar
     }
 
+    /** The guide chapter about money. */
+    internal fun openMoneyHelp() {
+        com.husarp.ankigo.help.HelpActivity.open(host.hostActivity ?: this, chapter = com.husarp.ankigo.help.GameGuide.MONEY)
+    }
+
+    /** The body for the Pokémon tab (no bar). */
+    internal fun embeddedBody(): View = buildBody()
+
+    /** Draws the embedded page; the Pokémon tab calls this on every render while the Shop section is on. */
+    internal fun renderEmbedded() = render()
+
+    /** An embedded page draws itself (nobody listens for it), a standalone one asks to be drawn. */
+    private fun redraw() { if (embedded) render() else requestRender() }
+
     override fun buildBody(): View {
         val ctx = this
-        tabShop = Ui.text(ctx, 13f, 800, R.color.ag_sub0).apply { gravity = Gravity.CENTER; setOnClickListener { showBag = false; requestRender() } }
-        tabBag = Ui.text(ctx, 13f, 800, R.color.ag_sub0).apply { gravity = Gravity.CENTER; setOnClickListener { showBag = true; requestRender() } }
+        tabShop = Ui.text(ctx, 13f, 800, R.color.ag_sub0).apply { gravity = Gravity.CENTER; setOnClickListener { showBag = false; redraw() } }
+        tabBag = Ui.text(ctx, 13f, 800, R.color.ag_sub0).apply { gravity = Gravity.CENTER; setOnClickListener { showBag = true; redraw() } }
         val tabs = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
@@ -60,7 +74,11 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     override fun onShow() {
         super.onShow()
-        // New game day: roll the day over and restock once (not in render(), which GameRepo's listener would loop on).
+        rollDay()
+    }
+
+    /** New game day: roll the day over and restock once (not in render(), which GameRepo's listener would loop on). */
+    internal fun rollDay() {
         if (GameRepo.status == GameRepo.Status.READY && GameRepo.state != null && GameRepo.data != null) {
             GameRepo.run(this) { g ->
                 g.tick()
@@ -71,7 +89,7 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     override fun render() {
         val st = state
-        appBar.setPill(Bits.fmt(st.cash))
+        if (!embedded) appBar.setPill(Bits.fmt(st.cash))
         val bagCount = st.bag.values.sum() + st.tms.size
         tabShop.text = "Shop"
         tabBag.text = "Bag · $bagCount"
@@ -99,21 +117,16 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
     private fun fillShop() {
         val ctx = this
         val st = state
-        // Section "Today's specials": title, "new in N h", reroll button (48 dp touch height, 28 dp look).
+        // Section "Today's specials": title and "new in N h", then the "Refresh shop" button (a real button, so it is easy to find; PLAN 108).
         val head = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(Ui.dp(ctx, 4), 0, 0, 0)
             addView(Ui.text(ctx, 12f, 900, R.color.ag_sub0).apply { text = "TODAY'S SPECIALS"; letterSpacing = 0.058f })
             addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = "  new in ${hoursToNewDay()} h" }, LinearLayout.LayoutParams(0, -2, 1f))
-            addView(Ui.text(ctx, 11f, 900, R.color.ag_text).apply {
-                text = "Reroll ${Tuning.REROLL_PRICE} ₽"
-                Ui.touchPill(this, Ui.rounded(Bits.blend(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_mantle), 0.22f), 10, ctx), 28, 9)
-                alpha = if (st.cash >= Tuning.REROLL_PRICE) 1f else 0.45f
-                setOnClickListener { reroll() }
-            })
         }
         content.addView(head, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+        content.addView(refreshButton(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 6); it.bottomMargin = Ui.dp(ctx, 10) })
         if (st.shopItems.isEmpty()) content.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Nothing in the shop yet." })
         // the specials as equal tiles in rows of three (mockup E)
         for (chunk in st.shopItems.chunked(3)) {
@@ -136,7 +149,7 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
             } else {
                 Bits.buyButton(ctx, Tuning.TM_PRICE, st.cash >= Tuning.TM_PRICE) { tmInfo(move) }
             }
-            val tile = Bits.tmTile(ctx, m?.let { Ui.typeColor(it.type) })
+            val tile = Bits.tmTile(ctx, m?.type)
             val mid = Bits.bodyText(ctx, Items.tmName(data, move), Bits.moveStats(data, move))
             if (m != null) mid.addView(Bits.typeRow(ctx, listOf(m.type)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
             content.addView(Bits.cardRow(ctx, tile, mid, right).also { it.setOnClickListener { tmInfo(move) } })
@@ -187,15 +200,36 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
         act { g -> Shop.buyTm(g.data, g.state, move) }
     }
 
+    /** "Refresh shop · 100 ₽": the accent button with the refresh icon (greyed, with a toast on tap, when the money is not enough). */
+    private fun refreshButton(): View {
+        val ctx = this
+        val ink = Ui.c(ctx, R.color.ag_base)
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            minimumHeight = Ui.dp(ctx, 44)
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx)
+            setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 8), Ui.dp(ctx, 14), Ui.dp(ctx, 8))
+            alpha = if (state.cash >= Tuning.REROLL_PRICE) 1f else 0.45f
+            contentDescription = "Refresh shop for ${Tuning.REROLL_PRICE} ₽"
+            addView(android.widget.ImageView(ctx).apply {
+                setImageResource(R.drawable.ic_sync)
+                setColorFilter(ink, android.graphics.PorterDuff.Mode.SRC_IN)
+            }, LinearLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18)).also { it.marginEnd = Ui.dp(ctx, 7) })
+            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = "Refresh shop · ${Tuning.REROLL_PRICE} ₽"; maxLines = 1 })
+            setOnClickListener { reroll() }
+        }
+    }
+
     private fun reroll() {
         if (state.cash < Tuning.REROLL_PRICE) { Ui.toast(this, "Not enough money (need ${Tuning.REROLL_PRICE} ₽)"); return }
-        Pickers.confirm(this, "Reroll the shop?", "New items and TMs for ${Tuning.REROLL_PRICE} ₽.", "Reroll") {
+        Pickers.confirm(this, "Refresh the shop?", "New items and TMs for ${Tuning.REROLL_PRICE} ₽.", "Refresh") {
             act { g -> Shop.reroll(g.data, g.state, g.rng) }
         }
     }
 }
 
-/** The Shop screen as its own Activity: a thin shell around [ShopPage]. */
+/** The Shop screen as its own Activity: a thin shell around [ShopPage]. Kept for old intents (its bar highlights Pokémon); new jumps use Dest.SHOP. */
 class ShopActivity : PageActivity() {
     override fun createPage(): GamePage = ShopPage(this, this)
 }

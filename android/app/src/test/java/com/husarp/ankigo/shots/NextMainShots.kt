@@ -61,7 +61,7 @@ class NextMainShots {
         var b = BattleShotKit.bound(ctx)
         var rows = menuRows(b)
         // with a wild Pokémon on stage the last entry flips catch <-> defeat (its label says what a tap does)
-        assertEquals(listOf("Pop out", "Team", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log", "Help"), rows.filter { it.first != 9 }.map { it.second })
+        assertEquals(listOf("Pop out", "Pokémon", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log", "Help"), rows.filter { it.first != 9 }.map { it.second })
         assertTrue(rows.first { it.first == 9 }.second in listOf("Catch this one", "Defeat it instead (XP)"))
         assertTrue(rows.first { it.first == 5 }.third)
 
@@ -71,7 +71,7 @@ class NextMainShots {
         val m = AppMenu(b.root)
         b.activity.fillMenu(m)
         rows = m.describe()
-        assertEquals(listOf("Pop out", "Team", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log", "Help"), rows.filter { it.first != 9 }.map { it.second })
+        assertEquals(listOf("Pop out", "Pokémon", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log", "Help"), rows.filter { it.first != 9 }.map { it.second })
         assertFalse(rows.first { it.first == 5 }.third)
         assertEquals("Needs 2+ Pokémon in your team", m.subOf(5))
         assertEquals("Pop out", rows.first().second)

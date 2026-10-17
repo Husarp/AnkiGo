@@ -72,7 +72,20 @@ class CompareState(var mode: CompareMode = CompareMode.VS_REFERENCE) {
         val movable = if (mode == CompareMode.VS_REFERENCE && shown.isNotEmpty()) shown.drop(1) else shown
         val at = movable.indexOf(columnIndex)
         if (at < 0) return
-        val moved = CompareModes.move(movable, at, at + step)
+        moveTo(data, columnIndex, shown.indexOf(columnIndex) + step)
+    }
+
+    /**
+     * Drag and drop (R4-X1 item 7): moves [columnIndex] to place [toPos] among the shown columns (the reference column of
+     * "vs reference" keeps place 0; a [toPos] outside the movable places is pulled in).
+     */
+    fun moveTo(data: CompareData, columnIndex: Int, toPos: Int) {
+        val shown = display(data)
+        val movable = if (mode == CompareMode.VS_REFERENCE && shown.isNotEmpty()) shown.drop(1) else shown
+        val at = movable.indexOf(columnIndex)
+        if (at < 0) return
+        val offset = shown.size - movable.size
+        val moved = CompareModes.move(movable, at, (toPos - offset).coerceIn(0, (movable.size - 1).coerceAtLeast(0)))
         // the shown order becomes the manual order: the sort is spent, the reference stays first
         val head = if (movable.size < shown.size) listOf(shown.first()) else emptyList()
         val hidden = baseIndexes(data).filter { it !in shown }
@@ -113,6 +126,7 @@ object CompareStore {
     private const val FILE = "ankigo_ui"
     private const val MODE = "compare_mode"
     private const val ROWS = "compare_rows_hidden"
+    private const val FIT = "compare_fit"
 
     fun loadMode(ctx: android.content.Context): CompareMode =
         CompareMode.entries.firstOrNull { it.name == prefs(ctx).getString(MODE, null) } ?: CompareMode.VS_REFERENCE
@@ -122,6 +136,11 @@ object CompareStore {
     fun loadRows(ctx: android.content.Context): RowChoice = RowChoice.decode(prefs(ctx).getString(ROWS, null))
 
     fun saveRows(ctx: android.content.Context, r: RowChoice) = prefs(ctx).edit().putString(ROWS, r.encode()).apply()
+
+    /** The zoom: how many columns fit (see [CompareFit]); automatic until the player picks one. */
+    fun loadFit(ctx: android.content.Context): Int = CompareFit.valid(prefs(ctx).getInt(FIT, CompareFit.AUTO))
+
+    fun saveFit(ctx: android.content.Context, fit: Int) = prefs(ctx).edit().putInt(FIT, CompareFit.valid(fit)).apply()
 
     private fun prefs(ctx: android.content.Context) = ctx.applicationContext.getSharedPreferences(FILE, android.content.Context.MODE_PRIVATE)
 }

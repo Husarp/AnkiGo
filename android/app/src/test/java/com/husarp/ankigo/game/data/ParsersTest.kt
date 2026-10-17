@@ -35,10 +35,10 @@ class ParsersTest {
         val special = listOf(
             dexEntry("base", 10, "Base", "\"evos\":[\"Itemmon\",\"Itemmon-Alola\",\"Holdmon\",\"Tradeitem\",\"Trademon\",\"Friendday\",\"Friendnight\"," +
                 "\"Fairymon\",\"Movemon\",\"Extralevel\",\"Extraother\",\"Othermon\",\"Plainlevel\",\"Gendermon\",\"Upgrademon\",\"Augurmon\"]," +
-                "\"genderRatio\":{\"M\":0.875,\"F\":0.125},\"abilities\":{\"0\":\"Ab One\",\"1\":\"Ab Two\",\"H\":\"Hidden Ab\"}", types = "\"Fire\",\"Flying\""),
+                "\"genderRatio\":{\"M\":0.875,\"F\":0.125},\"abilities\":{\"0\":\"Ab One\",\"1\":\"Ab Two\",\"H\":\"Hidden Ab\"},\"heightm\":1.7,\"weightkg\":90.5", types = "\"Fire\",\"Flying\""),
             evolved(11, "Itemmon", "Base", "\"evoType\":\"useItem\",\"evoItem\":\"Thunder Stone\""),
             dexEntry("itemmonalola", 11, "Itemmon-Alola", "\"forme\":\"Alola\",\"baseSpecies\":\"Itemmon\",\"prevo\":\"Base\""),
-            evolved(12, "Holdmon", "Base", "\"evoType\":\"levelHold\",\"evoItem\":\"King's Rock\",\"evoCondition\":\"at night\""),
+            evolved(12, "Holdmon", "Base", "\"evoType\":\"levelHold\",\"evoItem\":\"King's Rock\",\"evoCondition\":\"at night\",\"heightm\":0,\"weightkg\":-1"),
             evolved(13, "Tradeitem", "Base", "\"evoType\":\"trade\",\"evoItem\":\"Metal Coat\""),
             evolved(14, "Trademon", "Base", "\"evoType\":\"trade\""),
             evolved(15, "Friendday", "Base", "\"evoType\":\"levelFriendship\",\"evoCondition\":\"during the day\""),
@@ -489,7 +489,7 @@ id,evolved_species_id,evolution_trigger_id,version_group_id,is_default,trigger_i
 
     @Test fun cacheRoundTripIsExact() {
         val json = Parsers.encodeCache(data)
-        assertTrue(json.contains("\"format\":2"))
+        assertTrue(json.contains("\"format\":3"))
         val back = Parsers.decodeCache(json)
         assertEquals(data.builtAt, back.builtAt)
         assertEquals(data.species, back.species)
@@ -508,10 +508,47 @@ id,evolved_species_id,evolution_trigger_id,version_group_id,is_default,trigger_i
 
     @Test fun cacheRejectsOtherFormatsAndGarbage() {
         val json = Parsers.encodeCache(data)
-        assertTrue(fails { Parsers.decodeCache(json.replace("\"format\":2", "\"format\":1")) }.contains("format"))
+        assertTrue(fails { Parsers.decodeCache(json.replace("\"format\":3", "\"format\":1")) }.contains("format"))
         assertTrue(fails { Parsers.decodeCache("not json") }.isNotEmpty())
-        assertTrue(fails { Parsers.decodeCache("{\"format\":2}") }.contains("damaged"))
+        assertTrue(fails { Parsers.decodeCache("{\"format\":3}") }.contains("damaged"))
         assertTrue(fails { Parsers.decodeCache(json.take(json.length / 2)) }.isNotEmpty())
+    }
+
+    // ---- Info data: height, weight, hidden ability (R4-04) ----------------------------------------------------
+
+    @Test fun heightWeightAndHiddenAbilityAreRead() {
+        val b = data.sp(10)
+        assertEquals(1.7, b.heightM!!, 0.0)
+        assertEquals(90.5, b.weightKg!!, 0.0)
+        assertEquals("Hidden Ab", b.hiddenAbility)
+        assertEquals(listOf("Ab One", "Ab Two"), b.abilities) // battle data is unchanged
+    }
+
+    @Test fun missingOrZeroInfoIsNullNeverZero() {
+        val none = data.sp(11) // no heightm / weightkg / abilities.H in the sample
+        assertNull(none.heightM); assertNull(none.weightKg); assertNull(none.hiddenAbility)
+        val bad = data.sp(12) // heightm 0, weightkg -1
+        assertNull(bad.heightM); assertNull(bad.weightKg)
+    }
+
+    @Test fun infoDataSurvivesTheCache() {
+        val back = Parsers.decodeCache(Parsers.encodeCache(data))
+        assertEquals(1.7, back.sp(10).heightM!!, 0.0)
+        assertEquals(90.5, back.sp(10).weightKg!!, 0.0)
+        assertEquals("Hidden Ab", back.sp(10).hiddenAbility)
+        assertNull(back.sp(11).heightM); assertNull(back.sp(11).hiddenAbility)
+    }
+
+    @Test fun aSpeciesEntryWrittenBeforeFormat3LoadsWithNullInfo() {
+        // cut the three new values off every species array, as an old cache had them
+        val root = org.json.JSONObject(Parsers.encodeCache(data))
+        val sp = root.getJSONArray("species")
+        for (i in 0 until sp.length()) { val a = sp.getJSONArray(i); for (k in 23 downTo 21) a.remove(k) }
+        val back = Parsers.decodeCache(root.toString())
+        assertEquals(data.species.size, back.species.size)
+        val b = back.sp(10)
+        assertNull(b.heightM); assertNull(b.weightKg); assertNull(b.hiddenAbility)
+        assertEquals(data.sp(10).copy(heightM = null, weightKg = null, hiddenAbility = null), b)
     }
 
     // ---- Sanity errors -------------------------------------------------------------------------------------

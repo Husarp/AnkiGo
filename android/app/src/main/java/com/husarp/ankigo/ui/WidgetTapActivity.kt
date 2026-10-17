@@ -23,7 +23,7 @@ class WidgetTapActivity : AgActivity() {
             }
             runOnUiThread {
                 if (!isDestroyed) {
-                    startActivity(Intent(this, if (study) StudyDecksActivity::class.java else GameActivity::class.java))
+                    startActivity(Nav.intent(this, if (study) Dest.STUDY else Dest.BATTLE))
                     finish()
                 }
             }

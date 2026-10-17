@@ -44,7 +44,7 @@ internal object ShopInfo {
         val lead = LinearLayout(s).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(Bits.tmTile(s, m?.let { Ui.typeColor(it.type) }, 56))
+            addView(Bits.tmTile(s, m?.type, 56))
             val text = LinearLayout(s).apply {
                 orientation = LinearLayout.VERTICAL
                 if (m != null) addView(Bits.typeRow(s, listOf(m.type)))

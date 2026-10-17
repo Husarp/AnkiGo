@@ -69,7 +69,7 @@ internal object FirstRunJob {
                 if (job.cancelled) { job.done("Stopped. What was downloaded is kept."); return@Thread }
                 // same rule as the step check (openStep): "done" must mean the step is really done, or the screen bounces back to step 2
                 if (Sprites.enabled(app) && !staticsMostlyPresent(app, nums)) job.fail("Many pictures didn't download. Check the internet connection and try again.")
-                else job.done()
+                else { DownloadsDone.mark(app, DownloadsDone.PICTURES, gens); job.done() }
             } catch (e: Throwable) {
                 job.fail("Download stopped: ${e.message ?: e.javaClass.simpleName}")
             }
@@ -287,7 +287,7 @@ class FirstRunActivity : AgActivity() {
         actions.addView(Form.secondary(this, "Study without the game", onPage = true) {
             Sprites.setEnabled(this, false)
             prefs.edit().putBoolean("studyOnly", true).apply()
-            startActivity(Intent(this, StudyDecksActivity::class.java)); finish()
+            finish() // the home screen that started this one shows Study with a "Set up the game" row (a second start would open a second home screen)
         }, Form.lp(this, 8))
         val network = getSystemService(android.net.ConnectivityManager::class.java)
         val connection = when {
@@ -465,7 +465,7 @@ class FirstRunActivity : AgActivity() {
     private fun stepSaveProblem() {
         content.addView(Ui.text(this, 28f, 900, R.color.ag_text).apply { text = "Your save can't be read" })
         content.addView(Form.body(this, (GameRepo.error ?: "The save file is damaged.") + "\n\nNothing was deleted. Restore a backup in Settings.", 14), Form.lp(this, 10))
-        actions.addView(Form.primary(this, "Open Settings") { startActivity(Intent(this, SettingsActivity::class.java)) })
+        actions.addView(Form.primary(this, "Open Settings") { startActivity(Nav.intent(this, Dest.SETTINGS)) })
     }
 
     companion object {

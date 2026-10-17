@@ -49,6 +49,11 @@ enum class ChartMetric(
     XP("XP earned", ChartGroup.GAME, "up", ChartKind.TIME, "XP", "XP", listOf("XP"), false),
     HEALING("Healing used", ChartGroup.GAME, "heal", ChartKind.TIME, "items", "healing items", listOf("Healing items"), false),
     MONEY_SPENT("Money spent", ChartGroup.GAME, "cart", ChartKind.TIME, "₽", "₽ spent", listOf("Spent"), false),
+    // The battle numbers (R4-V11): counted since 0.13, so earlier days read 0 (see ChartData.BATTLE_SOURCE)
+    DMG_DEALT("Damage dealt", ChartGroup.GAME, "bolt", ChartKind.TIME, "HP", "HP dealt", listOf("Dealt"), false),
+    DMG_TAKEN("Damage taken", ChartGroup.GAME, "heartbreak", ChartKind.TIME, "HP", "HP taken", listOf("Taken"), false),
+    DMG_BLOCKED("Damage blocked", ChartGroup.GAME, "shield", ChartKind.TIME, "HP", "HP blocked", listOf("Blocked"), false),
+    MISSES("Misses", ChartGroup.GAME, "miss", ChartKind.TIME, "misses", "misses", listOf("Misses"), false),
 
     // Collection
     DEX_PROGRESS("Pokédex progress", ChartGroup.COLLECTION, "dex", ChartKind.CATEGORY, "%", "caught", listOf("Caught"), false),
@@ -127,6 +132,9 @@ data class ChartSeries(
 }
 
 object ChartData {
+    /** The caption of the four battle charts: the day log only started counting them with 0.13, earlier days show 0. */
+    const val BATTLE_SOURCE = "AnkiGo's own count, counted since 0.13 (earlier days show 0)"
+
     /** DUE looks ahead 7 or 30 days only; everything else keeps the asked period. */
     fun effectivePeriod(metric: ChartMetric, period: ChartPeriod): ChartPeriod =
         if (metric == ChartMetric.DUE && period.days > 30) ChartPeriod.D30 else period
@@ -275,6 +283,10 @@ object ChartData {
             ChartMetric.MONEY -> game("AnkiGo") { it.cash }
             ChartMetric.MONEY_SPENT -> game("AnkiGo") { it.spent }
             ChartMetric.HEALING -> game("AnkiGo") { it.healItems }
+            ChartMetric.DMG_DEALT -> game(BATTLE_SOURCE) { it.dmgDealt }
+            ChartMetric.DMG_TAKEN -> game(BATTLE_SOURCE) { it.dmgTaken }
+            ChartMetric.DMG_BLOCKED -> game(BATTLE_SOURCE) { it.dmgBlocked }
+            ChartMetric.MISSES -> game(BATTLE_SOURCE) { it.misses }
             // not time metrics: [build] hands these to categories() / heatmap() before it asks for a plan
             ChartMetric.CARD_STATES, ChartMetric.STREAK_CALENDAR, ChartMetric.DEX_PROGRESS, ChartMetric.PER_TYPE, ChartMetric.SHINIES_RARE ->
                 Plan(1, { doubleArrayOf(0.0) }, "", false)
@@ -474,6 +486,7 @@ object ChartData {
         ChartMetric.CATCHES -> "catch"
         ChartMetric.WINS -> "battle won"
         ChartMetric.HEALING -> "healing item"
+        ChartMetric.MISSES -> "miss"
         else -> metric.noun
     }
 

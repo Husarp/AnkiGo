@@ -246,6 +246,7 @@ class StatsChartView(ctx: Context) : View(ctx) {
     private var downX = 0f
     private var downY = 0f
     private var scrubbing = false
+    private var openAtDown = -1
 
     private fun hit(e: MotionEvent, clamp: Boolean): Int {
         val s = series ?: return -1
@@ -263,7 +264,7 @@ class StatsChartView(ctx: Context) : View(ctx) {
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (series == null || series?.bars.isNullOrEmpty()) return false
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y; scrubbing = false; choose(hit(e, false)); return true }
+            MotionEvent.ACTION_DOWN -> { downX = e.x; downY = e.y; scrubbing = false; openAtDown = selected; choose(hit(e, false)); return true }
             MotionEvent.ACTION_MOVE -> {
                 if (!rows) {
                     if (!scrubbing && abs(e.x - downX) > slop && abs(e.x - downX) > abs(e.y - downY)) {
@@ -274,7 +275,11 @@ class StatsChartView(ctx: Context) : View(ctx) {
                 }
                 return true
             }
-            MotionEvent.ACTION_UP -> { performClick(); return true }
+            MotionEvent.ACTION_UP -> {
+                // a plain tap on the bar whose box is already open closes it again (R4-X1 item 1)
+                if (!scrubbing && openAtDown >= 0 && selected == openAtDown) choose(StatsChartMath.tapPick(selected, openAtDown, -1))
+                performClick(); return true
+            }
         }
         return true
     }

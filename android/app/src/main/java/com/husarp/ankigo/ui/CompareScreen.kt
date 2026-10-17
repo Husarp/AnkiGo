@@ -26,6 +26,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     private var cmp: CompareState? = null
     private var evolved = false
     private var rows: RowChoice = CompareStore.loadRows(this)
+    /** How many columns fit (0 = automatic); remembered. */
+    private var fit: Int = CompareStore.loadFit(this)
     private var lastX = 0
     private var lastY = 0
     private var full: CompareData? = null
@@ -76,10 +78,11 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             return
         }
         val view = CompareModes.view(data, display, rows)
-        val look = CompareLook(this, view.columns.size)
+        val look = CompareLook(this, view.columns.size, fit)
         val grid = CompareGrid(this, look, view, st.mode, st.sortKey, st.sortDesc,
             onHead = { pos, anchor -> headMenu(anchor, data, display, pos) },
-            onLabel = { row -> tapLabel(row) })
+            onLabel = { row, anchor -> tapLabel(row, anchor) },
+            onMove = { from, to -> display.getOrNull(from)?.let { st.moveTo(data, it, to); requestRender() } })
         grid.restore(lastX, lastY)
         grid.onScrolled = { x, y -> lastX = x; lastY = y }
 
@@ -156,15 +159,42 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             out += filterChip
         }
         out += BoxViews.chip(this, "Fully evolved", evolved) { evolved = !evolved; requestRender() }
+        lateinit var zoomChip: View
+        zoomChip = BoxViews.chip(this, "Columns: ${CompareFit.label(fit).lowercase()}", fit != CompareFit.AUTO) { zoomMenu(zoomChip) }
+        out += zoomChip
         return out
     }
 
     private fun sortName(row: CompareRow): String = row.label + if (row.key.startsWith("base_")) " (base)" else ""
 
-    private fun tapLabel(row: CompareRow) {
+    /** R4-X1 item 9: a tap on a row label says what the row is; a number row also offers to sort by it. */
+    private fun tapLabel(row: CompareRow, anchor: View) {
         val st = cmp ?: return
-        if (row.numeric) { st.tapRow(row.key); requestRender() }
-        else StatInfo.forKey(row.key)?.let { DetailParts.showInfo(this, it) }
+        val info = CompareInfo.forRow(row.key, row.label)
+        if (!row.numeric) { info?.let { DetailParts.showInfo(this, it) }; return }
+        val on = st.sortKey == row.key
+        val m = AppMenu(anchor).header(info?.title ?: row.label, info?.text)
+            .item(0, "Sort high → low", if (on && st.sortDesc) R.drawable.ic_check else R.drawable.ic_blank)
+            .item(1, "Sort low → high", if (on && !st.sortDesc) R.drawable.ic_check else R.drawable.ic_blank)
+        if (on) m.item(2, "Clear sort", R.drawable.ic_close)
+        m.show { id ->
+            when (id) { 0 -> st.setSort(row.key, true); 1 -> st.setSort(row.key, false); else -> st.setSort(null) }
+            requestRender()
+        }
+    }
+
+    /** R4-X1 item 12: how many columns fit on the screen; everything in the table scales with it. Remembered. */
+    private fun zoomMenu(anchor: View) {
+        val opts = listOf(CompareFit.AUTO) + CompareFit.OPTIONS
+        val m = AppMenu(anchor).header("Columns on screen", "Everything in the table scales to fit")
+        opts.forEachIndexed { i, o ->
+            m.item(i, if (o == CompareFit.AUTO) "Auto (by window width)" else "$o columns", if (o == fit) R.drawable.ic_check else R.drawable.ic_blank)
+        }
+        m.show { id ->
+            fit = opts[id]
+            CompareStore.saveFit(this, fit)
+            requestRender()
+        }
     }
 
     private fun sortMenu(anchor: View, st: CompareState, row: CompareRow?) {
@@ -187,7 +217,7 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         m.show { id -> st.filter = st.filter.copy(owner = opts[id].first); requestRender() }
     }
 
-    /** The menu of a column head: make it the reference, move it, take it off. [pos] is its place among the shown columns. */
+    /** The menu of a column head: make it the reference or take it off (moving is a long-press drag on the head, see [CompareGrid]). [pos] is its place among the shown columns. */
     private fun headMenu(anchor: View, data: CompareData, display: List<Int>, pos: Int) {
         val st = cmp ?: return
         val idx = display[pos]
@@ -195,33 +225,30 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         val vs = st.mode == CompareMode.VS_REFERENCE
         val m = AppMenu(anchor).header(col.name)
         if (vs && pos != 0) m.item(0, "Make reference", R.drawable.ic_star)
-        if (st.canMove(data, idx, -1)) m.item(1, "Move left", R.drawable.ic_back)
-        if (st.canMove(data, idx, 1)) m.item(2, "Move right", R.drawable.ic_chevron)
         if (st.size > Compare.MIN) m.item(3, "Remove", R.drawable.ic_trash, danger = true)
         else m.item(3, "Remove", R.drawable.ic_trash, enabled = false, sub = "Compare needs at least ${Compare.MIN}", danger = true)
         m.show { id ->
             when (id) {
                 0 -> st.makeReference(data, idx)
-                1 -> st.move(data, idx, -1)
-                2 -> st.move(data, idx, 1)
                 else -> st.remove(data, idx)
             }
             requestRender()
         }
     }
 
-    /** "best / 2nd / 3rd" under the table of "best of all". */
+    /** "worst - best" colour bar under the table of "best of all": every number is coloured by its value in its row. */
     private fun legend(): View {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        fun key(label: String, color: Int?) {
-            if (color != null) row.addView(View(this).apply { background = Ui.rounded(color, 3, this@ComparePage) }, LinearLayout.LayoutParams(dp(12), dp(12)).also { it.marginEnd = dp(4) })
-            row.addView(Ui.text(this, 11f, 800, R.color.ag_sub0).apply { text = label }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dp(10) })
-        }
+        fun word(label: String, end: Int) = row.addView(Ui.text(this, 11f, 800, R.color.ag_sub0).apply { text = label },
+            LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = end })
         val card = c(R.color.ag_card)
-        key("best", Bits.blend(c(R.color.ag_yellow), card, 0.5f))
-        key("2nd", Bits.blend(c(R.color.ag_peach), card, 0.36f))
-        key("3rd", Bits.blend(c(R.color.ag_peach), card, 0.16f))
-        key("ties share a colour", null)
+        val stops = floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f).map { Bits.blend(scaleColor(this, it), card, 0.42f) }.toIntArray()
+        word("worst", dp(6))
+        row.addView(View(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, stops).apply { cornerRadius = Ui.dp(this@ComparePage, 4f) }
+        }, LinearLayout.LayoutParams(dp(96), dp(12)).also { it.marginEnd = dp(6) })
+        word("best", dp(10))
+        word("same value, same colour", 0)
         return row
     }
 

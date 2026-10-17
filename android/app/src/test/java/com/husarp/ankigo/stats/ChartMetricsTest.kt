@@ -39,14 +39,20 @@ class ChartMetricsTest {
             listOf("Reviews", "Time studied", "Retention", "New cards", "Buttons pressed", "Card states", "Due forecast", "Streak calendar"),
             names(ChartGroup.STUDY),
         )
-        assertEquals(listOf("Money earned", "Catches", "Battles won", "XP earned", "Healing used", "Money spent"), names(ChartGroup.GAME))
+        assertEquals(
+            listOf("Money earned", "Catches", "Battles won", "XP earned", "Healing used", "Money spent", "Damage dealt", "Damage taken", "Damage blocked", "Misses"),
+            names(ChartGroup.GAME),
+        )
         assertEquals(listOf("Pokédex progress", "Pokémon per type", "Shinies & rare"), names(ChartGroup.COLLECTION))
     }
 
     @Test fun gameGroupKeepsTheMockupOrder() {
         val game = ChartMetric.menu.first { it.first == ChartGroup.GAME }.second
         assertEquals(
-            listOf(ChartMetric.MONEY, ChartMetric.CATCHES, ChartMetric.WINS, ChartMetric.XP, ChartMetric.HEALING, ChartMetric.MONEY_SPENT),
+            listOf(
+                ChartMetric.MONEY, ChartMetric.CATCHES, ChartMetric.WINS, ChartMetric.XP, ChartMetric.HEALING, ChartMetric.MONEY_SPENT,
+                ChartMetric.DMG_DEALT, ChartMetric.DMG_TAKEN, ChartMetric.DMG_BLOCKED, ChartMetric.MISSES,
+            ),
             game,
         )
     }

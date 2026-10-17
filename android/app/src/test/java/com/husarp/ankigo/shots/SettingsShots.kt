@@ -36,6 +36,10 @@ class SettingsShots {
         paparazzi.shootPage("settings-home", variants) { page(it, null) }
     }
 
+    @Test fun homeTall() {
+        paparazzi.shootPage("settings-home-tall", listOf(Variant("tall", 412, 1300))) { page(it, null) }
+    }
+
     @Test fun homeNoGame() {
         paparazzi.shootPage("settings-home-nogame", listOf(Variants.PHONE), scenario = FakeGame.Scenario.EMPTY) { page(it, null) }
     }

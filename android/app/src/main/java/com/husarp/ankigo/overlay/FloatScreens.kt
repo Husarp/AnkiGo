@@ -10,14 +10,12 @@ import android.widget.LinearLayout
 import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 import com.husarp.ankigo.Report
-import com.husarp.ankigo.ui.DexActivity
+import com.husarp.ankigo.ui.Dest
 import com.husarp.ankigo.ui.GamePage
 import com.husarp.ankigo.ui.PageHost
-import com.husarp.ankigo.ui.SettingsActivity
+import com.husarp.ankigo.ui.Nav
 import com.husarp.ankigo.ui.SettingsPage
-import com.husarp.ankigo.ui.ShopActivity
 import com.husarp.ankigo.ui.ShopPage
-import com.husarp.ankigo.ui.TeamActivity
 import com.husarp.ankigo.ui.TeamPage
 import com.husarp.ankigo.ui.TeamSection
 import com.husarp.ankigo.ui.Ui
@@ -31,13 +29,13 @@ enum class FloatPage { TEAM, DEX, SHOP, SETTINGS }
  * Only the current page is kept alive; switching rebuilds the next one (cheap).
  */
 object FloatScreens {
-    private class Tab(val page: FloatPage, @DrawableRes val icon: Int, val label: String, val activity: Class<out Activity>)
+    private class Tab(val page: FloatPage, @DrawableRes val icon: Int, val label: String, val dest: Dest)
 
     private val tabs = listOf(
-        Tab(FloatPage.TEAM, R.drawable.ic_team, "Team", TeamActivity::class.java),
-        Tab(FloatPage.DEX, R.drawable.ic_book, "Pokédex", DexActivity::class.java),
-        Tab(FloatPage.SHOP, R.drawable.ic_shop, "Shop", ShopActivity::class.java),
-        Tab(FloatPage.SETTINGS, R.drawable.ic_settings, "Settings", SettingsActivity::class.java),
+        Tab(FloatPage.TEAM, R.drawable.ic_team, "Pokémon", Dest.TEAM),
+        Tab(FloatPage.DEX, R.drawable.ic_book, "Pokédex", Dest.DEX),
+        Tab(FloatPage.SHOP, R.drawable.ic_shop, "Shop", Dest.SHOP),
+        Tab(FloatPage.SETTINGS, R.drawable.ic_settings, "Settings", Dest.SETTINGS),
     )
 
     private var window: FloatWindow? = null
@@ -136,7 +134,7 @@ object FloatScreens {
         val which = current ?: return
         val t = tabs.first { it.page == which }
         try {
-            w.context.startActivity(Intent(w.context, t.activity).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            w.context.startActivity(Nav.intent(w.context, t.dest).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (e: Exception) {
             Report.fail("floatscreens", "open full screen $which", e)
             return

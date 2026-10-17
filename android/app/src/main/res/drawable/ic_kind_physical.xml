@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Physical move: the star burst (our own drawing, 16 x 16 grid); white so callers tint it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp" android:height="16dp" android:viewportWidth="16" android:viewportHeight="16">
+    <path android:fillColor="#FFFFFF" android:pathData="M8,1.2l1.3,3.3 3.5,-1 -1.5,3.3 3.3,1.6 -3.5,1 0.5,3.6 -2.8,-2.2 -2.6,2.6 0.2,-3.6 -3.6,-0.6 3,-2L4,3.8l3.1,1.6z" />
+</vector>

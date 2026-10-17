@@ -65,7 +65,7 @@ class StudyWidgetSetupActivity : AgActivity() {
         content.removeAllViews()
         content.addView(StudyUi.label(this, "AnkiGo can't read your AnkiDroid decks yet. Open AnkiGo and allow AnkiDroid access, then pick a deck here (long-press the widget, Reconfigure).", 13)
             .apply { setPadding(Ui.dp(context, 4), Ui.dp(context, 8), Ui.dp(context, 4), 0) })
-        content.addView(StudyUi.primary(this, "Open AnkiGo") { startActivity(Intent(this, StudyDecksActivity::class.java)); finish() }, StudyUi.spaced(this, 12))
+        content.addView(StudyUi.primary(this, "Open AnkiGo") { startActivity(Nav.intent(this, Dest.STUDY)); finish() }, StudyUi.spaced(this, 12))
     }
 
     internal fun render() {

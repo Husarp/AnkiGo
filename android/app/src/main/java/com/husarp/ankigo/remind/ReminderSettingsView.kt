@@ -344,7 +344,10 @@ internal class ReminderScreen(
         setPadding(0, Ui.dp(ctx, 8), 0, Ui.dp(ctx, 4))
     }
 
-    private fun chipRow(chips: List<View>): View = Wrap(ctx, Ui.dp(ctx, 6), -Ui.dp(ctx, 8)).apply { chips.forEach { addView(it) } }
+    /** R4-X1 item 6: every chip is at least 56 dp wide, so a short number ("10") is not a thin sliver. */
+    private fun chipRow(chips: List<View>): View = Wrap(ctx, Ui.dp(ctx, 6), -Ui.dp(ctx, 8)).apply {
+        chips.forEach { (it as? TextView)?.minWidth = Ui.dp(ctx, 56); addView(it) }
+    }
 
     /** "1 h  2 h  3 h  4 h  6 h": how often a reminder repeats ([ReminderPrefs.dueEveryHours], also what the own goal uses). */
     private fun hourChips(current: Int): View = chipRow(listOf(1, 2, 3, 4, 6).map { h ->

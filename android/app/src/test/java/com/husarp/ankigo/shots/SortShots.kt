@@ -26,8 +26,8 @@ import org.junit.Rule
 import org.junit.Test
 
 /*
- * R3-V6 (pick 6A): the Box with the sort chip row, the small list of sorts, the "Sort & filter" sheet, the tile values of a stat
- * sort, and the Pokédex with the same chip. PNGs: sort-box-*, sort-list-*, sort-sheet-*, sort-dex-*.
+ * R3-V6 (pick 6A): the Box with the sort chip row, the "Sort & filter" sheet, the sort chip's sheet, the tile values of a stat
+ * sort, and the Pokédex with the same chip. PNGs: sort-box-*, sort-sheet-*, sort-chip-sheet-*, sort-dex-*.
  */
 class SortShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
@@ -65,36 +65,19 @@ class SortShots {
     @Test fun statSortFavourites() = shootBox("sort-box-stat-fav", SortSpec(key = SortKey.STAT, stat = Stat.SPE, basis = StatBasis.BASE), BoxFilter.FAVOURITES)
     @Test fun attackSort() = shootBox("sort-box-attack", SortSpec(key = SortKey.STRONGEST_ATTACK))
 
-    /** The small list of sorts, hanging under the chip (where the PopupWindow puts it). */
-    private fun list(name: String, spec: SortSpec, vsWild: Boolean) {
-        for (v in sizes) paparazzi.shootPage(name, listOf(v)) { ctx ->
-            val (_, screen) = box(ctx, v, spec)
-            val menu = SortViews.sortMenu(View(ctx), spec, SortText.boxKeys, vsWild, more = false)
-            FrameLayout(ctx).apply {
-                addView(screen, FrameLayout.LayoutParams(-1, -1))
-                addView(menu.content(ctx), FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).also {
-                    it.topMargin = Ui.dp(ctx, if (v === Variants.SPLIT) 70 else 150); it.marginStart = Ui.dp(ctx, 2)
-                })
-            }
-        }
-    }
-
-    @Test fun listOpen() = list("sort-list", SortSpec.of(SortKey.LEVEL), vsWild = true)
-    @Test fun listNoBattle() = list("sort-list-nobattle", atkDef, vsWild = false)
-
     private fun sheetOver(ctx: Context, screen: View, sheet: View) = FrameLayout(ctx).apply {
         addView(screen, FrameLayout.LayoutParams(-1, -1))
         addView(View(ctx).apply { setBackgroundColor(Color.argb(122, 0, 0, 0)) }, FrameLayout.LayoutParams(-1, -1))
         addView(sheet, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
     }
 
-    private fun sheet(name: String, spec: SortSpec, filter: BoxFilter = BoxFilter.ALL, vs: List<Variant> = sizes, vsWild: Boolean = false) {
+    private fun sheet(name: String, spec: SortSpec, filter: BoxFilter = BoxFilter.ALL, vs: List<Variant> = sizes, vsWild: Boolean = false, sortOnly: Boolean = false) {
         for (v in vs) paparazzi.shootPage(name, listOf(v)) { ctx ->
             val (p, screen) = box(ctx, v, spec, filter)
             val maxBody = (ctx.resources.displayMetrics.heightPixels * SortSheet.BODY_SHARE).toInt() - Ui.dp(ctx, 150)
             val s = SortSheet(
                 p, SortText.boxKeys, spec, SortSpec.DEFAULT, vsWild, BoxFilter.entries.map { it.label }, filter.ordinal,
-                SortSheet.GroupToggle(true) {}, count = { 54 }, onChange = { _, _ -> },
+                SortSheet.GroupToggle(true) {}, count = { 54 }, onChange = { _, _ -> }, sortOnly = sortOnly,
             )
             sheetOver(ctx, screen, s.build(maxBody))
         }
@@ -103,6 +86,10 @@ class SortShots {
     @Test fun sheetChosenStats() = sheet("sort-sheet-chosen", atkDef.copy(basis = StatBasis.CURRENT), vsWild = true)
     @Test fun sheetAtLevel() = sheet("sort-sheet-level", atkDef, BoxFilter.FAVOURITES)
     @Test fun sheetOneStat() = sheet("sort-sheet-onestat", SortSpec(key = SortKey.STAT, stat = Stat.SPE, basis = StatBasis.BASE), vs = listOf(Variants.PHONE, FLOAT))
+    /** R4-X1 item 15: the sheet the sort chip opens (direction on top, the options below). */
+    @Test fun sortSheetLevel() = sheet("sort-chip-sheet", SortSpec.of(SortKey.LEVEL), vs = listOf(Variants.PHONE, Variants.SPLIT), sortOnly = true)
+    @Test fun sortSheetAsc() = sheet("sort-chip-sheet-asc", SortSpec(key = SortKey.NAME, descending = false), vs = listOf(Variants.PHONE), sortOnly = true)
+    @Test fun sortSheetStats() = sheet("sort-chip-sheet-stats", atkDef, vs = listOf(Variants.PHONE), vsWild = true, sortOnly = true)
     @Test fun sheetLevelSort() = sheet("sort-sheet-plain", SortSpec.of(SortKey.LEVEL), vs = listOf(Variants.PHONE, Variants.SPLIT))
 
     // ---- Pokédex ----
@@ -121,27 +108,12 @@ class SortShots {
         paparazzi.shootPage("sort-dex-level", listOf(Variants.PHONE)) { ctx -> pageScreen(ctx, dex(ctx, DexFilter(sort = DexSort.LEVEL))) }
     }
 
-    @Test fun dexList() {
-        for (v in listOf(Variants.PHONE, Variants.SPLIT)) paparazzi.shootPage("sort-dex-list", listOf(v)) { ctx ->
-            val p = dex(ctx, dexStat)
-            val screen = pageScreen(ctx, p)
-            val spec = dexStat.spec()
-            val menu = SortViews.sortMenu(View(ctx), spec, SortText.dexKeys, false, more = true)
-            FrameLayout(ctx).apply {
-                addView(screen, FrameLayout.LayoutParams(-1, -1))
-                addView(menu.content(ctx), FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).also {
-                    it.topMargin = Ui.dp(ctx, if (v === Variants.SPLIT) 90 else 200)
-                })
-            }
-        }
-    }
-
     @Test fun dexSheet() {
         for (v in listOf(Variants.PHONE, Variants.SPLIT)) paparazzi.shootPage("sort-dex-sheet", listOf(v)) { ctx ->
             val p = dex(ctx, dexStat)
             val screen = pageScreen(ctx, p)
             val maxBody = (ctx.resources.displayMetrics.heightPixels * SortSheet.BODY_SHARE).toInt() - Ui.dp(ctx, 150)
-            val s = SortSheet(p, SortText.dexKeys, dexStat.spec(), SortViews.DEX_DEFAULT, false, null, 0, null, count = { 151 }, onChange = { _, _ -> })
+            val s = SortSheet(p, SortText.dexKeys, dexStat.spec(), SortViews.DEX_DEFAULT, false, null, 0, null, count = { 151 }, onChange = { _, _ -> }, sortOnly = true)
             sheetOver(ctx, screen, s.build(maxBody))
         }
     }

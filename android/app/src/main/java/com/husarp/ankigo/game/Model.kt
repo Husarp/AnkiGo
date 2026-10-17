@@ -100,6 +100,10 @@ data class Species(
     val form: String? = null,        // Showdown "forme" ("Alola", "Paldea-Combat"); null for a base species
     val baseNum: Int = num,          // national Pokédex number (= num for a base species)
     val spriteId: String = id,       // Showdown sprite file name ("raticate-alola"); = id for a base species
+    // Info data (R4-04): Showdown heightm / weightkg / abilities.H. null = not in the data (never 0); old caches rebuild once to get them.
+    val heightM: Double? = null,
+    val weightKg: Double? = null,
+    val hiddenAbility: String? = null, // display only: battles and wild Pokémon never use it
 )
 
 data class Secondary(
@@ -225,6 +229,7 @@ class Battle(
     var rounds: Int = 0,
     var startedAt: Long = 0,
     var wildMaxHp: Int? = null,     // encounter-only pace override; never carried into a caught Pokémon
+    var failedThrows: Int = 0,      // ball throws that missed in this fight (R4 fix B8): the catch card says "Throw N" from it, whichever screen watched the fight
 ) {
     fun maxWildHp(data: GameData): Int = wildMaxHp?.coerceAtLeast(1) ?: StatCalc.maxHp(data, wild)
 }
@@ -250,12 +255,15 @@ class Settings(
 /**
  * One game day of study for the Stats screen (AnkiGo's own log; see Stats.kt). [xp] = all XP your Pokémon gained that day,
  * [cash] = money earned, [buttons] = counted answers per button (index 0 unknown, 1 Again .. 4 Easy), [spent] = money
- * spent in the Shop (items, TMs, restocks), [healItems] = healing items used.
+ * spent in the Shop (items, TMs, restocks), [healItems] = healing items used. [dmgDealt] / [dmgTaken] / [dmgBlocked] / [misses] =
+ * the battle numbers of that day (R4-V11; counted from the Attack events by the rules of Achievements.attackNumbers, so they always
+ * agree with the all-time achievement counters; days before that update read 0).
  */
 class DayLog(
     var reviews: Int = 0, var won: Int = 0, var caught: Int = 0, var shinies: Int = 0,
     var xp: Int = 0, var cash: Int = 0, val buttons: IntArray = IntArray(5),
     var spent: Int = 0, var healItems: Int = 0,
+    var dmgDealt: Int = 0, var dmgTaken: Int = 0, var dmgBlocked: Int = 0, var misses: Int = 0,
 )
 
 class GameState(
@@ -304,6 +312,12 @@ class GameState(
     val ballCatches: MutableMap<String, Int> = mutableMapOf(), // wild catches per ball id ("auto" = the auto rule's catch); fossils, the starter and imports don't count
     val seenAt: MutableMap<Int, Long> = mutableMapOf(),        // species -> epoch ms it was first seen (set once; old species have none)
     val releasedAnkimon: MutableSet<String> = linkedSetOf(), // ankimonId ?: uid of Pokémon released here (newest 5 000): the export removes them from the PC save
+    val viewedMons: MutableSet<String> = linkedSetOf(),        // uids of Pokémon whose details the player has opened: their NEW mark on the Box tile / Team row is gone (R4-V5); AnkiGo save and backups only, never the Ankimon file
+    val counters: MutableMap<String, Long> = mutableMapOf(),   // achievement counters (Achievements.Counter key -> count) for what the rest of the save can't tell; AnkiGo save and backups only (R4-03)
+    val achTiers: MutableMap<String, MutableList<Long>> = mutableMapOf(), // achievement id -> epoch ms each tier was reached, in order; an id with an empty list = looked at, nothing reached yet (see Achievements.check)
+    val achInferred: MutableSet<String> = linkedSetOf(),       // "<id>/<tier>" of reached tiers whose date is only the day AnkiGo first saw them (silent look, backfill, a first external feed), not the day they happened (R4 fix A3)
+    val badgeAt: MutableMap<Int, Long> = mutableMapOf(),       // Ankimon badge id -> epoch ms it was earned here (old badges have none)
+    var achSince: Long = 0,                                    // epoch ms the achievement tracking began (0 = not yet; set by the first Achievements.check)
     val settings: Settings = Settings(),
 ) {
     fun mon(uid: String?): Mon? = mons.firstOrNull { it.uid == uid }

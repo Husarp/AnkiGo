@@ -25,11 +25,11 @@ enum class SettingsSection(val title: String, @DrawableRes val icon: Int, @Color
     SOUND("Sound", R.drawable.ic_sound, R.color.ag_pink),
     DOWNLOADS("Downloads", R.drawable.ic_download, R.color.ag_teal),
     ANKIMON("Ankimon PC sync", R.drawable.ic_swap, R.color.ag_yellow),
-    SAVE("Save & backups", R.drawable.ic_flag, R.color.ag_lav),
-    HELP("Help & game guide", R.drawable.ic_help, R.color.ag_teal),
-    UPDATES("Updates", R.drawable.ic_update, R.color.ag_sky),
-    DIAGNOSTICS("Diagnostics", R.drawable.ic_bug, R.color.ag_red),
-    ABOUT("About", R.drawable.ic_star, R.color.ag_sub1);
+    SAVE("Save & backups", R.drawable.ic_save, R.color.ag_lav),
+    HELP("Help & game guide", R.drawable.ic_help, R.color.ag_sky),
+    UPDATES("Updates", R.drawable.ic_update, R.color.ag_lime),
+    DIAGNOSTICS("Diagnostics", R.drawable.ic_bug, R.color.ag_sub0),
+    ABOUT("About", R.drawable.ic_info, R.color.ag_sub1);
 
     val opens: Boolean get() = this != HELP && this != UPDATES && this != DIAGNOSTICS
 
@@ -40,6 +40,9 @@ enum class SettingsSection(val title: String, @DrawableRes val icon: Int, @Color
             listOf(SOUND, DOWNLOADS, ANKIMON, SAVE),
             listOf(HELP, UPDATES, DIAGNOSTICS, ABOUT),
         )
+
+        /** The small group titles over the cards of [GROUPS], one each (PLAN 87, pick 11C). */
+        val GROUP_TITLES: List<String> = listOf("Play", "Sound & data", "Help & app")
 
         fun byName(name: String?): SettingsSection? = entries.firstOrNull { it.name == name }
     }

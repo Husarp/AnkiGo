@@ -8,7 +8,7 @@ import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.Type
-import com.husarp.ankigo.game.TypeChart
+import com.husarp.ankigo.game.TypeMatchups
 import com.husarp.ankigo.game.shownName
 
 // PLAN item 9 (U-10): the data behind the Compare dialog. Pure Kotlin (no android.*): unit-tested on the JVM.
@@ -16,10 +16,8 @@ import com.husarp.ankigo.game.shownName
 /** One move in a Compare cell: [type] is null for a move the data doesn't know; [power] is "90" or "—". */
 data class MoveCell(val name: String, val type: Type?, val power: String)
 
-/** One matchup entry: attacking [type] hits for [mult] (4, 2, 0.5, 0.25 or 0). */
-data class Matchup(val type: Type, val mult: Double) {
-    val label: String get() = when (mult) { 4.0 -> "×4"; 2.0 -> "×2"; 0.5 -> "×½"; 0.25 -> "×¼"; 0.0 -> "×0"; else -> "×$mult" }
-}
+/** One matchup entry (now in game/TypeMatchups.kt, R4-04): attacking type, multiplier 4, 2, 0.5, 0.25 or 0. */
+typealias Matchup = com.husarp.ankigo.game.Matchup
 
 /** What one table cell shows. Only [Text] can be the best value of its row. */
 sealed class Cell {
@@ -127,11 +125,8 @@ object CompareTable {
     }
 
     fun matchups(types: List<Type>): Triple<List<Matchup>, List<Matchup>, List<Matchup>> {
-        val all = Type.entries.map { Matchup(it, TypeChart.eff(it, types)) }
-        val weak = all.filter { it.mult > 1.0 }.sortedWith(compareByDescending<Matchup> { it.mult }.thenBy { it.type.ordinal })
-        val resist = all.filter { it.mult > 0.0 && it.mult < 1.0 }.sortedWith(compareBy<Matchup> { it.mult }.thenBy { it.type.ordinal })
-        val immune = all.filter { it.mult == 0.0 }
-        return Triple(weak, resist, immune)
+        val m = TypeMatchups.of(types)
+        return Triple(m.weakTo, m.resists, m.immune)
     }
 
     private fun natureCell(m: Mon): Cell.Text {

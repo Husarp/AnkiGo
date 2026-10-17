@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- R4-V2 achievement icon, same stroke style as ic_ball / ic_check; white so callers tint it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFF" android:pathData="M3 18.5L4.3 7l4.9 4.4L12 4l2.8 7.4L19.7 7 21 18.5Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M3.4 19.7h17.2a.9.9 0 0 1 0 1.8H3.4a.9.9 0 0 1 0-1.8Z" />
+</vector>

@@ -57,7 +57,7 @@ object MenuKit {
 }
 
 /**
- * The app-styled ⋯ menus (B-01). PNGs: menu-battle(-blocked), menu-team(-box), menu-float, menu-dexsort (cards on a scrim);
+ * The app-styled ⋯ menus (B-01). PNGs: menu-battle(-blocked), menu-team(-box), menu-float (cards on a scrim);
  * menu-screen (battle screen with the top bar / footer Stats button); menu-open-battle, menu-open-team (menu over its screen).
  */
 class MenuShots {
@@ -94,15 +94,6 @@ class MenuShots {
             val fv = FloatBattleView(object : android.content.ContextWrapper(ctx) { override fun getApplicationContext(): Context = this }, {}, {}, {})
             fv.fillMenu(m)
             MenuKit.scene(ctx, m)
-        }
-    }
-
-    @Test fun dexSortCard() {
-        paparazzi.shootPage("menu-dexsort", phoneSplit) { ctx ->
-            val p = DexPage(ctx, NoHost)
-            pageScreen(ctx, p)
-            val pill = DexPage::class.java.getDeclaredField("sortPill").apply { isAccessible = true }.get(p) as View
-            MenuKit.scene(ctx, MenuKit.capture { pill.performClick() })
         }
     }
 

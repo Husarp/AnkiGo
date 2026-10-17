@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Type symbol "fighting" (own drawing, PLAN 33): one colour, tinted at runtime by Ui.typeChip. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5.85,5.5 h0.0 a1.85,1.85 0 0 1 1.85,1.85 v3.3 a1.85,1.85 0 0 1 -1.85,1.85 h-0.0 a1.85,1.85 0 0 1 -1.85,-1.85 v-3.3 a1.85,1.85 0 0 1 1.85,-1.85zM10.15,4 h0.0 a1.85,1.85 0 0 1 1.85,1.85 v4.8 a1.85,1.85 0 0 1 -1.85,1.85 h-0.0 a1.85,1.85 0 0 1 -1.85,-1.85 v-4.8 a1.85,1.85 0 0 1 1.85,-1.85zM14.45,4.5 h0.0 a1.85,1.85 0 0 1 1.85,1.85 v4.3 a1.85,1.85 0 0 1 -1.85,1.85 h-0.0 a1.85,1.85 0 0 1 -1.85,-1.85 v-4.3 a1.85,1.85 0 0 1 1.85,-1.85zM18.5,6.5 h0.0 a1.6,1.6 0 0 1 1.6,1.6 v2.8 a1.6,1.6 0 0 1 -1.6,1.6 h-0.0 a1.6,1.6 0 0 1 -1.6,-1.6 v-2.8 a1.6,1.6 0 0 1 1.6,-1.6zM4 13.3h16.1v2.2a5.5 5.5 0 0 1-5.5 5.5H9.5A5.5 5.5 0 0 1 4 15.5z" />
+</vector>

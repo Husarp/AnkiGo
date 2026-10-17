@@ -6,7 +6,6 @@ import android.view.ViewGroup
 import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.Anki
 import com.husarp.ankigo.ui.PullRefreshLayout
-import com.husarp.ankigo.ui.StudyDecksActivity
 import com.husarp.ankigo.ui.StudyWidgetSetupActivity
 import com.husarp.ankigo.ui.Ui
 import org.junit.Rule

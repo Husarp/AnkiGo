@@ -84,7 +84,13 @@
         <activity android:name=".ui.BattleLogActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.CompareActivity" android:theme="@style/GameTheme" android:exported="false" />
 
-        <activity android:name=".ui.StudyDecksActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <!-- The old Study tab: no UI any more (the deck list is the home screen's Study view); forwards old PendingIntents and shortcuts. -->
+        <activity
+            android:name=".ui.StudyDecksActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:exported="false" />
 
         <!-- Edit a note's fields from the study card menu (PLAN 70): the keyboard resizes the page, a turned screen keeps the typed text. -->
         <activity

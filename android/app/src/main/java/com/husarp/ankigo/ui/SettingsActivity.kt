@@ -86,7 +86,7 @@ internal object SettingsJobs {
                 }
                 latch.await()
                 if (anim.cancelled) anim.done("Stopped at ${done.get()} / $total. What was downloaded is kept.")
-                else anim.done("All battle animations downloaded.")
+                else { DownloadsDone.mark(app, DownloadsDone.ANIMATIONS, gens); anim.done("All battle animations downloaded.") }
             } catch (e: Throwable) {
                 anim.fail("Download stopped: ${e.message ?: e.javaClass.simpleName}")
             }
@@ -301,10 +301,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         content.addView(SettingsHomeSearch.box(this, query) { q -> query = q; showResults() }, Form.lp(this, 4))
         homeBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         SettingsSection.GROUPS.forEachIndexed { i, group ->
+            homeBox.addView(Form.sect(this, SettingsSection.GROUP_TITLES[i]), Form.lp(this, 0))
             homeBox.addView(SettingsHome.group(this, group.map { s ->
                 SettingsHome.row(this, s, summaryOf(s)) { choose(s) }
-            }), Form.lp(this, if (i == 0) 12 else 14))
+            }), Form.lp(this, 0))
         }
+        homeBox.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply { text = "AnkiGo ${Updates.current(this@SettingsPage)}"; gravity = Gravity.CENTER }, Form.lp(this, 16))
         resultsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(homeBox)
         content.addView(resultsBox)
@@ -399,7 +401,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.segmented(this, bars.map { it.label }, bars.indexOf(AppPrefs.barStyle(this))) { i ->
                 AppLook.setBarStyle(this, bars[i]); looked()
             })
-        return Form.cardOf(this, listOf(theme, accent, barStyle, size))
+        val typeStyles = TypeStyle.entries
+        val typeStyle = Form.stackRow(this, "Show types as", "Type names, small type icons, or both.",
+            Form.segmented(this, typeStyles.map { it.label }, typeStyles.indexOf(AppPrefs.typeStyle(this))) { i ->
+                AppLook.setTypeStyle(this, typeStyles[i]); looked()
+            })
+        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, size))
     }
 
     /** The look changed: this screen recreates itself (Activity) or tells the player the window needs reopening (floating card). */
@@ -624,6 +631,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private fun battleSection() {
         content.addView(Form.sect(this, "When you leave AnkiGo"))
         content.addView(leaveCard())
+        content.addView(Form.sect(this, "Pop out opens"))
+        content.addView(popOutCard())
         content.addView(Form.sect(this, "Battle panel"))
         content.addView(Form.cardOf(this, listOf(
             Form.switchRow(this, "Stat card under its own Pokémon", "Off: the classic game layout, each card on the opposite side",
@@ -668,6 +677,32 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             rows += Form.row(this, label, sub, tick) {
                 setLeaveMode(m)
                 ticks.forEach { (k, t) -> t.visibility = if (k == m) View.VISIBLE else View.INVISIBLE }
+            }
+        }
+        return Form.cardOf(this, rows)
+    }
+
+    /** What Pop out opens (R4-X5): the floating battle window or picture-in-picture; separate from the leave mode. */
+    private fun popOutCard(): LinearLayout {
+        val mode = AppPrefs.popOutMode(this)
+        val options = listOf(
+            Triple(PopOutMode.FLOAT, "Floating window", "Stays on top and you can tap it; needs “Display over other apps”"),
+            Triple(PopOutMode.PIP, "Picture-in-picture window", "Android's own small window; view only"),
+        )
+        val ticks = HashMap<PopOutMode, ImageView>()
+        val rows = mutableListOf<View>()
+        for ((m, label, sub) in options) {
+            val tick = ImageView(this).apply {
+                setImageResource(R.drawable.ic_check)
+                setColorFilter(Ui.c(this@SettingsPage, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
+                visibility = if (m == mode) View.VISIBLE else View.INVISIBLE
+                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+            }
+            ticks[m] = tick
+            rows += Form.row(this, label, sub, tick) {
+                AppPrefs.setPopOutMode(this, m)
+                ticks.forEach { (k, t) -> t.visibility = if (k == m) View.VISIBLE else View.INVISIBLE }
+                if (m == PopOutMode.FLOAT && !Overlay.canDraw(this)) askOverlay()
             }
         }
         return Form.cardOf(this, rows)
@@ -742,8 +777,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
         val picJob = FirstRunJob.job
         val picBusy = picJob.running
+        val gensNow = loaded?.settings?.gens?.toSet() ?: com.husarp.ankigo.game.Tuning.DEFAULT_GENS
+        if (!picBusy) GameRepo.data?.let { DownloadsDone.adoptPictures(this, speciesNums(it, gensNow), gensNow) } // X3-3: pictures that were all there before 0.13.0
+        val picsDone = !picBusy && DownloadsDone.isDone(this, DownloadsDone.PICTURES, gensNow)
         val picBtn = Form.secondary(this, if (picJob.state == BgJob.State.FAILED && picsFromSettings) "Try again: download pictures" else "Download pictures (about 1 MB)") { startPictures() }
         Form.enable(picBtn, !picBusy && !anim.running && !dat.running)
+        if (picsDone) downloadedLook(picBtn, "Pictures")
         actions.addView(picBtn)
         if (picsFromSettings) when (picJob.state) {
             BgJob.State.RUNNING -> {
@@ -761,6 +800,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         // battle animations
         val animBtn = Form.secondary(this, "Download all battle animations (about 80 MB)") { startAnimations() }
         Form.enable(animBtn, !anim.running && !dat.running && !picBusy)
+        if (anim.state != BgJob.State.RUNNING && DownloadsDone.isDone(this, DownloadsDone.ANIMATIONS, gensNow)) downloadedLook(animBtn, "Battle animations")
         actions.addView(animBtn)
         when (anim.state) {
             BgJob.State.RUNNING -> {
@@ -794,6 +834,17 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         actions.addView(Form.body(this, "Pictures download again as you need them.", 12, R.color.ag_sub0), Form.lp(this, 6))
         box.addView(actions)
         return box
+    }
+
+    /** R4-X1 item 5: a finished download turns its button into a green, tap-less "Downloaded ✓". */
+    private fun downloadedLook(b: TextView, what: String) {
+        val green = Ui.c(this, R.color.ag_green)
+        b.text = "$what: Downloaded ✓"
+        b.setTextColor(green)
+        b.background = Ui.rounded(Bits.blend(green, Ui.c(this, R.color.ag_mantle), 0.18f), 11, this)
+        b.isEnabled = false
+        b.isClickable = false
+        b.alpha = 1f
     }
 
     private fun rebuildData() {
@@ -866,6 +917,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private fun confirmClear() {
         confirm("Clear picture cache?", "All downloaded pictures and animations are deleted (${sizeText(Sprites.size(this))}). They download again when needed.", "Clear") {
             Sprites.clear(this)
+            DownloadsDone.clear(this)
             Ui.toast(this, "Picture cache cleared")
             rebuildData()
         }

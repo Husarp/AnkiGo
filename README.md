@@ -25,10 +25,11 @@ Existing features remain:
   picture-in-picture you can also choose a floating battle window; it keeps running with a notification while AnkiGo
   isn't in front.
 
-The game itself: every answer you give in AnkiDroid becomes part of an Ankimon-style battle in AnkiGo's panel (two
-answers make one round): catch and collect Pokémon, level them up, evolve them, fill the Pokédex, earn coins for the
-daily shop. Nothing needs a tap while you study. The rules follow the [Ankimon](https://github.com/h0tp-ftw/ankimon)
-Anki add-on, with a simpler battle engine.
+The game itself: every answer you give becomes part of a Pokémon battle in AnkiGo's panel (two answers make one
+round): catch and collect Pokémon, level them up, evolve them, fill the Pokédex, earn coins for the daily shop.
+Nothing needs a tap while you study. AnkiGo started from the rules of the [Ankimon](https://github.com/h0tp-ftw/ankimon)
+Anki add-on, but has since gone its own way: its own battle engine, money, healing, catching, achievements and more.
+Saves can still be moved to and from Ankimon on the PC.
 
 No Pokémon pictures or data are part of this repository or the APK. On first start AnkiGo downloads the game
 data (about 4 MB, from [PokeAPI](https://pokeapi.co) and [Pokémon Showdown](https://pokemonshowdown.com)) and

@@ -34,7 +34,7 @@ class PickSet(private val max: Int = Int.MAX_VALUE, private val min: Int = Compa
     }
 }
 
-/** What the Pokédex section needs from the Team tab that hosts it while Compare picking is on. */
+/** What the Pokédex section needs from the Pokémon tab that hosts it while Compare picking is on. */
 interface PickHost {
     val picking: Boolean
     fun isPicked(p: ComparePick): Boolean
@@ -44,11 +44,12 @@ interface PickHost {
     fun startPickWith(uid: String)
 }
 
-/** The sections of the Team tab. */
+/** The sections of the Pokémon tab (the Team tab until round 4). */
 enum class TeamSection(val label: String, val icon: Int) {
     TEAM("Team", R.drawable.ic_team),
-    BOX("Box", R.drawable.ic_ball),
-    DEX("Pokédex", R.drawable.ic_book);
+    BOX("Box", R.drawable.ic_grid),
+    DEX("Pokédex", R.drawable.ic_dex),
+    SHOP("Shop", R.drawable.ic_shop);
 
     companion object {
         fun of(name: String?): TeamSection = entries.firstOrNull { it.name == name } ?: TEAM
@@ -57,11 +58,14 @@ enum class TeamSection(val label: String, val icon: Int) {
 
 /** Looks shared by team rows, box cells and Pokédex cells in pick mode. */
 internal object PickKit {
-    /** Card background; a picked one gets a 2 dp accent outline. */
-    fun cardBg(ctx: Context, radiusDp: Int, picked: Boolean): Drawable =
-        Ui.rounded(Ui.c(ctx, R.color.ag_card), radiusDp, ctx).apply {
-            if (picked) setStroke(Ui.dp(ctx, 2), Ui.c(ctx, R.color.ag_mauve))
+    /** Card background; a picked one is tinted with the accent and gets a 3 dp accent outline, so it stands out from the others. */
+    fun cardBg(ctx: Context, radiusDp: Int, picked: Boolean): Drawable {
+        val card = Ui.c(ctx, R.color.ag_card)
+        val mauve = Ui.c(ctx, R.color.ag_mauve)
+        return Ui.rounded(if (picked) Bits.blend(mauve, card, 0.24f) else card, radiusDp, ctx).apply {
+            if (picked) setStroke(Ui.dp(ctx, 3), mauve)
         }
+    }
 
     fun badge(ctx: Context): ImageView = ImageView(ctx).apply { visibility = View.GONE }
 
@@ -69,7 +73,18 @@ internal object PickKit {
     fun bindBadge(img: ImageView, picking: Boolean, picked: Boolean) {
         val ctx = img.context
         img.visibility = if (picking) View.VISIBLE else View.GONE
-        img.setImageResource(if (picked) R.drawable.ic_checkbox_on else R.drawable.ic_checkbox_off)
-        img.setColorFilter(Ui.c(ctx, if (picked) R.color.ag_mauve else R.color.ag_ov), PorterDuff.Mode.SRC_IN)
+        if (picked) {
+            // ticked: a filled accent disc with a tick; unticked: the empty grey box
+            img.setImageResource(R.drawable.ic_check)
+            img.setColorFilter(Ui.c(ctx, R.color.ag_crust), PorterDuff.Mode.SRC_IN)
+            img.background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 99, ctx)
+            val p = Ui.dp(ctx, 2)
+            img.setPadding(p, p, p, p)
+        } else {
+            img.setImageResource(R.drawable.ic_checkbox_off)
+            img.setColorFilter(Ui.c(ctx, R.color.ag_ov), PorterDuff.Mode.SRC_IN)
+            img.background = null
+            img.setPadding(0, 0, 0, 0)
+        }
     }
 }

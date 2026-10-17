@@ -47,18 +47,34 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * The AnkiGo battle panel (launcher): meant for the bottom half of a split screen next to AnkiDroid, also fine full screen.
+ * The AnkiGo home screen (launcher, PLAN 88 + 108). It has two views ([HomeView], decided by [HomeLayout]):
+ * Study (the deck list, [StudyHome], with the bottom bar; the small battle card lives in the Pokémon tab) and the full-screen
+ * Battle (back arrow, Pop out, ⋯, no bottom bar; Back returns to where it was opened from). In a short window
+ * (the bottom half of a split screen next to AnkiDroid, a landscape phone) and in picture-in-picture it shows the battle only,
+ * as before the merge; a short window with no playable battle (study only, setup canceled, save error) keeps the Study layout. The panel is on screen, and animated by [LiveSession], only in those battle layouts.
  * Nothing needs a tap while you study: [LiveSession] sees each answer in AnkiDroid, [Game] turns it into battle
  * events and [EventPlayer] shows them on the [BattlePanelView]. Loading, first-run and save-error screens live here too.
  * Leaving the app with LeaveMode.PIP puts the compact battle into picture-in-picture (Open and Pause/Resume buttons);
  * the activity is only paused there, so live detection keeps running.
  */
 class GameActivity : AgActivity() {
-    private lateinit var content: FrameLayout
+    private lateinit var content: FrameLayout   // the battle's area: the panel, or a loading message; in the Study view the status slot (setup row / card), else gone
+    private var capped: CappedFrame? = null     // [content] as the capped frame (the status slot of a short window's Study layout shares the area with the deck list)
     private lateinit var nav: View
-    private lateinit var topBar: View        // slim "Battle" bar with Stats and ⋯; only in a tall window
+    private lateinit var studyBar: View       // Study view: "Study" app bar with the AnkiDroid pill, Sync and New deck
+    private lateinit var topBar: View        // slim "Battle" bar with Back, Pop out and ⋯; only in the Battle view of a tall window
     private lateinit var continueSlot: FrameLayout // "Continue studying" bar under the top bar (PLAN 92); empty/gone unless a deck is due
+    private lateinit var deckPane: View       // Study view: the deck list with pull-to-refresh
+    private lateinit var homeRoot: View
     private var continueDeck: Anki.Deck? = null
+    private var homeView = HomeView.STUDY
+    private var parts: HomeLayout.Parts? = null  // what the last layout decision showed ([relayout])
+    private var studyOnly = false             // "Study without the game" was chosen at first run
+    private var battleOrigin: Dest? = null    // the screen that opened the full-screen battle (the Pokémon tab's card): Back returns there
+    private var popOutPending = false         // the Pokémon tab's Pop out asked for the pop-out; it runs once the game is bound and we are on screen
+    private var holding = false               // LiveSession is held (started, with a loaded game)
+    private var sinkOn = false                // the panel is a LiveSession sink (it is on screen)
+    private var slotKey: Any? = null          // what [fillContent] last drew, so a layout pass that changes nothing redraws nothing
 
     private var panel: BattlePanelView? = null
     private var player: EventPlayer? = null
@@ -73,7 +89,14 @@ class GameActivity : AgActivity() {
     private var pipReceiver: BroadcastReceiver? = null
     private val pauseListener: (Boolean) -> Unit = { p -> panel?.setPaused(p); updatePipParams() }
 
-    /** The panel as a [LiveSession] sink: attached while the activity is started, so a stopped one queues no animations. */
+    /** What the Study view's deck list asks of the home screen. */
+    private val homeHost = object : StudyHome.Host {
+        override fun studyInAnkiDroid(deckId: Long) = reviewInAnkiDroid(deckId)
+        override fun askAnkiAccess() { internalNav = true; updatePipParams(); requestPermissions(arrayOf(Anki.permission), REQ_PERMISSION) }
+    }
+    internal val home by lazy { StudyHome(this, homeHost) }
+
+    /** The panel as a [LiveSession] sink: attached while the activity is started and the panel is on screen, so nothing hidden queues animations. */
     private val liveSink = object : LiveSession.Sink {
         override fun onGameEvents(events: List<GameEvent>) { player?.enqueue(events) }
         override fun onLogLine(kind: LogKind, pill: String, text: String, redraw: Boolean) {
@@ -90,58 +113,144 @@ class GameActivity : AgActivity() {
         Anki.load(this)
         if (savedInstanceState == null) Updates.onAppStart(this)
         studyReturn.restore(savedInstanceState?.getIntArray("studyReturn"))
+        // the view survives a recreation; else the Intent says (the launcher start has no extra: Study)
+        homeView = HomeView.of(savedInstanceState?.getString(HomeView.EXTRA_VIEW))
+            ?: HomeNav.viewFromIntent(intent?.getStringExtra(HomeView.EXTRA_VIEW), null)
+        battleOrigin = if (savedInstanceState != null) Dest.entries.firstOrNull { it.name == savedInstanceState.getString(STATE_ORIGIN) }
+            else HomeNav.originAfter(intent?.getStringExtra(HomeView.EXTRA_VIEW), intent?.getStringExtra(HomeView.EXTRA_FROM), null)
+        popOutPending = savedInstanceState == null && intent?.getBooleanExtra(HomeView.EXTRA_POP_OUT, false) == true
+        studyOnly = getSharedPreferences("firstrun", 0).getBoolean("studyOnly", false)
 
         val root = buildContent()
         setContentView(root)
-        showMessage("Loading…")
         registerPipReceiver()
+        home.resumeFlows()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putIntArray("studyReturn", studyReturn.toInts())
+        outState.putString(HomeView.EXTRA_VIEW, homeView.key)
+        outState.putString(STATE_ORIGIN, battleOrigin?.name)
     }
 
-    /** The screen's View tree (banner, content holder, bottom bar). Split out of onCreate so screenshots can build it. */
+    /** The screen's View tree (app bars, content holder, deck list, bottom bar). Split out of onCreate so screenshots can build it. */
     internal fun buildContent(): View {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Ui.c(this@GameActivity, R.color.ag_base))
         }
+        homeRoot = root
+        studyBar = home.buildAppBar().also { it.visibility = View.GONE }
+        root.addView(studyBar, LinearLayout.LayoutParams(-1, -2))
         topBar = buildTopBar().also { it.visibility = View.GONE }
         root.addView(topBar, LinearLayout.LayoutParams(-1, -2))
         continueSlot = FrameLayout(this).also { it.visibility = View.GONE }
         root.addView(continueSlot, LinearLayout.LayoutParams(-1, -2))
-        content = FrameLayout(this)
-        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
-        nav = BottomNav.create(this, BottomNav.Tab.BATTLE).also { it.visibility = View.GONE }
+        // the battle's area (or the Study view's status slot) and the deck list share the area between the bars; [relayout] sizes them for the view
+        content = CappedFrame(this).also { capped = it }
+        deckPane = home.buildBody().also { it.visibility = View.GONE }
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+            addView(deckPane, LinearLayout.LayoutParams(-1, 0, 1f))
+        }, LinearLayout.LayoutParams(-1, 0, 1f))
+        nav = BottomNav.create(this, BottomNav.tabOf(Dest.STUDY)).also { it.visibility = View.GONE }
         root.addView(nav, LinearLayout.LayoutParams(-1, -2))
-        // The bottom bar only fits a tall window; in a split-screen half the ⋯ menu is the way out.
-        root.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-            val tall = v.height / resources.displayMetrics.density >= 560f
-            val want = if (tall && !inPip) View.VISIBLE else View.GONE
-            if (nav.visibility != want) nav.visibility = want
-            if (topBar.visibility != want) { topBar.visibility = want; panel?.setFooterTools(want != View.VISIBLE) }
-            updateContinueVisibility()
-        }
+        // Which bars and views fit depends on the window's height ([HomeLayout]); in a split-screen half the ⋯ menu is the way out.
+        root.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> relayout(v.height / resources.displayMetrics.density) }
         return root
     }
 
-    /** The slim top bar of a tall window: title "Battle" and the Pop out, Stats and ⋯ buttons (a short window has them in the panel footer). */
+    /**
+     * Applies [HomeLayout.decide] for a window [heightDp] dp tall (every layout pass, a new view, a new game status, PiP):
+     * which bars and parts show, what the battle's area holds, and the panel's own tool buttons. Does nothing when the
+     * answer has not changed. Height 0 (not laid out yet) is skipped, except in PiP.
+     */
+    internal fun relayout(heightDp: Float = homeRoot.height / resources.displayMetrics.density) {
+        if (heightDp <= 0f && !inPip) return
+        val p = HomeLayout.decide(heightDp, inPip, homeView, GameRepo.status)
+        if (p == parts) return
+        val deckListWasShown = parts?.deckList == true
+        parts = p
+        studyBar.visibility = if (p.studyBar) View.VISIBLE else View.GONE
+        topBar.visibility = if (p.battleBar) View.VISIBLE else View.GONE
+        deckPane.visibility = if (p.deckList) View.VISIBLE else View.GONE
+        nav.visibility = if (p.bottomBar) View.VISIBLE else View.GONE
+        content.visibility = if (p.card == HomeLayout.Card.NONE) View.GONE else View.VISIBLE
+        val lp = content.layoutParams as LinearLayout.LayoutParams
+        if (p.card == HomeLayout.Card.FULL) { lp.height = 0; lp.weight = 1f } else { lp.height = -2; lp.weight = 0f } // SLOT: as tall as what it holds
+        capped?.cap = if (p.card == HomeLayout.Card.SLOT && !p.tall) SHORT_SLOT_SHARE else 0f // a short window: a tall card scrolls, the deck list keeps its half
+        content.layoutParams = lp
+        fillContent(force = true)
+        applyToPanel()
+        syncLive()
+        updateContinueVisibility()
+        if (p.deckList && !deckListWasShown) home.refresh()
+    }
+
+    /** What the last layout decision means for the panel: its tool buttons (the Battle view's top bar has them). */
+    private fun applyToPanel() {
+        panel?.setFooterTools(parts?.footerTools ?: true)
+    }
+
+    /** The panel is in the battle's area and that area is on screen (the Battle view, a short window, picture-in-picture). */
+    private fun panelShown(): Boolean = bound && panel?.parent === content && parts?.card == HomeLayout.Card.FULL
+
+    /**
+     * Fills the battle's area for the last layout decision: the panel when the game plays and the area is the battle's;
+     * else what [HomeLayout.slot] says (the "Loading…" message where the battle would be, the "Set up the game" row, the
+     * setup card, the save-error card; nothing while the Study view loads). [force]: draw again even when nothing changed.
+     */
+    private fun fillContent(force: Boolean = false) {
+        val p = parts ?: return
+        val slot = HomeLayout.slot(GameRepo.status, studyOnly, firstRunCanceled)
+        val showPanel = bound && p.card == HomeLayout.Card.FULL
+        val key = Triple(showPanel, p.card, slot)
+        if (!force && key == slotKey) return
+        slotKey = key
+        val pn = panel
+        when {
+            showPanel && pn != null -> {
+                if (pn.parent !== content) {
+                    content.removeAllViews()
+                    content.addView(pn, FrameLayout.LayoutParams(-1, -1))
+                    pn.renderAll()
+                }
+            }
+            slot == HomeLayout.Slot.SETUP_ROW -> showSetupRow()
+            slot == HomeLayout.Slot.SETUP_CARD -> showCard("Setup isn't finished",
+                "AnkiGo needs the game data and your first Pokémon before it can start.",
+                "Continue setup" to { firstRunCanceled = false; onStatus(GameRepo.status) })
+            slot == HomeLayout.Slot.SAVE_ERROR -> showSaveError()
+            slot == HomeLayout.Slot.LOADING && p.card == HomeLayout.Card.FULL -> showMessage("Loading…")
+            else -> content.removeAllViews()
+        }
+    }
+
+    /** Shows [v] (the Study view or the full-screen battle). Study reloads its deck list when it comes back. */
+    internal fun setHomeView(v: HomeView) {
+        if (homeView == v) return
+        homeView = v
+        if (v != HomeView.BATTLE) battleOrigin = null // the way back belongs to the battle that was opened
+        relayout()
+    }
+
+    /** The slim top bar of a tall window: Back, title "Battle", Pop out and ⋯ (Stats, Battle log, Switch… are in the menu; a short window has Pop out, Stats and ⋯ in the panel footer). */
     private fun buildTopBar(): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setBackgroundColor(Ui.c(this@GameActivity, R.color.ag_base))
-        setPadding(Ui.dp(this@GameActivity, 16), Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 8), Ui.dp(this@GameActivity, 4))
+        setPadding(Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 8), Ui.dp(this@GameActivity, 4))
+        addView(topButton(R.drawable.ic_back, "Back", R.color.ag_text) { onBackPressed() })
         addView(Ui.text(this@GameActivity, 18f, 900, R.color.ag_text).apply { text = "Battle"; maxLines = 1; letterSpacing = -0.014f }, LinearLayout.LayoutParams(0, -2, 1f))
         addView(topButton(R.drawable.ic_pip, "Pop out: small battle window") { popOut() })
-        addView(topButton(R.drawable.ic_stats, "Stats") { openStats() })
         addView(topButton(R.drawable.ic_more_vert, "Menu") { showMenu(it) })
     }
 
-    private fun topButton(icon: Int, description: String, onClick: (View) -> Unit): View = ImageView(this).apply {
+    private fun topButton(icon: Int, description: String, tone: Int = R.color.ag_sub1, onClick: (View) -> Unit): View = ImageView(this).apply {
         setImageResource(icon)
-        setColorFilter(Ui.c(this@GameActivity, R.color.ag_sub1), android.graphics.PorterDuff.Mode.SRC_IN)
+        setColorFilter(Ui.c(this@GameActivity, tone), android.graphics.PorterDuff.Mode.SRC_IN)
         contentDescription = description
         val p = Ui.dp(this@GameActivity, 12)
         setPadding(p, p, p, p)
@@ -155,11 +264,28 @@ class GameActivity : AgActivity() {
         BattleScreen.setVisible(this, true)
         LiveSession.addPauseListener(pauseListener)
         panel?.setPaused(LiveSession.paused)
-        if (bound) {
+        syncLive()
+    }
+
+    /**
+     * Keeps LiveSession in step with what is on screen: held while the activity is started with a loaded game (answers count
+     * wherever you are), the panel attached as a sink only while it is on screen (it draws itself from the game when it comes
+     * back, so nothing hidden queues animations).
+     */
+    private fun syncLive() {
+        val hold = started && bound
+        if (hold && !holding) { holding = true; LiveSession.hold(this, this) }
+        val sink = hold && panelShown()
+        if (sink && !sinkOn) {
+            sinkOn = true
             panel?.renderAll()
             LiveSession.addSink(liveSink)
-            LiveSession.hold(this, this)
+        } else if (!sink && sinkOn) {
+            sinkOn = false
+            LiveSession.removeSink(liveSink)
+            player?.clear()
         }
+        if (!hold && holding) { holding = false; LiveSession.release(this, this) }
     }
 
     /** The Continue bar shows only under the top bar (tall window), never in PiP, and only while a deck is due. */
@@ -214,29 +340,57 @@ class GameActivity : AgActivity() {
         startActivity(Intent(this, com.husarp.ankigo.StudyActivity::class.java).putExtra("deckId", deck.id).putExtra("deckName", deck.name))
     }
 
-    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent) }
+    /** A start of the home screen that found it open: the Intent says which view to show (PiP "Open", the floating window, a widget, a tab). */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        HomeNav.onIntent(intent.getStringExtra(HomeView.EXTRA_VIEW), studyReturn) // an explicit destination beats a pending "Study in AnkiDroid" return (onResume)
+        battleOrigin = HomeNav.originAfter(intent.getStringExtra(HomeView.EXTRA_VIEW), intent.getStringExtra(HomeView.EXTRA_FROM), battleOrigin)
+        setHomeView(HomeNav.viewFromIntent(intent.getStringExtra(HomeView.EXTRA_VIEW), homeView))
+        if (intent.getBooleanExtra(HomeView.EXTRA_POP_OUT, false)) popOutPending = true
+    }
+
+    /** The Pokémon tab's Pop out: once the game is bound and the activity is started, the same pop-out as the top bar's button. */
+    private fun runPendingPopOut() {
+        if (!popOutPending || !bound || !started) return
+        popOutPending = false
+        intent?.removeExtra(HomeView.EXTRA_POP_OUT)
+        window.decorView.post { popOut() }
+    }
+
+    /** "Study in AnkiDroid" for [deckId] (AnkiDroid has selected it): starts its reviewer and tracks the way back to the Study view ([StudyReturn]). */
+    internal fun reviewInAnkiDroid(deckId: Long) {
+        if (GameRepo.game == null) { // no game running: nothing to keep alive, nothing to come back to
+            runCatching { startActivity(Anki.reviewIntent(deckId)) }.onFailure { Ui.toast(this, "Open AnkiDroid once first") }
+            return
+        }
+        studyReturn.requested()
+        window.decorView.post {
+            studyReturn.ankiStarting()
+            runCatching { startActivity(Anki.reviewIntent(deckId)) }.onFailure { studyReturn.ankiFailed(); Ui.toast(this, "Open AnkiDroid once first") }
+        }
+    }
 
     override fun onResume() {
         super.onResume()
         val reviewDeck = intent.getLongExtra("reviewDeck", 0)
         if (reviewDeck != 0L) {
+            // handed over by the in-app study screen (StudyActivity "Study in AnkiDroid")
             intent.removeExtra("reviewDeck")
-            studyReturn.requested()
-            window.decorView.post {
-                studyReturn.ankiStarting()
-                runCatching { startActivity(Anki.reviewIntent(reviewDeck)) }.onFailure { studyReturn.ankiFailed(); Ui.toast(this, "Open AnkiDroid once first") }
-            }
+            reviewInAnkiDroid(reviewDeck)
         } else if (studyReturn.resumed(inPip)) {
-            startActivity(Intent(this, StudyDecksActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+            setHomeView(HomeView.STUDY) // back from AnkiDroid (not through the PiP window): the Study view
         }
         internalNav = false
         updatePipParams()
         FloatBattleService.startIfWanted(this)
         loadContinue()
+        if (parts?.deckList == true) home.refresh() // the Study view is showing; else it loads when it first shows
         if (bound) {
             panel?.refreshPrefs()   // Settings may have changed the card layout / compact cards while we were away
             val events = act { it.tick() }
-            if (events.isEmpty()) { if (player?.idle != false) panel?.renderAll() } else handleEvents(events)
+            if (events.isEmpty()) { if (panelShown() && player?.idle != false) panel?.renderAll() } else handleEvents(events)
+            runPendingPopOut()
         } else {
             startLoad()
         }
@@ -250,10 +404,9 @@ class GameActivity : AgActivity() {
         started = false
         BattleScreen.setVisible(this, false)
         LiveSession.removePauseListener(pauseListener)
-        LiveSession.removeSink(liveSink)
+        if (bound) LiveSession.saveSnapshot()
+        syncLive() // the sink goes, then the last hold is released (which saves)
         if (bound) {
-            LiveSession.saveSnapshot()
-            LiveSession.release(this, this)
             player?.clear()
             GameRepo.saveNow(this)
             Widgets.refreshAll(this)
@@ -263,12 +416,14 @@ class GameActivity : AgActivity() {
 
     override fun onDestroy() {
         destroyed = true
+        home.onDestroy()
         BattleScreen.setVisible(this, false)
         pipReceiver?.let { try { unregisterReceiver(it) } catch (e: IllegalArgumentException) { } }
         pipReceiver = null
         LiveSession.removePauseListener(pauseListener)
         LiveSession.removeSink(liveSink)
         LiveSession.release(this, this) // in case onStop didn't run
+        holding = false; sinkOn = false
         player?.clear()
         super.onDestroy()
     }
@@ -285,7 +440,7 @@ class GameActivity : AgActivity() {
         fun action(icon: Int, title: String, pi: PendingIntent) =
             RemoteAction(Icon.createWithResource(this, icon), title, title, pi)
         val open = PendingIntent.getActivity(this, 0,
-            Intent(this, GameActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            Nav.intent(this, Dest.BATTLE).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val toggle = if (LiveSession.paused) {
             action(R.drawable.ic_play, "Resume", pipBroadcast(ACTION_RESUME, 2))
@@ -342,15 +497,15 @@ class GameActivity : AgActivity() {
     }
 
     /**
-     * Pop out (PLAN 24): the battle as a floating window when the leave mode is FLOAT or the device has no PiP,
-     * else as picture-in-picture. Works with any leave mode, is not "leaving" (internalNav / studyReturn untouched),
+     * Pop out (PLAN 24, R4-X5): the battle as a floating window or as picture-in-picture, as chosen in Settings
+     * (the floating window anyway when the device has no PiP). Works with any leave mode, is not "leaving" (internalNav / studyReturn untouched),
      * does nothing when already in PiP. The floating window needs the overlay permission (explained once; if it was
      * explained before and is still missing, PiP is used when the device has it).
      */
     fun popOut() {
         if (inPip || !bound || destroyed) return
         val pip = pipAvailable()
-        if (PopOutPlan.useFloat(AppPrefs.leaveMode(this), pip)) {
+        if (PopOutPlan.useFloat(AppPrefs.popOutMode(this), pip)) {
             if (!Overlay.canDraw(this)) {
                 if (Overlay.askOnce(this, "The floating battle window shows your battle over AnkiDroid while you study.")) return
                 if (pip) { enterPip(); return }
@@ -368,9 +523,12 @@ class GameActivity : AgActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPip = isInPictureInPictureMode
         if (inPip) studyReturn.pipEntered()
+        // expanded from PiP during a "Study in AnkiDroid" hand-over: show the battle (Back from it goes to the Study view)
+        else if (studyReturn.fromStudy) { homeView = HomeView.BATTLE; battleOrigin = null }
         panel?.setCompact(inPip)
-        // the layout listener re-decides the bottom bar by height; force it now so it doesn't flash in PiP
-        if (inPip) { nav.visibility = View.GONE; topBar.visibility = View.GONE; panel?.setFooterTools(true) } else content.requestLayout()
+        // the layout listener re-decides by height; decide now so the bars don't flash in PiP
+        relayout()
+        if (!inPip) content.requestLayout()
         updateContinueVisibility()
     }
 
@@ -404,6 +562,7 @@ class GameActivity : AgActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQ_PERMISSION) return
+        home.refresh()
         val ok = grantResults.firstOrNull() == 0
         Report.log("PANEL", "permission ${permissions.firstOrNull()}: ${if (ok) "granted" else "denied"}")
         if (bound && started) LiveSession.restart(this)
@@ -414,7 +573,6 @@ class GameActivity : AgActivity() {
     private fun startLoad() {
         if (loading || bound) return
         loading = true
-        showMessage("Loading…")
         GameRepo.load(this) { status ->
             loading = false
             if (!destroyed) onStatus(status)
@@ -422,50 +580,44 @@ class GameActivity : AgActivity() {
     }
 
     private fun onStatus(status: GameRepo.Status) {
+        studyOnly = getSharedPreferences("firstrun", 0).getBoolean("studyOnly", false)
         when (status) {
-            GameRepo.Status.LOADING -> showMessage("Loading…")
-            GameRepo.Status.NEED_DATA, GameRepo.Status.NEED_STARTER -> {
-                if (getSharedPreferences("firstrun", 0).getBoolean("studyOnly", false)) {
-                    startActivity(Intent(this, StudyDecksActivity::class.java)); finish(); return
-                }
-                if (firstRunCanceled) {
-                    showCard("Setup isn't finished",
-                        "AnkiGo needs the game data and your first Pokémon before it can start.",
-                        "Continue setup" to { firstRunCanceled = false; onStatus(GameRepo.status) })
-                } else {
+            GameRepo.Status.LOADING, GameRepo.Status.SAVE_ERROR -> {}
+            GameRepo.Status.NEED_DATA, GameRepo.Status.NEED_STARTER ->
+                // studying without the game: the Study view's slot offers "Set up the game"; a canceled first run: "Continue setup"
+                if (!studyOnly && !firstRunCanceled) {
                     startActivityForResult(Intent(this, FirstRunActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION), REQ_FIRST_RUN)
                 }
-            }
-            GameRepo.Status.SAVE_ERROR -> showSaveError()
             GameRepo.Status.READY -> bind()
         }
+        relayout() // the layout depends on the status (a game that cannot be played shows the Study view)
+        fillContent(force = true)
+        syncLive()
     }
 
     private fun bind() {
         if (bound) return
-        if (GameRepo.game == null) { showMessage("Loading…"); return }
+        if (GameRepo.game == null) return // the area keeps showing what its status says
         player?.clear()
         val p = BattlePanelView(this)
         p.onGrant = { internalNav = true; updatePipParams(); requestPermissions(arrayOf(Anki.permission), REQ_PERMISSION) }
         p.onMenu = { showMenu(it) }
         p.addToolButton(R.drawable.ic_pip, "Pop out: small battle window") { popOut() }
         p.addToolButton(R.drawable.ic_stats, "Stats") { openStats() }
-        p.setFooterTools(topBar.visibility != View.VISIBLE)
         p.onBalls = { showBallDialog() }
         p.arena.onPlayerTap = { openMainDetails() }
+        p.arena.canTurn = { !inPip && player?.idle != false }
+        p.arena.onWildTap = { openWildInfo() }
         p.setPaused(LiveSession.paused)
         if (inPip) p.setCompact(true)
         panel = p
         player = EventPlayer(p)
-        content.removeAllViews()
-        content.addView(p, FrameLayout.LayoutParams(-1, -1))
         bound = true
-        p.renderAll()
+        fillContent(force = true) // puts the panel in the battle's area (and draws it) when that is on screen
+        applyToPanel()
         handleEvents(act { it.ensureEncounter() })
-        if (started) {
-            LiveSession.addSink(liveSink)
-            LiveSession.hold(this, this)
-        }
+        syncLive()
+        runPendingPopOut()
         updatePipParams()
     }
 
@@ -506,6 +658,28 @@ class GameActivity : AgActivity() {
             clipToPadding = false
             addView(card, FrameLayout.LayoutParams(-1, -2))
         }, FrameLayout.LayoutParams(-1, -1))
+    }
+
+    /** "Study without the game": a slim row in the Study view's status slot; its button leaves that mode and starts the first run (as Settings' Downloads does). */
+    private fun showSetupRow() {
+        val m = Ui.dp(this, 12)
+        val row = StudyUi.row(this).apply {
+            background = Ui.rounded(Ui.c(context, R.color.ag_card), 14, context)
+            setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 10), Ui.dp(context, 10))
+        }
+        val text = StudyUi.column(this)
+        text.addView(StudyUi.label(this, "Studying without the game", 14, R.color.ag_text, 800))
+        text.addView(StudyUi.label(this, "Set it up to battle and catch Pokémon as you study.", 12, R.color.ag_sub0), StudyUi.spaced(this, 2))
+        row.addView(text, StudyUi.lp(0, -2, 1f))
+        row.addView(StudyUi.smallButton(this, "Set up the game", primary = true) { setUpGame() }, StudyUi.lp(-2, -2).also { it.marginStart = Ui.dp(this, 10) })
+        content.removeAllViews()
+        content.addView(row, FrameLayout.LayoutParams(-1, -2).also { it.setMargins(m, Ui.dp(this, 4), m, Ui.dp(this, 4)) })
+    }
+
+    private fun setUpGame() {
+        getSharedPreferences("firstrun", 0).edit().putBoolean("studyOnly", false).apply()
+        firstRunCanceled = false
+        onStatus(GameRepo.status)
     }
 
     private fun showSaveError() {
@@ -579,14 +753,14 @@ class GameActivity : AgActivity() {
     /** Hands the events of this screen's own actions to the player; some of them change what the widgets show. */
     private fun handleEvents(events: List<GameEvent>) {
         if (events.isEmpty()) return
-        player?.enqueue(events)
+        if (panelShown()) player?.enqueue(events) // a panel that is not on screen draws the final state when it comes back
         LiveSession.refreshWidgetsFor(this, events)
     }
 
     /** The ⋯ menu entries. "Switch Pokémon" is greyed with the reason under it when it can't work. */
     internal fun fillMenu(m: AppMenu) {
         m.item(8, "Pop out", R.drawable.ic_pip, sub = "Small battle window over other apps", dividerAfter = true)
-        m.item(1, "Team", R.drawable.ic_team)
+        m.item(1, "Pokémon", R.drawable.ic_team)
         m.item(2, "Pokédex", R.drawable.ic_book)
         m.item(3, "Shop", R.drawable.ic_shop)
         m.item(4, "Settings", R.drawable.ic_settings)
@@ -603,10 +777,10 @@ class GameActivity : AgActivity() {
         fillMenu(m)
         m.show { id ->
             when (id) {
-                1 -> openScreen(FloatPage.TEAM, TeamActivity::class.java)
-                2 -> openScreen(FloatPage.DEX, DexActivity::class.java)
-                3 -> openScreen(FloatPage.SHOP, ShopActivity::class.java)
-                4 -> openScreen(FloatPage.SETTINGS, SettingsActivity::class.java)
+                1 -> openScreen(FloatPage.TEAM, Dest.TEAM)
+                2 -> openScreen(FloatPage.DEX, Dest.DEX)
+                3 -> openScreen(FloatPage.SHOP, Dest.SHOP)
+                4 -> openScreen(FloatPage.SETTINGS, Dest.SETTINGS)
                 5 -> openSwitchPopup()
                 6 -> openStats()
                 7 -> openStats(BattleLogActivity::class.java)
@@ -617,24 +791,49 @@ class GameActivity : AgActivity() {
         }
     }
 
-    /** Back from the battle that was opened for "Study in AnkiDroid" (e.g. expanded from PiP) returns to the Study tab. */
+    /**
+     * Back from the full-screen battle returns to where it was opened from: the Pokémon tab when its battle card opened it,
+     * else the Study view (also for the battle expanded from PiP after "Study in AnkiDroid"); from the Study view, a short
+     * window and PiP it is the normal Back ([HomeNav.back]).
+     */
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (studyReturn.back()) {
-            startActivity(Intent(this, StudyDecksActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
-            finish()
-        } else {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
+        studyReturn.back() // whichever way Back goes, the hand-over is over
+        val p = parts
+        when (if (p != null) HomeNav.back(p, battleOrigin) else HomeNav.Back.SYSTEM) {
+            HomeNav.Back.TO_STUDY -> setHomeView(HomeView.STUDY)
+            HomeNav.Back.TO_ORIGIN -> {
+                val origin = battleOrigin
+                setHomeView(HomeView.STUDY) // the home screen waits on Study, the origin comes to the front
+                if (origin != null) Nav.open(this, origin)
+            }
+            HomeNav.Back.SYSTEM -> {
+                @Suppress("DEPRECATION")
+                super.onBackPressed()
+            }
         }
     }
 
-    /** Stats are always their own Activity, also in split screen. */
-    private fun openStats(screen: Class<*> = StatsActivity::class.java) {
+    /**
+     * Our own screens (the Pokémon, Stats and Settings tabs, a deck's study page, the first run…) are not "leaving": no
+     * picture-in-picture, and the system is told so. Other apps (AnkiDroid) are leaving.
+     */
+    override fun startActivity(intent: Intent, options: Bundle?) {
+        if (intent.component?.packageName == packageName) {
+            internalNav = true
+            updatePipParams()
+            intent.addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+        }
+        super.startActivity(intent, options)
+    }
+
+    /** Stats are always their own Activity, also in split screen. [screen] = another own screen (Battle log, Help); the default is the Stats tab. */
+    private fun openStats(screen: Class<*>? = null) {
         studyReturn.ownScreenOpened()
         internalNav = true
         updatePipParams()
-        startActivity(Intent(this, screen).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
+        val i = if (screen == null) Nav.intent(this, Dest.STATS) else Intent(this, screen)
+        startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
     }
 
     /**
@@ -642,7 +841,7 @@ class GameActivity : AgActivity() {
      * stays visible; if the overlay permission is missing it is explained once and the screen comes back after it is
      * granted. Full screen, or anything else: the normal Activity.
      */
-    private fun openScreen(page: FloatPage, cls: Class<*>, showUid: String? = null) {
+    private fun openScreen(page: FloatPage, dest: Dest, showUid: String? = null) {
         if (isInMultiWindowMode && AppPrefs.floatScreens(this)) {
             if (Overlay.canDraw(this)) {
                 if (FloatScreens.open(this, page, showUid)) return
@@ -653,7 +852,7 @@ class GameActivity : AgActivity() {
         studyReturn.ownScreenOpened()
         internalNav = true
         updatePipParams()
-        startActivity(Intent(this, cls).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION).also { if (showUid != null) it.putExtra(TeamActivity.EXTRA_SHOW_UID, showUid) })
+        startActivity(Nav.intent(this, dest).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION).also { if (showUid != null) it.putExtra(TeamActivity.EXTRA_SHOW_UID, showUid) })
     }
 
     /** Tap on our Pokémon (PLAN 86): its Details window on top of the battle; not while an animation plays or without a main. */
@@ -661,6 +860,12 @@ class GameActivity : AgActivity() {
         if (inPip || player?.idle == false) return
         val uid = GameRepo.state?.main?.uid ?: return
         BattleDetails.show(this, uid)
+    }
+
+    /** Tap on the wild Pokémon (PLAN 93): its info window on top of the battle; not in the small PiP window or while an animation plays. */
+    private fun openWildInfo() {
+        if (inPip || player?.idle == false) return
+        BattleDetails.showWild(this)
     }
 
     /** "Switch Pokémon" (PLAN 99): the team as a grid popup; the picked one becomes the main. */
@@ -720,7 +925,19 @@ class GameActivity : AgActivity() {
         })
     }
 
+    /** The battle's area; with [cap] > 0 and a height that is not fixed it takes at most that share of the room it is offered. */
+    private class CappedFrame(ctx: Context) : FrameLayout(ctx) {
+        var cap = 0f
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val limited = cap > 0f && MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.EXACTLY
+            super.onMeasure(widthMeasureSpec,
+                if (limited) MeasureSpec.makeMeasureSpec((MeasureSpec.getSize(heightMeasureSpec) * cap).toInt(), MeasureSpec.AT_MOST) else heightMeasureSpec)
+        }
+    }
+
     private companion object {
+        const val SHORT_SLOT_SHARE = 0.5f
+        const val STATE_ORIGIN = "battleOrigin"
         const val REQ_FIRST_RUN = 1
         const val REQ_PERMISSION = 2
         const val ACTION_PAUSE = "com.husarp.ankigo.PIP_PAUSE"

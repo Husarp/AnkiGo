@@ -7,8 +7,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import com.husarp.ankigo.Report
-import com.husarp.ankigo.ui.ShopActivity
-import com.husarp.ankigo.ui.StudyDecksActivity
+import com.husarp.ankigo.ui.Dest
+import com.husarp.ankigo.ui.Nav
 import java.time.ZoneId
 
 /** The buttons of a reminder notification. */
@@ -77,8 +77,8 @@ class ReminderOpenActivity : Activity() {
         val kind = ReminderActions.kindOf(intent.getStringExtra(ReminderActions.EXTRA_KIND))
         try {
             if (kind != null) getSystemService(NotificationManager::class.java)?.cancel(ReminderNotifier.id(kind))
-            val screen = if (kind != null && ReminderActions.opensShop(kind)) ShopActivity::class.java else StudyDecksActivity::class.java
-            startActivity(Intent(this, screen).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+            val dest = if (kind != null && ReminderActions.opensShop(kind)) Dest.SHOP else Dest.STUDY
+            startActivity(Nav.intent(this, dest).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         } catch (e: Exception) {
             Report.fail("REMIND", "opening AnkiGo from a reminder", e)
         }

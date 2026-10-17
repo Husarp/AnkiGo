@@ -29,6 +29,8 @@ class EventPlayer(private val panel: BattlePanelView) {
     private sealed class Item {
         class Ev(val e: GameEvent) : Item()
         class Act(val block: () -> Unit) : Item()
+        /** The catch result tiles of a fight that ended (PLAN 40); dropped when the animations are skipped. */
+        class Tiles(val summary: CatchSummary) : Item()
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -40,13 +42,22 @@ class EventPlayer(private val panel: BattlePanelView) {
     private var factor = 1.0
     private var lastButton = 0
     private var mult = 1.0
+    /** The next fight's Encounter, held back while the result tiles show (it plays with the next answer's events). */
+    private var parked: GameEvent.Encounter? = null
 
     /** True when nothing is playing or waiting. */
     val idle: Boolean get() = !busy && queue.isEmpty()
 
     fun enqueue(events: List<GameEvent>) {
         if (events.isEmpty()) return
-        events.forEach { queue.addLast(Item.Ev(it)) }
+        releaseTiles()
+        val summary = CatchSummary.of(events, data = GameRepo.data) // the throw number comes with the BallThrow event (counted by the fight in the game state)
+        val at = if (summary != null) CatchTilesPlan.resultIndex(events) else -1
+        events.forEachIndexed { i, e ->
+            if (i == at) queue.addLast(Item.Tiles(summary!!))
+            queue.addLast(Item.Ev(e))
+        }
+        if (at == events.size) queue.addLast(Item.Tiles(summary!!))
         pump()
     }
 
@@ -58,6 +69,8 @@ class EventPlayer(private val panel: BattlePanelView) {
 
     /** Drops everything waiting and stops the animations. The caller redraws from the state afterwards. */
     fun clear() {
+        parked = null
+        panel.hideCatchTiles()
         epoch++
         queue.clear()
         busy = false
@@ -99,6 +112,11 @@ class EventPlayer(private val panel: BattlePanelView) {
                     try { item.block() } catch (t: Throwable) { Report.fail("PANEL", "queued action", t) }
                     0L
                 }
+                is Item.Tiles -> {
+                    dirty = true
+                    try { panel.showCatchTiles(item.summary, answerWaiting()) } catch (t: Throwable) { Report.fail("PANEL", "catch tiles", t) }
+                    0L
+                }
                 is Item.Ev -> try {
                     dirty = true
                     play(item.e)
@@ -116,11 +134,21 @@ class EventPlayer(private val panel: BattlePanelView) {
         }
     }
 
+    /** An answer (or a ball throw) is queued behind what is playing: the result tiles would only flash by. */
+    private fun answerWaiting() = queue.any { it is Item.Ev && (it.e is GameEvent.Counted || it.e is GameEvent.BallThrow) }
+
+    /** The next answer is here: the tiles go and the held next fight comes first. */
+    private fun releaseTiles() {
+        panel.hideCatchTiles()
+        parked?.let { parked = null; queue.addFirst(Item.Ev(it)) }
+    }
+
     /** Too many answers waiting: no animations, one summary line, then the saved state. */
     private fun skipAll(first: Item) {
         val events = ArrayList<GameEvent>()
         val acts = ArrayList<() -> Unit>()
-        fun take(i: Item) { if (i is Item.Ev) events += i.e else if (i is Item.Act) acts += i.block }
+        var result: CatchSummary? = null
+        fun take(i: Item) { if (i is Item.Ev) events += i.e else if (i is Item.Act) acts += i.block else if (i is Item.Tiles) result = i.summary }
         take(first)
         while (queue.isNotEmpty()) take(queue.removeFirst())
         panel.cancelAnimations()
@@ -128,6 +156,13 @@ class EventPlayer(private val panel: BattlePanelView) {
         panel.renderAll()
         acts.forEach { it() }
         if (events.isNotEmpty()) panel.setLog(LogKind.SYS, "FAST", summary(events))
+        // One answer's fight result still shows its tiles (no animation needed); a pile of answers gets only the summary line.
+        result?.let { r ->
+            if (events.count { it is GameEvent.Counted } <= 1 && panel.showCatchTiles(r, false) == CatchTilesPlan.Mode.HOLD) {
+                parked = events.lastOrNull { it is GameEvent.Encounter } as? GameEvent.Encounter
+                panel.renderAll()
+            }
+        }
         dirty = false
     }
 
@@ -189,7 +224,11 @@ class EventPlayer(private val panel: BattlePanelView) {
     /** True while game sounds must stay quiet (the study screen sets this when the card has audio). */
     var muted: () -> Boolean = { false }
 
-    init { GameSound.warm(panel.context) }
+    init {
+        GameSound.warm(panel.context)
+        // a held next wild one let go by a window change (B7) plays its entrance now; nothing parked: drawn from the save
+        panel.onHeldReleased = { val e = parked; if (e != null) { parked = null; queue.addFirst(Item.Ev(e)); pump() } else if (idle) panel.renderAll() }
+    }
 
     /** Battle sound / cry of [e] (never throws, never waits). A wild one that is about to be caught does not "faint" first. */
     private fun sound(e: GameEvent) {
@@ -224,6 +263,7 @@ class EventPlayer(private val panel: BattlePanelView) {
 
     /** Starts the visuals of [e]; returns how long (ms) to wait before the next event. */
     private fun play(e: GameEvent): Long {
+        if (e is GameEvent.Encounter && panel.holdsNextFight && !answerWaiting()) { parked = e; return 0 }   // under the result tiles: the next answer starts it
         val st = GameRepo.state
         val data = GameRepo.data
         panel.observeStudyEvent(e)
@@ -354,6 +394,10 @@ class EventPlayer(private val panel: BattlePanelView) {
             }
             is GameEvent.BadgeEarned -> {
                 log(LogKind.SYS, "BADGE", "Badge: ${em(e.title)}")
+                return d(900)
+            }
+            is GameEvent.AchievementReached -> {
+                log(LogKind.SYS, "ACHIEVE", "Achievement: ${em(e.title)} — ${e.tierName}")
                 return d(900)
             }
             is GameEvent.TrainerLevelUp -> {

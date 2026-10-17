@@ -31,9 +31,9 @@ class RegionalFormsParserTest {
     private fun pokedex(): String {
         val special = listOf(
             // Alola line: the base evolves into the base only; the form evolves into the form (night, level 20)
-            entry("squeaker", 19, "Squeaker", "\"evos\":[\"Squeakmaster\",\"Squeakmaster-Alola\"]"),
+            entry("squeaker", 19, "Squeaker", "\"evos\":[\"Squeakmaster\",\"Squeakmaster-Alola\"],\"heightm\":0.4,\"weightkg\":3.5"),
             entry("squeakmaster", 20, "Squeakmaster", "\"prevo\":\"Squeaker\",\"evoLevel\":20"),
-            form("squeakeralola", 19, "Squeaker-Alola", "Squeaker", "Alola", "\"evos\":[\"Squeakmaster-Alola\"]"),
+            form("squeakeralola", 19, "Squeaker-Alola", "Squeaker", "Alola", "\"evos\":[\"Squeakmaster-Alola\"],\"heightm\":0.7,\"abilities\":{\"0\":\"Alola One\",\"H\":\"Alola Hidden\"}"),
             form("squeakmasteralola", 20, "Squeakmaster-Alola", "Squeakmaster", "Alola",
                 "\"prevo\":\"Squeaker-Alola\",\"evoLevel\":20,\"evoCondition\":\"at night\""),
             // a form whose prevo is a BASE species (the base does not evolve into the form)
@@ -42,7 +42,7 @@ class RegionalFormsParserTest {
             form("zapmasteralola", 26, "Zapmaster-Alola", "Zapmaster", "Alola",
                 "\"prevo\":\"Zapper\",\"evoType\":\"useItem\",\"evoItem\":\"Thunder Stone\"", "\"Electric\",\"Psychic\""),
             // Galar line + a base species whose prevo is the form; friendship needs the BASE species' happiness
-            entry("pawcat", 52, "Pawcat", "\"evos\":[\"Pouncer\"]"),
+            entry("pawcat", 52, "Pawcat", "\"evos\":[\"Pouncer\"],\"heightm\":0.5,\"weightkg\":4.2,\"abilities\":{\"0\":\"Cat One\",\"H\":\"Cat Hidden\"}"),
             entry("pouncer", 53, "Pouncer", "\"prevo\":\"Pawcat\",\"evoType\":\"levelFriendship\""),
             entry("ironpaw", 863, "Ironpaw", "\"prevo\":\"Pawcat-Galar\",\"evoLevel\":28", "\"Steel\""),
             form("pawcatgalar", 52, "Pawcat-Galar", "Pawcat", "Galar", "\"evos\":[\"Ironpaw\"]", "\"Normal\""),
@@ -261,6 +261,19 @@ id,evolved_species_id,evolution_trigger_id,minimum_level,minimum_happiness
         assertEquals(10108, e.to); assertEquals(EvoKind.FRIENDSHIP, e.kind); assertEquals(220, e.minFriendship)
     }
 
+    // ---- Info data of forms (R4-04) ---------------------------------------------------------------------------------
+
+    @Test fun aFormKeepsItsOwnInfoAndFallsBackToTheBaseSpeciesForTheRest() {
+        val base = data.sp(19); val alola = data.sp(10091)
+        assertEquals(0.4, base.heightM!!, 0.0); assertEquals(3.5, base.weightKg!!, 0.0); assertNull(base.hiddenAbility)
+        assertEquals(0.7, alola.heightM!!, 0.0)       // its own
+        assertEquals(3.5, alola.weightKg!!, 0.0)      // from the base species
+        assertEquals("Alola Hidden", alola.hiddenAbility) // its own abilities list
+        val galar = data.sp(10161) // no own height / weight / abilities: all from Pawcat
+        assertEquals(0.5, galar.heightM!!, 0.0); assertEquals(4.2, galar.weightKg!!, 0.0); assertEquals("Cat Hidden", galar.hiddenAbility)
+        assertNull(data.sp(10092).heightM) // neither it nor its base species has a height
+    }
+
     // ---- Cache -------------------------------------------------------------------------------------------------
 
     @Test fun cacheRoundTripKeepsTheFormFields() {
@@ -277,7 +290,7 @@ id,evolved_species_id,evolution_trigger_id,minimum_level,minimum_happiness
     }
 
     @Test fun anOlderCacheFormatIsRefusedSoDataStoreRebuilds() {
-        val old = Parsers.encodeCache(data).replaceFirst("\"format\":2", "\"format\":1")
+        val old = Parsers.encodeCache(data).replaceFirst("\"format\":3", "\"format\":1")
         try { Parsers.decodeCache(old); fail("format 1 must be refused") } catch (e: IllegalStateException) {
             assertTrue(e.message!!.contains("format"))
         }

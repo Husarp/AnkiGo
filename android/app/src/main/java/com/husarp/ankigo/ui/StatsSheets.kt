@@ -34,6 +34,10 @@ internal object StatsSheets {
         "up" -> R.drawable.ic_up
         "heal" -> R.drawable.ic_heart
         "cart" -> R.drawable.ic_shop
+        "bolt" -> R.drawable.ic_bolt
+        "heartbreak" -> R.drawable.ic_ach_heart_broken // the battle numbers use the same icons as the achievements (R4-V2)
+        "shield" -> R.drawable.ic_ach_shield
+        "miss" -> R.drawable.ic_ach_miss
         "dex" -> R.drawable.ic_dex
         "types" -> R.drawable.ic_palette
         "star" -> R.drawable.ic_star

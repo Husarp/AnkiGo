@@ -70,6 +70,24 @@ object LiveSession {
     /** The detector runs. */
     val running: Boolean get() = detector?.running == true
 
+    /** Who paused the detector's polls ([hush]). */
+    private val hushers = HushGate()
+
+    /** Polls the detector started so far (Diagnostics: the study screen's timing line counts those during one answer). */
+    val polls: Int get() = detector?.polls ?: 0
+
+    /**
+     * [owner] (the in-app study screen, while it is resumed) talks to AnkiDroid for every answer and card: no regular poll
+     * may compete with it there meanwhile. Own answers still reach the game at once (absorbing them reads nothing). When
+     * the last owner lets go the polls go on where they stopped; the first one after a pause of 30 s or more is a full read
+     * (LivePolicy.isFull), so an answer made in AnkiDroid meanwhile still counts, once. Main thread.
+     */
+    fun hush(ctx: Context, owner: Any, on: Boolean) {
+        app = ctx.applicationContext
+        if (!(if (on) hushers.hold(owner) else hushers.release(owner))) return
+        detector?.hushed = hushers.active // start() hands the state to a detector made later
+    }
+
     // ---------------------------------------------------------------- holding
 
     /**
@@ -124,6 +142,7 @@ object LiveSession {
         val st = GameRepo.state ?: return
         val g = GameRepo.game ?: return
         val d = detector ?: LiveDetector(app) { onLive(it) }.also { detector = it }
+        d.hushed = hushers.active
         if (d.running) return
         timer.start(SystemClock.elapsedRealtime())
         val today = g.dayKey()

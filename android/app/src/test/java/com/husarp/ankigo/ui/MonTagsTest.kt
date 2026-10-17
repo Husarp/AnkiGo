@@ -78,4 +78,50 @@ class MonTagsTest {
         assertEquals("Hisuian", MonTags.regionalLabel("Hisui"))
         assertEquals("Paldean", MonTags.regionalLabel("Paldea-Combat"))
     }
+
+    // ---- MonMarks (PLAN 57) ----
+
+    private fun marks(st: com.husarp.ankigo.game.GameState, m: com.husarp.ankigo.game.Mon, seen: Set<String> = emptySet()) =
+        MonMarks.of(data, st, m, now, seen)
+
+    @Test fun marksKeepTypesOutOfTheTags() {
+        val st = TestData.state(data, 1, 10)
+        val r = marks(st, st.mons[0])
+        assertEquals(data.sp(1).types, r.types)
+        assertTrue(r.tags.none { it.icon == "type" || it.label.equals("Grass", true) || it.label.equals("Poison", true) })
+        assertEquals(listOf(TagKind.MAIN), r.tags.map { it.tag })
+    }
+
+    @Test fun newIsTheCornerBadgeUntilSeen() {
+        val st = TestData.state(data, 19, 10)
+        val m = st.mons[0]; m.caughtAt = now
+        val fresh = marks(st, m)
+        assertTrue(fresh.isNew)
+        assertTrue(fresh.tags.none { it.tag == TagKind.NEW })
+        assertTrue(!marks(st, m, seen = setOf(m.uid)).isNew)
+        m.caughtAt = ms(2026, 10, 1, 12, 0)    // an older catch is not new, seen or not
+        assertTrue(!marks(st, m).isNew)
+    }
+
+    @Test fun marksHaveKindsIconsAndLongPressLabels() {
+        val world = data.species.values.toList() + TestData.species(
+            9001, "Alolanthing", evolutions = listOf(Evolution(2, EvoKind.LEVEL, level = 5))
+        ).copy(form = "Alola")
+        val d = TestData.data(world)
+        val st = TestData.state(d, 9001, 10)
+        val m = st.mons[0]
+        m.shiny = true; m.heldItem = "lucky-egg"; m.hp = 0
+        st.settings.xpShareUid = m.uid
+        val r = MonMarks.of(d, st, m, now)
+        assertEquals(
+            listOf(MarkKind.STATE, MarkKind.STATE, MarkKind.STATE, MarkKind.ITEM, MarkKind.ITEM, MarkKind.RARITY, MarkKind.FORM),
+            r.tags.map { it.kind },
+        )
+        assertEquals(listOf("main", "fainted", "can-evolve", "exp-share", "held", "shiny", "regional"), r.tags.map { it.icon })
+        assertEquals("Holds Lucky Egg", r.tags[4].label); assertEquals("lucky-egg", r.tags[4].item)
+        assertEquals("Shiny", r.tags[5].label)
+        assertEquals("Alolan form", r.tags[6].label)
+        // today's tags are untouched
+        assertTrue(MonTags.of(d, st, m, now).any { it.kind == TagKind.SHINY })
+    }
 }

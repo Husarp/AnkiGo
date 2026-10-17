@@ -185,6 +185,7 @@ object HelpContent {
                     "In AnkiGo open Settings → Battle panel & windows → On leaving.",
                     "Choose Nothing. The window then stays closed until you tap Pop out (the small-window button at the top of the battle).",
                     "Choose Picture-in-picture or Floating battle window only if you want it every time you leave.",
+                    "Pop out opens the floating window or picture-in-picture, whichever you pick under Pop out opens in the same Settings section.",
                     "Close a small window with its X, or open AnkiGo again.",
                 ),
                 check("Press Home from the battle. Nothing pops up (with Nothing chosen)."),

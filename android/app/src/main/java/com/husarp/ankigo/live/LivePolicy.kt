@@ -39,3 +39,19 @@ class RecheckGate {
     /** The queued request started running: the next request may queue again. */
     @Synchronized fun done() { queuedGen = -1 }
 }
+
+/**
+ * Who wants the detector's regular polls paused (the in-app study screen while it is in front, see LiveSession.hush).
+ * An identity set: the same owner twice is one. [hold] / [release] say whether the paused state changed.
+ */
+class HushGate {
+    private val owners: MutableSet<Any> = java.util.Collections.newSetFromMap(java.util.IdentityHashMap())
+
+    val active: Boolean get() = owners.isNotEmpty()
+
+    /** True when this started the pause (nobody held it before). */
+    fun hold(owner: Any): Boolean { val was = active; owners += owner; return active != was }
+
+    /** True when this ended the pause (the last owner let go). */
+    fun release(owner: Any): Boolean { val was = active; owners -= owner; return active != was }
+}

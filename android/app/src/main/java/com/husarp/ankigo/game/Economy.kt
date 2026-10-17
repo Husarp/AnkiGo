@@ -198,18 +198,24 @@ object Shop {
         setStock(state, items, tms)
     }
 
-    fun buy(data: GameData, state: GameState, item: String): ActionResult {
+    /** What the achievements say after a Shop action (money spent counts; a tier reached comes back as AchievementReached). */
+    private fun spent(data: GameData, state: GameState, price: Int, now: Long): List<GameEvent> {
+        Achievements.bump(state, Metric.MONEY_SPENT, price.toLong())
+        return mutableListOf<GameEvent>().also { Achievements.check(state, data, now, it) }
+    }
+
+    fun buy(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis()): ActionResult {
         if (item !in state.shopItems) return ActionResult(false, "Not in today's shop")
         val price = data.price(item)
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
         StudyStats.addSpent(state, price)
         Economy.give(state, item)
-        return ActionResult(true, "Bought ${Items.name(item)} for ${money(price)}")
+        return ActionResult(true, "Bought ${Items.name(item)} for ${money(price)}", spent(data, state, price, now))
     }
 
     /** TMs cost 1000, can be owned once, never used up. */
-    fun buyTm(data: GameData, state: GameState, move: String): ActionResult {
+    fun buyTm(data: GameData, state: GameState, move: String, now: Long = System.currentTimeMillis()): ActionResult {
         if (move !in state.shopTms) return ActionResult(false, "Not in today's shop")
         val name = Items.tmName(data, move)
         if (move in state.tms) return ActionResult(false, "You already own $name")
@@ -218,17 +224,17 @@ object Shop {
         state.cash -= price
         StudyStats.addSpent(state, price)
         state.tms += move
-        return ActionResult(true, "Bought $name for ${money(price)}")
+        return ActionResult(true, "Bought $name for ${money(price)}", spent(data, state, price, now))
     }
 
     /** 100: a fresh random stock for today. */
-    fun reroll(data: GameData, state: GameState, rng: Random): ActionResult {
+    fun reroll(data: GameData, state: GameState, rng: Random, now: Long = System.currentTimeMillis()): ActionResult {
         val price = Tuning.REROLL_PRICE
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
         StudyStats.addSpent(state, price)
         restock(data, state, rng)
-        return ActionResult(true, "New stock for ${money(price)}")
+        return ActionResult(true, "New stock for ${money(price)}", spent(data, state, price, now))
     }
 
     private fun money(n: Int) = "$n ₽"
@@ -283,15 +289,18 @@ object Badges {
         19 to "Revived a fossil", 20 to "Healing does good",
     )
 
-    /** Adds the badge once; emits BadgeEarned the first time. */
-    fun award(state: GameState, id: Int, events: MutableList<GameEvent>) {
+    /** Adds the badge once; emits BadgeEarned the first time and remembers [now] in GameState.badgeAt (old badges have no date). */
+    fun award(state: GameState, id: Int, events: MutableList<GameEvent>, now: Long = System.currentTimeMillis()) {
         val title = TITLES[id] ?: return
-        if (state.badges.add(id)) events += GameEvent.BadgeEarned(id, title)
+        if (state.badges.add(id)) {
+            state.badgeAt[id] = now
+            events += GameEvent.BadgeEarned(id, title)
+        }
     }
 
     /** Reviews-in-a-day badges (Tuning.REVIEW_BADGES). */
-    fun onReviews(state: GameState, events: MutableList<GameEvent>) {
-        for ((reviews, id) in Tuning.REVIEW_BADGES) if (state.reviewsToday >= reviews) award(state, id, events)
+    fun onReviews(state: GameState, events: MutableList<GameEvent>, now: Long = System.currentTimeMillis()) {
+        for ((reviews, id) in Tuning.REVIEW_BADGES) if (state.reviewsToday >= reviews) award(state, id, events, now)
     }
 }
 
@@ -335,8 +344,8 @@ object ItemUse {
                 mon.hp += healed
                 Economy.take(state, item)
                 StudyStats.addHealItem(state)
-                Badges.award(state, 20, events)
-                return ActionResult(true, "$name healed ${mon.name} by $healed HP", events)
+                Badges.award(state, 20, events, now)
+                return used(data, state, now, events, "$name healed ${mon.name} by $healed HP")
             }
             ItemKind.EVOLUTION -> {
                 val mon = target(state, targetUid, false) ?: return ActionResult(false, "Choose a Pokémon first.")
@@ -351,15 +360,15 @@ object ItemUse {
                 val from = mon.name
                 Economy.take(state, item)
                 Progression.evolve(data, state, mon, evo, rng, events)
-                return ActionResult(true, "$from evolved into ${mon.name}!", events)
+                return used(data, state, now, events, "$from evolved into ${mon.name}!")
             }
             ItemKind.FOSSIL -> {
                 val species = def.fossil?.takeIf { data.species.containsKey(it) } ?: return ActionResult(false, "This fossil can't be revived.")
                 val mon = Progression.newMon(data, species, Tuning.FOSSIL_LEVEL, rng, now)
                 Economy.take(state, item)
                 val added = Catching.addToCollection(data, state, mon, Tier.NORMAL, null, now, events)
-                Badges.award(state, 19, events)
-                return ActionResult(true, "Revived ${added.name}!", events)
+                Badges.award(state, 19, events, now)
+                return used(data, state, now, events, "Revived ${added.name}!")
             }
             ItemKind.HELD -> {
                 val mon = target(state, targetUid, false) ?: return ActionResult(false, "Choose a Pokémon first.")
@@ -369,9 +378,16 @@ object ItemUse {
                 if (old != null) Economy.give(state, old)
                 mon.heldItem = item
                 val back = if (old != null) " (${Items.name(old)} went back to the bag)" else ""
-                return ActionResult(true, "${mon.name} now holds $name$back")
+                return used(data, state, now, events, "${mon.name} now holds $name$back")
             }
         }
+    }
+
+    /** An item was used up (heal, evolution, fossil): counts for the achievements, then checks the tiers (events get the AchievementReached ones). */
+    private fun used(data: GameData, state: GameState, now: Long, events: MutableList<GameEvent>, message: String): ActionResult {
+        Achievements.bump(state, Metric.ITEMS_USED)
+        Achievements.settle(data, state, now, events)
+        return ActionResult(true, message, events)
     }
 
     /** Takes the held item back into the bag. */
@@ -384,7 +400,7 @@ object ItemUse {
     }
 
     /** Teaches an owned TM (not used up) to a Pokémon whose species can learn it; [replaceIndex] when it knows 4 moves. */
-    fun teachTm(data: GameData, state: GameState, move: String, uid: String, replaceIndex: Int?): ActionResult {
+    fun teachTm(data: GameData, state: GameState, move: String, uid: String, replaceIndex: Int?, now: Long = System.currentTimeMillis()): ActionResult {
         val tm = Items.tmName(data, move)
         if (move !in state.tms) return ActionResult(false, "You don't own $tm.")
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
@@ -401,6 +417,9 @@ object ItemUse {
             mon.moves[replaceIndex] = move
         }
         val text = if (forgot == null) "${mon.name} learned $moveName" else "${mon.name} forgot $forgot and learned $moveName"
-        return ActionResult(true, text, listOf(GameEvent.MoveLearned(mon.uid, mon.name, moveName, forgot)))
+        val events = mutableListOf<GameEvent>(GameEvent.MoveLearned(mon.uid, mon.name, moveName, forgot))
+        Achievements.bump(state, Metric.TMS_TAUGHT)
+        Achievements.settle(data, state, now, events)
+        return ActionResult(true, text, events)
     }
 }

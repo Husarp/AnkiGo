@@ -56,6 +56,11 @@ object AppLook {
         generation++
     }
 
+    fun setTypeStyle(ctx: Context, style: TypeStyle) {
+        AppPrefs.putLook(ctx, "typeStyle", style.name)
+        generation++
+    }
+
     fun setScale(ctx: Context, percent: Int) {
         AppPrefs.putScale(ctx, percent)
         generation++

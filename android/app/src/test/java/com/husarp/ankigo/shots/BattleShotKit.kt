@@ -7,6 +7,7 @@ import com.husarp.ankigo.ui.ArenaView
 import com.husarp.ankigo.ui.BattlePanelView
 import com.husarp.ankigo.ui.EventPlayer
 import com.husarp.ankigo.ui.GameActivity
+import com.husarp.ankigo.ui.HomeView
 import com.husarp.ankigo.update.Updates
 
 /** Helpers for the main game screen (GameActivity) screenshots. */
@@ -18,6 +19,9 @@ object BattleShotKit {
 
         fun field(name: String): Any? = GameActivity::class.java.getDeclaredField(name).let { it.isAccessible = true; it.get(activity) }
         fun setField(name: String, v: Any?) = GameActivity::class.java.getDeclaredField(name).let { it.isAccessible = true; it.set(activity, v) }
+        /** The layout decision for the render context's window height (the activity does this on every layout pass). */
+        fun relayout(ctx: Context) = relayout(ctx.resources.configuration.screenHeightDp.toFloat())
+        fun relayout(heightDp: Float) = activity.relayout(heightDp)
         fun call(name: String, vararg args: Any?): Any? {
             val m = GameActivity::class.java.declaredMethods.first { it.name == name && it.parameterCount == args.size }
             m.isAccessible = true
@@ -28,20 +32,20 @@ object BattleShotKit {
     /** The screen's views as onCreate builds them (activity attached to the render context, no onCreate). */
     fun build(ctx: Context): Built {
         val a = attach(GameActivity(), ctx)
+        a.home.loadsInBackground = false // no AnkiDroid in the renderer; a shot fills the deck list itself
         return Built(a, a.buildContent())
     }
 
     /**
-     * The screen once the game is loaded (what bind() shows after onStatus(READY)). The bottom bar is shown when the
-     * window is tall (the activity's layout listener does that after the first layout, which a single render pass skips).
+     * The screen once the game is loaded (what bind() shows after onStatus(READY)), in [view] (the full-screen Battle by default;
+     * the home screen's Study view with HomeView.STUDY). The bars show for the window's height as the activity's layout listener
+     * decides it after the first layout, which a single render pass skips ([relayout] is that decision).
      */
-    fun bound(ctx: Context): Built = build(ctx).also {
+    fun bound(ctx: Context, view: HomeView = HomeView.BATTLE, studyOnly: Boolean = false): Built = build(ctx).also {
+        it.setField("homeView", view)
+        it.setField("studyOnly", studyOnly)
         it.call("bind")
-        if (ctx.resources.configuration.screenHeightDp >= 560) {
-            (it.field("nav") as View).visibility = View.VISIBLE
-            (it.field("topBar") as View).visibility = View.VISIBLE
-            it.panel?.setFooterTools(false)
-        }
+        it.relayout(ctx)
     }
 
     /** Picture-in-picture, as onPictureInPictureModeChanged(true) sets it up. */
@@ -49,9 +53,7 @@ object BattleShotKit {
         b.setField("inPip", true)
         b.panel?.setCompact(true)
         if (paused) b.panel?.setPaused(true)
-        (b.field("nav") as View).visibility = View.GONE
-        (b.field("topBar") as View).visibility = View.GONE
-        b.panel?.setFooterTools(true)
+        b.relayout(136f) // the PiP window is short: no bars, the battle only
     }
 
     /** The screen's view under the floating update banner, at its final (slid-in) position, as AgActivity.setContentView does it. */

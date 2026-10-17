@@ -1,5 +1,6 @@
 package com.husarp.ankigo.game.ankimon
 
+import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.BattleSide
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
@@ -156,12 +157,18 @@ object AnkimonMerge {
             if (state.tms.add(move)) tmsAdded++
         }
 
-        return ImportReport(
+        val report = ImportReport(
             added = added, upgraded = upgraded, unchanged = unchanged, skipped = skipped,
             seenAdded = state.seen.size - seenBefore, caughtAdded = state.caught.size - caughtBefore,
             cashBefore = cashBefore, cashAfter = state.cash, itemsRaised = raised, tmsAdded = tmsAdded, teamChanged = teamChanged,
             xpShareChanged = xpShareChanged, notInFile = notInFile, unsupported = keptUnsupported,
         )
+        // What the import brought (Pokémon, levels, Pokédex) must not fire a flood of achievement celebrations: the tiers it
+        // reaches get their dates, no events. A re-import that brings nothing changes nothing (no check).
+        if (added + upgraded > 0 || report.seenAdded > 0 || report.caughtAdded > 0) {
+            Achievements.check(state, data, now, mutableListOf(), silent = true)
+        }
+        return report
     }
 
     // ---- "Not supported yet" ---------------------------------------------------------------------------------------
@@ -211,6 +218,7 @@ object AnkimonMerge {
             iter.remove()
             revived++
         }
+        if (revived > 0) Achievements.check(state, data, now, mutableListOf(), silent = true) // quiet, like an import
         return revived
     }
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Status move: ring, right half filled (our own drawing, 16 x 16 grid); white so callers tint it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="16dp" android:height="16dp" android:viewportWidth="16" android:viewportHeight="16">
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="1.9" android:pathData="M2,8a6,6 0 1,0 12,0a6,6 0 1,0 -12,0" />
+    <path android:fillColor="#FFFFFF" android:pathData="M8,2a6,6 0 0,1 0,12z" />
+</vector>

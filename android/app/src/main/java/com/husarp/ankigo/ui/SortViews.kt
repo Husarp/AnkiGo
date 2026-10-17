@@ -95,6 +95,9 @@ object SortText {
         else -> if (descending) "High → low" else "Low → high"
     }
 
+    /** The two directions of the sort sheet's top switch. */
+    fun directionName(descending: Boolean): String = if (descending) "Descending" else "Ascending"
+
     /** A stat basis in the sheet's switch ("At Lv 50" shows the chosen level). */
     fun basisLabel(b: StatBasis, level: Int): String = when (b) {
         StatBasis.BASE -> "Base"; StatBasis.MAX_LEVEL -> "Max level"; StatBasis.CURRENT -> "Current"
@@ -174,10 +177,10 @@ internal class ChipFlow(ctx: Context, private val gapPx: Int, private val lineGa
 
 internal object SortViews {
     /**
-     * The sort chip: the name opens the small list ([onList], the click of the whole chip), the arrow flips the direction ([onFlip]).
-     * Accent fill, so it reads as "this is on" like the mockup. Returns the pill; its parts are not clickable on their own except the arrow.
+     * The sort chip: a tap anywhere on it ([onOpen]) opens the sort sheet, which holds the direction and the sort options too
+     * (R4-X1 item 15: no separate arrow target). Accent fill, so it reads as "this is on" like the mockup.
      */
-    fun sortChip(ctx: Context, spec: SortSpec, onList: (View) -> Unit, onFlip: () -> Unit): LinearLayout {
+    fun sortChip(ctx: Context, spec: SortSpec, onOpen: (View) -> Unit): LinearLayout {
         val (name, arrow, suffix) = SortText.chipParts(spec)
         val ink = Ui.c(ctx, R.color.ag_crust)
         fun label(t: String) = Ui.text(ctx, 12f, 800, R.color.ag_crust).apply { text = t; maxLines = 1; setTextColor(ink) }
@@ -187,17 +190,16 @@ internal object SortViews {
             minimumHeight = Ui.dp(ctx, 48)
             background = InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 10, ctx), 0, Ui.dp(ctx, 10), 0, Ui.dp(ctx, 10))
             contentDescription = "Sort: ${SortText.chipLabel(spec)}. Tap to change."
-            setOnClickListener { onList(it) }
+            setOnClickListener { onOpen(it) }
             addView(label(name).apply {
                 maxWidth = Ui.dp(ctx, 150)
                 ellipsize = TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 10) })
             addView(label(arrow).apply {
                 gravity = Gravity.CENTER
-                contentDescription = "Flip direction"
-                setPadding(Ui.dp(ctx, 7), Ui.dp(ctx, 12), Ui.dp(ctx, 7), Ui.dp(ctx, 12))
-                setOnClickListener { onFlip() }
-            }, LinearLayout.LayoutParams(-2, -2).also { if (suffix.isEmpty()) it.marginEnd = Ui.dp(ctx, 3) })
+                textSize = 16f // a little bigger than the name (R4-X1 item 15)
+                setPadding(Ui.dp(ctx, 5), 0, Ui.dp(ctx, 5), 0)
+            }, LinearLayout.LayoutParams(-2, -2).also { if (suffix.isEmpty()) it.marginEnd = Ui.dp(ctx, 5) })
             if (suffix.isNotEmpty()) addView(label(suffix.removePrefix(" ")).apply { maxLines = 1 },
                 LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 10) })
         }
@@ -212,32 +214,6 @@ internal object SortViews {
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(row, FrameLayout.LayoutParams(-2, -2))
         }
-    }
-
-    /**
-     * The small list that opens under the sort chip: every key of [keys], a check on the current one (whose note is its direction;
-     * pick it again to flip), "Best vs the wild one" greyed without a battle. [more] adds a last "More options…" row (id = keys.size).
-     */
-    fun sortMenu(anchor: View, spec: SortSpec, keys: List<SortKey>, vsWildOk: Boolean, more: Boolean): AppMenu {
-        val m = AppMenu(anchor).header("Sort by")
-        keys.forEachIndexed { i, k ->
-            val on = k == spec.key
-            val ok = k != SortKey.VS_WILD || vsWildOk
-            m.item(
-                i, SortText.keyLabel(k), if (on) R.drawable.ic_check else R.drawable.ic_blank, enabled = ok,
-                sub = when { !ok -> "Needs a wild Pokémon in battle"; on -> SortText.directionLabel(k, spec.descending) + " · tap to flip"; else -> null },
-                dividerAfter = more && i == keys.lastIndex,
-            )
-        }
-        if (more) m.item(keys.size, "More options…", R.drawable.ic_more_vert)
-        return m
-    }
-
-    /** Opens [sortMenu] and routes the pick: [onKey] gets a key, [onMore] the extra row. */
-    fun showSortMenu(
-        anchor: View, spec: SortSpec, keys: List<SortKey>, vsWildOk: Boolean, more: Boolean, onKey: (SortKey) -> Unit, onMore: () -> Unit,
-    ) {
-        sortMenu(anchor, spec, keys, vsWildOk, more).show { id -> if (id < keys.size) onKey(keys[id]) else onMore() }
     }
 
     /** The Pokédex starts on species base stats (a species you don't own has no "current"). */
@@ -279,6 +255,8 @@ internal class SortSheet(
     private val group: GroupToggle?,
     private val count: () -> Int,
     private val onChange: (SortSpec, Int) -> Unit,
+    /** R4-X1 item 15: only the sort part (the sort chip's sheet): direction on top, the sort options below; no show filters. */
+    private val sortOnly: Boolean = false,
 ) {
     /** The "Group duplicates" switch row of the Box (hidden while the Box is picking for Compare). */
     class GroupToggle(var on: Boolean, val set: (Boolean) -> Unit)
@@ -302,10 +280,10 @@ internal class SortSheet(
                 it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = Ui.dp(ctx, 4); it.bottomMargin = Ui.dp(ctx, 6)
             })
         val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        head.addView(Ui.text(ctx, 17f, 900, R.color.ag_text).apply { text = "Sort & filter"; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
+        head.addView(Ui.text(ctx, 17f, 900, R.color.ag_text).apply { text = if (sortOnly) "Sort by" else "Sort & filter"; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
         head.addView(Ui.text(ctx, 13f, 800, R.color.ag_sub1).apply {
             text = "Reset"
-            contentDescription = "Reset sort and filters"
+            contentDescription = if (sortOnly) "Reset sort" else "Reset sort and filters"
             minHeight = Ui.dp(ctx, 48)
             gravity = Gravity.CENTER
             setPadding(Ui.dp(ctx, 8), 0, Ui.dp(ctx, 4), 0)
@@ -342,15 +320,24 @@ internal class SortSheet(
 
     private fun fill() {
         body.removeAllViews()
+        if (sortOnly) {
+            body.addView(section("Direction"))
+            body.addView(directionSwitch(), LinearLayout.LayoutParams(-1, -2))
+            body.addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
+                text = SortText.directionLabel(spec.key, spec.descending)
+                setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), 0, 0)
+            })
+        }
         body.addView(section("Sort by"))
         val keyFlow = flow()
         for (k in keys) {
             val ok = k != SortKey.VS_WILD || vsWildOk
             keyFlow.addView(BoxViews.chip(ctx, SortText.keyLabel(k).replace("Best vs the wild one", "Best vs wild"), k == spec.key) {
-                if (!ok) Ui.toast(ctx, "Needs a wild Pokémon in battle") else { spec = spec.copy(key = k, descending = k.naturalDescending); changed() }
+                if (!ok) Ui.toast(ctx, "Needs a wild Pokémon in battle")
+                else if (!(sortOnly && k == spec.key)) { spec = spec.copy(key = k, descending = k.naturalDescending); changed() } // the sheet keeps a direction the player chose
             }.apply { if (!ok) alpha = 0.4f })
         }
-        keyFlow.addView(BoxViews.chip(ctx, (if (spec.descending) "↓ " else "↑ ") + SortText.directionLabel(spec.key, spec.descending), false) {
+        if (!sortOnly) keyFlow.addView(BoxViews.chip(ctx, (if (spec.descending) "↓ " else "↑ ") + SortText.directionLabel(spec.key, spec.descending), false) {
             spec = spec.flipped(); changed()
         })
         body.addView(keyFlow, LinearLayout.LayoutParams(-1, -2))
@@ -377,7 +364,7 @@ internal class SortSheet(
             body.addView(basisSwitch(), LinearLayout.LayoutParams(-1, -2))
             if (spec.basis == StatBasis.AT_LEVEL) body.addView(levelStepper(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         }
-        if (showLabels != null) {
+        if (showLabels != null && !sortOnly) {
             body.addView(section("Show"))
             val f = flow()
             showLabels.forEachIndexed { i, label ->
@@ -385,8 +372,29 @@ internal class SortSheet(
             }
             body.addView(f, LinearLayout.LayoutParams(-1, -2))
         }
-        if (group != null) body.addView(groupRow(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
-        go.text = "Show ${count()} Pokémon"
+        if (group != null && !sortOnly) body.addView(groupRow(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+        go.text = if (sortOnly) "Done" else "Show ${count()} Pokémon"
+    }
+
+    /** Ascending / Descending as one switch (the look of the stat basis switch). */
+    private fun directionSwitch(): View {
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
+            setPadding(Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3))
+        }
+        for (desc in listOf(false, true)) {
+            val on = desc == spec.descending
+            row.addView(Ui.text(ctx, 13f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply {
+                text = (if (desc) "↓ " else "↑ ") + SortText.directionName(desc)
+                gravity = Gravity.CENTER
+                maxLines = 1
+                setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 12), Ui.dp(ctx, 2), Ui.dp(ctx, 12))
+                background = if (on) Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx) else null
+                setOnClickListener { if (spec.descending != desc) { spec = spec.copy(descending = desc); changed() } }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        return row
     }
 
     /** Base / Max level / Current / At Lv N as one switch (the look of the Pokédex's All / Owned / Not owned switch). */

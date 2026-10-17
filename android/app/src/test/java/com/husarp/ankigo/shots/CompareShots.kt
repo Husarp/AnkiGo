@@ -95,7 +95,7 @@ class CompareShots {
             var got: AppMenu? = null
             AppMenu.intercept = { got = it }
             try {
-                find(p.root, { it.contentDescription?.endsWith("Tap for options.") == true })[pos].performClick()
+                find(p.root, { it.contentDescription?.contains("Tap for options.") == true })[pos].performClick()
             } finally { AppMenu.intercept = null }
             val colDp = (ctx.resources.configuration.screenWidthDp - 12 - 44) / 5f
             FrameLayout(ctx).apply {

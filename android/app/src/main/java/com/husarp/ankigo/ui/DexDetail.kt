@@ -11,6 +11,7 @@ import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
+import com.husarp.ankigo.game.TypeMatchups
 
 // TICKET T14 owns this file: the dialog of one seen/caught Pokédex entry.
 
@@ -47,25 +48,29 @@ object DexDetail {
         })
 
         val compact = DetailParts.compact(a)
-        col.addView(DetailParts.header(a, R.drawable.ic_stats, "Base stats", compact))
-        col.addView(DetailParts.statHint(a))
-        col.addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply {
-            text = "Grey, right: lowest to highest at Lv 100."
-            setPadding(0, 0, 0, Ui.dp(a, 2))
+        // sections that open on tap (DetailOpen); a species has no Moves / Training of its own
+        val mem = DetailSections.memory(a)
+        col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${sp.base.total}", title = "Base stats") {
+            LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(DetailParts.statHint(a))
+                addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply {
+                    text = "Grey, right: lowest to highest at Lv 100."
+                    setPadding(0, 0, 0, Ui.dp(a, 2))
+                })
+                Stat.entries.forEach { s ->
+                    val row = DetailParts.statRow(a, s, sp.base[s], DetailMath.fraction(sp.base[s], BASE_MAX), 0, null, compact) as LinearLayout
+                    val r = StatCalc.range(sp.base[s], s)
+                    row.addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = "${r.first}\u2013${r.last}"; gravity = Gravity.END; maxLines = 1 },
+                        LinearLayout.LayoutParams(Ui.dp(a, 58), -2))
+                    addView(row)
+                }
+                addView(DetailParts.totalRow(a, sp.base.total, null))
+            }
         })
-        Stat.entries.forEach { s ->
-            val row = DetailParts.statRow(a, s, sp.base[s], DetailMath.fraction(sp.base[s], BASE_MAX), 0, null, compact) as LinearLayout
-            val r = StatCalc.range(sp.base[s], s)
-            row.addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = "${r.first}\u2013${r.last}"; gravity = Gravity.END; maxLines = 1 },
-                LinearLayout.LayoutParams(Ui.dp(a, 58), -2))
-            col.addView(row)
-        }
-        col.addView(DetailParts.totalRow(a, sp.base.total, null))
-
-        col.addView(DetailParts.header(a, R.drawable.ic_update, "Evolution", compact))
-        MonDetail.evolvesFrom(data, sp)?.let { col.addView(line(a, "From", it)) }
-        val into = MonDetail.evolvesInto(data, sp)
-        if (into.isEmpty()) col.addView(line(a, "Into", "fully evolved")) else into.forEach { col.addView(line(a, "Into", it)) }
+        col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types) })
+        col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), DetailFormat.allAbilities(sp)?.let { Triple("Abilities", it, null) }, null,
+            state.seen + state.caught, compact) { other -> show(a, other) })
 
         col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))
         val mine = copies(state.mons, sp.num)

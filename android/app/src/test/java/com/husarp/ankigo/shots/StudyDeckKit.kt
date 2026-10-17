@@ -1,15 +1,36 @@
 package com.husarp.ankigo.shots
 
+import android.app.Activity
 import android.content.Context
 import android.view.View
-import app.cash.paparazzi.Paparazzi
+import android.widget.LinearLayout
 import com.husarp.ankigo.Anki
-import com.husarp.ankigo.ui.StudyDecksActivity
-import org.junit.Rule
-import org.junit.Test
+import com.husarp.ankigo.R
+import com.husarp.ankigo.ui.BottomNav
+import com.husarp.ankigo.ui.StudyHome
+import com.husarp.ankigo.ui.Ui
 
-/** The Study deck picker (StudyDecksActivity) with fake AnkiDroid decks. Part of the StudyShots class (see below). */
+/**
+ * The deck list of the Study view (StudyHome) with fake AnkiDroid decks, composed as the old Study tab looked: app bar, the list,
+ * the bottom bar. (The merged home screen with its battle card is [HomeShotKit].) Part of the StudyShots class (see below).
+ */
 object StudyDeckKit {
+    internal class Built(val home: StudyHome, val root: View)
+
+    /** StudyHome on a context that is already a [ShotCtx]: [Built.root] = [Study app bar][deck list][bottom bar]. */
+    internal fun compose(ss: Context): Built {
+        val act = attach(Activity(), ss)
+        val home = StudyHome(act, object : StudyHome.Host {
+            override fun studyInAnkiDroid(deckId: Long) {}
+            override fun askAnkiAccess() {}
+        })
+        val root = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(act, R.color.ag_base)) }
+        root.addView(home.buildAppBar())
+        root.addView(home.buildBody(), LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(BottomNav.create(act, BottomNav.Tab.STUDY))
+        return Built(home, root)
+    }
+
     // Deck(id, name, learn, review, new, dyn)
     val decks = listOf(
         Anki.Deck(1, "Geography", 4, 31, 12, false),
@@ -28,14 +49,13 @@ object StudyDeckKit {
         expanded: Set<Long> = emptySet(), lastDeck: Long = 2, problem: String? = null, granted: Boolean = true,
     ): View {
         val ss = ShotCtx(ctx, ankiVersion = ankiVersion, granted = granted)
-        val act = attach(StudyDecksActivity(), ss)
         ss.getSharedPreferences("study", 0).edit().putLong("lastDeck", lastDeck)
             .putLong("lastStudied:$lastDeck", System.currentTimeMillis() - 12 * 60_000L).apply()
-        val root = act.buildContent()
-        if (problem != null) { act.showAccessProblem(problem); return root }
-        setField(act, "decks", decks.sortedBy { it.name })
-        setField(act, "expanded", expanded)
-        call(act, "render")
-        return root
+        val b = compose(ss)
+        if (problem != null) { b.home.showAccessProblem(problem); return b.root }
+        setField(b.home, "decks", decks.sortedBy { it.name })
+        setField(b.home, "expanded", expanded)
+        call(b.home, "render")
+        return b.root
     }
 }

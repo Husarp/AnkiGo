@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Type symbol "poison" (own drawing, PLAN 33): one colour, tinted at runtime by Ui.typeChip. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,14.5 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0zM13.4,7.5 a3.6,3.6 0 1,0 7.2,0 a3.6,3.6 0 1,0 -7.2,0zM16.0,16.8 a2.3,2.3 0 1,0 4.6,0 a2.3,2.3 0 1,0 -4.6,0z" />
+</vector>

@@ -300,7 +300,7 @@ class StatsTest {
         val d = b.history.getValue("2026-10-12")
         assertEquals(listOf(100, 7, 2, 1), listOf(d.reviews, d.won, d.caught, d.shinies))
         assertNull(b.history["2026-10-14"]) // history present: nothing is seeded
-        assertEquals("[100,7,2,1,0,0,0,0,0,0,0,0,0]", JSONObject(json).getJSONObject("history").getJSONArray("2026-10-12").toString())
+        assertEquals("[100,7,2,1,0,0,0,0,0,0,0,0,0,0,0,0,0]", JSONObject(json).getJSONObject("history").getJSONArray("2026-10-12").toString())
     }
 
     @Test fun anOldSaveWithoutHistorySeedsTodayAndTheBestStreak() {

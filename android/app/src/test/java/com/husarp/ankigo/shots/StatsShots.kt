@@ -184,6 +184,26 @@ class StatsShots {
         }
     }
 
+    /** R4-V10 (pick 11A with cells): section cards in windows at full size (phone, small, split-height), and with the (i) texts open. */
+    @Test fun r4SectionCards() {
+        val slice = Variant("slice", 412, 500)
+        for ((i, offset) in listOf(0, 480, 960).withIndex()) {
+            ankiShot("r4v10-stats-w${i + 1}", listOf(slice), offset) { t -> StatsSnapshot(fakeAnki(t), AnkiAccess.OK, timeByDay = fakeAnkiGoTime(t)) }
+        }
+        ankiShot("r4v10-stats-small", listOf(Variant("small", 360, 640)), 480) { t -> StatsSnapshot(fakeAnki(t), AnkiAccess.OK, timeByDay = fakeAnkiGoTime(t)) }
+        ankiShot("r4v10-stats-tablet", listOf(Variant("tablet", 800, 1000)), null) { t -> StatsSnapshot(fakeAnki(t), AnkiAccess.OK, timeByDay = fakeAnkiGoTime(t)) }
+        ankiShot("r4v10-stats-nodroid", listOf(Variants.TALL)) { t -> StatsSnapshot(access = AnkiAccess.NO_PERMISSION, timeByDay = fakeAnkiGoTime(t)) }
+    }
+
+    @Test fun r4SectionCardsInfoOpen() {
+        paparazzi.shootPage("r4v10-stats-info", listOf(Variant("slice", 412, 500))) { ctx ->
+            val today = prepareMidGame()
+            AnkiStatsStore.snapshot = StatsSnapshot(fakeAnki(today), AnkiAccess.OK, timeByDay = fakeAnkiGoTime(today))
+            val p = StatsPage(ctx, ActivityHost(attach(Activity(), ctx))).also { it.infosOpen = true }
+            FrameLayout(ctx).apply { addView(pageScreen(ctx, p), FrameLayout.LayoutParams(-1, Ui.dp(ctx, 1300)).also { it.topMargin = -Ui.dp(ctx, 480) }) }
+        }
+    }
+
     @Test fun statsNewPlayer() {
         paparazzi.shootPage("stats-new", listOf(Variants.PHONE, Variants.SPLIT), scenario = FakeGame.Scenario.EMPTY) { ctx ->
             val s = GameRepo.state!!

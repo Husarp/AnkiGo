@@ -19,39 +19,47 @@ import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.ScrollView
 import android.widget.TextView
+import com.husarp.ankigo.Anki
+import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
-import com.husarp.ankigo.game.Badges
+import com.husarp.ankigo.game.AchPageMath
+import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Trainer
 
-// The Team tab: one screen with three sections (Team / Box / Pokedex), a Compare picking mode and a team Edit mode.
-// Team = trainer card + team rows (a ScrollView). Box = a ListView of 6-cell rows (recycled). Pokedex = DexPage embedded.
+// The Pokémon tab (the Team tab until round 4): one screen with four sections (Team / Box / Pokedex / Shop), a Compare picking
+// mode and a team Edit mode. Team = trainer card + team rows (a ScrollView). Box = a ListView of 6-cell rows (recycled).
+// Pokedex = DexPage embedded. Shop = ShopPage embedded (its bag and buy flow work as on its own screen).
 // Tap = details, long-press = the actions menu. Edit mode shows up/down arrows on the team rows (no drag and drop:
 // framework Views have no easy drag list).
 class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : GamePage(base, host), PickHost {
-    override val tab = BottomNav.Tab.TEAM
+    override val tab = BottomNav.Tab.POKEMON
 
     private lateinit var appBar: AppBar
     private lateinit var compareBtn: ImageView
+    private lateinit var shopHelp: ImageView      // the Shop's "?" (money guide), only on the Shop section
     private lateinit var switchBox: LinearLayout
     private lateinit var teamScroll: ScrollView
     private lateinit var teamCol: LinearLayout
+    private lateinit var cardSlot: FrameLayout // the battle card's place at the top of the Team section (never emptied by drawTeam)
     private lateinit var boxList: ListView
     private lateinit var boxHeader: LinearLayout
     private lateinit var unsupportedBox: LinearLayout // "Not supported yet" (PLAN 67), the end of the Box list
     private lateinit var dexBody: View
+    private lateinit var shopBody: View
     private lateinit var pickBar: LinearLayout
     private lateinit var pickHint: TextView
     private lateinit var pickGo: TextView
     private val actions by lazy { MonActions(this) }
     private val dexPage by lazy { DexPage(this, host, this) }
+    private val shopPage by lazy { ShopPage(this, host, embedded = true) }
     private var tiles: List<BoxTile> = emptyList()
     private var shown = 0 // Pokémon behind the tiles (after the filter)
 
-    // The Team tab always opens on Team (R1-02): the section chosen inside a visit is kept only while this page lives.
+    // A plain open of the tab is on Team (R1-02); a jump through Nav can ask for a section. The section chosen inside a visit is kept only while this page lives.
     private var section: TeamSection = start ?: TeamSection.TEAM
     private var editing = false
     private var pickOn = false
@@ -63,23 +71,24 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private var grouped = AppPrefs.boxGrouped(base)
     private var boxSort = SortPrefs.load(base, SortPrefs.Where.BOX) // PLAN 48/55: remembered for the Box
     private var tileValues: Map<BoxTile, String> = emptyMap() // the number a stat sort shows on each tile
+    private val cols = GridMath.columns(base.resources.configuration.screenWidthDp) // 3 / 4 / 5 / 6 by the window width (R4-V5)
 
     override val picking: Boolean get() = pickOn
     override fun isPicked(p: ComparePick): Boolean = picks.has(p)
 
     private val adapter = object : BaseAdapter() {
-        override fun getCount() = (tiles.size + COLS - 1) / COLS
+        override fun getCount() = (tiles.size + cols - 1) / cols
         override fun getItem(position: Int): Any = position
         override fun getItemId(position: Int) = position.toLong()
         override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val row = (convertView as? CellRow) ?: CellRow(this@TeamPage, COLS, CELL_RATIO, 4, 12) { f -> makeCell(f) }
-            for (c in 0 until COLS) bindCell(row.cells[c], tiles.getOrNull(position * COLS + c))
+            val row = (convertView as? CellRow) ?: CellRow(this@TeamPage, cols, CELL_RATIO, 4, 12) { f -> makeCell(f) }
+            for (c in 0 until cols) bindCell(row.cells[c], tiles.getOrNull(position * cols + c))
             return row
         }
     }
 
     override fun buildBar(): View {
-        appBar = Ui.appBar(this, section.label, "0/6")
+        appBar = Ui.appBar(this, "Pokémon", "0", pillIconRes = R.drawable.ic_coin) // the coins on every section; the counts sit in the sections
         compareBtn = ImageView(this).apply {
             setImageResource(R.drawable.ic_compare)
             contentDescription = "Compare"
@@ -91,6 +100,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             setOnClickListener { if (pickOn) endPick() else startPick() }
         }
         appBar.addView(compareBtn, appBar.childCount - 1) // before the right-hand pill
+        shopHelp = appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) { shopPage.openMoneyHelp() }
         tintCompare()
         return appBar
     }
@@ -103,6 +113,8 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             orientation = LinearLayout.VERTICAL
             setPadding(gap, 0, gap, gap)
         }
+        cardSlot = FrameLayout(this).apply { visibility = View.GONE }
+        teamCol.addView(cardSlot, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(this, 10) })
         teamScroll = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             addView(teamCol, FrameLayout.LayoutParams(-1, -2))
@@ -127,6 +139,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             adapter = this@TeamPage.adapter
         }
         dexBody = dexPage.embeddedBody()
+        shopBody = shopPage.embeddedBody()
 
         pickHint = Ui.text(this, 12f, 700, R.color.ag_sub0).apply { maxLines = 2 }
         pickGo = Ui.text(this, 13f, 900, R.color.ag_crust).apply { maxLines = 1 }
@@ -152,6 +165,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             addView(teamScroll, FrameLayout.LayoutParams(-1, -1))
             addView(boxList, FrameLayout.LayoutParams(-1, -1))
             addView(dexBody, FrameLayout.LayoutParams(-1, -1))
+            addView(shopBody, FrameLayout.LayoutParams(-1, -1))
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -165,7 +179,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val st = state
         picks.keepOwned { st.mon(it) != null }
         val team = st.teamMons()
-        val mons = BoxTiles.filter(st.mons, boxFilter, st.team)
+        val mons = BoxTiles.filter(st.mons, boxFilter, st.team, ::canEvolve)
         shown = mons.size
         // while picking for Compare every copy is its own tile
         tiles = BoxTiles.sorted(data, st, BoxTiles.build(data, mons, grouped && !pickOn), boxSort)
@@ -178,20 +192,41 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         UnsupportedBox.bind(unsupportedBox, st)
         adapter.notifyDataSetChanged()
         dexPage.renderEmbedded()
+        if (section == TeamSection.SHOP) shopPage.renderEmbedded()
         teamScroll.visibility = if (section == TeamSection.TEAM) View.VISIBLE else View.GONE
         boxList.visibility = if (section == TeamSection.BOX) View.VISIBLE else View.GONE
         dexBody.visibility = if (section == TeamSection.DEX) View.VISIBLE else View.GONE
+        shopBody.visibility = if (section == TeamSection.SHOP) View.VISIBLE else View.GONE
         drawPickBar()
+        syncBattleCard()
         // A battle asked for a Pokémon's details (PLAN 86): open them once, after the first render.
         detailsOnce.take { st.mon(it) != null }?.let { uid -> st.mon(uid)?.let { MonDetail.show(this, data, it) } }
     }
 
     // ---- sections ----
 
-    private fun showSection(s: TeamSection) {
+    override fun onShow() {
+        super.onShow()
+        visible = true
+        if (section == TeamSection.SHOP) shopPage.rollDay()
+    }
+
+    override fun onHide() {
+        visible = false
+        battleCard?.stop() // nothing animates, nothing holds the live session while the page is not in front
+        super.onHide()
+    }
+
+    override fun onGone() {
+        battleCard?.stop()
+        super.onGone()
+    }
+
+    internal fun showSection(s: TeamSection) {
         if (s == section) return
         section = s
         editing = false
+        if (s == TeamSection.SHOP) shopPage.rollDay() // a new game day restocks the shop when it is opened
         requestRender()
     }
 
@@ -212,41 +247,50 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         }
     }
 
-    /** The segmented Team / Box / Pokédex switch (same look as the Pokédex All / Owned / Not owned switch). */
+    /** The Team / Box / Pokédex / Shop tabs: four equal tabs with an icon over each label, the selected one on an accent rounded square. */
     private fun drawSwitch() {
-        val ctx = this
-        switchBox.removeAllViews()
-        switchBox.background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
-        switchBox.setPadding(Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3))
-        for (s in TeamSection.entries) {
-            val on = s == section
-            val tone = if (on) R.color.ag_text else R.color.ag_sub0
-            val seg = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-                minimumHeight = Ui.dp(ctx, 42) // 42 dp segments in a 48 dp control
-                background = if (on) Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx) else null
-                contentDescription = s.label
-                setOnClickListener { showSection(s) }
-            }
-            seg.addView(ImageView(ctx).apply {
-                setImageResource(s.icon)
-                setColorFilter(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_sub0), PorterDuff.Mode.SRC_IN)
-            }, LinearLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18)).also { it.marginEnd = Ui.dp(ctx, 5) })
-            seg.addView(Ui.text(ctx, 12f, 900, tone).apply { text = s.label; maxLines = 1 })
-            switchBox.addView(seg, LinearLayout.LayoutParams(0, -2, 1f))
+        SectionSwitch.draw(this, switchBox, TeamSection.entries.map { SectionSwitch.Seg(it.label, it.icon) }, section.ordinal, SectionSwitch.Style.TABS) { showSection(TeamSection.entries[it]) }
+    }
+
+    // ---- the battle card (Team section, top) ----
+
+    private var battleCard: BattleCard? = null
+    internal var cardSession: BattleCard.Live = BattleCard.RealLive // tests count who holds the live session
+    internal val cardLive: Boolean get() = battleCard?.isLive == true
+    private var visible = false // between onShow and onHide
+
+    /** Tap on the card / its expand icon, and Pop out; both go through the home screen, which owns the full battle and the pop-out. */
+    private val cardHost = object : BattleCard.Host {
+        override fun expand() { Nav.open(this@TeamPage, Dest.BATTLE, Dest.TEAM) }
+        // the tab closes behind it (as a tab switch does), so Back from the home screen does not land on a stale Pokémon tab
+        override fun popOut() { startScreen(Nav.popOutIntent(this@TeamPage)); host.closePage() }
+        // the panel's "Grant" (live status: AnkiDroid permission missing): the activity asks, its onRequestPermissionsResult calls [accessAnswered]
+        override fun grantAccess() { host.hostActivity?.requestPermissions(arrayOf(Anki.permission), TeamActivity.REQ_ANKI) }
+    }
+
+    /** The AnkiDroid permission dialog was answered (from [TeamActivity]): the card starts live detection again when it was granted. */
+    internal fun accessAnswered(granted: Boolean) { battleCard?.accessAnswered(granted) }
+
+    /**
+     * Shows the battle card while the Team section is on screen and live (the game is ready, the page is in an Activity; also in
+     * a short window, where the card's panel is smaller), hides it and lets the live session go otherwise.
+     */
+    private fun syncBattleCard() {
+        val want = section == TeamSection.TEAM && BattleCard.wanted(GameRepo.status == GameRepo.Status.READY, host.hostActivity != null)
+        if (want) {
+            val card = battleCard ?: BattleCard(this, cardHost, cardSession).also { battleCard = it; cardSlot.addView(it.view, FrameLayout.LayoutParams(-1, -2)) }
+            cardSlot.visibility = View.VISIBLE
+            if (visible) { card.start(); card.refresh() } else card.stop()
+        } else {
+            cardSlot.visibility = View.GONE
+            battleCard?.stop()
         }
     }
 
     private fun drawBar(teamSize: Int) {
-        appBar.titleView.text = section.label
-        appBar.setPill(
-            when (section) {
-                TeamSection.TEAM -> "$teamSize/6"
-                TeamSection.BOX -> "${state.mons.size} Pokémon"
-                TeamSection.DEX -> dexPage.pillText()
-            },
-        )
+        appBar.setPill(Bits.fmt(state.cash)) // the coins on every section (the counts are in the sections themselves)
+        compareBtn.visibility = if (section == TeamSection.SHOP) View.GONE else View.VISIBLE // nothing to tick in the Shop
+        shopHelp.visibility = if (section == TeamSection.SHOP) View.VISIBLE else View.GONE
         tintCompare()
     }
 
@@ -307,8 +351,9 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     private fun drawPickBar() {
-        pickBar.visibility = if (pickOn) View.VISIBLE else View.GONE
-        if (!pickOn) return
+        val show = pickOn && section != TeamSection.SHOP // ticks are kept while the Shop is open, the bar comes back with the other sections
+        pickBar.visibility = if (show) View.VISIBLE else View.GONE
+        if (!show) return
         val n = picks.size
         pickHint.text = if (n < Compare.MIN) "Tick at least ${Compare.MIN} Pokémon" else "$n ticked"
         pickGo.text = "Compare ($n)"
@@ -327,7 +372,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     private fun drawTeam(team: List<Mon>) {
         teamRows.clear()
-        teamCol.removeAllViews()
+        if (teamCol.childCount > 1) teamCol.removeViews(1, teamCol.childCount - 1) // child 0 is the battle card's slot
         teamCol.addView(trainerCard())
         teamCol.addView(teamHeader(team.size))
         team.forEachIndexed { i, mon -> teamCol.addView(teamRow(mon, i, team.size)) }
@@ -339,7 +384,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         row.addView(Ui.text(ctx, 12f, 900, R.color.ag_sub0).apply {
-            text = "TEAM"
+            text = "TEAM · $size / 6"
             letterSpacing = 0.058f
             setPadding(Ui.dp(ctx, 4), 0, 0, 0)
         }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -383,7 +428,9 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private fun drawBoxHeader() {
         boxHeader.removeAllViews()
         val someGroup = tiles.any { it.isGroup }
-        boxHeader.addView(Bits.sect(this, "Box", "$shown Pokémon" + if (someGroup) " · grouped" else ""))
+        // the count that was in the app bar's pill: all of them, or "n of N" under a filter
+        val total = state.mons.size
+        boxHeader.addView(Bits.sect(this, "Box", (if (shown == total) "$shown Pokémon" else "$shown of $total Pokémon") + if (someGroup) " · grouped" else ""))
         boxHeader.addView(boxControls(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 6) })
         // only the Compare picking hint is left; the "tap for details · hold for actions" hint is gone
         if (pickOn) boxHeader.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply {
@@ -395,7 +442,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             boxHeader.addView(Ui.text(this, 13f, 700, R.color.ag_sub0).apply {
                 text = when {
                     boxFilter == BoxFilter.FAVOURITES -> "No favourites yet. Hold a Pokémon and pick “Add to favourites”."
-                    boxFilter != BoxFilter.ALL -> "No ${boxFilter.label.lowercase()} Pokémon in your box."
+                    boxFilter != BoxFilter.ALL -> boxFilter.none ?: "No ${boxFilter.label.lowercase()} Pokémon in your box."
                     else -> "Your box is empty. Pokémon you catch beyond six wait here."
                 }
                 gravity = Gravity.CENTER
@@ -413,16 +460,21 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val st = state
         val shownSpec = boxSort.copy(key = MonSort.effectiveKey(boxSort, st)) // no battle: "vs the wild one" works as "strongest attack"
         val chips = ArrayList<View>()
-        sortPill = SortViews.sortChip(ctx, shownSpec, { openSortList(it) }, { setBoxSort(boxSort.flipped()) })
+        chips += TileViews.legendChip(ctx, dex = false)
+        sortPill = SortViews.sortChip(ctx, shownSpec) { openSortSheet(sortOnly = true) }
         chips += sortPill
         chips += BoxViews.chip(ctx, "Filters", false) { openSortSheet() } // next to the sort chip, so a narrow window still shows it
         chips += BoxViews.chip(ctx, "Favourites", boxFilter == BoxFilter.FAVOURITES, heart = true) { toggleBoxFilter(BoxFilter.FAVOURITES) }
         chips += BoxViews.chip(ctx, "Shiny", boxFilter == BoxFilter.SHINY) { toggleBoxFilter(BoxFilter.SHINY) }
+        chips += BoxViews.chip(ctx, BoxFilter.HOLDS_ITEM.label, boxFilter == BoxFilter.HOLDS_ITEM) { toggleBoxFilter(BoxFilter.HOLDS_ITEM) }
+        chips += BoxViews.chip(ctx, BoxFilter.CAN_EVOLVE.label, boxFilter == BoxFilter.CAN_EVOLVE) { toggleBoxFilter(BoxFilter.CAN_EVOLVE) }
         if (boxFilter == BoxFilter.IN_TEAM) chips += BoxViews.chip(ctx, "In team", true) { toggleBoxFilter(BoxFilter.IN_TEAM) }
         return SortViews.scrollRow(ctx, chips)
     }
 
     private lateinit var sortPill: View // the sort chip as last drawn (tests click it)
+
+    private fun canEvolve(mon: Mon): Boolean = MonTags.canEvolve(data, state, mon)
 
     private fun toggleBoxFilter(f: BoxFilter) = setBoxFilter(if (boxFilter == f) BoxFilter.ALL else f)
 
@@ -439,26 +491,18 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         boxList.setSelection(0)
     }
 
-    /** The small list of sorts under the sort chip. A key that needs stats picked (one stat, chosen stats) opens the sheet after it. */
-    private fun openSortList(anchor: View) {
-        SortViews.showSortMenu(anchor, boxSort, SortText.boxKeys, MonSort.vsWildAvailable(state), more = false, onKey = { k ->
-            val next = SortViews.choose(boxSort, k)
-            setBoxSort(next)
-            if (SortViews.needsStats(next)) openSortSheet()
-        }, onMore = {})
-    }
-
     /** The one "Sort & filter" sheet. Changes apply at once; the Box behind it follows. */
-    private fun openSortSheet() {
+    private fun openSortSheet(sortOnly: Boolean = false) {
         val labels = BoxFilter.entries.map { it.label }
         SortSheet(
             this, SortText.boxKeys, boxSort, SortSpec.DEFAULT, MonSort.vsWildAvailable(state), labels, boxFilter.ordinal,
             if (pickOn) null else SortSheet.GroupToggle(grouped) { on -> grouped = on; AppPrefs.setBoxGrouped(this, on); requestRender() },
-            count = { BoxTiles.filter(state.mons, boxFilter, state.team).size },
+            count = { BoxTiles.filter(state.mons, boxFilter, state.team, ::canEvolve).size },
             onChange = { spec, show ->
                 if (spec != boxSort) setBoxSort(spec)
                 BoxFilter.entries.getOrNull(show)?.let { setBoxFilter(it) }
             },
+            sortOnly = sortOnly,
         ).show()
     }
 
@@ -479,19 +523,19 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         top.addView(Ui.text(this, 17f, 900, R.color.ag_text).apply { text = st.settings.trainerName; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
         val short = Ui.shortWindow(this) // split screen: badges go next to the coins, saving a row
-        val badges = Ui.chip(this, R.drawable.ic_star, R.color.ag_yellow).apply { setText("Badges ${st.badges.size}/${Badges.TITLES.size}") }
+        val badges = Ui.chip(this, R.drawable.ic_star, R.color.ag_yellow).apply { setText("Achievements ${AchPageMath.tiersReached(Achievements.view(st, data))}") }
         // 48 dp touch height around the small chip
         val badgesBox = FrameLayout(this).apply {
             minimumHeight = Ui.dp(this@TeamPage, 48)
             isClickable = true
-            setOnClickListener { showBadges() }
+            setOnClickListener { startScreen(Nav.intent(this@TeamPage, Dest.ACHIEVEMENTS)) }
             addView(badges, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
         }
-        // Stats chip (T40): same 48 dp touch height as Badges, opens the Stats screen
+        // Stats chip (T40): same 48 dp touch height as Badges, opens the Stats tab
         val statsBox = FrameLayout(this).apply {
             minimumHeight = Ui.dp(this@TeamPage, 48)
             isClickable = true
-            setOnClickListener { startScreen(Intent(this@TeamPage, StatsActivity::class.java)) }
+            setOnClickListener { startScreen(Nav.intent(this@TeamPage, Dest.STATS)) }
             addView(Ui.chip(this@TeamPage, R.drawable.ic_flame, R.color.ag_peach).also { it.setText("Stats") }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
         }
         if (short) {
@@ -520,21 +564,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         return card
     }
 
-    private fun showBadges() {
-        val col = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(Ui.dp(this@TeamPage, 22), Ui.dp(this@TeamPage, 8), Ui.dp(this@TeamPage, 22), Ui.dp(this@TeamPage, 8))
-        }
-        for ((id, title) in Badges.TITLES) {
-            val got = id in state.badges
-            col.addView(Ui.text(this, 14f, if (got) 800 else 600, if (got) R.color.ag_green else R.color.ag_sub0).apply {
-                text = (if (got) "✓  " else "○  ") + title
-                setPadding(0, Ui.dp(this@TeamPage, 5), 0, Ui.dp(this@TeamPage, 5))
-            })
-        }
-        Pickers.info(this, "Badges ${state.badges.size}/${Badges.TITLES.size}", Bits.scroll(this, col))
-    }
-
     // ---- team rows (mockup .mon) ----
 
     private fun teamRow(mon: Mon, index: Int, count: Int): View {
@@ -554,29 +583,39 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         }
         val img = ImageView(ctx)
         MonPreview.show(ctx, mon.lookNum(data), mon.shiny, img)
-        row.addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 56), Ui.dp(ctx, 56)))
+        // the red NEW sticker sits on the sprite's top-left corner until the Pokémon's details were opened (6A)
+        val marks = TileMarks.of(state, listOf(mon))
+        val spriteBox = FrameLayout(ctx).apply { clipChildren = false }
+        spriteBox.addView(img, FrameLayout.LayoutParams(-1, -1))
+        if (TileMark.NEW in marks) spriteBox.addView(TileViews.newSticker(ctx), FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.TOP).also {
+            it.leftMargin = Ui.dp(ctx, 1); it.topMargin = Ui.dp(ctx, 1)
+        })
+        row.addView(spriteBox, LinearLayout.LayoutParams(Ui.dp(ctx, 56), Ui.dp(ctx, 56)))
 
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        // the name, then its marks right after it (the same icons and order as on the Box tiles; everyone here is in the team, so only Main shows), then the level
         val r1 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        r1.addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply {
+        val nameMarks = NameMarksRow(ctx)
+        nameMarks.addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply {
             text = mon.shownName
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        if (mon.favourite) r1.addView(BoxViews.heartMark(ctx), LinearLayout.LayoutParams(Ui.dp(ctx, 13), Ui.dp(ctx, 13)).also { it.marginStart = Ui.dp(ctx, 6) })
+        }, LinearLayout.LayoutParams(-2, -2))
+        for (m in marks) {
+            val mark: View = when (m) {
+                TileMark.SHINY -> Ui.text(ctx, 12f, 900, R.color.ag_yellow).apply { text = "★"; contentDescription = "Shiny" }
+                TileMark.MAIN, TileMark.FAVOURITE -> TileViews.markIcon(ctx, m, 13)
+                else -> null
+            } ?: continue
+            nameMarks.addView(mark, LinearLayout.LayoutParams(if (mark is ImageView) Ui.dp(ctx, 13) else -2, if (mark is ImageView) Ui.dp(ctx, 13) else -2).also { it.marginStart = Ui.dp(ctx, 5) })
+        }
+        r1.addView(nameMarks, LinearLayout.LayoutParams(0, -2, 1f))
         r1.addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { LevelTier.style(this, mon.level) }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 6) })
         body.addView(r1)
 
-        // types, then the tags (most useful first) as many as fit in the rest of the line, at most 3
+        // the types stay chips
         val r2 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         r2.addView(Bits.typeRow(ctx, data.sp(mon.species).types))
-        val tags = FitRow(ctx).apply {
-            MonTags.of(data, state, mon).take(3).forEach { t ->
-                addView(if (t.kind == TagKind.HELD && t.item != null) heldChip(t) else MonTags.pill(ctx, t),
-                    LinearLayout.LayoutParams(-2, -2).also { lp -> lp.marginStart = Ui.dp(ctx, 4) })
-            }
-        }
-        r2.addView(tags, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 3) })
         body.addView(r2, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
 
         val frac = mon.hp.toFloat() / maxHp
@@ -602,18 +641,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             teamRows[mon.uid] = TeamRow(row, badge)
         }
         return row
-    }
-
-    /** The held-item tag in a row: just the item icon on the neutral pill (the label is in the details), so it always fits. */
-    private fun heldChip(tag: MonTag): View {
-        val ctx = this
-        return LinearLayout(ctx).apply {
-            gravity = Gravity.CENTER
-            contentDescription = tag.label
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_s0), 7, ctx)
-            setPadding(Ui.dp(ctx, 5), Ui.dp(ctx, 2), Ui.dp(ctx, 5), Ui.dp(ctx, 2))
-            addView(ImageView(ctx).also { Ui.itemIcon(ctx, tag.item!!, it) }, LinearLayout.LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)))
-        }
     }
 
     /** An Edit-mode arrow: 48 dp touch, 36 dp look; greyed out and dead at the ends. */
@@ -654,13 +681,14 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         }
     }
 
-    // ---- box cells (mockup .boxgrid) ----
-    // A cell is a card with the sprite on top and a label strip under it (a ×N count on the left, the level on the right), so
-    // nothing but the small marks ever sits over the sprite: ★ shiny and ♥ favourite top-left, the team mark top-right.
+    // ---- box cells (mockup .boxgrid, R4 10A + 6A) ----
+    // A cell is a card: a top row for the marks (NEW + ♥ left, team / main right), the sprite filling the room between that row and
+    // the label strip (a ×N count on the left, the level on the right), so the sprite never covers a mark or the level. A shiny
+    // has a soft golden glow behind its sprite. Held item, can-evolve, fainted and regional form are in the details only.
 
     private class Cell(
-        val img: ImageView, val lv: TextView, val count: TextView, val star: TextView, val heart: ImageView,
-        val team: ImageView, val held: ImageView, val check: ImageView, val value: TextView,
+        val img: ImageView, val glow: View, val lv: TextView, val count: TextView, val marksLeft: LinearLayout, val marksRight: LinearLayout,
+        val check: ImageView, val value: TextView, val strip: View,
     ) {
         var uid: String? = null
     }
@@ -668,16 +696,18 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private fun makeCell(f: SquareFrame) {
         val ctx = this
         f.background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx)
-        val img = ImageView(ctx).apply { setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 2), Ui.dp(ctx, 2), Ui.dp(ctx, 2)) }
+        val glow = ShinyGlow(ctx).apply { visibility = View.GONE }
+        val img = TileSprite(ctx)
         val lv = Ui.text(ctx, 10f, 900, R.color.ag_sub0)
         val count = Ui.text(ctx, 10f, 900, R.color.ag_text) // plain text: no background, never over the sprite
         val value = Ui.text(ctx, 10f, 900, R.color.ag_text) // the number a stat sort sorts by (bottom-left, next to ×N)
-        val star = Ui.text(ctx, 9f, 900, R.color.ag_yellow).apply { text = "★" }
-        val heart = BoxViews.heartMark(ctx)
-        val team = BoxViews.teamMark(ctx)
-        val held = ImageView(ctx).apply { visibility = View.GONE }
         val check = PickKit.badge(ctx)
-        f.addView(img, FrameLayout.LayoutParams(-1, -1).also { it.bottomMargin = Ui.dp(ctx, STRIP_DP) })
+        val spriteBox = FrameLayout.LayoutParams(-1, -1).also {
+            it.topMargin = Ui.dp(ctx, TOP_DP); it.bottomMargin = Ui.dp(ctx, STRIP_DP)
+            it.leftMargin = Ui.dp(ctx, 2); it.rightMargin = Ui.dp(ctx, 2)
+        }
+        f.addView(glow, FrameLayout.LayoutParams(spriteBox))
+        f.addView(img, spriteBox)
         // One label strip: "×N" keeps its width, the level takes what is left and shrinks its text, so the two never overlap.
         count.maxLines = 1
         value.maxLines = 1
@@ -691,22 +721,19 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         f.addView(strip, FrameLayout.LayoutParams(-1, Ui.dp(ctx, STRIP_DP), Gravity.BOTTOM).also {
             it.leftMargin = Ui.dp(ctx, 4); it.rightMargin = Ui.dp(ctx, 4)
         })
-        f.addView(held, FrameLayout.LayoutParams(Ui.dp(ctx, 12), Ui.dp(ctx, 12), Gravity.START or Gravity.BOTTOM).also {
-            it.leftMargin = Ui.dp(ctx, 3); it.bottomMargin = Ui.dp(ctx, 2)
+        // top row: left = NEW sticker, ♥ ; right = in team, main (filled in by bindCell)
+        val marksLeft = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        f.addView(marksLeft, FrameLayout.LayoutParams(-2, Ui.dp(ctx, TOP_DP), Gravity.START or Gravity.TOP).also {
+            it.leftMargin = Ui.dp(ctx, 4)
         })
-        val marks = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        marks.addView(star)
-        marks.addView(heart, LinearLayout.LayoutParams(Ui.dp(ctx, 10), Ui.dp(ctx, 10)).also { it.marginStart = Ui.dp(ctx, 2) })
-        f.addView(marks, FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.TOP).also {
-            it.leftMargin = Ui.dp(ctx, 3); it.topMargin = Ui.dp(ctx, 3)
-        })
-        f.addView(team, FrameLayout.LayoutParams(Ui.dp(ctx, 13), Ui.dp(ctx, 13), Gravity.END or Gravity.TOP).also {
-            it.rightMargin = Ui.dp(ctx, 3); it.topMargin = Ui.dp(ctx, 3)
+        val marksRight = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        f.addView(marksRight, FrameLayout.LayoutParams(-2, Ui.dp(ctx, TOP_DP), Gravity.END or Gravity.TOP).also {
+            it.rightMargin = Ui.dp(ctx, 4)
         })
         f.addView(check, FrameLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18), Gravity.START or Gravity.BOTTOM).also {
             it.leftMargin = Ui.dp(ctx, 3); it.bottomMargin = Ui.dp(ctx, 3)
         })
-        f.tag = Cell(img, lv, count, star, heart, team, held, check, value)
+        f.tag = Cell(img, glow, lv, count, marksLeft, marksRight, check, value, strip)
     }
 
     /** The tick part of a box cell: frame stroke + badge. */
@@ -737,33 +764,44 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         cell.count.visibility = if (tile.isGroup) View.VISIBLE else View.GONE
         cell.value.text = tileValues[tile].orEmpty()
         cell.value.visibility = if (tileValues[tile] != null) View.VISIBLE else View.GONE
-        cell.star.visibility = if (tile.anyShiny()) View.VISIBLE else View.GONE
-        cell.heart.visibility = if (tile.anyFavourite()) View.VISIBLE else View.GONE
-        cell.team.visibility = if (tile.anyInTeam(state.team)) View.VISIBLE else View.GONE
-        // the held item of a single Pokémon (a group has several; the tick badge takes its corner while picking)
-        val item = mon.heldItem.takeIf { !tile.isGroup && !pickOn }
-        if (item != null) { Ui.itemIcon(this, item, cell.held); cell.held.visibility = View.VISIBLE } else cell.held.visibility = View.GONE
+        // the marks (only these five, always in this order; R4-X1 item 3: ♥ and team icons 16 dp): NEW + ♥ top-left, team / main top-right, shiny = the glow behind the sprite
+        val marks = TileMarks.of(state, tile.members)
+        cell.marksLeft.removeAllViews()
+        cell.marksRight.removeAllViews()
+        for (m in marks) {
+            val gap = Ui.dp(this, 2)
+            when (m) {
+                TileMark.NEW -> cell.marksLeft.addView(TileViews.newSticker(this), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 4) })
+                TileMark.FAVOURITE -> cell.marksLeft.addView(TileViews.markIcon(this, m, 16)!!, LinearLayout.LayoutParams(Ui.dp(this, 16), Ui.dp(this, 16)))
+                TileMark.IN_TEAM, TileMark.MAIN -> cell.marksRight.addView(TileViews.markIcon(this, m, 16)!!, LinearLayout.LayoutParams(Ui.dp(this, 16), Ui.dp(this, 16)).also { it.marginStart = gap })
+                TileMark.SHINY -> Unit
+            }
+        }
+        cell.glow.visibility = if (TileMark.SHINY in marks) View.VISIBLE else View.GONE
+        // the tick badge takes the bottom-left corner while picking: the strip starts after it
+        (cell.strip.layoutParams as FrameLayout.LayoutParams).leftMargin = Ui.dp(this, if (pickOn) 22 else 4)
         f.alpha = if (mon.hp <= 0) 0.55f else 1f
-        f.contentDescription = listOfNotNull(
+        f.contentDescription = (listOfNotNull(
             mon.shownName, "level ${mon.level}", if (tile.isGroup) "${tile.count} copies" else null,
-            if (tile.anyInTeam(state.team)) "in your team" else null, if (tile.anyFavourite()) "favourite" else null,
-        ).joinToString(", ")
+        ) + marks.map { it.label.lowercase() }).joinToString(", ")
         f.setOnClickListener { if (pickOn) togglePick(pick) else if (tile.isGroup) openCopies(tile) else MonDetail.show(this, data, mon) }
         f.setOnLongClickListener { if (tile.isGroup && !pickOn) openCopies(tile) else actions.menu(mon, it); true }
     }
 
     private companion object {
-        const val COLS = 4
-
-        /** A Box cell is taller than wide: the label strip (×N, level) sits under the sprite, which keeps its size. */
-        const val CELL_RATIO = 1.2f
+        /** A Box cell is taller than wide: the top row (marks) and the label strip (×N, level) sit around the sprite, which fills the rest (10A). */
+        const val CELL_RATIO = 1.25f
+        const val TOP_DP = 17
         const val STRIP_DP = 14
     }
 }
 
 /** The Team screen as its own Activity: a thin shell around [TeamPage]. */
 class TeamActivity : PageActivity() {
-    override fun createPage(): GamePage = TeamPage(this, this).also { p ->
+    private var teamPage: TeamPage? = null
+
+    override fun createPage(): GamePage = TeamPage(this, this, TeamSection.of(intent.getStringExtra(EXTRA_SECTION))).also { p ->
+        teamPage = p
         intent.getStringExtra(EXTRA_PICK_UID)?.let { p.startPickWith(it) }
         intent.getStringExtra(EXTRA_SHOW_UID)?.let {
             intent.removeExtra(EXTRA_SHOW_UID) // once: a rotation re-creates the page with the same intent
@@ -771,11 +809,32 @@ class TeamActivity : PageActivity() {
         }
     }
 
+    /** An open that finds this screen already there (brought to the front, [Nav.TAB_FLAGS]) may ask for another section, for Compare picking or for a Pokémon's details. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.getStringExtra(EXTRA_SECTION)?.let { teamPage?.showSection(TeamSection.of(it)) }
+        intent.getStringExtra(EXTRA_PICK_UID)?.let { intent.removeExtra(EXTRA_PICK_UID); teamPage?.startPickWith(it) }
+        intent.getStringExtra(EXTRA_SHOW_UID)?.let { intent.removeExtra(EXTRA_SHOW_UID); teamPage?.showDetailsOnce(it) }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_ANKI) teamPage?.accessAnswered(grantResults.firstOrNull() == 0)
+    }
+
     companion object {
+        /** Opens the Pokémon tab on this [TeamSection] (its name); without it the tab opens on Team. [Nav] sets it. */
+        const val EXTRA_SECTION = "section"
+
         /** Opens the Team tab in Compare picking mode with this Pokémon ticked (menu "Compare" from another screen). */
         const val EXTRA_PICK_UID = "pick_uid"
 
         /** Opens the Team tab with this Pokémon's details shown (tap on your Pokémon in a battle). */
         const val EXTRA_SHOW_UID = "show_uid"
+
+        /** Request code of the AnkiDroid permission asked from the battle card's "Grant" button. */
+        internal const val REQ_ANKI = 41
     }
 }

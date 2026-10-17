@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import android.app.Activity
-import android.content.Intent
 import android.graphics.PorterDuff
 import android.view.Gravity
 import android.view.View
@@ -13,20 +12,33 @@ import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 
 /**
- * The 5-tab bottom bar (mockup `.bnav`): Study / Battle (crossed swords) / Team (closed book) / Shop / Settings. Team holds Team, Box and Pokédex as
- * sections; [Tab.DEX] is not in the bar (a Pokédex screen highlights Team). The selected tab is in the accent colour with
- * its icon on a 20 % accent pill. Tapping another tab opens its screen (brought to front, no animation) and closes the
- * current one unless that is the Battle screen, so Back from any tab ends up on Battle.
+ * The 4-tab bottom bar (mockup `.bnav`): Study (open book) / Pokémon (Poké Ball outline) / Stats / Settings. The Pokémon tab holds Team, Box,
+ * Pokédex and Shop as sections; the Stats tab holds Statistics and Achievements. The selected tab is in the accent colour
+ * with its icon on a 20 % accent pill. Tapping another tab opens its screen through [Nav] (brought to front, no animation)
+ * and closes the current one unless that is the home screen ([isHome]), so Back from any tab ends up on the home screen.
+ * The home screen is Study (and the full-screen battle, its second view, which has no bar).
  */
 object BottomNav {
-    enum class Tab(val label: String, @DrawableRes val icon: Int, val screen: Class<out Activity>, val inBar: Boolean = true) {
-        STUDY("Study", R.drawable.ic_study, StudyDecksActivity::class.java),
-        BATTLE("Battle", R.drawable.ic_swords, GameActivity::class.java),
-        TEAM("Team", R.drawable.ic_book, TeamActivity::class.java),
-        DEX("Pokédex", R.drawable.ic_book, DexActivity::class.java, inBar = false),
-        SHOP("Shop", R.drawable.ic_shop, ShopActivity::class.java),
-        SETTINGS("Settings", R.drawable.ic_settings, SettingsActivity::class.java),
+    enum class Tab(val label: String, @DrawableRes val icon: Int, val dest: Dest) {
+        STUDY("Study", R.drawable.ic_study, Dest.STUDY),
+        POKEMON("Pokémon", R.drawable.ic_ball, Dest.TEAM),
+        STATS("Stats", R.drawable.ic_stats, Dest.STATS),
+        SETTINGS("Settings", R.drawable.ic_settings, Dest.SETTINGS),
     }
+
+    /** The tab a destination lives under (the bar highlights it). The battle is the second view of Study. */
+    fun tabOf(dest: Dest): Tab = when (dest) {
+        Dest.STUDY, Dest.BATTLE -> Tab.STUDY
+        Dest.TEAM, Dest.BOX, Dest.DEX, Dest.SHOP -> Tab.POKEMON
+        Dest.STATS, Dest.ACHIEVEMENTS -> Tab.STATS
+        Dest.SETTINGS -> Tab.SETTINGS
+    }
+
+    /** The screen Back ends on: a tab switch never closes it. The home screen: Study with the battle. */
+    fun isHome(activity: Activity): Boolean = activity is GameActivity
+
+    /** True when [activity] already is the screen [tab] opens, so a tap on the tab changes nothing. */
+    fun isHere(activity: Activity, tab: Tab): Boolean = Nav.target(tab.dest).screen == activity.javaClass
 
     /** Builds the bar for [activity], with [current] highlighted. Add it at the bottom of the screen. */
     fun create(activity: Activity, current: Tab): View {
@@ -36,8 +48,8 @@ object BottomNav {
             orientation = LinearLayout.HORIZONTAL
             setPadding(Ui.dp(activity, 6), Ui.dp(activity, 6), Ui.dp(activity, 6), Ui.dp(activity, 2))
         }
-        for (tab in Tab.entries.filter { it.inBar }) {
-            val on = tab == current || (current == Tab.DEX && tab == Tab.TEAM)
+        for (tab in Tab.entries) {
+            val on = tab == current
             val tint = if (on) col else idle
             val icon = ImageView(activity).apply {
                 setImageResource(tab.icon)
@@ -64,7 +76,7 @@ object BottomNav {
                 addView(label, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                     .also { it.topMargin = Ui.dp(activity, 2) })
                 contentDescription = tab.label
-                setOnClickListener { if (!on) open(activity, current, tab) }
+                setOnClickListener { if (!isHere(activity, tab)) open(activity, tab) }
             }
             row.addView(item)
         }
@@ -77,10 +89,10 @@ object BottomNav {
         }
     }
 
-    private fun open(activity: Activity, from: Tab, to: Tab) {
-        activity.startActivity(Intent(activity, to.screen).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+    private fun open(activity: Activity, to: Tab) {
+        Nav.open(activity, to.dest)
         @Suppress("DEPRECATION")
         activity.overridePendingTransition(0, 0)
-        if (from != Tab.BATTLE) activity.finish()
+        if (!isHome(activity)) activity.finish()
     }
 }

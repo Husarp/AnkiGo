@@ -18,6 +18,9 @@ sealed class GameEvent {
     data class Cash(val amount: Int, val total: Int, val kind: CashKind = CashKind.ANSWER) : GameEvent()
     data class ItemFound(val item: String, val count: Int) : GameEvent()
     data class BadgeEarned(val id: Int, val title: String) : GameEvent()
+
+    /** An achievement tier was reached (AchievementTable row [id], [tier] 0..4 = [tierName]); not sent for the one-offs that are Ankimon badges (BadgeEarned says so). */
+    data class AchievementReached(val id: String, val tier: Int, val title: String, val tierName: String) : GameEvent()
     data class TrainerLevelUp(val level: Int) : GameEvent()
     data class DayChanged(val day: String) : GameEvent()
 
@@ -56,8 +59,8 @@ sealed class GameEvent {
 
     data class Fainted(val player: Boolean, val name: String) : GameEvent()
 
-    /** A ball was thrown (optional tap). [success] = it caught the wild Pokémon. */
-    data class BallThrow(val ball: String, val chance: Int, val success: Boolean, val left: Int) : GameEvent()
+    /** A ball was thrown (optional tap). [success] = it caught the wild Pokémon. [number] = which throw of this fight it was (1 = the first; 0 = not known, an event made without a fight). */
+    data class BallThrow(val ball: String, val chance: Int, val success: Boolean, val left: Int, val number: Int = 0) : GameEvent()
 
     /** The wild Pokémon joined the collection. [newSpecies] = first of its kind (new Pokédex entry). */
     data class Caught(val uid: String, val species: Int, val name: String, val level: Int, val shiny: Boolean, val ball: String?, val newSpecies: Boolean, val toTeam: Boolean) : GameEvent()

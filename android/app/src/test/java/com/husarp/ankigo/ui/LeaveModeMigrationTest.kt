@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** TICKET R2-08: PiP on leave is moved to off once; Pop out picks float or PiP. */
+/** TICKET R2-08: PiP on leave is moved to off once; Pop out picks float or PiP (R4-X5: its own choice). */
 class LeaveModeMigrationTest {
     @Test fun oldPipBecomesOffOnce() {
         assertEquals(LeaveMode.OFF, LeaveModeMigration.resolve(null, "PIP"))
@@ -28,11 +28,25 @@ class LeaveModeMigrationTest {
         assertFalse(LeaveModeMigration.needsWrite("PIP"))
     }
 
-    @Test fun popOutPicksFloatOnlyForFloatModeOrNoPip() {
-        assertTrue(PopOutPlan.useFloat(LeaveMode.FLOAT, true))
-        assertTrue(PopOutPlan.useFloat(LeaveMode.OFF, false))
-        assertTrue(PopOutPlan.useFloat(LeaveMode.PIP, false))
-        assertFalse(PopOutPlan.useFloat(LeaveMode.OFF, true))
-        assertFalse(PopOutPlan.useFloat(LeaveMode.PIP, true))
+    @Test fun popOutDefaultFollowsLeaveModeUntilChosen() {
+        assertEquals(PopOutMode.FLOAT, PopOutPlan.resolve(null, LeaveMode.FLOAT))
+        assertEquals(PopOutMode.PIP, PopOutPlan.resolve(null, LeaveMode.OFF))
+        assertEquals(PopOutMode.PIP, PopOutPlan.resolve(null, LeaveMode.PIP))
+        assertEquals(PopOutMode.PIP, PopOutPlan.resolve("junk", LeaveMode.OFF))
+    }
+
+    @Test fun popOutChoiceSticksWhateverTheLeaveMode() {
+        assertEquals(PopOutMode.FLOAT, PopOutPlan.resolve("FLOAT", LeaveMode.OFF))
+        assertEquals(PopOutMode.PIP, PopOutPlan.resolve("PIP", LeaveMode.FLOAT))
+    }
+
+    @Test fun popOutPicksFloatOnlyWhenChosenOrNoPip() {
+        assertTrue(PopOutPlan.useFloat(PopOutMode.FLOAT, true))
+        assertFalse(PopOutPlan.useFloat(PopOutMode.PIP, true))
+    }
+
+    @Test fun noPipAlwaysFloat() {
+        assertTrue(PopOutPlan.useFloat(PopOutMode.PIP, false))
+        assertTrue(PopOutPlan.useFloat(PopOutMode.FLOAT, false))
     }
 }

@@ -17,9 +17,9 @@ class SpentHealSaveTest {
         return s
     }
 
-    @Test fun thirteenNumbersAreWrittenInOrder() {
+    @Test fun spentAndHealItemsAreWrittenInOrder() {
         val h = JSONObject(SaveCodec.encode(state())).getJSONObject("history")
-        assertEquals("[100,7,2,1,1234,4321,1,20,30,40,9,2600,4]", h.getJSONArray("2026-10-12").toString())
+        assertEquals("[100,7,2,1,1234,4321,1,20,30,40,9,2600,4,0,0,0,0]", h.getJSONArray("2026-10-12").toString())
     }
 
     @Test fun spentAndHealItemsRoundTrip() {

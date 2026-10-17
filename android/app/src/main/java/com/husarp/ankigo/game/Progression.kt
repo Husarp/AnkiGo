@@ -367,12 +367,12 @@ object Catching {
         state.caught += mon.species
         state.catches++
         events += GameEvent.Caught(mon.uid, mon.species, mon.name, mon.level, mon.shiny, ball, newSpecies, toTeam)
-        Badges.award(state, 7, events)
+        Badges.award(state, 7, events, now)
         val tierBadge = when (tier) {
             Tier.NORMAL -> 17; Tier.BABY -> 18; Tier.ULTRA -> 8; Tier.LEGENDARY -> 9; Tier.MYTHICAL -> 10
             else -> null
         }
-        if (tierBadge != null) Badges.award(state, tierBadge, events)
+        if (tierBadge != null) Badges.award(state, tierBadge, events, now)
         return mon
     }
 }

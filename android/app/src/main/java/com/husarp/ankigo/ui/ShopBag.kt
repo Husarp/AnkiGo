@@ -65,7 +65,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions)
     private fun tmRow(move: String): View {
         val ctx = s
         val m = data.move(move)
-        val tile = Bits.tmTile(ctx, m?.let { Ui.typeColor(it.type) })
+        val tile = Bits.tmTile(ctx, m?.type)
         val mid = Bits.bodyText(ctx, Items.tmName(data, move), Bits.moveStats(data, move))
         if (m != null) mid.addView(Bits.typeRow(ctx, listOf(m.type)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
         val teach = Ui.text(ctx, 12f, 900, R.color.ag_mauve).apply { text = "Teach" }

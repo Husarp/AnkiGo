@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import com.husarp.ankigo.data.AnkimonFiles
 import com.husarp.ankigo.data.DataStore
+import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameEvent
@@ -48,6 +49,9 @@ object GameRepo {
     val data: GameData? get() = loadedData
     val state: GameState? get() = held
     val game: Game? get() = current
+
+    /** The moves the wild Pokémon used in this fight (info window, PLAN 93); in memory only. */
+    val wildMoves = com.husarp.ankigo.game.WildMoveLog()
 
     fun saveDir(ctx: Context): File = File(ctx.filesDir, "game")
 
@@ -162,7 +166,12 @@ object GameRepo {
             st == null -> Status.SAVE_ERROR
             else -> {
                 current = Game(d, st)
-                if (st.starterChosen) Status.READY else Status.NEED_STARTER
+                if (st.starterChosen) {
+                    // R4 fix A2: the first, quiet look at the achievements, before any screen reads this game or any action changes it
+                    // (a loaded save, a restored backup, an import: they all come through here), so the tiers it earns are stored first.
+                    try { Achievements.onReady(st, d, System.currentTimeMillis()) } catch (e: Exception) { Report.fail(TAG, "first look at the achievements", e) }
+                    Status.READY
+                } else Status.NEED_STARTER
             }
         }
     }
@@ -184,7 +193,7 @@ object GameRepo {
         requireMain()
         val g = current ?: return emptyList()
         try {
-            return f(g).also { GameLog.events(it) }
+            return f(g).also { GameLog.events(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it) }
         } catch (e: Exception) {
             // A bug in one action must not take the whole app down while studying; the state stays as it is.
             Report.fail(TAG, "action failed", e)
@@ -201,8 +210,8 @@ object GameRepo {
         try {
             return f(g).also { result ->
                 when (result) {
-                    is com.husarp.ankigo.game.ActionResult -> GameLog.events(result.events)
-                    is List<*> -> GameLog.events(result.filterIsInstance<GameEvent>())
+                    is com.husarp.ankigo.game.ActionResult -> { GameLog.events(result.events); wildMoves.observe(result.events, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(result.events) }
+                    is List<*> -> result.filterIsInstance<GameEvent>().let { GameLog.events(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it) }
                 }
             }
         } catch (e: Exception) {

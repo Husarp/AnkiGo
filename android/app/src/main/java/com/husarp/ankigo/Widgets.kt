@@ -25,7 +25,7 @@ object Widgets {
     }
 
     fun openApp(ctx: Context): PendingIntent =
-        PendingIntent.getActivity(ctx, 0, Intent(ctx, com.husarp.ankigo.ui.GameActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        PendingIntent.getActivity(ctx, 0, com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.BATTLE), PendingIntent.FLAG_IMMUTABLE)
 
     /** The motivation widget's tap: a trampoline decides at tap time between the Study tab (cards due) and the battle. */
     fun openStudyOrBattle(ctx: Context): PendingIntent =

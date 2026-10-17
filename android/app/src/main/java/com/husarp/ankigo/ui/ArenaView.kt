@@ -20,6 +20,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -101,15 +102,23 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     // ---- catch moment ----
     private val stars = PanelStars(ctx).apply { visibility = GONE }
-    private val bannerTitle = Ui.text(ctx, 20f, 900, R.color.ag_mauve).apply { letterSpacing = -0.01f }
-    private val bannerLine1 = Ui.text(ctx, 12f, 700, R.color.ag_sub0)
-    private val bannerLine2 = Ui.text(ctx, 12f, 800, R.color.ag_mauve)
+    /** "GOTCHA!" in the comic style of the floating battle texts (Round 3 pick 9C): heavy italic capitals, yellow, dark outline. */
+    private val bannerTitle = OutlineTextView(ctx, Ui.dp(ctx, 2.5f), FloatTextView.Look.OUTLINE).apply {
+        typeface = Ui.font(ctx, 900)
+        setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 26f)
+        setTextColor(FloatTextView.Look.fill(FloatKind.CRIT))
+        includeFontPadding = false
+        paint.textSkewX = -0.22f
+        letterSpacing = 0.02f
+        setShadowLayer(Ui.dp(ctx, 3f), 0f, Ui.dp(ctx, 1.2f), 0x99000000.toInt())
+        setPadding(Ui.dp(ctx, 6), Ui.dp(ctx, 2), Ui.dp(ctx, 8), Ui.dp(ctx, 2))
+    }
+    // no card: the comic text stands on the arena; the padding leaves room for its slight tilt (BannerSpot places the padded box)
     private val banner = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
-        background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 16, ctx)
-        setPadding(dpi(16), dpi(10), dpi(16), dpi(10))
-        minimumWidth = dpi(170)
-        elevation = Ui.dp(ctx, 6f)
+        gravity = Gravity.CENTER_HORIZONTAL
+        setPadding(dpi(8), dpi(8), dpi(8), dpi(8))
+        rotation = -5f
         visibility = GONE
     }
 
@@ -127,6 +136,25 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     /** Tap on our Pokémon's sprite (PLAN 86): the screen decides whether it may open the details now. */
     var onPlayerTap: () -> Unit = {}
+
+    /** What a screen reader says about our Pokémon's sprite (the Study view's card opens the battle instead of the details). */
+    fun setPlayerTapHint(description: String) { playerHolder.contentDescription = description }
+
+    /** Whether a swipe may turn our Pokémon now (the screen says no while a battle animation plays or in PiP) and what to show (PLAN 34). */
+    var canTurn: () -> Boolean = { true }
+    var turnSource: PlayerTurnSource? = null
+    private var turned = false
+    private var frontTag: Any? = null          // the PanelSprites load tag of the front view this turn showed
+    private var turnAnim: Animator? = null
+    internal var instantTurn: Boolean? = null   // tests only: the renderer has no animation clock
+    private val swipe = SwipeTracker(ViewConfiguration.get(ctx).scaledTouchSlop.toFloat())
+    private val endTurnRun = Runnable { endTurn() }
+
+    /** Tap on the wild Pokémon's sprite (PLAN 93): the screen decides whether it may open the info now. */
+    var onWildTap: () -> Unit = {}
+
+    /** What a screen reader says about the wild Pokémon's sprite. */
+    fun setWildTapHint(description: String) { enemyHolder.contentDescription = description }
 
     private var wildIsNew = false
     private var cardShown = false
@@ -176,6 +204,25 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         playerHolder.addView(playerSprite, FrameLayout.LayoutParams(-1, -1))
         playerHolder.contentDescription = "Your Pokémon. Tap for its details"
         playerHolder.setOnClickListener { onPlayerTap() }
+        playerHolder.setOnTouchListener { v, e -> // PLAN 34: a horizontal swipe turns the Pokémon; a tap still opens the details
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { swipe.down(e.x, e.y); false }
+                MotionEvent.ACTION_MOVE -> when {
+                    swipe.swiped -> true
+                    swipe.move(e.x, e.y) -> { cancelPress(v, e); v.parent?.requestDisallowInterceptTouchEvent(true); swipeTurn(); true }
+                    else -> {
+                        // clearly sideways already: keep a vertical scroll parent from taking the swipe before it counts
+                        if (swipe.claims(e.x, e.y)) v.parent?.requestDisallowInterceptTouchEvent(true)
+                        false
+                    }
+                }
+                MotionEvent.ACTION_UP -> swipe.end()   // a swipe's UP is swallowed so it does not click
+                MotionEvent.ACTION_CANCEL -> { swipe.end(); false }
+                else -> false
+            }
+        }
+        enemyHolder.contentDescription = "Wild Pokémon. Tap for its info"
+        enemyHolder.setOnClickListener { onWildTap() }
 
         // enemy card: name + Lv, type chips, HP bar (no numbers)
         eRow.addView(eName, LinearLayout.LayoutParams(0, -2, 1f))
@@ -202,8 +249,6 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         playerCard.addView(pXp, LinearLayout.LayoutParams(-1, dpi(3)).also { it.topMargin = dpi(4) })
 
         banner.addView(bannerTitle)
-        banner.addView(bannerLine1)
-        banner.addView(bannerLine2)
 
         addView(platEnemy, LayoutParams(0, 0))
         addView(platPlayer, LayoutParams(0, 0))
@@ -213,7 +258,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         addView(playerCard, LayoutParams(0, -2))
         addView(newTag, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))
         addView(stars, LayoutParams(-1, -1))
-        addView(banner, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT).also { it.leftMargin = dpi(12); it.topMargin = dpi(14) })
+        addView(banner, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))   // placed by [placeBanner] (translation), never by margins
         addView(bubble, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))
         bubble.setOnClickListener { hideStatusBubble() }
         eStatus.onTap = { showStatusBubble(it) }
@@ -343,7 +388,74 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         }
     }
 
+    /** A swipe across our Pokémon: turn to the front view for [SwipeTurn.TURN_MS] (another swipe meanwhile extends it). */
+    private fun swipeTurn() {
+        val src = turnSource ?: return
+        if (!SwipeTurn.mayTurn(canTurn()) { src.hasFront() }) return
+        removeCallbacks(endTurnRun)
+        postDelayed(endTurnRun, SwipeTurn.TURN_MS)
+        if (turned && frontShown()) return
+        turned = true
+        val before = spriteTag()
+        squash(instant = false) {
+            // only over the picture the swipe saw: a battle event may have loaded another one during the squash
+            if (spriteTag() === before) { src.showFront(); frontTag = spriteTag() }
+        }
+    }
+
+    /** Back to the normal picture. Not when a battle event already put another picture there; at once (no squash) while one plays. */
+    private fun endTurn() {
+        removeCallbacks(endTurnRun)
+        if (!turned) return
+        turned = false
+        val front = frontTag
+        frontTag = null
+        if (front == null || spriteTag() !== front) { stopTurnAnim(); return }
+        squash(instant = !canTurn()) { if (spriteTag() === front) turnSource?.showBack() }
+    }
+
+    /** The picture is still the front view this turn loaded (PanelSprites tags each load; a newer load means a battle event's). */
+    private fun frontShown() = frontTag != null && spriteTag() === frontTag
+
+    private fun spriteTag(): Any = playerSprite.getTag(R.id.ag_tag_sprite) ?: NO_TAG
+
+    /**
+     * scaleX 1 -> 0, [swap], 0 -> 1 on the turn's own animator, so it never cancels a battle event's sprite animation (those
+     * stop it instead: [stopTurnAnim]). Stopped or not, [swap] runs once and the width ends at 1. Instant with reduced motion.
+     */
+    private fun squash(instant: Boolean, swap: () -> Unit) {
+        stopTurnAnim()
+        if (instant || (instantTurn ?: reduceMotion())) { swap(); return }
+        var swapped = false
+        val a = ObjectAnimator.ofFloat(playerSprite, View.SCALE_X, 1f, 0f, 1f).setDuration(SwipeTurn.SQUASH_MS * 2)
+        a.interpolator = LinearInterpolator()
+        a.addUpdateListener { if (!swapped && it.animatedFraction >= 0.5f) { swapped = true; swap() } }
+        a.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(an: Animator) {
+                if (turnAnim === a) turnAnim = null
+                if (!swapped) { swapped = true; swap() }
+                playerSprite.scaleX = 1f
+            }
+        })
+        turnAnim = a
+        a.start()
+    }
+
+    /** Ends a running turn squash at full width (its picture swap still happens). */
+    private fun stopTurnAnim() { turnAnim?.cancel(); turnAnim = null; playerSprite.scaleX = 1f }
+
+    /** The swipe owns the touch now: let the holder's own handling see a CANCEL (no pressed look, no pending tap or long press). */
+    private fun cancelPress(v: View, e: MotionEvent) {
+        val c = MotionEvent.obtain(e)
+        c.action = MotionEvent.ACTION_CANCEL
+        v.onTouchEvent(c)
+        c.recycle()
+    }
+
     override fun onDetachedFromWindow() {
+        removeCallbacks(endTurnRun)
+        stopTurnAnim()
+        if (turned) { turned = false; if (frontShown()) turnSource?.showBack(); frontTag = null }
         hideStatusBubble()
         bobs.forEach { it.cancel() }
         bobs.clear()
@@ -419,8 +531,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         for (t in listOf(eLevel, pLevel)) sz(t, lvl)
         val padV = if (on) 5 else 7
         for (c in listOf(enemyCard, playerCard)) c.setPadding(dpi(10), dpi(padV), dpi(10), dpi(if (on) 6 else 8))
-        sz(bannerTitle, if (on) 15f else 20f)
-        banner.minimumWidth = dpi(if (on) 110 else 170)
+        sz(bannerTitle, if (on) 19f else 26f)
         updateCards()
     }
 
@@ -659,8 +770,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun reduceMotion() = !ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
 
     /** The two stat cards as boxes (they are drawn scaled from their top-left corner). */
-    private fun cardBoxes(pad: Int): List<FloatSpot.Rect> =
-        listOf(enemyBlock, playerCard).map { v -> FloatSpot.Rect(v.left - pad, v.top - pad, v.left + (v.width * v.scaleX).toInt() + pad, v.top + (v.height * v.scaleY).toInt() + pad) }
+    private fun cardBoxes(pad: Int, shownOnly: Boolean = false): List<FloatSpot.Rect> =
+        listOf(enemyBlock, playerCard).filter { !shownOnly || (it.visibility == VISIBLE && it.width > 0) }.map { v -> FloatSpot.Rect(v.left - pad, v.top - pad, v.left + (v.width * v.scaleX).toInt() + pad, v.top + (v.height * v.scaleY).toInt() + pad) }
 
     /**
      * A floating battle text in the comic style ([FloatTextView]) pops in over the Pokémon it belongs to, holds a moment, then
@@ -718,14 +829,16 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** What a card must keep off: both stat cards (a little more room round the wild one for its NEW sticker) and both sprites' pictures. */
     private fun xpObstacles(): List<FloatSpot.Rect> {
         val m = dpi(3)
-        fun art(v: View, spr: SpriteView): FloatSpot.Rect {
-            val drawn = spr.drawnHeight()
-            val dw = spr.drawnWidth()
-            val aw = if (dw > 0) min(dw, v.width) else (v.width * 0.85f).toInt(); val ah = if (drawn > 0) min(drawn, v.height) else (v.height * 0.85f).toInt()
-            val x = v.left + (v.width - aw) / 2; val y = v.top + (v.height - ah)
-            return FloatSpot.Rect(x - m, y - m, x + aw + m, y + ah + m)
-        }
-        return cardBoxes(m * 2) + art(enemyHolder, enemySprite) + art(playerHolder, playerSprite)
+        return cardBoxes(m * 2) + artBox(enemyHolder, enemySprite, m) + artBox(playerHolder, playerSprite, m)
+    }
+
+    /** The picture a sprite really draws (bottom-centred in its holder), [m] px of room round it. */
+    private fun artBox(v: View, spr: SpriteView, m: Int): FloatSpot.Rect {
+        val drawn = spr.drawnHeight()
+        val dw = spr.drawnWidth()
+        val aw = if (dw > 0) min(dw, v.width) else (v.width * 0.85f).toInt(); val ah = if (drawn > 0) min(drawn, v.height) else (v.height * 0.85f).toInt()
+        val x = v.left + (v.width - aw) / 2; val y = v.top + (v.height - ah)
+        return FloatSpot.Rect(x - m, y - m, x + aw + m, y + ah + m)
     }
 
     private fun pumpXp() {
@@ -799,6 +912,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun enter(player: Boolean, ms: Long) {
         val spr = if (player) playerSprite else enemySprite
         spr.animate().cancel()
+        if (player) stopTurnAnim()
         spr.translationX = Ui.dp(context, 60f); spr.translationY = 0f; spr.alpha = 0f; spr.scaleX = 1f; spr.scaleY = 1f; spr.flash = 0f
         spr.animate().translationX(0f).alpha(1f).setDuration(ms).setInterpolator(DecelerateInterpolator()).start()
     }
@@ -812,6 +926,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun reset(player: Boolean) {
         val spr = if (player) playerSprite else enemySprite
         spr.animate().cancel()
+        if (player) stopTurnAnim()
         spr.translationX = 0f; spr.translationY = 0f; spr.alpha = 1f; spr.scaleX = 1f; spr.scaleY = 1f; spr.flash = 0f
         spr.visibility = VISIBLE
     }
@@ -868,16 +983,54 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         stars.running = on
     }
 
-    /** "Gotcha!" banner top-left (mockup `.banner`); [line2] is the optional mauve line ("New in your Pokédex"). */
+    /**
+     * "Gotcha!" banner in the comic text style (pick 8A); [line1] / [line2] only go to its description (the result tiles and the log
+     * say them). It sits above the Poké Ball, or centred in the arena when there is no room there (pick 8D), never over a Pokémon
+     * or a stat card ([BannerSpot], PLAN 35).
+     */
     fun showBanner(title: String, line1: String, line2: String?) {
-        bannerTitle.text = title
-        bannerLine1.text = line1
-        bannerLine2.text = line2 ?: ""
-        bannerLine2.visibility = if (line2 == null) GONE else VISIBLE
+        bannerTitle.text = title.uppercase(java.util.Locale.ROOT)
+        banner.contentDescription = listOfNotNull(title, line1, line2).joinToString(". ")
         banner.visibility = VISIBLE
         banner.animate().cancel()
-        banner.scaleX = 0.97f; banner.scaleY = 0.97f; banner.alpha = 0.6f
-        banner.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(300).start()
+        if (!placeBanner()) { banner.visibility = GONE; return }   // no clear spot even small: the tiles / log already say it
+        banner.scaleX = bannerFit * 0.97f; banner.scaleY = bannerFit * 0.97f; banner.alpha = 0.6f
+        banner.animate().scaleX(bannerFit).scaleY(bannerFit).alpha(1f).setDuration(300).start()
+    }
+
+    private var bannerFit = 1f
+
+    /**
+     * Puts the banner at its [BannerSpot] (translation from the layout origin) and shrinks it if the arena is smaller than it.
+     * False = no spot clear of the Pokémon and the cards at any size ([BannerSpot.Placed.shown]): the banner must not show.
+     */
+    private fun placeBanner(): Boolean {
+        if (width <= 0 || height <= 0) return true   // not laid out yet: onLayout calls this again
+        banner.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(height, MeasureSpec.AT_MOST))
+        val bw = banner.measuredWidth; val bh = banner.measuredHeight
+        val edge = dpi(6)
+        val m = dpi(3)
+        val obstacles = cardBoxes(dpi(4), shownOnly = true) + artBox(playerHolder, playerSprite, m) +
+            (if (ballOnField) emptyList() else listOf(artBox(enemyHolder, enemySprite, m)))   // the wild one is inside the ball
+        val ballBox = if (ballOnField && ball.width > 0) FloatSpot.Rect(enemyHolder.left + ball.left, enemyHolder.top + ball.top, enemyHolder.left + ball.right, enemyHolder.top + ball.bottom) else null
+        val placed = BannerSpot.placeFitting(width, height, bw, bh, ballBox, obstacles, edge, dpi(4))
+        if (!placed.shown) return false
+        val fit = placed.scale; val spot = placed.spot
+        val vw = (bw * fit).toInt(); val vh = (bh * fit).toInt()
+        bannerFit = fit
+        banner.pivotX = bw / 2f; banner.pivotY = bh / 2f
+        banner.translationX = spot.left - (bw - vw) / 2f
+        banner.translationY = spot.top - (bh - vh) / 2f
+        return true
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        super.onLayout(changed, l, t, r, b)
+        if (banner.visibility == VISIBLE) {
+            val was = bannerFit
+            if (!placeBanner()) { banner.animate().cancel(); banner.visibility = GONE; return }   // the arena shrank: no clear spot any more
+            if (bannerFit != was) { banner.scaleX = bannerFit; banner.scaleY = bannerFit }   // the arena changed size under the banner
+        }
     }
 
     fun hideBanner() { banner.animate().cancel(); banner.visibility = GONE }
@@ -945,6 +1098,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         private const val BIG_SPRITE_DP = 8f
         /** Initial height of a card's status row (dp); [ArenaGeo.statusRow] sets the real one. */
         private const val STATUS_ROW_DP = 14
+        /** [spriteTag] before any PanelSprites load. */
+        private val NO_TAG = Any()
         private fun translucentCard(ctx: Context): Int = (Ui.c(ctx, R.color.ag_card) and 0x00FFFFFF) or (0xEB shl 24)
         private fun oval(color: Int) = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
     }

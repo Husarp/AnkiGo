@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Type symbol "psychic" (own drawing, PLAN 33): one colour, tinted at runtime by Ui.typeChip. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M1.5 12S5.6 4.8 12 4.8 22.5 12 22.5 12 18.4 19.2 12 19.2 1.5 12 1.5 12zM7.6,12 a4.4,4.4 0 1,0 8.8,0 a4.4,4.4 0 1,0 -8.8,0zM9.7,12 a2.3,2.3 0 1,0 4.6,0 a2.3,2.3 0 1,0 -4.6,0z" />
+</vector>

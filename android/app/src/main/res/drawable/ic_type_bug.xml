@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Type symbol "bug" (own drawing, PLAN 33): one colour, tinted at runtime by Ui.typeChip. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M6.4,14.6 a5.6,6.6 0 1,0 11.2,0 a5.6,6.6 0 1,0 -11.2,0z M11.3,9.8 L12.7,9.8 L12.7,20.4 L11.3,20.4z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M9.3,6.2 a2.7,2.7 0 1,0 5.4,0 a2.7,2.7 0 1,0 -5.4,0z" />
+    <path
+        android:pathData="M10.3 4 8.3 1.8M13.7 4l2-2.2M6.5 11.5H3M6.4 15.8H3M17.5 11.5H21M17.6 15.8H21"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.9"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

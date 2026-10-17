@@ -115,4 +115,22 @@ class CardLedgerTest {
         assertEquals(emptyList<LiveDetector.Event>(), l.poll(review(2, 1)))
         assertEquals(1, decode(l.snapshot(setOf(2L)))[2L]!!.reps)
     }
+
+    // ---- polls paused while the study screen is in front (LiveSession.hush): own answers are absorbed meanwhile
+    @Test fun ownAnswersAbsorbedDuringAPauseAreNotCountedByThePollAfterIt() {
+        val l = ledgerWithOwnAnswer()
+        l.absorb(review(1, 6), 10)
+        l.own.expect(1, 7, 20); l.absorb(review(1, 7), 30) // two own answers, no poll in between
+        assertEquals(emptyList<LiveDetector.Event>(), l.poll(review(1, 7), nowMs = 60_000))
+        assertEquals(7, l.cards[1L]!!.reps)
+    }
+
+    @Test fun anAnswerMadeInAnkiDroidDuringThePauseIsCountedOnceByThePollAfterIt() {
+        val l = ledgerWithOwnAnswer()
+        l.absorb(review(1, 6), 10) // own answer on the study screen
+        val events = l.poll(review(1, 7), nowMs = 60_000) // one more answer in AnkiDroid while polls were paused
+        assertEquals(1, events.size)
+        assertTrue(events.single() is LiveDetector.Event.Answer)
+        assertEquals(emptyList<LiveDetector.Event>(), l.poll(review(1, 7), nowMs = 61_000))
+    }
 }

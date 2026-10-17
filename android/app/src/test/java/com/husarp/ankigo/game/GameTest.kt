@@ -816,7 +816,7 @@ class GameTest {
         Economy.give(g.state, "master-ball", 2)
         val wild = g.fight(species = 54)
         val ev = g.throwBall("master-ball")
-        assertEquals(GameEvent.BallThrow("master-ball", 100, true, 1), ev.of<GameEvent.BallThrow>().single())
+        assertEquals(GameEvent.BallThrow("master-ball", 100, true, 1, 1), ev.of<GameEvent.BallThrow>().single())
         val caught = ev.of<GameEvent.Caught>().single()
         assertEquals("master-ball", caught.ball); assertEquals(54, caught.species); assertTrue(caught.newSpecies)
         assertEquals(1, g.state.count("master-ball"))
@@ -832,7 +832,7 @@ class GameTest {
         Economy.give(win.state, "poke-ball", 3)
         win.fight(species = 54)
         val w = win.throwBall("poke-ball")
-        assertEquals(GameEvent.BallThrow("poke-ball", 8, true, 2), w.of<GameEvent.BallThrow>().single())
+        assertEquals(GameEvent.BallThrow("poke-ball", 8, true, 2, 1), w.of<GameEvent.BallThrow>().single())
         assertEquals(1, w.of<GameEvent.Caught>().size)
 
         // failure: first draw >= 8
@@ -840,7 +840,7 @@ class GameTest {
         Economy.give(lose.state, "poke-ball", 3)
         val wild = lose.fight(species = 54, hp = 20)
         val l = lose.throwBall("poke-ball")
-        assertEquals(GameEvent.BallThrow("poke-ball", 8, false, 2), l.of<GameEvent.BallThrow>().single())
+        assertEquals(GameEvent.BallThrow("poke-ball", 8, false, 2, 1), l.of<GameEvent.BallThrow>().single())
         assertEquals(listOf(GameEvent.Info("Duckling broke free!")), l.of<GameEvent.Info>())
         assertTrue(l.of<GameEvent.Caught>().isEmpty())
         assertEquals(2, lose.state.count("poke-ball"))

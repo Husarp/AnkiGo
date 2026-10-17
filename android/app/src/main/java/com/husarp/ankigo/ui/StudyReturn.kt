@@ -1,12 +1,12 @@
 package com.husarp.ankigo.ui
 
 /**
- * Where the battle screen goes after "Study in AnkiDroid" (Study tab → AnkiDroid icon → battle activity → AnkiDroid).
- * Coming back to AnkiGo (not through the PiP window) lands on the Study tab; Back from the battle that was expanded
- * from PiP returns to Study too. Pure logic, the activity only does the navigation.
+ * Where the home screen goes after "Study in AnkiDroid" (Study view → AnkiDroid icon → AnkiDroid). Coming back to AnkiGo
+ * (not through the PiP window) lands on the Study view; the battle expanded from PiP shows the Battle view, whose Back
+ * returns to Study ([HomeNav.back]). Pure logic, the activity only does the navigation.
  */
 class StudyReturn {
-    /** The battle was brought up by a Study screen to hand over to AnkiDroid: Back leads to Study. */
+    /** The home screen handed a deck over to AnkiDroid (or the in-app study screen did, through it) and the way back is not over yet. */
     var fromStudy = false; private set
     private var ankiStarted = false
     private var pipped = false
@@ -18,7 +18,7 @@ class StudyReturn {
         fromStudy = v[0] != 0; ankiStarted = v[1] != 0; pipped = v[2] != 0
     }
 
-    /** A Study screen asked for AnkiDroid (the "reviewDeck" intent). */
+    /** The Study view (or the in-app study screen, by the "reviewDeck" intent) asked for AnkiDroid. */
     fun requested() { fromStudy = true; ankiStarted = false; pipped = false }
     /** Call right before AnkiDroid is started. */
     fun ankiStarting() { if (fromStudy) ankiStarted = true }
@@ -29,7 +29,7 @@ class StudyReturn {
     /** The user opened one of our own screens from the battle: Back is the normal Back again. */
     fun ownScreenOpened() { fromStudy = false; ankiStarted = false; pipped = false }
 
-    /** The activity resumed. True = go to the Study tab now (back from AnkiDroid without the PiP window). */
+    /** The activity resumed. True = show the Study view now (back from AnkiDroid without the PiP window). */
     fun resumed(inPip: Boolean): Boolean {
         if (inPip || !ankiStarted) return false
         ankiStarted = false
@@ -38,6 +38,6 @@ class StudyReturn {
         return true
     }
 
-    /** Back was pressed. True = go to the Study tab instead of the normal Back. */
+    /** Back was pressed: the hand-over is over. True = it was still pending. */
     fun back(): Boolean { val r = fromStudy; fromStudy = false; return r }
 }

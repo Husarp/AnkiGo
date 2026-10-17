@@ -253,15 +253,11 @@ object Bits {
         layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, sizeDp), Ui.dp(ctx, sizeDp))
     }
 
-    /** TM tile: the TM disc tinted with the move's type colour on a soft tile; [typeColor] null (unknown move) = grey. */
-    fun tmTile(ctx: Context, typeColor: Int?, sizeDp: Int = 40): FrameLayout = FrameLayout(ctx).apply {
-        val col = typeColor ?: Ui.c(ctx, R.color.ag_sub0)
-        background = Ui.rounded(blend(col, Ui.c(ctx, R.color.ag_mantle), 0.18f), 10, ctx)
-        val img = ImageView(ctx).apply {
-            setImageResource(R.drawable.ic_tm)
-            setColorFilter(col, android.graphics.PorterDuff.Mode.SRC_IN)
-        }
-        val inner = Ui.dp(ctx, sizeDp * 3 / 5)
+    /** TM tile (pick 7A): a disc in the move's type colour with the type symbol in the middle; [type] null (unknown move) = the plain grey TM disc. */
+    fun tmTile(ctx: Context, type: Type?, sizeDp: Int = 40): FrameLayout = FrameLayout(ctx).apply {
+        val img = ImageView(ctx)
+        Ui.tmIcon(ctx, type, img)
+        val inner = Ui.dp(ctx, sizeDp * 9 / 10)
         addView(img, FrameLayout.LayoutParams(inner, inner, Gravity.CENTER))
         layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, sizeDp), Ui.dp(ctx, sizeDp))
     }
@@ -330,7 +326,7 @@ object Bits {
                 addView(Ui.text(ctx, 14f, 800, R.color.ag_text).apply { text = id })
                 return@apply
             }
-            addView(Ui.typeChip(ctx, m.type), LinearLayout.LayoutParams(Ui.dp(ctx, 62), -2))
+            addView(Ui.typeChip(ctx, m.type).also { it.minWidth = Ui.dp(ctx, 62) }, LinearLayout.LayoutParams(-2, -2))
             addView(Ui.text(ctx, 14f, 800, R.color.ag_text).apply { text = m.name; maxLines = 1 },
                 LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8) })
             addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = moveStats(data, id) })

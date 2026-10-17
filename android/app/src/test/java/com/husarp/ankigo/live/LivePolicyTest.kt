@@ -62,4 +62,36 @@ class LivePolicyTest {
         assertTrue(g.tryQueue(2))
         assertFalse(g.tryQueue(2))
     }
+
+    // ---- the study screen pauses the polls while it is in front (LiveSession.hush)
+    @Test fun hushStartsWithTheFirstOwnerAndEndsWithTheLast() {
+        val h = HushGate(); val a = Any(); val b = Any()
+        assertFalse(h.active)
+        assertTrue("first owner pauses", h.hold(a)); assertTrue(h.active)
+        assertFalse("a second owner changes nothing", h.hold(b))
+        assertFalse("one owner left: still paused", h.release(a)); assertTrue(h.active)
+        assertTrue("the last owner resumes", h.release(b)); assertFalse(h.active)
+    }
+
+    @Test fun hushCountsTheSameOwnerOnceAndIgnoresStrangers() {
+        val h = HushGate(); val screen = Any()
+        assertTrue(h.hold(screen)); assertFalse(h.hold(screen)) // onResume twice
+        assertFalse("never held", h.release(Any())); assertTrue(h.active)
+        assertTrue(h.release(screen)); assertFalse(h.active)
+        assertFalse("released twice", h.release(screen))
+    }
+
+    @Test fun hushIsByIdentityNotEquality() {
+        val h = HushGate()
+        val a = "screen"; val b = String("screen".toCharArray()) // equal, but two screens
+        h.hold(a); h.hold(b)
+        assertFalse(h.release(a)); assertTrue(h.active)
+        assertTrue(h.release(b))
+    }
+
+    @Test fun theFirstPollAfterALongPauseIsAFullRead() {
+        // polls paused (hush) for a minute after a full read: the tick that follows reads everything, whatever its number
+        assertTrue(LivePolicy.isFull(tickNo = 3, nowMs = 61_000, lastFullMs = 1_000))
+        assertFalse("a short pause: the light poll as usual", LivePolicy.isFull(tickNo = 3, nowMs = 6_000, lastFullMs = 1_000))
+    }
 }

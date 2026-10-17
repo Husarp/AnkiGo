@@ -21,9 +21,20 @@ object LeaveModeMigration {
     fun needsWrite(v2: String?): Boolean = parse(v2) == null
 }
 
-/** Which window "Pop out" opens (PLAN 24): the floating one when the leave mode is FLOAT or the device has no PiP, else PiP. */
+/** Which window "Pop out" opens (R4-X5): the floating battle window or Android's picture-in-picture. */
+enum class PopOutMode { PIP, FLOAT }
+
+/**
+ * Pop out (PLAN 24, R4-X5): the player's own choice ("popOutMode"). Never chosen: the floating window when the leave mode is
+ * FLOAT, else picture-in-picture (the behaviour before the choice existed). A device without PiP always gets the floating window.
+ */
 object PopOutPlan {
-    fun useFloat(mode: LeaveMode, pipAvailable: Boolean): Boolean = mode == LeaveMode.FLOAT || !pipAvailable
+    const val KEY = "popOutMode"
+
+    fun resolve(stored: String?, leave: LeaveMode): PopOutMode =
+        PopOutMode.entries.firstOrNull { it.name == stored } ?: if (leave == LeaveMode.FLOAT) PopOutMode.FLOAT else PopOutMode.PIP
+
+    fun useFloat(mode: PopOutMode, pipAvailable: Boolean): Boolean = mode == PopOutMode.FLOAT || !pipAvailable
 }
 
 /** App theme: follow Android, or always light / dark. */
@@ -52,6 +63,11 @@ object AppPrefs {
     }
 
     fun setLeaveMode(ctx: Context, mode: LeaveMode) = prefs(ctx).edit().putString(LeaveModeMigration.KEY, mode.name).apply()
+
+    /** Which window Pop out opens (Settings → Battle → Pop out opens); see [PopOutPlan]. */
+    fun popOutMode(ctx: Context): PopOutMode = PopOutPlan.resolve(prefs(ctx).getString(PopOutPlan.KEY, null), leaveMode(ctx))
+
+    fun setPopOutMode(ctx: Context, mode: PopOutMode) = prefs(ctx).edit().putString(PopOutPlan.KEY, mode.name).apply()
 
     /** Team, Pokédex, Shop and Settings open as floating windows while AnkiGo is in split screen (needs the overlay permission). */
     fun floatScreens(ctx: Context): Boolean = prefs(ctx).getBoolean("floatScreens", true)
@@ -103,6 +119,11 @@ object AppPrefs {
 
     fun setBoxGrouped(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("boxGrouped", on).apply()
 
+    /** Details sections (R4-V3): whether the section [key] is open; null = never answered (see [DetailOpen]). */
+    fun detailOpen(ctx: Context, key: String): Boolean? = prefs(ctx).let { if (it.contains("detailOpen_$key")) it.getBoolean("detailOpen_$key", false) else null }
+
+    fun setDetailOpen(ctx: Context, key: String, open: Boolean) = prefs(ctx).edit().putBoolean("detailOpen_$key", open).apply()
+
     /** App theme (Settings → Look). Default: follow the system. Applied by [AppLook]; change it through [AppLook.setTheme]. */
     fun theme(ctx: Context): ThemeMode =
         ThemeMode.entries.firstOrNull { it.name == prefs(ctx).getString("theme", null) } ?: ThemeMode.SYSTEM
@@ -114,6 +135,13 @@ object AppPrefs {
     /** Progress bar colours (Settings → Look): by meaning (default), accent or gradient. Change it through [AppLook.setBarStyle]; read by [BarTones]. */
     fun barStyle(ctx: Context): BarStyle =
         BarStyle.entries.firstOrNull { it.name == prefs(ctx).getString("barStyle", null) } ?: BarStyle.MEANING
+
+    /**
+     * How type chips are drawn (Settings → Look → "Show types as"): icon + text (default), text or icon. Change it
+     * through [AppLook.setTypeStyle]; drawn by [TypeChips].
+     */
+    fun typeStyle(ctx: Context): TypeStyle =
+        TypeStyle.entries.firstOrNull { it.name == prefs(ctx).getString("typeStyle", null) } ?: TypeStyle.ICON_TEXT
 
     /** Interface size in percent ([AppLook.SCALES], default 100): text, cards and sprites together. Change it through [AppLook.setScale]. */
     fun uiScale(ctx: Context): Int = prefs(ctx).getInt("uiScale", 100).let { if (it in AppLook.SCALES) it else 100 }

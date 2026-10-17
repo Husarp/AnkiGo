@@ -129,21 +129,8 @@ object Ui {
         Type.DARK -> 0xFF705746.toInt(); Type.STEEL -> 0xFFB7B7CE.toInt(); Type.FAIRY -> 0xFFD685AD.toInt()
     }
 
-    /** Text colour on a type chip: dark for the light-coloured types (mockup DARKTXT), else white. */
-    fun typeTextColor(t: Type): Int = when (t) {
-        Type.ELECTRIC, Type.GROUND, Type.ICE, Type.NORMAL, Type.STEEL, Type.GRASS, Type.BUG, Type.ROCK,
-        Type.FIRE, Type.FAIRY, Type.FLYING -> 0xFF1E1E2E.toInt()
-        else -> 0xFFFFFFFF.toInt()
-    }
-
-    /** The small coloured type label ("ELECTRIC"). */
-    fun typeChip(ctx: Context, type: Type): TextView = text(ctx, 9f, 900, R.color.ag_text).apply {
-        text = type.name
-        setTextColor(typeTextColor(type))
-        letterSpacing = 0.05f
-        setPadding(dp(ctx, 6), dp(ctx, 1), dp(ctx, 6), dp(ctx, 1))
-        background = rounded(typeColor(type), 6, ctx)
-    }
+    /** The type chip (symbol and/or name in the type colour on a soft tint, "Show types as"): [TypeChips.chip], the one renderer. */
+    fun typeChip(ctx: Context, type: Type): TextView = TypeChips.chip(ctx, type)
 
     /** HP bar colour: green above 50 %, yellow above 20 %, else red. */
     fun hpColor(ctx: Context, frac: Float): Int =
@@ -226,23 +213,34 @@ object Ui {
     }
 
     /**
-     * Shows the item icon in [view]: from disk if cached, else a letter badge now and the real icon when the download
-     * lands (stays on the badge if PokeAPI has none). [item] is the PokeAPI-style id, e.g. "poke-ball".
+     * Shows the item icon in [view]: from disk if cached, else AnkiGo's own kind badge ([ItemIcons.badge]) now and the real icon
+     * when the download lands (stays on the badge if PokeAPI has none; [ItemIconPlan.DRAWN] ids never download). [item] is the
+     * PokeAPI-style id, e.g. "poke-ball".
      */
     fun itemIcon(ctx: Context, item: String, view: ImageView) {
         view.setTag(R.id.ag_tag_sprite, "item:$item")
         view.clearColorFilter()
         view.alpha = 1f
         view.scaleType = ImageView.ScaleType.FIT_CENTER
-        val have = Sprites.itemBitmap(ctx, item)
+        val have = if (ItemIconPlan.of(item) is ItemIconSpec.Drawn) null else Sprites.itemBitmap(ctx, item)
         if (have != null) {
             view.setImageDrawable(pixelBitmap(ctx, have))
             return
         }
-        view.setImageDrawable(LetterBadge(ctx, item))
+        view.setImageDrawable(ItemIcons.badge(ctx, item))
+        if (ItemIconPlan.of(item) is ItemIconSpec.Drawn) return
         Sprites.fetchItem(ctx, item) { bmp ->
             if (bmp != null && view.getTag(R.id.ag_tag_sprite) == "item:$item") view.setImageDrawable(pixelBitmap(ctx, bmp))
         }
+    }
+
+    /** Shows the TM disc of [type] (the move's type; null = move not in the data, plain TM disc) in [view]. */
+    fun tmIcon(ctx: Context, type: Type?, view: ImageView) {
+        view.setTag(R.id.ag_tag_sprite, "tm:$type")
+        view.clearColorFilter()
+        view.alpha = 1f
+        view.scaleType = ImageView.ScaleType.FIT_CENTER
+        view.setImageDrawable(ItemIcons.tmDisc(ctx, type))
     }
 
     /**
@@ -282,37 +280,6 @@ object Ui {
 
     /** The newest toast text; the screenshot tests read it (the renderer has no toast service). */
     internal var lastToast: String? = null
-
-    /** Fallback item icon: `ag_mantle` disc with the item's initials ("poke-ball" -> "PB", "potion" -> "PO"). */
-    private class LetterBadge(private val ctx: Context, item: String) : Drawable() {
-        private val letters: String = run {
-            val words = item.split('-', '_', ' ').filter { it.isNotEmpty() }
-            when {
-                words.size >= 2 -> "${words[0][0]}${words[1][0]}"
-                words.size == 1 -> words[0].take(2)
-                else -> "?"
-            }.uppercase()
-        }
-        private val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = c(ctx, R.color.ag_mantle) }
-        private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = c(ctx, R.color.ag_sub0)
-            typeface = font(ctx, 900)
-            textAlign = Paint.Align.CENTER
-        }
-
-        override fun draw(canvas: Canvas) {
-            val b: Rect = bounds
-            val r = minOf(b.width(), b.height()) / 2f
-            canvas.drawCircle(b.exactCenterX(), b.exactCenterY(), r, disc)
-            ink.textSize = r * 0.85f
-            canvas.drawText(letters, b.exactCenterX(), b.exactCenterY() - (ink.descent() + ink.ascent()) / 2f, ink)
-        }
-
-        override fun setAlpha(alpha: Int) { disc.alpha = alpha; ink.alpha = alpha }
-        override fun setColorFilter(cf: android.graphics.ColorFilter?) { disc.colorFilter = cf; ink.colorFilter = cf }
-        @Deprecated("Deprecated in Java")
-        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
-    }
 }
 
 /**
@@ -425,7 +392,7 @@ class AppBar(
     }
 
     /** Changes the pill text (no-op when the bar has no pill). */
-    fun setPill(text: String) { pill?.text = text }
+    fun setPill(text: String) { pill?.text = text; pillBox?.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE } // empty = no pill
 
     /** A small icon button on the right, left of the pill (the Shop's "?"). 48 dp touch area around a 22 dp icon. */
     fun addAction(@DrawableRes icon: Int, description: String, @ColorRes tone: Int = R.color.ag_text, onClick: () -> Unit): ImageView {

@@ -15,6 +15,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
+import com.husarp.ankigo.game.AchPageMath
 import com.husarp.ankigo.game.ActionResult
 import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameData
@@ -133,9 +134,9 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
         cover.visibility = if (ok) View.GONE else View.VISIBLE
         cover.text = when (GameRepo.status) {
             GameRepo.Status.LOADING -> "Loading…"
-            GameRepo.Status.NEED_DATA -> "Finish the first-run download on the Battle tab first."
-            GameRepo.Status.NEED_STARTER -> "Pick your starter on the Battle tab first."
-            GameRepo.Status.SAVE_ERROR -> "The save couldn't be read. Open the Battle tab for options."
+            GameRepo.Status.NEED_DATA -> "Finish the first-run download on the Study tab first."
+            GameRepo.Status.NEED_STARTER -> "Pick your starter on the Study tab first."
+            GameRepo.Status.SAVE_ERROR -> "The save couldn't be read. Open the Study tab for options."
             GameRepo.Status.READY -> "Something went wrong loading the game."
         }
         if (ok) render()
@@ -152,12 +153,14 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
     /** Message toast (+ earned badges); an evolution gets a small dialog with the new sprite instead. */
     fun report(message: String, events: List<GameEvent> = emptyList()) {
         val evo = events.filterIsInstance<GameEvent.Evolved>().firstOrNull()
-        val badges = events.filterIsInstance<GameEvent.BadgeEarned>().joinToString { it.title }
+        // Achievements and the badges that stand for one get the popup (AchievementPopup, offered by GameRepo): no toast. A badge with no row keeps its toast.
+        val badges = AchPageMath.unmappedBadges(events).joinToString { it.title }
+        val earned = if (badges.isNotEmpty()) "Badge: $badges" else ""
         if (evo != null) {
             Pickers.evolved(this, evo, state.mon(evo.uid)?.shiny == true)
-            if (badges.isNotEmpty()) Ui.toast(this, "Badge: $badges")
+            if (earned.isNotEmpty()) Ui.toast(this, earned)
         } else {
-            val text = listOf(message, if (badges.isNotEmpty()) "Badge: $badges" else "").filter { it.isNotEmpty() }.joinToString("\n")
+            val text = listOf(message, earned).filter { it.isNotEmpty() }.joinToString("\n")
             if (text.isNotEmpty()) Ui.toast(this, text)
         }
     }

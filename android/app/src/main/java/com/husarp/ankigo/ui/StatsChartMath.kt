@@ -49,6 +49,9 @@ object StatsChartMath {
         return floor((pos - start) / (end - start) * n).toInt().coerceIn(0, n - 1)
     }
 
+    /** R4-X1 item 1: a tap on the pick that is already open closes it ([none] = nothing picked); any other tap picks it. */
+    fun <T> tapPick(open: T, tapped: T, none: T): T = if (tapped == open) none else tapped
+
     /** The middle of slot [i] of [n] in [start]..[end]. */
     fun slotCenter(i: Int, n: Int, start: Float, end: Float): Float = start + (i + 0.5f) * (end - start) / n
 
@@ -195,9 +198,27 @@ object StatsChartMath {
         return when {
             reason.isNotBlank() && s.source == reason -> reason
             s.kind == ChartKind.CATEGORY -> "Nothing here yet."
-            s.metric == ChartMetric.RETENTION -> "No answers counted in this period yet."
-            else -> "No ${s.metric.noun} in this period yet."
+            else -> emptyText(s.metric)
         }
+    }
+
+    /**
+     * "Nothing in the period" for one metric, worded for that metric (R4 fix N2): the metric's noun reads as a unit in the tiles ("HP dealt",
+     * "₽ earned", "min"), not after "No".
+     */
+    fun emptyText(m: ChartMetric): String = when (m) {
+        ChartMetric.RETENTION -> "No answers counted in this period yet."
+        ChartMetric.TIME -> "No study time in this period yet."
+        ChartMetric.DUE -> "Nothing due in this period."
+        ChartMetric.MONEY -> "No money earned in this period yet."
+        ChartMetric.MONEY_SPENT -> "No money spent in this period yet."
+        ChartMetric.XP -> "No XP earned in this period yet."
+        ChartMetric.HEALING -> "No healing items used in this period yet."
+        ChartMetric.DMG_DEALT -> "No damage dealt in this period yet."
+        ChartMetric.DMG_TAKEN -> "No damage taken in this period yet."
+        ChartMetric.DMG_BLOCKED -> "No damage blocked in this period yet."
+        ChartMetric.BUTTONS -> "No answers in this period yet."
+        else -> "No ${m.noun} in this period yet." // reviews, new cards, answers, catches, battles won, misses, calendar reviews
     }
 
     /** The three key numbers above the chart: total, a day on average and the best day (a category chart: its total and its biggest bar). */

@@ -32,4 +32,22 @@ class BarTonesTest {
         assertEquals(3, colours.toSet().size)
         assertNotEquals(colours[0], BarTones.resolve(BarMeaning.PROGRESS, BarStyle.MEANING, p).color)
     }
+
+    private val gp = BarPalette(0x11, 0x22, 0x33, 0x44, 0x55, GoalPalette(0xFFFF0000.toInt(), 0xFFFF8000.toInt(), 0xFF00FF00.toInt()))
+
+    @Test fun goalFollowsGoalToneByFractionInMeaningStyle() {
+        for (f in listOf(0f, 0.25f, 0.5f, 0.9f, 1f, 1.6f))
+            assertEquals(BarFill(GoalTone.color(f, gp.goal!!)), BarTones.resolve(BarMeaning.GOAL, BarStyle.MEANING, gp, f))
+        assertEquals(0xFFFF0000.toInt(), BarTones.resolve(BarMeaning.GOAL, BarStyle.MEANING, gp, 0f).color)
+        assertEquals(0xFF00FF00.toInt(), BarTones.resolve(BarMeaning.GOAL, BarStyle.MEANING, gp, 1.6f).color)
+    }
+
+    @Test fun goalKeepsStyleColourInAccentAndGradient() {
+        assertEquals(BarFill(0x44), BarTones.resolve(BarMeaning.GOAL, BarStyle.ACCENT, gp, 0.3f))
+        assertEquals(BarFill(0x44, 0x55), BarTones.resolve(BarMeaning.GOAL, BarStyle.GRADIENT, gp, 0.3f))
+    }
+
+    @Test fun otherMeaningsIgnoreFraction() {
+        assertEquals(BarFill(0x11), BarTones.resolve(BarMeaning.XP, BarStyle.MEANING, gp, 0.3f))
+    }
 }

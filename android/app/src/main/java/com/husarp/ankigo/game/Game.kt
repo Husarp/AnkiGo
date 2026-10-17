@@ -39,7 +39,12 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     }
 
     /** One answer from AnkiDroid -> bookkeeping + (every cardsPerRound answers) one battle round. */
-    fun onAnswer(a: Answer): List<GameEvent> = answer(a).also { StudyStats.record(state, it) }
+    fun onAnswer(a: Answer): List<GameEvent> {
+        val events = answer(a).toMutableList()
+        StudyStats.record(state, events)
+        Achievements.settle(data, state, clock(), events) // R4-03: counts these events once (an Ignored answer has none), then adds AchievementReached
+        return events
+    }
 
     private fun answer(a: Answer): List<GameEvent> {
         val events = tick().toMutableList()
@@ -74,7 +79,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         }
 
         Economy.onReview(data, state, rng, events)
-        Badges.onReviews(state, events)
+        Badges.onReviews(state, events, clock())
 
         events += ensureEncounter()
         val battle = state.battle ?: return events
@@ -210,7 +215,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (battle.wild.hp <= 0 || Items.def(ball)?.kind != ItemKind.BALL || !Economy.take(state, ball)) return emptyList()
         val chance = Catching.ballChance(ball, data.sp(battle.wild.species).types)
         val success = rng.nextInt(100) < chance
-        val events = mutableListOf<GameEvent>(GameEvent.BallThrow(ball, chance, success, state.count(ball)))
+        val events = mutableListOf<GameEvent>(GameEvent.BallThrow(ball, chance, success, state.count(ball), battle.failedThrows + 1)) // the fight itself counts its throws (saved with it)
         if (success) {
             Catching.addToCollection(data, state, battle.wild, battle.tier, ball, clock(), events)
             state.ballCatches.merge(ball, 1, Int::plus)
@@ -218,9 +223,11 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             state.battle = null
             events += ensureEncounter()
         } else {
+            battle.failedThrows++
             events += GameEvent.Info("${battle.wild.name} broke free!")
         }
         StudyStats.record(state, events)
+        Achievements.settle(data, state, clock(), events)
         return events
     }
 
@@ -231,6 +238,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val events = mutableListOf<GameEvent>(GameEvent.Fled(battle.wild.name))
         state.battle = null
         events += ensureEncounter()
+        Achievements.bump(state, Metric.ITEMS_USED)
+        Achievements.settle(data, state, clock(), events)
         return events
     }
 
@@ -251,6 +260,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         Shop.ensureToday(data, state)
         val events = mutableListOf<GameEvent>(GameEvent.Info("${mon.name} is your partner!"))
         events += ensureEncounter()
+        Achievements.check(state, data, now, events, silent = true) // every row is looked at once now: later tiers come with their celebration
         return events
     }
 
@@ -345,6 +355,16 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         mon.favourite = on
         return ActionResult(true, if (on) "${mon.shownName} is a favourite now." else "${mon.shownName} is no longer a favourite.")
+    }
+
+    /**
+     * The player opened [uid]'s details: its NEW mark (Box tile / Team row) is gone from now on. Only a Pokémon that is NEW today is
+     * remembered, so [GameState.viewedMons] stays small (it is saved without uids of released Pokémon). No events.
+     */
+    fun markViewed(uid: String): List<GameEvent> {
+        val mon = state.mon(uid) ?: return emptyList()
+        if (mon.caughtAt != 0L && dayKey(mon.caughtAt) == dayKey()) state.viewedMons += uid
+        return emptyList()
     }
 
     /**

@@ -21,7 +21,7 @@ import com.husarp.ankigo.deck.NoteEditActivity
 import com.husarp.ankigo.deck.NoteForEdit
 import com.husarp.ankigo.study.TtsRules
 import com.husarp.ankigo.ui.AppMenu
-import com.husarp.ankigo.ui.StudyDecksActivity
+import com.husarp.ankigo.ui.StudyHome
 import com.husarp.ankigo.ui.Ui
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -53,15 +53,14 @@ class R3V7Shots {
 
     // ---------------------------------------------------------------- deck list
 
-    private fun deckScreen(ctx: Context, granted: Boolean = true): Pair<StudyDecksActivity, View> {
+    private fun deckScreen(ctx: Context, granted: Boolean = true): Pair<StudyHome, View> {
         val ss = ShotCtx(ctx, granted = granted)
-        val act = attach(StudyDecksActivity(), ss)
         ss.getSharedPreferences("study", 0).edit().putLong("lastDeck", 0).apply()
-        val root = act.buildContent()
-        setField(act, "decks", decks.sortedBy { it.name })
-        setField(act, "expanded", setOf(1L, 2L))
-        call(act, "render")
-        return act to root
+        val b = StudyDeckKit.compose(ss)
+        setField(b.home, "decks", decks.sortedBy { it.name })
+        setField(b.home, "expanded", setOf(1L, 2L))
+        call(b.home, "render")
+        return b.home to b.root
     }
 
     private fun labels(m: AppMenu) = m.describe().map { it.second }

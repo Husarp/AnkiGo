@@ -342,7 +342,7 @@ object WidgetRender {
             roundRect(x, y, x + w, y + 7f, 3.5f, col(R.color.ag_s0))
             val fw = if (progress <= 0f) 0f else max(7f, w * progress)
             if (fw > 0f) {
-                val f = BarTones.fill(ctx, BarMeaning.GOAL)
+                val f = BarTones.fill(ctx, BarMeaning.GOAL, progress)
                 val to = f.gradientTo
                 if (to != null) fill.shader = LinearGradient(x, 0f, x + fw, 0f, f.color, to, Shader.TileMode.CLAMP) else fill.color = f.color
                 canvas.drawRoundRect(x, y, x + fw, y + 7f, 3.5f, 3.5f, fill)
@@ -455,7 +455,7 @@ object WidgetRender {
                 return
             }
             if (s.progress > 0f) {
-                val f = BarTones.fill(ctx, BarMeaning.GOAL)
+                val f = BarTones.fill(ctx, BarMeaning.GOAL, s.progress)
                 val to = f.gradientTo
                 if (to != null) {
                     val sweep = SweepGradient(cx, cy, f.color, to)

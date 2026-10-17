@@ -18,11 +18,13 @@ object StudyStats {
     /**
      * Adds what [events] say to today's [DayLog]: Counted -> reviews; Defeated -> won; Caught -> caught (+ shinies when
      * shiny) and won (a catch is a won battle); XpGained -> xp (every Pokémon, so an Exp. Share holder counts too); Cash
-     * -> cash; Counted also fills the per-button counts. Ignored answers never produce Counted, so they are never counted.
-     * Called by Game.onAnswer and Game.throwBall only.
+     * -> cash; Counted also fills the per-button counts; Attack -> damage dealt / taken / blocked and misses (the rules of
+     * [Achievements.attackNumbers], the same the all-time achievement counters use). Ignored answers never produce Counted or
+     * Attack, so they are never counted. Called by Game.onAnswer and Game.throwBall only.
      */
     fun record(state: GameState, events: List<GameEvent>) {
         var reviews = 0; var won = 0; var caught = 0; var shinies = 0; var xp = 0; var cash = 0
+        var dealt = 0; var taken = 0; var blocked = 0; var misses = 0
         val buttons = IntArray(5)
         for (e in events) when (e) {
             is GameEvent.Counted -> { reviews++; buttons[e.button.coerceIn(0, 4)]++ }
@@ -30,11 +32,13 @@ object StudyStats {
             is GameEvent.Caught -> { won++; caught++; if (e.shiny) shinies++ }
             is GameEvent.XpGained -> xp += e.xp
             is GameEvent.Cash -> cash += e.amount
+            is GameEvent.Attack -> Achievements.attackNumbers(e).let { dealt += it.dealt.toInt(); taken += it.taken.toInt(); blocked += it.blocked.toInt(); misses += it.misses }
             else -> Unit
         }
-        if (reviews + won + caught + shinies + xp + cash == 0 || state.day.isEmpty()) return
+        if (reviews + won + caught + shinies + xp + cash + dealt + taken + blocked + misses == 0 || state.day.isEmpty()) return
         val log = state.history.getOrPut(state.day) { DayLog() }
         log.reviews += reviews; log.won += won; log.caught += caught; log.shinies += shinies; log.xp += xp; log.cash += cash
+        log.dmgDealt += dealt; log.dmgTaken += taken; log.dmgBlocked += blocked; log.misses += misses
         for (i in buttons.indices) log.buttons[i] += buttons[i]
         prune(state)
     }
@@ -97,6 +101,8 @@ object StudyStats {
         val daysStudied: Int,
         val avgPerDay: Int,
         val bestDay: Int,
+        // all-time battle numbers (GameState.counters), counted since the update that brought them; 0 before (R4-V11)
+        val damageDealt: Long = 0, val damageTaken: Long = 0, val damageBlocked: Long = 0, val misses: Long = 0,
     )
 
     fun summary(state: GameState, today: String, weeks: Int = 18): Summary {
@@ -111,6 +117,8 @@ object StudyStats {
             reviews = state.totalReviews, battlesWon = state.defeats + state.catches, catches = state.catches,
             shinies = state.mons.count { it.shiny }, evolutions = state.evolutions, bestCombo = state.bestCardStreak,
             daysStudied = totals.daysStudied, avgPerDay = totals.avgPerDay, bestDay = totals.bestDay,
+            damageDealt = state.counters[Metric.DAMAGE_DEALT.name] ?: 0L, damageTaken = state.counters[Metric.DAMAGE_TAKEN.name] ?: 0L,
+            damageBlocked = state.counters[Metric.DAMAGE_BLOCKED.name] ?: 0L, misses = state.counters[Metric.MISSES.name] ?: 0L,
         )
     }
 

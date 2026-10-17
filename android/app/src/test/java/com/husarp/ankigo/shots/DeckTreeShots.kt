@@ -4,7 +4,6 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.Anki
-import com.husarp.ankigo.ui.StudyDecksActivity
 import org.junit.Rule
 import org.junit.Test
 
@@ -23,14 +22,13 @@ class DeckTreeShots {
 
     private fun build(ctx: android.content.Context, expanded: Set<Long>, icon: Boolean): android.view.View {
         val ss = ShotCtx(ctx)
-        val act = attach(StudyDecksActivity(), ss)
         ss.getSharedPreferences("study", 0).edit().putLong("lastDeck", 2).putLong("lastStudied:2", System.currentTimeMillis() - 12 * 60_000L).apply()
-        val root = act.buildContent()
-        setField(act, "decks", nested.sortedBy { it.name })
-        setField(act, "expanded", expanded)
-        if (icon) { setField(act, "ankiIcon", fakeIcon()); setField(act, "ankiIconLoaded", true) }
-        call(act, "render")
-        return root
+        val b = StudyDeckKit.compose(ss)
+        setField(b.home, "decks", nested.sortedBy { it.name })
+        setField(b.home, "expanded", expanded)
+        if (icon) { setField(b.home, "ankiIcon", fakeIcon()); setField(b.home, "ankiIconLoaded", true) }
+        call(b.home, "render")
+        return b.root
     }
 
     @Test fun tree() {

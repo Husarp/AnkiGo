@@ -50,12 +50,12 @@ object CompareModes {
         return out
     }
 
-    /** The green/red text of a difference: "+12", "−8" (real minus sign), "±0"; "" for none. */
+    /** The green/red text of a difference: "+12", "−8" (real minus sign); "" for none and for an equal value (R4-X1: no "±0"). */
     fun diffLabel(diff: Int?): String = when {
         diff == null -> ""
         diff > 0 -> "+$diff"
         diff < 0 -> "−${-diff}"
-        else -> "±0"
+        else -> ""
     }
 
     /** 1 = better than the reference (green), -1 = worse (red), 0 = equal or none (neutral). */
@@ -72,6 +72,24 @@ object CompareModes {
         val distinct = values.filterNotNull().distinct().sortedDescending()
         return values.map { v -> v?.let { distinct.indexOf(it) } }
     }
+
+    /**
+     * R4-X1 item 10: where each value sits between the row's worst (0.0 = red) and best (1.0 = green) value, in proportion to
+     * the VALUE (not the rank): near-equal values get near-equal positions. Null for a column without a value; with fewer than
+     * two values, or when they are all equal, there is nothing to compare, so every entry is null.
+     */
+    fun scale(values: List<Int?>): List<Float?> {
+        val have = values.filterNotNull()
+        if (have.size < 2) return values.map { null }
+        val lo = have.min()
+        val hi = have.max()
+        if (hi == lo) return values.map { null }
+        return values.map { v -> v?.let { (it - lo).toFloat() / (hi - lo) } }
+    }
+
+    /** [scale] for every numeric row, by row key. */
+    fun scaleRows(data: CompareData): Map<String, List<Float?>> =
+        data.rows.filter { it.numeric }.associate { it.key to scale(values(it)) }
 
     /** [ranks] for every numeric row, by row key. */
     fun rankRows(data: CompareData): Map<String, List<Int?>> =

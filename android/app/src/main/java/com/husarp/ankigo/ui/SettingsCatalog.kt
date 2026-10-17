@@ -45,6 +45,7 @@ object SettingsCatalog {
         s("theme", L, "", "Theme", "Light, dark, or follow the phone"),
         s("accent", L, "", "Accent", "The colour used for buttons, ticks and highlights"),
         s("barStyle", L, "", "Progress bars", "XP blue, goals orange, Pokédex teal; or all accent, or a gradient"),
+        s("typeStyle", L, "", "Show types as", "Type names, small type icons, or both"),
         s("scale", L, "", "Interface size", "Text, cards and Pokémon get bigger or smaller together"),
 
         // Sounds
@@ -58,6 +59,8 @@ object SettingsCatalog {
         s("leaveMode", B, "When you leave AnkiGo", "Nothing", "Leaving AnkiGo shows no battle; Pop out still works any time"),
         s("leaveModePip", B, "When you leave AnkiGo", "Picture-in-picture", "A small battle window when you switch to another app"),
         s("leaveModeFloat", B, "When you leave AnkiGo", "Floating battle window", "A movable battle window over AnkiDroid; needs the overlay permission"),
+        s("popOutFloat", B, "Pop out opens", "Floating window", "Stays on top and you can tap it; needs “Display over other apps”"),
+        s("popOutPip", B, "Pop out opens", "Picture-in-picture window", "Android's own small window; view only"),
         s("floatScreens", B, "Floating screens", "Floating screens in split screen", "Team, Pokédex, Shop and Settings open small over AnkiDroid"),
         s("overlay", B, "Floating screens", "Display over other apps", "Android permission the floating windows need"),
         s("cardsUnderOwn", B, "Battle panel", "Stat card under its own Pokémon", "Off: the classic layout, each card on the opposite side"),

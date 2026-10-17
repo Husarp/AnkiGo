@@ -22,7 +22,8 @@ import com.husarp.ankigo.ui.Form
 import com.husarp.ankigo.ui.GamePage
 import com.husarp.ankigo.ui.PageActivity
 import com.husarp.ankigo.ui.PageHost
-import com.husarp.ankigo.ui.SettingsActivity
+import com.husarp.ankigo.ui.Dest
+import com.husarp.ankigo.ui.Nav
 import com.husarp.ankigo.ui.Ui
 
 // TICKET R3-V3a (PLAN 44, pick 3): the Help screen. Home = the game guide on top, problem pages below; a problem page
@@ -315,7 +316,7 @@ internal object HelpActions {
                 HelpAction.IMPORT_APKG -> importApkg(page)
                 HelpAction.HELP_PAGE -> b.arg?.let { page.show(HelpRoute.Problem(it)) }
                 HelpAction.OPEN_DIAGNOSTICS -> page.startScreen(Intent(ctx, DiagnosticsActivity::class.java))
-                HelpAction.OPEN_SETTINGS -> page.startScreen(Intent(ctx, SettingsActivity::class.java))
+                HelpAction.OPEN_SETTINGS -> page.startScreen(Nav.intent(ctx, Dest.SETTINGS))
                 HelpAction.OPEN_URL -> b.arg?.let { page.startScreen(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
             }
         } catch (e: Exception) {

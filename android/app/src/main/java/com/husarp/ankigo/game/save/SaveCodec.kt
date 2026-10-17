@@ -1,5 +1,6 @@
 package com.husarp.ankigo.game.save
 
+import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.Battle
 import com.husarp.ankigo.game.BattleSide
 import com.husarp.ankigo.game.DayLog
@@ -53,6 +54,7 @@ object SaveCodec {
                         value(v.reviews); value(v.won); value(v.caught); value(v.shinies); value(v.xp); value(v.cash)
                         v.buttons.forEach { value(it) }
                         value(v.spent); value(v.healItems)
+                        value(v.dmgDealt); value(v.dmgTaken); value(v.dmgBlocked); value(v.misses)
                     }
                 }
             }
@@ -66,6 +68,12 @@ object SaveCodec {
             key("ballCatches"); obj { for ((k, v) in state.ballCatches.toSortedMap()) kv(k, v) }
             key("seenAt"); obj { for ((k, v) in state.seenAt.toSortedMap()) kv(k.toString(), v) }
             list("releasedAnkimon", state.releasedAnkimon) // insertion order (oldest first), not sorted
+            list("viewedMons", state.mons.map { it.uid }.filter { it in state.viewedMons }) // R4-V5: only still-owned uids
+            key("counters"); obj { for ((k, v) in state.counters.toSortedMap()) kv(k, v) } // R4-03 achievements: always written, so a save without the key is an old one
+            key("achTiers"); obj { for ((k, v) in state.achTiers.toSortedMap()) { key(k); arr { v.forEach { value(it) } } } }
+            list("achInferred", state.achInferred.sorted()) // R4 fix A3: tiers whose date is only "first seen"; a save without the key has none flagged
+            key("badgeAt"); obj { for ((k, v) in state.badgeAt.toSortedMap()) kv(k.toString(), v) }
+            kv("achSince", state.achSince)
             key("settings"); writeSettings(this, state.settings)
         }
         return w.toString()
@@ -151,6 +159,7 @@ object SaveCodec {
         key("enemy"); writeSide(this, b.enemy)
         kv("tally", b.tally); kv("answers", b.answers); kv("override", b.override?.name); kv("rounds", b.rounds)
         kv("startedAt", b.startedAt); kv("wildMaxHp", b.wildMaxHp)
+        kv("failedThrows", b.failedThrows)
     }
 
     private fun writeSettings(w: W, s: Settings) = w.obj {
@@ -233,6 +242,7 @@ object SaveCodec {
             override = o.strOrNull("override")?.let { n -> Outcome.entries.firstOrNull { it.name == n } },
             rounds = o.int("rounds", 0), startedAt = o.long("startedAt", 0),
             wildMaxHp = o.intOrNull("wildMaxHp")?.coerceAtLeast(1),
+            failedThrows = o.int("failedThrows", 0).coerceAtLeast(0), // old saves: 0
         )
     }
 
@@ -256,9 +266,9 @@ object SaveCodec {
     }
 
     /**
-     * History is a day -> [reviews, won, caught, shinies, xp, cash, b0, b1, b2, b3, b4, spent, healItems] object (b = counted
-     * answers per button, 0 unknown .. 4 Easy; spent = Shop money, healItems = healing items used); an older, shorter array
-     * reads the missing numbers as 0. An old save has no history: today's count seeds today.
+     * History is a day -> [reviews, won, caught, shinies, xp, cash, b0, b1, b2, b3, b4, spent, healItems, dmgDealt, dmgTaken,
+     * dmgBlocked, misses] object (b = counted answers per button, 0 unknown .. 4 Easy; spent = Shop money, healItems = healing
+     * items used; the last four = the day's battle numbers, R4-V11); an older, shorter array reads the missing numbers as 0. An old save has no history: today's count seeds today.
      */
     private fun readHistory(h: JSONObject?, s: GameState) {
         if (h == null) {
@@ -270,8 +280,25 @@ object SaveCodec {
             s.history[k] = DayLog(
                 a.optInt(0), a.optInt(1), a.optInt(2), a.optInt(3), a.optInt(4), a.optInt(5),
                 IntArray(5) { a.optInt(6 + it) }, a.optInt(11), a.optInt(12),
+                a.optInt(13), a.optInt(14), a.optInt(15), a.optInt(16),
             )
         }
+    }
+
+    /**
+     * Achievement data (R4-03). Unknown achievement ids stay (a later list may bring them back); a bad number reads 0. A save
+     * without `counters` was made before they existed: they are backfilled from the history (Achievements.backfill; needs the
+     * settings, so this runs after them). Every row then counts as "not looked at yet", so the first Achievements.check is quiet.
+     */
+    private fun readAchievements(o: JSONObject, s: GameState) {
+        o.optJSONObject("counters")?.let { c -> for (k in c.keys()) s.counters[k] = c.optLong(k, 0) }
+        o.optJSONObject("achTiers")?.let { t ->
+            for (k in t.keys()) t.optJSONArray(k)?.let { a -> s.achTiers[k] = MutableList(a.length()) { a.optLong(it, 0) } }
+        }
+        o.strList("achInferred")?.let { s.achInferred += it }
+        o.optJSONObject("badgeAt")?.let { b -> for (k in b.keys()) k.toIntOrNull()?.let { id -> s.badgeAt[id] = b.optLong(k, 0) } }
+        s.achSince = o.long("achSince", 0)
+        if (!o.has2("counters")) Achievements.backfill(s)
     }
 
     private fun readState(o: JSONObject, schema: Int, monsJson: JSONArray): GameState {
@@ -319,7 +346,9 @@ object SaveCodec {
         o.optJSONObject("ballCatches")?.let { b -> for (k in b.keys()) s.ballCatches[k] = b.getInt(k) }
         o.optJSONObject("seenAt")?.let { b -> for (k in b.keys()) k.toIntOrNull()?.let { sp -> s.seenAt[sp] = b.getLong(k) } }
         o.strList("releasedAnkimon")?.let { s.releasedAnkimon += it }
+        o.strList("viewedMons")?.let { s.viewedMons += it } // old saves: empty, so only today's NEW rule decides
         readSettings(o.optJSONObject("settings"), s.settings)
+        readAchievements(o, s)
         // Decoded and filled with defaults, so it is a current-schema state now.
         s.schema = GameState.SCHEMA
         return s

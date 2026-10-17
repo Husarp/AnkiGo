@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Type symbol "fire" (own drawing, PLAN 33): one colour, tinted at runtime by Ui.typeChip. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12 2.5c1.2 3.8 6.3 6 6.3 11.6a6.3 6.3 0 0 1-12.6 0c0-2.7 1.4-4.4 2.8-5.6.1 1.9 1.1 3.2 2.3 3.7-.5-3.4.3-7 1.2-9.7z" />
+</vector>

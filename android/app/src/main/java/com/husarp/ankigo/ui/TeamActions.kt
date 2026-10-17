@@ -21,23 +21,24 @@ internal class MonActions(private val s: GamePage) {
     fun menu(mon: Mon, anchor: android.view.View, onPick: () -> Unit = {}) {
         val m = AppMenu(anchor).header("${if (mon.shiny) "★ " else ""}${mon.shownName}  Lv ${mon.level}")
         val acts = mutableListOf<() -> Unit>()
-        fun add(label: String, @androidx.annotation.DrawableRes icon: Int, danger: Boolean = false, sub: String? = null, f: () -> Unit) {
-            m.item(acts.size, label, icon, sub = sub, danger = danger); acts += f
+        // R4-X1 item 14: icons are grey; only what carries a meaning gets a colour (♥ red, ★ yellow, Release red)
+        fun add(label: String, @androidx.annotation.DrawableRes icon: Int, danger: Boolean = false, sub: String? = null, @androidx.annotation.ColorRes tone: Int = 0, f: () -> Unit) {
+            m.item(acts.size, label, icon, sub = sub, danger = danger, tone = tone); acts += f
         }
 
         val idx = state.team.indexOf(mon.uid)
         val main = state.main
         if (idx >= 0) {
-            if (idx > 0) add("Make main", R.drawable.ic_star) { s.act { g -> g.setMain(mon.uid).let { r -> if (r.ok) r.copy(message = "") else r } } } // the change is visible: no toast
+            if (idx > 0) add("Make main", R.drawable.ic_star, tone = R.color.ag_yellow) { s.act { g -> g.setMain(mon.uid).let { r -> if (r.ok) r.copy(message = "") else r } } } // the change is visible: no toast
             if (state.team.size > 1) add("Send to box", R.drawable.ic_team) { s.act { it.toBox(mon.uid) } }
         } else if (state.team.size < 6) {
             add("Add to team", R.drawable.ic_team) { s.act { it.toTeam(mon.uid) } }
-            add("Make main", R.drawable.ic_star) {
+            add("Make main", R.drawable.ic_star, tone = R.color.ag_yellow) {
                 s.act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.setMain(mon.uid).let { m -> if (m.ok) m.copy(message = "") else m } else r } }
             }
         } else if (main != null) {
             // Team full: the main goes to the box and this one takes its place at the front.
-            add("Make main (${main.shownName} goes to the box)", R.drawable.ic_star) {
+            add("Make main (${main.shownName} goes to the box)", R.drawable.ic_star, tone = R.color.ag_yellow) {
                 s.act { g ->
                     g.toBox(main.uid).let { r1 ->
                         if (!r1.ok) r1 else g.toTeam(mon.uid).let { r2 -> if (r2.ok) g.setMain(mon.uid).let { m -> if (m.ok) m.copy(message = "") else m } else r2 }
@@ -55,14 +56,14 @@ internal class MonActions(private val s: GamePage) {
         }
         if (BuddyWidgetPrefs.widgetIds(s).isNotEmpty()) add("Show on Buddy widget", R.drawable.ic_open) { showOnBuddyWidget(mon) }
         add("Compare", R.drawable.ic_compare) {
-            // inside the Team tab (its own page, or the Pokédex section it hosts) the picking starts right there
+            // inside the Pokémon tab (its own page, or the Pokédex section it hosts) the picking starts right there
             val host: PickHost? = s as? TeamPage ?: (s as? DexPage)?.pickHost
             if (host != null) host.startPickWith(mon.uid)
-            else s.startScreen(android.content.Intent(s, TeamActivity::class.java).putExtra(TeamActivity.EXTRA_PICK_UID, mon.uid))
+            else s.startScreen(Nav.intent(s, Dest.TEAM).putExtra(TeamActivity.EXTRA_PICK_UID, mon.uid))
         }
         if (Looks.hasChoice(data, mon)) add("Change look…", R.drawable.ic_palette, sub = "Pick a picture from its line") { changeLook(mon) }
-        if (mon.favourite) add("Remove from favourites", R.drawable.ic_heart) { s.act { it.setFavourite(mon.uid, false) } }
-        else add("Add to favourites", R.drawable.ic_heart_outline) { s.act { it.setFavourite(mon.uid, true) } }
+        if (mon.favourite) add("Remove from favourites", R.drawable.ic_heart, tone = R.color.ag_red) { s.act { it.setFavourite(mon.uid, false) } }
+        else add("Add to favourites", R.drawable.ic_heart_outline, tone = R.color.ag_red) { s.act { it.setFavourite(mon.uid, true) } }
         add("Rename…", R.drawable.ic_pencil) { rename(mon) }
         if (mon.favourite) { m.item(acts.size, "Release…", R.drawable.ic_trash, enabled = false, sub = "Remove ${mon.shownName} from favourites first.", danger = true); acts += {} }
         else add("Release…", R.drawable.ic_trash, danger = true) { release(mon) }

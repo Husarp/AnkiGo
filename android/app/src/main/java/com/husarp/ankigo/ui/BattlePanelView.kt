@@ -101,6 +101,19 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var accentAnim: ValueAnimator? = null
     private var logSize = 13f
 
+    // ---- catch result tiles (PLAN 40): they take the log card's place after a catch or a defeat ----
+    private val tiles = CatchTilesView(ctx).apply { visibility = GONE }
+    private var tilesOn = false
+    private var tilesSummary: CatchSummary? = null
+    private var enemyHeld = false
+    private var tilesTimed = false   // the result runs on the small-window timeout ([CatchTilesPlan.Mode.TIMED]); a HOLD result becomes one when the window shrinks
+    private val hideTilesRun = Runnable { hideCatchTiles() }
+    /**
+     * The held next wild one was let go because the window shrank under a result ([CatchResultShift]), not by the next answer: whoever
+     * parked its Encounter ([EventPlayer]) plays it now. Without a listener the panel draws the wild one from the saved game itself.
+     */
+    var onHeldReleased: (() -> Unit)? = null
+
     // ---- modes ----
     /** Picture-in-picture or floating battle ([setCompact] outside the study screens): the normal panel, scaled. */
     private var small = false
@@ -109,6 +122,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var cornerClearance = 0
     private var study = false
     private var statsBarSmall = true
+    private var cardLook = false     // the Pokémon tab's battle card ([setCardLook])
     private var compactCards = false
     private var cardsOwn = true
     private var playerFront = false
@@ -166,7 +180,29 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var enemyKey: String? = null
     private var playerKey: String? = null
 
+    /** PLAN 34: the swipe-to-turn picture swap for our main (front view and back to the normal one). */
+    private val turnSource = object : PlayerTurnSource {
+        private fun look(): Pair<com.husarp.ankigo.game.Species, Boolean>? {
+            val data = GameRepo.data ?: return null
+            val m = GameRepo.state?.main ?: return null
+            return m.lookSpecies(data) to m.shiny
+        }
+        override fun hasFront(): Boolean {
+            if (AppPrefs.playerFront(context)) return false   // already shown from the front
+            val (sp, shiny) = look() ?: return false
+            if (com.husarp.ankigo.data.Sprites.cached(context, sp, SpriteKind.FRONT, shiny) != null) return true
+            if (com.husarp.ankigo.data.Sprites.staticFile(context, sp.num, shiny).isFile) return true
+            com.husarp.ankigo.data.Sprites.fetch(context, sp, SpriteKind.FRONT, shiny) { }   // ready for the next swipe
+            return false
+        }
+        /** The Pokémon the turn showed: the game may already hold the next main while an event still shows this one fainting. */
+        private var turnedLook: Pair<com.husarp.ankigo.game.Species, Boolean>? = null
+        override fun showFront() { look()?.let { (sp, shiny) -> turnedLook = sp to shiny; PanelSprites.show(context, arena.playerSprite, sp, SpriteKind.FRONT, shiny, false) } }
+        override fun showBack() { (turnedLook ?: look())?.let { (sp, shiny) -> PanelSprites.showMain(context, arena.playerSprite, sp, shiny) }; turnedLook = null }
+    }
+
     init {
+        arena.turnSource = turnSource
         // strip
         strip.addView(stripText, LinearLayout.LayoutParams(0, -2, 1f))
         strip.addView(grant, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(8) })
@@ -196,6 +232,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         column.addView(strip, LinearLayout.LayoutParams(-1, -2))
         column.addView(arena, LinearLayout.LayoutParams(-1, 0, 1f))
         column.addView(logBox, logLp)
+        column.addView(tiles, LinearLayout.LayoutParams(-1, -2))
         column.addView(footer, LinearLayout.LayoutParams(-1, -2))
 
         scaler.addView(column, LayoutParams(-1, -1))
@@ -248,7 +285,8 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         strip.visibility = if (statusOk || legacy) GONE else VISIBLE
         stripText.maxLines = if (small) 1 else 2
         footer.visibility = if (f.stats) VISIBLE else GONE
-        logBox.visibility = if (f.log) VISIBLE else GONE
+        logBox.visibility = if (f.log && !tilesOn) VISIBLE else GONE
+        tiles.visibility = if (f.log && tilesOn) VISIBLE else GONE
         tools.visibility = if (f.tools && toolsWanted) VISIBLE else GONE
         val k = TextMath.bar(f.floorSp)
         goalBarLp.height = dpf(8f * k)
@@ -264,6 +302,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         }
         for (v in listOf(strip, logBox, footer, pausedBadge)) TextFloor.apply(v, f.floorSp)
         updatePausedPill()
+        if (tilesOn) { layoutTiles(); resultWindowChanged() }
         requestLayout()
     }
 
@@ -274,7 +313,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
     /** Re-reads the battle panel prefs (stats bar in small windows, compact stat cards, cards under their own Pokémon) and lays out again. */
     fun refreshPrefs() {
-        statsBarSmall = AppPrefs.statsBarSmall(context)
+        statsBarSmall = cardLook || AppPrefs.statsBarSmall(context)
         compactCards = AppPrefs.compactCards(context)
         cardsOwn = AppPrefs.cardsUnderOwn(context)
         arena.cardsUnderOwn = cardsOwn
@@ -337,6 +376,17 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
      */
     fun setCompact(on: Boolean) {
         if (study) setLegacy(on) else setSmall(on)
+    }
+
+    /**
+     * The look of the battle card in the Pokémon tab (R4-V1): the small-window panel (one log line, compact cards, no menu or
+     * tool buttons) with the goal bar always shown (whatever [AppPrefs.statsBarSmall] says) and without the chips row.
+     */
+    fun setCardLook(on: Boolean) {
+        cardLook = on
+        chips.visibility = if (on) GONE else VISIBLE
+        setCompact(on)
+        refreshPrefs()
     }
 
     private fun setSmall(on: Boolean) {
@@ -487,6 +537,103 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         }
     }
 
+    // ---------------------------------------------------------------- catch result tiles
+
+    /** True while the catch result tiles replace the log card (tests). */
+    internal val tilesShown: Boolean get() = tilesOn
+
+    /** True while the result tiles hold the next wild one back (it appears with the next answer's events). */
+    val holdsNextFight: Boolean get() = tilesOn && enemyHeld
+
+    /**
+     * Shows the result [s] of a fight in the log card's place: the big tiles in a tall panel, one line in a small window or a
+     * short panel. Normal panel: stays until [hideCatchTiles] (the next answer) and holds the next wild one back; small windows:
+     * [CatchTilesPlan.SMALL_MS], then the log returns. [answerWaiting] = an answer is already queued (fast play): nothing shows.
+     * Returns the mode that was used.
+     */
+    fun showCatchTiles(s: CatchSummary, answerWaiting: Boolean): CatchTilesPlan.Mode {
+        val full = !small && !legacy
+        val mode = CatchTilesPlan.mode(full, fit.log, answerWaiting)
+        if (mode == CatchTilesPlan.Mode.NONE) return mode
+        removeCallbacks(hideTilesRun)
+        tilesSummary = s
+        tilesOn = true
+        enemyHeld = mode == CatchTilesPlan.Mode.HOLD
+        tilesTimed = mode == CatchTilesPlan.Mode.TIMED
+        layoutTiles()
+        logBox.visibility = GONE
+        tiles.visibility = VISIBLE
+        if (mode == CatchTilesPlan.Mode.TIMED) postDelayed(hideTilesRun, CatchTilesPlan.SMALL_MS)
+        requestLayout()
+        return mode
+    }
+
+    /** Back to the log card (and the held wild one, if there is one, is drawn by the next event or [renderAll]). */
+    fun hideCatchTiles() {
+        removeCallbacks(hideTilesRun)
+        if (!tilesOn && !enemyHeld) return
+        tilesOn = false
+        enemyHeld = false
+        tilesTimed = false
+        tilesSummary = null
+        tiles.visibility = GONE
+        logBox.visibility = if (fit.log) VISIBLE else GONE
+        requestLayout()
+    }
+
+    /**
+     * The window changed under a result that is showing (PiP or a smaller floating window, the log stepping out): what [CatchResultShift]
+     * says. A HOLD result in a small window gets the timeout and lets the parked next wild one appear; no room for it: it goes at once.
+     */
+    private fun resultWindowChanged() {
+        val held = enemyHeld
+        when (CatchResultShift.after(tilesTimed, !small && !legacy, fit.log)) {
+            CatchResultShift.Do.KEEP -> {}
+            CatchResultShift.Do.TIMEOUT -> {
+                tilesTimed = true
+                enemyHeld = false
+                removeCallbacks(hideTilesRun)
+                postDelayed(hideTilesRun, CatchTilesPlan.SMALL_MS)
+                releaseHeld(held)
+            }
+            CatchResultShift.Do.HIDE -> { hideCatchTiles(); releaseHeld(held) }
+        }
+    }
+
+    /** The next wild one was held back and is let go now: its owner plays it, else it is drawn from the saved game. */
+    private fun releaseHeld(wasHeld: Boolean) {
+        if (!wasHeld) return
+        // posted on the main looper (not from inside a measure pass; also when the view is detached)
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            val listener = onHeldReleased
+            if (listener != null) listener()
+            else {
+                val st = GameRepo.state ?: return@post
+                val data = GameRepo.data ?: return@post
+                renderEnemy(st, data)
+            }
+        }
+    }
+
+    /** Binds the tiles for the current window: layout (big or one line), height and margins like the log card's. */
+    private fun layoutTiles() {
+        val s = tilesSummary ?: return
+        val full = !small && !legacy
+        val grid = CatchTilesPlan.grid(full, fit.virtualH)
+        val lp = tiles.layoutParams as LinearLayout.LayoutParams
+        if (grid) {
+            tiles.bindGrid(s, next = true)
+            lp.height = -2
+            lp.setMargins(dpi(10), dpi(8), dpi(10), 0)
+        } else {
+            tiles.bindRow(s, next = full, rowH = logLp.height, radiusDp = if (legacy && logBg.cornerRadius == 0f) 0f else 12f)
+            lp.height = logLp.height
+            lp.setMargins(logLp.leftMargin, logLp.topMargin, logLp.rightMargin, logLp.bottomMargin)
+        }
+        tiles.layoutParams = lp
+        TextFloor.apply(tiles, fit.floorSp)
+    }
+
     // ---------------------------------------------------------------- footer
 
     /** Goal bar + "84 / 100 today" (or "Goal done · 112"). */
@@ -570,7 +717,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
     private fun renderEnemy(st: GameState, data: GameData) {
         val b = st.battle
-        if (b == null) {
+        if (b == null || enemyHeld) {   // held: the next wild one waits for the next answer (the catch result tiles show)
             arena.setEnemyShown(false)
             arena.setEnemyStatus(null)
             enemyKey = null

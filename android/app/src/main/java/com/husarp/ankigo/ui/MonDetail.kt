@@ -10,10 +10,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
-import com.husarp.ankigo.game.EvoKind
+import com.husarp.ankigo.game.EvoLine
 import com.husarp.ankigo.game.Evolution
 import com.husarp.ankigo.game.GameData
-import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
@@ -21,6 +20,7 @@ import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Tuning
+import com.husarp.ankigo.game.TypeMatchups
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -29,22 +29,7 @@ import java.util.Locale
 
 object MonDetail {
     /** "Lv 16", "Thunder Stone", "Linking Cord", "Friendship", "knows Mimic" (+ day/night, other conditions). */
-    fun method(data: GameData, e: Evolution): String {
-        val base = when (e.kind) {
-            EvoKind.LEVEL -> if (e.level != null) "Lv ${e.level}" else "Level up"
-            EvoKind.FRIENDSHIP -> "Friendship"
-            EvoKind.ITEM -> e.item?.let { Items.name(it) } ?: "an item"
-            EvoKind.TRADE -> Items.name(e.item ?: "linking-cord")
-            EvoKind.LEVEL_MOVE -> "knows ${e.move?.let { data.move(it)?.name ?: it } ?: "a move"}"
-            EvoKind.OTHER -> "Linking Cord"
-        }
-        val extra = listOfNotNull(
-            e.time,
-            e.moveType?.let { "${it.label}-type move" },
-            e.condition?.takeIf { e.kind != EvoKind.OTHER },
-        )
-        return if (extra.isEmpty()) base else "$base, ${extra.joinToString(", ")}"
-    }
+    fun method(data: GameData, e: Evolution): String = EvoLine.method(data, e) // the text lives in game/EvoLine.kt (R4-04)
 
     /** "Raichu (Thunder Stone)" for each evolution of [sp] that exists in the data. */
     fun evolvesInto(data: GameData, sp: Species): List<String> =
@@ -80,30 +65,9 @@ object MonDetail {
         }
     }
 
-    /** Training table: header + IV row + EV row, one column per stat. */
-    private fun trainingTable(a: Context, iv: List<Int>, ev: List<Int>): View = LinearLayout(a).apply {
-        orientation = LinearLayout.VERTICAL
-        fun row(label: String, cells: List<String>, head: Boolean) = LinearLayout(a).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, Ui.dp(a, 2), 0, Ui.dp(a, 2))
-            val info = if (label == "IV") StatInfo.IV else if (label == "EV") StatInfo.EV else null
-            val lab = Ui.text(a, 11f, 800, R.color.ag_sub0).apply { text = label; gravity = Gravity.CENTER_VERTICAL }
-            addView(if (info != null) DetailParts.tapInfo(lab, info) else lab, LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
-            cells.forEach { c ->
-                val t = if (head) Ui.text(a, 11f, 900, R.color.ag_sub0) else Ui.text(a, 12f, 800, R.color.ag_text)
-                addView(t.apply { text = c; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(0, -2, 1f))
-            }
-        }
-        addView(row("", DetailMath.LABELS, true).also { r ->
-            // the column heads explain their stat too
-            for (i in 0 until DetailMath.LABELS.size) DetailParts.tapInfo(r.getChildAt(i + 1), StatInfo.of(Stat.entries[i])).minimumHeight = 0
-        })
-        addView(row("IV", iv.map { it.toString() }, false))
-        addView(row("EV", ev.map { it.toString() }, false))
-    }
-
     fun show(a: Context, data: GameData, mon: Mon) {
+        // opened = seen: the NEW mark of its Box tile / Team row goes away (R4-V5)
+        GameRepo.state?.let { st -> if (TileMarks.isNew(st, mon)) GameRepo.act(a) { it.markViewed(mon.uid) } }
         val page = a as? GamePage
         val sp = data.sp(mon.species)
         val stats = StatCalc.stats(sp, mon)
@@ -177,12 +141,9 @@ object MonDetail {
                 it.topMargin = Ui.dp(a, 4)
             })
         }
+        // the state marks that tiles no longer show (held item, can evolve, fainted, regional form) and the other tags
         val tags = GameRepo.state?.let { MonTags.of(data, it, mon) }.orEmpty()
-        if (tags.isNotEmpty()) {
-            val flow = FlowRow(a, Ui.dp(a, 4))
-            tags.take(8).forEach { flow.addView(MonTags.pill(a, it)) }
-            col.addView(flow, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
-        }
+        if (tags.isNotEmpty()) col.addView(DetailSections.marks(a, tags), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
 
         // HP and XP, numbers
         val maxHp = stats.hp
@@ -194,50 +155,29 @@ object MonDetail {
         col.addView(barLine(a, "XP", if (maxed) "Max level" else "XP ${mon.xp} / $need", if (maxed) 1f else mon.xp.toFloat() / need,
             Ui.c(a, R.color.ag_sky), 5, BarMeaning.XP), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
-        // stats
-        col.addView(DetailParts.header(a, R.drawable.ic_stats, "Stats", compact))
-        col.addView(DetailParts.statHint(a))
-        val max = DetailMath.monStatMax(mon.level)
-        Stat.entries.forEach { s ->
-            col.addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), DetailMath.natureDir(mon.nature, s), sp.base[s], compact))
-        }
-        col.addView(DetailParts.totalRow(a, stats.total, sp.base.total))
-
-        // moves
-        col.addView(DetailParts.header(a, R.drawable.ic_swords, "Moves", compact))
-        if (mon.moves.isEmpty()) col.addView(DetailParts.line(a, "", "none", compact = compact))
-        for (m in mon.moves) {
-            if (compact) { col.addView(DetailParts.compactMoveRow(a, data, m)); continue }
-            val row = Bits.moveRow(a, data, m)
-            row.setPadding(0, Ui.dp(a, 5), 0, Ui.dp(a, 5))
-            col.addView(row)
-        }
-
-        // training
-        col.addView(DetailParts.header(a, R.drawable.ic_up, "Training", compact))
-        col.addView(DetailParts.line(a, "Nature", "${mon.nature.label} · ${DetailMath.natureEffect(mon.nature)}", 56, compact).also {
-            DetailParts.tapInfo(it.getChildAt(0), StatInfo.NATURE)
+        // sections that open on tap; the open ones are remembered (DetailOpen)
+        val mem = DetailSections.memory(a)
+        val seen = GameRepo.state?.let { it.seen + it.caught }.orEmpty()
+        col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${stats.total}") {
+            LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(DetailParts.statHint(a))
+                val max = DetailMath.monStatMax(mon.level)
+                Stat.entries.forEach { s ->
+                    addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), DetailMath.natureDir(mon.nature, s), sp.base[s], compact))
+                }
+                addView(DetailParts.totalRow(a, stats.total, sp.base.total))
+            }
         })
-        col.addView(trainingTable(a, mon.ivs.toList(), mon.evs.toList()), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 4) })
-
-        // info
-        col.addView(DetailParts.header(a, R.drawable.ic_book, "Info", compact))
-        if (mon.shownName != mon.name) col.addView(DetailParts.line(a, "Species", mon.name, compact = compact))
-        col.addView(DetailParts.line(a, "Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }, compact = compact))
-        col.addView(heldLine(a, mon, compact))
-        col.addView(DetailParts.line(a, "Friendship", mon.friendship.toString(), compact = compact))
-        col.addView(DetailParts.line(a, "Caught", if (mon.caughtAt > 0) date(mon.caughtAt) else "–", compact = compact))
-        col.addView(DetailParts.line(a, "Defeats", mon.defeats.toString(), compact = compact))
-
-        // evolution
-        col.addView(DetailParts.header(a, R.drawable.ic_update, "Evolution", compact))
-        tags.firstOrNull { it.kind == TagKind.CAN_EVOLVE }?.let {
-            col.addView(MonTags.pill(a, it.copy(label = "Can evolve now")), LinearLayout.LayoutParams(-2, -2).also { p -> p.bottomMargin = Ui.dp(a, 4) })
-        }
-        evolvesFrom(data, sp)?.let { col.addView(DetailParts.line(a, "From", it, 56, compact)) }
-        val into = evolvesInto(data, sp)
-        if (into.isEmpty()) col.addView(DetailParts.line(a, "Into", "fully evolved", 56, compact))
-        else into.forEach { col.addView(DetailParts.line(a, "Into", it, 56, compact)) }
+        col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves") { DetailSections.moves(a, data, mon.moves, compact) })
+        col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types) })
+        col.addView(DetailSections.section(a, mem, DetailSection.TRAINING, mon.nature.label) { DetailSections.training(a, mon, compact) })
+        val others = DetailFormat.otherAbilities(sp, mon.ability)
+        col.addView(DetailSections.infoSection(a, mem, data, sp,
+            listOf(if (mon.caughtAt > 0) date(mon.caughtAt) to "Caught" else "–" to "Caught", mon.defeats.toString() to "Defeats"),
+            Triple("Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }, others?.let { "Others of its kind: $it" }),
+            if (mon.shownName != mon.name) mon.name else null, seen, compact,
+            if (page != null) { s -> DexDetail.show(page, s) } else null))
 
         if (page == null) { Pickers.info(a, "Details", Bits.scroll(a, col)); return }
         lateinit var dlg: AlertDialog
@@ -298,20 +238,5 @@ object MonDetail {
         if (meaning != null) bar.setMeaning(meaning, frac, false) else bar.set(frac, color, false)
         addView(bar, LinearLayout.LayoutParams(0, Ui.dp(a, barDp), 1f).also { it.marginStart = Ui.dp(a, 6); it.marginEnd = Ui.dp(a, 10) })
         addView(Ui.text(a, 12f, 900, R.color.ag_text).apply { text = value; gravity = Gravity.END }, LinearLayout.LayoutParams(-2, -2))
-    }
-
-    private fun heldLine(a: Context, mon: Mon, compact: Boolean): View {
-        val held = mon.heldItem ?: return DetailParts.line(a, "Held item", "none", compact = compact)
-        return LinearLayout(a).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, Ui.dp(a, 1), 0, Ui.dp(a, 1))
-            addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Held item" }, LinearLayout.LayoutParams(Ui.dp(a, 84), -2))
-            val icon = ImageView(a)
-            Ui.itemIcon(a, held, icon)
-            addView(icon, LinearLayout.LayoutParams(Ui.dp(a, 22), Ui.dp(a, 22)))
-            addView(Ui.text(a, 12f, 800, R.color.ag_text).apply { text = Items.name(held) },
-                LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 6) })
-        }
     }
 }

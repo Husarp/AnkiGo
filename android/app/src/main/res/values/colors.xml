@@ -21,6 +21,7 @@
     <color name="ag_lav">#7287fd</color>
     <color name="ag_mauve">#8839ef</color>
     <color name="ag_pink">#ea76cb</color>
+    <color name="ag_lime">#8a9a12</color>
     <!-- Switch (settings): off track fill, off outline + knob, on knob -->
     <color name="ag_sw_track">#e6e9ef</color>
     <color name="ag_sw_line">#7c7f93</color>
@@ -48,4 +49,10 @@
     <color name="ag_tier_7">#4f7f8c</color>
     <color name="ag_tier_8">#0a8fb5</color>
     <color name="ag_tier_9">#c2185b</color>
+    <!-- R4-V2: achievement tiers Common / Rare / Epic / Legendary / Mythical (mockup tr0..4) -->
+    <color name="ag_ach_0">#7c7f93</color>
+    <color name="ag_ach_1">#1e66f5</color>
+    <color name="ag_ach_2">#8839ef</color>
+    <color name="ag_ach_3">#c98200</color>
+    <color name="ag_ach_4">#d94fae</color>
 </resources>

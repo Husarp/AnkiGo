@@ -11,7 +11,6 @@ import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.ui.AppMenu
 import com.husarp.ankigo.ui.BattlePanelView
 import com.husarp.ankigo.ui.EventPlayer
-import com.husarp.ankigo.ui.StatsActivity
 import com.husarp.ankigo.ui.LogKind
 import com.husarp.ankigo.ui.Ui
 
@@ -28,8 +27,9 @@ internal class FloatBattleView(
     private val onOpenGame: () -> Unit,
 ) {
     private val window = FloatWindow(app, "battle", 240, 190, 170, 130) { closed() }
-    private val pauseButton: ImageView
     private val menuButton: ImageView
+    private val pausedPill: TextView
+    private var paused = false
 
     private var panel: BattlePanelView? = null
     private var player: EventPlayer? = null
@@ -49,9 +49,14 @@ internal class FloatBattleView(
     init {
         window.compactHeader = true
         window.setTitle("AnkiGo")
-        pauseButton = window.addHeaderButton(R.drawable.ic_pause, "Pause", { onTogglePause() })
-        menuButton = window.addHeaderButton(R.drawable.ic_menu, "Menu: Team, Pokédex, Shop, Settings, Stats", { showMenu() })
-        window.addHeaderButton(R.drawable.ic_open, "Open AnkiGo", { onOpenGame() })
+        // "Paused" pill (tap = resume), only while paused
+        pausedPill = Ui.pill(app, "Paused", R.color.ag_peach).apply {
+            visibility = android.view.View.GONE
+            contentDescription = "Paused. Tap to resume watching AnkiDroid"
+            setOnClickListener { onTogglePause() }
+        }
+        window.addHeaderView(pausedPill)
+        menuButton = window.addHeaderButton(R.drawable.ic_menu, "Menu", { showMenu() })
     }
 
     val isShowing: Boolean get() = window.isShowing
@@ -83,10 +88,10 @@ internal class FloatBattleView(
     /** Hides for good (service ends). */
     fun destroy() = hide()
 
-    /** Pause/resume button follows [LiveSession.paused]. */
+    /** The header "Paused" pill and the menu's Pause/Resume row follow [LiveSession.paused]. */
     fun setPaused(paused: Boolean) {
-        pauseButton.setImageResource(if (paused) R.drawable.ic_play else R.drawable.ic_pause)
-        pauseButton.contentDescription = if (paused) "Resume" else "Pause"
+        this.paused = paused
+        pausedPill.visibility = if (paused) android.view.View.VISIBLE else android.view.View.GONE
     }
 
     // ---------------------------------------------------------------- internals
@@ -119,6 +124,8 @@ internal class FloatBattleView(
             p.setCornerClearance(Ui.dp(window.context, 26)) // keeps the log clear of the resize grip
             p.onGrant = { onOpenGame() } // the permission dialog needs an activity
             p.arena.onPlayerTap = { openMainDetails() }
+            p.arena.canTurn = { player?.idle != false }
+            p.arena.onWildTap = { openWildInfo() }
             panel = p
             player = EventPlayer(p)
             message = null
@@ -153,6 +160,13 @@ internal class FloatBattleView(
         catch (e: Exception) { Ui.toast(app, "Turn on “Display over other apps” for AnkiGo to open this here") }
     }
 
+    /** Tap on the wild Pokémon (PLAN 93): its info window on top of the floating battle; not while an animation plays. */
+    private fun openWildInfo() {
+        if (player?.idle == false) return
+        try { com.husarp.ankigo.ui.BattleDetails.showWild(window.context) }
+        catch (e: Exception) { Ui.toast(app, "Turn on “Display over other apps” for AnkiGo to open this here") }
+    }
+
     /** The ⋯ menu: [AppMenu] hung on the header button's window (the overlay), same entries as the battle screen's. */
     private fun showMenu() {
         val m = AppMenu(menuButton)
@@ -160,10 +174,8 @@ internal class FloatBattleView(
         menu = m
         m.show { id ->
             menu = null
-            if (id == 5 || id == 6) { // no Activity here: its own task
-                app.startActivity(android.content.Intent(app, if (id == 5) StatsActivity::class.java else com.husarp.ankigo.ui.BattleLogActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                return@show
-            }
+            if (id == 8) { onOpenGame(); return@show }
+            if (id == 9) { onTogglePause(); return@show }
             if (id == 7) { // Help: its own task too
                 com.husarp.ankigo.help.HelpActivity.open(app)
                 return@show
@@ -178,14 +190,15 @@ internal class FloatBattleView(
         }
     }
 
-    /** The five entries (also read by the screenshots). */
+    /** The entries (also read by the screenshots). */
     internal fun fillMenu(m: AppMenu) {
-        m.item(1, "Team", R.drawable.ic_team)
+        m.item(8, "Open AnkiGo", R.drawable.ic_open)
+        if (paused) m.item(9, "Resume watching", R.drawable.ic_play)
+        else m.item(9, "Pause watching AnkiDroid", R.drawable.ic_pause)
+        m.item(1, "Pokémon", R.drawable.ic_team)
         m.item(2, "Pokédex", R.drawable.ic_book)
         m.item(3, "Shop", R.drawable.ic_shop)
         m.item(4, "Settings", R.drawable.ic_settings)
-        m.item(5, "Stats", R.drawable.ic_stats)
-        m.item(6, "Battle log", R.drawable.ic_swords)
         m.item(7, "Help", R.drawable.ic_help)
     }
 }

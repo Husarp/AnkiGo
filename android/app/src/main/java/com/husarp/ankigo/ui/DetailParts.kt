@@ -55,8 +55,8 @@ object DetailMath {
     val LABELS = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
 }
 
-/** Wrapping row (centred lines) for the tag pills. */
-class FlowRow(ctx: Context, private val gapPx: Int) : ViewGroup(ctx) {
+/** Wrapping row (centred lines unless [centered] is false) for the tag pills and the matchup chips. */
+class FlowRow(ctx: Context, private val gapPx: Int, private val centered: Boolean = true) : ViewGroup(ctx) {
     private val lines = ArrayList<IntArray>() // per line: first child index, end index, width, height
 
     override fun onMeasure(widthSpec: Int, heightSpec: Int) {
@@ -86,7 +86,7 @@ class FlowRow(ctx: Context, private val gapPx: Int) : ViewGroup(ctx) {
         var y = paddingTop
         val inner = r - l - paddingLeft - paddingRight
         for (line in lines) {
-            var x = paddingLeft + (inner - line[2]) / 2
+            var x = paddingLeft + if (centered) (inner - line[2]) / 2 else 0
             for (i in line[0] until line[1]) {
                 val c = getChildAt(i)
                 if (c.visibility == GONE) continue

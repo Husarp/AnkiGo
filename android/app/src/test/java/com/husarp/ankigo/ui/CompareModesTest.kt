@@ -81,7 +81,7 @@ class CompareModesTest {
     @Test fun diffLabelsAndSigns() {
         assertEquals("+12", CompareModes.diffLabel(12))
         assertEquals("−8", CompareModes.diffLabel(-8))
-        assertEquals("±0", CompareModes.diffLabel(0))
+        assertEquals("", CompareModes.diffLabel(0)) // R4-X1: an equal value shows nothing
         assertEquals("", CompareModes.diffLabel(null))
         assertEquals(1, CompareModes.diffSign(3)); assertEquals(-1, CompareModes.diffSign(-3))
         assertEquals(0, CompareModes.diffSign(0)); assertEquals(0, CompareModes.diffSign(null))

@@ -55,6 +55,19 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
 
     private val drain = Runnable { drainAbsorbs() }
 
+    /**
+     * While true no regular poll starts (one already running finishes). Set while the in-app study screen is in front: each
+     * poll makes AnkiDroid load today's learning cards one by one (a full poll all of today's rated cards), on the same
+     * collection the study screen needs for every answer and card, so polls slowed the next card down. Own answers are
+     * still absorbed at once (that reads nothing from AnkiDroid) and [recheck] still runs; an answer made in AnkiDroid
+     * meanwhile is found by the polls after the pause (the first is a full read when the last one is 30 s old). Any thread.
+     */
+    @Volatile var hushed = false
+
+    /** Polls started so far (Diagnostics: how many ran while an answer was on its way). */
+    @Volatile var polls = 0
+        private set
+
     /** Worker thread. */
     private fun drainAbsorbs() {
         if (!ready) return // the baseline of this session is not read yet: startSession drains right after it
@@ -217,6 +230,7 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
     // ---------- polling ----------
     private fun tick(g: Int) {
         if (!alive(g)) return
+        if (hushed) { worker?.postDelayed({ tick(g) }, Tuning.LIVE_POLL_MS); return } // paused: look again in a second, read nothing
         val t0 = SystemClock.elapsedRealtime()
         tickNo++
         pollOnce(LivePolicy.isFull(tickNo, t0, lastFullMs), t0)
@@ -226,6 +240,7 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
 
     /** One poll (light or full) with its event delivery and error handling; used by tick() and recheck(). Worker thread. */
     private fun pollOnce(full: Boolean, nowMs: Long) {
+        polls++
         try {
             val out = ArrayList<Event>()
             poll(full, out)

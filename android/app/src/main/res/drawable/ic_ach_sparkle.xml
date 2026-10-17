@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- R4-V2 achievement icon, same stroke style as ic_ball / ic_check; white so callers tint it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFF" android:pathData="M12 2.5c.9 6.8 3.7 9.6 9.5 9.5-5.8.9-8.6 3.7-9.5 9.5-.9-5.8-3.7-8.6-9.5-9.5C8.3 12.1 11.1 9.3 12 2.5Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M19 2.6c.25 1.8 1 2.6 2.8 2.8-1.8.25-2.55 1-2.8 2.8-.25-1.8-1-2.55-2.8-2.8 1.8-.2 2.55-1 2.8-2.8Z" />
+</vector>

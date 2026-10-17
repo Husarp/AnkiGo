@@ -20,9 +20,10 @@ import com.husarp.ankigo.Report
 import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.ui.AppPrefs
 import com.husarp.ankigo.ui.BattleScreen
-import com.husarp.ankigo.ui.GameActivity
+import com.husarp.ankigo.ui.Dest
 import com.husarp.ankigo.ui.LeaveMode
 import com.husarp.ankigo.ui.LeaveModeMigration
+import com.husarp.ankigo.ui.Nav
 
 /**
  * Foreground service behind the floating battle window (LeaveMode.FLOAT): keeps live detection running while AnkiGo
@@ -272,8 +273,8 @@ class FloatBattleService : Service() {
             }
         }
 
-        private fun openIntent(ctx: Context) =
-            Intent(ctx, GameActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        /** The floating battle's "open": the full-screen battle view of the home screen (brought to the front when it is open). */
+        private fun openIntent(ctx: Context) = Nav.intent(ctx, Dest.BATTLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
         /**
          * Starts the service if LeaveMode is FLOAT and the overlay permission is granted; otherwise does nothing.

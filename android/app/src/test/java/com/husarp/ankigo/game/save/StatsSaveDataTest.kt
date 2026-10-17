@@ -30,10 +30,10 @@ class StatsSaveDataTest {
         return s
     }
 
-    @Test fun historyWritesThirteenNumbersPerDay() { // R3-14 appended spent and healItems to R3-03's eleven
+    @Test fun historyWritesSeventeenNumbersPerDay() { // R3-14 appended spent and healItems to R3-03's eleven, R4-V11 the four battle numbers
         val h = JSONObject(SaveCodec.encode(state())).getJSONObject("history")
-        assertEquals("[100,7,2,1,1234,4321,1,20,30,40,9,0,0]", h.getJSONArray("2026-10-12").toString())
-        assertEquals("[5,0,0,0,0,0,0,0,0,0,0,0,0]", h.getJSONArray("2026-10-13").toString())
+        assertEquals("[100,7,2,1,1234,4321,1,20,30,40,9,0,0,0,0,0,0]", h.getJSONArray("2026-10-12").toString())
+        assertEquals("[5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]", h.getJSONArray("2026-10-13").toString())
     }
 
     @Test fun newFieldsRoundTripExactly() {

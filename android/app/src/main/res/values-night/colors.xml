@@ -21,6 +21,7 @@
     <color name="ag_lav">#b4befe</color>
     <color name="ag_mauve">#cba6f7</color>
     <color name="ag_pink">#f5c2e7</color>
+    <color name="ag_lime">#d3e68a</color>
     <color name="ag_sw_track">#313244</color>
     <color name="ag_sw_line">#9399b2</color>
     <color name="ag_sw_knob_on">#1e1e2e</color>
@@ -47,4 +48,10 @@
     <color name="ag_tier_7">#a9d4de</color>
     <color name="ag_tier_8">#8ee6ff</color>
     <color name="ag_tier_9">#ff9ad0</color>
+    <!-- R4-V2: achievement tiers (mockup dark tr0..4) -->
+    <color name="ag_ach_0">#a6adc8</color>
+    <color name="ag_ach_1">#89b4fa</color>
+    <color name="ag_ach_2">#cba6f7</color>
+    <color name="ag_ach_3">#f6c55e</color>
+    <color name="ag_ach_4">#f5a6dc</color>
 </resources>
