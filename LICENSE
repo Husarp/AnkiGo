@@ -1,0 +1,27 @@
+AnkiGo
+Copyright (c) 2026 Husarp. All rights reserved.
+
+This repository is public so the game can be seen and played - that is not permission to use it.
+No licence is granted to copy, modify, merge, publish, distribute, sublicense or sell this game or
+any part of it - its source code, graphics, sounds, text, design or data - or to make works based
+on it, without prior written permission from the copyright holder.
+
+You may:
+  - view the files here on GitHub (forking on GitHub, which GitHub's terms allow, grants no
+    further rights);
+  - download the official releases and play the game for your own personal use.
+
+Not covered by the above - third-party material keeps its own licence:
+  - the Nunito font (android/app/src/main/assets/fonts/), under the SIL Open Font License 1.1;
+  - MathJax (android/app/src/main/assets/mathjax/), under the Apache License 2.0 (the licence file is
+    next to it);
+  - some icons from Material Symbols by Google, under the Apache License 2.0;
+  - Pokémon names, data and pictures (downloaded from PokeAPI and Pokémon Showdown) are
+    © Nintendo / Creatures / GAME FREAK;
+  - open-source libraries, tools and engines it is built with or ships with keep their own licences;
+  - names, trademarks and artwork that belong to others stay theirs.
+
+To ask for permission, open an issue at https://github.com/Husarp/AnkiGo/issues
+
+THE GAME IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE GAME OR ITS USE.

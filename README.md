@@ -53,3 +53,10 @@ to Android's installer (Android asks you to confirm each update).
 
 Icons: AnkiGo's own, plus some from [Material Symbols](https://github.com/google/material-design-icons) by Google
 (Apache License 2.0), e.g. the bottom bar's crossed swords (Battle) and closed book (Team / Pokédex).
+
+## Licence
+
+**All rights reserved** — © 2026 Husarp. The code is public to read, and the releases are free to
+download and play, but the game may not be copied, changed, shared, sold or built upon without
+written permission. Third-party parts (fonts, MathJax, Material Symbols icons, Pokémon data and
+pictures) keep their own licences and owners. Full terms in [LICENSE](LICENSE).
