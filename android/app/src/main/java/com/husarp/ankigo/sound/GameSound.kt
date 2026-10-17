@@ -108,9 +108,9 @@ object GameSound {
     /**
      * The one hook of the event player: makes the sound of [e], if it has one and the rules allow it.
      * [muted] = the study screen says the card has audio. [pace] = the event player's current pace factor (0.5 = the visuals run
-     * twice as fast): every cue delay is scaled by it once. Never throws.
+     * twice as fast): every cue delay is scaled by it once. [delayMs] (real ms) replaces every cue delay: an animated attack sounds when its hit lands. Never throws.
      */
-    fun onEvent(ctx: Context, e: GameEvent, muted: Boolean, ballShown: Boolean, pace: Double = 1.0) {
+    fun onEvent(ctx: Context, e: GameEvent, muted: Boolean, ballShown: Boolean, pace: Double = 1.0, delayMs: Long? = null) {
         try {
             val c = app(ctx)
             val shiny = e is GameEvent.MainChanged && GameRepo.state?.mon(e.uid)?.shiny == true
@@ -121,7 +121,7 @@ object GameSound {
             val heard = cues.filter { SoundRules.shouldPlay(it, sc) }
             if (heard.isEmpty()) return
             warm(c)
-            for (cue in heard) play(c, cue, SoundRules.scaledDelay(cue.delayMs, pace))
+            for (cue in heard) play(c, cue, delayMs ?: SoundRules.scaledDelay(cue.delayMs, pace))
         } catch (t: Throwable) {
             Report.fail(TAG, "sound for ${e.javaClass.simpleName}", t)
         }

@@ -257,6 +257,7 @@ object BattleEngine {
         ) = GameEvent.Attack(
             p, mon(p).name, mon(!p).name, move.name, if (move.id == Tuning.STRUGGLE) null else move.type, move.category,
             damage, hits, eff, crit, missed, failed, mon(!p).hp, maxHpOf(!p), mon(p).hp, maxHpOf(p),
+            moveId = move.id, power = move.power,
         )
 
         private fun accuracyHit(p: Boolean, move: Move): Boolean {

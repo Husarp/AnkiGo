@@ -1226,7 +1226,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             setGoalSparks(com.husarp.ankigo.ui.GoalTone.flameLevel(today.toFloat() / goal))
         }, StudyUi.lp(0, Ui.dp(this, 8), 1f).also { it.marginEnd = Ui.dp(this, 8) })
         goalRow.addView(StudyUi.label(this, if (today >= goal) "Goal done · $today" else "$today / $goal", 12, R.color.ag_text, 900))
-        goalRow.addView(Ui.chip(this, R.drawable.ic_flame, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
+        goalRow.addView(Ui.chip(this, com.husarp.ankigo.ui.StreakFlame(this).apply { alive = (st?.streakDays ?: 0) > 0 }, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
         summary.addView(goalRow, StudyUi.spaced(this, 6))
         summaryView = ScrollView(this).apply { addView(summary, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
         val next = decks.firstOrNull { it.id != deckId && it.total > 0 }

@@ -42,6 +42,13 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     var flash: Float = 0f
         set(v) { val c = v.coerceIn(0f, 1f); if (c != field) { field = c; invalidate() } }
 
+    /**
+     * Move animations (round 7): a 4 x 5 colour matrix (20 floats, android.graphics.ColorMatrix order) applied AFTER the flash;
+     * null = none. A [silhouette] stays a plain solid colour.
+     */
+    var fxMatrix: FloatArray? = null
+        set(v) { if (v != null || field != null) { field = v; invalidate() } }
+
     private var image: SpriteImage? = null
     private var frame = 0
     private var placeholderText: String? = null
@@ -146,7 +153,8 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     private fun currentFilter(): android.graphics.ColorFilter? {
         if (silhouette) return PorterDuffColorFilter(silhouetteColor, PorterDuff.Mode.SRC_IN)
         val f = flash
-        if (f <= 0f) return null
+        val fx = fxMatrix
+        if (f <= 0f) return if (fx != null && fx.size == 20) ColorMatrixColorFilter(ColorMatrix(fx)) else null
         // CSS brightness(2.2) saturate(.3) at full strength, blended from the identity.
         val sat = 1f + (0.3f - 1f) * f
         val b = 1f + (2.2f - 1f) * f
@@ -157,6 +165,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
             0f, 0f, b, 0f, 0f,
             0f, 0f, 0f, 1f, 0f,
         )))
+        if (fx != null && fx.size == 20) cm.postConcat(ColorMatrix(fx))
         return ColorMatrixColorFilter(cm)
     }
 

@@ -67,10 +67,13 @@ object SoftSfx {
     private fun button(s: SoftSound) = s.ordinal >= SoftSound.SHOW_ANSWER.ordinal
 
     /** Peak as a fraction of full scale. Battle/moment sounds sit near today's HIT/CATCH; buttons are short and
-     *  get another 40 % volume slider on top, so they are a bit higher; tab and menu taps are the softest. */
+     *  get another 40 % volume slider on top, so they are a bit higher; tab and menu taps are the softest (R7-X1: the tab tick is
+     *  about 10 dB under its old level of 0.42, the menu tick 6 dB under 0.40, both under the answer clicks). */
     private fun level(s: SoftSound) = when (s) {
-        SoftSound.TAB -> 0.42
-        SoftSound.MENU -> 0.40
+        SoftSound.TAB -> 0.13
+        SoftSound.MENU -> 0.20
+        SoftSound.BUY -> 0.50
+        SoftSound.BALL_BTN -> 0.42
         SoftSound.BURN_TICK, SoftSound.POISON_TICK -> 0.50
         else -> 0.60
     }
@@ -132,10 +135,10 @@ object SoftSfx {
             SoftSound.HARD -> p.ui(0.0, 740.0, .8)
             SoftSound.GOOD -> p.ui(0.0, 880.0, .8)
             SoftSound.EASY -> p.ui(0.0, 1050.0, .8)
-            SoftSound.TAB -> p.ui(0.0, 1350.0, .5, .035)
-            SoftSound.MENU -> p.ui(0.0, 1100.0, .45, .04)
-            SoftSound.BUY -> { p.ui(0.0, 990.0, .7, .04); p.ui(.04, 1480.0, .7, .04) }
-            SoftSound.BALL_BTN -> { p.x(0.0, .06, .3, 'b', 1000.0, 2500.0, 1.0); p.ui(0.0, 700.0, .6, .05) }
+            SoftSound.TAB -> p.tick(0.0, 480.0, .035, 1.0, 0.006) // a low, soft tick: pure sine, no octave layer, no sharp attack
+            SoftSound.MENU -> p.tick(0.0, 620.0, .035, 1.0, 0.006)
+            SoftSound.BUY -> { p.tick(0.0, 880.0, .04, .8, 0.004); p.tick(.04, 1320.0, .04, .8, 0.004) }
+            SoftSound.BALL_BTN -> { p.x(0.0, .05, .12, 'b', 800.0, 1600.0, 0.8); p.tick(0.0, 560.0, .05, .9, 0.005) }
         }
     }
 
@@ -158,6 +161,9 @@ object SoftSfx {
 
         /** A short click at pitch [f] (default 45 ms). */
         fun ui(t: Double, f: Double, amp: Double, dur: Double = 0.045) = n(t, f, dur, amp * 0.8, atk = 0.002)
+
+        /** A soft tick: one plain sine (no octave layer, so no high partials) with a gentle [atk]-second attack. */
+        fun tick(t: Double, f: Double, dur: Double, amp: Double, atk: Double) = osc(t, f, f, dur, amp, false, atk, false, 1.0)
 
         private fun osc(t: Double, f0: Double, f1: Double, dur: Double, amp: Double, rise: Boolean, atk: Double, tri: Boolean, scale: Double) {
             if (max(f0, f1) >= NYQ_LIMIT) return // above Nyquist: skip rather than alias

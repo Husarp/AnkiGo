@@ -167,6 +167,9 @@ object Ui {
     /** Chip with a tinted icon and a number/text, tinted by [colorRes] (mockup `.chip`). */
     fun chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes colorRes: Int): Chip = Chip(ctx, iconRes, colorRes)
 
+    /** A [chip] with its own icon View (e.g. the animated streak flame); the tone then colours only the text. */
+    fun chip(ctx: Context, iconView: View, @ColorRes colorRes: Int): Chip = Chip(ctx, 0, colorRes, iconView)
+
     /** Small bold label (mockup `.log .pill`); with [toneRes] it is filled with that colour and the text turns `ag_crust`. */
     fun pill(ctx: Context, text: String, @ColorRes toneRes: Int = 0): TextView =
         text(ctx, 10f, 900, if (toneRes == 0) R.color.ag_text else R.color.ag_crust).apply {
@@ -313,11 +316,15 @@ object Ui {
 /**
  * Icon + text on an `ag_mantle` pill (mockup `.chip`): 13 dp icon, 11 sp / 800 text. Icon and text share one tone colour.
  */
-class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int) : LinearLayout(ctx) {
-    private val icon = ImageView(ctx).apply {
+class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, customIcon: View? = null) : LinearLayout(ctx) {
+    private val icon: View = customIcon?.apply {
+        // 16 dp (the Noto emoji has inner padding, so 13 looks small); the -2 dp margins keep the chip as tall as with 13
+        layoutParams = LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.topMargin = -Ui.dp(ctx, 2); it.bottomMargin = -Ui.dp(ctx, 2); it.marginStart = -Ui.dp(ctx, 1) }
+    } ?: ImageView(ctx).apply {
         setImageResource(iconRes)
         layoutParams = LayoutParams(Ui.dp(ctx, 13), Ui.dp(ctx, 13))
     }
+    private val tintsIcon = customIcon == null
     val label: TextView = Ui.text(ctx, 11f, 800, toneRes).apply {
         maxLines = 1
         layoutParams = LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
@@ -340,7 +347,7 @@ class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int) : Li
     /** Recolours icon and text, e.g. the combo chip goes `ag_sub0` at zero. */
     fun setTone(@ColorRes toneRes: Int) {
         val col = Ui.c(context, toneRes)
-        icon.setColorFilter(col, PorterDuff.Mode.SRC_IN)
+        if (tintsIcon) (icon as ImageView).setColorFilter(col, PorterDuff.Mode.SRC_IN)
         label.setTextColor(col)
     }
 

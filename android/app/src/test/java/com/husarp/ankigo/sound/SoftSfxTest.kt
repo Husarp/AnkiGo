@@ -33,7 +33,8 @@ class SoftSfxTest {
             val s = SoftSfx.samples(id)
             assertTrue("$id empty", s.isNotEmpty())
             val p = peak(s)
-            assertTrue("$id peak $p", p in 0.38..0.66)
+            val low = when (id) { SoftSound.TAB -> 0.10..0.16; SoftSound.MENU -> 0.17..0.24; else -> 0.38..0.66 }
+            assertTrue("$id peak $p", p in low)
             val len = audibleEnd(s)
             val limit = if (id in buttons) 0.08 else 0.6
             assertTrue("$id audible length $len > $limit", len <= limit)
@@ -74,6 +75,33 @@ class SoftSfxTest {
     @Test fun answerButtonsRiseInPitch() {
         val r = listOf(SoftSound.AGAIN, SoftSound.HARD, SoftSound.GOOD, SoftSound.EASY).map { zeroCrossRate(SoftSfx.samples(it)) }
         assertTrue("again < hard < good < easy: $r", r[0] < r[1] && r[1] < r[2] && r[2] < r[3])
+    }
+
+    /** Share of the signal's energy above [hz], by a first-order high-pass of the samples (rough, but enough to tell a tick from a beep). */
+    private fun highShare(s: ShortArray, hz: Double): Double {
+        val a = Math.exp(-2 * Math.PI * hz / rate)
+        var y = 0.0; var xp = 0.0; var hi = 0.0; var all = 0.0
+        for (v in s) { val x = v / 32767.0; y = a * (y + x - xp); xp = x; hi += y * y; all += x * x }
+        return hi / all
+    }
+
+    @Test fun tabTickIsTenDbUnderItsOldLevelAndUnderTheAnswerClicks() {
+        val tab = peak(SoftSfx.samples(SoftSound.TAB))
+        assertTrue("tab $tab", tab <= 0.42 * 0.32) // the old level 0.42, minus 10 dB
+        for (b in listOf(SoftSound.AGAIN, SoftSound.HARD, SoftSound.GOOD, SoftSound.EASY, SoftSound.SHOW_ANSWER)) {
+            assertTrue("tab $tab vs $b", tab < peak(SoftSfx.samples(b)) / 3)
+        }
+        assertTrue(peak(SoftSfx.samples(SoftSound.MENU)) < peak(SoftSfx.samples(SoftSound.AGAIN)) / 2)
+    }
+
+    @Test fun tabAndMenuTicksAreLowAndHaveNoHarshPartials() {
+        for (id in listOf(SoftSound.TAB, SoftSound.MENU)) {
+            val s = SoftSfx.samples(id)
+            assertTrue("$id energy above 3 kHz: ${highShare(s, 3000.0)}", highShare(s, 3000.0) < 0.02)
+            assertTrue("$id zero crossings ${zeroCrossRate(s)}", zeroCrossRate(s) < 2 * 700) // a fundamental under ~700 Hz
+            val s2 = s.size.toDouble() / rate
+            assertTrue("$id length $s2", s2 <= 0.06)
+        }
     }
 
     @Test fun buttonsAreShort() {

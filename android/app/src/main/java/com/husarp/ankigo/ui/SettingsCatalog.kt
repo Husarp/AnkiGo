@@ -73,6 +73,8 @@ object SettingsCatalog {
         s("cardsUnderOwn", B, "Battle panel", "Stat card under its own Pokémon", "Off: the classic layout, each card on the opposite side"),
         s("playerSameSize", B, "Battle panel", "Same size as the wild one", "Your Pokémon is not drawn bigger than the wild one"),
         s("xpAnimation", B, "Battle panel", "XP animation", "Sparks fly into your Pokémon when it gains XP"),
+        s("attackAnimations", B, "Battle panel", "Attack animations", "Each move plays its own animation; off: a simple step and shake"),
+        s("backgroundPictures", B, "Battle panel", "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (~8 KB each); off: plain"),
         s("statsBarSmall", B, "Small battle windows", "Show stats bar in small windows", "Off gives the battle more room in small windows"),
         s("compactCards", B, "Small battle windows", "Compact stat cards", "Only name and HP on the battle cards"),
 

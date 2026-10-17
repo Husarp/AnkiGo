@@ -359,6 +359,17 @@ object WidgetRender {
             canvas.restore()
         }
 
+        /** The still streak flame (R7-06; widgets cannot animate) in a [size] square, drawn in real pixels; false when it cannot be decoded. */
+        fun flame(x: Float, y: Float, size: Float): Boolean {
+            val px = (size * k).roundToInt()
+            val b = StreakFlame.stillBitmap(ctx, px) ?: return false
+            canvas.save()
+            canvas.scale(1f / k, 1f / k)
+            canvas.drawBitmap(b, x * k, y * k, null)
+            canvas.restore()
+            return true
+        }
+
         /** Static sprite in a [size] square, pixel-crisp; null bitmap -> a coloured disc with two letters of [name]. */
         fun sprite(num: Int, shiny: Boolean, name: String, x: Float, y: Float, size: Float) {
             val b = Sprites.staticBitmap(spriteCtx, num, shiny)
@@ -384,11 +395,11 @@ object WidgetRender {
             canvas.drawBitmap(b, Rect(0, 0, b.width, b.height), RectF(x, y, x + size, y + size), p)
         }
 
-        fun chip(x: Float, y: Float, @DrawableRes iconRes: Int, @ColorRes tone: Int, text: String): Float {
+        fun chip(x: Float, y: Float, @DrawableRes iconRes: Int, @ColorRes tone: Int, text: String, streak: Boolean = false): Float {
             val p = paint(11f, 800, tone)
             val w = 7f + 13f + 4f + p.measureText(text) + 7f
             roundRect(x, y, x + w, y + WidgetLogic.CHIP_H, 9f, col(R.color.ag_mantle))
-            icon(iconRes, x + 7f, y + (WidgetLogic.CHIP_H - 13f) / 2f, 13f, col(tone))
+            if (!streak || !flame(x + 5.5f, y + (WidgetLogic.CHIP_H - 16f) / 2f, 16f)) icon(iconRes, x + 7f, y + (WidgetLogic.CHIP_H - 13f) / 2f, 13f, col(tone))
             line(text, x + 7f + 13f + 4f, y, WidgetLogic.CHIP_H, p)
             return w
         }
@@ -404,7 +415,7 @@ object WidgetRender {
             for ((ic, tone, text) in items) {
                 val w = 7f + 13f + 4f + paint(11f, 800, tone).measureText(text) + 7f
                 if (cx + w > maxX) break
-                cx += chip(cx, y, ic, tone, text) + 6f
+                cx += chip(cx, y, ic, tone, text, streak = ic == R.drawable.ic_flame && s.streak > 0) + 6f
             }
         }
 
@@ -593,7 +604,7 @@ object WidgetRender {
                 val txt = "${s.streak}"
                 val fl = streakH * 0.9f
                 val tw = fl + 2f + sp2.measureText(txt)
-                icon(R.drawable.ic_flame, cx - tw / 2f, y + (streakH - fl) / 2f, fl, col(R.color.ag_red))
+                if (!flame(cx - tw / 2f, y + (streakH - fl) / 2f, fl)) icon(R.drawable.ic_flame, cx - tw / 2f, y + (streakH - fl) / 2f, fl, col(R.color.ag_red))
                 line(txt, cx - tw / 2f + fl + 2f, y, streakH, sp2)
             }
         }

@@ -16,6 +16,7 @@ import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.sound.GameSound
+import com.husarp.ankigo.ui.movefx.MoveFxCatalog
 import com.husarp.ankigo.ui.PanelText.em
 import java.util.Locale
 import kotlin.math.max
@@ -131,7 +132,7 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
             if (ms > 0) {
                 busy = true
                 val my = epoch
-                handler.postDelayed({ if (my == epoch) { busy = false; pump() } }, ms)
+                handler.postDelayed({ if (my == epoch) { busy = false; arena.releaseMove(); pump() } }, ms)
                 return
             }
         }
@@ -274,9 +275,9 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
     }
 
     /** Battle sound / cry of [e] (never throws, never waits). A wild one that is about to be caught does not "faint" first. */
-    private fun sound(e: GameEvent) {
+    private fun sound(e: GameEvent, delayMs: Long? = null) {
         if (e is GameEvent.Fainted && !e.player && willBeCaught()) return
-        GameSound.onEvent(panel.context, e, muted(), arena.ballShown, factor)
+        GameSound.onEvent(panel.context, e, muted(), arena.ballShown, factor, delayMs)
     }
     private fun log(kind: LogKind, pill: String, text: String) {
         panel.setLog(kind, pill, text, side = logSide, fresh = logFresh)
@@ -314,7 +315,7 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
         val data = GameRepo.data
         panel.observeStudyEvent(e)
         logSide = LogSides.of(e); logFresh = LogSides.startsFight(e)
-        sound(e)
+        if (e !is GameEvent.Attack) sound(e)   // an attack sounds from [playAttack]: with its animation, when the hit lands
         when (e) {
             is GameEvent.Counted -> {
                 lastButton = e.button
@@ -529,23 +530,37 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
         } else {
             log(LogKind.AGAIN, "WILD", sb.toString())
         }
-        arena.lunge(e.byPlayer, d(350))
-        after(300) {
-            val onPlayer = !e.byPlayer
-            if (!e.missed && !e.failed && e.damage > 0) {
-                arena.hit(onPlayer, d(380))
-            }
-            floats(e)
-            // HP of the target, and of the user (drain, recoil, heal)
-            if (e.byPlayer) {
-                if (e.targetMaxHp > 0) arena.setEnemyHp(e.targetHp, e.targetMaxHp, true)
-                if (e.userMaxHp > 0) arena.setPlayerHp(e.userHp, e.userMaxHp, true)   // drain / heal float from their Effect event
-            } else {
-                if (e.targetMaxHp > 0) arena.setPlayerHp(e.targetHp, e.targetMaxHp, true)
-                if (e.userMaxHp > 0) arena.setEnemyHp(e.userHp, e.userMaxHp, true)
-            }
+        // Round 7: the move's own animation (the setting is on, the move connects, the arena can show it); it has its own lunge and hit
+        val run = if (AppPrefs.attackAnimations(ctx) && !e.missed && !e.failed) {
+            val plan = MoveFxCatalog.plan(e.moveId, e.moveType, e.category, e.power)
+            arena.playMove(plan, e.byPlayer, react = e.damage > 0, speed = (1.0 / factor).toFloat())
+        } else null
+        if (run == null) {
+            sound(e)
+            arena.lunge(e.byPlayer, d(350))
+            after(300) { afterHit(e) }
+            return d(800)
         }
-        return d(800)
+        sound(e, run.impactMs)
+        atMs(run.impactMs) { afterHit(e, animated = true) }
+        return ArenaMoveStage.Geo.waitMs(run.doneMs, run.impactMs, factor)
+    }
+
+    /** The hit has landed: the target's shake and flash (plain path only), the floating numbers and the HP bars. */
+    private fun afterHit(e: GameEvent.Attack, animated: Boolean = false) {
+        val onPlayer = !e.byPlayer
+        if (!animated && !e.missed && !e.failed && e.damage > 0) {
+            arena.hit(onPlayer, d(380))
+        }
+        floats(e)
+        // HP of the target, and of the user (drain, recoil, heal)
+        if (e.byPlayer) {
+            if (e.targetMaxHp > 0) arena.setEnemyHp(e.targetHp, e.targetMaxHp, true)
+            if (e.userMaxHp > 0) arena.setPlayerHp(e.userHp, e.userMaxHp, true)   // drain / heal float from their Effect event
+        } else {
+            if (e.targetMaxHp > 0) arena.setPlayerHp(e.targetHp, e.targetMaxHp, true)
+            if (e.userMaxHp > 0) arena.setEnemyHp(e.userHp, e.userMaxHp, true)
+        }
     }
 
     private fun playEncounter(e: GameEvent.Encounter): Long {
@@ -556,6 +571,7 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
         arena.setEnemyShown(true)
         arena.setEnemyCardShown(true)
         arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty())
+        arena.setBackdrop(sp?.types.orEmpty(), e.species)   // R7-07: the battle picture for this wild Pokémon's type
         arena.setEnemyHp(e.hp, e.maxHp, false)
         arena.setNewTag(e.newSpecies)
         if (sp != null) {

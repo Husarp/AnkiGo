@@ -128,6 +128,16 @@ object AppPrefs {
 
     fun setXpAnimation(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("xpAnimation", on).apply()
 
+    /** Each move plays its own attack animation (round 7, docs/design/attack-anims-v2.html; Settings → Battle). Off: the old step + shake. Default on. */
+    fun attackAnimations(ctx: Context): Boolean = prefs(ctx).getBoolean("attackAnimations", true)
+
+    fun setAttackAnimations(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("attackAnimations", on).apply()
+
+    /** The arena shows a battle background picture chosen by the wild Pokémon's type (round 7, PLAN 32A; Settings → Battle). Off: the plain background. Default on. */
+    fun backgroundPictures(ctx: Context): Boolean = prefs(ctx).getBoolean("backgroundPictures", true)
+
+    fun setBackgroundPictures(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("backgroundPictures", on).apply()
+
     /** The Box collapses copies of one species into one "×N" tile (Team → Box "Group duplicates" switch). Default on. */
     fun boxGrouped(ctx: Context): Boolean = prefs(ctx).getBoolean("boxGrouped", true)
 

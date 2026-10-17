@@ -76,7 +76,9 @@ class SfxTest {
     }
 
     @Test fun fileNamesAreVersioned() {
-        assertTrue(SoundId.entries.all { it.file.endsWith("-v1.wav") })
+        // redesigned sounds (R7-X1: the quiet tab/menu/ball/shop ticks) carry -v2 so a cached old file is never played
+        val v2 = setOf(SoundId.TAB, SoundId.MENU, SoundId.BALL_BTN, SoundId.BUY)
+        assertTrue(SoundId.entries.all { it.file.endsWith(if (it in v2) "-v2.wav" else "-v1.wav") })
         assertEquals(SoundId.entries.size, SoundId.entries.map { it.file }.toSet().size)
     }
 }

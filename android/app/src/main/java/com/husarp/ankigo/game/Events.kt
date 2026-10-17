@@ -37,12 +37,14 @@ sealed class GameEvent {
     /**
      * A move was used. [byPlayer] = our main used it. [damage] is the total dealt (0 for status moves / misses).
      * [targetHp]/[targetMaxHp] are the target's HP after the hit; [userHp]/[userMaxHp] after drain/recoil.
+     * [moveId] (Showdown id, "" = not known) and [power] (base power, 0 = none) pick the move's attack animation (round 7).
      */
     data class Attack(
         val byPlayer: Boolean, val user: String, val target: String, val move: String, val moveType: Type?,
         val category: Category, val damage: Int, val hits: Int, val effectiveness: Double, val crit: Boolean,
         val missed: Boolean, val failed: Boolean,
         val targetHp: Int, val targetMaxHp: Int, val userHp: Int, val userMaxHp: Int,
+        val moveId: String = "", val power: Int = 0,
     ) : GameEvent()
 
     /** The wild one did nothing because the round went well (Ankimon: Splash). */

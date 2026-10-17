@@ -633,6 +633,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 AppPrefs.playerSameSize(this)) { AppPrefs.setPlayerSameSize(this, it) },
             Form.switchRow(this, "XP animation", "Sparks fly into your Pokémon when it gains XP",
                 AppPrefs.xpAnimation(this)) { AppPrefs.setXpAnimation(this, it) },
+            Form.switchRow(this, "Attack animations", "Each move plays its own animation; off: a simple step and shake",
+                AppPrefs.attackAnimations(this)) { AppPrefs.setAttackAnimations(this, it) },
+            Form.switchRow(this, "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (~8 KB each); off: plain",
+                AppPrefs.backgroundPictures(this)) { AppPrefs.setBackgroundPictures(this, it) },
         )))
         content.addView(Form.sect(this, "Small battle windows"))
         content.addView(Form.cardOf(this, listOf(
@@ -1112,7 +1116,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         box.addView(Ui.text(this, 14f, 800, R.color.ag_text).apply { text = "AnkiGo ${Updates.current(this@SettingsPage)}" })
         box.addView(Form.body(this,
             "Pokémon and Pokémon names © Nintendo / Creatures / GAME FREAK. Data: PokeAPI, Pokémon Showdown. " +
-                "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0).", 12, R.color.ag_sub0), Form.lp(this, 6))
+                "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). " +
+                "Attack effects: Kenney Particle Pack (CC0) and Pokémon Showdown effect images (CC0); Ember and Vine Whip pixel art drawn for AnkiGo. " +
+                "Streak flame: animated Noto Emoji by Google (CC BY 4.0, resized). " +
+                "Battle backgrounds are downloaded from Pokémon Showdown (art by Smogon artists) and are not part of the app.", 12, R.color.ag_sub0), Form.lp(this, 6))
         return box
     }
 

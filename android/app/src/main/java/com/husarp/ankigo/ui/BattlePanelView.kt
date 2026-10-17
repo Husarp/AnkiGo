@@ -184,7 +184,8 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var toolsWanted = true
     private val menuButton = iconButton(R.drawable.ic_menu, "Menu: Team, Pokédex, Shop, Settings") { onMenu(it) }
     private val comboChip = Ui.chip(ctx, R.drawable.ic_bolt, R.color.ag_sub0)
-    private val streakChip = Ui.chip(ctx, R.drawable.ic_flame, R.color.ag_red)
+    private val streakFlame = StreakFlame(ctx)
+    private val streakChip = Ui.chip(ctx, streakFlame, R.color.ag_red)
     private val coinChip = Ui.chip(ctx, R.drawable.ic_coin, R.color.ag_yellow)
     private val itemChip = Ui.chip(ctx, R.drawable.ic_gift, R.color.ag_teal)
     private val ballChip = Ui.chip(ctx, R.drawable.ic_ball, R.color.ag_sub1)
@@ -776,7 +777,11 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         shownCombo = n
     }
 
-    fun setStreak(days: Int) { streakChip.setText(if (days == 1) "1 day" else "$days days") }
+    fun setStreak(days: Int) {
+        streakChip.setText(if (days == 1) "1 day" else "$days days")
+        streakFlame.alive = days > 0
+        streakChip.setTone(if (days > 0) R.color.ag_red else R.color.ag_sub0)
+    }
 
     fun setCoins(total: Int, bump: Boolean) {
         coinChip.setText(String.format(Locale.US, "%,d", total))
@@ -840,6 +845,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val sp = data.species[w.species]
         arena.setEnemyShown(true)
         arena.setEnemyInfo(w.name, w.level, w.shiny, sp?.types.orEmpty())
+        arena.setBackdrop(sp?.types.orEmpty(), w.species)   // R7-07: a restart / PiP / floating window shows the same picture
         arena.setEnemyStatus(b.enemy.status)
         arena.setEnemyHp(w.hp, if (sp != null) b.maxWildHp(data) else max(w.hp, 1), false)
         arena.setNewTag(w.species !in st.caught)

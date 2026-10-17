@@ -316,10 +316,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val card = Ui.card(this).apply { setPadding(dp(16), dp(14), dp(16), dp(16)) }
         val streak = s.streak.current
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        top.addView(ImageView(this).apply {
-            setImageResource(R.drawable.ic_flame)
-            setColorFilter(Ui.c(this@StatsPage, if (streak > 0) R.color.ag_peach else R.color.ag_ov))
-        }, LinearLayout.LayoutParams(dp(34), dp(34)).also { it.marginEnd = dp(10) })
+        top.addView(StreakFlame(this).apply { alive = streak > 0 }, LinearLayout.LayoutParams(dp(34), dp(34)).also { it.marginEnd = dp(10) })
 
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(Ui.text(this, 30f, 900, R.color.ag_text).apply {

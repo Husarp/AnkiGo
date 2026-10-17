@@ -78,6 +78,10 @@ object FakeGame {
         // Sprite decoding normally runs on a background thread, which races the snapshot: decode in place instead.
         // (Set here, not in the rule: PanelSprites needs the renderer's main looper.)
         com.husarp.ankigo.ui.PanelSprites.pool = java.util.concurrent.Executor { it.run() }
+        // Battle background pictures: load in place, and never from the network (R7-07; a shot puts its own pictures in the cache).
+        com.husarp.ankigo.data.Backdrops.pool = java.util.concurrent.Executor { it.run() }
+        com.husarp.ankigo.data.Backdrops.get = { _, _ -> null }
+        com.husarp.ankigo.data.Backdrops.forget()
         val sc = scenario
         scenario = Scenario.MID_GAME
         val d: GameData? = if (sc == Scenario.NO_DATA) null else data

@@ -390,6 +390,7 @@ object Sprites {
         dir(ctx).deleteRecursively()
         images.clear()
         bitmaps.clear()
+        Backdrops.forget()   // the battle background pictures live in the same folder (bg/)
     }
 
     // ---- internals ----

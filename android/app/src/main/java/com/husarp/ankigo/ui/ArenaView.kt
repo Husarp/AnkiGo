@@ -32,6 +32,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.husarp.ankigo.R
+import com.husarp.ankigo.data.Backdrops
+import com.husarp.ankigo.data.Sprites
 import com.husarp.ankigo.game.Type
 import com.husarp.ankigo.gfx.SpriteView
 import kotlin.math.max
@@ -55,6 +57,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val playerHolder = FrameLayout(ctx).apply { clipChildren = false; clipToPadding = false }
     private val platEnemy = View(ctx).apply { background = oval(Ui.c(ctx, R.color.ag_plat2)) }
     private val platPlayer = View(ctx).apply { background = oval(Ui.c(ctx, R.color.ag_plat)) }
+    /** The arena's background (R7-07): the plain gradient or a downloaded battle picture; it is a [com.husarp.ankigo.ui.movefx.Joltable] too. */
+    private val backdrop = ArenaBackdrop(ctx)
 
     // ---- enemy info card ----
     private val eName = FitName.make(ctx)
@@ -105,6 +109,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val stars = PanelStars(ctx).apply { visibility = GONE }
     /** Canvas effects (the shiny star burst, round 5), on top of everything laid out here; draws only while one runs. */
     val fx = ArenaFxView(ctx)
+    /** The attack animation's own canvas layer (round 7), under the stat cards so they stay readable over dims and flashes. */
+    private val moveFx = ArenaFxView(ctx)
     /** "GOTCHA!" in the comic style of the floating battle texts (Round 3 pick 9C): heavy italic capitals, yellow, dark outline. */
     private val bannerTitle = OutlineTextView(ctx, Ui.dp(ctx, 2.5f), FloatTextView.Look.OUTLINE).apply {
         typeface = Ui.font(ctx, 900)
@@ -196,8 +202,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     init {
         clipChildren = true
-        background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(Ui.c(ctx, R.color.ag_arena_top), Ui.c(ctx, R.color.ag_arena_bot)))
+        background = backdrop   // the plain gradient, or a downloaded battle picture (R7-07)
+        backdrop.onPictureChange = { shown -> setPlatformsShown(!shown) }
 
         enemyHolder.addView(enemySprite, FrameLayout.LayoutParams(-1, -1))
         enemyHolder.addView(ball, FrameLayout.LayoutParams(dpi(48), dpi(48), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).also { it.bottomMargin = dpi(6) })
@@ -254,6 +260,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         addView(platPlayer, LayoutParams(0, 0))
         addView(enemyHolder, LayoutParams(0, 0))
         addView(playerHolder, LayoutParams(0, 0))
+        addView(moveFx, LayoutParams(-1, -1))
         addView(enemyBlock, LayoutParams(0, -2))
         addView(playerCard, LayoutParams(0, -2))
         addView(newTag, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))
@@ -372,6 +379,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        // the attack animations' textures are decoded now, on a background thread (once per process), not inside the first frame
+        if (!reduceMotion() && AppPrefs.attackAnimations(context)) com.husarp.ankigo.ui.movefx.FxArt.of(context).warmUp()
         if (!ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) return
         if (bobs.isEmpty()) {
             bobs += bob(enemyHolder, 1600)
@@ -383,10 +392,16 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** The idle bob must not keep the screen redrawing while the app is in the background. */
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
+        if (visibility != VISIBLE) moveFx.clear()   // nothing keeps drawing (or leaves a sprite posed) off screen
         bobs.forEach {
             if (visibility == VISIBLE && ValueAnimator.areAnimatorsEnabled() && !context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) { if (it.isPaused) it.resume() else if (!it.isStarted) it.start() }
             else if (it.isStarted && !it.isPaused) it.pause()
         }
+    }
+
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        if (visibility != VISIBLE) moveFx.clear()
     }
 
     /** A swipe across our Pokémon: it turns to the other view (back <-> front) and stays turned; the facing is saved ([PlayerTurnSource]). */
@@ -454,6 +469,28 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             repeatMode = ValueAnimator.REVERSE
             interpolator = AccelerateDecelerateInterpolator()
         }
+
+    // ---------------------------------------------------------------- background (R7-07)
+
+    /**
+     * The battle background for a wild Pokémon of [species] with [types] ([BackdropRules]): the downloaded Showdown picture once
+     * it is there, else the plain gradient. Plain too while pictures or downloads are off in the settings ([Backdrops.allowed]).
+     */
+    fun setBackdrop(types: List<Type>, species: Int) {
+        val download = Backdrops.allowed(Sprites.enabled(context), AppPrefs.backgroundPictures(context))
+        if (!download) { backdrop.plain(); return }
+        backdrop.request(BackdropRules.pick(types, species), download)
+    }
+
+    /** The plain gradient with the two platform ellipses. */
+    fun setPlainBackdrop() = backdrop.plain()
+
+    /** The two plain-mode ellipses show only while no picture does (the picture has its own ground spots). */
+    private fun setPlatformsShown(shown: Boolean) {
+        val vis = if (shown) VISIBLE else GONE
+        platEnemy.visibility = vis
+        platPlayer.visibility = vis
+    }
 
     // ---------------------------------------------------------------- enemy side
 
@@ -953,6 +990,68 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         fx.showStill(e, atMs)
     }
 
+    /**
+     * The attack animation of [plan] (round 7) between the two sprites, [byPlayer] = ours attacks. [react] = false: the target
+     * shows no reaction. [speed] 2 = the battle's fast pace. Any move animation still running ends first. Null (the caller plays
+     * the plain lunge and hit): reduced motion, not on screen, no size yet, the wild side not shown, a sprite with no picture,
+     * or no look to play.
+     */
+    fun playMove(plan: com.husarp.ankigo.ui.movefx.MoveFxPlan, byPlayer: Boolean, react: Boolean, speed: Float): com.husarp.ankigo.ui.movefx.MoveFxEffect? {
+        if (reduceMotion() || !moveOnScreen()) return null
+        moveFx.clear()
+        val e = moveEffect(plan, byPlayer, react, speed) ?: return null
+        moveFx.add(e)
+        return e
+    }
+
+    private fun moveEffect(plan: com.husarp.ankigo.ui.movefx.MoveFxPlan, byPlayer: Boolean, react: Boolean, speed: Float): com.husarp.ankigo.ui.movefx.MoveFxEffect? {
+        val stage = moveStage(byPlayer) ?: return null
+        val effect = moveMaker(stage, plan, react, speed) ?: return null
+        moveLive = stage
+        return effect
+    }
+
+    /** The stage of the latest move animation: [releaseMove] lets go of the sprites it posed. */
+    private var moveLive: ArenaMoveStage? = null
+
+    /**
+     * The event player calls this right before it starts the next queued item after an attack animation: the move's sprite poses end
+     * for good (the sprites are back at rest and later frames or the end of the effect do not touch them again), while its particles
+     * may still fade. Does nothing when no move ran or it has let go already.
+     */
+    fun releaseMove() {
+        moveLive?.restore()
+        moveLive = null
+    }
+
+    // tests only: no window in the renderer, and a fake player instead of the real one
+    internal var moveOnScreen: () -> Boolean = { isAttachedToWindow && windowVisibility == VISIBLE && isShown }
+    internal var moveMaker: (com.husarp.ankigo.ui.movefx.MoveFxStage, com.husarp.ankigo.ui.movefx.MoveFxPlan, Boolean, Float) -> com.husarp.ankigo.ui.movefx.MoveFxEffect? =
+        { stage, plan, react, speed -> com.husarp.ankigo.ui.movefx.MoveFx.create(context, stage, plan, react, speed, kotlin.random.Random.nextLong()) }
+
+    /** The stage of one attack, or null while a sprite box has no size or picture or the wild side is hidden. */
+    private fun moveStage(byPlayer: Boolean): ArenaMoveStage? {
+        if (width <= 0 || height <= 0 || enemyHolder.visibility != VISIBLE) return null
+        val attacker = if (byPlayer) playerSprite else enemySprite
+        val target = if (byPlayer) enemySprite else playerSprite
+        val aBox = if (byPlayer) playerHolder else enemyHolder
+        val tBox = if (byPlayer) enemyHolder else playerHolder
+        for ((spr, box) in listOf(attacker to aBox, target to tBox)) {
+            if (box.width <= 0 || box.height <= 0 || spr.width <= 0 || spr.height <= 0 || spr.drawnWidth() <= 0 || spr.drawnHeight() <= 0) return null
+        }
+        val a = ArenaMoveStage.Geo.centre(aBox.left.toFloat(), aBox.top.toFloat(), attacker.width.toFloat(), attacker.height.toFloat(), attacker.drawnHeight().toFloat())
+        val t = ArenaMoveStage.Geo.centre(tBox.left.toFloat(), tBox.top.toFloat(), target.width.toFloat(), target.height.toFloat(), target.drawnHeight().toFloat())
+        val unit = ArenaMoveStage.Geo.unit(a.first, a.second, t.first, t.second, target.drawnHeight().toFloat())
+        return ArenaMoveStage(a.first, a.second, t.first, t.second, unit, attacker, target, { background }, { it === playerSprite && turnAnim != null })
+    }
+
+    /** Test-only: the move animation of [plan] frozen at [atMs] (a still frame for the screenshot tests; no clock, no window checks). */
+    internal fun moveStill(plan: com.husarp.ankigo.ui.movefx.MoveFxPlan, byPlayer: Boolean, atMs: Float) {
+        moveFx.clear()
+        com.husarp.ankigo.ui.movefx.FxArt.of(context).awaitWarm(10_000)   // the art warm-up of onAttachedToWindow, if it started
+        moveEffect(plan, byPlayer, true, 1f)?.let { moveFx.showStill(it, atMs) }
+    }
+
     /** The wild one runs off to the right and fades. */
     fun enemyLeave(ms: Long) {
         enemySprite.animate().translationX(Ui.dp(context, 70f)).alpha(0f).setDuration(ms).setInterpolator(AccelerateInterpolator()).start()
@@ -1062,6 +1161,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         super.onLayout(changed, l, t, r, b)
+        backdrop.setFeet(
+            (enemyHolder.left + enemyHolder.right) / 2f, enemyHolder.bottom.toFloat(),
+            (playerHolder.left + playerHolder.right) / 2f, playerHolder.bottom.toFloat(),
+        )
         if (banner.visibility == VISIBLE) {
             val was = bannerFit
             if (!placeBanner()) { banner.animate().cancel(); banner.visibility = GONE; return }   // the arena shrank: no clear spot any more
@@ -1077,6 +1180,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun cancelAnimations() {
         stopAnimators()
         fx.clear()
+        moveFx.clear()
         xpFx = null
         xpQueue.clear()
         xpActive.toList().forEach { it.view.animate().cancel(); removeView(it.view) }
@@ -1097,6 +1201,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun resetFx() {
         stopAnimators()
         fx.clear()
+        moveFx.clear()
         clearBall()
         showStars(false)
         hideBanner()
@@ -1107,6 +1212,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** Only the wild side back to rest (a new encounter is about to slide in). */
     fun resetEnemySide() {
         stopXp()   // the XP number stood over this spot
+        moveFx.clear()
         enemySprite.animate().cancel()
         clearBall()
         showStars(false)

@@ -31,8 +31,8 @@ enum class SoundId(val file: String, val group: SoundGroup) {
     AGAIN("again-v1.wav", SoundGroup.ANSWER_BUTTONS), HARD("hard-v1.wav", SoundGroup.ANSWER_BUTTONS),
     GOOD("good-v1.wav", SoundGroup.ANSWER_BUTTONS), EASY("easy-v1.wav", SoundGroup.ANSWER_BUTTONS),
     SHOW_ANSWER("show_answer-v1.wav", SoundGroup.SHOW_ANSWER),
-    TAB("tab-v1.wav", SoundGroup.MENUS), MENU("menu-v1.wav", SoundGroup.MENUS), BALL_BTN("ball_btn-v1.wav", SoundGroup.MENUS),
-    BUY("buy-v1.wav", SoundGroup.SHOP);
+    TAB("tab-v2.wav", SoundGroup.MENUS), MENU("menu-v2.wav", SoundGroup.MENUS), BALL_BTN("ball_btn-v2.wav", SoundGroup.MENUS),
+    BUY("buy-v2.wav", SoundGroup.SHOP);
 
     /** The soft recipe that makes this sound, or null for the six original battle sounds. */
     val soft: SoftSound? get() = SoftSound.entries.firstOrNull { it.name == name }
