@@ -196,6 +196,13 @@ class EventPlayer(private val panel: BattlePanelView) {
         handler.postDelayed({ if (my == epoch) f() }, d(ms))
     }
 
+    /** Runs [f] in [ms] of real time (no pace scaling: it comes from an effect that is scaled already); at once when [ms] is 0. */
+    private fun atMs(ms: Long, f: () -> Unit) {
+        if (ms <= 0L) { f(); return }
+        val my = epoch
+        handler.postDelayed({ if (my == epoch) f() }, ms)
+    }
+
     /** Looks ahead in the queue: after the wild one fainted, does a Caught (not a Defeated) come first? */
     private fun willBeCaught(): Boolean {
         for (item in queue) {
@@ -233,7 +240,7 @@ class EventPlayer(private val panel: BattlePanelView) {
     /** Battle sound / cry of [e] (never throws, never waits). A wild one that is about to be caught does not "faint" first. */
     private fun sound(e: GameEvent) {
         if (e is GameEvent.Fainted && !e.player && willBeCaught()) return
-        GameSound.onEvent(panel.context, e, muted(), arena.ballShown)
+        GameSound.onEvent(panel.context, e, muted(), arena.ballShown, factor)
     }
     private fun log(kind: LogKind, pill: String, text: String) = panel.setLog(kind, pill, text)
 
@@ -320,14 +327,18 @@ class EventPlayer(private val panel: BattlePanelView) {
             is GameEvent.XpGained -> {
                 if (e.uid != arena.playerUid) { teamXpCard(e); return 0 }
                 val frac = if (e.xpForLevel > 0) e.xpInLevel.toFloat() / e.xpForLevel else 1f
+                // XP animation (PLAN 38): sparks fly into our Pokémon first and the card's bar starts when the first one lands (0 = off, as before)
+                val lead = if (AppPrefs.xpAnimation(ctx)) arena.xpAbsorb(e.xp, factor.toFloat()) else 0L
                 if (e.level > arena.playerLevel || frac < arena.xpShown - 0.001f) {
                     // grew a level: fill the bar, then restart at the new level's progress
-                    arena.setPlayerXp(e.xpForLevel, e.xpForLevel, true)
-                    after(450) { arena.setPlayerXp(0, e.xpForLevel, false); arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
-                    return d(950)
+                    atMs(lead) {
+                        arena.setPlayerXp(e.xpForLevel, e.xpForLevel, true)
+                        after(450) { arena.setPlayerXp(0, e.xpForLevel, false); arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
+                    }
+                    return lead + d(950)
                 }
-                arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true)
-                return d(600)
+                atMs(lead) { arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
+                return lead + d(600)
             }
             is GameEvent.LevelUp -> {
                 if (e.uid == arena.playerUid) {
@@ -354,6 +365,7 @@ class EventPlayer(private val panel: BattlePanelView) {
                 arena.enemyLeave(d(450))
                 if (e.uid == arena.playerUid) {
                     arena.enter(true, d(450))
+                    if (GameRepo.state?.mon(e.uid)?.shiny == true) arena.shinyBurst(true, d(ShinyBurst.DELAY_MS))
                     arena.setPlayerHp(e.hp, maxHpOf(e.uid), true)
                 }
                 return d(1100)
@@ -376,6 +388,7 @@ class EventPlayer(private val panel: BattlePanelView) {
                 arena.setPlayerStatus(null)
                 panel.refreshPlayer()
                 arena.enter(true, d(450))
+                if (GameRepo.state?.mon(e.uid)?.shiny == true) arena.shinyBurst(true, d(ShinyBurst.DELAY_MS))
                 return d(800)
             }
             is GameEvent.Cash -> {
@@ -510,6 +523,7 @@ class EventPlayer(private val panel: BattlePanelView) {
             panel.noteEnemySprite(e.species, e.shiny)
         }
         arena.enter(false, d(450))
+        if (e.shiny) arena.shinyBurst(false, d(ShinyBurst.DELAY_MS))
         log(LogKind.SYS, "NEW", "A wild ${em(bare(e.name))}" + (if (e.shiny) " ${em("(shiny!)")}" else "") + " appeared!")
         GameRepo.state?.let { s -> GameRepo.data?.let { panel.prefetch(s, it) } }
         return d(950)

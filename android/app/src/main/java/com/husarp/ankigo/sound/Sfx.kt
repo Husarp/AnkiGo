@@ -7,9 +7,35 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
-/** The six battle sounds. [file] is the cache file name; bump the "-v1" when a sound is redesigned. */
-enum class SoundId(val file: String) {
-    HIT("hit-v1.wav"), SUPER("super-v1.wav"), WEAK("weak-v1.wav"), FAINT("faint-v1.wav"), CATCH("catch-v1.wav"), LEVEL_UP("levelup-v1.wav"),
+/**
+ * The sounds. [file] is the cache file name; bump the "-v1" when a sound is redesigned. [group] = the settings group that switches it.
+ * The first six are the original battle sounds ([Sfx]); the rest carry the names of [SoftSound] (made by [SoftSfx]).
+ */
+enum class SoundId(val file: String, val group: SoundGroup) {
+    HIT("hit-v1.wav", SoundGroup.BATTLE), SUPER("super-v1.wav", SoundGroup.BATTLE), WEAK("weak-v1.wav", SoundGroup.BATTLE),
+    FAINT("faint-v1.wav", SoundGroup.BATTLE), CATCH("catch-v1.wav", SoundGroup.BATTLE), LEVEL_UP("levelup-v1.wav", SoundGroup.BATTLE),
+
+    // battle
+    MISS("miss-v1.wav", SoundGroup.BATTLE), CHARGE("charge-v1.wav", SoundGroup.BATTLE),
+    THROW("throw-v1.wav", SoundGroup.BATTLE), WOBBLE("wobble-v1.wav", SoundGroup.BATTLE), BREAK_FREE("break_free-v1.wav", SoundGroup.BATTLE),
+    FLED("fled-v1.wav", SoundGroup.BATTLE), SENT_OUT("sent_out-v1.wav", SoundGroup.BATTLE),
+    // moments
+    STAT_UP("stat_up-v1.wav", SoundGroup.MOMENTS), STAT_DOWN("stat_down-v1.wav", SoundGroup.MOMENTS),
+    BURN("burn-v1.wav", SoundGroup.MOMENTS), BURN_TICK("burn_tick-v1.wav", SoundGroup.MOMENTS),
+    POISON("poison-v1.wav", SoundGroup.MOMENTS), POISON_TICK("poison_tick-v1.wav", SoundGroup.MOMENTS),
+    PARALYSIS("paralysis-v1.wav", SoundGroup.MOMENTS), SLEEP("sleep-v1.wav", SoundGroup.MOMENTS), FREEZE("freeze-v1.wav", SoundGroup.MOMENTS),
+    SHINY("shiny-v1.wav", SoundGroup.MOMENTS), EVO_START("evo_start-v1.wav", SoundGroup.MOMENTS), EVO_DONE("evo_done-v1.wav", SoundGroup.MOMENTS),
+    LEARNED("learned-v1.wav", SoundGroup.MOMENTS), ITEM("item-v1.wav", SoundGroup.MOMENTS), CASH("cash-v1.wav", SoundGroup.MOMENTS),
+    BADGE("badge-v1.wav", SoundGroup.MOMENTS), HEALED("healed-v1.wav", SoundGroup.MOMENTS), GOAL("goal-v1.wav", SoundGroup.MOMENTS),
+    // buttons (PLAN 84)
+    AGAIN("again-v1.wav", SoundGroup.ANSWER_BUTTONS), HARD("hard-v1.wav", SoundGroup.ANSWER_BUTTONS),
+    GOOD("good-v1.wav", SoundGroup.ANSWER_BUTTONS), EASY("easy-v1.wav", SoundGroup.ANSWER_BUTTONS),
+    SHOW_ANSWER("show_answer-v1.wav", SoundGroup.SHOW_ANSWER),
+    TAB("tab-v1.wav", SoundGroup.MENUS), MENU("menu-v1.wav", SoundGroup.MENUS), BALL_BTN("ball_btn-v1.wav", SoundGroup.MENUS),
+    BUY("buy-v1.wav", SoundGroup.SHOP);
+
+    /** The soft recipe that makes this sound, or null for the six original battle sounds. */
+    val soft: SoftSound? get() = SoftSound.entries.firstOrNull { it.name == name }
 }
 
 /**
@@ -25,12 +51,15 @@ object Sfx {
     private fun level(id: SoundId) = when (id) {
         SoundId.HIT -> 0.70; SoundId.SUPER -> 0.75; SoundId.WEAK -> 0.42
         SoundId.FAINT -> 0.60; SoundId.CATCH -> 0.58; SoundId.LEVEL_UP -> 0.55
+        else -> 0.5 // the soft sounds are leveled by SoftSfx itself
     }
 
     fun samples(id: SoundId): ShortArray {
+        id.soft?.let { return SoftSfx.samples(it) }
         val b = Buf(when (id) {
             SoundId.HIT -> 0.24; SoundId.SUPER -> 0.40; SoundId.WEAK -> 0.16
             SoundId.FAINT -> 0.50; SoundId.CATCH -> 0.67; SoundId.LEVEL_UP -> 0.55
+            else -> 0.1
         })
         when (id) {
             SoundId.HIT -> hit(b, 0.0, 1.0)
@@ -46,6 +75,7 @@ object Sfx {
                 val notes = doubleArrayOf(523.25, 659.25, 783.99, 1046.5) // C5 E5 G5 C6
                 notes.forEachIndexed { i, f -> chirp(b, i * 0.09, if (i == 3) 0.25 else 0.14, f, 0.5) }
             }
+            else -> {}
         }
         return b.finish(level(id))
     }

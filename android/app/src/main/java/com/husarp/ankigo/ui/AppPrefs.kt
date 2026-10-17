@@ -114,6 +114,11 @@ object AppPrefs {
 
     fun setPlayerFront(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("playerFront", on).apply()
 
+    /** Sparks fly from the defeated Pokémon into ours and a "+N XP" number counts up when our Pokémon gains XP (Settings → Battle). Default on. */
+    fun xpAnimation(ctx: Context): Boolean = prefs(ctx).getBoolean("xpAnimation", true)
+
+    fun setXpAnimation(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("xpAnimation", on).apply()
+
     /** The Box collapses copies of one species into one "×N" tile (Team → Box "Group duplicates" switch). Default on. */
     fun boxGrouped(ctx: Context): Boolean = prefs(ctx).getBoolean("boxGrouped", true)
 

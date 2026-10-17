@@ -49,9 +49,16 @@ object SettingsCatalog {
         s("scale", L, "", "Interface size", "Text, cards and Pokémon get bigger or smaller together"),
 
         // Sounds
-        s("battleSounds", SO, "", "Battle sounds", "Hit, faint and catch sounds during battles"),
-        s("cries", SO, "", "Pokémon cries", "Plays a cry when a Pokémon appears; each one downloads once, ~7 KB"),
-        s("volume", SO, "", "Volume", "How loud the game sounds are"),
+        s("answerSounds", SO, "Study buttons", "Answer buttons", "A click for Again, Hard, Good and Easy"),
+        s("showAnswerSound", SO, "Study buttons", "Show answer", "A click when you show the answer"),
+        s("menuSounds", SO, "Study buttons", "Menus & tabs", "A click for the tabs, the menus and the Poké Ball button"),
+        s("shopSounds", SO, "Study buttons", "Shop", "A click when you buy something"),
+        s("volumeButtons", SO, "Study buttons", "Button volume", "How loud the button clicks are"),
+        s("battleSounds", SO, "Battle", "Battle effects", "Hits, faint, catch, level up and misses during battles"),
+        s("momentSounds", SO, "Battle", "Status & moments", "Burn, poison, shiny, evolution, cash and goal sounds"),
+        s("volumeBattle", SO, "Battle", "Battle volume", "How loud the battle sounds are"),
+        s("cries", SO, "Pokémon cries", "Pokémon cries", "Plays a cry when a Pokémon appears; each one downloads once, ~7 KB"),
+        s("volumeCries", SO, "Pokémon cries", "Cries volume", "How loud the Pokémon cries are"),
         s("quietOnCardAudio", SO, "", "Quiet on cards with sound", "Game sounds pause while a card plays its own audio"),
         s("testSound", SO, "", "Play a test sound", "Checks the volume; follows the phone's silent mode"),
 
@@ -66,6 +73,7 @@ object SettingsCatalog {
         s("cardsUnderOwn", B, "Battle panel", "Stat card under its own Pokémon", "Off: the classic layout, each card on the opposite side"),
         s("playerSameSize", B, "Battle panel", "Same size as the wild one", "Your Pokémon is not drawn bigger than the wild one"),
         s("playerFront", B, "Battle panel", "Show my Pokémon from the front", "Front picture instead of the back picture"),
+        s("xpAnimation", B, "Battle panel", "XP animation", "Sparks fly into your Pokémon when it gains XP"),
         s("statsBarSmall", B, "Small battle windows", "Show stats bar in small windows", "Off gives the battle more room in small windows"),
         s("compactCards", B, "Small battle windows", "Compact stat cards", "Only name and HP on the battle cards"),
 

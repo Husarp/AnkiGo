@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- R5-07: widget picker text of the 1x1 Study now widget. -->
+    <string name="widget_study_now_desc">Cards due today. Tap to study.</string>
+</resources>

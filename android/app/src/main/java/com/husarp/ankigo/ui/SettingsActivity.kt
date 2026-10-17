@@ -36,7 +36,6 @@ import com.husarp.ankigo.game.save.SaveFormatException
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.overlay.FloatBattleService
 import com.husarp.ankigo.overlay.Overlay
-import com.husarp.ankigo.sound.SoundPrefs
 import com.husarp.ankigo.update.Updates
 import com.husarp.ankigo.update.UpdatesActivity
 import java.io.File
@@ -282,7 +281,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this), AppPrefs.cardsUnderOwn(this))
             SettingsSection.REMINDERS -> SettingsSummary.reminders(com.husarp.ankigo.remind.ReminderStore.load(this))
             SettingsSection.HELP -> "How the game works · fix a problem"
-            SettingsSection.SOUND -> SettingsSummary.sound(SoundPrefs.battleSounds(this), SoundPrefs.cries(this), SoundPrefs.volume(this))
+            SettingsSection.SOUND -> soundSummary(this)
             SettingsSection.DOWNLOADS -> SettingsSummary.downloads(DataStore.size(this), Sprites.size(this),
                 SettingsJobs.anim.running || SettingsJobs.data.running || FirstRunJob.job.running)
             SettingsSection.ANKIMON -> "Import a PC save · export one back"
@@ -641,6 +640,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 AppPrefs.playerSameSize(this)) { AppPrefs.setPlayerSameSize(this, it) },
             Form.switchRow(this, "Show my Pokémon from the front", "Front picture, turned to face the wild one, instead of the back picture",
                 AppPrefs.playerFront(this)) { AppPrefs.setPlayerFront(this, it) },
+            Form.switchRow(this, "XP animation", "Sparks fly into your Pokémon when it gains XP",
+                AppPrefs.xpAnimation(this)) { AppPrefs.setXpAnimation(this, it) },
         )))
         content.addView(Form.sect(this, "Small battle windows"))
         content.addView(Form.cardOf(this, listOf(

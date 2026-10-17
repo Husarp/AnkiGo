@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Buddy widget with "Animated Pokémon" on (drawn by ui/WidgetRender.kt): a ViewFlipper per colour scheme flips between two
+     pre-drawn frames (the Pokémon at rest, the Pokémon lifted) every ~550 ms. The flipper stops by itself when the home screen is
+     not shown; the flipper that is gone never starts. This layout shows the light flipper, layout-night the dark one (see layout/widget_buddy.xml). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/b_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_game_bg">
+
+    <ViewFlipper
+        android:id="@+id/b_flip_l"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:autoStart="true"
+        android:flipInterval="550">
+
+        <ImageView
+            android:id="@+id/b_img_l1"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter" />
+
+        <ImageView
+            android:id="@+id/b_img_l2"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter" />
+    </ViewFlipper>
+
+    <ViewFlipper
+        android:id="@+id/b_flip_d"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:autoStart="false"
+        android:flipInterval="550"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/b_img_d1"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter" />
+
+        <ImageView
+            android:id="@+id/b_img_d2"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter" />
+    </ViewFlipper>
+</FrameLayout>

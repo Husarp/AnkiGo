@@ -30,16 +30,16 @@ class SoundRulesTest {
 
     @Test fun attacksThatDidNotHitAreSilent() {
         assertNull(SoundRules.cueFor(attack(damage = 0)))
-        assertNull(SoundRules.cueFor(attack(missed = true)))
-        assertNull(SoundRules.cueFor(attack(failed = true)))
-        assertNull(SoundRules.cueFor(attack(damage = 0, eff = 0.0)))
+        assertEquals(SoundId.MISS, effect(attack(missed = true)))
+        assertEquals(SoundId.MISS, effect(attack(failed = true)))
+        assertEquals(SoundId.MISS, effect(attack(damage = 0, eff = 0.0))) // no effect: a "miss" sound now
         assertNull(SoundRules.cueFor(attack(cat = Category.STATUS, damage = 0)))
     }
 
     @Test fun otherEvents() {
         assertEquals(SoundId.FAINT, effect(GameEvent.Fainted(true, "A")))
         assertEquals(SoundId.FAINT, effect(GameEvent.Fainted(false, "B")))
-        assertEquals(SoundId.CATCH, effect(GameEvent.Caught("u", 1, "B", 5, false, null, false, true)))
+        assertEquals(SoundId.CATCH, effect(GameEvent.Caught("u", 1, "B", 5, false, null, false, true), ball = true))
         assertEquals(SoundId.LEVEL_UP, effect(GameEvent.LevelUp("u", "A", 6, 20, 20)))
         assertNull(SoundRules.cueFor(GameEvent.Cash(5, 10)))
         assertNull(SoundRules.cueFor(GameEvent.Defeated(1, "B", 5)))
@@ -58,7 +58,7 @@ class SoundRulesTest {
         assertEquals(0, SoundRules.cueFor(GameEvent.LevelUp("u", "A", 6, 20, 20))!!.delayMs)
         val caught = GameEvent.Caught("u", 1, "B", 5, false, null, false, true)
         assertEquals(0, SoundRules.cueFor(caught, ballShown = true)!!.delayMs)
-        assertTrue(SoundRules.cueFor(caught, ballShown = false)!!.delayMs > 0)
+        assertEquals(2250, SoundRules.cuesFor(caught, ballShown = false).last().delayMs) // the CATCH, after the wobbles
     }
 
     // ---- may it be heard? ----
@@ -75,21 +75,22 @@ class SoundRulesTest {
     @Test fun nothingToPlay() = assertFalse(SoundRules.shouldPlay(null, ok))
 
     @Test fun battleSoundsOffKeepsCries() {
-        val c = ok.copy(battleSounds = false)
+        val c = ok.copy(groupsOff = setOf(SoundGroup.BATTLE))
         assertFalse(SoundRules.shouldPlay(hit, c))
         assertTrue(SoundRules.shouldPlay(cry, c))
     }
 
     @Test fun criesOffKeepsBattleSounds() {
-        val c = ok.copy(cries = false)
+        val c = ok.copy(groupsOff = setOf(SoundGroup.CRIES))
         assertTrue(SoundRules.shouldPlay(hit, c))
         assertFalse(SoundRules.shouldPlay(cry, c))
     }
 
     @Test fun volumeZeroIsSilent() {
-        assertFalse(SoundRules.shouldPlay(hit, ok.copy(volumePct = 0)))
-        assertFalse(SoundRules.shouldPlay(cry, ok.copy(volumePct = 0)))
-        assertTrue(SoundRules.shouldPlay(hit, ok.copy(volumePct = 10)))
+        val zero = SoundChannel.entries.associateWith { 0 }
+        assertFalse(SoundRules.shouldPlay(hit, ok.copy(volumes = zero)))
+        assertFalse(SoundRules.shouldPlay(cry, ok.copy(volumes = zero)))
+        assertTrue(SoundRules.shouldPlay(hit, ok.copy(volumes = mapOf(SoundChannel.BATTLE to 10))))
     }
 
     @Test fun silentOrVibrateIsSilent() {

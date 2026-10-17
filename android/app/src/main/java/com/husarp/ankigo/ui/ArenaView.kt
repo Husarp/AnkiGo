@@ -102,6 +102,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     // ---- catch moment ----
     private val stars = PanelStars(ctx).apply { visibility = GONE }
+    /** Canvas effects (the shiny star burst, round 5), on top of everything laid out here; draws only while one runs. */
+    val fx = ArenaFxView(ctx)
     /** "GOTCHA!" in the comic style of the floating battle texts (Round 3 pick 9C): heavy italic capitals, yellow, dark outline. */
     private val bannerTitle = OutlineTextView(ctx, Ui.dp(ctx, 2.5f), FloatTextView.Look.OUTLINE).apply {
         typeface = Ui.font(ctx, 900)
@@ -260,6 +262,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         addView(stars, LayoutParams(-1, -1))
         addView(banner, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))   // placed by [placeBanner] (translation), never by margins
         addView(bubble, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))
+        addView(fx, LayoutParams(-1, -1))
         bubble.setOnClickListener { hideStatusBubble() }
         eStatus.onTap = { showStatusBubble(it) }
         pStatus.onTap = { showStatusBubble(it) }
@@ -917,6 +920,59 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         spr.animate().translationX(0f).alpha(1f).setDuration(ms).setInterpolator(DecelerateInterpolator()).start()
     }
 
+    /**
+     * The shiny star burst around the wild ([player] = false) or your sprite, starting [delayMs] from now (the end of its entrance).
+     * Centred on the sprite box, scaled by it; nothing with reduced motion or before the box has a size.
+     */
+    fun shinyBurst(player: Boolean, delayMs: Long) {
+        if (reduceMotion()) return
+        fx.addAfter(delayMs) { if (isAttachedToWindow) burstFx(player) else null }
+    }
+
+    private fun burstFx(player: Boolean): FxEffect? {
+        val box = if (player) playerHolder else enemyHolder
+        if (box.width <= 0 || box.height <= 0) return null
+        return ShinyBurstFx(box.left + box.width / 2f, ShinyBurst.centreY(box.top.toFloat(), box.height.toFloat()), ShinyBurst.scale(box.width.toFloat(), box.height.toFloat()))
+    }
+
+    /** Test-only: the burst frozen at [atMs] (a still frame for the screenshot tests). */
+    internal fun shinyBurstStill(player: Boolean, atMs: Float) { burstFx(player)?.let { fx.showStill(it, atMs) } }
+
+    private var xpFx: XpAbsorbFx? = null
+
+    /**
+     * The XP animation (PLAN 38) for [xp] gained by our Pokémon: sparks fly from the defeated wild one's box into ours, our sprite
+     * flashes white at each landing and a "+N XP" number counts up over the defeated one's spot. [factor] is the player's pace
+     * (all its times scale with it). Returns how long until the first spark lands, which is when the card's XP bar starts; 0 = no
+     * animation started (reduced motion, not on screen, no size yet).
+     */
+    fun xpAbsorb(xp: Int, factor: Float): Long {
+        if (xp <= 0 || reduceMotion() || !isAttachedToWindow) return 0L
+        val plan = XpParticles.plan(kotlin.random.Random.nextLong(), factor)
+        val e = xpEffect(plan, xp) ?: return 0L
+        stopXp()
+        xpFx = e
+        fx.add(e)
+        return plan.firstLanding.toLong()
+    }
+
+    private fun xpBox(v: View) = XpParticles.Box(v.left.toFloat(), v.top.toFloat(), v.width.toFloat(), v.height.toFloat())
+
+    private fun xpEffect(plan: XpParticles.Plan, xp: Int): XpAbsorbFx? {
+        if (width <= 0 || height <= 0 || enemyHolder.width <= 0 || enemyHolder.height <= 0 || playerHolder.width <= 0 || playerHolder.height <= 0) return null
+        return XpAbsorbFx(context, plan, xpBox(enemyHolder), xpBox(playerHolder), width.toFloat(), xp, floorSp) { playerSprite.flash = it }
+    }
+
+    private fun stopXp() { xpFx?.let { fx.stop(it) }; xpFx = null }
+
+    /** Test-only: the XP animation (mockup seed) frozen at [atMs], our sprite flashed as it is then. */
+    internal fun xpAbsorbStill(xp: Int, atMs: Float) {
+        val plan = XpParticles.plan(XpParticles.MOCK_SEED)
+        val e = xpEffect(plan, xp) ?: return
+        playerSprite.flash = XpParticles.flash(plan, atMs)
+        fx.showStill(e, atMs)
+    }
+
     /** The wild one runs off to the right and fades. */
     fun enemyLeave(ms: Long) {
         enemySprite.animate().translationX(Ui.dp(context, 70f)).alpha(0f).setDuration(ms).setInterpolator(AccelerateInterpolator()).start()
@@ -1040,6 +1096,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** Stops every running animation and removes leftovers (floating numbers too); sprites keep whatever they show. */
     fun cancelAnimations() {
         stopAnimators()
+        fx.clear()
+        xpFx = null
         xpQueue.clear()
         xpActive.toList().forEach { it.view.animate().cancel(); removeView(it.view) }
         xpActive.clear()
@@ -1058,6 +1116,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** Idle look: no catch overlay, both sprites at rest (numbers still floating are left to finish). */
     fun resetFx() {
         stopAnimators()
+        fx.clear()
         clearBall()
         showStars(false)
         hideBanner()
@@ -1067,6 +1126,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     /** Only the wild side back to rest (a new encounter is about to slide in). */
     fun resetEnemySide() {
+        stopXp()   // the XP number stood over this spot
         enemySprite.animate().cancel()
         clearBall()
         showStars(false)

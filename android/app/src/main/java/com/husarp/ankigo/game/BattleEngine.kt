@@ -191,7 +191,7 @@ object BattleEngine {
             if (move == null) { if (mon(p).hp > 0 && mon(!p).hp > 0) events += GameEvent.Splash(wild.name); return }
             if (mon(p).hp <= 0 || mon(!p).hp <= 0) return
             if (!canAct(p, move)) return
-            if (move.id in Tuning.CHARGE_MOVES && side(p).charged.add(move.id)) { fx(p, chargeText(p, move)); return }
+            if (move.id in Tuning.CHARGE_MOVES && side(p).charged.add(move.id)) { fx(p, chargeText(p, move), EffectKind.CHARGE); return }
             val saved = out
             val buffer = ArrayList<GameEvent>()
             out = buffer

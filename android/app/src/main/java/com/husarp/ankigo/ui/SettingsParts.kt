@@ -225,6 +225,79 @@ internal object Form {
             }
         }
 
+    /** Small coloured caps title on top of a card, with a tinted icon (mockup `.s39-ct`). */
+    fun cardTitle(ctx: Context, @androidx.annotation.DrawableRes icon: Int, title: String): View = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 10), Ui.dp(ctx, 14), Ui.dp(ctx, 2))
+        addView(android.widget.ImageView(ctx).apply {
+            setImageResource(icon)
+            setColorFilter(Ui.c(ctx, R.color.ag_mauve), android.graphics.PorterDuff.Mode.SRC_IN)
+        }, LinearLayout.LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.marginEnd = Ui.dp(ctx, 7) })
+        addView(Ui.text(ctx, 12.5f, 900, R.color.ag_mauve).apply {
+            text = title.uppercase()
+            letterSpacing = 0.04f
+        })
+    }
+
+    /**
+     * A switch row with an optional small round ▶ "hear it" button ([onPlay]) next to the switch (mockup `.s39-r`). The ▶ is a 28 dp
+     * circle inside a 48 dp touch area; it does not toggle the switch.
+     */
+    fun soundRow(ctx: Context, title: String, sub: String?, checked: Boolean, onPlay: (() -> Unit)?, onChange: (Boolean) -> Unit): LinearLayout {
+        val sw = Switch(ctx).apply {
+            isChecked = checked
+            Ui.tintSwitch(this)
+            setOnCheckedChangeListener { _, v -> onChange(v) }
+        }
+        val right = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            if (onPlay != null) addView(FrameLayout(ctx).apply {
+                contentDescription = "Hear $title"
+                isClickable = true
+                setOnClickListener { onPlay() }
+                addView(android.widget.ImageView(ctx).apply {
+                    setImageResource(R.drawable.ic_play)
+                    setColorFilter(Ui.c(ctx, R.color.ag_mauve), android.graphics.PorterDuff.Mode.SRC_IN)
+                    setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8))
+                    background = Ui.rounded((Ui.c(ctx, R.color.ag_mauve) and 0x00FFFFFF) or 0x29000000, 14, ctx)
+                }, FrameLayout.LayoutParams(Ui.dp(ctx, 28), Ui.dp(ctx, 28), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(Ui.dp(ctx, 44), Ui.dp(ctx, 48)))
+            addView(sw)
+        }
+        return row(ctx, title, sub, right, onClick = { sw.toggle() })
+    }
+
+    /**
+     * A volume slider row: [title] with the value ("70%") at the right and a drag-or-tap slider under it, 0..100 in steps of
+     * [SoundUiRules.STEP]. [onChange] gets every new value while the thumb moves. The slider is a plain SeekBar in the app colours,
+     * so TalkBack reads and adjusts it.
+     */
+    fun sliderRow(ctx: Context, title: String, valuePct: Int, onChange: (Int) -> Unit): LinearLayout {
+        val label = Ui.text(ctx, 13f, 800, R.color.ag_sub1).apply { text = "${SoundUiRules.snapVolume(valuePct)}%" }
+        val bar = android.widget.SeekBar(ctx).apply {
+            max = 100 / SoundUiRules.STEP
+            progress = SoundUiRules.snapVolume(valuePct) / SoundUiRules.STEP
+            progressTintList = ColorStateList.valueOf(Ui.c(ctx, R.color.ag_mauve))
+            progressBackgroundTintList = ColorStateList.valueOf(Ui.c(ctx, R.color.ag_s1))
+            thumbTintList = ColorStateList.valueOf(Ui.c(ctx, R.color.ag_mauve))
+            splitTrack = false
+            minimumHeight = Ui.dp(ctx, 40)
+            contentDescription = title
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                    val v = progress * SoundUiRules.STEP
+                    label.text = "$v%"
+                    if (fromUser) onChange(v)
+                }
+                override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
+                override fun onStopTrackingTouch(sb: android.widget.SeekBar) {}
+            })
+        }
+        return stackRow(ctx, title, null, bar, label)
+    }
+
     /** "- value +" control. Holding a button repeats. [format] turns the value into the label. */
     fun stepperRow(
         ctx: Context, title: String, sub: String?, value: Int, min: Int, max: Int, step: Int,

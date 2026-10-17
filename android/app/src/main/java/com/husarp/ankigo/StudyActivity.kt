@@ -30,6 +30,8 @@ import android.widget.TextView
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.overlay.FloatBattleService
+import com.husarp.ankigo.sound.GameSound
+import com.husarp.ankigo.sound.SoundId
 import com.husarp.ankigo.sound.SoundPrefs
 import com.husarp.ankigo.sound.SoundRules
 import com.husarp.ankigo.study.CardSpeech
@@ -127,8 +129,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private var voiceNote: String? = null          // "No Japanese voice on this phone"
     private var mediaArgs = Triple(0, 0, false)
     private var audioBusy = false                  // the AV queue is playing
-    private var audioNow = false   // the card on screen has sound (its question or answer)
-    private var audioPrev = false  // the card just answered had sound; its battle events play while the next card loads
+    @Volatile private var audioNow = false   // the card on screen has sound (its question or answer)
+    @Volatile private var audioPrev = false  // the card just answered had sound; its battle events play while the next card loads
     private val soundQueue = ArrayDeque<TtsRules.Av>()
     private val counts = IntArray(4)
     private var totalTime = 0L
@@ -282,6 +284,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
         }
         panel.onBalls = { throwBall() }
+        panel.clickMuted = { clickMuted() }
         panel.arena.onPlayerTap = { // PLAN 86: the main's Details window on top of the battle
             val uid = GameRepo.state?.main?.uid
             if (events.idle && uid != null) com.husarp.ankigo.ui.BattleDetails.show(this, uid)
@@ -436,6 +439,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     override fun onStop() { started = false; LiveSession.removeSink(sink); LiveSession.release(this, this); BattleScreen.setVisible(this, false); super.onStop() }
     override fun onResume() {
         super.onResume(); background = false; resumedNow = true; FloatBattleService.startIfWanted(this)
+        GameSound.setStudyQuiet(this) { clickMuted() }   // shared menu / tab clicks and delayed battle sounds honour "quiet on cards with sound"
         LiveSession.hush(this, this, true)   // no detector poll competes with this screen's answers and cards inside AnkiDroid
         io.execute { support.reset(); deckOptions.reset() }   // AnkiDroid or the deck's options may have changed meanwhile
         if (shownAt != 0L) shownAt = SystemClock.elapsedRealtime()
@@ -444,7 +448,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         syncTiming()
     }
     override fun onPause() {
-        resumedNow = false; cancelKeyboard(); pauseClock(); background = true; syncTiming(); stopAudio()
+        resumedNow = false; cancelKeyboard(); pauseClock(); background = true; syncTiming(); stopAudio(); GameSound.clearStudyQuiet(this)
         LiveSession.hush(this, this, false)   // the detector polls again (answers made in AnkiDroid meanwhile count then)
         super.onPause()
     }
@@ -518,7 +522,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
         }
     }
-    override fun onDestroy() { generation++; main.removeCallbacksAndMessages(null); events.clear(); actionSheet?.dismiss(); stopAudio(); speech?.shutdown(); web.destroy(); io.shutdown(); countsIo.shutdown(); super.onDestroy() }
+    override fun onDestroy() { GameSound.clearStudyQuiet(this); generation++; main.removeCallbacksAndMessages(null); events.clear(); actionSheet?.dismiss(); stopAudio(); speech?.shutdown(); web.destroy(); io.shutdown(); countsIo.shutdown(); super.onDestroy() }
     private fun setupWeb() {
         web.settings.javaScriptEnabled = true
         web.settings.allowFileAccess = false; web.settings.allowContentAccess = false
@@ -726,8 +730,11 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         web.loadDataWithBaseURL(CardHtml.BASE, page.html, "text/html", "UTF-8", null)
         showButtons(); playAv(avAuto); syncTiming(); refreshKeyboardLayout()
     }
+    /** The quiet-on-card-audio rule for a button click (the same rule the battle sounds use). */
+    private fun clickMuted() = SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev)
     private fun flip() {
         if (locked || flipped || mediaBlocked || card == null) return
+        GameSound.ui(this, SoundId.SHOW_ANSWER, clickMuted())
         locked = true; syncTiming()
         cancelKeyboard(); hideKeyboard()   // the battle is visible again once the answer shows
         web.evaluateJavascript("document.getElementById('typeans')?.value || ''") { raw ->
@@ -808,6 +815,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val before = stats
         val state = CardState.from(before) ?: return
         pauseClock(); val took = elapsed.coerceAtMost(maxTime)
+        GameSound.ui(this, SoundUiRules.answerSound(c.buttons, ease), clickMuted())   // one click per answer: taps, swipes, keys and the auto timer all come through here
         if (prefs.getBoolean("haptic", true)) web.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
         locked = true; showButtons(); syncTiming()
         val timing = AnswerTiming(SystemClock.elapsedRealtime(), setOf(AnswerTiming.GAME, AnswerTiming.SHOWN, AnswerTiming.PAGE, AnswerTiming.COUNTS))
@@ -1198,6 +1206,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
         goalRow.addView(BarView(this).apply {
             setMeaning(BarMeaning.GOAL, today.toFloat() / goal, false)
+            setGoalSparks(com.husarp.ankigo.ui.GoalTone.flameLevel(today.toFloat() / goal))
         }, StudyUi.lp(0, Ui.dp(this, 8), 1f).also { it.marginEnd = Ui.dp(this, 8) })
         goalRow.addView(StudyUi.label(this, if (today >= goal) "Goal done · $today" else "$today / $goal", 12, R.color.ag_text, 900))
         goalRow.addView(Ui.chip(this, R.drawable.ic_flame, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })

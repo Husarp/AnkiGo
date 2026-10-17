@@ -54,7 +54,7 @@ class SettingsSearchTest {
         assertEquals(SettingsSection.DOWNLOADS, SettingsSearch.sectionOf(SettingsCatalog.byId("gameDataSize")!!))
         assertEquals(SettingsSection.SAVE, SettingsSearch.sectionOf(SettingsCatalog.byId("exportSave")!!))
         assertEquals(SettingsSection.ANKIMON, SettingsSearch.sectionOf(SettingsCatalog.byId("ankimonImport")!!))
-        assertEquals(SettingsSection.SOUND, SettingsSearch.sectionOf(SettingsCatalog.byId("volume")!!))
+        assertEquals(SettingsSection.SOUND, SettingsSearch.sectionOf(SettingsCatalog.byId("volumeButtons")!!))
         assertEquals(SettingsSection.REMINDERS, SettingsSearch.sectionOf(SettingsCatalog.byId("dueOn")!!))
     }
 

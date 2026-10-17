@@ -23,6 +23,7 @@ import com.husarp.ankigo.game.shownName
 class BuddyWidgetSetupActivity : AgActivity() {
     override val showsUpdateBanner = false
     private lateinit var content: LinearLayout
+    private lateinit var lookBox: LinearLayout
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private var current = BuddyWidgetPrefs.MAIN
 
@@ -56,6 +57,10 @@ class BuddyWidgetSetupActivity : AgActivity() {
 
     internal fun render() {
         content.removeAllViews()
+        lookBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(StudyUi.section(this, "Widget look", "changes show at once"))
+        content.addView(lookBox)
+        renderLook()
         content.addView(StudyUi.label(this, "Which Pokémon should this widget show? You can change it later from a Pokémon's menu (Show on Buddy widget).", 13)
             .apply { setPadding(Ui.dp(context, 4), Ui.dp(context, 4), Ui.dp(context, 4), 0) })
         content.addView(StudyUi.section(this, "Pokémon", "default = current main"))
@@ -71,6 +76,44 @@ class BuddyWidgetSetupActivity : AgActivity() {
             val where = if (m.uid in st!!.team) (if (m.uid == main?.uid) "Main" else "Team") else "Box"
             addRow(m.uid, m, m.shownName, "Lv ${m.level} · $where")
         }
+    }
+
+    /** Ring colour and the animated option; they save at once and redraw the widgets (the Pokémon list below still saves + finishes on a tap). */
+    internal fun renderLook() {
+        lookBox.removeAllViews()
+        val prefs = getSharedPreferences("spike", 0)
+        val ring = BuddyWidgetPrefs.ring(prefs, widgetId)
+        val control = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        control.addView(Form.segmented(this, listOf("App colours", "Pokémon type", "Pick a colour"), ring.mode.ordinal) { i ->
+            setRing(when (i) {
+                0 -> BuddyRing.APP
+                1 -> BuddyRing(BuddyRing.Mode.TYPE)
+                else -> BuddyRing(BuddyRing.Mode.PICK)
+            })
+        })
+        if (ring.mode == BuddyRing.Mode.PICK) {
+            val colors = BuddyRing.PICKS.map { it.replaceFirstChar { c -> c.uppercase() } to Ui.c(this, BuddyRing.pickRes(it)) }
+            control.addView(Form.swatches(this, colors, BuddyRing.PICKS.indexOf(ring.pick)) { i -> setRing(BuddyRing(BuddyRing.Mode.PICK, BuddyRing.PICKS[i])) },
+                StudyUi.spaced(this, 6))
+        }
+        val sub = when (ring.mode) {
+            BuddyRing.Mode.APP -> "The colours of Settings → Look → Progress bars"
+            BuddyRing.Mode.TYPE -> "The first type of the Pokémon shown"
+            BuddyRing.Mode.PICK -> null
+        }
+        lookBox.addView(Form.cardOf(this, listOf(
+            Form.stackRow(this, "Ring colour", sub, control),
+            Form.switchRow(this, "Animated Pokémon", "Small 2-frame hop, uses a little more battery", BuddyWidgetPrefs.anim(prefs, widgetId)) { on ->
+                BuddyWidgetPrefs.setAnim(prefs, widgetId, on)
+                Widgets.refreshAll(this, study = false)
+            },
+        )), StudyUi.lp().also { it.bottomMargin = Ui.dp(this, 6) })
+    }
+
+    private fun setRing(ring: BuddyRing) {
+        BuddyWidgetPrefs.setRing(getSharedPreferences("spike", 0), widgetId, ring)
+        Widgets.refreshAll(this, study = false)
+        renderLook()
     }
 
     private fun addRow(choice: String, mon: Mon?, title: String, sub: String, tag: String? = null) {

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- R5-07: 1x1 "Study now" widget with the number of cards due. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="40dp"
+    android:minHeight="40dp"
+    android:targetCellWidth="1"
+    android:targetCellHeight="1"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/widget_study_now"
+    android:resizeMode="none"
+    android:description="@string/widget_study_now_desc"
+    android:widgetCategory="home_screen" />

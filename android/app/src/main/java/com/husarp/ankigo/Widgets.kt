@@ -17,7 +17,7 @@ import com.husarp.ankigo.ui.WidgetRender
 object Widgets {
     /** [study] = false skips the study widgets (the answer a study widget just gave must not reset the others). */
     fun refreshAll(ctx: Context, study: Boolean = true) {
-        for (cls in listOf(MotivationWidget::class.java, com.husarp.ankigo.ui.BuddyWidget::class.java, StudyWidget::class.java)) {
+        for (cls in listOf(MotivationWidget::class.java, com.husarp.ankigo.ui.BuddyWidget::class.java, com.husarp.ankigo.ui.StudyNowWidget::class.java, StudyWidget::class.java)) {
             if (!study && cls == StudyWidget::class.java) continue
             val ids = AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, cls))
             if (ids.isNotEmpty()) ctx.sendBroadcast(Intent(ctx, cls).setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE).putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
@@ -26,6 +26,10 @@ object Widgets {
 
     fun openApp(ctx: Context): PendingIntent =
         PendingIntent.getActivity(ctx, 0, com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.BATTLE), PendingIntent.FLAG_IMMUTABLE)
+
+    /** The 1x1 Study now widget's tap: AnkiGo's Study tab. */
+    fun openStudy(ctx: Context): PendingIntent =
+        PendingIntent.getActivity(ctx, 0, com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.STUDY), PendingIntent.FLAG_IMMUTABLE)
 
     /** The motivation widget's tap: a trampoline decides at tap time between the Study tab (cards due) and the battle. */
     fun openStudyOrBattle(ctx: Context): PendingIntent =

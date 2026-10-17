@@ -70,7 +70,7 @@ object FloatTexts {
             EffectKind.STAT_LIMIT -> statLabel(e.stat)?.let { listOf(FloatText(p, "$it ${if (e.stages > 0) "max" else "min"}", FloatKind.INFO)) } ?: emptyList()
             EffectKind.DRAIN, EffectKind.HEAL -> if (e.amount > 0) listOf(FloatText(p, "+${e.amount}", FloatKind.HEAL)) else emptyList()
             EffectKind.RECOIL, EffectKind.STATUS_DAMAGE -> if (e.amount > 0) listOf(FloatText(p, "-${e.amount}", FloatKind.DAMAGE)) else emptyList()
-            EffectKind.OTHER -> emptyList()
+            EffectKind.OTHER, EffectKind.CHARGE -> emptyList()
         }
     }
 

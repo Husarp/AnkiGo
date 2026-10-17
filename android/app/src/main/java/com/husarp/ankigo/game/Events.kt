@@ -112,9 +112,9 @@ data class ActionResult(val ok: Boolean, val message: String, val events: List<G
  * STAT_CHANGE carries [GameEvent.Effect.stat] (Showdown key atk/def/spa/spd/spe/accuracy/evasion) and the signed
  * [GameEvent.Effect.stages] really applied; STAT_LIMIT is "won't go higher/lower" (stages = the attempted sign).
  * STATUS_CURED carries the cured status key in `stat` ("slp" woke up, "frz" thawed). DRAIN/HEAL/RECOIL/STATUS_DAMAGE carry
- * the HP really gained / lost in [GameEvent.Effect.amount] (always positive).
+ * the HP really gained / lost in [GameEvent.Effect.amount] (always positive). CHARGE = the charge turn of a two-turn move.
  */
-enum class EffectKind { OTHER, STATUS_APPLIED, STATUS_CURED, CANT_MOVE, STAT_CHANGE, STAT_LIMIT, DRAIN, RECOIL, HEAL, STATUS_DAMAGE }
+enum class EffectKind { OTHER, STATUS_APPLIED, STATUS_CURED, CANT_MOVE, STAT_CHANGE, STAT_LIMIT, DRAIN, RECOIL, HEAL, STATUS_DAMAGE, CHARGE }
 
 /** Why a [GameEvent.Healed] happened: a level gained, a wild Pokémon defeated, or one caught (auto rule or ball). */
 enum class HealReason { LEVEL_UP, DEFEAT, CATCH }

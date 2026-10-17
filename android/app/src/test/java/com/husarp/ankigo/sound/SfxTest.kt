@@ -9,10 +9,13 @@ import java.nio.ByteOrder
 import kotlin.math.abs
 
 class SfxTest {
+    /** The six original battle sounds; the soft ones ([SoftSound]) are checked by the tests of [SoftSfx]. */
+    private val LEGACY = SoundId.entries.filter { it.soft == null }
+
     private fun peak(s: ShortArray) = s.maxOf { abs(it.toInt()) } / 32767.0
 
     @Test fun everySoundIsShortAndSafe() {
-        for (id in SoundId.entries) {
+        for (id in LEGACY) {
             val s = Sfx.samples(id)
             val seconds = s.size.toDouble() / Sfx.RATE
             assertTrue("$id length $seconds", seconds in 0.1..0.7)
@@ -22,7 +25,7 @@ class SfxTest {
     }
 
     @Test fun edgesAreSilentSoThereAreNoClicks() {
-        for (id in SoundId.entries) {
+        for (id in LEGACY) {
             val s = Sfx.samples(id)
             assertEquals("$id first", 0, s.first().toInt())
             assertTrue("$id last ${s.last()}", abs(s.last().toInt()) <= 3)
@@ -35,6 +38,12 @@ class SfxTest {
 
     @Test fun weakHitIsSofterThanHit() {
         assertTrue(peak(Sfx.samples(SoundId.WEAK)) < peak(Sfx.samples(SoundId.HIT)))
+    }
+
+    @Test fun originalSixAreUnchanged() {
+        // fingerprints of the six original sounds from before the soft ones were added
+        val got = LEGACY.joinToString { "${it.name}=${java.util.Arrays.hashCode(Sfx.samples(it))}" }
+        assertEquals("HIT=-2078988362, SUPER=1879347882, WEAK=424984795, FAINT=848167230, CATCH=618402792, LEVEL_UP=-363492495", got)
     }
 
     @Test fun deterministic() {

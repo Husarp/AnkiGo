@@ -12,6 +12,8 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Shop
 import com.husarp.ankigo.game.Tuning
+import com.husarp.ankigo.sound.GameSound
+import com.husarp.ankigo.sound.SoundId
 import java.util.Calendar
 
 // TICKET T14 owns this file: the daily shop and the bag (mockup frame E). The Bag tab lives in ShopBag.kt.
@@ -193,11 +195,11 @@ class ShopPage(base: Context, host: PageHost, private val embedded: Boolean = fa
     private fun tmInfo(move: String) = ShopInfo.tm(this, move) { buyTm(move) }
 
     private fun buyItem(item: String) {
-        act { g -> Shop.buy(g.data, g.state, item) }
+        if (act { g -> Shop.buy(g.data, g.state, item) }.ok) GameSound.ui(this, SoundId.BUY)
     }
 
     private fun buyTm(move: String) {
-        act { g -> Shop.buyTm(g.data, g.state, move) }
+        if (act { g -> Shop.buyTm(g.data, g.state, move) }.ok) GameSound.ui(this, SoundId.BUY)
     }
 
     /** "Refresh shop · 100 ₽": the accent button with the refresh icon (greyed, with a toast on tap, when the money is not enough). */

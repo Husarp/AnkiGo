@@ -78,7 +78,7 @@ class AppMenu(private val anchor: View) {
     private var picked: (Int) -> Unit = {}
 
     /** Called by a row: closes the menu, then reports the id. Tests call it through the intercepted menu. */
-    internal fun pick(id: Int) { dismiss(); picked(id) }
+    internal fun pick(id: Int) { dismiss(); com.husarp.ankigo.sound.GameSound.ui(anchor.context, com.husarp.ankigo.sound.SoundId.MENU); picked(id) }
 
     /** The rows as shown (tests read labels, enabled state and subs from here). */
     internal fun describe(): List<Triple<Int, String, Boolean>> = rows.map { Triple(it.id, it.label, it.enabled) }

@@ -32,26 +32,40 @@ object GameSound {
     @Volatile private var pool: SoundPool? = null
     private val effects = ConcurrentHashMap<SoundId, Int>()          // sound -> SoundPool id
     private val ready = ConcurrentHashMap.newKeySet<Int>()           // SoundPool ids that finished loading
-    private val waiting = ConcurrentHashMap<Int, Pair<Float, Long>>() // cry id -> (volume, play before this uptime)
+    /** A sound waiting for its file to load: its volume, the uptime it is too late after, and the check to pass right before it starts. */
+    private class Waiting(val volume: Float, val deadline: Long, val allowed: () -> Boolean)
+    private val waiting = ConcurrentHashMap<Int, Waiting>()          // SoundPool id -> sound waiting for the load
     private val cries = LinkedHashMap<Int, Int>()                    // species -> SoundPool id, oldest first
     private val lastAt = ConcurrentHashMap<Any, Long>()
     private val fetching = ConcurrentHashMap.newKeySet<Int>()
     @Volatile private var warming = false
 
+    /** Set by the study screen while it is resumed: true when the card on screen (or the one just answered) has audio and the player wants quiet. */
+    @Volatile private var studyQuiet: (() -> Boolean)? = null
+    @Volatile private var studyOwner: Any? = null
+
+    fun setStudyQuiet(owner: Any, quiet: () -> Boolean) { studyOwner = owner; studyQuiet = quiet }
+    /** Clears the provider, but only when [owner] still holds it (a newer screen keeps its own). */
+    fun clearStudyQuiet(owner: Any) { if (studyOwner === owner) { studyQuiet = null; studyOwner = null } }
+    private fun quietNow(muted: Boolean): Boolean = muted || (try { studyQuiet?.invoke() } catch (_: Throwable) { false }) == true
+
     private fun app(ctx: Context) = ctx.applicationContext ?: ctx
 
     private fun cryStore(ctx: Context) = CryStore(File(app(ctx).noBackupFilesDir, "cries"))
 
-    /** Makes the sound files and loads them, in the background; does nothing when both kinds are switched off or already done. */
+    /** True when any sound that is not a cry is switched on (a button sound too). */
+    private fun anyEffectGroupOn(c: Context) = SoundGroup.entries.any { it != SoundGroup.CRIES && SoundPrefs.groupOn(c, it) }
+
+    /** Makes the sound files and loads them, in the background; does nothing when every group is off or it is already done. */
     fun warm(ctx: Context) {
         if (warming || (pool != null && effects.size == SoundId.entries.size)) return
         val c = app(ctx)
-        val sfx = SoundPrefs.battleSounds(c)
+        val sfx = anyEffectGroupOn(c)
         if (!sfx && !SoundPrefs.cries(c)) return
         if (!sfx && pool != null) return
         warming = true
         io.execute {
-            // Cries need the pool even when the battle sounds are off.
+            // Cries need the pool even when all the effect sounds are off.
             try { if (sfx) start(c) else ensurePool() } catch (t: Throwable) { Report.fail(TAG, "preparing the sounds", t) } finally { warming = false }
         }
     }
@@ -78,12 +92,12 @@ object GameSound {
             .setUsage(AudioAttributes.USAGE_GAME)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
-        val p = SoundPool.Builder().setMaxStreams(4).setAudioAttributes(attrs).build()
+        val p = SoundPool.Builder().setMaxStreams(6).setAudioAttributes(attrs).build()
         p.setOnLoadCompleteListener { sp, id, status ->
             if (status != 0) return@setOnLoadCompleteListener
             ready.add(id)
             val want = waiting.remove(id)
-            if (want != null && SystemClock.uptimeMillis() <= want.second) sp.play(id, want.first, want.first, 1, 0, 1f)
+            if (want != null && SystemClock.uptimeMillis() <= want.deadline && want.allowed()) sp.play(id, want.volume, want.volume, 1, 0, 1f)
         }
         pool = p
         return p
@@ -93,31 +107,58 @@ object GameSound {
 
     /**
      * The one hook of the event player: makes the sound of [e], if it has one and the rules allow it.
-     * [muted] = the study screen says the card has audio. Never throws.
+     * [muted] = the study screen says the card has audio. [pace] = the event player's current pace factor (0.5 = the visuals run
+     * twice as fast): every cue delay is scaled by it once. Never throws.
      */
-    fun onEvent(ctx: Context, e: GameEvent, muted: Boolean, ballShown: Boolean) {
+    fun onEvent(ctx: Context, e: GameEvent, muted: Boolean, ballShown: Boolean, pace: Double = 1.0) {
         try {
             val c = app(ctx)
-            val cue = SoundRules.cueFor(e, ballShown)
+            val shiny = e is GameEvent.MainChanged && GameRepo.state?.mon(e.uid)?.shiny == true
+            val cues = SoundRules.cuesFor(e, ballShown, shiny)
             if (e is GameEvent.Encounter) prefetchCries(c, e.species)
-            if (!SoundRules.shouldPlay(cue, context(c, muted))) return
+            if (cues.isEmpty()) return
+            val sc = context(c, quietNow(muted))
+            val heard = cues.filter { SoundRules.shouldPlay(it, sc) }
+            if (heard.isEmpty()) return
             warm(c)
-            play(c, cue!!)
+            for (cue in heard) play(c, cue, SoundRules.scaledDelay(cue.delayMs, pace))
         } catch (t: Throwable) {
             Report.fail(TAG, "sound for ${e.javaClass.simpleName}", t)
         }
     }
 
+    /**
+     * A button click ([SoundId.AGAIN], [SoundId.TAB], ...): plays when its group is on, its channel volume is above 0, the phone's
+     * ringer is normal and [muted] is false. The first click after a start may stay silent while the files load. Never throws, never blocks.
+     */
+    fun ui(ctx: Context, id: SoundId, muted: Boolean = false) {
+        try {
+            val c = app(ctx)
+            val cue = Cue.Effect(id)
+            if (!SoundRules.shouldPlay(cue, context(c, quietNow(muted)))) return
+            warm(c)
+            playNow(c, cue)
+        } catch (t: Throwable) {
+            Report.fail(TAG, "click sound $id", t)
+        }
+    }
+
     private fun context(c: Context, muted: Boolean) = SoundContext(
-        battleSounds = SoundPrefs.battleSounds(c), cries = SoundPrefs.cries(c), volumePct = SoundPrefs.volume(c),
+        groupsOff = SoundGroup.entries.filterTo(HashSet()) { !SoundPrefs.groupOn(c, it) },
+        volumes = SoundChannel.entries.associateWith { SoundPrefs.volume(c, it) },
         ringerNormal = ringerNormal(c), muted = muted,
     )
 
     private fun ringerNormal(c: Context): Boolean =
         (c.getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.ringerMode?.let { it == AudioManager.RINGER_MODE_NORMAL } ?: true
 
-    private fun play(c: Context, cue: Cue) {
-        if (cue.delayMs > 0) main.postDelayed({ playNow(c, cue) }, cue.delayMs) else playNow(c, cue)
+    /** True when [cue] may start right now: its group is on, its volume above 0, the ringer normal and the card quiet rule not active. */
+    private fun allowedNow(c: Context, cue: Cue) = try {
+        SoundRules.shouldPlay(cue, context(c, quietNow(false)))
+    } catch (t: Throwable) { Report.fail(TAG, "checking $cue", t); false }
+
+    private fun play(c: Context, cue: Cue, delayMs: Long) {
+        if (delayMs > 0) main.postDelayed({ if (allowedNow(c, cue)) playNow(c, cue) }, delayMs) else playNow(c, cue)
     }
 
     private fun playNow(c: Context, cue: Cue) {
@@ -127,10 +168,11 @@ object GameSound {
             val key: Any = when (cue) { is Cue.Effect -> cue.id; is Cue.Cry -> "cry${cue.species}" }
             if (!SoundRules.gapOk(lastAt[key], now)) return
             lastAt[key] = now
-            val v = SoundRules.volume(SoundPrefs.volume(c)) * (if (cue is Cue.Cry) 0.9f else 1f)
+            val channel = SoundRules.groupOf(cue).channel
+            val v = SoundRules.volume(SoundPrefs.volume(c, channel)) * (if (cue is Cue.Cry) 0.9f else 1f)
             when (cue) {
                 is Cue.Effect -> effects[cue.id]?.takeIf { it in ready }?.let { p.play(it, v, v, 1, 0, 1f) }
-                is Cue.Cry -> playCry(c, p, cue.species, v)
+                is Cue.Cry -> playCry(c, p, cue.species, v, cue)
             }
         } catch (t: Throwable) {
             Report.fail(TAG, "playing $cue", t)
@@ -139,7 +181,7 @@ object GameSound {
 
     // ---------------------------------------------------------------- cries
 
-    private fun playCry(c: Context, p: SoundPool, species: Int, volume: Float) {
+    private fun playCry(c: Context, p: SoundPool, species: Int, volume: Float, cue: Cue) {
         val file = cryStore(c).cached(species) ?: return
         val id: Int
         synchronized(cries) {
@@ -154,7 +196,7 @@ object GameSound {
             }
         }
         if (id in ready) p.play(id, volume, volume, 1, 0, 1f)
-        else waiting[id] = volume to SystemClock.uptimeMillis() + CRY_WAIT_MS
+        else waiting[id] = Waiting(volume, SystemClock.uptimeMillis() + CRY_WAIT_MS) { allowedNow(c, cue) }
     }
 
     /** Downloads the cry of [species] and of the next encounter in the background (once each; only when downloads are allowed). */
@@ -180,23 +222,38 @@ object GameSound {
 
     // ---------------------------------------------------------------- Settings
 
-    /** The "Play a test sound" row: plays the level-up sound at the chosen volume. Returns why nothing could be heard, else null. */
-    fun test(ctx: Context): String? {
+    /** The "Play a test sound" row: plays the level-up sound at the battle volume. Returns why nothing could be heard, else null. */
+    fun test(ctx: Context): String? = preview(ctx, SoundId.LEVEL_UP)
+
+    /**
+     * The ▶ on a settings row: plays [id] at the volume of its channel, also when its group is switched off. Returns why nothing
+     * can be heard (volume 0, phone silent), else null.
+     */
+    fun preview(ctx: Context, id: SoundId): String? {
         val c = app(ctx)
-        if (SoundPrefs.volume(c) <= 0) return "Volume is 0"
+        val channel = id.group.channel
+        if (SoundPrefs.volume(c, channel) <= 0) return "Volume is 0"
         if (!ringerNormal(c)) return "Your phone is on silent or vibrate"
         io.execute {
             try {
-                start(c) // makes and loads the files if that has not happened yet (also when battle sounds are off)
-                val p = pool ?: return@execute
-                val id = effects[SoundId.LEVEL_UP] ?: return@execute
-                val v = SoundRules.volume(SoundPrefs.volume(c))
-                fun go() { if (id in ready) p.play(id, v, v, 1, 0, 1f) }
-                main.postDelayed({ go() }, 150)
+                start(c) // makes and loads the files if that has not happened yet (also when the group is off)
+                main.postDelayed({ previewNow(c, id) }, 150)
             } catch (t: Throwable) {
-                Report.fail(TAG, "test sound", t)
+                Report.fail(TAG, "preview of $id", t)
             }
         }
         return null
+    }
+
+    private fun previewNow(c: Context, id: SoundId) {
+        try {
+            val p = pool ?: return
+            val sp = effects[id] ?: return
+            val v = SoundRules.volume(SoundPrefs.volume(c, id.group.channel))
+            if (sp in ready) p.play(sp, v, v, 1, 0, 1f)
+            else waiting[sp] = Waiting(v, SystemClock.uptimeMillis() + CRY_WAIT_MS) { ringerNormal(c) && SoundPrefs.volume(c, id.group.channel) > 0 } // played by the load listener; a preview ignores the group switch
+        } catch (t: Throwable) {
+            Report.fail(TAG, "preview of $id", t)
+        }
     }
 }

@@ -66,6 +66,8 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     var onGrant: () -> Unit = {}
     var onMenu: (View) -> Unit = {}
     var onBalls: () -> Unit = {}
+    /** True while the button click sounds must stay quiet (the study screen: the card plays audio). */
+    var clickMuted: () -> Boolean = { false }
 
     // ---- strip ----
     private val stripText = Ui.text(ctx, 12f, 800, R.color.ag_red).apply { maxLines = 2; ellipsize = TextUtils.TruncateAt.END }
@@ -223,7 +225,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
         chips.addView(comboChip); chips.addView(streakChip); chips.addView(coinChip); chips.addView(itemChip); chips.addView(ballChip)
         chips.hideOrder = listOf(itemChip, streakChip) // least important first (only when even the scaled row is too wide)
-        ballChip.setOnClickListener { onBalls() }
+        ballChip.setOnClickListener { com.husarp.ankigo.sound.GameSound.ui(ctx, com.husarp.ankigo.sound.SoundId.BALL_BTN, clickMuted()); onBalls() }
         ballChip.contentDescription = "Poké Balls"
 
         footer.addView(goalRow, LinearLayout.LayoutParams(-1, -2))
@@ -640,6 +642,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     fun setGoal(today: Int, goal: Int, animate: Boolean) {
         val g = max(goal, 1)
         goalBar.setMeaning(BarMeaning.GOAL, min(1f, today.toFloat() / g), animate)
+        goalBar.setGoalSparks(GoalTone.flameLevel(today.toFloat() / g))
         val sub = Ui.c(context, R.color.ag_sub0)
         val sb = SpannableStringBuilder()
         if (today >= g) {

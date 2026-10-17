@@ -76,7 +76,7 @@ object BottomNav {
                 addView(label, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                     .also { it.topMargin = Ui.dp(activity, 2) })
                 contentDescription = tab.label
-                setOnClickListener { if (!isHere(activity, tab)) open(activity, tab) }
+                setOnClickListener { if (!isHere(activity, tab)) { com.husarp.ankigo.sound.GameSound.ui(activity, com.husarp.ankigo.sound.SoundId.TAB); open(activity, tab) } }
             }
             row.addView(item)
         }

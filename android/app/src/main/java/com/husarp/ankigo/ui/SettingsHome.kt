@@ -79,11 +79,10 @@ object SettingsSummary {
         "On leaving: ${leave(mode)}" + (if (compact) " · compact cards" else "") + (if (!cardsOwn) " · classic cards" else "") +
             (if (!statsBarSmall) " · no stats bar when small" else "")
 
-    fun sound(battle: Boolean, cries: Boolean, volume: Int): String = when {
-        !battle && !cries -> "Off"
-        else -> "${listOfNotNull("Battle sounds".takeIf { battle }, "cries".takeIf { cries }).joinToString(" and ")} · $volume%"
-            .replaceFirstChar { it.uppercase() }
-    }
+    /** Volumes of the channels that have something switched on (null = all of that channel's groups are off); "Off" when none. */
+    fun sound(buttons: Int?, battle: Int?, cries: Int?): String =
+        listOfNotNull(buttons?.let { "Buttons $it%" }, battle?.let { "battle $it%" }, cries?.let { "cries $it%" })
+            .joinToString(" · ").ifEmpty { "Off" }.replaceFirstChar { it.uppercase() }
 
     fun downloads(dataBytes: Long, pictureBytes: Long, working: Boolean): String =
         if (working) "Downloading…" else "Data ${bytes(dataBytes)} · pictures ${bytes(pictureBytes)}"

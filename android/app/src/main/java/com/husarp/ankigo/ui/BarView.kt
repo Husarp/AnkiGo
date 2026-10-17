@@ -4,12 +4,17 @@ import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.ColorFilter
+import android.graphics.PixelFormat
+import android.graphics.drawable.Drawable
 import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Shader
+import android.os.SystemClock
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.PathInterpolator
 import com.husarp.ankigo.R
 
@@ -115,12 +120,117 @@ class BarView(ctx: Context) : View(ctx) {
         }
     }
 
+    // ---- goal sparks: tiny sparks rising above the bar once the daily goal is passed (GoalSparks) ----
+    private var sparkLevel = 0
+    private var sparkHost: ViewGroup? = null
+    private var sparkDrawable: SparkDrawable? = null
+    private var sparkRunning = false
+    private val sparkPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val sparkRect = android.graphics.Rect()
+    private val sparkTick = object : Runnable {
+        override fun run() {
+            if (!sparkRunning) return
+            val ok = GoalSparks.keepTicking(sparkLevel, isAttachedToWindow, isShown, windowVisibility == VISIBLE, sparksStill())
+            sparkDrawable?.refresh()
+            if (!ok) { stopTicker(); if (sparkLevel == 0 || !isAttachedToWindow || !isShown) stopSparks(); return }
+            postOnAnimationDelayed(this, SPARK_FRAME_MS)
+        }
+    }
+
+    /**
+     * Sparks above the bar for the goal's flame [level] (0 = none, else [GoalTone.flameLevel]'s 1..3). They are drawn in the
+     * overlay of the bar's grandparent (so no layout changes and nothing takes touches) and animate only while the bar is
+     * attached and shown; with reduced motion they stand still.
+     */
+    fun setGoalSparks(level: Int) {
+        val l = level.coerceIn(0, 3)
+        if (l == sparkLevel) return
+        sparkLevel = l
+        refreshSparks()
+    }
+
+    private fun sparksStill() = !ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
+
+    private fun refreshSparks() {
+        val want = sparkLevel > 0 && isAttachedToWindow && windowVisibility == VISIBLE && isShown
+        if (!want) { stopSparks(); return }
+        if (sparkDrawable == null) {
+            val host = (parent as? ViewGroup)?.let { it.parent as? ViewGroup ?: it } ?: return
+            sparkHost = host
+            sparkDrawable = SparkDrawable(host).also { host.overlay.add(it) }
+        }
+        sparkDrawable?.refresh()
+        if (sparksStill()) { stopTicker(); return }
+        if (!sparkRunning) { sparkRunning = true; postOnAnimationDelayed(sparkTick, SPARK_FRAME_MS) }
+    }
+
+    private fun stopTicker() { sparkRunning = false; removeCallbacks(sparkTick) }
+
+    private fun stopSparks() {
+        stopTicker()
+        val d = sparkDrawable ?: return
+        sparkHost?.overlay?.remove(d)
+        sparkDrawable = null
+        sparkHost = null
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        refreshSparks()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        refreshSparks()
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        refreshSparks()
+    }
+
+    /** Draws the sparks into the host's coordinates, over the bar's top edge; computed at draw time, so a moved bar is followed. */
+    private inner class SparkDrawable(private val host: ViewGroup) : Drawable() {
+        private val r = android.graphics.Rect()
+        /** Pixels per spark-dp: the sizes are for an 8 dp bar and follow the bar's real height. */
+        private val k get() = this@BarView.height / GoalSparks.BAR_DP
+
+        /** Moves the drawn area to where the bar is now and asks the host to redraw it. */
+        fun refresh() {
+            if (this@BarView.width == 0 || this@BarView.height == 0 || !host.isAttachedToWindow) return
+            r.set(0, 0, this@BarView.width, this@BarView.height)
+            host.offsetDescendantRectToMyCoords(this@BarView, r)
+            val pad = (GoalSparks.MAX_RADIUS * k).toInt() + 2
+            sparkRect.set(r.left - pad, r.top - (GoalSparks.maxRise(3) * k).toInt() - pad, r.right + pad, r.top + pad)
+            bounds = sparkRect
+            invalidateSelf()
+        }
+
+        override fun draw(canvas: Canvas) {
+            if (this@BarView.width == 0 || this@BarView.height == 0 || sparkLevel == 0) return
+            r.set(0, 0, this@BarView.width, this@BarView.height)
+            host.offsetDescendantRectToMyCoords(this@BarView, r)
+            val t = if (sparksStill()) null else SystemClock.uptimeMillis()
+            for (sp in GoalSparks.frame(sparkLevel, t)) {
+                sparkPaint.color = sp.color
+                sparkPaint.alpha = (sp.alpha.coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+                canvas.drawCircle(r.left + r.width() * sp.x, r.top - sp.rise * k, sp.radius * k, sparkPaint)
+            }
+        }
+
+        override fun setAlpha(alpha: Int) = Unit
+        override fun setColorFilter(colorFilter: ColorFilter?) = Unit
+        @Suppress("OVERRIDE_DEPRECATION")
+        override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val h = resolveSize(Ui.dp(context, 8), heightMeasureSpec)
         setMeasuredDimension(resolveSize(Ui.dp(context, 100), widthMeasureSpec), h)
     }
 
     override fun onDetachedFromWindow() {
+        stopSparks()
         anim?.cancel()
         ghostAnim?.cancel()
         ghostFrac = 0f
@@ -159,5 +269,6 @@ class BarView(ctx: Context) : View(ctx) {
 
         const val GHOST_HOLD_MS = 450L
         const val GHOST_SHRINK_MS = 550L
+        const val SPARK_FRAME_MS = 33L   // ~30 fps is plenty for tiny sparks
     }
 }
