@@ -180,6 +180,17 @@ class StatsTest {
         assertTrue(monday.columns.last().drop(1).all { it == null })
     }
 
+    @Test fun eachHeatmapCellUsesItsOwnGameDaysGoal() {
+        // 2026-10-12 is a Monday (goal 500), 2026-10-13 a Tuesday (goal 20), 2026-10-14 (today) a Wednesday (goal 100)
+        val s = mapState(100)
+        s.settings.goalByWeekday = listOf(500, 20, 100, 100, 100, 100, 100)
+        s.history["2026-10-12"] = DayLog(reviews = 20)
+        s.history["2026-10-13"] = DayLog(reviews = 20)
+        val h = StudyStats.heatmap(s, "2026-10-14", 2)
+        assertEquals("a Monday goal of 500: 20 reviews is a pale cell", 1, h.columns.last()[0]!!.level)
+        assertEquals("a Tuesday goal of 20: the same 20 reviews reach it", 4, h.columns.last()[1]!!.level)
+    }
+
     @Test fun heatmapLevelsFollowTheDailyGoal() {
         assertEquals(0, StudyStats.level(0, 100))
         assertEquals(1, StudyStats.level(1, 100)); assertEquals(1, StudyStats.level(24, 100))
@@ -255,6 +266,12 @@ class StatsTest {
     }
 
     // ---- summary ----
+
+    @Test fun battlesWonCountsACatchOnce() {
+        val s = mapState(100)
+        s.defeats = 64; s.catches = 21; s.catchWins = 5 // 5 of the catches are already inside defeats
+        assertEquals(80, StudyStats.summary(s, "2026-10-14").battlesWon)
+    }
 
     @Test fun summaryTotalsComeFromTheSaveAndTheHistory() {
         val s = mapState(100)

@@ -2,7 +2,7 @@ package com.husarp.ankigo
 
 import com.husarp.ankigo.game.lookNum
 import android.app.Activity
-import android.app.AlertDialog
+import com.husarp.ankigo.ui.AppDialog
 import android.appwidget.AppWidgetManager
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -18,7 +18,6 @@ import android.provider.Settings
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -146,7 +145,7 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
     private fun pickTarget() {
         val inst = Anki.installed(this).map { it.pkg }
         val list = (inst + Anki.KNOWN.filter { it !in inst }).toTypedArray()
-        AlertDialog.Builder(this).setTitle("AnkiDroid package to test").setItems(list.map { if (it in inst) it else "$it (not installed)" }.toTypedArray()) { _, w ->
+        AppDialog.Builder(this).setTitle("AnkiDroid package to test").setItems(list.map { if (it in inst) it else "$it (not installed)" }.toTypedArray()) { _, w ->
             Anki.select(this, list[w]); Report.log("C12b", "target switched to ${list[w]}"); refreshHeader(log = true)
         }.showCard()
     }
@@ -207,7 +206,7 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
         try {
             val decks = Anki.decks(this)
             main.post {
-                AlertDialog.Builder(this).setTitle("Pick a deck")
+                AppDialog.Builder(this).setTitle("Pick a deck")
                     .setItems(decks.map { "${it.name}  [${it.learn}/${it.review}/${it.new}]" }.toTypedArray()) { _, w ->
                         startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", decks[w].id).putExtra("deckName", decks[w].name))
                     }.showCard()
@@ -392,7 +391,7 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             Report.log("C8", "pin ${cls.simpleName} requested=$ok")
         } else {
             Report.log("C8", "launcher can't pin from app: long-press home screen → Widgets → AnkiGo")
-            Toast.makeText(this, "Add it from the home screen widget list", Toast.LENGTH_LONG).show()
+            Ui.toast(this, "Add it from the home screen widget list")
         }
         Widgets.refreshAll(this)
     }
@@ -408,6 +407,6 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
 
     private fun copy() {
         (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("AnkiGo report", fullReport().takeLast(400_000)))
-        Toast.makeText(this, "Report copied", Toast.LENGTH_SHORT).show()
+        Ui.toast(this, "Report copied")
     }
 }

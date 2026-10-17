@@ -25,6 +25,11 @@ import com.husarp.ankigo.game.AchCelebration
 import com.husarp.ankigo.game.AchPageMath
 import com.husarp.ankigo.game.AchievementTable
 import com.husarp.ankigo.game.GameEvent
+import com.husarp.ankigo.game.ItemFind
+import com.husarp.ankigo.game.ItemInfo
+import com.husarp.ankigo.game.Items
+import com.husarp.ankigo.game.PopupMath
+import android.widget.ImageView
 import java.lang.ref.WeakReference
 
 // R4-V2 (PLAN 79, pick 2F): the popup when an achievement tier (or a badge one-off) is earned: a big medal on a burst, "Epic!", the title,
@@ -34,12 +39,18 @@ import java.lang.ref.WeakReference
 // AnkiDroid, the stats feed ...), and AnkiGoApp's lifecycle callbacks call [resumed] / [paused]. So it shows on whichever AnkiGo screen is in
 // front; when none is (floating window over AnkiDroid, app in the background, picture-in-picture) the batch waits and shows at the next
 // resume. The queue lives in memory only: the earned tiers themselves are in the save, only the popup would be missed after a kill.
+//
+// R6-07 (items 19, 20): the popup says "Achievement unlocked" on top; an item found in a fight ([GameEvent.ItemFound]) gets the same kind of
+// popup ("Item found": picture, name, what it does) through the same queue: one popup at a time, the achievements of a batch first, the items
+// after them (all the items waiting form one popup). Like the achievement popup it is a dialog of the screen in front: a tap anywhere closes it.
 
 object AchievementPopup {
     /** Wait a moment after the action so the answer's own animation is not covered at once. */
     internal const val DELAY_MS = 700L
 
     private val pending = ArrayList<AchCelebration>()
+    private var pendingItems: List<ItemFind> = emptyList()
+    private var shownItems: List<ItemFind> = emptyList()
     private var front: WeakReference<Activity>? = null
     private var dialog: Dialog? = null
     private var shown: List<AchCelebration> = emptyList()
@@ -49,13 +60,18 @@ object AchievementPopup {
     /** Celebrations waiting for a screen (tests). */
     internal fun waiting(): List<AchCelebration> = pending.toList()
 
-    internal fun reset() { pending.clear(); shown = emptyList(); front = null; dialog = null }
+    /** Found items waiting for a screen (tests). */
+    internal fun waitingItems(): List<ItemFind> = pendingItems
+
+    internal fun reset() { pending.clear(); shown = emptyList(); pendingItems = emptyList(); shownItems = emptyList(); front = null; dialog = null }
 
     /** The events of one action: what is worth a celebration is queued and shown (see the file comment). */
     fun offer(events: List<GameEvent>) {
         val items = AchPageMath.celebrations(events)
-        if (items.isEmpty()) return
+        val finds = PopupMath.finds(events)
+        if (items.isEmpty() && finds.isEmpty()) return
         pending += items.filter { n -> pending.none { it.rowId == n.rowId && it.tier == n.tier } }
+        pendingItems = PopupMath.merge(pendingItems, finds)
         schedule()
     }
 
@@ -66,21 +82,24 @@ object AchievementPopup {
     fun paused(a: Activity) {
         if (front?.get() !== a) return
         front = null
-        dialog?.let { d -> if (d.isShowing) { dialog = null; d.dismiss(); pending.addAll(0, shown); shown = emptyList() } }
+        dialog?.let { d ->
+            if (d.isShowing) {
+                dialog = null; d.dismiss()
+                pending.addAll(0, shown); shown = emptyList()
+                pendingItems = PopupMath.merge(shownItems, pendingItems); shownItems = emptyList()
+            }
+        }
     }
 
     private fun schedule() {
-        if (pending.isEmpty() || front?.get() == null) return
+        if ((pending.isEmpty() && pendingItems.isEmpty()) || front?.get() == null) return
         handler.removeCallbacks(showNow)
         handler.postDelayed(showNow, DELAY_MS)
     }
 
     private fun tryShow() {
         val a = front?.get() ?: return
-        if (pending.isEmpty() || dialog?.isShowing == true || a.isFinishing || a.isDestroyed || a.isInPictureInPictureMode) return
-        val batch = pending.toList()
-        pending.clear()
-        shown = batch
+        if ((pending.isEmpty() && pendingItems.isEmpty()) || dialog?.isShowing == true || a.isFinishing || a.isDestroyed || a.isInPictureInPictureMode) return
         val d = Dialog(a, android.R.style.Theme_Translucent_NoTitleBar)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
         d.window?.apply {
@@ -89,11 +108,21 @@ object AchievementPopup {
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0.45f)
         }
-        fun finish() { if (dialog === d) { dialog = null; shown = emptyList() }; d.dismiss(); schedule() } // a tap closes it; more waiting? the next batch follows
-        d.setContentView(layer(a, batch, onNice = { finish() }, onSee = { id ->
-            finish()
-            Nav.openAchievement(a, id)
-        }))
+        fun finish() { if (dialog === d) { dialog = null; shown = emptyList(); shownItems = emptyList() }; d.dismiss(); schedule() } // a tap closes it; more waiting? the next batch follows
+        if (pending.isNotEmpty()) {
+            val batch = pending.toList()
+            pending.clear()
+            shown = batch
+            d.setContentView(layer(a, batch, onNice = { finish() }, onSee = { id ->
+                finish()
+                Nav.openAchievement(a, id)
+            }))
+        } else { // no achievement waiting: the found items
+            val batch = pendingItems
+            pendingItems = emptyList()
+            shownItems = batch
+            d.setContentView(itemLayer(a, batch, onNice = { finish() }))
+        }
         d.setOnCancelListener { finish() }
         dialog = d
         d.show()
@@ -110,17 +139,19 @@ object AchievementPopup {
         val frame = FrameLayout(ctx).apply { isClickable = true; setOnClickListener { onNice() } }
         val card = if (items.size == 1) single(ctx, items[0], onNice, onSee) else many(ctx, items, onNice, onSee)
         card.isClickable = true // a tap on the card itself is not a tap outside
-        val scroll = object : ScrollView(ctx) {
-            override fun onMeasure(w: Int, h: Int) {
-                val cap = MeasureSpec.getSize(h) - Ui.dp(ctx, 24)
-                val wide = Ui.dp(ctx, 400) // wide windows (landscape, tablet): a phone-like card in the middle
-                super.onMeasure(if (MeasureSpec.getSize(w) > wide) MeasureSpec.makeMeasureSpec(wide, MeasureSpec.EXACTLY) else w,
-                    if (MeasureSpec.getMode(h) == MeasureSpec.UNSPECIFIED || cap <= 0) h else MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST))
-            }
-        }.apply { isVerticalScrollBarEnabled = false; isFillViewport = false; addView(card, ViewGroup.LayoutParams(-1, -2)) }
-        frame.addView(scroll, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER).also { it.setMargins(Ui.dp(ctx, 28), Ui.dp(ctx, 12), Ui.dp(ctx, 28), Ui.dp(ctx, 12)) })
+        frame.addView(cardScroll(ctx, card), FrameLayout.LayoutParams(-1, -2, Gravity.CENTER).also { it.setMargins(Ui.dp(ctx, 28), Ui.dp(ctx, 12), Ui.dp(ctx, 28), Ui.dp(ctx, 12)) })
         return frame
     }
+
+    /** The card in a ScrollView that stops short of the window's edges and keeps a phone-like width in wide windows. */
+    private fun cardScroll(ctx: Context, card: View): ScrollView = object : ScrollView(ctx) {
+        override fun onMeasure(w: Int, h: Int) {
+            val cap = MeasureSpec.getSize(h) - Ui.dp(ctx, 24)
+            val wide = Ui.dp(ctx, 400) // wide windows (landscape, tablet): a phone-like card in the middle
+            super.onMeasure(if (MeasureSpec.getSize(w) > wide) MeasureSpec.makeMeasureSpec(wide, MeasureSpec.EXACTLY) else w,
+                if (MeasureSpec.getMode(h) == MeasureSpec.UNSPECIFIED || cap <= 0) h else MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST))
+        }
+    }.apply { isVerticalScrollBarEnabled = false; isFillViewport = false; addView(card, ViewGroup.LayoutParams(-1, -2)) }
 
     private fun cardBox(ctx: Context): LinearLayout = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
@@ -135,6 +166,7 @@ object AchievementPopup {
     private fun single(ctx: Context, c: AchCelebration, onNice: () -> Unit, onSee: (String?) -> Unit): View {
         val box = cardBox(ctx)
         val color = colorOf(ctx, c)
+        box.addView(title(ctx, PopupMath.achievementTitle(1)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         val h = ctx.resources.configuration.screenHeightDp // a small window: a smaller burst, so the buttons stay in view
         val (stageDp, medalDp) = if (h in 1..299) 84 to 54 else if (h in 1..459) 104 to 62 else 170 to 92
         val stage = FrameLayout(ctx)
@@ -142,7 +174,7 @@ object AchievementPopup {
         stage.addView(AchMedal(ctx, medalDp).apply { set(AchStyle.icon(AchievementTable.row(c.rowId)?.icon ?: ""), c.tier, special = c.tier < 0) },
             FrameLayout.LayoutParams(Ui.dp(ctx, medalDp), Ui.dp(ctx, medalDp), Gravity.CENTER))
         box.addView(stage, LinearLayout.LayoutParams(-1, -2))
-        box.addView(Ui.text(ctx, 24f, 900, R.color.ag_text).apply { text = c.word; setTextColor(color) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
+        box.addView(Ui.text(ctx, 24f, 900, R.color.ag_text).apply { text = if (c.tier < 0) "Badge!" else c.word; setTextColor(color) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
         val sub = if (c.threshold != null) "${c.title} · ${AchPageMath.fmt(AchievementTable.row(c.rowId)?.metric, c.threshold)}" else c.title
         box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = sub; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         box.addView(buttons(ctx, "See it", onNice) { onSee(c.rowId) }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
@@ -152,7 +184,7 @@ object AchievementPopup {
     private fun many(ctx: Context, items: List<AchCelebration>, onNice: () -> Unit, onSee: (String?) -> Unit): View {
         val box = cardBox(ctx)
         box.setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 16), Ui.dp(ctx, 14), Ui.dp(ctx, 14))
-        box.addView(Ui.text(ctx, 22f, 900, R.color.ag_text).apply { text = "${items.size} achievements!"; setTextColor(AchStyle.tierColor(ctx, items.maxOf { it.tier }.coerceAtLeast(2))) })
+        box.addView(Ui.text(ctx, 22f, 900, R.color.ag_text).apply { text = PopupMath.achievementTitle(items.size); setTextColor(AchStyle.tierColor(ctx, items.maxOf { it.tier }.coerceAtLeast(2))) })
         val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         for (c in items) {
             val color = colorOf(ctx, c)
@@ -175,6 +207,58 @@ object AchievementPopup {
         // "See it" opens the sheet of the first one listed (every row opens its own); there is no "See all" without a sheet (Adam's pick 2F)
         box.addView(buttons(ctx, "See it", onNice) { onSee(items.first().rowId) }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         return box
+    }
+
+    /** The small line on top of a popup that says what it is ("Achievement unlocked", "Item found"). */
+    private fun title(ctx: Context, text: String): TextView = Ui.text(ctx, 12.5f, 900, R.color.ag_sub1).apply {
+        this.text = text.uppercase(); letterSpacing = 0.08f; gravity = Gravity.CENTER
+    }
+
+    /**
+     * The full-window layer of the "Item found" popup (shots render this view): one item = a big picture, its name, what it does and how many
+     * the bag holds now; several = a list. A tap outside the card or on "Nice" calls [onNice].
+     */
+    fun itemLayer(ctx: Context, finds: List<ItemFind>, onNice: () -> Unit): View {
+        val frame = FrameLayout(ctx).apply { isClickable = true; setOnClickListener { onNice() } }
+        val box = cardBox(ctx)
+        box.setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14))
+        box.isClickable = true // a tap on the card itself is not a tap outside
+        box.addView(title(ctx, PopupMath.itemTitle(finds.size)), LinearLayout.LayoutParams(-2, -2))
+        val small = ctx.resources.configuration.screenHeightDp in 1..459
+        if (finds.size == 1) {
+            val f = finds[0]
+            val pic = ImageView(ctx).also { Ui.itemIcon(ctx, f.item, it) }
+            val side = if (small) 56 else 84
+            box.addView(pic, LinearLayout.LayoutParams(Ui.dp(ctx, side), Ui.dp(ctx, side)).also { it.topMargin = Ui.dp(ctx, if (small) 8 else 14) })
+            box.addView(Ui.text(ctx, 22f, 900, R.color.ag_text).apply { text = Items.name(f.item); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 8) })
+            box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = PopupMath.description(f.item); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+            val how = ItemInfo.howToUse(f.item)
+            if (how.isNotEmpty()) box.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = how; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 6) })
+            box.addView(Ui.text(ctx, 12f, 900, R.color.ag_sub0).apply { text = "You have ${f.total}"; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 6) })
+        } else {
+            val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+            for (f in finds) {
+                val row = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+                    background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 14, ctx)
+                    setPadding(Ui.dp(ctx, 10), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 8))
+                }
+                row.addView(ImageView(ctx).also { Ui.itemIcon(ctx, f.item, it) }, LinearLayout.LayoutParams(Ui.dp(ctx, 38), Ui.dp(ctx, 38)))
+                val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+                body.addView(Ui.text(ctx, 13.5f, 800, R.color.ag_text).apply { text = Items.name(f.item); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+                body.addView(Ui.text(ctx, 11.5f, 700, R.color.ag_sub0).apply { text = "${PopupMath.description(f.item)} · you have ${f.total}"; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END },
+                    LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 1) })
+                row.addView(body, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 10) })
+                list.addView(row, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 7) })
+            }
+            box.addView(list, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 6) })
+        }
+        box.addView(Ui.text(ctx, 14f, 900, R.color.ag_crust).apply {
+            text = "Nice"; gravity = Gravity.CENTER; minHeight = Ui.dp(ctx, 48)
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 14, ctx); isClickable = true; setOnClickListener { onNice() }
+        }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
+        frame.addView(cardScroll(ctx, box), FrameLayout.LayoutParams(-1, -2, Gravity.CENTER).also { it.setMargins(Ui.dp(ctx, 28), Ui.dp(ctx, 12), Ui.dp(ctx, 28), Ui.dp(ctx, 12)) })
+        return frame
     }
 
     /** "[see]" (soft) and "Nice" (accent), side by side. */

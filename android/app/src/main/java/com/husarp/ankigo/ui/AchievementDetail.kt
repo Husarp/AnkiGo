@@ -34,13 +34,17 @@ internal object AchievementDetail {
      */
     fun layer(ctx: Context, v: AchView, achSince: Long, zone: ZoneId, onClose: () -> Unit): View {
         val layer = FrameLayout(ctx)
-        layer.addView(View(ctx).apply { setBackgroundColor(0x66000000); isClickable = true; setOnClickListener { onClose() } }, FrameLayout.LayoutParams(-1, -1))
-        layer.addView(sheet(ctx, v, achSince, zone), FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+        val scrim = View(ctx).apply { setBackgroundColor(0x66000000); isClickable = true; setOnClickListener { onClose() } }
+        layer.addView(scrim, FrameLayout.LayoutParams(-1, -1))
+        val sheet = sheet(ctx, v, achSince, zone)
+        // R6-07 (item 18): the handle really drags: the sheet follows the finger and closes when let go past 30 % (or on a fling down)
+        (sheet as DragSheet).dragger = SheetDragger(sheet, scrim, sheet.getChildAt(1) as? ScrollView, Ui.dp(ctx, 28), onClose)
+        layer.addView(sheet, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         return layer
     }
 
     fun sheet(ctx: Context, v: AchView, achSince: Long, zone: ZoneId): View {
-        val sheet = object : LinearLayout(ctx) {
+        val sheet = object : DragSheet(ctx) {
             // wide windows (landscape, tablet): the sheet keeps a phone-like width in the middle
             override fun onMeasure(w: Int, h: Int) {
                 val cap = Ui.dp(ctx, 520)

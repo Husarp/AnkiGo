@@ -318,7 +318,7 @@ class R4V2Shots {
         for (t in listOf(0, 1, 3, 4)) paparazzi.shootPage("r4v2-popup-tier$t", listOf(SMALL)) { ctx -> scene(ctx, listOf(one("catches", t))) }
         paparazzi.shootPage("r4v2-popup-oneoff", listOf(SMALL), themes = listOf(Theme.LIGHT)) { ctx ->
             val v = scene(ctx, listOf(AchCelebration("first-catch", "First Pokémon caught", -1, "Special", null)))
-            assertTrue(texts(v).toString(), "Achievement!" in texts(v) && "Nice" in texts(v) && "See it" in texts(v))
+            assertTrue(texts(v).toString(), "Badge!" in texts(v) && "Nice" in texts(v) && "See it" in texts(v))
             v
         }
     }
@@ -348,7 +348,7 @@ class R4V2Shots {
         paparazzi.shootPage("r4v2-popup-many", listOf(Variants.PHONE, SMALL)) { ctx ->
             val items = listOf(one("dex-caught", 2), one("catches", 1), one("answers", 3), AchCelebration("first-evolution", "Evolved a Pokémon", -1, "Special", null), one("shinies", 0))
             val v = scene(ctx, items)
-            assertTrue("5 achievements!" in texts(v))
+            assertTrue("5 achievements unlocked" in texts(v))
             assertTrue("See it" in texts(v) && "Nice" in texts(v))
             assertFalse("no \"See all\" without a sheet (R4 fix B13)", "See all" in texts(v))
             v

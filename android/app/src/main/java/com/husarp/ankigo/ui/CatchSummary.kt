@@ -29,7 +29,7 @@ data class CatchSummary(
     data class XpLine(val uid: String, val name: String, val xp: Int, val level: Int, val leveledUp: Boolean)
 
     companion object {
-        const val NEXT_TEXT = "Next answer starts a new battle"
+        const val NEXT_TEXT = "Continue starts the next battle"
 
         /**
          * [events] = the batch of the answer (or ball throw) that ended a fight; null when it ended none. The throw number is the

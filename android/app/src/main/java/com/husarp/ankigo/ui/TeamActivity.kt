@@ -22,16 +22,13 @@ import android.widget.TextView
 import com.husarp.ankigo.Anki
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
-import com.husarp.ankigo.game.AchPageMath
-import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.StatCalc
-import com.husarp.ankigo.game.Trainer
 
 // The Pokémon tab (the Team tab until round 4): one screen with four sections (Team / Box / Pokedex / Shop), a Compare picking
-// mode and a team Edit mode. Team = trainer card + team rows (a ScrollView). Box = a ListView of 6-cell rows (recycled).
+// mode and a team Edit mode. Team = battle card + team rows (a ScrollView). Box = a ListView of 6-cell rows (recycled).
 // Pokedex = DexPage embedded. Shop = ShopPage embedded (its bag and buy flow work as on its own screen).
 // Tap = details, long-press = the actions menu. Edit mode shows up/down arrows on the team rows (no drag and drop:
 // framework Views have no easy drag list).
@@ -39,7 +36,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     override val tab = BottomNav.Tab.POKEMON
 
     private lateinit var appBar: AppBar
-    private lateinit var compareBtn: ImageView
     private lateinit var shopHelp: ImageView      // the Shop's "?" (money guide), only on the Shop section
     private lateinit var switchBox: LinearLayout
     private lateinit var teamScroll: ScrollView
@@ -89,19 +85,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     override fun buildBar(): View {
         appBar = Ui.appBar(this, "Pokémon", "0", pillIconRes = R.drawable.ic_coin) // the coins on every section; the counts sit in the sections
-        compareBtn = ImageView(this).apply {
-            setImageResource(R.drawable.ic_compare)
-            contentDescription = "Compare"
-            val pad = Ui.dp(this@TeamPage, 12)
-            setPadding(pad, pad, pad, pad)
-            layoutParams = LinearLayout.LayoutParams(Ui.dp(this@TeamPage, 48), Ui.dp(this@TeamPage, 48)).also {
-                it.setMargins(0, -Ui.dp(this@TeamPage, 8), Ui.dp(this@TeamPage, 2), -Ui.dp(this@TeamPage, 8))
-            }
-            setOnClickListener { if (pickOn) endPick() else startPick() }
-        }
-        appBar.addView(compareBtn, appBar.childCount - 1) // before the right-hand pill
         shopHelp = appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) { shopPage.openMoneyHelp() }
-        tintCompare()
         return appBar
     }
 
@@ -179,7 +163,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val st = state
         picks.keepOwned { st.mon(it) != null }
         val team = st.teamMons()
-        val mons = BoxTiles.filter(st.mons, boxFilter, st.team, ::canEvolve)
+        val mons = BoxTiles.filter(st.mons, boxFilter, st.team, st.settings.xpShareUid, ::canEvolve)
         shown = mons.size
         // while picking for Compare every copy is its own tile
         tiles = BoxTiles.sorted(data, st, BoxTiles.build(data, mons, grouped && !pickOn), boxSort)
@@ -289,22 +273,10 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     private fun drawBar(teamSize: Int) {
         appBar.setPill(Bits.fmt(state.cash)) // the coins on every section (the counts are in the sections themselves)
-        compareBtn.visibility = if (section == TeamSection.SHOP) View.GONE else View.VISIBLE // nothing to tick in the Shop
         shopHelp.visibility = if (section == TeamSection.SHOP) View.VISIBLE else View.GONE
-        tintCompare()
-    }
-
-    private fun tintCompare() {
-        compareBtn.setColorFilter(Ui.c(this, if (pickOn) R.color.ag_mauve else R.color.ag_sub1), PorterDuff.Mode.SRC_IN)
     }
 
     // ---- Compare picking ----
-
-    private fun startPick() {
-        pickOn = true
-        editing = false
-        requestRender()
-    }
 
     /** Tap on your Pokémon in a battle: open [uid]'s details once, after the next render. */
     fun showDetailsOnce(uid: String) {
@@ -373,7 +345,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private fun drawTeam(team: List<Mon>) {
         teamRows.clear()
         if (teamCol.childCount > 1) teamCol.removeViews(1, teamCol.childCount - 1) // child 0 is the battle card's slot
-        teamCol.addView(trainerCard())
         teamCol.addView(teamHeader(team.size))
         team.forEachIndexed { i, mon -> teamCol.addView(teamRow(mon, i, team.size)) }
     }
@@ -467,6 +438,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         chips += BoxViews.chip(ctx, "Favourites", boxFilter == BoxFilter.FAVOURITES, heart = true) { toggleBoxFilter(BoxFilter.FAVOURITES) }
         chips += BoxViews.chip(ctx, "Shiny", boxFilter == BoxFilter.SHINY) { toggleBoxFilter(BoxFilter.SHINY) }
         chips += BoxViews.chip(ctx, BoxFilter.HOLDS_ITEM.label, boxFilter == BoxFilter.HOLDS_ITEM) { toggleBoxFilter(BoxFilter.HOLDS_ITEM) }
+        chips += BoxViews.chip(ctx, BoxFilter.HOLDS_XP_SHARE.label, boxFilter == BoxFilter.HOLDS_XP_SHARE) { toggleBoxFilter(BoxFilter.HOLDS_XP_SHARE) }
         chips += BoxViews.chip(ctx, BoxFilter.CAN_EVOLVE.label, boxFilter == BoxFilter.CAN_EVOLVE) { toggleBoxFilter(BoxFilter.CAN_EVOLVE) }
         if (boxFilter == BoxFilter.IN_TEAM) chips += BoxViews.chip(ctx, "In team", true) { toggleBoxFilter(BoxFilter.IN_TEAM) }
         return SortViews.scrollRow(ctx, chips)
@@ -497,7 +469,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         SortSheet(
             this, SortText.boxKeys, boxSort, SortSpec.DEFAULT, MonSort.vsWildAvailable(state), labels, boxFilter.ordinal,
             if (pickOn) null else SortSheet.GroupToggle(grouped) { on -> grouped = on; AppPrefs.setBoxGrouped(this, on); requestRender() },
-            count = { BoxTiles.filter(state.mons, boxFilter, state.team, ::canEvolve).size },
+            count = { BoxTiles.filter(state.mons, boxFilter, state.team, state.settings.xpShareUid, ::canEvolve).size },
             onChange = { spec, show ->
                 if (spec != boxSort) setBoxSort(spec)
                 BoxFilter.entries.getOrNull(show)?.let { setBoxFilter(it) }
@@ -511,57 +483,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         BoxCopiesSheet.show(this, tile,
             onOpen = { MonDetail.show(this, data, it) },
             onMenu = { mon, anchor, done -> actions.menu(mon, anchor, done) })
-    }
-
-    // ---- trainer card ----
-
-    private fun trainerCard(): View {
-        val st = state
-        val card = Ui.card(this).apply {
-            setPadding(Ui.dp(this@TeamPage, 14), Ui.dp(this@TeamPage, 12), Ui.dp(this@TeamPage, 14), Ui.dp(this@TeamPage, 12))
-        }
-        val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        top.addView(Ui.text(this, 17f, 900, R.color.ag_text).apply { text = st.settings.trainerName; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
-        val short = Ui.shortWindow(this) // split screen: badges go next to the coins, saving a row
-        val badges = Ui.chip(this, R.drawable.ic_star, R.color.ag_yellow).apply { setText("Achievements ${AchPageMath.tiersReached(Achievements.view(st, data))}") }
-        // 48 dp touch height around the small chip
-        val badgesBox = FrameLayout(this).apply {
-            minimumHeight = Ui.dp(this@TeamPage, 48)
-            isClickable = true
-            setOnClickListener { startScreen(Nav.intent(this@TeamPage, Dest.ACHIEVEMENTS)) }
-            addView(badges, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
-        }
-        // Stats chip (T40): same 48 dp touch height as Badges, opens the Stats tab
-        val statsBox = FrameLayout(this).apply {
-            minimumHeight = Ui.dp(this@TeamPage, 48)
-            isClickable = true
-            setOnClickListener { startScreen(Nav.intent(this@TeamPage, Dest.STATS)) }
-            addView(Ui.chip(this@TeamPage, R.drawable.ic_flame, R.color.ag_peach).also { it.setText("Stats") }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
-        }
-        if (short) {
-            top.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6); it.topMargin = -Ui.dp(this, 12); it.bottomMargin = -Ui.dp(this, 12) })
-            top.addView(statsBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6); it.topMargin = -Ui.dp(this, 12); it.bottomMargin = -Ui.dp(this, 12) })
-        }
-        top.addView(Ui.chip(this, R.drawable.ic_coin, R.color.ag_yellow).also { it.setText(Bits.fmt(st.cash)) })
-        card.addView(top)
-
-        val need = Trainer.xpForNext(st.trainerLevel)
-        val mid = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        mid.addView(Ui.text(this, 12f, 800, R.color.ag_sub1).apply { text = "Trainer Lv ${st.trainerLevel} · ${Trainer.rank(st)}" }, LinearLayout.LayoutParams(0, -2, 1f))
-        mid.addView(Ui.text(this, 11f, 800, R.color.ag_sub0).apply { text = "XP ${st.trainerXp} / $need" })
-        card.addView(mid, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, 4) })
-
-        val bar = BarView(this)
-        bar.setMeaning(BarMeaning.XP, st.trainerXp.toFloat() / need.coerceAtLeast(1), false)
-        card.addView(bar, LinearLayout.LayoutParams(-1, Ui.dp(this, 7)).also { it.topMargin = Ui.dp(this, 7) })
-
-        if (!short) {
-            val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            chips.addView(badgesBox, LinearLayout.LayoutParams(-2, -2))
-            chips.addView(statsBox, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(this, 8) })
-            card.addView(chips, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(this, 2); it.bottomMargin = -Ui.dp(this, 8) })
-        }
-        return card
     }
 
     // ---- team rows (mockup .mon) ----

@@ -136,7 +136,8 @@ object GameGuide {
             listOf(
                 "Poké Ball ${Tuning.BALL_CHANCE.getValue("poke-ball")}%, Great Ball ${Tuning.BALL_CHANCE.getValue("great-ball")}%, Ultra Ball ${Tuning.BALL_CHANCE.getValue("ultra-ball")}%, Master Ball ${Tuning.BALL_CHANCE.getValue("master-ball")}% per throw.",
                 "Net Ball and Dive Ball add ${Tuning.BALL_TYPE_BONUS} points against the types they like.",
-                "A catch gives your Pokémon the same XP as defeating it.",
+                "A catch counts as a win like a defeat: your trainer XP and defeat counts go up (an auto catch also gives your Pokémon the defeat XP). Only a defeat pays ₽.",
+                "Your wishlist: you can add a Pokémon you have seen but not caught yet (open it in the Pokédex). Wishlisted Pokémon are always caught.",
                 "Each wild Pokémon is shiny with a 1 in ${Tuning.SHINY_ODDS} chance.",
             ),
             listOf(

@@ -4,7 +4,6 @@ import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import app.cash.paparazzi.Paparazzi
-import com.husarp.ankigo.R
 import com.husarp.ankigo.ui.ArenaView
 import com.husarp.ankigo.ui.PlayerTurnSource
 import org.junit.After
@@ -14,7 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
-/** R4-X4 (PLAN 34): swipe across our Pokémon, it turns to its front view. PNG: r4x4-turned (front view shown). */
+/** R4-X4 / R6-10 (PLAN 34): swipe across our Pokémon, it turns and stays turned (the facing is saved). PNG: r4x4-turned (front view shown). */
 class R4X4Shots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
 
@@ -25,15 +24,16 @@ class R4X4Shots {
         val b = BattleShotKit.bound(ctx)
         val src = b.arena!!.turnSource!!
         assertTrue("front picture available", src.hasFront())
-        src.showFront()
+        src.turnTo(true, true)
         b.root
     }
 
-    private class Fake(val front: Boolean = true) : PlayerTurnSource {
-        var fronts = 0; var backs = 0
+    /** A turn source that remembers the facing, as the panel does with the pref. */
+    private class Fake(val front: Boolean = true, var facing: Boolean = false) : PlayerTurnSource {
+        var fronts = 0; var backs = 0; var saved = 0
+        override fun facingFront() = facing
         override fun hasFront() = front
-        override fun showFront() { fronts++ }
-        override fun showBack() { backs++ }
+        override fun turnTo(front: Boolean, show: Boolean) { facing = front; saved++; if (show) { if (front) fronts++ else backs++ } }
     }
 
     private fun holder(a: ArenaView): View =
@@ -57,13 +57,24 @@ class R4X4Shots {
         return ArenaView(ctx).also { it.instantTurn = true }   // swap at once: the renderer has no animation clock
     }
 
-    @Test fun swipeTurnsAndDoesNotTap() {
+    @Test fun swipeTurnsAndStaysTurnedUntilTheNextSwipe() {
         val a = arena(paparazzi.context)
         val src = Fake(); a.turnSource = src
         swipe(holder(a), 120f)
         assertEquals(1, src.fronts)
+        assertTrue("stays turned", src.facing)
         swipe(holder(a), -120f)
-        assertEquals("a second swipe only extends the turn", 1, src.fronts)
+        assertEquals("a second swipe turns it back", 1, src.backs)
+        assertFalse(src.facing)
+        assertEquals(1f, a.playerSprite.scaleX)
+    }
+
+    @Test fun startsFacingFrontWhenTheSavedFacingIsFront() {
+        val a = arena(paparazzi.context)
+        val src = Fake(facing = true); a.turnSource = src
+        swipe(holder(a), 120f)
+        assertEquals("the first swipe turns it to the back", 1, src.backs)
+        assertEquals(0, src.fronts)
     }
 
     @Test fun tapDoesNotTurn() {
@@ -80,37 +91,14 @@ class R4X4Shots {
         val src = Fake(); a.turnSource = src
         a.canTurn = { false }
         swipe(holder(a), 120f)
-        assertEquals(0, src.fronts)
+        assertEquals(0, src.saved)
         a.canTurn = { true }
         val none = Fake(front = false); a.turnSource = none
         swipe(holder(a), 120f)
-        assertEquals(0, none.fronts)
-    }
-
-    /** The 1.5 s timer's end (posted, so run by hand here). */
-    private fun endTurn(a: ArenaView) = ArenaView::class.java.getDeclaredMethod("endTurn").apply { isAccessible = true }.invoke(a)
-
-    @Test fun turnsBackOnlyOverItsOwnFrontPicture() {
-        val a = arena(paparazzi.context)
-        val src = Fake(); a.turnSource = src
+        assertEquals(0, none.saved)
+        val noneFacingFront = Fake(front = false, facing = true); a.turnSource = noneFacingFront
         swipe(holder(a), 120f)
-        endTurn(a)
-        assertEquals("back to the normal picture", 1, src.backs)
-        swipe(holder(a), 120f)
-        assertEquals(2, src.fronts)
-        a.playerSprite.setTag(R.id.ag_tag_sprite, Any())   // a battle event loaded another picture (e.g. the next main sent out)
-        endTurn(a)
-        assertEquals("the event's picture stays", 1, src.backs)
-        assertEquals(1f, a.playerSprite.scaleX)
-    }
-
-    @Test fun aSwipeAfterAnEventReplacedThePictureTurnsAgain() {
-        val a = arena(paparazzi.context)
-        val src = Fake(); a.turnSource = src
-        swipe(holder(a), 120f)
-        a.playerSprite.setTag(R.id.ag_tag_sprite, Any())
-        swipe(holder(a), -120f)
-        assertEquals(2, src.fronts)
+        assertEquals("turning back needs no front picture", 1, noneFacingFront.backs)
     }
 
     @Test fun aSwipeLeavesNoPressedLook() {

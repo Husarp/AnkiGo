@@ -1,6 +1,5 @@
 package com.husarp.ankigo.ui
 
-import android.app.AlertDialog
 import android.content.Context
 import android.graphics.PorterDuff
 import android.text.TextUtils
@@ -32,9 +31,9 @@ object LookPicker {
 
     /** Shows the popup; [onUse] gets the species number to show, or null for the Pokémon's own look. */
     fun show(a: Context, data: GameData, mon: Mon, onUse: (Int?) -> Unit) {
-        lateinit var dlg: AlertDialog
+        lateinit var dlg: AppDialog
         val body = Body(a, data, mon) { dlg.dismiss(); onUse(null) }
-        dlg = AlertDialog.Builder(a).setView(body.view)
+        dlg = AppDialog.Builder(a).setView(body.view)
             .setPositiveButton("Use") { _, _ -> if (body.selected != mon.lookSpecies(data).num) onUse(pickOf(body.selected, mon.species)) }
             .setNegativeButton("Cancel", null).create()
         Pickers.show(dlg)

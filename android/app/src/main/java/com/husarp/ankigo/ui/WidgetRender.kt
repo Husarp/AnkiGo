@@ -28,6 +28,7 @@ import com.husarp.ankigo.Report
 import com.husarp.ankigo.Widgets
 import com.husarp.ankigo.data.DataStore
 import com.husarp.ankigo.data.Sprites
+import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.lookNum
 import com.husarp.ankigo.game.GameState
@@ -114,7 +115,7 @@ object WidgetLogic {
                   typeOf: (Mon) -> Type? = { null }, lookNum: (Mon) -> Int = { it.species }, maxHp: (Mon) -> Int? = { null }): WidgetSnapshot {
         val dayKey = dayKey(now, s.settings.dayStartHour, zone)
         val today = if (s.day == dayKey) s.reviewsToday else 0
-        val goal = s.settings.dailyAverage
+        val goal = DailyGoal.forDay(s, dayKey)
         val yesterday = runCatching { LocalDate.parse(dayKey).minusDays(1).toString() }.getOrDefault("")
         val last = s.lastGoalDay
         val streak = if (last != null && last != dayKey && last != yesterday) 0 else s.streakDays
@@ -203,15 +204,20 @@ object WidgetRender {
         }
     }
 
-    /** R5-07: the 1x1 Study now widget needs only the due count (no save), read once for all its ids. */
+    /**
+     * R5-07: the 1x1 Study now widget needs the due count and (R6-08) today's goal progress for its colour, both read once
+     * for all its ids. No save yet = no progress (the colour is red).
+     */
     private fun updateStudyNow(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
-        val snap = WidgetSnapshot(null, false, 0, 0, 0, false, 0, 0, emptyList(), due = WidgetDue.read(ctx))
+        val prefs = ctx.getSharedPreferences("spike", 0)
+        val snap = (snapshot(ctx) ?: WidgetSnapshot(null, false, 0, 0, 0, false, 0, 0, emptyList())).copy(due = WidgetDue.read(ctx))
         for (id in ids) {
             val (w, h) = sizeDp(ctx, mgr.getAppWidgetOptions(id), Kind.STUDY_NOW)
+            val bg = StudyNowPrefs.bg(prefs, id)
             val rv = RemoteViews(ctx.packageName, Kind.STUDY_NOW.layout)
-            rv.setImageViewBitmap(Kind.STUDY_NOW.imgLight, render(ctx, Kind.STUDY_NOW, snap, w, h, night = false))
-            rv.setImageViewBitmap(Kind.STUDY_NOW.imgDark, render(ctx, Kind.STUDY_NOW, snap, w, h, night = true))
-            rv.setContentDescription(Kind.STUDY_NOW.root, StudyNow.description(snap.due))
+            rv.setImageViewBitmap(Kind.STUDY_NOW.imgLight, render(ctx, Kind.STUDY_NOW, snap, w, h, night = false, studyBg = bg))
+            rv.setImageViewBitmap(Kind.STUDY_NOW.imgDark, render(ctx, Kind.STUDY_NOW, snap, w, h, night = true, studyBg = bg))
+            rv.setContentDescription(Kind.STUDY_NOW.root, StudyNow.description(snap.due, snap.today, snap.goal))
             rv.setOnClickPendingIntent(Kind.STUDY_NOW.root, Widgets.openStudy(ctx))
             mgr.updateAppWidget(id, rv)
         }
@@ -288,15 +294,18 @@ object WidgetRender {
      * [look] and [hop] (the lifted frame of the hopping Pokémon) are for the Buddy widget; [maxBytes] caps the bitmap size.
      */
     fun render(ctx: Context, kind: Kind, snap: WidgetSnapshot?, wDp: Float, hDp: Float, night: Boolean,
-               look: BuddyLook = BuddyLook(), hop: Boolean = false, maxBytes: Int = WidgetLogic.MAX_BITMAP_BYTES): Bitmap {
-        val themed = themed(ctx, night)
+               look: BuddyLook = BuddyLook(), hop: Boolean = false, maxBytes: Int = WidgetLogic.MAX_BITMAP_BYTES,
+               studyBg: StudyNowBg = StudyNowBg.SYSTEM): Bitmap {
+        // the 1x1 widget's White / Black background fixes its colours in both bitmaps
+        val dark = if (kind == Kind.STUDY_NOW) studyBg.dark(night) else night
+        val themed = themed(ctx, dark)
         val k = WidgetLogic.pixelsPerDp(wDp, hDp, ctx.resources.displayMetrics.density, maxBytes)
         val bmp = Bitmap.createBitmap(max(1, (wDp * k).roundToInt()), max(1, (hDp * k).roundToInt()), Bitmap.Config.ARGB_8888)
         val d = Draw(themed, ctx, bmp, k)
         when (kind) {
             Kind.WIDE -> d.wide(snap, wDp, hDp)
             Kind.BUDDY -> d.buddy(snap, wDp, hDp, look, hop)
-            Kind.STUDY_NOW -> d.studyNow(snap?.due, wDp, hDp)
+            Kind.STUDY_NOW -> d.studyNow(snap, wDp, hDp, studyBg, dark)
         }
         return bmp
     }
@@ -491,8 +500,9 @@ object WidgetRender {
         // ---------------- buddy widget ----------------
 
         /**
-         * 64K: the Pokémon in a goal ring (a green check on it when the goal is reached, the streak as a small flame pill),
-         * "32 / 50 today" and "32 done · 48 left" under it. [hop] = the lifted frame of the hopping Pokémon.
+         * 64K: the Pokémon in a goal ring (a green check on it when the goal is reached), "32 / 50 today" and "32 done · 48 left"
+         * under it, and at the very bottom the streak: a flame and the number, no pill (R6-08; hidden at 0). [hop] = the lifted
+         * frame of the hopping Pokémon.
          */
         fun buddy(s: WidgetSnapshot?, w: Float, h: Float, look: BuddyLook = BuddyLook(), hop: Boolean = false) {
             val padX = 8f
@@ -501,7 +511,8 @@ object WidgetRender {
             val ts = (min(w, h) / 150f).coerceIn(0.85f, 1.3f) // text grows a little with the widget
             val goalH = 18f * ts
             val subH = 14f * ts
-            val textH = goalH + 1f + subH
+            val streakH = if ((s?.streak ?: 0) > 0 && s?.buddyMon != null) 12f * ts else 0f
+            val textH = goalH + 1f + subH + if (streakH > 0f) 1f + streakH else 0f
             val gap = 6f
             val ring = min(min(w - 2 * padX, h - 2 * padY - textH - gap), 130f).coerceAtLeast(36f)
             val total = ring + gap + textH
@@ -557,18 +568,6 @@ object WidgetRender {
                 fill.color = col(R.color.ag_green); canvas.drawCircle(bx, by, d / 2f, fill)
                 icon(R.drawable.ic_check, bx - d * 0.39f, by - d * 0.39f, d * 0.78f, 0xFFFFFFFF.toInt())
             }
-            if (s.streak > 0) {
-                val ph = max(13f, ring * 0.17f)
-                val fp = paint(max(8.5f, ph * 0.66f), 900, R.color.ag_red)
-                val txt = "${s.streak}"
-                val fl = ph * 0.72f
-                val pw = 4f + fl + 2f + fp.measureText(txt) + 5f
-                val px = min(cx + edge - pw * 0.3f, w - 2f - pw).coerceAtLeast(2f)
-                val py = cy - edge - ph / 2f
-                roundRect(px - halo, py - halo, px + pw + halo, py + ph + halo, ph / 2f + halo, col(R.color.ag_base))
-                icon(R.drawable.ic_flame, px + 4f, py + (ph - fl) / 2f, fl, col(R.color.ag_red))
-                line(txt, px + 4f + fl + 2f, py, ph, fp)
-            }
 
             // "32 / 50 today": the numbers bold and bigger, "today" small
             val maxW = w - 2 * padX
@@ -588,32 +587,48 @@ object WidgetRender {
             y += goalH + 1f
             val (cnt, cp) = fitted(BuddyText.counts(s.today, s.due), maxW, 10.5f * ts, 7.5f, 800, R.color.ag_sub0)
             line(cnt, cx, y, subH, cp, Paint.Align.CENTER)
+            if (streakH > 0f) { // R6-08: the streak at the very bottom, flame + number, no background
+                y += subH + 1f
+                val sp2 = paint(streakH * 0.95f, 900, R.color.ag_red)
+                val txt = "${s.streak}"
+                val fl = streakH * 0.9f
+                val tw = fl + 2f + sp2.measureText(txt)
+                icon(R.drawable.ic_flame, cx - tw / 2f, y + (streakH - fl) / 2f, fl, col(R.color.ag_red))
+                line(txt, cx - tw / 2f + fl + 2f, y, streakH, sp2)
+            }
         }
 
-        /** R5-07 (mockup 64I): accent square + Study icon + "Study" + red due badge; green + check + "All done" when nothing is due. */
-        fun studyNow(due: Int?, w: Float, h: Float) {
+        /**
+         * R5-07 (mockup 64I), changed by R6-08: a plain System / White / Black square; the Study icon (a check when nothing is
+         * due) and "Study" ("All done") in today's goal colour (red, orange, green), the due number under them in the neutral
+         * ink (white on a dark square, dark on a light one), no badge.
+         */
+        fun studyNow(s: WidgetSnapshot?, w: Float, h: Float, bg: StudyNowBg, dark: Boolean) {
+            val due = s?.due
             val state = StudyNow.state(due)
             val sc = (min(w, h) / 70f).coerceIn(0.8f, 1.6f)
-            val ink = col(R.color.ag_base) // the mockup's var(--base): white on light, dark on the pastel dark accent
-            val white = 0xFFFFFFFF.toInt()
-            roundRect(0f, 0f, w, h, 22f * sc, col(if (state == StudyNow.State.DONE) R.color.ag_green else R.color.ag_mauve))
-            val isz = 26f * sc
-            val lh = 14f * sc
-            val gap = 3f * sc
-            val top = (h - (isz + gap + lh)) / 2f + 3f * sc
-            icon(if (state == StudyNow.State.DONE) R.drawable.ic_check else R.drawable.ic_study, (w - isz) / 2f, top, isz, ink)
+            val surface = when (bg) {
+                StudyNowBg.SYSTEM -> col(R.color.ag_base)
+                StudyNowBg.WHITE -> 0xFFFFFFFF.toInt()
+                StudyNowBg.BLACK -> 0xFF000000.toInt()
+            }
+            roundRect(0f, 0f, w, h, 22f * sc, surface)
+            val tone = StudyNow.tone(state, s?.progress ?: 0f, GoalPalette(col(R.color.ag_red), col(R.color.ag_peach), col(R.color.ag_green)))
+            val neutral = if (dark) 0xFFFFFFFF.toInt() else col(R.color.ag_text)
+            val number = StudyNow.badge(due)
+            val isz = 24f * sc
+            val lh = 13f * sc
+            val gap = 2f * sc
+            val nh = 15f * sc
+            val total = isz + gap + lh + if (number != null) gap + 1f * sc + nh else 0f
+            val top = (h - total) / 2f
+            icon(if (state == StudyNow.State.DONE) R.drawable.ic_check else R.drawable.ic_study, (w - isz) / 2f, top, isz, tone)
             val (txt, tp) = fitted(StudyNow.label(state), w - 12f * sc, 10.5f * sc, 7f, 900, R.color.ag_base)
+            tp.color = tone
             line(txt, w / 2f, top + isz + gap, lh, tp, Paint.Align.CENTER)
-            val badge = StudyNow.badge(due) ?: return
-            val bp = paint(10.5f * sc, 900, R.color.ag_base).apply { color = white }
-            val bh = 20f * sc
-            val bw = max(bh, bp.measureText(badge) + 10f * sc)
-            val right = w - 5f * sc
-            val bt = 5f * sc
-            val ring = 2f * sc
-            roundRect(right - bw - ring, bt - ring, right + ring, bt + bh + ring, bh / 2f + ring, col(R.color.ag_base))
-            roundRect(right - bw, bt, right, bt + bh, bh / 2f, col(R.color.ag_red))
-            line(badge, right - bw / 2f, bt, bh, bp, Paint.Align.CENTER)
+            if (number == null) return
+            val np = paint(12f * sc, 900, R.color.ag_base).apply { color = neutral }
+            line(number, w / 2f, top + isz + gap + lh + gap + 1f * sc, nh, np, Paint.Align.CENTER)
         }
     }
 }

@@ -28,7 +28,7 @@ class CatchSummaryTest {
         assertEquals(CatchSummary.ThrowLine("ball-a", 2, 12), s.throwInfo)
         assertEquals(listOf(CatchSummary.XpLine("main", "Mainy", 30, 11, false)), s.xp)
         assertEquals(5, s.coins)
-        assertEquals("Next answer starts a new battle", s.next)
+        assertEquals("Continue starts the next battle", s.next)
     }
 
     @Test fun throwNumberCountsFailedThrowsOfEarlierBatches() {

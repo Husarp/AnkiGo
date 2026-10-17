@@ -1,6 +1,5 @@
 package com.husarp.ankigo.shots
 
-import android.app.AlertDialog
 import android.content.Context
 import android.view.View
 import android.widget.EditText
@@ -17,6 +16,7 @@ import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.TestData
 import com.husarp.ankigo.game.Tier
 import com.husarp.ankigo.game.Type
+import com.husarp.ankigo.ui.AppDialog
 import com.husarp.ankigo.ui.DexDetail
 import com.husarp.ankigo.ui.DexFilter
 import com.husarp.ankigo.ui.DexPage
@@ -123,7 +123,7 @@ class FormsShots {
     private fun dialog(name: String, open: (Context) -> Unit) {
         paparazzi.shootPage(name, bothVariants) { ctx ->
             install(ctx)
-            val d: AlertDialog = DialogShots.capture { open(ctx) } ?: error("no dialog was shown")
+            val d: AppDialog = DialogShots.capture { open(ctx) } ?: error("no dialog was shown")
             DialogShots.scene(ctx, d)
         }
     }

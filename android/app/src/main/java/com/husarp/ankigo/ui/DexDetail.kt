@@ -1,6 +1,5 @@
 package com.husarp.ankigo.ui
 
-import android.app.AlertDialog
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
@@ -8,6 +7,7 @@ import android.widget.LinearLayout
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.Wishlist
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
@@ -75,7 +75,7 @@ object DexDetail {
         col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))
         val mine = copies(state.mons, sp.num)
         col.addView(line(a, "Owned", mine.size.toString()))
-        lateinit var dlg: AlertDialog
+        lateinit var dlg: AppDialog
         if (mine.isNotEmpty()) {
             // Options / Details work on one copy; with several the player picks which first
             fun withCopy(f: (Mon) -> Unit) {
@@ -103,14 +103,21 @@ object DexDetail {
         }
         fun label() {
             val on = sp.num in a.state.settings.wishlist
+            val block = Wishlist.blocker(a.state, sp.num)
             star.text = if (on) "★  On your wishlist" else "☆  Add to wishlist"
-            hint.visibility = if (on) View.VISIBLE else View.GONE
+            star.visibility = if (block != null) View.GONE else View.VISIBLE
+            hint.text = when {
+                on -> "Always caught by the auto rule."
+                block == "owned" -> "You have it already."
+                block == "unseen" -> "Meet it in a battle to add it to your wishlist."
+                else -> ""
+            }
+            hint.visibility = if (hint.text.isNotEmpty()) View.VISIBLE else View.GONE
         }
         label()
         star.setOnClickListener {
             GameRepo.run(a) { g ->
-                val w = g.state.settings.wishlist
-                if (!w.remove(sp.num)) w.add(sp.num)
+                Wishlist.toggle(g.state, sp.num)
                 Unit
             }
             label()
@@ -119,7 +126,7 @@ object DexDetail {
         col.addView(star, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         col.addView(hint, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
-        dlg = AlertDialog.Builder(a).setTitle(sp.name).setView(Bits.scroll(a, col)).setPositiveButton("Close", null).create()
+        dlg = AppDialog.Builder(a).setTitle(sp.name).setView(Bits.scroll(a, col)).setPositiveButton("Close", null).create()
         Pickers.show(dlg)
     }
 

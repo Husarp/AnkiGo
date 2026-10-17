@@ -96,4 +96,27 @@ class WildInfoTest {
         log.observe(listOf(GameEvent.Info("x")), restored)
         assertTrue(log.used(restored).isEmpty())
     }
+
+    @Test fun statsAtItsLevelIgnoreItsRealIvsNatureAndEvs() {
+        val b = battle()
+        val sp = data.sp(92)
+        val shown = WildInfo.of(data, TestData.state(data), b, emptySet())!!.stats
+        assertEquals(WildInfo.statsAt(sp.base, 12), shown)
+        // the numbers follow the formulas with IV 15, 0 EVs and a neutral nature
+        assertEquals(StatCalc.hp(sp.base.hp, 15, 0, 12), shown.hp)
+        assertEquals(StatCalc.other(sp.base.atk, 15, 0, 12, 1.0), shown.atk)
+        assertEquals(StatCalc.other(sp.base.spe, 15, 0, 12, 1.0), shown.spe)
+        // other IVs / EVs / nature on the real wild Pokémon change nothing in what is shown
+        val other = battle()
+        other.wild.evs = Stats(252, 252, 6, 0, 0, 0)
+        assertEquals(shown, WildInfo.of(data, TestData.state(data), other, emptySet())!!.stats)
+    }
+
+    @Test fun statsGrowWithTheLevel() {
+        val base = data.sp(92).base
+        val low = WildInfo.statsAt(base, 5)
+        val high = WildInfo.statsAt(base, 80)
+        assertTrue(Stat.entries.all { high[it] > low[it] })
+        assertEquals(StatCalc.hp(base.hp, 15, 0, 80), high.hp)
+    }
 }

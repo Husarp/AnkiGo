@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.Type
 
 // PLAN item 53 (R3-09): the math behind Compare's two modes ("vs reference" / "best of all") for any number of Pokémon.
@@ -28,6 +29,44 @@ data class RowChoice(val hidden: Set<String> = emptySet()) {
 
     companion object {
         fun decode(s: String?): RowChoice = RowChoice(s.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet())
+    }
+}
+
+/** R6-05 item 7: the numbers of Compare come in two groups, shown one at a time: the Pokémon's own stats and the species' base stats. */
+enum class CompareGroup { STATS, BASE }
+
+/** The pure rules of the "Stats | Base stats" switch. Rows of neither group (level, types, moves, ...) always show. */
+object CompareGroups {
+    private val STAT_KEYS = Stat.entries.map { it.name.lowercase() } + "total"
+
+    /** The group a row key belongs to; null = not a stat row. */
+    fun of(key: String): CompareGroup? = when {
+        key.startsWith("base_") -> CompareGroup.BASE
+        key in STAT_KEYS -> CompareGroup.STATS
+        else -> null
+    }
+
+    fun other(g: CompareGroup): CompareGroup = if (g == CompareGroup.STATS) CompareGroup.BASE else CompareGroup.STATS
+
+    fun has(data: CompareData, g: CompareGroup): Boolean = data.rows.any { of(it.key) == g }
+
+    /** The switch only makes sense when both groups have rows (a table of Pokédex entries only has base stats). */
+    fun switchable(data: CompareData): Boolean = has(data, CompareGroup.STATS) && has(data, CompareGroup.BASE)
+
+    /** The group that shows: the [chosen] one, or the other when the chosen one has no rows in [data]. */
+    fun effective(data: CompareData, chosen: CompareGroup): CompareGroup = if (has(data, chosen) || !has(data, other(chosen))) chosen else other(chosen)
+
+    fun shows(key: String, g: CompareGroup): Boolean = of(key).let { it == null || it == g }
+
+    /**
+     * The sort key to use while [g] shows: a sort on a row of the hidden group moves to the same row of the shown group
+     * ("atk" <-> "base_atk"), so the order stays meaningful; other rows and "no sort" are unchanged.
+     */
+    fun sortKeyFor(sortKey: String?, g: CompareGroup): String? {
+        if (sortKey == null) return null
+        val own = of(sortKey) ?: return sortKey
+        if (own == g) return sortKey
+        return if (g == CompareGroup.BASE) "base_$sortKey" else sortKey.removePrefix("base_")
     }
 }
 
@@ -135,16 +174,16 @@ object CompareModes {
     /**
      * The data a screen draws: columns in [order] (others dropped), only the rows [rows] allows (a section heading moves
      * to its first visible row; a section without visible rows disappears), and the "best" marks recomputed for the
-     * columns that are left.
+     * columns that are left. With a [group] the stat rows of the other group are left out (R6-05).
      */
-    fun view(data: CompareData, order: List<Int>, rows: RowChoice = RowChoice()): CompareData {
+    fun view(data: CompareData, order: List<Int>, rows: RowChoice = RowChoice(), group: CompareGroup? = null): CompareData {
         val idx = order.filter { it in data.columns.indices }
         val cols = idx.map { data.columns[it] }
         val out = ArrayList<CompareRow>()
         var heading: String? = null
         for (row in data.rows) {
             if (row.section != null) heading = row.section
-            if (!rows.visible(row.key)) continue
+            if (!rows.visible(row.key) || (group != null && !CompareGroups.shows(row.key, group))) continue
             val cells = idx.map { row.cells[it] }
             val marked = if (row.numeric) {
                 val best = CompareTable.bestIndexes(cells.map { (it as? Cell.Text)?.value })

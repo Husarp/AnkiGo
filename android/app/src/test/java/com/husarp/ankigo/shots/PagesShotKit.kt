@@ -1,6 +1,5 @@
 package com.husarp.ankigo.shots
 
-import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
 import android.view.Gravity
@@ -9,6 +8,7 @@ import android.widget.FrameLayout
 import android.widget.ScrollView
 import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.R
+import com.husarp.ankigo.ui.AppDialog
 import com.husarp.ankigo.ui.Pickers
 import com.husarp.ankigo.ui.Ui
 
@@ -49,33 +49,17 @@ fun Paparazzi.shootPage(
     }
 }
 
-/** Builds a dialog's window content without showing it, and puts it on a 50 % black scrim like a real dialog. */
+/** Builds a dialog's window content without showing it, and puts it on a scrim like a real dialog (the app's [AppDialog]). */
 object DialogShots {
-    /** Runs [open] with [Pickers.intercept] set and returns the dialog it tried to show (null when none was shown). */
-    fun capture(open: () -> Unit): AlertDialog? {
-        var got: AlertDialog? = null
-        Pickers.intercept = { got = it }
-        try { open() } finally { Pickers.intercept = null }
-        return got
-    }
+    /** Runs [open] with [Pickers.interceptApp] set and returns the dialog it tried to show (null when none was shown). */
+    fun capture(open: () -> Unit): AppDialog? = AppDialogShots.capture(open)
 
-    /** Dialog.create() is hidden API: it runs onCreate (AlertController installs title, view and buttons) without a window. */
-    private fun create(d: AlertDialog) {
-        val m = android.app.Dialog::class.java.getDeclaredMethod("create")
-        m.isAccessible = true
-        m.invoke(d)
-    }
-
-    /** The scene: scrim + the dialog card centred. [round] = Pickers.show's rounded card background. */
-    fun scene(ctx: Context, d: AlertDialog, widthDp: Int? = null, round: Boolean = true): View {
-        if (round) d.window?.setBackgroundDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_card), 18, ctx))
-        create(d)
-        Pickers.style(d)
-        val decor = d.window!!.decorView
-        val dm = ctx.resources.displayMetrics
-        val w = Ui.dp(ctx, widthDp ?: 0).takeIf { widthDp != null } ?: (dm.widthPixels * 0.88f).toInt()
-        val scene = FrameLayout(ctx).apply { setBackgroundColor(Color.argb(128, 0, 0, 0)) }
-        scene.addView(decor, FrameLayout.LayoutParams(w, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER).also {
+    /** The scene: scrim + the dialog card centred. [widthDp] overrides the card width. */
+    fun scene(ctx: Context, d: AppDialog, widthDp: Int? = null): View {
+        if (widthDp == null) return AppDialogShots.scene(ctx, d)
+        val scene = FrameLayout(ctx).apply { setBackgroundColor(Color.argb(122, 0, 0, 0)) }
+        (d.content().parent as? android.view.ViewGroup)?.removeView(d.content())
+        scene.addView(d.content(), FrameLayout.LayoutParams(Ui.dp(ctx, widthDp), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER).also {
             val m = Ui.dp(ctx, 24); it.topMargin = m; it.bottomMargin = m
         })
         return scene

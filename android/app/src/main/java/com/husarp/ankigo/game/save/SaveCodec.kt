@@ -3,6 +3,7 @@ package com.husarp.ankigo.game.save
 import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.Battle
 import com.husarp.ankigo.game.BattleSide
+import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.DayLog
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
@@ -63,7 +64,7 @@ object SaveCodec {
             list("shopItems", state.shopItems); list("shopTms", state.shopTms)
             key("redo"); obj { for ((k, v) in state.redo.toSortedMap()) kv(k.toString(), v) }
             kv("liveDay", state.liveDay); kv("liveSnapshot", state.liveSnapshot)
-            kv("starterChosen", state.starterChosen); kv("catches", state.catches); kv("defeats", state.defeats)
+            kv("starterChosen", state.starterChosen); kv("catches", state.catches); kv("defeats", state.defeats); kv("catchWins", state.catchWins)
             kv("evolutions", state.evolutions)
             key("ballCatches"); obj { for ((k, v) in state.ballCatches.toSortedMap()) kv(k, v) }
             key("seenAt"); obj { for ((k, v) in state.seenAt.toSortedMap()) kv(k.toString(), v) }
@@ -172,6 +173,7 @@ object SaveCodec {
         kv("protectRegional", s.protectRegional)
         list("wishlist", s.wishlist.sorted())
         kv("dailyAverage", s.dailyAverage); kv("dayStartHour", s.dayStartHour)
+        s.goalByWeekday?.let { list("goalByWeekday", it) }
         kv("xpShareUid", s.xpShareUid); kv("trainerName", s.trainerName)
     }
 
@@ -261,6 +263,7 @@ object SaveCodec {
         o.intList("wishlist")?.let { s.wishlist.clear(); s.wishlist.addAll(it) }
         s.dailyAverage = o.int("dailyAverage", s.dailyAverage)
         s.dayStartHour = o.int("dayStartHour", s.dayStartHour)
+        s.goalByWeekday = DailyGoal.cleanTable(o.intList("goalByWeekday"))
         s.xpShareUid = o.strOrNull("xpShareUid")
         s.trainerName = o.str("trainerName", s.trainerName)
     }
@@ -342,7 +345,7 @@ object SaveCodec {
         o.optJSONObject("redo")?.let { r -> for (k in r.keys()) k.toLongOrNull()?.let { id -> s.redo[id] = r.getInt(k) } }
         s.liveDay = o.strOrNull("liveDay"); s.liveSnapshot = o.strOrNull("liveSnapshot")
         s.starterChosen = o.bool("starterChosen", false)
-        s.catches = o.int("catches", 0); s.defeats = o.int("defeats", 0); s.evolutions = o.int("evolutions", 0)
+        s.catches = o.int("catches", 0); s.defeats = o.int("defeats", 0); s.catchWins = o.int("catchWins", 0); s.evolutions = o.int("evolutions", 0)
         o.optJSONObject("ballCatches")?.let { b -> for (k in b.keys()) s.ballCatches[k] = b.getInt(k) }
         o.optJSONObject("seenAt")?.let { b -> for (k in b.keys()) k.toIntOrNull()?.let { sp -> s.seenAt[sp] = b.getLong(k) } }
         o.strList("releasedAnkimon")?.let { s.releasedAnkimon += it }

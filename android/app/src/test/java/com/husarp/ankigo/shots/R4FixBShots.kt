@@ -267,7 +267,7 @@ class R4FixBShots {
         var nice = 0; var seen = "none"
         val layer = com.husarp.ankigo.ui.AchievementPopup.layer(c, items, onNice = { nice++ }, onSee = { seen = it ?: "list" })
         val t = texts(layer)
-        assertTrue(t.toString(), "3 achievements!" in t && "See it" in t && "Nice" in t)
+        assertTrue(t.toString(), "3 achievements unlocked" in t && "See it" in t && "Nice" in t)
         assertFalse("no \"See all\"", "See all" in t)
         tap(layer, "See it")
         assertEquals("opens the first listed achievement's sheet", items[0].rowId, seen)

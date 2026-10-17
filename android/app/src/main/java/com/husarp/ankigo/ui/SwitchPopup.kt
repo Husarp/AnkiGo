@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.lookNum
-import android.app.AlertDialog
 import android.content.Context
 import android.text.SpannableString
 import android.text.TextUtils
@@ -28,29 +27,35 @@ object SwitchPopup {
     /** A fainted Pokémon can't be picked. (Tapping the main just closes the popup.) */
     fun pickable(hp: Int): Boolean = hp > 0
 
-    /** Shows the popup; [onPick] gets the uid of the chosen team member. */
-    fun show(a: Context, data: GameData, state: GameState, onPick: (String) -> Unit) {
-        lateinit var dlg: AlertDialog
+    /**
+     * Shows the popup; [onPick] gets the uid of the chosen team member. [header] is an optional line on top (R6-06: the
+     * swap into a full team); with [swap] the title is "Swap out" and a fainted Pokémon can be picked too.
+     */
+    fun show(a: Context, data: GameData, state: GameState, header: String? = null, swap: Boolean = false, onPick: (String) -> Unit) {
+        lateinit var dlg: AppDialog
         val body = content(a, data, state,
             onPick = { dlg.dismiss(); onPick(it) },
-            onDetails = { MonDetail.show(a, data, it) })
-        dlg = AlertDialog.Builder(a).setView(body).create()
+            onDetails = { MonDetail.show(a, data, it) },
+            header = header, swap = swap)
+        dlg = AppDialog.Builder(a).setView(body).create()
         Pickers.show(dlg)
     }
 
     /** The popup's inside (header + cards); also what the screenshot tests render. */
-    internal fun content(a: Context, data: GameData, state: GameState, onPick: (String) -> Unit, onDetails: (Mon) -> Unit): View {
+    internal fun content(a: Context, data: GameData, state: GameState, onPick: (String) -> Unit, onDetails: (Mon) -> Unit, header: String? = null, swap: Boolean = false): View {
         val compact = DetailParts.compact(a)
         val col = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(a, 16), Ui.dp(a, 14), Ui.dp(a, 16), Ui.dp(a, 14))
         }
         val head = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        head.addView(Ui.text(a, 17f, 900, R.color.ag_text).apply { text = "Switch Pokémon"; maxLines = 1; ellipsize = TextUtils.TruncateAt.END },
+        head.addView(Ui.text(a, 17f, 900, R.color.ag_text).apply { text = if (swap) "Swap out" else "Switch Pokémon"; maxLines = 1; ellipsize = TextUtils.TruncateAt.END },
             LinearLayout.LayoutParams(0, -2, 1f))
         head.addView(Ui.text(a, 11f, 800, R.color.ag_sub0).apply { text = "hold for details"; maxLines = 1 },
             LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 8) })
-        col.addView(head, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(a, 12) })
+        col.addView(head, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(a, if (header != null) 4 else 12) })
+        if (header != null) col.addView(Ui.text(a, 13f, 800, R.color.ag_sub1).apply { text = header },
+            LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(a, 12) })
 
         val mons = state.team.mapNotNull { state.mon(it) }
         val mainUid = state.team.firstOrNull()
@@ -62,7 +67,7 @@ object SwitchPopup {
                 val lp = LinearLayout.LayoutParams(0, -2, 1f).also {
                     if (i > 0) it.marginStart = Ui.dp(a, 8)
                 }
-                row.addView(if (mon != null) card(a, data, mon, mon.uid == mainUid, compact, onPick, onDetails) else View(a), lp)
+                row.addView(if (mon != null) card(a, data, mon, mon.uid == mainUid, compact, swap, onPick, onDetails) else View(a), lp)
             }
             grid.addView(row, LinearLayout.LayoutParams(-1, -2).also { if (r > 0) it.topMargin = Ui.dp(a, 8) })
         }
@@ -70,7 +75,7 @@ object SwitchPopup {
         return Bits.scroll(a, col)
     }
 
-    private fun card(a: Context, data: GameData, mon: Mon, isMain: Boolean, compact: Boolean, onPick: (String) -> Unit, onDetails: (Mon) -> Unit): View {
+    private fun card(a: Context, data: GameData, mon: Mon, isMain: Boolean, compact: Boolean, swap: Boolean, onPick: (String) -> Unit, onDetails: (Mon) -> Unit): View {
         val fainted = mon.hp <= 0
         val maxHp = StatCalc.maxHp(data, mon).coerceAtLeast(1)
         val frac = (mon.hp.toFloat() / maxHp).coerceIn(0f, 1f)
@@ -82,9 +87,9 @@ object SwitchPopup {
             background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 12, a).apply {
                 if (isMain) setStroke(Ui.dp(a, 2), Ui.c(a, R.color.ag_mauve))
             }
-            alpha = if (fainted) 0.5f else 1f
+            alpha = if (fainted && !swap) 0.5f else 1f
             contentDescription = "${mon.shownName}, level ${mon.level}" + if (fainted) ", fainted" else if (isMain) ", main" else ""
-            setOnClickListener { if (pickable(mon.hp)) onPick(mon.uid) }
+            setOnClickListener { if (swap || pickable(mon.hp)) onPick(mon.uid) }
             setOnLongClickListener { onDetails(mon); true }
             val img = ImageView(a)
             MonPreview.show(a, mon.lookNum(data), mon.shiny, img)

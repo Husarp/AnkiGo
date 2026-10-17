@@ -69,7 +69,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         Healing.restBench(data, state) // every counted answer (catch-up ones too): the bench heals 0.5 % of max HP, exactly
 
         // Daily goal: once a day, the first time the count reaches it (also if the goal was lowered during the day).
-        if (state.reviewsToday >= state.settings.dailyAverage && state.lastGoalDay != state.day) {
+        if (state.reviewsToday >= DailyGoal.today(state) && state.lastGoalDay != state.day) {
             val streakBefore = if (state.lastGoalDay == previousDay(state.day)) state.streakDays else 0 // goal days in a row before today
             state.streakDays = streakBefore + 1
             state.lastGoalDay = state.day
@@ -114,7 +114,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return events
     }
 
-    /** The wild one fainted: catch or defeat it by the auto rule (decide() honours a one-off override). */
+    /** The wild one fainted: catch or defeat it by the auto rule (decide() honours a one-off override). Both count as a win (defeat counters, trainer XP); only a defeat gives ₽. */
     private fun resolveWild(battle: Battle, main: Mon, events: MutableList<GameEvent>) {
         val now = clock()
         val plan = Catching.plan(data, state, battle)
@@ -125,6 +125,11 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 plan.duplicate?.let { swapDuplicate(it, battle.wild, events) }
                 if (Tuning.CATCH_GIVES_XP) Progression.rewardCatch(data, state, main, battle.wild, now, rng, events)
                 Healing.healMain(data, main, HealReason.CATCH, events) // after the rewards
+                // A catch is a win like a defeat: defeat counters + trainer XP by tier (no defeat ₽: Economy.onDefeat stays defeat-only).
+                main.defeats++
+                state.defeats++
+                state.catchWins++
+                Trainer.addDefeatXp(state, battle.tier, events)
             }
             Outcome.DEFEAT -> {
                 Progression.rewardDefeat(data, state, main, battle.wild, now, rng, events)
@@ -220,6 +225,11 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             Catching.addToCollection(data, state, battle.wild, battle.tier, ball, clock(), events)
             state.ballCatches.merge(ball, 1, Int::plus)
             state.main?.let { Healing.healMain(data, it, HealReason.CATCH, events) }
+            // A ball catch is a win like the auto catch: defeat counters + trainer XP by tier (no ₽, no Pokémon XP, as before).
+            state.main?.let { it.defeats++ }
+            state.defeats++
+            state.catchWins++
+            Trainer.addDefeatXp(state, battle.tier, events)
             state.battle = null
             events += ensureEncounter()
         } else {
@@ -338,6 +348,18 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (state.team.size >= 6) return ActionResult(false, "Your team is full (6).")
         state.team.add(uid)
         return ActionResult(true, "${mon.name} joined your team.")
+    }
+
+    /** R6-06: [inUid] (from the box) takes [outUid]'s place in the team; [outUid] goes to the box. A new main triggers the usual main-change events. */
+    fun swapIntoTeam(inUid: String, outUid: String): ActionResult {
+        val mon = state.mon(inUid) ?: return ActionResult(false, "Pokémon not found.")
+        val out = state.mon(outUid) ?: return ActionResult(false, "Pokémon not found.")
+        if (inUid in state.team) return ActionResult(false, "${mon.name} is already in your team.")
+        val slot = state.team.indexOf(outUid)
+        if (slot < 0) return ActionResult(false, "That Pokémon is not in your team.")
+        val old = state.team.first()
+        state.team[slot] = inUid
+        return changed("${mon.name} joined your team; ${out.name} went to the box.", old)
     }
 
     fun setXpShare(uid: String?): ActionResult {

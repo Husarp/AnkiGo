@@ -173,14 +173,22 @@ object DetailParts {
             LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
     }
 
-    /** "Total   NNN" row under the stat bars; [base] is the grey base total at the end. */
+    /**
+     * "Total   NNN" row under the stat bars; [base] is the grey base total at the end. The label and the number sit in the same
+     * 66 dp (label + value columns of [statRow]) and the number ends exactly where the stat numbers above end.
+     */
     fun totalRow(a: Context, total: Int, base: Int?): View = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, Ui.dp(a, 4), 0, 0)
-        addView(tapInfo(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Total"; gravity = Gravity.CENTER_VERTICAL }, StatInfo.TOTAL),
-            LinearLayout.LayoutParams(Ui.dp(a, 66), -2))
-        addView(Ui.text(a, 13f, 900, R.color.ag_text).apply { text = total.toString() }, LinearLayout.LayoutParams(0, -2, 1f))
+        addView(android.widget.FrameLayout(a).apply {
+            val big = total < 1000 // a 4-digit total (high levels) gets the normal sizes, so the label and the number never touch
+            addView(tapInfo(Ui.text(a, if (big) 14f else 12f, 800, R.color.ag_sub0).apply { text = "Total"; gravity = Gravity.CENTER_VERTICAL }, StatInfo.TOTAL),
+                android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL))
+            addView(Ui.text(a, if (big) 15f else 13f, 900, R.color.ag_text).apply { text = total.toString(); gravity = Gravity.END },
+                android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL))
+        }, LinearLayout.LayoutParams(Ui.dp(a, 32 + 34), -2))
+        addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
         if (base != null) addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = base.toString(); gravity = Gravity.END },
             LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
     }

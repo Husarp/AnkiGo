@@ -169,10 +169,10 @@ object GameSound {
             if (!SoundRules.gapOk(lastAt[key], now)) return
             lastAt[key] = now
             val channel = SoundRules.groupOf(cue).channel
-            val v = SoundRules.volume(SoundPrefs.volume(c, channel)) * (if (cue is Cue.Cry) 0.9f else 1f)
+            val v = SoundRules.volume(SoundPrefs.volume(c, channel))
             when (cue) {
                 is Cue.Effect -> effects[cue.id]?.takeIf { it in ready }?.let { p.play(it, v, v, 1, 0, 1f) }
-                is Cue.Cry -> playCry(c, p, cue.species, v, cue)
+                is Cue.Cry -> playCry(c, p, cue.species, v, cue) // v = the channel volume; the cry's gain and the entrance factor come on top
             }
         } catch (t: Throwable) {
             Report.fail(TAG, "playing $cue", t)
@@ -181,8 +181,11 @@ object GameSound {
 
     // ---------------------------------------------------------------- cries
 
-    private fun playCry(c: Context, p: SoundPool, species: Int, volume: Float, cue: Cue) {
+    private fun playCry(c: Context, p: SoundPool, species: Int, channelVolume: Float, cue: Cue) {
         val file = cryStore(c).cached(species) ?: return
+        // Each cry is levelled to the same loudness (CryLevel); one that was not measured yet plays at the safe default and is measured now.
+        val gain = CryDecoder.stored(c, species) ?: CryLevel.DEFAULT_GAIN.also { measure(c, species) }
+        val volume = CryLevel.volume(channelVolume, gain)
         val id: Int
         synchronized(cries) {
             val known = cries.remove(species)
@@ -211,11 +214,28 @@ object GameSound {
         if (store.cached(species) != null || store.knownMissing(species) || !fetching.add(species)) return
         io.execute {
             try {
-                store.fetch(species) { url -> Http.get(url) }
+                store.fetch(species) { url -> Http.get(url) }?.let { f -> if (CryDecoder.stored(c, species) == null) CryDecoder.measureAndStore(c, species, f) }
             } catch (t: Throwable) {
                 Report.fail(TAG, "cry $species", t)
             } finally {
                 fetching.remove(species)
+            }
+        }
+    }
+
+    private val measuring = ConcurrentHashMap.newKeySet<Int>()
+    private val unmeasurable = ConcurrentHashMap.newKeySet<Int>()   // cries that failed to decode: not tried again until the app restarts
+
+    /** Measures an already cached cry in the background (once at a time per species), so its next play is levelled. */
+    private fun measure(c: Context, species: Int) {
+        if (species in unmeasurable || !measuring.add(species)) return
+        io.execute {
+            try {
+                if (cryStore(c).cached(species)?.let { CryDecoder.measureAndStore(c, species, it) } == null) unmeasurable.add(species)
+            } catch (t: Throwable) {
+                Report.fail(TAG, "measuring cry $species", t)
+            } finally {
+                measuring.remove(species)
             }
         }
     }

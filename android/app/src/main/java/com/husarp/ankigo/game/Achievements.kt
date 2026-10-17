@@ -16,7 +16,7 @@ enum class Metric(val counted: Boolean, val external: Boolean = false) {
     // ---- derived from the save ----
     CATCHES(false),           // wild catches, or the Pokémon you own when that is more (imports)
     ANSWERS(false),           // GameState.totalReviews
-    DEFEATS(false),           // wild Pokémon defeated
+    DEFEATS(false),           // wild Pokémon defeated or caught (a catch is a win)
     EVOLUTIONS(false),
     BEST_COMBO(false),        // best correct answers in a row
     BEST_STREAK_DAYS(false),  // longest daily-goal streak
@@ -312,7 +312,8 @@ object Achievements {
      * `counters` key): money earned / spent, XP, Easy / Good presses, items used (healing items) and shinies from the day history
      * (kept 400 days; the XP value is also never below what the owned Pokémon hold, see [value]); days studied = days with answers, goal reached = days at the daily goal (or the best streak if higher);
      * balls thrown = the catches made with a ball (a lower bound); the rest starts at 0. All are lower bounds, never more
-     * than what happened.
+     * than what happened. (Goal days are read against `settings.dailyAverage` on purpose: a save without `counters` predates the weekday
+     * goal table, so `DailyGoal.forDay` always gives it that one goal.)
      */
     fun backfill(state: GameState) {
         val days = state.history.values
@@ -325,8 +326,7 @@ object Achievements {
         set(Metric.GOOD_PRESSES, days.sumOf { it.buttons[3].toLong() })
         set(Metric.SHINIES, max(days.sumOf { it.shinies.toLong() }, state.mons.count { it.shiny }.toLong()))
         set(Metric.DAYS_STUDIED, days.count { it.reviews > 0 }.toLong())
-        val goal = max(state.settings.dailyAverage, 1)
-        set(Metric.GOALS_REACHED, max(days.count { it.reviews >= goal }, max(state.bestStreakDays, state.streakDays)).toLong())
+        set(Metric.GOALS_REACHED, max(state.history.entries.count { it.value.reviews >= DailyGoal.forDay(state, it.key) }, max(state.bestStreakDays, state.streakDays)).toLong())
         set(Metric.BALLS_THROWN, state.ballCatches.filterKeys { it != "auto" }.values.sumOf { it.toLong() })
     }
 }

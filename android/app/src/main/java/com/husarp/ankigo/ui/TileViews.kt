@@ -1,6 +1,5 @@
 package com.husarp.ankigo.ui
 
-import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Matrix
@@ -144,7 +143,7 @@ internal object TileViews {
             text = "Held items, evolutions, fainted and regional forms are in a Pokémon's details."
             setPadding(0, Ui.dp(ctx, 10), 0, 0)
         })
-        val dialog = AlertDialog.Builder(ctx).setTitle("What the icons mean").setView(Bits.scroll(ctx, col))
+        val dialog = AppDialog.Builder(ctx).setTitle("What the icons mean").setView(Bits.scroll(ctx, col))
             .setPositiveButton("Got it", null).create()
         Pickers.show(dialog)
     }

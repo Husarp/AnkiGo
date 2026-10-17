@@ -238,6 +238,13 @@ class ReminderRulesTest {
 
     // ---- daily goal ----
 
+    @Test fun dailyGoalReminderUsesTheWeekdayGoalOfTheRealDayEvenWithOldFacts() {
+        // facts from Tuesday the 13th (goal 50); the app was not opened since, now it is Friday the 16th (goal 80)
+        val old = streakFacts.copy(day = "2026-10-13", dailyGoal = 50, goalWeek = listOf(10, 50, 30, 40, 80, 60, 70), lastGoalDay = "2026-10-13")
+        val out = decide("2026-10-16T19:00:00", ReminderPrefs(dailyGoalOn = true, quietOn = false), facts = old)
+        assertEquals("80 reviews to today's goal", out[0].title)
+    }
+
     @Test fun dailyGoalReminderAtItsTimeOncePerDay() {
         val p = ReminderPrefs(dailyGoalOn = true, quietOn = false)
         assertTrue(decide("2026-10-14T18:59:00", p, facts = streakFacts).isEmpty())

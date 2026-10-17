@@ -7,6 +7,7 @@ import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.data.SpriteKind
 import com.husarp.ankigo.game.CashKind
+import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.DuplicateResult
 import com.husarp.ankigo.game.Economy
@@ -25,7 +26,7 @@ import kotlin.math.max
  * Pace: an answer's events take about a second; with 4 or more answers waiting the durations are halved, and with
  * 10 or more the animations are skipped and one summary line shows (then the panel is redrawn from the saved game).
  */
-class EventPlayer(private val panel: BattlePanelView) {
+class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean = true) {
     private sealed class Item {
         class Ev(val e: GameEvent) : Item()
         class Act(val block: () -> Unit) : Item()
@@ -42,6 +43,8 @@ class EventPlayer(private val panel: BattlePanelView) {
     private var factor = 1.0
     private var lastButton = 0
     private var mult = 1.0
+    private var logSide = LogSide.YOURS   // R6-12: the side of the event being played (the bar's flip slots)
+    private var logFresh = false          // its line starts a new fight: both sides start over
     /** The next fight's Encounter, held back while the result tiles show (it plays with the next answer's events). */
     private var parked: GameEvent.Encounter? = null
 
@@ -143,6 +146,33 @@ class EventPlayer(private val panel: BattlePanelView) {
         parked?.let { parked = null; queue.addFirst(Item.Ev(it)) }
     }
 
+    /** True while a fight result holds the next wild one back (a Continue is pending). */
+    val holding: Boolean get() = panel.holdsNextFight
+
+    /**
+     * "Continue" after a fight result (R6-09): the tiles go and the held next wild one makes its entrance; the card in front of the
+     * player is not touched. Returns false when no result holds (nothing happened). The next answer's events release the same way
+     * ([enqueue]), so an answer that arrives anyway never waits for a tap.
+     */
+    fun continueBattle(): Boolean {
+        if (!panel.holdsNextFight) return false
+        releaseTiles()
+        dirty = true   // nothing parked: the wild one is drawn from the saved game when the queue is done
+        pump()
+        return true
+    }
+
+    /**
+     * The screen is left under a result: it goes without an entrance (nothing is played to an invisible panel) and the new wild one
+     * is drawn from the saved game, so nobody comes back to a stuck Continue.
+     */
+    fun dropHold() {
+        if (!panel.holdsNextFight) return
+        parked = null
+        panel.hideCatchTiles()
+        if (idle) panel.renderAll() else dirty = true
+    }
+
     /** Too many answers waiting: no animations, one summary line, then the saved state. */
     private fun skipAll(first: Item) {
         val events = ArrayList<GameEvent>()
@@ -155,7 +185,12 @@ class EventPlayer(private val panel: BattlePanelView) {
         events.forEach { panel.observeStudyEvent(it) }
         panel.renderAll()
         acts.forEach { it() }
-        if (events.isNotEmpty()) panel.setLog(LogKind.SYS, "FAST", summary(events))
+        val lone = events.singleOrNull() as? GameEvent.Encounter   // Continue with reduced motion: just the new wild one
+        if (lone != null) {
+            logSide = LogSide.WILD; logFresh = true
+            log(LogKind.SYS, "NEW", "A wild ${em(bare(lone.name))}" + (if (lone.shiny) " ${em("(shiny!)")}" else "") + " appeared!")
+        }
+        else if (events.isNotEmpty()) panel.setLog(LogKind.SYS, "FAST", summary(events), fresh = true)
         // One answer's fight result still shows its tiles (no animation needed); a pile of answers gets only the summary line.
         result?.let { r ->
             if (events.count { it is GameEvent.Counted } <= 1 && panel.showCatchTiles(r, false) == CatchTilesPlan.Mode.HOLD) {
@@ -233,6 +268,7 @@ class EventPlayer(private val panel: BattlePanelView) {
 
     init {
         GameSound.warm(panel.context)
+        if (continueOnPanel) panel.onContinue = { continueBattle() }   // the Continue tap under the held tiles (screens whose answers come from AnkiDroid)
         // a held next wild one let go by a window change (B7) plays its entrance now; nothing parked: drawn from the save
         panel.onHeldReleased = { val e = parked; if (e != null) { parked = null; queue.addFirst(Item.Ev(e)); pump() } else if (idle) panel.renderAll() }
     }
@@ -242,7 +278,10 @@ class EventPlayer(private val panel: BattlePanelView) {
         if (e is GameEvent.Fainted && !e.player && willBeCaught()) return
         GameSound.onEvent(panel.context, e, muted(), arena.ballShown, factor)
     }
-    private fun log(kind: LogKind, pill: String, text: String) = panel.setLog(kind, pill, text)
+    private fun log(kind: LogKind, pill: String, text: String) {
+        panel.setLog(kind, pill, text, side = logSide, fresh = logFresh)
+        logFresh = false
+    }
 
     private fun label(b: Int) = when (b) { 1 -> "AGAIN"; 2 -> "HARD"; 3 -> "GOOD"; 4 -> "EASY"; else -> "OK" }
     private fun kind(b: Int) = when (b) { 1 -> LogKind.AGAIN; 2 -> LogKind.HARD; 3 -> LogKind.GOOD; 4 -> LogKind.EASY; else -> LogKind.GOOD }
@@ -274,12 +313,13 @@ class EventPlayer(private val panel: BattlePanelView) {
         val st = GameRepo.state
         val data = GameRepo.data
         panel.observeStudyEvent(e)
+        logSide = LogSides.of(e); logFresh = LogSides.startsFight(e)
         sound(e)
         when (e) {
             is GameEvent.Counted -> {
                 lastButton = e.button
                 if (!e.catchUp) floats(e)   // an Again answer: "Hesitated"
-                panel.setGoal(e.reviewsToday, st?.settings?.dailyAverage ?: 100, true)
+                panel.setGoal(e.reviewsToday, st?.let { DailyGoal.today(it) } ?: 100, true)
                 panel.setCombo(e.cardStreak, true)
                 return 0
             }

@@ -69,15 +69,6 @@ class PanelHeightTest {
         assertEquals(180, PanelHeight.restore(0, 7, false))     // junk old value: the default
     }
 
-    @Test fun labels() {
-        assertEquals("FULL", PanelHeight.label(220, false))
-        assertEquals("STRIP", PanelHeight.label(180, false))
-        assertEquals("MINI", PanelHeight.label(34, false))
-        assertEquals("STRIP · 140", PanelHeight.label(140, false))
-        assertEquals("FULL · 260", PanelHeight.label(260, false))
-        assertEquals("MINI · 60", PanelHeight.label(60, false))
-    }
-
     @Test fun answerRowHasOneHeightPerLayout() {
         assertEquals(64, PanelHeight.buttonsDp(1))
         assertEquals(102, PanelHeight.buttonsDp(2))

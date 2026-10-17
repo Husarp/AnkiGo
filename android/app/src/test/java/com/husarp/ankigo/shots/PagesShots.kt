@@ -241,6 +241,14 @@ class PagesShots {
         }
     }
 
+    /** The same for dialogs that are an AppDialog (Pickers.confirm / choose since R6-01). */
+    private fun appDialog(name: String, variants: List<Variant> = phoneSplit, open: (Context) -> Unit) {
+        paparazzi.shootPage(name, variants, FakeGame.Scenario.MID_GAME) { ctx ->
+            val d = AppDialogShots.capture { open(ctx) } ?: error("no dialog was shown")
+            AppDialogShots.scene(ctx, d)
+        }
+    }
+
     private val st get() = GameRepo.state!!
     private val gd get() = GameRepo.data!!
 
@@ -257,15 +265,15 @@ class PagesShots {
         dialog("pages-dlg-evolved") { ctx ->
             Pickers.evolved(ctx, GameEvent.Evolved("t2", gd.sp(2).name, gd.sp(3).name, 3), false)
         }
-        dialog("pages-dlg-confirm") { ctx -> Pickers.confirm(ctx, "Refresh the shop?", "New items and TMs for 100 ₽.", "Refresh") {} }
-        dialog("pages-dlg-release") { ctx -> Pickers.confirm(ctx, "Release Sparkmouse?", "Sparkmouse (Lv 26) will be gone for good.", "Release…") {} }
+        appDialog("pages-dlg-confirm") { ctx -> Pickers.confirm(ctx, "Refresh the shop?", "New items and TMs for 100 ₽.", "Refresh") {} }
+        appDialog("pages-dlg-release") { ctx -> Pickers.confirm(ctx, "Release Sparkmouse?", "Sparkmouse (Lv 26) will be gone for good.", "Release…") {} }
         dialog("pages-dlg-pickitem") { ctx -> Pickers.pickItem(ctx, "Use which item?", st, listOf("potion", "super-potion", "thunder-stone", "rare-candy")) {} }
         dialog("pages-dlg-pickball") { ctx -> Pickers.pickItem(ctx, "Throw which ball?", st, listOf("poke-ball", "great-ball", "ultra-ball")) {} }
         dialog("pages-dlg-pickmon") { ctx ->
             Pickers.pickMon(ctx, "Give it to…", gd, st.mons.take(5), { com.husarp.ankigo.ui.Bits.hpText(gd, it) }) {}
         }
         dialog("pages-dlg-pickmove") { ctx -> Pickers.pickMove(ctx, "Forget which move?", gd, st.mon("t1")!!) {} }
-        dialog("pages-dlg-choose") { ctx -> Pickers.choose(ctx, "Pick one", listOf("Ask", "Always open in AnkiDroid", "Answer anyway")) {} }
+        appDialog("pages-dlg-choose") { ctx -> Pickers.choose(ctx, "Pick one", listOf("Ask", "Always open in AnkiDroid", "Answer anyway")) {} }
         for ((name, uid) in listOf("pages-dlg-monmenu" to "t3", "pages-dlg-monmenu-main" to "t1")) {
             paparazzi.shootPage(name, phoneSplit) { ctx ->
                 MenuKit.scene(ctx, MenuKit.capture { MonActions(TeamPage(ctx, NoHost)).menu(st.mon(uid)!!, View(ctx)) })

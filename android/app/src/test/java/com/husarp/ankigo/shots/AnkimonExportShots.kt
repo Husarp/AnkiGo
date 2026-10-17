@@ -20,7 +20,7 @@ class AnkimonExportShots {
     // 12 Oct 2026, midday UTC
     private val keptAt = 1_791_806_400_000L
 
-    private fun dialog(name: String, open: (Context) -> android.app.AlertDialog) {
+    private fun dialog(name: String, open: (Context) -> com.husarp.ankigo.ui.AppDialog) {
         paparazzi.shootPage(name) { ctx ->
             val d = DialogShots.capture { com.husarp.ankigo.ui.Pickers.show(open(ctx)) } ?: error("no dialog was shown")
             DialogShots.scene(ctx, d)

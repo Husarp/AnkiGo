@@ -18,7 +18,7 @@ import com.husarp.ankigo.live.LiveSession
  * The battle card at the top of the Pokémon tab's Team section (R4-V1, Adam's pick 1): a small "BATTLE" header with a
  * "Pop out" pill and an expand icon, then the live battle panel in its card look ([BattlePanelView.setCardLook]: both
  * Pokémon with names, Lv and HP, the last log line and the daily goal bar). A tap on the card or on the expand icon opens the
- * full-screen battle ([Host.expand]); Pop out is [Host.popOut]. It is live only while it is on screen: [start] holds
+ * full-screen battle (a tap on the wild Pokémon opens its info window instead) ([Host.expand]); Pop out is [Host.popOut]. It is live only while it is on screen: [start] holds
  * [LiveSession] and attaches a sink (answers made in AnkiDroid play on the card), [stop] lets both go. The card also shows in a
  * short window (a split-screen half): its panel is then smaller ([panelDp]) and [PanelFit] scales the battle to it. Pure decisions
  * ([wanted], [panelDp]) are tested on the JVM.
@@ -90,13 +90,14 @@ internal class BattleCard(private val ctx: Context, private val host: Host, priv
         }
         card.addView(header(), LinearLayout.LayoutParams(-1, -2))
         card.addView(panel, LinearLayout.LayoutParams(-1, Ui.dp(ctx, panelDp(ctx.resources.configuration.screenHeightDp.toFloat()))))
-        // taps on the panel's arena / Pokémon open the battle too (not the details they open in the full battle)
+        // taps on the panel's arena / your Pokémon open the battle too (not the details they open in the full battle);
+        // R6-06: a tap on the wild Pokémon opens its info window on top of this tab instead (not while an animation plays)
         panel.arena.setOnClickListener { host.expand() }
         panel.arena.onPlayerTap = { host.expand() }
-        panel.arena.onWildTap = { host.expand() }
+        panel.arena.onWildTap = { if (player.idle) BattleDetails.showWild(ctx) }
         panel.arena.canTurn = { player.idle } // PLAN 34: swipe to turn, not while an animation plays
         panel.arena.setPlayerTapHint("Your Pokémon. Tap to open the battle")
-        panel.arena.setWildTapHint("Wild Pokémon. Tap to open the battle")
+        panel.arena.setWildTapHint("Wild Pokémon. Tap for its details")
         panel.setOnClickListener { host.expand() }
         panel.onGrant = { host.grantAccess() }
         return card

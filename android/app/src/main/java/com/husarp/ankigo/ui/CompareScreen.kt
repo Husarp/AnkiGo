@@ -28,6 +28,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     private var rows: RowChoice = CompareStore.loadRows(this)
     /** How many columns fit (0 = automatic); remembered. */
     private var fit: Int = CompareStore.loadFit(this)
+    /** R6-05 item 7: which of the two number groups shows ("Stats" / "Base stats"); remembered. */
+    private var group: CompareGroup = CompareStore.loadGroup(this)
     private var lastX = 0
     private var lastY = 0
     private var full: CompareData? = null
@@ -51,6 +53,10 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         val st = cmp?.also { it.fit(data) }
             ?: CompareState(CompareStore.loadMode(this)).also { cmp = it; it.fit(data); onNewState?.invoke(it) }
         holder.removeAllViews()
+        // the shown group (a table of Pokédex entries only has base stats); a sort on a row of the hidden group moves to the same row of the shown one
+        val shownGroup = CompareGroups.effective(data, group)
+        val fixedSort = CompareGroups.sortKeyFor(st.sortKey, shownGroup)
+        if (fixedSort != st.sortKey) st.setSort(fixedSort, st.sortDesc)
         val display = st.display(data)
         bar.titleView.text = "Compare · ${st.size}"
         if (display.isEmpty()) {
@@ -77,8 +83,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             holder.addView(col, FrameLayout.LayoutParams(-1, -1))
             return
         }
-        val view = CompareModes.view(data, display, rows)
-        val look = CompareLook(this, view.columns.size, fit)
+        val view = CompareModes.view(data, display, rows, shownGroup)
+        val look = CompareLook(this, view.columns.size, fit, headNotes = view.columns.any { it.note != null })
         val grid = CompareGrid(this, look, view, st.mode, st.sortKey, st.sortDesc,
             onHead = { pos, anchor -> headMenu(anchor, data, display, pos) },
             onLabel = { row, anchor -> tapLabel(row, anchor) },
@@ -91,10 +97,10 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         val chips = chipViews(data, st)
         if (Ui.shortWindow(this)) {
             // little height: the mode switch becomes two chips at the start of the one chip row
-            val all = modeChips(st) + chips
+            val all = modeChips(st) + groupChips(data, shownGroup) + chips
             col.addView(SortViews.scrollRow(this, all).also { it.setPadding(side, 0, side, 0); (it as? android.view.ViewGroup)?.clipToPadding = false }, LinearLayout.LayoutParams(-1, -2))
         } else {
-            col.addView(modeSwitch(st), LinearLayout.LayoutParams(-1, -2).also { it.setMargins(side + dp(4), dp(2), side + dp(4), dp(0)) })
+            col.addView(switches(data, st, shownGroup), LinearLayout.LayoutParams(-1, -2).also { it.setMargins(side + dp(4), dp(2), side + dp(4), dp(0)) })
             col.addView(SortViews.scrollRow(this, chips).also { it.setPadding(side, 0, side, 0); (it as? android.view.ViewGroup)?.clipToPadding = false }, LinearLayout.LayoutParams(-1, -2))
         }
         col.addView(grid.root, LinearLayout.LayoutParams(-1, 0, 1f).also { it.setMargins(side, 0, side, dp(4)) })
@@ -113,29 +119,59 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
 
     private fun modeLabel(m: CompareMode) = if (m == CompareMode.VS_REFERENCE) "Vs reference" else "Best of all"
 
-    /** The two modes as one switch (the look of the sort sheet's basis switch). */
-    private fun modeSwitch(st: CompareState): View {
+    private fun setGroup(g: CompareGroup) {
+        if (group == g) return
+        group = g
+        CompareStore.saveGroup(this, g)
+        requestRender()
+    }
+
+    private fun groupLabel(g: CompareGroup) = if (g == CompareGroup.STATS) "Stats" else "Base stats"
+
+    /** [labels] as one switch (the look of the sort sheet's basis switch); [on] is the lit one. */
+    private fun segmented(labels: List<String>, on: Int, sp: Float, pick: (Int) -> Unit): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = Ui.rounded(c(R.color.ag_mantle), 12, this@ComparePage)
             setPadding(dp(3), dp(3), dp(3), dp(3))
         }
-        for (m in CompareMode.entries) {
-            val on = m == st.mode
-            row.addView(Ui.text(this, 13f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply {
-                text = modeLabel(m)
+        labels.forEachIndexed { i, label ->
+            val lit = i == on
+            row.addView(Ui.text(this, sp, 900, if (lit) R.color.ag_text else R.color.ag_sub0).apply {
+                text = label
                 gravity = Gravity.CENTER
                 maxLines = 1
                 setPadding(dp(2), dp(11), dp(2), dp(11))
-                background = if (on) Ui.rounded(c(R.color.ag_card), 10, this@ComparePage) else null
-                setOnClickListener { setMode(st, m) }
+                background = if (lit) Ui.rounded(c(R.color.ag_card), 10, this@ComparePage) else null
+                setOnClickListener { pick(i) }
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }
         return row
     }
 
+    /** The mode switch, and next to it (when both groups have rows) the "Stats | Base stats" switch; stacked in a very narrow window. */
+    private fun switches(data: CompareData, st: CompareState, shown: CompareGroup): View {
+        val modes = segmented(CompareMode.entries.map(::modeLabel), st.mode.ordinal, if (CompareGroups.switchable(data)) 12f else 13f) { setMode(st, CompareMode.entries[it]) }
+        if (!CompareGroups.switchable(data)) return modes
+        val groups = segmented(CompareGroup.entries.map(::groupLabel), shown.ordinal, 12f) { setGroup(CompareGroup.entries[it]) }
+        val narrow = resources.configuration.screenWidthDp in 1..339
+        return LinearLayout(this).apply {
+            orientation = if (narrow) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            if (narrow) {
+                addView(modes, LinearLayout.LayoutParams(-1, -2))
+                addView(groups, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(4) })
+            } else {
+                addView(modes, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(groups, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(8) })
+            }
+        }
+    }
+
     private fun modeChips(st: CompareState): List<View> =
         CompareMode.entries.map { m -> BoxViews.chip(this, modeLabel(m), m == st.mode) { setMode(st, m) } }
+
+    private fun groupChips(data: CompareData, shown: CompareGroup): List<View> =
+        if (!CompareGroups.switchable(data)) emptyList() else CompareGroup.entries.map { g -> BoxViews.chip(this, groupLabel(g), g == shown) { setGroup(g) } }
 
     private fun chipViews(data: CompareData, st: CompareState): List<View> {
         val out = ArrayList<View>()
@@ -174,8 +210,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         if (!row.numeric) { info?.let { DetailParts.showInfo(this, it) }; return }
         val on = st.sortKey == row.key
         val m = AppMenu(anchor).header(info?.title ?: row.label, info?.text)
-            .item(0, "Sort high → low", if (on && st.sortDesc) R.drawable.ic_check else R.drawable.ic_blank)
-            .item(1, "Sort low → high", if (on && !st.sortDesc) R.drawable.ic_check else R.drawable.ic_blank)
+            .item(0, "High to low", R.drawable.ic_sort_desc, sub = if (on && st.sortDesc) "Sorted like this now" else null, tone = if (on && st.sortDesc) R.color.ag_mauve else 0)
+            .item(1, "Low to high", R.drawable.ic_sort_asc, sub = if (on && !st.sortDesc) "Sorted like this now" else null, tone = if (on && !st.sortDesc) R.color.ag_mauve else 0)
         if (on) m.item(2, "Clear sort", R.drawable.ic_close)
         m.show { id ->
             when (id) { 0 -> st.setSort(row.key, true); 1 -> st.setSort(row.key, false); else -> st.setSort(null) }
@@ -200,8 +236,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     private fun sortMenu(anchor: View, st: CompareState, row: CompareRow?) {
         if (row == null) { Ui.toast(this, "Tap a row name in the table to sort by it"); return }
         AppMenu(anchor).header("Sort by ${sortName(row)}")
-            .item(0, "High → low", if (st.sortDesc) R.drawable.ic_check else R.drawable.ic_blank)
-            .item(1, "Low → high", if (!st.sortDesc) R.drawable.ic_check else R.drawable.ic_blank)
+            .item(0, "High to low", R.drawable.ic_sort_desc, tone = if (st.sortDesc) R.color.ag_mauve else 0)
+            .item(1, "Low to high", R.drawable.ic_sort_asc, tone = if (!st.sortDesc) R.color.ag_mauve else 0)
             .item(2, "Clear sort", R.drawable.ic_close, dividerAfter = false)
             .show { id ->
                 when (id) { 0 -> st.setSort(row.key, true); 1 -> st.setSort(row.key, false); else -> st.setSort(null) }
@@ -223,7 +259,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         val idx = display[pos]
         val col = data.columns[idx]
         val vs = st.mode == CompareMode.VS_REFERENCE
-        val m = AppMenu(anchor).header(col.name)
+        val tags = col.mon?.let { MonTags.of(this.data, this.state, it).map { t -> t.label } }.orEmpty()
+        val m = AppMenu(anchor).header(col.name, CompareInfo.headInfo(col.mon == null, tags, col.note))
         if (vs && pos != 0) m.item(0, "Make reference", R.drawable.ic_star)
         if (st.size > Compare.MIN) m.item(3, "Remove", R.drawable.ic_trash, danger = true)
         else m.item(3, "Remove", R.drawable.ic_trash, enabled = false, sub = "Compare needs at least ${Compare.MIN}", danger = true)
@@ -255,7 +292,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     // ---------- the Rows sheet ----------
 
     private fun showRows(data: CompareData) {
-        val items = rowItems(data)
+        val shown = CompareGroups.effective(data, group)
+        val items = rowItems(data).filter { CompareGroups.shows(it.key, shown) } // the rows of the hidden group would change nothing on screen
         val dialog = Dialog(this).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
         val maxBody = (resources.displayMetrics.heightPixels * 0.9f).toInt() - dp(150)
         dialog.setContentView(rowsSheet(items, maxBody.coerceAtLeast(dp(120)), { dialog.dismiss() }))

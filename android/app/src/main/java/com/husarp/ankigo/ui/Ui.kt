@@ -272,9 +272,37 @@ object Ui {
         }
     }
 
-    /** Short message toast (a plain system Toast: custom toast views are ignored on newer Android). */
+    /**
+     * Short message: the app's own popup ([AppToast]) in the window of [ctx] (its Activity, else the floating window).
+     * Only when there is no window to put it in (a service with nothing on screen, an Activity that is finishing) it
+     * falls back to a plain system Toast, so the message is not lost.
+     */
     fun toast(ctx: Context, text: String) {
         lastToast = text
+        onMain {
+            try {
+                if (!AppToast.show(ctx, text)) systemToast(ctx, text)
+            } catch (e: RuntimeException) { systemToast(ctx, text) /* no window yet (screenshots render without one) */ }
+        }
+    }
+
+    /** [toast] for a view in a window without an Activity (the floating window): the message goes on top of that view's window root. */
+    fun toast(view: View, text: String) {
+        lastToast = text
+        onMain {
+            try {
+                val root = view.rootView as? android.widget.FrameLayout
+                if (findActivity(view.context) != null || root == null) toast(view.context, text) else AppToast.show(root, text)
+            } catch (e: RuntimeException) { systemToast(view.context, text) }
+        }
+    }
+
+    private fun onMain(block: () -> Unit) {
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) block()
+        else android.os.Handler(android.os.Looper.getMainLooper()).post(block)
+    }
+
+    internal fun systemToast(ctx: Context, text: String) {
         try { Toast.makeText(ctx.applicationContext, text, Toast.LENGTH_SHORT).show() } catch (e: RuntimeException) { /* no toast service (screenshots) */ }
     }
 

@@ -109,6 +109,7 @@ class FloatWindow(
             setPadding(pad, pad, pad, pad)
             addView(card, FrameLayout.LayoutParams(-1, -1))
         }
+        com.husarp.ankigo.ui.AppToast.attach(root) // messages of the floating screens (Ui.toast without an Activity) show inside this window
         applyHeaderSize()
     }
 

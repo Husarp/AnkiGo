@@ -63,7 +63,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val eTypeRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private val eStatus = StatusRow(ctx)           // status badge row directly under the HP bar (item 95)
     private val pStatus = StatusRow(ctx)
-    private val bubble = StatusBubble(ctx).apply { visibility = GONE }
+    // elevated above the stat cards (the study strip lifts them by 2 dp, and a higher z draws over any sibling order)
+    private val bubble = StatusBubble(ctx).apply { visibility = GONE; elevation = Ui.dp(ctx, 8f); outlineProvider = null }
     private val eHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0)
     private val eHp = BarView(ctx).apply { ghostOnDrop = true }
     private val eHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }   // HP bar + "61 / 61 HP" side by side
@@ -145,12 +146,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** Whether a swipe may turn our Pokémon now (the screen says no while a battle animation plays or in PiP) and what to show (PLAN 34). */
     var canTurn: () -> Boolean = { true }
     var turnSource: PlayerTurnSource? = null
-    private var turned = false
-    private var frontTag: Any? = null          // the PanelSprites load tag of the front view this turn showed
     private var turnAnim: Animator? = null
     internal var instantTurn: Boolean? = null   // tests only: the renderer has no animation clock
     private val swipe = SwipeTracker(ViewConfiguration.get(ctx).scaledTouchSlop.toFloat())
-    private val endTurnRun = Runnable { endTurn() }
 
     /** Tap on the wild Pokémon's sprite (PLAN 93): the screen decides whether it may open the info now. */
     var onWildTap: () -> Unit = {}
@@ -391,34 +389,18 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         }
     }
 
-    /** A swipe across our Pokémon: turn to the front view for [SwipeTurn.TURN_MS] (another swipe meanwhile extends it). */
+    /** A swipe across our Pokémon: it turns to the other view (back <-> front) and stays turned; the facing is saved ([PlayerTurnSource]). */
     private fun swipeTurn() {
         val src = turnSource ?: return
-        if (!SwipeTurn.mayTurn(canTurn()) { src.hasFront() }) return
-        removeCallbacks(endTurnRun)
-        postDelayed(endTurnRun, SwipeTurn.TURN_MS)
-        if (turned && frontShown()) return
-        turned = true
+        stopTurnAnim()   // a swipe during a squash: its picture swap (and the saved facing) happens first
+        val toFront = !src.facingFront()
+        if (!SwipeTurn.mayTurn(canTurn(), toFront) { src.hasFront() }) return
         val before = spriteTag()
         squash(instant = false) {
-            // only over the picture the swipe saw: a battle event may have loaded another one during the squash
-            if (spriteTag() === before) { src.showFront(); frontTag = spriteTag() }
+            // the picture only over the one the swipe saw: a battle event may have loaded another one during the squash
+            src.turnTo(toFront, spriteTag() === before)
         }
     }
-
-    /** Back to the normal picture. Not when a battle event already put another picture there; at once (no squash) while one plays. */
-    private fun endTurn() {
-        removeCallbacks(endTurnRun)
-        if (!turned) return
-        turned = false
-        val front = frontTag
-        frontTag = null
-        if (front == null || spriteTag() !== front) { stopTurnAnim(); return }
-        squash(instant = !canTurn()) { if (spriteTag() === front) turnSource?.showBack() }
-    }
-
-    /** The picture is still the front view this turn loaded (PanelSprites tags each load; a newer load means a battle event's). */
-    private fun frontShown() = frontTag != null && spriteTag() === frontTag
 
     private fun spriteTag(): Any = playerSprite.getTag(R.id.ag_tag_sprite) ?: NO_TAG
 
@@ -456,9 +438,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     override fun onDetachedFromWindow() {
-        removeCallbacks(endTurnRun)
         stopTurnAnim()
-        if (turned) { turned = false; if (frontShown()) turnSource?.showBack(); frontTag = null }
         hideStatusBubble()
         bobs.forEach { it.cancel() }
         bobs.clear()

@@ -26,7 +26,11 @@ import com.husarp.ankigo.Anki
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.Report
+import com.husarp.ankigo.game.AchPageMath
+import com.husarp.ankigo.game.Achievements
+import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.StudyStats
+import com.husarp.ankigo.game.Trainer
 import com.husarp.ankigo.game.Type
 import com.husarp.ankigo.stats.AnkiGoTime
 import com.husarp.ankigo.stats.AnkiStats
@@ -235,10 +239,11 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val snap = AnkiStatsStore.snapshot
         val anki = snap.stats
         val collection = CollectionStats.of(data, state, System.currentTimeMillis())
-        val series = ChartData.build(metric, period, deck, snap, state.history, today, grain, goal = s.goal, collection = collection)
+        val series = ChartData.build(metric, period, deck, snap, state.history, today, grain, goal = s.goal, collection = collection, goalFor = { DailyGoal.forDay(state, it) })
         AnkiStatsStore.requestSeries(this, ChartData.seriesKeys(metric, period, deck, today))
 
-        content.addView(streakCard(s))
+        content.addView(trainerCard())
+        content.addView(streakCard(s), lp(14))
         content.addView(sectTitle(R.drawable.ic_stats, "Charts", R.color.ag_mauve))
         content.addView(metricButton())
         content.addView(filterChips(series), lp(8))
@@ -266,6 +271,43 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         content.addView(sectionCard(R.drawable.ic_star, "All time", R.color.ag_yellow, null, null, allTime), lp(14))
         content.addView(collectionSection(collection, snap, today), lp(14))
         syncSheet()
+    }
+
+    // ---- 0. trainer card (R6-06: moved here from the Pokémon tab) ----
+
+    /** Name, coins, trainer level + rank and the XP bar; the Achievements chip opens the Achievements section of this tab. */
+    private fun trainerCard(): View {
+        val st = state
+        val card = Ui.card(this).apply { setPadding(dp(14), dp(12), dp(14), dp(12)) }
+        val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        top.addView(Ui.text(this, 17f, 900, R.color.ag_text).apply { text = st.settings.trainerName; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
+        val short = Ui.shortWindow(this) // split screen: the badges chip goes next to the coins, saving a row
+        // 48 dp touch height around the small chip
+        val badgesBox = FrameLayout(this).apply {
+            minimumHeight = dp(48)
+            isClickable = true
+            contentDescription = "Achievements"
+            setOnClickListener { showSection(StatsSection.ACHIEVEMENTS) }
+            addView(Ui.chip(this@StatsPage, R.drawable.ic_star, R.color.ag_yellow).apply {
+                setText("Achievements ${AchPageMath.tiersReached(Achievements.view(st, data))}")
+            }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
+        }
+        if (short) top.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dp(6); it.topMargin = -dp(12); it.bottomMargin = -dp(12) })
+        top.addView(Ui.chip(this, R.drawable.ic_coin, R.color.ag_yellow).also { it.setText(Bits.fmt(st.cash)) })
+        card.addView(top)
+
+        val need = Trainer.xpForNext(st.trainerLevel)
+        val mid = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        mid.addView(Ui.text(this, 12f, 800, R.color.ag_sub1).apply { text = "Trainer Lv ${st.trainerLevel} · ${Trainer.rank(st)}" }, LinearLayout.LayoutParams(0, -2, 1f))
+        mid.addView(Ui.text(this, 11f, 800, R.color.ag_sub0).apply { text = "XP ${st.trainerXp} / $need" })
+        card.addView(mid, lp(4))
+
+        val bar = BarView(this)
+        bar.setMeaning(BarMeaning.XP, st.trainerXp.toFloat() / need.coerceAtLeast(1), false)
+        card.addView(bar, LinearLayout.LayoutParams(-1, dp(7)).also { it.topMargin = dp(7) })
+
+        if (!short) card.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -dp(2); it.bottomMargin = -dp(8) })
+        return card
     }
 
     // ---- 1. streak ----
@@ -753,7 +795,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             Triple("Most used ball", ball, R.color.ag_text),
             Triple("Rarest catch", cs.rarest?.name ?: "–", R.color.ag_text),
             Triple("Wild catches", Bits.fmt(cs.totalCatches), R.color.ag_text),
-            Triple("Defeated", Bits.fmt(cs.totalDefeats), R.color.ag_text),
+            Triple("Defeated or caught", Bits.fmt(cs.totalDefeats), R.color.ag_text),
             Triple("Evolutions", Bits.fmt(cs.totalEvolutions), R.color.ag_text),
         )
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }

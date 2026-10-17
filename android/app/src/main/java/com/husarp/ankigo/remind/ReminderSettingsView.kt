@@ -1,6 +1,6 @@
 package com.husarp.ankigo.remind
 
-import android.app.AlertDialog
+import com.husarp.ankigo.ui.AppDialog
 import android.app.Dialog
 import android.app.TimePickerDialog
 import android.content.Context
@@ -370,7 +370,10 @@ internal class ReminderScreen(
     // ---- dialogs ----
 
     private fun pickTime(minute: Int, onPick: (Int) -> Unit) {
-        Pickers.show(TimePickerDialog(ctx, { _, h, m -> onPick(h * 60 + m) }, minute / 60, minute % 60, true))
+        // Android's own time picker (a clock is system UI): only given the app's card colour
+        val d = TimePickerDialog(ctx, { _, h, m -> onPick(h * 60 + m) }, minute / 60, minute % 60, true)
+        d.window?.setBackgroundDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_card), 18, ctx))
+        Pickers.showSystem(d) // floating Settings has no Activity: the dialog needs the overlay window type
     }
 
     private fun askNumber(title: String, current: Int, min: Int, max: Int, onSave: (Int) -> Unit) {
@@ -394,7 +397,7 @@ internal class ReminderScreen(
             addView(field, FrameLayout.LayoutParams(-1, Ui.dp(ctx, 44)))
         }
         fun save() { field.text.toString().toIntOrNull()?.coerceIn(min, max)?.let(onSave) }
-        val dlg = AlertDialog.Builder(ctx).setTitle(title).setView(box)
+        val dlg = AppDialog.Builder(ctx).setTitle(title).setView(box)
             .setPositiveButton("Save") { _, _ -> save() }.setNegativeButton("Cancel", null).create()
         field.setOnEditorActionListener { _, action, _ ->
             if (action == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) { dlg.dismiss(); save(); true } else false

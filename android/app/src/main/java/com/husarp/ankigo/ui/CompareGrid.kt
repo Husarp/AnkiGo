@@ -22,7 +22,8 @@ import kotlin.math.roundToInt
 // the reference column) stay put while the rest scrolls sideways; the column heads stay at the top while it scrolls down.
 
 /** Sizes of the Compare table, from the window: tighter in split screen and small floating windows. */
-internal class CompareLook(ctx: Context, columns: Int, val fit: Int = CompareFit.AUTO) {
+/** [headNotes]: some column head carries a small note line ("from Pikachu" in "Fully evolved"); the heads then get one line more, in every column. */
+internal class CompareLook(ctx: Context, columns: Int, val fit: Int = CompareFit.AUTO, headNotes: Boolean = false) {
     private val cfg = ctx.resources.configuration
     private val wDp = if (cfg.screenWidthDp > 0) cfg.screenWidthDp else 412
     private val hDp = if (cfg.screenHeightDp > 0) cfg.screenHeightDp else 800
@@ -49,7 +50,7 @@ internal class CompareLook(ctx: Context, columns: Int, val fit: Int = CompareFit
     val nameSp = (if (tight) 10f else 11f) * zoom
     val spriteDp = ((if (tight) 30 else 40) * zoom).roundToInt()
     val rowMinDp = ((if (tight) 34 else 40) * zoom).roundToInt()
-    val headerDp = spriteDp + ((if (tight) 34 else 40) * zoom).roundToInt()
+    val headerDp = spriteDp + ((if (tight) 34 else 40) * zoom).roundToInt() + if (headNotes) (12 * zoom).roundToInt() else 0
 }
 
 /** The colour of a value on the red (0) - yellow - green (1) scale of "best of all" (before it is blended into the row's band). */
@@ -155,7 +156,6 @@ internal class CompareGrid(
         rows.addView(View(ctx), LinearLayout.LayoutParams(totalPx, dp(look.headerDp)))
         head = headRow()
 
-        whoRow()?.let { rows.addView(it, LinearLayout.LayoutParams(totalPx, -2)) }
         var band = 0
         for (row in table.rows) {
             if (row.section != null) {
@@ -210,21 +210,33 @@ internal class CompareGrid(
         setBackgroundColor(bg)
         val active = row != null && row.key == sortKey
         val label = Ui.text(ctx, look.labelSp, 800, if (active) R.color.ag_mauve else R.color.ag_sub0).apply {
-            this.text = if (active) text + "\n" + (if (sortDesc) "↓" else "↑") else text
+            this.text = text
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(6), dp(4), dp(2), dp(4))
+            setPadding(dp(6), dp(4), dp(2), if (active) dp(1) else dp(4))
             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
             // R4-X1 item 8: a word is never broken in the middle: the text shrinks until its longest word fits the column
             val word = CompareLabelFit.longestWord(this.text.toString())
             val avail = labelPx - dp(6) - dp(2) - dp(1)
             setTextSize(TypedValue.COMPLEX_UNIT_PX, CompareLabelFit.sp(textSize, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 8f, ctx.resources.displayMetrics), paint.measureText(word), avail.toFloat()))
         }
-        addView(label, FrameLayout.LayoutParams(-1, -1))
+        if (active) {
+            // R6-05 item 6: the direction is a drawn icon under the name (not a text arrow)
+            val arrow = ImageView(ctx).apply {
+                setImageResource(if (sortDesc) R.drawable.ic_sort_desc else R.drawable.ic_sort_asc)
+                setColorFilter(c(R.color.ag_mauve), android.graphics.PorterDuff.Mode.SRC_IN)
+            }
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(label, LinearLayout.LayoutParams(-1, -2))
+                addView(arrow, LinearLayout.LayoutParams(dp(14), dp(14)).also { it.marginStart = dp(6); it.bottomMargin = dp(3) })
+            }, FrameLayout.LayoutParams(-1, -1))
+        } else addView(label, FrameLayout.LayoutParams(-1, -1))
         addView(line(), FrameLayout.LayoutParams(dp(1), -1, Gravity.END))
         sticky(this, 3f)
         if (row != null) {
             val info = StatInfo.forKey(row.key)
-            contentDescription = (if (row.numeric) "Sort by ${row.label}. " else "") + (info?.let { "${it.title}: ${it.text}" } ?: row.label)
+            contentDescription = (if (row.numeric) "Sort by ${row.label}. " else "") + (if (active) (if (sortDesc) "Sorted high to low. " else "Sorted low to high. ") else "") + (info?.let { "${it.title}: ${it.text}" } ?: row.label)
             setOnClickListener { onLabel(row, this) }
             if (info != null) setOnLongClickListener { DetailParts.showInfo(ctx, info); true }
         }
@@ -257,6 +269,11 @@ internal class CompareGrid(
                 }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(2) })
                 if (vs && i == 0) addView(Ui.text(ctx, 9f, 900, R.color.ag_mauve).apply { text = "reference"; maxLines = 1; gravity = Gravity.CENTER },
                     LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(1) })
+                // R6-05 item 8: no tags under the heads; the "Fully evolved" note is one small line here (all heads are as tall as it needs)
+                col.note?.let {
+                    addView(Ui.text(ctx, 9f, 700, R.color.ag_sub0).apply { text = it; maxLines = 1; ellipsize = TextUtils.TruncateAt.END; gravity = Gravity.CENTER },
+                        LinearLayout.LayoutParams(-1, -2).also { p -> p.topMargin = dp(1) })
+                }
                 contentDescription = "${col.name}. Tap for options." + if (canDrag(i)) " Hold and drag to move." else ""
                 setOnClickListener { onHead(i, this) }
                 if (canDrag(i)) wireDrag(this, i)
@@ -271,58 +288,26 @@ internal class CompareGrid(
         }
     }
 
-    /** Tags (owned) or the "Pokédex" pill, plus the evolved note. Null when there is nothing to show. */
-    private fun whoRow(): View? {
-        val cells = table.columns.map { col ->
-            val box = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(pad, dp(5), pad, dp(3))
+    private fun sectionBar(title: String): View {
+        val mantle = c(R.color.ag_mantle)
+        // R6-05 item 8: the reference column's tint runs through the section bars too. The tint takes the bar's height (set after
+        // the bar measured itself: a match-parent child of a wrap-content FrameLayout stayed 0 high).
+        val tint = if (vs) View(ctx).apply { setBackgroundColor(refBg(mantle)); sticky(this) } else null
+        return object : FrameLayout(ctx) {
+            override fun onMeasure(w: Int, h: Int) {
+                super.onMeasure(w, h)
+                tint?.measure(MeasureSpec.makeMeasureSpec(colPx, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(measuredHeight, MeasureSpec.EXACTLY))
             }
-            colViews[table.columns.indexOf(col)].add(box)
-            val maxW = colPx - 2 * pad
-            val mon = col.mon
-            if (mon != null) {
-                for (t in MonTags.of(page.data, page.state, mon).take(if (look.narrow) 1 else 2)) {
-                    box.addView(MonTags.pill(ctx, t).also { clampWidth(it, maxW) },
-                        LinearLayout.LayoutParams(-2, -2).also { it.bottomMargin = dp(3) })
-                }
-            } else {
-                box.addView(Ui.pill(ctx, "DEX").also { it.maxLines = 1; it.setOnClickListener { Ui.toast(ctx, "Pokédex entry, not one of your Pokémon") } }, LinearLayout.LayoutParams(-2, -2))
-            }
-            col.note?.let {
-                box.addView(Ui.text(ctx, look.subSp, 700, R.color.ag_sub0).apply { text = it; gravity = Gravity.CENTER },
-                    LinearLayout.LayoutParams(-2, -2).also { p -> p.topMargin = dp(1) })
-            }
-            box
+        }.apply {
+            setBackgroundColor(mantle)
+            tint?.let { addView(it, FrameLayout.LayoutParams(colPx, 1).also { p -> p.leftMargin = labelPx }) }
+            addView(Ui.text(ctx, look.labelSp - 0.5f, 900, R.color.ag_sub0).apply {
+                text = title.uppercase() + if (title in SORT_SECTIONS) " · TAP A NAME TO SORT" else ""
+                letterSpacing = 0.06f
+                setPadding(dp(8), dp(6), dp(8), dp(4))
+                sticky(this, 3f)
+            }, FrameLayout.LayoutParams(-2, -2))
         }
-        if (cells.all { it.childCount == 0 }) return null
-        return LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(bandA)
-            addView(labelCell("", bandA), LinearLayout.LayoutParams(labelPx, -1))
-            cells.forEachIndexed { i, cell ->
-                addView(cell, LinearLayout.LayoutParams(colPx, -2))
-                pinIfRef(cell, i, bandA)
-            }
-        }
-    }
-
-    private fun clampWidth(v: View, maxPx: Int) {
-        when (v) {
-            is TextView -> { v.maxWidth = maxPx; v.ellipsize = TextUtils.TruncateAt.END; v.maxLines = 1 }
-            is ViewGroup -> for (i in 0 until v.childCount) (v.getChildAt(i) as? TextView)?.let { clampWidth(it, maxPx - dp(24)) }
-        }
-    }
-
-    private fun sectionBar(title: String): View = LinearLayout(ctx).apply {
-        setBackgroundColor(c(R.color.ag_mantle))
-        addView(Ui.text(ctx, look.labelSp - 0.5f, 900, R.color.ag_sub0).apply {
-            text = title.uppercase() + if (title in SORT_SECTIONS) " · TAP A NAME TO SORT" else ""
-            letterSpacing = 0.06f
-            setPadding(dp(8), dp(6), dp(8), dp(4))
-            stickyX += this
-        }, LinearLayout.LayoutParams(-2, -2))
     }
 
     private fun dataRow(row: CompareRow, band: Int): View {
@@ -348,7 +333,24 @@ internal class CompareGrid(
         v.setOnClickListener { Ui.toast(ctx, text) }
     }
 
-    private fun typeTap(v: View, t: com.husarp.ankigo.game.Type): View = v.also { tapText(it, CompareInfo.typeText(t)) }
+    /**
+     * R6-05 item 10: a type chip says its name already, so a tap on it shows nothing (the icon-only style keeps the chip's own
+     * "name" popup). The name stays as the spoken description. Text is shrunk a little before it would be cut ([fitChip]).
+     */
+    private fun typeTap(v: View, t: com.husarp.ankigo.game.Type, maxPx: Int = colPx - 2 * pad): View = v.also {
+        it.contentDescription = CompareInfo.typeText(t)
+        (it as? TextView)?.let { tv -> fitChip(tv, maxPx) }
+    }
+
+    /** R6-05 item 9: the chip shows its full name: the text shrinks (down to 7 sp) until chip + symbol fit [maxPx], before it could ever get a "…". */
+    private fun fitChip(tv: TextView, maxPx: Int) {
+        if (tv.text.isNullOrEmpty()) return // icon-only style: nothing to cut
+        val min = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 7f, ctx.resources.displayMetrics)
+        fun need(): Float = tv.paint.measureText(tv.text.toString()) + tv.paddingLeft + tv.paddingRight + tv.compoundDrawablePadding +
+            (tv.compoundDrawablesRelative[0]?.bounds?.width() ?: 0)
+        var size = tv.textSize
+        while (need() > maxPx && size > min) { size = (size - 0.5f).coerceAtLeast(min); tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, size) }
+    }
 
     // ---------- long-press drag of a column (R4-X1 item 7) ----------
 
@@ -488,20 +490,28 @@ internal class CompareGrid(
                     cell.types.forEachIndexed { k, t ->
                         box.addView(typeTap(Ui.typeChip(ctx, t), t), LinearLayout.LayoutParams(-2, -2).also { if (k > 0) it.topMargin = dp(3) })
                     }
-                } else box.addView(Bits.typeRow(ctx, cell.types).also { r -> for (k in 0 until r.childCount) typeTap(r.getChildAt(k), cell.types[k]) }, LinearLayout.LayoutParams(-2, -2))
+                } else box.addView(Bits.typeRow(ctx, cell.types).also { r -> for (k in 0 until r.childCount) typeTap(r.getChildAt(k), cell.types[k], (colPx - 2 * pad) / cell.types.size - dp(3)) }, LinearLayout.LayoutParams(-2, -2))
             }
             is Cell.Moves -> {
                 if (cell.moves.isEmpty()) box.addView(Ui.text(ctx, look.valueSp, 700, R.color.ag_sub0).apply { text = "none" })
                 cell.moves.forEachIndexed { k, m ->
                     box.addView(Ui.text(ctx, look.subSp + 0.5f, 800, R.color.ag_text).apply {
                         text = m.name; maxLines = 2; gravity = Gravity.CENTER
+                        hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                        // a word is not broken in the middle: it shrinks (not below 7 sp) until it fits the column
+                        setTextSize(TypedValue.COMPLEX_UNIT_PX, CompareLabelFit.sp(textSize, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 7f, ctx.resources.displayMetrics),
+                            paint.measureText(CompareLabelFit.longestWord(m.name)), (colPx - 2 * pad).toFloat()))
                     }, LinearLayout.LayoutParams(-2, -2).also { if (k > 0) it.topMargin = dp(6) })
                     box.addView(LinearLayout(ctx).apply {
                         orientation = if (look.stackTypes) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
                         gravity = Gravity.CENTER
-                        m.type?.let { addView(typeTap(Ui.typeChip(ctx, it), it)) }
-                        addView(Ui.text(ctx, look.subSp, 700, R.color.ag_sub0).apply { text = "Pow ${m.power}" },
-                            LinearLayout.LayoutParams(-2, -2).also { if (m.type != null) { if (look.stackTypes) it.topMargin = dp(1) else it.marginStart = dp(4) } })
+                        val pow = Ui.text(ctx, look.subSp, 700, R.color.ag_sub0).apply { text = "Pow ${m.power}" }
+                        // R6-05 item 9: the chip gets wrap-content (it used to be squeezed to the width of "Pow 65") and the room that is left
+                        m.type?.let {
+                            val room = colPx - 2 * pad - if (look.stackTypes) 0 else pow.paint.measureText(pow.text.toString()).toInt() + dp(4)
+                            addView(typeTap(Ui.typeChip(ctx, it), it, room), LinearLayout.LayoutParams(-2, -2))
+                        }
+                        addView(pow, LinearLayout.LayoutParams(-2, -2).also { if (m.type != null) { if (look.stackTypes) it.topMargin = dp(1) else it.marginStart = dp(4) } })
                     }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
                 }
             }
@@ -514,7 +524,7 @@ internal class CompareGrid(
                         orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
                         gravity = Gravity.CENTER
                         chunk.forEachIndexed { k, m ->
-                            addView(Ui.typeChip(ctx, m.type).also { tapText(it, CompareInfo.matchupText(m)) }, LinearLayout.LayoutParams(-2, -2).also { if (k > 0 && !stacked) it.marginStart = dp(8) })
+                            addView(Ui.typeChip(ctx, m.type).also { tapText(it, CompareInfo.matchupText(m)); if (stacked) fitChip(it, colPx - 2 * pad) }, LinearLayout.LayoutParams(-2, -2).also { if (k > 0 && !stacked) it.marginStart = dp(8) })
                             val tone = if (m.mult > 1.0) R.color.ag_red else if (m.mult == 0.0) R.color.ag_sub0 else R.color.ag_green
                             addView(Ui.text(ctx, look.subSp, 900, tone).apply { text = m.label; tapText(this, CompareInfo.matchupText(m)) },
                                 LinearLayout.LayoutParams(-2, -2).also { if (!stacked) it.marginStart = dp(3) })

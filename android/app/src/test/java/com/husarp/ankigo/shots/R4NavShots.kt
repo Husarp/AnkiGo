@@ -230,19 +230,23 @@ class R4NavShots {
         }
     }
 
-    @Test fun trainerCardChipsOpenTheRightTab() {
+    /** R6-06 item 15: the trainer card lives on the Stats tab (top of Statistics); its Achievements chip shows the Achievements section. */
+    @Test fun trainerCardIsOnTheStatsTab() {
         paparazzi.shootPage("r4n-chips", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
-            val cap = Capture(ctx)
-            val p = TeamPage(cap, NoHost)
-            val screen = pageScreen(cap, p)
+            val team = TeamPage(ctx, NoHost)
+            pageScreen(ctx, team)
+            call(team, "render")
+            assertTrue("no trainer card on the Pokémon tab", texts(team.root).none { it.startsWith("Trainer Lv") })
+            assertTrue(texts(team.root).none { it.startsWith("Achievements") })
+
+            val p = StatsPage(ctx, NoHost)
+            val screen = pageScreen(ctx, p)
             call(p, "render")
+            assertTrue(texts(p.root).any { it.startsWith("Trainer Lv") })
+            assertTrue(texts(p.root).any { it.startsWith("XP ") })
             tap(findText(p.root) { it.startsWith("Achievements") }!!)
-            tap(findText(p.root) { it == "Stats" }!!)
-            assertEquals(2, cap.started.size)
-            assertEquals(StatsActivity::class.java.name, cap.started[0].component?.className)
-            assertEquals("ACHIEVEMENTS", cap.started[0].getStringExtra(StatsActivity.EXTRA_SECTION))
-            assertEquals(StatsActivity::class.java.name, cap.started[1].component?.className)
-            assertEquals("STATISTICS", cap.started[1].getStringExtra(StatsActivity.EXTRA_SECTION))
+            call(p, "render")
+            assertTrue("the Achievements section is showing", texts(p.root).none { it.startsWith("Trainer Lv") })
             screen
         }
     }

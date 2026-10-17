@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.lookNum
-import android.app.AlertDialog
 import android.content.Context
 import android.view.Gravity
 import android.view.View
@@ -17,7 +16,6 @@ import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.Species
-import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.TypeMatchups
@@ -159,28 +157,21 @@ object MonDetail {
         val mem = DetailSections.memory(a)
         val seen = GameRepo.state?.let { it.seen + it.caught }.orEmpty()
         col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${stats.total}") {
-            LinearLayout(a).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(DetailParts.statHint(a))
-                val max = DetailMath.monStatMax(mon.level)
-                Stat.entries.forEach { s ->
-                    addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), DetailMath.natureDir(mon.nature, s), sp.base[s], compact))
-                }
-                addView(DetailParts.totalRow(a, stats.total, sp.base.total))
-            }
+            DetailSections.statsBody(a, stats, mon.level, mon.nature, sp, compact)
         })
         col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves") { DetailSections.moves(a, data, mon.moves, compact) })
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types) })
         col.addView(DetailSections.section(a, mem, DetailSection.TRAINING, mon.nature.label) { DetailSections.training(a, mon, compact) })
         val others = DetailFormat.otherAbilities(sp, mon.ability)
         col.addView(DetailSections.infoSection(a, mem, data, sp,
-            listOf(if (mon.caughtAt > 0) date(mon.caughtAt) to "Caught" else "–" to "Caught", mon.defeats.toString() to "Defeats"),
+            listOf(mon.defeats.toString() to "Defeats"),
             Triple("Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }, others?.let { "Others of its kind: $it" }),
             if (mon.shownName != mon.name) mon.name else null, seen, compact,
-            if (page != null) { s -> DexDetail.show(page, s) } else null))
+            lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–"),
+            onTap = if (page != null) { s -> DexDetail.show(page, s) } else null))
 
         if (page == null) { Pickers.info(a, "Details", Bits.scroll(a, col)); return }
-        lateinit var dlg: AlertDialog
+        lateinit var dlg: AppDialog
         lateinit var more: View
         more = DetailParts.secondaryButton(a, "More options") {
             // the menu hangs on this button, so the details close only once a row was tapped
@@ -200,7 +191,7 @@ object MonDetail {
                 addView(more, LinearLayout.LayoutParams(-1, -2).also(margins))
             }
         }
-        dlg = AlertDialog.Builder(a).setTitle("Details").setView(box).setPositiveButton("Close", null).create()
+        dlg = AppDialog.Builder(a).setTitle("Details").setView(box).setPositiveButton("Close", null).create()
         Pickers.show(dlg)
     }
 

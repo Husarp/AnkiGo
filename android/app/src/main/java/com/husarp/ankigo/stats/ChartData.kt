@@ -184,7 +184,7 @@ object ChartData {
      */
     fun build(
         metric: ChartMetric, period: ChartPeriod, deck: String?, snap: StatsSnapshot, history: Map<String, DayLog>, today: String,
-        grain: ChartGrain? = null, goal: Int = Tuning.DAILY_AVERAGE, collection: CollectionStats? = null,
+        grain: ChartGrain? = null, goal: Int = Tuning.DAILY_AVERAGE, collection: CollectionStats? = null, goalFor: ((String) -> Int)? = null,
     ): ChartSeries {
         val p = effectivePeriod(metric, period)
         val d = deck?.takeIf { it.isNotBlank() }
@@ -192,7 +192,7 @@ object ChartData {
             ?: return ChartSeries(metric, p, d, emptyList(), 0.0, 0.0, 0.0, null, metric.unit, "", false, true)
         when (metric.kind) {
             ChartKind.CATEGORY -> return categories(metric, p, d, snap, today, collection)
-            ChartKind.HEATMAP -> return heatmap(metric, p, d, snap, history, today, t, goal)
+            ChartKind.HEATMAP -> return heatmap(metric, p, d, snap, history, today, t, goal, goalFor)
             ChartKind.TIME -> Unit
         }
         val g = effectiveGrain(metric, p, grain)
@@ -414,7 +414,7 @@ object ChartData {
 
     /** The calendar of the period's weeks: cards answered per day (AnkiDroid's count, else AnkiGo's own), heat measured against [goal]. */
     private fun heatmap(
-        metric: ChartMetric, p: ChartPeriod, deck: String?, snap: StatsSnapshot, history: Map<String, DayLog>, today: String, t: LocalDate, goal: Int,
+        metric: ChartMetric, p: ChartPeriod, deck: String?, snap: StatsSnapshot, history: Map<String, DayLog>, today: String, t: LocalDate, goal: Int, goalFor: ((String) -> Int)?,
     ): ChartSeries {
         val weeks = heatmapWeeks(p)
         // the REVIEWS numbers of all decks; D30 so the "history still loading" note shows (the calendar reaches past 7 days)
@@ -425,10 +425,10 @@ object ChartData {
         val first = if (periodFirst.isAfter(gridFirst)) periodFirst else gridFirst
         val days = generateSequence(first) { it.plusDays(1) }.takeWhile { !it.isAfter(t) }.toList()
         val counts = days.associate { it.toString() to plan.value(it.toString())[0].toInt() }
-        val grid = StudyStats.heatmapFromCounts(counts, goal, today, weeks, first.toString())
+        val grid = StudyStats.heatmapFromCounts(counts, goal, today, weeks, first.toString(), goalFor)
         val bars = days.map { date ->
             val n = counts.getValue(date.toString())
-            Bar(date.dayOfMonth.toString(), date.toString(), date.toString(), listOf(n.toDouble()), true, heatDetail(date, n, goal, t))
+            Bar(date.dayOfMonth.toString(), date.toString(), date.toString(), listOf(n.toDouble()), true, heatDetail(date, n, goalFor?.invoke(date.toString()) ?: goal, t))
         }
         val total = counts.values.sumOf { it.toDouble() }
         val best = bars.filter { it.values[0] > 0.0 }.maxByOrNull { it.values[0] }

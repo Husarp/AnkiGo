@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -163,7 +162,7 @@ object AnkimonImportFlow {
     }
 
     private fun info(c: Context, title: String, message: String) {
-        Pickers.show(AlertDialog.Builder(c).setTitle(title).setMessage(message).setPositiveButton("OK", null).create())
+        Pickers.show(AppDialog.Builder(c).setTitle(title).setMessage(message).setPositiveButton("OK", null).create())
     }
 
     /** Merges [read] into a throw-away copy of [state] (the real state is untouched). Null when the merge itself fails. */
@@ -250,7 +249,7 @@ object AnkimonImportFlow {
         }
 
         var taken = false // apply() owns the cache copy from the Import tap on
-        val dialog = AlertDialog.Builder(c).setTitle("Import from Ankimon?").setView(Bits.scroll(c, col))
+        val dialog = AppDialog.Builder(c).setTitle("Import from Ankimon?").setView(Bits.scroll(c, col))
             .setPositiveButton("Import") { _, _ ->
                 val live = liveUi(app, ui)
                 if (live != null) { taken = true; apply(app, read, box.isChecked, now, onDone) } else onDone(false)

@@ -64,7 +64,7 @@ object AchievementTable {
         tiered("goals", "Study", "Daily goal reached", "Days you reached the daily goal (not in a row)", Metric.GOALS_REACHED, "target", 5, 30, 100, 300, 1_000),
 
         // ---- Battle (battle and progress) ----
-        tiered("defeats", "Battle", "Wild Pokémon defeated", "Wild Pokémon your main knocked out", Metric.DEFEATS, "crossed-swords", 10, 100, 1_000, 5_000, 15_000),
+        tiered("defeats", "Battle", "Wild Pokémon defeated", "Wild Pokémon your main knocked out or caught", Metric.DEFEATS, "crossed-swords", 10, 100, 1_000, 5_000, 15_000),
         tiered("damage-dealt", "Battle", "Damage dealt", "HP your Pokémon took off wild ones", Metric.DAMAGE_DEALT, "sword", 1_000, 20_000, 200_000, 1_000_000, 3_000_000),
         tiered("damage-taken", "Battle", "Damage taken", "HP your Pokémon lost", Metric.DAMAGE_TAKEN, "heart-broken", 500, 10_000, 100_000, 500_000, 1_500_000),
         tiered("damage-blocked", "Battle", "Damage blocked", "Damage you didn't take thanks to resisting", Metric.DAMAGE_BLOCKED, "shield", 200, 5_000, 50_000, 200_000, 600_000),

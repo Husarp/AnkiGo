@@ -127,6 +127,7 @@ object CompareStore {
     private const val MODE = "compare_mode"
     private const val ROWS = "compare_rows_hidden"
     private const val FIT = "compare_fit"
+    private const val GROUP = "compare_group"
 
     fun loadMode(ctx: android.content.Context): CompareMode =
         CompareMode.entries.firstOrNull { it.name == prefs(ctx).getString(MODE, null) } ?: CompareMode.VS_REFERENCE
@@ -136,6 +137,12 @@ object CompareStore {
     fun loadRows(ctx: android.content.Context): RowChoice = RowChoice.decode(prefs(ctx).getString(ROWS, null))
 
     fun saveRows(ctx: android.content.Context, r: RowChoice) = prefs(ctx).edit().putString(ROWS, r.encode()).apply()
+
+    /** R6-05 item 7: "Stats" or "Base stats" (default Stats). */
+    fun loadGroup(ctx: android.content.Context): CompareGroup =
+        CompareGroup.entries.firstOrNull { it.name == prefs(ctx).getString(GROUP, null) } ?: CompareGroup.STATS
+
+    fun saveGroup(ctx: android.content.Context, g: CompareGroup) = prefs(ctx).edit().putString(GROUP, g.name).apply()
 
     /** The zoom: how many columns fit (see [CompareFit]); automatic until the player picks one. */
     fun loadFit(ctx: android.content.Context): Int = CompareFit.valid(prefs(ctx).getInt(FIT, CompareFit.AUTO))

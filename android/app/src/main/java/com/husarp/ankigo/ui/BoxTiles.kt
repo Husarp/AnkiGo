@@ -20,11 +20,13 @@ class BoxTile(
     fun anyInTeam(team: Collection<String>): Boolean = members.any { it.uid in team }
 }
 
-/** The Box "show" filters (PLAN 81, 6A): everything, or only the favourites / the shiny ones / the team members / those holding an item / those that can evolve now. */
+/** The Box "show" filters (PLAN 81, 6A): everything, or only the favourites / the shiny ones / the team members / those holding an item / the Exp. Share / those that can evolve now. */
 enum class BoxFilter(val label: String, val none: String? = null) {
     ALL("All"), FAVOURITES("Favourites"), SHINY("Shiny"), IN_TEAM("In team"),
     /** R4-V5: the details show held items and evolutions, the tiles no longer do, so these two find them. */
     HOLDS_ITEM("Holds an item", "None of your Pokémon holds an item."),
+    /** R6-06: the holder can be any owned Pokémon, also one in the Box. */
+    HOLDS_XP_SHARE("Holds Exp. Share", "None of your Pokémon holds the Exp. Share."),
     CAN_EVOLVE("Can evolve now", "No Pokémon can evolve right now."),
 }
 
@@ -32,13 +34,14 @@ enum class BoxFilter(val label: String, val none: String? = null) {
 enum class CopySort(val label: String) { LEVEL("Level"), RECENT("Recent") }
 
 object BoxTiles {
-    /** [team] = the uids of the team (for [BoxFilter.IN_TEAM]); [canEvolve] answers [BoxFilter.CAN_EVOLVE] (see [MonTags.canEvolve]). */
-    fun filter(mons: List<Mon>, f: BoxFilter, team: Collection<String> = emptyList(), canEvolve: (Mon) -> Boolean = { false }): List<Mon> = when (f) {
+    /** [team] = the uids of the team (for [BoxFilter.IN_TEAM]); [xpShareUid] = the holder of the Exp. Share (for [BoxFilter.HOLDS_XP_SHARE]); [canEvolve] answers [BoxFilter.CAN_EVOLVE] (see [MonTags.canEvolve]). */
+    fun filter(mons: List<Mon>, f: BoxFilter, team: Collection<String> = emptyList(), xpShareUid: String? = null, canEvolve: (Mon) -> Boolean = { false }): List<Mon> = when (f) {
         BoxFilter.ALL -> mons
         BoxFilter.FAVOURITES -> mons.filter { it.favourite }
         BoxFilter.SHINY -> mons.filter { it.shiny }
         BoxFilter.IN_TEAM -> mons.filter { it.uid in team }
         BoxFilter.HOLDS_ITEM -> mons.filter { it.heldItem != null }
+        BoxFilter.HOLDS_XP_SHARE -> mons.filter { xpShareUid != null && it.uid == xpShareUid }
         BoxFilter.CAN_EVOLVE -> mons.filter(canEvolve)
     }
 

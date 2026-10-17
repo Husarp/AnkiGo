@@ -15,6 +15,7 @@ import android.os.IBinder
 import android.os.Handler
 import android.os.Looper
 import com.husarp.ankigo.GameRepo
+import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.R
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.live.LiveSession
@@ -205,7 +206,7 @@ class FloatBattleService : Service() {
         if (GameRepo.status != GameRepo.Status.READY || st == null) {
             return if (GameRepo.status == GameRepo.Status.LOADING) "Loading…" else "Open AnkiGo to finish setting up"
         }
-        val today = "${st.reviewsToday}/${st.settings.dailyAverage} today"
+        val today = "${st.reviewsToday}/${DailyGoal.today(st)} today"
         val wild = st.battle?.wild ?: return today
         return "Wild ${wild.name} Lv ${wild.level} · $today"
     }

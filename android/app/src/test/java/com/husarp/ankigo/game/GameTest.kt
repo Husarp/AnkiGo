@@ -243,10 +243,13 @@ class GameTest {
         assertEquals(54, caught.species); assertTrue(caught.newSpecies); assertTrue(caught.toTeam); assertNull(caught.ball)
         assertEquals(12, caught.level)
         assertTrue(ev.of<GameEvent.Fainted>().any { !it.player })
-        // AnkiGo (Tuning.CATCH_GIVES_XP): a 0-HP catch gives the full defeat XP to the main, but it is no defeat
+        // AnkiGo (Tuning.CATCH_GIVES_XP): a 0-HP catch gives the full defeat XP to the main; it counts as a win
+        // (defeat counters once, trainer XP by tier) but is no Defeated event and gives no defeat money
         assertEquals(Progression.xpForDefeat(data.sp(54), 12), ev.of<GameEvent.XpGained>().single { it.uid == s.main!!.uid }.xp)
         assertTrue(ev.of<GameEvent.Defeated>().isEmpty())
-        assertEquals(1, s.catches); assertEquals(0, s.defeats)
+        assertEquals(1, s.catches); assertEquals(1, s.defeats); assertEquals(1, s.catchWins); assertEquals(1, s.main!!.defeats)
+        assertEquals(Tuning.TRAINER_XP[Tier.NORMAL]!!, s.trainerXp)
+        assertEquals(2 * Tuning.CASH_PER_ANSWER, s.cashToday) // the two answers only: no defeat ₽
         assertTrue(54 in s.caught && 54 in s.seen)
         assertEquals(2, s.team.size)
         val mon = s.mon(caught.uid)!!
@@ -826,6 +829,20 @@ class GameTest {
         assertEquals(2, g.state.team.size)
     }
 
+    @Test fun aBallCatchIsAWinLikeTheAutoCatch() {
+        val g = game()
+        Economy.give(g.state, "master-ball", 1)
+        g.fight(species = 54)
+        val cash = g.state.cash
+        val ev = g.throwBall("master-ball")
+        val s = g.state
+        assertEquals(1, s.catches); assertEquals(1, s.defeats); assertEquals(1, s.catchWins); assertEquals(1, s.main!!.defeats)
+        assertEquals(Tuning.TRAINER_XP[Tier.NORMAL]!!, s.trainerXp)
+        assertEquals("no money for a catch", cash, s.cash)
+        assertTrue("no Pokémon XP", ev.of<GameEvent.XpGained>().isEmpty())
+        assertEquals("one win, counted once", 1, StudyStats.summary(s, s.day).battlesWon)
+    }
+
     @Test fun pokeBallSuccessAndFailureFollowTheChance() {
         // success: first draw < 8
         val win = game(seed = seedWithFirstDraw { it < 8 })
@@ -1041,6 +1058,37 @@ class GameTest {
         assertFalse(g.toTeam("b7").ok) // full
         assertFalse(g.toTeam("t0").ok) // already in
         assertFalse(g.toTeam("nope").ok)
+    }
+
+    @Test fun swapIntoTeamTakesTheSlotAndSendsTheOldOneToTheBox() {
+        val g = game(state = roster(6, 8))
+        val r = g.swapIntoTeam("b6", "t3")
+        assertTrue(r.ok); assertTrue(r.events.isEmpty()) // the main did not change
+        assertEquals(listOf("t0", "t1", "t2", "b6", "t4", "t5"), g.state.team)
+        assertNotNull(g.state.mon("t3")) // nothing lost, it is in the box now
+        assertEquals(14, g.state.mons.size)
+        assertTrue("t3" !in g.state.team)
+    }
+
+    @Test fun swapIntoTeamForTheMainMakesTheNewOneMain() {
+        val g = game(state = roster(6, 8))
+        g.fight()
+        g.state.battle!!.player.boosts[2] = 3
+        val r = g.swapIntoTeam("b6", "t0")
+        assertTrue(r.ok)
+        assertEquals(listOf("b6", "t1", "t2", "t3", "t4", "t5"), g.state.team)
+        assertEquals(listOf(GameEvent.MainChanged("b6", g.state.mon("b6")!!.name)), r.events)
+        assertEquals(0, g.state.battle!!.player.boosts[2])
+    }
+
+    @Test fun swapIntoTeamRefusesWhatDoesNotFit() {
+        val g = game(state = roster(6, 8))
+        val before = g.state.team.toList()
+        assertFalse(g.swapIntoTeam("nope", "t1").ok)  // unknown in
+        assertFalse(g.swapIntoTeam("b6", "nope").ok)  // unknown out
+        assertFalse(g.swapIntoTeam("t2", "t1").ok)    // already in the team
+        assertFalse(g.swapIntoTeam("b6", "b7").ok)    // out is not in the team
+        assertEquals(before, g.state.team)
     }
 
     @Test fun boxingTheMainPromotesTheNextOne() {

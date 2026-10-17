@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
 import android.app.RemoteAction
@@ -699,7 +698,7 @@ class GameActivity : AgActivity() {
                 if (found.isEmpty()) { Ui.toast(this, "No readable backup found"); return@runOnUiThread }
                 val fmt = SimpleDateFormat("d MMM yyyy HH:mm", Locale.getDefault())
                 val labels = found.map { (f, st) -> "${fmt.format(Date(f.lastModified()))}  ·  save #${st.seq}  ·  ${st.mons.size} Pokémon" }
-                AlertDialog.Builder(this).setTitle("Restore a backup")
+                AppDialog.Builder(this).setTitle("Restore a backup")
                     .setItems(labels.toTypedArray()) { _, i -> confirmRestore(found[i].first, labels[i]) }
                     .setNegativeButton("Cancel", null).showCard()
             }
@@ -707,7 +706,7 @@ class GameActivity : AgActivity() {
     }
 
     private fun confirmRestore(file: File, label: String) {
-        AlertDialog.Builder(this).setTitle("Restore this backup?")
+        AppDialog.Builder(this).setTitle("Restore this backup?")
             .setMessage("Your game goes back to:\n$label\n\nThe current files stay on disk.")
             .setPositiveButton("Restore") { _, _ ->
                 Thread {
@@ -729,7 +728,7 @@ class GameActivity : AgActivity() {
     }
 
     private fun confirmNewGame() {
-        AlertDialog.Builder(this).setTitle("Start a new game?")
+        AppDialog.Builder(this).setTitle("Start a new game?")
             .setMessage("You begin with nothing. Your old save files stay on disk, but the game won't use them.")
             .setPositiveButton("Continue") { _, _ ->
                 Pickers.show(AnkimonExportFlow.startOverDialog(this, AnkimonFiles.keptAt(this)) { forget ->
@@ -893,21 +892,21 @@ class GameActivity : AgActivity() {
             .sortedBy { Tuning.BALL_CHANCE[it] ?: 0 }
         if (balls.isEmpty()) { Ui.toast(this, "No Poké Balls. Buy some in the shop."); return }
         val labels = balls.map { "${Items.name(it)}  ×${st.count(it)}  ·  ${Catching.ballChance(it, types)}%" }
-        AlertDialog.Builder(this).setTitle("Throw a ball")
+        AppDialog.Builder(this).setTitle("Throw a ball")
             .setItems(labels.toTypedArray()) { _, i -> handleEvents(act { it.throwBall(balls[i]) }) }
             .setNegativeButton("Cancel", null).showCard()
     }
 
     /** The ⋯ entry that flips catch <-> defeat for this fight: its label says what a tap will do; null when no wild Pokémon is on stage. */
     private fun catchMenuLabel(): String? {
-        if (GameRepo.state?.battle == null) return null
+        if (GameRepo.state?.battle == null || player?.holding == true) return null   // a held result: the next wild one is not on stage yet
         val will = try { GameRepo.game?.willCatch() } catch (t: Throwable) { null } ?: return null
-        return if (will) "Defeat it instead (XP)" else "Catch this one"
+        return CatchChoiceText.menuLabel(will)
     }
 
     /** One-off: flip catch <-> defeat for this fight (the ⋯ menu entry). */
     private fun toggleCatch() {
-        if (GameRepo.state?.battle == null) return
+        if (GameRepo.state?.battle == null || player?.holding == true) return
         val g = GameRepo.game ?: return
         val before = try { g.willCatch() } catch (t: Throwable) { return }
         try {
@@ -917,12 +916,7 @@ class GameActivity : AgActivity() {
             return
         }
         val after = g.willCatch()
-        Ui.toast(this, when {
-            after != before && after -> "Will catch it"
-            after != before -> "Will defeat it instead (XP)"
-            after -> "This one is always caught"
-            else -> "No change"
-        })
+        Ui.toast(this, CatchChoiceText.toast(before, after))
     }
 
     /** The battle's area; with [cap] > 0 and a height that is not fixed it takes at most that share of the room it is offered. */

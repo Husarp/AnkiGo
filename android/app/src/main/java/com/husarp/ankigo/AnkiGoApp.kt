@@ -10,6 +10,7 @@ import com.husarp.ankigo.overlay.FloatBattleService
 import com.husarp.ankigo.remind.GameFactsWriter
 import com.husarp.ankigo.remind.ReminderScheduler
 import com.husarp.ankigo.ui.AchievementPopup
+import com.husarp.ankigo.ui.AppToast
 import com.husarp.ankigo.ui.BattleScreen
 
 /** Every Activity participates, including setup, diagnostics, updates and picker bridges. */
@@ -58,7 +59,7 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
     }
     override fun onActivityDestroyed(activity: Activity) { BattleScreen.setVisible(activity, false) }
     override fun onActivityCreated(activity: Activity, state: Bundle?) {}
-    override fun onActivityResumed(activity: Activity) { AchievementPopup.resumed(activity) } // the "achievement earned" popup shows on the screen in front
-    override fun onActivityPaused(activity: Activity) { AchievementPopup.paused(activity) }
+    override fun onActivityResumed(activity: Activity) { AppToast.resumed(activity); AchievementPopup.resumed(activity) } // the "achievement earned" popup shows on the screen in front
+    override fun onActivityPaused(activity: Activity) { AppToast.paused(activity); AchievementPopup.paused(activity) }
     override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) {}
 }

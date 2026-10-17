@@ -2,7 +2,7 @@ package com.husarp.ankigo
 
 import com.husarp.ankigo.game.lookNum
 import android.app.Activity
-import android.app.AlertDialog
+import com.husarp.ankigo.ui.AppDialog
 import android.app.Dialog
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
@@ -27,6 +27,7 @@ import android.webkit.*
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.overlay.FloatBattleService
@@ -74,7 +75,6 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private lateinit var answerDivider: View
     private lateinit var buttons: LinearLayout
     private lateinit var header: TextView
-    private lateinit var handle: TextView
     private lateinit var handleBar: FrameLayout
     private lateinit var gap: View
     private lateinit var topBar: LinearLayout
@@ -155,7 +155,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private var pageTiming: AnswerTiming? = null  // the answer whose next card's page is loading: its timing line waits for the page
     @Volatile private var answerQueued = false    // an answer waits for the io thread: the counts read after a card is skipped
     private val sink = object : LiveSession.Sink {
-        override fun onGameEvents(events: List<GameEvent>) { this@StudyActivity.events.enqueue(events); updateHandle() }
+        override fun onGameEvents(events: List<GameEvent>) { this@StudyActivity.events.enqueue(events) }
         override fun onLogLine(kind: LogKind, pill: String, text: String, redraw: Boolean) {
             events.enqueueAction { if (redraw) panel.renderAll(); panel.setLog(kind, pill, text) }
         }
@@ -259,11 +259,10 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
         handleBar.addView(View(this).apply { background = Ui.rounded(Ui.c(context, R.color.ag_ov), 2, context) }, FrameLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 4), Gravity.CENTER))
         handleBar.addView(StudyUi.line(this), FrameLayout.LayoutParams(-1, Ui.dp(this, 1), Gravity.TOP))
-        handle = StudyUi.label(this, "STRIP", 9, R.color.ag_sub0, 900).apply { letterSpacing = .055f; gravity = Gravity.CENTER_VERTICAL }
-        handleBar.addView(handle, FrameLayout.LayoutParams(-2, -1, Gravity.RIGHT).also { it.rightMargin = Ui.dp(this, 10) })
         side.addView(handleBar, StudyUi.lp(-1, Ui.dp(this, PanelHeight.BAR)))
         panel = BattlePanelView(this)
-        events = EventPlayer(panel)
+        events = EventPlayer(panel, continueOnPanel = false)   // the answer row has the Continue button (R6-09), the tiles show none
+        panel.onHoldChanged = { if (!isDestroyed && !finished) { releaseHiddenHold(); showButtons(); syncTiming() } }   // a result starts / stops holding the next battle: the row swaps its button, the auto timer pauses / restarts
         events.muted = { SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev) }
         panel.onMenu = { anchor ->
             if (events.idle) {
@@ -271,8 +270,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                     .item(0, "Pokémon", R.drawable.ic_team).item(1, "Bag / Shop", R.drawable.ic_shop)
                     .item(2, "Pokédex", R.drawable.ic_book).item(3, "Settings", R.drawable.ic_settings).item(4, "Battle log", R.drawable.ic_swords)
                 // one-off catch <-> defeat for this fight, only while a wild Pokémon is on stage; the label says what a tap does
-                val will = if (GameRepo.state?.battle != null) try { GameRepo.game?.willCatch() } catch (t: Throwable) { null } else null
-                if (will != null) m.item(5, if (will) "Defeat it instead (XP)" else "Catch this one", R.drawable.ic_ball)
+                val will = if (GameRepo.state?.battle != null && !events.holding) try { GameRepo.game?.willCatch() } catch (t: Throwable) { null } else null
+                if (will != null) m.item(5, com.husarp.ankigo.ui.CatchChoiceText.menuLabel(will), R.drawable.ic_ball)
                 val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
                 m.item(6, "Switch Pokémon", R.drawable.ic_swap, enabled = blocker == null, sub = blocker)
                 m.show { i ->
@@ -322,20 +321,15 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             record(r.events); events.enqueue(r.events); LiveSession.refreshWidgetsFor(this, r.events)
         }
     }
-    /** The ⋯ entry "Catch this one" / "Defeat it instead (XP)": flips the auto rule for this fight only. */
+    /** The ⋯ entry "Catch this one" / "Don't catch this one": flips the auto rule for this fight only. */
     private fun toggleCatch() {
         val game = GameRepo.game ?: return
-        if (!events.idle || GameRepo.state?.battle == null) return
+        if (!events.idle || events.holding || GameRepo.state?.battle == null) return
         val before = try { game.willCatch() } catch (t: Throwable) { return }
         GameRepo.run(this) { it.setOverride(if (before) com.husarp.ankigo.game.Outcome.DEFEAT else com.husarp.ankigo.game.Outcome.CATCH) }
         val after = game.willCatch()
         panel.renderAll()
-        Ui.toast(this, when {
-            after != before && after -> "Will catch it"
-            after != before -> "Will defeat it instead (XP)"
-            after -> "This one is always caught"
-            else -> "No change"
-        })
+        Ui.toast(this, com.husarp.ankigo.ui.CatchChoiceText.toast(before, after))
     }
     override fun onSaveInstanceState(out: Bundle) {
         super.onSaveInstanceState(out)
@@ -374,13 +368,13 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         panel.visibility = if (finished || GameRepo.game == null || kb) View.GONE else View.VISIBLE
         handleBar.visibility = if (finished || !plan.handle || GameRepo.game == null || kb) View.GONE else View.VISIBLE
         if (kb) gap.layoutParams = StudyUi.lp(-1, 0, 0f)
+        releaseHiddenHold()   // the panel just went (keyboard layout / summary) under a result: no Continue could be tapped
         if (!finished) {   // the answer row has one fixed height whatever it holds, so nothing above it moves between cards
             buttons.layoutParams = StudyUi.lp(-1, Ui.dp(this, if (kb) com.husarp.ankigo.study.TypeInLayout.BUTTON_DP else PanelHeight.buttonsDp(plan.answerRows)))
             buttons.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8)); buttons.gravity = Gravity.CENTER_VERTICAL
         }
         side.setPadding(if (wide) Ui.dp(this, 1) else 0, 0, 0, 0)
         side.setBackgroundColor(Ui.c(this, if (wide) R.color.ag_s0 else R.color.ag_base))
-        updateHandle()
         placeTimer()
         if (card != null && !finished) showButtons()
     }
@@ -392,7 +386,6 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private fun studyPlan(): com.husarp.ankigo.study.StudyLayout.Plan = resources.configuration.let {
         com.husarp.ankigo.study.StudyLayout.plan(it.screenWidthDp, it.smallestScreenWidthDp, it.orientation == Configuration.ORIENTATION_LANDSCAPE, finished)
     }
-    private fun updateHandle() { handle.text = PanelHeight.label(currentPanelDp(), isTablet()) }
     private fun isTablet() = resources.configuration.smallestScreenWidthDp >= com.husarp.ankigo.study.StudyLayout.TABLET_DP
     /** The panel height (dp) before it is clamped to the window: the saved/dragged one, else the preset of [heightMode]. */
     private fun currentPanelDp() = if (panelDp > 0) panelDp else PanelHeight.preset(isTablet(), heightMode)
@@ -411,7 +404,6 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val mode = PanelHeight.mode(shown, plan.panelDp(0))
         if (mode != heightMode) { heightMode = mode; panel.setStudyLayout(mode != 0, mode == 2) }
         panel.layoutParams = StudyUi.lp(-1, Ui.dp(this, shown))
-        updateHandle()
     }
     /** Drag the bar like a split-screen divider: the panel follows the finger, on release it snaps to a preset within reach. */
     private fun handleDrag() = object : View.OnTouchListener {
@@ -436,7 +428,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
     }
     override fun onStart() { super.onStart(); started = true; BattleScreen.setVisible(this, true); LiveSession.addSink(sink); LiveSession.hold(this, this) }
-    override fun onStop() { started = false; LiveSession.removeSink(sink); LiveSession.release(this, this); BattleScreen.setVisible(this, false); super.onStop() }
+    override fun onStop() { started = false; events.dropHold(); LiveSession.removeSink(sink); LiveSession.release(this, this); BattleScreen.setVisible(this, false); super.onStop() }
     override fun onResume() {
         super.onResume(); background = false; resumedNow = true; FloatBattleService.startIfWanted(this)
         GameSound.setStudyQuiet(this) { clickMuted() }   // shared menu / tab clicks and delayed battle sounds honour "quiet on cards with sound"
@@ -500,16 +492,18 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         countdown.contentDescription = StudyTiming.describe(plan)
     }
     private fun syncAuto() {
+        releaseHiddenHold()
         countdown.visibility = if (autoOn()) View.VISIBLE else View.GONE
         val plan = autoPlan()
         val run = plan != null && autoFired != sideNo &&
-            StudyTiming.mayRun(pageReady, !background, hasWindowFocus(), locked, mediaBlocked, actionSheet != null, audioBusy, opts.waitForAudio)
+            StudyTiming.mayRun(pageReady, !background, hasWindowFocus(), locked || !ContinueRule.autoMayRun(holding()), mediaBlocked, actionSheet != null, audioBusy, opts.waitForAudio)
         if (plan == null || !run) { auto.stop(); return }
         if (auto.running && auto.side == sideNo) return
         styleCountdown(plan); auto.start(sideNo, plan.millis)
     }
     /** The countdown reached zero: act through the same functions a tap uses (they keep every safety check). */
     private fun fireAuto() {
+        if (holding()) { auto.stop(); return }   // paused while Continue is pending: it counts again in full after it
         val plan = autoPlan() ?: return
         autoFired = sideNo
         when (plan.act) {
@@ -733,6 +727,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     /** The quiet-on-card-audio rule for a button click (the same rule the battle sounds use). */
     private fun clickMuted() = SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev)
     private fun flip() {
+        if (heldContinue()) return
         if (locked || flipped || mediaBlocked || card == null) return
         GameSound.ui(this, SoundId.SHOW_ANSWER, clickMuted())
         locked = true; syncTiming()
@@ -788,9 +783,30 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         if (v !== buttons) { v.isEnabled = false; if (v.isClickable) v.alpha = .55f }
         if (v is ViewGroup) for (i in 0 until v.childCount) disableButtons(v.getChildAt(i))
     }
+    /** A fight result holds the next battle back and its panel is on screen: the answer row shows Continue ([ContinueRule]). */
+    private fun holding() = ::panel.isInitialized && ContinueRule.holding(panel.holdsNextFight)
+    /** The panel is hidden (type-in keyboard layout, summary) while a result holds: nobody can tap Continue, so the hold goes at once and the card works as usual. */
+    private fun releaseHiddenHold() {
+        if (!::panel.isInitialized || !::events.isInitialized) return
+        // the row swaps back at once (not only through the posted onHoldChanged)
+        if (ContinueRule.mustRelease(panel.holdsNextFight, panel.visibility == View.VISIBLE) && events.continueBattle() && ::buttons.isInitialized) showButtons()
+    }
+    /** Continue: the result tiles go, the held next wild one makes its entrance, the card stays as it is. False = nothing was held. */
+    private fun continueBattle(): Boolean {
+        if (!events.continueBattle()) return false
+        showButtons(); syncTiming()
+        return true
+    }
+    /** A request to flip or answer (button, key, swipe, tap on the card, card script) while [holding]: it acts as Continue and the card stays. True = it did. */
+    private fun heldContinue(): Boolean { releaseHiddenHold(); return heldContinueNow() }
+    private fun heldContinueNow() = ContinueRule.onRequest(holding()) == ContinueRule.Act.CONTINUE && continueBattle()
     private fun showButtons() {
         buttons.removeAllViews(); updateSwipe()
         val enabled = !locked && !mediaBlocked
+        if (ContinueRule.row(flipped, holding()) == ContinueRule.Row.CONTINUE) {   // a fight result holds the next battle: no card is answered outside a battle
+            buttons.addView(StudyUi.answer(this, ContinueRule.LABEL, null, R.color.ag_mauve, true, ContinueRule.HINT) { if (!continueBattle()) showButtons() }, StudyUi.lp(-1, Ui.dp(this, 48)))
+            return
+        }
         if (!flipped) {
             val hint = if (keyboardLayout() && prefs.getBoolean(TypeInRules.PREF_ENTER, TypeInRules.ENTER_DEFAULT)) "or press Enter" else null
             buttons.addView(StudyUi.answer(this, "Show answer", null, R.color.ag_mauve, enabled, hint) { flip() }, StudyUi.lp(-1, Ui.dp(this, 48)))
@@ -810,6 +826,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
     }
     private fun answer(ease: Int) {
+        if (heldContinue()) return
         if (locked || !flipped || mediaBlocked || ease !in 1..(card?.buttons ?: 4) || SystemClock.elapsedRealtime() < allowAt) return
         val c = card ?: return
         val before = stats
@@ -972,7 +989,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val st = GameRepo.state ?: return
         val balls = st.bag.filter { (id, count) -> count > 0 && com.husarp.ankigo.game.Items.def(id)?.kind == com.husarp.ankigo.game.ItemKind.BALL }.keys.toList()
         if (balls.isEmpty()) { Ui.toast(this, "No Poké Balls. Buy some in the shop."); return }
-        AlertDialog.Builder(this).setTitle("Throw a ball").setItems(balls.map { "${com.husarp.ankigo.game.Items.name(it)} ×${st.count(it)}" }.toTypedArray()) { _, i ->
+        AppDialog.Builder(this).setTitle("Throw a ball").setItems(balls.map { "${com.husarp.ankigo.game.Items.name(it)} ×${st.count(it)}" }.toTypedArray()) { _, i ->
             val result = GameRepo.act(this) { it.throwBall(balls[i]) }
             record(result); events.enqueue(result); LiveSession.refreshWidgetsFor(this, result)
         }.setNegativeButton("Cancel", null).showCard()
@@ -1049,7 +1066,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         action(R.drawable.ic_sound, "Replay sound") { playAv(avAuto) }
         sheet.addView(StudyUi.line(this), StudyUi.lp(-1, Ui.dp(this, 1)).also { it.setMargins(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4)) })
         action(R.drawable.ic_undo, "Undo…", "Not possible in AnkiGo. Use Undo in AnkiDroid", faded = true) {
-            AlertDialog.Builder(this).setMessage("AnkiGo can't undo answers, bury, suspend or delete. Use Undo in AnkiDroid. The battle doesn't rewind; a redo won't count twice.").setPositiveButton("Open AnkiDroid") { _, _ -> openAnki() }.setNegativeButton("Back", null).showCard()
+            AppDialog.Builder(this).setMessage("AnkiGo can't undo answers, bury, suspend or delete. Use Undo in AnkiDroid. The battle doesn't rewind; a redo won't count twice.").setPositiveButton("Open AnkiDroid") { _, _ -> openAnki() }.setNegativeButton("Back", null).showCard()
         }
         val scroll = object : ScrollView(this) {
             override fun onMeasure(w: Int, h: Int) {
@@ -1199,7 +1216,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         if (foundItems.isEmpty()) result(R.drawable.ic_gift, "Found", "No items", R.color.ag_teal)
         else foundItems.distinct().forEach { item -> result(R.drawable.ic_gift, "Found", com.husarp.ankigo.game.Items.name(item), R.color.ag_teal, item = item) }
         summary.addView(results, StudyUi.spaced(this, 6))
-        val today = st?.reviewsToday ?: 0; val goal = (st?.settings?.dailyAverage ?: 100).coerceAtLeast(1)
+        val today = st?.reviewsToday ?: 0; val goal = (st?.let { DailyGoal.today(it) } ?: 100).coerceAtLeast(1)
         val goalRow = StudyUi.row(this).apply {
             background = Ui.rounded(Ui.c(context, R.color.ag_card), 12, context)
             setPadding(Ui.dp(context, 10), Ui.dp(context, 7), Ui.dp(context, 10), Ui.dp(context, 7))
@@ -1301,7 +1318,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             JsApi.Action.Bury -> jsWrite("bury", 0)
             JsApi.Action.Suspend -> jsWrite("suspend", 0)
             is JsApi.Action.Flag -> jsWrite("flag", a.value)
-            is JsApi.Action.Toast -> android.widget.Toast.makeText(applicationContext, a.text, if (a.short) android.widget.Toast.LENGTH_SHORT else android.widget.Toast.LENGTH_LONG).show()
+            is JsApi.Action.Toast -> Ui.toast(this, a.text) // the in-app message has no long / short length: it stays by text length
             is JsApi.Action.Speak -> {
                 val say = TtsRules.Av(speech = TtsRules.Item(a.text, jsLang, jsRate, jsPitch))
                 if (a.add && audioBusy) soundQueue.add(say) else playAv(listOf(say))

@@ -10,6 +10,8 @@ import com.husarp.ankigo.game.Tier
 import com.husarp.ankigo.game.Type
 import com.husarp.ankigo.ui.ArenaView
 import com.husarp.ankigo.ui.BattleDetails
+import com.husarp.ankigo.ui.DetailOpenStore
+import com.husarp.ankigo.ui.DetailSections
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -26,7 +28,18 @@ import org.junit.Test
 class R4X2Shots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
 
-    @After fun cleanUp() = BattleShotKit.reset()
+    @After fun cleanUp() {
+        BattleShotKit.reset()
+        DetailSections.storeOf = { ctx -> object : DetailOpenStore {
+            override fun get(key: String): Boolean? = com.husarp.ankigo.ui.AppPrefs.detailOpen(ctx, key)
+            override fun set(key: String, open: Boolean) = com.husarp.ankigo.ui.AppPrefs.setDetailOpen(ctx, key, open)
+        } }
+    }
+
+    /** The wild window has the same sections as the own details; Info (tier, Pokédex line) starts closed, so these shots open it. */
+    private fun openInfo() {
+        DetailSections.storeOf = { object : DetailOpenStore { override fun get(key: String): Boolean? = if (key == "info") true else null; override fun set(key: String, open: Boolean) {} } }
+    }
 
     private fun attack(move: String) = GameEvent.Attack(
         false, "Duckling", "Me", move, Type.WATER, Category.SPECIAL, 5, 1, 1.0, false, false, false, 10, 20, 10, 20,
@@ -53,6 +66,7 @@ class R4X2Shots {
     }
 
     @Test fun usedMovesAndTier() = paparazzi.shootWith("r4x2-used", listOf(Size.PHONE, Size.FLOATBATTLE)) { ctx ->
+        openInfo()
         val st = GameRepo.state!!
         val battle = st.battle!!
         battle.tier = Tier.LEGENDARY

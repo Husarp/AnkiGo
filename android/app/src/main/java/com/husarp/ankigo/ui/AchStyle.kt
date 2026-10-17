@@ -45,6 +45,19 @@ object AchStyle {
 
     @DrawableRes fun icon(key: String): Int = ICONS[key] ?: R.drawable.ic_star
 
+    /**
+     * R6-07 (item 21): icons whose drawing is not centred in its 24 x 24 viewport (the flame sits 2 units to the right ...), as the shift
+     * (x, y in viewport units) that centres them in a medal. Measured from the paths' bounding boxes (centre of the box vs. 12, 12).
+     */
+    private val NUDGE: Map<Int, Pair<Float, Float>> = mapOf(
+        R.drawable.ic_flame to (-2f to 0.25f), R.drawable.ic_ach_fossil to (-1.8f to 0.6f), R.drawable.ic_bolt to (1f to 0f),
+        R.drawable.ic_shop to (0.75f to 0.1f), R.drawable.ic_ach_cards to (0f to -1f), R.drawable.ic_ach_crown to (0f to -0.75f),
+        R.drawable.ic_ach_easy to (0f to -0.8f), R.drawable.ic_ach_heart_broken to (0f to -0.68f), R.drawable.ic_gift to (0f to -0.76f),
+    )
+
+    /** The shift (x, y) in viewport units that centres [res] in a medal; (0, 0) for an icon that is centred already. */
+    fun nudge(@DrawableRes res: Int): Pair<Float, Float> = NUDGE[res] ?: (0f to 0f)
+
     /** The colour of tier 0..4 (light and dark come from the colour resources). */
     @ColorRes fun tierRes(tier: Int): Int = when (tier.coerceIn(0, 4)) {
         0 -> R.color.ag_ach_0; 1 -> R.color.ag_ach_1; 2 -> R.color.ag_ach_2; 3 -> R.color.ag_ach_3; else -> R.color.ag_ach_4
@@ -104,6 +117,7 @@ object AchStyle {
  */
 class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
     private var icon: Drawable? = null
+    private var nudge = 0f to 0f
     private var tier = -1
     private var special = false
     private var ground = Ui.c(ctx, R.color.ag_card)
@@ -117,6 +131,7 @@ class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
     fun set(@DrawableRes iconRes: Int, tier: Int, special: Boolean = false, ground: Int = Ui.c(context, R.color.ag_card)) {
         this.tier = tier; this.special = special; this.ground = ground
         icon = context.getDrawable(iconRes)?.mutate()
+        nudge = AchStyle.nudge(iconRes)
         invalidate()
     }
 
@@ -140,7 +155,8 @@ class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
         canvas.drawCircle(cx, cy, r, ring)
         icon?.let {
             val h = s * 0.27f
-            it.setBounds((cx - h).toInt(), (cy - h).toInt(), (cx + h).toInt(), (cy + h).toInt())
+            val ox = nudge.first * h / 12f; val oy = nudge.second * h / 12f // the icon box is 2h wide for 24 viewport units
+            it.setBounds((cx - h + ox).toInt(), (cy - h + oy).toInt(), (cx + h + ox).toInt(), (cy + h + oy).toInt())
             it.setTint(if (locked) AchStyle.mix(color, ground, 0.8f) else color)
             it.draw(canvas)
         }

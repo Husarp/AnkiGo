@@ -12,6 +12,7 @@ import android.view.View
 import android.view.Window
 import android.view.WindowManager
 import com.husarp.ankigo.Anki
+import com.husarp.ankigo.ui.AppDialog
 import com.husarp.ankigo.ui.Ui
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -40,7 +41,7 @@ internal object DeckFlows {
     /** The move in progress, if any (main thread). */
     @Volatile var job: MoveAllJob? = null
         private set
-    private var progress: Dialog? = null
+    private var progress: AppDialog? = null
 
     private fun ui(act: Activity, block: () -> Unit) = act.runOnUiThread { if (!act.isDestroyed) block() }
 

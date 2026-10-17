@@ -27,9 +27,19 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
 
     private fun dpi(v: Int) = Ui.dp(context, v)
 
-    /** Fills the view with the big layout for [s]; [next] adds the NEXT line. */
-    fun bindGrid(s: CatchSummary, next: Boolean) {
+    /**
+     * The result is held until a tap on Continue ([cont] given: the NEXT line gets a Continue pill and the tiles take the tap too);
+     * null = nothing to tap (the Study screen has its own button, small windows run on a timeout).
+     */
+    private fun setContinue(cont: (() -> Unit)?) {
+        setOnClickListener(cont?.let { c -> View.OnClickListener { c() } })
+        isClickable = cont != null
+    }
+
+    /** Fills the view with the big layout for [s]; [next] adds the NEXT line, [cont] its Continue tap (see [setContinue]). */
+    fun bindGrid(s: CatchSummary, next: Boolean, cont: (() -> Unit)? = null) {
         removeAllViews()
+        setContinue(cont)
         background = null
         setPadding(0, 0, 0, 0)
         val tiles = CatchTilesPlan.tiles(s) { Items.name(it) }
@@ -42,15 +52,16 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
             addView(row, LayoutParams(-1, -2).also { if (i > 0) it.topMargin = dpi(6) })
             i += 2
         }
-        if (next) addView(nextLine(s.next), LayoutParams(-1, -2).also { it.topMargin = dpi(8); it.marginStart = dpi(2) })
+        if (next) addView(nextLine(s.next, cont), LayoutParams(-1, -2).also { it.topMargin = dpi(8); it.marginStart = dpi(2) })
     }
 
     /**
      * Fills the view with the one-line layout for [s]: a flat card like the log card ([radiusDp] corners, [card] colour) with the
      * short tiles in a row; [rowH] px tall. [next] puts the NEXT line under the row (the panel has room for it).
      */
-    fun bindRow(s: CatchSummary, next: Boolean, rowH: Int, radiusDp: Float) {
+    fun bindRow(s: CatchSummary, next: Boolean, rowH: Int, radiusDp: Float, cont: (() -> Unit)? = null) {
         removeAllViews()
+        setContinue(cont)
         background = Ui.rounded(Ui.c(context, R.color.ag_card), radiusDp, context)
         setPadding(dpi(10), dpi(2), dpi(8), dpi(2))
         gravity = Gravity.CENTER_VERTICAL
@@ -58,7 +69,7 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
         val h = if (next) dpi(26) else rowH - dpi(4)
         for (t in CatchTilesPlan.rowTiles(s)) row.addView(miniTile(t, max(dpi(14), h - dpi(6))))
         addView(row, LayoutParams(-1, if (next) h else -2))
-        if (next) addView(nextLine(s.next), LayoutParams(-1, -2).also { it.topMargin = dpi(1) })
+        if (next) addView(nextLine(s.next, cont), LayoutParams(-1, -2).also { it.topMargin = dpi(1) })
     }
 
     // ---------------------------------------------------------------- parts
@@ -130,11 +141,23 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
         return tile
     }
 
-    private fun nextLine(text: String): View {
+    private fun nextLine(text: String, cont: (() -> Unit)? = null): View {
         val row = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         row.addView(Ui.text(context, 10f, 900, R.color.ag_mauve).apply { this.text = "NEXT"; letterSpacing = 0.06f }, LayoutParams(-2, -2).also { it.marginEnd = dpi(6) })
         row.addView(Ui.text(context, 11f, 700, R.color.ag_sub0).apply { this.text = text; oneLine() }, LayoutParams(0, -2, 1f))
+        if (cont != null) row.addView(continuePill(cont), LayoutParams(-2, -2).also { it.marginStart = dpi(8) })
         return row
+    }
+
+    /** The small "Continue ›" pill at the end of the NEXT line (the same mauve as the Study screen's Continue button). */
+    private fun continuePill(cont: () -> Unit): View = Ui.text(context, 10.5f, 900, R.color.ag_base).apply {
+        text = "${ContinueRule.LABEL} ›"
+        gravity = Gravity.CENTER
+        setPadding(dpi(9), dpi(2), dpi(9), dpi(2))
+        background = StudyUi.ripple(context, Ui.rounded(Ui.c(context, R.color.ag_mauve), 9, context))
+        contentDescription = "${ContinueRule.LABEL}, ${ContinueRule.HINT}"
+        setOnClickListener { cont() }
+        oneLine()
     }
 
     private fun TextView.oneLine() { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }

@@ -246,6 +246,7 @@ class Settings(
     val wishlist: MutableSet<Int> = Tuning.DEFAULT_WISHLIST.toMutableSet(),
     var dailyAverage: Int = Tuning.DAILY_AVERAGE,       // Ankimon "daily average": the daily goal, also drives rarity
     var dayStartHour: Int = Tuning.DAY_START_HOUR,
+    var goalByWeekday: List<Int>? = null,               // R6-04: the daily goal per weekday (7 values, Monday first); null = the same every day (dailyAverage)
     var xpShareUid: String? = null,                     // Ankimon "classic" Exp. Share holder (null = off)
     var trainerName: String = "Trainer",
     var fasterStart: Boolean = false, // off by default; saved as fasterStartV2 (the old fasterStart key is ignored, so old saves start off)
@@ -308,6 +309,7 @@ class GameState(
     var starterChosen: Boolean = false,
     var catches: Int = 0,
     var defeats: Int = 0,
+    var catchWins: Int = 0,         // auto-rule catches that were also counted in [defeats] (from 0.15 on); Stats battlesWon subtracts them
     var evolutions: Int = 0,
     val ballCatches: MutableMap<String, Int> = mutableMapOf(), // wild catches per ball id ("auto" = the auto rule's catch); fossils, the starter and imports don't count
     val seenAt: MutableMap<Int, Long> = mutableMapOf(),        // species -> epoch ms it was first seen (set once; old species have none)

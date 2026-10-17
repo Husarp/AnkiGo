@@ -8,5 +8,7 @@
     android:updatePeriodMillis="1800000"
     android:initialLayout="@layout/widget_study_now"
     android:resizeMode="none"
+    android:configure="com.husarp.ankigo.ui.StudyNowSetupActivity"
+    android:widgetFeatures="reconfigurable|configuration_optional"
     android:description="@string/widget_study_now_desc"
     android:widgetCategory="home_screen" />

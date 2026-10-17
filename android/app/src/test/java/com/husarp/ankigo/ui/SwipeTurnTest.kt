@@ -52,14 +52,21 @@ class SwipeTurnTest {
     }
 
     @Test fun ignoredWhileBusyOrWithoutAFrontPicture() {
-        assertTrue(SwipeTurn.mayTurn(allowed = true) { true })
-        assertFalse("battle animation / PiP", SwipeTurn.mayTurn(allowed = false) { true })
-        assertFalse("no front sprite", SwipeTurn.mayTurn(allowed = true) { false })
+        assertTrue(SwipeTurn.mayTurn(allowed = true, toFront = true) { true })
+        assertFalse("battle animation / PiP", SwipeTurn.mayTurn(allowed = false, toFront = true) { true })
+        assertFalse("battle animation / PiP, back", SwipeTurn.mayTurn(allowed = false, toFront = false) { true })
+        assertFalse("no front sprite", SwipeTurn.mayTurn(allowed = true, toFront = true) { false })
+    }
+
+    @Test fun turningBackNeedsNoFrontPicture() {
+        var asked = 0
+        assertTrue(SwipeTurn.mayTurn(allowed = true, toFront = false) { asked++; false })
+        assertEquals("no file check for the way back", 0, asked)
     }
 
     @Test fun noFileChecksWhileBusy() {
         var asked = 0
-        assertFalse(SwipeTurn.mayTurn(allowed = false) { asked++; true })
+        assertFalse(SwipeTurn.mayTurn(allowed = false, toFront = true) { asked++; true })
         assertEquals(0, asked)
     }
 
@@ -74,9 +81,5 @@ class SwipeTurnTest {
         assertFalse("not yet a swipe", t.move(10f, 1f))
         assertTrue(t.move(30f, 2f))
         assertFalse("a swipe already owns the touch", t.claims(40f, 2f))
-    }
-
-    @Test fun turnLastsAboutOneAndAHalfSeconds() {
-        assertEquals(1500L, SwipeTurn.TURN_MS)
     }
 }

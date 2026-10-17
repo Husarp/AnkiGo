@@ -62,7 +62,7 @@ class NextMainShots {
         var rows = menuRows(b)
         // with a wild Pokémon on stage the last entry flips catch <-> defeat (its label says what a tap does)
         assertEquals(listOf("Pop out", "Pokémon", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log", "Help"), rows.filter { it.first != 9 }.map { it.second })
-        assertTrue(rows.first { it.first == 9 }.second in listOf("Catch this one", "Defeat it instead (XP)"))
+        assertTrue(rows.first { it.first == 9 }.second in listOf("Catch this one", "Don't catch this one"))
         assertTrue(rows.first { it.first == 5 }.third)
 
         FakeGame.scenario = FakeGame.Scenario.EMPTY

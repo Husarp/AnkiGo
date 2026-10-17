@@ -46,6 +46,16 @@ class BoxTilesTest {
         assertTrue(BoxTiles.filter(listOf(a, b, c), BoxFilter.IN_TEAM).isEmpty())
     }
 
+    @Test fun holdsExpShareFindsTheHolderAnywhere() {
+        val a = mon(25, 5); val b = mon(25, 6); val c = mon(1, 9)
+        val all = listOf(a, b, c)
+        assertEquals(listOf(b), BoxTiles.filter(all, BoxFilter.HOLDS_XP_SHARE, listOf(a.uid), b.uid)) // a Box holder
+        assertEquals(listOf(a), BoxTiles.filter(all, BoxFilter.HOLDS_XP_SHARE, listOf(a.uid), a.uid)) // a team holder
+        assertTrue(BoxTiles.filter(all, BoxFilter.HOLDS_XP_SHARE).isEmpty()) // nobody holds it
+        assertTrue(BoxTiles.filter(all, BoxFilter.HOLDS_XP_SHARE, xpShareUid = "gone").isEmpty())
+        assertEquals("None of your Pokémon holds the Exp. Share.", BoxFilter.HOLDS_XP_SHARE.none)
+    }
+
     @Test fun tileMarksSeeEveryCopy() {
         val a = mon(25, 5); val b = mon(25, 9)
         val t = BoxTiles.build(data, listOf(a, b), grouped = true).single()

@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.graphics.PorterDuff
@@ -288,7 +287,7 @@ object AnkimonExportFlow {
 
     internal fun warningDialog(
         c: Context, keptAt: Long?, onChoose: () -> Unit, onCancel: () -> Unit, noCopy: Boolean = false, oldGame: Boolean = false,
-    ): AlertDialog {
+    ): AppDialog {
         val col = column(c)
         val risky = (keptAt == null && noCopy) || (keptAt != null && oldGame)
         col.addView(warningPanel(c, WARNING, 13f))
@@ -296,7 +295,7 @@ object AnkimonExportFlow {
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 14) })
         col.addView(Ui.text(c, 12f, 600, R.color.ag_sub0).apply { text = "Your AnkiGo game isn't changed." },
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 10) })
-        return AlertDialog.Builder(c).setTitle("Export for Ankimon PC?").setView(Bits.scroll(c, col))
+        return AppDialog.Builder(c).setTitle("Export for Ankimon PC?").setView(Bits.scroll(c, col))
             .setPositiveButton(if (risky) "Export anyway…" else "Choose file…") { _, _ -> onChoose() }
             .setNegativeButton("Cancel") { _, _ -> onCancel() }
             .setOnCancelListener { onCancel() }
@@ -308,8 +307,8 @@ object AnkimonExportFlow {
      * yes -> a later export builds a fresh Ankimon save; no -> it still builds on the old import (said here and in the
      * export warning). [onStart] gets the answer (false when there is no kept file).
      */
-    internal fun startOverDialog(c: Context, keptAt: Long?, onStart: (forgetAnkimon: Boolean) -> Unit): AlertDialog {
-        val b = AlertDialog.Builder(c).setTitle("Really start over?")
+    internal fun startOverDialog(c: Context, keptAt: Long?, onStart: (forgetAnkimon: Boolean) -> Unit): AppDialog {
+        val b = AppDialog.Builder(c).setTitle("Really start over?")
         val gone = "Your Pokémon, items and progress are gone from the game. Are you sure?"
         if (keptAt == null) return b.setMessage(gone).setPositiveButton("Start over") { _, _ -> onStart(false) }.setNegativeButton("Cancel", null).create()
         val col = column(c)
@@ -337,7 +336,7 @@ object AnkimonExportFlow {
     }
 
     /** The progress dialog (not cancelable); [set] moves the bar and the one-line label. */
-    internal class ExportProgress(val dialog: AlertDialog, private val bar: BarView, private val label: TextView) {
+    internal class ExportProgress(val dialog: AppDialog, private val bar: BarView, private val label: TextView) {
         fun set(fraction: Float, text: String) { bar.setMeaning(BarMeaning.PROGRESS, fraction, true); label.text = text }
     }
 
@@ -347,22 +346,22 @@ object AnkimonExportFlow {
         val bar = BarView(c)
         col.addView(label)
         col.addView(bar, LinearLayout.LayoutParams(-1, Ui.dp(c, 8)).also { it.topMargin = Ui.dp(c, 14); it.bottomMargin = Ui.dp(c, 12) })
-        val d = AlertDialog.Builder(c).setTitle("Exporting…").setView(col).setCancelable(false).create()
+        val d = AppDialog.Builder(c).setTitle("Exporting…").setView(col).setCancelable(false).create()
         return ExportProgress(d, bar, label)
     }
 
-    internal fun successDialog(c: Context, r: ExportReport): AlertDialog {
+    internal fun successDialog(c: Context, r: ExportReport): AppDialog {
         val col = column(c)
         col.addView(Ui.text(c, 14f, 800, R.color.ag_text).apply { text = noBreaks(summary(r)); setLineSpacing(0f, 1.1f) })
         col.addView(Ui.text(c, 14f, 700, R.color.ag_sub1).apply { text = STEPS; setLineSpacing(0f, 1.15f) },
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 12) })
         col.addView(warningPanel(c, "Don't play Ankimon on the PC until you've imported this file.", 12f),
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 14) })
-        return AlertDialog.Builder(c).setTitle("Ready for Ankimon").setView(Bits.scroll(c, col)).setPositiveButton("OK", null).create()
+        return AppDialog.Builder(c).setTitle("Ready for Ankimon").setView(Bits.scroll(c, col)).setPositiveButton("OK", null).create()
     }
 
-    internal fun failureDialog(c: Context, message: String, nothingChanged: Boolean = true): AlertDialog =
-        AlertDialog.Builder(c).setTitle("Export failed")
+    internal fun failureDialog(c: Context, message: String, nothingChanged: Boolean = true): AppDialog =
+        AppDialog.Builder(c).setTitle("Export failed")
             .setMessage(message + "\n\n" + (if (nothingChanged) "Nothing was changed. " else "") + UNCHANGED)
             .setPositiveButton("OK", null).create()
 }

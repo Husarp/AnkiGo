@@ -1,6 +1,6 @@
 package com.husarp.ankigo.deck
 
-import android.app.AlertDialog
+import com.husarp.ankigo.ui.AppDialog
 import android.content.Context
 import android.text.InputFilter
 import android.util.TypedValue
@@ -22,11 +22,11 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal object DeckDialogs {
     /** A plain message with one OK button. */
     fun say(ctx: Context, title: String, message: String) {
-        lateinit var dlg: AlertDialog
+        lateinit var dlg: AppDialog
         val box = DeckViews.box(ctx, title)
         box.addView(DeckViews.message(ctx, message), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 8) })
         box.addView(DeckViews.button(ctx, "OK", R.color.ag_mauve) { dlg.dismiss() }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 16) })
-        dlg = AlertDialog.Builder(ctx).setView(box).create()
+        dlg = AppDialog.Builder(ctx).setView(box).create()
         Pickers.show(dlg)
     }
 
@@ -34,15 +34,15 @@ internal object DeckDialogs {
      * Cancel + [yes] ([danger] = red). [onYes] runs after the dialog closes. [onCancel] runs when the dialog goes away without a yes
      * (Cancel, a tap outside, Back), so a screen that locked something for the question can unlock it.
      */
-    fun confirm(ctx: Context, title: String, body: CharSequence, yes: String, danger: Boolean, onCancel: () -> Unit = {}, onYes: () -> Unit): AlertDialog {
-        lateinit var dlg: AlertDialog
+    fun confirm(ctx: Context, title: String, body: CharSequence, yes: String, danger: Boolean, onCancel: () -> Unit = {}, onYes: () -> Unit): AppDialog {
+        lateinit var dlg: AppDialog
         var answered = false
         val box = DeckViews.box(ctx, title)
         box.addView(DeckViews.message(ctx, body), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 8) })
         val row = DeckViews.buttons(ctx, DeckViews.button(ctx, "Cancel") { dlg.dismiss() },
             DeckViews.button(ctx, yes, if (danger) R.color.ag_red else R.color.ag_mauve) { answered = true; dlg.dismiss(); onYes() })
         box.addView(row, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 18) })
-        dlg = AlertDialog.Builder(ctx).setView(box).setOnDismissListener { if (!answered) onCancel() }.create()
+        dlg = AppDialog.Builder(ctx).setView(box).setOnDismissListener { if (!answered) onCancel() }.create()
         Pickers.show(dlg)
         return dlg
     }
@@ -56,7 +56,7 @@ internal object DeckDialogs {
         private lateinit var input: EditText
         private lateinit var error: TextView
         private lateinit var make: TextView
-        private lateinit var dlg: AlertDialog
+        private lateinit var dlg: AppDialog
         private val working = AtomicBoolean(false)
 
         /** The dialog's content (the screenshots build it without a window). */
@@ -88,8 +88,8 @@ internal object DeckDialogs {
             return box
         }
 
-        fun show(): AlertDialog {
-            dlg = AlertDialog.Builder(ctx).setView(view()).create()
+        fun show(): AppDialog {
+            dlg = AppDialog.Builder(ctx).setView(view()).create()
             Pickers.show(dlg)
             dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             input.requestFocus()
@@ -125,13 +125,13 @@ internal object DeckDialogs {
      * when it is over. Several screens can show it in turn (a turned screen builds a new one for the same job).
      */
     class MoveProgress(private val ctx: Context, private val job: MoveAllJob, private val onClose: () -> Unit) {
-        private lateinit var dlg: AlertDialog
+        private lateinit var dlg: AppDialog
         private val holder = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
 
         fun view(): View { render(); return holder }
 
-        fun show(): AlertDialog {
-            dlg = AlertDialog.Builder(ctx).setView(view()).setCancelable(false).create()
+        fun show(): AppDialog {
+            dlg = AppDialog.Builder(ctx).setView(view()).setCancelable(false).create()
             Pickers.show(dlg)
             return dlg
         }

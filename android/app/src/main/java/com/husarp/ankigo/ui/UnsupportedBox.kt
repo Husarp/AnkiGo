@@ -1,6 +1,5 @@
 package com.husarp.ankigo.ui
 
-import android.app.AlertDialog
 import android.content.Context
 import android.view.Gravity
 import android.view.View
@@ -69,7 +68,7 @@ object UnsupportedBox {
         val a = Ui.findActivity(ctx)
         if (a == null || a.isFinishing || a.isDestroyed) return
         Pickers.show(
-            AlertDialog.Builder(ctx).setTitle(u.name.replaceFirstChar { it.uppercase() } + " · Lv " + u.level)
+            AppDialog.Builder(ctx).setTitle(u.name.replaceFirstChar { it.uppercase() } + " · Lv " + u.level)
                 .setMessage(
                     "AnkiGo doesn't support this Pokémon yet (${u.reason}).\n\n" +
                         "It can't battle, join your team or be released for now. It is kept safe, and when you export back to Ankimon " +

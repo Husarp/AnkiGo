@@ -106,7 +106,7 @@ object StudyStats {
     )
 
     fun summary(state: GameState, today: String, weeks: Int = 18): Summary {
-        val goal = max(state.settings.dailyAverage, 1)
+        val goal = max(DailyGoal.forDay(state, today), 1)
         val live = state.day == today
         val todayReviews = if (live) max(state.reviewsToday, state.history[today]?.reviews ?: 0) else state.history[today]?.reviews ?: 0
         val streak = streak(state, today)
@@ -114,7 +114,7 @@ object StudyStats {
         return Summary(
             today = today, reviewsToday = todayReviews, goal = goal, streak = streak,
             heatmap = heatmap(state, today, weeks, todayReviews),
-            reviews = state.totalReviews, battlesWon = state.defeats + state.catches, catches = state.catches,
+            reviews = state.totalReviews, battlesWon = state.defeats + state.catches - state.catchWins, catches = state.catches,
             shinies = state.mons.count { it.shiny }, evolutions = state.evolutions, bestCombo = state.bestCardStreak,
             daysStudied = totals.daysStudied, avgPerDay = totals.avgPerDay, bestDay = totals.bestDay,
             damageDealt = state.counters[Metric.DAMAGE_DEALT.name] ?: 0L, damageTaken = state.counters[Metric.DAMAGE_TAKEN.name] ?: 0L,
@@ -148,12 +148,12 @@ object StudyStats {
     fun heatmap(state: GameState, today: String, weeks: Int, todayReviews: Int? = null): Heatmap {
         val counts = state.history.mapValues { it.value.reviews }.toMutableMap()
         if (todayReviews != null) counts[today] = todayReviews
-        return heatmapFromCounts(counts, state.settings.dailyAverage, today, weeks)
+        return heatmapFromCounts(counts, DailyGoal.forDay(state, today), today, weeks, goalFor = { DailyGoal.forDay(state, it) })
     }
 
     /** The same heatmap from any per-day count map (date "yyyy-MM-dd" -> count, e.g. the cards AnkiDroid says were studied); heat levels are measured against [goal].
-     *  Days before [firstDay] (when given) stay empty cells and are not counted. */
-    fun heatmapFromCounts(counts: Map<String, Int>, goal: Int, today: String, weeks: Int, firstDay: String? = null): Heatmap {
+     *  Days before [firstDay] (when given) stay empty cells and are not counted. [goalFor] (when given) is the goal of each cell's own game day, instead of the one [goal]. */
+    fun heatmapFromCounts(counts: Map<String, Int>, goal: Int, today: String, weeks: Int, firstDay: String? = null, goalFor: ((String) -> Int)? = null): Heatmap {
         val t = parse(today) ?: return Heatmap(emptyList(), emptyList(), 0)
         val from = firstDay?.let { parse(it) }
         val first = t.with(DayOfWeek.MONDAY).minusWeeks((weeks - 1).toLong())
@@ -165,7 +165,7 @@ object StudyStats {
                     val key = date.toString()
                     val r = counts[key] ?: 0
                     total += r
-                    Cell(key, r, level(r, goal))
+                    Cell(key, r, level(r, goalFor?.invoke(key) ?: goal))
                 }
             }
         }

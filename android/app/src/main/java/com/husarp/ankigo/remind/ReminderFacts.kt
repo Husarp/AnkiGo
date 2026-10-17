@@ -7,6 +7,7 @@ import android.os.Looper
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.data.Sprites
+import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.ItemKind
@@ -29,6 +30,8 @@ data class ReminderFacts(
     val dayStartHour: Int = Tuning.DAY_START_HOUR,
     val reviewsToday: Int = 0,
     val dailyGoal: Int = 0,
+    /** The weekday goals (7, Monday first; null = [dailyGoal] every day): a snapshot older than a day still knows the goal of the real day, see [goalFor]. */
+    val goalWeek: List<Int>? = null,
     val streakDays: Int = 0,
     val lastGoalDay: String? = null,
     /** Shop items worth having (any ball, an evolution item that evolves a team member) in [day]'s stock... */
@@ -39,6 +42,9 @@ data class ReminderFacts(
     val mainSprite: String? = null,
 ) {
     val valid: Boolean get() = day.isNotEmpty()
+
+    /** The daily goal of game day [gameDay] (0 = no goal known); [dailyGoal] is the one of [day]. */
+    fun goalFor(gameDay: String): Int = if (goalWeek == null || dailyGoal <= 0) dailyGoal else DailyGoal.pick(dailyGoal, goalWeek, gameDay)
 
     companion object {
         val NONE = ReminderFacts()
@@ -52,7 +58,8 @@ data class ReminderFacts(
                 day = state.day,
                 dayStartHour = state.settings.dayStartHour.coerceIn(0, 23),
                 reviewsToday = state.reviewsToday,
-                dailyGoal = state.settings.dailyAverage,
+                dailyGoal = DailyGoal.today(state),
+                goalWeek = DailyGoal.cleanTable(state.settings.goalByWeekday),
                 streakDays = state.streakDays,
                 lastGoalDay = state.lastGoalDay,
                 shopToday = worthHaving(data, state, today),
@@ -87,6 +94,7 @@ data class ReminderFacts(
             dayStartHour = p.getInt("dayStartHour", Tuning.DAY_START_HOUR).coerceIn(0, 23),
             reviewsToday = p.getInt("reviewsToday", 0),
             dailyGoal = p.getInt("dailyGoal", 0),
+            goalWeek = DailyGoal.cleanTable(p.getString("goalWeek", null)?.split(',')?.mapNotNull { it.toIntOrNull() }),
             streakDays = p.getInt("streakDays", 0),
             lastGoalDay = p.getString("lastGoalDay", null),
             shopToday = split(p.getString("shopToday", null)),
@@ -97,7 +105,7 @@ data class ReminderFacts(
         fun save(p: SharedPreferences, f: ReminderFacts) {
             p.edit()
                 .putString("day", f.day).putInt("dayStartHour", f.dayStartHour).putInt("reviewsToday", f.reviewsToday)
-                .putInt("dailyGoal", f.dailyGoal).putInt("streakDays", f.streakDays).putString("lastGoalDay", f.lastGoalDay)
+                .putInt("dailyGoal", f.dailyGoal).putString("goalWeek", f.goalWeek?.joinToString(",")).putInt("streakDays", f.streakDays).putString("lastGoalDay", f.lastGoalDay)
                 .putString("shopToday", f.shopToday.joinToString(",")).putString("shopTomorrow", f.shopTomorrow.joinToString(","))
                 .putString("mainSprite", f.mainSprite)
                 .apply()

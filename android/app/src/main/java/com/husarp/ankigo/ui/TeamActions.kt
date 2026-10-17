@@ -37,13 +37,10 @@ internal class MonActions(private val s: GamePage) {
                 s.act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.setMain(mon.uid).let { m -> if (m.ok) m.copy(message = "") else m } else r } }
             }
         } else if (main != null) {
-            // Team full: the main goes to the box and this one takes its place at the front.
+            // Team full (R6-06): pick which team Pokémon to swap out, or make this one the main (the main goes to the box).
+            add("Add to team…", R.drawable.ic_team) { swapIn(mon) }
             add("Make main (${main.shownName} goes to the box)", R.drawable.ic_star, tone = R.color.ag_yellow) {
-                s.act { g ->
-                    g.toBox(main.uid).let { r1 ->
-                        if (!r1.ok) r1 else g.toTeam(mon.uid).let { r2 -> if (r2.ok) g.setMain(mon.uid).let { m -> if (m.ok) m.copy(message = "") else m } else r2 }
-                    }
-                }
+                s.act { g -> g.swapIntoTeam(mon.uid, main.uid).let { r -> if (r.ok) r.copy(message = "") else r } }
             }
         }
         add("Give item…", R.drawable.ic_gift) { giveItem(mon) }
@@ -68,6 +65,13 @@ internal class MonActions(private val s: GamePage) {
         if (mon.favourite) { m.item(acts.size, "Release…", R.drawable.ic_trash, enabled = false, sub = "Remove ${mon.shownName} from favourites first.", danger = true); acts += {} }
         else add("Release…", R.drawable.ic_trash, danger = true) { release(mon) }
         m.show { onPick(); acts[it]() }
+    }
+
+    /** R6-06: the team is full; the picker of the battle switch (with a line on top) says which team Pokémon makes room for [mon]. */
+    private fun swapIn(mon: Mon) {
+        SwitchPopup.show(s, data, state, header = "Pick a team Pokémon to swap out", swap = true) { outUid ->
+            s.act { g -> g.swapIntoTeam(mon.uid, outUid) }
+        }
     }
 
     /** "Change look…": the 8B popup; the pick is saved through the game (purely visual) and every screen refreshes. */

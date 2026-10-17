@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.lookNum
-import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PorterDuff
@@ -34,74 +33,35 @@ import java.util.Locale
 /** Dialogs: choose from a list, confirm, pick a Pokémon / item / move. */
 object Pickers {
     /** Screenshot tests set this to take a dialog instead of showing it (a renderer has no window for it). Null in the app. */
-    internal var intercept: ((AlertDialog) -> Unit)? = null
+    internal var interceptApp: ((AppDialog) -> Unit)? = null
 
     /**
-     * Shows [dialog] the app's way: rounded card, Nunito title / message / buttons, 48 dp list rows ([style]). Every dialog
-     * of the game screens goes through here. Works in an Activity and over other apps (floating card).
+     * Shows an [AppDialog] (the app's own dialog card, see AppDialog.kt). Works in an Activity and over other apps (the
+     * dialog becomes an overlay window when there is no Activity).
      */
-    fun show(dialog: AlertDialog) {
-        dialog.window?.setBackgroundDrawable(Ui.rounded(Ui.c(dialog.context, R.color.ag_card), 18, dialog.context))
-        intercept?.let { it(dialog); return }
-        // Without an Activity there is no window to hang the dialog on: make it an overlay window (needs the overlay permission).
+    fun show(dialog: AppDialog) {
+        interceptApp?.let { it(dialog); return }
         if (Ui.findActivity(dialog.context) == null) {
             dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
         dialog.show()
-        style(dialog)
     }
 
-    /** Same as [show] (kept for the Settings calls). */
-    fun showPlain(dialog: AlertDialog) = show(dialog)
-
-    /**
-     * Gives an already created dialog the app's typography: title Nunito 18/900, message 14/700, buttons 14/900 in mauve
-     * (cancel-type buttons in `ag_sub1`, no ALL-CAPS) and `setItems` rows 15/700 at least 48 dp tall. Needs the dialog's views
-     * (after `show()`, or after Dialog.create() in the screenshot tests).
-     */
-    internal fun style(d: AlertDialog) {
-        val ctx = d.context
-        val titleId = ctx.resources.getIdentifier("alertTitle", "id", "android")
-        if (titleId != 0) d.findViewById<TextView>(titleId)?.apply {
-            typeface = Ui.font(ctx, 900); setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f); setTextColor(Ui.c(ctx, R.color.ag_text))
-        }
-        d.findViewById<TextView>(android.R.id.message)?.apply {
-            typeface = Ui.font(ctx, 700); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); setTextColor(Ui.c(ctx, R.color.ag_sub1))
-            setLineSpacing(0f, 1.15f)
-        }
-        for (which in listOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL)) {
-            d.getButton(which)?.apply {
-                isAllCaps = false
-                typeface = Ui.font(ctx, 900); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                setTextColor(Ui.c(ctx, if (which == AlertDialog.BUTTON_POSITIVE) R.color.ag_mauve else R.color.ag_sub1))
-                minHeight = Ui.dp(ctx, 48)
-            }
-        }
-        // setItems rows (the platform's text1 TextViews); custom rows ([rows]) are not touched
-        d.listView?.let { lv ->
-            fun row(v: View) {
-                if (v is TextView && v.id == android.R.id.text1) v.apply {
-                    typeface = Ui.font(ctx, 700); setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                    setTextColor(Ui.c(ctx, R.color.ag_text)); minHeight = Ui.dp(ctx, 48); gravity = Gravity.CENTER_VERTICAL
-                }
-            }
-            lv.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
-                override fun onChildViewAdded(parent: View, child: View) = row(child)
-                override fun onChildViewRemoved(parent: View, child: View) {}
-            })
-            for (i in 0 until lv.childCount) row(lv.getChildAt(i))
-        }
+    /** [show] for a platform dialog (the system time picker): over other apps (no Activity) its window becomes an overlay window, else `show()` throws BadTokenException. */
+    fun showSystem(dialog: android.app.Dialog) {
+        if (Ui.findActivity(dialog.context) == null) dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+        dialog.show()
     }
 
     /** A plain list of text choices. */
     fun choose(a: Context, title: String, labels: List<String>, onPick: (Int) -> Unit) {
-        show(AlertDialog.Builder(a).setTitle(title)
+        show(AppDialog.Builder(a).setTitle(title)
             .setItems(labels.toTypedArray()) { _, i -> onPick(i) }
             .setNegativeButton("Cancel", null).create())
     }
 
     fun confirm(a: Context, title: String, message: String, yes: String = "OK", onYes: () -> Unit) {
-        show(AlertDialog.Builder(a).setTitle(title).setMessage(message)
+        show(AppDialog.Builder(a).setTitle(title).setMessage(message)
             .setPositiveButton(yes) { _, _ -> onYes() }
             .setNegativeButton("Cancel", null).create())
     }
@@ -135,7 +95,7 @@ object Pickers {
             setPadding(Ui.dp(a, 24), Ui.dp(a, 8), Ui.dp(a, 24), Ui.dp(a, 0))
             addView(field, FrameLayout.LayoutParams(-1, Ui.dp(a, 44)))
         }
-        val b = AlertDialog.Builder(a).setTitle(title).setView(box)
+        val b = AppDialog.Builder(a).setTitle(title).setView(box)
             .setPositiveButton(save) { _, _ -> onSave(field.text.toString()) }
             .setNegativeButton("Cancel", null)
         neutral?.let { (label, act) -> b.setNeutralButton(label) { _, _ -> act() } }
@@ -149,12 +109,12 @@ object Pickers {
     }
 
     fun info(a: Context, title: String, view: View) {
-        show(AlertDialog.Builder(a).setTitle(title).setView(view).setPositiveButton("Close", null).create())
+        show(AppDialog.Builder(a).setTitle(title).setView(view).setPositiveButton("Close", null).create())
     }
 
     /** A list of [n] custom rows ([bind] builds row i); picking one closes the dialog and calls [onPick]. */
     fun rows(a: Context, title: String, n: Int, bind: (Int) -> View, onPick: (Int) -> Unit) {
-        lateinit var dlg: AlertDialog
+        lateinit var dlg: AppDialog
         val list = ListView(a).apply {
             divider = null
             dividerHeight = 0
@@ -169,7 +129,7 @@ object Pickers {
             }
             setOnItemClickListener { _, _, p, _ -> dlg.dismiss(); onPick(p) }
         }
-        dlg = AlertDialog.Builder(a).setTitle(title).setView(list).setNegativeButton("Cancel", null).create()
+        dlg = AppDialog.Builder(a).setTitle(title).setView(list).setNegativeButton("Cancel", null).create()
         show(dlg)
     }
 
@@ -206,12 +166,9 @@ object Pickers {
             text = "${ev.from} evolved into ${ev.to}!"
             gravity = Gravity.CENTER
         })
-        show(AlertDialog.Builder(a).setTitle("Evolution").setView(col).setPositiveButton("Nice", null).create())
+        show(AppDialog.Builder(a).setTitle("Evolution").setView(col).setPositiveButton("Nice", null).create())
     }
 }
-
-/** Builds and shows the dialog through [Pickers.show] (the app's dialog look). */
-fun AlertDialog.Builder.showCard() = Pickers.show(create())
 
 /** Small widgets shared by the three screens. */
 object Bits {

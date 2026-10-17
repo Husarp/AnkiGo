@@ -47,12 +47,6 @@ object PanelHeight {
     fun tap(dp: Int, tablet: Boolean): Int =
         listOf(preset(tablet, 0), preset(tablet, 1), preset(tablet, 2)).firstOrNull { it < dp - SAME } ?: preset(tablet, 0)
 
-    /** The bar's label: a preset's name, otherwise the look's name with the height. */
-    fun label(dp: Int, tablet: Boolean): String {
-        val name = listOf("FULL", "STRIP", "MINI")[mode(dp, preset(tablet, 0))]
-        return if ((0..2).any { Math.abs(preset(tablet, it) - dp) <= SAME }) name else "$name · $dp"
-    }
-
     /** Height (dp) of the answer-button container: it never changes while the card changes, so nothing above it moves. */
     fun buttonsDp(answerRows: Int) = (if (answerRows == 2) 40 + 6 + 40 else 48) + 16
 }

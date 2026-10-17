@@ -59,7 +59,7 @@ class SaveCodecTest {
         s.liveSnapshot = "{\"cards\":{\"1\":\"a \\\"q\\\"\"}}\nline2\r\n\ttab é ♀   end"
         s.unsupported += com.husarp.ankigo.game.UnsupportedMon("u-1", 4000, "Futuremon", "Fu \"Z\"", 33, true, "species #4000 isn't in AnkiGo's data", "{\"id\": 4000, \"name\": \"futuremon\"}")
         s.unsupported += com.husarp.ankigo.game.UnsupportedMon("u-2", null, "#?", null, 1, false, "no species number", null)
-        s.starterChosen = true; s.catches = 11; s.defeats = 22; s.evolutions = 3
+        s.starterChosen = true; s.catches = 11; s.defeats = 22; s.catchWins = 4; s.evolutions = 3
         val st = s.settings
         st.gens.clear(); st.gens += setOf(1, 3, 9)
         st.cardsPerRound = 5; st.autoMode = 1
@@ -115,7 +115,7 @@ class SaveCodecTest {
         assertEquals(listOf("potion", "great-ball"), b.shopItems); assertEquals(listOf("earthquake", "shadowball"), b.shopTms)
         assertEquals(mapOf(9_999_999_999_999L to 2, 42L to 1, -7L to 3), b.redo)
         assertEquals(fullState().liveSnapshot, b.liveSnapshot)
-        assertTrue(b.starterChosen); assertEquals(11, b.catches); assertEquals(22, b.defeats); assertEquals(3, b.evolutions)
+        assertTrue(b.starterChosen); assertEquals(11, b.catches); assertEquals(22, b.defeats); assertEquals(4, b.catchWins); assertEquals(3, b.evolutions)
         val st = b.settings
         assertEquals(setOf(1, 3, 9), st.gens); assertEquals(5, st.cardsPerRound); assertEquals(1, st.autoMode)
         assertFalse(st.protectLegendary); assertFalse(st.protectMythical); assertFalse(st.protectUltra); assertFalse(st.protectStarter)

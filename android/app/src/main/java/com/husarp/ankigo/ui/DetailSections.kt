@@ -20,7 +20,10 @@ import com.husarp.ankigo.game.EvoNode
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.Nature
 import com.husarp.ankigo.game.Species
+import com.husarp.ankigo.game.Stat
+import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.TypeMatchups
 import com.husarp.ankigo.game.data.DexEntry
@@ -134,6 +137,22 @@ object DetailSections {
         TagKind.REGIONAL -> R.color.ag_lav
     }
 
+    // ---------- Stats ----------
+
+    /**
+     * The Stats section body: hint, the six bars with [stats] (▲/▼ from [nature]; null = no arrows) and the grey base of [sp] at the
+     * end, then the Total row. Your Pokémon's details and the wild Pokémon's window build the same block.
+     */
+    fun statsBody(a: Context, stats: Stats, level: Int, nature: Nature?, sp: Species, compact: Boolean): View = LinearLayout(a).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(DetailParts.statHint(a))
+        val max = DetailMath.monStatMax(level)
+        Stat.entries.forEach { s ->
+            addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), if (nature == null) 0 else DetailMath.natureDir(nature, s), sp.base[s], compact))
+        }
+        addView(DetailParts.totalRow(a, stats.total, sp.base.total))
+    }
+
     // ---------- Moves ----------
 
     @ColorRes private fun kindTone(c: Category): Int = when (c) { Category.PHYSICAL -> R.color.ag_peach; Category.SPECIAL -> R.color.ag_blue; Category.STATUS -> R.color.ag_sub0 }
@@ -155,10 +174,13 @@ object DetailSections {
         contentDescription = kindName(c)
     }
 
-    /** Each move: kind icon, name, type chip + kind, power and accuracy; the one-line legend of the icons under them. No PP (the battle has none). */
-    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean): View {
+    /**
+     * Each move: kind icon, name, type chip + kind, power and accuracy; the one-line legend of the icons under them. No PP (the battle has none).
+     * [unknown] = moves that are not known yet (the wild Pokémon's unused ones): a grey "?" line each, after the known ones.
+     */
+    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        if (ids.isEmpty()) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "No moves" })
+        if (ids.isEmpty() && unknown == 0) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "No moves" })
         ids.forEachIndexed { i, id ->
             val m = data.move(id)
             if (i > 0) col.addView(View(a).apply { setBackgroundColor(Ui.c(a, R.color.ag_s0)); alpha = 0.6f }, LinearLayout.LayoutParams(-1, 1))
@@ -188,6 +210,13 @@ object DetailSections {
                 }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 10) })
                 addView(num(power, "power"), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
                 addView(num(m.accuracy?.toString() ?: "—", "acc."), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
+            })
+        }
+        repeat(unknown) { k ->
+            if (ids.isNotEmpty() || k > 0) col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
+            col.addView(Ui.text(a, 14f, 800, R.color.ag_sub0).apply {
+                text = "?"; contentDescription = "Unknown move"
+                setPadding(0, Ui.dp(a, if (compact) 8 else 10), 0, Ui.dp(a, if (compact) 8 else 10))
             })
         }
         // legend
@@ -380,9 +409,11 @@ object DetailSections {
 
     /**
      * The Info section: Pokédex text and category (loaded the first time it opens; never blocks), height / weight, [extra] cells
-     * (caught date, defeats), the abilities, and the evolution line. [abilities] = (label, value, small line under it) or null.
+     * (defeats; short values only), then each of [lines] (label, value) on its own full-width line (the long caught date, the
+     * wild Pokémon's tier), the abilities, and the evolution line. [abilities] = (label, value, small line under it) or null.
      */
-    private fun info(a: Context, data: GameData, sp: Species, extra: List<Pair<String, String>>, abilities: Triple<String, String, String?>?,
+    private fun info(a: Context, data: GameData, sp: Species, extra: List<Pair<String, String>>, lines: List<Pair<String, String>>,
+                     abilities: Triple<String, String, String?>?,
                      speciesLine: String?, seen: Set<Int>, compact: Boolean, onTap: ((Species) -> Unit)?): Pair<View, () -> Unit> {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         val head = caption(a, "Pokédex")
@@ -393,6 +424,10 @@ object DetailSections {
         if (facts != null) {
             col.addView(divider(a), LinearLayout.LayoutParams(-1, 1).also { it.topMargin = Ui.dp(a, 10); it.bottomMargin = Ui.dp(a, 10) })
             col.addView(facts)
+        }
+        lines.forEachIndexed { i, (label, value) ->
+            col.addView(divider(a), LinearLayout.LayoutParams(-1, 1).also { it.topMargin = Ui.dp(a, if (i == 0) 10 else 0) })
+            col.addView(fact(a, label, null, value, null, compact))
         }
         if (speciesLine != null) {
             col.addView(divider(a), LinearLayout.LayoutParams(-1, 1).also { it.topMargin = Ui.dp(a, 10); it.bottomMargin = Ui.dp(a, 4) })
@@ -415,10 +450,10 @@ object DetailSections {
 
     /** The Info section as a whole: the Pokédex text is asked for the first time it opens. */
     fun infoSection(a: Context, mem: DetailOpen, data: GameData, sp: Species, extra: List<Pair<String, String>>, abilities: Triple<String, String, String?>?,
-                    speciesLine: String?, seen: Set<Int>, compact: Boolean, onTap: ((Species) -> Unit)?): View {
+                    speciesLine: String?, seen: Set<Int>, compact: Boolean, lines: List<Pair<String, String>> = emptyList(), onTap: ((Species) -> Unit)?): View {
         var load: () -> Unit = {}
         return section(a, mem, DetailSection.INFO, "Pokédex, evolution", onFirstOpen = { load() }) {
-            val (v, l) = info(a, data, sp, extra, abilities, speciesLine, seen, compact, onTap)
+            val (v, l) = info(a, data, sp, extra, lines, abilities, speciesLine, seen, compact, onTap)
             load = l
             v
         }

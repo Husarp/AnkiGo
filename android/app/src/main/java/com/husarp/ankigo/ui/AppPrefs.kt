@@ -109,10 +109,19 @@ object AppPrefs {
 
     fun setPlayerSameSize(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("playerSameSize", on).apply()
 
-    /** Our Pokémon shows its front sprite, mirrored to face the wild one, instead of the back sprite. Default off. */
+    /**
+     * The facing of our Pokémon in every battle view: true = its front sprite, mirrored to face the wild one; false = the back
+     * sprite. Set by a swipe across the Pokémon (no Settings row since 0.15; installs that had the old switch on start facing
+     * front). Default off.
+     */
     fun playerFront(ctx: Context): Boolean = prefs(ctx).getBoolean("playerFront", false)
 
     fun setPlayerFront(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("playerFront", on).apply()
+
+    /** Calls [onChange] when the facing changes (a swipe in another battle view). The prefs hold [listener] weakly: the caller keeps it. */
+    fun watchPlayerFront(ctx: Context, listener: SharedPreferences.OnSharedPreferenceChangeListener) = prefs(ctx).registerOnSharedPreferenceChangeListener(listener)
+
+    fun unwatchPlayerFront(ctx: Context, listener: SharedPreferences.OnSharedPreferenceChangeListener) = prefs(ctx).unregisterOnSharedPreferenceChangeListener(listener)
 
     /** Sparks fly from the defeated Pokémon into ours and a "+N XP" number counts up when our Pokémon gains XP (Settings → Battle). Default on. */
     fun xpAnimation(ctx: Context): Boolean = prefs(ctx).getBoolean("xpAnimation", true)

@@ -1,6 +1,5 @@
 package com.husarp.ankigo.ui
 
-import android.app.AlertDialog
 import android.view.Gravity
 import android.view.View
 import android.widget.ImageView
@@ -100,7 +99,7 @@ internal object ShopInfo {
     }
 
     private fun show(s: GamePage, title: String, body: LinearLayout, price: Int, buy: Boolean, onBuy: () -> Unit) {
-        lateinit var dlg: AlertDialog
+        lateinit var dlg: AppDialog
         if (buy) {
             body.addView(buyButton(s, price) {
                 if (s.state.cash < price) { Ui.toast(s, "Not enough money (need ${Bits.fmt(price)} ₽)"); return@buyButton }
@@ -110,7 +109,7 @@ internal object ShopInfo {
         } else {
             body.addView(Ui.text(s, 14f, 900, R.color.ag_green).apply { text = "✓ Owned"; gravity = Gravity.CENTER }, Form.lp(s, 12))
         }
-        dlg = AlertDialog.Builder(s).setTitle(title).setView(Bits.scroll(s, body))
+        dlg = AppDialog.Builder(s).setTitle(title).setView(Bits.scroll(s, body))
             .setNegativeButton("Close", null).create()
         Pickers.show(dlg)
     }

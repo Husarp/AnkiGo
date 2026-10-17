@@ -46,10 +46,28 @@ data class WildInfo(
     val tier: Tier,
     val dex: WildDex,
     val base: Stats,
+    /** Its stats at its level, from the species base stats with the same fixed assumption for every wild one (see [statsAt]). */
+    val stats: Stats,
     val matchups: TypeMatchups,
     val moves: List<WildMoveSlot>,
 ) {
     companion object {
+        /** IV assumed for every stat of every wild Pokémon in the window (the middle of 0..31): its real IVs never show. */
+        const val ASSUMED_IV = 15
+
+        /**
+         * Stats at [level] from [base] with a neutral nature, 0 EVs and [ASSUMED_IV] in every stat: the same rule for every wild
+         * Pokémon, so the numbers carry no trace of the real IVs, nature or EVs.
+         */
+        fun statsAt(base: Stats, level: Int): Stats = Stats(
+            StatCalc.hp(base.hp, ASSUMED_IV, 0, level),
+            StatCalc.other(base.atk, ASSUMED_IV, 0, level, 1.0),
+            StatCalc.other(base.def, ASSUMED_IV, 0, level, 1.0),
+            StatCalc.other(base.spa, ASSUMED_IV, 0, level, 1.0),
+            StatCalc.other(base.spd, ASSUMED_IV, 0, level, 1.0),
+            StatCalc.other(base.spe, ASSUMED_IV, 0, level, 1.0),
+        )
+
         /** Null while the wild species is not in the data. [usedMoves] = move names from [WildMoveLog.used]. */
         fun of(data: GameData, state: GameState, battle: Battle, usedMoves: Set<String>): WildInfo? {
             val wild = battle.wild
@@ -63,7 +81,7 @@ data class WildInfo(
                 name = wild.name, dexNum = sp.baseNum, level = wild.level, gender = wild.gender, shiny = wild.shiny,
                 types = sp.types, tier = battle.tier,
                 dex = if (wild.species in state.caught) WildDex.CAUGHT else WildDex.SEEN,
-                base = sp.base, matchups = TypeMatchups.of(sp.types), moves = known + unknown,
+                base = sp.base, stats = statsAt(sp.base, wild.level), matchups = TypeMatchups.of(sp.types), moves = known + unknown,
             )
         }
     }

@@ -2,7 +2,6 @@ package com.husarp.ankigo.ui
 
 import android.Manifest
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -126,7 +125,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private var dataCard: LinearLayout? = null
     private var windowsCard: LinearLayout? = null
     private var nameEdit: EditText? = null
-    private var dialog: AlertDialog? = null
+    private var dialog: AppDialog? = null
     private var handledDataDone = false
 
     /** The open section, or null on the home list. */
@@ -276,7 +275,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val study = getSharedPreferences("study", 0)
         return when (s) {
             SettingsSection.LOOK -> SettingsSummary.look(AppPrefs.theme(this), AppPrefs.accent(this), AppPrefs.uiScale(this))
-            SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, st.cardsPerRound, st.dailyAverage)
+            SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, st.cardsPerRound, com.husarp.ankigo.game.DailyGoal.forSettings(st, loaded?.day), st.goalByWeekday != null)
             SettingsSection.STUDY -> SettingsSummary.study(study.getBoolean("inAnkiDroid", false), study.getBoolean("swipe", false), study.getInt("zoom", 100))
             SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this), AppPrefs.cardsUnderOwn(this))
             SettingsSection.REMINDERS -> SettingsSummary.reminders(com.husarp.ankigo.remind.ReminderStore.load(this))
@@ -461,7 +460,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 getSharedPreferences("study", 0).edit().putInt("zoom", it).apply()
             },
             Form.row(this, "Answer timer", null, valueText(getSharedPreferences("study", 0).getString("timer", com.husarp.ankigo.study.StudyTiming.AS_DECK))) {
-                Pickers.showPlain(android.app.AlertDialog.Builder(this).setItems(com.husarp.ankigo.study.StudyTiming.TIMER_MODES.toTypedArray()) { _, i ->
+                Pickers.show(AppDialog.Builder(this).setItems(com.husarp.ankigo.study.StudyTiming.TIMER_MODES.toTypedArray()) { _, i ->
                     getSharedPreferences("study", 0).edit().putString("timer", com.husarp.ankigo.study.StudyTiming.TIMER_MODES[i]).apply(); render()
                 }.create())
             },
@@ -477,7 +476,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 getSharedPreferences("study", 0).edit().putInt("autoAnswerSecs", it).apply()
             }.also { Form.enable(it, getSharedPreferences("study", 0).getBoolean("autoAdvance", false)) },
             Form.row(this, "Cards with missing media", null, valueText(getSharedPreferences("study", 0).getString("missing", "Ask"))) {
-                Pickers.showPlain(android.app.AlertDialog.Builder(this).setItems(arrayOf("Ask", "Always open in AnkiDroid", "Answer anyway")) { _, i ->
+                Pickers.show(AppDialog.Builder(this).setItems(arrayOf("Ask", "Always open in AnkiDroid", "Answer anyway")) { _, i ->
                     getSharedPreferences("study", 0).edit().putString("missing", listOf("Ask", "Always open in AnkiDroid", "Answer anyway")[i]).apply(); render()
                 }.create())
             },
@@ -538,8 +537,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         rows += Form.stepperRow(this, "Answers per attack", "How many answers make one attack. Ankimon: 2.", s.cardsPerRound, 1, 4, 1) { v ->
             edit { it.cardsPerRound = v }
         }
-        rows += Form.stepperRow(this, "Daily goal", "Reviews a day. A bigger goal also makes rare Pokémon more likely.", s.dailyAverage, 20, 500, 10) { v ->
-            edit { it.dailyAverage = v }
+        val goalDay = loaded?.day
+        val goalValue = valueText(DailyGoalPicker.valueText(s, goalDay)) as TextView
+        rows += Form.row(this, "Daily goal", "Reviews a day, the same every day or different per weekday. A bigger goal also makes rare Pokémon more likely.", goalValue) {
+            DailyGoalPicker.show(this, s, goalDay, { f -> edit(f) }) { goalValue.text = DailyGoalPicker.valueText(s, goalDay) }
         }
         rows += Form.stepperRow(this, "New day starts at", "Answers before this hour count for the day before.", s.dayStartHour, 0, 12, 1, { "$it:00" }) { v ->
             edit { it.dayStartHour = v }
@@ -567,14 +568,6 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
         nameEdit = field
         rows += Form.row(this, "Trainer name", null, field)
-
-        val holder = loaded?.mon(s.xpShareUid)
-        rows += Form.row(this, "Exp. Share holder", "Change it in Team.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
-            text = holder?.let { "${it.shownName} Lv ${it.level}" } ?: "Nobody"
-        })
-        rows += Form.row(this, "Wishlist", "Always caught by the auto rule. Tap ☆ in the Pokédex to add or remove.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
-            text = "${s.wishlist.size}"
-        })
         return rows
     }
 
@@ -638,8 +631,6 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 AppPrefs.cardsUnderOwn(this)) { AppPrefs.setCardsUnderOwn(this, it) },
             Form.switchRow(this, "Same size as the wild one", "Your Pokémon is not drawn bigger than the wild one",
                 AppPrefs.playerSameSize(this)) { AppPrefs.setPlayerSameSize(this, it) },
-            Form.switchRow(this, "Show my Pokémon from the front", "Front picture, turned to face the wild one, instead of the back picture",
-                AppPrefs.playerFront(this)) { AppPrefs.setPlayerFront(this, it) },
             Form.switchRow(this, "XP animation", "Sparks fly into your Pokémon when it gains XP",
                 AppPrefs.xpAnimation(this)) { AppPrefs.setXpAnimation(this, it) },
         )))
@@ -1073,10 +1064,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                     "$date · #${b.state.seq} · ${b.state.mons.size} Pokémon\n($kind)"
                 }.toTypedArray<CharSequence>()
                 dialog?.dismiss()
-                dialog = AlertDialog.Builder(this).setTitle("Restore a backup").setItems(labels) { _, which ->
+                dialog = AppDialog.Builder(this).setTitle("Restore a backup").setItems(labels) { _, which ->
                     val b = found[which]
                     confirm("Restore this backup?", describe(b.state) + "\n\nYour current game is kept as a backup.", "Restore") { applyRestore(null, b.file) }
-                }.setNegativeButton("Cancel", null).create().also { Pickers.showPlain(it) }
+                }.setNegativeButton("Cancel", null).create().also { Pickers.show(it) }
             }
         }.start()
     }
@@ -1129,13 +1120,13 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     private fun confirm(title: String, message: String, yes: String, onYes: () -> Unit) {
         dialog?.dismiss()
-        dialog = AlertDialog.Builder(this).setTitle(title).setMessage(message)
-            .setPositiveButton(yes) { _, _ -> onYes() }.setNegativeButton("Cancel", null).create().also { Pickers.showPlain(it) }
+        dialog = AppDialog.Builder(this).setTitle(title).setMessage(message)
+            .setPositiveButton(yes) { _, _ -> onYes() }.setNegativeButton("Cancel", null).create().also { Pickers.show(it) }
     }
 
     private fun info(title: String, message: String) {
         dialog?.dismiss()
-        dialog = AlertDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).create().also { Pickers.showPlain(it) }
+        dialog = AppDialog.Builder(this).setTitle(title).setMessage(message).setPositiveButton("OK", null).create().also { Pickers.show(it) }
     }
 
     companion object {

@@ -28,6 +28,7 @@ import androidx.annotation.DrawableRes
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.data.SpriteKind
+import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
@@ -102,6 +103,12 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     }
     private var accentAnim: ValueAnimator? = null
     private var logSize = 13f
+    /** R6-12: the latest line of each side; a tap or a swipe on the bar flips between them ([LogSlots]). */
+    private class ShownLine(val kind: LogKind, val pill: String, val text: String)
+    private val logSlots = LogSlots<ShownLine>()
+    private val chevLeft = LogChevron(ctx, false)
+    private val chevRight = LogChevron(ctx, true)
+    private val logSwipe = SwipeTracker(android.view.ViewConfiguration.get(ctx).scaledTouchSlop.toFloat())
 
     // ---- catch result tiles (PLAN 40): they take the log card's place after a catch or a defeat ----
     private val tiles = CatchTilesView(ctx).apply { visibility = GONE }
@@ -115,6 +122,14 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
      * parked its Encounter ([EventPlayer]) plays it now. Without a listener the panel draws the wild one from the saved game itself.
      */
     var onHeldReleased: (() -> Unit)? = null
+    /**
+     * A tap on "Continue" under the held result tiles (R6-09: the screens whose answers come from AnkiDroid, [EventPlayer] sets it).
+     * Null = the tiles show no Continue (the Study screen has its own button in the answer row).
+     */
+    var onContinue: (() -> Unit)? = null
+    /** Tells the screen when a result starts or stops holding the next wild one back ([holdsNextFight]); always on the main looper, never inside a layout pass. */
+    var onHoldChanged: ((Boolean) -> Unit)? = null
+    private var holdTold = false
 
     // ---- modes ----
     /** Picture-in-picture or floating battle ([setCompact] outside the study screens): the normal panel, scaled. */
@@ -127,7 +142,6 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var cardLook = false     // the Pokémon tab's battle card ([setCardLook])
     private var compactCards = false
     private var cardsOwn = true
-    private var playerFront = false
     private var applied: PanelFit.Fit? = null
     private var fit = PanelFit.Fit(1f, 0f, 0f, 0f, stats = true, log = true, xp = true, tools = true, logLines = 2, compactCards = false, middle = false, ok = true)
     private val chargePips = StudyUi.row(ctx).apply { visibility = GONE }
@@ -182,25 +196,50 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var enemyKey: String? = null
     private var playerKey: String? = null
 
-    /** PLAN 34: the swipe-to-turn picture swap for our main (front view and back to the normal one). */
+    /** PLAN 34: the swipe-to-turn facing for our main (saved in [AppPrefs.playerFront], so every battle view agrees). */
     private val turnSource = object : PlayerTurnSource {
         private fun look(): Pair<com.husarp.ankigo.game.Species, Boolean>? {
             val data = GameRepo.data ?: return null
             val m = GameRepo.state?.main ?: return null
             return m.lookSpecies(data) to m.shiny
         }
+        override fun facingFront(): Boolean = AppPrefs.playerFront(context)
         override fun hasFront(): Boolean {
-            if (AppPrefs.playerFront(context)) return false   // already shown from the front
             val (sp, shiny) = look() ?: return false
             if (com.husarp.ankigo.data.Sprites.cached(context, sp, SpriteKind.FRONT, shiny) != null) return true
             if (com.husarp.ankigo.data.Sprites.staticFile(context, sp.num, shiny).isFile) return true
             com.husarp.ankigo.data.Sprites.fetch(context, sp, SpriteKind.FRONT, shiny) { }   // ready for the next swipe
             return false
         }
-        /** The Pokémon the turn showed: the game may already hold the next main while an event still shows this one fainting. */
-        private var turnedLook: Pair<com.husarp.ankigo.game.Species, Boolean>? = null
-        override fun showFront() { look()?.let { (sp, shiny) -> turnedLook = sp to shiny; PanelSprites.show(context, arena.playerSprite, sp, SpriteKind.FRONT, shiny, false) } }
-        override fun showBack() { (turnedLook ?: look())?.let { (sp, shiny) -> PanelSprites.showMain(context, arena.playerSprite, sp, shiny) }; turnedLook = null }
+        override fun turnTo(front: Boolean, show: Boolean) {
+            AppPrefs.setPlayerFront(context, front)
+            // the Pokémon on screen (the game may already hold the next main while an event still shows this one fainting)
+            val (sp, shiny) = (playerLook ?: look()) ?: return
+            if (!show) return   // playerKey no longer matches the facing: the next render loads the picture
+            PanelSprites.showMain(context, arena.playerSprite, sp, shiny)
+            playerKey = playerKeyOf(sp.num, shiny)
+        }
+    }
+
+    /** What [playerKey] says: the picture follows the Pokémon, its shininess and the saved facing (so another view's swipe shows here too). */
+    private fun playerKeyOf(species: Int, shiny: Boolean) = "$species:$shiny:${AppPrefs.playerFront(context)}"
+
+    /** The Pokémon whose picture the player's sprite shows now (null: unknown, the game's main). */
+    private var playerLook: Pair<com.husarp.ankigo.game.Species, Boolean>? = null
+
+    /** A swipe in another battle view changed the facing: load the picture again here. */
+    private val facingWatch = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "playerFront") post { if (isAttachedToWindow) refreshPlayer() }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        AppPrefs.watchPlayerFront(context, facingWatch)
+    }
+
+    override fun onDetachedFromWindow() {
+        AppPrefs.unwatchPlayerFront(context, facingWatch)
+        super.onDetachedFromWindow()
     }
 
     init {
@@ -210,10 +249,13 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         strip.addView(grant, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(8) })
 
         // log
+        logBox.addView(chevLeft, LinearLayout.LayoutParams(dpi(14), dpi(14)))   // takes 14 dp on its side only while shown
         logBox.addView(pausedPill, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(6) })
         logBox.addView(logText, LinearLayout.LayoutParams(0, -2, 1f))
         pips.forEachIndexed { i, pip -> chargePips.addView(pip, LinearLayout.LayoutParams(dpi(10), dpi(10)).also { if (i > 0) it.marginStart = dpi(4) }) }
         logBox.addView(chargePips, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(7) })
+        logBox.addView(chevRight, LinearLayout.LayoutParams(dpi(14), dpi(14)))
+        logBox.setOnTouchListener { v, e -> logTouch(v, e) }
 
         setLog(LogKind.NEUTRAL, "READY", "Waiting for your first answer in AnkiDroid.", pop = false)
 
@@ -320,7 +362,6 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         cardsOwn = AppPrefs.cardsUnderOwn(context)
         arena.cardsUnderOwn = cardsOwn
         arena.playerSameSize = AppPrefs.playerSameSize(context)
-        AppPrefs.playerFront(context).let { if (it != playerFront) { playerFront = it; playerKey = null } }   // the main's picture loads again
         applied = null
         requestLayout()
     }
@@ -512,10 +553,18 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
      * Replaces the log card's content: coloured pill + text. `{{...}}` in [text] turns mauve. [pop] plays the short
      * scale/fade-in (mockup `.pop`, 250 ms).
      */
-    fun setLog(kind: LogKind, pill: String, text: String, pop: Boolean = true) {
+    fun setLog(kind: LogKind, pill: String, text: String, pop: Boolean = true, side: LogSide = LogSide.YOURS, fresh: Boolean = false) {
+        val line = ShownLine(kind, pill, text)
+        logSlots.post(side, line, fresh)
+        showLine(line, pop)
+    }
+
+    /** Draws [line] in the bar (a new line or the flipped one) and sets the chevron hint. */
+    private fun showLine(line: ShownLine, pop: Boolean) {
+        val kind = line.kind; val pill = line.pill; val text = line.text
         logPill?.let { logBox.removeView(it) }
         val p = Ui.pill(context, pill, kind.tone)
-        logBox.addView(p, 0, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(8) })
+        logBox.addView(p, 1, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(8) })   // after the left chevron
         p.visibility = if (small && paused) GONE else VISIBLE
         logPill = p
         TextFloor.apply(p, fit.floorSp)
@@ -537,6 +586,55 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         } else {
             logBg.accent = to
         }
+        syncChevrons()
+    }
+
+    private fun syncChevrons() {
+        val a = logSlots.arrow()
+        chevRight.visibility = if (a == LogArrow.RIGHT) VISIBLE else GONE
+        chevLeft.visibility = if (a == LogArrow.LEFT) VISIBLE else GONE
+        logBox.contentDescription = when (a) {
+            LogArrow.RIGHT -> "Battle text, your Pokémon's last action. Tap or swipe to see the wild Pokémon's"
+            LogArrow.LEFT -> "Battle text, the wild Pokémon's last action. Tap or swipe to see yours"
+            LogArrow.NONE -> null
+        }
+    }
+
+    /** Flips the bar to the other side's latest line (a short cross-fade; still with reduced motion). */
+    private fun flipLog() {
+        val line = logSlots.flip() ?: return
+        showLine(line, false)
+        val still = !ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
+        if (!still && isAttachedToWindow) { logBox.animate().cancel(); logBox.alpha = 0.4f; logBox.animate().alpha(1f).setDuration(140).start() }
+        else logBox.alpha = 1f
+    }
+
+    private var logDownX = 0f
+    private var logDownY = 0f
+
+    /** The bar's touches: a tap or a clear sideways swipe flips the line; nothing happens (and the touch is not taken) with no other side yet. */
+    private fun logTouch(v: View, e: android.view.MotionEvent): Boolean {
+        when (e.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> {
+                if (!logSlots.canFlip || tilesOn) return false
+                logDownX = e.x; logDownY = e.y; logSwipe.down(e.x, e.y)
+                return true
+            }
+            android.view.MotionEvent.ACTION_MOVE -> {
+                if (logSwipe.swiped) return true
+                if (logSwipe.move(e.x, e.y)) { v.parent?.requestDisallowInterceptTouchEvent(true); flipLog(); return true }
+                if (logSwipe.claims(e.x, e.y)) v.parent?.requestDisallowInterceptTouchEvent(true)
+                return true
+            }
+            android.view.MotionEvent.ACTION_UP -> {
+                if (logSwipe.end()) return true
+                val slop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+                if (kotlin.math.abs(e.x - logDownX) <= slop * 2 && kotlin.math.abs(e.y - logDownY) <= slop * 2) { v.performClick(); flipLog() }
+                return true
+            }
+            android.view.MotionEvent.ACTION_CANCEL -> { logSwipe.end(); return true }
+        }
+        return false
     }
 
     // ---------------------------------------------------------------- catch result tiles
@@ -567,7 +665,16 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         tiles.visibility = VISIBLE
         if (mode == CatchTilesPlan.Mode.TIMED) postDelayed(hideTilesRun, CatchTilesPlan.SMALL_MS)
         requestLayout()
+        holdChanged()
         return mode
+    }
+
+    /** Tells [onHoldChanged] when [holdsNextFight] changed. Posted: it can be called from a measure pass. */
+    private fun holdChanged() {
+        val now = holdsNextFight
+        if (now == holdTold) return
+        holdTold = now
+        android.os.Handler(android.os.Looper.getMainLooper()).post { onHoldChanged?.invoke(holdsNextFight) }
     }
 
     /** Back to the log card (and the held wild one, if there is one, is drawn by the next event or [renderAll]). */
@@ -581,6 +688,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         tiles.visibility = GONE
         logBox.visibility = if (fit.log) VISIBLE else GONE
         requestLayout()
+        holdChanged()
     }
 
     /**
@@ -597,6 +705,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
                 removeCallbacks(hideTilesRun)
                 postDelayed(hideTilesRun, CatchTilesPlan.SMALL_MS)
                 releaseHeld(held)
+                holdChanged()
             }
             CatchResultShift.Do.HIDE -> { hideCatchTiles(); releaseHeld(held) }
         }
@@ -623,12 +732,13 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val full = !small && !legacy
         val grid = CatchTilesPlan.grid(full, fit.virtualH)
         val lp = tiles.layoutParams as LinearLayout.LayoutParams
+        val cont: (() -> Unit)? = if (enemyHeld) onContinue?.let { c -> { c() } } else null   // only a held result waits for a tap
         if (grid) {
-            tiles.bindGrid(s, next = true)
+            tiles.bindGrid(s, next = true, cont = cont)
             lp.height = -2
             lp.setMargins(dpi(10), dpi(8), dpi(10), 0)
         } else {
-            tiles.bindRow(s, next = full, rowH = logLp.height, radiusDp = if (legacy && logBg.cornerRadius == 0f) 0f else 12f)
+            tiles.bindRow(s, next = full, rowH = logLp.height, radiusDp = if (legacy && logBg.cornerRadius == 0f) 0f else 12f, cont = cont)
             lp.height = logLp.height
             lp.setMargins(logLp.leftMargin, logLp.topMargin, logLp.rightMargin, logLp.bottomMargin)
         }
@@ -745,6 +855,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
             arena.setPlayerInfo(null, "", 0)
             arena.setPlayerStatus(null)
             playerKey = null
+            playerLook = null
             return
         }
         val sp = data.species[m.species]
@@ -755,13 +866,13 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         arena.setPlayerXp(m.xp, need, false)
         if (sp != null) {
             val look = m.lookSpecies(data)   // the picture follows the chosen look (purely visual)
-            val key = "${look.num}:${m.shiny}"
-            if (key != playerKey) { playerKey = key; PanelSprites.showMain(context, arena.playerSprite, look, m.shiny) }
+            val key = playerKeyOf(look.num, m.shiny)
+            if (key != playerKey) { playerKey = key; playerLook = look to m.shiny; PanelSprites.showMain(context, arena.playerSprite, look, m.shiny) }
         }
     }
 
     fun renderFooter(st: GameState) {
-        setGoal(st.reviewsToday, st.settings.dailyAverage, false)
+        setGoal(st.reviewsToday, DailyGoal.today(st), false)
         setCombo(st.cardStreak, false)
         val g = GameRepo.game
         val now = System.currentTimeMillis()
@@ -781,11 +892,11 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /** Forgets which sprite is shown so the next [renderAll] / event loads it again (after a species change). */
-    fun forgetSprites() { enemyKey = null; playerKey = null }
+    fun forgetSprites() { enemyKey = null; playerKey = null; playerLook = null }
 
     /** Marks the main's sprite as already loaded for a species (set by the evolution animation). */
     fun noteEnemySprite(species: Int, shiny: Boolean) { enemyKey = "$species:$shiny" }
-    fun notePlayerSprite(species: Int, shiny: Boolean) { playerKey = "$species:$shiny" }
+    fun notePlayerSprite(species: Int, shiny: Boolean) { playerKey = playerKeyOf(species, shiny); playerLook = null }
 
     /** Downloads the next encounter and the main ahead of time so the next fight appears at once. */
     fun prefetch(st: GameState, data: GameData) {

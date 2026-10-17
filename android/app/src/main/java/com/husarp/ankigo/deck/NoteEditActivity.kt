@@ -290,7 +290,7 @@ class NoteEditActivity : AgActivity() {
             main.post {
                 if (isDestroyed) return@post
                 saving = false
-                if (r.ok) { Ui.toast(this, r.message); setResult(RESULT_OK); finish() }
+                if (r.ok) { setResult(RESULT_OK); finish(); Ui.toast(this, r.message) } // the message waits for the screen behind (AppToast)
                 else { stale = r.changed; setStatus(r.message); setEditing(true); refreshSave() }
             }
         }

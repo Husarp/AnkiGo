@@ -181,7 +181,7 @@ object Encounters {
      * The pick may then turn into one of its regional forms ([eligibleForms]). MEGA/GMAX rolls resolve to NORMAL. Shiny 1/4096.
      */
     fun roll(data: GameData, state: GameState, wildLevel: Int, rng: Random): Roll {
-        val pct = tierPercentages(state.reviewsToday, state.settings.dailyAverage, state.trainerLevel, state.main?.level ?: 1)
+        val pct = tierPercentages(state.reviewsToday, DailyGoal.today(state), state.trainerLevel, state.main?.level ?: 1)
         var pick = rng.nextDouble() * 100
         var tier = Tier.NORMAL
         for ((t, w) in pct) {

@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.Drawable
@@ -245,7 +244,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     private fun open(deck: Anki.Deck) {
         if (prefs.getBoolean("inAnkiDroid", false)) { companion(deck); return }
         if (deck.total == 0) {
-            AlertDialog.Builder(act).setMessage("Nothing due. Custom study is in AnkiDroid.")
+            AppDialog.Builder(act).setMessage("Nothing due. Custom study is in AnkiDroid.")
                 .setPositiveButton("Open in AnkiDroid") { _, _ -> companion(deck) }.setNegativeButton("Back", null).showCard(); return
         }
         act.startActivity(Intent(act, StudyActivity::class.java).putExtra("deckId", deck.id).putExtra("deckName", deck.name))

@@ -98,6 +98,14 @@ object CompareInfo {
 
     fun typeText(t: Type): String = "${t.label} type"
 
+    /**
+     * R6-05 item 8: what a column head's menu says now that the heads carry no tags: a Pokédex entry says so, an owned Pokémon
+     * lists its tags ("Main · Exp. Share"), then the "Fully evolved" note. Null when there is nothing to say.
+     */
+    fun headInfo(dex: Boolean, tags: List<String>, note: String?): String? =
+        (listOfNotNull(if (dex) "Pokédex entry, not one of your Pokémon" else null) + tags + listOfNotNull(note))
+            .filter { it.isNotBlank() }.joinToString(" · ").ifEmpty { null }
+
     /** "Water: ×2, takes double damage" for a matchup chip. */
     fun matchupText(m: Matchup): String = "${m.type.label} ${m.label}: " + when (m.mult) {
         4.0 -> "takes four times the damage"

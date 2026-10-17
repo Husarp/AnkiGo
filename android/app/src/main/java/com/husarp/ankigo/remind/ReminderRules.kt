@@ -190,16 +190,17 @@ object ReminderRules {
         if (facts.valid) {
             val reviews = if (facts.day == todayKey) facts.reviewsToday else 0
             val goalReachedToday = facts.lastGoalDay == todayKey
+            val goal = facts.goalFor(todayKey) // the facts may be from an earlier day: today's weekday goal
 
             // Streak about to end: the goal was reached yesterday and not yet today
-            if (prefs.streakOn && !off(ReminderKind.STREAK) && facts.streakDays > 0 && facts.lastGoalDay == yesterdayKey && facts.dailyGoal > 0 &&
-                reviews < facts.dailyGoal && !sentToday(ReminderKind.STREAK) && timeIsNow(prefs.streakTime)
-            ) post(streak(facts.streakDays, reviews, facts.dailyGoal))
+            if (prefs.streakOn && !off(ReminderKind.STREAK) && facts.streakDays > 0 && facts.lastGoalDay == yesterdayKey && goal > 0 &&
+                reviews < goal && !sentToday(ReminderKind.STREAK) && timeIsNow(prefs.streakTime)
+            ) post(streak(facts.streakDays, reviews, goal))
 
             // Daily goal not reached yet
-            if (prefs.dailyGoalOn && !off(ReminderKind.DAILY_GOAL) && facts.dailyGoal > 0 && reviews < facts.dailyGoal && !goalReachedToday &&
+            if (prefs.dailyGoalOn && !off(ReminderKind.DAILY_GOAL) && goal > 0 && reviews < goal && !goalReachedToday &&
                 !sentToday(ReminderKind.DAILY_GOAL) && timeIsNow(prefs.dailyGoalTime)
-            ) post(dailyGoal(reviews, facts.dailyGoal, aliveStreak(facts, todayKey, yesterdayKey)))
+            ) post(dailyGoal(reviews, goal, aliveStreak(facts, todayKey, yesterdayKey)))
 
             // Shop news: once per game day, as soon as the quiet hours allow
             if (prefs.shopOn && !off(ReminderKind.SHOP) && !sentToday(ReminderKind.SHOP)) {
@@ -228,7 +229,7 @@ object ReminderRules {
         var target = 0
         if (facts.valid && facts.dailyGoal > 0) {
             done = if (facts.day == todayKey) facts.reviewsToday else 0
-            target = facts.dailyGoal
+            target = facts.goalFor(todayKey)
             lines += ReminderText.goalLine(done, target, aliveStreak(facts, todayKey, yesterdayKey))
         }
         return Notice(

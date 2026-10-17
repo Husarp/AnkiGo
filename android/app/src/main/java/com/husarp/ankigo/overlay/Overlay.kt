@@ -1,7 +1,7 @@
 package com.husarp.ankigo.overlay
 
 import android.app.Activity
-import android.app.AlertDialog
+import com.husarp.ankigo.ui.AppDialog
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -34,7 +34,7 @@ object Overlay {
     fun ask(activity: Activity, reason: String) {
         AppPrefs.setOverlayExplained(activity, true)
         if (activity.isFinishing) return
-        AlertDialog.Builder(activity)
+        AppDialog.Builder(activity)
             .setTitle("Show AnkiGo over other apps?")
             .setMessage(
                 "$reason Android calls this “Display over other apps”. " +
