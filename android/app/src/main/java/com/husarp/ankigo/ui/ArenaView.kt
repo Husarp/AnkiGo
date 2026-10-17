@@ -63,10 +63,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val eStatus = StatusRow(ctx)           // status badge row directly under the HP bar (item 95)
     private val pStatus = StatusRow(ctx)
     private val bubble = StatusBubble(ctx).apply { visibility = GONE }
-    private val eNums = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private val eHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0)
-    private val eHp = BarView(ctx)
-    private val eHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }   // HP bar + numbers (side by side on compact cards)
+    private val eHp = BarView(ctx).apply { ghostOnDrop = true }
+    private val eHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }   // HP bar + "61 / 61 HP" side by side
     private val enemyCard = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         background = Ui.rounded(translucentCard(ctx), 12, ctx)
@@ -86,12 +85,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // ---- player info card ----
     private val pName = FitName.make(ctx)
     private val pLevel = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { maxLines = 1 }
-    private val pHp = BarView(ctx)
+    private val pHp = BarView(ctx).apply { ghostOnDrop = true }
     private val pHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val pXpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val pXp = BarView(ctx)
-    private val pNums = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-    private val pHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    private val pHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }   // HP bar + "61 / 61 HP" side by side
     private val playerCard = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         background = Ui.rounded(translucentCard(ctx), 12, ctx)
@@ -160,6 +158,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     private val live = LinkedHashSet<Animator>()
     private val floats = ArrayList<View>()
+    private class Flying(val onPlayer: Boolean, val rect: FloatSpot.Rect)
+    private val flying = ArrayList<Flying>()       // floating texts on screen (or waiting to start): their start boxes
+    private class XpShown(val view: XpCardView, val x: Int, val top: Int)
+    private val xpQueue = ArrayDeque<Pair<XpCard, (SpriteView) -> Unit>>()
+    private val xpActive = ArrayList<XpShown>()
     private val bobs = ArrayList<ObjectAnimator>()
     private var hpCount: ValueAnimator? = null
 
@@ -180,23 +183,21 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         enemyCard.addView(eRow, LinearLayout.LayoutParams(-1, -2))
         eTypeRow.addView(eTypes, LinearLayout.LayoutParams(-2, -2))
         enemyCard.addView(eTypeRow, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dpi(4) })
-        eHpBox.addView(eHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
-        eHpBox.addView(eStatus, LinearLayout.LayoutParams(-1, dpi(STATUS_ROW_DP)))
-        eNums.addView(eHpText, LinearLayout.LayoutParams(0, -2, 1f))
-        eHpBox.addView(eNums, LinearLayout.LayoutParams(-1, -2))
-        enemyCard.addView(eHpBox, LinearLayout.LayoutParams(-1, -2))
+        eHpBox.addView(eHp, LinearLayout.LayoutParams(0, dpi(7), 1f))
+        eHpBox.addView(eHpText, LinearLayout.LayoutParams(-2, -2))
+        enemyCard.addView(eHpBox, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(6) })
+        enemyCard.addView(eStatus, LinearLayout.LayoutParams(-1, dpi(STATUS_ROW_DP)))
         enemyBlock.addView(enemyCard, LinearLayout.LayoutParams(-1, -2))
 
-        // player card: name + Lv, HP bar, one row "58 / 71" left + "XP 640 / 1000" right, XP bar
+        // player card: name + Lv, HP bar with "58 / 71 HP" beside it, status row, "XP 640 / 1000", XP bar
         pRow.addView(pName, LinearLayout.LayoutParams(0, -2, 1f))
         pRow.addView(pLevel, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(5) })
         playerCard.addView(pRow, LinearLayout.LayoutParams(-1, -2))
-        pHpBox.addView(pHp, LinearLayout.LayoutParams(-1, dpi(7)).also { it.topMargin = dpi(6) })
-        pHpBox.addView(pStatus, LinearLayout.LayoutParams(-1, dpi(STATUS_ROW_DP)))
-        pNums.addView(pHpText, LinearLayout.LayoutParams(0, -2, 1f))
-        pNums.addView(pXpText, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dpi(6) })
-        pHpBox.addView(pNums, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(3) })
-        playerCard.addView(pHpBox, LinearLayout.LayoutParams(-1, -2))
+        pHpBox.addView(pHp, LinearLayout.LayoutParams(0, dpi(7), 1f))
+        pHpBox.addView(pHpText, LinearLayout.LayoutParams(-2, -2))
+        playerCard.addView(pHpBox, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(6) })
+        playerCard.addView(pStatus, LinearLayout.LayoutParams(-1, dpi(STATUS_ROW_DP)))
+        playerCard.addView(pXpText, LinearLayout.LayoutParams(-2, -2))
         pXp.setTrackColor(Ui.c(ctx, R.color.ag_s0))
         playerCard.addView(pXp, LinearLayout.LayoutParams(-1, dpi(3)).also { it.topMargin = dpi(4) })
 
@@ -310,8 +311,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             place(enemyHolder, sp(96), sp(80) - g, Gravity.TOP or Gravity.RIGHT, 0, sp(4), sp(26), 0)
             if (playerSameSize) place(playerHolder, sp(96), sp(80) - g, Gravity.BOTTOM or Gravity.LEFT, sp(14), 0, 0, sp(2))
             else place(playerHolder, sp(116), sp(96) - g, Gravity.BOTTOM or Gravity.LEFT, sp(14), 0, 0, sp(2))
-            place(enemyBlock, min(dpi(138), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
-            place(playerCard, min(dpi(142), infoMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(8), dpi(8))
+            // a narrow pane: the cards may go down to 96 dp (the name shortens) so ours covers no more of our sprite's box than before the HP number moved up
+            val stripMax = ((w - dpi(30)) / 2).coerceAtLeast(dpi(96))
+            place(enemyBlock, min(dpi(138), stripMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
+            place(playerCard, min(dpi(142), stripMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(8), dpi(8))
         }
     }
 
@@ -387,7 +390,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun setEnemyHp(hp: Int, max: Int, animate: Boolean) {
         val f = if (max > 0) hp.toFloat() / max else 0f
         eHp.set(f, Ui.hpColor(context, f), animate)
-        eHpText.text = DisplayNumbers.hp(hp, max)
+        eHpText.text = DisplayNumbers.hpLabel(hp, max)
     }
 
     /** The red "NEW" sticker on the wild card's corner: shown while the wild species isn't caught yet. */
@@ -459,10 +462,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         pXp.visibility = vis(wantXpBar && full)
         val hpSp = if (cardsCompact || studyStrip) 10f else 11f
         for (t in listOf(eHpText, pHpText, pXpText)) sz(t, hpSp)
-        statusRow(eStatus, eHpBox, enemyCard, enemyStatus)
-        statusRow(pStatus, pHpBox, playerCard, playerStatus)
-        hpRow(eHpBox, eHp, eNums, eHpText, 0, eStatus)
-        hpRow(pHpBox, pHp, pNums, pHpText, 3, pStatus)
+        statusRow(eStatus, enemyStatus)
+        statusRow(pStatus, playerStatus)
+        hpRow(eHpBox, eHp)
+        hpRow(pHpBox, pHp)
         (pXp.layoutParams as LinearLayout.LayoutParams).height = dpf(3f * TextMath.bar(floorSp))
         eRow.tight = cardsCompact
         pRow.tight = cardsCompact
@@ -472,46 +475,29 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /**
-     * The status badge row of a card: under the HP bar (full card) or under the bar-and-number line (compact card), a fixed
-     * [ArenaGeo.statusRow] dp tall whether or not a badge shows, so nothing moves when an effect comes or goes. This holds in
-     * the study strips too (their fixed geometry is not planned by [ArenaGeo], the row is part of the card's own height).
+     * The status badge row of a card, under the HP bar and its number: a fixed [ArenaGeo.statusRow] dp tall whether or not a
+     * badge shows, so nothing moves when an effect comes or goes. This holds in the study strips too (their fixed geometry is
+     * not planned by [ArenaGeo], the row is part of the card's own height).
      */
-    private fun statusRow(row: StatusRow, box: LinearLayout, card: LinearLayout, status: String?) {
-        val want: ViewGroup = if (cardsCompact) card else box
-        if (row.parent !== want) {
-            (row.parent as? ViewGroup)?.removeView(row)
-            val lp = LinearLayout.LayoutParams(-1, dpi(STATUS_ROW_DP))
-            if (cardsCompact) card.addView(row, card.indexOfChild(box) + 1, lp) else box.addView(row, 1, lp)
-        }
+    private fun statusRow(row: StatusRow, status: String?) {
         row.set(status)
         row.visibility = VISIBLE
         row.fit(dpf(ArenaGeo.statusRow(floorSp, cardsCompact)))
     }
 
-    /** Full card: the HP bar with the numbers under it. Compact card: bar and small number on one line. */
-    private fun hpRow(box: LinearLayout, bar: BarView, nums: LinearLayout, text: TextView, numsTop: Int, status: StatusRow) {
+    /** The HP bar with its "61 / 61 HP" number right beside it (bar thinner on compact cards). */
+    private fun hpRow(box: LinearLayout, bar: BarView) {
         val k = TextMath.bar(floorSp)
         val barLp = bar.layoutParams as LinearLayout.LayoutParams
-        val numsLp = nums.layoutParams as LinearLayout.LayoutParams
-        val textLp = text.layoutParams as LinearLayout.LayoutParams
+        val boxLp = box.layoutParams as LinearLayout.LayoutParams
+        barLp.marginEnd = dpi(6)
         if (cardsCompact) {
-            box.orientation = LinearLayout.HORIZONTAL
-            box.gravity = Gravity.CENTER_VERTICAL
-            barLp.width = 0; barLp.weight = 1f; barLp.height = dpf(5f * k); barLp.topMargin = 0; barLp.marginEnd = dpi(6)
-            numsLp.width = -2; numsLp.topMargin = 0
-            textLp.width = -2; textLp.weight = 0f
+            barLp.height = dpf(5f * k); boxLp.topMargin = 0
         } else {
-            box.orientation = LinearLayout.VERTICAL
-            box.gravity = Gravity.START
-            barLp.width = -1; barLp.weight = 0f; barLp.marginEnd = 0
-            barLp.height = dpf((if (studyStrip) 6f else 7f) * k); barLp.topMargin = dpi(if (studyStrip) 4 else 6)
-            // the status row sits between the bar and the numbers and takes the place of their gap
-            numsLp.width = -1; numsLp.topMargin = if (status.visibility == VISIBLE) 0 else dpi(numsTop)
-            textLp.width = 0; textLp.weight = 1f
+            barLp.height = dpf((if (studyStrip) 6f else 7f) * k); boxLp.topMargin = dpi(if (studyStrip) 4 else 6)
         }
         bar.layoutParams = barLp
-        nums.layoutParams = numsLp
-        text.layoutParams = textLp
+        box.layoutParams = boxLp
     }
 
     private fun sz(tv: TextView, sp: Float) = TextFloor.set(tv, sp, floorSp)
@@ -605,10 +591,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         hpCount?.cancel()
         val from = pHpShown
         pHpShown = hp
-        if (!animate || from == hp || !isAttachedToWindow) { pHpText.text = "$hp / $max"; return }
+        if (!animate || from == hp || !isAttachedToWindow) { pHpText.text = DisplayNumbers.hpLabel(hp, max); return }
         hpCount = ValueAnimator.ofInt(from, hp).setDuration(450).also { a ->
-            a.addUpdateListener { pHpText.text = "${it.animatedValue as Int} / $max" }
-            a.addListener(object : AnimatorListenerAdapter() { override fun onAnimationEnd(an: Animator) { pHpText.text = "$hp / $max" } })
+            a.addUpdateListener { pHpText.text = DisplayNumbers.hpLabel(it.animatedValue as Int, max) }
+            a.addListener(object : AnimatorListenerAdapter() { override fun onAnimationEnd(an: Animator) { pHpText.text = DisplayNumbers.hpLabel(hp, max) } })
             a.start()
         }
     }
@@ -659,50 +645,147 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     fun flashPlayer(ms: Long, times: Int) = flash(playerSprite, ms, times)
 
-    /** A big outlined number pops in over the sprite, holds ~0.6 s, then rises and fades (1.6 s in all). */
+    /** The old four number styles, now drawn by [floatText]. */
     fun floatNumber(onPlayer: Boolean, text: String, style: FloatStyle) {
-        val holder = if (onPlayer) playerHolder else enemyHolder
-        val spr = if (onPlayer) playerSprite else enemySprite
-        val (size, colorRes) = when (style) {
-            FloatStyle.DAMAGE -> 22f to R.color.ag_red
-            FloatStyle.BIG -> 27f to R.color.ag_peach
-            FloatStyle.HEAL -> 22f to R.color.ag_green
-            FloatStyle.MISS -> 17f to R.color.ag_text
+        val kind = when (style) {
+            FloatStyle.DAMAGE -> FloatKind.DAMAGE
+            FloatStyle.BIG -> FloatKind.BIG_DAMAGE
+            FloatStyle.HEAL -> FloatKind.HEAL
+            FloatStyle.MISS -> FloatKind.MISS
         }
-        val tv = OutlineTextView(context, Ui.dp(context, 2.5f), 0xE6141420.toInt())
-        tv.typeface = Ui.font(context, 900)
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, size)
-        tv.setTextColor(Ui.c(context, colorRes))
-        tv.includeFontPadding = false
-        // Room for the stroke so it is not clipped by the view bounds.
-        val pad = dpi(3)
-        tv.setPadding(pad, pad, pad, pad)
-        TextFloor.set(tv, size, floorSp)
-        tv.text = text
-        tv.setShadowLayer(Ui.dp(context, 4f), 0f, Ui.dp(context, 1f), 0x99000000.toInt())
+        floatText(FloatText(onPlayer, text, kind))
+    }
+
+    private fun reduceMotion() = !ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
+
+    /** The two stat cards as boxes (they are drawn scaled from their top-left corner). */
+    private fun cardBoxes(pad: Int): List<FloatSpot.Rect> =
+        listOf(enemyBlock, playerCard).map { v -> FloatSpot.Rect(v.left - pad, v.top - pad, v.left + (v.width * v.scaleX).toInt() + pad, v.top + (v.height * v.scaleY).toInt() + pad) }
+
+    /**
+     * A floating battle text in the comic style ([FloatTextView]) pops in over the Pokémon it belongs to, holds a moment, then
+     * rises and fades (about 1.1 s). Kept inside the arena and off the stat cards ([FloatSpot.placeClear]); texts of one
+     * round start 0.23 s apart and sit one under the other, so they never print over each other.
+     */
+    fun floatText(ft: FloatText) {
+        val holder = if (ft.onPlayer) playerHolder else enemyHolder
+        val spr = if (ft.onPlayer) playerSprite else enemySprite
+        val tv = FloatTextView(context, ft, floorSp)
         tv.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
+        val tvW = tv.measuredWidth
+        val tvH = tv.measuredHeight
         val drawn = spr.drawnHeight()
         val top = if (drawn > 0) max(holder.top - dpi(8), holder.bottom - drawn - dpi(8)) else holder.top + dpi(6)
-        val lp = LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT)
+        val left = holder.left + (holder.width - tvW) / 2
+        val mine = flying.filter { it.onPlayer == ft.onPlayer }   // texts of this side wait for each other
         // Not laid out yet (no size): the old free-floating start. Otherwise keep the whole rise inside the arena.
-        val spot = if (width > 0 && height > 0)
-            FloatSpot.place(holder.left + (holder.width - tv.measuredWidth) / 2, top, width, height, tv.measuredWidth, tv.measuredHeight, dpi(34))
-        else FloatSpot.Spot(holder.left + (holder.width - tv.measuredWidth) / 2, top, dpi(34))
+        val spot = if (width > 0 && height > 0) FloatSpot.placeClear(left, top, width, height, tvW, tvH, dpi(34), flying.map { it.rect }, cardBoxes(dpi(2)), dpi(2))
+        else FloatSpot.Spot(left, top, dpi(34))
+        val lp = LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT)
         lp.leftMargin = spot.left
         lp.topMargin = spot.top
         addView(tv, lp)
         floats += tv
-        val reduce = !ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
-        val done = { removeView(tv); floats -= tv }
-        if (reduce) {   // no pop, no rise: just show, then fade out
+        val rec = Flying(ft.onPlayer, FloatSpot.Rect(spot.left, spot.top, spot.left + tvW, spot.top + tvH))
+        flying += rec
+        val done = { removeView(tv); floats -= tv; flying -= rec }
+        if (reduceMotion()) {   // no pop, no rise: just show, then fade out
             tv.animate().alpha(0f).setStartDelay(900).setDuration(500).withEndAction(done).start()
             return
         }
-        tv.scaleX = 0.6f; tv.scaleY = 0.6f
-        tv.animate().scaleX(1f).scaleY(1f).setDuration(160).setInterpolator(OvershootInterpolator()).withEndAction {
+        val delay = min(3, mine.size) * FLOAT_STAGGER_MS
+        tv.alpha = 0f; tv.scaleX = 0.6f; tv.scaleY = 0.6f
+        tv.animate().alpha(1f).scaleX(1f).scaleY(1f).setStartDelay(delay).setDuration(150).setInterpolator(OvershootInterpolator()).withEndAction {
             if (tv.parent == null) return@withEndAction
-            tv.animate().translationY(-spot.rise.toFloat()).alpha(0f).setStartDelay(600).setDuration(840)
+            tv.animate().translationY(-spot.rise.toFloat()).alpha(0f).setStartDelay(520).setDuration(480)
                 .setInterpolator(DecelerateInterpolator()).withEndAction(done).start()
+        }.start()
+    }
+
+    // ---------------------------------------------------------------- team XP cards
+
+    /**
+     * Queues the XP card of a team member (pick 9A): it slides in from the left edge, between the two Pokémon, stays a moment
+     * and slides away. [loadSprite] puts the mini sprite in. Several stack in the free gap or play one after another; with no
+     * room even for the slim card (tiny window) it is skipped. It sits on no sprite and no stat card, and takes no touches.
+     */
+    fun showXpCard(card: XpCard, loadSprite: (SpriteView) -> Unit) {
+        if (xpQueue.size >= 8) return
+        xpQueue.addLast(card to loadSprite)
+        pumpXp()
+    }
+
+    /** What a card must keep off: both stat cards (a little more room round the wild one for its NEW sticker) and both sprites' pictures. */
+    private fun xpObstacles(): List<FloatSpot.Rect> {
+        val m = dpi(3)
+        fun art(v: View, spr: SpriteView): FloatSpot.Rect {
+            val drawn = spr.drawnHeight()
+            val dw = spr.drawnWidth()
+            val aw = if (dw > 0) min(dw, v.width) else (v.width * 0.85f).toInt(); val ah = if (drawn > 0) min(drawn, v.height) else (v.height * 0.85f).toInt()
+            val x = v.left + (v.width - aw) / 2; val y = v.top + (v.height - ah)
+            return FloatSpot.Rect(x - m, y - m, x + aw + m, y + ah + m)
+        }
+        return cardBoxes(m * 2) + art(enemyHolder, enemySprite) + art(playerHolder, playerSprite)
+    }
+
+    private fun pumpXp() {
+        while (xpQueue.isNotEmpty()) {
+            if (width <= 0 || height <= 0) { xpQueue.clear(); return }
+            val (card, load) = xpQueue.first()
+            val slimOnly = compact || studyStrip || height < dpi(190)
+            val obstacles = xpObstacles()
+            var made: XpCardView? = null
+            var spots: List<XpCardSpot.Pos> = emptyList()
+            for (slim in if (slimOnly) listOf(true) else listOf(false, true)) {
+                val v = XpCardView(context, card, slim, floorSp)
+                val w = min(dpi(if (slim) 160 else 188), (width * (if (slim) 0.72f else 0.55f)).toInt())
+                v.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.UNSPECIFIED)
+                val t = XpCardSpot.slots(height, dpi(XP_EDGE_DP), w, v.measuredHeight, dpi(6), dpi(4), obstacles)
+                if (t.isNotEmpty()) { made = v; spots = t.map { XpCardSpot.Pos(dpi(XP_EDGE_DP), it) }; break }
+            }
+            if (made == null) {
+                // Small window: the slim one-line card in any free spot (along the top or bottom edge, or beside a stat card),
+                // a bit narrower if it must be, and last the micro card (no name) in the narrowest gap.
+                search@ for (micro in booleanArrayOf(false, true)) {
+                    val v = XpCardView(context, card, true, floorSp, micro)
+                    for (wDp in if (micro) intArrayOf(88, 80) else intArrayOf(160, 132)) {
+                        val w = min(dpi(wDp), (width * 0.72f).toInt())
+                        v.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.UNSPECIFIED)
+                        val t = XpCardSpot.anywhere(width, height, w, v.measuredHeight, dpi(if (micro) 2 else 4), dpi(2), obstacles)
+                        if (t.isNotEmpty()) { made = v; spots = t; break@search }
+                    }
+                }
+            }
+            if (made == null) { xpQueue.clear(); return }   // no room: skipped
+            val v: XpCardView = made
+            val busy = xpActive.map { FloatSpot.Rect(it.x, it.top, it.x + it.view.measuredWidth, it.top + it.view.measuredHeight) }
+            val spot = spots.firstOrNull { p -> val r = FloatSpot.Rect(p.x, p.y, p.x + v.measuredWidth, p.y + v.measuredHeight); busy.none { b -> b.hits(r) } }
+                ?: return   // all places busy: the next one leaves
+            xpQueue.removeFirst()
+            slideXp(v, spot, load)
+        }
+    }
+
+    private fun slideXp(v: XpCardView, spot: XpCardSpot.Pos, load: (SpriteView) -> Unit) {
+        load(v.sprite)
+        addView(v, LayoutParams(v.measuredWidth, v.measuredHeight, Gravity.TOP or Gravity.LEFT).also { it.leftMargin = spot.x; it.topMargin = spot.y })
+        val shown = XpShown(v, spot.x, spot.y)
+        xpActive += shown
+        val finish = { removeView(v); xpActive -= shown; pumpXp() }
+        val hold = if (v.card.levelUp) 2500L else 1800L
+        if (reduceMotion()) {   // no slide: there, and gone after a moment
+            v.play(true)
+            v.postDelayed(finish, hold - 300)
+            return
+        }
+        // Slides in from the nearer side edge.
+        val fromRight = spot.x + v.measuredWidth / 2 > width / 2
+        val off = if (fromRight) (width - spot.x).toFloat() else -(spot.x + v.measuredWidth).toFloat()
+        v.translationX = off
+        v.play(false)
+        v.animate().translationX(0f).setDuration(260).setInterpolator(DecelerateInterpolator()).withEndAction {
+            if (v.parent == null) return@withEndAction
+            v.animate().translationX(off).alpha(0f).setStartDelay(hold).setDuration(240).setInterpolator(AccelerateInterpolator()).withEndAction(finish).start()
         }.start()
     }
 
@@ -804,8 +887,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** Stops every running animation and removes leftovers (floating numbers too); sprites keep whatever they show. */
     fun cancelAnimations() {
         stopAnimators()
+        xpQueue.clear()
+        xpActive.toList().forEach { it.view.animate().cancel(); removeView(it.view) }
+        xpActive.clear()
         floats.toList().forEach { it.animate().cancel(); removeView(it) }
         floats.clear()
+        flying.clear()
     }
 
     private fun stopAnimators() {
@@ -852,6 +939,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun dpf(v: Float) = (v * resources.displayMetrics.density + 0.5f).toInt()
 
     companion object {
+        private const val FLOAT_STAGGER_MS = 230L
+        private const val XP_EDGE_DP = 8
         /** dp per sprite pixel in the normal arena: the holder is the limit (the study layouts keep 2). */
         private const val BIG_SPRITE_DP = 8f
         /** Initial height of a card's status row (dp); [ArenaGeo.statusRow] sets the real one. */

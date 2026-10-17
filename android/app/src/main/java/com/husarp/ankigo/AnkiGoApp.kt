@@ -7,6 +7,8 @@ import android.os.Handler
 import android.os.Looper
 import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.overlay.FloatBattleService
+import com.husarp.ankigo.remind.GameFactsWriter
+import com.husarp.ankigo.remind.ReminderScheduler
 import com.husarp.ankigo.ui.BattleScreen
 
 /** Every Activity participates, including setup, diagnostics, updates and picker bridges. */
@@ -27,6 +29,8 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
         GameLog.init(this)
         registerActivityLifecycleCallbacks(this)
         GameRepo.addListener { if (backgroundRequested) main.post(leave) }
+        GameRepo.addListener { GameFactsWriter.changed(this) } // the reminders' small snapshot of the game (PLAN 85)
+        ReminderScheduler.rearm(this) // the reminder alarm: Android forgets it after a force stop or an update
     }
     override fun onActivityStarted(activity: Activity) {
         backgroundRequested = false

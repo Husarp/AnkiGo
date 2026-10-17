@@ -88,6 +88,14 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         return 0
     }
 
+    /** Width in px the current image is drawn at (0 while nothing is shown yet). */
+    fun drawnWidth(): Int {
+        val img = image
+        if (img != null) return (img.width * scaleFor(img, width, height)).roundToInt()
+        if (placeholderText != null) return placeholderDiameter(width, height).roundToInt()
+        return 0
+    }
+
     /** Device pixels per sprite pixel for this view ([scale]). */
     private fun scaleFor(img: SpriteImage, vw: Int, vh: Int): Float =
         scale(img.width, img.height, vw, vh, maxOf(1, floor(scaleDp * resources.displayMetrics.density).toInt()))

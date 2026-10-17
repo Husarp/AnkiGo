@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.lookSpecies
 import android.animation.ArgbEvaluator
 import android.animation.ValueAnimator
 import android.content.Context
@@ -535,7 +536,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         shownBalls = n
     }
 
-    /** "+40 ₽" floats up from the coin chip. */
+    /** "+5 ₽" floats up from the coin chip. */
     fun floatAtCoins(text: String) {
         val tv = Ui.text(context, 13f, 900, R.color.ag_yellow)
         TextFloor.set(tv, 13f, fit.floorSp)
@@ -603,8 +604,9 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val need = Progression.xpToNext(data, m)
         arena.setPlayerXp(m.xp, need, false)
         if (sp != null) {
-            val key = "${m.species}:${m.shiny}"
-            if (key != playerKey) { playerKey = key; PanelSprites.showMain(context, arena.playerSprite, sp, m.shiny) }
+            val look = m.lookSpecies(data)   // the picture follows the chosen look (purely visual)
+            val key = "${look.num}:${m.shiny}"
+            if (key != playerKey) { playerKey = key; PanelSprites.showMain(context, arena.playerSprite, look, m.shiny) }
         }
     }
 
@@ -638,9 +640,9 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     /** Downloads the next encounter and the main ahead of time so the next fight appears at once. */
     fun prefetch(st: GameState, data: GameData) {
         st.nextSpecies?.let { n -> data.species[n]?.let { PanelSprites.prefetch(context, it, st.nextShiny, false) } }
-        st.main?.let { m -> data.species[m.species]?.let { PanelSprites.prefetch(context, it, m.shiny, true) } }
+        st.main?.let { m -> PanelSprites.prefetch(context, m.lookSpecies(data), m.shiny, true) }
         // "Next team member as main" brings the second one next: have its sprite ready.
-        st.team.getOrNull(1)?.let { st.mon(it) }?.let { m -> data.species[m.species]?.let { PanelSprites.prefetch(context, it, m.shiny, true) } }
+        st.team.getOrNull(1)?.let { st.mon(it) }?.let { m -> PanelSprites.prefetch(context, m.lookSpecies(data), m.shiny, true) }
     }
 
     fun cancelAnimations() {

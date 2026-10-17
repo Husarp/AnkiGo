@@ -145,11 +145,12 @@ internal class FloatBattleView(
         }
     }
 
-    /** Tap on our Pokémon (PLAN 86): the Team floating page with its details; not while an animation plays or without a main. */
+    /** Tap on our Pokémon (PLAN 86): its Details window on top of the floating battle; not while an animation plays or without a main. */
     private fun openMainDetails() {
         val uid = GameRepo.state?.main?.uid ?: return
         if (player?.idle == false) return
-        if (!FloatScreens.open(app, FloatPage.TEAM, uid)) Ui.toast(app, "Turn on “Display over other apps” for AnkiGo to open this here")
+        try { com.husarp.ankigo.ui.BattleDetails.show(window.context, uid) }
+        catch (e: Exception) { Ui.toast(app, "Turn on “Display over other apps” for AnkiGo to open this here") }
     }
 
     /** The ⋯ menu: [AppMenu] hung on the header button's window (the overlay), same entries as the battle screen's. */
@@ -161,6 +162,10 @@ internal class FloatBattleView(
             menu = null
             if (id == 5 || id == 6) { // no Activity here: its own task
                 app.startActivity(android.content.Intent(app, if (id == 5) StatsActivity::class.java else com.husarp.ankigo.ui.BattleLogActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                return@show
+            }
+            if (id == 7) { // Help: its own task too
+                com.husarp.ankigo.help.HelpActivity.open(app)
                 return@show
             }
             val page = when (id) {
@@ -181,5 +186,6 @@ internal class FloatBattleView(
         m.item(4, "Settings", R.drawable.ic_settings)
         m.item(5, "Stats", R.drawable.ic_stats)
         m.item(6, "Battle log", R.drawable.ic_swords)
+        m.item(7, "Help", R.drawable.ic_help)
     }
 }

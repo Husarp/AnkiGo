@@ -4,6 +4,8 @@ import java.util.Locale
 
 object DisplayNumbers {
     fun hp(current: Int, max: Int) = "${current.coerceAtLeast(0)} / ${max.coerceAtLeast(0)}"
+    /** The HP number of a battle card: "61 / 61 HP". */
+    fun hpLabel(current: Int, max: Int) = "${hp(current, max)} HP"
     fun xp(current: Int, needed: Int) = if (needed <= 0) "XP MAX" else "XP ${current.coerceAtLeast(0)} / $needed"
     fun size(bytes: Long): String = when {
         bytes < 0 -> "Size unknown"

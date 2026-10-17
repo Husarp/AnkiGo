@@ -296,7 +296,7 @@ object AnkimonExportFlow {
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 14) })
         col.addView(Ui.text(c, 12f, 600, R.color.ag_sub0).apply { text = "Your AnkiGo game isn't changed." },
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(c, 10) })
-        return AlertDialog.Builder(c).setTitle("Export for Ankimon (PC)?").setView(Bits.scroll(c, col))
+        return AlertDialog.Builder(c).setTitle("Export for Ankimon PC?").setView(Bits.scroll(c, col))
             .setPositiveButton(if (risky) "Export anyway…" else "Choose file…") { _, _ -> onChoose() }
             .setNegativeButton("Cancel") { _, _ -> onCancel() }
             .setOnCancelListener { onCancel() }

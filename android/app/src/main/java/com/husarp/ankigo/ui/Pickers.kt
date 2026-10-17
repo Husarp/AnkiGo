@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.lookNum
 import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Color
@@ -125,6 +126,7 @@ object Pickers {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_WORDS
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE
             background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 12, a)
+            backgroundTintList = null // tintEdit's underline tint would paint the whole rounded fill in the accent (white text on green)
             setPadding(Ui.dp(a, 14), Ui.dp(a, 10), Ui.dp(a, 14), Ui.dp(a, 10))
             setText(initial)
             setSelection(text.length)
@@ -309,7 +311,7 @@ object Bits {
         setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 2), Ui.dp(ctx, 16), Ui.dp(ctx, 2))
         alpha = if (mon.hp <= 0) 0.55f else 1f
         val img = ImageView(ctx)
-        MonPreview.show(ctx, mon.species, mon.shiny, img)
+        MonPreview.show(ctx, mon.lookNum(data), mon.shiny, img)
         addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
         addView(bodyText(ctx, (if (mon.shiny) "★ " else "") + mon.name, sub))
         addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { LevelTier.style(this, mon.level) })

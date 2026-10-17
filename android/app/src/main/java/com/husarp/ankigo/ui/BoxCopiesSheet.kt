@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.lookNum
 import android.app.Dialog
 import android.content.Context
 import android.graphics.Color
@@ -58,7 +59,6 @@ internal class BoxCopiesSheet(
             text = "${page.data.sp(tile.best.species).name} ×${tile.count}"
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
         })
-        titles.addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = "Tap for details · hold for actions" })
         head.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         sortBox = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
         head.addView(sortBox, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
@@ -103,7 +103,7 @@ internal class BoxCopiesSheet(
             setOnLongClickListener { onMenu(mon, it) { dismiss() }; true }
         }
         val img = ImageView(ctx)
-        Ui.staticSprite(ctx, mon.species, mon.shiny, img)
+        Ui.staticSprite(ctx, mon.lookNum(page.data), mon.shiny, img)
         row.addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 44), Ui.dp(ctx, 44)))
 
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }

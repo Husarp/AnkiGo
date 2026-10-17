@@ -10,6 +10,7 @@ import com.husarp.ankigo.game.Outcome
 import com.husarp.ankigo.game.Settings
 import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.Tier
+import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.UnsupportedMon
 import org.json.JSONArray
 import org.json.JSONObject
@@ -46,7 +47,14 @@ object SaveCodec {
             kv("streakDays", state.streakDays); kv("lastGoalDay", state.lastGoalDay); kv("totalReviews", state.totalReviews)
             kv("bestStreakDays", state.bestStreakDays)
             key("history"); obj {
-                for ((k, v) in state.history.toSortedMap()) { key(k); arr { value(v.reviews); value(v.won); value(v.caught); value(v.shinies) } }
+                for ((k, v) in state.history.toSortedMap()) {
+                    key(k)
+                    arr {
+                        value(v.reviews); value(v.won); value(v.caught); value(v.shinies); value(v.xp); value(v.cash)
+                        v.buttons.forEach { value(it) }
+                        value(v.spent); value(v.healItems)
+                    }
+                }
             }
             list("badges", state.badges.sorted())
             kv("shopDay", state.shopDay)
@@ -55,6 +63,8 @@ object SaveCodec {
             kv("liveDay", state.liveDay); kv("liveSnapshot", state.liveSnapshot)
             kv("starterChosen", state.starterChosen); kv("catches", state.catches); kv("defeats", state.defeats)
             kv("evolutions", state.evolutions)
+            key("ballCatches"); obj { for ((k, v) in state.ballCatches.toSortedMap()) kv(k, v) }
+            key("seenAt"); obj { for ((k, v) in state.seenAt.toSortedMap()) kv(k.toString(), v) }
             list("releasedAnkimon", state.releasedAnkimon) // insertion order (oldest first), not sorted
             key("settings"); writeSettings(this, state.settings)
         }
@@ -120,6 +130,7 @@ object SaveCodec {
         kv("hp", m.hp); kv("friendship", m.friendship); kv("heldItem", m.heldItem); kv("caughtAt", m.caughtAt)
         kv("defeats", m.defeats); kv("tier", m.tier.name)
         kv("nickname", m.nickname); kv("ankimonId", m.ankimonId); kv("favourite", m.favourite)
+        kv("look", m.look); kv("restFrac", m.restFrac)
     }
 
     private fun writeUnsupported(w: W, u: UnsupportedMon) = w.obj {
@@ -145,6 +156,7 @@ object SaveCodec {
     private fun writeSettings(w: W, s: Settings) = w.obj {
         list("gens", s.gens.sorted())
         kv("fasterStartV2", s.fasterStart)
+        kv("autoReleaseDuplicates", s.autoReleaseDuplicates)
         kv("cardsPerRound", s.cardsPerRound); kv("autoMode", s.autoMode)
         kv("protectLegendary", s.protectLegendary); kv("protectMythical", s.protectMythical)
         kv("protectUltra", s.protectUltra); kv("protectStarter", s.protectStarter)
@@ -194,7 +206,8 @@ object SaveCodec {
             caughtAt = o.long("caughtAt", 0), defeats = o.int("defeats", 0),
             tier = enumOr(o.strOrNull("tier"), Tier.NORMAL),
             nickname = o.strOrNull("nickname"), ankimonId = o.strOrNull("ankimonId"),
-            favourite = o.bool("favourite", false),
+            favourite = o.bool("favourite", false), look = o.intOrNull("look"),
+            restFrac = o.int("restFrac", 0).coerceIn(0, Tuning.BENCH_REST_DIVISOR - 1),
         )
     }
 
@@ -234,6 +247,7 @@ object SaveCodec {
         s.protectUltra = o.bool("protectUltra", s.protectUltra)
         s.protectStarter = o.bool("protectStarter", s.protectStarter)
         s.protectRegional = o.bool("protectRegional", s.protectRegional)
+        s.autoReleaseDuplicates = o.bool("autoReleaseDuplicates", false)
         o.intList("wishlist")?.let { s.wishlist.clear(); s.wishlist.addAll(it) }
         s.dailyAverage = o.int("dailyAverage", s.dailyAverage)
         s.dayStartHour = o.int("dayStartHour", s.dayStartHour)
@@ -241,7 +255,11 @@ object SaveCodec {
         s.trainerName = o.str("trainerName", s.trainerName)
     }
 
-    /** History is a day -> [reviews, won, caught, shinies] object. An old save has none: today's count seeds today. */
+    /**
+     * History is a day -> [reviews, won, caught, shinies, xp, cash, b0, b1, b2, b3, b4, spent, healItems] object (b = counted
+     * answers per button, 0 unknown .. 4 Easy; spent = Shop money, healItems = healing items used); an older, shorter array
+     * reads the missing numbers as 0. An old save has no history: today's count seeds today.
+     */
     private fun readHistory(h: JSONObject?, s: GameState) {
         if (h == null) {
             if (s.day.isNotEmpty() && s.reviewsToday > 0) s.history[s.day] = DayLog(reviews = s.reviewsToday)
@@ -249,7 +267,10 @@ object SaveCodec {
         }
         for (k in h.keys()) {
             val a = h.optJSONArray(k) ?: continue
-            s.history[k] = DayLog(a.optInt(0), a.optInt(1), a.optInt(2), a.optInt(3))
+            s.history[k] = DayLog(
+                a.optInt(0), a.optInt(1), a.optInt(2), a.optInt(3), a.optInt(4), a.optInt(5),
+                IntArray(5) { a.optInt(6 + it) }, a.optInt(11), a.optInt(12),
+            )
         }
     }
 
@@ -295,6 +316,8 @@ object SaveCodec {
         s.liveDay = o.strOrNull("liveDay"); s.liveSnapshot = o.strOrNull("liveSnapshot")
         s.starterChosen = o.bool("starterChosen", false)
         s.catches = o.int("catches", 0); s.defeats = o.int("defeats", 0); s.evolutions = o.int("evolutions", 0)
+        o.optJSONObject("ballCatches")?.let { b -> for (k in b.keys()) s.ballCatches[k] = b.getInt(k) }
+        o.optJSONObject("seenAt")?.let { b -> for (k in b.keys()) k.toIntOrNull()?.let { sp -> s.seenAt[sp] = b.getLong(k) } }
         o.strList("releasedAnkimon")?.let { s.releasedAnkimon += it }
         readSettings(o.optJSONObject("settings"), s.settings)
         // Decoded and filled with defaults, so it is a current-schema state now.

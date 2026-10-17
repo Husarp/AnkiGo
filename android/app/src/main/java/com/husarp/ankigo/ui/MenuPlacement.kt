@@ -15,7 +15,9 @@ object MenuPlacement {
 
     /**
      * Opens the menu under [anchor], right edge to right edge; flips above when it does not fit below; slides sideways to stay
-     * inside [bounds]; shrinks (and so scrolls) when it is taller than the room on either side.
+     * inside [bounds]; when neither side has room for all of it but the window does, it slides up or down over the anchor so
+     * it is shown whole (a long Pokémon actions menu used to be cut off at the roomier side, its last rows hidden below the
+     * edge); only a menu taller than the whole window shrinks (and so scrolls).
      *
      * @param menuW,menuH the menu window's wanted size (its card plus shadow room)
      * @param inset how far the visible card sits inside the window (shadow room); the card, not the shadow, hugs the anchor
@@ -36,6 +38,8 @@ object MenuPlacement {
         return when {
             menuH <= roomBelow -> Spot(x, belowTop, w, menuH)
             menuH <= roomAbove -> Spot(x, aboveBottom - menuH, w, menuH)
+            menuH <= bounds.height ->
+                Spot(x, (if (roomBelow >= roomAbove) belowTop else aboveBottom - menuH).coerceIn(bounds.top, bounds.bottom - menuH), w, menuH)
             maxOf(roomBelow, roomAbove) >= minOf(menuH, minUseful) ->
                 if (roomBelow >= roomAbove) Spot(x, belowTop, w, roomBelow) else Spot(x, bounds.top, w, roomAbove)
             else -> {

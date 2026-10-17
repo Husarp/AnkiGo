@@ -4,6 +4,7 @@ import android.text.Html
 import com.husarp.ankigo.study.IoScript
 import com.husarp.ankigo.study.JsApiScript
 import com.husarp.ankigo.study.TtsRules
+import com.husarp.ankigo.study.TypeInRules
 
 /** Builds the WebView page for one side of a card from the API's rendered HTML + note-type CSS. */
 object CardHtml {
@@ -42,7 +43,7 @@ list.forEach(function(it){
 })();"""
 
     /** [av] = every sound and speech of the page in document order (a button's number is its index); [autoplay] = the part that plays by itself; [sounds] = the sound files of that part. */
-    data class Page(val html: String, val sounds: List<String>, val notes: List<String>, val av: List<TtsRules.Av> = emptyList(), val autoplay: List<TtsRules.Av> = emptyList())
+    data class Page(val html: String, val sounds: List<String>, val notes: List<String>, val av: List<TtsRules.Av> = emptyList(), val autoplay: List<TtsRules.Av> = emptyList(), val typeIn: Boolean = false)
 
     fun esc(s: String) = Html.escapeHtml(s)
 
@@ -66,18 +67,21 @@ list.forEach(function(it){
      * @param speech the card's speech slots for this side (TtsRules), bound to the page's play references in order
      * @param jsPage the page token card JavaScript must present (JsApi): calls from an older page are ignored
      * @param tapShow, tapHide the tap settings (Settings → Study), see [tapScript]
+     * @param enterShows Settings → Study "Enter = Show answer": the type-in field's Enter listener (TypeInRules)
      * @param fieldValue resolves a type-in field name to its expected value
      */
-    fun build(content: String, css: String, ord: Int, side: String, typed: String?, dark: Boolean = false, speech: List<TtsRules.Item> = emptyList(), jsPage: Int = 0, tapShow: Boolean = true, tapHide: Boolean = false, fieldValue: (String) -> String?): Page {
+    fun build(content: String, css: String, ord: Int, side: String, typed: String?, dark: Boolean = false, speech: List<TtsRules.Item> = emptyList(), jsPage: Int = 0, tapShow: Boolean = true, tapHide: Boolean = false, enterShows: Boolean = true, fieldValue: (String) -> String?): Page {
         val notes = ArrayList<String>()
         var body = content
+        var typeIn = false
 
         // type-in answer
         body = TYPE.replace(body) { m ->
             val field = m.groupValues[1]
             notes.add("type-in field '$field'")
             if (side == "q") {
-                "<input id=\"typeans\" type=\"text\" autocomplete=\"off\" class=\"ag-typeans\" placeholder=\"type answer\">"
+                typeIn = true
+                "<input id=\"typeans\" type=\"text\" enterkeyhint=\"go\" autocomplete=\"off\" class=\"ag-typeans\" placeholder=\"type answer\">"
             } else {
                 val bare = field.substringAfterLast(':')
                 val raw = fieldValue(bare) ?: "?"
@@ -152,6 +156,7 @@ ${if (body.contains("\\(") || body.contains("\\[")) """<script async src="https:
  onload="AnkiGo.mathjax('loaded')" onerror="AnkiGo.mathjax('FAILED')"></script>""" else ""}
 </head><body class="card card${ord + 1} chrome${if (dark) " nightMode night_mode" else ""}"><div id="qa">$body</div>${if (side == "q" && tapShow) "<div class=\"ag-hint\">Tap the card to show the answer</div>" else ""}<script>$UNFIX_JS</script><script>
 ${tapScript(side, tapShow, tapHide)}
+${if (typeIn) TypeInRules.enterScript(enterShows) else ""}
 document.addEventListener('contextmenu',function(e){e.preventDefault();AnkiGo.actions()});
 document.querySelectorAll('img').forEach(function(i){
  i.onerror=function(){
@@ -166,6 +171,6 @@ document.querySelectorAll('img').forEach(function(i){
  if(i.complete&&i.naturalWidth===0)i.onerror();
 });
 </script></body></html>"""
-        return Page(html, sounds, notes, av, autoplay)
+        return Page(html, sounds, notes, av, autoplay, typeIn)
     }
 }

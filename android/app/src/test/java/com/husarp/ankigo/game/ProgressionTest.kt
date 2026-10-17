@@ -113,9 +113,9 @@ class ProgressionTest {
         assertEquals(7, e.of<GameEvent.XpGained>().single().level)
         assertEquals(10, e.of<GameEvent.XpGained>().single().xpInLevel)
         assertTrue(e.indexOfFirst { it is GameEvent.MoveLearned } > e.indexOfLast { it is GameEvent.LevelUp })
-        // HP did not heal
-        assertEquals(hpBefore, m.hp)
+        // R3-02: each level adds its HP and heals 25 % of the new max, so a Pokémon that was full is full at the new max
         assertTrue(StatCalc.maxHp(data, m) > hpBefore)
+        assertEquals(StatCalc.maxHp(data, m), m.hp)
         assertTrue(5 in s.badges)
     }
 
@@ -139,11 +139,15 @@ class ProgressionTest {
         assertEquals(0, m.xp)
     }
 
-    @Test fun gainXpDoesNotHeal() {
+    @Test fun gainXpHealsTheLevelsHpPlusAQuarterOfTheNewMax() { // R3-02: max HP 20 -> 22, 25 % of 22 = 5
         val (s, m) = st(1, 5)
         m.hp = 3
-        Progression.gainXp(data, s, m, 91, ev())
-        assertEquals(3, m.hp)
+        val e = ev()
+        Progression.gainXp(data, s, m, 91, e)
+        assertEquals(22, StatCalc.maxHp(data, m))
+        assertEquals(3 + 2 + 5, m.hp)
+        assertEquals(10, e.of<GameEvent.LevelUp>().single().hp) // LevelUp carries the HP after the heal
+        assertEquals(7, e.of<GameEvent.Healed>().single().amount)
     }
 
     @Test fun firstLevelUpBadgeOnce() {
@@ -261,16 +265,16 @@ class ProgressionTest {
         assertTrue(m.friendship in 5..9)
     }
 
-    @Test fun rewardCatchIsHalfTheDefeatXp() {
-        assertEquals(0.5, Tuning.CATCH_XP_PART, 0.0)
+    @Test fun rewardCatchIsTheFullDefeatXp() {
         val (s, m) = st(1, 5)
         val e = ev()
         Progression.rewardCatch(data, s, m, wild16(10), noon, Random(1), e)
-        assertEquals(36, e.of<GameEvent.XpGained>().single().xp) // half of 72
+        assertEquals(72, e.of<GameEvent.XpGained>().single().xp)
+        assertEquals(Progression.xpForDefeat(data.sp(wild16(10).species), 10), 72)
         assertEquals(0, m.defeats); assertEquals(Stats.ZERO, m.evs)
     }
 
-    @Test fun rewardCatchHalfIsTakenBeforeExpShareAndLuckyEgg() {
+    @Test fun rewardCatchFullXpIsSplitByExpShareAndBoostedByLuckyEgg() {
         val (s, m) = st(1, 5)
         val h = TestData.mon(data, 16, 5, uid = "holder")
         s.mons += h; s.team += h.uid
@@ -278,13 +282,13 @@ class ProgressionTest {
         val e = ev()
         Progression.rewardCatch(data, s, m, wild16(10), noon, Random(1), e)
         val xs = e.of<GameEvent.XpGained>()
-        assertEquals(18, xs[0].xp); assertEquals(18, xs[1].xp) // 72 -> 36 -> 18 each
+        assertEquals(36, xs[0].xp); assertEquals(36, xs[1].xp) // 72 -> 36 each
 
         val (s2, m2) = st(1, 5)
         m2.heldItem = "lucky-egg"
         val e2 = ev()
         Progression.rewardCatch(data, s2, m2, wild16(10), noon, Random(1), e2)
-        assertEquals(54, e2.of<GameEvent.XpGained>().single().xp) // 36 * 1.5
+        assertEquals(108, e2.of<GameEvent.XpGained>().single().xp) // 72 * 1.5
     }
 
     @Test fun friendshipGainSeededAndSootheBell() {

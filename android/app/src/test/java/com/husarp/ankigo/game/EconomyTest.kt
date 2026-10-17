@@ -65,56 +65,128 @@ class EconomyTest {
 
     // ---- cash and drops ----
 
-    @Test fun cashOnlyEveryTenthReview() {
+    private fun cash(ev: List<GameEvent>) = ev.filterIsInstance<GameEvent.Cash>()
+
+    @Test fun everyAnswerPaysFive() {
         val s = state()
         val ev = events()
-        for (n in 1..25) { s.reviewsToday = n; Economy.onReview(data, s, TestData.rng(), ev) }
-        assertEquals(80, s.cash)
-        assertEquals(80, s.cashToday)
-        assertEquals(listOf(40, 80), ev.filterIsInstance<GameEvent.Cash>().map { it.total })
-        assertEquals(listOf(40, 40), ev.filterIsInstance<GameEvent.Cash>().map { it.amount })
+        for (n in 1..3) { s.reviewsToday = n; Economy.onReview(data, s, TestData.rng(), ev) }
+        assertEquals(15, s.cash)
+        assertEquals(15, s.cashToday)
+        assertEquals(listOf(5, 10, 15), cash(ev).map { it.total })
+        assertEquals(listOf(5, 5, 5), cash(ev).map { it.amount })
+        assertTrue(cash(ev).all { it.kind == CashKind.ANSWER })
     }
 
-    @Test fun noCashAtZeroReviews() {
+    @Test fun answersStopPayingAtTheDailyCap() {
         val s = state()
-        s.reviewsToday = 0
         val ev = events()
+        for (n in 1..100) { s.reviewsToday = n; Economy.onReview(data, s, TestData.rng(), ev) }
+        assertEquals(500, s.cash)
+        assertEquals(500, s.cashToday)
+        assertEquals(100, cash(ev).size)
+        s.reviewsToday = 101
         Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(0, s.cash)
-        assertTrue(ev.none { it is GameEvent.Cash })
+        assertEquals(500, s.cash)
+        assertEquals(100, cash(ev).size) // no payment, no event
     }
 
-    @Test fun cashCapsAt400() {
+    @Test fun theCapPaysOnlyWhatIsLeft() {
         val s = state()
-        s.cashToday = 390
-        s.reviewsToday = 10
+        s.cashToday = 497
         val ev = events()
+        s.reviewsToday = 1
         Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(10, s.cash)
-        assertEquals(400, s.cashToday)
-        s.reviewsToday = 20
-        Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(10, s.cash)
-        assertEquals(1, ev.filterIsInstance<GameEvent.Cash>().size)
+        assertEquals(3, s.cash)
+        assertEquals(500, s.cashToday)
+        assertEquals(GameEvent.Cash(3, 3, CashKind.ANSWER), cash(ev).single())
     }
 
-    @Test fun amuletCoinDoublesAndStillCaps() {
+    @Test fun anOldSaveKeepsItsCashSoFarAgainstTheNewCap() {
+        val s = state()
+        s.cashToday = 380 // the old rule's day
+        s.reviewsToday = 90
+        val ev = events()
+        for (n in 91..200) { s.reviewsToday = n; Economy.onReview(data, s, TestData.rng(), ev) }
+        assertEquals(120, s.cash)
+        assertEquals(500, s.cashToday)
+        assertEquals(24, cash(ev).size)
+    }
+
+    @Test fun amuletCoinDoublesAnswersAndStillCaps() {
         val s = state()
         s.main!!.heldItem = "amulet-coin"
-        s.reviewsToday = 10
+        s.reviewsToday = 1
         val ev = events()
         Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(80, s.cash)
-        s.cashToday = 370
-        s.reviewsToday = 20
+        assertEquals(10, s.cash)
+        s.cashToday = 495 // 5 left under the cap: the doubled 10 is cut to what is left
+        s.reviewsToday = 2
         Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(110, s.cash)
-        assertEquals(400, s.cashToday)
+        assertEquals(15, s.cash)
+        assertEquals(500, s.cashToday)
         s.main!!.heldItem = "luck-incense"
         s.cashToday = 0
-        s.reviewsToday = 30
+        s.reviewsToday = 3
         Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(190, s.cash)
+        assertEquals(25, s.cash)
+        s.main!!.heldItem = "everstone" // another held item pays the plain 5
+        s.reviewsToday = 4
+        Economy.onReview(data, s, TestData.rng(), ev)
+        assertEquals(30, s.cash)
+    }
+
+    @Test fun defeatPaysTenAndAmuletCoinDoublesIt() {
+        val s = state()
+        val ev = events()
+        Economy.onDefeat(s, ev)
+        assertEquals(GameEvent.Cash(10, 10, CashKind.DEFEAT), cash(ev).single())
+        assertEquals(10, s.cashToday)
+        s.main!!.heldItem = "amulet-coin"
+        Economy.onDefeat(s, ev)
+        assertEquals(30, s.cash)
+        assertEquals(30, s.cashToday)
+        assertEquals(20, cash(ev).last().amount)
+    }
+
+    @Test fun defeatMoneyIsBlockedByTheCapAndSharesIt() {
+        val s = state()
+        s.cashToday = 500
+        val ev = events()
+        Economy.onDefeat(s, ev)
+        assertEquals(0, s.cash)
+        assertTrue(ev.isEmpty())
+        s.cashToday = 495
+        Economy.onDefeat(s, ev)
+        assertEquals(5, s.cash)
+        assertEquals(500, s.cashToday)
+    }
+
+    @Test fun dailyBonusGrowsWithTheStreakBeforeToday() {
+        assertEquals(50, Economy.dailyBonus(0))
+        assertEquals(55, Economy.dailyBonus(1))
+        assertEquals(80, Economy.dailyBonus(6))
+        assertEquals(100, Economy.dailyBonus(10))
+        assertEquals(100, Economy.dailyBonus(11))
+        assertEquals(100, Economy.dailyBonus(400))
+        assertEquals(50, Economy.dailyBonus(-3))
+    }
+
+    @Test fun dailyBonusIsOutsideTheCapAndNeverDoubled() {
+        val s = state()
+        s.main!!.heldItem = "amulet-coin"
+        s.cashToday = 500 // cap reached
+        val ev = events()
+        Economy.payDailyBonus(s, 6, ev)
+        assertEquals(80, s.cash)
+        assertEquals(500, s.cashToday)
+        assertEquals(GameEvent.Cash(80, 80, CashKind.DAILY_BONUS), cash(ev).single())
+    }
+
+    @Test fun dailyBonusText() {
+        assertEquals("Daily goal bonus: +75 ₽ (6-day streak)", Economy.dailyBonusText(75, 6))
+        assertEquals("Daily goal bonus: +50 ₽", Economy.dailyBonusText(50, 1))
+        assertEquals("Daily goal bonus: +100 ₽ (14-day streak)", Economy.dailyBonusText(100, 14))
     }
 
     @Test fun countdownRollsThenDecrements() {

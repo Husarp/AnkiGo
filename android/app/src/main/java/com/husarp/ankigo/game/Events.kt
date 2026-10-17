@@ -14,7 +14,8 @@ sealed class GameEvent {
     /** The round is not complete yet: [answers] of [of] answers in, [points] so far. */
     data class Charge(val points: Int, val answers: Int, val of: Int) : GameEvent()
 
-    data class Cash(val amount: Int, val total: Int) : GameEvent()
+    /** Money paid: [amount] just now, [total] in the wallet afterwards, [kind] = what for (sum the amounts for "earned"). */
+    data class Cash(val amount: Int, val total: Int, val kind: CashKind = CashKind.ANSWER) : GameEvent()
     data class ItemFound(val item: String, val count: Int) : GameEvent()
     data class BadgeEarned(val id: Int, val title: String) : GameEvent()
     data class TrainerLevelUp(val level: Int) : GameEvent()
@@ -48,7 +49,10 @@ sealed class GameEvent {
      * Side effects: status applied/healed, stat stage change, can't move, burn/poison damage, drain/recoil text.
      * [status] = the affected side's status after this effect ("par" "brn" "psn" "tox" "slp" "frz", null = none).
      */
-    data class Effect(val onPlayer: Boolean, val text: String, val hp: Int, val maxHp: Int, val status: String? = null) : GameEvent()
+    data class Effect(
+        val onPlayer: Boolean, val text: String, val hp: Int, val maxHp: Int, val status: String? = null,
+        val kind: EffectKind = EffectKind.OTHER, val stat: String? = null, val stages: Int = 0, val amount: Int = 0,
+    ) : GameEvent()
 
     data class Fainted(val player: Boolean, val name: String) : GameEvent()
 
@@ -61,6 +65,16 @@ sealed class GameEvent {
     /** The wild Pokémon was defeated; XP follows as XpGained events. */
     data class Defeated(val species: Int, val name: String, val xp: Int) : GameEvent()
 
+    /**
+     * "Auto-release duplicates" acted on a wild [name] ([level]) of a species you own (best copy [ownedLevel]); comes after
+     * the Caught / Defeated event it explains. DEFEATED = not caught; SWAPPED = caught, your [ownedLevel] copy ([releasedName]) was
+     * released; KEPT_BOTH = caught, the old copy stayed because it is [keptBecause] (Duplicates.Keep label).
+     */
+    data class Duplicate(
+        val name: String, val level: Int, val ownedLevel: Int, val result: DuplicateResult,
+        val releasedName: String? = null, val keptBecause: String? = null,
+    ) : GameEvent()
+
     data class XpGained(val uid: String, val name: String, val xp: Int, val level: Int, val xpInLevel: Int, val xpForLevel: Int) : GameEvent()
     data class LevelUp(val uid: String, val name: String, val level: Int, val hp: Int, val maxHp: Int) : GameEvent()
     data class MoveLearned(val uid: String, val name: String, val move: String, val forgot: String?) : GameEvent()
@@ -69,6 +83,13 @@ sealed class GameEvent {
 
     /** Our main fainted: fully healed at once, and this wild Pokémon is lost (Ankimon). */
     data class MainHealed(val uid: String, val name: String, val hp: Int) : GameEvent()
+
+    /**
+     * The MAIN healed by AnkiGo's own healing rules (PLAN 80): [amount] = HP really gained (always more than 0), [hp]/[maxHp]
+     * after it. LEVEL_UP comes right after that level's LevelUp (amount = the HP the level added + 25 % of max HP); DEFEAT and
+     * CATCH (auto rule or ball) come after the rewards. Bench rest, items and healing moves send no Healed event.
+     */
+    data class Healed(val uid: String, val name: String, val amount: Int, val hp: Int, val maxHp: Int, val reason: HealReason) : GameEvent()
 
     /** The wild Pokémon left without a result (escape item). */
     data class Fled(val name: String) : GameEvent()
@@ -82,3 +103,21 @@ sealed class GameEvent {
 
 /** Result of a between-battle action (shop, bag, team). */
 data class ActionResult(val ok: Boolean, val message: String, val events: List<GameEvent> = emptyList())
+
+/**
+ * What an [GameEvent.Effect] is, so the UI can show a short floating text instead of the log sentence.
+ * STAT_CHANGE carries [GameEvent.Effect.stat] (Showdown key atk/def/spa/spd/spe/accuracy/evasion) and the signed
+ * [GameEvent.Effect.stages] really applied; STAT_LIMIT is "won't go higher/lower" (stages = the attempted sign).
+ * STATUS_CURED carries the cured status key in `stat` ("slp" woke up, "frz" thawed). DRAIN/HEAL/RECOIL/STATUS_DAMAGE carry
+ * the HP really gained / lost in [GameEvent.Effect.amount] (always positive).
+ */
+enum class EffectKind { OTHER, STATUS_APPLIED, STATUS_CURED, CANT_MOVE, STAT_CHANGE, STAT_LIMIT, DRAIN, RECOIL, HEAL, STATUS_DAMAGE }
+
+/** Why a [GameEvent.Healed] happened: a level gained, a wild Pokémon defeated, or one caught (auto rule or ball). */
+enum class HealReason { LEVEL_UP, DEFEAT, CATCH }
+
+/** What a [GameEvent.Cash] was paid for: a counted answer, a defeated wild Pokémon, or the once-a-day daily-goal bonus. */
+enum class CashKind { ANSWER, DEFEAT, DAILY_BONUS }
+
+/** What [GameEvent.Duplicate] says happened to the wild one. */
+enum class DuplicateResult { DEFEATED, SWAPPED, KEPT_BOTH }

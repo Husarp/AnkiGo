@@ -41,7 +41,7 @@ class NextMainShots {
         b.root
     }
 
-    /** The card and the toast already say "Leafbud" at the moment the tap returns, with the old queue still full. */
+    /** The card already says the new main at the moment the tap returns, with the old queue still full (no toast any more). */
     @Test fun panelFollowsTheTapAtOnceEvenWithAFullQueue() {
         FakeGame.install(Shots.files(paparazzi.context))
         val b = BattleShotKit.bound(Shots.files(paparazzi.context))
@@ -50,7 +50,8 @@ class NextMainShots {
         b.call("switchMain", "t2")
         assertEquals("t2", b.arena!!.playerUid)
         assertEquals("t2", GameRepo.state!!.main!!.uid)
-        assertEquals("${GameRepo.state!!.main!!.name} is your main now.", Ui.lastToast)
+        // R3-X1 removed the "X is your main now." toast on purpose: the card changing (and the short "Go, X!") is the feedback
+        assertFalse(Ui.lastToast.orEmpty().contains("is your main now"))
     }
 
     /** The menu: with a team of 6 the item is enabled; with 1 member it is greyed and the reason sits right under it. */
@@ -60,7 +61,7 @@ class NextMainShots {
         var b = BattleShotKit.bound(ctx)
         var rows = menuRows(b)
         // with a wild Pokémon on stage the last entry flips catch <-> defeat (its label says what a tap does)
-        assertEquals(listOf("Pop out", "Team", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log"), rows.filter { it.first != 9 }.map { it.second })
+        assertEquals(listOf("Pop out", "Team", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log", "Help"), rows.filter { it.first != 9 }.map { it.second })
         assertTrue(rows.first { it.first == 9 }.second in listOf("Catch this one", "Defeat it instead (XP)"))
         assertTrue(rows.first { it.first == 5 }.third)
 
@@ -70,7 +71,7 @@ class NextMainShots {
         val m = AppMenu(b.root)
         b.activity.fillMenu(m)
         rows = m.describe()
-        assertEquals(listOf("Pop out", "Team", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log"), rows.filter { it.first != 9 }.map { it.second })
+        assertEquals(listOf("Pop out", "Team", "Pokédex", "Shop", "Settings", "Switch Pokémon", "Stats", "Battle log", "Help"), rows.filter { it.first != 9 }.map { it.second })
         assertFalse(rows.first { it.first == 5 }.third)
         assertEquals("Needs 2+ Pokémon in your team", m.subOf(5))
         assertEquals("Pop out", rows.first().second)

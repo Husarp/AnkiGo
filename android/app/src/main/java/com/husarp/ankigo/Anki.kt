@@ -218,6 +218,36 @@ object Anki {
     /** Deletes the whole note (all its cards) — the API has no single-card delete. */
     fun deleteNote(ctx: Context, nid: Long): Int = ctx.contentResolver.delete(uri("notes/$nid"), null, null)
 
+    /**
+     * Creates a deck ("A::B" makes a subdeck and any missing parent) through the official `decks` insert and returns its id.
+     * AnkiDroid throws IllegalArgumentException for a name that exists, an invalid name or a filtered parent; SecurityException
+     * without permission. The caller verifies by re-reading [decks] (see deck/DeckOps.kt). No undo exists.
+     */
+    fun createDeck(ctx: Context, name: String, desc: String? = null): Long {
+        val v = ContentValues(); v.put("deck_name", name)
+        if (!desc.isNullOrBlank()) v.put("deck_desc", desc)
+        val made = ctx.contentResolver.insert(uri("decks"), v) ?: throw IllegalStateException("AnkiDroid returned no deck")
+        return made.lastPathSegment?.toLongOrNull() ?: throw IllegalStateException("AnkiDroid returned no deck id")
+    }
+
+    /**
+     * Moves one card to [deckId] (the only writable card column besides flags). AnkiDroid throws IllegalArgumentException for a
+     * filtered target and does not check that the deck exists; returns the number of updated keys. Callers verify by re-reading the card.
+     */
+    fun moveCard(ctx: Context, nid: Long, ord: Int, deckId: Long): Int {
+        val v = ContentValues(); v.put("deck_id", deckId)
+        return ctx.contentResolver.update(uri("notes/$nid/cards/$ord"), v, null, null)
+    }
+
+    /**
+     * Replaces all field texts of a note (joined by \u001f, same count as the note type; AnkiDroid throws IllegalArgumentException
+     * otherwise). Tags are not touched. Callers verify by re-reading [note].
+     */
+    fun updateNoteFields(ctx: Context, nid: Long, fields: List<String>): Int {
+        val v = ContentValues(); v.put("flds", fields.joinToString("\u001f"))
+        return ctx.contentResolver.update(uri("notes/$nid"), v, null, null)
+    }
+
     fun searchCards(ctx: Context, query: String, cols: Array<String>): List<Map<String, String?>> =
         rows(ctx.contentResolver.query(uri("cards"), cols, query, null, null))
 

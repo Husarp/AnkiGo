@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.TypedValue
+import android.view.MotionEvent
 import android.view.View
 import androidx.core.graphics.ColorUtils
 import com.husarp.ankigo.R
@@ -31,12 +32,22 @@ class HeatmapView(ctx: Context) : View(ctx) {
         textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 10f, ctx.resources.displayMetrics)
         color = Ui.c(ctx, R.color.ag_sub0)
     }
+    private val pick = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = Ui.dp(ctx, 2f)
+        color = Ui.c(ctx, R.color.ag_text)
+    }
     private val rect = RectF()
     private val gap = Ui.dp(ctx, 3f)
     private val radius = Ui.dp(ctx, 3f)
     private val maxCell = Ui.dp(ctx, 18f)
     private val leftW = Ui.dp(ctx, 18f)
     private val topH = Ui.dp(ctx, 16f)
+
+    /** TICKET R3-V1: the day whose info is open (outlined), and what a tap on a day does (null = tapped beside the days). */
+    var selectedDay: String? = null
+        set(v) { if (v != field) { field = v; invalidate() } }
+    var onDayTap: ((String?) -> Unit)? = null
 
     fun set(heatmap: StudyStats.Heatmap, today: String, noun: String = "Reviews") {
         map = heatmap
@@ -82,9 +93,27 @@ class HeatmapView(ctx: Context) : View(ctx) {
                     rect.inset(h, h)
                     canvas.drawRoundRect(rect, radius, radius, ring)
                 }
+                if (d.day == selectedDay) {
+                    rect.set(x, y, x + cell, y + cell)
+                    rect.inset(pick.strokeWidth / 2, pick.strokeWidth / 2)
+                    canvas.drawRoundRect(rect, radius, radius, pick)
+                }
             }
         }
     }
+
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        val tap = onDayTap ?: return super.onTouchEvent(e)
+        val m = map ?: return false
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) return true
+        if (e.actionMasked != MotionEvent.ACTION_UP) return true
+        val hit = StatsChartMath.gridCell(e.x, e.y, leftW, topH, cellFor(width), gap, m.columns.size)
+        tap(hit?.let { (c, r) -> m.columns[c].getOrNull(r)?.day })
+        performClick()
+        return true
+    }
+
+    override fun performClick(): Boolean = super.performClick()
 
     companion object {
         /** Level 0 = the quiet empty tone, 1..4 = `ag_green` at rising strength over the card colour. */

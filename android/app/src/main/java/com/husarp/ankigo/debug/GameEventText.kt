@@ -20,12 +20,13 @@ object GameEventText {
         is GameEvent.Effect -> "Effect player=${e.onPlayer} hp=${e.hp}/${e.maxHp}"
         is GameEvent.Charge -> "Charge points=${e.points} answers=${e.answers}/${e.of}"
         is GameEvent.RoundStart -> "RoundStart multiplier=${e.multiplier} points=${e.points} enemyActs=${e.enemyActs}"
-        is GameEvent.Cash -> "Cash amount=${e.amount} total=${e.total}"
+        is GameEvent.Cash -> "Cash amount=${e.amount} total=${e.total} kind=${e.kind}"
         is GameEvent.ItemFound -> "ItemFound item=${com.husarp.ankigo.game.Items.def(e.item)?.id ?: "unknown"} count=${e.count}"
         is GameEvent.BadgeEarned -> "BadgeEarned id=${e.id}"
         is GameEvent.TrainerLevelUp -> "TrainerLevelUp level=${e.level}"
         is GameEvent.Fainted -> "Fainted player=${e.player}"
         is GameEvent.MainHealed -> "MainHealed uid=${id(e.uid)} hp=${e.hp}"
+        is GameEvent.Healed -> "Healed uid=${id(e.uid)} amount=${e.amount} hp=${e.hp}/${e.maxHp} reason=${e.reason}"
         is GameEvent.MainChanged -> "MainChanged uid=${id(e.uid)}"
         else -> e.javaClass.simpleName // Info, undo reasons, move names etc deliberately omit their text
     }

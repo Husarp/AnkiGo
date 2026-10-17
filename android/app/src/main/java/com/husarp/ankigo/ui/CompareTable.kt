@@ -23,8 +23,8 @@ data class Matchup(val type: Type, val mult: Double) {
 
 /** What one table cell shows. Only [Text] can be the best value of its row. */
 sealed class Cell {
-    /** A value; [sub] are small grey lines under it. "—" (no value) is a Text with [empty]. */
-    data class Text(val text: String, val best: Boolean = false, val sub: List<String> = emptyList(), val level: Int? = null) : Cell() {
+    /** A value; [sub] are small grey lines under it. "—" (no value) is a Text with [empty]. [value] is the raw number (null = none / not numeric). */
+    data class Text(val text: String, val best: Boolean = false, val sub: List<String> = emptyList(), val level: Int? = null, val value: Int? = null) : Cell() {
         val empty: Boolean get() = text == DASH
     }
     data class TypeChips(val types: List<Type>) : Cell()
@@ -50,8 +50,11 @@ data class CompareColumn(
     val note: String?,
 )
 
-/** A labelled row; [section] (when set) starts a new group with that heading. */
-data class CompareRow(val key: String, val label: String, val cells: List<Cell>, val section: String? = null)
+/**
+ * A labelled row; [section] (when set) starts a new group with that heading. [numeric] rows carry a [Cell.Text.value] in
+ * their cells and a higher value is better (R3-09: lets Compare modes diff, rank and sort by them).
+ */
+data class CompareRow(val key: String, val label: String, val cells: List<Cell>, val section: String? = null, val numeric: Boolean = false)
 
 data class CompareData(val columns: List<CompareColumn>, val rows: List<CompareRow>) {
     fun row(key: String): CompareRow = rows.first { it.key == key }
@@ -120,7 +123,7 @@ object CompareTable {
 
     private fun numeric(key: String, label: String, values: List<Int?>, section: String? = null, fmt: (Int) -> String = { it.toString() }): CompareRow {
         val best = bestIndexes(values)
-        return CompareRow(key, label, values.mapIndexed { i, v -> Cell.Text(v?.let(fmt) ?: DASH, best = i in best, level = if (key == "level") v else null) }, section)
+        return CompareRow(key, label, values.mapIndexed { i, v -> Cell.Text(v?.let(fmt) ?: DASH, best = i in best, level = if (key == "level") v else null, value = v) }, section, numeric = true)
     }
 
     fun matchups(types: List<Type>): Triple<List<Matchup>, List<Matchup>, List<Matchup>> {
@@ -185,9 +188,9 @@ object CompareTable {
                 if (m == null) Cell.Text(DASH) else {
                     val iv = m.ivs.toList()
                     Cell.Text("${m.ivs.total} / 186", best = i in best,
-                        sub = listOf(iv.take(3).joinToString(" · "), iv.drop(3).joinToString(" · ")))
+                        sub = listOf(iv.take(3).joinToString(" · "), iv.drop(3).joinToString(" · ")), value = m.ivs.total)
                 }
-            })
+            }, numeric = true)
             rows += CompareRow("moves", "Moves", owned.map { m ->
                 if (m == null) Cell.Text(DASH) else Cell.Moves(m.moves.map { id ->
                     val mv = data.move(id)

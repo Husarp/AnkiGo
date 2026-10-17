@@ -70,8 +70,6 @@ object Tuning {
     val POWDER_MOVES = setOf("sleeppowder", "stunspore", "poisonpowder", "spore", "powder", "ragepowder", "magicpowder")
 
     // ---- Catching ----
-    /** AnkiGo: a catch by the auto rule gives this part of the defeat XP (before Exp. Share / Lucky Egg). */
-    const val CATCH_XP_PART = 0.5
     /** Ankimon "automatic_battle" mode used because AnkiGo never asks during study: 3 = catch species you don't have. */
     const val DEFAULT_AUTO_MODE = 3
     val DEFAULT_WISHLIST = setOf(25, 133) // Pikachu, Eevee
@@ -137,14 +135,24 @@ object Tuning {
     const val TRAINER_BONUS_FROM_LEVEL = 10 // trainer level above this adds the rare bonus once more
 
     // ---- Cash, items, shop ----
-    const val CASH_EVERY = 10           // reviews
-    const val CASH_AMOUNT = 40
-    const val CASH_DAILY_CAP = 400
+    // AnkiGo's money (not Ankimon's 40 per 10 reviews, cap 400): per counted answer and per defeated wild Pokémon, one
+    // daily cap for both; the daily-goal bonus grows with the goal streak and sits outside the cap.
+    const val CASH_PER_ANSWER = 5       // any button, Again too
+    const val CASH_PER_DEFEAT = 10      // a defeat only, never a catch
+    const val CASH_DAILY_CAP = 500      // answers + defeats, counted after Amulet Coin / Luck Incense doubling
+    const val DAILY_BONUS_BASE = 50     // first goal day
+    const val DAILY_BONUS_PER_DAY = 5   // + per goal-streak day before today ...
+    const val DAILY_BONUS_MAX_DAYS = 10 // ... up to this many (so at most 100)
     val ITEM_COUNTDOWN = 3..385         // reviews until the next random item
     const val SHOP_BASE_SLOTS = 3       // + trainer level / 5
     const val SHOP_SLOTS_PER_LEVELS = 5
     const val TM_PRICE = 1000
     const val REROLL_PRICE = 100
+
+    // ---- Healing (AnkiGo's own rules, PLAN 80; Ankimon has none of these). Whole HP, never above max HP. ----
+    const val LEVEL_UP_HEAL_PERCENT = 25 // of max HP per level gained, on top of the HP the new level adds (min 1)
+    const val DEFEAT_HEAL_PERCENT = 10   // of max HP: the main after a defeat or a catch (min 1)
+    const val BENCH_REST_DIVISOR = 200   // a bench team member heals maxHp / 200 HP (0.5 %) per counted answer, fraction kept (Mon.restFrac)
 
     // ---- Trainer ----
     val TRAINER_XP = mapOf(Tier.NORMAL to 10, Tier.BABY to 16, Tier.ULTRA to 30, Tier.LEGENDARY to 120, Tier.MYTHICAL to 160)

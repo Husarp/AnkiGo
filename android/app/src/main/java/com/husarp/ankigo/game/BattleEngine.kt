@@ -154,7 +154,9 @@ object BattleEngine {
         private fun maxHpOf(p: Boolean) = maxHp[if (p) 1 else 0]
         private fun types(p: Boolean) = data.sp(mon(p).species).types
 
-        private fun fx(p: Boolean, text: String) { out += GameEvent.Effect(p, text, mon(p).hp, maxHpOf(p), side(p).status) }
+        private fun fx(p: Boolean, text: String, kind: EffectKind = EffectKind.OTHER, stat: String? = null, stages: Int = 0, amount: Int = 0) {
+            out += GameEvent.Effect(p, text, mon(p).hp, maxHpOf(p), side(p).status, kind, stat, stages, amount)
+        }
 
         private fun checkFaint(p: Boolean) {
             val i = if (p) 1 else 0
@@ -231,11 +233,11 @@ object BattleEngine {
             val s = side(p)
             val n = mon(p).name
             when (s.status) {
-                "slp" -> if (rng.nextDouble() < Tuning.WAKE_CHANCE) { s.status = null; fx(p, "$n woke up!") }
-                         else { fx(p, "$n is fast asleep."); return false }
-                "frz" -> if (move.id in Tuning.THAW_IF_USES || rng.nextDouble() < Tuning.FREEZE_THAW) { s.status = null; fx(p, "$n thawed out!") }
-                         else { fx(p, "$n is frozen solid!"); return false }
-                "par" -> if (rng.nextDouble() < Tuning.PARA_SKIP) { fx(p, "$n is fully paralyzed!"); return false }
+                "slp" -> if (rng.nextDouble() < Tuning.WAKE_CHANCE) { s.status = null; fx(p, "$n woke up!", EffectKind.STATUS_CURED, "slp") }
+                         else { fx(p, "$n is fast asleep.", EffectKind.CANT_MOVE); return false }
+                "frz" -> if (move.id in Tuning.THAW_IF_USES || rng.nextDouble() < Tuning.FREEZE_THAW) { s.status = null; fx(p, "$n thawed out!", EffectKind.STATUS_CURED, "frz") }
+                         else { fx(p, "$n is frozen solid!", EffectKind.CANT_MOVE); return false }
+                "par" -> if (rng.nextDouble() < Tuning.PARA_SKIP) { fx(p, "$n is fully paralyzed!", EffectKind.CANT_MOVE); return false }
             }
             return true
         }
@@ -246,7 +248,7 @@ object BattleEngine {
             if (s.status != "frz" || mon(tp).hp <= 0) return
             if (move.type != Type.FIRE && move.id !in Tuning.THAW_IF_HIT_BY) return
             s.status = null
-            fx(tp, "${mon(tp).name} thawed out!")
+            fx(tp, "${mon(tp).name} thawed out!", EffectKind.STATUS_CURED, "frz")
         }
 
         private fun attackEvent(
@@ -285,9 +287,9 @@ object BattleEngine {
             }
             val hit = eff > 0
             if (hit) {
-                move.drain?.let { (a, b) -> heal(p, maxOf(1, total * a / b), "${u.name} drained HP from ${t.name}!") }
-                if (struggle) hurt(p, maxOf(1, maxHpOf(p) / 4), "${u.name} is damaged by recoil!")
-                else move.recoil?.let { (a, b) -> hurt(p, maxOf(1, total * a / b), "${u.name} is damaged by recoil!") }
+                move.drain?.let { (a, b) -> heal(p, maxOf(1, total * a / b), "${u.name} drained HP from ${t.name}!", EffectKind.DRAIN) }
+                if (struggle) hurt(p, maxOf(1, maxHpOf(p) / 4), "${u.name} is damaged by recoil!", EffectKind.RECOIL)
+                else move.recoil?.let { (a, b) -> hurt(p, maxOf(1, total * a / b), "${u.name} is damaged by recoil!", EffectKind.RECOIL) }
             }
             if (move.selfDestruct) { u.hp = 0 }
             if (hit && u.hp > 0) move.selfBoosts?.let { boost(p, it) }
@@ -322,21 +324,23 @@ object BattleEngine {
             move.selfBoosts?.let { parts++; if (boost(p, it)) applied = true }
             move.heal?.let { (a, b) ->
                 parts++
-                if (mon(p).hp < maxHpOf(p)) { heal(p, maxOf(1, maxHpOf(p) * a / b), "${mon(p).name} regained health!"); applied = true }
+                if (mon(p).hp < maxHpOf(p)) { heal(p, maxOf(1, maxHpOf(p) * a / b), "${mon(p).name} regained health!", EffectKind.HEAL); applied = true }
             }
             if (parts == 0) fx(p, "But nothing happened.")
             else if (!applied) fx(p, "But it failed!")
             return attackEvent(p, move, failed = !applied)
         }
 
-        private fun heal(p: Boolean, amount: Int, text: String) {
-            mon(p).hp = minOf(maxHpOf(p), mon(p).hp + amount)
-            fx(p, text)
+        private fun heal(p: Boolean, amount: Int, text: String, kind: EffectKind = EffectKind.HEAL) {
+            val before = mon(p).hp
+            mon(p).hp = minOf(maxHpOf(p), before + amount)
+            fx(p, text, kind, amount = mon(p).hp - before)
         }
 
-        private fun hurt(p: Boolean, amount: Int, text: String) {
-            mon(p).hp = maxOf(0, mon(p).hp - amount)
-            fx(p, text)
+        private fun hurt(p: Boolean, amount: Int, text: String, kind: EffectKind = EffectKind.RECOIL) {
+            val before = mon(p).hp
+            mon(p).hp = maxOf(0, before - amount)
+            fx(p, text, kind, amount = before - mon(p).hp)
         }
 
         private fun canHave(status: String, tp: Boolean, moveType: Type): Boolean {
@@ -363,7 +367,7 @@ object BattleEngine {
                 "tox" -> "$n was badly poisoned!"
                 "slp" -> "$n fell asleep!"
                 else -> "$n was frozen solid!"
-            })
+            }, EffectKind.STATUS_APPLIED)
             return true
         }
 
@@ -375,9 +379,11 @@ object BattleEngine {
                 if (i < 0 || v == 0) continue
                 val b = side(tp).boosts
                 val label = "${mon(tp).name}'s ${BOOST_LABELS[i]}"
-                if (v > 0 && b[i] >= 6) { fx(tp, "$label won't go any higher!"); continue }
-                if (v < 0 && b[i] <= -6) { fx(tp, "$label won't go any lower!"); continue }
+                if (v > 0 && b[i] >= 6) { fx(tp, "$label won't go any higher!", EffectKind.STAT_LIMIT, key, 1); continue }
+                if (v < 0 && b[i] <= -6) { fx(tp, "$label won't go any lower!", EffectKind.STAT_LIMIT, key, -1); continue }
+                val before = b[i]
                 b[i] = (b[i] + v).coerceIn(-6, 6)
+                val applied = b[i] - before
                 changed = true
                 fx(tp, "$label " + when {
                     v == 1 -> "rose!"
@@ -386,7 +392,7 @@ object BattleEngine {
                     v == -1 -> "fell!"
                     v == -2 -> "harshly fell!"
                     else -> "severely fell!"
-                })
+                }, EffectKind.STAT_CHANGE, key, applied)
             }
             return changed
         }
@@ -407,8 +413,9 @@ object BattleEngine {
         }
 
         private fun hurtEvent(p: Boolean, amount: Int, text: String) {
-            mon(p).hp = maxOf(0, mon(p).hp - amount)
-            events += GameEvent.Effect(p, text, mon(p).hp, maxHpOf(p), side(p).status)
+            val before = mon(p).hp
+            mon(p).hp = maxOf(0, before - amount)
+            events += GameEvent.Effect(p, text, mon(p).hp, maxHpOf(p), side(p).status, EffectKind.STATUS_DAMAGE, amount = before - mon(p).hp)
         }
     }
 }

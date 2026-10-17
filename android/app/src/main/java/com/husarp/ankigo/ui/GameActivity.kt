@@ -595,6 +595,7 @@ class GameActivity : AgActivity() {
         m.item(6, "Stats", R.drawable.ic_stats)
         m.item(7, "Battle log", R.drawable.ic_swords)
         catchMenuLabel()?.let { m.item(9, it, R.drawable.ic_ball) }
+        m.item(10, "Help", R.drawable.ic_help)
     }
 
     private fun showMenu(anchor: View) {
@@ -610,6 +611,7 @@ class GameActivity : AgActivity() {
                 6 -> openStats()
                 7 -> openStats(BattleLogActivity::class.java)
                 9 -> toggleCatch()
+                10 -> openStats(com.husarp.ankigo.help.HelpActivity::class.java)
                 8 -> popOut()
             }
         }
@@ -654,11 +656,11 @@ class GameActivity : AgActivity() {
         startActivity(Intent(this, cls).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION).also { if (showUid != null) it.putExtra(TeamActivity.EXTRA_SHOW_UID, showUid) })
     }
 
-    /** Tap on our Pokémon (PLAN 86): the Team screen with its details; not while an animation plays or without a main. */
+    /** Tap on our Pokémon (PLAN 86): its Details window on top of the battle; not while an animation plays or without a main. */
     private fun openMainDetails() {
         if (inPip || player?.idle == false) return
         val uid = GameRepo.state?.main?.uid ?: return
-        openScreen(FloatPage.TEAM, TeamActivity::class.java, uid)
+        BattleDetails.show(this, uid)
     }
 
     /** "Switch Pokémon" (PLAN 99): the team as a grid popup; the picked one becomes the main. */
@@ -671,7 +673,6 @@ class GameActivity : AgActivity() {
     private fun switchMain(uid: String) {
         if (GameRepo.state?.main?.uid == uid) return
         val r = try { GameRepo.run(this) { it.setMain(uid) } } catch (t: Throwable) { Report.fail("PANEL", "setMain", t); return }
-        if (r.message.isNotEmpty()) Ui.toast(this, r.message)
         // The new main shows at once, not after the animations still waiting; then the short "Go, X!" plays.
         if (r.events.any { it is GameEvent.MainChanged }) player?.finishNow()
         handleEvents(r.events)

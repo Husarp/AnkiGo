@@ -9,8 +9,8 @@ import com.husarp.ankigo.game.Mon
 
 /** Small views shared by the Box grid, the copies sheet and the favourite buttons (items 54, 45, 81). */
 internal object BoxViews {
-    /** The Team tab's own icon from the bottom bar: marks a team member (outline, accent colour, no text, no background). */
-    val TEAM_ICON: Int get() = BottomNav.Tab.TEAM.icon
+    /** Two people (outline, accent colour, no text, no background): marks a team member. Not the bottom bar's Team tab icon. */
+    val TEAM_ICON: Int get() = R.drawable.ic_team
 
     /** A tinted small icon view. */
     fun icon(ctx: Context, res: Int, colorRes: Int): ImageView = ImageView(ctx).apply {

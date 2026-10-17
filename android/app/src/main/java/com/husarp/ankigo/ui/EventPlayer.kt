@@ -1,14 +1,19 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.lookSpecies
 import android.os.Handler
 import android.os.Looper
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.data.SpriteKind
+import com.husarp.ankigo.game.CashKind
 import com.husarp.ankigo.game.Category
+import com.husarp.ankigo.game.DuplicateResult
+import com.husarp.ankigo.game.Economy
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.StatCalc
+import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.sound.GameSound
 import com.husarp.ankigo.ui.PanelText.em
 import java.util.Locale
@@ -167,6 +172,18 @@ class EventPlayer(private val panel: BattlePanelView) {
         }
         return false
     }
+
+    /** Looks ahead in the queue: does the Caught being played come with a swap (auto-release duplicates)? */
+    private fun upcomingSwap(): GameEvent.Duplicate? {
+        for (item in queue) {
+            when (val ev = (item as? Item.Ev)?.e) {
+                is GameEvent.Duplicate -> return ev.takeIf { it.result == DuplicateResult.SWAPPED }
+                is GameEvent.Counted, is GameEvent.Encounter, null -> return null
+                else -> {}
+            }
+        }
+        return null
+    }
     private val ctx get() = panel.context
 
     /** True while game sounds must stay quiet (the study screen sets this when the card has audio). */
@@ -214,6 +231,7 @@ class EventPlayer(private val panel: BattlePanelView) {
         when (e) {
             is GameEvent.Counted -> {
                 lastButton = e.button
+                if (!e.catchUp) floats(e)   // an Again answer: "Hesitated"
                 panel.setGoal(e.reviewsToday, st?.settings?.dailyAverage ?: 100, true)
                 panel.setCombo(e.cardStreak, true)
                 return 0
@@ -235,6 +253,7 @@ class EventPlayer(private val panel: BattlePanelView) {
             }
             is GameEvent.Effect -> {
                 log(LogKind.SYS, "EFFECT", e.text)
+                floats(e)
                 if (e.onPlayer) arena.setPlayerStatus(e.status) else arena.setEnemyStatus(e.status)
                 if (e.maxHp > 0) {
                     if (e.onPlayer) arena.setPlayerHp(e.hp, e.maxHp, true) else arena.setEnemyHp(e.hp, e.maxHp, true)
@@ -259,7 +278,7 @@ class EventPlayer(private val panel: BattlePanelView) {
                 return d(650)
             }
             is GameEvent.XpGained -> {
-                if (e.uid != arena.playerUid) return 0
+                if (e.uid != arena.playerUid) { teamXpCard(e); return 0 }
                 val frac = if (e.xpForLevel > 0) e.xpInLevel.toFloat() / e.xpForLevel else 1f
                 if (e.level > arena.playerLevel || frac < arena.xpShown - 0.001f) {
                     // grew a level: fill the bar, then restart at the new level's progress
@@ -299,6 +318,13 @@ class EventPlayer(private val panel: BattlePanelView) {
                 }
                 return d(1100)
             }
+            is GameEvent.Healed -> {
+                if (e.uid != arena.playerUid) return 0
+                floats(e)
+                arena.setPlayerHp(e.hp, e.maxHp, true)
+                log(LogKind.GOOD, "HEAL", "${em(e.name)} healed ${em("+${e.amount}")} HP")
+                return d(500)
+            }
             is GameEvent.Encounter -> return playEncounter(e)
             is GameEvent.Fled -> {
                 log(LogKind.NEUTRAL, "FLED", "${em(bare(e.name))} ran away.")
@@ -315,6 +341,10 @@ class EventPlayer(private val panel: BattlePanelView) {
             is GameEvent.Cash -> {
                 panel.setCoins(e.total, true)
                 panel.floatAtCoins("+${e.amount} ₽")
+                if (e.kind == CashKind.DAILY_BONUS) { // the goal moment: its own log line (the per-answer money stays a float)
+                    log(LogKind.SYS, "GOAL", Economy.dailyBonusText(e.amount, st?.streakDays ?: 0))
+                    return d(600)
+                }
                 return 0
             }
             is GameEvent.ItemFound -> {
@@ -335,12 +365,48 @@ class EventPlayer(private val panel: BattlePanelView) {
                 if (st != null) panel.renderFooter(st)
                 return d(900)
             }
+            is GameEvent.Duplicate -> return playDuplicate(e)
             is GameEvent.Info -> {
                 if (arena.ballShown && e.text.endsWith("broke free!")) return breakFree(e.text)
                 log(LogKind.SYS, if (e.text.startsWith("Daily goal")) "GOAL" else "INFO", e.text)
                 return d(800)
             }
         }
+    }
+
+    /** The floating texts of [e] (damage, Miss, effectiveness, status words, stat badges, +HP, Hesitated), via the pure mapper. */
+    private fun floats(e: GameEvent) = FloatTexts.of(e, FloatContext(Tuning.CRITS)).forEach { arena.floatText(it) }
+
+    /**
+     * Another team member's XP: a card slides in between the two Pokémon (pick 9A). The level-up / evolve events that belong to
+     * this gain are still waiting in the queue, so the card is built from this event plus the ones after it up to the next answer.
+     */
+    private fun teamXpCard(e: GameEvent.XpGained) {
+        val batch = ArrayList<GameEvent>()
+        batch += e
+        for (item in queue) {
+            val ev = (item as? Item.Ev)?.e ?: break
+            if (ev is GameEvent.Counted || ev is GameEvent.Encounter) break
+            batch += ev
+        }
+        val card = TeamXpCards.of(batch, arena.playerUid).firstOrNull { it.uid == e.uid } ?: return
+        arena.showXpCard(card) { view ->
+            val data = GameRepo.data
+            val mon = GameRepo.state?.mon(card.uid)
+            val sp = if (mon != null && data != null) mon.lookSpecies(data) else null   // owned: its chosen look
+            if (sp != null && mon != null) PanelSprites.show(ctx, view, sp, SpriteKind.FRONT, mon.shiny, false)
+        }
+    }
+
+    /** Auto-release duplicates: one log line says what happened to the wild one (a swap also shows on the "Gotcha!" banner). */
+    private fun playDuplicate(e: GameEvent.Duplicate): Long {
+        val who = em(bare(e.name))
+        when (e.result) {
+            DuplicateResult.DEFEATED -> log(LogKind.SYS, "DUPE", "Not higher than your Lv ${e.ownedLevel} copy: $who was defeated, not caught.")
+            DuplicateResult.SWAPPED -> log(LogKind.SYS, "SWAP", "Swapped for Lv ${e.level}: your Lv ${e.ownedLevel} ${em(e.releasedName ?: bare(e.name))} was released.")
+            DuplicateResult.KEPT_BOTH -> log(LogKind.SYS, "DUPE", "Kept both $who: your Lv ${e.ownedLevel} copy is ${e.keptBecause ?: "kept"}.")
+        }
+        return d(700)
     }
 
     private fun playAttack(e: GameEvent.Attack): Long {
@@ -371,19 +437,12 @@ class EventPlayer(private val panel: BattlePanelView) {
             val onPlayer = !e.byPlayer
             if (!e.missed && !e.failed && e.damage > 0) {
                 arena.hit(onPlayer, d(380))
-                val big = e.crit || e.effectiveness > 1.0
-                arena.floatNumber(onPlayer, "-${e.damage}", if (big) FloatStyle.BIG else FloatStyle.DAMAGE)
-            } else if (e.missed) {
-                arena.floatNumber(onPlayer, "Miss", FloatStyle.MISS)
             }
+            floats(e)
             // HP of the target, and of the user (drain, recoil, heal)
             if (e.byPlayer) {
                 if (e.targetMaxHp > 0) arena.setEnemyHp(e.targetHp, e.targetMaxHp, true)
-                if (e.userMaxHp > 0) {
-                    val gained = e.userHp - arena.playerHpShown
-                    if (gained > 0 && arena.playerHpShown > 0) arena.floatNumber(true, "+$gained", FloatStyle.HEAL)
-                    arena.setPlayerHp(e.userHp, e.userMaxHp, true)
-                }
+                if (e.userMaxHp > 0) arena.setPlayerHp(e.userHp, e.userMaxHp, true)   // drain / heal float from their Effect event
             } else {
                 if (e.targetMaxHp > 0) arena.setPlayerHp(e.targetHp, e.targetMaxHp, true)
                 if (e.userMaxHp > 0) arena.setEnemyHp(e.userHp, e.userMaxHp, true)
@@ -436,6 +495,7 @@ class EventPlayer(private val panel: BattlePanelView) {
     /** Mockup frame B: ball drops (450 ms) and wobbles (1.8 s), stars twinkle, "Gotcha!" banner. */
     private fun playCaught(e: GameEvent.Caught): Long {
         val hadBall = arena.ballShown
+        val swap = upcomingSwap()
         var t = 0L
         arena.setEnemyCardShown(false)
         if (!hadBall) {
@@ -446,7 +506,7 @@ class EventPlayer(private val panel: BattlePanelView) {
             t = 2250
         }
         after(t) {
-            val line2 = if (e.newSpecies) "New in your Pokédex" else null
+            val line2 = swap?.let { "Swapped for Lv ${it.level}" } ?: if (e.newSpecies) "New in your Pokédex" else null
             arena.showBanner("Gotcha!", "${bare(e.name)} was caught", line2)
             arena.showStars(true)
             val where = if (e.toTeam) "" else " It went to the box."
@@ -473,7 +533,8 @@ class EventPlayer(private val panel: BattlePanelView) {
         after(450) {
             val data = GameRepo.data
             val mon = GameRepo.state?.mon(e.uid)
-            val sp = data?.species?.get(e.toSpecies)
+            // the new form, unless the Pokémon keeps a chosen look (still one of its line)
+            val sp = if (mon != null && data != null) mon.lookSpecies(data) else data?.species?.get(e.toSpecies)
             if (sp != null && mon != null) {
                 PanelSprites.showMain(ctx, arena.playerSprite, sp, mon.shiny)
                 panel.notePlayerSprite(sp.num, mon.shiny)

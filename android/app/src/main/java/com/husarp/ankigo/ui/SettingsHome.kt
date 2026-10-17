@@ -14,29 +14,31 @@ import java.util.Locale
 
 /**
  * The sections of the Settings tab. [opens] = true: tapping opens it in place (same page, back arrow in the app bar);
- * false: the row starts its own screen (Updates, Diagnostics), so a section with a single link isn't needed.
+ * false: the row starts its own screen (Help, Updates, Diagnostics), so a section with a single link isn't needed.
  */
 enum class SettingsSection(val title: String, @DrawableRes val icon: Int, @ColorRes val tone: Int) {
     LOOK("Look", R.drawable.ic_palette, R.color.ag_mauve),
     GAME("Game", R.drawable.ic_game, R.color.ag_green),
     STUDY("Study", R.drawable.ic_study, R.color.ag_blue),
     BATTLE("Battle panel & windows", R.drawable.ic_pip, R.color.ag_peach),
+    REMINDERS("Reminders", R.drawable.ic_bell, R.color.ag_red),
     SOUND("Sound", R.drawable.ic_sound, R.color.ag_pink),
     DOWNLOADS("Downloads", R.drawable.ic_download, R.color.ag_teal),
-    ANKIMON("Ankimon (PC)", R.drawable.ic_swap, R.color.ag_yellow),
+    ANKIMON("Ankimon PC sync", R.drawable.ic_swap, R.color.ag_yellow),
     SAVE("Save & backups", R.drawable.ic_flag, R.color.ag_lav),
+    HELP("Help & game guide", R.drawable.ic_help, R.color.ag_teal),
     UPDATES("Updates", R.drawable.ic_update, R.color.ag_sky),
     DIAGNOSTICS("Diagnostics", R.drawable.ic_bug, R.color.ag_red),
     ABOUT("About", R.drawable.ic_star, R.color.ag_sub1);
 
-    val opens: Boolean get() = this != UPDATES && this != DIAGNOSTICS
+    val opens: Boolean get() = this != HELP && this != UPDATES && this != DIAGNOSTICS
 
     companion object {
         /** The home list in order, in groups (one card each). */
         val GROUPS: List<List<SettingsSection>> = listOf(
-            listOf(LOOK, GAME, STUDY, BATTLE),
+            listOf(LOOK, GAME, STUDY, BATTLE, REMINDERS),
             listOf(SOUND, DOWNLOADS, ANKIMON, SAVE),
-            listOf(UPDATES, DIAGNOSTICS, ABOUT),
+            listOf(HELP, UPDATES, DIAGNOSTICS, ABOUT),
         )
 
         fun byName(name: String?): SettingsSection? = entries.firstOrNull { it.name == name }
@@ -87,6 +89,15 @@ object SettingsSummary {
         if (savedAt == null || savedAt == 0L) "Not saved yet" else "Saved ${format(savedAt)}" + (seq?.let { " (#$it)" } ?: "")
 
     fun updates(version: String) = "Version $version"
+
+    /** "Off", or "2 on · cards due, own goal" (the first two names, then "+n"). Quiet hours alone are not a reminder. */
+    fun reminders(p: com.husarp.ankigo.remind.ReminderPrefs): String {
+        val on = listOfNotNull("cards due".takeIf { p.dueOn }, "own goal".takeIf { p.goalOn }, "streak".takeIf { p.streakOn },
+            "daily goal".takeIf { p.dailyGoalOn }, "shop news".takeIf { p.shopOn })
+        if (on.isEmpty()) return "Off"
+        val names = on.take(2).joinToString(", ") + if (on.size > 2) " +${on.size - 2}" else ""
+        return "${on.size} on · $names"
+    }
 
     fun bytes(n: Long): String = when {
         n >= 1_000_000 -> String.format(Locale.US, "%.1f MB", n / 1_000_000.0)

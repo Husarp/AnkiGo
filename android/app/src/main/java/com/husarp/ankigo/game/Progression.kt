@@ -57,12 +57,15 @@ object Progression {
 
     /**
      * Gives [xp] to [mon] (Ankimon): XP is progress inside the level; at most 10 levels per call; no XP at 100.
-     * Each new level: stats recalculated (current HP stays, capped to the new max), moves learned at exactly that
-     * level go through [learnMove]. Emits XpGained, LevelUp, MoveLearned/MoveSkipped. Returns levels gained.
+     * Each new level: stats recalculated, current HP goes up by the HP the level adds to max HP plus 25 % of the new max
+     * (AnkiGo, PLAN 80; see [Healing.levelUpHp]; never above max, a Pokémon at 0 HP stays there), moves learned at exactly
+     * that level go through [learnMove]. Emits XpGained, LevelUp (with the HP after the heal), Healed (the main only),
+     * MoveLearned/MoveSkipped. Returns levels gained.
      */
     fun gainXp(data: GameData, state: GameState, mon: Mon, xp: Int, events: MutableList<GameEvent>): Int {
         if (mon.level >= Tuning.MAX_LEVEL || xp <= 0) return 0
         val sp0 = data.sp(mon.species)
+        val isMain = state.main?.uid == mon.uid // only the main's heals are shown (Healed)
         mon.xp += xp
         val later = mutableListOf<GameEvent>() // level events; XpGained goes first but needs the final numbers
         var gained = 0
@@ -70,11 +73,14 @@ object Progression {
             val need = xpToNext(data, mon)
             if (need <= 0 || mon.xp < need) break
             mon.xp -= need
+            val oldMax = StatCalc.maxHp(data, mon)
             mon.level++
             gained++
             val maxHp = StatCalc.maxHp(data, mon)
-            mon.hp = min(mon.hp, maxHp)
+            val hpBefore = mon.hp
+            mon.hp = Healing.levelUpHp(mon.hp, oldMax, maxHp)
             later += GameEvent.LevelUp(mon.uid, mon.name, mon.level, mon.hp, maxHp)
+            if (isMain && mon.hp > hpBefore) later += GameEvent.Healed(mon.uid, mon.name, mon.hp - hpBefore, mon.hp, maxHp, HealReason.LEVEL_UP)
             Badges.award(state, 5, later)
             for (lm in sp0.levelMoves.filter { it.level == mon.level && it.level > 0 }.map { it.move }.distinct()) {
                 learnMove(data, mon, lm, later)
@@ -174,12 +180,11 @@ object Progression {
     /**
      * AnkiGo: XP for a wild Pokémon the auto rule CATCHES at 0 HP (Tuning.CATCH_GIVES_XP). Ankimon gives none, but there
      * you choose catch or defeat by hand; with the choice automatic, catching every new species would starve the team
-     * of XP for weeks. Half the defeat XP (Tuning.CATCH_XP_PART; Exp. Share, Lucky Egg) and the level-evolution check; no EVs, friendship,
+     * of XP for weeks. The full defeat XP (Exp. Share, Lucky Egg apply) and the level-evolution check; no EVs, friendship,
      * defeat count or trainer XP (those stay defeat-only, as in Ankimon).
      */
     fun rewardCatch(data: GameData, state: GameState, main: Mon, wild: Mon, now: Long, rng: Random, events: MutableList<GameEvent>) {
-        val defeatXp = xpForDefeat(data.sp(wild.species), wild.level)
-        val xp = if (defeatXp >= 1) maxOf(1, (defeatXp * Tuning.CATCH_XP_PART).toInt()) else defeatXp
+        val xp = xpForDefeat(data.sp(wild.species), wild.level)
         val holder = state.settings.xpShareUid?.let { state.mon(it) }?.takeIf { it.uid != main.uid }
         val half = (xp * Tuning.XP_SHARE_PART).toInt()
         var mainXp = if (holder != null) half else xp
@@ -305,23 +310,31 @@ object Catching {
      * first (CATCH -> CATCH; DEFEAT -> DEFEAT, except a protected kind is caught anyway); then the wishlist -> CATCH;
      * then the automatic mode: mode 1 CATCH; mode 2 CATCH if shiny or protected else DEFEAT;
      * mode 3 CATCH if the species was never caught, or shiny, or protected, else DEFEAT.
+     * With Settings.autoReleaseDuplicates on, an owned species goes first by [Duplicates] (see [plan]).
      */
-    fun decide(data: GameData, state: GameState, battle: Battle): Outcome {
+    fun decide(data: GameData, state: GameState, battle: Battle): Outcome = plan(data, state, battle).outcome
+
+    /** [decide] plus the duplicate verdict when [Duplicates] acted on this fight (a swap releases a copy after the catch). */
+    fun plan(data: GameData, state: GameState, battle: Battle): CatchPlan {
         val settings = state.settings
         val wild = battle.wild
         val protected = isProtected(settings, data.sp(wild.species), battle.tier)
         when (battle.override) {
-            Outcome.CATCH -> return Outcome.CATCH
-            Outcome.DEFEAT -> return if (protected) Outcome.CATCH else Outcome.DEFEAT
+            Outcome.CATCH -> return CatchPlan(Outcome.CATCH)
+            Outcome.DEFEAT -> return CatchPlan(if (protected) Outcome.CATCH else Outcome.DEFEAT)
             null -> {}
         }
-        if (wild.species in settings.wishlist) return Outcome.CATCH
         val special = wild.shiny || protected
-        return when (settings.autoMode) {
+        // Auto-release duplicates: higher than the best copy = catch (and swap); not higher = defeat, unless it is special.
+        val dup = Duplicates.verdict(data, state, wild)
+        if (dup != null && dup.higher) return CatchPlan(Outcome.CATCH, dup)
+        if (dup != null && !special && wild.species !in settings.wishlist) return CatchPlan(Outcome.DEFEAT, dup)
+        if (wild.species in settings.wishlist) return CatchPlan(Outcome.CATCH)
+        return CatchPlan(when (settings.autoMode) {
             1 -> Outcome.CATCH
             2 -> if (special) Outcome.CATCH else Outcome.DEFEAT
             else -> if (special || wild.species !in state.caught) Outcome.CATCH else Outcome.DEFEAT
-        }
+        })
     }
 
     /** Ball chance in percent (Tuning.BALL_CHANCE, +10 Net Ball vs Water/Bug, +10 Dive Ball vs Water), max 100. */
@@ -350,7 +363,7 @@ object Catching {
         val toTeam = state.team.size < 6
         state.mons += mon
         if (toTeam) state.team += mon.uid
-        state.seen += mon.species
+        state.markSeen(mon.species, now)
         state.caught += mon.species
         state.catches++
         events += GameEvent.Caught(mon.uid, mon.species, mon.name, mon.level, mon.shiny, ball, newSpecies, toTeam)

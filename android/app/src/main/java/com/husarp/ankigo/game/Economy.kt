@@ -98,21 +98,12 @@ object Economy {
 
     /**
      * Bookkeeping for one counted answer (call after state.reviewsToday was increased):
-     * every 10 reviews today +40 cash (x2 when the main holds Amulet Coin or Luck Incense), never more than 400 a day;
-     * random item countdown (3..385 answers, rolled when 0) -> one random dropPool item (badge 6 first item).
+     * +5 cash for the answer (any button), then the random item countdown (3..385 answers, rolled when 0) -> one random
+     * dropPool item (badge 6 first item). Money goes through [earn] (x2 with Amulet Coin / Luck Incense, daily cap).
      * Emits Cash, ItemFound, BadgeEarned.
      */
     fun onReview(data: GameData, state: GameState, rng: Random, events: MutableList<GameEvent>) {
-        if (state.reviewsToday > 0 && state.reviewsToday % Tuning.CASH_EVERY == 0) {
-            val held = state.main?.heldItem
-            val base = if (held == "amulet-coin" || held == "luck-incense") Tuning.CASH_AMOUNT * 2 else Tuning.CASH_AMOUNT
-            val amount = minOf(base, Tuning.CASH_DAILY_CAP - state.cashToday)
-            if (amount > 0) {
-                state.cash += amount
-                state.cashToday += amount
-                events += GameEvent.Cash(amount, state.cash)
-            }
-        }
+        earn(state, Tuning.CASH_PER_ANSWER, CashKind.ANSWER, events)
         if (state.itemCountdown <= 0) state.itemCountdown = rollCountdown(rng)
         state.itemCountdown--
         if (state.itemCountdown <= 0) {
@@ -124,6 +115,45 @@ object Economy {
             state.itemCountdown = rollCountdown(rng)
         }
     }
+
+    /**
+     * The defeat money: +10 cash for a wild Pokémon that was defeated (call for Outcome.DEFEAT only: a catch pays nothing).
+     * Same doubling and daily cap as the answer money. Emits Cash.
+     */
+    fun onDefeat(state: GameState, events: MutableList<GameEvent>) = earn(state, Tuning.CASH_PER_DEFEAT, CashKind.DEFEAT, events)
+
+    /**
+     * Pays [base] cash for [kind] (ANSWER or DEFEAT): x2 when the main holds Amulet Coin or Luck Incense, then at most what
+     * is left of today's cap (Tuning.CASH_DAILY_CAP counts what is really paid, after the doubling). Nothing left: no
+     * payment and no event. Adds to state.cash and state.cashToday; emits Cash.
+     */
+    private fun earn(state: GameState, base: Int, kind: CashKind, events: MutableList<GameEvent>) {
+        val held = state.main?.heldItem
+        val want = if (held == "amulet-coin" || held == "luck-incense") base * 2 else base
+        val amount = minOf(want, Tuning.CASH_DAILY_CAP - state.cashToday)
+        if (amount <= 0) return
+        state.cash += amount
+        state.cashToday += amount
+        events += GameEvent.Cash(amount, state.cash, kind)
+    }
+
+    /** The daily-goal bonus for [streakBefore] goal-streak days before today: 50 + 5 per day, 10 days at most (so 50..100). */
+    fun dailyBonus(streakBefore: Int): Int =
+        Tuning.DAILY_BONUS_BASE + Tuning.DAILY_BONUS_PER_DAY * streakBefore.coerceIn(0, Tuning.DAILY_BONUS_MAX_DAYS)
+
+    /**
+     * Pays the daily-goal bonus once (the caller is the one-a-day "Daily goal reached" moment): never doubled, outside the
+     * daily cap (state.cashToday stays as it is), paid even when the cap is reached. Emits Cash(DAILY_BONUS).
+     */
+    fun payDailyBonus(state: GameState, streakBefore: Int, events: MutableList<GameEvent>) {
+        val amount = dailyBonus(streakBefore)
+        state.cash += amount
+        events += GameEvent.Cash(amount, state.cash, CashKind.DAILY_BONUS)
+    }
+
+    /** The log line of the daily bonus: "Daily goal bonus: +75 ₽ (6-day streak)"; a first day (streak 1 or less) has no streak part. */
+    fun dailyBonusText(amount: Int, streakDays: Int): String =
+        "Daily goal bonus: +$amount ₽" + if (streakDays > 1) " ($streakDays-day streak)" else ""
 
     private fun rollCountdown(rng: Random) = rng.nextInt(Tuning.ITEM_COUNTDOWN.first, Tuning.ITEM_COUNTDOWN.last + 1)
 }
@@ -139,16 +169,33 @@ object Shop {
     /** If state.shopDay != state.day: today's stock = date-seeded sample of slots() items and slots() TMs. */
     fun ensureToday(data: GameData, state: GameState) {
         if (state.shopDay == state.day) return
-        restock(data, state, Random(state.day.hashCode()))
+        val (items, tms) = stockFor(data, state.day, state.trainerLevel)
+        setStock(state, items, tms)
     }
 
-    private fun restock(data: GameData, state: GameState, rng: Random) {
-        val n = slots(state.trainerLevel)
+    /**
+     * The date-seeded stock (items, TMs) of game day [day] for a trainer of [trainerLevel]: what [ensureToday] puts in
+     * the shop that day. Pure, so the reminders can look at tomorrow's shop. After a reroll the real stock is state.shopItems.
+     */
+    fun stockFor(data: GameData, day: String, trainerLevel: Int): Pair<List<String>, List<String>> =
+        draw(data, Random(day.hashCode()), trainerLevel)
+
+    private fun draw(data: GameData, rng: Random, trainerLevel: Int): Pair<List<String>, List<String>> {
+        val n = slots(trainerLevel)
         val items = Items.shopPool(data).shuffled(rng).take(n)
         val tms = tmPool(data).shuffled(rng).take(n)
+        return items to tms
+    }
+
+    private fun setStock(state: GameState, items: List<String>, tms: List<String>) {
         state.shopDay = state.day
         state.shopItems.clear(); state.shopItems.addAll(items)
         state.shopTms.clear(); state.shopTms.addAll(tms)
+    }
+
+    private fun restock(data: GameData, state: GameState, rng: Random) {
+        val (items, tms) = draw(data, rng, state.trainerLevel)
+        setStock(state, items, tms)
     }
 
     fun buy(data: GameData, state: GameState, item: String): ActionResult {
@@ -156,6 +203,7 @@ object Shop {
         val price = data.price(item)
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
+        StudyStats.addSpent(state, price)
         Economy.give(state, item)
         return ActionResult(true, "Bought ${Items.name(item)} for ${money(price)}")
     }
@@ -168,6 +216,7 @@ object Shop {
         val price = Tuning.TM_PRICE
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
+        StudyStats.addSpent(state, price)
         state.tms += move
         return ActionResult(true, "Bought $name for ${money(price)}")
     }
@@ -177,6 +226,7 @@ object Shop {
         val price = Tuning.REROLL_PRICE
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
+        StudyStats.addSpent(state, price)
         restock(data, state, rng)
         return ActionResult(true, "New stock for ${money(price)}")
     }
@@ -284,6 +334,7 @@ object ItemUse {
                 val healed = minOf(missing, def.heal)
                 mon.hp += healed
                 Economy.take(state, item)
+                StudyStats.addHealItem(state)
                 Badges.award(state, 20, events)
                 return ActionResult(true, "$name healed ${mon.name} by $healed HP", events)
             }

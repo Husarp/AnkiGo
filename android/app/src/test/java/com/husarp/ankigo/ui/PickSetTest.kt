@@ -16,8 +16,14 @@ class PickSetTest {
         assertEquals(0, s.size)
     }
 
-    @Test fun atMostFour() {
+    @Test fun noLimitByDefault() {
         val s = PickSet()
+        (1..12).forEach { assertEquals(PickSet.Result.ADDED, s.toggle(owned(it))) }
+        assertEquals(12, s.size)
+    }
+
+    @Test fun atMostFour() {
+        val s = PickSet(max = 4)
         (1..4).forEach { assertEquals(PickSet.Result.ADDED, s.toggle(owned(it))) }
         assertEquals(PickSet.Result.FULL, s.toggle(owned(5)))
         assertEquals(4, s.size)

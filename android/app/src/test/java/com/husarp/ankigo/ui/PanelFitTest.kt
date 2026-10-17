@@ -193,8 +193,8 @@ class PanelFitTest {
         assertEquals(75f, PanelFit.Heights.footer(8f, true), 0.5f)
         assertEquals(356f, PanelFit.Heights.chips(8f), 0.5f)
         val c = ArenaGeo.cards(8f, false, true)
-        assertEquals(94.4f, c.wildH, 0.5f)    // 80.4 + the 14 dp status row under the HP bar (item 95)
-        assertEquals(83.1f, c.playerH, 0.5f)  // 72.1 + the row, which takes the place of the 3 dp gap above the numbers
+        assertEquals(87.4f, c.wildH, 0.5f)    // HP number beside the bar (R3-X1), the 14 dp status row under it
+        assertEquals(91.1f, c.playerH, 0.5f)  // ... and our XP line under the status row
         assertEquals(166f, c.wildW, 0f)
         assertEquals(170f, c.playerW, 0f)
     }
@@ -267,7 +267,7 @@ class PanelFitTest {
         assertTrue(raised.wildW > normal.wildW && raised.wildH > normal.wildH && raised.playerH > normal.playerH)
         // compact cards: name + thin HP bar, no types, no XP
         val compact = ArenaGeo.cards(8f, true, true)
-        assertTrue(compact.wildH < normal.wildH * 0.65f && compact.playerH < normal.playerH * 0.75f)
+        assertTrue(compact.wildH < normal.wildH * 0.7f && compact.playerH < normal.playerH * 0.75f)
         assertTrue(compact.wildW < normal.wildW)
         // the XP numbers are what makes our card wide
         assertTrue(ArenaGeo.cards(8f, false, false).playerW < normal.playerW)

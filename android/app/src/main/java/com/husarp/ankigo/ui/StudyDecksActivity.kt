@@ -13,6 +13,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import com.husarp.ankigo.*
+import com.husarp.ankigo.deck.DeckFlows
 import com.husarp.ankigo.overlay.FloatBattleService
 import java.util.concurrent.Executors
 
@@ -22,6 +23,7 @@ class StudyDecksActivity : AgActivity() {
     private lateinit var content: LinearLayout
     private lateinit var appBar: AppBar
     private lateinit var pull: PullRefreshLayout
+    private var newDeckButton: View? = null
     private val prefs by lazy { getSharedPreferences("study", 0) }
     private var decks = emptyList<Anki.Deck>()
     private var expanded = emptySet<Long>()
@@ -35,11 +37,25 @@ class StudyDecksActivity : AgActivity() {
         if (prefs.contains("folded")) prefs.edit().remove("folded").apply() // old by-name folding, replaced by expandedDecks
         setContentView(buildContent())
         GameRepo.load(this) { if (!isDestroyed) render() }
+        DeckFlows.resume(this) { refresh() }   // a "Move all cards" that was running when the screen turned or closed: its progress card comes back
     }
     /** The screen's views (app bar, deck list, bottom bar); split out of onCreate so the design screenshots can build them. */
     internal fun buildContent(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@StudyDecksActivity, R.color.ag_base)) }
         appBar = Ui.appBar(this, "Study", "AnkiDroid")
+        // "Sync AnkiDroid": asks AnkiDroid to sync with AnkiWeb (the official DO_SYNC intent, see AnkiSync); a 46 dp touch area that keeps the bar's height
+        appBar.addView(StudyUi.iconButton(this, R.drawable.ic_sync, "Sync AnkiDroid") { AnkiSync.ask(this) }.apply {
+            setPadding(Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11))
+        }, LinearLayout.LayoutParams(Ui.dp(this, 46), Ui.dp(this, 46)).also {
+            it.setMargins(Ui.dp(this, 4), -Ui.dp(this, 9), -Ui.dp(this, 11), -Ui.dp(this, 9))
+        })
+        // "New deck" (PLAN 70): shown once AnkiDroid is known to take changes (see render)
+        newDeckButton = StudyUi.iconButton(this, R.drawable.ic_plus, "New deck") { DeckFlows.newDeck(this, null) { refresh() } }.apply {
+            setColorFilter(Ui.c(context, R.color.ag_mauve))
+            setPadding(Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11)); visibility = View.GONE
+        }.also {
+            appBar.addView(it, appBar.childCount - 1, LinearLayout.LayoutParams(Ui.dp(this, 46), Ui.dp(this, 46)).also { lp -> lp.setMargins(Ui.dp(this, 4), -Ui.dp(this, 9), 0, -Ui.dp(this, 9)) })
+        }
         root.addView(appBar)
         content = StudyUi.column(this).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
         val scroll = ScrollView(this).apply { addView(content, android.widget.FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
@@ -51,7 +67,7 @@ class StudyDecksActivity : AgActivity() {
     override fun onStart() { super.onStart(); BattleScreen.setVisible(this, true) }
     override fun onStop() { BattleScreen.setVisible(this, false); super.onStop() }
     override fun onResume() { super.onResume(); FloatBattleService.startIfWanted(this); refresh() }
-    override fun onDestroy() { generation++; io.shutdown(); super.onDestroy() }
+    override fun onDestroy() { generation++; DeckFlows.detach(); io.shutdown(); super.onDestroy() }
     /** [byUser]: pulled down or the refresh button: the spinner shows. Otherwise (screen came back) a shown list stays until the new one is there. */
     private fun refresh(byUser: Boolean = false) {
         val token = ++generation
@@ -67,6 +83,7 @@ class StudyDecksActivity : AgActivity() {
         }
     }
     internal fun showAccessProblem(message: String?) {
+        newDeckButton?.visibility = View.GONE
         content.removeAllViews(); content.addView(StudyUi.label(this, message ?: "Open AnkiDroid once, then refresh.", 13).apply { setPadding(Ui.dp(context, 4), Ui.dp(context, 8), Ui.dp(context, 4), 0) })
         content.addView(StudyUi.primary(this, "Allow AnkiDroid access") { requestPermissions(arrayOf(Anki.permission), 1) }, StudyUi.spaced(this, 12))
         content.addView(StudyUi.smallButton(this, "Open AnkiDroid") { Anki.launchIntent(this)?.let { startActivity(it) } }, StudyUi.spaced(this, 6))
@@ -89,6 +106,7 @@ class StudyDecksActivity : AgActivity() {
         appBar.pill?.apply {
             setTextColor(Ui.c(this@StudyDecksActivity, if (Anki.studySupported(this@StudyDecksActivity)) R.color.ag_green else R.color.ag_sub0))
         }
+        newDeckButton?.visibility = if (canManage()) View.VISIBLE else View.GONE
         val last = decks.firstOrNull { it.id == prefs.getLong("lastDeck", 0) }
         if (last != null) {
             val resume = StudyUi.row(this).apply {
@@ -150,6 +168,7 @@ class StudyDecksActivity : AgActivity() {
                 minimumHeight = Ui.dp(context, 52)
                 alpha = if (deck.total == 0) .55f else 1f
                 setOnClickListener { open(deck) }
+                setOnLongClickListener { deckMenu(deck, this); true }
             }
             // left part: arrow (parents) or empty space (leaves, so names line up); the whole 48 dp-wide strip toggles, never studies
             val zone = FrameLayout(this)
@@ -198,6 +217,32 @@ class StudyDecksActivity : AgActivity() {
             addView(StudyUi.icon(context, R.drawable.ic_open, R.color.ag_text), FrameLayout.LayoutParams(Ui.dp(context, 10), Ui.dp(context, 10), Gravity.CENTER))
         }, FrameLayout.LayoutParams(Ui.dp(context, 16), Ui.dp(context, 16), Gravity.TOP or Gravity.START).also { it.leftMargin = Ui.dp(context, 29); it.topMargin = Ui.dp(context, 3) })
     }
+    /** AnkiDroid takes changes (permission given, version new enough): New deck, New subdeck and Move all cards are offered. */
+    private fun canManage() = Anki.hasPermission(this) && Anki.studySupported(this)
+    /**
+     * Long-press on a deck (PLAN 70): the usual AnkiGo popup menu. New subdeck and Move all cards are only offered where AnkiDroid
+     * can do them (not in a filtered deck, which can hold no subdeck and no cards of its own). Renaming or deleting a deck is not
+     * possible through AnkiDroid's API, so those are simply not offered.
+     */
+    internal fun deckMenu(deck: Anki.Deck, anchor: View): AppMenu {
+        val menu = AppMenu(anchor)
+        if (canManage() && !deck.dyn) {
+            menu.item(MENU_SUBDECK, "New subdeck…", R.drawable.ic_plus)
+            menu.item(MENU_MOVE_ALL, "Move all cards…", R.drawable.ic_move)
+        }
+        menu.item(MENU_ANKI, "Study in AnkiDroid", R.drawable.ic_open)
+        menu.show { id ->
+            when (id) {
+                MENU_SUBDECK -> DeckFlows.newDeck(this, deck) {
+                    expanded = expanded + deck.id
+                    prefs.edit().putStringSet("expandedDecks", DeckTree.encode(expanded)).apply(); refresh()
+                }
+                MENU_MOVE_ALL -> DeckFlows.moveAll(this, deck) { refresh() }
+                MENU_ANKI -> companion(deck)
+            }
+        }
+        return menu
+    }
     private fun open(deck: Anki.Deck) {
         if (prefs.getBoolean("inAnkiDroid", false)) { companion(deck); return }
         if (deck.total == 0) {
@@ -211,5 +256,10 @@ class StudyDecksActivity : AgActivity() {
             val result = runCatching { Anki.selectDeck(this, deck.id) }
             runOnUiThread { if (!isDestroyed) result.onSuccess { runCatching { if (GameRepo.game == null) startActivity(Anki.reviewIntent(deck.id)) else startActivity(Intent(this, GameActivity::class.java).putExtra("reviewDeck", deck.id).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)) }.onFailure { Ui.toast(this, "Open AnkiDroid once first") } }.onFailure { Ui.toast(this, "Couldn't select this deck") } }
         }
+    }
+    private companion object {
+        const val MENU_SUBDECK = 1
+        const val MENU_MOVE_ALL = 2
+        const val MENU_ANKI = 3
     }
 }

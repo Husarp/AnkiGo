@@ -1,5 +1,7 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.CashKind
+import com.husarp.ankigo.game.DuplicateResult
 import com.husarp.ankigo.game.GameEvent
 import java.util.Locale
 
@@ -12,7 +14,7 @@ enum class Tone { PLAIN, GOOD, BAD, SUB }
 /** One line of a round or of a result. */
 class LogLine(val tone: Tone, val text: String)
 
-/** One counted answer. [card] is the short front text or "card #id"; [coins] are what this answer earned. */
+/** One counted answer. [card] is the short front text or "card #id"; [coins] are what this answer earned (the defeat money joins the last answer). */
 class LogAnswer(val button: Int, val card: String, val catchUp: Boolean, var coins: Int = 0)
 
 enum class RoundKind { ROUND, BALL }
@@ -31,7 +33,7 @@ class LogBattle(val startedAt: Long, var wild: String?, var level: Int, var shin
     val rounds = ArrayList<LogRound>()
     val result = ArrayList<LogLine>()
 
-    /** Coins earned by the answers of this battle. */
+    /** Coins earned by the answers and the defeat of this battle (not the daily-goal bonus). */
     val coins: Int get() = rounds.sumOf { r -> r.answers.sumOf { it.coins } }
 
     fun copy(): LogBattle = LogBattle(startedAt, wild, level, shiny, outcome).also { b ->
@@ -58,6 +60,7 @@ class BattleLogBuilder(
 
     private val pending = ArrayDeque<Pending>()
     private var lastAnswer: LogAnswer? = null
+    private var defeatedWith: LogAnswer? = null // the answer whose round defeated the wild one: the defeat money comes after the result
     private var wildHp: Int? = null
     private var playerHp: Int? = null
     private var resultOpen = false
@@ -73,7 +76,11 @@ class BattleLogBuilder(
         when (e) {
             is GameEvent.Counted -> counted(e)
             is GameEvent.Ignored -> pending.removeFirstOrNull()
-            is GameEvent.Cash -> lastAnswer?.let { it.coins += e.amount }
+            is GameEvent.Cash -> when (e.kind) {
+                CashKind.ANSWER -> lastAnswer?.let { it.coins += e.amount }
+                CashKind.DEFEAT -> (lastAnswer ?: defeatedWith)?.let { it.coins += e.amount }
+                CashKind.DAILY_BONUS -> {} // no fight money: the panel log has its own line
+            }
             is GameEvent.Encounter -> encounter(e)
             is GameEvent.RoundStart -> collecting().let { it.multiplier = e.multiplier; it.points = e.points }
             is GameEvent.Attack -> attack(e)
@@ -84,9 +91,11 @@ class BattleLogBuilder(
             is GameEvent.Defeated -> finish(Outcome.DEFEATED, LogLine(Tone.GOOD, "${e.name} was defeated · ${e.xp} XP"))
             is GameEvent.Caught -> finish(Outcome.CAUGHT, LogLine(Tone.GOOD, caughtText(e)))
             is GameEvent.Fled -> finish(Outcome.FLED, LogLine(Tone.SUB, "${e.name} left"))
+            is GameEvent.Duplicate -> resultLine(Tone.PLAIN, duplicateText(e))
             is GameEvent.MainHealed -> finish(Outcome.LOST, LogLine(Tone.BAD, "${e.name} was healed to ${e.hp} HP · the wild one is lost"))
             is GameEvent.XpGained -> resultLine(Tone.PLAIN, "${e.name} +${e.xp} XP · Lv ${e.level}")
             is GameEvent.LevelUp -> resultLine(Tone.GOOD, "${e.name} grew to Lv ${e.level}")
+            is GameEvent.Healed -> resultLine(Tone.PLAIN, "${e.name} +${e.amount} HP")
             is GameEvent.Evolved -> resultLine(Tone.GOOD, "${e.from} evolved into ${e.to}")
             is GameEvent.MoveLearned -> resultLine(Tone.PLAIN, "${e.name} learned ${e.move}" + (e.forgot?.let { " (forgot $it)" } ?: ""))
             else -> {}
@@ -102,6 +111,7 @@ class BattleLogBuilder(
         val p = takePending(e.button)
         val a = LogAnswer(e.button, p?.card ?: "a card", e.catchUp || p?.catchUp == true)
         lastAnswer = a
+        defeatedWith = null
         collecting().answers += a
     }
 
@@ -195,6 +205,7 @@ class BattleLogBuilder(
         b.outcome = outcome
         b.result += line
         resultOpen = true
+        defeatedWith = if (outcome == Outcome.DEFEATED) lastAnswer else null
         lastAnswer = null
     }
 
@@ -203,6 +214,12 @@ class BattleLogBuilder(
     }
 
     private fun trim(b: LogBattle) { while (b.rounds.size > MAX_ROUNDS) b.rounds.removeAt(0) }
+
+    private fun duplicateText(e: GameEvent.Duplicate): String = when (e.result) {
+        DuplicateResult.DEFEATED -> "Not higher than your Lv ${e.ownedLevel} copy · defeated, not caught"
+        DuplicateResult.SWAPPED -> "Swapped for Lv ${e.level} · your Lv ${e.ownedLevel} ${e.releasedName ?: e.name} was released"
+        DuplicateResult.KEPT_BOTH -> "Kept both · your Lv ${e.ownedLevel} copy is ${e.keptBecause ?: "kept"}"
+    }
 
     private fun caughtText(e: GameEvent.Caught): String =
         "Caught ${e.name} · Lv ${e.level}" + (if (e.shiny) " · shiny" else "") + (if (e.newSpecies) " · new Pokédex entry" else "") +

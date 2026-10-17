@@ -32,7 +32,17 @@ data class StatsSnapshot(
     val historyRunning: Boolean = false,
     /** ms per game day AnkiGo measured itself ([timeInAnkiGo]). */
     val timeByDay: Map<String, Long> = emptyMap(),
-)
+    /** ms per game day AnkiGo measured for answers detected live (split screen, PiP, floating); [timeLive]. */
+    val liveTimeByDay: Map<String, Long> = emptyMap(),
+    /** Per-deck / on-demand AnkiDroid reads for the chart ([AnkiSeriesCache]). */
+    val series: Map<SeriesKey, SeriesData> = emptyMap(),
+) {
+    /** Time studied on [day]: in AnkiGo's study screen + live detection. */
+    fun timeTotalOn(day: String): Long = (timeByDay[day] ?: 0L) + (liveTimeByDay[day] ?: 0L)
+
+    /** [timeByDay] and [liveTimeByDay] added per day. */
+    val timeTotalByDay: Map<String, Long> get() = (timeByDay.keys + liveTimeByDay.keys).associateWith { timeTotalOn(it) }
+}
 
 object StatsText {
     fun reason(access: AnkiAccess?, message: String? = null): String = when (access) {

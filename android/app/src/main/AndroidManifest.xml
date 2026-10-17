@@ -25,6 +25,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Reminders (Settings): the alarm that checks them is set again after a reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
         <package android:name="com.ichi2.anki" />
@@ -78,9 +80,19 @@
         <activity android:name=".ui.ShopActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.SettingsActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.StatsActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".help.HelpActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.BattleLogActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".ui.CompareActivity" android:theme="@style/GameTheme" android:exported="false" />
 
         <activity android:name=".ui.StudyDecksActivity" android:theme="@style/GameTheme" android:exported="false" />
+
+        <!-- Edit a note's fields from the study card menu (PLAN 70): the keyboard resizes the page, a turned screen keeps the typed text. -->
+        <activity
+            android:name=".deck.NoteEditActivity"
+            android:theme="@style/GameTheme"
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false" />
 
         <!-- Study widget deck picker: the launcher starts it when the widget is added / reconfigured; AnkiGo starts it from "Change deck". -->
         <activity
@@ -146,6 +158,7 @@
         <activity
             android:name=".StudyActivity"
             android:theme="@style/GameTheme"
+            android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:exported="false" />
 
@@ -192,6 +205,30 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_study" />
+        </receiver>
+
+        <!-- Reminders: the alarm tick (AlarmManager sends it to AnkiGo itself) ... -->
+        <receiver android:name=".remind.ReminderReceiver" android:exported="false" />
+
+        <!-- ... the buttons of a reminder notification (In 1 hour, Not today): only AnkiGo's own PendingIntents reach it ... -->
+        <receiver android:name=".remind.ReminderActionReceiver" android:exported="false" />
+
+        <!-- ... a tap on a reminder notification and "Study now": no UI; takes the notification away, opens the Study tab (Shop for the shop news). -->
+        <activity
+            android:name=".remind.ReminderOpenActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:exported="false" />
+
+        <!-- ... and the system events after which Android has forgotten the alarm (the system may send these to a non-exported receiver). -->
+        <receiver android:name=".remind.ReminderRearmReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
         </receiver>
 
         <!-- Shares the downloaded update APK (in the cache) with Android's package installer. -->

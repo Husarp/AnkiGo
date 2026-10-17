@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.lookNum
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -60,6 +61,8 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     // The Box lists every owned Pokémon (team members carry a mark); copies of a species collapse into one "×N" tile.
     private var boxFilter = BoxFilter.ALL
     private var grouped = AppPrefs.boxGrouped(base)
+    private var boxSort = SortPrefs.load(base, SortPrefs.Where.BOX) // PLAN 48/55: remembered for the Box
+    private var tileValues: Map<BoxTile, String> = emptyMap() // the number a stat sort shows on each tile
 
     override val picking: Boolean get() = pickOn
     override fun isPicked(p: ComparePick): Boolean = picks.has(p)
@@ -162,9 +165,11 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val st = state
         picks.keepOwned { st.mon(it) != null }
         val team = st.teamMons()
-        val mons = BoxTiles.filter(st.mons, boxFilter)
+        val mons = BoxTiles.filter(st.mons, boxFilter, st.team)
         shown = mons.size
-        tiles = BoxTiles.build(data, mons, grouped && !pickOn) // while picking for Compare every copy is its own tile
+        // while picking for Compare every copy is its own tile
+        tiles = BoxTiles.sorted(data, st, BoxTiles.build(data, mons, grouped && !pickOn), boxSort)
+        tileValues = SortText.tileValues(data, st, tiles, boxSort)
         if (team.size < 2) editing = false
         drawSwitch()
         drawBar(team.size)
@@ -193,12 +198,13 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     /** Test hook: opens the page on [s]. */
     internal fun preset(
         s: TeamSection = section, edit: Boolean = false, pick: List<ComparePick>? = null,
-        filter: BoxFilter = boxFilter, group: Boolean = grouped,
+        filter: BoxFilter = boxFilter, group: Boolean = grouped, sort: SortSpec = boxSort,
     ) {
         section = s
         editing = edit
         boxFilter = filter
         grouped = group
+        boxSort = sort
         if (pick != null) {
             pickOn = true
             picks.clear()
@@ -278,7 +284,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     override fun togglePick(p: ComparePick) {
-        if (picks.toggle(p) == PickSet.Result.FULL) Ui.toast(this, "You can compare up to ${Compare.MAX} Pokémon")
+        picks.toggle(p)
         refreshPicks()
     }
 
@@ -304,7 +310,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         pickBar.visibility = if (pickOn) View.VISIBLE else View.GONE
         if (!pickOn) return
         val n = picks.size
-        pickHint.text = if (n < Compare.MIN) "Tick ${Compare.MIN}–${Compare.MAX} Pokémon" else "$n ticked"
+        pickHint.text = if (n < Compare.MIN) "Tick at least ${Compare.MIN} Pokémon" else "$n ticked"
         pickGo.text = "Compare ($n)"
         val ok = picks.canCompare
         pickGo.setTextColor(Ui.c(this, if (ok) R.color.ag_crust else R.color.ag_sub0))
@@ -379,57 +385,81 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val someGroup = tiles.any { it.isGroup }
         boxHeader.addView(Bits.sect(this, "Box", "$shown Pokémon" + if (someGroup) " · grouped" else ""))
         boxHeader.addView(boxControls(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 6) })
-        boxHeader.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply {
-            text = when {
-                pickOn -> "Tap a Pokémon to tick it for Compare."
-                someGroup -> "Tap for details · hold for actions · a ×N tile opens its copies"
-                else -> "Tap for details · hold for actions"
-            }
+        // only the Compare picking hint is left; the "tap for details · hold for actions" hint is gone
+        if (pickOn) boxHeader.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply {
+            text = "Tap a Pokémon to tick it for Compare."
             setPadding(Ui.dp(this@TeamPage, 4), 0, Ui.dp(this@TeamPage, 4), Ui.dp(this@TeamPage, 8))
             visibility = if (tiles.isEmpty() || Ui.shortWindow(this@TeamPage)) View.GONE else View.VISIBLE
         })
         if (tiles.isEmpty()) {
             boxHeader.addView(Ui.text(this, 13f, 700, R.color.ag_sub0).apply {
-                text = if (boxFilter == BoxFilter.FAVOURITES) "No favourites yet. Hold a Pokémon and pick “Add to favourites”."
-                else "Your box is empty. Pokémon you catch beyond six wait here."
+                text = when {
+                    boxFilter == BoxFilter.FAVOURITES -> "No favourites yet. Hold a Pokémon and pick “Add to favourites”."
+                    boxFilter != BoxFilter.ALL -> "No ${boxFilter.label.lowercase()} Pokémon in your box."
+                    else -> "Your box is empty. Pokémon you catch beyond six wait here."
+                }
                 gravity = Gravity.CENTER
                 setPadding(0, Ui.dp(this@TeamPage, 28), 0, Ui.dp(this@TeamPage, 12))
             })
         }
     }
 
-    /** The filter chips "All" / "♥ Favourites" and the "Group duplicates" switch (hidden while picking: copies are ungrouped then). */
+    /**
+     * The chip row under the tabs (6A): the sort chip (name = small list of sorts, arrow = flip), "Filters" = the sheet with
+     * everything, ♥ Favourites, Shiny, and "In team" while that filter is on. Scrolls sideways when it is long.
+     */
     private fun boxControls(): View {
         val ctx = this
-        val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        row.addView(BoxViews.chip(ctx, "All", boxFilter == BoxFilter.ALL) { setBoxFilter(BoxFilter.ALL) })
-        row.addView(BoxViews.chip(ctx, "Favourites", boxFilter == BoxFilter.FAVOURITES, heart = true) { setBoxFilter(BoxFilter.FAVOURITES) },
-            LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 6) })
-        if (pickOn) return row
-        val sw = android.widget.Switch(ctx).apply {
-            isChecked = grouped
-            Ui.tintSwitch(this)
-            setOnCheckedChangeListener { _, on -> grouped = on; AppPrefs.setBoxGrouped(ctx, on); requestRender() }
-        }
-        row.addView(LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL or Gravity.END
-            minimumHeight = Ui.dp(ctx, 48)
-            addView(Ui.text(ctx, 11f, 800, R.color.ag_sub1).apply {
-                text = "Group duplicates"
-                maxLines = 1
-                ellipsize = TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginEnd = Ui.dp(ctx, 6) })
-            addView(sw, LinearLayout.LayoutParams(-2, -2))
-            setOnClickListener { sw.toggle() }
-        }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8) })
-        return row
+        val st = state
+        val shownSpec = boxSort.copy(key = MonSort.effectiveKey(boxSort, st)) // no battle: "vs the wild one" works as "strongest attack"
+        val chips = ArrayList<View>()
+        sortPill = SortViews.sortChip(ctx, shownSpec, { openSortList(it) }, { setBoxSort(boxSort.flipped()) })
+        chips += sortPill
+        chips += BoxViews.chip(ctx, "Filters", false) { openSortSheet() } // next to the sort chip, so a narrow window still shows it
+        chips += BoxViews.chip(ctx, "Favourites", boxFilter == BoxFilter.FAVOURITES, heart = true) { toggleBoxFilter(BoxFilter.FAVOURITES) }
+        chips += BoxViews.chip(ctx, "Shiny", boxFilter == BoxFilter.SHINY) { toggleBoxFilter(BoxFilter.SHINY) }
+        if (boxFilter == BoxFilter.IN_TEAM) chips += BoxViews.chip(ctx, "In team", true) { toggleBoxFilter(BoxFilter.IN_TEAM) }
+        return SortViews.scrollRow(ctx, chips)
     }
+
+    private lateinit var sortPill: View // the sort chip as last drawn (tests click it)
+
+    private fun toggleBoxFilter(f: BoxFilter) = setBoxFilter(if (boxFilter == f) BoxFilter.ALL else f)
 
     private fun setBoxFilter(f: BoxFilter) {
         if (f == boxFilter) return
         boxFilter = f
         requestRender()
+    }
+
+    private fun setBoxSort(s: SortSpec) {
+        boxSort = s
+        SortPrefs.save(this, SortPrefs.Where.BOX, s)
+        requestRender()
+        boxList.setSelection(0)
+    }
+
+    /** The small list of sorts under the sort chip. A key that needs stats picked (one stat, chosen stats) opens the sheet after it. */
+    private fun openSortList(anchor: View) {
+        SortViews.showSortMenu(anchor, boxSort, SortText.boxKeys, MonSort.vsWildAvailable(state), more = false, onKey = { k ->
+            val next = SortViews.choose(boxSort, k)
+            setBoxSort(next)
+            if (SortViews.needsStats(next)) openSortSheet()
+        }, onMore = {})
+    }
+
+    /** The one "Sort & filter" sheet. Changes apply at once; the Box behind it follows. */
+    private fun openSortSheet() {
+        val labels = BoxFilter.entries.map { it.label }
+        SortSheet(
+            this, SortText.boxKeys, boxSort, SortSpec.DEFAULT, MonSort.vsWildAvailable(state), labels, boxFilter.ordinal,
+            if (pickOn) null else SortSheet.GroupToggle(grouped) { on -> grouped = on; AppPrefs.setBoxGrouped(this, on); requestRender() },
+            count = { BoxTiles.filter(state.mons, boxFilter, state.team).size },
+            onChange = { spec, show ->
+                if (spec != boxSort) setBoxSort(spec)
+                BoxFilter.entries.getOrNull(show)?.let { setBoxFilter(it) }
+            },
+        ).show()
     }
 
     /** A group tile (hold or tap): the sheet with all copies. A copy's details / actions work as everywhere else. */
@@ -523,7 +553,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             setOnLongClickListener { actions.menu(mon, it); true }
         }
         val img = ImageView(ctx)
-        MonPreview.show(ctx, mon.species, mon.shiny, img)
+        MonPreview.show(ctx, mon.lookNum(data), mon.shiny, img)
         row.addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 56), Ui.dp(ctx, 56)))
 
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
@@ -630,7 +660,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     private class Cell(
         val img: ImageView, val lv: TextView, val count: TextView, val star: TextView, val heart: ImageView,
-        val team: ImageView, val held: ImageView, val check: ImageView,
+        val team: ImageView, val held: ImageView, val check: ImageView, val value: TextView,
     ) {
         var uid: String? = null
     }
@@ -641,6 +671,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val img = ImageView(ctx).apply { setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 2), Ui.dp(ctx, 2), Ui.dp(ctx, 2)) }
         val lv = Ui.text(ctx, 10f, 900, R.color.ag_sub0)
         val count = Ui.text(ctx, 10f, 900, R.color.ag_text) // plain text: no background, never over the sprite
+        val value = Ui.text(ctx, 10f, 900, R.color.ag_text) // the number a stat sort sorts by (bottom-left, next to ×N)
         val star = Ui.text(ctx, 9f, 900, R.color.ag_yellow).apply { text = "★" }
         val heart = BoxViews.heartMark(ctx)
         val team = BoxViews.teamMark(ctx)
@@ -649,11 +680,13 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         f.addView(img, FrameLayout.LayoutParams(-1, -1).also { it.bottomMargin = Ui.dp(ctx, STRIP_DP) })
         // One label strip: "×N" keeps its width, the level takes what is left and shrinks its text, so the two never overlap.
         count.maxLines = 1
+        value.maxLines = 1
         lv.maxLines = 1
         lv.gravity = Gravity.END or Gravity.CENTER_VERTICAL
         lv.setAutoSizeTextTypeUniformWithConfiguration(6, 10, 1, TypedValue.COMPLEX_UNIT_SP)
         val strip = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        strip.addView(count, LinearLayout.LayoutParams(-2, -2))
+        strip.addView(count, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 3) })
+        strip.addView(value, LinearLayout.LayoutParams(-2, -2))
         strip.addView(lv, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 2) })
         f.addView(strip, FrameLayout.LayoutParams(-1, Ui.dp(ctx, STRIP_DP), Gravity.BOTTOM).also {
             it.leftMargin = Ui.dp(ctx, 4); it.rightMargin = Ui.dp(ctx, 4)
@@ -673,7 +706,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         f.addView(check, FrameLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18), Gravity.START or Gravity.BOTTOM).also {
             it.leftMargin = Ui.dp(ctx, 3); it.bottomMargin = Ui.dp(ctx, 3)
         })
-        f.tag = Cell(img, lv, count, star, heart, team, held, check)
+        f.tag = Cell(img, lv, count, star, heart, team, held, check, value)
     }
 
     /** The tick part of a box cell: frame stroke + badge. */
@@ -698,10 +731,12 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         f.visibility = View.VISIBLE
         val pick = ComparePick.Owned(mon.uid)
         bindPick(f)
-        Ui.staticSprite(this, mon.species, mon.shiny, cell.img)
+        Ui.staticSprite(this, mon.lookNum(data), mon.shiny, cell.img)
         LevelTier.style(cell.lv, mon.level)
         cell.count.text = if (tile.isGroup) "×${tile.count}" else ""
         cell.count.visibility = if (tile.isGroup) View.VISIBLE else View.GONE
+        cell.value.text = tileValues[tile].orEmpty()
+        cell.value.visibility = if (tileValues[tile] != null) View.VISIBLE else View.GONE
         cell.star.visibility = if (tile.anyShiny()) View.VISIBLE else View.GONE
         cell.heart.visibility = if (tile.anyFavourite()) View.VISIBLE else View.GONE
         cell.team.visibility = if (tile.anyInTeam(state.team)) View.VISIBLE else View.GONE
@@ -718,7 +753,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     private companion object {
-        const val COLS = 6
+        const val COLS = 4
 
         /** A Box cell is taller than wide: the label strip (×N, level) sits under the sprite, which keeps its size. */
         const val CELL_RATIO = 1.2f

@@ -1,5 +1,6 @@
 package com.husarp.ankigo
 
+import com.husarp.ankigo.game.lookNum
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.Dialog
@@ -41,6 +42,7 @@ import com.husarp.ankigo.study.PendingAnswers
 import com.husarp.ankigo.study.StudyLoop
 import com.husarp.ankigo.study.StudyTiming
 import com.husarp.ankigo.study.TtsRules
+import com.husarp.ankigo.study.TypeInRules
 import com.husarp.ankigo.ui.*
 import org.json.JSONObject
 import java.util.concurrent.Executors
@@ -96,6 +98,10 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private var opts = StudyTiming.Options()   // the deck's time options (timer pill, auto-advance)
     private var sideNo = 0                     // counts up per card side shown: a countdown belongs to one side
     private var pageReady = false              // this side's page finished loading
+    private var typeInQuestion = false         // the question side on screen has a type-in field (TypeInRules)
+    private var imeDp = 0                      // the soft keyboard's height now (0 = hidden); with a type-in card it switches to the keyboard layout (TypeInLayout)
+    private var resumedNow = false
+    private var keyboardJob: Runnable? = null  // the pending "open the keyboard on a type-in card", cancelled when the card changes or the screen pauses
     private var autoFired = -1                 // the side whose auto-advance already acted
     private var frozenAt = -1L                 // the timer pill's value once the answer is shown (deck: stop timer on answer)
     private var timerRed = false
@@ -152,6 +158,14 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         panelDp = PanelHeight.restore(prefs.getInt("panelDp", -1), prefs.getInt("height", -1), tablet)
         if (!prefs.contains("panelDp")) prefs.edit().putInt("panelDp", panelDp).apply()   // the old 0/1/2 pref, migrated once
         setContentView(buildContent())
+        // The window resizes above the keyboard (adjustResize); the decor view's insets only tell us how tall the keyboard is (a child view
+        // would get them already consumed). Passed on to the decor unchanged.
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(window.decorView) { v, insets ->
+            val kb = androidx.core.view.WindowInsetsCompat.Type.ime()
+            val ime = if (insets.isVisible(kb)) (insets.getInsets(kb).bottom / resources.displayMetrics.density).toInt() else 0
+            if (ime != imeDp) { imeDp = ime; main.post { if (!isDestroyed) refreshKeyboardLayout() } }
+            androidx.core.view.ViewCompat.onApplyWindowInsets(v, insets)
+        }
         setupWeb(); layout()
         if (savedInstanceState != null) {
             savedInstanceState.getIntArray("counts")?.copyInto(counts)
@@ -257,9 +271,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
         }
         panel.onBalls = { throwBall() }
-        panel.arena.onPlayerTap = { // PLAN 86: the Team screen with the main's details
+        panel.arena.onPlayerTap = { // PLAN 86: the main's Details window on top of the battle
             val uid = GameRepo.state?.main?.uid
-            if (events.idle && uid != null) startActivity(Intent(this, TeamActivity::class.java).putExtra(TeamActivity.EXTRA_SHOW_UID, uid))
+            if (events.idle && uid != null) com.husarp.ankigo.ui.BattleDetails.show(this, uid)
         }
         panel.onGrant = { requestPermissions(arrayOf(Anki.permission), 1) }
         side.addView(panel)
@@ -274,7 +288,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         // The window's real height is known only after the first layout (and changes in split screen): keep the panel inside it.
         body.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ ->
             val dp = ((bottom - top) / resources.displayMetrics.density).toInt()
-            if (dp != appliedBodyDp && panelDp > 0 && studyPlan().handle && !finished) main.post { if (!isDestroyed) setPanelDp(panelDp, save = false) }
+            if (dp != appliedBodyDp && panelDp > 0 && studyPlan().handle && !finished && !keyboardLayout()) main.post { if (!isDestroyed) setPanelDp(panelDp, save = false) }
         }
         root.addView(body, StudyUi.lp(-1, 0, 1f))
         return root
@@ -287,7 +301,6 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         com.husarp.ankigo.ui.SwitchPopup.show(this, data, st) { uid ->
             if (!events.idle || GameRepo.state?.main?.uid == uid) return@show
             val r = GameRepo.run(this) { it.setMain(uid) }
-            if (r.message.isNotEmpty()) Ui.toast(this, r.message)
             record(r.events); events.enqueue(r.events); LiveSession.refreshWidgetsFor(this, r.events)
         }
     }
@@ -318,7 +331,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     override fun onConfigurationChanged(config: Configuration) { super.onConfigurationChanged(config); actionSheet?.dismiss(); layout() }
     private fun layout() {
         val plan = studyPlan()
-        val wide = plan.columns
+        val kb = keyboardLayout()
+        kbApplied = kb
+        val wide = plan.columns && !kb   // keyboard open on a type-in card: card on top, Show answer above the keyboard, whatever the window shape
         body.orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
         // A split-screen window (e.g. 412x400 dp) counts as landscape but is too narrow for a 42% battle column
         // (~170 dp: info cards cover the sprites). There the columns are 50/50 and the arena keeps a fixed, width-sized
@@ -338,10 +353,11 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
         gap.layoutParams = StudyUi.lp(-1, 0, if (narrow) 1f else 0f)
         answerDivider.visibility = if (finished) View.VISIBLE else View.GONE
-        panel.visibility = if (finished || GameRepo.game == null) View.GONE else View.VISIBLE
-        handleBar.visibility = if (finished || !plan.handle || GameRepo.game == null) View.GONE else View.VISIBLE
+        panel.visibility = if (finished || GameRepo.game == null || kb) View.GONE else View.VISIBLE
+        handleBar.visibility = if (finished || !plan.handle || GameRepo.game == null || kb) View.GONE else View.VISIBLE
+        if (kb) gap.layoutParams = StudyUi.lp(-1, 0, 0f)
         if (!finished) {   // the answer row has one fixed height whatever it holds, so nothing above it moves between cards
-            buttons.layoutParams = StudyUi.lp(-1, Ui.dp(this, PanelHeight.buttonsDp(plan.answerRows)))
+            buttons.layoutParams = StudyUi.lp(-1, Ui.dp(this, if (kb) com.husarp.ankigo.study.TypeInLayout.BUTTON_DP else PanelHeight.buttonsDp(plan.answerRows)))
             buttons.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8)); buttons.gravity = Gravity.CENTER_VERTICAL
         }
         side.setPadding(if (wide) Ui.dp(this, 1) else 0, 0, 0, 0)
@@ -350,6 +366,11 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         placeTimer()
         if (card != null && !finished) showButtons()
     }
+    private var kbApplied = false
+    /** The keyboard layout is on: a type-in question side with the soft keyboard up (study/TypeInLayout.kt). */
+    private fun keyboardLayout() = !finished && com.husarp.ankigo.study.TypeInLayout.compact(typeInQuestion && !flipped, imeDp)
+    /** Re-applies the layout when the keyboard layout switched on or off (keyboard shown/hidden, or the card's type changed). */
+    private fun refreshKeyboardLayout() { if (::body.isInitialized && keyboardLayout() != kbApplied) layout() }
     private fun studyPlan(): com.husarp.ankigo.study.StudyLayout.Plan = resources.configuration.let {
         com.husarp.ankigo.study.StudyLayout.plan(it.screenWidthDp, it.smallestScreenWidthDp, it.orientation == Configuration.ORIENTATION_LANDSCAPE, finished)
     }
@@ -399,14 +420,14 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     override fun onStart() { super.onStart(); started = true; BattleScreen.setVisible(this, true); LiveSession.addSink(sink); LiveSession.hold(this, this) }
     override fun onStop() { started = false; LiveSession.removeSink(sink); LiveSession.release(this, this); BattleScreen.setVisible(this, false); super.onStop() }
     override fun onResume() {
-        super.onResume(); background = false; FloatBattleService.startIfWanted(this)
+        super.onResume(); background = false; resumedNow = true; FloatBattleService.startIfWanted(this)
         if (shownAt != 0L) shownAt = SystemClock.elapsedRealtime()
         swipeOn = prefs.getBoolean("swipe", false); if (::swipe.isInitialized) updateSwipe()
         if (::web.isInitialized && (finished || card != null && !locked)) loadNext()
         syncTiming()
     }
     override fun onPause() {
-        pauseClock(); background = true; syncTiming(); stopAudio(); super.onPause()
+        resumedNow = false; cancelKeyboard(); pauseClock(); background = true; syncTiming(); stopAudio(); super.onPause()
     }
     private fun pauseClock() { if (shownAt != 0L) elapsed += SystemClock.elapsedRealtime() - shownAt; shownAt = 0 }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (::countdown.isInitialized) syncTiming() }
@@ -499,6 +520,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             override fun onPageFinished(view: WebView, url: String) {
                 if (!flipped && card != null && !background && shownAt == 0L) shownAt = SystemClock.elapsedRealtime()
                 pageReady = true; syncTiming()
+                keyboardForPage()
             }
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                 JsApi.signal(req.url.toString())?.let { a -> main.post { if (jsSnap != null) jsDo(a) }; return true }
@@ -515,7 +537,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
     }
     private fun loadNext(timing: AnswerTiming? = null) {
-        stopAudio()
+        stopAudio(); cancelKeyboard(); typeInQuestion = false
         audioPrev = audioNow; audioNow = false; voiceNote = null; ttsCard = TtsRules.NONE
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
         // The answer row keeps its place while the next card loads: the old buttons stay, disabled (the summary's buttons go).
@@ -653,27 +675,55 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private fun valid(token: Int) = !isDestroyed && token == generation
     private fun page(content: String, side: String, typed: String?) = CardHtml.build(content, css, card!!.ord, side, typed,
         dark = isNight(), speech = if (side == "q") ttsCard.question else ttsCard.answer, jsPage = jsShow(side == "a"),
-        tapShow = prefs.getBoolean("tapShow", true), tapHide = prefs.getBoolean("tapHide", false)) { fields[it] }
+        tapShow = prefs.getBoolean("tapShow", true), tapHide = prefs.getBoolean("tapHide", false), enterShows = prefs.getBoolean(TypeInRules.PREF_ENTER, TypeInRules.ENTER_DEFAULT)) { fields[it] }
     private fun showQuestion() {
         val key = card!!.nid to card!!.ord
         if (timedCard != key) elapsed = 0
         timedCard = key
         flipped = false; shownAt = 0; locked = false; sideNo++; pageReady = false; frozenAt = -1
-        val page = page(question, "q", null); avAuto = page.autoplay; avAll = page.av
+        cancelKeyboard()
+        val page = page(question, "q", null); avAuto = page.autoplay; avAll = page.av; typeInQuestion = page.typeIn
         web.loadDataWithBaseURL(CardHtml.BASE, page.html, "text/html", "UTF-8", null)
-        showButtons(); playAv(avAuto); syncTiming()
+        showButtons(); playAv(avAuto); syncTiming(); refreshKeyboardLayout()
     }
     private fun flip() {
         if (locked || flipped || mediaBlocked || card == null) return
         locked = true; syncTiming()
+        cancelKeyboard(); hideKeyboard()   // the battle is visible again once the answer shows
         web.evaluateJavascript("document.getElementById('typeans')?.value || ''") { raw ->
             if (isDestroyed || card == null) return@evaluateJavascript
             val typed = runCatching { org.json.JSONArray("[$raw]").getString(0) }.getOrDefault("")
-            val page = page(answerHtml, "a", typed); avAuto = page.autoplay; avAll = page.av
+            val page = page(answerHtml, "a", typed); avAuto = page.autoplay; avAll = page.av; typeInQuestion = false
             flipped = true; locked = false; sideNo++; pageReady = false; allowAt = SystemClock.elapsedRealtime() + 300
             if (opts.stopTimerOnAnswer) frozenAt = StudyTiming.taken(elapsed, shownAt, SystemClock.elapsedRealtime(), maxTime)
             web.loadDataWithBaseURL(CardHtml.BASE, page.html, "text/html", "UTF-8", null)
-            web.announceForAccessibility("Answer shown"); showButtons(); playAv(avAuto); syncTiming()
+            web.announceForAccessibility("Answer shown"); refreshKeyboardLayout(); showButtons(); playAv(avAuto); syncTiming()
+        }
+    }
+    // ---- type-in cards and the keyboard (rules in study/TypeInRules.kt; the IME timing can only be proven on a device)
+    private fun cancelKeyboard() { keyboardJob?.let { main.removeCallbacks(it) }; keyboardJob = null }
+    private fun hideKeyboard() {
+        web.evaluateJavascript(TypeInRules.BLUR_JS, null)
+        (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)?.hideSoftInputFromWindow(web.windowToken, 0)
+    }
+    /** The page of the current side finished loading: open the keyboard on a type-in question after a short moment, close it on any other card. */
+    private fun keyboardForPage() {
+        cancelKeyboard()
+        when (TypeInRules.onPageReady(typeInQuestion, flipped, resumedNow)) {
+            TypeInRules.Keyboard.HIDE -> hideKeyboard()
+            TypeInRules.Keyboard.KEEP -> {}
+            TypeInRules.Keyboard.OPEN -> {
+                val planned = sideNo
+                val job = Runnable {
+                    keyboardJob = null
+                    if (!TypeInRules.stillWanted(planned, sideNo, flipped, resumedNow, isDestroyed)) return@Runnable
+                    web.requestFocus()
+                    web.evaluateJavascript(TypeInRules.FOCUS_JS, null)
+                    (getSystemService(INPUT_METHOD_SERVICE) as? android.view.inputmethod.InputMethodManager)?.showSoftInput(web, 0)
+                }
+                keyboardJob = job
+                main.postDelayed(job, TypeInRules.FOCUS_DELAY_MS)
+            }
         }
     }
     /** Tap-to-hide: back to the question side, as a fresh render of it. Only while the answer is up, nothing is saving, and not right after it appeared (a double tap). */
@@ -695,7 +745,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         buttons.removeAllViews(); updateSwipe()
         val enabled = !locked && !mediaBlocked
         if (!flipped) {
-            buttons.addView(StudyUi.answer(this, "Show answer", null, R.color.ag_mauve, enabled) { flip() }, StudyUi.lp(-1, Ui.dp(this, 48)))
+            val hint = if (keyboardLayout() && prefs.getBoolean(TypeInRules.PREF_ENTER, TypeInRules.ENTER_DEFAULT)) "or press Enter" else null
+            buttons.addView(StudyUi.answer(this, "Show answer", null, R.color.ag_mauve, enabled, hint) { flip() }, StudyUi.lp(-1, Ui.dp(this, 48)))
             return
         }
         val n = card ?: return
@@ -767,13 +818,13 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                 levels++
                 val mon = GameRepo.state?.mon(e.uid)
                 val progress = teamProgress.getOrPut(e.uid) { JSONObject().put("start", initialLevels[e.uid] ?: e.level - 1) }
-                progress.put("name", mon?.name ?: e.name).put("level", mon?.level ?: e.level).put("species", mon?.species ?: 0).put("shiny", mon?.shiny ?: false)
+                progress.put("name", mon?.name ?: e.name).put("level", mon?.level ?: e.level).put("species", mon?.lookNum(GameRepo.data) ?: 0).put("shiny", mon?.shiny ?: false)
             }
             is GameEvent.Evolved -> {
                 evolutions++
                 val mon = GameRepo.state?.mon(e.uid)
                 val progress = teamProgress.getOrPut(e.uid) { JSONObject().put("start", initialLevels[e.uid] ?: mon?.level ?: 0) }
-                progress.put("fromName", e.from).put("name", e.to).put("species", e.toSpecies).put("level", mon?.level ?: 0).put("shiny", mon?.shiny ?: false).put("evolved", true)
+                progress.put("fromName", e.from).put("name", e.to).put("species", mon?.lookNum(GameRepo.data) ?: e.toSpecies).put("level", mon?.level ?: 0).put("shiny", mon?.shiny ?: false).put("evolved", true)
             }
             is GameEvent.Caught -> {
                 caught += e.name
@@ -820,6 +871,10 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             row.addView(StudyUi.smallButton(this, "Open in AnkiDroid", true) { openAnki() })
             row.addView(StudyUi.smallButton(this, "Answer anyway") { mediaBlocked = false; showNotice(false); showButtons(); syncTiming() }, noticeGap())
             notice.addView(row, StudyUi.spaced(this, 8))
+            val help = noticeButtons() // R3-V3b: where to read about it, and the checks with their fixes
+            help.addView(StudyUi.smallButton(this, "Set up pictures") { com.husarp.ankigo.help.HelpActivity.openSetup(this) })
+            help.addView(StudyUi.smallButton(this, "Help") { com.husarp.ankigo.help.HelpActivity.open(this, page = com.husarp.ankigo.help.HelpContent.PICTURES_DONT_SHOW) }, noticeGap())
+            notice.addView(help, StudyUi.spaced(this, 6))
             notice.addView(StudyUi.label(this, "For readable pictures, use F-Droid / GitHub and grant the media folder in Settings. Sync in AnkiDroid, install the other build, then sync back.", 11.5f, R.color.ag_sub0), StudyUi.spaced(this, 6))
             val links = StudyUi.row(this)
             links.addView(StudyUi.smallButton(this, "F-Droid") { openUrl("https://f-droid.org/packages/com.ichi2.anki/") })
@@ -915,6 +970,11 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             if (sub != null) text.addView(StudyUi.label(this, sub, 10.5f, if (danger) R.color.ag_red else R.color.ag_sub0))
             row.addView(text, StudyUi.lp(0, -2, 1f)); sheet.addView(row)
         }
+        // PLAN 70: edit / move / delete through AnkiDroid's official API (deck/DeckOps.kt), on top
+        action(R.drawable.ic_pencil, "Edit note", "Fields of this card's note") { editNote() }
+        action(R.drawable.ic_move, "Move to deck…", "This card only") { moveCard() }
+        action(R.drawable.ic_trash, "Delete note…", "Deletes all cards of this note", danger = true) { confirmDelete() }
+        sheet.addView(StudyUi.line(this), StudyUi.lp(-1, Ui.dp(this, 1)).also { it.setMargins(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4)) })
         action(R.drawable.ic_bury, "Bury card", "Back tomorrow") { writeAction("bury") }
         action(R.drawable.ic_pause, "Suspend card", "Unsuspend later in AnkiDroid's browser") { writeAction("suspend") }
         if (Anki.flagsSupported(this)) {
@@ -932,11 +992,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
             sheet.addView(flags)
         }
-        action(R.drawable.ic_edit, "Edit note", "Opens AnkiDroid's browser on this note, tap it to edit") { edit() }
         action(R.drawable.ic_open, "Continue in AnkiDroid", "Same deck; the battle keeps counting") { openAnki() }
         action(R.drawable.ic_sound, "Replay sound") { playAv(avAuto) }
         sheet.addView(StudyUi.line(this), StudyUi.lp(-1, Ui.dp(this, 1)).also { it.setMargins(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4)) })
-        action(R.drawable.ic_trash, "Delete note…", "Asks first. Deletes all cards of this note", danger = true) { confirmDelete() }
         action(R.drawable.ic_undo, "Undo…", "Not possible in AnkiGo. Use Undo in AnkiDroid", faded = true) {
             AlertDialog.Builder(this).setMessage("AnkiGo can't undo answers, bury, suspend or delete. Use Undo in AnkiDroid. The battle doesn't rewind; a redo won't count twice.").setPositiveButton("Open AnkiDroid") { _, _ -> openAnki() }.setNegativeButton("Back", null).showCard()
         }
@@ -957,31 +1015,39 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                     "bury" -> { Anki.bury(this, c.nid, c.ord); com.husarp.ankigo.study.StudyRules.buried(Anki.cardStats(this, c.nid, c.ord)) }
                     "suspend" -> { Anki.suspend(this, c.nid, c.ord); com.husarp.ankigo.study.StudyRules.suspended(Anki.cardStats(this, c.nid, c.ord)) }
                     "flag" -> Anki.flag(this, c.nid, c.ord, flag)
-                    else -> { Anki.deleteNote(this, c.nid); Anki.note(this, c.nid) == null }
+                    else -> false   // deleting a note is confirmDelete() (DeckOps)
                 }
             }
             main.post { if (!isDestroyed) { if (result.getOrDefault(false)) loadNext() else showError("This change wasn't saved.") } }
         }
     }
+    /** The card's own deck (the home deck when it sits in a filtered deck right now). */
+    private fun homeDeckId(): Long = stats["original_deck_id"]?.toLongOrNull()?.takeIf { it != 0L } ?: stats["deck_id"]?.toLongOrNull() ?: deckId
+    /** A deck or note change starts: the card is locked until it is over (as for bury / suspend). */
+    private fun lockForChange() { locked = true; showButtons(); syncTiming() }
+    /** It is over: the next card when this one is gone or elsewhere, else the card is usable again. Deleting or moving is not an answer: nothing of the game runs. */
+    private fun changeDone(gone: Boolean) { if (gone) loadNext() else { locked = false; showButtons(); syncTiming() } }
+    /** A deck / note change of the card on show: locked NOW (before any read or question), and its callbacks only act while this same card is on show. */
+    private fun startChange(): com.husarp.ankigo.deck.CardChange =
+        com.husarp.ankigo.deck.CardChange({ generation }, { lockForChange() }, { changeDone(false) }, { changeDone(true) }).also { it.begin() }
     private fun confirmDelete() {
         val c = card ?: return
-        locked = true
-        io.execute {
-            val count = runCatching { Anki.searchCards(this, "nid:${c.nid}", arrayOf("_id")).size }.getOrNull()
-            main.post { if (!isDestroyed) {
-                locked = false
-                AlertDialog.Builder(this).setTitle("Delete note?").setMessage("Deletes the note and all its ${count ?: "associated"} cards. AnkiGo can't undo this.")
-                    .setPositiveButton("Delete") { _, _ -> writeAction("delete") }.setNegativeButton("Cancel", null).showCard()
-            } }
-        }
+        if (locked) return
+        val change = startChange()
+        com.husarp.ankigo.deck.DeckFlows.deleteNote(this, c.nid, homeDeckId(), { change.cancelled() }) { r -> change.finished(r.ok) }
     }
-    private fun edit() {
+    private fun moveCard() {
         val c = card ?: return
-        val did = stats["deck_id"]?.toLongOrNull() ?: deckId
-        io.execute {
-            val result = runCatching { Anki.selectDeck(this, did) }
-            main.post { if (!isDestroyed) result.onSuccess { runCatching { startActivity(Anki.editIntent(c.nid)) }.onFailure { showError("Couldn't open AnkiDroid's browser") } } }
-        }
+        if (locked) return
+        val change = startChange()
+        com.husarp.ankigo.deck.DeckFlows.moveCard(this, c.nid, c.ord, { change.cancelled() }) { r -> change.finished(r.changed) }
+    }
+    /** The note editor (its own page); coming back reloads the card, so an edit shows right away. */
+    private fun editNote() {
+        val c = card ?: return
+        startActivity(Intent(this, com.husarp.ankigo.deck.NoteEditActivity::class.java)
+            .putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_NID, c.nid).putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_ORD, c.ord)
+            .putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_DECK, homeDeckId()))
     }
     private fun openAnki() {
         io.execute {
@@ -1008,7 +1074,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 12), Ui.dp(context, 10))
         }
         st?.main?.let { mon -> hero.addView(ImageView(this).apply {
-            com.husarp.ankigo.ui.MonPreview.show(context, mon.species, mon.shiny, this); contentDescription = mon.name
+            com.husarp.ankigo.ui.MonPreview.show(context, mon.lookNum(GameRepo.data), mon.shiny, this); contentDescription = mon.name
         }, StudyUi.lp(Ui.dp(this, 72), Ui.dp(this, 72)).also { it.marginStart = -Ui.dp(this, 4); it.marginEnd = Ui.dp(this, 4); it.topMargin = -Ui.dp(this, 6); it.bottomMargin = -Ui.dp(this, 6) }) }
         val heroText = StudyUi.column(this)
         heroText.addView(StudyUi.label(this, "Done for today!", 20, R.color.ag_text, 900))
@@ -1197,6 +1263,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private fun jsWrite(action: String, flag: Int) { if (!locked && !mediaBlocked && card != null && !finished) writeAction(action, flag) }
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (web.hasFocus() && event.isPrintingKey && keyCode !in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_4) return super.onKeyUp(keyCode, event)
+        if (keyCode == KeyEvent.KEYCODE_ENTER && !TypeInRules.enterShowsAnswer(prefs.getBoolean(TypeInRules.PREF_ENTER, TypeInRules.ENTER_DEFAULT), typeInQuestion, web.hasFocus())) return super.onKeyUp(keyCode, event)
         if (keyCode == KeyEvent.KEYCODE_SPACE || keyCode == KeyEvent.KEYCODE_ENTER) { flip(); return true }
         if (keyCode in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_4 && flipped) { answer(keyCode - KeyEvent.KEYCODE_1 + 1); return true }
         return super.onKeyUp(keyCode, event)

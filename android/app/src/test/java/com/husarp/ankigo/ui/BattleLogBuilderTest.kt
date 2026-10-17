@@ -1,7 +1,9 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.CashKind
 import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.GameEvent
+import com.husarp.ankigo.game.HealReason
 import com.husarp.ankigo.game.Tier
 import com.husarp.ankigo.game.Type
 import org.junit.Assert.assertEquals
@@ -33,6 +35,17 @@ class BattleLogBuilderTest {
             GameEvent.LevelUp("u1", "Sparkmouse", 8, 30, 30), encounter("Next")))
     }
 
+    @Test fun fightMoneyCountsAnswersAndDefeatButNotTheDailyBonus() {
+        val b = builder()
+        b.feed(encounter())
+        b.answer("study", 11, 3, "Card")
+        b.feed(listOf(counted(3), GameEvent.Cash(50, 50, CashKind.DAILY_BONUS), GameEvent.Cash(5, 55, CashKind.ANSWER),
+            GameEvent.RoundStart(1.0, 10, false), hit(true, "Sparkmouse", "Wildling", "Zap", 30, 0),
+            GameEvent.Defeated(1, "Wildling", 40), GameEvent.Cash(10, 65, CashKind.DEFEAT)))
+        assertEquals(Outcome.DEFEATED, b.battles[0].outcome)
+        assertEquals(15, b.battles[0].coins)
+    }
+
     @Test fun answersAndMovesLandInTheirRound() {
         val b = builder()
         fight(b)
@@ -50,6 +63,14 @@ class BattleLogBuilderTest {
         assertEquals(Tone.GOOD, r.lines[0].tone)
         assertEquals("Wildling fainted", r.lines[1].text)
         assertEquals(listOf("Wildling was defeated · 40 XP", "Sparkmouse +40 XP · Lv 8", "Sparkmouse grew to Lv 8"), first.result.map { it.text })
+    }
+
+    @Test fun aHealedEventIsAShortResultLine() {
+        val b = builder()
+        b.feed(encounter())
+        b.feed(listOf(counted(3), GameEvent.RoundStart(1.0, 10, false), hit(true, "Sparkmouse", "Wildling", "Zap", 30, 0),
+            GameEvent.Defeated(1, "Wildling", 40), GameEvent.Healed("u1", "Sparkmouse", 12, 30, 40, HealReason.DEFEAT)))
+        assertEquals(listOf("Wildling was defeated · 40 XP", "Sparkmouse +12 HP"), b.battles[0].result.map { it.text })
     }
 
     @Test fun theNextEncounterOpensTheCurrentBattleAndNewestIsFirst() {

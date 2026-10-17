@@ -39,12 +39,13 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     private lateinit var segBox: LinearLayout     // All / Owned / Not owned
     private lateinit var chipsBox: LinearLayout   // Wishlist + gen chips, type chips
     private lateinit var search: EditText         // built once so typing keeps focus
-    private lateinit var sortPill: TextView
+    private lateinit var sortPill: View        // the sort chip as last drawn (a new one each render)
+    private lateinit var sortHolder: FrameLayout
     private lateinit var filtersPill: TextView   // short windows only: shows / hides the chip rows
     private var filtersOpen = false
     private lateinit var emptyView: TextView
     // Kept while the page lives. Search + sort re-filter in place (render would rebuild the header and drop the keyboard).
-    private var filter = DexFilter()
+    private var filter = DexFilter().withSort(SortViews.loadDex(base)) // the sort is remembered (PLAN 48/55)
     private var shown: List<Species> = emptyList()
 
     private val adapter = object : BaseAdapter() {
@@ -132,7 +133,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         topBox.addView(progress(enabled, compact = Ui.shortWindow(this)))
         segBox.removeAllViews()
         segmented()
-        sortPill.text = "↕ ${filter.sort.label}"
+        drawSortChip()
         chipsBox.removeAllViews()
         filters(gens)
         // a short window keeps only the progress line, the segmented control and the search row; "Filters" opens the chip rows
@@ -146,9 +147,46 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     /** Recomputes the grid from [filter] and shows the "No Pokémon match" line when it is empty. */
     private fun refilter() {
         val st = state
-        shown = filter.apply(data.species.values.toList(), DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens)
+        shown = filtered()
         emptyView.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
         adapter.notifyDataSetChanged()
+    }
+
+    private fun filtered(): List<Species> {
+        val st = state
+        return filter.apply(data.species.values.toList(), DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens, DexSortInfo(data, st))
+    }
+
+    // ---- sort (6A): the chip, its small list and the sheet ----
+
+    private fun drawSortChip() {
+        sortHolder.removeAllViews()
+        sortPill = SortViews.sortChip(this, filter.spec(), { openSortList(it) }, { setSort(filter.spec().flipped()) })
+        sortHolder.addView(sortPill)
+    }
+
+    private fun setSort(s: SortSpec) {
+        filter = filter.withSort(s)
+        SortPrefs.save(this, SortPrefs.Where.DEX, s)
+        redraw()
+        list.setSelection(0)
+    }
+
+    /** The small list of sorts; a key that needs stats picked (one stat, chosen stats) opens the sheet after it. */
+    private fun openSortList(anchor: View) {
+        SortViews.showSortMenu(anchor, filter.spec(), SortText.dexKeys, vsWildOk = false, more = true, onKey = { k ->
+            val next = SortViews.choose(filter.spec(), k)
+            setSort(next)
+            if (SortViews.needsStats(next)) openSortSheet()
+        }, onMore = { openSortSheet() })
+    }
+
+    private fun openSortSheet() {
+        SortSheet(
+            this, SortText.dexKeys, filter.spec(), SortViews.DEX_DEFAULT, false, null, 0, null,
+            count = { filtered().size },
+            onChange = { spec, _ -> if (spec != filter.spec()) setSort(spec) },
+        ).show()
     }
 
     // ---- hero ----
@@ -281,18 +319,8 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
                 if (action == EditorInfo.IME_ACTION_SEARCH) { v.clearFocus(); true } else false
             }
         }
-        sortPill = Ui.text(ctx, 12f, 800, R.color.ag_text).apply {
-            maxLines = 1
-            gravity = Gravity.CENTER
-            Ui.touchPill(this, Ui.rounded(Bits.blend(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_mantle), 0.22f), 12, ctx), 36, 12)
-            setOnClickListener {
-                val sorts = DexSort.entries
-                val m = AppMenu(this).header("Sort by")
-                // the current sort carries a check; the others keep a blank icon so the labels line up
-                sorts.forEachIndexed { i, so -> m.item(i, so.label, if (so == filter.sort) R.drawable.ic_check else R.drawable.ic_blank) }
-                m.show { i -> filter = filter.copy(sort = sorts[i]); redraw(); list.setSelection(0) }
-            }
-        }
+        sortHolder = FrameLayout(ctx)
+        drawSortChip() // render() redraws it; this one exists as soon as the page is built
         filtersPill = Ui.text(ctx, 12f, 800, R.color.ag_text).apply {
             maxLines = 1
             visibility = View.GONE
@@ -304,7 +332,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             gravity = Gravity.CENTER_VERTICAL
             addView(search, LinearLayout.LayoutParams(0, -2, 1f))
             addView(filtersPill, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
-            addView(sortPill, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
+            addView(sortHolder, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
         }
     }
 

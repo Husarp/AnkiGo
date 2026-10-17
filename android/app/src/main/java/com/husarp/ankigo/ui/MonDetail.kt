@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.lookNum
 import android.app.AlertDialog
 import android.content.Context
 import android.view.Gravity
@@ -65,6 +66,20 @@ object MonDetail {
 
     fun date(ms: Long): String = SimpleDateFormat("d MMM yyyy", Locale.ENGLISH).format(Date(ms))
 
+    /** The name line of the details as plain text: "♂ ★ Name" (♂/♀ first, nothing for a genderless one; ★ for a shiny). */
+    fun nameLine(mon: Mon): String =
+        when (mon.gender) { 'M', 'F' -> Bits.genderSign(mon.gender) + " "; else -> "" } + (if (mon.shiny) "★ " else "") + mon.shownName
+
+    /** [nameLine] with the ♂/♀ in its colour (blue / pink); it has the name's own size. */
+    private fun styledName(a: Context, mon: Mon): CharSequence {
+        val plain = nameLine(mon)
+        if (mon.gender != 'M' && mon.gender != 'F') return plain
+        val color = Ui.c(a, if (mon.gender == 'M') R.color.ag_blue else R.color.ag_pink)
+        return android.text.SpannableString(plain).apply {
+            setSpan(android.text.style.ForegroundColorSpan(color), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
     /** Training table: header + IV row + EV row, one column per stat. */
     private fun trainingTable(a: Context, iv: List<Int>, ev: List<Int>): View = LinearLayout(a).apply {
         orientation = LinearLayout.VERTICAL
@@ -101,10 +116,10 @@ object MonDetail {
 
         // header: sprite, name + pencil, #num / Lv / nature / gender, types, all tags
         val img = ImageView(a)
-        MonPreview.show(a, mon.species, mon.shiny, img)
+        MonPreview.show(a, mon.lookNum(data), mon.shiny, img)
         val spriteDp = if (compact) 64 else 96
         val nameText = Ui.text(a, if (compact) 18f else 20f, 900, R.color.ag_text).apply {
-            text = (if (mon.shiny) "★ " else "") + mon.shownName
+            text = styledName(a, mon)
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             // leave room for the pencil (and the sprite when it sits beside the text): the dialog is at most about 88 % of the window wide
             maxWidth = Ui.dp(a, ((a.resources.configuration.screenWidthDp * 0.88f).toInt() - 2 * pad - 48 - 8 - if (compact) spriteDp + 12 + (if (page != null) HEART_COMPACT_DP else 0) else 0).coerceAtLeast(100))
@@ -123,14 +138,14 @@ object MonDetail {
                 contentDescription = "Rename"
                 setOnClickListener {
                     MonActions(page).rename(mon) {
-                        GameRepo.state?.mon(mon.uid)?.let { m -> nameText.text = (if (m.shiny) "★ " else "") + m.shownName }
+                        GameRepo.state?.mon(mon.uid)?.let { m -> nameText.text = styledName(a, m) }
                     }
                 }
             }
             nameRow.addView(pencil, LinearLayout.LayoutParams(Ui.dp(a, 48), Ui.dp(a, 48)))
         }
         val numText = Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
-            text = LevelTier.line(a, "#%03d · ".format(sp.baseNum), mon.level, " · %s %s".format(mon.nature.label, Bits.genderSign(mon.gender)))
+            text = LevelTier.line(a, "#%03d · ".format(sp.baseNum), mon.level, " · %s".format(mon.nature.label))
             if (!compact) gravity = Gravity.CENTER
         }
         val typeRow = Bits.typeRow(a, sp.types)

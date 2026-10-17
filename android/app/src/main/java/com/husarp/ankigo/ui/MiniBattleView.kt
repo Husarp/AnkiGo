@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.lookNum
 import android.content.Context
 import android.view.Gravity
 import android.widget.ImageView
@@ -18,7 +19,7 @@ class MiniBattleView(ctx: Context) : LinearLayout(ctx) {
         val mons = listOfNotNull(st.main, st.battle?.wild)
         for (mon in mons) {
             val image = ImageView(context)
-            Ui.staticSprite(context, mon.species, mon.shiny, image)
+            Ui.staticSprite(context, if (mon === st.battle?.wild) mon.species else mon.lookNum(data), mon.shiny, image)
             addView(image, LayoutParams(Ui.dp(context, 40), Ui.dp(context, 40)))
             val col = LinearLayout(context).apply { orientation = VERTICAL }
             val max = if (mon === st.battle?.wild) st.battle!!.maxWildHp(data) else StatCalc.maxHp(data, mon)

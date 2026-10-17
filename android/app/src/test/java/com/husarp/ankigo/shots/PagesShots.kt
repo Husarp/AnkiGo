@@ -11,6 +11,8 @@ import com.husarp.ankigo.game.ankimon.AnkimonMon
 import com.husarp.ankigo.game.ankimon.AnkimonSave
 import com.husarp.ankigo.ui.AnkimonImportFlow
 import com.husarp.ankigo.ui.DexDetail
+import com.husarp.ankigo.ui.DexFilter
+import com.husarp.ankigo.ui.DexOwned
 import com.husarp.ankigo.ui.DexPage
 import com.husarp.ankigo.ui.FirstRunActivity
 import com.husarp.ankigo.ui.FirstRunJob
@@ -59,26 +61,14 @@ class PagesShots {
             if (kind == "search" || kind == "types") return false
             f.set(page, kind); return true
         }
-        val cls = f.type
-        fun enumOf(name: String, v: String): Any = Class.forName(name).enumConstants.first { (it as Enum<*>).name == v }
-        val owned = if (kind == "caught") "OWNED" else if (kind == "missing") "NOT_OWNED" else "ALL"
-        val args = cls.declaredConstructors.first { it.parameterCount == 6 }.let { c ->
-            c.parameterTypes.map { t ->
-                when {
-                    t.name.endsWith("DexOwned") -> enumOf(t.name, owned)
-                    t.name.endsWith("DexSort") -> enumOf(t.name, "NUMBER")
-                    t == Set::class.java -> emptySet<Any>()
-                    t == Boolean::class.javaPrimitiveType -> kind == "wish"
-                    t == String::class.java -> if (kind == "search") "spark" else ""
-                    else -> error("unexpected ${t.name}")
-                }
-            }.toTypedArray().let { a ->
-                if (kind == "gen1") a[1] = setOf(1)
-                if (kind == "types") a[2] = setOf(com.husarp.ankigo.game.Type.WATER, com.husarp.ankigo.game.Type.ELECTRIC)
-                c.newInstance(*a)
-            }
-        }
-        f.set(page, args)
+        val owned = if (kind == "caught") DexOwned.OWNED else if (kind == "missing") DexOwned.NOT_OWNED else DexOwned.ALL
+        f.set(page, DexFilter(
+            owned = owned,
+            gens = if (kind == "gen1") setOf(1) else emptySet(),
+            types = if (kind == "types") setOf(com.husarp.ankigo.game.Type.WATER, com.husarp.ankigo.game.Type.ELECTRIC) else emptySet(),
+            wishlistOnly = kind == "wish",
+            query = if (kind == "search") "spark" else "",
+        ))
         return true
     }
 

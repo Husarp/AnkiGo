@@ -1,5 +1,6 @@
 package com.husarp.ankigo
 
+import com.husarp.ankigo.game.lookNum
 import android.app.Activity
 import android.app.AlertDialog
 import android.appwidget.AppWidgetManager
@@ -131,6 +132,12 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
                 }
             }
             sb.append("Target: ${Anki.pkg}  ·  $api\nMedia: all-files=${Media.allFilesAccess()} folder=${Media.treeUri(this) != null} imported=${Media.ownDir(this).list()?.size ?: 0}  ·  AnkiGo reviews today: ${Local.todayCount(this)}")
+            // PLAN 41: AnkiDroid build, collection folder, what AnkiGo can read (this block runs on the bg thread)
+            try {
+                com.husarp.ankigo.help.PictureSetup.diagnosticLines(com.husarp.ankigo.help.PictureFacts.read(this)).forEach { sb.append("\n").append(it) }
+            } catch (e: Exception) {
+                sb.append("\nPictures: check failed (${e.javaClass.simpleName})")
+            }
             if (log) Report.log("C12b", sb.toString().replace("\n", " | "))
             main.post { header.text = sb.toString() }
         }
@@ -168,7 +175,7 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             val state = GameRepo.state
             val data = GameRepo.data
             if (state == null || data == null) { Report.log(tag, "the game isn't loaded yet; open the game once and try again"); return@execute }
-            val keys = state.mons.map { it.species to it.shiny }
+            val keys = state.mons.flatMap { listOf(it.species to it.shiny, it.lookNum(data) to it.shiny) }.distinct()   // a chosen look needs its picture too
             val gaps = com.husarp.ankigo.data.Sprites.pictureGaps(this, keys)
             val name = { n: Int -> data.species[n]?.name ?: "?" }
             if (gaps.isEmpty()) { Report.ok(tag, "all ${keys.distinct().size} owned Pokémon (by kind) have a picture"); return@execute }

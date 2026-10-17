@@ -39,6 +39,13 @@ class BoxTilesTest {
         assertTrue(t.all { it.anyFavourite() })
     }
 
+    @Test fun shinyAndTeamFilters() {
+        val a = mon(25, 5, shiny = true); val b = mon(25, 6); val c = mon(1, 9)
+        assertEquals(listOf(a), BoxTiles.filter(listOf(a, b, c), BoxFilter.SHINY))
+        assertEquals(listOf(b, c), BoxTiles.filter(listOf(a, b, c), BoxFilter.IN_TEAM, listOf(b.uid, c.uid)))
+        assertTrue(BoxTiles.filter(listOf(a, b, c), BoxFilter.IN_TEAM).isEmpty())
+    }
+
     @Test fun tileMarksSeeEveryCopy() {
         val a = mon(25, 5); val b = mon(25, 9)
         val t = BoxTiles.build(data, listOf(a, b), grouped = true).single()

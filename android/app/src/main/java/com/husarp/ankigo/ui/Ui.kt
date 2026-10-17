@@ -426,6 +426,23 @@ class AppBar(
 
     /** Changes the pill text (no-op when the bar has no pill). */
     fun setPill(text: String) { pill?.text = text }
+
+    /** A small icon button on the right, left of the pill (the Shop's "?"). 48 dp touch area around a 22 dp icon. */
+    fun addAction(@DrawableRes icon: Int, description: String, @ColorRes tone: Int = R.color.ag_text, onClick: () -> Unit): ImageView {
+        val v = ImageView(context).apply {
+            setImageResource(icon)
+            setColorFilter(Ui.c(context, tone), PorterDuff.Mode.SRC_IN)
+            contentDescription = description
+            setPadding(Ui.dp(context, 13), Ui.dp(context, 13), Ui.dp(context, 13), Ui.dp(context, 13))
+            // the 48 dp touch area is pulled back by margins so the bar keeps its height
+            layoutParams = LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)).also {
+                it.setMargins(Ui.dp(context, 4), -Ui.dp(context, 8), 0, -Ui.dp(context, 8))
+            }
+            setOnClickListener { onClick() }
+        }
+        addView(v, if (pillBox != null) childCount - 1 else childCount)
+        return v
+    }
 }
 
 /** Switch knob: fixed 26x32 dp box, draws a 16 dp circle (off, left) or a 24 dp circle (on, right) in it. */

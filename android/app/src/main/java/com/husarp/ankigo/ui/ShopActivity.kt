@@ -28,6 +28,10 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     override fun buildBar(): View {
         appBar = Ui.appBar(this, "Shop", "0", pillIconRes = R.drawable.ic_coin)
+        // "?" opens the guide chapter about money (R3-V3b)
+        appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) {
+            com.husarp.ankigo.help.HelpActivity.open(host.hostActivity ?: this, chapter = com.husarp.ankigo.help.GameGuide.MONEY)
+        }
         return appBar
     }
 
@@ -130,16 +134,16 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
             val right: View = if (owned) {
                 Ui.text(ctx, 12f, 900, R.color.ag_green).apply { text = "✓ Owned" }
             } else {
-                Bits.buyButton(ctx, Tuning.TM_PRICE, st.cash >= Tuning.TM_PRICE) { buyTm(move) }
+                Bits.buyButton(ctx, Tuning.TM_PRICE, st.cash >= Tuning.TM_PRICE) { tmInfo(move) }
             }
             val tile = Bits.tmTile(ctx, m?.let { Ui.typeColor(it.type) })
             val mid = Bits.bodyText(ctx, Items.tmName(data, move), Bits.moveStats(data, move))
             if (m != null) mid.addView(Bits.typeRow(ctx, listOf(m.type)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
-            content.addView(Bits.cardRow(ctx, tile, mid, right))
+            content.addView(Bits.cardRow(ctx, tile, mid, right).also { it.setOnClickListener { tmInfo(move) } })
         }
     }
 
-    /** One of today's specials (mockup `.spec`): icon, name, note, price pill, "×N" owned in the corner. The whole tile buys. */
+    /** One of today's specials (mockup `.spec`): icon, name, note, price pill, "×N" owned in the corner. The whole tile opens its info (Buy is in there). */
     private fun specialTile(item: String): View {
         val ctx = this
         val st = state
@@ -147,7 +151,7 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
         val tile = FrameLayout(ctx).apply {
             background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
             isClickable = true
-            setOnClickListener { buyItem(item) }
+            setOnClickListener { itemInfo(item) }
         }
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -162,13 +166,18 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
             text = Items.def(item)?.note.orEmpty(); gravity = Gravity.CENTER; maxLines = 2
         }, Form.lp(ctx, 2))
         col.addView(View(ctx), LinearLayout.LayoutParams(1, 0, 1f)) // price pills line up at the bottom of equal tiles
-        col.addView(Bits.buyButton(ctx, price, st.cash >= price, compact = true) { buyItem(item) },
+        col.addView(Bits.buyButton(ctx, price, st.cash >= price, compact = true) { itemInfo(item) },
             LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 8) })
         tile.addView(col, FrameLayout.LayoutParams(-1, -1))
         tile.addView(Ui.text(ctx, 10f, 800, R.color.ag_sub0).apply { text = "×${st.count(item)}" },
             FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.TOP).also { it.topMargin = Ui.dp(ctx, 7); it.rightMargin = Ui.dp(ctx, 8) })
         return tile
     }
+
+    /** A tap on a special or a TM opens its info popup first; the purchase happens from the popup's Buy button. */
+    private fun itemInfo(item: String) = ShopInfo.item(this, item) { buyItem(item) }
+
+    private fun tmInfo(move: String) = ShopInfo.tm(this, move) { buyTm(move) }
 
     private fun buyItem(item: String) {
         act { g -> Shop.buy(g.data, g.state, item) }

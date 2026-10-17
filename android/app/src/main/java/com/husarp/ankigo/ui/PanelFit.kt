@@ -235,9 +235,11 @@ internal object ArenaGeo {
             val h = 5f + TextMath.line(TextMath.at(14f, floor)) + 3f + max(5f * bar, TextMath.line(TextMath.at(10f, floor))) + row + 6f
             return Cards(140f * k, h, 140f * k, h)
         }
-        // the status row sits between the HP bar and its numbers (on our card it takes the place of their 3 dp gap)
-        val wild = 7f + TextMath.line(TextMath.at(14f, floor)) + (4f + TextMath.line(TextMath.at(9f, floor)) + 2f) + (6f + 7f * bar) + row + TextMath.line(TextMath.at(11f, floor)) + 8f
-        val player = 7f + TextMath.line(TextMath.at(14f, floor)) + (6f + 7f * bar) + row + TextMath.line(TextMath.at(11f, floor)) + (4f + 3f * bar) + 8f
+        // the HP number sits beside the HP bar (the line is as tall as the number's text), the status row under it; our card has
+        // the XP line under that when the XP numbers show
+        val hpLine = 6f + max(7f * bar, TextMath.line(TextMath.at(11f, floor)))
+        val wild = 7f + TextMath.line(TextMath.at(14f, floor)) + (4f + TextMath.line(TextMath.at(9f, floor)) + 2f) + hpLine + row + 8f
+        val player = 7f + TextMath.line(TextMath.at(14f, floor)) + hpLine + row + (if (xp) TextMath.line(TextMath.at(11f, floor)) else 0f) + (4f + 3f * bar) + 8f
         // the wild card is also as wide as its type chips: the two longest (ELECTRIC + FIGHTING) are 94 dp of text at 9 sp, grown with the floor
         val chips = 49f + 11f * max(9f, floor)
         return Cards(max(166f * k, chips), wild, (if (xp) 170f else 132f) * k, player)

@@ -8,6 +8,7 @@ import com.husarp.ankigo.Local
 import com.husarp.ankigo.Report
 import java.io.File
 import java.time.LocalDate
+import java.util.Collections
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -34,6 +35,15 @@ object AnkiStatsStore {
 
     private val main by lazy { Handler(Looper.getMainLooper()) }
     private val io by lazy { Executors.newSingleThreadExecutor { r -> Thread(r, "ankidroid-stats").apply { isDaemon = true } } }
+    /** On-demand chart reads (deck filter, new cards, retention windows) run here so they never hold up the normal refresh. */
+    private val seriesIo by lazy { Executors.newSingleThreadExecutor { r -> Thread(r, "ankidroid-series").apply { isDaemon = true } } }
+    private val seriesInFlight = Collections.synchronizedSet(HashSet<SeriesKey>())
+    /**
+     * When a chart read last failed (no AnkiDroid / no permission / provider error). The page asks again on every render and
+     * every failure re-renders it, so without this pause a failing read would loop forever (round-3 manager fix).
+     */
+    private val seriesFailedAt = java.util.concurrent.ConcurrentHashMap<SeriesKey, Long>()
+    private const val SERIES_RETRY_MS = 60_000L
     private val running = AtomicBoolean(false)
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private var loaded = false
@@ -86,7 +96,8 @@ object AnkiStatsStore {
 
     private fun work(app: Context, today: String, dayStartHour: Int) {
         val time = readTime(app, dayStartHour)
-        update { it.copy(timeByDay = time) }
+        val live = readLiveTime(app, dayStartHour)
+        update { it.copy(timeByDay = time, liveTimeByDay = live) }
         Anki.load(app)
         val access = AnkiAccess.decide(
             installed = Anki.installed(app).any { it.pkg == Anki.pkg },
@@ -113,6 +124,61 @@ object AnkiStatsStore {
         }
     }
 
+    /**
+     * Reads the AnkiDroid numbers the chart needs for [keys] ([ChartData.seriesKeys]) on the store's second thread and
+     * publishes each through the listener ([StatsSnapshot.series]). A key read less than [AnkiSeriesCache.MAX_AGE_MS] ago, or
+     * already being read, is skipped unless [force]. Failures end in [StatsSnapshot.access] / message, never a crash.
+     */
+    fun requestSeries(ctx: Context, keys: List<SeriesKey>, force: Boolean = false) {
+        if (!enabled) return
+        val app = ctx.applicationContext
+        for (key in keys.distinct()) {
+            if (runCatching { LocalDate.parse(key.today) }.isFailure) continue
+            val now = System.currentTimeMillis()
+            if (!force && AnkiSeriesCache.fresh(snapshot.series, key, now)) continue
+            if (!force && now - (seriesFailedAt[key] ?: Long.MIN_VALUE / 2) < SERIES_RETRY_MS) continue
+            if (!seriesInFlight.add(key)) continue
+            seriesIo.execute {
+                try {
+                    readSeries(app, key)
+                } catch (t: Throwable) { // a background thread must never take the app down
+                    seriesFailedAt[key] = System.currentTimeMillis()
+                    Report.fail("STATS", "chart read", t)
+                    update { it.copy(access = AnkiAccess.ERROR, message = failureText(t)) }
+                } finally {
+                    seriesInFlight.remove(key)
+                }
+            }
+        }
+    }
+
+    private fun readSeries(app: Context, key: SeriesKey) {
+        Anki.load(app)
+        val access = AnkiAccess.decide(
+            installed = Anki.installed(app).any { it.pkg == Anki.pkg },
+            supported = Anki.studySupported(app),
+            permission = Anki.hasPermission(app),
+        )
+        if (access != AnkiAccess.OK) {
+            seriesFailedAt[key] = System.currentTimeMillis()
+            update { it.copy(access = access, message = null) }
+            return
+        }
+        try {
+            val data = AnkiSeriesReader { q -> Anki.countCards(app, q) }.read(key, System.currentTimeMillis())
+            seriesFailedAt.remove(key)
+            update { it.copy(series = AnkiSeriesCache.put(it.series, key, data)) }
+        } catch (e: SecurityException) {
+            seriesFailedAt[key] = System.currentTimeMillis()
+            Report.fail("STATS", "AnkiDroid permission", e)
+            update { it.copy(access = AnkiAccess.NO_PERMISSION, message = null) }
+        } catch (e: Exception) {
+            seriesFailedAt[key] = System.currentTimeMillis()
+            Report.fail("STATS", "reading a chart from AnkiDroid", e)
+            update { it.copy(access = AnkiAccess.ERROR, message = failureText(e)) }
+        }
+    }
+
     private fun failureText(t: Throwable): String = (t.message ?: t.javaClass.simpleName).take(60)
 
     /** ms per game day from AnkiGo's own review log; AnkiDroid is not involved. */
@@ -121,6 +187,15 @@ object AnkiStatsStore {
         if (!f.exists()) emptyMap() else f.useLines { timeInAnkiGo(it) { ms -> AnkiGoTime.dayKey(ms, dayStartHour) } }
     } catch (e: Exception) {
         Report.fail("STATS", "reading AnkiGo's own review log", e)
+        emptyMap()
+    }
+
+    /** ms per game day of the answers AnkiGo timed itself while watching AnkiDroid live (`live-time.csv`). */
+    private fun readLiveTime(app: Context, dayStartHour: Int): Map<String, Long> = try {
+        val f = LiveTimeFile.file(app.filesDir)
+        if (!f.exists()) emptyMap() else f.useLines { timeLive(it) { ms -> AnkiGoTime.dayKey(ms, dayStartHour) } }
+    } catch (e: Exception) {
+        Report.fail("STATS", "reading the live time log", e)
         emptyMap()
     }
 

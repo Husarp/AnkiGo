@@ -10,6 +10,8 @@ import com.husarp.ankigo.Report
 import com.husarp.ankigo.Widgets
 import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameEvent
+import com.husarp.ankigo.stats.LiveTimeFile
+import com.husarp.ankigo.stats.LiveTimer
 import com.husarp.ankigo.ui.LogKind
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -47,6 +49,9 @@ object LiveSession {
     private var lastStatus: Pair<Boolean, String>? = null
 
     private val pendingCatchUp = ArrayList<GameAnswer>()
+
+    /** Times live answers for live-time.csv (stats): reset whenever the watch stops, pauses or starts. */
+    private val timer = LiveTimer()
 
     /**
      * Own answers (the card as it is after the answer) whose game step has not run yet: added in [ownAnswer], removed when
@@ -87,6 +92,7 @@ object LiveSession {
         lastStatus = null
         val d = detector ?: return  // never started: nothing to stop or save
         d.stop()
+        timer.stop()
         flushCatchUp()
         saveSnapshot()
         GameRepo.saveNow(app)
@@ -109,6 +115,7 @@ object LiveSession {
     fun restart(ctx: Context) {
         app = ctx.applicationContext
         detector?.stop()
+        timer.stop()
         start()
     }
 
@@ -118,6 +125,7 @@ object LiveSession {
         val g = GameRepo.game ?: return
         val d = detector ?: LiveDetector(app) { onLive(it) }.also { detector = it }
         if (d.running) return
+        timer.start(SystemClock.elapsedRealtime())
         val today = g.dayKey()
         if (pendingOwn.isEmpty()) d.start(st.liveSnapshot, st.liveDay, today)
         else d.start(withPendingOwn(st.liveSnapshot.takeIf { st.liveDay == today }, pendingOwn), today, today)
@@ -138,6 +146,7 @@ object LiveSession {
         val finish = {
             val absorbed = SystemClock.elapsedRealtime()
             flushCatchUp()
+            timer.touch(SystemClock.elapsedRealtime()) // reviews.csv times own answers; the next live one starts from here
             pendingOwn.remove(row) // from here on the snapshot saved below contains this answer, and the step counts it
             GameLog.answer("study", row.id, button)
             val events = act { g ->
@@ -168,6 +177,7 @@ object LiveSession {
         paused = p
         if (p) {
             detector?.stop()
+            timer.stop()
             flushCatchUp()
             saveSnapshot()
             GameRepo.scheduleSave(app)
@@ -251,6 +261,7 @@ object LiveSession {
     private fun onAnswer(e: LiveDetector.Event.Answer) {
         GameLog.answer(if (e.catchUp) "catch-up" else "live", e.cardId, e.button)
         val a = GameAnswer(e.cardId, e.button, System.currentTimeMillis(), e.catchUp)
+        recordLiveTime(e.catchUp)
         if (e.catchUp) {
             // Answers made while AnkiGo wasn't watching arrive in one burst: no animation, one summary line.
             pendingCatchUp += a
@@ -262,6 +273,16 @@ object LiveSession {
         // The detector refreshes its map a moment after delivering; save the fresh one too.
         handler.removeCallbacks(snapshotLater)
         handler.postDelayed(snapshotLater, 1500)
+    }
+
+    /** Live answers (not catch-up, not own) add their time to live-time.csv on a background thread; a failure never reaches the game. */
+    private fun recordLiveTime(catchUp: Boolean) {
+        try {
+            val ms = timer.onAnswer(catchUp, SystemClock.elapsedRealtime()) ?: return
+            LiveTimeFile.appendAsync(app.filesDir, System.currentTimeMillis(), ms) { Report.fail("LIVE", "writing the live time", it) }
+        } catch (t: Throwable) {
+            Report.fail("LIVE", "timing a live answer", t)
+        }
     }
 
     private val snapshotLater = Runnable {

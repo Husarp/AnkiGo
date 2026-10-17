@@ -72,7 +72,7 @@ internal object StudyUi {
     }
 
     /** .ab: independent label/interval typography, pressed scale and disabled alpha. */
-    fun answer(ctx: Context, text: String, interval: String?, tone: Int, enabled: Boolean, action: () -> Unit): View {
+    fun answer(ctx: Context, text: String, interval: String?, tone: Int, enabled: Boolean, hint: String? = null, action: () -> Unit): View {
         val dark = ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         val ink = if (dark) Ui.c(ctx, R.color.ag_crust) else Color.WHITE
         return column(ctx).apply {
@@ -80,8 +80,9 @@ internal object StudyUi {
             background = ripple(ctx, Ui.rounded(Ui.c(ctx, tone), 12, ctx))
             addView(label(ctx, text, if (interval == null) 15 else 14, R.color.ag_text, 900).apply { setTextColor(ink); gravity = Gravity.CENTER }, lp(-1, -2))
             if (interval != null) addView(label(ctx, interval, 11, R.color.ag_text, 800).apply { setTextColor(ink); alpha = .92f; gravity = Gravity.CENTER }, lp(-1, -2))
+            else if (hint != null) addView(label(ctx, hint, 10, R.color.ag_text, 800).apply { setTextColor(ink); alpha = .92f; gravity = Gravity.CENTER }, lp(-1, -2))
             isEnabled = enabled; alpha = if (enabled) 1f else .55f
-            contentDescription = if (interval == null) text else "$text, next in $interval"
+            contentDescription = if (interval != null) "$text, next in $interval" else if (hint != null) "$text, $hint" else text
             isFocusable = true
             setOnClickListener { action() }
             setOnTouchListener { v, e ->

@@ -61,13 +61,16 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.cardStreak = if (button == 1) 0 else state.cardStreak + 1
         if (state.cardStreak > state.bestCardStreak) state.bestCardStreak = state.cardStreak
         events += GameEvent.Counted(button, points, state.reviewsToday, state.cardStreak, a.catchUp)
+        Healing.restBench(data, state) // every counted answer (catch-up ones too): the bench heals 0.5 % of max HP, exactly
 
         // Daily goal: once a day, the first time the count reaches it (also if the goal was lowered during the day).
         if (state.reviewsToday >= state.settings.dailyAverage && state.lastGoalDay != state.day) {
-            state.streakDays = if (state.lastGoalDay == previousDay(state.day)) state.streakDays + 1 else 1
+            val streakBefore = if (state.lastGoalDay == previousDay(state.day)) state.streakDays else 0 // goal days in a row before today
+            state.streakDays = streakBefore + 1
             state.lastGoalDay = state.day
             state.bestStreakDays = maxOf(state.bestStreakDays, state.streakDays)
             events += GameEvent.Info("Daily goal reached!")
+            Economy.payDailyBonus(state, streakBefore, events) // once a day: this moment never repeats on a day
         }
 
         Economy.onReview(data, state, rng, events)
@@ -109,17 +112,40 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     /** The wild one fainted: catch or defeat it by the auto rule (decide() honours a one-off override). */
     private fun resolveWild(battle: Battle, main: Mon, events: MutableList<GameEvent>) {
         val now = clock()
-        when (Catching.decide(data, state, battle)) {
+        val plan = Catching.plan(data, state, battle)
+        when (plan.outcome) {
             Outcome.CATCH -> {
                 Catching.addToCollection(data, state, battle.wild, battle.tier, null, now, events)
+                state.ballCatches.merge("auto", 1, Int::plus)
+                plan.duplicate?.let { swapDuplicate(it, battle.wild, events) }
                 if (Tuning.CATCH_GIVES_XP) Progression.rewardCatch(data, state, main, battle.wild, now, rng, events)
+                Healing.healMain(data, main, HealReason.CATCH, events) // after the rewards
             }
             Outcome.DEFEAT -> {
                 Progression.rewardDefeat(data, state, main, battle.wild, now, rng, events)
+                Healing.healMain(data, main, HealReason.DEFEAT, events) // after XP, level-ups and evolution
                 Trainer.addDefeatXp(state, battle.tier, events)
                 state.defeats++
+                Economy.onDefeat(state, events)
+                plan.duplicate?.let { events += GameEvent.Duplicate(battle.wild.name, battle.wild.level, it.bestLevel, DuplicateResult.DEFEATED) }
             }
         }
+    }
+
+    /**
+     * Auto-release duplicates, after the wild one was caught: lets the replaced copy go like a manual release (the Ankimon
+     * export removes it), or keeps both when it may not go. The copy is checked again here; it is never in the team.
+     */
+    private fun swapDuplicate(dup: Duplicates.Verdict, wild: Mon, events: MutableList<GameEvent>) {
+        val old = dup.release?.takeIf { it in state.mons && Duplicates.keepReason(data, state, it) == null }
+        if (old == null) {
+            events += GameEvent.Duplicate(wild.name, wild.level, dup.bestLevel, DuplicateResult.KEPT_BOTH,
+                keptBecause = (dup.kept ?: dup.release?.let { Duplicates.keepReason(data, state, it) })?.label)
+            return
+        }
+        state.mons.remove(old)
+        rememberReleased(old.ankimonId ?: old.uid)
+        events += GameEvent.Duplicate(wild.name, wild.level, old.level, DuplicateResult.SWAPPED, releasedName = old.shownName)
     }
 
     /** AnkiDroid undo of [count] answers on [cardId]: the battle doesn't rewind; the redo isn't counted again. */
@@ -140,7 +166,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         val wild = Encounters.makeWild(data, roll, level, rng, now)
         val newSpecies = roll.species !in state.caught
-        state.seen += roll.species
+        state.markSeen(roll.species, now)
         val fullHp = StatCalc.maxHp(data, wild)
         val encounterHp = Tuning.wildHp(fullHp, main.level, state.settings.fasterStart)
         wild.hp = encounterHp
@@ -187,6 +213,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val events = mutableListOf<GameEvent>(GameEvent.BallThrow(ball, chance, success, state.count(ball)))
         if (success) {
             Catching.addToCollection(data, state, battle.wild, battle.tier, ball, clock(), events)
+            state.ballCatches.merge(ball, 1, Int::plus)
+            state.main?.let { Healing.healMain(data, it, HealReason.CATCH, events) }
             state.battle = null
             events += ensureEncounter()
         } else {
@@ -215,7 +243,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.mons += mon
         state.team.clear()
         state.team += mon.uid
-        state.seen += species
+        state.markSeen(species, now)
         state.caught += species
         state.starterChosen = true
         state.cash = Tuning.START_CASH
@@ -317,6 +345,22 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         mon.favourite = on
         return ActionResult(true, if (on) "${mon.shownName} is a favourite now." else "${mon.shownName} is no longer a favourite.")
+    }
+
+    /**
+     * Picks which look (sprite) [uid] shows: any species of its evolution line up to its current one ([Looks.choices]);
+     * null or its own species = the current look again. Purely visual. A species outside the line is refused.
+     */
+    fun setLook(uid: String, species: Int?): ActionResult {
+        val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
+        if (species == null || species == mon.species) {
+            mon.look = null
+            return ActionResult(true, "${mon.shownName} shows its own look again.")
+        }
+        val pick = Looks.choices(data, mon).firstOrNull { it.num == species }
+            ?: return ActionResult(false, "${mon.shownName} can't look like that.")
+        mon.look = pick.num
+        return ActionResult(true, "${mon.shownName} now looks like ${pick.name}.")
     }
 
     fun release(uid: String): ActionResult {

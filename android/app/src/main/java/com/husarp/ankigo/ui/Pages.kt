@@ -157,7 +157,8 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
             Pickers.evolved(this, evo, state.mon(evo.uid)?.shiny == true)
             if (badges.isNotEmpty()) Ui.toast(this, "Badge: $badges")
         } else {
-            Ui.toast(this, message + if (badges.isNotEmpty()) "\nBadge: $badges" else "")
+            val text = listOf(message, if (badges.isNotEmpty()) "Badge: $badges" else "").filter { it.isNotEmpty() }.joinToString("\n")
+            if (text.isNotEmpty()) Ui.toast(this, text)
         }
     }
 

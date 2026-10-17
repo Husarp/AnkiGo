@@ -134,6 +134,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     var section: SettingsSection? = null
         private set
 
+    /** What the search box holds (kept across opening a result and coming back), and the setting to scroll to after a render. */
+    private var query = ""
+    private var pendingFocus: SettingInfo? = null
+
     // views of the data card that the download jobs update
     private var animBar: ProgressBlock? = null
     private var dataBar: ProgressBlock? = null
@@ -234,17 +238,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val st = loaded
         when (section) {
             null -> home()
-            SettingsSection.LOOK -> {
-                content.addView(Form.sect(this, "Theme, accent and size"))
-                content.addView(lookCard())
-            }
+            SettingsSection.LOOK -> content.addView(lookCard(), Form.lp(this, 12))
             SettingsSection.GAME -> if (st != null) {
-                content.addView(Form.sect(this, "Game"))
-                content.addView(gameCard(st.settings))
-                content.addView(Form.sect(this, "When a wild Pokémon faints"))
-                content.addView(faintCard(st.settings))
-                content.addView(Form.sect(this, "Always catch", "even with \"Defeat\""))
-                content.addView(protectCard(st.settings))
+                gameGroups(gameRows(st.settings) + faintRows(st.settings) + duplicatesRows(st.settings) + protectRows(st.settings))
             } else {
                 content.addView(Form.cardOf(this, listOf(
                     Form.row(this, "The game isn't loaded", "Its options show here once it is. Data and backups still work.", null),
@@ -252,6 +248,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             }
             SettingsSection.STUDY -> content.addView(studyCard(), Form.lp(this, 12))
             SettingsSection.BATTLE -> battleSection()
+            SettingsSection.REMINDERS -> {
+                // a search result for a reminder setting: its sheet opens (the rows here are custom views, there is no row to highlight)
+                val openFor = pendingFocus?.takeIf { it.section == CatalogSection.REMINDERS }?.id
+                content.addView(com.husarp.ankigo.remind.ReminderSettingsView.build(this, openFor), Form.lp(this, 12))
+            }
             SettingsSection.SOUND -> content.addView(soundCard(this), Form.lp(this, 12))
             SettingsSection.DOWNLOADS -> {
                 val dc = buildDataCard()
@@ -261,8 +262,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             SettingsSection.ANKIMON -> content.addView(ankimonCard(), Form.lp(this, 12))
             SettingsSection.SAVE -> content.addView(saveCard(), Form.lp(this, 12))
             SettingsSection.ABOUT -> content.addView(aboutCard(), Form.lp(this, 12))
-            SettingsSection.UPDATES, SettingsSection.DIAGNOSTICS -> home() // these start their own screens; never open in place
+            SettingsSection.HELP, SettingsSection.UPDATES, SettingsSection.DIAGNOSTICS -> home() // these start their own screens; never open in place
         }
+        explain(content)
+        pendingFocus?.let { focusOn(it); pendingFocus = null }
     }
 
     // ---------- home ----------
@@ -277,6 +280,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, st.cardsPerRound, st.dailyAverage)
             SettingsSection.STUDY -> SettingsSummary.study(study.getBoolean("inAnkiDroid", false), study.getBoolean("swipe", false), study.getInt("zoom", 100))
             SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this), AppPrefs.cardsUnderOwn(this))
+            SettingsSection.REMINDERS -> SettingsSummary.reminders(com.husarp.ankigo.remind.ReminderStore.load(this))
+            SettingsSection.HELP -> "How the game works · fix a problem"
             SettingsSection.SOUND -> SettingsSummary.sound(SoundPrefs.battleSounds(this), SoundPrefs.cries(this), SoundPrefs.volume(this))
             SettingsSection.DOWNLOADS -> SettingsSummary.downloads(DataStore.size(this), Sprites.size(this),
                 SettingsJobs.anim.running || SettingsJobs.data.running || FirstRunJob.job.running)
@@ -288,16 +293,80 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
     }
 
+    private lateinit var homeBox: LinearLayout
+    private lateinit var resultsBox: LinearLayout
+
+    /** The home list: a search box on top, then the section cards; while the box has words, the matching settings replace the cards. */
     private fun home() {
+        content.addView(SettingsHomeSearch.box(this, query) { q -> query = q; showResults() }, Form.lp(this, 4))
+        homeBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         SettingsSection.GROUPS.forEachIndexed { i, group ->
-            content.addView(SettingsHome.group(this, group.map { s ->
+            homeBox.addView(SettingsHome.group(this, group.map { s ->
                 SettingsHome.row(this, s, summaryOf(s)) { choose(s) }
-            }), Form.lp(this, if (i == 0) 4 else 14))
+            }), Form.lp(this, if (i == 0) 12 else 14))
+        }
+        resultsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(homeBox)
+        content.addView(resultsBox)
+        showResults()
+    }
+
+    private fun showResults() {
+        val q = query.trim()
+        resultsBox.removeAllViews()
+        homeBox.visibility = if (q.isEmpty()) View.VISIBLE else View.GONE
+        if (q.isEmpty()) return
+        resultsBox.addView(SettingsHomeSearch.results(this, SettingsSearch.match(q), q) { openSetting(it) }, Form.lp(this, 12))
+    }
+
+    /** Puts [q] into the search box of the home list (restores a search, and lets the render tests show one). */
+    internal fun showSearch(q: String) {
+        query = q
+        if (section == null && ::content.isInitialized) render()
+    }
+
+    /** Opens the section that holds [info] and scrolls to its row (a section that starts its own screen just starts it). */
+    fun openSetting(info: SettingInfo) {
+        val target = SettingsSearch.sectionOf(info)
+        pendingFocus = info.takeIf { target.opens }
+        choose(target)
+    }
+
+    /** Scrolls to the row of [info] in the open section and tints it for a moment; nothing happens when the section has no such row. */
+    private fun focusOn(info: SettingInfo) {
+        val row = Form.rowsIn(content).firstOrNull { Form.titleOf(it) == info.title } ?: return
+        scroll.post {
+            var y = 0
+            var v: View = row
+            while (v !== content && v.parent is View) { y += v.top; v = v.parent as View }
+            scroll.smoothScrollTo(0, (y - dp(80)).coerceAtLeast(0))
+        }
+        SettingsHomeSearch.flash(row)
+    }
+
+    /** Gives every settings row inside [root] its one-line explanation from [SettingsCatalog] (rows without an entry keep what they have). */
+    private fun explain(root: View) {
+        val s = section ?: return
+        val here = SettingsSearch.entriesOf(s)
+        for (row in Form.rowsIn(root)) {
+            val title = Form.titleOf(row) ?: continue
+            here.firstOrNull { it.title == title }?.let { Form.setExplain(row, it.explain) }
+        }
+    }
+
+    /** Game section: its rows in small groups named like the catalog's (Battle, Difficulty, Pokémon, Always catch). */
+    private fun gameGroups(rows: List<View>) {
+        val game = SettingsSearch.entriesOf(SettingsSection.GAME)
+        val subs = rows.map { r -> game.firstOrNull { it.title == Form.titleOf(r) }?.sub ?: "" }
+        for (g in SettingsSearch.groups(subs, GAME_GROUPS)) {
+            if (g.title.isNotEmpty()) content.addView(Form.sect(this, g.title, if (g.title == "Always catch") "even with \"Defeat\"" else null))
+            content.addView(Form.cardOf(this, g.rows.map { rows[it] }), if (g.title.isEmpty()) Form.lp(this, 12) else Form.lp())
         }
     }
 
     private fun choose(s: SettingsSection) {
         when (s) {
+            SettingsSection.HELP -> com.husarp.ankigo.help.HelpActivity.open(host.hostActivity ?: this)
             SettingsSection.UPDATES -> startScreen(Intent(this, UpdatesActivity::class.java))
             SettingsSection.DIAGNOSTICS -> startScreen(Intent(this, DiagnosticsActivity::class.java))
             else -> open(s)
@@ -370,6 +439,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.switchRow(this, "Tap again to hide the answer", "Tap the answer to read the question again", getSharedPreferences("study", 0).getBoolean("tapHide", false)) {
                 getSharedPreferences("study", 0).edit().putBoolean("tapHide", it).apply()
             }.also { Form.enable(it, getSharedPreferences("study", 0).getBoolean("tapShow", true)) },
+            Form.switchRow(this, "Enter = Show answer", "Pressing Enter in a type-in answer shows the answer", getSharedPreferences("study", 0).getBoolean(com.husarp.ankigo.study.TypeInRules.PREF_ENTER, com.husarp.ankigo.study.TypeInRules.ENTER_DEFAULT)) {
+                getSharedPreferences("study", 0).edit().putBoolean(com.husarp.ankigo.study.TypeInRules.PREF_ENTER, it).apply()
+            },
             Form.switchRow(this, "Vibrate on answer", null, getSharedPreferences("study", 0).getBoolean("haptic", true)) {
                 getSharedPreferences("study", 0).edit().putBoolean("haptic", it).apply()
             },
@@ -382,7 +454,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.stepperRow(this, "Card text size", null, getSharedPreferences("study", 0).getInt("zoom", 100), 80, 150, 10, { "$it%" }) {
                 getSharedPreferences("study", 0).edit().putInt("zoom", it).apply()
             },
-            Form.row(this, "Answer timer", getSharedPreferences("study", 0).getString("timer", com.husarp.ankigo.study.StudyTiming.AS_DECK), null) {
+            Form.row(this, "Answer timer", null, valueText(getSharedPreferences("study", 0).getString("timer", com.husarp.ankigo.study.StudyTiming.AS_DECK))) {
                 Pickers.showPlain(android.app.AlertDialog.Builder(this).setItems(com.husarp.ankigo.study.StudyTiming.TIMER_MODES.toTypedArray()) { _, i ->
                     getSharedPreferences("study", 0).edit().putString("timer", com.husarp.ankigo.study.StudyTiming.TIMER_MODES[i]).apply(); render()
                 }.create())
@@ -398,10 +470,13 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 com.husarp.ankigo.study.StudyTiming.MIN_SECS, com.husarp.ankigo.study.StudyTiming.MAX_SECS, 1, { "$it s" }) {
                 getSharedPreferences("study", 0).edit().putInt("autoAnswerSecs", it).apply()
             }.also { Form.enable(it, getSharedPreferences("study", 0).getBoolean("autoAdvance", false)) },
-            Form.row(this, "Cards with missing media", getSharedPreferences("study", 0).getString("missing", "Ask"), null) {
+            Form.row(this, "Cards with missing media", null, valueText(getSharedPreferences("study", 0).getString("missing", "Ask"))) {
                 Pickers.showPlain(android.app.AlertDialog.Builder(this).setItems(arrayOf("Ask", "Always open in AnkiDroid", "Answer anyway")) { _, i ->
                     getSharedPreferences("study", 0).edit().putString("missing", listOf("Ask", "Always open in AnkiDroid", "Answer anyway")[i]).apply(); render()
                 }.create())
+            },
+            Form.row(this, "Set up pictures", "Checks AnkiDroid's pictures and shows what to fix", null) {
+                com.husarp.ankigo.help.HelpActivity.openSetup(host.hostActivity ?: this)
             },
             Form.row(this, "Import a media copy (.apkg)", "Optional; use a legacy-format export with media", null) {
                 host.startForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE)) { code, intent ->
@@ -419,6 +494,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             },
     ))
 
+    /** The current value of a pick-one row, shown on its right (the grey line under the title is the explanation). */
+    private fun valueText(v: String?): View = Ui.text(this, 13f, 800, R.color.ag_sub1).apply { text = v ?: "" }
+
     // ---------- game ----------
 
     /** Changes a setting through the game (main thread) and saves. */
@@ -427,7 +505,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         GameRepo.scheduleSave(this)
     }
 
-    private fun gameCard(s: GameSettings): View {
+    private fun gameRows(s: GameSettings): List<View> {
         val rows = mutableListOf<View>()
         rows += Form.switchRow(this, "Faster start", "Shorter wild battles while your lead is below Lv 15. Off by default. Applies to the next encounter; off keeps Ankimon's HP.", s.fasterStart) { v -> edit { it.fasterStart = v } }
 
@@ -491,7 +569,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         rows += Form.row(this, "Wishlist", "Always caught by the auto rule. Tap ☆ in the Pokédex to add or remove.", Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
             text = "${s.wishlist.size}"
         })
-        return Form.cardOf(this, rows)
+        return rows
     }
 
     private fun saveName() {
@@ -502,7 +580,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         if (field.text.toString() != name) field.setText(name)
     }
 
-    private fun faintCard(s: GameSettings): View {
+    private fun faintRows(s: GameSettings): List<View> {
         val options = listOf(
             1 to "Always catch",
             2 to "Defeat (catch shinies and protected kinds)",
@@ -522,16 +600,24 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 ticks.forEach { (m, t) -> t.visibility = if (m == mode) View.VISIBLE else View.INVISIBLE }
             }
         }
-        return Form.cardOf(this, rows)
+        return rows
     }
 
-    private fun protectCard(s: GameSettings): View = Form.cardOf(this, listOf(
+    private fun duplicatesRows(s: GameSettings): List<View> = listOf(
+        Form.switchRow(this, "Auto-release duplicates",
+            "Off by default. A wild Pokémon of a species you own is defeated instead of caught, unless it is a higher level than your best copy: then it is caught and that copy is released. " +
+                "Favourites, shinies, team members, Pokémon holding an item, protected kinds, the Exp. Share holder and renamed Pokémon are never released (you keep both). " +
+                "Balls and the one-off Catch/Defeat tap are not affected.",
+            s.autoReleaseDuplicates) { v -> edit { it.autoReleaseDuplicates = v } },
+    )
+
+    private fun protectRows(s: GameSettings): List<View> = listOf(
         Form.switchRow(this, "Legendary", null, s.protectLegendary) { v -> edit { it.protectLegendary = v } },
         Form.switchRow(this, "Mythical", null, s.protectMythical) { v -> edit { it.protectMythical = v } },
         Form.switchRow(this, "Ultra Beast", null, s.protectUltra) { v -> edit { it.protectUltra = v } },
         Form.switchRow(this, "Starter", null, s.protectStarter) { v -> edit { it.protectStarter = v } },
         Form.switchRow(this, "Regional form", null, s.protectRegional) { v -> edit { it.protectRegional = v } },
-    ))
+    )
 
     // ---------- battle panel & windows ----------
 
@@ -609,6 +695,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val i = parent.indexOfChild(old)
         parent.removeViewAt(i)
         val fresh = buildWindowsCard()
+        explain(fresh)
         windowsCard = fresh
         parent.addView(fresh, i)
     }
@@ -715,6 +802,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val i = parent.indexOfChild(old)
         parent.removeViewAt(i)
         val fresh = buildDataCard()
+        explain(fresh)
         dataCard = fresh
         parent.addView(fresh, i)
     }
@@ -818,13 +906,14 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val ankimon = Form.secondary(this, "Import Ankimon save (.db)…") { startAnkimonImport() }
         Form.enable(ankimon, st != null)
         btns.addView(ankimon)
-        val ankimonOut = Form.secondary(this, "Export for Ankimon (PC)…") { startAnkimonExport() }
+        val ankimonOut = Form.secondary(this, "Export for Ankimon PC…") { startAnkimonExport() }
         Form.enable(ankimonOut, st != null)
         btns.addView(ankimonOut, Form.lp(this, 8))
         btns.addView(Form.body(this, "Import your PC save here (it only adds, and your current game is kept as a backup first). " +
             "Export writes a file for Ankimon's Game → Import Save File… on the PC.",
             12, R.color.ag_sub0), Form.lp(this, 8))
         if (st == null) btns.addView(Form.body(this, "Both need the game to be loaded.", 12, R.color.ag_sub0), Form.lp(this, 4))
+        btns.addView(com.husarp.ankigo.help.HelpViews.ankimonGuide(this), Form.lp(this, 14))
         box.addView(btns)
         return box
     }
@@ -1004,6 +1093,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         @Volatile internal var picsFromSettings = false
 
         private const val SCALE_DELAY_MS = 700L
+
+        /** The Game section's groups in this order (the catalog's group names); others follow. */
+        private val GAME_GROUPS = listOf("Battle", "Difficulty", "Pokémon", "Always catch")
 
         /**
          * File picker result. Lives here (captures no page) and looks the newest page up in [live], so it still works when

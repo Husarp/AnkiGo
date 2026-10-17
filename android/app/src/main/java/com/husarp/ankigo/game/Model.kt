@@ -180,6 +180,8 @@ class Mon(
     var nickname: String? = null,   // player-given name (Ankimon import); null = none
     var ankimonId: String? = null,  // Ankimon's individual_id when imported from an Ankimon save (re-import matches on it)
     var favourite: Boolean = false, // player's favourite: kept in the AnkiGo save and backups only (not written into the Ankimon file); can't be released
+    var look: Int? = null,          // chosen look: species number whose sprite to show (null = its current species). Visual only; AnkiGo save and backups only, never written into the Ankimon file (see Looks.kt)
+    var restFrac: Int = 0,          // bench rest: the part of an HP built up so far, in 1/200 HP (0..199); AnkiGo save and backups only, not in the Ankimon file (see Healing.kt)
 )
 
 /**
@@ -242,10 +244,19 @@ class Settings(
     var xpShareUid: String? = null,                     // Ankimon "classic" Exp. Share holder (null = off)
     var trainerName: String = "Trainer",
     var fasterStart: Boolean = false, // off by default; saved as fasterStartV2 (the old fasterStart key is ignored, so old saves start off)
+    var autoReleaseDuplicates: Boolean = false, // off by default (old saves too): a wild copy of an owned species is defeated, or swapped in when higher (see Duplicates)
 )
 
-/** One game day of study for the Stats screen (AnkiGo's own log; see Stats.kt). */
-class DayLog(var reviews: Int = 0, var won: Int = 0, var caught: Int = 0, var shinies: Int = 0)
+/**
+ * One game day of study for the Stats screen (AnkiGo's own log; see Stats.kt). [xp] = all XP your Pokémon gained that day,
+ * [cash] = money earned, [buttons] = counted answers per button (index 0 unknown, 1 Again .. 4 Easy), [spent] = money
+ * spent in the Shop (items, TMs, restocks), [healItems] = healing items used.
+ */
+class DayLog(
+    var reviews: Int = 0, var won: Int = 0, var caught: Int = 0, var shinies: Int = 0,
+    var xp: Int = 0, var cash: Int = 0, val buttons: IntArray = IntArray(5),
+    var spent: Int = 0, var healItems: Int = 0,
+)
 
 class GameState(
     var schema: Int = SCHEMA,
@@ -290,6 +301,8 @@ class GameState(
     var catches: Int = 0,
     var defeats: Int = 0,
     var evolutions: Int = 0,
+    val ballCatches: MutableMap<String, Int> = mutableMapOf(), // wild catches per ball id ("auto" = the auto rule's catch); fossils, the starter and imports don't count
+    val seenAt: MutableMap<Int, Long> = mutableMapOf(),        // species -> epoch ms it was first seen (set once; old species have none)
     val releasedAnkimon: MutableSet<String> = linkedSetOf(), // ankimonId ?: uid of Pokémon released here (newest 5 000): the export removes them from the PC save
     val settings: Settings = Settings(),
 ) {
@@ -306,6 +319,15 @@ class GameState(
         return inTeam + rest
     }
     fun count(item: String) = bag[item] ?: 0
+
+    /** Adds [species] to the Pokédex as seen; the first time, [at] is remembered in [seenAt] (never overwritten). */
+    fun markSeen(species: Int, at: Long) {
+        if (seen.add(species)) seenAt.putIfAbsent(species, at)
+    }
+
+    /** When [species] was first seen: its [seenAt] date, else the earliest known catch date of an owned copy, else null. */
+    fun firstSeen(species: Int): Long? =
+        seenAt[species] ?: mons.filter { it.species == species && it.caughtAt > 0 }.minOfOrNull { it.caughtAt }
 
     companion object { const val SCHEMA = 1 }
 }

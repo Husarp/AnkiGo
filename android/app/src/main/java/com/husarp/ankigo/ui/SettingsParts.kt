@@ -88,6 +88,7 @@ internal object Form {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 11), Ui.dp(ctx, 14), Ui.dp(ctx, 11))
             minimumHeight = Ui.dp(ctx, 52)
+            tag = ROW_TAG
             val col = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(Ui.text(ctx, 14f, 700, R.color.ag_text).apply { text = title })
@@ -104,6 +105,40 @@ internal object Form {
 
     /** Replaces the grey sub text of a row built by [row]. */
     fun setSub(row: View, text: String) { (row.findViewWithTag<View>("sub") as? TextView)?.text = text }
+
+    /** Tag of the root of a row built by [row] or [stackRow]; [rowsIn] and [titleOf] find rows by it. */
+    const val ROW_TAG = "row"
+
+    /** Every row built by [row] / [stackRow] inside [root] (including [root] itself), top to bottom. */
+    fun rowsIn(root: View): List<View> {
+        val out = ArrayList<View>()
+        fun walk(v: View) {
+            if (v.tag == ROW_TAG) out += v
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(root)
+        return out
+    }
+
+    /** The title of a row built by [row] / [stackRow] (its first text), or null for anything else. */
+    fun titleOf(row: View): String? {
+        fun firstText(v: View): TextView? {
+            if (v is TextView) return v
+            if (v is ViewGroup) for (i in 0 until v.childCount) firstText(v.getChildAt(i))?.let { return it }
+            return null
+        }
+        return if (row.tag == ROW_TAG) firstText(row)?.text?.toString() else null
+    }
+
+    /** Sets the grey line under the title of a row built by [row] / [stackRow]: replaces the one it has, or adds it. */
+    fun setExplain(row: View, text: String) {
+        val ctx = row.context
+        (row.findViewWithTag<View>("sub") as? TextView)?.let { it.text = text; return }
+        val sub = body(ctx, text, 12f, R.color.ag_sub0).apply { tag = "sub" }
+        val box = row as? LinearLayout ?: return
+        if (box.orientation == LinearLayout.VERTICAL) box.addView(sub, 1, lp(ctx, 2)) // stackRow: under the head, above the control
+        else (box.getChildAt(0) as? LinearLayout)?.addView(sub, lp(ctx, 2))
+    }
 
     /** Thin line between rows of a card. */
     fun divider(ctx: Context): View = View(ctx).apply {
@@ -133,6 +168,7 @@ internal object Form {
         LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 11), Ui.dp(ctx, 14), Ui.dp(ctx, 6))
+            tag = ROW_TAG
             val head = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL

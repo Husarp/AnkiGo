@@ -53,11 +53,28 @@ class MenuPlacementTest {
         inside(s, b)
     }
 
-    @Test fun tallerThanEitherSideScrollsOnTheRoomierSide() {
+    @Test fun tallerThanEitherSideButFittingTheWindowSlidesOverTheAnchorWhole() {
         val b = Box(0, 0, 412 * d, 400 * d)           // split screen
-        val s = place(Box(300 * d, 300 * d, 340 * d, 340 * d), 220 * d, 380 * d, b)   // 6+ rows, anchor low
-        assertTrue("shrunk to scroll", s.height < 380 * d)
-        assertEquals(300 * d + inset / 2 - s.height, s.y)  // opens upward, as its bottom edge meets the anchor
+        val s = place(Box(300 * d, 300 * d, 340 * d, 340 * d), 220 * d, 380 * d, b)   // 12 rows, anchor low
+        assertEquals("shown whole, no scrolling", 380 * d, s.height)
+        assertEquals(0, s.y)                          // more room above the anchor: slid up as far as the window allows
+        inside(s, b)
+    }
+
+    @Test fun longActionsMenuInTheMiddleOfAPhoneIsShownWhole() {
+        // the Pokémon actions menu (about 600 dp) on a long-pressed Box cell at mid height of a phone: neither side holds it
+        val b = Box(0, 24 * d, 412 * d, 869 * d)
+        for (y in 100..760 step 40) {
+            val s = place(Box(100 * d, y * d, 180 * d, (y + 100) * d), 300 * d, 600 * d, b)
+            assertEquals("anchor y $y", 600 * d, s.height)
+            inside(s, b)
+        }
+    }
+
+    @Test fun tallerThanTheWholeWindowScrollsOnTheRoomierSide() {
+        val b = Box(0, 0, 412 * d, 400 * d)
+        val s = place(Box(300 * d, 300 * d, 340 * d, 340 * d), 220 * d, 700 * d, b)
+        assertTrue("shrunk to scroll", s.height < 700 * d)
         inside(s, b)
     }
 

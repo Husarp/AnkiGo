@@ -7,8 +7,8 @@ import android.view.View
 import android.widget.ImageView
 import com.husarp.ankigo.R
 
-/** The Pokémon ticked for Compare, in tick order; at most [max] (Compare.MAX). Owned and Pokédex picks are different keys. */
-class PickSet(private val max: Int = Compare.MAX, private val min: Int = Compare.MIN) {
+/** The Pokémon ticked for Compare, in tick order; any number (a [max] only for callers that want one). Owned and Pokédex picks are different keys. */
+class PickSet(private val max: Int = Int.MAX_VALUE, private val min: Int = Compare.MIN) {
     enum class Result { ADDED, REMOVED, FULL }
 
     private val items = LinkedHashSet<ComparePick>()

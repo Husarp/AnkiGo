@@ -92,6 +92,7 @@ class FirstRunActivity : AgActivity() {
     private var selGen = 1
     private var selNum = 0
     private var denied = false           // permission asked and refused
+    private var ankimonSteps = false     // the Ankimon steps are unfolded on the starter step
     private var picking = false          // starter being saved
     private var afterLoading = false     // GameRepo.load running after the download
     private var progress: ProgressBlock? = null
@@ -349,6 +350,12 @@ class FirstRunActivity : AgActivity() {
             row.addView(starterCard(data, num), Form.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i > 0) it.marginStart = dp(8) })
         }
         content.addView(row, Form.lp(this, 14))
+
+        // Ankimon on the PC? The same steps as Settings → Ankimon PC sync, folded away until asked for (R3-V3b)
+        content.addView(Form.secondary(this, if (ankimonSteps) "Hide the Ankimon steps" else "Play Ankimon on PC? Show the steps", onPage = true) {
+            ankimonSteps = !ankimonSteps; render()
+        }, Form.lp(this, 12))
+        if (ankimonSteps) content.addView(com.husarp.ankigo.help.HelpViews.ankimonGuide(this, withWarnings = false), Form.lp(this, 10))
 
         val sp = data.species[selNum]
         val btn = Form.primary(this, if (sp != null) "Choose ${sp.name}" else "Tap a Pokémon") { choose(selNum) }

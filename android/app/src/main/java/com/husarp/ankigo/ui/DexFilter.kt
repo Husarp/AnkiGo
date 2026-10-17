@@ -1,12 +1,41 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.GameData
+import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Species
+import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.Type
 
 enum class DexOwned { ALL, OWNED, NOT_OWNED }
 
-enum class DexSort(val label: String) { NUMBER("Number"), NAME("Name"), LAST_CAUGHT("Last caught") }
+/**
+ * The Pokédex sorts. [LAST_CAUGHT] needs the owned-copies map; the stat sorts read [DexFilter.basis]/[DexFilter.stat]/
+ * [DexFilter.chosenStats]; [LEVEL] (highest owned level) and [FIRST_SEEN] need the [DexSortInfo] given to [DexFilter.apply].
+ * [naturalDescending]: the direction a sort starts in (newest / biggest first; number and name go up).
+ */
+enum class DexSort(val label: String, val naturalDescending: Boolean = false) {
+    NUMBER("Number"), NAME("Name"), LAST_CAUGHT("Last caught", true),
+    LEVEL("Level", true), TOTAL("Total stats", true), STAT("One stat", true), CHOSEN_TOTAL("Chosen stats", true), FIRST_SEEN("First seen", true);
+
+    /** The [SortKey] that does the same job. */
+    val key: SortKey get() = when (this) {
+        NUMBER -> SortKey.DEX_NUMBER; NAME -> SortKey.NAME; LAST_CAUGHT -> SortKey.CAUGHT_DATE; LEVEL -> SortKey.LEVEL
+        TOTAL -> SortKey.TOTAL; STAT -> SortKey.STAT; CHOSEN_TOTAL -> SortKey.CHOSEN_TOTAL; FIRST_SEEN -> SortKey.FIRST_SEEN
+    }
+
+    companion object {
+        /** The Dex sort for a Box/Team sort key; keys a species can't have (attacks, caught date) give NUMBER. */
+        fun fromKey(k: SortKey): DexSort = when (k) {
+            SortKey.DEX_NUMBER -> NUMBER; SortKey.NAME -> NAME; SortKey.LEVEL -> LEVEL; SortKey.TOTAL -> TOTAL; SortKey.STAT -> STAT
+            SortKey.CHOSEN_TOTAL -> CHOSEN_TOTAL; SortKey.FIRST_SEEN -> FIRST_SEEN; SortKey.CAUGHT_DATE -> LAST_CAUGHT
+            SortKey.STRONGEST_ATTACK, SortKey.VS_WILD -> NUMBER
+        }
+    }
+}
+
+/** What the Dex sorts that look at your collection need: the owned copies and first-seen dates live in [state]. */
+class DexSortInfo(val data: GameData, val state: GameState)
 
 /**
  * The Pokédex filters and sort, pure Kotlin. All parts combine with AND.
@@ -22,12 +51,24 @@ data class DexFilter(
     val wishlistOnly: Boolean = false,
     val query: String = "",
     val sort: DexSort = DexSort.NUMBER,
+    /** Sort direction; null = the sort's own ([DexSort.naturalDescending]). Missing values (not owned, never seen) always go last. */
+    val descending: Boolean? = null,
+    /** For [DexSort.STAT] (null = HP). */
+    val stat: Stat? = null,
+    /** For [DexSort.CHOSEN_TOTAL]: the stats that are added up. */
+    val chosenStats: Set<Stat> = emptySet(),
+    /** Which stats the stat sorts read (Pokédex species: base, or IV 31 / EV 0 / neutral at Lv 100 / [level]; CURRENT = best owned copy). */
+    val basis: StatBasis = StatBasis.BASE,
+    val level: Int = 100,
 ) {
     /**
      * @param all every species to consider (usually the enabled gens)
      * @param lastCaught species number -> newest caughtAt among the mons you own now (absent = not owned), see [lastCaught]
+     * @param info the collection, for the LEVEL, FIRST_SEEN and CURRENT-basis sorts (null: those have no values, so the list stays in number order)
      */
-    fun apply(all: List<Species>, lastCaught: Map<Int, Long>, wishlist: Set<Int>, enabledGens: Set<Int>): List<Species> {
+    fun apply(
+        all: List<Species>, lastCaught: Map<Int, Long>, wishlist: Set<Int>, enabledGens: Set<Int>, info: DexSortInfo? = null,
+    ): List<Species> {
         val q = query.trim().removePrefix("#").lowercase()
         val digits = q.isNotEmpty() && q.all { it.isDigit() }
         val out = all.filter { sp ->
@@ -42,13 +83,24 @@ data class DexFilter(
                 } &&
                 (q.isEmpty() || sp.name.lowercase().contains(q) || (digits && numMatches(sp.baseNum, q)))
         }
+        val desc = descending ?: sort.naturalDescending
+        val tie = compareBy<Species>({ it.baseNum }, { it.num })
         return when (sort) {
-            DexSort.NUMBER -> out.sortedWith(compareBy({ it.baseNum }, { it.num }))
-            DexSort.NAME -> out.sortedWith(compareBy({ it.name.lowercase() }, { it.num }))
+            DexSort.NUMBER -> MonSort.ordered(out, desc, { it.baseNum.toDouble() }, null, tie)
+            DexSort.NAME -> MonSort.ordered(out, desc, null, { it.name.lowercase() }, tie)
             // owned first, newest first; the rest after, by number
-            DexSort.LAST_CAUGHT -> out.sortedWith(compareBy<Species>({ if (it.num in lastCaught) 0 else 1 }, { -(lastCaught[it.num] ?: 0L) }, { it.baseNum }, { it.num }))
+            DexSort.LAST_CAUGHT -> MonSort.ordered(out, desc, { lastCaught[it.num]?.toDouble() }, null, tie)
+            else -> MonSort.sortSpecies(info?.data, info?.state, out, spec(desc))
         }
     }
+
+    /** The [SortSpec] of this filter's sort (for the Box-style sorts and for remembering it). */
+    fun spec(desc: Boolean = descending ?: sort.naturalDescending) =
+        SortSpec(key = sort.key, stat = stat, chosenStats = chosenStats, basis = basis, level = level, descending = desc)
+
+    /** This filter with the sort taken from a remembered [SortSpec] (see [SortPrefs]). */
+    fun withSort(s: SortSpec): DexFilter =
+        copy(sort = DexSort.fromKey(s.key), descending = s.descending, stat = s.stat, chosenStats = s.chosenStats, basis = s.basis, level = s.level)
 
     // "25" = numbers starting with 25; "025" = the padded form (#025...), so a zero-padded query pins one number
     private fun numMatches(num: Int, q: String) =

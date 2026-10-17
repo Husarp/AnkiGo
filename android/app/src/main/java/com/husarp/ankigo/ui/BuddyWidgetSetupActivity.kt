@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.lookNum
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.content.Intent
@@ -85,7 +86,7 @@ class BuddyWidgetSetupActivity : AgActivity() {
         val size = Ui.dp(this, 40)
         if (mon != null) {
             val img = ImageView(this)
-            Ui.staticSprite(this, mon.species, mon.shiny, img)
+            Ui.staticSprite(this, mon.lookNum(com.husarp.ankigo.GameRepo.data), mon.shiny, img)
             row.addView(img, StudyUi.lp(size, size))
         } else {
             row.addView(StudyUi.icon(this, R.drawable.ic_star, R.color.ag_mauve).apply { setPadding(Ui.dp(context, 9), Ui.dp(context, 9), Ui.dp(context, 9), Ui.dp(context, 9)) }, StudyUi.lp(size, size))

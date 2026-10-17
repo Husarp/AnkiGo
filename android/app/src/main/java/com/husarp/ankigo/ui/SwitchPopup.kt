@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.lookNum
 import android.app.AlertDialog
 import android.content.Context
 import android.text.SpannableString
@@ -86,7 +87,7 @@ object SwitchPopup {
             setOnClickListener { if (pickable(mon.hp)) onPick(mon.uid) }
             setOnLongClickListener { onDetails(mon); true }
             val img = ImageView(a)
-            MonPreview.show(a, mon.species, mon.shiny, img)
+            MonPreview.show(a, mon.lookNum(data), mon.shiny, img)
             addView(img, LinearLayout.LayoutParams(Ui.dp(a, spriteDp), Ui.dp(a, spriteDp)))
             addView(Ui.text(a, 12f, 900, R.color.ag_text).apply {
                 text = mon.shownName; maxLines = 1; ellipsize = TextUtils.TruncateAt.END; gravity = Gravity.CENTER

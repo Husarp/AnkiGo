@@ -17,21 +17,48 @@ object StudyStats {
 
     /**
      * Adds what [events] say to today's [DayLog]: Counted -> reviews; Defeated -> won; Caught -> caught (+ shinies when
-     * shiny) and won (a catch is a won battle). Ignored answers never produce Counted, so they are never counted.
+     * shiny) and won (a catch is a won battle); XpGained -> xp (every Pokémon, so an Exp. Share holder counts too); Cash
+     * -> cash; Counted also fills the per-button counts. Ignored answers never produce Counted, so they are never counted.
      * Called by Game.onAnswer and Game.throwBall only.
      */
     fun record(state: GameState, events: List<GameEvent>) {
-        var reviews = 0; var won = 0; var caught = 0; var shinies = 0
+        var reviews = 0; var won = 0; var caught = 0; var shinies = 0; var xp = 0; var cash = 0
+        val buttons = IntArray(5)
         for (e in events) when (e) {
-            is GameEvent.Counted -> reviews++
+            is GameEvent.Counted -> { reviews++; buttons[e.button.coerceIn(0, 4)]++ }
             is GameEvent.Defeated -> won++
             is GameEvent.Caught -> { won++; caught++; if (e.shiny) shinies++ }
+            is GameEvent.XpGained -> xp += e.xp
+            is GameEvent.Cash -> cash += e.amount
             else -> Unit
         }
-        if (reviews + won + caught + shinies == 0 || state.day.isEmpty()) return
+        if (reviews + won + caught + shinies + xp + cash == 0 || state.day.isEmpty()) return
         val log = state.history.getOrPut(state.day) { DayLog() }
-        log.reviews += reviews; log.won += won; log.caught += caught; log.shinies += shinies
+        log.reviews += reviews; log.won += won; log.caught += caught; log.shinies += shinies; log.xp += xp; log.cash += cash
+        for (i in buttons.indices) log.buttons[i] += buttons[i]
         prune(state)
+    }
+
+    /** Money spent in the Shop goes into today's [DayLog.spent] (called by Shop.buy / buyTm / reroll after a successful purchase). */
+    fun addSpent(state: GameState, amount: Int) {
+        if (amount <= 0) return
+        today(state)?.let { it.spent += amount }
+    }
+
+    /** One healing item used goes into today's [DayLog.healItems] (called by ItemUse.use after a heal that happened). */
+    fun addHealItem(state: GameState) {
+        today(state)?.let { it.healItems++ }
+    }
+
+    /** Today's log, made when missing (and old days dropped then); null while the game has no day yet. */
+    private fun today(state: GameState): DayLog? {
+        if (state.day.isEmpty()) return null
+        val existing = state.history[state.day]
+        if (existing != null) return existing
+        val log = DayLog()
+        state.history[state.day] = log
+        prune(state)
+        return log
     }
 
     /** Drops days older than [KEEP_DAYS] before the game day. */
@@ -116,15 +143,17 @@ object StudyStats {
         return heatmapFromCounts(counts, state.settings.dailyAverage, today, weeks)
     }
 
-    /** The same heatmap from any per-day count map (date "yyyy-MM-dd" -> count, e.g. the cards AnkiDroid says were studied); heat levels are measured against [goal]. */
-    fun heatmapFromCounts(counts: Map<String, Int>, goal: Int, today: String, weeks: Int): Heatmap {
+    /** The same heatmap from any per-day count map (date "yyyy-MM-dd" -> count, e.g. the cards AnkiDroid says were studied); heat levels are measured against [goal].
+     *  Days before [firstDay] (when given) stay empty cells and are not counted. */
+    fun heatmapFromCounts(counts: Map<String, Int>, goal: Int, today: String, weeks: Int, firstDay: String? = null): Heatmap {
         val t = parse(today) ?: return Heatmap(emptyList(), emptyList(), 0)
+        val from = firstDay?.let { parse(it) }
         val first = t.with(DayOfWeek.MONDAY).minusWeeks((weeks - 1).toLong())
         var total = 0
         val columns = (0 until weeks).map { w ->
             (0 until 7).map { d ->
                 val date = first.plusDays((w * 7 + d).toLong())
-                if (date.isAfter(t)) null else {
+                if (date.isAfter(t) || (from != null && date.isBefore(from))) null else {
                     val key = date.toString()
                     val r = counts[key] ?: 0
                     total += r

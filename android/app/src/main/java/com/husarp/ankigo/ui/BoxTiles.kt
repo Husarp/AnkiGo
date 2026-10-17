@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.GameData
+import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
 
 /** One cell of the Box grid: a single Pokémon, or a group of copies of one species ("×N"). Pure logic, no views. */
@@ -19,14 +20,20 @@ class BoxTile(
     fun anyInTeam(team: Collection<String>): Boolean = members.any { it.uid in team }
 }
 
-/** The Box filter chips (PLAN 81): everything, or only the favourites. */
-enum class BoxFilter { ALL, FAVOURITES }
+/** The Box "show" filters (PLAN 81, 6A): everything, or only the favourites / the shiny ones / the team members. */
+enum class BoxFilter(val label: String) { ALL("All"), FAVOURITES("Favourites"), SHINY("Shiny"), IN_TEAM("In team") }
 
 /** The sort toggle of the copies sheet: highest level first, or latest caught first. */
 enum class CopySort(val label: String) { LEVEL("Level"), RECENT("Recent") }
 
 object BoxTiles {
-    fun filter(mons: List<Mon>, f: BoxFilter): List<Mon> = if (f == BoxFilter.FAVOURITES) mons.filter { it.favourite } else mons
+    /** [team] = the uids of the team (for [BoxFilter.IN_TEAM]). */
+    fun filter(mons: List<Mon>, f: BoxFilter, team: Collection<String> = emptyList()): List<Mon> = when (f) {
+        BoxFilter.ALL -> mons
+        BoxFilter.FAVOURITES -> mons.filter { it.favourite }
+        BoxFilter.SHINY -> mons.filter { it.shiny }
+        BoxFilter.IN_TEAM -> mons.filter { it.uid in team }
+    }
 
     /**
      * The tiles of the Box for [mons] (all owned Pokémon, team members too). [grouped]: copies of one species collapse into
@@ -42,4 +49,11 @@ object BoxTiles {
         CopySort.LEVEL -> members.sortedWith(compareBy<Mon>({ -it.level }, { if (it.shiny) 0 else 1 }, { -it.caughtAt }))
         CopySort.RECENT -> members.sortedWith(compareBy<Mon>({ -it.caughtAt }, { -it.level }))
     }
+
+    /**
+     * [tiles] in [spec]'s order (PLAN 48/55). A group sorts by its best member under [spec] (the first copy [MonSort.sort] gives);
+     * the tile still shows its own best-level copy and keeps its members as they are. Team members are in [tiles] like any other.
+     */
+    fun sorted(data: GameData, state: GameState, tiles: List<BoxTile>, spec: SortSpec): List<BoxTile> =
+        MonSort.sortGroups(data, state, tiles, { it.members }, spec)
 }

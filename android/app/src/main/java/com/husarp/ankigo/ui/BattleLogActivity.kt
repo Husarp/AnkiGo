@@ -77,7 +77,7 @@ class BattleLogPage(base: Context, host: PageHost) : GamePage(base, host) {
                 setPadding(dp(10), dp(8), dp(10), dp(8))
             }
             b.result.forEach { box.addView(line(it), lp(2)) }
-            if (coins > 0) box.addView(line(LogLine(Tone.PLAIN, "+$coins ₽ from the answers")), lp(2))
+            if (coins > 0) box.addView(line(LogLine(Tone.PLAIN, "+$coins ₽ earned in this fight")), lp(2))
             card.addView(box, lp(10))
         }
         if (b.rounds.isEmpty()) {

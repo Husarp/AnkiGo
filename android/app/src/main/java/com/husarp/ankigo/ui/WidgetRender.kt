@@ -29,6 +29,7 @@ import com.husarp.ankigo.Widgets
 import com.husarp.ankigo.data.DataStore
 import com.husarp.ankigo.data.Sprites
 import com.husarp.ankigo.game.GameData
+import com.husarp.ankigo.game.lookNum
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.shownName
@@ -104,7 +105,8 @@ object WidgetLogic {
      * Builds the snapshot. [maxHp] gives a mon's max HP (null = unknown, the bar then shows full).
      * Daily numbers count as 0 when the save is from an earlier game day; a streak that already lapsed shows 0.
      */
-    fun summarize(s: GameState, now: Long, zone: ZoneId = ZoneId.systemDefault(), extraUids: Set<String> = emptySet(), maxHp: (Mon) -> Int? = { null }): WidgetSnapshot {
+    fun summarize(s: GameState, now: Long, zone: ZoneId = ZoneId.systemDefault(), extraUids: Set<String> = emptySet(),
+                  lookNum: (Mon) -> Int = { it.species }, maxHp: (Mon) -> Int? = { null }): WidgetSnapshot {
         val dayKey = dayKey(now, s.settings.dayStartHour, zone)
         val today = if (s.day == dayKey) s.reviewsToday else 0
         val goal = s.settings.dailyAverage
@@ -117,12 +119,12 @@ object WidgetLogic {
             today = today, goal = goal, streak = streak,
             atRisk = hour >= RISK_HOUR && today < goal && streak > 0,
             cash = s.cash, balls = s.bag.filterKeys { it.endsWith("-ball") }.values.sumOf { max(0, it) },
-            team = s.teamMons().take(6).map { widgetMon(it, maxHp) },
-            picked = extraUids.mapNotNull { s.mon(it) }.associate { it.uid to widgetMon(it, maxHp) },
+            team = s.teamMons().take(6).map { widgetMon(it, lookNum, maxHp) },
+            picked = extraUids.mapNotNull { s.mon(it) }.associate { it.uid to widgetMon(it, lookNum, maxHp) },
         )
     }
 
-    private fun widgetMon(m: Mon, maxHp: (Mon) -> Int?) = WidgetMon(m.species, m.shownName, m.level, m.shiny, hpFrac(m.hp, maxHp(m)), m.uid)
+    private fun widgetMon(m: Mon, lookNum: (Mon) -> Int, maxHp: (Mon) -> Int?) = WidgetMon(lookNum(m), m.shownName, m.level, m.shiny, hpFrac(m.hp, maxHp(m)), m.uid)
 
     /**
      * Wide widget layout for a [w] x [h] dp widget with [teamCount] team sprites: the silhouette tile takes the height
@@ -202,24 +204,27 @@ object WidgetRender {
         val now = System.currentTimeMillis()
         var data: GameData? = null
         var dataTried = false
-        val maxHp: (Mon) -> Int? = { m ->
+        fun loaded(): GameData? {
             if (!dataTried) {
                 dataTried = true
                 data = runCatching { GameRepo.data }.getOrNull() ?: runCatching { DataStore.load(ctx) }.getOrNull()
             }
-            data?.let { d -> runCatching { StatCalc.maxHp(d, m) }.getOrNull() }
+            return data
         }
+        val maxHp: (Mon) -> Int? = { m -> loaded()?.let { d -> runCatching { StatCalc.maxHp(d, m) }.getOrNull() } }
+        // the picture of an owned Pokémon follows its chosen look (WidgetMon.species is only used to draw it)
+        val lookNum: (Mon) -> Int = { m -> runCatching { m.lookNum(loaded()) }.getOrDefault(m.species) }
         // The loaded game is changed on the main thread; if a list moves under us, fall back to the file.
         val live = runCatching { GameRepo.state }.getOrNull()
         if (live != null) {
             try {
-                return WidgetLogic.summarize(live, now, extraUids = extraUids, maxHp = maxHp)
+                return WidgetLogic.summarize(live, now, extraUids = extraUids, lookNum = lookNum, maxHp = maxHp)
             } catch (_: Exception) { /* read the file instead */ }
         }
         val dir = GameRepo.saveDir(ctx)
         val store = SaveStore(dir)
         val st = store.read(File(dir, "save.json")) ?: store.read(File(dir, "save.bak")) ?: return null
-        return WidgetLogic.summarize(st, now, extraUids = extraUids, maxHp = maxHp)
+        return WidgetLogic.summarize(st, now, extraUids = extraUids, lookNum = lookNum, maxHp = maxHp)
     }
 
     /** One widget bitmap, [wDp] x [hDp] of layout, in the light or dark colours. [snap] null = no save yet. */

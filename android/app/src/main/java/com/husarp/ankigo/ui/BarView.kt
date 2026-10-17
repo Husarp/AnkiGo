@@ -30,6 +30,43 @@ class BarView(ctx: Context) : View(ctx) {
     private var color = Ui.c(ctx, R.color.ag_green)
     private var anim: ValueAnimator? = null
 
+    // "Ghost" of an HP drop: the part just lost, drawn behind the fill in a soft darkened red, held a moment, then shrinking away.
+    private val ghostPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Bits.blend(Ui.c(ctx, R.color.ag_red), 0xFF000000.toInt(), 0.6f)
+        alpha = 165
+    }
+    private var ghostFrac = 0f
+    private var ghostAnim: ValueAnimator? = null
+
+    /** True on the HP bars: a drop leaves a fading ghost of what was lost. */
+    var ghostOnDrop = false
+
+    /**
+     * Shows the ghost up to [from] (never below where the fill is heading, [dest]); it holds [GHOST_HOLD_MS],
+     * then shrinks to the fill. [dest] defaults to what is drawn now; [set] passes the new fraction, because
+     * the fill is still at the old one when the drop starts.
+     */
+    internal fun ghostFrom(from: Float, dest: Float = shown) {
+        ghostAnim?.cancel()
+        ghostFrac = ghostTop(from, dest)
+        if (ghostFrac == 0f) { invalidate(); return }
+        ghostAnim = ValueAnimator.ofFloat(1f, 0f).apply {
+            startDelay = GHOST_HOLD_MS
+            duration = GHOST_SHRINK_MS
+            interpolator = PathInterpolator(0.4f, 0f, 0.2f, 1f)
+            val top = ghostFrac
+            addUpdateListener { ghostFrac = dest + (top - dest) * (it.animatedValue as Float); invalidate() }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: android.animation.Animator) { ghostFrac = 0f; invalidate() }
+            })
+            start()
+        }
+        invalidate()
+    }
+
+    /** Draws the ghost still (no animation); screenshots use it. */
+    internal fun ghostStill(from: Float) { ghostAnim?.cancel(); ghostFrac = from.coerceIn(0f, 1f); invalidate() }
+
     /** Track colour, `ag_s0` unless changed. */
     fun setTrackColor(argb: Int) { track.color = argb; invalidate() }
 
@@ -52,6 +89,10 @@ class BarView(ctx: Context) : View(ctx) {
         val to = fraction.coerceIn(0f, 1f)
         anim?.cancel()
         anim = null
+        if (ghostOnDrop) {
+            if (animate && isAttachedToWindow && to < shown) ghostFrom(maxOf(shown, ghostFrac), to)
+            else if (to >= shown || !animate) { ghostAnim?.cancel(); ghostFrac = 0f }
+        }
         if (!animate || !isAttachedToWindow || (to == shown && fillColor == color)) {
             shown = to
             color = fillColor
@@ -81,6 +122,8 @@ class BarView(ctx: Context) : View(ctx) {
 
     override fun onDetachedFromWindow() {
         anim?.cancel()
+        ghostAnim?.cancel()
+        ghostFrac = 0f
         super.onDetachedFromWindow()
     }
 
@@ -90,6 +133,10 @@ class BarView(ctx: Context) : View(ctx) {
         val r = h / 2f
         rect.set(0f, 0f, w, h)
         canvas.drawRoundRect(rect, r, r, track)
+        if (ghostFrac > shown) {
+            rect.set(0f, 0f, maxOf(w * ghostFrac, minOf(h, w)), h)
+            canvas.drawRoundRect(rect, r, r, ghostPaint)
+        }
         if (shown <= 0f) return
         // At least a round dot so a tiny fraction stays visible.
         val fw = maxOf(w * shown, minOf(h, w))
@@ -104,5 +151,13 @@ class BarView(ctx: Context) : View(ctx) {
             fill.color = color
         }
         canvas.drawRoundRect(rect, r, r, fill)
+    }
+
+    internal companion object {
+        /** Where the ghost of a drop starts: [from] (0..1), or 0 (no ghost) when it is not above where the fill is heading, [dest]. */
+        fun ghostTop(from: Float, dest: Float): Float = from.coerceIn(0f, 1f).let { if (it <= dest) 0f else it }
+
+        const val GHOST_HOLD_MS = 450L
+        const val GHOST_SHRINK_MS = 550L
     }
 }
