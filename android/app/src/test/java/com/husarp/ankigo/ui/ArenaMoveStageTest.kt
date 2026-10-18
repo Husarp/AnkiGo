@@ -39,6 +39,14 @@ class ArenaMoveStageTest {
         assertEquals(100f, y, 0f)
     }
 
+    @Test fun anchoredFeetMoveTheCentreDownByTheEmptyRowsUnderThem() {
+        // the same view, but the image reaches 7 px under the view's bottom (the empty rows under the feet, R8-04)
+        val (x, y) = g.centre(30f, 50f, 100f, 80f, 60f, 7f)
+        assertEquals(80f, x, 0f)
+        assertEquals(107f, y, 0f)
+        assertEquals("no inset = as before", g.centre(30f, 50f, 100f, 80f, 60f).second, g.centre(30f, 50f, 100f, 80f, 60f, 0f).second, 0f)
+    }
+
     @Test fun theWaitCoversTheLooksEndAndTheHitsAfterTime() {
         assertEquals(1000L, g.waitMs(1000, 400, 1.0))      // the look is longer than impact + 500
         assertEquals(900L, g.waitMs(500, 400, 1.0))        // impact + 500

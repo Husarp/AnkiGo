@@ -419,40 +419,4 @@ class PanelFitTest {
             }
         }
     }
-
-    // ---------------------------------------------------------------- our sprite as big as the wild one's
-
-    @Test fun sameSizeKeepsEveryPlanCleanAndOurBoxEqualToTheWildOne() {
-        for (own in listOf(true, false)) for (compact in listOf(false, true)) for (floor in listOf(8f, 14f)) for (w in 160..900 step 20) for (h in 100..1000 step 20) {
-            val c = ArenaGeo.cards(floor, compact, true)
-            val tag = "$w x $h own=$own compact=$compact floor=$floor"
-            val normal = ArenaGeo.plan(w.toFloat(), h.toFloat(), c, compact, own)
-            val same = ArenaGeo.plan(w.toFloat(), h.toFloat(), c, compact, own, same = true)
-            if (normal.fits) assertTrue("$tag: fits normally, not with the option", same.fits)
-            if (!same.fits || same.middle) continue
-            nothingOverlaps(same, w.toFloat(), h.toFloat(), "$tag ${same.layout}")
-            assertEquals(tag, same.wildSprite.w, same.playerSprite.w, 0.001f)
-            assertEquals(tag, same.wildSprite.h, same.playerSprite.h, 0.001f)
-        }
-    }
-
-    @Test fun sameSizeMiddleColumnAlsoKeepsTheBoxesEqual() {
-        for ((w, h) in listOf(160f to 120f, 100f to 60f, 240f to 136f, 320f to 300f)) for (own in listOf(true, false)) {
-            val p = ArenaGeo.plan(w, h, ArenaGeo.cards(8f, false, true), false, own, same = true)
-            if (p.middle) {
-                assertEquals("$w x $h", p.wildSprite.w, p.playerSprite.w, 0.001f)
-                assertEquals("$w x $h", p.wildSprite.h, p.playerSprite.h, 0.001f)
-                assertFalse("$w x $h: pictures touch", p.wildSprite.art().hits(p.playerSprite.art()))
-            }
-        }
-    }
-
-    @Test fun sameSizeAtTheWindowSizes() {
-        // the arenas of PHONE, SPLIT, LAND, FLOAT, FLOATBATTLE and PIP (the window less the log, the bars and the tools)
-        for ((w, h) in listOf(412f to 640f, 412f to 260f, 869f to 200f, 340f to 330f, 320f to 130f, 240f to 80f)) for (own in listOf(true, false)) {
-            val p = ArenaGeo.plan(w, h, ArenaGeo.cards(8f, false, true), false, own, same = true)
-            if (p.fits && !p.middle) nothingOverlaps(p, w, h, "$w x $h own=$own")
-            assertTrue("$w x $h own=$own: neither fits nor falls back to the middle column", p.fits || p.middle)
-        }
-    }
 }

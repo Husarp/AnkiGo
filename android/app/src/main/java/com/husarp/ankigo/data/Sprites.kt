@@ -18,10 +18,10 @@ import java.util.concurrent.atomic.AtomicInteger
 
 enum class SpriteKind { FRONT, BACK }
 
-/** One HTTP GET: the body, null for "not found", IOException for trouble. The real one is [Http.get]; tests pass a fake. */
+/** One HTTP GET: the body, null for "not found", IOException for trouble. The real one is [Mirror.get] (mirror first, then [Http.get]); tests pass a fake. */
 internal typealias HttpGet = (url: String, progress: ((Long, Long) -> Unit)?) -> ByteArray?
 
-private val realGet: HttpGet = { url, progress -> Http.get(url, progress = progress) }
+private val realGet: HttpGet = { url, progress -> Mirror.get(url, progress = progress) }
 
 /** A decoded sprite: one frame for PNGs, several for animated GIFs. Bitmaps are ARGB_8888 at native pixel size. */
 class SpriteImage(val frames: List<Bitmap>, val delays: IntArray) {
@@ -89,8 +89,16 @@ internal object SpriteUrls {
     private val PNG = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
     fun isPng(b: ByteArray) = b.size > 8 && PNG.indices.all { b[it] == PNG[it] }
 
+    /** A WebP file: "RIFF", four size bytes, "WEBP" (Adam's own battle backgrounds). */
+    fun isWebp(b: ByteArray) = b.size > 12 && b[0] == 'R'.code.toByte() && b[1] == 'I'.code.toByte() && b[2] == 'F'.code.toByte() &&
+        b[3] == 'F'.code.toByte() && b[8] == 'W'.code.toByte() && b[9] == 'E'.code.toByte() && b[10] == 'B'.code.toByte() && b[11] == 'P'.code.toByte()
+
     /** True when the bytes are what the URL's extension promises (an HTML error page must never be saved as a sprite). */
-    fun validFor(url: String, b: ByteArray) = if (url.endsWith(".gif")) isGif(b) else isPng(b)
+    fun validFor(url: String, b: ByteArray) = when {
+        url.endsWith(".gif") -> isGif(b)
+        url.endsWith(".webp") -> isWebp(b)
+        else -> isPng(b)
+    }
 }
 
 /** Memory cache bounded by bytes, least recently used out first. */
@@ -452,7 +460,7 @@ object Sprites {
             if (bytes == null) continue
             if (!SpriteUrls.validFor(url, bytes)) { networkError = true; continue } // an error page, not "not found"
             if (bytes.size > MAX_SPRITE_BYTES) continue // too big to keep: counts as not there
-            val ext = if (url.endsWith(".gif")) "gif" else "png"
+            val ext = if (url.endsWith(".gif")) "gif" else if (url.endsWith(".webp")) "webp" else "png"
             val target = File(base.parentFile, "${base.name}.$ext")
             val tmp = File(base.parentFile, "${base.name}.$ext.${System.nanoTime()}.tmp")
             try {

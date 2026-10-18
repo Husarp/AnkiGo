@@ -88,11 +88,6 @@ class R2V12Shots {
         val b = BattleShotKit.bound(ctx); set("slp", "psn"); b.panel!!.renderAll(); b.root
     }
 
-    @Test fun sameSizeFront() = paparazzi.shootWith("r2v12-same", listOf(Size.SPLIT)) { ctx ->
-        AppPrefs.setPlayerSameSize(ctx, true)
-        val b = BattleShotKit.bound(ctx); set("frz", "brn"); b.panel!!.renderAll(); b.root
-    }
-
     // ---------------------------------------------------------------- small windows
 
     @Test fun smallNone() = paparazzi.shootWith("r2v12-small-none", small) { ctx -> bare(ctx, null, null) }

@@ -180,15 +180,24 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     var cardsUnderOwn: Boolean = true
         set(v) { if (field != v) { field = v; requestLayout() } }
 
-    /** Our Pokémon's sprite box is as big as the wild one's ([AppPrefs.playerSameSize]) instead of the enlarged one. */
-    var playerSameSize: Boolean = false
-        set(v) { if (field != v) { field = v; requestLayout() } }
+    /**
+     * How far the stage rule may zoom the battle picture in (round 8): 1 = not at all, 0.72 = up to ~28 % (the floating window,
+     * which is small and would rather show less of the picture; [StageFit.fit]). Picture mode only.
+     */
+    var stageZoom: Float = 1f
+        set(v) { if (v != field) { field = v; requestLayout() } }
 
-    /** True while the two stat cards sit in the middle column between the sprites (the corner layout would cover one). */
-    val middleLayout: Boolean get() = plan?.middle == true
+    /** The picture's stage and the layout made from it while a picture shows (null = plain mode); see [layoutStage]. */
+    internal var stageNow: Stage? = null
+        private set
+    internal var stagePlanNow: StagePlan? = null
+        private set
+
+    /** True while the two stat cards sit in the middle column between the sprites (the corner layout would cover one; never in picture mode). */
+    val middleLayout: Boolean get() = stagePlanNow == null && plan?.middle == true
 
     /** How much bigger than their normal size the two stat cards are drawn (1 in the study layouts). */
-    val cardScale: Float get() = if (compact || studyStrip) 1f else plan?.k ?: 1f
+    val cardScale: Float get() = stagePlanNow?.k ?: if (compact || studyStrip) 1f else plan?.k ?: 1f
 
     private val live = LinkedHashSet<Animator>()
     private val floats = ArrayList<View>()
@@ -203,7 +212,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     init {
         clipChildren = true
         background = backdrop   // the plain gradient, or a downloaded battle picture (R7-07)
-        backdrop.onPictureChange = { shown -> setPlatformsShown(!shown) }
+        backdrop.onPictureChange = { shown -> setPlatformsShown(!shown); requestLayout() }   // R8-04: another picture = other stand points
+        enemySprite.onArtChange = { artChanged() }    // R8-FIX M2: a new image / placeholder can change what the cards must keep clear of
+        playerSprite.onArtChange = { artChanged() }
 
         enemyHolder.addView(enemySprite, FrameLayout.LayoutParams(-1, -1))
         enemyHolder.addView(ball, FrameLayout.LayoutParams(dpi(48), dpi(48), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).also { it.bottomMargin = dpi(6) })
@@ -289,7 +300,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             else -> minH
         }
         val w = MeasureSpec.getSize(widthMeasureSpec)
-        if (compact || studyStrip) layoutStudy(w, h) else layoutPlan(w, h)
+        if (!layoutStage(w, h)) { if (compact || studyStrip) layoutStudy(w, h) else layoutPlan(w, h) }
         placeNewTag()
         super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
     }
@@ -301,7 +312,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      */
     private fun layoutPlan(w: Int, h: Int) {
         val d = Ui.dp(context, 1f)
-        val p = ArenaGeo.plan(w / d, h / d, ArenaGeo.cards(floorSp, cardsCompact, xpOn), cardsCompact, cardsUnderOwn, playerSameSize)
+        val p = ArenaGeo.plan(w / d, h / d, ArenaGeo.cards(floorSp, cardsCompact, xpOn), cardsCompact, cardsUnderOwn)
         plan = p
         for (s in listOf(enemySprite, playerSprite)) if (s.scaleDp != BIG_SPRITE_DP) s.scaleDp = BIG_SPRITE_DP
         fun put(v: View, b: ArenaGeo.Box, wrapHeight: Boolean = false, k: Float = 1f) {
@@ -314,6 +325,111 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         put(playerHolder, p.playerSprite)
         put(enemyBlock, p.wildCard, wrapHeight = true, k = p.k)
         put(playerCard, p.playerCard, wrapHeight = true, k = p.k)
+    }
+
+    /**
+     * Picture mode (round 8, "Pokémon belong to the picture"): while a battle picture shows, the Pokémon stand on its two stand
+     * points. [StageFit] crops the picture to this arena (the backdrop gets that stage) and says where the feet are and how big the
+     * frames are; [StageGeo] puts the two cards where they cover neither Pokémon. The sprite holders are the plan's square frames
+     * (bottom = the feet, so [SpriteView.anchorFeet] stands the visible feet on them), the cards are laid out at their normal
+     * width and drawn [StagePlan.k] times bigger from their corner. The study layouts use their own card widths and k = 1; the
+     * plain ellipses are hidden. False = plain mode (no picture, or no size yet): the caller lays out the plain way.
+     */
+    private fun layoutStage(w: Int, h: Int): Boolean {
+        val bg = backdrop.shown
+        val d = Ui.dp(context, 1f)
+        val stage = if (bg != null && w > 0 && h > 0) fitStage(bg, w / d, h / d) else null
+        backdrop.setStage(stage)
+        stageNow = stage
+        if (bg == null || stage == null) {
+            stagePlanNow = null
+            for (s in arrayOf(enemySprite, playerSprite)) { s.anchorFeet = false; s.byFrame = false }
+            return false
+        }
+        val study = compact || studyStrip
+        val c = ArenaGeo.cards(floorSp, cardsCompact, xpOn)
+        val widths = studyCardWidths(w)
+        val wildW = if (study) widths.first / d else c.wildW
+        val playerW = if (study) widths.second / d else c.playerW
+        val k0 = if (study) 1f else min(w / d / 300f, h / d / 430f).coerceIn(1f, 1.4f)
+        // The cards keep clear of what each sprite really draws at the planned frame (R8-FIX M2), not of a flat 85 % of it.
+        val p = StageGeo.plan(w / d, h / d, stage, wildW, c.wildH, playerW, c.playerH, k0, cardsUnderOwn,
+            { side -> enemySprite.artShare(side * d) }, { side -> playerSprite.artShare(side * d) })
+        stagePlanNow = p
+        artOf(stage, p, d, plannedArt)
+        for (s in arrayOf(enemySprite, playerSprite)) {
+            s.anchorFeet = true
+            s.byFrame = true    // R8-FIX M1: a small species is small in its frame, a big one big (frame / 96 px per sprite pixel)
+            if (s.scaleDp != BIG_SPRITE_DP) s.scaleDp = BIG_SPRITE_DP   // the holder decides the size
+        }
+        putBox(enemyHolder, p.wildSprite, d)
+        putBox(playerHolder, p.playerSprite, d)
+        putBox(enemyBlock, p.wildCard, d, wrapHeight = true, k = p.k)
+        putBox(playerCard, p.playerCard, d, wrapHeight = true, k = p.k)
+        return true
+    }
+
+    /**
+     * Fills [out] with what the two sprites draw (the [SpriteView.artShare] width and height shares, wild then ours) at the full frame
+     * and at the planned one: the numbers [StageGeo.plan] decided the cards by. No share yet (nothing shown) = the plan's default.
+     */
+    private fun artOf(stage: Stage, p: StagePlan, d: Float, out: FloatArray) {
+        fun put(i: Int, spr: SpriteView, frameDp: Float) {
+            val a = spr.artShare(frameDp * d) ?: ArtShare.DEFAULT
+            out[i] = a.w; out[i + 1] = a.h
+        }
+        put(0, enemySprite, stage.wildFrame); put(2, enemySprite, p.wildSprite.w)
+        put(4, playerSprite, stage.playerFrame); put(6, playerSprite, p.playerSprite.w)
+    }
+    private val plannedArt = FloatArray(8)
+    private val artNow = FloatArray(8)
+
+    /**
+     * A sprite's image or placeholder changed: in picture mode, when that changes what the cards were planned around, lay out again
+     * (so the cards move onto the freed room, or off the bigger Pokémon). The same numbers again = nothing; the layout itself never
+     * changes a sprite's image, so this cannot loop.
+     */
+    private fun artChanged() {
+        val stage = stageNow ?: return
+        val p = stagePlanNow ?: return
+        artOf(stage, p, Ui.dp(context, 1f), artNow)
+        if (!java.util.Arrays.equals(artNow, plannedArt)) requestLayout()
+    }
+
+    /** The stage for [bg] in a panel of [w] x [h] dp; the same object while nothing it depends on changed (the backdrop re-lays-out on a new one). */
+    private fun fitStage(bg: Backdrop, w: Float, h: Float): Stage? {
+        val k = fitKey
+        val old = fitted
+        if (old != null && fitBg === bg && k[0] == w && k[1] == h && k[2] == stageZoom) return old
+        val st = StageFit.fit(bg, w, h, stageZoom)
+        fitBg = bg; k[0] = w; k[1] = h; k[2] = stageZoom
+        fitted = st
+        return st
+    }
+    private var fitBg: Backdrop? = null
+    private val fitKey = FloatArray(3)
+    private var fitted: Stage? = null
+
+    /** The study layouts' card widths in px (wild, ours): the same numbers [layoutStudy] uses. */
+    private fun studyCardWidths(w: Int): Pair<Int, Int> {
+        if (studyStrip) {
+            val stripMax = ((w - dpi(30)) / 2).coerceAtLeast(dpi(96))
+            return min(dpi(138), stripMax) to min(dpi(142), stripMax)
+        }
+        val infoMax = ((w - dpi(30)) / 2).coerceAtLeast(dpi(100))
+        return min(dpi(130), infoMax) to min(dpi(130), infoMax)
+    }
+
+    /**
+     * Places [v] on the box [b] (virtual dp, [d] px per dp). A sprite holder has its edges rounded to the pixel, so its bottom-centre is
+     * its feet; a card ([wrapHeight]) is laid out at its normal width ([k] times smaller than the box) and as high as its text.
+     */
+    private fun putBox(v: View, b: ArenaGeo.Box, d: Float, wrapHeight: Boolean = false, k: Float = 1f) {
+        val x0 = Math.round(b.x * d)
+        val y0 = Math.round(b.y * d)
+        val w = if (wrapHeight) Math.round(b.w / k * d) else Math.round(b.right * d) - x0
+        place(v, w, if (wrapHeight) -2 else Math.round(b.bottom * d) - y0, Gravity.TOP or Gravity.LEFT, x0, y0, 0, 0)
+        scaleFrom(v, k)
     }
 
     /** The NEW sticker sits on the wild card's top-left corner, overhanging it a little, and grows with the card. */
@@ -349,8 +465,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         place(platEnemy, px(150f), px(30f), Gravity.TOP or Gravity.RIGHT, 0, px(92f) + down, px(22f), 0)
         place(platPlayer, px(180f), px(40f), Gravity.BOTTOM or Gravity.LEFT, px(4f), 0, 0, -px(8f))
         place(enemyHolder, px(110f), px(100f) - g, Gravity.TOP or Gravity.RIGHT, 0, px(12f) + down, px(42f), 0)
-        if (playerSameSize) place(playerHolder, px(110f), px(100f) - g, Gravity.BOTTOM or Gravity.LEFT, px(22f), 0, 0, px(6f))
-        else place(playerHolder, px(140f), px(128f) - g, Gravity.BOTTOM or Gravity.LEFT, px(22f), 0, 0, px(6f))
+        place(playerHolder, px(140f), px(128f) - g, Gravity.BOTTOM or Gravity.LEFT, px(22f), 0, 0, px(6f))
         val infoMax = ((w - dpi(30)) / 2).coerceAtLeast(dpi(if (compact) 100 else 120))
         val edge = if (compact) 6 else 10
         place(enemyBlock, min(dpi(if (compact) 130 else 166), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(edge), dpi(edge), 0, 0)
@@ -362,8 +477,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             place(platEnemy, sp(120), sp(24), Gravity.TOP or Gravity.RIGHT, 0, sp(70), sp(16), 0)
             place(platPlayer, sp(150), sp(34), Gravity.BOTTOM or Gravity.LEFT, 0, 0, 0, -sp(10))
             place(enemyHolder, sp(96), sp(80) - g, Gravity.TOP or Gravity.RIGHT, 0, sp(4), sp(26), 0)
-            if (playerSameSize) place(playerHolder, sp(96), sp(80) - g, Gravity.BOTTOM or Gravity.LEFT, sp(14), 0, 0, sp(2))
-            else place(playerHolder, sp(116), sp(96) - g, Gravity.BOTTOM or Gravity.LEFT, sp(14), 0, 0, sp(2))
+            place(playerHolder, sp(116), sp(96) - g, Gravity.BOTTOM or Gravity.LEFT, sp(14), 0, 0, sp(2))
             // a narrow pane: the cards may go down to 96 dp (the name shortens) so ours covers no more of our sprite's box than before the HP number moved up
             val stripMax = ((w - dpi(30)) / 2).coerceAtLeast(dpi(96))
             place(enemyBlock, min(dpi(138), stripMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
@@ -473,13 +587,14 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // ---------------------------------------------------------------- background (R7-07)
 
     /**
-     * The battle background for a wild Pokémon of [species] with [types] ([BackdropRules]): the downloaded Showdown picture once
-     * it is there, else the plain gradient. Plain too while pictures or downloads are off in the settings ([Backdrops.allowed]).
+     * The battle background for a wild Pokémon with [types] ([BackdropCatalog.pick]): one of its type's pictures, [seed] (from the
+     * wild one's uid, [BackdropCatalog.seed]) fixing which for the whole fight; the plain gradient until it is there. Plain too
+     * while pictures or downloads are off in the settings ([Backdrops.allowed]).
      */
-    fun setBackdrop(types: List<Type>, species: Int) {
+    fun setBackdrop(types: List<Type>, seed: Int, legendary: Boolean = false) {
         val download = Backdrops.allowed(Sprites.enabled(context), AppPrefs.backgroundPictures(context))
         if (!download) { backdrop.plain(); return }
-        backdrop.request(BackdropRules.pick(types, species), download)
+        backdrop.request(BackdropCatalog.pick(types, seed, legendary), download)
     }
 
     /** The plain gradient with the two platform ellipses. */
@@ -806,7 +921,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val tvW = tv.measuredWidth
         val tvH = tv.measuredHeight
         val drawn = spr.drawnHeight()
-        val top = if (drawn > 0) max(holder.top - dpi(8), holder.bottom - drawn - dpi(8)) else holder.top + dpi(6)
+        val top = if (drawn > 0) max(holder.top - dpi(8), holder.bottom + spr.drawnBottomInset() - drawn - dpi(8)) else holder.top + dpi(6)
         val left = holder.left + (holder.width - tvW) / 2
         val mine = flying.filter { it.onPlayer == ft.onPlayer }   // texts of this side wait for each other
         // Not laid out yet (no size): the old free-floating start. Otherwise keep the whole rise inside the arena.
@@ -857,8 +972,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val drawn = spr.drawnHeight()
         val dw = spr.drawnWidth()
         val aw = if (dw > 0) min(dw, v.width) else (v.width * 0.85f).toInt(); val ah = if (drawn > 0) min(drawn, v.height) else (v.height * 0.85f).toInt()
-        val x = v.left + (v.width - aw) / 2; val y = v.top + (v.height - ah)
-        return FloatSpot.Rect(x - m, y - m, x + aw + m, y + ah + m)
+        val x = v.left + (v.width - aw) / 2; val y = v.top + (v.height - ah) + spr.drawnBottomInset()   // anchored feet: the image reaches below the holder
+        return FloatSpot.Rect(x - m, y - m, x + aw + m, min(y + ah, v.bottom) + m)
     }
 
     private fun pumpXp() {
@@ -1039,8 +1154,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         for ((spr, box) in listOf(attacker to aBox, target to tBox)) {
             if (box.width <= 0 || box.height <= 0 || spr.width <= 0 || spr.height <= 0 || spr.drawnWidth() <= 0 || spr.drawnHeight() <= 0) return null
         }
-        val a = ArenaMoveStage.Geo.centre(aBox.left.toFloat(), aBox.top.toFloat(), attacker.width.toFloat(), attacker.height.toFloat(), attacker.drawnHeight().toFloat())
-        val t = ArenaMoveStage.Geo.centre(tBox.left.toFloat(), tBox.top.toFloat(), target.width.toFloat(), target.height.toFloat(), target.drawnHeight().toFloat())
+        val a = ArenaMoveStage.Geo.centre(aBox.left.toFloat(), aBox.top.toFloat(), attacker.width.toFloat(), attacker.height.toFloat(), attacker.drawnHeight().toFloat(), attacker.drawnBottomInset().toFloat())
+        val t = ArenaMoveStage.Geo.centre(tBox.left.toFloat(), tBox.top.toFloat(), target.width.toFloat(), target.height.toFloat(), target.drawnHeight().toFloat(), target.drawnBottomInset().toFloat())
         val unit = ArenaMoveStage.Geo.unit(a.first, a.second, t.first, t.second, target.drawnHeight().toFloat())
         return ArenaMoveStage(a.first, a.second, t.first, t.second, unit, attacker, target, { background }, { it === playerSprite && turnAnim != null })
     }
@@ -1161,10 +1276,6 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         super.onLayout(changed, l, t, r, b)
-        backdrop.setFeet(
-            (enemyHolder.left + enemyHolder.right) / 2f, enemyHolder.bottom.toFloat(),
-            (playerHolder.left + playerHolder.right) / 2f, playerHolder.bottom.toFloat(),
-        )
         if (banner.visibility == VISIBLE) {
             val was = bannerFit
             if (!placeBanner()) { banner.animate().cancel(); banner.visibility = GONE; return }   // the arena shrank: no clear spot any more

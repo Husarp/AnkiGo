@@ -338,7 +338,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val bar = BarView(this)
         bar.setMeaning(BarMeaning.GOAL, minOf(1f, s.reviewsToday.toFloat() / s.goal), false)
         bar.setGoalSparks(GoalTone.flameLevel(s.reviewsToday.toFloat() / s.goal))
-        goalRow.addView(bar, LinearLayout.LayoutParams(0, dp(8), 1f).also { it.marginEnd = dp(10) })
+        goalRow.addView(bar, LinearLayout.LayoutParams(0, dp(GoalGlow.THICK_BAR_DP), 1f).also { it.marginEnd = dp(10) })
         goalRow.addView(Ui.text(this, 12f, 900, R.color.ag_text).apply { text = goalText(s); maxLines = 1 })
         card.addView(goalRow, lp(16))
         return card

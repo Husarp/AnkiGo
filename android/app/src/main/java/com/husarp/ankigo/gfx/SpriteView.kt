@@ -15,6 +15,7 @@ import android.util.AttributeSet
 import android.view.View
 import com.husarp.ankigo.data.SpriteImage
 import kotlin.math.floor
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -49,7 +50,31 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     var fxMatrix: FloatArray? = null
         set(v) { if (v != null || field != null) { field = v; invalidate() } }
 
+    /**
+     * Round 8: true = the picture's lowest visible row (over all frames) sits on the view's bottom, so a Pokémon's feet stand on the
+     * view's bottom edge even when its frames keep empty rows under them. False (the default) = the frame's bottom is the view's
+     * bottom. Placeholders are the same either way.
+     */
+    var anchorFeet: Boolean = false
+        set(v) { if (v != field) { field = v; measureFoot(); invalidate() } }
+
+    /**
+     * Round 8 picture mode: true = the sprite is drawn at (the view's height / 96) device px per sprite pixel, so a small species
+     * is small and a big one big in its 96-px frame ([frameScale]); the view is the Pokémon's square frame. False (the default)
+     * = [scaleDp], as before.
+     */
+    var byFrame: Boolean = false
+        set(v) { if (v != field) { field = v; invalidate() } }
+
+    /**
+     * Round 8 picture mode: called after [setImage] / [setPlaceholder] changed what the view shows, so the arena can compare [artShare]
+     * with what it planned its cards for (null = nobody listens). Never called while drawing.
+     */
+    internal var onArtChange: (() -> Unit)? = null
+
     private var image: SpriteImage? = null
+    /** Empty rows of the image under its feet while [anchorFeet] (worked out when the image is set, never while drawing). */
+    private var rowsBelow = 0
     private var frame = 0
     private var placeholderText: String? = null
     private var placeholderColor = 0
@@ -74,17 +99,20 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
 
     fun setImage(img: SpriteImage?) {
         image = img
+        measureFoot()
         frame = 0
         removeCallbacks(tick); ticking = false
         requestLayout()
         invalidate()
         updateAnimation()
+        onArtChange?.invoke()
     }
 
     fun setPlaceholder(text: String, color: Int) {
         placeholderText = text
         placeholderColor = color
         invalidate()
+        onArtChange?.invoke()
     }
 
     /** Height in px the current image is drawn at (for placing damage numbers). */
@@ -95,6 +123,28 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         return 0
     }
 
+    /**
+     * How many px the drawn image reaches below the view's bottom edge: the empty rows under the feet while [anchorFeet] (0 otherwise
+     * and for placeholders). The drawn box is then [drawnHeight] high with its bottom this far under the view's.
+     */
+    fun drawnBottomInset(): Int {
+        val img = image ?: return 0
+        return footInset(scaleFor(img, width, height))
+    }
+
+    private fun footInset(s: Float): Int = if (rowsBelow > 0) (rowsBelow * s).roundToInt() else 0
+
+    private fun measureFoot() {
+        val img = image
+        if (!anchorFeet || img == null) { rowsBelow = 0; return }
+        val row = IntArray(img.frames.maxOf { it.width })
+        val lowest = SpriteFoot.lowestRow(img.frames.size, img.height) { f, y ->
+            val b = img.frames[f]
+            y < b.height && b.width > 0 && run { b.getPixels(row, 0, b.width, 0, y, b.width, 1); SpriteFoot.anyVisible(row, 0, b.width) }
+        }
+        rowsBelow = SpriteFoot.rowsBelow(img.height, lowest)
+    }
+
     /** Width in px the current image is drawn at (0 while nothing is shown yet). */
     fun drawnWidth(): Int {
         val img = image
@@ -103,9 +153,25 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         return 0
     }
 
-    /** Device pixels per sprite pixel for this view ([scale]). */
+    /** Device pixels per sprite pixel for this view ([scale], or [frameScale] in picture mode). */
     private fun scaleFor(img: SpriteImage, vw: Int, vh: Int): Float =
-        scale(img.width, img.height, vw, vh, maxOf(1, floor(scaleDp * resources.displayMetrics.density).toInt()))
+        if (byFrame) frameScale(img.width, img.height, vw, vh, vh.toFloat())
+        else scale(img.width, img.height, vw, vh, maxOf(1, floor(scaleDp * resources.displayMetrics.density).toInt()))
+
+    /**
+     * Picture mode: how much of a square frame [sidePx] wide the Pokémon's visible picture takes, as shares of its width and height
+     * (bottom-centred), for what is shown now (the image, else the placeholder circle, else nothing = null). The image is measured
+     * at the scale it would be drawn at in a frame that size, without the empty rows under the feet while [anchorFeet].
+     */
+    internal fun artShare(sidePx: Float): com.husarp.ankigo.ui.ArtShare? {
+        if (!(sidePx > 0f)) return null
+        val side = Math.round(sidePx)
+        val img = image
+        if (img != null) return artShare(img.width, img.height, rowsBelow, side)
+        if (placeholderText == null) return null
+        val d = (placeholderDiameter(side, side) / sidePx).coerceIn(0f, 1f)
+        return com.husarp.ankigo.ui.ArtShare(d, d)
+    }
 
     private fun placeholderDiameter(vw: Int, vh: Int): Float =
         min(min(vw, vh) * 0.8f, 72f * resources.displayMetrics.density).coerceAtLeast(0f)
@@ -139,7 +205,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         val dw = (bmp.width * s).roundToInt()
         val dh = (bmp.height * s).roundToInt()
         val left = (vw - dw) / 2
-        val top = vh - dh
+        val top = vh - dh + footInset(s)
         src.set(0, 0, bmp.width, bmp.height)
         dst.set(left, top, left + dw, top + dh)
         paint.colorFilter = currentFilter()
@@ -216,6 +282,37 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
             if (!pixelArt(w, h)) return min(wanted.toFloat(), fit)
             val whole = min(wanted, floor(fit).toInt())
             return if (whole >= 1) whole.toFloat() else fit
+        }
+
+        /** The frame every Pokémon is drawn in, in sprite pixels (the approved stage page draws each one at frame / 96). */
+        private const val FRAME = 96f
+
+        /** A holder rounded to whole pixels can be a hair under a multiple of 96: that is still the multiple. */
+        private const val ROUNDING = 0.02f
+
+        /**
+         * Picture mode: device pixels per sprite pixel for a [w] x [h] picture in a [vw] x [vh] view that is a [frame]-px frame. The
+         * frame wants [frame] / 96: pixel art at the whole number below it (at least 1; fractional only if even 1 does not fit the
+         * view), a bigger picture (a 3D animation, drawn smoothed) at that fractional scale. Never more than the view allows.
+         */
+        fun frameScale(w: Int, h: Int, vw: Int, vh: Int, frame: Float): Float {
+            if (vw <= 0 || vh <= 0 || w <= 0 || h <= 0) return 0f
+            val fit = min(vw.toFloat() / w, vh.toFloat() / h)
+            val want = frame / FRAME
+            if (!pixelArt(w, h)) return min(want, fit)
+            val whole = min(max(1, floor(want + ROUNDING).toInt()), floor(fit).toInt())
+            return if (whole >= 1) whole.toFloat() else fit
+        }
+
+        /**
+         * How much of a square frame [side] px wide a [w] x [h] picture takes when drawn at [frameScale]: shares of the frame's width
+         * and height, the [rowsBelow] empty rows under the feet not counted (the feet stand on the frame's bottom).
+         */
+        fun artShare(w: Int, h: Int, rowsBelow: Int, side: Int): com.husarp.ankigo.ui.ArtShare? {
+            if (side <= 0 || w <= 0 || h <= 0) return null
+            val s = frameScale(w, h, side, side, side.toFloat())
+            val seen = (h - rowsBelow).coerceIn(1, h)
+            return com.husarp.ankigo.ui.ArtShare((w * s / side).coerceIn(0f, 1f), (seen * s / side).coerceIn(0f, 1f))
         }
     }
 }

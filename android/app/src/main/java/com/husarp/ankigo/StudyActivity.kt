@@ -1224,7 +1224,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         goalRow.addView(BarView(this).apply {
             setMeaning(BarMeaning.GOAL, today.toFloat() / goal, false)
             setGoalSparks(com.husarp.ankigo.ui.GoalTone.flameLevel(today.toFloat() / goal))
-        }, StudyUi.lp(0, Ui.dp(this, 8), 1f).also { it.marginEnd = Ui.dp(this, 8) })
+        }, StudyUi.lp(0, Ui.dp(this, com.husarp.ankigo.ui.GoalGlow.THICK_BAR_DP), 1f).also { it.marginEnd = Ui.dp(this, 8) })
         goalRow.addView(StudyUi.label(this, if (today >= goal) "Goal done · $today" else "$today / $goal", 12, R.color.ag_text, 900))
         goalRow.addView(Ui.chip(this, com.husarp.ankigo.ui.StreakFlame(this).apply { alive = (st?.streakDays ?: 0) > 0 }, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
         summary.addView(goalRow, StudyUi.spaced(this, 6))

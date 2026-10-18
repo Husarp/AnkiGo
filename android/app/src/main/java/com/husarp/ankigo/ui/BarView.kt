@@ -127,6 +127,10 @@ class BarView(ctx: Context) : View(ctx) {
     private var sparkRunning = false
     private val sparkPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val sparkRect = android.graphics.Rect()
+    private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val glowRect = RectF()
+    private var glowRings: List<GoalGlow.Ring> = emptyList()
+    private var glowKey = 0L    // (level, room in px) the cached rings were made for
     private val sparkTick = object : Runnable {
         override fun run() {
             if (!sparkRunning) return
@@ -189,19 +193,37 @@ class BarView(ctx: Context) : View(ctx) {
         refreshSparks()
     }
 
-    /** Draws the sparks into the host's coordinates, over the bar's top edge; computed at draw time, so a moved bar is followed. */
+    /**
+     * Draws the golden outline + glow round the bar and the sparks over its top edge, into the host's coordinates; computed at
+     * draw time, so a moved bar is followed. The glow may reach as far as the host has room round the bar.
+     */
     private inner class SparkDrawable(private val host: ViewGroup) : Drawable() {
         private val r = android.graphics.Rect()
-        /** Pixels per spark-dp: the sizes are for an 8 dp bar and follow the bar's real height. */
-        private val k get() = this@BarView.height / GoalSparks.BAR_DP
+        /**
+         * Pixels per spark-dp: the sizes are for an 8 dp bar and follow the bar's real height, but a taller bar (the 14 dp goal
+         * bar outside the battle) does not make the sparks and the glow bigger.
+         */
+        private val k get() = minOf(this@BarView.height.toFloat(), 8f * resources.displayMetrics.density) / GoalSparks.BAR_DP
+
+        /** Pixels the glow may reach beyond the bar: the smallest gap between the bar and the host's edges. */
+        private fun room(r: android.graphics.Rect): Int =
+            minOf(minOf(r.left, host.width - r.right), minOf(r.top, host.height - r.bottom)).coerceAtLeast(0)
+
+        /** The rings for the current level and room, made again only when one of them changes. */
+        private fun rings(room: Int): List<GoalGlow.Ring> {
+            val key = sparkLevel * 1_000_000L + room
+            if (key != glowKey) { glowKey = key; glowRings = GoalGlow.rings(sparkLevel, room / k) }
+            return glowRings
+        }
 
         /** Moves the drawn area to where the bar is now and asks the host to redraw it. */
         fun refresh() {
             if (this@BarView.width == 0 || this@BarView.height == 0 || !host.isAttachedToWindow) return
             r.set(0, 0, this@BarView.width, this@BarView.height)
             host.offsetDescendantRectToMyCoords(this@BarView, r)
-            val pad = (GoalSparks.MAX_RADIUS * k).toInt() + 2
-            sparkRect.set(r.left - pad, r.top - (GoalSparks.maxRise(3) * k).toInt() - pad, r.right + pad, r.top + pad)
+            val glow = (GoalGlow.extent(sparkLevel) * k).toInt().coerceAtMost(room(r))
+            val pad = maxOf((GoalSparks.MAX_RADIUS * k).toInt(), glow) + 2
+            sparkRect.set(r.left - pad, r.top - maxOf((GoalSparks.maxRise(3) * k).toInt(), glow) - pad, r.right + pad, r.bottom + glow + 2)
             bounds = sparkRect
             invalidateSelf()
         }
@@ -210,6 +232,14 @@ class BarView(ctx: Context) : View(ctx) {
             if (this@BarView.width == 0 || this@BarView.height == 0 || sparkLevel == 0) return
             r.set(0, 0, this@BarView.width, this@BarView.height)
             host.offsetDescendantRectToMyCoords(this@BarView, r)
+            for (g in rings(room(r))) {
+                val o = g.outset * k
+                glowPaint.color = g.color
+                glowPaint.alpha = (g.alpha.coerceIn(0f, 1f) * 255f + 0.5f).toInt()
+                glowPaint.strokeWidth = g.width * k
+                glowRect.set(r.left - o, r.top - o, r.right + o, r.bottom + o)
+                canvas.drawRoundRect(glowRect, r.height() / 2f + o, r.height() / 2f + o, glowPaint)
+            }
             val t = if (sparksStill()) null else SystemClock.uptimeMillis()
             for (sp in GoalSparks.frame(sparkLevel, t)) {
                 sparkPaint.color = sp.color

@@ -5,6 +5,7 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import com.husarp.ankigo.data.Mirror
 import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.overlay.FloatBattleService
 import com.husarp.ankigo.remind.GameFactsWriter
@@ -29,6 +30,7 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
         super.onCreate()
         Report.init(this)
         GameLog.init(this)
+        Mirror.init(this)
         registerActivityLifecycleCallbacks(this)
         GameRepo.addListener { if (backgroundRequested) main.post(leave) }
         GameRepo.addListener { GameFactsWriter.changed(this) } // the reminders' small snapshot of the game (PLAN 85)

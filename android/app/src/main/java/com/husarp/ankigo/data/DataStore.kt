@@ -180,7 +180,7 @@ object DataStore {
         val min = MIN_SIZE[name] ?: MIN_CSV_SIZE
         repeat(TRIES) { attempt ->
             try {
-                val b = Http.get(url, 30_000, progress)
+                val b = Mirror.get(url, 30_000, progress)
                 if (b == null) Report.log(TAG, "$name: not found (try ${attempt + 1})")
                 else if (b.size < min) Report.log(TAG, "$name: only ${b.size} bytes, expected more than $min (try ${attempt + 1})")
                 else return b
@@ -237,6 +237,54 @@ object Http {
                         }
                         out.toByteArray()
                     }
+                }
+            } finally {
+                c.disconnect()
+            }
+        }
+        throw java.io.IOException("too many redirects for $url")
+    }
+
+    /**
+     * Exactly [length] bytes at [offset] of [url] (a Range request; a pack of the assets mirror). null on 404/410; IOException on
+     * anything else, including a 200 answer (the server ignored the range: its body is never read) or a wrong Content-Range.
+     * Redirects are followed by hand so the Range header goes along on every hop. [progress] gets (bytes read, length) while the body is read.
+     */
+    fun getRange(url: String, offset: Long, length: Int, timeoutMs: Int = 20_000, progress: ((Long, Long) -> Unit)? = null): ByteArray? {
+        require(offset >= 0 && length > 0)
+        var u = url
+        repeat(5) {
+            val c = java.net.URL(u).openConnection() as java.net.HttpURLConnection
+            try {
+                c.connectTimeout = timeoutMs; c.readTimeout = timeoutMs
+                c.instanceFollowRedirects = false
+                c.setRequestProperty("User-Agent", DataStore.USER_AGENT)
+                c.setRequestProperty("Accept-Encoding", "identity")
+                c.setRequestProperty("Range", "bytes=$offset-${offset + length - 1}")
+                val code = c.responseCode
+                when {
+                    code == 404 || code == 410 -> return null
+                    code in 300..399 -> {
+                        val loc = c.getHeaderField("Location") ?: throw java.io.IOException("HTTP $code without Location for $u")
+                        u = java.net.URL(java.net.URL(u), loc).toString()
+                    }
+                    code == 206 -> {
+                        val cr = c.getHeaderField("Content-Range")
+                        val start = cr?.let { Regex("""^bytes (\d+)-(\d+)/""").find(it.trim())?.groupValues?.get(1)?.toLongOrNull() }
+                        if (start != offset) throw java.io.IOException("Content-Range '$cr' does not start at $offset for $u")
+                        val out = ByteArray(length)
+                        c.inputStream.use { inp ->
+                            var got = 0
+                            while (got < length) {
+                                val n = inp.read(out, got, minOf(32 * 1024, length - got))
+                                if (n < 0) throw java.io.EOFException("range body ended after $got of $length bytes for $u")
+                                got += n
+                                progress?.invoke(got.toLong(), length.toLong())
+                            }
+                        }
+                        return out
+                    }
+                    else -> throw java.io.IOException("HTTP $code for range of $u")
                 }
             } finally {
                 c.disconnect()

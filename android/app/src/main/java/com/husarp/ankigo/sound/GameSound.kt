@@ -9,7 +9,7 @@ import android.os.Looper
 import android.os.SystemClock
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.Report
-import com.husarp.ankigo.data.Http
+import com.husarp.ankigo.data.Mirror
 import com.husarp.ankigo.data.Sprites
 import com.husarp.ankigo.game.GameEvent
 import java.io.File
@@ -214,7 +214,7 @@ object GameSound {
         if (store.cached(species) != null || store.knownMissing(species) || !fetching.add(species)) return
         io.execute {
             try {
-                store.fetch(species) { url -> Http.get(url) }?.let { f -> if (CryDecoder.stored(c, species) == null) CryDecoder.measureAndStore(c, species, f) }
+                store.fetch(species) { url -> Mirror.get(url) }?.let { f -> if (CryDecoder.stored(c, species) == null) CryDecoder.measureAndStore(c, species, f) }
             } catch (t: Throwable) {
                 Report.fail(TAG, "cry $species", t)
             } finally {

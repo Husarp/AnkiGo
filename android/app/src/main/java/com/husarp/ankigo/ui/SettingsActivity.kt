@@ -629,13 +629,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         content.addView(Form.cardOf(this, listOf(
             Form.switchRow(this, "Stat card under its own Pokémon", "Off: the classic game layout, each card on the opposite side",
                 AppPrefs.cardsUnderOwn(this)) { AppPrefs.setCardsUnderOwn(this, it) },
-            Form.switchRow(this, "Same size as the wild one", "Your Pokémon is not drawn bigger than the wild one",
-                AppPrefs.playerSameSize(this)) { AppPrefs.setPlayerSameSize(this, it) },
             Form.switchRow(this, "XP animation", "Sparks fly into your Pokémon when it gains XP",
                 AppPrefs.xpAnimation(this)) { AppPrefs.setXpAnimation(this, it) },
             Form.switchRow(this, "Attack animations", "Each move plays its own animation; off: a simple step and shake",
                 AppPrefs.attackAnimations(this)) { AppPrefs.setAttackAnimations(this, it) },
-            Form.switchRow(this, "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (~8 KB each); off: plain",
+            Form.switchRow(this, "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (8–400 KB each); off: plain",
                 AppPrefs.backgroundPictures(this)) { AppPrefs.setBackgroundPictures(this, it) },
         )))
         content.addView(Form.sect(this, "Small battle windows"))
@@ -1119,7 +1117,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). " +
                 "Attack effects: Kenney Particle Pack (CC0) and Pokémon Showdown effect images (CC0); Ember and Vine Whip pixel art drawn for AnkiGo. " +
                 "Streak flame: animated Noto Emoji by Google (CC BY 4.0, resized). " +
-                "Battle backgrounds are downloaded from Pokémon Showdown (art by Smogon artists) and are not part of the app.", 12, R.color.ag_sub0), Form.lp(this, 6))
+                "Battle backgrounds: Pokémon Showdown's (art by Smogon artists) and scenes made for AnkiGo, downloaded when needed, not part of the app. " +
+                "Pictures, cries and game data come from AnkiGo's own copy on GitHub first and from the original sites second.", 12, R.color.ag_sub0), Form.lp(this, 6))
         return box
     }
 

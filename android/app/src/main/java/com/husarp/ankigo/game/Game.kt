@@ -189,7 +189,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return listOf(
             GameEvent.Encounter(
                 wild.species, wild.name, wild.level, wild.shiny, roll.tier,
-                wild.hp, encounterHp, willCatch(), newSpecies,
+                wild.hp, encounterHp, willCatch(), newSpecies, wild.uid,
             ),
         )
     }

@@ -362,7 +362,6 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         compactCards = AppPrefs.compactCards(context)
         cardsOwn = AppPrefs.cardsUnderOwn(context)
         arena.cardsUnderOwn = cardsOwn
-        arena.playerSameSize = AppPrefs.playerSameSize(context)
         applied = null
         requestLayout()
     }
@@ -845,7 +844,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val sp = data.species[w.species]
         arena.setEnemyShown(true)
         arena.setEnemyInfo(w.name, w.level, w.shiny, sp?.types.orEmpty())
-        arena.setBackdrop(sp?.types.orEmpty(), w.species)   // R7-07: a restart / PiP / floating window shows the same picture
+        arena.setBackdrop(sp?.types.orEmpty(), BackdropCatalog.seed(w.uid), BackdropCatalog.isLegendary(sp))   // R8-03: a restart / PiP / floating window shows the same picture
         arena.setEnemyStatus(b.enemy.status)
         arena.setEnemyHp(w.hp, if (sp != null) b.maxWildHp(data) else max(w.hp, 1), false)
         arena.setNewTag(w.species !in st.caught)

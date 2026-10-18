@@ -571,7 +571,7 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
         arena.setEnemyShown(true)
         arena.setEnemyCardShown(true)
         arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty())
-        arena.setBackdrop(sp?.types.orEmpty(), e.species)   // R7-07: the battle picture for this wild Pokémon's type
+        arena.setBackdrop(sp?.types.orEmpty(), BackdropCatalog.seed(e.wildUid), BackdropCatalog.isLegendary(sp))   // R8-03: one of the pictures for this wild Pokémon's type, random per encounter
         arena.setEnemyHp(e.hp, e.maxHp, false)
         arena.setNewTag(e.newSpecies)
         if (sp != null) {

@@ -25,10 +25,14 @@ sealed class GameEvent {
     data class DayChanged(val day: String) : GameEvent()
 
     // ---- battle ----
-    /** A new wild Pokémon appeared. [willCatch] = what the auto rule will do when it faints. */
+    /**
+     * A new wild Pokémon appeared. [willCatch] = what the auto rule will do when it faints. [wildUid] = its uid (round 8: the
+     * battle background is picked from it, so one fight keeps one picture; "" = not known).
+     */
     data class Encounter(
         val species: Int, val name: String, val level: Int, val shiny: Boolean, val tier: Tier,
         val hp: Int, val maxHp: Int, val willCatch: Boolean, val newSpecies: Boolean,
+        val wildUid: String = "",
     ) : GameEvent()
 
     /** A round starts. [enemyActs] is false when the multiplier is 1 or more (the wild one uses Splash). */

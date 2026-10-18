@@ -5,35 +5,41 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
 import android.os.Looper
+import com.husarp.ankigo.ui.Backdrop
+import com.husarp.ankigo.ui.BackdropBlur
+import com.husarp.ankigo.ui.BackdropSource
 import java.io.File
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
 /**
- * Round 7 battle backgrounds: the 14 Pokémon Showdown arena pictures, downloaded on demand (never in the repo or the APK) into
- * `Sprites.dir(ctx)/bg/<name>.png`, so the Downloads size and "clear pictures" include them. Only while "Download pictures as
- * needed" and the background-pictures setting are both on ([allowed]); a missing picture is the plain gradient.
- * The pure parts (names, URL, file, gate) are unit-tested; [load] decodes off the main thread and keeps at most [KEEP] bitmaps.
+ * Battle backgrounds (round 8: the 31 pictures of [com.husarp.ankigo.ui.BackdropCatalog]), downloaded on demand (never in the repo
+ * or the APK) into `Sprites.dir(ctx)/bg/<id>.<ext>`, so the Downloads size and "clear pictures" include them. Showdown's come from
+ * `fx/bg-<id>.png` (the AnkiGo mirror first, [Mirror.get]), Adam's own from the `assets-1` release ([Mirror.ownUrl]). Only while
+ * "Download pictures as needed" and the background-pictures setting are both on ([allowed]); a missing picture is the plain gradient.
+ * The pure parts (URL, file, gate, blur maths in [BackdropBlur]) are unit-tested; [load] decodes off the main thread, makes the
+ * blurred copy there too, and keeps at most [KEEP] pictures (each with its blur) in memory.
  */
 object Backdrops {
-    /** The pictures used (Showdown's `fx/bg-<name>.png`); [com.husarp.ankigo.ui.BackdropRules] decides which Pokémon gets which. */
-    val NAMES = listOf(
-        "beach", "beachshore", "city", "dampcave", "deepsea", "desert", "earthycave",
-        "forest", "icecave", "meadow", "mountain", "river", "route", "volcanocave",
-    )
-
-    private const val BASE = "https://play.pokemonshowdown.com/fx/"
-
-    /** Memory kept: the picture on screen and one more (a bitmap is about 1.5 MB). */
+    /** Memory kept: the picture on screen and one more (a bitmap is about 1.5 MB; the blur is a few KB). */
     internal const val KEEP = 2
 
     /** Like the sprites that must exist: a "not found" note is tried again within the hour (a hiccup, not a missing file). */
     private const val RETRY_MS = 3600L * 1000
 
-    fun url(name: String) = "${BASE}bg-$name.png"
+    private const val SHOWDOWN_BASE = "https://play.pokemonshowdown.com/fx/"
 
-    /** Where [name] is (or will be) saved under the sprite folder [spritesDir]. */
-    fun file(spritesDir: File, name: String) = File(File(spritesDir, "bg"), "$name.png")
+    /** Showdown's URL of its picture called [name] (`fx/bg-<name>.png`). */
+    fun url(name: String) = "${SHOWDOWN_BASE}bg-$name.png"
+
+    /** Where [bg] is downloaded from: Showdown's `fx/bg-<id>.png`, or AnkiGo's own release file `bg-<id>.<ext>`. */
+    fun url(bg: Backdrop): String = when (bg.source) {
+        BackdropSource.SHOWDOWN -> url(bg.id)
+        BackdropSource.OWN -> Mirror.ownUrl("bg-${bg.id}.${bg.ext}")
+    }
+
+    /** Where [bg] is (or will be) saved under the sprite folder [spritesDir]: `bg/<id>.<ext>` (round 7's Showdown files are the same names). */
+    fun file(spritesDir: File, bg: Backdrop) = File(File(spritesDir, "bg"), "${bg.id}.${bg.ext}")
 
     /** Pictures show and download only with sprite downloads on AND the background setting on. */
     fun allowed(spritesOn: Boolean, picturesOn: Boolean) = spritesOn && picturesOn
@@ -42,17 +48,17 @@ object Backdrops {
     internal var pool: Executor = Executor { r -> realPool.execute(r) }
     private val realPool by lazy { Executors.newSingleThreadExecutor { r -> Thread(r, "backdrops").apply { isDaemon = true } } }
 
-    /** The HTTP GET; a var only so tests and the design screenshots never touch the network. */
-    internal var get: HttpGet = { url, progress -> Http.get(url, progress = progress) }
+    /** The HTTP GET (the mirror first, the original second); a var only so tests and the design screenshots never touch the network. */
+    internal var get: HttpGet = { url, progress -> Mirror.get(url, progress = progress) }
 
     private val main by lazy { Handler(Looper.getMainLooper()) }
-    private val memory = object : LinkedHashMap<String, Bitmap>(4, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Bitmap>) = size > KEEP
+    private val memory = object : LinkedHashMap<String, BackdropPic>(4, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, BackdropPic>) = size > KEEP
     }
-    private val inflight = HashMap<String, MutableList<(Bitmap?) -> Unit>>()
+    private val inflight = HashMap<String, MutableList<(BackdropPic?) -> Unit>>()
 
-    /** The decoded picture if it is in memory right now (main thread), else null. */
-    fun inMemory(name: String): Bitmap? = synchronized(memory) { memory[name] }
+    /** The decoded picture (with its blur) if it is in memory right now, else null. */
+    fun inMemory(bg: Backdrop): BackdropPic? = synchronized(memory) { memory[bg.id] }
 
     /** Bumped by [forget]: a load that started in an older generation neither stores its picture nor calls back. */
     private var generation = 0
@@ -63,55 +69,70 @@ object Backdrops {
         synchronized(inflight) { inflight.clear() }
     }
 
-    /** Stores [bmp] and hands back the waiting callbacks, unless [gen] is no longer current (then null: drop everything). */
-    internal fun finish(gen: Int, name: String, bmp: Bitmap?): List<(Bitmap?) -> Unit>? {
+    /** Stores [pic] and hands back the waiting callbacks, unless [gen] is no longer current (then null: drop everything). */
+    internal fun finish(gen: Int, id: String, pic: BackdropPic?): List<(BackdropPic?) -> Unit>? {
         synchronized(memory) {
             if (gen != generation) return null
-            if (bmp != null) memory[name] = bmp
+            if (pic != null) memory[id] = pic
         }
-        return synchronized(inflight) { inflight.remove(name) }.orEmpty()
+        return synchronized(inflight) { inflight.remove(id) }.orEmpty()
     }
 
     internal fun currentGeneration() = synchronized(memory) { generation }
 
     /**
-     * Calls back on the main thread with the decoded picture, or null (not downloaded and [download] off, not found, network
-     * trouble, unreadable file). The file comes from the cache, else from the network when [download] says so.
+     * Calls back on the main thread with the decoded picture and its blurred copy, or null (not downloaded and [download] off, not
+     * found, network trouble, unreadable file). The file comes from the cache, else from the network when [download] says so.
      */
-    fun load(ctx: Context, name: String, download: Boolean, cb: (Bitmap?) -> Unit) {
-        inMemory(name)?.let { main.post { cb(it) }; return }
+    fun load(ctx: Context, bg: Backdrop, download: Boolean, cb: (BackdropPic?) -> Unit) {
+        inMemory(bg)?.let { main.post { cb(it) }; return }
         val first: Boolean
         synchronized(inflight) {
-            val waiting = inflight[name]
-            if (waiting != null) { waiting.add(cb); first = false } else { inflight[name] = mutableListOf(cb); first = true }
+            val waiting = inflight[bg.id]
+            if (waiting != null) { waiting.add(cb); first = false } else { inflight[bg.id] = mutableListOf(cb); first = true }
         }
         if (!first) return
         val dir = Sprites.dir(ctx)
         val gen = currentGeneration()
         pool.execute {
-            val bmp = try { fetchBlocking(dir, name, download, get) } catch (_: Throwable) { null }
-            val callbacks = finish(gen, name, bmp) ?: return@execute
-            main.post { callbacks.forEach { it(bmp) } }
+            val pic = try { fetchBlocking(dir, bg, download, get) } catch (_: Throwable) { null }
+            val callbacks = finish(gen, bg.id, pic) ?: return@execute
+            main.post { callbacks.forEach { it(pic) } }
         }
     }
 
-    /** The cached file, else (when [download]) the downloaded one, decoded; null if there is none. Background threads only. */
-    internal fun fetchBlocking(spritesDir: File, name: String, download: Boolean, get: HttpGet): Bitmap? {
-        val cached = file(spritesDir, name)
-        val f = cached.takeIf { it.isFile } ?: if (download) fetchFile(spritesDir, name, get) else null
+    /** The cached file, else (when [download]) the downloaded one, decoded and blurred; null if there is none. Background threads only. */
+    internal fun fetchBlocking(spritesDir: File, bg: Backdrop, download: Boolean, get: HttpGet): BackdropPic? {
+        val cached = file(spritesDir, bg)
+        val f = cached.takeIf { it.isFile } ?: if (download) fetchFile(spritesDir, bg, get) else null
         f ?: return null
         val bmp = decode(f)
-        if (bmp == null) f.delete() // a damaged file: gone, so the next try downloads it again
-        return bmp
+        if (bmp == null) { f.delete(); return null } // a damaged file: gone, so the next try downloads it again
+        return try { BackdropPic(bmp, makeBlur(bmp)) } catch (_: Throwable) { null }
     }
 
-    /** Downloads [name] through the sprite downloader (PNG check, size limit, "not found" note); the file or null. */
-    internal fun fetchFile(spritesDir: File, name: String, get: HttpGet): File? =
-        Sprites.download(File(File(spritesDir, "bg"), name), listOf(url(name)), get = get, retryMissingMs = RETRY_MS)
+    /** Downloads [bg] through the sprite downloader (PNG / WebP check, size limit, "not found" note); the file or null. */
+    internal fun fetchFile(spritesDir: File, bg: Backdrop, get: HttpGet): File? =
+        Sprites.download(File(File(spritesDir, "bg"), bg.id), listOf(url(bg)), get = get, retryMissingMs = RETRY_MS)
 
     private fun decode(f: File): Bitmap? = try {
         val o = BitmapFactory.Options().apply { inScaled = false; inPreferredConfig = Bitmap.Config.ARGB_8888 }
         val bytes = f.readBytes()
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
     } catch (_: Exception) { null }
+
+    /** The blurred, darkened little copy ([BackdropBlur]): scaled down (filtered), blurred on the pixels, back into a bitmap. */
+    private fun makeBlur(bmp: Bitmap): Bitmap {
+        val (w, h) = BackdropBlur.smallSize(bmp.width, bmp.height)
+        val small = if (w == bmp.width && h == bmp.height) bmp else Bitmap.createScaledBitmap(bmp, w, h, true)
+        val px = IntArray(w * h)
+        small.getPixels(px, 0, w, 0, 0, w, h)
+        if (small !== bmp) small.recycle()
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        out.setPixels(BackdropBlur.process(px, w, h), 0, w, 0, 0, w, h)
+        return out
+    }
 }
+
+/** A decoded background and its blurred, darkened copy ([BackdropBlur]; a few KB), kept and dropped together. */
+class BackdropPic(val bitmap: Bitmap, val blur: Bitmap)

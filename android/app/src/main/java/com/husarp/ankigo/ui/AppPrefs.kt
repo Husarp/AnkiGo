@@ -104,11 +104,6 @@ object AppPrefs {
 
     fun setCardsUnderOwn(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("cardsUnderOwn", on).apply()
 
-    /** Our Pokémon's sprite box is as big as the wild one's, not enlarged (Settings → Battle). Default off. */
-    fun playerSameSize(ctx: Context): Boolean = prefs(ctx).getBoolean("playerSameSize", false)
-
-    fun setPlayerSameSize(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("playerSameSize", on).apply()
-
     /**
      * The facing of our Pokémon in every battle view: true = its front sprite, mirrored to face the wild one; false = the back
      * sprite. Set by a swipe across the Pokémon (no Settings row since 0.15; installs that had the old switch on start facing

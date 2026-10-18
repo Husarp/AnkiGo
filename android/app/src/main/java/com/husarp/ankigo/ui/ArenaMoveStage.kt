@@ -78,10 +78,11 @@ class ArenaMoveStage(
 
         /**
          * Centre of the DRAWN image of a sprite view at ([holderLeft], [holderTop]) of the arena, [viewW] x [viewH] big, whose image
-         * ([drawnH] high) SpriteView draws bottom-centred. Returns (x, y); no bob or pose translation is counted.
+         * ([drawnH] high) SpriteView draws bottom-centred. [bottomInset] = how far the image reaches below the view's bottom when the
+         * feet are anchored ([SpriteView.drawnBottomInset]; 0 otherwise). Returns (x, y); no bob or pose translation is counted.
          */
-        fun centre(holderLeft: Float, holderTop: Float, viewW: Float, viewH: Float, drawnH: Float): Pair<Float, Float> =
-            Pair(holderLeft + viewW / 2f, holderTop + viewH - drawnH / 2f)
+        fun centre(holderLeft: Float, holderTop: Float, viewW: Float, viewH: Float, drawnH: Float, bottomInset: Float = 0f): Pair<Float, Float> =
+            Pair(holderLeft + viewW / 2f, holderTop + viewH + bottomInset - drawnH / 2f)
 
         /**
          * How long the event player waits after an animated attack: the look's own end, but at least [impactMs] plus 500 ms of the

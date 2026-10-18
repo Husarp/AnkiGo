@@ -250,18 +250,17 @@ internal object ArenaGeo {
      * (BESIDE, short ones); not [own]: the classic corners. What does not fit gives the middle layout. One rule from
      * picture-in-picture to tablet, and it also grows: the sprites' scale `a` goes from the mockup's size up to 40 % of
      * the arena's height (60 % of its width, at most 4), the cards' scale `k` up to 1.4. The first (a, k) that fits wins:
-     * biggest sprites first, then biggest cards. [same]: our sprite box is the wild one's size (110 x 100) instead of 140 x 128;
-     * the wild one and the search stay as they are, so only our side gets more room.
+     * biggest sprites first, then biggest cards. Our sprite box is the enlarged 140 x 128 one.
      */
-    fun plan(w: Float, h: Float, c: Cards, compact: Boolean, own: Boolean = true, same: Boolean = false): Plan {
+    fun plan(w: Float, h: Float, c: Cards, compact: Boolean, own: Boolean = true): Plan {
         val ref = refH(compact)
         val base = (h / ref).coerceIn(0.66f, 1.5f)
         val aMax = max(base, min(0.4f * h / 128f, min(0.6f * w / 140f, 4f)))
         val k0 = min(w / 300f, h / 430f).coerceIn(1f, 1.4f)
         val low = min(base, A_CORNERS)
-        val found = if (own) search(aMax, low, k0) { a, k -> under(w, h, c, a, k, same) } ?: search(aMax, low, k0) { a, k -> beside(w, h, c, ref, a, k, same) }
-        else search(aMax, low, k0) { a, k -> corners(w, h, c, ref, a, k, same) }
-        return found ?: middle(w, h, c, ref, same)
+        val found = if (own) search(aMax, low, k0) { a, k -> under(w, h, c, a, k) } ?: search(aMax, low, k0) { a, k -> beside(w, h, c, ref, a, k) }
+        else search(aMax, low, k0) { a, k -> corners(w, h, c, ref, a, k) }
+        return found ?: middle(w, h, c, ref)
     }
 
     /** The first plan that fits, sprite scale from [aMax] down to [aMin] (steps of 0.05), for each of those the card scale from [k0] down to 1. */
@@ -295,31 +294,31 @@ internal object ArenaGeo {
     /** Sprite holders and platforms of the classic look: the wild one at the right, ours bottom-left; the wild one sits a bit lower in tall arenas. */
     private class Sprites(val wild: Box, val player: Box, val wildPlat: Box, val playerPlat: Box)
 
-    private fun classic(w: Float, h: Float, ref: Float, a: Float, same: Boolean): Sprites {
+    private fun classic(w: Float, h: Float, ref: Float, a: Float): Sprites {
         val down = max(0f, h - ref * a) * 0.35f
         return Sprites(
             Box(w - 42f * a - 110f * a, 12f * a + down, 110f * a, 100f * a),
-            Box(22f * a, h - 6f * a - playerH(same) * a, playerW(same) * a, playerH(same) * a),
+            Box(22f * a, h - 6f * a - PLAYER_H * a, PLAYER_W * a, PLAYER_H * a),
             Box(w - 22f * a - 150f * a, 92f * a + down, 150f * a, 30f * a),
-            Box(4f * a, h + 8f * a - 40f * a, 180f * a * (playerW(same) / 140f), 40f * a),
+            Box(4f * a, h + 8f * a - 40f * a, 180f * a * (PLAYER_W / 140f), 40f * a),
         )
     }
 
-    /** Our sprite holder in the mockup's dp: enlarged (140 x 128) or, with [same], the wild one's size. */
-    private fun playerW(same: Boolean) = if (same) 110f else 140f
-    private fun playerH(same: Boolean) = if (same) 100f else 128f
+    /** Our sprite holder in the mockup's dp: the enlarged one. */
+    private const val PLAYER_W = 140f
+    private const val PLAYER_H = 128f
 
     /** The mockup's look: wild card top-left, ours bottom-right, the cards [k] times bigger. */
-    private fun corners(w: Float, h: Float, c: Cards, ref: Float, a: Float, k: Float, same: Boolean): Plan {
-        val s = classic(w, h, ref, a, same)
+    private fun corners(w: Float, h: Float, c: Cards, ref: Float, a: Float, k: Float): Plan {
+        val s = classic(w, h, ref, a)
         val wild = Box(10f, 10f, c.wildW * k, c.wildH * k)
         val player = Box(w - 10f - c.playerW * k, h - 12f - c.playerH * k, c.playerW * k, c.playerH * k)
         return Plan(Layout.CORNERS, clear(w, h, wild, player, s.wild, s.player), wild, player, s.wild, s.player, s.wildPlat, s.playerPlat, a, k)
     }
 
     /** Short arenas: the classic sprites, each card beside its own Pokémon (the wild card in the top row to the left of it, ours in the bottom row to the right of it). */
-    private fun beside(w: Float, h: Float, c: Cards, ref: Float, a: Float, k: Float, same: Boolean): Plan {
-        val s = classic(w, h, ref, a, same)
+    private fun beside(w: Float, h: Float, c: Cards, ref: Float, a: Float, k: Float): Plan {
+        val s = classic(w, h, ref, a)
         val cw = c.wildW * k
         val pw = c.playerW * k
         val wild = Box(max(10f, s.wild.art().x - 6f - cw), 10f, cw, c.wildH * k)
@@ -331,16 +330,16 @@ internal object ArenaGeo {
      * Tall arenas: the wild sprite top-right with its card right-aligned right under it; our card bottom-left with our
      * sprite right above it. Free height between the two groups moves the wild one down by 30 % of it.
      */
-    private fun under(w: Float, h: Float, c: Cards, a: Float, k: Float, same: Boolean): Plan {
+    private fun under(w: Float, h: Float, c: Cards, a: Float, k: Float): Plan {
         val cw = c.wildW * k
         val ch = c.wildH * k
         val player = Box(UNDER_EDGE, h - UNDER_EDGE - c.playerH * k, c.playerW * k, c.playerH * k)
-        val playerSprite = Box(UNDER_EDGE, player.y - 4f - playerH(same) * a, playerW(same) * a, playerH(same) * a)
+        val playerSprite = Box(UNDER_EDGE, player.y - 4f - PLAYER_H * a, PLAYER_W * a, PLAYER_H * a)
         val extra = playerSprite.art().y - (UNDER_EDGE + 100f * a + 4f + ch) - 6f
         val wildSprite = Box(w - UNDER_EDGE - 110f * a, UNDER_EDGE + max(0f, extra) * 0.3f, 110f * a, 100f * a)
         val wild = Box(w - UNDER_EDGE - cw, wildSprite.bottom + 4f, cw, ch)
         val wildPlat = Box(wildSprite.x - 20f * a, wildSprite.y + 80f * a, 150f * a, 30f * a)
-        val playerPlat = Box(playerSprite.x - 20f * a, playerSprite.bottom - 32f * a, 180f * a * (playerW(same) / 140f), 40f * a)
+        val playerPlat = Box(playerSprite.x - 20f * a, playerSprite.bottom - 32f * a, 180f * a * (PLAYER_W / 140f), 40f * a)
         return Plan(Layout.UNDER, clear(w, h, wild, player, wildSprite, playerSprite), wild, player, wildSprite, playerSprite, wildPlat, playerPlat, a, k)
     }
 
@@ -348,12 +347,12 @@ internal object ArenaGeo {
      * Our sprite at the left, the wild one at the right, both cards stacked in the middle column between them (wild card
      * on top). The sprites shrink (together) until the column and the sprites fit side by side.
      */
-    private fun middle(w: Float, h: Float, c: Cards, ref: Float, same: Boolean = false): Plan {
+    private fun middle(w: Float, h: Float, c: Cards, ref: Float): Plan {
         val cw = max(c.wildW, c.playerW)
         val side = w - cw - 2f * MID_EDGE - 2f * MID_GAP
-        val a = min(min((h / ref).coerceIn(0.66f, 1.5f), side / (playerW(same) + 110f)), h / (playerH(same) + 6f))
+        val a = min(min((h / ref).coerceIn(0.66f, 1.5f), side / (PLAYER_W + 110f)), h / (PLAYER_H + 6f))
         val down = max(0f, h - ref * a) * 0.75f
-        val playerSprite = Box(MID_EDGE, h - 6f * a - playerH(same) * a, playerW(same) * a, playerH(same) * a)
+        val playerSprite = Box(MID_EDGE, h - 6f * a - PLAYER_H * a, PLAYER_W * a, PLAYER_H * a)
         val wildSprite = Box(w - MID_EDGE - 110f * a, 12f * a + down, 110f * a, 100f * a)
         val stack = c.wildH + 6f + c.playerH
         val left = playerSprite.right + MID_GAP
