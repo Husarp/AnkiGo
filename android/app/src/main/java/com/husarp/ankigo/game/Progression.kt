@@ -260,8 +260,15 @@ object Progression {
         mon.name = sp.name
         mon.hp = StatCalc.maxHp(data, mon)
         if (sp.abilities.isNotEmpty()) mon.ability = sp.abilities[rng.nextInt(sp.abilities.size)]
+        val wasSeen = sp.num in state.seen; val wasCaught = sp.num in state.caught
         state.seen += sp.num
         state.caught += sp.num
+        // R9-W4-B: the starter's new form is not a find (the evolution itself counts); any other Pokémon evolving into it is.
+        if (mon.uid == state.starterUid) {
+            if (!wasSeen) state.starterSeen += sp.num
+            if (!wasCaught) state.starterCaught += sp.num
+        } else { state.starterSeen -= sp.num; state.starterCaught -= sp.num }
+        Wishlist.onCaught(state, sp.num)
         state.evolutions++
         events += GameEvent.Evolved(mon.uid, from, sp.name, sp.num)
         for (m in sp.levelMoves.filter { it.level == 0 }.map { it.move }.distinct()) learnMove(data, mon, m, events)
@@ -365,6 +372,8 @@ object Catching {
         if (toTeam) state.team += mon.uid
         state.markSeen(mon.species, now)
         state.caught += mon.species
+        state.starterCaught -= mon.species; state.starterSeen -= mon.species // R9-W4-B: a real catch of the starter's species
+        Wishlist.onCaught(state, mon.species) // caught now: it leaves the wishlist (this fight's plan was made already)
         state.catches++
         events += GameEvent.Caught(mon.uid, mon.species, mon.name, mon.level, mon.shiny, ball, newSpecies, toTeam)
         Badges.award(state, 7, events, now)

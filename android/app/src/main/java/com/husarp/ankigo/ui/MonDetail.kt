@@ -160,7 +160,7 @@ object MonDetail {
             DetailSections.statsBody(a, stats, mon.level, mon.nature, sp, compact)
         })
         col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves") { DetailSections.moves(a, data, mon.moves, compact) })
-        col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types) })
+        col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, mon.shownName) })
         col.addView(DetailSections.section(a, mem, DetailSection.TRAINING, mon.nature.label) { DetailSections.training(a, mon, compact) })
         val others = DetailFormat.otherAbilities(sp, mon.ability)
         col.addView(DetailSections.infoSection(a, mem, data, sp,
@@ -170,28 +170,19 @@ object MonDetail {
             lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–"),
             onTap = if (page != null) { s -> DexDetail.show(page, s) } else null))
 
-        if (page == null) { Pickers.info(a, "Details", Bits.scroll(a, col)); return }
+        if (page == null) { Pickers.info(a, "Details", DetailSections.scroll(a, col)); return }
         lateinit var dlg: AppDialog
         lateinit var more: View
         more = DetailParts.secondaryButton(a, "More options") {
             // the menu hangs on this button, so the details close only once a row was tapped
             MonActions(page).menu(mon, more) { dlg.dismiss() }
         }
-        val margins = { it: LinearLayout.LayoutParams -> it.setMargins(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 4)) }
-        val box: View
-        if (compact) {
-            // little room: the button is the last thing of the scrolling content
-            col.addView(more, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 14) })
-            box = Bits.scroll(a, col)
-        } else {
-            // "More options" stays visible under the scrolling details
-            box = LinearLayout(a).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(Bits.scroll(a, col), LinearLayout.LayoutParams(-1, 0, 1f))
-                addView(more, LinearLayout.LayoutParams(-1, -2).also(margins))
-            }
+        // "More options" is pinned under the scrolling details (AppDialog footer, just above Close), compact or not
+        val pinned = FrameLayout(a).apply {
+            addView(more, FrameLayout.LayoutParams(-1, -2).also { it.setMargins(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 4)) })
         }
-        dlg = AppDialog.Builder(a).setTitle("Details").setView(box).setPositiveButton("Close", null).create()
+        dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col)).setFooter(pinned)
+            .setPositiveButton("Close", null).create()
         Pickers.show(dlg)
     }
 

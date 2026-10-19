@@ -3,39 +3,27 @@ package com.husarp.ankigo.study
 import org.junit.Assert.*
 import org.junit.Test
 
+/** The rule that tells a verified write (the write queue itself is tested in AnswerQueueTest / StudySimTest). */
 class StudyLoopTest {
     private val before = mapOf("_id" to "7", "reps" to "3", "due" to "1", "queue" to "2", "last_review_time_secs" to "100")
-    private class Fake(val initial: Map<String, String?>, var top: StudyLoop.Key? = StudyLoop.Key(1, 0)) : StudyLoop.Provider {
-        var writes = 0; var selections = 0; var reads = 0; var save = true
-        var row = initial
-        override fun select() { selections++ }
-        override fun top(): StudyLoop.Key? { reads++; return top }
-        override fun stats(key: StudyLoop.Key) = row
-        override fun answer(key: StudyLoop.Key, ease: Int, ms: Long) { writes++; if (save) row = row + mapOf("reps" to "4", "due" to "2") }
-    }
+
     @Test fun verifiesActualRowsAfterWrite() {
-        val p = Fake(before)
-        val result = StudyLoop(p).answer(StudyLoop.Key(1, 0), before, 3, 400)
-        assertEquals(StudyLoop.Status.SAVED, result.status)
-        assertEquals(1, p.writes); assertTrue(p.selections > 0); assertTrue(p.reads > 0)
-    }
-    @Test fun refusesStaleCard() {
-        val p = Fake(before, StudyLoop.Key(2, 0))
-        assertEquals(StudyLoop.Status.MOVED, StudyLoop(p).answer(StudyLoop.Key(1, 0), before, 3, 0).status)
-        assertEquals(0, p.writes)
-    }
-    @Test fun silentFailureIsRetriedOnceAndNeverSaved() {
-        val p = Fake(before).apply { save = false }
-        assertEquals(StudyLoop.Status.FAILED, StudyLoop(p).answer(StudyLoop.Key(1, 0), before, 3, 0).status)
-        assertEquals(2, p.writes)
+        assertTrue(StudyLoop.saved(before, before + mapOf("reps" to "4", "due" to "2")))
+        assertTrue("the queue change alone is enough next to the rep", StudyLoop.saved(before, before + mapOf("reps" to "4", "queue" to "1")))
+        assertTrue(StudyLoop.saved(before, before + mapOf("reps" to "4", "last_review_time_secs" to "200")))
     }
     @Test fun repChangeAloneCannotConfirmWrite() {
         assertFalse(StudyLoop.saved(before, before + ("reps" to "4")))
         assertFalse(StudyLoop.saved(before, before + ("due" to "2")))
     }
-    @Test fun alreadyChangedStateDoesNotWriteAgain() {
-        val p = Fake(before).apply { row = before + mapOf("reps" to "4", "due" to "2") }
-        assertEquals(StudyLoop.Status.MOVED, StudyLoop(p).answer(StudyLoop.Key(1, 0), before, 3, 0).status)
-        assertEquals(0, p.writes)
+    @Test fun unreadableOrOtherCardsAreNeverSaved() {
+        assertFalse(StudyLoop.saved(before, null))
+        assertFalse(StudyLoop.saved(before, before + mapOf("_id" to "8", "reps" to "4", "due" to "2")))
+        assertFalse("two reps at once is not one answer", StudyLoop.saved(before, before + mapOf("reps" to "5", "due" to "2")))
+        assertFalse(StudyLoop.saved(before - "reps", before + mapOf("reps" to "4", "due" to "2")))
+        assertFalse(StudyLoop.saved(before - "_id", before + mapOf("reps" to "4", "due" to "2")))
+    }
+    @Test fun anUnchangedCardIsNotSaved() {
+        assertFalse(StudyLoop.saved(before, before))
     }
 }

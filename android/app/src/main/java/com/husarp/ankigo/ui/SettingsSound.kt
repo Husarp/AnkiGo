@@ -32,7 +32,7 @@ internal fun soundCard(ctx: Context): View {
     ))
     val battle = card(R.drawable.ic_flame, "Battle", listOf(
         group("Battle effects", "Hits, faint, catch, level up, misses", SoundGroup.BATTLE, SoundId.HIT),
-        group("Status & moments", "Burn, poison, shiny, evolution, cash, goals", SoundGroup.MOMENTS, SoundId.STAT_UP),
+        group("Status & moments", "Burn, poison, shiny, evolution, XP, cash, goals", SoundGroup.MOMENTS, SoundId.STAT_UP),
         volume("Battle volume", SoundChannel.BATTLE),
     ))
     val cries = card(R.drawable.ic_sound, "Pokémon cries", listOf(

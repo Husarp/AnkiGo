@@ -36,6 +36,7 @@ import com.husarp.ankigo.Report
 import com.husarp.ankigo.ui.Form
 import com.husarp.ankigo.ui.GamePage
 import com.husarp.ankigo.ui.Pickers
+import com.husarp.ankigo.ui.SheetKit
 import com.husarp.ankigo.ui.Ui
 
 /**
@@ -506,7 +507,7 @@ internal class ReminderScreen(
     /** Shows [content] at the bottom of the window (an overlay window when the page is a floating card); [onClosed] runs when it goes. */
     private fun showSheet(content: View, onClosed: () -> Unit): Dialog {
         val dialog = Dialog(ctx).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
-        dialog.setContentView(content)
+        dialog.setContentView(SheetKit.dialog(dialog, content))
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))

@@ -44,7 +44,7 @@ class R4X1Shots {
 
     private fun page(ctx: Context, picks: List<ComparePick>, mode: CompareMode, fit: Int, seed: (CompareState) -> Unit = {}): ComparePage {
         CompareStore.saveMode(ctx, mode); CompareStore.saveRows(ctx, RowChoice()); CompareStore.saveFit(ctx, fit)
-        return ComparePage(ctx, NoHost, picks).also { it.onNewState = seed }
+        return ComparePage(ctx, NoHost, picks).also { it.onNewState = seed; it.fit = fit } // R9 C1: the screen starts on Auto, the shot sets what it shows
     }
 
     private fun resetFit() = CompareStore.saveFit(Shots.files(paparazzi.context), CompareFit.AUTO)

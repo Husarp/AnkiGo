@@ -51,9 +51,9 @@ class PanelFitTest {
     }
 
     @Test fun narrowPhoneScalesSlightlyForTheStatsBar() {
-        // the five chips need 376 dp: a 360 dp phone is drawn at 360 / 376
+        // the five chips need 366 dp (R9-B7: the streak chip has no box): a 360 dp phone is drawn at 360 / 366
         val f = fit(360, 800)
-        assertEquals(360f / 376f, f.scale, 0.005f)
+        assertEquals(360f / 366f, f.scale, 0.005f)
         assertEquals("SLX", kept(f))
         assertFalse(f.middle) // the sprites shrink a little so the corners still work
     }
@@ -191,12 +191,15 @@ class PanelFitTest {
         // measured on the real views at floor 8 (PanelFitShots.calibration keeps this honest at other floors)
         assertEquals(52.6f, PanelFit.Heights.log(2, 8f) - 8f, 0.3f)
         assertEquals(75f, PanelFit.Heights.footer(8f, true), 0.5f)
-        assertEquals(356f, PanelFit.Heights.chips(8f), 0.5f)
+        assertEquals(346f, PanelFit.Heights.chips(8f), 0.5f)
         val c = ArenaGeo.cards(8f, false, true)
-        assertEquals(87.4f, c.wildH, 0.5f)    // HP number beside the bar (R3-X1), the 14 dp status row under it
-        assertEquals(91.1f, c.playerH, 0.5f)  // ... and our XP line under the status row
-        assertEquals(166f, c.wildW, 0f)
-        assertEquals(170f, c.playerW, 0f)
+        assertEquals(59.4f, c.wildH, 0.5f)    // R9 D12-A: name line, number line, 7 dp bar; the status badge sits in the name line (no row)
+        assertEquals(74.7f, c.playerH, 0.5f)  // ... and our XP line (3 dp bar + its number) right under the bar
+        assertEquals(160f, c.wildW, 0f)
+        assertEquals(160f, c.playerW, 0f)
+        val inside = ArenaGeo.cards(8f, false, true, InfoBoxStyle.INSIDE)
+        assertEquals(51.1f, inside.wildH, 0.5f)    // D12-B: name line + the 14 dp bar with the number in it
+        assertEquals(64.1f, inside.playerH, 0.5f)  // ... + the 10 dp XP bar
     }
 
     // ---------------------------------------------------------------- cards: corners or the middle column
@@ -225,7 +228,7 @@ class PanelFitTest {
     }
 
     @Test fun shortArenaUsesTheMiddleColumn() {
-        for ((w, h) in listOf(412f to 200f, 477f to 200f, 573f to 200f, 377f to 200f, 344f to 200f)) {
+        for ((w, h) in listOf(412f to 170f, 477f to 170f, 573f to 170f, 377f to 170f, 344f to 170f)) {   // R9 D12: the boxes are 25 dp shorter, so the corners hold down to about 185 dp
             val p = plan(w, h)
             assertTrue("$w x $h", p.middle)
             noCardCoversASprite(p, "$w x $h")
@@ -243,14 +246,14 @@ class PanelFitTest {
         // same width, only the height changes: corners while the cards clear the sprites, the middle column when they do not
         assertFalse(plan(412f, 300f).middle)
         assertFalse(plan(412f, 230f).middle)
-        assertTrue(plan(412f, 190f).middle)
+        assertTrue(plan(412f, 170f).middle)
         // same short arena, smaller cards: compact cards keep the corners where the full cards could not
-        assertFalse(plan(412f, 190f, compact = true).middle)
+        assertFalse(plan(412f, 170f, compact = true).middle)
         // wider does not help a short arena: the cards still reach into the sprites' height
-        assertTrue(plan(700f, 190f).middle)
+        assertTrue(plan(700f, 170f).middle)
         // bigger text (a raised floor) makes the cards bigger: the corners give up earlier
-        assertFalse(plan(412f, 210f, floor = 8f).middle)
-        assertTrue(plan(412f, 210f, floor = 14f).middle)
+        assertFalse(plan(412f, 190f, floor = 8f).middle)
+        assertTrue(plan(412f, 190f, floor = 14f).middle)
     }
 
     @Test fun cornersShrinkTheSpritesALittleBeforeGivingUp() {
@@ -267,24 +270,24 @@ class PanelFitTest {
         assertTrue(raised.wildW > normal.wildW && raised.wildH > normal.wildH && raised.playerH > normal.playerH)
         // compact cards: name + thin HP bar, no types, no XP
         val compact = ArenaGeo.cards(8f, true, true)
-        assertTrue(compact.wildH < normal.wildH * 0.7f && compact.playerH < normal.playerH * 0.75f)
+        assertTrue(compact.wildH < normal.wildH * 0.85f && compact.playerH < normal.playerH * 0.75f)
         assertTrue(compact.wildW < normal.wildW)
-        // the XP numbers are what makes our card wide
-        assertTrue(ArenaGeo.cards(8f, false, false).playerW < normal.playerW)
+        // the XP numbers are what makes our card tall (R9 D12: not wide any more, both boxes are 160 dp)
+        assertTrue(ArenaGeo.cards(8f, false, false).playerH < normal.playerH)
+        assertEquals(normal.wildW, normal.playerW, 0f)
     }
 
-    @Test fun statusRowIsPartOfEveryCardAndGrowsWithTheText() {
-        // item 95: the badge row under the HP bar (14 dp, 12 on compact cards) is reserved in every card, even with no status
-        assertEquals(14f, ArenaGeo.statusRow(8f, false), 0f)
-        assertEquals(12f, ArenaGeo.statusRow(8f, true), 0f)
-        assertEquals(21f, ArenaGeo.statusRow(18f, false), 0.01f)
-        for (compact in listOf(false, true)) {
-            val small = ArenaGeo.cards(8f, compact, true)
-            val big = ArenaGeo.cards(18f, compact, true)
-            val grow = ArenaGeo.statusRow(18f, compact) - ArenaGeo.statusRow(8f, compact)
-            assertTrue("compact=$compact wild", big.wildH - small.wildH > grow)
-            assertTrue("compact=$compact player", big.playerH - small.playerH > grow)
+    @Test fun theStatusBadgeSitsInTheNameLineSoACardHasNoRowForIt() {
+        // R9 D12: both styles (and the compact card) put the badge between the name and "Lv"; the cards are as high as the text alone makes them
+        for (style in InfoBoxStyle.entries) for (compact in listOf(false, true)) {
+            val small = ArenaGeo.cards(8f, compact, true, style)
+            val big = ArenaGeo.cards(18f, compact, true, style)
+            assertTrue("$style compact=$compact wild", big.wildH > small.wildH)
+            assertTrue("$style compact=$compact player", big.playerH > small.playerH)
         }
+        // the name line is the 14 sp text line; the 13 dp badge never makes it taller
+        assertEquals(TextMath.line(14f), InfoBoxGeo.nameRow(8f, squares = false), 0.001f)
+        assertEquals(TextMath.line(14f), InfoBoxGeo.nameRow(8f, squares = true), 0.001f)
     }
 
     @Test fun planIsCleanWhereverItSaysItFits() {
@@ -304,7 +307,7 @@ class PanelFitTest {
         val stack = c.wildH + 6f + c.playerH
         assertTrue(plan(400f, stack + 13f).fits)
         assertFalse(plan(400f, stack + 6f).fits)
-        assertFalse(plan(200f, 400f).fits) // 200 dp cannot hold a 170 dp column and two sprites
+        assertFalse(plan(200f, 400f).fits) // 200 dp cannot hold a 160 dp column and two sprites
     }
 
     // ---------------------------------------------------------------- the arena grows; each card under its own Pokemon
@@ -365,7 +368,7 @@ class PanelFitTest {
         assertTrue(b.wildCard.y < 12f && b.wildCard.right <= b.wildSprite.art().x + 0.01f)
         assertTrue(b.playerCard.bottom > 220f - 14f && b.playerCard.x >= b.playerSprite.art().right - 0.01f)
         // too short for any of that: the middle column as before (also when the pref is off)
-        for (own in listOf(true, false)) for ((w, h) in listOf(344f to 200f)) {
+        for (own in listOf(true, false)) for ((w, h) in listOf(344f to 170f)) {
             val p = plan(w, h, own = own)
             assertTrue("$w x $h own=$own", p.middle && p.fits)
             assertEquals(1f, p.k, 0f)
@@ -385,7 +388,7 @@ class PanelFitTest {
     }
 
     @Test fun narrowAndTinyArenasStillGetTheMiddleColumn() {
-        // as before (the classic rule): 200 dp cannot hold a 170 dp column and two sprites
+        // as before (the classic rule): 200 dp cannot hold a 160 dp column and two sprites
         assertFalse(plan(200f, 400f, own = false).fits)
         for ((w, h) in listOf(160f to 120f, 100f to 60f, 60f to 40f)) assertTrue("$w x $h", plan(w, h, own = true).middle)
     }

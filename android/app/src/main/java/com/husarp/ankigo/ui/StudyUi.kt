@@ -71,6 +71,17 @@ internal object StudyUi {
         background = ripple(ctx, Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx))
     }
 
+    /** A [primary] button of the deck-finished screen: the same 48 dp minimum height as [secondary] ("Back to decks"). */
+    fun finishedPrimary(ctx: Context, text: String, action: () -> Unit) = primary(ctx, text, action).apply { minimumHeight = Ui.dp(ctx, 48) }
+
+    /** The secondary look next to [primary]: same size, corner radius and text size, `ag_s0` fill; at least 48 dp tall. */
+    fun secondary(ctx: Context, text: String, action: () -> Unit) = smallButton(ctx, text, false, action).apply {
+        textSize = 14f
+        minimumHeight = Ui.dp(ctx, 48)
+        setPadding(Ui.dp(ctx, 11), Ui.dp(ctx, 11), Ui.dp(ctx, 11), Ui.dp(ctx, 11))
+        background = ripple(ctx, Ui.rounded(Ui.c(ctx, R.color.ag_s0), 12, ctx))
+    }
+
     /** .ab: independent label/interval typography, pressed scale and disabled alpha. */
     fun answer(ctx: Context, text: String, interval: String?, tone: Int, enabled: Boolean, hint: String? = null, action: () -> Unit): View {
         val dark = ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES

@@ -275,7 +275,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val study = getSharedPreferences("study", 0)
         return when (s) {
             SettingsSection.LOOK -> SettingsSummary.look(AppPrefs.theme(this), AppPrefs.accent(this), AppPrefs.uiScale(this))
-            SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, st.cardsPerRound, com.husarp.ankigo.game.DailyGoal.forSettings(st, loaded?.day), st.goalByWeekday != null)
+            SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, com.husarp.ankigo.game.DailyGoal.forSettings(st, loaded?.day), st.goalByWeekday != null)
             SettingsSection.STUDY -> SettingsSummary.study(study.getBoolean("inAnkiDroid", false), study.getBoolean("swipe", false), study.getInt("zoom", 100))
             SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this), AppPrefs.cardsUnderOwn(this))
             SettingsSection.REMINDERS -> SettingsSummary.reminders(com.husarp.ankigo.remind.ReminderStore.load(this))
@@ -534,9 +534,6 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         gensBox.addView(chipRow)
         rows += gensBox
 
-        rows += Form.stepperRow(this, "Answers per attack", "How many answers make one attack. Ankimon: 2.", s.cardsPerRound, 1, 4, 1) { v ->
-            edit { it.cardsPerRound = v }
-        }
         val goalDay = loaded?.day
         val goalValue = valueText(DailyGoalPicker.valueText(s, goalDay)) as TextView
         rows += Form.row(this, "Daily goal", "Reviews a day, the same every day or different per weekday. A bigger goal also makes rare Pokémon more likely.", goalValue) {
@@ -627,7 +624,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         content.addView(popOutCard())
         content.addView(Form.sect(this, "Battle panel"))
         content.addView(Form.cardOf(this, listOf(
-            Form.switchRow(this, "Stat card under its own Pokémon", "Off: the classic game layout, each card on the opposite side",
+            Form.switchRow(this, "Stat card under its own Pokémon", "Without a background picture. Off: the classic layout, each card on the opposite side",
                 AppPrefs.cardsUnderOwn(this)) { AppPrefs.setCardsUnderOwn(this, it) },
             Form.switchRow(this, "XP animation", "Sparks fly into your Pokémon when it gains XP",
                 AppPrefs.xpAnimation(this)) { AppPrefs.setXpAnimation(this, it) },
@@ -635,7 +632,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 AppPrefs.attackAnimations(this)) { AppPrefs.setAttackAnimations(this, it) },
             Form.switchRow(this, "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (8–400 KB each); off: plain",
                 AppPrefs.backgroundPictures(this)) { AppPrefs.setBackgroundPictures(this, it) },
+            turnDotsRow(),
         )))
+        content.addView(Form.sect(this, "Info box style"))
+        content.addView(infoBoxCard())
+        content.addView(Form.sect(this, "Battle frame"))
+        content.addView(battleFrameCard())
         content.addView(Form.sect(this, "Small battle windows"))
         content.addView(Form.cardOf(this, listOf(
             Form.switchRow(this, "Show stats bar in small windows", "Picture-in-picture and the floating battle; off gives the battle more room",
@@ -647,6 +649,13 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val wc = buildWindowsCard()
         windowsCard = wc
         content.addView(wc)
+    }
+
+    /** Round 9 D3: where the charge dots sit in the battle's action bar (Study): between the two moves, or at the right end. */
+    private fun turnDotsRow(): View {
+        val places = DotsPlace.entries
+        return Form.stackRow(this, "Turn dots", "Where the charge dots sit in the bar under the battle picture (Study screen).",
+            Form.segmented(this, places.map { it.label }, places.indexOf(AppPrefs.turnDots(this))) { i -> AppPrefs.setTurnDots(this, places[i]) })
     }
 
     /** Leave mode (one at a time). */
@@ -697,6 +706,54 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 AppPrefs.setPopOutMode(this, m)
                 ticks.forEach { (k, t) -> t.visibility = if (k == m) View.VISIBLE else View.INVISIBLE }
                 if (m == PopOutMode.FLOAT && !Overlay.canDraw(this)) askOverlay()
+            }
+        }
+        return Form.cardOf(this, rows)
+    }
+
+    /** The design of the battle's info boxes (Round 9, D12): a tick list of the two designs; every open battle follows live. */
+    private fun infoBoxCard(): LinearLayout {
+        val mode = AppPrefs.infoBoxStyle(this)
+        val ticks = HashMap<InfoBoxStyle, ImageView>()
+        val rows = mutableListOf<View>()
+        for (s in InfoBoxStyle.entries) {
+            val tick = ImageView(this).apply {
+                setImageResource(R.drawable.ic_check)
+                setColorFilter(Ui.c(this@SettingsPage, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
+                visibility = if (s == mode) View.VISIBLE else View.INVISIBLE
+                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+            }
+            ticks[s] = tick
+            rows += Form.row(this, s.label, s.sub, tick) {
+                AppPrefs.setInfoBoxStyle(this, s)
+                ticks.forEach { (k, t) -> t.visibility = if (k == s) View.VISIBLE else View.INVISIBLE }
+            }
+        }
+        return Form.cardOf(this, rows)
+    }
+
+    /** The pixel frame around the battle picture (Round 9, D2): one tick list, each row with a small preview of its frame. */
+    private fun battleFrameCard(): LinearLayout {
+        val mode = AppPrefs.battleFrame(this)
+        val ticks = HashMap<BattleFrameStyle, ImageView>()
+        val rows = mutableListOf<View>()
+        for (s in BattleFrameStyle.entries) {
+            val tick = ImageView(this).apply {
+                setImageResource(R.drawable.ic_check)
+                setColorFilter(Ui.c(this@SettingsPage, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
+                visibility = if (s == mode) View.VISIBLE else View.INVISIBLE
+                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+            }
+            ticks[s] = tick
+            val right = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(BattleFramePreview(this@SettingsPage, s), LinearLayout.LayoutParams(dp(44), dp(26)).also { it.marginEnd = dp(10) })
+                addView(tick)
+            }
+            rows += Form.row(this, s.label, s.sub, right) {
+                AppPrefs.setBattleFrame(this, s)
+                ticks.forEach { (k, t) -> t.visibility = if (k == s) View.VISIBLE else View.INVISIBLE }
             }
         }
         return Form.cardOf(this, rows)

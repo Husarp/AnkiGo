@@ -33,6 +33,8 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
 
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var content: LinearLayout
+    /** The CONTINUE card's place above the scrolling list: it stays on top while the decks scroll. */
+    private lateinit var resumeSlot: LinearLayout
     private lateinit var appBar: AppBar
     private lateinit var pull: PullRefreshLayout
     private var newDeckButton: View? = null
@@ -53,31 +55,30 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     /** A "Move all cards" that was running when the screen turned or closed: its progress card comes back. */
     fun resumeFlows() = DeckFlows.resume(act) { refresh() }
 
-    /** The Study app bar: title, the AnkiDroid pill, Sync and New deck. */
+    /** The Study app bar: title, the AnkiDroid pill and New deck. */
     fun buildAppBar(): AppBar {
         appBar = Ui.appBar(act, "Study", "AnkiDroid")
-        // "Sync AnkiDroid": asks AnkiDroid to sync with AnkiWeb (the official DO_SYNC intent, see AnkiSync); a 46 dp touch area that keeps the bar's height
-        appBar.addView(StudyUi.iconButton(act, R.drawable.ic_sync, "Sync AnkiDroid") { AnkiSync.ask(act) }.apply {
-            setPadding(Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11))
-        }, LinearLayout.LayoutParams(Ui.dp(act, 46), Ui.dp(act, 46)).also {
-            it.setMargins(Ui.dp(act, 4), -Ui.dp(act, 9), -Ui.dp(act, 11), -Ui.dp(act, 9))
-        })
         // "New deck" (PLAN 70): shown once AnkiDroid is known to take changes (see render)
         newDeckButton = StudyUi.iconButton(act, R.drawable.ic_plus, "New deck") { DeckFlows.newDeck(act, null) { refresh() } }.apply {
             setColorFilter(Ui.c(context, R.color.ag_mauve))
             setPadding(Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11)); visibility = View.GONE
         }.also {
-            appBar.addView(it, appBar.childCount - 1, LinearLayout.LayoutParams(Ui.dp(act, 46), Ui.dp(act, 46)).also { lp -> lp.setMargins(Ui.dp(act, 4), -Ui.dp(act, 9), 0, -Ui.dp(act, 9)) })
+            // last in the bar; a 46 dp touch area that keeps the bar's height, pulled right so the glyph lines up with the bar's edge
+            appBar.addView(it, LinearLayout.LayoutParams(Ui.dp(act, 46), Ui.dp(act, 46)).also { lp -> lp.setMargins(Ui.dp(act, 4), -Ui.dp(act, 9), -Ui.dp(act, 11), -Ui.dp(act, 9)) })
         }
         return appBar
     }
 
-    /** The scrolling deck list with pull-to-refresh (the list itself is drawn by [render] / [refresh]). */
+    /** The sticky CONTINUE slot above the scrolling deck list with pull-to-refresh (both are filled by [render] / [refresh]). */
     fun buildBody(): View {
         content = StudyUi.column(act).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
         val scroll = ScrollView(act).apply { addView(content, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
         pull = PullRefreshLayout(act, scroll).apply { onRefresh = { refresh(true) } }
-        return pull
+        resumeSlot = StudyUi.column(act).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 4)); visibility = View.GONE }
+        return StudyUi.column(act).apply {
+            addView(resumeSlot, LinearLayout.LayoutParams(StudyUi.pageWidth(context), -2).apply { gravity = Gravity.CENTER_HORIZONTAL })
+            addView(pull, StudyUi.lp(-1, 0, 1f))
+        }
     }
 
     fun onDestroy() { generation++; DeckFlows.detach(); io.shutdown() }
@@ -100,6 +101,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
 
     fun showAccessProblem(message: String?) {
         newDeckButton?.visibility = View.GONE
+        resumeSlot.removeAllViews(); resumeSlot.visibility = View.GONE
         content.removeAllViews(); content.addView(StudyUi.label(act, message ?: "Open AnkiDroid once, then refresh.", 13).apply { setPadding(Ui.dp(context, 4), Ui.dp(context, 8), Ui.dp(context, 4), 0) })
         content.addView(StudyUi.primary(act, "Allow AnkiDroid access") { host.askAnkiAccess() }, StudyUi.spaced(act, 12))
         content.addView(StudyUi.smallButton(act, "Open AnkiDroid") { Anki.launchIntent(act)?.let { act.startActivity(it) } }, StudyUi.spaced(act, 6))
@@ -119,7 +121,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
 
     fun render() {
         if (!::content.isInitialized) return
-        content.removeAllViews()
+        content.removeAllViews(); resumeSlot.removeAllViews(); resumeSlot.visibility = View.GONE
         val installed = Anki.installed(act).firstOrNull { it.pkg == Anki.pkg }
         appBar.setPill(installed?.let { "AnkiDroid ${it.versionName}${if (Anki.studySupported(act)) " ✓" else ""}" } ?: "AnkiDroid needed")
         appBar.pill?.apply {
@@ -146,7 +148,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
                 setPadding(Ui.dp(context, 12), Ui.dp(context, 12), Ui.dp(context, 12), Ui.dp(context, 12))
                 background = Ui.rounded(Ui.c(context, R.color.ag_mauve), 14, context)
             }, StudyUi.lp(Ui.dp(act, 46), Ui.dp(act, 46)).also { it.marginStart = Ui.dp(act, 10) })
-            content.addView(resume)
+            resumeSlot.addView(resume); resumeSlot.visibility = View.VISIBLE
         }
         content.addView(StudyUi.section(act, "Decks"))
         val columns = StudyUi.row(act).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, 50), Ui.dp(context, 3)) }

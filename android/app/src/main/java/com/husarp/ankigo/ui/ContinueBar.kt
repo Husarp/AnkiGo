@@ -1,6 +1,8 @@
 package com.husarp.ankigo.ui
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.view.Gravity
 import android.view.View
@@ -9,6 +11,7 @@ import android.widget.LinearLayout
 import com.husarp.ankigo.Anki
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
+import com.husarp.ankigo.StudyActivity
 
 /**
  * "Continue studying" slim bar under the battle screen's top bar (PLAN 92): ▶, the last studied deck and how many cards are
@@ -36,6 +39,43 @@ object ContinueBar {
         val lastId = ctx.getSharedPreferences(PREFS, 0).getLong("lastDeck", 0)
         val deck = decks.firstOrNull { it.id == lastId } ?: return null
         return deck.takeIf { show(lastId, it.total, hiddenDay(ctx), today()) }
+    }
+
+    /**
+     * The Pokémon tab battle card's Continue button (R9-B9b): the saved last deck if it is in [decks] and has cards due. Unlike
+     * [pick] the bar's "hidden today" × does not apply (it hides the bar, not this button). Pure.
+     */
+    fun forCard(lastDeck: Long, decks: List<Anki.Deck>): Anki.Deck? =
+        decks.firstOrNull { it.id == lastDeck && lastDeck != 0L }?.takeIf { it.total > 0 }
+
+    /** [forCard] with the saved last deck read from the prefs. */
+    fun forCard(ctx: Context, decks: List<Anki.Deck>): Anki.Deck? = forCard(ctx.getSharedPreferences(PREFS, 0).getLong("lastDeck", 0), decks)
+
+    /** "Continue <deck>, N due" for the card's Continue button. */
+    fun description(deck: Anki.Deck): String = "Continue ${deck.name.substringAfterLast("::")}, ${deck.total} due"
+
+    /** A delayed AnkiDroid start still runs only for a request that is wanted and an Activity that is not leaving. Pure. */
+    fun mayStart(finishing: Boolean, destroyed: Boolean, wanted: Boolean): Boolean = !finishing && !destroyed && wanted
+
+    /**
+     * Starts studying [deck] like the Study tab's CONTINUE card: with "Study in AnkiDroid" on, AnkiDroid selects it and opens its
+     * reviewer (selecting runs off the main thread); else AnkiGo's own study screen (immediate). [stillWanted] says whether the
+     * request is current (the card's live flag): the delayed AnkiDroid start and its toasts are dropped when it is not, or when
+     * the Activity is finishing / destroyed.
+     */
+    fun study(a: Activity, deck: Anki.Deck, stillWanted: () -> Boolean = { true }) {
+        if (a.getSharedPreferences(PREFS, 0).getBoolean("inAnkiDroid", false)) {
+            Thread {
+                val ok = runCatching { Anki.selectDeck(a, deck.id) }.isSuccess
+                a.runOnUiThread {
+                    if (!mayStart(a.isFinishing, a.isDestroyed, stillWanted())) return@runOnUiThread
+                    if (ok) runCatching { a.startActivity(Anki.reviewIntent(deck.id)) }.onFailure { Ui.toast(a, "Open AnkiDroid once first") }
+                    else Ui.toast(a, "Couldn't select this deck")
+                }
+            }.start()
+            return
+        }
+        a.startActivity(Intent(a, StudyActivity::class.java).putExtra("deckId", deck.id).putExtra("deckName", deck.name))
     }
 
     /** The bar's view: card with a round play button, "Continue · Deck" + "42 due", and a × at the end. */

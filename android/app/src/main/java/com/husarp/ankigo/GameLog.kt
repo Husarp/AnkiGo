@@ -1,6 +1,7 @@
 package com.husarp.ankigo
 
 import android.content.Context
+import com.husarp.ankigo.debug.DelayedFlush
 import com.husarp.ankigo.debug.GameEventText
 import com.husarp.ankigo.debug.RollingGameLog
 import com.husarp.ankigo.game.GameEvent
@@ -13,12 +14,15 @@ import java.util.concurrent.TimeUnit
 object GameLog {
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "ankigo-event-log").apply { isDaemon = true } }
     private var journal: RollingGameLog? = null // worker-owned
+    /** At most one file rewrite + fsync per ~2 s (a diagnostics log: the last 2 s may be lost on a process kill). */
+    private val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "ankigo-event-log-flush").apply { isDaemon = true } }
+    private val flush = DelayedFlush(2000, { ms, task -> timer.schedule({ worker.execute(task) }, ms, TimeUnit.MILLISECONDS) }) { runCatching { journal?.persist() } }
     @Synchronized fun init(ctx: Context) {
         if (initialized) return
         initialized = true
         BattleLog.init(ctx)
         val file = File(ctx.applicationContext.filesDir, "game-events.log")
-        worker.execute { runCatching { journal = RollingGameLog(file) } }
+        worker.execute { runCatching { journal = RollingGameLog(file, flush = flush) } }
     }
     private var initialized = false
     private fun append(lines: List<String>) { worker.execute { runCatching { journal?.append(lines) } } }

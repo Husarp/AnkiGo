@@ -63,7 +63,7 @@ class R3V8Shots {
     private fun popup(name: String, setLook: Boolean) {
         paparazzi.shootPage(name, both) { ctx ->
             if (setLook) st.mon("t3")!!.look = 1
-            val d = DialogShots.capture { LookPicker.show(ctx, gd, st.mon("t3")!!) { } } ?: error("no dialog")
+            val d = DialogShots.capture { LookPicker.show(ctx, gd, st.mon("t3")!!, gd.species.keys) { } } ?: error("no dialog")
             DialogShots.scene(ctx, d, widthDp = 330)
         }
     }

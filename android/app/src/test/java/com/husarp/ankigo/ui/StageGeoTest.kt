@@ -7,390 +7,496 @@ import org.junit.Test
 import kotlin.math.max
 import kotlin.math.min
 
-// ROUND 8 R8-02: the stage plan - sprites on the feet, cards where they cover neither Pokémon.
+/**
+ * ROUND 9 D1: the info boxes' automatic rule ([StageGeo]) on made-up numbers (no Pokémon data): the size and gap formulas, the
+ * primary side, the spots and their order, the boxes shrinking before the sprites, the frame inset, and an independent
+ * straight-line port of the mockup's `autoRule` ([Oracle]) compared with the optimised search over a wide grid.
+ */
 class StageGeoTest {
-    private val shapes = listOf(0.5f, 0.6f, 1f, 1.25f, 1.4f, 2.2f, 2.6f, 3.5f)
+    private val frames = floatArrayOf(1f, 0.9f, 0.8f, 0.7f, 0.6f)
 
-    // panel sizes in dp (phones in every shape, strips, split halves, tablets)
-    private val gridW = listOf(250f, 300f, 360f, 412f, 520f, 640f, 800f, 869f)
-    private val gridH = listOf(130f, 160f, 200f, 250f, 300f, 400f, 640f)
+    private fun stage(px: Float, py: Float, pf: Float, wx: Float, wy: Float, wf: Float) = Stage(0f, 0f, 1f, 1f, false, px, py, pf, wx, wy, wf)
 
-    // card sizes in dp (a full wild card, a full player card)
-    private val wcw = 166f
-    private val wch = 70f
-    private val pcw = 170f
-    private val pch = 82f
+    private fun fit(id: String, w: Float, h: Float, zoom: Float = 1f) = StageFit.fit(BackdropCatalog.byId(id)!!, w, h, zoom)!!
 
-    private fun stage(id: String, w: Float, h: Float, zoom: Float = 1f) = StageFit.fit(BackdropCatalog.byId(id)!!, w, h, zoom)!!
+    private fun inside(vw: Float, vh: Float, inset: Float, b: ArenaGeo.Box) =
+        b.x >= inset - 0.01f && b.y >= inset - 0.01f && b.right <= vw - inset + 0.01f && b.bottom <= vh - inset + 0.01f
 
-    private fun plan(id: String, w: Float, h: Float, own: Boolean, k0: Float = 1.2f, zoom: Float = 1f, scale: Float = 1f) =
-        StageGeo.plan(w, h, stage(id, w, h, zoom), wcw * scale, wch * scale, pcw * scale, pch * scale, k0, own)
+    private fun grown(b: ArenaGeo.Box, d: Float) = ArenaGeo.Box(b.x - d, b.y - d, b.w + 2f * d, b.h + 2f * d)
 
-    private fun inside(w: Float, h: Float, b: ArenaGeo.Box) = b.x >= -0.01f && b.y >= -0.01f && b.right <= w + 0.01f && b.bottom <= h + 0.01f
+    // ---------------------------------------------------------------- the formulas
 
-    private fun assertClear(tag: String, w: Float, h: Float, p: StagePlan) {
-        val wa = p.wildSprite.art()
-        val pa = p.playerSprite.art()
-        assertTrue("$tag wild inside", inside(w, h - 4f, p.wildCard))
-        assertTrue("$tag player inside", inside(w, h, p.playerCard))
-        assertFalse("$tag wild on wild", p.wildCard.hits(wa))
-        assertFalse("$tag wild on ours", p.wildCard.hits(pa))
-        assertFalse("$tag player on wild", p.playerCard.hits(wa))
-        assertFalse("$tag player on ours", p.playerCard.hits(pa))
-        assertFalse("$tag cards overlap", p.wildCard.hits(p.playerCard))
+    @Test fun theTargetShareIsFullFrom260DpAndFallsLinearlyToTheMinimumAt130() {
+        assertEquals(1f, StageGeo.targetShare(640f), 0f)
+        assertEquals(1f, StageGeo.targetShare(265f), 0f)
+        assertEquals(1f, StageGeo.targetShare(260f), 0.0001f)
+        assertEquals(0.55f + 16f / 130f * 0.45f, StageGeo.targetShare(146f), 0.0001f)   // the strip: 60.5 %
+        assertEquals(0.55f + 4f / 130f * 0.45f, StageGeo.targetShare(134f), 0.0001f)
+        assertEquals(0.55f, StageGeo.targetShare(130f), 0.0001f)
+        assertEquals("under 130 dp it stays at the minimum", 0.55f, StageGeo.targetShare(100f), 0f)
+        assertEquals(0.775f, StageGeo.targetShare(195f), 0.0001f)                          // half way
     }
 
-    // an independent brute-force: is there ANY clear pair at sprite scale f and card scale k (any of the 4 x 4 positions)
-    private fun anyClear(w: Float, h: Float, s: Stage, f: Float, k: Float): Boolean {
-        val side = { frame: Float -> frame * f }
-        val ws = side(s.wildFrame)
-        val ps = side(s.playerFrame)
-        val wa = ArenaGeo.Box(s.wildFeetX - ws / 2, s.wildFeetY - ws, ws, ws).art()
-        val pa = ArenaGeo.Box(s.playerFeetX - ps / 2, s.playerFeetY - ps, ps, ps).art()
-        val cw = wcw * k; val ch = wch * k; val qw = pcw * k; val qh = pch * k
-        val mid = (pa.right + wa.x) / 2f
-        val wx = listOf(wa.x - 6f - cw, 8f, mid - cw / 2f, w - 8f - cw).map { max(8f, min(it, w - 8f - cw)) }
-        val px = listOf(pa.right + 6f, w - 8f - qw, mid - qw / 2f, 8f).map { max(8f, min(it, w - 8f - qw)) }
-        for (x in wx) for (y in px) {
-            val wild = ArenaGeo.Box(x, 8f, cw, ch)
-            val pl = ArenaGeo.Box(y, h - 10f - qh, qw, qh)
-            if (inside(w, h - 4f, wild) && inside(w, h, pl) && !wild.hits(wa) && !wild.hits(pa) && !pl.hits(wa) && !pl.hits(pa) && !wild.hits(pl)) return true
+    // ---------------------------------------------------------------- R9 wave 3 (D12): no text under 8 sp on screen
+
+    @Test fun aTextIsReadableFromTheBoxScaleThatDrawsItOnEightSpOnScreen() {
+        assertEquals(0f, StageGeo.textScale(0f, 1f, 8f), 0f)                                   // no text, no floor
+        assertEquals(8f / 10.5f, StageGeo.textScale(10.5f, 1f, 0f), 0.0001f)                 // the Study strip: panel scale 1, no raised text
+        assertEquals(8f / 9f, StageGeo.textScale(9f, 1f, 8f), 0.0001f)
+        assertEquals(1f, StageGeo.textScale(10.5f, 0.6f, 13.4f), 0.01f)                    // a panel at 60 %: PanelFit raised the text to 13.4 sp, it is on 8 sp already
+        assertEquals(1f, StageGeo.textScale(6f, 1f, 0f), 0f)                                  // never above 1
+        assertEquals(8f / 14f, StageGeo.textScale(14f, 1f, 0f), 0.0001f)
+    }
+
+    @Test fun theBoxScalesNeverGoUnderTheReadableOneAndAFullBoxNeedsMoreThanAReducedOne() {
+        // the strip with the above style: reduced box 10.5 sp (the HP number), full box 8.5 sp (the type chips)
+        val strip = StageGeo.boxScales(146f, 1f, 0f, 1f, 10.5f, 8.5f)
+        assertEquals(8f / 10.5f, strip.start, 0.0001f)          // 60.5 % wanted by the height, 76.2 % needed by the text
+        assertEquals(8f / 10.5f, strip.min, 0.0001f)
+        assertEquals(8f / 10.5f, strip.near, 0.0001f)
+        assertEquals(8f / 8.5f, strip.full, 0.0001f)             // the chips are readable from 94 %
+        // a roomy panel is unaffected
+        val big = StageGeo.boxScales(640f, 1f, 8f, 1.37f, 10.5f, 8.5f)
+        assertEquals(1.37f, big.start, 0.0001f)
+        assertEquals(1.37f * 0.85f, big.near, 0.0001f)
+        assertEquals(max(1.37f * 0.55f, 8f / 10.5f), big.min, 0.0001f)
+        // no text sizes = the mockup's scales exactly
+        val plain = StageGeo.boxScales(146f, 1f, 8f, 1f)
+        assertEquals(0.55f + 16f / 130f * 0.45f, plain.start, 0.0001f)
+        assertEquals(0f, plain.full, 0f)
+    }
+
+    @Test fun aReducedBoxIsUsedUnderTheScaleItsOptionalPartsAreReadableAt() {
+        val st = fit("forest", 412f, 146f)
+        // heights: full 75, reduced 65 (the XP number gone): the plan says which it drew, and a reduced plan used the short height
+        val p = StageGeo.plan(412f, 146f, st, 160f, 59f, 160f, 75f, 1f, 1f, 0f, 0f, null, null, 60f, 65f, 10.5f, 8.5f)
+        assertTrue("reduced in the strip (k ${p.k})", p.reduced)
+        assertEquals(8f / 10.5f, p.k, 0.001f)
+        assertEquals(65f * p.k, p.playerCard.h, 0.01f)
+        assertEquals(60f * p.k, p.wildCard.h, 0.01f)
+        // a roomy panel keeps the full box
+        val big = StageGeo.plan(412f, 640f, fit("forest", 412f, 640f), 160f, 59f, 160f, 75f, 1.37f, 1f, 8f, 0f, null, null, 60f, 65f, 10.5f, 8.5f)
+        assertFalse(big.reduced)
+        assertEquals(75f * big.k, big.playerCard.h, 0.01f)
+    }
+
+    @Test fun theGapIsEightDpOnScreenInBigPanelsAndNeverUnderFour() {
+        assertEquals(8f, StageGeo.gap(640f, 1f), 0.0001f)
+        assertEquals(8f, StageGeo.gap(265f, 1f), 0.0001f)
+        assertEquals(8f * 146f / 260f, StageGeo.gap(146f, 1f), 0.0001f)
+        assertEquals(4f, StageGeo.gap(130f, 1f), 0.0001f)                   // 8 * .5
+        assertEquals(4f, StageGeo.gap(100f, 1f), 0.0001f)                   // the floor
+        // virtual dp: a panel drawn at 63 % has its gap 1 / .634 times bigger so it is the same on screen
+        assertEquals(max(4f, 8f * 134f / 260f) / 0.634f, StageGeo.gap(134f, 0.634f), 0.0001f)
+        assertEquals(4f / 0.61f, StageGeo.gap(130f, 0.61f), 0.0001f)
+    }
+
+    @Test fun theBoxScalesAtTheNineHostHeights() {
+        // Battle tab, phone upright: 412 x 640, roomy k0 = 1.37; the boxes keep their full size
+        val battle = StageGeo.boxScales(640f, 1f, 8f, 1.37f)
+        assertEquals(1.37f, battle.start, 0.0001f)
+        assertEquals(1.37f * 0.85f, battle.near, 0.0001f)
+        assertEquals(1.37f * 0.55f, battle.min, 0.0001f)
+        // Study panel dragged tall: 265 dp
+        assertEquals(1f, StageGeo.boxScales(265f, 1f, 8f, 1f).start, 0.0001f)
+        // the strip: 146 dp, k0 = 1 - small boxes from the start (60.5 %), near = start, min 55 %
+        val strip = StageGeo.boxScales(146f, 1f, 8f, 1f)
+        val t146 = 0.55f + 16f / 130f * 0.45f
+        assertEquals(t146, strip.start, 0.0001f)
+        assertEquals(t146, strip.near, 0.0001f)
+        assertEquals(0.55f, strip.min, 0.0001f)
+        // the 220 dp Full preset drawn at 63.4 %: the panel's scale and the raised text (floor 12.7) already shrank the cards
+        val s = 0.634f
+        val already = s * max(1f, 12.7f / 12f)
+        val short = StageGeo.boxScales(134f, s, 12.7f, 1f)
+        assertEquals(min(1f, (0.55f + 4f / 130f * 0.45f) / already), short.start, 0.0001f)
+        assertEquals(min(short.start, 0.55f / already), short.min, 0.0001f)
+        // 130 dp and 100 dp: the target is the minimum share in both
+        assertEquals(0.55f, StageGeo.boxScales(130f, 1f, 8f, 1f).start, 0.0001f)
+        assertEquals(0.55f, StageGeo.boxScales(100f, 1f, 8f, 1f).start, 0.0001f)
+        assertEquals(0.55f, StageGeo.boxScales(100f, 1f, 8f, 1f).min, 0.0001f)
+        // k never goes above the roomy scale k0
+        assertTrue(StageGeo.boxScales(900f, 0.5f, 8f, 1.4f).start <= 1.4f)
+    }
+
+    @Test fun theBoxScaleCanBeUnderOneAndThePanelsOwnShrinkIsNotCountedTwice() {
+        // a panel drawn at 55 % with floor 14.6 is already at .55 * 1.217 = 67 % of the design size: asking 55 % on screen needs only .82 more
+        val k = StageGeo.boxScales(130f, 0.55f, 14.6f, 1f)
+        assertEquals(0.55f / (0.55f * (14.6f / 12f)), k.start, 0.0001f)
+        assertTrue(k.start < 1f)
+        // a panel already smaller than the wanted share asks for no more shrinking
+        assertEquals(1f, StageGeo.boxScales(260f, 0.3f, 8f, 1f).start, 0f)
+    }
+
+    @Test fun tallMeansTallerThanOnePointOneTimesTheWidth() {
+        assertTrue(StageGeo.isTall(412f, 640f))
+        assertFalse(StageGeo.isTall(412f, 265f))
+        assertFalse(StageGeo.isTall(400f, 440f))      // exactly 1.1: not tall
+        assertTrue(StageGeo.isTall(400f, 440.5f))
+        assertFalse(StageGeo.isTall(860f, 253f))
+    }
+
+    // ---------------------------------------------------------------- the spots
+
+    // wide panel 400 x 200 on screen, ours left, the wild one right; art = the default 85 % square
+    private val wide = stage(100f, 180f, 80f, 300f, 120f, 60f)
+
+    @Test fun aRoomyWidePanelPutsEachBoxOnItsPokemonsOuterSideCentredOnIt() {
+        val p = StageGeo.plan(400f, 200f, wide, 138f, 60f, 142f, 60f, 1f)
+        val k = StageGeo.boxScales(200f, 1f, 0f, 1f).start
+        assertTrue(p.clear); assertEquals(1f, p.spriteScale, 0f); assertEquals(0, p.level)
+        assertEquals(k, p.k, 0.0001f)
+        // wide: ours at the top, the wild one at the bottom; both touch the panel's edge (no 8 dp margin), centred on the feet
+        assertEquals(0f, p.playerCard.y, 0.001f)
+        assertEquals(100f - 142f * k / 2f, p.playerCard.x, 0.001f)
+        assertEquals(200f, p.wildCard.bottom, 0.001f)
+        assertEquals(300f - 138f * k / 2f, p.wildCard.x, 0.001f)
+        assertEquals(142f * k, p.playerCard.w, 0.001f); assertEquals(60f * k, p.playerCard.h, 0.001f)
+        assertEquals(StageGeo.gap(200f, 1f), p.gap, 0.0001f)
+    }
+
+    // the Battle tab, 412 x 640 dp: ours low left, the wild one high right
+    private val tallStage = stage(200f, 480f, 150f, 290f, 250f, 110f)
+
+    @Test fun aRoomyTallPanelPutsOursAtTheBottomAndTheWildOneAtTheTop() {
+        val p = StageGeo.plan(412f, 640f, tallStage, 166f, 70f, 170f, 82f, 1.37f)
+        assertTrue(p.clear); assertEquals(0, p.level)
+        assertEquals(1.37f, p.k, 0.0001f)
+        assertEquals(640f, p.playerCard.bottom, 0.001f)
+        assertEquals(0f, p.wildCard.y, 0.001f)
+        assertEquals(200f - 170f * 1.37f / 2f, p.playerCard.x, 0.001f)
+        assertEquals(290f - 166f * 1.37f / 2f, p.wildCard.x, 0.001f)
+    }
+
+    @Test fun aBoxNearAnEdgeIsClampedToItAndBecomesEdgeAligned() {
+        // ours stands 20 dp from the left edge, the wild one 15 dp from the right: centring would leave the panel
+        val s = stage(20f, 180f, 60f, 385f, 120f, 50f)
+        val p = StageGeo.plan(400f, 200f, s, 138f, 60f, 142f, 60f, 1f)
+        assertEquals(0f, p.playerCard.x, 0.001f)
+        assertEquals(400f, p.wildCard.right, 0.001f)
+        assertEquals(0f, p.playerCard.y, 0.001f)
+        assertEquals(200f, p.wildCard.bottom, 0.001f)
+    }
+
+    @Test fun theBattleFrameInsetKeepsTheBoxesInsideAndTouchingTheInsetEdge() {
+        val s = stage(20f, 180f, 60f, 385f, 120f, 50f)
+        val inset = 7f
+        val p = StageGeo.plan(400f, 200f, s, 138f, 60f, 142f, 60f, 1f, inset = inset)
+        assertEquals(inset, p.playerCard.x, 0.001f)
+        assertEquals(inset, p.playerCard.y, 0.001f)
+        assertEquals(400f - inset, p.wildCard.right, 0.001f)
+        assertEquals(200f - inset, p.wildCard.bottom, 0.001f)
+        // over a grid, with and without a frame: always inside the inset panel (or, in a fallback, no further out than the smallest box allows)
+        for (id in BackdropCatalog.ALL.map { it.id }) for ((w, h) in listOf(412f to 640f, 412f to 265f, 412f to 146f, 206f to 136f, 860f to 253f)) for (ins in listOf(0f, 5f, 9f)) {
+            val st = fit(id, w, h)
+            val q = StageGeo.plan(w, h, st, 150f, 64f, 156f, 70f, 1f, inset = ins)
+            if (q.clear) {
+                assertTrue("$id ${w}x$h inset $ins wild ${q.wildCard.x},${q.wildCard.y} ${q.wildCard.w}x${q.wildCard.h}", inside(w, h, ins, q.wildCard))
+                assertTrue("$id ${w}x$h inset $ins ours", inside(w, h, ins, q.playerCard))
+            }
         }
-        return false
     }
 
-    // ---------------------------------------------------------------- geometry
-
-    @Test fun spritesStandOnTheFeet() {
-        val w = 800f; val h = 500f
-        val s = stage("forest", w, h)
-        val p = StageGeo.plan(w, h, s, wcw, wch, pcw, pch, 1f, true)
-        assertEquals(1f, p.spriteScale, 0f)
-        assertEquals(s.playerFeetX, p.playerSprite.x + p.playerSprite.w / 2f, 0.01f)
-        assertEquals(s.playerFeetY, p.playerSprite.bottom, 0.01f)
-        assertEquals(s.playerFrame, p.playerSprite.h, 0.01f)
-        assertEquals(s.playerFrame, p.playerSprite.w, 0.01f)
-        assertEquals(s.wildFeetX, p.wildSprite.x + p.wildSprite.w / 2f, 0.01f)
-        assertEquals(s.wildFeetY, p.wildSprite.bottom, 0.01f)
-        assertEquals(s.wildFrame, p.wildSprite.h, 0.01f)
+    @Test fun smallPanelsGetSmallBoxesFromTheStartNotOnlyAfterACollision() {
+        // the strip (146 dp, nothing in the way): the very first box scale is 60.5 %
+        val roomy = stage(60f, 130f, 50f, 330f, 95f, 40f)
+        val p = StageGeo.plan(412f, 146f, roomy, 138f, 60f, 142f, 60f, 1f)
+        assertTrue(p.clear); assertEquals(0, p.level); assertEquals(1f, p.spriteScale, 0f)
+        assertEquals(0.55f + 16f / 130f * 0.45f, p.k, 0.0001f)
+        // a tall roomy panel: no shrink at all
+        val big = StageGeo.plan(412f, 640f, tallStage, 166f, 70f, 170f, 82f, 1.37f)
+        assertEquals(1.37f, big.k, 0.0001f)
     }
 
-    @Test fun smallerSpriteScaleKeepsTheFeet() {
-        // a tiny panel forces f below 1: holders shrink around the same feet
-        val w = 330f; val h = 250f
-        val s = stage("night-alley", w, h)
-        val p = StageGeo.plan(w, h, s, wcw, wch, pcw, pch, 1f, true)
-        assertTrue(p.spriteScale < 1f)
-        assertEquals(s.playerFeetY, p.playerSprite.bottom, 0.01f)
-        assertEquals(s.wildFeetX, p.wildSprite.x + p.wildSprite.w / 2f, 0.01f)
-        assertEquals(s.playerFrame * p.spriteScale, p.playerSprite.h, 0.01f)
+    // ---------------------------------------------------------------- shrink order: boxes before sprites
+
+    /** A crowded wide panel: both Pokémon fill their frames' art (a full-frame share), so the roomy spots are blocked at full size. */
+    private val fullArt: (Float) -> ArtShare? = { ArtShare(0f, 0f, 1f, 1f) }
+
+    @Test fun aCrowdedPanelShrinksTheBoxesBeforeTheSpritesAndKeepsTheFramesWhole() {
+        var shrunkBoxes = 0
+        var example = ""
+        for (id in BackdropCatalog.ALL.map { it.id }) for ((w, h) in listOf(412f to 265f, 300f to 200f, 260f to 180f, 860f to 253f, 412f to 640f)) {
+            val st = fit(id, w, h)
+            val sc = StageGeo.boxScales(h, 1f, 0f, if (h > 400f) 1.37f else 1f)
+            val p = StageGeo.plan(w, h, st, 150f, 64f, 156f, 70f, if (h > 400f) 1.37f else 1f, wildArt = fullArt, playerArt = fullArt)
+            if (p.clear && p.spriteScale == 1f && p.k < sc.start - 0.001f) {
+                shrunkBoxes++
+                if (example.isEmpty()) example = "$id ${w}x$h k ${p.k} of ${sc.start} level ${p.level}"
+                assertTrue("$id: not under the smallest box", p.k >= sc.min - 0.001f)
+            }
+            if (p.spriteScale < 1f) {
+                // sprites shrank: even the smallest box at the bigger sprite scale had no ok pair at any spot
+                val bigger = frames[frames.indexOfFirst { abs(it - p.spriteScale) < 0.001f } - 1]
+                assertFalse("$id ${w}x$h: at f $bigger an ok pair existed at the smallest box", Oracle.anyOk(w, h, st, 150f, 64f, 156f, 70f, sc.min, bigger, StageGeo.gap(h, 1f), 0f, fullArt, fullArt))
+            }
+        }
+        assertTrue("some crowded panels are solved by smaller boxes alone ($shrunkBoxes)", shrunkBoxes > 0)
+        println("D1 crowded example: $example ($shrunkBoxes plans)")
     }
 
-    // ---------------------------------------------------------------- preference
-
-    @Test fun ownPutsEachCardBesideItsPokemon() {
-        val w = 1400f; val h = 1000f
-        val p = plan("forest", w, h, own = true, k0 = 1f)
-        assertTrue(p.clear)
-        assertEquals(1f, p.spriteScale, 0f)
-        // wild card: BW, 6 dp left of the wild picture, top row; ours: BP, 6 dp right of our picture, bottom row
-        assertEquals(p.wildSprite.art().x - 6f, p.wildCard.right, 0.01f)
-        assertEquals(8f, p.wildCard.y, 0.01f)
-        assertEquals(p.playerSprite.art().right + 6f, p.playerCard.x, 0.01f)
-        assertEquals(h - 10f, p.playerCard.bottom, 0.01f)
+    @Test fun theSpritesShrinkOnlyWhenEvenTheSmallestBoxFailsAtEverySpot() {
+        var smaller = 0
+        for (id in BackdropCatalog.ALL.map { it.id }) for ((w, h) in listOf(260f to 150f, 220f to 140f, 300f to 170f, 206f to 136f)) {
+            val st = fit(id, w, h)
+            val sc = StageGeo.boxScales(h, 1f, 0f, 1f)
+            val p = StageGeo.plan(w, h, st, 160f, 70f, 160f, 70f, 1f, wildArt = fullArt, playerArt = fullArt)
+            if (p.spriteScale < 1f - 0.001f) {
+                smaller++
+                for (cand in frames) {
+                    if (cand <= p.spriteScale + 0.001f) break
+                    assertFalse("$id ${w}x$h: f=$cand had an ok pair at the smallest box", Oracle.anyOk(w, h, st, 160f, 70f, 160f, 70f, sc.min, cand, StageGeo.gap(h, 1f), 0f, fullArt, fullArt))
+                }
+            }
+        }
+        assertTrue("some panels need smaller sprites ($smaller)", smaller > 0)
     }
 
-    @Test fun notOwnPutsTheCardsInTheCorners() {
-        val w = 1400f; val h = 1000f
-        val p = plan("forest", w, h, own = false, k0 = 1f)
-        assertTrue(p.clear)
-        assertEquals(8f, p.wildCard.x, 0.01f)
-        assertEquals(8f, p.wildCard.y, 0.01f)
-        assertEquals(w - 8f, p.playerCard.right, 0.01f)
-        assertEquals(h - 10f, p.playerCard.bottom, 0.01f)
-    }
-
-    @Test fun cardsGrowToK0WhenThereIsRoom() {
-        val p = plan("forest", 1400f, 1000f, own = true, k0 = 1.4f)
-        assertEquals(1.4f, p.k, 0.0001f)
-        assertEquals(wcw * 1.4f, p.wildCard.w, 0.01f)
-        assertEquals(pch * 1.4f, p.playerCard.h, 0.01f)
-        val one = plan("forest", 1400f, 1000f, own = true, k0 = 0.5f)
-        assertEquals("k0 under 1 is read as 1", 1f, one.k, 0.0001f)
+    @Test fun nothingFitsGivesTheLeastCoverAtTheSmallestBoxAndIsNotClear() {
+        // a 100 x 60 dp panel: two boxes of 77 x 33 dp at the smallest size and two full-frame Pokémon do not fit, even at x .6
+        val st = stage(30f, 58f, 50f, 70f, 58f, 50f)
+        val p = StageGeo.plan(100f, 60f, st, 140f, 60f, 140f, 60f, 1f, wildArt = fullArt, playerArt = fullArt)
+        assertFalse(p.clear)
+        assertEquals(-1, p.level)
+        assertEquals(StageGeo.boxScales(60f, 1f, 0f, 1f).min, p.k, 0.0001f)
+        // and it is deterministic
+        val q = StageGeo.plan(100f, 60f, st, 140f, 60f, 140f, 60f, 1f, wildArt = fullArt, playerArt = fullArt)
+        assertEquals(p.wildCard.x, q.wildCard.x, 0f); assertEquals(p.playerCard.y, q.playerCard.y, 0f); assertEquals(p.spriteScale, q.spriteScale, 0f)
+        // the chosen pair is the one the oracle finds
+        val o = Oracle.plan(100f, 60f, st, 140f, 60f, 140f, 60f, 1f, 1f, 0f, 0f, fullArt, fullArt, 60f, 60f, 0f, 0f)
+        assertFalse(o.ok)
+        assertEquals(o.f, p.spriteScale, 0.0001f)
+        assertEquals(o.wild.x, p.wildCard.x, 0.001f); assertEquals(o.wild.y, p.wildCard.y, 0.001f)
+        assertEquals(o.you.x, p.playerCard.x, 0.001f); assertEquals(o.you.y, p.playerCard.y, 0.001f)
     }
 
     // ---------------------------------------------------------------- properties over the catalog
 
-    @Test fun clearPlansReallyAreClear() {
-        for (b in BackdropCatalog.ALL) for (a in shapes) for (own in listOf(true, false)) for (zoom in listOf(1f, 0.72f)) {
-            val h = 420f
-            val w = a * h
-            val p = plan(b.id, w, h, own, zoom = zoom)
-            if (p.clear) assertClear("${b.id} $a own=$own zoom=$zoom", w, h, p)
+    @Test fun everyClearPlanKeepsTheGapFromBothArtBoxesAndBetweenTheBoxes() {
+        var clear = 0
+        for (b in BackdropCatalog.ALL) for ((w, h) in listOf(412f to 640f, 412f to 265f, 412f to 146f, 365f to 266f, 860f to 253f, 206f to 136f, 393f to 205f)) for (s in listOf(1f, 0.634f, 0.61f)) {
+            val vw = w / s; val vh = h / s
+            val st = fit(b.id, vw, vh)
+            val k0 = if (h > 400f) 1.37f else 1f
+            val p = StageGeo.plan(vw, vh, st, 150f, 64f, 156f, 70f, k0, panelScale = s, floorSp = Math.ceil((8f / s * 10f).toDouble()).toFloat() / 10f)
+            if (!p.clear) continue
+            clear++
+            val g = p.gap - 0.02f
+            val tag = "${b.id} ${w}x$h s=$s f=${p.spriteScale} k=${p.k}"
+            for (box in listOf(p.wildCard, p.playerCard)) {
+                assertFalse("$tag: box on the wild art", grown(box, g).hits(p.wildArt))
+                assertFalse("$tag: box on our art", grown(box, g).hits(p.playerArt))
+                assertTrue("$tag: box inside", inside(vw, vh, 0f, box))
+            }
+            assertFalse("$tag: ours near the wild box", grown(p.playerCard, g).hits(p.wildCard))
+            assertTrue("$tag: k between the smallest and the roomy scale", p.k <= k0 + 0.0001f && p.k > 0.4f)
         }
+        assertTrue("many clear plans ($clear)", clear > 30)
     }
 
-    @Test fun spriteScaleOnlyBelowOneWhenOneHasNoClearPair() {
-        for (b in BackdropCatalog.ALL) for (a in shapes) {
-            val h = 420f
-            val w = a * h
-            val s = stage(b.id, w, h)
-            val p = plan(b.id, w, h, own = true)
-            val scales = listOf(1f, 0.9f, 0.8f, 0.7f, 0.6f)
-            if (p.clear) {
-                assertTrue("${b.id} $a", p.spriteScale in scales)
-                for (f in scales.filter { it > p.spriteScale + 0.001f }) {
-                    var k = 1.2f
-                    while (true) {
-                        assertFalse("${b.id} $a f=$f k=$k", anyClear(w, h, s, f, k))
-                        if (k <= 1f) break
-                        k = max(1f, k - 0.05f)
-                    }
+    @Test fun theSpriteFramesStandOnTheFeetAtEveryScale() {
+        val st = fit("forest", 412f, 265f)
+        val p = StageGeo.plan(412f, 265f, st, 150f, 64f, 156f, 70f, 1f, wildArt = fullArt, playerArt = fullArt)
+        assertEquals(st.playerFeetX, p.playerSprite.x + p.playerSprite.w / 2f, 0.01f)
+        assertEquals(st.playerFeetY, p.playerSprite.bottom, 0.01f)
+        assertEquals(st.playerFrame * p.spriteScale, p.playerSprite.w, 0.01f)
+        assertEquals(st.wildFeetX, p.wildSprite.x + p.wildSprite.w / 2f, 0.01f)
+        assertEquals(st.wildFeetY, p.wildSprite.bottom, 0.01f)
+        assertEquals(st.wildFrame * p.spriteScale, p.wildSprite.h, 0.01f)
+    }
+
+    // ---------------------------------------------------------------- the real art box in the frame
+
+    @Test fun theArtBoxIsMappedThroughTheFrameAndMovesWithTheSprite() {
+        // an off-centre sprite: its art is the left third of the frame, 40 % high, standing on the bottom
+        val left: (Float) -> ArtShare? = { ArtShare(0f, 0.6f, 0.33f, 0.4f) }
+        val st = stage(100f, 180f, 80f, 300f, 120f, 60f)
+        val p = StageGeo.plan(400f, 200f, st, 138f, 60f, 142f, 60f, 1f, playerArt = left)
+        // our frame is [60, 100] .. [140, 180]
+        assertEquals(60f, p.playerArt.x, 0.001f)
+        assertEquals(100f + 0.6f * 80f, p.playerArt.y, 0.001f)
+        assertEquals(0.33f * 80f, p.playerArt.w, 0.001f); assertEquals(0.4f * 80f, p.playerArt.h, 0.001f)
+        // the default stays the 85 % bottom-centred square
+        val d = ArtShare.DEFAULT.inFrame(0f, 0f, 100f)
+        val flat = ArenaGeo.Box(0f, 0f, 100f, 100f).art()
+        assertEquals(flat.x, d.x, 0.0001f); assertEquals(flat.y, d.y, 0.0001f); assertEquals(flat.w, d.w, 0.0001f); assertEquals(flat.h, d.h, 0.0001f)
+        val bc = ArtShare.bottomCentred(0.5f, 0.4f)
+        assertEquals(0.25f, bc.x, 0f); assertEquals(0.6f, bc.y, 0f)
+    }
+
+    @Test fun aSmallerRealArtBoxFreesRoomThatTheFlatFrameDidNot() {
+        var better = 0
+        var example = ""
+        for (b in BackdropCatalog.ALL) for ((w, h) in listOf(260f to 150f, 300f to 170f, 220f to 140f, 412f to 146f, 206f to 136f)) {
+            val st = fit(b.id, w, h)
+            val flat = StageGeo.plan(w, h, st, 150f, 64f, 156f, 70f, 1f, wildArt = fullArt, playerArt = fullArt)
+            val real = StageGeo.plan(w, h, st, 150f, 64f, 156f, 70f, 1f, wildArt = { ArtShare(0.3f, 0.35f, 0.4f, 0.65f) }, playerArt = { ArtShare(0.3f, 0.35f, 0.4f, 0.65f) })
+            if ((!flat.clear && real.clear) || real.spriteScale > flat.spriteScale + 0.001f || real.k > flat.k + 0.001f) {
+                better++
+                if (example.isEmpty()) example = "${b.id} ${w}x$h flat f=${flat.spriteScale} k=${flat.k} clear=${flat.clear} -> real f=${real.spriteScale} k=${real.k} clear=${real.clear}"
+            }
+            assertTrue("${b.id} ${w}x$h: a real art box never needs more room than the whole frame", real.spriteScale >= flat.spriteScale - 0.001f)
+        }
+        assertTrue("a real art box frees room somewhere ($better)", better > 0)
+        println("D1 real art: $example ($better combos better)")
+    }
+
+    // ---------------------------------------------------------------- the optimised search equals the straight port of the mockup
+
+    @Test fun theSearchEqualsAnIndependentPortOfTheMockupsAutoRule() {
+        val none: (Float) -> ArtShare? = { null }
+        val tight: (Float) -> ArtShare? = { ArtShare(0.13f, 0.18f, 0.66f, 0.62f) }
+        val wide2: (Float) -> ArtShare? = { ArtShare(0.04f, 0.04f, 0.88f, 0.87f) }
+        val arts = listOf(none to none, fullArt to fullArt, tight to wide2)
+        // (smallest text of a reduced box, of a full box): no floor, the above style (10.5 / 8.5 sp), the inside style (9.5 / 8 sp)
+        val floors = listOf(0f to 0f, 10.5f to 8.5f, 9.5f to 8f)
+        var n = 0
+        var fallback = 0
+        var smallerSprites = 0
+        var smallerBoxes = 0
+        var reducedPlans = 0
+        for (b in BackdropCatalog.ALL) for ((w, h, s) in listOf(Triple(412f, 640f, 1f), Triple(412f, 265f, 1f), Triple(412f, 134f, 0.634f), Triple(412f, 146f, 1f),
+            Triple(365f, 266f, 1f), Triple(860f, 253f, 1f), Triple(206f, 136f, 1f), Triple(240f, 130f, 0.61f), Triple(246f, 138f, 0.65f))) {
+            val vw = w / s; val vh = h / s
+            val floor = Math.ceil((8f / s * 10f).toDouble()).toFloat() / 10f
+            val st = fit(b.id, vw, vh)
+            val k0 = if (s < 1f || h <= 400f) 1f else min(vw / 300f, vh / 430f).coerceIn(1f, 1.4f)
+            for ((wa, pa) in arts) for (inset in listOf(0f, 6f)) for ((minSp, fullSp) in floors) {
+                // reduced boxes are shorter (R9 wave 3); without a readability floor they are never used
+                val p = StageGeo.plan(vw, vh, st, 150f, 64f, 156f, 70f, k0, s, floor, inset, wa, pa, 56f, 58f, minSp, fullSp)
+                val o = Oracle.plan(vw, vh, st, 150f, 64f, 156f, 70f, k0, s, floor, inset, wa, pa, 56f, 58f, minSp, fullSp)
+                val tag = "${b.id} ${w}x$h s=$s inset=$inset text $minSp/$fullSp"
+                assertEquals("$tag clear", o.ok, p.clear)
+                assertEquals("$tag f", o.f, p.spriteScale, 0.0001f)
+                assertEquals("$tag k", o.k, p.k, 0.0005f)
+                assertEquals("$tag reduced", o.reduced, p.reduced)
+                // the readability floor itself: the smallest text of what is drawn stays on 8 sp on screen (when the floor can hold at all)
+                if (minSp > 0f) {
+                    val sp = if (p.reduced) minSp else fullSp
+                    assertTrue("$tag: text ${max(sp, floor) * s * p.k} sp on screen", max(sp, floor) * s * p.k >= PanelFit.MIN_SP - 0.01f)
                 }
-                // at the chosen f, no bigger card scale was clear
-                var k = 1.2f
-                while (k > p.k + 0.001f) {
-                    assertFalse("${b.id} $a bigger k=$k", anyClear(w, h, s, p.spriteScale, k))
-                    k = max(1f, k - 0.05f)
+                for ((name, a, c) in listOf(Triple("wild", o.wild, p.wildCard), Triple("ours", o.you, p.playerCard))) {
+                    assertEquals("$tag $name x", a.x, c.x, 0.01f); assertEquals("$tag $name y", a.y, c.y, 0.01f)
+                    assertEquals("$tag $name w", a.w, c.w, 0.01f); assertEquals("$tag $name h", a.h, c.h, 0.01f)
                 }
-                assertTrue("${b.id} $a", anyClear(w, h, s, p.spriteScale, p.k))
-            } else {
-                assertEquals(0.7f, p.spriteScale, 0f)
-                assertEquals(1f, p.k, 0f)
-                for (f in scales) assertFalse("${b.id} $a f=$f", anyClear(w, h, s, f, 1f))
+                n++
+                if (!p.clear) fallback++
+                if (p.spriteScale < 1f) smallerSprites++
+                if (p.clear && p.k < StageGeo.boxScales(vh * s, s, floor, k0, minSp, fullSp).start - 0.001f) smallerBoxes++
+                if (p.reduced) reducedPlans++
             }
         }
+        println("D1 oracle: $n combos, $fallback fallbacks, $smallerSprites with smaller sprites, $smallerBoxes with shrunk boxes, $reducedPlans reduced")
+        assertTrue(n > 500)
+        assertTrue("the grid reaches the shrink steps", smallerSprites > 0 && smallerBoxes > 0)
+        assertTrue("the grid reaches reduced boxes", reducedPlans > 0)
     }
 
-    @Test fun kStaysBetweenOneAndK0() {
-        for (b in BackdropCatalog.ALL) for (a in shapes) {
-            val h = 420f
-            val p = plan(b.id, a * h, h, true, k0 = 1.4f)
-            assertTrue("${b.id} $a", p.k >= 1f - 0.0001f && p.k <= 1.4f + 0.0001f)
+    private fun abs(v: Float) = if (v < 0f) -v else v
+
+    /** A straight, allocation-happy port of `autoRule` in docs/design/boxes-layout.html (Box objects, lists), the independent oracle. */
+    private object Oracle {
+        class Out(val wild: ArenaGeo.Box, val you: ArenaGeo.Box, val k: Float, val f: Float, val ok: Boolean, val reduced: Boolean = false)
+
+        private class Spot(val top: Boolean, val a: Char, val level: Int)
+
+        private fun spots(primTop: Boolean): List<Spot> {
+            val p = primTop
+            return listOf(Spot(p, 'c', 0), Spot(p, 'n', 1), Spot(p, 'L', 2), Spot(p, 'R', 2),
+                Spot(!p, 'c', 3), Spot(!p, 'n', 3), Spot(!p, 'L', 3), Spot(!p, 'R', 3))
         }
-    }
 
-    @Test fun tallPhoneBattleAndLandscapeAreAlwaysClear() {
-        // (the real arenas at f 1 were measured by the manager with the real card sizes; these card sizes are round numbers, so f may dip a notch)
-        for (b in BackdropCatalog.ALL) for ((w, h) in listOf(412f to 640f, 869f to 400f)) for (own in listOf(true, false)) {
-            val p = plan(b.id, w, h, own)
-            assertTrue("${b.id} ${w}x$h own=$own", p.clear)
-            assertTrue("${b.id} ${w}x$h own=$own f=${p.spriteScale}", p.spriteScale >= 0.8f)
-        }
-    }
+        private fun grow(b: ArenaGeo.Box, d: Float) = ArenaGeo.Box(b.x - d, b.y - d, b.w + 2f * d, b.h + 2f * d)
 
-    // ---------------------------------------------------------------- the fallback
-
-    @Test fun fallbackWhenNothingFitsIsDeterministic() {
-        // a panel far too small for the cards
-        val w = 200f; val h = 120f
-        val s = stage("night-alley", w, h)
-        val a = StageGeo.plan(w, h, s, wcw, wch, pcw, pch, 1.4f, true)
-        val b = StageGeo.plan(w, h, s, wcw, wch, pcw, pch, 1.4f, true)
-        assertFalse(a.clear)
-        assertEquals(0.7f, a.spriteScale, 0f)
-        assertEquals(1f, a.k, 0f)
-        assertEquals(wcw, a.wildCard.w, 0.001f)
-        assertEquals(a.wildCard.x, b.wildCard.x, 0f)
-        assertEquals(a.wildCard.y, b.wildCard.y, 0f)
-        assertEquals(a.playerCard.x, b.playerCard.x, 0f)
-        assertEquals(a.playerCard.y, b.playerCard.y, 0f)
-        assertEquals(s.playerFrame * 0.7f, a.playerSprite.h, 0.001f)
-    }
-
-    @Test fun fallbackPicksTheLeastOverlap() {
-        // the chosen pair covers no more of the sprites than the all-corners pair would
-        val w = 260f; val h = 200f
-        val s = stage("forest", w, h)
-        val p = StageGeo.plan(w, h, s, wcw, wch, pcw, pch, 1f, true)
-        if (p.clear) return
-        fun area(a: ArenaGeo.Box, b: ArenaGeo.Box): Float {
+        private fun area(a: ArenaGeo.Box, b: ArenaGeo.Box): Float {
             val dx = min(a.right, b.right) - max(a.x, b.x)
             val dy = min(a.bottom, b.bottom) - max(a.y, b.y)
             return if (dx > 0f && dy > 0f) dx * dy else 0f
         }
-        val wa = p.wildSprite.art(); val pa = p.playerSprite.art()
-        val chosen = area(p.wildCard, wa) + area(p.wildCard, pa) + area(p.playerCard, wa) + area(p.playerCard, pa) + area(p.wildCard, p.playerCard)
-        val corners = ArenaGeo.Box(8f, 8f, wcw, wch).let { c -> area(c, wa) + area(c, pa) } +
-            ArenaGeo.Box(w - 8f - pcw, h - 10f - pch, pcw, pch).let { c -> area(c, wa) + area(c, pa) }
-        assertTrue("$chosen vs $corners", chosen <= corners + 0.01f)
-    }
 
-    // ---------------------------------------------------------------- R8-FIX M2: clearance from what the sprites really draw
+        private fun artOf(of: (Float) -> ArtShare?, fx: Float, fy: Float, side: Float): ArenaGeo.Box =
+            (of(side) ?: ArtShare.DEFAULT).inFrame(fx - side / 2f, fy - side, side)
 
-    private fun planArt(id: String, w: Float, h: Float, own: Boolean, wild: ArtShare?, ours: ArtShare?, k0: Float = 1.2f): StagePlan =
-        StageGeo.plan(w, h, stage(id, w, h), wcw, wch, pcw, pch, k0, own, wild?.let { a -> { _: Float -> a } }, ours?.let { a -> { _: Float -> a } })
-
-    @Test fun theArtLambdasGetEachFramesSideAndNullMeansTheDefault() {
-        val w = 330f; val h = 250f
-        val s = stage("night-alley", w, h)
-        val wildSides = ArrayList<Float>(); val ourSides = ArrayList<Float>()
-        val p = StageGeo.plan(w, h, s, wcw, wch, pcw, pch, 1f, true, { wildSides += it; null }, { ourSides += it; null })
-        val q = StageGeo.plan(w, h, s, wcw, wch, pcw, pch, 1f, true)
-        // no share given = the 85 % square, so the plan is the very same
-        assertEquals(q.spriteScale, p.spriteScale, 0f)
-        assertEquals(q.wildCard.x, p.wildCard.x, 0f); assertEquals(q.playerCard.y, p.playerCard.y, 0f)
-        // asked at the sprite scales it tries, in px of the frame's side (the first = scale 1)
-        assertEquals(s.wildFrame, wildSides.first(), 0.001f)
-        assertEquals(s.playerFrame, ourSides.first(), 0.001f)
-        assertTrue(wildSides.all { it <= s.wildFrame + 0.001f && it >= s.wildFrame * 0.6f - 0.001f })
-    }
-
-    @Test fun aSmallerPictureMakesAPreviouslyBlockedPairClear() {
-        var better = 0
-        var example = ""
-        for (b in BackdropCatalog.ALL) for (w in gridW) for (h in gridH) for (own in listOf(true, false)) {
-            val flat = planArt(b.id, w, h, own, null, null)
-            val small = planArt(b.id, w, h, own, ArtShare(0.4f, 0.45f), ArtShare(0.4f, 0.45f))
-            if ((!flat.clear && small.clear) || (flat.spriteScale < 1f - 0.001f && small.spriteScale > flat.spriteScale + 0.001f)) {
-                better++
-                if (example.isEmpty()) example = "${b.id} ${w}x$h own=$own flat f=${flat.spriteScale} clear=${flat.clear} -> small f=${small.spriteScale} clear=${small.clear}"
-            }
-            if (small.clear) {
-                // clear of the SMALL pictures, as asked: the same check as assertClear, with the shares
-                val wa = small.wildSprite.share(0.4f, 0.45f); val pa = small.playerSprite.share(0.4f, 0.45f)
-                assertFalse("${b.id} ${w}x$h wild card on wild", small.wildCard.hits(wa)); assertFalse("${b.id} ${w}x$h wild card on ours", small.wildCard.hits(pa))
-                assertFalse("${b.id} ${w}x$h our card on wild", small.playerCard.hits(wa)); assertFalse("${b.id} ${w}x$h our card on ours", small.playerCard.hits(pa))
-                assertFalse("${b.id} ${w}x$h cards", small.wildCard.hits(small.playerCard))
-            }
+        private fun range(hi: Float, lo: Float): List<Float> {
+            val out = ArrayList<Float>()
+            var k = hi
+            while (k > lo + 0.001f) { out += k; k -= 0.05f }
+            out += lo
+            return out
         }
-        assertTrue("a small picture frees room somewhere in the catalog ($better)", better > 0)
-        println("M2 example: $example ($better combos better)")
-    }
 
-    @Test fun aSpecificBlockedPairClearsWithASmallPicture() {
-        // beach, 300 x 250 dp: with the flat 85 % the sprites must shrink to .8 for the cards; a 40 x 45 % picture leaves them whole and the cards bigger
-        val flat = planArt("beach", 300f, 250f, true, null, null)
-        val small = planArt("beach", 300f, 250f, true, ArtShare(0.4f, 0.45f), ArtShare(0.4f, 0.45f))
-        assertTrue(flat.clear && small.clear)
-        assertTrue("flat f=${flat.spriteScale}", flat.spriteScale < 1f)
-        assertEquals(1f, small.spriteScale, 0f)
-        assertTrue("k ${flat.k} -> ${small.k}", small.k > flat.k)
-    }
-
-    @Test fun aBiggerPictureNeedsMoreRoomThanTheDefault() {
-        // a full-frame sprite (1.0 x 1.0) is bigger than the 85 % default: cards that cleared the default may have to move or shrink
-        var worse = 0
-        for (b in BackdropCatalog.ALL) for (w in gridW) for (h in gridH) {
-            val flat = planArt(b.id, w, h, true, null, null)
-            val big = planArt(b.id, w, h, true, ArtShare(1f, 1f), ArtShare(1f, 1f))
-            if (big.spriteScale < flat.spriteScale - 0.001f || (flat.clear && !big.clear)) worse++
-            if (big.clear) {
-                val wa = big.wildSprite; val pa = big.playerSprite   // the whole frame is the picture
-                assertFalse("${b.id} ${w}x$h", big.wildCard.hits(wa) || big.wildCard.hits(pa) || big.playerCard.hits(wa) || big.playerCard.hits(pa))
+        /** The mockup's `place`. */
+        private fun place(sp: Spot, feetX: Float, art: ArenaGeo.Box, bw: Float, bh: Float, vw: Float, vh: Float, inset: Float, g: Float): ArenaGeo.Box {
+            val x = when (sp.a) {
+                'c', 'n' -> max(inset, min(vw - inset - bw, feetX - bw / 2f))
+                'L' -> inset
+                else -> vw - inset - bw
             }
+            val y0 = if (sp.a == 'n') (if (sp.top) art.y - g - bh else art.bottom + g) else if (sp.top) inset else vh - inset - bh
+            return ArenaGeo.Box(x, max(inset, min(vh - inset - bh, y0)), bw, bh)
         }
-        assertTrue("some arenas need the sprites smaller for a full-frame picture ($worse)", worse > 0)
-    }
 
-    private fun ArenaGeo.Box.share(aw: Float, ah: Float) = ArenaGeo.Box(x + w * (1f - aw) / 2f, y + h * (1f - ah), w * aw, h * ah)
+        fun anyOk(vw: Float, vh: Float, st: Stage, ww: Float, wh: Float, pw: Float, ph: Float, k: Float, f: Float, g: Float, inset: Float,
+                  wa: (Float) -> ArtShare?, pa: (Float) -> ArtShare?): Boolean {
+            val tall = vh > vw * 1.1f
+            val wArt = artOf(wa, st.wildFeetX, st.wildFeetY, st.wildFrame * f)
+            val pArt = artOf(pa, st.playerFeetX, st.playerFeetY, st.playerFrame * f)
+            for (oy in spots(!tall)) for (ow in spots(tall)) {
+                val y = place(oy, st.playerFeetX, pArt, pw * k, ph * k, vw, vh, inset, g)
+                val w = place(ow, st.wildFeetX, wArt, ww * k, wh * k, vw, vh, inset, g)
+                if (ok(y, w, wArt, pArt, g)) return true
+            }
+            return false
+        }
 
-    // ---------------------------------------------------------------- R8-FIX M3: both cards on top, and a fallback that protects the wild one
+        private fun ok(y: ArenaGeo.Box, w: ArenaGeo.Box, wa: ArenaGeo.Box, pa: ArenaGeo.Box, g: Float) =
+            !grow(y, g).hits(wa) && !grow(y, g).hits(pa) && !grow(w, g).hits(wa) && !grow(w, g).hits(pa) && !grow(y, g).hits(w)
 
-    @Test fun bothOnTopIsTriedOnlyFromScaleDotEightAndNeverMovesTheWildCardDown() {
-        var top = 0
-        var example = ""
-        for (b in BackdropCatalog.ALL) for (w in gridW) for (h in gridH) for (own in listOf(true, false)) for (zoom in listOf(1f, 0.72f)) {
-            val p = plan(b.id, w, h, own, zoom = zoom)
-            assertEquals("${b.id} ${w}x$h: the wild card keeps the top row", 8f, p.wildCard.y, 0.001f)
-            if (p.bothTop) {
-                top++
-                if (example.isEmpty()) example = "${b.id} ${w}x$h own=$own zoom=$zoom f=${p.spriteScale} clear=${p.clear}"
-                assertEquals("${b.id} ${w}x$h: ours on the top row too", 8f, p.playerCard.y, 0.001f)
-                if (p.clear) {
-                    assertTrue("${b.id} ${w}x$h: both on top only from .8 down (f=${p.spriteScale})", p.spriteScale <= 0.8f + 0.001f)
-                    assertClear("${b.id} ${w}x$h own=$own", w, h, p)
-                    assertTrue("${b.id} ${w}x$h: the two cards keep a gap in their shared row", p.wildCard.right + 6f <= p.playerCard.x + 0.01f || p.playerCard.right + 6f <= p.wildCard.x + 0.01f)
+        /**
+         * [wh2] / [ph2]: the heights of the reduced boxes, [minSp] / [fullSp]: the smallest text of a reduced / a full box (R9 wave 3, the
+         * one thing added to the mockup's rule: no scale under the one a text is readable at, and shorter boxes under the full one's).
+         */
+        fun plan(vw: Float, vh: Float, st: Stage, ww: Float, wh: Float, pw: Float, ph: Float, k0: Float, s: Float, floor: Float, inset: Float,
+                 wa: (Float) -> ArtShare?, pa: (Float) -> ArtShare?, wh2: Float, ph2: Float, minSp: Float, fullSp: Float): Out {
+            val bigH = vh * s
+            val target = max(0.55f, min(1f, 0.55f + (bigH - 130f) / 130f * 0.45f))
+            val already = s * max(1f, floor / 12f)
+            fun kv(scr: Float) = k0 * min(1f, scr / already)
+            fun readable(sp: Float) = if (sp <= 0f) 0f else min(1f, 8f / (max(sp, floor) * max(s, 0.01f)))
+            val kRead = readable(minSp)
+            val kFull = max(kRead, readable(fullSp))
+            val kStart = max(kv(target), kRead)
+            val kMin = max(min(kStart, kv(0.55f)), kRead)
+            val kNear = max(min(kStart, kv(0.85f)), kRead)
+            fun red(k: Float) = k < kFull - 0.0001f
+            fun wH(k: Float) = if (red(k)) wh2 else wh
+            fun pH(k: Float) = if (red(k)) ph2 else ph
+            val g = max(4f, 8f * min(1f, bigH / 260f)) / s
+            val tall = vh > vw * 1.1f
+            val phases = listOf(Triple(0, kStart, kNear), Triple(1, kStart, kNear), Triple(2, kStart, kNear), Triple(2, kNear, kMin), Triple(3, kStart, kMin))
+            val oursSpots = spots(!tall)
+            val wildSpots = spots(tall)
+            var worst: Out? = null
+            var worstScore = Double.MAX_VALUE
+            for (f in floatArrayOf(1f, 0.9f, 0.8f, 0.7f, 0.6f)) {
+                val wArt = artOf(wa, st.wildFeetX, st.wildFeetY, st.wildFrame * f)
+                val pArt = artOf(pa, st.playerFeetX, st.playerFeetY, st.playerFrame * f)
+                for ((level, hi, lo) in phases) for (k in range(hi, lo)) for (oy in oursSpots) for (ow in wildSpots) {
+                    if (oy.level > level || ow.level > level) continue
+                    val y = place(oy, st.playerFeetX, pArt, pw * k, pH(k) * k, vw, vh, inset, g)
+                    val w = place(ow, st.wildFeetX, wArt, ww * k, wH(k) * k, vw, vh, inset, g)
+                    if (ok(y, w, wArt, pArt, g)) return Out(w, y, k, f, true, red(k))
                 }
-            } else {
-                assertEquals("${b.id} ${w}x$h: ours in the bottom row", h - 10f, p.playerCard.bottom, 0.001f)
+                for (oy in oursSpots) for (ow in wildSpots) {
+                    val y = place(oy, st.playerFeetX, pArt, pw * kMin, pH(kMin) * kMin, vw, vh, inset, g)
+                    val w = place(ow, st.wildFeetX, wArt, ww * kMin, wH(kMin) * kMin, vw, vh, inset, g)
+                    val cover = area(y, wArt) + area(y, pArt) + area(w, wArt) + area(w, pArt) + area(y, w)
+                    val near = area(grow(y, g), wArt) + area(grow(y, g), pArt) + area(grow(w, g), wArt) + area(grow(w, g), pArt) + area(grow(y, g), w)
+                    val sc = cover.toDouble() * 1e6 + near
+                    if (sc < worstScore) { worstScore = sc; worst = Out(w, y, kMin, f, false, red(kMin)) }
+                }
             }
+            return worst!!
         }
-        assertTrue("both-on-top is used somewhere in the catalog ($top)", top > 0)
-        println("M3 both-on-top example: $example ($top plans)")
-    }
-
-    @Test fun bothOnTopBeatsShrinkingTheSpritesFurther() {
-        // a clear plan below .8 means neither the usual rows nor the top row had a clear pair at .8 (at any card scale)
-        var below = 0
-        for (b in BackdropCatalog.ALL) for (w in gridW) for (h in gridH) {
-            val s = stage(b.id, w, h)
-            val p = plan(b.id, w, h, true)
-            if (!p.clear || p.spriteScale >= 0.8f - 0.001f) continue
-            below++
-            var k = 1.2f
-            while (true) {
-                assertFalse("${b.id} ${w}x$h f=.8 k=$k usual", anyClear(w, h, s, 0.8f, k))
-                assertFalse("${b.id} ${w}x$h f=.8 k=$k top", anyClearTop(w, h, s, 0.8f, k))
-                if (k <= 1f) break
-                k = max(1f, k - 0.05f)
-            }
-        }
-        println("M3 plans below .8: $below")
-    }
-
-    // both cards on the top row: the wild card at any of its 4 positions, ours top-right or top-middle
-    private fun anyClearTop(w: Float, h: Float, s: Stage, f: Float, k: Float): Boolean {
-        val ws = s.wildFrame * f; val ps = s.playerFrame * f
-        val wa = ArenaGeo.Box(s.wildFeetX - ws / 2, s.wildFeetY - ws, ws, ws).art()
-        val pa = ArenaGeo.Box(s.playerFeetX - ps / 2, s.playerFeetY - ps, ps, ps).art()
-        val cw = wcw * k; val ch = wch * k; val qw = pcw * k; val qh = pch * k
-        val mid = (pa.right + wa.x) / 2f
-        val wx = listOf(wa.x - 6f - cw, 8f, mid - cw / 2f, w - 8f - cw).map { max(8f, min(it, w - 8f - cw)) }
-        val px = listOf(w - 8f - qw, mid - qw / 2f).map { max(8f, min(it, w - 8f - qw)) }
-        for (x in wx) for (y in px) {
-            val wild = ArenaGeo.Box(x, 8f, cw, ch)
-            val pl = ArenaGeo.Box(y, 8f, qw, qh)
-            val apart = !wild.hits(ArenaGeo.Box(pl.x - 6f, pl.y, pl.w + 12f, pl.h))
-            if (inside(w, h - 4f, wild) && inside(w, h, pl) && !wild.hits(wa) && !wild.hits(pa) && !pl.hits(wa) && !pl.hits(pa) && apart) return true
-        }
-        return false
-    }
-
-    // the weighted score the fallback minimises: wild covered 3x, ours 1x, the cards on each other 3x, off the panel 4x
-    private fun ov(a: ArenaGeo.Box, b: ArenaGeo.Box): Float {
-        val dx = min(a.right, b.right) - max(a.x, b.x); val dy = min(a.bottom, b.bottom) - max(a.y, b.y)
-        return if (dx > 0f && dy > 0f) dx * dy else 0f
-    }
-    private fun off(w: Float, h: Float, b: ArenaGeo.Box) = b.w * b.h - ov(b, ArenaGeo.Box(0f, 0f, w, h))
-    private fun weighted(w: Float, h: Float, c: ArenaGeo.Box, d: ArenaGeo.Box, wa: ArenaGeo.Box, pa: ArenaGeo.Box) =
-        3f * (ov(c, wa) + ov(d, wa)) + (ov(c, pa) + ov(d, pa)) + 3f * ov(c, d) + 4f * (off(w, h, c) + off(w, h, d))
-
-    /** Every position pair the fallback considers ([own] decides the orders only through StageGeo's own tables, so all 4 x 6 are listed): (wild covered, ours covered, weighted). */
-    private fun candidates(w: Float, h: Float, p: StagePlan): List<Triple<Float, Float, Float>> {
-        val wa = p.wildSprite.art(); val pa = p.playerSprite.art()
-        val mid = (pa.right + wa.x) / 2f
-        fun cx(x: Float, cw: Float) = max(8f, min(x, w - 8f - cw))
-        val wxs = listOf(wa.x - 6f - wcw, 8f, mid - wcw / 2f, w - 8f - wcw).map { cx(it, wcw) }
-        val bottom = listOf(pa.right + 6f, w - 8f - pcw, mid - pcw / 2f, 8f).map { ArenaGeo.Box(cx(it, pcw), h - 10f - pch, pcw, pch) }
-        val top = listOf(w - 8f - pcw, mid - pcw / 2f).map { ArenaGeo.Box(cx(it, pcw), 8f, pcw, pch) }
-        val out = ArrayList<Triple<Float, Float, Float>>()
-        for (x in wxs) {
-            val wild = ArenaGeo.Box(x, 8f, wcw, wch)
-            for (pl in bottom + top) out += Triple(ov(wild, wa) + ov(pl, wa), ov(wild, pa) + ov(pl, pa), weighted(w, h, wild, pl, wa, pa))
-        }
-        return out
-    }
-
-    @Test fun theFallbackIsTheLeastWeightedOverlapOfEveryPositionPair() {
-        var fallbacks = 0
-        var protecting = 0   // fallbacks where the weights chose a pair with less on the wild one than the plain sum would have
-        for (b in BackdropCatalog.ALL) for (w in listOf(200f, 240f, 300f)) for (h in listOf(110f, 140f, 170f)) for (own in listOf(true, false)) {
-            val s = stage(b.id, w, h)
-            val p = StageGeo.plan(w, h, s, wcw, wch, pcw, pch, 1f, own)
-            if (p.clear) continue
-            fallbacks++
-            assertEquals(0.7f, p.spriteScale, 0f)
-            assertEquals(8f, p.wildCard.y, 0.001f)
-            val wa = p.wildSprite.art(); val pa = p.playerSprite.art()
-            val all = candidates(w, h, p)
-            val chosen = weighted(w, h, p.wildCard, p.playerCard, wa, pa)
-            assertEquals("${b.id} ${w}x$h own=$own", all.minOf { it.third }, chosen, 0.5f)
-            val chosenWild = ov(p.wildCard, wa) + ov(p.playerCard, wa)
-            val plain = all.minBy { it.first + it.second }
-            if (chosenWild < plain.first - 0.5f) protecting++
-        }
-        assertTrue("some panels fall back ($fallbacks)", fallbacks > 0)
-        println("M3 fallbacks: $fallbacks, weights protected the wild one in $protecting")
     }
 }

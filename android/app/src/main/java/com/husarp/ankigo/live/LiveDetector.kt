@@ -30,7 +30,7 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
     }
 
     private val ledger = CardLedger()
-    fun expectOwn(id: Long, rep: Int) = ledger.own.expect(id, rep, SystemClock.elapsedRealtime())
+    fun expectOwn(id: Long, rep: Int, pinned: Boolean = false) = ledger.own.expect(id, rep, SystemClock.elapsedRealtime(), pinned)
     fun cancelOwn(id: Long, rep: Int) = ledger.own.cancel(id, rep)
 
     /** Own answers waiting to be absorbed, oldest first: they keep their order whatever else is queued on the worker. */

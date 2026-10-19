@@ -3,6 +3,7 @@ package com.husarp.ankigo.ui
 import com.husarp.ankigo.game.lookSpecies
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.data.SpriteKind
@@ -27,7 +28,7 @@ import kotlin.math.max
  * Pace: an answer's events take about a second; with 4 or more answers waiting the durations are halved, and with
  * 10 or more the animations are skipped and one summary line shows (then the panel is redrawn from the saved game).
  */
-class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean = true) {
+class EventPlayer(private val panel: BattlePanelView, private val continueOnPanel: Boolean = true) {
     private sealed class Item {
         class Ev(val e: GameEvent) : Item()
         class Act(val block: () -> Unit) : Item()
@@ -44,10 +45,12 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
     private var factor = 1.0
     private var lastButton = 0
     private var mult = 1.0
-    private var logSide = LogSide.YOURS   // R6-12: the side of the event being played (the bar's flip slots)
-    private var logFresh = false          // its line starts a new fight: both sides start over
+    private var logWhole = true           // R9 D3: the line of the event being played is about the whole battle (the bar shows it); else it is only spoken
     /** The next fight's Encounter, held back while the result tiles show (it plays with the next answer's events). */
     private var parked: GameEvent.Encounter? = null
+    /** R9-W6 CX-A: the player's XpGained whose burst already played inside the Caught step; its own step only waits for what is left ([doneAt] = uptime ms). */
+    private class XpRun(val ev: GameEvent.XpGained, val doneAt: Long)
+    private var xpRun: XpRun? = null
 
     /** True when nothing is playing or waiting. */
     val idle: Boolean get() = !busy && queue.isEmpty()
@@ -56,12 +59,21 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
         if (events.isEmpty()) return
         releaseTiles()
         val summary = CatchSummary.of(events, data = GameRepo.data) // the throw number comes with the BallThrow event (counted by the fight in the game state)
-        val at = if (summary != null) CatchTilesPlan.resultIndex(events) else -1
+        // R9 C5: a won / caught fight with a next one behind it holds that one from now on (Continue shows at once, the rewards keep playing);
+        // screens whose Continue sits under the result tiles queue the tiles right behind the fight's end so they show early too
+        val early = summary != null && NextFight.holdsEarly(events, panel.resultMode())
+        val at = when {
+            summary == null -> -1
+            early && continueOnPanel -> NextFight.earlyTilesIndex(events)
+            else -> CatchTilesPlan.resultIndex(events)
+        }
         events.forEachIndexed { i, e ->
             if (i == at) queue.addLast(Item.Tiles(summary!!))
             queue.addLast(Item.Ev(e))
         }
         if (at == events.size) queue.addLast(Item.Tiles(summary!!))
+        for (e in events) if (e is GameEvent.Encounter) panel.prefetchBackdrop(e.species, e.wildUid)   // R9 C4: its picture loads while the rewards play
+        if (early) panel.holdEarly()
         pump()
     }
 
@@ -74,6 +86,7 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
     /** Drops everything waiting and stops the animations. The caller redraws from the state afterwards. */
     fun clear() {
         parked = null
+        xpRun = null
         panel.hideCatchTiles()
         epoch++
         queue.clear()
@@ -129,13 +142,19 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
                     0L
                 }
             }
+            if (ms == PENDING) { busy = true; return }   // R9 C4: the event ends itself ([resume]) once its picture is there
             if (ms > 0) {
                 busy = true
-                val my = epoch
-                handler.postDelayed({ if (my == epoch) { busy = false; arena.releaseMove(); pump() } }, ms)
+                resume(ms)
                 return
             }
         }
+    }
+
+    /** The event being played is over in [ms]: the next one starts. */
+    private fun resume(ms: Long) {
+        val my = epoch
+        handler.postDelayed({ if (my == epoch) { busy = false; arena.releaseMove(); pump() } }, ms)
     }
 
     /** An answer (or a ball throw) is queued behind what is playing: the result tiles would only flash by. */
@@ -157,10 +176,48 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
      */
     fun continueBattle(): Boolean {
         if (!panel.holdsNextFight) return false
+        if (!idle) { skipToNextFight(); return true }   // R9 C5: the rewards still play (Continue came at once): they end now
         releaseTiles()
         dirty = true   // nothing parked: the wild one is drawn from the saved game when the queue is done
         pump()
         return true
+    }
+
+    /**
+     * R9 C5: Continue while the reward animations of the won / caught fight still play (or wait). The rewards are in the saved game
+     * already, so: what plays stops (and its cues stay silent), every event up to the next fight's Encounter is only observed, the
+     * panel is drawn from the saved game with the next wild one still held back (it is not drawn), queued actions run, the result
+     * tiles go, and the Encounter plays as usual (new background first, C4). What follows the Encounter in the queue plays after it.
+     */
+    private fun skipToNextFight() {
+        val items = ArrayList<Item>()
+        while (queue.isNotEmpty()) items += queue.removeFirst()
+        val held = parked
+        parked = null
+        xpRun = null
+        val before: List<Item>
+        val next: GameEvent.Encounter?
+        val after: List<Item>
+        if (held != null) {
+            before = emptyList(); next = held; after = items   // the next fight was parked already: all that is queued follows it
+        } else {
+            val s = NextFight.splitAtNext(items) { it is Item.Ev && it.e is GameEvent.Encounter }
+            before = s.before; next = ((s.next as? Item.Ev)?.e as? GameEvent.Encounter); after = s.after
+        }
+        epoch++
+        busy = false
+        mult = 1.0
+        handler.removeCallbacksAndMessages(null)
+        GameSound.cancelPending()
+        panel.cancelAnimations()
+        for (item in before) if (item is Item.Ev) panel.observeStudyEvent(item.e)
+        panel.renderAll()   // still holding: the player side, the footer and the numbers come from the saved game, the next wild one waits
+        for (item in before) if (item is Item.Act) try { item.block() } catch (t: Throwable) { Report.fail("PANEL", "queued action", t) }
+        panel.hideCatchTiles()
+        if (next != null) queue.addLast(Item.Ev(next))
+        queue.addAll(after)
+        dirty = true
+        pump()
     }
 
     /**
@@ -169,29 +226,32 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
      */
     fun dropHold() {
         if (!panel.holdsNextFight) return
+        if (!idle) { finishNow(); return }   // R9 C5: the hold started with the winning batch, its rewards may still play: they end, the saved game shows
         parked = null
         panel.hideCatchTiles()
-        if (idle) panel.renderAll() else dirty = true
+        panel.renderAll()
     }
 
     /** Too many answers waiting: no animations, one summary line, then the saved state. */
     private fun skipAll(first: Item) {
         val events = ArrayList<GameEvent>()
         val acts = ArrayList<() -> Unit>()
+        xpRun = null
         var result: CatchSummary? = null
         fun take(i: Item) { if (i is Item.Ev) events += i.e else if (i is Item.Act) acts += i.block else if (i is Item.Tiles) result = i.summary }
         take(first)
         while (queue.isNotEmpty()) take(queue.removeFirst())
+        panel.releaseEarlyHold()   // R9 C5: the early hold of a batch that is skipped goes; the result below decides again
         panel.cancelAnimations()
         events.forEach { panel.observeStudyEvent(it) }
         panel.renderAll()
         acts.forEach { it() }
         val lone = events.singleOrNull() as? GameEvent.Encounter   // Continue with reduced motion: just the new wild one
         if (lone != null) {
-            logSide = LogSide.WILD; logFresh = true
+            logWhole = false
             log(LogKind.SYS, "NEW", "A wild ${em(bare(lone.name))}" + (if (lone.shiny) " ${em("(shiny!)")}" else "") + " appeared!")
         }
-        else if (events.isNotEmpty()) panel.setLog(LogKind.SYS, "FAST", summary(events), fresh = true)
+        else if (events.isNotEmpty()) panel.setLog(LogKind.SYS, "FAST", summary(events))
         // One answer's fight result still shows its tiles (no animation needed); a pile of answers gets only the summary line.
         result?.let { r ->
             if (events.count { it is GameEvent.Counted } <= 1 && panel.showCatchTiles(r, false) == CatchTilesPlan.Mode.HOLD) {
@@ -262,6 +322,9 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
         }
         return null
     }
+
+    /** R9-W6 CX-A: looks ahead in the queue: the player's XpGained that belongs to the Caught being played (null = no XP for the player). */
+    private fun upcomingPlayerXp(): GameEvent.XpGained? = CatchXp.find(queue.asSequence().map { (it as? Item.Ev)?.e }.asIterable(), arena.playerUid)
     private val ctx get() = panel.context
 
     /** True while game sounds must stay quiet (the study screen sets this when the card has audio). */
@@ -269,6 +332,7 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
 
     init {
         GameSound.warm(panel.context)
+        panel.hostIdle = { idle }   // R9-W5-A: the panel follows changes of the saved game made elsewhere only while nothing plays
         if (continueOnPanel) panel.onContinue = { continueBattle() }   // the Continue tap under the held tiles (screens whose answers come from AnkiDroid)
         // a held next wild one let go by a window change (B7) plays its entrance now; nothing parked: drawn from the save
         panel.onHeldReleased = { val e = parked; if (e != null) { parked = null; queue.addFirst(Item.Ev(e)); pump() } else if (idle) panel.renderAll() }
@@ -279,9 +343,9 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
         if (e is GameEvent.Fainted && !e.player && willBeCaught()) return
         GameSound.onEvent(panel.context, e, muted(), arena.ballShown, factor, delayMs)
     }
+    /** A battle line: across the bar when it is about the whole battle; a move or a line about one side is on the bar / the arena already, so it is only spoken. */
     private fun log(kind: LogKind, pill: String, text: String) {
-        panel.setLog(kind, pill, text, side = logSide, fresh = logFresh)
-        logFresh = false
+        if (logWhole) panel.setLog(kind, pill, text) else panel.sayBattle(text)
     }
 
     private fun label(b: Int) = when (b) { 1 -> "AGAIN"; 2 -> "HARD"; 3 -> "GOOD"; 4 -> "EASY"; else -> "OK" }
@@ -314,8 +378,8 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
         val st = GameRepo.state
         val data = GameRepo.data
         panel.observeStudyEvent(e)
-        logSide = LogSides.of(e); logFresh = LogSides.startsFight(e)
-        if (e !is GameEvent.Attack) sound(e)   // an attack sounds from [playAttack]: with its animation, when the hit lands
+        logWhole = ActionBarModel.scope(e) == LineScope.WHOLE
+        if (e !is GameEvent.Attack && e !is GameEvent.Encounter) sound(e)   // an attack sounds from [playAttack]: with its animation, when the hit lands; a new wild one's cry when it comes in
         when (e) {
             is GameEvent.Counted -> {
                 lastButton = e.button
@@ -366,20 +430,11 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
                 return d(650)
             }
             is GameEvent.XpGained -> {
-                if (e.uid != arena.playerUid) { teamXpCard(e); return 0 }
-                val frac = if (e.xpForLevel > 0) e.xpInLevel.toFloat() / e.xpForLevel else 1f
-                // XP animation (PLAN 38): sparks fly into our Pokémon first and the card's bar starts when the first one lands (0 = off, as before)
-                val lead = if (AppPrefs.xpAnimation(ctx)) arena.xpAbsorb(e.xp, factor.toFloat()) else 0L
-                if (e.level > arena.playerLevel || frac < arena.xpShown - 0.001f) {
-                    // grew a level: fill the bar, then restart at the new level's progress
-                    atMs(lead) {
-                        arena.setPlayerXp(e.xpForLevel, e.xpForLevel, true)
-                        after(450) { arena.setPlayerXp(0, e.xpForLevel, false); arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
-                    }
-                    return lead + d(950)
+                xpRun?.let { run ->   // R9-W6 CX-A: its burst played inside the Caught step already; only what is left of it is waited for
+                    if (run.ev === e) { xpRun = null; return CatchXp.remaining(run.doneAt, SystemClock.uptimeMillis()) }
                 }
-                atMs(lead) { arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
-                return lead + d(600)
+                if (e.uid != arena.playerUid) { teamXpCard(e); return 0 }
+                return startXp(e, fromBall = false)
             }
             is GameEvent.LevelUp -> {
                 if (e.uid == arena.playerUid) {
@@ -470,6 +525,38 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
                 return d(800)
             }
         }
+    }
+
+    /**
+     * XP animation (PLAN 38) for the player's [e]: sparks fly into our Pokémon and the card's bar grows with them (0 = off, as before).
+     * R9-C8: the bar is driven by the effect's own clock, one step per landing; R9-C3: a soft pling per picked landing. [fromBall]
+     * (R9-W6 CX-A, from the Caught step): the orbs leave the catch ball. Returns how long until the next event may start.
+     */
+    private fun startXp(e: GameEvent.XpGained, fromBall: Boolean): Long {
+        val frac = if (e.xpForLevel > 0) e.xpInLevel.toFloat() / e.xpForLevel else 1f
+        val levelUp = e.level > arena.playerLevel || frac < arena.xpShown - 0.001f
+        val animated = AppPrefs.xpAnimation(ctx)
+        val fill = if (animated) XpFill(arena.xpShown, e.xpInLevel, e.xpForLevel, levelUp) else null
+        // not animated: xp 0 starts no orbs but still clears the previous plan (catchWithXp reads arena.xpPlan as THIS call's plan)
+        val lead = arena.xpAbsorb(if (animated) e.xp else 0, factor.toFloat(), fill, { rate, last -> GameSound.xpOrb(ctx, rate, last, muted()) }, fromBall)
+        val lastLand = if (lead > 0L) arena.xpLastLandingMs else 0L
+        if (levelUp) {
+            if (lead > 0L) {
+                // the orbs fill the bar to 100 %; a moment later it restarts at 0 and grows on to the new level's progress
+                atMs(lastLand + d(300)) { arena.setPlayerXp(0, e.xpForLevel, false); arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
+                return lastLand + d(950)
+            }
+            // grew a level: fill the bar, then restart at the new level's progress
+            atMs(lead) {
+                arena.setPlayerXp(e.xpForLevel, e.xpForLevel, true)
+                after(450) { arena.setPlayerXp(0, e.xpForLevel, false); arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
+            }
+            return lead + d(950)
+        }
+        // with orbs the bar is already growing; the wait covers the last landing when it comes later than the old 600 ms
+        if (lead > 0L) return max(lead + d(600), lastLand + d(150))
+        atMs(lead) { arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
+        return lead + d(600)
     }
 
     /** The floating texts of [e] (damage, Miss, effectiveness, status words, stat badges, +HP, Hesitated), via the pure mapper. */
@@ -563,26 +650,54 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
         }
     }
 
+    /**
+     * R9 C4: the order of a new fight is: the background changes first (its cross-fade), then the wild one comes in, already at its
+     * right stand point. The wild side stays out while the background loads (its picture was asked for early, [enqueue], so it is
+     * usually in memory), the wild one enters when the picture is applied and has cross-faded ([NextFight.EntranceGate]); a picture
+     * that is not there after [NextFight.PICTURE_WAIT_MS] does not hold the fight up (the wild one comes in and may move once,
+     * as it did before). Reduced motion never gets here ([skipAll] draws from the saved game, which waits the same way).
+     */
     private fun playEncounter(e: GameEvent.Encounter): Long {
         val sp = GameRepo.data?.species?.get(e.species)
+        val my = epoch
+        val gate = NextFight.EntranceGate()
+        var entered = false
+        var inline = true
+        panel.cancelEnemyReveal()
         arena.resetEnemySide()
+        arena.setEnemyShown(false)
         arena.setEnemyStatus(null)
         arena.setPlayerStatus(null)
-        arena.setEnemyShown(true)
-        arena.setEnemyCardShown(true)
-        arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty())
         arena.setBackdrop(sp?.types.orEmpty(), BackdropCatalog.seed(e.wildUid), BackdropCatalog.isLegendary(sp))   // R8-03: one of the pictures for this wild Pokémon's type, random per encounter
+        arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty())
         arena.setEnemyHp(e.hp, e.maxHp, false)
         arena.setNewTag(e.newSpecies)
         if (sp != null) {
             PanelSprites.show(ctx, arena.enemySprite, sp, SpriteKind.FRONT, e.shiny, false)
             panel.noteEnemySprite(e.species, e.shiny)
         }
-        arena.enter(false, d(450))
-        if (e.shiny) arena.shinyBurst(false, d(ShinyBurst.DELAY_MS))
-        log(LogKind.SYS, "NEW", "A wild ${em(bare(e.name))}" + (if (e.shiny) " ${em("(shiny!)")}" else "") + " appeared!")
-        GameRepo.state?.let { s -> GameRepo.data?.let { panel.prefetch(s, it) } }
-        return d(950)
+        fun enter() {
+            if (my != epoch || !gate.enter()) return
+            entered = true
+            arena.setEnemyShown(true)
+            arena.setEnemyCardShown(true)
+            arena.enter(false, d(450))
+            if (e.shiny) arena.shinyBurst(false, d(ShinyBurst.DELAY_MS))
+            sound(e)
+            log(LogKind.SYS, "NEW", "A wild ${em(bare(e.name))}" + (if (e.shiny) " ${em("(shiny!)")}" else "") + " appeared!")
+            GameRepo.state?.let { s -> GameRepo.data?.let { panel.prefetch(s, it) } }
+            if (!inline) resume(d(950))
+        }
+        fun open() {   // the picture is there (or the wait ran out): in after its cross-fade
+            if (my != epoch || !gate.open()) return
+            val fade = arena.backdropFadeMs()
+            if (fade > 0L) atMs(fade) { enter() } else enter()
+        }
+        arena.whenBackdropReady(NextFight.PICTURE_WAIT_MS) { open() }
+        if (entered) return d(950)
+        inline = false
+        atMs(NextFight.PICTURE_WAIT_MS + 300L) { open() }   // the arena's own cap needs a window; this one never hangs the player
+        return PENDING
     }
 
     /** Optional ball tap: the wild one goes into the ball, wobbles, then breaks free or stays (Caught follows). */
@@ -610,6 +725,7 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
     private fun playCaught(e: GameEvent.Caught): Long {
         val hadBall = arena.ballShown
         val swap = upcomingSwap()
+        val xpEv = upcomingPlayerXp()
         var t = 0L
         arena.setEnemyCardShown(false)
         if (!hadBall) {
@@ -619,21 +735,54 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
             after(450) { arena.wobbleBall(d(1800)) }
             t = 2250
         }
+        if (xpEv != null) { catchWithXp(e, xpEv, swap, t); return PENDING }
         after(t) {
-            val line2 = swap?.let { "Swapped for Lv ${it.level}" } ?: if (e.newSpecies) "New in your Pokédex" else null
-            arena.showBanner("Gotcha!", "${bare(e.name)} was caught", line2)
-            arena.showStars(true)
-            val where = if (e.toTeam) "" else " It went to the box."
-            log(LogKind.SYS, "GOTCHA", "${em(bare(e.name))} was caught!" + (if (e.newSpecies) " New in your Pokédex!" else "") + where)
-            GameRepo.state?.let { s -> panel.setBalls(BattlePanelView.ballCount(s), true) }
+            showGotcha(e, swap, null)
         }
-        after(t + 1600) {
-            arena.hideBanner()
-            arena.showStars(false)
-            arena.clearBall()
-            arena.setEnemyShown(false)
-        }
+        after(t + 1600) { endCatch() }
         return d(t + 1650)
+    }
+
+    /** The click: "Gotcha!" + stars + the log line ([xp] = the player's XP in the line, CX-A). */
+    private fun showGotcha(e: GameEvent.Caught, swap: GameEvent.Duplicate?, xp: Int?, numberAbove: Boolean = false) {
+        val line2 = swap?.let { "Swapped for Lv ${it.level}" } ?: if (e.newSpecies) "New in your Pokédex" else null
+        arena.showBanner("Gotcha!", "${bare(e.name)} was caught", line2, numberAbove)
+        arena.showStars(true)
+        val where = if (e.toTeam) "" else " It went to the box."
+        log(LogKind.SYS, "GOTCHA", "${em(bare(e.name))} was caught!" + (if (xp != null) " +$xp XP" else "") + (if (e.newSpecies) " New in your Pokédex!" else "") + where)
+        GameRepo.state?.let { s -> panel.setBalls(BattlePanelView.ballCount(s), true) }
+    }
+
+    private fun endCatch() {
+        arena.hideBanner()
+        arena.showStars(false)
+        arena.clearBall()
+        arena.setEnemyShown(false)
+    }
+
+    /**
+     * R9-W6 CX-A (item 5): the catch gives the player's XP ([xpEv], found by looking ahead, whatever sits between Caught and it in the
+     * queue: catch badges, a swap, a heal, team XP). At the click (after [t] ms) "Gotcha!" + stars and the XP burst start TOGETHER: the
+     * orbs leave the ball (glowing while they go) and fly to our Pokémon, the ball fades after the last launch, banner and stars stay
+     * until just after the last landing. The XpGained step later only waits for what is left ([xpRun]); no second burst, no second fill.
+     * Without orbs (XP animation off, no window yet) the bar fills at the click and the banner stays as it always did.
+     */
+    private fun catchWithXp(e: GameEvent.Caught, xpEv: GameEvent.XpGained, swap: GameEvent.Duplicate?, t: Long) {
+        after(t) {
+            val wait = startXp(xpEv, fromBall = true)
+            xpRun = XpRun(xpEv, SystemClock.uptimeMillis() + wait)
+            val plan = arena.xpPlan
+            showGotcha(e, swap, xpEv.xp, numberAbove = plan != null)
+            if (plan == null) {   // no orbs flew: the old timing for the banner (the bar was filled at the click)
+                after(1600) { endCatch() }
+                resume(d(1650))
+                return@after
+            }
+            atMs(plan.ballFadeFrom.toLong()) { arena.fadeBall(plan.ballFadeMs.toLong()) }
+            atMs(plan.bannerFadeFrom.toLong()) { arena.fadeBanner(plan.bannerEnd.toLong() - plan.bannerFadeFrom.toLong()) }
+            atMs(plan.bannerEnd.toLong()) { endCatch() }
+            resume(plan.bannerEnd.toLong() + d(50))
+        }
     }
 
     /** Sprite flashes white three times, swaps to the new back sprite at the middle flash. */
@@ -661,6 +810,7 @@ class EventPlayer(private val panel: BattlePanelView, continueOnPanel: Boolean =
     }
 
     private companion object {
+        const val PENDING = -1L // an event that is not over until it says so ([resume])
         const val SLOW_AT = 4   // answers waiting: halve the durations
         const val SKIP_AT = 10  // answers waiting: skip the animations
     }

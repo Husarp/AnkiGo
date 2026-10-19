@@ -236,7 +236,6 @@ class Battle(
 
 class Settings(
     val gens: MutableSet<Int> = Tuning.DEFAULT_GENS.toMutableSet(),
-    var cardsPerRound: Int = Tuning.CARDS_PER_ROUND,
     var autoMode: Int = Tuning.DEFAULT_AUTO_MODE,       // Ankimon automatic_battle: 1 always catch, 2 defeat (catch shiny/protected), 3 catch new species
     var protectLegendary: Boolean = true,
     var protectMythical: Boolean = true,
@@ -320,6 +319,13 @@ class GameState(
     val achInferred: MutableSet<String> = linkedSetOf(),       // "<id>/<tier>" of reached tiers whose date is only the day AnkiGo first saw them (silent look, backfill, a first external feed), not the day they happened (R4 fix A3)
     val badgeAt: MutableMap<Int, Long> = mutableMapOf(),       // Ankimon badge id -> epoch ms it was earned here (old badges have none)
     var achSince: Long = 0,                                    // epoch ms the achievement tracking began (0 = not yet; set by the first Achievements.check)
+    /** Version of the achievement tier ladders this save's [achTiers] / [achInferred] are written for (AchievementTable.LADDER). A new game starts current; a save without the key is 1; Achievements.migrate remaps an older one once (R9-B2). */
+    var achLadder: Int = AchievementTable.LADDER,
+    /** R9-W4-B: the uid of the Pokémon picked as the starter ("" = none known: an old save, an import). It counts for no achievement (Achievements.value). */
+    var starterUid: String = "",
+    /** Species the starter alone put into [seen] / [caught] (its own, and the form it evolved into): not counted by the Pokédex rows until met / caught for real. */
+    val starterSeen: MutableSet<Int> = linkedSetOf(),
+    val starterCaught: MutableSet<Int> = linkedSetOf(),
     val settings: Settings = Settings(),
 ) {
     fun mon(uid: String?): Mon? = mons.firstOrNull { it.uid == uid }
@@ -338,7 +344,7 @@ class GameState(
 
     /** Adds [species] to the Pokédex as seen; the first time, [at] is remembered in [seenAt] (never overwritten). */
     fun markSeen(species: Int, at: Long) {
-        if (seen.add(species)) seenAt.putIfAbsent(species, at)
+        if (seen.add(species)) seenAt.putIfAbsent(species, at) else starterSeen.remove(species) // met again for real: no longer only the starter's
     }
 
     /** When [species] was first seen: its [seenAt] date, else the earliest known catch date of an owned copy, else null. */

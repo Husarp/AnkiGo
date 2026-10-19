@@ -82,7 +82,7 @@ class R6CompareShots {
         val six = listOf("t1", "t2", "t3", "t4", "t5", "t6").map { ComparePick.Owned(it) }
         paparazzi.shootPage("r6compare-moves-6narrow", listOf(Variants.PHONE)) { ctx ->
             val p = page(ctx, six, vs, CompareGroup.STATS, moveRows)
-            CompareStore.saveFit(ctx, 6)
+            p.fit = 6 // R9 C1: a screen starts on Auto, the shot sets what it shows
             pageScreen(ctx, p)
         }
         CompareStore.saveFit(Shots.files(paparazzi.context), CompareFit.AUTO)

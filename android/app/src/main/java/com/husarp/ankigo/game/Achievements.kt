@@ -89,24 +89,47 @@ object Achievements {
 
     /** The number [metric] stands at now. Derived ones read the save; counted ones read GameState.counters. */
     fun value(metric: Metric, state: GameState, data: GameData): Long = when (metric) {
-        Metric.CATCHES -> max(state.catches, state.mons.size).toLong()
+        Metric.CATCHES -> max(state.catches, state.mons.size - ownedStarter(state)).toLong()
         Metric.ANSWERS -> state.totalReviews
         Metric.DEFEATS -> state.defeats.toLong()
         Metric.EVOLUTIONS -> state.evolutions.toLong()
         Metric.BEST_COMBO -> state.bestCardStreak.toLong()
         Metric.BEST_STREAK_DAYS -> max(state.bestStreakDays, state.streakDays).toLong()
-        Metric.DEX_SEEN -> state.seen.size.toLong()
-        Metric.DEX_CAUGHT -> state.caught.size.toLong()
-        Metric.HIGHEST_LEVEL -> (state.mons.maxOfOrNull { it.level } ?: 0).toLong()
-        Metric.TOTAL_LEVELS -> state.mons.sumOf { it.level.toLong() }
+        Metric.DEX_SEEN -> (state.seen.size - starterOnly(state, state.starterSeen, state.seen)).toLong()
+        Metric.DEX_CAUGHT -> (state.caught.size - starterOnly(state, state.starterCaught, state.caught)).toLong()
+        Metric.HIGHEST_LEVEL -> (state.mons.maxOfOrNull { if (isStarter(state, it) && it.level <= Tuning.STARTER_LEVEL) 0 else it.level } ?: 0).toLong()
+        Metric.TOTAL_LEVELS -> state.mons.sumOf { (it.level - if (isStarter(state, it)) minOf(it.level, Tuning.STARTER_LEVEL) else 0).toLong() }
         Metric.BEST_DAY -> bestDay(state)
-        Metric.LEGENDARY_MYTHICAL -> state.caught.count { data.species[it]?.let { sp -> sp.isLegendary || sp.isMythical } == true }.toLong()
-        Metric.TYPES_CAUGHT -> state.caught.flatMapTo(HashSet()) { data.species[it]?.types ?: emptyList() }.size.toLong()
+        Metric.LEGENDARY_MYTHICAL -> caughtForReal(state).count { data.species[it]?.let { sp -> sp.isLegendary || sp.isMythical } == true }.toLong()
+        Metric.TYPES_CAUGHT -> caughtForReal(state).flatMapTo(HashSet()) { data.species[it]?.types ?: emptyList() }.size.toLong()
         Metric.BALL_CATCHES -> state.ballCatches.filterKeys { it != "auto" }.values.sumOf { it.toLong() }
-        Metric.SHINIES -> max(counter(state, metric), state.mons.count { it.shiny }.toLong()) // an import brings owned shinies
-        Metric.TOTAL_XP -> max(counter(state, metric), state.mons.sumOf { totalXp(data, it) }) // old saves: worked out from the levels
+        Metric.SHINIES -> max(counter(state, metric), state.mons.count { it.shiny && !isStarter(state, it) }.toLong()) // an import brings owned shinies
+        Metric.TOTAL_XP -> max(counter(state, metric), state.mons.sumOf { totalXp(data, it) - if (isStarter(state, it)) giftXp(data, it) else 0L }.coerceAtLeast(0L)) // old saves: worked out from the levels
         else -> counter(state, metric)
     }
+
+    // ---- R9-W4-B: the starter counts for no achievement ----
+    // It is a gift: it is not a catch, its species is not a Pokédex find, its types and (rare) shine are not collected, and the free
+    // level / XP it starts with are not earned. What it earns later by studying (levels, XP, evolving) counts like anything else.
+    // GameState.starterUid says which one it is ("" = unknown: an old save or an import, nothing is held back there).
+
+    private fun isStarter(state: GameState, mon: Mon) = state.starterUid.isNotEmpty() && mon.uid == state.starterUid
+
+    /** 1 while the starter is still owned, else 0. */
+    private fun ownedStarter(state: GameState): Int = if (state.starterUid.isNotEmpty() && state.mons.any { it.uid == state.starterUid }) 1 else 0
+
+    /** How many of [only] (species the starter alone brought) are in [all] and not owned by any other Pokémon (which makes them real finds). */
+    private fun starterOnly(state: GameState, only: Set<Int>, all: Set<Int>): Int =
+        only.count { sp -> sp in all && state.mons.none { it.species == sp && !isStarter(state, it) } }
+
+    /** [GameState.caught] without the species only the starter brought. */
+    private fun caughtForReal(state: GameState): Set<Int> {
+        val skip = state.starterCaught.filterTo(HashSet()) { sp -> state.mons.none { it.species == sp && !isStarter(state, it) } }
+        return if (skip.isEmpty()) state.caught else state.caught - skip
+    }
+
+    /** XP the starter started with (Lv [Tuning.STARTER_LEVEL], no progress), or less if it somehow is lower. */
+    private fun giftXp(data: GameData, mon: Mon): Long = totalXp(data, mon.species, minOf(mon.level, Tuning.STARTER_LEVEL), 0)
 
     private fun counter(state: GameState, metric: Metric): Long = state.counters[metric.name] ?: 0L
 
@@ -136,11 +159,13 @@ object Achievements {
     }
 
     /** All XP of [mon]: the XP to reach its level (growth table) plus its progress inside the level. */
-    private fun totalXp(data: GameData, mon: Mon): Long {
-        val table = data.species[mon.species]?.let { data.growth[it.growthRate] }
-        val n = mon.level.coerceIn(1, Tuning.MAX_LEVEL)
+    private fun totalXp(data: GameData, mon: Mon): Long = totalXp(data, mon.species, mon.level, mon.xp)
+
+    private fun totalXp(data: GameData, species: Int, level: Int, xp: Int): Long {
+        val table = data.species[species]?.let { data.growth[it.growthRate] }
+        val n = level.coerceIn(1, Tuning.MAX_LEVEL)
         val toLevel = if (table != null && n < table.size) table[n].toLong() else n.toLong() * n * n // the same n^3 fallback as Progression.xpToNext
-        return toLevel + mon.xp.coerceAtLeast(0)
+        return toLevel + xp.coerceAtLeast(0)
     }
 
     /** How many tiers of [row] are reached right now (0..row.tiers.size). A badge one-off is reached when its id is in GameState.badges. */
@@ -241,9 +266,11 @@ object Achievements {
      * event (BadgeEarned has already said it), nor does a tier of a row whose tiers are badges (AchRow.tierBadges) once that badge is held. Tiers never go back down: a lower value later changes nothing.
      * A tier dated by a quiet look (silent, or a row never looked at) without a date of its own (the badge's) only says "AnkiGo saw it
      * by now": it is flagged in GameState.achInferred, so the page shows "Reached before <date>" and "Recently reached" skips it (R4 fix A3).
+     * The call that migrates an older tier ladder ([migrate]) is quiet and flags its new dates as inferred too.
      * The first call on a state also sets GameState.achSince = [now]. Every call first [ratchet]s the lifetime totals (R4 fix A1).
      */
     fun check(state: GameState, data: GameData, now: Long, events: MutableList<GameEvent>, silent: Boolean = false) {
+        val migrated = migrate(state) // R9-B2: a tier the player already had under the old ladder is added back quietly below
         if (state.achSince == 0L) state.achSince = now
         ratchet(state, data)
         for (row in AchievementTable.ROWS) {
@@ -251,8 +278,8 @@ object Achievements {
             val dates = known ?: mutableListOf<Long>().also { state.achTiers[row.id] = it }
             val reached = reachedTiers(row, state, data)
             if (reached <= dates.size) continue
-            val quiet = silent || known == null || row.ankimonBadge != null
-            val guessed = silent || known == null // reached before AnkiGo looked: [now] is only when it was first seen
+            val quiet = silent || migrated || known == null || row.ankimonBadge != null
+            val guessed = silent || migrated || known == null // reached before AnkiGo looked: [now] is only when it was first seen
             for (t in dates.size until reached) {
                 val badge = row.ankimonBadge ?: row.tierBadges.getOrNull(t) // a tier that IS a badge: the badge's date, and BadgeEarned has said it
                 val badgeDate = badge?.let { state.badgeAt[it] }
@@ -261,6 +288,26 @@ object Achievements {
                 if (!quiet && (badge == null || badge !in state.badges)) events += GameEvent.AchievementReached(row.id, t, row.title, AchievementTable.tierName(t))
             }
         }
+    }
+
+    /**
+     * R9-B2: brings a save written for an older tier ladder (GameState.achLadder < AchievementTable.LADDER) to the current one, once.
+     * Rows in [AchievementTable.REMAP]: new tier t takes the date (and the inferred flag) of old tier REMAP[t]; the old tiers that have no
+     * new tier are dropped, and a new tier whose old one was never reached has no date (so [check] decides, quietly). Nothing is paid
+     * for a tier, so nothing can be lost. Returns true when it changed the version. No-op on a current state.
+     */
+    fun migrate(state: GameState): Boolean {
+        if (state.achLadder >= AchievementTable.LADDER) return false
+        for ((id, remap) in AchievementTable.REMAP) {
+            val old = state.achTiers[id] ?: continue
+            val oldInferred = old.indices.filterTo(HashSet()) { inferredKey(id, it) in state.achInferred }
+            state.achInferred.removeAll { it.startsWith("$id/") }
+            val kept = remap.filter { it < old.size }
+            state.achTiers[id] = kept.map { old[it] }.toMutableList()
+            kept.forEachIndexed { t, o -> if (o in oldInferred) state.achInferred += inferredKey(id, t) }
+        }
+        state.achLadder = AchievementTable.LADDER
+        return true
     }
 
     /**

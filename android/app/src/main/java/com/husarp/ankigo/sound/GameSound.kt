@@ -143,6 +143,28 @@ object GameSound {
         }
     }
 
+    /**
+     * R9-C3: the soft "absorb" pling of one XP orb landing ([rate] = its pitch, [last] = the fuller final one). It follows the
+     * moments group, the battle volume, the ringer and the card-audio rule like the other battle sounds; the caller is the XP
+     * effect's own draw loop, so a cancelled animation never sounds. Never throws, never blocks.
+     */
+    fun xpOrb(ctx: Context, rate: Float, last: Boolean, muted: Boolean = false) {
+        try {
+            val c = app(ctx)
+            val cue = Cue.Effect(SoundId.XP_ABSORB)
+            if (!SoundRules.shouldPlay(cue, context(c, quietNow(muted)))) return
+            warm(c)
+            val p = pool ?: return
+            val now = SystemClock.elapsedRealtime()
+            if (!SoundRules.gapOk(lastAt[SoundId.XP_ABSORB], now, SoundRules.ORB_MIN_GAP_MS)) return
+            lastAt[SoundId.XP_ABSORB] = now
+            val v = SoundRules.volume(SoundPrefs.volume(c, SoundId.XP_ABSORB.group.channel)) * SoundRules.orbGain(last)
+            effects[SoundId.XP_ABSORB]?.takeIf { it in ready }?.let { p.play(it, v, v, 1, 0, SoundRules.orbRate(rate, last)) }
+        } catch (t: Throwable) {
+            Report.fail(TAG, "orb sound", t)
+        }
+    }
+
     private fun context(c: Context, muted: Boolean) = SoundContext(
         groupsOff = SoundGroup.entries.filterTo(HashSet()) { !SoundPrefs.groupOn(c, it) },
         volumes = SoundChannel.entries.associateWith { SoundPrefs.volume(c, it) },
@@ -158,8 +180,14 @@ object GameSound {
     } catch (t: Throwable) { Report.fail(TAG, "checking $cue", t); false }
 
     private fun play(c: Context, cue: Cue, delayMs: Long) {
-        if (delayMs > 0) main.postDelayed({ if (allowedNow(c, cue)) playNow(c, cue) }, delayMs) else playNow(c, cue)
+        val gen = pendingGen
+        if (delayMs > 0) main.postDelayed({ if (gen == pendingGen && allowedNow(c, cue)) playNow(c, cue) }, delayMs) else playNow(c, cue)
     }
+
+    private var pendingGen = 0
+
+    /** R9 C5: the cues still waiting for their delay stay silent (a Continue tap skipped the animations they belong to). Later cues are not affected. */
+    fun cancelPending() { pendingGen++ }
 
     private fun playNow(c: Context, cue: Cue) {
         try {

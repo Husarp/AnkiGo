@@ -337,9 +337,9 @@ class ChartMetricsTest {
         assertEquals(110.0, s.total, 0.0)
         assertTrue(s.source.startsWith("AnkiDroid"))
         assertEquals(listOf("Sun 11 Oct · 100 reviews", "Daily goal reached (100)"), s.detailFor(date(3)))
-        assertEquals(listOf(4, 6, 14, 52), ChartPeriod.values().map { ChartData.heatmapWeeks(it) })
-        assertEquals(14, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D90).heatmap!!.columns.size)
-        assertEquals(52, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D365).heatmap!!.columns.size)
+        assertEquals(listOf(4, 6, 13, 53), ChartPeriod.values().map { ChartData.heatmapWeeks(it) })
+        assertEquals(13, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D90).heatmap!!.columns.size)
+        assertEquals(53, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D365).heatmap!!.columns.size)
         assertTrue(build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D90).empty)
         assertTrue(ChartData.seriesKeys(ChartMetric.STREAK_CALENDAR, ChartPeriod.D90, "x", today).isEmpty())
     }

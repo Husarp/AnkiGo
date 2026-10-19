@@ -16,7 +16,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * The status row in the study layouts (strip and narrow split) is reserved like everywhere else: a status coming or going
+ * The status badge in the study layouts (strip and narrow split) sits in the name line (R9 D12): a status coming or going
  * changes no card height. PNGs: studystatus-none|on-<size>-<theme>; [geometry] writes studystatus-geometry.txt.
  */
 class StudyStatusShots {
@@ -95,13 +95,11 @@ class StudyStatusShots {
                 val row = field(arena, rowName) as View
                 val r = rectIn(arena, row); val c = rectIn(arena, card)
                 if (r.left < c.left - 1 || r.right > c.right + 1 || r.top < c.top - 1 || r.bottom > c.bottom + 1) problems += "$tag: $name row $r outside card $c"
-                // the card must not cover more of a sprite than it did before the row was added (the card without its row); 600 px2 lets a card edge grow along the transparent side of a sprite box
-                val before = if (name == "wild") Rect(c.left, c.top, c.right, c.bottom - r.height()) else Rect(c.left, c.top + r.height(), c.right, c.bottom)
+                // R9 D12: the badge sits in the name line and the sprite boxes got the old row's height back, so there is nothing to compare with the
+                // card "before its row"; the card may only touch the transparent edge of a sprite's box (the 85 % box, in the narrow 96 dp strip), never a big part of it
                 for ((what, art) in listOf("wild sprite" to eArt, "our sprite" to pArt)) {
-                    // before the row was added the sprite boxes were that much taller (the enemy's downwards, ours upwards)
-                    val old = if (what == "wild sprite") Rect(art.left, art.top, art.right, art.bottom + r.height()) else Rect(art.left, art.top - r.height(), art.right, art.bottom)
-                    val now = overlap(c, art); val was = overlap(before, old)
-                    if (now > was + 600) problems += "$tag: $name card covers $what by $now px2 (was $was without the row)"
+                    val now = overlap(c, art)
+                    if (now > c.width() * c.height() * 0.15f) problems += "$tag: $name card covers $what by $now px2 of its ${c.width() * c.height()}"
                 }
                 if (r.height() <= 0) problems += "$tag: $name row has no height"
             }

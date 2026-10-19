@@ -9,7 +9,7 @@ import kotlin.math.min
  * [Fit.virtualH] and draws that scaled by [Fit.scale], so sprites, texts, bars, pills, log and chips all shrink together.
  *
  * - Scale: `s = min(1, w / REF_W, h / REF_H)`, where REF_* is the smallest window the chosen set of parts looks right in
- *   unscaled: 376 dp wide (the stats bar's five chips; 340 dp for the arena alone) and 212 dp of arena + log card + stats
+ *   unscaled: 366 dp wide (the stats bar's five chips; 330 dp for the arena alone) and 212 dp of arena + log card + stats
  *   bar (about 347 dp; the arena is 180 dp with compact cards). Never above 1.
  * - Text floor: nothing is drawn under [MIN_SP] on screen. A text that would fall under it is drawn at the virtual size
  *   `max(design, MIN_SP / s)` ([Fit.floorSp]); the virtual window grows with 1 / s, so it mostly still fits. If it does
@@ -25,8 +25,8 @@ object PanelFit {
     /** No text is drawn under this many sp on screen. */
     const val MIN_SP = 8f
 
-    /** Smallest unscaled width (virtual dp) of the stats bar: its chips row (356 dp, measured on the real views) + 20 dp padding. */
-    const val REF_W_STATS = 376f
+    /** Smallest unscaled width (virtual dp) of the stats bar: its chips row (346 dp, measured on the real views) + 20 dp padding. */
+    const val REF_W_STATS = 366f
 
     /**
      * The smallest scale before parts step out: about 8 / 14, where the biggest text (the 14 sp names) reaches the floor.
@@ -64,11 +64,12 @@ object PanelFit {
      * [corner]: dp (on screen) kept free at the bottom-right corner for a resize grip. [footerTools]: the menu and tool
      * buttons are wanted in the goal row (never in small windows). [own]: each card under its own Pokémon (else the
      * corners). A small window whose short side is under 260 dp has no room for the full cards: it uses the compact ones
-     * whatever the pref says.
+     * whatever the pref says. [boxStyle]: the design of the info boxes (their heights differ).
      */
     fun decide(
         w: Float, h: Float, small: Boolean, statsBarSmall: Boolean, compactCards: Boolean,
         strip: Boolean = false, corner: Float = 0f, footerTools: Boolean = true, own: Boolean = true,
+        boxStyle: InfoBoxStyle = InfoBoxStyle.DEFAULT,
     ): Fit {
         val cc = compactCards || (small && min(w, h) < 260f)
         if (w < 1f || h < 1f) return Fit(1f, w, h, MIN_SP, stats = false, log = false, xp = false, tools = false, logLines = 1, compactCards = cc, middle = false, ok = false)
@@ -80,7 +81,7 @@ object PanelFit {
         steps += Shown(stats = false, log = false, xp = false)
         var f: Fit? = null
         for ((i, p) in steps.withIndex()) {
-            f = evaluate(w, h, p, small, tools, cc, strip, corner, own, last = i == steps.lastIndex)
+            f = evaluate(w, h, p, small, tools, cc, strip, corner, own, boxStyle, last = i == steps.lastIndex)
             if (f.ok) break
         }
         return f!!
@@ -94,10 +95,10 @@ object PanelFit {
      * it stays at least [S_MIN]. A step that cannot get there is not ok (the next part steps out); the last step goes on
      * down to [MIN_SCALE], so the cards never cover a sprite.
      */
-    private fun evaluate(w: Float, h: Float, p: Shown, small: Boolean, tools: Boolean, compact: Boolean, strip: Boolean, corner: Float, own: Boolean, last: Boolean): Fit {
+    private fun evaluate(w: Float, h: Float, p: Shown, small: Boolean, tools: Boolean, compact: Boolean, strip: Boolean, corner: Float, own: Boolean, style: InfoBoxStyle, last: Boolean): Fit {
         var s = max(MIN_SCALE, min(1f, min(w / refW(p, compact), h / refH(p, small, tools, compact, strip))))
         while (true) {
-            val f = at(w, h, s, p, small, tools, compact, strip, corner, own)
+            val f = at(w, h, s, p, small, tools, compact, strip, corner, own, style)
             if (f.ok && (s >= S_MIN || last)) return f
             val next = s * 0.97f
             if (next < (if (last) MIN_SCALE else S_MIN)) return if (last) f else f.copy(ok = false)
@@ -105,14 +106,14 @@ object PanelFit {
         }
     }
 
-    private fun at(w: Float, h: Float, s: Float, p: Shown, small: Boolean, tools: Boolean, compact: Boolean, strip: Boolean, corner: Float, own: Boolean): Fit {
+    private fun at(w: Float, h: Float, s: Float, p: Shown, small: Boolean, tools: Boolean, compact: Boolean, strip: Boolean, corner: Float, own: Boolean, style: InfoBoxStyle): Fit {
         val floor = Math.ceil((MIN_SP / s * 10f).toDouble()).toFloat() / 10f
         val lines = if (small) 1 else 2
         val vw = w / s
         val vh = h / s
         val arenaH = vh - (if (strip) Heights.strip(floor) else 0f) - (if (p.log) Heights.log(lines, floor) else 0f) -
             (if (p.stats) Heights.footer(floor, tools) else 0f)
-        val plan = ArenaGeo.plan(vw, arenaH, ArenaGeo.cards(floor, compact, p.xp), compact, own)
+        val plan = ArenaGeo.plan(vw, arenaH, ArenaGeo.cards(floor, compact, p.xp, style), compact, own)
         val chipsFit = !p.stats || vw - corner / s >= Heights.chips(floor) + 20f
         return Fit(s, vw, vh, floor, p.stats, p.log, p.xp, tools, lines, compact, plan.middle, plan.fits && chipsFit)
     }
@@ -139,8 +140,11 @@ object PanelFit {
 
         fun chipH(floor: Float) = TextMath.line(TextMath.at(11f, floor)) + 8f
 
-        /** Width of the chips row: 20 dp gaps and 18 dp padding + label margin per chip (110 dp), plus icons and label texts (246 dp at 11 sp). */
-        fun chips(floor: Float) = 110f + 246f * TextMath.at(11f, floor) / 11f
+        /**
+         * Width of the chips row: 20 dp gaps and 18 dp padding + label margin per chip (100 dp; the streak chip has 4 dp side padding,
+         * no box, since R9-B7), plus icons and label texts (246 dp at 11 sp).
+         */
+        fun chips(floor: Float) = 100f + 246f * TextMath.at(11f, floor) / 11f
     }
 }
 
@@ -209,7 +213,7 @@ internal object ArenaGeo {
 
     fun refH(compact: Boolean) = if (compact) 180f else 212f
 
-    /** Cards + the two sprites at A_MIN, in the middle column: 340 dp (full cards), 310 dp (compact cards). */
+    /** Cards + the two sprites at A_MIN, in the middle column: 330 dp (full cards, 160 dp wide since R9 D12), 310 dp (compact cards). */
     fun refW(compact: Boolean, xp: Boolean): Float {
         val c = cards(0f, compact, xp)
         return max(c.wildW, c.playerW) + 250f * A_MIN + 2f * MID_EDGE + 2f * MID_GAP
@@ -220,29 +224,19 @@ internal object ArenaGeo {
     private const val UNDER_EDGE = 8f
 
     /**
-     * The status badge row under a card's HP bar (item 95), in virtual dp: 14 dp (12 on compact cards), grown with the raised
-     * text like the bars. Its height is part of the card whether or not a badge shows, so nothing moves when an effect comes.
+     * The cards at text floor [floor] for the info box design [style] (R9 D12; [InfoBoxGeo] has the parts): 160 dp wide, grown with
+     * the raised text (floor / 12, at least 1). The status badge sits in the name line, so a card has no row for it. [xp]: the XP
+     * numbers show. [reduced]: the optional parts are dropped (the wild type chips become symbols, no XP number); only picture mode
+     * asks for it ([StageGeo]). Compact cards (the pref, small windows) keep their own shape: name + a thin bar with the HP number.
      */
-    fun statusRow(floor: Float, compact: Boolean) = (if (compact) 12f else 14f) * TextMath.bar(floor)
-
-    /** The cards at text floor [floor]. Their widths grow with the raised text (floor / 12, at least 1). */
-    fun cards(floor: Float, compact: Boolean, xp: Boolean): Cards {
+    fun cards(floor: Float, compact: Boolean, xp: Boolean, style: InfoBoxStyle = InfoBoxStyle.DEFAULT, reduced: Boolean = false): Cards {
         val k = max(1f, floor / 12f)
-        val bar = TextMath.bar(floor)
-        val row = statusRow(floor, compact)
         if (compact) {
-            // name + Lv, then a thin HP bar with the small HP number next to it, then the status row
-            val h = 5f + TextMath.line(TextMath.at(14f, floor)) + 3f + max(5f * bar, TextMath.line(TextMath.at(10f, floor))) + row + 6f
+            val h = InfoBoxGeo.compactHeight(floor)
             return Cards(140f * k, h, 140f * k, h)
         }
-        // the HP number sits beside the HP bar (the line is as tall as the number's text), the status row under it; our card has
-        // the XP line under that when the XP numbers show
-        val hpLine = 6f + max(7f * bar, TextMath.line(TextMath.at(11f, floor)))
-        val wild = 7f + TextMath.line(TextMath.at(14f, floor)) + (4f + TextMath.line(TextMath.at(9f, floor)) + 2f) + hpLine + row + 8f
-        val player = 7f + TextMath.line(TextMath.at(14f, floor)) + hpLine + row + (if (xp) TextMath.line(TextMath.at(11f, floor)) else 0f) + (4f + 3f * bar) + 8f
-        // the wild card is also as wide as its type chips: the two longest (ELECTRIC + FIGHTING) are 94 dp of text at 9 sp, grown with the floor
-        val chips = 49f + 11f * max(9f, floor)
-        return Cards(max(166f * k, chips), wild, (if (xp) 170f else 132f) * k, player)
+        val w = InfoBoxGeo.width(floor)
+        return Cards(w, InfoBoxGeo.height(style, true, floor, xp, reduced), w, InfoBoxGeo.height(style, false, floor, xp, reduced))
     }
 
     /**

@@ -150,7 +150,7 @@ object LiveSession {
         else d.start(withPendingOwn(st.liveSnapshot.takeIf { st.liveDay == today }, pendingOwn), today, today)
     }
 
-    fun expectOwn(row: com.husarp.ankigo.CardState) { detector?.expectOwn(row.id, row.reps + 1) }
+    fun expectOwn(row: com.husarp.ankigo.CardState, pinned: Boolean = false) { detector?.expectOwn(row.id, row.reps + 1, pinned) }
     fun cancelOwn(row: com.husarp.ankigo.CardState) { detector?.cancelOwn(row.id, row.reps + 1) }
 
     /**

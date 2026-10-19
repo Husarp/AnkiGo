@@ -63,8 +63,8 @@ object SettingsSummary {
         }
     }
 
-    fun game(gens: Iterable<Int>, cardsPerRound: Int, dailyGoal: Int, perWeekday: Boolean = false) =
-        "${gens(gens)} · $cardsPerRound answers per attack · goal $dailyGoal" + if (perWeekday) " today" else ""
+    fun game(gens: Iterable<Int>, dailyGoal: Int, perWeekday: Boolean = false) =
+        "${gens(gens)} · goal $dailyGoal" + if (perWeekday) " today" else ""
 
     fun study(inAnkiDroid: Boolean, swipe: Boolean, zoom: Int): String =
         (if (inAnkiDroid) "Decks open AnkiDroid" else "Studies inside AnkiGo") + (if (swipe) " · swipes" else "") + " · text $zoom%"

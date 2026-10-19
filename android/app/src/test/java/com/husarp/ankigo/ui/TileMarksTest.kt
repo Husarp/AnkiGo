@@ -14,20 +14,33 @@ import org.junit.Test
 import java.time.LocalDateTime
 import java.time.ZoneId
 
-/** R4-V5: the marks of a Box tile (only five kinds), NEW until opened (persisted), the two new Box filters, the tile sprite scale. */
+/** R4-V5: the marks of a Box tile (only six kinds), NEW until opened (persisted), the two new Box filters, the tile sprite scale. */
 class TileMarksTest {
     private val data = TestData.world()
     private fun ms(h: Int) = LocalDateTime.of(2026, 10, 14, h, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
     private val now = ms(12)
 
-    @Test fun onlyTheFiveKindsExistAndInOrder() {
-        assertEquals(listOf("NEW", "FAVOURITE", "SHINY", "IN_TEAM", "MAIN"), TileMark.entries.map { it.name })
+    @Test fun onlyTheSixKindsExistAndInOrder() {
+        assertEquals(listOf("NEW", "FAVOURITE", "SHINY", "IN_TEAM", "MAIN", "EXP_SHARE"), TileMark.entries.map { it.name })
         val st = TestData.state(data, 19, 10)
         val m = st.mons[0]
         m.caughtAt = now; m.favourite = true; m.shiny = true; m.heldItem = "lucky-egg"; m.hp = 0
         st.settings.xpShareUid = m.uid
-        // held item, fainted, exp share, can evolve: none of them is a tile mark
-        assertEquals(listOf(TileMark.NEW, TileMark.FAVOURITE, TileMark.SHINY, TileMark.IN_TEAM, TileMark.MAIN), TileMarks.of(st, listOf(m), now))
+        // held item, fainted, can evolve: none of them is a tile mark; the Exp. Share holder is the sixth
+        assertEquals(listOf(TileMark.NEW, TileMark.FAVOURITE, TileMark.SHINY, TileMark.IN_TEAM, TileMark.MAIN, TileMark.EXP_SHARE), TileMarks.of(st, listOf(m), now))
+    }
+
+    @Test fun expShareMarksOnlyTheHolderAndAGroupWithTheHolder() {
+        val st = TestData.state(data, 19, 10)
+        val holder = TestData.mon(data, 16, 10, uid = "h"); val other = TestData.mon(data, 16, 11, uid = "o")
+        st.mons += holder; st.mons += other
+        assertTrue(TileMark.EXP_SHARE !in TileMarks.of(st, listOf(holder), now)) // nobody holds it yet
+        st.settings.xpShareUid = "h"
+        assertEquals(listOf(TileMark.EXP_SHARE), TileMarks.of(st, listOf(holder), now))
+        assertTrue(TileMarks.of(st, listOf(other), now).isEmpty())
+        assertEquals(listOf(TileMark.EXP_SHARE), TileMarks.of(st, listOf(holder, other), now))
+        st.settings.xpShareUid = null
+        assertTrue(TileMarks.of(st, listOf(holder), now).isEmpty())
     }
 
     @Test fun inTeamButNotMain() {

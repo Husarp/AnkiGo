@@ -13,6 +13,7 @@ import android.view.Window
 import android.view.WindowManager
 import com.husarp.ankigo.Anki
 import com.husarp.ankigo.ui.AppDialog
+import com.husarp.ankigo.ui.SheetKit
 import com.husarp.ankigo.ui.Ui
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -128,7 +129,7 @@ internal object DeckFlows {
     /** A bottom sheet in its own dialog window: dim behind, at the bottom, at most 600 dp wide. */
     fun showSheet(act: Activity, content: View): Dialog {
         val dialog = Dialog(act).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
-        dialog.setContentView(content)
+        dialog.setContentView(SheetKit.dialog(dialog, content)) // the handle + drag down to close
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))

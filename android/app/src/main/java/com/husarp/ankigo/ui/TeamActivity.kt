@@ -250,6 +250,8 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         override fun popOut() { startScreen(Nav.popOutIntent(this@TeamPage)); host.closePage() }
         // the panel's "Grant" (live status: AnkiDroid permission missing): the activity asks, its onRequestPermissionsResult calls [accessAnswered]
         override fun grantAccess() { host.hostActivity?.requestPermissions(arrayOf(Anki.permission), TeamActivity.REQ_ANKI) }
+        // the green Continue button: studies the last deck like the Study tab's CONTINUE card
+        override fun continueStudy(deck: Anki.Deck, stillWanted: () -> Boolean) { host.hostActivity?.let { ContinueBar.study(it, deck, stillWanted) } }
     }
 
     /** The AnkiDroid permission dialog was answered (from [TeamActivity]): the card starts live detection again when it was granted. */
@@ -514,7 +516,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         row.addView(spriteBox, LinearLayout.LayoutParams(Ui.dp(ctx, 56), Ui.dp(ctx, 56)))
 
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        // the name, then its marks right after it (the same icons and order as on the Box tiles; everyone here is in the team, so only Main shows), then the level
+        // the name, then its marks right after it (the same icons and order as on the Box tiles; everyone here is in the team, so only Main and Exp. Share show), then the level
         val r1 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val nameMarks = NameMarksRow(ctx)
         nameMarks.addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply {
@@ -525,7 +527,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         for (m in marks) {
             val mark: View = when (m) {
                 TileMark.SHINY -> Ui.text(ctx, 12f, 900, R.color.ag_yellow).apply { text = "★"; contentDescription = "Shiny" }
-                TileMark.MAIN, TileMark.FAVOURITE -> TileViews.markIcon(ctx, m, 13)
+                TileMark.MAIN, TileMark.FAVOURITE, TileMark.EXP_SHARE -> TileViews.markIcon(ctx, m, 13)
                 else -> null
             } ?: continue
             nameMarks.addView(mark, LinearLayout.LayoutParams(if (mark is ImageView) Ui.dp(ctx, 13) else -2, if (mark is ImageView) Ui.dp(ctx, 13) else -2).also { it.marginStart = Ui.dp(ctx, 5) })
@@ -685,7 +687,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         cell.count.visibility = if (tile.isGroup) View.VISIBLE else View.GONE
         cell.value.text = tileValues[tile].orEmpty()
         cell.value.visibility = if (tileValues[tile] != null) View.VISIBLE else View.GONE
-        // the marks (only these five, always in this order; R4-X1 item 3: ♥ and team icons 16 dp): NEW + ♥ top-left, team / main top-right, shiny = the glow behind the sprite
+        // the marks (only these six, always in this order; R4-X1 item 3: ♥ and team icons 16 dp): NEW + ♥ top-left, team / main top-right, shiny = the glow behind the sprite
         val marks = TileMarks.of(state, tile.members)
         cell.marksLeft.removeAllViews()
         cell.marksRight.removeAllViews()
@@ -694,7 +696,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             when (m) {
                 TileMark.NEW -> cell.marksLeft.addView(TileViews.newSticker(this), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 4) })
                 TileMark.FAVOURITE -> cell.marksLeft.addView(TileViews.markIcon(this, m, 16)!!, LinearLayout.LayoutParams(Ui.dp(this, 16), Ui.dp(this, 16)))
-                TileMark.IN_TEAM, TileMark.MAIN -> cell.marksRight.addView(TileViews.markIcon(this, m, 16)!!, LinearLayout.LayoutParams(Ui.dp(this, 16), Ui.dp(this, 16)).also { it.marginStart = gap })
+                TileMark.IN_TEAM, TileMark.MAIN, TileMark.EXP_SHARE -> cell.marksRight.addView(TileViews.markIcon(this, m, 16)!!, LinearLayout.LayoutParams(Ui.dp(this, 16), Ui.dp(this, 16)).also { it.marginStart = gap })
                 TileMark.SHINY -> Unit
             }
         }

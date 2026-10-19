@@ -161,4 +161,151 @@ class AnswerFlowTest {
         assertNull(Anki.Deck.from(mapOf("deck_id" to "1", "deck_name" to "x")))
         assertNull(Anki.Deck.from(mapOf("deck_id" to "1", "deck_count" to "not json")))
     }
+
+    // ---- R9 wave 6: the STUDY line of the background-write flow
+    private val all = AnswerTiming.ALL_PARTS
+
+    @Test fun theAnswerCallAloneIsOnTheLineWithItsTries() {
+        val t = AnswerTiming(0, all)
+        t.put(AnswerTiming.ANSWER, 2247); t.attempts = 3
+        assertTrue(t.line(), t.line().startsWith("answer: ANSWER 2247 ms (3 tries), save+verify -, "))
+        val one = AnswerTiming(0, all); one.put(AnswerTiming.ANSWER, 31)
+        assertTrue(one.line(), one.line().startsWith("answer: ANSWER 31 ms, save+verify -, "))
+        assertFalse("a line without the call has no ANSWER", AnswerTiming(0, all).line().contains("ANSWER"))
+    }
+
+    @Test fun theWholeLineWithEveryNewPart() {
+        val t = AnswerTiming(0, all)
+        t.put(AnswerTiming.ANSWER, 2247); t.put(AnswerTiming.WRITE, 2290); t.queueAtTap = 0
+        t.put(AnswerTiming.ABSORB, 3); t.put(AnswerTiming.GAME, 25); t.put(AnswerTiming.NEXT, 52); t.put(AnswerTiming.LIST, 4)
+        t.next = AnswerTiming.HIT; t.put(AnswerTiming.CONFIRMED, 2310); t.put(AnswerTiming.SHOWN, 12); t.put(AnswerTiming.PAGE, 80)
+        t.put(AnswerTiming.COUNTS, -1); t.loadRetries = 0; t.noteMainWait(14); t.noteMainWait(6); t.polls = 0
+        assertEquals("answer: ANSWER 2247 ms, save+verify 2290 ms, write queue 0 at the tap, detector wait 3 ms, game step 25 ms, " +
+            "next card 52 ms (deck list 4 ms), next card: predicted hit, confirmed after 2310 ms, tap to next card shown 12 ms, " +
+            "page loaded 80 ms, deck counts read after it -, load retries 0, main wait 14 ms, detector polls meanwhile 0", t.line())
+    }
+
+    @Test fun theThreeKindsOfNextCardAreNamedAndAMissIsASwap() {
+        for ((kind, text) in listOf(AnswerTiming.HIT to "predicted hit", AnswerTiming.MISS to "predicted miss (swap)", AnswerTiming.NONE to "none (waited)")) {
+            val t = AnswerTiming(0, all); t.next = kind
+            assertTrue(t.line(), t.line().contains("next card: $text"))
+        }
+        assertFalse(AnswerTiming(0, all).line().contains("next card:"))
+    }
+
+    @Test fun theWriteQueueLengthAndMainWaitShowOnlyWhenKnown() {
+        val t = AnswerTiming(0, all)
+        assertFalse(t.line().contains("write queue")); assertFalse(t.line().contains("main wait"))
+        t.queueAtTap = 2
+        assertTrue(t.line().contains("write queue 2 at the tap"))
+        t.noteMainWait(0)
+        assertTrue("a wait of 0 ms is a measurement too", t.line().contains("main wait 0 ms"))
+    }
+
+    @Test fun theLineWaitsForEveryPartAndIsLoggedOnce() {
+        val t = AnswerTiming(0, all)
+        val parts = listOf(AnswerTiming.GAME, AnswerTiming.SHOWN, AnswerTiming.PAGE, AnswerTiming.COUNTS, AnswerTiming.WRITE, AnswerTiming.CONFIRMED)
+        for (part in parts.dropLast(1)) assertFalse(part, t.put(part, 1))
+        assertTrue(t.put(parts.last(), 1))
+        assertFalse("logged once", t.put(AnswerTiming.PAGE, 2))
+        assertFalse("and the screen going afterwards does not log it again", t.flush())
+    }
+
+    @Test fun theScreenGoingLogsWhatTheLineHasExactlyOnce() {
+        val t = AnswerTiming(0, all)
+        t.put(AnswerTiming.WRITE, 900)
+        assertTrue(t.flush()); assertFalse(t.flush())
+        assertFalse("a part arriving later does not log it twice", t.put(AnswerTiming.GAME, 5))
+        assertTrue(t.line().contains("save+verify 900 ms"))
+    }
+
+    @Test fun anOldLineStaysTheSameWithoutTheNewParts() {
+        val t = AnswerTiming(0)
+        t.put(AnswerTiming.WRITE, 120); t.put(AnswerTiming.GAME, 15); t.put(AnswerTiming.NEXT, 340); t.put(AnswerTiming.SHOWN, 700)
+        assertEquals("answer: save+verify 120 ms, detector wait -, game step 15 ms, next card 340 ms (deck list -), tap to next card shown 700 ms", t.line())
+    }
+
+    // ---- the deck counts read (item 3)
+    @Test fun noCountsReadWhileAnAnswerIsUnresolved() {
+        assertFalse(CountsPolicy.mayStart(unresolved = true, firstOfVisit = true, now = 1_000_000, lastStartedAt = null))
+        assertFalse(CountsPolicy.mayStart(unresolved = true, firstOfVisit = false, now = 1_000_000, lastStartedAt = 0))
+    }
+
+    @Test fun atMostOneCountsReadPerThirtySeconds() {
+        assertFalse(CountsPolicy.mayStart(false, false, now = 29_999, lastStartedAt = 0))
+        assertTrue(CountsPolicy.mayStart(false, false, now = 30_000, lastStartedAt = 0))
+        assertFalse(CountsPolicy.mayStart(false, false, now = 31_000, lastStartedAt = 10_000))
+        assertTrue(CountsPolicy.mayStart(false, false, now = 40_000, lastStartedAt = 10_000))
+    }
+
+    @Test fun theFirstCardOfAVisitAndTheFirstEverReadAreAllowed() {
+        assertTrue(CountsPolicy.mayStart(false, firstOfVisit = true, now = 5, lastStartedAt = 0))
+        assertTrue(CountsPolicy.mayStart(false, firstOfVisit = false, now = 5, lastStartedAt = null))
+    }
+
+    // ---- the queue read (item 2)
+    private class Reads(val results: List<Any>, val due: Int? = null) {
+        var asks = 0; var dueAsks = 0; val pauses = ArrayList<Int>()
+        val query: () -> List<String> = { val r = results[minOf(asks++, results.size - 1)]; if (r is Exception) throw r else @Suppress("UNCHECKED_CAST") (r as List<String>) }
+        val dueCount: () -> Int? = { dueAsks++; due }
+        val pause: (Int) -> Unit = { pauses += it }
+    }
+
+    @Test fun aQueueThatComesBackIsAskedOnce() {
+        val r = Reads(listOf(listOf("a", "b", "c")))
+        val out = QueueRead.read(r.query, r.dueCount, r.pause)
+        assertEquals(listOf("a", "b", "c"), out.items); assertEquals(0, out.retries); assertEquals(1, r.asks); assertEquals(0, r.dueAsks); assertTrue(r.pauses.isEmpty())
+    }
+
+    @Test fun anEmptyQueueIsNotAskedAgainWhenTheCountsSayNothingIsDue() {
+        val r = Reads(listOf(emptyList<String>()), due = 0)
+        val out = QueueRead.read(r.query, r.dueCount, r.pause)
+        assertTrue(out.items.isEmpty()); assertFalse(out.dueButEmpty); assertEquals(0, out.retries); assertEquals(1, r.asks); assertEquals(1, r.dueAsks)
+        val unknown = Reads(listOf(emptyList<String>()), due = null)
+        assertFalse(QueueRead.read(unknown.query, unknown.dueCount, unknown.pause).dueButEmpty); assertEquals(1, unknown.asks)
+    }
+
+    @Test fun anEmptyQueueIsAskedAgainWhileTheCountsSayCardsAreDueAndTheRetriesAreCounted() {
+        val r = Reads(listOf(emptyList<String>(), emptyList<String>(), listOf("a")), due = 4)
+        val out = QueueRead.read(r.query, r.dueCount, r.pause)
+        assertEquals(listOf("a"), out.items); assertEquals(2, out.retries); assertEquals(3, r.asks); assertEquals(listOf(1, 2), r.pauses)
+        assertEquals("the counts are read once", 1, r.dueAsks)
+    }
+
+    @Test fun anEmptyQueueThatStaysEmptyWhileCardsAreDueEndsAsDueButEmptyAfterThreeAsks() {
+        val r = Reads(listOf(emptyList<String>()), due = 4)
+        val out = QueueRead.read(r.query, r.dueCount, r.pause)
+        assertTrue(out.dueButEmpty); assertEquals(3, r.asks); assertEquals(2, out.retries)
+    }
+
+    @Test fun aQueryThatThrowsIsAskedAgainWithoutReadingTheCounts() {
+        val r = Reads(listOf(IllegalStateException("busy"), listOf("a")))
+        val out = QueueRead.read(r.query, r.dueCount, r.pause)
+        assertEquals(listOf("a"), out.items); assertEquals(1, out.retries); assertEquals(0, r.dueAsks); assertEquals(listOf(1), r.pauses)
+    }
+
+    @Test fun aQueryThatKeepsThrowingFailsWithTheLastErrorAfterThreeTries() {
+        val r = Reads(listOf(IllegalStateException("one"), IllegalStateException("two"), IllegalStateException("three")))
+        val e = runCatching { QueueRead.read(r.query, r.dueCount, r.pause) }.exceptionOrNull()
+        assertEquals("three", e?.message); assertEquals(3, r.asks); assertEquals(listOf(1, 2), r.pauses)
+    }
+
+    // ---- what the user is told
+    @Test fun everyReasonHasItsOwnText() {
+        val texts = AnswerOutcome.Reason.entries.map { AnswerNotes.notWritten(it) }
+        assertEquals(texts.size, texts.toSet().size)
+        assertTrue(AnswerNotes.notWritten(AnswerOutcome.Reason.NOT_TOP).startsWith("AnkiDroid showed another card first"))
+        assertTrue(AnswerNotes.notWritten(AnswerOutcome.Reason.CHANGED).startsWith("That card changed in AnkiDroid"))
+        assertTrue(AnswerNotes.notWritten(AnswerOutcome.Reason.UNSURE).contains("Check it in AnkiDroid"))
+        assertTrue("it says the answer was not saved", AnswerNotes.notWritten(AnswerOutcome.Reason.DISCARDED).contains("wasn't saved"))
+    }
+
+    @Test fun theNoticeTextsSayWhatHappenedAndWhatToDo() {
+        assertTrue(AnswerNotes.RETRYING.startsWith("Your last answer isn't saved in AnkiDroid yet."))
+        assertTrue(AnswerNotes.RETRYING.endsWith("AnkiGo keeps it and tries again."))
+        assertTrue(AnswerNotes.GIVE_UP_ASK.contains("The card will come up again in AnkiDroid."))
+        assertEquals("Answer saved", AnswerNotes.SAVED_LATE)
+        assertTrue("a held tap that is dropped says the card is still due", AnswerNotes.HELD_LOST.contains("still due"))
+        assertEquals(6, setOf(AnswerNotes.RETRYING, AnswerNotes.PARKED, AnswerNotes.SAVED_LATE, AnswerNotes.SAVING, AnswerNotes.WAIT, AnswerNotes.HELD_LOST).size)
+    }
 }

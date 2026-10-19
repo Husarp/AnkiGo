@@ -26,14 +26,14 @@ class SoftSfxTest {
         return z / (s.size.toDouble() / rate)
     }
 
-    @Test fun thereAre34Sounds() = assertEquals(34, SoftSound.entries.size)
+    @Test fun thereAre35Sounds() = assertEquals(35, SoftSound.entries.size)
 
     @Test fun everySoundRendersWithinLimits() {
         for (id in SoftSound.entries) {
             val s = SoftSfx.samples(id)
             assertTrue("$id empty", s.isNotEmpty())
             val p = peak(s)
-            val low = when (id) { SoftSound.TAB -> 0.10..0.16; SoftSound.MENU -> 0.17..0.24; else -> 0.38..0.66 }
+            val low = when (id) { SoftSound.TAB, in tabLike -> 0.10..0.16; SoftSound.MENU -> 0.17..0.24; SoftSound.XP_ABSORB -> 0.085..0.105; else -> 0.38..0.66 }
             assertTrue("$id peak $p", p in low)
             val len = audibleEnd(s)
             val limit = if (id in buttons) 0.08 else 0.6
@@ -63,18 +63,21 @@ class SoftSfxTest {
         }
     }
 
+    /** R9-W4-A: the answer buttons and Show answer are the tab tick, sample for sample. */
+    private val tabLike = listOf(SoftSound.SHOW_ANSWER, SoftSound.AGAIN, SoftSound.HARD, SoftSound.GOOD, SoftSound.EASY)
+
     @Test fun allSoundsAreDifferent() {
         val seen = HashMap<List<Short>, SoftSound>()
-        for (id in SoftSound.entries) {
+        for (id in SoftSound.entries - tabLike.toSet()) {
             val key = SoftSfx.samples(id).toList()
             val other = seen.put(key, id)
             assertTrue("$id equals $other", other == null)
         }
     }
 
-    @Test fun answerButtonsRiseInPitch() {
-        val r = listOf(SoftSound.AGAIN, SoftSound.HARD, SoftSound.GOOD, SoftSound.EASY).map { zeroCrossRate(SoftSfx.samples(it)) }
-        assertTrue("again < hard < good < easy: $r", r[0] < r[1] && r[1] < r[2] && r[2] < r[3])
+    @Test fun answerButtonsAndShowAnswerPlayExactlyTheTabTick() {
+        val tab = SoftSfx.samples(SoftSound.TAB)
+        for (b in tabLike) assertArrayEquals("$b", tab, SoftSfx.samples(b))
     }
 
     /** Share of the signal's energy above [hz], by a first-order high-pass of the samples (rough, but enough to tell a tick from a beep). */
@@ -85,13 +88,11 @@ class SoftSfxTest {
         return hi / all
     }
 
-    @Test fun tabTickIsTenDbUnderItsOldLevelAndUnderTheAnswerClicks() {
+    @Test fun tabTickIsTenDbUnderItsOldLevelAndTheAnswerButtonsShareIt() {
         val tab = peak(SoftSfx.samples(SoftSound.TAB))
         assertTrue("tab $tab", tab <= 0.42 * 0.32) // the old level 0.42, minus 10 dB
-        for (b in listOf(SoftSound.AGAIN, SoftSound.HARD, SoftSound.GOOD, SoftSound.EASY, SoftSound.SHOW_ANSWER)) {
-            assertTrue("tab $tab vs $b", tab < peak(SoftSfx.samples(b)) / 3)
-        }
-        assertTrue(peak(SoftSfx.samples(SoftSound.MENU)) < peak(SoftSfx.samples(SoftSound.AGAIN)) / 2)
+        for (b in tabLike) assertEquals("tab $tab vs $b", tab, peak(SoftSfx.samples(b)), 0.0)
+        assertTrue(peak(SoftSfx.samples(SoftSound.MENU)) > tab)
     }
 
     @Test fun tabAndMenuTicksAreLowAndHaveNoHarshPartials() {
@@ -104,6 +105,45 @@ class SoftSfxTest {
         }
     }
 
+    // ---- R9-C3: the XP orb "absorb" pling ----
+
+    /** Magnitude of the signal's component at [hz] (single-bin DFT, normalised by the length). */
+    private fun mag(s: ShortArray, hz: Double): Double {
+        var re = 0.0; var im = 0.0
+        for (i in s.indices) { val a = 2 * Math.PI * hz * i / rate; re += s[i] * Math.cos(a); im += s[i] * Math.sin(a) }
+        return 2 * Math.hypot(re, im) / s.size
+    }
+
+    @Test fun xpAbsorbIsTheGlassPingTenDbUnderThePage() {
+        val s = SoftSfx.samples(SoftSound.XP_ABSORB)
+        assertEquals("peak", 0.095, peak(s), 0.002)          // the page's XP-D peak 0.30, minus 10 dB
+        assertEquals("length", 0.32, s.size.toDouble() / rate, 0.01)
+        assertTrue("quieter than the hit", peak(s) < peak(Sfx.samples(SoundId.HIT)) / 4)
+        // energy near 2093 Hz dominates; the 2.76 x partial (5777 Hz) is weaker; nothing at an octave below or above
+        val main = mag(s, 2093.0)
+        assertTrue("main $main vs bell ${mag(s, 2093.0 * 2.76)}", main > 2 * mag(s, 2093.0 * 2.76))
+        assertTrue("octave up ${mag(s, 4186.0)}", main > 10 * mag(s, 4186.0))
+        assertTrue("octave down ${mag(s, 1046.5)}", main > 10 * mag(s, 1046.5))
+    }
+
+    @Test fun theGlassPartialIsReallyInTheXpPing() {
+        // the 2.76 x f partial (5777 Hz): relative 0.15, tau 40 ms. Compare the sound with and without it, so a fundamental's leakage cannot pass for it.
+        val withP = SoftSfx.xpAbsorbSamples(true)
+        val without = SoftSfx.xpAbsorbSamples(false)
+        val f = 2093.0 * 2.76
+        fun win(s: ShortArray, from: Double, to: Double) = s.copyOfRange((from * rate).toInt(), (to * rate).toInt())
+        val head = win(withP, 0.0, 0.02); val headNo = win(without, 0.0, 0.02)
+        val ratio = mag(head, f) / mag(head, 2093.0)
+        val ratioNo = mag(headNo, f) / mag(headNo, 2093.0)
+        assertTrue("partial/main in the first 20 ms $ratio (without: $ratioNo)", ratio in 0.08..0.2)
+        assertTrue("with $ratio vs without $ratioNo", ratio > 5 * ratioNo)
+        // it decays (tau 40 ms) and is over by 0.15 s
+        val mid = win(withP, 0.06, 0.08)
+        assertTrue("decay ${mag(mid, f)} vs ${mag(head, f)}", mag(mid, f) < 0.45 * mag(head, f))
+        val tail = win(withP, 0.2, 0.3)
+        assertTrue("no partial in the tail ${mag(tail, f)}", mag(tail, f) < 0.02 * mag(head, 2093.0))
+    }
+
     @Test fun buttonsAreShort() {
         for (id in buttons) assertTrue("$id", SoftSfx.samples(id).size.toDouble() / rate <= 0.09)
     }
@@ -112,7 +152,7 @@ class SoftSfxTest {
     @Test fun writeWavsForListening() {
         val dir = File("build/sfx-r5").also { it.mkdirs() }
         for (id in SoftSound.entries) File(dir, "${id.name.lowercase()}.wav").writeBytes(Sfx.wav(SoftSfx.samples(id)))
-        assertEquals(34, dir.listFiles { f -> f.extension == "wav" }!!.size)
+        assertEquals(35, dir.listFiles { f -> f.extension == "wav" }!!.size)
     }
 
     // ---- R5-FIX 6: band-limited triangle ----

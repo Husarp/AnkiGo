@@ -24,6 +24,7 @@ import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.MoveText
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Type
 import java.util.Locale
@@ -272,7 +273,7 @@ object Bits {
 
     fun hpText(data: GameData, mon: Mon): String = "HP ${mon.hp}/${StatCalc.maxHp(data, mon)}"
 
-    /** One move line: type chip, name, "Pow 90 · Acc 100 · Special". */
+    /** One move line: type chip, name, "Pow 90 · Acc 100 · Special" (parts the move doesn't have are left out). */
     fun moveRow(ctx: Context, data: GameData, id: String): View {
         val m = data.move(id)
         return LinearLayout(ctx).apply {
@@ -293,8 +294,8 @@ object Bits {
     fun moveStats(data: GameData, id: String): String {
         val m = data.move(id) ?: return ""
         val cat = when (m.category) { Category.PHYSICAL -> "Physical"; Category.SPECIAL -> "Special"; Category.STATUS -> "Status" }
-        val pow = if (m.damaging && m.power > 0) m.power.toString() else "—"
-        return "Pow $pow · Acc ${m.accuracy ?: "—"} · $cat"
+        // R9-B6: a stat the move doesn't have is left out, not shown as "—"
+        return listOfNotNull(if (MoveText.showsPower(m)) "Pow ${m.power}" else null, m.accuracy?.let { "Acc $it" }, cat).joinToString(" · ")
     }
 
     /**

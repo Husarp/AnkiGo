@@ -42,6 +42,8 @@ class Backdrop(
     val crisp: Boolean,
     /** Already a dark (night) scene: the dark theme adds no dusk tint. */
     val dark: Boolean,
+    /** File revision: a retouched picture gets a new file name so a phone with the old one downloads it again; 1 = the original name. */
+    val rev: Int = 1,
 )
 
 /**
@@ -59,8 +61,11 @@ class Stage(
 
 /**
  * The arena's layout in picture mode ([StageGeo.plan], virtual dp like [ArenaGeo.Plan]): the two sprite holders (square frames,
- * bottom = the feet, already shrunk by [spriteScale] when the cards needed the room), the two card boxes (on screen, [k] times
- * their normal size) and whether nothing overlaps ([clear]; false = the least-bad choice, a card may cover part of a Pokémon).
+ * bottom = the feet, already shrunk by [spriteScale] when the info boxes needed the room), the two info boxes (on screen, [k] times
+ * their normal size; k can be under 1: small panels get small boxes) and whether nothing is in the way ([clear]; false = the
+ * least-bad choice, a box may cover part of a Pokémon). [wildArt] / [playerArt] are the Pokémon's real art boxes the plan kept
+ * clear of, [gap] the distance it kept, [level] the loosest spot rule it needed (0 = outer side centred on its Pokémon ..
+ * 3 = the other side; -1 = nothing was clear).
  */
 internal class StagePlan(
     val wildSprite: ArenaGeo.Box,
@@ -70,16 +75,27 @@ internal class StagePlan(
     val k: Float,
     val spriteScale: Float,
     val clear: Boolean,
-    /** True when both cards sit in the top row (ours top-right / top-middle), the arrangement tried when the usual rows found no room. */
-    val bothTop: Boolean = false,
+    val wildArt: ArenaGeo.Box = wildSprite.art(),
+    val playerArt: ArenaGeo.Box = playerSprite.art(),
+    val gap: Float = 0f,
+    val level: Int = 0,
+    /** Round 9 wave 3: the boxes are drawn with their optional parts dropped (the wild type chips as symbols, no XP number): [k] is under the scale those are readable at. */
+    val reduced: Boolean = false,
 )
 
 /**
- * A Pokémon's visible picture as shares of its square frame: [w] of the frame's width, [h] of its height, bottom-centred. What the
- * cards must stay clear of ([StageGeo.plan]); [DEFAULT] is the 85 % square [ArenaGeo.Box.art] always used.
+ * A Pokémon's real art box inside its square frame, as shares of the frame: [x] / [y] = its top-left corner (from the frame's
+ * left / top), [w] / [h] = its size. What the info boxes must stay clear of ([StageGeo.plan]); [DEFAULT] is the 85 %
+ * bottom-centred square [ArenaGeo.Box.art] always used, for "nothing shown yet".
  */
-internal class ArtShare(val w: Float, val h: Float) {
+internal class ArtShare(val x: Float, val y: Float, val w: Float, val h: Float) {
+    /** This art box in a square frame [side] wide whose top-left corner is ([fx], [fy]). */
+    fun inFrame(fx: Float, fy: Float, side: Float) = ArenaGeo.Box(fx + side * x, fy + side * y, side * w, side * h)
+
     companion object {
-        val DEFAULT = ArtShare(0.85f, 0.85f)
+        val DEFAULT = ArtShare(0.075f, 0.15f, 0.85f, 0.85f)
+
+        /** A [w] x [h] share centred on the frame's width and standing on its bottom edge. */
+        fun bottomCentred(w: Float, h: Float) = ArtShare((1f - w) / 2f, 1f - h, w, h)
     }
 }

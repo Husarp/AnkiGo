@@ -138,7 +138,7 @@ class BattleStatsTest {
 
     @Test fun throughTheGameTheDayLogAndTheCountersAgreeAndARedoDoesNotCountTwice() {
         val g = game()
-        g.state.settings.cardsPerRound = 1
+        g.roundAnswers = 1
         g.state.battle = Battle(TestData.mon(data, 19, 15, listOf("tackle"), uid = "wild"), Tier.NORMAL, startedAt = time)
         val events = g.answer(3, 1) + g.answer(3, 2)
         val attacks = events.filterIsInstance<GameEvent.Attack>()

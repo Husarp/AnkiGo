@@ -27,10 +27,12 @@ enum class SoundId(val file: String, val group: SoundGroup) {
     SHINY("shiny-v1.wav", SoundGroup.MOMENTS), EVO_START("evo_start-v1.wav", SoundGroup.MOMENTS), EVO_DONE("evo_done-v1.wav", SoundGroup.MOMENTS),
     LEARNED("learned-v1.wav", SoundGroup.MOMENTS), ITEM("item-v1.wav", SoundGroup.MOMENTS), CASH("cash-v1.wav", SoundGroup.MOMENTS),
     BADGE("badge-v1.wav", SoundGroup.MOMENTS), HEALED("healed-v1.wav", SoundGroup.MOMENTS), GOAL("goal-v1.wav", SoundGroup.MOMENTS),
+    // R9-C3: one orb of the XP animation landing (a reward sound, like the cash one)
+    XP_ABSORB("xp_absorb-v2.wav", SoundGroup.MOMENTS),
     // buttons (PLAN 84)
-    AGAIN("again-v1.wav", SoundGroup.ANSWER_BUTTONS), HARD("hard-v1.wav", SoundGroup.ANSWER_BUTTONS),
-    GOOD("good-v1.wav", SoundGroup.ANSWER_BUTTONS), EASY("easy-v1.wav", SoundGroup.ANSWER_BUTTONS),
-    SHOW_ANSWER("show_answer-v1.wav", SoundGroup.SHOW_ANSWER),
+    AGAIN("again-v2.wav", SoundGroup.ANSWER_BUTTONS), HARD("hard-v2.wav", SoundGroup.ANSWER_BUTTONS),
+    GOOD("good-v2.wav", SoundGroup.ANSWER_BUTTONS), EASY("easy-v2.wav", SoundGroup.ANSWER_BUTTONS),
+    SHOW_ANSWER("show_answer-v2.wav", SoundGroup.SHOW_ANSWER),
     TAB("tab-v2.wav", SoundGroup.MENUS), MENU("menu-v2.wav", SoundGroup.MENUS), BALL_BTN("ball_btn-v2.wav", SoundGroup.MENUS),
     BUY("buy-v2.wav", SoundGroup.SHOP);
 

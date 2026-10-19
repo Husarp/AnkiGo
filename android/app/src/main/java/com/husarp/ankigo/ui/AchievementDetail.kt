@@ -38,7 +38,7 @@ internal object AchievementDetail {
         layer.addView(scrim, FrameLayout.LayoutParams(-1, -1))
         val sheet = sheet(ctx, v, achSince, zone)
         // R6-07 (item 18): the handle really drags: the sheet follows the finger and closes when let go past 30 % (or on a fling down)
-        (sheet as DragSheet).dragger = SheetDragger(sheet, scrim, sheet.getChildAt(1) as? ScrollView, Ui.dp(ctx, 28), onClose)
+        SheetKit.layer(sheet as DragSheet, scrim, onClose)
         layer.addView(sheet, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         return layer
     }

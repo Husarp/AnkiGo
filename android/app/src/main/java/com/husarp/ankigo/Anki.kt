@@ -285,7 +285,6 @@ object Anki {
     }
     fun editIntent(nid: Long) = android.content.Intent(android.content.Intent.ACTION_VIEW,
         Uri.parse("anki://x-callback-url/browser?search=nid:$nid")).setPackage(pkg)
-    fun syncIntent() = android.content.Intent("com.ichi2.anki.DO_SYNC").setComponent(android.content.ComponentName(pkg, "com.ichi2.anki.IntentHandler"))
     fun launchIntent(ctx: Context) = ctx.packageManager.getLaunchIntentForPackage(pkg)
 
     /**

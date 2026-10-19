@@ -118,4 +118,58 @@ class WidgetLogicTest {
         }
         assertEquals(2f, WidgetLogic.pixelsPerDp(250f, 110f, 2f), 0f)
     }
+
+    /** R9-W5-A: the team signature changes with everything a Team / Box action can change of what the widgets draw, and with nothing an answer changes. */
+    @Test fun theTeamSignatureFollowsTheTeamAndNotTheAnswers() {
+        val s = TestData.state(data)
+        s.mons += TestData.mon(data, 2, 10, uid = "b")
+        val base = WidgetLogic.teamSignature(s)
+        // an answer: HP, XP, cash, the day's numbers
+        s.mons.first().hp -= 1; s.mons.first().xp += 7; s.cash += 5; s.reviewsToday += 1
+        assertEquals(base, WidgetLogic.teamSignature(s))
+        // a box Pokémon changes: not on a widget
+        s.mon("b")!!.nickname = "Zip"; s.mon("b")!!.level = 11
+        assertEquals(base, WidgetLogic.teamSignature(s))
+        // who is in the team and in which order
+        s.team += "b"
+        val two = WidgetLogic.teamSignature(s)
+        assertTrue(two != base)
+        s.team.reverse()
+        val flipped = WidgetLogic.teamSignature(s)
+        assertTrue(flipped != two)
+        s.team.reverse()
+        assertEquals(two, WidgetLogic.teamSignature(s))
+        // what each one shows
+        val first = s.mons.first()
+        for (change in listOf<() -> Unit>({ first.look = 172 }, { first.nickname = "Zippy" }, { first.level += 1 }, { first.species = 26 }, { first.shiny = !first.shiny })) {
+            val before = WidgetLogic.teamSignature(s)
+            change()
+            assertTrue(before != WidgetLogic.teamSignature(s))
+        }
+    }
+    /** R9-W5-FIX: a Pokémon a widget shows by pick (even one in the box) counts in the signature: its picture / name / level / release, not its HP. */
+    @Test fun aPickedBoxedPokemonCountsInTheSignature() {
+        val s = TestData.state(data)
+        s.mons += TestData.mon(data, 2, 10, uid = "boxed")
+        val none = WidgetLogic.teamSignature(s)
+        val picks = setOf("boxed")
+        val base = WidgetLogic.teamSignature(s, picks)
+        assertTrue(base != none)
+        // without picks nothing changes for a boxed one; with the pick it does
+        val boxed = s.mon("boxed")!!
+        boxed.hp -= 1; boxed.xp += 5
+        assertEquals(base, WidgetLogic.teamSignature(s, picks))
+        for (change in listOf<() -> Unit>({ boxed.look = 172 }, { boxed.nickname = "Zippy" }, { boxed.level += 1 }, { boxed.species = 26 }, { boxed.shiny = !boxed.shiny })) {
+            val before = WidgetLogic.teamSignature(s, picks)
+            val teamBefore = WidgetLogic.teamSignature(s)
+            change()
+            assertTrue(before != WidgetLogic.teamSignature(s, picks))
+            assertEquals(teamBefore, WidgetLogic.teamSignature(s))
+        }
+        // released: the pick is gone, which is a change too (the widget falls back to the main), and it does not crash
+        val before = WidgetLogic.teamSignature(s, picks)
+        s.mons.remove(boxed)
+        assertTrue(before != WidgetLogic.teamSignature(s, picks))
+        assertEquals(WidgetLogic.teamSignature(s, picks), WidgetLogic.teamSignature(s, picks))
+    }
 }

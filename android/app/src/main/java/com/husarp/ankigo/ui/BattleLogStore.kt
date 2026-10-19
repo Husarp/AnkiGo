@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
+import com.husarp.ankigo.debug.DelayedFlush
 import com.husarp.ankigo.game.GameEvent
 import java.io.File
 import java.io.FileOutputStream
@@ -78,6 +79,9 @@ object BattleLog {
     private var builder = BattleLogBuilder() // worker-owned
     private var file: File? = null           // worker-owned
     @Volatile private var started = false
+    /** At most one file rewrite + fsync per ~3 s; the delayed persist runs on [worker] (the builder is worker-owned). */
+    private val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "ankigo-battle-log-flush").apply { isDaemon = true } }
+    private val flush = DelayedFlush(3000, { ms, task -> timer.schedule({ worker.execute(task) }, ms, TimeUnit.MILLISECONDS) }) { runCatching { persist() } }
 
     /** Short card fronts the study screen already has, by card id (for the next [answer] of that card). */
     private val fronts = LinkedHashMap<Long, String>()
@@ -111,7 +115,7 @@ object BattleLog {
     fun events(events: List<GameEvent>) {
         if (!started || events.isEmpty()) return
         val copy = events.takeLast(500)
-        worker.execute { runCatching { builder.feed(copy); persist() } }
+        worker.execute { runCatching { builder.feed(copy); flush.request() } }
     }
 
     /** Newest battle first; empty when nothing is logged (or the worker is stuck). Call it off the main thread. */

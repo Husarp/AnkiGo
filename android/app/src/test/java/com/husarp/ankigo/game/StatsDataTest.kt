@@ -29,8 +29,7 @@ class StatsDataTest {
 
     private fun game(): Game {
         val s = TestData.state(data, 25, 20, listOf("tackle"))
-        s.settings.cardsPerRound = 1
-        return Game(data, s, Random(1)) { now }
+        return Game(data, s, Random(1)) { now }.also { it.roundAnswers = 1 }
     }
 
     private fun Game.fight(species: Int, hp: Int = 1): Mon {
@@ -217,7 +216,7 @@ class StatsDataTest {
     // ---- chosen look ----
 
     @Test fun choicesAreTheLineUpToTheCurrentSpeciesOldestFirst() {
-        fun nums(sp: Int) = Looks.choices(data, TestData.mon(data, sp, 5)).map { it.num }
+        fun nums(sp: Int) = Looks.choices(data, TestData.mon(data, sp, 5), data.species.keys).map { it.num }
         assertEquals(listOf(1), nums(1))
         assertEquals(listOf(1, 2), nums(2))
         assertEquals(listOf(1, 2, 3), nums(3))
@@ -230,18 +229,19 @@ class StatsDataTest {
         val regional = TestData.species(10001, "Pre-Regional").copy(form = "Alola", baseNum = 19)
         val next = TestData.species(10002, "Reg-Final", prevo = 10001).copy(form = "Alola", baseNum = 20)
         val d = TestData.data(data.species.values.toList() + regional + next)
-        assertEquals(listOf(10001, 10002), Looks.choices(d, TestData.mon(d, 10002, 5)).map { it.num })
+        assertEquals(listOf(10001, 10002), Looks.choices(d, TestData.mon(d, 10002, 5), d.species.keys).map { it.num })
     }
 
     @Test fun anEndlessPrevoLoopStillEnds() {
         val a = TestData.species(2001, "Loop-A", prevo = 2002)
         val b = TestData.species(2002, "Loop-B", prevo = 2001)
         val d = TestData.data(data.species.values.toList() + a + b)
-        assertEquals(listOf(2002, 2001), Looks.choices(d, TestData.mon(d, 2001, 5)).map { it.num })
+        assertEquals(listOf(2002, 2001), Looks.choices(d, TestData.mon(d, 2001, 5), d.species.keys).map { it.num })
     }
 
     @Test fun setLookAcceptsALineSpeciesAndResets() {
         val g = game()
+        g.state.caught += listOf(1, 2)
         val mon = TestData.mon(data, 3, 40, uid = "evo3")
         g.state.mons += mon
         val ok = g.setLook("evo3", 1)
@@ -289,6 +289,6 @@ class StatsDataTest {
         assertEquals(before, StatCalc.stats(data, mon))
         mon.species = 2; mon.name = "Leafbud"
         assertEquals(1, mon.lookSpecies(data).num) // still the old look after evolving
-        assertTrue(Looks.choices(data, mon).map { it.num }.containsAll(listOf(1, 2)))
+        assertTrue(Looks.choices(data, mon, data.species.keys).map { it.num }.containsAll(listOf(1, 2)))
     }
 }

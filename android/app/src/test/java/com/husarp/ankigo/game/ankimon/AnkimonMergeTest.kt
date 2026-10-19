@@ -828,4 +828,11 @@ class AnkimonMergeTest {
         // A file without any of the phone's own catches can't tell which of them went to the PC: only imported ones count.
         assertEquals(1, AnkimonMerge.notInFile(st, sv(am("still-there", 16, level = 5))))
     }
+
+    @Test fun importedSpeciesLeaveTheWishlist() {
+        val state = GameState()
+        state.settings.wishlist.clear(); state.settings.wishlist += listOf(16, 54, 25)
+        merge(sv(am("w-1", 16, level = 5), caught = setOf(54)), state)
+        assertEquals(setOf(25), state.settings.wishlist) // 16 imported as a Pokémon, 54 from the Pokédex list, 25 still wanted
+    }
 }

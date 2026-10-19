@@ -50,9 +50,16 @@
     <color name="ag_tier_8">#0a8fb5</color>
     <color name="ag_tier_9">#c2185b</color>
     <!-- R4-V2: achievement tiers Common / Rare / Epic / Legendary / Mythical (mockup tr0..4) -->
-    <color name="ag_ach_0">#7c7f93</color>
-    <color name="ag_ach_1">#1e66f5</color>
-    <color name="ag_ach_2">#8839ef</color>
-    <color name="ag_ach_3">#c98200</color>
-    <color name="ag_ach_4">#d94fae</color>
+    <color name="ag_ach_0">#2f9e44</color>
+    <color name="ag_ach_1">#1c7ed6</color>
+    <color name="ag_ach_2">#9c36b5</color>
+    <color name="ag_ach_3">#e09400</color>
+    <color name="ag_ach_4">#e8261c</color>
+    <!-- R9-W3-A (D8-V1): matchup group colours x4, x2, x1/2, x1/4, x0, "strong against" (fixed, saturated in both themes) -->
+    <color name="ag_mu_x4">#d20f39</color>
+    <color name="ag_mu_x2">#e63524</color>
+    <color name="ag_mu_half">#349c4c</color>
+    <color name="ag_mu_quarter">#40a02b</color>
+    <color name="ag_mu_zero">#8c90a2</color>
+    <color name="ag_mu_strong">#1e66f5</color>
 </resources>

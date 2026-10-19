@@ -97,7 +97,8 @@ class AchievementPageMathTest {
     @Test fun theWholeTableTotalsItsTiers() {
         val data = TestData.world()
         val views = Achievements.view(TestData.state(data), data)
-        assertEquals(AchievementTable.ROWS.count { !it.oneOff } * 5, AchPageMath.tiersTotal(views))
+        assertEquals(AchievementTable.ROWS.filter { !it.oneOff }.sumOf { it.tiers.size }, AchPageMath.tiersTotal(views)) // 3 for "types" / "highest-level", else 5
+        assertEquals(AchievementTable.ROWS.count { !it.oneOff } * 5 - 4, AchPageMath.tiersTotal(views))
     }
 
     // ---- ladder and texts ----

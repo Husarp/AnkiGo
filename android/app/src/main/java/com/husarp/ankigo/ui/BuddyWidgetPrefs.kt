@@ -50,6 +50,12 @@ object BuddyWidgetPrefs {
         ed.apply()
     }
 
+    /** R9-W5-FIX: the uids the placed Buddy widgets show by pick (not [MAIN]); empty on any error. Read only. */
+    fun pickedUids(ctx: Context): Set<String> = runCatching {
+        val prefs = ctx.getSharedPreferences("spike", 0)
+        widgetIds(ctx).map { choice(prefs, it) }.filter { it != MAIN }.toSet()
+    }.getOrDefault(emptySet())
+
     /** The ids of the Buddy widgets on the home screens (empty: none placed). */
     fun widgetIds(ctx: Context): IntArray =
         runCatching { AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, BuddyWidget::class.java)) }.getOrDefault(IntArray(0))

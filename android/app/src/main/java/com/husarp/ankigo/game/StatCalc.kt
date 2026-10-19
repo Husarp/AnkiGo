@@ -10,13 +10,16 @@ object StatCalc {
     fun other(base: Int, iv: Int, ev: Int, level: Int, natureMult: Double): Int =
         floor((5 + floor((2 * base + iv + ev / 4) * level / 100.0).toInt()) * natureMult).toInt()
 
-    fun stats(sp: Species, mon: Mon): Stats = Stats(
-        hp(sp.base.hp, mon.ivs.hp, mon.evs.hp, mon.level),
-        other(sp.base.atk, mon.ivs.atk, mon.evs.atk, mon.level, mon.nature.mult(Stat.ATK)),
-        other(sp.base.def, mon.ivs.def, mon.evs.def, mon.level, mon.nature.mult(Stat.DEF)),
-        other(sp.base.spa, mon.ivs.spa, mon.evs.spa, mon.level, mon.nature.mult(Stat.SPA)),
-        other(sp.base.spd, mon.ivs.spd, mon.evs.spd, mon.level, mon.nature.mult(Stat.SPD)),
-        other(sp.base.spe, mon.ivs.spe, mon.evs.spe, mon.level, mon.nature.mult(Stat.SPE)),
+    fun stats(sp: Species, mon: Mon): Stats = stats(sp, mon, mon.level)
+
+    /** [mon]'s IVs, EVs and nature on [sp]'s base stats at [level] (Compare's "Fully evolved" uses the level the final form is reached). */
+    fun stats(sp: Species, mon: Mon, level: Int): Stats = Stats(
+        hp(sp.base.hp, mon.ivs.hp, mon.evs.hp, level),
+        other(sp.base.atk, mon.ivs.atk, mon.evs.atk, level, mon.nature.mult(Stat.ATK)),
+        other(sp.base.def, mon.ivs.def, mon.evs.def, level, mon.nature.mult(Stat.DEF)),
+        other(sp.base.spa, mon.ivs.spa, mon.evs.spa, level, mon.nature.mult(Stat.SPA)),
+        other(sp.base.spd, mon.ivs.spd, mon.evs.spd, level, mon.nature.mult(Stat.SPD)),
+        other(sp.base.spe, mon.ivs.spe, mon.evs.spe, level, mon.nature.mult(Stat.SPE)),
     )
 
     /**

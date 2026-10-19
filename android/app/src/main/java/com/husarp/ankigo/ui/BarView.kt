@@ -72,6 +72,84 @@ class BarView(ctx: Context) : View(ctx) {
     /** Draws the ghost still (no animation); screenshots use it. */
     internal fun ghostStill(from: Float) { ghostAnim?.cancel(); ghostFrac = from.coerceIn(0f, 1f); invalidate() }
 
+    // ---- a label written inside the bar (Round 9 D12-B: "245 / 312" in the info box): dark text with a light glow, readable on every fill and on the empty track ----
+    private var label: String? = null
+    private var labelSizeSp = 0f
+    private var labelPx = 0f
+    private val labelInk = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF1E1E2E.toInt(); textAlign = Paint.Align.CENTER; typeface = Ui.font(ctx, 900); letterSpacing = 0.02f
+    }
+    private val labelGlow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xE6FFFFFF.toInt(); textAlign = Paint.Align.CENTER; typeface = Ui.font(ctx, 900); letterSpacing = 0.02f
+        style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND
+    }
+    private val digitBounds = android.graphics.Rect()
+
+    /** The text written inside the bar (null = none) and its size in sp. A label wider than the bar is drawn smaller (not under 8 dp), else not at all (never cut off). */
+    fun setLabel(text: String?, sp: Float) {
+        if (text == label && sp == labelSizeSp) return
+        label = text
+        labelSizeSp = sp
+        labelPx = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, sp, resources.displayMetrics)
+        labelSet(labelPx)
+        invalidate()
+    }
+
+    /** The label and its size in sp (tests). */
+    internal fun labelText(): String? = label
+    internal fun labelSp(): Float = if (label == null) 0f else labelSizeSp
+
+    private val meter = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Ui.font(ctx, 900); letterSpacing = 0.02f }
+    private val meterBounds = android.graphics.Rect()
+
+    /**
+     * The height (px) a bar needs for a label of [sp]: the glyphs ("0", "/", "X", "P" about the digits' middle) plus the glow stroke
+     * on both sides. The label's size follows the system font scale but a bar's height does not, so the card sets the bar at least
+     * this tall ([ArenaView.fitBars]); otherwise the text and glow are cut off at a big font size.
+     */
+    internal fun labelNeedPx(sp: Float): Int {
+        val px = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, sp, resources.displayMetrics)
+        meter.textSize = px
+        meter.getTextBounds("0", 0, 1, digitBounds)
+        val cy = digitBounds.exactCenterY()
+        meter.getTextBounds("0/XP", 0, 4, meterBounds)
+        val half = maxOf(cy - meterBounds.top, meterBounds.bottom - cy, digitBounds.height() / 2f)
+        val stroke = maxOf(1.5f * resources.displayMetrics.density, px * 0.22f)
+        return kotlin.math.ceil(2f * half + stroke).toInt()
+    }
+
+    /** The text size (px) the label is drawn at: as asked, or smaller (not under 8 dp) when the bar is too narrow for it; 0 = not drawn. */
+    private fun labelDrawPx(): Float {
+        val t = label ?: return 0f
+        if (t.isEmpty() || labelSizeSp <= 0f || width <= 0) return 0f
+        val d = resources.displayMetrics.density
+        val avail = width - 4f * d
+        labelSet(labelPx)
+        val need = labelInk.measureText(t)
+        if (need <= avail) return labelPx
+        val fit = labelPx * avail / need
+        return if (fit >= minOf(labelPx, 8f * d)) fit else 0f
+    }
+
+    private fun labelSet(px: Float) {
+        labelInk.textSize = px; labelGlow.textSize = px
+        labelGlow.strokeWidth = maxOf(1.5f * resources.displayMetrics.density, px * 0.22f)
+    }
+
+    /** True when the label is drawn (it fits the bar, shrunk a little at a big font size) and the bar is tall enough for it (tests). */
+    internal fun labelShown(): Boolean = labelDrawPx() > 0f && height >= labelNeedPx(labelSizeSp)
+
+    private fun drawLabel(canvas: Canvas) {
+        val t = label ?: return
+        val px = labelDrawPx()
+        if (px <= 0f) return
+        labelSet(px)
+        labelInk.getTextBounds("0", 0, 1, digitBounds)
+        val y = height / 2f - digitBounds.exactCenterY()
+        canvas.drawText(t, width / 2f, y, labelGlow)
+        canvas.drawText(t, width / 2f, y, labelInk)
+    }
+
     /** Track colour, `ag_s0` unless changed. */
     fun setTrackColor(argb: Int) { track.color = argb; invalidate() }
 
@@ -277,7 +355,7 @@ class BarView(ctx: Context) : View(ctx) {
             rect.set(0f, 0f, maxOf(w * ghostFrac, minOf(h, w)), h)
             canvas.drawRoundRect(rect, r, r, ghostPaint)
         }
-        if (shown <= 0f) return
+        if (shown <= 0f) { drawLabel(canvas); return }
         // At least a round dot so a tiny fraction stays visible.
         val fw = maxOf(w * shown, minOf(h, w))
         rect.set(0f, 0f, fw, h)
@@ -291,6 +369,7 @@ class BarView(ctx: Context) : View(ctx) {
             fill.color = color
         }
         canvas.drawRoundRect(rect, r, r, fill)
+        drawLabel(canvas)
     }
 
     internal companion object {

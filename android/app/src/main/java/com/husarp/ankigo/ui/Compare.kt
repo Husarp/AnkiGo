@@ -24,9 +24,25 @@ object Compare {
 
 /** The Compare screen: the picks come in the Intent (see [CompareArgs]). */
 class CompareActivity : PageActivity() {
+    private var comparePage: ComparePage? = null
+    private var restoredFit = CompareFit.atOpen()
+
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        // a rotation keeps the columns chosen on this screen (R9 C1); a fresh open starts on automatic
+        restoredFit = CompareFit.valid(savedInstanceState?.getInt(STATE_FIT, CompareFit.AUTO) ?: CompareFit.AUTO)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onSaveInstanceState(outState: android.os.Bundle) {
+        super.onSaveInstanceState(outState)
+        comparePage?.let { outState.putInt(STATE_FIT, it.fit) }
+    }
+
     override fun createPage(): GamePage = ComparePage(this, this, CompareArgs.decodeAll(intent.getStringArrayListExtra(EXTRA_PICKS)))
+        .also { it.fit = restoredFit; comparePage = it }
 
     companion object {
         const val EXTRA_PICKS = "picks"
+        private const val STATE_FIT = "compare_fit_open"
     }
 }

@@ -2,6 +2,7 @@ package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
+import com.husarp.ankigo.game.Evolution
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
@@ -85,6 +86,28 @@ object CompareTable {
         return FinalForm(cur, branches)
     }
 
+    /** The first branch out of [sp] with its evolution rule (the same step [finalForm] takes), or null at the end of the line. */
+    private fun firstStep(data: GameData, sp: Species): Pair<Evolution, Species>? =
+        sp.evolutions.mapNotNull { e -> data.species[e.to]?.let { e to it } }.distinctBy { it.second.num }.firstOrNull()
+
+    /**
+     * R9-B10: the level [mon] has once it reaches the final form of [picked]: its current level, raised to every evolution level
+     * along the first-branch path picked → final (a step without a level, like a stone or friendship, adds nothing). Equals
+     * [Mon.level] when [picked] is already final or the Pokémon is already past those levels.
+     */
+    fun evolvedLevel(data: GameData, picked: Species, mon: Mon): Int {
+        var level = mon.level
+        var cur = picked
+        val seen = HashSet<Int>().also { it += picked.num }
+        while (true) {
+            val (evo, next) = firstStep(data, cur) ?: break
+            if (!seen.add(next.num)) break
+            evo.level?.let { if (it > level) level = it }
+            cur = next
+        }
+        return level
+    }
+
     /** The line "root → ... → picked → ... → final" (first branch after the picked one), mark index, branch count after it. */
     fun evolutionLine(data: GameData, sp: Species): Cell.Evo {
         val before = ArrayList<Species>()
@@ -157,10 +180,21 @@ object CompareTable {
 
         val owned = columns.map { it.mon }
         val anyOwned = owned.any { it != null }
-        val stats: List<Stats?> = columns.map { c -> c.mon?.let { StatCalc.stats(c.shown, it) } }
+        // "Fully evolved": an owned column whose form changed shows the level its final form is first reached at (R9-B10)
+        val levels: List<Int?> = columns.map { c ->
+            c.mon?.let { m -> if (evolved && c.shown.num != c.picked.num) evolvedLevel(data, c.picked, m) else m.level }
+        }
+        val stats: List<Stats?> = columns.mapIndexed { i, c -> c.mon?.let { StatCalc.stats(c.shown, it, levels[i] ?: it.level) } }
         val rows = ArrayList<CompareRow>()
 
-        if (anyOwned) rows += numeric("level", "Level", owned.map { it?.level }) { "Lv $it" }
+        if (anyOwned) {
+            val row = numeric("level", "Level", levels) { "Lv $it" }
+            // the small grey line "evolves" marks a level raised by the evolution (a sub line, so a narrow column never wraps the "Lv")
+            rows += row.copy(cells = row.cells.mapIndexed { i, c ->
+                val raised = owned[i]?.let { m -> (levels[i] ?: m.level) > m.level } == true
+                if (raised && c is Cell.Text) c.copy(sub = c.sub + "evolves") else c
+            })
+        }
         rows += CompareRow("types", "Types", columns.map { Cell.TypeChips(it.shown.types) })
 
         if (anyOwned) {
@@ -196,9 +230,9 @@ object CompareTable {
         }
 
         val m = columns.map { matchups(it.shown.types) }
-        rows += CompareRow("weak", "Weak to", m.map { Cell.Matchups(it.first) }, section = "Matchups")
+        rows += CompareRow("weak", "Weak against", m.map { Cell.Matchups(it.first) }, section = "Matchups")
         rows += CompareRow("resist", "Resists", m.map { Cell.Matchups(it.second) })
-        rows += CompareRow("immune", "Immune", m.map { Cell.Matchups(it.third) })
+        rows += CompareRow("immune", "Immune to", m.map { Cell.Matchups(it.third) })
 
         val lines = columns.map { evolutionLine(data, it.picked) }
         rows += CompareRow("evo", "Line", lines, section = "Evolution")

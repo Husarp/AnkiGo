@@ -22,6 +22,8 @@ class ArenaMoveStage(
     private val target: SpriteView,
     private val background: () -> Any?,
     private val turning: (SpriteView) -> Boolean = { false },
+    /** R9-B5: called once, when the stage lets go of the sprites: the arena puts the attacker's draw order and clip back. */
+    private val onRestore: () -> Unit = {},
 ) : MoveFxStage {
 
     /** True after the first [restore]: the sprites belong to whatever animates them next. */
@@ -56,6 +58,7 @@ class ArenaMoveStage(
             s.fxMatrix = null
         }
         (background() as? Joltable)?.jolt = 0f
+        onRestore()
     }
 
     /** Pure geometry and timing of the wiring (JVM-tested). */

@@ -27,7 +27,7 @@ object AchStyle {
         "easy" to R.drawable.ic_ach_easy, "target" to R.drawable.ic_ach_target,
         // Battle: the app's own swords
         "crossed-swords" to R.drawable.ic_swords, "sword" to R.drawable.ic_swords, "heart-broken" to R.drawable.ic_ach_heart_broken,
-        "shield" to R.drawable.ic_ach_shield, "miss" to R.drawable.ic_ach_miss, "bolt" to R.drawable.ic_bolt, "crit" to R.drawable.ic_ach_crit,
+        "shield" to R.drawable.ic_ach_shield, "miss" to R.drawable.ic_ach_miss, "bolt" to R.drawable.ic_bolt,
         "heart" to R.drawable.ic_heart,
         // Collection: the app's ball
         "ball" to R.drawable.ic_ball, "dex-caught" to R.drawable.ic_dex, "dex" to R.drawable.ic_ach_eye, "sparkle" to R.drawable.ic_ach_sparkle,
@@ -69,19 +69,28 @@ object AchStyle {
     fun medalColor(ctx: Context, tier: Int, special: Boolean = false): Int =
         if (special) ctx.getColor(R.color.ag_teal) else if (tier < 0) ctx.getColor(R.color.ag_ov) else tierColor(ctx, tier)
 
-    /** The shape of a tier in a 16 x 16 box (the mockup's own drawings): dot, diamond, hexagon, crown, sparkle. */
+    /** The 16 points of the Mythical star in the 16 x 16 box: radius 7.4 / 5.9 / 2.9 (every 4th / other even / odd), from straight up. */
+    fun starPoints(): List<Pair<Float, Float>> = List(16) { i ->
+        val a = Math.toRadians(-90.0 + i * 22.5)
+        val r = if (i % 2 == 1) 2.9 else if (i % 4 == 0) 7.4 else 5.9
+        (8 + Math.cos(a) * r).toFloat() to (8 + Math.sin(a) * r).toFloat()
+    }
+
+    /** The shape of a tier in a 16 x 16 box (the mockup's own drawings): dot, diamond, hexagon, 4-point sparkle (Legendary), straight 8-point star (Mythical). */
     fun shapePath(tier: Int): Path = Path().apply {
         when (tier.coerceIn(0, 4)) {
             0 -> addCircle(8f, 8f, 5.2f, Path.Direction.CW)
             1 -> { moveTo(8f, 1.6f); lineTo(14.4f, 8f); lineTo(8f, 14.4f); lineTo(1.6f, 8f); close() }
             2 -> { moveTo(8f, 1.4f); lineTo(13.7f, 4.7f); lineTo(13.7f, 11.3f); lineTo(8f, 14.6f); lineTo(2.3f, 11.3f); lineTo(2.3f, 4.7f); close() }
             3 -> {
-                moveTo(1.8f, 12f); lineTo(2.6f, 4.3f); lineTo(6.1f, 7.5f); lineTo(8f, 2.3f); lineTo(9.9f, 7.5f); lineTo(13.4f, 4.3f); lineTo(14.2f, 12f); close()
-                addRoundRect(RectF(1.8f, 12.8f, 14.2f, 14.7f), 0.9f, 0.9f, Path.Direction.CW)
-            }
-            else -> {
                 moveTo(8f, 0.8f); cubicTo(8.6f, 5.4f, 10.6f, 7.4f, 15.2f, 8f); cubicTo(10.6f, 8.6f, 8.6f, 10.6f, 8f, 15.2f)
                 cubicTo(7.4f, 10.6f, 5.4f, 8.6f, 0.8f, 8f); cubicTo(5.4f, 7.4f, 7.4f, 5.4f, 8f, 0.8f); close()
+            }
+            else -> {
+                val pts = starPoints()
+                moveTo(pts[0].first, pts[0].second)
+                for (i in 1 until pts.size) lineTo(pts[i].first, pts[i].second)
+                close()
             }
         }
     }

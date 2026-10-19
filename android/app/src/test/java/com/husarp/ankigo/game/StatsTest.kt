@@ -31,8 +31,7 @@ class StatsTest {
 
     private fun game(): Game {
         val s = TestData.state(data, 25, 20, listOf("tackle"))
-        s.settings.cardsPerRound = 1
-        return Game(data, s, Random(1)) { now }
+        return Game(data, s, Random(1)) { now }.also { it.roundAnswers = 1 }
     }
 
     private fun Game.fight(species: Int, shiny: Boolean = false, hp: Int = 1) {

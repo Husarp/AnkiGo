@@ -38,14 +38,27 @@ import com.husarp.ankigo.sound.SoundRules
 import com.husarp.ankigo.study.CardSpeech
 import com.husarp.ankigo.study.JsApi
 import com.husarp.ankigo.study.PanelHeight
+import com.husarp.ankigo.study.AnswerHost
+import com.husarp.ankigo.study.AnswerNotes
+import com.husarp.ankigo.study.AnswerOutcome
 import com.husarp.ankigo.study.AnswerTiming
 import com.husarp.ankigo.study.AutoAdvance
+import com.husarp.ankigo.study.Cmd
 import com.husarp.ankigo.study.CountsGate
+import com.husarp.ankigo.study.CountsPolicy
 import com.husarp.ankigo.study.DeckNames
+import com.husarp.ankigo.study.LoadPlan
+import com.husarp.ankigo.study.NextCard
 import com.husarp.ankigo.study.PendingAnswers
+import com.husarp.ankigo.study.Prepared
 import com.husarp.ankigo.study.QueueCounts
+import com.husarp.ankigo.study.QueueRead
+import com.husarp.ankigo.study.QueuedAnswer
 import com.husarp.ankigo.study.ScreenMemo
+import com.husarp.ankigo.study.StudyIo
+import com.husarp.ankigo.study.StudyListener
 import com.husarp.ankigo.study.StudyLoop
+import com.husarp.ankigo.study.StudyRules
 import com.husarp.ankigo.study.StudyTiming
 import com.husarp.ankigo.study.TtsRules
 import com.husarp.ankigo.study.TypeInRules
@@ -56,7 +69,14 @@ import java.util.concurrent.RejectedExecutionException
 
 /** Study through AnkiDroid's scheduler, awarding game progress only after a verified answer. */
 class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
-    private val io = Executors.newSingleThreadExecutor()
+    /**
+     * R9 wave 6: ONE process-wide study io thread (study/StudyIo.kt) runs every provider call of every study screen, in order, and an
+     * answer's write blocks it until the answer is resolved: whatever is queued after an answer sees AnkiDroid's real state. It is not
+     * owned by this screen (a closed screen never stops an answer); what this screen queued and has not started is dropped in onDestroy.
+     */
+    private val host get() = StudyIo.host(applicationContext)
+    private fun io(task: () -> Unit) = host.submit(this, Runnable(task))
+    private val nc by lazy { NextCard<StudyCard>(deckId, { host.nextSeq() }) }   // which card is on screen and whether AnkiDroid confirmed it
     private val countsIo = Executors.newSingleThreadExecutor()   // R4 fix B1: only the deck counts' read runs here, so answers and card loads on [io] never wait behind it
     private val countsGate = CountsGate()                        // which counts reads may still be shown (main thread)
     private val main = Handler(Looper.getMainLooper())
@@ -153,7 +173,30 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private val deckOptions = ScreenMemo { Anki.deckOptions(this, deckId) }   // AnkiDroid builds its whole deck tree to answer this
     private var lastCounts: Anki.Deck? = null     // the deck's counts shown with a card: the last exact read minus the answers since (main thread)
     private var pageTiming: AnswerTiming? = null  // the answer whose next card's page is loading: its timing line waits for the page
-    @Volatile private var answerQueued = false    // an answer waits for the io thread: the counts read after a card is skipped
+    private var predictedNow = false              // the card on screen is the one AnkiDroid is expected to give next, not confirmed yet (taps are held, no card actions)
+    @Volatile private var heldEase = 0            // a tap on a predicted card waits for its confirmation (0 = none); read by the io side too
+    private var inFlight = 0                      // answers made on this screen and not resolved yet ("card N" counts them)
+    private val tickets = HashMap<Long, PendingAnswers.Ticket>()   // by seq (this process only): the summary waits for the game step of each
+    private val timings = LinkedHashMap<Long, AnswerTiming>()     // by seq: the STUDY line of each answer
+    private var answerTiming: AnswerTiming? = null                // the newest answer's: the load behind it fills in its parts
+    private lateinit var savingDot: View
+    private lateinit var saveNotice: LinearLayout
+    private var unresolved: AnswerHost.Unresolved? = null         // the answers still being saved, as the host last told
+    private var sawRetrying = false                               // the user was told an answer is not saved yet: tell them when it is
+    private var studiedDirty = false; private var studiedWritten = false   // "lastStudied" is written once per visit (the first saved answer) and on pause
+    private var journalToasted = false                            // the user was told once per visit that the backup copy of an answer could not be kept
+    @Volatile private var countsFirst = true                      // the first card of a visit reads the deck counts (CountsPolicy)
+    @Volatile private var countsAt: Long? = null                  // when the last counts read started
+    private val dotTick = Runnable { updateSavingDot() }
+    private companion object {
+        /** An answer still unresolved after this long shows the saving dot (and Back says it is still saving). */
+        const val DOT_AFTER_MS = 300L
+    }
+    private val listener = object : StudyListener {
+        override fun unresolved(u: AnswerHost.Unresolved?) { applyUnresolved(u) }
+        override fun outcome(o: AnswerOutcome, info: AnswerHost.Info) { answerEnded(o, info) }
+        override fun gameDone(answer: QueuedAnswer, events: List<GameEvent>, absorbMs: Long, gameMs: Long, mine: Boolean) { gameFinished(answer, events, absorbMs, gameMs, mine) }
+    }
     private val sink = object : LiveSession.Sink {
         override fun onGameEvents(events: List<GameEvent>) { this@StudyActivity.events.enqueue(events) }
         override fun onLogLine(kind: LogKind, pill: String, text: String, redraw: Boolean) {
@@ -195,6 +238,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                 starts?.keys()?.forEach { initialLevels[it] = starts.getInt(it) }
             }
         }
+        host.register(listener)   // answers still being saved (also those of an earlier screen or run of the app) report to this screen from now on
         GameRepo.load(this) {
             if (!isDestroyed) {
                 GameRepo.state?.teamMons()?.forEach { mon -> initialLevels.putIfAbsent(mon.uid, mon.level) }
@@ -228,6 +272,12 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }; styleTimer(false)
         top.addView(timerPill, StudyUi.lp(-2).also { it.marginEnd = Ui.dp(this, 8) })
         queueCounts = StudyUi.row(this); top.addView(queueCounts)
+        // R9 wave 6: a tiny dot next to the counts while an answer is still being saved in AnkiDroid (shown after 300 ms, static: nothing animates)
+        savingDot = View(this).apply {
+            visibility = View.GONE; contentDescription = "Saving your answer to AnkiDroid"
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Ui.c(this@StudyActivity, R.color.ag_peach)) }
+        }
+        top.addView(savingDot, StudyUi.lp(Ui.dp(this, 8), Ui.dp(this, 8)).also { it.marginStart = Ui.dp(this, 7) })
         top.addView(StudyUi.iconButton(this, R.drawable.ic_more_vert, "Card actions") { actions() }, StudyUi.lp(Ui.dp(this, 34), Ui.dp(this, 34)).also { it.marginStart = Ui.dp(this, 6) })
         topBar.addView(top, StudyUi.lp(-1, Ui.dp(this, 45)))
         topBar.addView(StudyUi.line(this))
@@ -249,6 +299,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
         }.apply { visibility = View.GONE; isVerticalScrollBarEnabled = false; addView(notice) }
         cardSurface.addView(noticeScroll, StudyUi.lp().also { it.setMargins(Ui.dp(this, 8), 0, Ui.dp(this, 8), Ui.dp(this, 8)) })
+        saveNotice = StudyUi.column(this).apply { visibility = View.GONE }   // "your last answer isn't saved yet" (its own notice: the card's notice stays as it is)
+        cardSurface.addView(saveNotice, StudyUi.lp().also { it.setMargins(Ui.dp(this, 8), 0, Ui.dp(this, 8), Ui.dp(this, 8)) })
         cardColumn.addView(cardSurface, StudyUi.lp(-1, 0, 1f))
         side = StudyUi.column(this)
         handleBar = FrameLayout(this).apply {
@@ -433,15 +485,23 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         super.onResume(); background = false; resumedNow = true; FloatBattleService.startIfWanted(this)
         GameSound.setStudyQuiet(this) { clickMuted() }   // shared menu / tab clicks and delayed battle sounds honour "quiet on cards with sound"
         LiveSession.hush(this, this, true)   // no detector poll competes with this screen's answers and cards inside AnkiDroid
-        io.execute { support.reset(); deckOptions.reset() }   // AnkiDroid or the deck's options may have changed meanwhile
+        refreshMain()
+        io { support.reset(); deckOptions.reset() }   // AnkiDroid or the deck's options may have changed meanwhile
+        host.invalidateSelection(); host.retryNow()   // AnkiDroid's selected deck may have changed meanwhile; an answer waiting to be saved tries again at once
+        countsFirst = true; studiedWritten = false
         if (shownAt != 0L) shownAt = SystemClock.elapsedRealtime()
         swipeOn = prefs.getBoolean("swipe", false); if (::swipe.isInitialized) updateSwipe()
-        if (::web.isInitialized && (finished || card != null && !locked)) loadNext()
+        // a predicted card is checked by the load queued behind its answer: reloading now would drop it (and a held tap with it)
+        if (::web.isInitialized && (finished || card != null && !locked && !predictedNow)) loadNext()
         syncTiming()
     }
+    /** R9-C6 / R9-W5-A: the main was changed (sent to the box, another look, a name...) in Team / Pokédex while this screen waited in the back stack: its card and picture follow (idle only). */
+    internal fun refreshMain() { if (::panel.isInitialized && ::events.isInitialized && events.idle) panel.refreshMain() }
     override fun onPause() {
         resumedNow = false; cancelKeyboard(); pauseClock(); background = true; syncTiming(); stopAudio(); GameSound.clearStudyQuiet(this)
         LiveSession.hush(this, this, false)   // the detector polls again (answers made in AnkiDroid meanwhile count then)
+        if (studiedDirty) writeStudied()
+        studiedWritten = false
         super.onPause()
     }
     private fun pauseClock() { if (shownAt != 0L) elapsed += SystemClock.elapsedRealtime() - shownAt; shownAt = 0 }
@@ -495,7 +555,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         releaseHiddenHold()
         countdown.visibility = if (autoOn()) View.VISIBLE else View.GONE
         val plan = autoPlan()
-        val run = plan != null && autoFired != sideNo &&
+        // an automatic answer or bury acts on the card: not on one AnkiDroid has not confirmed yet (the countdown then starts in full)
+        val waitsForConfirm = predictedNow && plan != null && plan.act != StudyTiming.Act.SHOW_ANSWER && plan.act != StudyTiming.Act.REMINDER
+        val run = plan != null && autoFired != sideNo && !waitsForConfirm &&
             StudyTiming.mayRun(pageReady, !background, hasWindowFocus(), locked || !ContinueRule.autoMayRun(holding()), mediaBlocked, actionSheet != null, audioBusy, opts.waitForAudio)
         if (plan == null || !run) { auto.stop(); return }
         if (auto.running && auto.side == sideNo) return
@@ -516,7 +578,24 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
         }
     }
-    override fun onDestroy() { GameSound.clearStudyQuiet(this); generation++; main.removeCallbacksAndMessages(null); events.clear(); actionSheet?.dismiss(); stopAudio(); speech?.shutdown(); web.destroy(); io.shutdown(); countsIo.shutdown(); super.onDestroy() }
+    override fun onDestroy() {
+        GameSound.clearStudyQuiet(this); generation++; main.removeCallbacksAndMessages(null); events.clear(); actionSheet?.dismiss(); stopAudio(); speech?.shutdown(); web.destroy()
+        for (t in timings.values) if (t.flush()) Report.log("STUDY", t.line())   // the screen goes: what the line has so far
+        timings.clear()
+        host.unregister(listener); host.cancelOwner(this)   // the host (its io thread, the answers) stays: only what this screen queued and has not started is dropped
+        countsIo.shutdown(); super.onDestroy()
+    }
+    /** Leaving while an answer is still being saved: just leave (the host keeps writing, in order), but say so. */
+    override fun finish() {
+        if (!isFinishing) {
+            val u = unresolved
+            if (heldEase != 0) Ui.toast(this, AnswerNotes.HELD_LOST)   // a tap still waiting for the next card's confirmation is not an answer: it is dropped
+            else if (u != null && SystemClock.elapsedRealtime() - u.since > DOT_AFTER_MS) Ui.toast(this, AnswerNotes.SAVING)
+            // really dropped, not only said: a confirmation already posted to the main thread must not queue that tap before onDestroy
+            heldEase = 0; generation = nc.leave()
+        }
+        super.finish()
+    }
     private fun setupWeb() {
         web.settings.javaScriptEnabled = true
         web.settings.allowFileAccess = false; web.settings.allowContentAccess = false
@@ -554,133 +633,279 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
         }
     }
-    private fun loadNext(timing: AnswerTiming? = null) {
+    /** (Re)loads the card AnkiDroid shows now: nothing is predicted. The load waits behind any answer still being written. */
+    private fun loadNext() {
+        answerTiming = null
+        resetForLoading(waiting = true)
+        perform(nc.reload())
+    }
+    /**
+     * The screen lets go of the card it had. [waiting]: the old buttons stay in their place, disabled, until the next card loads (the
+     * summary's buttons go); else a card is shown right after this and rebuilds everything itself.
+     */
+    private fun resetForLoading(waiting: Boolean) {
         stopAudio(); cancelKeyboard(); typeInQuestion = false
         audioPrev = audioNow; audioNow = false; voiceNote = null; ttsCard = TtsRules.NONE
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
-        // The answer row keeps its place while the next card loads: the old buttons stay, disabled (the summary's buttons go).
-        if (finished) buttons.removeAllViews() else disableButtons(buttons)
+        if (finished) buttons.removeAllViews() else if (waiting) disableButtons(buttons)
         finished = false; lastSummary = null; locked = true; card = null; pageReady = false; jsSnap = null
+        predictedNow = false; heldEase = 0
         topBar.visibility = View.VISIBLE; summaryBar.visibility = View.GONE; cardSurface.visibility = View.VISIBLE
         web.visibility = View.VISIBLE; showNotice(false); updateSwipe()
-        layout(); syncTiming()
-        val token = ++generation
-        val countsTicket = countsGate.ticket(token)   // taken now (main thread): an answer started after this drops the read of this card
-        pageTiming?.let { pageTiming = null; timingPart(it, AnswerTiming.PAGE, -1) }   // replaced before its page loaded
-        io.execute {
-            val ioStart = SystemClock.elapsedRealtime()
-            var listMs = -1L   // how long the deck list took before the card could show (Diagnostics: the summary, a sub-deck's name once)
-            fun ioDone() = SystemClock.elapsedRealtime() - ioStart
-            /**
-             * This load is over after [ioMs] on the io thread. [shown]: a card is on screen; its page load and its counts read
-             * complete the answer's timing line later (and its game step). Else (summary, failure) those never come. Main thread.
-             */
-            fun noteNext(ioMs: Long, shown: Boolean) {
-                val t = timing ?: return
-                t.put(AnswerTiming.NEXT, ioMs)
-                if (listMs >= 0) t.put(AnswerTiming.LIST, listMs)
-                t.polls = LiveSession.polls - t.pollsAtTap
-                if (shown) pageTiming = t else { t.put(AnswerTiming.PAGE, -1); t.put(AnswerTiming.COUNTS, -1) }
-                timingPart(t, AnswerTiming.SHOWN, SystemClock.elapsedRealtime() - t.tapAt)
+        if (waiting) { layout(); syncTiming() }
+    }
+    /** Carries out what [nc] decided, in order (an answer's list is: queue it, show the next card or wait, ask for the real one behind the write). */
+    private fun perform(cmds: List<Cmd<StudyCard>>) {
+        cmds.filterIsInstance<Cmd.Load>().lastOrNull()?.let { generation = it.token }   // the card shown by this list belongs to that load (its async parts check it)
+        for (c in cmds) when (c) {
+            is Cmd.Enqueue -> answerMade(c.answer)
+            is Cmd.Show -> showCard(c.card, c.predicted)
+            is Cmd.Confirm -> cardConfirmed(c.card)
+            Cmd.ShowWaiting -> resetForLoading(waiting = true)
+            is Cmd.ShowHeld -> showHeld(c.ease)
+            Cmd.ShowFinished -> if (!finished) resetForLoading(waiting = true)   // the summary follows, behind the last game step
+            is Cmd.ShowError -> showError(c.message)
+            is Cmd.Refuse -> {   // the card's state could not be read: nothing was queued, the card stays as it was
+                if (!background && shownAt == 0L) shownAt = SystemClock.elapsedRealtime()
+                Ui.toast(this, "That answer could not be saved (${c.reason}). Reload the card.")
             }
-            val result = runCatching {
-                val (studyOk, flagsOk) = support.get()
-                check(studyOk) { "Studying here needs AnkiDroid 2.24 or newer. Companion mode is still available." }
-                Anki.selectDeck(this, deckId)
-                var next: Anki.Review? = null
-                var problem: Exception? = null
-                repeat(3) {
-                    if (next == null) try {
-                        if (it > 0) { main.post { if(valid(token)) subtitle.text = "Waking AnkiDroid…" }; Thread.sleep(250) }
-                        next = Anki.nextCards(this, deckId, 1).firstOrNull(); problem = null } catch (e: Exception) { problem = e }
-                }
-                problem?.let { throw it }
-                val n = next
-                if (n == null) {
-                    // Nothing left to study: the whole deck list is needed (the "Next deck" button) and read here only.
+            is Cmd.Load -> startLoad(c.token, c.predicted)
+            is Cmd.Prepare -> startPrepare(c)
+        }
+    }
+    /** An answer was made on a CONFIRMED card (a tap, or a held tap whose card was just confirmed): queued in order for the background write. */
+    private fun answerMade(a: QueuedAnswer) {
+        val buttons = card?.buttons ?: a.buttons
+        val answer = a.copy(ease = a.ease.coerceAtMost(buttons), buttons = buttons)
+        while (timings.size >= 6) timings.remove(timings.keys.first())?.let { if (it.flush()) Report.log("STUDY", it.line()) }
+        val timing = AnswerTiming(SystemClock.elapsedRealtime(), AnswerTiming.ALL_PARTS)
+        timing.pollsAtTap = LiveSession.polls; timing.queueAtTap = host.queue.size
+        timings[answer.seq] = timing; answerTiming = timing
+        tickets[answer.seq] = pending.start()   // the summary waits for the game step of this answer
+        inFlight++; timedCard = null
+        countsGate.answerStarted()
+        lastCounts = QueueCounts.afterAnswer(lastCounts, a.before["queue"]?.toIntOrNull())   // the stand-in counts, until the next exact read
+        heldEase = 0
+        if (!host.enqueue(answer, question, listener)) journalWarn()   // the journal first; the write follows on the io thread, before the load queued after it
+    }
+    /** The backup copy of an answer could not be written (storage full?): studying goes on and the answer is still written to AnkiDroid; the user hears it once per visit. */
+    internal fun journalWarn() {
+        if (journalToasted) return
+        journalToasted = true
+        Ui.toast(this, AnswerNotes.JOURNAL_FAILED)
+    }
+    /** Shows the question side of [p]: a card AnkiDroid gave (confirmed), or the one it is expected to give next ([predicted]: its answers only wait). */
+    private fun showCard(p: Prepared<StudyCard>, predicted: Boolean) {
+        val v = p.view
+        val n = v.review
+        resetForLoading(waiting = false)
+        pageTiming?.let { pageTiming = null; timingPart(it, AnswerTiming.PAGE, -1) }   // replaced before its page loaded
+        predictedNow = predicted
+        finished = false; card = n; stats = p.before; question = v.question; answerHtml = v.answer; css = v.css; fields = v.fields
+        audioNow = SoundRules.cardHasAudio(v.question, v.answer); ttsCard = v.spoken
+        opts = StudyTiming.parse(v.options); maxTime = opts.maxMs
+        val d = lastCounts   // stands in until this card's counts read (readCounts) is in
+        modelName = v.modelName
+        cardName = v.cardName
+        header.text = deckName.substringAfterLast("::")
+        subtitle.text = "$cardName · card ${counts.sum() + inFlight + 1}"
+        showQueueCounts(d, p.before["queue"]?.toIntOrNull())
+        jsBase = JsApi.snapshot(p.before, n.buttons, n.nextTimes, Triple(d?.new ?: 0, d?.learn ?: 0, d?.review ?: 0), v.tags, v.cardDeckName, v.flagsOk)
+        mediaBlocked = (v.blocked.isNotEmpty() || v.unsupported) && prefs.getString("missing", "Ask") != "Answer anyway"
+        layout(); showQuestion(); mediaNotice(v.blocked.size, v.missing.size - v.blocked.size, v.unsupported); checkVoices(generation)
+        if (!predicted && mediaBlocked && prefs.getString("missing", "Ask") == "Always open in AnkiDroid") openAnki()
+        answerTiming?.takeIf { !it.has(AnswerTiming.SHOWN) }?.let { t -> pageTiming = t; timingPart(t, AnswerTiming.SHOWN, SystemClock.elapsedRealtime() - t.tapAt) }
+    }
+    /** The predicted card on screen is the real one: its buttons and next times now come from AnkiDroid; the side the user is on stays. */
+    private fun cardConfirmed(p: Prepared<StudyCard>) {
+        val n = p.view.review
+        predictedNow = false
+        card = n; stats = p.before
+        jsBase = jsBase.copy(buttons = n.buttons, nextTimes = n.nextTimes); jsSnap = jsSnap?.copy(buttons = n.buttons, nextTimes = n.nextTimes)
+        if (heldEase != 0) return   // the tap that was held acts right now: the commands after this one carry it out
+        if (mediaBlocked && prefs.getString("missing", "Ask") == "Always open in AnkiDroid") openAnki()
+        showButtons(); syncTiming()   // the answer-side countdown starts in full now
+    }
+    /** A tap on a predicted card: the click and haptic were given at the tap; the answer is made once AnkiDroid confirms this card. The pressed button stays marked, the others dim. */
+    private fun showHeld(ease: Int) {
+        heldEase = ease; locked = true
+        showButtons(); syncTiming()
+    }
+    /** Asks AnkiDroid what its queue says now (the io thread runs it behind any answer being written) and tells [nc] the result. */
+    private fun startLoad(token: Int, predicted: StudyLoop.Key?) {
+        generation = token
+        val countsTicket = countsGate.ticket(token)   // taken now (main thread): an answer started after this drops the read of this card
+        val timing = answerTiming
+        io { loadTask(token, predicted, countsTicket, timing) }
+    }
+    private var queueReviews = emptyList<Anki.Review>()   // the queue the last load read (io thread only): the prediction is prepared from it
+    private fun loadTask(token: Int, predicted: StudyLoop.Key?, countsTicket: CountsGate.Ticket, timing: AnswerTiming?) {
+        if (token != generation) return   // replaced before it ran: nobody wants its card
+        val app = applicationContext
+        val ioStart = SystemClock.elapsedRealtime()
+        var listMs = -1L   // how long the deck list took before the card could show (Diagnostics: the summary, a sub-deck's name once)
+        var retries = 0
+        fun ioDone() = SystemClock.elapsedRealtime() - ioStart
+        /** This load is over after [ioMs]: [how] = hit / miss / none (a card came), "" = no card (summary, failure: no page or counts read follow). Main thread. */
+        fun noteLoad(ioMs: Long, how: String) {
+            val t = timing ?: return
+            t.put(AnswerTiming.NEXT, ioMs)
+            if (listMs >= 0) t.put(AnswerTiming.LIST, listMs)
+            t.loadRetries = retries
+            t.polls = LiveSession.polls - t.pollsAtTap
+            if (how.isNotEmpty()) t.next = how
+            else {
+                if (!t.has(AnswerTiming.SHOWN)) timingPart(t, AnswerTiming.SHOWN, SystemClock.elapsedRealtime() - t.tapAt)
+                if (!t.has(AnswerTiming.PAGE)) timingPart(t, AnswerTiming.PAGE, -1)
+                if (!t.has(AnswerTiming.COUNTS)) timingPart(t, AnswerTiming.COUNTS, -1)
+            }
+            timingPart(t, AnswerTiming.CONFIRMED, SystemClock.elapsedRealtime() - t.tapAt)
+        }
+        val result = runCatching {
+            val (studyOk, flagsOk) = support.get()
+            check(studyOk) { "Studying here needs AnkiDroid 2.24 or newer. Companion mode is still available." }
+            fun select() = host.ensureSelected(deckId) { Anki.selectDeck(app, deckId) }   // once per visit, again after a failure
+            select()
+            var decks: List<Anki.Deck>? = null
+            // ONE queue read (3 cards: the top one and the next two); asked again only when it throws, or when it is empty although the deck's counts say cards are due
+            val read = QueueRead.read(
+                query = { Anki.nextCards(app, deckId, 3) },
+                dueCount = {
                     val listStart = SystemClock.elapsedRealtime()
-                    val decks = Anki.decks(this)
-                    deckNames.remember(decks.associate { it.id to it.name })
+                    val all = Anki.decks(app)
+                    deckNames.remember(all.associate { it.id to it.name })
+                    decks = all
                     listMs = SystemClock.elapsedRealtime() - listStart
-                    if ((decks.firstOrNull { it.id == deckId }?.total ?: 0) > 0) {
+                    all.firstOrNull { it.id == deckId }?.total
+                },
+                pause = {
+                    postMain { if (valid(token)) subtitle.text = "Waking AnkiDroid…" }
+                    Thread.sleep(250)
+                    host.invalidateSelection(); select()
+                },
+            )
+            retries = read.retries
+            val reviews = read.items
+            val keys = reviews.map { StudyLoop.Key(it.nid, it.ord) }
+            when (val step = LoadPlan.decide(keys, predicted)) {
+                LoadPlan.Step.Finished -> {
+                    // Nothing left to study: the whole deck list is needed (the "Next deck" button); it was read when the queue came back empty.
+                    val all = decks ?: Anki.decks(app).also { deckNames.remember(it.associate { d -> d.id to d.name }) }
+                    if (read.dueButEmpty) {
                         val ioMs = ioDone()
-                        main.post { if(valid(token)) showError("AnkiDroid hasn't opened its study queue. Open AnkiDroid once, then retry."); noteNext(ioMs, false) }
+                        postMain {
+                            if (valid(token)) perform(nc.failed(token, "AnkiDroid hasn't opened its study queue. Open AnkiDroid once, then retry."))
+                            noteLoad(ioMs, "")
+                        }
                         return@runCatching
                     }
                     val queryDeck = "deck:\"${deckName.replace("\"", "") }\""
-                    val learn = Anki.searchCards(this, "$queryDeck is:learn", arrayOf("_id")).size
-                    val fresh = Anki.searchCards(this, "$queryDeck is:new", arrayOf("_id")).size
+                    val learn = Anki.searchCards(app, "$queryDeck is:learn", arrayOf("_id")).size
+                    val fresh = Anki.searchCards(app, "$queryDeck is:new", arrayOf("_id")).size
                     val ioMs = ioDone()
-                    main.post {
-                        if (!valid(token)) { noteNext(ioMs, false); return@post }
+                    postMain {
+                        val cmds = if (valid(token)) nc.finished(token) else emptyList()
+                        if (cmds.isEmpty()) { noteLoad(ioMs, ""); return@postMain }
+                        perform(cmds)
                         // The last answer's rewards belong in the summary: wait for a game step that is still running.
-                        pending.whenIdle { if (valid(token)) summary(decks, learn, fresh); noteNext(ioMs, false) }
+                        pending.whenIdle { if (valid(token)) summary(all, learn, fresh); noteLoad(ioMs, "") }
                     }
                     return@runCatching
                 }
-                // The deck's counts are NOT read here: AnkiDroid gives them only with its whole deck tree (the selected-deck row
-                // has no usable counts: it writes "[null]"), slow with a big collection. They follow the card (readCounts).
-                val html = Anki.card(this, n.nid, n.ord) ?: kotlin.error("Open AnkiDroid once, then retry.")
-                val state = Anki.card(this, n.nid, n.ord, CardState.COLS + "ord" + "original_due" + (if (flagsOk) arrayOf("flags") else emptyArray())) ?: kotlin.error("Couldn't read this card's scheduling state.")
-                check(CardState.from(state) != null) { "AnkiDroid didn't provide the card's review count." }
-                val note = Anki.note(this, n.nid)
-                val model = note?.let { Anki.model(this, it.mid) }
-                val q = html["question"] ?: ""; val a = html["answer"] ?: ""
-                val fieldMap = if (model != null) model.fieldNames.zip(note.fields).toMap() else emptyMap()
-                val files = CardMedia.files(q + a + (model?.css ?: ""), n.media)
-                val missing = files.filter { Media.open(this, it)?.use { false } ?: true }
-                val blocked = missing.filterNot { CardMedia.isSound(it) }
-                val unsupported = CardMedia.unsupported(q + a)
-                // {{tts}} text and language are not in the API's HTML (only [anki:play:..]): rebuild them from the template
-                val spoken = if (note != null && model != null && (q + a).contains("[anki:play:")) runCatching {
-                    TtsRules.templateFor(Anki.templates(this, note.mid), n.ord, model.type == 1)?.let { TtsRules.card(it, fieldMap, n.ord) }
-                }.getOrNull() ?: TtsRules.NONE else TtsRules.NONE
-                val options = JSONObject(deckOptions.get())
-                // The card's own deck (a sub-deck of the studied one) names itself; the list is read once, not per card.
-                val cardDeckId = state["deck_id"]?.toLongOrNull() ?: deckId
-                val nameStart = SystemClock.elapsedRealtime()
-                val cardDeckName = if (cardDeckId == deckId) deckName else deckNames.name(cardDeckId) ?: deckName
-                val nameMs = SystemClock.elapsedRealtime() - nameStart
-                if (nameMs > 0) listMs = nameMs
-                val ioMs = ioDone()
-                main.post {
-                    if (!valid(token)) { noteNext(ioMs, false); return@post }
-                    finished = false; card = n; stats = state; question = q; answerHtml = a; css = model?.css ?: ""; fields = fieldMap
-                    audioNow = SoundRules.cardHasAudio(q, a); ttsCard = spoken
-                    opts = StudyTiming.parse(options); maxTime = opts.maxMs
-                    val d = lastCounts   // stands in until this card's counts read (readCounts) is in
-                    modelName = model?.name ?: ""
-                    cardName = com.husarp.ankigo.study.StudyRules.cardName(html, state, n.ord)
-                    header.text = deckName.substringAfterLast("::")
-                    subtitle.text = "$cardName · card ${counts.sum() + 1}"
-                    showQueueCounts(d, state["queue"]?.toIntOrNull())
-                    jsBase = JsApi.snapshot(state, n.buttons, n.nextTimes, Triple(d?.new ?: 0, d?.learn ?: 0, d?.review ?: 0), note?.tags ?: "",
-                        cardDeckName, flagsOk)
-                    mediaBlocked = (blocked.isNotEmpty() || unsupported) && prefs.getString("missing", "Ask") != "Answer anyway"
-                    layout(); showQuestion(); mediaNotice(blocked.size, missing.size - blocked.size, unsupported); checkVoices(token)
-                    if (mediaBlocked && prefs.getString("missing", "Ask") == "Always open in AnkiDroid") openAnki()
-                    noteNext(ioMs, true)
+                is LoadPlan.Step.Confirm -> {
+                    // The predicted card is on top. A tap is held on it: the card after it is prepared right here, so the held answer's own next card shows at once too.
+                    val fresh = reviews.first()
+                    val next = if (heldEase != 0 && reviews.size > 1) runCatching { prepare(reviews[1], flagsOk) }.getOrNull() else null
+                    queueReviews = reviews
+                    val ioMs = ioDone()
+                    postMain {
+                        if (isDestroyed || isFinishing) return@postMain   // the user left: a confirmation must not queue a held tap now
+                        perform(nc.confirmed(token, step.key, keys, next) { it.copy(review = fresh) })
+                        noteLoad(ioMs, AnswerTiming.HIT)
+                    }
                 }
-                readCounts(token, countsTicket, timing)
+                is LoadPlan.Step.Fetch -> {
+                    val p = prepare(reviews.first(), flagsOk)
+                    queueReviews = reviews
+                    if (p.view.nameMs > 0) listMs = p.view.nameMs
+                    val ioMs = ioDone()
+                    postMain {
+                        if (isDestroyed || isFinishing) return@postMain
+                        perform(if (predicted != null) nc.swapped(token, p, keys) else nc.loaded(token, p, keys))
+                        noteLoad(ioMs, if (predicted != null) AnswerTiming.MISS else AnswerTiming.NONE)
+                    }
+                }
             }
-            result.onFailure {
-                val ioMs = ioDone()
-                main.post { if (valid(token)) showError(it.message ?: "Open AnkiDroid once, then retry."); noteNext(ioMs, false) }
-            }
+            // The deck's counts are NOT read with the card: AnkiDroid gives them only with its whole deck tree (the selected-deck row
+            // has no usable counts: it writes "[null]"), slow with a big collection. They follow the card, rarely (CountsPolicy).
+            readCounts(token, countsTicket, timing)
         }
+        result.onFailure { e ->
+            val ioMs = ioDone()
+            postMain { if (valid(token)) perform(nc.failed(token, e.message ?: "Open AnkiDroid once, then retry.")); noteLoad(ioMs, "") }
+        }
+    }
+    /** Everything a card's question page needs, read on the io thread (the reads a normal load makes). */
+    private fun prepare(n: Anki.Review, flagsOk: Boolean): Prepared<StudyCard> {
+        val app = applicationContext
+        val html = Anki.card(app, n.nid, n.ord) ?: kotlin.error("Open AnkiDroid once, then retry.")
+        val state = Anki.card(app, n.nid, n.ord, CardState.COLS + "ord" + "original_due" + (if (flagsOk) arrayOf("flags") else emptyArray())) ?: kotlin.error("Couldn't read this card's scheduling state.")
+        check(CardState.from(state) != null) { "AnkiDroid didn't provide the card's review count." }
+        val note = Anki.note(app, n.nid)
+        val model = note?.let { Anki.model(app, it.mid) }
+        val q = html["question"] ?: ""; val a = html["answer"] ?: ""
+        val fieldMap = if (model != null) model.fieldNames.zip(note.fields).toMap() else emptyMap()
+        val files = CardMedia.files(q + a + (model?.css ?: ""), n.media)
+        val missing = files.filter { Media.open(app, it)?.use { false } ?: true }
+        val blocked = missing.filterNot { CardMedia.isSound(it) }
+        val unsupported = CardMedia.unsupported(q + a)
+        // {{tts}} text and language are not in the API's HTML (only [anki:play:..]): rebuild them from the template
+        val spoken = if (note != null && model != null && (q + a).contains("[anki:play:")) runCatching {
+            TtsRules.templateFor(Anki.templates(app, note.mid), n.ord, model.type == 1)?.let { TtsRules.card(it, fieldMap, n.ord) }
+        }.getOrNull() ?: TtsRules.NONE else TtsRules.NONE
+        val options = JSONObject(deckOptions.get())
+        // The card's own deck (a sub-deck of the studied one) names itself; the list is read once, not per card.
+        val cardDeckId = state["deck_id"]?.toLongOrNull() ?: deckId
+        val nameStart = SystemClock.elapsedRealtime()
+        val cardDeckName = if (cardDeckId == deckId) deckName else deckNames.name(cardDeckId) ?: deckName
+        val nameMs = SystemClock.elapsedRealtime() - nameStart
+        val view = StudyCard(
+            n, q, a, StudyRules.cardName(html, state, n.ord), model?.name ?: "", model?.css ?: "", fieldMap, note?.tags ?: "",
+            blocked, missing, unsupported, spoken, options, cardDeckName, flagsOk, nameMs,
+        )
+        return Prepared(StudyLoop.Key(n.nid, n.ord), state, view)
+    }
+    /** The card after the one on screen, prepared while the user reads it: what an answer shows at once. Dropped when the screen moved on. */
+    private fun startPrepare(c: Cmd.Prepare) {
+        io {
+            if (c.forToken != generation) return@io
+            val review = queueReviews.firstOrNull { it.nid == c.key.nid && it.ord == c.key.ord } ?: return@io
+            val p = try { prepare(review, support.get().second) } catch (e: Exception) { return@io }   // no prediction: the next answer waits for the real card
+            postMain { if (!isDestroyed && !isFinishing) nc.prepared(c.forKey, c.forToken, p) }
+        }
+    }
+    /** Posts an io result to the main thread and notes how long it waited there (the STUDY line's "main wait"). */
+    private fun postMain(block: () -> Unit) {
+        val at = SystemClock.elapsedRealtime()
+        main.post { answerTiming?.noteMainWait(SystemClock.elapsedRealtime() - at); block() }
     }
     /**
      * The studied deck's exact counts, read after its card is on screen: AnkiDroid builds its whole deck tree for them, which used
      * to hold up every card. Called on the io thread, it only hands the read to [countsIo] (R4 fix B1): an answer tapped meanwhile
-     * is saved on [io] at once, not after this read. Skipped when an answer or another card is already on its way (that one reads
-     * them); the result is shown only while [countsGate] says it is still current. A failure only leaves the stand-in counts.
+     * is saved on the study io at once, not after this read. [CountsPolicy] decides when it really starts (never while an answer is
+     * unresolved, at most one per 30 s, the first card of a visit); the result is shown only while [countsGate] says it is still
+     * current. A failure only leaves the stand-in counts.
      */
     private fun readCounts(token: Int, ticket: CountsGate.Ticket, timing: AnswerTiming?) {
         try { countsIo.execute { readCountsNow(token, ticket, timing) } }
         catch (e: RejectedExecutionException) { /* the screen is gone */ }
     }
     private fun readCountsNow(token: Int, ticket: CountsGate.Ticket, timing: AnswerTiming?) {
-        if (answerQueued || token != generation) { main.post { timing?.let { timingPart(it, AnswerTiming.COUNTS, -1) } }; return }
+        val now = SystemClock.elapsedRealtime()
+        if (token != generation || !CountsPolicy.mayStart(host.unresolvedNow(), countsFirst, now, countsAt)) {
+            main.post { timing?.let { timingPart(it, AnswerTiming.COUNTS, -1) } }; return
+        }
+        countsFirst = false; countsAt = now
         val start = SystemClock.elapsedRealtime()
         val exact = runCatching { Anki.decks(this).also { all -> deckNames.remember(all.associate { it.id to it.name }) }.firstOrNull { it.id == deckId } }
             .onFailure { Report.fail("STUDY", "reading the deck counts", it) }.getOrNull()
@@ -697,6 +922,86 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             timing?.let { timingPart(it, AnswerTiming.COUNTS, if (exact != null) ms else -1) }
         }
     }
+    // ---- answers being saved in the background (the host tells this screen; main thread)
+    private fun applyUnresolved(u: AnswerHost.Unresolved?) {
+        unresolved = u
+        if (u != null && u.retrying) sawRetrying = true
+        if (!::savingDot.isInitialized) return
+        updateSavingDot(); updateSaveNotice()
+    }
+    /** The dot shows while an answer is unresolved for more than [DOT_AFTER_MS]; static (nothing animates). */
+    internal fun updateSavingDot() {
+        main.removeCallbacks(dotTick)
+        val u = unresolved
+        if (u == null) { savingDot.visibility = View.GONE; return }
+        val left = DOT_AFTER_MS - (SystemClock.elapsedRealtime() - u.since)
+        if (left <= 0) savingDot.visibility = View.VISIBLE
+        else { savingDot.visibility = View.GONE; main.postDelayed(dotTick, left) }
+    }
+    /** "Your last answer isn't saved yet" with its buttons, while the host is trying again (its own notice: the card's notice stays as it is). */
+    internal fun updateSaveNotice() {
+        val u = unresolved
+        saveNotice.removeAllViews()
+        if (u == null || !u.retrying) { saveNotice.visibility = View.GONE; return }
+        styleNotice(saveNotice); saveNotice.visibility = View.VISIBLE
+        saveNotice.addView(StudyUi.label(this, if (u.parked) AnswerNotes.PARKED else AnswerNotes.RETRYING, 13, R.color.ag_text, 900))
+        val row = noticeButtons()
+        row.addView(StudyUi.smallButton(this, "Retry now", true) { host.retryNow() })
+        if (u.parked) row.addView(StudyUi.smallButton(this, "Give up on this answer") { confirmGiveUp(u.seq) }, noticeGap())
+        else row.addView(StudyUi.smallButton(this, "Open in AnkiDroid") { openAnki(select = false) }, noticeGap())
+        saveNotice.addView(row, StudyUi.spaced(this, 8))
+        if (u.parked) saveNotice.addView(StudyUi.smallButton(this, "Open in AnkiDroid") { openAnki(select = false) }, StudyUi.spaced(this, 6, -2))
+    }
+    private fun confirmGiveUp(seq: Long) {
+        AppDialog.Builder(this).setMessage(AnswerNotes.GIVE_UP_ASK).setPositiveButton("Give up") { _, _ -> host.discard(seq) }.setNegativeButton("Keep trying", null).showCard()
+    }
+    /**
+     * An answer ended: one of this screen, or of another screen / a restored one the host handed to this screen to be told about. Every
+     * outcome gives its toast, but the session accounting (counts per button, total time, lastStudied, the summary's tickets and rewards)
+     * is only for this screen's OWN answers ([AnswerHost.Info.mine]): another screen's answer is never credited to this session.
+     */
+    private fun answerEnded(o: AnswerOutcome, info: AnswerHost.Info) {
+        val a = o.answer
+        val mine = info.mine
+        val timing = if (mine) timings[a.seq] else null
+        if (mine) inFlight = (inFlight - 1).coerceAtLeast(0)
+        val told = sawRetrying
+        sawRetrying = false
+        when (o) {
+            is AnswerOutcome.Saved -> {
+                if (mine) {
+                    countSaved(a)
+                    timing?.let { it.put(AnswerTiming.ANSWER, o.answerMs); it.attempts = o.attempts; it.noteMainWait(SystemClock.elapsedRealtime() - info.postedAt); timingPart(it, AnswerTiming.WRITE, info.writeMs) }
+                    main.postDelayed({ tickets.remove(a.seq)?.finish() }, PendingAnswers.MAX_WAIT_MS)   // the safety timeout starts now, at the resolution
+                }
+                if (told) Ui.toast(this, AnswerNotes.SAVED_LATE)
+            }
+            is AnswerOutcome.AlreadySaved -> {}   // an earlier run of the app wrote it: the game counts it through the detector
+            is AnswerOutcome.NotWritten -> {
+                if (mine) {
+                    tickets.remove(a.seq)?.finish()
+                    countsFirst = true   // the stand-in counts took it off: the next card reads them again
+                    timing?.let { it.note = "not written: ${o.reason}"; timingPart(it, AnswerTiming.WRITE, info.writeMs); timingPart(it, AnswerTiming.GAME, -1) }
+                }
+                Ui.toast(this, AnswerNotes.notWritten(o.reason))
+            }
+            is AnswerOutcome.Retrying -> {}   // progress is told through unresolved()
+        }
+    }
+    /** The game step of a saved answer is done (events come from [LiveSession.ownAnswer], as before). Only this screen's own answers reach its summary. */
+    private fun gameFinished(a: QueuedAnswer, events: List<GameEvent>, absorbMs: Long, gameMs: Long, mine: Boolean) {
+        if (!mine) return
+        timings[a.seq]?.let { it.put(AnswerTiming.ABSORB, absorbMs); timingPart(it, AnswerTiming.GAME, gameMs) }
+        record(events)
+        tickets.remove(a.seq)?.finish()
+    }
+    /** A saved answer counts for the session summary (per button, and the time); "lastStudied" is written once per visit and on pause. */
+    private fun countSaved(a: QueuedAnswer) {
+        counts[StudyRules.gameButton(a.buttons, a.ease) - 1]++; totalTime += a.tookMs
+        studiedDirty = true
+        if (!studiedWritten) { writeStudied(); studiedWritten = true }
+    }
+    private fun writeStudied() { prefs.edit().putLong("lastStudied:$deckId", System.currentTimeMillis()).apply(); studiedDirty = false }
     /** Records one part of an answer's timing; the STUDY line is logged once, when the last needed part is in. Main thread. */
     private fun timingPart(t: AnswerTiming, part: String, value: Long) { if (t.put(part, value)) Report.log("STUDY", t.line()) }
     internal fun showQueueCounts(d: Anki.Deck?, queue: Int?) {
@@ -821,64 +1126,37 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             if (wide && i == 2) { row = StudyUi.row(this); buttons.addView(row, StudyUi.spaced(this, 6)) }
             val ease = i + 1
             val color = when(label) { "Again" -> R.color.ag_red; "Hard" -> R.color.ag_peach; "Good" -> R.color.ag_green; else -> R.color.ag_blue }
-            row.addView(StudyUi.answer(this, label, n.nextTimes.getOrElse(i) { "" }, color, enabled) { answer(ease) },
+            row.addView(StudyUi.answer(this, label, n.nextTimes.getOrElse(i) { "" }, color, enabled) { answer(ease) }.also { if (heldEase != 0) markHeld(it, ease == heldEase) },
                 StudyUi.lp(0, Ui.dp(this, if (wide) 40 else 48), 1f).also { if (row.childCount > 0) it.marginStart = Ui.dp(this, 6) })
         }
     }
+    /** A tap is held for the predicted card: the pressed button stays marked (pressed look, an outline), the others dim; none takes another tap. */
+    private fun markHeld(v: View, pressed: Boolean) {
+        v.isEnabled = false
+        if (!pressed) { v.alpha = .35f; return }
+        v.alpha = 1f; v.scaleX = .95f; v.scaleY = .95f
+        v.foreground = GradientDrawable().apply {
+            setColor(Color.TRANSPARENT); cornerRadius = Ui.dp(this@StudyActivity, 12f)
+            setStroke(Ui.dp(this@StudyActivity, 2), Ui.c(this@StudyActivity, R.color.ag_text))
+        }
+        v.contentDescription = "${v.contentDescription}, saving"
+    }
+    /**
+     * The one gate for every answer (buttons, keys 1-4, swipe, the auto timer, card JavaScript). On a CONFIRMED card [nc] queues the
+     * answer for the background write and the next card shows at once; on a predicted card the tap is only held (the click and haptic
+     * are given now), and acts when AnkiDroid confirms that card.
+     */
     private fun answer(ease: Int) {
         if (heldContinue()) return
         if (locked || !flipped || mediaBlocked || ease !in 1..(card?.buttons ?: 4) || SystemClock.elapsedRealtime() < allowAt) return
+        if (heldEase != 0) return   // one tap is already waiting for the predicted card
         val c = card ?: return
-        val before = stats
-        val state = CardState.from(before) ?: return
+        val slot = nc.slot
+        if (slot !is NextCard.Slot.Confirmed<*> && !(slot is NextCard.Slot.Predicted<*> && slot.held == null)) return   // nothing to answer yet
         pauseClock(); val took = elapsed.coerceAtMost(maxTime)
         GameSound.ui(this, SoundUiRules.answerSound(c.buttons, ease), clickMuted())   // one click per answer: taps, swipes, keys and the auto timer all come through here
         if (prefs.getBoolean("haptic", true)) web.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-        locked = true; showButtons(); syncTiming()
-        val timing = AnswerTiming(SystemClock.elapsedRealtime(), setOf(AnswerTiming.GAME, AnswerTiming.SHOWN, AnswerTiming.PAGE, AnswerTiming.COUNTS))
-        timing.pollsAtTap = LiveSession.polls
-        answerQueued = true; countsGate.answerStarted()
-        io.execute {
-            answerQueued = false
-            val writeStart = SystemClock.elapsedRealtime()
-            val result = runCatching {
-                StudyLoop(object : StudyLoop.Provider {
-                    override fun select() { Anki.selectDeck(this@StudyActivity, deckId) }
-                    override fun top() = Anki.nextCards(this@StudyActivity, deckId, 1).firstOrNull()?.let { StudyLoop.Key(it.nid, it.ord) }
-                    override fun stats(key: StudyLoop.Key) = Anki.card(this@StudyActivity, key.nid, key.ord, CardState.COLS)
-                    override fun answer(key: StudyLoop.Key, ease: Int, ms: Long) { Anki.answer(this@StudyActivity, key.nid, key.ord, ease, ms) }
-                }).answer(StudyLoop.Key(c.nid, c.ord), before, ease, took) { LiveSession.expectOwn(state) }
-            }
-            val writeMs = SystemClock.elapsedRealtime() - writeStart
-            main.post {
-                timing.put(AnswerTiming.WRITE, writeMs)
-                result.onSuccess { r ->
-                    when (r.status) {
-                        StudyLoop.Status.SAVED -> {
-                            val button = com.husarp.ankigo.study.StudyRules.gameButton(c.buttons, ease)
-                            val front = question
-                            counts[button - 1]++; totalTime += took; timedCard = null
-                            lastCounts = QueueCounts.afterAnswer(lastCounts, state.queue)
-                            // The answer is saved in AnkiDroid: the next card starts loading before anything else. The game step (it waits
-                            // for the detector to settle this answer, so no poll counts it twice) and its battle run alongside; the summary waits for it.
-                            val inFlight = pending.start()
-                            if (!isDestroyed) loadNext(timing)
-                            prefs.edit().putLong("lastStudied:$deckId", System.currentTimeMillis()).apply()
-                            Local.recordReview(this, c.nid, c.ord, ease, took, "app")
-                            val fresh = CardState.from(r.row!!)!!
-                            main.postDelayed({ inFlight.finish() }, PendingAnswers.MAX_WAIT_MS)
-                            com.husarp.ankigo.ui.BattleLog.front(fresh.id, front) // the Battle log shows the card's front
-                            LiveSession.ownAnswer(this, fresh, button, { absorbMs, gameMs ->
-                                timing.put(AnswerTiming.ABSORB, absorbMs)
-                                timingPart(timing, AnswerTiming.GAME, gameMs)
-                            }) { record(it); inFlight.finish() }
-                        }
-                        StudyLoop.Status.MOVED -> { LiveSession.cancelOwn(state); if (!isDestroyed) loadNext() }
-                        StudyLoop.Status.FAILED -> { LiveSession.cancelOwn(state); if (!isDestroyed) showError("This answer wasn't saved. Reload before retrying.") }
-                    }
-                }.onFailure { LiveSession.cancelOwn(state); if (!isDestroyed) showError("Couldn't confirm that this answer was saved. Reload before retrying.") }
-            }
-        }
+        perform(nc.tapAnswer(ease, took))
     }
     private fun record(list: List<GameEvent>) {
         for (e in list) when (e) {
@@ -915,9 +1193,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         notice.visibility = if (show) View.VISIBLE else View.GONE
         noticeScroll.visibility = notice.visibility
     }
-    private fun styleNotice() {
-        notice.setPadding(Ui.dp(this, 11), Ui.dp(this, 9), Ui.dp(this, 11), Ui.dp(this, 10))
-        notice.background = Ui.rounded(StudyUi.blend(Ui.c(this, R.color.ag_peach), Ui.c(this, R.color.ag_card), .14f), 14, this).apply {
+    private fun styleNotice(box: LinearLayout = notice) {
+        box.setPadding(Ui.dp(this, 11), Ui.dp(this, 9), Ui.dp(this, 11), Ui.dp(this, 10))
+        box.background = Ui.rounded(StudyUi.blend(Ui.c(this, R.color.ag_peach), Ui.c(this, R.color.ag_card), .14f), 14, this).apply {
             setStroke(Ui.dp(this@StudyActivity, 1), (Ui.c(this@StudyActivity, R.color.ag_peach) and 0x00ffffff) or 0x73000000)
         }
     }
@@ -977,6 +1255,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             if (runCatching { startActivity(Intent(action)) }.isSuccess) return
     }
     private fun showError(message: String) {
+        predictedNow = false; heldEase = 0   // an error ends a prediction: the retry asks AnkiDroid again
         locked = true; notice.removeAllViews(); styleNotice(); showNotice(true)
         notice.addView(StudyUi.label(this, message, 13, R.color.ag_red, 900))
         val row = StudyUi.row(this)
@@ -995,12 +1274,12 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }.setNegativeButton("Cancel", null).showCard()
     }
     private fun actions() {
-        if (locked || card == null) return
+        if (locked || card == null || predictedNow) { if (predictedNow && !locked) Ui.toast(this, AnswerNotes.WAIT); return }   // card actions only on a card AnkiDroid confirmed
         actionSheet?.dismiss()
         val dialog = Dialog(this).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
         actionSheet = dialog
         val scroll = actionSheetContent { dialog.dismiss() }
-        dialog.setContentView(scroll); dialog.setCanceledOnTouchOutside(true)
+        dialog.setContentView(SheetKit.dialog(dialog, scroll)); dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
@@ -1077,10 +1356,11 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     private fun writeAction(action: String, flag: Int = 0) {
         val c = card ?: return
+        if (predictedNow) { Ui.toast(this, AnswerNotes.WAIT); return }   // bury / suspend / flag only on a card AnkiDroid confirmed
         locked = true; showButtons(); syncTiming()
-        io.execute {
+        io {
             val result = runCatching {
-                Anki.selectDeck(this, deckId)
+                host.ensureSelected(deckId) { Anki.selectDeck(this, deckId) }
                 when(action) {
                     "bury" -> { Anki.bury(this, c.nid, c.ord); com.husarp.ankigo.study.StudyRules.buried(Anki.cardStats(this, c.nid, c.ord)) }
                     "suspend" -> { Anki.suspend(this, c.nid, c.ord); com.husarp.ankigo.study.StudyRules.suspended(Anki.cardStats(this, c.nid, c.ord)) }
@@ -1119,15 +1399,18 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             .putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_NID, c.nid).putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_ORD, c.ord)
             .putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_DECK, homeDeckId()))
     }
-    private fun openAnki() {
-        io.execute {
-            val result = runCatching { Anki.selectDeck(this, deckId) }
-            main.post { if (!isDestroyed) result.onSuccess {
-                // Bring up the existing battle activity so its PiP / floating mode follows the reviewer.
-                if (GameRepo.game == null) startActivity(Anki.reviewIntent(deckId))
-                else startActivity(Intent(this, GameActivity::class.java).putExtra("reviewDeck", deckId).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
-            }.onFailure { showError("Couldn't select this deck") } }
+    /** [select] false: the deck is not selected first (the "answer not saved" notice: the study io thread may be busy with that very answer). */
+    private fun openAnki(select: Boolean = true) {
+        if (!select) { startAnki(); return }
+        io {
+            val result = runCatching { host.invalidateSelection(); Anki.selectDeck(this, deckId) }
+            main.post { if (!isDestroyed) result.onSuccess { startAnki() }.onFailure { showError("Couldn't select this deck") } }
         }
+    }
+    private fun startAnki() {
+        // Bring up the existing battle activity so its PiP / floating mode follows the reviewer.
+        if (GameRepo.game == null) startActivity(Anki.reviewIntent(deckId))
+        else startActivity(Intent(this, GameActivity::class.java).putExtra("reviewDeck", deckId).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
     }
     private fun summary(decks: List<Anki.Deck>, learn: Int, fresh: Int) {
         val rerender = finished && lastSummary != null
@@ -1232,34 +1515,22 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val next = decks.firstOrNull { it.id != deckId && it.total > 0 }
         buttons.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 10))
         buttons.layoutParams = LinearLayout.LayoutParams(StudyUi.pageWidth(this), -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
-        if (next != null) buttons.addView(StudyUi.primary(this, "Next deck: ${next.name} · ${next.total} due") {
+        if (next != null) buttons.addView(StudyUi.finishedPrimary(this, "Next deck: ${next.name} · ${next.total} due") {
             startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", next.id).putExtra("deckName", next.name)); finish()
         })
-        else buttons.addView(StudyUi.primary(this, "Custom study in AnkiDroid") { openAnki() })
-        val navigation = StudyUi.row(this)
-        navigation.addView(StudyUi.smallButton(this, "Back to decks") { finish() }, StudyUi.lp(0, -2, 1f))
-        val sync = StudyUi.row(this).apply {
-            gravity = Gravity.CENTER
-            background = Ui.rounded(Ui.c(context, R.color.ag_s0), 10, context)
-            setPadding(Ui.dp(context, 10), Ui.dp(context, 7), Ui.dp(context, 10), Ui.dp(context, 7))
-            contentDescription = "Sync now"; isFocusable = true
-            setOnClickListener { runCatching { startActivity(Anki.syncIntent()) }.onFailure { Ui.toast(this@StudyActivity, "Open AnkiDroid to sync") } }
-        }
-        sync.addView(StudyUi.icon(this, R.drawable.ic_sync, R.color.ag_text), StudyUi.lp(Ui.dp(this, 14), Ui.dp(this, 14)).also { it.marginEnd = Ui.dp(this, 5) })
-        sync.addView(StudyUi.label(this, "Sync now", 12, R.color.ag_text, 900))
-        navigation.addView(sync, StudyUi.lp(0, -2, 1f).also { it.marginStart = Ui.dp(this, 6) })
-        buttons.addView(navigation, StudyUi.spaced(this, 6))
+        else buttons.addView(StudyUi.finishedPrimary(this, "Custom study in AnkiDroid") { openAnki() })
+        buttons.addView(StudyUi.secondary(this, "Back to decks") { finish() }, StudyUi.spaced(this, 6))
         layout()
         if (learn > 0 && !rerender) main.postDelayed({ recheckLearning() }, 30_000)
     }
     private fun recheckLearning() {
         if (!finished || background || isDestroyed) return
         val token = generation
-        io.execute {
-            val available = runCatching { Anki.selectDeck(this, deckId); Anki.nextCards(this, deckId, 1).isNotEmpty() }.getOrDefault(false)
+        io {
+            val available = runCatching { host.ensureSelected(deckId) { Anki.selectDeck(this, deckId) }; Anki.nextCards(this, deckId, 1).isNotEmpty() }.getOrDefault(false)
             main.post {
                 if (!valid(token) || !finished || background) return@post
-                if (available) buttons.addView(StudyUi.primary(this, "Continue · learning cards are ready") { loadNext() })
+                if (available) buttons.addView(StudyUi.finishedPrimary(this, "Continue · learning cards are ready") { loadNext() }, StudyUi.spaced(this, 6))
                 else main.postDelayed({ recheckLearning() }, 30_000)
             }
         }
@@ -1295,7 +1566,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     // ---- Card JavaScript API (study/JsApi.kt + JsApiScript.kt): scripts read a snapshot; every action goes through flip / answer / writeAction ----
     @Volatile private var jsSnap: JsApi.Snapshot? = null   // what card scripts may read, rebuilt on the main thread whenever a side is shown
-    private var jsBase = JsApi.Snapshot()                   // the shown card's data (counts, scheduling, tags, deck name), set in loadNext
+    private var jsBase = JsApi.Snapshot()                   // the shown card's data (counts, scheduling, tags, deck name), set in showCard
     private var jsPageSeq = 0
     private var jsLang = java.util.Locale.getDefault().toLanguageTag(); private var jsRate = 1f; private var jsPitch = 1f
     private fun isNight() = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
@@ -1331,7 +1602,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
     }
     /** Bury / suspend / flag from card JavaScript: same function as the action sheet, and only when the card is idle (it locks the screen itself). */
-    private fun jsWrite(action: String, flag: Int) { if (!locked && !mediaBlocked && card != null && !finished) writeAction(action, flag) }
+    private fun jsWrite(action: String, flag: Int) { if (!locked && !mediaBlocked && card != null && !finished && !predictedNow) writeAction(action, flag) }
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean {
         if (web.hasFocus() && event.isPrintingKey && keyCode !in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_4) return super.onKeyUp(keyCode, event)
         if (keyCode == KeyEvent.KEYCODE_ENTER && !TypeInRules.enterShowsAnswer(prefs.getBoolean(TypeInRules.PREF_ENTER, TypeInRules.ENTER_DEFAULT), typeInQuestion, web.hasFocus())) return super.onKeyUp(keyCode, event)
@@ -1340,3 +1611,11 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         return super.onKeyUp(keyCode, event)
     }
 }
+
+/** Everything the question page of one card needs, read on the io thread (the card's [Prepared.before] is its scheduling state row). */
+internal data class StudyCard(
+    val review: Anki.Review, val question: String, val answer: String, val cardName: String,
+    val modelName: String, val css: String, val fields: Map<String, String>, val tags: String,
+    val blocked: List<String>, val missing: List<String>, val unsupported: Boolean,
+    val spoken: TtsRules.Card, val options: JSONObject, val cardDeckName: String, val flagsOk: Boolean, val nameMs: Long,
+)

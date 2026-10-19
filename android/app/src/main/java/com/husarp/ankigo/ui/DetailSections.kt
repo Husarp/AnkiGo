@@ -16,10 +16,10 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.data.DexText
 import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.EvoLine
-import com.husarp.ankigo.game.EvoNode
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.MoveText
 import com.husarp.ankigo.game.Nature
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
@@ -180,21 +180,23 @@ object DetailSections {
      */
     fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+        val tap = MoveTap()
         if (ids.isEmpty() && unknown == 0) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "No moves" })
         ids.forEachIndexed { i, id ->
             val m = data.move(id)
             if (i > 0) col.addView(View(a).apply { setBackgroundColor(Ui.c(a, R.color.ag_s0)); alpha = 0.6f }, LinearLayout.LayoutParams(-1, 1))
             if (m == null) { col.addView(Ui.text(a, 13f, 800, R.color.ag_text).apply { text = id; setPadding(0, Ui.dp(a, 8), 0, Ui.dp(a, 8)) }); return@forEachIndexed }
-            val power = if (m.damaging && m.power > 0) m.power.toString() else "—"
+            val showPower = MoveText.showsPower(m)
             fun num(v: String, label: String) = LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
                 addView(Ui.text(a, 13f, 900, R.color.ag_text).apply { text = v })
                 addView(Ui.text(a, 9f, 700, R.color.ag_sub0).apply { text = label })
             }
-            col.addView(LinearLayout(a).apply {
+            val row = LinearLayout(a).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = Ui.dp(a, 48)
                 setPadding(0, Ui.dp(a, if (compact) 6 else 8), 0, Ui.dp(a, if (compact) 6 else 8))
                 addView(kindTile(a, m.category, 28), LinearLayout.LayoutParams(Ui.dp(a, 28), Ui.dp(a, 28)))
                 addView(LinearLayout(a).apply {
@@ -208,8 +210,27 @@ object DetailSections {
                             LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 6) })
                     }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 3) })
                 }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 10) })
-                addView(num(power, "power"), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
-                addView(num(m.accuracy?.toString() ?: "—", "acc."), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
+                // only the numbers the move has (R9-B6); power alone gets a blank where "acc." would be, so the columns line up
+                if (showPower) addView(num(m.power.toString(), "power"), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
+                if (m.accuracy != null) addView(num(m.accuracy.toString(), "acc."), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
+                else if (showPower) addView(View(a), LinearLayout.LayoutParams(Ui.dp(a, 40), 1))
+            }
+            val desc = Ui.text(a, 12f, 700, R.color.ag_text).apply {
+                text = MoveText.describe(m)
+                visibility = View.GONE
+                background = Ui.rounded(Bits.blend(Ui.c(a, R.color.ag_sub0), Ui.c(a, R.color.ag_mantle), 0.14f), 10, a)
+                setPadding(Ui.dp(a, 10), Ui.dp(a, 7), Ui.dp(a, 10), Ui.dp(a, 8))
+            }
+            val said = listOfNotNull(m.name, m.type.label, kindName(m.category), if (showPower) "power ${m.power}" else null,
+                m.accuracy?.let { "accuracy $it" }).joinToString(", ")
+            row.contentDescription = "$said. Tap for what it does"
+            row.setOnClickListener { tap.toggle(row, desc, said) }
+            // a touch that starts on a row belongs to the row's click alone: the scroll's outside-tap must not also act on it
+            row.setOnTouchListener { _, ev -> if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) tap.downOnRow(); false }
+            col.addView(LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(row, LinearLayout.LayoutParams(-1, -2))
+                addView(desc, LinearLayout.LayoutParams(-1, -2).also { it.marginStart = Ui.dp(a, 38); it.bottomMargin = Ui.dp(a, 8) })
             })
         }
         repeat(unknown) { k ->
@@ -233,37 +254,64 @@ object DetailSections {
         return col
     }
 
+    /** The ScrollView of a details window: like [Bits.scroll], and it lets an open move text close on a tap anywhere. */
+    internal fun scroll(ctx: Context, child: View): android.widget.ScrollView = TapWatchScroll(ctx).apply { addView(child) }
+
+    /**
+     * The one move whose "what it does" is open (at most one). Tapping its row again or another row, or any plain tap in the details
+     * (a [TapWatchScroll] ancestor calls [down] / [tapped]), closes it. No animation: the text just appears under the row.
+     */
+    private class MoveTap : TapWatchScroll.Watcher {
+        private var row: View? = null
+        private var desc: View? = null
+        private var said = ""
+        private var host: TapWatchScroll? = null
+        private var openAtDown: View? = null
+        private var onRow = false
+
+        /** Called by a row's touch listener on ACTION_DOWN (after [down] of this gesture). */
+        fun downOnRow() { onRow = true }
+
+        fun toggle(r: View, d: View, said: String) {
+            val wasThis = row === r
+            close()
+            if (wasThis) return
+            row = r; desc = d; this.said = said
+            openAtDown = null; onRow = false   // a new open starts clean: the gesture that opened it is not an outside tap
+            // listens for taps elsewhere only while a text is open
+            var p = r.parent
+            while (p != null && p !is TapWatchScroll) p = p.parent
+            host = (p as? TapWatchScroll)?.also { it.watchers += this }
+            d.visibility = View.VISIBLE
+            r.contentDescription = "$said, open. Tap to close"
+            r.announceForAccessibility((d as TextView).text)
+        }
+
+        fun close() {
+            val r = row ?: return
+            desc?.visibility = View.GONE
+            r.contentDescription = "$said. Tap for what it does"
+            host?.watchers?.remove(this); host = null
+            row = null; desc = null
+        }
+
+        override fun down() { openAtDown = row; onRow = false }
+        override fun tapped() { if (row != null && row === openAtDown && !onRow) close() }
+        override fun end() { openAtDown = null; onRow = false }
+    }
+
     // ---------- Matchups ----------
 
-    /** Strong against / Weak to / Resists / Immune: groups of type chips with the multiplier. */
-    fun matchups(a: Context, types: List<com.husarp.ankigo.game.Type>): View {
-        val m = TypeMatchups.of(types)
+    /**
+     * R9-W3-A (D8-V1): the matchups as boxes per multiplier (Very weak against ×4, Weak against ×2, Resists ×½, Strongly resists ×¼,
+     * Immune to ×0), then "Strong against" (its own attacks ×2) last; empty groups are left out. A tap on a box says what it means for
+     * [name]. The chips carry no ×N any more: the box does.
+     */
+    fun matchups(a: Context, types: List<com.husarp.ankigo.game.Type>, name: String): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        fun group(title: String, desc: String, @ColorRes tone: Int, list: List<com.husarp.ankigo.game.Matchup>) {
-            if (list.isEmpty()) return
-            if (col.childCount > 0) col.addView(View(a).apply { setBackgroundColor(Ui.c(a, R.color.ag_s0)); alpha = 0.6f },
-                LinearLayout.LayoutParams(-1, 1).also { it.topMargin = Ui.dp(a, 8); it.bottomMargin = Ui.dp(a, 8) })
-            col.addView(LinearLayout(a).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(Ui.text(a, 11f, 900, tone).apply { text = title.uppercase(); letterSpacing = 0.06f })
-                addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply { text = desc }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 8) })
-            })
-            col.addView(FlowRow(a, Ui.dp(a, 6), centered = false).apply {
-                list.forEach { e ->
-                    addView(LinearLayout(a).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        gravity = Gravity.CENTER_VERTICAL
-                        addView(Ui.typeChip(a, e.type))
-                        addView(Ui.text(a, 11f, 900, R.color.ag_text).apply { text = e.label }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 3) })
-                    })
-                }
-            }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+        MatchupGroups.details(TypeMatchups.of(types)).forEach { (g, ts) ->
+            col.addView(MatchupBoxes.box(a, g, ts, name, compact = false), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
         }
-        group("Strong against", "its attacks do ×2", R.color.ag_peach, m.strongAgainst)
-        group("Weak to", "takes more damage", R.color.ag_red, m.weakTo)
-        group("Resists", "takes less", R.color.ag_green, m.resists)
-        group("Immune", "takes nothing", R.color.ag_blue, m.immune)
         return col
     }
 
@@ -313,71 +361,38 @@ object DetailSections {
 
     // ---------- Info ----------
 
-    /** A drawn arrow of a stage change (never a "<" / ">" sign): a line with a head, [lengthDp] long (30 dp; a little shorter in small windows). */
-    class ArrowView(ctx: Context, private val lengthDp: Int = 30) : View(ctx) {
+    /**
+     * A drawn arrow of a stage change (never a "<" / ">" sign): a line with a head, [lengthDp] long (30 dp; shorter in small windows),
+     * pointing right, or down when the stages are stacked ([set]).
+     */
+    class ArrowView(ctx: Context, private var lengthDp: Int = 30) : View(ctx) {
+        private var down = false
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
             strokeWidth = Ui.dp(ctx, 1.8f); color = Ui.c(ctx, R.color.ag_sub0)
         }
-        override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(Ui.dp(context, lengthDp), Ui.dp(context, 14))
+        fun set(lengthDp: Int, down: Boolean) {
+            if (lengthDp == this.lengthDp && down == this.down) return
+            this.lengthDp = lengthDp; this.down = down; requestLayout(); invalidate()
+        }
+        override fun onMeasure(w: Int, h: Int) {
+            val long = Ui.dp(context, lengthDp); val short = Ui.dp(context, 14)
+            if (down) setMeasuredDimension(short, long) else setMeasuredDimension(long, short)
+        }
         override fun onDraw(c: Canvas) {
-            val y = height / 2f
             val pad = paint.strokeWidth
             val head = Ui.dp(context, 4.5f)
-            c.drawLine(pad, y, width - pad, y, paint)
-            c.drawLine(width - pad - head, y - head, width - pad, y, paint)
-            c.drawLine(width - pad - head, y + head, width - pad, y, paint)
-        }
-    }
-
-    private fun evoNode(a: Context, node: EvoNode, current: Species, seen: Set<Int>, spriteDp: Int, onTap: ((Species) -> Unit)?): View {
-        val here = node.species.num == current.num
-        val img = ImageView(a)
-        MonPreview.show(a, node.species.num, false, img, silhouette = node.species.num !in seen && node.species.baseNum !in seen)
-        return LinearLayout(a).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            val px = Ui.dp(a, if (spriteDp < 44) 2 else 4)
-            setPadding(px, Ui.dp(a, 4), px, Ui.dp(a, 4))
-            if (here) background = Ui.rounded(Bits.blend(Ui.c(a, R.color.ag_mauve), Ui.c(a, R.color.ag_mantle), 0.22f), 12, a)
-            addView(img, LinearLayout.LayoutParams(Ui.dp(a, spriteDp), Ui.dp(a, spriteDp)))
-            addView(Ui.text(a, if (spriteDp < 44) 9.5f else 10.5f, 800, if (here) R.color.ag_text else R.color.ag_sub1).apply {
-                text = node.species.name; maxLines = 1; gravity = Gravity.CENTER
-            }, LinearLayout.LayoutParams(-2, -2))
-            contentDescription = node.species.name + if (here) " (this one)" else ""
-            if (!here && onTap != null && (node.species.num in seen || node.species.baseNum in seen)) setOnClickListener { onTap(node.species) }
-        }
-    }
-
-    private fun evoTree(a: Context, data: GameData, node: EvoNode, current: Species, seen: Set<Int>, spriteDp: Int, onTap: ((Species) -> Unit)?): View {
-        val me = evoNode(a, node, current, seen, spriteDp, onTap)
-        if (node.children.isEmpty()) return me
-        val kids = LinearLayout(a).apply {
-            orientation = LinearLayout.VERTICAL
-            node.children.forEach { c ->
-                addView(LinearLayout(a).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(LinearLayout(a).apply {
-                        orientation = LinearLayout.VERTICAL
-                        gravity = Gravity.CENTER_HORIZONTAL
-                        addView(ArrowView(a, if (spriteDp < 44) 22 else 30))
-                        c.via?.let { v ->
-                            addView(Ui.text(a, if (spriteDp < 44) 9f else 9.5f, 800, R.color.ag_sub0).apply {
-                                text = EvoLine.method(data, v); gravity = Gravity.CENTER; maxWidth = Ui.dp(a, if (spriteDp < 44) 52 else 66)
-                            }, LinearLayout.LayoutParams(-2, -2))
-                        }
-                        setPadding(Ui.dp(a, if (spriteDp < 44) 0 else 2), 0, Ui.dp(a, if (spriteDp < 44) 0 else 2), 0)
-                    })
-                    addView(evoTree(a, data, c, current, seen, spriteDp, onTap))
-                })
+            if (down) {
+                val x = width / 2f
+                c.drawLine(x, pad, x, height - pad, paint)
+                c.drawLine(x - head, height - pad - head, x, height - pad, paint)
+                c.drawLine(x + head, height - pad - head, x, height - pad, paint)
+            } else {
+                val y = height / 2f
+                c.drawLine(pad, y, width - pad, y, paint)
+                c.drawLine(width - pad - head, y - head, width - pad, y, paint)
+                c.drawLine(width - pad - head, y + head, width - pad, y, paint)
             }
-        }
-        return LinearLayout(a).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(me)
-            addView(kids)
         }
     }
 
@@ -385,8 +400,9 @@ object DetailSections {
     fun evolution(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onTap: ((Species) -> Unit)?): View {
         val line = EvoLine.of(data, sp)
         if (line.standalone) return Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Does not evolve" }
-        val tree = evoTree(a, data, line.root, sp, seen, if (compact) 36 else 48, onTap)
-        // centred when it fits, drawn smaller when it does not (the 340 dp floating card): never clipped, never scrolling sideways
+        val tree = EvoTreeView(a, data, line.root, sp, seen, compact, onTap)
+        // centred when it fits; when it does not (the 340 dp floating card) the tree first takes a narrower look (shorter arrows with
+        // the method wrapped, smaller sprites, stacked downwards), then is drawn smaller: never clipped, never scrolling sideways
         return FitWidth(a).apply { addView(tree) }
     }
 
@@ -457,5 +473,30 @@ object DetailSections {
             load = l
             v
         }
+    }
+}
+
+/**
+ * The details window's ScrollView (MonDetail, BattleDetails): tells its [watchers] about every touch that goes down and every
+ * plain tap (no scrolling) on it, without taking the touch, so the open move text can close on a tap anywhere in the details.
+ */
+internal class TapWatchScroll(ctx: Context) : android.widget.ScrollView(ctx) {
+    interface Watcher { fun down(); fun tapped(); fun end() {} }
+
+    val watchers = ArrayList<Watcher>()
+    private var downX = 0f
+    private var downY = 0f
+    private var moved = false
+    private val slop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            android.view.MotionEvent.ACTION_DOWN -> { downX = ev.x; downY = ev.y; moved = false; watchers.toList().forEach { it.down() } }
+            android.view.MotionEvent.ACTION_MOVE -> if (Math.abs(ev.x - downX) > slop || Math.abs(ev.y - downY) > slop) moved = true
+        }
+        val handled = super.dispatchTouchEvent(ev)
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_UP && !moved) watchers.toList().forEach { it.tapped() }
+        if (ev.actionMasked == android.view.MotionEvent.ACTION_UP || ev.actionMasked == android.view.MotionEvent.ACTION_CANCEL) watchers.toList().forEach { it.end() }
+        return handled
     }
 }

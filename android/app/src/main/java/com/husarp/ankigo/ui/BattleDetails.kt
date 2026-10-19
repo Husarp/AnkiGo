@@ -97,10 +97,10 @@ object BattleDetails {
                 addView(DetailSections.moves(ctx, data, known, compact, unknown))
             }
         })
-        col.addView(DetailSections.section(ctx, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(info.matchups)) { DetailSections.matchups(ctx, info.types) })
+        col.addView(DetailSections.section(ctx, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(info.matchups)) { DetailSections.matchups(ctx, info.types, info.name) })
         col.addView(DetailSections.infoSection(ctx, mem, data, sp, emptyList(), null, null, seen, compact,
             lines = listOf("Tier" to info.tier.label, "Pokédex" to if (info.dex == WildDex.CAUGHT) "Caught" else "Seen, not caught yet"), onTap = null))
-        Pickers.info(ctx, "Wild Pokémon", Bits.scroll(ctx, col))
+        Pickers.info(ctx, "Wild Pokémon", DetailSections.scroll(ctx, col))
         return true
     }
 

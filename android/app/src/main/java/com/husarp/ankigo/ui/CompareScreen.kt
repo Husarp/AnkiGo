@@ -26,8 +26,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     private var cmp: CompareState? = null
     private var evolved = false
     private var rows: RowChoice = CompareStore.loadRows(this)
-    /** How many columns fit (0 = automatic); remembered. */
-    private var fit: Int = CompareStore.loadFit(this)
+    /** How many columns fit (0 = automatic); always automatic when the screen opens (R9 C1), the choice lives as long as the screen. */
+    internal var fit: Int = CompareFit.atOpen()
     /** R6-05 item 7: which of the two number groups shows ("Stats" / "Base stats"); remembered. */
     private var group: CompareGroup = CompareStore.loadGroup(this)
     private var lastX = 0
@@ -219,7 +219,7 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         }
     }
 
-    /** R4-X1 item 12: how many columns fit on the screen; everything in the table scales with it. Remembered. */
+    /** R4-X1 item 12: how many columns fit on the screen; everything in the table scales with it. Not remembered for the next time (R9 C1). */
     private fun zoomMenu(anchor: View) {
         val opts = listOf(CompareFit.AUTO) + CompareFit.OPTIONS
         val m = AppMenu(anchor).header("Columns on screen", "Everything in the table scales to fit")
@@ -228,7 +228,6 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         }
         m.show { id ->
             fit = opts[id]
-            CompareStore.saveFit(this, fit)
             requestRender()
         }
     }
@@ -279,11 +278,14 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         fun word(label: String, end: Int) = row.addView(Ui.text(this, 11f, 800, R.color.ag_sub0).apply { text = label },
             LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = end })
         val card = c(R.color.ag_card)
-        val stops = floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f).map { Bits.blend(scaleColor(this, it), card, 0.42f) }.toIntArray()
+        val steps = CompareScale.legend(card, TypeChips.isDark(this)) // the mockup's 21 steps, worst to best
         word("worst", dp(6))
-        row.addView(View(this).apply {
-            background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, stops).apply { cornerRadius = Ui.dp(this@ComparePage, 4f) }
-        }, LinearLayout.LayoutParams(dp(96), dp(12)).also { it.marginEnd = dp(6) })
+        row.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = GradientDrawable().apply { setColor(card); cornerRadius = Ui.dp(this@ComparePage, 4f) }
+            clipToOutline = true
+            for (col in steps) addView(View(this@ComparePage).apply { setBackgroundColor(col) }, LinearLayout.LayoutParams(0, -1, 1f))
+        }, LinearLayout.LayoutParams(dp(105), dp(12)).also { it.marginEnd = dp(6) })
         word("best", dp(10))
         word("same value, same colour", 0)
         return row
@@ -296,7 +298,7 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         val items = rowItems(data).filter { CompareGroups.shows(it.key, shown) } // the rows of the hidden group would change nothing on screen
         val dialog = Dialog(this).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
         val maxBody = (resources.displayMetrics.heightPixels * 0.9f).toInt() - dp(150)
-        dialog.setContentView(rowsSheet(items, maxBody.coerceAtLeast(dp(120)), { dialog.dismiss() }))
+        dialog.setContentView(SheetKit.dialog(dialog, rowsSheet(items, maxBody.coerceAtLeast(dp(120)), { dialog.dismiss() })))
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))

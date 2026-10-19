@@ -13,8 +13,8 @@ import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
 /**
- * Battle backgrounds (round 8: the 31 pictures of [com.husarp.ankigo.ui.BackdropCatalog]), downloaded on demand (never in the repo
- * or the APK) into `Sprites.dir(ctx)/bg/<id>.<ext>`, so the Downloads size and "clear pictures" include them. Showdown's come from
+ * Battle backgrounds (round 9: the 35 pictures of [com.husarp.ankigo.ui.BackdropCatalog]), downloaded on demand (never in the repo
+ * or the APK) into `Sprites.dir(ctx)/bg/<fileName>`, so the Downloads size and "clear pictures" include them. Showdown's come from
  * `fx/bg-<id>.png` (the AnkiGo mirror first, [Mirror.get]), Adam's own from the `assets-1` release ([Mirror.ownUrl]). Only while
  * "Download pictures as needed" and the background-pictures setting are both on ([allowed]); a missing picture is the plain gradient.
  * The pure parts (URL, file, gate, blur maths in [BackdropBlur]) are unit-tested; [load] decodes off the main thread, makes the
@@ -35,11 +35,20 @@ object Backdrops {
     /** Where [bg] is downloaded from: Showdown's `fx/bg-<id>.png`, or AnkiGo's own release file `bg-<id>.<ext>`. */
     fun url(bg: Backdrop): String = when (bg.source) {
         BackdropSource.SHOWDOWN -> url(bg.id)
-        BackdropSource.OWN -> Mirror.ownUrl("bg-${bg.id}.${bg.ext}")
+        BackdropSource.OWN -> Mirror.ownUrl("bg-" + fileName(bg))
     }
 
-    /** Where [bg] is (or will be) saved under the sprite folder [spritesDir]: `bg/<id>.<ext>` (round 7's Showdown files are the same names). */
-    fun file(spritesDir: File, bg: Backdrop) = File(File(spritesDir, "bg"), "${bg.id}.${bg.ext}")
+    /** The picture's revision: Showdown's pictures are always the first (their names never change). */
+    private fun revOf(bg: Backdrop) = if (bg.source == BackdropSource.OWN) bg.rev else 1
+
+    /** The picture's name without the extension: `<id>` for revision 1, `<id>-<rev>` after a retouch. */
+    internal fun baseName(bg: Backdrop) = if (revOf(bg) > 1) "${bg.id}-${revOf(bg)}" else bg.id
+
+    /** The picture's file name: `<id>.<ext>` for revision 1, `<id>-<rev>.<ext>` after a retouch. */
+    fun fileName(bg: Backdrop) = "${baseName(bg)}.${bg.ext}"
+
+    /** Where [bg] is (or will be) saved under the sprite folder [spritesDir]: `bg/<fileName>` (round 7's Showdown files are the same names). */
+    fun file(spritesDir: File, bg: Backdrop) = File(File(spritesDir, "bg"), fileName(bg))
 
     /** Pictures show and download only with sprite downloads on AND the background setting on. */
     fun allowed(spritesOn: Boolean, picturesOn: Boolean) = spritesOn && picturesOn
@@ -112,8 +121,24 @@ object Backdrops {
     }
 
     /** Downloads [bg] through the sprite downloader (PNG / WebP check, size limit, "not found" note); the file or null. */
-    internal fun fetchFile(spritesDir: File, bg: Backdrop, get: HttpGet): File? =
-        Sprites.download(File(File(spritesDir, "bg"), bg.id), listOf(url(bg)), get = get, retryMissingMs = RETRY_MS)
+    internal fun fetchFile(spritesDir: File, bg: Backdrop, get: HttpGet): File? {
+        val f = Sprites.download(File(File(spritesDir, "bg"), baseName(bg)), listOf(url(bg)), get = get, retryMissingMs = RETRY_MS)
+        if (f != null) deleteStale(spritesDir, bg)
+        return f
+    }
+
+    /** After a retouched picture (rev > 1) arrived: removes the older files of the same id (`<id>.<ext>`, `<id>-<n>.<ext>`). Best effort. */
+    internal fun deleteStale(spritesDir: File, bg: Backdrop) {
+        try {
+            val rev = revOf(bg)
+            if (rev <= 1) return
+            val dir = File(spritesDir, "bg")
+            for (n in 1 until rev) {
+                val base = if (n == 1) bg.id else "${bg.id}-$n"
+                File(dir, "$base.${bg.ext}").delete()
+            }
+        } catch (_: Throwable) {}
+    }
 
     private fun decode(f: File): Bitmap? = try {
         val o = BitmapFactory.Options().apply { inScaled = false; inPreferredConfig = Bitmap.Config.ARGB_8888 }

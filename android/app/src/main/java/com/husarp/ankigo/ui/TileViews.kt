@@ -114,6 +114,7 @@ internal object TileViews {
             TileMark.FAVOURITE -> BoxViews.heartMark(ctx)
             TileMark.IN_TEAM -> BoxViews.teamMark(ctx)
             TileMark.MAIN -> BoxViews.icon(ctx, R.drawable.ic_swords, R.color.ag_peach)
+            TileMark.EXP_SHARE -> BoxViews.icon(ctx, R.drawable.ic_exp_share, R.color.ag_teal)
             TileMark.NEW, TileMark.SHINY -> return null
         }
         icon.contentDescription = mark.label

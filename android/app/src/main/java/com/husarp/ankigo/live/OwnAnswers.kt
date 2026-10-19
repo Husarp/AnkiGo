@@ -2,11 +2,17 @@ package com.husarp.ankigo.live
 
 /** Suppress only the expected rep, preserving other answers observed in the same poll. */
 class OwnAnswers {
-    private data class Expected(val rep: Int, val until: Long)
+    private class Expected(val rep: Int, var until: Long)
     private val pending = HashMap<Long, MutableList<Expected>>()
-    @Synchronized fun expect(id: Long, rep: Int, now: Long) {
+    /**
+     * [pinned]: the answer is not resolved yet (written or not, nobody knows), so the expectation does not expire however long that
+     * takes; it ends by [consume], [cancel], or a later plain [expect] (which sets it back to [now] + 30 s, the saved-answer handoff).
+     */
+    @Synchronized fun expect(id: Long, rep: Int, now: Long, pinned: Boolean = false) {
+        val until = if (pinned) Long.MAX_VALUE else now + 30_000
         val list = pending.getOrPut(id) { arrayListOf() }
-        if (list.none { it.rep == rep }) list += Expected(rep, now + 30_000)
+        val old = list.firstOrNull { it.rep == rep }
+        if (old == null) list += Expected(rep, until) else old.until = until // a write that is tried again keeps its expectation alive
     }
     @Synchronized fun consume(id: Long, from: Int, to: Int, now: Long): Int {
         val list = pending[id] ?: return 0

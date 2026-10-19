@@ -55,45 +55,87 @@ object DetailMath {
     val LABELS = listOf("HP", "Atk", "Def", "SpA", "SpD", "Spe")
 }
 
-/** Wrapping row (centred lines unless [centered] is false) for the tag pills and the matchup chips. */
-class FlowRow(ctx: Context, private val gapPx: Int, private val centered: Boolean = true) : ViewGroup(ctx) {
-    private val lines = ArrayList<IntArray>() // per line: first child index, end index, width, height
+/** R9 (C2): where a flow of boxes breaks into lines (pure, unit-tested): a box goes on the line while the line stays within [maxW]. */
+object FlowMath {
+    /** One line of a flow: the boxes [start] until [end] (exclusive indexes) and the line's width. */
+    class Line(val start: Int, val end: Int, val width: Int)
 
-    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
-        val maxW = MeasureSpec.getSize(widthSpec) - paddingLeft - paddingRight
-        lines.clear()
+    /**
+     * Breaks boxes of [widths] (margins included) into lines at most [maxW] wide with [gap] between boxes: a box starts a new line
+     * only when it does not fit in what is left of the current one (a box wider than [maxW] stands alone on its line).
+     */
+    fun lines(widths: List<Int>, gap: Int, maxW: Int): List<Line> {
+        val out = ArrayList<Line>()
         var start = 0
         var w = 0
-        var h = 0
+        for (i in widths.indices) {
+            val add = widths[i] + if (i > start) gap else 0
+            if (i > start && w + add > maxW) {
+                out += Line(start, i, w)
+                start = i; w = widths[i]
+            } else w += add
+        }
+        if (widths.isNotEmpty()) out += Line(start, widths.size, w)
+        return out
+    }
+}
+
+/**
+ * Wrapping row (centred lines unless [centered] is false) for the tag pills and the matchup chips. A child goes on the line while
+ * it fits in what is left of it (children's margins count); [gapPx] is between children, [lineGapPx] between lines.
+ */
+class FlowRow(ctx: Context, private val gapPx: Int, private val centered: Boolean = true, private val lineGapPx: Int = gapPx) : ViewGroup(ctx) {
+    private val kids = ArrayList<View>()
+    private var lines: List<FlowMath.Line> = emptyList()
+    private val lineH = ArrayList<Int>()
+
+    private fun mlp(c: View) = c.layoutParams as MarginLayoutParams
+
+    override fun generateDefaultLayoutParams(): LayoutParams = MarginLayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+    override fun generateLayoutParams(attrs: android.util.AttributeSet?): LayoutParams = MarginLayoutParams(context, attrs)
+    override fun generateLayoutParams(p: LayoutParams): LayoutParams = MarginLayoutParams(p)
+    override fun checkLayoutParams(p: LayoutParams?): Boolean = p is MarginLayoutParams
+
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        val unbounded = MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED
+        val maxW = if (unbounded) Int.MAX_VALUE / 4 else (MeasureSpec.getSize(widthSpec) - paddingLeft - paddingRight).coerceAtLeast(0)
+        kids.clear()
+        val widths = ArrayList<Int>()
+        val heights = ArrayList<Int>()
         for (i in 0 until childCount) {
             val c = getChildAt(i)
             if (c.visibility == GONE) continue
-            measureChild(c, MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST), MeasureSpec.UNSPECIFIED)
-            val add = c.measuredWidth + if (w > 0) gapPx else 0
-            if (w > 0 && w + add > maxW) {
-                lines += intArrayOf(start, i, w, h)
-                start = i; w = 0; h = 0
-            }
-            w += c.measuredWidth + if (w > 0) gapPx else 0
-            h = maxOf(h, c.measuredHeight)
+            val lp = mlp(c)
+            val room = (maxW - lp.leftMargin - lp.rightMargin).coerceAtLeast(0)
+            // measured on its own (not measureChild: that would take this row's padding off a second time)
+            c.measure(MeasureSpec.makeMeasureSpec(room, if (unbounded) MeasureSpec.UNSPECIFIED else MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+            kids += c
+            widths += c.measuredWidth + lp.leftMargin + lp.rightMargin
+            heights += c.measuredHeight + lp.topMargin + lp.bottomMargin
         }
-        if (w > 0) lines += intArrayOf(start, childCount, w, h)
-        val total = lines.sumOf { it[3] } + gapPx * maxOf(0, lines.size - 1) + paddingTop + paddingBottom
-        setMeasuredDimension(MeasureSpec.getSize(widthSpec), total)
+        lines = FlowMath.lines(widths, gapPx, maxW)
+        lineH.clear()
+        for (l in lines) lineH += (l.start until l.end).maxOf { heights[it] }
+        val total = lineH.sum() + lineGapPx * maxOf(0, lines.size - 1) + paddingTop + paddingBottom
+        val w = if (unbounded) (lines.maxOfOrNull { it.width } ?: 0) + paddingLeft + paddingRight else MeasureSpec.getSize(widthSpec)
+        setMeasuredDimension(w, total)
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         var y = paddingTop
         val inner = r - l - paddingLeft - paddingRight
-        for (line in lines) {
-            var x = paddingLeft + if (centered) (inner - line[2]) / 2 else 0
-            for (i in line[0] until line[1]) {
-                val c = getChildAt(i)
-                if (c.visibility == GONE) continue
-                c.layout(x, y + (line[3] - c.measuredHeight) / 2, x + c.measuredWidth, y + (line[3] + c.measuredHeight) / 2)
-                x += c.measuredWidth + gapPx
+        lines.forEachIndexed { n, line ->
+            var x = paddingLeft + if (centered) ((inner - line.width) / 2).coerceAtLeast(0) else 0
+            val h = lineH[n]
+            for (i in line.start until line.end) {
+                val c = kids[i]
+                val lp = mlp(c)
+                x += lp.leftMargin
+                val top = y + (h - (c.measuredHeight + lp.topMargin + lp.bottomMargin)) / 2 + lp.topMargin
+                c.layout(x, top, x + c.measuredWidth, top + c.measuredHeight)
+                x += c.measuredWidth + lp.rightMargin + gapPx
             }
-            y += line[3] + gapPx
+            y += h + lineGapPx
         }
     }
 }

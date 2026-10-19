@@ -12,7 +12,7 @@ import com.husarp.ankigo.ui.TeamPage
 import org.junit.Rule
 import org.junit.Test
 
-/* R3-X2: readable rename field (1), gender sign before the name (2), Shop info popup (3), Sync button in the Study bar (5). */
+/* R3-X2: readable rename field (1), gender sign before the name (2), Shop info popup (3). (The Sync button of the Study bar was removed in Round 9.) */
 class R3X2Shots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
     private val st get() = GameRepo.state!!
@@ -58,9 +58,5 @@ class R3X2Shots {
             st.shopTms += listOf("thunderbolt", "bodyslam")
             pageScreen(ctx, ShopPage(ctx, NoHost)) as View
         }
-    }
-
-    @Test fun syncButtonInTheStudyBar() {
-        paparazzi.shootWith("r3x2-study-sync", listOf(Size.PHONE)) { StudyDeckKit.build(it) }
     }
 }

@@ -131,8 +131,8 @@ class SoundCuesTest {
         for (id in ids("HIT", "SUPER", "WEAK", "FAINT", "CATCH", "LEVEL_UP", "MISS", "CHARGE", "THROW", "WOBBLE", "BREAK_FREE", "FLED", "SENT_OUT"))
             assertEquals("$id", SoundGroup.BATTLE, id.group)
         for (id in ids("STAT_UP", "STAT_DOWN", "BURN", "BURN_TICK", "POISON", "POISON_TICK", "PARALYSIS", "SLEEP", "FREEZE", "SHINY", "EVO_START",
-            "EVO_DONE", "LEARNED", "ITEM", "CASH", "BADGE", "HEALED", "GOAL")) assertEquals("$id", SoundGroup.MOMENTS, id.group)
-        assertEquals(40, SoundId.entries.size)
+            "EVO_DONE", "LEARNED", "ITEM", "CASH", "BADGE", "HEALED", "GOAL", "XP_ABSORB")) assertEquals("$id", SoundGroup.MOMENTS, id.group)
+        assertEquals(41, SoundId.entries.size)
         assertTrue(SoundId.entries.none { it.group == SoundGroup.CRIES })
     }
 
@@ -146,7 +146,7 @@ class SoundCuesTest {
 
     @Test fun everySoftSoundHasAnIdAndFile() {
         for (s in SoftSound.entries) assertEquals(s.name, SoundId.valueOf(s.name).soft?.name)
-        assertEquals(34, SoftSound.entries.size)
+        assertEquals(35, SoftSound.entries.size)
         assertEquals("stat_up-v1.wav", SoundId.STAT_UP.file)
         assertTrue(SoundId.entries.filter { it.soft == null }.map { it.name }.toSet() == setOf("HIT", "SUPER", "WEAK", "FAINT", "CATCH", "LEVEL_UP"))
     }

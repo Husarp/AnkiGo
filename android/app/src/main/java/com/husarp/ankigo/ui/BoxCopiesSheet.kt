@@ -144,7 +144,7 @@ internal class BoxCopiesSheet(
         val dialog = Dialog(ctx).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
         dismiss = { dialog.dismiss() }
         val maxList = (ctx.resources.displayMetrics.heightPixels * LIST_SHARE).toInt()
-        dialog.setContentView(build(maxList))
+        dialog.setContentView(SheetKit.dialog(dialog, build(maxList)))
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))

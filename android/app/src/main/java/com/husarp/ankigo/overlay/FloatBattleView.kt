@@ -70,9 +70,17 @@ internal class FloatBattleView(
         if (!window.isShowing) {
             panel?.renderAll() // everything that happened while it was hidden
             if (!window.show()) return false
-        }
+        } else refreshPicture()
         attach()
         return true
+    }
+
+    /**
+     * R9-C6 / R9-W5-A: the window stayed up while the game changed under it (the floating Team / Pokédex card on top sent the main to
+     * the box, changed a look, ...): the main's card and picture follow. Not while an animation plays; no reload when nothing changed.
+     */
+    internal fun refreshPicture() {
+        if (player?.idle != false) panel?.refreshMain()
     }
 
     /** Hides the window and detaches the sink; the object can [show] again. */

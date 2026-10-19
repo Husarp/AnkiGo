@@ -5,6 +5,8 @@ package com.husarp.ankigo.ui
  * "outside a battle": the Study screen's answer row shows Continue instead of Show answer / the answer buttons, and every other
  * way to flip or answer (keys, swipes, taps on the card, the card's script) acts as Continue first and leaves the card alone.
  * Only the auto-advance countdown does not act: it waits until Continue was tapped.
+ * Round 9 C5: the hold starts when the winning / catching batch arrives ([NextFight.holdsEarly]), not only once the reward animations and
+ * the tiles are done; a Continue tap during the animations ends them ([EventPlayer.continueBattle]).
  */
 object ContinueRule {
     /** What the Study screen's answer row shows. */

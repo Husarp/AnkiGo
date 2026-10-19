@@ -47,16 +47,6 @@ class StatsChartMathTest {
         for (i in 0 until 7) assertEquals(i, StatsChartMath.indexAt(StatsChartMath.slotCenter(i, 7, 30f, 380f), 7, 30f, 380f))
     }
 
-    @Test fun heatmapCellUnderAFinger() {
-        // grid at (20, 16), cells 10 wide, gap 2: columns at 20, 32, 44 ...; rows at 16, 28 ...
-        assertEquals(0 to 0, StatsChartMath.gridCell(25f, 20f, 20f, 16f, 10f, 2f, 5))
-        assertEquals(2 to 3, StatsChartMath.gridCell(50f, 55f, 20f, 16f, 10f, 2f, 5))
-        assertNull(StatsChartMath.gridCell(10f, 20f, 20f, 16f, 10f, 2f, 5))   // the M / W / F labels
-        assertNull(StatsChartMath.gridCell(25f, 5f, 20f, 16f, 10f, 2f, 5))    // the month names
-        assertNull(StatsChartMath.gridCell(25f, 16f + 7 * 12 + 1, 20f, 16f, 10f, 2f, 5)) // under the 7th row
-        assertNull(StatsChartMath.gridCell(20f + 5 * 12 + 1, 20f, 20f, 16f, 10f, 2f, 5)) // right of the last column
-    }
-
     // ---- axis ----
 
     @Test fun axisUsesRoundNumbers() {

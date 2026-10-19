@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.GameData
-import com.husarp.ankigo.game.Matchup
 import com.husarp.ankigo.game.TestData
 import com.husarp.ankigo.game.Type
 import org.junit.Assert.assertEquals
@@ -168,12 +167,8 @@ class R4X1Test {
         assertNull(CompareInfo.forRow("unknown", ""))
     }
 
-    @Test fun typeAndMatchupTexts() {
+    @Test fun typeText() {
         assertEquals("Fire type", CompareInfo.typeText(Type.FIRE))
-        assertEquals("Water ×2: takes double damage", CompareInfo.matchupText(Matchup(Type.WATER, 2.0)))
-        assertEquals("Grass ×¼: takes a quarter of the damage", CompareInfo.matchupText(Matchup(Type.GRASS, 0.25)))
-        assertEquals("Ground ×0: takes no damage", CompareInfo.matchupText(Matchup(Type.GROUND, 0.0)))
-        assertEquals("Ice ×4: takes four times the damage", CompareInfo.matchupText(Matchup(Type.ICE, 4.0)))
     }
 
     // ---- item 2: no limit on ticks ----

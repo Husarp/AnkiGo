@@ -130,6 +130,20 @@ object WidgetLogic {
         )
     }
 
+    /**
+     * R9-W5-A: who is in the team, in which order, and how each one shows (species, chosen look, shininess, name, level): everything
+     * of the team the widgets draw that a Team / Box action, an item, a look or a rename can change. HP and XP are left out on
+     * purpose (every answer changes them; those redraws come from the answer events). The Buddy widget follows the main, which is the first.
+     * [picked] = the uids the widgets show by pick (a Buddy widget set to a Pokémon, often one in the box): they count the same way,
+     * and a pick that is gone (released) is its own marker, so the widget that falls back to the main redraws too.
+     */
+    fun teamSignature(s: GameState, picked: Set<String> = emptySet()): String {
+        fun shows(m: Mon) = "${m.uid}:${m.species}:${m.look}:${m.shiny}:${m.shownName}:${m.level}"
+        val team = s.teamMons().take(6).joinToString("|") { shows(it) }
+        if (picked.isEmpty()) return team
+        return team + "#" + picked.sorted().joinToString("|") { u -> s.mon(u)?.let { shows(it) } ?: "$u:gone" }
+    }
+
     private fun widgetMon(m: Mon, lookNum: (Mon) -> Int, maxHp: (Mon) -> Int?, typeOf: (Mon) -> Type?) =
         WidgetMon(lookNum(m), m.shownName, m.level, m.shiny, hpFrac(m.hp, maxHp(m)), m.uid, typeOf(m))
 

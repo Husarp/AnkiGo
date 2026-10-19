@@ -68,7 +68,7 @@ object DexDetail {
                 addView(DetailParts.totalRow(a, sp.base.total, null))
             }
         })
-        col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types) })
+        col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, sp.name) })
         col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), DetailFormat.allAbilities(sp)?.let { Triple("Abilities", it, null) }, null,
             state.seen + state.caught, compact) { other -> show(a, other) })
 

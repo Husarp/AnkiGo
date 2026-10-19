@@ -22,6 +22,7 @@ import com.husarp.ankigo.ui.BattleCard
 import com.husarp.ankigo.ui.BattlePanelView
 import com.husarp.ankigo.ui.Stage
 import com.husarp.ankigo.ui.StageFit
+import com.husarp.ankigo.ui.StageGeo
 import com.husarp.ankigo.ui.Ui
 import java.io.File
 import org.junit.After
@@ -39,7 +40,7 @@ import kotlin.math.min
 /**
  * R8-04 "Pokémon belong to the picture": the arena in picture mode in every host, with GENERATED stand-in pictures ([BackdropScenes]:
  * sky, ground, and a light oval centred on each stand point, so a shot shows whether the feet are on the spots) and FakeGame's
- * generated sprites. Four backgrounds of different shapes (forest 1.5:1, reef 3:2 crisp, rocky-path 2.3:1 wide, night-alley dark
+ * generated sprites. Four backgrounds of different shapes (forest 1.5:1 crisp, mine 1.49:1 soft, canyon 1.79:1 wide, night-forest dark
  * with a low wild spot) in: the full battle (PHONE, LAND, SPLIT), the study panel and the study strips, picture-in-picture, the
  * floating battle window (zoom .72) and the Pokémon tab's battle card; light and dark. Every shot asserts: the sprite holders'
  * bottom-centre is the stage's feet (within 1 px), the backdrop got the same stage, the holders are the plan's frames, and (when the
@@ -55,7 +56,7 @@ class R804Shots {
         BattleShotKit.reset()
     }
 
-    private val ids = listOf("forest", "reef", "rocky-path", "night-alley")
+    private val ids = listOf("forest", "mine", "canyon", "night-forest")
     private val noGet: HttpGet = { _, _ -> null }
 
     // ---- helpers -----------------------------------------------------------------------------------------------------------
@@ -160,8 +161,10 @@ class R804Shots {
         val wc = box(field(arena, "enemyBlock"))
         val pc = box(field(arena, "playerCard"))
         assertTrue("$tag: picture mode draws by frame", arena.enemySprite.byFrame && arena.playerSprite.byFrame)
-        val wa = drawnArt(wild, arena.enemySprite)    // what the sprites REALLY draw (R8-FIX M2), not a flat 85 % of the frame
-        val pa = drawnArt(player, arena.playerSprite)
+        val wa = art(plan.wildArt, d)    // the sprites' REAL art boxes (R9 D1: the drawn pixels, not the bitmap), which the plan kept a gap from
+        val pa = art(plan.playerArt, d)
+        val drawnW = drawnArt(wild, arena.enemySprite)
+        val drawnP = drawnArt(player, arena.playerSprite)
         assertEquals("$tag: wild card x", plan.wildCard.x * d, wc.x, 1f)
         assertEquals("$tag: wild card y", plan.wildCard.y * d, wc.y, 1f)
         assertEquals("$tag: player card x", plan.playerCard.x * d, pc.x, 1f)
@@ -179,8 +182,8 @@ class R804Shots {
         }
         val line = "%-11s %5.0f x %-4.0f dp  %s  sprites x%.1f  cards x%.2f  %s  %s  frames %.0f/%.0f dp  drawn %.0f x %.0f / %.0f x %.0f dp".format(
             bg.id, arena.width / d, arena.height / d, if (stage.shrunk) "shrunk" else "crop  ", plan.spriteScale, plan.k,
-            if (plan.clear) "clear   " else "FALLBACK", if (plan.bothTop) "both-top" else "        ", stage.wildFrame * plan.spriteScale, stage.playerFrame * plan.spriteScale,
-            wa.w / d, wa.h / d, pa.w / d, pa.h / d,
+            if (plan.clear) "clear   " else "FALLBACK", "level ${plan.level}", stage.wildFrame * plan.spriteScale, stage.playerFrame * plan.spriteScale,
+            drawnW.w / d, drawnW.h / d, drawnP.w / d, drawnP.h / d,
         )
         return Row(line, plan.clear)
     }
@@ -195,6 +198,9 @@ class R804Shots {
         if (dw <= 0 || dh <= 0) return hostBox(holder).art()
         return ArenaGeo.Box(holder.left + (holder.width - dw) / 2f, holder.bottom - dh.toFloat(), dw.toFloat(), dh.toFloat())
     }
+
+    /** A plan's art box (virtual dp) in the arena's px. */
+    private fun art(b: ArenaGeo.Box, d: Float) = ArenaGeo.Box(b.x * d, b.y * d, b.w * d, b.h * d)
 
     private data class Foot(val name: String, val holder: View, val x: Float, val y: Float, val frame: Float)
 
@@ -281,7 +287,7 @@ class R804Shots {
         assertSame(st1, arena.stageNow)
 
         // another picture replaces it: other stand points, so a re-layout
-        show(ctx, arena, bg("reef"))
+        show(ctx, arena, bg("canyon"))
         assertTrue("layout asked for on a swap", arena.isLayoutRequested)
         layOut(arena, 380, 300)
         val st2 = arena.stageNow!!
@@ -289,13 +295,13 @@ class R804Shots {
         assertEquals(st2.wildFeetX * 2f, (wild.left + wild.right) / 2f, 1f)
         assertEquals(st2.wildFeetY * 2f, wild.bottom.toFloat(), 1f)
         assertEquals(st2.playerFeetX * 2f, (player.left + player.right) / 2f, 1f)
-        assertEquals(StageFit.fit(bg("reef"), 380f, 300f)!!.cropX, st2.cropX, 0.001f)
+        assertEquals(StageFit.fit(bg("canyon"), 380f, 300f)!!.cropX, st2.cropX, 0.001f)
 
         // the floating window's zoom: a re-layout, and the very crop StageFit gives for that zoom
         arena.stageZoom = 0.72f
         assertTrue("layout asked for on a zoom change", arena.isLayoutRequested)
         layOut(arena, 380, 300)
-        val z = StageFit.fit(bg("reef"), 380f, 300f, 0.72f)!!
+        val z = StageFit.fit(bg("canyon"), 380f, 300f, 0.72f)!!
         val st3 = arena.stageNow!!
         assertEquals(z.cropW, st3.cropW, 0.001f); assertEquals(z.cropX, st3.cropX, 0.001f); assertEquals(z.cropY, st3.cropY, 0.001f)
         assertEquals(z.wildFeetY, st3.wildFeetY, 0.001f)
@@ -317,7 +323,7 @@ class R804Shots {
 
     private fun assertNotSame(a: Any?, b: Any?) = assertTrue("same object", a !== b)
 
-    @Test fun theStudyLayoutsKeepTheirCardWidthsAndCardScaleOne() {
+    @Test fun theStudyLayoutsKeepTheirCardWidthsAndTheirBoxesFollowThePanelHeight() {
         val ctx = setUp()
         val arena = ArenaView(ctx)
         arena.configure(0f, true, false)
@@ -327,23 +333,27 @@ class R804Shots {
         show(ctx, arena, bg("forest"))
         layOut(arena, 412, 146)
         val p = arena.stagePlanNow!!
-        assertEquals(1f, p.k, 0f); assertEquals(1f, arena.cardScale, 0f)
-        // the strip's cards: 138 / 142 dp (a 412 dp strip has room), laid out at that width and not scaled
-        assertEquals(Ui.dp(ctx, 138), wildCard.layoutParams.width)
-        assertEquals(Ui.dp(ctx, 142), playerCard.layoutParams.width)
-        assertEquals(1f, wildCard.scaleX, 0f); assertEquals(1f, playerCard.scaleY, 0f)
+        // R9 D1: a 146 dp strip gets small boxes from the start (60.5 % of the design size), still laid out at the design width; R9 D12: not under
+        // the scale the compact cards' 10 sp HP number is readable at (80 %)
+        assertEquals(StageGeo.boxScales(146f, 1f, 0f, 1f, 10f, 10f).start, p.k, 0.0001f); assertEquals(p.k, arena.cardScale, 0f)
+        assertEquals(0.8f, p.k, 0.0001f)
+        assertTrue("the strip's boxes are under their design size", p.k < 1f)
+        // the strip's cards: 160 dp since D12 (a 412 dp strip has room), laid out at that width and drawn p.k times as big from their corner
+        assertEquals(Ui.dp(ctx, 160), wildCard.layoutParams.width)
+        assertEquals(Ui.dp(ctx, 160), playerCard.layoutParams.width)
+        assertEquals(p.k, wildCard.scaleX, 0f); assertEquals(p.k, playerCard.scaleY, 0f)
         // a narrow pane: the cards shrink with it (to half the pane minus 15 dp, never under 96 dp)
         layOut(arena, 220, 146)
         assertEquals(Ui.dp(ctx, 96), wildCard.layoutParams.width)
         assertEquals(Ui.dp(ctx, 96), playerCard.layoutParams.width)
 
-        // the compact study layout (not the strip): 130 dp
+        // the compact study layout (not the strip): 160 dp
         val b = ArenaView(ctx)
         b.configure(0f, true, false)
         b.setCompact(true)
-        show(ctx, b, bg("reef"))
+        show(ctx, b, bg("canyon"))
         layOut(b, 412, 200)
-        assertEquals(Ui.dp(ctx, 130), field<View>(b, "enemyBlock").layoutParams.width)
+        assertEquals(Ui.dp(ctx, 160), field<View>(b, "enemyBlock").layoutParams.width)
     }
 
     @Test fun theNormalLayoutDrawsTheCardsBiggerFromTheirCorner() {
@@ -464,8 +474,8 @@ class R804Shots {
 
     private fun assertClearOfDrawn(tag: String, arena: ArenaView) {
         val plan = arena.stagePlanNow!!
-        val wild: View = field(arena, "enemyHolder"); val player: View = field(arena, "playerHolder")
-        val wa = drawnArt(wild, arena.enemySprite); val pa = drawnArt(player, arena.playerSprite)
+        val d = arena.resources.displayMetrics.density
+        val wa = art(plan.wildArt, d); val pa = art(plan.playerArt, d)
         val wc = box(field(arena, "enemyBlock")); val pc = box(field(arena, "playerCard"))
         if (!plan.clear) return
         fun hits(a: ArenaGeo.Box, b: ArenaGeo.Box) = a.x < b.right - 1f && b.x < a.right - 1f && a.y < b.bottom - 1f && b.y < a.bottom - 1f

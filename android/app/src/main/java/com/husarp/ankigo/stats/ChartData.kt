@@ -149,12 +149,12 @@ object ChartData {
         return if (metric.kind == ChartKind.TIME && grain != null && grain in p.grains) grain else p.defaultGrain
     }
 
-    /** How many weeks the streak calendar shows for [period] (always whole weeks, Monday first, ending with the current week). */
+    /** How many weeks the streak calendar grid holds for [period] (whole weeks, Monday first, ending with the current week; 7 and 30 days draw only their days). */
     fun heatmapWeeks(period: ChartPeriod): Int = when (period) {
         ChartPeriod.D7 -> 4
         ChartPeriod.D30 -> 6
-        ChartPeriod.D90 -> 14
-        ChartPeriod.D365 -> 52
+        ChartPeriod.D90 -> 13
+        ChartPeriod.D365 -> 53
     }
 
     /**

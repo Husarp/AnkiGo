@@ -4,186 +4,303 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Round 8 stage rule, part 2 (pure maths, virtual dp like [ArenaGeo]): the Pokémon stand on the [Stage]'s feet, the two stat cards
- * go where they cover neither Pokémon. The wild card sits in the top row (beside the wild one, top-left, between the two, top-right),
- * ours in the bottom row (beside ours, bottom-right, between, bottom-left). Search order: sprite scale 1, .9 .. .6, and for each the
- * card scale from the caller's k0 down to 1; the clear pair with the best preference wins. From sprite scale [TOP_FROM] on, when the
- * usual rows have no clear pair, "both cards on top" is tried before the sprites shrink further: the wild card in its top row as
- * ever, ours in the top row too (top-right, top-middle). A card never has to clear more than the Pokémon's visible picture: the
- * caller can say how much of its frame that is ([ArtShare]; the default is [ArenaGeo.Box.art]'s 85 %). Nothing clear: sprites at .7,
- * cards at 1, the pair with the least weighted overlap ([StagePlan.clear] false): a card on the wild Pokémon counts 3x, on ours 1x,
- * the cards on each other 3x, card area outside the panel 4x.
+ * Round 9 D1 "the info boxes' automatic rule" (pure maths, virtual dp like [ArenaGeo]; a port of the mockup's `autoRule` in
+ * docs/design/boxes-layout.html, whose JS is the spec). While a battle picture shows, the two Pokémon stand on the [Stage]'s feet and
+ * the two info boxes (the stat cards) follow ONE rule, in every host, with no setting:
+ *
+ * 1. Box size comes from the panel's on-screen height first ([boxScales]): full size from [H_FULL] dp, linearly down to
+ *    [SHARE_MIN] at [H_SMALL] dp, so a small panel gets small boxes from the start, not only after a collision. The card scale k can
+ *    be under 1.
+ * 2. Vertical: on the OUTER side of the box's own Pokémon, touching the panel's edge (tall panels: ours at the bottom, the wild one
+ *    at the top; wide ones: ours at the top, the wild one at the bottom). Horizontal: centred on its Pokémon's feet, kept inside the
+ *    panel (near an edge it becomes edge-aligned).
+ * 3. A box keeps a gap ([gap]) from both Pokémon's real art boxes and ours from the wild box. If that fails, in steps: (a) right
+ *    next to its own Pokémon (just above / under its art box), boxes down to [SHARE_NEAR]; (b) the edge-aligned spots; (c) shrink on
+ *    to [SHARE_MIN]; (d) the other vertical side. Boxes always shrink before the Pokémon: only when all of that fails do the sprites
+ *    get smaller (frames x .9 .. .6 around their feet) and the whole search runs again.
+ * 4. Nothing is clear anywhere: the pair with the least cover (then the least nearness) at the smallest box, [StagePlan.clear] false.
+ *
+ * With a battle frame ([inset] > 0) the "panel" for the boxes is the arena inset by that much on every side.
+ *
+ * Round 9 wave 3 (D12), on top of the mockup's rule: **no text in a box is drawn under [PanelFit.MIN_SP] on screen** (its size x the
+ * panel's scale x the box scale). So the box scale has a floor [textScale] worked out from the smallest text a box draws, and
+ * [SHARE_MIN] only applies above it. The smallest texts are the optional parts (the wild type chips, the XP number): below the
+ * scale where those are readable the box is "reduced" (chips -> type symbols, no XP number: [StagePlan.reduced], its own, shorter
+ * heights) and its floor is the next smallest text. Boxes still shrink before the Pokémon do; with the floor, a roomy box that no
+ * longer fits makes the sprites smaller (frames x .9 .. .6) rather than the text.
  */
 internal object StageGeo {
-    private const val EDGE = 8f
-    private const val BOTTOM = 10f
-    private const val GAP = 6f
+    /** The sprite frames' scales, tried in this order; the boxes shrink before the next one is used. */
     private val SCALES = floatArrayOf(1f, 0.9f, 0.8f, 0.7f, 0.6f)
-    private const val FALLBACK_SCALE = 0.7f
 
-    /** From this sprite scale down, "both cards on top" is tried too. */
-    private const val TOP_FROM = 0.8f
+    /** On-screen height (dp) of the arena from which the boxes are full size, and the one where they are smallest. */
+    const val H_FULL = 260f
+    const val H_SMALL = 130f
 
-    /** Weights of the fallback's overlap score. */
-    private const val W_WILD = 3f
-    private const val W_OURS = 1f
-    private const val W_CARDS = 3f
-    private const val W_OUTSIDE = 4f
+    /** The smallest box (share of its design size on screen), and the one a box may shrink to while it still tries to sit right by its Pokémon. */
+    const val SHARE_MIN = 0.55f
+    const val SHARE_NEAR = 0.85f
 
-    /** Wild positions: BW beside the wild one, TL, TM between the two, TR. */
-    private const val BW = 0
-    private const val TL = 1
-    private const val TM = 2
-    private const val TR = 3
+    private const val K_STEP = 0.05f
 
-    /** Player positions: BP beside ours, BR, BM between the two, BL (bottom row); PTR, PTM top-right and top-middle ("both on top"). */
-    private const val BP = 0
-    private const val BR = 1
-    private const val BM = 2
-    private const val BL = 3
-    private const val PTR = 4
-    private const val PTM = 5
+    /** A scale this close under [BoxScales.full] still counts as full (the steps and the threshold are floats). */
+    private const val K_EPS = 0.0001f
 
-    private val WILD_OWN = intArrayOf(BW, TL, TM, TR)
-    private val WILD_CORNERS = intArrayOf(TL, BW, TM, TR)
-    private val PLAYER_OWN = intArrayOf(BP, BR, BM, BL)
-    private val PLAYER_CORNERS = intArrayOf(BR, BP, BM, BL)
-    private val PLAYER_TOP = intArrayOf(PTR, PTM)
+    /** Same tolerance as [ArenaGeo.Box.hits]. */
+    private const val EPS = 0.01f
 
-    /** A pair of cards and whether ours is in the top row. */
-    private class Pick(val wild: ArenaGeo.Box, val player: ArenaGeo.Box, val top: Boolean)
+    private const val OURS = 0
+    private const val WILD = 1
+
+    /** A spot's anchor: centred on its Pokémon's feet, right next to the Pokémon (just above / under its art box), the left edge, the right edge. */
+    private const val CENTRE = 0
+    private const val NEXT = 1
+    private const val LEFT = 2
+    private const val RIGHT = 3
+
+    /** The loosest spot level a phase may use: 0 outer side centred, 1 next to its Pokémon, 2 edge-aligned, 3 anything (the other side too). */
+    private val PHASE_LEVEL = intArrayOf(0, 1, 2, 2, 3)
+
+    /** What a phase's k runs between: 0 = kStart, 1 = kNear, 2 = kMin. */
+    private val PHASE_FROM = intArrayOf(0, 0, 0, 1, 0)
+    private val PHASE_TO = intArrayOf(1, 1, 1, 2, 2)
 
     /**
-     * [wildArt] / [playerArt]: how much of its square frame (the argument = the frame's side, dp) each Pokémon's picture takes;
-     * null = [ArtShare.DEFAULT]. The frame's side changes with the sprite scale, and a sprite's drawn size can change in steps with it.
+     * The box scales of a panel: where the boxes start, the smallest they get while sitting right by their Pokémon, and the smallest
+     * of all; [full] = the scale from which the optional parts (chips, XP number) are readable, under it a box is reduced (0 = no text floor).
+     */
+    class BoxScales(val start: Float, val near: Float, val min: Float, val full: Float = 0f)
+
+    /**
+     * The box scale at which a text of design size [sp] is drawn [PanelFit.MIN_SP] on screen: the text is raised to the panel's
+     * floor [floorSp] first and then drawn at [panelScale] x the box scale. 0 for no text ([sp] <= 0); never above 1 (a text that is
+     * under the floor at scale 1 can only be raised, which the floor already did).
+     */
+    fun textScale(sp: Float, panelScale: Float, floorSp: Float): Float =
+        if (sp <= 0f) 0f else min(1f, PanelFit.MIN_SP / (max(sp, floorSp) * max(panelScale, 0.01f)))
+
+    /** The share of its design size on screen a box should have in a panel [onScreenH] dp high: [SHARE_MIN] up to full size. */
+    fun targetShare(onScreenH: Float): Float =
+        (SHARE_MIN + (onScreenH - H_SMALL) / H_SMALL * (1f - SHARE_MIN)).coerceIn(SHARE_MIN, 1f)
+
+    /**
+     * The card scales for an arena [onScreenH] dp high on screen drawn at [panelScale] with text floor [floorSp]: [k0] is the scale a
+     * roomy panel draws its boxes at (1 in the study layouts). The panel's scale and the raised text already changed the cards by
+     * `panelScale * max(1, floorSp / 12)`, so a card only needs the rest of the way to the wanted on-screen share.
+     * [minSp]: the smallest text (sp) a reduced box draws, [fullSp] the smallest of a full one (default: the same); both 0 = no
+     * text floor. No scale goes under [textScale] of [minSp], so no text is drawn under the readable size.
+     */
+    fun boxScales(onScreenH: Float, panelScale: Float, floorSp: Float, k0: Float, minSp: Float = 0f, fullSp: Float = minSp): BoxScales {
+        val already = max(panelScale, 0.01f) * max(1f, floorSp / 12f)
+        fun kv(screen: Float) = k0 * min(1f, screen / already)
+        val readable = textScale(minSp, panelScale, floorSp)
+        val start = max(kv(targetShare(onScreenH)), readable)
+        return BoxScales(start, max(min(start, kv(SHARE_NEAR)), readable), max(min(start, kv(SHARE_MIN)), readable), max(readable, textScale(fullSp, panelScale, floorSp)))
+    }
+
+    /** The gap (virtual dp) a box keeps from the art boxes and the other box: 8 dp on screen, in small panels down to 4 dp. */
+    fun gap(onScreenH: Float, panelScale: Float): Float = max(4f, 8f * min(1f, onScreenH / H_FULL)) / max(panelScale, 0.01f)
+
+    /** True for a tall arena: ours sits at the bottom and the wild one at the top; else ours at the top and the wild one at the bottom. */
+    fun isTall(w: Float, h: Float): Boolean = h > w * 1.1f
+
+    /**
+     * [w] x [h]: the arena in virtual dp; [panelScale]: the panel's draw scale, so the arena is `h * panelScale` dp high on screen;
+     * [floorSp]: the text floor; [inset]: how far a battle frame reaches in (0 = none). The cards' design sizes at k = 1 are
+     * [wildCardW] x [wildCardH] and [playerCardW] x [playerCardH]; [k0] the roomy scale. [wildArt] / [playerArt]: each Pokémon's real
+     * art box in its square frame (the argument = the frame's side, dp; a sprite's drawn size can change in steps with it); null =
+     * [ArtShare.DEFAULT]. The heights are the full boxes'; [wildCardHReduced] / [playerCardHReduced] the same boxes with their optional
+     * parts dropped (used under the scale [BoxScales.full], where [StagePlan.reduced] is true); [minSp] / [fullSp] the smallest text
+     * of a reduced / full box in design sp (both 0 = no readability floor).
      */
     fun plan(
         w: Float, h: Float, stage: Stage,
         wildCardW: Float, wildCardH: Float, playerCardW: Float, playerCardH: Float,
-        k0: Float, own: Boolean,
+        k0: Float,
+        panelScale: Float = 1f, floorSp: Float = 0f, inset: Float = 0f,
         wildArt: ((Float) -> ArtShare?)? = null, playerArt: ((Float) -> ArtShare?)? = null,
+        wildCardHReduced: Float = wildCardH, playerCardHReduced: Float = playerCardH,
+        minSp: Float = 0f, fullSp: Float = minSp,
     ): StagePlan {
-        val wildOrder = if (own) WILD_OWN else WILD_CORNERS
-        val playerOrder = if (own) PLAYER_OWN else PLAYER_CORNERS
+        val onScreen = h * panelScale
+        val scales = boxScales(onScreen, panelScale, floorSp, k0, minSp, fullSp)
+        val run = Run(w, h, max(0f, inset), gap(onScreen, panelScale), isTall(w, h), stage,
+            floatArrayOf(playerCardW, wildCardW), floatArrayOf(playerCardH, wildCardH), floatArrayOf(playerCardHReduced, wildCardHReduced),
+            scales.full, wildArt, playerArt)
+        for (fi in SCALES.indices) {
+            run.setFrames(SCALES[fi])
+            for (ph in PHASE_LEVEL.indices) {
+                val hi = scales.at(PHASE_FROM[ph])
+                val lo = scales.at(PHASE_TO[ph])
+                var k = hi
+                while (k > lo + 0.001f) {   // hi down in 0.05 steps, then lo itself
+                    if (run.findOk(k, PHASE_LEVEL[ph])) return run.result(k, SCALES[fi], true)
+                    k -= K_STEP
+                }
+                if (run.findOk(lo, PHASE_LEVEL[ph])) return run.result(lo, SCALES[fi], true)
+            }
+        }
+        // nothing is clear at any sprite scale: the least-bad pair at the smallest box
+        var bestScore = Double.MAX_VALUE
+        var bestF = SCALES[0]
         for (f in SCALES) {
-            val ws = sprite(stage.wildFeetX, stage.wildFeetY, stage.wildFrame * f)
-            val ps = sprite(stage.playerFeetX, stage.playerFeetY, stage.playerFrame * f)
-            val wa = art(ws, wildArt)
-            val pa = art(ps, playerArt)
-            for (top in if (f <= TOP_FROM + 0.001f) booleanArrayOf(false, true) else booleanArrayOf(false)) {
-                var k = max(1f, k0)
-                while (true) {
-                    val pick = best(
-                        w, h, wa, pa, wildCardW * k, wildCardH * k, playerCardW * k, playerCardH * k,
-                        wildOrder, if (top) PLAYER_TOP else playerOrder, onlyClear = true,
-                    )
-                    if (pick != null) return StagePlan(ws, ps, pick.wild, pick.player, k, f, true, pick.top)
-                    if (k <= 1f) break
-                    k = max(1f, k - 0.05f)
-                }
+            run.setFrames(f)
+            val score = run.leastBad(scales.min)
+            if (score < bestScore) {
+                bestScore = score
+                bestF = f
+                run.keepLeastBad()
             }
         }
-        val ws = sprite(stage.wildFeetX, stage.wildFeetY, stage.wildFrame * FALLBACK_SCALE)
-        val ps = sprite(stage.playerFeetX, stage.playerFeetY, stage.playerFrame * FALLBACK_SCALE)
-        val wa = art(ws, wildArt)
-        val pa = art(ps, playerArt)
-        val rows = playerOrder + PLAYER_TOP
-        val pick = best(w, h, wa, pa, wildCardW, wildCardH, playerCardW, playerCardH, wildOrder, rows, onlyClear = false)!!
-        return StagePlan(ws, ps, pick.wild, pick.player, 1f, FALLBACK_SCALE, false, pick.top)
+        run.setFrames(bestF)
+        return run.result(scales.min, bestF, false, keep = true)
     }
 
-    /** The square sprite holder: [side] wide and high, centred on the feet, bottom = the feet. */
-    private fun sprite(feetX: Float, feetY: Float, side: Float) = ArenaGeo.Box(feetX - side / 2f, feetY - side, side, side)
+    private fun BoxScales.at(i: Int) = when (i) { 0 -> start; 1 -> near; else -> min }
 
-    /** The Pokémon's visible picture in its holder: bottom-centred, [art] of the frame (null = the default share). */
-    private fun art(b: ArenaGeo.Box, art: ((Float) -> ArtShare?)?): ArenaGeo.Box {
-        val a = art?.invoke(b.w) ?: ArtShare.DEFAULT
-        return ArenaGeo.Box(b.x + b.w * (1f - a.w) / 2f, b.y + b.h * (1f - a.h), b.w * a.w, b.h * a.h)
-    }
+    /** One call of [plan]: the arena, the two kinds' spots, and the scratch boxes (no allocation while searching). */
+    private class Run(
+        val vw: Float, val vh: Float, val inset: Float, val g: Float, tall: Boolean, val stage: Stage,
+        val baseW: FloatArray, val baseH: FloatArray, val reducedH: FloatArray, val kFull: Float,
+        val wildArtOf: ((Float) -> ArtShare?)?, val playerArtOf: ((Float) -> ArtShare?)?,
+    ) {
+        // spot tables per kind: index 0-3 on the primary side (centre, next, left, right), 4-7 on the other
+        private val spotTop = arrayOf(BooleanArray(8), BooleanArray(8))
+        private val spotAnchor = intArrayOf(CENTRE, NEXT, LEFT, RIGHT, CENTRE, NEXT, LEFT, RIGHT)
+        private val spotLevel = intArrayOf(0, 1, 2, 2, 3, 3, 3, 3)
+        private val feetX = floatArrayOf(stage.playerFeetX, stage.wildFeetX)
 
-    private fun cx(x: Float, cw: Float, w: Float) = max(EDGE, min(x, w - EDGE - cw))
+        // the frames and art boxes at the current sprite scale: [x, y, right, bottom] (art), Box (frame)
+        private val art = arrayOf(FloatArray(4), FloatArray(4))
+        private val frame = arrayOfNulls<ArenaGeo.Box>(2)
+        private val artBox = arrayOfNulls<ArenaGeo.Box>(2)
 
-    /**
-     * The best pair of cards for these pictures ([wa] wild, [pa] ours): with [onlyClear] the clear pair with the lowest summed
-     * preference index (null when none); else the pair with the least weighted overlap (then the best preference; a pair with ours
-     * in the top row only wins a tie against none), always one. [playerRows] holds the player positions to try.
-     */
-    private fun best(
-        w: Float, h: Float, wa: ArenaGeo.Box, pa: ArenaGeo.Box, wcw: Float, wch: Float, pcw: Float, pch: Float,
-        wildOrder: IntArray, playerRows: IntArray, onlyClear: Boolean,
-    ): Pick? {
-        val between = (pa.right + wa.x) / 2f
-        var bestPick: Pick? = null
-        var bestScore = Float.MAX_VALUE
-        var bestPref = Int.MAX_VALUE
-        for ((wi, wp) in wildOrder.withIndex()) {
-            val x = when (wp) {
-                BW -> wa.x - GAP - wcw
-                TL -> EDGE
-                TM -> between - wcw / 2f
-                else -> w - EDGE - wcw
-            }
-            val wild = ArenaGeo.Box(cx(x, wcw, w), EDGE, wcw, wch)
-            for ((pi, pp) in playerRows.withIndex()) {
-                val top = pp >= PTR
-                val px = when (pp) {
-                    BP -> pa.right + GAP
-                    BR -> w - EDGE - pcw
-                    BM -> between - pcw / 2f
-                    BL -> EDGE
-                    PTR -> w - EDGE - pcw
-                    else -> between - pcw / 2f
-                }
-                val player = ArenaGeo.Box(cx(px, pcw, w), if (top) EDGE else h - BOTTOM - pch, pcw, pch)
-                val pref = wi + pi + if (top) 8 else 0
-                if (onlyClear) {
-                    if (clear(w, h, wild, player, wa, pa, top) && pref < bestPref) {
-                        bestPref = pref
-                        bestPick = Pick(wild, player, top)
-                    }
-                } else {
-                    val score = overlap(w, h, wild, player, wa, pa)
-                    if (score < bestScore - 0.001f || (score <= bestScore + 0.001f && pref < bestPref)) {
-                        bestScore = score
-                        bestPref = pref
-                        bestPick = Pick(wild, player, top)
-                    }
-                }
+        // scratch: the two placed boxes [x, y, w, h]
+        private val pOurs = FloatArray(4)
+        private val pWild = FloatArray(4)
+
+        // the chosen pair
+        private val keepOurs = FloatArray(4)
+        private val keepWild = FloatArray(4)
+        private var keepLevel = 0
+
+        init {
+            val oursTop = !tall
+            for (i in 0 until 8) {
+                spotTop[OURS][i] = if (i < 4) oursTop else !oursTop
+                spotTop[WILD][i] = if (i < 4) !oursTop else oursTop
             }
         }
-        return bestPick
-    }
 
-    private fun inside(w: Float, h: Float, b: ArenaGeo.Box) = b.x >= -0.01f && b.y >= -0.01f && b.right <= w + 0.01f && b.bottom <= h + 0.01f
+        fun setFrames(f: Float) {
+            setKind(OURS, stage.playerFeetX, stage.playerFeetY, stage.playerFrame * f, playerArtOf)
+            setKind(WILD, stage.wildFeetX, stage.wildFeetY, stage.wildFrame * f, wildArtOf)
+        }
 
-    /**
-     * Both cards inside the panel (the wild card with 4 dp of slack at the bottom, like [ArenaGeo]), neither on a sprite's picture nor
-     * on the other card; two cards in the same row ([sameRow]) also keep a [GAP] between them.
-     */
-    private fun clear(w: Float, h: Float, wild: ArenaGeo.Box, player: ArenaGeo.Box, wa: ArenaGeo.Box, pa: ArenaGeo.Box, sameRow: Boolean): Boolean {
-        val gap = if (sameRow) GAP else 0f
-        val apart = !wild.hits(ArenaGeo.Box(player.x - gap, player.y, player.w + 2f * gap, player.h))
-        return inside(w, h - 4f, wild) && inside(w, h, player) && !wild.hits(wa) && !wild.hits(pa) && !player.hits(wa) && !player.hits(pa) && apart
-    }
+        private fun setKind(kind: Int, fx: Float, fy: Float, side: Float, of: ((Float) -> ArtShare?)?) {
+            val a = (of?.invoke(side) ?: ArtShare.DEFAULT).inFrame(fx - side / 2f, fy - side, side)
+            frame[kind] = ArenaGeo.Box(fx - side / 2f, fy - side, side, side)
+            artBox[kind] = a
+            art[kind][0] = a.x; art[kind][1] = a.y; art[kind][2] = a.right; art[kind][3] = a.bottom
+        }
 
-    /**
-     * Weighted overlap of the cards with both pictures and each other, plus the part of a card outside the panel: the wild Pokémon
-     * covered counts [W_WILD] x, ours [W_OURS] x, the cards on each other [W_CARDS] x, card area off the panel [W_OUTSIDE] x.
-     */
-    private fun overlap(w: Float, h: Float, wild: ArenaGeo.Box, player: ArenaGeo.Box, wa: ArenaGeo.Box, pa: ArenaGeo.Box) =
-        W_WILD * (area(wild, wa) + area(player, wa)) + W_OURS * (area(wild, pa) + area(player, pa)) +
-            W_CARDS * area(wild, player) + W_OUTSIDE * (outside(w, h, wild) + outside(w, h, player))
+        /** Puts spot [i] of [kind] at box scale [k] into [out] (x, y, w, h). */
+        private fun place(kind: Int, i: Int, k: Float, out: FloatArray) {
+            val bw = baseW[kind] * k
+            val bh = (if (k < kFull - K_EPS) reducedH[kind] else baseH[kind]) * k
+            val top = spotTop[kind][i]
+            val x = when (spotAnchor[i]) {
+                LEFT -> inset
+                RIGHT -> vw - inset - bw
+                else -> max(inset, min(vw - inset - bw, feetX[kind] - bw / 2f))
+            }
+            val y = if (spotAnchor[i] == NEXT) (if (top) art[kind][1] - g - bh else art[kind][3] + g) else if (top) inset else vh - inset - bh
+            out[0] = x; out[1] = max(inset, min(vh - inset - bh, y)); out[2] = bw; out[3] = bh
+        }
 
-    private fun area(a: ArenaGeo.Box, b: ArenaGeo.Box): Float {
-        val dx = min(a.right, b.right) - max(a.x, b.x)
-        val dy = min(a.bottom, b.bottom) - max(a.y, b.y)
-        return if (dx > 0f && dy > 0f) dx * dy else 0f
-    }
+        /** [b] (x, y, w, h) grown by [d] on every side meets the box [o] (x, y, right, bottom)? Same tolerance as [ArenaGeo.Box.hits]. */
+        private fun hits(b: FloatArray, d: Float, o: FloatArray) =
+            b[0] - d < o[2] - EPS && o[0] < b[0] + b[2] + d - EPS && b[1] - d < o[3] - EPS && o[1] < b[1] + b[3] + d - EPS
 
-    private fun outside(w: Float, h: Float, b: ArenaGeo.Box): Float {
-        val dx = min(b.right, w) - max(b.x, 0f)
-        val dy = min(b.bottom, h) - max(b.y, 0f)
-        val inner = if (dx > 0f && dy > 0f) dx * dy else 0f
-        return b.w * b.h - inner
+        /** Same for a box given as (x, y, w, h). */
+        private fun hitsBox(b: FloatArray, d: Float, ow: FloatArray) =
+            b[0] - d < ow[0] + ow[2] - EPS && ow[0] < b[0] + b[2] + d - EPS && b[1] - d < ow[1] + ow[3] - EPS && ow[1] < b[1] + b[3] + d - EPS
+
+        /** First pair (ours' spots x the wild one's) of level up to [level] at scale [k] where nothing is in the way; it is kept. */
+        fun findOk(k: Float, level: Int): Boolean {
+            for (oi in 0 until 8) {
+                if (spotLevel[oi] > level) continue
+                place(OURS, oi, k, pOurs)
+                // ours (grown by the gap) must clear both art boxes
+                if (hits(pOurs, g, art[WILD]) || hits(pOurs, g, art[OURS])) continue
+                for (wi in 0 until 8) {
+                    if (spotLevel[wi] > level) continue
+                    place(WILD, wi, k, pWild)
+                    if (hits(pWild, g, art[WILD]) || hits(pWild, g, art[OURS]) || hitsBox(pOurs, g, pWild)) continue
+                    System.arraycopy(pOurs, 0, keepOurs, 0, 4)
+                    System.arraycopy(pWild, 0, keepWild, 0, 4)
+                    keepLevel = max(spotLevel[oi], spotLevel[wi])
+                    return true
+                }
+            }
+            return false
+        }
+
+        private val leastOurs = FloatArray(4)
+        private val leastWild = FloatArray(4)
+
+        /** The least-bad pair at scale [k] and the current frames: its score `cover * 1e6 + near` (cover = overlap areas, near = the same with the boxes grown by the gap). */
+        fun leastBad(k: Float): Double {
+            var best = Double.MAX_VALUE
+            for (oi in 0 until 8) {
+                place(OURS, oi, k, pOurs)
+                for (wi in 0 until 8) {
+                    place(WILD, wi, k, pWild)
+                    val cover = cover(0f)
+                    val near = cover(g)
+                    val score = cover.toDouble() * 1e6 + near
+                    if (score < best) {
+                        best = score
+                        System.arraycopy(pOurs, 0, leastOurs, 0, 4)
+                        System.arraycopy(pWild, 0, leastWild, 0, 4)
+                    }
+                }
+            }
+            return best
+        }
+
+        /** Overlap areas of both boxes (grown by [d]) with both art boxes, and of ours (grown) with the wild one. */
+        private fun cover(d: Float): Float =
+            area(pOurs, d, art[WILD]) + area(pOurs, d, art[OURS]) + area(pWild, d, art[WILD]) + area(pWild, d, art[OURS]) + areaBox(pOurs, d, pWild)
+
+        private fun area(b: FloatArray, d: Float, o: FloatArray): Float {
+            val dx = min(b[0] + b[2] + d, o[2]) - max(b[0] - d, o[0])
+            val dy = min(b[1] + b[3] + d, o[3]) - max(b[1] - d, o[1])
+            return if (dx > 0f && dy > 0f) dx * dy else 0f
+        }
+
+        private fun areaBox(b: FloatArray, d: Float, o: FloatArray): Float {
+            val dx = min(b[0] + b[2] + d, o[0] + o[2]) - max(b[0] - d, o[0])
+            val dy = min(b[1] + b[3] + d, o[1] + o[3]) - max(b[1] - d, o[1])
+            return if (dx > 0f && dy > 0f) dx * dy else 0f
+        }
+
+        /** The pair [leastBad] just found is the one to return. */
+        fun keepLeastBad() {
+            System.arraycopy(leastOurs, 0, keepOurs, 0, 4)
+            System.arraycopy(leastWild, 0, keepWild, 0, 4)
+            keepLevel = -1
+        }
+
+        /** The plan for the kept pair at box scale [k] and sprite scale [f] (the frames must be set for [f]). */
+        fun result(k: Float, f: Float, clear: Boolean, keep: Boolean = false): StagePlan {
+            if (!clear && !keep) throw IllegalStateException("a plan that is not clear comes from the least-bad search")
+            return StagePlan(
+                frame[WILD]!!, frame[OURS]!!,
+                ArenaGeo.Box(keepWild[0], keepWild[1], keepWild[2], keepWild[3]),
+                ArenaGeo.Box(keepOurs[0], keepOurs[1], keepOurs[2], keepOurs[3]),
+                k, f, clear, artBox[WILD]!!, artBox[OURS]!!, g, if (clear) keepLevel else -1, k < kFull - K_EPS,
+            )
+        }
     }
 }

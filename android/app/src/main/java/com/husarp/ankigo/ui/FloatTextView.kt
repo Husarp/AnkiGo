@@ -65,7 +65,7 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
             else -> th + 2f * strokePx
         }
         isClickable = false
-        contentDescription = if (badge) "${ft.stat} ${if (ft.kind == FloatKind.STAT_UP) "up" else "down"} ${ft.stages}" else ft.text
+        contentDescription = if (badge) "${ft.stat} ${if (ft.kind == FloatKind.STAT_UP) "up" else "down"} ${ft.stages}" else FloatTexts.spoken(ft.text, ft.kind)
     }
 
     private val rad = Math.toRadians(tiltDeg.toDouble())

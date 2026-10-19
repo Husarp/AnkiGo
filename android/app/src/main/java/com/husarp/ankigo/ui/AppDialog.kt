@@ -34,6 +34,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
     private var title: CharSequence? = null
     private var message: CharSequence? = null
     private var customView: View? = null
+    private var footer: View? = null
     private var items: Array<out CharSequence>? = null
     private var itemListener: DialogInterface.OnClickListener? = null
     private var cancelable = true
@@ -127,6 +128,10 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
                     addView(body, ViewGroup.LayoutParams(-1, -2))
                 }, LinearLayout.LayoutParams(-1, 0, 1f))
             }
+        }
+        footer?.let { f -> // pinned: never scrolled, between the body and the buttons
+            (f.parent as? ViewGroup)?.removeView(f)
+            card.addView(f, LinearLayout.LayoutParams(-1, -2))
         }
         if (buttons.isNotEmpty()) {
             val row = ButtonRow(ctx).apply { setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 10)) }
@@ -239,6 +244,9 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
         fun setTitle(t: CharSequence?) = apply { d.title = t }
         fun setMessage(m: CharSequence?) = apply { d.message = m }
         fun setView(v: View?) = apply { d.customView = v }
+
+        /** A view pinned between the body and the button row: it never scrolls away (give it its own side margins). */
+        fun setFooter(v: View?) = apply { d.footer = v }
         fun setItems(labels: Array<out CharSequence>, l: DialogInterface.OnClickListener?) = apply { d.items = labels; d.itemListener = l }
         fun setPositiveButton(text: CharSequence, l: DialogInterface.OnClickListener?) = apply { d.buttons[DialogInterface.BUTTON_POSITIVE] = Btn(text, l) }
         fun setNegativeButton(text: CharSequence, l: DialogInterface.OnClickListener?) = apply { d.buttons[DialogInterface.BUTTON_NEGATIVE] = Btn(text, l) }

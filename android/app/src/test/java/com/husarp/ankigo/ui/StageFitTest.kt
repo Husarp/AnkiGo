@@ -54,18 +54,19 @@ class StageFitTest {
     @Test fun goldenForest() =
         golden(stage("forest", 1400f, 1000f), 1f, 26.50f, 0f, 700f, 500f, false, 398.8f, 780.0f, 440.0f, 971.1f, 500.0f, 320.0f)
 
-    @Test fun goldenReefShrunk() =
-        // the page used 1264 x 848; the catalog's file is 316 x 212 (a quarter)
-        golden(stage("reef", 2600f, 1000f), 316f / 1264f, -65.16f, 214.20f, 1394.32f, 536.28f, true, 852.2f, 960.5f, 695.8f, 1948.2f, 454.5f, 506.0f)
+    // round 9 D10: the catalog lost its 316 x 212 pixel-grid pictures and the wide set; these goldens come from a port of the page's maths (checked
+    // against goldenForest and the old night-alley zoomed-window golden before the drop), so they pin StageFit for the pictures that are left.
+    @Test fun goldenForestWideShrunk() =
+        golden(stage("forest", 2600f, 1000f), 1f, -8.56f, 106.30f, 770.12f, 296.20f, true, 791.56f, 957.80f, 742.74f, 1757.60f, 485.15f, 540.18f)
 
-    @Test fun goldenGardenShrunk() =
-        golden(stage("garden", 600f, 1000f), 316f / 1264f, 152.48f, -380.20f, 965.04f, 1608.40f, true, 129.2f, 679.3f, 232.0f, 502.5f, 558.0f, 168.7f)
+    @Test fun goldenJungleTallShrunk() =
+        golden(stage("jungle", 600f, 1000f), 1f, 171.44f, -459.20f, 1059.84f, 1766.40f, true, 117.62f, 658.42f, 211.23f, 511.19f, 560.01f, 153.62f)
 
-    @Test fun goldenNightAlleyZoomedWindow() =
-        golden(stage("night-alley", 1250f, 1000f, 0.72f), 1f, 251.04f, 237.44f, 763.20f, 610.56f, false, 375.5f, 722.2f, 611.1f, 1006.9f, 569.4f, 416.7f)
+    @Test fun goldenNightForestZoomedWindow() =
+        golden(stage("night-forest", 1250f, 1000f, 0.72f), 1f, 234.64f, 161.92f, 857.60f, 686.08f, false, 302.82f, 728.08f, 543.84f, 1021.34f, 493.24f, 395.52f)
 
-    @Test fun goldenRockyPath() =
-        golden(stage("rocky-path", 2200f, 1000f), 1f, 19.00f, 0f, 715.00f, 325.00f, false, 775.6f, 880.0f, 500.0f, 1331.7f, 660.0f, 360.0f)
+    @Test fun goldenCanyon() =
+        golden(stage("canyon", 2200f, 1000f), 1f, 0.00f, 133.94f, 1375.00f, 625.00f, false, 726.00f, 695.01f, 565.25f, 1606.00f, 363.23f, 405.50f)
 
     // ---------------------------------------------------------------- edge cases
 
@@ -164,11 +165,11 @@ class StageFitTest {
     }
 
     @Test fun tallPanelsShowingABandDoNotBlowTheSpritesUp() {
-        // garden at 600x1000 is a band: the frame stays the picture's own share (clamp scales with ih / cropH)
-        val s = stage("garden", 600f, 1000f)
+        // jungle at 600x1000 is a band: the frame stays the picture's own share (clamp scales with ih / cropH)
+        val s = stage("jungle", 600f, 1000f)
         assertTrue(s.shrunk)
         assertTrue(s.playerFrame / 1000f < 0.30f)
-        assertEquals(0.44f * 212f / s.cropH * 1000f, s.playerFrame, 0.05f)
+        assertEquals(0.44f * 848f / s.cropH * 1000f, s.playerFrame, 0.05f)
     }
 
     @Test fun bottomFirstSkyIsCroppedBeforeAnythingElse() = allStages { b, w, h, s ->
@@ -182,7 +183,7 @@ class StageFitTest {
 
     @Test fun landscapeCropOfAWidePictureIsCentredAcross() {
         // a panel narrower than the picture's shape crops the sides, centred, unless the safe box needs it moved
-        val b = bg("rocky-path")
+        val b = bg("canyon")
         val s = StageFit.fit(b, 1000f, 1000f)!!
         val sf = safe(b)
         val centred = (b.w - s.cropW) / 2f
@@ -193,8 +194,8 @@ class StageFitTest {
     @Test fun sameRatioSameCrop() {
         // 600 x 1000 and 6 x 10: identical crop; shapes decide, not sizes
         assertFalse(stage("forest", 600f, 1000f).cropW == 0f)
-        val a = stage("dojo", 600f, 1000f)
-        val b = stage("dojo", 6f, 10f)
+        val a = stage("mine", 600f, 1000f)
+        val b = stage("mine", 6f, 10f)
         assertEquals(a.cropX, b.cropX, 0.001f)
         assertEquals(a.cropY, b.cropY, 0.001f)
         assertEquals(a.cropH, b.cropH, 0.001f)

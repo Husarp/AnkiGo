@@ -12,13 +12,23 @@ import kotlin.math.roundToInt
  * land on the right view (the child is scaled with its own scale properties). Not under [MIN_SCALE]: nothing real is that wide.
  */
 class FitWidth(ctx: Context) : ViewGroup(ctx) {
+    /** A child that can show itself in [levels] steps, each narrower than the one before (0 = the normal look). */
+    interface Tunable { val levels: Int; fun tune(level: Int) }
+
     private var scale = 1f
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val child = getChildAt(0)
         if (child == null) { setMeasuredDimension(0, 0); return }
-        child.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+        val none = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        (child as? Tunable)?.tune(0)
+        child.measure(none, none)
         val avail = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) child.measuredWidth else MeasureSpec.getSize(widthMeasureSpec)
+        // a tunable child gets narrower looks first (shorter arrows, smaller sprites, stacked); scaling is the last step
+        (child as? Tunable)?.let { t ->
+            var level = 0
+            while (child.measuredWidth > avail && level < t.levels - 1) { t.tune(++level); child.measure(none, none) }
+        }
         scale = scaleFor(child.measuredWidth, avail)
         child.pivotX = 0f; child.pivotY = 0f
         child.scaleX = scale; child.scaleY = scale

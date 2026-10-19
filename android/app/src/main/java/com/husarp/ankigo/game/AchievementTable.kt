@@ -1,8 +1,8 @@
 package com.husarp.ankigo.game
 
 // R4-03 / PLAN 79: THE list of achievements. Changing the list (titles, thresholds, new rows) is an edit of this file only.
-// Rules for an edit: an id is stable and never reused (saves remember dates by id); a tiered row has exactly 5 thresholds,
-// strictly ascending; a one-off has 1. A row that is new to a save is looked at silently the first time (no flood of
+// Rules for an edit: an id is stable and never reused (saves remember dates by id); a tiered row has 5 thresholds, or 3 when it
+// is easy (it saturates fast; capped at Epic, see [tiered3]), strictly ascending; a one-off has 1. A row that is new to a save is looked at silently the first time (no flood of
 // celebrations), see Achievements.check. What a row counts is a Metric (Achievements.kt).
 //
 // LIST: the proposal in docs/design/round4.html section 3 with Adam's edits (.loki/picks/round4-achievements.txt, R4-V2b): "Best combo",
@@ -22,7 +22,7 @@ class AchRow(
     val title: String,
     val desc: String,                 // short: "Cards you answer while AnkiGo is running"
     val metric: Metric?,
-    val tiers: List<Long>,            // thresholds, ascending; 5 for a tiered row, 1 for a one-off
+    val tiers: List<Long>,            // thresholds, ascending; 5 for a tiered row (3 when easy), 1 for a one-off
     val icon: String,                 // key the page draws later
     val ankimonBadge: Int? = null,    // Ankimon badges.json id of a one-off that is today's badge (5-10, 16-20)
     val tierBadges: List<Int> = emptyList(),
@@ -31,7 +31,16 @@ class AchRow(
 }
 
 object AchievementTable {
-    /** Tier names; the index is the tier id 0..4 (ids are stable, the names may change). */
+    /**
+     * R9-B2: the version of the tier ladders. 2 = "types" and "highest-level" have 3 tiers (they used to have 5). A save older than
+     * this is remapped once by Achievements.migrate (GameState.achLadder remembers the version); a new game starts at [LADDER].
+     */
+    const val LADDER = 2
+
+    /** R9-B2: per row whose ladder was shortened in version 2: new tier t = old tier REMAP[id][t] (the new thresholds are a subset of the old ones). */
+    val REMAP: Map<String, List<Int>> = mapOf("types" to listOf(1, 2, 4), "highest-level" to listOf(1, 2, 4))
+
+    /** Tier names; the index is the tier id 0..4 (ids are stable, the names may change). A 3-tier row tops out at Epic. */
     val TIER_NAMES = listOf("Common", "Rare", "Epic", "Legendary", "Mythical")
 
     /** The page's groups, in page order (every row's group is one of these, and ROWS follow this order). */
@@ -45,6 +54,12 @@ object AchievementTable {
         id: String, group: String, title: String, desc: String, metric: Metric, icon: String,
         a: Long, b: Long, c: Long, d: Long, e: Long, tierBadges: List<Int> = emptyList(),
     ) = AchRow(id, group, title, desc, metric, listOf(a, b, c, d, e), icon, tierBadges = tierBadges)
+
+    /** An easy row: 3 tiers (Common, Rare, Epic), never Legendary / Mythical. */
+    private fun tiered3(
+        id: String, group: String, title: String, desc: String, metric: Metric, icon: String,
+        a: Long, b: Long, c: Long,
+    ) = AchRow(id, group, title, desc, metric, listOf(a, b, c), icon)
 
     /** A one-off that is today's Ankimon badge [badge] (same meaning, same id for the import/export). */
     private fun badge(badge: Int, id: String, title: String, desc: String, icon: String) =
@@ -70,17 +85,16 @@ object AchievementTable {
         tiered("damage-blocked", "Battle", "Damage blocked", "Damage you didn't take thanks to resisting", Metric.DAMAGE_BLOCKED, "shield", 200, 5_000, 50_000, 200_000, 600_000),
         tiered("misses", "Battle", "Misses", "Attacks that missed, yours or the wild one's", Metric.MISSES, "miss", 10, 100, 1_000, 5_000, 15_000),
         tiered("super-effective", "Battle", "Super-effective hits", "Your hits that were super effective", Metric.SUPER_EFFECTIVE, "bolt", 25, 250, 2_500, 10_000, 30_000),
-        tiered("crits", "Battle", "Critical hits", "Your critical hits (only while critical hits are on)", Metric.CRITS, "crit", 5, 50, 500, 2_000, 5_000),
         tiered("total-xp", "Battle", "Total XP", "XP all your Pokémon have earned", Metric.TOTAL_XP, "xp", 10_000, 100_000, 1_000_000, 5_000_000, 20_000_000),
         tiered("total-levels", "Battle", "Total levels", "All your Pokémon's levels added up", Metric.TOTAL_LEVELS, "level", 100, 1_000, 5_000, 15_000, 40_000),
-        tiered("highest-level", "Battle", "Highest level", "Level of your best Pokémon", Metric.HIGHEST_LEVEL, "trophy", 10, 25, 50, 75, 100),
+        tiered3("highest-level", "Battle", "Highest level", "Level of your best Pokémon", Metric.HIGHEST_LEVEL, "trophy", 25, 50, 100),
         tiered("evolutions", "Battle", "Evolutions", "Times one of your Pokémon evolved", Metric.EVOLUTIONS, "evolve", 1, 10, 50, 150, 400),
 
         // ---- Collection ----
         tiered("catches", "Collection", "Pokémon caught", "Every catch, duplicates too", Metric.CATCHES, "ball", 10, 100, 500, 2_000, 5_000),
         tiered("dex-caught", "Collection", "Pokédex caught", "Different species caught", Metric.DEX_CAUGHT, "dex-caught", 25, 100, 250, 500, 800),
         tiered("dex-seen", "Collection", "Pokédex seen", "Different species met", Metric.DEX_SEEN, "dex", 50, 150, 400, 700, 1_000),
-        tiered("types", "Collection", "Types caught", "Different types among your Pokémon (18 in all)", Metric.TYPES_CAUGHT, "types", 3, 6, 10, 15, 18),
+        tiered3("types", "Collection", "Types caught", "Different types among your Pokémon (18 in all)", Metric.TYPES_CAUGHT, "types", 6, 10, 18),
         tiered("balls-thrown", "Collection", "Balls thrown", "Balls you threw at wild Pokémon", Metric.BALLS_THROWN, "ball-throw", 5, 50, 250, 1_000, 3_000),
         tiered("ball-catches", "Collection", "Ball catches", "Catches with a thrown ball (not the auto-catch rule)", Metric.BALL_CATCHES, "ball-catch", 1, 10, 50, 200, 500),
 

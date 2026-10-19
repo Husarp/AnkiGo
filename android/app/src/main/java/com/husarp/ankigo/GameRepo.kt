@@ -8,11 +8,14 @@ import com.husarp.ankigo.data.DataStore
 import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameData
+import com.husarp.ankigo.game.Looks
+import com.husarp.ankigo.game.Wishlist
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.ankimon.AnkimonMerge
 import com.husarp.ankigo.game.save.SaveCodec
 import com.husarp.ankigo.game.save.SaveStore
+import com.husarp.ankigo.ui.WidgetLogic
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -85,6 +88,7 @@ object GameRepo {
      */
     fun load(ctx: Context, done: (Status) -> Unit) {
         val app = ctx.applicationContext
+        widgetApp = app
         Report.init(app)
         var callNow = false
         synchronized(lock) {
@@ -146,6 +150,7 @@ object GameRepo {
         }
         r.saveError?.let { held = null; error = it }
         rebuild()
+        widgetTeam = widgetSignature(widgetApp) // the widgets are drawn from this game: later changes are measured against it
         val callbacks = synchronized(lock) {
             loading = false
             ArrayList(waiters).also { waiters.clear() }
@@ -170,6 +175,8 @@ object GameRepo {
                     // R4 fix A2: the first, quiet look at the achievements, before any screen reads this game or any action changes it
                     // (a loaded save, a restored backup, an import: they all come through here), so the tiers it earns are stored first.
                     try { Achievements.onReady(st, d, System.currentTimeMillis()) } catch (e: Exception) { Report.fail(TAG, "first look at the achievements", e) }
+                    try { Wishlist.prune(st) } catch (e: Exception) { Report.fail(TAG, "pruning the wishlist", e) }
+                    try { Looks.sanitize(st, d) } catch (e: Exception) { Report.fail(TAG, "clearing uncaught looks", e) }
                     Status.READY
                 } else Status.NEED_STARTER
             }
@@ -226,6 +233,40 @@ object GameRepo {
         if (status == Status.NEED_STARTER && held?.starterChosen == true) status = Status.READY
         scheduleSave(ctx)
         notifyListeners()
+        widgetsFollowTheTeam(ctx)
+    }
+
+    // ---- widgets ----
+
+    /** What the home-screen widgets last showed of the team ([WidgetLogic.teamSignature]); null until a game is loaded. */
+    private var widgetTeam: String? = null
+
+    private var widgetApp: Context? = null
+
+    /** Which Pokémon the placed widgets show by pick (a test swaps it); the default reads the Buddy widgets' prefs. */
+    internal var widgetPicked: (Context) -> Set<String> = { com.husarp.ankigo.ui.BuddyWidgetPrefs.pickedUids(it) }
+
+    /** The team signature plus the Pokémon the widgets pick, so a picked boxed Pokémon's look / name / level / release redraws them too. */
+    private fun widgetSignature(ctx: Context?): String? {
+        val s = held ?: return null
+        val picked = if (ctx == null) emptySet() else try { widgetPicked(ctx) } catch (_: Throwable) { emptySet() }
+        return WidgetLogic.teamSignature(s, picked)
+    }
+
+    /** How the widgets are told to draw again (a test swaps it). The study widgets keep their card. */
+    internal var widgetRefresh: (Context) -> Unit = { Widgets.refreshAll(it, study = false) }
+
+    /**
+     * R9-W5-A: the team, the main or one of their pictures / names changed (the Pokémon tab, Switch Pokémon, a look, an evolution, a
+     * release, an import...): the widgets show them, so they draw again now, not with the next answer. One shared place for every
+     * source of such a change. Answers (HP, XP, cash) do not change the signature and send nothing.
+     */
+    private fun widgetsFollowTheTeam(ctx: Context) {
+        val sig = widgetSignature(ctx.applicationContext)
+        val was = widgetTeam
+        widgetTeam = sig
+        if (was == null || sig == null || was == sig) return
+        try { widgetRefresh(ctx.applicationContext) } catch (e: Throwable) { Report.fail(TAG, "refreshing the widgets", e) } // never reaches the caller: a missed nudge only leaves a widget a little late
     }
 
     // ---- saving ----
@@ -311,6 +352,7 @@ object GameRepo {
         rebuild()
         saveNow(app)
         notifyListeners()
+        widgetsFollowTheTeam(app)
     }
 
     /**
@@ -333,6 +375,7 @@ object GameRepo {
         error = null
         rebuild()
         notifyListeners()
+        widgetsFollowTheTeam(app)
     }
 
     private fun moveAside(from: File, to: File) {

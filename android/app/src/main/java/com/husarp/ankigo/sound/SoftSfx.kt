@@ -21,7 +21,7 @@ enum class SoftSound {
     // Poké Ball
     THROW, WOBBLE, BREAK_FREE,
     // moments
-    SHINY, FLED, EVO_START, EVO_DONE, LEARNED, ITEM, CASH, BADGE, HEALED, SENT_OUT, GOAL,
+    SHINY, FLED, EVO_START, EVO_DONE, LEARNED, ITEM, CASH, BADGE, HEALED, SENT_OUT, GOAL, XP_ABSORB,
     // buttons (PLAN 84)
     SHOW_ANSWER, AGAIN, HARD, GOOD, EASY, TAB, MENU, BUY, BALL_BTN,
 }
@@ -64,15 +64,28 @@ object SoftSfx {
         return p.finish(level(s), button(s))
     }
 
+    /** The XP-D glass ping; [partial] = false leaves out the 2.76 x f partial (a test seam, so a test can prove the partial is really in the sound). */
+    private fun xpAbsorb(p: Pen, partial: Boolean) {
+        p.ping(0.0, 2093.0, 1.0, .003, .110, .32)
+        if (partial) p.ping(0.0, 2093.0 * 2.76, 0.15, .002, .040, .15)
+    }
+
+    internal fun xpAbsorbSamples(partial: Boolean): ShortArray {
+        val p = Pen()
+        xpAbsorb(p, partial)
+        return p.finish(level(SoftSound.XP_ABSORB), false)
+    }
+
     private fun button(s: SoftSound) = s.ordinal >= SoftSound.SHOW_ANSWER.ordinal
 
     /** Peak as a fraction of full scale. Battle/moment sounds sit near today's HIT/CATCH; buttons are short and
      *  get another 40 % volume slider on top, so they are a bit higher; tab and menu taps are the softest (R7-X1: the tab tick is
      *  about 10 dB under its old level of 0.42, the menu tick 6 dB under 0.40, both under the answer clicks). */
     private fun level(s: SoftSound) = when (s) {
-        SoftSound.TAB -> 0.13
+        SoftSound.TAB, SoftSound.SHOW_ANSWER, SoftSound.AGAIN, SoftSound.HARD, SoftSound.GOOD, SoftSound.EASY -> 0.13 // R9-W4-A: the answer buttons + Show answer are the tab tick
         SoftSound.MENU -> 0.20
         SoftSound.BUY -> 0.50
+        SoftSound.XP_ABSORB -> 0.095  // R9-W4-A: the XP-D glass ping at 10 dB under the page's peak 0.30 (0.30 x 10^-0.5); well under the battle hits (HIT 0.70)
         SoftSound.BALL_BTN -> 0.42
         SoftSound.BURN_TICK, SoftSound.POISON_TICK -> 0.50
         else -> 0.60
@@ -130,11 +143,10 @@ object SoftSfx {
                 intArrayOf(72, 79, 84, 88).forEachIndexed { i, n -> p.n(i * .08, m(n), .1, .5) }
                 for (n in intArrayOf(79, 84, 88)) p.n(.34, m(n), .25, .25)
             }
-            SoftSound.SHOW_ANSWER -> { p.ui(0.0, 520.0, .8, .05); p.ui(.03, 780.0, .6, .045) }
-            SoftSound.AGAIN -> p.ui(0.0, 620.0, .8)
-            SoftSound.HARD -> p.ui(0.0, 740.0, .8)
-            SoftSound.GOOD -> p.ui(0.0, 880.0, .8)
-            SoftSound.EASY -> p.ui(0.0, 1050.0, .8)
+            // R9-W4-A: XP-D "glass ping" (sounds.html XP-D row): sine 2093 Hz, 3 ms attack, tau 110 ms, 0.32 s; plus a plain sine partial at 2.76 x f, relative 0.15, 2 ms attack, tau 40 ms, 0.15 s
+            SoftSound.XP_ABSORB -> xpAbsorb(p, true)
+            // R9-W4-A: the answer buttons and Show answer sound exactly like the tab tick (own files and groups, so their volumes and switches stay)
+            SoftSound.SHOW_ANSWER, SoftSound.AGAIN, SoftSound.HARD, SoftSound.GOOD, SoftSound.EASY -> p.tick(0.0, 480.0, .035, 1.0, 0.006)
             SoftSound.TAB -> p.tick(0.0, 480.0, .035, 1.0, 0.006) // a low, soft tick: pure sine, no octave layer, no sharp attack
             SoftSound.MENU -> p.tick(0.0, 620.0, .035, 1.0, 0.006)
             SoftSound.BUY -> { p.tick(0.0, 880.0, .04, .8, 0.004); p.tick(.04, 1320.0, .04, .8, 0.004) }
@@ -164,6 +176,23 @@ object SoftSfx {
 
         /** A soft tick: one plain sine (no octave layer, so no high partials) with a gentle [atk]-second attack. */
         fun tick(t: Double, f: Double, dur: Double, amp: Double, atk: Double) = osc(t, f, f, dur, amp, false, atk, false, 1.0)
+
+        /** R9-W4-A: a plain sine of [f] Hz with a linear [atk]-second attack, then an exponential decay exp(-(t-atk)/[tau]), for [dur] seconds. */
+        fun ping(t: Double, f: Double, amp: Double, atk: Double, tau: Double, dur: Double) {
+            if (f >= NYQ_LIMIT) return
+            val start = (t * RATE).roundToInt()
+            val n = (dur * RATE).roundToInt()
+            var ph = 0.0
+            for (i in 0 until n) {
+                val idx = start + i
+                if (idx >= buf.size) break
+                val tt = i.toDouble() / RATE
+                ph += 2 * PI * f / RATE
+                val env = if (tt < atk) tt / atk else kotlin.math.exp(-(tt - atk) / tau)
+                buf[idx] += sin(ph) * amp * env
+                end = max(end, idx + 1)
+            }
+        }
 
         private fun osc(t: Double, f0: Double, f1: Double, dur: Double, amp: Double, rise: Boolean, atk: Double, tri: Boolean, scale: Double) {
             if (max(f0, f1) >= NYQ_LIMIT) return // above Nyquist: skip rather than alias

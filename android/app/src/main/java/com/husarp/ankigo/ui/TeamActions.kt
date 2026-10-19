@@ -58,7 +58,7 @@ internal class MonActions(private val s: GamePage) {
             if (host != null) host.startPickWith(mon.uid)
             else s.startScreen(Nav.intent(s, Dest.TEAM).putExtra(TeamActivity.EXTRA_PICK_UID, mon.uid))
         }
-        if (Looks.hasChoice(data, mon)) add("Change look…", R.drawable.ic_palette, sub = "Pick a picture from its line") { changeLook(mon) }
+        if (Looks.hasChoice(data, mon, state.caught)) add("Change look…", R.drawable.ic_palette, sub = "Pick a picture from its line") { changeLook(mon) }
         if (mon.favourite) add("Remove from favourites", R.drawable.ic_heart, tone = R.color.ag_red) { s.act { it.setFavourite(mon.uid, false) } }
         else add("Add to favourites", R.drawable.ic_heart_outline, tone = R.color.ag_red) { s.act { it.setFavourite(mon.uid, true) } }
         add("Rename…", R.drawable.ic_pencil) { rename(mon) }
@@ -76,7 +76,7 @@ internal class MonActions(private val s: GamePage) {
 
     /** "Change look…": the 8B popup; the pick is saved through the game (purely visual) and every screen refreshes. */
     private fun changeLook(mon: Mon) {
-        LookPicker.show(s, data, mon) { pick -> s.act { g -> g.setLook(mon.uid, pick).let { r -> if (r.ok) r.copy(message = "") else r } } }
+        LookPicker.show(s, data, mon, state.caught) { pick -> s.act { g -> g.setLook(mon.uid, pick).let { r -> if (r.ok) r.copy(message = "") else r } } }
     }
 
     /** Puts [mon] on the Buddy widget(s): with several widgets they all get it (each can be changed on its own from the widget's Reconfigure). */

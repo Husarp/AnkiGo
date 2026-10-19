@@ -105,11 +105,46 @@ class SoundRulesTest {
         assertFalse(SoundRules.shouldPlay(cry, ok.copy(skipping = true)))
     }
 
+    // ---- R9-C3: the XP orb pling follows the same rules as the other battle sounds ----
+
+    private val orb = Cue.Effect(SoundId.XP_ABSORB)
+
+    @Test fun theOrbPlingFollowsGroupVolumeRingerMuteAndSkip() {
+        assertEquals(SoundGroup.MOMENTS, SoundId.XP_ABSORB.group)
+        assertEquals("xp_absorb-v2.wav", SoundId.XP_ABSORB.file)
+        assertTrue(SoundRules.shouldPlay(orb, ok))
+        assertFalse(SoundRules.shouldPlay(orb, ok.copy(groupsOff = setOf(SoundGroup.MOMENTS))))
+        assertTrue(SoundRules.shouldPlay(orb, ok.copy(groupsOff = setOf(SoundGroup.BATTLE))))
+        assertFalse(SoundRules.shouldPlay(orb, ok.copy(volumes = mapOf(SoundChannel.BATTLE to 0))))
+        assertTrue(SoundRules.shouldPlay(orb, ok.copy(volumes = mapOf(SoundChannel.BATTLE to 5))))
+        assertFalse(SoundRules.shouldPlay(orb, ok.copy(ringerNormal = false)))
+        assertFalse(SoundRules.shouldPlay(orb, ok.copy(muted = true)))
+        assertFalse(SoundRules.shouldPlay(orb, ok.copy(skipping = true)))
+    }
+
+    @Test fun theLastOrbIsFullerAndRatesStayLegal() {
+        assertTrue(SoundRules.orbGain(true) > SoundRules.orbGain(false))
+        assertEquals(1f, SoundRules.orbGain(true), 0f)
+        assertEquals(1.1f, SoundRules.orbRate(1.1f, false), 0f)
+        assertTrue(SoundRules.orbRate(1.25f, true) < 1.25f)
+        assertEquals(2f, SoundRules.orbRate(9f, false), 0f)
+        assertEquals(0.5f, SoundRules.orbRate(0.1f, false), 0f)
+    }
+
     @Test fun gapBetweenSameSounds() {
         assertTrue(SoundRules.gapOk(null, 1000))
         assertFalse(SoundRules.gapOk(1000, 1079))
         assertTrue(SoundRules.gapOk(1000, 1080))
         assertTrue(SoundRules.gapOk(5000, 100)) // clock went back: don't stay silent forever
+    }
+
+    @Test fun theOrbPlingHasItsOwnSmallerRepeatGuard() {
+        // R9-W4-FIX: plings come 50 ms or more apart; the 80 ms guard of the other sounds would swallow them
+        assertTrue(SoundRules.ORB_MIN_GAP_MS < SoundRules.MIN_GAP_MS)
+        assertTrue(SoundRules.ORB_MIN_GAP_MS < com.husarp.ankigo.ui.XpParticles.SOUND_GAP_MS)   // always below the pick gap
+        assertFalse(SoundRules.gapOk(1000, 1039, SoundRules.ORB_MIN_GAP_MS))
+        assertTrue(SoundRules.gapOk(1000, 1050, SoundRules.ORB_MIN_GAP_MS))
+        assertFalse(SoundRules.gapOk(1000, 1075)) // the default guard is unchanged
     }
 
     @Test fun volumeScale() {

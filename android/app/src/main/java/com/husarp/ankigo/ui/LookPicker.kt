@@ -30,9 +30,9 @@ object LookPicker {
     fun pickOf(num: Int, ownNum: Int): Int? = if (num == ownNum) null else num
 
     /** Shows the popup; [onUse] gets the species number to show, or null for the Pokémon's own look. */
-    fun show(a: Context, data: GameData, mon: Mon, onUse: (Int?) -> Unit) {
+    fun show(a: Context, data: GameData, mon: Mon, caught: Set<Int>, onUse: (Int?) -> Unit) {
         lateinit var dlg: AppDialog
-        val body = Body(a, data, mon) { dlg.dismiss(); onUse(null) }
+        val body = Body(a, data, mon, caught) { dlg.dismiss(); onUse(null) }
         dlg = AppDialog.Builder(a).setView(body.view)
             .setPositiveButton("Use") { _, _ -> if (body.selected != mon.lookSpecies(data).num) onUse(pickOf(body.selected, mon.species)) }
             .setNegativeButton("Cancel", null).create()
@@ -40,7 +40,7 @@ object LookPicker {
     }
 
     /** The popup's inside (also what the screenshot tests render); [selected] is the picked species number. */
-    internal class Body(private val a: Context, private val data: GameData, private val mon: Mon, onReset: () -> Unit) {
+    internal class Body(private val a: Context, private val data: GameData, private val mon: Mon, private val caught: Set<Int>, onReset: () -> Unit) {
         var selected: Int = mon.lookSpecies(data).num
             private set
         private val cards = ArrayList<Pair<Int, LinearLayout>>()
@@ -61,9 +61,12 @@ object LookPicker {
             }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 8) })
             col.addView(head, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(a, 12) })
 
-            val line = Looks.choices(data, mon)
+            // captions count the FULL line (Stage 1 = base form), so a hidden stage keeps its number
+            val full = Looks.choices(data, mon, data.species.keys)
+            val shown = Looks.choices(data, mon, caught)
+            val line = full.withIndex().filter { v -> shown.any { it.num == v.value.num } }
             val grid = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-            line.withIndex().toList().chunked(COLUMNS).forEachIndexed { r, chunk ->
+            line.chunked(COLUMNS).forEachIndexed { r, chunk ->
                 val row = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL }
                 for (i in 0 until COLUMNS) {
                     val item = chunk.getOrNull(i)

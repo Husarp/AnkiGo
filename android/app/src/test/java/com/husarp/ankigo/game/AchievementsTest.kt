@@ -49,10 +49,10 @@ class AchievementsTest {
         assertTrue(ids.all { id -> id.isNotEmpty() && id.all { it.isLowerCase() || it.isDigit() || it == '-' } })
     }
 
-    @Test fun tieredRowsHaveFiveAscendingThresholdsAndOneOffsOne() {
+    @Test fun tieredRowsHaveFiveAscendingThresholdsAndOneOffsOne() { // R9-B2: 3 when easy (exactly "types" and "highest-level")
         for (r in AchievementTable.ROWS) {
             if (r.ankimonBadge == null) {
-                assertEquals(r.id, 5, r.tiers.size)
+                assertEquals(r.id, if (r.id in setOf("types", "highest-level")) 3 else 5, r.tiers.size)
                 assertTrue(r.id, r.metric != null)
                 assertTrue(r.id, r.tiers.zipWithNext().all { (a, b) -> a < b })
                 assertTrue(r.id, r.tiers.first() >= 1)
@@ -72,7 +72,7 @@ class AchievementsTest {
     private val DROPPED = listOf("combo", "good", "easy")
     private val BY_GROUP = mapOf(
         "Study" to listOf("answers", "streak-days", "cards-day", "days-studied", "study-time", "new-cards", "goals"),
-        "Battle" to listOf("defeats", "damage-dealt", "damage-taken", "damage-blocked", "misses", "super-effective", "crits", "total-xp", "total-levels", "highest-level", "evolutions"),
+        "Battle" to listOf("defeats", "damage-dealt", "damage-taken", "damage-blocked", "misses", "super-effective", "total-xp", "total-levels", "highest-level", "evolutions"),
         "Collection" to listOf("catches", "dex-caught", "dex-seen", "types", "balls-thrown", "ball-catches"),
         "Economy" to listOf("money-earned", "money-spent", "items-used", "tms", "items-found"),
         "Special" to listOf("shinies", "legendary-mythical", "comebacks"),
@@ -80,7 +80,7 @@ class AchievementsTest {
 
     @Test fun theDroppedRowsAreGoneAndTheirIdsStayFree() {
         for (id in DROPPED) assertNull(id, AchievementTable.row(id))
-        assertEquals(32, AchievementTable.ROWS.count { !it.oneOff })
+        assertEquals(31, AchievementTable.ROWS.count { !it.oneOff })
         assertEquals(11, AchievementTable.ROWS.count { it.oneOff })
         // their counters stay in the engine
         assertTrue(Metric.entries.containsAll(listOf(Metric.BEST_COMBO, Metric.GOOD_PRESSES, Metric.EASY_PRESSES)))
@@ -363,7 +363,7 @@ class AchievementsTest {
     @Test fun attacksOfARoundCountThroughTheGame() {
         val g = game()
         g.state.battle = Battle(TestData.mon(data, 19, 15, listOf("tackle"), uid = "wild"), Tier.NORMAL, startedAt = time)
-        g.state.settings.cardsPerRound = 1
+        g.roundAnswers = 1
         val events = g.answer(3, 1)
         val attacks = events.filterIsInstance<GameEvent.Attack>()
         assertTrue(attacks.isNotEmpty())

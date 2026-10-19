@@ -53,7 +53,7 @@ internal object StatsSheets {
 
     /** The sheet: handle, "Show · one chart at a time", then every group's metrics as chips. [onPick] gets the tapped metric. */
     fun metricSheet(ctx: Context, current: ChartMetric, onPick: (ChartMetric) -> Unit): View {
-        val sheet = LinearLayout(ctx).apply {
+        val sheet = DragSheet(ctx).apply {
             orientation = LinearLayout.VERTICAL
             val r = Ui.dp(ctx, 20f)
             background = GradientDrawable().apply {

@@ -465,7 +465,7 @@ internal class SortSheet(
         val dialog = Dialog(ctx).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
         dismiss = { dialog.dismiss() }
         val maxBody = (ctx.resources.displayMetrics.heightPixels * BODY_SHARE).toInt() - Ui.dp(ctx, 150) // the handle, title and button stay in view
-        dialog.setContentView(build(maxBody.coerceAtLeast(Ui.dp(ctx, 120))))
+        dialog.setContentView(SheetKit.dialog(dialog, build(maxBody.coerceAtLeast(Ui.dp(ctx, 120)))))
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))

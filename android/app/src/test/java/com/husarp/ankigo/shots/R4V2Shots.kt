@@ -221,6 +221,16 @@ class R4V2Shots {
         }
     }
 
+    @Test fun detailThreeTierRow() { // R9-B2: an easy row stops at Epic: no Legendary / Mythical step
+        paparazzi.shootPage("r9b2-detail-types", listOf(Variants.PHONE)) { ctx ->
+            val screen = page(ctx, open = "types")
+            val t = texts(screen)
+            assertTrue(t.toString(), "Common · 6" in t && "Rare · 10" in t && "Epic · 18" in t)
+            assertTrue(t.toString(), t.drop(t.indexOf("Common · 6")).none { it.contains("Legendary") || it.contains("Mythical") }) // the sheet only (the page behind has other rows)
+            screen
+        }
+    }
+
     @Test fun detailBeforeDateAndHistoryNote() {
         paparazzi.shootPage("r4v2-detail-money", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
             val screen = page(ctx, open = "money-earned")

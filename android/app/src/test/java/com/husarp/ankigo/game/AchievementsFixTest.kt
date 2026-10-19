@@ -78,14 +78,14 @@ class AchievementsFixTest {
 
     @Test fun tiersAreStoredBeforeAReleaseCanTakeThemAway() {
         val s = state()
-        s.mons += TestData.mon(data, 19, 80, uid = "big") // highest level 80: Common, Rare, Epic, Legendary (10, 25, 50, 75)
-        assertEquals(3, view(s, "highest-level").tier) // what a page opened right after loading would show
+        s.mons += TestData.mon(data, 19, 80, uid = "big") // highest level 80: Common, Rare (25, 50; Epic is 100)
+        assertEquals(1, view(s, "highest-level").tier) // what a page opened right after loading would show
         Achievements.onReady(s, data, NOW)
-        assertEquals(4, s.achTiers["highest-level"]!!.size)
+        assertEquals(2, s.achTiers["highest-level"]!!.size)
         s.mons.removeAll { it.uid == "big" }
         val v = view(s, "highest-level")
-        assertEquals(3, v.tier)
-        assertEquals("Legendary", v.tierName)
+        assertEquals(1, v.tier)
+        assertEquals("Rare", v.tierName)
         assertEquals(20L, v.value) // the number is the live one; the tier stays
     }
 
@@ -93,7 +93,7 @@ class AchievementsFixTest {
         val s = state()
         s.mons += TestData.mon(data, 19, 80, uid = "big")
         s.mons.removeAll { it.uid == "big" }
-        assertEquals(0, view(s, "highest-level").tier) // nothing was stored: this is the loss the first look prevents
+        assertEquals(-1, view(s, "highest-level").tier) // nothing was stored (the main is Lv 20, under the first tier of 25): this is the loss the first look prevents
     }
 
     @Test fun theFirstLookIsQuietAndRepeatable() {

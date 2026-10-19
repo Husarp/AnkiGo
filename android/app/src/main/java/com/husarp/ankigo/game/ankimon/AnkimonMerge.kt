@@ -9,6 +9,7 @@ import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Nature
 import com.husarp.ankigo.game.Progression
+import com.husarp.ankigo.game.Wishlist
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Stats
@@ -91,6 +92,7 @@ object AnkimonMerge {
         val skipped = mutableListOf<String>()
         val keptUnsupported = mutableListOf<String>()
         val importedSpecies = LinkedHashSet<Int>()
+        val otherSpecies = LinkedHashSet<Int>() // R9-W5: species of the file's Pokémon other than this game's starter
 
         for (m in save.mons) {
             val label = m.name ?: m.id?.let { "#$it" } ?: "Pokémon ${m.individualId.take(8)}"
@@ -108,6 +110,7 @@ object AnkimonMerge {
             }
             state.unsupported.removeAll { it.ankimonId == m.individualId } // known now: it becomes a normal Pokémon below
             importedSpecies += sp.num
+            if (existing == null || existing.uid != state.starterUid) otherSpecies += sp.num
             val attackMoves = attackMoves(data, m)
             if (existing == null) {
                 val mon = buildMon(data, m, sp, newUid(m.individualId, takenUids), now, attackMoves)
@@ -140,6 +143,8 @@ object AnkimonMerge {
         val caughtBefore = state.caught.size
         state.seen += newSeen
         state.caught += newCaught
+        Wishlist.prune(state)
+        val giftCleared = clearStarterGift(state, otherSpecies, dex(save.seen), dex(save.caught), save, byAnkimonId)
 
         // Items and money: the higher of the two values, so importing the same file again changes nothing.
         val raised = LinkedHashMap<String, Pair<Int, Int>>()
@@ -165,10 +170,28 @@ object AnkimonMerge {
         )
         // What the import brought (Pokémon, levels, Pokédex) must not fire a flood of achievement celebrations: the tiers it
         // reaches get their dates, no events. A re-import that brings nothing changes nothing (no check).
-        if (added + upgraded > 0 || report.seenAdded > 0 || report.caughtAdded > 0) {
+        if (added + upgraded > 0 || report.seenAdded > 0 || report.caughtAdded > 0 || giftCleared) {
             Achievements.check(state, data, now, mutableListOf(), silent = true)
         }
         return report
+    }
+
+    /**
+     * R9-W5 (the wave-4 edge): species the file really has are real finds, no longer the starter's gift alone (R9-W4-B). Its other
+     * Pokémon always count; its Pokédex lists count unless the file holds this game's starter itself (exported to Ankimon earlier, its
+     * lists may name the starter's species only because of it; also when it was released here since: an exported phone Pokémon keeps
+     * its uid as its Ankimon id). The starter itself stays a gift. True if a set changed (the tiers this
+     * reaches are dated quietly, like the rest of the import).
+     */
+    private fun clearStarterGift(state: GameState, otherSpecies: Set<Int>, fileSeen: List<Int>, fileCaught: List<Int>, save: AnkimonSave, byAnkimonId: Map<String, Mon>): Boolean {
+        if (state.starterSeen.isEmpty() && state.starterCaught.isEmpty()) return false
+        val fileHasStarter = state.starterUid.isNotEmpty() && save.mons.any { it.individualId == state.starterUid || byAnkimonId[it.individualId]?.uid == state.starterUid }
+        val caught = if (fileHasStarter) otherSpecies else otherSpecies + fileCaught
+        val seen = if (fileHasStarter) otherSpecies else caught + fileSeen
+        val before = state.starterCaught.size + state.starterSeen.size
+        state.starterCaught -= caught
+        state.starterSeen -= seen
+        return state.starterCaught.size + state.starterSeen.size != before
     }
 
     // ---- "Not supported yet" ---------------------------------------------------------------------------------------
@@ -215,6 +238,7 @@ object AnkimonMerge {
             takenUids += mon.uid
             state.seen += sp.num
             state.caught += sp.num
+            Wishlist.onCaught(state, sp.num)
             iter.remove()
             revived++
         }

@@ -55,15 +55,6 @@ object StatsChartMath {
     /** The middle of slot [i] of [n] in [start]..[end]. */
     fun slotCenter(i: Int, n: Int, start: Float, end: Float): Float = start + (i + 0.5f) * (end - start) / n
 
-    /** The (column, row) of the heatmap cell under ([x], [y]); null in the margins, between cells beyond the grid or outside it. */
-    fun gridCell(x: Float, y: Float, left: Float, top: Float, cell: Float, gap: Float, cols: Int, rows: Int = 7): Pair<Int, Int>? {
-        if (cols <= 0 || cell <= 0f || x < left || y < top) return null
-        val step = cell + gap
-        val c = floor((x - left) / step).toInt()
-        val r = floor((y - top) / step).toInt()
-        return if (c in 0 until cols && r in 0 until rows) c to r else null
-    }
-
     // ---------------------------------------------------------------- the y axis
 
     /**

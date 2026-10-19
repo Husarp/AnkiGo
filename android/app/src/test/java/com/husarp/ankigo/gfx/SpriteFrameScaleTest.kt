@@ -48,23 +48,55 @@ class SpriteFrameScaleTest {
         assertEquals(129f, small, 0f); assertEquals(288f, big, 0f)
     }
 
-    @Test fun artShareIsWhatIsDrawnOfTheFrameWithoutTheEmptyRowsUnderTheFeet() {
-        // 43 x 49 in a 300-px frame: scale 3 = 129 x 147 px; 5 empty rows under the feet are not part of the picture
-        val a = SpriteView.artShare(43, 49, 5, 300)
+    // ROUND 9 D1: the REAL art box (the visible pixels) inside the frame, not the bitmap's width and height.
+    @Test fun artShareOfAFullyOpaquePictureIsTheBitmapOnTheFramesBottom() {
+        // 43 x 49 in a 300-px frame: scale 3 = 129 x 147 px, centred, standing on the bottom edge
+        val a = SpriteView.artShare(43, 49, intArrayOf(0, 0, 43, 49), false, 300)
         assertNotNull(a)
         assertEquals(129f / 300f, a!!.w, 0.0001f)
-        assertEquals(44f * 3f / 300f, a.h, 0.0001f)
-        val full = SpriteView.artShare(96, 96, 0, 300)!!
+        assertEquals(147f / 300f, a.h, 0.0001f)
+        assertEquals(85f / 300f, a.x, 0.0001f); assertEquals(153f / 300f, a.y, 0.0001f)
+        val full = SpriteView.artShare(96, 96, null, false, 300)!!   // no bounds = the whole bitmap
         assertEquals(288f / 300f, full.w, 0.0001f); assertEquals(288f / 300f, full.h, 0.0001f)
+        assertEquals(6f / 300f, full.x, 0.0001f); assertEquals(12f / 300f, full.y, 0.0001f)
         // a 3D one at 1.5: 300 x 270 of 300 x 300
-        val big = SpriteView.artShare(200, 180, 0, 300)!!
-        assertEquals(1f, big.w, 0.0001f); assertEquals(0.9f, big.h, 0.0001f)
+        val big = SpriteView.artShare(200, 180, intArrayOf(0, 0, 200, 180), false, 300)!!
+        assertEquals(1f, big.w, 0.0001f); assertEquals(0.9f, big.h, 0.0001f); assertEquals(0.1f, big.y, 0.0001f)
         // a smaller species always takes a smaller share than a bigger one
         assertTrue(a.w < full.w && a.h < full.h)
     }
 
+    @Test fun transparentMarginsAreNotPartOfTheArtBox() {
+        // 96 x 96, the visible pixels in columns 20..59 and rows 10..79 (right/bottom exclusive 60 / 80): 16 empty rows under the feet
+        val bounds = intArrayOf(20, 10, 60, 80)
+        val a = SpriteView.artShare(96, 96, bounds, false, 288)!!   // scale 3: dw = dh = 288, left = 0
+        assertEquals(60f / 288f, a.x, 0.0001f)                      // 20 * 3
+        assertEquals(40f * 3f / 288f, a.w, 0.0001f)
+        // the feet (row 79's bottom) stand on the frame's bottom, so the top is 70 rows above it
+        assertEquals(1f, a.y + a.h, 0.0001f)
+        assertEquals(70f * 3f / 288f, a.h, 0.0001f)
+        // an off-centre sprite: art in the left third, then mirrored it is in the right third
+        val left = intArrayOf(0, 0, 30, 96)
+        val l = SpriteView.artShare(96, 96, left, false, 288)!!
+        val r = SpriteView.artShare(96, 96, left, true, 288)!!
+        assertEquals(0f, l.x, 0.0001f); assertEquals(90f / 288f, l.w, 0.0001f)
+        assertEquals(1f - 90f / 288f, r.x, 0.0001f); assertEquals(l.w, r.w, 0.0001f)
+    }
+
+    @Test fun aSmallPictureIsCentredInItsFrameAndItsMarginsMoveWithIt() {
+        // 43 x 49, the pixels at columns 3..39 / rows 2..46 (exclusive 40 / 47): 2 empty rows below; frame 300 -> scale 3 (dw 129, dh 147)
+        val a = SpriteView.artShare(43, 49, intArrayOf(3, 2, 40, 47), false, 300)!!
+        val left = (300 - 129) / 2           // 85
+        val top = 300 - 147 + 2 * 3          // the empty rows hang below the frame: the feet are on the bottom
+        assertEquals((left + 3 * 3) / 300f, a.x, 0.0001f)
+        assertEquals((top + 2 * 3) / 300f, a.y, 0.0001f)
+        assertEquals(37 * 3 / 300f, a.w, 0.0001f)
+        assertEquals(45 * 3 / 300f, a.h, 0.0001f)
+        assertEquals("the feet stand on the bottom edge", 1f, a.y + a.h, 0.0001f)
+    }
+
     @Test fun artShareOfNothingIsNull() {
-        assertNull(SpriteView.artShare(43, 49, 0, 0))
-        assertNull(SpriteView.artShare(0, 49, 0, 300))
+        assertNull(SpriteView.artShare(43, 49, null, false, 0))
+        assertNull(SpriteView.artShare(0, 49, null, false, 300))
     }
 }

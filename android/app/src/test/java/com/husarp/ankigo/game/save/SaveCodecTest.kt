@@ -62,7 +62,7 @@ class SaveCodecTest {
         s.starterChosen = true; s.catches = 11; s.defeats = 22; s.catchWins = 4; s.evolutions = 3
         val st = s.settings
         st.gens.clear(); st.gens += setOf(1, 3, 9)
-        st.cardsPerRound = 5; st.autoMode = 1
+        st.autoMode = 1
         st.protectLegendary = false; st.protectMythical = false; st.protectUltra = false; st.protectStarter = false
         st.wishlist.clear(); st.wishlist += setOf(7, 8, 9)
         st.dailyAverage = 321; st.dayStartHour = 4; st.xpShareUid = "u2"; st.trainerName = "Zoë \"Ace\""
@@ -117,7 +117,7 @@ class SaveCodecTest {
         assertEquals(fullState().liveSnapshot, b.liveSnapshot)
         assertTrue(b.starterChosen); assertEquals(11, b.catches); assertEquals(22, b.defeats); assertEquals(4, b.catchWins); assertEquals(3, b.evolutions)
         val st = b.settings
-        assertEquals(setOf(1, 3, 9), st.gens); assertEquals(5, st.cardsPerRound); assertEquals(1, st.autoMode)
+        assertEquals(setOf(1, 3, 9), st.gens); assertEquals(1, st.autoMode)
         assertFalse(st.protectLegendary); assertFalse(st.protectMythical); assertFalse(st.protectUltra); assertFalse(st.protectStarter)
         assertEquals(setOf(7, 8, 9), st.wishlist); assertEquals(321, st.dailyAverage); assertEquals(4, st.dayStartHour)
         assertEquals("u2", st.xpShareUid); assertEquals("Zoë \"Ace\"", st.trainerName)
@@ -184,7 +184,7 @@ class SaveCodecTest {
         val d = GameState()
         assertEquals(1, b.mons.size)
         assertEquals(listOf("a"), b.team) // no team stored: the first Pokémon becomes the main
-        assertEquals(d.trainerLevel, b.trainerLevel); assertEquals(d.settings.cardsPerRound, b.settings.cardsPerRound)
+        assertEquals(d.trainerLevel, b.trainerLevel);
         assertEquals(d.settings.gens, b.settings.gens); assertEquals(d.settings.wishlist, b.settings.wishlist)
         assertEquals(d.settings.trainerName, b.settings.trainerName)
         assertEquals(Tier.NORMAL, b.nextTier); assertNull(b.nextSeed); assertEquals("", b.day); assertEquals(5, b.buttonsToday.size)
@@ -286,11 +286,18 @@ class SaveCodecTest {
         assertEquals(5, b.mons.size)
     }
 
+    @Test fun cardsPerRoundIsNoLongerWrittenAndAnOldValueIsIgnored() {
+        val o = JSONObject(SaveCodec.encode(fullState()))
+        assertFalse(o.getJSONObject("settings").has("cardsPerRound"))
+        o.getJSONObject("settings").put("cardsPerRound", 5)
+        val b = SaveCodec.decode(o.toString())
+        assertEquals(setOf(1, 3, 9), b.settings.gens)
+    }
+
     @Test fun settingsObjectDefaultsFillIn() {
         val o = JSONObject(SaveCodec.encode(fullState()))
         o.remove("settings")
         val b = SaveCodec.decode(o.toString())
-        assertEquals(Settings().cardsPerRound, b.settings.cardsPerRound)
         assertEquals(Tuning.DEFAULT_WISHLIST, b.settings.wishlist)
     }
 }

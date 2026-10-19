@@ -23,8 +23,8 @@ class FloatTextsTest {
 
     @Test fun plainHitIsJustTheNumberAtTheTarget() {
         val r = FloatTexts.of(attack(byPlayer = true), on)
-        assertEquals(listOf(FloatText(false, "-12", FloatKind.DAMAGE)), r) // our hit lands on the wild one
-        assertEquals(listOf(FloatText(true, "-12", FloatKind.DAMAGE)), FloatTexts.of(attack(byPlayer = false), on))
+        assertEquals(listOf(FloatText(false, "\u221212 HP", FloatKind.DAMAGE)), r) // our hit lands on the wild one
+        assertEquals(listOf(FloatText(true, "\u221212 HP", FloatKind.DAMAGE)), FloatTexts.of(attack(byPlayer = false), on))
     }
 
     @Test fun missIsAtTheTarget() {
@@ -43,16 +43,16 @@ class FloatTextsTest {
     }
 
     @Test fun superAndResisted() {
-        assertEquals(listOf("-30" to FloatKind.BIG_DAMAGE, "Super effective!" to FloatKind.SUPER), FloatTexts.of(attack(damage = 30, eff = 2.0), on).pairs())
-        assertEquals(listOf("-3" to FloatKind.DAMAGE, "Not very effective" to FloatKind.NOT_VERY), FloatTexts.of(attack(damage = 3, eff = 0.5), on).pairs())
-        assertEquals(listOf("-60" to FloatKind.BIG_DAMAGE, "Super effective!" to FloatKind.SUPER), FloatTexts.of(attack(damage = 60, eff = 4.0), on).pairs())
-        assertEquals(listOf("-1" to FloatKind.DAMAGE, "Not very effective" to FloatKind.NOT_VERY), FloatTexts.of(attack(damage = 1, eff = 0.25), on).pairs())
+        assertEquals(listOf("\u221230 HP" to FloatKind.BIG_DAMAGE, "Super effective!" to FloatKind.SUPER), FloatTexts.of(attack(damage = 30, eff = 2.0), on).pairs())
+        assertEquals(listOf("\u22123 HP" to FloatKind.DAMAGE, "Not very effective" to FloatKind.NOT_VERY), FloatTexts.of(attack(damage = 3, eff = 0.5), on).pairs())
+        assertEquals(listOf("\u221260 HP" to FloatKind.BIG_DAMAGE, "Super effective!" to FloatKind.SUPER), FloatTexts.of(attack(damage = 60, eff = 4.0), on).pairs())
+        assertEquals(listOf("\u22121 HP" to FloatKind.DAMAGE, "Not very effective" to FloatKind.NOT_VERY), FloatTexts.of(attack(damage = 1, eff = 0.25), on).pairs())
     }
 
     @Test fun critOnlyWhenCritsAreOn() {
-        assertEquals(listOf("-18" to FloatKind.BIG_DAMAGE, "Critical!" to FloatKind.CRIT), FloatTexts.of(attack(damage = 18, crit = true), on).pairs())
-        assertEquals(listOf("-18" to FloatKind.BIG_DAMAGE), FloatTexts.of(attack(damage = 18, crit = true), off).pairs())
-        assertEquals(listOf("-40" to FloatKind.BIG_DAMAGE, "Super effective!" to FloatKind.SUPER, "Critical!" to FloatKind.CRIT),
+        assertEquals(listOf("\u221218 HP" to FloatKind.BIG_DAMAGE, "Critical!" to FloatKind.CRIT), FloatTexts.of(attack(damage = 18, crit = true), on).pairs())
+        assertEquals(listOf("\u221218 HP" to FloatKind.BIG_DAMAGE), FloatTexts.of(attack(damage = 18, crit = true), off).pairs())
+        assertEquals(listOf("\u221240 HP" to FloatKind.BIG_DAMAGE, "Super effective!" to FloatKind.SUPER, "Critical!" to FloatKind.CRIT),
             FloatTexts.of(attack(damage = 40, eff = 2.0, crit = true), on).pairs())
     }
 
@@ -62,7 +62,7 @@ class FloatTextsTest {
     }
 
     @Test fun multiHitIsOneTotalNumber() {
-        assertEquals(listOf("-27" to FloatKind.DAMAGE), FloatTexts.of(attack(damage = 27, hits = 3), on).pairs())
+        assertEquals(listOf("\u221227 HP" to FloatKind.DAMAGE), FloatTexts.of(attack(damage = 27, hits = 3), on).pairs())
     }
 
     @Test fun zeroDamageHitShowsNothing() {
@@ -108,11 +108,11 @@ class FloatTextsTest {
     }
 
     @Test fun drainHealRecoilAndStatusDamage() {
-        assertEquals(listOf(FloatText(true, "+7", FloatKind.HEAL)), FloatTexts.of(fx(EffectKind.DRAIN, amount = 7), on))
-        assertEquals(listOf(FloatText(false, "+9", FloatKind.HEAL)), FloatTexts.of(fx(EffectKind.HEAL, onPlayer = false, amount = 9), on))
+        assertEquals(listOf(FloatText(true, "+7 HP", FloatKind.HEAL)), FloatTexts.of(fx(EffectKind.DRAIN, amount = 7), on))
+        assertEquals(listOf(FloatText(false, "+9 HP", FloatKind.HEAL)), FloatTexts.of(fx(EffectKind.HEAL, onPlayer = false, amount = 9), on))
         assertEquals(emptyList<FloatText>(), FloatTexts.of(fx(EffectKind.HEAL, amount = 0), on)) // already full
-        assertEquals(listOf("-4" to FloatKind.DAMAGE), FloatTexts.of(fx(EffectKind.RECOIL, amount = 4), on).pairs())
-        assertEquals(listOf("-2" to FloatKind.DAMAGE), FloatTexts.of(fx(EffectKind.STATUS_DAMAGE, amount = 2), on).pairs())
+        assertEquals(listOf("\u22124 HP" to FloatKind.DAMAGE), FloatTexts.of(fx(EffectKind.RECOIL, amount = 4), on).pairs())
+        assertEquals(listOf("\u22122 HP" to FloatKind.DAMAGE), FloatTexts.of(fx(EffectKind.STATUS_DAMAGE, amount = 2), on).pairs())
     }
 
     @Test fun otherEffectShowsNothing() {
@@ -132,7 +132,7 @@ class FloatTextsTest {
 
     @Test fun healedIsOnePlusNAtTheMainAndNothingForZero() {
         fun healed(a: Int) = GameEvent.Healed("u1", "Sparkmouse", a, 20, 30, com.husarp.ankigo.game.HealReason.LEVEL_UP)
-        assertEquals(listOf(FloatText(true, "+6", FloatKind.HEAL)), FloatTexts.of(healed(6), on))
+        assertEquals(listOf(FloatText(true, "+6 HP", FloatKind.HEAL)), FloatTexts.of(healed(6), on))
         assertEquals(emptyList<FloatText>(), FloatTexts.of(healed(0), on))
     }
 

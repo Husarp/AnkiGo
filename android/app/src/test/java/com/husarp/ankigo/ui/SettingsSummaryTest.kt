@@ -20,7 +20,7 @@ class SettingsSummaryTest {
     }
 
     @Test fun gameLine() {
-        assertEquals("Gens 1–8 · 2 answers per attack · goal 100", SettingsSummary.game(1..8, 2, 100))
+        assertEquals("Gens 1–8 · goal 100", SettingsSummary.game(1..8, 100))
     }
 
     @Test fun leaveAndBattle() {

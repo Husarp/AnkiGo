@@ -3,27 +3,43 @@ package com.husarp.ankigo.ui
 import android.content.Context
 import android.graphics.PorterDuff
 import android.graphics.Outline
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import com.husarp.ankigo.Anki
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.live.LiveSession
+import java.lang.ref.WeakReference
+import java.util.concurrent.Executors
 
 /**
- * The battle card at the top of the Pokémon tab's Team section (R4-V1, Adam's pick 1): a small "BATTLE" header with a
- * "Pop out" pill and an expand icon, then the live battle panel in its card look ([BattlePanelView.setCardLook]: both
+ * The battle card at the top of the Pokémon tab's Team section (R4-V1, Adam's pick 1): a small "BATTLE" header with the green Continue button
+ * (R9-B9b: [setContinue], studies the last deck), a "Pop out" pill and an expand icon, then the live battle panel in its card look ([BattlePanelView.setCardLook]: both
  * Pokémon with names, Lv and HP, the last log line and the daily goal bar). A tap on the card or on the expand icon opens the
  * full-screen battle (a tap on the wild Pokémon opens its info window instead) ([Host.expand]); Pop out is [Host.popOut]. It is live only while it is on screen: [start] holds
  * [LiveSession] and attaches a sink (answers made in AnkiDroid play on the card), [stop] lets both go. The card also shows in a
  * short window (a split-screen half): its panel is then smaller ([panelDp]) and [PanelFit] scales the battle to it. Pure decisions
  * ([wanted], [panelDp]) are tested on the JVM.
  */
-internal class BattleCard(private val ctx: Context, private val host: Host, private val session: Live = RealLive) {
+internal class BattleCard(
+    private val ctx: Context,
+    private val host: Host,
+    private val session: Live = RealLive,
+    /** Hands a result to the main thread (a test collects them and runs them itself). */
+    private val poster: (Runnable) -> Unit = mainPoster,
+    /**
+     * Finds the deck the Continue button studies (off the main thread, given the APPLICATION context: the lookup never holds the
+     * page or the Activity); null = no button. A test passes its own.
+     */
+    private val loadContinue: (Context) -> Anki.Deck? = { defaultContinue(it) },
+) {
     /** What the card needs of the live session: [LiveSession] itself; a test passes its own to count who holds it. */
     interface Live {
         val paused: Boolean
@@ -55,12 +71,20 @@ internal class BattleCard(private val ctx: Context, private val host: Host, priv
         fun popOut()
         /** The panel's "Grant" button (live status: AnkiDroid permission missing): ask for the permission through the activity; the answer goes to [accessAnswered]. */
         fun grantAccess() {}
+        /**
+         * The Continue button (R9-B9b): start studying [deck] like the Study tab's CONTINUE card. [stillWanted] turns false when the
+         * card stops (the page was left): a delayed start must then not fire.
+         */
+        fun continueStudy(deck: Anki.Deck, stillWanted: () -> Boolean) {}
     }
 
     private val panel = BattlePanelView(ctx).apply { setCardLook(true) }
     private val player = EventPlayer(panel)
     private var live = false
     private val pauseListener: (Boolean) -> Unit = { panel.setPaused(it) }
+    private var continueBtn: View? = null
+    private var lookingUp = false // a Continue lookup is in flight: a start while one runs reuses it (one per card)
+    private var studyGen = 0 // which Continue tap is still wanted ([stop] ends it: a late AnkiDroid start is dropped)
 
     /** The panel as a [LiveSession] sink; attached only between [start] and [stop], so a hidden card queues no animations. */
     private val sink = object : LiveSession.Sink {
@@ -109,6 +133,7 @@ internal class BattleCard(private val ctx: Context, private val host: Host, priv
         gravity = Gravity.CENTER_VERTICAL
         setPadding(Ui.dp(ctx, 14), 0, Ui.dp(ctx, 4), 0)
         addView(Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply { text = "BATTLE"; letterSpacing = 0.058f; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
+        addView(continueButton().also { continueBtn = it })
         addView(popOutPill())
         addView(ImageView(ctx).apply {
             setImageResource(R.drawable.ic_fullscreen)
@@ -118,6 +143,45 @@ internal class BattleCard(private val ctx: Context, private val host: Host, priv
             setPadding(p, p, p, p)
             setOnClickListener { host.expand() }
         }, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
+    }
+
+    /** The green Continue button as on the Study tab's CONTINUE card (accent square with a play icon; 32 dp look in a 48 dp touch area). Hidden until [setContinue] gets a deck. */
+    private fun continueButton(): View = FrameLayout(ctx).apply {
+        visibility = View.GONE
+        addView(StudyUi.icon(ctx, R.drawable.ic_play, R.color.ag_base).apply {
+            setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8))
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 10, ctx)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32), Gravity.CENTER))
+    }.also { it.layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)) }
+
+    /** Shows the Continue button for [deck], or hides it (null). */
+    fun setContinue(deck: Anki.Deck?) {
+        val b = continueBtn ?: return
+        if (deck == null) { b.visibility = View.GONE; b.setOnClickListener(null); b.contentDescription = null; return }
+        b.contentDescription = ContinueBar.description(deck)
+        b.setOnClickListener { val req = ++studyGen; host.continueStudy(deck) { live && req == studyGen } }
+        b.visibility = View.VISIBLE
+    }
+
+    /** True while the Continue button is showing. */
+    val continueShown: Boolean get() = continueBtn?.visibility == View.VISIBLE
+
+    /**
+     * Reads the deck list off the main thread; the result applies only if the card is still live (a late one after [stop] is
+     * dropped). Never blocks the card. The worker holds the application context and a weak reference to the card only, so a
+     * stalled provider never keeps the page or the Activity alive; one lookup per card is in flight at most.
+     */
+    private fun loadContinueButton() {
+        if (lookingUp) return
+        lookingUp = true
+        lookup(WeakReference(this), ctx.applicationContext, loadContinue, poster)
+    }
+
+    /** The lookup's result arrived on the main thread. */
+    private fun continueLoaded(deck: Anki.Deck?) {
+        lookingUp = false
+        if (live) setContinue(deck)
     }
 
     /** The accent "Pop out" pill (icon + text, 26 dp look in a 48 dp touch area). */
@@ -154,12 +218,14 @@ internal class BattleCard(private val ctx: Context, private val host: Host, priv
         session.addPauseListener(pauseListener)
         session.addSink(sink)
         session.hold(ctx, this)
+        loadContinueButton()
     }
 
     /** The card left the screen (another section, the page paused or closed): stop following, let the session go. */
     fun stop() {
         if (!live) return
         live = false
+        studyGen++
         session.removePauseListener(pauseListener)
         session.removeSink(sink)
         player.clear()
@@ -177,12 +243,31 @@ internal class BattleCard(private val ctx: Context, private val host: Host, priv
     }
 
     companion object {
+        private val mainPoster: (Runnable) -> Unit = { r -> Handler(Looper.getMainLooper()).post(r) }
+
+        /** One daemon thread for every card's lookup: no thread per start, and none that keeps the process alive. */
+        private val lookups = Executors.newSingleThreadExecutor { r -> Thread(r, "ankigo-continue").apply { isDaemon = true } }
+
+        /** Static on purpose: the worker closure captures no card, view, host or Activity (only a weak card reference). */
+        private fun lookup(card: WeakReference<BattleCard>, appCtx: Context, load: (Context) -> Anki.Deck?, post: (Runnable) -> Unit) {
+            lookups.execute {
+                val deck = runCatching { load(appCtx) }.getOrNull()
+                post(Runnable { card.get()?.continueLoaded(deck) })
+            }
+        }
+
         /**
          * Whether the Team section shows the card: a game that is READY and the page lives in an Activity (floating cards have
          * none). Also in a short window: the Team section has no battle of its own there, so without the card it would have neither
          * the battle nor its LiveSession hold.
          */
         fun wanted(ready: Boolean, inActivity: Boolean): Boolean = ready && inActivity
+
+        /** The deck for the Continue button, or null without AnkiDroid permission / AnkiDroid / a last deck with cards due. Runs off the main thread. */
+        private fun defaultContinue(ctx: Context): Anki.Deck? {
+            if (!Anki.hasPermission(ctx) || Anki.installed(ctx).none { it.pkg == Anki.pkg }) return null
+            return ContinueBar.forCard(ctx, Anki.decks(ctx))
+        }
 
         /** Windows shorter than this (dp) are "short" (split-screen half, landscape phone): the same line as [HomeLayout.TALL_DP]. */
         private const val SHORT_DP = HomeLayout.TALL_DP

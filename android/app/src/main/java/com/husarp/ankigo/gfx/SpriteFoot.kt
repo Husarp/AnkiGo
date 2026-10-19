@@ -31,4 +31,30 @@ internal object SpriteFoot {
 
     /** The empty rows under the feet of an image [rows] high whose [lowest] visible row is known (0 when nothing is visible). */
     fun rowsBelow(rows: Int, lowest: Int): Int = if (lowest < 0) 0 else (rows - 1 - lowest).coerceAtLeast(0)
+
+    /**
+     * Round 9 "real art box": the box of the visible pixels (alpha above [ALPHA]) over all the frames of an animation, as an
+     * accumulator of four ints (left, top, right, bottom; right and bottom exclusive). [emptyBounds] starts one, [addFrame] adds a
+     * frame, [isEmpty] says if nothing visible was seen. Pure maths on pixel arrays; [SpriteView.artShare] feeds it the bitmaps once
+     * per image.
+     */
+    fun emptyBounds(): IntArray = intArrayOf(Int.MAX_VALUE, Int.MAX_VALUE, -1, -1)
+
+    fun isEmpty(bounds: IntArray): Boolean = bounds[2] < 0
+
+    /** Adds the visible pixels of one [w] x [h] frame ([argb], row-major, at least w * h ints) to [bounds]. */
+    fun addFrame(bounds: IntArray, argb: IntArray, w: Int, h: Int) {
+        for (y in 0 until h) {
+            val row = y * w
+            var x0 = 0
+            while (x0 < w && (argb[row + x0] ushr 24) <= ALPHA) x0++
+            if (x0 == w) continue
+            var x1 = w - 1
+            while ((argb[row + x1] ushr 24) <= ALPHA) x1--
+            if (x0 < bounds[0]) bounds[0] = x0
+            if (x1 + 1 > bounds[2]) bounds[2] = x1 + 1
+            if (y < bounds[1]) bounds[1] = y
+            if (y + 1 > bounds[3]) bounds[3] = y + 1
+        }
+    }
 }

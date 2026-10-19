@@ -155,7 +155,7 @@ class R7MoveWiringShots {
         val arena get() = panel.arena
         val player = EventPlayer(panel)
         init {
-            panel.setLog(com.husarp.ankigo.ui.LogKind.SYS, "X", "x", fresh = true)
+            panel.setLog(com.husarp.ankigo.ui.LogKind.SYS, "X", "x")
         }
     }
 

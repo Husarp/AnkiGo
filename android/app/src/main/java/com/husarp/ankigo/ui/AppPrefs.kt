@@ -104,6 +104,21 @@ object AppPrefs {
 
     fun setCardsUnderOwn(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("cardsUnderOwn", on).apply()
 
+    /** The pixel frame around the battle picture (Round 9, Settings → Battle → Battle frame). Default none; unknown = none. */
+    fun battleFrame(ctx: Context): BattleFrameStyle = BattleFrameStyle.parse(prefs(ctx).getString(BattleFrame.KEY, null))
+
+    fun setBattleFrame(ctx: Context, style: BattleFrameStyle) = prefs(ctx).edit().putString(BattleFrame.KEY, style.name).apply()
+
+    /** The design of the battle's info boxes (Round 9 D12, Settings → Battle → Info box style). Default "number above the bar"; unknown = that. */
+    fun infoBoxStyle(ctx: Context): InfoBoxStyle = InfoBoxStyle.parse(prefs(ctx).getString(InfoBoxStyle.KEY, null))
+
+    fun setInfoBoxStyle(ctx: Context, style: InfoBoxStyle) = prefs(ctx).edit().putString(InfoBoxStyle.KEY, style.name).apply()
+
+    /** Where the charge dots sit in the battle action bar (Round 9 D3, Settings → Battle → Turn dots). Default middle; unknown = middle. */
+    fun turnDots(ctx: Context): DotsPlace = DotsPlace.parse(prefs(ctx).getString(DotsPlace.KEY, null))
+
+    fun setTurnDots(ctx: Context, place: DotsPlace) = prefs(ctx).edit().putString(DotsPlace.KEY, place.name).apply()
+
     /**
      * The facing of our Pokémon in every battle view: true = its front sprite, mirrored to face the wild one; false = the back
      * sprite. Set by a swipe across the Pokémon (no Settings row since 0.15; installs that had the old switch on start facing

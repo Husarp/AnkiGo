@@ -335,8 +335,10 @@ class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, cust
     init {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(Ui.dp(ctx, 7), Ui.dp(ctx, 4), Ui.dp(ctx, 7), Ui.dp(ctx, 4))
-        background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 9, ctx)
+        // the streak flame (the only custom icon) never sits in its own box (R9-B7): no background, side padding trimmed
+        val side = if (customIcon == null) 7 else 2
+        setPadding(Ui.dp(ctx, side), Ui.dp(ctx, 4), Ui.dp(ctx, side), Ui.dp(ctx, 4))
+        if (customIcon == null) background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 9, ctx)
         addView(icon)
         addView(label)
         setTone(toneRes)

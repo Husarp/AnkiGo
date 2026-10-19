@@ -61,4 +61,53 @@ class SpriteFootTest {
         assertEquals(6, r)
         assertEquals(listOf(0 to 9, 0 to 8, 0 to 7, 0 to 6, 1 to 9, 1 to 8, 1 to 7), seen)
     }
+
+    // ---- ROUND 9 D1: the box of the visible pixels over all frames (the real art box)
+
+    /** A [w] x [h] frame with a solid block on columns [x0]..[x1] and rows [y0]..[y1] (inclusive). */
+    private fun block(w: Int, h: Int, x0: Int, y0: Int, x1: Int, y1: Int, alpha: Int = 255): IntArray {
+        val px = IntArray(w * h)
+        for (y in y0..y1) for (x in x0..x1) px[y * w + x] = (alpha shl 24) or 0x336699
+        return px
+    }
+
+    @Test fun theBoundsOfOneFrameAreItsVisiblePixels() {
+        val b = SpriteFoot.emptyBounds()
+        assertTrue(SpriteFoot.isEmpty(b))
+        SpriteFoot.addFrame(b, block(96, 96, 20, 10, 59, 79), 96, 96)
+        assertFalse(SpriteFoot.isEmpty(b))
+        assertEquals(listOf(20, 10, 60, 80), b.toList())      // right and bottom are exclusive
+    }
+
+    @Test fun theBoundsAreTheUnionOverAllFrames() {
+        val b = SpriteFoot.emptyBounds()
+        SpriteFoot.addFrame(b, block(96, 96, 30, 20, 50, 70), 96, 96)
+        SpriteFoot.addFrame(b, block(96, 96, 10, 30, 40, 85), 96, 96)   // wider to the left, lower
+        SpriteFoot.addFrame(b, block(96, 96, 35, 5, 70, 60), 96, 96)    // higher, wider to the right
+        assertEquals(listOf(10, 5, 71, 86), b.toList())
+    }
+
+    @Test fun anOffCentreSpriteKeepsItsOwnColumns() {
+        val b = SpriteFoot.emptyBounds()
+        SpriteFoot.addFrame(b, block(96, 96, 0, 0, 14, 95), 96, 96)     // only the left strip
+        assertEquals(listOf(0, 0, 15, 96), b.toList())
+    }
+
+    @Test fun faintPixelsAreNotTheArtAndAnEmptyFrameStaysEmpty() {
+        val b = SpriteFoot.emptyBounds()
+        SpriteFoot.addFrame(b, block(20, 20, 2, 2, 17, 17, alpha = 16), 20, 20)    // alpha 16: not above the limit
+        assertTrue(SpriteFoot.isEmpty(b))
+        SpriteFoot.addFrame(b, IntArray(400), 20, 20)
+        assertTrue(SpriteFoot.isEmpty(b))
+        SpriteFoot.addFrame(b, block(20, 20, 5, 5, 6, 6, alpha = 17), 20, 20)
+        assertEquals(listOf(5, 5, 7, 7), b.toList())
+    }
+
+    @Test fun aSinglePixelAtTheCornersIsFound() {
+        val b = SpriteFoot.emptyBounds()
+        val px = IntArray(10 * 8)
+        px[0] = 0xFF000000.toInt(); px[10 * 8 - 1] = 0xFF000000.toInt()
+        SpriteFoot.addFrame(b, px, 10, 8)
+        assertEquals(listOf(0, 0, 10, 8), b.toList())
+    }
 }

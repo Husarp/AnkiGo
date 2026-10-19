@@ -75,6 +75,8 @@ object SaveCodec {
             list("achInferred", state.achInferred.sorted()) // R4 fix A3: tiers whose date is only "first seen"; a save without the key has none flagged
             key("badgeAt"); obj { for ((k, v) in state.badgeAt.toSortedMap()) kv(k.toString(), v) }
             kv("achSince", state.achSince)
+            kv("achLadder", state.achLadder) // R9-B2: always written; a save without the key is ladder 1 (5-tier "types" / "highest-level")
+            kv("starterUid", state.starterUid); list("starterSeen", state.starterSeen.sorted()); list("starterCaught", state.starterCaught.sorted()) // R9-W4-B
             key("settings"); writeSettings(this, state.settings)
         }
         return w.toString()
@@ -167,7 +169,7 @@ object SaveCodec {
         list("gens", s.gens.sorted())
         kv("fasterStartV2", s.fasterStart)
         kv("autoReleaseDuplicates", s.autoReleaseDuplicates)
-        kv("cardsPerRound", s.cardsPerRound); kv("autoMode", s.autoMode)
+        kv("autoMode", s.autoMode)
         kv("protectLegendary", s.protectLegendary); kv("protectMythical", s.protectMythical)
         kv("protectUltra", s.protectUltra); kv("protectStarter", s.protectStarter)
         kv("protectRegional", s.protectRegional)
@@ -252,7 +254,6 @@ object SaveCodec {
         s.fasterStart = o?.bool("fasterStartV2", false) ?: false // old "fasterStart" key ignored: existing saves switch it off once
         if (o == null) return
         o.intList("gens")?.let { s.gens.clear(); s.gens.addAll(it) }
-        s.cardsPerRound = o.int("cardsPerRound", s.cardsPerRound)
         s.autoMode = o.int("autoMode", s.autoMode)
         s.protectLegendary = o.bool("protectLegendary", s.protectLegendary)
         s.protectMythical = o.bool("protectMythical", s.protectMythical)
@@ -301,6 +302,10 @@ object SaveCodec {
         o.strList("achInferred")?.let { s.achInferred += it }
         o.optJSONObject("badgeAt")?.let { b -> for (k in b.keys()) k.toIntOrNull()?.let { id -> s.badgeAt[id] = b.optLong(k, 0) } }
         s.achSince = o.long("achSince", 0)
+        s.achLadder = o.int("achLadder", 1)
+        s.starterUid = o.str("starterUid", "")
+        o.intList("starterSeen")?.let { s.starterSeen += it }
+        o.intList("starterCaught")?.let { s.starterCaught += it }
         if (!o.has2("counters")) Achievements.backfill(s)
     }
 

@@ -81,8 +81,31 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
      */
     var onPictureChange: (Boolean) -> Unit = {}
 
+    /**
+     * R9 C4: called after every [request] that had to wait for a picture is settled: the picture was applied (after [onPictureChange]
+     * and the new layout were asked for), or the background turned plain (also when the load failed). The arena lets the next wild
+     * one in then, so it never shows at the old picture's stand points.
+     */
+    var onSettled: () -> Unit = {}
+
+    /** True while a requested picture is not there yet (it loads); false once it is applied, the same one is shown, or the request was dropped. */
+    val loading: Boolean get() = wanted != null
+
     /** True while a picture (not the gradient) is drawn. */
     val showsPicture: Boolean get() = cur != null
+
+    /** R9 C4: how long the cross-fade of the picture just applied still has to run (ms; 0 = no fade under way). The next wild one comes in after it. */
+    fun fadeRemainingMs(): Long {
+        if (!fading || reduceMotion()) return 0L
+        if (fadeStart < 0L) return BackdropFade.DURATION_MS
+        return (BackdropFade.DURATION_MS - (clock() - fadeStart)).coerceIn(0L, BackdropFade.DURATION_MS)
+    }
+
+    /** R9 C4: starts loading [bg] without showing it (the next encounter's picture, known from its queued Encounter), so it is in memory when the wild one comes. */
+    fun prefetch(bg: Backdrop, download: Boolean) {
+        if (bg.id == shown?.id || Backdrops.inMemory(bg) != null) return
+        Backdrops.load(ctx, bg, download) { }
+    }
 
     override var jolt: Float = 0f
         set(v) { if (v != field) { field = v; invalidateSelf() } }
@@ -122,6 +145,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         endFade()
         invalidateSelf()
         if (had) onPictureChange(false)
+        onSettled()
     }
 
     private fun apply(bg: Backdrop, loaded: BackdropPic) {
@@ -147,6 +171,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         f.relayout()
         invalidateSelf()
         onPictureChange(true)
+        onSettled()
     }
 
     private fun endFade() {

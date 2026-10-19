@@ -218,17 +218,23 @@ class GameTest {
         assertEquals(GameEvent.RoundStart(0.5, 10, true), h.answer(2).of<GameEvent.RoundStart>().single()) // Hard+Hard
     }
 
-    @Test fun cardsPerRoundIsHonoured() {
-        val one = game(); one.state.settings.cardsPerRound = 1; one.fight(hp = 36)
-        assertEquals(1, one.answer(3).of<GameEvent.RoundStart>().size)
-        val three = game(); three.state.settings.cardsPerRound = 3; three.fight(hp = 36)
-        assertEquals(GameEvent.Charge(10, 1, 3), three.answer(3).last())
-        assertEquals(GameEvent.Charge(20, 2, 3), three.answer(3).last())
-        assertEquals(GameEvent.RoundStart(1.0, 30, false), three.answer(3).of<GameEvent.RoundStart>().single())
-        val many = game(); many.state.settings.cardsPerRound = 9; many.fight(hp = 36)
-        many.answer(3); many.answer(3); many.answer(3)
-        assertEquals(1, many.answer(3).of<GameEvent.RoundStart>().size) // clamped to 4
+    @Test fun aRoundIsAlwaysTwoAnswers() {
+        val g = game(); g.fight(hp = 36)
+        assertEquals(GameEvent.Charge(10, 1, Tuning.CARDS_PER_ROUND), g.answer(3).last())
+        assertEquals(GameEvent.RoundStart(1.0, 20, false), g.answer(3).of<GameEvent.RoundStart>().single())
     }
+
+    @Test fun anOldSavesCardsPerRoundIsIgnored() {
+        for (v in listOf(1, 3, 9)) {
+            val o = org.json.JSONObject(com.husarp.ankigo.game.save.SaveCodec.encode(game().state))
+            o.getJSONObject("settings").put("cardsPerRound", v)
+            val g = Game(data, com.husarp.ankigo.game.save.SaveCodec.decode(o.toString()), Random(1)) { now }
+            g.fight(hp = 36)
+            assertEquals(GameEvent.Charge(10, 1, 2), g.answer(3).last())
+            assertEquals(1, g.answer(3).of<GameEvent.RoundStart>().size)
+        }
+    }
+
 
     // ---- resolving a fight ----
 

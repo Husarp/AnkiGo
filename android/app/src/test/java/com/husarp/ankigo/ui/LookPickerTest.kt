@@ -16,10 +16,10 @@ class LookPickerTest {
     private fun mon(num: Int) = TestData.mon(data, num, 20, listOf("tackle"), "m$num")
 
     @Test fun entryOnlyWhenThereIsAChoice() {
-        assertTrue(Looks.hasChoice(data, mon(3)))     // Leafking <- Leafbud <- Leafling
-        assertTrue(Looks.hasChoice(data, mon(2)))
-        assertFalse(Looks.hasChoice(data, mon(1)))    // base form, nothing to pick
-        assertFalse(Looks.hasChoice(data, mon(16)))   // no evolution line at all
+        assertTrue(Looks.hasChoice(data, mon(3), data.species.keys))     // Leafking <- Leafbud <- Leafling
+        assertTrue(Looks.hasChoice(data, mon(2), data.species.keys))
+        assertFalse(Looks.hasChoice(data, mon(1), data.species.keys))    // base form, nothing to pick
+        assertFalse(Looks.hasChoice(data, mon(16), data.species.keys))   // no evolution line at all
     }
 
     @Test fun captionsAndPicks() {

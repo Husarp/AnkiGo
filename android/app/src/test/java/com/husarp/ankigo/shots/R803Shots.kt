@@ -193,46 +193,46 @@ class R803Shots {
     // ---- shots ---------------------------------------------------------------------------------------------------------------
 
     @Test fun crop() = shoot("r8-03-crop", listOf(Size.PHONE)) { ctx ->
-        val forest = scene(ctx, "forest"); val peak = scene(ctx, "dragon-peak", 0.5f); val path = scene(ctx, "rocky-path")
+        val forest = scene(ctx, "forest"); val peak = scene(ctx, "dragon-peak", 0.5f); val path = scene(ctx, "canyon")
         sheet(ctx,
             row(ctx, cell(ctx, "forest (pixel art, 753 x 500) crop 380 x 210", 380, 210, Panel(ctx, forest, 1f))),
             row(ctx, cell(ctx, "dragon-peak (soft, file at half size) crop 380 x 250", 380, 250, Panel(ctx, peak, 1f))),
-            row(ctx, cell(ctx, "rocky-path (wide, soft) crop 380 x 160", 380, 160, Panel(ctx, path, 1f))),
+            row(ctx, cell(ctx, "canyon (wide, soft) crop 380 x 160", 380, 160, Panel(ctx, path, 1f))),
             row(ctx, cell(ctx, "no stage yet: cover crop 380 x 150", 380, 150, Panel(ctx, forest, 1f, withStage = false))),
         )
     }
 
     @Test fun shrunk() = shoot("r8-03-shrunk", listOf(Size.PHONE)) { ctx ->
-        val reef = scene(ctx, "reef"); val forest = scene(ctx, "forest"); val garden = scene(ctx, "garden"); val temple = scene(ctx, "temple")
+        val reef = scene(ctx, "beach"); val forest = scene(ctx, "forest"); val garden = scene(ctx, "jungle"); val temple = scene(ctx, "stormy-plains")
         sheet(ctx,
-            row(ctx, cell(ctx, "wide: reef 380 x 110, blur left + right, edges fade", 380, 110, Panel(ctx, reef, 1.35f))),
+            row(ctx, cell(ctx, "wide: beach 380 x 110, blur left + right, edges fade", 380, 110, Panel(ctx, reef, 1.35f))),
             row(
                 ctx,
                 cell(ctx, "tall: forest 120 x 300, blur top + bottom", 120, 300, Panel(ctx, forest, 2.2f)),
-                cell(ctx, "both: garden 150 x 150", 150, 150, Panel(ctx, garden, 1.5f)),
-                cell(ctx, "temple 90 x 220", 90, 220, Panel(ctx, temple, 2.8f)),
+                cell(ctx, "both: jungle 150 x 150", 150, 150, Panel(ctx, garden, 1.5f)),
+                cell(ctx, "stormy-plains 90 x 220", 90, 220, Panel(ctx, temple, 2.8f)),
             ),
         )
     }
 
     @Test fun scaling() = shoot("r8-03-scaling", listOf(Size.SPLIT)) { ctx ->
-        val reef = scene(ctx, "reef", 0.2f); val path = scene(ctx, "rocky-path", 0.15f)
+        val reef = scene(ctx, "beach", 0.2f); val path = scene(ctx, "canyon", 0.15f)
         sheet(ctx,
-            row(ctx, cell(ctx, "crisp (reef): nearest-neighbour", 190, 120, Panel(ctx, reef, 0.35f)), cell(ctx, "smooth (rocky-path): filtered", 190, 120, Panel(ctx, path, 0.35f))),
+            row(ctx, cell(ctx, "crisp (beach): nearest-neighbour", 190, 120, Panel(ctx, reef, 0.35f)), cell(ctx, "smooth (canyon): filtered", 190, 120, Panel(ctx, path, 0.35f))),
         )
     }
 
     @Test fun tint() = shoot("r8-03-tint", listOf(Size.PHONE)) { ctx ->
-        val day = scene(ctx, "meadow"); val night = scene(ctx, "night-forest", 0.5f); val dayWebp = scene(ctx, "snow-field", 0.5f); val dark2 = scene(ctx, "graveyard", 0.5f)
+        val day = scene(ctx, "meadow"); val night = scene(ctx, "night-forest", 0.5f); val dayWebp = scene(ctx, "factory", 0.5f); val dark2 = scene(ctx, "haunted-mansion", 0.5f)
         sheet(ctx,
             row(ctx, cell(ctx, "meadow (day): dusk in the dark theme, blur too", 380, 120, Panel(ctx, day, 1.35f))),
             row(ctx, cell(ctx, "night-forest (dark picture): never tinted", 380, 120, Panel(ctx, night, 1.4f))),
-            row(ctx, cell(ctx, "snow-field (day)", 185, 150, Panel(ctx, dayWebp, 1.6f)), cell(ctx, "graveyard (dark)", 185, 150, Panel(ctx, dark2, 1.6f))),
+            row(ctx, cell(ctx, "factory (day)", 185, 150, Panel(ctx, dayWebp, 1.6f)), cell(ctx, "haunted-mansion (dark)", 185, 150, Panel(ctx, dark2, 1.6f))),
         )
     }
 
     @Test fun jolt() = shoot("r8-03-jolt", listOf(Size.PHONE)) { ctx ->
-        val forest = scene(ctx, "forest"); val reef = scene(ctx, "reef")
+        val forest = scene(ctx, "forest"); val reef = scene(ctx, "beach")
         sheet(ctx,
             row(ctx, cell(ctx, "crop, jolt +6 % (down): blur shows at the top", 185, 200, Panel(ctx, forest, 1f, jolt = 0.06f)), cell(ctx, "crop, jolt -6 % (up)", 185, 200, Panel(ctx, forest, 1f, jolt = -0.06f))),
             row(ctx, cell(ctx, "shrunk, jolt +6 %", 380, 110, Panel(ctx, reef, 1.35f, jolt = 0.06f))),
@@ -729,7 +729,7 @@ class R803Shots {
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, theme))
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx)
-            val a = scene(ctx, "reef"); val bb = scene(ctx, "garden")
+            val a = scene(ctx, "beach"); val bb = scene(ctx, "jungle")
             preload(ctx, a); preload(ctx, bb)
             val wPx = Ui.dp(ctx, 380); val hPx = Ui.dp(ctx, 200)
             var calls = 0
@@ -741,7 +741,7 @@ class R803Shots {
             back.request(bb, false); back.setStage(stageFor(bb, wPx.toFloat(), hPx.toFloat(), 1f))
             drawn(back, wPx, hPx) // starts the clock at 0 (same bounds as the view below, so no resize)
             val pane = View(ctx).apply { background = back }
-            val view = sheet(ctx, label(ctx, "reef -> garden, 200 ms into the 400 ms cross-fade"), FrameLayout(ctx).apply { addView(pane, FrameLayout.LayoutParams(wPx, hPx)) })
+            val view = sheet(ctx, label(ctx, "beach -> jungle, 200 ms into the 400 ms cross-fade"), FrameLayout(ctx).apply { addView(pane, FrameLayout.LayoutParams(wPx, hPx)) })
             paparazzi.snapshot(FrameLayout(ctx).apply { addView(view, FrameLayout.LayoutParams(-1, -1)) }, "r8-x1b-midfade-phone-${theme.name.lowercase()}", 1000)
         }
     }
@@ -757,7 +757,7 @@ class R803Shots {
         paparazzi.snapshot(frame, "r8-03-check-nodownload", 100)
         assertEquals("downloads off: no request", 0, asked)
         assertFalse(back.showsPicture)
-        back.request(bg("reef"), true)
+        back.request(bg("canyon"), true)
         paparazzi.snapshot(frame, "r8-03-check-notfound", 100)
         assertEquals("one request for the one picture", 1, asked)
         assertFalse("not found: plain", back.showsPicture)

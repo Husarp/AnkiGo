@@ -25,11 +25,22 @@ data class FloatContext(val crits: Boolean = Tuning.CRITS)
 object FloatTexts {
     private const val AGAIN = 1 // button index of Again (Tuning.POINTS[1] = 0)
 
+    /** R9-W6-6: HP floats carry their unit: "+3 HP" and "−12 HP" (real minus sign, like CompareModes). */
+    fun heal(n: Int) = "+$n HP"
+    fun loss(n: Int) = "\u2212$n HP"
+
+    /** What a screen reader says for a float: "3 HP healed" / "12 HP damage"; any other text is read as it is. */
+    fun spoken(text: String, kind: FloatKind): String {
+        if (kind == FloatKind.HEAL && text.startsWith("+") && text.endsWith(" HP")) return "${text.substring(1, text.length - 3)} HP healed"
+        if ((kind == FloatKind.DAMAGE || kind == FloatKind.BIG_DAMAGE) && text.startsWith("\u2212") && text.endsWith(" HP")) return "${text.substring(1, text.length - 3)} HP damage"
+        return text
+    }
+
     fun of(e: GameEvent, ctx: FloatContext = FloatContext()): List<FloatText> = when (e) {
         is GameEvent.Counted -> if (e.button == AGAIN) listOf(FloatText(true, "Hesitated", FloatKind.HESITATE)) else emptyList()
         is GameEvent.Attack -> attack(e, ctx)
         is GameEvent.Effect -> effect(e)
-        is GameEvent.Healed -> if (e.amount > 0) listOf(FloatText(true, "+${e.amount}", FloatKind.HEAL)) else emptyList() // only the main's heals emit it
+        is GameEvent.Healed -> if (e.amount > 0) listOf(FloatText(true, heal(e.amount), FloatKind.HEAL)) else emptyList() // only the main's heals emit it
         is GameEvent.Duplicate -> if (e.result == DuplicateResult.SWAPPED) listOf(FloatText(false, "Swapped for Lv ${e.level}", FloatKind.INFO)) else emptyList()
         else -> emptyList()
     }
@@ -42,7 +53,7 @@ object FloatTexts {
         if (e.damage <= 0) return emptyList()
         val out = ArrayList<FloatText>(3)
         val big = e.crit || e.effectiveness > 1.0
-        out += FloatText(onPlayer, "-${e.damage}", if (big) FloatKind.BIG_DAMAGE else FloatKind.DAMAGE)
+        out += FloatText(onPlayer, loss(e.damage), if (big) FloatKind.BIG_DAMAGE else FloatKind.DAMAGE)
         if (e.effectiveness > 1.0) out += FloatText(onPlayer, "Super effective!", FloatKind.SUPER)
         else if (e.effectiveness < 1.0) out += FloatText(onPlayer, "Not very effective", FloatKind.NOT_VERY)
         if (e.crit && ctx.crits) out += FloatText(onPlayer, "Critical!", FloatKind.CRIT)
@@ -68,8 +79,8 @@ object FloatTexts {
                 }
             }
             EffectKind.STAT_LIMIT -> statLabel(e.stat)?.let { listOf(FloatText(p, "$it ${if (e.stages > 0) "max" else "min"}", FloatKind.INFO)) } ?: emptyList()
-            EffectKind.DRAIN, EffectKind.HEAL -> if (e.amount > 0) listOf(FloatText(p, "+${e.amount}", FloatKind.HEAL)) else emptyList()
-            EffectKind.RECOIL, EffectKind.STATUS_DAMAGE -> if (e.amount > 0) listOf(FloatText(p, "-${e.amount}", FloatKind.DAMAGE)) else emptyList()
+            EffectKind.DRAIN, EffectKind.HEAL -> if (e.amount > 0) listOf(FloatText(p, heal(e.amount), FloatKind.HEAL)) else emptyList()
+            EffectKind.RECOIL, EffectKind.STATUS_DAMAGE -> if (e.amount > 0) listOf(FloatText(p, loss(e.amount), FloatKind.DAMAGE)) else emptyList()
             EffectKind.OTHER, EffectKind.CHARGE -> emptyList()
         }
     }

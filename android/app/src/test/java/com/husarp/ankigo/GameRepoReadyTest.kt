@@ -41,7 +41,7 @@ class GameRepoReadyTest {
         rebuild(data, st)
         assertEquals(GameRepo.Status.READY, GameRepo.status)
         assertTrue(st.achSince > 0)
-        assertEquals(4, st.achTiers["highest-level"]!!.size)
+        assertEquals(2, st.achTiers["highest-level"]!!.size) // Lv 80: Common (25) and Rare (50)
         assertEquals(AchievementTable.ROWS.map { it.id }.toSet(), st.achTiers.keys)
         assertEquals(8_000L + 512_000L, st.counters[Metric.TOTAL_XP.name]) // Lv 20 and Lv 80 (n^3): the baseline is stored
     }
@@ -51,7 +51,7 @@ class GameRepoReadyTest {
         st.mons += TestData.mon(data, 19, 80, uid = "big")
         rebuild(data, st)
         st.mons.removeAll { it.uid == "big" }
-        assertEquals(3, Achievements.view(st, data).single { it.id == "highest-level" }.tier)
+        assertEquals(1, Achievements.view(st, data).single { it.id == "highest-level" }.tier)
     }
 
     @Test fun aGameWithoutAStarterIsNotLookedAtYet() {
@@ -69,5 +69,12 @@ class GameRepoReadyTest {
         rebuild(data, st) // the data arrived
         assertEquals(GameRepo.Status.READY, GameRepo.status)
         assertTrue(st.achTiers.isNotEmpty())
+    }
+
+    @Test fun aSaveThatStillListsACaughtSpeciesOnTheWishlistIsCleanedOnce() {
+        val st = TestData.state(data, 25, 20, listOf("tackle")) // 25 is caught
+        st.settings.wishlist.clear(); st.settings.wishlist += listOf(25, 92)
+        rebuild(data, st)
+        assertEquals(setOf(92), st.settings.wishlist)
     }
 }

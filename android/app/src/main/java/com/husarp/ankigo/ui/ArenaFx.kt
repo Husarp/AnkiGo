@@ -150,6 +150,12 @@ class XpAbsorbFx(
     private val xp: Int,
     floorSp: Float,
     private val onFlash: (Float) -> Unit,
+    /** R9-C8: the bar's progress 0..1 ([XpParticles.fill]) every frame, and exactly 1 on the last call (null = the bar is not driven). */
+    private val onFill: ((Float) -> Unit)? = null,
+    /** R9-C3: called with (pitch, last) when an orb that gets a pling lands (null = silent). */
+    private val onLand: ((Float, Boolean) -> Unit)? = null,
+    /** R9-W6 CX-A: [from] is the catch ball: the number rides above it and a blue glow sits around it while the orbs leave. */
+    private val fromBall: Boolean = false,
 ) : FxEffect {
     private val d = ctx.resources.displayMetrics.density
     private val unit = XpParticles.unit(arenaW, d)
@@ -167,6 +173,11 @@ class XpAbsorbFx(
         close()
     }
     private val starPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    // the ball's glow (CX-A): a soft blue ring hugging the ball's edge (radius 1 = the ring's outer edge, the ball fills 70 % of it); the middle stays clear so the ball shows
+    private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(0f, 0f, 1f, intArrayOf(0x0078C8FF, 0x0078C8FF, 0xCC78C8FF.toInt(), 0x0078C8FF), floatArrayOf(0f, 0.6f, 0.74f, 1f), Shader.TileMode.CLAMP)
+    }
+    private val haloR = from.w / 2f / HALO_INNER
 
     // the number: the comic look of the floating battle texts (heavy italic, dark outline), a smaller size
     private val sizePx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, TextMath.at(19f, floorSp), ctx.resources.displayMetrics)
@@ -182,20 +193,42 @@ class XpAbsorbFx(
     private val ink = Rect().also { text.getTextBounds(label, 0, label.length, it) }
     private val inkMid = (ink.top + ink.bottom) / 2f
     // room for the pop (x 1.16) and the tilt on each side
-    private val spot = XpParticles.numberSpot(from, arenaW, (text.measureText(label) / 2f + strokePx) * 1.2f, (ink.height() / 2f + strokePx) * 1.2f, 2f * d)
+    private val spot = XpParticles.numberSpot(from, arenaW, (text.measureText(label) / 2f + strokePx) * 1.2f, (ink.height() / 2f + strokePx) * 1.2f, 2f * d,
+        if (fromBall) XpParticles.BALL_NUMBER_LIFT * unit else -1f)
     private lateinit var canvas: Canvas
     private val sink = XpParticles.Sink { kind, x, y, r, alpha -> mark(kind, x, y, r, alpha) }
+    private val picks = if (onLand != null) XpParticles.soundPicks(plan) else emptyList()
+    private var nextPick = 0
 
     override fun draw(canvas: Canvas, t: Float): Boolean {
-        if (t >= plan.end) return false
+        if (t >= plan.end) { onFill?.invoke(1f); return false }
         onFlash(XpParticles.flash(plan, t))
+        onFill?.invoke(XpParticles.fill(plan, t))
+        if (nextPick < picks.size && picks[nextPick].atMs <= t) {
+            var latest = picks[nextPick++]
+            while (nextPick < picks.size && picks[nextPick].atMs <= t) latest = picks[nextPick++]   // a slow frame: one pling, not a burst
+            onLand?.invoke(latest.rate, latest.last)
+        }
         this.canvas = canvas
+        if (fromBall) drawGlow(canvas, XpParticles.ballGlow(plan, t))
         XpParticles.forEach(plan, t, from, to, unit, sink)
         drawNumber(canvas, t)
         return true
     }
 
+    private fun drawGlow(canvas: Canvas, g: Float) {
+        if (g <= 0f) return
+        haloPaint.alpha = (g * 255).toInt()
+        canvas.save()
+        canvas.translate(from.cx, from.top + from.h / 2f)
+        canvas.scale(haloR, haloR)
+        canvas.drawCircle(0f, 0f, 1f, haloPaint)
+        canvas.restore()
+    }
+
     override fun end() = onFlash(0f)
+
+    private companion object { const val HALO_INNER = 0.7f }
 
     private fun mark(kind: Int, x: Float, y: Float, r: Float, alpha: Float) {
         if (r <= 0f || alpha <= 0f) return

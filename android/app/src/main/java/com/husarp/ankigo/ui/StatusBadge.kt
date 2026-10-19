@@ -2,12 +2,16 @@ package com.husarp.ankigo.ui
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.TextPaint
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.TouchDelegate
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -19,8 +23,8 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /**
- * The round colour badge of a status effect on an info card (item 95): a filled circle with a drawn symbol, no text, so it
- * reads by shape as well as colour. Drop = poisoned (also badly poisoned), flame = burned, bolt = paralysed, Zz = asleep,
+ * The square colour badge of a status effect on an info card (item 95, round 9 D4-A): a filled rounded square with a drawn symbol, no text, so it
+ * reads by shape as well as colour. Drop = poisoned, two drops = badly poisoned, flame = burned, bolt = paralysed, Zz = asleep,
  * snowflake = frozen. The engine has no confusion. Colours come from the `ag_*` tokens (read raw: the accent mapping of
  * `Ui.c` must not turn the poison purple into the user's accent).
  */
@@ -32,11 +36,13 @@ class StatusBadge(ctx: Context, val status: String) : View(ctx) {
     }
     private val glyph = Path()
     private val hole = Path()
+    private val box = RectF(1f, 1f, 23f, 23f)
 
     init {
-        // the symbols live in a 24 x 24 box (circle radius 12); the view scales it
+        // the symbols live in a 24 x 24 box (square 22 wide, corner radius 5); the view scales it
         when (status) {
-            "psn", "tox" -> drop(glyph)
+            "psn" -> drop(glyph)
+            "tox" -> toxDrops(glyph)
             "brn" -> flame(glyph, hole)
             "par" -> bolt(glyph)
         }
@@ -50,7 +56,7 @@ class StatusBadge(ctx: Context, val status: String) : View(ctx) {
         canvas.save()
         canvas.translate((width - side) / 2f, (height - side) / 2f)
         canvas.scale(k, k)
-        canvas.drawCircle(12f, 12f, 12f, fill)
+        canvas.drawRoundRect(box, 5f, 5f, fill)
         when (status) {
             "psn", "tox", "par" -> canvas.drawPath(glyph, ink)
             "brn" -> { canvas.drawPath(glyph, ink); canvas.drawPath(hole, fill) }
@@ -92,6 +98,14 @@ class StatusBadge(ctx: Context, val status: String) : View(ctx) {
         p.arcTo(RectF(7.2f, 9.4f, 16.8f, 19f), 180f, -180f, false)
         p.cubicTo(16.8f, 9.6f, 12f, 4.2f, 12f, 4.2f)
         p.close()
+    }
+
+    /** Badly poisoned: the drop twice, a big one low-left and a small one high-right (the mockup's two SVG transforms). */
+    private fun toxDrops(p: Path) {
+        val one = Path().also { drop(it) }
+        val big = Matrix().apply { preTranslate(-3.6f, 1.2f); preScale(0.8f, 0.8f); preTranslate(3f, 3f) }
+        val small = Matrix().apply { preTranslate(4.4f, -2.4f); preScale(0.62f, 0.62f); preTranslate(7f, 7f) }
+        p.addPath(one, big); p.addPath(one, small)
     }
 
     private fun flame(outer: Path, inner: Path) {
@@ -140,9 +154,10 @@ class StatusBadge(ctx: Context, val status: String) : View(ctx) {
 }
 
 /**
- * The small row directly under an info card's HP bar that holds the status badges (one per status; the engine has one at a
- * time). Its height is set by the card and stays whether or not a badge shows, so the bar keeps its full width and
- * nothing moves when an effect comes or goes. Tapping the row asks [onTap] for the explanation bubble.
+ * The holder of a status badge in an info card's name line (one status at a time; the engine has one). Round 9 D12: it sits between
+ * the name and "Lv" and takes no room (GONE) while there is no status; the name line is taller than the badge, so a badge coming or
+ * going moves nothing and never squeezes the HP bar (that has a line of its own). Its sides are padded a little so the 13 dp badge is
+ * easy to hit. Tapping it asks [onTap] for the explanation bubble.
  */
 class StatusRow(ctx: Context) : LinearLayout(ctx) {
     var status: String? = null
@@ -158,6 +173,14 @@ class StatusRow(ctx: Context) : LinearLayout(ctx) {
         gravity = Gravity.START or Gravity.CENTER_VERTICAL
         setOnClickListener { if (status != null) onTap(this) }
         isClickable = false
+        visibility = GONE
+        setPadding(Ui.dp(ctx, 3), 0, Ui.dp(ctx, 3), 0)
+        accessibilityDelegate = object : AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = android.widget.Button::class.java.name   // TalkBack: a button, with its description
+            }
+        }
     }
 
     /** The badge in the row (null when there is none). */
@@ -170,10 +193,11 @@ class StatusRow(ctx: Context) : LinearLayout(ctx) {
         removeAllViews()
         if (shown != null) addView(StatusBadge(context, shown), LayoutParams(badgePx, badgePx))
         isClickable = shown != null
+        visibility = if (shown != null) VISIBLE else GONE
         contentDescription = StatusInfo.of(shown)?.let { "${it.name}. Tap for what it does" }
     }
 
-    /** The row is [heightPx] tall; its badge is a circle a little smaller than that. */
+    /** The row is [heightPx] tall; its badge is a square 2 dp smaller than that. */
     fun fit(heightPx: Int) {
         badgePx = (heightPx - 2 * Ui.dp(context, 1)).coerceAtLeast(1)
         val lp = layoutParams as? LayoutParams
@@ -241,5 +265,62 @@ class StatusBubble(ctx: Context) : TextView(ctx) {
     private class HeavySpan(private val face: Typeface) : android.text.style.MetricAffectingSpan() {
         override fun updateDrawState(p: TextPaint) { p.typeface = face }
         override fun updateMeasureState(p: TextPaint) { p.typeface = face }
+    }
+}
+
+/**
+ * The touch area of a status badge (Round 9 FIX): the badge is a small square in a card's name line (and the card may be drawn smaller
+ * than its normal size), so the arena gives each shown badge a touch area of at least [MIN_DP] x [MIN_DP] dp ON SCREEN around it, kept
+ * inside the arena. [area] is the pure maths; [Delegate] hands touches in those areas to the badge's row, but only touches nothing else
+ * in the arena took (a Pokemon's tap, the bubble and the buttons keep theirs).
+ */
+internal object StatusTouch {
+    const val MIN_DP = 48
+
+    /**
+     * The area (left, top, right, bottom in arena px) around a badge at [left] [top] [right] [bottom]: centred on it, at least [minPx]
+     * wide and tall (bigger when the badge is), moved back inside the arena of [w] x [h] px (cut to it only when the arena is smaller).
+     */
+    fun area(left: Int, top: Int, right: Int, bottom: Int, minPx: Int, w: Int, h: Int): IntArray {
+        fun axis(a: Int, b: Int, size: Int): IntArray {
+            val len = minOf(maxOf(b - a, minPx), size)
+            var lo = (a + b - len) / 2
+            if (lo < 0) lo = 0
+            if (lo + len > size) lo = size - len
+            return intArrayOf(lo, lo + len)
+        }
+        val x = axis(left, right, w); val y = axis(top, bottom, h)
+        return intArrayOf(x[0], y[0], x[1], y[1])
+    }
+
+    /** The touch delegate of an arena: one area per card (slot 0 = wild, 1 = ours), each handing its touches to that card's status row. */
+    class Delegate(owner: View) : TouchDelegate(Rect(), owner) {
+        private val parts = arrayOfNulls<TouchDelegate>(2)
+        private val areas = arrayOf(Rect(), Rect())
+        private val shown = BooleanArray(2)
+        private var active: TouchDelegate? = null
+
+        /** Sets (bounds + row) or removes (null) the area of [slot]. */
+        fun set(slot: Int, bounds: Rect?, row: View?) {
+            if (bounds == null || row == null) { parts[slot] = null; shown[slot] = false; return }
+            areas[slot].set(bounds)
+            shown[slot] = true
+            parts[slot] = TouchDelegate(areas[slot], row)
+        }
+
+        /** The area of [slot] (null = none). */
+        fun areaOf(slot: Int): Rect? = if (shown[slot]) Rect(areas[slot]) else null
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                active = null
+                for (p in parts) if (p != null && p.onTouchEvent(event)) { active = p; break }
+                return active != null
+            }
+            val a = active ?: return false
+            val r = a.onTouchEvent(event)
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) active = null
+            return r
+        }
     }
 }

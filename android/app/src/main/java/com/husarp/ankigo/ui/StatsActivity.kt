@@ -529,7 +529,11 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val slot = FrameLayout(this).apply { minimumHeight = dp(58) }
         val map = HeatmapView(this).apply {
-            set(s.heatmap!!, today, "Reviews")
+            set(s.heatmap!!, today, "Reviews", when (s.period) {
+                ChartPeriod.D7 -> HeatmapLayout.Mode.STRIP
+                ChartPeriod.D30 -> HeatmapLayout.Mode.ROWS
+                else -> HeatmapLayout.Mode.WEEKS
+            })
             selectedDay = heatDay
             onDayTap = { d -> heatDay = StatsChartMath.tapPick(heatDay, d, null); selectedDay = heatDay; fillHeatSlot(slot, s) }
             closeHeat = { heatDay = null; selectedDay = null; fillHeatSlot(slot, s) }
@@ -576,11 +580,14 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         sheetLayer.removeAllViews()
         if (!sheetOpen) { sheetLayer.visibility = View.GONE; return }
         sheetLayer.visibility = View.VISIBLE
-        sheetLayer.addView(View(this).apply {
+        val scrim = View(this).apply {
             setBackgroundColor(Color.argb(122, 0, 0, 0))
             setOnClickListener { sheetOpen = false; syncSheet() }
-        }, FrameLayout.LayoutParams(-1, -1))
-        sheetLayer.addView(StatsSheets.metricSheet(this, metric) { m -> pickMetric(m) }, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
+        }
+        sheetLayer.addView(scrim, FrameLayout.LayoutParams(-1, -1))
+        val sheet = StatsSheets.metricSheet(this, metric) { m -> pickMetric(m) }
+        SheetKit.layer(sheet as DragSheet, scrim) { sheetOpen = false; syncSheet() } // R9-W5-B: the handle drags it down to close
+        sheetLayer.addView(sheet, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
     }
 
     private fun pickMetric(m: ChartMetric) {

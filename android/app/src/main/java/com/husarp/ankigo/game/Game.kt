@@ -38,6 +38,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return listOf(GameEvent.DayChanged(today))
     }
 
+    /** Answers per battle round: always [Tuning.CARDS_PER_ROUND]; tests lower it to shorten fights. */
+    internal var roundAnswers: Int = Tuning.CARDS_PER_ROUND
+
     /** One answer from AnkiDroid -> bookkeeping + (every cardsPerRound answers) one battle round. */
     fun onAnswer(a: Answer): List<GameEvent> {
         val events = answer(a).toMutableList()
@@ -85,7 +88,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val battle = state.battle ?: return events
         battle.tally += points
         battle.answers++
-        val n = state.settings.cardsPerRound.coerceIn(1, 4)
+        val n = roundAnswers
         if (battle.answers < n) {
             events += GameEvent.Charge(battle.tally, battle.answers, n)
             refreshNext()
@@ -264,6 +267,10 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.team += mon.uid
         state.markSeen(species, now)
         state.caught += species
+        Wishlist.onCaught(state, species)
+        // R9-W4-B: the starter is a gift, not an achievement: it (and its species) counts for none (Achievements.value).
+        state.starterUid = mon.uid
+        state.starterSeen += species; state.starterCaught += species
         state.starterChosen = true
         state.cash = Tuning.START_CASH
         state.day = dayKey()
@@ -390,7 +397,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     }
 
     /**
-     * Picks which look (sprite) [uid] shows: any species of its evolution line up to its current one ([Looks.choices]);
+     * Picks which look (sprite) [uid] shows: any species of its evolution line up to its current one that is caught ([Looks.choices]);
      * null or its own species = the current look again. Purely visual. A species outside the line is refused.
      */
     fun setLook(uid: String, species: Int?): ActionResult {
@@ -399,7 +406,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             mon.look = null
             return ActionResult(true, "${mon.shownName} shows its own look again.")
         }
-        val pick = Looks.choices(data, mon).firstOrNull { it.num == species }
+        val pick = Looks.choices(data, mon, state.caught).firstOrNull { it.num == species }
             ?: return ActionResult(false, "${mon.shownName} can't look like that.")
         mon.look = pick.num
         return ActionResult(true, "${mon.shownName} now looks like ${pick.name}.")

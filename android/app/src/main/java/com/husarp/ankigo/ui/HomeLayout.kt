@@ -55,7 +55,7 @@ object HomeLayout {
         /** The view that is really shown: the asked one, STUDY when the game cannot be played, BATTLE in a short window. */
         val view: HomeView,
         val tall: Boolean,
-        /** Study app bar: title, AnkiDroid pill, Sync, New deck. */
+        /** Study app bar: title, AnkiDroid pill, New deck. */
         val studyBar: Boolean,
         /** The "Battle" top bar with Back, Pop out and the menu. */
         val battleBar: Boolean,

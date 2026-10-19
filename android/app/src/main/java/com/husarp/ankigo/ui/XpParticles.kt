@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.GameEvent
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
@@ -23,6 +24,19 @@ object XpParticles {
 
     const val LAUNCH_FROM = 520f
     const val LAUNCH_SPAN = 1000f
+    /** R9-W6 CX-A: the burst out of the ball at the catch's click leaves at once (first orb ~40 ms, all out within 600 ms). */
+    const val BALL_FROM = 40f
+    const val BALL_SPAN = 560f
+    /** CX-A: the number pops in this long before the first launch (the mockup's `popStart`). */
+    const val BALL_POP_LEAD = 140f
+    /** CX-A: the ball starts to fade this long after the last launch, for [BALL_FADE_MS]. */
+    const val BALL_FADE_AFTER = 100f
+    const val BALL_FADE_MS = 300f
+    /** CX-A: the "Gotcha!" banner and the stars stay until this long after the last landing; the banner fades in its last [BANNER_FADE_MS]. */
+    const val BANNER_PAD = 200f
+    const val BANNER_FADE_MS = 250f
+    /** CX-A: the "+N XP" number rides this far (mock units) above the ball. */
+    const val BALL_NUMBER_LIFT = 12f
     const val FLY_MIN = 750f
     const val FLY_MAX = 1100f
     /** The small white star where a spark lands. */
@@ -67,13 +81,13 @@ object XpParticles {
     }
 
     /** The whole schedule of one animation, built once (seeded), so every frame and the still frame look the same. */
-    class Plan(val sparks: List<Spark>, val factor: Float) {
+    class Plan(val sparks: List<Spark>, val factor: Float, burst: Boolean = false) {
         val firstLaunch = sparks.minOf { it.t0 }
         val lastLaunch = sparks.maxOf { it.t0 }
         val firstLanding = sparks.minOf { it.land }
         val lastLanding = sparks.maxOf { it.land }
-        val popFrom = POP_FROM * factor
-        val popTo = POP_TO * factor
+        val popFrom = if (burst) firstLaunch - BALL_POP_LEAD * factor else POP_FROM * factor
+        val popTo = popFrom + POP_MS * factor
         val countTo = lastLaunch + COUNT_PAD * factor
         val fadeFrom = lastLanding + FADE_FROM * factor
         val fadeTo = lastLanding + FADE_TO * factor
@@ -82,6 +96,12 @@ object XpParticles {
         val landMs = LAND_MS * factor
         val flashMs = FLASH_MS * factor
         val popMs = POP_MS * factor
+        /** CX-A (a [burst] plan out of the ball): the ball fades from here for [ballFadeMs]; the glow around it is gone at [lastLaunch]. */
+        val ballFadeFrom = lastLaunch + BALL_FADE_AFTER * factor
+        val ballFadeMs = BALL_FADE_MS * factor
+        /** CX-A: the banner and the stars end here, the banner fading from [bannerFadeFrom]. */
+        val bannerEnd = lastLanding + BANNER_PAD * factor
+        val bannerFadeFrom = bannerEnd - BANNER_FADE_MS * factor
     }
 
     /** Receives the marks of one frame (an interface, so a frame allocates nothing): [kind] is [HEAD], [TRAIL_MARK] or [LAND]. */
@@ -101,12 +121,17 @@ object XpParticles {
         }
     }
 
-    /** The plan for [seed] at pace [factor] (every time in it is multiplied by it). */
-    fun plan(seed: Long, factor: Float = 1f): Plan {
+    /**
+     * The plan for [seed] at pace [factor] (every time in it is multiplied by it). [burst] = CX-A: the orbs leave the catch ball at the
+     * click (launch window [BALL_FROM] + [BALL_SPAN] instead of [LAUNCH_FROM] + [LAUNCH_SPAN]; same count, flights and random order).
+     */
+    fun plan(seed: Long, factor: Float = 1f, burst: Boolean = false): Plan {
+        val from = if (burst) BALL_FROM else LAUNCH_FROM
+        val span = if (burst) BALL_SPAN else LAUNCH_SPAN
         val r = Rng(seed)
         val out = ArrayList<Spark>(COUNT)
         for (i in 0 until COUNT) {
-            val t0 = LAUNCH_FROM + (i + r.next() * 0.8f) / COUNT * LAUNCH_SPAN
+            val t0 = from + (i + r.next() * 0.8f) / COUNT * span
             val dur = FLY_MIN + r.next() * (FLY_MAX - FLY_MIN)
             val sx = (r.next() - 0.5f) * 0.5f
             val sy = (r.next() - 0.5f) * 0.4f
@@ -121,7 +146,7 @@ object XpParticles {
             val sz = 0.75f + r.next() * 0.5f
             out += Spark(t0 * factor, dur * factor, ez, sz, sx, sy, ex, ey, a1, r1, a2, r2)
         }
-        return Plan(out, factor)
+        return Plan(out, factor, burst)
     }
 
     /** Mock units to pixels: about a dp, a bit smaller in a narrow window and bigger in a wide one. */
@@ -179,6 +204,40 @@ object XpParticles {
     fun start(s: Spark, from: Box): Pair<Float, Float> = (from.cx + s.sx * from.w) to (from.top + from.h * 0.55f + s.sy * from.h)
     fun landing(s: Spark, to: Box): Pair<Float, Float> = (to.cx + s.ex * to.w) to (to.top + to.h * 0.55f + s.ey * to.h)
 
+    /** R9-C8: a landing adds its share of the bar's growth over this long, ending at the landing (ms at pace 1), so the bar steps up with each orb without a jump. */
+    const val FILL_EASE_MS = 90f
+
+    /**
+     * R9-C8: how much of the XP bar's growth is done at [tMs], 0..1: every orb adds 1/[COUNT], easing in over the
+     * [FILL_EASE_MS] before its landing. Never goes down, and is exactly 1 at the last landing.
+     */
+    fun fill(plan: Plan, tMs: Float): Float {
+        var sum = 0f
+        val ease = FILL_EASE_MS * plan.factor
+        for (s in plan.sparks) sum += easeOut(seg(tMs, s.land - ease, s.land))
+        return if (sum >= plan.sparks.size - 1e-4f) 1f else sum / plan.sparks.size
+    }
+
+    /** R9-C3 / R9-W4-A: the landings that get a pling must be at least this far apart (ms; the orb pling's own 40 ms repeat guard sits under it). */
+    const val SOUND_GAP_MS = 50f
+
+    /** One pling: [atMs] since the animation started, SoundPool [rate] (0.9..1.25, from the landing orb's size, so it differs per animation), [last] = the final, fuller one. */
+    class OrbSound(val atMs: Float, val rate: Float, val last: Boolean)
+
+    /**
+     * R9-C3: which landings make a sound: the first, then each landing at least [SOUND_GAP_MS] after the previous pick (a burst of
+     * 16 becomes a quick ripple of a handful), and always the very last landing, which is the fuller one. Deterministic for a plan.
+     */
+    fun soundPicks(plan: Plan): List<OrbSound> {
+        val byLand = plan.sparks.sortedBy { it.land }
+        val last = byLand.last()
+        val picks = ArrayList<Spark>()
+        for (s in byLand) if (s !== last && (picks.isEmpty() || s.land - picks.last().land >= SOUND_GAP_MS)) picks += s
+        while (picks.isNotEmpty() && last.land - picks.last().land < SOUND_GAP_MS) picks.removeAt(picks.size - 1)   // the fuller final one keeps its distance
+        picks += last
+        return picks.map { OrbSound(it.land, 0.9f + 0.35f * clamp01((it.size - 0.75f) / 0.5f), it === last) }
+    }
+
     /** Our Pokémon's white flash (0..1, for [com.husarp.ankigo.gfx.SpriteView.flash]): every landing adds a burst that dies away in 130 ms. Exactly 0 once all are over. */
     fun flash(plan: Plan, tMs: Float): Float {
         var sum = 0f
@@ -198,11 +257,47 @@ object XpParticles {
     /** The small pop as it appears: 1, up to 1.16, back to 1. */
     fun numberScale(plan: Plan, tMs: Float): Float = 1f + 0.16f * sin(min(1f, max(0f, tMs - plan.popFrom) / plan.popMs) * PI.toFloat())
 
-    /** The number's anchor: over the defeated one's box (its centre, 18 % down), kept inside an arena [arenaW] wide with [halfW] x [halfH] of text and [pad] to spare. */
-    fun numberSpot(from: Box, arenaW: Float, halfW: Float, halfH: Float, pad: Float): Pair<Float, Float> {
+    /**
+     * The number's anchor: over the defeated one's box (its centre, 18 % down), kept inside an arena [arenaW] wide with [halfW] x [halfH] of text
+     * and [pad] to spare. [lift] >= 0 (CX-A, [from] is the ball): the number's centre sits [lift] above the box's top instead.
+     */
+    fun numberSpot(from: Box, arenaW: Float, halfW: Float, halfH: Float, pad: Float, lift: Float = -1f): Pair<Float, Float> {
         val lo = halfW + pad
         val hi = arenaW - halfW - pad
         val x = if (hi < lo) arenaW / 2f else from.cx.coerceIn(lo, hi)
-        return x to max(halfH + pad, from.top + from.h * 0.18f)
+        return x to max(halfH + pad, if (lift >= 0f) from.top - lift else from.top + from.h * 0.18f)
     }
+
+    /** CX-A: the glow around the ball at [tMs] after the click, 1 down to 0 over the launch window (gone with the last launch). */
+    fun ballGlow(plan: Plan, tMs: Float): Float = if (tMs < 0f) 0f else 1f - seg(tMs, 0f, plan.lastLaunch)
+
+    /** CX-A: the ball's opacity at [tMs] after the click: 1 until [Plan.ballFadeFrom], then out over [Plan.ballFadeMs]. */
+    fun ballAlpha(plan: Plan, tMs: Float): Float = 1f - seg(tMs, plan.ballFadeFrom, plan.ballFadeFrom + plan.ballFadeMs)
+}
+
+
+/**
+ * R9-W6 CX-A (item 5): a catch with XP plays the player's XP burst INSIDE the Caught step, from the ball at the click, so no other
+ * event that sits between Caught and the player's XpGained (catch badges, a swap, a heal, team XP) can bring the old gap back. Pure
+ * helpers for [EventPlayer].
+ */
+object CatchXp {
+    /**
+     * The XpGained of the player's Pokémon [playerUid] that belongs to the Caught being played: the first one among the [upcoming]
+     * events (null = an item that is not an event: a queued action or the result tiles, skipped) before the next answer or fight.
+     * Another Pokémon's XpGained (Exp. Share) is skipped; a Defeated can't follow a Caught, so it ends the search too.
+     */
+    fun find(upcoming: Iterable<GameEvent?>, playerUid: String?): GameEvent.XpGained? {
+        for (ev in upcoming) {
+            when (ev) {
+                is GameEvent.XpGained -> if (ev.uid == playerUid) return ev
+                is GameEvent.Counted, is GameEvent.Encounter, is GameEvent.Defeated, is GameEvent.Caught, is GameEvent.BallThrow -> return null
+                else -> {}
+            }
+        }
+        return null
+    }
+
+    /** What is left of the burst's wait when its XpGained step comes: [doneAt] and [now] are uptime milliseconds. */
+    fun remaining(doneAt: Long, now: Long): Long = max(0L, doneAt - now)
 }

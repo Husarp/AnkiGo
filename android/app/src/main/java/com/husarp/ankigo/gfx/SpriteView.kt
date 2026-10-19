@@ -99,6 +99,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
 
     fun setImage(img: SpriteImage?) {
         image = img
+        boundsFor = null; bounds = null
         measureFoot()
         frame = 0
         removeCallbacks(tick); ticking = false
@@ -159,19 +160,40 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         else scale(img.width, img.height, vw, vh, maxOf(1, floor(scaleDp * resources.displayMetrics.density).toInt()))
 
     /**
-     * Picture mode: how much of a square frame [sidePx] wide the Pokémon's visible picture takes, as shares of its width and height
-     * (bottom-centred), for what is shown now (the image, else the placeholder circle, else nothing = null). The image is measured
-     * at the scale it would be drawn at in a frame that size, without the empty rows under the feet while [anchorFeet].
+     * Picture mode (round 9): the Pokémon's REAL art box in a square frame [sidePx] wide, as shares of the frame ([ArtShare]): the
+     * box of the pixels it actually draws (alpha above [SpriteFoot.ALPHA], the union over all the animation's frames), mapped through
+     * the draw transform: the frame scale, the horizontal centring, the feet on the frame's bottom (picture mode always anchors the
+     * feet), mirrored when [mirror]. For what is shown now: the image, else the placeholder circle, else nothing = null.
      */
     internal fun artShare(sidePx: Float): com.husarp.ankigo.ui.ArtShare? {
         if (!(sidePx > 0f)) return null
         val side = Math.round(sidePx)
         val img = image
-        if (img != null) return artShare(img.width, img.height, rowsBelow, side)
+        if (img != null) return artShare(img.width, img.height, visibleBounds(img), mirror, side)
         if (placeholderText == null) return null
         val d = (placeholderDiameter(side, side) / sidePx).coerceIn(0f, 1f)
-        return com.husarp.ankigo.ui.ArtShare(d, d)
+        return com.husarp.ankigo.ui.ArtShare.bottomCentred(d, d)
     }
+
+    /** The visible pixels' bounds of [img] over its frames ([SpriteFoot.addFrame]; null = nothing visible), worked out once per image. */
+    private fun visibleBounds(img: SpriteImage): IntArray? {
+        if (boundsFor === img) return bounds
+        val box = SpriteFoot.emptyBounds()
+        var buf = IntArray(0)
+        for (b in img.frames) {
+            val w = b.width
+            val h = b.height
+            if (w <= 0 || h <= 0) continue
+            if (buf.size < w * h) buf = IntArray(w * h)
+            b.getPixels(buf, 0, w, 0, 0, w, h)
+            SpriteFoot.addFrame(box, buf, w, h)
+        }
+        boundsFor = img
+        bounds = if (SpriteFoot.isEmpty(box)) null else box
+        return bounds
+    }
+    private var boundsFor: SpriteImage? = null
+    private var bounds: IntArray? = null
 
     private fun placeholderDiameter(vw: Int, vh: Int): Float =
         min(min(vw, vh) * 0.8f, 72f * resources.displayMetrics.density).coerceAtLeast(0f)
@@ -305,14 +327,29 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         }
 
         /**
-         * How much of a square frame [side] px wide a [w] x [h] picture takes when drawn at [frameScale]: shares of the frame's width
-         * and height, the [rowsBelow] empty rows under the feet not counted (the feet stand on the frame's bottom).
+         * The real art box of a [w] x [h] picture drawn in a square frame [side] px wide at [frameScale], as shares of the frame:
+         * [bounds] = its visible pixels (left, top, right, bottom, right and bottom exclusive; null = the whole bitmap), put where
+         * [SpriteView.onDraw] puts the bitmap (centred, its lowest visible row on the frame's bottom, flipped when [mirror]).
          */
-        fun artShare(w: Int, h: Int, rowsBelow: Int, side: Int): com.husarp.ankigo.ui.ArtShare? {
+        fun artShare(w: Int, h: Int, bounds: IntArray?, mirror: Boolean, side: Int): com.husarp.ankigo.ui.ArtShare? {
             if (side <= 0 || w <= 0 || h <= 0) return null
             val s = frameScale(w, h, side, side, side.toFloat())
-            val seen = (h - rowsBelow).coerceIn(1, h)
-            return com.husarp.ankigo.ui.ArtShare((w * s / side).coerceIn(0f, 1f), (seen * s / side).coerceIn(0f, 1f))
+            if (s <= 0f) return null
+            val dw = (w * s).roundToInt()
+            val dh = (h * s).roundToInt()
+            val b = bounds ?: intArrayOf(0, 0, w, h)
+            val rowsBelow = (h - b[3]).coerceAtLeast(0)
+            val left = (side - dw) / 2
+            val top = side - dh + (if (rowsBelow > 0) (rowsBelow * s).roundToInt() else 0)
+            val sx = dw.toFloat() / w
+            val sy = dh.toFloat() / h
+            val bl = if (mirror) w - b[2] else b[0]
+            val br = if (mirror) w - b[0] else b[2]
+            val x0 = (left + bl * sx).coerceIn(0f, side.toFloat())
+            val x1 = (left + br * sx).coerceIn(x0, side.toFloat())
+            val y0 = (top + b[1] * sy).coerceIn(0f, side.toFloat())
+            val y1 = (top + b[3] * sy).coerceIn(y0, side.toFloat())
+            return com.husarp.ankigo.ui.ArtShare(x0 / side, y0 / side, (x1 - x0) / side, (y1 - y0) / side)
         }
     }
 }

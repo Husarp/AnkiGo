@@ -53,15 +53,6 @@ internal class CompareLook(ctx: Context, columns: Int, val fit: Int = CompareFit
     val headerDp = spriteDp + ((if (tight) 34 else 40) * zoom).roundToInt() + if (headNotes) (12 * zoom).roundToInt() else 0
 }
 
-/** The colour of a value on the red (0) - yellow - green (1) scale of "best of all" (before it is blended into the row's band). */
-internal fun scaleColor(ctx: Context, pos: Float): Int {
-    val red = Ui.c(ctx, R.color.ag_red)
-    val yellow = Ui.c(ctx, R.color.ag_yellow)
-    val green = Ui.c(ctx, R.color.ag_green)
-    val p = pos.coerceIn(0f, 1f)
-    return if (p < 0.5f) Bits.blend(yellow, red, p * 2) else Bits.blend(green, yellow, (p - 0.5f) * 2)
-}
-
 /** A horizontal scroller that stops on whole columns ([step] px) and reports its position. */
 private class SnapScroll(ctx: Context) : HorizontalScrollView(ctx) {
     var step = 0
@@ -454,8 +445,8 @@ internal class CompareGrid(
 
     private fun dash(): TextView = Ui.text(ctx, look.valueSp, 700, R.color.ag_ov).apply { text = DASH; gravity = Gravity.CENTER }
 
-    /** The fill of a value in "best of all": [pos] 0 = the row's worst value (red) .. 1 = its best (green), yellow between. */
-    private fun scaleFill(pos: Float, band: Int): Int = Bits.blend(scaleColor(ctx, pos), band, 0.42f)
+    /** R9-W3-A (D7-A): the look of a value in "best of all": [pos] 0 = the row's worst value .. 1 = its best; the middle stays the plain [band]. */
+    private fun scaleLook(pos: Float, band: Int): CompareScale.Look = CompareScale.look(pos, band, TypeChips.isDark(ctx))
 
     private fun small(text: String, tone: Int, weight: Int = 700) = Ui.text(ctx, look.subSp, weight, tone).apply { this.text = text; gravity = Gravity.CENTER }
 
@@ -468,11 +459,13 @@ internal class CompareGrid(
                     val pos = scales[row.key]?.getOrNull(i)
                     val diff = diffs[row.key]?.getOrNull(i)
                     val top = pos == 1f || (vs && i == 0 && row.numeric)
+                    val scale = pos?.let { scaleLook(it, band) }
                     box.addView(Ui.text(ctx, look.valueSp, if (top) 900 else 700, R.color.ag_text).apply {
                         text = cell.text
                         gravity = Gravity.CENTER
                         // level cells wear their tier colour (plain on a value fill: the fill would hide it)
                         cell.level?.let { if (pos == null) setTextColor(LevelTier.color(ctx, it)) }
+                        scale?.ink?.let { setTextColor(it) } // a strong fill takes white / dark ink
                     }, LinearLayout.LayoutParams(-2, -2))
                     if (vs && row.numeric) {
                         if (i == 0) box.addView(small("ref", R.color.ag_sub0), LinearLayout.LayoutParams(-2, -2))
@@ -480,7 +473,7 @@ internal class CompareGrid(
                             1 -> R.color.ag_green; -1 -> R.color.ag_red; else -> R.color.ag_sub0
                         }, 900), LinearLayout.LayoutParams(-2, -2)) // an equal value shows nothing (no "±0")
                     }
-                    if (pos != null) box.setBackgroundColor(scaleFill(pos, band))
+                    scale?.fill?.let { box.setBackgroundColor(it) }
                     for (s in cell.sub) box.addView(small(s, R.color.ag_sub0), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
                 }
             }
@@ -517,19 +510,14 @@ internal class CompareGrid(
             }
             is Cell.Matchups -> {
                 if (cell.entries.isEmpty()) box.addView(dash())
-                val stacked = look.stackTypes
-                val perLine = if (stacked) 1 else ((colPx - 2 * pad) / dp(92)).coerceAtLeast(1)
-                for (chunk in cell.entries.chunked(perLine)) {
-                    box.addView(LinearLayout(ctx).apply {
-                        orientation = if (stacked) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
-                        gravity = Gravity.CENTER
-                        chunk.forEachIndexed { k, m ->
-                            addView(Ui.typeChip(ctx, m.type).also { tapText(it, CompareInfo.matchupText(m)); if (stacked) fitChip(it, colPx - 2 * pad) }, LinearLayout.LayoutParams(-2, -2).also { if (k > 0 && !stacked) it.marginStart = dp(8) })
-                            val tone = if (m.mult > 1.0) R.color.ag_red else if (m.mult == 0.0) R.color.ag_sub0 else R.color.ag_green
-                            addView(Ui.text(ctx, look.subSp, 900, tone).apply { text = m.label; tapText(this, CompareInfo.matchupText(m)) },
-                                LinearLayout.LayoutParams(-2, -2).also { if (!stacked) it.marginStart = dp(3) })
-                        }
-                    }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(if (stacked) 4 else 2) })
+                else {
+                    // R9-W3-A (D8-V1): one box per multiplier of this row; pill only (the row label says the words)
+                    val room = colPx - 2 * pad
+                    val name = table.columns.getOrNull(i)?.name ?: ""
+                    MatchupGroups.of(cell.entries).forEachIndexed { k, (g, types) ->
+                        box.addView(MatchupBoxes.box(ctx, g, types, name, compact = true, roomPx = room, textSp = look.subSp + 1f, chipFit = { chip, w -> fitChip(chip, w) }),
+                            LinearLayout.LayoutParams(-1, -2).also { if (k > 0) it.topMargin = dp(3) })
+                    }
                 }
             }
             is Cell.Evo -> {

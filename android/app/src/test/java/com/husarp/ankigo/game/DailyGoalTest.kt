@@ -73,11 +73,11 @@ class DailyGoalTest {
     @Test fun theGameDayDecidesTheWeekdayNotTheClock() {
         // day starts at 4: Tuesday 2 a.m. still belongs to Monday's goal
         val s = TestData.state(data, 25, 20, listOf("tackle"))
-        s.settings.cardsPerRound = 1
         s.settings.dayStartHour = 4
         s.settings.goalByWeekday = week
         var now = at(13, 2)
         val g = Game(data, s, Random(1)) { now }
+        g.roundAnswers = 1
         g.tick()
         assertEquals("2026-10-12", s.day)
         assertEquals(10, DailyGoal.today(s))
@@ -89,10 +89,10 @@ class DailyGoalTest {
 
     @Test fun theStreakAndTheBonusUseThatDaysGoal() {
         val s = TestData.state(data, 25, 20, listOf("tackle"))
-        s.settings.cardsPerRound = 1
         s.settings.goalByWeekday = listOf(2, 3, 1000, 1000, 1000, 1000, 1000) // Mon 2, Tue 3
         var now = at(12, 12)
         val g = Game(data, s, Random(1)) { now }
+        g.roundAnswers = 1
         var card = 1L
         fun answers(n: Int) = (1..n).sumOf { g.onAnswer(Answer(card++, 3, now)).count { it == GameEvent.Info("Daily goal reached!") } }
         assertEquals(0, answers(1)); assertNull(s.lastGoalDay)
@@ -106,10 +106,10 @@ class DailyGoalTest {
 
     @Test fun lowerAndRaisedGoalsMidDayAndAMetDayStaysMet() {
         val s = TestData.state(data, 25, 20, listOf("tackle"))
-        s.settings.cardsPerRound = 1
         s.settings.goalByWeekday = listOf(1000, 5, 1000, 1000, 1000, 1000, 1000)
         var now = at(13, 12) // Tuesday
         val g = Game(data, s, Random(1)) { now }
+        g.roundAnswers = 1
         var card = 1L
         fun answer() = g.onAnswer(Answer(card++, 3, now)).any { it == GameEvent.Info("Daily goal reached!") }
         repeat(3) { assertEquals(false, answer()) }

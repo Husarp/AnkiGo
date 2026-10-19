@@ -4,111 +4,125 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
-import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
 import androidx.core.graphics.ColorUtils
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.StudyStats
-import kotlin.math.min
 
 /**
- * The Stats heatmap (TICKET T40): weeks as columns (oldest left, current week right), Monday on the top row, month names
- * on top and M / W / F on the left. Rounded 3 dp cells, 3 dp apart, as big as the width allows (at most 18 dp). A day
- * after today is not drawn. Level colours come from [levelColor] (also used by the legend).
+ * The Stats heatmap (TICKET T40, R9-W2-D5): the calendar of the chosen period. The geometry is [HeatmapLayout] (a strip for 7
+ * days, rows of 7 with a new row per month for 30 days, week columns for 90 days and a year); this view only draws it and maps
+ * a tap to a day. Cells are rounded, today has a mauve ring. Level colours come from [levelColor] (also used by the legend).
  */
 class HeatmapView(ctx: Context) : View(ctx) {
-    private var map: StudyStats.Heatmap? = null
+    private var days: List<HeatmapLayout.Day> = emptyList()
+    private var mode = HeatmapLayout.Mode.WEEKS
     private var todayKey: String? = null
+    private var layout: HeatmapLayout.Result? = null
+    private var layoutW = -1f
 
+    private val density = ctx.resources.displayMetrics.density
+    private val fontScale = ctx.resources.configuration.fontScale
+
+    // the canvas is scaled by the density while drawing, so every size below is in dp
     private val cellPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = Ui.dp(ctx, 1.5f)
+        strokeWidth = 1.5f
         color = Ui.c(ctx, R.color.ag_mauve)
     }
     private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Ui.font(ctx, 700)
-        textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 10f, ctx.resources.displayMetrics)
         color = Ui.c(ctx, R.color.ag_sub0)
+    }
+    private val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Ui.font(ctx, 800)
+        textSize = 10f * fontScale
+        textAlign = Paint.Align.CENTER
     }
     private val pick = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = Ui.dp(ctx, 2f)
+        strokeWidth = 2f
         color = Ui.c(ctx, R.color.ag_text)
     }
+    private val numberOnDark = Ui.c(ctx, R.color.ag_card)
+    private val numberOnLight = Ui.c(ctx, R.color.ag_text)
     private val rect = RectF()
-    private val gap = Ui.dp(ctx, 3f)
-    private val radius = Ui.dp(ctx, 3f)
-    private val maxCell = Ui.dp(ctx, 18f)
-    private val leftW = Ui.dp(ctx, 18f)
-    private val topH = Ui.dp(ctx, 16f)
 
     /** TICKET R3-V1: the day whose info is open (outlined), and what a tap on a day does (null = tapped beside the days). */
     var selectedDay: String? = null
         set(v) { if (v != field) { field = v; invalidate() } }
     var onDayTap: ((String?) -> Unit)? = null
 
-    fun set(heatmap: StudyStats.Heatmap, today: String, noun: String = "Reviews") {
-        map = heatmap
+    fun set(heatmap: StudyStats.Heatmap, today: String, noun: String = "Reviews", mode: HeatmapLayout.Mode = HeatmapLayout.Mode.WEEKS) {
+        days = heatmap.columns.flatten().filterNotNull().map { HeatmapLayout.Day(it.day, it.level) }
+        this.mode = mode
         todayKey = today
-        contentDescription = "$noun in the last ${heatmap.columns.size} weeks: ${heatmap.total}"
+        layout = null
+        contentDescription = "$noun in the last ${days.size} days: ${heatmap.total}"
         requestLayout()
         invalidate()
     }
 
-    private fun cellFor(width: Int): Float {
-        val cols = map?.columns?.size?.takeIf { it > 0 } ?: return maxCell
-        return min(maxCell, (width - leftW - gap * (cols - 1)) / cols)
+    private fun layoutFor(widthPx: Int): HeatmapLayout.Result {
+        val w = widthPx / density
+        val l = layout
+        if (l != null && w == layoutW) return l
+        return HeatmapLayout.layout(mode, days, todayKey ?: days.lastOrNull()?.key ?: "", w).also { layout = it; layoutW = w }
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = resolveSize(Ui.dp(context, 240), widthMeasureSpec)
-        val h = topH + 7 * cellFor(w) + 6 * gap
-        setMeasuredDimension(w, h.toInt() + 1)
+        setMeasuredDimension(w, (layoutFor(w).height * density).toInt() + 1)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        layout = null
     }
 
     override fun onDraw(canvas: Canvas) {
-        val m = map ?: return
-        val cell = cellFor(width)
-        // M / W / F on the left, vertically centred on their rows
-        label.textAlign = Paint.Align.LEFT
-        for ((row, text) in listOf(0 to "M", 2 to "W", 4 to "F")) {
-            val cy = topH + row * (cell + gap) + cell / 2
-            canvas.drawText(text, 0f, cy - (label.descent() + label.ascent()) / 2, label)
+        val l = layoutFor(width)
+        canvas.save()
+        canvas.scale(density, density)
+        label.textSize = l.labelSp * fontScale
+        val mid = -(label.descent() + label.ascent()) / 2
+        for (t in l.letters) {
+            label.textAlign = if (t.centered) Paint.Align.CENTER else Paint.Align.LEFT
+            canvas.drawText(t.text, t.x, t.cy + mid, label)
         }
-        for ((col, name) in m.monthLabels) {
-            canvas.drawText(name, leftW + col * (cell + gap), topH - Ui.dp(context, 5f), label)
+        for (t in l.months) {
+            label.textAlign = if (t.centered) Paint.Align.CENTER else Paint.Align.LEFT
+            canvas.drawText(t.text, t.x, t.cy + mid, label)
         }
-        for ((c, column) in m.columns.withIndex()) {
-            val x = leftW + c * (cell + gap)
-            for ((r, d) in column.withIndex()) {
-                if (d == null) continue
-                val y = topH + r * (cell + gap)
-                rect.set(x, y, x + cell, y + cell)
-                cellPaint.color = levelColor(context, d.level)
-                canvas.drawRoundRect(rect, radius, radius, cellPaint)
-                if (d.day == todayKey) {
-                    val h = ring.strokeWidth / 2
-                    rect.inset(h, h)
-                    canvas.drawRoundRect(rect, radius, radius, ring)
-                }
-                if (d.day == selectedDay) {
-                    rect.set(x, y, x + cell, y + cell)
-                    rect.inset(pick.strokeWidth / 2, pick.strokeWidth / 2)
-                    canvas.drawRoundRect(rect, radius, radius, pick)
-                }
+        val numMid = -(numberPaint.descent() + numberPaint.ascent()) / 2
+        for (c in l.cells) {
+            rect.set(c.x, c.y, c.x + c.w, c.y + c.h)
+            cellPaint.color = levelColor(context, c.level)
+            canvas.drawRoundRect(rect, c.radius, c.radius, cellPaint)
+            if (c.today) {
+                val h = ring.strokeWidth / 2
+                rect.inset(h, h)
+                canvas.drawRoundRect(rect, c.radius, c.radius, ring)
+            }
+            c.number?.let {
+                numberPaint.color = if (c.level >= 3) numberOnDark else numberOnLight
+                canvas.drawText(it, c.x + c.w / 2, c.y + c.h / 2 + numMid, numberPaint)
+            }
+            if (c.day == selectedDay) {
+                rect.set(c.x, c.y, c.x + c.w, c.y + c.h)
+                rect.inset(pick.strokeWidth / 2, pick.strokeWidth / 2)
+                canvas.drawRoundRect(rect, c.radius, c.radius, pick)
             }
         }
+        canvas.restore()
     }
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val tap = onDayTap ?: return super.onTouchEvent(e)
-        val m = map ?: return false
         if (e.actionMasked == MotionEvent.ACTION_DOWN) return true
         if (e.actionMasked != MotionEvent.ACTION_UP) return true
-        val hit = StatsChartMath.gridCell(e.x, e.y, leftW, topH, cellFor(width), gap, m.columns.size)
-        tap(hit?.let { (c, r) -> m.columns[c].getOrNull(r)?.day })
+        tap(layoutFor(width).hit(e.x / density, e.y / density))
         performClick()
         return true
     }

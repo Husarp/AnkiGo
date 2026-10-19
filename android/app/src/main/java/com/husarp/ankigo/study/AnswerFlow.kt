@@ -38,9 +38,10 @@ class PendingAnswers {
 
 /**
  * How long each part of one answer took, for the one STUDY line in Diagnostics (so the real split of the wait after an
- * answer is visible on the phone). Parts arrive on their own schedule (the next card loads while the game step runs, the
- * page loads and the deck counts are read after the card is shown); [put] says when the line is complete: when every part
- * in [needs] is in. A negative value means "did not happen" and shows as "-". Main thread only.
+ * answer is visible on the phone). Parts arrive on their own schedule (the answer is written in the background while the
+ * next card is already on screen; the page loads and the deck counts are read after the card is shown); [put] says when the
+ * line is complete: when every part in [needs] is in. A negative value means "did not happen" and shows as "-". The line
+ * is logged once, when complete, or with what it has when the screen goes ([flush]). Main thread only.
  */
 class AnswerTiming(val tapAt: Long, private val needs: Set<String> = setOf(GAME, SHOWN)) {
     private val ms = LinkedHashMap<String, Long>()
@@ -51,10 +52,35 @@ class AnswerTiming(val tapAt: Long, private val needs: Set<String> = setOf(GAME,
     var pollsAtTap = 0
     var polls = -1
 
+    /** How many answers waited to be written when this one was tapped (-1: not known). */
+    var queueAtTap = -1
+
+    /** How many tries the ANSWER call needed (the line shows it when more than one). */
+    var attempts = 1
+
+    /** The next card: [HIT] the predicted card was the real one, [MISS] it was swapped away, [NONE] nothing was predicted. "" = not known. */
+    var next = ""
+
+    /** How many times the load of the next card asked AnkiDroid again (-1: not known). */
+    var loadRetries = -1
+    private var mainWait = -1L
+
+    /** The longest time an io result waited for the main thread (posted -> running) during this answer. */
+    fun noteMainWait(waitMs: Long) { if (waitMs > mainWait) mainWait = waitMs }
+
+    fun has(part: String) = part in ms
+
     /** Records [part]; true exactly once, when every part in [needs] is in. */
     fun put(part: String, value: Long): Boolean {
         ms[part] = value
         if (logged || !needs.all { it in ms }) return false
+        logged = true
+        return true
+    }
+
+    /** True exactly once, when the line was not logged yet: the screen goes, so it is logged with what it has. */
+    fun flush(): Boolean {
+        if (logged) return false
         logged = true
         return true
     }
@@ -64,16 +90,101 @@ class AnswerTiming(val tapAt: Long, private val needs: Set<String> = setOf(GAME,
         val after = listOfNotNull(
             if (PAGE in ms) "page loaded ${v(PAGE)}" else null,
             if (COUNTS in ms) "deck counts read after it ${v(COUNTS)}" else null,
+            if (loadRetries >= 0) "load retries $loadRetries" else null,
+            if (mainWait >= 0) "main wait $mainWait ms" else null,
             if (polls >= 0) "detector polls meanwhile $polls" else null,
         )
-        return "answer: save+verify ${v(WRITE)}, detector wait ${v(ABSORB)}, game step ${v(GAME)}, next card ${v(NEXT)} " +
-            "(deck list ${v(LIST)}), tap to next card shown ${v(SHOWN)}" +
+        val head = if (ANSWER in ms) "ANSWER ${v(ANSWER)}${if (attempts > 1) " ($attempts tries)" else ""}, " else ""
+        val queue = if (queueAtTap >= 0) "write queue $queueAtTap at the tap, " else ""
+        val prediction = if (next.isNotEmpty()) ", next card: $next" + (if (CONFIRMED in ms) ", confirmed after ${v(CONFIRMED)}" else "") else ""
+        return "answer: ${head}save+verify ${v(WRITE)}, ${queue}detector wait ${v(ABSORB)}, game step ${v(GAME)}, next card ${v(NEXT)} " +
+            "(deck list ${v(LIST)})$prediction, tap to next card shown ${v(SHOWN)}" +
             (if (after.isEmpty()) "" else ", " + after.joinToString(", ")) + (if (note.isEmpty()) "" else "; $note")
     }
 
     companion object {
         const val WRITE = "write"; const val ABSORB = "absorb"; const val GAME = "game"; const val NEXT = "next"
         const val COUNTS = "counts"; const val LIST = "list"; const val SHOWN = "shown"; const val PAGE = "page"
+
+        /** The provider's ANSWER call alone (the last try); [CONFIRMED] = tap until AnkiDroid confirmed (or swapped) the next card. */
+        const val ANSWER = "answer"; const val CONFIRMED = "confirmed"
+        const val HIT = "predicted hit"; const val MISS = "predicted miss (swap)"; const val NONE = "none (waited)"
+
+        /** The parts an answer of the background-write flow waits for before its line is logged. */
+        val ALL_PARTS = setOf(GAME, SHOWN, PAGE, COUNTS, WRITE, CONFIRMED)
+    }
+}
+
+/**
+ * When the deck-tree read for the counts may start (R9 wave 6, item 3). AnkiDroid builds its whole deck tree for it, which competes
+ * with the answer write for its collection: never while an answer is unresolved, at most one per [MIN_GAP_MS], plus the first card
+ * of a visit (and after an answer that was not written, which made the stand-in counts wrong). The end of the deck reads the
+ * deck list for its summary anyway.
+ */
+object CountsPolicy {
+    const val MIN_GAP_MS = 30_000L
+
+    /** [lastStartedAt] = when the last read started (null: none yet in this process), same clock as [now]. */
+    fun mayStart(unresolved: Boolean, firstOfVisit: Boolean, now: Long, lastStartedAt: Long?): Boolean = when {
+        unresolved -> false
+        firstOfVisit || lastStartedAt == null -> true
+        else -> now - lastStartedAt >= MIN_GAP_MS
+    }
+}
+
+/**
+ * Reading AnkiDroid's queue for the next card (R9 wave 6, item 2). The query is asked again only when it THROWS, or when it comes
+ * back empty although the deck's counts still say cards are due (AnkiDroid not awake yet); never just because it is empty.
+ * [maxTries] counts the first ask. Each retry is counted for the STUDY line.
+ */
+object QueueRead {
+    class Result<R>(val items: List<R>, val retries: Int, val dueButEmpty: Boolean)
+
+    /**
+     * [query] = one ask; [dueCount] = the deck's due cards, read lazily and at most once, only after an empty answer (null = unknown);
+     * [pause] runs before each retry (waits, selects the deck again). Throws the last failure when every try threw.
+     */
+    fun <R> read(query: () -> List<R>, dueCount: () -> Int?, pause: (retry: Int) -> Unit, maxTries: Int = 3): Result<R> {
+        var tries = 0
+        var due: Int? = null
+        var dueRead = false
+        while (true) {
+            if (tries > 0) pause(tries)
+            tries++
+            val items = try { query() } catch (e: Exception) {
+                if (tries >= maxTries) throw e
+                continue
+            }
+            if (items.isNotEmpty()) return Result(items, tries - 1, false)
+            if (!dueRead) { due = dueCount(); dueRead = true }
+            val dueNow = (due ?: 0) > 0
+            if (!dueNow) return Result(items, tries - 1, false)
+            if (tries >= maxTries) return Result(items, tries - 1, true)
+        }
+    }
+}
+
+/** The texts the study screen says about an answer that is not (yet) saved in AnkiDroid. */
+object AnswerNotes {
+    const val RETRYING = "Your last answer isn't saved in AnkiDroid yet. AnkiGo keeps it and tries again."
+    const val PARKED = "AnkiGo could not save your last answer after many tries. It still keeps it."
+    const val SAVED_LATE = "Answer saved"
+    const val SAVING = "Saving your last answer…"
+    const val WAIT = "One moment — saving your last answer"
+
+    /** Back while a tap on the next card was still held (its card not confirmed yet): that tap was never an answer, so say it was not counted. */
+    const val HELD_LOST = "Your last tap wasn't counted: that card is still due in AnkiDroid."
+    const val GIVE_UP_ASK = "AnkiGo will stop trying to save this answer. The card will come up again in AnkiDroid."
+
+    /** Once per visit when the backup copy (journal file) of an answer could not be written: studying is not blocked, the answer is still being saved. */
+    const val JOURNAL_FAILED = "AnkiGo couldn't keep a backup copy of your answer (is the phone's storage full?). It is still being saved to AnkiDroid."
+
+    /** The toast for an answer that ended NOT written. */
+    fun notWritten(reason: AnswerOutcome.Reason): String = when (reason) {
+        AnswerOutcome.Reason.NOT_TOP -> "AnkiDroid showed another card first, so that answer wasn't saved. The card comes back later."
+        AnswerOutcome.Reason.CHANGED -> "That card changed in AnkiDroid meanwhile, so your answer wasn't saved."
+        AnswerOutcome.Reason.UNSURE -> "AnkiGo couldn't confirm your last answer. Check it in AnkiDroid."
+        AnswerOutcome.Reason.DISCARDED -> "That answer wasn't saved in AnkiDroid. The card will come up again there."
     }
 }
 

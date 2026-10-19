@@ -111,7 +111,16 @@ object SoundRules {
     }
 
     /** True when a sound that last played at [lastAt] (null = never) may start at [now]. */
-    fun gapOk(lastAt: Long?, now: Long) = lastAt == null || now - lastAt >= MIN_GAP_MS || now < lastAt
+    fun gapOk(lastAt: Long?, now: Long, minGap: Long = MIN_GAP_MS) = lastAt == null || now - lastAt >= minGap || now < lastAt
+
+    /** R9-W4-A: the XP orb plings come about 50 ms or more apart (XpParticles.SOUND_GAP_MS), so they get their own, smaller repeat guard. */
+    const val ORB_MIN_GAP_MS = 40L
+
+    /** R9-C3: the XP orbs ripple in as they land: each lands this much of the full volume, the last one (fuller) all of it. */
+    fun orbGain(last: Boolean) = if (last) 1f else 0.7f
+
+    /** The SoundPool rate of an orb's pling: the plan's pitch (0.9..1.25), the last one a little lower and fuller; always a legal rate. */
+    fun orbRate(rate: Float, last: Boolean) = (if (last) 0.95f else rate).coerceIn(0.5f, 2f)
 
     /** Volume 0.0..1.0 from the in-app percentage. */
     fun volume(pct: Int) = pct.coerceIn(0, 100) / 100f

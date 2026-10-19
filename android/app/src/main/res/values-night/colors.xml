@@ -49,9 +49,16 @@
     <color name="ag_tier_8">#8ee6ff</color>
     <color name="ag_tier_9">#ff9ad0</color>
     <!-- R4-V2: achievement tiers (mockup dark tr0..4) -->
-    <color name="ag_ach_0">#a6adc8</color>
-    <color name="ag_ach_1">#89b4fa</color>
-    <color name="ag_ach_2">#cba6f7</color>
-    <color name="ag_ach_3">#f6c55e</color>
-    <color name="ag_ach_4">#f5a6dc</color>
+    <color name="ag_ach_0">#69db7c</color>
+    <color name="ag_ach_1">#74c0fc</color>
+    <color name="ag_ach_2">#da77f2</color>
+    <color name="ag_ach_3">#ffd43b</color>
+    <color name="ag_ach_4">#ff3b2a</color>
+    <!-- R9-W3-A (D8-V1): matchup group colours, as saturated as in light (contrast >= 3 on the dark card) -->
+    <color name="ag_mu_x4">#ff4a64</color>
+    <color name="ag_mu_x2">#ff6652</color>
+    <color name="ag_mu_half">#31d58f</color>
+    <color name="ag_mu_quarter">#34d77a</color>
+    <color name="ag_mu_zero">#8d93ab</color>
+    <color name="ag_mu_strong">#5c9dff</color>
 </resources>

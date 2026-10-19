@@ -1,6 +1,5 @@
 package com.husarp.ankigo.ui
 
-import com.husarp.ankigo.game.Matchup
 import com.husarp.ankigo.game.Type
 import kotlin.math.roundToInt
 
@@ -14,6 +13,9 @@ object CompareFit {
 
     /** A stored value is kept only when it is [AUTO] or one of [OPTIONS]. */
     fun valid(v: Int): Int = if (v in OPTIONS) v else AUTO
+
+    /** R9 (C1): Compare always opens on automatic; a column count chosen on the screen is not remembered for the next time. */
+    fun atOpen(): Int = AUTO
 
     fun label(v: Int): String = if (valid(v) == AUTO) "Auto" else "${valid(v)}"
 }
@@ -88,9 +90,9 @@ object CompareInfo {
     fun forRow(key: String, label: String): StatInfoText? = StatInfo.forKey(key) ?: when (key) {
         "types" -> StatInfoText("Types", "The Pokémon's type or types. They decide which attacks are strong or weak against it.")
         "moves" -> StatInfoText("Moves", "The attacks it knows now, with their type and power. A dash means the move does not hit for damage.")
-        "weak" -> StatInfoText("Weak to", "Attack types that hit it for double (×2) or four times (×4) damage.")
-        "resist" -> StatInfoText("Resists", "Attack types that hit it for half (×½) or a quarter (×¼) damage.")
-        "immune" -> StatInfoText("Immune", "Attack types that cannot hurt it at all (×0).")
+        "weak" -> StatInfoText("Weak against", "Attack types that hit it for four times (×4, \"Very weak against\") or double (×2, \"Weak against\") damage. Tap a box to see what it means.")
+        "resist" -> StatInfoText("Resists", "Attack types that hit it for half (×½, \"Resists\") or a quarter (×¼, \"Strongly resists\") damage. Tap a box to see what it means.")
+        "immune" -> StatInfoText("Immune to", "Attack types that cannot hurt it at all (×0). Tap the box to see what it means.")
         "evo" -> StatInfoText("Evolution line", "The family it belongs to, in the order it evolves. The highlighted one is this Pokémon.")
         "becomes" -> StatInfoText("Becomes", "The last form it can evolve into.")
         else -> null
@@ -105,14 +107,4 @@ object CompareInfo {
     fun headInfo(dex: Boolean, tags: List<String>, note: String?): String? =
         (listOfNotNull(if (dex) "Pokédex entry, not one of your Pokémon" else null) + tags + listOfNotNull(note))
             .filter { it.isNotBlank() }.joinToString(" · ").ifEmpty { null }
-
-    /** "Water: ×2, takes double damage" for a matchup chip. */
-    fun matchupText(m: Matchup): String = "${m.type.label} ${m.label}: " + when (m.mult) {
-        4.0 -> "takes four times the damage"
-        2.0 -> "takes double damage"
-        0.5 -> "takes half the damage"
-        0.25 -> "takes a quarter of the damage"
-        0.0 -> "takes no damage"
-        else -> "damage ×${m.mult}"
-    }
 }
