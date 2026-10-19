@@ -120,7 +120,12 @@ class HelpContentTest {
     @Test fun numbersOfTheOtherChaptersAreTheTuningConstants() {
         val battles = chapterText(GameGuide.BATTLES)
         assertTrue(battles.contains("${Tuning.CARDS_PER_ROUND} answers"))
-        assertTrue(battles.contains("Again ${Tuning.POINTS[1]}, Hard ${Tuning.POINTS[2]}, Good ${Tuning.POINTS[3]}, Easy ${Tuning.POINTS[4]}"))
+        // R10-B22: who attacks by answer (the numbers are the Tuning constants)
+        assertTrue(battles.contains("Your Main attacks when the round has a Good or an Easy answer"))
+        assertTrue(battles.contains("Good adds ×0.5 and Easy adds ×1 to its damage (Good + Good = ×1, Easy + Easy = ×2)"))
+        assertTrue(battles.contains("The wild Pokémon attacks when the round has an Again or a Hard answer"))
+        assertTrue(battles.contains("Again gives it ×1 and Hard ×0.5 of its normal damage (Again + Again = ×2, Hard + Easy = ×0.5)"))
+        assertTrue(battles.contains("Both can attack in the same round"))
         assertTrue(battles.contains("÷ 7"))
         assertTrue(battles.contains("${Tuning.MAX_LEVELS_PER_GAIN} levels"))
         assertTrue(battles.contains("×1.5 XP"))

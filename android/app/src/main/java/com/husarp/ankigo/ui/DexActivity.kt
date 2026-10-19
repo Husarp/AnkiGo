@@ -37,7 +37,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     private lateinit var header: LinearLayout
     private lateinit var topBox: LinearLayout     // hero + progress, rebuilt on every render
     private lateinit var segBox: LinearLayout     // All / Owned / Not owned
-    private lateinit var chipsBox: LinearLayout   // Wishlist + gen chips, type chips
+    private lateinit var chipsBox: LinearLayout   // the two rows of type chips
     private lateinit var search: EditText         // built once so typing keeps focus
     private lateinit var sortPill: View        // the sort chip as last drawn (a new one each render)
     private lateinit var sortHolder: FrameLayout
@@ -122,7 +122,6 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
 
     override fun render() {
         val st = state
-        val gens = st.settings.gens.sorted()
         if (!embedded) appBar.setPill(pillText())
         val enabled = data.species.values.filter { it.gen in st.settings.gens }.sortedBy { it.num }
         // drop selections that no longer exist (a gen switched off in Settings)
@@ -136,7 +135,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         segmented()
         drawSortChip()
         chipsBox.removeAllViews()
-        filters(gens)
+        filters()
         // a short window keeps only the progress line, the segmented control and the search row; "Filters" opens the chip rows
         val short = Ui.shortWindow(this)
         filtersPill.visibility = if (short) View.VISIBLE else View.GONE
@@ -162,7 +161,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
 
     private fun drawSortChip() {
         sortHolder.removeAllViews()
-        sortPill = SortViews.sortChip(this, filter.spec()) { openSortSheet() }
+        sortPill = SortViews.sortChip(this, filter.spec(), filter.sheetActive) { openSortSheet() }
         sortHolder.addView(sortPill)
     }
 
@@ -173,13 +172,24 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         list.setSelection(0)
     }
 
-    private fun openSortSheet() {
-        SortSheet(
+    /** The one "Sort & filter" sheet (R10 B3): sort + direction, "Only wishlist", the generations. Changes apply at once. */
+    private fun openSortSheet() = sortSheet().show()
+
+    /** The sheet itself (tests build its view and click through it; there is no window to show a dialog in). */
+    internal fun sortSheet(): SortSheet {
+        val gens = state.settings.gens.sorted()
+        return SortSheet(
             this, SortText.dexKeys, filter.spec(), SortViews.DEX_DEFAULT, false, null, 0, null,
             count = { filtered().size },
             onChange = { spec, _ -> if (spec != filter.spec()) setSort(spec) },
-            sortOnly = true,
-        ).show()
+            dex = SortSheet.DexPart(filter.wishlistOnly, gens, filter.gens) { wish, picked -> setSheetFilters(wish, picked) },
+        )
+    }
+
+    private fun setSheetFilters(wishlistOnly: Boolean, gens: Set<Int>) {
+        filter = filter.copy(wishlistOnly = wishlistOnly, gens = gens)
+        redraw()
+        list.setSelection(0)
     }
 
     // ---- hero ----
@@ -230,6 +240,12 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         card.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
         // opens that Pokémon's details (taps tick instead while picking for Compare)
         card.setOnClickListener { if (pickHost?.picking != true) MonDetail.show(this, data, mon) }
+        // hold = the same options menu as a Team / Box row (the card is cached, so the Pokémon is looked up by uid at press time)
+        val uid = mon.uid
+        card.setOnLongClickListener {
+            val m = state.mons.firstOrNull { it.uid == uid } ?: return@setOnLongClickListener false
+            MonActions(this).menu(m, it); true
+        }
         return card
     }
 
@@ -346,23 +362,25 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     private fun chipRow(chips: List<View>): View {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         for (c in chips) row.addView(c, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6) })
-        return HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            addView(row)
-        }
+        return row
     }
 
     private fun <T> Set<T>.toggle(v: T) = if (v in this) this - v else this + v
 
-    private fun filters(gens: List<Int>) {
+    /** The type chips in two rows (about half the types each) that scroll sideways together; wishlist + generations live in the sort sheet (R10 B3). */
+    private fun filters() {
         val f = filter
-        val firstRow = listOf(chip("Wishlist", f.wishlistOnly) { filter = filter.copy(wishlistOnly = !filter.wishlistOnly) }) +
-            gens.map { g -> chip("Gen $g", g in f.gens) { filter = filter.copy(gens = filter.gens.toggle(g)) } }
-        chipsBox.addView(chipRow(firstRow))
         val types = Type.entries.map { t ->
             chip(t.label, t in f.types) { filter = filter.copy(types = filter.types.toggle(t)) }.also { TypeChips.styleFilter(it, t, t in f.types) }
         }
-        chipsBox.addView(chipRow(types), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 4) }) // chips are 48 dp touch rows
+        val half = (types.size + 1) / 2
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        rows.addView(chipRow(types.take(half)))
+        rows.addView(chipRow(types.drop(half)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(this, 8) }) // chips are 48 dp touch rows around a 28 dp look
+        chipsBox.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(rows)
+        }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 4) })
     }
 
     // ---- grid cells (mockup .dexgrid) ----

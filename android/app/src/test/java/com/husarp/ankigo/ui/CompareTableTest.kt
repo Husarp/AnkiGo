@@ -236,9 +236,9 @@ class CompareTableTest {
         assertEquals("90 / 186", (t.row("ivs").cells[1] as Cell.Text).text) // Leafbud: 15 each
         assertEquals(listOf(true, false), t.row("ivs").cells.map { (it as Cell.Text).best })
         val mv = (t.row("moves").cells[0] as Cell.Moves).moves
-        assertEquals(MoveCell("Thunderbolt", Type.ELECTRIC, "90"), mv[0])
-        assertEquals(MoveCell("Growl", Type.NORMAL, DASH), mv[1])
-        assertEquals(MoveCell("nope", null, DASH), mv[2])
+        assertEquals(MoveCell("Thunderbolt", Type.ELECTRIC, "90", "thunderbolt"), mv[0])
+        assertEquals(MoveCell("Growl", Type.NORMAL, DASH, "growl"), mv[1])
+        assertEquals(MoveCell("nope", null, DASH, "nope"), mv[2])
     }
 
     @Test fun nicknameIsKeptAndMissingPicksAreSkipped() {

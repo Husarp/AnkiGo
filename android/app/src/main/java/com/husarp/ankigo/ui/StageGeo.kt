@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -28,10 +29,40 @@ import kotlin.math.min
  * scale where those are readable the box is "reduced" (chips -> type symbols, no XP number: [StagePlan.reduced], its own, shorter
  * heights) and its floor is the next smallest text. Boxes still shrink before the Pokémon do; with the floor, a roomy box that no
  * longer fits makes the sprites smaller (frames x .9 .. .6) rather than the text.
+ *
+ * Round 10 B20 ("Pokémon size", [PokemonSize]): the player's size multiplies the frame scales ([frameScales]); 100 % is the rule above,
+ * unchanged. A size over 100 % may only use a step while both sprites' real art boxes stay inside the arena (inset by the battle frame)
+ * and do not touch each other (the last, smallest step always runs).
  */
 internal object StageGeo {
     /** The sprite frames' scales, tried in this order; the boxes shrink before the next one is used. */
     private val SCALES = floatArrayOf(1f, 0.9f, 0.8f, 0.7f, 0.6f)
+
+    /**
+     * Round 10 B20: the frame scales to try for the Pokémon size [size]. The arena draws both sprites [size] times what a frame 1 / [size]
+     * as big would ([com.husarp.ankigo.gfx.SpriteView.sizeFactor]), so the rule's own steps are those smaller frames: `size x` each step.
+     * - 1: today's [SCALES] (the same array).
+     * - over 1: `size x` the usual steps, continued (.5, .4 ..) until the last is no bigger than the usual worst case (.6), so a big
+     *   size is brought back down by the rule's own steps as far as 100 % could go.
+     * - under 1: `size x atOne x` the usual steps; [atOne] = the frame scale the same panel gets at 100 %, so a smaller size is never
+     *   bigger than 100 %.
+     */
+    internal fun frameScales(size: Float, atOne: Float = 1f): FloatArray {
+        if (abs(size - 1f) < F_EPS) return SCALES
+        if (size < 1f) return FloatArray(SCALES.size) { SCALES[it] * atOne * size }
+        val steps = ArrayList<Float>(SCALES.toList())
+        while (steps.last() * size > SCALES.last() + 0.001f) steps += steps.last() - 0.1f
+        return FloatArray(steps.size) { steps[it] * size }
+    }
+
+    /**
+     * Round 10 B20: whether the plan [sized] made for the Pokémon size [size] is to be used, or [one] (the plan at 100 %, sprites drawn
+     * as before). A smaller size always is. A bigger one only if its rule step (`spriteScale / size`, the frame it draws the sprites like)
+     * is not lower than the 100 % plan's, and it is clear whenever the 100 % plan is: so a bigger size is never a smaller Pokémon, and
+     * never leaves a box over one that 100 % kept clear.
+     */
+    internal fun keepSized(size: Float, one: StagePlan, sized: StagePlan): Boolean =
+        size <= 1f + F_EPS || (sized.spriteScale / size >= one.spriteScale - 0.001f && !(one.clear && !sized.clear))
 
     /** On-screen height (dp) of the arena from which the boxes are full size, and the one where they are smallest. */
     const val H_FULL = 260f
@@ -48,6 +79,9 @@ internal object StageGeo {
 
     /** Same tolerance as [ArenaGeo.Box.hits]. */
     private const val EPS = 0.01f
+
+    /** A size this close to 1 is 1. */
+    private const val F_EPS = 0.0001f
 
     private const val OURS = 0
     private const val WILD = 1
@@ -105,13 +139,31 @@ internal object StageGeo {
     fun isTall(w: Float, h: Float): Boolean = h > w * 1.1f
 
     /**
+     * Round 10 W7 (the HUD look) for the layouts that are not made from a picture's stage (the plain arena, the study layouts): the two
+     * boxes in opposite corners of a [w] x [h] arena, [inset] in from its edges. [ours] and [wild] give the sizes (their positions are
+     * ignored). Ours is on the left edge, the wild one on the right edge; the primary sides are [plan]'s (tall: ours at the bottom, the
+     * wild one at the top; wide: ours at the top, the wild one at the bottom). Returns (wild, ours).
+     */
+    fun cornerBoxes(w: Float, h: Float, wild: ArenaGeo.Box, ours: ArenaGeo.Box, inset: Float = 0f): Pair<ArenaGeo.Box, ArenaGeo.Box> {
+        val i = max(0f, inset)
+        val oursTop = !isTall(w, h)
+        fun put(b: ArenaGeo.Box, left: Boolean, top: Boolean): ArenaGeo.Box {
+            val x = if (left) i else w - i - b.w
+            val y = if (top) i else h - i - b.h
+            return ArenaGeo.Box(max(i, min(w - i - b.w, x)), max(i, min(h - i - b.h, y)), b.w, b.h)
+        }
+        return put(wild, left = false, top = !oursTop) to put(ours, left = true, top = oursTop)
+    }
+
+    /**
      * [w] x [h]: the arena in virtual dp; [panelScale]: the panel's draw scale, so the arena is `h * panelScale` dp high on screen;
      * [floorSp]: the text floor; [inset]: how far a battle frame reaches in (0 = none). The cards' design sizes at k = 1 are
      * [wildCardW] x [wildCardH] and [playerCardW] x [playerCardH]; [k0] the roomy scale. [wildArt] / [playerArt]: each Pokémon's real
      * art box in its square frame (the argument = the frame's side, dp; a sprite's drawn size can change in steps with it); null =
      * [ArtShare.DEFAULT]. The heights are the full boxes'; [wildCardHReduced] / [playerCardHReduced] the same boxes with their optional
      * parts dropped (used under the scale [BoxScales.full], where [StagePlan.reduced] is true); [minSp] / [fullSp] the smallest text
-     * of a reduced / full box in design sp (both 0 = no readability floor).
+     * of a reduced / full box in design sp (both 0 = no readability floor). [sizeScale]: the Pokémon size (Round 10 B20, 1 = today; [frameScales]);
+     * [atOne]: for a size under 1, the frame scale the same panel gets at 1 (0 = worked out here).
      */
     fun plan(
         w: Float, h: Float, stage: Stage,
@@ -121,30 +173,43 @@ internal object StageGeo {
         wildArt: ((Float) -> ArtShare?)? = null, playerArt: ((Float) -> ArtShare?)? = null,
         wildCardHReduced: Float = wildCardH, playerCardHReduced: Float = playerCardH,
         minSp: Float = 0f, fullSp: Float = minSp,
+        sizeScale: Float = 1f, atOne: Float = 0f,
+        corners: Boolean = false,
     ): StagePlan {
         val onScreen = h * panelScale
         val scales = boxScales(onScreen, panelScale, floorSp, k0, minSp, fullSp)
         val run = Run(w, h, max(0f, inset), gap(onScreen, panelScale), isTall(w, h), stage,
             floatArrayOf(playerCardW, wildCardW), floatArrayOf(playerCardH, wildCardH), floatArrayOf(playerCardHReduced, wildCardHReduced),
             scales.full, wildArt, playerArt)
-        for (fi in SCALES.indices) {
-            run.setFrames(SCALES[fi])
+        // a size under 100 % is that share of the frame the same panel gets at 100 % (given, or worked out first)
+        val one = if (sizeScale < 1f - F_EPS && !(atOne > 0f)) plan(w, h, stage, wildCardW, wildCardH, playerCardW, playerCardH, k0, panelScale, floorSp, inset,
+            wildArt, playerArt, wildCardHReduced, playerCardHReduced, minSp, fullSp, 1f, 0f, corners).spriteScale else if (atOne > 0f) atOne else 1f
+        val chain = frameScales(sizeScale, one)
+        val big = sizeScale > 1f + F_EPS
+        for ((i, f) in chain.withIndex()) {
+            run.setFrames(f)
+            if (big && i < chain.lastIndex && !run.bigFramesOk()) continue   // a bigger Pokémon must keep its real art inside the arena and off the other one (the last step always runs)
+            if (corners) {   // Round 10 W7 (the HUD look): the two corners at the start scale, no search; the Pokémon keep their frame
+                run.keepCorners(scales.start)
+                return run.result(scales.start, f, true)
+            }
             for (ph in PHASE_LEVEL.indices) {
                 val hi = scales.at(PHASE_FROM[ph])
                 val lo = scales.at(PHASE_TO[ph])
                 var k = hi
                 while (k > lo + 0.001f) {   // hi down in 0.05 steps, then lo itself
-                    if (run.findOk(k, PHASE_LEVEL[ph])) return run.result(k, SCALES[fi], true)
+                    if (run.findOk(k, PHASE_LEVEL[ph])) return run.result(k, f, true)
                     k -= K_STEP
                 }
-                if (run.findOk(lo, PHASE_LEVEL[ph])) return run.result(lo, SCALES[fi], true)
+                if (run.findOk(lo, PHASE_LEVEL[ph])) return run.result(lo, f, true)
             }
         }
         // nothing is clear at any sprite scale: the least-bad pair at the smallest box
         var bestScore = Double.MAX_VALUE
-        var bestF = SCALES[0]
-        for (f in SCALES) {
+        var bestF = chain[0]
+        for ((i, f) in chain.withIndex()) {
             run.setFrames(f)
+            if (big && i < chain.lastIndex && !run.bigFramesOk()) continue
             val score = run.leastBad(scales.min)
             if (score < bestScore) {
                 bestScore = score
@@ -202,6 +267,20 @@ internal object StageGeo {
             frame[kind] = ArenaGeo.Box(fx - side / 2f, fy - side, side, side)
             artBox[kind] = a
             art[kind][0] = a.x; art[kind][1] = a.y; art[kind][2] = a.right; art[kind][3] = a.bottom
+        }
+
+        /**
+         * Round 10 B20: a Pokémon size over 100 % is allowed a step while both real art boxes lie inside the arena (inset by the battle
+         * frame) and do not touch each other.
+         */
+        fun bigFramesOk(): Boolean {
+            for (kind in 0..1) {
+                val a = art[kind]
+                if (a[0] < inset - EPS || a[1] < inset - EPS || a[2] > vw - inset + EPS || a[3] > vh - inset + EPS) return false
+            }
+            val a = art[OURS]
+            val b = art[WILD]
+            return !(a[0] < b[2] - EPS && b[0] < a[2] - EPS && a[1] < b[3] - EPS && b[1] < a[3] - EPS)
         }
 
         /** Puts spot [i] of [kind] at box scale [k] into [out] (x, y, w, h). */
@@ -283,6 +362,13 @@ internal object StageGeo {
             val dx = min(b[0] + b[2] + d, o[0] + o[2]) - max(b[0] - d, o[0])
             val dy = min(b[1] + b[3] + d, o[1] + o[3]) - max(b[1] - d, o[1])
             return if (dx > 0f && dy > 0f) dx * dy else 0f
+        }
+
+        /** Round 10 W7: the HUD's pair at scale [k]: ours on the left edge, the wild one on the right edge, each on its primary side (top / bottom as the rule says). */
+        fun keepCorners(k: Float) {
+            place(OURS, 2, k, keepOurs)
+            place(WILD, 3, k, keepWild)
+            keepLevel = 2
         }
 
         /** The pair [leastBad] just found is the one to return. */

@@ -189,6 +189,11 @@ internal class FloatBattleView(
                 com.husarp.ankigo.help.HelpActivity.open(app)
                 return@show
             }
+            if (id == 10) { // R10 B19: the view settings sheet, an overlay window of its own
+                try { com.husarp.ankigo.ui.ViewSettingsSheet.open(window.context) }
+                catch (e: Exception) { Ui.toast(app, "Turn on “Display over other apps” for AnkiGo to open this here") }
+                return@show
+            }
             val page = when (id) {
                 1 -> FloatPage.TEAM
                 2 -> FloatPage.DEX
@@ -208,6 +213,7 @@ internal class FloatBattleView(
         m.item(2, "Pokédex", R.drawable.ic_book)
         m.item(3, "Shop", R.drawable.ic_shop)
         m.item(4, "Settings", R.drawable.ic_settings)
+        m.item(10, "View settings", R.drawable.ic_palette)
         m.item(7, "Help", R.drawable.ic_help)
     }
 }

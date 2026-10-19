@@ -290,6 +290,7 @@ class DuplicatesTest {
 
     @Test fun theSettingSurvivesTheSaveRoundTrip() {
         val s = state()
+        s.settings.autoMode = 3 // R10-X2: the switch is kept only with mode 3 (CatchChoice.normalize on load)
         val back = SaveCodec.decode(SaveCodec.encode(s))
         assertTrue(back.settings.autoReleaseDuplicates)
         assertEquals(SaveCodec.encode(s), SaveCodec.encode(back))

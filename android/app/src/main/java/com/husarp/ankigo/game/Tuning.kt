@@ -25,8 +25,15 @@ object Tuning {
     val POINTS = intArrayOf(10, 0, 5, 10, 20)
     /** Answers per battle round ("cards per round"). */
     const val CARDS_PER_ROUND = 2
-    /** multiplier = points / (POINTS_PER_CARD * answers). The enemy only attacks when the multiplier is below 1. */
-    const val POINTS_PER_CARD = 10
+    /**
+     * AnkiGo (Round 10, B22; Ankimon sums [POINTS] instead): who attacks in a round is decided per answer, see [RoundRule].
+     * The wild one attacks whenever one answer is Again or Hard; its damage is scaled by the sum of these (index = button).
+     */
+    val WILD_POWER = doubleArrayOf(0.0, 1.0, 0.5, 0.0, 0.0)
+    /** Your Main attacks whenever one answer is Good or Easy; its damage multiplier is the sum of these (index = button, 0 unknown counts as Good). */
+    val MAIN_POWER = doubleArrayOf(0.5, 0.0, 0.0, 0.5, 1.0)
+    /** AnkiGo (Round 10, W10): switching the Main in a fight gives the wild one one free hit on the incoming Pokémon at this power: the same as one Again. */
+    val SWITCH_HIT_POWER = WILD_POWER[1]
 
     // ---- Battle (poke-engine, simplified) ----
     const val STAB = 1.5
@@ -41,6 +48,15 @@ object Tuning {
     const val STRUGGLE = "struggle"
     const val SPLASH = "splash"
     const val FALLBACK_MOVE = "tackle"
+
+    // ---- Move choice (AnkiGo, Round 10 W9; see MoveChooser) ----
+    /** Smart / Smartest: how often a side that also has a useful status move still uses a damaging one. */
+    const val SMART_DAMAGE_SHARE = 0.8
+    /** Smart / Smartest: accuracy and evasion stages stop at ±this (Random keeps the games' ±6). */
+    const val SMART_ACC_EVA_LIMIT = 2
+    /** Smartest: with two or more damaging moves, the strongest one is picked this often, else the second strongest. */
+    const val SMARTEST_BEST_SHARE = 0.7
+
     /** Paralysis: chance to be fully paralysed, speed multiplier. */
     const val PARA_SKIP = 0.25
     const val PARA_SPEED = 0.5
@@ -148,6 +164,9 @@ object Tuning {
     const val SHOP_SLOTS_PER_LEVELS = 5
     const val TM_PRICE = 1000
     const val REROLL_PRICE = 100
+    val SHOP_BASICS = listOf("poke-ball", "potion") // always on sale at their normal price; not part of the daily draw
+    const val DEAL_PERCENT = 30             // the deal of the day: this much off (price = round(normal * 0.7), at least 1)
+    const val WEEKEND_TM_MIN_POWER = 90     // the weekend special is an evolution stone or a TM of a move at least this strong
 
     // ---- Healing (AnkiGo's own rules, PLAN 80; Ankimon has none of these). Whole HP, never above max HP. ----
     const val LEVEL_UP_HEAL_PERCENT = 25 // of max HP per level gained, on top of the HP the new level adds (min 1)

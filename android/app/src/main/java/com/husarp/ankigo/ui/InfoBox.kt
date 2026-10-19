@@ -23,6 +23,51 @@ enum class InfoBoxStyle(val label: String, val sub: String) {
 }
 
 /**
+ * The LOOK of the battle's info boxes (Round 10 W7, docs mock D8): colours, edge and background of the two boxes, the other axis next to
+ * the layout [InfoBoxStyle] (above / inside), which every look combines with. Settings → Battle → "Info box style" and the battle's
+ * "View settings" sheet. [TODAY] (the default, "Card") is the card colour at 92 %, exactly as the boxes always were. What each look paints
+ * is one pure spec, [InfoBoxSkin]; the real boxes ([ArenaView]) and the small previews ([BoxLookPreview]) both draw from it.
+ */
+enum class InfoBoxLook(val label: String, val sub: String) {
+    TODAY("Card", "The card colour, as it always was"),
+    GLASS("Glass", "The picture behind the box, blurred, under a light tint and a thin bright edge"),
+    FRAME("Thin frame", "A barely-there dark veil and a thin white frame, white text; the same in light and dark"),
+    PLATE("Dark plate", "Deep navy with a gold trim and light text; the same in light and dark"),
+    HUD("HUD in the corners", "No box: outlined text and bars straight on the picture, yours in one corner and the wild one in the opposite one"),
+    TYPE("Type colour", "Washed with the Pokémon's first type colour, with a stripe on the left");
+
+    companion object {
+        /** The preference key (an [InfoBoxLook] name). */
+        const val KEY = "infoBoxLook"
+
+        val DEFAULT = TODAY
+
+        /** The saved choice (the enum name); unknown or missing = [DEFAULT]. */
+        fun parse(name: String?): InfoBoxLook = entries.firstOrNull { it.name == name } ?: DEFAULT
+    }
+}
+
+/**
+ * The look of the battle info boxes' HP and XP bars (Round 10 W8, docs mock D9-E). Settings → Battle → "HP / XP bars" and the battle's
+ * "View settings" sheet. [TODAY] (the default) is the flat rounded bar; [PIXEL] has hard pixel edges, a cut-corner outline and a fill
+ * that moves in 5 % steps ([PixelBar]). Not the same as Look → "Progress bars" ([BarStyle], `barStyle`): that one is about the colours.
+ */
+enum class HpBarLook(val label: String, val sub: String) {
+    TODAY("Today", "Flat rounded bars on a grey track"),
+    PIXEL("Pixel", "Hard pixel edges, a cut-corner outline, filled in 5 % steps; matches the pixel sprites");
+
+    companion object {
+        /** The preference key (a [HpBarLook] name). */
+        const val KEY = "hpBarLook"
+
+        val DEFAULT = TODAY
+
+        /** The saved choice (the enum name); unknown or missing = [DEFAULT]. */
+        fun parse(name: String?): HpBarLook = entries.firstOrNull { it.name == name } ?: DEFAULT
+    }
+}
+
+/**
  * The info boxes' design sizes (pure maths; virtual dp / sp at box scale 1, the CSS of the D12 mockup) and what their text needs
  * on screen. [ArenaGeo.cards] builds the boxes' sizes from them, [ArenaView] the views.
  *

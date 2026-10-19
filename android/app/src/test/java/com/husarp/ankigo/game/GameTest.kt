@@ -192,30 +192,97 @@ class GameTest {
         assertSame(wild, g.state.battle!!.wild) // still the same fight
     }
 
-    @Test fun againAgainIsOneHpPerHitAndTheEnemyAttacks() {
+    @Test fun againAgainOnlyTheWildOneAttacksAtOnePointTwo() {
         val g = game()
         val wild = g.fight(hp = 36)
+        val hp = g.state.main!!.hp
         g.answer(1)
         val ev = g.answer(1)
-        assertEquals(GameEvent.RoundStart(0.0, 0, true), ev.of<GameEvent.RoundStart>().single())
+        val rs = ev.of<GameEvent.RoundStart>().single()
+        assertEquals(GameEvent.RoundStart(0.0, 0, true, false, 2.0), rs) // R10-B22: no Good/Easy answer = the Main does not attack at all
         val attacks = ev.of<GameEvent.Attack>()
-        assertEquals(2, attacks.size)
-        assertEquals(1, attacks.single { it.byPlayer }.damage)
+        assertTrue(attacks.none { it.byPlayer }) // not even the old 1 HP hit
         assertTrue(attacks.single { !it.byPlayer }.damage > 0)
-        assertEquals(35, wild.hp)
-        assertTrue(g.state.main!!.hp < maxHp(g.state.main!!))
+        assertEquals(36, wild.hp)
+        assertTrue(g.state.main!!.hp < hp)
         assertTrue(ev.of<GameEvent.Splash>().isEmpty())
     }
 
-    @Test fun mixedRoundMultiplierIsTheAverageOfThePoints() {
+    @Test fun eachAnswerPairDecidesWhoAttacksAndHowHard() {
+        // (first, second) -> main multiplier (null = the Main does not attack), wild power (null = the wild one does not attack)
+        val cases = listOf(
+            Triple(1 to 1, null, 2.0), Triple(1 to 2, null, 1.5), Triple(2 to 2, null, 1.0),
+            Triple(1 to 3, 0.5, 1.0), Triple(1 to 4, 1.0, 1.0), Triple(2 to 3, 0.5, 0.5), Triple(2 to 4, 1.0, 0.5),
+            Triple(3 to 3, 1.0, null), Triple(3 to 4, 1.5, null), Triple(4 to 4, 2.0, null), Triple(0 to 3, 1.0, null),
+        )
+        for ((pair, main, wild) in cases) {
+            for ((x, y) in listOf(pair.first to pair.second, pair.second to pair.first)) {
+                val g = game(); g.fight(hp = 36)
+                g.answer(x)
+                val rs = g.answer(y).of<GameEvent.RoundStart>().single()
+                val label = "$x+$y"
+                assertEquals(label, main != null, rs.mainActs)
+                assertEquals(label, main ?: 0.0, rs.multiplier, 1e-9)
+                assertEquals(label, wild != null, rs.enemyActs)
+                assertEquals(label, wild ?: 0.0, rs.enemyPower, 1e-9)
+            }
+        }
+    }
+
+    @Test fun hardPlusEasyBothAttackAndHardHardOnlyTheWild() {
         val g = game()
         g.fight(hp = 36)
-        g.answer(2) // Hard 5
-        val ev = g.answer(4) // Easy 20
-        assertEquals(GameEvent.RoundStart(1.25, 25, false), ev.of<GameEvent.RoundStart>().single())
+        g.answer(2) // Hard
+        val ev = g.answer(4) // Easy
+        assertEquals(GameEvent.RoundStart(1.0, 25, true, true, 0.5), ev.of<GameEvent.RoundStart>().single())
+        val attacks = ev.of<GameEvent.Attack>()
+        assertEquals(2, attacks.size) // both attack in one round
+        assertTrue(ev.of<GameEvent.Splash>().isEmpty())
         val h = game(); h.fight(hp = 36)
         h.answer(2)
-        assertEquals(GameEvent.RoundStart(0.5, 10, true), h.answer(2).of<GameEvent.RoundStart>().single()) // Hard+Hard
+        val hh = h.answer(2)
+        assertEquals(GameEvent.RoundStart(0.0, 10, true, false, 1.0), hh.of<GameEvent.RoundStart>().single()) // Hard+Hard
+        assertTrue(hh.of<GameEvent.Attack>().none { it.byPlayer })
+    }
+
+    @Test fun theWildOnesHitIsScaledByThePowerOfTheBadAnswers() {
+        fun wildHit(buttons: List<Int>, seed: Int): Int {
+            val g = game(seed); g.fight(species = 150, level = 40, moves = listOf("tackle"), hp = 36)
+            var last = emptyList<GameEvent>()
+            for (b in buttons) last = g.answer(b)
+            return last.of<GameEvent.Attack>().single { !it.byPlayer }.damage
+        }
+        for (seed in 1..8) {
+            val full = wildHit(listOf(1, 1), seed) // 2.0
+            val again = wildHit(listOf(1, 3), seed) // 1.0
+            val hard = wildHit(listOf(2, 3), seed) // 0.5
+            assertTrue("again $again > full $full", again <= full) // ×2 may be cut short by the Main's HP
+            assertTrue("hard $hard < again $again", hard < again)
+            assertTrue(hard >= 1)
+        }
+    }
+
+    @Test fun anOldSavesRoundInProgressKeepsItsAnswer() {
+        // A battle saved before Round 10 has the point sum only (Again 0 / Hard 5 / Good 10 / Easy 20) and no buttons.
+        for ((points, first) in listOf(0 to 1, 5 to 2, 10 to 3, 20 to 4)) {
+            val g = game(); g.fight(hp = 36)
+            g.state.battle!!.tally = points; g.state.battle!!.answers = 1
+            val rs = g.answer(3).of<GameEvent.RoundStart>().single() // + Good
+            val expected = RoundRule.plan(listOf(first, 3))
+            assertEquals("first=$first", expected.enemyActs, rs.enemyActs)
+            assertEquals("first=$first", expected.mainActs, rs.mainActs)
+            assertEquals("first=$first", expected.multiplier, rs.multiplier, 1e-9)
+        }
+    }
+
+    @Test fun theButtonsOfTheRoundSurviveASaveAndReset() {
+        val g = game(); g.fight(hp = 36)
+        g.answer(1)
+        assertEquals(listOf(1), g.state.battle!!.buttons)
+        val back = com.husarp.ankigo.game.save.SaveCodec.decode(com.husarp.ankigo.game.save.SaveCodec.encode(g.state))
+        assertEquals(listOf(1), back.battle!!.buttons)
+        g.answer(4)
+        assertTrue(g.state.battle!!.buttons.isEmpty())
     }
 
     @Test fun aRoundIsAlwaysTwoAnswers() {
@@ -950,6 +1017,7 @@ class GameTest {
         g.state.battle!!.enemy.boosts[1] = -1
         g.state.battle!!.tally = 10; g.state.battle!!.answers = 1
         g.state.mon("t1")!!.hp = 5
+        g.state.main!!.hp = 0 // R10 W10: a switch away from a fainted main is free; a costly one (the wild hit) is in SwitchHitTest
         val r = g.cycleMain()
         assertTrue(r.ok)
         assertEquals("t1", g.state.main!!.uid)
@@ -1083,7 +1151,8 @@ class GameTest {
         val r = g.swapIntoTeam("b6", "t0")
         assertTrue(r.ok)
         assertEquals(listOf("b6", "t1", "t2", "t3", "t4", "t5"), g.state.team)
-        assertEquals(listOf(GameEvent.MainChanged("b6", g.state.mon("b6")!!.name)), r.events)
+        assertEquals(GameEvent.MainChanged("b6", g.state.mon("b6")!!.name), r.events[0])
+        assertTrue(r.events[1] is GameEvent.SwitchHit) // R10 W10: switching in a fight costs a hit (the details are in SwitchHitTest)
         assertEquals(0, g.state.battle!!.player.boosts[2])
     }
 
@@ -1103,7 +1172,8 @@ class GameTest {
         g.state.battle!!.player.boosts[2] = 3
         val r = g.toBox("t0")
         assertEquals(listOf("t1", "t2"), g.state.team)
-        assertEquals(listOf(GameEvent.MainChanged("t1", g.state.mon("t1")!!.name)), r.events)
+        assertEquals(GameEvent.MainChanged("t1", g.state.mon("t1")!!.name), r.events[0])
+        assertTrue(r.events[1] is GameEvent.SwitchHit) // R10 W10: switching in a fight costs a hit (the details are in SwitchHitTest)
         assertEquals(0, g.state.battle!!.player.boosts[2])
         assertSame(wild, g.state.battle!!.wild)
     }
@@ -1206,6 +1276,7 @@ class GameTest {
         assertTrue("wild hp $where", b.wild.hp in 1..maxHp(b.wild))
         assertTrue("wild moves $where", b.wild.moves.size in 1..4)
         assertTrue("tally $where", b.answers in 0..3 && b.tally >= 0)
+        assertEquals("buttons vs answers $where", b.answers, b.buttons.size)
         assertTrue("cash ${s.cash} $where", s.cash >= 0 && s.cashToday in 0..Tuning.CASH_DAILY_CAP)
         assertTrue("bag $where", s.bag.values.all { it > 0 })
         assertEquals("buttons vs reviews $where", s.reviewsToday, s.buttonsToday.sum())

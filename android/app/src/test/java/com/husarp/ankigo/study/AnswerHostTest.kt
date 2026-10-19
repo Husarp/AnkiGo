@@ -11,7 +11,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
-/** The process-wide study io with a REAL executor: ordering behind a write, the journal replay, routing to screens, the game step. */
+/** The process-wide study io with a REAL executor: ordering behind a write, the journal replay, routing to screens, the game step (at the tap, R10-B23). */
 class AnswerHostTest {
     private val deck = 7L
 
@@ -20,17 +20,30 @@ class AnswerHostTest {
         val log = CopyOnWriteArrayList<String>()
         val expects = AtomicInteger(); val cancels = AtomicInteger()
         val pins = CopyOnWriteArrayList<Boolean>()   // the `pinned` flag of every expect, in order
-        val games = CopyOnWriteArrayList<Pair<AnswerOutcome.Saved, String?>>()
+        val games = CopyOnWriteArrayList<Pair<QueuedAnswer, String?>>()   // game steps, in order
+        val settles = CopyOnWriteArrayList<Triple<QueuedAnswer, Map<String, String?>, Boolean>>()   // (answer, after, saved by this process)
+        val drops = CopyOnWriteArrayList<QueuedAnswer>()
+        val restoredAsked = CopyOnWriteArrayList<List<QueuedAnswer>>()
         @Volatile var onExpect: ((Map<String, String?>, Boolean) -> Unit)? = null   // a pretend detector's ledger
         @Volatile var onCancel: ((Map<String, String?>) -> Unit)? = null
-        @Volatile var onGame: ((AnswerOutcome.Saved) -> Unit)? = null
+        @Volatile var onGame: ((QueuedAnswer) -> Unit)? = null
+        @Volatile var onSettle: ((QueuedAnswer) -> Unit)? = null
+        /** What the game decides for replayed answers; default: none of them is in the save yet, so each gets its game step now. */
+        @Volatile var onRestored: ((List<QueuedAnswer>, () -> Unit) -> Unit)? = null
         override fun post(r: Runnable) { posted += r }
         override fun elapsed() = System.nanoTime() / 1_000_000L
         override fun expect(before: Map<String, String?>, pinned: Boolean) { expects.incrementAndGet(); pins += pinned; onExpect?.invoke(before, pinned) }
         override fun cancel(before: Map<String, String?>) { cancels.incrementAndGet(); onCancel?.invoke(before) }
-        override fun gameStep(saved: AnswerOutcome.Saved, front: String?, onTiming: (Long, Long) -> Unit, done: (List<GameEvent>) -> Unit) {
-            games += saved to front; onGame?.invoke(saved); onTiming(1, 2); done(emptyList())
+        override fun gameStep(answer: QueuedAnswer, front: String?, done: (List<GameEvent>, Long) -> Unit) {
+            games += answer to front; onGame?.invoke(answer); done(emptyList(), 2)
         }
+        override fun restored(answers: List<QueuedAnswer>, done: () -> Unit) {
+            restoredAsked += answers
+            val decide = onRestored
+            if (decide != null) decide(answers, done) else { for (a in answers) games += a to null; done() }
+        }
+        override fun settled(answer: QueuedAnswer, after: Map<String, String?>, saved: Boolean) { settles += Triple(answer, after, saved); onSettle?.invoke(answer) }
+        override fun dropped(answer: QueuedAnswer) { drops += answer }
         override fun log(text: String) { log += text }
 
         /** Runs what the io thread posted, like the main looper does. */
@@ -107,7 +120,8 @@ class AnswerHostTest {
         init {
             env.onExpect = { b, pinned -> own.expect(id(b), rep(b), fake.clock.ms, pinned) }
             env.onCancel = { b -> own.cancel(id(b), rep(b)) }
-            if (absorb) env.onGame = { saved -> own.consume(id(saved.answer.before), rep(saved.answer.before) - 1, rep(saved.answer.before), fake.clock.ms) } // the detector settles it
+            env.onGame = { a -> own.expect(id(a.before), rep(a.before), fake.clock.ms, pinned = true) } // LiveSession.ownAnswer pins it at the tap
+            if (absorb) env.onSettle = { a -> own.consume(id(a.before), rep(a.before) - 1, rep(a.before), fake.clock.ms) } // the detector settles it
         }
 
         /** The first try writes and throws; the next two reads fail: parked, with the card already answered in AnkiDroid. */
@@ -186,40 +200,46 @@ class AnswerHostTest {
             r.env.pumpUntil { seen.get() >= 0 }
             assertEquals("the replay ran before the first load", 1, seen.get())
             r.env.pump()
-            assertEquals("a write of this process: the game step runs once", 1, r.env.games.size)
+            assertEquals("the save did not hold it: the replay gave it its game step, once", 1, r.env.games.size)
             assertNull("a replayed answer has no card front", r.env.games.single().second)
+            assertEquals("and the write only settled it", 1, r.env.settles.size)
             assertEquals(0, AnswerJournal.decode(r.store.text).answers.size)
         } finally { r.close() }
     }
 
-    @Test fun anAnswerFoundAlreadyWrittenAfterARestartGetsNoGameStep() {
+    @Test fun anAnswerFoundAlreadyWrittenAfterARestartIsOnlySettled() {
         val fake = newFake(); val r = Rig(fake)
         try {
             val c = fake.queueOf(deck).first()
             val before = fake.stats(c.key)!!
             r.store.write(AnswerJournal.encode(listOf(QueuedAnswer(5, deck, c.nid, c.ord, c.id, before, 3, 500, 1))))
             fake.externalAnswer(c, 3)   // the dead process's write had applied
+            r.env.onRestored = { _, done -> done() }   // and its save held the game step
             val screen = Screen()
             r.host.start(); r.host.register(screen)
             r.env.pumpUntil { screen.outcomes.isNotEmpty() }
             assertTrue(screen.outcomes.single().first is AnswerOutcome.AlreadySaved)
-            assertEquals(0, r.env.games.size); assertEquals(0, r.env.expects.get())
+            assertEquals("no game step", 0, r.env.games.size)
+            val (a, after, saved) = r.env.settles.single()
+            assertEquals(5L, a.seq); assertFalse("an earlier process wrote it", saved); assertEquals("${before["reps"]!!.toInt() + 1}", after["reps"])
+            assertEquals("only the plain expectation that ends the replay's pin", listOf(false), r.env.pins.toList())
+            assertEquals("not written again", 1, fake.revlog.size)
         } finally { r.close() }
     }
 
-    @Test fun theGameStepRunsEvenWhenNoScreenIsLeft() {
+    @Test fun theAnswerIsSettledEvenWhenNoScreenIsLeft() {
         val fake = newFake(); val gate = Gate(fake); val r = Rig(fake, gate)
         try {
             r.host.start()
             val screen = Screen(); r.host.register(screen)
             r.host.enqueue(entry(r.host, fake), "What is 2+2?", screen)
+            assertEquals("the game step ran at the tap", "What is 2+2?", r.env.games.single().second)
             assertTrue(gate.inWrite.await(10, TimeUnit.SECONDS))
             r.host.unregister(screen)   // the screen is closed while the write is slow
             gate.release.countDown()
-            r.env.pumpUntil { r.env.games.isNotEmpty() }
-            assertEquals("What is 2+2?", r.env.games.single().second)
-            assertEquals(1, fake.revlog.size)
-            assertTrue("nobody was told, nobody needed to be", screen.outcomes.isEmpty() && screen.games.isEmpty())
+            r.env.pumpUntil { r.env.settles.isNotEmpty() }
+            assertEquals(1, fake.revlog.size); assertEquals("no second step", 1, r.env.games.size)
+            assertTrue("the end was told to nobody, nobody needed it", screen.outcomes.isEmpty())
         } finally { gate.release.countDown(); r.close() }
     }
 
@@ -229,7 +249,7 @@ class AnswerHostTest {
             val mine = Screen(); val other = Screen()
             r.host.register(mine); r.host.register(other)
             r.host.enqueue(entry(r.host, fake), "f", mine)
-            r.env.pumpUntil { mine.games.isNotEmpty() }
+            r.env.pumpUntil { mine.outcomes.isNotEmpty() }
             assertTrue(mine.outcomes.single().second.mine)
             assertEquals("its game step is its own too", listOf(true), mine.gameMine)
             assertTrue(other.outcomes.isEmpty()); assertTrue(other.games.isEmpty())
@@ -245,10 +265,11 @@ class AnswerHostTest {
             r.host.unregister(old)
             val fresh = Screen(); r.host.register(fresh)   // the screen was recreated while the write ran
             gate.release.countDown()
-            r.env.pumpUntil { fresh.games.isNotEmpty() }
+            r.env.pumpUntil { fresh.outcomes.isNotEmpty() }
             val (o, info) = fresh.outcomes.single()
             assertTrue(o is AnswerOutcome.Saved); assertFalse(info.mine)
-            assertEquals("the game step is told as someone else's: it does not belong in the new screen's summary", listOf(false), fresh.gameMine)
+            assertEquals("the game step was the old screen's, at its tap", listOf(true), old.gameMine)
+            assertTrue("the new screen never counts it in its summary", fresh.games.isEmpty())
             assertTrue(old.outcomes.isEmpty())
         } finally { gate.release.countDown(); r.close() }
     }
@@ -445,6 +466,7 @@ class AnswerHostTest {
             assertEquals(0, w.fake.revlog.size)
             assertEquals("cancelOwn removed the pinned expectation", 0, w.expectedAt(w.fake.clock.ms))
             assertTrue(w.env.pins.all { it }); assertEquals(1, w.env.cancels.get())
+            assertEquals("the game keeps the step it made at the tap", 1, w.env.games.size); assertEquals(1, w.env.drops.size)
         } finally { w.close() }
     }
 
@@ -464,6 +486,89 @@ class AnswerHostTest {
             val (o, info) = b.outcomes.single()
             assertEquals(AnswerOutcome.Reason.NOT_TOP, (o as AnswerOutcome.NotWritten).reason)
             assertFalse("told, but not B's answer", info.mine)
+        } finally { r.close() }
+    }
+
+    // ---- R10-B23: the game step runs at the tap; the write's end only settles it
+
+    @Test fun theGameStepRunsAtTheTapWhileTheWriteIsStillBlocked() {
+        val fake = newFake(); val gate = Gate(fake); val r = Rig(fake, gate)
+        try {
+            r.host.start()
+            val screen = Screen(); r.host.register(screen)
+            val a = entry(r.host, fake)
+            r.host.enqueue(a, "front", screen)
+            assertEquals("the step ran inside enqueue, on the tap", listOf(a.seq), r.env.games.map { it.first.seq })
+            assertEquals(listOf(a.seq), screen.games); assertEquals("its own answer: the summary counts it", listOf(true), screen.gameMine)
+            assertTrue(gate.inWrite.await(10, TimeUnit.SECONDS))
+            Thread.sleep(100)
+            assertEquals("AnkiDroid has nothing yet", 0, fake.revlog.size)
+            assertTrue("nothing settled while the write hangs", r.env.settles.isEmpty() && screen.outcomes.isEmpty())
+            gate.release.countDown()
+            r.env.pumpUntil { screen.outcomes.isNotEmpty() }
+            assertTrue(screen.outcomes.single().first is AnswerOutcome.Saved)
+            assertEquals("the Saved outcome does not count it again", 1, r.env.games.size); assertEquals(listOf(a.seq), screen.games)
+            val (settled, after, saved) = r.env.settles.single()
+            assertEquals(a.seq, settled.seq); assertTrue(saved); assertEquals("${a.before["reps"]!!.toInt() + 1}", after["reps"])
+            assertEquals(1, fake.revlog.size)
+        } finally { gate.release.countDown(); r.close() }
+    }
+
+    @Test fun anAnswerThatEndsNotWrittenKeepsItsGameStep() {
+        val fake = newFake(); val r = Rig(fake)
+        try {
+            val screen = Screen(); r.host.register(screen)
+            val a = entry(r.host, fake)
+            fake.moveToTop(fake.queueOf(deck).last())   // AnkiDroid shows another card first: NOT_TOP
+            r.host.enqueue(a, "f", screen)
+            r.env.pumpUntil { screen.outcomes.isNotEmpty() }
+            assertEquals(AnswerOutcome.Reason.NOT_TOP, (screen.outcomes.single().first as AnswerOutcome.NotWritten).reason)
+            assertEquals("the battle is never undone", listOf(a.seq), r.env.games.map { it.first.seq })
+            assertEquals(listOf(a.seq), r.env.drops.map { it.seq }); assertTrue(r.env.settles.isEmpty())
+            assertEquals(1, r.env.cancels.get()); assertEquals(0, fake.revlog.size)
+        } finally { r.close() }
+    }
+
+    @Test fun replayedAnswersReachAnkiDroidOnlyAfterTheGameDecidedWhichItCounted() {
+        val fake = newFake(); val r = Rig(fake)
+        try {
+            val c = fake.queueOf(deck).first()
+            r.store.write(AnswerJournal.encode(listOf(QueuedAnswer(9, deck, c.nid, c.ord, c.id, fake.stats(c.key)!!, 3, 500, 1))))
+            val decide = LinkedBlockingQueue<() -> Unit>()
+            r.env.onRestored = { _, done -> decide += done }   // the game is still loading
+            val loadRan = AtomicInteger(-1)
+            val calls = fake.count("answer") + fake.count("stats")
+            r.host.start()
+            r.host.submit(null, Runnable { loadRan.set(fake.revlog.size) })
+            Thread.sleep(300)
+            assertEquals("nothing reached AnkiDroid before the decision", calls, fake.count("answer") + fake.count("stats"))
+            assertEquals("and the first load waits behind the replay", -1, loadRan.get())
+            assertEquals(listOf(9L), r.env.restoredAsked.single().map { it.seq })
+            assertTrue(r.env.restoredAsked.single().single().restored)
+            decide.take().invoke()
+            r.env.pumpUntil { loadRan.get() >= 0 && r.env.settles.isNotEmpty() }
+            assertEquals("written before the load ran", 1, loadRan.get())
+            assertEquals("the game decided: no step from the host", 0, r.env.games.size)
+        } finally { r.close() }
+    }
+
+    @Test fun aDetectorPollThatSeesTheWriteLandNeverCountsTheAnswerTheTapCounted() {
+        val fake = newFake(); val r = Rig(fake)
+        try {
+            val own = OwnAnswers()
+            val a = entry(r.host, fake)
+            val id = a.cardId; val rep = a.before["reps"]!!.toInt() + 1
+            r.env.onGame = { own.expect(id, rep, 0, pinned = true) }   // LiveSession.ownAnswer at the tap
+            r.env.onExpect = { _, pinned -> own.expect(id, rep, 0, pinned) }
+            r.env.onSettle = { own.consume(id, rep - 1, rep, 0) }       // the settle's absorb
+            val screen = Screen(); r.host.register(screen)
+            r.host.enqueue(a, "f", screen)
+            val end = System.nanoTime() + 10_000_000_000L
+            while (fake.revlog.isEmpty() && System.nanoTime() < end) Thread.sleep(5)
+            assertEquals("a poll right after the write (before the outcome reached the main thread) finds it expected", 1, own.consume(id, rep - 1, rep, 1_000_000))
+            r.env.pumpUntil { screen.outcomes.isNotEmpty() }
+            assertEquals("so the detector counted nothing; the tap's step is the one count", 1, r.env.games.size)
+            assertEquals("nothing stays expected after the settle", 0, own.consume(id, rep - 1, rep, 1_000_000))
         } finally { r.close() }
     }
 

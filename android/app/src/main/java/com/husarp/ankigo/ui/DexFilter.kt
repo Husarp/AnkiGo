@@ -109,6 +109,9 @@ data class DexFilter(
     /** Anything beyond the defaults (used for the "No Pokémon match" line and the sort pill). */
     val active get() = owned != DexOwned.ALL || gens.isNotEmpty() || types.isNotEmpty() || wishlistOnly || query.isNotBlank()
 
+    /** How many of the filters that live in the sort sheet are on (wishlist, generations), for the sort chip's " · N". */
+    val sheetActive get() = (if (wishlistOnly) 1 else 0) + (if (gens.isNotEmpty()) 1 else 0)
+
     companion object {
         /** Species number -> newest caughtAt among the mons you own now. */
         fun lastCaught(mons: List<Mon>): Map<Int, Long> {

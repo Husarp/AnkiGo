@@ -95,4 +95,76 @@ class CompareScaleTest {
         assertEquals(darkBand, d[10])
         assertEquals(21, d.size)
     }
+
+    // ---- R10-F (B8): "vs reference" fills by the relative difference to the reference ----
+
+    @Test fun vsRefEqualHasNoFill() {
+        val l = CompareScale.vsRef(80, 80, white, false)
+        assertNull(l.fill); assertNull(l.ink)
+        assertNull(CompareScale.vsRef(80, 80, darkBand, true).fill)
+    }
+
+    @Test fun vsRefUnderTheCutHasNoFill() {
+        assertNull(CompareScale.vsRef(102, 100, white, false).fill)  // +2 %
+        assertNull(CompareScale.vsRef(95, 100, white, false).fill)   // -5 %
+        assertNotNull(CompareScale.vsRef(108, 100, white, false).fill) // +8 %
+        assertNotNull(CompareScale.vsRef(92, 100, white, false).fill)
+    }
+
+    @Test fun vsRefTenPercentBetterIsALightGreen() {
+        val l = CompareScale.vsRef(110, 100, white, false)
+        val (r, g, b) = rgb(l.fill!!)
+        assertTrue("green: g > r and g > b: ${rgb(l.fill!!)}", g > r && g > b)
+        assertNull("a light fill keeps the normal ink", l.ink)
+        // r = 0.10 -> p 0.6 -> d 0.2: the share of d 0.2 (0.14 + 0.66 * 0.2^1.2)
+        assertEquals(CompareScale.look(0.6f, white, false).fill, l.fill)
+    }
+
+    @Test fun vsRefSixtyPercentBetterIsFullGreenWithInk() {
+        val l = CompareScale.vsRef(160, 100, white, false)
+        assertEquals(CompareScale.look(1f, white, false).fill, l.fill)
+        assertEquals(0xFFFFFFFF.toInt(), l.ink)
+        // ... and further above is the same: the full colour is the end of the scale
+        assertEquals(l.fill, CompareScale.vsRef(400, 100, white, false).fill)
+        assertEquals(l.fill, CompareScale.vsRef(150, 100, white, false).fill) // exactly +50 %
+    }
+
+    @Test fun vsRefThirtyPercentWorseIsRed() {
+        val l = CompareScale.vsRef(70, 100, white, false)
+        val (r, g, b) = rgb(l.fill!!)
+        assertTrue("red: r > g and r > b: ${rgb(l.fill!!)}", r > g && r > b)
+        assertEquals(CompareScale.look(0.2f, white, false).fill, l.fill)
+        // the worse, the stronger
+        val worse = rgb(CompareScale.vsRef(40, 100, white, false).fill!!).second
+        assertTrue(worse < g)
+    }
+
+    @Test fun vsRefIsRelativeNotAbsolute() {
+        // +10 on 20 is half again as much (full), +10 on 200 is 5 % (nothing)
+        assertEquals(CompareScale.look(1f, white, false).fill, CompareScale.vsRef(30, 20, white, false).fill)
+        assertNull(CompareScale.vsRef(210, 200, white, false).fill)
+    }
+
+    @Test fun vsRefAgainstZeroUsesOne() {
+        assertEquals(1f, CompareScale.relative(1, 0), 0f)
+        assertEquals(-1f, CompareScale.relative(-1, 0), 0f)
+        assertEquals(0f, CompareScale.relative(0, 0), 0f)
+        assertEquals(CompareScale.look(1f, white, false).fill, CompareScale.vsRef(5, 0, white, false).fill) // anything above 0 is far above
+        assertNull(CompareScale.vsRef(0, 0, white, false).fill)
+    }
+
+    @Test fun vsRefInkSwitchesOnAStrongFillAndDarkUsesDarkInk() {
+        val strong = CompareScale.vsRef(10, 100, darkBand, true) // -90 % -> full red
+        assertEquals(0xFF11111B.toInt(), strong.ink)
+        assertNull(CompareScale.vsRef(112, 100, darkBand, true).ink) // a light fill: normal ink
+    }
+
+    @Test fun referenceGreyIsNeutralAndNotTheBand() {
+        val g = CompareScale.neutral(white, 0xFF9CA0B0.toInt())
+        val (r, gr, b) = rgb(g)
+        assertTrue("grey: channels within a few of each other: ${rgb(g)}", maxOf(r, gr, b) - minOf(r, gr, b) < 12)
+        assertTrue(g != white)
+        val dark = CompareScale.neutral(darkBand, 0xFF6C7086.toInt())
+        assertTrue(dark != darkBand)
+    }
 }

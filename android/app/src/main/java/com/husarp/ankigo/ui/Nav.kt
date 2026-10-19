@@ -26,7 +26,7 @@ object Nav {
         Dest.TEAM -> pokemon(TeamSection.TEAM)
         Dest.BOX -> pokemon(TeamSection.BOX)
         Dest.DEX -> pokemon(TeamSection.DEX)
-        Dest.SHOP -> pokemon(TeamSection.SHOP)
+        Dest.SHOP -> Target(ShopActivity::class.java, null, TAB_FLAGS) // the Shop is a tab of its own (R10 W11); onResume shows today's stock
         Dest.STATS -> stats(StatsSection.STATISTICS)
         Dest.ACHIEVEMENTS -> stats(StatsSection.ACHIEVEMENTS)
         Dest.SETTINGS -> Target(SettingsActivity::class.java)
@@ -37,10 +37,14 @@ object Nav {
     private fun home(v: HomeView) = Target(GameActivity::class.java, HomeView.EXTRA_VIEW to v.key,
         Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
-    // The Pokémon tab (Team · Box · Pokédex · Shop) and the Stats tab (Statistics · Achievements) are one Activity each, and both
+    // The Pokémon tab (Team · Box · Pokédex) and the Stats tab (Statistics · Achievements) are one Activity each, and both
     // handle onNewIntent (section, pick, details): an open one is brought to the front and told, never stacked a second time.
+    // The Shop tab has no sections: an open one is just brought to the front.
     private fun pokemon(s: TeamSection) = Target(TeamActivity::class.java, TeamActivity.EXTRA_SECTION to s.name, TAB_FLAGS)
     private fun stats(s: StatsSection) = Target(StatsActivity::class.java, StatsActivity.EXTRA_SECTION to s.name, TAB_FLAGS)
+
+    /** The section name the Pokémon tab used to have for the Shop: an old intent still carrying it is sent to the Shop tab ([TeamActivity]). */
+    const val OLD_SHOP_SECTION = "SHOP"
 
     /** The flags of the tab targets that reuse an open screen ([intent] carries them, so every start of a tab has them, not only [open]). */
     const val TAB_FLAGS = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP

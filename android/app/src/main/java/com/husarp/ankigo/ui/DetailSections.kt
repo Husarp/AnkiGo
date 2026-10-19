@@ -7,11 +7,13 @@ import android.graphics.PorterDuff
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.annotation.ColorRes
+import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 import com.husarp.ankigo.data.DexText
 import com.husarp.ankigo.game.Category
@@ -95,43 +97,58 @@ object DetailSections {
 
     // ---------- the marks of the header ----------
 
-    /** The state marks under the types (held item, can evolve, fainted, regional form and the other tags), small icon + label. */
+    /**
+     * The tags under the types (R10-W2-D, D7-A): per tag the same icon the Box / Pokédex tiles use for it in its mark colour, then the
+     * name in grey, sentence case, no background. A held item shows the item's own icon and name. Wraps to more lines when long;
+     * TalkBack reads them as one list ("Main, Team, Exp. Share …").
+     */
     fun marks(a: Context, tags: List<MonTag>): View {
-        val flow = FlowRow(a, Ui.dp(a, 4))
-        tags.take(8).forEach { t ->
+        val flow = FlowRow(a, Ui.dp(a, 6), lineGapPx = Ui.dp(a, 2))
+        tags.forEach { t ->
             val held = t.kind == TagKind.HELD && t.item != null
-            val ink = if (held) R.color.ag_text else R.color.ag_crust
-            val box = LinearLayout(a).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(Ui.dp(a, 6), Ui.dp(a, 3), Ui.dp(a, 7), Ui.dp(a, 3))
-                background = Ui.rounded(Ui.c(a, if (held) R.color.ag_s0 else markTone(t.kind)), 7, a)
-            }
             val img = ImageView(a)
-            if (held) Ui.itemIcon(a, t.item!!, img) else {
-                val icon = markIcon(t.kind)
-                if (icon != 0) img.apply { setImageResource(icon); setColorFilter(Ui.c(a, ink), PorterDuff.Mode.SRC_IN) }
+            if (held) Ui.itemIcon(a, t.item!!, img) else img.apply {
+                setImageResource(markIcon(t.kind))
+                setColorFilter(Ui.c(a, markTone(t.kind)), PorterDuff.Mode.SRC_IN)
+                scaleType = ImageView.ScaleType.FIT_CENTER
             }
-            if (held || markIcon(t.kind) != 0) box.addView(img, LinearLayout.LayoutParams(Ui.dp(a, 12), Ui.dp(a, 12)).also { it.marginEnd = Ui.dp(a, 4) })
-            box.addView(Ui.text(a, 10f, 900, ink).apply { text = t.label.uppercase(); letterSpacing = 0.06f; maxLines = 1 })
-            flow.addView(box)
+            img.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            val name = if (held) Items.name(t.item!!) else t.label
+            val label = Ui.text(a, 12f, 800, R.color.ag_sub1).apply { text = name; maxLines = 1 }
+            flow.addView(IconLabel(a, img, label, 14, 4).apply {
+                setPadding(Ui.dp(a, 4), Ui.dp(a, 2), Ui.dp(a, 4), Ui.dp(a, 2))
+                contentDescription = t.label
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            })
         }
+        flow.contentDescription = tags.joinToString(", ") { it.label }
+        flow.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
         return flow
     }
 
-    private fun markIcon(kind: TagKind): Int = when (kind) {
+    /** The icon of a tag: the tiles' (swords, team, Exp. Share, heart) where the tiles have one. */
+    @DrawableRes internal fun markIcon(kind: TagKind): Int = when (kind) {
+        TagKind.MAIN -> R.drawable.ic_swords
+        TagKind.TEAM -> BoxViews.TEAM_ICON
+        TagKind.EXP_SHARE -> R.drawable.ic_exp_share
+        TagKind.FAVOURITE -> R.drawable.ic_heart
         TagKind.FAINTED -> R.drawable.ic_alert
         TagKind.CAN_EVOLVE -> R.drawable.ic_up
+        TagKind.NEW -> R.drawable.ic_ach_sparkle
+        TagKind.SHINY -> R.drawable.ic_star
         TagKind.REGIONAL -> R.drawable.ic_flag
-        else -> 0
+        TagKind.HELD -> R.drawable.ic_star // never drawn: a held item shows its own icon
     }
 
-    @ColorRes private fun markTone(kind: TagKind): Int = when (kind) {
-        TagKind.MAIN -> R.color.ag_mauve
+    /** The mark colour of a tag, the same as on the tiles (Main peach, Team mauve, Exp. Share teal, Favourite pink). */
+    @ColorRes internal fun markTone(kind: TagKind): Int = when (kind) {
+        TagKind.MAIN -> R.color.ag_peach
+        TagKind.TEAM -> R.color.ag_mauve
+        TagKind.EXP_SHARE -> R.color.ag_teal
+        TagKind.FAVOURITE -> R.color.ag_pink
         TagKind.FAINTED -> R.color.ag_red
         TagKind.CAN_EVOLVE -> R.color.ag_green
         TagKind.NEW -> R.color.ag_sky
-        TagKind.EXP_SHARE -> R.color.ag_teal
         TagKind.HELD -> R.color.ag_s0
         TagKind.SHINY -> R.color.ag_yellow
         TagKind.REGIONAL -> R.color.ag_lav
@@ -177,8 +194,9 @@ object DetailSections {
     /**
      * Each move: kind icon, name, type chip + kind, power and accuracy; the one-line legend of the icons under them. No PP (the battle has none).
      * [unknown] = moves that are not known yet (the wild Pokémon's unused ones): a grey "?" line each, after the known ones.
+     * [levels] (R10-B4, the Pokédex entry's learnset) = one small label per id ("Lv 12") at the start of its row.
      */
-    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0): View {
+    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0, levels: List<String>? = null): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         val tap = MoveTap()
         if (ids.isEmpty() && unknown == 0) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "No moves" })
@@ -187,6 +205,7 @@ object DetailSections {
             if (i > 0) col.addView(View(a).apply { setBackgroundColor(Ui.c(a, R.color.ag_s0)); alpha = 0.6f }, LinearLayout.LayoutParams(-1, 1))
             if (m == null) { col.addView(Ui.text(a, 13f, 800, R.color.ag_text).apply { text = id; setPadding(0, Ui.dp(a, 8), 0, Ui.dp(a, 8)) }); return@forEachIndexed }
             val showPower = MoveText.showsPower(m)
+            val lvl = levels?.getOrNull(i)
             fun num(v: String, label: String) = LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -198,6 +217,7 @@ object DetailSections {
                 gravity = Gravity.CENTER_VERTICAL
                 minimumHeight = Ui.dp(a, 48)
                 setPadding(0, Ui.dp(a, if (compact) 6 else 8), 0, Ui.dp(a, if (compact) 6 else 8))
+                lvl?.let { addView(levelLabel(a, it), LinearLayout.LayoutParams(-2, -2)) }
                 addView(kindTile(a, m.category, 28), LinearLayout.LayoutParams(Ui.dp(a, 28), Ui.dp(a, 28)))
                 addView(LinearLayout(a).apply {
                     orientation = LinearLayout.VERTICAL
@@ -230,7 +250,7 @@ object DetailSections {
             col.addView(LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(row, LinearLayout.LayoutParams(-1, -2))
-                addView(desc, LinearLayout.LayoutParams(-1, -2).also { it.marginStart = Ui.dp(a, 38); it.bottomMargin = Ui.dp(a, 8) })
+                addView(desc, LinearLayout.LayoutParams(-1, -2).also { it.marginStart = Ui.dp(a, if (lvl != null) 38 + LEVEL_W else 38); it.bottomMargin = Ui.dp(a, 8) })
             })
         }
         repeat(unknown) { k ->
@@ -252,6 +272,13 @@ object DetailSections {
             }
         }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 4) })
         return col
+    }
+
+    private const val LEVEL_W = 44
+
+    /** The learn level at the start of a species' move row ("Lv 12", "Start"); at least [LEVEL_W] dp wide so the rows line up. */
+    private fun levelLabel(a: Context, text: String): TextView = Ui.text(a, 11f, 900, R.color.ag_sub0).apply {
+        this.text = text; minWidth = Ui.dp(a, LEVEL_W); maxLines = 1
     }
 
     /** The ScrollView of a details window: like [Bits.scroll], and it lets an open move text close on a tap anywhere. */
@@ -454,7 +481,14 @@ object DetailSections {
             col.addView(fact(a, abilities.first, null, abilities.second, abilities.third, compact))
         }
         col.addView(divider(a), LinearLayout.LayoutParams(-1, 1).also { it.topMargin = Ui.dp(a, 4); it.bottomMargin = Ui.dp(a, 10) })
-        col.addView(evolution(a, data, sp, seen, compact, onTap))
+        // R10-B18: the generation at the bottom-right, opposite the evolution text (standalone) or under the tree
+        val gen = Ui.text(a, 11f, 700, R.color.ag_sub0).apply { this.text = DetailFormat.generation(sp.gen); gravity = Gravity.END }
+        if (EvoLine.of(data, sp).standalone) {
+            col.addView(EvoGenRow(a, evolution(a, data, sp, seen, compact, onTap), gen), LinearLayout.LayoutParams(-1, -2))
+        } else {
+            col.addView(evolution(a, data, sp, seen, compact, onTap))
+            col.addView(gen, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+        }
         val load = {
             dexLoader(a, sp.baseNum) { e ->
                 if (e?.text != null) text.text = e.text else text.text = "Not downloaded yet — needs internet"
@@ -498,5 +532,53 @@ internal class TapWatchScroll(ctx: Context) : android.widget.ScrollView(ctx) {
         if (ev.actionMasked == android.view.MotionEvent.ACTION_UP && !moved) watchers.toList().forEach { it.tapped() }
         if (ev.actionMasked == android.view.MotionEvent.ACTION_UP || ev.actionMasked == android.view.MotionEvent.ACTION_CANCEL) watchers.toList().forEach { it.end() }
         return handled
+    }
+}
+
+/**
+ * R10-FIX (M1): the info row of a species that does not evolve: [evo] ("Does not evolve") on the left, [gen] at the right on the same
+ * line while both fit side by side; when they do not (a big font on a narrow screen) the generation goes right-aligned on its own line
+ * under the evolution text, as for an evolving species.
+ */
+internal class EvoGenRow(ctx: Context, private val evo: View, private val gen: View) : ViewGroup(ctx) {
+    private val gap = Ui.dp(ctx, 8)
+    private val under = Ui.dp(ctx, 6)
+
+    /** True when the last measure put the generation under the evolution text. */
+    internal var stacked = false
+        private set
+
+    init { addView(evo); addView(gen) }
+
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        val limit = if (MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE / 4 else MeasureSpec.getSize(widthSpec)
+        val unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        evo.measure(unspecified, unspecified)
+        gen.measure(unspecified, unspecified)
+        stacked = evo.measuredWidth + gap + gen.measuredWidth > limit
+        val height: Int
+        if (stacked) {
+            evo.measure(MeasureSpec.makeMeasureSpec(limit, MeasureSpec.AT_MOST), unspecified)
+            gen.measure(MeasureSpec.makeMeasureSpec(limit, MeasureSpec.AT_MOST), unspecified)
+            height = evo.measuredHeight + under + gen.measuredHeight
+        } else {
+            height = maxOf(evo.measuredHeight, gen.measuredHeight)
+        }
+        val width = if (MeasureSpec.getMode(widthSpec) == MeasureSpec.EXACTLY) limit
+            else if (stacked) minOf(limit, maxOf(evo.measuredWidth, gen.measuredWidth)) else evo.measuredWidth + gap + gen.measuredWidth
+        setMeasuredDimension(width, height)
+    }
+
+    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val w = r - l
+        if (stacked) {
+            evo.layout(0, 0, evo.measuredWidth, evo.measuredHeight)
+            val top = evo.measuredHeight + under
+            gen.layout(w - gen.measuredWidth, top, w, top + gen.measuredHeight)
+        } else {
+            val h = b - t
+            evo.layout(0, h - evo.measuredHeight, evo.measuredWidth, h)
+            gen.layout(w - gen.measuredWidth, h - gen.measuredHeight, w, h)
+        }
     }
 }

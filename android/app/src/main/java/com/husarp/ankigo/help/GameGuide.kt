@@ -73,19 +73,21 @@ object GameGuide {
 
     private fun n(d: Double): String = if (d == d.toLong().toDouble()) d.toLong().toString() else String.format(Locale.US, "%.1f", d)
     private fun pct(d: Double): String = n(d * 100)
-
-    /** The points one button gives, in the order Again / Hard / Good / Easy (Tuning.POINTS index 1..4). */
-    fun pointsText(): String = listOf("Again" to 1, "Hard" to 2, "Good" to 3, "Easy" to 4)
-        .joinToString(", ") { (name, i) -> "$name ${Tuning.POINTS[i]}" }
+    /** A factor with up to two decimals, no trailing zeros: 0.35, 1.2, 2. */
+    private fun x(d: Double): String = String.format(Locale.US, "%.2f", d).trimEnd('0').trimEnd('.')
 
     fun chapters(nums: GuideNumbers = GuideNumbers.pending()): List<GuideChapter> = listOf(
         GuideChapter(
             BATTLES, "Battles and XP",
             "Every answer you give is a move in a battle against a wild Pokémon.",
             listOf(
-                "A battle round is ${Tuning.CARDS_PER_ROUND} answers. Points per button: ${pointsText()}.",
-                "The multiplier is your points ÷ ${Tuning.POINTS_PER_CARD} for each answer in the round (${Tuning.POINTS_PER_CARD * Tuning.CARDS_PER_ROUND} for the round). Your damage is multiplied by it.",
-                "The wild Pokémon only attacks when the multiplier is below ×1, so Good and Easy answers keep you safe.",
+                "A battle round is ${Tuning.CARDS_PER_ROUND} answers, and each answer decides who attacks.",
+                "Your Main attacks when the round has a Good or an Easy answer. Good adds ×${x(Tuning.MAIN_POWER[3])} and Easy adds ×${x(Tuning.MAIN_POWER[4])} to its damage (Good + Good = ×${x(2 * Tuning.MAIN_POWER[3])}, Easy + Easy = ×${x(2 * Tuning.MAIN_POWER[4])}).",
+                "The wild Pokémon attacks when the round has an Again or a Hard answer. Again gives it ×${x(Tuning.WILD_POWER[1])} and Hard ×${x(Tuning.WILD_POWER[2])} of its normal damage (Again + Again = ×${x(2 * Tuning.WILD_POWER[1])}, Hard + Easy = ×${x(Tuning.WILD_POWER[2])}).",
+                "Both can attack in the same round. A round of only Good and Easy answers is safe: the wild Pokémon does nothing.",
+                "Switching your Main in the middle of a battle gives the wild Pokémon one free hit on the Pokémon you send in, at the damage of one Again (×${x(Tuning.SWITCH_HIT_POWER)}). It picks its move like in a round, and the answers you already gave stay as they were. This goes for every way of changing the Main (the switch menu, Team, Box, Compare). Replacing a Main that has fainted is free, and so is a switch with no wild Pokémon in the fight.",
+                "Move choice (Settings, Game, Battle) is how both Pokémon pick their move, yours and the wild one alike. Smart (the default) uses an attack ${pct(Tuning.SMART_DAMAGE_SHARE)}% of the time when it also has a status move that can still change something, and always when it has none. Smartest also prefers the stronger attack. Random picks any of its moves by chance, as before.",
+                "Smart and Smartest never use a status move that would do nothing (a stat already at its limit, a status the target already has or cannot get, healing at full HP) and never an attack the target is immune to unless nothing else is left. Accuracy and evasion stop at ±${Tuning.SMART_ACC_EVA_LIMIT} instead of ±6.",
                 "Beat it and your main Pokémon gets XP: its base experience × its level ÷ ${n(Tuning.XP_DIVISOR)}, at most ${Tuning.MAX_LEVELS_PER_GAIN} levels at a time.",
                 "An Exp. Share holder gets ${pct(Tuning.XP_SHARE_PART)}% of the XP and the main keeps the other half. A Lucky Egg holder gets ×${n(Tuning.LUCKY_EGG)} XP.",
             ),
@@ -137,6 +139,7 @@ object GameGuide {
                 "Poké Ball ${Tuning.BALL_CHANCE.getValue("poke-ball")}%, Great Ball ${Tuning.BALL_CHANCE.getValue("great-ball")}%, Ultra Ball ${Tuning.BALL_CHANCE.getValue("ultra-ball")}%, Master Ball ${Tuning.BALL_CHANCE.getValue("master-ball")}% per throw.",
                 "Net Ball and Dive Ball add ${Tuning.BALL_TYPE_BONUS} points against the types they like.",
                 "A catch counts as a win like a defeat: your trainer XP and defeat counts go up (an auto catch also gives your Pokémon the defeat XP). Only a defeat pays ₽.",
+                "When you beat a wild Pokémon without a ball, Settings → Game → \"When you beat a wild Pokémon\" decides: always catch, catch only new species (the default), catch new species and better copies (a higher-level copy replaces your old one), or defeat (only shinies and protected kinds are caught). A defeat pays ${nums.cashPerDefeat} ₽ and the XP; a catch gives the Pokémon and the same XP.",
                 "Your wishlist: you can add a Pokémon you have seen but not caught yet (open it in the Pokédex). Wishlisted Pokémon are always caught.",
                 "Each wild Pokémon is shiny with a 1 in ${Tuning.SHINY_ODDS} chance.",
             ),
@@ -155,6 +158,10 @@ object GameGuide {
                 "At most ${nums.dailyCashCap} a day from answers and defeats. A main Pokémon holding an Amulet Coin or a Luck Incense doubles that money (×2).",
                 "Reach your daily goal for a bonus of ${nums.dailyBonusStart} ₽, plus ${nums.dailyBonusPerStreakDay} ₽ for every day of your streak before today, up to ${nums.dailyBonusMax} ₽ after ${nums.dailyBonusMaxStreakDays} days in a row. The bonus is not part of the daily limit, and Amulet Coin or Luck Incense does not double it.",
                 "The Shop has ${Tuning.SHOP_BASE_SLOTS} items, plus one for every ${Tuning.SHOP_SLOTS_PER_LEVELS} trainer levels. A new offer costs ${Tuning.REROLL_PRICE}; a TM costs ${Tuning.TM_PRICE}.",
+                "Poké Balls and Potions are always on sale at their normal price, so you are never stuck without the basics. They are not part of the daily items.",
+                "Deal of the day: one item each day costs ${Tuning.DEAL_PERCENT}% less. Buy as many as you like at that price; a new offer doesn't change the deal.",
+                "Weekend special: on Saturday and Sunday the Shop also sells one rare thing, an evolution stone or a strong TM (a move with power ${Tuning.WEEKEND_TM_MIN_POWER} or more), at its normal price. It is the same on both days.",
+                "A small dot on the Shop tab means a new day's offers and deal are waiting and you haven't looked yet.",
                 "Worth buying: evolution items for Pokémon that need them, and better balls when you hunt for a rare Pokémon. You don't need many healing items, because your Pokémon heal on their own (see Healing).",
             ),
             listOf(

@@ -165,7 +165,7 @@ object Ui {
     }
 
     /** Chip with a tinted icon and a number/text, tinted by [colorRes] (mockup `.chip`). */
-    fun chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes colorRes: Int): Chip = Chip(ctx, iconRes, colorRes)
+    fun chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes colorRes: Int, plain: Boolean = false): Chip = Chip(ctx, iconRes, colorRes, null, plain)
 
     /** A [chip] with its own icon View (e.g. the animated streak flame); the tone then colours only the text. */
     fun chip(ctx: Context, iconView: View, @ColorRes colorRes: Int): Chip = Chip(ctx, 0, colorRes, iconView)
@@ -314,9 +314,9 @@ object Ui {
 }
 
 /**
- * Icon + text on an `ag_mantle` pill (mockup `.chip`): 13 dp icon, 11 sp / 800 text. Icon and text share one tone colour.
+ * Icon + text on an `ag_mantle` pill (mockup `.chip`; `plain` = no pill): 13 dp icon, 11 sp / 800 text. Icon and text share one tone colour.
  */
-class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, customIcon: View? = null) : LinearLayout(ctx) {
+class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, customIcon: View? = null, plain: Boolean = false) : LinearLayout(ctx) {
     private val icon: View = customIcon?.apply {
         // 16 dp (the Noto emoji has inner padding, so 13 looks small); the -2 dp margins keep the chip as tall as with 13
         layoutParams = LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.topMargin = -Ui.dp(ctx, 2); it.bottomMargin = -Ui.dp(ctx, 2); it.marginStart = -Ui.dp(ctx, 1) }
@@ -324,7 +324,8 @@ class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, cust
         setImageResource(iconRes)
         layoutParams = LayoutParams(Ui.dp(ctx, 13), Ui.dp(ctx, 13))
     }
-    private val tintsIcon = customIcon == null
+    // the gold money stack (R10-W5) keeps its own colours: only the text takes the tone
+    private val tintsIcon = customIcon == null && iconRes != R.drawable.ic_money
     val label: TextView = Ui.text(ctx, 11f, 800, toneRes).apply {
         maxLines = 1
         layoutParams = LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
@@ -336,9 +337,11 @@ class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, cust
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         // the streak flame (the only custom icon) never sits in its own box (R9-B7): no background, side padding trimmed
-        val side = if (customIcon == null) 7 else 2
+        // [plain] (R10-B17) drops the box the same way, for a chip drawn straight on a card
+        val boxed = customIcon == null && !plain
+        val side = if (boxed) 7 else 2
         setPadding(Ui.dp(ctx, side), Ui.dp(ctx, 4), Ui.dp(ctx, side), Ui.dp(ctx, 4))
-        if (customIcon == null) background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 9, ctx)
+        if (boxed) background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 9, ctx)
         addView(icon)
         addView(label)
         setTone(toneRes)
@@ -413,7 +416,7 @@ class AppBar(
                 if (pillIconRes != 0) {
                     addView(ImageView(ctx).apply {
                         setImageResource(pillIconRes)
-                        setColorFilter(Ui.c(ctx, pillIconColorRes), PorterDuff.Mode.SRC_IN)
+                        if (pillIconRes != R.drawable.ic_money) setColorFilter(Ui.c(ctx, pillIconColorRes), PorterDuff.Mode.SRC_IN) // the gold money stack is never tinted
                         layoutParams = LayoutParams(Ui.dp(ctx, 14), Ui.dp(ctx, 14)).also { it.marginEnd = Ui.dp(ctx, 4) }
                     })
                 }

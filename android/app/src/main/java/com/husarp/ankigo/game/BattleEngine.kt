@@ -54,28 +54,63 @@ object BattleEngine {
     private val STRUGGLE_MOVE = Move(Tuning.STRUGGLE, "Struggle", Type.NORMAL, Category.PHYSICAL, 50, null)
     private val TACKLE_MOVE = Move(Tuning.FALLBACK_MOVE, "Tackle", Type.NORMAL, Category.PHYSICAL, 40, 100)
 
-    private val SELF_TARGETS = setOf("self", "adjacentAllyOrSelf", "allies", "allySide")
-    private val BOOST_KEYS = listOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
+    internal val SELF_TARGETS = setOf("self", "adjacentAllyOrSelf", "allies", "allySide")
+    internal val BOOST_KEYS = listOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
     private val BOOST_LABELS = listOf("Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed", "accuracy", "evasiveness")
 
     /**
      * Plays one Ankimon battle round between the main and the wild Pokémon (mutates HP and battle sides):
-     * - main: a random move from its moves (Struggle when none of them can damage the wild one);
+     * - main: a random move from its moves (Struggle when none of them can damage the wild one) if [mainActs], otherwise nothing;
      * - wild: a random move if [enemyActs], otherwise Splash (no action, emits GameEvent.Splash);
      * - order: higher priority first, then higher effective speed; a tie goes to the wild one;
-     * - every damage the main deals is multiplied by [multiplier], and is at least 1 when the move hits a
-     *   non-immune target (Again+Again = multiplier 0 = 1 HP);
+     * - every damage the main deals is multiplied by [multiplier] and every damage the wild one deals by [enemyPower]
+     *   (Round 10: RoundRule picks both from the answers), and is at least 1 when the move hits a non-immune target;
      * - a fainted Pokémon doesn't act; end-of-turn burn/poison damage for both.
      * Returns Attack / Effect / Splash / Fainted events in order. Does NOT resolve catch/defeat/heal.
      * An Attack's damage is what really came off the target's HP (never more than it had left).
+     * Round 10 (W9): [moveChoice] is how both sides pick their move (see [MoveChooser]); RANDOM (the default here) is the old rule,
+     * the other two also stop accuracy / evasion stages at ±[Tuning.SMART_ACC_EVA_LIMIT].
      */
     fun playRound(
         data: GameData, battle: Battle, main: Mon, multiplier: Double, enemyActs: Boolean, rng: Random,
+        enemyPower: Double = 1.0, mainActs: Boolean = true, moveChoice: MoveChoice = MoveChoice.RANDOM,
     ): List<GameEvent> {
-        val r = Round(data, battle, main, multiplier.coerceAtLeast(0.0), rng)
-        r.play(enemyActs)
+        val r = Round(data, battle, main, multiplier.coerceAtLeast(0.0), enemyPower.coerceAtLeast(0.0), rng, moveChoice)
+        r.play(enemyActs, mainActs)
         battle.rounds++
         return r.events
+    }
+
+    /**
+     * Round 10 (W10): the free hit of a switch. ONE action of the wild one against [incoming] (the Main just sent in, already on
+     * fresh sides), at [power] of its normal damage (Tuning.SWITCH_HIT_POWER = one Again); it picks its move with [moveChoice] like in
+     * a round and every battle rule of an action applies (order of checks, accuracy, type, sleep / freeze / paralysis may stop it,
+     * secondary effects, recoil, drain). Unlike [playRound] the Main does not act, nothing counts as a round (battle.rounds stays)
+     * and there is no end-of-turn burn / poison damage. A charge move that would only charge is left out of the pick while the wild
+     * one has another move (see [pickSwitchHitMove]). Returns the Attack / Effect / Fainted events; resolves nothing.
+     */
+    fun switchHit(
+        data: GameData, battle: Battle, incoming: Mon, rng: Random,
+        moveChoice: MoveChoice = MoveChoice.RANDOM, power: Double = Tuning.SWITCH_HIT_POWER,
+    ): List<GameEvent> {
+        val r = Round(data, battle, incoming, 0.0, power.coerceAtLeast(0.0), rng, moveChoice)
+        r.wildStrikes()
+        return r.events
+    }
+
+    /**
+     * The move of the wild one's free hit: [MoveChooser.pickWild], but among the moves that really attack now. A charge move not yet
+     * charged in this fight would only spend the hit charging up, so it is left out while the wild one has any other move; with
+     * nothing else (every move is such a charge move) the choice is made among all of them and the wild one charges (no damage).
+     * With no charge move in play this is exactly [MoveChooser.pickWild] (same picks, same rng use).
+     */
+    internal fun pickSwitchHitMove(data: GameData, battle: Battle, incoming: Mon, rng: Random, choice: MoveChoice): Move {
+        val known = knownMoves(data, battle.wild)
+        val usable = known.filterNot { it.id in Tuning.CHARGE_MOVES && it.id !in battle.enemy.charged }
+        if (usable.isEmpty() || usable.size == known.size) return MoveChooser.pickWild(choice, data, battle, incoming, rng)
+        val w = battle.wild
+        val reduced = Mon(w.uid, w.species, w.name, w.level, w.xp, w.ivs, w.evs, w.nature, w.gender, w.shiny, w.ability, usable.map { it.id }.toMutableList(), w.hp)
+        return MoveChooser.pick(choice, data, rng, reduced, battle.enemy, battle.maxWildHp(data), incoming, battle.player, attackerIsMain = false)
     }
 
     /**
@@ -131,18 +166,40 @@ object BattleEngine {
     /** Accuracy/evasion stage multiplier: (3+s)/3 or 3/(3-s). */
     fun accStageMult(stage: Int): Double = if (stage >= 0) (3.0 + stage) / 3.0 else 3.0 / (3.0 - stage)
 
-    /** The move the main will use this round (random, Ankimon), Struggle when nothing can hurt the wild one. */
+    /** The moves of [mon] that the game data knows (Tackle when none). */
+    internal fun knownMoves(data: GameData, mon: Mon): List<Move> =
+        mon.moves.mapNotNull { data.move(it) }.ifEmpty { listOf(data.move(Tuning.FALLBACK_MOVE) ?: TACKLE_MOVE) }
+
+    /** The move the main will use this round (random, Ankimon), Struggle when nothing can hurt the wild one. This is the RANDOM move choice. */
     fun pickPlayerMove(data: GameData, main: Mon, wild: Mon, rng: Random): Move {
-        val known = main.moves.mapNotNull { data.move(it) }.ifEmpty { listOf(data.move(Tuning.FALLBACK_MOVE) ?: TACKLE_MOVE) }
+        val known = knownMoves(data, main)
         val wildTypes = data.sp(wild.species).types
         if (known.none { it.damaging && TypeChart.eff(it.type, wildTypes) > 0 }) return struggle(data)
         return known[rng.nextInt(known.size)]
     }
 
-    private fun struggle(data: GameData) = data.move(Tuning.STRUGGLE) ?: STRUGGLE_MOVE
+    /** The move the wild one uses this round with the RANDOM move choice: one of its moves by chance. */
+    internal fun pickWildMove(data: GameData, wild: Mon, rng: Random): Move {
+        val known = knownMoves(data, wild)
+        return known[rng.nextInt(known.size)]
+    }
+
+    internal fun struggle(data: GameData) = data.move(Tuning.STRUGGLE) ?: STRUGGLE_MOVE
+
+    /** Type immunities to a status: Electric can't be paralysed (nor a Ground type by an Electric move), Fire not burned, Ice not frozen, Poison / Steel not poisoned. */
+    internal fun canHaveStatus(targetTypes: List<Type>, status: String, moveType: Type): Boolean = when (status) {
+        "par" -> Type.ELECTRIC !in targetTypes && !(moveType == Type.ELECTRIC && Type.GROUND in targetTypes)
+        "brn" -> Type.FIRE !in targetTypes
+        "frz" -> Type.ICE !in targetTypes
+        "psn", "tox" -> Type.POISON !in targetTypes && Type.STEEL !in targetTypes
+        else -> true
+    }
 
     /** State of one round; keeps the two sides symmetric by addressing them with [p] = "the main's side". */
-    private class Round(val data: GameData, val battle: Battle, val main: Mon, val mult: Double, val rng: Random) {
+    private class Round(
+        val data: GameData, val battle: Battle, val main: Mon, val mult: Double, val enemyPower: Double, val rng: Random,
+        val moveChoice: MoveChoice = MoveChoice.RANDOM,
+    ) {
         val wild = battle.wild
         val events = ArrayList<GameEvent>()
         private var out: MutableList<GameEvent> = events
@@ -168,15 +225,12 @@ object BattleEngine {
             return if (side(p).status == "par") s * Tuning.PARA_SPEED else s
         }
 
-        fun play(enemyActs: Boolean) {
-            val playerMove = pickPlayerMove(data, main, wild, rng)
-            val enemyMove: Move? = if (enemyActs) {
-                val known = wild.moves.mapNotNull { data.move(it) }.ifEmpty { listOf(data.move(Tuning.FALLBACK_MOVE) ?: TACKLE_MOVE) }
-                known[rng.nextInt(known.size)]
-            } else null
+        fun play(enemyActs: Boolean, mainActs: Boolean) {
+            val playerMove: Move? = if (mainActs) MoveChooser.pickMain(moveChoice, data, battle, main, rng) else null
+            val enemyMove: Move? = if (enemyActs) MoveChooser.pickWild(moveChoice, data, battle, main, rng) else null
 
             val playerFirst = when {
-                (enemyMove?.priority ?: 0) != playerMove.priority -> playerMove.priority > (enemyMove?.priority ?: 0)
+                (enemyMove?.priority ?: 0) != (playerMove?.priority ?: 0) -> (playerMove?.priority ?: 0) > (enemyMove?.priority ?: 0)
                 else -> speed(true) > speed(false) // a tie goes to the wild one
             }
             val order = if (playerFirst) listOf(true, false) else listOf(false, true)
@@ -187,8 +241,15 @@ object BattleEngine {
             for (p in order) endOfTurn(p)
         }
 
+        /** The free hit of a switch (W10): the wild one's single action against [main]; no turn order, no Splash, no end-of-turn damage. */
+        fun wildStrikes() {
+            if (main.hp <= 0 || wild.hp <= 0) return // nothing to hit, or nobody left to hit with
+            act(false, pickSwitchHitMove(data, battle, main, rng, moveChoice))
+            checkFaint(true); checkFaint(false)
+        }
+
         private fun act(p: Boolean, move: Move?) {
-            if (move == null) { if (mon(p).hp > 0 && mon(!p).hp > 0) events += GameEvent.Splash(wild.name); return }
+            if (move == null) { if (!p && mon(p).hp > 0 && mon(!p).hp > 0) events += GameEvent.Splash(wild.name); return } // only the wild one's idle turn is shown
             if (mon(p).hp <= 0 || mon(!p).hp <= 0) return
             if (!canAct(p, move)) return
             if (move.id in Tuning.CHARGE_MOVES && side(p).charged.add(move.id)) { fx(p, chargeText(p, move), EffectKind.CHARGE); return }
@@ -282,7 +343,7 @@ object BattleEngine {
                 if (eff == 0.0) break
                 crit = crit || r.crit
                 var d = r.damage
-                if (p) d = maxOf(1, floor(d * mult).toInt()) // the multiplier only scales what the main deals
+                d = maxOf(1, floor(d * (if (p) mult else enemyPower)).toInt()) // R10-B22: each side's damage is scaled by its own answers-based factor
                 d = minOf(d, t.hp)
                 t.hp -= d; total += d; done++
             }
@@ -344,16 +405,7 @@ object BattleEngine {
             fx(p, text, kind, amount = before - mon(p).hp)
         }
 
-        private fun canHave(status: String, tp: Boolean, moveType: Type): Boolean {
-            val ts = types(tp)
-            return when (status) {
-                "par" -> Type.ELECTRIC !in ts && !(moveType == Type.ELECTRIC && Type.GROUND in ts)
-                "brn" -> Type.FIRE !in ts
-                "frz" -> Type.ICE !in ts
-                "psn", "tox" -> Type.POISON !in ts && Type.STEEL !in ts
-                else -> true
-            }
-        }
+        private fun canHave(status: String, tp: Boolean, moveType: Type): Boolean = canHaveStatus(types(tp), status, moveType)
 
         private fun setStatus(tp: Boolean, status: String, moveType: Type): Boolean {
             val s = side(tp)
@@ -380,10 +432,11 @@ object BattleEngine {
                 if (i < 0 || v == 0) continue
                 val b = side(tp).boosts
                 val label = "${mon(tp).name}'s ${BOOST_LABELS[i]}"
-                if (v > 0 && b[i] >= 6) { fx(tp, "$label won't go any higher!", EffectKind.STAT_LIMIT, key, 1); continue }
-                if (v < 0 && b[i] <= -6) { fx(tp, "$label won't go any lower!", EffectKind.STAT_LIMIT, key, -1); continue }
+                val limit = moveChoice.stageLimit(i) // 6; accuracy / evasion stop at ±2 with a smart move choice (W9)
+                if (v > 0 && b[i] >= limit) { fx(tp, "$label won't go any higher!", EffectKind.STAT_LIMIT, key, 1); continue }
+                if (v < 0 && b[i] <= -limit) { fx(tp, "$label won't go any lower!", EffectKind.STAT_LIMIT, key, -1); continue }
                 val before = b[i]
-                b[i] = (b[i] + v).coerceIn(-6, 6)
+                b[i] = if (v > 0) minOf(b[i] + v, limit) else maxOf(b[i] + v, -limit)
                 val applied = b[i] - before
                 changed = true
                 fx(tp, "$label " + when {

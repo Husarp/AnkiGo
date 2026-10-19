@@ -83,6 +83,85 @@ class AchievementPageMathTest {
         assertEquals("11 of 11", AchPageMath.groupCount(oneOffsEarned))
     }
 
+    // ---- tabs (R10 W2, D3-A) ----
+
+    /** A Study row far from its next tier and a Collection row close to it. */
+    private fun twoGroupViews(): List<AchView> = listOf(
+        view(tier = 1, value = 450, id = "catches"),
+        view(tier = -1, value = 0, id = "answers").let { v -> AchView(v.id, "Study", v.title, v.desc, v.icon, false, null, -1, null, emptyList(), 0, 10, 0f, v.tiers) },
+    )
+
+    @Test fun tabsAreAllThenEveryGroupInPageOrder() {
+        val g = AchPageMath.groups(worldViews(), AchFilter.ALL, NOW, SINCE)
+        assertEquals(listOf("All") + AchievementTable.GROUPS, AchPageMath.tabs(g))
+        // a group with no row has no tab
+        assertEquals(listOf("All", "Study", "Collection"), AchPageMath.tabs(AchPageMath.groups(twoGroupViews(), AchFilter.ALL, NOW, SINCE)))
+    }
+
+    @Test fun aTabThatIsGoneFallsBackToAll() {
+        val g = AchPageMath.groups(twoGroupViews(), AchFilter.ALL, NOW, SINCE)
+        assertEquals("Study", AchPageMath.tabOrAll(g, "Study"))
+        assertEquals("All", AchPageMath.tabOrAll(g, "Battle"))
+        assertEquals("All", AchPageMath.tabOrAll(g, "All"))
+    }
+
+    @Test fun theAllTabShowsEveryGroupThatHasRowsUnderTheFilter() {
+        val all = AchPageMath.groups(worldViews(), AchFilter.ALL, NOW, SINCE)
+        assertEquals(AchievementTable.GROUPS, AchPageMath.tabGroups(all, "All").map { it.name })
+        val close = AchPageMath.groups(twoGroupViews(), AchFilter.CLOSE, NOW, SINCE)
+        assertEquals(listOf("Collection"), AchPageMath.tabGroups(close, "All").map { it.name }) // the empty Study group has no header on All
+    }
+
+    @Test fun aGroupTabShowsOnlyThatGroupEvenWhenTheFilterEmptiesIt() {
+        val all = AchPageMath.groups(worldViews(), AchFilter.ALL, NOW, SINCE)
+        val battle = AchPageMath.tabGroups(all, "Battle")
+        assertEquals(listOf("Battle"), battle.map { it.name })
+        assertTrue(battle.single().shown.isNotEmpty() && battle.single().shown.all { it.group == "Battle" })
+        val close = AchPageMath.groups(twoGroupViews(), AchFilter.CLOSE, NOW, SINCE)
+        val study = AchPageMath.tabGroups(close, "Study")
+        assertEquals(1, study.size)          // the tab stays...
+        assertTrue(study.single().empty)     // ...and has nothing to show
+        assertTrue(AchPageMath.tabGroups(all, "Nope").isEmpty())
+    }
+
+    @Test fun theCountLineReadsTheTabAndItsTiers() {
+        val g = AchPageMath.groups(worldViews(), AchFilter.ALL, NOW, SINCE)
+        assertEquals("Battle · 0 of ${g.single { it.name == "Battle" }.all.filter { !it.oneOff }.sumOf { it.tiers.size }} tiers", AchPageMath.countLine(g, "Battle"))
+        assertEquals("Study · 0 of 35 tiers", AchPageMath.countLine(g, "Study"))
+        assertEquals("Badges · 0 of 11", AchPageMath.countLine(g, "Badges")) // one-offs: no "tiers"
+        assertEquals("All · 0 of ${AchPageMath.tiersTotal(worldViews())} tiers", AchPageMath.countLine(g, "All"))
+        // reached tiers count, whatever the filter shows
+        val two = twoGroupViews()
+        val close = AchPageMath.groups(two, AchFilter.CLOSE, NOW, SINCE)
+        assertEquals("Study · 0 of 5 tiers", AchPageMath.countLine(close, "Study"))
+        assertEquals("Collection · 2 of 5 tiers", AchPageMath.countLine(close, "Collection"))
+        assertEquals("All · 2 of 10 tiers", AchPageMath.countLine(close, "All"))
+        assertEquals("All · 2 of 10 tiers", AchPageMath.countLine(AchPageMath.groups(two, AchFilter.ALL, NOW, SINCE), "All"))
+    }
+
+    @Test fun theShowButtonNamesTheFilter() {
+        assertEquals("Show: All", AchPageMath.showLabel(AchFilter.ALL))
+        assertEquals("Show: Close to next", AchPageMath.showLabel(AchFilter.CLOSE))
+        assertEquals("Show: Recently reached", AchPageMath.showLabel(AchFilter.RECENT))
+    }
+
+    @Test fun anEmptyTabSaysWhatTheFilterLeftOut() {
+        assertEquals("Nothing close to the next tier in Battle", AchPageMath.emptyText(AchFilter.CLOSE, "Battle"))
+        assertEquals("Nothing reached in Battle in the last 14 days", AchPageMath.emptyText(AchFilter.RECENT, "Battle"))
+        assertEquals("Nothing is close to its next tier yet.", AchPageMath.emptyText(AchFilter.CLOSE, "All"))
+        assertEquals("Nothing reached in the last 14 days.", AchPageMath.emptyText(AchFilter.RECENT, "All"))
+        assertEquals("", AchPageMath.emptyText(AchFilter.ALL, "Battle"))
+    }
+
+    @Test fun seeItFindsTheRowsTabAndWhetherTheFilterShowsIt() {
+        assertEquals("Collection", AchPageMath.tabOf("catches"))
+        assertNull(AchPageMath.tabOf("no-such-row"))
+        val two = twoGroupViews()
+        assertTrue(AchPageMath.shows(AchPageMath.groups(two, AchFilter.CLOSE, NOW, SINCE), "catches"))
+        assertFalse(AchPageMath.shows(AchPageMath.groups(two, AchFilter.CLOSE, NOW, SINCE), "answers")) // filtered out: "See it" resets the filter
+        assertTrue(AchPageMath.shows(AchPageMath.groups(two, AchFilter.ALL, NOW, SINCE), "answers"))
+    }
+
     // ---- header ----
 
     @Test fun tierCountsCountEveryReachedTierOfTieredRowsOnly() {

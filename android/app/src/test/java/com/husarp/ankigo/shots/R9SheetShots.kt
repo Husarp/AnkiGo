@@ -196,7 +196,7 @@ class R9SheetShots {
             val maxBody = (ctx.resources.displayMetrics.heightPixels * SortSheet.BODY_SHARE).toInt() - Ui.dp(ctx, 150)
             val make = {
                 SortSheet(p, SortText.boxKeys, SortSpec.of(SortKey.LEVEL), SortSpec.DEFAULT, false, BoxFilter.entries.map { it.label }, 0,
-                    SortSheet.GroupToggle(true) {}, count = { 54 }, onChange = { _, _ -> }, sortOnly = false).build(maxBody)
+                    SortSheet.GroupToggle(true) {}, count = { 54 }, onChange = { _, _ -> }).build(maxBody)
             }
             check(ctx, make); scene(ctx, run(ctx, make()))
         }

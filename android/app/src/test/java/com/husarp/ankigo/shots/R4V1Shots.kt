@@ -111,6 +111,14 @@ class R4V1Shots {
         return p to screen
     }
 
+    /** The Shop tab (R10 W11: a page of its own, no longer a Pokémon-tab section) in an Activity, drawn once. */
+    private fun shopPage(ctx: Context): Pair<com.husarp.ankigo.ui.ShopPage, View> {
+        val p = com.husarp.ankigo.ui.ShopPage(ctx, ActivityHost(attach(Activity(), ctx)))
+        val screen = pageScreen(ctx, p)
+        call(p, "render")
+        return p to screen
+    }
+
     // ---------------- pure rules
 
     @Test fun theCardShowsForAReadyGameInAnActivity() {
@@ -164,12 +172,12 @@ class R4V1Shots {
         assertTrue("Pokédex numbers and generations: $dexTexts", dexTexts.any { it.startsWith("of ") && it.contains("Gen ") })
     }
 
-    @Test fun theSwitcherHasFourIconTabsAndOneSelected() {
+    @Test fun theSwitcherHasThreeIconTabsAndOneSelected() { // R10 W11: the Shop left the switcher (it is a bottom tab)
         val ctx = Shots.files(paparazzi.context).also { FakeGame.install(it) }
         for (s in TeamSection.entries) {
             val (p, screen) = page(ctx, s)
             val box = getField(p, "switchBox") as ViewGroup
-            assertEquals(listOf("Team", "Box", "Pokédex", "Shop"), (0 until box.childCount).map { box.getChildAt(it).contentDescription.toString() })
+            assertEquals(listOf("Team", "Box", "Pokédex"), (0 until box.childCount).map { box.getChildAt(it).contentDescription.toString() })
             // each tab: an icon over its label; only the selected one has the accent rounded square
             val on = (0 until box.childCount).filter { box.getChildAt(it).background != null }
             assertEquals("$s", listOf(s.ordinal), on)
@@ -186,10 +194,11 @@ class R4V1Shots {
         val ctx = Shots.files(paparazzi.context).also { FakeGame.install(it) }
         val (p, screen) = page(ctx, TeamSection.TEAM)
         val box = getField(p, "switchBox") as ViewGroup
-        box.getChildAt(TeamSection.SHOP.ordinal).performClick()
+        box.getChildAt(TeamSection.BOX.ordinal).performClick()
         call(p, "render")
-        assertTrue("TODAY'S SPECIALS" in texts(screen))
-        assertEquals(TeamSection.SHOP, getField(p, "section"))
+        assertEquals(View.VISIBLE, (getField(p, "boxList") as View).visibility)
+        assertEquals(TeamSection.BOX, getField(p, "section"))
+        assertNotNull(screen)
     }
 
     // ---------------- the battle card
@@ -199,7 +208,7 @@ class R4V1Shots {
         val (p, screen) = page(ctx, TeamSection.TEAM, FakeLive())
         assertTrue("BATTLE" in texts(screen))
         assertTrue("Pop out" in texts(screen))
-        for (s in listOf(TeamSection.BOX, TeamSection.DEX, TeamSection.SHOP)) {
+        for (s in listOf(TeamSection.BOX, TeamSection.DEX)) {
             p.showSection(s); call(p, "render")
             assertFalse("$s", "BATTLE" in texts(screen))
         }
@@ -320,14 +329,14 @@ class R4V1Shots {
     @Test fun theShopHasAnEasyToFindRefreshButton() {
         val ctx = Shots.files(paparazzi.context).also { FakeGame.install(it) }
         st.cash = 5000
-        val (_, screen) = page(ctx, TeamSection.SHOP)
+        val (_, screen) = shopPage(ctx)
         val btn = findText(screen) { it.startsWith("Refresh shop") }
         assertNotNull(texts(screen).toString(), btn)
         assertEquals("Refresh shop · 100 ₽", btn!!.text.toString())
         var row: View? = btn
         while (row != null && !row.isClickable) row = row.parent as? View
         assertEquals("a full-strength button when the money is there", 1f, row!!.alpha, 0f)
-        val (_, poor) = page(ctx.also { st.cash = 20 }, TeamSection.SHOP)
+        val (_, poor) = shopPage(ctx.also { st.cash = 20 })
         var weak: View? = findText(poor) { it.startsWith("Refresh shop") }
         while (weak != null && !weak.isClickable) weak = weak.parent as? View
         assertTrue("greyed out without the money", weak!!.alpha < 1f)
@@ -350,7 +359,7 @@ class R4V1Shots {
 
     @Test fun boxAndShopOnThePhone() {
         paparazzi.shootPage("r4v1-box", listOf(Variants.PHONE)) { ctx -> page(ctx, TeamSection.BOX).second }
-        paparazzi.shootPage("r4v1-shop", listOf(Variants.PHONE, Variants.SPLIT)) { ctx -> page(ctx, TeamSection.SHOP).second }
+        paparazzi.shootPage("r4v1-shop", listOf(Variants.PHONE, Variants.SPLIT)) { ctx -> shopPage(ctx).second }
     }
 
     @Test fun statsTab() {

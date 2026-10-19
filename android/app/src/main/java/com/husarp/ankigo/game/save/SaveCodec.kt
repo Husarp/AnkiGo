@@ -7,6 +7,7 @@ import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.DayLog
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.MoveChoice
 import com.husarp.ankigo.game.Nature
 import com.husarp.ankigo.game.Outcome
 import com.husarp.ankigo.game.Settings
@@ -163,12 +164,14 @@ object SaveCodec {
         kv("tally", b.tally); kv("answers", b.answers); kv("override", b.override?.name); kv("rounds", b.rounds)
         kv("startedAt", b.startedAt); kv("wildMaxHp", b.wildMaxHp)
         kv("failedThrows", b.failedThrows)
+        list("buttons", b.buttons)
     }
 
     private fun writeSettings(w: W, s: Settings) = w.obj {
         list("gens", s.gens.sorted())
         kv("fasterStartV2", s.fasterStart)
         kv("autoReleaseDuplicates", s.autoReleaseDuplicates)
+        kv("moveChoice", s.moveChoice.name)
         kv("autoMode", s.autoMode)
         kv("protectLegendary", s.protectLegendary); kv("protectMythical", s.protectMythical)
         kv("protectUltra", s.protectUltra); kv("protectStarter", s.protectStarter)
@@ -247,6 +250,7 @@ object SaveCodec {
             rounds = o.int("rounds", 0), startedAt = o.long("startedAt", 0),
             wildMaxHp = o.intOrNull("wildMaxHp")?.coerceAtLeast(1),
             failedThrows = o.int("failedThrows", 0).coerceAtLeast(0), // old saves: 0
+            buttons = (o.intList("buttons") ?: emptyList()).map { it.coerceIn(0, 4) }.toMutableList(), // old saves: none, Game.onAnswer restores them from the tally
         )
     }
 
@@ -261,6 +265,8 @@ object SaveCodec {
         s.protectStarter = o.bool("protectStarter", s.protectStarter)
         s.protectRegional = o.bool("protectRegional", s.protectRegional)
         s.autoReleaseDuplicates = o.bool("autoReleaseDuplicates", false)
+        com.husarp.ankigo.game.CatchChoice.normalize(s) // R10-X2: an old switch-on save with mode 1/2 keeps its mode, switch off
+        s.moveChoice = MoveChoice.parse(o.strOrNull("moveChoice")) // missing or unknown = SMART (old saves too)
         o.intList("wishlist")?.let { s.wishlist.clear(); s.wishlist.addAll(it) }
         s.dailyAverage = o.int("dailyAverage", s.dailyAverage)
         s.dayStartHour = o.int("dayStartHour", s.dayStartHour)

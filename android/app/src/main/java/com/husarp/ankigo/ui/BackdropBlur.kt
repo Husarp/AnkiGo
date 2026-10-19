@@ -22,6 +22,10 @@ internal object BackdropBlur {
     const val BRIGHTNESS = 0.55f
     const val SATURATION = 1.15f
 
+    /** The glass box's copy ([glass]): a finer blur (about 1.4 px at the working size, 7 px of a phone-wide picture) and saturation 1.35. */
+    const val GLASS_RADIUS = 1
+    const val GLASS_SATURATION = 1.35f
+
     /** The size of the copy of a [w] x [h] picture: the long side [MAX_SIDE] (never larger than the picture), the short side in proportion, at least 1. */
     fun smallSize(w: Int, h: Int): Pair<Int, Int> {
         if (w <= 0 || h <= 0) return 1 to 1
@@ -33,6 +37,13 @@ internal object BackdropBlur {
 
     /** The finished copy: [blur] then [grade]. [px] is not changed. */
     fun process(px: IntArray, w: Int, h: Int): IntArray = grade(blur(px, w, h))
+
+    /**
+     * Round 10 W7, the glass info box: the picture seen through frosted glass. Not darkened (brightness 1) and a little more colourful
+     * ([GLASS_SATURATION], the design page's `blur(7px) saturate(1.35)`), blurred less than the panel fill ([GLASS_RADIUS]): at the
+     * working copy's size a box's behind shows what is there, softened. [px] is not changed.
+     */
+    fun glass(px: IntArray, w: Int, h: Int): IntArray = grade(blur(px, w, h, GLASS_RADIUS), 1f, GLASS_SATURATION)
 
     /** [passes] box blurs of [radius] (horizontal then vertical each time; the edge pixels repeat outward), alpha included. [px] is not changed. */
     fun blur(px: IntArray, w: Int, h: Int, radius: Int = RADIUS, passes: Int = PASSES): IntArray {

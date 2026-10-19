@@ -2,12 +2,9 @@ package com.husarp.ankigo.ui
 
 import android.app.Activity
 import android.content.Intent
-import android.graphics.Color
-import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import com.husarp.ankigo.Anki
@@ -41,8 +38,6 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     private val prefs by lazy { act.getSharedPreferences("study", 0) }
     private var decks = emptyList<Anki.Deck>()
     private var expanded = DeckTree.decode(prefs.getStringSet("expandedDecks", null))
-    private var ankiIcon: Drawable? = null
-    private var ankiIconLoaded = false
     private var generation = 0
 
     /** Off in screenshots: they fill [decks] themselves and a background read must not replace it. */
@@ -113,12 +108,6 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
         if (kept != expanded) { expanded = kept; prefs.edit().putStringSet("expandedDecks", DeckTree.encode(kept)).apply() }
     }
 
-    /** AnkiDroid's own launcher icon, read once per screen; null when it is not installed or the icon can't be read. */
-    private fun ankiDroidIcon(): Drawable? {
-        if (!ankiIconLoaded) { ankiIconLoaded = true; ankiIcon = runCatching { act.packageManager.getApplicationIcon(Anki.pkg) }.getOrNull() }
-        return ankiIcon
-    }
-
     fun render() {
         if (!::content.isInitialized) return
         content.removeAllViews(); resumeSlot.removeAllViews(); resumeSlot.visibility = View.GONE
@@ -186,33 +175,8 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(act, 5) })
             row.addView(name, StudyUi.lp(0, -2, 1f).also { it.marginEnd = Ui.dp(act, 6); it.topMargin = Ui.dp(act, 8); it.bottomMargin = Ui.dp(act, 8) })
             DeckCounts.addTo(row, act, deck, countWidth)
-            row.addView(companionButton(deck), StudyUi.lp(Ui.dp(act, 48), Ui.dp(act, 48)))
             content.addView(row, StudyUi.lp().also { it.marginStart = Ui.dp(act, r.depth * 16); it.bottomMargin = Ui.dp(act, 5) })
         }
-    }
-
-    /** "Study in AnkiDroid": AnkiDroid's own icon (fallback: a neutral book glyph) with a small "opens another app" badge. */
-    private fun companionButton(deck: Anki.Deck): View = FrameLayout(act).apply {
-        contentDescription = "Study ${deck.name} in AnkiDroid"
-        tooltipText = "Study in AnkiDroid"
-        background = StudyUi.ripple(context, Ui.rounded(Color.TRANSPARENT, 12, context))
-        setOnClickListener { companion(deck) }
-        val icon = ankiDroidIcon()
-        if (icon != null) {
-            addView(ImageView(context).apply {
-                setImageDrawable(icon.constantState?.newDrawable(resources)?.mutate() ?: icon)
-                scaleType = ImageView.ScaleType.FIT_CENTER
-            }, FrameLayout.LayoutParams(Ui.dp(context, 26), Ui.dp(context, 26), Gravity.CENTER))
-        } else {
-            addView(FrameLayout(context).apply {
-                background = Ui.rounded(Ui.c(context, R.color.ag_mantle), 8, context)
-                addView(StudyUi.icon(context, R.drawable.ic_study, R.color.ag_sub1), FrameLayout.LayoutParams(Ui.dp(context, 18), Ui.dp(context, 18), Gravity.CENTER))
-            }, FrameLayout.LayoutParams(Ui.dp(context, 26), Ui.dp(context, 26), Gravity.CENTER))
-        }
-        addView(FrameLayout(context).apply {
-            background = Ui.rounded(Ui.c(context, R.color.ag_mantle), 8, context)
-            addView(StudyUi.icon(context, R.drawable.ic_open, R.color.ag_text), FrameLayout.LayoutParams(Ui.dp(context, 10), Ui.dp(context, 10), Gravity.CENTER))
-        }, FrameLayout.LayoutParams(Ui.dp(context, 16), Ui.dp(context, 16), Gravity.TOP or Gravity.START).also { it.leftMargin = Ui.dp(context, 29); it.topMargin = Ui.dp(context, 3) })
     }
 
     /** AnkiDroid takes changes (permission given, version new enough): New deck, New subdeck and Move all cards are offered. */

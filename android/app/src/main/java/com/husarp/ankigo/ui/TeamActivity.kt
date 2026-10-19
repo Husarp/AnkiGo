@@ -3,6 +3,7 @@ package com.husarp.ankigo.ui
 import com.husarp.ankigo.game.lookNum
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.graphics.Color
 import android.graphics.PorterDuff
 import android.graphics.drawable.ColorDrawable
@@ -27,16 +28,15 @@ import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.StatCalc
 
-// The Pokémon tab (the Team tab until round 4): one screen with four sections (Team / Box / Pokedex / Shop), a Compare picking
+// The Pokémon tab (the Team tab until round 4): one screen with three sections (Team / Box / Pokedex), a Compare picking
 // mode and a team Edit mode. Team = battle card + team rows (a ScrollView). Box = a ListView of 6-cell rows (recycled).
-// Pokedex = DexPage embedded. Shop = ShopPage embedded (its bag and buy flow work as on its own screen).
+// Pokedex = DexPage embedded. (The Shop is a tab of its own since round 10: ShopActivity.)
 // Tap = details, long-press = the actions menu. Edit mode shows up/down arrows on the team rows (no drag and drop:
 // framework Views have no easy drag list).
 class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : GamePage(base, host), PickHost {
     override val tab = BottomNav.Tab.POKEMON
 
     private lateinit var appBar: AppBar
-    private lateinit var shopHelp: ImageView      // the Shop's "?" (money guide), only on the Shop section
     private lateinit var switchBox: LinearLayout
     private lateinit var teamScroll: ScrollView
     private lateinit var teamCol: LinearLayout
@@ -45,13 +45,11 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private lateinit var boxHeader: LinearLayout
     private lateinit var unsupportedBox: LinearLayout // "Not supported yet" (PLAN 67), the end of the Box list
     private lateinit var dexBody: View
-    private lateinit var shopBody: View
     private lateinit var pickBar: LinearLayout
     private lateinit var pickHint: TextView
     private lateinit var pickGo: TextView
     private val actions by lazy { MonActions(this) }
     private val dexPage by lazy { DexPage(this, host, this) }
-    private val shopPage by lazy { ShopPage(this, host, embedded = true) }
     private var tiles: List<BoxTile> = emptyList()
     private var shown = 0 // Pokémon behind the tiles (after the filter)
 
@@ -84,8 +82,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     override fun buildBar(): View {
-        appBar = Ui.appBar(this, "Pokémon", "0", pillIconRes = R.drawable.ic_coin) // the coins on every section; the counts sit in the sections
-        shopHelp = appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) { shopPage.openMoneyHelp() }
+        appBar = Ui.appBar(this, "Pokémon", "0", pillIconRes = R.drawable.ic_money) // the coins on every section; the counts sit in the sections
         return appBar
     }
 
@@ -123,7 +120,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             adapter = this@TeamPage.adapter
         }
         dexBody = dexPage.embeddedBody()
-        shopBody = shopPage.embeddedBody()
 
         pickHint = Ui.text(this, 12f, 700, R.color.ag_sub0).apply { maxLines = 2 }
         pickGo = Ui.text(this, 13f, 900, R.color.ag_crust).apply { maxLines = 1 }
@@ -149,7 +145,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             addView(teamScroll, FrameLayout.LayoutParams(-1, -1))
             addView(boxList, FrameLayout.LayoutParams(-1, -1))
             addView(dexBody, FrameLayout.LayoutParams(-1, -1))
-            addView(shopBody, FrameLayout.LayoutParams(-1, -1))
         }
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -176,11 +171,9 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         UnsupportedBox.bind(unsupportedBox, st)
         adapter.notifyDataSetChanged()
         dexPage.renderEmbedded()
-        if (section == TeamSection.SHOP) shopPage.renderEmbedded()
         teamScroll.visibility = if (section == TeamSection.TEAM) View.VISIBLE else View.GONE
         boxList.visibility = if (section == TeamSection.BOX) View.VISIBLE else View.GONE
         dexBody.visibility = if (section == TeamSection.DEX) View.VISIBLE else View.GONE
-        shopBody.visibility = if (section == TeamSection.SHOP) View.VISIBLE else View.GONE
         drawPickBar()
         syncBattleCard()
         // A battle asked for a Pokémon's details (PLAN 86): open them once, after the first render.
@@ -192,7 +185,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     override fun onShow() {
         super.onShow()
         visible = true
-        if (section == TeamSection.SHOP) shopPage.rollDay()
     }
 
     override fun onHide() {
@@ -210,7 +202,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         if (s == section) return
         section = s
         editing = false
-        if (s == TeamSection.SHOP) shopPage.rollDay() // a new game day restocks the shop when it is opened
         requestRender()
     }
 
@@ -231,7 +222,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         }
     }
 
-    /** The Team / Box / Pokédex / Shop tabs: four equal tabs with an icon over each label, the selected one on an accent rounded square. */
+    /** The Team / Box / Pokédex tabs: three equal tabs with an icon over each label, the selected one on an accent rounded square. */
     private fun drawSwitch() {
         SectionSwitch.draw(this, switchBox, TeamSection.entries.map { SectionSwitch.Seg(it.label, it.icon) }, section.ordinal, SectionSwitch.Style.TABS) { showSection(TeamSection.entries[it]) }
     }
@@ -275,7 +266,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     private fun drawBar(teamSize: Int) {
         appBar.setPill(Bits.fmt(state.cash)) // the coins on every section (the counts are in the sections themselves)
-        shopHelp.visibility = if (section == TeamSection.SHOP) View.VISIBLE else View.GONE
     }
 
     // ---- Compare picking ----
@@ -325,7 +315,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     private fun drawPickBar() {
-        val show = pickOn && section != TeamSection.SHOP // ticks are kept while the Shop is open, the bar comes back with the other sections
+        val show = pickOn
         pickBar.visibility = if (show) View.VISIBLE else View.GONE
         if (!show) return
         val n = picks.size
@@ -425,8 +415,8 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     /**
-     * The chip row under the tabs (6A): the sort chip (name = small list of sorts, arrow = flip), "Filters" = the sheet with
-     * everything, ♥ Favourites, Shiny, and "In team" while that filter is on. Scrolls sideways when it is long.
+     * The chip row under the tabs (6A, R10 B14): the sort chip = the one sheet with everything (direction, sort, show, group
+     * duplicates), then the quick filters ♥ Favourites, Shiny, ... and "In team" while that filter is on. Scrolls sideways when it is long.
      */
     private fun boxControls(): View {
         val ctx = this
@@ -434,9 +424,8 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val shownSpec = boxSort.copy(key = MonSort.effectiveKey(boxSort, st)) // no battle: "vs the wild one" works as "strongest attack"
         val chips = ArrayList<View>()
         chips += TileViews.legendChip(ctx, dex = false)
-        sortPill = SortViews.sortChip(ctx, shownSpec) { openSortSheet(sortOnly = true) }
+        sortPill = SortViews.sortChip(ctx, shownSpec) { openSortSheet() }
         chips += sortPill
-        chips += BoxViews.chip(ctx, "Filters", false) { openSortSheet() } // next to the sort chip, so a narrow window still shows it
         chips += BoxViews.chip(ctx, "Favourites", boxFilter == BoxFilter.FAVOURITES, heart = true) { toggleBoxFilter(BoxFilter.FAVOURITES) }
         chips += BoxViews.chip(ctx, "Shiny", boxFilter == BoxFilter.SHINY) { toggleBoxFilter(BoxFilter.SHINY) }
         chips += BoxViews.chip(ctx, BoxFilter.HOLDS_ITEM.label, boxFilter == BoxFilter.HOLDS_ITEM) { toggleBoxFilter(BoxFilter.HOLDS_ITEM) }
@@ -466,9 +455,12 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     /** The one "Sort & filter" sheet. Changes apply at once; the Box behind it follows. */
-    private fun openSortSheet(sortOnly: Boolean = false) {
+    private fun openSortSheet() = sortSheet().show()
+
+    /** The sheet itself (tests build its view and click through it; there is no window to show a dialog in). */
+    internal fun sortSheet(): SortSheet {
         val labels = BoxFilter.entries.map { it.label }
-        SortSheet(
+        return SortSheet(
             this, SortText.boxKeys, boxSort, SortSpec.DEFAULT, MonSort.vsWildAvailable(state), labels, boxFilter.ordinal,
             if (pickOn) null else SortSheet.GroupToggle(grouped) { on -> grouped = on; AppPrefs.setBoxGrouped(this, on); requestRender() },
             count = { BoxTiles.filter(state.mons, boxFilter, state.team, state.settings.xpShareUid, ::canEvolve).size },
@@ -476,8 +468,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
                 if (spec != boxSort) setBoxSort(spec)
                 BoxFilter.entries.getOrNull(show)?.let { setBoxFilter(it) }
             },
-            sortOnly = sortOnly,
-        ).show()
+        )
     }
 
     /** A group tile (hold or tap): the sheet with all copies. A copy's details / actions work as everywhere else. */
@@ -732,11 +723,26 @@ class TeamActivity : PageActivity() {
         }
     }
 
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // an old intent (an old widget / notification) asking for the Pokémon tab's Shop section: the Shop is a tab of its own now
+        if (intent.getStringExtra(EXTRA_SECTION) == Nav.OLD_SHOP_SECTION) { openShopTab(); finish() }
+    }
+
+    private fun openShopTab() {
+        Nav.open(this, Dest.SHOP)
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
+    }
+
     /** An open that finds this screen already there (brought to the front, [Nav.TAB_FLAGS]) may ask for another section, for Compare picking or for a Pokémon's details. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        intent.getStringExtra(EXTRA_SECTION)?.let { teamPage?.showSection(TeamSection.of(it)) }
+        intent.getStringExtra(EXTRA_SECTION)?.let {
+            if (it == Nav.OLD_SHOP_SECTION) { intent.removeExtra(EXTRA_SECTION); openShopTab() } // removed: a rotation re-creates this screen with the same intent
+            else teamPage?.showSection(TeamSection.of(it))
+        }
         intent.getStringExtra(EXTRA_PICK_UID)?.let { intent.removeExtra(EXTRA_PICK_UID); teamPage?.startPickWith(it) }
         intent.getStringExtra(EXTRA_SHOW_UID)?.let { intent.removeExtra(EXTRA_SHOW_UID); teamPage?.showDetailsOnce(it) }
     }

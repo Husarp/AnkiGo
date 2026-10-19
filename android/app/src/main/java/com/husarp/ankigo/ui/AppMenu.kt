@@ -25,19 +25,35 @@ import com.husarp.ankigo.R
  * Use: `AppMenu(anchor).header("Title").item(1, "Team", R.drawable.ic_team).show { id -> … }`.
  */
 class AppMenu(private val anchor: View) {
-    private class Row(val id: Int, val label: String, @DrawableRes val icon: Int, val enabled: Boolean, val sub: String?, val danger: Boolean, val dividerAfter: Boolean = false, @ColorRes val tone: Int = 0)
+    private class Row(val id: Int, val label: String, @DrawableRes val icon: Int, val enabled: Boolean, val sub: String?, val danger: Boolean, val dividerAfter: Boolean = false, @ColorRes val tone: Int = 0, val extra: Boolean = false, val more: Boolean = false, val lessLabel: String = "", @DrawableRes val lessIcon: Int = 0)
 
     private val rows = ArrayList<Row>()
     private var title: String? = null
     private var titleSub: String? = null
     private var window: PopupWindow? = null
 
+    /** R10 "More": whether the [extra] rows are showing, and the views of the current [content] (so a tap can switch them in place). */
+    private var expanded = false
+    private var moreRow: View? = null
+    private val extraViews = ArrayList<View>()
+    private var frameView: View? = null
+
     /** Optional title (and a small line under it) above the rows. */
     fun header(title: String, sub: String? = null): AppMenu { this.title = title; titleSub = sub; return this }
 
     /** One row. A disabled row is dimmed and not clickable (its [sub] line stays readable); [danger] tints it red; [tone] (a colour res) tints only the icon. */
-    fun item(id: Int, label: String, @DrawableRes icon: Int, enabled: Boolean = true, sub: String? = null, danger: Boolean = false, dividerAfter: Boolean = false, @ColorRes tone: Int = 0): AppMenu {
-        rows.add(Row(id, label, icon, enabled, sub, danger, dividerAfter, tone))
+    fun item(id: Int, label: String, @DrawableRes icon: Int, enabled: Boolean = true, sub: String? = null, danger: Boolean = false, dividerAfter: Boolean = false, @ColorRes tone: Int = 0, extra: Boolean = false): AppMenu {
+        rows.add(Row(id, label, icon, enabled, sub, danger, dividerAfter, tone, extra))
+        return this
+    }
+
+    /**
+     * R10: the "More" row. Rows added with `extra = true` stay hidden until it is tapped; they then show right under it (wherever they
+     * were added), in the order added, and the same row reads [lessLabel] with [lessIcon]. The menu grows in place and is placed again
+     * so it stays on screen. Not remembered: a new menu opens collapsed. Without any extra row, nothing is shown for it.
+     */
+    fun more(id: Int, label: String = "More", @DrawableRes icon: Int = R.drawable.ic_down, lessLabel: String = "Less", @DrawableRes lessIcon: Int = R.drawable.ic_up): AppMenu {
+        rows.add(Row(id, label, icon, true, null, false, false, 0, false, true, lessLabel, lessIcon))
         return this
     }
 
@@ -50,23 +66,9 @@ class AppMenu(private val anchor: View) {
         picked = onPick
         intercept?.let { it(this); return }
         val ctx = anchor.context
-        val card = content(ctx)
-        // Everything in the anchor window's coordinates; the visible display frame (screen minus system bars, or the split / PiP
-        // window) is the box the menu must stay inside.
-        val frame = android.graphics.Rect().also { anchor.getWindowVisibleDisplayFrame(it) }
-        val onScreen = IntArray(2).also { anchor.getLocationOnScreen(it) }
-        val inWindow = IntArray(2).also { anchor.getLocationInWindow(it) }
-        val dx = onScreen[0] - inWindow[0]
-        val dy = onScreen[1] - inWindow[1]
-        val bounds = MenuPlacement.Box(frame.left - dx, frame.top - dy, frame.right - dx, frame.bottom - dy)
-        val maxW = minOf(Ui.dp(ctx, MAX_DP + 2 * PAD_DP), bounds.width)
-        card.measure(View.MeasureSpec.makeMeasureSpec(maxW, View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-        val pad = Ui.dp(ctx, PAD_DP)
-        val spot = MenuPlacement.place(
-            MenuPlacement.Box(inWindow[0], inWindow[1], inWindow[0] + anchor.width, inWindow[1] + anchor.height),
-            card.measuredWidth, card.measuredHeight, bounds, pad, Ui.dp(ctx, MIN_ROOM_DP),
-        )
-        val pw = PopupWindow(card, spot.width, spot.height, true)
+        val frame = content(ctx)
+        val spot = spotFor(ctx, frame)
+        val pw = PopupWindow(frame, spot.width, spot.height, true)
         pw.setBackgroundDrawable(ColorDrawable(0))
         pw.isOutsideTouchable = true
         pw.setIsClippedToScreen(true)
@@ -75,14 +77,70 @@ class AppMenu(private val anchor: View) {
         pw.showAtLocation(anchor, Gravity.TOP or Gravity.START, spot.x, spot.y)
     }
 
+    /** Measures [frame] and returns where its window goes (see [MenuPlacement]); also used again when "More" changes its height. */
+    private fun spotFor(ctx: Context, frame: View): MenuPlacement.Spot {
+        // Everything in the anchor window's coordinates; the visible display frame (screen minus system bars, or the split / PiP
+        // window) is the box the menu must stay inside.
+        val vis = android.graphics.Rect().also { anchor.getWindowVisibleDisplayFrame(it) }
+        val onScreen = IntArray(2).also { anchor.getLocationOnScreen(it) }
+        val inWindow = IntArray(2).also { anchor.getLocationInWindow(it) }
+        val dx = onScreen[0] - inWindow[0]
+        val dy = onScreen[1] - inWindow[1]
+        val bounds = MenuPlacement.Box(vis.left - dx, vis.top - dy, vis.right - dx, vis.bottom - dy)
+        val maxW = minOf(Ui.dp(ctx, MAX_DP + 2 * PAD_DP), bounds.width)
+        frame.measure(View.MeasureSpec.makeMeasureSpec(maxW, View.MeasureSpec.AT_MOST), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+        val pad = Ui.dp(ctx, PAD_DP)
+        return MenuPlacement.place(
+            MenuPlacement.Box(inWindow[0], inWindow[1], inWindow[0] + anchor.width, inWindow[1] + anchor.height),
+            frame.measuredWidth, frame.measuredHeight, bounds, pad, Ui.dp(ctx, MIN_ROOM_DP),
+        )
+    }
+
     private var picked: (Int) -> Unit = {}
+
+    private val hasMore get() = rows.any { it.more } && rows.any { it.extra }
+
+    /** Shows or hides the extra rows ([expandMore] / the More row's tap); the open popup is measured and placed again. */
+    internal fun toggleMore() {
+        if (!hasMore) return
+        expanded = !expanded
+        applyMore()
+        val pw = window; val frame = frameView
+        if (pw != null && pw.isShowing && frame != null) {
+            val spot = spotFor(frame.context, frame)
+            pw.update(spot.x, spot.y, spot.width, spot.height)
+        }
+    }
+
+    /** Tests: open the "More" group (no-op when it already is). */
+    internal fun expandMore() { if (!expanded) toggleMore() }
+    internal val isMoreExpanded: Boolean get() = expanded
+
+    private fun applyMore() {
+        extraViews.forEach { it.visibility = if (expanded) View.VISIBLE else View.GONE }
+        val row = moreRow as? LinearLayout ?: return
+        val r = rows.first { it.more }
+        (row.getChildAt(0) as ImageView).setImageResource(if (expanded) r.lessIcon else r.icon)
+        ((row.getChildAt(1) as LinearLayout).getChildAt(0) as TextView).text = if (expanded) r.lessLabel else r.label
+        androidx.core.view.ViewCompat.setStateDescription(row, if (expanded) "Expanded" else "Collapsed")
+    }
 
     /** Called by a row: closes the menu, then reports the id. Tests call it through the intercepted menu. */
     internal fun pick(id: Int) { dismiss(); com.husarp.ankigo.sound.GameSound.ui(anchor.context, com.husarp.ankigo.sound.SoundId.MENU); picked(id) }
 
     /** The rows as shown (tests read labels, enabled state and subs from here). */
-    internal fun describe(): List<Triple<Int, String, Boolean>> = rows.map { Triple(it.id, it.label, it.enabled) }
+    internal fun describe(): List<Triple<Int, String, Boolean>> = ordered().filter { shown(it) }.map { Triple(it.id, if (it.more && expanded) it.lessLabel else it.label, it.enabled) }
     internal fun subOf(id: Int): String? = rows.firstOrNull { it.id == id }?.sub
+
+    /** Rows in layout order: extra rows move to sit right under the More row (when there is one). */
+    private fun ordered(): List<Row> {
+        if (!hasMore) return rows.filter { !it.more }
+        val extras = rows.filter { it.extra }
+        return rows.filter { !it.extra }.flatMap { if (it.more) listOf(it) + extras else listOf(it) }
+    }
+
+    /** Visible now: a More row only with extras to show, extra rows only expanded. */
+    private fun shown(r: Row) = if (r.extra) !hasMore || expanded else true
 
     /** The menu's view: the card inside a transparent frame that leaves room for its shadow. Screenshots render this. */
     internal fun content(ctx: Context): View {
@@ -106,8 +164,12 @@ class AppMenu(private val anchor: View) {
             })
             card.addView(View(ctx).apply { setBackgroundColor(Ui.c(ctx, R.color.ag_s0)) }, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 1)).also { it.topMargin = Ui.dp(ctx, 2); it.bottomMargin = Ui.dp(ctx, 4) })
         }
-        for (r in rows) {
-            card.addView(rowView(ctx, r), LinearLayout.LayoutParams(-1, -2))
+        extraViews.clear(); moreRow = null
+        for (r in ordered()) {
+            val v = rowView(ctx, r)
+            if (r.extra && hasMore) extraViews += v
+            if (r.more) moreRow = v
+            card.addView(v, LinearLayout.LayoutParams(-1, -2))
             if (r.dividerAfter) card.addView(View(ctx).apply { setBackgroundColor(Ui.c(ctx, R.color.ag_s0)) }, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 1)).also { it.topMargin = Ui.dp(ctx, 2); it.bottomMargin = Ui.dp(ctx, 4) })
         }
         val scroll = ScrollView(ctx).apply { isVerticalScrollBarEnabled = false; addView(card, FrameLayout.LayoutParams(-2, -2)) }
@@ -124,7 +186,7 @@ class AppMenu(private val anchor: View) {
             clipChildren = false; clipToPadding = false
             setPadding(pad, pad, pad, pad)
             addView(scroll, FrameLayout.LayoutParams(-2, -2))
-        }.also { scroll.clipChildren = false; scroll.clipToPadding = false }
+        }.also { scroll.clipChildren = false; scroll.clipToPadding = false; frameView = it; applyMore() }
     }
 
     private fun rowView(ctx: Context, r: Row): View {
@@ -144,7 +206,9 @@ class AppMenu(private val anchor: View) {
                 addView(Ui.text(ctx, 14f, 800, if (r.danger) R.color.ag_red else R.color.ag_text).apply { text = r.label })
                 r.sub?.let { s -> addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = s }) }
             }, LinearLayout.LayoutParams(0, -2, 1f))
-            if (r.enabled) {
+            if (r.more) {
+                setOnClickListener { toggleMore() }
+            } else if (r.enabled) {
                 setOnClickListener { pick(r.id) }
             } else {
                 isClickable = false

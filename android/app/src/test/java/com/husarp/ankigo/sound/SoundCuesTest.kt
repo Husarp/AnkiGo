@@ -256,4 +256,10 @@ class SoundCuesTest {
         assertEquals(0L, SoundRules.scaledDelay(500, -1.0))
         assertEquals(500L, SoundRules.scaledDelay(500, 3.0))
     }
+
+    @Test fun theSwitchHitMarkerIsSilentAndTheAttackAfterItSoundsAsUsual() {
+        assertTrue(cues(GameEvent.SwitchHit("Wild", "A", 10, 20)).isEmpty())
+        val wildHit = GameEvent.Attack(false, "Wild", "A", "Tackle", null, Category.PHYSICAL, 10, 1, 1.0, false, false, false, 5, 20, 20, 20)
+        assertEquals(listOf("HIT" to 300L), cues(wildHit))
+    }
 }

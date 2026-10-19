@@ -86,7 +86,10 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         events += ensureEncounter()
         val battle = state.battle ?: return events
+        // R10-B22: who attacks depends on each answer, not on the point sum. A battle saved before keeps only the sum: restore the buttons from it.
+        if (battle.buttons.size != battle.answers) { battle.buttons.clear(); battle.buttons += RoundRule.restore(battle.answers, battle.tally) }
         battle.tally += points
+        battle.buttons += button
         battle.answers++
         val n = roundAnswers
         if (battle.answers < n) {
@@ -95,13 +98,21 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             return events
         }
 
-        val multiplier = battle.tally.toDouble() / (Tuning.POINTS_PER_CARD * n)
-        val enemyActs = multiplier < 1.0
-        events += GameEvent.RoundStart(multiplier, battle.tally, enemyActs)
+        val plan = RoundRule.plan(battle.buttons.takeLast(n))
+        events += GameEvent.RoundStart(plan.multiplier, battle.tally, plan.enemyActs, plan.mainActs, plan.enemyPower)
         battle.tally = 0
         battle.answers = 0
-        events += BattleEngine.playRound(data, battle, main, multiplier, enemyActs, rng)
+        battle.buttons.clear()
+        events += BattleEngine.playRound(data, battle, main, plan.multiplier, plan.enemyActs, rng, plan.enemyPower, plan.mainActs, state.settings.moveChoice)
+        settleFight(battle, main, events)
+        return events
+    }
 
+    /**
+     * What follows an action of the fight (a round, or the free hit of a switch): a wild one that fainted is caught or defeated,
+     * a Main that fainted is healed at once and the wild one is lost (Ankimon), then the next encounter starts if the fight is over.
+     */
+    private fun settleFight(battle: Battle, main: Mon, events: MutableList<GameEvent>) {
         if (battle.wild.hp <= 0) {
             resolveWild(battle, main, events)
             state.battle = null
@@ -114,7 +125,6 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         }
         events += ensureEncounter() // no-op while a fight is still going
         refreshNext()
-        return events
     }
 
     /** The wild one fainted: catch or defeat it by the auto rule (decide() honours a one-off override). Both count as a win (defeat counters, trainer XP); only a defeat gives ₽. */
@@ -286,16 +296,54 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     /**
      * Success result after a team change. When the main differs from [oldMain], the fight (if any) goes on with the new
      * one on fresh stat stages and status, and a MainChanged event says so. The new main keeps its own HP (Ankimon).
+     * Round 10 (W10): with a wild one in the fight the switch costs a hit, see [switchHit]. [oldMon] = the Pokémon that was the main
+     * before (looked up by [oldMain] unless the caller removed it from the game, like [release]).
      */
-    private fun changed(message: String, oldMain: String?): ActionResult {
+    private fun changed(message: String, oldMain: String?, oldMon: Mon? = oldMain?.let { state.mon(it) }): ActionResult {
         val events = mutableListOf<GameEvent>()
+        var text = message
         val main = state.main
         if (main != null && main.uid != oldMain) {
-            state.battle?.player = BattleSide()
+            val battle = state.battle
+            battle?.player = BattleSide()
             events += GameEvent.MainChanged(main.uid, main.name)
             refreshNext() // the wild level follows the main's level
+            if (battle != null && oldMon != null && switchCostsAHit(battle, oldMon, main)) {
+                val hit = switchHit(battle, main)
+                events += hit
+                text = SwitchHitText.withHit(message, hit, named = main.name in message)
+            } else if (battle != null && main.hp <= 0 && battle.wild.hp > 0) {
+                // A fainted Pokémon (an import, an old save) comes in during a fight: the normal faint settlement at once, no hit.
+                val settle = mutableListOf<GameEvent>()
+                settleFight(battle, main, settle)
+                events += settle
+                text = SwitchHitText.withFaintedIn(message)
+            }
         }
-        return ActionResult(true, message, events)
+        return ActionResult(true, text, events)
+    }
+
+    /**
+     * Round 10 (W10): a switch costs the hit only when there is a wild one to hit with and a Pokémon to hit: FREE when the old main
+     * had fainted (hp 0: replacing a fainted Pokémon is not a retreat), when the wild one has no HP left, and when the Pokémon that
+     * comes in is itself at 0 HP (it can't be hit; [changed] settles it at once instead: healed, the wild one is lost).
+     */
+    private fun switchCostsAHit(battle: Battle, oldMon: Mon, incoming: Mon): Boolean =
+        oldMon.hp > 0 && battle.wild.hp > 0 && incoming.hp > 0
+
+    /**
+     * The free hit: the wild one makes one attack at [incoming] at [Tuning.SWITCH_HIT_POWER] with the current move choice
+     * ([BattleEngine.switchHit]; no round is counted, no end-of-turn damage, the round's pending answers stay as they were). Then
+     * what a round does: a fainted wild one is resolved, a fainted Main is healed at once and the wild one is lost ([settleFight]).
+     * Counted for the stats and the achievements like any wild attack. Returns the events: the [GameEvent.SwitchHit] marker first.
+     */
+    private fun switchHit(battle: Battle, incoming: Mon): List<GameEvent> {
+        val hit = mutableListOf<GameEvent>(GameEvent.SwitchHit(battle.wild.name, incoming.name, incoming.hp, StatCalc.maxHp(data, incoming)))
+        hit += BattleEngine.switchHit(data, battle, incoming, rng, state.settings.moveChoice)
+        settleFight(battle, incoming, hit)
+        StudyStats.record(state, hit)
+        Achievements.settle(data, state, clock(), hit)
+        return hit
     }
 
     /** Puts [uid] first. A Pokémon from the box takes a free team place, or the last member's when the team is full. */
@@ -420,13 +468,14 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             return ActionResult(false, "Put another Pokémon in your team before releasing ${mon.name}.")
         }
         val old = state.team.firstOrNull()
+        val oldMon = state.main // released with the main: the switch hit still needs to know whether it had fainted
         mon.heldItem?.let { Economy.give(state, it) }
         mon.heldItem = null
         state.team.remove(uid)
         state.mons.remove(mon)
         if (state.settings.xpShareUid == uid) state.settings.xpShareUid = null
         rememberReleased(mon.ankimonId ?: mon.uid)
-        return changed("${mon.name} was released.", old)
+        return changed("${mon.name} was released.", old, oldMon)
     }
 
     /** The Ankimon export removes released Pokémon from the PC save: remember the id (newest 5 000 kept). */
@@ -435,6 +484,31 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         set.remove(id)
         set.add(id)
         while (set.size > RELEASED_KEPT) set.remove(set.first())
+    }
+
+    /**
+     * R10 B21 "Release duplicates": releases the lower-level copies [Duplicates.releasePlan] picks, in one action (one save), but ONLY
+     * those the player [confirmed] (the uids the dialog showed) that are still in a fresh plan (still not the keeper, still unprotected):
+     * a Pokémon that arrived or changed while the dialog was open is never released unasked. Each goes the way [release] does it (and is
+     * remembered for the Ankimon export). The keeper, the main, the team and every protected copy stay, so no species loses its last
+     * copy. Nothing left to release: not ok, nothing changes.
+     */
+    fun releaseDuplicates(confirmed: Set<String>): ActionResult {
+        val plan = Duplicates.releasePlan(data, state)
+        val go = plan.release.filter { it in confirmed }
+        if (go.isEmpty()) return ActionResult(false, if (plan.isEmpty && confirmed.isEmpty()) "No duplicates to release" else Duplicates.CHANGED_NOTHING)
+        val old = state.team.firstOrNull()
+        val oldMon = state.main
+        for (uid in go) {
+            val mon = state.mon(uid) ?: continue
+            mon.heldItem?.let { Economy.give(state, it) } // as in release(); a holder is protected, so this only guards a later change of the rule
+            mon.heldItem = null
+            state.team.remove(uid)
+            state.mons.remove(mon)
+            if (state.settings.xpShareUid == uid) state.settings.xpShareUid = null
+            rememberReleased(mon.ankimonId ?: mon.uid)
+        }
+        return changed(if (go.size == confirmed.size) "Released ${go.size} Pokémon" else "Released ${go.size} of ${confirmed.size} — your Pokémon changed", old, oldMon)
     }
 
     /**

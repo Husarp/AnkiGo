@@ -39,7 +39,7 @@ class SettingsSearchTest {
 
     @Test fun hitSaysWhereItLives() {
         val hit = SettingsSearch.match("always catch").first()
-        assertEquals("Game · Battle", hit.where)
+        assertEquals("Game · When you beat a wild Pokémon", hit.where)
         assertEquals("Look", SettingsSearch.match("interface size").first().where)
     }
 

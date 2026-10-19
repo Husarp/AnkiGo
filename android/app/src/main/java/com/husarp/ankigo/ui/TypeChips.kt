@@ -42,8 +42,11 @@ object TypeChips {
     fun tinted(ctx: Context, t: Type, color: Int): Drawable =
         ContextCompat.getDrawable(ctx, symbol(t))!!.mutate().also { it.setTint(color) }
 
-    /** A type chip in [style]. A TextView (callers set maxLines, text floors, click handlers on it as before). */
-    fun chip(ctx: Context, t: Type, style: TypeStyle = AppPrefs.typeStyle(ctx)): TextView = Chip(ctx, t, style)
+    /**
+     * A type chip in [style]. A TextView (callers set maxLines, text floors, click handlers on it as before). [dark]: the palette to paint
+     * in (default: the current theme's); the info boxes of the looks that are the same in light and dark ask for the dark one (Round 10 W7).
+     */
+    fun chip(ctx: Context, t: Type, style: TypeStyle = AppPrefs.typeStyle(ctx), dark: Boolean = isDark(ctx)): TextView = Chip(ctx, t, style, dark)
 
     /**
      * Dresses [tv] as a filter / sort chip of type [t]: the symbol before the name, both in the type colour; selected = soft tint
@@ -69,8 +72,8 @@ object TypeChips {
 
     private fun toast(v: View, name: String) = Ui.toast(v.context, name)
 
-    private class Chip(ctx: Context, private val type: Type, private val style: TypeStyle) : TextView(ctx) {
-        private val icon: Drawable? = if (style == TypeStyle.TEXT) null else tinted(ctx, type, ink(ctx, type))
+    private class Chip(ctx: Context, private val type: Type, private val style: TypeStyle, dark: Boolean) : TextView(ctx) {
+        private val icon: Drawable? = if (style == TypeStyle.TEXT) null else tinted(ctx, type, TypeInk.ink(Ui.typeColor(type), dark))
 
         init {
             typeface = Ui.font(ctx, 900)
@@ -78,8 +81,8 @@ object TypeChips {
             maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
-            setTextColor(ink(ctx, type))
-            background = Ui.rounded(fill(ctx, type), 6, ctx)
+            setTextColor(TypeInk.ink(Ui.typeColor(type), dark))
+            background = Ui.rounded(TypeInk.fill(Ui.typeColor(type), dark), 6, ctx)
             if (style == TypeStyle.ICON) {
                 // symbol only: a small rounded chip; the name comes from a long press (or a tap that does nothing else)
                 contentDescription = type.label

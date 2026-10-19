@@ -193,6 +193,19 @@ class AnswerFlowTest {
         assertFalse(AnswerTiming(0, all).line().contains("next card:"))
     }
 
+    @Test fun whyTheNextCardWaitedTheSwapsCauseAndTheVisitTallyShowInTheLine() { // R10-X1
+        val t = AnswerTiming(0, all); t.next = AnswerTiming.NONE; t.wait = "learning card due"
+        assertTrue(t.line(), t.line().contains("next card: none (waited: learning card due)"))
+        t.next = AnswerTiming.HIT
+        assertTrue("a shown prediction says nothing about a wait", t.line().contains("next card: predicted hit,"))
+        t.next = AnswerTiming.swap("a learning card came due")
+        assertTrue(t.line(), t.line().contains("next card: predicted miss (swap: a learning card came due)"))
+        assertEquals(AnswerTiming.MISS, AnswerTiming.swap(""))
+        assertFalse(t.line().contains("this visit"))
+        t.visit = "predicted 3 (hit 2, swap 1), waited 1 (learning card due 1)"
+        assertTrue(t.line(), t.line().endsWith("; this visit: predicted 3 (hit 2, swap 1), waited 1 (learning card due 1)"))
+    }
+
     @Test fun theWriteQueueLengthAndMainWaitShowOnlyWhenKnown() {
         val t = AnswerTiming(0, all)
         assertFalse(t.line().contains("write queue")); assertFalse(t.line().contains("main wait"))

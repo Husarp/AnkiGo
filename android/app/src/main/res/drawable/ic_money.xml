@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Money (round 10 D6-C): a stack of three gold coins. Fixed colours, the same in light and dark: never tint it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#C98A10" android:strokeColor="#8F5D06" android:strokeWidth="0.9"
+        android:pathData="M4,16.5v2.2c0,1.6 3.6,2.8 8,2.8s8,-1.2 8,-2.8v-2.2" />
+    <path android:fillColor="#C98A10" android:strokeColor="#8F5D06" android:strokeWidth="0.9"
+        android:pathData="M4,12.8V15c0,1.6 3.6,2.8 8,2.8s8,-1.2 8,-2.8v-2.2" />
+    <path android:fillColor="#C98A10" android:strokeColor="#8F5D06" android:strokeWidth="0.9"
+        android:pathData="M4,9.1v2.2c0,1.6 3.6,2.8 8,2.8s8,-1.2 8,-2.8V9.1" />
+    <path android:fillColor="#F4C33F" android:strokeColor="#8F5D06" android:strokeWidth="0.9"
+        android:pathData="M4,8.6a8,3.4 0 1,0 16,0a8,3.4 0 1,0 -16,0Z" />
+    <path android:strokeColor="#8F5D06" android:strokeWidth="0.9"
+        android:pathData="M7.8,8.6a4.2,1.5 0 1,0 8.4,0a4.2,1.5 0 1,0 -8.4,0Z" />
+</vector>

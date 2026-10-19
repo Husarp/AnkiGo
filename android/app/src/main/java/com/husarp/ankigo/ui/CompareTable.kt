@@ -14,8 +14,8 @@ import com.husarp.ankigo.game.shownName
 
 // PLAN item 9 (U-10): the data behind the Compare dialog. Pure Kotlin (no android.*): unit-tested on the JVM.
 
-/** One move in a Compare cell: [type] is null for a move the data doesn't know; [power] is "90" or "—". */
-data class MoveCell(val name: String, val type: Type?, val power: String)
+/** One move in a Compare cell: [type] is null for a move the data doesn't know; [power] is "90" or "—"; [id] is the move's id (R10-F: a tap opens its popup). */
+data class MoveCell(val name: String, val type: Type?, val power: String, val id: String = "")
 
 /** One matchup entry (now in game/TypeMatchups.kt, R4-04): attacking type, multiplier 4, 2, 0.5, 0.25 or 0. */
 typealias Matchup = com.husarp.ankigo.game.Matchup
@@ -223,8 +223,8 @@ object CompareTable {
             rows += CompareRow("moves", "Moves", owned.map { m ->
                 if (m == null) Cell.Text(DASH) else Cell.Moves(m.moves.map { id ->
                     val mv = data.move(id)
-                    if (mv == null) MoveCell(id, null, DASH)
-                    else MoveCell(mv.name, mv.type, if (mv.damaging && mv.power > 0) mv.power.toString() else DASH)
+                    if (mv == null) MoveCell(id, null, DASH, id)
+                    else MoveCell(mv.name, mv.type, if (mv.damaging && mv.power > 0) mv.power.toString() else DASH, id)
                 })
             }, section = "Moves")
         }

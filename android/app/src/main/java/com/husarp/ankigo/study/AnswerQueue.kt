@@ -12,10 +12,10 @@ sealed class AnswerOutcome {
     /** Attempt [attempt] failed ([reason]); the next one starts in [waitMs] ms, or on [AnswerQueue.retryNow] when [waitMs] < 0 (parked). */
     data class Retrying(override val answer: QueuedAnswer, val attempt: Int, val reason: String, val waitMs: Long) : AnswerOutcome()
 
-    /** Written and verified in this process: the game step runs now ([after] = the card as it is after the answer). */
+    /** Written and verified in this process ([after] = the card as it is after the answer). The game counted it at the tap (R10-B23): this settles it. */
     data class Saved(override val answer: QueuedAnswer, val after: Map<String, String?>, val attempts: Int, val answerMs: Long) : AnswerOutcome()
 
-    /** Found already written by a write of an earlier process: NO game step (the new detector finds it in its first full read). */
+    /** Found already written by a write of an earlier process (a journal replay; its game step was decided at the replay): this settles it. */
     data class AlreadySaved(override val answer: QueuedAnswer, val after: Map<String, String?>) : AnswerOutcome()
 
     /** NOT written, for a reason the user is told. */
@@ -124,7 +124,7 @@ class LockWaiter : Waiter {
  *
  * One answer (the head), attempt n:
  * ```
- *  R  (n > 1 or restored) read the card: saved -> Saved (a write of this process) | AlreadySaved (a dead process's: no game step) |
+ *  R  (n > 1 or restored) read the card: saved -> Saved (a write of this process) | AlreadySaved (a dead process's) |
  *     CHANGED (neither could have written: it was answered elsewhere); same as before -> go on; unreadable -> FAIL; else CHANGED
  *  1  select the deck (unless known selected; always when n > 1)
  *  2  top(deck) == key?  no -> (look again after a real select, if the first select was skipped) NOT_TOP
@@ -306,7 +306,7 @@ class AnswerQueue(
         }
     }
 
-    /** Found written by reconcile: an own write of this process means the game step runs, else it was an earlier process's. */
+    /** Found written by reconcile: an own write of this process (Saved), else an earlier process's (AlreadySaved). */
     private fun wasSaved(s: Slot, now: Map<String, String?>): AnswerOutcome =
         if (s.attempted) AnswerOutcome.Saved(s.a, now, s.n, s.answerMs) else AnswerOutcome.AlreadySaved(s.a, now)
 

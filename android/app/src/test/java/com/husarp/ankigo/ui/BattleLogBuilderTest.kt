@@ -46,6 +46,19 @@ class BattleLogBuilderTest {
         assertEquals(15, b.battles[0].coins)
     }
 
+    @Test fun theWildOnesScaledHitShowsItsPowerAndOnlyThatRound() {
+        val b = builder()
+        b.feed(encounter())
+        b.feed(listOf(counted(2), GameEvent.RoundStart(1.0, 25, true, true, 0.35),
+            hit(false, "Wildling", "Sparkmouse", "Bite", 3, 37, 30), hit(true, "Sparkmouse", "Wildling", "Zap", 10, 20)))
+        b.feed(listOf(counted(1), GameEvent.RoundStart(0.0, 0, true, false, 1.0), hit(false, "Wildling", "Sparkmouse", "Bite", 9, 28, 30)))
+        val rounds = b.battles[0].rounds
+        assertTrue(rounds[0].lines[0].text, "×0.35 power" in rounds[0].lines[0].text)
+        assertFalse("power" in rounds[0].lines[1].text) // the Main's line has no such part
+        assertFalse("power" in rounds[1].lines[0].text) // full power: nothing to add
+        assertEquals(0.0, rounds[1].multiplier!!, 0.0)
+    }
+
     @Test fun answersAndMovesLandInTheirRound() {
         val b = builder()
         fight(b)
@@ -259,5 +272,49 @@ class BattleLogBuilderTest {
         assertEquals(40, long.length)
         assertTrue(long.endsWith("…"))
         assertEquals("", BattleLog.plain("<img src=a.png>"))
+    }
+
+    // ---- R10 W10: the free hit of a switch ----
+
+    @Test fun theSwitchHitIsAMarkerLineAndTheAttackLineInTheRoundItHappenedIn() {
+        val b = builder()
+        b.feed(encounter())
+        b.answer("live", 5, 1, null)
+        b.feed(listOf(counted(1), GameEvent.Charge(0, 1, 2)))   // a round is collecting: one answer in
+        b.feed(listOf(GameEvent.MainChanged("u2", "Birdie"), GameEvent.SwitchHit("Wildling", "Birdie", 30, 30),
+            hit(false, "Wildling", "Birdie", "Bite", 9, 21, 30)))
+        // the pending answer's round keeps its answer and gets the lines; the next answer completes THAT round
+        b.answer("live", 6, 3, null)
+        b.feed(listOf(counted(3), GameEvent.RoundStart(1.0, 10, true, true, 1.0), hit(true, "Birdie", "Wildling", "Zap", 4, 26)))
+        val round = b.battles.single().rounds.single()
+        assertEquals(2, round.answers.size)
+        assertEquals("Birdie comes in — the wild Wildling attacks!", round.lines[0].text)
+        assertEquals("Wildling used Bite · 9 damage · Birdie 21/30 HP", round.lines[1].text)
+        assertEquals(Tone.BAD, round.lines[1].tone)
+        assertTrue(round.lines[2].text.startsWith("Birdie used Zap"))
+    }
+
+    @Test fun theSwitchHitIsAtNormalPowerWhateverTheRoundBeforeHad() {
+        val b = builder()
+        b.feed(encounter())
+        b.feed(listOf(counted(2), GameEvent.RoundStart(1.0, 25, true, true, 0.35), hit(false, "Wildling", "Sparkmouse", "Bite", 3, 37, 30)))
+        b.feed(listOf(GameEvent.MainChanged("u2", "Birdie"), GameEvent.SwitchHit("Wild Wildling", "Birdie", 30, 30),   // (a name with "Wild " in front is shown once)
+            hit(false, "Wildling", "Birdie", "Bite", 9, 21, 30)))
+        val lines = b.battles.single().rounds.single().lines.map { it.text }
+        assertTrue(lines[0], "×0.35 power" in lines[0])
+        assertEquals("Birdie comes in — the wild Wildling attacks!", lines[1])
+        assertFalse(lines[2], "power" in lines[2])
+    }
+
+    @Test fun aSwitchHitThatMakesTheNewMainFaintEndsTheFightLikeARound() {
+        val b = builder()
+        b.feed(encounter())
+        b.feed(listOf(GameEvent.MainChanged("u2", "Birdie"), GameEvent.SwitchHit("Wildling", "Birdie", 4, 30),
+            hit(false, "Wildling", "Birdie", "Bite", 4, 0, 30), GameEvent.Fainted(true, "Birdie"), GameEvent.MainHealed("u2", "Birdie", 30), encounter("Next")))
+        val first = b.battles[0]
+        assertEquals(Outcome.LOST, first.outcome)
+        assertEquals("Birdie fainted", first.rounds.single().lines.last().text)
+        assertEquals("Birdie was healed to 30 HP · the wild one is lost", first.result.single().text)
+        assertEquals("Next", b.battles[1].wild)
     }
 }

@@ -345,4 +345,140 @@ class NextCardTest {
             }
         }
     }
+
+    // ---- R10-X1: a prediction shows only when it is safe; "Show answer" on a predicted card waits for the confirm
+
+    /** card 1 confirmed with card 2 prepared for it (token 1); the check answers [why] and records what it was asked. */
+    private class Checked(var why: PredictRule.Why = PredictRule.Why.SAFE) {
+        var seq = 10L
+        val asked = ArrayList<Triple<StudyLoop.Key, StudyLoop.Key, Long>>()
+        val nc = NextCard<String>(1, { ++seq }, { 4242L }) { a, n, now -> asked += Triple(a.key, n.key, now); why }
+        fun key(n: Int) = StudyLoop.Key(100L + n, 0)
+        fun card(n: Int) = Prepared(key(n), mapOf("_id" to "$n", "note_id" to "${100 + n}", "deck_id" to "1", "reps" to "3", "due" to "5", "queue" to "2", "last_review_time_secs" to "9"), "c$n")
+        fun ready(next: Int = 2): Checked { nc.reload(); nc.loaded(1, card(1), listOf(key(1), key(next), key(9))); nc.prepared(key(1), 1, card(next)); return this }
+    }
+
+    @Test fun aPredictionTheCheckHoldsBackMakesTheAnswerWaitForTheRealCard() {
+        val r = Checked(PredictRule.Why.LEARNING_DUE).ready()
+        val cmds = r.nc.tapAnswer(3, 1)
+        assertTrue(cmds[0] is Cmd.Enqueue); assertEquals(Cmd.ShowWaiting, cmds[1]); assertEquals("nothing predicted is asked for", Cmd.Load(2, null), cmds[2])
+        assertEquals(NextCard.Slot.Loading(2), r.nc.slot)
+        assertEquals(mapOf(PredictRule.Why.LEARNING_DUE to 1), r.nc.withheld); assertEquals(0, r.nc.noPrediction); assertEquals(0, r.nc.predicted)
+        assertEquals("learning card due", r.nc.lastWait)
+        r.nc.loaded(2, r.card(7), listOf(r.key(7), r.key(2))) // the learning card that came due
+        assertEquals("a wait is no swap", 0, r.nc.misses)
+    }
+
+    @Test fun theCheckSeesTheAnsweredCardThePreparedOneAndTheTapTime() {
+        val r = Checked().ready()
+        r.nc.tapAnswer(3, 1)
+        assertEquals(listOf(Triple(r.key(1), r.key(2), 4242L)), r.asked)
+    }
+
+    @Test fun aSafePredictionShowsAtOnceAndIsCounted() {
+        val r = Checked().ready()
+        val cmds = r.nc.tapAnswer(3, 1)
+        assertEquals(Cmd.Show(r.card(2), predicted = true), cmds[1]); assertEquals(Cmd.Load(2, r.key(2)), cmds[2])
+        assertEquals(1, r.nc.predicted); assertEquals("", r.nc.lastWait); assertTrue(r.nc.withheld.isEmpty())
+    }
+
+    @Test fun nothingPreparedIsNotAskedAndCountedApart() {
+        val r = Checked(PredictRule.Why.OLD); r.nc.reload(); r.nc.loaded(1, r.card(1), listOf(r.key(1), r.key(2)))
+        r.nc.tapAnswer(3, 1)
+        assertTrue(r.asked.isEmpty()); assertEquals(1, r.nc.noPrediction); assertEquals(NextCard.NOTHING, r.nc.lastWait)
+    }
+
+    @Test fun theTallyCountsPredictionsSwapsAndWaits() {
+        val r = Checked().ready()
+        assertEquals("predicted 0 (hit 0, swap 0), waited 0", r.nc.tally())
+        r.nc.tapAnswer(3, 1); r.nc.confirmed(2, r.key(2), listOf(r.key(2), r.key(3)), next = r.card(3)) // hit; card 3 predicted for card 2
+        r.nc.tapAnswer(3, 1); r.nc.swapped(3, r.card(8), listOf(r.key(8), r.key(3))) // swap
+        r.nc.prepared(r.key(8), 3, r.card(3)); r.why = PredictRule.Why.LEARNING_DUE
+        r.nc.tapAnswer(3, 1); r.nc.loaded(4, r.card(3), listOf(r.key(3))) // held back
+        r.nc.tapAnswer(3, 1) // nothing prepared (the last card)
+        assertEquals("predicted 2 (hit 1, swap 1), waited 2 (learning card due 1, nothing prepared 1)", r.nc.tally())
+    }
+
+    @Test fun aSwapNamesWhatCameFirst() {
+        fun swapTo(top: Prepared<String>, queue: List<StudyLoop.Key>): String {
+            val r = Checked().ready(); r.nc.tapAnswer(1, 1)
+            r.nc.swapped(2, top, queue)
+            return r.nc.lastSwap
+        }
+        val c = Checked()
+        assertEquals("the answered card came back", swapTo(c.card(1), listOf(c.key(1), c.key(2))))
+        assertEquals("a learning card came due", swapTo(c.card(7).copy(before = c.card(7).before + ("queue" to "1")), listOf(c.key(7), c.key(2))))
+        assertEquals("the predicted card left the queue", swapTo(c.card(9), listOf(c.key(9))))
+        assertEquals("AnkiDroid changed the order", swapTo(c.card(9), listOf(c.key(9), c.key(2))))
+    }
+
+    @Test fun showAnswerOnAPredictedCardIsHeldAndOpensWithTheConfirm() {
+        val r = ready(); r.nc.tapAnswer(3, 1)
+        assertTrue(r.nc.holdFlip())
+        assertFalse("one held at a time", r.nc.holdFlip())
+        assertTrue((r.nc.slot as NextCard.Slot.Predicted<String>).flipHeld)
+        val cmds = r.nc.confirmed(2, key(2), queue(2, 3), refresh = { "$it*" })
+        assertEquals(Cmd.Confirm(card(2, "c2*"), flip = true), cmds[0])
+        assertEquals(NextCard.Slot.Confirmed(card(2, "c2*"), 2), r.nc.slot)
+    }
+
+    @Test fun aConfirmWithoutAHeldShowAnswerDoesNotOpenIt() {
+        val r = ready(); r.nc.tapAnswer(3, 1)
+        assertEquals(Cmd.Confirm(card(2), flip = false), r.nc.confirmed(2, key(2), queue(2, 3))[0])
+    }
+
+    @Test fun aSwapDropsAHeldShowAnswer() {
+        val r = ready(); r.nc.tapAnswer(3, 1); r.nc.holdFlip()
+        val cmds = r.nc.swapped(2, card(5), queue(5, 6))
+        assertEquals("the new card shows its question", Cmd.Show(card(5), predicted = false), cmds[0])
+        assertTrue(cmds.none { it is Cmd.Confirm })
+        assertEquals(NextCard.Slot.Confirmed(card(5), 2), r.nc.slot)
+        assertFalse("nothing to hold on a confirmed card", r.nc.holdFlip())
+    }
+
+    @Test fun showAnswerIsHeldOnlyOnAPredictedCardWithNoHeldTap() {
+        val r = ready()
+        assertFalse("a confirmed card flips at once", r.nc.holdFlip())
+        val r2 = Rig(); r2.nc.reload()
+        assertFalse("nothing shown", r2.nc.holdFlip())
+        val r3 = ready(); r3.nc.tapAnswer(3, 1); r3.nc.tapAnswer(4, 9)
+        assertFalse("a tap is held already", r3.nc.holdFlip())
+    }
+
+    @Test fun randomEventOrdersNeverOpenAHeldShowAnswerOnAnotherCard() {
+        for (seed in 1..300) {
+            val rng = Random(seed)
+            var seq = 0L
+            val nc = NextCard<String>(1, { ++seq }) { _, _, _ -> if (rng.nextInt(4) == 0) PredictRule.Why.LEARNING_DUE else PredictRule.Why.SAFE }
+            var heldOn: StudyLoop.Key? = null // the predicted card a "Show answer" is held on
+            var tokenAsked = 0
+            fun run(cmds: List<Cmd<String>>) {
+                for (c in cmds) when (c) {
+                    is Cmd.Show, Cmd.ShowWaiting, Cmd.ShowFinished, is Cmd.ShowError -> heldOn = null
+                    is Cmd.Confirm -> {
+                        if (c.flip) assertEquals("seed $seed: opened on ${c.card.key}", heldOn, c.card.key)
+                        heldOn = null
+                    }
+                    is Cmd.Load -> tokenAsked = c.token
+                    else -> {}
+                }
+            }
+            run(nc.reload())
+            repeat(150) {
+                val t = (tokenAsked - 1 + rng.nextInt(3)).coerceAtLeast(0)
+                val n = 1 + rng.nextInt(6)
+                val q = (0 until 1 + rng.nextInt(3)).map { key(n + it) }
+                when (rng.nextInt(10)) {
+                    0 -> run(nc.loaded(t, card(n), q))
+                    1 -> run(nc.swapped(t, card(n), q))
+                    2 -> run(nc.confirmed(t, key(1 + rng.nextInt(6)), q))
+                    3 -> run(nc.finished(t))
+                    4 -> nc.prepared(key(1 + rng.nextInt(6)), t, card(n))
+                    5, 6 -> run(nc.tapAnswer(1 + rng.nextInt(4), 10))
+                    7, 8 -> { val s = nc.slot; if (nc.holdFlip()) heldOn = (s as NextCard.Slot.Predicted<String>).card.key }
+                    9 -> if (rng.nextInt(4) == 0) run(nc.reload())
+                }
+            }
+        }
+    }
 }

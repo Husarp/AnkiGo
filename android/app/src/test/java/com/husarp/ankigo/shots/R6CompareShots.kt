@@ -88,7 +88,7 @@ class R6CompareShots {
         CompareStore.saveFit(Shots.files(paparazzi.context), CompareFit.AUTO)
     }
 
-    /** The sort menu of a tapped row label. */
+    /** The sort menu of a long-pressed row label (R10-G B12: a tap sorts, a long press opens the menu). */
     @Test fun sortMenu() {
         paparazzi.shootPage("r6compare-sortmenu", listOf(Variants.PHONE)) { ctx ->
             val p = page(ctx, four, vs, CompareGroup.STATS) { it.setSort("atk", false) }
@@ -96,7 +96,7 @@ class R6CompareShots {
             p.render()
             var got: AppMenu? = null
             AppMenu.intercept = { got = it }
-            try { find(p.root, { it.contentDescription?.startsWith("Sort by Atk") == true }).first().performClick() } finally { AppMenu.intercept = null }
+            try { find(p.root, { it.contentDescription?.startsWith("Sort by Atk") == true }).first().performLongClick() } finally { AppMenu.intercept = null }
             FrameLayout(ctx).apply {
                 addView(screen, FrameLayout.LayoutParams(-1, -1))
                 addView(got!!.content(ctx), FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).also { it.topMargin = Ui.dp(ctx, 330); it.marginStart = Ui.dp(ctx, 50) })

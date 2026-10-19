@@ -230,6 +230,7 @@ class Battle(
     var startedAt: Long = 0,
     var wildMaxHp: Int? = null,     // encounter-only pace override; never carried into a caught Pokémon
     var failedThrows: Int = 0,      // ball throws that missed in this fight (R4 fix B8): the catch card says "Throw N" from it, whichever screen watched the fight
+    var buttons: MutableList<Int> = ArrayList(), // R10-B22: the buttons (1 Again .. 4 Easy) of this round's answers so far; who attacks depends on them (see RoundRule)
 ) {
     fun maxWildHp(data: GameData): Int = wildMaxHp?.coerceAtLeast(1) ?: StatCalc.maxHp(data, wild)
 }
@@ -250,6 +251,7 @@ class Settings(
     var trainerName: String = "Trainer",
     var fasterStart: Boolean = false, // off by default; saved as fasterStartV2 (the old fasterStart key is ignored, so old saves start off)
     var autoReleaseDuplicates: Boolean = false, // off by default (old saves too): a wild copy of an owned species is defeated, or swapped in when higher (see Duplicates)
+    var moveChoice: MoveChoice = MoveChoice.SMART,      // Round 10 W9: how both sides pick their move; missing or unknown in a save = SMART
 )
 
 /**

@@ -364,7 +364,7 @@ object WidgetRender {
 
         fun icon(@DrawableRes res: Int, x: Float, y: Float, size: Float, color: Int) {
             val dr = ctx.getDrawable(res)?.mutate() ?: return
-            dr.setTint(color)
+            if (res != R.drawable.ic_money) dr.setTint(color) // the gold money stack is never tinted
             // vectors rasterise at their bounds: draw them in real pixels, not through the dp scale
             canvas.save()
             canvas.scale(1f / k, 1f / k)
@@ -423,7 +423,7 @@ object WidgetRender {
             var cx = x
             val items = listOf(
                 Triple(R.drawable.ic_flame, if (s.streak > 0) R.color.ag_red else R.color.ag_sub0, if (s.streak == 1) "1 day" else "${s.streak} days"),
-                Triple(R.drawable.ic_coin, R.color.ag_yellow, "%,d".format(s.cash)),
+                Triple(R.drawable.ic_money, R.color.ag_yellow, "%,d".format(s.cash)),
                 Triple(R.drawable.ic_ball, R.color.ag_sub1, "${s.balls}"),
             )
             for ((ic, tone, text) in items) {

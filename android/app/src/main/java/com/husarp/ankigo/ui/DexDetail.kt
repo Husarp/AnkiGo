@@ -6,6 +6,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
+import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Wishlist
 import com.husarp.ankigo.game.Species
@@ -27,6 +28,9 @@ object DexDetail {
     fun copyNote(mon: Mon, inTeam: Boolean): String =
         listOfNotNull(mon.nickname?.takeIf { it.isNotBlank() }?.let { "\u201C$it\u201D" }, if (inTeam) "In team" else "In box").joinToString(" · ")
 
+    /** Opens one of your Pokémon's details (the tests swap it to see which copy "My Pokémon" opens). */
+    internal var openMon: (GamePage, GameData, Mon) -> Unit = { a, data, m -> MonDetail.show(a, data, m) }
+
     fun show(a: GamePage, sp: Species) {
         val data = a.data
         val state = a.state
@@ -37,6 +41,8 @@ object DexDetail {
         }
         val img = ImageView(a)
         MonPreview.show(a, sp.num, false, img)
+        img.setOnClickListener { SpriteViewer.show(a, sp.num, false) } // R10-B1: full-screen viewer
+        img.contentDescription = "Show the picture full screen"
         col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, if (DetailParts.compact(a)) 72 else 96), Ui.dp(a, if (DetailParts.compact(a)) 72 else 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply { text = sp.name; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
         col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
@@ -48,7 +54,7 @@ object DexDetail {
         })
 
         val compact = DetailParts.compact(a)
-        // sections that open on tap (DetailOpen); a species has no Moves / Training of its own
+        // sections that open on tap (DetailOpen); a species has no Training of its own; its Moves are the level-up learnset (R10-B4)
         val mem = DetailSections.memory(a)
         col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${sp.base.total}", title = "Base stats") {
             LinearLayout(a).apply {
@@ -68,6 +74,12 @@ object DexDetail {
                 addView(DetailParts.totalRow(a, sp.base.total, null))
             }
         })
+        val learn = sp.levelMoves.distinct()
+        if (learn.isNotEmpty()) {
+            col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${learn.size} moves") {
+                DetailSections.moves(a, data, learn.map { it.move }, compact, levels = learn.map { DetailFormat.learnLevel(it.level) })
+            })
+        }
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, sp.name) })
         col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), DetailFormat.allAbilities(sp)?.let { Triple("Abilities", it, null) }, null,
             state.seen + state.caught, compact) { other -> show(a, other) })
@@ -77,14 +89,15 @@ object DexDetail {
         col.addView(line(a, "Owned", mine.size.toString()))
         lateinit var dlg: AppDialog
         if (mine.isNotEmpty()) {
-            // Options / Details work on one copy; with several the player picks which first
+            // Options works on one copy; with several the player picks which first
             fun withCopy(f: (Mon) -> Unit) {
                 if (mine.size == 1) f(mine[0])
                 else Pickers.pickMon(a, "Which ${sp.name}?", data, mine, { copyNote(it, it.uid in a.state.team) }, f)
             }
             val options = DetailParts.secondaryButton(a, "Options") {}
             options.setOnClickListener { withCopy { MonActions(a).menu(it, options) { dlg.dismiss() } } }
-            val details = DetailParts.secondaryButton(a, "Details") { withCopy { MonDetail.show(a, data, it) } }
+            // "My Pokémon" = the details of the best copy (copies() puts the highest level first), no picker
+            val details = DetailParts.secondaryButton(a, "My Pok\u00E9mon") { openMon(a, data, mine[0]) }
             col.addView(LinearLayout(a).apply {
                 orientation = LinearLayout.HORIZONTAL
                 addView(options, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginEnd = Ui.dp(a, 4) })
@@ -126,7 +139,7 @@ object DexDetail {
         col.addView(star, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         col.addView(hint, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
-        dlg = AppDialog.Builder(a).setTitle(sp.name).setView(Bits.scroll(a, col)).setPositiveButton("Close", null).create()
+        dlg = AppDialog.Builder(a).setTitle(sp.name).setView(DetailSections.scroll(a, col)).setPositiveButton("Close", null).create()
         Pickers.show(dlg)
     }
 

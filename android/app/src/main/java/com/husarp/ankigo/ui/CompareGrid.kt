@@ -2,7 +2,10 @@ package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.lookNum
 import android.content.Context
+import android.text.SpannableStringBuilder
 import android.text.TextUtils
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -90,6 +93,9 @@ private class SnapScroll(ctx: Context) : HorizontalScrollView(ctx) {
     }
 }
 
+/** R10-F (B9): the page-background gap above every section header (except the first thing in the table). */
+internal const val SECTION_GAP_DP = 11
+
 /** Section groups whose labels are numeric stats: tapping a row label sorts the columns by it. */
 private val SORT_SECTIONS = setOf("Stats", "Base stats", "Build")
 
@@ -110,6 +116,11 @@ internal class CompareGrid(
     private val onHead: (Int, View) -> Unit,
     private val onLabel: (CompareRow, View) -> Unit,
     private val onMove: (Int, Int) -> Unit = { _, _ -> },
+    /** R10-F (B9): the sections that are folded (their rows are not built) and what a tap on a section header does (gets the title). */
+    private val collapsed: SectionChoice = SectionChoice(),
+    private val onSection: (String) -> Unit = {},
+    /** R10-G (B12): a long press on a row label (a number row: the sort menu; another row: its info). */
+    private val onLabelLong: (CompareRow, View) -> Unit = { _, _ -> },
 ) {
     private val ctx: Context = page
     private fun dp(v: Int) = Ui.dp(ctx, v)
@@ -148,12 +159,16 @@ internal class CompareGrid(
         head = headRow()
 
         var band = 0
+        var open = true // rows before the first section header (level, types) are not in a section and always show
         for (row in table.rows) {
             if (row.section != null) {
-                rows.addView(sectionBar(row.section), LinearLayout.LayoutParams(totalPx, -2))
+                // R10-F (B9): a gap of page background above every header but the first thing in the table; the header's rows follow unless it is folded
+                if (rows.childCount > 1) rows.addView(View(ctx), LinearLayout.LayoutParams(totalPx, dp(SECTION_GAP_DP)))
+                open = collapsed.isOpen(row.section)
+                rows.addView(sectionBar(row.section, open), LinearLayout.LayoutParams(totalPx, -2))
                 band = 0
             }
-            rows.addView(dataRow(row, if (band++ % 2 == 0) bandA else bandB), LinearLayout.LayoutParams(totalPx, -2))
+            if (open) rows.addView(dataRow(row, if (band++ % 2 == 0) bandA else bandB), LinearLayout.LayoutParams(totalPx, -2))
         }
         rows.addView(View(ctx), LinearLayout.LayoutParams(totalPx, dp(8)))
 
@@ -164,12 +179,14 @@ internal class CompareGrid(
         hsv.step = colPx
         hsv.addView(grid, FrameLayout.LayoutParams(totalPx, -2))
         hsv.onScroll = { x ->
+            if (CompareMovePopup.isShowing) CompareMovePopup.dismiss()
             for (v in stickyX) v.translationX = x.toFloat()
             onScrolled?.invoke(x, vsv.scrollY)
         }
         vsv.addView(hsv, FrameLayout.LayoutParams(-1, -2))
         vsv.isVerticalScrollBarEnabled = false
         vsv.setOnScrollChangeListener { _, _, y, _, _ ->
+            if (CompareMovePopup.isShowing) CompareMovePopup.dismiss()
             head.translationY = y.toFloat()
             onScrolled?.invoke(hsv.scrollX, y)
         }
@@ -187,8 +204,8 @@ internal class CompareGrid(
         v.outlineProvider = null
     }
 
-    /** The reference column's background: the band with a little accent, opaque so scrolled columns don't show through. */
-    private fun refBg(band: Int): Int = Bits.blend(c(R.color.ag_mauve), band, 0.13f)
+    /** The reference column's background (R10-F B8 / B11): the band with a neutral grey mixed in, opaque so scrolled columns don't show through. Only behind its cells. */
+    private fun refBg(band: Int): Int = CompareScale.neutral(band, c(R.color.ag_ov))
 
     /** [v] is the cell of column [i] in a row on [band]: pinned and tinted when it is the reference column. */
     private fun pinIfRef(v: View, i: Int, band: Int) {
@@ -227,9 +244,11 @@ internal class CompareGrid(
         sticky(this, 3f)
         if (row != null) {
             val info = StatInfo.forKey(row.key)
-            contentDescription = (if (row.numeric) "Sort by ${row.label}. " else "") + (if (active) (if (sortDesc) "Sorted high to low. " else "Sorted low to high. ") else "") + (info?.let { "${it.title}: ${it.text}" } ?: row.label)
+            val says = if (row.numeric) CompareSortCycle.tapSays(sortKey.takeIf { active }, sortDesc, row.key) + " Hold for the sort menu." else "Tap or hold to read what it is."
+            contentDescription = (if (row.numeric) "Sort by ${row.label}. " else "") + (if (active) (if (sortDesc) "Sorted high to low. " else "Sorted low to high. ") else "") +
+                (info?.let { "${it.title}: ${it.text.trimEnd('.')}. " } ?: "${row.label}. ") + says
             setOnClickListener { onLabel(row, this) }
-            if (info != null) setOnLongClickListener { DetailParts.showInfo(ctx, info); true }
+            setOnLongClickListener { onLabelLong(row, this); true }
         }
     }
 
@@ -279,25 +298,48 @@ internal class CompareGrid(
         }
     }
 
-    private fun sectionBar(title: String): View {
+    /**
+     * R10-F (B9): a section header (a bigger title than the row labels, a chevron for open / folded), tappable to fold its rows. The title
+     * stays where it is while the table scrolls sideways. The reference column's tint does NOT run through it (B11).
+     */
+    private fun sectionBar(title: String, open: Boolean): View {
         val mantle = c(R.color.ag_mantle)
-        // R6-05 item 8: the reference column's tint runs through the section bars too. The tint takes the bar's height (set after
-        // the bar measured itself: a match-parent child of a wrap-content FrameLayout stayed 0 high).
-        val tint = if (vs) View(ctx).apply { setBackgroundColor(refBg(mantle)); sticky(this) } else null
-        return object : FrameLayout(ctx) {
-            override fun onMeasure(w: Int, h: Int) {
-                super.onMeasure(w, h)
-                tint?.measure(MeasureSpec.makeMeasureSpec(colPx, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(measuredHeight, MeasureSpec.EXACTLY))
-            }
-        }.apply {
+        return FrameLayout(ctx).apply {
             setBackgroundColor(mantle)
-            tint?.let { addView(it, FrameLayout.LayoutParams(colPx, 1).also { p -> p.leftMargin = labelPx }) }
-            addView(Ui.text(ctx, look.labelSp - 0.5f, 900, R.color.ag_sub0).apply {
-                text = title.uppercase() + if (title in SORT_SECTIONS) " · TAP A NAME TO SORT" else ""
-                letterSpacing = 0.06f
-                setPadding(dp(8), dp(6), dp(8), dp(4))
+            minimumHeight = dp(40)
+            val name = SpannableStringBuilder(title.uppercase()).apply {
+                setSpan(ForegroundColorSpan(c(R.color.ag_text)), 0, length, 0)
+                if (title in SORT_SECTIONS) {
+                    val start = length
+                    append(" · TAP A NAME TO SORT")
+                    setSpan(RelativeSizeSpan(0.68f), start, length, 0)
+                    setSpan(ForegroundColorSpan(c(R.color.ag_sub0)), start, length, 0)
+                }
+            }
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(8), dp(8), dp(8), dp(8))
+                addView(ImageView(ctx).apply {
+                    setImageResource(if (open) R.drawable.ic_expand else R.drawable.ic_chevron)
+                    setColorFilter(c(R.color.ag_mauve), android.graphics.PorterDuff.Mode.SRC_IN)
+                }, LinearLayout.LayoutParams(dp(20), dp(20)).also { it.marginEnd = dp(4) })
+                addView(Ui.text(ctx, look.labelSp + 3f, 900, R.color.ag_text).apply {
+                    text = name
+                    letterSpacing = 0.05f
+                    maxLines = 1
+                }, LinearLayout.LayoutParams(-2, -2))
                 sticky(this, 3f)
-            }, FrameLayout.LayoutParams(-2, -2))
+            }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
+            contentDescription = "$title, ${if (open) "expanded" else "collapsed"}"
+            isClickable = true
+            setOnClickListener { onSection(title) }
+            accessibilityDelegate = object : View.AccessibilityDelegate() {
+                override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
+                    super.onInitializeAccessibilityNodeInfo(host, info)
+                    info.className = android.widget.Button::class.java.name // TalkBack: a button, "Stats, expanded"
+                }
+            }
         }
     }
 
@@ -459,19 +501,22 @@ internal class CompareGrid(
                     val pos = scales[row.key]?.getOrNull(i)
                     val diff = diffs[row.key]?.getOrNull(i)
                     val top = pos == 1f || (vs && i == 0 && row.numeric)
+                    // R10-F (B8): in "vs reference" a number is filled by how much better / worse it is than the reference (relative, not ranked)
+                    val refValue = if (vs && row.numeric) (row.cells.getOrNull(0) as? Cell.Text)?.value else null
                     val scale = pos?.let { scaleLook(it, band) }
+                        ?: if (refValue != null && i != 0 && cell.value != null) CompareScale.vsRef(cell.value, refValue, band, TypeChips.isDark(ctx)) else null
                     box.addView(Ui.text(ctx, look.valueSp, if (top) 900 else 700, R.color.ag_text).apply {
                         text = cell.text
                         gravity = Gravity.CENTER
                         // level cells wear their tier colour (plain on a value fill: the fill would hide it)
-                        cell.level?.let { if (pos == null) setTextColor(LevelTier.color(ctx, it)) }
+                        cell.level?.let { if (pos == null && scale?.fill == null) setTextColor(LevelTier.color(ctx, it)) }
                         scale?.ink?.let { setTextColor(it) } // a strong fill takes white / dark ink
                     }, LinearLayout.LayoutParams(-2, -2))
                     if (vs && row.numeric) {
                         if (i == 0) box.addView(small("ref", R.color.ag_sub0), LinearLayout.LayoutParams(-2, -2))
                         else if (CompareModes.diffLabel(diff).isNotEmpty()) box.addView(small(CompareModes.diffLabel(diff), when (CompareModes.diffSign(diff)) {
                             1 -> R.color.ag_green; -1 -> R.color.ag_red; else -> R.color.ag_sub0
-                        }, 900), LinearLayout.LayoutParams(-2, -2)) // an equal value shows nothing (no "±0")
+                        }, 900).also { tv -> scale?.ink?.let { tv.setTextColor(it) } }, LinearLayout.LayoutParams(-2, -2)) // an equal value shows nothing (no "±0"); on a strong fill it takes the fill's ink
                     }
                     scale?.fill?.let { box.setBackgroundColor(it) }
                     for (s in cell.sub) box.addView(small(s, R.color.ag_sub0), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
@@ -487,25 +532,26 @@ internal class CompareGrid(
             }
             is Cell.Moves -> {
                 if (cell.moves.isEmpty()) box.addView(Ui.text(ctx, look.valueSp, 700, R.color.ag_sub0).apply { text = "none" })
+                // R10-F (B10): a move shows its name and its type only; a tap opens the move's popup (name, type, category, power, accuracy, effect)
                 cell.moves.forEachIndexed { k, m ->
-                    box.addView(Ui.text(ctx, look.subSp + 0.5f, 800, R.color.ag_text).apply {
-                        text = m.name; maxLines = 2; gravity = Gravity.CENTER
-                        hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
-                        // a word is not broken in the middle: it shrinks (not below 7 sp) until it fits the column
-                        setTextSize(TypedValue.COMPLEX_UNIT_PX, CompareLabelFit.sp(textSize, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 7f, ctx.resources.displayMetrics),
-                            paint.measureText(CompareLabelFit.longestWord(m.name)), (colPx - 2 * pad).toFloat()))
-                    }, LinearLayout.LayoutParams(-2, -2).also { if (k > 0) it.topMargin = dp(6) })
                     box.addView(LinearLayout(ctx).apply {
-                        orientation = if (look.stackTypes) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
-                        gravity = Gravity.CENTER
-                        val pow = Ui.text(ctx, look.subSp, 700, R.color.ag_sub0).apply { text = "Pow ${m.power}" }
-                        // R6-05 item 9: the chip gets wrap-content (it used to be squeezed to the width of "Pow 65") and the room that is left
-                        m.type?.let {
-                            val room = colPx - 2 * pad - if (look.stackTypes) 0 else pow.paint.measureText(pow.text.toString()).toInt() + dp(4)
-                            addView(typeTap(Ui.typeChip(ctx, it), it, room), LinearLayout.LayoutParams(-2, -2))
+                        orientation = LinearLayout.VERTICAL
+                        gravity = Gravity.CENTER_HORIZONTAL
+                        addView(Ui.text(ctx, look.subSp + 0.5f, 800, R.color.ag_text).apply {
+                            text = m.name; maxLines = 2; gravity = Gravity.CENTER
+                            hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                            // a word is not broken in the middle: it shrinks (not below 7 sp) until it fits the column
+                            setTextSize(TypedValue.COMPLEX_UNIT_PX, CompareLabelFit.sp(textSize, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 7f, ctx.resources.displayMetrics),
+                                paint.measureText(CompareLabelFit.longestWord(m.name)), (colPx - 2 * pad).toFloat()))
+                        }, LinearLayout.LayoutParams(-2, -2))
+                        // R6-05 item 9: the chip gets wrap-content and the room that is left
+                        m.type?.let { addView(typeTap(Ui.typeChip(ctx, it), it, colPx - 2 * pad), LinearLayout.LayoutParams(-2, -2).also { p -> p.topMargin = dp(2) }) }
+                        val mv = page.data.move(m.id)
+                        if (mv != null) {
+                            contentDescription = CompareMovePopup.said(mv) + ". Tap for details"
+                            setOnClickListener { CompareMovePopup.show(it, mv) }
                         }
-                        addView(pow, LinearLayout.LayoutParams(-2, -2).also { if (m.type != null) { if (look.stackTypes) it.topMargin = dp(1) else it.marginStart = dp(4) } })
-                    }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
+                    }, LinearLayout.LayoutParams(-2, -2).also { if (k > 0) it.topMargin = dp(6) })
                 }
             }
             is Cell.Matchups -> {

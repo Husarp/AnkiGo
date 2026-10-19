@@ -16,6 +16,7 @@ import com.husarp.ankigo.stats.ChartMetric
 import com.husarp.ankigo.stats.ChartPeriod
 import com.husarp.ankigo.stats.StatsSnapshot
 import com.husarp.ankigo.ui.AppMenu
+import com.husarp.ankigo.ui.Bits
 import com.husarp.ankigo.ui.BottomNav
 import com.husarp.ankigo.ui.DexActivity
 import com.husarp.ankigo.ui.DexPage
@@ -43,9 +44,9 @@ import org.junit.Test
 import java.time.LocalDate
 
 /*
- * R4-01 (PLAN 108): the new tab model. Checks (Nav intents, the 4-tab bar and its highlight, the Shop inside the Pokémon
- * tab with its buy flow, the Stats tab switching sections and keeping the chart state, the trainer-card chips) and the shots:
- * r4n-pokemon-team|box|dex|shop (phone, split, floating card), r4n-stats-statistics|achievements (phone, split).
+ * R4-01 (PLAN 108): the new tab model. Checks (Nav intents, the bar and its highlight, the Shop's buy flow, the Stats tab switching sections
+ * and keeping the chart state, the trainer-card chips) and the shots: r4n-pokemon-team|box|dex (phone, split, floating card),
+ * r4n-stats-statistics|achievements (phone, split). R10 W11: the bar has 5 tabs and the Shop is its own tab (no Shop section of the Pokémon tab).
  */
 class R4NavShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
@@ -96,16 +97,19 @@ class R4NavShots {
             if (t.extra == null) assertFalse("$d", i.hasExtra("section"))
             else assertEquals("$d", t.extra!!.second, i.getStringExtra(t.extra!!.first))
         }
-        assertEquals("SHOP", Nav.intent(ctx, Dest.SHOP).getStringExtra(TeamActivity.EXTRA_SECTION))
+        // R10 W11: the Shop is a tab of its own, no longer a Pokémon-tab section
+        assertEquals(ShopActivity::class.java.name, Nav.intent(ctx, Dest.SHOP).component?.className)
+        assertFalse(Nav.intent(ctx, Dest.SHOP).hasExtra(TeamActivity.EXTRA_SECTION))
         assertEquals("ACHIEVEMENTS", Nav.intent(ctx, Dest.ACHIEVEMENTS).getStringExtra(StatsActivity.EXTRA_SECTION))
     }
 
-    @Test fun barHasFourTabsAndOneIsOn() {
+    @Test fun barHasFiveTabsAndOneIsOn() {
         val act = attach(Activity(), Shots.files(paparazzi.context))
         for (cur in BottomNav.Tab.entries) {
             val bar = BottomNav.create(act, cur) as ViewGroup
             val row = bar.getChildAt(1) as ViewGroup // under the 1 dp divider
-            assertEquals(listOf("Study", "Pokémon", "Stats", "Settings"), (0 until row.childCount).map { row.getChildAt(it).contentDescription.toString() })
+            // the Shop tab's description may carry ", new stock" (the dot): only its label is compared here
+            assertEquals(listOf("Study", "Pokémon", "Shop", "Stats", "Settings"), (0 until row.childCount).map { row.getChildAt(it).contentDescription.toString().substringBefore(",") })
             // the highlighted tab has the accent pill behind its icon
             val on = (0 until row.childCount).filter { (row.getChildAt(it) as ViewGroup).getChildAt(0).background != null }
             assertEquals(listOf(cur.ordinal), on)
@@ -116,7 +120,8 @@ class R4NavShots {
         assertTrue(BottomNav.isHere(TeamActivity(), BottomNav.Tab.POKEMON))
         assertTrue(BottomNav.isHere(StatsActivity(), BottomNav.Tab.STATS))
         assertTrue(BottomNav.isHere(SettingsActivity(), BottomNav.Tab.SETTINGS))
-        // the old Pokédex / Shop screens are not the tab's screen: the tab opens it
+        assertTrue(BottomNav.isHere(ShopActivity(), BottomNav.Tab.SHOP))
+        // the old Pokédex screen is not the tab's screen: the tab opens it; the Shop screen is not the Pokémon tab
         assertFalse(BottomNav.isHere(DexActivity(), BottomNav.Tab.POKEMON))
         assertFalse(BottomNav.isHere(ShopActivity(), BottomNav.Tab.POKEMON))
         // the home screen is Study (R4-02): its Study tab is "here" (in the Battle view the activity switches to the Study view instead)
@@ -135,7 +140,7 @@ class R4NavShots {
         FakeGame.install(ctx)
         assertEquals(BottomNav.Tab.POKEMON, TeamPage(ctx, NoHost).tab)
         assertEquals(BottomNav.Tab.POKEMON, DexPage(ctx, NoHost).tab)
-        assertEquals(BottomNav.Tab.POKEMON, ShopPage(ctx, NoHost).tab)
+        assertEquals(BottomNav.Tab.SHOP, ShopPage(ctx, NoHost).tab)
         assertEquals(BottomNav.Tab.STATS, StatsPage(ctx, NoHost).tab)
     }
 
@@ -144,7 +149,7 @@ class R4NavShots {
         FakeGame.install(ctx)
         val m = AppMenu(View(ctx))
         FloatBattleView(object : ContextWrapper(ctx) { override fun getApplicationContext(): Context = this }, {}, {}, {}).fillMenu(m)
-        assertEquals(listOf("Open AnkiGo", "Pause watching AnkiDroid", "Pokémon", "Pokédex", "Shop", "Settings", "Help"), m.describe().map { it.second })
+        assertEquals(listOf("Open AnkiGo", "Pause watching AnkiDroid", "Pokémon", "Pokédex", "Shop", "Settings", "View settings", "Help"), m.describe().map { it.second })
         BattleShotKit.reset()
     }
 
@@ -159,38 +164,36 @@ class R4NavShots {
     @Test fun teamSection() = shootAll("r4n-pokemon-team", TeamSection.TEAM)
     @Test fun boxSection() = shootAll("r4n-pokemon-box", TeamSection.BOX)
     @Test fun dexSection() = shootAll("r4n-pokemon-dex", TeamSection.DEX)
-    @Test fun shopSectionShots() = shootAll("r4n-pokemon-shop", TeamSection.SHOP)
 
     private fun shootAll(name: String, s: TeamSection) {
         for (v in sizes) paparazzi.shootPage(name, listOf(v)) { ctx -> pokemon(ctx, v, s) }
     }
 
-    @Test fun shopSectionShowsTheShopAndBuying() {
+    /** R10 W11: the Shop is its own tab (a standalone ShopPage); its buy flow and the Bag switch work as they did inside the Pokémon tab. */
+    @Test fun theShopTabShowsTheShopAndBuying() {
         paparazzi.shootPage("r4n-shop-buy", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
-            val p = TeamPage(ctx, NoHost)
-            p.preset(TeamSection.SHOP)
+            val p = ShopPage(ctx, NoHost)
             val screen = pageScreen(ctx, p)
             st.cash = 5000
             call(p, "render")
             val shown = texts(screen)
             assertTrue(shown.toString(), "TODAY'S SPECIALS" in shown)
-            assertTrue("the Team body is hidden", shown.none { it == "TEAM" })
+            assertTrue("the bar says Shop", "Shop" in shown)
             assertTrue("coins in the bar pill", "5,000" in shown)
 
-            // buying through the embedded page's own flow
-            val shop = (getField(p, "shopPage\$delegate") as Lazy<*>).value!!
             val item = st.shopItems.first()
-            val price = GameRepo.data!!.price(item)
+            val price = com.husarp.ankigo.game.Shop.priceOf(GameRepo.data!!, st, item)
             val n0 = st.count(item)
-            call(shop, "buyItem", item)
+            call(p, "buyItem", item)
             assertEquals(n0 + 1, st.count(item))
             assertEquals(5000 - price, st.cash)
             call(p, "render")
-            assertTrue("owned count follows the buy", "×${n0 + 1}" in texts(screen))
+            assertTrue("the coins follow the buy", Bits.fmt(5000 - price) in texts(screen))
 
-            // the Bag toggle redraws the embedded page at once
+            // the Bag switch redraws the page at once
             val bagTab = findText(p.root) { it.startsWith("Bag") }!!
             tap(bagTab)
+            call(p, "render") // a standalone page draws on the next message-loop turn (the embedded one used to draw at once)
             assertTrue("the Bag replaced the specials", "TODAY'S SPECIALS" !in texts(screen))
             screen
         }
@@ -202,26 +205,28 @@ class R4NavShots {
             val screen = pageScreen(ctx, p)
             call(p, "render")
             assertTrue(texts(screen).any { it.startsWith("TEAM") }) // the section header on the Team body ("TEAM · n / 6")
-            p.showSection(TeamSection.SHOP)
+            p.showSection(TeamSection.BOX)
             call(p, "render")
-            assertTrue("TODAY'S SPECIALS" in texts(screen))
+            assertEquals(View.VISIBLE, (getField(p, "boxList") as View).visibility)
+            assertEquals(View.GONE, (getField(p, "teamScroll") as View).visibility)
             assertTrue(texts(screen).none { it.startsWith("TEAM") })
             p.showSection(TeamSection.TEAM)
             call(p, "render")
-            assertTrue("TODAY'S SPECIALS" !in texts(screen))
+            assertEquals(View.GONE, (getField(p, "boxList") as View).visibility)
             assertTrue(texts(screen).any { it.startsWith("TEAM") })
             screen
         }
     }
 
-    @Test fun compareTicksSurviveTheShopSection() {
-        paparazzi.shootPage("r4n-pick-shop", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
+    /** R10 W11: the Shop section left the Pokémon tab, so the Compare bar shows on every section (it used to hide over the Shop). */
+    @Test fun compareTicksSurviveSectionSwitches() {
+        paparazzi.shootPage("r4n-pick-sections", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
             val p = TeamPage(ctx, NoHost)
-            p.preset(TeamSection.SHOP, pick = listOf(com.husarp.ankigo.ui.ComparePick.Owned("t1"), com.husarp.ankigo.ui.ComparePick.Owned("t2")))
+            p.preset(TeamSection.DEX, pick = listOf(com.husarp.ankigo.ui.ComparePick.Owned("t1"), com.husarp.ankigo.ui.ComparePick.Owned("t2")))
             val screen = pageScreen(ctx, p)
             call(p, "render")
             val bar = getField(p, "pickBar") as View
-            assertEquals("no pick bar over the Shop", View.GONE, bar.visibility)
+            assertEquals(View.VISIBLE, bar.visibility)
             p.showSection(TeamSection.TEAM)
             call(p, "render")
             assertEquals("the ticks are still there", View.VISIBLE, bar.visibility)

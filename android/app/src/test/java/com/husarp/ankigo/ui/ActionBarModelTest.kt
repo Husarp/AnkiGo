@@ -282,4 +282,29 @@ class ActionBarModelTest {
         assertEquals(DotsPlace.RIGHT_END, DotsPlace.parse("RIGHT_END"))
         assertEquals(DotsPlace.MIDDLE, DotsPlace.parse(null)); assertEquals(DotsPlace.MIDDLE, DotsPlace.parse("nonsense"))
     }
+
+    // ---------------------------------------------------------------- R10 W10: the free hit of a switch
+
+    @Test fun theSwitchHitMarkerChangesNoHalfAndAboutTheWholeBattle() {
+        val m = ActionBarModel()
+        m.observe(attack(true)); m.observe(attack(false, "Bite"))
+        m.observe(GameEvent.MainChanged("u", "Newmon"))
+        assertTrue(m.observe(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30)).isEmpty())
+        assertEquals(HalfState.Empty, m.mine)   // the new Pokémon has not moved
+        assertEquals("Bite", moved(m, BarSide.THEIRS).move)
+        assertEquals(LineScope.WHOLE, ActionBarModel.scope(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30)))
+        // then the wild one's attack fills its half and its effects attach to it
+        assertEquals(listOf(BarSide.THEIRS), m.observe(attack(false, "Tackle", user = "Wildling")))
+        assertEquals(listOf(BarSide.THEIRS), m.observe(effect(true, EffectKind.STATUS_APPLIED, status = "par")))
+        assertEquals("par", moved(m, BarSide.THEIRS).status)
+        assertEquals(HalfState.Empty, m.mine)
+    }
+
+    @Test fun theMarkerClosesTheEffectWindowOfTheMoveBeforeIt() {
+        val m = ActionBarModel()
+        m.observe(attack(true, "Ember", Type.FIRE))
+        m.observe(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30))
+        assertTrue(m.observe(effect(false, EffectKind.STATUS_APPLIED, status = "brn")).isEmpty())
+        assertNull(moved(m, BarSide.MINE).status)
+    }
 }

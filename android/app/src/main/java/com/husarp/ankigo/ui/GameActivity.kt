@@ -767,6 +767,7 @@ class GameActivity : AgActivity() {
         m.item(5, "Switch Pokémon", R.drawable.ic_swap, enabled = blocker == null, sub = blocker)
         m.item(6, "Stats", R.drawable.ic_stats)
         m.item(7, "Battle log", R.drawable.ic_swords)
+        m.item(11, "View settings", R.drawable.ic_palette)   // R10 B19: Pokémon size, facing, info boxes, frame... in one sheet
         catchMenuLabel()?.let { m.item(9, it, R.drawable.ic_ball) }
         m.item(10, "Help", R.drawable.ic_help)
     }
@@ -783,6 +784,7 @@ class GameActivity : AgActivity() {
                 5 -> openSwitchPopup()
                 6 -> openStats()
                 7 -> openStats(BattleLogActivity::class.java)
+                11 -> ViewSettingsSheet.open(this)
                 9 -> toggleCatch()
                 10 -> openStats(com.husarp.ankigo.help.HelpActivity::class.java)
                 8 -> popOut()
@@ -876,9 +878,10 @@ class GameActivity : AgActivity() {
 
     private fun switchMain(uid: String) {
         if (GameRepo.state?.main?.uid == uid) return
+        // The animations still waiting end first (the saved game has their numbers), so the switch starts from the fight as it stands:
+        // then the short "Go, X!" plays, and the wild one's free hit on the new main (R10 W10) with its floating damage text after it.
+        player?.finishNow()
         val r = try { GameRepo.run(this) { it.setMain(uid) } } catch (t: Throwable) { Report.fail("PANEL", "setMain", t); return }
-        // The new main shows at once, not after the animations still waiting; then the short "Go, X!" plays.
-        if (r.events.any { it is GameEvent.MainChanged }) player?.finishNow()
         handleEvents(r.events)
     }
 

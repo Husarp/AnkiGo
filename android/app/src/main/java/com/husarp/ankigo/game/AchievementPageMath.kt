@@ -7,7 +7,7 @@ import java.util.Locale
 
 // R4-V2 (PLAN 79): the pure parts of the Achievements page, its detail sheet and the "earned" popup. No android.* in here.
 
-/** The page's filter chips. */
+/** The page's filter (the "Show" menu, R10 W2: it applies inside the picked tab). */
 enum class AchFilter(val label: String) { ALL("All"), CLOSE("Close to next"), RECENT("Recently reached") }
 
 /** Where a row's count comes from (the footnote of the detail sheet). */
@@ -30,7 +30,7 @@ class AchCelebration(val rowId: String, val title: String, val tier: Int, val ti
     val word: String get() = if (tier < 0) "Achievement!" else "$tierName!"
 }
 
-/** One group of the page: all its rows ([all]) and those the filter lets through ([shown]). A group with nothing shown is hidden and its jump chip greyed. */
+/** One group of the page: all its rows ([all]) and those the filter lets through ([shown]). A group with nothing shown is left out of the "All" tab; its own tab stays and says so. */
 class AchGroup(val name: String, val all: List<AchView>, val shown: List<AchView>) {
     val empty get() = shown.isEmpty()
 }
@@ -79,6 +79,46 @@ object AchPageMath {
     fun groupCount(rows: List<AchView>): String =
         if (rows.all { it.oneOff }) "${rows.count { it.tier >= 0 }} of ${rows.size}"
         else "${rows.filter { !it.oneOff }.sumOf { it.tier + 1 }} of ${rows.filter { !it.oneOff }.sumOf { it.tiers.size }} tiers"
+
+    // ---- tabs (R10 W2, D3-A): All · one tab per group; a tab shows only its group ----
+
+    /** The first tab: every group, each under its header. */
+    const val ALL_TAB = "All"
+
+    /** The tabs in order: "All", then each group of [groups] (a group with no row at all has no tab). */
+    fun tabs(groups: List<AchGroup>): List<String> = listOf(ALL_TAB) + groups.map { it.name }
+
+    /** [tab] when it exists among [groups], else "All" (a tab that vanished falls back). */
+    fun tabOrAll(groups: List<AchGroup>, tab: String): String = if (tab in tabs(groups)) tab else ALL_TAB
+
+    /**
+     * The groups a tab SHOWS: "All" = every group the filter leaves something in (each gets its header); a group's tab = that group alone,
+     * even when the filter leaves it empty (its tab stays and shows [emptyText]). An unknown tab shows nothing.
+     */
+    fun tabGroups(groups: List<AchGroup>, tab: String): List<AchGroup> =
+        if (tab == ALL_TAB) groups.filter { !it.empty } else groups.filter { it.name == tab }
+
+    /** The tab a row lives in (its group), or null for an unknown id. */
+    fun tabOf(rowId: String): String? = AchievementTable.row(rowId)?.group
+
+    /** "Battle · 12 of 50 tiers" for a tab; "All · 47 of 166 tiers" for All. Not changed by the filter (it counts what is reached, not what is shown). */
+    fun countLine(groups: List<AchGroup>, tab: String): String {
+        val rows = if (tab == ALL_TAB) groups.flatMap { it.all } else groups.firstOrNull { it.name == tab }?.all.orEmpty()
+        return "$tab · ${groupCount(rows)}"
+    }
+
+    /** The text on the "Show" button. */
+    fun showLabel(f: AchFilter): String = "Show: ${f.label}"
+
+    /** What a tab says when the filter leaves nothing in it ("" when it has rows, or when the filter is All). */
+    fun emptyText(f: AchFilter, tab: String): String = when {
+        f == AchFilter.ALL -> ""
+        tab == ALL_TAB -> if (f == AchFilter.CLOSE) "Nothing is close to its next tier yet." else "Nothing reached in the last $RECENT_DAYS days."
+        else -> if (f == AchFilter.CLOSE) "Nothing close to the next tier in $tab" else "Nothing reached in $tab in the last $RECENT_DAYS days"
+    }
+
+    /** True when [rowId] is among the rows the groups SHOW (the filter lets it through), so a "See it" can keep the filter. */
+    fun shows(groups: List<AchGroup>, rowId: String): Boolean = groups.any { g -> g.shown.any { it.id == rowId } }
 
     // ---- header numbers ----
 

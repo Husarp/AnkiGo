@@ -36,6 +36,7 @@ import com.husarp.ankigo.data.Backdrops
 import com.husarp.ankigo.data.Sprites
 import com.husarp.ankigo.game.Type
 import com.husarp.ankigo.gfx.SpriteView
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -78,6 +79,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
     // "NEW" sticker: red text, tilted like a sticker, on the wild card's top-left corner (no background). Shown while the wild species isn't caught yet.
     // A sibling of the card (not a child) so it can overhang the card's corner without being clipped; [placeNewTag] puts it there.
+    // Round 10 G: when it would be cut (or cover the HP numbers) there, [updateNewTag] moves it to another corner of the card ([NewTagRule]).
     private val newTag = Ui.text(ctx, 8f, 900, R.color.ag_red).apply {
         text = "NEW"
         maxLines = 1
@@ -185,8 +187,38 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     var infoBoxStyle: InfoBoxStyle = InfoBoxStyle.DEFAULT
         set(v) { if (field != v) { field = v; updateCards() } }
 
+    /**
+     * Round 10 W8: the look of the info boxes' HP / XP bars ([AppPrefs.hpBarLook]; the battle panel sets it). In [HpBarLook.PIXEL] each
+     * bar is laid out 2 outline units taller ([fitBars]), so the boxes grow like the mock and the box rule follows ([extraHeight]).
+     */
+    var hpBarLook: HpBarLook = HpBarLook.DEFAULT
+        set(v) { if (field != v) { field = v; eHp.look = v; pHp.look = v; pXp.look = v; updateCards() } }
+
     /** Picture mode: the plan drew the boxes under the scale their optional parts (type chips, XP number) are readable at, so they are left out ([StagePlan.reduced]). */
     private var partsReduced = false
+
+    /**
+     * Round 10 W7: the look of the two info boxes ([AppPrefs.infoBoxLook]; the battle panel sets it, so every host follows the setting
+     * live). The layout [infoBoxStyle] combines with every look. [InfoBoxLook.TODAY] is the boxes exactly as they were; what each other
+     * look paints is [InfoBoxSkin]. The HUD also moves the boxes to two opposite corners while a picture shows ([StageGeo] corners mode).
+     */
+    var infoBoxLook: InfoBoxLook = InfoBoxLook.DEFAULT
+        set(v) { if (field != v) { field = v; applyLook(); requestLayout() } }
+
+    // the look's state (see "info box looks" below): the inside colours of a look that is the same in light and dark (null = the theme's),
+    // what the colours are set on (levels, HP fractions, the wild types), the Pokémon's first type colours (the type look), the glass behind each box
+    private var ink: InfoBoxSkin.Ink? = null
+    private var skinKey = "${InfoBoxLook.DEFAULT.name}|false|0|0"
+    private var baseElevation = 0f
+    private var eLvl = 0
+    private var pLvl = 0
+    private var eHpFrac = -1f
+    private var pHpFrac = -1f
+    private var enemyTypes: List<Type> = emptyList()
+    private var eTypeColor = 0
+    private var pTypeColor = 0
+    private var eGlass: ArenaGlass? = null
+    private var pGlass: ArenaGlass? = null
 
     // what the cards say (kept so a new style or a new text floor can write it again)
     private var eHpStr = ""
@@ -216,6 +248,13 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     var frameInsetDp: Float = 0f
         set(v) { if (v != field) { field = v; requestLayout() } }
 
+    /**
+     * Round 10 B20: the Pokémon size ([PokemonSize], [AppPrefs.pokemonSize] / 100; the battle panel sets it): both sprites are drawn this much
+     * bigger or smaller around their feet in every layout, kept inside the room the layout has. 1 = the layout before the setting.
+     */
+    var pokemonSize: Float = 1f
+        set(v) { if (abs(v - field) > 0.0001f) { field = v; requestLayout() } }
+
     /** The picture's stage and the layout made from it while a picture shows (null = plain mode); see [layoutStage]. */
     internal var stageNow: Stage? = null
         private set
@@ -241,7 +280,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     init {
         clipChildren = true
         background = backdrop   // the plain gradient, or a downloaded battle picture (R7-07)
-        backdrop.onPictureChange = { shown -> setPlatformsShown(!shown); requestLayout() }   // R8-04: another picture = other stand points
+        backdrop.onPictureChange = { shown -> setPlatformsShown(!shown); invalidateGlass(); requestLayout() }   // R8-04: another picture = other stand points
         backdrop.onSettled = { fireBackdropReady() }   // R9 C4: the next wild one waits for this
         enemySprite.onArtChange = { artChanged() }    // R8-FIX M2: a new image / placeholder can change what the cards must keep clear of
         playerSprite.onArtChange = { artChanged() }
@@ -327,7 +366,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val c0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle)
         val c = ArenaGeo.Cards(c0.wildW, c0.wildH + extraHeight(enemyBlock, c0.wildW, d, c0.wildH),
             c0.playerW, c0.playerH + extraHeight(playerCard, c0.playerW, d, c0.playerH))
-        val p = ArenaGeo.plan(w / d, h / d, c, cardsCompact, cardsUnderOwn)
+        val p0 = ArenaGeo.plan(w / d, h / d, c, cardsCompact, cardsUnderOwn)
+        val sized = PokemonSize.fitHolders(w / d, h / d, p0.wildSprite, p0.playerSprite, listOf(p0.wildCard, p0.playerCard), pokemonSize)
+        val p = if (sized.changed) sizedPlan(p0, sized) else p0   // Round 10 B20: the same plan at 100 %
+        setSpriteFactor(if (sized.changed) sized.f else 1f)
         plan = p
         for (s in listOf(enemySprite, playerSprite)) if (s.scaleDp != BIG_SPRITE_DP) s.scaleDp = BIG_SPRITE_DP
         fun put(v: View, b: ArenaGeo.Box, wrapHeight: Boolean = false, k: Float = 1f) {
@@ -340,6 +382,13 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         put(playerHolder, p.playerSprite)
         put(enemyBlock, p.wildCard, wrapHeight = true, k = p.k)
         put(playerCard, p.playerCard, wrapHeight = true, k = p.k)
+    }
+
+    /** [p] with its two sprite holders as [sized] says (Round 10 B20); the platforms follow their Pokémon (scaled around their middle, moved with it). */
+    private fun sizedPlan(p: ArenaGeo.Plan, sized: PokemonSize.Sized): ArenaGeo.Plan {
+        fun plat(b: ArenaGeo.Box, dx: Float) = ArenaGeo.Box(b.x + b.w / 2f - b.w * sized.f / 2f + dx, b.y + b.h / 2f - b.h * sized.f / 2f, b.w * sized.f, b.h * sized.f)
+        return ArenaGeo.Plan(p.layout, p.fits, p.wildCard, p.playerCard, sized.wild, sized.player,
+            plat(p.wildPlat, sized.wildDx), plat(p.playerPlat, sized.playerDx), p.a, p.k)
     }
 
     /**
@@ -382,9 +431,19 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val fullSp = if (cardsCompact) InfoBoxGeo.COMPACT_SP else InfoBoxGeo.smallestSp(infoBoxStyle, wantXpText && xpOn && wantXpBar, reduced = false)
         val minSp = if (cardsCompact) InfoBoxGeo.COMPACT_SP else InfoBoxGeo.smallestSp(infoBoxStyle, xpText = false, reduced = true)
         // The boxes keep clear of each sprite's REAL art box (the pixels it draws, R9 D1) at the planned frame, not of the frame or a flat 85 % of it.
-        val p = StageGeo.plan(w / d, h / d, stage, wildW, c.wildH, playerW, c.playerH, k0,
+        fun planAt(size: Float, atOne: Float) = StageGeo.plan(w / d, h / d, stage, wildW, c.wildH, playerW, c.playerH, k0,
             panelScale, floorSp, frameInsetDp, { side -> enemySprite.artShare(side * d) }, { side -> playerSprite.artShare(side * d) },
-            cr.wildH, cr.playerH, minSp, fullSp)
+            cr.wildH, cr.playerH, minSp, fullSp, size, atOne, InfoBoxSkin.corners(infoBoxLook))   // Round 10 W7: the HUD look = the corners mode
+        // Round 10 B20: the plan at 100 % first (the layout before the setting); a Pokémon size draws both sprites that many times what a
+        // frame 1 / size as big would ([SpriteView.sizeFactor]) and is planned with its sprites like that. A bigger size is used only while it
+        // stays clear and its rule step is not lower than the 100 % plan's (so it is never a smaller Pokémon than 100 %).
+        setSpriteFactor(1f)
+        var p = planAt(1f, 0f)
+        if (abs(pokemonSize - 1f) > 0.0001f) {
+            setSpriteFactor(pokemonSize)
+            val sized = planAt(pokemonSize, p.spriteScale)
+            if (StageGeo.keepSized(pokemonSize, p, sized)) p = sized else setSpriteFactor(1f)
+        }
         stagePlanNow = p
         setPartsReduced(p.reduced)
         artOf(stage, p, d, plannedArt)
@@ -452,6 +511,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val st = StageFit.fit(bg, w, h, stageZoom)
         fitBg = bg; k[0] = w; k[1] = h; k[2] = stageZoom
         fitted = st
+        invalidateGlass()   // another crop of the picture: the glass boxes line up with it again
         return st
     }
     private var fitBg: Backdrop? = null
@@ -493,6 +553,39 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         scaleFrom(newTag, max(k, StageGeo.textScale(8f, panelScale, floorSp)))
     }
 
+    /**
+     * Round 10 G (after layout): the sticker stays on today's corner when it fits there, else goes to the first other corner of the wild box
+     * where the whole turned sticker is inside the panel and clear of the HP numbers ([NewTagRule]). A translation and a tilt on the same
+     * view, so a fresh layout (the box moved, rescaled, the panel resized) always starts from today's margins and picks again.
+     */
+    private fun updateNewTag() {
+        newTag.rotation = -NewTagRule.TILT; newTag.translationX = 0f; newTag.translationY = 0f
+        if (newTag.visibility != VISIBLE || newTag.width <= 0 || enemyBlock.width <= 0 || width <= 0 || height <= 0) return
+        val d = Ui.dp(context, 1f)
+        val k = enemyBlock.scaleX
+        val box = NewTagRule.Box(enemyBlock.left.toFloat(), enemyBlock.top.toFloat(), enemyBlock.left + enemyBlock.width * k, enemyBlock.top + enemyBlock.height * k)
+        val edge = if (stagePlanNow != null) frameInsetDp * d else 0f
+        val s = NewTagRule.place(box, width.toFloat(), height.toFloat(), edge, 4f * d * k, 3f * d * k,
+            newTag.width.toFloat(), newTag.height.toFloat(), newTag.scaleX, hpNumbersRect(k, d))
+        if (NewTagRule.keepsTodaysSpot(s)) return   // today's spot, exactly as placeNewTag left it (a pushed-in top-left one is applied below)
+        newTag.rotation = s.angle
+        newTag.translationX = s.x - newTag.left
+        newTag.translationY = s.y - newTag.top
+    }
+
+    /** Where the wild card draws its HP numbers (the bar itself when the number is inside it), a dp of room round it, in the arena's px; null = not laid out. */
+    private fun hpNumbersRect(k: Float, d: Float): NewTagRule.Box? {
+        val v: View = if (eHpText.parent != null && eHpText.visibility != GONE) eHpText else eHp
+        if (v.width <= 0 || v.height <= 0 || v.visibility == GONE) return null
+        var x = 0f; var y = 0f
+        var p: View = v
+        while (p !== enemyBlock) {
+            x += p.left; y += p.top
+            p = (p.parent as? View) ?: return null
+        }
+        return NewTagRule.Box(enemyBlock.left + x * k, enemyBlock.top + y * k, enemyBlock.left + (x + v.width) * k, enemyBlock.top + (y + v.height) * k).grow(d)
+    }
+
     /** Draws [v] [k] times bigger around its top-left corner (touches still land on the right view). */
     private fun scaleFrom(v: View, k: Float) {
         v.pivotX = 0f; v.pivotY = 0f
@@ -532,6 +625,53 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             place(enemyBlock, min(dpi(InfoBoxGeo.W.toInt()), stripMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
             place(playerCard, min(dpi(InfoBoxGeo.W.toInt()), stripMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(8), dpi(8))
         }
+        setSpriteFactor(studySize(w, h))
+    }
+
+    /** Round 10 B20: both sprites draw [f] times what they would in a holder 1 / [f] as big (1 = as before the setting; see [SpriteView.sizeFactor]). */
+    private fun setSpriteFactor(f: Float) {
+        enemySprite.sizeFactor = f
+        playerSprite.sizeFactor = f
+    }
+
+    /**
+     * Round 10 B20 for the study layouts (px): the two holders, laid out as above, are scaled around their feet by the Pokémon size, kept to
+     * the room ([PokemonSize.fitHolders]: art inside the arena, clear of both cards). Their platforms follow. Returns the factor used (1 = nothing changed).
+     */
+    private fun studySize(w: Int, h: Int): Float {
+        if (abs(pokemonSize - 1f) < 0.0001f) return 1f
+        val wl = enemyHolder.layoutParams as LayoutParams      // TOP | RIGHT
+        val pl = playerHolder.layoutParams as LayoutParams     // BOTTOM | LEFT
+        val wild = ArenaGeo.Box((w - wl.rightMargin - wl.width).toFloat(), wl.topMargin.toFloat(), wl.width.toFloat(), wl.height.toFloat())
+        val player = ArenaGeo.Box(pl.leftMargin.toFloat(), (h - pl.bottomMargin - pl.height).toFloat(), pl.width.toFloat(), pl.height.toFloat())
+        val ec = enemyBlock.layoutParams as LayoutParams       // TOP | LEFT
+        val pc = playerCard.layoutParams as LayoutParams       // BOTTOM | RIGHT
+        val ech = cardHeightPx(enemyBlock, ec.width)
+        val pch = cardHeightPx(playerCard, pc.width)
+        val cards = listOf(
+            ArenaGeo.Box(ec.leftMargin.toFloat(), ec.topMargin.toFloat(), ec.width.toFloat(), ech.toFloat()),
+            ArenaGeo.Box((w - pc.rightMargin - pc.width).toFloat(), (h - pc.bottomMargin - pch).toFloat(), pc.width.toFloat(), pch.toFloat()),
+        )
+        val sized = PokemonSize.fitHolders(w.toFloat(), h.toFloat(), wild, player, cards, pokemonSize)
+        if (!sized.changed) return 1f
+        place(enemyHolder, Math.round(sized.wild.w), Math.round(sized.wild.h), Gravity.TOP or Gravity.RIGHT, 0, Math.round(sized.wild.y), Math.round(w - sized.wild.right), 0)
+        place(playerHolder, Math.round(sized.player.w), Math.round(sized.player.h), Gravity.BOTTOM or Gravity.LEFT, Math.round(sized.player.x), 0, 0, Math.round(h - sized.player.bottom))
+        // the platforms: scaled around their middle, moved with their Pokémon
+        val we = platEnemy.layoutParams as LayoutParams        // TOP | RIGHT
+        val pp = platPlayer.layoutParams as LayoutParams       // BOTTOM | LEFT (its bottom margin is negative: it hangs below the arena)
+        val ew = we.width * sized.f; val eh = we.height * sized.f
+        val ex = w - we.rightMargin - we.width / 2f - ew / 2f + sized.wildDx
+        place(platEnemy, Math.round(ew), Math.round(eh), Gravity.TOP or Gravity.RIGHT, 0, Math.round(we.topMargin + (we.height - eh) / 2f), Math.round(w - ex - ew), 0)
+        val pw = pp.width * sized.f; val ph = pp.height * sized.f
+        val px = pp.leftMargin + pp.width / 2f - pw / 2f + sized.playerDx
+        place(platPlayer, Math.round(pw), Math.round(ph), Gravity.BOTTOM or Gravity.LEFT, Math.round(px), 0, 0, Math.round(pp.bottomMargin - (ph - pp.height) / 2f))
+        return sized.f
+    }
+
+    /** The height (px) a card laid out [widthPx] wide wants (the study layouts give it no height of its own). */
+    private fun cardHeightPx(card: View, widthPx: Int): Int {
+        card.measure(MeasureSpec.makeMeasureSpec(widthPx, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+        return card.measuredHeight
     }
 
     private fun place(v: View, w: Int, h: Int, gravity: Int, left: Int, top: Int, right: Int, bottom: Int) {
@@ -641,6 +781,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      * while pictures or downloads are off in the settings ([Backdrops.allowed]).
      */
     fun setBackdrop(types: List<Type>, seed: Int, legendary: Boolean = false) {
+        lastBackdrop = Triple(types, seed, legendary)
         val download = Backdrops.allowed(Sprites.enabled(context), AppPrefs.backgroundPictures(context))
         if (!download) { backdrop.plain(); return }
         backdrop.request(BackdropCatalog.pick(types, seed, legendary), download)
@@ -648,6 +789,17 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     /** The plain gradient with the two platform ellipses. */
     fun setPlainBackdrop() = backdrop.plain()
+
+    private var lastBackdrop: Triple<List<Type>, Int, Boolean>? = null
+
+    /**
+     * Round 10 B19: "Background pictures" was switched in the battle's view settings (or Settings) while this arena is open: asks again for the
+     * picture of the wild Pokémon last shown, which is the plain gradient when pictures are off now. Nothing before the first encounter.
+     */
+    fun reapplyBackdrop() {
+        val last = lastBackdrop ?: return
+        setBackdrop(last.first, last.second, last.third)
+    }
 
     /**
      * R9 C4: runs [then] once the background asked for last by [setBackdrop] is settled (applied and the stand points asked to
@@ -710,15 +862,24 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             SpannableStringBuilder(name).also {
                 val at = it.length
                 it.append("  ★")
-                it.setSpan(ForegroundColorSpan(Ui.c(context, R.color.ag_yellow)), at, it.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                it.setSpan(ForegroundColorSpan(ink?.yellow ?: Ui.c(context, R.color.ag_yellow)), at, it.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 it.setSpan(RelativeSizeSpan(12f / 14f), at, it.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
         } else name
-        eLevel.text = "Lv $level"; eLevel.setTextColor(LevelTier.color(context, level))
+        eLvl = level
+        eLevel.text = "Lv $level"; eLevel.setTextColor(levelColor(level))
+        enemyTypes = types
+        eTypeColor = types.firstOrNull()?.let { Ui.typeColor(it) } ?: 0
+        buildEnemyTypes()
+        if (InfoBoxSkin.needsType(infoBoxLook)) applyBackgrounds()   // the type look: this Pokémon's colour
+    }
+
+    /** The wild one's type chips and symbols, painted in the look's palette (the dark one for a look that is the same in light and dark). */
+    private fun buildEnemyTypes() {
         eTypes.removeAllViews()
         eIcons.removeAllViews()
-        for (t in types) {
-            eTypes.addView(Ui.typeChip(context, t).also { it.maxLines = 1; sz(it, InfoBoxGeo.CHIP) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
+        for (t in enemyTypes) {
+            eTypes.addView(TypeChips.chip(context, t, dark = insideDark()).also { it.maxLines = 1; sz(it, InfoBoxGeo.CHIP) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
             eIcons.addView(typeSquare(t), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(2) })
         }
         fitSquares()
@@ -726,8 +887,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     /** A type as a small coloured square with its symbol in it (D12 `typeIcons`): the inside style's, and the swap for chips that do not fit. */
     private fun typeSquare(t: Type) = ImageView(context).apply {
-        setImageDrawable(TypeChips.tinted(context, t, TypeChips.ink(context, t)))
-        background = Ui.rounded(TypeChips.fill(context, t), 4, context)
+        val dk = insideDark()
+        setImageDrawable(TypeChips.tinted(context, t, TypeInk.ink(Ui.typeColor(t), dk)))
+        background = Ui.rounded(TypeInk.fill(Ui.typeColor(t), dk), 4, context)
         scaleType = ImageView.ScaleType.FIT_CENTER
         contentDescription = t.label
     }
@@ -746,7 +908,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     fun setEnemyHp(hp: Int, max: Int, animate: Boolean) {
         val f = if (max > 0) hp.toFloat() / max else 0f
-        eHp.set(f, Ui.hpColor(context, f), animate)
+        eHpFrac = f
+        eHp.set(f, hpColorOf(f), animate)
         eHpStr = DisplayNumbers.hp(hp, max)
         showHpText(eHpText, eHp, eHpStr)
     }
@@ -758,7 +921,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /** The sticker follows the wild card: shown only while the card is (and the species is new). */
-    private fun showNewTag() { newTag.visibility = if (wildIsNew && cardShown) VISIBLE else INVISIBLE }
+    private fun showNewTag() { newTag.visibility = if (wildIsNew && cardShown) VISIBLE else INVISIBLE; updateNewTag() }
 
     /**
      * The study strips' compact look (narrow split-screen strip): the info cards keep name, level and HP (no type chips, XP number or
@@ -781,10 +944,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         wantTypes = true
         wantXpText = true
         wantXpBar = true
-        for (c in listOf(enemyCard, playerCard)) {
-            c.elevation = Ui.dp(context, 2f)
-            c.background = Ui.rounded(translucentCard(context), if (on) 10 else 12, context)
-        }
+        baseElevation = Ui.dp(context, 2f)
+        applyBackgrounds(force = true)   // the card colour (or the look's box) with the strip's corner radius, and the strip's 2 dp lift
         updateCards()
     }
 
@@ -869,8 +1030,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         sz(pHpLabel, InfoBoxGeo.NUM)
         sz(pXpText, InfoBoxGeo.XP)
         for (i in 0 until eTypes.childCount) (eTypes.getChildAt(i) as? TextView)?.let { sz(it, InfoBoxGeo.CHIP) }
-        eHpText.setTextColor(Ui.c(context, if (full) R.color.ag_text else R.color.ag_sub0))
-        pHpText.setTextColor(Ui.c(context, if (full) R.color.ag_text else R.color.ag_sub0))
+        eHpText.setTextColor(if (full) inkText() else inkSub())
+        pHpText.setTextColor(if (full) inkText() else inkSub())
         // what shows
         eNumRow.visibility = vis(full && !inside)
         pNumRow.visibility = vis(full && !inside)
@@ -902,7 +1063,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val b = TextMath.bar(floorSp)
         fun h(bar: BarView, dp: Float, labelSp: Float = 0f) {
             val lp = bar.layoutParams as LinearLayout.LayoutParams
-            val px = max(dpf(dp * b), if (labelSp > 0f) bar.labelNeedPx(labelSp) else 0)
+            val inner = max(dpf(dp * b), if (labelSp > 0f) bar.labelNeedPx(labelSp) else 0)
+            val px = if (bar.look == HpBarLook.PIXEL) PixelBar.outerPx(inner, resources.displayMetrics.density) else inner   // pixel look: + an outline unit on each side
             if (lp.height != px) { lp.height = px; bar.layoutParams = lp }
         }
         when {
@@ -1032,6 +1194,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (bubbleFor != null) hideStatusBubble()
+        invalidateGlass()
     }
 
     // ---------------------------------------------------------------- player side
@@ -1040,20 +1203,31 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         playerUid = uid
         playerLevel = level
         pName.text = name
-        pLevel.text = "Lv $level"; pLevel.setTextColor(LevelTier.color(context, level))
+        pLvl = level
+        pLevel.text = "Lv $level"; pLevel.setTextColor(levelColor(level))
     }
 
     fun setPlayerLevel(level: Int) {
         playerLevel = level
-        pLevel.text = "Lv $level"; pLevel.setTextColor(LevelTier.color(context, level))
+        pLvl = level
+        pLevel.text = "Lv $level"; pLevel.setTextColor(levelColor(level))
     }
 
     fun setPlayerName(name: String) { pName.text = name }
 
+    /** Round 10 W7: our Pokémon's types; the type look washes our box with the first one's colour (nothing else shows them). */
+    fun setPlayerTypes(types: List<Type>) {
+        val c = types.firstOrNull()?.let { Ui.typeColor(it) } ?: 0
+        if (c == pTypeColor) return
+        pTypeColor = c
+        if (InfoBoxSkin.needsType(infoBoxLook)) applyBackgrounds()
+    }
+
     /** HP bar eases 450 ms; the "58 / 71" counts along. */
     fun setPlayerHp(hp: Int, max: Int, animate: Boolean) {
         val f = if (max > 0) hp.toFloat() / max else 0f
-        pHp.set(f, Ui.hpColor(context, f), animate)
+        pHpFrac = f
+        pHp.set(f, hpColorOf(f), animate)
         hpCount?.cancel()
         val from = pHpShown
         pHpShown = hp
@@ -1075,7 +1249,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun setPlayerXp(current: Int, needed: Int, animate: Boolean) {
         val f = (if (needed > 0) current.toFloat() / needed else 1f).coerceIn(0f, 1f)
         pXpShown = f
-        pXp.setMeaning(BarMeaning.XP, f, animate)
+        setXpBar(f, animate)
         showXp(DisplayNumbers.xp(current, needed))
     }
 
@@ -1088,6 +1262,98 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     val xpShown: Float get() = pXpShown
+
+    // ---------------------------------------------------------------- info box looks (Round 10 W7)
+
+    /** The palette the inside of the boxes is painted in: the dark one for a look that is the same in light and dark, else the theme's. */
+    private fun insideDark() = ink != null || TypeChips.isDark(context)
+    private fun inkText() = ink?.text ?: Ui.c(context, R.color.ag_text)
+    private fun inkSub() = ink?.sub ?: Ui.c(context, R.color.ag_sub0)
+    private fun levelColor(level: Int) = ink?.tier(level) ?: LevelTier.color(context, level)
+    private fun hpColorOf(f: Float) = ink?.hp(f) ?: Ui.hpColor(context, f)
+
+    /** The XP bar's fill at [f]: the look's sky, or the meaning colour of the chosen bar style. */
+    private fun setXpBar(f: Float, animate: Boolean) {
+        val i = ink
+        if (i == null) pXp.setMeaning(BarMeaning.XP, f, animate) else { pXp.clearGradient(); pXp.set(f, i.xp, animate) }
+    }
+
+    /** The glass boxes draw their picture again (the picture, its crop or the arena changed under them). */
+    private fun invalidateGlass() {
+        if (InfoBoxSkin.glass(infoBoxLook)) { enemyCard.invalidate(); playerCard.invalidate() }
+    }
+
+    /** Dresses the two boxes in [infoBoxLook]: their backgrounds, the colours inside, the text shadows and bar rings. */
+    private fun applyLook() {
+        ink = InfoBoxSkin.ink(infoBoxLook)
+        applyBackgrounds()
+        applyInk()
+        invalidateGlass()
+    }
+
+    /**
+     * The boxes' backgrounds: today's translucent card, or the look's layers ([InfoBoxSkin]); the strip's corner radius and lift; the
+     * glass look's soft shadow. Built again only when the look, the strip flag or (type look) a Pokémon's type colour changed.
+     */
+    private fun applyBackgrounds(force: Boolean = false) {
+        val look = infoBoxLook
+        val typed = InfoBoxSkin.needsType(look)
+        val key = "${look.name}|$studyStrip|${if (typed) eTypeColor else 0}|${if (typed) pTypeColor else 0}"
+        if (!force && key == skinKey) return
+        skinKey = key
+        val d = resources.displayMetrics.density
+        val baseRadius = if (studyStrip) 10f else 12f
+        val radius = InfoBoxSkin.radiusDp(look, baseRadius)
+        val card = Ui.c(context, R.color.ag_card)
+        val dark = TypeChips.isDark(context)
+        val lift = max(baseElevation, Ui.dp(context, InfoBoxSkin.elevationDp(look)))
+        val glass = InfoBoxSkin.glass(look)
+        fun dress(v: View, typeColor: Int, glassOf: ArenaGlass?) {
+            v.background =
+                if (look == InfoBoxLook.TODAY) Ui.rounded(translucentCard(context), baseRadius, context)   // exactly as the boxes always were
+                else InfoBoxDrawable(d, InfoBoxSkin.layers(look, card, dark, typeColor.takeIf { it != 0 }), radius, if (glass) glassOf else null)
+            v.elevation = lift
+        }
+        dress(enemyCard, eTypeColor, eGlass ?: ArenaGlass(context, this, enemyCard, { backdrop.shown }, { stageNow }).also { eGlass = it })
+        dress(playerCard, pTypeColor, pGlass ?: ArenaGlass(context, this, playerCard, { backdrop.shown }, { stageNow }).also { pGlass = it })
+    }
+
+    /**
+     * Everything inside the boxes that a look recolours: texts, level tiers, HP / XP bars and their tracks, the status badges, the wild
+     * one's type chips; the shadows of the texts and the rings of the bars of the looks that have no plate behind them.
+     */
+    private fun applyInk() {
+        val look = infoBoxLook
+        val text = inkText()
+        val sub = inkSub()
+        eName.setTextColor(text); pName.setTextColor(text)
+        pHpLabel.setTextColor(sub); pXpText.setTextColor(sub)
+        val full = !cardsCompact
+        eHpText.setTextColor(if (full) text else sub); pHpText.setTextColor(if (full) text else sub)
+        eLevel.setTextColor(if (eLvl > 0) levelColor(eLvl) else sub)
+        pLevel.setTextColor(if (pLvl > 0) levelColor(pLvl) else sub)
+        val track = ink?.track ?: Ui.c(context, R.color.ag_s0)
+        eHp.setTrackColor(track); pHp.setTrackColor(track); pXp.setTrackColor(track)
+        if (eHpFrac >= 0f) eHp.set(eHpFrac, hpColorOf(eHpFrac), false)
+        if (pHpFrac >= 0f) pHp.set(pHpFrac, hpColorOf(pHpFrac), false)
+        setXpBar(pXpShown, false)
+        eStatus.dark = ink != null
+        pStatus.dark = ink != null
+        if (enemyTypes.isNotEmpty()) buildEnemyTypes()
+        val sh = InfoBoxSkin.textShadow(look)
+        for (t in listOf(eName, pName, eLevel, pLevel, eHpText, pHpText, pHpLabel, pXpText)) {
+            if (sh == null) t.setShadowLayer(0f, 0f, 0f, 0)
+            else t.setShadowLayer(Ui.dp(context, sh.radiusDp), Ui.dp(context, sh.dxDp), Ui.dp(context, sh.dyDp), sh.color)
+        }
+        // the HUD's ring round the bars is drawn outside the bars' bounds: the rows that hold them stop clipping
+        val ring = InfoBoxSkin.barRing(look)
+        val d = resources.displayMetrics.density
+        for (b in listOf(eHp, pHp, pXp)) b.foreground = if (ring == null) null else BarRingDrawable(b, ring, d)
+        // the pixel bars' outline: the fixed dark palette's text colour on the looks with a fixed dark plate, else the theme's own
+        for (b in listOf(eHp, pHp, pXp)) b.outlineColor = ink?.text
+        for (g in listOf<ViewGroup>(enemyCard, playerCard, pXpRow, eHpBox, pHpBox)) g.clipChildren = ring == null
+        updateCards()
+    }
 
     // ---------------------------------------------------------------- hit animations
 
@@ -1395,7 +1661,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val spec = xpFillSpec ?: return
         val f = spec.frac(fill)
         pXpShown = f
-        pXp.setMeaning(BarMeaning.XP, f, false)
+        setXpBar(f, false)
         showXp(DisplayNumbers.xp(spec.current(fill), spec.needed))
         if (fill >= 1f) xpFillSpec = null
     }
@@ -1621,6 +1887,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         super.onLayout(changed, l, t, r, b)
+        updateNewTag()
         updateStatusTouch()
         if (banner.visibility == VISIBLE) {
             val was = bannerFit

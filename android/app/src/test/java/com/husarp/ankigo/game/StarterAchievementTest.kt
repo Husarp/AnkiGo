@@ -90,11 +90,15 @@ class StarterAchievementTest {
 
     @Test fun noTierIsGrantedOrCelebratedBecauseOfTheStarter() {
         val (g, s) = fresh()
+        // R10-W2-H made SMART the default: fights end faster, so a REAL catch (catches=4, id "types") can reach a tier inside 40 answers.
+        // Pin the old random picks so the run stays the same as before; the intent (no tier because of the starter) is unchanged.
+        s.settings.moveChoice = MoveChoice.RANDOM
         val collection = setOf("catches", "dex-caught", "dex-seen", "types", "highest-level", "total-levels", "total-xp", "shinies", "legendary-mythical")
         assertTrue(s.achTiers.filterKeys { it in collection }.values.all { it.isEmpty() })
         for (i in 1..40) {
             val ev = g.onAnswer(Answer(i.toLong(), 3, time))
-            assertTrue(ev.filterIsInstance<GameEvent.AchievementReached>().none { it.id in collection })
+            val hit = ev.filterIsInstance<GameEvent.AchievementReached>().filter { it.id in collection }
+            assertTrue("answer $i fired $hit; catches=${s.catches} dexCaught=${v(s, Metric.DEX_CAUGHT)}", hit.isEmpty())
         }
         // the one-offs of real catches still fire: this is the wild one's catch, not the starter's
         assertFalse(s.catches == 0 && 7 in s.badges)

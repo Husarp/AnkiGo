@@ -29,11 +29,6 @@ class PendingAnswers {
     fun whenIdle(action: () -> Unit) { if (n == 0) action() else waiting = action }
 
     private fun release() { val w = waiting ?: return; waiting = null; w() }
-
-    companion object {
-        /** The detector never answers when it was stopped for good; the summary must not wait for ever. */
-        const val MAX_WAIT_MS = 20_000L
-    }
 }
 
 /**
@@ -60,6 +55,10 @@ class AnswerTiming(val tapAt: Long, private val needs: Set<String> = setOf(GAME,
 
     /** The next card: [HIT] the predicted card was the real one, [MISS] it was swapped away, [NONE] nothing was predicted. "" = not known. */
     var next = ""
+
+    /** R10-X1: why the next card was not predicted (shown with [NONE]; "" = not said); [visit] = the screen's predictions and waits so far. */
+    var wait = ""
+    var visit = ""
 
     /** How many times the load of the next card asked AnkiDroid again (-1: not known). */
     var loadRetries = -1
@@ -96,10 +95,12 @@ class AnswerTiming(val tapAt: Long, private val needs: Set<String> = setOf(GAME,
         )
         val head = if (ANSWER in ms) "ANSWER ${v(ANSWER)}${if (attempts > 1) " ($attempts tries)" else ""}, " else ""
         val queue = if (queueAtTap >= 0) "write queue $queueAtTap at the tap, " else ""
-        val prediction = if (next.isNotEmpty()) ", next card: $next" + (if (CONFIRMED in ms) ", confirmed after ${v(CONFIRMED)}" else "") else ""
+        val kind = if (next == NONE && wait.isNotEmpty()) "none (waited: $wait)" else next
+        val prediction = if (next.isNotEmpty()) ", next card: $kind" + (if (CONFIRMED in ms) ", confirmed after ${v(CONFIRMED)}" else "") else ""
         return "answer: ${head}save+verify ${v(WRITE)}, ${queue}detector wait ${v(ABSORB)}, game step ${v(GAME)}, next card ${v(NEXT)} " +
             "(deck list ${v(LIST)})$prediction, tap to next card shown ${v(SHOWN)}" +
-            (if (after.isEmpty()) "" else ", " + after.joinToString(", ")) + (if (note.isEmpty()) "" else "; $note")
+            (if (after.isEmpty()) "" else ", " + after.joinToString(", ")) + (if (note.isEmpty()) "" else "; $note") +
+            (if (visit.isEmpty()) "" else "; this visit: $visit")
     }
 
     companion object {
@@ -109,6 +110,9 @@ class AnswerTiming(val tapAt: Long, private val needs: Set<String> = setOf(GAME,
         /** The provider's ANSWER call alone (the last try); [CONFIRMED] = tap until AnkiDroid confirmed (or swapped) the next card. */
         const val ANSWER = "answer"; const val CONFIRMED = "confirmed"
         const val HIT = "predicted hit"; const val MISS = "predicted miss (swap)"; const val NONE = "none (waited)"
+
+        /** A swap with its cause ([PredictRule.swapCause]; "" = not known). */
+        fun swap(cause: String) = if (cause.isEmpty()) MISS else "predicted miss (swap: $cause)"
 
         /** The parts an answer of the background-write flow waits for before its line is logged. */
         val ALL_PARTS = setOf(GAME, SHOWN, PAGE, COUNTS, WRITE, CONFIRMED)

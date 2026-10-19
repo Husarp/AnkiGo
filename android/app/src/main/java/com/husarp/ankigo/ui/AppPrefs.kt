@@ -74,6 +74,11 @@ object AppPrefs {
 
     fun setFloatScreens(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("floatScreens", on).apply()
 
+    /** The game day (yyyy-MM-dd) the Shop tab was last opened on, or null (never): the red dot on the Shop tab shows until then ([com.husarp.ankigo.game.Shop.unseen]). */
+    fun shopSeenDay(ctx: Context): String? = prefs(ctx).getString("shopSeenDay", null)
+
+    fun setShopSeenDay(ctx: Context, day: String) = prefs(ctx).edit().putString("shopSeenDay", day).apply()
+
     /** True once the "Display over other apps" explanation was shown (it is asked only once; Settings can ask again). */
     fun overlayExplained(ctx: Context): Boolean = prefs(ctx).getBoolean("overlayExplained", false)
 
@@ -113,6 +118,24 @@ object AppPrefs {
     fun infoBoxStyle(ctx: Context): InfoBoxStyle = InfoBoxStyle.parse(prefs(ctx).getString(InfoBoxStyle.KEY, null))
 
     fun setInfoBoxStyle(ctx: Context, style: InfoBoxStyle) = prefs(ctx).edit().putString(InfoBoxStyle.KEY, style.name).apply()
+
+    /** The look of the battle's info boxes (Round 10 W7; Settings → Battle → Info box style and the battle's view settings). Default [InfoBoxLook.TODAY]; unknown = that. */
+    fun infoBoxLook(ctx: Context): InfoBoxLook = InfoBoxLook.parse(prefs(ctx).getString(InfoBoxLook.KEY, null))
+
+    fun setInfoBoxLook(ctx: Context, look: InfoBoxLook) = prefs(ctx).edit().putString(InfoBoxLook.KEY, look.name).apply()
+
+    /** The look of the info boxes' HP / XP bars (Round 10 W8). Default [HpBarLook.TODAY]; unknown = that. Not `barStyle` (Look → Progress bars). */
+    fun hpBarLook(ctx: Context): HpBarLook = HpBarLook.parse(prefs(ctx).getString(HpBarLook.KEY, null))
+
+    fun setHpBarLook(ctx: Context, look: HpBarLook) = prefs(ctx).edit().putString(HpBarLook.KEY, look.name).apply()
+
+    /**
+     * How big both battle Pokémon are, in percent (Round 10 B20; Settings → Battle → Pokémon size and the battle's "View settings" sheet):
+     * 80 to 130 in steps of 5, one value for every battle view. Missing or outside that range = 100 (exactly the layout before the setting).
+     */
+    fun pokemonSize(ctx: Context): Int = PokemonSize.parse(prefs(ctx).getInt(PokemonSize.KEY, PokemonSize.DEFAULT))
+
+    fun setPokemonSize(ctx: Context, percent: Int) = prefs(ctx).edit().putInt(PokemonSize.KEY, PokemonSize.parse(percent)).apply()
 
     /** Where the charge dots sit in the battle action bar (Round 9 D3, Settings → Battle → Turn dots). Default middle; unknown = middle. */
     fun turnDots(ctx: Context): DotsPlace = DotsPlace.parse(prefs(ctx).getString(DotsPlace.KEY, null))
@@ -176,6 +199,10 @@ object AppPrefs {
      */
     fun typeStyle(ctx: Context): TypeStyle =
         TypeStyle.entries.firstOrNull { it.name == prefs(ctx).getString("typeStyle", null) } ?: TypeStyle.ICON_TEXT
+
+    /** Type chips in the Matchups boxes (Settings → Look → "Matchup chips"): Soft (default) or a ring in the type colour. Read every time the boxes are built. */
+    fun matchupChips(ctx: Context): MatchupChips =
+        MatchupChips.entries.firstOrNull { it.name == prefs(ctx).getString("matchupChips", null) } ?: MatchupChips.SOFT
 
     /** Interface size in percent ([AppLook.SCALES], default 100): text, cards and sprites together. Change it through [AppLook.setScale]. */
     fun uiScale(ctx: Context): Int = prefs(ctx).getInt("uiScale", 100).let { if (it in AppLook.SCALES) it else 100 }

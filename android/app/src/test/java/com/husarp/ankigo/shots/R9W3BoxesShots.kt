@@ -426,15 +426,16 @@ class R9W3BoxesShots {
                 addView(card, LinearLayout.LayoutParams(-1, -2))
             }
             paparazzi.snapshot(holder, "r9w3-settings-${theme.name.lowercase()}", 0)
+            com.husarp.ankigo.ui.LookChooser.find(card, "Info box style")!!.expand()   // collapsed at first
             val texts = ArrayList<TextView>(); textViews(card, texts)
             val labels = texts.map { it.text.toString() }
             for (s in InfoBoxStyle.entries) assertTrue("${s.label} is listed: $labels", s.label in labels)
             assertEquals("Number above the bar", InfoBoxStyle.ABOVE.label)
             assertEquals(InfoBoxStyle.ABOVE, AppPrefs.infoBoxStyle(ctx))
-            // the second row = "Number inside the bar"
-            val rows = (0 until card.childCount).map { card.getChildAt(it) }.filter { it.hasOnClickListeners() }
-            assertEquals(2, rows.size)
-            rows[1].performClick()
+            // Round 10 F: the entry is one collapsible chooser; the layout choice is the two segments at the top of its body
+            val chips = texts.filter { it.text.toString() == "Number inside the bar" }
+            assertEquals(1, chips.size)
+            chips[0].performClick()
             assertEquals(InfoBoxStyle.INSIDE, AppPrefs.infoBoxStyle(ctx))
         }
     }

@@ -38,12 +38,13 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
 
     /**
      * An own answer was saved and verified. On the worker thread (so the card map is never touched from two threads) the
-     * detector settles it and remembers [row]; then [done] runs on the main thread, and only then may the game step save
-     * the snapshot (it contains the answered card, so a restart cannot count the answer a second time). The work goes to
+     * detector settles it and remembers [row]; then [done] runs on the main thread, and only then may the snapshot be saved
+     * with the card's real state (R10-B23: the game counted the answer at the tap; until here its predicted row stands in,
+     * see OwnAhead, so a restart cannot count the answer a second time). The work goes to
      * the FRONT of the worker's queue: it waits only for a poll that is already running, not for ticks or rechecks
      * queued behind it. Several waiting answers are absorbed in the order they were made. Before the session's baseline
      * is read it waits for it (the baseline's catch-up settles own answers itself), and a stop() or start() clearing the
-     * queue does not lose it: the answer is already saved in AnkiDroid, so the game must still count it once. [done]
+     * queue does not lose it: the answer is already saved in AnkiDroid, so its row must still be settled once. [done]
      * runs with [snapshot] set to the map right after this answer (and not yet any later one).
      */
     fun absorbOwn(row: CardState, done: () -> Unit) {
@@ -115,8 +116,8 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
      * Starts watching. [snapshot] is the card map saved with the game ([snapshotDay] its game day): when it is from
      * [today], answers made while AnkiGo wasn't watching are emitted first as catchUp answers (cards whose reps grew;
      * cards rated today that the snapshot didn't know count once). With no snapshot for today, every card rated today
-     * counts once (catchUp). Safe to call again after stop(). Own answers still waiting for their game step must be in
-     * [snapshot] already (the caller adds them with withPendingOwn): the baseline then neither counts nor settles them.
+     * counts once (catchUp). Safe to call again after stop(). Own answers the game counted ahead of their write must be in
+     * [snapshot] already (the caller adds them with withPendingOwn, see OwnAhead): the baseline then does not count them.
      */
     fun start(snapshot: String?, snapshotDay: String?, today: String) {
         Report.init(ctx)
@@ -201,14 +202,7 @@ class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Uni
             base.forEach { ledger.cards[it.id] = it }
             prevRated = Anki.searchCards(ctx, "rated:1", arrayOf("_id")).mapNotNull { it["_id"]?.toLongOrNull() }.toSet()
             prevHot = base.filter { it.id in prevRated && it.queue in LEARN_QUEUES }.map { it.id }.toSet()
-            val missed = catchUp(restored, base, prevRated, ::stepsFor, System.currentTimeMillis() / 1000).toMutableList()
-            for (n in base) {
-                val from = restored?.get(n.id)?.reps ?: (n.reps - 1)
-                repeat(ledger.own.consume(n.id, from, n.reps, SystemClock.elapsedRealtime())) {
-                    val i = missed.indexOfFirst { it.cardId == n.id }
-                    if (i >= 0) missed.removeAt(i)
-                }
-            }
+            val missed = baselineAnswers(restored, base, prevRated, ::stepsFor, System.currentTimeMillis() / 1000, ledger.own, SystemClock.elapsedRealtime())
             refreshSnapshot()
             Report.log("LIVE", "watching: baseline ${base.size} cards in ${SystemClock.elapsedRealtime() - t0} ms; rated today=${prevRated.size}; catch-up answers=${missed.size}; AnkiDroid=${Anki.pkg}")
             if (missed.isNotEmpty()) { val snap = snapshotJson; main.post { deliveredSnapshot = snap; missed.forEach(onEvent) } }

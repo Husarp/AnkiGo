@@ -10,7 +10,7 @@ import com.husarp.ankigo.R
 
 /**
  * The switch under a tab's app bar. Two looks, one place, so a new look is a one-file change:
- * [Style.TABS]: the Pokémon tab's Team · Box · Pokédex · Shop (four equal tabs, each with its icon on top of its label; the
+ * [Style.TABS]: the Pokémon tab's Team · Box · Pokédex (three equal tabs, each with its icon on top of its label; the
  * selected one sits in a rounded square of the accent colour, like the selected tab of the bottom bar);
  * [Style.SEGMENTED]: the Stats tab's Statistics · Achievements (the plain segmented control, the selected part raised).
  */

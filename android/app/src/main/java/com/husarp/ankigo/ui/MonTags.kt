@@ -18,7 +18,9 @@ import java.time.Instant
 import java.time.ZoneId
 
 /** Tags of one owned Pokémon, in priority order (most useful first). */
-enum class TagKind { MAIN, FAINTED, CAN_EVOLVE, NEW, EXP_SHARE, HELD, SHINY, REGIONAL }
+enum class TagKind { MAIN, FAINTED, CAN_EVOLVE, NEW, EXP_SHARE, HELD, SHINY, REGIONAL,
+    /** Only in the details header ([MonTags.detailTags]): in the team / a favourite (the tiles show these two as marks). */
+    TEAM, FAVOURITE }
 
 /** [item] is set for HELD (the held item id, for its icon). */
 data class MonTag(val kind: TagKind, val label: String, val item: String? = null)
@@ -62,6 +64,21 @@ object MonTags {
         return out
     }
 
+    /** The order of the details header tags (R10-W2-D): the tiles' marks first (Main, Team, Exp. Share, Favourite), then the states. */
+    private val DETAIL_ORDER = listOf(
+        TagKind.MAIN, TagKind.TEAM, TagKind.EXP_SHARE, TagKind.FAVOURITE, TagKind.FAINTED, TagKind.CAN_EVOLVE,
+        TagKind.NEW, TagKind.HELD, TagKind.SHINY, TagKind.REGIONAL,
+    )
+
+    /** [of] plus Team (in the team, the main too) and Favourite, in [DETAIL_ORDER]: what the details header shows. */
+    fun detailTags(data: GameData, state: GameState, mon: Mon, now: Long = System.currentTimeMillis()): List<MonTag> {
+        val out = ArrayList(of(data, state, mon, now))
+        if (mon.uid in state.team) out += MonTag(TagKind.TEAM, "Team")
+        if (mon.favourite) out += MonTag(TagKind.FAVOURITE, "Favourite")
+        // the star is the tag's icon here, so the name is just "Shiny"
+        return out.map { if (it.kind == TagKind.SHINY) it.copy(label = "Shiny") else it }.sortedBy { DETAIL_ORDER.indexOf(it.kind) }
+    }
+
     @ColorRes private fun tone(kind: TagKind): Int = when (kind) {
         TagKind.MAIN -> R.color.ag_mauve
         TagKind.FAINTED -> R.color.ag_red
@@ -71,6 +88,8 @@ object MonTags {
         TagKind.HELD -> 0
         TagKind.SHINY -> R.color.ag_yellow
         TagKind.REGIONAL -> R.color.ag_lav
+        TagKind.TEAM -> R.color.ag_mauve
+        TagKind.FAVOURITE -> R.color.ag_pink
     }
 
     fun pill(ctx: Context, tag: MonTag): View {
@@ -130,6 +149,8 @@ data class MonMarks(val types: List<Type>, val isNew: Boolean, val tags: List<Mo
                     TagKind.SHINY -> MonMark(t.kind, MarkKind.RARITY, "shiny", "Shiny")
                     TagKind.REGIONAL -> MonMark(t.kind, MarkKind.FORM, "regional", "${t.label} form")
                     TagKind.NEW -> error("NEW is the corner badge, not a mark")
+                    TagKind.TEAM -> MonMark(t.kind, MarkKind.STATE, "team", "In team")
+                    TagKind.FAVOURITE -> MonMark(t.kind, MarkKind.STATE, "favourite", "Favourite")
                 }
             }
             val isNew = all.any { it.kind == TagKind.NEW } && mon.uid !in seen

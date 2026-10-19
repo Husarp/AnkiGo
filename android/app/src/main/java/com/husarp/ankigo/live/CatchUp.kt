@@ -80,8 +80,32 @@ fun catchUp(
 }
 
 /**
- * [snapshot] plus the own answers [rows] whose game step has not run yet (each card as it is after the answer), for a
- * detector that starts meanwhile: its baseline then counts nothing for them, the absorb still waiting counts each once.
+ * What a detector's baseline reports: [catchUp] minus the rep changes [own] expects (AnkiGo's own answers: their game step
+ * counts them). Settles those expectations. [nowMs] is the clock of [OwnAnswers].
+ */
+fun baselineAnswers(
+    restored: Map<Long, CardState>?,
+    baseline: List<CardState>,
+    ratedToday: Set<Long>,
+    steps: (CardState) -> Steps?,
+    nowSec: Long,
+    own: OwnAnswers,
+    nowMs: Long,
+): List<LiveDetector.Event.Answer> {
+    val missed = catchUp(restored, baseline, ratedToday, steps, nowSec).toMutableList()
+    for (n in baseline) {
+        val from = restored?.get(n.id)?.reps ?: (n.reps - 1)
+        repeat(own.consume(n.id, from, n.reps, nowMs)) {
+            val i = missed.indexOfFirst { it.cardId == n.id }
+            if (i >= 0) missed.removeAt(i)
+        }
+    }
+    return missed
+}
+
+/**
+ * [snapshot] plus the own answers [rows] the game counted ahead of their write (each card as it will be after the answer,
+ * see [OwnAhead]), for the save and for a detector that starts meanwhile: its baseline then counts nothing for them.
  * No or unreadable snapshot = empty. A card the snapshot already has at the same or a later rep is left alone.
  */
 fun withPendingOwn(snapshot: String?, rows: List<CardState>): String? {

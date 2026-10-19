@@ -27,9 +27,12 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.data.DataStore
 import com.husarp.ankigo.data.SpriteKind
 import com.husarp.ankigo.data.Sprites
+import com.husarp.ankigo.game.CatchChoice
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
+import com.husarp.ankigo.game.MoveChoice
 import com.husarp.ankigo.game.Settings as GameSettings
+import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.save.SaveCodec
 import com.husarp.ankigo.game.save.SaveFormatException
 import com.husarp.ankigo.game.shownName
@@ -136,6 +139,15 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private var query = ""
     private var pendingFocus: SettingInfo? = null
 
+    /** The titles of the look choosers that are open: kept while this screen lives, so a re-render (a pick, a theme change) does not fold them. */
+    private val openChoosers = LinkedHashSet<String>()
+
+    /** The open choosers, to save with the Activity (a theme change recreates it). */
+    internal fun openChoosersNow(): ArrayList<String> = ArrayList(openChoosers)
+
+    /** Puts back the choosers that were open before the Activity was recreated. */
+    internal fun restoreChoosers(titles: List<String>?) { if (titles != null) openChoosers.addAll(titles) }
+
     // views of the data card that the download jobs update
     private var animBar: ProgressBlock? = null
     private var dataBar: ProgressBlock? = null
@@ -238,7 +250,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             null -> home()
             SettingsSection.LOOK -> content.addView(lookCard(), Form.lp(this, 12))
             SettingsSection.GAME -> if (st != null) {
-                gameGroups(gameRows(st.settings) + faintRows(st.settings) + duplicatesRows(st.settings) + protectRows(st.settings))
+                gameGroups(gameRows(st.settings) + faintRows(st.settings) + moveChoiceRows(st.settings) + protectRows(st.settings))
             } else {
                 content.addView(Form.cardOf(this, listOf(
                     Form.row(this, "The game isn't loaded", "Its options show here once it is. Data and backups still work.", null),
@@ -334,6 +346,19 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     /** Scrolls to the row of [info] in the open section and tints it for a moment; nothing happens when the section has no such row. */
     private fun focusOn(info: SettingInfo) {
+        // Round 10 F: a look / layout / frame / bar line lives in a collapsible chooser: it opens, then it is scrolled to and tinted
+        LookChoosers.titleFor(info.id)?.let { t ->
+            val chooser = LookChooser.find(content, t) ?: return
+            chooser.expand()
+            scroll.post {
+                var y = 0
+                var v: View = chooser
+                while (v !== content && v.parent is View) { y += v.top; v = v.parent as View }
+                scroll.smoothScrollTo(0, (y - dp(80)).coerceAtLeast(0))
+            }
+            SettingsHomeSearch.flash(chooser.header)
+            return
+        }
         val row = Form.rowsIn(content).firstOrNull { Form.titleOf(it) == info.title } ?: return
         scroll.post {
             var y = 0
@@ -359,7 +384,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val game = SettingsSearch.entriesOf(SettingsSection.GAME)
         val subs = rows.map { r -> game.firstOrNull { it.title == Form.titleOf(r) }?.sub ?: "" }
         for (g in SettingsSearch.groups(subs, GAME_GROUPS)) {
-            if (g.title.isNotEmpty()) content.addView(Form.sect(this, g.title, if (g.title == "Always catch") "even with \"Defeat\"" else null))
+            if (g.title.isNotEmpty()) content.addView(Form.sect(this, g.title, if (g.title == "Always catch") "options 2 to 4" else null))
+            if (g.title == CATCH_GROUP) content.addView(Ui.text(this, 12f, 600, R.color.ag_sub0).apply {
+                text = "Defeat: +${Tuning.CASH_PER_DEFEAT} ₽ and the XP. Catch: the Pokémon and the same XP."
+                setPadding(dp(4), 0, dp(4), dp(8))
+            })
             content.addView(Form.cardOf(this, g.rows.map { rows[it] }), if (g.title.isEmpty()) Form.lp(this, 12) else Form.lp())
         }
     }
@@ -404,7 +433,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.segmented(this, typeStyles.map { it.label }, typeStyles.indexOf(AppPrefs.typeStyle(this))) { i ->
                 AppLook.setTypeStyle(this, typeStyles[i]); looked()
             })
-        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, size))
+        val chipLooks = MatchupChips.entries
+        val matchupChips = Form.stackRow(this, "Matchup chips", "Type chips in the Matchups boxes: soft fill, or a ring in the type colour.",
+            Form.segmented(this, chipLooks.map { it.label }, chipLooks.indexOf(AppPrefs.matchupChips(this))) { i ->
+                AppLook.setMatchupChips(this, chipLooks[i]); render()
+            })
+        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size))
     }
 
     /** The look changed: this screen recreates itself (Activity) or tells the player the window needs reopening (floating card). */
@@ -565,6 +599,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
         nameEdit = field
         rows += Form.row(this, "Trainer name", null, field)
+        // R10-B21: keep the best copy of each species, release the rest (asks first; protected copies always stay)
+        rows += Form.row(this, "Release duplicates", "Keeps the best copy of each species and releases the rest. Favourites, shinies, team, item holders and nicknamed Pokémon always stay. Asks first.",
+            valueText("Release…")) { ReleaseDuplicates.start(this) }
         return rows
     }
 
@@ -576,36 +613,48 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         if (field.text.toString() != name) field.setText(name)
     }
 
+    /** R10-X2: one list for what happens to a beaten wild Pokémon; each option writes both autoMode and autoReleaseDuplicates (see [CatchChoice]). */
     private fun faintRows(s: GameSettings): List<View> {
-        val options = listOf(
-            1 to "Always catch",
-            2 to "Defeat (catch shinies and protected kinds)",
-            3 to "Catch species you don't have yet",
-        )
-        val ticks = HashMap<Int, ImageView>()
-        val rows = options.map { (mode, label) ->
+        val ticks = HashMap<CatchChoice, ImageView>()
+        val current = CatchChoice.of(s)
+        return CatchChoice.entries.map { choice ->
             val tick = ImageView(this).apply {
                 setImageResource(R.drawable.ic_check)
                 setColorFilter(Ui.c(this@SettingsPage, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
-                visibility = if (s.autoMode == mode) View.VISIBLE else View.INVISIBLE
+                visibility = if (current == choice) View.VISIBLE else View.INVISIBLE
+                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+            }
+            ticks[choice] = tick
+            Form.row(this, choice.title, choice.explain, tick) {
+                edit { CatchChoice.apply(it, choice) }
+                ticks.forEach { (c, t) -> t.visibility = if (c == choice) View.VISIBLE else View.INVISIBLE }
+            }
+        }
+    }
+
+    /** Round 10 W9: how both Pokémon, yours and the wild one, pick their move each round (one tick, from the next round on). */
+    private fun moveChoiceRows(s: GameSettings): List<View> {
+        val subs = mapOf(
+            MoveChoice.RANDOM to "Each move by chance, as before",
+            MoveChoice.SMART to "Mostly attacks; status moves only when they still do something",
+            MoveChoice.SMARTEST to "Smart, and picks the strongest attack more often",
+        )
+        val ticks = HashMap<MoveChoice, ImageView>()
+        return MoveChoice.entries.map { mode ->
+            val tick = ImageView(this).apply {
+                setImageResource(R.drawable.ic_check)
+                setColorFilter(Ui.c(this@SettingsPage, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
+                visibility = if (s.moveChoice == mode) View.VISIBLE else View.INVISIBLE
                 layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
             }
             ticks[mode] = tick
-            Form.row(this, label, if (mode == 3) "Default (Ankimon's automatic mode 3)" else null, tick) {
-                edit { it.autoMode = mode }
+            val title = "Move choice: ${mode.label}" // = the catalog titles moveChoiceRandom / Smart / Smartest
+            Form.row(this, title, subs.getValue(mode), tick) {
+                edit { it.moveChoice = mode }
                 ticks.forEach { (m, t) -> t.visibility = if (m == mode) View.VISIBLE else View.INVISIBLE }
             }
         }
-        return rows
     }
-
-    private fun duplicatesRows(s: GameSettings): List<View> = listOf(
-        Form.switchRow(this, "Auto-release duplicates",
-            "Off by default. A wild Pokémon of a species you own is defeated instead of caught, unless it is a higher level than your best copy: then it is caught and that copy is released. " +
-                "Favourites, shinies, team members, Pokémon holding an item, protected kinds, the Exp. Share holder and renamed Pokémon are never released (you keep both). " +
-                "Balls and the one-off Catch/Defeat tap are not affected.",
-            s.autoReleaseDuplicates) { v -> edit { it.autoReleaseDuplicates = v } },
-    )
 
     private fun protectRows(s: GameSettings): List<View> = listOf(
         Form.switchRow(this, "Legendary", null, s.protectLegendary) { v -> edit { it.protectLegendary = v } },
@@ -624,6 +673,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         content.addView(popOutCard())
         content.addView(Form.sect(this, "Battle panel"))
         content.addView(Form.cardOf(this, listOf(
+            pokemonSizeRow(),
             Form.switchRow(this, "Stat card under its own Pokémon", "Without a background picture. Off: the classic layout, each card on the opposite side",
                 AppPrefs.cardsUnderOwn(this)) { AppPrefs.setCardsUnderOwn(this, it) },
             Form.switchRow(this, "XP animation", "Sparks fly into your Pokémon when it gains XP",
@@ -634,10 +684,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 AppPrefs.backgroundPictures(this)) { AppPrefs.setBackgroundPictures(this, it) },
             turnDotsRow(),
         )))
-        content.addView(Form.sect(this, "Info box style"))
+        content.addView(Form.sect(this, "Battle look"))
         content.addView(infoBoxCard())
-        content.addView(Form.sect(this, "Battle frame"))
-        content.addView(battleFrameCard())
+        content.addView(hpBarsCard(), Form.lp(this, 8))
+        content.addView(battleFrameCard(), Form.lp(this, 8))
         content.addView(Form.sect(this, "Small battle windows"))
         content.addView(Form.cardOf(this, listOf(
             Form.switchRow(this, "Show stats bar in small windows", "Picture-in-picture and the floating battle; off gives the battle more room",
@@ -649,6 +699,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val wc = buildWindowsCard()
         windowsCard = wc
         content.addView(wc)
+    }
+
+    /** Round 10 B20: how big both battle Pokémon are (80 to 130 %); every open battle view follows live, the battle's "View settings" sheet has the same slider. */
+    private fun pokemonSizeRow(): View {
+        val (bar, label) = PokemonSizeSlider.make(this, AppPrefs.pokemonSize(this), "Pokémon size") { AppPrefs.setPokemonSize(this, it) }
+        return Form.stackRow(this, "Pokémon size", null, bar, label)
     }
 
     /** Round 9 D3: where the charge dots sit in the battle's action bar (Study): between the two moves, or at the right end. */
@@ -711,53 +767,18 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         return Form.cardOf(this, rows)
     }
 
-    /** The design of the battle's info boxes (Round 9, D12): a tick list of the two designs; every open battle follows live. */
-    private fun infoBoxCard(): LinearLayout {
-        val mode = AppPrefs.infoBoxStyle(this)
-        val ticks = HashMap<InfoBoxStyle, ImageView>()
-        val rows = mutableListOf<View>()
-        for (s in InfoBoxStyle.entries) {
-            val tick = ImageView(this).apply {
-                setImageResource(R.drawable.ic_check)
-                setColorFilter(Ui.c(this@SettingsPage, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
-                visibility = if (s == mode) View.VISIBLE else View.INVISIBLE
-                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
-            }
-            ticks[s] = tick
-            rows += Form.row(this, s.label, s.sub, tick) {
-                AppPrefs.setInfoBoxStyle(this, s)
-                ticks.forEach { (k, t) -> t.visibility = if (k == s) View.VISIBLE else View.INVISIBLE }
-            }
-        }
-        return Form.cardOf(this, rows)
-    }
+    /**
+     * The design of the battle's info boxes (Round 9 D12, Round 10 W7): ONE collapsible "Info box style" entry. Opened it shows the layout
+     * (Number above / inside the bar) and a grid of the six looks as small live previews ([LookChooser]); every open battle follows live.
+     */
+    private fun infoBoxCard(): LinearLayout =
+        Form.cardOf(this, listOf(LookChoosers.infoBox(this, boxed = false, keepOpen = openChoosers)))
 
-    /** The pixel frame around the battle picture (Round 9, D2): one tick list, each row with a small preview of its frame. */
-    private fun battleFrameCard(): LinearLayout {
-        val mode = AppPrefs.battleFrame(this)
-        val ticks = HashMap<BattleFrameStyle, ImageView>()
-        val rows = mutableListOf<View>()
-        for (s in BattleFrameStyle.entries) {
-            val tick = ImageView(this).apply {
-                setImageResource(R.drawable.ic_check)
-                setColorFilter(Ui.c(this@SettingsPage, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
-                visibility = if (s == mode) View.VISIBLE else View.INVISIBLE
-                layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
-            }
-            ticks[s] = tick
-            val right = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(BattleFramePreview(this@SettingsPage, s), LinearLayout.LayoutParams(dp(44), dp(26)).also { it.marginEnd = dp(10) })
-                addView(tick)
-            }
-            rows += Form.row(this, s.label, s.sub, right) {
-                AppPrefs.setBattleFrame(this, s)
-                ticks.forEach { (k, t) -> t.visibility = if (k == s) View.VISIBLE else View.INVISIBLE }
-            }
-        }
-        return Form.cardOf(this, rows)
-    }
+    /** The look of the info boxes' HP / XP bars (Round 10 W8): a collapsible entry with Today / Pixel as small live previews. */
+    private fun hpBarsCard(): LinearLayout = Form.cardOf(this, listOf(LookChoosers.bars(this, boxed = false, keepOpen = openChoosers)))
+
+    /** The pixel frame around the battle picture (Round 9 D2, Round 10 W7): a collapsible entry with a grid of the seven frames. */
+    private fun battleFrameCard(): LinearLayout = Form.cardOf(this, listOf(LookChoosers.frame(this, boxed = false, keepOpen = openChoosers)))
 
     /** Floating screens in split screen, and the overlay permission. */
     private fun buildWindowsCard(): LinearLayout {
@@ -1202,7 +1223,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         private const val SCALE_DELAY_MS = 700L
 
         /** The Game section's groups in this order (the catalog's group names); others follow. */
-        private val GAME_GROUPS = listOf("Battle", "Difficulty", "Pokémon", "Always catch")
+        private const val CATCH_GROUP = "When you beat a wild Pokémon"
+        private val GAME_GROUPS = listOf(CATCH_GROUP, "Always catch", "Battle", "Difficulty", "Pokémon")
 
         /**
          * File picker result. Lives here (captures no page) and looks the newest page up in [live], so it still works when
@@ -1228,21 +1250,25 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 /** The Settings screen as its own Activity (the Settings tab): a thin shell around [SettingsPage]. */
 class SettingsActivity : PageActivity() {
     private var restore: String? = null
+    private var restoreChoosers: List<String>? = null
     private var settingsPage: SettingsPage? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         restore = savedInstanceState?.getString("section")
+        restoreChoosers = savedInstanceState?.getStringArrayList("choosers")
         super.onCreate(savedInstanceState)
     }
 
     override fun createPage(): GamePage = SettingsPage(this, this).also {
         it.restoreSection(restore)
+        it.restoreChoosers(restoreChoosers)
         settingsPage = it
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         settingsPage?.section?.let { outState.putString("section", it.name) }
+        settingsPage?.openChoosersNow()?.let { outState.putStringArrayList("choosers", it) }
     }
 
     /** Back inside a section goes to the list first. */

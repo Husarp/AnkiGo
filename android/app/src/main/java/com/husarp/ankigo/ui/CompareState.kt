@@ -121,6 +121,18 @@ class CompareState(var mode: CompareMode = CompareMode.VS_REFERENCE) {
     }
 }
 
+/** R10-F (B9): the table sections (Stats, Moves, ...) the player folded, by title. A title that is no section any more is just ignored. */
+data class SectionChoice(val collapsed: Set<String> = emptySet()) {
+    fun isOpen(title: String): Boolean = title !in collapsed
+    fun toggle(title: String): SectionChoice = SectionChoice(if (title in collapsed) collapsed - title else collapsed + title)
+    /** For prefs: the folded titles joined by commas ("" = all open). */
+    fun encode(): String = collapsed.sorted().joinToString(",")
+
+    companion object {
+        fun decode(s: String?): SectionChoice = SectionChoice(s.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet())
+    }
+}
+
 /** What Compare remembers in prefs (SharedPreferences "ankigo_ui"): the mode and the hidden rows. */
 object CompareStore {
     private const val FILE = "ankigo_ui"
@@ -128,6 +140,7 @@ object CompareStore {
     private const val ROWS = "compare_rows_hidden"
     private const val FIT = "compare_fit"
     private const val GROUP = "compare_group"
+    private const val COLLAPSED = "compare_collapsed"
 
     fun loadMode(ctx: android.content.Context): CompareMode =
         CompareMode.entries.firstOrNull { it.name == prefs(ctx).getString(MODE, null) } ?: CompareMode.VS_REFERENCE
@@ -143,6 +156,11 @@ object CompareStore {
         CompareGroup.entries.firstOrNull { it.name == prefs(ctx).getString(GROUP, null) } ?: CompareGroup.STATS
 
     fun saveGroup(ctx: android.content.Context, g: CompareGroup) = prefs(ctx).edit().putString(GROUP, g.name).apply()
+
+    /** R10-F (B9): which table sections are folded; all open until the player folds one. */
+    fun loadCollapsed(ctx: android.content.Context): SectionChoice = SectionChoice.decode(prefs(ctx).getString(COLLAPSED, null))
+
+    fun saveCollapsed(ctx: android.content.Context, c: SectionChoice) = prefs(ctx).edit().putString(COLLAPSED, c.encode()).apply()
 
     /** The zoom: how many columns fit (see [CompareFit]); automatic until the player picks one. */
     fun loadFit(ctx: android.content.Context): Int = CompareFit.valid(prefs(ctx).getInt(FIT, CompareFit.AUTO))

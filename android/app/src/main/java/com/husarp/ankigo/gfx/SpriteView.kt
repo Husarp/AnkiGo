@@ -67,6 +67,15 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         set(v) { if (v != field) { field = v; invalidate() } }
 
     /**
+     * Round 10 B20 (Pokémon size): the picture is drawn this many times bigger (or smaller) than it would be in a view 1 / [sizeFactor] as
+     * big: the whole-pixel scale of that smaller view (as before), times the factor, so a size of 130 % is exactly 1.3 x what 100 % draws
+     * and pixel art goes up smoothly instead of in whole-pixel jumps (it stays nearest-neighbour, the pixels a little uneven). 1 = off:
+     * exactly the scale before the setting. The battle arena sets it with the holder it scaled by the same factor.
+     */
+    var sizeFactor: Float = 1f
+        set(v) { if (v != field) { field = v; invalidate() } }
+
+    /**
      * Round 8 picture mode: called after [setImage] / [setPlaceholder] changed what the view shows, so the arena can compare [artShare]
      * with what it planned its cards for (null = nobody listens). Never called while drawing.
      */
@@ -155,9 +164,13 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     }
 
     /** Device pixels per sprite pixel for this view ([scale], or [frameScale] in picture mode). */
-    private fun scaleFor(img: SpriteImage, vw: Int, vh: Int): Float =
-        if (byFrame) frameScale(img.width, img.height, vw, vh, vh.toFloat())
-        else scale(img.width, img.height, vw, vh, maxOf(1, floor(scaleDp * resources.displayMetrics.density).toInt()))
+    private fun scaleFor(img: SpriteImage, vw: Int, vh: Int): Float {
+        val wanted = maxOf(1, floor(scaleDp * resources.displayMetrics.density).toInt())
+        val k = sizeFactor
+        return if (k == 1f) {
+            if (byFrame) frameScale(img.width, img.height, vw, vh, vh.toFloat()) else scale(img.width, img.height, vw, vh, wanted)
+        } else sized(k, img.width, img.height, vw, vh, byFrame, wanted)
+    }
 
     /**
      * Picture mode (round 9): the Pokémon's REAL art box in a square frame [sidePx] wide, as shares of the frame ([ArtShare]): the
@@ -169,7 +182,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         if (!(sidePx > 0f)) return null
         val side = Math.round(sidePx)
         val img = image
-        if (img != null) return artShare(img.width, img.height, visibleBounds(img), mirror, side)
+        if (img != null) return artShare(img.width, img.height, visibleBounds(img), mirror, side, sizeFactor)
         if (placeholderText == null) return null
         val d = (placeholderDiameter(side, side) / sidePx).coerceIn(0f, 1f)
         return com.husarp.ankigo.ui.ArtShare.bottomCentred(d, d)
@@ -306,6 +319,19 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
             return if (whole >= 1) whole.toFloat() else fit
         }
 
+        /**
+         * Round 10 B20: device pixels per sprite pixel at the Pokémon size [k] (not 1): the whole-pixel scale ([scale], or [frameScale] when
+         * [byFrame]) of a view 1 / [k] as big, times [k]; never past what the view allows. The view [vw] x [vh] is meant to be today's
+         * holder scaled by [k], so this is [k] times the scale today's holder gets.
+         */
+        fun sized(k: Float, w: Int, h: Int, vw: Int, vh: Int, byFrame: Boolean, wanted: Int): Float {
+            if (vw <= 0 || vh <= 0 || w <= 0 || h <= 0 || !(k > 0f)) return 0f
+            val aw = Math.round(vw / k)
+            val ah = Math.round(vh / k)
+            val base = if (byFrame) frameScale(w, h, aw, ah, vh / k) else scale(w, h, aw, ah, wanted)
+            return min(base * k, min(vw.toFloat() / w, vh.toFloat() / h))
+        }
+
         /** The frame every Pokémon is drawn in, in sprite pixels (the approved stage page draws each one at frame / 96). */
         private const val FRAME = 96f
 
@@ -331,9 +357,9 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
          * [bounds] = its visible pixels (left, top, right, bottom, right and bottom exclusive; null = the whole bitmap), put where
          * [SpriteView.onDraw] puts the bitmap (centred, its lowest visible row on the frame's bottom, flipped when [mirror]).
          */
-        fun artShare(w: Int, h: Int, bounds: IntArray?, mirror: Boolean, side: Int): com.husarp.ankigo.ui.ArtShare? {
+        fun artShare(w: Int, h: Int, bounds: IntArray?, mirror: Boolean, side: Int, sizeFactor: Float = 1f): com.husarp.ankigo.ui.ArtShare? {
             if (side <= 0 || w <= 0 || h <= 0) return null
-            val s = frameScale(w, h, side, side, side.toFloat())
+            val s = if (sizeFactor == 1f) frameScale(w, h, side, side, side.toFloat()) else sized(sizeFactor, w, h, side, side, true, 1)
             if (s <= 0f) return null
             val dw = (w * s).roundToInt()
             val dh = (h * s).roundToInt()

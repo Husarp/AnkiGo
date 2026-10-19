@@ -35,8 +35,15 @@ sealed class GameEvent {
         val wildUid: String = "",
     ) : GameEvent()
 
-    /** A round starts. [enemyActs] is false when the multiplier is 1 or more (the wild one uses Splash). */
-    data class RoundStart(val multiplier: Double, val points: Int, val enemyActs: Boolean) : GameEvent()
+    /**
+     * A round starts (RoundRule). [multiplier] scales the Main's damage and [mainActs] says whether it attacks at all (a round
+     * without a Good or Easy answer: no); [enemyActs] says whether the wild one attacks (a round without an Again or Hard
+     * answer: no, it uses Splash), at [enemyPower] of its normal damage. [points] = the answers' point sum.
+     */
+    data class RoundStart(
+        val multiplier: Double, val points: Int, val enemyActs: Boolean,
+        val mainActs: Boolean = true, val enemyPower: Double = if (enemyActs) 1.0 else 0.0,
+    ) : GameEvent()
 
     /**
      * A move was used. [byPlayer] = our main used it. [damage] is the total dealt (0 for status moves / misses).
@@ -105,6 +112,13 @@ sealed class GameEvent {
 
     /** The main changed (team switch). */
     data class MainChanged(val uid: String, val name: String) : GameEvent()
+
+    /**
+     * Round 10 (W10): comes right after a [MainChanged] in a fight. The wild one [wildName] makes ONE free attack at the incoming
+     * Pokémon [monName]; the Attack / Effect / Fainted events of that one action follow. [hp] / [maxHp] = the incoming Pokémon's HP
+     * BEFORE the hit, so a panel can show it at that value until the hit lands (the saved game already has the HP after it).
+     */
+    data class SwitchHit(val wildName: String, val monName: String, val hp: Int, val maxHp: Int) : GameEvent()
 
     /** Generic message for item use etc. */
     data class Info(val text: String) : GameEvent()

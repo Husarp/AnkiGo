@@ -71,13 +71,13 @@ class SortShots {
         addView(sheet, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
     }
 
-    private fun sheet(name: String, spec: SortSpec, filter: BoxFilter = BoxFilter.ALL, vs: List<Variant> = sizes, vsWild: Boolean = false, sortOnly: Boolean = false) {
+    private fun sheet(name: String, spec: SortSpec, filter: BoxFilter = BoxFilter.ALL, vs: List<Variant> = sizes, vsWild: Boolean = false) {
         for (v in vs) paparazzi.shootPage(name, listOf(v)) { ctx ->
             val (p, screen) = box(ctx, v, spec, filter)
             val maxBody = (ctx.resources.displayMetrics.heightPixels * SortSheet.BODY_SHARE).toInt() - Ui.dp(ctx, 150)
             val s = SortSheet(
                 p, SortText.boxKeys, spec, SortSpec.DEFAULT, vsWild, BoxFilter.entries.map { it.label }, filter.ordinal,
-                SortSheet.GroupToggle(true) {}, count = { 54 }, onChange = { _, _ -> }, sortOnly = sortOnly,
+                SortSheet.GroupToggle(true) {}, count = { 54 }, onChange = { _, _ -> },
             )
             sheetOver(ctx, screen, s.build(maxBody))
         }
@@ -87,9 +87,9 @@ class SortShots {
     @Test fun sheetAtLevel() = sheet("sort-sheet-level", atkDef, BoxFilter.FAVOURITES)
     @Test fun sheetOneStat() = sheet("sort-sheet-onestat", SortSpec(key = SortKey.STAT, stat = Stat.SPE, basis = StatBasis.BASE), vs = listOf(Variants.PHONE, FLOAT))
     /** R4-X1 item 15: the sheet the sort chip opens (direction on top, the options below). */
-    @Test fun sortSheetLevel() = sheet("sort-chip-sheet", SortSpec.of(SortKey.LEVEL), vs = listOf(Variants.PHONE, Variants.SPLIT), sortOnly = true)
-    @Test fun sortSheetAsc() = sheet("sort-chip-sheet-asc", SortSpec(key = SortKey.NAME, descending = false), vs = listOf(Variants.PHONE), sortOnly = true)
-    @Test fun sortSheetStats() = sheet("sort-chip-sheet-stats", atkDef, vs = listOf(Variants.PHONE), vsWild = true, sortOnly = true)
+    @Test fun sortSheetLevel() = sheet("sort-chip-sheet", SortSpec.of(SortKey.LEVEL), vs = listOf(Variants.PHONE, Variants.SPLIT))
+    @Test fun sortSheetAsc() = sheet("sort-chip-sheet-asc", SortSpec(key = SortKey.NAME, descending = false), vs = listOf(Variants.PHONE))
+    @Test fun sortSheetStats() = sheet("sort-chip-sheet-stats", atkDef, vs = listOf(Variants.PHONE), vsWild = true)
     @Test fun sheetLevelSort() = sheet("sort-sheet-plain", SortSpec.of(SortKey.LEVEL), vs = listOf(Variants.PHONE, Variants.SPLIT))
 
     // ---- Pokédex ----
@@ -113,7 +113,7 @@ class SortShots {
             val p = dex(ctx, dexStat)
             val screen = pageScreen(ctx, p)
             val maxBody = (ctx.resources.displayMetrics.heightPixels * SortSheet.BODY_SHARE).toInt() - Ui.dp(ctx, 150)
-            val s = SortSheet(p, SortText.dexKeys, dexStat.spec(), SortViews.DEX_DEFAULT, false, null, 0, null, count = { 151 }, onChange = { _, _ -> }, sortOnly = true)
+            val s = SortSheet(p, SortText.dexKeys, dexStat.spec(), SortViews.DEX_DEFAULT, false, null, 0, null, count = { 151 }, onChange = { _, _ -> })
             sheetOver(ctx, screen, s.build(maxBody))
         }
     }

@@ -45,6 +45,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     private var factor = 1.0
     private var lastButton = 0
     private var mult = 1.0
+    private var wildMult = 1.0   // R10-B22: the wild one's damage factor of this round (shown on its attack line like the Main's)
     private var logWhole = true           // R9 D3: the line of the event being played is about the whole battle (the bar shows it); else it is only spoken
     /** The next fight's Encounter, held back while the result tiles show (it plays with the next answer's events). */
     private var parked: GameEvent.Encounter? = null
@@ -206,7 +207,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         }
         epoch++
         busy = false
-        mult = 1.0
+        mult = 1.0; wildMult = 1.0
         handler.removeCallbacksAndMessages(null)
         GameSound.cancelPending()
         panel.cancelAnimations()
@@ -396,7 +397,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 log(kind(lastButton), label(lastButton), "charging ${e.answers}/${e.of} — the next answer attacks")
                 return d(450)
             }
-            is GameEvent.RoundStart -> { mult = e.multiplier; return 0 }
+            is GameEvent.RoundStart -> { mult = e.multiplier; wildMult = e.enemyPower; return 0 }
 
             is GameEvent.Attack -> return playAttack(e)
             is GameEvent.Splash -> {
@@ -483,9 +484,17 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 log(LogKind.SYS, "SWITCH", "Go, ${em(e.name)}!")
                 arena.setPlayerStatus(null)
                 panel.refreshPlayer()
+                // R10 W10: a free hit follows: the saved game already has the HP after it, the bar shows the HP before until the hit lands
+                val hit = (queue.firstOrNull() as? Item.Ev)?.e as? GameEvent.SwitchHit
+                if (hit != null) arena.setPlayerHp(hit.hp, hit.maxHp, false)
                 arena.enter(true, d(450))
                 if (GameRepo.state?.mon(e.uid)?.shiny == true) arena.shinyBurst(true, d(ShinyBurst.DELAY_MS))
                 return d(800)
+            }
+            is GameEvent.SwitchHit -> {
+                wildMult = Tuning.SWITCH_HIT_POWER   // the free hit is at normal power: no "×0" left over from a round where the wild one stayed quiet
+                log(LogKind.AGAIN, "WILD", "${em(e.monName)} comes in — ${wild(e.wildName)} attacks!")
+                return d(500)
             }
             is GameEvent.Cash -> {
                 panel.setCoins(e.total, true)
@@ -615,6 +624,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             mult = 1.0
             log(kind(lastButton), label(lastButton), sb.toString())
         } else {
+            if (wildMult != 1.0 && !e.failed) sb.append("  ").append(times(wildMult))
+            wildMult = 1.0
             log(LogKind.AGAIN, "WILD", sb.toString())
         }
         // Round 7: the move's own animation (the setting is on, the move connects, the arena can show it); it has its own lunge and hit
@@ -802,6 +813,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 PanelSprites.showMain(ctx, arena.playerSprite, sp, mon.shiny)
                 panel.notePlayerSprite(sp.num, mon.shiny)
                 arena.setPlayerName(e.to)
+                arena.setPlayerTypes(sp.types)   // the type look follows the new form (Round 10 W7)
                 arena.setPlayerHp(mon.hp, maxHpOf(e.uid), true)
             }
         }

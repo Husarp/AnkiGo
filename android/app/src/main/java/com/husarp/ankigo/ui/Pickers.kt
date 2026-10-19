@@ -317,8 +317,7 @@ object Bits {
         }
         alpha = if (enabled) 1f else 0.45f
         addView(ImageView(ctx).apply {
-            setImageResource(R.drawable.ic_coin)
-            setColorFilter(Ui.c(ctx, R.color.ag_yellow), PorterDuff.Mode.SRC_IN)
+            setImageResource(R.drawable.ic_money)
         }, LinearLayout.LayoutParams(Ui.dp(ctx, 12), Ui.dp(ctx, 12)).also { it.marginEnd = Ui.dp(ctx, 3) })
         addView(Ui.text(ctx, 12f, 900, R.color.ag_text).apply { text = fmt(price); maxLines = 1 })
         setOnClickListener { onClick() }

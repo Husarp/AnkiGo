@@ -28,8 +28,34 @@ class BarView(ctx: Context) : View(ctx) {
     private val rect = RectF()
     private val unitGradient = Matrix()
     private var gradient: LinearGradient? = null
+    private val pxFrame = Paint().apply { color = (Ui.c(ctx, R.color.ag_text) and 0xFFFFFF) or (0xE0 shl 24); isAntiAlias = false }
+    private val pxHigh = Paint().apply { color = 0x66FFFFFF; isAntiAlias = false }     // white 40 %
+    private val pxLow = Paint().apply { color = 0x2E000000; isAntiAlias = false }      // black 18 %
+    private val pxTrack = Paint().apply { isAntiAlias = false }
+    private val pxFill = Paint().apply { isAntiAlias = false }
+    private val pxFrameRects = IntArray(16)
+    private val pxFrameDefault = pxFrame.color
+
+    /**
+     * The colour of the PIXEL look's outline: null (the default) = the theme's own text colour at 88 %. A card on a fixed dark plate
+     * (the thin frame, the dark plate, the HUD) sets the fixed dark palette's text colour so the outline stays light in the light theme too.
+     */
+    var outlineColor: Int? = null
+        set(v) {
+            if (field == v) return
+            field = v
+            pxFrame.color = if (v == null) pxFrameDefault else (v and 0xFFFFFF) or (0xE0 shl 24)
+            invalidate()
+        }
     private var gradFrom = 0
     private var gradTo = 0
+
+    /**
+     * The look of the bar: [HpBarLook.TODAY] (rounded, the default) or [HpBarLook.PIXEL] (Round 10 W8: hard pixel edges, a cut-corner
+     * outline, 5 % steps). Only the battle info boxes' HP / XP bars set it. In PIXEL the card lays the bar out at [PixelBar.outerPx].
+     */
+    var look: HpBarLook = HpBarLook.TODAY
+        set(v) { if (field != v) { field = v; invalidate() } }
 
     private var shown = 0f      // fraction currently drawn
     private var color = Ui.c(ctx, R.color.ag_green)
@@ -137,7 +163,10 @@ class BarView(ctx: Context) : View(ctx) {
     }
 
     /** True when the label is drawn (it fits the bar, shrunk a little at a big font size) and the bar is tall enough for it (tests). */
-    internal fun labelShown(): Boolean = labelDrawPx() > 0f && height >= labelNeedPx(labelSizeSp)
+    internal fun labelShown(): Boolean = labelDrawPx() > 0f && height - 2 * pixelUnit() >= labelNeedPx(labelSizeSp)
+
+    /** The pixel look's unit (px) at the bar's current height, 0 in the other look (or when the bar is too thin for an outline). */
+    internal fun pixelUnit(): Int = if (look == HpBarLook.PIXEL) PixelBar.unitOfOuter(height, resources.displayMetrics.density) else 0
 
     private fun drawLabel(canvas: Canvas) {
         val t = label ?: return
@@ -345,7 +374,48 @@ class BarView(ctx: Context) : View(ctx) {
         super.onDetachedFromWindow()
     }
 
+    /** The pixel look (W8): whole-pixel rectangles only, so the edges are hard; the fill is the 5 % step of what the animation has reached. */
+    private fun drawPixel(canvas: Canvas, u: Int) {
+        val w = width
+        val h = height
+        PixelBar.frame(w, h, u, pxFrameRects)
+        val f = pxFrameRects
+        for (i in 0 until 16 step 4) canvas.drawRect(f[i].toFloat(), f[i + 1].toFloat(), f[i + 2].toFloat(), f[i + 3].toFloat(), pxFrame)
+        val l = u.toFloat()
+        val t = u.toFloat()
+        val r = (w - u).toFloat()
+        val b = (h - u).toFloat()
+        pxTrack.color = track.color
+        canvas.drawRect(l, t, r, b, pxTrack)
+        val innerW = w - 2 * u
+        if (ghostFrac > shown) {
+            pxFill.shader = null
+            pxFill.color = ghostPaint.color; pxFill.alpha = ghostPaint.alpha
+            canvas.drawRect(l, t, l + PixelBar.fillPx(innerW, ghostFrac), b, pxFill)
+        }
+        if (shown <= 0f) { drawLabel(canvas); return }
+        val fw = PixelBar.fillPx(innerW, shown).toFloat()
+        val g = gradient
+        if (g != null) {
+            unitGradient.setScale(maxOf(fw, 1f), 1f)
+            unitGradient.postTranslate(l, 0f)
+            g.setLocalMatrix(unitGradient)
+            pxFill.shader = g
+            pxFill.alpha = 255
+        } else {
+            pxFill.shader = null
+            pxFill.color = color
+        }
+        canvas.drawRect(l, t, l + fw, b, pxFill)
+        val hi = minOf(PixelBar.highlightPx(u).toFloat(), b - t)
+        canvas.drawRect(l, t, l + fw, t + hi, pxHigh)
+        canvas.drawRect(l, maxOf(t + hi, b - u), l + fw, b, pxLow)
+        drawLabel(canvas)
+    }
+
     override fun onDraw(canvas: Canvas) {
+        val pu = pixelUnit()
+        if (pu > 0) { drawPixel(canvas, pu); return }
         val w = width.toFloat()
         val h = height.toFloat()
         val r = h / 2f

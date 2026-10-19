@@ -11,6 +11,7 @@ import com.husarp.ankigo.Local
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.live.LiveSession
+import com.husarp.ankigo.live.OwnAhead
 import com.husarp.ankigo.ui.BattleLog
 import java.io.File
 import java.util.concurrent.LinkedBlockingQueue
@@ -19,7 +20,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * The process-wide study io (R9 wave 6, item 1): the one `ankigo-study-io` thread for EVERY study provider call, the answer write
- * queue with its journal (`filesDir/study-answers.json`), and the game step of a saved answer. It lives as long as the process: a
+ * queue with its journal (`filesDir/study-answers.json`), and the game step of each answer (at the tap). It lives as long as the process: a
  * study screen being closed never stops an answer from being written. Created by the first screen (main thread); that restores the
  * journal and replays the answers it holds before anything else runs. The logic is in [AnswerHost].
  */
@@ -57,22 +58,35 @@ object StudyIo {
         override fun cancel(before: Map<String, String?>) { CardState.from(before)?.let { LiveSession.cancelOwn(it) } }
         override fun log(text: String) { Report.log("STUDY", text) }
 
-        /**
-         * Runs even when the study screen is gone (the answer is saved in AnkiDroid, so the game must count it once). The game
-         * must be loaded for it: after a restart, the replay of a journal can be saved before the game has loaded.
-         */
-        override fun gameStep(saved: AnswerOutcome.Saved, front: String?, onTiming: (Long, Long) -> Unit, done: (List<GameEvent>) -> Unit) {
-            val a = saved.answer
+        /** At the tap (R10-B23): the button and the card as shown are all the game needs. The game is loaded before a card can be answered. */
+        override fun gameStep(answer: QueuedAnswer, front: String?, done: (List<GameEvent>, Long) -> Unit) {
+            val before = CardState.from(answer.before) ?: return done(emptyList(), -1)
             val step = {
-                Local.recordReview(app, a.nid, a.ord, a.ease, a.tookMs, "app")
-                val fresh = CardState.from(saved.after)
-                if (fresh == null) done(emptyList())
-                else {
-                    if (front != null) BattleLog.front(fresh.id, front) // the Battle log shows the card's front
-                    LiveSession.ownAnswer(app, fresh, StudyRules.gameButton(a.buttons, a.ease), onTiming) { done(it) }
-                }
+                val t0 = SystemClock.elapsedRealtime()
+                if (front != null) BattleLog.front(before.id, front) // the Battle log shows the card's front
+                val events = LiveSession.ownAnswer(app, before, StudyRules.gameButton(answer.buttons, answer.ease))
+                done(events, SystemClock.elapsedRealtime() - t0)
             }
             if (GameRepo.game == null) GameRepo.load(app) { step() } else step()
         }
+
+        /** The game must be loaded to tell which replayed answers its save already counted (the replay can start before it has). */
+        override fun restored(answers: List<QueuedAnswer>, done: () -> Unit) {
+            GameRepo.load(app) {
+                try {
+                    LiveSession.ownRestored(app, answers.mapNotNull { a -> CardState.from(a.before)?.let { it to StudyRules.gameButton(a.buttons, a.ease) } })
+                } finally {
+                    done() // the replay must never wait for ever
+                }
+            }
+        }
+
+        override fun settled(answer: QueuedAnswer, after: Map<String, String?>, saved: Boolean) {
+            Local.recordReview(app, answer.nid, answer.ord, answer.ease, answer.tookMs, "app")
+            val before = CardState.from(answer.before) ?: return
+            LiveSession.ownSettled(app, before, CardState.from(after) ?: OwnAhead.predicted(before))
+        }
+
+        override fun dropped(answer: QueuedAnswer) { CardState.from(answer.before)?.let { LiveSession.ownDropped(app, it) } }
     }
 }

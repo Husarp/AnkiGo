@@ -44,12 +44,11 @@ interface PickHost {
     fun startPickWith(uid: String)
 }
 
-/** The sections of the Pokémon tab (the Team tab until round 4). */
+/** The sections of the Pokémon tab (the Team tab until round 4). The Shop left it for a tab of its own in round 10: an old "SHOP" name is [Nav.OLD_SHOP_SECTION], which [of] answers with Team. */
 enum class TeamSection(val label: String, val icon: Int) {
     TEAM("Team", R.drawable.ic_team),
     BOX("Box", R.drawable.ic_grid),
-    DEX("Pokédex", R.drawable.ic_dex),
-    SHOP("Shop", R.drawable.ic_shop);
+    DEX("Pokédex", R.drawable.ic_dex);
 
     companion object {
         fun of(name: String?): TeamSection = entries.firstOrNull { it.name == name } ?: TEAM
@@ -74,12 +73,11 @@ internal object PickKit {
         val ctx = img.context
         img.visibility = if (picking) View.VISIBLE else View.GONE
         if (picked) {
-            // ticked: a filled accent disc with a tick; unticked: the empty grey box
-            img.setImageResource(R.drawable.ic_check)
+            // ticked: the empty box's square filled with the accent (the box fills 18 of the icon's 24 units, so inset 1/8 per side) + a tick
+            img.setImageResource(R.drawable.ic_checkbox_tick)
             img.setColorFilter(Ui.c(ctx, R.color.ag_crust), PorterDuff.Mode.SRC_IN)
-            img.background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 99, ctx)
-            val p = Ui.dp(ctx, 2)
-            img.setPadding(p, p, p, p)
+            img.background = android.graphics.drawable.InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 3, ctx), .125f)
+            img.setPadding(0, 0, 0, 0)
         } else {
             img.setImageResource(R.drawable.ic_checkbox_off)
             img.setColorFilter(Ui.c(ctx, R.color.ag_ov), PorterDuff.Mode.SRC_IN)

@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
@@ -36,6 +37,24 @@ object CompareScale {
         val a = share(d)
         return Look(mix(band, col, a), if (a > INK_SWITCH) (if (dark) INK_DARK else INK_LIGHT) else null)
     }
+
+    /** R10-F (B8) "vs reference": a value this far (relative to the reference) above / below it gets the full colour. */
+    const val VS_FULL = 0.5f
+    /** The share of the grey over the band behind the reference's cells (B8 / B11). */
+    const val REF_SHARE = 0.2f
+
+    /** (value - ref) / max(|ref|, 1): +0.5 = half as much again as the reference, -1 = nothing left. */
+    fun relative(value: Int, ref: Int): Float = (value - ref).toFloat() / max(abs(ref), 1)
+
+    /**
+     * R10-F (B8): the look of [value] against the reference [ref] in "vs reference". Green above, red below, by the RELATIVE difference (not
+     * by ranking): full strength at |r| >= [VS_FULL], no fill under D7-A's cut (|r| < 6 %), the same colours / ink rule as [look].
+     */
+    fun vsRef(value: Int, ref: Int, band: Int, dark: Boolean): Look =
+        look(0.5f + relative(value, ref).coerceIn(-VS_FULL, VS_FULL), band, dark)
+
+    /** The neutral grey behind the reference's cells: the [grey] colour mixed a little into the row [band]. */
+    fun neutral(band: Int, grey: Int): Int = mix(band, grey, REF_SHARE)
 
     /** The legend: [STEPS] colours from the worst to the best value over [card] (the plain colour where a value has no fill). */
     const val STEPS = 21

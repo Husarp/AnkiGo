@@ -26,6 +26,12 @@ import com.husarp.ankigo.game.Type
  * Compare's cells (the pill only: the row label carries the words). A tap on the box says what the group means (a real button
  * for TalkBack).
  */
+/** Settings → Look → "Matchup chips": how the type chips in a matchup box look (R10 W1). Missing / unknown pref = [SOFT]. */
+enum class MatchupChips(val label: String) {
+    SOFT("Soft"),
+    TYPE_COLOUR("Type colour"),
+}
+
 internal object MatchupBoxes {
     @ColorRes
     fun colorRes(g: MatchupGroup): Int = when (g) {
@@ -117,11 +123,12 @@ internal object MatchupBoxes {
         head.addView(pill, LinearLayout.LayoutParams(-2, -2))
         box.addView(head, LinearLayout.LayoutParams(if (compact) -2 else -1, -2))
 
-        val outline = MatchupGroups.outline(col, dark)
+        val look = AppPrefs.matchupChips(ctx)
         val flow = FlowRow(ctx, dp(5f), centered = false, lineGapPx = dp(4f))
         for (t in types) {
             val chip = Ui.typeChip(ctx, t)
-            (chip.background as? GradientDrawable)?.setStroke(dp(1f).coerceAtLeast(1), outline)
+            // Soft (default, D1-A): no ring. Type colour (D1-C): a 1.5 dp ring in the type's own colour.
+            if (look == MatchupChips.TYPE_COLOUR) (chip.background as? GradientDrawable)?.setStroke(Ui.dp(ctx, 1.5f).toInt().coerceAtLeast(1), Ui.typeColor(t))
             chip.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             if (innerW != null) chipFit(chip, innerW)
             flow.addView(chip)

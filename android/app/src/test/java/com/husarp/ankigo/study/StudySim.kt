@@ -68,7 +68,7 @@ class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemSt
             if (o is AnswerOutcome.Saved) {
                 val reps = o.answer.before["reps"]!!.toInt()
                 if (o.after["reps"]?.toIntOrNull() != reps + 1) violations += "Saved without the card's new state for seq ${o.answer.seq}"
-                proc.main += { gameSteps.merge(o.answer.id, 1, Int::plus) } // LiveSession.ownAnswer on the main thread
+                proc.main += { gameSteps.merge(o.answer.id, 1, Int::plus) } // a Saved outcome of this process (R10-B23: the game counts at the tap, see InstantBattleSimTest; here it checks Saved is reported once per own write)
             }
         }
     }

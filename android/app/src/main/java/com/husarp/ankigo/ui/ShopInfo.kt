@@ -10,11 +10,12 @@ import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Tuning
 
 // TICKET R3-X2 owns this file: the popup a Shop tap opens (what it does, price, how many you own) with Buy at the bottom.
+// R10 W11: the price is today's (the deal item shows the old price struck through with the new one under it, like on the deal card).
 
 internal object ShopInfo {
     /** The popup of one shop item; [onBuy] runs after Buy (the popup closes first). Nothing is bought by the tap itself. */
     fun item(s: GamePage, item: String, onBuy: () -> Unit) {
-        val price = s.data.price(item)
+        val price = ShopPlan.price(s.data, s.state.day, item)
         val body = column(s)
         val lead = LinearLayout(s).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -32,7 +33,7 @@ internal object ShopInfo {
         body.addView(lead)
         body.addView(fact(s, "Price", price))
         body.addView(fact(s, "You own", text = "×${s.state.count(item)}"))
-        show(s, Items.name(item), body, price, buy = true, onBuy)
+        show(s, Items.name(item), body, price.now, buy = true, onBuy)
     }
 
     /** The popup of one shop TM. A TM can be owned once, so an owned one shows "Owned" instead of Buy. */
@@ -53,7 +54,7 @@ internal object ShopInfo {
             addView(text, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(s, 12) })
         }
         body.addView(lead)
-        body.addView(fact(s, "Price", Tuning.TM_PRICE))
+        body.addView(fact(s, "Price", ShopPlan.tmPrice()))
         body.addView(fact(s, "You own", text = if (owned) "Yes" else "No"))
         show(s, Items.tmName(s.data, move), body, Tuning.TM_PRICE, buy = !owned, onBuy)
     }
@@ -63,18 +64,14 @@ internal object ShopInfo {
         setPadding(Ui.dp(s, 24), Ui.dp(s, 8), Ui.dp(s, 24), 0)
     }
 
-    /** "Label ....... 🪙 200" or "Label ....... text". */
-    private fun fact(s: GamePage, label: String, price: Int? = null, text: String? = null): View = LinearLayout(s).apply {
+    /** "Label ....... 🪙 200", "Label ....... (old 🪙 700 struck through) 🪙 490" for a deal, or "Label ....... text". */
+    private fun fact(s: GamePage, label: String, price: ShopPlan.Price? = null, text: String? = null): View = LinearLayout(s).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = Ui.dp(s, 40)
         addView(Ui.text(s, 13f, 700, R.color.ag_sub0).apply { this.text = label }, LinearLayout.LayoutParams(0, -2, 1f))
         if (price != null) {
-            addView(ImageView(s).apply {
-                setImageResource(R.drawable.ic_coin)
-                setColorFilter(Ui.c(s, R.color.ag_yellow), android.graphics.PorterDuff.Mode.SRC_IN)
-            }, LinearLayout.LayoutParams(Ui.dp(s, 14), Ui.dp(s, 14)).also { it.marginEnd = Ui.dp(s, 4) })
-            addView(Ui.text(s, 14f, 900, R.color.ag_text).apply { this.text = Bits.fmt(price) })
+            addView(ShopViews.price(s, price, normalSp = 14f, nowSp = 17f, coinDp = 14))
         } else {
             addView(Ui.text(s, 14f, 900, R.color.ag_text).apply { this.text = text.orEmpty() })
         }
@@ -91,8 +88,7 @@ internal object ShopInfo {
         contentDescription = "Buy for ${Bits.fmt(price)}"
         addView(Ui.text(s, 14f, 900, R.color.ag_text).apply { text = "Buy" })
         addView(ImageView(s).apply {
-            setImageResource(R.drawable.ic_coin)
-            setColorFilter(Ui.c(s, R.color.ag_yellow), android.graphics.PorterDuff.Mode.SRC_IN)
+            setImageResource(R.drawable.ic_money)
         }, LinearLayout.LayoutParams(Ui.dp(s, 14), Ui.dp(s, 14)).also { it.marginStart = Ui.dp(s, 10); it.marginEnd = Ui.dp(s, 4) })
         addView(Ui.text(s, 14f, 900, R.color.ag_text).apply { text = Bits.fmt(price) })
         setOnClickListener { onTap() }

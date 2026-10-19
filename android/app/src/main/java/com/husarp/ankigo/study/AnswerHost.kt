@@ -4,6 +4,7 @@ import com.husarp.ankigo.game.GameEvent
 import java.io.File
 import java.util.IdentityHashMap
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
 import java.util.concurrent.RejectedExecutionException
@@ -41,8 +42,9 @@ interface StudyListener {
     fun outcome(o: AnswerOutcome, info: AnswerHost.Info)
 
     /**
-     * The game step of a saved answer is done ([absorbMs] / [gameMs] as `LiveSession.ownAnswer` measured them). [mine] = this screen
-     * made the answer: only then do its events belong in the screen's session summary.
+     * The game step of an answer is done (R10-B23: at the tap, not waiting for AnkiDroid; [absorbMs] is -1 now, nothing waits for
+     * the detector; [gameMs] = how long the step took). [mine] = this screen made the answer: only then do its events belong in the
+     * screen's session summary.
      */
     fun gameDone(answer: QueuedAnswer, events: List<GameEvent>, absorbMs: Long, gameMs: Long, mine: Boolean)
 }
@@ -50,9 +52,13 @@ interface StudyListener {
 /**
  * The process-wide host of the study answers (R9 wave 6): ONE single-thread io executor runs EVERY study provider call in order,
  * and an answer's write task ([AnswerQueue.drain]) blocks it until the answer is resolved, so a load queued after it sees AnkiDroid's
- * real queue. It lives as long as the process, so a screen that is closed (or killed) never stops an answer from being written; the
- * game step of a saved answer runs here too, whether a screen is still there or not. Screens register a [StudyListener] (main thread).
- * Pure Kotlin: Android comes in through [Env] (tests use a fake and a real executor).
+ * real queue. It lives as long as the process, so a screen that is closed (or killed) never stops an answer from being written.
+ * Screens register a [StudyListener] (main thread). Pure Kotlin: Android comes in through [Env] (tests use a fake and a real executor).
+ *
+ * The game step (R10-B23) runs at the TAP, in [enqueue], from the button and the card as shown: the battle never waits for
+ * AnkiDroid. The write's end only settles it: saved / already saved -> [Env.settled] (the detector learns the card's real state,
+ * the game is not touched), not written -> [Env.dropped] (the game keeps its result). Answers replayed from the journal after a
+ * kill go through [Env.restored] first (the game counts the ones its save does not hold yet); nothing reaches AnkiDroid before.
  *
  * Routing: an outcome goes to the screen that made the answer while it is registered, else to the newest registered screen. A
  * terminal "not written" outcome nobody could be told about (no screen, e.g. an answer replayed from the journal after a restart)
@@ -79,15 +85,24 @@ class AnswerHost(
 
         /**
          * `LiveSession.expectOwn`: right before each write attempt, [pinned] while the answer is unresolved (the detector must not
-         * count it as a live answer however long that takes); a plain one (30 s) when it is saved, right before its game step.
+         * count it as a live answer however long that takes); a plain one (30 s) when it is saved, right before it is settled.
          */
         fun expect(before: Map<String, String?>, pinned: Boolean)
 
         /** `LiveSession.cancelOwn`: the answer ended NOT written. */
         fun cancel(before: Map<String, String?>)
 
-        /** The game step of a saved answer: recordReview, the Battle log's front, `LiveSession.ownAnswer`. [done] gets its events. */
-        fun gameStep(saved: AnswerOutcome.Saved, front: String?, onTiming: (absorbMs: Long, gameMs: Long) -> Unit, done: (List<GameEvent>) -> Unit)
+        /** The game step of an answer, at the tap: the Battle log's front, `LiveSession.ownAnswer`. [done] gets its events and how long it took. */
+        fun gameStep(answer: QueuedAnswer, front: String?, done: (events: List<GameEvent>, gameMs: Long) -> Unit)
+
+        /** Answers replayed from the journal: `LiveSession.ownRestored` (the game counts each one its save does not hold yet, once). [done] when that is decided. */
+        fun restored(answers: List<QueuedAnswer>, done: () -> Unit)
+
+        /** The answer is in AnkiDroid ([after] = the card now; [saved] = written by this process): reviews.csv, `LiveSession.ownSettled`. */
+        fun settled(answer: QueuedAnswer, after: Map<String, String?>, saved: Boolean)
+
+        /** The answer ended NOT written: `LiveSession.ownDropped` (the game keeps its result). */
+        fun dropped(answer: QueuedAnswer)
 
         fun log(text: String)
     }
@@ -133,7 +148,11 @@ class AnswerHost(
 
     // ---------------------------------------------------------------- start
 
-    /** Main thread, once per process (a second call does nothing): reads the journal; the answers it holds are replayed before any other io task. */
+    /**
+     * Main thread, once per process (a second call does nothing): reads the journal; the answers it holds are replayed before any
+     * other io task, and only once the game has decided which of them it already counted ([Env.restored]): no write of them can
+     * reach AnkiDroid (and the detector) before that.
+     */
     fun start() {
         if (started) return
         started = true
@@ -144,7 +163,9 @@ class AnswerHost(
             count = r.count
             since = env.elapsed()
             state = Unresolved(count, since, 0, null, false, queue.pending().firstOrNull()?.seq ?: 0)
-            execute(drainTask)
+            val decided = CountDownLatch(1)
+            execute(Runnable { decided.await(); drainTask.run() }) // first on the io thread: everything queued later waits behind it
+            env.restored(queue.pending().filter { it.restored }) { decided.countDown() }
         }
     }
 
@@ -179,15 +200,23 @@ class AnswerHost(
     /** Answers not resolved yet, as the io thread sees them (exact; the counts read checks it). */
     fun unresolvedNow(): Boolean = queue.size > 0
 
-    /** Main thread. The answer is written in the background, in order, however long it takes. False = the journal file could not be written (the answer is still queued in memory). */
+    /**
+     * Main thread. The answer is written in the background, in order, however long it takes; its game step runs right here, at the
+     * tap (R10-B23). False = the journal file could not be written (the answer is still queued in memory).
+     */
     fun enqueue(a: QueuedAnswer, front: String?, owner: StudyListener?): Boolean {
-        metas[a.seq] = Meta(front, owner)
+        val meta = Meta(front, owner)
+        metas[a.seq] = meta
         val persisted = queue.enqueue(a) // the journal first, then the entry can run
         if (count == 0) since = env.elapsed()
         count++
         state = Unresolved(count, since, 0, null, false, a.seq)
         broadcast()
         execute(drainTask) // before any load the caller queues next
+        env.gameStep(a, front) { events, gameMs ->
+            val (screen, mine) = route(meta)
+            screen?.gameDone(a, events, -1, gameMs, mine)
+        }
         return persisted
     }
 
@@ -246,15 +275,17 @@ class AnswerHost(
         broadcast()
         if (target != null) target.outcome(o, Info(mine, writeMs, postedAt))
         else if (o is AnswerOutcome.NotWritten) { orphans += o; while (orphans.size > MAX_ORPHANS) orphans.removeAt(0) }
-        if (o is AnswerOutcome.Saved) {
-            var absorb = -1L
-            var game = -1L
-            env.expect(o.answer.before, false) // resolved: the pin ends (30 s, or the game step's absorb settles it first)
-            env.gameStep(o, meta?.front, { a, g -> absorb = a; game = g }) { events ->
-                val (screen, ownAnswer) = route(meta)
-                screen?.gameDone(o.answer, events, absorb, game, ownAnswer)
-            }
+        when (o) { // the game counted it at the tap (or at the replay): the end only settles it
+            is AnswerOutcome.Saved -> settle(o.answer, o.after, true)
+            is AnswerOutcome.AlreadySaved -> settle(o.answer, o.after, false)
+            is AnswerOutcome.NotWritten -> env.dropped(o.answer)
+            is AnswerOutcome.Retrying -> {}
         }
+    }
+
+    private fun settle(a: QueuedAnswer, after: Map<String, String?>, saved: Boolean) {
+        env.expect(a.before, false) // resolved: the pin ends (30 s, or the settle's absorb takes it first)
+        env.settled(a, after, saved)
     }
 
     private fun describe(o: AnswerOutcome) = when (o) {

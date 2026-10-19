@@ -3,6 +3,7 @@ package com.husarp.ankigo.ui
 import com.husarp.ankigo.game.CashKind
 import com.husarp.ankigo.game.DuplicateResult
 import com.husarp.ankigo.game.GameEvent
+import com.husarp.ankigo.game.Tuning
 import java.util.Locale
 
 // TICKET R2-07: the Battle log. Pure Kotlin: game events (+ the answers that caused them) -> battles -> rounds.
@@ -64,6 +65,7 @@ class BattleLogBuilder(
     private var wildHp: Int? = null
     private var playerHp: Int? = null
     private var resultOpen = false
+    private var wildPower = 1.0 // R10-B22: the wild one's damage factor of the round being played
 
     fun answer(source: String, cardId: Long, button: Int, front: String?) {
         pending.addLast(Pending(button, if (front.isNullOrBlank()) "card #$cardId" else front, source == "catch-up"))
@@ -82,9 +84,13 @@ class BattleLogBuilder(
                 CashKind.DAILY_BONUS -> {} // no fight money: the panel log has its own line
             }
             is GameEvent.Encounter -> encounter(e)
-            is GameEvent.RoundStart -> collecting().let { it.multiplier = e.multiplier; it.points = e.points }
+            is GameEvent.RoundStart -> { collecting().let { it.multiplier = e.multiplier; it.points = e.points }; wildPower = e.enemyPower }
             is GameEvent.Attack -> attack(e)
             is GameEvent.Splash -> moves().lines += LogLine(Tone.SUB, "${e.name} did nothing (Splash)")
+            is GameEvent.SwitchHit -> {
+                wildPower = Tuning.SWITCH_HIT_POWER // R10 W10: the free hit of a switch is at normal power, whatever the round before had
+                moves().lines += LogLine(Tone.PLAIN, "${e.monName} comes in — the wild ${e.wildName.removePrefix("Wild ")} attacks!")
+            }
             is GameEvent.Effect -> effect(e)
             is GameEvent.Fainted -> moves().lines += LogLine(if (e.player) Tone.BAD else Tone.GOOD, "${e.name} fainted")
             is GameEvent.BallThrow -> ball(e)
@@ -170,6 +176,7 @@ class BattleLogBuilder(
                 if (e.damage > 0 && e.effectiveness < 1.0) parts += "not very effective"
             }
         }
+        if (e.damage > 0 && !e.byPlayer && wildPower != 1.0) parts += "×" + String.format(Locale.US, "%.2f", wildPower).trimEnd('0').trimEnd('.') + " power"
         if (e.damage > 0) parts += "${e.target} ${e.targetHp}/${e.targetMaxHp} HP"
         val hit = e.damage > 0
         val tone = when {

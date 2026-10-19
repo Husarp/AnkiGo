@@ -61,7 +61,7 @@ class SettingsR3Shots {
 
     @Test fun hitHighlighted() {
         paparazzi.shootPage("settings3-hit", variants) { ctx ->
-            page(ctx) { it.openSetting(SettingsCatalog.byId("autoMode1")!!) }
+            page(ctx) { it.openSetting(SettingsCatalog.byId("catchAlways")!!) }
         }
     }
 

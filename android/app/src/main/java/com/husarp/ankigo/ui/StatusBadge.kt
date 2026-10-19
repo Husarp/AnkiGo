@@ -28,8 +28,8 @@ import kotlin.math.sin
  * snowflake = frozen. The engine has no confusion. Colours come from the `ag_*` tokens (read raw: the accent mapping of
  * `Ui.c` must not turn the poison purple into the user's accent).
  */
-class StatusBadge(ctx: Context, val status: String) : View(ctx) {
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fillColor(ctx, status) }
+class StatusBadge(ctx: Context, val status: String, dark: Boolean = false) : View(ctx) {
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (dark) InfoBoxSkin.statusFill(status) else fillColor(ctx, status) }
     private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = inkColor(fill.color) }
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ink.color; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
@@ -163,6 +163,10 @@ class StatusRow(ctx: Context) : LinearLayout(ctx) {
     var status: String? = null
         private set
 
+    /** Round 10 W7: the badge is painted in the dark palette (the info box looks that are the same in light and dark); changing it redraws a badge that shows. */
+    var dark = false
+        set(v) { if (field != v) { field = v; val s = status; if (s != null) { removeAllViews(); addView(StatusBadge(context, s, v), LayoutParams(badgePx, badgePx)) } } }
+
     /** Called with this row when it is tapped while it shows a status. */
     var onTap: (StatusRow) -> Unit = {}
 
@@ -191,7 +195,7 @@ class StatusRow(ctx: Context) : LinearLayout(ctx) {
         if (shown == this.status && (shown == null) == (childCount == 0)) return
         this.status = shown
         removeAllViews()
-        if (shown != null) addView(StatusBadge(context, shown), LayoutParams(badgePx, badgePx))
+        if (shown != null) addView(StatusBadge(context, shown, dark), LayoutParams(badgePx, badgePx))
         isClickable = shown != null
         visibility = if (shown != null) VISIBLE else GONE
         contentDescription = StatusInfo.of(shown)?.let { "${it.name}. Tap for what it does" }

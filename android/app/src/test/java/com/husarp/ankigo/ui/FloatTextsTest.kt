@@ -143,4 +143,9 @@ class FloatTextsTest {
         assertEquals("ACC" to 3, down.stat to down.stages) // never more than three chevrons
         assertEquals(FloatKind.STAT_DOWN, down.kind)
     }
+
+    @Test fun theSwitchHitMarkerFloatsNothingAndTheWildAttackAfterItFloatsAtOurPokemon() {
+        assertEquals(emptyList<FloatText>(), FloatTexts.of(GameEvent.SwitchHit("Wild", "A", 10, 20), on))
+        assertEquals(listOf(FloatText(true, "\u221212 HP", FloatKind.DAMAGE)), FloatTexts.of(attack(byPlayer = false), on))
+    }
 }

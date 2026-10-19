@@ -113,7 +113,7 @@ class R4V2Shots {
             assertTrue("Epic" in t) // the answers row
             assertTrue("Not yet" in t)
             assertTrue("Earned" in t) // the earned one-offs
-            assertTrue("All" in t && "Close to next" in t && "Recently reached" in t)
+            assertTrue("All" in t && "Show: All" in t) // R10 W2: the tab and the Show button (the filters are in its menu)
             screen
         }
     }
@@ -129,37 +129,31 @@ class R4V2Shots {
         return pageScreen(ctx, p).also { call(p, "render") }
     }
 
-    @Test fun scrolledIntoAGroupPinsItsHeader() {
-        paparazzi.shootPage("r4v2b-sticky", listOf(Variants.PHONE, Variants.SPLIT, SMALL)) { ctx ->
-            pageWith(ctx) { it.scrollIntoGroup("Battle", 260) }
-        }
-        paparazzi.shootPage("r4v2b-sticky-badges", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
-            pageWith(ctx) { it.scrollIntoGroup("Badges", 200) }
-        }
-    }
-
-    @Test fun tappingAChipJumpsToItsGroup() {
-        paparazzi.shootPage("r4v2b-jump-economy", listOf(Variants.PHONE, Variants.SPLIT, SMALL)) { ctx ->
+    // R10 W2 (D3-A): the pinned header, the jump chips and the greyed chips are gone; the tabs really filter (see R10W2AchievementsShots).
+    @Test fun aTabShowsOnlyItsGroup() {
+        paparazzi.shootPage("r4v2b-tab-economy", listOf(Variants.PHONE, Variants.SPLIT, SMALL)) { ctx ->
             val screen = pageWith(ctx) {}
-            val p = lastPage!!
             var v: View? = findText(screen) { it == "Economy" }
             while (v != null && !v.isClickable) v = v.parent as? View
             assertNotNull(v); v!!.performClick()
+            call(lastPage!!, "render")
+            assertEquals("Economy", lastPage!!.achievementsView().tab())
+            val t = texts(screen)
+            assertFalse("BATTLE" in t || "Wild Pokémon defeated" in t)
+            assertTrue("Money earned" in t)
             screen
         }
     }
 
-    @Test fun aFilterGreysTheChipsOfEmptyGroups() {
+    @Test fun aFilterThatEmptiesAGroupKeepsItsTab() {
         paparazzi.shootPage("r4v2b-filter-close", listOf(Variants.PHONE, Variants.SPLIT, SMALL)) { ctx ->
             val screen = page(ctx, filter = AchFilter.CLOSE)
-            val av = lastPage!!.achievementsView()
             val views = Achievements.view(st, GameRepo.data!!)
             val groups = AchPageMath.groups(views, AchFilter.CLOSE, NOW, st.achSince)
-            assertEquals(groups.filter { it.empty }.map { it.name }.toSet(), av.greyedChips())
-            assertTrue("Badges must be greyed: a one-off is never close", "Badges" in av.greyedChips())
+            assertTrue("Badges must be empty: a one-off is never close", groups.single { it.name == "Badges" }.empty)
             val t = texts(screen)
-            assertFalse("BADGES" in t) // the empty group's header is hidden, its chip stays
-            assertTrue("Badges" in t)
+            assertFalse("BADGES" in t) // the empty group's header is not on the All tab...
+            assertTrue("Badges" in t) // ...its tab stays
             screen
         }
     }

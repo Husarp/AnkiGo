@@ -78,7 +78,7 @@ object ContinueBar {
         a.startActivity(Intent(a, StudyActivity::class.java).putExtra("deckId", deck.id).putExtra("deckName", deck.name))
     }
 
-    /** The bar's view: card with a round play button, "Continue · Deck" + "42 due", and a × at the end. */
+    /** The bar's view: card with a rounded-square play button, "Continue · Deck" + "42 due", and a × at the end. */
     fun build(ctx: Context, deck: Anki.Deck, onOpen: () -> Unit, onHide: () -> Unit): View {
         val bar = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -90,7 +90,7 @@ object ContinueBar {
         }
         bar.addView(StudyUi.icon(ctx, R.drawable.ic_play, R.color.ag_base).apply {
             setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8))
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 16, ctx)
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 10, ctx)
         }, LinearLayout.LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32)).also { it.marginEnd = Ui.dp(ctx, 10) })
         val text = StudyUi.column(ctx)
         text.addView(StudyUi.ellipsis(StudyUi.label(ctx, title(deck.name), 14, R.color.ag_text, 900)))

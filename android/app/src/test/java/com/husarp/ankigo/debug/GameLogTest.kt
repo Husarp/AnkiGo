@@ -53,4 +53,11 @@ class GameLogTest {
         threads.forEach { it.start() }; threads.forEach { it.join() }
         assertEquals(40, RollingGameLog(file, 40).all().lines().size)
     }
+
+    @Test fun theSwitchHitIsLoggedWithoutNames() {
+        val secret = "a nickname"
+        val text = GameEventText.event(GameEvent.SwitchHit(secret, secret, 13, 20))
+        assertFalse(text.contains(secret))
+        assertEquals("SwitchHit hp=13/20", text)
+    }
 }

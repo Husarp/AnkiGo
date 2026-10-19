@@ -46,7 +46,7 @@ internal object StudyUi {
         if (note != null) addView(label(ctx, note, 12, R.color.ag_sub0))
     }
     fun icon(ctx: Context, resource: Int, tone: Int = R.color.ag_sub1) = ImageView(ctx).apply {
-        setImageResource(resource); setColorFilter(Ui.c(ctx, tone))
+        setImageResource(resource); if (resource != R.drawable.ic_money) setColorFilter(Ui.c(ctx, tone)) // the gold money stack is never tinted
     }
     fun iconButton(ctx: Context, resource: Int, description: String, action: () -> Unit) = icon(ctx, resource).apply {
         setPadding(Ui.dp(ctx, 7), Ui.dp(ctx, 7), Ui.dp(ctx, 7), Ui.dp(ctx, 7))

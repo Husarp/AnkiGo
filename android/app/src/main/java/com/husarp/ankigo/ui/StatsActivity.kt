@@ -288,12 +288,12 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             isClickable = true
             contentDescription = "Achievements"
             setOnClickListener { showSection(StatsSection.ACHIEVEMENTS) }
-            addView(Ui.chip(this@StatsPage, R.drawable.ic_star, R.color.ag_yellow).apply {
+            addView(Ui.chip(this@StatsPage, R.drawable.ic_star, R.color.ag_yellow, plain = true).apply {
                 setText("Achievements ${AchPageMath.tiersReached(Achievements.view(st, data))}")
             }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
         }
         if (short) top.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dp(6); it.topMargin = -dp(12); it.bottomMargin = -dp(12) })
-        top.addView(Ui.chip(this, R.drawable.ic_coin, R.color.ag_yellow).also { it.setText(Bits.fmt(st.cash)) })
+        top.addView(Ui.chip(this, R.drawable.ic_money, R.color.ag_yellow, plain = true).also { it.setText(Bits.fmt(st.cash)) })
         card.addView(top)
 
         val need = Trainer.xpForNext(st.trainerLevel)
@@ -331,7 +331,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         })
         col.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply { text = "Daily goal streak" })
         top.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
-        top.addView(Ui.chip(this, R.drawable.ic_star, R.color.ag_yellow).also { it.setText("Best ${s.streak.best}") })
+        top.addView(StreakBest.view(this, streak, s.streak.best))
         card.addView(top)
 
         val goalRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }

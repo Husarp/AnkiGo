@@ -79,6 +79,8 @@ object MonDetail {
         // header: sprite, name + pencil, #num / Lv / nature / gender, types, all tags
         val img = ImageView(a)
         MonPreview.show(a, mon.lookNum(data), mon.shiny, img)
+        img.setOnClickListener { SpriteViewer.show(a, mon.lookNum(data), mon.shiny) } // R10-B1: full-screen viewer
+        img.contentDescription = "Show the picture full screen"
         val spriteDp = if (compact) 64 else 96
         val nameText = Ui.text(a, if (compact) 18f else 20f, 900, R.color.ag_text).apply {
             text = styledName(a, mon)
@@ -140,7 +142,7 @@ object MonDetail {
             })
         }
         // the state marks that tiles no longer show (held item, can evolve, fainted, regional form) and the other tags
-        val tags = GameRepo.state?.let { MonTags.of(data, it, mon) }.orEmpty()
+        val tags = GameRepo.state?.let { MonTags.detailTags(data, it, mon) }.orEmpty()
         if (tags.isNotEmpty()) col.addView(DetailSections.marks(a, tags), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
 
         // HP and XP, numbers

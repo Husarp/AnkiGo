@@ -160,7 +160,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private val comboChip = Ui.chip(ctx, R.drawable.ic_bolt, R.color.ag_sub0)
     private val streakFlame = StreakFlame(ctx)
     private val streakChip = Ui.chip(ctx, streakFlame, R.color.ag_red)
-    private val coinChip = Ui.chip(ctx, R.drawable.ic_coin, R.color.ag_yellow)
+    private val coinChip = Ui.chip(ctx, R.drawable.ic_money, R.color.ag_yellow)
     private val itemChip = Ui.chip(ctx, R.drawable.ic_gift, R.color.ag_teal)
     private val ballChip = Ui.chip(ctx, R.drawable.ic_ball, R.color.ag_sub1)
     private val chips = PanelChipRow(ctx)
@@ -208,6 +208,11 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         if (key == BattleFrame.KEY) post { if (isAttachedToWindow) refreshPrefs() }   // Settings picked another frame: every open panel (Study, float window...) follows
         if (key == DotsPlace.KEY) post { if (isAttachedToWindow) refreshPrefs() }     // ... and another place for the turn dots
         if (key == InfoBoxStyle.KEY) post { if (isAttachedToWindow) refreshPrefs() }  // ... and another design for the info boxes
+        if (key == InfoBoxLook.KEY) post { if (isAttachedToWindow) refreshPrefs() }   // ... and another look for them (Round 10 W7)
+        if (key == HpBarLook.KEY) post { if (isAttachedToWindow) refreshPrefs() }     // ... and another look for their HP / XP bars (Round 10 W8)
+        // Round 10 B19: the battle's "View settings" sheet changes these from any host; every open panel follows live
+        if (key == PokemonSize.KEY || key == "cardsUnderOwn" || key == "compactCards") post { if (isAttachedToWindow) refreshPrefs() }
+        if (key == "backgroundPictures") post { if (isAttachedToWindow) arena.reapplyBackdrop() }
     }
 
     /** Round 9 (D2): the battle frame drawn over the arena. [frameStyle] is the saved choice; [updateFrame] fits it to the panel scale. */
@@ -369,6 +374,9 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         arena.cardsUnderOwn = cardsOwn
         boxStyle = AppPrefs.infoBoxStyle(context)
         arena.infoBoxStyle = boxStyle
+        arena.infoBoxLook = AppPrefs.infoBoxLook(context)
+        arena.hpBarLook = AppPrefs.hpBarLook(context)
+        arena.pokemonSize = PokemonSize.factor(AppPrefs.pokemonSize(context))
         frameStyle = AppPrefs.battleFrame(context)
         logBox.dotsPlace = AppPrefs.turnDots(context)
         applied = null
@@ -821,6 +829,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         val sp = data.species[m.species]
         playerSeen = playerSeenOf(m)
         arena.setPlayerInfo(m.uid, m.shownName, m.level)
+        arena.setPlayerTypes(sp?.types.orEmpty())   // the type look washes our box with the first one's colour (Round 10 W7)
         arena.setPlayerStatus(st.battle?.player?.status)
         arena.setPlayerHp(m.hp, if (sp != null) StatCalc.maxHp(data, m) else max(m.hp, 1), false)
         val need = Progression.xpToNext(data, m)

@@ -54,11 +54,12 @@ object LiveSession {
     private val timer = LiveTimer()
 
     /**
-     * Own answers (the card as it is after the answer) whose game step has not run yet: added in [ownAnswer], removed when
-     * the step starts. Saves leave them out of the snapshot (the game has not counted them), and a detector that starts
-     * meanwhile gets them as already known, so a restart neither loses nor counts them twice.
+     * R10-B23: own answers the game counted at the tap whose write to AnkiDroid is not settled yet (the card as it will be after
+     * the answer). Saves put them into the snapshot, a detector that starts gets them as known and expects their rep change
+     * (pinned), so a restart neither loses nor counts them twice. Added in [ownAnswer] / [ownRestored], removed in [ownSettled] /
+     * [ownDropped].
      */
-    private val pendingOwn = ArrayList<com.husarp.ankigo.CardState>()
+    private val ahead = OwnAhead()
     private var flushPosted = false
     private var lastWidgets = 0L
     private var widgetsPosted = false
@@ -141,47 +142,88 @@ object LiveSession {
         if (paused || holders.isEmpty() || GameRepo.status != GameRepo.Status.READY) return
         val st = GameRepo.state ?: return
         val g = GameRepo.game ?: return
-        val d = detector ?: LiveDetector(app) { onLive(it) }.also { detector = it }
+        val d = detector ?: LiveDetector(app) { onLive(it) }.also { made ->
+            detector = made
+            for (r in ahead.pending) made.expectOwn(r.id, r.reps, pinned = true) // counted at the tap: their writes are never counted again
+        }
         d.hushed = hushers.active
         if (d.running) return
         timer.start(SystemClock.elapsedRealtime())
         val today = g.dayKey()
-        if (pendingOwn.isEmpty()) d.start(st.liveSnapshot, st.liveDay, today)
-        else d.start(withPendingOwn(st.liveSnapshot.takeIf { st.liveDay == today }, pendingOwn), today, today)
+        if (ahead.isEmpty()) d.start(st.liveSnapshot, st.liveDay, today)
+        else d.start(withPendingOwn(st.liveSnapshot.takeIf { st.liveDay == today }, ahead.pending), today, today)
     }
 
     fun expectOwn(row: com.husarp.ankigo.CardState, pinned: Boolean = false) { detector?.expectOwn(row.id, row.reps + 1, pinned) }
     fun cancelOwn(row: com.husarp.ankigo.CardState) { detector?.cancelOwn(row.id, row.reps + 1) }
 
     /**
-     * Verified own answers use the exact button and absorb their state before saving the game: the game step runs once
-     * the detector has settled the answer (so a poll cannot count it again), and [done] gets its events. The caller does
-     * not have to wait for [done] to go on (the study screen loads the next card at once). [onTiming] gets the
-     * milliseconds this call waited for the detector and the game step took, just before [done].
+     * R10-B23: an own answer counts in the game at the TAP, with its exact button ([before] = the card as it was shown); the
+     * write to AnkiDroid follows in the background. From now on the detector expects the card's rep change (pinned until
+     * [ownSettled] / [ownDropped]) and every saved snapshot holds the card one rep further, so neither a poll nor a restart
+     * counts the write again. Returns the events (the sinks get them too).
      */
-    fun ownAnswer(ctx: Context, row: com.husarp.ankigo.CardState, button: Int, onTiming: (absorbMs: Long, gameMs: Long) -> Unit = { _, _ -> }, done: (List<GameEvent>) -> Unit) {
+    fun ownAnswer(ctx: Context, before: com.husarp.ankigo.CardState, button: Int): List<GameEvent> {
         app = ctx.applicationContext
-        val asked = SystemClock.elapsedRealtime()
-        val finish = {
-            val absorbed = SystemClock.elapsedRealtime()
-            flushCatchUp()
-            timer.touch(SystemClock.elapsedRealtime()) // reviews.csv times own answers; the next live one starts from here
-            pendingOwn.remove(row) // from here on the snapshot saved below contains this answer, and the step counts it
-            GameLog.answer("study", row.id, button)
-            val events = act { g ->
-                saveSnapshotInto(g)
-                if (detector == null) {
-                    val map = runCatching { decode(g.state.liveSnapshot ?: "[]") }.getOrDefault(emptyMap())
-                    g.state.liveSnapshot = encode(map + (row.id to row)); g.state.liveDay = g.dayKey()
-                }
-                g.tick() + g.onAnswer(GameAnswer(row.id, button, System.currentTimeMillis(), false))
-            }
-            deliver(events)
-            onTiming(absorbed - asked, SystemClock.elapsedRealtime() - absorbed)
-            done(events)
+        flushCatchUp()
+        timer.touch(SystemClock.elapsedRealtime()) // reviews.csv times own answers; the next live one starts from here
+        val row = ahead.add(before)
+        detector?.expectOwn(row.id, row.reps, pinned = true)
+        GameLog.answer("study", row.id, button)
+        val events = act { g ->
+            saveSnapshotInto(g) // with the row: the save that holds this step also says the game counted it
+            if (detector == null) { g.state.liveSnapshot = ahead.into(g.state.liveSnapshot); g.state.liveDay = g.dayKey() }
+            g.tick() + g.onAnswer(GameAnswer(row.id, button, System.currentTimeMillis(), false))
         }
-        pendingOwn += row
-        detector?.absorbOwn(row, finish) ?: finish()
+        deliver(events)
+        return events
+    }
+
+    /**
+     * The own answer made on [before] is in AnkiDroid ([after] = the card now). The game is not touched (it counted at the tap):
+     * the detector settles the expectation and learns the real state, and only then does the predicted row leave the snapshot.
+     */
+    fun ownSettled(ctx: Context, before: com.husarp.ankigo.CardState, after: com.husarp.ankigo.CardState) {
+        app = ctx.applicationContext
+        val d = detector
+        if (d == null) {
+            ahead.remove(before)
+            GameRepo.state?.let { st ->
+                val map = runCatching { decode(st.liveSnapshot ?: "[]") }.getOrDefault(emptyMap())
+                st.liveSnapshot = ahead.into(encode(map + (after.id to after))); st.liveDay = GameRepo.game?.dayKey() ?: st.liveDay
+            }
+            GameRepo.scheduleSave(app)
+            return
+        }
+        d.absorbOwn(after) {
+            ahead.remove(before)
+            saveSnapshot()
+            GameRepo.scheduleSave(app)
+        }
+    }
+
+    /** The own answer made on [before] ended NOT written: the game keeps what it counted at the tap (a battle is never undone); its row leaves the snapshot. */
+    fun ownDropped(ctx: Context, before: com.husarp.ankigo.CardState) {
+        app = ctx.applicationContext
+        val row = ahead.remove(before) ?: return
+        val st = GameRepo.state ?: return
+        if (detector == null) st.liveSnapshot?.let { st.liveSnapshot = withoutPendingOwn(it, listOf(row)) } else saveSnapshot()
+        GameRepo.scheduleSave(app)
+    }
+
+    /**
+     * Answers replayed from the journal after the app was killed ([answers] = the card as shown + the game's button), before any
+     * of them is written again (AnswerHost waits for this). The game counts each one it has not counted yet, once; the ones the
+     * kill came after (their row is in the saved snapshot) or that the detector already counted are only kept as ahead.
+     */
+    fun ownRestored(ctx: Context, answers: List<Pair<com.husarp.ankigo.CardState, Int>>) {
+        app = ctx.applicationContext
+        for ((before, button) in answers) {
+            if (OwnAhead.counted(before, GameRepo.state?.liveSnapshot, detector?.snapshot())) {
+                val row = ahead.add(before)
+                detector?.expectOwn(row.id, row.reps, pinned = true)
+            } else ownAnswer(app, before, button)
+        }
     }
 
     // ---------------------------------------------------------------- pause
@@ -244,13 +286,13 @@ object LiveSession {
         val d = detector ?: return
         val st = GameRepo.state ?: return
         if (pendingCatchUp.isNotEmpty()) return // not counted yet: flushCatchUp saves the snapshot together with them
-        st.liveSnapshot = withoutPendingOwn(d.snapshot(), pendingOwn)
+        st.liveSnapshot = ahead.into(d.snapshot())
         st.liveDay = GameRepo.game?.dayKey()
     }
 
     private fun saveSnapshotInto(g: Game) {
         val d = detector ?: return
-        g.state.liveSnapshot = withoutPendingOwn(d.snapshot(), pendingOwn)
+        g.state.liveSnapshot = ahead.into(d.snapshot())
         g.state.liveDay = g.dayKey()
     }
 

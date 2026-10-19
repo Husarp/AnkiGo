@@ -8,6 +8,7 @@ import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Looks
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Tuning
+import com.husarp.ankigo.game.quietUnlessHit
 import com.husarp.ankigo.game.shownName
 
 // TICKET T14 owns this file: the per-Pokémon action menu (team + box) and the item / TM flows behind it.
@@ -21,37 +22,39 @@ internal class MonActions(private val s: GamePage) {
     fun menu(mon: Mon, anchor: android.view.View, onPick: () -> Unit = {}) {
         val m = AppMenu(anchor).header("${if (mon.shiny) "★ " else ""}${mon.shownName}  Lv ${mon.level}")
         val acts = mutableListOf<() -> Unit>()
+        var hasExtra = false
         // R4-X1 item 14: icons are grey; only what carries a meaning gets a colour (♥ red, ★ yellow, Release red)
-        fun add(label: String, @androidx.annotation.DrawableRes icon: Int, danger: Boolean = false, sub: String? = null, @androidx.annotation.ColorRes tone: Int = 0, f: () -> Unit) {
-            m.item(acts.size, label, icon, sub = sub, danger = danger, tone = tone); acts += f
+        fun add(label: String, @androidx.annotation.DrawableRes icon: Int, danger: Boolean = false, sub: String? = null, @androidx.annotation.ColorRes tone: Int = 0, extra: Boolean = false, f: () -> Unit) {
+            m.item(acts.size, label, icon, sub = sub, danger = danger, tone = tone, extra = extra); acts += f
+            if (extra) hasExtra = true
         }
 
         val idx = state.team.indexOf(mon.uid)
         val main = state.main
         if (idx >= 0) {
-            if (idx > 0) add("Make main", R.drawable.ic_star, tone = R.color.ag_yellow) { s.act { g -> g.setMain(mon.uid).let { r -> if (r.ok) r.copy(message = "") else r } } } // the change is visible: no toast
+            if (idx > 0) add("Make main", R.drawable.ic_star, tone = R.color.ag_yellow) { s.act { g -> g.setMain(mon.uid).quietUnlessHit() } } // the change is visible: no toast (unless it cost a hit)
             if (state.team.size > 1) add("Send to box", R.drawable.ic_team) { s.act { it.toBox(mon.uid) } }
         } else if (state.team.size < 6) {
             add("Add to team", R.drawable.ic_team) { s.act { it.toTeam(mon.uid) } }
             add("Make main", R.drawable.ic_star, tone = R.color.ag_yellow) {
-                s.act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.setMain(mon.uid).let { m -> if (m.ok) m.copy(message = "") else m } else r } }
+                s.act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.setMain(mon.uid).quietUnlessHit() else r } }
             }
         } else if (main != null) {
             // Team full (R6-06): pick which team Pokémon to swap out, or make this one the main (the main goes to the box).
             add("Add to team…", R.drawable.ic_team) { swapIn(mon) }
             add("Make main (${main.shownName} goes to the box)", R.drawable.ic_star, tone = R.color.ag_yellow) {
-                s.act { g -> g.swapIntoTeam(mon.uid, main.uid).let { r -> if (r.ok) r.copy(message = "") else r } }
+                s.act { g -> g.swapIntoTeam(mon.uid, main.uid).quietUnlessHit() }
             }
         }
-        add("Give item…", R.drawable.ic_gift) { giveItem(mon) }
-        mon.heldItem?.let { held -> add("Take ${Items.name(held)}", R.drawable.ic_gift) { s.act { ItemUse.takeHeld(it.state, mon.uid) } } }
-        add("Use item…", R.drawable.ic_ball) { useItem(mon) }
-        add("Teach TM…", R.drawable.ic_tm) { teachMenu(mon) }
+        add("Give item…", R.drawable.ic_gift, extra = true) { giveItem(mon) }
+        mon.heldItem?.let { held -> add("Take ${Items.name(held)}", R.drawable.ic_gift, extra = true) { s.act { ItemUse.takeHeld(it.state, mon.uid) } } }
+        add("Use item…", R.drawable.ic_ball, extra = true) { useItem(mon) }
+        add("Teach TM…", R.drawable.ic_tm, extra = true) { teachMenu(mon) }
         if (mon.uid != main?.uid) {
             if (state.settings.xpShareUid == mon.uid) add("Exp. Share holder: turn off", R.drawable.ic_up) { s.act { it.setXpShare(null) } }
             else add("Make Exp. Share holder", R.drawable.ic_up) { s.act { it.setXpShare(mon.uid) } }
         }
-        if (BuddyWidgetPrefs.widgetIds(s).isNotEmpty()) add("Show on Buddy widget", R.drawable.ic_open) { showOnBuddyWidget(mon) }
+        if (BuddyWidgetPrefs.widgetIds(s).isNotEmpty()) add("Show on Buddy widget", R.drawable.ic_open, extra = true) { showOnBuddyWidget(mon) }
         add("Compare", R.drawable.ic_compare) {
             // inside the Pokémon tab (its own page, or the Pokédex section it hosts) the picking starts right there
             val host: PickHost? = s as? TeamPage ?: (s as? DexPage)?.pickHost
@@ -62,6 +65,8 @@ internal class MonActions(private val s: GamePage) {
         if (mon.favourite) add("Remove from favourites", R.drawable.ic_heart, tone = R.color.ag_red) { s.act { it.setFavourite(mon.uid, false) } }
         else add("Add to favourites", R.drawable.ic_heart_outline, tone = R.color.ag_red) { s.act { it.setFavourite(mon.uid, true) } }
         add("Rename…", R.drawable.ic_pencil) { rename(mon) }
+        // R10 B16: the less used rows (item, TM, Buddy widget) sit behind "More", just above Release
+        if (hasExtra) { m.more(acts.size); acts += {} }
         if (mon.favourite) { m.item(acts.size, "Release…", R.drawable.ic_trash, enabled = false, sub = "Remove ${mon.shownName} from favourites first.", danger = true); acts += {} }
         else add("Release…", R.drawable.ic_trash, danger = true) { release(mon) }
         m.show { onPick(); acts[it]() }

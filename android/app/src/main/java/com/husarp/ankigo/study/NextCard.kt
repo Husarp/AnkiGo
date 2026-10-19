@@ -3,9 +3,10 @@ package com.husarp.ankigo.study
 /**
  * A card ready to show without a provider call: [key], the card's state as AnkiDroid gave it ([before], the
  * [com.husarp.ankigo.CardState.COLS] row; it is what an answer is checked against) and [view], everything else 1b prepared
- * (the Review with the buttons and next times, html, note fields, model css, media check, tts…).
+ * (the Review with the buttons and next times, html, note fields, model css, media check, tts…). [learning] (R10-X1): the deck's
+ * learning cards read with a card prepared as the prediction ([PredictRule.check] decides with it; null = not read).
  */
-data class Prepared<out T>(val key: StudyLoop.Key, val before: Map<String, String?>, val view: T)
+data class Prepared<out T>(val key: StudyLoop.Key, val before: Map<String, String?>, val view: T, val learning: PredictRule.LearnRead? = null)
 
 /** What the io thread does with a `Load(token, predicted)`, from AnkiDroid's queue (limit 3) read after every earlier write. */
 object LoadPlan {
@@ -40,8 +41,8 @@ sealed class Cmd<out T> {
     /** Show [card] on its QUESTION side; [predicted] = AnkiDroid has not confirmed it yet (buttons only hold the tap). */
     data class Show<T>(val card: Prepared<T>, val predicted: Boolean) : Cmd<T>()
 
-    /** The predicted card on screen is the real one: refresh buttons / next times from [card], keep the side the user is on. */
-    data class Confirm<T>(val card: Prepared<T>) : Cmd<T>()
+    /** The predicted card on screen is the real one: refresh buttons / next times from [card], keep the side the user is on; [flip] = a held "Show answer" opens now. */
+    data class Confirm<T>(val card: Prepared<T>, val flip: Boolean = false) : Cmd<T>()
 
     /** No card to show yet (nothing predicted): the usual waiting state. */
     object ShowWaiting : Cmd<Nothing>()
@@ -62,25 +63,29 @@ sealed class Cmd<out T> {
  * ```
  *  LOADING(token)              waiting for a load
  *  CONFIRMED(card, token)      AnkiDroid's real top card: answers and card actions act on it
- *  PREDICTED(card, token, afterSeq, held?)  the card expected after answer [afterSeq]; the confirm runs behind that write
+ *  PREDICTED(card, token, afterSeq, held?, flipHeld)  the card expected after answer [afterSeq]; the confirm runs behind that write
  *  FINISHED / ERROR(msg)
  * ```
  * Every load result carries the token it was asked with; a result for an old token changes nothing. A tap on a PREDICTED card is
  * only held: it acts when `confirmed` arrives and is dropped (quietly, counted) when `loaded` brings a different card, a reload, a
  * finish or an error. A swap always lands on the question side. A prepared card (the prediction) is kept only for the card it was
- * made for and only while that card is CONFIRMED, and is used by the very next answer. Card actions (bury, suspend, flag, move,
- * delete, edit) only on [actionCard], which is null unless CONFIRMED.
+ * made for and only while that card is CONFIRMED, and is used by the very next answer, only when [check] says it is safe (R10-X1,
+ * [PredictRule]); else that answer waits for the real card. "Show answer" on a PREDICTED card is held too ([holdFlip]): the answer side
+ * of a card that could still be swapped never shows. Card actions (bury, suspend, flag, move, delete, edit) only on [actionCard], which
+ * is null unless CONFIRMED.
  */
 class NextCard<T>(
     private val deckId: Long,
     /** Sequence numbers for answers: `queue::nextSeq`. */
     private val newSeq: () -> Long,
     private val now: () -> Long = { System.currentTimeMillis() },
+    /** R10-X1: may the prepared next card show at once (`PredictRule::check`)? Anything but SAFE makes the answer wait. Default: always. */
+    private val check: (answered: Prepared<T>, next: Prepared<T>, now: Long) -> PredictRule.Why = { _, _, _ -> PredictRule.Why.SAFE },
 ) {
     sealed class Slot<out T> {
         data class Loading(val token: Int) : Slot<Nothing>()
         data class Confirmed<T>(val card: Prepared<T>, val token: Int) : Slot<T>()
-        data class Predicted<T>(val card: Prepared<T>, val token: Int, val afterSeq: Long, val held: Held? = null) : Slot<T>()
+        data class Predicted<T>(val card: Prepared<T>, val token: Int, val afterSeq: Long, val held: Held? = null, val flipHeld: Boolean = false) : Slot<T>()
         object Finished : Slot<Nothing>()
         data class Error(val message: String) : Slot<Nothing>()
     }
@@ -93,8 +98,11 @@ class NextCard<T>(
         private set
     private var token = 0
     private var prediction: Pred<T>? = null
+    private var answered: StudyLoop.Key? = null // the card of the last answer (for the swap's cause)
 
-    /** For the STUDY line: predictions confirmed / swapped away, answers that had no prediction, held taps dropped. */
+    /** For the STUDY line: predictions shown / confirmed / swapped away, answers with nothing prepared, held taps dropped. */
+    var predicted = 0
+        private set
     var hits = 0
         private set
     var misses = 0
@@ -103,6 +111,24 @@ class NextCard<T>(
         private set
     var heldDropped = 0
         private set
+
+    /** R10-X1: answers whose prepared next card [check] held back, by reason. */
+    val withheld: Map<PredictRule.Why, Int> get() = waitsBy
+    private val waitsBy = LinkedHashMap<PredictRule.Why, Int>()
+
+    /** Why the last answer waited for its next card ("" = it showed the prediction); the cause of the last swap. */
+    var lastWait = ""
+        private set
+    var lastSwap = ""
+        private set
+
+    /** This visit's predictions and waits in one line, e.g. "predicted 12 (hit 11, swap 1), waited 3 (learning card due 2, nothing prepared 1)". */
+    fun tally(): String {
+        val waits = withheld.filterValues { it > 0 }.map { (why, n) -> why.label to n } + listOfNotNull(if (noPrediction > 0) NOTHING to noPrediction else null)
+        return "predicted $predicted (hit $hits, swap $misses), waited ${waits.sumOf { it.second }}" +
+            (if (waits.isEmpty()) "" else waits.joinToString(", ", " (", ")") { "${it.first} ${it.second}" }) +
+            (if (heldDropped > 0) ", held taps dropped $heldDropped" else "")
+    }
 
     /** The card the card actions may act on: only a CONFIRMED one. */
     fun actionCard(): Prepared<T>? = (slot as? Slot.Confirmed<T>)?.card
@@ -135,9 +161,9 @@ class NextCard<T>(
     /** A load found the top card [p] (`LoadPlan.Fetch`). [queue] = the keys read with it (limit 3), first = [p]. */
     fun loaded(token: Int, p: Prepared<T>, queue: List<StudyLoop.Key>): List<Cmd<T>> {
         if (token != this.token) return emptyList()
-        when (slot) {
+        when (val s = slot) {
             is Slot.Loading -> {}
-            is Slot.Predicted -> { misses++; dropHeld() } // the prediction was wrong: swap, the held tap is dropped
+            is Slot.Predicted -> { misses++; lastSwap = PredictRule.swapCause(answered, s.card.key, p, queue); dropHeld() } // the prediction was wrong: swap, the held tap (or flip) is dropped
             else -> return emptyList()
         }
         prediction = null
@@ -163,7 +189,7 @@ class NextCard<T>(
         prediction = null
         val usable = next != null && queue.firstOrNull() == key && queue.getOrNull(1) == next.key && next.key != key
         if (usable && next != null) prediction = Pred(key, token, next)
-        val held = s.held ?: return listOf<Cmd<T>>(Cmd.Confirm(card)) + (if (usable) emptyList() else prepareNext(card, queue))
+        val held = s.held ?: return listOf<Cmd<T>>(Cmd.Confirm(card, flip = s.flipHeld)) + (if (usable) emptyList() else prepareNext(card, queue))
         return listOf<Cmd<T>>(Cmd.Confirm(card)) + answerOn(card, held.ease, held.tookMs) // as if tapped now, on a confirmed card
     }
 
@@ -203,6 +229,18 @@ class NextCard<T>(
         }
     }
 
+    /**
+     * R10-X1: "Show answer" on the PREDICTED card: held, not shown (a card that could still be swapped must never show its answer).
+     * True = held now; it opens with the confirm ([Cmd.Confirm.flip]) and is dropped by a swap. False = not a predicted card, or one
+     * tap is held already. A CONFIRMED card flips at once (the screen does not ask).
+     */
+    fun holdFlip(): Boolean {
+        val s = slot as? Slot.Predicted<T> ?: return false
+        if (s.flipHeld || s.held != null) return false
+        slot = s.copy(flipHeld = true)
+        return true
+    }
+
     private fun pending(token: Int) = token == this.token && (slot is Slot.Loading || slot is Slot.Predicted<*>)
 
     private fun dropHeld() { if ((slot as? Slot.Predicted<T>)?.held != null) heldDropped++ }
@@ -217,21 +255,32 @@ class NextCard<T>(
         val cardId = card.before["_id"]?.toLongOrNull()
         if (cardId == null || !AnswerState.usable(card.before)) return listOf(Cmd.Refuse("the card's state could not be read"))
         val a = QueuedAnswer(newSeq(), deckId, card.key.nid, card.key.ord, cardId, card.before, ease, tookMs, now())
-        val guess = prediction?.takeIf { it.forKey == card.key && it.forToken == token }?.card
+        val made = prediction?.takeIf { it.forKey == card.key && it.forToken == token }?.card
+        val why = if (made == null) null else check(card, made, a.madeAt)
+        val guess = made?.takeIf { why == PredictRule.Why.SAFE }
         prediction = null
+        answered = card.key
         token++
         val out = ArrayList<Cmd<T>>(3)
         out += Cmd.Enqueue(a)
         if (guess != null) {
+            predicted++
+            lastWait = ""
             slot = Slot.Predicted(guess, token, a.seq)
             out += Cmd.Show(guess, predicted = true)
             out += Cmd.Load(token, guess.key)
         } else {
-            noPrediction++
+            if (why == null) noPrediction++ else waitsBy[why] = (waitsBy[why] ?: 0) + 1 // nothing prepared / prepared but not safe to show
+            lastWait = why?.label ?: NOTHING
             slot = Slot.Loading(token)
             out += Cmd.ShowWaiting
             out += Cmd.Load(token, null)
         }
         return out
+    }
+
+    companion object {
+        /** The wait of an answer whose next card was not prepared yet (or there was none: the last card). */
+        const val NOTHING = "nothing prepared"
     }
 }

@@ -179,8 +179,9 @@ internal object SortViews {
     /**
      * The sort chip: a tap anywhere on it ([onOpen]) opens the sort sheet, which holds the direction and the sort options too
      * (R4-X1 item 15: no separate arrow target). Accent fill, so it reads as "this is on" like the mockup.
+     * [filters] > 0: the sheet also holds that many filters that are on, so the chip adds " · N" (a hidden filter is never a surprise).
      */
-    fun sortChip(ctx: Context, spec: SortSpec, onOpen: (View) -> Unit): LinearLayout {
+    fun sortChip(ctx: Context, spec: SortSpec, filters: Int = 0, onOpen: (View) -> Unit): LinearLayout {
         val (name, arrow, suffix) = SortText.chipParts(spec)
         val ink = Ui.c(ctx, R.color.ag_crust)
         fun label(t: String) = Ui.text(ctx, 12f, 800, R.color.ag_crust).apply { text = t; maxLines = 1; setTextColor(ink) }
@@ -189,7 +190,7 @@ internal object SortViews {
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = Ui.dp(ctx, 48)
             background = InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 10, ctx), 0, Ui.dp(ctx, 10), 0, Ui.dp(ctx, 10))
-            contentDescription = "Sort: ${SortText.chipLabel(spec)}. Tap to change."
+            contentDescription = "Sort: ${SortText.chipLabel(spec)}." + (if (filters > 0) " $filters filters on." else "") + " Tap to change."
             setOnClickListener { onOpen(it) }
             addView(label(name).apply {
                 maxWidth = Ui.dp(ctx, 150)
@@ -199,8 +200,10 @@ internal object SortViews {
                 gravity = Gravity.CENTER
                 textSize = 16f // a little bigger than the name (R4-X1 item 15)
                 setPadding(Ui.dp(ctx, 5), 0, Ui.dp(ctx, 5), 0)
-            }, LinearLayout.LayoutParams(-2, -2).also { if (suffix.isEmpty()) it.marginEnd = Ui.dp(ctx, 5) })
+            }, LinearLayout.LayoutParams(-2, -2).also { if (suffix.isEmpty() && filters <= 0) it.marginEnd = Ui.dp(ctx, 5) })
             if (suffix.isNotEmpty()) addView(label(suffix.removePrefix(" ")).apply { maxLines = 1 },
+                LinearLayout.LayoutParams(-2, -2).also { if (filters <= 0) it.marginEnd = Ui.dp(ctx, 10) else it.marginEnd = Ui.dp(ctx, 4) })
+            if (filters > 0) addView(label("· $filters").apply { maxLines = 1 },
                 LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 10) })
         }
     }
@@ -240,9 +243,10 @@ internal object SortViews {
 }
 
 /**
- * The "Sort & filter" sheet (mockup 6A): sort key, direction, the stats to count, the stat basis (with a level stepper for
- * "At Lv N"), the show filters and a "Show N Pokémon" button that closes it. Every change is applied at once through [onChange]
- * (the page behind updates), so the button only closes.
+ * The one "Sort & filter" sheet (mockup 6A, R10 B3 + B14): direction on top, sort key, the stats to count, the stat basis (with a
+ * level stepper for "At Lv N"), then what the host needs below: the Box's "Show" chips ([showLabels]) and "Group duplicates"
+ * ([group]), the Pokédex's wishlist switch and generation chips ([dex]); a "Show N Pokémon" button closes it. Every change is
+ * applied at once through [onChange] / the parts' callbacks (the page behind updates), so the button only closes.
  */
 internal class SortSheet(
     private val page: GamePage,
@@ -255,11 +259,17 @@ internal class SortSheet(
     private val group: GroupToggle?,
     private val count: () -> Int,
     private val onChange: (SortSpec, Int) -> Unit,
-    /** R4-X1 item 15: only the sort part (the sort chip's sheet): direction on top, the sort options below; no show filters. */
-    private val sortOnly: Boolean = false,
+    /** The Pokédex's own filters (null in the Box). */
+    private val dex: DexPart? = null,
 ) {
     /** The "Group duplicates" switch row of the Box (hidden while the Box is picking for Compare). */
     class GroupToggle(var on: Boolean, val set: (Boolean) -> Unit)
+
+    /**
+     * The Pokédex's part: the "Only wishlist" switch and one chip per enabled generation ([gens]; none ticked = all, like
+     * [DexFilter.gens]). [set] gets every change (wishlist only, ticked gens); Reset sends (false, empty).
+     */
+    class DexPart(var wishlistOnly: Boolean, val gens: List<Int>, var picked: Set<Int>, val set: (Boolean, Set<Int>) -> Unit)
 
     private val ctx: Context get() = page
     private var dismiss: () -> Unit = {}
@@ -280,14 +290,18 @@ internal class SortSheet(
                 it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = Ui.dp(ctx, 4); it.bottomMargin = Ui.dp(ctx, 6)
             })
         val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        head.addView(Ui.text(ctx, 17f, 900, R.color.ag_text).apply { text = if (sortOnly) "Sort by" else "Sort & filter"; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
+        head.addView(Ui.text(ctx, 17f, 900, R.color.ag_text).apply { text = "Sort & filter"; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
         head.addView(Ui.text(ctx, 13f, 800, R.color.ag_sub1).apply {
             text = "Reset"
-            contentDescription = if (sortOnly) "Reset sort" else "Reset sort and filters"
+            contentDescription = "Reset sort and filters"
             minHeight = Ui.dp(ctx, 48)
             gravity = Gravity.CENTER
             setPadding(Ui.dp(ctx, 8), 0, Ui.dp(ctx, 4), 0)
-            setOnClickListener { spec = resetSpec; showIndex = 0; changed() }
+            setOnClickListener {
+                spec = resetSpec; showIndex = 0
+                dex?.let { it.wishlistOnly = false; it.picked = emptySet(); it.set(false, emptySet()) }
+                changed()
+            }
         }, LinearLayout.LayoutParams(-2, -2))
         sheet.addView(head, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(ctx, 6) })
 
@@ -320,26 +334,21 @@ internal class SortSheet(
 
     private fun fill() {
         body.removeAllViews()
-        if (sortOnly) {
-            body.addView(section("Direction"))
-            body.addView(directionSwitch(), LinearLayout.LayoutParams(-1, -2))
-            body.addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
-                text = SortText.directionLabel(spec.key, spec.descending)
-                setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), 0, 0)
-            })
-        }
+        body.addView(section("Direction"))
+        body.addView(directionSwitch(), LinearLayout.LayoutParams(-1, -2))
+        body.addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
+            text = SortText.directionLabel(spec.key, spec.descending)
+            setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), 0, 0)
+        })
         body.addView(section("Sort by"))
         val keyFlow = flow()
         for (k in keys) {
             val ok = k != SortKey.VS_WILD || vsWildOk
             keyFlow.addView(BoxViews.chip(ctx, SortText.keyLabel(k).replace("Best vs the wild one", "Best vs wild"), k == spec.key) {
                 if (!ok) Ui.toast(ctx, "Needs a wild Pokémon in battle")
-                else if (!(sortOnly && k == spec.key)) { spec = spec.copy(key = k, descending = k.naturalDescending); changed() } // the sheet keeps a direction the player chose
+                else if (k != spec.key) { spec = spec.copy(key = k, descending = k.naturalDescending); changed() } // the sheet keeps a direction the player chose
             }.apply { if (!ok) alpha = 0.4f })
         }
-        if (!sortOnly) keyFlow.addView(BoxViews.chip(ctx, (if (spec.descending) "↓ " else "↑ ") + SortText.directionLabel(spec.key, spec.descending), false) {
-            spec = spec.flipped(); changed()
-        })
         body.addView(keyFlow, LinearLayout.LayoutParams(-1, -2))
 
         if (spec.key == SortKey.STAT) {
@@ -364,7 +373,7 @@ internal class SortSheet(
             body.addView(basisSwitch(), LinearLayout.LayoutParams(-1, -2))
             if (spec.basis == StatBasis.AT_LEVEL) body.addView(levelStepper(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         }
-        if (showLabels != null && !sortOnly) {
+        if (showLabels != null) {
             body.addView(section("Show"))
             val f = flow()
             showLabels.forEachIndexed { i, label ->
@@ -372,8 +381,24 @@ internal class SortSheet(
             }
             body.addView(f, LinearLayout.LayoutParams(-1, -2))
         }
-        if (group != null && !sortOnly) body.addView(groupRow(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
-        go.text = if (sortOnly) "Done" else "Show ${count()} Pokémon"
+        if (dex != null) {
+            body.addView(section("Show"))
+            body.addView(switchRow("Only wishlist", dex.wishlistOnly) { on -> dex.wishlistOnly = on; dex.set(on, dex.picked); changed() },
+                LinearLayout.LayoutParams(-1, -2))
+            if (dex.gens.size >= 2) {
+                body.addView(section("Generation"))
+                val f = flow()
+                for (g in dex.gens) f.addView(BoxViews.chip(ctx, "Gen $g", g in dex.picked) {
+                    dex.picked = if (g in dex.picked) dex.picked - g else dex.picked + g
+                    dex.set(dex.wishlistOnly, dex.picked); changed()
+                })
+                body.addView(f, LinearLayout.LayoutParams(-1, -2))
+            }
+        }
+        if (group != null) body.addView(
+            switchRow("Group duplicates", group.on) { on -> group.on = on; group.set(on); fill() },
+            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+        go.text = "Show ${count()} Pokémon"
     }
 
     /** Ascending / Descending as one switch (the look of the stat basis switch). */
@@ -435,18 +460,18 @@ internal class SortSheet(
         return row
     }
 
-    private fun groupRow(): View {
-        val g = group!!
+    /** A 48 dp row: the label and a switch ("Group duplicates", "Only wishlist"). */
+    private fun switchRow(label: String, checked: Boolean, onSet: (Boolean) -> Unit): View {
         val sw = android.widget.Switch(ctx).apply {
-            isChecked = g.on
+            isChecked = checked
             Ui.tintSwitch(this)
-            setOnCheckedChangeListener { _, on -> g.on = on; g.set(on); fill() }
+            setOnCheckedChangeListener { _, on -> onSet(on) }
         }
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = Ui.dp(ctx, 48)
-            addView(Ui.text(ctx, 13f, 800, R.color.ag_text).apply { text = "Group duplicates" }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 2) })
+            addView(Ui.text(ctx, 13f, 800, R.color.ag_text).apply { text = label }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 2) })
             addView(sw, LinearLayout.LayoutParams(-2, -2))
             setOnClickListener { sw.toggle() }
         }

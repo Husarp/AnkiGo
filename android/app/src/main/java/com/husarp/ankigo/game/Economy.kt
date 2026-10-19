@@ -1,5 +1,8 @@
 package com.husarp.ankigo.game
 
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import kotlin.random.Random
 
 // TICKET T07 owns this file. Public signatures are fixed (other tickets call them); add private helpers freely.
@@ -182,10 +185,87 @@ object Shop {
 
     private fun draw(data: GameData, rng: Random, trainerLevel: Int): Pair<List<String>, List<String>> {
         val n = slots(trainerLevel)
-        val items = Items.shopPool(data).shuffled(rng).take(n)
+        val items = dailyPool(data).shuffled(rng).take(n)
         val tms = tmPool(data).shuffled(rng).take(n)
         return items to tms
     }
+
+    /** The items the daily draw and the deal pick from: the shop's item pool minus the always-on-sale [basics]. */
+    private fun dailyPool(data: GameData): List<String> = Items.shopPool(data).filter { it !in Tuning.SHOP_BASICS }
+
+    // ---- always in stock, deal of the day, weekend special (R10 T5; all derived from the game day, nothing is saved) ----
+
+    /** Poké Ball and Potion: on sale every day at their normal price, whatever the daily stock is. */
+    fun basics(): List<String> = Tuning.SHOP_BASICS
+
+    /** The deal of the day: [item] at [price] instead of [oldPrice] (-Tuning.DEAL_PERCENT %, at least 1). */
+    data class Deal(val item: String, val oldPrice: Int, val price: Int)
+
+    /** The deal price for a [normal] price: round(normal * (100 - DEAL_PERCENT) / 100), half up, at least 1. */
+    fun dealPrice(normal: Int): Int = ((normal * (100 - Tuning.DEAL_PERCENT) + 50) / 100).coerceAtLeast(1)
+
+    /**
+     * The deal of game day [day]: one day-seeded item of the shop's item pool without the basics (items only, no TMs); null
+     * when that pool is empty. The same all day, whatever is bought or rerolled; any number of buys at [Deal.price].
+     */
+    fun dealFor(data: GameData, day: String): Deal? {
+        val pool = dailyPool(data)
+        if (pool.isEmpty()) return null
+        val item = pool[Random(("deal:$day").hashCode()).nextInt(pool.size)]
+        val normal = data.price(item)
+        return Deal(item, normal, dealPrice(normal))
+    }
+
+    /** The weekend special: an evolution stone ([item]) or a strong TM ([tm]; exactly one is set) at its normal [price], on sale until [endsDay] (the Sunday). */
+    data class Special(val item: String?, val tm: String?, val price: Int, val endsDay: String) {
+        val isTm: Boolean get() = tm != null
+        /** The item id, or the TM's move id. */
+        val id: String get() = tm ?: item.orEmpty()
+    }
+
+    private fun parse(day: String): LocalDate? = try { LocalDate.parse(day) } catch (e: DateTimeParseException) { null }
+
+    /** Is game day [day] a Saturday or a Sunday? (The game day already follows the day-start hour.) */
+    fun isWeekend(day: String): Boolean = parse(day)?.dayOfWeek.let { it == DayOfWeek.SATURDAY || it == DayOfWeek.SUNDAY }
+
+    /**
+     * The weekend special of game day [day] (null on weekdays, for a day that isn't a date, or when the data has neither a priced
+     * stone nor a strong TM). Seeded by that weekend's Saturday, so Saturday and Sunday show the same one. The kind (stone or
+     * TM) is drawn first; an empty pool falls back to the other kind.
+     */
+    fun weekendFor(data: GameData, day: String): Special? {
+        val date = parse(day) ?: return null
+        val saturday = when (date.dayOfWeek) {
+            DayOfWeek.SATURDAY -> date
+            DayOfWeek.SUNDAY -> date.minusDays(1)
+            else -> return null
+        }
+        val stones = Items.ALL.values.filter { it.kind == ItemKind.EVOLUTION && it.id.endsWith("-stone") && data.price(it.id) > 0 }.map { it.id }.sorted()
+        val tms = tmPool(data).filter { (data.moves[it]?.power ?: 0) >= Tuning.WEEKEND_TM_MIN_POWER }
+        val rng = Random(("weekend:$saturday").hashCode())
+        val wantStone = rng.nextBoolean()
+        val ends = saturday.plusDays(1).toString()
+        return when {
+            stones.isEmpty() && tms.isEmpty() -> null
+            tms.isEmpty() || (wantStone && stones.isNotEmpty()) ->
+                stones[rng.nextInt(stones.size)].let { Special(it, null, data.price(it), ends) }
+            else -> tms[rng.nextInt(tms.size)].let { Special(null, it, Tuning.TM_PRICE, ends) }
+        }
+    }
+
+    /** What an item costs on game day [day]: the deal price for that day's deal item, else its normal price. One price per item per day. */
+    fun priceOf(data: GameData, day: String, item: String): Int {
+        val deal = dealFor(data, day)
+        return if (deal != null && deal.item == item) deal.price else data.price(item)
+    }
+
+    fun priceOf(data: GameData, state: GameState, item: String): Int = priceOf(data, state.day, item)
+
+    /**
+     * The dot on the Shop tab: true when the tab hasn't been opened on game day [today] ([lastSeenDay] = the game day it was last
+     * opened, null = never), so that day's stock and deal are waiting. False while there is no game day yet.
+     */
+    fun unseen(lastSeenDay: String?, today: String): Boolean = today.isNotEmpty() && lastSeenDay != today
 
     private fun setStock(state: GameState, items: List<String>, tms: List<String>) {
         state.shopDay = state.day
@@ -204,9 +284,12 @@ object Shop {
         return mutableListOf<GameEvent>().also { Achievements.check(state, data, now, it) }
     }
 
+    /** Buys one [item] for [priceOf]: from today's stock, the always-on-sale [basics], today's deal or today's weekend stone. */
     fun buy(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis()): ActionResult {
-        if (item !in state.shopItems) return ActionResult(false, "Not in today's shop")
-        val price = data.price(item)
+        val onSale = item in state.shopItems || item in Tuning.SHOP_BASICS || dealFor(data, state.day)?.item == item ||
+            weekendFor(data, state.day)?.item == item
+        if (!onSale || data.price(item) <= 0) return ActionResult(false, "Not in today's shop")
+        val price = priceOf(data, state, item)
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
         StudyStats.addSpent(state, price)
@@ -214,9 +297,9 @@ object Shop {
         return ActionResult(true, "Bought ${Items.name(item)} for ${money(price)}", spent(data, state, price, now))
     }
 
-    /** TMs cost 1000, can be owned once, never used up. */
+    /** TMs cost 1000, can be owned once, never used up. Today's TMs or today's weekend TM. */
     fun buyTm(data: GameData, state: GameState, move: String, now: Long = System.currentTimeMillis()): ActionResult {
-        if (move !in state.shopTms) return ActionResult(false, "Not in today's shop")
+        if (move !in state.shopTms && weekendFor(data, state.day)?.tm != move) return ActionResult(false, "Not in today's shop")
         val name = Items.tmName(data, move)
         if (move in state.tms) return ActionResult(false, "You already own $name")
         val price = Tuning.TM_PRICE

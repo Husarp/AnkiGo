@@ -67,6 +67,18 @@ object DetailFormat {
         return list.takeIf { it.isNotEmpty() }?.joinToString(" · ")
     }
 
+    private val REGIONS = listOf("Kanto", "Johto", "Hoenn", "Sinnoh", "Unova", "Kalos", "Alola", "Galar", "Paldea")
+
+    /** "Gen 3 · Hoenn" (1 Kanto ... 9 Paldea); any other number is just "Gen N". */
+    fun generation(gen: Int): String = REGIONS.getOrNull(gen - 1)?.let { "Gen $gen \u00B7 $it" } ?: "Gen $gen"
+
+    /** What the species' learnset row says about when a move is learned: "Lv 12"; level 1 = "Start", level 0 (on evolving) = "Evo". */
+    fun learnLevel(level: Int): String = when {
+        level <= 0 -> "Evo"
+        level == 1 -> "Start"
+        else -> "Lv $level"
+    }
+
     /** All abilities of a species (the Pokédex entry): "Static · Lightning Rod (hidden)"; null when none. */
     fun allAbilities(sp: Species): String? =
         (sp.abilities + listOfNotNull(sp.hiddenAbility?.let { "$it (hidden)" })).takeIf { it.isNotEmpty() }?.joinToString(" · ")

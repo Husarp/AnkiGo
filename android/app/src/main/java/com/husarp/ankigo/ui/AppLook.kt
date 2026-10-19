@@ -61,6 +61,10 @@ object AppLook {
         generation++
     }
 
+    fun setMatchupChips(ctx: Context, look: MatchupChips) {
+        AppPrefs.putLook(ctx, "matchupChips", look.name)
+    }
+
     fun setScale(ctx: Context, percent: Int) {
         AppPrefs.putScale(ctx, percent)
         generation++

@@ -88,7 +88,7 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
         CatchTilesPlan.Kind.DEFEATED -> R.drawable.ic_swords
         CatchTilesPlan.Kind.THROW, CatchTilesPlan.Kind.AUTO -> R.drawable.ic_ball
         CatchTilesPlan.Kind.XP -> R.drawable.ic_up
-        CatchTilesPlan.Kind.COINS -> R.drawable.ic_coin
+        CatchTilesPlan.Kind.COINS -> R.drawable.ic_money
     }
 
     /** The round icon holder: [sizePx] wide, the tone at 18 % behind a tinted icon (the ball is the real item picture). */
@@ -103,7 +103,7 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
             Ui.itemIcon(context, t.ball, img)
         } else {
             img.setImageResource(icon(t.kind))
-            img.setColorFilter(color, PorterDuff.Mode.SRC_IN)
+            if (t.kind != CatchTilesPlan.Kind.COINS) img.setColorFilter(color, PorterDuff.Mode.SRC_IN) // the gold money stack is never tinted
             img.setPadding(pad, pad, pad, pad)
         }
         box.addView(img, FrameLayout.LayoutParams(sizePx, sizePx, Gravity.CENTER))

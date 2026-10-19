@@ -155,4 +155,29 @@ class CompareStateTest {
         assertEquals(listOf(ComparePick.Dex(3)), CompareArgs.decodeAll(listOf("d:3", "d:x", "junk", "o:", "")))
         assertEquals(emptyList<ComparePick>(), CompareArgs.decodeAll(null))
     }
+
+    // ---- R10-F (B9): the folded sections ----
+
+    @Test fun sectionChoiceStartsAllOpen() {
+        assertEquals(SectionChoice(), SectionChoice.decode(null))
+        assertEquals(SectionChoice(), SectionChoice.decode(""))
+        assertEquals("", SectionChoice().encode())
+        assertTrue(SectionChoice().isOpen("Stats"))
+    }
+
+    @Test fun sectionChoiceToggleAndEncodingRoundTrip() {
+        val c = SectionChoice().toggle("Moves").toggle("Base stats")
+        assertEquals(false, c.isOpen("Moves"))
+        assertEquals(true, c.isOpen("Stats"))
+        assertEquals("Base stats,Moves", c.encode())
+        assertEquals(c, SectionChoice.decode(c.encode()))
+        assertEquals(true, c.toggle("Moves").isOpen("Moves"))
+        assertEquals("Base stats", c.toggle("Moves").encode())
+    }
+
+    @Test fun sectionChoiceDecodeIgnoresBlanksAndKeepsUnknownTitles() {
+        val c = SectionChoice.decode(" Moves ,, ,Gone section,")
+        assertEquals(setOf("Moves", "Gone section"), c.collapsed)
+        assertEquals(true, c.isOpen("Stats")) // unknown / missing = open
+    }
 }

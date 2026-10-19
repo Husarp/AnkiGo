@@ -13,7 +13,13 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.view.ViewCompat
 import com.husarp.ankigo.R
+import com.husarp.ankigo.game.GameData
+import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.Species
+import com.husarp.ankigo.game.quietUnlessHit
+import com.husarp.ankigo.game.shownName
 
 // PLAN item 53 (R3-V5, pick 5A): the Compare screen. Mode switch on top (vs reference / best of all), a chip row (rows, sort,
 // filter, fully evolved) and the table of CompareGrid. All the choices live in CompareState; the screen only draws them.
@@ -30,6 +36,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     internal var fit: Int = CompareFit.atOpen()
     /** R6-05 item 7: which of the two number groups shows ("Stats" / "Base stats"); remembered. */
     private var group: CompareGroup = CompareStore.loadGroup(this)
+    /** R10-F (B9): the folded table sections; remembered. */
+    private var folded: SectionChoice = CompareStore.loadCollapsed(this)
     private var lastX = 0
     private var lastY = 0
     private var full: CompareData? = null
@@ -88,7 +96,9 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         val grid = CompareGrid(this, look, view, st.mode, st.sortKey, st.sortDesc,
             onHead = { pos, anchor -> headMenu(anchor, data, display, pos) },
             onLabel = { row, anchor -> tapLabel(row, anchor) },
-            onMove = { from, to -> display.getOrNull(from)?.let { st.moveTo(data, it, to); requestRender() } })
+            onMove = { from, to -> display.getOrNull(from)?.let { st.moveTo(data, it, to); requestRender() } },
+            collapsed = folded, onSection = { title -> toggleSection(title) },
+            onLabelLong = { row, anchor -> holdLabel(row, anchor) })
         grid.restore(lastX, lastY)
         grid.onScrolled = { x, y -> lastX = x; lastY = y }
 
@@ -104,7 +114,7 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             col.addView(SortViews.scrollRow(this, chips).also { it.setPadding(side, 0, side, 0); (it as? android.view.ViewGroup)?.clipToPadding = false }, LinearLayout.LayoutParams(-1, -2))
         }
         col.addView(grid.root, LinearLayout.LayoutParams(-1, 0, 1f).also { it.setMargins(side, 0, side, dp(4)) })
-        if (st.mode == CompareMode.BEST_OF_ALL) col.addView(legend(), LinearLayout.LayoutParams(-1, -2).also { it.setMargins(side + dp(4), 0, side, dp(6)) })
+        col.addView(legend(st.mode == CompareMode.VS_REFERENCE), LinearLayout.LayoutParams(-1, -2).also { it.setMargins(side + dp(4), 0, side, dp(6)) })
         holder.addView(col, FrameLayout.LayoutParams(-1, -1))
     }
 
@@ -118,6 +128,13 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     }
 
     private fun modeLabel(m: CompareMode) = if (m == CompareMode.VS_REFERENCE) "Vs reference" else "Best of all"
+
+    /** R10-F (B9): a tap on a section header folds / opens its rows; remembered. */
+    private fun toggleSection(title: String) {
+        folded = folded.toggle(title)
+        CompareStore.saveCollapsed(this, folded)
+        requestRender()
+    }
 
     private fun setGroup(g: CompareGroup) {
         if (group == g) return
@@ -179,14 +196,6 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         val hidden = data.rows.count { !rows.visible(it.key) }
         out += BoxViews.chip(this, if (hidden == 0) "Rows: all" else "Rows: ${all - hidden} of $all", hidden > 0) { showRows(data) }
 
-        val key = st.sortKey
-        val sortRow = key?.let { data.rowOrNull(it) }
-        lateinit var sortChip: View
-        sortChip = BoxViews.chip(this, if (sortRow == null) "Sort columns" else "Sort: ${sortName(sortRow)} ${if (st.sortDesc) "↓" else "↑"}", sortRow != null) {
-            sortMenu(sortChip, st, sortRow)
-        }
-        out += sortChip
-
         val mixed = data.columns.any { it.mon != null } && data.columns.any { it.mon == null }
         if (mixed || st.filter.owner != OwnerFilter.ALL) {
             lateinit var filterChip: View
@@ -201,13 +210,31 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         return out
     }
 
-    private fun sortName(row: CompareRow): String = row.label + if (row.key.startsWith("base_")) " (base)" else ""
-
-    /** R4-X1 item 9: a tap on a row label says what the row is; a number row also offers to sort by it. */
+    /**
+     * R10-G (B12): a tap on a number row's label sorts the columns by it: high to low, then low to high, then no sort ([CompareSortCycle]).
+     * Another row says what it is.
+     */
     private fun tapLabel(row: CompareRow, anchor: View) {
         val st = cmp ?: return
+        if (!row.numeric) { rowInfo(row); return }
+        val (key, desc) = CompareSortCycle.next(st.sortKey, st.sortDesc, row.key)
+        st.setSort(key, desc)
+        requestRender()
+    }
+
+    /** R10-G (B12): a long press on a label: a number row opens its sort menu (with the description), another row says what it is. One action only. */
+    private fun holdLabel(row: CompareRow, anchor: View) {
+        if (row.numeric) sortMenu(row, anchor) else rowInfo(row)
+    }
+
+    private fun rowInfo(row: CompareRow) {
+        CompareInfo.forRow(row.key, row.label)?.let { DetailParts.showInfo(this, it) }
+    }
+
+    /** R4-X1 item 9: the stat's title and text on top, then High to low / Low to high / Clear sort. */
+    private fun sortMenu(row: CompareRow, anchor: View) {
+        val st = cmp ?: return
         val info = CompareInfo.forRow(row.key, row.label)
-        if (!row.numeric) { info?.let { DetailParts.showInfo(this, it) }; return }
         val on = st.sortKey == row.key
         val m = AppMenu(anchor).header(info?.title ?: row.label, info?.text)
             .item(0, "High to low", R.drawable.ic_sort_desc, sub = if (on && st.sortDesc) "Sorted like this now" else null, tone = if (on && st.sortDesc) R.color.ag_mauve else 0)
@@ -232,18 +259,6 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         }
     }
 
-    private fun sortMenu(anchor: View, st: CompareState, row: CompareRow?) {
-        if (row == null) { Ui.toast(this, "Tap a row name in the table to sort by it"); return }
-        AppMenu(anchor).header("Sort by ${sortName(row)}")
-            .item(0, "High to low", R.drawable.ic_sort_desc, tone = if (st.sortDesc) R.color.ag_mauve else 0)
-            .item(1, "Low to high", R.drawable.ic_sort_asc, tone = if (!st.sortDesc) R.color.ag_mauve else 0)
-            .item(2, "Clear sort", R.drawable.ic_close, dividerAfter = false)
-            .show { id ->
-                when (id) { 0 -> st.setSort(row.key, true); 1 -> st.setSort(row.key, false); else -> st.setSort(null) }
-                requestRender()
-            }
-    }
-
     private fun filterMenu(anchor: View, st: CompareState) {
         val cur = st.filter.owner
         val opts = listOf(OwnerFilter.ALL to "All", OwnerFilter.OWNED to "Owned only", OwnerFilter.DEX to "Pokédex only")
@@ -252,7 +267,11 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         m.show { id -> st.filter = st.filter.copy(owner = opts[id].first); requestRender() }
     }
 
-    /** The menu of a column head: make it the reference or take it off (moving is a long-press drag on the head, see [CompareGrid]). [pos] is its place among the shown columns. */
+    /**
+     * The menu of a column head: make it the reference or take it off (moving is a long-press drag on the head, see [CompareGrid]).
+     * R10-G (B13): under those, the team actions of an owned Pokémon (same rules and messages as [MonActions]) and "Details".
+     * [pos] is its place among the shown columns.
+     */
     private fun headMenu(anchor: View, data: CompareData, display: List<Int>, pos: Int) {
         val st = cmp ?: return
         val idx = display[pos]
@@ -260,34 +279,71 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         val vs = st.mode == CompareMode.VS_REFERENCE
         val tags = col.mon?.let { MonTags.of(this.data, this.state, it).map { t -> t.label } }.orEmpty()
         val m = AppMenu(anchor).header(col.name, CompareInfo.headInfo(col.mon == null, tags, col.note))
-        if (vs && pos != 0) m.item(0, "Make reference", R.drawable.ic_star)
-        if (st.size > Compare.MIN) m.item(3, "Remove", R.drawable.ic_trash, danger = true)
-        else m.item(3, "Remove", R.drawable.ic_trash, enabled = false, sub = "Compare needs at least ${Compare.MIN}", danger = true)
-        m.show { id ->
-            when (id) {
-                0 -> st.makeReference(data, idx)
-                else -> st.remove(data, idx)
-            }
-            requestRender()
+        val acts = HashMap<Int, () -> Unit>()
+        fun add(id: Int, label: String, icon: Int, enabled: Boolean = true, sub: String? = null, danger: Boolean = false, tone: Int = 0, f: () -> Unit = {}) {
+            m.item(id, label, icon, enabled = enabled, sub = sub, danger = danger, tone = tone)
+            acts[id] = f
         }
+        if (vs && pos != 0) add(0, "Make reference", R.drawable.ic_star) { st.makeReference(data, idx); requestRender() }
+        if (st.size > Compare.MIN) add(3, "Remove from compare", R.drawable.ic_trash, danger = true) { st.remove(data, idx); requestRender() }
+        else add(3, "Remove from compare", R.drawable.ic_trash, enabled = false, sub = "Compare needs at least ${Compare.MIN}", danger = true)
+
+        val mon = col.mon?.let { this.state.mon(it.uid) }
+        if (mon != null) {
+            val team = this.state.team
+            val inTeam = mon.uid in team
+            val main = this.state.main
+            if (inTeam) {
+                if (team.size > 1) add(4, "Remove from team", R.drawable.ic_team) { act { it.toBox(mon.uid) } }
+                else add(4, "Remove from team", R.drawable.ic_team, enabled = false, sub = "Your team needs at least one Pokémon.")
+            } else if (team.size < 6) {
+                add(4, "Add to team", R.drawable.ic_team) { act { it.toTeam(mon.uid) } }
+            } else {
+                add(4, "Add to team…", R.drawable.ic_team) {
+                    SwitchPopup.show(this, this.data, this.state, header = "Pick a team Pokémon to swap out", swap = true) { outUid -> act { g -> g.swapIntoTeam(mon.uid, outUid) } }
+                }
+            }
+            if (!inTeam || team.indexOf(mon.uid) > 0) {
+                when {
+                    inTeam -> add(5, "Set as main", R.drawable.ic_star, tone = R.color.ag_yellow) { act { g -> g.setMain(mon.uid).quietUnlessHit() } } // the change is visible: no toast (unless it cost a hit)
+                    team.size < 6 -> add(5, "Set as main", R.drawable.ic_star, tone = R.color.ag_yellow) {
+                        act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.setMain(mon.uid).quietUnlessHit() else r } }
+                    }
+                    main != null -> add(5, "Set as main", R.drawable.ic_star, sub = "${main.shownName} goes to the box", tone = R.color.ag_yellow) {
+                        act { g -> g.swapIntoTeam(mon.uid, main.uid).quietUnlessHit() }
+                    }
+                }
+            }
+            add(6, "Details", R.drawable.ic_info) { openMon(this, this.data, mon) }
+        } else if (col.mon == null) {
+            add(6, "Details", R.drawable.ic_info) { openDex(this, col.picked) }
+        }
+        m.show { id -> acts[id]?.invoke() }
     }
 
-    /** "worst - best" colour bar under the table of "best of all": every number is coloured by its value in its row. */
-    private fun legend(): View {
+    /** Where "Details" goes (the tests swap them to see which Pokémon / species is opened). */
+    internal var openMon: (GamePage, GameData, Mon) -> Unit = { a, data, mon -> MonDetail.show(a, data, mon) }
+    internal var openDex: (GamePage, Species) -> Unit = { a, sp -> DexDetail.show(a, sp) }
+
+    /**
+     * The colour bar under the table. "Best of all": worst - best, every number is coloured by its value in its row. "Vs reference"
+     * (R10-F B8): worse - better than the reference, every number is coloured by how far it is from the reference's.
+     */
+    private fun legend(vsRef: Boolean): View {
         val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         fun word(label: String, end: Int) = row.addView(Ui.text(this, 11f, 800, R.color.ag_sub0).apply { text = label },
             LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = end })
         val card = c(R.color.ag_card)
         val steps = CompareScale.legend(card, TypeChips.isDark(this)) // the mockup's 21 steps, worst to best
-        word("worst", dp(6))
+        word(if (vsRef) "worse" else "worst", dp(6))
         row.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             background = GradientDrawable().apply { setColor(card); cornerRadius = Ui.dp(this@ComparePage, 4f) }
             clipToOutline = true
             for (col in steps) addView(View(this@ComparePage).apply { setBackgroundColor(col) }, LinearLayout.LayoutParams(0, -1, 1f))
         }, LinearLayout.LayoutParams(dp(105), dp(12)).also { it.marginEnd = dp(6) })
-        word("best", dp(10))
-        word("same value, same colour", 0)
+        if (vsRef) word("better than the reference", 0)
+        else { word("best", dp(10)); word("same value, same colour", 0) }
         return row
     }
 
@@ -347,17 +403,26 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         sheet.addView(head, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -dp(6) })
 
         var last: String? = "\u0000"
+        // R10-G (B7): the abbreviation as the table shows it, big, in a fixed column; beside it the full name and one sentence, small and grey
+        val labelCol = dp(84)
+        val gap = dp(10)
         for (item in items) {
             if (item.section != last) {
+                val first = last == "\u0000"
                 last = item.section
-                body.addView(Ui.text(this, 11f, 900, R.color.ag_sub0).apply {
+                // a section header: accent, bigger, with a rule and room above it, so it never reads like a row
+                if (!first) body.addView(View(this).apply { setBackgroundColor(c(R.color.ag_ov)) }, LinearLayout.LayoutParams(-1, dp(1)).also { it.topMargin = dp(16) })
+                body.addView(Ui.text(this, 14f, 900, R.color.ag_mauve).apply {
                     text = (item.section ?: "Overview").uppercase()
-                    letterSpacing = 0.06f
-                    setPadding(dp(2), dp(10), 0, dp(2))
+                    letterSpacing = 0.08f
+                    setPadding(dp(2), if (first) dp(8) else dp(12), 0, dp(4))
+                    ViewCompat.setAccessibilityHeading(this, true)
                 })
             }
+            val (full, sentence) = CompareRowText.of(item.key, item.label)
             val sw = android.widget.Switch(this).apply {
                 isChecked = rows.visible(item.key)
+                contentDescription = "Show $full"
                 Ui.tintSwitch(this)
             }
             switches += item.key to sw
@@ -365,8 +430,22 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             body.addView(LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = dp(48)
-                addView(Ui.text(this@ComparePage, 13f, 800, R.color.ag_text).apply { text = item.label }, LinearLayout.LayoutParams(0, -2, 1f).also { p -> p.marginStart = dp(2) })
+                minimumHeight = dp(52)
+                setPadding(0, dp(4), 0, dp(4))
+                addView(Ui.text(this@ComparePage, 20f, 900, R.color.ag_text).apply {
+                    text = item.label
+                    gravity = Gravity.CENTER_VERTICAL
+                    hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+                    // a word is never broken: a long label ("against") shrinks until its longest word fits the column
+                    val avail = (labelCol - dp(2)).toFloat()
+                    val word = CompareLabelFit.longestWord(item.label)
+                    setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, CompareLabelFit.sp(textSize, android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 12f, resources.displayMetrics), paint.measureText(word), avail))
+                }, LinearLayout.LayoutParams(labelCol, -2).also { p -> p.marginStart = dp(2) })
+                addView(LinearLayout(this@ComparePage).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(Ui.text(this@ComparePage, 12f, 800, R.color.ag_sub1).apply { text = full })
+                    if (sentence.isNotEmpty()) addView(Ui.text(this@ComparePage, 11f, 700, R.color.ag_sub0).apply { text = sentence })
+                }, LinearLayout.LayoutParams(0, -2, 1f).also { p -> p.marginStart = gap; p.marginEnd = gap })
                 addView(sw, LinearLayout.LayoutParams(-2, -2))
                 setOnClickListener { sw.toggle() }
             }, LinearLayout.LayoutParams(-1, -2))
