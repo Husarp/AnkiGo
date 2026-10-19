@@ -64,6 +64,16 @@ class NavTest {
         assertEquals(want, Nav.TAB_FLAGS)
     }
 
+    /** PLAN 131: the deck-finished screen's "Back to decks" does Nav.open(Dest.STUDY): the home screen's Study view (the deck list), brought to the front, whatever tab was used before studying. */
+    @Test fun backToDecksOpensTheStudyDeckList() {
+        val t = Nav.target(Dest.STUDY)
+        assertEquals(GameActivity::class.java, t.screen)
+        assertEquals(HomeView.EXTRA_VIEW to HomeView.STUDY.key, t.extra)
+        assertTrue(t.flags and android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT != 0)
+        // no tab (Pokémon, Shop, Stats) is a Study target
+        for (d in listOf(Dest.TEAM, Dest.BOX, Dest.DEX, Dest.SHOP, Dest.STATS, Dest.ACHIEVEMENTS)) assertTrue("$d", Nav.target(d).screen != t.screen)
+    }
+
     @Test fun otherScreensNeedNoExtra() {
         assertNull(extra(Dest.SETTINGS))
     }

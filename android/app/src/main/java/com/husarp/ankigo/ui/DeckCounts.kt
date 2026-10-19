@@ -19,6 +19,9 @@ object DeckCounts {
         }
     }
 
+    /** Right padding (dp) between the green column and the right edge of the list: the header row and every deck row use it, so the columns line up (PLAN 132). */
+    const val END_PAD_DP = 12
+
     private fun label(ctx: Context, n: Int, zeroTone: Int, tone: Int): TextView {
         val zero = n <= 0
         return StudyUi.label(ctx, format(n), 13, if (zero) zeroTone else tone, if (zero) 700 else 900).apply {

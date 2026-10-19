@@ -262,7 +262,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         cardColumn = StudyUi.column(this)
         topBar = StudyUi.column(this)
         val top = StudyUi.row(this).apply { setPadding(Ui.dp(context, 4), 0, Ui.dp(context, 6), 0) }
-        top.addView(StudyUi.iconButton(this, R.drawable.ic_back, "Back to decks") { finish() }, StudyUi.lp(Ui.dp(this, 34), Ui.dp(this, 34)))
+        top.addView(StudyUi.iconButton(this, R.drawable.ic_back, "Back to decks") { Nav.open(this, Dest.STUDY); finish() }, StudyUi.lp(Ui.dp(this, 34), Ui.dp(this, 34)))
         val title = StudyUi.column(this)
         header = StudyUi.ellipsis(StudyUi.label(this, deckName.substringAfterLast("::"), 15, R.color.ag_text, 900))
         subtitle = StudyUi.ellipsis(StudyUi.label(this, "Loading…", 10, R.color.ag_sub0, 800))
@@ -1548,7 +1548,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", next.id).putExtra("deckName", next.name)); finish()
         })
         else buttons.addView(StudyUi.finishedPrimary(this, "Custom study in AnkiDroid") { openAnki() })
-        buttons.addView(StudyUi.secondary(this, "Back to decks") { finish() }, StudyUi.spaced(this, 6))
+        buttons.addView(StudyUi.secondary(this, "Back to decks") { Nav.open(this, Dest.STUDY); finish() }, StudyUi.spaced(this, 6)) // always the Study deck list, not the tab it was started from (PLAN 131)
         layout()
         if (learn > 0 && !rerender) main.postDelayed({ recheckLearning() }, 30_000)
     }

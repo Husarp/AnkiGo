@@ -38,6 +38,12 @@ class EvoLine(val root: EvoNode, val current: Species) {
     }
 
     companion object {
+        /** True when [sp] (or its base form) is in [seen] (the player's seen + caught species); the same check as the hidden sprite. */
+        fun isSeen(sp: Species, seen: Set<Int>): Boolean = sp.num in seen || sp.baseNum in seen
+
+        /** The name an evolution chain writes for [sp]: the real name once seen, else "???" (like its silhouette). */
+        fun shownName(sp: Species, seen: Set<Int>): String = if (isSeen(sp, seen)) sp.name else "???"
+
         /** The line of [species]; a regional line stays regional (Perrserker's line starts at the regional pre-form). */
         fun of(data: GameData, species: Species): EvoLine {
             var top = species

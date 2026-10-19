@@ -288,7 +288,7 @@ class BattleLogBuilderTest {
         b.feed(listOf(counted(3), GameEvent.RoundStart(1.0, 10, true, true, 1.0), hit(true, "Birdie", "Wildling", "Zap", 4, 26)))
         val round = b.battles.single().rounds.single()
         assertEquals(2, round.answers.size)
-        assertEquals("Birdie comes in — the wild Wildling attacks!", round.lines[0].text)
+        assertEquals("Switched to Birdie — the wild Wildling attacks!", round.lines[0].text)
         assertEquals("Wildling used Bite · 9 damage · Birdie 21/30 HP", round.lines[1].text)
         assertEquals(Tone.BAD, round.lines[1].tone)
         assertTrue(round.lines[2].text.startsWith("Birdie used Zap"))
@@ -302,7 +302,7 @@ class BattleLogBuilderTest {
             hit(false, "Wildling", "Birdie", "Bite", 9, 21, 30)))
         val lines = b.battles.single().rounds.single().lines.map { it.text }
         assertTrue(lines[0], "×0.35 power" in lines[0])
-        assertEquals("Birdie comes in — the wild Wildling attacks!", lines[1])
+        assertEquals("Switched to Birdie — the wild Wildling attacks!", lines[1])
         assertFalse(lines[2], "power" in lines[2])
     }
 

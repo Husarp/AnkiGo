@@ -285,19 +285,20 @@ class ActionBarModelTest {
 
     // ---------------------------------------------------------------- R10 W10: the free hit of a switch
 
-    @Test fun theSwitchHitMarkerChangesNoHalfAndAboutTheWholeBattle() {
+    @Test fun theSwitchHitMarkerSaysSwitchedOnYourHalfAndAboutTheWholeBattle() {
         val m = ActionBarModel()
         m.observe(attack(true)); m.observe(attack(false, "Bite"))
         m.observe(GameEvent.MainChanged("u", "Newmon"))
-        assertTrue(m.observe(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30)).isEmpty())
-        assertEquals(HalfState.Empty, m.mine)   // the new Pokémon has not moved
+        assertEquals(HalfState.Empty, m.mine)   // a free switch (no hit): the new Pokémon has not moved
+        assertEquals(listOf(BarSide.MINE), m.observe(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30)))   // R11-133
+        assertEquals(HalfState.Note("Switched to Newmon"), m.mine)
         assertEquals("Bite", moved(m, BarSide.THEIRS).move)
         assertEquals(LineScope.WHOLE, ActionBarModel.scope(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30)))
         // then the wild one's attack fills its half and its effects attach to it
         assertEquals(listOf(BarSide.THEIRS), m.observe(attack(false, "Tackle", user = "Wildling")))
         assertEquals(listOf(BarSide.THEIRS), m.observe(effect(true, EffectKind.STATUS_APPLIED, status = "par")))
         assertEquals("par", moved(m, BarSide.THEIRS).status)
-        assertEquals(HalfState.Empty, m.mine)
+        assertEquals(HalfState.Note("Switched to Newmon"), m.mine)
     }
 
     @Test fun theMarkerClosesTheEffectWindowOfTheMoveBeforeIt() {
@@ -305,6 +306,54 @@ class ActionBarModelTest {
         m.observe(attack(true, "Ember", Type.FIRE))
         m.observe(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30))
         assertTrue(m.observe(effect(false, EffectKind.STATUS_APPLIED, status = "brn")).isEmpty())
-        assertNull(moved(m, BarSide.MINE).status)
+        assertEquals(HalfState.Note("Switched to Newmon"), m.mine)
+    }
+
+    // ---------------------------------------------------------------- R11-137: every round refreshes both halves
+
+    private fun roundStart(enemyActs: Boolean, mainActs: Boolean) =
+        GameEvent.RoundStart(1.0, 10, enemyActs, mainActs, if (enemyActs) 1.0 else 0.0)
+
+    @Test fun aRoundWhereOnlyTheWildOneAttacksResetsYourHalfToNoMove() {
+        val m = ActionBarModel()
+        m.observe(attack(true, "Ember", Type.FIRE)); m.observe(attack(false, "Bite"))
+        assertEquals(listOf(BarSide.MINE, BarSide.THEIRS), m.observe(roundStart(enemyActs = true, mainActs = false)))
+        assertEquals(HalfState.Note("No move"), m.mine)
+        m.observe(attack(false, "Tackle", user = "Wildling"))
+        assertEquals(HalfState.Note("No move"), m.mine)   // still the round's truth after the wild one's attack
+        assertEquals("Tackle", moved(m, BarSide.THEIRS).move)
+    }
+
+    @Test fun aRoundWhereOnlyYouAttackResetsTheWildHalf() {
+        val m = ActionBarModel()
+        m.observe(attack(true, "Ember", Type.FIRE)); m.observe(attack(false, "Bite"))
+        m.observe(roundStart(enemyActs = false, mainActs = true))
+        assertEquals(HalfState.Note("No move"), m.theirs)
+        m.observe(attack(true, "Spark", Type.ELECTRIC))
+        assertEquals("Spark", moved(m, BarSide.MINE).move)
+        assertEquals(HalfState.Note("No move"), m.theirs)   // nothing of the wild one's old Bite is left
+        m.observe(GameEvent.Splash("Wildling"))   // its idle turn is shown as before
+        assertEquals(HalfState.Note("Just watching"), m.theirs)
+    }
+
+    @Test fun aRoundWhereBothAttackFillsBothHalvesWithTheNewMoves() {
+        val m = ActionBarModel()
+        m.observe(attack(true, "Ember", Type.FIRE)); m.observe(attack(false, "Bite"))
+        m.observe(roundStart(enemyActs = true, mainActs = true))
+        m.observe(attack(true, "Spark", Type.ELECTRIC)); m.observe(attack(false, "Tackle", user = "Wildling"))
+        assertEquals("Spark", moved(m, BarSide.MINE).move)
+        assertEquals("Tackle", moved(m, BarSide.THEIRS).move)
+    }
+
+    @Test fun aSwitchRoundShowsSwitchedAndTheWildMoveThenTheNextRoundResetsIt() {
+        val m = ActionBarModel()
+        m.observe(attack(true, "Ember", Type.FIRE))
+        m.observe(GameEvent.MainChanged("u", "Newmon"))
+        m.observe(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30))
+        m.observe(attack(false, "Tackle", user = "Wildling"))
+        assertEquals(HalfState.Note("Switched to Newmon"), m.mine)
+        assertEquals("Tackle", moved(m, BarSide.THEIRS).move)
+        m.observe(roundStart(enemyActs = false, mainActs = true))
+        assertEquals(HalfState.Note("No move"), m.mine)
     }
 }

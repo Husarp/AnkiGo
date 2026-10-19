@@ -269,7 +269,7 @@ internal class CompareGrid(
                 // animated previews only for a few columns; dozens of decoded GIFs would cost memory
                 // an owned Pokémon shows its chosen look; the "Fully evolved" preview of a Pokémon that evolves shows the evolved form
                 val picNum = if (col.mon != null && col.shown.num == col.picked.num) col.mon.lookNum(com.husarp.ankigo.GameRepo.data) else col.shown.num
-                if (n <= 5) MonPreview.show(ctx, picNum, col.shiny, img) else Ui.staticSprite(ctx, picNum, col.shiny, img)
+                if (n <= 5) MonPreview.show(ctx, picNum, col.shiny, img, silhouette = col.hidden) else Ui.staticSprite(ctx, picNum, col.shiny, img, silhouette = col.hidden)
                 addView(img, LinearLayout.LayoutParams(dp(look.spriteDp), dp(look.spriteDp)))
                 addView(Ui.text(ctx, look.nameSp, 900, R.color.ag_text).apply {
                     text = (if (col.shiny) "★ " else "") + col.name

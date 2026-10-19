@@ -58,7 +58,7 @@ class SwitchHitTest {
         }
         s.settings.moveChoice = choice
         val g = Game(data, s, Random(seed)) { now }
-        if (fight) s.battle = Battle(TestData.mon(data, 19, wildLevel, wildMoves, uid = "wild"), Tier.NORMAL, startedAt = now)
+        if (fight) s.battle = Battle(TestData.mon(data, 19, wildLevel, wildMoves, uid = "wild"), Tier.NORMAL, startedAt = now, rounds = 1) // R11-135: a round was played, so the switch costs the hit
         return g
     }
 
@@ -167,7 +167,7 @@ class SwitchHitTest {
         assertTrue(r3.ok && r3.events.isEmpty())
         assertEquals("t0", g.state.main!!.uid)
         assertEquals(before, g.state.main!!.hp)
-        assertEquals(0, g.state.battle!!.rounds)
+        assertEquals(1, g.state.battle!!.rounds)   // no round was counted
     }
 
     @Test fun aFaintedOldMainMakesEveryPathFree() {
@@ -184,6 +184,41 @@ class SwitchHitTest {
             assertSame(p.name, wild, g.state.battle!!.wild)
             assertFalse(p.name, "wild" in r.message)
         }
+    }
+
+    // ---------------------------------------------------------------- R11-135: free until the first answer of the battle
+
+    @Test fun beforeTheFirstRoundEveryPathIsFree() {
+        for (p in paths) {
+            val g = game()
+            g.state.battle!!.rounds = 0
+            val wild = g.state.battle!!.wild
+            val incoming = g.state.mon(p.newMain)!!
+            val before = incoming.hp
+            val r = p.act(g)
+            assertTrue(p.name, r.ok)
+            assertEquals(p.name, listOf<GameEvent>(GameEvent.MainChanged(p.newMain, incoming.name)), r.events)
+            assertEquals(p.name, before, incoming.hp)
+            assertSame(p.name, wild, g.state.battle!!.wild)
+            assertEquals(p.name, 0, g.state.battle!!.rounds)
+        }
+    }
+
+    @Test fun afterOneRoundTheSwitchCostsTheHit() {
+        val g = game()
+        g.state.battle!!.rounds = 0
+        g.onAnswer(Answer(1, 3, now)); g.onAnswer(Answer(2, 3, now))   // a whole round (2 answers) is played
+        assertEquals(1, g.state.battle!!.rounds)
+        val r = g.setMain("t1")
+        assertTrue(r.events.of<GameEvent.SwitchHit>().isNotEmpty())
+    }
+
+    @Test fun anAnswerWaitingInTheFirstRoundAlreadyMakesTheSwitchCostTheHit() {
+        val g = game()
+        g.state.battle!!.rounds = 0
+        g.onAnswer(Answer(1, 3, now))   // one of two answers: no round yet, but the first answer of the fight is given
+        assertEquals(0, g.state.battle!!.rounds)
+        assertTrue(g.setMain("t1").events.of<GameEvent.SwitchHit>().isNotEmpty())
     }
 
     @Test fun aWildOneWithNoHpLeftCannotHit() {
@@ -234,6 +269,7 @@ class SwitchHitTest {
         // a new wild one is there (ensureEncounter); the next switch is a normal one and pays its hit
         val battle = g.state.battle!!
         assertTrue(battle.wild.hp > 0)
+        battle.rounds = 1 // R11-135: the first answers of the new fight were given (before them a switch is free)
         val second = g.setMain("t2")
         assertTrue(second.events.any { it is GameEvent.SwitchHit })
     }

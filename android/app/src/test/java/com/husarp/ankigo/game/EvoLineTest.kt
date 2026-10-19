@@ -91,4 +91,13 @@ class EvoLineTest {
         assertEquals("Linking Cord", EvoLine.method(d, Evolution(1, EvoKind.TRADE)))
         assertEquals("knows Mimic", EvoLine.method(d, Evolution(1, EvoKind.LEVEL_MOVE, move = "mimic")))
     }
+
+    @Test fun unseenFormsShowQuestionMarks() {
+        val seen = setOf(1002)
+        assertEquals("???", EvoLine.shownName(branched.sp(1001), seen))
+        assertEquals("Sparkmouse", EvoLine.shownName(branched.sp(1002), seen))
+        assertTrue(EvoLine.isSeen(branched.sp(1002), seen))
+        assertFalse(EvoLine.isSeen(branched.sp(1003), seen))
+        assertEquals("Sparkrat", EvoLine.shownName(branched.sp(1003), setOf(1003)))
+    }
 }

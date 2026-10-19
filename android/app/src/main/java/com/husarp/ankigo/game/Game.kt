@@ -327,9 +327,11 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * Round 10 (W10): a switch costs the hit only when there is a wild one to hit with and a Pokémon to hit: FREE when the old main
      * had fainted (hp 0: replacing a fainted Pokémon is not a retreat), when the wild one has no HP left, and when the Pokémon that
      * comes in is itself at 0 HP (it can't be hit; [changed] settles it at once instead: healed, the wild one is lost).
+     * Round 11 (PLAN 135): and FREE while nothing was answered in this battle yet (no round played, no answer waiting in the
+     * round), also after "Next battle" was tapped: the hit starts with the first answer of the fight.
      */
     private fun switchCostsAHit(battle: Battle, oldMon: Mon, incoming: Mon): Boolean =
-        oldMon.hp > 0 && battle.wild.hp > 0 && incoming.hp > 0
+        oldMon.hp > 0 && battle.wild.hp > 0 && incoming.hp > 0 && (battle.rounds > 0 || battle.answers > 0)
 
     /**
      * The free hit: the wild one makes one attack at [incoming] at [Tuning.SWITCH_HIT_POWER] with the current move choice

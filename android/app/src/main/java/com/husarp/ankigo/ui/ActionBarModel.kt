@@ -79,6 +79,8 @@ enum class LineScope {
  * Round 9 D3: the state behind the battle action bar, folded from the [GameEvent]s in the order they are played (pure, no
  * Android). An Attack fills its user's half and opens a window in which the Effects that follow in the same batch (a status it
  * inflicted, stat changes) attach to that move; anything else closes the window. An Encounter clears both halves.
+ * Round 11 (PLAN 137): a round start refreshes BOTH halves to "No move", so a side that does not act (only the wild one attacks, or
+ * only you) never keeps its move of the round before; the Attack / Splash / Effect events of the round then fill what happened.
  */
 class ActionBarModel {
     var mine: HalfState = HalfState.Empty
@@ -101,6 +103,9 @@ class ActionBarModel {
         if (e !is GameEvent.Effect) open = null
         return when (e) {
             is GameEvent.Encounter -> { reset(); BOTH }
+            is GameEvent.RoundStart -> { put(BarSide.MINE, HalfState.Note(NO_MOVE)); put(BarSide.THEIRS, HalfState.Note(NO_MOVE)); BOTH }
+            // R11-133: the free hit of a switch: your half says why only the wild one attacks
+            is GameEvent.SwitchHit -> { put(BarSide.MINE, HalfState.Note("Switched to ${e.monName}")); listOf(BarSide.MINE) }
             is GameEvent.MainChanged -> { put(BarSide.MINE, HalfState.Empty); listOf(BarSide.MINE) }   // a new Pokémon has not moved yet
             is GameEvent.Attack -> {
                 val side = if (e.byPlayer) BarSide.MINE else BarSide.THEIRS
@@ -141,6 +146,9 @@ class ActionBarModel {
 
     companion object {
         private val BOTH = listOf(BarSide.MINE, BarSide.THEIRS)
+
+        /** What a half says in a round in which that side made no move. */
+        const val NO_MOVE = "No move"
 
         /** "Wild Psyduck" whether or not the name already has "Wild" in front. */
         fun wild(name: String) = if (name.startsWith("Wild ")) name else "Wild $name"

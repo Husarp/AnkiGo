@@ -140,7 +140,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             resumeSlot.addView(resume); resumeSlot.visibility = View.VISIBLE
         }
         content.addView(StudyUi.section(act, "Decks"))
-        val columns = StudyUi.row(act).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, 50), Ui.dp(context, 3)) }
+        val columns = StudyUi.row(act).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, DeckCounts.END_PAD_DP), Ui.dp(context, 3)) }
         val countWidth = DeckCounts.columnWidth(act, decks)
         DeckCounts.addHeader(columns, act, countWidth)
         content.addView(columns)
@@ -149,7 +149,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             val deck = r.deck
             val row = StudyUi.row(act).apply {
                 background = Ui.rounded(Ui.c(context, R.color.ag_card), 12, context)
-                setPadding(0, 0, Ui.dp(context, 2), 0)
+                setPadding(0, 0, Ui.dp(context, DeckCounts.END_PAD_DP), 0)
                 minimumHeight = Ui.dp(context, 52)
                 alpha = if (deck.total == 0) .55f else 1f
                 setOnClickListener { open(deck) }

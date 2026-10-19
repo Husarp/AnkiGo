@@ -89,7 +89,7 @@ class BattleLogBuilder(
             is GameEvent.Splash -> moves().lines += LogLine(Tone.SUB, "${e.name} did nothing (Splash)")
             is GameEvent.SwitchHit -> {
                 wildPower = Tuning.SWITCH_HIT_POWER // R10 W10: the free hit of a switch is at normal power, whatever the round before had
-                moves().lines += LogLine(Tone.PLAIN, "${e.monName} comes in — the wild ${e.wildName.removePrefix("Wild ")} attacks!")
+                moves().lines += LogLine(Tone.PLAIN, "Switched to ${e.monName} — the wild ${e.wildName.removePrefix("Wild ")} attacks!")
             }
             is GameEvent.Effect -> effect(e)
             is GameEvent.Fainted -> moves().lines += LogLine(if (e.player) Tone.BAD else Tone.GOOD, "${e.name} fainted")

@@ -690,11 +690,11 @@ class ProgressionTest {
         assertEquals(555L, c.caughtAt); assertEquals(12, c.level); assertTrue(c.shiny)
         assertEquals(0, c.defeats)
         assertEquals(w.ivs, c.ivs); assertEquals(w.nature, c.nature); assertEquals(w.moves, c.moves)
-        assertTrue(c.uid in s.team)
+        assertFalse(c.uid in s.team)
         assertTrue(16 in s.seen && 16 in s.caught)
         assertEquals(1, s.catches)
         val ce = e.of<GameEvent.Caught>().single()
-        assertTrue(ce.newSpecies); assertTrue(ce.toTeam); assertEquals("poke-ball", ce.ball)
+        assertTrue(ce.newSpecies); assertFalse(ce.toTeam); assertEquals("poke-ball", ce.ball)
         assertEquals(c.uid, ce.uid)
         assertTrue(7 in s.badges && 17 in s.badges)
         // same species again is not new
@@ -702,6 +702,13 @@ class ProgressionTest {
         Catching.addToCollection(data, s, TestData.mon(data, 16, 5, uid = "w2"), Tier.NORMAL, null, 1L, e2)
         assertFalse(e2.of<GameEvent.Caught>().single().newSpecies)
         assertEquals(0, e2.of<GameEvent.BadgeEarned>().size)
+    }
+
+    @Test fun addToCollectionNeverJoinsTheTeam() {
+        val s = TestData.state(data, 25, 20)
+        assertEquals(1, s.team.size); val mons = s.mons.size
+        val c = Catching.addToCollection(data, s, TestData.mon(data, 19, 5, uid = "w"), Tier.NORMAL, null, 1L, ev())
+        assertEquals(1, s.team.size); assertFalse(c.uid in s.team); assertEquals(mons + 1, s.mons.size)
     }
 
     @Test fun addToCollectionBoxWhenTeamFull() {

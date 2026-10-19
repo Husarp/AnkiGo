@@ -313,7 +313,7 @@ class GameTest {
         g.answer(3)
         val ev = g.answer(3)
         val caught = ev.of<GameEvent.Caught>().single()
-        assertEquals(54, caught.species); assertTrue(caught.newSpecies); assertTrue(caught.toTeam); assertNull(caught.ball)
+        assertEquals(54, caught.species); assertTrue(caught.newSpecies); assertFalse(caught.toTeam); assertNull(caught.ball)
         assertEquals(12, caught.level)
         assertTrue(ev.of<GameEvent.Fainted>().any { !it.player })
         // AnkiGo (Tuning.CATCH_GIVES_XP): a 0-HP catch gives the full defeat XP to the main; it counts as a win
@@ -324,7 +324,7 @@ class GameTest {
         assertEquals(Tuning.TRAINER_XP[Tier.NORMAL]!!, s.trainerXp)
         assertEquals(2 * Tuning.CASH_PER_ANSWER, s.cashToday) // the two answers only: no defeat ₽
         assertTrue(54 in s.caught && 54 in s.seen)
-        assertEquals(2, s.team.size)
+        assertEquals(1, s.team.size)
         val mon = s.mon(caught.uid)!!
         assertEquals(maxHp(mon), mon.hp) // caught at full health
         // the next wild one is there at once
@@ -899,7 +899,7 @@ class GameTest {
         assertEquals(1, g.state.catches)
         assertNotSame(wild, g.state.battle!!.wild) // next wild one is there
         assertEquals(1, ev.of<GameEvent.Encounter>().size)
-        assertEquals(2, g.state.team.size)
+        assertEquals(1, g.state.team.size)
     }
 
     @Test fun aBallCatchIsAWinLikeTheAutoCatch() {
@@ -1148,6 +1148,7 @@ class GameTest {
         val g = game(state = roster(6, 8))
         g.fight()
         g.state.battle!!.player.boosts[2] = 3
+        g.state.battle!!.rounds = 1 // R11-135: a round was played, so the switch costs the hit
         val r = g.swapIntoTeam("b6", "t0")
         assertTrue(r.ok)
         assertEquals(listOf("b6", "t1", "t2", "t3", "t4", "t5"), g.state.team)
@@ -1170,6 +1171,7 @@ class GameTest {
         val g = game(state = roster(3))
         val wild = g.fight()
         g.state.battle!!.player.boosts[2] = 3
+        g.state.battle!!.rounds = 1 // R11-135: a round was played, so the switch costs the hit
         val r = g.toBox("t0")
         assertEquals(listOf("t1", "t2"), g.state.team)
         assertEquals(GameEvent.MainChanged("t1", g.state.mon("t1")!!.name), r.events[0])

@@ -9,6 +9,7 @@ import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.TestData
 import com.husarp.ankigo.game.Type
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,6 +24,7 @@ class CompareTableTest {
 
     private fun state(vararg mons: Mon): GameState {
         val s = GameState(createdAt = 1L, starterChosen = true)
+        s.seen += data.species.keys   // everything met, so evolution names show (R11-D hides unseen ones)
         mons.forEach { s.mons += it }
         return s
     }
@@ -262,5 +264,28 @@ class CompareTableTest {
         val d = TestData.data(listOf(a, b))
         assertEquals(911, CompareTable.finalForm(d, a).species.num)
         assertEquals(2, CompareTable.evolutionLine(d, a).names.size)
+    }
+
+    @Test fun unseenFormsInTheEvolutionLineShowQuestionMarks() {
+        val st = GameState(createdAt = 1L, starterChosen = true)
+        st.seen += 25   // only Sparkmouse (the middle form) is met
+        val t = CompareTable.build(data, st, listOf(ComparePick.Dex(25)), false)
+        val l = t.row("evo").cells[0] as Cell.Evo
+        assertEquals("??? → Sparkmouse → ???", l.line)
+        assertEquals("???", (t.row("becomes").cells[0] as Cell.Text).text)
+        st.seen += 172
+        assertEquals("Sparklet → Sparkmouse → ???", (CompareTable.build(data, st, listOf(ComparePick.Dex(25)), false).row("evo").cells[0] as Cell.Evo).line)
+    }
+
+    @Test fun anUnseenFinalFormStaysHiddenInFullyEvolved() {
+        val st = GameState(createdAt = 1L, starterChosen = true)
+        st.seen += 25
+        val col = CompareTable.build(data, st, listOf(ComparePick.Dex(25)), true).columns[0]
+        assertEquals("???", col.name)
+        assertTrue(col.hidden)
+        st.seen += 26
+        val seen = CompareTable.build(data, st, listOf(ComparePick.Dex(25)), true).columns[0]
+        assertEquals(seen.shown.name, seen.name)
+        assertFalse(seen.hidden)
     }
 }

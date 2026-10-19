@@ -71,9 +71,9 @@ class EvoTreeView(ctx: Context, data: GameData, root: EvoNode, private val curre
     private fun spot(a: Context, node: EvoNode): View {
         val here = node.species.num == current.num
         val img = ImageView(a)
-        MonPreview.show(a, node.species.num, false, img, silhouette = node.species.num !in seen && node.species.baseNum !in seen)
+        MonPreview.show(a, node.species.num, false, img, silhouette = !EvoLine.isSeen(node.species, seen))
         val name = Ui.text(a, 10.5f, 800, if (here) R.color.ag_text else R.color.ag_sub1).apply {
-            text = node.species.name; maxLines = 1; gravity = Gravity.CENTER
+            text = EvoLine.shownName(node.species, seen); maxLines = 1; gravity = Gravity.CENTER
         }
         val box = LinearLayout(a).apply {
             orientation = VERTICAL
@@ -81,8 +81,8 @@ class EvoTreeView(ctx: Context, data: GameData, root: EvoNode, private val curre
             if (here) background = Ui.rounded(Bits.blend(Ui.c(a, R.color.ag_mauve), Ui.c(a, R.color.ag_mantle), 0.22f), 12, a)
             addView(img, LayoutParams(Ui.dp(a, 48), Ui.dp(a, 48)))
             addView(name, LayoutParams(-2, -2))
-            contentDescription = node.species.name + if (here) " (this one)" else ""
-            if (!here && onTap != null && (node.species.num in seen || node.species.baseNum in seen)) setOnClickListener { onTap.invoke(node.species) }
+            contentDescription = EvoLine.shownName(node.species, seen) + if (here) " (this one)" else ""
+            if (!here && onTap != null && EvoLine.isSeen(node.species, seen)) setOnClickListener { onTap.invoke(node.species) }
         }
         spots += Spot(box, img, name)
         return box

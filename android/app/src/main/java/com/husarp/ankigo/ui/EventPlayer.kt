@@ -493,7 +493,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             }
             is GameEvent.SwitchHit -> {
                 wildMult = Tuning.SWITCH_HIT_POWER   // the free hit is at normal power: no "×0" left over from a round where the wild one stayed quiet
-                log(LogKind.AGAIN, "WILD", "${em(e.monName)} comes in — ${wild(e.wildName)} attacks!")
+                log(LogKind.AGAIN, "WILD", "Switched to ${em(e.monName)} — ${wild(e.wildName)} attacks!")
                 return d(500)
             }
             is GameEvent.Cash -> {

@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.EvoLine
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Evolution
@@ -47,6 +48,8 @@ data class CompareColumn(
     val name: String,
     val shiny: Boolean,
     val note: String?,
+    /** "Fully evolved" shows a final form the player hasn't seen: its sprite is a silhouette (PLAN 128). */
+    val hidden: Boolean = false,
 )
 
 /**
@@ -109,7 +112,8 @@ object CompareTable {
     }
 
     /** The line "root → ... → picked → ... → final" (first branch after the picked one), mark index, branch count after it. */
-    fun evolutionLine(data: GameData, sp: Species): Cell.Evo {
+    fun evolutionLine(data: GameData, sp: Species, seen: Set<Int>? = null): Cell.Evo {
+        fun label(s: Species) = if (seen == null || s.num == sp.num) s.name else EvoLine.shownName(s, seen)
         val before = ArrayList<Species>()
         val seen = HashSet<Int>().also { it += sp.num }
         var up = sp.prevo?.let { data.species[it] }
@@ -117,7 +121,7 @@ object CompareTable {
             before.add(0, up)
             up = up.prevo?.let { data.species[it] }
         }
-        val names = before.map { it.name } + sp.name
+        val names = before.map { label(it) } + sp.name
         val fin = finalForm(data, sp)
         // species after the picked one, following the first branch
         val after = ArrayList<Species>()
@@ -129,7 +133,7 @@ object CompareTable {
             after += n; cur = n
         }
         val note = if (fin.branches > 1) "first of ${fin.branches} branches" else null
-        return Cell.Evo(names + after.map { it.name }, before.size, note)
+        return Cell.Evo(names + after.map { label(it) }, before.size, note)
     }
 
     /**
@@ -174,8 +178,9 @@ object CompareTable {
                 fin.branches > 1 -> "from ${sp.name} · first of ${fin.branches}"
                 else -> "from ${sp.name}"
             }
-            val name = if (mon != null && !mon.nickname.isNullOrBlank()) mon.shownName else shown.name
-            CompareColumn(pick, mon, shown, sp, name, mon?.shiny == true, note)
+            val hidden = changed && !EvoLine.isSeen(shown, state.seen + state.caught)
+            val name = if (mon != null && !mon.nickname.isNullOrBlank()) mon.shownName else if (hidden) "???" else shown.name // an unseen final form stays "???" (PLAN 128)
+            CompareColumn(pick, mon, shown, sp, name, mon?.shiny == true, note, hidden)
         }
 
         val owned = columns.map { it.mon }
@@ -234,12 +239,12 @@ object CompareTable {
         rows += CompareRow("resist", "Resists", m.map { Cell.Matchups(it.second) })
         rows += CompareRow("immune", "Immune to", m.map { Cell.Matchups(it.third) })
 
-        val lines = columns.map { evolutionLine(data, it.picked) }
+        val lines = columns.map { evolutionLine(data, it.picked, state.seen + state.caught) }
         rows += CompareRow("evo", "Line", lines, section = "Evolution")
         rows += CompareRow("becomes", "Becomes", columns.map { c ->
             val fin = finalForm(data, c.picked)
             if (fin.species.num == c.picked.num) Cell.Text("already final")
-            else Cell.Text(fin.species.name, sub = if (fin.branches > 1) listOf("first of ${fin.branches}") else emptyList())
+            else Cell.Text(EvoLine.shownName(fin.species, state.seen + state.caught), sub = if (fin.branches > 1) listOf("first of ${fin.branches}") else emptyList())
         })
 
         return CompareData(columns, rows)

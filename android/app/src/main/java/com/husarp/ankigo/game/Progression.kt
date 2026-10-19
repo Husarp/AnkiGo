@@ -367,9 +367,8 @@ object Catching {
         )
         mon.hp = StatCalc.maxHp(data, mon)
         val newSpecies = wild.species !in state.caught
-        val toTeam = state.team.size < 6
+        val toTeam = false // R11-B (PLAN 134): a catch always goes to the Box; the player adds it to the team by hand
         state.mons += mon
-        if (toTeam) state.team += mon.uid
         state.markSeen(mon.species, now)
         state.caught += mon.species
         state.starterCaught -= mon.species; state.starterSeen -= mon.species // R9-W4-B: a real catch of the starter's species
