@@ -6,7 +6,7 @@ package com.husarp.ankigo.game
  */
 enum class CatchChoice(val title: String, val explain: String, val autoMode: Int, val swap: Boolean) {
     ALWAYS("Always catch", "Every wild Pokémon you beat is caught", 1, false),
-    NEW_ONLY("Catch only new species", "Others are defeated for money. Default", 3, false),
+    NEW_ONLY("Catch only new species", "Others are defeated: the same XP and ₽. Default", 3, false),
     NEW_AND_BETTER("Catch new species and better copies", "A higher-level copy replaces your old one", 3, true),
     DEFEAT("Defeat", "Catch only shinies and protected kinds", 2, false);
 

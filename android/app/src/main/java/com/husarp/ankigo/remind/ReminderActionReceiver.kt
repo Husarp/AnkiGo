@@ -48,6 +48,7 @@ class ReminderActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val kind = ReminderActions.kindOf(intent.getStringExtra(ReminderActions.EXTRA_KIND)) ?: return
         val app = context.applicationContext
+        com.husarp.ankigo.Report.log("REMIND", "notification action ${intent.action?.substringAfterLast('.')} for $kind")   // R13 Part E
         val now = System.currentTimeMillis()
         try {
             when (NoticeAction.entries.firstOrNull { it.intentAction == intent.action }) {

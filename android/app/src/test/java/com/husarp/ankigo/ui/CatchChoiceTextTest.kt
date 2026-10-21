@@ -11,7 +11,7 @@ class CatchChoiceTextTest {
 
     @Test fun theMessageNamesTheRealDifference() {
         assertEquals("Will catch it", CatchChoiceText.toast(before = false, after = true))
-        assertEquals("Won't catch it: you get ₽ instead", CatchChoiceText.toast(before = true, after = false))
+        assertEquals("Won't catch it: it will be defeated", CatchChoiceText.toast(before = true, after = false))   // a defeat and a catch pay the same ₽ (R13 Part C): only the Pokémon differs
         assertEquals("This one is always caught", CatchChoiceText.toast(before = true, after = true))
         assertEquals("No change", CatchChoiceText.toast(before = false, after = false))
     }

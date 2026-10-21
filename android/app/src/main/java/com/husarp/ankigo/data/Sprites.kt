@@ -217,6 +217,7 @@ object Sprites {
         if (!enabled(ctx)) return null
         val base = File(folder(ctx, kind), baseName(sp.num, shiny))
         return download(base, SpriteUrls.battle(sp, kind, shiny), retryMissingMs = if (kind == SpriteKind.FRONT) RETRY_EXPECTED_MS else RETRY_MISSING_MS)
+            .also { Report.log("PICS", "battle picture #${sp.num} $kind${if (shiny) " shiny" else ""}: ${if (it != null) "downloaded" else "not available"}") }   // R13 Part E
     }
 
     /** Starts front+back downloads in the background (next encounter, new catch). */

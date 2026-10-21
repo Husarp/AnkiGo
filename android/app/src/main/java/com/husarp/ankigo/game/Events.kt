@@ -114,11 +114,12 @@ sealed class GameEvent {
     data class MainChanged(val uid: String, val name: String) : GameEvent()
 
     /**
-     * Round 10 (W10): comes right after a [MainChanged] in a fight. The wild one [wildName] makes ONE free attack at the incoming
-     * Pokémon [monName]; the Attack / Effect / Fainted events of that one action follow. [hp] / [maxHp] = the incoming Pokémon's HP
-     * BEFORE the hit, so a panel can show it at that value until the hit lands (the saved game already has the HP after it).
+     * Round 10 (W10): comes right after a [MainChanged] in a fight. The wild one [wildName] attacks the incoming Pokémon [monName]
+     * ONCE (the switch took one turn, one dot); the Attack / Effect / Fainted events of that one action follow. [hp] / [maxHp] = the
+     * Pokémon's HP BEFORE the hit, so a panel can show it at that value until the hit lands (the saved game already has the HP after
+     * it). R13 Part C: [item] set = not a switch but that item used on the Main in a fight (it took the turn); no [MainChanged] then.
      */
-    data class SwitchHit(val wildName: String, val monName: String, val hp: Int, val maxHp: Int) : GameEvent()
+    data class SwitchHit(val wildName: String, val monName: String, val hp: Int, val maxHp: Int, val item: String? = null) : GameEvent()
 
     /** Generic message for item use etc. */
     data class Info(val text: String) : GameEvent()
@@ -139,7 +140,10 @@ enum class EffectKind { OTHER, STATUS_APPLIED, STATUS_CURED, CANT_MOVE, STAT_CHA
 /** Why a [GameEvent.Healed] happened: a level gained, a wild Pokémon defeated, or one caught (auto rule or ball). */
 enum class HealReason { LEVEL_UP, DEFEAT, CATCH }
 
-/** What a [GameEvent.Cash] was paid for: a counted answer, a defeated wild Pokémon, or the once-a-day daily-goal bonus. */
+/**
+ * What a [GameEvent.Cash] was paid for: a counted answer, a won fight ([DEFEAT]: a wild Pokémon defeated or caught, R13 Part C), or
+ * the once-a-day daily-goal bonus.
+ */
 enum class CashKind { ANSWER, DEFEAT, DAILY_BONUS }
 
 /** What [GameEvent.Duplicate] says happened to the wild one. */

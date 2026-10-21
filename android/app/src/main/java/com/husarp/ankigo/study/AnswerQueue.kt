@@ -1,5 +1,7 @@
 package com.husarp.ankigo.study
 
+import java.time.Instant
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
@@ -21,6 +23,12 @@ sealed class AnswerOutcome {
     /** NOT written, for a reason the user is told. */
     data class NotWritten(override val answer: QueuedAnswer, val reason: Reason, val detail: String) : AnswerOutcome()
 
+    /**
+     * PLAN 195: AnkiDroid refused the answer while another card was first ([reason]). It is kept (journal) and written when its card is
+     * first again the same day ([AnswerQueue.writeWaiting]); its end (saved, or not written) comes later as a terminal outcome.
+     */
+    data class Waiting(override val answer: QueuedAnswer, val reason: String) : AnswerOutcome()
+
     enum class Reason {
         /** The card was not first in AnkiDroid's queue any more (a learning card came due, the queue changed). */
         NOT_TOP,
@@ -35,7 +43,7 @@ sealed class AnswerOutcome {
         DISCARDED,
     }
 
-    val isTerminal get() = this !is Retrying
+    val isTerminal get() = this !is Retrying && this !is Waiting
 }
 
 /** The provider calls the queue makes (1b implements them with `Anki.*`, all on the study io thread). */
@@ -71,6 +79,9 @@ interface AnswerHooks {
 
     /** The journal file could not be written (the answer stays queued in memory only). */
     fun journalFailed(reason: String) {}
+
+    /** PLAN 195: a line for the debug report ("NOT_TOP try", "saved late", "gave up"). */
+    fun note(text: String) {}
 }
 
 /** Back-off between failed attempts of one answer: 1 s, 2 s, 5 s, 10 s, 30 s, then 30 s; park after [PARK_AFTER] attempts. */
@@ -127,11 +138,16 @@ class LockWaiter : Waiter {
  *  R  (n > 1 or restored) read the card: saved -> Saved (a write of this process) | AlreadySaved (a dead process's) |
  *     CHANGED (neither could have written: it was answered elsewhere); same as before -> go on; unreadable -> FAIL; else CHANGED
  *  1  select the deck (unless known selected; always when n > 1)
- *  2  top(deck) == key?  no -> (look again after a real select, if the first select was skipped) NOT_TOP
+ *  2  top(deck) == key?  no -> (look again after a real select, if the first select was skipped) NOT_TOP, or with [tryNotTop] N
  *  3  card still the same as shown?  no -> CHANGED;  unreadable -> FAIL
  *  4  hooks.expect; ANSWER (timed alone)
  *  5  read the card: saved -> Saved | unchanged reps -> n == 1 ? attempt 2 at once : FAIL | unreadable -> FAIL | else UNSURE
  *  FAIL(n): Retrying outcome, wait backoff(n) (parked after [parkAfter] attempts) -> attempt n + 1 (which starts with R)
+ *  N  (PLAN 195) steps 3-5 for this exact card anyway, watching the first card: saved -> Saved | unchanged -> WAIT | unreadable -> FAIL |
+ *     the first card was answered instead -> UNSURE and the try is off until the app restarts | else UNSURE
+ *  WAIT: the answer leaves the queue for the waiting list (journal flag; the expectation stays pinned): Waiting outcome. A load that
+ *     finds its card first the same day writes it then ([writeWaiting]: R, 1-5 again; a second refusal ends it NOT_TOP), and the card
+ *     is never shown; a day over ends it NOT_TOP ([drain], [writeWaiting]). It survives a restart in the journal.
  * ```
  * The end of an answer: `cancel` (when not written), journal rewritten without it (the file is deleted when it was the last; a rewrite
  * that fails is tried again before the next answer starts), outcome posted. Never lost: it ends as saved,
@@ -149,13 +165,23 @@ class AnswerQueue(
     private val parkAfter: Int = Backoff.PARK_AFTER,
     /** Select the deck before every write (set it when skipping the select is found unsafe on a device). */
     private val alwaysSelect: Boolean = false,
+    /**
+     * PLAN 195 (Settings -> Diagnostics, ON by default in the app): on NOT_TOP still try the write for that exact card, and keep an
+     * answer AnkiDroid refuses waiting for its card. Off by default here, so a queue made without it keeps the old rule.
+     */
+    private val tryNotTop: () -> Boolean = { false },
+    /** The local day of a wall-clock time: a waiting answer is only written on the day it was made. */
+    private val dayOf: (Long) -> String = LOCAL_DAY,
+    private val wallNow: () -> Long = { System.currentTimeMillis() },
 ) {
-    class Restored(val count: Int, val problem: String?)
+    /** [count] answers back in the queue, [waiting] back on the waiting list (PLAN 195). */
+    class Restored(val count: Int, val problem: String?, val waiting: Int = 0)
 
-    private class Slot(val a: QueuedAnswer) {
+    private class Slot(@Volatile var a: QueuedAnswer) {
         var n = 0
         var attempted = false // hooks.expect was called in this process: a write of ours may exist
         var answerMs = -1L
+        var late = false // PLAN 195: back from the waiting list for its write (its earlier try was refused)
         @Volatile var discard = false
     }
 
@@ -163,19 +189,28 @@ class AnswerQueue(
         class Done(val outcome: AnswerOutcome) : Step()
         object Again : Step()
         class Fail(val reason: String) : Step()
+        class Wait(val reason: String) : Step()
     }
 
     private val lock = ReentrantLock() // slots, journal, selection
     private val runLock = ReentrantLock() // at most one writer, whatever the callers do
     private val slots = ArrayList<Slot>()
+    private val waiting = ArrayList<Slot>() // PLAN 195: refused while another card was first, kept for when theirs is first again
+    @Volatile private var notTopOff = false // PLAN 195: a try answered ANOTHER card once: never again in this process
     private val seqs = AtomicLong(0)
     private var restoredOnce: Restored? = null
     private var selectedDeck: Long? = null
     private var selectedAt = 0L
     private var dirty = false // the journal file still holds more than the unresolved answers (a rewrite failed): tried again before the next answer starts
 
-    /** Answers not yet ended, oldest first (a copy). */
+    /** Answers not yet ended, oldest first (a copy). The waiting ones (PLAN 195) are not in it: [waitingAnswers]. */
     fun pending(): List<QueuedAnswer> = lock.withLock { slots.map { it.a } }
+
+    /** PLAN 195: the answers waiting for their card to be first again (a copy). */
+    fun waitingAnswers(): List<QueuedAnswer> = lock.withLock { waiting.map { it.a } }
+
+    /** Everything the journal must hold: the queue and the waiting list (with its flag). Called with [lock] held. */
+    private fun journal(extra: QueuedAnswer? = null): List<QueuedAnswer> = slots.map { it.a } + listOfNotNull(extra) + waiting.map { it.a }
 
     val size: Int get() = lock.withLock { slots.size }
 
@@ -186,11 +221,13 @@ class AnswerQueue(
     fun restore(): Restored = lock.withLock {
         restoredOnce?.let { return Restored(0, it.problem) }
         val d = try { AnswerJournal.decode(store.read()) } catch (e: Exception) { AnswerJournal.Decoded(emptyList(), "the journal could not be read: ${e.message}") }
-        val known = slots.map { it.a.seq }.toSet()
+        val known = (slots + waiting).map { it.a.seq }.toSet()
         val fresh = d.answers.filter { it.seq !in known }
-        slots.addAll(0, fresh.map { Slot(it.copy(restored = true)) })
+        val (wait, now) = fresh.partition { it.waiting }
+        slots.addAll(0, now.map { Slot(it.copy(restored = true)) })
+        waiting.addAll(wait.map { Slot(it.copy(restored = true)) })
         for (a in fresh) seqs.updateAndGet { maxOf(it, a.seq) }
-        Restored(fresh.size, d.problem).also { restoredOnce = it }
+        Restored(now.size, d.problem, wait.size).also { restoredOnce = it }
     }
 
     /**
@@ -200,7 +237,7 @@ class AnswerQueue(
     fun enqueue(a: QueuedAnswer): Boolean = lock.withLock {
         require(a.ease in 1..4 && AnswerState.usable(a.before)) { "unusable answer" }
         seqs.updateAndGet { maxOf(it, a.seq) }
-        val ok = persist(slots.map { it.a } + a)
+        val ok = persist(journal(a))
         slots.add(Slot(a))
         ok
     }
@@ -228,9 +265,13 @@ class AnswerQueue(
 
     private fun trusted(deckId: Long) = !alwaysSelect && lock.withLock { selectedDeck == deckId && clock() - selectedAt <= SELECT_TRUST_MS }
 
-    /** Io thread. Resolves every queued answer, oldest first, and returns their end outcomes. Blocks while one is retrying. */
+    /**
+     * Io thread. Resolves every queued answer, oldest first, and returns their end outcomes (a [AnswerOutcome.Waiting] too). Blocks
+     * while one is retrying. First ends the waiting answers whose day is over (PLAN 195).
+     */
     fun drain(): List<AnswerOutcome> = runLock.withLock {
         val out = ArrayList<AnswerOutcome>()
+        out += expireWaiting()
         while (true) {
             val s = lock.withLock { slots.firstOrNull() } ?: break
             out += resolve(s)
@@ -240,12 +281,13 @@ class AnswerQueue(
 
     private fun resolve(s: Slot): AnswerOutcome {
         waiter.clear()
-        lock.withLock { if (dirty) persist(slots.map { it.a }) } // a told answer must not stay in the journal: try the failed rewrite again before this answer starts
+        lock.withLock { if (dirty) persist(journal()) } // a told answer must not stay in the journal: try the failed rewrite again before this answer starts
         while (true) {
             if (s.discard) return end(s, discarded(s))
             s.n++
             when (val r = attempt(s)) {
                 is Step.Done -> return end(s, r.outcome)
+                is Step.Wait -> return wait(s, r.reason)
                 Step.Again -> continue
                 is Step.Fail -> {
                     invalidateSelection() // the state of AnkiDroid is unknown now: the next load selects again
@@ -262,14 +304,15 @@ class AnswerQueue(
         val key = a.key
         val n = s.n
         try {
-            if (n > 1 || a.restored) {
+            if (n > 1 || a.restored || s.late) {
                 // an earlier attempt of this process may have applied: keep its expectation alive (30 s) while the card is read, so a
                 // long back-off can never let a poll count our own answer as a live one as well as the game step
                 if (s.attempted) guard { hooks.expect(a.before) }
                 val now = provider.stats(key) ?: return Step.Fail("the card could not be read")
                 if (StudyLoop.saved(a.before, now)) {
                     // only a write of ours (this process's, or a dead one's) can have made it look saved; else someone else answered it
-                    return Step.Done(if (s.attempted || a.restored) wasSaved(s, now) else changed(a))
+                    // (a late answer's earlier try was refused: a saved-looking card was answered elsewhere, PLAN 195)
+                    return Step.Done(if (s.attempted || (a.restored && !s.late)) wasSaved(s, now) else changed(a))
                 }
                 if (!AnswerState.same(a.before, now)) return Step.Done(changed(a))
             }
@@ -280,7 +323,10 @@ class AnswerQueue(
                 provider.select(a.deckId); markSelected(a.deckId)
                 top = provider.top(a.deckId, 1).firstOrNull()
             }
-            if (top != key) return Step.Done(AnswerOutcome.NotWritten(a, AnswerOutcome.Reason.NOT_TOP, "the card is no longer first in AnkiDroid's queue"))
+            if (top != key) {
+                if (notTopOff || !tryNotTop()) return Step.Done(AnswerOutcome.NotWritten(a, AnswerOutcome.Reason.NOT_TOP, "the card is no longer first in AnkiDroid's queue"))
+                return notTopTry(s, top)
+            }
             val fresh = provider.stats(key) ?: return Step.Fail("the card could not be read")
             if (!AnswerState.same(a.before, fresh)) return Step.Done(changed(a))
             guard { hooks.expect(a.before) }
@@ -306,6 +352,93 @@ class AnswerQueue(
         }
     }
 
+    /**
+     * PLAN 195, step N: [s]'s card is not first ([topKey] is, or nothing): steps 3-5 for exactly that card anyway. Saved -> Saved; AnkiDroid
+     * refused it (the card unchanged after the call, or the call failed) -> WAIT; unreadable after the call -> FAIL (the next attempt starts
+     * with R). The first card is read before and after: if IT was answered, AnkiDroid answered the wrong card: UNSURE, and the try is
+     * off until the app restarts (never the wrong card again).
+     */
+    private fun notTopTry(s: Slot, topKey: StudyLoop.Key?): Step {
+        val a = s.a
+        val key = a.key
+        note("NOT_TOP try: card ${a.cardId} is not first (first: ${topKey?.let { "${it.nid}/${it.ord}" } ?: "none"}); writing it anyway")
+        val fresh = provider.stats(key) ?: return Step.Fail("the card could not be read")
+        if (!AnswerState.same(a.before, fresh)) return Step.Done(changed(a))
+        val topBefore = topKey?.let { k -> try { provider.stats(k) } catch (e: Exception) { null } }
+        guard { hooks.expect(a.before) }
+        s.attempted = true
+        val t0 = clock()
+        val failed = try { provider.answer(key, a.ease, a.tookMs.coerceIn(0, 3_600_000)); null } catch (e: Exception) { e }
+        s.answerMs = clock() - t0
+        guard { hooks.answerTimed(a, s.n, s.answerMs) }
+        val after = provider.stats(key)
+        if (topKey != null && topBefore != null) {
+            val topAfter = try { provider.stats(topKey) } catch (e: Exception) { null }
+            if (StudyLoop.saved(topBefore, topAfter)) {
+                notTopOff = true
+                note("NOT_TOP try: AnkiDroid answered the FIRST card (${topKey.nid}/${topKey.ord}) instead of card ${a.cardId}; the try is off until the app restarts")
+                if (after != null && StudyLoop.saved(a.before, after)) return Step.Done(AnswerOutcome.Saved(a, after, s.n, s.answerMs))
+                return Step.Done(AnswerOutcome.NotWritten(a, AnswerOutcome.Reason.UNSURE, "AnkiDroid answered another card"))
+            }
+        }
+        if (after != null && StudyLoop.saved(a.before, after)) {
+            note("NOT_TOP try: card ${a.cardId} saved")
+            return Step.Done(AnswerOutcome.Saved(a, after, s.n, s.answerMs))
+        }
+        if (after == null) return Step.Fail("the write could not be confirmed")
+        if (AnswerState.same(a.before, after)) {
+            s.attempted = false // the call is over and did not apply: from now on a saved-looking card was answered elsewhere
+            return Step.Wait(failed?.let { "AnkiDroid refused it: ${it.message ?: it.javaClass.simpleName}" } ?: "AnkiDroid did not apply it")
+        }
+        return Step.Done(AnswerOutcome.NotWritten(a, AnswerOutcome.Reason.UNSURE, "AnkiDroid changed the card in an unexpected way"))
+    }
+
+    /** PLAN 195, WAIT: [s] leaves the queue for the waiting list (journal flag). A late one (already back from it once) ends NOT_TOP instead. */
+    private fun wait(s: Slot, reason: String): AnswerOutcome {
+        if (s.late) return end(s, AnswerOutcome.NotWritten(s.a, AnswerOutcome.Reason.NOT_TOP, "AnkiDroid refused it even when its card was first ($reason)"))
+        lock.withLock {
+            slots.remove(s)
+            s.a = s.a.copy(waiting = true)
+            waiting.add(s)
+            persist(journal())
+        }
+        note("NOT_TOP try: card ${s.a.cardId} not saved ($reason); it waits for its card to be first again today")
+        val o = AnswerOutcome.Waiting(s.a, reason)
+        post(o)
+        return o
+    }
+
+    /** PLAN 195: the waiting answers made on another day than today end NOT_TOP (they are never written late across a day). Io thread. */
+    private fun expireWaiting(): List<AnswerOutcome> {
+        val today = dayOf(wallNow())
+        val old = lock.withLock { waiting.filter { dayOf(it.a.madeAt) != today } }
+        return old.map { end(it, AnswerOutcome.NotWritten(it.a, AnswerOutcome.Reason.NOT_TOP, "its card was not first again on the day it was made")) }
+    }
+
+    /**
+     * PLAN 195, io thread, inside a load: [top] is AnkiDroid's first card for [deckId] right now. An answer waiting for exactly that card
+     * is written now, with every check (R, select [deckId], top, unchanged, write, read back), as if it had just been made: the caller
+     * reads the queue again, so the card is never shown. It does not wait a second time: refused again, it ends NOT_TOP. Ends the
+     * waiting answers whose day is over first. True when an answer for [top] was handled (the queue may have changed).
+     */
+    fun writeWaiting(deckId: Long, top: StudyLoop.Key?): Boolean = runLock.withLock {
+        expireWaiting()
+        if (top == null) return false
+        val s = lock.withLock {
+            waiting.firstOrNull { it.a.key == top }?.also {
+                waiting.remove(it)
+                it.late = true
+                it.n = 0
+                it.a = it.a.copy(waiting = false, deckId = deckId)
+                slots.add(0, it)
+                persist(journal()) // back in the queue BEFORE the write: a kill during it replays it as a normal answer (R first)
+            }
+        } ?: return false
+        note("card ${s.a.cardId} is first again: writing its waiting answer")
+        drain()
+        true
+    }
+
     /** Found written by reconcile: an own write of this process (Saved), else an earlier process's (AlreadySaved). */
     private fun wasSaved(s: Slot, now: Map<String, String?>): AnswerOutcome =
         if (s.attempted) AnswerOutcome.Saved(s.a, now, s.n, s.answerMs) else AnswerOutcome.AlreadySaved(s.a, now)
@@ -324,15 +457,23 @@ class AnswerQueue(
     /** cancel (not written) -> journal without it -> outcome: a told answer can never come back from the journal. */
     private fun end(s: Slot, o: AnswerOutcome): AnswerOutcome {
         if (o is AnswerOutcome.NotWritten) guard { hooks.cancel(s.a.before) }
-        lock.withLock {
+        val wasWaiting = lock.withLock {
             slots.remove(s)
-            persist(slots.map { it.a })
+            val w = waiting.remove(s)
+            persist(journal())
+            w
         }
+        if (s.late || wasWaiting) note(
+            if (o is AnswerOutcome.NotWritten) "gave up: card ${s.a.cardId}'s waiting answer ends ${o.reason} (${o.detail})"
+            else "saved late: card ${s.a.cardId}'s waiting answer is in AnkiDroid",
+        )
         post(o)
         return o
     }
 
     private fun post(o: AnswerOutcome) = guard { hooks.outcome(o) }
+
+    private fun note(text: String) = guard { hooks.note(text) }
 
     private inline fun guard(f: () -> Unit) { try { f() } catch (e: Exception) { /* a hook must not break the queue */ } }
 
@@ -356,5 +497,8 @@ class AnswerQueue(
     companion object {
         /** How long a deck selection made by us is trusted without selecting again. */
         const val SELECT_TRUST_MS = 60_000L
+
+        /** The phone's local calendar day ("yyyy-MM-dd") of a wall-clock time: the window of a waiting answer (PLAN 195). */
+        val LOCAL_DAY: (Long) -> String = { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate().toString() }
     }
 }

@@ -32,10 +32,12 @@ class AchRow(
 
 object AchievementTable {
     /**
-     * R9-B2: the version of the tier ladders. 2 = "types" and "highest-level" have 3 tiers (they used to have 5). A save older than
-     * this is remapped once by Achievements.migrate (GameState.achLadder remembers the version); a new game starts at [LADDER].
+     * R9-B2: the version of the tier ladders. 2 = "types" and "highest-level" have 3 tiers (they used to have 5). 3 (R13 Part F) =
+     * "Total XP" / "Total levels" count only what the Pokémon gained with you (they were inflated by the XP and levels a caught Pokémon
+     * came with): recomputed once, tiers reached only through the inflated value locked again. A save older than this is brought up
+     * once by Achievements.migrate (GameState.achLadder remembers the version); a new game starts at [LADDER].
      */
-    const val LADDER = 2
+    const val LADDER = 3
 
     /** R9-B2: per row whose ladder was shortened in version 2: new tier t = old tier REMAP[id][t] (the new thresholds are a subset of the old ones). */
     val REMAP: Map<String, List<Int>> = mapOf("types" to listOf(1, 2, 4), "highest-level" to listOf(1, 2, 4))
@@ -85,8 +87,10 @@ object AchievementTable {
         tiered("damage-blocked", "Battle", "Damage blocked", "Damage you didn't take thanks to resisting", Metric.DAMAGE_BLOCKED, "shield", 200, 5_000, 50_000, 200_000, 600_000),
         tiered("misses", "Battle", "Misses", "Attacks that missed, yours or the wild one's", Metric.MISSES, "miss", 10, 100, 1_000, 5_000, 15_000),
         tiered("super-effective", "Battle", "Super-effective hits", "Your hits that were super effective", Metric.SUPER_EFFECTIVE, "bolt", 25, 250, 2_500, 10_000, 30_000),
-        tiered("total-xp", "Battle", "Total XP", "XP all your Pokémon have earned", Metric.TOTAL_XP, "xp", 10_000, 100_000, 1_000_000, 5_000_000, 20_000_000),
-        tiered("total-levels", "Battle", "Total levels", "All your Pokémon's levels added up", Metric.TOTAL_LEVELS, "level", 100, 1_000, 5_000, 15_000, 40_000),
+        // R13 Part F: a Lv 100 Pokémon gains no XP, so the top tiers mean raising many Pokémon to 100 (~0.8-1.25 M XP each): 10 M ≈ 10
+        // raised ≈ 1-1.5 years of daily study (was 5 M / 20 M).
+        tiered("total-xp", "Battle", "Total XP", "XP your Pokémon have gained with you", Metric.TOTAL_XP, "xp", 10_000, 100_000, 1_000_000, 3_000_000, 10_000_000),
+        tiered("total-levels", "Battle", "Total levels", "Levels your Pokémon have gained with you (not the levels they came with)", Metric.TOTAL_LEVELS, "level", 100, 1_000, 5_000, 15_000, 40_000),
         tiered3("highest-level", "Battle", "Highest level", "Level of your best Pokémon", Metric.HIGHEST_LEVEL, "trophy", 25, 50, 100),
         tiered("evolutions", "Battle", "Evolutions", "Times one of your Pokémon evolved", Metric.EVOLUTIONS, "evolve", 1, 10, 50, 150, 400),
 
@@ -99,7 +103,7 @@ object AchievementTable {
         tiered("ball-catches", "Collection", "Ball catches", "Catches with a thrown ball (not the auto-catch rule)", Metric.BALL_CATCHES, "ball-catch", 1, 10, 50, 200, 500),
 
         // ---- Economy ----
-        tiered("money-earned", "Economy", "Money earned", "₽ earned from answers, defeats and goal bonuses", Metric.MONEY_EARNED, "coin", 2_000, 20_000, 100_000, 365_000, 1_000_000),
+        tiered("money-earned", "Economy", "Money earned", "₽ earned from answers, won battles and goal bonuses", Metric.MONEY_EARNED, "coin", 2_000, 20_000, 100_000, 365_000, 1_000_000),
         tiered("money-spent", "Economy", "Money spent", "₽ spent in the Shop", Metric.MONEY_SPENT, "bag", 1_000, 10_000, 75_000, 250_000, 750_000),
         tiered("items-used", "Economy", "Items used", "Potions, stones, held items given", Metric.ITEMS_USED, "potion", 5, 50, 250, 1_000, 3_000),
         tiered("tms", "Economy", "TMs taught", "Moves taught with a TM", Metric.TMS_TAUGHT, "tm", 1, 5, 20, 50, 100),

@@ -1,40 +1,56 @@
 package com.husarp.ankigo.debug
 
 import com.husarp.ankigo.game.GameEvent
+import com.husarp.ankigo.game.Items
 
-/** Only structured game facts. Never include card HTML, nicknames, trainer names, free-form messages or exceptions. */
+/**
+ * R13 Part E: every game event as one short readable line for the debug log, with names (Pokémon, moves, items, the event's own
+ * text), so a report says what happened. Never card text: no game event carries any (the Battle log's card fronts are not logged).
+ * Kept short on purpose: the whole log is ~1 MB, and a day of study writes thousands of these.
+ */
 object GameEventText {
     fun answer(source: String, cardId: Long, button: Int) =
         "Answer source=${if (source in setOf("live", "study", "catch-up")) source else "unknown"} card=$cardId button=$button"
 
     fun event(e: GameEvent): String = when (e) {
-        is GameEvent.Counted -> "Counted button=${e.button} points=${e.points} today=${e.reviewsToday} catchUp=${e.catchUp}"
-        is GameEvent.Attack -> "Attack player=${e.byPlayer} damage=${e.damage} hits=${e.hits} targetHp=${e.targetHp}/${e.targetMaxHp} userHp=${e.userHp}/${e.userMaxHp} critical=${e.crit} missed=${e.missed} failed=${e.failed} effectiveness=${e.effectiveness}"
-        is GameEvent.Encounter -> "Encounter species=${e.species} level=${e.level} shiny=${e.shiny} hp=${e.hp}/${e.maxHp} catch=${e.willCatch} new=${e.newSpecies}"
-        is GameEvent.BallThrow -> "BallThrow ball=${com.husarp.ankigo.game.Items.def(e.ball)?.id ?: "unknown"} chance=${e.chance} success=${e.success} left=${e.left} throw=${e.number}"
-        is GameEvent.Caught -> "Caught species=${e.species} level=${e.level} shiny=${e.shiny} new=${e.newSpecies} team=${e.toTeam}"
-        is GameEvent.Defeated -> "Defeated species=${e.species} xp=${e.xp}"
-        is GameEvent.XpGained -> "XpGained uid=${id(e.uid)} xp=${e.xp} level=${e.level} progress=${e.xpInLevel}/${e.xpForLevel}"
-        is GameEvent.LevelUp -> "LevelUp uid=${id(e.uid)} level=${e.level} hp=${e.hp}/${e.maxHp}"
-        is GameEvent.Evolved -> "Evolved uid=${id(e.uid)} species=${e.toSpecies}"
-        is GameEvent.Effect -> "Effect player=${e.onPlayer} hp=${e.hp}/${e.maxHp}"
+        is GameEvent.Counted -> "Counted button=${e.button} points=${e.points} today=${e.reviewsToday} streak=${e.cardStreak}" + flag(e.catchUp, "catch-up")
+        is GameEvent.Ignored -> "Ignored: ${e.reason}"
         is GameEvent.Charge -> "Charge points=${e.points} answers=${e.answers}/${e.of}"
-        is GameEvent.RoundStart -> "RoundStart multiplier=${e.multiplier} points=${e.points} enemyActs=${e.enemyActs} mainActs=${e.mainActs} enemyPower=${e.enemyPower}"
-        is GameEvent.Cash -> "Cash amount=${e.amount} total=${e.total} kind=${e.kind}"
-        is GameEvent.ItemFound -> "ItemFound item=${com.husarp.ankigo.game.Items.def(e.item)?.id ?: "unknown"} count=${e.count}"
-        is GameEvent.BadgeEarned -> "BadgeEarned id=${e.id}"
-        is GameEvent.AchievementReached -> "AchievementReached id=${e.id.filter { it.isLetterOrDigit() || it == '-' }.take(48)} tier=${e.tier}"
+        is GameEvent.Cash -> "Cash +${e.amount} total=${e.total} ${e.kind}"
+        is GameEvent.ItemFound -> "ItemFound ${Items.name(e.item)} (now ${e.count})"
+        is GameEvent.BadgeEarned -> "BadgeEarned #${e.id} ${e.title}"
+        is GameEvent.AchievementReached -> "AchievementReached ${e.id.filter { it.isLetterOrDigit() || it == '-' }.take(48)} tier=${e.tier} ${e.title} ${e.tierName}"
         is GameEvent.TrainerLevelUp -> "TrainerLevelUp level=${e.level}"
-        is GameEvent.Fainted -> "Fainted player=${e.player}"
-        is GameEvent.MainHealed -> "MainHealed uid=${id(e.uid)} hp=${e.hp}"
-        is GameEvent.Healed -> "Healed uid=${id(e.uid)} amount=${e.amount} hp=${e.hp}/${e.maxHp} reason=${e.reason}"
-        is GameEvent.MainChanged -> "MainChanged uid=${id(e.uid)}"
-        is GameEvent.SwitchHit -> "SwitchHit hp=${e.hp}/${e.maxHp}"
-        else -> e.javaClass.simpleName // Info, undo reasons, move names etc deliberately omit their text
-    }
+        is GameEvent.DayChanged -> "DayChanged ${e.day}"
+        is GameEvent.Encounter -> "Encounter ${e.name} #${e.species} Lv ${e.level} ${e.tier} hp=${e.hp}/${e.maxHp}" +
+            flag(e.shiny, "shiny") + flag(e.newSpecies, "new") + (if (e.willCatch) " will-catch" else " will-defeat")
+        is GameEvent.RoundStart -> "RoundStart x${e.multiplier} points=${e.points} main=${e.mainActs} wild=${e.enemyActs} wildPower=${e.enemyPower}"
+        is GameEvent.Attack -> "Attack ${if (e.byPlayer) "mine" else "wild"} ${e.user} -> ${e.target}: ${e.move} ${e.moveType ?: "?"}/${e.category} dmg=${e.damage}" +
+            (if (e.hits > 1) " hits=${e.hits}" else "") + " eff=${e.effectiveness} target=${e.targetHp}/${e.targetMaxHp} user=${e.userHp}/${e.userMaxHp}" +
+            flag(e.crit, "crit") + flag(e.missed, "missed") + flag(e.failed, "failed")
+        is GameEvent.Splash -> "Splash ${e.name}"
+        is GameEvent.Effect -> "Effect on ${if (e.onPlayer) "mine" else "wild"} ${e.kind}: ${e.text} hp=${e.hp}/${e.maxHp}" + (e.status?.let { " status=$it" } ?: "")
+        is GameEvent.Fainted -> "Fainted ${if (e.player) "mine" else "wild"} ${e.name}"
+        is GameEvent.BallThrow -> "BallThrow ${Items.name(e.ball)} chance=${e.chance}% ${if (e.success) "caught" else "missed"} left=${e.left} throw=${e.number}"
+        is GameEvent.Caught -> "Caught ${e.name} #${e.species} Lv ${e.level} ball=${e.ball?.let(Items::name) ?: "auto"}" +
+            flag(e.shiny, "shiny") + flag(e.newSpecies, "new") + (if (e.toTeam) " to-team" else " to-box")
+        is GameEvent.Defeated -> "Defeated ${e.name} #${e.species} xp=${e.xp}"
+        is GameEvent.Duplicate -> "Duplicate ${e.name} Lv ${e.level} (own Lv ${e.ownedLevel}) ${e.result}" +
+            (e.releasedName?.let { " released=$it" } ?: "") + (e.keptBecause?.let { " kept: $it" } ?: "")
+        is GameEvent.XpGained -> "XpGained ${e.name} +${e.xp} Lv ${e.level} ${e.xpInLevel}/${e.xpForLevel}"
+        is GameEvent.LevelUp -> "LevelUp ${e.name} -> Lv ${e.level} hp=${e.hp}/${e.maxHp}"
+        is GameEvent.MoveLearned -> "MoveLearned ${e.name}: ${e.move}" + (e.forgot?.let { " (forgot $it)" } ?: "")
+        is GameEvent.MoveSkipped -> "MoveSkipped ${e.name}: ${e.move}"
+        is GameEvent.Evolved -> "Evolved ${e.from} -> ${e.to} #${e.toSpecies}"
+        is GameEvent.MainHealed -> "MainHealed ${e.name} hp=${e.hp}"
+        is GameEvent.Healed -> "Healed ${e.name} +${e.amount} hp=${e.hp}/${e.maxHp} ${e.reason}"
+        is GameEvent.Fled -> "Fled ${e.name}"
+        is GameEvent.MainChanged -> "MainChanged -> ${e.name}"
+        is GameEvent.SwitchHit -> "TurnHit ${e.item?.let { "item ${Items.name(it)} on" } ?: "switch to"} ${e.monName} hp=${e.hp}/${e.maxHp}; ${e.wildName} attacks once"
+        is GameEvent.Info -> "Info: ${e.text}"
+    }.replace('\n', ' ').take(400)
 
     fun error(tag: String, type: String) = "Error tag=${safe(tag)} type=${safe(type)}"
     private fun safe(value: String) = value.filter { it.isLetterOrDigit() || it == '_' }.take(48)
-    private fun id(uid: String) = java.security.MessageDigest.getInstance("SHA-256")
-        .digest(uid.toByteArray(Charsets.UTF_8)).take(6).joinToString("") { "%02x".format(it.toInt() and 255) }
+    private fun flag(on: Boolean, word: String) = if (on) " $word" else ""
 }

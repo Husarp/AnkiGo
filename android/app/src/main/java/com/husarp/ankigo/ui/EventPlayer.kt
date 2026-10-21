@@ -492,8 +492,14 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 return d(800)
             }
             is GameEvent.SwitchHit -> {
-                wildMult = Tuning.SWITCH_HIT_POWER   // the free hit is at normal power: no "×0" left over from a round where the wild one stayed quiet
-                log(LogKind.AGAIN, "WILD", "Switched to ${em(e.monName)} — ${wild(e.wildName)} attacks!")
+                wildMult = Tuning.SWITCH_HIT_POWER   // the turn's attack is at normal power: no "×0" left over from a round where the wild one stayed quiet
+                if (e.item != null) {
+                    // R13 Part C: an item used on the main in a fight took the turn: the bar shows the HP after the item, then the attack lands
+                    arena.setPlayerHp(e.hp, e.maxHp, true)
+                    log(LogKind.AGAIN, "WILD", "Used ${em(Items.name(e.item))} on ${em(e.monName)} — ${wild(e.wildName)} attacks once!")
+                } else {
+                    log(LogKind.AGAIN, "WILD", "Switched to ${em(e.monName)} — ${wild(e.wildName)} attacks once!")
+                }
                 return d(500)
             }
             is GameEvent.Cash -> {

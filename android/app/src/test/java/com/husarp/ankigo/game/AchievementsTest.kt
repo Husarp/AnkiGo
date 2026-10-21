@@ -154,13 +154,13 @@ class AchievementsTest {
         assertEquals(7L, v(Metric.DEX_SEEN)) // the main's 25 + six more
         assertEquals(5L, v(Metric.DEX_CAUGHT)) // 25 + 1 + 150 + 151 + 19
         assertEquals(50L, v(Metric.HIGHEST_LEVEL))
-        assertEquals(20L + 50 + 7, v(Metric.TOTAL_LEVELS))
+        assertEquals("R13 F: the levels the Pokémon came with are not levels gained", 0L, v(Metric.TOTAL_LEVELS))
         assertEquals(2L, v(Metric.LEGENDARY_MYTHICAL)) // 150 (legendary) and 151 (mythical)
         assertEquals(3L, v(Metric.BALL_CATCHES)) // not the auto rule's
         // Electric (25) + Grass/Poison (1) + Psychic (150, 151) + Normal (19) = 5 types
         assertEquals(5L, v(Metric.TYPES_CAUGHT))
-        // medium growth = n^3: 20^3 + 50^3 (+ 77 progress) + 7^3; the leaf (growth rate 2) too
-        assertEquals(8_000L + 343 + 77 + data.growth.getValue(data.sp(150).growthRate)[50], v(Metric.TOTAL_XP))
+        // R13 F: no XP floor from the Pokémon you own (it used to add their whole growth-table XP)
+        assertEquals(0L, v(Metric.TOTAL_XP))
     }
 
     @Test fun catchesNeverFallBelowThePokemonYouOwn() {
@@ -250,11 +250,25 @@ class AchievementsTest {
         assertEquals(2L, counter(s, Metric.ITEMS_FOUND))
     }
 
-    @Test fun totalXpIsNeverBelowTheXpOfThePokemonYouOwn() {
-        val s = state() // Sparkmouse Lv 20: 20^3 = 8 000
-        assertEquals(8_000L, Achievements.value(Metric.TOTAL_XP, s, data))
+    @Test fun totalXpIsTheXpGainedNotTheXpOfThePokemonYouOwn() {   // R13 Part F
+        val s = state() // Sparkmouse Lv 20: 20^3 = 8 000 XP from the growth table, none of it gained here
+        assertEquals(0L, Achievements.value(Metric.TOTAL_XP, s, data))
+        s.mons += TestData.mon(data, 19, 25, uid = "caught25")   // a Lv 25 joins: TOTAL_XP unchanged
+        assertEquals(0L, Achievements.value(Metric.TOTAL_XP, s, data))
         s.counters[Metric.TOTAL_XP.name] = 9_500 // a released Pokémon's XP was counted too
+        s.mons.removeAll { it.uid == "caught25" }
         assertEquals(9_500L, Achievements.value(Metric.TOTAL_XP, s, data))
+    }
+
+    @Test fun totalLevelsCountsEachLevelGained() {   // R13 Part F
+        val s = state()
+        s.mons += TestData.mon(data, 19, 25, uid = "caught25")
+        assertEquals("a caught Lv 25 brings no levels", 0L, Achievements.value(Metric.TOTAL_LEVELS, s, data))
+        Achievements.count(s, listOf(GameEvent.LevelUp("main", "Sparkmouse", 21, 50, 50), GameEvent.LevelUp("main", "Sparkmouse", 22, 52, 52),
+            GameEvent.LevelUp("caught25", "Ratty", 26, 40, 40)))
+        assertEquals(3L, Achievements.value(Metric.TOTAL_LEVELS, s, data))
+        s.mons.removeAll { it.uid == "caught25" }   // released: the levels it gained stay counted
+        assertEquals(3L, Achievements.value(Metric.TOTAL_LEVELS, s, data))
     }
 
     @Test fun bestDayTakesTheHistoryTodayAndTheBadgesAlreadyEarned() {
@@ -448,19 +462,20 @@ class AchievementsTest {
     }
 
     @Test fun reachedTiersNeverGoDownWhenAValueDrops() {
+        // (R13 Part F: "total-levels" no longer drops with a release; "catches" still reads the Pokémon you own when that is more)
         val s = looked()
-        repeat(10) { s.mons += TestData.mon(data, 19, 100, uid = "big$it") } // total levels 20 + 1 000 -> Common (100) and Rare (1 000)
+        repeat(120) { s.mons += TestData.mon(data, 19, 10, uid = "big$it") } // an import: 121 owned -> Common (10) and Rare (100)
         val first = check(s)
-        assertEquals(listOf(0, 1), reached(first, "total-levels").map { it.tier })
+        assertEquals(listOf(0, 1), reached(first, "catches").map { it.tier })
         s.mons.removeAll { it.uid.startsWith("big") }                      // released
-        assertEquals(20L, Achievements.value(Metric.TOTAL_LEVELS, s, data))
+        assertEquals(1L, Achievements.value(Metric.CATCHES, s, data))
         assertTrue(check(s, NOW + 1).none { it is GameEvent.AchievementReached })
-        assertEquals(listOf(NOW, NOW), s.achTiers["total-levels"])
-        val view = Achievements.view(s, data).single { it.id == "total-levels" }
+        assertEquals(listOf(NOW, NOW), s.achTiers["catches"])
+        val view = Achievements.view(s, data).single { it.id == "catches" }
         assertEquals(1, view.tier)
         assertEquals("Rare", view.tierName)
-        assertEquals(20L, view.value)
-        assertEquals(5_000L, view.next)
+        assertEquals(1L, view.value)
+        assertEquals(500L, view.next)
     }
 
     @Test fun aBadgeOneOffIsReachedWhenTheBadgeIsInTheSetAndSendsNoSecondEvent() {
@@ -547,8 +562,8 @@ class AchievementsTest {
         assertEquals(AchievementTable.ROWS.map { it.id }, Achievements.view(s, data).map { it.id })
     }
 
-    @Test fun theDebugLogLineHasOnlyFacts() {
-        assertEquals("AchievementReached id=answers tier=1", com.husarp.ankigo.debug.GameEventText.event(GameEvent.AchievementReached("answers", 1, "Answers given", "Rare")))
+    @Test fun theDebugLogLineIsReadable() {   // R13 Part E: names in the debug log, not only ids
+        assertEquals("AchievementReached answers tier=1 Answers given Rare", com.husarp.ankigo.debug.GameEventText.event(GameEvent.AchievementReached("answers", 1, "Answers given", "Rare")))
     }
 
     // ---- shop, items, TMs ----

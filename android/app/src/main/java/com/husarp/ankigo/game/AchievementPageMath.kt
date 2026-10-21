@@ -183,8 +183,11 @@ object AchPageMath {
         Metric.SHINIES, Metric.DAYS_STUDIED, Metric.GOALS_REACHED, Metric.BALLS_THROWN,
     )
 
+    /** R13 Part F: "Total levels" counts each level gained from that update on (the starter's earlier ones were worked out once). */
+    const val LEVELS_NOTE = "Counted level by level since the October 2026 update (your starter's earlier levels are included); the levels a Pokémon came with never count."
+
     /** The footnote under the ladder. */
-    fun sourceNote(row: AchRow, since: String): String = when (source(row)) {
+    fun sourceNote(row: AchRow, since: String): String = if (row.metric == Metric.TOTAL_LEVELS) LEVELS_NOTE else when (source(row)) {
         AchSource.SAVE -> "Counted from your save, so your earlier progress is included."
         AchSource.HISTORY -> "Started from your save's daily history (up to 400 days), then counted live."
         AchSource.SINCE_UPDATE -> "Counted since the update ($since); earlier progress is not included."

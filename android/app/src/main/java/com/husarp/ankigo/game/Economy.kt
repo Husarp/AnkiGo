@@ -19,7 +19,18 @@ data class ItemDef(
 )
 
 object Items {
-    private fun balls() = Tuning.BALL_CHANCE.map { (id, pct) -> ItemDef(id, ItemKind.BALL, note = "Catch chance $pct%") }
+    /**
+     * PLAN 171: the four ball tiers, then Ankimon's other balls (kept so the Ankimon import and balls already in a bag still work; they
+     * throw as a Great Ball and are never sold or found). Every ball's text says what a miss costs.
+     */
+    private fun balls() = Tuning.BALL_CHANCE.map { (id, pct) ->
+        ItemDef(id, ItemKind.BALL, note = if (pct >= 100) "Catch chance $pct %: it always catches." else "Catch chance $pct %. $MISS_RULE")
+    } + Tuning.OLD_BALLS.map { id ->
+        ItemDef(id, ItemKind.BALL, note = "Throws as a ${name(Tuning.OLD_BALL_AS)}: catch chance ${Catching.ballChance(id)} %. $MISS_RULE")
+    }
+
+    /** PLAN 171: what a failed throw costs, said wherever a ball is chosen or explained. */
+    const val MISS_RULE = "If it fails, the wild Pokémon runs away."
 
     // Ankimon's fixed heal amounts (item_window.py hp_heal_items); max-potion / full-restore heal everything.
     private val HEALS = listOf(
@@ -81,7 +92,7 @@ object Items {
     /** "TM Thunderbolt" style name for a TM move id. */
     fun tmName(data: GameData, move: String): String = "TM " + (data.move(move)?.name ?: move)
 
-    /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; Master Ball has price 0). */
+    /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; the Master Ball and the old Ankimon balls have price 0). */
     fun shopPool(data: GameData): List<String> = ALL.keys.filter { data.price(it) > 0 }.sorted()
 
     /** Ankimon random-item pool: catalogue items except balls. */
@@ -101,12 +112,11 @@ object Economy {
 
     /**
      * Bookkeeping for one counted answer (call after state.reviewsToday was increased):
-     * +5 cash for the answer (any button), then the random item countdown (3..385 answers, rolled when 0) -> one random
-     * dropPool item (badge 6 first item). Money goes through [earn] (x2 with Amulet Coin / Luck Incense, daily cap).
-     * Emits Cash, ItemFound, BadgeEarned.
+     * the answer money ([payAnswer]: the day's curve, x2 with Amulet Coin / Luck Incense), then the random item countdown (3..385
+     * answers, rolled when 0) -> one random dropPool item (badge 6 first item). Emits Cash, ItemFound, BadgeEarned.
      */
     fun onReview(data: GameData, state: GameState, rng: Random, events: MutableList<GameEvent>) {
-        earn(state, Tuning.CASH_PER_ANSWER, CashKind.ANSWER, events)
+        payAnswer(state, events)
         if (state.itemCountdown <= 0) state.itemCountdown = rollCountdown(rng)
         state.itemCountdown--
         if (state.itemCountdown <= 0) {
@@ -120,25 +130,44 @@ object Economy {
     }
 
     /**
-     * The defeat money: +10 cash for a wild Pokémon that was defeated (call for Outcome.DEFEAT only: a catch pays nothing).
-     * Same doubling and daily cap as the answer money. Emits Cash.
+     * PLAN 125, the money curve (linear, reset each game day; it replaced the hard 500 ₽ a day): the day's money comes in tiers of
+     * Tuning.CASH_TIER. In the first tier every counted answer pays Tuning.CASH_PER_ANSWER, in the second every 2nd answer does, in
+     * the third every 3rd, and so on ([answersPerPayment]); state.cashWait counts the answers toward the next payment.
+     * Amulet Coin / Luck Incense on the main: each payment is doubled, and the tiers follow the money BEFORE the doubling
+     * (state.cashToday), so the item doubles the day's money at every tier and never makes the curve steeper sooner.
+     * Adds to state.cash and state.cashToday; emits Cash(ANSWER) when a payment is made.
      */
-    fun onDefeat(state: GameState, events: MutableList<GameEvent>) = earn(state, Tuning.CASH_PER_DEFEAT, CashKind.DEFEAT, events)
+    private fun payAnswer(state: GameState, events: MutableList<GameEvent>) {
+        state.cashWait++
+        if (state.cashWait < answersPerPayment(state.cashToday)) return
+        state.cashWait = 0
+        pay(state, Tuning.CASH_PER_ANSWER, CashKind.ANSWER, events)
+    }
 
     /**
-     * Pays [base] cash for [kind] (ANSWER or DEFEAT): x2 when the main holds Amulet Coin or Luck Incense, then at most what
-     * is left of today's cap (Tuning.CASH_DAILY_CAP counts what is really paid, after the doubling). Nothing left: no
-     * payment and no event. Adds to state.cash and state.cashToday; emits Cash.
+     * R13 Part C: a won fight (a wild Pokémon defeated, or caught by the auto rule or a ball; never a miss, an escape or a release)
+     * pays Tuning.CASH_PER_WIN on the same curve as the answers, paid the way the answers are: the WHOLE amount, every Nth win in the
+     * Nth tier (state.winWait counts the wins toward it; not 10/N ₽ each). Its money counts toward the day's tiers like an answer's,
+     * and Amulet Coin / Luck Incense doubles it the same way. Emits Cash(DEFEAT) when a payment is made.
      */
-    private fun earn(state: GameState, base: Int, kind: CashKind, events: MutableList<GameEvent>) {
+    fun onWin(state: GameState, events: MutableList<GameEvent>) {
+        state.winWait++
+        if (state.winWait < answersPerPayment(state.cashToday)) return
+        state.winWait = 0
+        pay(state, Tuning.CASH_PER_WIN, CashKind.DEFEAT, events)
+    }
+
+    /** One payment of [base] ₽ (×2 with Amulet Coin / Luck Incense on the main); the tiers count [base], the money before the doubling. */
+    private fun pay(state: GameState, base: Int, kind: CashKind, events: MutableList<GameEvent>) {
         val held = state.main?.heldItem
-        val want = if (held == "amulet-coin" || held == "luck-incense") base * 2 else base
-        val amount = minOf(want, Tuning.CASH_DAILY_CAP - state.cashToday)
-        if (amount <= 0) return
+        val amount = if (held == "amulet-coin" || held == "luck-incense") base * 2 else base
+        state.cashToday += base
         state.cash += amount
-        state.cashToday += amount
         events += GameEvent.Cash(amount, state.cash, kind)
     }
+
+    /** PLAN 125: the counted answers (or wins) one payment takes once [baseToday] ₽ (before any ×2) were earned today: 1, then 2, 3, 4 ... per tier. */
+    fun answersPerPayment(baseToday: Int): Int = baseToday.coerceAtLeast(0) / Tuning.CASH_TIER + 1
 
     /** The daily-goal bonus for [streakBefore] goal-streak days before today: 50 + 5 per day, 10 days at most (so 50..100). */
     fun dailyBonus(streakBefore: Int): Int =
@@ -146,7 +175,7 @@ object Economy {
 
     /**
      * Pays the daily-goal bonus once (the caller is the one-a-day "Daily goal reached" moment): never doubled, outside the
-     * daily cap (state.cashToday stays as it is), paid even when the cap is reached. Emits Cash(DAILY_BONUS).
+     * money curve (state.cashToday stays as it is, so it never makes the answers pay slower). Emits Cash(DAILY_BONUS).
      */
     fun payDailyBonus(state: GameState, streakBefore: Int, events: MutableList<GameEvent>) {
         val amount = dailyBonus(streakBefore)
@@ -169,8 +198,12 @@ object Shop {
     fun tmPool(data: GameData): List<String> =
         data.species.values.flatMap { it.tmMoves }.filter { it in data.moves }.distinct().sorted()
 
-    /** If state.shopDay != state.day: today's stock = date-seeded sample of slots() items and slots() TMs. */
+    /**
+     * If state.shopDay != state.day: today's stock = date-seeded sample of slots() items and slots() TMs (+ the Ultra Ball on its days).
+     * PLAN 171: an item that is no longer sold (an old Ankimon ball drawn before the update) leaves today's stock.
+     */
     fun ensureToday(data: GameData, state: GameState) {
+        state.shopItems.removeAll { data.price(it) <= 0 }
         if (state.shopDay == state.day) return
         val (items, tms) = stockFor(data, state.day, state.trainerLevel)
         setStock(state, items, tms)
@@ -181,17 +214,30 @@ object Shop {
      * the shop that day. Pure, so the reminders can look at tomorrow's shop. After a reroll the real stock is state.shopItems.
      */
     fun stockFor(data: GameData, day: String, trainerLevel: Int): Pair<List<String>, List<String>> =
-        draw(data, Random(day.hashCode()), trainerLevel)
+        draw(data, Random(day.hashCode()), trainerLevel, day)
 
-    private fun draw(data: GameData, rng: Random, trainerLevel: Int): Pair<List<String>, List<String>> {
+    /** slots() items and TMs drawn with [rng]; on an [ultraBallDay] the Ultra Ball comes first, on top of the drawn items (a reroll keeps it). */
+    private fun draw(data: GameData, rng: Random, trainerLevel: Int, day: String): Pair<List<String>, List<String>> {
         val n = slots(trainerLevel)
         val items = dailyPool(data).shuffled(rng).take(n)
         val tms = tmPool(data).shuffled(rng).take(n)
-        return items to tms
+        val ultra = if (ultraBallDay(day) && data.price(ULTRA_BALL) > 0) listOf(ULTRA_BALL) else emptyList()
+        return ultra + items to tms
     }
 
-    /** The items the daily draw and the deal pick from: the shop's item pool minus the always-on-sale [basics]. */
-    private fun dailyPool(data: GameData): List<String> = Items.shopPool(data).filter { it !in Tuning.SHOP_BASICS }
+    private const val ULTRA_BALL = "ultra-ball"
+
+    /**
+     * PLAN 171: is the Ultra Ball in the Shop on game day [day]? About one day in Tuning.ULTRA_BALL_EVERY_DAYS, seeded by the date like
+     * the rest of the stock, so a reroll neither brings it nor takes it away.
+     */
+    fun ultraBallDay(day: String): Boolean = Random(("ultra:$day").hashCode()).nextInt(Tuning.ULTRA_BALL_EVERY_DAYS) == 0
+
+    /**
+     * The items the daily draw and the deal pick from: the shop's item pool minus the always-on-sale [basics] and the Ultra Ball
+     * (PLAN 171: it has its own rare days, [ultraBallDay], and is never the deal).
+     */
+    private fun dailyPool(data: GameData): List<String> = Items.shopPool(data).filter { it !in Tuning.SHOP_BASICS && it != ULTRA_BALL }
 
     // ---- always in stock, deal of the day, weekend special (R10 T5; all derived from the game day, nothing is saved) ----
 
@@ -274,7 +320,7 @@ object Shop {
     }
 
     private fun restock(data: GameData, state: GameState, rng: Random) {
-        val (items, tms) = draw(data, rng, state.trainerLevel)
+        val (items, tms) = draw(data, rng, state.trainerLevel, state.day)
         setStock(state, items, tms)
     }
 

@@ -307,6 +307,7 @@ object LiveSession {
             }
             is LiveDetector.Event.Answer -> onAnswer(e)
             is LiveDetector.Event.Undo -> {
+                Report.log("LIVE", "undo in AnkiDroid: card ${e.cardId}, ${e.count} answer(s)")   // R13 Part E
                 val done = try {
                     GameRepo.run(app) { g -> saveSnapshotInto(g); g.onUndo(e.cardId, e.count) }
                     true

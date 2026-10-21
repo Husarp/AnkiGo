@@ -14,7 +14,7 @@ data class CatchSummary(
     val pokedex: PokedexLine?,
     val throwInfo: ThrowLine?,
     val xp: List<XpLine>,
-    val coins: Int, // answer + defeat money of the batch; the once-a-day goal bonus is not part of the fight
+    val coins: Int, // answer + win money of the batch (R13 Part C); the once-a-day goal bonus is not part of the fight
     val next: String,
 ) {
     /** [isNew] = first of its species; [number] = national Pokédex number. */

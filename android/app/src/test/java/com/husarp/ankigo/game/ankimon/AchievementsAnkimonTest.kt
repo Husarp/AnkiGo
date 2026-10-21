@@ -37,9 +37,10 @@ class AchievementsAnkimonTest {
     @Test fun anImportReachesTiersWithDatesAndNoEvents() {
         val s = looked()
         assertEquals(emptyList<Long>(), s.achTiers["catches"])
-        merge(s, save(12, level = 30)) // 13 Pokémon owned: "catches" Common (10); levels 20 + 12 * 30 = 380: "total-levels" Common (100)
+        merge(s, save(12, level = 30)) // 13 Pokémon owned: "catches" Common (10); their 12 * 30 levels were not gained here (R13 Part F)
         assertEquals(listOf(NOW), s.achTiers["catches"])
-        assertEquals(listOf(NOW), s.achTiers["total-levels"])
+        assertEquals(emptyList<Long>(), s.achTiers["total-levels"])
+        assertEquals(emptyList<Long>(), s.achTiers["total-xp"])
         val later = mutableListOf<GameEvent>()
         Achievements.check(s, data, NOW + 1, later) // nothing is left over for the next answer to celebrate
         assertTrue(later.none { it is GameEvent.AchievementReached })

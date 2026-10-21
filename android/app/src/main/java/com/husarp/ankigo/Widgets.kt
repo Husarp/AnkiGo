@@ -83,6 +83,7 @@ class StudyWidget : AppWidgetProvider() {
                 val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
                 if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
                 Report.init(ctx); Anki.load(ctx)
+                Report.log("WIDGET", "study widget $id: ${intent.action?.substringAfterLast('.')}${intent.getIntExtra("ease", 0).takeIf { it > 0 }?.let { " ease $it" } ?: ""}")   // R13 Part E
                 val pr = goAsync()
                 Thread {
                     try {

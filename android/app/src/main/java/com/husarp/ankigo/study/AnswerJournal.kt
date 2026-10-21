@@ -14,6 +14,8 @@ data class QueuedAnswer(
     val restored: Boolean = false,
     /** The card's answer-button count (2, 3 or 4): the game step needs it to turn [ease] into the game's button. */
     val buttons: Int = 4,
+    /** PLAN 195: AnkiDroid refused it while another card was first; it waits (in the journal too) to be written when its card is first again. */
+    val waiting: Boolean = false,
 ) {
     val key get() = StudyLoop.Key(nid, ord)
 }
@@ -55,7 +57,8 @@ object AnswerJournal {
             for (k in AnswerState.JOURNAL) if (a.before.containsKey(k)) before.put(k, a.before[k] ?: JSONObject.NULL)
             arr.put(
                 JSONObject().put("seq", a.seq).put("deckId", a.deckId).put("nid", a.nid).put("ord", a.ord).put("cardId", a.cardId)
-                    .put("ease", a.ease).put("tookMs", a.tookMs).put("madeAt", a.madeAt).put("buttons", a.buttons).put("before", before),
+                    .put("ease", a.ease).put("tookMs", a.tookMs).put("madeAt", a.madeAt).put("buttons", a.buttons).put("before", before)
+                    .also { if (a.waiting) it.put("waiting", true) },
             )
         }
         return JSONObject().put("v", VERSION).put("answers", arr).toString()
@@ -92,6 +95,7 @@ object AnswerJournal {
         return QueuedAnswer(
             o.optLong("seq"), o.optLong("deckId"), o.optLong("nid"), o.optInt("ord"), cardId, before, ease,
             o.optLong("tookMs", 0).coerceAtLeast(0), o.optLong("madeAt", 0), restored = true, buttons = o.optInt("buttons", 4).takeIf { it in 2..4 } ?: 4,
+            waiting = o.optBoolean("waiting", false),
         )
     }
 }

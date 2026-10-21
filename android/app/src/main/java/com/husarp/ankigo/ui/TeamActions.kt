@@ -144,9 +144,9 @@ internal class MonActions(private val s: GamePage) {
         }
     }
 
-    /** Runs ItemUse.use through GameRepo (also used for fossils: [uid] null). */
+    /** Runs Game.useItem through GameRepo (also used for fossils: [uid] null); an item on the Main in a fight takes a turn (R13 Part C). */
     fun runUse(item: String, uid: String?): ActionResult =
-        s.act { g -> ItemUse.use(g.data, g.state, item, uid, g.rng, g.clock()) }
+        s.act { g -> g.useItem(item, uid) }
 
     // ---- TMs ----
 

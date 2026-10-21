@@ -17,7 +17,7 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.Stat
-import com.husarp.ankigo.game.Tuning
+import com.husarp.ankigo.game.Catching
 import com.husarp.ankigo.game.Type
 import com.husarp.ankigo.ui.Bits
 import com.husarp.ankigo.ui.BarMeaning
@@ -480,7 +480,7 @@ internal object HelpViews {
             val id = v.arg.orEmpty()
             val def = Items.def(id)
             val cap = v.caption.ifBlank {
-                Items.name(id) + if (def?.kind == ItemKind.BALL) "\n${Tuning.BALL_CHANCE[id]} %" else ""
+                Items.name(id) + if (def?.kind == ItemKind.BALL) "\n${Catching.ballChance(id)} %" else ""
             }
             cell(ctx, Bits.itemTile(ctx, id, 44), cap)
         }

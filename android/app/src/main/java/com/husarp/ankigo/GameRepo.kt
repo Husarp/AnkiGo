@@ -174,7 +174,7 @@ object GameRepo {
                 if (st.starterChosen) {
                     // R4 fix A2: the first, quiet look at the achievements, before any screen reads this game or any action changes it
                     // (a loaded save, a restored backup, an import: they all come through here), so the tiers it earns are stored first.
-                    try { Achievements.onReady(st, d, System.currentTimeMillis()) } catch (e: Exception) { Report.fail(TAG, "first look at the achievements", e) }
+                    try { Achievements.onReady(st, d, System.currentTimeMillis()) { Report.log("ACH", it) } } catch (e: Exception) { Report.fail(TAG, "first look at the achievements", e) }
                     try { Wishlist.prune(st) } catch (e: Exception) { Report.fail(TAG, "pruning the wishlist", e) }
                     try { Looks.sanitize(st, d) } catch (e: Exception) { Report.fail(TAG, "clearing uncaught looks", e) }
                     Status.READY
@@ -214,8 +214,10 @@ object GameRepo {
     fun <T> run(ctx: Context, f: (Game) -> T): T {
         requireMain()
         val g = current ?: error("The game is not loaded")
+        val settingsBefore = com.husarp.ankigo.debug.SettingsText.of(g.state.settings) // R13 Part E: a changed game setting goes to the log
         try {
             return f(g).also { result ->
+                com.husarp.ankigo.debug.SettingsText.diff(settingsBefore, com.husarp.ankigo.debug.SettingsText.of(g.state.settings)).forEach { Report.log("SETTINGS", "game $it") }
                 when (result) {
                     is com.husarp.ankigo.game.ActionResult -> { GameLog.events(result.events); wildMoves.observe(result.events, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(result.events) }
                     is List<*> -> result.filterIsInstance<GameEvent>().let { GameLog.events(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it) }

@@ -107,8 +107,11 @@ class ActionBarModel {
         return when (e) {
             is GameEvent.Encounter -> { reset(); BOTH }
             is GameEvent.RoundStart -> { put(BarSide.MINE, HalfState.Note(NO_MOVE)); put(BarSide.THEIRS, HalfState.Note(NO_MOVE)); BOTH }
-            // R11-133: the free hit of a switch: your half says why only the wild one attacks
-            is GameEvent.SwitchHit -> { put(BarSide.MINE, HalfState.Note("Switched to ${e.monName}")); listOf(BarSide.MINE) }
+            // R11-133: the turn a switch (R13 Part C: or an item) took: your half says why only the wild one attacks
+            is GameEvent.SwitchHit -> {
+                put(BarSide.MINE, HalfState.Note(e.item?.let { "Used ${com.husarp.ankigo.game.Items.name(it)}" } ?: "Switched to ${e.monName}"))
+                listOf(BarSide.MINE)
+            }
             is GameEvent.MainChanged -> { put(BarSide.MINE, HalfState.Empty); listOf(BarSide.MINE) }   // a new Pokémon has not moved yet
             is GameEvent.Attack -> {
                 val side = if (e.byPlayer) BarSide.MINE else BarSide.THEIRS
@@ -172,7 +175,7 @@ class ActionBarModel {
             is GameEvent.Encounter, is GameEvent.Defeated, is GameEvent.Fled, is GameEvent.Fainted, is GameEvent.Caught,
             is GameEvent.BallThrow, is GameEvent.LevelUp, is GameEvent.MoveLearned, is GameEvent.MoveSkipped, is GameEvent.Evolved,
             is GameEvent.MainHealed, is GameEvent.Healed, is GameEvent.MainChanged, is GameEvent.XpGained, is GameEvent.Charge,
-            is GameEvent.Duplicate -> LineScope.SIDE
+            is GameEvent.Duplicate, is GameEvent.SwitchHit -> LineScope.SIDE   // PLAN 173: a switch draws no whole-bar line
             is GameEvent.Info -> if (e.text.endsWith("broke free!")) LineScope.SIDE else LineScope.WHOLE
             is GameEvent.AchievementReached -> LineScope.POPUP
             is GameEvent.BadgeEarned -> if (AchPageMath.forBadge(e.id) != null) LineScope.POPUP else LineScope.WHOLE

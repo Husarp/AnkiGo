@@ -20,4 +20,19 @@ class StudyRulesTest {
         assertEquals(StudyRules.SpriteSource.STATIC, StudyRules.spriteSource(false, true))
         assertEquals(StudyRules.SpriteSource.ANIMATED, StudyRules.spriteSource(true, true))
     }
+    // PLAN 175: the answer side shows again after a resume only for the same card in the same state
+    private val row = mapOf("_id" to "7", "note_id" to "70", "reps" to "3", "queue" to "2", "due" to "100")
+    private val keep = StudyRules.AnswerKeep(StudyLoop.Key(70, 0), row, "typed", -1)
+    @Test fun theSameUnansweredCardKeepsItsAnswerSide() {
+        assertTrue(keep.same(StudyLoop.Key(70, 0), row.toMap()))
+    }
+    @Test fun aCardAnsweredInAnkiDroidMeanwhileShowsItsQuestion() {
+        assertFalse(keep.same(StudyLoop.Key(70, 0), row + ("reps" to "4")))   // answered (Again brings it back on top)
+        assertFalse(keep.same(StudyLoop.Key(70, 0), row + ("due" to "200")))  // rescheduled
+    }
+    @Test fun anotherCardOrNoRowShowsTheQuestion() {
+        assertFalse(keep.same(StudyLoop.Key(70, 1), row))
+        assertFalse(keep.same(StudyLoop.Key(71, 0), row))
+        assertFalse(StudyRules.AnswerKeep(StudyLoop.Key(70, 0), emptyMap(), "", -1).same(StudyLoop.Key(70, 0), emptyMap()))
+    }
 }

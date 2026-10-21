@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.Battle
+import com.husarp.ankigo.game.Catching
 import com.husarp.ankigo.game.Economy
 import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameEvent
@@ -13,14 +14,17 @@ import org.junit.Assert.assertNotNull
 import org.junit.Test
 import kotlin.random.Random
 
-/** R4 fix B8: the throw number of a catch comes from the fight in the game state, not from the screen that watched it. */
+/**
+ * R4 fix B8: the throw number of a catch comes from the fight in the game state, not from the screen that watched it. PLAN 171: a miss
+ * ends the fight now (the wild one runs away), so a new fight's throw is always its first; a fight saved before the update keeps its count.
+ */
 class ThrowNumberTest {
     private val data = TestData.world()
     private val now = 1_791_892_800_000L
 
-    /** A seed whose first draws say [outcomes] for the 8 % Poké Ball (true = it catches). */
+    /** A seed whose first draws say [outcomes] for the Poké Ball (true = it catches). */
     private fun seed(vararg outcomes: Boolean): Int =
-        (0..200_000).first { s -> Random(s).let { r -> outcomes.all { want -> (r.nextInt(100) < 8) == want } } }
+        (0..200_000).first { s -> Random(s).let { r -> outcomes.all { want -> (r.nextInt(100) < Catching.ballChance("poke-ball")) == want } } }
 
     private fun fight(outcomes: BooleanArray): Game {
         val st = TestData.state(data, 25, 20, listOf("tackle"))
@@ -32,12 +36,20 @@ class ThrowNumberTest {
 
     private fun throws(g: Game, n: Int) = (1..n).map { g.throwBall("poke-ball") }
 
-    @Test fun theCatchSaysThrowThreeEvenForAScreenThatOnlySawTheLastThrow() {
+    @Test fun aMissEndsTheFightSoEveryThrowIsItsFightsFirst() {
         val g = fight(booleanArrayOf(false, false, true))
         val batches = throws(g, 3)
-        assertEquals(listOf(1, 2, 3), batches.map { b -> b.filterIsInstance<GameEvent.BallThrow>().single().number })
+        assertEquals(listOf(1, 1, 1), batches.map { b -> b.filterIsInstance<GameEvent.BallThrow>().single().number })
+        assertEquals(2, batches.take(2).count { b -> b.any { it is GameEvent.Fled } })
+    }
+
+    @Test fun theCatchSaysThrowThreeEvenForAScreenThatOnlySawTheLastThrow() {
+        val g = fight(booleanArrayOf(true))
+        g.state.battle!!.failedThrows = 2   // a fight saved before PLAN 171 with two misses in it
+        val batches = listOf(g.throwBall("poke-ball"))
+        assertEquals(3, batches[0].filterIsInstance<GameEvent.BallThrow>().single().number)
         // A panel that was not open for the first two throws has only the last batch: it still reports throw 3.
-        val last = CatchSummary.of(batches[2], data = data)!!
+        val last = CatchSummary.of(batches[0], data = data)!!
         assertEquals(3, last.throwInfo!!.number)
         val tile = CatchTilesPlan.tiles(last) { it }.single { it.kind == CatchTilesPlan.Kind.THROW }
         assertEquals("Throw 3", tile.value)
@@ -57,9 +69,8 @@ class ThrowNumberTest {
     }
 
     @Test fun theCountIsSavedWithTheFight() {
-        val g = fight(booleanArrayOf(false, false, true))
-        throws(g, 2)
-        assertEquals(2, g.state.battle!!.failedThrows)
+        val g = fight(booleanArrayOf(true))
+        g.state.battle!!.failedThrows = 2   // a fight saved before PLAN 171 with two misses in it
         val back = SaveCodec.decode(SaveCodec.encode(g.state))
         assertEquals(2, back.battle!!.failedThrows)
         val g2 = Game(data, back, Random(seed(true))) { now } // the app was restarted between the throws

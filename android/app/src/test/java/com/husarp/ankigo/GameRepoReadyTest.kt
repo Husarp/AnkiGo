@@ -8,6 +8,7 @@ import com.husarp.ankigo.game.Metric
 import com.husarp.ankigo.game.TestData
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -43,7 +44,7 @@ class GameRepoReadyTest {
         assertTrue(st.achSince > 0)
         assertEquals(2, st.achTiers["highest-level"]!!.size) // Lv 80: Common (25) and Rare (50)
         assertEquals(AchievementTable.ROWS.map { it.id }.toSet(), st.achTiers.keys)
-        assertEquals(8_000L + 512_000L, st.counters[Metric.TOTAL_XP.name]) // Lv 20 and Lv 80 (n^3): the baseline is stored
+        assertNull("R13 Part F: no XP baseline from the Pokémon you own", st.counters[Metric.TOTAL_XP.name])
     }
 
     @Test fun aReleaseAfterTheLoadCannotTakeTheTierAway() {

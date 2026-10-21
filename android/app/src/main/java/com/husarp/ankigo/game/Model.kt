@@ -152,7 +152,15 @@ class GameData(
 ) {
     fun sp(num: Int): Species = species.getValue(num)
     fun move(id: String): Move? = moves[id]
-    fun price(item: String): Int = itemPrices[item] ?: 0
+    /**
+     * The Shop price in ₽ (0 = never sold): PokeAPI's. PLAN 171: a ball PokeAPI sells costs AnkiGo's own price instead (Tuning.BALL_PRICE),
+     * and Ankimon's other balls (Tuning.OLD_BALLS) are never sold.
+     */
+    fun price(item: String): Int {
+        val raw = itemPrices[item] ?: 0
+        if (raw <= 0) return 0
+        return Tuning.BALL_PRICE[item] ?: if (item in Tuning.OLD_BALLS) 0 else raw
+    }
 }
 
 /** Rarity tiers (Ankimon legacy encounter system). MEGA and GMAX only exist as rolls; AnkiGo has no such forms, so they fall back to NORMAL. */
@@ -290,7 +298,9 @@ class GameState(
     var nextSeed: Long? = null,          // random seed of the next encounter (null on old saves)
     var day: String = "",                // current game day "yyyy-MM-dd" (a day starts at settings.dayStartHour)
     var reviewsToday: Int = 0,
-    var cashToday: Int = 0,
+    var cashToday: Int = 0,              // PLAN 125: today's answer + win money BEFORE any ×2 (it picks the money curve's tier, Economy)
+    var cashWait: Int = 0,               // PLAN 125: counted answers since today's last answer payment (a tier pays every N answers)
+    var winWait: Int = 0,                // R13 Part C: wins (defeats + catches) since today's last win payment (a tier pays every N wins)
     var itemCountdown: Int = 0,          // answers until the next random item (0 = not rolled yet)
     val buttonsToday: IntArray = IntArray(5), // index = button (0 unknown, 1 Again .. 4 Easy)
     var cardStreak: Int = 0,             // correct answers in a row (shown as the combo chip; no battle effect, as Ankimon)

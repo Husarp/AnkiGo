@@ -49,7 +49,7 @@ class LooksBTest {
         run(MoveLook.PSYCHIC).t.let { assertEquals(1500f, it.total, 0f); assertEquals(100f, it.impact, 0f); assertEquals(1100f, it.done, 0f) }
         run(MoveLook.SHADOW_BALL).t.let { assertEquals(1700f, it.total, 0f); assertEquals(900f, it.impact, 0f); assertEquals(1500f, it.done, 0f) }
         run(MoveLook.ORB_TEMPLATE).t.let { assertEquals(1700f, it.total, 0f); assertEquals(900f, it.impact, 0f) }
-        run(MoveLook.EARTHQUAKE).t.let { assertEquals(1800f, it.total, 0f); assertEquals(75f, it.impact, 0f); assertEquals(1075f, it.done, 0f) }
+        run(MoveLook.EARTHQUAKE).t.let { assertEquals(2200f, it.total, 0f); assertEquals(75f, it.impact, 0f); assertEquals(1500f, it.done, 0f) }   // PLAN 157: longer
         run(MoveLook.AURA_TEMPLATE).t.let { assertEquals(1000f, it.total, 0f); assertTrue(it.done <= it.total) }
         for (look in allLooks) run(look, react = false).t.let { assertTrue("$look", it.impact <= it.done && it.done <= it.total) }
     }
@@ -265,16 +265,26 @@ class LooksBTest {
     // ---- Earthquake ----
     @Test fun earthquakeJoltsTheBackgroundAndEndsAtZero() {
         val r = run(MoveLook.EARTHQUAKE, FxKit.GROUND, k = 1f)
-        frames(r, 1800f)
+        frames(r, 2200f)
         val j = r.stage.jolts
         assertTrue(j.isNotEmpty())
         assertEquals(0f, j.last(), 0f)
-        val q = run(MoveLook.EARTHQUAKE); q.s.advance(175f)
-        assertEquals(-10f * .75f * unit, q.stage.jolts.last(), eps)             // the deepest keyframe (175 ms): -10 x .75 x unit
-        assertTrue(j.all { it <= 0f })
-        assertTrue(r.stage.rec.poses.none { it.attacker && it.dx != 0f })
+        val q = run(MoveLook.EARTHQUAKE); q.s.advance(140f)
+        assertEquals(-24f * unit, q.stage.jolts.last(), eps)                    // PLAN 157: the deepest keyframe (140 ms): -24 x unit (was -7.5)
+        assertTrue("it jolts up and down", j.any { it < -20f * unit } && j.any { it > 5f * unit })
+        assertTrue(j.all { it >= -24f * unit - eps && it <= 8f * unit + eps })
         val a = r.stage.rec.last(true)!!; val t = r.stage.rec.last(false)!!
         assertEquals(0f, a.dy, eps); assertEquals(1f, a.sy, eps); assertEquals(0f, t.dy, eps)
+        assertEquals("the sideways shake is over", 0f, a.dx, eps); assertEquals(0f, t.dx, eps)
+    }
+
+    @Test fun earthquakeShakesBothMonsSidewaysAndItFadesOut() {
+        val r = run(MoveLook.EARTHQUAKE)
+        val early = ArrayList<Float>(); val late = ArrayList<Float>()
+        frames(r, 1500f) { ms -> r.stage.rec.last(true)?.let { if (ms < 300f) early += Math.abs(it.dx) else if (ms > 1300f) late += Math.abs(it.dx) } }
+        assertTrue("a clear shake at the start", early.max() > EarthquakeFx.SIDE * unit * .7f)
+        assertTrue("it fades out", late.max() < EarthquakeFx.SIDE * unit * .2f)
+        assertTrue(r.stage.rec.poses.any { !it.attacker && it.dx != 0f })
     }
 
     @Test fun earthquakeSquashesTheAttackerOnTheSecondBeatAndScalesWithK() {
@@ -283,7 +293,7 @@ class LooksBTest {
         val r = run(MoveLook.EARTHQUAKE)
         var minSy = 1f; var at = 0f
         frames(r, 1100f) { ms -> r.stage.rec.last(true)?.let { if (it.sy < minSy) { minSy = it.sy; at = ms } } }
-        assertEquals(.9f, minSy, .01f); assertEquals(175f, at, 20f)
+        assertEquals(.85f, minSy, .02f); assertEquals(175f, at, 20f)   // 60 fps frames land either side of the 175 ms key
     }
 
     @Test fun earthquakeBothMonsBounceAndAnEarthquakeWithoutReactionOnlyShakesTheAttacker() {
@@ -301,20 +311,29 @@ class LooksBTest {
             val seen = HashSet<FxParticle>()
             val xs = ArrayList<Float>()
             val imgs = HashSet<String?>()
-            frames(r, 1100f) { r.s.particles.forEach { p -> imgs += p.img; if (p.img?.startsWith("dirt") == true && seen.add(p)) xs += p.x0 } }
+            frames(r, 1400f) { r.s.particles.forEach { p -> imgs += p.img; if (p.img?.startsWith("dirt") == true && seen.add(p)) xs += p.x0 } }
             assertTrue(imgs.all { it == "dirt_01" || it == "dirt_02" || it == "smoke_08" })   // nothing else: no cracks
             val ax = r.stage.attackerX; val tx = r.stage.targetX; val mid = (ax + tx) / 2f
-            val tol = 70f * unit + 1f
+            val tol = 90f * unit + 1f
             assertTrue(xs.any { Math.abs(it - ax) <= tol }); assertTrue(xs.any { Math.abs(it - tx) <= tol }); assertTrue(xs.any { Math.abs(it - mid) <= tol })
         }
     }
 
-    @Test fun earthquakeDustPuffsAreTwoWavesAtBothFeet() {
+    @Test fun earthquakeDustPuffsAreThreeWavesAtBothFeetAndTheMiddle() {
         val r = run(MoveLook.EARTHQUAKE)
         val smoke = ArrayList<FxParticle>()
-        frames(r, 700f) { r.s.particles.forEach { p -> if (p.img == "smoke_08" && p !in smoke) smoke += p } }
-        assertEquals(4, smoke.size)
-        assertEquals(setOf(150f, 600f), smoke.map { it.t0 }.toSet())
+        frames(r, 1000f) { r.s.particles.forEach { p -> if (p.img == "smoke_08" && p !in smoke) smoke += p } }
+        assertEquals(9, smoke.size)
+        assertEquals(setOf(150f, 550f, 950f), smoke.map { it.t0 }.toSet())
+    }
+
+    @Test fun earthquakeThrowsMoreAndBiggerDirtWithRockChips() {
+        val r = run(MoveLook.EARTHQUAKE)
+        val dirt = LinkedHashSet<FxParticle>()
+        frames(r, 1400f) { r.s.particles.forEach { p -> if (p.img?.startsWith("dirt") == true) dirt += p } }
+        assertTrue("about 3 x the R7-08 look's ~20 clods: ${dirt.size}", dirt.size >= 45)
+        assertTrue("bigger clods", dirt.maxOf { it.s0 } > 34f * unit)
+        assertTrue("grey rock chips among the dirt", dirt.any { it.tint == 0xFF7A7068.toInt() } && dirt.any { it.tint == 0xFF9A7448.toInt() })
     }
 
     @Test fun deterministicForASeed() {

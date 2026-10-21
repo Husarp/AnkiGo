@@ -21,7 +21,7 @@ class ShopStockForTest {
             val (items, tms) = Shop.stockFor(data, day, level)
             assertEquals("items $day L$level", s.shopItems.toList(), items)
             assertEquals("tms $day L$level", s.shopTms.toList(), tms)
-            assertEquals(Shop.slots(level), items.size)
+            assertEquals(Shop.slots(level) + if (Shop.ultraBallDay(day)) 1 else 0, items.size)   // PLAN 171: + the Ultra Ball on its days
         }
     }
 

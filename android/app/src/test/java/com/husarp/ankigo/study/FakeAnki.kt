@@ -57,6 +57,7 @@ class FakeAnki(val clock: FakeClock = FakeClock()) : AnswerProvider {
     // AnkiDroid quirks
     var answerAnyTop = false // worst case: ANSWER applies to whatever is on top of the selected deck, whatever key was sent
     var topNeedsSelection = false // AnkiDroid #18270: the schedule query shows the SELECTED deck's queue when another deck is asked for
+    var answerAnyKey = false // PLAN 195: ANSWER applies to the card asked for even when it is not first (what the device test checks)
 
     // faults
     val plans = HashMap<String, java.util.ArrayDeque<F>>()
@@ -151,7 +152,10 @@ class FakeAnki(val clock: FakeClock = FakeClock()) : AnswerProvider {
         val top = queues[selected]?.firstOrNull()
         if (top == null || top.key != key) notTopWrites++
         val applies = f != F.SWALLOW && top != null && (answerAnyTop || top.key == key)
-        if (applies) apply(top!!, ease, external = false, ms = ms) else swallowed++
+        val asked = card(key)
+        if (applies) apply(top!!, ease, external = false, ms = ms)
+        else if (f != F.SWALLOW && answerAnyKey && asked != null) apply(asked, ease, external = false, ms = ms)
+        else swallowed++
         when (f) { F.THROW_AFTER -> throw IllegalStateException("answer failed after it was applied"); F.DIE_AFTER -> throw Die(); else -> {} }
     }
 }

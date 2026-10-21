@@ -319,7 +319,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
                 if (a >= 255) endFade() else again = true
             }
         }
-        compose(canvas, a, jolt)
+        compose(canvas, a, BackdropDraw.jolt(jolt, bounds.height().toFloat()))
         if (again) invalidateSelf() // the next frame of the fade; none is asked for after the last
     }
 

@@ -1,6 +1,9 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.Catching
 import com.husarp.ankigo.game.GameData
+import com.husarp.ankigo.game.ItemKind
+import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Shop
 import com.husarp.ankigo.game.Tuning
 import java.util.Calendar
@@ -22,6 +25,9 @@ internal object ShopPlan {
         val now = Shop.priceOf(data, day, item)
         return Price(now, if (now < normal) normal else null)
     }
+
+    /** PLAN 171: the small line under a ball's tile, "50 % catch"; null for anything else. */
+    fun chanceLine(item: String): String? = if (Items.def(item)?.kind == ItemKind.BALL) "${Catching.ballChance(item)} % catch" else null
 
     /** A TM costs [Tuning.TM_PRICE], never discounted. */
     fun tmPrice(): Price = Price(Tuning.TM_PRICE)

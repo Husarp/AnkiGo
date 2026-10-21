@@ -118,8 +118,8 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions)
         val battle = state.battle
         if (battle == null) { Ui.toast(s, "No wild Pokémon right now. Throw balls from a battle."); return }
         val wild = battle.wild
-        val chance = Catching.ballChance(ball, data.sp(wild.species).types)
-        Pickers.confirm(s, "Throw ${Items.name(ball)}?", "Throw at wild ${wild.name} (chance $chance%)?", "Throw") {
+        val chance = Catching.ballChance(ball)
+        Pickers.confirm(s, "Throw ${Items.name(ball)}?", "Throw at wild ${wild.name} (chance $chance%)? ${Items.MISS_RULE}", "Throw") {
             val events = GameRepo.act(s) { it.throwBall(ball) }
             s.report(ballMessage(events, wild.name), events)
             s.requestRender()
@@ -128,7 +128,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions)
 
     private fun ballMessage(events: List<GameEvent>, wildName: String): String {
         val throwEv = events.filterIsInstance<GameEvent.BallThrow>().firstOrNull() ?: return "Nothing happened."
-        if (!throwEv.success) return "$wildName broke free! (${throwEv.chance}% chance, ${throwEv.left} left)"
+        if (!throwEv.success) return "$wildName broke free and ran away! (${throwEv.chance}% chance, ${throwEv.left} left)"
         val caught = events.filterIsInstance<GameEvent.Caught>().firstOrNull()
         return "Gotcha! $wildName was caught!" + if (caught?.newSpecies == true) " New Pokédex entry!" else ""
     }

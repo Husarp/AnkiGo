@@ -30,6 +30,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (firstEver) return emptyList()
         state.reviewsToday = 0
         state.cashToday = 0
+        state.cashWait = 0
+        state.winWait = 0
         state.buttonsToday.fill(0)
         // An undo whose redo never came must not swallow a real answer days later.
         state.redo.clear()
@@ -127,7 +129,10 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         refreshNext()
     }
 
-    /** The wild one fainted: catch or defeat it by the auto rule (decide() honours a one-off override). Both count as a win (defeat counters, trainer XP); only a defeat gives ₽. */
+    /**
+     * The wild one fainted: catch or defeat it by the auto rule (decide() honours a one-off override). Both count as a win (defeat
+     * counters, trainer XP) and give the same Pokémon XP and the same win money (R13 Part C, Economy.onWin, on the day's curve).
+     */
     private fun resolveWild(battle: Battle, main: Mon, events: MutableList<GameEvent>) {
         val now = clock()
         val plan = Catching.plan(data, state, battle)
@@ -138,18 +143,19 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 plan.duplicate?.let { swapDuplicate(it, battle.wild, events) }
                 if (Tuning.CATCH_GIVES_XP) Progression.rewardCatch(data, state, main, battle.wild, now, rng, events)
                 Healing.healMain(data, main, HealReason.CATCH, events) // after the rewards
-                // A catch is a win like a defeat: defeat counters + trainer XP by tier (no defeat ₽: Economy.onDefeat stays defeat-only).
+                // A catch is a win like a defeat: defeat counters + trainer XP by tier.
                 main.defeats++
                 state.defeats++
                 state.catchWins++
                 Trainer.addDefeatXp(state, battle.tier, events)
+                Economy.onWin(state, events)
             }
             Outcome.DEFEAT -> {
                 Progression.rewardDefeat(data, state, main, battle.wild, now, rng, events)
                 Healing.healMain(data, main, HealReason.DEFEAT, events) // after XP, level-ups and evolution
                 Trainer.addDefeatXp(state, battle.tier, events)
                 state.defeats++
-                Economy.onDefeat(state, events)
+                Economy.onWin(state, events)
                 plan.duplicate?.let { events += GameEvent.Duplicate(battle.wild.name, battle.wild.level, it.bestLevel, DuplicateResult.DEFEATED) }
             }
         }
@@ -227,28 +233,37 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     /** Optional tap: one-off catch/defeat choice for this fight (null = back to the auto rule). */
     fun setOverride(o: Outcome?) { state.battle?.override = o }
 
-    /** Optional tap: throw a ball at the current wild Pokémon (AnkiGo fix: success really catches). */
+    /**
+     * Optional tap: throw a ball at the current wild Pokémon (AnkiGo fix: success really catches). PLAN 171: the ball is used up either
+     * way, and a miss ends the fight: the wild one breaks free and runs away (no XP, no win counted) and the next one comes, as after
+     * a defeat. PLAN 170: a ball catch gives the same Pokémon XP as a defeat or an auto catch, and (R13 Part C) the same win money.
+     */
     fun throwBall(ball: String): List<GameEvent> {
         val battle = state.battle ?: return emptyList()
         if (battle.wild.hp <= 0 || Items.def(ball)?.kind != ItemKind.BALL || !Economy.take(state, ball)) return emptyList()
-        val chance = Catching.ballChance(ball, data.sp(battle.wild.species).types)
+        val chance = Catching.ballChance(ball)
         val success = rng.nextInt(100) < chance
         val events = mutableListOf<GameEvent>(GameEvent.BallThrow(ball, chance, success, state.count(ball), battle.failedThrows + 1)) // the fight itself counts its throws (saved with it)
         if (success) {
-            Catching.addToCollection(data, state, battle.wild, battle.tier, ball, clock(), events)
+            val now = clock()
+            Catching.addToCollection(data, state, battle.wild, battle.tier, ball, now, events)
             state.ballCatches.merge(ball, 1, Int::plus)
-            state.main?.let { Healing.healMain(data, it, HealReason.CATCH, events) }
-            // A ball catch is a win like the auto catch: defeat counters + trainer XP by tier (no ₽, no Pokémon XP, as before).
+            state.main?.let { main ->
+                if (Tuning.CATCH_GIVES_XP) Progression.rewardCatch(data, state, main, battle.wild, now, rng, events)
+                Healing.healMain(data, main, HealReason.CATCH, events) // after the rewards
+            }
+            // A ball catch is a win like the auto catch: defeat counters + trainer XP by tier.
             state.main?.let { it.defeats++ }
             state.defeats++
             state.catchWins++
             Trainer.addDefeatXp(state, battle.tier, events)
-            state.battle = null
-            events += ensureEncounter()
+            Economy.onWin(state, events)
         } else {
-            battle.failedThrows++
-            events += GameEvent.Info("${battle.wild.name} broke free!")
+            events += GameEvent.Info("${battle.wild.name} broke free!")   // the ball opens (its own animation and sound) ...
+            events += GameEvent.Fled(battle.wild.name)                     // ... and the wild one runs away
         }
+        state.battle = null
+        events += ensureEncounter()
         StudyStats.record(state, events)
         Achievements.settle(data, state, clock(), events)
         return events
@@ -334,19 +349,46 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         oldMon.hp > 0 && battle.wild.hp > 0 && incoming.hp > 0 && (battle.rounds > 0 || battle.answers > 0)
 
     /**
-     * The free hit: the wild one makes one attack at [incoming] at [Tuning.SWITCH_HIT_POWER] with the current move choice
-     * ([BattleEngine.switchHit]; no round is counted, no end-of-turn damage, the round's pending answers stay as they were). Then
-     * what a round does: a fainted wild one is resolved, a fainted Main is healed at once and the wild one is lost ([settleFight]).
+     * The turn a switch (or an item, [item]) takes: the wild one attacks [incoming] once at [Tuning.SWITCH_HIT_POWER] with the current
+     * move choice ([BattleEngine.switchHit]; no round is counted, no end-of-turn damage, the round's pending answers stay as they were).
+     * Then what a round does: a fainted wild one is resolved, a fainted Main is healed at once and the wild one is lost ([settleFight]).
      * Counted for the stats and the achievements like any wild attack. Returns the events: the [GameEvent.SwitchHit] marker first.
      */
-    private fun switchHit(battle: Battle, incoming: Mon): List<GameEvent> {
-        val hit = mutableListOf<GameEvent>(GameEvent.SwitchHit(battle.wild.name, incoming.name, incoming.hp, StatCalc.maxHp(data, incoming)))
+    private fun switchHit(battle: Battle, incoming: Mon, item: String? = null): List<GameEvent> {
+        val hit = mutableListOf<GameEvent>(GameEvent.SwitchHit(battle.wild.name, incoming.name, incoming.hp, StatCalc.maxHp(data, incoming), item))
         hit += BattleEngine.switchHit(data, battle, incoming, rng, state.settings.moveChoice)
         settleFight(battle, incoming, hit)
         StudyStats.record(state, hit)
         Achievements.settle(data, state, clock(), hit)
         return hit
     }
+
+    /**
+     * R13 Part C: uses [item] from the Bag ([ItemUse.use]). A healing or evolution item used on the Main in a fight takes one turn (one
+     * dot), like a switch: after it works the wild one attacks the Main once ([switchHit], marker with [item]); your next answer
+     * attacks as normal. The same moments as a switch are free of it ([itemTakesATurn]); items given to hold, TMs, fossils and items
+     * used on another Pokémon never take a turn, and balls / escape items have their own rules ([throwBall], [escape]).
+     */
+    fun useItem(item: String, targetUid: String?): ActionResult {
+        val main = state.main
+        val battle = state.battle
+        val kind = Items.def(item)?.kind
+        val onMain = main != null && (targetUid ?: if (kind == ItemKind.HEAL) main.uid else null) == main.uid
+        val turn = onMain && battle != null && (kind == ItemKind.HEAL || kind == ItemKind.EVOLUTION) && itemTakesATurn(battle, main!!)
+        val r = ItemUse.use(data, state, item, targetUid, rng, clock())
+        if (!r.ok || !turn || battle == null || state.battle !== battle) return r
+        val mon = state.main ?: return r
+        if (mon.hp <= 0 || battle.wild.hp <= 0) return r
+        val hit = switchHit(battle, mon, item)
+        return ActionResult(true, SwitchHitText.withHit(r.message, hit, named = mon.name in r.message), r.events + hit)
+    }
+
+    /**
+     * R13 Part C: an item on the Main takes its turn at the moments a switch takes one ([switchCostsAHit]): a wild one with HP left,
+     * a Main with HP, and something answered in this battle (before the first answer, also after "Next battle", it is free).
+     */
+    private fun itemTakesATurn(battle: Battle, main: Mon): Boolean =
+        main.hp > 0 && battle.wild.hp > 0 && (battle.rounds > 0 || battle.answers > 0)
 
     /** Puts [uid] first. A Pokémon from the box takes a free team place, or the last member's when the team is full. */
     fun setMain(uid: String): ActionResult {

@@ -145,7 +145,7 @@ object SettingsCatalog {
         s("dailyAverage", G, "Difficulty", "Daily goal", "Reviews a day, the same or per weekday; a bigger goal makes rare Pokémon likelier"),
         s("dayStartHour", G, "Difficulty", "New day starts at", "Answers before this hour count for the day before"),
 s("catchAlways", G, "When you beat a wild Pokémon", "Always catch", "Every wild Pokémon you beat is caught"),
-s("catchNew", G, "When you beat a wild Pokémon", "Catch only new species", "Others are defeated for money; default"),
+s("catchNew", G, "When you beat a wild Pokémon", "Catch only new species", "Others are defeated: the same XP and ₽; default"),
 s("catchBetter", G, "When you beat a wild Pokémon", "Catch new species and better copies", "A higher-level copy replaces your old one"),
 s("catchDefeat", G, "When you beat a wild Pokémon", "Defeat", "Catch only shinies and protected kinds; the rest are defeated"),
         s("protectLegendary", G, "Always catch", "Legendary", "Always caught, even with Defeat"),

@@ -10,14 +10,17 @@ object ItemInfo {
 
     /** Where and how the item is used (one sentence). */
     fun howToUse(item: String): String = when (Items.def(item)?.kind) {
-        ItemKind.BALL -> "Throw it from the Bag at a wild Pokémon in battle. A good throw catches it."
-        ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon."
-        ItemKind.EVOLUTION -> "Use it from the Bag on a Pokémon that evolves with it."
+        ItemKind.BALL -> "Throw it from the Bag at a wild Pokémon in battle. A good throw catches it; the ball is used up either way."
+        ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"
+        ItemKind.EVOLUTION -> "Use it from the Bag on a Pokémon that evolves with it. $FIGHT_TURN"
         ItemKind.HELD -> "Give it to a Pokémon from the Bag. A Pokémon holds one item at a time."
         ItemKind.ESCAPE -> "Use it from the Bag to leave the wild Pokémon in battle and meet a new one."
         ItemKind.FOSSIL -> "Use it from the Bag to revive an ancient Pokémon at Lv 5."
         null -> ""
     }
+
+    /** R13 Part C: an item used on the main during a fight takes one turn (Game.useItem). */
+    const val FIGHT_TURN = "On your main during a fight it takes one turn: the wild Pokémon attacks once."
 
     /** What a TM does, for the popup: it teaches a move and is never used up. */
     fun tmHowToUse(): String = "Teaches this move to a Pokémon that can learn it. A TM is never used up."

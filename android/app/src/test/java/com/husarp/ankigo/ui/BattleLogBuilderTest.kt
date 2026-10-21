@@ -224,7 +224,7 @@ class BattleLogBuilderTest {
         val first = b.battles[0]
         assertEquals(Outcome.CAUGHT, first.outcome)
         assertEquals(RoundKind.BALL, first.rounds[0].kind)
-        assertEquals("Threw Poke ball · 30% · it broke free", first.rounds[0].lines[0].text)
+        assertEquals("Threw Poke ball · 30% · it broke free and ran away", first.rounds[0].lines[0].text)
         assertEquals("Caught Ghosty · Lv 7 · shiny · new Pokédex entry · Great ball · sent to the box", first.result[0].text)
 
         b.feed(listOf(GameEvent.MainHealed("u1", "Sparkmouse", 40), encounter("C")))
@@ -288,7 +288,7 @@ class BattleLogBuilderTest {
         b.feed(listOf(counted(3), GameEvent.RoundStart(1.0, 10, true, true, 1.0), hit(true, "Birdie", "Wildling", "Zap", 4, 26)))
         val round = b.battles.single().rounds.single()
         assertEquals(2, round.answers.size)
-        assertEquals("Switched to Birdie — the wild Wildling attacks!", round.lines[0].text)
+        assertEquals("Switched to Birdie — the wild Wildling attacks once!", round.lines[0].text)
         assertEquals("Wildling used Bite · 9 damage · Birdie 21/30 HP", round.lines[1].text)
         assertEquals(Tone.BAD, round.lines[1].tone)
         assertTrue(round.lines[2].text.startsWith("Birdie used Zap"))
@@ -302,7 +302,17 @@ class BattleLogBuilderTest {
             hit(false, "Wildling", "Birdie", "Bite", 9, 21, 30)))
         val lines = b.battles.single().rounds.single().lines.map { it.text }
         assertTrue(lines[0], "×0.35 power" in lines[0])
-        assertEquals("Switched to Birdie — the wild Wildling attacks!", lines[1])
+        assertEquals("Switched to Birdie — the wild Wildling attacks once!", lines[1])
+        assertFalse(lines[2], "power" in lines[2])
+    }
+
+    @Test fun anItemTurnIsAMarkerLineWithTheItem() {   // R13 Part C
+        val b = builder()
+        b.feed(encounter())
+        b.feed(listOf(counted(2), GameEvent.RoundStart(1.0, 25, true, true, 0.35), hit(false, "Wildling", "Sparkmouse", "Bite", 3, 37, 30)))
+        b.feed(listOf(GameEvent.SwitchHit("Wildling", "Sparkmouse", 30, 40, "super-potion"), hit(false, "Wildling", "Sparkmouse", "Bite", 9, 21, 40)))
+        val lines = b.battles.single().rounds.single().lines.map { it.text }
+        assertEquals("Used Super Potion on Sparkmouse — the wild Wildling attacks once!", lines[1])
         assertFalse(lines[2], "power" in lines[2])
     }
 

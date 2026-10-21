@@ -120,16 +120,17 @@ class HelpModelTest {
     @Test fun guideMoneyNumbersAreTheTuningConstants() {
         val n = GuideNumbers.pending()
         assertEquals(Tuning.CASH_PER_ANSWER, n.cashPerAnswer)
-        assertEquals(Tuning.CASH_PER_DEFEAT, n.cashPerDefeat)
-        assertEquals(Tuning.CASH_DAILY_CAP, n.dailyCashCap)
+        assertEquals(Tuning.CASH_TIER, n.cashTier)
+        assertEquals(Tuning.CASH_PER_WIN, n.cashPerWin)
         assertEquals(Tuning.DAILY_BONUS_BASE, n.dailyBonusStart)
         assertEquals(Tuning.DAILY_BONUS_PER_DAY, n.dailyBonusPerStreakDay)
         assertEquals(Tuning.DAILY_BONUS_MAX_DAYS, n.dailyBonusMaxStreakDays)
         assertEquals(Tuning.DAILY_BONUS_BASE + Tuning.DAILY_BONUS_PER_DAY * Tuning.DAILY_BONUS_MAX_DAYS, n.dailyBonusMax)
         val money = GameGuide.chapter(GameGuide.MONEY)!!.let { (listOf(it.intro) + it.points).joinToString(" ") }
         assertTrue(money.contains("+${Tuning.CASH_PER_ANSWER} for every answer"))
-        assertTrue(money.contains("At most ${Tuning.CASH_DAILY_CAP} a day"))
-        // Adam's decision: the coin / incense doubles answers and defeats, not the daily bonus
+        assertTrue(money.contains("in the first ${Tuning.CASH_TIER} ₽ every answer and every win pays"))   // PLAN 125's curve
+        assertTrue(money.contains("+${Tuning.CASH_PER_WIN} for every wild Pokémon you defeat or catch"))   // R13 Part C
+        // Adam's decision: the coin / incense doubles the answer money, not the daily bonus
         assertTrue(money.contains("Amulet Coin") && money.contains("Luck Incense") && money.contains("does not double it"))
         assertTrue(Items.def("amulet-coin") != null && Items.def("luck-incense") != null)
     }

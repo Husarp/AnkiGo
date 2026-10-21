@@ -32,7 +32,10 @@ object Tuning {
     val WILD_POWER = doubleArrayOf(0.0, 1.0, 0.5, 0.0, 0.0)
     /** Your Main attacks whenever one answer is Good or Easy; its damage multiplier is the sum of these (index = button, 0 unknown counts as Good). */
     val MAIN_POWER = doubleArrayOf(0.5, 0.0, 0.0, 0.5, 1.0)
-    /** AnkiGo (Round 10, W10): switching the Main in a fight gives the wild one one free hit on the incoming Pokémon at this power: the same as one Again. */
+    /**
+     * AnkiGo (Round 10, W10): switching the Main in a fight takes one turn (one dot): the wild one attacks the incoming Pokémon once at
+     * this power, the same as one Again. R13 (Part C): so does an item used on the Main in a fight (Game.useItem).
+     */
     val SWITCH_HIT_POWER = WILD_POWER[1]
 
     // ---- Battle (poke-engine, simplified) ----
@@ -89,13 +92,23 @@ object Tuning {
     /** Ankimon "automatic_battle" mode used because AnkiGo never asks during study: 3 = catch species you don't have. */
     const val DEFAULT_AUTO_MODE = 3
     val DEFAULT_WISHLIST = setOf(25, 133) // Pikachu, Eevee
-    /** Ball throw chance in percent (Ankimon item_window.py). AnkiGo fix: a successful throw really catches. */
-    val BALL_CHANCE = mapOf(
-        "poke-ball" to 8, "great-ball" to 12, "ultra-ball" to 13, "master-ball" to 100, "premier-ball" to 8,
-        "net-ball" to 12, "dive-ball" to 11, "dusk-ball" to 11, "heal-ball" to 12, "luxury-ball" to 12,
-        "nest-ball" to 12, "quick-ball" to 13, "repeat-ball" to 12, "timer-ball" to 13,
+    /**
+     * AnkiGo (PLAN 171; Ankimon's were 8-13 %): the four ball tiers' catch chance in percent. A successful throw really catches;
+     * a miss uses the ball up AND the wild Pokémon runs away (Game.throwBall), so a cheap ball is a lucky shot, not one to spam.
+     */
+    val BALL_CHANCE = mapOf("poke-ball" to 20, "great-ball" to 50, "ultra-ball" to 80, "master-ball" to 100)
+    /**
+     * PLAN 171: Ankimon's other ten balls. Their ids stay (the Ankimon import / export, balls already in a bag), but they are never sold
+     * or found any more; one the player owns throws as an [OLD_BALL_AS] (its chance, no type bonus).
+     */
+    val OLD_BALLS = listOf(
+        "premier-ball", "net-ball", "dive-ball", "dusk-ball", "heal-ball", "luxury-ball", "nest-ball", "quick-ball", "repeat-ball", "timer-ball",
     )
-    const val BALL_TYPE_BONUS = 10 // net vs water/bug, dive vs water
+    const val OLD_BALL_AS = "great-ball"
+    /** PLAN 171 (prices: Adam, R13 Part C): ball prices in ₽ (not PokeAPI's 200 / 600 / 800). 0 = never sold (the Master Ball, every [OLD_BALLS] one). */
+    val BALL_PRICE = mapOf("poke-ball" to 200, "great-ball" to 700, "ultra-ball" to 1_500, "master-ball" to 0)
+    /** PLAN 171: the Ultra Ball is in the Shop on about one game day in this many (date-seeded, see Shop.ultraBallDay); never in the daily draw. */
+    const val ULTRA_BALL_EVERY_DAYS = 7
 
     // ---- XP, levels, EVs, friendship ----
     const val XP_DIVISOR = 7.0          // XP = ceil(base_exp * level / 7)
@@ -151,11 +164,13 @@ object Tuning {
     const val TRAINER_BONUS_FROM_LEVEL = 10 // trainer level above this adds the rare bonus once more
 
     // ---- Cash, items, shop ----
-    // AnkiGo's money (not Ankimon's 40 per 10 reviews, cap 400): per counted answer and per defeated wild Pokémon, one
-    // daily cap for both; the daily-goal bonus grows with the goal streak and sits outside the cap.
+    // AnkiGo's money (not Ankimon's 40 per 10 reviews, cap 400): counted answers and won fights (a defeat or a catch, R13 Part C) pay.
+    // PLAN 125: no hard daily cap; the day's money comes in tiers of CASH_TIER and each tier is harder to earn (linear): in the first
+    // tier every answer pays CASH_PER_ANSWER and every win CASH_PER_WIN, in the second every 2nd one does, then every 3rd, 4th ...
+    // (Economy). The daily-goal bonus grows with the goal streak and sits outside the tiers.
     const val CASH_PER_ANSWER = 5       // any button, Again too
-    const val CASH_PER_DEFEAT = 10      // a defeat only, never a catch
-    const val CASH_DAILY_CAP = 500      // answers + defeats, counted after Amulet Coin / Luck Incense doubling
+    const val CASH_PER_WIN = 10         // a wild Pokémon defeated or caught (auto catch or ball); never a miss, an escape or a release
+    const val CASH_TIER = 500           // counted BEFORE the Amulet Coin / Luck Incense doubling (so those keep doubling at every tier)
     const val DAILY_BONUS_BASE = 50     // first goal day
     const val DAILY_BONUS_PER_DAY = 5   // + per goal-streak day before today ...
     const val DAILY_BONUS_MAX_DAYS = 10 // ... up to this many (so at most 100)

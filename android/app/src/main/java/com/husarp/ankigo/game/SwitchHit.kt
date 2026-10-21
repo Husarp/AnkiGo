@@ -1,13 +1,14 @@
 package com.husarp.ankigo.game
 
 /**
- * Round 10 (W10): the words for the free hit a switch costs, for the screens that do not show the battle (Team, Box, Compare:
- * the action's toast says it). Pure Kotlin; the hit itself is [BattleEngine.switchHit], played by [Game].
+ * Round 10 (W10): the words for the wild one's attack in the turn a switch takes (R13 Part C: or an item used on the Main in a
+ * fight), for the screens that do not show the battle (Team, Box, Compare, Bag: the action's toast says it). Pure Kotlin; the hit
+ * itself is [BattleEngine.switchHit], played by [Game].
  */
 object SwitchHitText {
     /**
      * The sentence for the toast, without a leading dash or a final full stop: "the wild Ratty hit it for 23 HP". [hit] = the events
-     * of the free hit ([GameEvent.SwitchHit] first). [named] = the toast already names the Pokémon that came in, so it says "it".
+     * of that attack ([GameEvent.SwitchHit] first). [named] = the toast already names the Pokémon that came in, so it says "it".
      */
     fun tail(hit: List<GameEvent>, named: Boolean): String {
         val marker = hit.filterIsInstance<GameEvent.SwitchHit>().firstOrNull() ?: return ""
@@ -33,7 +34,7 @@ object SwitchHitText {
     /** [message] (the action's own, e.g. "Charizard is your main now.") with the hit added after a dash: "… — the wild Ratty hit it for 23 HP." */
     fun withHit(message: String, hit: List<GameEvent>, named: Boolean): String {
         val tail = tail(hit, named)
-        return if (tail.isEmpty()) message else message.trimEnd().trimEnd('.') + " — " + tail + "."
+        return if (tail.isEmpty()) message else message.trimEnd().trimEnd('.', '!') + " — " + tail + "."
     }
 
     /** [message] with the ending of a fainted Pokémon coming in during a fight: "… — it had fainted: it is back at full HP, but the wild one is lost." */

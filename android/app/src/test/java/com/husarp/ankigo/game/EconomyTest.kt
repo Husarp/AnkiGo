@@ -42,7 +42,10 @@ class EconomyTest {
         assertEquals(Int.MAX_VALUE, Items.def("max-potion")!!.heal)
         assertEquals(Int.MAX_VALUE, Items.def("full-restore")!!.heal)
         assertEquals(140, Items.def("dome-fossil")!!.fossil)
-        assertEquals("Catch chance 12%", Items.def("great-ball")!!.note)
+        assertEquals("Catch chance 50 %. If it fails, the wild Pokémon runs away.", Items.def("great-ball")!!.note)   // PLAN 171
+        assertEquals("Catch chance 100 %: it always catches.", Items.def("master-ball")!!.note)
+        assertEquals("Throws as a Great Ball: catch chance 50 %. If it fails, the wild Pokémon runs away.", Items.def("dive-ball")!!.note)
+        assertTrue(Items.ALL.values.filter { it.kind == ItemKind.BALL && it.id != "master-ball" }.all { it.note.endsWith(Items.MISS_RULE) })
         assertEquals("Heals 60 HP", Items.def("super-potion")!!.note)
         assertTrue(Items.ALL.values.all { it.note.isNotBlank() })
     }
@@ -50,6 +53,8 @@ class EconomyTest {
     @Test fun shopPoolSkipsFreeItemsAndKeepsBalls() {
         val pool = Items.shopPool(data)
         assertFalse("master-ball" in pool)
+        assertFalse("an old Ankimon ball is never sold, whatever PokeAPI says", "net-ball" in pool)
+        assertTrue("ultra-ball" in pool)
         assertFalse("rare-candy" in pool) // not in the catalogue
         assertFalse("fire-stone" in pool) // no price in the fixtures
         assertTrue("poke-ball" in pool && "great-ball" in pool && "thunder-stone" in pool)
@@ -78,88 +83,85 @@ class EconomyTest {
         assertTrue(cash(ev).all { it.kind == CashKind.ANSWER })
     }
 
-    @Test fun answersStopPayingAtTheDailyCap() {
-        val s = state()
+    // ---- PLAN 125: the linear money curve (the old hard 500 ₽ a day is gone) ----
+
+    /** [n] more counted answers; returns the Cash events they made. */
+    private fun answers(s: GameState, n: Int): List<GameEvent.Cash> {
         val ev = events()
-        for (n in 1..100) { s.reviewsToday = n; Economy.onReview(data, s, TestData.rng(), ev) }
-        assertEquals(500, s.cash)
-        assertEquals(500, s.cashToday)
-        assertEquals(100, cash(ev).size)
-        s.reviewsToday = 101
-        Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(500, s.cash)
-        assertEquals(100, cash(ev).size) // no payment, no event
+        repeat(n) { s.reviewsToday++; Economy.onReview(data, s, TestData.rng(), ev) }
+        return cash(ev)
     }
 
-    @Test fun theCapPaysOnlyWhatIsLeft() {
-        val s = state()
-        s.cashToday = 497
-        val ev = events()
-        s.reviewsToday = 1
-        Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(3, s.cash)
-        assertEquals(500, s.cashToday)
-        assertEquals(GameEvent.Cash(3, 3, CashKind.ANSWER), cash(ev).single())
+    @Test fun theAnswersPerPaymentGrowByOneEveryTier() {
+        assertEquals(1, Economy.answersPerPayment(0))
+        assertEquals(1, Economy.answersPerPayment(495))
+        assertEquals(2, Economy.answersPerPayment(500))
+        assertEquals(2, Economy.answersPerPayment(995))
+        assertEquals(3, Economy.answersPerPayment(1000))
+        assertEquals(4, Economy.answersPerPayment(1500))
+        assertEquals(11, Economy.answersPerPayment(5000))
+        assertEquals(1, Economy.answersPerPayment(-5))
     }
 
-    @Test fun anOldSaveKeepsItsCashSoFarAgainstTheNewCap() {
+    @Test fun eachNext500IsHarderToEarn() {
         val s = state()
-        s.cashToday = 380 // the old rule's day
-        s.reviewsToday = 90
-        val ev = events()
-        for (n in 91..200) { s.reviewsToday = n; Economy.onReview(data, s, TestData.rng(), ev) }
-        assertEquals(120, s.cash)
-        assertEquals(500, s.cashToday)
-        assertEquals(24, cash(ev).size)
+        assertEquals("the first 500 ₽: every answer", 100, answers(s, 100).size)
+        assertEquals(500, s.cash); assertEquals(500, s.cashToday)
+        assertEquals("the next 500 ₽: every 2nd answer", 100, answers(s, 200).size)
+        assertEquals(1000, s.cashToday)
+        assertEquals("then every 3rd", 100, answers(s, 300).size)
+        assertEquals(1500, s.cashToday)
+        val fourth = answers(s, 8)
+        assertEquals("then every 4th", 2, fourth.size)
+        assertTrue(fourth.all { it.amount == Tuning.CASH_PER_ANSWER && it.kind == CashKind.ANSWER })
+        assertEquals(1510, s.cash)
     }
 
-    @Test fun amuletCoinDoublesAnswersAndStillCaps() {
+    @Test fun theTierBoundaryIsExact() {
         val s = state()
-        s.main!!.heldItem = "amulet-coin"
-        s.reviewsToday = 1
-        val ev = events()
-        Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(10, s.cash)
-        s.cashToday = 495 // 5 left under the cap: the doubled 10 is cut to what is left
-        s.reviewsToday = 2
-        Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(15, s.cash)
-        assertEquals(500, s.cashToday)
-        s.main!!.heldItem = "luck-incense"
-        s.cashToday = 0
-        s.reviewsToday = 3
-        Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(25, s.cash)
-        s.main!!.heldItem = "everstone" // another held item pays the plain 5
-        s.reviewsToday = 4
-        Economy.onReview(data, s, TestData.rng(), ev)
-        assertEquals(30, s.cash)
-    }
-
-    @Test fun defeatPaysTenAndAmuletCoinDoublesIt() {
-        val s = state()
-        val ev = events()
-        Economy.onDefeat(s, ev)
-        assertEquals(GameEvent.Cash(10, 10, CashKind.DEFEAT), cash(ev).single())
-        assertEquals(10, s.cashToday)
-        s.main!!.heldItem = "amulet-coin"
-        Economy.onDefeat(s, ev)
-        assertEquals(30, s.cash)
-        assertEquals(30, s.cashToday)
-        assertEquals(20, cash(ev).last().amount)
-    }
-
-    @Test fun defeatMoneyIsBlockedByTheCapAndSharesIt() {
-        val s = state()
-        s.cashToday = 500
-        val ev = events()
-        Economy.onDefeat(s, ev)
-        assertEquals(0, s.cash)
-        assertTrue(ev.isEmpty())
         s.cashToday = 495
-        Economy.onDefeat(s, ev)
-        assertEquals(5, s.cash)
+        assertEquals(GameEvent.Cash(5, 5, CashKind.ANSWER), answers(s, 1).single())   // the last payment of the first tier
         assertEquals(500, s.cashToday)
+        assertTrue("the second tier waits for a 2nd answer", answers(s, 1).isEmpty())
+        assertEquals(1, s.cashWait)
+        assertEquals(GameEvent.Cash(5, 10, CashKind.ANSWER), answers(s, 1).single())
+        assertEquals(0, s.cashWait)
+    }
+
+    @Test fun anOldSaveDayCarriesOnFromItsCashSoFar() {
+        val s = state()
+        s.cashToday = 380 // a day of the old rule (it never went past 500)
+        s.reviewsToday = 90
+        val paid = answers(s, 110)
+        assertEquals("24 answers to 500, then every 2nd of the other 86", 24 + 43, paid.size)
+        assertEquals(335, s.cash)
+        assertEquals(715, s.cashToday)
+    }
+
+    @Test fun amuletCoinDoublesEveryPaymentAtEveryTier() {
+        val s = state()
+        s.main!!.heldItem = "amulet-coin"
+        assertEquals(10, answers(s, 1).single().amount)
+        assertEquals("the curve counts the money before the ×2", 5, s.cashToday)
+        s.cashToday = 500
+        s.main!!.heldItem = "luck-incense"
+        val second = answers(s, 4)
+        assertEquals(listOf(10, 10), second.map { it.amount })   // every 2nd answer, doubled
+        assertEquals(30, s.cash); assertEquals(510, s.cashToday)
+        s.main!!.heldItem = "everstone" // another held item pays the plain 5
+        assertEquals(listOf(5), answers(s, 2).map { it.amount })
+        // over a whole day the item doubles the money exactly: 600 answers pay 1500 ₽ without it, 3000 with it
+        val plain = state(); answers(plain, 600)
+        val coin = state(); coin.main!!.heldItem = "amulet-coin"; answers(coin, 600)
+        assertEquals(1500, plain.cash); assertEquals(3000, coin.cash)
+    }
+
+    @Test fun aNewDayStartsTheCurveAgain() {
+        val g = Game(data, state(), TestData.rng(), { 1_760_000_000_000L })
+        g.state.cashToday = 1234; g.state.cashWait = 2
+        g.state.day = "2000-01-01"
+        g.tick()
+        assertEquals(0, g.state.cashToday); assertEquals(0, g.state.cashWait)
     }
 
     @Test fun dailyBonusGrowsWithTheStreakBeforeToday() {
@@ -172,7 +174,7 @@ class EconomyTest {
         assertEquals(50, Economy.dailyBonus(-3))
     }
 
-    @Test fun dailyBonusIsOutsideTheCapAndNeverDoubled() {
+    @Test fun dailyBonusIsOutsideTheCurveAndNeverDoubled() {
         val s = state()
         s.main!!.heldItem = "amulet-coin"
         s.cashToday = 500 // cap reached
@@ -260,10 +262,10 @@ class EconomyTest {
         val a = state(); val b = state()
         Shop.ensureToday(d, a); Shop.ensureToday(d, b)
         assertEquals("2026-10-13", a.shopDay)
-        assertEquals(3, a.shopItems.size); assertEquals(3, a.shopTms.size)
+        assertEquals(3, drawn(a).size); assertEquals(3, a.shopTms.size)
         assertEquals(a.shopItems, b.shopItems)
         assertEquals(a.shopTms, b.shopTms)
-        assertEquals(a.shopItems.toSet().size, 3)
+        assertEquals(drawn(a).toSet().size, 3)
         assertTrue(a.shopItems.all { it in Items.shopPool(d) })
         assertTrue(a.shopTms.all { it in Shop.tmPool(d) })
 
@@ -277,16 +279,19 @@ class EconomyTest {
         assertTrue(other.shopItems != a.shopItems || other.shopTms != a.shopTms)
     }
 
+    /** Today's drawn items: the stock without the Ultra Ball that its rare days add on top (PLAN 171). */
+    private fun drawn(s: GameState) = s.shopItems.filter { it != "ultra-ball" }
+
     @Test fun ensureTodayRestocksOnNewDayAndUsesSlots() {
         val d = shopData()
         val s = state()
         s.trainerLevel = 10
         Shop.ensureToday(d, s)
-        assertEquals(5, s.shopItems.size); assertEquals(5, s.shopTms.size)
+        assertEquals(5, drawn(s).size); assertEquals(5, s.shopTms.size)
         s.day = "2026-10-14"
         Shop.ensureToday(d, s)
         assertEquals("2026-10-14", s.shopDay)
-        assertEquals(5, s.shopItems.size)
+        assertEquals(5, drawn(s).size)
     }
 
     @Test fun buyItem() {
@@ -295,7 +300,7 @@ class EconomyTest {
         assertEquals(ActionResult(false, "Not in today's shop"), Shop.buy(data, s, "ultra-ball"))
         s.cash = 199
         val no = Shop.buy(data, s, "poke-ball")
-        assertFalse(no.ok); assertEquals("Not enough money (need 200 ₽)", no.message)
+        assertFalse(no.ok); assertEquals("Not enough money (need 200 ₽)", no.message)   // PLAN 171 / R13 Part C: 200 ₽
         assertEquals(199, s.cash); assertEquals(0, s.count("poke-ball"))
         s.cash = 1000
         val ok = Shop.buy(data, s, "poke-ball")
@@ -337,10 +342,68 @@ class EconomyTest {
             assertTrue(Shop.reroll(d, s, TestData.rng(seed)).ok)
             assertEquals(150, s.cash)
             assertEquals(s.day, s.shopDay)
-            assertEquals(3, s.shopItems.size); assertEquals(3, s.shopTms.size)
+            assertEquals(3, drawn(s).size); assertEquals(3, s.shopTms.size)
             if (s.shopItems != items || s.shopTms != tms) changed = true
         }
         assertTrue(changed)
+    }
+
+    // ---- PLAN 171: ball prices and stock ----
+
+    @Test fun ballPricesOverridePokeApi() {
+        // the fixtures carry PokeAPI's 200 / 600 / 800 / 1000 (Net Ball): the Shop uses its own
+        assertEquals(200, data.price("poke-ball")); assertEquals(700, data.price("great-ball")); assertEquals(1500, data.price("ultra-ball"))   // R13 Part C
+        assertEquals("never sold", 0, data.price("master-ball"))
+        for (old in Tuning.OLD_BALLS) assertEquals(old, 0, data.price(old))
+        assertEquals("other items keep PokeAPI's price", 700, data.price("super-potion"))
+        val s = state()
+        s.shopDay = s.day; s.shopItems += "great-ball"; s.cash = 1000
+        assertEquals("Bought Great Ball for 700 ₽", Shop.buy(data, s, "great-ball").message)
+        s.shopItems += "net-ball"
+        assertEquals("Not in today's shop", Shop.buy(data, s, "net-ball").message)
+        assertEquals("Not in today's shop", Shop.buy(data, s, "master-ball").message)
+    }
+
+    private fun days(n: Int) = (0 until n).map { java.time.LocalDate.of(2026, 1, 1).plusDays(it.toLong()).toString() }
+
+    @Test fun theUltraBallIsInStockAboutOneDayInSeven() {
+        val ultraDays = days(730).count { Shop.ultraBallDay(it) }
+        assertTrue("$ultraDays of 730", ultraDays in 70..140)   // ~104 expected
+        assertEquals("date-seeded: the same answer every time", days(60).map { Shop.ultraBallDay(it) }, days(60).map { Shop.ultraBallDay(it) })
+    }
+
+    @Test fun theUltraBallComesOnTopOfTheDrawnItemsOnlyOnItsDays() {
+        val d = shopData()
+        val yes = days(400).first { Shop.ultraBallDay(it) }
+        val no = days(400).first { !Shop.ultraBallDay(it) }
+        val (items, _) = Shop.stockFor(d, yes, 0)
+        assertEquals("ultra-ball", items.first()); assertEquals(Shop.slots(0) + 1, items.size)
+        assertFalse("ultra-ball" in Shop.stockFor(d, no, 0).first)
+        // never in the daily draw or the deal, whatever the day
+        for (day in days(200)) {
+            assertTrue(Shop.stockFor(d, day, 0).first.drop(if (Shop.ultraBallDay(day)) 1 else 0).none { it == "ultra-ball" })
+            assertTrue(Shop.dealFor(d, day)?.item != "ultra-ball")
+        }
+        // a reroll on its day keeps it, a reroll on another day never brings it
+        val s = state(); s.day = yes; Shop.ensureToday(d, s)
+        for (seed in 1..20) { s.cash = 100; Shop.reroll(d, s, TestData.rng(seed)); assertEquals("ultra-ball", s.shopItems.first()) }
+        val t = state(); t.day = no; Shop.ensureToday(d, t)
+        for (seed in 1..20) { t.cash = 100; Shop.reroll(d, t, TestData.rng(seed)); assertFalse("ultra-ball" in t.shopItems) }
+        // and it can be bought there
+        s.cash = 2000
+        assertEquals("Bought Ultra Ball for 1500 ₽", Shop.buy(d, s, "ultra-ball").message)
+    }
+
+    @Test fun anOldBallLeftInTodaysStockLeavesIt() {
+        val s = state()
+        s.shopDay = s.day; s.shopItems += listOf("net-ball", "potion")   // drawn before the update
+        Shop.ensureToday(data, s)
+        assertEquals(listOf("potion"), s.shopItems)
+    }
+
+    @Test fun noBallIsEverFound() {
+        assertTrue(Items.dropPool().none { Items.def(it)?.kind == ItemKind.BALL })
+        assertTrue(Tuning.OLD_BALLS.all { Items.def(it)?.kind == ItemKind.BALL })   // still known: the Ankimon import and old bags keep them
     }
 
     // ---- trainer ----

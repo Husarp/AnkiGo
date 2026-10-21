@@ -25,25 +25,27 @@ class AchievementsFixTest {
     // ---- A1: the lifetime totals are ratcheted into the counters ----
 
     @Test fun releasingAPokemonDoesNotLowerTheLifetimeXp() {
-        val s = state() // an old save: no XP counter at all
-        s.mons += TestData.mon(data, 19, 30, uid = "old") // 27 000 XP
+        val s = state()
+        s.mons += TestData.mon(data, 19, 30, uid = "old") // 27 000 XP from the growth table: not gained here (R13 Part F), no baseline
         Achievements.onReady(s, data, NOW)
-        assertEquals(35_000L, counter(s, Metric.TOTAL_XP)) // the baseline is stored, not only worked out
-        s.mons.removeAll { it.uid == "old" }              // released
-        assertEquals(35_000L, Achievements.value(Metric.TOTAL_XP, s, data))
+        assertEquals(0L, counter(s, Metric.TOTAL_XP))
+        Achievements.count(s, listOf(GameEvent.XpGained("old", "Ratty", 400, 30, 400, 2_000)))
+        s.mons.removeAll { it.uid == "old" }              // released: the XP it gained stays
+        assertEquals(400L, Achievements.value(Metric.TOTAL_XP, s, data))
         check(s, NOW + 1)
-        assertEquals(35_000L, view(s, "total-xp").value)
+        assertEquals(400L, view(s, "total-xp").value)
     }
 
-    @Test fun xpEventsAddOnTopOfTheStoredBaseline() {
+    @Test fun xpEventsAddOnTopOfTheCounter() {
         val s = state()
+        s.counters[Metric.TOTAL_XP.name] = 1_000
         s.mons += TestData.mon(data, 19, 30, uid = "old")
         check(s)
         Achievements.count(s, listOf(GameEvent.XpGained("main", "Sparkmouse", 50, 20, 0, 100)))
-        assertEquals(35_050L, counter(s, Metric.TOTAL_XP))
+        assertEquals(1_050L, counter(s, Metric.TOTAL_XP))
         s.mons.removeAll { it.uid == "old" }
         check(s, NOW + 1)
-        assertEquals(35_050L, Achievements.value(Metric.TOTAL_XP, s, data))
+        assertEquals(1_050L, Achievements.value(Metric.TOTAL_XP, s, data))
     }
 
     @Test fun importedShiniesStayWhenYouReleaseThem() {
@@ -68,10 +70,10 @@ class AchievementsFixTest {
         assertEquals(9L, counter(s, Metric.SHINIES))
     }
 
-    @Test fun onlyTheTwoTotalsAreRatcheted() {
+    @Test fun onlyTheShiniesAreRatcheted() {   // R13 Part F: Total XP left the ratchet
         val s = state()
         check(s)
-        assertEquals(setOf(Metric.TOTAL_XP.name), s.counters.keys) // 8 000 XP; every other counter stays absent, no shinies owned
+        assertEquals(emptySet<String>(), s.counters.keys) // no counter is made up from the save; no shinies owned
     }
 
     // ---- A2: the first quiet look when the game becomes ready ----

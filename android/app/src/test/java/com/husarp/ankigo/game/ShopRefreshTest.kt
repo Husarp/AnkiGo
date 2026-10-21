@@ -60,7 +60,8 @@ class ShopRefreshTest {
             val day = LocalDate.parse("2026-10-01").plusDays(offset).toString()
             val (items, tms) = Shop.stockFor(data, day, level)
             assertTrue(items.none { it in Shop.basics() })
-            assertEquals(Shop.slots(level), items.size); assertEquals(Shop.slots(level), tms.size)
+            val drawn = if (Shop.ultraBallDay(day)) items.drop(1) else items   // PLAN 171: the Ultra Ball's rare days add it first
+            assertEquals(Shop.slots(level), drawn.size); assertEquals(Shop.slots(level), tms.size)
             assertEquals(items.size, items.toSet().size)
             assertTrue(items.all { it in Items.shopPool(data) })
         }

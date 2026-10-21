@@ -152,7 +152,8 @@ class ShopPage(base: Context, host: PageHost) : GamePage(base, host) {
         is ShopPlan.Tile.Item -> {
             val price = ShopPlan.price(data, state.day, t.id)
             val name = Items.name(t.id)
-            ShopViews.tile(this, Bits.itemTile(this, t.id, 36), name, priceView(price, 14f), ShopPlan.describe(name, price)) { itemInfo(t.id) }
+            val chance = ShopPlan.chanceLine(t.id)
+            ShopViews.tile(this, Bits.itemTile(this, t.id, 36), name, priceView(price, 14f), ShopPlan.describe(listOfNotNull(name, chance).joinToString(", "), price), chance) { itemInfo(t.id) }
         }
         is ShopPlan.Tile.Tm -> tmTile(t.move)
     }

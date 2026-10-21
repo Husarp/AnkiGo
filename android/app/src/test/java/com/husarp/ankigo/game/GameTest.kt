@@ -317,12 +317,12 @@ class GameTest {
         assertEquals(12, caught.level)
         assertTrue(ev.of<GameEvent.Fainted>().any { !it.player })
         // AnkiGo (Tuning.CATCH_GIVES_XP): a 0-HP catch gives the full defeat XP to the main; it counts as a win
-        // (defeat counters once, trainer XP by tier) but is no Defeated event and gives no defeat money
+        // (defeat counters once, trainer XP by tier) but is no Defeated event; it pays the win money (R13 Part C)
         assertEquals(Progression.xpForDefeat(data.sp(54), 12), ev.of<GameEvent.XpGained>().single { it.uid == s.main!!.uid }.xp)
         assertTrue(ev.of<GameEvent.Defeated>().isEmpty())
         assertEquals(1, s.catches); assertEquals(1, s.defeats); assertEquals(1, s.catchWins); assertEquals(1, s.main!!.defeats)
         assertEquals(Tuning.TRAINER_XP[Tier.NORMAL]!!, s.trainerXp)
-        assertEquals(2 * Tuning.CASH_PER_ANSWER, s.cashToday) // the two answers only: no defeat ₽
+        assertEquals(2 * Tuning.CASH_PER_ANSWER + Tuning.CASH_PER_WIN, s.cashToday) // the two answers and the catch
         assertTrue(54 in s.caught && 54 in s.seen)
         assertEquals(1, s.team.size)
         val mon = s.mon(caught.uid)!!
@@ -472,18 +472,19 @@ class GameTest {
         assertEquals(20, g.state.cash); assertEquals(20, g.state.cashToday)
     }
 
-    @Test fun aHundredAnswersFillTheCapThenNothingMoreIsPaid() {
+    @Test fun aHundredAnswersFillTheFirstTierThenEverySecondAnswerPays() {   // PLAN 125: the linear money curve
         val g = game()
         g.state.settings.dailyAverage = 1000
         val first = g.plainAnswers(100)
         assertEquals(100, first.cash().size)
         assertTrue(first.cash().all { it.kind == CashKind.ANSWER && it.amount == 5 })
         assertEquals(500, g.state.cash); assertEquals(500, g.state.cashToday)
-        assertTrue(g.plainAnswers(10).cash().isEmpty())
-        assertEquals(500, g.state.cash)
+        val next = g.plainAnswers(10)
+        assertEquals("every 2nd answer of the second 500", 5, next.cash().size)
+        assertEquals(525, g.state.cash); assertEquals(525, g.state.cashToday)
     }
 
-    @Test fun amuletCoinPaysTenPerAnswerAndTwentyPerDefeatWithTheSameCap() {
+    @Test fun amuletCoinDoublesEveryAnswerAndWinPayment() {   // R13 Part C: a won fight pays again, doubled like an answer
         val g = game()
         g.state.settings.dailyAverage = 1000
         g.state.main!!.heldItem = "amulet-coin"
@@ -491,17 +492,19 @@ class GameTest {
         g.state.caught += 16
         g.fight(species = 16, level = 12, hp = 1)
         g.answer(3)
-        val ev = g.answer(3).cash()
-        assertEquals(listOf(CashKind.ANSWER to 10, CashKind.DEFEAT to 20), ev.map { it.kind to it.amount })
+        val ev = g.answer(3)
+        assertEquals(1, ev.of<GameEvent.Defeated>().size)
+        assertEquals(listOf(CashKind.ANSWER to 10, CashKind.DEFEAT to 20), ev.cash().map { it.kind to it.amount })
         assertEquals(50, g.state.cash)
-        g.state.cashToday = 490
+        assertEquals("the curve counts the money before the ×2", 25, g.state.cashToday)
+        g.state.cashToday = 500   // the second tier: every 2nd answer pays, still doubled
         g.state.main!!.heldItem = "luck-incense"
-        assertEquals(GameEvent.Cash(10, 60, CashKind.ANSWER), g.plainAnswers(1).cash().single())
-        assertEquals(500, g.state.cashToday)
         assertTrue(g.plainAnswers(1).cash().isEmpty())
+        assertEquals(GameEvent.Cash(10, 60, CashKind.ANSWER), g.plainAnswers(1).cash().single())
+        assertEquals(505, g.state.cashToday)
     }
 
-    @Test fun defeatingPaysTenAndAnAutoCatchPaysNothing() {
+    @Test fun aDefeatAndAnAutoCatchEachPayTheWinMoney() {   // R13 Part C (PLAN 170 had taken it away)
         val g = game()
         g.state.settings.dailyAverage = 1000
         g.state.caught += 16
@@ -509,8 +512,9 @@ class GameTest {
         g.answer(3)
         val ev = g.answer(3)
         assertEquals(1, ev.of<GameEvent.Defeated>().size)
-        assertEquals(listOf(CashKind.ANSWER to 5, CashKind.DEFEAT to 10), ev.cash().map { it.kind to it.amount })
+        assertEquals(listOf(CashKind.ANSWER to 5, CashKind.DEFEAT to Tuning.CASH_PER_WIN), ev.cash().map { it.kind to it.amount })
         assertEquals(listOf(10, 20), ev.cash().map { it.total }) // first answer paid 5 before
+        assertTrue("the money comes after the result", ev.indexOfFirst { it is GameEvent.Defeated } < ev.indexOfLast { it is GameEvent.Cash })
         assertEquals(20, g.state.cash); assertEquals(20, g.state.cashToday)
 
         val c = game()
@@ -519,29 +523,31 @@ class GameTest {
         c.answer(3)
         val cev = c.answer(3)
         assertEquals(1, cev.of<GameEvent.Caught>().size)
-        assertEquals(listOf(CashKind.ANSWER), cev.cash().map { it.kind })
-        assertEquals(10, c.state.cash) // two answers, no catch money
+        assertEquals(listOf(CashKind.ANSWER to 5, CashKind.DEFEAT to 10), cev.cash().map { it.kind to it.amount })
+        assertEquals(20, c.state.cash) // two answers and the catch
     }
 
-    @Test fun aDefeatTapOnAWishlistedOneStillPaysAndABallCatchDoesNot() {
+    @Test fun aDefeatTapOnAWishlistedOneAndABallCatchPayTheWinMoney() {   // R13 Part C
         val g = game()
         g.state.settings.dailyAverage = 1000
         g.state.caught += 25
         g.fight(species = 25, hp = 1)
         g.setOverride(Outcome.DEFEAT)
         g.answer(3)
-        assertTrue(g.answer(3).cash().any { it.kind == CashKind.DEFEAT })
+        val dev = g.answer(3)
+        assertEquals(1, dev.of<GameEvent.Defeated>().size)
+        assertEquals(listOf(10), dev.cash().filter { it.kind == CashKind.DEFEAT }.map { it.amount })
 
         val b = game()
         Economy.give(b.state, "master-ball", 1)
         b.fight(species = 54)
         val ev = b.throwBall("master-ball")
         assertEquals(1, ev.of<GameEvent.Caught>().size)
-        assertTrue(ev.cash().isEmpty())
-        assertEquals(0, b.state.cash)
+        assertEquals(listOf(GameEvent.Cash(10, 10, CashKind.DEFEAT)), ev.cash())
+        assertEquals(10, b.state.cash); assertEquals(10, b.state.cashToday)
     }
 
-    @Test fun aFullCapAlsoBlocksTheDefeatMoney() {
+    @Test fun inTheSecondTierEverySecondWinPays() {   // R13 Part C: the win money follows the answers' curve (whole 10 ₽, every Nth win)
         val g = game()
         g.state.settings.dailyAverage = 1000
         g.state.caught += 16
@@ -550,19 +556,28 @@ class GameTest {
         g.answer(3)
         val ev = g.answer(3)
         assertEquals(1, ev.of<GameEvent.Defeated>().size)
-        assertTrue(ev.cash().isEmpty())
-        assertEquals(0, g.state.cash)
+        assertEquals("the 2nd answer of the tier pays, the 1st win doesn't", listOf(CashKind.ANSWER to 5), ev.cash().map { it.kind to it.amount })
+        assertEquals(1, g.state.winWait)
+        g.fight(species = 16, level = 12, hp = 1)
+        g.answer(3)
+        val ev2 = g.answer(3)
+        assertEquals(listOf(CashKind.ANSWER to 5, CashKind.DEFEAT to 10), ev2.cash().map { it.kind to it.amount })
+        assertEquals(0, g.state.winWait)
+        assertEquals(20, g.state.cash); assertEquals(520, g.state.cashToday)
+        now += day(1)
+        g.plainAnswers(1)
+        assertEquals("a new day starts the win count again too", 0, g.state.winWait)
     }
 
     @Test fun cashSoFarOfAnOldSaveCarriesOverAndTheNewDayStartsAtZero() {
         val g = game()
         g.state.settings.dailyAverage = 1000
-        g.state.cashToday = 380 // the old rule's day
-        assertEquals(24, g.plainAnswers(40).cash().size) // only 120 more today
-        assertEquals(500, g.state.cashToday)
+        g.state.cashToday = 380 // a day of the old rule
+        assertEquals(24 + 8, g.plainAnswers(40).cash().size) // 24 answers to 500, then the other 16 pay every 2nd
+        assertEquals(540, g.state.cashToday)
         now += day(1)
-        assertEquals(GameEvent.Cash(5, 125, CashKind.ANSWER), g.plainAnswers(1).cash().single())
-        assertEquals(5, g.state.cashToday)
+        assertEquals(GameEvent.Cash(5, 165, CashKind.ANSWER), g.plainAnswers(1).cash().single())
+        assertEquals(5, g.state.cashToday); assertEquals(0, g.state.cashWait)
     }
 
     @Test fun undoThenRedoOfAnAnswerPaysNothing() {
@@ -583,7 +598,7 @@ class GameTest {
         val bonus = ev.cash().single { it.kind == CashKind.DAILY_BONUS }
         assertEquals(50, bonus.amount)
         assertEquals(65, g.state.cash)
-        assertEquals(15, g.state.cashToday) // the bonus is not in the cap
+        assertEquals(15, g.state.cashToday) // the bonus is not on the money curve
         assertTrue(ev.indexOf(GameEvent.Info("Daily goal reached!")) < ev.indexOf(bonus)) // the goal line, then its bonus
         val more = g.plainAnswers(5)
         assertTrue(more.cash().none { it.kind == CashKind.DAILY_BONUS }) // once a day
@@ -615,14 +630,14 @@ class GameTest {
         assertEquals(listOf(50, 55, 60), paid)
     }
 
-    @Test fun dailyBonusIsPaidEvenWhenTheCapIsReachedAndNeverDoubled() {
+    @Test fun dailyBonusIsPaidInFullOnASlowTierAndNeverDoubled() {
         val h = game()
         h.state.settings.dailyAverage = 3
         h.state.main!!.heldItem = "amulet-coin"
-        h.state.cashToday = 500 // the answers pay nothing, the bonus still comes (and is not doubled)
+        h.state.cashToday = 500 // the second tier: one of the 3 answers pays (doubled); the bonus comes in full, not doubled
         val ev = h.plainAnswers(3).cash()
-        assertEquals(listOf(CashKind.DAILY_BONUS to 50), ev.map { it.kind to it.amount })
-        assertEquals(500, h.state.cashToday)
+        assertEquals(listOf(CashKind.ANSWER to 10, CashKind.DAILY_BONUS to 50), ev.map { it.kind to it.amount })
+        assertEquals(505, h.state.cashToday)
     }
 
     @Test fun anAnswerThatReachesTheGoalCountsInTheStatsLogToo() {
@@ -902,48 +917,68 @@ class GameTest {
         assertEquals(1, g.state.team.size)
     }
 
-    @Test fun aBallCatchIsAWinLikeTheAutoCatch() {
+    @Test fun aBallCatchIsAWinLikeTheAutoCatchWithTheSameXp() {
         val g = game()
         Economy.give(g.state, "master-ball", 1)
-        g.fight(species = 54)
+        g.fight(species = 54, level = 12)
         val cash = g.state.cash
         val ev = g.throwBall("master-ball")
         val s = g.state
         assertEquals(1, s.catches); assertEquals(1, s.defeats); assertEquals(1, s.catchWins); assertEquals(1, s.main!!.defeats)
         assertEquals(Tuning.TRAINER_XP[Tier.NORMAL]!!, s.trainerXp)
-        assertEquals("no money for a catch", cash, s.cash)
-        assertTrue("no Pokémon XP", ev.of<GameEvent.XpGained>().isEmpty())
+        assertEquals("the win money for a catch (R13 Part C)", cash + Tuning.CASH_PER_WIN, s.cash)
+        // PLAN 170: a ball catch gives the Pokémon XP a defeat or an auto catch gives (it used to give none)
+        assertEquals(Progression.xpForDefeat(data.sp(54), 12), ev.of<GameEvent.XpGained>().single { it.uid == s.main!!.uid }.xp)
+        assertTrue("the XP comes after the catch", ev.indexOfFirst { it is GameEvent.Caught } < ev.indexOfFirst { it is GameEvent.XpGained })
         assertEquals("one win, counted once", 1, StudyStats.summary(s, s.day).battlesWon)
     }
 
     @Test fun pokeBallSuccessAndFailureFollowTheChance() {
-        // success: first draw < 8
-        val win = game(seed = seedWithFirstDraw { it < 8 })
+        // success: first draw < 20 (PLAN 171: a Poké Ball catches 20 % of the time)
+        val win = game(seed = seedWithFirstDraw { it < 20 })
         Economy.give(win.state, "poke-ball", 3)
         win.fight(species = 54)
         val w = win.throwBall("poke-ball")
-        assertEquals(GameEvent.BallThrow("poke-ball", 8, true, 2, 1), w.of<GameEvent.BallThrow>().single())
+        assertEquals(GameEvent.BallThrow("poke-ball", 20, true, 2, 1), w.of<GameEvent.BallThrow>().single())
         assertEquals(1, w.of<GameEvent.Caught>().size)
 
-        // failure: first draw >= 8
-        val lose = game(seed = seedWithFirstDraw { it >= 8 })
+        // failure: first draw >= 20
+        val lose = game(seed = seedWithFirstDraw { it >= 20 })
         Economy.give(lose.state, "poke-ball", 3)
-        val wild = lose.fight(species = 54, hp = 20)
+        lose.fight(species = 54, hp = 20)
         val l = lose.throwBall("poke-ball")
-        assertEquals(GameEvent.BallThrow("poke-ball", 8, false, 2, 1), l.of<GameEvent.BallThrow>().single())
+        assertEquals(GameEvent.BallThrow("poke-ball", 20, false, 2, 1), l.of<GameEvent.BallThrow>().single())
         assertEquals(listOf(GameEvent.Info("Duckling broke free!")), l.of<GameEvent.Info>())
         assertTrue(l.of<GameEvent.Caught>().isEmpty())
         assertEquals(2, lose.state.count("poke-ball"))
-        assertSame(wild, lose.state.battle!!.wild)
-        assertEquals(20, wild.hp)
         assertEquals(0, lose.state.catches)
     }
 
-    @Test fun netBallHasATypeBonus() {
+    @Test fun aMissUsesTheBallUpAndTheWildOneRunsAway() {   // PLAN 171
+        val g = game(seed = seedWithFirstDraw { it >= 50 })
+        Economy.give(g.state, "great-ball", 2)
+        val wild = g.fight(species = 54, hp = 20)
+        val trainerXp = g.state.trainerXp
+        val ev = g.throwBall("great-ball")
+        assertEquals(1, g.state.count("great-ball"))
+        // the ball breaks (its own animation), the wild one runs away, then the next one comes, as after a defeat
+        val i = ev.indexOf(GameEvent.Info("Duckling broke free!"))
+        val f = ev.indexOf(GameEvent.Fled("Duckling"))
+        val e = ev.indexOfFirst { it is GameEvent.Encounter }
+        assertTrue("$ev", i in 0 until f && f < e)
+        assertNotSame(wild, g.state.battle!!.wild)
+        // no win: no XP, no defeat count, no trainer XP, no money
+        assertTrue(ev.of<GameEvent.XpGained>().isEmpty() && ev.of<GameEvent.Defeated>().isEmpty() && ev.of<GameEvent.Cash>().isEmpty())
+        assertEquals(0, g.state.defeats); assertEquals(0, g.state.main!!.defeats); assertEquals(0, g.state.catches)
+        assertEquals(trainerXp, g.state.trainerXp)
+        assertEquals(0, StudyStats.summary(g.state, g.state.day).battlesWon)
+    }
+
+    @Test fun anOldAnkimonBallThrowsAsAGreatBallWithNoTypeBonus() {   // PLAN 171
         val g = game()
         Economy.give(g.state, "net-ball")
-        g.fight(species = 54) // water
-        assertEquals(22, g.throwBall("net-ball").of<GameEvent.BallThrow>().single().chance)
+        g.fight(species = 54) // water: the Net Ball's old bonus is gone
+        assertEquals(50, g.throwBall("net-ball").of<GameEvent.BallThrow>().single().chance)
     }
 
     @Test fun throwWithoutABallOrABattleDoesNothing() {
@@ -1279,7 +1314,7 @@ class GameTest {
         assertTrue("wild moves $where", b.wild.moves.size in 1..4)
         assertTrue("tally $where", b.answers in 0..3 && b.tally >= 0)
         assertEquals("buttons vs answers $where", b.answers, b.buttons.size)
-        assertTrue("cash ${s.cash} $where", s.cash >= 0 && s.cashToday in 0..Tuning.CASH_DAILY_CAP)
+        assertTrue("cash ${s.cash} $where", s.cash >= 0 && s.cashToday >= 0 && s.cashWait in 0 until Economy.answersPerPayment(s.cashToday))
         assertTrue("bag $where", s.bag.values.all { it > 0 })
         assertEquals("buttons vs reviews $where", s.reviewsToday, s.buttonsToday.sum())
         assertTrue("counters $where", s.reviewsToday >= 0 && s.totalReviews >= s.reviewsToday)

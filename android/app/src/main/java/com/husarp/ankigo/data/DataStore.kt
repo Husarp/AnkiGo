@@ -178,6 +178,7 @@ object DataStore {
     /** One file with up to 3 tries; null when every try failed or the file looked cut off. */
     private fun fetch(name: String, url: String, progress: (Long, Long) -> Unit): ByteArray? {
         val min = MIN_SIZE[name] ?: MIN_CSV_SIZE
+        Report.log(TAG, "download $name")   // R13 Part E
         repeat(TRIES) { attempt ->
             try {
                 val b = Mirror.get(url, 30_000, progress)

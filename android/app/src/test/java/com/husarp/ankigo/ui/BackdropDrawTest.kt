@@ -112,6 +112,13 @@ class BackdropDrawTest {
         }
     }
 
+    @Test fun aStrongerEarthquakeIsKeptInsideTheBlursMargin() {   // PLAN 157
+        assertEquals(-0.06f * 500f, BackdropDraw.jolt(-200f, 500f), 0.001f)
+        assertEquals(0.06f * 500f, BackdropDraw.jolt(90f, 500f), 0.001f)
+        assertEquals(-12f, BackdropDraw.jolt(-12f, 500f), 0f)
+        assertTrue(BackdropDraw.JOLT_MAX < BackdropDraw.OVERSCAN)
+    }
+
     @Test fun anEmptyPanelOrPictureDoesNotCrash() {
         val c = BackdropDraw.coverCrop(0, 0, 0f, 0f)
         assertTrue(c.w >= 1f && c.h >= 1f)

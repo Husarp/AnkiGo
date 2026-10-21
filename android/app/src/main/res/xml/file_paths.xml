@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Only the updater's download folder in the cache is shared (with Android's package installer). -->
+<!-- The updater's download folder (shared with Android's package installer) and the log shared from Diagnostics (R13 Part E). -->
 <paths>
     <cache-path name="updates" path="updates/" />
+    <cache-path name="logs" path="logs/" />
 </paths>

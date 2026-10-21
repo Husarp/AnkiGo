@@ -1,7 +1,5 @@
 package com.husarp.ankigo.debug
 
-import java.io.File
-import java.nio.file.Files
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -27,24 +25,5 @@ class DelayedFlushTest {
         val d = DelayedFlush(2000, f::schedule) { runs++ }
         d.request(); f.runDue(); d.request(); f.runDue()
         assertEquals(2, runs)
-    }
-
-    @Test fun rollingLogCoalescesAndKeepsAllLines() {
-        val dir = Files.createTempDirectory("rgl").toFile()
-        val file = File(dir, "e.log")
-        val f = Fake()
-        lateinit var log: RollingGameLog
-        val d = DelayedFlush(2000, f::schedule) { log.persist() }
-        log = RollingGameLog(file, 500, d)
-        repeat(5) { log.append(listOf("line $it")) }
-        assertEquals(false, file.exists())
-        assertEquals(5, log.all().lines().size)
-        f.runDue()
-        assertEquals(5, RollingGameLog(file).all().lines().size)
-        log.append(listOf("later")); f.runDue()
-        assertEquals(6, RollingGameLog(file).all().lines().size)
-        log.clear()
-        assertEquals("", file.readText())
-        dir.deleteRecursively()
     }
 }

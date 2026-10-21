@@ -27,6 +27,9 @@ import java.util.concurrent.TimeUnit
 object StudyIo {
     private const val FILE = "study-answers.json"
 
+    /** PLAN 195: Settings -> Diagnostics "Save answers for cards that aren't first (test)", in the "study" prefs; on unless turned off. */
+    const val NOT_TOP_PREF = "notTopTry"
+
     @Volatile private var host: AnswerHost? = null
 
     @Synchronized
@@ -35,7 +38,8 @@ object StudyIo {
         val app = ctx.applicationContext
         Anki.load(app)
         val io = ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, LinkedBlockingQueue()) { r -> Thread(r, "ankigo-study-io").apply { isDaemon = true } }
-        return AnswerHost(AnkiProvider(app), FileJournalStore(File(app.filesDir, FILE)), AndroidEnv(app), io).also {
+        val prefs = app.getSharedPreferences("study", 0)
+        return AnswerHost(AnkiProvider(app), FileJournalStore(File(app.filesDir, FILE)), AndroidEnv(app), io, tryNotTop = { prefs.getBoolean(NOT_TOP_PREF, true) }).also {
             host = it
             it.start()
         }

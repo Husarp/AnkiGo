@@ -19,8 +19,8 @@ class SpentHealStatsTest {
         assertTrue(Shop.buy(data, s, "poke-ball").ok)
         assertTrue(Shop.buy(data, s, "great-ball").ok)
         assertTrue(Shop.buy(data, s, "poke-ball").ok)
-        assertEquals(200 + 600 + 200, s.history.getValue(s.day).spent)
-        assertEquals(5000 - 1000, s.cash)
+        assertEquals(200 + 700 + 200, s.history.getValue(s.day).spent)   // PLAN 171's ball prices (R13 Part C: 200 / 700)
+        assertEquals(5000 - 1100, s.cash)
         assertEquals(0, s.history.getValue(s.day).healItems)
     }
 

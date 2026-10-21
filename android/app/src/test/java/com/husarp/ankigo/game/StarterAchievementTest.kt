@@ -82,10 +82,13 @@ class StarterAchievementTest {
 
     @Test fun theStarterLevelsItEarnsStillCount() {
         val (_, s) = fresh()
-        s.main!!.level = 9
-        assertEquals(9L, v(s, Metric.HIGHEST_LEVEL))
-        assertEquals(4L, v(s, Metric.TOTAL_LEVELS))
-        assertTrue(v(s, Metric.TOTAL_XP) > 0)
+        val events = mutableListOf<GameEvent>()
+        val gained = Progression.gainXp(data, s, s.main!!, 2_000, events)   // R13 Part F: counted from the level-ups and the XP gained
+        Achievements.count(s, events)
+        assertTrue(gained > 0)
+        assertEquals(s.main!!.level.toLong(), v(s, Metric.HIGHEST_LEVEL))
+        assertEquals(gained.toLong(), v(s, Metric.TOTAL_LEVELS))
+        assertEquals(2_000L, v(s, Metric.TOTAL_XP))
     }
 
     @Test fun noTierIsGrantedOrCelebratedBecauseOfTheStarter() {

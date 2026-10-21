@@ -26,10 +26,21 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
         backgroundRequested = false // one transition, one attempt; closing the overlay must not restart it
         FloatBattleService.startIfWanted(this)
     }
+    /** R13 Part E: the app's own preference files whose changes go to the debug log (kept here: Android holds the listeners weakly). */
+    private val prefFiles = listOf("study", "spike", "firstrun", "ankigo_ui", "ankigo_sound")
+    private val prefLogger = android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+        val file = prefFiles.firstOrNull { getSharedPreferences(it, 0) === p } ?: "?"
+        // never card text: the study widget keeps its card's question under "w<id>.q" (and the old "w_q")
+        val value = if (key != null && (key == "w_q" || key.endsWith(".q"))) "(card text, not logged)" else p.all[key]?.toString()?.take(80)
+        Report.log("SETTINGS", if (key == null) "$file: cleared" else "$file.$key -> $value")
+    }
+
     override fun onCreate() {
         super.onCreate()
         Report.init(this)
+        Report.log("LIFE", "app process started")
         GameLog.init(this)
+        for (f in prefFiles) getSharedPreferences(f, 0).registerOnSharedPreferenceChangeListener(prefLogger)
         Mirror.init(this)
         registerActivityLifecycleCallbacks(this)
         GameRepo.addListener { if (backgroundRequested) main.post(leave) }
@@ -41,6 +52,7 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
         main.removeCallbacks(leave)
         val entering = !BattleScreen.visible && !recreating
         recreating = false
+        if (entering) Report.log("LIFE", "app in front (${activity.javaClass.simpleName})")   // R13 Part E
         BattleScreen.setVisible(activity, true)
         if (entering) LiveSession.recheck(this) // entering AnkiGo: read AnkiDroid again now
         FloatBattleService.stop(this)
@@ -52,6 +64,7 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
             main.postDelayed({ recreating = false }, 2_000) // a recreate follows at once; never leave the flag stuck
         }
         if (!BattleScreen.visible && !activity.isChangingConfigurations) {
+            Report.log("LIFE", "app in background (${activity.javaClass.simpleName})")   // R13 Part E
             LiveSession.recheck(this) // leaving AnkiGo: PiP / floating battle may keep watching, make sure the last second counts
             backgroundRequested = true
             // A new Activity starts before the old one stops. Defer to settle task/picker transitions.
@@ -59,9 +72,9 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
             main.postDelayed(leave, 200)
         }
     }
-    override fun onActivityDestroyed(activity: Activity) { BattleScreen.setVisible(activity, false) }
-    override fun onActivityCreated(activity: Activity, state: Bundle?) {}
-    override fun onActivityResumed(activity: Activity) { AppToast.resumed(activity); AchievementPopup.resumed(activity) } // the "achievement earned" popup shows on the screen in front
-    override fun onActivityPaused(activity: Activity) { AppToast.paused(activity); AchievementPopup.paused(activity) }
+    override fun onActivityDestroyed(activity: Activity) { BattleScreen.setVisible(activity, false); Report.log("LIFE", "${activity.javaClass.simpleName} closed") }
+    override fun onActivityCreated(activity: Activity, state: Bundle?) { Report.log("LIFE", "${activity.javaClass.simpleName} opened" + if (state != null) " (restored)" else "") }
+    override fun onActivityResumed(activity: Activity) { Report.log("LIFE", "${activity.javaClass.simpleName} resumed"); AppToast.resumed(activity); AchievementPopup.resumed(activity) } // the "achievement earned" popup shows on the screen in front
+    override fun onActivityPaused(activity: Activity) { Report.log("LIFE", "${activity.javaClass.simpleName} paused"); AppToast.paused(activity); AchievementPopup.paused(activity) }
     override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) {}
 }

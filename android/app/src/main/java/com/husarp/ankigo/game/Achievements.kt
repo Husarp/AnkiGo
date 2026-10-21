@@ -23,7 +23,6 @@ enum class Metric(val counted: Boolean, val external: Boolean = false) {
     DEX_SEEN(false),
     DEX_CAUGHT(false),
     HIGHEST_LEVEL(false),     // highest level among the Pokémon you own
-    TOTAL_LEVELS(false),      // sum of the levels of the Pokémon you own
     BEST_DAY(false),          // most answers in one day: the day history, today, and the review badges (Ankimon 1-4, 12, 13) already earned
     LEGENDARY_MYTHICAL(false), // caught species flagged legendary or mythical
     TYPES_CAUGHT(false),      // different types among the caught species (0..18)
@@ -39,7 +38,8 @@ enum class Metric(val counted: Boolean, val external: Boolean = false) {
     RESISTED(true),           // the wild one's damaging hits that were not very effective or had no effect (once per attack)
     BALLS_THROWN(true),
     SHINIES(true),            // shinies caught in a fight (the value is never below the shinies you own)
-    TOTAL_XP(true),           // XP your Pokémon gained (XpGained events); the value is never below the XP of the Pokémon you own (growth table + progress)
+    TOTAL_XP(true),           // XP your Pokémon gained (XpGained events). R13 Part F: no floor from the Pokémon you own (a caught one's XP is not earned)
+    TOTAL_LEVELS(true),       // R13 Part F: levels your Pokémon gained (LevelUp events), never the levels a Pokémon came with (was: the owned levels added up)
     ITEMS_FOUND(true),        // random items after answers
     MONEY_EARNED(true),
     MONEY_SPENT(true),        // Shop
@@ -98,13 +98,11 @@ object Achievements {
         Metric.DEX_SEEN -> (state.seen.size - starterOnly(state, state.starterSeen, state.seen)).toLong()
         Metric.DEX_CAUGHT -> (state.caught.size - starterOnly(state, state.starterCaught, state.caught)).toLong()
         Metric.HIGHEST_LEVEL -> (state.mons.maxOfOrNull { if (isStarter(state, it) && it.level <= Tuning.STARTER_LEVEL) 0 else it.level } ?: 0).toLong()
-        Metric.TOTAL_LEVELS -> state.mons.sumOf { (it.level - if (isStarter(state, it)) minOf(it.level, Tuning.STARTER_LEVEL) else 0).toLong() }
         Metric.BEST_DAY -> bestDay(state)
         Metric.LEGENDARY_MYTHICAL -> caughtForReal(state).count { data.species[it]?.let { sp -> sp.isLegendary || sp.isMythical } == true }.toLong()
         Metric.TYPES_CAUGHT -> caughtForReal(state).flatMapTo(HashSet()) { data.species[it]?.types ?: emptyList() }.size.toLong()
         Metric.BALL_CATCHES -> state.ballCatches.filterKeys { it != "auto" }.values.sumOf { it.toLong() }
         Metric.SHINIES -> max(counter(state, metric), state.mons.count { it.shiny && !isStarter(state, it) }.toLong()) // an import brings owned shinies
-        Metric.TOTAL_XP -> max(counter(state, metric), state.mons.sumOf { totalXp(data, it) - if (isStarter(state, it)) giftXp(data, it) else 0L }.coerceAtLeast(0L)) // old saves: worked out from the levels
         else -> counter(state, metric)
     }
 
@@ -128,16 +126,16 @@ object Achievements {
         return if (skip.isEmpty()) state.caught else state.caught - skip
     }
 
-    /** XP the starter started with (Lv [Tuning.STARTER_LEVEL], no progress), or less if it somehow is lower. */
-    private fun giftXp(data: GameData, mon: Mon): Long = totalXp(data, mon.species, minOf(mon.level, Tuning.STARTER_LEVEL), 0)
-
     private fun counter(state: GameState, metric: Metric): Long = state.counters[metric.name] ?: 0L
 
-    /** The counted metrics whose [value] is max(counter, what the save holds): see [ratchet]. */
-    private val RATCHETED = listOf(Metric.SHINIES, Metric.TOTAL_XP)
+    /**
+     * The counted metrics whose [value] is max(counter, what the save holds): see [ratchet]. R13 Part F: only the shinies (an import
+     * brings owned shinies). Total XP left the list: its floor added the XP a caught Pokémon came with, and the ratchet kept it.
+     */
+    private val RATCHETED = listOf(Metric.SHINIES)
 
     /**
-     * R4 fix A1: stores the max(counter, derived) of the lifetime totals that [value] reads that way (shinies, total XP) back into
+     * R4 fix A1: stores the max(counter, derived) of the lifetime totals that [value] reads that way (the shinies) back into
      * GameState.counters, so the number a later release of a Pokémon would lower stays. Later event increments then add on top of
      * the stored baseline. Never lowers a counter. Called by [check] (so by every action, import and the first look at a save).
      */
@@ -156,16 +154,6 @@ object Achievements {
         val logged = state.history.values.maxOfOrNull { it.reviews } ?: 0
         val badge = Tuning.REVIEW_BADGES.filter { (_, id) -> id in state.badges }.keys.maxOrNull() ?: 0
         return max(max(logged, state.reviewsToday), badge).toLong()
-    }
-
-    /** All XP of [mon]: the XP to reach its level (growth table) plus its progress inside the level. */
-    private fun totalXp(data: GameData, mon: Mon): Long = totalXp(data, mon.species, mon.level, mon.xp)
-
-    private fun totalXp(data: GameData, species: Int, level: Int, xp: Int): Long {
-        val table = data.species[species]?.let { data.growth[it.growthRate] }
-        val n = level.coerceIn(1, Tuning.MAX_LEVEL)
-        val toLevel = if (table != null && n < table.size) table[n].toLong() else n.toLong() * n * n // the same n^3 fallback as Progression.xpToNext
-        return toLevel + xp.coerceAtLeast(0)
     }
 
     /** How many tiers of [row] are reached right now (0..row.tiers.size). A badge one-off is reached when its id is in GameState.badges. */
@@ -202,6 +190,7 @@ object Achievements {
                 if (e.kind == CashKind.DAILY_BONUS) bump(state, Metric.GOALS_REACHED)
             }
             is GameEvent.XpGained -> bump(state, Metric.TOTAL_XP, e.xp.toLong())
+            is GameEvent.LevelUp -> bump(state, Metric.TOTAL_LEVELS)   // one event per level gained
             is GameEvent.ItemFound -> bump(state, Metric.ITEMS_FOUND)
             is GameEvent.Attack -> {
                 if (e.byPlayer) { hp = e.userHp; maxHp = e.userMaxHp } else { hp = e.targetHp; maxHp = e.targetMaxHp }
@@ -269,8 +258,8 @@ object Achievements {
      * The call that migrates an older tier ladder ([migrate]) is quiet and flags its new dates as inferred too.
      * The first call on a state also sets GameState.achSince = [now]. Every call first [ratchet]s the lifetime totals (R4 fix A1).
      */
-    fun check(state: GameState, data: GameData, now: Long, events: MutableList<GameEvent>, silent: Boolean = false) {
-        val migrated = migrate(state) // R9-B2: a tier the player already had under the old ladder is added back quietly below
+    fun check(state: GameState, data: GameData, now: Long, events: MutableList<GameEvent>, silent: Boolean = false, log: (String) -> Unit = {}) {
+        val migrated = migrate(state, log) // R9-B2: a tier the player already had under the old ladder is added back quietly below
         if (state.achSince == 0L) state.achSince = now
         ratchet(state, data)
         for (row in AchievementTable.ROWS) {
@@ -294,11 +283,12 @@ object Achievements {
      * R9-B2: brings a save written for an older tier ladder (GameState.achLadder < AchievementTable.LADDER) to the current one, once.
      * Rows in [AchievementTable.REMAP]: new tier t takes the date (and the inferred flag) of old tier REMAP[t]; the old tiers that have no
      * new tier are dropped, and a new tier whose old one was never reached has no date (so [check] decides, quietly). Nothing is paid
-     * for a tier, so nothing can be lost. Returns true when it changed the version. No-op on a current state.
+     * for a tier, so nothing can be lost. Then (ladder 3) [fixLifetimeTotals]; [log] gets its line. Returns true when it changed the
+     * version. No-op on a current state.
      */
-    fun migrate(state: GameState): Boolean {
+    fun migrate(state: GameState, log: (String) -> Unit = {}): Boolean {
         if (state.achLadder >= AchievementTable.LADDER) return false
-        for ((id, remap) in AchievementTable.REMAP) {
+        if (state.achLadder < 2) for ((id, remap) in AchievementTable.REMAP) {
             val old = state.achTiers[id] ?: continue
             val oldInferred = old.indices.filterTo(HashSet()) { inferredKey(id, it) in state.achInferred }
             state.achInferred.removeAll { it.startsWith("$id/") }
@@ -306,8 +296,42 @@ object Achievements {
             state.achTiers[id] = kept.map { old[it] }.toMutableList()
             kept.forEachIndexed { t, o -> if (o in oldInferred) state.achInferred += inferredKey(id, t) }
         }
+        if (state.achLadder < 3) log(fixLifetimeTotals(state))
         state.achLadder = AchievementTable.LADDER
         return true
+    }
+
+    /**
+     * R13 Part F, once (ladder 2 -> 3): "Total XP" and "Total levels" were inflated by what a caught (or imported) Pokémon came with:
+     * Total XP had a floor of the owned Pokémon's whole growth-table XP and was ratcheted (kept), Total levels added up the owned
+     * levels. Both are recomputed from what really happened: Total XP = the XP of the day history ([DayLog.xp], every XpGained;
+     * 400 days kept), Total levels = the levels the starter gained after Lv [Tuning.STARTER_LEVEL] (no other Pokémon's level when it
+     * was caught is known: those count from now on, level by level). The counters are set to these values (the ratchet reset), and a
+     * tier of the two rows that the new value doesn't reach is locked again quietly (its date and inferred flag go; no event, no
+     * message on screen). Returns the line for the debug log.
+     */
+    internal fun fixLifetimeTotals(state: GameState): String {
+        val oldXp = counter(state, Metric.TOTAL_XP)
+        val oldLevels = state.mons.sumOf { it.level.toLong() }
+        val xp = state.history.values.sumOf { it.xp.toLong() }
+        val starter = state.mons.firstOrNull { isStarter(state, it) }
+        val levels = starter?.let { (it.level - Tuning.STARTER_LEVEL).coerceAtLeast(0).toLong() } ?: 0L
+        fun set(m: Metric, v: Long) { if (v > 0) state.counters[m.name] = v else state.counters.remove(m.name) }
+        set(Metric.TOTAL_XP, xp)
+        set(Metric.TOTAL_LEVELS, levels)
+        val relocked = ArrayList<String>()
+        for (row in AchievementTable.ROWS) {
+            val m = row.metric ?: continue
+            if (m != Metric.TOTAL_XP && m != Metric.TOTAL_LEVELS) continue
+            val dates = state.achTiers[row.id] ?: continue
+            val keep = row.tiers.count { counter(state, m) >= it }
+            if (dates.size <= keep) continue
+            relocked += "${row.id} ${dates.size}->$keep"
+            while (dates.size > keep) dates.removeAt(dates.size - 1)
+            state.achInferred.removeAll { k -> k.startsWith("${row.id}/") && (k.substringAfter('/').toIntOrNull() ?: 0) >= keep }
+        }
+        return "achievements fix (R13 F): total XP $oldXp -> $xp, total levels (owned) $oldLevels -> $levels gained" +
+            if (relocked.isEmpty()) "; no tier locked again" else "; locked again: " + relocked.joinToString(", ")
     }
 
     /**
@@ -328,7 +352,7 @@ object Achievements {
      * can show it or any action change it: it persists the tiers the save already earns (and the lifetime-total baselines), so a later
      * release of a Pokémon cannot take a tier the page has shown away again.
      */
-    fun onReady(state: GameState, data: GameData, now: Long) = check(state, data, now, mutableListOf(), silent = true)
+    fun onReady(state: GameState, data: GameData, now: Long, log: (String) -> Unit = {}) = check(state, data, now, mutableListOf(), silent = true, log = log)
 
     /** One action done: count its events, then check the tiers (the new AchievementReached events are appended to [events]). */
     fun settle(data: GameData, state: GameState, now: Long, events: MutableList<GameEvent>) {

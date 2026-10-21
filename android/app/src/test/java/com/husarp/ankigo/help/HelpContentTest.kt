@@ -144,22 +144,25 @@ class HelpContentTest {
         assertTrue(catching.contains("Master Ball ${Tuning.BALL_CHANCE["master-ball"]}%"))
         assertTrue(catching.contains("1 in ${Tuning.SHINY_ODDS}"))
         assertTrue(catching.contains("while it still has HP") && catching.contains("caught automatically"))
-        assertTrue(catching.contains("${Tuning.BALL_TYPE_BONUS} points"))
+        assertTrue(catching.contains("used up whether it works or not") && catching.contains("runs away"))   // PLAN 171
+        assertTrue(catching.contains("throws like a Great Ball") && catching.contains("the same XP and you the same ${Tuning.CASH_PER_WIN} ₽ as for a defeat"))   // PLAN 171, 170, R13 Part C
         val items = chapterText(GameGuide.ITEMS)
         assertTrue(items.contains("${Tuning.ITEM_COUNTDOWN.first} to ${Tuning.ITEM_COUNTDOWN.last}"))
         assertTrue(items.contains("level ${Tuning.FOSSIL_LEVEL}"))
         val money = chapterText(GameGuide.MONEY)
         assertTrue(money.contains("${Tuning.SHOP_BASE_SLOTS} items"))
         assertTrue(money.contains("${Tuning.REROLL_PRICE}") && money.contains("${Tuning.TM_PRICE}"))
+        assertTrue(money.contains("Poké Ball costs 200 ₽") && money.contains("Great Ball 700 ₽") && money.contains("Ultra Ball 1,500 ₽") && money.contains("Master Ball is never sold"))   // R13 Part C
     }
 
     @Test fun moneyAndHealingUseThePendingNumbersInOnePlace() {
         val n = GuideNumbers.pending()
-        assertEquals(listOf(5, 10, 500, 50, 5, 100, 10), listOf(n.cashPerAnswer, n.cashPerDefeat, n.dailyCashCap, n.dailyBonusStart, n.dailyBonusPerStreakDay, n.dailyBonusMax, n.dailyBonusMaxStreakDays))
+        assertEquals(listOf(5, 10, 500, 50, 5, 100, 10), listOf(n.cashPerAnswer, n.cashPerWin, n.cashTier, n.dailyBonusStart, n.dailyBonusPerStreakDay, n.dailyBonusMax, n.dailyBonusMaxStreakDays))
         assertEquals(listOf(25, 10), listOf(n.levelUpHealPercent, n.defeatHealPercent))
         assertEquals(0.5, n.benchRestPercentPerAnswer, 0.0)
         val money = chapterText(GameGuide.MONEY)
-        assertTrue(money.contains("+5 for every answer") && money.contains("+10 for defeating") && money.contains("At most 500"))
+        assertTrue(money.contains("+5 for every answer") && money.contains("+10 for every wild Pokémon you defeat or catch") && !money.contains("At most 500"))
+        assertTrue(money.contains("in the next 500 ₽ every 2nd answer pays 5 ₽ and every 2nd win 10 ₽"))
         assertTrue(money.contains("bonus of 50 ₽") && money.contains("5 ₽ for every day of your streak before today, up to 100 ₽ after 10 days in a row"))
         val healing = chapterText(GameGuide.HEALING)
         assertTrue(healing.contains("heals 25% of max HP") && healing.contains("heals 10% of max HP") && healing.contains("0.5% of their max HP"))

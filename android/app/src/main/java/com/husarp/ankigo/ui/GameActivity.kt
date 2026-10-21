@@ -27,13 +27,9 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.Widgets
 import com.husarp.ankigo.data.AnkimonFiles
-import com.husarp.ankigo.game.Catching
 import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameEvent
-import com.husarp.ankigo.game.ItemKind
-import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Outcome
-import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.live.LiveSession
 import com.husarp.ankigo.overlay.FloatBattleService
 import com.husarp.ankigo.overlay.FloatPage
@@ -760,7 +756,7 @@ class GameActivity : AgActivity() {
     internal fun fillMenu(m: AppMenu) {
         m.item(8, "Pop out", R.drawable.ic_pip, sub = "Small battle window over other apps", dividerAfter = true)
         m.item(1, "Pokémon", R.drawable.ic_team)
-        m.item(2, "Pokédex", R.drawable.ic_book)
+        m.item(2, "Pokédex", R.drawable.ic_dex)
         m.item(3, "Shop", R.drawable.ic_shop)
         m.item(4, "Settings", R.drawable.ic_settings)
         val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
@@ -890,14 +886,7 @@ class GameActivity : AgActivity() {
         val st = GameRepo.state ?: return
         val battle = st.battle
         if (battle == null) { Ui.toast(this, "No wild Pokémon right now"); return }
-        val types = GameRepo.data?.species?.get(battle.wild.species)?.types.orEmpty()
-        val balls = st.bag.filter { (id, n) -> n > 0 && Items.def(id)?.kind == ItemKind.BALL }.keys
-            .sortedBy { Tuning.BALL_CHANCE[it] ?: 0 }
-        if (balls.isEmpty()) { Ui.toast(this, "No Poké Balls. Buy some in the shop."); return }
-        val labels = balls.map { "${Items.name(it)}  ×${st.count(it)}  ·  ${Catching.ballChance(it, types)}%" }
-        AppDialog.Builder(this).setTitle("Throw a ball")
-            .setItems(labels.toTypedArray()) { _, i -> handleEvents(act { it.throwBall(balls[i]) }) }
-            .setNegativeButton("Cancel", null).showCard()
+        BallThrowUi.show(this, st) { ball -> handleEvents(act { it.throwBall(ball) }) }   // PLAN 171: each chance, and what a miss costs
     }
 
     /** The ⋯ entry that flips catch <-> defeat for this fight: its label says what a tap will do; null when no wild Pokémon is on stage. */

@@ -210,7 +210,7 @@ internal class FloatBattleView(
         if (paused) m.item(9, "Resume watching", R.drawable.ic_play)
         else m.item(9, "Pause watching AnkiDroid", R.drawable.ic_pause)
         m.item(1, "Pokémon", R.drawable.ic_team)
-        m.item(2, "Pokédex", R.drawable.ic_book)
+        m.item(2, "Pokédex", R.drawable.ic_dex)
         m.item(3, "Shop", R.drawable.ic_shop)
         m.item(4, "Settings", R.drawable.ic_settings)
         m.item(10, "View settings", R.drawable.ic_palette)

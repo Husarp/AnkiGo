@@ -130,7 +130,7 @@ class StatsDataTest {
         g.answer() // defeated, not caught
         assertTrue(g.state.ballCatches.isEmpty())
         Economy.give(g.state, "poke-ball", 5)
-        val miss = (0..1000).first { Random(it).nextInt(100) >= 8 }
+        val miss = (0..1000).first { Random(it).nextInt(100) >= Catching.ballChance("poke-ball") }
         val g2 = Game(data, g.state, Random(miss)) { now }
         g2.fight(54, hp = 20)
         g2.throwBall("poke-ball")

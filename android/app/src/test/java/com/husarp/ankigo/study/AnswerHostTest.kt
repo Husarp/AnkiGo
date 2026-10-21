@@ -572,5 +572,39 @@ class AnswerHostTest {
         } finally { r.close() }
     }
 
+    // ---- PLAN 195: an answer waiting for its card
+
+    @Test fun aWaitingAnswerIsNotUnresolvedAndItsLateEndIsToldOnceAsLate() {
+        val fake = newFake(4)
+        val env = Env()
+        val io = Executors.newSingleThreadExecutor { r -> Thread(r, "test-study-io").apply { isDaemon = true } }
+        val host = AnswerHost(fake, MemStore(), env, io, LockWaiter(), backoff = { 60_000L }, tryNotTop = { true }, dayOf = { "2026-10-15" }, wallNow = { 0L })
+        try {
+            val screen = Screen(); host.register(screen)
+            val c = fake.queueOf(deck).first()
+            val a = entry(host, fake, c)
+            fake.moveToTop(fake.queueOf(deck).last())   // a learning card came first: AnkiDroid refuses the write
+            host.enqueue(a, "front", screen)
+            env.pumpUntil { screen.outcomes.isNotEmpty() }
+            val (w, wInfo) = screen.outcomes.single()
+            assertTrue(w is AnswerOutcome.Waiting); assertTrue(wInfo.mine); assertFalse(wInfo.late)
+            assertNull("nothing unresolved: studying goes on", host.unresolved())
+            assertTrue(env.drops.isEmpty() && env.settles.isEmpty() && env.cancels.get() == 0)
+            assertTrue(env.log.any { it.startsWith("NOT_TOP try") })
+            fake.moveToTop(c)
+            val handled = CountDownLatch(1)
+            host.submit(null, Runnable { if (host.writeWaiting(deck, c.key)) handled.countDown() })
+            assertTrue(handled.await(10, TimeUnit.SECONDS))
+            env.pumpUntil { screen.outcomes.size == 2 }
+            val (o, info) = screen.outcomes[1]
+            assertTrue(o is AnswerOutcome.Saved); assertTrue(info.late); assertTrue(info.mine)
+            assertNull(host.unresolved())
+            assertEquals(1, env.settles.size); assertEquals(c.id, env.settles.single().first.cardId)
+            assertEquals("the game step ran once, at the tap", 1, env.games.size)
+            assertEquals(1, fake.revlog.count { !it.external && it.cardId == c.id })
+            assertTrue(env.log.any { it.startsWith("saved late") })
+        } finally { io.shutdownNow() }
+    }
+
     private companion object { const val AWAY_MS = 300_000L }
 }

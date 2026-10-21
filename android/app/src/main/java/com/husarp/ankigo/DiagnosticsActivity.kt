@@ -30,6 +30,12 @@ import com.husarp.ankigo.update.UpdatesActivity
 
 /** The step-0 test screen (C-checks, LIVE watch, report), now reached from Settings -> Diagnostics. */
 class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
+    companion object {
+        private const val COPY_MAX = 400_000
+        const val NOT_TOP_TITLE = "Save answers for cards that aren't first (test)"
+        const val NOT_TOP_SUB = "When AnkiDroid puts another card first, AnkiGo still tries to save your answer, or saves it when that card is first again today. Turn off if answers go wrong."
+    }
+
     private val bg = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var header: TextView
@@ -82,8 +88,14 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
         row("Pictures: owned Pokémon without one" to { checkPictures() })
         row("C8 Pin motivation widget" to { pin(MotivationWidget::class.java) }, "C8 Pin study widget" to { pin(StudyWidget::class.java) })
         row("Updates (version ${Updates.current(this)})" to { startActivity(Intent(this, UpdatesActivity::class.java)) })
-        row("Share report" to { share() }, "Copy report" to { copy() }, "Clear log" to { Report.clear(); GameLog.clear(); logView.text = "" })
+        row("Share log…" to { pickRange() }, "Clear log" to { Report.clear(); logView.text = "" })
         body.addView(buttons, LinearLayout.LayoutParams(-1, -2))
+        // PLAN 195: on by default; Adam turns it off if his phone shows trouble with answers to cards that aren't first
+        val study = getSharedPreferences("study", 0)
+        body.addView(Form.cardOf(this, listOf(Form.switchRow(this, NOT_TOP_TITLE, NOT_TOP_SUB, study.getBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, true)) { on ->
+            study.edit().putBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, on).apply()
+            Report.log("SETTINGS", "${com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF} -> $on")
+        })), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap })
 
         // not selectable: a focused log made fullScroll pan the whole window up, hiding the buttons (Copy report covers copying)
         logView = Ui.text(this, 11f, 600, R.color.ag_sub1).apply { typeface = Typeface.MONOSPACE; setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8)) }
@@ -396,17 +408,78 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
         Widgets.refreshAll(this)
     }
 
-    // ---------- report ----------
-    private fun fullReport() = "AnkiGo report\n" + header.text + "\n\n" + sharedReport()
+    // ---------- the log (R13 Part E) ----------
 
-    private fun sharedReport() = Report.all() + "\n\n=== GAME EVENTS (last 500; ids only) ===\n" + GameLog.all()
-
-    private fun share() {
-        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, "AnkiGo report").putExtra(Intent.EXTRA_TEXT, fullReport().takeLast(400_000)), "Share report"))
+    /** "Share log…": which part of the log (Last hour / Today / Yesterday / Pick a day / Everything), then Share or Copy. */
+    private fun pickRange() {
+        val kinds = com.husarp.ankigo.debug.LogRange.Kind.entries
+        AppDialog.Builder(this).setTitle("Share log").setItems(kinds.map { it.label }.toTypedArray()) { _, i ->
+            if (kinds[i] == com.husarp.ankigo.debug.LogRange.Kind.DAY) pickDay() else prepare(kinds[i], null)
+        }.setNegativeButton("Cancel", null).showCard()
     }
 
-    private fun copy() {
-        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("AnkiGo report", fullReport().takeLast(400_000)))
-        Ui.toast(this, "Report copied")
+    private fun pickDay() = bg.execute {
+        val days = com.husarp.ankigo.debug.LogRange.days(Report.all())
+        main.post {
+            if (isFinishing) return@post
+            if (days.isEmpty()) { Ui.toast(this, "The log has no dated lines yet"); return@post }
+            AppDialog.Builder(this).setTitle("Pick a day").setItems(days.map { it.toString() }.toTypedArray()) { _, i ->
+                prepare(com.husarp.ankigo.debug.LogRange.Kind.DAY, days[i])
+            }.setNegativeButton("Cancel", null).showCard()
+        }
+    }
+
+    /** Builds the chosen range (with the header) off the main thread, then offers Share (a .txt attachment) or Copy. */
+    private fun prepare(kind: com.husarp.ankigo.debug.LogRange.Kind, day: java.time.LocalDate?) {
+        val name = if (kind == com.husarp.ankigo.debug.LogRange.Kind.DAY) day.toString() else kind.label
+        val head = logHeader(name)
+        bg.execute {
+            val body = com.husarp.ankigo.debug.LogRange.filter(Report.all(), com.husarp.ankigo.debug.LogRange.window(kind, java.time.LocalDateTime.now(), day))
+            val text = head + "\n" + body
+            val lines = body.lineSequence().count { it.isNotEmpty() }
+            main.post {
+                if (isFinishing) return@post
+                AppDialog.Builder(this).setTitle("Log: $name").setMessage("$lines lines, ${(text.length + 1023) / 1024} KB")
+                    .setPositiveButton("Share") { _, _ -> shareFile(name, text) }
+                    .setNeutralButton("Copy") { _, _ -> copy(text) }
+                    .setNegativeButton("Cancel", null).showCard()
+            }
+        }
+    }
+
+    /** App version, Android, device, AnkiDroid (the status card's lines) and the main settings, on top of a shared log. */
+    private fun logHeader(range: String): String {
+        val study = getSharedPreferences("study", 0).all.filterKeys { ':' !in it && !it.endsWith(".q") }.toSortedMap()
+            .entries.joinToString(", ") { "${it.key}=${it.value.toString().take(40)}" }
+        val game = GameRepo.state?.settings?.let { com.husarp.ankigo.debug.SettingsText.line(it) } ?: "game not loaded"
+        return "AnkiGo log: $range (made ${java.time.LocalDateTime.now().withNano(0)})\n" +
+            "App: AnkiGo ${Updates.current(this)} · Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}) · ${Build.MANUFACTURER} ${Build.MODEL}\n" +
+            header.text + "\n" +
+            "Game settings: $game\n" +
+            "Study settings: $study\n"
+    }
+
+    private fun shareFile(range: String, text: String) {
+        try {
+            val dir = File(cacheDir, "logs").apply { mkdirs() }
+            dir.listFiles()?.forEach { it.delete() } // only the newest shared log is kept
+            val file = File(dir, "ankigo-log-" + range.lowercase().replace(Regex("[^a-z0-9-]+"), "-").trim('-') + ".txt")
+            file.writeText(text)
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri)
+                .putExtra(Intent.EXTRA_SUBJECT, "AnkiGo log: $range").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(send, "Share log"))
+            Report.log("C12b", "log shared: $range, ${text.length} chars")
+        } catch (e: Exception) {
+            Report.fail("C12b", "sharing the log", e)
+            Ui.toast(this, "The log couldn't be shared: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /** The clipboard takes a few hundred KB at most (Android's limit for one transfer): a longer range is copied from its end. */
+    private fun copy(text: String) {
+        val cut = text.length > COPY_MAX
+        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("AnkiGo log", if (cut) text.takeLast(COPY_MAX) else text))
+        Ui.toast(this, if (cut) "Copied the last ${COPY_MAX / 1000} KB (use Share for all of it)" else "Log copied")
     }
 }

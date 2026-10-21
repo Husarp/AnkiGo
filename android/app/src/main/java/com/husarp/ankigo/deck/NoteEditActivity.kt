@@ -15,6 +15,7 @@ import android.view.View
 import android.view.ViewOutlineProvider
 import android.webkit.JavascriptInterface
 import android.webkit.MimeTypeMap
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -28,6 +29,7 @@ import com.husarp.ankigo.Anki
 import com.husarp.ankigo.CardHtml
 import com.husarp.ankigo.Media
 import com.husarp.ankigo.R
+import com.husarp.ankigo.Report
 import com.husarp.ankigo.study.TtsRules
 import com.husarp.ankigo.ui.AgActivity
 import com.husarp.ankigo.ui.AppBar
@@ -51,6 +53,7 @@ class NoteEditActivity : AgActivity() {
         private const val KEY_TEXTS = "draftTexts"
         private const val KEY_STALE = "draftStale"
         private const val KEY_STATUS = "draftStatus"
+        internal const val PREVIEW_FAILED = "The preview can't be shown on this phone right now. Your text is still here."
     }
 
     /** Everything the page needs once the note is read. */
@@ -329,9 +332,27 @@ class NoteEditActivity : AgActivity() {
         }
         sideChips.visibility = if (hasTemplates) View.VISIBLE else View.GONE
         previewSink?.let { it(previewHtml()); return }
-        val w = webView()
-        if (w.parent == null) previewCard.addView(w, FrameLayout.LayoutParams(-1, -1))
-        w.loadDataWithBaseURL(CardHtml.BASE, previewHtml(), "text/html", "UTF-8", null)
+        // PLAN 161 (Preview closed the app; the cause could not be seen without the phone's crash log): nothing here may take the
+        // app down. A page that can't be built or shown is logged (the debug report names it) and the preview says so instead.
+        try {
+            val html = previewHtml()
+            val w = webView()
+            if (w.parent == null) { previewCard.removeAllViews(); previewCard.addView(w, FrameLayout.LayoutParams(-1, -1)) }
+            w.loadDataWithBaseURL(CardHtml.BASE, html, "text/html", "UTF-8", null)
+        } catch (t: Throwable) {
+            Report.fail("EDIT", "preview", t)
+            previewFailed()
+        }
+    }
+
+    /** PLAN 161: the page could not be shown: the WebView goes (it can't be used again), a short line takes its place. */
+    private fun previewFailed() {
+        web?.let { (it.parent as? android.view.ViewGroup)?.removeView(it); runCatching { it.destroy() } }
+        web = null
+        previewCard.removeAllViews()
+        previewCard.addView(StudyUi.label(this, PREVIEW_FAILED, 13, R.color.ag_sub1, 800).apply {
+            gravity = Gravity.CENTER; setPadding(Ui.dp(context, 18), Ui.dp(context, 18), Ui.dp(context, 18), Ui.dp(context, 18))
+        }, FrameLayout.LayoutParams(-1, -1))
     }
 
     /** Screenshot / unit tests set this to take the preview page's HTML instead of loading it (a renderer has no working WebView). Null in the app. */
@@ -371,6 +392,12 @@ class NoteEditActivity : AgActivity() {
         addJavascriptInterface(object { @JavascriptInterface fun call(page: Int, endpoint: String, data: String): String = "" }, "AnkiGoJs")
         webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest) = true
+            // PLAN 161: a page renderer that crashed or was killed takes the whole app with it unless this says it was handled
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                Report.fail("EDIT", "preview page renderer gone (crash=${detail.didCrash()})")
+                if (view === web) previewFailed()
+                return true
+            }
             override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): WebResourceResponse? {
                 if (req.url.host != "ankigo.media") return WebResourceResponse("text/plain", "UTF-8", "".byteInputStream())
                 val name = req.url.path?.trimStart('/') ?: return null

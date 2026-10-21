@@ -231,6 +231,7 @@ object Updates {
     }
 
     private fun download(latest: Latest, file: File) {
+        com.husarp.ankigo.Report.log("UPDATE", "download ${latest.apkUrl.substringAfterLast('/')}")   // R13 Part E
         val part = File(file.parentFile, file.name + ".part")
         val c = open(latest.apkUrl)
         try {
@@ -251,7 +252,9 @@ object Updates {
             }
             if (total > 0 && done != total) throw IOException("incomplete")
             if (!part.renameTo(file)) throw IOException("rename")
+            com.husarp.ankigo.Report.log("UPDATE", "downloaded $done bytes")
         } catch (e: Throwable) {
+            com.husarp.ankigo.Report.fail("UPDATE", "download", e)
             part.delete(); throw e
         } finally { c.disconnect() }
     }

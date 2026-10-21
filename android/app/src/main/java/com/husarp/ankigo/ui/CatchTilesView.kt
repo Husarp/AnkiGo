@@ -84,7 +84,7 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
     }
 
     @DrawableRes private fun icon(k: CatchTilesPlan.Kind) = when (k) {
-        CatchTilesPlan.Kind.DEX -> R.drawable.ic_book
+        CatchTilesPlan.Kind.DEX -> R.drawable.ic_dex
         CatchTilesPlan.Kind.DEFEATED -> R.drawable.ic_swords
         CatchTilesPlan.Kind.THROW, CatchTilesPlan.Kind.AUTO -> R.drawable.ic_ball
         CatchTilesPlan.Kind.XP -> R.drawable.ic_up

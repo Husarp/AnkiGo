@@ -464,7 +464,8 @@ id,evolved_species_id,evolution_trigger_id,version_group_id,is_default,trigger_i
 
     @Test fun itemPrices() {
         assertEquals(3000, data.price("thunder-stone"))
-        assertEquals(800, data.price("ultra-ball"))
+        assertEquals(800, data.itemPrices["ultra-ball"])   // PokeAPI's own number is parsed ...
+        assertEquals(1500, data.price("ultra-ball"))       // ... and the Shop uses AnkiGo's (PLAN 171)
         assertEquals(0, data.price("master-ball"))
         assertEquals(0, data.price("not-an-item"))
     }

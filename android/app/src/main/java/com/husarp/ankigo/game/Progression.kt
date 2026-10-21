@@ -344,13 +344,12 @@ object Catching {
         })
     }
 
-    /** Ball chance in percent (Tuning.BALL_CHANCE, +10 Net Ball vs Water/Bug, +10 Dive Ball vs Water), max 100. */
-    fun ballChance(ball: String, wildTypes: List<Type>): Int {
-        var chance = Tuning.BALL_CHANCE[ball] ?: 0
-        if (ball == "net-ball" && (Type.WATER in wildTypes || Type.BUG in wildTypes)) chance += Tuning.BALL_TYPE_BONUS
-        if (ball == "dive-ball" && Type.WATER in wildTypes) chance += Tuning.BALL_TYPE_BONUS
-        return min(100, chance)
-    }
+    /**
+     * Ball chance in percent (Tuning.BALL_CHANCE). PLAN 171: one of Ankimon's other balls ([Tuning.OLD_BALLS]) throws as a Great Ball
+     * (no type bonus any more, whatever the wild one's types); anything else is 0.
+     */
+    fun ballChance(ball: String): Int =
+        Tuning.BALL_CHANCE[ball] ?: if (ball in Tuning.OLD_BALLS) Tuning.BALL_CHANCE.getValue(Tuning.OLD_BALL_AS) else 0
 
     /**
      * Adds the wild Pokémon to the collection (Ankimon catch: keeps level, IVs, nature, ability, gender, shiny, moves;

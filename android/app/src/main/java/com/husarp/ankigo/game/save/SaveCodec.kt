@@ -43,7 +43,7 @@ object SaveCodec {
             list("seen", state.seen.sorted()); list("caught", state.caught.sorted())
             key("battle"); state.battle.let { if (it == null) value(null) else writeBattle(this, it) }
             kv("nextSpecies", state.nextSpecies); kv("nextTier", state.nextTier.name); kv("nextShiny", state.nextShiny); kv("nextSeed", state.nextSeed)
-            kv("day", state.day); kv("reviewsToday", state.reviewsToday); kv("cashToday", state.cashToday)
+            kv("day", state.day); kv("reviewsToday", state.reviewsToday); kv("cashToday", state.cashToday); kv("cashWait", state.cashWait); kv("winWait", state.winWait)
             kv("itemCountdown", state.itemCountdown)
             list("buttonsToday", state.buttonsToday.toList())
             kv("cardStreak", state.cardStreak); kv("bestCardStreak", state.bestCardStreak)
@@ -341,7 +341,7 @@ object SaveCodec {
         s.nextTier = enumOr(o.strOrNull("nextTier"), Tier.NORMAL)
         s.nextShiny = o.bool("nextShiny", false)
         s.nextSeed = if (o.has2("nextSeed")) o.getLong("nextSeed") else null
-        s.day = o.str("day", ""); s.reviewsToday = o.int("reviewsToday", 0); s.cashToday = o.int("cashToday", 0)
+        s.day = o.str("day", ""); s.reviewsToday = o.int("reviewsToday", 0); s.cashToday = o.int("cashToday", 0); s.cashWait = o.int("cashWait", 0); s.winWait = o.int("winWait", 0)
         s.itemCountdown = o.int("itemCountdown", 0)
         o.intArray("buttonsToday", s.buttonsToday.size).copyInto(s.buttonsToday)
         s.cardStreak = o.int("cardStreak", 0); s.bestCardStreak = o.int("bestCardStreak", 0)

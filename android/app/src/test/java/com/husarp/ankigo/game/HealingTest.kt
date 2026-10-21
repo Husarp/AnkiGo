@@ -165,7 +165,7 @@ class HealingTest {
     @Test fun aBallThatBreaksFreeHealsNothing() {
         val s = hurtMain(10)
         s.bag["poke-ball"] = 1
-        val chance = Catching.ballChance("poke-ball", data.sp(54).types)
+        val chance = Catching.ballChance("poke-ball")
         val seed = (0..500).first { Random(it).nextInt(100) >= chance } // the first draw of the throw misses
         val g = game(s, seed)
         g.fight(54, 15, hp = 30)

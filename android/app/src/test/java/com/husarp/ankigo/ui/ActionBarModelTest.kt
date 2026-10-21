@@ -292,7 +292,15 @@ class ActionBarModelTest {
 
     // ---------------------------------------------------------------- R10 W10: the free hit of a switch
 
-    @Test fun theSwitchHitMarkerSaysSwitchedOnYourHalfAndAboutTheWholeBattle() {
+    @Test fun anItemTurnSaysTheItemOnYourHalf() {   // R13 Part C: an item on the main in a fight takes the turn, marked like a switch
+        val m = ActionBarModel()
+        m.observe(attack(true)); m.observe(attack(false, "Bite"))
+        assertEquals(listOf(BarSide.MINE), m.observe(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30, "potion")))
+        assertEquals(HalfState.Note("Used Potion"), m.mine)
+        assertEquals(LineScope.SIDE, ActionBarModel.scope(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30, "potion")))
+    }
+
+    @Test fun theSwitchHitMarkerSaysSwitchedOnYourHalfAndDrawsNoWholeBarLine() {
         val m = ActionBarModel()
         m.observe(attack(true)); m.observe(attack(false, "Bite"))
         m.observe(GameEvent.MainChanged("u", "Newmon"))
@@ -300,7 +308,8 @@ class ActionBarModelTest {
         assertEquals(listOf(BarSide.MINE), m.observe(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30)))   // R11-133
         assertEquals(HalfState.Note("Switched to Newmon"), m.mine)
         assertEquals("Bite", moved(m, BarSide.THEIRS).move)
-        assertEquals(LineScope.WHOLE, ActionBarModel.scope(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30)))
+        // PLAN 173: no whole-bar line after a switch (the long bar with dots); the arena shows the switch
+        assertEquals(LineScope.SIDE, ActionBarModel.scope(GameEvent.SwitchHit("Wildling", "Newmon", 20, 30)))
         // then the wild one's attack fills its half and its effects attach to it
         assertEquals(listOf(BarSide.THEIRS), m.observe(attack(false, "Tackle", user = "Wildling")))
         assertEquals(listOf(BarSide.THEIRS), m.observe(effect(true, EffectKind.STATUS_APPLIED, status = "par")))

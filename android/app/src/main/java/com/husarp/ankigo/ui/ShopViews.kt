@@ -87,7 +87,7 @@ internal object ShopViews {
     // ---- the item tiles ("always in stock", "today's specials") ----
 
     /** A tile of the mockup `.stile`: [lead] (the 36 dp item or TM tile), the name (two lines kept), and [bottom] (the price, or "Owned") at the bottom. A tap calls [onTap]. */
-    fun tile(ctx: Context, lead: View, name: String, bottom: View, description: String, onTap: () -> Unit): View = LinearLayout(ctx).apply {
+    fun tile(ctx: Context, lead: View, name: String, bottom: View, description: String, sub: String? = null, onTap: () -> Unit): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
@@ -99,6 +99,7 @@ internal object ShopViews {
         addView(Ui.text(ctx, 12f, 900, R.color.ag_text).apply {
             text = name; gravity = Gravity.CENTER; minLines = 2; maxLines = 3
         }, Form.lp(ctx, 6))
+        sub?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it; gravity = Gravity.CENTER; maxLines = 1 }, Form.lp(ctx, 2)) }   // PLAN 171: a ball's catch chance
         addView(View(ctx), LinearLayout.LayoutParams(1, 0, 1f)) // prices line up at the bottom of equal tiles
         addView(bottom, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
     }

@@ -2,7 +2,7 @@ package com.husarp.ankigo.ui
 
 /**
  * The words of the ⋯ entry that flips catch <-> defeat for the fight on stage (R6-09, item 24; pure). Catch and defeat give the same
- * XP, so the entries say what really differs: a defeat gives money (₽) and no Pokémon.
+ * XP and the same money (R13 Part C), so the entries say what really differs: a defeat gives no Pokémon.
  */
 object CatchChoiceText {
     /** The menu entry: what a tap will do, given what the auto rule will do now ([willCatch]). */
@@ -11,7 +11,7 @@ object CatchChoiceText {
     /** The message after the tap; [before] / [after] = [willCatch] before and after the flip. */
     fun toast(before: Boolean, after: Boolean): String = when {
         after != before && after -> "Will catch it"
-        after != before -> "Won't catch it: you get ₽ instead"
+        after != before -> "Won't catch it: it will be defeated"
         after -> "This one is always caught"
         else -> "No change"
     }

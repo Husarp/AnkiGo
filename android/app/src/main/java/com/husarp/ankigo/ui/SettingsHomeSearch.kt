@@ -90,11 +90,25 @@ internal object SettingsHomeSearch {
         minimumHeight = Ui.dp(ctx, 52)
         addView(Ui.text(ctx, 14f, 700, R.color.ag_text).apply { text = hit.info.title })
         addView(Form.body(ctx, hit.info.explain, 12f, R.color.ag_sub0), Form.lp(ctx, 2))
-        addView(Ui.text(ctx, 11f, 800, SettingsSearch.sectionOf(hit.info).tone).apply { text = hit.where }, Form.lp(ctx, 3))
+        addView(wherePath(ctx, hit), Form.lp(ctx, 3))
         contentDescription = "${hit.info.title}. ${hit.info.explain}. ${hit.where}"
         isClickable = true
         background = RippleDrawable(ColorStateList.valueOf(0x22000000), null, ColorDrawable(0xFFFFFFFF.toInt()))
         setOnClickListener { onTap(hit.info) }
+    }
+
+    /** PLAN 165: the "Section · Sub" path line, in the section's tone, after the section's icon (the one on the Settings home tiles). */
+    private fun wherePath(ctx: Context, hit: SettingHit): View = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        val section = SettingsSearch.sectionOf(hit.info)
+        val icon = ImageView(ctx).apply {
+            setImageResource(section.icon)
+            setColorFilter(Ui.c(ctx, section.tone), PorterDuff.Mode.SRC_IN)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO   // the row's description already says where
+        }
+        addView(icon, LinearLayout.LayoutParams(Ui.dp(ctx, 15), Ui.dp(ctx, 15)).also { it.marginEnd = Ui.dp(ctx, 5) })
+        addView(Ui.text(ctx, 11f, 800, section.tone).apply { text = hit.where })
     }
 
     /** Tints [row] with the accent for a moment, so the player sees which setting the search led to. */

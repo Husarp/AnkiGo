@@ -88,8 +88,9 @@ class BattleLogBuilder(
             is GameEvent.Attack -> attack(e)
             is GameEvent.Splash -> moves().lines += LogLine(Tone.SUB, "${e.name} did nothing (Splash)")
             is GameEvent.SwitchHit -> {
-                wildPower = Tuning.SWITCH_HIT_POWER // R10 W10: the free hit of a switch is at normal power, whatever the round before had
-                moves().lines += LogLine(Tone.PLAIN, "Switched to ${e.monName} — the wild ${e.wildName.removePrefix("Wild ")} attacks!")
+                wildPower = Tuning.SWITCH_HIT_POWER // R10 W10: the turn a switch takes is at normal power, whatever the round before had
+                val why = e.item?.let { "Used ${com.husarp.ankigo.game.Items.name(it)} on ${e.monName}" } ?: "Switched to ${e.monName}"   // R13 Part C: or an item
+                moves().lines += LogLine(Tone.PLAIN, "$why — the wild ${e.wildName.removePrefix("Wild ")} attacks once!")
             }
             is GameEvent.Effect -> effect(e)
             is GameEvent.Fainted -> moves().lines += LogLine(if (e.player) Tone.BAD else Tone.GOOD, "${e.name} fainted")
@@ -203,7 +204,7 @@ class BattleLogBuilder(
         val r = LogRound(RoundKind.BALL).also { b.rounds += it; trim(b) }
         r.lines += LogLine(
             if (e.success) Tone.GOOD else Tone.SUB,
-            "Threw ${prettyItem(e.ball)} · ${e.chance}% · " + if (e.success) "caught" else "it broke free",
+            "Threw ${prettyItem(e.ball)} · ${e.chance}% · " + if (e.success) "caught" else "it broke free and ran away",
         )
     }
 

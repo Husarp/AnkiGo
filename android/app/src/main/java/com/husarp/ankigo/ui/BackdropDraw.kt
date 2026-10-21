@@ -16,6 +16,12 @@ internal object BackdropDraw {
     /** The blurred copy extends this much of the panel's size beyond each edge. */
     const val OVERSCAN = 0.08f
 
+    /** PLAN 157: the most Earthquake may jolt the picture, as a share of the panel's height (inside [OVERSCAN]: the blur still covers). */
+    const val JOLT_MAX = 0.06f
+
+    /** The jolt [dy] px as drawn on a panel [h] px high: at most [JOLT_MAX] of it either way, so the picture's edge never shows. */
+    fun jolt(dy: Float, h: Float): Float = dy.coerceIn(-JOLT_MAX * h, JOLT_MAX * h)
+
     /** A shrunk picture's edge fades into the blur over this share of its drawn size. */
     const val FADE = 0.07f
 

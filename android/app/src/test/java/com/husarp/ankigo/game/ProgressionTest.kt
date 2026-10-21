@@ -667,15 +667,14 @@ class ProgressionTest {
     }
 
     @Test fun ballChances() {
-        assertEquals(8, Catching.ballChance("poke-ball", listOf(Type.NORMAL)))
-        assertEquals(12, Catching.ballChance("great-ball", listOf(Type.WATER)))
-        assertEquals(100, Catching.ballChance("master-ball", listOf(Type.WATER)))
-        assertEquals(22, Catching.ballChance("net-ball", listOf(Type.WATER)))
-        assertEquals(22, Catching.ballChance("net-ball", listOf(Type.GRASS, Type.BUG)))
-        assertEquals(12, Catching.ballChance("net-ball", listOf(Type.NORMAL)))
-        assertEquals(21, Catching.ballChance("dive-ball", listOf(Type.FLYING, Type.WATER)))
-        assertEquals(11, Catching.ballChance("dive-ball", listOf(Type.BUG)))
-        assertEquals(0, Catching.ballChance("mystery-ball", listOf(Type.WATER)))
+        // PLAN 171: four tiers; Ankimon's other balls throw as a Great Ball, with no type bonus
+        assertEquals(20, Catching.ballChance("poke-ball"))
+        assertEquals(50, Catching.ballChance("great-ball"))
+        assertEquals(80, Catching.ballChance("ultra-ball"))
+        assertEquals(100, Catching.ballChance("master-ball"))
+        for (old in Tuning.OLD_BALLS) assertEquals(old, 50, Catching.ballChance(old))
+        assertEquals(10, Tuning.OLD_BALLS.size)
+        assertEquals(0, Catching.ballChance("mystery-ball"))
     }
 
     @Test fun addToCollectionResets() {
