@@ -80,8 +80,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // "NEW" sticker: red text, tilted like a sticker, on the wild card's top-left corner (no background). Shown while the wild species isn't caught yet.
     // A sibling of the card (not a child) so it can overhang the card's corner without being clipped; [placeNewTag] puts it there.
     // Round 10 G: when it would be cut (or cover the HP numbers) there, [updateNewTag] moves it to another corner of the card ([NewTagRule]).
-    private val newTag = Ui.text(ctx, 8f, 900, R.color.ag_red).apply {
+    // PLAN 139 / NEW colour: its own strong red with a halo in the page colour, and drawn again over the battle frame ([onDrawForeground]).
+    private val newTag = Ui.text(ctx, 8f, 900, R.color.ag_new_tag).apply {
         text = "NEW"
+        setShadowLayer(Ui.dp(ctx, 1.5f), 0f, 0f, Ui.c(ctx, R.color.ag_base))
         maxLines = 1
         letterSpacing = 0.04f
         rotation = -20f
@@ -336,6 +338,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         // Nothing until the first encounter.
         setEnemyShown(false)
         setNewTag(false)
+    }
+
+    /** PLAN 139: the battle frame is this view's foreground, drawn over every child; the NEW sticker goes over it (and over the cards, fx and texts). */
+    override fun onDrawForeground(canvas: Canvas) {
+        super.onDrawForeground(canvas)
+        if (newTag.visibility == VISIBLE && newTag.alpha > 0f) drawChild(canvas, newTag, drawingTime)
     }
 
     // ---------------------------------------------------------------- layout

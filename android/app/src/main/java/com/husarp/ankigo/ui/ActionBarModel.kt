@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.AchPageMath
 import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.EffectKind
 import com.husarp.ankigo.game.GameEvent
@@ -73,6 +74,8 @@ enum class LineScope {
     MOVE,
     /** About one side but not a move (encounter, caught, fainted ...): the arena shows it; the line is only spoken. */
     SIDE,
+    /** An achievement (or a badge that is one): the "achievement earned" popup shows it, so the bar keeps its moves; the line is only spoken. */
+    POPUP,
 }
 
 /**
@@ -171,6 +174,8 @@ class ActionBarModel {
             is GameEvent.MainHealed, is GameEvent.Healed, is GameEvent.MainChanged, is GameEvent.XpGained, is GameEvent.Charge,
             is GameEvent.Duplicate -> LineScope.SIDE
             is GameEvent.Info -> if (e.text.endsWith("broke free!")) LineScope.SIDE else LineScope.WHOLE
+            is GameEvent.AchievementReached -> LineScope.POPUP
+            is GameEvent.BadgeEarned -> if (AchPageMath.forBadge(e.id) != null) LineScope.POPUP else LineScope.WHOLE
             else -> LineScope.WHOLE
         }
 

@@ -171,6 +171,13 @@ class ActionBarModelTest {
             assertEquals(e.toString(), LineScope.WHOLE, ActionBarModel.scope(e))
     }
 
+    @Test fun anAchievementStaysOffTheBarThePopupShowsIt() {
+        assertEquals(LineScope.POPUP, ActionBarModel.scope(GameEvent.AchievementReached("x", 0, "Title", "Bronze")))
+        val mapped = com.husarp.ankigo.game.AchievementTable.ROWS.firstNotNullOf { r -> r.ankimonBadge.takeIf { it != null } ?: r.tierBadges.firstOrNull() }
+        assertEquals(LineScope.POPUP, ActionBarModel.scope(GameEvent.BadgeEarned(mapped, "Badge")))
+        assertEquals(LineScope.WHOLE, ActionBarModel.scope(GameEvent.BadgeEarned(-12345, "Not an achievement")))
+    }
+
     // ---------------------------------------------------------------- the bubble
 
     @Test fun plainDamageIsInHpLostNotPercent() {

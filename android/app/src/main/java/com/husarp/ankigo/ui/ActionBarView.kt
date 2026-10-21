@@ -443,7 +443,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             gravity = Gravity.CENTER
             minimumWidth = Ui.dp(ctx, 44)
             setPadding(Ui.dp(ctx, 8), 0, Ui.dp(ctx, 8), 0)
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 12, ctx)   // the same card colour as the two move halves (mantle read as black in dark)
             addView(pips, LayoutParams(-2, -2))
         }
     }

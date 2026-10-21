@@ -35,6 +35,7 @@ import com.husarp.ankigo.sound.GameSound
 import com.husarp.ankigo.sound.SoundId
 import com.husarp.ankigo.sound.SoundPrefs
 import com.husarp.ankigo.sound.SoundRules
+import com.husarp.ankigo.study.NextDeck
 import com.husarp.ankigo.study.CardSpeech
 import com.husarp.ankigo.study.JsApi
 import com.husarp.ankigo.study.PanelHeight
@@ -718,7 +719,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         modelName = v.modelName
         cardName = v.cardName
         header.text = deckName.substringAfterLast("::")
-        subtitle.text = "$cardName · card ${counts.sum() + inFlight + 1}"
+        subtitle.text = listOfNotNull(NextDeck.subPath(deckName, v.cardDeckName), cardName, "card ${counts.sum() + inFlight + 1}").joinToString(" · ")   // PLAN 152: the card's own subdeck first
         showQueueCounts(d, p.before["queue"]?.toIntOrNull())
         jsBase = JsApi.snapshot(p.before, n.buttons, n.nextTimes, Triple(d?.new ?: 0, d?.learn ?: 0, d?.review ?: 0), v.tags, v.cardDeckName, v.flagsOk)
         mediaBlocked = (v.blocked.isNotEmpty() || v.unsupported) && prefs.getString("missing", "Ask") != "Answer anyway"
@@ -1541,7 +1542,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         goalRow.addView(Ui.chip(this, com.husarp.ankigo.ui.StreakFlame(this).apply { alive = (st?.streakDays ?: 0) > 0 }, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
         summary.addView(goalRow, StudyUi.spaced(this, 6))
         summaryView = ScrollView(this).apply { addView(summary, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
-        val next = decks.firstOrNull { it.id != deckId && it.total > 0 }
+        val next = NextDeck.pick(decks.map { NextDeck.D(it.id, it.name, it.total) }, deckId, deckName)   // PLAN 147: a sibling subdeck first, never a parent
         buttons.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 10))
         buttons.layoutParams = LinearLayout.LayoutParams(StudyUi.pageWidth(this), -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
         if (next != null) buttons.addView(StudyUi.finishedPrimary(this, "Next deck: ${next.name} · ${next.total} due") {

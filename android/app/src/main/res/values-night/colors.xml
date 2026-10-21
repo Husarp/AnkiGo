@@ -12,6 +12,8 @@
     <color name="ag_sub1">#bac2de</color>
     <color name="ag_sub0">#a6adc8</color>
     <color name="ag_red">#f38ba8</color>
+    <!-- the battle's NEW sticker: a plain strong red in both themes (ag_red is pink in dark) -->
+    <color name="ag_new_tag">#ff4057</color>
     <color name="ag_peach">#fab387</color>
     <color name="ag_yellow">#f9e2af</color>
     <color name="ag_green">#a6e3a1</color>

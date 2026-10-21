@@ -19,10 +19,13 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.animation.ValueAnimator
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import com.husarp.ankigo.R
 import com.husarp.ankigo.data.BackdropPic
 import com.husarp.ankigo.data.Backdrops
+import com.husarp.ankigo.Report
 import com.husarp.ankigo.ui.movefx.Joltable
 
 /**
@@ -130,14 +133,36 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         wanted = bg
         val ready = Backdrops.inMemory(bg)
         if (ready != null) { apply(bg, ready); return }
+        load(bg, download, 0, ++requestGen)
+    }
+
+    /** Bumped by every new load and by [plain]: a callback or retry of an older request (even for the same picture) does nothing. */
+    private var requestGen = 0
+
+    /**
+     * PLAN 158: a download can fail for a moment (network, a slow redirect, memory); the picture went plain at once and came back with a
+     * later request. Now a failed download is tried again [RETRIES] times, [RETRY_MS] apart, before the background turns plain; the
+     * picture showing (if any) stays meanwhile. Without downloads a missing file stays missing, so that turns plain at once as before.
+     */
+    private fun load(bg: Backdrop, download: Boolean, tries: Int, gen: Int) {
         Backdrops.load(ctx, bg, download) { loaded ->
-            if (wanted?.id != bg.id) return@load // a newer request, or plain, came in meanwhile
-            if (loaded != null) apply(bg, loaded) else plain()
+            if (gen != requestGen || wanted?.id != bg.id) return@load // a newer request, or plain, came in meanwhile
+            when {
+                loaded != null -> apply(bg, loaded)
+                download && tries < RETRIES -> {
+                    Report.log("BACKDROP", "${bg.id}: load failed (try ${tries + 1}), again in ${RETRY_MS} ms")
+                    retry.postDelayed({ if (gen == requestGen && wanted?.id == bg.id) load(bg, download, tries + 1, gen) }, RETRY_MS)
+                }
+                else -> { if (download) Report.log("BACKDROP", "${bg.id}: load failed, plain background"); plain() }
+            }
         }
     }
 
+    private val retry by lazy { Handler(Looper.getMainLooper()) }
+
     /** The plain gradient (at once; a fade under way is dropped). */
     fun plain() {
+        requestGen++
         wanted = null
         shown = null
         val had = cur != null
@@ -335,5 +360,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
     private companion object {
         const val SOLID = 0xFF000000.toInt()
         const val CLEAR = 0x00000000
+        const val RETRIES = 2
+        const val RETRY_MS = 1500L
     }
 }
