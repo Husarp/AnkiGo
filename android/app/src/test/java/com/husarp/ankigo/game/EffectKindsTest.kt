@@ -99,7 +99,13 @@ class EffectKindsTest {
                 val b = Battle(mon(150, 50, "splash"), Tier.NORMAL); b.player.status = st
                 val ev = round(mon(19, 20, "tackle"), b, acts = false, seed = s)
                 val c = ev.fx(EffectKind.CANT_MOVE).firstOrNull() ?: continue
-                assertTrue(c.onPlayer); assertEquals(st, c.status)
+                assertTrue(c.onPlayer); assertEquals(st, c.status); assertEquals(st, c.stat)
+                // PLAN 172: exactly one CANT_MOVE, and both the float and the bar say something for that side
+                assertEquals(1, ev.fx(EffectKind.CANT_MOVE).size)
+                assertEquals(1, com.husarp.ankigo.ui.FloatTexts.of(c).size)
+                val bar = com.husarp.ankigo.ui.ActionBarModel()
+                bar.observe(c)
+                assertTrue(bar.mine is com.husarp.ankigo.ui.HalfState.Note)
                 when (st) {
                     "par" -> { par++; assertEquals("Ratty is fully paralyzed!", c.text) }
                     "slp" -> { slp++; assertEquals("Ratty is fast asleep.", c.text) }

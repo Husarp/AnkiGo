@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.PixelFormat
@@ -29,6 +30,23 @@ object ItemIcons {
         ItemSymbol.GEM -> R.color.ag_mauve; ItemSymbol.TAG -> R.color.ag_teal; ItemSymbol.FOSSIL -> R.color.ag_peach
         ItemSymbol.BOTTLE -> R.color.ag_green; ItemSymbol.BALL -> R.color.ag_red; ItemSymbol.ESCAPE -> R.color.ag_sky
         ItemSymbol.BAG -> R.color.ag_sub0
+    }
+
+    /** PLAN 166A: the own 16x16 pixel icon (`res/drawable-nodpi/item_<id>.png`) of an [ItemIconPlan.DRAWN] item; null = none (kind badge instead). */
+    @DrawableRes
+    fun drawnRes(itemId: String): Int? = when (itemId) {
+        "sweet-apple" -> R.drawable.item_sweet_apple; "tart-apple" -> R.drawable.item_tart_apple
+        "cracked-pot" -> R.drawable.item_cracked_pot; "chipped-pot" -> R.drawable.item_chipped_pot
+        "linking-cord" -> R.drawable.item_linking_cord
+        else -> null
+    }
+
+    /** The pixel icon of [itemId] as a crisp (nearest-neighbour) drawable, or null if it has none. */
+    fun drawn(ctx: Context, itemId: String): Drawable? {
+        val res = drawnRes(itemId) ?: return null
+        val opts = BitmapFactory.Options().apply { inScaled = false }
+        val bmp = BitmapFactory.decodeResource(ctx.resources, res, opts) ?: return null
+        return Ui.pixelBitmap(ctx, bmp)
     }
 
     /** A kind badge for [k]: rounded square in a soft tint of the kind colour, the symbol in its ink. */

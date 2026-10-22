@@ -136,6 +136,18 @@ class ActionBarModelTest {
         assertEquals(HalfState.Note("Can't move: frozen"), m.mine)
     }
 
+    @Test fun cantMoveReadsTheStatusKeyFirst() {
+        val m = ActionBarModel()
+        m.observe(effect(true, EffectKind.CANT_MOVE, "Sparkmouse is stuck.", stat = "slp"))
+        assertEquals(HalfState.Note("Can't move: asleep"), m.mine)
+        m.observe(effect(true, EffectKind.CANT_MOVE, "x", status = "frz"))
+        assertEquals(HalfState.Note("Can't move: frozen"), m.mine)
+        m.observe(effect(true, EffectKind.CANT_MOVE, "x", stat = "par"))
+        assertEquals(HalfState.Note("Can't move: paralyzed"), m.mine)
+        m.observe(effect(true, EffectKind.CANT_MOVE, "x"))
+        assertEquals(HalfState.Note("Can't move"), m.mine)
+    }
+
     @Test fun aNoteDoesNotTakeLaterEffects() {
         val m = ActionBarModel()
         m.observe(effect(true, EffectKind.CANT_MOVE, "Sparkmouse is fully paralyzed!"))
@@ -166,7 +178,7 @@ class ActionBarModelTest {
     }
 
     @Test fun theAppsOwnNewsIsAboutTheWholeBattle() {
-        for (e in listOf(GameEvent.Ignored("undo"), GameEvent.ItemFound("potion", 1),
+        for (e in listOf(GameEvent.Ignored("undo"), GameEvent.ItemFound("potion", 1), GameEvent.DailyGift("poke-ball", null, 3, 6), // R14-B2-D: the gift line goes across the bar like a found item
             GameEvent.TrainerLevelUp(3), GameEvent.DayChanged("d"), GameEvent.Info("Daily goal reached")))
             assertEquals(e.toString(), LineScope.WHOLE, ActionBarModel.scope(e))
     }
@@ -371,5 +383,23 @@ class ActionBarModelTest {
         assertEquals("Tackle", moved(m, BarSide.THEIRS).move)
         m.observe(roundStart(enemyActs = false, mainActs = true))
         assertEquals(HalfState.Note("No move"), m.mine)
+    }
+
+    // ---- PLAN 206 (R14-B1-D): the line while a switch waits for the next answer
+
+    @Test fun theQueuedLineSaysSwitchingAfterThisCard() {
+        assertEquals("Switching after this card…", ActionBarModel.queuedLine())
+        assertEquals("Switching after this card…", ActionBarModel.queuedLine(null))
+        assertEquals("Switching after this card…", ActionBarModel.queuedLine(" "))
+        assertEquals("Switching to {{Pikachu}} after this card…", ActionBarModel.queuedLine("Pikachu"))
+    }
+
+    @Test fun aQueuedSwitchChangesNoHalfAndIsNotABattleLine() {
+        val m = ActionBarModel()
+        m.observe(attack(true, "Ember", Type.FIRE))
+        assertTrue(m.observe(GameEvent.SwitchQueued("u2", "Newmon")).isEmpty())
+        assertTrue(m.observe(GameEvent.SwitchQueued(null, "Oldmon")).isEmpty())
+        assertEquals("Ember", moved(m, BarSide.MINE).move)   // the main's last move stays until the switch really happens
+        assertEquals(LineScope.SIDE, ActionBarModel.scope(GameEvent.SwitchQueued("u2", "Newmon")))
     }
 }

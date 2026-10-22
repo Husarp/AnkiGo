@@ -54,6 +54,31 @@ object ContinueBar {
     /** "Continue <deck>, N due" for the card's Continue button. */
     fun description(deck: Anki.Deck): String = "Continue ${deck.name.substringAfterLast("::")}, ${deck.total} due"
 
+    /**
+     * The small green Continue button (accent square with a play icon; 32 dp look in a 48 dp touch area), shared by the Pokémon tab's
+     * battle card and the full-screen Battle view's top bar (PLAN 204) so they look the same. Hidden until [bindButton] gets a deck.
+     * Its layout params are for a horizontal LinearLayout.
+     */
+    fun button(ctx: Context): View = FrameLayout(ctx).apply {
+        visibility = View.GONE
+        addView(StudyUi.icon(ctx, R.drawable.ic_play, R.color.ag_base).apply {
+            setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8))
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 10, ctx)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32), Gravity.CENTER))
+    }.also { it.layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)) }
+
+    /** Shows [b] for [deck] (a tap calls [onTap]) or hides it (null). */
+    fun bindButton(b: View, deck: Anki.Deck?, onTap: (Anki.Deck) -> Unit) {
+        if (deck == null) { b.visibility = View.GONE; b.setOnClickListener(null); b.contentDescription = null; return }
+        b.contentDescription = description(deck)
+        b.setOnClickListener { onTap(deck) }
+        b.visibility = View.VISIBLE
+    }
+
+    /** The top bar's button shows only for a qualifying deck, while the top bar is on screen (tall window) and never in PiP. Pure. */
+    fun topButtonShown(deck: Anki.Deck?, topBarShown: Boolean, inPip: Boolean): Boolean = deck != null && topBarShown && !inPip
+
     /** A delayed AnkiDroid start still runs only for a request that is wanted and an Activity that is not leaving. Pure. */
     fun mayStart(finishing: Boolean, destroyed: Boolean, wanted: Boolean): Boolean = !finishing && !destroyed && wanted
 

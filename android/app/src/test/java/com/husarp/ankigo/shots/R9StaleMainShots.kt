@@ -151,7 +151,7 @@ class R9StaleMainShots {
         "make main from the box while the team is full (the last member goes to the box)" to { g -> assertTrue(g.setMain("b2").ok) },
         "move the second member up" to { g -> assertTrue(g.moveInTeam("t2", -1).ok) },
         "release the main" to { g -> assertTrue(g.release("t1").ok) },
-        "next team member as main" to { g -> assertTrue(g.cycleMain().ok) },
+        "next team member as main" to { g -> assertTrue(g.cycleMain(cardShowing = false).ok) },
         "evolve the main with a stone" to { g -> assertTrue(ItemUse.use(g.data, g.state, "thunder-stone", "t1", g.rng, g.clock()).ok) },
     )
 
@@ -262,11 +262,11 @@ class R9StaleMainShots {
         val sroot = act.buildContent()
         call(act, "layout")
         val spanel = getField(act, "panel") as BattlePanelView
-        GameRepo.run(c) { g -> g.cycleMain(); ActionResult(true, "") }   // the game moved on again: t3 is main now
+        GameRepo.run(c) { g -> g.cycleMain(cardShowing = false); ActionResult(true, "") }   // the game moved on again: t3 is main now
         spanel.renderAll()
         val sown = settle(sroot, spanel.arena.playerSprite, "r9-stalemain-studybusy-0")
         (getField(act, "events") as com.husarp.ankigo.ui.EventPlayer).enqueue(listOf(GameEvent.Info("one"), GameEvent.Info("two")))
-        GameRepo.run(c) { g -> g.cycleMain(); ActionResult(true, "") }
+        GameRepo.run(c) { g -> g.cycleMain(cardShowing = false); ActionResult(true, "") }
         act.refreshMain()
         assertEquals("study screen, busy: untouched", sown, settle(sroot, spanel.arena.playerSprite, "r9-stalemain-studybusy-1"))
     }

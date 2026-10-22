@@ -446,6 +446,7 @@ object AnkimonMerge {
         val changed = uids != state.team.toList()
         state.team.clear()
         state.team.addAll(uids)
+        state.pendingMain = null // PLAN 206: the import sets the team: a switch that was waiting for the next answer is dropped
         // A new main starts the fight fresh (no boosts or status carried over from the old one).
         if (uids.first() != oldMain) state.battle?.player = BattleSide()
         return changed

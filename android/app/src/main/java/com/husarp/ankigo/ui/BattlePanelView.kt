@@ -32,6 +32,7 @@ import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.PendingFight
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.StatCalc
@@ -227,6 +228,10 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         if (on && arena.foreground !== frameDrawable) arena.foreground = frameDrawable
         else if (!on && arena.foreground != null) arena.foreground = null
         arena.frameInsetDp = if (on) frameStyle.t * u / d else 0f
+        // PLAN 140: and what the frame draws deeper than its band (the icicles, the corner squares): the info boxes keep clear of it too
+        val safe = BattleFrame.safe(frameStyle, u / d)
+        arena.frameTopDp = safe.top
+        arena.frameCornerDp = safe.corner
     }
 
     /**
@@ -242,13 +247,30 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
      * unchanged, so the changes that come with every answer cost one comparison.
      */
     private val gameWatch: () -> Unit = {
-        if (isAttachedToWindow && isShown && windowVisibility == VISIBLE && hostIdle()) refreshMain()
+        if (isAttachedToWindow && isShown && windowVisibility == VISIBLE && hostIdle() && !onPendingFight()) refreshMain()
+    }
+
+    /**
+     * PLAN 191: the host takes the fight events that were made on another screen and plays them ([EventPlayer.playPending]); true
+     * when it did (then they draw the player side, not [refreshMain]). A panel without a player has none.
+     */
+    internal var onPendingFight: () -> Boolean = { false }
+
+    /** PLAN 191: the panel came on screen (attached, or its window became visible): a host that is idle takes the waiting fight events. */
+    private val takePending = Runnable {
+        if (isAttachedToWindow && isShown && windowVisibility == VISIBLE && hostIdle()) onPendingFight()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility == VISIBLE) post(takePending)
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         AppPrefs.watchPlayerFront(context, facingWatch)
         GameRepo.addListener(gameWatch)
+        post(takePending)
     }
 
     override fun onDetachedFromWindow() {
@@ -816,8 +838,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private var revealGen = 0
     fun cancelEnemyReveal() { revealGen++ }
 
-    private fun renderPlayer(st: GameState, data: GameData) {
-        val m = st.main
+    private fun renderPlayer(st: GameState, data: GameData, m: Mon? = st.main) {
         if (m == null) {
             arena.setPlayerInfo(null, "", 0)
             arena.setPlayerStatus(null)
@@ -830,8 +851,9 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         playerSeen = playerSeenOf(m)
         arena.setPlayerInfo(m.uid, m.shownName, m.level)
         arena.setPlayerTypes(sp?.types.orEmpty())   // the type look washes our box with the first one's colour (Round 10 W7)
-        arena.setPlayerStatus(st.battle?.player?.status)
-        arena.setPlayerHp(m.hp, if (sp != null) StatCalc.maxHp(data, m) else max(m.hp, 1), false)
+        val pre = preHit(m)   // PLAN 191: fight events from another screen still wait to play: the Pokémon is drawn as it is before the wild one's hit
+        arena.setPlayerStatus(if (pre?.fresh == true) null else st.battle?.player?.status)
+        arena.setPlayerHp(pre?.hp ?: m.hp, pre?.maxHp ?: if (sp != null) StatCalc.maxHp(data, m) else max(m.hp, 1), false)
         val need = Progression.xpToNext(data, m)
         arena.setPlayerXp(m.xp, need, false)
         if (sp != null) showPlayerPicture(m, data)
@@ -850,7 +872,21 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
      */
     private var playerSeen: String? = null
 
-    private fun playerSeenOf(m: Mon) = "${m.uid}:${m.species}:${m.look}:${m.shiny}:${m.shownName}:${m.level}:${m.hp}:${m.xp}"
+    private fun playerSeenOf(m: Mon) = "${m.uid}:${m.species}:${m.look}:${m.shiny}:${m.shownName}:${m.level}:${preHit(m)?.hp ?: m.hp}:${m.xp}"
+
+    /**
+     * PLAN 191: what the player side shows while fight events made on another screen wait to play: [hp] / [maxHp] before the wild
+     * one's hit (the saved game already has the HP after it), and a [fresh] status when the Pokémon came in (a switch starts clean).
+     * Null: nothing waits for this Pokémon, the saved game is drawn.
+     */
+    private class PreHit(val hp: Int, val maxHp: Int, val fresh: Boolean)
+
+    private fun preHit(m: Mon): PreHit? {
+        val waiting = GameRepo.pendingFightEvents()
+        if (waiting.isEmpty()) return null
+        val hit = PendingFight.hpBeforeHit(waiting, m.name) ?: return null
+        return PreHit(hit.hp, hit.maxHp, waiting.any { it is GameEvent.MainChanged })
+    }
 
     /**
      * R9-W5-A: the saved game changed under this panel without an event for it (the Pokémon tab sent the main to the box, a look
@@ -880,11 +916,15 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         setBalls(ballCount(st), false)
     }
 
-    /** Redraws the player card (and sprite if the species changed) from the saved state, e.g. after a team switch. */
-    fun refreshPlayer() {
+    /**
+     * Redraws the player card (and sprite if the species changed) from the saved state, e.g. after a team switch. [uid]: draw that
+     * team member instead of the main (a switch event playing while the save is already further on: several switches made on another
+     * screen play one by one, each Pokémon drawn as itself; [refreshMain] draws the main again once nothing plays).
+     */
+    fun refreshPlayer(uid: String? = null) {
         val st = GameRepo.state ?: return
         val data = GameRepo.data ?: return
-        renderPlayer(st, data)
+        renderPlayer(st, data, uid?.let { st.mon(it) } ?: st.main)
     }
 
     /** Forgets which sprite is shown so the next [renderAll] / event loads it again (after a species change). */

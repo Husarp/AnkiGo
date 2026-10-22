@@ -30,8 +30,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (firstEver) return emptyList()
         state.reviewsToday = 0
         state.cashToday = 0
-        state.cashWait = 0
-        state.winWait = 0
+        state.cashFracNum = 0; state.cashFracDen = 1
         state.buttonsToday.fill(0)
         // An undo whose redo never came must not swallow a real answer days later.
         state.redo.clear()
@@ -43,12 +42,28 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     /** Answers per battle round: always [Tuning.CARDS_PER_ROUND]; tests lower it to shorten fights. */
     internal var roundAnswers: Int = Tuning.CARDS_PER_ROUND
 
-    /** One answer from AnkiDroid -> bookkeeping + (every cardsPerRound answers) one battle round. */
+    /**
+     * One answer from AnkiDroid -> bookkeeping + (every cardsPerRound answers) one battle round. PLAN 206: a switch queued while this
+     * card showed ([requestMain]) comes in right after the answer's own events, in the same list. It is applied AFTER the answer was
+     * counted for the stats and achievements: the switch counts its own wild attack (switchHit), so nothing is counted twice. An
+     * Ignored answer (the redo after an undo) has no Counted event and applies nothing; the queue is cleared before it is applied.
+     */
     fun onAnswer(a: Answer): List<GameEvent> {
         val events = answer(a).toMutableList()
         StudyStats.record(state, events)
         Achievements.settle(data, state, clock(), events) // R4-03: counts these events once (an Ignored answer has none), then adds AchievementReached
+        if (events.any { it is GameEvent.Counted }) events += applyQueuedMain()
         return events
+    }
+
+    /** PLAN 206: the queued switch comes in now (today's [setMain] path: MainChanged, and the wild one's attack when [switchCostsAHit]). A queue gone stale (left the team, already the main) is dropped. */
+    private fun applyQueuedMain(): List<GameEvent> {
+        val uid = state.pendingMain ?: return emptyList()
+        val cycle = state.pendingCycle
+        state.pendingMain = null; state.pendingCycle = false // first: whatever happens below, the switch is never applied twice
+        if (state.mon(uid) == null || uid !in state.team || state.team.firstOrNull() == uid) return emptyList()
+        // a queued [cycleMain] keeps its rotation of the first three ([A,B,C] -> [B,C,A]) while the one it queued is still next in line
+        return if (cycle && state.team.getOrNull(1) == uid) rotateMain().events else setMain(uid).events
     }
 
     private fun answer(a: Answer): List<GameEvent> {
@@ -68,9 +83,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.reviewsToday++
         state.totalReviews++
         state.buttonsToday[button]++
-        state.cardStreak = if (button == 1) 0 else state.cardStreak + 1
+        if (!a.neutral) state.cardStreak = if (button == 1) 0 else state.cardStreak + 1   // PLAN 155: the OK of a new card neither breaks nor builds the combo
         if (state.cardStreak > state.bestCardStreak) state.bestCardStreak = state.cardStreak
-        events += GameEvent.Counted(button, points, state.reviewsToday, state.cardStreak, a.catchUp)
+        events += GameEvent.Counted(button, points, state.reviewsToday, state.cardStreak, a.catchUp, a.neutral)
         Healing.restBench(data, state) // every counted answer (catch-up ones too): the bench heals 0.5 % of max HP, exactly
 
         // Daily goal: once a day, the first time the count reaches it (also if the goal was lowered during the day).
@@ -80,7 +95,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             state.lastGoalDay = state.day
             state.bestStreakDays = maxOf(state.bestStreakDays, state.streakDays)
             events += GameEvent.Info("Daily goal reached!")
-            Economy.payDailyBonus(state, streakBefore, events) // once a day: this moment never repeats on a day
+            DailyGift.give(data, state, events) // R14-B2-D: once a day, this moment never repeats on a day (lastGoalDay is saved): one gift into the Bag, no money
         }
 
         Economy.onReview(data, state, rng, events)
@@ -88,6 +103,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         events += ensureEncounter()
         val battle = state.battle ?: return events
+        if (a.neutral) return events   // PLAN 155: counted above (reviews, money, goal, stats), but not part of a round: no Charge, nobody attacks
         // R10-B22: who attacks depends on each answer, not on the point sum. A battle saved before keeps only the sum: restore the buttons from it.
         if (battle.buttons.size != battle.answers) { battle.buttons.clear(); battle.buttons += RoundRule.restore(battle.answers, battle.tally) }
         battle.tally += points
@@ -317,6 +333,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     private fun changed(message: String, oldMain: String?, oldMon: Mon? = oldMain?.let { state.mon(it) }): ActionResult {
         val events = mutableListOf<GameEvent>()
         var text = message
+        // PLAN 206: a queued switch whose Pokémon left the team (box, released, import) or is the main now has nothing to wait for
+        state.pendingMain?.let { if (it !in state.team || it == state.team.firstOrNull()) state.pendingMain = null }
         val main = state.main
         if (main != null && main.uid != oldMain) {
             val battle = state.battle
@@ -406,6 +424,34 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return changed(message, old)
     }
 
+    /**
+     * PLAN 206 (decided): a switch made while a card shows takes effect right after that card is answered, so nobody picks the
+     * fighter after seeing the question. The card you saw is fought by the Pokémon that is out; the switch's one wild attack stays
+     * (it comes with the switch, see [switchCostsAHit]). The first card of a fight follows the same rule.
+     *
+     * With [cardShowing] and a fight on ([SwitchQueue.fightOn]) and [uid] a team member other than the main: [uid] is queued
+     * ([GameState.pendingMain], a newer pick replaces an older one), the result has a [GameEvent.SwitchQueued] and the main stays.
+     * Picking the main again cancels a queue ([GameEvent.SwitchQueued] with a null uid). Every other case is today's [setMain] at
+     * once: no card in front of the player (a result holds / "Next battle"), no fight, a fainted main, a Pokémon that is not in the
+     * team yet (a box Pokémon: the caller adds it with [toTeam] first). An immediate pick replaces the queue. The queue is applied by
+     * [onAnswer] (the own study screen and the companion / PiP mode alike).
+     */
+    fun requestMain(uid: String, cardShowing: Boolean = true): ActionResult {
+        val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
+        val main = state.main
+        if (main != null && main.uid == uid) {
+            if (state.pendingMain == null) return setMain(uid) // "already your main"
+            state.pendingMain = null
+            return ActionResult(true, SwitchQueue.cancelledText(main.name), listOf(GameEvent.SwitchQueued(null, main.name)))
+        }
+        if (cardShowing && uid in state.team && SwitchQueue.fightOn(state)) {
+            state.pendingMain = uid; state.pendingCycle = false
+            return ActionResult(true, SwitchQueue.queuedText(mon.name), listOf(GameEvent.SwitchQueued(uid, mon.name)))
+        }
+        state.pendingMain = null
+        return setMain(uid)
+    }
+
     /** Why [cycleMain] can't work right now (shown under the greyed menu item), or null when it can. */
     fun cycleMainBlocker(): String? = when {
         state.team.isEmpty() -> "Pick your first Pokémon first"
@@ -413,11 +459,25 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         else -> null
     }
 
-    /** Ankimon team cycle: the next team member becomes the main. */
-    fun cycleMain(): ActionResult {
+    /**
+     * Ankimon team cycle: the next team member becomes the main. PLAN 206: with a card showing in a fight ([cardShowing], like
+     * [requestMain]) that member is only queued, to come in after the card; the answer then rotates the team as the cycle does
+     * ([GameState.pendingCycle]).
+     */
+    fun cycleMain(cardShowing: Boolean = true): ActionResult {
         cycleMainBlocker()?.let { return ActionResult(false, it) }
+        if (cardShowing && SwitchQueue.fightOn(state)) {
+            val r = requestMain(state.team[1], cardShowing = true)
+            if (state.pendingMain != null) state.pendingCycle = true
+            return r
+        }
+        state.pendingMain = null
+        return rotateMain()
+    }
+
+    /** Ankimon cycles the first 3 only: [A,B,C,D] -> [B,C,A,D]. */
+    private fun rotateMain(): ActionResult {
         val old = state.team.first()
-        // Ankimon cycles the first 3 only: [A,B,C,D] -> [B,C,A,D].
         state.team.add(minOf(3, state.team.size) - 1, state.team.removeAt(0))
         return changed("${state.main?.name ?: "?"} is your main now.", old)
     }

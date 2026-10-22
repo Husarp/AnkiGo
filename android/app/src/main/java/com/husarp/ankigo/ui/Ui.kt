@@ -230,8 +230,12 @@ object Ui {
             view.setImageDrawable(pixelBitmap(ctx, have))
             return
         }
+        if (ItemIconPlan.of(item) is ItemIconSpec.Drawn) {
+            // PLAN 166A: the five picture-less items have their own pixel icon; the kind badge is the fallback.
+            view.setImageDrawable(ItemIcons.drawn(ctx, item) ?: ItemIcons.badge(ctx, item))
+            return
+        }
         view.setImageDrawable(ItemIcons.badge(ctx, item))
-        if (ItemIconPlan.of(item) is ItemIconSpec.Drawn) return
         Sprites.fetchItem(ctx, item) { bmp ->
             if (bmp != null && view.getTag(R.id.ag_tag_sprite) == "item:$item") view.setImageDrawable(pixelBitmap(ctx, bmp))
         }

@@ -81,6 +81,26 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
      */
     internal var onArtChange: (() -> Unit)? = null
 
+    /**
+     * PLAN 205 (R14): true = a STILL picture (no frames to play: Gen 9, or an animation that failed to load) gets a soft idle motion: a
+     * slow float up and down and a tiny breath (scaleY, the feet staying on the ground). Off by default; only for the big Pokémon pictures
+     * (the battle arena), never grids or lists. It is drawn as a canvas transform, so the view's own translation / scale stay free for the
+     * battle animations. It runs only while attached and shown, not in reduced motion, and never for an animated picture.
+     */
+    var idleMotion: Boolean = false
+        set(v) {
+            if (v == field) return
+            field = v
+            if (v) idleSlot = idleSlots.getAndIncrement() and 1
+            updateIdle()
+        }
+
+    /** True while the idle motion animator runs (for tests). */
+    internal val idleRunning: Boolean get() = idleAnim != null
+    /** How many times the idle animator was started (for tests: a snapshot host detaches the view again afterwards). */
+    internal var idleStarts = 0
+        private set
+
     private var image: SpriteImage? = null
     /** Empty rows of the image under its feet while [anchorFeet] (worked out when the image is set, never while drawing). */
     private var rowsBelow = 0
@@ -88,6 +108,11 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     private var placeholderText: String? = null
     private var placeholderColor = 0
     private var ticking = false
+    private var idleAnim: android.animation.ValueAnimator? = null
+    /** 0..1 position in the idle cycle; 0 = the rest pose (what a snapshot or a not-yet-started animator draws). */
+    private var idlePhase = 0f
+    /** 0 or 1: the two big sprites of a battle take turns, so they float out of step (second one starts half a cycle later, a bit slower). */
+    private var idleSlot = 0
 
     // Nearest-neighbour: no bilinear filtering (except for 3D animations, see [scale]), no anti-aliasing.
     private val paint = Paint().apply { isFilterBitmap = false; isAntiAlias = false; isDither = false }
@@ -246,6 +271,12 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         paint.colorFilter = currentFilter()
         paint.isFilterBitmap = !pixelArt(bmp.width, bmp.height)
         val save = canvas.save()
+        if (idleAnim != null && idlePhase > 0f) {
+            val lift = idleLift(idlePhase)
+            canvas.translate(0f, -(IDLE_FLOAT_DP * resources.displayMetrics.density * lift).roundToInt().toFloat())
+            // the feet (the visible bottom row) are the pivot, so they stay where they are while the body breathes
+            canvas.scale(1f, idleBreath(idlePhase), vw / 2f, (dst.bottom - footInset(s)).toFloat())
+        }
         if (mirror) canvas.scale(-1f, 1f, vw / 2f, vh / 2f)
         canvas.drawBitmap(bmp, src, dst, paint)
         canvas.restoreToCount(save)
@@ -292,16 +323,59 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         val img = image
         val run = android.animation.ValueAnimator.areAnimatorsEnabled() && !context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false) && img != null && img.animated && isAttachedToWindow && windowVisibility == VISIBLE && isShown
         if (run) schedule() else { removeCallbacks(tick); ticking = false }
+        updateIdle()
+    }
+
+    /** PLAN 205: starts or stops the idle motion by [idleShouldRun]. */
+    private fun updateIdle(detaching: Boolean = false) {
+        val img = image
+        val run = idleShouldRun(idleMotion, img != null, img != null && img.animated,
+            android.animation.ValueAnimator.areAnimatorsEnabled(),
+            context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false),
+            !detaching && isAttachedToWindow && windowVisibility == VISIBLE && isShown)
+        if (run) {
+            if (idleAnim != null) return
+            idleStarts++
+            val period = if (idleSlot == 0) IDLE_PERIOD_MS else IDLE_PERIOD_MS + 300L
+            idleAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = period
+                if (idleSlot == 1) startDelay = period / 2
+                repeatCount = android.animation.ValueAnimator.INFINITE
+                interpolator = android.view.animation.LinearInterpolator()
+                addUpdateListener { idlePhase = it.animatedValue as Float; invalidate() }
+                start()
+            }
+        } else {
+            idleAnim?.let { it.removeAllUpdateListeners(); it.cancel() }
+            idleAnim = null
+            if (idlePhase != 0f) { idlePhase = 0f; invalidate() }
+        }
     }
 
     override fun onAttachedToWindow() { super.onAttachedToWindow(); updateAnimation() }
-    override fun onDetachedFromWindow() { removeCallbacks(tick); ticking = false; super.onDetachedFromWindow() }
+    override fun onDetachedFromWindow() { removeCallbacks(tick); ticking = false; super.onDetachedFromWindow(); updateIdle(detaching = true) }
     override fun onVisibilityChanged(changedView: View, visibility: Int) { super.onVisibilityChanged(changedView, visibility); updateAnimation() }
     override fun onWindowVisibilityChanged(visibility: Int) { super.onWindowVisibilityChanged(visibility); updateAnimation() }
 
     internal companion object {
         /** Gen-5 pixel art is at most 96 x 96; Showdown's 3D animations are often bigger. */
         private const val PIXEL_ART_MAX = 96
+
+        /** PLAN 205: idle float height (peak to peak, the arena's own holder bob is 3 dp too), one cycle's length, and the breath's size. */
+        internal const val IDLE_FLOAT_DP = 3f
+        internal const val IDLE_PERIOD_MS = 2600L
+        private const val IDLE_BREATH = 0.02f
+        private val idleSlots = java.util.concurrent.atomic.AtomicInteger()
+
+        /** 0..1 ease in / out over a cycle at [phase] (0..1): 0 at the start (rest), 1 at the half (top), back to 0 at the end. */
+        fun idleLift(phase: Float): Float = (0.5 - 0.5 * Math.cos(2.0 * Math.PI * phase)).toFloat()
+
+        /** scaleY at [phase]: 1 at rest, 1 + [IDLE_BREATH] at the top of the float (the picture breathes in as it rises). */
+        fun idleBreath(phase: Float): Float = 1f + IDLE_BREATH * idleLift(phase)
+
+        /** The idle motion runs only for a STILL picture ([animated] false) that is shown, with animators on and no reduced motion. */
+        fun idleShouldRun(enabled: Boolean, hasImage: Boolean, animated: Boolean, animatorsOn: Boolean, reduceMotion: Boolean, shown: Boolean): Boolean =
+            enabled && hasImage && !animated && animatorsOn && !reduceMotion && shown
 
         fun pixelArt(w: Int, h: Int) = w <= PIXEL_ART_MAX && h <= PIXEL_ART_MAX
 

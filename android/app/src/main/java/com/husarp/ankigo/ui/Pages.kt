@@ -142,9 +142,12 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
         if (ok) render()
     }
 
-    /** Runs an action through GameRepo (saves + notifies), shows its message, re-renders. */
+    /**
+     * Runs an action through GameRepo (saves + notifies), shows its message, re-renders. PLAN 191: a page is not a battle, so what the
+     * action did to the fight on (an item on the main, a team edit that changed it) is kept for the battle to play ([GameRepo.runOffscreen]).
+     */
     fun act(f: (Game) -> ActionResult): ActionResult {
-        val r = GameRepo.run(this, f)
+        val r = GameRepo.runOffscreen(this, f)
         report(r.message, r.events)
         requestRender()
         return r

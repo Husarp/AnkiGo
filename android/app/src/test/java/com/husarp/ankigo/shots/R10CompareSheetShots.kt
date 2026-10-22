@@ -253,6 +253,7 @@ class R10CompareSheetShots {
 
     @Test fun addToTeamAndSetAsMainFromTheBox() {
         val ctx = Shots.files(paparazzi.context); FakeGame.install(ctx)
+        st.battle = null // PLAN 206: outside a fight "Set as main" is at once (in a fight it waits for the next answer, see the test below)
         st.team.retainAll(listOf("t1", "t2", "t3"))
         val p = page(ctx, mixed)
         shown(ctx, p)
@@ -278,6 +279,22 @@ class R10CompareSheetShots {
         val m4 = headMenu(p, 2)
         m4.pick(idOf(m4, "Remove from team"))
         assertFalse("b1" in st.team)
+    }
+
+    @Test fun setAsMainInAFightWaitsForTheNextAnswer() {
+        val ctx = Shots.files(paparazzi.context); FakeGame.install(ctx)
+        st.team.retainAll(listOf("t1", "t2", "t3"))
+        org.junit.Assert.assertTrue(com.husarp.ankigo.game.SwitchQueue.fightOn(st))
+        val p = page(ctx, mixed)
+        shown(ctx, p)
+        val m = headMenu(p, 2)
+        m.pick(idOf(m, "Add to team"))
+        p.render()
+        val m2 = headMenu(p, 2)
+        m2.pick(idOf(m2, "Set as main"))
+        assertEquals("the main stays out until the next answer", "t1", st.main!!.uid)
+        assertEquals("b1", st.pendingMain)
+        assertEquals(listOf("t1", "t2", "t3", "b1"), st.team.toList())
     }
 
     @Test fun fullTeamSwapsAndMainGoesToTheBox() {

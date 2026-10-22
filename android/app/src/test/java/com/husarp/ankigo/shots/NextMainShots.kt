@@ -30,27 +30,34 @@ class NextMainShots {
     /** nextmain-now: 60 ms after the tap: the new main's card (name, level, HP, XP) and sprite are already there. */
     @Test fun now() = paparazzi.shootWith("nextmain-now", sizes, offsetMillis = 60) { ctx ->
         val b = BattleShotKit.bound(ctx)
-        b.call("switchMain", "t2")
+        b.switchAfterCard("t2")
         b.root
     }
 
     /** nextmain-done: 2 s after the tap, the switch animation is over. */
     @Test fun done() = paparazzi.shootWith("nextmain-done", sizes, offsetMillis = 2000) { ctx ->
         val b = BattleShotKit.bound(ctx)
-        b.call("switchMain", "t2")
+        b.switchAfterCard("t2")
         b.root
     }
 
-    /** The card already says the new main at the moment the tap returns, with the old queue still full (no toast any more). */
-    @Test fun panelFollowsTheTapAtOnceEvenWithAFullQueue() {
+    /**
+     * R14-D (PLAN 206): the tap with a full queue ends what plays, draws the saved game and QUEUES the switch (no peeking: the main
+     * stays until the next answer); the answer then brings the new main in at once. No toast either way ("X is your main now.").
+     */
+    @Test fun theTapQueuesTheSwitchEvenWithAFullQueueAndTheAnswerBringsItIn() {
         FakeGame.install(Shots.files(paparazzi.context))
         val b = BattleShotKit.bound(Shots.files(paparazzi.context))
         b.player!!.enqueue(listOf(GameEvent.Info("one"), GameEvent.Info("two"), GameEvent.Info("three")))
         assertFalse(b.player!!.idle)
         b.call("switchMain", "t2")
+        assertEquals("t1", b.arena!!.playerUid)
+        assertEquals("t1", GameRepo.state!!.main!!.uid)
+        assertEquals("t2", GameRepo.state!!.pendingMain)
+        val events = GameRepo.run(b.activity) { it.onAnswer(com.husarp.ankigo.game.Answer(90_002L, 3, System.currentTimeMillis())) }
+        b.call("handleEvents", events.dropWhile { it !is GameEvent.MainChanged })
         assertEquals("t2", b.arena!!.playerUid)
         assertEquals("t2", GameRepo.state!!.main!!.uid)
-        // R3-X1 removed the "X is your main now." toast on purpose: the card changing (and the short "Go, X!") is the feedback
         assertFalse(Ui.lastToast.orEmpty().contains("is your main now"))
     }
 
@@ -87,7 +94,7 @@ class NextMainShots {
     /** The tap while three events (about 2.4 s of animation) are still queued. */
     private fun busy(b: BattleShotKit.Built) {
         b.player!!.enqueue(listOf(GameEvent.Info("one"), GameEvent.Info("two"), GameEvent.Info("three")))
-        b.call("switchMain", "t2")
+        b.switchAfterCard("t2")
     }
 
     /** nextmain-busy-now: 300 ms after the tap, the queue still plays: the panel must show the new main already. */

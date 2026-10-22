@@ -10,7 +10,8 @@ import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.ui.ItemIconPlan
-import com.husarp.ankigo.ui.ShopInfo
+import com.husarp.ankigo.ui.CardKeys
+import com.husarp.ankigo.ui.ShopPlan
 import com.husarp.ankigo.ui.ShopPage
 import com.husarp.ankigo.ui.Ui
 import org.junit.Rule
@@ -57,11 +58,13 @@ class R4V6Shots {
         ScrollView(ctx).apply { setBackgroundColor(Ui.c(ctx, R.color.ag_card)); addView(col) }
     }
 
-    private fun dialog(name: String, open: (Context) -> Unit) = paparazzi.shootPage(name, listOf(Variants.PHONE)) { ctx ->
+    /** R14 batch 2: the info popups became cards that open in the Shop page. */
+    private fun card(name: String, key: String) = paparazzi.shootPage(name, listOf(Variants.TALL)) { ctx ->
+        ShopCardKit.install()
         state()
-        DialogShots.scene(ctx, DialogShots.capture { open(ctx) } ?: error("no dialog was shown"))
+        ShopCardKit.page(ctx, key, cash = 5000).second
     }
 
-    @Test fun tmInfo() = dialog("r4v6-tm-info") { ctx -> ShopInfo.tm(ShopPage(ctx, NoHost), "thunderbolt") {} }
-    @Test fun itemInfo() = dialog("r4v6-item-info") { ctx -> ShopInfo.item(ShopPage(ctx, NoHost), "cracked-pot") {} }
+    @Test fun tmCard() = card("r4v6-tm-card", CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")))
+    @Test fun itemCard() = card("r4v6-item-card", CardKeys.special(ShopPlan.Tile.Item("cracked-pot")))
 }

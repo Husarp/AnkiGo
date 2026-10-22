@@ -282,6 +282,14 @@ internal class SpriteZoomView(ctx: Context) : View(ctx) {
         private set
     private var scale = 0f // device px per picture pixel at zoom 1
     private var layout = ViewerMath.Layout(0f, 0f, 0f, 0f)
+    // PLAN 205 (R14): a STILL picture floats softly (canvas transform, the feet as the pivot), same maths / period / height as SpriteView
+    private var idleAnim: android.animation.ValueAnimator? = null
+    private var idlePhase = 0f
+    /** True while the idle float runs (for tests). */
+    internal val idleRunning: Boolean get() = idleAnim != null
+    /** How many times the idle float was started (for tests: a snapshot host detaches the view again afterwards). */
+    internal var idleStarts = 0
+        private set
 
     private val paint = Paint().apply { isFilterBitmap = false; isAntiAlias = false; isDither = false }
     private val rect = RectF()
@@ -377,6 +385,10 @@ internal class SpriteZoomView(ctx: Context) : View(ctx) {
         rect.set(r[0], r[1], r[2], r[3])
         paint.isFilterBitmap = !SpriteView.pixelArt(bmp.width, bmp.height)
         val save = canvas.save()
+        if (idleAnim != null && idlePhase > 0f) {
+            canvas.translate(0f, MonPreview.idleOffsetPx(idlePhase, resources.displayMetrics.density))
+            canvas.scale(1f, SpriteView.idleBreath(idlePhase), rect.centerX(), rect.bottom)
+        }
         if (mirror) canvas.scale(-1f, 1f, rect.centerX(), rect.centerY())
         canvas.drawBitmap(bmp, null, rect, paint)
         canvas.restoreToCount(save)
@@ -405,10 +417,35 @@ internal class SpriteZoomView(ctx: Context) : View(ctx) {
         val run = android.animation.ValueAnimator.areAnimatorsEnabled() && !context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false) &&
             img != null && img.animated && isAttachedToWindow && windowVisibility == VISIBLE && isShown
         if (run) schedule() else { removeCallbacks(tick); ticking = false }
+        updateIdle()
+    }
+
+    /** PLAN 205: starts or stops the idle float by [SpriteView.idleShouldRun]. */
+    private fun updateIdle(detaching: Boolean = false) {
+        val img = image
+        val run = SpriteView.idleShouldRun(true, img != null, img != null && img.animated,
+            android.animation.ValueAnimator.areAnimatorsEnabled(),
+            context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false),
+            !detaching && isAttachedToWindow && windowVisibility == VISIBLE && isShown)
+        if (run) {
+            if (idleAnim != null) return
+            idleStarts++
+            idleAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = SpriteView.IDLE_PERIOD_MS
+                repeatCount = android.animation.ValueAnimator.INFINITE
+                interpolator = android.view.animation.LinearInterpolator()
+                addUpdateListener { idlePhase = it.animatedValue as Float; invalidate() }
+                start()
+            }
+        } else {
+            idleAnim?.let { it.removeAllUpdateListeners(); it.cancel() }
+            idleAnim = null
+            if (idlePhase != 0f) { idlePhase = 0f; invalidate() }
+        }
     }
 
     override fun onAttachedToWindow() { super.onAttachedToWindow(); updateAnimation() }
-    override fun onDetachedFromWindow() { removeCallbacks(tick); ticking = false; super.onDetachedFromWindow() }
+    override fun onDetachedFromWindow() { removeCallbacks(tick); ticking = false; super.onDetachedFromWindow(); updateIdle(detaching = true) }
     override fun onVisibilityChanged(changedView: View, visibility: Int) { super.onVisibilityChanged(changedView, visibility); updateAnimation() }
     override fun onWindowVisibilityChanged(visibility: Int) { super.onWindowVisibilityChanged(visibility); updateAnimation() }
 }

@@ -15,6 +15,7 @@ internal class StudyCharge {
     fun observe(event: GameEvent, roundSize: Int) {
         when (event) {
             is GameEvent.Counted -> {
+                if (event.neutral) return   // PLAN 155: the OK of a new card is no part of the round: the dots stay as they are
                 if (complete) { choices.clear(); complete = false }
                 awaitingCharge = true
                 goal = roundSize.coerceIn(1, 4)

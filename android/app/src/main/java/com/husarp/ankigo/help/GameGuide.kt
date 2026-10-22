@@ -1,8 +1,11 @@
 package com.husarp.ankigo.help
 
+import com.husarp.ankigo.game.AchievementTable
+import com.husarp.ankigo.game.DailyGift
 import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.Type
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /** Which real in-app element a guide chapter shows (the visual ticket renders the real component for each id). */
 enum class GuideVisualId {
@@ -36,10 +39,14 @@ data class GuideNumbers(
     val cashPerAnswer: Int,
     val cashPerWin: Int,
     val cashTier: Int,
-    val dailyBonusStart: Int,
-    val dailyBonusPerStreakDay: Int,
-    val dailyBonusMax: Int,
-    val dailyBonusMaxStreakDays: Int,
+    val giftMaxStreakDays: Int,        // R14-B2-D: the daily gift's chances (percent) on goal-streak day 1 and on day [giftMaxStreakDays] and later
+    val giftCommonFirst: Int,
+    val giftUncommonFirst: Int,
+    val giftRareFirst: Int,
+    val giftCommonLast: Int,
+    val giftUncommonLast: Int,
+    val giftRareLast: Int,
+    val masterBallStreakDays: Int,     // the top tier of "Best streak": it gives the Master Ball
     val levelUpHealPercent: Int,
     val defeatHealPercent: Int,
     val benchRestPercentPerAnswer: Double,
@@ -48,9 +55,12 @@ data class GuideNumbers(
         /** Money (R3-01) and healing (R3-02) numbers, straight from Tuning. */
         fun pending() = GuideNumbers(
             cashPerAnswer = Tuning.CASH_PER_ANSWER, cashPerWin = Tuning.CASH_PER_WIN, cashTier = Tuning.CASH_TIER,
-            dailyBonusStart = Tuning.DAILY_BONUS_BASE, dailyBonusPerStreakDay = Tuning.DAILY_BONUS_PER_DAY,
-            dailyBonusMax = Tuning.DAILY_BONUS_BASE + Tuning.DAILY_BONUS_PER_DAY * Tuning.DAILY_BONUS_MAX_DAYS,
-            dailyBonusMaxStreakDays = Tuning.DAILY_BONUS_MAX_DAYS,
+            giftMaxStreakDays = Tuning.GIFT_MAX_DAYS,
+            giftCommonFirst = DailyGift.chances(1).common.roundToInt(), giftUncommonFirst = DailyGift.chances(1).uncommon.roundToInt(),
+            giftRareFirst = DailyGift.chances(1).rare.roundToInt(),
+            giftCommonLast = DailyGift.chances(Tuning.GIFT_MAX_DAYS).common.roundToInt(), giftUncommonLast = DailyGift.chances(Tuning.GIFT_MAX_DAYS).uncommon.roundToInt(),
+            giftRareLast = DailyGift.chances(Tuning.GIFT_MAX_DAYS).rare.roundToInt(),
+            masterBallStreakDays = AchievementTable.row("streak-days")?.tiers?.last()?.toInt() ?: 365,
             levelUpHealPercent = Tuning.LEVEL_UP_HEAL_PERCENT, defeatHealPercent = Tuning.DEFEAT_HEAL_PERCENT,
             benchRestPercentPerAnswer = 100.0 / Tuning.BENCH_REST_DIVISOR,
         )
@@ -139,8 +149,9 @@ object GameGuide {
             "Throw a ball at a wild Pokémon while it still has HP. If it reaches 0 HP, it is caught automatically.",
             listOf(
                 "Poké Ball ${Tuning.BALL_CHANCE.getValue("poke-ball")}%, Great Ball ${Tuning.BALL_CHANCE.getValue("great-ball")}%, Ultra Ball ${Tuning.BALL_CHANCE.getValue("ultra-ball")}%, Master Ball ${Tuning.BALL_CHANCE.getValue("master-ball")}% per throw.",
-                "A ball is used up whether it works or not. If it fails, the wild Pokémon breaks free and runs away: no XP, and the next wild Pokémon comes.",
-                "Balls from Ankimon (Net Ball, Dive Ball, Premier Ball and the others) still work if you have some: each one throws like a Great Ball. They aren't sold or found any more.",
+                "A ball is used up whether it works or not. If it fails, the wild Pokémon breaks free and runs away: no XP, and the next wild Pokémon comes. Throwing a ball is not a turn: the wild Pokémon doesn't attack.",
+                "The Master Ball can't be bought. You get one for the top tier of the \"Best streak\" achievement (365 days in a row with your daily goal reached).",
+                "Balls from Ankimon (Net Ball, Dive Ball, Premier Ball and the others) still work if you have some: each one throws like a Great Ball (and counts as one when you trade balls up in the Bag). They aren't sold or found any more.",
                 "A catch counts as a win like a defeat: your trainer XP and defeat counts go up, and your Pokémon get the same XP and you the same ${nums.cashPerWin} ₽ as for a defeat, with a ball or without.",
                 "When you beat a wild Pokémon without a ball, Settings → Game → \"When you beat a wild Pokémon\" decides: always catch, catch only new species (the default), catch new species and better copies (a higher-level copy replaces your old one), or defeat (only shinies and protected kinds are caught). A defeat gives the XP (and EVs) and ${nums.cashPerWin} ₽; a catch gives the Pokémon, the same XP and the same ₽.",
                 "Your wishlist: you can add a Pokémon you have seen but not caught yet (open it in the Pokédex). Wishlisted Pokémon are always caught.",
@@ -158,19 +169,21 @@ object GameGuide {
             listOf(
                 "+${nums.cashPerAnswer} for every answer, with any button, so a wrong answer never costs you.",
                 "+${nums.cashPerWin} for every wild Pokémon you defeat or catch (a ball that misses pays nothing).",
-                "The more you earn in a day, the slower it comes: in the first ${nums.cashTier} ₽ every answer and every win pays, in the next ${nums.cashTier} ₽ every 2nd answer pays ${nums.cashPerAnswer} ₽ and every 2nd win ${nums.cashPerWin} ₽, then every 3rd, every 4th and so on. It starts again each day.",
+                "The more you earn in a day, the slower it comes: in the first ${nums.cashTier} ₽ every answer pays ${nums.cashPerAnswer} ₽ and every win ${nums.cashPerWin} ₽; in the next ${nums.cashTier} ₽ half of that (an answer 2.5 ₽, paid in whole coins as they add up), then a third, a quarter and so on. It starts again each day.",
                 "A main Pokémon holding an Amulet Coin or a Luck Incense doubles the money of your answers and wins (×2), all day long.",
-                "Reach your daily goal for a bonus of ${nums.dailyBonusStart} ₽, plus ${nums.dailyBonusPerStreakDay} ₽ for every day of your streak before today, up to ${nums.dailyBonusMax} ₽ after ${nums.dailyBonusMaxStreakDays} days in a row. The bonus doesn't slow down your other money, and Amulet Coin or Luck Incense does not double it.",
+                "Daily gift: the first time you reach your daily goal each day, you get one gift in your Bag. It is not money, so it doesn't touch your money, and it is never a Master Ball.",
+                "Which gift depends on your goal streak (days in a row you reached the goal). On day 1 it is common ${nums.giftCommonFirst}%, uncommon ${nums.giftUncommonFirst}% or rare ${nums.giftRareFirst}%. The chances move up day by day, to common ${nums.giftCommonLast}%, uncommon ${nums.giftUncommonLast}% and rare ${nums.giftRareLast}% after ${nums.giftMaxStreakDays} days in a row, and stay there.",
+                "Common: ${DailyGift.poolText(Tuning.GIFT_COMMON)}. Uncommon: ${DailyGift.poolText(Tuning.GIFT_UNCOMMON)}. Rare: ${DailyGift.poolText(Tuning.GIFT_RARE_ITEMS)}, an evolution stone or a TM you don't own yet. Inside a kind, every gift is equally likely.",
                 "The Shop has ${Tuning.SHOP_BASE_SLOTS} items, plus one for every ${Tuning.SHOP_SLOTS_PER_LEVELS} trainer levels. A new offer costs ${Tuning.REROLL_PRICE}; a TM costs ${Tuning.TM_PRICE}.",
                 "Poké Balls and Potions are always on sale at their normal price, so you are never stuck without the basics. They are not part of the daily items.",
-                "Balls: a Poké Ball costs ${Tuning.BALL_PRICE.getValue("poke-ball")} ₽, a Great Ball ${Tuning.BALL_PRICE.getValue("great-ball")} ₽ (now and then among the daily items), an Ultra Ball ${String.format(Locale.US, "%,d", Tuning.BALL_PRICE.getValue("ultra-ball"))} ₽ and it is in the Shop only about one day a week. The Master Ball is never sold.",
+                "Balls: a Poké Ball costs ${Tuning.BALL_PRICE.getValue("poke-ball")} ₽, a Great Ball ${Tuning.BALL_PRICE.getValue("great-ball")} ₽ (now and then among the daily items), an Ultra Ball ${String.format(Locale.US, "%,d", Tuning.BALL_PRICE.getValue("ultra-ball"))} ₽ and it is in the Shop only about one day a week. The Master Ball is never sold: you get one for reaching the top tier of Best streak (${nums.masterBallStreakDays} days in a row).",
                 "Deal of the day: one item each day costs ${Tuning.DEAL_PERCENT}% less. Buy as many as you like at that price; a new offer doesn't change the deal.",
                 "Weekend special: on Saturday and Sunday the Shop also sells one rare thing, an evolution stone or a strong TM (a move with power ${Tuning.WEEKEND_TM_MIN_POWER} or more), at its normal price. It is the same on both days.",
                 "A small dot on the Shop tab means a new day's offers and deal are waiting and you haven't looked yet.",
                 "Worth buying: evolution items for Pokémon that need them, and better balls when you hunt for a rare Pokémon. You don't need many healing items, because your Pokémon heal on their own (see Healing).",
             ),
             listOf(
-                GuideVisual(GuideVisualId.ITEM_ICON, "amulet-coin", "Held: ×2 money"), GuideVisual(GuideVisualId.ITEM_ICON, "luck-incense", "Held: ×2 money"),
+                GuideVisual(GuideVisualId.ITEM_ICON, "amulet-coin", "Main: ×2 money"), GuideVisual(GuideVisualId.ITEM_ICON, "luck-incense", "Main: ×2 money"),
                 GuideVisual(GuideVisualId.ITEM_ICON, "ultra-ball", "Balls"), GuideVisual(GuideVisualId.ITEM_ICON, "thunder-stone", "Evolution items"),
             ),
         ),
@@ -188,11 +201,13 @@ object GameGuide {
         ),
         GuideChapter(
             ITEMS, "Items",
-            "Items come from the Shop and, every so often, as a reward.",
+            "Items come from the Shop, as random drops, and as the Daily gift when you reach your daily goal.",
             listOf(
                 "A new random item drops after ${Tuning.ITEM_COUNTDOWN.first} to ${Tuning.ITEM_COUNTDOWN.last} answers.",
+                "Open any item in the Shop or the Bag to read exactly what it does, how to use it and what it means in a fight.",
+                "In the Bag you can trade balls up: 5 Poké Balls for 1 Great Ball, and 3 Great Balls for 1 Ultra Ball. Old Ankimon balls count as Great Balls.",
                 "Balls catch Pokémon. Healing items restore HP. Evolution items evolve the Pokémon that need them.",
-                "Held items work while a Pokémon holds them: Lucky Egg (×${n(Tuning.LUCKY_EGG)} XP), Everstone (never evolves), Macho Brace (×2 EVs) and more.",
+                "Held items work while a Pokémon holds them: Lucky Egg (×${n(Tuning.LUCKY_EGG)} XP), Everstone (never evolves), Macho Brace (×2 EVs) and more. A Pokémon holds one item at a time; giving it a new one sends the old one back to the Bag.",
                 "Fossils bring back an old Pokémon at level ${Tuning.FOSSIL_LEVEL}.",
                 "TMs are never used up: you keep them and can teach their move again.",
             ),

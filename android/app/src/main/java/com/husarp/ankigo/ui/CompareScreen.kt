@@ -18,6 +18,7 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Species
+import com.husarp.ankigo.game.SwitchQueue
 import com.husarp.ankigo.game.quietUnlessHit
 import com.husarp.ankigo.game.shownName
 
@@ -305,9 +306,9 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             }
             if (!inTeam || team.indexOf(mon.uid) > 0) {
                 when {
-                    inTeam -> add(5, "Set as main", R.drawable.ic_star, tone = R.color.ag_yellow) { act { g -> g.setMain(mon.uid).quietUnlessHit() } } // the change is visible: no toast (unless it cost a hit)
-                    team.size < 6 -> add(5, "Set as main", R.drawable.ic_star, tone = R.color.ag_yellow) {
-                        act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.setMain(mon.uid).quietUnlessHit() else r } }
+                    inTeam -> add(5, "Set as main", R.drawable.ic_star, sub = SwitchQueue.MENU_SUB.takeIf { SwitchQueue.fightOn(this.state) }, tone = R.color.ag_yellow) { act { g -> g.requestMain(mon.uid).quietUnlessHit() } } // PLAN 206: in a fight it waits for the next answer; the change is visible: no toast (unless it cost a hit)
+                    team.size < 6 -> add(5, "Set as main", R.drawable.ic_star, sub = SwitchQueue.MENU_SUB.takeIf { SwitchQueue.fightOn(this.state) }, tone = R.color.ag_yellow) {
+                        act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.requestMain(mon.uid).quietUnlessHit() else r } }
                     }
                     main != null -> add(5, "Set as main", R.drawable.ic_star, sub = "${main.shownName} goes to the box", tone = R.color.ag_yellow) {
                         act { g -> g.swapIntoTeam(mon.uid, main.uid).quietUnlessHit() }

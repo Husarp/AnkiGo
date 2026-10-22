@@ -12,6 +12,7 @@ import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.stats.LiveTimeFile
 import com.husarp.ankigo.stats.LiveTimer
+import com.husarp.ankigo.study.NewCardOk
 import com.husarp.ankigo.ui.LogKind
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -163,17 +164,17 @@ object LiveSession {
      * [ownSettled] / [ownDropped]) and every saved snapshot holds the card one rep further, so neither a poll nor a restart
      * counts the write again. Returns the events (the sinks get them too).
      */
-    fun ownAnswer(ctx: Context, before: com.husarp.ankigo.CardState, button: Int): List<GameEvent> {
+    fun ownAnswer(ctx: Context, before: com.husarp.ankigo.CardState, button: Int, neutral: Boolean = false): List<GameEvent> {
         app = ctx.applicationContext
         flushCatchUp()
         timer.touch(SystemClock.elapsedRealtime()) // reviews.csv times own answers; the next live one starts from here
         val row = ahead.add(before)
         detector?.expectOwn(row.id, row.reps, pinned = true)
-        GameLog.answer("study", row.id, button)
+        GameLog.answer("study", row.id, button, neutral)
         val events = act { g ->
             saveSnapshotInto(g) // with the row: the save that holds this step also says the game counted it
             if (detector == null) { g.state.liveSnapshot = ahead.into(g.state.liveSnapshot); g.state.liveDay = g.dayKey() }
-            g.tick() + g.onAnswer(GameAnswer(row.id, button, System.currentTimeMillis(), false))
+            g.tick() + g.onAnswer(GameAnswer(row.id, button, System.currentTimeMillis(), false, neutral))
         }
         deliver(events)
         return events
@@ -215,14 +216,15 @@ object LiveSession {
      * Answers replayed from the journal after the app was killed ([answers] = the card as shown + the game's button), before any
      * of them is written again (AnswerHost waits for this). The game counts each one it has not counted yet, once; the ones the
      * kill came after (their row is in the saved snapshot) or that the detector already counted are only kept as ahead.
+     * Each entry is (the card as shown, the game's button, whether it was a neutral OK, PLAN 155).
      */
-    fun ownRestored(ctx: Context, answers: List<Pair<com.husarp.ankigo.CardState, Int>>) {
+    fun ownRestored(ctx: Context, answers: List<Triple<com.husarp.ankigo.CardState, Int, Boolean>>) {
         app = ctx.applicationContext
-        for ((before, button) in answers) {
+        for ((before, button, neutral) in answers) {
             if (OwnAhead.counted(before, GameRepo.state?.liveSnapshot, detector?.snapshot())) {
                 val row = ahead.add(before)
                 detector?.expectOwn(row.id, row.reps, pinned = true)
-            } else ownAnswer(app, before, button)
+            } else ownAnswer(app, before, button, neutral)
         }
     }
 
@@ -321,8 +323,9 @@ object LiveSession {
     }
 
     private fun onAnswer(e: LiveDetector.Event.Answer) {
-        GameLog.answer(if (e.catchUp) "catch-up" else "live", e.cardId, e.button)
-        val a = GameAnswer(e.cardId, e.button, System.currentTimeMillis(), e.catchUp)
+        val neutral = NewCardOk.companionNeutral(app.getSharedPreferences("study", 0).getBoolean(NewCardOk.PREF, false), e.wasNew, e.button)   // PLAN 155: an Again / Hard on a new card in AnkiDroid's own buttons
+        GameLog.answer(if (e.catchUp) "catch-up" else "live", e.cardId, e.button, neutral)
+        val a = GameAnswer(e.cardId, e.button, System.currentTimeMillis(), e.catchUp, neutral)
         recordLiveTime(e.catchUp)
         if (e.catchUp) {
             // Answers made while AnkiGo wasn't watching arrive in one burst: no animation, one summary line.

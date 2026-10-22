@@ -22,8 +22,11 @@ import org.json.JSONObject
  */
 class LiveDetector(private val ctx: Context, private val onEvent: (Event) -> Unit) {
     sealed class Event {
-        /** One answer. button 0 unknown, 1..4; conf = LiveInfer SURE/LIKELY/GUESS. Several answers between polls = several events. */
-        data class Answer(val cardId: Long, val button: Int, val conf: String, val catchUp: Boolean) : Event()
+        /**
+         * One answer. button 0 unknown, 1..4; conf = LiveInfer SURE/LIKELY/GUESS. Several answers between polls = several events.
+         * [wasNew] (PLAN 155): the card was new before this answer (the ledger's state before it); only the first of several answers can say so.
+         */
+        data class Answer(val cardId: Long, val button: Int, val conf: String, val catchUp: Boolean, val wasNew: Boolean = false) : Event()
         data class Undo(val cardId: Long, val count: Int) : Event()
         /** Watching state for the panel: ok=false means a problem the user should see (no permission, old AnkiDroid...). */
         data class Status(val ok: Boolean, val text: String) : Event()

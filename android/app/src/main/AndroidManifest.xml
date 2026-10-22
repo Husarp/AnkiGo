@@ -50,7 +50,8 @@
     <application
         android:name=".AnkiGoApp"
         android:label="AnkiGo"
-        android:icon="@drawable/ic_launcher"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:requestLegacyExternalStorage="true"
         android:resizeableActivity="true"
         android:theme="@style/AppTheme"

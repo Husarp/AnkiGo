@@ -131,7 +131,7 @@ class ActionBarModel {
     private fun effect(e: GameEvent.Effect): List<BarSide> {
         val own = if (e.onPlayer) BarSide.MINE else BarSide.THEIRS
         when (e.kind) {
-            EffectKind.CANT_MOVE -> { open = null; put(own, HalfState.Note(cantMove(e.text))); return listOf(own) }
+            EffectKind.CANT_MOVE -> { open = null; put(own, HalfState.Note(cantMove(e.stat ?: e.status, e.text))); return listOf(own) }
             EffectKind.CHARGE -> { open = null; put(own, HalfState.Note(e.text)); return listOf(own) }
             EffectKind.STATUS_APPLIED, EffectKind.STAT_CHANGE -> {
                 val side = open ?: return emptyList()
@@ -156,10 +156,17 @@ class ActionBarModel {
         /** What a half says in a round in which that side made no move. */
         const val NO_MOVE = "No move"
 
+        /** PLAN 206: the bar's line while a switch waits for the next answer; with the incoming Pokémon's [name] when the bar has room for it ({{ }} = mauve). */
+        fun queuedLine(name: String? = null) = if (name.isNullOrBlank()) "Switching after this card…" else "Switching to {{$name}} after this card…"
+
         /** "Wild Psyduck" whether or not the name already has "Wild" in front. */
         fun wild(name: String) = if (name.startsWith("Wild ")) name else "Wild $name"
 
-        private fun cantMove(text: String) = when {
+        /** PLAN 172: by the status key the engine sends; the text is the fallback for old events. */
+        private fun cantMove(key: String?, text: String) = when {
+            key == "par" -> "Can't move: paralyzed"
+            key == "slp" -> "Can't move: asleep"
+            key == "frz" -> "Can't move: frozen"
             "paralyzed" in text -> "Can't move: paralyzed"
             "asleep" in text -> "Can't move: asleep"
             "frozen" in text -> "Can't move: frozen"
@@ -176,8 +183,10 @@ class ActionBarModel {
             is GameEvent.BallThrow, is GameEvent.LevelUp, is GameEvent.MoveLearned, is GameEvent.MoveSkipped, is GameEvent.Evolved,
             is GameEvent.MainHealed, is GameEvent.Healed, is GameEvent.MainChanged, is GameEvent.XpGained, is GameEvent.Charge,
             is GameEvent.Duplicate, is GameEvent.SwitchHit -> LineScope.SIDE   // PLAN 173: a switch draws no whole-bar line
+            is GameEvent.SwitchQueued -> LineScope.SIDE   // PLAN 206: its line is [ActionBarView.setQueued] (also derived from the saved game), not a battle line
             is GameEvent.Info -> if (e.text.endsWith("broke free!")) LineScope.SIDE else LineScope.WHOLE
             is GameEvent.AchievementReached -> LineScope.POPUP
+            is GameEvent.DailyGift -> LineScope.WHOLE   // R14-B2-D: like ItemFound, its line ("Daily gift: ...") goes across the bar although the popup shows it too
             is GameEvent.BadgeEarned -> if (AchPageMath.forBadge(e.id) != null) LineScope.POPUP else LineScope.WHOLE
             else -> LineScope.WHOLE
         }

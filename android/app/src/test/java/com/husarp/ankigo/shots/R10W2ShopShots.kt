@@ -19,7 +19,7 @@ import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.ui.AppPrefs
 import com.husarp.ankigo.ui.Bits
 import com.husarp.ankigo.ui.BottomNav
-import com.husarp.ankigo.ui.ShopInfo
+import com.husarp.ankigo.ui.CardKeys
 import com.husarp.ankigo.ui.ShopPage
 import com.husarp.ankigo.ui.ShopPlan
 import com.husarp.ankigo.ui.ShopViews
@@ -288,30 +288,40 @@ class R10W2ShopShots {
         addView(v, FrameLayout.LayoutParams(-1, -2, Gravity.TOP).also { val m = Ui.dp(ctx, 12); it.setMargins(m, m, m, m) })
     }
 
-    // ---------- the buy sheet ----------
+    // ---------- the opened card (PLAN 168: it replaced the buy sheet) ----------
 
-    @Test fun theBuySheetOfTheDealShowsTheDiscountPriceLayout() {
-        shoot("sheet-deal", listOf(Variants.PHONE), check = { _, v ->
+    /** Paints the pieces of [v] that are struck through (the old price of a deal). */
+    private fun struck(v: View, out: MutableList<String> = ArrayList()): List<String> {
+        if (v.visibility == View.GONE) return out
+        if (v is TextView && v.paintFlags and android.graphics.Paint.STRIKE_THRU_TEXT_FLAG != 0) out += v.text.toString()
+        if (v is ViewGroup) for (i in 0 until v.childCount) struck(v.getChildAt(i), out)
+        return out
+    }
+
+    @Test fun theOpenCardOfTheDealShowsTheOldPriceStruckThroughOnItsBuyButton() {
+        shoot("card-deal", listOf(Variants.PHONE), check = { _, v ->
             val t = texts(v)
-            assertTrue(t.toString(), "Price" in t)
             val deal = Shop.dealFor(gd, WEEKDAY)!!
-            assertTrue("the old price", Bits.fmt(deal.oldPrice) in t)
-            assertTrue("the new price twice: in the facts and on the Buy button", t.count { it == Bits.fmt(deal.price) } == 2)
-            assertTrue(descriptions(v).any { it == "Buy for ${Bits.fmt(deal.price)}" })
+            assertEquals("the old price, struck through, once", listOf(Bits.fmt(deal.oldPrice)), struck(v))
+            assertTrue("the new price", Bits.fmt(deal.price) in t)
+            assertTrue("the card replaced the deal card", "DEAL OF THE DAY" !in t)
+            assertTrue(descriptions(v).any { it.startsWith("Buy for ${Bits.fmt(deal.price)}") })
         }) { ctx ->
-            val (p, _) = shopTab(ctx, WEEKDAY)
-            val deal = Shop.dealFor(gd, WEEKDAY)!!
-            val d = DialogShots.capture { ShopInfo.item(p, deal.item) {} } ?: error("no sheet")
-            DialogShots.scene(ctx, d)
+            val (p, screen) = shopTab(ctx, WEEKDAY)
+            p.toggleCard(CardKeys.DEAL)
+            call(p, "render")
+            screen
         }
-        shoot("sheet-plain", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT), check = { _, v ->
+        shoot("card-plain", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT), check = { _, v ->
             val basic = Shop.basics().first()
-            assertEquals("the price in the facts and on the Buy button, nothing struck through", 2, texts(v).count { it == Bits.fmt(gd.price(basic)) })
+            assertTrue("nothing struck through on a plain price", struck(v).isEmpty())
+            assertTrue(descriptions(v).any { it == "Buy for ${Bits.fmt(gd.price(basic))}" })
+            assertTrue("no Price row", "Price" !in texts(v))
         }) { ctx ->
-            val (p, _) = shopTab(ctx, WEEKDAY)
-            val basic = Shop.basics().first()
-            val d = DialogShots.capture { ShopInfo.item(p, basic) {} } ?: error("no sheet")
-            DialogShots.scene(ctx, d)
+            val (p, screen) = shopTab(ctx, WEEKDAY)
+            p.toggleCard(CardKeys.basic(ShopPlan.Tile.Item(Shop.basics().first())))
+            call(p, "render")
+            screen
         }
     }
 
@@ -328,9 +338,11 @@ class R10W2ShopShots {
             assertEquals(20_000 - 2 * deal.price, st.cash)
             call(p, "render")
             assertTrue(Bits.fmt(20_000 - 2 * deal.price) in texts(screen))
-            // a tap on the deal card opens its sheet
+            // a tap on the deal card opens its item card in place (no sheet), with the count in words
             val card = clickable(findText(screen) { it == "DEAL OF THE DAY" })!!
-            assertNotNull(DialogShots.capture { card.performClick() })
+            assertNull(DialogShots.capture { card.performClick() })
+            call(p, "render")
+            assertEquals(1, texts(screen).count { it == "▴" })
             screen
         }
     }

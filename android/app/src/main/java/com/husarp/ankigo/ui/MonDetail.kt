@@ -78,7 +78,7 @@ object MonDetail {
 
         // header: sprite, name + pencil, #num / Lv / nature / gender, types, all tags
         val img = ImageView(a)
-        MonPreview.show(a, mon.lookNum(data), mon.shiny, img)
+        MonPreview.show(a, mon.lookNum(data), mon.shiny, img, idle = true)
         img.setOnClickListener { SpriteViewer.show(a, mon.lookNum(data), mon.shiny) } // R10-B1: full-screen viewer
         img.contentDescription = "Show the picture full screen"
         val spriteDp = if (compact) 64 else 96

@@ -43,7 +43,7 @@ object SaveCodec {
             list("seen", state.seen.sorted()); list("caught", state.caught.sorted())
             key("battle"); state.battle.let { if (it == null) value(null) else writeBattle(this, it) }
             kv("nextSpecies", state.nextSpecies); kv("nextTier", state.nextTier.name); kv("nextShiny", state.nextShiny); kv("nextSeed", state.nextSeed)
-            kv("day", state.day); kv("reviewsToday", state.reviewsToday); kv("cashToday", state.cashToday); kv("cashWait", state.cashWait); kv("winWait", state.winWait)
+            kv("day", state.day); kv("reviewsToday", state.reviewsToday); kv("cashToday", state.cashToday); kv("cashFracNum", state.cashFracNum); kv("cashFracDen", state.cashFracDen)
             kv("itemCountdown", state.itemCountdown)
             list("buttonsToday", state.buttonsToday.toList())
             kv("cardStreak", state.cardStreak); kv("bestCardStreak", state.bestCardStreak)
@@ -74,10 +74,13 @@ object SaveCodec {
             key("counters"); obj { for ((k, v) in state.counters.toSortedMap()) kv(k, v) } // R4-03 achievements: always written, so a save without the key is an old one
             key("achTiers"); obj { for ((k, v) in state.achTiers.toSortedMap()) { key(k); arr { v.forEach { value(it) } } } }
             list("achInferred", state.achInferred.sorted()) // R4 fix A3: tiers whose date is only "first seen"; a save without the key has none flagged
+            list("rewardsClaimed", state.rewardsClaimed.sorted()) // R14-B2 fix Y1: tier rewards already given; a save without the key has none claimed
             key("badgeAt"); obj { for ((k, v) in state.badgeAt.toSortedMap()) kv(k.toString(), v) }
             kv("achSince", state.achSince)
             kv("achLadder", state.achLadder) // R9-B2: always written; a save without the key is ladder 1 (5-tier "types" / "highest-level")
             kv("starterUid", state.starterUid); list("starterSeen", state.starterSeen.sorted()); list("starterCaught", state.starterCaught.sorted()) // R9-W4-B
+            kv("pendingMain", state.pendingMain) // PLAN 206: the switch waiting for the next answer (null = none; a save without the key is an old one)
+            kv("pendingCycle", state.pendingCycle) // PLAN 206: that switch is a team cycle (a save without the key: false)
             key("settings"); writeSettings(this, state.settings)
         }
         return w.toString()
@@ -306,6 +309,7 @@ object SaveCodec {
             for (k in t.keys()) t.optJSONArray(k)?.let { a -> s.achTiers[k] = MutableList(a.length()) { a.optLong(it, 0) } }
         }
         o.strList("achInferred")?.let { s.achInferred += it }
+        o.strList("rewardsClaimed")?.let { s.rewardsClaimed += it }
         o.optJSONObject("badgeAt")?.let { b -> for (k in b.keys()) k.toIntOrNull()?.let { id -> s.badgeAt[id] = b.optLong(k, 0) } }
         s.achSince = o.long("achSince", 0)
         s.achLadder = o.int("achLadder", 1)
@@ -341,7 +345,8 @@ object SaveCodec {
         s.nextTier = enumOr(o.strOrNull("nextTier"), Tier.NORMAL)
         s.nextShiny = o.bool("nextShiny", false)
         s.nextSeed = if (o.has2("nextSeed")) o.getLong("nextSeed") else null
-        s.day = o.str("day", ""); s.reviewsToday = o.int("reviewsToday", 0); s.cashToday = o.int("cashToday", 0); s.cashWait = o.int("cashWait", 0); s.winWait = o.int("winWait", 0)
+        s.day = o.str("day", ""); s.reviewsToday = o.int("reviewsToday", 0); s.cashToday = o.int("cashToday", 0); s.cashFracNum = o.long("cashFracNum", 0); s.cashFracDen = o.long("cashFracDen", 1)
+        if (s.cashFracDen < 1 || s.cashFracNum < 0 || s.cashFracNum >= s.cashFracDen) { s.cashFracNum = 0; s.cashFracDen = 1 }   // PLAN 198: an old save (cashWait/winWait) or a broken pair starts the day's fraction at 0
         s.itemCountdown = o.int("itemCountdown", 0)
         o.intArray("buttonsToday", s.buttonsToday.size).copyInto(s.buttonsToday)
         s.cardStreak = o.int("cardStreak", 0); s.bestCardStreak = o.int("bestCardStreak", 0)
@@ -363,6 +368,8 @@ object SaveCodec {
         o.strList("viewedMons")?.let { s.viewedMons += it } // old saves: empty, so only today's NEW rule decides
         readSettings(o.optJSONObject("settings"), s.settings)
         readAchievements(o, s)
+        s.pendingMain = o.strOrNull("pendingMain")?.takeIf { it in known && it in s.team && it != s.team.firstOrNull() } // PLAN 206: only a team member that is not the main can still be waiting
+        s.pendingCycle = s.pendingMain != null && o.bool("pendingCycle", false)
         // Decoded and filled with defaults, so it is a current-schema state now.
         s.schema = GameState.SCHEMA
         return s

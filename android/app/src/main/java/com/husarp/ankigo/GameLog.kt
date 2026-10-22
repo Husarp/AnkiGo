@@ -26,8 +26,8 @@ object GameLog {
         BattleLog.events(events)
     }
 
-    fun answer(source: String, cardId: Long, button: Int) {
-        Report.logLater(TAG) { listOf(GameEventText.answer(source, cardId, button)) }
+    fun answer(source: String, cardId: Long, button: Int, neutral: Boolean = false) {
+        Report.logLater(TAG) { listOf(GameEventText.answer(source, cardId, button) + if (neutral) " neutral" else "") }
         BattleLog.answer(source, cardId, button)
     }
 

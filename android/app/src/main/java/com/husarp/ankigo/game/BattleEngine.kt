@@ -295,10 +295,10 @@ object BattleEngine {
             val n = mon(p).name
             when (s.status) {
                 "slp" -> if (rng.nextDouble() < Tuning.WAKE_CHANCE) { s.status = null; fx(p, "$n woke up!", EffectKind.STATUS_CURED, "slp") }
-                         else { fx(p, "$n is fast asleep.", EffectKind.CANT_MOVE); return false }
+                         else { fx(p, "$n is fast asleep.", EffectKind.CANT_MOVE, "slp"); return false }
                 "frz" -> if (move.id in Tuning.THAW_IF_USES || rng.nextDouble() < Tuning.FREEZE_THAW) { s.status = null; fx(p, "$n thawed out!", EffectKind.STATUS_CURED, "frz") }
-                         else { fx(p, "$n is frozen solid!", EffectKind.CANT_MOVE); return false }
-                "par" -> if (rng.nextDouble() < Tuning.PARA_SKIP) { fx(p, "$n is fully paralyzed!", EffectKind.CANT_MOVE); return false }
+                         else { fx(p, "$n is frozen solid!", EffectKind.CANT_MOVE, "frz"); return false }
+                "par" -> if (rng.nextDouble() < Tuning.PARA_SKIP) { fx(p, "$n is fully paralyzed!", EffectKind.CANT_MOVE, "par"); return false }
             }
             return true
         }

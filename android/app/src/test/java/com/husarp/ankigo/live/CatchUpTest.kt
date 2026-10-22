@@ -62,7 +62,7 @@ class CatchUpTest {
         // new card, one step left of two (Good on step 1) -> Good, SURE
         val now = CardState(9, 109, 1, 0, 1, 0, 1, 1, 3000, 0, 0, 1001, null, null, 1990L)
         val r = run(mapOf(1L to review(1)), listOf(now), setOf(9L))
-        assertEquals(listOf(LiveDetector.Event.Answer(9L, 3, SURE, true)), r)
+        assertEquals(listOf(LiveDetector.Event.Answer(9L, 3, SURE, true, wasNew = true)), r)   // PLAN 155: the card was new before
     }
 
     @Test fun unknownCardWithMoreRepsIsOneAnswerButtonZero() {

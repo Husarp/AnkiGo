@@ -10,10 +10,14 @@ package com.husarp.ankigo.ui
  */
 object ContinueRule {
     /** What the Study screen's answer row shows. */
-    enum class Row { SHOW_ANSWER, CONTINUE, ANSWERS }
+    enum class Row { SHOW_ANSWER, CONTINUE, ANSWERS, FINISH }
 
-    /** [flipped] = the answer side is up; [holding] = a result holds the next fight ([holding]). */
-    fun row(flipped: Boolean, holding: Boolean): Row = when {
+    /**
+     * [flipped] = the answer side is up; [holding] = a result holds the next fight ([holding]); [deckDone] (PLAN 129) = the deck's last
+     * answer was made and the finished screen waits for a tap: its one button wins over everything, a held result included.
+     */
+    fun row(flipped: Boolean, holding: Boolean, deckDone: Boolean = false): Row = when {
+        deckDone -> Row.FINISH
         holding -> Row.CONTINUE
         flipped -> Row.ANSWERS
         else -> Row.SHOW_ANSWER
@@ -40,4 +44,9 @@ object ContinueRule {
     /** Text of the button and its second line. */
     const val LABEL = "Continue"
     const val HINT = "next battle"
+
+    /** PLAN 129: the button that takes the place of Show answer once the deck's last answer is in, and the calm line in the card area. */
+    const val FINISH_LABEL = "Finish deck"
+    const val FINISH_HINT = "see the summary"
+    const val FINISH_LINE = "Deck finished · tap Finish deck"
 }

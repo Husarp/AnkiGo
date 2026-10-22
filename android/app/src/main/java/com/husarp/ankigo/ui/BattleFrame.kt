@@ -5,6 +5,7 @@ import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
+import kotlin.math.abs
 
 /**
  * The battle frame setting (Round 9 wave 2, D2; docs/design/round9.html `FR` + `drawFrame`): a pixel-art border around the battle
@@ -97,6 +98,16 @@ enum class BattleFrameStyle(
 
     val hasCorner: Boolean get() = corner.isNotEmpty()
 
+    /**
+     * PLAN 140: how far (art pixels) the corner pattern reaches along each side: the side of the square it fills at every corner
+     * (the farthest drawn cell, counted from the picture's corner); 0 = no corner pattern.
+     */
+    val cornerUnits: Int get() {
+        var n = 0
+        for ((y, row) in corner.withIndex()) for (x in row.indices) if (cornerAt(x, y) != 0) n = maxOf(n, x + 1, y + 1)
+        return n
+    }
+
     companion object {
         private val ICICLES = intArrayOf(0, 0, 3, 1, 0, 2, 0, 0, 4, 1, 0)
 
@@ -109,12 +120,87 @@ object BattleFrame {
     /** The preference key (a [BattleFrameStyle] name). */
     const val KEY = "battleFrame"
 
+    /** PLAN 140: the safe area of [style] drawn with [unit] (art pixel, in the arena's own dp); see [FrameSafe]. */
+    internal fun safe(style: BattleFrameStyle, unit: Float): FrameSafe =
+        if (style == BattleFrameStyle.NONE) FrameSafe.NONE else FrameSafe(style.t * unit, style.reach * unit, style.cornerUnits * unit)
+
     /**
      * One art pixel in whole px of the view it is drawn in: 2 dp on screen. The arena is drawn scaled by the panel scale
      * ([PanelFit.Fit.scale]), so in its own (virtual) px it is 2 dp / scale, rounded, at least 2.
      */
     fun unitPx(density: Float, scale: Float, dp: Float = 2f): Int =
         Math.round(dp * density / scale.coerceAtLeast(0.05f)).coerceAtLeast(2)
+}
+
+/**
+ * PLAN 140: the part of a battle picture a [BattleFrameStyle] leaves free for the info boxes, in one unit (the arena's virtual dp):
+ * [edge] is the band on the left, right and bottom sides, [top] the band at the top (the ice's icicles hang deeper there than the
+ * band is thick), [corner] the side of the square the corner pattern covers at each of the four corners. A box is "clear" when it is
+ * inside the edges and touches none of the four corner squares; nothing of the frame is then drawn over it. [NONE] (all 0) changes
+ * nothing.
+ */
+internal class FrameSafe(val edge: Float, val top: Float, val corner: Float) {
+    val none: Boolean get() = edge <= 0f && top <= 0f && corner <= 0f
+
+    /**
+     * Moves the box [out] (x, y, w, h, in place) so it is inside the edges and clear of the corner squares of a [vw] x [vh] picture. A
+     * box that hits a corner square moves to the nearest place that touches none of the four (each axis stays, or sits on the inner
+     * side of a left / right, top / bottom corner square, inside the edges; the shortest move wins, along x on a tie); a box too big
+     * for any such place stays where the edges put it. Every place is checked against all four corners, so leaving one corner never
+     * lands in another. No allocation.
+     */
+    fun clearInto(out: FloatArray, vw: Float, vh: Float) {
+        if (none) return
+        val w = out[2]
+        val h = out[3]
+        val x = maxOf(edge, minOf(vw - edge - w, out[0]))
+        val y = maxOf(top, minOf(vh - edge - h, out[1]))
+        out[0] = x; out[1] = y
+        if (corner <= 0f || !hitsCorner(x, y, w, h, vw, vh)) return
+        var best = Float.MAX_VALUE
+        var bestDy = Float.MAX_VALUE
+        for (i in 0 until 3) {
+            val cx = when (i) { 0 -> x; 1 -> corner; else -> vw - corner - w }
+            if (i > 0 && (cx < edge - EPS || cx + w > vw - edge + EPS)) continue
+            for (j in 0 until 3) {
+                val cy = when (j) { 0 -> y; 1 -> corner; else -> vh - corner - h }
+                if (j > 0 && (cy < top - EPS || cy + h > vh - edge + EPS)) continue
+                if (hitsCorner(cx, cy, w, h, vw, vh)) continue
+                val dy = abs(cy - y)
+                val cost = abs(cx - x) + dy
+                if (cost < best - EPS || (cost <= best + EPS && dy < bestDy - EPS)) { best = cost; bestDy = dy; out[0] = cx; out[1] = cy }
+            }
+        }
+    }
+
+    private fun hitsCorner(x: Float, y: Float, w: Float, h: Float, vw: Float, vh: Float): Boolean {
+        for (c in 0 until 4) {
+            val cl = if ((c and 1) == 1) vw - corner else 0f
+            val ct = if (c >= 2) vh - corner else 0f
+            if (x < cl + corner - EPS && cl < x + w - EPS && y < ct + corner - EPS && ct < y + h - EPS) return true
+        }
+        return false
+    }
+
+    /** [b] moved as [clearInto] says (the same box when nothing moves). */
+    fun clear(b: ArenaGeo.Box, vw: Float, vh: Float): ArenaGeo.Box {
+        if (none) return b
+        val a = floatArrayOf(b.x, b.y, b.w, b.h)
+        clearInto(a, vw, vh)
+        return if (abs(a[0] - b.x) < 0.0001f && abs(a[1] - b.y) < 0.0001f) b else ArenaGeo.Box(a[0], a[1], b.w, b.h)
+    }
+
+    /** True when the box (x, y, w, h) is inside the edges and touches no corner square: nothing of the frame is drawn over it. */
+    fun isClear(x: Float, y: Float, w: Float, h: Float, vw: Float, vh: Float): Boolean {
+        if (none) return true
+        if (x < edge - EPS || y < top - EPS || x + w > vw - edge + EPS || y + h > vh - edge + EPS) return false
+        return corner <= 0f || !hitsCorner(x, y, w, h, vw, vh)
+    }
+
+    companion object {
+        val NONE = FrameSafe(0f, 0f, 0f)
+        private const val EPS = 0.01f
+    }
 }
 
 /**

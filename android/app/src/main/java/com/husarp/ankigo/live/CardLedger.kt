@@ -45,7 +45,8 @@ class CardLedger(val own: OwnAnswers = OwnAnswers()) {
         else inferButton(p, n, steps(n), nowSec)
         // Several answers between polls: only the first can be inferred, and only as a guess.
         val guess = if (d > 1) g0.copy(conf = GUESS) else g0
-        out += LiveDetector.Event.Answer(n.id, guess.button, guess.conf, false)
+        // PLAN 155: a card whose state before was new; with an own answer in the same poll the reported one came after it
+        out += LiveDetector.Event.Answer(n.id, guess.button, guess.conf, false, wasNew = suppressed == 0 && p.queue == 0 && (old != null || n.reps == 1))
         repeat(remaining - 1) { out += LiveDetector.Event.Answer(n.id, 0, GUESS, false) }
     }
 

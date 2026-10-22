@@ -27,6 +27,20 @@ object BattleShotKit {
             m.isAccessible = true
             return m.invoke(activity, *args)
         }
+
+        /**
+         * R14-D (PLAN 206): the "Switch Pokémon" tap now only queues the switch; the next answer brings it in. This is the tap, that
+         * answer (a Good one, its own events are not played), and the screen playing the events from the switch on (MainChanged,
+         * the wild one's attack). Returns all of the answer's events.
+         */
+        fun switchAfterCard(uid: String, answerId: Long = 90_001L): List<com.husarp.ankigo.game.GameEvent> {
+            call("switchMain", uid)
+            // the answer is the first of a round (no round is played that could end the fight before the switch comes in)
+            GameRepo.state?.battle?.let { it.answers = 0; it.tally = 0; it.buttons.clear() }
+            val events = GameRepo.run(activity) { it.onAnswer(com.husarp.ankigo.game.Answer(answerId, 3, System.currentTimeMillis())) }
+            call("handleEvents", events.dropWhile { it !is com.husarp.ankigo.game.GameEvent.MainChanged })
+            return events
+        }
     }
 
     /** The screen's views as onCreate builds them (activity attached to the render context, no onCreate). */

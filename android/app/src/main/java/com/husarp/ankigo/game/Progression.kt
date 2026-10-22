@@ -66,12 +66,15 @@ object Progression {
         if (mon.level >= Tuning.MAX_LEVEL || xp <= 0) return 0
         val sp0 = data.sp(mon.species)
         val isMain = state.main?.uid == mon.uid // only the main's heals are shown (Healed)
+        val before = mon.xp
+        val crossed = mutableListOf<Int>() // PLAN 138: the XP each level grown needed
         mon.xp += xp
         val later = mutableListOf<GameEvent>() // level events; XpGained goes first but needs the final numbers
         var gained = 0
         while (mon.level < Tuning.MAX_LEVEL && gained < Tuning.MAX_LEVELS_PER_GAIN) {
             val need = xpToNext(data, mon)
             if (need <= 0 || mon.xp < need) break
+            crossed += need
             mon.xp -= need
             val oldMax = StatCalc.maxHp(data, mon)
             mon.level++
@@ -91,7 +94,7 @@ object Progression {
             val need = xpToNext(data, mon)
             if (need > 0) mon.xp = min(mon.xp, need - 1)
         }
-        events += GameEvent.XpGained(mon.uid, mon.name, xp, mon.level, mon.xp, xpToNext(data, mon))
+        events += GameEvent.XpGained(mon.uid, mon.name, xp, mon.level, mon.xp, xpToNext(data, mon), before, crossed)
         events += later
         return gained
     }

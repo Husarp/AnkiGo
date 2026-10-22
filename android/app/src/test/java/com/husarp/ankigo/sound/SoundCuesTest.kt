@@ -95,6 +95,8 @@ class SoundCuesTest {
         assertEquals(listOf("EVO_START" to 0L, "EVO_DONE" to 900L), cues(GameEvent.Evolved("u", "A", "B", 2)))
         assertEquals(listOf("LEARNED" to 0L), cues(GameEvent.MoveLearned("u", "A", "Tackle", null)))
         assertEquals(listOf("ITEM" to 0L), cues(GameEvent.ItemFound("potion", 1)))
+        assertEquals(listOf("ITEM" to 0L), cues(GameEvent.DailyGift("poke-ball", null, 3, 6)))   // R14-B2-D
+        assertEquals(listOf("ITEM" to 0L), cues(GameEvent.DailyGift(null, "thunderbolt", 1, 1)))
         assertEquals(listOf("CASH" to 0L), cues(GameEvent.Cash(5, 10, CashKind.DEFEAT)))
         assertEquals(listOf("GOAL" to 0L), cues(GameEvent.Info("Daily goal reached!")))
         assertEquals(listOf("BADGE" to 0L), cues(GameEvent.BadgeEarned(1, "B")))

@@ -1,5 +1,6 @@
 package com.husarp.ankigo.debug
 
+import com.husarp.ankigo.game.DailyGift
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.Items
 
@@ -13,12 +14,13 @@ object GameEventText {
         "Answer source=${if (source in setOf("live", "study", "catch-up")) source else "unknown"} card=$cardId button=$button"
 
     fun event(e: GameEvent): String = when (e) {
-        is GameEvent.Counted -> "Counted button=${e.button} points=${e.points} today=${e.reviewsToday} streak=${e.cardStreak}" + flag(e.catchUp, "catch-up")
+        is GameEvent.Counted -> "Counted button=${e.button} points=${e.points} today=${e.reviewsToday} streak=${e.cardStreak}" + flag(e.catchUp, "catch-up") + flag(e.neutral, "neutral")
         is GameEvent.Ignored -> "Ignored: ${e.reason}"
         is GameEvent.Charge -> "Charge points=${e.points} answers=${e.answers}/${e.of}"
         is GameEvent.Cash -> "Cash +${e.amount} total=${e.total} ${e.kind}"
         is GameEvent.ItemFound -> "ItemFound ${Items.name(e.item)} (now ${e.count})"
         is GameEvent.BadgeEarned -> "BadgeEarned #${e.id} ${e.title}"
+        is GameEvent.DailyGift -> "DailyGift ${DailyGift.name(null, e.item, e.tm, e.count)} streak=${e.streakDays}"
         is GameEvent.AchievementReached -> "AchievementReached ${e.id.filter { it.isLetterOrDigit() || it == '-' }.take(48)} tier=${e.tier} ${e.title} ${e.tierName}"
         is GameEvent.TrainerLevelUp -> "TrainerLevelUp level=${e.level}"
         is GameEvent.DayChanged -> "DayChanged ${e.day}"
@@ -47,6 +49,7 @@ object GameEventText {
         is GameEvent.Fled -> "Fled ${e.name}"
         is GameEvent.MainChanged -> "MainChanged -> ${e.name}"
         is GameEvent.SwitchHit -> "TurnHit ${e.item?.let { "item ${Items.name(it)} on" } ?: "switch to"} ${e.monName} hp=${e.hp}/${e.maxHp}; ${e.wildName} attacks once"
+        is GameEvent.SwitchQueued -> if (e.uid == null) "SwitchQueued cancelled, ${e.name} stays in" else "SwitchQueued -> ${e.name} after this card"
         is GameEvent.Info -> "Info: ${e.text}"
     }.replace('\n', ' ').take(400)
 

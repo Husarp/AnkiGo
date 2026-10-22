@@ -78,7 +78,7 @@ class SwitchHitTest {
     private val paths = listOf(
         Path("setMain: a team member", "t2") { it.setMain("t2") },
         Path("setMain: a box Pokémon joins the team", "b3") { it.setMain("b3") },
-        Path("cycleMain", "t1") { it.cycleMain() },
+        Path("cycleMain", "t1") { it.cycleMain(cardShowing = false) },
         Path("moveInTeam: the second one up", "t1") { it.moveInTeam("t1", -1) },
         Path("moveInTeam: the main down", "t1") { it.moveInTeam("t0", 1) },
         Path("toBox: the main", "t1") { it.toBox("t0") },
@@ -256,7 +256,7 @@ class SwitchHitTest {
     @Test fun switchingToAZeroHpMemberOutsideAFightChangesNothingElse() {
         val g = game(fight = false)
         g.state.mon("t1")!!.hp = 0
-        val r = g.cycleMain()
+        val r = g.cycleMain(cardShowing = false)
         assertEquals(listOf<GameEvent>(GameEvent.MainChanged("t1", g.state.main!!.name)), r.events)
         assertEquals(0, g.state.main!!.hp) // as before: no fight, nothing to settle
     }
@@ -287,7 +287,7 @@ class SwitchHitTest {
         val g = game()
         g.state.battle!!.wild.hp = 0
         g.state.mon("t1")!!.hp = 0
-        val r = g.cycleMain()
+        val r = g.cycleMain(cardShowing = false)
         assertEquals(listOf<GameEvent>(GameEvent.MainChanged("t1", g.state.main!!.name)), r.events)
         assertEquals(0, g.state.main!!.hp)
     }
@@ -298,7 +298,7 @@ class SwitchHitTest {
         val g = game()
         val b = g.state.battle!!
         b.rounds = 4; b.answers = 1; b.tally = 10; b.buttons += 3
-        g.cycleMain()
+        g.cycleMain(cardShowing = false)
         assertEquals(4, b.rounds)
         assertEquals(1, b.answers); assertEquals(10, b.tally); assertEquals(listOf(3), b.buttons)
         // the next answer completes the round as it would have
@@ -312,7 +312,7 @@ class SwitchHitTest {
         val b = g.state.battle!!
         b.enemy.status = "psn" // the wild one is poisoned: a round would hurt it at the end
         val wildHp = b.wild.hp
-        val r = g.cycleMain()
+        val r = g.cycleMain(cardShowing = false)
         assertEquals(wildHp, b.wild.hp)
         assertTrue(r.events.none { it is GameEvent.Effect && it.kind == EffectKind.STATUS_DAMAGE })
         // a status the hit puts on the new Main does not tick either
@@ -320,7 +320,7 @@ class SwitchHitTest {
         for (seed in 1..40) {
             val t = game(seed = seed, wildMoves = listOf("toxic"))
             val before = t.state.mon("t1")!!.hp
-            val e = t.cycleMain().events
+            val e = t.cycleMain(cardShowing = false).events
             assertEquals(before, t.state.main!!.hp) // toxic deals nothing now
             assertTrue(e.none { it is GameEvent.Effect && it.kind == EffectKind.STATUS_DAMAGE })
             if (e.any { it is GameEvent.Effect && it.kind == EffectKind.STATUS_APPLIED }) { applied = true; assertEquals("tox", t.state.battle!!.player.status) }
@@ -335,7 +335,7 @@ class SwitchHitTest {
             t.state.battle!!.player.boosts[0] = 3
             t.state.battle!!.player.status = "brn"
             t.state.battle!!.enemy.boosts[1] = -2
-            val e = t.cycleMain().events
+            val e = t.cycleMain(cardShowing = false).events
             assertEquals(0, t.state.battle!!.player.boosts[0])
             assertEquals(-2, t.state.battle!!.enemy.boosts[1]) // the wild one keeps its own stages
             if (e.any { it is GameEvent.Effect && it.kind == EffectKind.STATUS_APPLIED }) { parked = true; assertEquals("par", t.state.battle!!.player.status) }
@@ -351,7 +351,7 @@ class SwitchHitTest {
         val t1 = g.state.mon("t1")!!
         t1.hp = 1
         val oldBattle = g.state.battle!!
-        val r = g.cycleMain()
+        val r = g.cycleMain(cardShowing = false)
         val e = r.events
         assertEquals(GameEvent.MainChanged("t1", t1.name), e[0])
         assertEquals(GameEvent.SwitchHit("Ratty", t1.name, 1, maxHp(t1)), e[1])
@@ -378,7 +378,7 @@ class SwitchHitTest {
         val wild = g.state.battle!!.wild
         wild.hp = 1
         val t1 = g.state.mon("t1")!!
-        val r = g.cycleMain()
+        val r = g.cycleMain(cardShowing = false)
         val e = r.events
         assertTrue(e.any { it is GameEvent.Fainted && !it.player })
         assertTrue(e.any { it is GameEvent.Defeated || it is GameEvent.Caught })
@@ -395,9 +395,9 @@ class SwitchHitTest {
         var randomWasImmune = false
         for (seed in 1..120) {
             val smart = game(seed = seed, choice = MoveChoice.SMART, wildMoves = listOf("earthquake", "tackle"))
-            assertEquals("Tackle", smart.cycleMain().events.of<GameEvent.Attack>().single().move)
+            assertEquals("Tackle", smart.cycleMain(cardShowing = false).events.of<GameEvent.Attack>().single().move)
             val rnd = game(seed = seed, choice = MoveChoice.RANDOM, wildMoves = listOf("earthquake", "tackle"))
-            val a = rnd.cycleMain().events.of<GameEvent.Attack>().single()
+            val a = rnd.cycleMain(cardShowing = false).events.of<GameEvent.Attack>().single()
             if (a.move == "Earthquake") { randomWasImmune = true; assertEquals(0.0, a.effectiveness, 0.0); assertEquals(0, a.damage) }
         }
         assertTrue(randomWasImmune)
@@ -419,9 +419,9 @@ class SwitchHitTest {
         var smartest = 0; var random = 0
         for (seed in 1..300) {
             val s = game(seed = seed, choice = MoveChoice.SMARTEST, wildMoves = listOf("tackle", "bodyslam"), wildLevel = 8)
-            if (s.cycleMain().events.of<GameEvent.Attack>().single().move == "Body Slam") smartest++
+            if (s.cycleMain(cardShowing = false).events.of<GameEvent.Attack>().single().move == "Body Slam") smartest++
             val r = game(seed = seed, choice = MoveChoice.RANDOM, wildMoves = listOf("tackle", "bodyslam"), wildLevel = 8)
-            if (r.cycleMain().events.of<GameEvent.Attack>().single().move == "Body Slam") random++
+            if (r.cycleMain(cardShowing = false).events.of<GameEvent.Attack>().single().move == "Body Slam") random++
         }
         assertTrue("smartest $smartest", smartest > 190) // 70 % of the picks
         assertTrue("random $random", random in 100..200) // about half
@@ -435,7 +435,7 @@ class SwitchHitTest {
             val g = game(seed = seed)
             g.state.battle!!.enemy.status = "slp"
             val before = g.state.mon("t1")!!.hp
-            val e = g.cycleMain().events
+            val e = g.cycleMain(cardShowing = false).events
             assertEquals(GameEvent.MainChanged("t1", g.state.main!!.name), e[0])
             assertTrue(e[1] is GameEvent.SwitchHit)
             if (e.any { it is GameEvent.Effect && it.kind == EffectKind.CANT_MOVE }) {
@@ -457,7 +457,7 @@ class SwitchHitTest {
         for (seed in 1..80) {
             val g = game(seed = seed)
             g.state.battle!!.enemy.status = "par"
-            val e = g.cycleMain().events
+            val e = g.cycleMain(cardShowing = false).events
             if (e.any { it is GameEvent.Effect && it.kind == EffectKind.CANT_MOVE }) { skipped = true; assertTrue(e.none { it is GameEvent.Attack }) }
             else { acted = true; assertEquals(1, e.of<GameEvent.Attack>().size) }
         }
@@ -468,7 +468,7 @@ class SwitchHitTest {
         for (seed in 1..80) {
             val g = game(seed = seed)
             g.state.battle!!.enemy.status = "slp"
-            val r = g.cycleMain()
+            val r = g.cycleMain(cardShowing = false)
             if (r.events.any { it is GameEvent.Effect && it.kind == EffectKind.CANT_MOVE }) {
                 assertEquals("${g.state.main!!.name} is your main now — the wild Ratty couldn't attack.", r.message)
                 return
@@ -479,9 +479,9 @@ class SwitchHitTest {
 
     @Test fun aMissIsAMissInTheToastAndInTheStats() {
         // a 1 % move misses nearly always: take the first seed that does
-        val seed = (1..50).first { game(seed = it, wildMoves = listOf("wildswing")).cycleMain().events.of<GameEvent.Attack>().single().missed }
+        val seed = (1..50).first { game(seed = it, wildMoves = listOf("wildswing")).cycleMain(cardShowing = false).events.of<GameEvent.Attack>().single().missed }
         val g = game(seed = seed, wildMoves = listOf("wildswing"))
-        val r = g.cycleMain()
+        val r = g.cycleMain(cardShowing = false)
         val a = r.events.of<GameEvent.Attack>().single()
         assertTrue(a.missed)
         assertEquals(maxHp(g.state.main!!), g.state.main!!.hp)
@@ -492,7 +492,7 @@ class SwitchHitTest {
 
     @Test fun anImmuneTargetSaysSoAndLosesNothing() {
         val g = game(wildMoves = listOf("earthquake")) // t1 (Normal / Flying) is immune
-        val r = g.cycleMain()
+        val r = g.cycleMain(cardShowing = false)
         val a = r.events.of<GameEvent.Attack>().single()
         assertEquals(0.0, a.effectiveness, 0.0)
         assertEquals(maxHp(g.state.main!!), g.state.main!!.hp)
@@ -504,7 +504,7 @@ class SwitchHitTest {
     @Test fun aChargeMoveThatWouldOnlyChargeIsLeftOutWhileThereIsAnotherMove() {
         for (c in MoveChoice.entries) for (seed in 1..60) {
             val g = game(seed = seed, choice = c, wildMoves = listOf("fly", "tackle"))
-            val e = g.cycleMain().events
+            val e = g.cycleMain(cardShowing = false).events
             assertEquals("$c $seed", "Tackle", e.of<GameEvent.Attack>().single().move)
             assertTrue(g.state.battle!!.enemy.charged.isEmpty())
         }
@@ -513,7 +513,7 @@ class SwitchHitTest {
     @Test fun aWildOneWithOnlyAChargeMoveSpendsTheHitCharging() {
         val g = game(wildMoves = listOf("fly"))
         val before = g.state.mon("t1")!!.hp
-        val r = g.cycleMain()
+        val r = g.cycleMain(cardShowing = false)
         assertTrue(r.events.any { it is GameEvent.Effect && it.kind == EffectKind.CHARGE })
         assertEquals(before, g.state.main!!.hp)
         assertEquals(setOf("fly"), g.state.battle!!.enemy.charged) // as in a round: it hits the next time
@@ -525,7 +525,7 @@ class SwitchHitTest {
         for (seed in 1..60) {
             val g = game(seed = seed, wildMoves = listOf("fly", "tackle"))
             g.state.battle!!.enemy.charged += "fly"
-            val a = g.cycleMain().events.of<GameEvent.Attack>().single()
+            val a = g.cycleMain(cardShowing = false).events.of<GameEvent.Attack>().single()
             if (a.move == "Fly") { flew = true; assertTrue(a.damage > 0) }
         }
         assertTrue(flew)
@@ -537,20 +537,20 @@ class SwitchHitTest {
         val g = game()
         val day = g.state.history[g.state.day]?.dmgTaken ?: 0
         val counter = g.state.counters[Metric.DAMAGE_TAKEN.name] ?: 0L
-        val a = g.cycleMain().events.of<GameEvent.Attack>().single()
+        val a = g.cycleMain(cardShowing = false).events.of<GameEvent.Attack>().single()
         assertTrue(a.damage > 0)
         assertEquals(day + a.damage, g.state.history[g.state.day]!!.dmgTaken)
         assertEquals(counter + a.damage.toLong(), g.state.counters[Metric.DAMAGE_TAKEN.name]!!)
         // a free switch counts nothing
         val free = game(fight = false)
-        free.cycleMain()
+        free.cycleMain(cardShowing = false)
         assertNull(free.state.history[free.state.day])
         assertNull(free.state.counters[Metric.DAMAGE_TAKEN.name])
     }
 
     @Test fun theSaveRoundTripsMidFightAfterAHit() {
         val g = game()
-        val a = g.cycleMain().events.of<GameEvent.Attack>().single()
+        val a = g.cycleMain(cardShowing = false).events.of<GameEvent.Attack>().single()
         assertTrue(a.damage > 0)
         val json = SaveCodec.encode(g.state)
         val back = SaveCodec.decode(json)

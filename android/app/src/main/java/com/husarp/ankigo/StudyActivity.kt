@@ -36,6 +36,8 @@ import com.husarp.ankigo.sound.SoundId
 import com.husarp.ankigo.sound.SoundPrefs
 import com.husarp.ankigo.sound.SoundRules
 import com.husarp.ankigo.study.NextDeck
+import com.husarp.ankigo.study.NewCardOk
+import com.husarp.ankigo.study.GentleCards
 import com.husarp.ankigo.study.CardSpeech
 import com.husarp.ankigo.study.JsApi
 import com.husarp.ankigo.study.PanelHeight
@@ -167,6 +169,10 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private val foundItems = arrayListOf<String>()
     private var finished = false
     private var lastSummary: Triple<List<Anki.Deck>, Int, Int>? = null   // args of the summary on screen: a late own answer re-renders it
+    // PLAN 129: the deck's last answer is in, the last battle plays on the study screen and "Finish deck" opens the summary (args of that summary; null = not waiting)
+    private var finishArgs: Triple<List<Anki.Deck>, Int, Int>? = null
+    private var finishTapped = false
+    private var answeredSinceCard = false   // an own answer was made and no card has been confirmed since: a finished queue is the deck's end of this visit
     private var started = false
     private val pending = PendingAnswers()    // own answers whose game step has not run yet: the next card does not wait for them, the summary does
     private val deckNames = DeckNames { Anki.decks(this).associate { it.id to it.name } }   // read on the io thread only
@@ -235,6 +241,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             met = savedInstanceState.getInt("met"); defeated = savedInstanceState.getInt("defeated"); levels = savedInstanceState.getInt("levels"); evolutions = savedInstanceState.getInt("evolutions")
             caught += savedInstanceState.getStringArrayList("caught").orEmpty(); items += savedInstanceState.getStringArrayList("items").orEmpty()
             foundItems += savedInstanceState.getStringArrayList("foundItems").orEmpty()
+            restoreFinishWait(savedInstanceState)
             runCatching {
                 val saved = JSONObject(savedInstanceState.getString("studyResults") ?: "{}")
                 val mons = saved.optJSONArray("mons")
@@ -371,14 +378,20 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         root.addView(body, StudyUi.lp(-1, 0, 1f))
         return root
     }
-    /** The ⋯ entry "Switch Pokémon": the team as a grid popup; the picked one becomes the main. */
+    /**
+     * The ⋯ entry "Switch Pokémon": the team as a grid popup. PLAN 206: with a card showing the picked one comes in right after
+     * that card is answered ([com.husarp.ankigo.game.Game.requestMain]); with no card (a result holds / Next battle, the deck is
+     * finished) it is the main at once. Picking the main again cancels a waiting switch.
+     */
     private fun switchPokemon() {
         val data = GameRepo.data ?: return
         val st = GameRepo.state ?: return
         if (!events.idle) return
         com.husarp.ankigo.ui.SwitchPopup.show(this, data, st) { uid ->
-            if (!events.idle || GameRepo.state?.main?.uid == uid) return@show
-            val r = GameRepo.run(this) { it.setMain(uid) }
+            if (!events.idle) return@show
+            if (GameRepo.state?.main?.uid == uid && GameRepo.state?.pendingMain == null) return@show
+            val cardShowing = card != null && !finished && !events.holding
+            val r = GameRepo.run(this) { it.requestMain(uid, cardShowing) }
             record(r.events); events.enqueue(r.events); LiveSession.refreshWidgetsFor(this, r.events)
         }
     }
@@ -398,6 +411,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         out.putInt("met", met); out.putInt("defeated", defeated); out.putInt("levels", levels); out.putInt("evolutions", evolutions)
         out.putStringArrayList("caught", caught); out.putStringArrayList("items", items)
         out.putStringArrayList("foundItems", foundItems)
+        saveFinishWait(out)
         out.putString("studyResults", JSONObject().put("mons", org.json.JSONArray(rewardMons))
             .put("progress", JSONObject(teamProgress.toMap())).put("initialLevels", JSONObject(initialLevels.toMap())).toString())
     }
@@ -509,7 +523,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         syncTiming()
     }
     /** R9-C6 / R9-W5-A: the main was changed (sent to the box, another look, a name...) in Team / Pokédex while this screen waited in the back stack: its card and picture follow (idle only). */
-    internal fun refreshMain() { if (::panel.isInitialized && ::events.isInitialized && events.idle) panel.refreshMain() }
+    internal fun refreshMain() { if (::panel.isInitialized && ::events.isInitialized && events.idle && !events.playPending()) panel.refreshMain() }   // PLAN 191: fight events made on another screen (an item on the main from the Bag, a team edit) play now, once
     override fun onPause() {
         resumedNow = false; cancelKeyboard(); pauseClock(); background = true; syncTiming(); stopAudio(); GameSound.clearStudyQuiet(this)
         LiveSession.hush(this, this, false)   // the detector polls again (answers made in AnkiDroid meanwhile count then)
@@ -670,7 +684,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         audioPrev = audioNow; audioNow = false; voiceNote = null; ttsCard = TtsRules.NONE
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
         if (finished) buttons.removeAllViews() else if (waiting) disableButtons(buttons)
-        finished = false; lastSummary = null; locked = true; card = null; pageReady = false; jsSnap = null
+        finished = false; lastSummary = null; finishArgs = null; finishTapped = false; locked = true; card = null; pageReady = false; jsSnap = null
         predictedNow = false; heldEase = 0; flipHeld = false
         topBar.visibility = View.VISIBLE; summaryBar.visibility = View.GONE; cardSurface.visibility = View.VISIBLE
         web.visibility = View.VISIBLE; showNotice(false); updateSwipe()
@@ -698,14 +712,17 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     /** An answer was made on a CONFIRMED card (a tap, or a held tap whose card was just confirmed): queued in order for the background write. */
     private fun answerMade(a: QueuedAnswer) {
         val buttons = card?.buttons ?: a.buttons
-        val answer = a.copy(ease = a.ease.coerceAtMost(buttons), buttons = buttons)
+        // PLAN 155: the one place that decides OK (every tap, key, swipe, auto answer and card script comes through here): the ease AnkiDroid gets and whether the game counts it neutrally
+        val ok = NewCardOk.settle(prefs.getBoolean(NewCardOk.PREF, false), a.before["queue"]?.toIntOrNull(), a.nid, a.ord, buttons, a.ease.coerceAtMost(buttons), gentleCards())
+        val answer = a.copy(ease = ok.ease, buttons = buttons, neutral = ok.neutral)
+        if (ok.neutral) Report.log("STUDY", "OK on a new card: note ${a.nid}, ord ${a.ord}, queue ${a.before["queue"]}; AnkiDroid gets Again, the game a neutral answer")
         while (timings.size >= 6) timings.remove(timings.keys.first())?.let { if (it.flush()) Report.log("STUDY", it.line()) }
         val timing = AnswerTiming(SystemClock.elapsedRealtime(), AnswerTiming.ALL_PARTS)
         timing.pollsAtTap = LiveSession.polls; timing.queueAtTap = host.queue.size
         timing.wait = nc.lastWait   // R10-X1: why this answer's next card waits ("" = the prediction shows)
         timings[answer.seq] = timing; answerTiming = timing
         tickets[answer.seq] = pending.start()   // the summary waits for the game step of this answer
-        inFlight++; timedCard = null
+        inFlight++; timedCard = null; answeredSinceCard = true
         countsGate.answerStarted()
         lastCounts = QueueCounts.afterAnswer(lastCounts, a.before["queue"]?.toIntOrNull())   // the stand-in counts, until the next exact read
         heldEase = 0
@@ -723,6 +740,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val n = v.review
         Report.log("STUDY", "card shown: deck ${v.cardDeckName.ifEmpty { deckName }}, note ${p.key.nid}, ord ${p.key.ord}, card ${p.before["_id"]}, queue ${p.before["queue"]}, reps ${p.before["reps"]}" + if (predicted) " (predicted)" else "")
         resetForLoading(waiting = false)
+        if (!predicted) answeredSinceCard = false
         pageTiming?.let { pageTiming = null; timingPart(it, AnswerTiming.PAGE, -1) }   // replaced before its page loaded
         predictedNow = predicted
         finished = false; card = n; stats = p.before; question = v.question; answerHtml = v.answer; css = v.css; fields = v.fields
@@ -745,7 +763,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     /** The predicted card on screen is the real one: its buttons and next times now come from AnkiDroid; the side the user is on stays. [openAnswer]: a held "Show answer" opens now. */
     private fun cardConfirmed(p: Prepared<StudyCard>, openAnswer: Boolean = false) {
         val n = p.view.review
-        predictedNow = false
+        predictedNow = false; answeredSinceCard = false
         card = n; stats = p.before
         jsBase = jsBase.copy(buttons = n.buttons, nextTimes = n.nextTimes); jsSnap = jsSnap?.copy(buttons = n.buttons, nextTimes = n.nextTimes)
         if (heldEase != 0) return   // the tap that was held acts right now: the commands after this one carry it out
@@ -843,13 +861,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                     val learn = Anki.searchCards(app, "$queryDeck is:learn", arrayOf("_id")).size
                     val fresh = Anki.searchCards(app, "$queryDeck is:new", arrayOf("_id")).size
                     val ioMs = ioDone()
-                    postMain {
-                        val cmds = if (valid(token)) nc.finished(token) else emptyList()
-                        if (cmds.isEmpty()) { noteLoad(ioMs, ""); return@postMain }
-                        perform(cmds)
-                        // The last answer's rewards belong in the summary: wait for a game step that is still running.
-                        pending.whenIdle { if (valid(token)) summary(all, learn, fresh); noteLoad(ioMs, "") }
-                    }
+                    postMain { deckEmpty(token, Triple(all, learn, fresh)) { noteLoad(ioMs, "") } }
                     return@runCatching
                 }
                 is LoadPlan.Step.Confirm -> {
@@ -1174,11 +1186,16 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     /** A request to flip or answer (button, key, swipe, tap on the card, card script) while [holding]: it acts as Continue and the card stays. True = it did. */
     private fun heldContinue(): Boolean { releaseHiddenHold(); return heldContinueNow() }
-    private fun heldContinueNow() = ContinueRule.onRequest(holding()) == ContinueRule.Act.CONTINUE && continueBattle()
+    private fun heldContinueNow() = finishArgs == null && ContinueRule.onRequest(holding()) == ContinueRule.Act.CONTINUE && continueBattle()   // PLAN 129: waiting to finish, only the Finish deck button acts
     private fun showButtons() {
         buttons.removeAllViews(); updateSwipe()
         val enabled = !locked && !mediaBlocked
-        if (ContinueRule.row(flipped, holding()) == ContinueRule.Row.CONTINUE) {   // a fight result holds the next battle: no card is answered outside a battle
+        val rowKind = ContinueRule.row(flipped, holding(), finishArgs != null)
+        if (rowKind == ContinueRule.Row.FINISH) {   // PLAN 129: the deck's last answer is in: one button in the place of Show answer
+            buttons.addView(StudyUi.answer(this, ContinueRule.FINISH_LABEL, null, R.color.ag_mauve, !finishTapped, ContinueRule.FINISH_HINT) { finishDeck() }, StudyUi.lp(-1, Ui.dp(this, 48)))
+            return
+        }
+        if (rowKind == ContinueRule.Row.CONTINUE) {   // a fight result holds the next battle: no card is answered outside a battle
             buttons.addView(StudyUi.answer(this, ContinueRule.LABEL, null, R.color.ag_mauve, true, ContinueRule.HINT) { if (!continueBattle()) showButtons() }, StudyUi.lp(-1, Ui.dp(this, 48)))
             return
         }
@@ -1188,18 +1205,17 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             return
         }
         val n = card ?: return
-        val labels = when (n.buttons) { 2 -> listOf("Again", "Good"); 3 -> listOf("Again", "Good", "Easy"); else -> listOf("Again", "Hard", "Good", "Easy") }
-        val wide = studyPlan().answerRows == 2
-        var row = StudyUi.row(this)
-        buttons.addView(row)
-        labels.forEachIndexed { i, label ->
-            if (wide && i == 2) { row = StudyUi.row(this); buttons.addView(row, StudyUi.spaced(this, 6)) }
-            val ease = i + 1
-            val color = when(label) { "Again" -> R.color.ag_red; "Hard" -> R.color.ag_peach; "Good" -> R.color.ag_green; else -> R.color.ag_blue }
-            row.addView(StudyUi.answer(this, label, n.nextTimes.getOrElse(i) { "" }, color, enabled) { answer(ease) }.also { if (heldEase != 0) markHeld(it, ease == heldEase) },
-                StudyUi.lp(0, Ui.dp(this, if (wide) 40 else 48), 1f).also { if (row.childCount > 0) it.marginStart = Ui.dp(this, 6) })
-        }
+        AnswerRow.fill(this, buttons, n.buttons, n.nextTimes, okRow(), studyPlan().answerRows == 2, enabled, heldEase, { v, pressed -> markHeld(v, pressed) }) { answer(it) }   // PLAN 155: a new card may get the OK row
     }
+    /** PLAN 155 "New cards: one OK button": the card on screen is new (or the gentle first learning step of one) and the setting is on. */
+    private fun okRow(): Boolean {
+        val n = card ?: return false
+        val on = prefs.getBoolean(NewCardOk.PREF, false)
+        return on && NewCardOk.rowApplies(true, stats["queue"]?.toIntOrNull(), gentleCards().has(n.nid, n.ord))
+    }
+    private var gentle: GentleCards? = null
+    /** The cards whose next showing is gentle (a new card that got OK): in memory, kept in the "study" prefs so a restart keeps them. */
+    private fun gentleCards(): GentleCards = gentle ?: GentleCards(prefs.getString(NewCardOk.GENTLE_PREF, null), { prefs.edit().putString(NewCardOk.GENTLE_PREF, it).apply() }).also { gentle = it }
     /** A tap is held for the predicted card: the pressed button stays marked (pressed look, an outline), the others dim; none takes another tap. */
     private fun markHeld(v: View, pressed: Boolean) {
         v.isEnabled = false
@@ -1483,9 +1499,49 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         if (GameRepo.game == null) startActivity(Anki.reviewIntent(deckId))
         else startActivity(Intent(this, GameActivity::class.java).putExtra("reviewDeck", deckId).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
     }
+    /**
+     * The load [token] found the deck's queue empty (main thread); [done] when this screen is through with it. PLAN 129: after an own
+     * answer the last battle plays on this screen and "Finish deck" opens the summary ([waitForFinish]); a screen opened on a deck that
+     * was finished earlier shows the summary at once. Either way the last answer's rewards wait for a game step still running.
+     */
+    private fun deckEmpty(token: Int, args: Triple<List<Anki.Deck>, Int, Int>, done: () -> Unit) {
+        val cmds = if (valid(token)) nc.finished(token) else emptyList()
+        if (cmds.isEmpty()) { done(); return }
+        perform(cmds)
+        if (answeredSinceCard) { waitForFinish(args); done() }
+        else pending.whenIdle { if (valid(token)) summary(args.first, args.second, args.third); done() }
+    }
+    /** PLAN 129: a screen recreated (a theme or font change, the app reopened after Android closed it) while the deck's end waits for "Finish deck" waits again, not straight to the summary. */
+    private fun saveFinishWait(out: Bundle) = out.putBoolean("finishWait", answeredSinceCard || finishArgs != null)
+    private fun restoreFinishWait(saved: Bundle) { answeredSinceCard = saved.getBoolean("finishWait") }
+    /**
+     * PLAN 129: the queue is empty after an own answer. The screen stays as it is (the battle panel, the last answer's events playing out);
+     * the card area says so calmly and the answer row holds one "Finish deck" button. Only that button opens the summary.
+     */
+    private fun waitForFinish(args: Triple<List<Anki.Deck>, Int, Int>) {
+        finishArgs = args; finishTapped = false
+        summaryView?.let { cardColumn.removeView(it) }
+        cardSurface.visibility = View.GONE; showNotice(false)
+        summaryView = FrameLayout(this).apply {
+            addView(StudyUi.label(context, ContinueRule.FINISH_LINE, 15, R.color.ag_sub1, 700).apply { gravity = Gravity.CENTER; setPadding(Ui.dp(context, 24), 0, Ui.dp(context, 24), 0) },
+                FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
+        }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
+        showButtons(); syncTiming()
+    }
+    /** "Finish deck": ends a result's hold (like Continue) and opens the summary, behind the last answer's game step. Once: a second tap or a resume finds it done. */
+    private fun finishDeck() {
+        val args = finishArgs ?: return
+        if (finishTapped || isDestroyed) return
+        finishTapped = true
+        Report.log("STUDY", "finish deck")
+        events.continueBattle()
+        showButtons()   // the button is dimmed while the last game step finishes
+        val token = generation
+        pending.whenIdle { if (valid(token) && finishArgs === args) summary(args.first, args.second, args.third) }
+    }
     private fun summary(decks: List<Anki.Deck>, learn: Int, fresh: Int) {
         val rerender = finished && lastSummary != null
-        lastSummary = Triple(decks, learn, fresh)
+        lastSummary = Triple(decks, learn, fresh); finishArgs = null; answeredSinceCard = false
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
         finished = true; card = null; locked = true; buttons.removeAllViews(); showNotice(false); syncTiming()
         topBar.visibility = View.GONE; summaryBar.visibility = View.VISIBLE; cardSurface.visibility = View.GONE

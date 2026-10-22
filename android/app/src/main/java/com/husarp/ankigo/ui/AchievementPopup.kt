@@ -20,11 +20,15 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.AchCelebration
 import com.husarp.ankigo.game.AchPageMath
 import com.husarp.ankigo.game.AchievementTable
+import com.husarp.ankigo.game.DailyGift
+import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameEvent
+import com.husarp.ankigo.game.GiftPop
 import com.husarp.ankigo.game.ItemFind
 import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.Items
@@ -43,6 +47,10 @@ import java.lang.ref.WeakReference
 // R6-07 (items 19, 20): the popup says "Achievement unlocked" on top; an item found in a fight ([GameEvent.ItemFound]) gets the same kind of
 // popup ("Item found": picture, name, what it does) through the same queue: one popup at a time, the achievements of a batch first, the items
 // after them (all the items waiting form one popup). Like the achievement popup it is a dialog of the screen in front: a tap anywhere closes it.
+//
+// R14-B2-D: the "Daily gift" popup (the gift of the once-a-day goal moment, [GameEvent.DailyGift]) goes through the same queue: after the
+// achievements of a batch, before the found items; one gift per popup. It shows the item's picture (or the TM disc), its name with the count
+// in words, what the item does and the goal-streak line. An achievement tier with a reward (the Master Ball) says so on its popup.
 
 object AchievementPopup {
     /** Wait a moment after the action so the answer's own animation is not covered at once. */
@@ -51,6 +59,8 @@ object AchievementPopup {
     private val pending = ArrayList<AchCelebration>()
     private var pendingItems: List<ItemFind> = emptyList()
     private var shownItems: List<ItemFind> = emptyList()
+    private var pendingGifts: List<GiftPop> = emptyList()
+    private var shownGift: GiftPop? = null
     private var front: WeakReference<Activity>? = null
     private var dialog: Dialog? = null
     private var shown: List<AchCelebration> = emptyList()
@@ -63,15 +73,20 @@ object AchievementPopup {
     /** Found items waiting for a screen (tests). */
     internal fun waitingItems(): List<ItemFind> = pendingItems
 
-    internal fun reset() { pending.clear(); shown = emptyList(); pendingItems = emptyList(); shownItems = emptyList(); front = null; dialog = null }
+    /** Daily gifts waiting for a screen (tests). */
+    internal fun waitingGifts(): List<GiftPop> = pendingGifts
+
+    internal fun reset() { pending.clear(); shown = emptyList(); pendingItems = emptyList(); shownItems = emptyList(); pendingGifts = emptyList(); shownGift = null; front = null; dialog = null }
 
     /** The events of one action: what is worth a celebration is queued and shown (see the file comment). */
     fun offer(events: List<GameEvent>) {
         val items = AchPageMath.celebrations(events)
         val finds = PopupMath.finds(events)
-        if (items.isEmpty() && finds.isEmpty()) return
+        val gifts = PopupMath.gifts(events)
+        if (items.isEmpty() && finds.isEmpty() && gifts.isEmpty()) return
         pending += items.filter { n -> pending.none { it.rowId == n.rowId && it.tier == n.tier } }
         pendingItems = PopupMath.merge(pendingItems, finds)
+        pendingGifts = pendingGifts + gifts
         schedule()
     }
 
@@ -87,19 +102,20 @@ object AchievementPopup {
                 dialog = null; d.dismiss()
                 pending.addAll(0, shown); shown = emptyList()
                 pendingItems = PopupMath.merge(shownItems, pendingItems); shownItems = emptyList()
+                shownGift?.let { pendingGifts = listOf(it) + pendingGifts }; shownGift = null
             }
         }
     }
 
     private fun schedule() {
-        if ((pending.isEmpty() && pendingItems.isEmpty()) || front?.get() == null) return
+        if ((pending.isEmpty() && pendingItems.isEmpty() && pendingGifts.isEmpty()) || front?.get() == null) return
         handler.removeCallbacks(showNow)
         handler.postDelayed(showNow, DELAY_MS)
     }
 
     private fun tryShow() {
         val a = front?.get() ?: return
-        if ((pending.isEmpty() && pendingItems.isEmpty()) || dialog?.isShowing == true || a.isFinishing || a.isDestroyed || a.isInPictureInPictureMode) return
+        if ((pending.isEmpty() && pendingItems.isEmpty() && pendingGifts.isEmpty()) || dialog?.isShowing == true || a.isFinishing || a.isDestroyed || a.isInPictureInPictureMode) return
         val d = Dialog(a, android.R.style.Theme_Translucent_NoTitleBar)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
         d.window?.apply {
@@ -108,7 +124,7 @@ object AchievementPopup {
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0.45f)
         }
-        fun finish() { if (dialog === d) { dialog = null; shown = emptyList(); shownItems = emptyList() }; d.dismiss(); schedule() } // a tap closes it; more waiting? the next batch follows
+        fun finish() { if (dialog === d) { dialog = null; shown = emptyList(); shownItems = emptyList(); shownGift = null }; d.dismiss(); schedule() } // a tap closes it; more waiting? the next batch follows
         if (pending.isNotEmpty()) {
             val batch = pending.toList()
             pending.clear()
@@ -117,7 +133,12 @@ object AchievementPopup {
                 finish()
                 Nav.openAchievement(a, id)
             }))
-        } else { // no achievement waiting: the found items
+        } else if (pendingGifts.isNotEmpty()) { // no achievement waiting: the daily gift (one per popup), before the found items
+            val gift = pendingGifts.first()
+            pendingGifts = pendingGifts.drop(1)
+            shownGift = gift
+            d.setContentView(giftLayer(a, GameRepo.data, gift, onNice = { finish() }))
+        } else { // the found items
             val batch = pendingItems
             pendingItems = emptyList()
             shownItems = batch
@@ -177,6 +198,10 @@ object AchievementPopup {
         box.addView(Ui.text(ctx, 24f, 900, R.color.ag_text).apply { text = if (c.tier < 0) "Badge!" else c.word; setTextColor(color) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
         val sub = if (c.threshold != null) "${c.title} · ${AchPageMath.fmt(AchievementTable.row(c.rowId)?.metric, c.threshold)}" else c.title
         box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = sub; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+        AchPageMath.rewardOf(c.rowId, c.tier)?.let { reward -> // R14-B2-D: "Reward: a Master Ball, in your Bag"
+            box.addView(Ui.text(ctx, 13f, 900, R.color.ag_text).apply { text = AchPageMath.rewardPopupText(reward); gravity = Gravity.CENTER; setTextColor(color) },
+                LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 8) })
+        }
         box.addView(buttons(ctx, "See it", onNice) { onSee(c.rowId) }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         return box
     }
@@ -200,6 +225,9 @@ object AchievementPopup {
             body.addView(Ui.text(ctx, 13.5f, 800, R.color.ag_text).apply { text = c.title; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
             val tag = if (c.threshold != null) "${c.tierName} · ${AchPageMath.fmt(AchievementTable.row(c.rowId)?.metric, c.threshold)}" else "Badge"
             body.addView(Ui.text(ctx, 11.5f, 900, R.color.ag_text).apply { text = tag; setTextColor(color) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 1) })
+            AchPageMath.rewardOf(c.rowId, c.tier)?.let { reward -> // R14-B2-D
+                body.addView(Ui.text(ctx, 11.5f, 800, R.color.ag_sub1).apply { text = AchPageMath.rewardPopupText(reward) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 1) })
+            }
             row.addView(body, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 10) })
             list.addView(row, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 7) })
         }
@@ -253,6 +281,38 @@ object AchievementPopup {
             }
             box.addView(list, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 6) })
         }
+        box.addView(Ui.text(ctx, 14f, 900, R.color.ag_crust).apply {
+            text = "Nice"; gravity = Gravity.CENTER; minHeight = Ui.dp(ctx, 48)
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 14, ctx); isClickable = true; setOnClickListener { onNice() }
+        }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
+        frame.addView(cardScroll(ctx, box), FrameLayout.LayoutParams(-1, -2, Gravity.CENTER).also { it.setMargins(Ui.dp(ctx, 28), Ui.dp(ctx, 12), Ui.dp(ctx, 28), Ui.dp(ctx, 12)) })
+        return frame
+    }
+
+    /**
+     * R14-B2-D: the full-window layer of the "Daily gift" popup (shots render this view): the item's picture (or the TM disc), the name with its
+     * count in words ("3 Poké Balls", "Great Ball", "TM Thunderbolt"), what it does, and the goal-streak line. A tap outside the card or on
+     * "Nice" calls [onNice]. [data] null = no game data (the TM shows its move id and no type colour).
+     */
+    fun giftLayer(ctx: Context, data: GameData?, gift: GiftPop, onNice: () -> Unit): View {
+        val frame = FrameLayout(ctx).apply { isClickable = true; setOnClickListener { onNice() } }
+        val box = cardBox(ctx)
+        box.setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14))
+        box.isClickable = true // a tap on the card itself is not a tap outside
+        box.addView(title(ctx, PopupMath.GIFT_TITLE), LinearLayout.LayoutParams(-2, -2))
+        val small = ctx.resources.configuration.screenHeightDp in 1..459
+        val pic = ImageView(ctx)
+        if (gift.tm != null) Ui.tmIcon(ctx, data?.move(gift.tm)?.type, pic) else if (gift.item != null) Ui.itemIcon(ctx, gift.item, pic)
+        val side = if (small) 56 else 84
+        box.addView(pic, LinearLayout.LayoutParams(Ui.dp(ctx, side), Ui.dp(ctx, side)).also { it.topMargin = Ui.dp(ctx, if (small) 8 else 14) })
+        box.addView(Ui.text(ctx, 22f, 900, R.color.ag_text).apply { text = DailyGift.name(data, gift.item, gift.tm, gift.count); gravity = Gravity.CENTER },
+            LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 8) })
+        val what = when {
+            gift.item != null -> ItemInfo.line(data, gift.item)
+            else -> data?.let { ItemInfo.plain(ItemInfo.moveEffect(it, gift.tm.orEmpty())) }?.takeIf { it.isNotBlank() } ?: ItemInfo.tmHowToUse()
+        }
+        box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = what; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+        box.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = DailyGift.streakLine(gift.streakDays); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 10) })
         box.addView(Ui.text(ctx, 14f, 900, R.color.ag_crust).apply {
             text = "Nice"; gravity = Gravity.CENTER; minHeight = Ui.dp(ctx, 48)
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 14, ctx); isClickable = true; setOnClickListener { onNice() }

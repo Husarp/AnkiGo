@@ -5,8 +5,10 @@ import android.view.View
 import android.widget.LinearLayout
 import com.husarp.ankigo.R
 import com.husarp.ankigo.GameRepo
+import com.husarp.ankigo.game.BallTrade
 import com.husarp.ankigo.game.Catching
 import com.husarp.ankigo.game.GameEvent
+import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.ItemUse
 import com.husarp.ankigo.game.Items
@@ -14,8 +16,9 @@ import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Progression
 
 // TICKET T14 owns this file: the Bag tab of the Shop screen (owned items grouped, then TMs) and what a tap does.
+// R14 batch 2 (PLAN 181): a tap on a row opens its card in place ([ItemCard]); the card's button starts what a tap used to do at once.
 
-internal class BagActions(private val s: GamePage, private val mons: MonActions) {
+internal class BagActions(private val s: GamePage, private val mons: MonActions, private val host: CardHost) {
     private val data get() = s.data
     private val state get() = s.state
 
@@ -25,27 +28,30 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions)
         "Evolution" to listOf(ItemKind.EVOLUTION),
         "Held" to listOf(ItemKind.HELD),
         "Fossils" to listOf(ItemKind.FOSSIL),
+        "Escape" to listOf(ItemKind.ESCAPE),
     )
 
     /** Fills [into] with the bag sections. */
     fun fill(into: LinearLayout) {
         val ctx = s
-        val owned = state.bag.filter { it.value > 0 }.keys
+        val kept = host.open.key?.takeIf { host.open.keepEmpty && it.startsWith("bag:") }?.removePrefix("bag:") // Y5: the open card whose last ball a trade took stays, showing 0
+        val owned = state.bag.filter { it.value > 0 }.keys + listOfNotNull(kept)
         var any = false
         fun section(title: String, ids: List<String>) {
             if (ids.isEmpty()) return
             any = true
-            into.addView(Bits.sect(ctx, title, "${ids.sumOf { state.count(it) }} items"))
-            for (id in ids.sortedBy { Items.name(it) }) into.addView(itemRow(id))
+            val n = ids.sumOf { state.count(it) }
+            into.addView(Bits.sect(ctx, title, "$n item${if (n == 1) "" else "s"}"))
+            for (id in ids.sortedBy { Items.name(it) }) into.addView(if (host.open.isOpen(CardKeys.bagItem(id))) itemCard(id) else itemRow(id), cardLp(host.open.key == CardKeys.bagItem(id)))
         }
         for ((title, kinds) in groups) section(title, owned.filter { Items.def(it)?.kind in kinds })
-        // escape items and anything the catalogue doesn't know
+        // anything the catalogue doesn't know
         section("Other", owned.filter { id -> groups.none { (_, k) -> Items.def(id)?.kind in k } })
 
         if (state.tms.isNotEmpty()) {
             any = true
             into.addView(Bits.sect(ctx, "TMs", "${state.tms.size} owned"))
-            for (move in state.tms.sortedBy { data.move(it)?.name ?: it }) into.addView(tmRow(move))
+            for (move in state.tms.sortedBy { data.move(it)?.name ?: it }) into.addView(if (host.open.isOpen(CardKeys.bagTm(move))) tmCard(move) else tmRow(move), cardLp(host.open.key == CardKeys.bagTm(move)))
         }
         if (!any) into.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply {
             text = "Your bag is empty. Items drop while you study, and the shop sells more."
@@ -53,25 +59,73 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions)
         })
     }
 
+    /** A card sits 2 dp under the row above and 8 dp above the next; a folded row has its own 6 dp below (Bits.cardRow). */
+    private fun cardLp(card: Boolean): LinearLayout.LayoutParams = LinearLayout.LayoutParams(-1, -2).also {
+        if (card) { it.topMargin = Ui.dp(s, 2); it.bottomMargin = Ui.dp(s, 8) } else it.bottomMargin = Ui.dp(s, 6)
+    }
+
+    /** The count "×N" and the small ▾ at the right of a folded row (the card says it in words). */
+    private fun rowEnd(count: String?): View = LinearLayout(s).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        if (count != null) addView(Ui.text(s, 13f, 900, R.color.ag_sub1).apply { text = count })
+        addView(ItemCard.chevron(s, "▾"), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(s, 2) })
+    }
+
+    /** A folded row: icon, name, the item's line, "×N", ▾. A tap opens its card (it no longer acts). */
     private fun itemRow(id: String): View {
         val ctx = s
         val n = state.count(id)
-        val count = Ui.text(ctx, 13f, 900, R.color.ag_sub1).apply { text = "×$n" }
-        val row = Bits.cardRow(ctx, Bits.itemTile(ctx, id), Bits.bodyText(ctx, Items.name(id), Items.def(id)?.note), count)
-        row.setOnClickListener { tap(id) }
+        val line = ItemInfo.plain(ItemInfo.line(data, id))
+        val row = Bits.cardRow(ctx, Bits.itemTile(ctx, id), Bits.bodyText(ctx, Items.name(id), line), rowEnd("×$n"))
+        row.contentDescription = ItemCardPlan.foldedLabel("${Items.name(id)}, $line, $n owned")
+        row.setOnClickListener { host.toggleCard(CardKeys.bagItem(id)) }
         return row
     }
 
+    /** A folded TM row: name and type chip (no count: a TM is owned once). */
     private fun tmRow(move: String): View {
         val ctx = s
         val m = data.move(move)
         val tile = Bits.tmTile(ctx, m?.type)
-        val mid = Bits.bodyText(ctx, Items.tmName(data, move), Bits.moveStats(data, move))
+        val mid = Bits.bodyText(ctx, Items.tmName(data, move), null)
         if (m != null) mid.addView(Bits.typeRow(ctx, listOf(m.type)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
-        val teach = Ui.text(ctx, 12f, 900, R.color.ag_mauve).apply { text = "Teach" }
-        val row = Bits.cardRow(ctx, tile, mid, teach)
-        row.setOnClickListener { tapTm(move) }
+        val row = Bits.cardRow(ctx, tile, mid, rowEnd(null))
+        row.contentDescription = ItemCardPlan.foldedLabel("${Items.tmName(data, move)}, ${m?.type?.label.orEmpty()}")
+        row.setOnClickListener { host.toggleCard(CardKeys.bagTm(move)) }
         return row
+    }
+
+    // ---- the opened cards ----
+
+    /** The card of an owned item: its texts, the action button of its kind, and for a ball the trade-up. */
+    private fun itemCard(id: String): View {
+        val key = CardKeys.bagItem(id)
+        val kind = Items.def(id)?.kind
+        val none = state.count(id) <= 0 // Y5: a card kept open after a trade took the last ball
+        val act = BagAct.of(kind)?.let { a -> ItemCard.Act(a.label, a.usableNow(state) && !none, if (none) "You have none" else a.offFight) { tap(id) } }
+        val offer = if (kind == ItemKind.BALL) BallTrade.offer(state, id) else null
+        val trade = offer?.let { o ->
+            val confirming = host.open.confirming && offer.canTrade
+            ItemCard.Trade(o, confirming, ItemCardPlan.tradeConfirm(state, o),
+                onAsk = { host.open.confirmTrade(true); s.requestRender() },
+                onCancel = { host.open.confirmTrade(false); s.requestRender() },
+                onConfirm = { tradeUp(id) })
+        }
+        return ItemCard.build(s, ItemCard.Spec(id, act = act, trade = trade, onFold = { host.toggleCard(key) })).also { host.cardShown(it) }
+    }
+
+    private fun tmCard(move: String): View {
+        val key = CardKeys.bagTm(move)
+        val act = ItemCard.Act(BagAct.TEACH.label, true, null) { tapTm(move) }
+        return ItemCard.build(s, ItemCard.Spec(null, move, act = act, onFold = { host.toggleCard(key) })).also { host.cardShown(it) }
+    }
+
+    /** One batch of the trade-up (PLAN 199): the confirm closes, the card stays open with the new counts. */
+    private fun tradeUp(ball: String) {
+        host.open.confirmTrade(false)
+        host.open.keepWhenEmpty() // Y5: if this uses the last ball of the card, the card stays open showing 0
+        s.act { g -> BallTrade.trade(g.state, ball) }
     }
 
     // ---- what a tap does ----

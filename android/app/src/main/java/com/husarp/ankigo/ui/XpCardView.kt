@@ -55,29 +55,46 @@ internal class XpCardView(ctx: Context, val card: XpCard, val slim: Boolean, flo
 
     override fun onTouchEvent(event: MotionEvent?): Boolean = false
 
+    /** The bar's runs: one for a plain gain; per level crossed the loop of [XpLoop] (fill to the end, hold, empty, on). */
+    private val segs = XpLoop.segments(card.levelFrom, card.barFrom, card.levelTo, card.barTo)
+
+    /** How long [play] takes in ms (the arena keeps the card up for it). */
+    val playMs: Long = START_MS + if (!card.levelUp) PLAIN_MS else segs.withIndex().sumOf { (i, s) -> (if (i > 0) XpLoop.HOLD_MS else 0L) + XpLoop.runMs(s.length) }
+
     /** Starts the bar (and the level-up text); [reduce]: no animation, the end state right away. */
     fun play(reduce: Boolean) {
         if (reduce) {
             bar.setMeaning(BarMeaning.XP, card.barTo, false)
-            if (card.levelUp) levelUpText()
+            if (card.levelUp) levelUpText(card.levelTo)
             return
         }
         if (!card.levelUp) {
-            postDelayed({ bar.setMeaning(BarMeaning.XP, card.barTo, true) }, 260)
+            postDelayed({ bar.setMeaning(BarMeaning.XP, card.barTo, true) }, START_MS)
             return
         }
-        postDelayed({ bar.setMeaning(BarMeaning.XP, 1f, true) }, 260)
-        postDelayed({
-            levelUpText()
-            bar.setMeaning(BarMeaning.XP, 0f, false)
-            bar.setMeaning(BarMeaning.XP, card.barTo, true)
-        }, 260 + 520)
+        // PLAN 182: from the XP it had, to the end; then per level: hold, "Level up! Lv N", empty, on to the next end
+        var t = START_MS
+        for ((i, s) in segs.withIndex()) {
+            val ms = XpLoop.runMs(s.length)
+            if (i > 0) t += XpLoop.HOLD_MS
+            val at = t
+            postDelayed({
+                if (i > 0) { levelUpText(s.level); bar.setMeaning(BarMeaning.XP, 0f, false) }
+                bar.setMeaning(BarMeaning.XP, s.to, ms > 0L, maxOf(ms, 1L))
+            }, at)
+            t += ms
+        }
     }
 
-    private fun levelUpText() {
-        note.text = if (micro) "Lv ${card.levelTo}!" else "Level up! Lv ${card.levelTo}"
+    private fun levelUpText(level: Int) {
+        note.text = if (micro) "Lv $level!" else "Level up! Lv $level"
         note.setTextColor(Ui.c(context, R.color.ag_peach))
         if (!micro) { sparkle.visibility = VISIBLE; sparkle.twinkle() }
+    }
+
+    private companion object {
+        const val START_MS = 260L   // the card's slide-in
+        const val PLAIN_MS = 450L   // a plain gain's slide
     }
 
     /** A small four-point star that pulses. */

@@ -122,16 +122,19 @@ class HelpModelTest {
         assertEquals(Tuning.CASH_PER_ANSWER, n.cashPerAnswer)
         assertEquals(Tuning.CASH_TIER, n.cashTier)
         assertEquals(Tuning.CASH_PER_WIN, n.cashPerWin)
-        assertEquals(Tuning.DAILY_BONUS_BASE, n.dailyBonusStart)
-        assertEquals(Tuning.DAILY_BONUS_PER_DAY, n.dailyBonusPerStreakDay)
-        assertEquals(Tuning.DAILY_BONUS_MAX_DAYS, n.dailyBonusMaxStreakDays)
-        assertEquals(Tuning.DAILY_BONUS_BASE + Tuning.DAILY_BONUS_PER_DAY * Tuning.DAILY_BONUS_MAX_DAYS, n.dailyBonusMax)
+        // R14-B2-D: the daily gift's chances come from the table (DailyGift), the Master Ball day count from the Best streak row
+        assertEquals(Tuning.GIFT_MAX_DAYS, n.giftMaxStreakDays)
+        assertEquals(listOf(75, 22, 3), listOf(n.giftCommonFirst, n.giftUncommonFirst, n.giftRareFirst))
+        assertEquals(listOf(40, 40, 20), listOf(n.giftCommonLast, n.giftUncommonLast, n.giftRareLast))
+        assertEquals(365, n.masterBallStreakDays)
         val money = GameGuide.chapter(GameGuide.MONEY)!!.let { (listOf(it.intro) + it.points).joinToString(" ") }
         assertTrue(money.contains("+${Tuning.CASH_PER_ANSWER} for every answer"))
-        assertTrue(money.contains("in the first ${Tuning.CASH_TIER} ₽ every answer and every win pays"))   // PLAN 125's curve
+        assertTrue(money.contains("in the first ${Tuning.CASH_TIER} ₽ every answer pays ${Tuning.CASH_PER_ANSWER} ₽ and every win ${Tuning.CASH_PER_WIN} ₽") && money.contains("then a third, a quarter"))   // PLAN 125's curve
         assertTrue(money.contains("+${Tuning.CASH_PER_WIN} for every wild Pokémon you defeat or catch"))   // R13 Part C
-        // Adam's decision: the coin / incense doubles the answer money, not the daily bonus
-        assertTrue(money.contains("Amulet Coin") && money.contains("Luck Incense") && money.contains("does not double it"))
+        // Adam's decision: the coin / incense doubles the answer and win money (R14-B2-D: the daily goal gives a gift now, not money)
+        assertTrue(money.contains("Amulet Coin") && money.contains("Luck Incense") && money.contains("doubles the money of your answers and wins"))
+        assertFalse(money.contains("bonus of"))
+        assertTrue(money.contains("Daily gift") && money.contains("it is never a Master Ball") && money.contains("doesn't touch your money"))
         assertTrue(Items.def("amulet-coin") != null && Items.def("luck-incense") != null)
     }
 

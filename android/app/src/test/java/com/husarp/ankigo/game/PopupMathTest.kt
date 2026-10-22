@@ -35,6 +35,16 @@ class PopupMathTest {
         assertEquals(3, m[0].total)
     }
 
+    @Test fun giftsAreTheDailyGiftEventsInOrder() { // R14-B2-D
+        val g = PopupMath.gifts(listOf(GameEvent.Info("x"), GameEvent.DailyGift("poke-ball", null, 3, 6), GameEvent.ItemFound("potion", 1), GameEvent.DailyGift(null, "thunderbolt", 1, 7)))
+        assertEquals(listOf("poke-ball", null), g.map { it.item })
+        assertEquals(listOf(null, "thunderbolt"), g.map { it.tm })
+        assertEquals(listOf(3, 1), g.map { it.count })
+        assertEquals(listOf(6, 7), g.map { it.streakDays })
+        assertEquals("Daily gift", PopupMath.GIFT_TITLE)
+        assertTrue(PopupMath.gifts(listOf(GameEvent.ItemFound("potion", 1))).isEmpty())
+    }
+
     @Test fun descriptionIsTheCatalogueNote() {
         assertTrue(PopupMath.description("potion").isNotBlank())
         assertEquals("No description.", PopupMath.description("not-an-item"))

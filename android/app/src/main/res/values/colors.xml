@@ -64,4 +64,6 @@
     <color name="ag_mu_quarter">#40a02b</color>
     <color name="ag_mu_zero">#8c90a2</color>
     <color name="ag_mu_strong">#1e66f5</color>
+    <!-- App icon (PLAN 148, round 14): the plain off-white background layer of the adaptive launcher icon -->
+    <color name="ic_launcher_background">#F6F3EC</color>
 </resources>

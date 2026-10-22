@@ -50,7 +50,7 @@ object BattleDetails {
 
         // header: sprite, name (♂/♀ in colour, ★ when shiny), #num / level, types
         val img = ImageView(ctx)
-        MonPreview.show(ctx, battle.wild.lookNum(data), info.shiny, img)
+        MonPreview.show(ctx, battle.wild.lookNum(data), info.shiny, img, idle = true)
         img.setOnClickListener { SpriteViewer.show(ctx, battle.wild.lookNum(data), info.shiny) } // R10-B1: full-screen viewer
         img.contentDescription = "Show the picture full screen"
         val name = Ui.text(ctx, if (compact) 18f else 20f, 900, R.color.ag_text).apply {

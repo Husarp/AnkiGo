@@ -80,7 +80,8 @@ internal class FloatBattleView(
      * the box, changed a look, ...): the main's card and picture follow. Not while an animation plays; no reload when nothing changed.
      */
     internal fun refreshPicture() {
-        if (player?.idle != false) panel?.refreshMain()
+        if (player?.idle == false) return
+        if (player?.playPending() != true) panel?.refreshMain() // PLAN 191: fight events made on another screen play here once; else the picture follows the game
     }
 
     /** Hides the window and detaches the sink; the object can [show] again. */
@@ -114,6 +115,7 @@ internal class FloatBattleView(
         if (attached || panel == null) return
         attached = true
         LiveSession.addSink(sink)
+        panel?.post { player?.playPending() } // PLAN 191: the window is up: fight events made on another screen (a Bag item, a team edit) play now, once
     }
 
     private fun detach() {

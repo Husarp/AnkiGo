@@ -27,6 +27,7 @@ import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.StatCalc
+import com.husarp.ankigo.game.SwitchQueue
 
 // The Pokémon tab (the Team tab until round 4): one screen with three sections (Team / Box / Pokedex), a Compare picking
 // mode and a team Edit mode. Team = battle card + team rows (a ScrollView). Box = a ListView of 6-cell rows (recycled).
@@ -530,6 +531,11 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         // the types stay chips
         val r2 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         r2.addView(Bits.typeRow(ctx, data.sp(mon.species).types))
+        // PLAN 206: the Pokémon a switch waits for: it comes in right after the card on screen is answered
+        if (state.queuedMain?.uid == mon.uid) {
+            val next = Ui.pill(ctx, SwitchQueue.ROW_MARK.uppercase(), R.color.ag_yellow).apply { maxLines = 1 }
+            r2.addView(next, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 6) })
+        }
         body.addView(r2, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
 
         val frac = mon.hp.toFloat() / maxHp

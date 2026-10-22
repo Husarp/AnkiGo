@@ -44,7 +44,8 @@ object SwitchHitText {
 
 /**
  * "Make main" / "Set as main" stay silent when the change is visible on screen (no toast, as before); when the switch cost a hit the
- * toast says so ([SwitchHitText]). A failed result is returned as it is.
+ * toast says so ([SwitchHitText]). PLAN 206: a switch that only waits for the next answer ([GameEvent.SwitchQueued]) changes nothing on
+ * screen yet, so its toast stays. A failed result is returned as it is.
  */
 fun ActionResult.quietUnlessHit(): ActionResult =
-    if (ok && events.none { it is GameEvent.SwitchHit || it is GameEvent.MainHealed }) copy(message = "") else this
+    if (ok && events.none { it is GameEvent.SwitchHit || it is GameEvent.MainHealed || it is GameEvent.SwitchQueued }) copy(message = "") else this

@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.R
 import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.TestData
@@ -37,6 +38,23 @@ class ItemIconPlanTest {
         }
         assertTrue(ItemIconPlan.DRAWN.all { it in Items.ALL })
         assertEquals(ItemIconSpec.Drawn("cracked-pot"), ItemIconPlan.of("cracked-pot"))
+    }
+
+    @Test fun everyDrawnItemMapsToItsOwnPixelIcon() {
+        val expect = mapOf(
+            "sweet-apple" to R.drawable.item_sweet_apple, "tart-apple" to R.drawable.item_tart_apple,
+            "cracked-pot" to R.drawable.item_cracked_pot, "chipped-pot" to R.drawable.item_chipped_pot,
+            "linking-cord" to R.drawable.item_linking_cord,
+        )
+        assertEquals(ItemIconPlan.DRAWN, expect.keys)
+        for ((id, res) in expect) assertEquals(id, res, ItemIcons.drawnRes(id))
+        assertEquals(5, expect.values.toSet().size)
+    }
+
+    @Test fun otherItemsAndUnknownIdsGetNoPixelIconSoTheyKeepTheBadge() {
+        assertEquals(null, ItemIcons.drawnRes("poke-ball"))
+        assertEquals(null, ItemIcons.drawnRes("no-such-item"))
+        assertEquals(ItemSymbol.BAG, ItemIconPlan.symbolOf("no-such-item"))
     }
 
     @Test fun everyCatalogueItemHasAKindSymbolMatchingItsKind() {

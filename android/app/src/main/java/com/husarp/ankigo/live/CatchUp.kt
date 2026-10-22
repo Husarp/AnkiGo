@@ -69,11 +69,13 @@ fun catchUp(
         if (d <= 0) continue
         var button = 0
         var conf = GUESS
+        var wasNew = false
         if (d == 1) {
             val p = old ?: if (n.reps == 1) CardState.fresh(n) else null
             if (p != null) inferButton(p, n, steps(n), nowSec).let { button = it.button; conf = it.conf }
+            wasNew = p?.queue == 0   // PLAN 155
         }
-        out += LiveDetector.Event.Answer(n.id, button, conf, true)
+        out += LiveDetector.Event.Answer(n.id, button, conf, true, wasNew)
         repeat(d - 1) { out += LiveDetector.Event.Answer(n.id, 0, GUESS, true) }
     }
     return out

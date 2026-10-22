@@ -62,6 +62,8 @@ class GameActivity : AgActivity() {
     private lateinit var deckPane: View       // Study view: the deck list with pull-to-refresh
     private lateinit var homeRoot: View
     private var continueDeck: Anki.Deck? = null
+    private var topContinue: View? = null      // PLAN 204: small green Continue button in the top bar (before Pop out)
+    private var topContinueDeck: Anki.Deck? = null // its deck: the card rule (no "hide today"), set by loadContinue
     private var homeView = HomeView.STUDY
     private var parts: HomeLayout.Parts? = null  // what the last layout decision showed ([relayout])
     private var studyOnly = false             // "Study without the game" was chosen at first run
@@ -239,6 +241,7 @@ class GameActivity : AgActivity() {
         setPadding(Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 8), Ui.dp(this@GameActivity, 4))
         addView(topButton(R.drawable.ic_back, "Back", R.color.ag_text) { onBackPressed() })
         addView(Ui.text(this@GameActivity, 18f, 900, R.color.ag_text).apply { text = "Battle"; maxLines = 1; letterSpacing = -0.014f }, LinearLayout.LayoutParams(0, -2, 1f))
+        addView(ContinueBar.button(this@GameActivity).also { topContinue = it })
         addView(topButton(R.drawable.ic_pip, "Pop out: small battle window") { popOut() })
         addView(topButton(R.drawable.ic_more_vert, "Menu") { showMenu(it) })
     }
@@ -287,6 +290,15 @@ class GameActivity : AgActivity() {
     private fun updateContinueVisibility() {
         val want = if (continueDeck != null && topBar.visibility == View.VISIBLE && !inPip) View.VISIBLE else View.GONE
         if (continueSlot.visibility != want) continueSlot.visibility = want
+        val b = topContinue ?: return
+        val shown = ContinueBar.topButtonShown(topContinueDeck, topBar.visibility == View.VISIBLE, inPip)
+        ContinueBar.bindButton(b, topContinueDeck.takeIf { shown }) { openContinue(it) }
+    }
+
+    /** PLAN 204: the top bar's Continue button deck (null hides it). */
+    internal fun setTopContinueDeck(deck: Anki.Deck?) {
+        topContinueDeck = deck
+        updateContinueVisibility()
     }
 
     /** Shows the Continue bar for [deck] (null removes it). */
@@ -303,11 +315,14 @@ class GameActivity : AgActivity() {
     /** Reads AnkiDroid's deck list off the main thread; no permission or no AnkiDroid means no bar. Never blocks the battle. */
     private fun loadContinue() {
         val gen = ++continueGen
-        if (!Anki.hasPermission(this) || Anki.installed(this).none { it.pkg == Anki.pkg }) { setContinueDeck(null); return }
+        if (!Anki.hasPermission(this) || Anki.installed(this).none { it.pkg == Anki.pkg }) { setContinueDeck(null); setTopContinueDeck(null); return }
         Thread {
-            val deck = runCatching { ContinueBar.pick(this, Anki.decks(this)) }.getOrNull()
+            val decks = runCatching { Anki.decks(this) }.getOrNull()
+            val deck = decks?.let { ContinueBar.pick(this, it) }
+            val topDeck = decks?.let { ContinueBar.forCard(this, it) }
             runOnUiThread {
                 if (destroyed || gen != continueGen) return@runOnUiThread
+                setTopContinueDeck(topDeck)
                 // the × may have been tapped while the thread ran: the hidden-day rule is checked again here
                 setContinueDeck(deck?.takeIf { ContinueBar.hiddenDay(this) != ContinueBar.today() })
             }
@@ -385,6 +400,7 @@ class GameActivity : AgActivity() {
             panel?.refreshPrefs()   // Settings may have changed the card layout / compact cards while we were away
             val events = act { it.tick() }
             if (events.isEmpty()) { if (panelShown() && player?.idle != false) panel?.renderAll() } else handleEvents(events)
+            if (panelShown()) player?.playPending() // PLAN 191: fight events made on another screen (an item on the main from the Bag, a team edit) play now, once
             runPendingPopOut()
         } else {
             startLoad()
@@ -873,11 +889,14 @@ class GameActivity : AgActivity() {
     }
 
     private fun switchMain(uid: String) {
-        if (GameRepo.state?.main?.uid == uid) return
+        if (GameRepo.state?.main?.uid == uid && GameRepo.state?.pendingMain == null) return
         // The animations still waiting end first (the saved game has their numbers), so the switch starts from the fight as it stands:
         // then the short "Go, X!" plays, and the wild one's free hit on the new main (R10 W10) with its floating damage text after it.
         player?.finishNow()
-        val r = try { GameRepo.run(this) { it.setMain(uid) } } catch (t: Throwable) { Report.fail("PANEL", "setMain", t); return }
+        // PLAN 206: AnkiDroid shows a card unless a result holds the next fight: then the pick is queued, to come in right after that
+        // card is answered (the bar says "Switching after this card…"); picking the main again cancels it.
+        val cardShowing = player?.holding != true
+        val r = try { GameRepo.run(this) { it.requestMain(uid, cardShowing) } } catch (t: Throwable) { Report.fail("PANEL", "requestMain", t); return }
         handleEvents(r.events)
     }
 

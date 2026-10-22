@@ -6,13 +6,14 @@ import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.ui.MonActions
 import com.husarp.ankigo.ui.MonDetail
-import com.husarp.ankigo.ui.ShopInfo
+import com.husarp.ankigo.ui.CardKeys
+import com.husarp.ankigo.ui.ShopPlan
 import com.husarp.ankigo.ui.ShopPage
 import com.husarp.ankigo.ui.TeamPage
 import org.junit.Rule
 import org.junit.Test
 
-/* R3-X2: readable rename field (1), gender sign before the name (2), Shop info popup (3). (The Sync button of the Study bar was removed in Round 9.) */
+/* R3-X2: readable rename field (1), gender sign before the name (2), Shop item info (3; R14 batch 2: an opened card in the page, no popup any more). (The Sync button of the Study bar was removed in Round 9.) */
 class R3X2Shots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
     private val st get() = GameRepo.state!!
@@ -46,11 +47,19 @@ class R3X2Shots {
         }
     }
 
-    @Test fun shopInfoPopup() {
-        dialog("r3x2-shop-item") { ctx -> ShopInfo.item(ShopPage(ctx, NoHost), "thunder-stone") {} }
-        dialog("r3x2-shop-item-poor") { ctx -> st.cash = 100; ShopInfo.item(ShopPage(ctx, NoHost), "lucky-egg") {} }
-        dialog("r3x2-shop-tm") { ctx -> ShopInfo.tm(ShopPage(ctx, NoHost), "thunderbolt") {} }
-        dialog("r3x2-shop-tm-owned") { ctx -> st.tms += "thunderbolt"; ShopInfo.tm(ShopPage(ctx, NoHost), "thunderbolt") {} }
+    @Test fun shopItemCards() {
+        fun card(name: String, key: String, setup: () -> Unit = {}) {
+            paparazzi.shootPage(name, listOf(Variants.TALL)) { ctx ->
+                ShopCardKit.install()
+                st.tms.clear()
+                setup()
+                ShopCardKit.page(ctx, key, cash = st.cash).second
+            }
+        }
+        card("r3x2-shop-item", CardKeys.special(ShopPlan.Tile.Item("tart-apple")))
+        card("r3x2-shop-item-poor", CardKeys.special(ShopPlan.Tile.Item("amulet-coin"))) { st.cash = 100 }
+        card("r3x2-shop-tm", CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")))
+        card("r3x2-shop-tm-owned", CardKeys.special(ShopPlan.Tile.Tm("thunderbolt"))) { st.tms += "thunderbolt" }
     }
 
     @Test fun shopPageStillShowsTheSpecials() {

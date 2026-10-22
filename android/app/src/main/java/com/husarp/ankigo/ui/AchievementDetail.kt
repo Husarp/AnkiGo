@@ -110,6 +110,10 @@ internal object AchievementDetail {
             AchStep.State.LOCKED -> body.addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = s.lockedText },
                 LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
         }
+        s.reward?.let { reward -> // R14-B2-D: a tier with a reward says so, whatever its state ("Reward: Master Ball")
+            body.addView(Ui.text(ctx, 11.5f, 900, if (locked) R.color.ag_sub0 else R.color.ag_mauve).apply { text = AchPageMath.rewardText(reward) },
+                LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 3) })
+        }
         row.addView(body, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12) })
         when (s.state) {
             AchStep.State.REACHED -> row.addView(ImageView(ctx).apply { setImageResource(R.drawable.ic_check); setColorFilter(Ui.c(ctx, R.color.ag_green)) }, LinearLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18)))

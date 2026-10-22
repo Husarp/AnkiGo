@@ -1,15 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Money (round 10 D6-C): a stack of three gold coins. Fixed colours, the same in light and dark: never tint it. -->
+<!-- Money (PLAN 144, round 14): the picked "144C" gold coin without its outer rim ring: soft gold gradient face, inner groove (light offset
+     lines under the dark ball lines and button) and a shine. Fixed colours, the same in light and dark: never tint it. The drawing is
+     unchanged in a 24 grid; the viewport is cropped to the face (+ outline), 3.25..20.75, so the coin fills the icon box. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-    <path android:fillColor="#C98A10" android:strokeColor="#8F5D06" android:strokeWidth="0.9"
-        android:pathData="M4,16.5v2.2c0,1.6 3.6,2.8 8,2.8s8,-1.2 8,-2.8v-2.2" />
-    <path android:fillColor="#C98A10" android:strokeColor="#8F5D06" android:strokeWidth="0.9"
-        android:pathData="M4,12.8V15c0,1.6 3.6,2.8 8,2.8s8,-1.2 8,-2.8v-2.2" />
-    <path android:fillColor="#C98A10" android:strokeColor="#8F5D06" android:strokeWidth="0.9"
-        android:pathData="M4,9.1v2.2c0,1.6 3.6,2.8 8,2.8s8,-1.2 8,-2.8V9.1" />
-    <path android:fillColor="#F4C33F" android:strokeColor="#8F5D06" android:strokeWidth="0.9"
-        android:pathData="M4,8.6a8,3.4 0 1,0 16,0a8,3.4 0 1,0 -16,0Z" />
-    <path android:strokeColor="#8F5D06" android:strokeWidth="0.9"
-        android:pathData="M7.8,8.6a4.2,1.5 0 1,0 8.4,0a4.2,1.5 0 1,0 -8.4,0Z" />
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="24dp" android:height="24dp" android:viewportWidth="17.5" android:viewportHeight="17.5">
+    <group android:translateX="-3.25" android:translateY="-3.25">
+        <!-- gold face r 8.4; radial gradient cx .35 cy .3 r .9 of its 3.6..20.4 box = centre 9.48,8.64 radius 15.12 -->
+        <path android:strokeColor="#8F5D06" android:strokeWidth="0.7"
+            android:pathData="M3.6,12a8.4,8.4 0 1,0 16.8,0a8.4,8.4 0 1,0 -16.8,0Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="radial" android:centerX="9.48" android:centerY="8.64" android:gradientRadius="15.12">
+                    <item android:offset="0" android:color="#FFE98A" />
+                    <item android:offset="0.6" android:color="#F4C33F" />
+                    <item android:offset="1" android:color="#D9981C" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <!-- light edge, 0.75 below the dark lines -->
+        <group android:translateY="0.75">
+            <path android:strokeColor="#D9FFF4C4" android:strokeWidth="1.8" android:pathData="M3.9,12h5M15.1,12h5" />
+            <path android:strokeColor="#D9FFF4C4" android:strokeWidth="1.8"
+                android:pathData="M9.1,12a2.9,2.9 0 1,0 5.8,0a2.9,2.9 0 1,0 -5.8,0Z" />
+        </group>
+        <path android:strokeColor="#8F5D06" android:strokeWidth="1.8" android:pathData="M3.9,12h5M15.1,12h5" />
+        <path android:fillColor="#F4C33F" android:strokeColor="#8F5D06" android:strokeWidth="1.8"
+            android:pathData="M9.1,12a2.9,2.9 0 1,0 5.8,0a2.9,2.9 0 1,0 -5.8,0Z" />
+        <path android:strokeColor="#CCFFFFFF" android:strokeWidth="1.3" android:strokeLineCap="round"
+            android:pathData="M6.2,8.2a7,7 0 0,1 4.3,-3.1" />
+    </group>
 </vector>

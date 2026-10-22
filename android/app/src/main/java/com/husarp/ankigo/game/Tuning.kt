@@ -165,15 +165,21 @@ object Tuning {
 
     // ---- Cash, items, shop ----
     // AnkiGo's money (not Ankimon's 40 per 10 reviews, cap 400): counted answers and won fights (a defeat or a catch, R13 Part C) pay.
-    // PLAN 125: no hard daily cap; the day's money comes in tiers of CASH_TIER and each tier is harder to earn (linear): in the first
-    // tier every answer pays CASH_PER_ANSWER and every win CASH_PER_WIN, in the second every 2nd one does, then every 3rd, 4th ...
-    // (Economy). The daily-goal bonus grows with the goal streak and sits outside the tiers.
+    // PLAN 125/198: no hard daily cap; the day's money comes in tiers of CASH_TIER and each tier is harder to earn (linear): in tier N
+    // every answer earns CASH_PER_ANSWER / N and every win CASH_PER_WIN / N, added up exactly and paid in whole coins (Economy).
+    // R14-B2-D (PLAN 125 / R10 X3): reaching the daily goal gives a gift from a tiered pool (DailyGift) instead of money; money sits only in the tiers.
     const val CASH_PER_ANSWER = 5       // any button, Again too
     const val CASH_PER_WIN = 10         // a wild Pokémon defeated or caught (auto catch or ball); never a miss, an escape or a release
     const val CASH_TIER = 500           // counted BEFORE the Amulet Coin / Luck Incense doubling (so those keep doubling at every tier)
-    const val DAILY_BONUS_BASE = 50     // first goal day
-    const val DAILY_BONUS_PER_DAY = 5   // + per goal-streak day before today ...
-    const val DAILY_BONUS_MAX_DAYS = 10 // ... up to this many (so at most 100)
+    // Daily gift (DailyGift.kt): the chance of each tier grows in a straight line with the goal streak, from day 1 to day GIFT_MAX_DAYS (then it stays).
+    const val GIFT_MAX_DAYS = 30            // the streak (in days) at which the chances stop growing
+    const val GIFT_UNCOMMON_FIRST = 22      // percent on streak day 1 ...
+    const val GIFT_UNCOMMON_LAST = 40       // ... and on day GIFT_MAX_DAYS and later
+    const val GIFT_RARE_FIRST = 3           // (common = the rest: 75 % on day 1, 40 % on day 30)
+    const val GIFT_RARE_LAST = 20
+    val GIFT_COMMON = listOf("poke-ball" to 3, "potion" to 2, "super-potion" to 1)    // item to count; each entry equally likely in its tier
+    val GIFT_UNCOMMON = listOf("great-ball" to 2, "hyper-potion" to 1, "poke-ball" to 5)
+    val GIFT_RARE_ITEMS = listOf("ultra-ball" to 1)  // the rare tier also holds one evolution stone and one TM (see DailyGift)
     val ITEM_COUNTDOWN = 3..385         // reviews until the next random item
     const val SHOP_BASE_SLOTS = 3       // + trainer level / 5
     const val SHOP_SLOTS_PER_LEVELS = 5

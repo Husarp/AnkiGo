@@ -12,7 +12,8 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Round 10, W10: "Switch Pokémon" (GameActivity.switchMain) with a wild one in the fight. The entrance plays first and the bar still
+ * Round 10, W10: "Switch Pokémon" (GameActivity.switchMain) with a wild one in the fight. R14-D (PLAN 206): the tap queues the
+ * switch and the next answer brings it in; [BattleShotKit.Built.switchAfterCard] is that tap + answer. The entrance plays first and the bar still
  * shows the HP from before the hit; the wild one's attack lands after it and the bar ends on the HP the saved game has.
  * PNGs: r10-switchhit-now (right after the tap), r10-switchhit-done (4 s later).
  */
@@ -46,7 +47,7 @@ class R10SwitchHitShots {
         val t2 = GameRepo.state!!.mon("t2")!!
         val before = t2.hp
         val max = StatCalc.maxHp(FakeGame.data, t2)
-        b.call("switchMain", "t2")
+        b.switchAfterCard("t2")
         assertEquals("t2", GameRepo.state!!.main!!.uid)
         assertEquals("t2", b.arena!!.playerUid)
         assertTrue("the wild one hit it: ${t2.hp} of $before", t2.hp < before)
@@ -63,7 +64,7 @@ class R10SwitchHitShots {
         val b = BattleShotKit.bound(ctx)
         val t2 = GameRepo.state!!.mon("t2")!!
         val before = t2.hp
-        b.call("switchMain", "t2")
+        b.switchAfterCard("t2")
         assertTrue(t2.hp < before)
         assertEquals("t2", b.arena!!.playerUid)
         assertEquals(t2.hp, b.arena!!.playerHpShown)
@@ -73,13 +74,13 @@ class R10SwitchHitShots {
     /** The pictures: right after the tap, and 4 s later (phone + split, light + dark). */
     @Test fun now() = paparazzi.shootWith("r10-switchhit-now", sizes, offsetMillis = 60) { ctx ->
         val b = BattleShotKit.bound(ctx)
-        b.call("switchMain", "t2")
+        b.switchAfterCard("t2")
         b.root
     }
 
     @Test fun done() = paparazzi.shootWith("r10-switchhit-done", sizes, offsetMillis = 4000) { ctx ->
         val b = BattleShotKit.bound(ctx)
-        b.call("switchMain", "t2")
+        b.switchAfterCard("t2")
         b.root
     }
 

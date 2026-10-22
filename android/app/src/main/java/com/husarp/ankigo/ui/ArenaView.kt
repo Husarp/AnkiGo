@@ -51,8 +51,8 @@ enum class FloatStyle { DAMAGE, BIG, HEAL, MISS }
  */
 class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // ---- sprite boxes: holder (bobs) > sprite (lunge / shake / faint / enter) ----
-    val enemySprite = SpriteView(ctx).apply { scaleDp = 2f }
-    val playerSprite = SpriteView(ctx).apply { scaleDp = 2f }
+    val enemySprite = SpriteView(ctx).apply { scaleDp = 2f; idleMotion = true }   // PLAN 205: a still picture floats
+    val playerSprite = SpriteView(ctx).apply { scaleDp = 2f; idleMotion = true }
     private val ball = ImageView(ctx).apply { visibility = GONE }
     private val enemyHolder = FrameLayout(ctx).apply { clipChildren = false; clipToPadding = false }
     private val playerHolder = FrameLayout(ctx).apply { clipChildren = false; clipToPadding = false }
@@ -90,6 +90,21 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         contentDescription = "New: not caught yet"
     }
     private val enemyBlock = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+
+    /**
+     * PLAN 140: the two info boxes live in this layer, which (like every group inside the boxes, see [init]) clips nothing. The arena
+     * clips EACH of its children at the child's own bounds (`clipChildren`, the sprites' faint / entrance animations rely on it), so a
+     * box that was a direct child lost everything it draws outside its own rectangle: a drop shadow, a text outline, a bar ring. The
+     * layer is as big as the arena (so the boxes keep the arena's coordinates) and is clipped by it only at the arena's own edge.
+     */
+    private val cardLayer = FrameLayout(ctx)
+
+    /**
+     * PLAN 207: the small side pop-ups (the team XP cards, the status note) live in this layer. The arena draws it AGAIN in
+     * [onDrawForeground], after the battle frame, so the frame never covers a pop-up (like the NEW sticker, PLAN 139); the pop-ups are
+     * not clipped at their own box either. It is the last child, as big as the arena.
+     */
+    private val popLayer = FrameLayout(ctx)
 
     // ---- player info card ----
     private val pName = FitName.make(ctx)
@@ -251,6 +266,20 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         set(v) { if (v != field) { field = v; requestLayout() } }
 
     /**
+     * PLAN 140: what the battle frame draws deeper than its band (virtual dp, [FrameSafe]): [frameTopDp] the top (the ice's icicles),
+     * [frameCornerDp] the side of the square each corner pattern covers. With [frameInsetDp] they are the frame's safe area: the info
+     * boxes stay inside it, so nothing of the frame is drawn over a box. 0 / 0 = just the band.
+     */
+    var frameTopDp: Float = 0f
+        set(v) { if (v != field) { field = v; requestLayout() } }
+    var frameCornerDp: Float = 0f
+        set(v) { if (v != field) { field = v; requestLayout() } }
+
+    /** The frame's safe area in virtual dp; null = no frame. */
+    private fun frameSafe(): FrameSafe? =
+        if (frameInsetDp <= 0f && frameTopDp <= 0f && frameCornerDp <= 0f) null else FrameSafe(frameInsetDp, max(frameInsetDp, frameTopDp), frameCornerDp)
+
+    /**
      * Round 10 B20: the Pokémon size ([PokemonSize], [AppPrefs.pokemonSize] / 100; the battle panel sets it): both sprites are drawn this much
      * bigger or smaller around their feet in every layout, kept inside the room the layout has. 1 = the layout before the setting.
      */
@@ -281,6 +310,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     init {
         clipChildren = true
+        // PLAN 140: nothing inside the info boxes (and the layers that hold the boxes and the pop-ups) cuts a child at its own bounds
+        for (g in listOf<ViewGroup>(cardLayer, popLayer, enemyBlock, enemyCard, playerCard, eRow, pRow, eNumRow, pNumRow, pXpRow, eHpBox, pHpBox, eTypes, eIcons, eStatus, pStatus)) {
+            g.clipChildren = false
+            g.clipToPadding = false
+        }
         background = backdrop   // the plain gradient, or a downloaded battle picture (R7-07)
         backdrop.onPictureChange = { shown -> setPlatformsShown(!shown); invalidateGlass(); requestLayout() }   // R8-04: another picture = other stand points
         backdrop.onSettled = { fireBackdropReady() }   // R9 C4: the next wild one waits for this
@@ -324,13 +358,15 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         addView(enemyHolder, LayoutParams(0, 0))
         addView(playerHolder, LayoutParams(0, 0))
         addView(moveFx, LayoutParams(-1, -1))
-        addView(enemyBlock, LayoutParams(0, -2))
-        addView(playerCard, LayoutParams(0, -2))
+        cardLayer.addView(enemyBlock, LayoutParams(0, -2))
+        cardLayer.addView(playerCard, LayoutParams(0, -2))
+        addView(cardLayer, LayoutParams(-1, -1))
         addView(newTag, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))
         addView(stars, LayoutParams(-1, -1))
         addView(banner, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))   // placed by [placeBanner] (translation), never by margins
-        addView(bubble, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))
+        popLayer.addView(bubble, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))
         addView(fx, LayoutParams(-1, -1))
+        addView(popLayer, LayoutParams(-1, -1))
         bubble.setOnClickListener { hideStatusBubble() }
         eStatus.onTap = { showStatusBubble(it) }
         pStatus.onTap = { showStatusBubble(it) }
@@ -340,11 +376,24 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         setNewTag(false)
     }
 
-    /** PLAN 139: the battle frame is this view's foreground, drawn over every child; the NEW sticker goes over it (and over the cards, fx and texts). */
+    /**
+     * PLAN 139: the battle frame is this view's foreground, drawn over every child; the NEW sticker goes over it (and over the cards, fx
+     * and texts). PLAN 207: so do the side pop-ups ([popLayer]), after it: the layer is skipped in the normal child pass ([drawChild])
+     * and drawn only here, so a pop-up is drawn once, above the frame.
+     */
     override fun onDrawForeground(canvas: Canvas) {
         super.onDrawForeground(canvas)
         if (newTag.visibility == VISIBLE && newTag.alpha > 0f) drawChild(canvas, newTag, drawingTime)
+        if (popLayer.visibility == VISIBLE && popLayer.childCount > 0) {
+            popOnTop = true
+            try { drawChild(canvas, popLayer, drawingTime) } finally { popOnTop = false }
+        }
     }
+
+    private var popOnTop = false
+
+    override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean =
+        if (child === popLayer && !popOnTop) false else super.drawChild(canvas, child, drawingTime)
 
     // ---------------------------------------------------------------- layout
 
@@ -374,7 +423,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val c0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle)
         val c = ArenaGeo.Cards(c0.wildW, c0.wildH + extraHeight(enemyBlock, c0.wildW, d, c0.wildH),
             c0.playerW, c0.playerH + extraHeight(playerCard, c0.playerW, d, c0.playerH))
-        val p0 = ArenaGeo.plan(w / d, h / d, c, cardsCompact, cardsUnderOwn)
+        val p0 = ArenaGeo.plan(w / d, h / d, c, cardsCompact, cardsUnderOwn, frameSafe())   // PLAN 140: the cards stay inside the frame's safe area
         val sized = PokemonSize.fitHolders(w / d, h / d, p0.wildSprite, p0.playerSprite, listOf(p0.wildCard, p0.playerCard), pokemonSize)
         val p = if (sized.changed) sizedPlan(p0, sized) else p0   // Round 10 B20: the same plan at 100 %
         setSpriteFactor(if (sized.changed) sized.f else 1f)
@@ -441,7 +490,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         // The boxes keep clear of each sprite's REAL art box (the pixels it draws, R9 D1) at the planned frame, not of the frame or a flat 85 % of it.
         fun planAt(size: Float, atOne: Float) = StageGeo.plan(w / d, h / d, stage, wildW, c.wildH, playerW, c.playerH, k0,
             panelScale, floorSp, frameInsetDp, { side -> enemySprite.artShare(side * d) }, { side -> playerSprite.artShare(side * d) },
-            cr.wildH, cr.playerH, minSp, fullSp, size, atOne, InfoBoxSkin.corners(infoBoxLook))   // Round 10 W7: the HUD look = the corners mode
+            cr.wildH, cr.playerH, minSp, fullSp, size, atOne, InfoBoxSkin.corners(infoBoxLook), frameSafe())   // Round 10 W7: the HUD look = the corners mode; PLAN 140: the frame's safe area
         // Round 10 B20: the plan at 100 % first (the layout before the setting); a Pokémon size draws both sprites that many times what a
         // frame 1 / size as big would ([SpriteView.sizeFactor]) and is planned with its sprites like that. A bigger size is used only while it
         // stays clear and its rule step is not lower than the 100 % plan's (so it is never a smaller Pokémon than 100 %).
@@ -633,7 +682,28 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             place(enemyBlock, min(dpi(InfoBoxGeo.W.toInt()), stripMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
             place(playerCard, min(dpi(InfoBoxGeo.W.toInt()), stripMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(8), dpi(8))
         }
+        clearStudyCards(w, h)
         setSpriteFactor(studySize(w, h))
+    }
+
+    /**
+     * PLAN 140: the study layouts put the cards at fixed margins from the corners; with a battle frame they move inside its band and
+     * off its corner squares ([FrameSafe.clearInto], in this arena's px). No frame = nothing moves.
+     */
+    private fun clearStudyCards(w: Int, h: Int) {
+        val s = frameSafe() ?: return
+        val d = Ui.dp(context, 1f)
+        val px = FrameSafe(s.edge * d, s.top * d, s.corner * d)
+        val ec = enemyBlock.layoutParams as LayoutParams       // TOP | LEFT
+        val pc = playerCard.layoutParams as LayoutParams       // BOTTOM | RIGHT
+        val ech = cardHeightPx(enemyBlock, ec.width)
+        val pch = cardHeightPx(playerCard, pc.width)
+        val wild = floatArrayOf(ec.leftMargin.toFloat(), ec.topMargin.toFloat(), ec.width.toFloat(), ech.toFloat())
+        px.clearInto(wild, w.toFloat(), h.toFloat())
+        ec.leftMargin = Math.round(wild[0]); ec.topMargin = Math.round(wild[1])
+        val ours = floatArrayOf((w - pc.rightMargin - pc.width).toFloat(), (h - pc.bottomMargin - pch).toFloat(), pc.width.toFloat(), pch.toFloat())
+        px.clearInto(ours, w.toFloat(), h.toFloat())
+        pc.rightMargin = Math.round(w - ours[0] - pc.width); pc.bottomMargin = Math.round(h - ours[1] - pch)
     }
 
     /** Round 10 B20: both sprites draw [f] times what they would in a holder 1 / [f] as big (1 = as before the setting; see [SpriteView.sizeFactor]). */
@@ -1216,6 +1286,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     fun setPlayerLevel(level: Int) {
+        xpTrace?.invoke("level $level")
         playerLevel = level
         pLvl = level
         pLevel.text = "Lv $level"; pLevel.setTextColor(levelColor(level))
@@ -1254,10 +1325,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /** XP bar (3 dp, sky) and the "XP 640 / 1000" label. */
-    fun setPlayerXp(current: Int, needed: Int, animate: Boolean) {
+    fun setPlayerXp(current: Int, needed: Int, animate: Boolean, durationMs: Long = 450) {
         val f = (if (needed > 0) current.toFloat() / needed else 1f).coerceIn(0f, 1f)
         pXpShown = f
-        setXpBar(f, animate)
+        xpTrace?.invoke("bar ${"%.2f".format(java.util.Locale.US, f)}${if (animate) " slide" else ""}")
+        setXpBar(f, animate, durationMs)
         showXp(DisplayNumbers.xp(current, needed))
     }
 
@@ -1281,10 +1353,13 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun hpColorOf(f: Float) = ink?.hp(f) ?: Ui.hpColor(context, f)
 
     /** The XP bar's fill at [f]: the look's sky, or the meaning colour of the chosen bar style. */
-    private fun setXpBar(f: Float, animate: Boolean) {
+    private fun setXpBar(f: Float, animate: Boolean, durationMs: Long = 450) {
         val i = ink
-        if (i == null) pXp.setMeaning(BarMeaning.XP, f, animate) else { pXp.clearGradient(); pXp.set(f, i.xp, animate) }
+        if (i == null) pXp.setMeaning(BarMeaning.XP, f, animate, durationMs) else { pXp.clearGradient(); pXp.set(f, i.xp, animate, durationMs) }
     }
+
+    /** Test-only (PLAN 138): hears what the XP bar and the level number are told, in order ("bar 1.00", "bar 0.00", "bar 0.40 slide", "level 11"). */
+    internal var xpTrace: ((String) -> Unit)? = null
 
     /** The glass boxes draw their picture again (the picture, its crop or the arena changed under them). */
     private fun invalidateGlass() {
@@ -1321,6 +1396,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
                 if (look == InfoBoxLook.TODAY) Ui.rounded(translucentCard(context), baseRadius, context)   // exactly as the boxes always were
                 else InfoBoxDrawable(d, InfoBoxSkin.layers(look, card, dark, typeColor.takeIf { it != 0 }), radius, if (glass) glassOf else null)
             v.elevation = lift
+            cardLayer.elevation = lift   // PLAN 140: the layer keeps the boxes' place in the arena's depth order (over fx / texts, under the attacker and the status note)
         }
         dress(enemyCard, eTypeColor, eGlass ?: ArenaGlass(context, this, enemyCard, { backdrop.shown }, { stageNow }).also { eGlass = it })
         dress(playerCard, pTypeColor, pGlass ?: ArenaGlass(context, this, playerCard, { backdrop.shown }, { stageNow }).also { pGlass = it })
@@ -1353,13 +1429,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             if (sh == null) t.setShadowLayer(0f, 0f, 0f, 0)
             else t.setShadowLayer(Ui.dp(context, sh.radiusDp), Ui.dp(context, sh.dxDp), Ui.dp(context, sh.dyDp), sh.color)
         }
-        // the HUD's ring round the bars is drawn outside the bars' bounds: the rows that hold them stop clipping
+        // the HUD's ring round the bars is drawn outside the bars' bounds (like the texts' shadows): no group inside a box clips its children ([init])
         val ring = InfoBoxSkin.barRing(look)
         val d = resources.displayMetrics.density
         for (b in listOf(eHp, pHp, pXp)) b.foreground = if (ring == null) null else BarRingDrawable(b, ring, d)
         // the pixel bars' outline: the fixed dark palette's text colour on the looks with a fixed dark plate, else the theme's own
         for (b in listOf(eHp, pHp, pXp)) b.outlineColor = ink?.text
-        for (g in listOf<ViewGroup>(enemyCard, playerCard, pXpRow, eHpBox, pHpBox)) g.clipChildren = ring == null
         updateCards()
     }
 
@@ -1571,11 +1646,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     private fun slideXp(v: XpCardView, spot: XpCardSpot.Pos, load: (SpriteView) -> Unit) {
         load(v.sprite)
-        addView(v, LayoutParams(v.measuredWidth, v.measuredHeight, Gravity.TOP or Gravity.LEFT).also { it.leftMargin = spot.x; it.topMargin = spot.y })
+        popLayer.addView(v, LayoutParams(v.measuredWidth, v.measuredHeight, Gravity.TOP or Gravity.LEFT).also { it.leftMargin = spot.x; it.topMargin = spot.y })   // PLAN 207: above the frame
         val shown = XpShown(v, spot.x, spot.y)
         xpActive += shown
-        val finish = { removeView(v); xpActive -= shown; pumpXp() }
-        val hold = if (v.card.levelUp) 2500L else 1800L
+        val finish = { popLayer.removeView(v); xpActive -= shown; pumpXp() }
+        val hold = if (v.card.levelUp) maxOf(2500L, v.playMs + 900L) else 1800L   // PLAN 182: a loop of several levels needs longer
         if (reduceMotion()) {   // no slide: there, and gone after a moment
             v.play(true)
             v.postDelayed(finish, hold - 300)
@@ -1669,6 +1744,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val spec = xpFillSpec ?: return
         val f = spec.frac(fill)
         pXpShown = f
+        if (xpTrace != null && fill >= 1f) xpTrace?.invoke("bar ${"%.2f".format(java.util.Locale.US, f)}")
         setXpBar(f, false)
         showXp(DisplayNumbers.xp(spec.current(fill), spec.needed))
         if (fill >= 1f) xpFillSpec = null
@@ -1916,7 +1992,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         xpFx = null
         xpFillSpec = null
         xpQueue.clear()
-        xpActive.toList().forEach { it.view.animate().cancel(); removeView(it.view) }
+        xpActive.toList().forEach { it.view.animate().cancel(); popLayer.removeView(it.view) }
         xpActive.clear()
         floats.toList().forEach { it.animate().cancel(); removeView(it) }
         floats.clear()

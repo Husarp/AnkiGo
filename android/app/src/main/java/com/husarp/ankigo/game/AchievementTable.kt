@@ -26,6 +26,7 @@ class AchRow(
     val icon: String,                 // key the page draws later
     val ankimonBadge: Int? = null,    // Ankimon badges.json id of a one-off that is today's badge (5-10, 16-20)
     val tierBadges: List<Int> = emptyList(),
+    val rewards: Map<Int, String> = emptyMap(), // R14-B2-D: tier index -> item id put in the Bag when that tier is reached (only "Best streak" tier 4: the Master Ball)
 ) {
     val oneOff get() = tiers.size == 1
 }
@@ -38,6 +39,10 @@ object AchievementTable {
      * once by Achievements.migrate (GameState.achLadder remembers the version); a new game starts at [LADDER].
      */
     const val LADDER = 3
+
+    /** R14-B2 fix Y2: the threshold of the tier of row [id] that gives [item] as its reward (the days of the "Best streak" tier that gives the Master Ball), so texts can't drift from the rule. Null when no tier does. */
+    fun rewardThreshold(id: String, item: String): Long? =
+        ROWS.firstOrNull { it.id == id }?.let { r -> r.rewards.entries.firstOrNull { it.value == item }?.let { r.tiers[it.key] } }
 
     /** R9-B2: per row whose ladder was shortened in version 2: new tier t = old tier REMAP[id][t] (the new thresholds are a subset of the old ones). */
     val REMAP: Map<String, List<Int>> = mapOf("types" to listOf(1, 2, 4), "highest-level" to listOf(1, 2, 4))
@@ -54,8 +59,8 @@ object AchievementTable {
 
     private fun tiered(
         id: String, group: String, title: String, desc: String, metric: Metric, icon: String,
-        a: Long, b: Long, c: Long, d: Long, e: Long, tierBadges: List<Int> = emptyList(),
-    ) = AchRow(id, group, title, desc, metric, listOf(a, b, c, d, e), icon, tierBadges = tierBadges)
+        a: Long, b: Long, c: Long, d: Long, e: Long, tierBadges: List<Int> = emptyList(), rewards: Map<Int, String> = emptyMap(),
+    ) = AchRow(id, group, title, desc, metric, listOf(a, b, c, d, e), icon, tierBadges = tierBadges, rewards = rewards)
 
     /** An easy row: 3 tiers (Common, Rare, Epic), never Legendary / Mythical. */
     private fun tiered3(
@@ -70,7 +75,9 @@ object AchievementTable {
     val ROWS: List<AchRow> = listOf(
         // ---- Study ----
         tiered("answers", "Study", "Answers given", "Cards you answer while AnkiGo is running", Metric.ANSWERS, "cards", 500, 5_000, 25_000, 100_000, 250_000),
-        tiered("streak-days", "Study", "Best streak", "Most days in a row with the daily goal reached", Metric.BEST_STREAK_DAYS, "flame", 3, 7, 30, 100, 365),
+        // R14-B2-D: the top tier gives the one Master Ball (it is never sold).
+        tiered("streak-days", "Study", "Best streak", "Most days in a row with the daily goal reached · top tier: a Master Ball", Metric.BEST_STREAK_DAYS, "flame", 3, 7, 30, 100, 365,
+            rewards = mapOf(4 to "master-ball")),
         // Keeps the Ankimon badges 1, 2, 4, 12, 13 as its tiers; badge 3 (300 cards) is still given, it just has no tier here.
         tiered("cards-day", "Study", "Cards in one day", "Most answers in a single day", Metric.BEST_DAY, "calendar", 100, 200, 500, 1_000, 2_000,
             tierBadges = listOf(1, 2, 4, 12, 13)),
@@ -103,7 +110,7 @@ object AchievementTable {
         tiered("ball-catches", "Collection", "Ball catches", "Catches with a thrown ball (not the auto-catch rule)", Metric.BALL_CATCHES, "ball-catch", 1, 10, 50, 200, 500),
 
         // ---- Economy ----
-        tiered("money-earned", "Economy", "Money earned", "₽ earned from answers, won battles and goal bonuses", Metric.MONEY_EARNED, "coin", 2_000, 20_000, 100_000, 365_000, 1_000_000),
+        tiered("money-earned", "Economy", "Money earned", "₽ earned from answers and won battles", Metric.MONEY_EARNED, "coin", 2_000, 20_000, 100_000, 365_000, 1_000_000),
         tiered("money-spent", "Economy", "Money spent", "₽ spent in the Shop", Metric.MONEY_SPENT, "bag", 1_000, 10_000, 75_000, 250_000, 750_000),
         tiered("items-used", "Economy", "Items used", "Potions, stones, held items given", Metric.ITEMS_USED, "potion", 5, 50, 250, 1_000, 3_000),
         tiered("tms", "Economy", "TMs taught", "Moves taught with a TM", Metric.TMS_TAUGHT, "tm", 1, 5, 20, 50, 100),

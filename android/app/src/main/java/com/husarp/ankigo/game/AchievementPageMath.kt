@@ -19,8 +19,11 @@ enum class AchSource {
     BADGE,         // an Ankimon badge (a one-off)
 }
 
-/** One tier on the detail sheet's ladder. [state]: reached, the one being worked on, or locked. [lockedText] = "next after Epic" / "locked until Legendary". */
-class AchStep(val tier: Int, val name: String, val threshold: Long, val state: State, val date: Long?, val lockedText: String?, val inferred: Boolean = false) {
+/**
+ * One tier on the detail sheet's ladder. [state]: reached, the one being worked on, or locked. [lockedText] = "next after Epic" / "locked until Legendary".
+ * [reward] = the item id this tier puts in the Bag (R14-B2-D: the Master Ball for the top tier of "Best streak"), or null.
+ */
+class AchStep(val tier: Int, val name: String, val threshold: Long, val state: State, val date: Long?, val lockedText: String?, val inferred: Boolean = false, val reward: String? = null) {
     enum class State { REACHED, CURRENT, LOCKED }
 }
 
@@ -147,8 +150,19 @@ object AchPageMath {
             t == v.tier + 2 -> "next after ${AchievementTable.tierName(v.tier + 1)}"
             else -> "locked until ${AchievementTable.tierName(t - 1)}"
         }
-        AchStep(t, AchievementTable.tierName(t), threshold, state, v.dates.getOrNull(t), lockedText, t in v.inferred)
+        AchStep(t, AchievementTable.tierName(t), threshold, state, v.dates.getOrNull(t), lockedText, t in v.inferred, rewardOf(v.id, t))
     }
+
+    // ---- rewards (R14-B2-D) ----
+
+    /** The item id tier [tier] of row [rowId] puts in the Bag, or null. */
+    fun rewardOf(rowId: String, tier: Int): String? = AchievementTable.row(rowId)?.rewards?.get(tier)
+
+    /** The detail sheet's line on a tier with a reward: "Reward: Master Ball". */
+    fun rewardText(item: String): String = "Reward: ${Items.name(item)}"
+
+    /** The popup's line when the tier just reached has a reward: "Reward: a Master Ball, in your Bag". */
+    fun rewardPopupText(item: String): String = "Reward: ${DailyGift.withArticle(Items.name(item))}, in your Bag"
 
     /**
      * "Reached 4 Jun 2026", or "Reached before 4 Jun 2026" for a tier whose date is only inferred ([inferred]: first seen by a silent look,

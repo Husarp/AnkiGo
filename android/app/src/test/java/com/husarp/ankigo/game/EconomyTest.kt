@@ -92,103 +92,125 @@ class EconomyTest {
         return cash(ev)
     }
 
-    @Test fun theAnswersPerPaymentGrowByOneEveryTier() {
-        assertEquals(1, Economy.answersPerPayment(0))
-        assertEquals(1, Economy.answersPerPayment(495))
-        assertEquals(2, Economy.answersPerPayment(500))
-        assertEquals(2, Economy.answersPerPayment(995))
-        assertEquals(3, Economy.answersPerPayment(1000))
-        assertEquals(4, Economy.answersPerPayment(1500))
-        assertEquals(11, Economy.answersPerPayment(5000))
-        assertEquals(1, Economy.answersPerPayment(-5))
+    /** [n] more wins; returns the Cash events they made (PLAN 198: wins share the day's fraction with the answers). */
+    private fun wins(s: GameState, n: Int): List<GameEvent.Cash> {
+        val ev = events()
+        repeat(n) { Economy.onWin(s, ev) }
+        return cash(ev)
     }
 
-    @Test fun eachNext500IsHarderToEarn() {
+    /** Paid coins per action over [n] answers, 0 for an action that paid nothing. */
+    private fun perAnswer(s: GameState, n: Int): List<Int> = List(n) { answers(s, 1).sumOf { it.amount } }
+    private fun perWin(s: GameState, n: Int): List<Int> = List(n) { wins(s, 1).sumOf { it.amount } }
+
+    @Test fun inTheFirstTierEveryAnswerPays5AndEveryWinPays10() {
         val s = state()
-        assertEquals("the first 500 ₽: every answer", 100, answers(s, 100).size)
-        assertEquals(500, s.cash); assertEquals(500, s.cashToday)
-        assertEquals("the next 500 ₽: every 2nd answer", 100, answers(s, 200).size)
-        assertEquals(1000, s.cashToday)
-        assertEquals("then every 3rd", 100, answers(s, 300).size)
-        assertEquals(1500, s.cashToday)
-        val fourth = answers(s, 8)
-        assertEquals("then every 4th", 2, fourth.size)
-        assertTrue(fourth.all { it.amount == Tuning.CASH_PER_ANSWER && it.kind == CashKind.ANSWER })
-        assertEquals(1510, s.cash)
+        assertEquals(listOf(5, 5, 5, 5), perAnswer(s, 4))
+        assertEquals(listOf(10, 10, 10), perWin(s, 3))
+        assertEquals(50, s.cash); assertEquals(50, s.cashToday)
+        assertEquals(0L, s.cashFracNum); assertEquals(1L, s.cashFracDen)
+        assertEquals(CashKind.DEFEAT, wins(s, 1).single().kind)
+        assertEquals(CashKind.ANSWER, answers(s, 1).single().kind)
     }
 
-    @Test fun theTierBoundaryIsExact() {
-        val s = state()
-        s.cashToday = 495
-        assertEquals(GameEvent.Cash(5, 5, CashKind.ANSWER), answers(s, 1).single())   // the last payment of the first tier
-        assertEquals(500, s.cashToday)
-        assertTrue("the second tier waits for a 2nd answer", answers(s, 1).isEmpty())
-        assertEquals(1, s.cashWait)
-        assertEquals(GameEvent.Cash(5, 10, CashKind.ANSWER), answers(s, 1).single())
-        assertEquals(0, s.cashWait)
+    @Test fun inTheSecondTierAnAnswerIsWorth2point5SoItPays2Then3() {
+        val s = state(); s.cashToday = 500
+        assertEquals(listOf(2, 3, 2, 3, 2, 3), perAnswer(s, 6))
+        assertEquals(515, s.cashToday); assertEquals(15, s.cash)
+        assertEquals(listOf(5, 5, 5), perWin(s, 3))   // a win is 10 / 2 = 5
     }
 
-    @Test fun anOldSaveDayCarriesOnFromItsCashSoFar() {
-        val s = state()
-        s.cashToday = 380 // a day of the old rule (it never went past 500)
-        s.reviewsToday = 90
-        val paid = answers(s, 110)
-        assertEquals("24 answers to 500, then every 2nd of the other 86", 24 + 43, paid.size)
-        assertEquals(335, s.cash)
-        assertEquals(715, s.cashToday)
+    @Test fun inTheThirdTierAnswersPay1Then2Then2AndWinsPay3Then3Then4() {
+        val a = state(); a.cashToday = 1000
+        assertEquals(listOf(1, 2, 2), perAnswer(a, 3))
+        assertEquals(1005, a.cashToday)
+        val w = state(); w.cashToday = 1000
+        assertEquals(listOf(3, 3, 4), perWin(w, 3))
+        assertEquals(1010, w.cashToday)
+        assertEquals("exactly 10 back to 0", 0L, w.cashFracNum)
     }
 
-    @Test fun amuletCoinDoublesEveryPaymentAtEveryTier() {
+    @Test fun answersAndWinsShareOneExactFraction() {
+        val s = state(); s.cashToday = 500   // tier 2 for the next 500 base coins: answer 5/2 + win 10/2 = 7.5 per pair
+        repeat(40) { answers(s, 1); wins(s, 1) }
+        assertEquals("40 pairs = 300 exactly", 300, s.cash); assertEquals(800, s.cashToday)
+        assertEquals(0L, s.cashFracNum)
+        answers(s, 1); wins(s, 1)
+        assertEquals("the 41st pair: 307.5 so far", 307, s.cash)
+        assertEquals(1L, s.cashFracNum); assertEquals(2L, s.cashFracDen)
+        // a whole mixed day in the 2nd tier only: total = floor of the exact sum
+        val t = state(); t.cashToday = 500
+        var exactHalves = 0   // in units of half a coin: answer 5, win 10
+        for (i in 0 until 53) { if (i % 3 == 0) { wins(t, 1); exactHalves += 10 } else { answers(t, 1); exactHalves += 5 } }
+        assertEquals(exactHalves / 2, t.cash)   // 53 actions stay below 1000
+    }
+
+    @Test fun theTierIsPickedWhenTheActionHappensAndAnActionAcrossTheEdgeStaysInThePreviousTier() {
+        val s = state(); s.cashToday = 498
+        assertEquals("tier 1 pays the whole 5 even though it crosses 500", listOf(5), perAnswer(s, 1))
+        assertEquals(503, s.cashToday)
+        assertEquals("then tier 2", listOf(2, 3), perAnswer(s, 2))
+        val e = state(); e.cashToday = 499
+        assertEquals(GameEvent.Cash(5, 5, CashKind.ANSWER), answers(e, 1).single())
+        assertEquals(GameEvent.Cash(2, 7, CashKind.ANSWER), answers(e, 1).single())
+    }
+
+    @Test fun anActionThatPaysNoWholeCoinMakesNoCashEvent() {
+        val s = state(); s.cashToday = 5000   // tier 11: an answer is 5/11 of a coin
+        assertTrue(answers(s, 1).isEmpty())
+        assertEquals(0, s.cash); assertEquals(5000, s.cashToday)
+        assertEquals(5L, s.cashFracNum); assertEquals(11L, s.cashFracDen)
+        val paid = answers(s, 22)   // 23 answers in all = 115/11 = 10.45
+        assertEquals(10, paid.sumOf { it.amount }); assertEquals(10, paid.size)
+        assertTrue(paid.all { it.amount == 1 })
+    }
+
+    @Test fun amuletCoinAndLuckIncenseDoubleThePaidCoinsWhileTheTiersFollowTheBase() {
         val s = state()
         s.main!!.heldItem = "amulet-coin"
         assertEquals(10, answers(s, 1).single().amount)
         assertEquals("the curve counts the money before the ×2", 5, s.cashToday)
         s.cashToday = 500
         s.main!!.heldItem = "luck-incense"
-        val second = answers(s, 4)
-        assertEquals(listOf(10, 10), second.map { it.amount })   // every 2nd answer, doubled
-        assertEquals(30, s.cash); assertEquals(510, s.cashToday)
-        s.main!!.heldItem = "everstone" // another held item pays the plain 5
-        assertEquals(listOf(5), answers(s, 2).map { it.amount })
+        assertEquals(listOf(4, 6, 4, 6), answers(s, 4).map { it.amount })   // 2, 3, 2, 3 doubled
+        assertEquals(10 + 20, s.cash); assertEquals(510, s.cashToday)
+        s.main!!.heldItem = "everstone" // another held item pays the plain coins
+        assertEquals(listOf(2, 3), answers(s, 2).map { it.amount })
+        s.main!!.heldItem = "amulet-coin"
+        assertEquals("a win is doubled the same way: 10/2 = 5, x2", listOf(10), wins(s, 1).map { it.amount })
         // over a whole day the item doubles the money exactly: 600 answers pay 1500 ₽ without it, 3000 with it
         val plain = state(); answers(plain, 600)
         val coin = state(); coin.main!!.heldItem = "amulet-coin"; answers(coin, 600)
         assertEquals(1500, plain.cash); assertEquals(3000, coin.cash)
+        assertEquals(1500, plain.cashToday); assertEquals(1500, coin.cashToday)
+    }
+
+    @Test fun aWholeDayOfAnswersAddsUpToTheExactTierMoney() {
+        val s = state()
+        answers(s, 100); assertEquals(500, s.cash)        // tier 1: 5 each
+        answers(s, 200); assertEquals(1000, s.cash)       // tier 2: 2.5 each
+        answers(s, 300); assertEquals(1500, s.cash)       // tier 3: 5/3 each
+        assertEquals(1500, s.cashToday)
+        assertEquals("tier 4: 5/4 each, 4 answers = 5", 5, answers(s, 4).sumOf { it.amount })
+        assertEquals(1505, s.cashToday)
+    }
+
+    @Test fun theFractionDenominatorStaysUnderTheGuardWhenTiersPileUp() {
+        val s = state(); s.cashToday = 500 * 29   // tier 30: lcm(1..30) is about 2.3e12, over the 1e12 guard
+        s.cashFracNum = 1; s.cashFracDen = 2_329_089_562_800L / 3   // an odd big denominator so the product passes the guard
+        answers(s, 1)
+        assertTrue(s.cashFracDen <= 1_000_000_000_000L)
+        assertTrue(s.cashFracNum in 0 until s.cashFracDen)
+        assertEquals("the value is kept (5/30 + a hair)", 1.0 / 6 + 1.0 / (2_329_089_562_800.0 / 3), s.cashFracNum.toDouble() / s.cashFracDen, 1e-6)
+        assertEquals(0, s.cash)
     }
 
     @Test fun aNewDayStartsTheCurveAgain() {
         val g = Game(data, state(), TestData.rng(), { 1_760_000_000_000L })
-        g.state.cashToday = 1234; g.state.cashWait = 2
+        g.state.cashToday = 1234; g.state.cashFracNum = 2; g.state.cashFracDen = 3
         g.state.day = "2000-01-01"
         g.tick()
-        assertEquals(0, g.state.cashToday); assertEquals(0, g.state.cashWait)
-    }
-
-    @Test fun dailyBonusGrowsWithTheStreakBeforeToday() {
-        assertEquals(50, Economy.dailyBonus(0))
-        assertEquals(55, Economy.dailyBonus(1))
-        assertEquals(80, Economy.dailyBonus(6))
-        assertEquals(100, Economy.dailyBonus(10))
-        assertEquals(100, Economy.dailyBonus(11))
-        assertEquals(100, Economy.dailyBonus(400))
-        assertEquals(50, Economy.dailyBonus(-3))
-    }
-
-    @Test fun dailyBonusIsOutsideTheCurveAndNeverDoubled() {
-        val s = state()
-        s.main!!.heldItem = "amulet-coin"
-        s.cashToday = 500 // cap reached
-        val ev = events()
-        Economy.payDailyBonus(s, 6, ev)
-        assertEquals(80, s.cash)
-        assertEquals(500, s.cashToday)
-        assertEquals(GameEvent.Cash(80, 80, CashKind.DAILY_BONUS), cash(ev).single())
-    }
-
-    @Test fun dailyBonusText() {
-        assertEquals("Daily goal bonus: +75 ₽ (6-day streak)", Economy.dailyBonusText(75, 6))
-        assertEquals("Daily goal bonus: +50 ₽", Economy.dailyBonusText(50, 1))
-        assertEquals("Daily goal bonus: +100 ₽ (14-day streak)", Economy.dailyBonusText(100, 14))
+        assertEquals(0, g.state.cashToday); assertEquals(0L, g.state.cashFracNum); assertEquals(1L, g.state.cashFracDen)
     }
 
     @Test fun countdownRollsThenDecrements() {

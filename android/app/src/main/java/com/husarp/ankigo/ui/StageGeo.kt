@@ -21,7 +21,9 @@ import kotlin.math.min
  *    get smaller (frames x .9 .. .6 around their feet) and the whole search runs again.
  * 4. Nothing is clear anywhere: the pair with the least cover (then the least nearness) at the smallest box, [StagePlan.clear] false.
  *
- * With a battle frame ([inset] > 0) the "panel" for the boxes is the arena inset by that much on every side.
+ * With a battle frame ([inset] > 0) the "panel" for the boxes is the arena inset by that much on every side. PLAN 140: [FrameSafe]
+ * adds what a frame draws deeper than its band: the top (icicles) and the four corner squares; a box that would touch one moves out
+ * of it (along x, else y), so nothing of the frame is drawn over a box.
  *
  * Round 9 wave 3 (D12), on top of the mockup's rule: **no text in a box is drawn under [PanelFit.MIN_SP] on screen** (its size x the
  * panel's scale x the box scale). So the box scale has a floor [textScale] worked out from the smallest text a box draws, and
@@ -175,15 +177,16 @@ internal object StageGeo {
         minSp: Float = 0f, fullSp: Float = minSp,
         sizeScale: Float = 1f, atOne: Float = 0f,
         corners: Boolean = false,
+        safe: FrameSafe? = null,
     ): StagePlan {
         val onScreen = h * panelScale
         val scales = boxScales(onScreen, panelScale, floorSp, k0, minSp, fullSp)
         val run = Run(w, h, max(0f, inset), gap(onScreen, panelScale), isTall(w, h), stage,
             floatArrayOf(playerCardW, wildCardW), floatArrayOf(playerCardH, wildCardH), floatArrayOf(playerCardHReduced, wildCardHReduced),
-            scales.full, wildArt, playerArt)
+            scales.full, wildArt, playerArt, safe?.takeUnless { it.none })
         // a size under 100 % is that share of the frame the same panel gets at 100 % (given, or worked out first)
         val one = if (sizeScale < 1f - F_EPS && !(atOne > 0f)) plan(w, h, stage, wildCardW, wildCardH, playerCardW, playerCardH, k0, panelScale, floorSp, inset,
-            wildArt, playerArt, wildCardHReduced, playerCardHReduced, minSp, fullSp, 1f, 0f, corners).spriteScale else if (atOne > 0f) atOne else 1f
+            wildArt, playerArt, wildCardHReduced, playerCardHReduced, minSp, fullSp, 1f, 0f, corners, safe).spriteScale else if (atOne > 0f) atOne else 1f
         val chain = frameScales(sizeScale, one)
         val big = sizeScale > 1f + F_EPS
         for ((i, f) in chain.withIndex()) {
@@ -228,7 +231,10 @@ internal object StageGeo {
         val vw: Float, val vh: Float, val inset: Float, val g: Float, tall: Boolean, val stage: Stage,
         val baseW: FloatArray, val baseH: FloatArray, val reducedH: FloatArray, val kFull: Float,
         val wildArtOf: ((Float) -> ArtShare?)?, val playerArtOf: ((Float) -> ArtShare?)?,
+        /** PLAN 140: the frame's safe area (null = no frame): the top band, and the four corner squares a box must stay out of. */
+        val safe: FrameSafe? = null,
     ) {
+        private val topInset = max(inset, safe?.top ?: 0f)
         // spot tables per kind: index 0-3 on the primary side (centre, next, left, right), 4-7 on the other
         private val spotTop = arrayOf(BooleanArray(8), BooleanArray(8))
         private val spotAnchor = intArrayOf(CENTRE, NEXT, LEFT, RIGHT, CENTRE, NEXT, LEFT, RIGHT)
@@ -294,7 +300,8 @@ internal object StageGeo {
                 else -> max(inset, min(vw - inset - bw, feetX[kind] - bw / 2f))
             }
             val y = if (spotAnchor[i] == NEXT) (if (top) art[kind][1] - g - bh else art[kind][3] + g) else if (top) inset else vh - inset - bh
-            out[0] = x; out[1] = max(inset, min(vh - inset - bh, y)); out[2] = bw; out[3] = bh
+            out[0] = x; out[1] = max(topInset, min(vh - inset - bh, y)); out[2] = bw; out[3] = bh
+            safe?.clearInto(out, vw, vh)   // PLAN 140: clear of the frame's corner squares (and its deeper top)
         }
 
         /** [b] (x, y, w, h) grown by [d] on every side meets the box [o] (x, y, right, bottom)? Same tolerance as [ArenaGeo.Box.hits]. */

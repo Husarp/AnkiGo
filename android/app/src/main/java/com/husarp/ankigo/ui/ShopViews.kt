@@ -86,8 +86,11 @@ internal object ShopViews {
 
     // ---- the item tiles ("always in stock", "today's specials") ----
 
-    /** A tile of the mockup `.stile`: [lead] (the 36 dp item or TM tile), the name (two lines kept), and [bottom] (the price, or "Owned") at the bottom. A tap calls [onTap]. */
-    fun tile(ctx: Context, lead: View, name: String, bottom: View, description: String, sub: String? = null, onTap: () -> Unit): View = LinearLayout(ctx).apply {
+    /**
+     * A tile of the mockup `.stile`: [lead] (the 36 dp item or TM tile), the name (two lines kept), the short line ([sub], or [subView] such as a
+     * TM's type chip), [bottom] (the price, or "Owned") at the bottom and a small ▾ (PLAN 168: a tap opens its card in place). A tap calls [onTap].
+     */
+    fun tile(ctx: Context, lead: View, name: String, bottom: View, description: String, sub: String? = null, subView: View? = null, onTap: () -> Unit): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
@@ -99,9 +102,11 @@ internal object ShopViews {
         addView(Ui.text(ctx, 12f, 900, R.color.ag_text).apply {
             text = name; gravity = Gravity.CENTER; minLines = 2; maxLines = 3
         }, Form.lp(ctx, 6))
-        sub?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it; gravity = Gravity.CENTER; maxLines = 1 }, Form.lp(ctx, 2)) }   // PLAN 171: a ball's catch chance
+        sub?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it; gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }, Form.lp(ctx, 2)) }   // PLAN 168: ItemInfo.short
+        subView?.let { addView(it, LinearLayout.LayoutParams(-2, -2).also { lp -> lp.topMargin = Ui.dp(ctx, 3) }) }
         addView(View(ctx), LinearLayout.LayoutParams(1, 0, 1f)) // prices line up at the bottom of equal tiles
         addView(bottom, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+        addView(Ui.text(ctx, 10f, 900, R.color.ag_sub0).apply { text = "▾"; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
     }
 
     /** "✓ Owned" in a TM tile or card. */
@@ -129,6 +134,7 @@ internal object ShopViews {
             addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = note }, Form.lp(ctx, 2))
         }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 10); it.marginEnd = Ui.dp(ctx, 8) })
         addView(right)
+        if (ctx.resources.configuration.fontScale <= 1.4f) addView(ItemCard.chevron(ctx, "▾", 11f, 3f), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 2) }) // PLAN 168: opens in place (the big-text sizes keep the room for the words)
     }
 
     // ---- the deal card (F5 option A) ----
@@ -216,9 +222,9 @@ internal object ShopViews {
     /**
      * The deal of the day (F5 option A): a soft peach glow from the left, a thin peach edge, the "−30 %" ribbon across the top-right corner,
      * "✦ DEAL OF THE DAY", the item on a lit tile with its name, effect and "ends at midnight · 7 h", and the discount price on the right.
-     * A tap calls [onTap] (the buy sheet at the deal price).
+     * A tap calls [onTap] (PLAN 168: the card opens in place, with Buy at the deal price). [line] is the text under the name.
      */
-    fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String, onTap: () -> Unit): View {
+    fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String, line: String = ItemInfo.effect(item), onTap: () -> Unit): View {
         val dark = TypeChips.isDark(ctx)
         val peach = Ui.c(ctx, R.color.ag_peach)
         val card = Ui.c(ctx, R.color.ag_card)
@@ -246,7 +252,7 @@ internal object ShopViews {
         val middle = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             addView(Ui.text(ctx, 15f, 900, R.color.ag_text).apply { text = name })
-            addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = ItemInfo.effect(item) })
+            addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = line })
             addView(clock, Form.lp(ctx, 3))
         }
         val row = LinearLayout(ctx).apply {
@@ -254,7 +260,9 @@ internal object ShopViews {
             gravity = Gravity.CENTER_VERTICAL
             addView(litTile(ctx, item, peach, dark))
             addView(middle, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12); it.marginEnd = Ui.dp(ctx, 8) })
-            addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 14) })
+            val chevron = ctx.resources.configuration.fontScale <= 1.4f // the big-text sizes keep the room for the words
+            addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, if (chevron) 2 else 14) })
+            if (chevron) addView(ItemCard.chevron(ctx, "▾", 11f, 3f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 8) }) // PLAN 168: opens in place
         }
         val body = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL

@@ -28,6 +28,9 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
     private val label = (if (badge) ft.stat!! else ft.text).uppercase(Locale.ROOT)
     private val sizePx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, TextMath.at(Look.sizeSp(ft.kind), floorSp), ctx.resources.displayMetrics)
     private val fillColor = Look.fill(ft.kind)
+    /** PLAN 172: "can't move" floats carry the status key; its badge is drawn in front of the text. */
+    private val statusKey = if (ft.kind == FloatKind.STATUS && ft.stat in setOf("slp", "frz", "par")) ft.stat else null
+    private val statusBadge = statusKey?.let { StatusBadge(ctx, it) }
     private val tiltDeg = if (badge) 0f else Look.tilt(ft.text)
 
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -57,11 +60,13 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
         contentW = when {
             badge -> sizePx * 0.6f + chevW + 3f * d + tw + sizePx * 0.6f
             burst -> tw + skewPad + sizePx * 2.7f
+            statusBadge != null -> tw + skewPad + 2f * strokePx + th * 1.4f
             else -> tw + skewPad + 2f * strokePx
         }
         contentH = when {
             badge -> max(th + sizePx * 0.55f, chevH + (ft.stages - 1) * chevStep + sizePx * 0.6f)
             burst -> th + sizePx * 1.3f
+            statusBadge != null -> th * 1.3f + 2f * strokePx
             else -> th + 2f * strokePx
         }
         isClickable = false
@@ -91,17 +96,27 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
                 canvas.drawText(label, -tw / 2f, baseline, text)
             }
             else -> {
+                var tx = -tw / 2f
+                if (statusBadge != null) {
+                    val b = (th * 1.3f).toInt()
+                    tx = -contentW / 2f + strokePx + th * 1.4f
+                    statusBadge.layout(0, 0, b, b)
+                    canvas.save()
+                    canvas.translate(-contentW / 2f + strokePx, -b / 2f)
+                    statusBadge.draw(canvas)
+                    canvas.restore()
+                }
                 text.style = Paint.Style.STROKE
                 text.strokeWidth = strokePx * 2f
                 text.strokeJoin = Paint.Join.ROUND
                 text.color = Look.OUTLINE
                 text.setShadowLayer(3f * d, 0f, 1.2f * d, 0x99000000.toInt())
-                canvas.drawText(label, -tw / 2f, baseline, text)
+                canvas.drawText(label, tx, baseline, text)
                 text.style = Paint.Style.FILL
                 text.strokeWidth = 0f
                 text.clearShadowLayer()
                 text.color = fillColor
-                canvas.drawText(label, -tw / 2f, baseline, text)
+                canvas.drawText(label, tx, baseline, text)
             }
         }
         canvas.restore()

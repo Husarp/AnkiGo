@@ -483,6 +483,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.switchRow(this, "Vibrate on answer", null, getSharedPreferences("study", 0).getBoolean("haptic", true)) {
                 getSharedPreferences("study", 0).edit().putBoolean("haptic", it).apply()
             },
+            Form.switchRow(this, "New cards: one OK button", com.husarp.ankigo.study.NewCardOk.SETTING_NOTE, getSharedPreferences("study", 0).getBoolean(com.husarp.ankigo.study.NewCardOk.PREF, false)) {
+                getSharedPreferences("study", 0).edit().putBoolean(com.husarp.ankigo.study.NewCardOk.PREF, it).apply()
+            },
             Form.switchRow(this, "Swipe to answer", "Answer side: ← Again · ↓ Hard · → Good · ↑ Easy", getSharedPreferences("study", 0).getBoolean("swipe", false)) {
                 getSharedPreferences("study", 0).edit().putBoolean("swipe", it).apply()
             },
@@ -1188,6 +1191,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     private fun aboutCard(): View {
         val box = Ui.card(this).apply { setPadding(dp(14), dp(12), dp(14), dp(14)) }
+        // PLAN 202: the AnkiDroid version and whether it works (the Study screen only warns when something is wrong)
+        box.addView(Form.row(this, "AnkiDroid", null, valueText(StudyStatus.line(this))), Form.lp(this, 0))
+        StudyStatus.warning(this)?.let { box.addView(Form.body(this, it.message, 12, R.color.ag_yellow), Form.lp(this, 4)) }
         box.addView(Ui.text(this, 14f, 800, R.color.ag_text).apply { text = "AnkiGo ${Updates.current(this@SettingsPage)}" })
         box.addView(Form.body(this,
             "Pokémon and Pokémon names © Nintendo / Creatures / GAME FREAK. Data: PokeAPI, Pokémon Showdown. " +

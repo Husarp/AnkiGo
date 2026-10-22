@@ -4,4 +4,6 @@
     <item name="ag_tag_sprite" type="id" />
     <!-- View tag key: a TextView's design text size (sp) before the battle panel's small-window text floor raised it. -->
     <item name="ag_tag_base_sp" type="id" />
+    <!-- View tag key: the idle-float controller of a details picture (MonPreview), so no static map holds the view. -->
+    <item name="ag_tag_idle_float" type="id" />
 </resources>

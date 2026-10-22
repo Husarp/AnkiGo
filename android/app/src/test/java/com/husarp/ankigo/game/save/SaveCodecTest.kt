@@ -38,6 +38,7 @@ class SaveCodecTest {
         s.team += listOf("u3", "u1", "u5")
         s.bag["poke-ball"] = 12; s.bag["rare-candy"] = 3; s.bag["potion"] = 0
         s.tms += setOf("bodyslam", "thunderbolt")
+        s.rewardsClaimed += setOf("streak-days/4") // R14-B2 fix Y1
         s.cash = 98765; s.trainerLevel = 12; s.trainerXp = 345
         s.seen += setOf(1, 2, 25, 133, 1025); s.caught += setOf(2, 25)
         val wild = mon(9, "Wildmon", 'M')
@@ -48,7 +49,7 @@ class SaveCodecTest {
             tally = 25, answers = 3, override = Outcome.CATCH, rounds = 4, startedAt = 1_800_000_000_000L,
         )
         s.nextSpecies = 133; s.nextTier = Tier.BABY; s.nextShiny = true; s.nextSeed = 1234567890123L
-        s.day = "2026-10-13"; s.reviewsToday = 321; s.cashToday = 4321; s.itemCountdown = 7
+        s.day = "2026-10-13"; s.reviewsToday = 321; s.cashToday = 4321; s.cashFracNum = 7; s.cashFracDen = 12; s.itemCountdown = 7
         intArrayOf(1, 2, 3, 4, 5).copyInto(s.buttonsToday)
         s.cardStreak = 17; s.bestCardStreak = 99; s.streakDays = 5; s.lastGoalDay = "2026-10-12"
         s.totalReviews = 5_000_000_000L
@@ -110,6 +111,7 @@ class SaveCodecTest {
         assertEquals(25, bt.tally); assertEquals(3, bt.answers); assertEquals(4, bt.rounds); assertEquals(1_800_000_000_000L, bt.startedAt)
         assertEquals(133, b.nextSpecies); assertEquals(Tier.BABY, b.nextTier); assertTrue(b.nextShiny); assertEquals(1234567890123L, b.nextSeed)
         assertArrayEquals(intArrayOf(1, 2, 3, 4, 5), b.buttonsToday)
+        assertEquals(4321, b.cashToday); assertEquals(7L, b.cashFracNum); assertEquals(12L, b.cashFracDen)   // PLAN 198
         assertEquals("2026-10-12", b.lastGoalDay); assertEquals(5_000_000_000L, b.totalReviews)
         assertEquals(setOf(1, 4, 9), b.badges)
         assertEquals(listOf("potion", "great-ball"), b.shopItems); assertEquals(listOf("earthquake", "shadowball"), b.shopTms)
@@ -284,6 +286,25 @@ class SaveCodecTest {
         val b = SaveCodec.decode(o.toString())
         assertNull(b.battle)
         assertEquals(5, b.mons.size)
+    }
+
+    @Test fun claimedRewardsRoundTripAndAnOldSaveHasNone() {   // R14-B2 fix Y1
+        val o = JSONObject(SaveCodec.encode(fullState()))
+        assertEquals(setOf("streak-days/4"), SaveCodec.decode(o.toString()).rewardsClaimed)
+        o.remove("rewardsClaimed")
+        assertTrue(SaveCodec.decode(o.toString()).rewardsClaimed.isEmpty())
+    }
+
+    @Test fun theMoneyFractionReplacesTheOldWaitCountersAndAnOldSaveLoadsWithZero() {   // PLAN 198
+        val o = JSONObject(SaveCodec.encode(fullState()))
+        assertFalse(o.has("cashWait")); assertFalse(o.has("winWait"))
+        assertEquals(7L, o.getLong("cashFracNum")); assertEquals(12L, o.getLong("cashFracDen"))
+        o.remove("cashFracNum"); o.remove("cashFracDen"); o.put("cashWait", 2); o.put("winWait", 1)
+        val old = SaveCodec.decode(o.toString())
+        assertEquals(0L, old.cashFracNum); assertEquals(1L, old.cashFracDen); assertEquals(4321, old.cashToday)
+        o.put("cashFracNum", 9); o.put("cashFracDen", 4)   // a broken pair (not under one coin) also starts at 0
+        val bad = SaveCodec.decode(o.toString())
+        assertEquals(0L, bad.cashFracNum); assertEquals(1L, bad.cashFracDen)
     }
 
     @Test fun cardsPerRoundIsNoLongerWrittenAndAnOldValueIsIgnored() {

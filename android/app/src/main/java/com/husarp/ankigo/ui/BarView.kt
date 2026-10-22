@@ -195,9 +195,9 @@ class BarView(ctx: Context) : View(ctx) {
 
     /**
      * Fills [fraction] (0..1) in [fillColor] (ignored while a gradient is set). [animate] eases width and colour
-     * over 450 ms with the mockup's cubic-bezier(.4,0,.2,1); false jumps there.
+     * over [durationMs] (450) with the mockup's cubic-bezier(.4,0,.2,1); false jumps there.
      */
-    fun set(fraction: Float, fillColor: Int, animate: Boolean) {
+    fun set(fraction: Float, fillColor: Int, animate: Boolean, durationMs: Long = 450) {
         val to = fraction.coerceIn(0f, 1f)
         anim?.cancel()
         anim = null
@@ -215,7 +215,7 @@ class BarView(ctx: Context) : View(ctx) {
         val fromColor = color
         val ev = ArgbEvaluator()
         anim = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 450
+            duration = durationMs
             interpolator = PathInterpolator(0.4f, 0f, 0.2f, 1f)
             addUpdateListener {
                 val t = it.animatedValue as Float

@@ -15,7 +15,7 @@ data class ItemDef(
     val kind: ItemKind,
     val heal: Int = 0,           // HEAL: HP restored (Ankimon fixed amounts); Int.MAX_VALUE = full
     val fossil: Int? = null,     // FOSSIL: species revived
-    val note: String = "",       // one short line for the shop/bag ("Heals 20 HP", "Held: x1.5 XP", "Evolves some Pokémon")
+    val note: String = "",       // one short line for the shop/bag ("Heals 20 HP", "Holder gets x1.5 XP", "Evolves some Pokémon")
 )
 
 object Items {
@@ -47,17 +47,17 @@ object Items {
     )
 
     private val HELD = listOf(
-        "lucky-egg" to "Held: ×1.5 XP",
-        "amulet-coin" to "Held: ×2 cash",
-        "luck-incense" to "Held: ×2 cash",
-        "everstone" to "Held: never evolves",
-        "macho-brace" to "Held: ×2 EVs",
-        "power-weight" to "Held: +8 HP EVs per defeat",
-        "power-bracer" to "Held: +8 Atk EVs per defeat",
-        "power-belt" to "Held: +8 Def EVs per defeat",
-        "power-lens" to "Held: +8 Sp. Atk EVs per defeat",
-        "power-band" to "Held: +8 Sp. Def EVs per defeat",
-        "power-anklet" to "Held: +8 Speed EVs per defeat",
+        "lucky-egg" to "Holder gets ×1.5 XP",
+        "amulet-coin" to "Main holds it: ×2 money",
+        "luck-incense" to "Main holds it: ×2 money",
+        "everstone" to "Holder never evolves",
+        "macho-brace" to "Main holds it: ×2 EVs",
+        "power-weight" to "Main holds it: +8 HP EVs",
+        "power-bracer" to "Main holds it: +8 Attack EVs",
+        "power-belt" to "Main holds it: +8 Defense EVs",
+        "power-lens" to "Main holds it: +8 Sp. Atk EVs",
+        "power-band" to "Main holds it: +8 Sp. Def EVs",
+        "power-anklet" to "Main holds it: +8 Speed EVs",
     )
 
     private val FOSSILS = listOf(
@@ -72,10 +72,10 @@ object Items {
         HEALS.forEach { (id, hp) ->
             add(ItemDef(id, ItemKind.HEAL, heal = hp, note = if (hp == Int.MAX_VALUE) "Heals all HP" else "Heals $hp HP"))
         }
-        EVOLUTION.forEach { add(ItemDef(it, ItemKind.EVOLUTION, note = "Evolves certain Pokémon")) }
+        EVOLUTION.forEach { add(ItemDef(it, ItemKind.EVOLUTION, note = "Evolves Pokémon that evolve with it")) }
         HELD.forEach { (id, note) -> add(ItemDef(id, ItemKind.HELD, note = note)) }
-        listOf("poke-doll", "fluffy-tail").forEach { add(ItemDef(it, ItemKind.ESCAPE, note = "Escape: a new wild Pokémon appears")) }
-        FOSSILS.forEach { (id, sp) -> add(ItemDef(id, ItemKind.FOSSIL, fossil = sp, note = "Revives a fossil Pokémon")) }
+        listOf("poke-doll", "fluffy-tail").forEach { add(ItemDef(it, ItemKind.ESCAPE, note = "Skip this wild Pokémon")) }
+        FOSSILS.forEach { (id, sp) -> add(ItemDef(id, ItemKind.FOSSIL, fossil = sp, note = "Revives an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}")) }
     }.associateBy { it.id }
 
     fun def(id: String): ItemDef? = ALL[id]
@@ -130,62 +130,63 @@ object Economy {
     }
 
     /**
-     * PLAN 125, the money curve (linear, reset each game day; it replaced the hard 500 ₽ a day): the day's money comes in tiers of
-     * Tuning.CASH_TIER. In the first tier every counted answer pays Tuning.CASH_PER_ANSWER, in the second every 2nd answer does, in
-     * the third every 3rd, and so on ([answersPerPayment]); state.cashWait counts the answers toward the next payment.
-     * Amulet Coin / Luck Incense on the main: each payment is doubled, and the tiers follow the money BEFORE the doubling
+     * PLAN 198 (it replaced PLAN 125's "the whole amount every Nth time"), the money curve (linear, reset each game day; no hard cap):
+     * the day's money comes in tiers of Tuning.CASH_TIER and every counted answer earns Tuning.CASH_PER_ANSWER / tier, where
+     * tier = state.cashToday / CASH_TIER + 1 at that moment (cashToday = the day's base money paid so far, before any x2). So an
+     * answer is worth 5, 2.5, 1.67, 1.25, 1 ... ₽. The earnings are added to one exact running fraction of the day
+     * (state.cashFracNum / cashFracDen, shared with the wins, never a Double) and the whole coins in it are paid out at once ([earn]).
+     * Amulet Coin / Luck Incense on the main: the paid coins are doubled, and the tiers follow the coins BEFORE the doubling
      * (state.cashToday), so the item doubles the day's money at every tier and never makes the curve steeper sooner.
-     * Adds to state.cash and state.cashToday; emits Cash(ANSWER) when a payment is made.
+     * Adds to state.cash and state.cashToday; emits Cash(ANSWER) when at least one whole coin was paid.
      */
     private fun payAnswer(state: GameState, events: MutableList<GameEvent>) {
-        state.cashWait++
-        if (state.cashWait < answersPerPayment(state.cashToday)) return
-        state.cashWait = 0
-        pay(state, Tuning.CASH_PER_ANSWER, CashKind.ANSWER, events)
+        earn(state, Tuning.CASH_PER_ANSWER, CashKind.ANSWER, events)
     }
 
     /**
-     * R13 Part C: a won fight (a wild Pokémon defeated, or caught by the auto rule or a ball; never a miss, an escape or a release)
-     * pays Tuning.CASH_PER_WIN on the same curve as the answers, paid the way the answers are: the WHOLE amount, every Nth win in the
-     * Nth tier (state.winWait counts the wins toward it; not 10/N ₽ each). Its money counts toward the day's tiers like an answer's,
-     * and Amulet Coin / Luck Incense doubles it the same way. Emits Cash(DEFEAT) when a payment is made.
+     * R13 Part C, PLAN 198: a won fight (a wild Pokémon defeated, or caught by the auto rule or a ball; never a miss, an escape or a
+     * release) earns Tuning.CASH_PER_WIN / tier on the same curve and the same running fraction as the answers ([payAnswer]), so a
+     * win is worth 10, 5, 3.33, 2.5, 2 ... ₽. Its money counts toward the day's tiers like an answer's, and Amulet Coin / Luck
+     * Incense doubles the paid coins the same way. Emits Cash(DEFEAT) when at least one whole coin was paid.
      */
     fun onWin(state: GameState, events: MutableList<GameEvent>) {
-        state.winWait++
-        if (state.winWait < answersPerPayment(state.cashToday)) return
-        state.winWait = 0
-        pay(state, Tuning.CASH_PER_WIN, CashKind.DEFEAT, events)
+        earn(state, Tuning.CASH_PER_WIN, CashKind.DEFEAT, events)
     }
 
-    /** One payment of [base] ₽ (×2 with Amulet Coin / Luck Incense on the main); the tiers count [base], the money before the doubling. */
-    private fun pay(state: GameState, base: Int, kind: CashKind, events: MutableList<GameEvent>) {
+    /**
+     * Adds [base] / tier ₽ to the day's exact fraction and pays out its whole coins: cashToday grows by the paid coins (base),
+     * cash by the same coins, x2 with Amulet Coin / Luck Incense on the main. No event when this action paid 0 coins.
+     * Overflow guard: if the denominator would pass [MAX_FRAC_DEN] (about 1e12; it cannot in a normal day, the denominators are
+     * the least common multiples of the tiers so far), the unpaid rest (under one coin) is rounded DOWN to a denominator of
+     * 1,000,000: the money already paid stays exact, at most a millionth of a coin is dropped.
+     */
+    private fun earn(state: GameState, base: Int, kind: CashKind, events: MutableList<GameEvent>) {
+        val tier = state.cashToday.coerceAtLeast(0).toLong() / Tuning.CASH_TIER + 1
+        val oldDen = state.cashFracDen.coerceAtLeast(1)
+        var num = state.cashFracNum.coerceAtLeast(0) * tier + base.toLong() * oldDen    // num/oldDen + base/tier = num / (oldDen * tier)
+        var den = oldDen * tier
+        val g = gcd(num, den)
+        num /= g; den /= g
+        val paid = num / den
+        num %= den
+        if (den > MAX_FRAC_DEN) {
+            num = java.math.BigInteger.valueOf(num).multiply(java.math.BigInteger.valueOf(1_000_000L)).divide(java.math.BigInteger.valueOf(den)).toLong()
+            den = 1_000_000L
+            val g2 = gcd(num, den); num /= g2; den /= g2
+        }
+        state.cashFracNum = num; state.cashFracDen = den
+        if (paid <= 0) return
+        val coins = paid.toInt()
         val held = state.main?.heldItem
-        val amount = if (held == "amulet-coin" || held == "luck-incense") base * 2 else base
-        state.cashToday += base
+        val amount = if (held == "amulet-coin" || held == "luck-incense") coins * 2 else coins
+        state.cashToday += coins
         state.cash += amount
         events += GameEvent.Cash(amount, state.cash, kind)
     }
 
-    /** PLAN 125: the counted answers (or wins) one payment takes once [baseToday] ₽ (before any ×2) were earned today: 1, then 2, 3, 4 ... per tier. */
-    fun answersPerPayment(baseToday: Int): Int = baseToday.coerceAtLeast(0) / Tuning.CASH_TIER + 1
+    private const val MAX_FRAC_DEN = 1_000_000_000_000L
 
-    /** The daily-goal bonus for [streakBefore] goal-streak days before today: 50 + 5 per day, 10 days at most (so 50..100). */
-    fun dailyBonus(streakBefore: Int): Int =
-        Tuning.DAILY_BONUS_BASE + Tuning.DAILY_BONUS_PER_DAY * streakBefore.coerceIn(0, Tuning.DAILY_BONUS_MAX_DAYS)
-
-    /**
-     * Pays the daily-goal bonus once (the caller is the one-a-day "Daily goal reached" moment): never doubled, outside the
-     * money curve (state.cashToday stays as it is, so it never makes the answers pay slower). Emits Cash(DAILY_BONUS).
-     */
-    fun payDailyBonus(state: GameState, streakBefore: Int, events: MutableList<GameEvent>) {
-        val amount = dailyBonus(streakBefore)
-        state.cash += amount
-        events += GameEvent.Cash(amount, state.cash, CashKind.DAILY_BONUS)
-    }
-
-    /** The log line of the daily bonus: "Daily goal bonus: +75 ₽ (6-day streak)"; a first day (streak 1 or less) has no streak part. */
-    fun dailyBonusText(amount: Int, streakDays: Int): String =
-        "Daily goal bonus: +$amount ₽" + if (streakDays > 1) " ($streakDays-day streak)" else ""
+    private fun gcd(a: Long, b: Long): Long { var x = a; var y = b; while (y != 0L) { val t = x % y; x = y; y = t }; return if (x == 0L) 1 else x }
 
     private fun rollCountdown(rng: Random) = rng.nextInt(Tuning.ITEM_COUNTDOWN.first, Tuning.ITEM_COUNTDOWN.last + 1)
 }

@@ -7,11 +7,11 @@ import android.os.SystemClock
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.data.SpriteKind
-import com.husarp.ankigo.game.CashKind
+import com.husarp.ankigo.game.CatchBall
+import com.husarp.ankigo.game.DailyGift
 import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.DuplicateResult
-import com.husarp.ankigo.game.Economy
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.StatCalc
@@ -76,6 +76,21 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         for (e in events) if (e is GameEvent.Encounter) panel.prefetchBackdrop(e.species, e.wildUid)   // R9 C4: its picture loads while the rewards play
         if (early) panel.holdEarly()
         pump()
+    }
+
+    /**
+     * PLAN 191: the fight events made on a screen that is not a battle (an item on the main from the Bag, a team edit that changed
+     * it) wait in [GameRepo]; a host that is on screen and idle takes them here ONCE and plays them like an in-battle switch: the
+     * Pokémon comes in at its HP before the hit ([BattlePanelView] draws it so until now), then the wild one's attack. Returns true
+     * when events were queued. Busy: they stay for the next time. Events of a fight that is over (another wild one, no battle) are
+     * dropped; two hosts on screen: the first takes them, the other just shows the end state.
+     */
+    fun playPending(): Boolean {
+        if (!idle) return false
+        val events = GameRepo.takePendingFightEvents()
+        if (events.isEmpty()) return false
+        enqueue(events)
+        return true
     }
 
     /** Runs [block] in order with the events (e.g. a log line for a catch-up batch). */
@@ -334,6 +349,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     init {
         GameSound.warm(panel.context)
         panel.hostIdle = { idle }   // R9-W5-A: the panel follows changes of the saved game made elsewhere only while nothing plays
+        panel.onPendingFight = { playPending() }   // PLAN 191: fight events made on another screen play here when the panel is on screen and idle
         if (continueOnPanel) panel.onContinue = { continueBattle() }   // the Continue tap under the held tiles (screens whose answers come from AnkiDroid)
         // a held next wild one let go by a window change (B7) plays its entrance now; nothing parked: drawn from the save
         panel.onHeldReleased = { val e = parked; if (e != null) { parked = null; queue.addFirst(Item.Ev(e)); pump() } else if (idle) panel.renderAll() }
@@ -383,6 +399,12 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         if (e !is GameEvent.Attack && e !is GameEvent.Encounter) sound(e)   // an attack sounds from [playAttack]: with its animation, when the hit lands; a new wild one's cry when it comes in
         when (e) {
             is GameEvent.Counted -> {
+                if (e.neutral) {   // PLAN 155: the OK of a new card: counted, but no charge, no float, nobody attacks; the combo stays as it was
+                    panel.setGoal(e.reviewsToday, st?.let { DailyGoal.today(it) } ?: 100, true)
+                    panel.setCombo(e.cardStreak, true)
+                    log(LogKind.NEUTRAL, "OK", com.husarp.ankigo.study.NewCardOk.LOG_LINE)
+                    return d(450)
+                }
                 lastButton = e.button
                 if (!e.catchUp) floats(e)   // an Again answer: "Hesitated"
                 panel.setGoal(e.reviewsToday, st?.let { DailyGoal.today(it) } ?: 100, true)
@@ -439,7 +461,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             }
             is GameEvent.LevelUp -> {
                 if (e.uid == arena.playerUid) {
-                    arena.setPlayerLevel(e.level)
+                    if (e.level > arena.playerLevel) arena.setPlayerLevel(e.level)   // PLAN 138: the XP bar's loop already changed it, level by level
                     arena.setPlayerHp(e.hp, e.maxHp, true)
                 }
                 log(LogKind.SYS, "LEVEL UP", "${em(e.name)} grew to Lv ${em(e.level.toString())}!")
@@ -482,8 +504,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             }
             is GameEvent.MainChanged -> {
                 log(LogKind.SYS, "SWITCH", "Go, ${em(e.name)}!")
-                arena.setPlayerStatus(null)
-                panel.refreshPlayer()
+                panel.refreshPlayer(e.uid)   // the one this event brings in, not the save's main: fight events made elsewhere can hold several switches (PLAN 191)
+                arena.setPlayerStatus(null)   // a switch starts clean (the battle side is reset): a status comes with its own Effect event
                 // R10 W10: a free hit follows: the saved game already has the HP after it, the bar shows the HP before until the hit lands
                 val hit = (queue.firstOrNull() as? Item.Ev)?.e as? GameEvent.SwitchHit
                 if (hit != null) arena.setPlayerHp(hit.hp, hit.maxHp, false)
@@ -491,6 +513,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 if (GameRepo.state?.mon(e.uid)?.shiny == true) arena.shinyBurst(true, d(ShinyBurst.DELAY_MS))
                 return d(800)
             }
+            is GameEvent.SwitchQueued -> return 0   // PLAN 206: nothing to animate; the action bar (observeStudyEvent above) shows "Switching after this card…" or drops it
             is GameEvent.SwitchHit -> {
                 wildMult = Tuning.SWITCH_HIT_POWER   // the turn's attack is at normal power: no "×0" left over from a round where the wild one stayed quiet
                 if (e.item != null) {
@@ -505,11 +528,12 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             is GameEvent.Cash -> {
                 panel.setCoins(e.total, true)
                 panel.floatAtCoins("+${e.amount} ₽")
-                if (e.kind == CashKind.DAILY_BONUS) { // the goal moment: its own log line (the per-answer money stays a float)
-                    log(LogKind.SYS, "GOAL", Economy.dailyBonusText(e.amount, st?.streakDays ?: 0))
-                    return d(600)
-                }
                 return 0
+            }
+            is GameEvent.DailyGift -> { // R14-B2-D: the goal moment's gift (it replaced the money bonus): its own log line, the Bag count may have changed
+                log(LogKind.SYS, "GOAL", DailyGift.logText(DailyGift.name(data, e.item, e.tm, e.count), e.streakDays))
+                if (st != null) panel.setBalls(BattlePanelView.ballCount(st), true)
+                return d(900)
             }
             is GameEvent.ItemFound -> {
                 log(LogKind.SYS, "ITEM", "Found ${em(aOrAn(Items.name(e.item)))}!")
@@ -549,24 +573,43 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
      */
     private fun startXp(e: GameEvent.XpGained, fromBall: Boolean): Long {
         val frac = if (e.xpForLevel > 0) e.xpInLevel.toFloat() / e.xpForLevel else 1f
-        val levelUp = e.level > arena.playerLevel || frac < arena.xpShown - 0.001f
+        val levelUp = e.crossedNeeds.isNotEmpty() || e.level > arena.playerLevel || frac < arena.xpShown - 0.001f
+        // PLAN 138: levels this gain grew (the event knows; an old-style event: the gap to the level shown, at least one)
+        val crossed = if (!levelUp) 0 else if (e.crossedNeeds.isNotEmpty()) e.crossedNeeds.size else max(1, e.level - arena.playerLevel)
+        val needs = XpLoop.needs(crossed, e.crossedNeeds, e.xpForLevel)
         val animated = AppPrefs.xpAnimation(ctx)
-        val fill = if (animated) XpFill(arena.xpShown, e.xpInLevel, e.xpForLevel, levelUp) else null
+        // a level-up bar first runs to the end of the OLD level (its own XP for the label)
+        val fill = if (animated) XpFill(arena.xpShown, e.xpInLevel, needs[0], levelUp) else null
         // not animated: xp 0 starts no orbs but still clears the previous plan (catchWithXp reads arena.xpPlan as THIS call's plan)
         val lead = arena.xpAbsorb(if (animated) e.xp else 0, factor.toFloat(), fill, { rate, last -> GameSound.xpOrb(ctx, rate, last, muted()) }, fromBall)
         val lastLand = if (lead > 0L) arena.xpLastLandingMs else 0L
         if (levelUp) {
-            if (lead > 0L) {
-                // the orbs fill the bar to 100 %; a moment later it restarts at 0 and grows on to the new level's progress
-                atMs(lastLand + d(300)) { arena.setPlayerXp(0, e.xpForLevel, false); arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
-                return lastLand + d(950)
+            if (!animated) {   // XP animation off: the end state at once (the LevelUp event changes the level number)
+                arena.setPlayerXp(e.xpInLevel, e.xpForLevel, false)
+                return d(300)
             }
-            // grew a level: fill the bar, then restart at the new level's progress
-            atMs(lead) {
-                arena.setPlayerXp(e.xpForLevel, e.xpForLevel, true)
-                after(450) { arena.setPlayerXp(0, e.xpForLevel, false); arena.setPlayerXp(e.xpInLevel, e.xpForLevel, true) }
+            // fill to the end (the orbs do it; without orbs the bar slides there), then per level: hold, level number, empty, slide on
+            val segs = XpLoop.segments(e.level - crossed, arena.xpShown, e.level, frac)
+            var t = lastLand
+            if (lead <= 0L) {
+                val ms = d(XpLoop.runMs(segs[0].length))
+                atMs(lead) { arena.setPlayerXp(needs[0], needs[0], true, ms) }
+                t = lead + ms
             }
-            return lead + d(950)
+            for (i in 1 until segs.size) {
+                val seg = segs[i]
+                val need = needs[i]
+                val cur = if (i == segs.lastIndex) e.xpInLevel else if (seg.toEnd) need else (seg.to * need).toInt()
+                val ms = if (seg.length <= 0f) 0L else d(XpLoop.runMs(seg.length))   // (d is never 0)
+                t += d(XpLoop.HOLD_MS)
+                atMs(t) {
+                    arena.setPlayerLevel(seg.level)
+                    arena.setPlayerXp(0, need, false)
+                    if (ms > 0L) arena.setPlayerXp(cur, need, true, ms) else arena.setPlayerXp(cur, need, false)
+                }
+                t += ms
+            }
+            return t + d(300)
         }
         // with orbs the bar is already growing; the wait covers the last landing when it comes later than the old 600 ms
         if (lead > 0L) return max(lead + d(600), lastLand + d(150))
@@ -748,7 +791,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         if (!hadBall) {
             log(LogKind.SYS, "CATCH", "Catching ${em(bare(e.name))}…")
             arena.enemyIntoBall(d(350))
-            arena.dropBall(e.ball ?: "poke-ball", d(450))
+            arena.dropBall(e.ball ?: CatchBall.forAuto(GameRepo.data?.species?.get(e.species)), d(450)) // PLAN 205: an auto-catch shows a ball by rarity (visual only)
             after(450) { arena.wobbleBall(d(1800)) }
             t = 2250
         }

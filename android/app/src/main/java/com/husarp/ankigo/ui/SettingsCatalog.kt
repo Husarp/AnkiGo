@@ -104,6 +104,7 @@ object SettingsCatalog {
         s("tapHide", ST, "", "Tap again to hide the answer", "Tap the answer to read the question again"),
         s("enterShows", ST, "", "Enter = Show answer", "Pressing Enter in a type-in answer shows the answer"),
         s("haptic", ST, "", "Vibrate on answer", "A short buzz when you answer a card"),
+        s("newCardOk", ST, "", "New cards: one OK button", com.husarp.ankigo.study.NewCardOk.SETTING_NOTE),   // PLAN 155
         s("swipe", ST, "", "Swipe to answer", "On the answer side: left Again, down Hard, right Good, up Easy"),
         s("speakBattle", ST, "", "Read battle log with TalkBack", "Off keeps the card reading uninterrupted"),
         s("zoom", ST, "", "Card text size", "Makes the card text bigger or smaller"),
@@ -175,6 +176,7 @@ s("catchDefeat", G, "When you beat a wild Pokémon", "Defeat", "Catch only shini
         s("diagnostics", DI, "", "Diagnostics", "What AnkiGo can see on this phone, and a log to send if something breaks"),
 
         // About
+        s("ankidroidStatus", A, "", "AnkiDroid", "Which AnkiDroid AnkiGo uses, its version and whether it works"),
         s("about", A, "", "About", "Version, credits and licences"),
     )
 

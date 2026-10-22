@@ -225,13 +225,122 @@ class AchievementsTest {
             GameEvent.Counted(3, 10, 1, 1, false), GameEvent.Cash(5, 5, CashKind.ANSWER),
             GameEvent.Counted(4, 20, 2, 2, false), GameEvent.Cash(5, 10, CashKind.ANSWER),
             GameEvent.Counted(1, 0, 3, 0, false), GameEvent.Counted(2, 5, 4, 1, true), GameEvent.Counted(0, 10, 5, 2, true),
-            GameEvent.Cash(75, 85, CashKind.DAILY_BONUS), GameEvent.Cash(10, 95, CashKind.DEFEAT),
+            GameEvent.DailyGift("poke-ball", null, 3, 6), GameEvent.Cash(10, 95, CashKind.DEFEAT),
         ))
         assertEquals(1L, counter(s, Metric.GOOD_PRESSES)) // button 0 (unknown) is not a Good press
         assertEquals(1L, counter(s, Metric.EASY_PRESSES))
         assertEquals(1L, counter(s, Metric.DAYS_STUDIED)) // only the first answer of the day
-        assertEquals(95L, counter(s, Metric.MONEY_EARNED))
-        assertEquals(1L, counter(s, Metric.GOALS_REACHED))
+        assertEquals("a gift is no money", 20L, counter(s, Metric.MONEY_EARNED))
+        assertEquals("the daily gift is the goal moment", 1L, counter(s, Metric.GOALS_REACHED))
+    }
+
+    @Test fun anOldBonusCashEventNoLongerCountsAsAGoal() { // R14-B2-D: only DailyGift does
+        val s = state()
+        Achievements.count(s, listOf(GameEvent.Cash(50, 50, CashKind.DAILY_BONUS)))
+        assertEquals(0L, counter(s, Metric.GOALS_REACHED))
+    }
+
+    @Test fun aTmGiftCountsAsAGoalToo() {
+        val s = state()
+        Achievements.count(s, listOf(GameEvent.DailyGift(null, "bodyslam", 1, 1), GameEvent.DailyGift("potion", null, 2, 2)))
+        assertEquals(2L, counter(s, Metric.GOALS_REACHED))
+    }
+
+    // ---- R14-B2-D: the one Master Ball (the top tier of "Best streak") ----
+
+    @Test fun bestStreakTopTierIsTheOnlyRewardAndItIsTheMasterBall() {
+        val rewards = AchievementTable.ROWS.filter { it.rewards.isNotEmpty() }
+        assertEquals(listOf("streak-days"), rewards.map { it.id })
+        assertEquals(mapOf(4 to "master-ball"), rewards.single().rewards)
+        assertEquals(365L, rewards.single().tiers[4])
+        assertTrue("master-ball" in Items.ALL)
+        assertEquals(0, data.price("master-ball")) // never sold
+        assertTrue(rewards.single().desc.contains("Master Ball"))
+    }
+
+    @Test fun reachingTheTopStreakTierGivesExactlyOneMasterBall() {
+        val s = looked()
+        s.bestStreakDays = 100 // tier 3 only
+        check(s)
+        assertEquals(0, s.count("master-ball"))
+        s.bestStreakDays = 365
+        val ev = check(s, NOW + 1)
+        assertEquals(listOf(4), reached(ev, "streak-days").map { it.tier })
+        assertEquals(1, s.count("master-ball"))
+        assertEquals(0, check(s, NOW + 2).size)
+        assertEquals("a second check gives none", 1, s.count("master-ball"))
+        s.bestStreakDays = 400
+        check(s, NOW + 3)
+        assertEquals(1, s.count("master-ball"))
+    }
+
+    @Test fun theMasterBallAlsoComesWhenTheTierIsFoundOnAQuietLook() {
+        val s = state() // an old save that already has a 400-day streak, never looked at
+        s.bestStreakDays = 400
+        assertTrue(check(s).none { it is GameEvent.AchievementReached })
+        assertEquals(1, s.count("master-ball"))
+        check(s, NOW + 1)
+        assertEquals(1, s.count("master-ball"))
+        val silent = state(); silent.bestStreakDays = 365
+        Achievements.check(silent, data, NOW, mutableListOf(), silent = true)
+        assertEquals(1, silent.count("master-ball"))
+    }
+
+    @Test fun aTopStreakTierDatedBeforeThisVersionGetsItsMasterBallOnTheNextCheckExactlyOnce() { // R14-B2 fix Y1
+        val s = looked()
+        s.bestStreakDays = 365
+        // a save written by the previous version: the tier has its date, no reward was ever given, nothing claimed
+        s.achTiers["streak-days"] = mutableListOf(NOW - 5000, NOW - 4000, NOW - 3000, NOW - 2000, NOW - 1000)
+        assertTrue(s.rewardsClaimed.isEmpty()); assertEquals(0, s.count("master-ball"))
+        assertTrue(check(s).none { it is GameEvent.AchievementReached })
+        assertEquals(1, s.count("master-ball"))
+        assertEquals(setOf("streak-days/4"), s.rewardsClaimed)
+        check(s, NOW + 1)
+        assertEquals("a second check gives none", 1, s.count("master-ball"))
+    }
+
+    @Test fun aClaimedRewardNeverComesAgainEvenWhenTheBallIsUsedUp() { // R14-B2 fix Y1
+        val s = looked()
+        s.bestStreakDays = 365
+        check(s)
+        assertEquals(1, s.count("master-ball"))
+        Economy.take(s, "master-ball")
+        assertEquals(0, s.count("master-ball"))
+        check(s, NOW + 1)
+        s.achTiers["streak-days"] = mutableListOf(NOW, NOW, NOW, NOW, NOW) // even when the dates are found again
+        check(s, NOW + 2)
+        assertEquals(0, s.count("master-ball"))
+        val claimed = looked()
+        claimed.bestStreakDays = 365
+        claimed.rewardsClaimed += "streak-days/4"
+        check(claimed)
+        assertEquals("a save that already holds the claim gets no ball", 0, claimed.count("master-ball"))
+    }
+
+    @Test fun theRewardThresholdComesFromTheTable() { // R14-B2 fix Y2
+        assertEquals(365L, AchievementTable.rewardThreshold("streak-days", "master-ball"))
+        assertNull(AchievementTable.rewardThreshold("streak-days", "ultra-ball"))
+        assertNull(AchievementTable.rewardThreshold("answers", "master-ball"))
+    }
+
+    @Test fun theLowerStreakTiersAndEveryOtherRowGiveNoItem() {
+        val s = state()
+        s.bestStreakDays = 100; s.totalReviews = 300_000; s.defeats = 20_000
+        val before = s.bag.toMap()
+        check(s)
+        assertEquals(before, s.bag.toMap())
+    }
+
+    @Test fun theStreakTopTierPopupAndSheetSayWhatTheRewardIs() {
+        assertEquals("master-ball", AchPageMath.rewardOf("streak-days", 4))
+        assertNull(AchPageMath.rewardOf("streak-days", 3))
+        assertNull(AchPageMath.rewardOf("answers", 4))
+        assertEquals("Reward: Master Ball", AchPageMath.rewardText("master-ball"))
+        assertEquals("Reward: a Master Ball, in your Bag", AchPageMath.rewardPopupText("master-ball"))
+        assertEquals("Reward: an Ultra Ball, in your Bag", AchPageMath.rewardPopupText("ultra-ball"))
+        val s = state(); s.bestStreakDays = 365
+        val v = Achievements.view(s, data).single { it.id == "streak-days" }
+        assertEquals(listOf(null, null, null, null, "master-ball"), AchPageMath.ladder(v).map { it.reward })
     }
 
     @Test fun blockedDamageIsWhatAResistedHitDidNotDo() {
@@ -564,6 +673,7 @@ class AchievementsTest {
 
     @Test fun theDebugLogLineIsReadable() {   // R13 Part E: names in the debug log, not only ids
         assertEquals("AchievementReached answers tier=1 Answers given Rare", com.husarp.ankigo.debug.GameEventText.event(GameEvent.AchievementReached("answers", 1, "Answers given", "Rare")))
+        assertEquals("DailyGift 3 Poké Balls streak=6", com.husarp.ankigo.debug.GameEventText.event(GameEvent.DailyGift("poke-ball", null, 3, 6))) // R14-B2-D
     }
 
     // ---- shop, items, TMs ----

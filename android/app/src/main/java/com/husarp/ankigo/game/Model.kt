@@ -299,8 +299,8 @@ class GameState(
     var day: String = "",                // current game day "yyyy-MM-dd" (a day starts at settings.dayStartHour)
     var reviewsToday: Int = 0,
     var cashToday: Int = 0,              // PLAN 125: today's answer + win money BEFORE any ×2 (it picks the money curve's tier, Economy)
-    var cashWait: Int = 0,               // PLAN 125: counted answers since today's last answer payment (a tier pays every N answers)
-    var winWait: Int = 0,                // R13 Part C: wins (defeats + catches) since today's last win payment (a tier pays every N wins)
+    var cashFracNum: Long = 0,           // PLAN 198: today's unpaid money as an exact fraction cashFracNum / cashFracDen of a coin (always < 1; Economy)
+    var cashFracDen: Long = 1,           // PLAN 198: its denominator (>= 1)
     var itemCountdown: Int = 0,          // answers until the next random item (0 = not rolled yet)
     val buttonsToday: IntArray = IntArray(5), // index = button (0 unknown, 1 Again .. 4 Easy)
     var cardStreak: Int = 0,             // correct answers in a row (shown as the combo chip; no battle effect, as Ankimon)
@@ -329,6 +329,7 @@ class GameState(
     val counters: MutableMap<String, Long> = mutableMapOf(),   // achievement counters (Achievements.Counter key -> count) for what the rest of the save can't tell; AnkiGo save and backups only (R4-03)
     val achTiers: MutableMap<String, MutableList<Long>> = mutableMapOf(), // achievement id -> epoch ms each tier was reached, in order; an id with an empty list = looked at, nothing reached yet (see Achievements.check)
     val achInferred: MutableSet<String> = linkedSetOf(),       // "<id>/<tier>" of reached tiers whose date is only the day AnkiGo first saw them (silent look, backfill, a first external feed), not the day they happened (R4 fix A3)
+    val rewardsClaimed: MutableSet<String> = linkedSetOf(),    // "<achievement id>/<tier>" of tier rewards already put in the Bag (R14-B2 fix Y1): a reward comes once, even when the item is used up; an old save has none
     val badgeAt: MutableMap<Int, Long> = mutableMapOf(),       // Ankimon badge id -> epoch ms it was earned here (old badges have none)
     var achSince: Long = 0,                                    // epoch ms the achievement tracking began (0 = not yet; set by the first Achievements.check)
     /** Version of the achievement tier ladders this save's [achTiers] / [achInferred] are written for (AchievementTable.LADDER). A new game starts current; a save without the key is 1; Achievements.migrate remaps an older one once (R9-B2). */
@@ -338,10 +339,17 @@ class GameState(
     /** Species the starter alone put into [seen] / [caught] (its own, and the form it evolved into): not counted by the Pokédex rows until met / caught for real. */
     val starterSeen: MutableSet<Int> = linkedSetOf(),
     val starterCaught: MutableSet<Int> = linkedSetOf(),
+    /** PLAN 206: the uid of the team member a switch is waiting for: it comes in right after the next counted answer ([Game.requestMain]). Null = no switch queued; old saves have none; never exported to Ankimon. */
+    var pendingMain: String? = null,
+    /** PLAN 206: the queued switch came from [Game.cycleMain]: the answer rotates the first three as the cycle does, not [Game.setMain]'s move to the front. Meaningful only with [pendingMain]. */
+    var pendingCycle: Boolean = false,
     val settings: Settings = Settings(),
 ) {
     fun mon(uid: String?): Mon? = mons.firstOrNull { it.uid == uid }
     val main: Mon? get() = mon(team.firstOrNull())
+
+    /** PLAN 206: the team member queued to come in after the next answer, or null (nothing queued, or the queue went stale: it left the team, or it is the main already). */
+    val queuedMain: Mon? get() = pendingMain?.takeIf { it in team && it != team.firstOrNull() }?.let { mon(it) }
     fun teamMons(): List<Mon> = team.mapNotNull { mon(it) }
     fun boxMons(): List<Mon> = mons.filter { it.uid !in team }
 
@@ -366,5 +374,8 @@ class GameState(
     companion object { const val SCHEMA = 1 }
 }
 
-/** One answer seen in AnkiDroid. button: 0 unknown (counts as Good), 1 Again, 2 Hard, 3 Good, 4 Easy. */
-data class Answer(val cardId: Long, val button: Int, val at: Long, val catchUp: Boolean = false)
+/**
+ * One answer seen in AnkiDroid. button: 0 unknown (counts as Good), 1 Again, 2 Hard, 3 Good, 4 Easy. [neutral] (PLAN 155): the
+ * "New cards: one OK button" answer: it counts like an Again press (reviews, money, goal, stats) but stays out of the battle round.
+ */
+data class Answer(val cardId: Long, val button: Int, val at: Long, val catchUp: Boolean = false, val neutral: Boolean = false)

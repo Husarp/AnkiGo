@@ -82,9 +82,12 @@ class FloatTextsTest {
         assertEquals(listOf("Thawed" to FloatKind.STATUS), FloatTexts.of(fx(EffectKind.STATUS_CURED, stat = "frz"), on).pairs())
         assertEquals(listOf("Woke up" to FloatKind.STATUS), FloatTexts.of(fx(EffectKind.STATUS_CURED, text = "X woke up!"), on).pairs())
         assertEquals(listOf("Thawed" to FloatKind.STATUS), FloatTexts.of(fx(EffectKind.STATUS_CURED, text = "X thawed out!"), on).pairs())
-        for (st in listOf("par", "slp", "frz")) {
-            assertEquals(listOf(FloatText(true, "Can't move", FloatKind.STATUS)), FloatTexts.of(fx(EffectKind.CANT_MOVE, status = st), on))
+        for ((st, t) in listOf("par" to "Fully paralyzed", "slp" to "Fast asleep", "frz" to "Frozen solid")) {
+            assertEquals(listOf(FloatText(true, t, FloatKind.STATUS, st)), FloatTexts.of(fx(EffectKind.CANT_MOVE, status = st), on))
+            assertEquals(listOf(FloatText(true, t, FloatKind.STATUS, st)), FloatTexts.of(fx(EffectKind.CANT_MOVE, stat = st), on))
         }
+        // an old event with no key still says something
+        assertEquals(listOf(FloatText(true, "Can't move", FloatKind.STATUS)), FloatTexts.of(fx(EffectKind.CANT_MOVE), on))
     }
 
     @Test fun statChangeLabelsAndArrows() {

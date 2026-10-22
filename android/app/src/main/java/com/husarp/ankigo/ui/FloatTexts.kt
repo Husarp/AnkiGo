@@ -37,7 +37,7 @@ object FloatTexts {
     }
 
     fun of(e: GameEvent, ctx: FloatContext = FloatContext()): List<FloatText> = when (e) {
-        is GameEvent.Counted -> if (e.button == AGAIN) listOf(FloatText(true, "Hesitated", FloatKind.HESITATE)) else emptyList()
+        is GameEvent.Counted -> if (e.button == AGAIN && !e.neutral) listOf(FloatText(true, "Hesitated", FloatKind.HESITATE)) else emptyList()
         is GameEvent.Attack -> attack(e, ctx)
         is GameEvent.Effect -> effect(e)
         is GameEvent.Healed -> if (e.amount > 0) listOf(FloatText(true, heal(e.amount), FloatKind.HEAL)) else emptyList() // only the main's heals emit it
@@ -68,7 +68,16 @@ object FloatTexts {
                 val woke = e.stat == "slp" || (e.stat == null && "woke" in e.text)
                 listOf(FloatText(p, if (woke) "Woke up" else "Thawed", FloatKind.STATUS))
             }
-            EffectKind.CANT_MOVE -> listOf(FloatText(p, "Can't move", FloatKind.STATUS))
+            // PLAN 172: say why, with the status key so the view draws that status' badge in front
+            EffectKind.CANT_MOVE -> {
+                val key = e.stat ?: e.status
+                when (key) {
+                    "slp" -> listOf(FloatText(p, "Fast asleep", FloatKind.STATUS, key))
+                    "par" -> listOf(FloatText(p, "Fully paralyzed", FloatKind.STATUS, key))
+                    "frz" -> listOf(FloatText(p, "Frozen solid", FloatKind.STATUS, key))
+                    else -> listOf(FloatText(p, "Can't move", FloatKind.STATUS))
+                }
+            }
             EffectKind.STAT_CHANGE -> {
                 val label = statLabel(e.stat) ?: return emptyList()
                 if (e.stages == 0) emptyList()

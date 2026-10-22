@@ -5,8 +5,8 @@ package com.husarp.ankigo.game
  * Every event carries the numbers the UI needs, so the panel never has to guess intermediate HP values.
  */
 sealed class GameEvent {
-    /** An answer was counted. button 0..4, points per Tuning.POINTS. */
-    data class Counted(val button: Int, val points: Int, val reviewsToday: Int, val cardStreak: Int, val catchUp: Boolean) : GameEvent()
+    /** An answer was counted. button 0..4, points per Tuning.POINTS. [neutral] (PLAN 155): the OK of a new card, no round and no combo change. */
+    data class Counted(val button: Int, val points: Int, val reviewsToday: Int, val cardStreak: Int, val catchUp: Boolean, val neutral: Boolean = false) : GameEvent()
 
     /** The answer was not counted (the redo of an answer that was undone in AnkiDroid). */
     data class Ignored(val reason: String) : GameEvent()
@@ -23,6 +23,13 @@ sealed class GameEvent {
     data class AchievementReached(val id: String, val tier: Int, val title: String, val tierName: String) : GameEvent()
     data class TrainerLevelUp(val level: Int) : GameEvent()
     data class DayChanged(val day: String) : GameEvent()
+
+    /**
+     * R14-B2-D (PLAN 125 / R10 X3): the daily gift, sent once a day when the daily goal is reached (it replaces the old money bonus). Exactly one of
+     * [item] (an item id, [count] of it, already in the Bag) and [tm] (a TM's move id, already in the TMs) is set. [streakDays] = the goal streak
+     * today, which sets the chances of the rarer tiers.
+     */
+    data class DailyGift(val item: String?, val tm: String?, val count: Int, val streakDays: Int) : GameEvent()
 
     // ---- battle ----
     /**
@@ -91,7 +98,15 @@ sealed class GameEvent {
         val releasedName: String? = null, val keptBecause: String? = null,
     ) : GameEvent()
 
-    data class XpGained(val uid: String, val name: String, val xp: Int, val level: Int, val xpInLevel: Int, val xpForLevel: Int) : GameEvent()
+    /**
+     * [xp] gained; [level] / [xpInLevel] / [xpForLevel] are AFTER the gain. PLAN 138 + 182: [beforeInLevel] = the XP inside the old level
+     * before the gain (-1 = not recorded) and [crossedNeeds] = the XP each level the gain grew needed (the old level's first, one entry per
+     * level gained; empty = no level), so a bar can be played as "fill to the end, restart, ..." from where it really stood.
+     */
+    data class XpGained(
+        val uid: String, val name: String, val xp: Int, val level: Int, val xpInLevel: Int, val xpForLevel: Int,
+        val beforeInLevel: Int = -1, val crossedNeeds: List<Int> = emptyList(),
+    ) : GameEvent()
     data class LevelUp(val uid: String, val name: String, val level: Int, val hp: Int, val maxHp: Int) : GameEvent()
     data class MoveLearned(val uid: String, val name: String, val move: String, val forgot: String?) : GameEvent()
     data class MoveSkipped(val uid: String, val name: String, val move: String) : GameEvent()
@@ -121,6 +136,14 @@ sealed class GameEvent {
      */
     data class SwitchHit(val wildName: String, val monName: String, val hp: Int, val maxHp: Int, val item: String? = null) : GameEvent()
 
+    /**
+     * PLAN 206: a switch was made while a card shows: [uid] ([name]) comes in right after that card is answered (the card you saw is
+     * fought by the Pokémon that is out); then [MainChanged] (and the wild one's [SwitchHit]) follow, with that answer's events. Plays
+     * no animation: the action bar says "Switching after this card…". [uid] null = the queue was cancelled (the main was picked again):
+     * [name] is the Pokémon that stays out.
+     */
+    data class SwitchQueued(val uid: String?, val name: String) : GameEvent()
+
     /** Generic message for item use etc. */
     data class Info(val text: String) : GameEvent()
 }
@@ -141,8 +164,9 @@ enum class EffectKind { OTHER, STATUS_APPLIED, STATUS_CURED, CANT_MOVE, STAT_CHA
 enum class HealReason { LEVEL_UP, DEFEAT, CATCH }
 
 /**
- * What a [GameEvent.Cash] was paid for: a counted answer, a won fight ([DEFEAT]: a wild Pokémon defeated or caught, R13 Part C), or
- * the once-a-day daily-goal bonus.
+ * What a [GameEvent.Cash] was paid for: a counted answer or a won fight ([DEFEAT]: a wild Pokémon defeated or caught, R13 Part C).
+ * [DAILY_BONUS] is the old once-a-day goal bonus: R14-B2-D replaced it with [GameEvent.DailyGift], nothing sends it any more; the value stays
+ * so old logs and saved text that name it still read.
  */
 enum class CashKind { ANSWER, DEFEAT, DAILY_BONUS }
 

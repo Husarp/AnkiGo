@@ -30,7 +30,25 @@ class TeamXpCardsTest {
         assertEquals(0f, cards[0].barFrom, 0.0001f); assertEquals(0.4f, cards[0].barTo, 0.0001f)
     }
 
-    @Test fun levelUpStartsTheBarAtZeroAndCountsLevels() {
+    @Test fun levelUpStartsTheBarAtTheOldFractionOfTheOldLevel() {
+        // PLAN 182: 80 of 90 XP before the gain, two levels, 25 of 100 now
+        val ev = listOf(GameEvent.XpGained("a", "A", 500, 12, 25, 100, 80, listOf(90, 95)), up("a", 11), up("a", 12))
+        val c = TeamXpCards.of(ev, "main").single()
+        assertTrue(c.levelUp); assertEquals(10, c.levelFrom); assertEquals(12, c.levelTo)
+        assertEquals(80f / 90f, c.barFrom, 0.0001f); assertEquals(0.25f, c.barTo, 0.0001f)
+    }
+
+    @Test fun aPlainGainUsesTheRecordedStartToo() {
+        val c = TeamXpCards.of(listOf(GameEvent.XpGained("a", "A", 30, 9, 50, 100, 20)), "main").single()
+        assertFalse(c.levelUp); assertEquals(0.2f, c.barFrom, 0.0001f); assertEquals(0.5f, c.barTo, 0.0001f)
+    }
+
+    @Test fun aLevelUpWithTheStartRecordedAtZeroStartsEmpty() {
+        val ev = listOf(GameEvent.XpGained("a", "A", 100, 10, 0, 100, 0, listOf(100)), up("a", 10))
+        assertEquals(0f, TeamXpCards.of(ev, "main").single().barFrom, 0f)
+    }
+
+    @Test fun oldStyleLevelUpWithoutARecordedStartStartsTheBarAtZero() {
         val ev = listOf(xp("a", 500, 12, 25, 100), up("a", 11), up("a", 12), up("main", 30))
         val c = TeamXpCards.of(ev, "main").single()
         assertTrue(c.levelUp); assertEquals(10, c.levelFrom); assertEquals(12, c.levelTo)

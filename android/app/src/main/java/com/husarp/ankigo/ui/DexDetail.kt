@@ -40,7 +40,7 @@ object DexDetail {
             setPadding(Ui.dp(a, 20), Ui.dp(a, 6), Ui.dp(a, 20), Ui.dp(a, 6))
         }
         val img = ImageView(a)
-        MonPreview.show(a, sp.num, false, img)
+        MonPreview.show(a, sp.num, false, img, idle = true)
         img.setOnClickListener { SpriteViewer.show(a, sp.num, false) } // R10-B1: full-screen viewer
         img.contentDescription = "Show the picture full screen"
         col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, if (DetailParts.compact(a)) 72 else 96), Ui.dp(a, if (DetailParts.compact(a)) 72 else 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })

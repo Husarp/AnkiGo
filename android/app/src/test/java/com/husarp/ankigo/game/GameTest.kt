@@ -472,7 +472,7 @@ class GameTest {
         assertEquals(20, g.state.cash); assertEquals(20, g.state.cashToday)
     }
 
-    @Test fun aHundredAnswersFillTheFirstTierThenEverySecondAnswerPays() {   // PLAN 125: the linear money curve
+    @Test fun aHundredAnswersFillTheFirstTierThenEveryAnswerPaysHalf() {   // PLAN 125: the linear money curve
         val g = game()
         g.state.settings.dailyAverage = 1000
         val first = g.plainAnswers(100)
@@ -480,7 +480,7 @@ class GameTest {
         assertTrue(first.cash().all { it.kind == CashKind.ANSWER && it.amount == 5 })
         assertEquals(500, g.state.cash); assertEquals(500, g.state.cashToday)
         val next = g.plainAnswers(10)
-        assertEquals("every 2nd answer of the second 500", 5, next.cash().size)
+        assertEquals("every answer of the second 500 pays 2.5 as whole coins: 2, 3, 2, 3 ...", listOf(2, 3, 2, 3, 2, 3, 2, 3, 2, 3), next.cash().map { it.amount })   // PLAN 198
         assertEquals(525, g.state.cash); assertEquals(525, g.state.cashToday)
     }
 
@@ -497,10 +497,10 @@ class GameTest {
         assertEquals(listOf(CashKind.ANSWER to 10, CashKind.DEFEAT to 20), ev.cash().map { it.kind to it.amount })
         assertEquals(50, g.state.cash)
         assertEquals("the curve counts the money before the ×2", 25, g.state.cashToday)
-        g.state.cashToday = 500   // the second tier: every 2nd answer pays, still doubled
+        g.state.cashToday = 500   // the second tier: an answer is 2.5 (2 then 3 coins, PLAN 198), still doubled
         g.state.main!!.heldItem = "luck-incense"
-        assertTrue(g.plainAnswers(1).cash().isEmpty())
-        assertEquals(GameEvent.Cash(10, 60, CashKind.ANSWER), g.plainAnswers(1).cash().single())
+        assertEquals(GameEvent.Cash(4, 54, CashKind.ANSWER), g.plainAnswers(1).cash().single())
+        assertEquals(GameEvent.Cash(6, 60, CashKind.ANSWER), g.plainAnswers(1).cash().single())
         assertEquals(505, g.state.cashToday)
     }
 
@@ -547,37 +547,40 @@ class GameTest {
         assertEquals(10, b.state.cash); assertEquals(10, b.state.cashToday)
     }
 
-    @Test fun inTheSecondTierEverySecondWinPays() {   // R13 Part C: the win money follows the answers' curve (whole 10 ₽, every Nth win)
+    @Test fun inTheSecondTierAWinIsWorthFiveAndSharesTheFractionWithTheAnswers() {   // R13 Part C, PLAN 198: base / tier, one exact fraction
         val g = game()
         g.state.settings.dailyAverage = 1000
         g.state.caught += 16
         g.state.cashToday = 500
         g.fight(species = 16, level = 12, hp = 1)
-        g.answer(3)
+        val first = g.answer(3)
+        assertEquals("answer 1 of tier 2: 2.5 pays 2", listOf(CashKind.ANSWER to 2), first.cash().map { it.kind to it.amount })
         val ev = g.answer(3)
         assertEquals(1, ev.of<GameEvent.Defeated>().size)
-        assertEquals("the 2nd answer of the tier pays, the 1st win doesn't", listOf(CashKind.ANSWER to 5), ev.cash().map { it.kind to it.amount })
-        assertEquals(1, g.state.winWait)
+        assertEquals("answer 2 pays 3 (the half coin was kept), the win 10/2 = 5", listOf(CashKind.ANSWER to 3, CashKind.DEFEAT to 5), ev.cash().map { it.kind to it.amount })
+        assertEquals(0L, g.state.cashFracNum)
         g.fight(species = 16, level = 12, hp = 1)
         g.answer(3)
         val ev2 = g.answer(3)
-        assertEquals(listOf(CashKind.ANSWER to 5, CashKind.DEFEAT to 10), ev2.cash().map { it.kind to it.amount })
-        assertEquals(0, g.state.winWait)
+        assertEquals(listOf(CashKind.ANSWER to 3, CashKind.DEFEAT to 5), ev2.cash().map { it.kind to it.amount })
         assertEquals(20, g.state.cash); assertEquals(520, g.state.cashToday)
+        g.state.cashFracNum = 1; g.state.cashFracDen = 2
         now += day(1)
         g.plainAnswers(1)
-        assertEquals("a new day starts the win count again too", 0, g.state.winWait)
+        assertEquals("a new day starts the fraction again too (the new day's first answer pays 5 and leaves 0)", 0L, g.state.cashFracNum)
+        assertEquals(1L, g.state.cashFracDen)
     }
 
     @Test fun cashSoFarOfAnOldSaveCarriesOverAndTheNewDayStartsAtZero() {
         val g = game()
         g.state.settings.dailyAverage = 1000
         g.state.cashToday = 380 // a day of the old rule
-        assertEquals(24 + 8, g.plainAnswers(40).cash().size) // 24 answers to 500, then the other 16 pay every 2nd
-        assertEquals(540, g.state.cashToday)
+        // 24 answers of 5 to 500, then the other 16 are 2.5 each = 40 in two-coin / three-coin steps (8 + 8 pairs): 16 more payments
+        assertEquals(24 + 16, g.plainAnswers(40).cash().size)
+        assertEquals(500 + 40, g.state.cashToday)
         now += day(1)
         assertEquals(GameEvent.Cash(5, 165, CashKind.ANSWER), g.plainAnswers(1).cash().single())
-        assertEquals(5, g.state.cashToday); assertEquals(0, g.state.cashWait)
+        assertEquals(5, g.state.cashToday); assertEquals(0L, g.state.cashFracNum)
     }
 
     @Test fun undoThenRedoOfAnAnswerPaysNothing() {
@@ -591,61 +594,110 @@ class GameTest {
         assertEquals(5, g.state.cash); assertEquals(5, g.state.cashToday)
     }
 
-    @Test fun dailyBonusFirstDayIsFiftyAndPaidOnceOutsideTheCap() {
+    // ---- the daily gift (R14-B2-D: it replaced the daily money bonus) ----
+
+    private fun List<GameEvent>.gifts() = of<GameEvent.DailyGift>()
+
+    @Test fun reachingTheGoalGivesOneGiftIntoTheBagAndNoMoney() {
         val g = game()
         g.state.settings.dailyAverage = 3
+        g.state.itemCountdown = 1000 // no random item drop in these answers: only the gift changes the bag
+        val bagBefore = g.state.bag.values.sum(); val tmsBefore = g.state.tms.toSet()
         val ev = g.plainAnswers(3)
-        val bonus = ev.cash().single { it.kind == CashKind.DAILY_BONUS }
-        assertEquals(50, bonus.amount)
-        assertEquals(65, g.state.cash)
-        assertEquals(15, g.state.cashToday) // the bonus is not on the money curve
-        assertTrue(ev.indexOf(GameEvent.Info("Daily goal reached!")) < ev.indexOf(bonus)) // the goal line, then its bonus
-        val more = g.plainAnswers(5)
-        assertTrue(more.cash().none { it.kind == CashKind.DAILY_BONUS }) // once a day
-        assertEquals(65 + 25, g.state.cash)
+        val gift = ev.gifts().single()
+        assertEquals(1, gift.streakDays)
+        assertTrue("no money bonus any more", ev.cash().none { it.kind == CashKind.DAILY_BONUS })
+        assertEquals(15, g.state.cash) // the three answers only
+        assertEquals(15, g.state.cashToday)
+        assertTrue(ev.indexOf(GameEvent.Info("Daily goal reached!")) < ev.indexOf(gift)) // the goal line, then its gift
+        if (gift.item != null) {
+            assertNull(gift.tm)
+            assertEquals(bagBefore + gift.count, g.state.bag.values.sum())
+            assertTrue(gift.item in Items.ALL)
+        } else {
+            assertTrue(gift.tm!! !in tmsBefore && gift.tm in g.state.tms)
+            assertEquals(bagBefore, g.state.bag.values.sum())
+        }
+        assertTrue("once a day", g.plainAnswers(5).gifts().isEmpty())
+        assertEquals(15 + 25, g.state.cash) // five more answers, still no bonus
     }
 
-    @Test fun dailyBonusGrowsWithTheStreakBeforeToday() {
-        fun bonusAfter(streak: Int, lastGoal: String): Int {
+    @Test fun theGiftComesAgainTheNextDayAndTheStreakGrowsWithIt() {
+        val g = game()
+        g.state.settings.dailyAverage = 3
+        val streaks = ArrayList<Int>()
+        repeat(3) {
+            streaks += g.plainAnswers(3).gifts().single().streakDays
+            assertTrue(g.plainAnswers(2).gifts().isEmpty())
+            now += day(1)
+        }
+        assertEquals(listOf(1, 2, 3), streaks)
+    }
+
+    @Test fun theGiftCarriesTheStreakOfToday() {
+        fun streakOfGift(streak: Int, lastGoal: String): Int {
             val g = game()
             g.state.settings.dailyAverage = 2
             g.state.streakDays = streak; g.state.lastGoalDay = lastGoal
-            return g.plainAnswers(2).cash().single { it.kind == CashKind.DAILY_BONUS }.amount
+            return g.plainAnswers(2).gifts().single().streakDays
         }
-        assertEquals(80, bonusAfter(6, "2026-10-12")) // six goal days in a row until yesterday
-        assertEquals(100, bonusAfter(10, "2026-10-12"))
-        assertEquals(100, bonusAfter(23, "2026-10-12"))
-        assertEquals(50, bonusAfter(9, "2026-10-11")) // a day was missed: the streak starts again
-        assertEquals(50, bonusAfter(0, ""))
+        assertEquals(7, streakOfGift(6, "2026-10-12")) // six goal days in a row until yesterday, today makes seven
+        assertEquals(24, streakOfGift(23, "2026-10-12"))
+        assertEquals(1, streakOfGift(9, "2026-10-11")) // a day was missed: the streak starts again
+        assertEquals(1, streakOfGift(0, ""))
     }
 
-    @Test fun dailyBonusOnConsecutiveDays() {
-        val g = game()
-        g.state.settings.dailyAverage = 3
-        val paid = ArrayList<Int>()
-        repeat(3) {
-            paid += g.plainAnswers(3).cash().single { it.kind == CashKind.DAILY_BONUS }.amount
-            now += day(1)
-        }
-        assertEquals(listOf(50, 55, 60), paid)
-    }
-
-    @Test fun dailyBonusIsPaidInFullOnASlowTierAndNeverDoubled() {
+    @Test fun theGiftNeverTouchesTheMoneyCurveOrTheAmuletCoin() {
         val h = game()
         h.state.settings.dailyAverage = 3
         h.state.main!!.heldItem = "amulet-coin"
-        h.state.cashToday = 500 // the second tier: one of the 3 answers pays (doubled); the bonus comes in full, not doubled
-        val ev = h.plainAnswers(3).cash()
-        assertEquals(listOf(CashKind.ANSWER to 10, CashKind.DAILY_BONUS to 50), ev.map { it.kind to it.amount })
-        assertEquals(505, h.state.cashToday)
+        h.state.cashToday = 500 // the second tier: the 3 answers pay 2, 3, 2 (doubled)
+        val ev = h.plainAnswers(3)
+        assertEquals(listOf(CashKind.ANSWER to 4, CashKind.ANSWER to 6, CashKind.ANSWER to 4), ev.cash().map { it.kind to it.amount })
+        assertEquals(1, ev.gifts().size)
+        assertEquals(507, h.state.cashToday)
+        assertEquals(14, h.state.cash)
     }
 
-    @Test fun anAnswerThatReachesTheGoalCountsInTheStatsLogToo() {
+    @Test fun aGoalLoweredDuringTheDayStillGivesTheGiftOnce() {
+        val g = game()
+        g.state.settings.dailyAverage = 1000
+        assertTrue(g.plainAnswers(5).gifts().isEmpty())
+        g.state.settings.dailyAverage = 3 // already 5 answers today: the very next answer reaches the lowered goal
+        assertEquals(1, g.plainAnswers(1).gifts().size)
+        assertTrue(g.plainAnswers(4).gifts().isEmpty())
+    }
+
+    @Test fun theGiftSurvivesASaveAndLoadAndIsNotGivenAgainAfterARestart() {
+        val g = game()
+        g.state.settings.dailyAverage = 3
+        val gift = g.plainAnswers(3).gifts().single()
+        val back = SaveCodec.decode(SaveCodec.encode(g.state))
+        assertEquals(g.state.lastGoalDay, back.lastGoalDay)
+        assertEquals(g.state.bag, back.bag); assertEquals(g.state.tms, back.tms)
+        if (gift.tm != null) assertTrue(gift.tm in back.tms)
+        val again = Game(data, back, Random(2)) { now } // the app was killed and opened again the same day
+        assertTrue(again.plainAnswers(4).gifts().isEmpty())
+        assertEquals(7, back.reviewsToday)
+    }
+
+    @Test fun theGiftOfADayIsTheSameAfterARestart() {
+        fun giftOf(seed: Int): GameEvent.DailyGift {
+            val g = game(seed = seed)
+            g.state.settings.dailyAverage = 2
+            return g.plainAnswers(2).gifts().single()
+        }
+        assertEquals("seeded by the game day, not by the random generator", giftOf(1), giftOf(99))
+    }
+
+    @Test fun anAnswerThatReachesTheGoalCountsInTheStatsLogAndTheAchievementCounterToo() {
         val g = game()
         g.state.settings.dailyAverage = 1
         val ev = g.answer(3)
-        assertEquals(listOf(CashKind.DAILY_BONUS, CashKind.ANSWER), ev.cash().map { it.kind })
-        assertEquals(55, g.state.history[g.state.day]!!.cash) // money earned that day, bonus included
+        assertEquals(listOf(CashKind.ANSWER), ev.cash().map { it.kind })
+        assertEquals(1, ev.gifts().size)
+        assertEquals(5, g.state.history[g.state.day]!!.cash) // money earned that day: the answer only
+        assertEquals(1L, g.state.counters[Metric.GOALS_REACHED.name]) // counted on the DailyGift event
     }
 
     @Test fun reviewBadgeComesWithTheHundredthAnswer() {
@@ -1074,7 +1126,7 @@ class GameTest {
         assertTrue(g.state.battle!!.player.charged.isEmpty())
         assertEquals(setOf("fly"), g.state.battle!!.enemy.charged) // the wild one keeps its charge
         g.state.battle!!.player.charged += "dig"
-        assertTrue(g.cycleMain().ok)
+        assertTrue(g.cycleMain(cardShowing = false).ok) // PLAN 206: with a card showing the cycle only queues the switch (SwitchQueueTest)
         assertTrue(g.state.battle!!.player.charged.isEmpty())
     }
 
@@ -1314,7 +1366,7 @@ class GameTest {
         assertTrue("wild moves $where", b.wild.moves.size in 1..4)
         assertTrue("tally $where", b.answers in 0..3 && b.tally >= 0)
         assertEquals("buttons vs answers $where", b.answers, b.buttons.size)
-        assertTrue("cash ${s.cash} $where", s.cash >= 0 && s.cashToday >= 0 && s.cashWait in 0 until Economy.answersPerPayment(s.cashToday))
+        assertTrue("cash ${s.cash} $where", s.cash >= 0 && s.cashToday >= 0 && s.cashFracDen >= 1 && s.cashFracNum in 0 until s.cashFracDen)
         assertTrue("bag $where", s.bag.values.all { it > 0 })
         assertEquals("buttons vs reviews $where", s.reviewsToday, s.buttonsToday.sum())
         assertTrue("counters $where", s.reviewsToday >= 0 && s.totalReviews >= s.reviewsToday)

@@ -76,7 +76,7 @@ object SoundRules {
         is GameEvent.Fled -> listOf(fx(SoundId.FLED))
         is GameEvent.Evolved -> listOf(fx(SoundId.EVO_START), fx(SoundId.EVO_DONE, EVO_DONE_MS))
         is GameEvent.MoveLearned -> listOf(fx(SoundId.LEARNED))
-        is GameEvent.ItemFound -> listOf(fx(SoundId.ITEM))
+        is GameEvent.ItemFound, is GameEvent.DailyGift -> listOf(fx(SoundId.ITEM))   // R14-B2-D: the goal gift sounds like a found item
         is GameEvent.Cash -> if (e.kind == CashKind.DEFEAT) listOf(fx(SoundId.CASH)) else emptyList()
         is GameEvent.BadgeEarned, is GameEvent.AchievementReached, is GameEvent.TrainerLevelUp -> listOf(fx(SoundId.BADGE))
         is GameEvent.Healed, is GameEvent.MainHealed -> listOf(fx(SoundId.HEALED))

@@ -46,7 +46,7 @@ enum class Metric(val counted: Boolean, val external: Boolean = false) {
     ITEMS_USED(true),         // healing / evolution items, fossils and escape items used up, held items given
     TMS_TAUGHT(true),
     DAYS_STUDIED(true),       // days with at least one counted answer
-    GOALS_REACHED(true),      // times the daily goal was reached (the daily-goal bonus moments)
+    GOALS_REACHED(true),      // times the daily goal was reached (the Daily gift moments, R14-B2-D)
     EASY_PRESSES(true),
     GOOD_PRESSES(true),
     COMEBACKS(true),          // a wild one defeated or caught while your main is under 10 % HP
@@ -173,7 +173,7 @@ object Achievements {
 
     /**
      * Counts what the [events] of ONE action say (Game.onAnswer / throwBall). Counted -> Good / Easy presses and the first answer
-     * of a day; Cash -> money earned (+ the daily-goal bonus = goal reached); XpGained -> total XP; ItemFound -> items found;
+     * of a day; Cash -> money earned; DailyGift -> goal reached (R14-B2-D: the gift is the once-a-day goal moment); XpGained -> total XP; ItemFound -> items found;
      * Attack -> damage dealt / taken / blocked, misses (either side), super-effective and critical hits, resisted hits;
      * BallThrow -> balls thrown; Caught -> shinies; Defeated / Caught while the main has less than [COMEBACK_PERCENT] % HP ->
      * comeback. Events other actions already counted must not be passed again.
@@ -185,10 +185,8 @@ object Achievements {
                 when (e.button) { 3 -> bump(state, Metric.GOOD_PRESSES); 4 -> bump(state, Metric.EASY_PRESSES) }
                 if (e.reviewsToday == 1) bump(state, Metric.DAYS_STUDIED)
             }
-            is GameEvent.Cash -> {
-                bump(state, Metric.MONEY_EARNED, e.amount.toLong())
-                if (e.kind == CashKind.DAILY_BONUS) bump(state, Metric.GOALS_REACHED)
-            }
+            is GameEvent.Cash -> bump(state, Metric.MONEY_EARNED, e.amount.toLong())
+            is GameEvent.DailyGift -> bump(state, Metric.GOALS_REACHED)
             is GameEvent.XpGained -> bump(state, Metric.TOTAL_XP, e.xp.toLong())
             is GameEvent.LevelUp -> bump(state, Metric.TOTAL_LEVELS)   // one event per level gained
             is GameEvent.ItemFound -> bump(state, Metric.ITEMS_FOUND)
@@ -256,6 +254,8 @@ object Achievements {
      * A tier dated by a quiet look (silent, or a row never looked at) without a date of its own (the badge's) only says "AnkiGo saw it
      * by now": it is flagged in GameState.achInferred, so the page shows "Reached before <date>" and "Recently reached" skips it (R4 fix A3).
      * The call that migrates an older tier ladder ([migrate]) is quiet and flags its new dates as inferred too.
+     * R14-B2-D: a tier with a reward ([AchRow.rewards]: the Master Ball for the top tier of "Best streak") puts it in the Bag the moment the
+     * tier has a date, loud or quiet, also a date from before the reward existed; GameState.rewardsClaimed makes it come once ([claimRewards]).
      * The first call on a state also sets GameState.achSince = [now]. Every call first [ratchet]s the lifetime totals (R4 fix A1).
      */
     fun check(state: GameState, data: GameData, now: Long, events: MutableList<GameEvent>, silent: Boolean = false, log: (String) -> Unit = {}) {
@@ -266,7 +266,7 @@ object Achievements {
             val known = state.achTiers[row.id]
             val dates = known ?: mutableListOf<Long>().also { state.achTiers[row.id] = it }
             val reached = reachedTiers(row, state, data)
-            if (reached <= dates.size) continue
+            if (reached <= dates.size) { claimRewards(state, row, dates); continue } // a tier dated by an older version still gets its reward (Y1)
             val quiet = silent || migrated || known == null || row.ankimonBadge != null
             val guessed = silent || migrated || known == null // reached before AnkiGo looked: [now] is only when it was first seen
             for (t in dates.size until reached) {
@@ -276,6 +276,19 @@ object Achievements {
                 if (badgeDate == null && guessed) state.achInferred += inferredKey(row.id, t)
                 if (!quiet && (badge == null || badge !in state.badges)) events += GameEvent.AchievementReached(row.id, t, row.title, AchievementTable.tierName(t))
             }
+            claimRewards(state, row, dates)
+        }
+    }
+
+    /**
+     * R14-B2 fix Y1: every tier of [row] that has a reward ([AchRow.rewards]) and a date (now or earlier, so also one dated before this
+     * version existed) and is not yet in GameState.rewardsClaimed puts its item in the Bag and is recorded as claimed in the same step:
+     * a reward comes once, even after the item is used up.
+     */
+    private fun claimRewards(state: GameState, row: AchRow, dates: List<Long>) {
+        for ((t, item) in row.rewards) {
+            if (t >= dates.size) continue
+            if (state.rewardsClaimed.add(inferredKey(row.id, t))) Economy.give(state, item)
         }
     }
 

@@ -146,22 +146,12 @@ internal class BattleCard(
     }
 
     /** The green Continue button as on the Study tab's CONTINUE card (accent square with a play icon; 32 dp look in a 48 dp touch area). Hidden until [setContinue] gets a deck. */
-    private fun continueButton(): View = FrameLayout(ctx).apply {
-        visibility = View.GONE
-        addView(StudyUi.icon(ctx, R.drawable.ic_play, R.color.ag_base).apply {
-            setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8))
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 10, ctx)
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, FrameLayout.LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32), Gravity.CENTER))
-    }.also { it.layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)) }
+    private fun continueButton(): View = ContinueBar.button(ctx)
 
     /** Shows the Continue button for [deck], or hides it (null). */
     fun setContinue(deck: Anki.Deck?) {
         val b = continueBtn ?: return
-        if (deck == null) { b.visibility = View.GONE; b.setOnClickListener(null); b.contentDescription = null; return }
-        b.contentDescription = ContinueBar.description(deck)
-        b.setOnClickListener { val req = ++studyGen; host.continueStudy(deck) { live && req == studyGen } }
-        b.visibility = View.VISIBLE
+        ContinueBar.bindButton(b, deck) { d -> val req = ++studyGen; host.continueStudy(d) { live && req == studyGen } }
     }
 
     /** True while the Continue button is showing. */
@@ -219,6 +209,7 @@ internal class BattleCard(
         session.addSink(sink)
         session.hold(ctx, this)
         loadContinueButton()
+        panel.post { if (live) player.playPending() } // PLAN 191: fight events made on another screen (a Bag item, a team edit) play here once, when the card is laid out
     }
 
     /** The card left the screen (another section, the page paused or closed): stop following, let the session go. */
@@ -239,7 +230,7 @@ internal class BattleCard(
 
     /** The game changed by something other than a live answer (a main switched in the team list…): draw it again unless an animation is playing. */
     fun refresh() {
-        if (live && player.idle) panel.renderAll()
+        if (live && player.idle && !player.playPending()) panel.renderAll() // PLAN 191: waiting fight events play instead of the redraw
     }
 
     companion object {

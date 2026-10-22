@@ -55,4 +55,24 @@ class ContinueRuleTest {
         assertEquals("Continue", ContinueRule.LABEL)
         assertEquals("next battle", ContinueRule.HINT)
     }
+
+    // PLAN 129: the deck's last answer is in, the finished screen waits for a tap
+    @Test fun aFinishedDeckShowsOnlyFinishDeck() {
+        assertEquals(Row.FINISH, ContinueRule.row(flipped = false, holding = false, deckDone = true))
+        assertEquals(Row.FINISH, ContinueRule.row(flipped = true, holding = false, deckDone = true))
+    }
+
+    @Test fun aFinishedDeckWithAHeldResultStillShowsFinishDeck() {
+        assertEquals(Row.FINISH, ContinueRule.row(flipped = false, holding = true, deckDone = true))
+    }
+
+    @Test fun withoutAFinishedDeckTheRowsAreAsBefore() {
+        assertEquals(Row.CONTINUE, ContinueRule.row(flipped = false, holding = true, deckDone = false))
+        assertEquals(Row.SHOW_ANSWER, ContinueRule.row(flipped = false, holding = false))
+    }
+
+    @Test fun theFinishTextsAreShort() {
+        assertEquals("Finish deck", ContinueRule.FINISH_LABEL)
+        assertEquals("Deck finished · tap Finish deck", ContinueRule.FINISH_LINE)
+    }
 }

@@ -246,15 +246,29 @@ internal object ArenaGeo {
      * the arena's height (60 % of its width, at most 4), the cards' scale `k` up to 1.4. The first (a, k) that fits wins:
      * biggest sprites first, then biggest cards. Our sprite box is the enlarged 140 x 128 one.
      */
-    fun plan(w: Float, h: Float, c: Cards, compact: Boolean, own: Boolean = true): Plan {
+    fun plan(w: Float, h: Float, c: Cards, compact: Boolean, own: Boolean = true, safe: FrameSafe? = null): Plan {
         val ref = refH(compact)
         val base = (h / ref).coerceIn(0.66f, 1.5f)
         val aMax = max(base, min(0.4f * h / 128f, min(0.6f * w / 140f, 4f)))
         val k0 = min(w / 300f, h / 430f).coerceIn(1f, 1.4f)
         val low = min(base, A_CORNERS)
-        val found = if (own) search(aMax, low, k0) { a, k -> under(w, h, c, a, k) } ?: search(aMax, low, k0) { a, k -> beside(w, h, c, ref, a, k) }
-        else search(aMax, low, k0) { a, k -> corners(w, h, c, ref, a, k) }
-        return found ?: middle(w, h, c, ref)
+        val found = if (own) search(aMax, low, k0) { a, k -> under(w, h, c, a, k).kept(w, h, safe) } ?: search(aMax, low, k0) { a, k -> beside(w, h, c, ref, a, k).kept(w, h, safe) }
+        else search(aMax, low, k0) { a, k -> corners(w, h, c, ref, a, k).kept(w, h, safe) }
+        return found ?: middle(w, h, c, ref).kept(w, h, safe)
+    }
+
+    /**
+     * PLAN 140: the plan with its two cards moved clear of the battle frame ([FrameSafe]: inside the frame's band, off its corner
+     * squares). The plan only counts as fitting while the moved cards are still clear of the sprites and of each other. No frame (or
+     * nothing to move) = the same plan.
+     */
+    private fun Plan.kept(w: Float, h: Float, safe: FrameSafe?): Plan {
+        if (safe == null || safe.none) return this
+        val wc = safe.clear(wildCard, w, h)
+        val pc = safe.clear(playerCard, w, h)
+        if (wc === wildCard && pc === playerCard) return this
+        val ok = fits && (layout == Layout.MIDDLE || clear(w, h, wc, pc, wildSprite, playerSprite))
+        return Plan(layout, ok, wc, pc, wildSprite, playerSprite, wildPlat, playerPlat, a, k)
     }
 
     /** The first plan that fits, sprite scale from [aMax] down to [aMin] (steps of 0.05), for each of those the card scale from [k0] down to 1. */

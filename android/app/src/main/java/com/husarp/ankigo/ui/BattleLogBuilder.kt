@@ -116,7 +116,7 @@ class BattleLogBuilder(
 
     private fun counted(e: GameEvent.Counted) {
         val p = takePending(e.button)
-        val a = LogAnswer(e.button, p?.card ?: "a card", e.catchUp || p?.catchUp == true)
+        val a = LogAnswer(if (e.neutral) OK else e.button, p?.card ?: "a card", e.catchUp || p?.catchUp == true)   // PLAN 155: the OK of a new card is its own row, not an "Again"
         lastAnswer = a
         defeatedWith = null
         collecting().answers += a
@@ -241,6 +241,9 @@ class BattleLogBuilder(
         /** "great-ball" -> "Great ball". */
         fun prettyItem(id: String): String = id.replace('-', ' ').replaceFirstChar { it.titlecase(Locale.US) }
 
-        fun buttonLabel(button: Int): String = when (button) { 1 -> "Again"; 2 -> "Hard"; 3 -> "Good"; 4 -> "Easy"; else -> "Answer" }
+        /** PLAN 155: the log's own code for the OK of a new card (the game's buttons are 0..4; the log file keeps the number as it is). */
+        const val OK = 5
+
+        fun buttonLabel(button: Int): String = when (button) { 1 -> "Again"; 2 -> "Hard"; 3 -> "Good"; 4 -> "Easy"; OK -> "OK"; else -> "Answer" }
     }
 }

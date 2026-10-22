@@ -7,7 +7,7 @@ import com.husarp.ankigo.R
 import org.junit.Rule
 import org.junit.Test
 
-/** R2-V02: the launcher icon (ball with thin outline) on white, black and a colour. */
+/** R2-V02: the launcher icon (foreground layer, ball with thin outline; layoutlib cannot inflate the adaptive icon itself) on white, black and a colour. */
 class R2SmallShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
 
@@ -15,7 +15,7 @@ class R2SmallShots {
         val row = android.widget.LinearLayout(ctx)
         for (c in intArrayOf(0xFFFFFFFF.toInt(), 0xFF000000.toInt(), 0xFF6A5ACD.toInt())) {
             val f = FrameLayout(ctx).apply { setBackgroundColor(c) }
-            f.addView(ImageView(ctx).apply { setImageResource(R.drawable.ic_launcher) }, FrameLayout.LayoutParams(300, 300))
+            f.addView(ImageView(ctx).apply { setImageResource(R.drawable.ic_launcher_foreground) }, FrameLayout.LayoutParams(300, 300))
             row.addView(f, android.widget.LinearLayout.LayoutParams(320, 320))
         }
         row

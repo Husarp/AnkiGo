@@ -50,9 +50,9 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     /** A "Move all cards" that was running when the screen turned or closed: its progress card comes back. */
     fun resumeFlows() = DeckFlows.resume(act) { refresh() }
 
-    /** The Study app bar: title, the AnkiDroid pill and New deck. */
+    /** The Study app bar: title and New deck (the AnkiDroid version is in Settings, PLAN 202). */
     fun buildAppBar(): AppBar {
-        appBar = Ui.appBar(act, "Study", "AnkiDroid")
+        appBar = Ui.appBar(act, "Study")
         // "New deck" (PLAN 70): shown once AnkiDroid is known to take changes (see render)
         newDeckButton = StudyUi.iconButton(act, R.drawable.ic_plus, "New deck") { DeckFlows.newDeck(act, null) { refresh() } }.apply {
             setColorFilter(Ui.c(context, R.color.ag_mauve))
@@ -97,9 +97,34 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     fun showAccessProblem(message: String?) {
         newDeckButton?.visibility = View.GONE
         resumeSlot.removeAllViews(); resumeSlot.visibility = View.GONE
-        content.removeAllViews(); content.addView(StudyUi.label(act, message ?: "Open AnkiDroid once, then refresh.", 13).apply { setPadding(Ui.dp(context, 4), Ui.dp(context, 8), Ui.dp(context, 4), 0) })
+        content.removeAllViews()
+        // PLAN 202: a known problem (not installed, too old, no permission) is one warning card; anything else keeps the old message + buttons
+        val problem = StudyStatus.warning(act)
+        if (problem != null) { content.addView(warningCard(problem), StudyUi.lp().also { it.topMargin = Ui.dp(act, 4) }); return }
+        content.addView(StudyUi.label(act, message ?: "Open AnkiDroid once, then refresh.", 13).apply { setPadding(Ui.dp(context, 4), Ui.dp(context, 8), Ui.dp(context, 4), 0) })
         content.addView(StudyUi.primary(act, "Allow AnkiDroid access") { host.askAnkiAccess() }, StudyUi.spaced(act, 12))
         content.addView(StudyUi.smallButton(act, "Open AnkiDroid") { Anki.launchIntent(act)?.let { act.startActivity(it) } }, StudyUi.spaced(act, 6))
+    }
+
+    /** The warning card at the top of the list: one short line and the one button that helps. */
+    internal fun warningCard(p: StudyStatus.Problem): View {
+        val card = StudyUi.column(act).apply {
+            background = StudyUi.gradient(context, R.color.ag_yellow, .16f, 16)
+            setPadding(Ui.dp(context, 14), Ui.dp(context, 12), Ui.dp(context, 14), Ui.dp(context, 12))
+        }
+        card.addView(StudyUi.label(act, p.message, 13, R.color.ag_text, 700))
+        card.addView(StudyUi.primary(act, p.button) { onWarningAction(p.action) }, StudyUi.spaced(act, 10))
+        return card
+    }
+
+    private fun onWarningAction(a: StudyStatus.Action) = when (a) {
+        StudyStatus.Action.ALLOW_ACCESS -> host.askAnkiAccess()
+        StudyStatus.Action.OPEN_ANKIDROID -> { Anki.launchIntent(act)?.let { act.startActivity(it) }; Unit }
+        StudyStatus.Action.GET_ANKIDROID -> {
+            val id = Anki.pkg
+            try { act.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$id"))) }
+            catch (_: Exception) { runCatching { act.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=$id"))) } }
+        }
     }
 
     /** Forget expanded decks that no longer exist (only after a successful, non-empty read). */
@@ -111,11 +136,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     fun render() {
         if (!::content.isInitialized) return
         content.removeAllViews(); resumeSlot.removeAllViews(); resumeSlot.visibility = View.GONE
-        val installed = Anki.installed(act).firstOrNull { it.pkg == Anki.pkg }
-        appBar.setPill(installed?.let { "AnkiDroid ${it.versionName}${if (Anki.studySupported(act)) " ✓" else ""}" } ?: "AnkiDroid needed")
-        appBar.pill?.apply {
-            setTextColor(Ui.c(act, if (Anki.studySupported(act)) R.color.ag_green else R.color.ag_sub0))
-        }
+        StudyStatus.warning(act)?.let { content.addView(warningCard(it), StudyUi.lp().also { lp -> lp.topMargin = Ui.dp(act, 4); lp.bottomMargin = Ui.dp(act, 8) }) }
         newDeckButton?.visibility = if (canManage()) View.VISIBLE else View.GONE
         val last = decks.firstOrNull { it.id == prefs.getLong("lastDeck", 0) }
         if (last != null) {

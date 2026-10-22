@@ -12,6 +12,7 @@ import com.husarp.ankigo.game.Looks
 import com.husarp.ankigo.game.Wishlist
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.GameState
+import com.husarp.ankigo.game.PendingFight
 import com.husarp.ankigo.game.ankimon.AnkimonMerge
 import com.husarp.ankigo.game.save.SaveCodec
 import com.husarp.ankigo.game.save.SaveStore
@@ -166,6 +167,7 @@ object GameRepo {
         val d = loadedData
         val st = held
         current = null
+        pendingFight.clear() // a loaded save, a restored backup, an import, a new game: nothing waiting leads to it
         status = when {
             d == null -> Status.NEED_DATA
             st == null -> Status.SAVE_ERROR
@@ -200,7 +202,7 @@ object GameRepo {
         requireMain()
         val g = current ?: return emptyList()
         try {
-            return f(g).also { GameLog.events(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it) }
+            return f(g).also { GameLog.events(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it); forgetPendingFight(it) }
         } catch (e: Exception) {
             // A bug in one action must not take the whole app down while studying; the state stays as it is.
             Report.fail(TAG, "action failed", e)
@@ -211,7 +213,9 @@ object GameRepo {
     }
 
     /** Same for actions that return an ActionResult. */
-    fun <T> run(ctx: Context, f: (Game) -> T): T {
+    fun <T> run(ctx: Context, f: (Game) -> T): T = runIn(ctx, host = true, f)
+
+    private fun <T> runIn(ctx: Context, host: Boolean, f: (Game) -> T): T {
         requireMain()
         val g = current ?: error("The game is not loaded")
         val settingsBefore = com.husarp.ankigo.debug.SettingsText.of(g.state.settings) // R13 Part E: a changed game setting goes to the log
@@ -219,8 +223,8 @@ object GameRepo {
             return f(g).also { result ->
                 com.husarp.ankigo.debug.SettingsText.diff(settingsBefore, com.husarp.ankigo.debug.SettingsText.of(g.state.settings)).forEach { Report.log("SETTINGS", "game $it") }
                 when (result) {
-                    is com.husarp.ankigo.game.ActionResult -> { GameLog.events(result.events); wildMoves.observe(result.events, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(result.events) }
-                    is List<*> -> result.filterIsInstance<GameEvent>().let { GameLog.events(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it) }
+                    is com.husarp.ankigo.game.ActionResult -> { GameLog.events(result.events); wildMoves.observe(result.events, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(result.events); if (host) forgetPendingFight(result.events) }
+                    is List<*> -> result.filterIsInstance<GameEvent>().let { GameLog.events(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it); if (host) forgetPendingFight(it) }
                 }
             }
         } catch (e: Exception) {
@@ -229,6 +233,52 @@ object GameRepo {
         } finally {
             afterChange(ctx)
         }
+    }
+
+    // ---- fight events made on a screen that is not a battle (PLAN 191) ----
+
+    private val pendingFight = PendingFight()
+
+    /** The id of the fight on now (the wild Pokémon's uid), or null without a fight. */
+    fun fightId(): String? = held?.battle?.wild?.uid
+
+    /**
+     * PLAN 191: [run] for the pages that are not a battle host (Team, Box, Compare, the Bag, the details sheets: [com.husarp.ankigo.ui.GamePage.act]).
+     * What the action did to the fight on (an item on the main, a team edit that changed it: the new Pokémon comes in and the wild one
+     * attacks once) happens in the saved game at once, but no battle shows it. Those fight events are kept as pending, with the id of the
+     * fight, for the battle host that is on screen next ([takePendingFightEvents]); a battle host that is on screen now takes them
+     * as soon as the listeners are told. Only a fight that goes on keeps them ([PendingFight.fightPart]).
+     */
+    fun runOffscreen(ctx: Context, f: (Game) -> com.husarp.ankigo.game.ActionResult): com.husarp.ankigo.game.ActionResult {
+        val before = fightId()
+        val result = runIn(ctx, host = false, f)
+        keepPendingFight(before, result.events)
+        return result
+    }
+
+    /** [runOffscreen]'s hand-off: the fight events of [events], made in fight [before] and still the fight on now. */
+    internal fun keepPendingFight(before: String?, events: List<GameEvent>) {
+        if (before == null || before != fightId()) return
+        PendingFight.fightPart(events)?.let { pendingFight.add(before, it) }
+    }
+
+    /**
+     * The fight events waiting for a battle host, handed over ONCE: returns them and forgets them. [fightId] = the fight the host
+     * shows now; events of another fight (the wild one was replaced meanwhile) or of no fight are dropped and none come back.
+     */
+    fun takePendingFightEvents(fightId: String? = fightId()): List<GameEvent> {
+        val had = !pendingFight.isEmpty
+        val events = pendingFight.take(fightId)
+        if (had) notifyListeners() // the other panels drew the Pokémon before the hit while they waited: they follow the saved game now (or the host that took them plays)
+        return events
+    }
+
+    /** The fight events waiting for a battle host (nothing is taken): a panel draws the main at its HP before the hit until they play. */
+    fun pendingFightEvents(): List<GameEvent> = pendingFight.peek(fightId())
+
+    /** An action of a battle host (or an answer from AnkiDroid) moved the fight on by itself: what waited no longer leads to the saved game, it is dropped. */
+    private fun forgetPendingFight(events: List<GameEvent>) {
+        if (!pendingFight.isEmpty && PendingFight.movesFightOn(events)) pendingFight.clear()
     }
 
     private fun afterChange(ctx: Context) {
