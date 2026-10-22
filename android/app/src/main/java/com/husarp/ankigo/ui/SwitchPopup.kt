@@ -51,8 +51,6 @@ object SwitchPopup {
         val head = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         head.addView(Ui.text(a, 17f, 900, R.color.ag_text).apply { text = if (swap) "Swap out" else "Switch Pokémon"; maxLines = 1; ellipsize = TextUtils.TruncateAt.END },
             LinearLayout.LayoutParams(0, -2, 1f))
-        head.addView(Ui.text(a, 11f, 800, R.color.ag_sub0).apply { text = "hold for details"; maxLines = 1 },
-            LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 8) })
         col.addView(head, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(a, if (header != null) 4 else 12) })
         if (header != null) col.addView(Ui.text(a, 13f, 800, R.color.ag_sub1).apply { text = header },
             LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(a, 12) })

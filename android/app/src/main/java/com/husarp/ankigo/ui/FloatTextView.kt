@@ -27,7 +27,7 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
     private val burst = ft.kind == FloatKind.SUPER
     private val label = (if (badge) ft.stat!! else ft.text).uppercase(Locale.ROOT)
     private val sizePx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, TextMath.at(Look.sizeSp(ft.kind), floorSp), ctx.resources.displayMetrics)
-    private val fillColor = Look.fill(ft.kind)
+    private val fillColor = if (ft.kind == FloatKind.STATUS_DAMAGE) InfoBoxSkin.statusFill(ft.stat) else Look.fill(ft.kind) // PLAN 217: the status badge colour
     /** PLAN 172: "can't move" floats carry the status key; its badge is drawn in front of the text. */
     private val statusKey = if (ft.kind == FloatKind.STATUS && ft.stat in setOf("slp", "frz", "par")) ft.stat else null
     private val statusBadge = statusKey?.let { StatusBadge(ctx, it) }
@@ -70,7 +70,7 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
             else -> th + 2f * strokePx
         }
         isClickable = false
-        contentDescription = if (badge) "${ft.stat} ${if (ft.kind == FloatKind.STAT_UP) "up" else "down"} ${ft.stages}" else FloatTexts.spoken(ft.text, ft.kind)
+        contentDescription = if (badge) "${ft.stat} ${if (ft.kind == FloatKind.STAT_UP) "up" else "down"} ${ft.stages}" else FloatTexts.spoken(ft.text, ft.kind, ft.stat)
     }
 
     private val rad = Math.toRadians(tiltDeg.toDouble())
@@ -179,6 +179,7 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
 
         fun sizeSp(k: FloatKind): Float = when (k) {
             FloatKind.DAMAGE -> 22f
+            FloatKind.STATUS_DAMAGE -> 22f
             FloatKind.BIG_DAMAGE -> 27f
             FloatKind.MISS -> 17f
             FloatKind.NO_EFFECT -> 15f
@@ -194,6 +195,7 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
 
         fun fill(k: FloatKind): Int = when (k) {
             FloatKind.DAMAGE -> 0xFFFF5C77.toInt()      // red
+            FloatKind.STATUS_DAMAGE -> 0xFFFF5C77.toInt() // the view uses InfoBoxSkin.statusFill(status); red only as a fallback
             FloatKind.BIG_DAMAGE -> 0xFFFF8A3D.toInt()  // hot orange
             FloatKind.MISS, FloatKind.HESITATE -> 0xFFFFFFFF.toInt()
             FloatKind.NO_EFFECT -> 0xFFF2F2FA.toInt()

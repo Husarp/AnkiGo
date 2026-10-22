@@ -19,6 +19,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Stat
+import com.husarp.ankigo.game.Type
 import java.util.IdentityHashMap
 
 // PLAN items 48 + 55, pick 6A (R3-V6): the sort chip with its small list, the one "Sort & filter" sheet, and the texts they show.
@@ -175,35 +176,50 @@ internal class ChipFlow(ctx: Context, private val gapPx: Int, private val lineGa
     }
 }
 
+/**
+ * The sort & filter chip's view: the sort name takes up to [nameMax] px; when the host gives the chip less width than that (the one
+ * filter row of R16 192F), the name shrinks (to [nameMin] at the least, with "…") so the arrow and the basis note stay visible.
+ */
+private class SortChipView(ctx: Context, private val name: TextView, private val nameMax: Int, private val nameMin: Int) : LinearLayout(ctx) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        name.maxWidth = nameMax
+        if (MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+            super.onMeasure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), heightMeasureSpec) // the width it wants
+            val excess = measuredWidth - MeasureSpec.getSize(widthMeasureSpec)
+            if (excess > 0) name.maxWidth = maxOf(nameMin, name.measuredWidth - excess)
+        }
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+    }
+}
+
 internal object SortViews {
     /**
-     * The sort chip: a tap anywhere on it ([onOpen]) opens the sort sheet, which holds the direction and the sort options too
-     * (R4-X1 item 15: no separate arrow target). Accent fill, so it reads as "this is on" like the mockup.
-     * [filters] > 0: the sheet also holds that many filters that are on, so the chip adds " · N" (a hidden filter is never a surprise).
+     * The sort & filter chip: a funnel on its left, then the sort name and direction; a tap anywhere on it ([onOpen]) opens the sheet, which
+     * holds the direction, the sort options and the filters (R4-X1 item 15: no separate arrow target; R16 192: the funnel says "filters live here").
+     * Accent fill, so it reads as "this is on" like the mockup. [filters] > 0 only goes into the content description (the active-filter
+     * chip next to this one shows what is on); the chip itself carries no count.
      */
     fun sortChip(ctx: Context, spec: SortSpec, filters: Int = 0, onOpen: (View) -> Unit): LinearLayout {
         val (name, arrow, suffix) = SortText.chipParts(spec)
         val ink = Ui.c(ctx, R.color.ag_crust)
         fun label(t: String) = Ui.text(ctx, 12f, 800, R.color.ag_crust).apply { text = t; maxLines = 1; setTextColor(ink) }
-        return LinearLayout(ctx).apply {
+        val nameView = label(name).apply { ellipsize = TextUtils.TruncateAt.END }
+        return SortChipView(ctx, nameView, Ui.dp(ctx, 150), Ui.dp(ctx, 36)).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = Ui.dp(ctx, 48)
             background = InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 10, ctx), 0, Ui.dp(ctx, 10), 0, Ui.dp(ctx, 10))
-            contentDescription = "Sort: ${SortText.chipLabel(spec)}." + (if (filters > 0) " $filters filters on." else "") + " Tap to change."
+            contentDescription = "Sort and filter: ${SortText.chipLabel(spec)}." + (if (filters > 0) " $filters ${if (filters == 1) "filter is" else "filters are"} on." else "") + " Tap to change."
             setOnClickListener { onOpen(it) }
-            addView(label(name).apply {
-                maxWidth = Ui.dp(ctx, 150)
-                ellipsize = TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 10) })
+            addView(BoxViews.icon(ctx, R.drawable.ic_filter, R.color.ag_crust),
+                LinearLayout.LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.marginStart = Ui.dp(ctx, 10) })
+            addView(nameView, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 5) })
             addView(label(arrow).apply {
                 gravity = Gravity.CENTER
                 textSize = 16f // a little bigger than the name (R4-X1 item 15)
                 setPadding(Ui.dp(ctx, 5), 0, Ui.dp(ctx, 5), 0)
-            }, LinearLayout.LayoutParams(-2, -2).also { if (suffix.isEmpty() && filters <= 0) it.marginEnd = Ui.dp(ctx, 5) })
+            }, LinearLayout.LayoutParams(-2, -2).also { if (suffix.isEmpty()) it.marginEnd = Ui.dp(ctx, 5) })
             if (suffix.isNotEmpty()) addView(label(suffix.removePrefix(" ")).apply { maxLines = 1 },
-                LinearLayout.LayoutParams(-2, -2).also { if (filters <= 0) it.marginEnd = Ui.dp(ctx, 10) else it.marginEnd = Ui.dp(ctx, 4) })
-            if (filters > 0) addView(label("· $filters").apply { maxLines = 1 },
                 LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 10) })
         }
     }
@@ -245,14 +261,15 @@ internal object SortViews {
 /**
  * The one "Sort & filter" sheet (mockup 6A, R10 B3 + B14): direction on top, sort key, the stats to count, the stat basis (with a
  * level stepper for "At Lv N"), then what the host needs below: the Box's "Show" chips ([showLabels]) and "Group duplicates"
- * ([group]), the Pokédex's wishlist switch and generation chips ([dex]); a "Show N Pokémon" button closes it. Every change is
- * applied at once through [onChange] / the parts' callbacks (the page behind updates), so the button only closes.
+ * ([group]), the Pokédex's wishlist switch and generation chips ([dex]), then the "Type" section ([type]: the Any of / All of / Only
+ * switch, one plain line, the 18 type chips; PLAN 192A + M1); a "Show N Pokémon" button closes it. Every change is applied at once
+ * through [onChange] / the parts' callbacks (the page behind updates), so the button only closes. The head's "Clear" button clears every
+ * filter in the sheet and keeps the sort and "Group duplicates".
  */
 internal class SortSheet(
     private val page: GamePage,
     private val keys: List<SortKey>,
     private var spec: SortSpec,
-    private val resetSpec: SortSpec,
     private val vsWildOk: Boolean,
     private val showLabels: List<String>?,
     private var showIndex: Int,
@@ -261,20 +278,26 @@ internal class SortSheet(
     private val onChange: (SortSpec, Int) -> Unit,
     /** The Pokédex's own filters (null in the Box). */
     private val dex: DexPart? = null,
+    /** The type filter (Box and Pokédex); null = no Type section. */
+    private val type: TypePart? = null,
 ) {
     /** The "Group duplicates" switch row of the Box (hidden while the Box is picking for Compare). */
     class GroupToggle(var on: Boolean, val set: (Boolean) -> Unit)
 
     /**
      * The Pokédex's part: the "Only wishlist" switch and one chip per enabled generation ([gens]; none ticked = all, like
-     * [DexFilter.gens]). [set] gets every change (wishlist only, ticked gens); Reset sends (false, empty).
+     * [DexFilter.gens]). [set] gets every change (wishlist only, ticked gens); Clear sends (false, empty).
      */
     class DexPart(var wishlistOnly: Boolean, val gens: List<Int>, var picked: Set<Int>, val set: (Boolean, Set<Int>) -> Unit)
+
+    /** The "Type" section's state: the filter now and [set], which gets every change (Clear sends the empty filter). */
+    class TypePart(var filter: TypeFilter, val set: (TypeFilter) -> Unit)
 
     private val ctx: Context get() = page
     private var dismiss: () -> Unit = {}
     private lateinit var body: LinearLayout
     private lateinit var go: TextView
+    private lateinit var clear: TextView
 
     fun build(maxBodyPx: Int): View {
         val sheet = LinearLayout(ctx).apply {
@@ -291,18 +314,20 @@ internal class SortSheet(
             })
         val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         head.addView(Ui.text(ctx, 17f, 900, R.color.ag_text).apply { text = "Sort & filter"; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
-        head.addView(Ui.text(ctx, 13f, 800, R.color.ag_sub1).apply {
-            text = "Reset"
-            contentDescription = "Reset sort and filters"
-            minHeight = Ui.dp(ctx, 48)
-            gravity = Gravity.CENTER
-            setPadding(Ui.dp(ctx, 8), 0, Ui.dp(ctx, 4), 0)
-            setOnClickListener {
-                spec = resetSpec; showIndex = 0
-                dex?.let { it.wishlistOnly = false; it.picked = emptySet(); it.set(false, emptySet()) }
-                changed()
-            }
-        }, LinearLayout.LayoutParams(-2, -2))
+        clear = Ui.text(ctx, 13f, 800, R.color.ag_sub1).apply {
+            text = "Clear"
+            contentDescription = "Clear all filters"
+            // a real button: the close icon before the word, a quiet pill (28 dp look in a 48 dp touch height)
+            val d = ctx.getDrawable(R.drawable.ic_close)!!.mutate()
+            d.setTint(Ui.c(ctx, R.color.ag_sub1))
+            val s = Ui.dp(ctx, 12)
+            d.setBounds(0, 0, s, s)
+            setCompoundDrawablesRelative(d, null, null, null)
+            compoundDrawablePadding = Ui.dp(ctx, 5)
+            Ui.touchPill(this, Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx), 28, 12)
+            setOnClickListener { if (anyFilterOn()) clearFilters() }
+        }
+        head.addView(clear, LinearLayout.LayoutParams(-2, -2))
         sheet.addView(head, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(ctx, 6) })
 
         body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
@@ -323,6 +348,18 @@ internal class SortSheet(
     }
 
     private fun changed() { onChange(spec, showIndex); fill() }
+
+    /** Anything on in this sheet that "Clear" would switch off (a type mode alone filters nothing). */
+    private fun anyFilterOn(): Boolean =
+        showIndex != 0 || dex?.wishlistOnly == true || dex?.picked?.isNotEmpty() == true || type?.filter?.active == true
+
+    /** "Clear": every filter off (Show = All, wishlist, generations, types and the mode back to Any of); the sort and "Group duplicates" stay. */
+    private fun clearFilters() {
+        showIndex = 0
+        dex?.let { it.wishlistOnly = false; it.picked = emptySet(); it.set(false, emptySet()) }
+        type?.let { it.filter = TypeFilter(); it.set(it.filter) }
+        changed()
+    }
 
     private fun section(title: String): View = Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply {
         text = title.uppercase()
@@ -393,12 +430,65 @@ internal class SortSheet(
                     dex.set(dex.wishlistOnly, dex.picked); changed()
                 })
                 body.addView(f, LinearLayout.LayoutParams(-1, -2))
+                if (dex.picked.isEmpty()) body.addView(help("None picked: every generation shows."))
             }
         }
+        if (type != null) typeSection(type)
         if (group != null) body.addView(
             switchRow("Group duplicates", group.on) { on -> group.on = on; group.set(on); fill() },
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         go.text = "Show ${count()} Pokémon"
+        val on = anyFilterOn()
+        clear.isEnabled = on
+        clear.alpha = if (on) 1f else 0.4f // nothing to clear: dimmed
+    }
+
+    /** A small plain line under a control (the sheet's quiet text). */
+    private fun help(t: String): View = Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
+        text = t
+        setLineSpacing(0f, 1.15f)
+        setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4), 0)
+    }
+
+    /**
+     * PLAN 192A + M1: "Type" = the Any of / All of / Only switch (the look of the direction switch), ONE plain line that changes with the
+     * mode and names the picks ([TypeFilter.sentence]), then the 18 type chips (type symbol + name in the type colour).
+     */
+    private fun typeSection(t: TypePart) {
+        body.addView(section("Type"))
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
+            setPadding(Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3))
+        }
+        for (m in TypeMatch.entries) {
+            val on = m == t.filter.match
+            row.addView(Ui.text(ctx, 13f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply {
+                text = m.label
+                gravity = Gravity.CENTER
+                maxLines = 1
+                isSelected = on
+                setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 12), Ui.dp(ctx, 2), Ui.dp(ctx, 12)) // 42 dp segments in a 48 dp control
+                background = if (on) Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx) else null
+                setOnClickListener { if (t.filter.match != m) { t.filter = t.filter.withMatch(m); t.set(t.filter); changed() } }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        body.addView(row, LinearLayout.LayoutParams(-1, -2))
+        body.addView(help(t.filter.sentence()))
+        val f = flow()
+        for (ty in Type.entries) {
+            val on = ty in t.filter.types
+            f.addView(Ui.text(ctx, 12f, 800, R.color.ag_sub1).apply {
+                text = ty.label
+                maxLines = 1
+                TypeChips.styleFilter(this, ty, on)
+                setOnClickListener {
+                    val next = t.filter.toggle(ty)
+                    if (next == null) Ui.toast(ctx, TypeFilter.FULL) else { t.filter = next; t.set(next); changed() }
+                }
+            })
+        }
+        body.addView(f, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
     }
 
     /** Ascending / Descending as one switch (the look of the stat basis switch). */

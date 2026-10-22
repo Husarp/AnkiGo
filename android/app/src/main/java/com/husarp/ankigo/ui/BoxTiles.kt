@@ -3,6 +3,7 @@ package com.husarp.ankigo.ui
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.Type
 
 /** One cell of the Box grid: a single Pokémon, or a group of copies of one species ("×N"). Pure logic, no views. */
 class BoxTile(
@@ -34,15 +35,24 @@ enum class BoxFilter(val label: String, val none: String? = null) {
 enum class CopySort(val label: String) { LEVEL("Level"), RECENT("Recent") }
 
 object BoxTiles {
-    /** [team] = the uids of the team (for [BoxFilter.IN_TEAM]); [xpShareUid] = the holder of the Exp. Share (for [BoxFilter.HOLDS_XP_SHARE]); [canEvolve] answers [BoxFilter.CAN_EVOLVE] (see [MonTags.canEvolve]). */
-    fun filter(mons: List<Mon>, f: BoxFilter, team: Collection<String> = emptyList(), xpShareUid: String? = null, canEvolve: (Mon) -> Boolean = { false }): List<Mon> = when (f) {
-        BoxFilter.ALL -> mons
-        BoxFilter.FAVOURITES -> mons.filter { it.favourite }
-        BoxFilter.SHINY -> mons.filter { it.shiny }
-        BoxFilter.IN_TEAM -> mons.filter { it.uid in team }
-        BoxFilter.HOLDS_ITEM -> mons.filter { it.heldItem != null }
-        BoxFilter.HOLDS_XP_SHARE -> mons.filter { xpShareUid != null && it.uid == xpShareUid }
-        BoxFilter.CAN_EVOLVE -> mons.filter(canEvolve)
+    /**
+     * [team] = the uids of the team (for [BoxFilter.IN_TEAM]); [xpShareUid] = the holder of the Exp. Share (for [BoxFilter.HOLDS_XP_SHARE]); [canEvolve] answers [BoxFilter.CAN_EVOLVE] (see [MonTags.canEvolve]).
+     * PLAN 192: [types] is the separate type filter (it also applies with any [f], X7); [typesOf] gives a Pokémon's species types (a regional form has its own).
+     */
+    fun filter(
+        mons: List<Mon>, f: BoxFilter, team: Collection<String> = emptyList(), xpShareUid: String? = null, canEvolve: (Mon) -> Boolean = { false },
+        types: TypeFilter = TypeFilter(), typesOf: (Mon) -> List<Type> = { emptyList() },
+    ): List<Mon> {
+        val shown = when (f) {
+            BoxFilter.ALL -> mons
+            BoxFilter.FAVOURITES -> mons.filter { it.favourite }
+            BoxFilter.SHINY -> mons.filter { it.shiny }
+            BoxFilter.IN_TEAM -> mons.filter { it.uid in team }
+            BoxFilter.HOLDS_ITEM -> mons.filter { it.heldItem != null }
+            BoxFilter.HOLDS_XP_SHARE -> mons.filter { xpShareUid != null && it.uid == xpShareUid }
+            BoxFilter.CAN_EVOLVE -> mons.filter(canEvolve)
+        }
+        return if (types.active) shown.filter { types.matches(typesOf(it)) } else shown
     }
 
     /**

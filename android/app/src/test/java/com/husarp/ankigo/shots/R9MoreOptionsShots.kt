@@ -15,7 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /*
- * TICKET R9-C7: "More options" is pinned under the scrolling details (AppDialog footer). PNGs: r9moreopt-s<0|1>-<size>-<theme>.
+ * TICKET R9-C7: "Options" is pinned under the scrolling details (AppDialog footer). PNGs: r9moreopt-s<0|1>-<size>-<theme>.
  * The button's rect (in the scene) is recorded at draw time per scroll position and size: it is inside the dialog, below the
  * details' scroll view, 48 dp high, and at the same place at the top and in the middle.
  */
@@ -52,7 +52,7 @@ class R9MoreOptionsShots {
                             val sc = scrolls(scene).maxByOrNull { it.getChildAt(0)?.height ?: 0 }!!
                             val range = (sc.getChildAt(0).height - sc.height).coerceAtLeast(0)
                             sc.scrollTo(0, (range * frac).toInt())
-                            val more = findText(scene, "More options")!!
+                            val more = findText(scene, "Options")!!
                             val t = top(more, scene)
                             val sTop = top(sc, scene)
                             rects["${var_.label}-$k"] = intArrayOf(t, t + more.height, sTop + sc.height, range, scene.height, (ctx.resources.displayMetrics.density * 100).toInt())

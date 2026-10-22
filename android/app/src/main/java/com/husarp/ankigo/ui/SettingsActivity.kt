@@ -112,12 +112,14 @@ internal object SettingsJobs {
                 Report.init(app)
                 val firstError = AtomicReference<String?>(null)
                 val layout = DownloadAll.layout(app)
-                val fetch = DownloadAll.fetcher(app, firstError)
+                val reasons = java.util.concurrent.ConcurrentHashMap<String, String>() // PLAN 219: why each failed file failed
+                val fetch = DownloadAll.fetcher(app, firstError, reasons)
                 val r = DownloadAll.run(todo, cancelled = { everything.cancelled }, check = { DownloadAll.check(it, layout) }, fetch = fetch) { ok, failed, total, bytes ->
                     everything.progress((ok + failed).toFloat() / total, DownloadAll.progressLabel(ok, total, bytes))
                 }
-                Report.log("PICS", "download everything: ${r.ok} of ${scan.todo.size} done, ${r.failed.size} failed, ${r.untouched.size} not tried" +
+                Report.log("PICS", "download everything: ${r.ok} of ${scan.todo.size} done, ${r.failed.size} failed, ${r.untouched.size} not tried, ${r.notAvailable} not available" +
                     (if (r.aborted) ", stopped (the internet isn't answering)" else "") + (firstError.get()?.let { ", first network error $it" } ?: ""))
+                DownloadAll.failureLines(r.failed, reasons).forEach { Report.log("PICS", it) }
                 // the jobs to run last next time: the ones that failed now, and the earlier failures this run never got to
                 val failedKeys = r.failed.map { it.key }.toSet() + r.untouched.map { it.key }.filter { it in before }
                 when {
@@ -231,6 +233,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         if (section == null) return false
         open(null)
         return true
+    }
+
+    /** PLAN 218: the Settings tab was tapped again: a section goes back to the list, the list scrolls to its top. */
+    override fun onTabReselected() {
+        if (!goHome()) scrollToTop(scroll)
     }
 
     /** Opens [s] (null = the list). */
@@ -485,11 +492,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.segmented(this, chipLooks.map { it.label }, chipLooks.indexOf(AppPrefs.matchupChips(this))) { i ->
                 AppLook.setMatchupChips(this, chipLooks[i]); render()
             })
-        // PLAN 156: read each time a grid cell is drawn, so it applies when the Pokédex / Box is next drawn
-        val animate = Form.switchRow(this, "Animate Pokémon in lists", "Caught Pokémon move in the Pokédex and the Box", AppPrefs.animateLists(this)) {
-            AppPrefs.setAnimateLists(this, it)
-        }
-        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size, animate))
+        val listSize = ListSizePreview.row(this, AppPrefs.listSpriteSize(this)) { AppPrefs.setListSpriteSize(this, it) } // PLAN 215
+        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size, listSize))
     }
 
     /** The look changed: this screen recreates itself (Activity) or tells the player the window needs reopening (floating card). */

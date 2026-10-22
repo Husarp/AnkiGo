@@ -110,11 +110,11 @@ internal class BoxCopiesSheet(
         val r1 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         r1.addView(Ui.text(ctx, 15f, 900, R.color.ag_text).apply { LevelTier.style(this, mon.level); maxLines = 1 })
         if (mon.favourite) r1.addView(BoxViews.heartMark(ctx), LinearLayout.LayoutParams(Ui.dp(ctx, 13), Ui.dp(ctx, 13)).also { it.marginStart = Ui.dp(ctx, 6) })
-        // the shiny pill first, then the other tags as many as fit
-        val tags = MonTags.of(data, state, mon).sortedBy { if (it.kind == TagKind.SHINY) 0 else 1 }.take(3)
+        // PLAN 164 / X3: bare tinted icons (the details' mapping), the shiny star first, then the other tags as many as fit
+        val tags = MonTags.of(data, state, mon).sortedBy { if (it.kind == TagKind.SHINY) 0 else 1 }
         val fit = TeamPage.FitRow(ctx).apply {
             tags.forEach { t ->
-                addView(MonTags.pill(ctx, t), LinearLayout.LayoutParams(-2, -2).also { lp -> lp.marginStart = Ui.dp(ctx, 5) })
+                addView(MonTags.icon(ctx, t, 15), LinearLayout.LayoutParams(Ui.dp(ctx, 15), Ui.dp(ctx, 15)).also { lp -> lp.marginStart = Ui.dp(ctx, 7) })
             }
         }
         r1.addView(fit, LinearLayout.LayoutParams(0, -2, 1f))

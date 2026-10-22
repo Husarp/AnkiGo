@@ -9,12 +9,16 @@ import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Typeface
+import android.graphics.drawable.InsetDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -23,6 +27,7 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.Executors
 import com.husarp.ankigo.ui.Form
+import com.husarp.ankigo.ui.FoldGroup
 import com.husarp.ankigo.ui.Ui
 import com.husarp.ankigo.ui.showCard
 import com.husarp.ankigo.update.Updates
@@ -50,12 +55,15 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
         setContentView(buildContent())
 
         logView.text = Report.all().takeLast(20000)
-        Report.listener = { line -> main.post { logView.append(line + "\n"); logScroll.post { logScroll.scrollTo(0, logView.height) } } }
+        Report.listener = { line -> main.post { logView.append(line + "\n") } }
         Report.log("C12b", "=== AnkiGo started; Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
         refreshHeader(log = true)
     }
 
-    /** The screen's views; onCreate sets them as the Activity's content. */
+    /**
+     * The screen's views; onCreate sets them as the Activity's content. PLAN 220: under the app bar the whole page scrolls: the status card,
+     * the log in a tall box of its own, then the option groups (folded to begin with, see [FoldGroup]).
+     */
     internal fun buildContent(): LinearLayout {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@DiagnosticsActivity, R.color.ag_base)) }
         root.addView(Ui.appBar(this, "Diagnostics", back = true))
@@ -63,48 +71,93 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 4), Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 12))
         }
-        root.addView(body, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(ScrollView(this).apply { isFillViewport = false; addView(body, ViewGroup.LayoutParams(-1, -2)) }, LinearLayout.LayoutParams(-1, 0, 1f))
 
         // status card
         header = Ui.text(this, 12f, 700, R.color.ag_sub1).apply { setLineSpacing(0f, 1.15f) }
         body.addView(Ui.card(this).apply { setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 12), Ui.dp(context, 10)); addView(header) })
 
         val gap = Ui.dp(this, 6)
-        val buttons = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        fun row(vararg items: Pair<String, () -> Unit>) {
-            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            items.forEachIndexed { i, (label, f) ->
-                r.addView(Form.secondary(this, label, onPage = true) { f() }.apply { textSize = 12f; minHeight = Ui.dp(context, 48) },
-                    LinearLayout.LayoutParams(0, -1, 1f).also { if (i > 0) it.marginStart = gap })
-            }
-            buttons.addView(r, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap })
+        // right under the status card, the log: its buttons, then a box about 70 % of the window tall (at least 320 dp) that scrolls inside the page
+        val logActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        listOf<Pair<String, () -> Unit>>("Full screen" to { showFullLog() }, "Share log…" to { pickRange() },
+            "Clear log" to { Report.clear(); logView.text = "" }).forEachIndexed { i, (label, f) ->
+            logActions.addView(Form.secondary(this, label, onPage = true) { f() }.apply { textSize = 12f; minHeight = Ui.dp(context, 48) },
+                LinearLayout.LayoutParams(0, -1, 1f).also { if (i > 0) it.marginStart = gap })
         }
-        row("Switch AnkiDroid target" to { pickTarget() }, "Grant AnkiDroid permission" to { askPermission() })
-        row("C1 Decks + counts" to { c1() }, "C2–C5 Study a deck…" to { pickDeckAndStudy() })
-        row("C3 Media: probe paths" to { bg.execute { Media.probe(this) } }, "C3 Media: All-files access" to { allFiles() })
-        row("C3 Media: pick media folder" to { pickTree() }, "C3 Media: import .apkg" to { pickApkg() })
-        row("C6 Stats probe" to { c6() }, "C7 Snapshot" to { snapshot() }, "C7 Compare" to { compare() })
-        row("LIVE watch (study in AnkiDroid, split screen)" to { startActivity(Intent(this, LiveWatchActivity::class.java)) })
-        row("Pictures: owned Pokémon without one" to { checkPictures() })
-        row("C8 Pin motivation widget" to { pin(MotivationWidget::class.java) }, "C8 Pin study widget" to { pin(StudyWidget::class.java) })
-        row("Updates (version ${Updates.current(this)})" to { startActivity(Intent(this, UpdatesActivity::class.java)) })
-        row("Share log…" to { pickRange() }, "Clear log" to { Report.clear(); logView.text = "" })
-        body.addView(buttons, LinearLayout.LayoutParams(-1, -2))
-        // PLAN 195: on by default; Adam turns it off if his phone shows trouble with answers to cards that aren't first
-        val study = getSharedPreferences("study", 0)
-        body.addView(Form.cardOf(this, listOf(Form.switchRow(this, NOT_TOP_TITLE, NOT_TOP_SUB, study.getBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, true)) { on ->
-            study.edit().putBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, on).apply()
-            Report.log("SETTINGS", "${com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF} -> $on")
-        })), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap })
-
+        body.addView(logActions, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, 10) })
         // not selectable: a focused log made fullScroll pan the whole window up, hiding the buttons (Copy report covers copying)
         logView = Ui.text(this, 11f, 600, R.color.ag_sub1).apply { typeface = Typeface.MONOSPACE; setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8)) }
         logScroll = ScrollView(this).apply {
             background = Ui.rounded(Ui.c(this@DiagnosticsActivity, R.color.ag_mantle), 12, this@DiagnosticsActivity)
+            isNestedScrollingEnabled = true
+            // a drag that starts in the log scrolls the log, not the page
+            setOnTouchListener { v, e ->
+                v.parent?.requestDisallowInterceptTouchEvent(e.actionMasked != MotionEvent.ACTION_UP && e.actionMasked != MotionEvent.ACTION_CANCEL)
+                false
+            }
             addView(logView)
         }
-        body.addView(logScroll, LinearLayout.LayoutParams(-1, 0, 1f).also { it.topMargin = Ui.dp(this, 10) })
+        // the log box follows the newest line only while it is already at the end (the first fill counts as at the end)
+        var follow = true
+        logScroll.setOnScrollChangeListener { _, _, y, _, _ -> follow = y + logScroll.height >= logView.height - Ui.dp(this, 8) }
+        logView.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (follow && bottom - top != oldBottom - oldTop) logScroll.scrollTo(0, bottom - top)
+        }
+        body.addView(logScroll, LinearLayout.LayoutParams(-1, logHeightPx()).also { it.topMargin = gap })
+        fun row(vararg items: Pair<String, () -> Unit>): View {
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            items.forEachIndexed { i, (label, f) ->
+                r.addView(Form.secondary(this, label) { f() }.apply { textSize = 12f; minHeight = Ui.dp(context, 48) },
+                    LinearLayout.LayoutParams(0, -1, 1f).also { if (i > 0) it.marginStart = gap })
+            }
+            r.layoutParams = LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap }
+            return r
+        }
+        fun group(title: String, vararg rows: View) = body.addView(FoldGroup.build(this, title, rows.toList()), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap })
+        group("AnkiDroid",
+            row("Switch AnkiDroid target" to { pickTarget() }, "Grant AnkiDroid permission" to { askPermission() }))
+        group("Checks",
+            row("C1 Decks + counts" to { c1() }, "C2–C5 Study a deck…" to { pickDeckAndStudy() }),
+            row("C6 Stats probe" to { c6() }, "C7 Snapshot" to { snapshot() }, "C7 Compare" to { compare() }),
+            row("LIVE watch (study in AnkiDroid, split screen)" to { startActivity(Intent(this, LiveWatchActivity::class.java)) }),
+            row("Pictures: owned Pokémon without one" to { checkPictures() }))
+        group("Media",
+            row("C3 Media: probe paths" to { bg.execute { Media.probe(this) } }, "C3 Media: All-files access" to { allFiles() }),
+            row("C3 Media: pick media folder" to { pickTree() }, "C3 Media: import .apkg" to { pickApkg() }))
+        group("Widgets",
+            row("C8 Pin motivation widget" to { pin(MotivationWidget::class.java) }, "C8 Pin study widget" to { pin(StudyWidget::class.java) }))
+        // PLAN 195: on by default; Adam turns it off if his phone shows trouble with answers to cards that aren't first
+        val study = getSharedPreferences("study", 0)
+        group("App",
+            row("Updates (version ${Updates.current(this)})" to { startActivity(Intent(this, UpdatesActivity::class.java)) }),
+            Form.switchRow(this, NOT_TOP_TITLE, NOT_TOP_SUB, study.getBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, true)) { on ->
+                study.edit().putBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, on).apply()
+                Report.log("SETTINGS", "${com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF} -> $on")
+            })
+
         return root
+    }
+
+    /** About 70 % of the window, but never under 320 dp. */
+    private fun logHeightPx(): Int = maxOf(Ui.dp(this, 320), (resources.displayMetrics.heightPixels * 0.7f).toInt())
+
+    /** "Full screen": the log text in a dialog that fills the window, scrolled to the end (a snapshot: new lines don't follow there). */
+    private fun showFullLog() {
+        val text = Ui.text(this, 11f, 600, R.color.ag_sub1).apply {
+            typeface = Typeface.MONOSPACE
+            this.text = logView.text
+            setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8))
+        }
+        val scroll = ScrollView(this).apply {
+            val side = Ui.dp(context, 16)
+            background = InsetDrawable(Ui.rounded(Ui.c(context, R.color.ag_mantle), 12, context), side, 0, side, 0)
+            setPadding(side, 0, side, 0)
+            minimumHeight = resources.displayMetrics.heightPixels - Ui.dp(context, 200)
+            addView(text)
+        }
+        text.addOnLayoutChangeListener { _, _, top, _, bottom, _, _, _, _ -> scroll.scrollTo(0, bottom - top) }
+        AppDialog.Builder(this).setTitle("Log").setView(scroll).setPositiveButton("Close", null).showCard()
     }
 
     // Launch and every return to the app: check for updates (at most every 5 min) and carry on an install

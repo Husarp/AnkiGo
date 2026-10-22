@@ -34,6 +34,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     private lateinit var resumeSlot: LinearLayout
     private lateinit var appBar: AppBar
     private lateinit var pull: PullRefreshLayout
+    private var deckScroll: ScrollView? = null
     private var newDeckButton: View? = null
     private val prefs by lazy { act.getSharedPreferences("study", 0) }
     private var decks = emptyList<Anki.Deck>()
@@ -68,6 +69,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     fun buildBody(): View {
         content = StudyUi.column(act).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
         val scroll = ScrollView(act).apply { addView(content, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
+        deckScroll = scroll
         pull = PullRefreshLayout(act, scroll).apply { onRefresh = { refresh(true) } }
         resumeSlot = StudyUi.column(act).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 4)); visibility = View.GONE }
         return StudyUi.column(act).apply {
@@ -75,6 +77,9 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             addView(pull, StudyUi.lp(-1, 0, 1f))
         }
     }
+
+    /** PLAN 218: the Study tab was tapped while it is shown: the deck list goes back to its top. */
+    fun scrollToTop() { deckScroll?.scrollTo(0, 0) }
 
     fun onDestroy() { generation++; DeckFlows.detach(); io.shutdown() }
 

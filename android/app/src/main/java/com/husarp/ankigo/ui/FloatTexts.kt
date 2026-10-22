@@ -7,11 +7,12 @@ import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.Tuning
 
 /** What a floating battle text means (the look is chosen per kind by the panel). */
-enum class FloatKind { DAMAGE, BIG_DAMAGE, MISS, NO_EFFECT, NOT_VERY, SUPER, CRIT, STATUS, STAT_UP, STAT_DOWN, HEAL, HESITATE, INFO }
+enum class FloatKind { DAMAGE, BIG_DAMAGE, MISS, NO_EFFECT, NOT_VERY, SUPER, CRIT, STATUS, STAT_UP, STAT_DOWN, HEAL, HESITATE, INFO, STATUS_DAMAGE }
 
 /**
  * One floating text: at the player's Pokémon ([onPlayer]) or the wild one. A stat change also carries its short label
  * ([stat], "ATK") and how many stages ([stages], 1..3, the direction is the kind), which the view draws as an arrow badge.
+ * PLAN 217: a STATUS_DAMAGE float carries the status key ("brn" / "psn" / "tox") in [stat]; the view colours it like that status' badge.
  */
 data class FloatText(val onPlayer: Boolean, val text: String, val kind: FloatKind, val stat: String? = null, val stages: Int = 0)
 
@@ -30,7 +31,12 @@ object FloatTexts {
     fun loss(n: Int) = "\u2212$n HP"
 
     /** What a screen reader says for a float: "3 HP healed" / "12 HP damage"; any other text is read as it is. */
-    fun spoken(text: String, kind: FloatKind): String {
+    fun spoken(text: String, kind: FloatKind, stat: String? = null): String {
+        // PLAN 217: "−4 HP Burning" is read as "4 HP burn damage" / "4 HP poison damage"
+        if (kind == FloatKind.STATUS_DAMAGE && text.startsWith("\u2212")) {
+            val n = text.substring(1).substringBefore(" HP")
+            when (stat) { "brn" -> return "$n HP burn damage"; "psn", "tox" -> return "$n HP poison damage" }
+        }
         if (kind == FloatKind.HEAL && text.startsWith("+") && text.endsWith(" HP")) return "${text.substring(1, text.length - 3)} HP healed"
         if ((kind == FloatKind.DAMAGE || kind == FloatKind.BIG_DAMAGE) && text.startsWith("\u2212") && text.endsWith(" HP")) return "${text.substring(1, text.length - 3)} HP damage"
         return text
@@ -89,9 +95,22 @@ object FloatTexts {
             }
             EffectKind.STAT_LIMIT -> statLabel(e.stat)?.let { listOf(FloatText(p, "$it ${if (e.stages > 0) "max" else "min"}", FloatKind.INFO)) } ?: emptyList()
             EffectKind.DRAIN, EffectKind.HEAL -> if (e.amount > 0) listOf(FloatText(p, heal(e.amount), FloatKind.HEAL)) else emptyList()
-            EffectKind.RECOIL, EffectKind.STATUS_DAMAGE -> if (e.amount > 0) listOf(FloatText(p, loss(e.amount), FloatKind.DAMAGE)) else emptyList()
+            EffectKind.RECOIL -> if (e.amount > 0) listOf(FloatText(p, loss(e.amount), FloatKind.DAMAGE)) else emptyList()
+            // PLAN 217: status damage names its status ("−4 HP Burning"); an unknown status stays a plain red "−4 HP"
+            EffectKind.STATUS_DAMAGE -> if (e.amount > 0) {
+                val word = damageWord(e.status)
+                if (word == null) listOf(FloatText(p, loss(e.amount), FloatKind.DAMAGE))
+                else listOf(FloatText(p, "${loss(e.amount)} $word", FloatKind.STATUS_DAMAGE, e.status))
+            } else emptyList()
             EffectKind.OTHER, EffectKind.CHARGE -> emptyList()
         }
+    }
+
+    /** PLAN 217: the -ing word after a status damage number (poison and bad poison share one; the card badge tells them apart). */
+    private fun damageWord(status: String?): String? = when (status) {
+        "brn" -> "Burning"
+        "psn", "tox" -> "Poisoning"
+        else -> null
     }
 
     private fun statusName(status: String?): String? = when (status) {

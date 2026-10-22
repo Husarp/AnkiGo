@@ -24,6 +24,7 @@ import com.husarp.ankigo.game.Shop
  * small red dot while the day's stock hasn't been looked at ([Shop.unseen]). The selected tab is in the accent colour
  * with its icon on a 20 % accent pill. Tapping another tab opens its screen through [Nav] (brought to front, no animation)
  * and closes the current one unless that is the home screen ([isHome]), so Back from any tab ends up on the home screen.
+ * Tapping the current tab goes back to that tab's top page ([reselect], PLAN 218).
  * The home screen is Study (and the full-screen battle, its second view, which has no bar).
  */
 object BottomNav {
@@ -49,6 +50,14 @@ object BottomNav {
 
     /** True when [activity] already is the screen [tab] opens, so a tap on the tab changes nothing. */
     fun isHere(activity: Activity, tab: Tab): Boolean = Nav.target(tab.dest).screen == activity.javaClass
+
+    /** PLAN 218: a tap on the tab the screen already shows. A [PageActivity] asks its page; the home screen scrolls the Study deck list to the top. */
+    fun reselect(activity: Activity) {
+        when (activity) {
+            is PageActivity -> activity.reselectTab()
+            is GameActivity -> activity.home.scrollToTop()
+        }
+    }
 
     /** The red dot of the Shop tab: shown when the Shop tab wasn't opened on game day [today] (null / empty = no game yet: no dot). Pure; the bar feeds it the saved day. */
     fun dotShown(lastSeenDay: String?, today: String?): Boolean = !today.isNullOrEmpty() && Shop.unseen(lastSeenDay, today)
@@ -95,7 +104,10 @@ object BottomNav {
                 addView(label, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
                     .also { it.topMargin = Ui.dp(activity, 2) })
                 contentDescription = tab.label
-                setOnClickListener { if (!isHere(activity, tab)) { com.husarp.ankigo.sound.GameSound.ui(activity, com.husarp.ankigo.sound.SoundId.TAB); open(activity, tab) } }
+                setOnClickListener {
+                    if (!isHere(activity, tab)) { com.husarp.ankigo.sound.GameSound.ui(activity, com.husarp.ankigo.sound.SoundId.TAB); open(activity, tab) }
+                    else reselect(activity) // PLAN 218: no tab sound, nothing opens: the screen goes back to its top page
+                }
             }
             if (tab == Tab.SHOP && !on) { // the Shop screen itself shows no dot: opening it is what clears it
                 val dot = dotView(activity)

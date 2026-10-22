@@ -5,7 +5,6 @@ import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.InsetDrawable
 import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
@@ -16,18 +15,16 @@ import android.view.inputmethod.EditorInfo
 import android.widget.BaseAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ListView
 import android.widget.TextView
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Species
-import com.husarp.ankigo.game.Type
 
 // TICKET T14 owns this file: the Pokédex (mockup frame D).
 // Standalone it is a page of its own; given a [pickHost] it is embedded as the Pokédex section of the Pokémon tab (TeamPage
-// builds [embeddedBody], calls [renderEmbedded] and owns the bar). One ListView: header = hero card + progress + filters (segmented, search + sort, chips), rows = 4 cells each (recycled, so ~1000 entries scroll smoothly).
+// builds [embeddedBody], calls [renderEmbedded] and owns the bar). One ListView: header = hero card + progress + filters (segmented, search, the one filter row), rows = 4 cells each (recycled, so ~1000 entries scroll smoothly).
 class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = null) : GamePage(base, host) {
     override val tab = BottomNav.Tab.POKEMON
 
@@ -38,16 +35,13 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     private lateinit var header: LinearLayout
     private lateinit var topBox: LinearLayout     // hero + progress, rebuilt on every render
     private lateinit var segBox: LinearLayout     // All / Owned / Not owned
-    private lateinit var chipsBox: LinearLayout   // the match switch and the two rows of type chips
-    private var chipScroller: HorizontalScrollView? = null // the chip rows' scroll view, reused so a redraw keeps its scroll position
+    private lateinit var rowBox: LinearLayout     // the one filter row (PLAN 192 / X10), rebuilt on every render
     private lateinit var search: EditText         // built once so typing keeps focus
     private lateinit var sortPill: View        // the sort chip as last drawn (a new one each render)
-    private lateinit var sortHolder: FrameLayout
-    private lateinit var filtersPill: TextView   // short windows only: shows / hides the chip rows
-    private var filtersOpen = false
-    private lateinit var emptyView: TextView
+    private lateinit var emptyView: EmptyState
     // Kept while the page lives. Search + sort re-filter in place (render would rebuild the header and drop the keyboard).
-    private var filter = DexFilter().withSort(SortViews.loadDex(base)) // the sort is remembered (PLAN 48/55)
+    // The sort (PLAN 48/55) and the type filter (PLAN 192, X8) are remembered; the other filters are not.
+    private var filter = DexFilter().withSort(SortViews.loadDex(base)).withTypeFilter(SortPrefs.loadType(base, SortPrefs.TypeWhere.DEX))
     private var shown: List<Species> = emptyList()
     private val cols = GridMath.columns(base.resources.configuration.screenWidthDp) // 3 / 4 / 5 / 6 by the window width (R4-V5)
 
@@ -74,18 +68,13 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         }
         topBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         segBox = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        chipsBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        emptyView = Ui.text(this, 13f, 700, R.color.ag_sub0).apply {
-            text = "No Pokémon match"
-            gravity = Gravity.CENTER
-            visibility = View.GONE
-            setPadding(0, Ui.dp(this@DexPage, 24), 0, Ui.dp(this@DexPage, 12))
-        }
+        rowBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        emptyView = EmptyState(this, 24) { clearFilters() }.apply { visibility = View.GONE }
         header.addView(topBox)
         val gapTop = if (Ui.shortWindow(this)) 6 else 12 // a short window (split screen) packs the header tighter
         header.addView(segBox, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, gapTop) })
-        header.addView(searchRow(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, gapTop - 4) })
-        header.addView(chipsBox, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 2) })
+        header.addView(searchField(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, gapTop - 4) }) // its own full-width line
+        header.addView(rowBox, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 2) })
         header.addView(emptyView)
         list = ListView(this).apply {
             divider = null
@@ -95,10 +84,12 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             clipToPadding = false
             addHeaderView(header, null, false)
             adapter = this@DexPage.adapter
-            gate.attach(this) // PLAN 156: the Pokémon stand still while the list flings
         }
         return list
     }
+
+    /** PLAN 218: the list goes back to its top (also as the Pokédex section of the Pokémon tab). */
+    override fun onTabReselected() = scrollToTop(list)
 
     /** The right-hand app bar pill: the enabled generations. */
     fun pillText(): String {
@@ -136,22 +127,14 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         topBox.addView(progress(enabled, compact = Ui.shortWindow(this)))
         segBox.removeAllViews()
         segmented()
-        drawSortChip()
-        chipsBox.removeAllViews()
-        filters()
-        // a short window keeps only the progress line, the segmented control and the search row; "Filters" opens the chip rows
-        val short = Ui.shortWindow(this)
-        filtersPill.visibility = if (short) View.VISIBLE else View.GONE
-        chipsBox.visibility = if (!short || filtersOpen) View.VISIBLE else View.GONE
-        val active = filter.gens.size + filter.types.size + (if (filter.wishlistOnly) 1 else 0)
-        filtersPill.text = "Filters" + (if (active > 0) " · $active" else "") + (if (filtersOpen) " ▴" else " ▾")
+        drawRow()
     }
 
-    /** Recomputes the grid from [filter] and shows the "No Pokémon match" line when it is empty. */
+    /** Recomputes the grid from [filter]; an empty grid says why ([FilterRowText.emptyDex]) and offers "Clear filters" while a filter is on. */
     private fun refilter() {
-        val st = state
         shown = filtered()
         emptyView.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
+        if (shown.isEmpty()) emptyView.set(FilterRowText.emptyDex(filter), filter.active)
         adapter.notifyDataSetChanged()
     }
 
@@ -160,13 +143,50 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         return filter.apply(data.species.values.toList(), DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens, DexSortInfo(data, st))
     }
 
-    // ---- sort (6A): the chip and its sheet ----
+    // ---- the one filter row (PLAN 192, X10): "?" legend, sort & filter button, active-filter chip, quick chips ----
 
-    private fun drawSortChip() {
-        sortHolder.removeAllViews()
-        sortPill = SortViews.sortChip(this, filter.spec(), filter.sheetActive) { openSortSheet() }
-        sortHolder.addView(sortPill)
+    /**
+     * The row under the search field, never scrolling: the legend, the sort & filter button (its sheet holds ALL filters), the
+     * active-filter chip while a sheet filter is on (✕ clears them), then the quick chip for the filter that is off (★ Wishlist).
+     * The All / Owned / Not owned switch and the search field are their own controls above and are not part of the chip.
+     */
+    private fun drawRow() {
+        val ctx = this
+        rowBox.removeAllViews()
+        sortPill = SortViews.sortChip(ctx, filter.spec(), filter.sheetActive) { openSortSheet() }
+        val quick = ArrayList<View>()
+        if (!filter.wishlistOnly) quick += BoxViews.chip(ctx, "★ Wishlist", false) { setSheetFilters(true, filter.gens) }
+        rowBox.addView(FilterRow.make(ctx, TileViews.legendChip(ctx, dex = true), sortPill,
+            FilterRowText.activePieces(filter.typeFilter, null, filter.wishlistOnly, filter.gens),
+            onOpen = { openSortSheet() }, onClear = { clearSheetFilters() }, quick = quick), LinearLayout.LayoutParams(-1, -2))
     }
+
+    /** The ✕ of the active chip: the type filter, the wishlist and the generations off (the search and All / Owned / Not owned stay). */
+    private fun clearSheetFilters() {
+        filter = filter.withTypeFilter(TypeFilter()).copy(wishlistOnly = false, gens = emptySet())
+        SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, filter.typeFilter)
+        redraw()
+        list.setSelection(0)
+    }
+
+    /** The empty state's "Clear filters": every Pokédex filter off, also All / Owned / Not owned and the search text. */
+    private fun clearFilters() {
+        filter = filter.withTypeFilter(TypeFilter()).copy(wishlistOnly = false, gens = emptySet(), owned = DexOwned.ALL, query = "")
+        SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, filter.typeFilter)
+        search.setText("") // its watcher re-filters with the empty query
+        redraw()
+        list.setSelection(0)
+    }
+
+    /** The type filter changed in the sheet: remembered for the Pokédex (X8), the grid follows. */
+    private fun setTypeFilter(t: TypeFilter) {
+        filter = filter.withTypeFilter(t)
+        SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, t)
+        redraw()
+        list.setSelection(0)
+    }
+
+    // ---- sort (6A): the sheet ----
 
     private fun setSort(s: SortSpec) {
         filter = filter.withSort(s)
@@ -175,17 +195,18 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         list.setSelection(0)
     }
 
-    /** The one "Sort & filter" sheet (R10 B3): sort + direction, "Only wishlist", the generations. Changes apply at once. */
+    /** The one "Sort & filter" sheet (R10 B3, R16 192A): sort + direction, "Only wishlist", the generations, the types. Changes apply at once. */
     private fun openSortSheet() = sortSheet().show()
 
     /** The sheet itself (tests build its view and click through it; there is no window to show a dialog in). */
     internal fun sortSheet(): SortSheet {
         val gens = state.settings.gens.sorted()
         return SortSheet(
-            this, SortText.dexKeys, filter.spec(), SortViews.DEX_DEFAULT, false, null, 0, null,
+            this, SortText.dexKeys, filter.spec(), false, null, 0, null,
             count = { filtered().size },
             onChange = { spec, _ -> if (spec != filter.spec()) setSort(spec) },
             dex = SortSheet.DexPart(filter.wishlistOnly, gens, filter.gens) { wish, picked -> setSheetFilters(wish, picked) },
+            type = SortSheet.TypePart(filter.typeFilter) { setTypeFilter(it) },
         )
     }
 
@@ -307,7 +328,8 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         }
     }
 
-    private fun searchRow(): View {
+    /** The search field: its own full-width line (R16 X10: the sort chip lives in the filter row now). */
+    private fun searchField(): View {
         val ctx = this
         search = EditText(ctx).apply {
             hint = "Search name or number"
@@ -331,107 +353,13 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
                 if (action == EditorInfo.IME_ACTION_SEARCH) { v.clearFocus(); true } else false
             }
         }
-        sortHolder = FrameLayout(ctx)
-        drawSortChip() // render() redraws it; this one exists as soon as the page is built
-        filtersPill = Ui.text(ctx, 12f, 800, R.color.ag_text).apply {
-            maxLines = 1
-            visibility = View.GONE
-            Ui.touchPill(this, Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx), 36, 12)
-            setOnClickListener { filtersOpen = !filtersOpen; redraw() }
-        }
-        return LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(search, LinearLayout.LayoutParams(0, -2, 1f))
-            addView(filtersPill, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
-            addView(sortHolder, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
-            addView(TileViews.legendChip(ctx, dex = true), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
-        }
-    }
-
-    /** One filter chip, selected = mauve (the type chips are re-dressed in the type colours by [TypeChips.styleFilter]). [onClick] false = refused, nothing redraws. */
-    private fun chip(label: String, on: Boolean, onClick: () -> Boolean): TextView {
-        val ctx = this
-        val (fill, ink) = Ui.c(ctx, R.color.ag_mauve) to Ui.c(ctx, R.color.ag_crust)
-        return Ui.text(ctx, 12f, 800, R.color.ag_sub1).apply {
-            text = label
-            maxLines = 1
-            setTextColor(if (on) ink else Ui.c(ctx, R.color.ag_sub1))
-            Ui.touchPill(this, Ui.rounded(if (on) fill else Ui.c(ctx, R.color.ag_mantle), 10, ctx), 28, 10) // 48 dp touch height
-            setOnClickListener { if (onClick()) { redraw(); list.setSelection(0) } }
-        }
-    }
-
-    private fun chipRow(chips: List<View>): View {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        for (c in chips) row.addView(c, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 6) })
-        return row
-    }
-
-    /**
-     * PLAN 192: "Any of / All of" for the picked types, a compact two-part switch (a 28 dp bar in a 48 dp touch row, the segmented look of the
-     * sort sheet). The mode lives in [filter] (kept while the page lives, not saved).
-     */
-    private fun matchSwitch(): View {
-        val ctx = this
-        val d = { v: Int -> Ui.dp(ctx, v) }
-        return LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx), 0, d(10), 0, d(10)) // a 28 dp bar in the 48 dp row
-            for (m in TypeMatch.entries) {
-                val on = filter.typeMatch == m
-                addView(Ui.text(ctx, 12f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply {
-                    text = m.label
-                    maxLines = 1
-                    minHeight = d(48)
-                    gravity = Gravity.CENTER
-                    if (on) background = InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_card), 8, ctx), d(3), d(13), d(3), d(13)) // the raised pick, 22 dp
-                    setPadding(d(14), 0, d(14), 0)
-                    isSelected = on
-                    setOnClickListener {
-                        if (filter.typeMatch != m) { filter = filter.withTypeMatch(m); redraw(); list.setSelection(0) }
-                    }
-                }, LinearLayout.LayoutParams(-2, -2))
-            }
-        }
-    }
-
-    /**
-     * The match switch and the type chips in two rows (about half the types each) that scroll sideways together; wishlist + generations live in
-     * the sort sheet (R10 B3). The scroll view is kept across redraws, so a pick or a mode change leaves the row where it was (PLAN 212).
-     */
-    private fun filters() {
-        val types = Type.entries.map { t ->
-            val on = t in filter.types
-            chip(t.label, on) {
-                val next = filter.toggleType(t)
-                if (next == null) Ui.toast(this, "All of: pick up to ${DexFilter.MAX_ALL_TYPES} types") else filter = next
-                next != null
-            }.also { TypeChips.styleFilter(it, t, on) }
-        }
-        val half = (types.size + 1) / 2
-        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        // wrap-content width for both rows: without params the first row is match-parent, so it was squeezed to the width of the shorter second one (Ground, its last chip, was cut: PLAN 212a)
-        rows.addView(chipRow(types.take(half)), LinearLayout.LayoutParams(-2, -2))
-        rows.addView(chipRow(types.drop(half)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(this, 8) }) // chips are 48 dp touch rows around a 28 dp look
-        val scroller = chipScroller ?: HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }.also { chipScroller = it }
-        (scroller.parent as? ViewGroup)?.removeView(scroller)
-        scroller.removeAllViews()
-        scroller.addView(rows)
-        chipsBox.addView(matchSwitch(), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(this, 4) })
-        chipsBox.addView(scroller, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 10) })
+        return search
     }
 
     // ---- grid cells (mockup .dexgrid) ----
 
-    private class Cell(val num: TextView, val img: ImageView, val name: TextView, val star: TextView, val check: ImageView) {
+    private class Cell(val num: TextView, val img: TileSprite, val name: TextView, val star: TextView, val check: ImageView) {
         var sp: Species? = null
-    }
-
-    /** PLAN 156: caught Pokémon move in the grid; this gate keeps them still while the list flings and starts the visible ones when it settles. */
-    private val gate = ScrollGate(GridShape.of(base, cols, CELL_RATIO, gapDp = 6, sidePadDp = 12, topDp = TOP_DP, stripDp = STRIP_DP)) {
-        (0 until list.childCount).flatMap { i -> (list.getChildAt(i) as? CellRow)?.cells.orEmpty().map { (it.tag as Cell).img } }
     }
 
     private fun makeCell(f: SquareFrame) {
@@ -499,7 +427,8 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         val picking = pickHost?.picking == true
         val pick = ComparePick.Dex(sp.num)
         bindPick(f)
-        GridSprites.bind(this, cell.img, sp.num, false, animate = caught, gate = gate, silhouette = !seen) // PLAN 156: a caught one moves
+        cell.img.sizeStep = AppPrefs.listSpriteSize(this) // PLAN 215
+        Ui.staticSprite(this, sp.num, false, cell.img, silhouette = !seen)
         if (seen && !caught) {
             // seen only: grey sprite (mockup .seen)
             cell.img.colorFilter = greyed

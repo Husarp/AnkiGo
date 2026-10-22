@@ -211,13 +211,10 @@ object AppPrefs {
 
     internal fun putScale(ctx: Context, percent: Int) = prefs(ctx).edit().putInt("uiScale", percent).apply()
 
-    /**
-     * PLAN 156: caught Pokémon move in the Pokédex and Box grids (Settings → Look → "Animate Pokémon in lists"). Default on. Read
-     * every time a cell is drawn, so a change shows when the grid is next drawn.
-     */
-    fun animateLists(ctx: Context): Boolean = prefs(ctx).getBoolean("animateLists", true)
+    /** PLAN 215: the Pokémon size in the Pokédex and Box grids, a step of [ListSpriteSize] (0..4, default Medium). Read each time a cell is drawn. */
+    fun listSpriteSize(ctx: Context): Int = ListSpriteSize.parse(prefs(ctx).getInt("listSpriteSize", ListSpriteSize.DEFAULT))
 
-    fun setAnimateLists(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("animateLists", on).apply()
+    fun setListSpriteSize(ctx: Context, step: Int) = prefs(ctx).edit().putInt("listSpriteSize", ListSpriteSize.parse(step)).apply()
 }
 
 /**

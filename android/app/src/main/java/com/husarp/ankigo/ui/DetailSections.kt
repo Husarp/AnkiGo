@@ -133,7 +133,7 @@ object DetailSections {
         TagKind.EXP_SHARE -> R.drawable.ic_exp_share
         TagKind.FAVOURITE -> R.drawable.ic_heart
         TagKind.FAINTED -> R.drawable.ic_alert
-        TagKind.CAN_EVOLVE -> R.drawable.ic_up
+        TagKind.CAN_EVOLVE -> R.drawable.ic_evolve
         TagKind.NEW -> R.drawable.ic_ach_sparkle
         TagKind.SHINY -> R.drawable.ic_star
         TagKind.REGIONAL -> R.drawable.ic_flag
@@ -451,6 +451,27 @@ object DetailSections {
     }
 
     /**
+     * PLAN 183A: the small mauve "Read more on Bulbapedia" link (open-in-browser sign, 48 dp tall to touch) directly under the
+     * Pokédex text; a tap opens the species' Bulbapedia page in the browser ([ReadMore]).
+     */
+    private fun readMore(a: Context, data: GameData, sp: Species): TextView {
+        val name = data.species[sp.baseNum]?.name ?: sp.name
+        return Ui.text(a, 12f, 800, R.color.ag_mauve).apply {
+            text = "Read more on Bulbapedia"
+            gravity = Gravity.CENTER_VERTICAL
+            minHeight = Ui.dp(a, 48)
+            contentDescription = "Read more about $name on Bulbapedia, opens the browser"
+            a.getDrawable(R.drawable.ic_open)?.mutate()?.let { d ->
+                d.setTint(Ui.c(a, R.color.ag_mauve))
+                d.setBounds(0, 0, Ui.dp(a, 12), Ui.dp(a, 12))
+                setCompoundDrawablesRelative(null, null, d, null)
+                compoundDrawablePadding = Ui.dp(a, 4)
+            }
+            setOnClickListener { ReadMore.open(a, ReadMore.url(data, sp)) }
+        }
+    }
+
+    /**
      * The Info section: Pokédex text and category (loaded the first time it opens; never blocks), height / weight, [extra] cells
      * (defeats; short values only), then each of [lines] (label, value) on its own full-width line (the long caught date, the
      * wild Pokémon's tier), the abilities, and the evolution line. [abilities] = (label, value, small line under it) or null.
@@ -463,6 +484,7 @@ object DetailSections {
         val text = Ui.text(a, 12f, 700, R.color.ag_text).apply { setLineSpacing(0f, 1.1f); text = "Loading the Pokédex text…" }
         col.addView(head)
         col.addView(text, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 4) })
+        col.addView(readMore(a, data, sp), LinearLayout.LayoutParams(-2, Ui.dp(a, 48)))
         val facts = cells(a, listOfNotNull(DetailFormat.height(sp.heightM)?.let { it to "Height" }, DetailFormat.weight(sp.weightKg)?.let { it to "Weight" }) + extra)
         if (facts != null) {
             col.addView(divider(a), LinearLayout.LayoutParams(-1, 1).also { it.topMargin = Ui.dp(a, 10); it.bottomMargin = Ui.dp(a, 10) })

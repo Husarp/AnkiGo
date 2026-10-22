@@ -8,7 +8,7 @@ plugins {
 
 // The app's version: the one place it is written. versionCode must grow with every release or Android
 // refuses the update, so it comes from the version: 0.1.0 -> 100, 1.2.3 -> 10203.
-val appVersion = "0.21.0"
+val appVersion = "0.22.0"
 val (vMajor, vMinor, vPatch) = appVersion.split('.').map { it.toInt() }
 
 android {
@@ -55,7 +55,12 @@ android {
 
 // The screenshot-test library (Paparazzi) brings a newer Kotlin standard library into the unit tests only; let the
 // test sources compile against it. The app itself is not affected.
-tasks.withType<Test>().configureEach { reports.html.required.set(false); forkEvery = 25; maxHeapSize = "1536m" }
+// -PtestHeap / -PtestForkEvery let a low-RAM machine run the tests in a smaller worker.
+tasks.withType<Test>().configureEach {
+    reports.html.required.set(false)
+    forkEvery = (findProperty("testForkEvery") as String?)?.toLong() ?: 25
+    maxHeapSize = (findProperty("testHeap") as String?) ?: "1536m"
+}
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     if (name.contains("UnitTest")) compilerOptions.freeCompilerArgs.add("-Xskip-metadata-version-check")
 }

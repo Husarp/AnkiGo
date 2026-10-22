@@ -1182,8 +1182,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     // ---------------------------------------------------------------- status badges
 
-    private var enemyStatus: String? = null
-    private var playerStatus: String? = null
+    internal var enemyStatus: String? = null; private set    // read by tests (PLAN 216)
+    internal var playerStatus: String? = null; private set
 
     /** Status badge (poison, burn, paralysis, sleep, freeze) on the wild card; null clears it. Raw engine ids ("tox" shows as poison). */
     fun setEnemyStatus(status: String?) { if (status != enemyStatus) { enemyStatus = status; statusChanged(eStatus) } }

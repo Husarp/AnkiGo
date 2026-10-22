@@ -36,18 +36,18 @@ internal class MonActions(private val s: GamePage) {
         val makeSub = SwitchQueue.MENU_SUB.takeIf { SwitchQueue.fightOn(state) }
         if (idx >= 0) {
             if (idx > 0 && state.queuedMain?.uid == mon.uid && main != null) {
-                add("Cancel the switch", R.drawable.ic_star, sub = "${main.shownName} stays in", tone = R.color.ag_yellow) { s.act { g -> g.requestMain(main.uid) } }
-            } else if (idx > 0) add("Make main", R.drawable.ic_star, sub = makeSub, tone = R.color.ag_yellow) { s.act { g -> g.requestMain(mon.uid).quietUnlessHit() } } // the change is visible: no toast (unless it cost a hit or waits for the next answer)
+                add("Cancel the switch", R.drawable.ic_close, sub = "${main.shownName} stays in", tone = R.color.ag_yellow) { s.act { g -> g.requestMain(main.uid) } }
+            } else if (idx > 0) add("Make main", R.drawable.ic_swords, sub = makeSub, tone = R.color.ag_peach) { s.act { g -> g.requestMain(mon.uid).quietUnlessHit() } } // the change is visible: no toast (unless it cost a hit or waits for the next answer)
             if (state.team.size > 1) add("Send to box", R.drawable.ic_team) { s.act { it.toBox(mon.uid) } }
         } else if (state.team.size < 6) {
             add("Add to team", R.drawable.ic_team) { s.act { it.toTeam(mon.uid) } }
-            add("Make main", R.drawable.ic_star, sub = makeSub, tone = R.color.ag_yellow) {
+            add("Make main", R.drawable.ic_swords, sub = makeSub, tone = R.color.ag_peach) {
                 s.act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.requestMain(mon.uid).quietUnlessHit() else r } }
             }
         } else if (main != null) {
             // Team full (R6-06): pick which team Pokémon to swap out, or make this one the main (the main goes to the box).
             add("Add to team…", R.drawable.ic_team) { swapIn(mon) }
-            add("Make main (${main.shownName} goes to the box)", R.drawable.ic_star, tone = R.color.ag_yellow) {
+            add("Make main (${main.shownName} goes to the box)", R.drawable.ic_swords, tone = R.color.ag_peach) {
                 s.act { g -> g.swapIntoTeam(mon.uid, main.uid).quietUnlessHit() }
             }
         }
@@ -56,8 +56,8 @@ internal class MonActions(private val s: GamePage) {
         add("Use item…", R.drawable.ic_ball, extra = true) { useItem(mon) }
         add("Teach TM…", R.drawable.ic_tm, extra = true) { teachMenu(mon) }
         if (mon.uid != main?.uid) {
-            if (state.settings.xpShareUid == mon.uid) add("Exp. Share holder: turn off", R.drawable.ic_up) { s.act { it.setXpShare(null) } }
-            else add("Make Exp. Share holder", R.drawable.ic_up) { s.act { it.setXpShare(mon.uid) } }
+            if (state.settings.xpShareUid == mon.uid) add("Exp. Share holder: turn off", R.drawable.ic_exp_share, tone = R.color.ag_teal) { s.act { it.setXpShare(null) } }
+            else add("Make Exp. Share holder", R.drawable.ic_exp_share, tone = R.color.ag_teal) { s.act { it.setXpShare(mon.uid) } }
         }
         if (BuddyWidgetPrefs.widgetIds(s).isNotEmpty()) add("Show on Buddy widget", R.drawable.ic_open, extra = true) { showOnBuddyWidget(mon) }
         add("Compare", R.drawable.ic_compare) {

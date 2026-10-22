@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
+import app.cash.paparazzi.RenderExtension
 import app.cash.paparazzi.Snapshot
 import app.cash.paparazzi.SnapshotHandler
 import java.lang.reflect.Proxy
@@ -137,7 +138,27 @@ object Shots {
         showSystemUi = false,
         maxPercentDifference = 100.0,
         snapshotHandler = fileHandler(outDir),
+        renderExtensions = setOf(BalancedFirstFrame),
     )
+
+    /**
+     * R16 (RAM rule): before a shot's frame, layoutlib draws the screen once into one shared no-op canvas (RenderSessionImpl.NOP_CANVAS)
+     * whose save / restore do nothing, so every translate, scale and concat stays on it, shot after shot. Once its scale is large, each
+     * vector icon drawn into it gets a 2048 x 2048 cache (32 MB, freed only when the JVM collects): PagesShots grew past 3 GB with a
+     * 768 MB heap. This wraps every shot's view so that pass draws it into a plain canvas without pixels, where save / restore work.
+     */
+    private object BalancedFirstFrame : RenderExtension {
+        override fun renderView(contentView: View): View {
+            val lp = contentView.layoutParams
+            return object : FrameLayout(contentView.context) {
+                override fun dispatchDraw(canvas: android.graphics.Canvas) =
+                    super.dispatchDraw(if (canvas.javaClass.simpleName == "NopCanvas") android.graphics.Canvas() else canvas)
+            }.apply {
+                addView(contentView, FrameLayout.LayoutParams(-1, -1))
+                if (lp != null) layoutParams = lp
+            }
+        }
+    }
 
     // Android unit-test sources compile without java.awt, so the handler is a Proxy and the image is written through
     // reflection (ImageIO is there at run time).

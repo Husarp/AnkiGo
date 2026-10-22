@@ -15,7 +15,7 @@ enum class GuideVisualId {
     XP_BAR,
     /** An item's icon; [GuideVisual.arg] = the item id (always an id of game.Items). */
     ITEM_ICON,
-    /** A Pokémon tag; [GuideVisual.arg] = a ui TagKind name ("CAN_EVOLVE", "SHINY", "MAIN"...). */
+    /** A Pokémon mark (drawn as its icon, like the details header); [GuideVisual.arg] = a ui TagKind name ("CAN_EVOLVE", "SHINY", "MAIN"...). */
     TAG,
     /** The compare/Pokédex type matchup table. */
     MATCHUP_TABLE,
@@ -117,7 +117,7 @@ object GameGuide {
                 "Level: some Pokémon evolve when they reach a level.",
                 "Friendship: others evolve after a defeat once their friendship is high enough (usually ${Tuning.DEFAULT_MIN_FRIENDSHIP}). Friendship goes up by ${Tuning.FRIENDSHIP_GAIN.first} to ${Tuning.FRIENDSHIP_GAIN.last} with each defeat.",
                 "Item: stones and similar items evolve the Pokémon that need them. Open the item in your bag and use it.",
-                "A \"Can evolve\" tag shows when a Pokémon is ready. An Everstone in its hold stops evolving.",
+                "A green mark shows when a Pokémon is ready to evolve. An Everstone in its hold stops evolving.",
                 "Evolving heals the Pokémon fully.",
             ),
             listOf(GuideVisual(GuideVisualId.TAG, "CAN_EVOLVE", "Ready to evolve"), GuideVisual(GuideVisualId.ITEM_ICON, "thunder-stone", "An evolution stone"), GuideVisual(GuideVisualId.ITEM_ICON, "everstone", "Holds a Pokémon back")),

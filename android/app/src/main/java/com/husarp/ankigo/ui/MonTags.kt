@@ -1,11 +1,9 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
-import android.view.Gravity
-import android.view.View
+import android.graphics.PorterDuff
 import android.widget.ImageView
 import android.widget.LinearLayout
-import androidx.annotation.ColorRes
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
@@ -79,45 +77,21 @@ object MonTags {
         return out.map { if (it.kind == TagKind.SHINY) it.copy(label = "Shiny") else it }.sortedBy { DETAIL_ORDER.indexOf(it.kind) }
     }
 
-    @ColorRes private fun tone(kind: TagKind): Int = when (kind) {
-        TagKind.MAIN -> R.color.ag_mauve
-        TagKind.FAINTED -> R.color.ag_red
-        TagKind.CAN_EVOLVE -> R.color.ag_green
-        TagKind.NEW -> R.color.ag_sky
-        TagKind.EXP_SHARE -> R.color.ag_teal
-        TagKind.HELD -> 0
-        TagKind.SHINY -> R.color.ag_yellow
-        TagKind.REGIONAL -> R.color.ag_lav
-        TagKind.TEAM -> R.color.ag_mauve
-        TagKind.FAVOURITE -> R.color.ag_pink
-    }
-
-    fun pill(ctx: Context, tag: MonTag): View {
-        val text = Ui.pill(ctx, tag.label.uppercase(), tone(tag.kind))
-        text.maxLines = 1
-        val item = tag.item
-        if (tag.kind != TagKind.HELD || item == null) return text
-        // neutral pill with the item icon before the label
-        val box = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_s0), 7, ctx)
-        }
+    /**
+     * PLAN 164 / X3: a tag as a bare tinted icon of [sizeDp] (no pill): the details header's icon and tone ([DetailSections.markIcon] /
+     * [DetailSections.markTone]); a held item shows its own icon. The label is the content description.
+     */
+    fun icon(ctx: Context, tag: MonTag, sizeDp: Int): ImageView {
         val img = ImageView(ctx)
-        Ui.itemIcon(ctx, item, img)
-        box.addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 12), Ui.dp(ctx, 12)).also { it.marginStart = Ui.dp(ctx, 6) })
-        text.background = null
-        text.setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 3), Ui.dp(ctx, 7), Ui.dp(ctx, 3))
-        box.addView(text, LinearLayout.LayoutParams(-2, -2))
-        return box
-    }
-
-    fun row(ctx: Context, tags: List<MonTag>, max: Int = 3): LinearLayout = LinearLayout(ctx).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        tags.take(max).forEachIndexed { i, t ->
-            addView(pill(ctx, t), LinearLayout.LayoutParams(-2, -2).also { if (i > 0) it.marginStart = Ui.dp(ctx, 4) })
+        val item = tag.item
+        if (tag.kind == TagKind.HELD && item != null) Ui.itemIcon(ctx, item, img) else img.apply {
+            setImageResource(DetailSections.markIcon(tag.kind))
+            setColorFilter(Ui.c(ctx, DetailSections.markTone(tag.kind)), PorterDuff.Mode.SRC_IN)
+            scaleType = ImageView.ScaleType.FIT_CENTER
         }
+        img.contentDescription = tag.label.removePrefix("★ ")
+        img.layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, sizeDp), Ui.dp(ctx, sizeDp))
+        return img
     }
 }
 
@@ -129,7 +103,7 @@ data class MonMark(val tag: TagKind, val kind: MarkKind, val icon: String, val l
 
 /**
  * The redone card (PLAN 57): [types] have their own spot (never among the tags), [isNew] is the corner badge, [tags] are the
- * other marks as icons in today's priority order. Nothing draws this yet; [MonTags.of] / pill / row keep today's look.
+ * other marks as icons in today's priority order. Nothing draws this yet; [MonTags.of] and [MonTags.icon] are what the screens use.
  */
 data class MonMarks(val types: List<Type>, val isNew: Boolean, val tags: List<MonMark>) {
     companion object {
@@ -162,7 +136,7 @@ data class MonMarks(val types: List<Type>, val isNew: Boolean, val tags: List<Mo
 /**
  * The marks a Box / Pokédex tile shows (R4-V5, 6A in Adam's version): ONLY these six, in this order everywhere. Held item,
  * can evolve, fainted and regional form are not on tiles (the details show them). Shiny is a golden glow behind the sprite on a
- * tile (a ★ on the Team row), never a ★ icon on a tile.
+ * tile (a star icon on the Team row), never a ★ icon on a tile.
  */
 enum class TileMark(val label: String, val legend: String) {
     NEW("New", "Caught today and not opened yet"),

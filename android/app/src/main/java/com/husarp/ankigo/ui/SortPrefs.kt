@@ -15,4 +15,13 @@ object SortPrefs {
 
     fun load(ctx: Context, where: Where): SortSpec = load(prefs(ctx), where)
     fun save(ctx: Context, where: Where, spec: SortSpec) = save(prefs(ctx), where, spec)
+
+    /** PLAN 192 (X8): the type filter (types + mode) is remembered per screen; the string is [TypeFilter.encode]. Nothing else of the filters is saved. */
+    enum class TypeWhere(val key: String) { BOX("typeFilter.box"), DEX("typeFilter.dex") }
+
+    fun loadType(p: SharedPreferences, where: TypeWhere): TypeFilter = TypeFilter.decode(p.getString(where.key, null))
+    fun saveType(p: SharedPreferences, where: TypeWhere, f: TypeFilter) { p.edit().putString(where.key, f.encode()).apply() }
+
+    fun loadType(ctx: Context, where: TypeWhere): TypeFilter = loadType(prefs(ctx), where)
+    fun saveType(ctx: Context, where: TypeWhere, f: TypeFilter) = saveType(prefs(ctx), where, f)
 }

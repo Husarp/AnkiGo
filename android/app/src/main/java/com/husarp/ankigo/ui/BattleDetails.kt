@@ -16,7 +16,7 @@ import com.husarp.ankigo.game.lookNum
 /**
  * Tap on your Pokémon in a battle (PLAN 86): the same Details window as in the Pokédex / Box, on top of the battle.
  * Close returns to the battle; nothing switches to the Team tab. The window is built on a bare [GamePage] so heart,
- * rename and "More options" work like in the Team tab.
+ * rename and "Options" work like in the Team tab.
  */
 object BattleDetails {
     /** Shows the details of [uid] over whatever [ctx] belongs to (an Activity or an overlay window). False when there is nothing to show. */

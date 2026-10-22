@@ -115,7 +115,25 @@ class FloatTextsTest {
         assertEquals(listOf(FloatText(false, "+9 HP", FloatKind.HEAL)), FloatTexts.of(fx(EffectKind.HEAL, onPlayer = false, amount = 9), on))
         assertEquals(emptyList<FloatText>(), FloatTexts.of(fx(EffectKind.HEAL, amount = 0), on)) // already full
         assertEquals(listOf("\u22124 HP" to FloatKind.DAMAGE), FloatTexts.of(fx(EffectKind.RECOIL, amount = 4), on).pairs())
+        // PLAN 217: status damage names its status and carries the key; an unknown status stays the plain red number
         assertEquals(listOf("\u22122 HP" to FloatKind.DAMAGE), FloatTexts.of(fx(EffectKind.STATUS_DAMAGE, amount = 2), on).pairs())
+        assertEquals(listOf("\u22122 HP" to FloatKind.DAMAGE), FloatTexts.of(fx(EffectKind.STATUS_DAMAGE, status = "zzz", amount = 2), on).pairs())
+        assertEquals(emptyList<FloatText>(), FloatTexts.of(fx(EffectKind.STATUS_DAMAGE, status = "brn", amount = 0), on))
+    }
+
+    @Test fun statusDamageSaysItsStatus() {
+        assertEquals(listOf(FloatText(true, "\u22124 HP Burning", FloatKind.STATUS_DAMAGE, "brn")), FloatTexts.of(fx(EffectKind.STATUS_DAMAGE, status = "brn", amount = 4), on))
+        assertEquals(listOf(FloatText(false, "\u221211 HP Poisoning", FloatKind.STATUS_DAMAGE, "psn")), FloatTexts.of(fx(EffectKind.STATUS_DAMAGE, onPlayer = false, status = "psn", amount = 11), on))
+        assertEquals(listOf(FloatText(true, "\u22123 HP Poisoning", FloatKind.STATUS_DAMAGE, "tox")), FloatTexts.of(fx(EffectKind.STATUS_DAMAGE, status = "tox", amount = 3), on))
+        // recoil is untouched, whatever status the mon has
+        assertEquals(listOf(FloatText(true, "\u22124 HP", FloatKind.DAMAGE)), FloatTexts.of(fx(EffectKind.RECOIL, status = "brn", amount = 4), on))
+    }
+
+    @Test fun statusDamageSpoken() {
+        assertEquals("4 HP burn damage", FloatTexts.spoken("\u22124 HP Burning", FloatKind.STATUS_DAMAGE, "brn"))
+        assertEquals("4 HP poison damage", FloatTexts.spoken("\u22124 HP Poisoning", FloatKind.STATUS_DAMAGE, "psn"))
+        assertEquals("12 HP poison damage", FloatTexts.spoken("\u221212 HP Poisoning", FloatKind.STATUS_DAMAGE, "tox"))
+        assertEquals("12 HP damage", FloatTexts.spoken("\u221212 HP", FloatKind.DAMAGE))
     }
 
     @Test fun otherEffectShowsNothing() {

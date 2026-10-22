@@ -179,10 +179,13 @@ internal object DownloadAll {
     // ---- the run ----
 
     /**
-     * What a run did: [ok] jobs done (downloaded, or upstream has none), the [failed] ones (network trouble: no file, no note), the
-     * [untouched] ones left in the queue by a Cancel or [aborted], and [bytes] written on disk by this run.
+     * What a run did: [ok] jobs done (downloaded, or upstream has none), the [failed] ones (no file and no note: network trouble, or an
+     * answer that wasn't a usable file), the [untouched] ones left in the queue by a Cancel or [aborted], and [bytes] written on disk by
+     * this run. [notAvailable] (PLAN 219) = how many of the [ok] ones are "upstream has no such file" (a "not found" note), not downloads.
      */
-    class Result(val ok: Int, val failed: List<Job>, val untouched: List<Job>, val bytes: Long, val aborted: Boolean) {
+    class Result(
+        val ok: Int, val failed: List<Job>, val untouched: List<Job>, val bytes: Long, val aborted: Boolean, val notAvailable: Int = 0,
+    ) {
         /** The estimate of what is still missing after this run. */
         val leftBytes: Long get() = failed.sumOf { it.bytes } + untouched.sumOf { it.bytes }
     }
@@ -204,6 +207,7 @@ internal object DownloadAll {
         val ok = AtomicInteger()
         val failed = ConcurrentLinkedQueue<Job>()
         val bytes = AtomicLong()
+        val notAvailable = AtomicInteger()
         val straight = AtomicInteger()
         val aborted = AtomicBoolean(false)
         if (total == 0) return Result(0, emptyList(), emptyList(), 0, false)
@@ -217,6 +221,7 @@ internal object DownloadAll {
                         val before = check(job)
                         if (before.state != Have.NONE) {
                             ok.incrementAndGet(); straight.set(0)
+                            if (before.state == Have.NOTE) notAvailable.incrementAndGet()
                         } else {
                             var network = false
                             try { fetch(job) } catch (e: Exception) { network = isNetworkFailure(e) /* counted below: nothing on disk */ }
@@ -227,7 +232,7 @@ internal object DownloadAll {
                                 else if (straight.incrementAndGet() >= stopAfter) aborted.set(true)
                             } else {
                                 ok.incrementAndGet(); straight.set(0)
-                                if (after.state == Have.HAVE) bytes.addAndGet(after.bytes)
+                                if (after.state == Have.HAVE) bytes.addAndGet(after.bytes) else notAvailable.incrementAndGet()
                             }
                         }
                         progress(ok.get(), failed.size, total, bytes.get())
@@ -236,43 +241,105 @@ internal object DownloadAll {
             }.apply { isDaemon = true; name = "download-all" }.start()
         }
         latch.await()
-        return Result(ok.get(), failed.toList(), queue.toList(), bytes.get(), aborted.get())
+        return Result(ok.get(), failed.toList(), queue.toList(), bytes.get(), aborted.get(), notAvailable.get())
+    }
+
+    /**
+     * PLAN 219: the requests ONE job made and what each was answered, to say why a job that left no file and no note failed. A worker
+     * thread runs one job at a time, so one [Trail] per worker is enough (see [fetching]).
+     */
+    internal class Trail {
+        private class Ask(val url: String, val answer: String, val notFound: Boolean)
+        private val asks = ArrayList<Ask>()
+
+        /** [url] was answered with [body] (null = not found). */
+        fun got(url: String, body: ByteArray?) {
+            asks += if (body == null) Ask(url, "not found", true)
+            else Ask(url, "answered with ${body.size} bytes, but nothing was saved from them", false)
+        }
+
+        /** [url] failed with [e]. */
+        fun failed(url: String, e: IOException) { asks += Ask(url, answerOf(e), false) }
+
+        /** "last asked <url>: <what went wrong>": the last request that was not a clean "not found" is the one blamed. */
+        fun describe(): String {
+            val last = asks.lastOrNull() ?: return "nothing was asked, no file and no answer"
+            val problem = asks.lastOrNull { !it.notFound } ?: return "last asked ${last.url}: no file and no answer"
+            return "last asked ${last.url}: " + (if (problem === last) "" else "${problem.url} ") + problem.answer
+        }
+
+        companion object {
+            /** "HTTP 403" for the server's error answer ([Http.get]: "HTTP 403 for <url>"), else "SocketTimeoutException: timeout". */
+            fun answerOf(e: IOException): String = Regex("^HTTP \\d+").find(e.message.orEmpty())?.value ?: "${e.javaClass.simpleName}: ${e.message}"
+        }
+    }
+
+    /** The kinds that are pictures: they go only while "Download pictures as needed" is on (cries and backgrounds have their own rules). */
+    private val PICTURE_KINDS = setOf(Kind.STATIC, Kind.FRONT, Kind.BACK, Kind.ITEM)
+
+    /**
+     * PLAN 219: the lines for the log after a run: one per failed job (kind, shiny, number or id, the URL asked last and why), the
+     * first [cap] only, then "and N more". [reasons] = [fetching]'s record per [Job.key].
+     */
+    fun failureLines(failed: List<Job>, reasons: Map<String, String>, cap: Int = 50): List<String> {
+        val lines = failed.take(cap).map { "download everything: failed ${it.key}, ${reasons[it.key] ?: "no file and no answer"}" }
+        return if (failed.size > cap) lines + "download everything: ... and ${failed.size - cap} more failed" else lines
     }
 
     /**
      * The real fetches for [run]: each job goes to the same code the on-demand path uses (so the same hosts, the same mirror, the same
-     * "not found" notes). Network errors are remembered in [firstError] for the one summary line in the report.
+     * "not found" notes). Network errors are remembered in [firstError] for the one summary line in the report; the reason of every job
+     * that fails goes into [reasons] (by [Job.key]; see [failureLines]).
      */
-    fun fetcher(ctx: Context, firstError: AtomicReference<String?>): (Job) -> Unit {
+    fun fetcher(ctx: Context, firstError: AtomicReference<String?>, reasons: MutableMap<String, String>): (Job) -> Unit {
         val app = ctx.applicationContext
-        val sprites = Sprites.dir(app)
-        val cries = GameSound.cryStoreOf(app)
+        return fetching(layout(app), GameSound.cryStoreOf(app), firstError, reasons, { Sprites.enabled(app) }) { url, p -> Mirror.get(url, progress = p) }
+    }
+
+    /**
+     * [fetcher] without the Context: [l] the folders, [store] the cries, [net] the network (the mirror in the app, a fake in the tests),
+     * [picturesOn] the "Download pictures as needed" switch. After the fetch, a job with no file and no note gets its reason in [reasons];
+     * a network-level failure is rethrown so [run] counts it toward the stop.
+     */
+    internal fun fetching(
+        l: Layout, store: CryStore, firstError: AtomicReference<String?>, reasons: MutableMap<String, String>,
+        picturesOn: () -> Boolean = { true }, net: HttpGet,
+    ): (Job) -> Unit {
         val preferred = AtomicInteger(0)
         val netError = ThreadLocal<IOException?>() // the last network-level failure of this worker's current job
+        val trail = ThreadLocal.withInitial { Trail() } // what this worker's current job asked, and the answers
         val get: HttpGet = { url, p ->
-            try { Mirror.get(url, progress = p) } catch (e: IOException) {
+            try { net(url, p).also { trail.get().got(url, it) } } catch (e: IOException) {
+                trail.get().failed(url, e)
                 firstError.compareAndSet(null, "${e.javaClass.simpleName}: ${e.message}")
                 if (isNetworkFailure(e)) netError.set(e)
                 throw e
             }
         }
         return { job ->
-            netError.set(null)
-            fetchOne(app, sprites, cries, job, get, preferred)
-            // the fetch code swallows its IOException and leaves nothing; say it was the network so [run] counts it toward the stop
-            val e = netError.get()
-            if (e != null && check(job, Layout(sprites, cries.folder())).state == Have.NONE) throw e
+            netError.set(null); trail.set(Trail())
+            if (job.kind in PICTURE_KINDS && !picturesOn()) {
+                reasons[job.key] = "\"Download pictures as needed\" is off, nothing was asked"
+            } else {
+                try { fetchIn(l, store, job, get, preferred) } catch (e: Exception) { reasons[job.key] = "${e.javaClass.simpleName}: ${e.message}"; throw e }
+                if (check(job, l).state == Have.NONE) {
+                    reasons[job.key] = trail.get().describe()
+                    // the fetch code swallows its IOException and leaves nothing; say it was the network so [run] counts it toward the stop
+                    netError.get()?.let { throw it }
+                }
+            }
         }
     }
 
-    private fun fetchOne(app: Context, sprites: File, cries: CryStore, job: Job, get: HttpGet, preferred: AtomicInteger) {
+    /** The real fetch of one job into the folders of [l] (and [store] for a cry): [get] is the network. */
+    internal fun fetchIn(l: Layout, store: CryStore, job: Job, get: HttpGet, preferred: AtomicInteger) {
         when (job.kind) {
-            Kind.STATIC -> Sprites.fetchStaticBlocking(app, job.num, job.shiny, get, preferred)
-            Kind.FRONT -> Sprites.fetchBattleQuiet(app, job.species!!, SpriteKind.FRONT, job.shiny, get)
-            Kind.BACK -> Sprites.fetchBattleQuiet(app, job.species!!, SpriteKind.BACK, job.shiny, get)
-            Kind.ITEM -> Sprites.fetchItemBlocking(app, job.id, get)
-            Kind.BACKGROUND -> Backdrops.fetchFile(sprites, job.bg!!, get)
-            Kind.CRY -> cries.fetch(job.num) { url -> get(url, null) }
+            Kind.STATIC -> Sprites.fetchStaticBlocking(l.sprites, job.num, job.shiny, get, preferred)
+            Kind.FRONT -> Sprites.fetchBattleQuiet(l.sprites, job.species!!, SpriteKind.FRONT, job.shiny, get)
+            Kind.BACK -> Sprites.fetchBattleQuiet(l.sprites, job.species!!, SpriteKind.BACK, job.shiny, get)
+            Kind.ITEM -> Sprites.fetchItemBlocking(l.sprites, job.id, get)
+            Kind.BACKGROUND -> Backdrops.fetchFile(l.sprites, job.bg!!, get)
+            Kind.CRY -> store.fetch(job.num) { url -> get(url, null) }
         }
     }
 

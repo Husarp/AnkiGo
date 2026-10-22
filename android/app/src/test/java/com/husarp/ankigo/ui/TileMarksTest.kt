@@ -129,7 +129,7 @@ class TileMarksTest {
         val plain = TestData.mon(data, 16, 10, uid = "p")
         st.mons += held; st.mons += plain
         assertEquals(listOf("h"), BoxTiles.filter(st.mons, BoxFilter.HOLDS_ITEM).map { it.uid })
-        val evolving = BoxTiles.filter(st.mons, BoxFilter.CAN_EVOLVE, st.team) { MonTags.canEvolve(data, st, it, now) }
+        val evolving = BoxTiles.filter(st.mons, BoxFilter.CAN_EVOLVE, st.team, canEvolve = { MonTags.canEvolve(data, st, it, now) })
         assertEquals(listOf(st.mons[0].uid), evolving.map { it.uid })
         assertTrue(BoxTiles.filter(st.mons, BoxFilter.CAN_EVOLVE).isEmpty()) // no answer given = nothing can evolve
         assertEquals(st.mons.size, BoxTiles.filter(st.mons, BoxFilter.ALL).size)

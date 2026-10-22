@@ -76,7 +76,7 @@ class SortShots {
             val (p, screen) = box(ctx, v, spec, filter)
             val maxBody = (ctx.resources.displayMetrics.heightPixels * SortSheet.BODY_SHARE).toInt() - Ui.dp(ctx, 150)
             val s = SortSheet(
-                p, SortText.boxKeys, spec, SortSpec.DEFAULT, vsWild, BoxFilter.entries.map { it.label }, filter.ordinal,
+                p, SortText.boxKeys, spec, vsWild, BoxFilter.entries.map { it.label }, filter.ordinal,
                 SortSheet.GroupToggle(true) {}, count = { 54 }, onChange = { _, _ -> },
             )
             sheetOver(ctx, screen, s.build(maxBody))
@@ -113,7 +113,7 @@ class SortShots {
             val p = dex(ctx, dexStat)
             val screen = pageScreen(ctx, p)
             val maxBody = (ctx.resources.displayMetrics.heightPixels * SortSheet.BODY_SHARE).toInt() - Ui.dp(ctx, 150)
-            val s = SortSheet(p, SortText.dexKeys, dexStat.spec(), SortViews.DEX_DEFAULT, false, null, 0, null, count = { 151 }, onChange = { _, _ -> })
+            val s = SortSheet(p, SortText.dexKeys, dexStat.spec(), false, null, 0, null, count = { 151 }, onChange = { _, _ -> })
             sheetOver(ctx, screen, s.build(maxBody))
         }
     }

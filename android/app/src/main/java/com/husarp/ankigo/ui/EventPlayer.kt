@@ -315,6 +315,12 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         handler.postDelayed({ if (my == epoch) f() }, ms)
     }
 
+    /** PLAN 216: the fight is over (the wild one fainted, was caught or fled): both status badges go at once, not with the next Encounter. */
+    private fun clearStatuses() {
+        arena.setPlayerStatus(null)
+        arena.setEnemyStatus(null)
+    }
+
     /** Looks ahead in the queue: after the wild one fainted, does a Caught (not a Defeated) come first? */
     private fun willBeCaught(): Boolean {
         for (item in queue) {
@@ -437,10 +443,12 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             }
             is GameEvent.Fainted -> {
                 if (e.player) {
+                    arena.setPlayerStatus(null)   // PLAN 216: it left the field: its badge goes with the faint
                     arena.faint(true, d(500))
                     log(LogKind.AGAIN, "FAINT", "${em(e.name)} fainted!")
                     return d(800)
                 }
+                clearStatuses()   // PLAN 216: the fight is over: no badge waits for the XP / money steps or the next Encounter
                 // A caught one goes into the ball instead of sinking (the Caught event does that).
                 if (willBeCaught()) return 0
                 arena.faint(false, d(500))
@@ -479,8 +487,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             is GameEvent.Evolved -> return playEvolved(e)
             is GameEvent.MainHealed -> {
                 log(LogKind.AGAIN, "FAINT", "${em(e.name)} fainted… it's back at full HP. The wild one ran off.")
-                arena.setPlayerStatus(null)
-                arena.setEnemyStatus(null)
+                clearStatuses()
                 arena.enemyLeave(d(450))
                 if (e.uid == arena.playerUid) {
                     arena.enter(true, d(450))
@@ -499,6 +506,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             is GameEvent.Encounter -> return playEncounter(e)
             is GameEvent.Fled -> {
                 log(LogKind.NEUTRAL, "FLED", "${em(bare(e.name))} ran away.")
+                clearStatuses()   // PLAN 216
                 arena.enemyLeave(d(450))
                 return d(700)
             }
@@ -762,6 +770,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     /** Optional ball tap: the wild one goes into the ball, wobbles, then breaks free or stays (Caught follows). */
     private fun playBallThrow(e: GameEvent.BallThrow): Long {
+        if (e.success) clearStatuses()   // PLAN 216: this ball takes it: the fight ends with the throw (a broken-free ball keeps the fight and the badges)
         log(LogKind.SYS, "CATCH", "Throw: ${em(Items.name(e.ball))} · ${e.chance}%…")
         GameRepo.state?.let { panel.setBalls(BattlePanelView.ballCount(it), true) }
         arena.setEnemyCardShown(false)
@@ -783,6 +792,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     /** Mockup frame B: ball drops (450 ms) and wobbles (1.8 s), stars twinkle, "Gotcha!" banner. */
     private fun playCaught(e: GameEvent.Caught): Long {
+        clearStatuses()   // PLAN 216: caught (auto-catch, or the ball already took it): the fight is over
         val hadBall = arena.ballShown
         val swap = upcomingSwap()
         val xpEv = upcomingPlayerXp()

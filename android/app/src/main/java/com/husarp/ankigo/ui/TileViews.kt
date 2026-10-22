@@ -1,12 +1,15 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.RadialGradient
+import android.graphics.Rect
 import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.View
@@ -18,12 +21,21 @@ import com.husarp.ankigo.R
 // the red NEW sticker, the mark icons and the "?" legend. Pure maths is in GridMath / TileMarks.
 
 /**
- * A sprite drawn at a whole-number scale, nearest-neighbour (sharp pixels), centred in the room the view has. The picture never
- * leaves the view's bounds, so a tile that reserves the corners and the label strip around it never has its marks covered.
- * Placeholders without a size just fill the view.
+ * A sprite drawn nearest-neighbour (sharp pixels), centred in the room the view has. The picture never leaves the view's bounds, so a
+ * tile that reserves the corners and the label strip around it never has its marks covered. [sizeStep] (PLAN 215, [ListSpriteSize]) is
+ * the list size: 0 is the plain [GridMath.tileScale] of the whole picture, bigger steps zoom up until the opaque part of the picture
+ * fills the room; the opaque part is what is centred. Placeholders without a size just fill the view.
  */
 internal class TileSprite(ctx: Context) : ImageView(ctx) {
     init { super.setScaleType(ScaleType.MATRIX) }
+
+    /** The list size step ([ListSpriteSize]); the picture is re-fitted when it changes. */
+    var sizeStep: Int = 0
+        set(v) {
+            if (field == v) return
+            field = v
+            fit()
+        }
 
     /** Always [ScaleType.MATRIX]: [Ui.staticSprite] asks for FIT_CENTER, but the scale is computed here. */
     override fun setScaleType(scaleType: ScaleType?) = Unit
@@ -45,11 +57,54 @@ internal class TileSprite(ctx: Context) : ImageView(ctx) {
         val aw = width - paddingLeft - paddingRight
         val ah = height - paddingTop - paddingBottom
         if (dw <= 0 || dh <= 0 || aw <= 0 || ah <= 0) { imageMatrix = Matrix(); return }
-        val s = GridMath.tileScale(aw, ah, dw, dh)
+        // the opaque part of the picture (in the drawable's own pixels); a drawable that is no bitmap counts as all opaque
+        val bmp = (d as? BitmapDrawable)?.bitmap
+        val box = bmp?.let { contentBox(it) }
+        val kx = if (bmp == null) 1f else dw.toFloat() / bmp.width
+        val ky = if (bmp == null) 1f else dh.toFloat() / bmp.height
+        val cl = if (box == null) 0f else box.left * kx
+        val ct = if (box == null) 0f else box.top * ky
+        val cw = if (box == null) dw.toFloat() else box.width() * kx
+        val ch = if (box == null) dh.toFloat() else box.height() * ky
+        val s = ListSpriteSize.scale(aw, ah, dw, dh, Math.round(cw).coerceAtLeast(1), Math.round(ch).coerceAtLeast(1), sizeStep)
         val m = Matrix()
         m.setScale(s, s)
-        m.postTranslate(paddingLeft + (aw - dw * s) / 2f, paddingTop + (ah - dh * s) / 2f)
+        m.postTranslate(paddingLeft + (aw - cw * s) / 2f - cl * s, paddingTop + (ah - ch * s) / 2f - ct * s)
         imageMatrix = m
+    }
+
+    private companion object {
+        /** The opaque bounds of each bitmap, found once (main thread); null = nothing to find (no alpha, empty, or unreadable). */
+        private val boxes = java.util.WeakHashMap<Bitmap, Rect>()
+        private val NONE = Rect()
+
+        fun contentBox(bmp: Bitmap): Rect? {
+            val known = boxes[bmp]
+            if (known != null) return if (known === NONE) null else known
+            val found = scan(bmp)
+            boxes[bmp] = found ?: NONE
+            return found
+        }
+
+        private fun scan(bmp: Bitmap): Rect? {
+            val w = bmp.width
+            val h = bmp.height
+            if (w <= 0 || h <= 0 || !bmp.hasAlpha()) return null
+            return try {
+                val px = IntArray(w * h)
+                bmp.getPixels(px, 0, w, 0, 0, w, h)
+                var l = w; var t = h; var r = -1; var b = -1
+                for (y in 0 until h) for (x in 0 until w) {
+                    if (px[y * w + x] ushr 24 != 0) {
+                        if (x < l) l = x
+                        if (x > r) r = x
+                        if (y < t) t = y
+                        if (y > b) b = y
+                    }
+                }
+                if (r < 0) null else Rect(l, t, r + 1, b + 1)
+            } catch (e: Exception) { null } // a hardware bitmap cannot be read: the whole picture is the content
+        }
     }
 }
 

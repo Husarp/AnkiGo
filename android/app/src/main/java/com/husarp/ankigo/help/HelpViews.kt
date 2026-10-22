@@ -487,7 +487,7 @@ internal object HelpViews {
         GuideVisualId.TAG -> {
             val kind = TagKind.entries.firstOrNull { it.name == v.arg } ?: TagKind.MAIN
             val item = if (kind == TagKind.HELD) "lucky-egg" else null
-            cell(ctx, MonTags.pill(ctx, MonTag(kind, GuideDemo.tagLabel(kind.name), item)), v.caption)
+            cell(ctx, MonTags.icon(ctx, MonTag(kind, GuideDemo.tagLabel(kind.name), item), 22), v.caption)
         }
         else -> cell(ctx, Ui.typeChip(ctx, Type.entries.firstOrNull { it.name == v.arg } ?: Type.NORMAL), v.caption)
     }

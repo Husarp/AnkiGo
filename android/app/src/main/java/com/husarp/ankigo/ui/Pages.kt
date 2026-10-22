@@ -12,6 +12,8 @@ import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ListView
+import android.widget.ScrollView
 import android.widget.TextView
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
@@ -107,6 +109,21 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
         }
     }
 
+    /**
+     * PLAN 218: the tab this page belongs to was tapped while it is already the current one. The page goes back to its top page: a page
+     * with a sub-page closes it, any other page scrolls its main list to the top (a section switch, such as Team / Box / Pokédex, stays).
+     * Dialogs and sheets over the page are not touched. Default: nothing.
+     */
+    open fun onTabReselected() {}
+
+    /** Scrolls [v] (a ScrollView or a ListView) back to its top at once; anything else is left alone. */
+    protected fun scrollToTop(v: View?) {
+        when (v) {
+            is ScrollView -> v.scrollTo(0, 0)
+            is ListView -> v.setSelection(0)
+        }
+    }
+
     /** The page is paused / hidden: stop listening. */
     open fun onHide() {
         GameRepo.removeListener(listener)
@@ -188,6 +205,9 @@ abstract class PageActivity : AgActivity(), PageHost {
     override val hostActivity: Activity? get() = this
 
     override fun closePage() = finish()
+
+    /** PLAN 218: the bar's current tab was tapped again ([BottomNav]); the page goes back to its top. */
+    internal fun reselectTab() = page.onTabReselected()
 
     override fun startForResult(intent: Intent, onResult: (Int, Intent?) -> Unit) {
         val code = nextCode++

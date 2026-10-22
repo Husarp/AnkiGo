@@ -58,7 +58,7 @@ class R3X1Shots {
         }
     }
 
-    /** Tap on your Pokémon in a battle: the Details window (heart, pencil, More options) on top, no Team tab. */
+    /** Tap on your Pokémon in a battle: the Details window (heart, pencil, Options) on top, no Team tab. */
     @Test fun detailsOverBattle() = paparazzi.shootWith("r3x1-details", listOf(Size.PHONE, Size.SPLIT)) { ctx ->
         val b = BattleShotKit.bound(ctx)
         val uid = GameRepo.state!!.main!!.uid
@@ -76,7 +76,7 @@ class R3X1Shots {
             val d = DialogShots.capture { BattleDetails.show(ctx, uid) }
             assertNotNull(d)
             val scene = DialogShots.scene(ctx, d!!)
-            assertTrue("More options", texts(scene).any { it == "More options" })
+            assertTrue("Options", texts(scene).any { it == "Options" })
             assertTrue("Close", texts(scene).any { it.equals("Close", true) })
             assertTrue("Rename pencil", descs(scene).any { it == "Rename" })
             scene

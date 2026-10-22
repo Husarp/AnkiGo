@@ -165,6 +165,11 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         SectionSwitch.draw(this, switchBox, StatsSection.entries.map { SectionSwitch.Seg(it.label, it.icon) }, section.ordinal) { showSection(StatsSection.entries[it]) }
     }
 
+    /** PLAN 218: Statistics / Achievements are sections, not sub-pages: the shown one stays and scrolls to its top. */
+    override fun onTabReselected() {
+        if (section == StatsSection.ACHIEVEMENTS) achievements.scrollToY(0) else scrollToTop(statsScroll)
+    }
+
     /** Test hook and Nav: shows [s]. The chart state (metric, period, deck, grain) is kept while the page lives. */
     internal fun showSection(s: StatsSection) {
         if (s == section) return

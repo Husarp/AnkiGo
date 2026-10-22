@@ -175,11 +175,11 @@ object MonDetail {
         if (page == null) { Pickers.info(a, "Details", DetailSections.scroll(a, col)); return }
         lateinit var dlg: AppDialog
         lateinit var more: View
-        more = DetailParts.secondaryButton(a, "More options") {
+        more = DetailParts.secondaryButton(a, "Options") {
             // the menu hangs on this button, so the details close only once a row was tapped
             MonActions(page).menu(mon, more) { dlg.dismiss() }
         }
-        // "More options" is pinned under the scrolling details (AppDialog footer, just above Close), compact or not
+        // "Options" is pinned under the scrolling details (AppDialog footer, just above Close), compact or not
         val pinned = FrameLayout(a).apply {
             addView(more, FrameLayout.LayoutParams(-1, -2).also { it.setMargins(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 4)) })
         }

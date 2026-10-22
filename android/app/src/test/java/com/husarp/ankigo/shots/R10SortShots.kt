@@ -66,11 +66,10 @@ class R10SortShots {
         GamePage::class.java.getDeclaredMethod("render").apply { isAccessible = true }.invoke(p)
     }
 
-    private fun dexPage(ctx: Context, f: DexFilter, v: Variant? = null, open: Boolean = true): Pair<DexPage, View> {
+    private fun dexPage(ctx: Context, f: DexFilter, v: Variant? = null): Pair<DexPage, View> {
         val p = DexPage(ctx, NoHost)
         setField(p, "filter", f)
         val screen = if (v === FLOAT) p.root.also { p.onShow() } else pageScreen(ctx, p)
-        setField(p, "filtersOpen", open)
         render(p)
         return p to screen
     }
@@ -85,36 +84,40 @@ class R10SortShots {
 
     // ------------------------------------------------------------------ B3
 
-    @Test fun dexHeaderHasOnlyTwoRowsOfTypeChips() {
+    @Test fun dexHeaderHasNoTypeRowsAnyMore() {
+        // R16 X10: the Any of / All of switch and the type rows left the header: search has its own line, then the one filter row
         for (v in listOf(Variants.PHONE, Variants.SPLIT, FLOAT)) paparazzi.shootPage("r10sort-dex-header", listOf(v)) { ctx ->
             val (p, screen) = dexPage(ctx, DexFilter(), v)
-            val chips = getField(p, "chipsBox") as LinearLayout
-            val t = texts(chips)
-            assertFalse("no Wishlist chip", "Wishlist" in t)
-            assertTrue("no Gen chips: $t", t.none { it.startsWith("Gen ") })
-            // PLAN 192: the Any of / All of switch comes first, then the one scroller for both rows
-            assertEquals("Any of / All of", listOf("Any of", "All of"), texts(chips.getChildAt(0)))
-            val scroll = chips.getChildAt(1) as HorizontalScrollView
-            assertEquals("the switch and one scroller for both rows", 2, chips.childCount)
-            val rows = scroll.getChildAt(0) as LinearLayout
-            assertEquals("exactly two rows", 2, rows.childCount)
-            val counts = (0 until 2).map { (rows.getChildAt(it) as LinearLayout).childCount }
-            assertEquals(Type.entries.size, counts.sum())
-            assertTrue("about half each: $counts", Math.abs(counts[0] - counts[1]) <= 1)
+            val t = texts(screen)
+            assertTrue("no Any of / All of switch in the header: $t", t.none { it == "Any of" || it == "All of" || it == "Only" })
+            assertTrue("no type chips in the header: $t", Type.entries.none { it.label in t })
+            assertTrue("no Filters pill", t.none { it.startsWith("Filters") })
+            assertFalse("no Gen chips in the header", "Gen 1" in t)
+            val header = (getField(p, "rowBox") as View).parent as LinearLayout
+            val search = getField(p, "search") as View
+            assertNotNull(search.parent)
+            val row = (getField(p, "rowBox") as LinearLayout).getChildAt(0)
+            assertTrue("the row is the one FilterRow", row is com.husarp.ankigo.ui.FilterRow)
+            assertTrue("the search field is its own line: above the row", header.indexOfChild(search) < header.indexOfChild(getField(p, "rowBox") as View))
+            assertTrue("no scrolling row", all(header).none { it is HorizontalScrollView })
             screen
         }
     }
 
-    @Test fun sortChipShowsHiddenFilters() {
+    @Test fun sortChipHasAFunnelAndNoCountButSaysHowManyFiltersAreOn() {
         paparazzi.shootPage("r10sort-dex-chip", listOf(Variants.PHONE)) { ctx ->
             val (p, screen) = dexPage(ctx, DexFilter(wishlistOnly = true, gens = setOf(1, 2)))
-            assertTrue("chip says 2 filters are on: ${texts(getField(p, "sortPill") as View)}", "· 2" in texts(getField(p, "sortPill") as View))
-            val (_, _) = dexPage(ctx, DexFilter())
+            val chip = getField(p, "sortPill") as View
+            assertTrue("no count on the chip: ${texts(chip)}", texts(chip).none { Regex("· \\d+").matches(it) })
+            assertTrue("funnel on the left", (chip as ViewGroup).getChildAt(0) is android.widget.ImageView)
+            assertTrue("the description says 2 filters are on: ${chip.contentDescription}", "2 filters are on" in chip.contentDescription)
             screen
         }
         paparazzi.shootPage("r10sort-dex-chip-off", listOf(Variants.PHONE)) { ctx ->
             val (p, screen) = dexPage(ctx, DexFilter())
-            assertTrue("no count while nothing is on", texts(getField(p, "sortPill") as View).none { it.startsWith("·") })
+            val chip = getField(p, "sortPill") as View
+            assertTrue("no count while nothing is on", texts(chip).none { Regex("· \\d+").matches(it) })
+            assertTrue("no filter note while nothing is on: ${chip.contentDescription}", "filter" !in chip.contentDescription.toString().replace("Sort and filter", ""))
             screen
         }
     }
@@ -148,7 +151,7 @@ class R10SortShots {
             sw.isChecked = true
             val f = getField(p, "filter") as DexFilter
             assertTrue(f.wishlistOnly)
-            tap(sheet, "Reset")
+            tap(sheet, "Clear")
             val r = getField(p, "filter") as DexFilter
             assertFalse(r.wishlistOnly); assertTrue(r.gens.isEmpty())
             assertEquals("Show $all Pokémon", texts(sheet).first { it.startsWith("Show ") && it.endsWith("Pokémon") })

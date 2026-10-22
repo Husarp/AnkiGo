@@ -146,7 +146,7 @@ object GuideDemo {
     /** The short name of a chapter for the contents tiles. */
     fun shortTitle(id: String): String = SHORT[id] ?: GameGuide.chapter(id)?.title ?: id
 
-    /** The pill text of a guide tag (same words as the tags in Team). [item] = the icon of a HELD tag. */
+    /** The words of a guide mark (the icon's content description; same words as in the details header). */
     fun tagLabel(kind: String): String = when (kind) {
         "MAIN" -> "Main"
         "FAINTED" -> "Fainted"
@@ -154,7 +154,7 @@ object GuideDemo {
         "NEW" -> "New"
         "EXP_SHARE" -> "Exp. Share"
         "HELD" -> "Holds an item"
-        "SHINY" -> "★ Shiny"
+        "SHINY" -> "Shiny"
         "REGIONAL" -> "Regional"
         else -> kind
     }

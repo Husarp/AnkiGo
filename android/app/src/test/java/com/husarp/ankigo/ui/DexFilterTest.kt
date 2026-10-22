@@ -167,34 +167,22 @@ class DexFilterTest {
         assertEquals(true, DexFilter(types = setOf(Type.FIRE), typeMatch = TypeMatch.ALL).active)
     }
 
-    @Test fun allOfTakesAtMostTwoPicksAndRefusesAThirdWithoutChangingAnything() {
-        var f = DexFilter(typeMatch = TypeMatch.ALL)
-        f = f.toggleType(Type.WATER)!!
-        f = f.toggleType(Type.FLYING)!!
-        assertEquals(setOf(Type.WATER, Type.FLYING), f.types)
-        assertNull(f.toggleType(Type.FIRE))
-        assertEquals(setOf(Type.WATER, Type.FLYING), f.types)
-        // un-picking is always allowed, then there is room again
-        f = f.toggleType(Type.WATER)!!
-        assertEquals(setOf(Type.FLYING), f.types)
-        assertEquals(setOf(Type.FLYING, Type.FIRE), f.toggleType(Type.FIRE)!!.types)
+    // ---- R16-2-E: the third mode, and the filter's type part ----
+
+    @Test fun onlyKeepsNoTypeOutsideThePicks() {
+        // Water: pure Water only (Gyara is Water/Flying); Water + Flying: pure Water, pure Flying and Water/Flying
+        assertEquals(listOf(7, 9), runTyped(DexFilter(types = setOf(Type.WATER), typeMatch = TypeMatch.ONLY)))
+        assertEquals(listOf(7, 9, 130), runTyped(DexFilter(types = setOf(Type.WATER, Type.FLYING), typeMatch = TypeMatch.ONLY)))
+        assertEquals(emptyList<Int>(), runTyped(DexFilter(types = setOf(Type.FLYING), typeMatch = TypeMatch.ONLY))) // nobody here is pure Flying
+        assertEquals(6, runTyped(DexFilter(typeMatch = TypeMatch.ONLY)).size)
     }
 
-    @Test fun anyOfTakesAnyNumberOfPicks() {
-        var f = DexFilter()
-        for (t in listOf(Type.WATER, Type.FLYING, Type.FIRE, Type.ROCK)) f = f.toggleType(t)!!
-        assertEquals(4, f.types.size)
-    }
-
-    @Test fun switchingToAllOfKeepsTheTwoPickedLast() {
-        var f = DexFilter()
-        for (t in listOf(Type.WATER, Type.FLYING, Type.FIRE, Type.ROCK)) f = f.toggleType(t)!!
-        val all = f.withTypeMatch(TypeMatch.ALL)
-        assertEquals(TypeMatch.ALL, all.typeMatch)
-        assertEquals(listOf(Type.FIRE, Type.ROCK), all.types.toList())
-        // two or fewer picks are kept as they are, and going back to Any of keeps what is picked
-        val two = DexFilter(types = setOf(Type.WATER, Type.FLYING)).withTypeMatch(TypeMatch.ALL)
-        assertEquals(listOf(Type.WATER, Type.FLYING), two.types.toList())
-        assertEquals(two.types, two.withTypeMatch(TypeMatch.ANY).types)
+    @Test fun theTypePartIsATypeFilterAndRoundTrips() {
+        val f = DexFilter(types = setOf(Type.WATER, Type.ICE), typeMatch = TypeMatch.ALL)
+        assertEquals(TypeFilter(setOf(Type.WATER, Type.ICE), TypeMatch.ALL), f.typeFilter)
+        val g = DexFilter(query = "x", wishlistOnly = true).withTypeFilter(f.typeFilter)
+        assertEquals(f.types, g.types); assertEquals(TypeMatch.ALL, g.typeMatch)
+        assertEquals("x", g.query); assertTrue(g.wishlistOnly)
+        assertEquals(TypeFilter(), g.withTypeFilter(TypeFilter()).typeFilter)
     }
 }

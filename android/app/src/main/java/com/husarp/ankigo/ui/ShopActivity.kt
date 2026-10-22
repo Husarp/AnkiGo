@@ -110,6 +110,9 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         return scroll
     }
 
+    /** PLAN 218: Shop / Bag are a switch at the top, not sub-pages: the shown one stays and scrolls to its top. */
+    override fun onTabReselected() = scrollToTop(scroll)
+
     override fun onShow() {
         super.onShow()
         rollDay()

@@ -2,6 +2,7 @@ package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.TestData
+import com.husarp.ankigo.game.Type
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -44,6 +45,39 @@ class BoxTilesTest {
         assertEquals(listOf(a), BoxTiles.filter(listOf(a, b, c), BoxFilter.SHINY))
         assertEquals(listOf(b, c), BoxTiles.filter(listOf(a, b, c), BoxFilter.IN_TEAM, listOf(b.uid, c.uid)))
         assertTrue(BoxTiles.filter(listOf(a, b, c), BoxFilter.IN_TEAM).isEmpty())
+    }
+
+    // ---- R16-2-E: the type filter is its own state, independent of the Show filter (X7) ----
+
+    private val typed = TestData.data(listOf(
+        TestData.species(7, types = listOf(Type.WATER)),
+        TestData.species(131, types = listOf(Type.WATER, Type.ICE)),
+        TestData.species(4, types = listOf(Type.FIRE)),
+        TestData.species(10101, types = listOf(Type.ICE, Type.STEEL)).copy(form = "Alola", baseNum = 4), // a regional form has its own types
+    ))
+    private fun typedMon(sp: Int, fav: Boolean = false) = TestData.mon(typed, sp, 10, uid = "t${n++}").also { it.favourite = fav }
+    private fun typesOf(m: Mon) = typed.sp(m.species).types
+
+    @Test fun typeFilterWorksOnTheSpeciesTypesAlone() {
+        val sq = typedMon(7); val lap = typedMon(131); val ch = typedMon(4); val alo = typedMon(10101)
+        val all = listOf(sq, lap, ch, alo)
+        fun f(match: TypeMatch, vararg t: Type) = BoxTiles.filter(all, BoxFilter.ALL, types = TypeFilter(t.toSet(), match), typesOf = ::typesOf)
+        assertEquals(all, BoxTiles.filter(all, BoxFilter.ALL, types = TypeFilter(), typesOf = ::typesOf)) // no picks: everything
+        assertEquals(listOf(sq, lap), f(TypeMatch.ANY, Type.WATER))
+        assertEquals(listOf(lap, alo), f(TypeMatch.ANY, Type.ICE)) // the Alolan form is Ice/Steel, not Fire like its base
+        assertEquals(listOf(lap), f(TypeMatch.ALL, Type.WATER, Type.ICE))
+        assertEquals(listOf(sq, lap), f(TypeMatch.ONLY, Type.WATER, Type.ICE))
+        assertEquals(listOf(sq), f(TypeMatch.ONLY, Type.WATER))
+    }
+
+    @Test fun typeFilterCombinesWithTheShowFilter() {
+        val sq = typedMon(7, fav = true); val lap = typedMon(131); val ch = typedMon(4, fav = true)
+        val all = listOf(sq, lap, ch)
+        val water = TypeFilter(setOf(Type.WATER))
+        assertEquals(listOf(sq), BoxTiles.filter(all, BoxFilter.FAVOURITES, types = water, typesOf = ::typesOf)) // Water + Favourites
+        assertEquals(listOf(sq, ch), BoxTiles.filter(all, BoxFilter.FAVOURITES, types = TypeFilter(), typesOf = ::typesOf))
+        assertEquals(listOf(sq), BoxTiles.filter(all, BoxFilter.CAN_EVOLVE, canEvolve = { it === sq || it === ch }, types = water, typesOf = ::typesOf)) // Water + Can evolve now
+        assertTrue(BoxTiles.filter(all, BoxFilter.SHINY, types = water, typesOf = ::typesOf).isEmpty())
     }
 
     @Test fun holdsExpShareFindsTheHolderAnywhere() {
