@@ -304,4 +304,7 @@ object GameSound {
             Report.fail(TAG, "preview of $id", t)
         }
     }
+
+    /** PLAN 167: the cry store, for "Download everything" (its own threads call [CryStore.fetch]). */
+    internal fun cryStoreOf(ctx: Context): CryStore = cryStore(ctx)
 }

@@ -60,6 +60,9 @@ class CryStore(private val dir: File, private val now: () -> Long = System::curr
         return null
     }
 
+    /** PLAN 167: the folder the cries are in ([DownloadAll] looks at it to see what is on the phone). */
+    fun folder(): File = dir
+
     companion object {
         const val RETRY_MISSING_MS = 7L * 24 * 3600 * 1000
 

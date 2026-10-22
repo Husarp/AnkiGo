@@ -34,25 +34,6 @@ internal object ShopPlan {
         data class Tm(val move: String) : Tile() { override val key: String get() = "tm:$move" }
     }
 
-    /** One row of the tile grid: tiles side by side, or (PLAN 168) the opened card across the full width. */
-    sealed class Row {
-        data class Tiles(val tiles: List<Tile>) : Row()
-        data class Card(val tile: Tile) : Row()
-    }
-
-    /**
-     * The grid in rows of [cols] tiles. The [open] tile becomes a full-width card where its row was, and the other tiles of that row
-     * follow in a row below it (PLAN 168, mockup `tileRows`); the rows after it are not touched.
-     */
-    fun rows(tiles: List<Tile>, cols: Int, open: Tile?): List<Row> = tiles.chunked(cols).flatMap { chunk ->
-        if (open != null && open in chunk) {
-            val rest = chunk - open
-            listOf<Row>(Row.Card(open)) + (if (rest.isEmpty()) emptyList() else listOf(Row.Tiles(rest)))
-        } else {
-            listOf<Row>(Row.Tiles(chunk))
-        }
-    }
-
     /** Today's items, then today's TMs, as one list of tiles in rows (the old separate TM list is gone). */
     fun specials(items: List<String>, tms: List<String>): List<Tile> = items.map { Tile.Item(it) } + tms.map { Tile.Tm(it) }
 

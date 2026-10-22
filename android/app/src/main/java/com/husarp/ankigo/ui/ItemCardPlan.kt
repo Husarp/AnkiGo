@@ -7,38 +7,33 @@ import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.Items
 
 /**
- * What the item cards of the Shop and the Bag (PLAN 168 / 181 / 200 / 199) decide, worked out without Views so the rules are tested on
- * the JVM: which card is open, the keys of the cards, the Bag's action button of each kind, the words around the cards.
+ * What the item windows of the Shop and the Bag (PLAN 168 / 181 / 200 / 199, PLAN 210) decide, worked out without Views so the rules are
+ * tested on the JVM: which item is open, the keys of the cards, the Bag's action button of each kind, the words around the cards.
  */
 
-/** Which card is open: ONE at a time (opening another folds the first). It survives a re-render but the page drops it when it is left. */
+/** Which item's window is open: ONE at a time (opening another replaces it). It survives a re-render but the page drops it when it is left. */
 internal class OpenCard {
-    /** The key of the open card (see [CardKeys]), or null. */
+    /** The key of the open item (see [CardKeys]), or null. */
     var key: String? = null
         private set
 
-    /** The trade confirm of the open ball card is showing. */
+    /** The trade confirm of the open ball window is showing. */
     var confirming: Boolean = false
         private set
 
     /**
-     * R14-B2 fix Y5: the open card stays although its item count has dropped to 0 (a trade used the last ball): it then says "You don't
-     * own any ... yet". Set by [keepWhenEmpty]; ends with the card (folded, another one opened, [reset]). Ordinary rows with 0 vanish.
+     * R14-B2 fix Y5: the open window stays although its item count has dropped to 0 (a trade used the last ball): it then says "You don't
+     * own any ... yet". Set by [keepWhenEmpty]; ends with the window (closed, another one opened, [reset]). Ordinary rows with 0 vanish.
      */
     var keepEmpty: Boolean = false
         private set
 
-    private var seen = false
-
-    /** Call when the open card's own action can use up its item (a trade): the card then stays with a 0 count. */
+    /** Call when the open window's own action can use up its item (a trade): the window then stays with a 0 count. */
     fun keepWhenEmpty() { keepEmpty = key != null }
 
-    /** True when [k] is the open card; counts as "the open card was drawn" for [endRender]. */
-    fun isOpen(k: String): Boolean = (key == k).also { if (it) seen = true }
-
-    /** A tap on the header or the tile of [k]: opens it (and folds the one that was open), or folds it when it was open. */
-    fun toggle(k: String) {
-        key = if (key == k) null else k
+    /** A tap on a tile, row or card of [k]: its window is the open one (the one that was open is replaced). */
+    fun open(k: String) {
+        key = k
         confirming = false
         keepEmpty = false
     }
@@ -46,14 +41,9 @@ internal class OpenCard {
     fun confirmTrade(on: Boolean) { confirming = on && key != null }
 
     fun reset() { key = null; confirming = false; keepEmpty = false }
-
-    /** Call before a page draws its cards and [endRender] after: a card whose item is gone (the last Potion was used) is forgotten, so it does not pop open again later. */
-    fun beginRender() { seen = false }
-
-    fun endRender() { if (key != null && !seen) reset() }
 }
 
-/** The keys of the cards: where a card is (a Shop section or the Bag) plus what it shows, so the same item in two places never opens twice. */
+/** The keys of the items: where the tile is (a Shop section or the Bag) plus what it shows, so the page can find the item again after a re-render. */
 internal object CardKeys {
     const val DEAL = "deal"
     const val WEEKEND = "weekend"
@@ -61,6 +51,12 @@ internal object CardKeys {
     fun special(tile: ShopPlan.Tile) = "special:${tile.key}"
     fun bagItem(item: String) = "bag:$item"
     fun bagTm(move: String) = "bagtm:$move"
+
+    /** The item id of a [bagItem] key, or null for any other key. */
+    fun bagItemId(key: String): String? = key.removePrefix("bag:").takeIf { key.startsWith("bag:") }
+
+    /** The move id of a [bagTm] key, or null for any other key. */
+    fun bagTmMove(key: String): String? = key.removePrefix("bagtm:").takeIf { key.startsWith("bagtm:") }
 }
 
 /** The action button of a Bag card, by kind of item (PLAN 181); the TM's is [TEACH]. */
@@ -137,11 +133,8 @@ internal object ItemCardPlan {
 
     // ---- TalkBack ----
 
-    /** A folded tile or row: [base] ("Great Ball, 50 % to catch, 700") + "double tap to open". */
-    fun foldedLabel(base: String): String = "$base, double tap to open"
-
-    /** The header of an open card: the name and its line + "double tap to fold". */
-    fun openLabel(name: String, line: String?): String = listOfNotNull(name, line?.takeIf { it.isNotBlank() }, "double tap to fold").joinToString(", ")
+    /** A tile, row or card that opens the item's window: [base] ("Great Ball, 50 % to catch, 700") + "Opens details". */
+    fun detailsLabel(base: String): String = "$base. Opens details"
 }
 
 /** Splits a text with `**bold**` marks into parts; the stars are never part of a text. An unclosed mark runs to the end. */

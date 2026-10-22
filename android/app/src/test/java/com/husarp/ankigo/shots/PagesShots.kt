@@ -116,11 +116,11 @@ class PagesShots {
     @Test fun settings() {
         paparazzi.shootPage("pages-settings", listOf(Variants.PHONE, Variants.TALL_SETTINGS)) { settings(it) }
         paparazzi.shootPage("pages-settings-nosprites", listOf(Variants.TALL_SETTINGS), withSprites = false) { settings(it) }
-        // data card with both long downloads shown: animations running, game data failed
-        SettingsJobs.anim.begin("Starting…"); SettingsJobs.anim.progress(0.42f, "Downloaded 168 / 400")
+        // data card with both long downloads shown: everything running, game data failed
+        SettingsJobs.everything.begin("Starting…"); SettingsJobs.everything.progress(0.42f, "Downloaded 168 / 400 · 7 MB")
         SettingsJobs.data.begin("Starting…"); SettingsJobs.data.fail("No internet connection.")
         try { paparazzi.shootPage("pages-settings-jobs", listOf(Variants.TALL_SETTINGS)) { settings(it) } }
-        finally { SettingsJobs.anim.reset(); SettingsJobs.data.reset() }
+        finally { SettingsJobs.everything.reset(); SettingsJobs.data.reset() }
     }
 
     // ---------- 7. Diagnostics ----------

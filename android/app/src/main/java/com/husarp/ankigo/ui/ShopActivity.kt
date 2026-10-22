@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
-import android.graphics.Rect
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
@@ -19,14 +18,16 @@ import com.husarp.ankigo.sound.SoundId
 // TICKET T14 owns this file (the daily shop and the bag, mockup frame E); R10 W11 made it the Shop TAB (mockups T5 / F5): the deal of the day, always in
 // stock, today's specials (items + TMs in rows), the weekend special. The pieces are in ShopViews.kt, the rules in game/Economy.kt `Shop`, the
 // numbers in ShopPlan.kt. The Bag tab lives in ShopBag.kt. It is the page of ShopActivity (the Shop tab) and of the floating card.
-// R14 batch 2 (PLAN 168): a tap on a tile, the deal, the weekend card or a Bag row opens its card IN PLACE ([ItemCard]); one card at a time.
+// R14 batch 2 (PLAN 168) made a tap on a tile, the deal, the weekend card or a Bag row open its card in place; R15 (PLAN 210) opens it in a WINDOW
+// over the list instead ([ItemWindow], the card's parts are [ItemCard]); one window at a time.
 
-/** What the Shop and Bag lists need from their page to open and fold cards. */
+/** What the Shop and Bag lists need from their page to open and close the item window. */
 internal interface CardHost {
     val open: OpenCard
-    fun toggleCard(key: String)
-    /** The page drew the open card [view] (it is scrolled into view the first time). */
-    fun cardShown(view: View)
+    /** A tap on a tile, row or card: the window of the item with [key] opens. */
+    fun openCard(key: String)
+    /** The window closes (a button of it opens a picker or a confirm, which are shown over the page itself). */
+    fun closeCard()
 }
 
 internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), CardHost {
@@ -40,21 +41,37 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     private var showBag = false
     private val bag by lazy { BagActions(this, MonActions(this), this) }
 
-    // the open card: its key survives a re-render (Buy keeps the card open with the new count) but not leaving the page
+    // the open item: its key survives a re-render (Buy keeps its window open with the new count) but not leaving the page
     override val open = OpenCard()
-    private var openView: View? = null
-    private var revealed: String? = null
+    private var window: ItemWindow? = null
 
-    override fun toggleCard(key: String) {
-        open.toggle(key)
+    /** The item window while one is open (the shots look at it). */
+    internal val itemWindow: ItemWindow? get() = window
+
+    override fun openCard(key: String) {
+        open.open(key)
         requestRender()
     }
 
-    override fun cardShown(view: View) { openView = view }
+    override fun closeCard() {
+        open.reset()
+        closeWindow()
+    }
+
+    private fun closeWindow() {
+        val w = window ?: return
+        window = null
+        w.dismiss()
+    }
 
     override fun onHide() {
-        open.reset()
+        closeCard()
         super.onHide()
+    }
+
+    override fun onGone() {
+        closeWindow()
+        super.onGone()
     }
 
     override fun buildBar(): View {
@@ -71,8 +88,8 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
 
     override fun buildBody(): View {
         val ctx = this
-        tabShop = Ui.text(ctx, 13f, 800, R.color.ag_sub0).apply { gravity = Gravity.CENTER; setOnClickListener { open.reset(); showBag = false; requestRender() } }
-        tabBag = Ui.text(ctx, 13f, 800, R.color.ag_sub0).apply { gravity = Gravity.CENTER; setOnClickListener { open.reset(); showBag = true; requestRender() } }
+        tabShop = Ui.text(ctx, 13f, 800, R.color.ag_sub0).apply { gravity = Gravity.CENTER; setOnClickListener { closeCard(); showBag = false; requestRender() } }
+        tabBag = Ui.text(ctx, 13f, 800, R.color.ag_sub0).apply { gravity = Gravity.CENTER; setOnClickListener { closeCard(); showBag = true; requestRender() } }
         val tabs = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
@@ -126,22 +143,46 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             t.background = if (on) Ui.rounded(Ui.c(this, R.color.ag_card), 10, this) else null
         }
         content.removeAllViews()
-        openView = null
-        open.beginRender()
         if (showBag) bag.fill(content) else fillShop()
-        open.endRender()
-        revealOpenCard()
+        syncWindow()
     }
 
-    /** The card that was just opened scrolls into view (once; a re-render of the same open card, e.g. after Buy, leaves the scroll alone). */
-    private fun revealOpenCard() {
+    /**
+     * The window follows [open] on every render: it opens for the item asked for, is drawn again in place (the new count after Buy or a trade;
+     * never a second window), and goes when the item is gone (the last Potion was used, the shop restocked) so it does not pop up again later.
+     */
+    private fun syncWindow() {
         val key = open.key
-        if (key == null) { revealed = null; return }
-        val card = openView ?: return
-        if (key == revealed) return
-        revealed = key
-        card.post { card.requestRectangleOnScreen(Rect(0, 0, card.width, card.height), false) }
+        val spec = key?.let { cardSpec(it) }
+        if (key != null && spec == null) open.reset()
+        if (spec == null) { closeWindow(); return }
+        val w = window ?: ItemWindow(this) { window = null; open.reset() }.also { window = it }
+        w.update(spec)
+        w.show()
     }
+
+    /** What the window of [key] shows and does, or null when that item is not on this tab any more. */
+    private fun cardSpec(key: String): ItemCard.Spec? {
+        if (showBag) return bag.spec(key)
+        val st = state
+        return when (key) {
+            CardKeys.DEAL -> Shop.dealFor(data, st.day)?.let { itemSpec(it.item) }
+            CardKeys.WEEKEND -> Shop.weekendFor(data, st.day)?.let { if (it.isTm) tmSpec(it.id) else itemSpec(it.id) }
+            else -> (Shop.basics().map { ShopPlan.Tile.Item(it) }.firstOrNull { CardKeys.basic(it) == key }
+                ?: ShopPlan.specials(st.shopItems, st.shopTms).firstOrNull { CardKeys.special(it) == key })?.let { tileSpec(it) }
+        }
+    }
+
+    private fun tileSpec(t: ShopPlan.Tile): ItemCard.Spec = when (t) {
+        is ShopPlan.Tile.Item -> itemSpec(t.id)
+        is ShopPlan.Tile.Tm -> tmSpec(t.move)
+    }
+
+    /** A Shop item with its Buy button (the deal's item at the deal price, with the old price struck through). */
+    private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state.day, item), false) { buyItem(item) })
+
+    /** A Shop TM with Buy, or "✓ Owned" once it is yours. */
+    private fun tmSpec(move: String) = ItemCard.Spec(null, move, buy = ItemCard.Buy(ShopPlan.tmPrice(), move in state.tms) { buyTm(move) })
 
     // ---- shop tab ----
 
@@ -153,13 +194,12 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         val cols = ShopPlan.columns(resources.configuration.screenWidthDp, resources.configuration.fontScale)
         val gap = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 4) }
 
-        // the deal of the day (F5 option A): the card at the top; opened, its item card replaces it (Buy shows the old price struck through)
+        // the deal of the day (F5 option A): the card at the top; a tap opens its window (Buy shows the old price struck through)
         Shop.dealFor(data, st.day)?.let { deal ->
             val price = ShopPlan.price(data, st.day, deal.item)
             val name = Items.name(deal.item)
-            if (open.isOpen(CardKeys.DEAL)) content.addView(shopCard(CardKeys.DEAL, deal.item, null, price), cardLp())
-            else content.addView(ShopViews.dealCard(ctx, deal.item, name, price, ShopPlan.endsText(st.settings.dayStartHour, hoursToNewDay()),
-                ItemCardPlan.foldedLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item))) { toggleCard(CardKeys.DEAL) }, gap)
+            content.addView(ShopViews.dealCard(ctx, deal.item, name, price, ShopPlan.endsText(st.settings.dayStartHour, hoursToNewDay()),
+                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item))) { openCard(CardKeys.DEAL) }, gap)
         }
 
         // always in stock: the basics at their normal price
@@ -176,29 +216,15 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         // the weekend special (Saturday and Sunday only)
         Shop.weekendFor(data, st.day)?.let { w ->
             content.addView(Bits.sect(ctx, "Weekend special", "Sat & Sun"))
-            content.addView(if (open.isOpen(CardKeys.WEEKEND)) weekendOpen(w) else weekendCard(w), if (open.key == CardKeys.WEEKEND) cardLp() else LinearLayout.LayoutParams(-1, -2))
+            content.addView(weekendCard(w), LinearLayout.LayoutParams(-1, -2))
         }
     }
 
-    /** An opened card sits 2 dp under what is above it and 8 dp above what follows. */
-    private fun cardLp() = LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, 2); it.bottomMargin = Ui.dp(this, 8) }
-
-    /** [tiles] in rows of [cols] equal tiles (the last row is filled up with blanks so its tiles keep the width); the open tile is its card across the full width, the rest of its row follows below. */
+    /** [tiles] in rows of [cols] equal tiles (the last row is filled up with blanks so its tiles keep the width); a tap on a tile opens its window. */
     private fun tileRows(tiles: List<ShopPlan.Tile>, cols: Int, key: (ShopPlan.Tile) -> String) {
         val ctx = this
-        val openTile = tiles.firstOrNull { open.key == key(it) }
-        for (r in ShopPlan.rows(tiles, cols, openTile)) {
-            if (r is ShopPlan.Row.Card) {
-                val k = key(r.tile)
-                open.isOpen(k)
-                content.addView(when (val t = r.tile) {
-                    is ShopPlan.Tile.Item -> shopCard(k, t.id, null, ShopPlan.price(data, state.day, t.id))
-                    is ShopPlan.Tile.Tm -> shopCard(k, null, t.move, ShopPlan.tmPrice())
-                }, cardLp())
-                continue
-            }
+        for (chunk in tiles.chunked(cols)) {
             val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-            val chunk = (r as ShopPlan.Row.Tiles).tiles
             for (i in 0 until cols) {
                 val t = chunk.getOrNull(i)
                 val lp = LinearLayout.LayoutParams(0, -1, 1f).also { if (i > 0) it.marginStart = Ui.dp(ctx, 8) }
@@ -214,7 +240,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             val name = Items.name(t.id)
             val short = ItemInfo.plain(ItemInfo.short(data, t.id))
             ShopViews.tile(this, Bits.itemTile(this, t.id, 36), name, priceView(price, 14f),
-                ItemCardPlan.foldedLabel(ShopPlan.describe("$name, $short", price)), sub = short) { toggleCard(key) }
+                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, $short", price)), sub = short) { openCard(key) }
         }
         is ShopPlan.Tile.Tm -> tmTile(t.move, key)
     }
@@ -231,15 +257,8 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         val price = ShopPlan.tmPrice()
         val bottom = if (owned) ShopViews.owned(this) else priceView(price, 14f)
         return ShopViews.tile(this, Bits.tmTile(this, m?.type, 36), name, bottom,
-            ItemCardPlan.foldedLabel(ShopPlan.describe(listOfNotNull(name, m?.type?.label).joinToString(", "), price, owned)),
-            subView = m?.let { Ui.typeChip(this, it.type) }) { toggleCard(key) }
-    }
-
-    /** The opened card of a Shop item ([item]) or TM ([move]) with its Buy button; a tap on its header folds it. */
-    private fun shopCard(key: String, item: String?, move: String?, price: ShopPlan.Price): View {
-        val owned = move != null && move in state.tms
-        val spec = ItemCard.Spec(item, move, buy = ItemCard.Buy(price, owned) { if (item != null) buyItem(item) else buyTm(move.orEmpty()) }, onFold = { toggleCard(key) })
-        return ItemCard.build(this, spec).also { cardShown(it) }
+            ItemCardPlan.detailsLabel(ShopPlan.describe(listOfNotNull(name, m?.type?.label).joinToString(", "), price, owned)),
+            subView = m?.let { Ui.typeChip(this, it.type) }) { openCard(key) }
     }
 
     /** The weekend special: an evolution stone or a strong TM at its normal price, until Sunday night. */
@@ -250,17 +269,14 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             val name = Items.tmName(data, w.id)
             val price = ShopPlan.tmPrice()
             ShopViews.weekendCard(ctx, Bits.tmTile(ctx, data.move(w.id)?.type, 40), name, ShopPlan.WEEKEND_NOTE,
-                if (owned) ShopViews.owned(ctx, 14f) else priceView(price, 17f), ItemCardPlan.foldedLabel(ShopPlan.describe(name, price, owned))) { toggleCard(CardKeys.WEEKEND) }
+                if (owned) ShopViews.owned(ctx, 14f) else priceView(price, 17f), ItemCardPlan.detailsLabel(ShopPlan.describe(name, price, owned))) { openCard(CardKeys.WEEKEND) }
         } else {
             val price = ShopPlan.price(data, state.day, w.id)
             val name = Items.name(w.id)
             ShopViews.weekendCard(ctx, Bits.itemTile(ctx, w.id, 40), name, ShopPlan.WEEKEND_NOTE, priceView(price, 17f),
-                ItemCardPlan.foldedLabel(ShopPlan.describe(name, price))) { toggleCard(CardKeys.WEEKEND) }
+                ItemCardPlan.detailsLabel(ShopPlan.describe(name, price))) { openCard(CardKeys.WEEKEND) }
         }
     }
-
-    private fun weekendOpen(w: Shop.Special): View =
-        if (w.isTm) shopCard(CardKeys.WEEKEND, null, w.id, ShopPlan.tmPrice()) else shopCard(CardKeys.WEEKEND, w.id, null, ShopPlan.price(data, state.day, w.id))
 
     private fun buyItem(item: String) {
         if (act { g -> Shop.buy(g.data, g.state, item) }.ok) GameSound.ui(this, SoundId.BUY)

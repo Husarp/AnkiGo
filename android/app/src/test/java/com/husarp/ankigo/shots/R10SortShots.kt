@@ -92,8 +92,10 @@ class R10SortShots {
             val t = texts(chips)
             assertFalse("no Wishlist chip", "Wishlist" in t)
             assertTrue("no Gen chips: $t", t.none { it.startsWith("Gen ") })
-            val scroll = chips.getChildAt(0) as HorizontalScrollView
-            assertEquals("one scroller for both rows", 1, chips.childCount)
+            // PLAN 192: the Any of / All of switch comes first, then the one scroller for both rows
+            assertEquals("Any of / All of", listOf("Any of", "All of"), texts(chips.getChildAt(0)))
+            val scroll = chips.getChildAt(1) as HorizontalScrollView
+            assertEquals("the switch and one scroller for both rows", 2, chips.childCount)
             val rows = scroll.getChildAt(0) as LinearLayout
             assertEquals("exactly two rows", 2, rows.childCount)
             val counts = (0 until 2).map { (rows.getChildAt(it) as LinearLayout).childCount }

@@ -210,6 +210,14 @@ object AppPrefs {
     internal fun putLook(ctx: Context, key: String, value: String?) = prefs(ctx).edit().putString(key, value).apply()
 
     internal fun putScale(ctx: Context, percent: Int) = prefs(ctx).edit().putInt("uiScale", percent).apply()
+
+    /**
+     * PLAN 156: caught Pokémon move in the Pokédex and Box grids (Settings → Look → "Animate Pokémon in lists"). Default on. Read
+     * every time a cell is drawn, so a change shows when the grid is next drawn.
+     */
+    fun animateLists(ctx: Context): Boolean = prefs(ctx).getBoolean("animateLists", true)
+
+    fun setAnimateLists(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("animateLists", on).apply()
 }
 
 /**

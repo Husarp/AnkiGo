@@ -9,6 +9,9 @@ import com.husarp.ankigo.game.Type
 
 enum class DexOwned { ALL, OWNED, NOT_OWNED }
 
+/** PLAN 192: how the picked types match a species. [ANY]: it has at least one of them; [ALL]: it has every one (at most [DexFilter.MAX_ALL_TYPES] picks). */
+enum class TypeMatch(val label: String) { ANY("Any of"), ALL("All of") }
+
 /**
  * The Pokédex sorts. [LAST_CAUGHT] needs the owned-copies map; the stat sorts read [DexFilter.basis]/[DexFilter.stat]/
  * [DexFilter.chosenStats]; [LEVEL] (highest owned level) and [FIRST_SEEN] need the [DexSortInfo] given to [DexFilter.apply].
@@ -40,7 +43,7 @@ class DexSortInfo(val data: GameData, val state: GameState)
 /**
  * The Pokédex filters and sort, pure Kotlin. All parts combine with AND.
  * - [owned]: Owned = at least one of that species in the team or box now; Not owned = the rest (seen-only and never met).
- * - [gens]: multi-select, empty = every enabled gen. [types]: any of the species' types. [wishlistOnly]: only the wishlist.
+ * - [gens]: multi-select, empty = every enabled gen. [types]: the picked types, matched by [typeMatch] (in pick order). [wishlistOnly]: only the wishlist.
  * - [query]: name (contains) or number (prefix of "25" or of the padded "025"; a leading "#" is ignored), case-insensitive.
  *   The number is the national one ([Species.baseNum]): "19" also finds Alolan Rattata. Sorted by number, a form follows its base species.
  */
@@ -60,6 +63,8 @@ data class DexFilter(
     /** Which stats the stat sorts read (Pokédex species: base, or IV 31 / EV 0 / neutral at Lv 100 / [level]; CURRENT = best owned copy). */
     val basis: StatBasis = StatBasis.BASE,
     val level: Int = 100,
+    /** PLAN 192: any of the picked [types] (default) or all of them. */
+    val typeMatch: TypeMatch = TypeMatch.ANY,
 ) {
     /**
      * @param all every species to consider (usually the enabled gens)
@@ -75,7 +80,7 @@ data class DexFilter(
             sp.gen in enabledGens &&
                 (gens.isEmpty() || sp.gen in gens) &&
                 (!wishlistOnly || sp.num in wishlist) &&
-                (types.isEmpty() || sp.types.any { it in types }) &&
+                (types.isEmpty() || (if (typeMatch == TypeMatch.ALL) types.all { it in sp.types } else sp.types.any { it in types })) &&
                 when (owned) {
                     DexOwned.ALL -> true
                     DexOwned.OWNED -> sp.num in lastCaught
@@ -102,6 +107,20 @@ data class DexFilter(
     fun withSort(s: SortSpec): DexFilter =
         copy(sort = DexSort.fromKey(s.key), descending = s.descending, stat = s.stat, chosenStats = s.chosenStats, basis = s.basis, level = s.level)
 
+    /**
+     * PLAN 192: this filter with [t] picked or un-picked; null = refused (All of already has [MAX_ALL_TYPES] picks and [t] is a new one:
+     * the caller shows a short toast and changes nothing).
+     */
+    fun toggleType(t: Type): DexFilter? = when {
+        t in types -> copy(types = types - t)
+        typeMatch == TypeMatch.ALL && types.size >= MAX_ALL_TYPES -> null
+        else -> copy(types = types + t)
+    }
+
+    /** PLAN 192: this filter with the match mode [m]; switching to All of with more than [MAX_ALL_TYPES] picked keeps the ones picked last. */
+    fun withTypeMatch(m: TypeMatch): DexFilter =
+        copy(typeMatch = m, types = if (m == TypeMatch.ALL && types.size > MAX_ALL_TYPES) types.toList().takeLast(MAX_ALL_TYPES).toSet() else types)
+
     // "25" = numbers starting with 25; "025" = the padded form (#025...), so a zero-padded query pins one number
     private fun numMatches(num: Int, q: String) =
         if (q.startsWith("0")) "%03d".format(num).startsWith(q) else num.toString().startsWith(q)
@@ -113,6 +132,9 @@ data class DexFilter(
     val sheetActive get() = (if (wishlistOnly) 1 else 0) + (if (gens.isNotEmpty()) 1 else 0)
 
     companion object {
+        /** All of takes at most this many picked types (a species has at most two). */
+        const val MAX_ALL_TYPES = 2
+
         /** Species number -> newest caughtAt among the mons you own now. */
         fun lastCaught(mons: List<Mon>): Map<Int, Long> {
             val m = HashMap<Int, Long>()

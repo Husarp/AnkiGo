@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.husarp.ankigo.data.Sprites
 
 // R4-X1 item 5: what Settings -> Downloads remembers, so a finished download shows a green "Downloaded ✓" instead of the
@@ -8,7 +9,11 @@ import com.husarp.ankigo.data.Sprites
 
 object DownloadsDone {
     const val PICTURES = "dl_done_pictures"
-    const val ANIMATIONS = "dl_done_animations"
+    /** PLAN 167: the "Download everything" button finished for these generations (it replaced the animations button). */
+    const val EVERYTHING = "dl_done_everything"
+
+    /** The old animations button's memory: nothing reads it any more (that phone just sees the new button), [clear] still wipes it. */
+    private const val LEGACY_ANIMATIONS = "dl_done_animations"
 
     /** True when a finished download covered every generation in [wanted] (and there is something to cover). */
     fun complete(saved: Set<Int>, wanted: Set<Int>): Boolean = wanted.isNotEmpty() && saved.containsAll(wanted)
@@ -26,12 +31,24 @@ object DownloadsDone {
     private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences("firstrun", Context.MODE_PRIVATE)
 
     /** Remembers that a download of [key] finished (not stopped, not failed) for [gens]. */
-    fun mark(ctx: Context, key: String, gens: Set<Int>) {
-        val p = prefs(ctx)
+    fun mark(ctx: Context, key: String, gens: Set<Int>) = markIn(prefs(ctx), key, gens)
+
+    /** PLAN 167: the "Download everything" button was pressed and nothing is missing: done for [gens], and "Download pictures as needed" goes on. */
+    fun markNothingMissing(ctx: Context, gens: Set<Int>) = markNothingMissingIn(prefs(ctx), gens)
+
+    internal fun markNothingMissingIn(p: SharedPreferences, gens: Set<Int>) {
+        com.husarp.ankigo.data.Sprites.setEnabledIn(p, true)
+        markIn(p, EVERYTHING, gens)
+    }
+
+    fun isDone(ctx: Context, key: String, wanted: Set<Int>): Boolean = isDoneIn(prefs(ctx), key, wanted)
+
+    // the same on a given preferences file (a fake one in the unit tests)
+    internal fun markIn(p: SharedPreferences, key: String, gens: Set<Int>) {
         p.edit().putString(key, encode(decode(p.getString(key, null)) + gens)).apply()
     }
 
-    fun isDone(ctx: Context, key: String, wanted: Set<Int>): Boolean = complete(decode(prefs(ctx).getString(key, null)), wanted)
+    internal fun isDoneIn(p: SharedPreferences, key: String, wanted: Set<Int>): Boolean = complete(decode(p.getString(key, null)), wanted)
 
     /**
      * X3-3: for someone who downloaded the pictures before this memory existed. When the Downloads page opens and the pictures of [gens]
@@ -44,5 +61,7 @@ object DownloadsDone {
     }
 
     /** The picture cache was cleared: nothing counts as downloaded any more. */
-    fun clear(ctx: Context) = prefs(ctx).edit().remove(PICTURES).remove(ANIMATIONS).apply()
+    fun clear(ctx: Context) = clearIn(prefs(ctx))
+
+    internal fun clearIn(p: SharedPreferences) = p.edit().remove(PICTURES).remove(EVERYTHING).remove(LEGACY_ANIMATIONS).apply()
 }

@@ -33,15 +33,14 @@ internal object ViewerMath {
     fun isZoomed(p: Pose): Boolean = p.zoom > ZOOMED
 
     /**
-     * Device pixels per picture pixel at zoom 1 for an [imgW] x [imgH] picture in the free area [boxW] x [boxH]: pixel art takes the
-     * largest whole number that fits (crisp) when that is at least [WHOLE_SHARE] of the exact fit, else the exact fit (a 3.96 x fit
-     * as 3 x would waste a quarter of the screen; at 3.96 x only one pixel row in 25 is a pixel narrower); anything else (a 3D
-     * animation, drawn smoothed) the exact fit. 0 for an empty picture or box.
+     * Device pixels per picture pixel at zoom 1 for an [imgW] x [imgH] picture in the free area [boxW] x [boxH]: every picture
+     * (PLAN 213: pixel art and 3D animations alike, never smoothed) takes the largest whole number that fits (crisp) when that is at
+     * least [WHOLE_SHARE] of the exact fit, else the exact fit (a 3.96 x fit as 3 x would waste a quarter of the screen; at 3.96 x
+     * only one pixel row in 25 is a pixel narrower). 0 for an empty picture or box.
      */
-    fun fitScale(imgW: Int, imgH: Int, boxW: Int, boxH: Int, pixelArt: Boolean): Float {
+    fun fitScale(imgW: Int, imgH: Int, boxW: Int, boxH: Int): Float {
         if (imgW <= 0 || imgH <= 0 || boxW <= 0 || boxH <= 0) return 0f
         val fit = min(boxW.toFloat() / imgW, boxH.toFloat() / imgH)
-        if (!pixelArt) return fit
         val whole = floor(fit)
         return if (whole >= 1f && whole >= fit * WHOLE_SHARE) whole else fit
     }

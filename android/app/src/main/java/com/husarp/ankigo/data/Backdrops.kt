@@ -157,6 +157,9 @@ object Backdrops {
         out.setPixels(BackdropBlur.process(px, w, h), 0, w, 0, 0, w, h)
         return out
     }
+
+    /** PLAN 167: how long a "not found" note keeps a picture from being asked for again ([DownloadAll] counts a fresh note as done). */
+    internal val NOTE_MS: Long get() = RETRY_MS
 }
 
 /** A decoded background and its blurred, darkened copy ([BackdropBlur]; a few KB), kept and dropped together. */

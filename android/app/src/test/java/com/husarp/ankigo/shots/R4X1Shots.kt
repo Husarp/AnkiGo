@@ -118,7 +118,7 @@ class R4X1Shots {
         paparazzi.shootPage("r4x1-downloads-done", listOf(Variants.PHONE)) { ctx ->
             val c = ShotCtx(ctx)
             DownloadsDone.mark(c, DownloadsDone.PICTURES, Tuning.DEFAULT_GENS)
-            DownloadsDone.mark(c, DownloadsDone.ANIMATIONS, Tuning.DEFAULT_GENS)
+            DownloadsDone.mark(c, DownloadsDone.EVERYTHING, Tuning.DEFAULT_GENS)
             try {
                 val pg = SettingsPage(c, NoHost)
                 val v = pageScreen(c, pg)

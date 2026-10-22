@@ -3,7 +3,6 @@ package com.husarp.ankigo.shots
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Color
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -24,8 +23,8 @@ import com.husarp.ankigo.ui.InfoBoxStyle
 import com.husarp.ankigo.ui.PokemonSize
 import com.husarp.ankigo.ui.SettingsPage
 import com.husarp.ankigo.ui.SettingsSection
-import com.husarp.ankigo.ui.SheetKit
 import com.husarp.ankigo.ui.Ui
+import com.husarp.ankigo.ui.ViewSettingsScreen
 import com.husarp.ankigo.ui.ViewSettingsSheet
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -34,98 +33,22 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
-import kotlin.math.min
 
 /**
- * ROUND 10 B19, the battle's "View settings" sheet: its content in the Battle tab (no panel height row) and the Study screen (with
- * one), on PHONE, FLOAT (the floating window's width) and SPLIT, light and dark; the three battle menus list the row; every control
+ * ROUND 10 B19 (updated for ROUND 15 F, PLAN 141: the sheet is a full-screen page now, its pictures are in [R15FViewSettingsShots]): the
+ * page's rows in the Battle tab (no panel height row) and the Study screen (with one); the three battle menus list the row; every control
  * writes the same preference Settings writes, and an open battle panel follows each of them (its preference watcher).
- * PNGs: r10-view-battle-<size>-<theme>, r10-view-study-<size>-<theme>, r10-view-settings-size-<size>-<theme> (the Settings slider row).
+ * PNGs: r10-view-settings-size-<size>-<theme> (the Settings slider row), r10-view-follow.
  */
 class R10ViewSettingsShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
 
     @After fun cleanUp() = BattleShotKit.reset()
 
-    private val three = listOf(Size.PHONE, Size.FLOAT, Size.SPLIT)
+    // ---- the page --------------------------------------------------------------------------------------------------------------------
 
-    // ---- the sheet -------------------------------------------------------------------------------------------------------------------
-
-    private fun sheet(ctx: Context, height: ViewSettingsSheet.PanelHeightPart?): View {
-        val s = ViewSettingsSheet(ctx, height)
-        val share = if (s.atTop) ViewSettingsSheet.TOP_SHARE else ViewSettingsSheet.BODY_SHARE
-        val body = s.build((ctx.resources.displayMetrics.heightPixels * share).toInt() - Ui.dp(ctx, 120))
-        return if (s.atTop) body else SheetKit.host(ctx, body, {}, {})
-    }
-
-    /** The sheet at the bottom of a dimmed screen (the top one on the stacked Study screen), the width a dialog gives it (at most 600 dp). */
-    private fun scene(ctx: Context, height: ViewSettingsSheet.PanelHeightPart?): View {
-        val w = min(ctx.resources.displayMetrics.widthPixels, Ui.dp(ctx, 600))
-        val top = ViewSettingsSheet.atTop(height)
-        return FrameLayout(ctx).apply {
-            setBackgroundColor(Color.argb(60, 0, 0, 0))
-            addView(sheet(ctx, height), FrameLayout.LayoutParams(w, -2, (if (top) Gravity.TOP else Gravity.BOTTOM) or Gravity.CENTER_HORIZONTAL))
-        }
-    }
-
-    private class TopSeen(val sheetTop: Int, val sheetBottom: Int, val panelTop: Int, val height: Int)
-    private val topSeen = LinkedHashMap<String, TopSeen>()
-
-    /** A made-up non-default state, so the shot shows picked values and not just the defaults. */
-    private fun someSettings(ctx: Context) {
-        AppPrefs.setPokemonSize(ctx, 115)
-        AppPrefs.setPlayerFront(ctx, true)
-        AppPrefs.setInfoBoxStyle(ctx, InfoBoxStyle.INSIDE)
-        AppPrefs.setBattleFrame(ctx, BattleFrameStyle.WOOD)
-        AppPrefs.setCompactCards(ctx, true)
-        AppPrefs.setCardsUnderOwn(ctx, false)
-    }
-
-    @Test fun sheetInTheBattleTab() {
-        paparazzi.shootWith("r10-view-battle", three) { ctx -> someSettings(ctx); scene(ctx, null) }
-    }
-
-    @Test fun sheetOnTheStudyScreen() {
-        paparazzi.shootWith("r10-view-study", three) { ctx -> someSettings(ctx); scene(ctx, ViewSettingsSheet.PanelHeightPart({ 1 }) {}) } // top sheet
-    }
-
-    /** B19/M2: on the stacked Study screen the sheet is at the top and the battle panel (a stand-in block at the bottom) stays uncovered. */
-    @Test fun sheetOnTheStackedStudyScreenIsAtTheTop() {
-        assertTrue(ViewSettingsSheet.atTop(ViewSettingsSheet.PanelHeightPart({ 1 }) {}))
-        assertFalse("the Battle tab and the floating window keep the bottom sheet", ViewSettingsSheet.atTop(null))
-        for (size in three) for (theme in Theme.entries) {
-            paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(size, theme))
-            val ctx = Shots.files(paparazzi.context)
-            FakeGame.install(ctx)
-            someSettings(ctx)
-            val panel = View(ctx).apply { setBackgroundColor(Color.argb(255, 60, 90, 70)); tag = "panel" }
-            val sheetView = sheet(ctx, ViewSettingsSheet.PanelHeightPart({ 1 }) {})
-            val w = min(ctx.resources.displayMetrics.widthPixels, Ui.dp(ctx, 600))
-            val key = "${size.name}-${theme.name}"
-            val frame = object : FrameLayout(ctx) {
-                override fun dispatchDraw(canvas: android.graphics.Canvas) {
-                    topSeen[key] = TopSeen(sheetView.top, sheetView.bottom, panel.top, height)
-                    super.dispatchDraw(canvas)
-                }
-            }.apply {
-                setBackgroundColor(Color.argb(60, 0, 0, 0))
-                // the stand-in for the battle panel: the bottom 42 % of the screen
-                addView(panel, FrameLayout.LayoutParams(-1, (ctx.resources.displayMetrics.heightPixels * 0.42f).toInt(), Gravity.BOTTOM))
-                addView(sheetView, FrameLayout.LayoutParams(w, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL))
-            }
-            paparazzi.snapshot(frame, "r10-view-study-top-${size.name.lowercase()}-${theme.name.lowercase()}", 1000)
-        }
-        assertEquals(6, topSeen.size)
-        for ((key, t) in topSeen) {
-            assertEquals("$key: the sheet starts at the top", 0, t.sheetTop)
-            assertTrue("$key: at most 55 % (${t.sheetBottom} of ${t.height})", t.sheetBottom <= t.height * ViewSettingsSheet.TOP_SHARE + 1)
-            assertTrue("$key: the panel area is uncovered (sheet bottom ${t.sheetBottom} <= panel top ${t.panelTop})", t.sheetBottom <= t.panelTop)
-        }
-    }
-
-    @Test fun sheetWithTheDefaults() {
-        paparazzi.shootWith("r10-view-default", listOf(Size.PHONE)) { ctx -> scene(ctx, ViewSettingsSheet.PanelHeightPart({ 0 }) {}) }
-    }
+    /** The page's view (bar, preview, rows); the rows are what these tests drive. */
+    private fun sheet(ctx: Context, height: ViewSettingsSheet.PanelHeightPart?): View = ViewSettingsScreen(ctx, height).root
 
     @Test fun theRowsAndTheirOrder() {
         assertEquals(listOf("SIZE", "FACING", "INFO_BOX", "BARS", "FRAME", "CARD_OWN", "COMPACT", "BACKGROUND"), ViewSettingsSheet.parts(false).map { it.name })
@@ -135,9 +58,9 @@ class R10ViewSettingsShots {
         val titles = { h: ViewSettingsSheet.PanelHeightPart? -> texts(sheet(ctx, h)) }
         val battle = titles(null)
         val study = titles(ViewSettingsSheet.PanelHeightPart({ 1 }) {})
-        for (t in listOf("View settings", "POKÉMON SIZE", "FACING", "Info box style", "HP / XP bars", "Battle frame", "Stat card under its own Pokémon", "Compact stat cards", "Background pictures", "Done")) {
-            assertTrue("battle sheet has '$t'", t in battle)
-            assertTrue("study sheet has '$t'", t in study)
+        for (t in listOf("View settings", "POKÉMON SIZE", "FACING", "Info box style", "HP / XP bars", "Battle frame", "Stat card under its own Pokémon", "Compact stat cards", "Background pictures")) {
+            assertTrue("battle page has '$t'", t in battle)
+            assertTrue("study page has '$t'", t in study)
         }
         for (s in BattleFrameStyle.entries) assertTrue("a tile for ${s.label}", s.label in battle)
         for (s in InfoBoxStyle.entries) assertTrue("an option for ${s.label}", s.label in battle)
@@ -229,7 +152,8 @@ class R10ViewSettingsShots {
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         var picked = -1
-        val root = sheet(ctx, ViewSettingsSheet.PanelHeightPart({ 0 }) { picked = it })
+        val screen = ViewSettingsScreen(ctx, ViewSettingsSheet.PanelHeightPart({ 0 }) { picked = it })
+        val root = screen.root
         // size: the slider keys move one step (5 %) at a time and write the pref
         val bar = find(root, { it is SeekBar }).single() as SeekBar
         assertEquals(PokemonSize.index(100), bar.progress)
@@ -256,10 +180,11 @@ class R10ViewSettingsShots {
         tap(root, "Compact stat cards"); assertEquals(!was.second, AppPrefs.compactCards(ctx))
         tap(root, "Background pictures"); assertEquals(!was.third, AppPrefs.backgroundPictures(ctx))
         assertEquals(3, find(root, { it is Switch }).size)
-        // the panel height goes to the host
-        tap(root, "Mini"); assertEquals(2, picked)
-        tap(root, "Full"); assertEquals(0, picked)
-        tap(root, "Strip"); assertEquals(1, picked)
+        // the panel height is the page's own until it closes (the full check is in R15FViewSettingsShots)
+        tap(root, "Mini"); tap(root, "Full"); tap(root, "Strip")
+        assertEquals("the host hears nothing while the page is open", -1, picked)
+        screen.close()
+        assertEquals("... and the final pick when it closes", 1, picked)
     }
 
     @Test fun theSettingsSliderIsTheSameControlAndWritesTheSamePreference() {

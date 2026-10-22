@@ -287,7 +287,6 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
         // log / action bar: the bubble opens in the overlay, inside the scaled layer
         logBox.attachBubbleLayer(overlay)
-        setLog(LogKind.NEUTRAL, "READY", "Waiting for your first answer in AnkiDroid.", pop = false)
 
         // footer: goal bar, goal text, tool buttons, menu; then the chips
         goalRow.addView(goalBar, goalBarLp)

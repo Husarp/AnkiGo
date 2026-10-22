@@ -5,7 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// Lane D: pixel art keeps whole-number steps; bigger 3D animations take their room instead of staying at 1x.
+// Lane D: pixel art keeps whole-number steps; bigger 3D animations take their room instead of staying at 1x (PLAN 213: crisp, whole when it keeps 85 %).
 class SpriteScaleTest {
     @Test fun pixelArtStaysWholeNumbers() {
         assertTrue(SpriteView.pixelArt(96, 96))
@@ -17,7 +17,7 @@ class SpriteScaleTest {
 
     @Test fun threeDAnimationsFillTheirRoom() {
         assertFalse(SpriteView.pixelArt(200, 162))
-        assertEquals(1.1f, SpriteView.scale(200, 162, 220, 200, 4), 0.001f)          // was 1x
+        assertEquals(1f, SpriteView.scale(200, 162, 220, 200, 4), 0.001f)            // 1.1 room: PLAN 213 whole 1 (>= 0.935)
         assertEquals(220f / 147f, SpriteView.scale(147, 111, 220, 200, 4), 0.001f)   // was 1x
         assertEquals(2f, SpriteView.scale(146, 81, 1000, 1000, 2), 0f)               // never over the wanted scale
         assertEquals(0.5f, SpriteView.scale(200, 162, 100, 300, 4), 0f)

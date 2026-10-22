@@ -358,7 +358,7 @@ internal class SpriteZoomView(ctx: Context) : View(ctx) {
     private fun relayout() {
         val img = image
         val freeH = freeHeight()
-        scale = if (img == null) 0f else ViewerMath.fitScale(img.width, img.height, (width - 2 * Ui.dp(context, 16)).coerceAtLeast(1), freeH, SpriteView.pixelArt(img.width, img.height))
+        scale = if (img == null) 0f else ViewerMath.fitScale(img.width, img.height, (width - 2 * Ui.dp(context, 16)).coerceAtLeast(1), freeH)
         layout = if (img == null) ViewerMath.Layout(0f, 0f, width.toFloat(), height.toFloat())
         else ViewerMath.Layout(img.width * scale, img.height * scale, width.toFloat(), height.toFloat())
         pose = ViewerMath.clamp(pose, layout)
@@ -383,7 +383,7 @@ internal class SpriteZoomView(ctx: Context) : View(ctx) {
         val bmp = img.frames[frame.coerceIn(0, img.frames.size - 1)]
         val r = ViewerMath.spriteRect(pose, layout)
         rect.set(r[0], r[1], r[2], r[3])
-        paint.isFilterBitmap = !SpriteView.pixelArt(bmp.width, bmp.height)
+        paint.isFilterBitmap = SpriteView.SMOOTH
         val save = canvas.save()
         if (idleAnim != null && idlePhase > 0f) {
             canvas.translate(0f, MonPreview.idleOffsetPx(idlePhase, resources.displayMetrics.density))

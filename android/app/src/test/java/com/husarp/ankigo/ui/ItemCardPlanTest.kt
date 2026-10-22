@@ -11,51 +11,37 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** PLAN 168 / 181 / 199 (R14 B2-B): which card is open, the Bag's buttons, the words around the cards. */
+/** PLAN 168 / 181 / 199 (R14 B2-B), PLAN 210 (R15-A): which item's window is open, the Bag's buttons, the words around the cards. */
 class ItemCardPlanTest {
     private val data = TestData.world()
     private fun state(vararg bag: Pair<String, Int>) = TestData.state(data).also { it.bag.clear(); it.bag.putAll(bag) }
 
-    // ---- one card open at a time ----
+    // ---- one window open at a time ----
 
-    @Test fun openingACardFoldsTheOneThatWasOpen() {
+    @Test fun openingAnotherItemReplacesTheOneThatWasOpen() {
         val o = OpenCard()
         assertNull(o.key)
-        o.toggle("a"); assertEquals("a", o.key)
-        o.toggle("b"); assertEquals("b", o.key)
-        assertFalse(o.isOpen("a"))
-        assertTrue(o.isOpen("b"))
-        o.toggle("b"); assertNull("a tap on the open card's header folds it", o.key)
+        o.open("a"); assertEquals("a", o.key)
+        o.open("b"); assertEquals("b", o.key)
+        o.reset(); assertNull("closing the window ends it", o.key)
     }
 
-    @Test fun theTradeConfirmBelongsToTheOpenCardAndIsDroppedWithIt() {
+    @Test fun theTradeConfirmBelongsToTheOpenWindowAndIsDroppedWithIt() {
         val o = OpenCard()
-        o.confirmTrade(true); assertFalse("no card, no confirm", o.confirming)
-        o.toggle("bag:poke-ball"); o.confirmTrade(true); assertTrue(o.confirming)
-        o.toggle("bag:great-ball"); assertFalse("another card: the confirm is gone", o.confirming)
-        o.confirmTrade(true); o.toggle("bag:great-ball"); assertFalse("folding closes it", o.confirming)
-        o.toggle("x"); o.confirmTrade(true); o.reset(); assertFalse(o.confirming); assertNull(o.key)
+        o.confirmTrade(true); assertFalse("no window, no confirm", o.confirming)
+        o.open("bag:poke-ball"); o.confirmTrade(true); assertTrue(o.confirming)
+        o.open("bag:great-ball"); assertFalse("another item: the confirm is gone", o.confirming)
+        o.confirmTrade(true); o.confirmTrade(false); assertFalse("cancel closes it", o.confirming)
+        o.open("x"); o.confirmTrade(true); o.reset(); assertFalse(o.confirming); assertNull(o.key)
     }
 
-    @Test fun aCardKeptOpenAfterATradeEndsWithTheCard() {
+    @Test fun aWindowKeptOpenAfterATradeEndsWithTheWindow() {
         val o = OpenCard()
-        o.keepWhenEmpty(); assertFalse("no card, nothing kept", o.keepEmpty)
-        o.toggle("bag:poke-ball"); o.keepWhenEmpty(); assertTrue(o.keepEmpty)
-        o.beginRender(); assertTrue(o.isOpen("bag:poke-ball")); o.endRender()
-        assertEquals("bag:poke-ball", o.key)
-        o.toggle("bag:poke-ball"); assertFalse("folding ends it", o.keepEmpty)
-        o.toggle("bag:poke-ball"); o.keepWhenEmpty(); o.toggle("bag:great-ball"); assertFalse("another card ends it", o.keepEmpty)
-        o.keepWhenEmpty(); o.reset(); assertFalse("leaving the page ends it", o.keepEmpty)
-    }
-
-    @Test fun aCardWhoseItemIsGoneIsForgottenAfterTheRender() {
-        val o = OpenCard()
-        o.toggle("bag:potion")
-        o.beginRender(); assertTrue(o.isOpen("bag:potion")); o.endRender()
-        assertEquals("the card was drawn: it stays open through a re-render", "bag:potion", o.key)
-        o.beginRender(); o.endRender() // the item is gone: nothing asked for the key
-        assertNull(o.key)
-        o.beginRender(); assertFalse("and it does not open again", o.isOpen("bag:potion")); o.endRender()
+        o.keepWhenEmpty(); assertFalse("no window, nothing kept", o.keepEmpty)
+        o.open("bag:poke-ball"); o.keepWhenEmpty(); assertTrue(o.keepEmpty)
+        o.open("bag:poke-ball"); assertFalse("opening it again ends it", o.keepEmpty)
+        o.keepWhenEmpty(); o.open("bag:great-ball"); assertFalse("another item ends it", o.keepEmpty)
+        o.keepWhenEmpty(); o.reset(); assertFalse("closing or leaving the page ends it", o.keepEmpty)
     }
 
     @Test fun theKeysSayWhereACardIs() {
@@ -63,7 +49,16 @@ class ItemCardPlanTest {
             CardKeys.DEAL, CardKeys.WEEKEND, CardKeys.basic(ShopPlan.Tile.Item("potion")), CardKeys.special(ShopPlan.Tile.Item("potion")),
             CardKeys.special(ShopPlan.Tile.Tm("potion")), CardKeys.bagItem("potion"), CardKeys.bagTm("potion"),
         )
-        assertEquals("the same thing in two places never opens twice", keys.size, keys.toSet().size)
+        assertEquals("the same thing in two places has two keys", keys.size, keys.toSet().size)
+    }
+
+    @Test fun aBagKeyGivesBackItsItemOrMoveAndNothingElse() {
+        assertEquals("potion", CardKeys.bagItemId(CardKeys.bagItem("potion")))
+        assertNull(CardKeys.bagItemId(CardKeys.bagTm("potion")))
+        assertNull(CardKeys.bagItemId(CardKeys.DEAL))
+        assertNull(CardKeys.bagItemId(CardKeys.special(ShopPlan.Tile.Item("potion"))))
+        assertEquals("thunderbolt", CardKeys.bagTmMove(CardKeys.bagTm("thunderbolt")))
+        assertNull(CardKeys.bagTmMove(CardKeys.bagItem("thunderbolt")))
     }
 
     // ---- the Bag's buttons ----
@@ -140,10 +135,9 @@ class ItemCardPlanTest {
         assertEquals("Need 5, you have 3", ItemCardPlan.tradeShort(o))
     }
 
-    @Test fun talkBackSaysHowToOpenAndFold() {
-        assertEquals("Great Ball, 50 % to catch, 700, double tap to open", ItemCardPlan.foldedLabel("Great Ball, 50 % to catch, 700"))
-        assertEquals("Great Ball, 50 % to catch, double tap to fold", ItemCardPlan.openLabel("Great Ball", "50 % to catch"))
-        assertEquals("TM Thunderbolt, double tap to fold", ItemCardPlan.openLabel("TM Thunderbolt", null))
+    @Test fun talkBackSaysTheTileOpensDetails() {
+        assertEquals("Great Ball, 50 % to catch, 700. Opens details", ItemCardPlan.detailsLabel("Great Ball, 50 % to catch, 700"))
+        assertTrue("no word of the old in-place card", !ItemCardPlan.detailsLabel("TM Thunderbolt").contains("fold") && !ItemCardPlan.detailsLabel("TM Thunderbolt").contains("in place"))
     }
 
     @Test fun theMoneyToastIsTheOldOne() {

@@ -1,34 +1,27 @@
 package com.husarp.ankigo.ui
 
-import android.app.Dialog
 import android.content.Context
 import android.content.res.ColorStateList
-import android.graphics.Color
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
-import android.view.Window
-import android.view.WindowManager
-import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import com.husarp.ankigo.R
 
-// TICKET R10-H (B19): the battle's "View settings" sheet. B20's slider is [PokemonSizeSlider], used here and in Settings.
+// TICKET R10-H (B19): the battle's "View settings". B20's slider is [PokemonSizeSlider], used here and in Settings.
+// TICKET R15-F (PLAN 141): it is a full screen with a live battle preview now ([ViewSettingsScreen]); this class keeps the rows and the entry.
 
 /**
- * Round 10 B19: the battle-look settings in one bottom sheet, opened from the battle's ⋯ menu in every host (Battle tab, Study screen,
- * floating battle window): Pokémon size, which side of our Pokémon shows, the info box style, the HP / XP bars and the battle frame (three
- * collapsed [LookChooser] entries that open into a grid of small live previews), the stat card under its own Pokémon, compact stat cards and the background pictures; on the Study screen also the panel's height
- * (Full / Strip / Mini). They are the same preferences as in Settings ([AppPrefs]); every change is written at once and every open battle
- * view follows live ([BattlePanelView]'s preference watcher). The look is the sort sheet's ([SortSheet]): handle, title, sections, a
- * mauve button; over other apps (no Activity) the dialog is an overlay window.
+ * Round 10 B19 / Round 15 F (PLAN 141): the battle-look settings, opened from the battle's ⋯ menu in every host (Battle tab, Study screen,
+ * floating battle window) as a FULL-SCREEN page ([ViewSettingsScreen]: a live battle preview on top, these rows under it). The rows: Pokémon
+ * size, which side of our Pokémon shows, the info box style, the HP / XP bars and the battle frame (three collapsed [LookChooser] entries
+ * that open into a grid of small live previews), the stat card under its own Pokémon, compact stat cards and the background pictures; on
+ * the Study screen also the panel's height (Full / Strip / Mini). They are the same preferences as in Settings ([AppPrefs]); every change is
+ * written at once and every open battle view follows live ([BattlePanelView]'s preference watcher), the page's preview included. Only the
+ * panel height is held back: it moves the preview and goes to the host when the page closes.
  */
 internal class ViewSettingsSheet(
     private val ctx: Context,
@@ -38,57 +31,17 @@ internal class ViewSettingsSheet(
     /** Full (0) / Strip (1) / Mini (2): [current] is the mode the panel shows now, [set] moves the panel to that preset (the Study screen's own `setPanelDp`). */
     class PanelHeightPart(val current: () -> Int, val set: (Int) -> Unit)
 
-    /** The sheet's rows, top to bottom. */
+    /** The rows, top to bottom. */
     enum class Part { SIZE, FACING, INFO_BOX, BARS, FRAME, CARD_OWN, COMPACT, BACKGROUND, HEIGHT }
 
-    private var dismiss: () -> Unit = {}
-
     /**
-     * R10-FIX (M2): on the Study screen in the stacked (portrait) layout the battle panel is at the bottom, so a bottom sheet would cover
-     * exactly what is being changed. That host passes the panel height part only there, so the sheet then opens at the TOP of the window
-     * (rounded bottom corners, at most [TOP_SHARE] of the height, the same light dim) and the panel stays visible below it.
+     * The rows in one vertical column (the page scrolls it). [onHeight] hears a pick in the Panel height row (0 Full, 1 Strip, 2 Mini); it is
+     * not the host's setter: the page keeps the choice and hands it to the host once, when it closes.
      */
-    val atTop: Boolean get() = atTop(panelHeight)
-
-    /** The sheet's content (card, handle, title, the scrolling rows, the Done button); [maxBodyPx] caps the rows' height. */
-    fun build(maxBodyPx: Int): View {
-        val top = atTop
-        val padTop = Ui.dp(ctx, if (top) 12 else 6)
-        val sheet = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply {
-                setColor(Ui.c(ctx, R.color.ag_card))
-                val r = Ui.dp(ctx, 22f)
-                cornerRadii = if (top) floatArrayOf(0f, 0f, 0f, 0f, r, r, r, r) else floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
-            }
-            setPadding(Ui.dp(ctx, 16), padTop, Ui.dp(ctx, 16), Ui.dp(ctx, 12))
-        }
-        if (top) {
-            // a window that draws under the status bar / camera cut-out: keep the title clear of it
-            ViewCompat.setOnApplyWindowInsetsListener(sheet) { v, ins ->
-                val b = ins.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-                v.setPadding(Ui.dp(ctx, 16), padTop + b.top, Ui.dp(ctx, 16), Ui.dp(ctx, 12))
-                ins
-            }
-        } else sheet.addView(View(ctx).apply { background = Ui.rounded(Ui.c(ctx, R.color.ag_ov), 2, ctx) },
-            LinearLayout.LayoutParams(Ui.dp(ctx, 40), Ui.dp(ctx, 4)).also {
-                it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = Ui.dp(ctx, 4); it.bottomMargin = Ui.dp(ctx, 6)
-            })
-        sheet.addView(Ui.text(ctx, 17f, 900, R.color.ag_text).apply { text = "View settings"; maxLines = 1 }, LinearLayout.LayoutParams(-1, -2))
+    fun rows(onHeight: (Int) -> Unit = {}): LinearLayout {
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        for (part in parts(panelHeight != null)) addPart(body, part)
-        sheet.addView(MaxHeightScroll(ctx, maxBodyPx).apply {
-            isVerticalScrollBarEnabled = false
-            addView(body, FrameLayout.LayoutParams(-1, -2))
-        }, LinearLayout.LayoutParams(-1, -2))
-        sheet.addView(Ui.text(ctx, 14f, 900, R.color.ag_crust).apply {
-            text = "Done"
-            gravity = Gravity.CENTER
-            minHeight = Ui.dp(ctx, 48)
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 14, ctx)
-            setOnClickListener { dismiss() }
-        }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10) })
-        return sheet
+        for (part in parts(panelHeight != null)) addPart(body, part, onHeight)
+        return body
     }
 
     private fun section(title: String): View = Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply {
@@ -102,7 +55,7 @@ internal class ViewSettingsSheet(
         setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), 0, 0)
     }
 
-    private fun addPart(body: LinearLayout, part: Part) {
+    private fun addPart(body: LinearLayout, part: Part, onHeight: (Int) -> Unit) {
         val full = LinearLayout.LayoutParams(-1, -2)
         val choosers = LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 8) }
         when (part) {
@@ -132,8 +85,8 @@ internal class ViewSettingsSheet(
             Part.HEIGHT -> {
                 val h = panelHeight ?: return
                 body.addView(section("Panel height"))
-                body.addView(segmented(listOf("Full", "Strip", "Mini"), h.current().coerceIn(0, 2)) { h.set(it) }, full)
-                body.addView(hint("The battle panel here; dragging its handle works too."))
+                body.addView(segmented(listOf("Full", "Strip", "Mini"), h.current().coerceIn(0, 2)) { onHeight(it) }, full)
+                body.addView(hint("Shown in the preview now; the battle panel takes it when you close this page. Mini shows only the action bar."))
             }
         }
     }
@@ -162,58 +115,12 @@ internal class ViewSettingsSheet(
         }
     }
 
-    /** A ScrollView that never grows past [maxPx]: the sheet grows with its content, then scrolls. */
-    private class MaxHeightScroll(ctx: Context, private val maxPx: Int) : ScrollView(ctx) {
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val cap = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) maxPx else minOf(maxPx, MeasureSpec.getSize(heightMeasureSpec))
-            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST))
-        }
-    }
-
-    /**
-     * Shows the sheet at the bottom of the screen, or at the top on the stacked Study screen ([atTop]; an overlay window when [ctx] has no
-     * Activity). The window dims the battle only a little and the sheet stays short, so the change being made can still be seen behind it.
-     */
-    fun show() {
-        val dialog = Dialog(ctx).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
-        dismiss = { dialog.dismiss() }
-        val top = atTop
-        val maxBody = (ctx.resources.displayMetrics.heightPixels * (if (top) TOP_SHARE else BODY_SHARE)).toInt() - Ui.dp(ctx, 120)
-        val sheet = build(maxBody.coerceAtLeast(Ui.dp(ctx, 120)))
-        // at the top it closes by Done, a tap outside or Back (no drag: the handle is a bottom sheet's)
-        val content = if (top) sheet else SheetKit.host(ctx, sheet,
-            { dialog.window?.setWindowAnimations(0); dialog.cancel() },
-            { dim -> dialog.window?.setDimAmount(dim * DIM / SheetDrag.DIM) })
-        dialog.setContentView(content)
-        dialog.setCanceledOnTouchOutside(true)
-        dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setDimAmount(DIM); setGravity(if (top) Gravity.TOP else Gravity.BOTTOM)
-            if (Ui.findActivity(ctx) == null) setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
-        }
-        dialog.show()
-        dialog.window?.setLayout(minOf(ctx.resources.displayMetrics.widthPixels, Ui.dp(ctx, 600)), -2)
-    }
-
     companion object {
-        /** The sheet (handle, title, rows, button) takes at most this share of the screen height. */
-        const val BODY_SHARE = 0.8f
-
-        /** ... and at the top of the Study screen only this much, so the battle panel below it stays in view. */
-        const val TOP_SHARE = 0.55f
-
-        /** The sheet opens at the top when the host passes its panel height part: only the Study screen in its stacked layout does. */
-        fun atTop(panelHeight: PanelHeightPart?): Boolean = panelHeight != null
-
-        /** The window dim behind the sheet: light, the battle must stay readable. */
-        private const val DIM = 0.2f
-
         /** The rows in order; the panel height only where the host has a panel handle (the Study screen). */
         fun parts(withPanelHeight: Boolean): List<Part> = Part.entries.filter { it != Part.HEIGHT || withPanelHeight }
 
-        /** Opens the sheet from a battle menu. */
-        fun open(ctx: Context, panelHeight: PanelHeightPart? = null) = ViewSettingsSheet(ctx, panelHeight).show()
+        /** Opens the page from a battle menu (a full-window dialog: over other apps it is an overlay window). */
+        fun open(ctx: Context, panelHeight: PanelHeightPart? = null) = ViewSettingsScreen(ctx, panelHeight).show()
     }
 }
 

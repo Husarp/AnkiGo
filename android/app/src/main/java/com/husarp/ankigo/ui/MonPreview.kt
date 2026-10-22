@@ -20,8 +20,8 @@ import com.husarp.ankigo.study.StudyRules
 
 /**
  * Single-Pokémon previews (team rows, detail sheets, pickers, Dex hero): the looping battle GIF when the FRONT sprite is
- * already cached as a GIF, otherwise exactly [Ui.staticSprite]. Grids (box, Pokédex list) keep the static sprite on purpose
- * (dozens of decoded animations would cost memory and CPU).
+ * already cached as a GIF, otherwise exactly [Ui.staticSprite]. Grids (box, Pokédex list) animate too, but through [GridSprites]
+ * (PLAN 156): dozens of animations at once need their own frame cap and cache, one shared clock and a stop while the list flings.
  */
 internal object MonPreview {
     private val main by lazy { Handler(Looper.getMainLooper()) }

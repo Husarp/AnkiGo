@@ -4,6 +4,7 @@ import com.husarp.ankigo.game.TestData
 import com.husarp.ankigo.game.Type
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -128,5 +129,72 @@ class DexFilterTest {
     @Test fun activeFlag() {
         assertEquals(false, DexFilter(sort = DexSort.NAME).active)
         assertEquals(true, DexFilter(query = "x").active)
+    }
+
+    // ---- PLAN 192: Any of / All of for the picked types ----
+
+    private val typed = listOf(
+        TestData.species(7, "Squirt", listOf(Type.WATER)),
+        TestData.species(130, "Gyara", listOf(Type.WATER, Type.FLYING)),
+        TestData.species(16, "Birdie", listOf(Type.NORMAL, Type.FLYING)),
+        TestData.species(6, "Zard", listOf(Type.FIRE, Type.FLYING)),
+        TestData.species(9, "Blast", listOf(Type.WATER)),
+        TestData.species(95, "Onix", listOf(Type.ROCK, Type.GROUND)),
+    )
+
+    private fun runTyped(f: DexFilter) = f.apply(typed, last, wish, gens).map { it.num }
+
+    @Test fun anyOfIsTheDefaultAndUnchanged() {
+        assertEquals(TypeMatch.ANY, DexFilter().typeMatch)
+        assertEquals(listOf(6, 7, 9, 16, 130), runTyped(DexFilter(types = setOf(Type.WATER, Type.FLYING))))
+        assertEquals(listOf(7, 9, 130), runTyped(DexFilter(types = setOf(Type.WATER))))
+    }
+
+    @Test fun allOfOneTypeIsTheSameAsAnyOfOneType() {
+        assertEquals(listOf(7, 9, 130), runTyped(DexFilter(types = setOf(Type.WATER), typeMatch = TypeMatch.ALL)))
+        assertEquals(listOf(6, 16, 130), runTyped(DexFilter(types = setOf(Type.FLYING), typeMatch = TypeMatch.ALL)))
+    }
+
+    @Test fun allOfTwoTypesFindsOnlyThoseWithBoth() {
+        assertEquals(listOf(130), runTyped(DexFilter(types = setOf(Type.WATER, Type.FLYING), typeMatch = TypeMatch.ALL)))
+        assertEquals(listOf(95), runTyped(DexFilter(types = setOf(Type.GROUND, Type.ROCK), typeMatch = TypeMatch.ALL)))
+        assertEquals(emptyList<Int>(), runTyped(DexFilter(types = setOf(Type.WATER, Type.FIRE), typeMatch = TypeMatch.ALL)))
+    }
+
+    @Test fun noPickedTypesShowsEverythingInBothModes() {
+        assertEquals(6, runTyped(DexFilter(typeMatch = TypeMatch.ALL)).size)
+        assertEquals(false, DexFilter(typeMatch = TypeMatch.ALL).active)
+        assertEquals(true, DexFilter(types = setOf(Type.FIRE), typeMatch = TypeMatch.ALL).active)
+    }
+
+    @Test fun allOfTakesAtMostTwoPicksAndRefusesAThirdWithoutChangingAnything() {
+        var f = DexFilter(typeMatch = TypeMatch.ALL)
+        f = f.toggleType(Type.WATER)!!
+        f = f.toggleType(Type.FLYING)!!
+        assertEquals(setOf(Type.WATER, Type.FLYING), f.types)
+        assertNull(f.toggleType(Type.FIRE))
+        assertEquals(setOf(Type.WATER, Type.FLYING), f.types)
+        // un-picking is always allowed, then there is room again
+        f = f.toggleType(Type.WATER)!!
+        assertEquals(setOf(Type.FLYING), f.types)
+        assertEquals(setOf(Type.FLYING, Type.FIRE), f.toggleType(Type.FIRE)!!.types)
+    }
+
+    @Test fun anyOfTakesAnyNumberOfPicks() {
+        var f = DexFilter()
+        for (t in listOf(Type.WATER, Type.FLYING, Type.FIRE, Type.ROCK)) f = f.toggleType(t)!!
+        assertEquals(4, f.types.size)
+    }
+
+    @Test fun switchingToAllOfKeepsTheTwoPickedLast() {
+        var f = DexFilter()
+        for (t in listOf(Type.WATER, Type.FLYING, Type.FIRE, Type.ROCK)) f = f.toggleType(t)!!
+        val all = f.withTypeMatch(TypeMatch.ALL)
+        assertEquals(TypeMatch.ALL, all.typeMatch)
+        assertEquals(listOf(Type.FIRE, Type.ROCK), all.types.toList())
+        // two or fewer picks are kept as they are, and going back to Any of keeps what is picked
+        val two = DexFilter(types = setOf(Type.WATER, Type.FLYING)).withTypeMatch(TypeMatch.ALL)
+        assertEquals(listOf(Type.WATER, Type.FLYING), two.types.toList())
+        assertEquals(two.types, two.withTypeMatch(TypeMatch.ANY).types)
     }
 }

@@ -3,7 +3,6 @@ package com.husarp.ankigo.ui
 import android.content.Context
 import android.graphics.Paint
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextPaint
@@ -24,11 +23,12 @@ import com.husarp.ankigo.game.Move
 import com.husarp.ankigo.game.MoveText
 
 /**
- * PLAN 168 / 181 / 200 / 199 (R14 batch 2): the item card that opens in place, one design for the Shop and the Bag (mockup
- * docs/design/round14-shop.html `.xcard`). A full-width card with a thin mauve edge: header (icon, name, one line, ▴; a tap folds it),
- * a divider, then for a TM the move block, the text blocks from [ItemInfo], for a TM the "Who can learn it" button, the "You own" line
- * and the action row (Buy in the Shop; Throw / Use / Give / Revive / Teach in the Bag), in the Bag a ball also the Trade button.
- * The page decides which card is open ([OpenCard]) and what the buttons do; this object only builds the Views.
+ * PLAN 168 / 181 / 200 / 199 (R14 batch 2), PLAN 210 (R15-A): the item card, one design for the Shop and the Bag (mockup docs/design/round14-shop.html
+ * `.xcard`). Since R15 it is not drawn in place but inside the item WINDOW ([ItemWindow]), in three parts: the [header] (icon, name, one line, the
+ * close button), the [body] that scrolls (for a TM the move block, the text blocks from [ItemInfo], the "Who can learn it" button) and the
+ * [footer] that stays in view (the "You own" line, the action row: Buy in the Shop; Throw / Use / Give / Revive / Teach in the Bag, and in the
+ * Bag a ball also the Trade button or its confirm). The page decides which item is open ([OpenCard]) and what the buttons do; this object
+ * only builds the Views.
  */
 internal object ItemCard {
     /** What one card shows and does. [item] is the catalogue id, or null for a TM ([move] is then its Showdown move id). */
@@ -38,7 +38,6 @@ internal object ItemCard {
         val buy: Buy? = null,
         val act: Act? = null,
         val trade: Trade? = null,
-        val onFold: () -> Unit,
     )
 
     /** The Shop's Buy button: [price] (a deal shows the old price struck through); [owned] (a TM) shows "✓ Owned" instead; [onBuy] runs after the money check. */
@@ -76,76 +75,80 @@ internal object ItemCard {
         return out
     }
 
-    // ---- the card ----
+    // ---- the card, in three parts ----
 
-    /** The card of [spec] as a View (to add to a vertical list with its own margins: 2 dp above, 8 dp below). */
-    fun build(page: GamePage, spec: Spec): View {
+    /** The name the card shows: "TM Thunderbolt" or the item's name. */
+    private fun nameOf(page: GamePage, spec: Spec): String =
+        if (spec.item == null) Items.tmName(page.data, spec.move.orEmpty()) else Items.name(spec.item)
+
+    /** The header: icon tile, name, the one line (an item only) and the close button ([onClose]; 48 dp to touch, the glyph is smaller). */
+    fun header(page: GamePage, spec: Spec, onClose: () -> Unit): View {
         val ctx: Context = page
-        val data = page.data
-        val state = page.state
         val isTm = spec.item == null
-        val move = spec.move?.let { data.move(it) }
-        val name = if (isTm) Items.tmName(data, spec.move.orEmpty()) else Items.name(spec.item.orEmpty())
-        val line = if (isTm) null else ItemInfo.line(data, spec.item.orEmpty())
-
-        val card = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            val card = Ui.c(ctx, R.color.ag_card)
-            background = GradientDrawable().apply {
-                setColor(card)
-                cornerRadius = Ui.dp(ctx, 14f)
-                setStroke(dp(ctx, 1.5f), Bits.blend(Ui.c(ctx, R.color.ag_mauve), card, 0.55f))
-            }
-            setPadding(dp(ctx, 12f), dp(ctx, 8f), dp(ctx, 12f), dp(ctx, 12f))
-        }
-
-        // header: icon tile, name, one line, the fold chevron; the whole header folds the card
+        val move = spec.move?.let { page.data.move(it) }
+        val line = if (isTm) null else ItemInfo.line(page.data, spec.item.orEmpty())
         val lead: View = if (isTm) tmLead(ctx, move) else Bits.itemTile(ctx, spec.item.orEmpty(), 48)
         val titles = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            addView(Ui.text(ctx, 16f, 900, R.color.ag_text).apply { text = name })
+            addView(Ui.text(ctx, 16f, 900, R.color.ag_text).apply { text = nameOf(page, spec) })
             if (line != null) addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = line }, Form.lp(ctx, 1))
         }
-        card.addView(LinearLayout(ctx).apply {
+        return LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(lead)
             addView(titles, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(ctx, 10f) })
-            addView(chevron(ctx, "▴"))
-            isClickable = true
-            contentDescription = ItemCardPlan.openLabel(name, line)
-            setOnClickListener { spec.onFold() }
-        }, LinearLayout.LayoutParams(-1, -2))
-
-        val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(ctx, 10f), 0, 0) }
-        card.addView(View(ctx).apply { setBackgroundColor(Ui.c(ctx, R.color.ag_s0)) }, LinearLayout.LayoutParams(-1, dp(ctx, 1f)).also { it.topMargin = dp(ctx, 8f) })
-        card.addView(body, LinearLayout.LayoutParams(-1, -2))
-
-        val below = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = dp(ctx, 10f) }
-        if (move != null) body.addView(moveBlock(ctx, page, move), below)
-        val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty())
-        for (f in facts) body.addView(factBlock(ctx, f.title, f.text), LinearLayout.LayoutParams(below))
-        if (isTm) body.addView(whoButton(ctx, page, spec.move.orEmpty(), name), Form.lp(ctx, 0))
-
-        val own = if (isTm) ItemInfo.tmOwnLine(spec.move in state.tms) else ItemInfo.ownLine(spec.item.orEmpty(), state.count(spec.item.orEmpty()))
-        body.addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub0).apply { text = styled(ctx, own) }, Form.lp(ctx, 6))
-
-        val trade = spec.trade
-        if (trade == null || !trade.confirming) {
-            val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-            spec.buy?.let { row.addView(buyView(ctx, state.cash, it), LinearLayout.LayoutParams(0, -2, 1f)) }
-            spec.act?.let { row.addView(actView(ctx, it), LinearLayout.LayoutParams(0, -2, 1f)) }
-            if (row.childCount > 0) body.addView(row, Form.lp(ctx, 10))
+            addView(closeButton(ctx, onClose), LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)).also { it.marginStart = dp(ctx, 4f); it.marginEnd = -dp(ctx, 8f) })
         }
-        if (trade != null) body.addView(if (trade.confirming) confirmView(ctx, trade) else tradeButton(ctx, trade), Form.lp(ctx, if (trade.confirming) 10 else 8))
-        return card
     }
 
-    /** The chevron at the right of a header or row: ▾ folded, ▴ open. */
-    fun chevron(ctx: Context, glyph: String, sp: Float = 14f, padH: Float = 6f): TextView = Ui.text(ctx, sp, 900, R.color.ag_sub0).apply {
-        text = glyph
-        setPadding(dp(ctx, padH), dp(ctx, 4f), dp(ctx, padH), dp(ctx, 4f))
-        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    /** The ✕ of the window: a quiet X on a 48 dp touch area. */
+    private fun closeButton(ctx: Context, onClose: () -> Unit): View = FrameLayout(ctx).apply {
+        isClickable = true
+        contentDescription = "Close"
+        setOnClickListener { onClose() }
+        addView(ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_close)
+            setColorFilter(Ui.c(ctx, R.color.ag_sub0), android.graphics.PorterDuff.Mode.SRC_IN)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(dp(ctx, 22f), dp(ctx, 22f), Gravity.CENTER))
+    }
+
+    /** The body that scrolls: for a TM the move block, then the text blocks, for a TM "Who can learn it". */
+    fun body(page: GamePage, spec: Spec): View {
+        val ctx: Context = page
+        val data = page.data
+        val isTm = spec.item == null
+        val move = spec.move?.let { data.move(it) }
+        val below = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = dp(ctx, 10f) }
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            if (move != null) addView(moveBlock(ctx, page, move), below)
+            val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty())
+            for (f in facts) addView(factBlock(ctx, f.title, f.text), LinearLayout.LayoutParams(below))
+            if (isTm) addView(whoButton(ctx, page, spec.move.orEmpty(), nameOf(page, spec)), Form.lp(ctx, 0))
+        }
+    }
+
+    /** The footer that stays in view: the "You own" line, the action row, and in the Bag a ball's Trade button (or its confirm). */
+    fun footer(page: GamePage, spec: Spec): View {
+        val ctx: Context = page
+        val state = page.state
+        val isTm = spec.item == null
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            val own = if (isTm) ItemInfo.tmOwnLine(spec.move in state.tms) else ItemInfo.ownLine(spec.item.orEmpty(), state.count(spec.item.orEmpty()))
+            addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub0).apply { text = styled(ctx, own) }, Form.lp(ctx, 0))
+
+            val trade = spec.trade
+            if (trade == null || !trade.confirming) {
+                val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+                spec.buy?.let { row.addView(buyView(ctx, state.cash, it), LinearLayout.LayoutParams(0, -2, 1f)) }
+                spec.act?.let { row.addView(actView(ctx, it), LinearLayout.LayoutParams(0, -2, 1f)) }
+                if (row.childCount > 0) addView(row, Form.lp(ctx, 10))
+            }
+            if (trade != null) addView(if (trade.confirming) confirmView(ctx, trade) else tradeButton(ctx, trade), Form.lp(ctx, if (trade.confirming) 10 else 8))
+        }
     }
 
     /** The 48 dp tile of a TM in the card header: the move's type disc on the quiet tile colour. */

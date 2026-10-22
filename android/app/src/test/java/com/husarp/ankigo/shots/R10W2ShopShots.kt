@@ -12,6 +12,7 @@ import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.GameData
+import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Shop
 import com.husarp.ankigo.game.TestData
@@ -298,19 +299,19 @@ class R10W2ShopShots {
         return out
     }
 
-    @Test fun theOpenCardOfTheDealShowsTheOldPriceStruckThroughOnItsBuyButton() {
+    @Test fun theWindowOfTheDealShowsTheOldPriceStruckThroughOnItsBuyButton() {
         shoot("card-deal", listOf(Variants.PHONE), check = { _, v ->
             val t = texts(v)
             val deal = Shop.dealFor(gd, WEEKDAY)!!
-            assertEquals("the old price, struck through, once", listOf(Bits.fmt(deal.oldPrice)), struck(v))
+            assertEquals("the old price, struck through, once (on the Buy button; the deal card behind draws its own line)", listOf(Bits.fmt(deal.oldPrice)), struck(v))
             assertTrue("the new price", Bits.fmt(deal.price) in t)
-            assertTrue("the card replaced the deal card", "DEAL OF THE DAY" !in t)
+            assertTrue("the deal card stays under the window", "DEAL OF THE DAY" in t)
             assertTrue(descriptions(v).any { it.startsWith("Buy for ${Bits.fmt(deal.price)}") })
         }) { ctx ->
             val (p, screen) = shopTab(ctx, WEEKDAY)
-            p.toggleCard(CardKeys.DEAL)
-            call(p, "render")
-            screen
+            val stage = ShopCardKit.Stage(ctx, p, screen)
+            p.openCard(CardKeys.DEAL)
+            stage.render()
         }
         shoot("card-plain", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT), check = { _, v ->
             val basic = Shop.basics().first()
@@ -319,9 +320,9 @@ class R10W2ShopShots {
             assertTrue("no Price row", "Price" !in texts(v))
         }) { ctx ->
             val (p, screen) = shopTab(ctx, WEEKDAY)
-            p.toggleCard(CardKeys.basic(ShopPlan.Tile.Item(Shop.basics().first())))
-            call(p, "render")
-            screen
+            val stage = ShopCardKit.Stage(ctx, p, screen)
+            p.openCard(CardKeys.basic(ShopPlan.Tile.Item(Shop.basics().first())))
+            stage.render()
         }
     }
 
@@ -338,12 +339,14 @@ class R10W2ShopShots {
             assertEquals(20_000 - 2 * deal.price, st.cash)
             call(p, "render")
             assertTrue(Bits.fmt(20_000 - 2 * deal.price) in texts(screen))
-            // a tap on the deal card opens its item card in place (no sheet), with the count in words
+            // a tap on the deal card opens its item window (not a dialog), with the count in words
+            val stage = ShopCardKit.Stage(ctx, p, screen)
             val card = clickable(findText(screen) { it == "DEAL OF THE DAY" })!!
             assertNull(DialogShots.capture { card.performClick() })
-            call(p, "render")
-            assertEquals(1, texts(screen).count { it == "▴" })
-            screen
+            stage.render()
+            assertTrue("the item window is open", p.itemWindow != null)
+            assertTrue(ItemInfo.plain(ItemInfo.ownLine(deal.item, n0 + 2)) in texts(stage))
+            stage
         }
     }
 

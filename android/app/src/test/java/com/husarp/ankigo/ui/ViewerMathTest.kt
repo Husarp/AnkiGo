@@ -25,20 +25,20 @@ class ViewerMathTest {
 
     @Test fun fitScalePortraitAndLandscapeBoxes() {
         // pixel art: the largest whole number that fits
-        assertEquals(10f, ViewerMath.fitScale(96, 96, 1000, 1500, true), eps)   // portrait: width limits (10.4)
-        assertEquals(4f, ViewerMath.fitScale(96, 96, 1500, 400, true), eps)     // landscape: height limits (4.16)
-        assertEquals(1f, ViewerMath.fitScale(96, 96, 96, 96, true), eps)
+        assertEquals(10f, ViewerMath.fitScale(96, 96, 1000, 1500), eps)   // portrait: width limits (10.4)
+        assertEquals(4f, ViewerMath.fitScale(96, 96, 1500, 400), eps)     // landscape: height limits (4.16)
+        assertEquals(1f, ViewerMath.fitScale(96, 96, 96, 96), eps)
         // a whole number that would waste more than 15 % of the room gives way to the exact fit
-        assertEquals(380f / 96f, ViewerMath.fitScale(96, 96, 380, 1000, true), eps)  // 3.96 x, not 3
-        assertEquals(1.9f, ViewerMath.fitScale(100, 100, 190, 1000, true), eps)      // 1.9 x, not 1
+        assertEquals(380f / 96f, ViewerMath.fitScale(96, 96, 380, 1000), eps)  // 3.96 x, not 3
+        assertEquals(1.9f, ViewerMath.fitScale(100, 100, 190, 1000), eps)      // 1.9 x, not 1
         // fractional only when even 1 does not fit
-        assertEquals(0.5f, ViewerMath.fitScale(96, 96, 48, 48, true), eps)
-        // a bigger (smoothed) picture takes the exact fit
-        assertEquals(1000f / 300f, ViewerMath.fitScale(300, 300, 1000, 1500, false), eps)
+        assertEquals(0.5f, ViewerMath.fitScale(96, 96, 48, 48), eps)
+        // PLAN 213: a bigger (3D) picture follows the same rule: 3.33 -> 3 (3 >= 2.83)
+        assertEquals(3f, ViewerMath.fitScale(300, 300, 1000, 1500), eps)
         // a non-square picture
-        assertEquals(5f, ViewerMath.fitScale(40, 80, 1000, 420, true), eps)
-        assertEquals(0f, ViewerMath.fitScale(0, 96, 1000, 1000, true), eps)
-        assertEquals(0f, ViewerMath.fitScale(96, 96, 0, 1000, true), eps)
+        assertEquals(5f, ViewerMath.fitScale(40, 80, 1000, 420), eps)
+        assertEquals(0f, ViewerMath.fitScale(0, 96, 1000, 1000), eps)
+        assertEquals(0f, ViewerMath.fitScale(96, 96, 0, 1000), eps)
     }
 
     @Test fun panIsZeroWhileThePictureFitsTheBox() {

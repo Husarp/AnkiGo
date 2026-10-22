@@ -48,6 +48,7 @@ object SettingsCatalog {
         s("typeStyle", L, "", "Show types as", "Type names, small type icons, or both"),
         s("matchupChips", L, "", "Matchup chips", "Type chips in Matchups: soft fill, or a ring in the type colour"),
         s("scale", L, "", "Interface size", "Text, cards and Pokémon get bigger or smaller together"),
+        s("animateLists", L, "", "Animate Pokémon in lists", "Caught Pokémon move in the Pokédex and the Box"),   // PLAN 156
 
         // Sounds
         s("answerSounds", SO, "Study buttons", "Answer buttons", "A click for Again, Hard, Good and Easy"),

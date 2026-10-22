@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.InsetDrawable
 import android.text.Editable
 import android.text.TextUtils
 import android.text.TextWatcher
@@ -37,7 +38,8 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     private lateinit var header: LinearLayout
     private lateinit var topBox: LinearLayout     // hero + progress, rebuilt on every render
     private lateinit var segBox: LinearLayout     // All / Owned / Not owned
-    private lateinit var chipsBox: LinearLayout   // the two rows of type chips
+    private lateinit var chipsBox: LinearLayout   // the match switch and the two rows of type chips
+    private var chipScroller: HorizontalScrollView? = null // the chip rows' scroll view, reused so a redraw keeps its scroll position
     private lateinit var search: EditText         // built once so typing keeps focus
     private lateinit var sortPill: View        // the sort chip as last drawn (a new one each render)
     private lateinit var sortHolder: FrameLayout
@@ -93,6 +95,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             clipToPadding = false
             addHeaderView(header, null, false)
             adapter = this@DexPage.adapter
+            gate.attach(this) // PLAN 156: the Pokémon stand still while the list flings
         }
         return list
     }
@@ -346,8 +349,8 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         }
     }
 
-    /** One filter chip, selected = mauve (the type chips are re-dressed in the type colours by [TypeChips.styleFilter]). */
-    private fun chip(label: String, on: Boolean, onClick: () -> Unit): TextView {
+    /** One filter chip, selected = mauve (the type chips are re-dressed in the type colours by [TypeChips.styleFilter]). [onClick] false = refused, nothing redraws. */
+    private fun chip(label: String, on: Boolean, onClick: () -> Boolean): TextView {
         val ctx = this
         val (fill, ink) = Ui.c(ctx, R.color.ag_mauve) to Ui.c(ctx, R.color.ag_crust)
         return Ui.text(ctx, 12f, 800, R.color.ag_sub1).apply {
@@ -355,7 +358,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             maxLines = 1
             setTextColor(if (on) ink else Ui.c(ctx, R.color.ag_sub1))
             Ui.touchPill(this, Ui.rounded(if (on) fill else Ui.c(ctx, R.color.ag_mantle), 10, ctx), 28, 10) // 48 dp touch height
-            setOnClickListener { onClick(); redraw(); list.setSelection(0) }
+            setOnClickListener { if (onClick()) { redraw(); list.setSelection(0) } }
         }
     }
 
@@ -365,28 +368,70 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         return row
     }
 
-    private fun <T> Set<T>.toggle(v: T) = if (v in this) this - v else this + v
+    /**
+     * PLAN 192: "Any of / All of" for the picked types, a compact two-part switch (a 28 dp bar in a 48 dp touch row, the segmented look of the
+     * sort sheet). The mode lives in [filter] (kept while the page lives, not saved).
+     */
+    private fun matchSwitch(): View {
+        val ctx = this
+        val d = { v: Int -> Ui.dp(ctx, v) }
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx), 0, d(10), 0, d(10)) // a 28 dp bar in the 48 dp row
+            for (m in TypeMatch.entries) {
+                val on = filter.typeMatch == m
+                addView(Ui.text(ctx, 12f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply {
+                    text = m.label
+                    maxLines = 1
+                    minHeight = d(48)
+                    gravity = Gravity.CENTER
+                    if (on) background = InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_card), 8, ctx), d(3), d(13), d(3), d(13)) // the raised pick, 22 dp
+                    setPadding(d(14), 0, d(14), 0)
+                    isSelected = on
+                    setOnClickListener {
+                        if (filter.typeMatch != m) { filter = filter.withTypeMatch(m); redraw(); list.setSelection(0) }
+                    }
+                }, LinearLayout.LayoutParams(-2, -2))
+            }
+        }
+    }
 
-    /** The type chips in two rows (about half the types each) that scroll sideways together; wishlist + generations live in the sort sheet (R10 B3). */
+    /**
+     * The match switch and the type chips in two rows (about half the types each) that scroll sideways together; wishlist + generations live in
+     * the sort sheet (R10 B3). The scroll view is kept across redraws, so a pick or a mode change leaves the row where it was (PLAN 212).
+     */
     private fun filters() {
-        val f = filter
         val types = Type.entries.map { t ->
-            chip(t.label, t in f.types) { filter = filter.copy(types = filter.types.toggle(t)) }.also { TypeChips.styleFilter(it, t, t in f.types) }
+            val on = t in filter.types
+            chip(t.label, on) {
+                val next = filter.toggleType(t)
+                if (next == null) Ui.toast(this, "All of: pick up to ${DexFilter.MAX_ALL_TYPES} types") else filter = next
+                next != null
+            }.also { TypeChips.styleFilter(it, t, on) }
         }
         val half = (types.size + 1) / 2
         val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        rows.addView(chipRow(types.take(half)))
+        // wrap-content width for both rows: without params the first row is match-parent, so it was squeezed to the width of the shorter second one (Ground, its last chip, was cut: PLAN 212a)
+        rows.addView(chipRow(types.take(half)), LinearLayout.LayoutParams(-2, -2))
         rows.addView(chipRow(types.drop(half)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(this, 8) }) // chips are 48 dp touch rows around a 28 dp look
-        chipsBox.addView(HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            addView(rows)
-        }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 4) })
+        val scroller = chipScroller ?: HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false }.also { chipScroller = it }
+        (scroller.parent as? ViewGroup)?.removeView(scroller)
+        scroller.removeAllViews()
+        scroller.addView(rows)
+        chipsBox.addView(matchSwitch(), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(this, 4) })
+        chipsBox.addView(scroller, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 10) })
     }
 
     // ---- grid cells (mockup .dexgrid) ----
 
     private class Cell(val num: TextView, val img: ImageView, val name: TextView, val star: TextView, val check: ImageView) {
         var sp: Species? = null
+    }
+
+    /** PLAN 156: caught Pokémon move in the grid; this gate keeps them still while the list flings and starts the visible ones when it settles. */
+    private val gate = ScrollGate(GridShape.of(base, cols, CELL_RATIO, gapDp = 6, sidePadDp = 12, topDp = TOP_DP, stripDp = STRIP_DP)) {
+        (0 until list.childCount).flatMap { i -> (list.getChildAt(i) as? CellRow)?.cells.orEmpty().map { (it.tag as Cell).img } }
     }
 
     private fun makeCell(f: SquareFrame) {
@@ -454,7 +499,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         val picking = pickHost?.picking == true
         val pick = ComparePick.Dex(sp.num)
         bindPick(f)
-        Ui.staticSprite(this, sp.num, false, cell.img, silhouette = !seen)
+        GridSprites.bind(this, cell.img, sp.num, false, animate = caught, gate = gate, silhouette = !seen) // PLAN 156: a caught one moves
         if (seen && !caught) {
             // seen only: grey sprite (mockup .seen)
             cell.img.colorFilter = greyed

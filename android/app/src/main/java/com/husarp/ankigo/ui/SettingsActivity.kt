@@ -24,8 +24,9 @@ import android.widget.TextView
 import com.husarp.ankigo.DiagnosticsActivity
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
+import com.husarp.ankigo.Report
 import com.husarp.ankigo.data.DataStore
-import com.husarp.ankigo.data.SpriteKind
+import com.husarp.ankigo.data.DownloadAll
 import com.husarp.ankigo.data.Sprites
 import com.husarp.ankigo.game.CatchChoice
 import com.husarp.ankigo.game.GameData
@@ -44,53 +45,100 @@ import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /** The two long Settings downloads. They live here so rotating or resizing the screen doesn't stop them. */
 internal object SettingsJobs {
-    val anim = BgJob()
+    val everything = BgJob()
     val data = BgJob()
 
+    private val main = Handler(Looper.getMainLooper())
+
+    /** True while [check] works out what is missing (the button says "Checking…"). */
+    @Volatile var checking = false
+        private set
+
+    /** What a stopped or partly failed "Download everything" left, for the Resume button: the generations it was for and the size estimate. */
+    class Left(val gens: Set<Int>, val bytes: Long, val failed: Set<String> = emptySet())
+    @Volatile var left: Left? = null
+
+    /** Is a long download (or the check before one) going on: the other buttons wait. */
+    val everythingBusy get() = everything.running || checking
+
     /**
-     * Front + back battle sprites of every species of [gens] with 4 parallel workers; [BgJob.cancel] stops it early.
-     * [preloaded] is the game data when it is already in memory; otherwise it is read here, off the main thread.
+     * PLAN 167: works out, off the main thread, what "Download everything" would still fetch for [gens] (the files already on the phone and
+     * fresh "not found" notes count as done). [onResult] runs on the main thread with the scan, or an error text. [preloaded] is the game data
+     * when it is already in memory; otherwise it is read here.
      */
-    fun startAnimations(ctx: Context, gens: Set<Int>, preloaded: GameData?) {
-        if (anim.running) return
+    fun check(ctx: Context, gens: Set<Int>, preloaded: GameData?, onResult: (DownloadAll.Scan?, String?) -> Unit) {
+        if (everythingBusy) return
         val app = ctx.applicationContext
-        Sprites.setEnabled(app, true)
-        anim.begin("Starting…")
+        checking = true
         Thread {
+            var scan: DownloadAll.Scan? = null
+            var error: String? = null
             try {
                 val data = preloaded ?: DataStore.load(app)
-                if (data == null) { anim.fail("Download the game data first."); return@Thread }
-                val species = data.species.values.filter { it.gen in gens }.sortedBy { it.num }
-                val queue = ConcurrentLinkedQueue(species.flatMap { listOf(it to SpriteKind.FRONT, it to SpriteKind.BACK) })
-                val total = queue.size
-                val done = AtomicInteger()
-                val workers = 4
-                val latch = CountDownLatch(workers)
-                repeat(workers) {
-                    Thread {
-                        try {
-                            while (!anim.cancelled) {
-                                val (sp, kind) = queue.poll() ?: break
-                                Sprites.fetchBlocking(app, sp, kind, false)
-                                val d = done.incrementAndGet()
-                                anim.progress(d.toFloat() / total, "Downloaded $d / $total")
-                            }
-                        } finally { latch.countDown() }
-                    }.apply { isDaemon = true; name = "settings-anim" }.start()
-                }
-                latch.await()
-                if (anim.cancelled) anim.done("Stopped at ${done.get()} / $total. What was downloaded is kept.")
-                else { DownloadsDone.mark(app, DownloadsDone.ANIMATIONS, gens); anim.done("All battle animations downloaded.") }
+                if (data == null) error = "Download the game data first."
+                else scan = DownloadAll.scan(DownloadAll.planFor(data, gens), DownloadAll.layout(app))
             } catch (e: Throwable) {
-                anim.fail("Download stopped: ${e.message ?: e.javaClass.simpleName}")
+                error = "Couldn't check the pictures: ${e.message ?: e.javaClass.simpleName}"
             }
-        }.apply { isDaemon = true; name = "settings-anim-main" }.start()
+            checking = false
+            main.post {
+                everything.listener?.invoke() // the screen on top now (it may not be the one that asked) shows the button again
+                onResult(scan, error)
+            }
+        }.apply { isDaemon = true; name = "settings-everything-check" }.start()
+    }
+
+    /**
+     * PLAN 167: gets everything in [scan] (the jobs [check] found missing) with [DownloadAll.WORKERS] parallel workers; [BgJob.cancel] stops it
+     * early and what was downloaded is kept. A clean finish is remembered for [gens] ([DownloadsDone.EVERYTHING]); a stop, or files that
+     * failed on the network, leave the Resume button with the size that is left. Like the animation job before it, it runs while the app
+     * process lives (no foreground service, no new permission).
+     */
+    fun startEverything(ctx: Context, gens: Set<Int>, scan: DownloadAll.Scan) {
+        if (everything.running) return
+        val app = ctx.applicationContext
+        Sprites.setEnabled(app, true) // the player asked for the pictures: "Download pictures as needed" goes on
+        // a Resume runs the jobs that failed last time at the END (untried work first, so one stubborn prefix can't block it every time)
+        val before = left?.takeIf { it.gens == gens }?.failed ?: emptySet()
+        val todo = DownloadAll.resumeOrder(scan.todo, before)
+        left = null
+        everything.begin("Starting…")
+        Thread {
+            try {
+                Report.init(app)
+                val firstError = AtomicReference<String?>(null)
+                val layout = DownloadAll.layout(app)
+                val fetch = DownloadAll.fetcher(app, firstError)
+                val r = DownloadAll.run(todo, cancelled = { everything.cancelled }, check = { DownloadAll.check(it, layout) }, fetch = fetch) { ok, failed, total, bytes ->
+                    everything.progress((ok + failed).toFloat() / total, DownloadAll.progressLabel(ok, total, bytes))
+                }
+                Report.log("PICS", "download everything: ${r.ok} of ${scan.todo.size} done, ${r.failed.size} failed, ${r.untouched.size} not tried" +
+                    (if (r.aborted) ", stopped (the internet isn't answering)" else "") + (firstError.get()?.let { ", first network error $it" } ?: ""))
+                // the jobs to run last next time: the ones that failed now, and the earlier failures this run never got to
+                val failedKeys = r.failed.map { it.key }.toSet() + r.untouched.map { it.key }.filter { it in before }
+                when {
+                    r.aborted -> { left = Left(gens, r.leftBytes, failedKeys); everything.done(DownloadAll.OFFLINE_LABEL) }
+                    everything.cancelled -> { left = Left(gens, r.leftBytes, failedKeys); everything.done(DownloadAll.stoppedLabel(r.ok, scan.todo.size)) }
+                    r.failed.isNotEmpty() -> { left = Left(gens, r.leftBytes, failedKeys); everything.done(DownloadAll.failedLabel(r.failed.size)) }
+                    else -> { DownloadsDone.mark(app, DownloadsDone.EVERYTHING, gens); everything.done() }
+                }
+            } catch (e: Throwable) {
+                everything.fail("Download stopped: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }.apply { isDaemon = true; name = "settings-everything" }.start()
+    }
+
+    /**
+     * PLAN 167: the button was pressed and nothing is missing: it is remembered as done, and, as when a download starts, "Download
+     * pictures as needed" goes on (the player asked for the pictures).
+     */
+    fun markNothingMissing(ctx: Context, gens: Set<Int>) {
+        DownloadsDone.markNothingMissing(ctx, gens)
+        left = null
     }
 
     /** Deletes the data, downloads and rebuilds it. */
@@ -148,7 +196,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     internal fun restoreChoosers(titles: List<String>?) { if (titles != null) openChoosers.addAll(titles) }
 
     // views of the data card that the download jobs update
-    private var animBar: ProgressBlock? = null
+    private var everyBar: ProgressBlock? = null
     private var dataBar: ProgressBlock? = null
     private var picBar: ProgressBlock? = null
 
@@ -157,7 +205,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private val main = Handler(Looper.getMainLooper())
 
     // Attached in onShow, detached in onGone only if still ours (a recreated page may have taken over the job screens).
-    private val animListener: () -> Unit = { onAnim() }
+    private val everyListener: () -> Unit = { onEvery() }
     private val dataListener: () -> Unit = { onData() }
     private val picListener: () -> Unit = { onPics() }
 
@@ -207,9 +255,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     override fun onShow() {
         super.onShow()
-        SettingsJobs.anim.listener = animListener
+        SettingsJobs.everything.listener = everyListener
         SettingsJobs.data.listener = dataListener
-        if (SettingsJobs.anim.state != BgJob.State.IDLE) onAnim() // progress / result that changed while this screen was away
+        if (SettingsJobs.everything.state != BgJob.State.IDLE) onEvery() // progress / result that changed while this screen was away
         FirstRunJob.job.listener = picListener
         if (SettingsJobs.data.state == BgJob.State.DONE) onData() // finished while this screen was away
         if (picsFromSettings && FirstRunJob.job.state != BgJob.State.RUNNING) onPics()
@@ -223,7 +271,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     }
 
     override fun onGone() {
-        if (SettingsJobs.anim.listener === animListener) SettingsJobs.anim.listener = null
+        if (SettingsJobs.everything.listener === everyListener) SettingsJobs.everything.listener = null
         if (SettingsJobs.data.listener === dataListener) SettingsJobs.data.listener = null
         if (FirstRunJob.job.listener === picListener) FirstRunJob.job.listener = null
         if (live?.get() === this) live = null
@@ -242,7 +290,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     override fun render() {
         saveName()
         content.removeAllViews()
-        animBar = null; dataBar = null; picBar = null; nameEdit = null; dataCard = null; windowsCard = null
+        everyBar = null; dataBar = null; picBar = null; nameEdit = null; dataCard = null; windowsCard = null
         rebuildBar()
         val st = loaded
         when (section) {
@@ -293,7 +341,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             SettingsSection.HELP -> "How the game works · fix a problem"
             SettingsSection.SOUND -> soundSummary(this)
             SettingsSection.DOWNLOADS -> SettingsSummary.downloads(DataStore.size(this), Sprites.size(this),
-                SettingsJobs.anim.running || SettingsJobs.data.running || FirstRunJob.job.running)
+                SettingsJobs.everythingBusy || SettingsJobs.data.running || FirstRunJob.job.running)
             SettingsSection.ANKIMON -> "Import a PC save · export one back"
             SettingsSection.SAVE -> loaded.let { SettingsSummary.save(it?.savedAt, it?.seq) { t -> dateFmt.format(Date(t)) } }
             SettingsSection.UPDATES -> SettingsSummary.updates(Updates.current(this))
@@ -437,7 +485,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.segmented(this, chipLooks.map { it.label }, chipLooks.indexOf(AppPrefs.matchupChips(this))) { i ->
                 AppLook.setMatchupChips(this, chipLooks[i]); render()
             })
-        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size))
+        // PLAN 156: read each time a grid cell is drawn, so it applies when the Pokédex / Box is next drawn
+        val animate = Form.switchRow(this, "Animate Pokémon in lists", "Caught Pokémon move in the Pokédex and the Box", AppPrefs.animateLists(this)) {
+            AppPrefs.setAnimateLists(this, it)
+        }
+        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size, animate))
     }
 
     /** The look changed: this screen recreates itself (Activity) or tells the player the window needs reopening (floating card). */
@@ -832,9 +884,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     // ---------- data and pictures ----------
 
     private fun buildDataCard(): LinearLayout {
-        val anim = SettingsJobs.anim
+        val every = SettingsJobs.everything
         val dat = SettingsJobs.data
-        animBar = null; dataBar = null
+        everyBar = null; dataBar = null
         val box = Ui.card(this)
         box.addView(Form.row(this, "Game data", null, Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
             text = sizeText(DataStore.size(this@SettingsPage))
@@ -855,7 +907,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         if (!picBusy) GameRepo.data?.let { DownloadsDone.adoptPictures(this, speciesNums(it, gensNow), gensNow) } // X3-3: pictures that were all there before 0.13.0
         val picsDone = !picBusy && DownloadsDone.isDone(this, DownloadsDone.PICTURES, gensNow)
         val picBtn = Form.secondary(this, if (picJob.state == BgJob.State.FAILED && picsFromSettings) "Try again: download pictures" else "Download pictures (about 1 MB)") { startPictures() }
-        Form.enable(picBtn, !picBusy && !anim.running && !dat.running)
+        Form.enable(picBtn, !picBusy && !SettingsJobs.everythingBusy && !dat.running)
         if (picsDone) downloadedLook(picBtn, "Pictures")
         actions.addView(picBtn)
         if (picsFromSettings) when (picJob.state) {
@@ -871,25 +923,31 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         // the row has its own 14 dp padding: pull it out of the buttons' padding so its text lines up with the other rows
         actions.addView(Form.switchRow(this, "Download pictures as needed", "Off: use placeholders", Sprites.enabled(this)) { Sprites.setEnabled(this, it) },
             LinearLayout.LayoutParams(-1, -2).also { it.setMargins(-dp(14), 0, -dp(14), 0) })
-        // battle animations
-        val animBtn = Form.secondary(this, "Download all battle animations (about 80 MB)") { startAnimations() }
-        Form.enable(animBtn, !anim.running && !dat.running && !picBusy)
-        if (anim.state != BgJob.State.RUNNING && DownloadsDone.isDone(this, DownloadsDone.ANIMATIONS, gensNow)) downloadedLook(animBtn, "Battle animations")
-        actions.addView(animBtn)
-        when (anim.state) {
+        // PLAN 167: everything (pictures, battle animations incl. shiny, item icons, backgrounds, cries) in one go
+        val left = SettingsJobs.left?.takeIf { it.gens == gensNow }
+        val everyDone = every.state != BgJob.State.RUNNING && DownloadsDone.isDone(this, DownloadsDone.EVERYTHING, gensNow)
+        val everyBtn = Form.secondary(this, when {
+            SettingsJobs.checking -> "Checking…"
+            left != null -> DownloadAll.resumeButton(left.bytes)
+            else -> DownloadAll.BUTTON
+        }) { askEverything() }
+        Form.enable(everyBtn, !SettingsJobs.everythingBusy && !dat.running && !picBusy)
+        if (everyDone) downloadedLook(everyBtn, "Everything", "Everything downloaded ✓")
+        actions.addView(everyBtn)
+        when (every.state) {
             BgJob.State.RUNNING -> {
-                val p = ProgressBlock(this).also { it.show(anim.fraction, anim.label) }
-                animBar = p
+                val p = ProgressBlock(this).also { it.show(every.fraction, every.label) }
+                everyBar = p
                 actions.addView(p, Form.lp(this, 10))
-                actions.addView(Form.secondary(this, "Cancel", R.color.ag_red) { anim.cancel() }, Form.lp(this, 8))
+                actions.addView(Form.secondary(this, "Cancel", R.color.ag_red) { every.cancel() }, Form.lp(this, 8))
             }
-            BgJob.State.DONE -> actions.addView(Form.body(this, anim.label, 12), Form.lp(this, 8))
-            BgJob.State.FAILED -> actions.addView(Form.body(this, anim.error ?: "Failed.", 12, R.color.ag_red), Form.lp(this, 8))
+            BgJob.State.DONE -> if (!everyDone) actions.addView(Form.body(this, every.label, 12), Form.lp(this, 8))
+            BgJob.State.FAILED -> actions.addView(Form.body(this, every.error ?: "Failed.", 12, R.color.ag_red), Form.lp(this, 8))
             BgJob.State.IDLE -> {}
         }
         // data again
         val dataBtn = Form.secondary(this, "Download game data again") { confirmRedownload() }
-        Form.enable(dataBtn, !dat.running && !anim.running && !picBusy)
+        Form.enable(dataBtn, !dat.running && !SettingsJobs.everythingBusy && !picBusy)
         actions.addView(dataBtn, Form.lp(this, 10))
         when (dat.state) {
             BgJob.State.RUNNING -> {
@@ -903,17 +961,17 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
         // clear
         val clearBtn = Form.secondary(this, "Clear picture cache", R.color.ag_red) { confirmClear() }
-        Form.enable(clearBtn, !anim.running)
+        Form.enable(clearBtn, !SettingsJobs.everythingBusy)
         actions.addView(clearBtn, Form.lp(this, 10))
         actions.addView(Form.body(this, "Pictures download again as you need them.", 12, R.color.ag_sub0), Form.lp(this, 6))
         box.addView(actions)
         return box
     }
 
-    /** R4-X1 item 5: a finished download turns its button into a green, tap-less "Downloaded ✓". */
-    private fun downloadedLook(b: TextView, what: String) {
+    /** R4-X1 item 5: a finished download turns its button into a green, tap-less "Downloaded ✓" ([text] replaces that wording, PLAN 167). */
+    private fun downloadedLook(b: TextView, what: String, text: String = "$what: Downloaded ✓") {
         val green = Ui.c(this, R.color.ag_green)
-        b.text = "$what: Downloaded ✓"
+        b.text = text
         b.setTextColor(green)
         b.background = Ui.rounded(Bits.blend(green, Ui.c(this, R.color.ag_mantle), 0.18f), 11, this)
         b.isEnabled = false
@@ -932,9 +990,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         parent.addView(fresh, i)
     }
 
-    private fun onAnim() {
-        val j = SettingsJobs.anim
-        val b = animBar
+    private fun onEvery() {
+        val j = SettingsJobs.everything
+        val b = everyBar
         if (j.state == BgJob.State.RUNNING && b != null) b.show(j.fraction, j.label) else rebuildData()
     }
 
@@ -977,9 +1035,29 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         FirstRunJob.start(this, gens) // its first update re-draws the card with the progress
     }
 
-    private fun startAnimations() {
+    /**
+     * PLAN 167: the "Download everything" button. First works out (off the main thread) what is missing and asks with the total size;
+     * the download starts on OK. Nothing missing at all: it is remembered as done right away.
+     */
+    private fun askEverything() {
         val gens = loaded?.settings?.gens?.toSet() ?: com.husarp.ankigo.game.Tuning.DEFAULT_GENS
-        SettingsJobs.startAnimations(this, gens, GameRepo.data) // reads the data off the main thread when it isn't in memory
+        val resume = SettingsJobs.left?.gens == gens
+        SettingsJobs.check(this, gens, GameRepo.data) { scan, error -> // reads the data off the main thread when it isn't in memory
+            if (!alive) return@check
+            when {
+                error != null -> Ui.toast(this, error)
+                scan == null -> {}
+                scan.todo.isEmpty() -> {
+                    SettingsJobs.markNothingMissing(this, gens)
+                    Ui.toast(this, "Everything is already on this phone")
+                    rebuildData()
+                }
+                else -> confirm(DownloadAll.confirmTitle(resume), DownloadAll.confirmMessage(scan), if (resume) "Resume" else "Download") {
+                    SettingsJobs.startEverything(this, gens, scan)
+                }
+            }
+        }
+        rebuildData() // "Checking…"
     }
 
     private fun confirmRedownload() {
@@ -992,6 +1070,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         confirm("Clear picture cache?", "All downloaded pictures and animations are deleted (${sizeText(Sprites.size(this))}). They download again when needed.", "Clear") {
             Sprites.clear(this)
             DownloadsDone.clear(this)
+            SettingsJobs.left = null
+            SettingsJobs.everything.reset() // its "Stopped…" / "Done…" line was about files that are gone now
             Ui.toast(this, "Picture cache cleared")
             rebuildData()
         }

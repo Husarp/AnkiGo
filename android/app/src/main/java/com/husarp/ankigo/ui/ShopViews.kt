@@ -88,13 +88,13 @@ internal object ShopViews {
 
     /**
      * A tile of the mockup `.stile`: [lead] (the 36 dp item or TM tile), the name (two lines kept), the short line ([sub], or [subView] such as a
-     * TM's type chip), [bottom] (the price, or "Owned") at the bottom and a small ▾ (PLAN 168: a tap opens its card in place). A tap calls [onTap].
+     * TM's type chip) and [bottom] (the price, or "Owned") at the bottom. A tap calls [onTap] (PLAN 210: it opens the item's window; no arrow).
      */
     fun tile(ctx: Context, lead: View, name: String, bottom: View, description: String, sub: String? = null, subView: View? = null, onTap: () -> Unit): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
         background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
-        setPadding(Ui.dp(ctx, 6), Ui.dp(ctx, 9), Ui.dp(ctx, 6), Ui.dp(ctx, 8))
+        setPadding(Ui.dp(ctx, 6), Ui.dp(ctx, 9), Ui.dp(ctx, 6), Ui.dp(ctx, 11))
         isClickable = true
         contentDescription = description
         setOnClickListener { onTap() }
@@ -106,7 +106,6 @@ internal object ShopViews {
         subView?.let { addView(it, LinearLayout.LayoutParams(-2, -2).also { lp -> lp.topMargin = Ui.dp(ctx, 3) }) }
         addView(View(ctx), LinearLayout.LayoutParams(1, 0, 1f)) // prices line up at the bottom of equal tiles
         addView(bottom, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
-        addView(Ui.text(ctx, 10f, 900, R.color.ag_sub0).apply { text = "▾"; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
     }
 
     /** "✓ Owned" in a TM tile or card. */
@@ -134,7 +133,6 @@ internal object ShopViews {
             addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = note }, Form.lp(ctx, 2))
         }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 10); it.marginEnd = Ui.dp(ctx, 8) })
         addView(right)
-        if (ctx.resources.configuration.fontScale <= 1.4f) addView(ItemCard.chevron(ctx, "▾", 11f, 3f), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 2) }) // PLAN 168: opens in place (the big-text sizes keep the room for the words)
     }
 
     // ---- the deal card (F5 option A) ----
@@ -222,7 +220,7 @@ internal object ShopViews {
     /**
      * The deal of the day (F5 option A): a soft peach glow from the left, a thin peach edge, the "−30 %" ribbon across the top-right corner,
      * "✦ DEAL OF THE DAY", the item on a lit tile with its name, effect and "ends at midnight · 7 h", and the discount price on the right.
-     * A tap calls [onTap] (PLAN 168: the card opens in place, with Buy at the deal price). [line] is the text under the name.
+     * A tap calls [onTap] (PLAN 210: the item's window opens, with Buy at the deal price). [line] is the text under the name.
      */
     fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String, line: String = ItemInfo.effect(item), onTap: () -> Unit): View {
         val dark = TypeChips.isDark(ctx)
@@ -260,9 +258,7 @@ internal object ShopViews {
             gravity = Gravity.CENTER_VERTICAL
             addView(litTile(ctx, item, peach, dark))
             addView(middle, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12); it.marginEnd = Ui.dp(ctx, 8) })
-            val chevron = ctx.resources.configuration.fontScale <= 1.4f // the big-text sizes keep the room for the words
-            addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, if (chevron) 2 else 14) })
-            if (chevron) addView(ItemCard.chevron(ctx, "▾", 11f, 3f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 8) }) // PLAN 168: opens in place
+            addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 6) }) // clear of the ribbon in the corner
         }
         val body = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL

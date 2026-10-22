@@ -479,4 +479,41 @@ object Sprites {
         }
         return null
     }
+
+    // ---- PLAN 167 ("Download everything", [DownloadAll]): blocking twins of the on-demand fetches, background threads only ----
+
+    /** How long a "not found" note keeps a picture that must exist (a FRONT sprite, a Pokédex picture) from being asked for again. */
+    internal val NOTE_EXPECTED_MS: Long get() = RETRY_EXPECTED_MS
+
+    /** How long a "not found" note keeps a picture that may really not exist (a BACK sprite, an item icon) from being asked for again. */
+    internal val NOTE_RARE_MS: Long get() = RETRY_MISSING_MS
+
+    /** [fetchBlocking] without its log line (thousands of them would push everything else out of the report); [get] is the network. */
+    internal fun fetchBattleQuiet(ctx: Context, sp: Species, kind: SpriteKind, shiny: Boolean, get: HttpGet = realGet): File? {
+        cached(ctx, sp, kind, shiny)?.let { return it }
+        if (!enabled(ctx)) return null
+        val base = File(folder(ctx, kind), baseName(sp.num, shiny))
+        return download(base, SpriteUrls.battle(sp, kind, shiny), get = get, retryMissingMs = if (kind == SpriteKind.FRONT) RETRY_EXPECTED_MS else RETRY_MISSING_MS)
+    }
+
+    /** The static picture of [num] (the file), downloaded when missing, with the same rules as [fetchStatic]; [preferred] is shared by one batch. */
+    internal fun fetchStaticBlocking(ctx: Context, num: Int, shiny: Boolean, get: HttpGet = realGet, preferred: AtomicInteger? = null): File? {
+        val file = staticFile(ctx, num, shiny)
+        if (file.isFile) return file
+        if (!enabled(ctx)) return null
+        return download(File(file.parentFile, baseName(num, shiny)), SpriteUrls.staticChain(num, shiny), retries = 1, get = get, preferred = preferred, retryMissingMs = RETRY_EXPECTED_MS)
+    }
+
+    /** The icon of [item] (the file), downloaded when missing, with the same rules as [fetchItem]. */
+    internal fun fetchItemBlocking(ctx: Context, item: String, get: HttpGet = realGet): File? {
+        val file = itemFile(ctx, item)
+        if (file.isFile) return file
+        if (!enabled(ctx)) return null
+        return download(File(file.parentFile, item), listOf(SpriteUrls.item(item)), get = get)
+    }
+
+    /** [setEnabled] on a given preferences file (PLAN 167: the "Download everything" button turns the pictures on; unit-testable). */
+    internal fun setEnabledIn(p: android.content.SharedPreferences, enabled: Boolean) { p.edit().putBoolean("skipSprites", !enabled).apply() }
+
+    internal fun enabledIn(p: android.content.SharedPreferences) = !p.getBoolean("skipSprites", false)
 }

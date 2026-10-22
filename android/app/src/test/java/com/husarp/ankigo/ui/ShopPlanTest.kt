@@ -71,38 +71,7 @@ class ShopPlanTest {
         assertEquals("a font scale under 1 counts as 1", 3, ShopPlan.columns(320, 0.85f))
     }
 
-    // ---- PLAN 168: the open tile becomes a full-width card where its row was ----
-
-    private fun items(vararg ids: String) = ids.map { ShopPlan.Tile.Item(it) }
-
-    @Test fun withNoOpenTileTheRowsAreJustTheChunks() {
-        val tiles = items("a", "b", "c", "d", "e")
-        assertEquals(listOf(ShopPlan.Row.Tiles(items("a", "b", "c")), ShopPlan.Row.Tiles(items("d", "e"))), ShopPlan.rows(tiles, 3, null))
-    }
-
-    @Test fun theOpenTileIsACardAndTheRestOfItsRowFollowsBelow() {
-        val tiles = items("a", "b", "c", "d", "e")
-        assertEquals(
-            listOf(ShopPlan.Row.Tiles(items("a", "b", "c")), ShopPlan.Row.Card(ShopPlan.Tile.Item("d")), ShopPlan.Row.Tiles(items("e"))),
-            ShopPlan.rows(tiles, 3, ShopPlan.Tile.Item("d")),
-        )
-        assertEquals(
-            listOf(ShopPlan.Row.Card(ShopPlan.Tile.Item("b")), ShopPlan.Row.Tiles(items("a", "c")), ShopPlan.Row.Tiles(items("d", "e"))),
-            ShopPlan.rows(tiles, 3, ShopPlan.Tile.Item("b")),
-        )
-    }
-
-    @Test fun aLoneOpenTileLeavesNoEmptyRowAndTwoColumnsWork() {
-        assertEquals(listOf(ShopPlan.Row.Card(ShopPlan.Tile.Item("a"))), ShopPlan.rows(items("a"), 3, ShopPlan.Tile.Item("a")))
-        assertEquals(
-            listOf(ShopPlan.Row.Tiles(items("a", "b")), ShopPlan.Row.Card(ShopPlan.Tile.Item("c"))),
-            ShopPlan.rows(items("a", "b", "c"), 2, ShopPlan.Tile.Item("c")),
-        )
-    }
-
-    @Test fun anOpenTileThatIsNotInTheListChangesNothing() {
-        assertEquals(ShopPlan.rows(items("a", "b"), 3, null), ShopPlan.rows(items("a", "b"), 3, ShopPlan.Tile.Item("zzz")))
-    }
+    // ---- PLAN 168 / 210: the tile keys (an open tile now opens a window; the grid never changes) ----
 
     @Test fun aTileAndATmOfTheSameNameHaveDifferentKeys() {
         assertEquals("item:x", ShopPlan.Tile.Item("x").key)

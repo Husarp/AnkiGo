@@ -22,8 +22,8 @@ import kotlin.math.roundToInt
 // TICKET T03 owns this file. Public members are fixed (the battle panel / screens use them); add private helpers freely.
 
 /**
- * Draws a pixel-art sprite crisply (nearest-neighbour, integer device-pixel scale; 3D animations bigger than pixel art
- * are scaled to the room and smoothed), animated if it has frames,
+ * Draws a sprite crisply (nearest-neighbour, never smoothed; whole-number device-pixel scale where it fits, PLAN 213: a 3D animation
+ * bigger than pixel art takes the whole number too when that keeps at least 85 % of its room), animated if it has frames,
  * bottom-centred in the view. Effects for the battle panel: [flash] (white-ish hit flash), [silhouette],
  * [mirror] (used when only a front sprite exists for the player's back view), and a placeholder (type-coloured
  * circle + text) when there's no image yet. Animation runs only while attached and visible.
@@ -269,7 +269,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         src.set(0, 0, bmp.width, bmp.height)
         dst.set(left, top, left + dw, top + dh)
         paint.colorFilter = currentFilter()
-        paint.isFilterBitmap = !pixelArt(bmp.width, bmp.height)
+        paint.isFilterBitmap = SMOOTH
         val save = canvas.save()
         if (idleAnim != null && idlePhase > 0f) {
             val lift = idleLift(idlePhase)
@@ -379,16 +379,29 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
 
         fun pixelArt(w: Int, h: Int) = w <= PIXEL_ART_MAX && h <= PIXEL_ART_MAX
 
+        /** PLAN 213: sprites are never drawn smoothed (nearest neighbour for every picture size); [SpriteView] and the viewer paint with this. */
+        const val SMOOTH = false
+
+        /**
+         * PLAN 213: the scale a picture bigger than pixel art gets from the room [x] it may take: the whole number below it when that is at
+         * least 1 and at least [com.husarp.ankigo.ui.ViewerMath.WHOLE_SHARE] of [x] (crisp, wastes at most 15 %), else [x] itself
+         * (fractional, still nearest neighbour). 0 or less stays as it is.
+         */
+        fun crispScale(x: Float): Float {
+            val whole = floor(x)
+            return if (whole >= 1f && whole >= x * com.husarp.ankigo.ui.ViewerMath.WHOLE_SHARE) whole else x
+        }
+
         /**
          * Device pixels per sprite pixel for a [w] x [h] picture in a [vw] x [vh] view, at most [wanted]. Pixel art: a
          * whole number reduced to fit the view, and only fractional (below 1) if even 1 does not fit. A bigger picture
-         * (a 3D animation, not pixel art) takes the room up to [wanted], fractional (drawn smoothed), so a big Pokémon
-         * isn't left at 1x in a corner of its space.
+         * (a 3D animation, not pixel art) takes the room up to [wanted] so a big Pokémon isn't left at 1x in a corner of its
+         * space: the whole number below that when it keeps 85 % of it ([crispScale]), else the exact room (never smoothed, PLAN 213).
          */
         fun scale(w: Int, h: Int, vw: Int, vh: Int, wanted: Int): Float {
             if (vw <= 0 || vh <= 0) return 0f
             val fit = min(vw.toFloat() / w, vh.toFloat() / h)
-            if (!pixelArt(w, h)) return min(wanted.toFloat(), fit)
+            if (!pixelArt(w, h)) return crispScale(min(wanted.toFloat(), fit))
             val whole = min(wanted, floor(fit).toInt())
             return if (whole >= 1) whole.toFloat() else fit
         }
@@ -415,13 +428,14 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         /**
          * Picture mode: device pixels per sprite pixel for a [w] x [h] picture in a [vw] x [vh] view that is a [frame]-px frame. The
          * frame wants [frame] / 96: pixel art at the whole number below it (at least 1; fractional only if even 1 does not fit the
-         * view), a bigger picture (a 3D animation, drawn smoothed) at that fractional scale. Never more than the view allows.
+         * view), a bigger picture (a 3D animation) at that scale made whole when it keeps 85 % of it ([crispScale], PLAN 213; never
+         * smoothed). Never more than the view allows.
          */
         fun frameScale(w: Int, h: Int, vw: Int, vh: Int, frame: Float): Float {
             if (vw <= 0 || vh <= 0 || w <= 0 || h <= 0) return 0f
             val fit = min(vw.toFloat() / w, vh.toFloat() / h)
             val want = frame / FRAME
-            if (!pixelArt(w, h)) return min(want, fit)
+            if (!pixelArt(w, h)) return crispScale(min(want, fit))
             val whole = min(max(1, floor(want + ROUNDING).toInt()), floor(fit).toInt())
             return if (whole >= 1) whole.toFloat() else fit
         }

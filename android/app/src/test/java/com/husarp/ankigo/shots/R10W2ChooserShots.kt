@@ -1,8 +1,6 @@
 package com.husarp.ankigo.shots
 
 import android.content.Context
-import android.graphics.Color
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -22,9 +20,8 @@ import com.husarp.ankigo.ui.LookChoosers
 import com.husarp.ankigo.ui.SettingsCatalog
 import com.husarp.ankigo.ui.SettingsPage
 import com.husarp.ankigo.ui.SettingsSection
-import com.husarp.ankigo.ui.SheetKit
 import com.husarp.ankigo.ui.Ui
-import com.husarp.ankigo.ui.ViewSettingsSheet
+import com.husarp.ankigo.ui.ViewSettingsScreen
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -117,18 +114,22 @@ class R10W2ChooserShots {
         }
     }
 
-    // ---- the sheet -------------------------------------------------------------------------------------------------------------------
+    // ---- the page's rows (ROUND 15 F: the sheet is a full-screen page; its rows are shot here without the preview above them) -------------
 
-    private fun sheetView(ctx: Context, open: Set<String> = emptySet(), bodyDp: Int = 1300, prep: (Context) -> Unit = {}): View {
+    /** The page's rows as the page puts them: the scroll with the rounded card, taken out of the page (the preview would only take room). */
+    private fun rowsView(ctx: Context): View {
+        val scroll = ViewSettingsScreen(ctx, null).scroll
+        (scroll.parent as ViewGroup).removeView(scroll)
+        return scroll
+    }
+
+    private fun sheetView(ctx: Context, open: Set<String> = emptySet(), prep: (Context) -> Unit = {}): View {
         prep(ctx)
-        val s = ViewSettingsSheet(ctx, null)
-        val body = s.build(Ui.dp(ctx, bodyDp))
+        val body = rowsView(ctx)
         for (t in open) LookChooser.find(body, t)!!.expand()
-        val sheet = SheetKit.host(ctx, body, {}, {})
-        val w = min(ctx.resources.displayMetrics.widthPixels, Ui.dp(ctx, 600))
         return FrameLayout(ctx).apply {
-            setBackgroundColor(Color.argb(60, 0, 0, 0))
-            addView(sheet, FrameLayout.LayoutParams(w, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+            setBackgroundColor(Ui.c(ctx, R.color.ag_base))
+            addView(body, FrameLayout.LayoutParams(-1, -1))
         }
     }
 
@@ -145,18 +146,19 @@ class R10W2ChooserShots {
         }
     }
 
-    /** The sheet with an entry open still fits: its body is capped at the usual share of the height and scrolls. */
-    @Test fun theSheetStillFitsWithEveryEntryOpen() {
+    /** The page with every entry open still fits the window: the rows scroll under the fixed preview, the preview takes at most 40 % of the height. */
+    @Test fun thePageStillFitsWithEveryEntryOpen() {
         for (v in listOf(V("phone", 412, 869), V("narrow", 320, 640), V("float", 340, 480), V("big", 320, 640, 2.0f))) {
             val ctx = config(v)
-            val s = ViewSettingsSheet(ctx, null)
+            val screen = ViewSettingsScreen(ctx, null)
+            for (t in titles) LookChooser.find(screen.root, t)!!.expand()
+            val w = ctx.resources.displayMetrics.widthPixels
             val h = ctx.resources.displayMetrics.heightPixels
-            val body = s.build((h * ViewSettingsSheet.BODY_SHARE).toInt() - Ui.dp(ctx, 120))
-            for (t in titles) LookChooser.find(body, t)!!.expand()
-            body.measure(View.MeasureSpec.makeMeasureSpec(min(ctx.resources.displayMetrics.widthPixels, Ui.dp(ctx, 600)), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.AT_MOST))
-            assertTrue("${v.label}: the sheet is ${body.measuredHeight} of $h px", body.measuredHeight <= h * 0.95f)
-            val scroll = (body as ViewGroup).let { g -> (0 until g.childCount).map { g.getChildAt(it) }.first { it is android.widget.ScrollView } as android.widget.ScrollView }
+            screen.root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
+            assertEquals("${v.label}: the page is the window", h, screen.root.measuredHeight)
+            val scroll = screen.scroll
             assertTrue("${v.label}: its rows scroll", scroll.getChildAt(0).let { c -> c.measure(View.MeasureSpec.makeMeasureSpec(scroll.measuredWidth, View.MeasureSpec.EXACTLY), 0); c.measuredHeight } > scroll.measuredHeight)
+            assertTrue("${v.label}: the rows keep some room (${scroll.measuredHeight} of $h px)", scroll.measuredHeight >= h * 0.3f)
         }
     }
 
@@ -187,8 +189,7 @@ class R10W2ChooserShots {
     }
 
     private fun both(ctx: Context): List<Pair<String, View>> {
-        val sheet = ViewSettingsSheet(ctx, null).build(Ui.dp(ctx, 900))
-        return listOf("settings" to settingsHolder(ctx), "sheet" to sheet)
+        return listOf("settings" to settingsHolder(ctx), "sheet" to rowsView(ctx))
     }
 
     @Test fun collapsedByDefaultWithTheValueLineAndATapTogglesIt() {
@@ -283,16 +284,18 @@ class R10W2ChooserShots {
     }
 
     @Test fun twoToARowWhenNarrowOrBigAndThreeOnAPhone() {
-        for ((v, want) in listOf(phone to 3, narrow to 2, big to 2, float to 3)) {
+        // the page is as wide as the window (a full-window dialog), minus the page's and the card's padding: a 340 dp window gets two
+        for ((v, want) in listOf(phone to 3, narrow to 2, big to 2, float to 2)) {
             val ctx = config(v)
-            val sheet = ViewSettingsSheet(ctx, null).build(Ui.dp(ctx, 900))
+            val page = ViewSettingsScreen(ctx, null).root
             val set = settingsHolder(ctx)
             val w = min(ctx.resources.displayMetrics.widthPixels, Ui.dp(ctx, 600))
-            for ((where, root) in listOf("sheet" to sheet, "settings" to set)) {
+            for ((where, root) in listOf("sheet" to page, "settings" to set)) {
                 val c = LookChooser.find(root, LookChoosers.INFO_BOX) as LookChooser<*>
                 c.expand()
-                root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-                val expect = if (where == "settings" && v === float) 2 else want   // the Settings card is narrower than the sheet (page padding + row padding)
+                if (where == "sheet") root.measure(View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.widthPixels, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.heightPixels, View.MeasureSpec.EXACTLY))
+                else root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                val expect = if (where == "settings" && v === float) 2 else want   // the Settings card is narrower than the page (page padding + row padding)
                 assertEquals("${v.label}/$where: tiles per row", expect, c.columnsNow)
             }
         }

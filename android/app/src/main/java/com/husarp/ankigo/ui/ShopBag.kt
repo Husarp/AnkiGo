@@ -1,6 +1,5 @@
 package com.husarp.ankigo.ui
 
-import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import com.husarp.ankigo.R
@@ -16,7 +15,8 @@ import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Progression
 
 // TICKET T14 owns this file: the Bag tab of the Shop screen (owned items grouped, then TMs) and what a tap does.
-// R14 batch 2 (PLAN 181): a tap on a row opens its card in place ([ItemCard]); the card's button starts what a tap used to do at once.
+// R14 batch 2 (PLAN 181): a tap on a row opens its card ([ItemCard]); the card's button starts what a tap used to do at once.
+// R15 (PLAN 210): the card is the item WINDOW ([ItemWindow]) over the list, and the button closes it just before it opens a picker or a confirm (an answer that is only a message keeps it open).
 
 internal class BagActions(private val s: GamePage, private val mons: MonActions, private val host: CardHost) {
     private val data get() = s.data
@@ -34,15 +34,14 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     /** Fills [into] with the bag sections. */
     fun fill(into: LinearLayout) {
         val ctx = s
-        val kept = host.open.key?.takeIf { host.open.keepEmpty && it.startsWith("bag:") }?.removePrefix("bag:") // Y5: the open card whose last ball a trade took stays, showing 0
-        val owned = state.bag.filter { it.value > 0 }.keys + listOfNotNull(kept)
+        val owned = state.bag.filter { it.value > 0 }.keys
         var any = false
         fun section(title: String, ids: List<String>) {
             if (ids.isEmpty()) return
             any = true
             val n = ids.sumOf { state.count(it) }
             into.addView(Bits.sect(ctx, title, "$n item${if (n == 1) "" else "s"}"))
-            for (id in ids.sortedBy { Items.name(it) }) into.addView(if (host.open.isOpen(CardKeys.bagItem(id))) itemCard(id) else itemRow(id), cardLp(host.open.key == CardKeys.bagItem(id)))
+            for (id in ids.sortedBy { Items.name(it) }) into.addView(itemRow(id), rowLp())
         }
         for ((title, kinds) in groups) section(title, owned.filter { Items.def(it)?.kind in kinds })
         // anything the catalogue doesn't know
@@ -51,7 +50,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         if (state.tms.isNotEmpty()) {
             any = true
             into.addView(Bits.sect(ctx, "TMs", "${state.tms.size} owned"))
-            for (move in state.tms.sortedBy { data.move(it)?.name ?: it }) into.addView(if (host.open.isOpen(CardKeys.bagTm(move))) tmCard(move) else tmRow(move), cardLp(host.open.key == CardKeys.bagTm(move)))
+            for (move in state.tms.sortedBy { data.move(it)?.name ?: it }) into.addView(tmRow(move), rowLp())
         }
         if (!any) into.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply {
             text = "Your bag is empty. Items drop while you study, and the shop sells more."
@@ -59,51 +58,53 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         })
     }
 
-    /** A card sits 2 dp under the row above and 8 dp above the next; a folded row has its own 6 dp below (Bits.cardRow). */
-    private fun cardLp(card: Boolean): LinearLayout.LayoutParams = LinearLayout.LayoutParams(-1, -2).also {
-        if (card) { it.topMargin = Ui.dp(s, 2); it.bottomMargin = Ui.dp(s, 8) } else it.bottomMargin = Ui.dp(s, 6)
-    }
+    /** A row has its own 6 dp below (Bits.cardRow). */
+    private fun rowLp(): LinearLayout.LayoutParams = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(s, 6) }
 
-    /** The count "×N" and the small ▾ at the right of a folded row (the card says it in words). */
-    private fun rowEnd(count: String?): View = LinearLayout(s).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        if (count != null) addView(Ui.text(s, 13f, 900, R.color.ag_sub1).apply { text = count })
-        addView(ItemCard.chevron(s, "▾"), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(s, 2) })
-    }
+    /** The count "×N" at the right of a row. */
+    private fun countView(count: String): View = Ui.text(s, 13f, 900, R.color.ag_sub1).apply { text = count }
 
-    /** A folded row: icon, name, the item's line, "×N", ▾. A tap opens its card (it no longer acts). */
+    /** A row: icon, name, the item's line, "×N". A tap opens its window (it no longer acts). */
     private fun itemRow(id: String): View {
         val ctx = s
         val n = state.count(id)
         val line = ItemInfo.plain(ItemInfo.line(data, id))
-        val row = Bits.cardRow(ctx, Bits.itemTile(ctx, id), Bits.bodyText(ctx, Items.name(id), line), rowEnd("×$n"))
-        row.contentDescription = ItemCardPlan.foldedLabel("${Items.name(id)}, $line, $n owned")
-        row.setOnClickListener { host.toggleCard(CardKeys.bagItem(id)) }
+        val row = Bits.cardRow(ctx, Bits.itemTile(ctx, id), Bits.bodyText(ctx, Items.name(id), line), countView("×$n"))
+        row.contentDescription = ItemCardPlan.detailsLabel("${Items.name(id)}, $line, $n owned")
+        row.setOnClickListener { host.openCard(CardKeys.bagItem(id)) }
         return row
     }
 
-    /** A folded TM row: name and type chip (no count: a TM is owned once). */
+    /** A TM row: name and type chip (no count: a TM is owned once). */
     private fun tmRow(move: String): View {
         val ctx = s
         val m = data.move(move)
         val tile = Bits.tmTile(ctx, m?.type)
         val mid = Bits.bodyText(ctx, Items.tmName(data, move), null)
         if (m != null) mid.addView(Bits.typeRow(ctx, listOf(m.type)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
-        val row = Bits.cardRow(ctx, tile, mid, rowEnd(null))
-        row.contentDescription = ItemCardPlan.foldedLabel("${Items.tmName(data, move)}, ${m?.type?.label.orEmpty()}")
-        row.setOnClickListener { host.toggleCard(CardKeys.bagTm(move)) }
+        val row = Bits.cardRow(ctx, tile, mid, null)
+        row.contentDescription = ItemCardPlan.detailsLabel("${Items.tmName(data, move)}, ${m?.type?.label.orEmpty()}")
+        row.setOnClickListener { host.openCard(CardKeys.bagTm(move)) }
         return row
     }
 
-    // ---- the opened cards ----
+    // ---- what the item window shows ----
 
-    /** The card of an owned item: its texts, the action button of its kind, and for a ball the trade-up. */
-    private fun itemCard(id: String): View {
-        val key = CardKeys.bagItem(id)
+    /**
+     * What the window of [key] shows and does, or null when that item is not in the bag any more. An item that a trade took the last of stays
+     * while the window is kept open (Y5), showing 0.
+     */
+    fun spec(key: String): ItemCard.Spec? {
+        CardKeys.bagItemId(key)?.let { id -> return if (state.count(id) > 0 || host.open.keepEmpty) itemSpec(id) else null }
+        CardKeys.bagTmMove(key)?.let { move -> return if (move in state.tms) tmSpec(move) else null }
+        return null
+    }
+
+    /** The window of an owned item: its texts, the action button of its kind, and for a ball the trade-up. The button closes the window just before a picker or confirm opens (a message-only answer keeps it open). */
+    private fun itemSpec(id: String): ItemCard.Spec {
         val kind = Items.def(id)?.kind
-        val none = state.count(id) <= 0 // Y5: a card kept open after a trade took the last ball
-        val act = BagAct.of(kind)?.let { a -> ItemCard.Act(a.label, a.usableNow(state) && !none, if (none) "You have none" else a.offFight) { tap(id) } }
+        val none = state.count(id) <= 0 // Y5: a window kept open after a trade took the last ball
+        val act = BagAct.of(kind)?.let { a -> ItemCard.Act(a.label, a.usableNow(state) && !none, if (none) "You have none" else a.offFight) { tap(id) { host.closeCard() } } }
         val offer = if (kind == ItemKind.BALL) BallTrade.offer(state, id) else null
         val trade = offer?.let { o ->
             val confirming = host.open.confirming && offer.canTrade
@@ -112,51 +113,56 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
                 onCancel = { host.open.confirmTrade(false); s.requestRender() },
                 onConfirm = { tradeUp(id) })
         }
-        return ItemCard.build(s, ItemCard.Spec(id, act = act, trade = trade, onFold = { host.toggleCard(key) })).also { host.cardShown(it) }
+        return ItemCard.Spec(id, act = act, trade = trade)
     }
 
-    private fun tmCard(move: String): View {
-        val key = CardKeys.bagTm(move)
-        val act = ItemCard.Act(BagAct.TEACH.label, true, null) { tapTm(move) }
-        return ItemCard.build(s, ItemCard.Spec(null, move, act = act, onFold = { host.toggleCard(key) })).also { host.cardShown(it) }
-    }
+    private fun tmSpec(move: String): ItemCard.Spec =
+        ItemCard.Spec(null, move, act = ItemCard.Act(BagAct.TEACH.label, true, null) { tapTm(move) { host.closeCard() } })
 
-    /** One batch of the trade-up (PLAN 199): the confirm closes, the card stays open with the new counts. */
+    /** One batch of the trade-up (PLAN 199): the confirm closes, the window stays open with the new counts. */
     private fun tradeUp(ball: String) {
         host.open.confirmTrade(false)
-        host.open.keepWhenEmpty() // Y5: if this uses the last ball of the card, the card stays open showing 0
+        host.open.keepWhenEmpty() // Y5: if this uses the last ball of the window, the window stays open showing 0
         s.act { g -> BallTrade.trade(g.state, ball) }
     }
 
     // ---- what a tap does ----
 
-    private fun tap(item: String) {
+    /**
+     * What a tap on the window's button does. [close] shuts the item window; it is called right before something else opens (a picker, a
+     * confirm, the battle), never for an action that ends only in a message (those keep the window open and just show the toast).
+     */
+    private fun tap(item: String, close: () -> Unit) {
         val def = Items.def(item) ?: return
         when (def.kind) {
             ItemKind.HEAL -> {
                 val team = state.teamMons()
                 if (team.isEmpty()) return
+                close()
                 // main first (it is team[0]); HP shown so the choice is easy
                 Pickers.pickMon(s, "${Items.name(item)} on…", data, team, { Bits.hpText(data, it) }) { mons.runUse(item, it.uid) }
             }
             ItemKind.EVOLUTION -> {
                 val ok = candidates().filter { ItemUse.canUse(data, state, item, it) || Progression.itemEvolutionTimeNeeded(data, it, item) != null } // time-blocked ones stay, hinted "(night)"
                 if (ok.isEmpty()) { Ui.toast(s, "No Pokémon can use ${Items.name(item)} right now"); return }
+                close()
                 Pickers.pickMon(s, "${Items.name(item)} on…", data, ok, { mon -> evoHint(item, mon) }) { mons.useItem(it, item) }
             }
             ItemKind.HELD -> {
                 val all = candidates().filter { it.heldItem != item }
                 if (all.isEmpty()) { Ui.toast(s, "No Pokémon to give it to"); return }
+                close()
                 Pickers.pickMon(s, "Give ${Items.name(item)} to…", data, all, { mon ->
                     mon.heldItem?.let { "holds ${Items.name(it)}" } ?: "holds nothing"
                 }) { mons.giveItemTo(it, item) }
             }
             ItemKind.FOSSIL -> {
                 val sp = def.fossil?.let { data.species[it] }?.name ?: "a Pokémon"
+                close()
                 Pickers.confirm(s, "Revive fossil?", "Use ${Items.name(item)} to revive $sp (Lv 5)?", "Revive") { mons.runUse(item, null) }
             }
-            ItemKind.BALL -> throwBall(item)
-            ItemKind.ESCAPE -> escape(item)
+            ItemKind.BALL -> throwBall(item, close)
+            ItemKind.ESCAPE -> escape(item, close)
         }
     }
 
@@ -168,11 +174,12 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
             "→ ${data.sp(e.to).name}" + (Progression.itemEvolutionTimeNeeded(data, mon, item)?.let { " ($it)" } ?: "")
         } ?: "Lv ${mon.level}"
 
-    private fun throwBall(ball: String) {
+    private fun throwBall(ball: String, close: () -> Unit) {
         val battle = state.battle
         if (battle == null) { Ui.toast(s, "No wild Pokémon right now. Throw balls from a battle."); return }
         val wild = battle.wild
         val chance = Catching.ballChance(ball)
+        close()
         Pickers.confirm(s, "Throw ${Items.name(ball)}?", "Throw at wild ${wild.name} (chance $chance%)? ${Items.MISS_RULE}", "Throw") {
             val events = GameRepo.act(s) { it.throwBall(ball) }
             s.report(ballMessage(events, wild.name), events)
@@ -187,9 +194,10 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         return "Gotcha! $wildName was caught!" + if (caught?.newSpecies == true) " New Pokédex entry!" else ""
     }
 
-    private fun escape(item: String) {
+    private fun escape(item: String, close: () -> Unit) {
         val battle = state.battle
         if (battle == null) { Ui.toast(s, "No wild Pokémon to escape from"); return }
+        close()
         Pickers.confirm(s, "Use ${Items.name(item)}?", "The wild ${battle.wild.name} leaves and a new one appears.", "Use") {
             val events = GameRepo.act(s) { it.escape(item) }
             val fled = events.filterIsInstance<GameEvent.Fled>().firstOrNull()
@@ -198,9 +206,10 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         }
     }
 
-    private fun tapTm(move: String) {
+    private fun tapTm(move: String, close: () -> Unit) {
         val able = candidates().filter { data.sp(it.species).tmMoves.contains(move) && move !in it.moves }
         if (able.isEmpty()) { Ui.toast(s, "None of your Pokémon can learn ${data.move(move)?.name ?: move}"); return }
+        close()
         Pickers.pickMon(s, "Teach ${Items.tmName(data, move)} to…", data, able, { mon -> "${mon.moves.size}/4 moves" }) { mons.teach(it, move) }
     }
 }

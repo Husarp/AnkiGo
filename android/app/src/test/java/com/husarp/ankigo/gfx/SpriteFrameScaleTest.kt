@@ -34,9 +34,9 @@ class SpriteFrameScaleTest {
         assertEquals(1f, SpriteView.frameScale(96, 96, 100, 300, 300f), 0f)
     }
 
-    @Test fun aBigThreeDAnimationIsSmoothAndFractionalCappedByTheFit() {
+    @Test fun aBigThreeDAnimationIsCrispWholeWhenItKeeps85PercentElseFractionalCappedByTheFit() {
         assertEquals(1.5f, SpriteView.frameScale(200, 180, 300, 300, 300f), 0.0001f)    // 300/96 = 3.125, the holder fits 1.5
-        assertEquals(300f / 96f, SpriteView.frameScale(100, 100, 400, 400, 300f), 0.0001f)   // room to spare: exactly frame / 96
+        assertEquals(3f, SpriteView.frameScale(100, 100, 400, 400, 300f), 0.0001f)   // room to spare: frame / 96 = 3.125, PLAN 213 whole 3 (>= 2.66)
         assertEquals(2.5f, SpriteView.frameScale(120, 100, 300, 300, 300f), 0.0001f)
         assertEquals(0.5f, SpriteView.frameScale(200, 162, 100, 300, 100f), 0.0001f)
     }

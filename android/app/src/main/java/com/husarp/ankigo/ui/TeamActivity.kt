@@ -119,6 +119,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             addHeaderView(boxHeader, null, false)
             addFooterView(unsupportedBox, null, false)
             adapter = this@TeamPage.adapter
+            boxGate.attach(this) // PLAN 156: the Pokémon stand still while the list flings
         }
         dexBody = dexPage.embeddedBody()
 
@@ -613,6 +614,11 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         var uid: String? = null
     }
 
+    /** PLAN 156: every Box tile moves; this gate keeps them still while the list flings and starts the visible ones when it settles. */
+    private val boxGate = ScrollGate(GridShape.of(base, cols, CELL_RATIO, gapDp = 4, sidePadDp = 12, topDp = TOP_DP, stripDp = STRIP_DP)) {
+        (0 until boxList.childCount).flatMap { i -> (boxList.getChildAt(i) as? CellRow)?.cells.orEmpty().map { (it.tag as Cell).img } }
+    }
+
     private fun makeCell(f: SquareFrame) {
         val ctx = this
         f.background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx)
@@ -678,7 +684,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         f.visibility = View.VISIBLE
         val pick = ComparePick.Owned(mon.uid)
         bindPick(f)
-        Ui.staticSprite(this, mon.lookNum(data), mon.shiny, cell.img)
+        GridSprites.bind(this, cell.img, mon.lookNum(data), mon.shiny, animate = true, gate = boxGate) // PLAN 156: the copy it shows moves
         LevelTier.style(cell.lv, mon.level)
         cell.count.text = if (tile.isGroup) "×${tile.count}" else ""
         cell.count.visibility = if (tile.isGroup) View.VISIBLE else View.GONE
