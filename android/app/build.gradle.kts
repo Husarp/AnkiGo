@@ -8,7 +8,7 @@ plugins {
 
 // The app's version: the one place it is written. versionCode must grow with every release or Android
 // refuses the update, so it comes from the version: 0.1.0 -> 100, 1.2.3 -> 10203.
-val appVersion = "0.22.1"
+val appVersion = "0.22.2"
 val (vMajor, vMinor, vPatch) = appVersion.split('.').map { it.toInt() }
 
 android {

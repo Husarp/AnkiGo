@@ -1454,7 +1454,14 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                     else -> false   // deleting a note is confirmDelete() (DeckOps)
                 }
             }
-            main.post { if (!isDestroyed) { if (result.getOrDefault(false)) loadNext() else showError("This change wasn't saved.") } }
+            main.post {
+                if (isDestroyed) return@post
+                when {
+                    !result.getOrDefault(false) -> showError("This change wasn't saved.")
+                    action == "flag" -> { locked = false; showButtons(); syncTiming() }   // PLAN 246: a flag keeps the card as it is (the answer stays shown)
+                    else -> loadNext()
+                }
+            }
         }
     }
     /** The card's own deck (the home deck when it sits in a filtered deck right now). */

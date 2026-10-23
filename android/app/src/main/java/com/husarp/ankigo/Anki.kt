@@ -159,9 +159,18 @@ object Anki {
         }
     }
 
-    private val modelCache = HashMap<String, Model>()
+    /**
+     * Note types are cached only for [TYPE_CACHE_MS]: the user may change a note type's CSS / templates in AnkiDroid while AnkiGo
+     * keeps running (split screen), and the next card must use the new look (a process-long cache kept the old CSS with the new HTML).
+     */
+    private const val TYPE_CACHE_MS = 5_000L
+    private class Cached<T>(val value: T, val at: Long = android.os.SystemClock.elapsedRealtime()) {
+        fun fresh() = android.os.SystemClock.elapsedRealtime() - at < TYPE_CACHE_MS
+    }
+
+    private val modelCache = HashMap<String, Cached<Model>>()
     fun model(ctx: Context, mid: Long): Model? {
-        modelCache["$pkg/$mid"]?.let { return it }
+        modelCache["$pkg/$mid"]?.takeIf { it.fresh() }?.let { return it.value }
         val c = ctx.contentResolver.query(uri("models/$mid"), null, null, null, null) ?: return null
         c.use {
             if (!it.moveToFirst()) return null
@@ -173,18 +182,18 @@ object Anki {
                 }
             }
             val m = Model(mid, it.str("name") ?: "?", it.str("css") ?: "", names, it.lng("type").toInt())
-            modelCache["$pkg/$mid"] = m
+            modelCache["$pkg/$mid"] = Cached(m)
             return m
         }
     }
 
-    private val templateCache = HashMap<String, List<com.husarp.ankigo.study.TtsRules.Template>>()
+    private val templateCache = HashMap<String, Cached<List<com.husarp.ankigo.study.TtsRules.Template>>>()
     /** The card templates (question/answer format) of a note type; only read for cards that have speech. */
     fun templates(ctx: Context, mid: Long): List<com.husarp.ankigo.study.TtsRules.Template> {
-        templateCache["$pkg/$mid"]?.let { return it }
+        templateCache["$pkg/$mid"]?.takeIf { it.fresh() }?.let { return it.value }
         val rows = rows(ctx.contentResolver.query(uri("models/$mid/templates"), null, null, null, null))
         val out = rows.map { com.husarp.ankigo.study.TtsRules.Template(it["ord"]?.toIntOrNull() ?: 0, it["question_format"] ?: "", it["answer_format"] ?: "") }
-        if (out.isNotEmpty()) templateCache["$pkg/$mid"] = out
+        if (out.isNotEmpty()) templateCache["$pkg/$mid"] = Cached(out)
         return out
     }
 
