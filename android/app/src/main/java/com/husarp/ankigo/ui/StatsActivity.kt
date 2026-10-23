@@ -165,9 +165,17 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         SectionSwitch.draw(this, switchBox, StatsSection.entries.map { SectionSwitch.Seg(it.label, it.icon) }, section.ordinal) { showSection(StatsSection.entries[it]) }
     }
 
-    /** PLAN 218: Statistics / Achievements are sections, not sub-pages: the shown one stays and scrolls to its top. */
+    /** PLAN 218: Statistics / Achievements are sections, not sub-pages: the shown one stays and scrolls to its top. PLAN 221: an open achievement sheet closes. */
     override fun onTabReselected() {
+        achievements.close()
         if (section == StatsSection.ACHIEVEMENTS) achievements.scrollToY(0) else scrollToTop(statsScroll)
+    }
+
+    /** PLAN 222: back in the app after leaving it: the "Show" sheet closes too, then as a reselect. */
+    override fun onAppReturned() {
+        sheetOpen = false
+        syncSheet()
+        onTabReselected()
     }
 
     /** Test hook and Nav: shows [s]. The chart state (metric, period, deck, grain) is kept while the page lives. */

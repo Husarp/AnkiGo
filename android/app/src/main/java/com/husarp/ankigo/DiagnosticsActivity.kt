@@ -35,6 +35,7 @@ import com.husarp.ankigo.update.UpdatesActivity
 
 /** The step-0 test screen (C-checks, LIVE watch, report), now reached from Settings -> Diagnostics. */
 class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
+    override val closesWhenLeft = true // PLAN 222
     companion object {
         private const val COPY_MAX = 400_000
         const val NOT_TOP_TITLE = "Save answers for cards that aren't first (test)"

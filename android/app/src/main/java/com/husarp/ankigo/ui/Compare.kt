@@ -24,6 +24,7 @@ object Compare {
 
 /** The Compare screen: the picks come in the Intent (see [CompareArgs]). */
 class CompareActivity : PageActivity() {
+    override val closesWhenLeft = true // PLAN 222
     private var comparePage: ComparePage? = null
     private var restoredFit = CompareFit.atOpen()
 

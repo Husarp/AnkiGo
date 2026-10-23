@@ -116,6 +116,9 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
      */
     open fun onTabReselected() {}
 
+    /** PLAN 222: the user left the app and came back to this page: it starts at its top page, like a tab reselect. */
+    open fun onAppReturned() = onTabReselected()
+
     /** Scrolls [v] (a ScrollView or a ListView) back to its top at once; anything else is left alone. */
     protected fun scrollToTop(v: View?) {
         when (v) {
@@ -208,6 +211,11 @@ abstract class PageActivity : AgActivity(), PageHost {
 
     /** PLAN 218: the bar's current tab was tapped again ([BottomNav]); the page goes back to its top. */
     internal fun reselectTab() = page.onTabReselected()
+
+    override fun onAppReturned() {
+        super.onAppReturned()
+        if (!isFinishing) page.onAppReturned()
+    }
 
     override fun startForResult(intent: Intent, onResult: (Int, Intent?) -> Unit) {
         val code = nextCode++

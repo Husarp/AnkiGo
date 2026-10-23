@@ -98,6 +98,10 @@ object AppLook {
 abstract class AgActivity : Activity() {
     private var lookGeneration = -1
 
+    /** PLAN 222: true on screens opened from a tab (Diagnostics, Updates, Help, Battle log, Compare) that close when the user comes back to the app. */
+    open val closesWhenLeft: Boolean = false
+    private var seenLeaves = leaves
+
     /** False on trampolines and the first-run screen: no floating update banner there. */
     open val showsUpdateBanner: Boolean = true
     /** The screen's content + floating update banner (null when [showsUpdateBanner] is off or before setContentView). */
@@ -132,6 +136,30 @@ abstract class AgActivity : Activity() {
     override fun onPause() {
         Updates.onPause(this)
         super.onPause()
+    }
+
+    /** Home / Recents / another app: the user left AnkiGo (not called when AnkiGo opens a picker or share sheet itself). */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        leaves++
+    }
+
+    override fun onRestart() {
+        super.onRestart()
+        if (seenLeaves != leaves) {
+            seenLeaves = leaves
+            onAppReturned()
+        }
+    }
+
+    /** PLAN 222: the user left the app while this screen was open and is back: start fresh. Default: [closesWhenLeft] screens close. */
+    open fun onAppReturned() {
+        if (closesWhenLeft) finish()
+    }
+
+    private companion object {
+        /** How many times the user left the app (process-wide; each screen compares it with the count it last saw). */
+        var leaves = 0
     }
 
     /** Picture-in-picture is too small for the banner. */

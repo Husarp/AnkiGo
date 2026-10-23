@@ -355,6 +355,7 @@ internal object HelpActions {
 
 /** The Help screen as its own Activity. */
 class HelpActivity : PageActivity() {
+    override val closesWhenLeft = true // PLAN 222
     private var restored: HelpRoute? = null
     private var outside = false
     private var screen: HelpScreen? = null

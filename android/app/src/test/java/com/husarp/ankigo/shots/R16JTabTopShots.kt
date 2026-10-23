@@ -147,4 +147,35 @@ class R16JTabTopShots {
         page.onTabReselected()
         assertEquals(0, sc.scrollY)
     }
+    // PLAN 221: a reselect on Stats also closes an open achievement sheet (the section stays).
+    @Test fun statsReselectClosesTheAchievementSheet() {
+        val ctx = setup()
+        val page = StatsPage(ctx, NoHost, StatsSection.ACHIEVEMENTS)
+        val screen = pageScreen(ctx, page)
+        page.achievementsView().open("any")
+        call(page, "render")
+        layout(ctx, screen)
+        page.onTabReselected()
+        assertEquals("the sheet is closed", null, getField(page.achievementsView(), "openId"))
+        assertEquals(StatsSection.ACHIEVEMENTS, getField(page, "section"))
+    }
+
+    // PLAN 222: back in the app after leaving it, a page starts at its top page (Settings: the home list; Stats: no sheet open).
+    @Test fun comingBackToTheAppStartsAtTheTopPage() {
+        val ctx = setup()
+        val settings = SettingsPage(ShotCtx(ctx), NoHost)
+        layout(ctx, pageScreen(ctx, settings))
+        settings.open(SettingsSection.DOWNLOADS)
+        settings.onAppReturned()
+        assertEquals("Settings is back on its home list", null, settings.section)
+
+        val stats = StatsPage(ctx, NoHost, StatsSection.STATISTICS)
+        val screen = pageScreen(ctx, stats)
+        call(stats, "render")
+        layout(ctx, screen)
+        setField(stats, "sheetOpen", true)
+        stats.onAppReturned()
+        assertEquals("the Show sheet is closed", false, getField(stats, "sheetOpen"))
+        assertEquals(View.GONE, (getField(stats, "sheetLayer") as View).visibility)
+    }
 }

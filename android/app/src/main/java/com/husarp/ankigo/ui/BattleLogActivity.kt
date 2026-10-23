@@ -172,5 +172,6 @@ class BattleLogPage(base: Context, host: PageHost) : GamePage(base, host) {
 
 /** The Battle log as its own Activity: a thin shell around [BattleLogPage]. */
 class BattleLogActivity : PageActivity() {
+    override val closesWhenLeft = true // PLAN 222
     override fun createPage(): GamePage = BattleLogPage(this, this)
 }
