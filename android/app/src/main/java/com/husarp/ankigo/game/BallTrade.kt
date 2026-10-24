@@ -2,7 +2,7 @@ package com.husarp.ankigo.game
 
 /**
  * PLAN 199 (R14 batch 2): trading balls up, from a ball's card in the Bag (never in the Shop). 5 Poké Balls make 1 Great Ball, 3 Great
- * Balls make 1 Ultra Ball; on purpose worse than buying (5 Poké = 1,000 ₽ in the Shop for a 700 ₽ Great Ball). Ankimon's old balls
+ * Balls make 1 Ultra Ball; on purpose worse than buying (5 Poké = 1,000 coins in the Shop for a 700-coin Great Ball). Ankimon's old balls
  * ([Tuning.OLD_BALLS], not sold or found any more) count as Great Balls and are used up first (the one you have fewest of first, then by
  * name), then the Great Balls. The Ultra and the Master Ball cannot be traded. One call = one batch. Pure (no android.*).
  */
@@ -78,7 +78,7 @@ object BallTrade {
     /** What the player has left of [ball] after [offer] went (the "You keep ..." number). */
     fun keep(state: GameState, offer: Offer): Int = state.count(offer.from) - offer.take.filter { it.first == offer.from }.sumOf { it.second }
 
-    /** The ₽ the shop would ask for [parts] (Poké / Great / Ultra at [Tuning.BALL_PRICE]); null when an old ball is in it (not sold). */
+    /** The coins the shop would ask for [parts] (Poké / Great / Ultra at [Tuning.BALL_PRICE]); null when an old ball is in it (not sold). */
     fun worth(parts: List<Pair<String, Int>>): Int? {
         var sum = 0
         for ((id, n) in parts) sum += (Tuning.BALL_PRICE[id]?.takeIf { it > 0 } ?: return null) * n

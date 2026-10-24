@@ -7,13 +7,19 @@ import com.husarp.ankigo.Report
 
 /**
  * No-UI trampoline behind the motivation widget's tap: opens the Study tab when AnkiDroid has cards due,
- * otherwise the battle. Decided at tap time on a background thread; any problem (no permission, AnkiDroid
- * missing, error) opens the battle. Translucent, out of recents, finishes itself.
+ * otherwise (and on any problem: no permission, AnkiDroid
+ * missing, error) the "Open AnkiGo on" choice (R18 263). Decided at tap time on a background thread. Translucent, out of recents, finishes itself.
  */
 class WidgetTapActivity : AgActivity() {
+    companion object {
+        /** The Buddy widget's tap: no due check, straight to the "Open AnkiGo on" choice read now (R18 RV-1). */
+        const val ACTION_OPEN = "com.husarp.ankigo.WIDGET_OPEN"
+    }
+
     override val showsUpdateBanner = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent?.action == ACTION_OPEN) { startActivity(OpenOnPrefs.intent(this)); finish(); return }
         Anki.load(this)
         Thread {
             val study = try {
@@ -23,7 +29,7 @@ class WidgetTapActivity : AgActivity() {
             }
             runOnUiThread {
                 if (!isDestroyed) {
-                    startActivity(Nav.intent(this, if (study) Dest.STUDY else Dest.BATTLE))
+                    startActivity(if (study) Nav.intent(this, Dest.STUDY) else OpenOnPrefs.intent(this))
                     finish()
                 }
             }

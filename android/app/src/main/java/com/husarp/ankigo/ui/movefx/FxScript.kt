@@ -210,10 +210,32 @@ class FxScript(
          * centre, colour [filter] (a [FxColor] matrix, null = none). Nothing happens for the target when `react` is false, nor after [releaseStage].
          */
         fun set(x: Float = 0f, y: Float = 0f, sx: Float = 1f, sy: Float = sx, filter: FloatArray? = null) {
-            if (enabled && !stageReleased) stage.pose(isAttacker, space.x(x), space.y(y), sx, sy, filter)
+            lastX = x; lastY = y; lastSx = sx; lastSy = sy; lastFilter = filter
+            if (enabled && !stageReleased) stage.pose(isAttacker, space.x(x + if (isAttacker) leanX else 0f), space.y(y), sx, sy, filter)
         }
 
         fun reset() = set()
+
+        // R18-C (PLAN 228): the pose the look asked for last, so the attacker's lean ([FxScript.lean]) can be added to it.
+        private var lastX = 0f
+        private var lastY = 0f
+        private var lastSx = 1f
+        private var lastSy = 1f
+        private var lastFilter: FloatArray? = null
+
+        /** Poses again with the look's last pose, so a change of the lean shows even when the look itself poses nothing right now. */
+        internal fun repose() = set(lastX, lastY, lastSx, lastSy, lastFilter)
+    }
+
+    /** R18-C: the attacker's lean toward the target right now, in stage units; [Actor.set] adds it to the look's own offset. */
+    private var leanX = 0f
+
+    /**
+     * R18-C (PLAN 228): the user of a special or status move leans a little toward the target and back ([FxLean]), as if casting at
+     * it, from [t0]. Added on top of whatever the look poses; ends at rest ([FxLean.UNITS] -> 0 at the end of its last tween).
+     */
+    fun lean(t0: Float) {
+        tween(t0, FxLean.OUT_MS + FxLean.BACK_MS) { _, ms -> leanX = FxLean.at(ms - t0); attacker.repose() }
     }
 
     val attacker = Actor(true, true)

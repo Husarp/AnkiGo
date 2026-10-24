@@ -67,13 +67,16 @@ class R17C10TextsTest {
         val b = text(GameGuide.BATTLES)
         assertFalse(b, b.contains("A turn is one dot"))
         assertFalse(b, b.contains("takes one turn"))
-        assertTrue(b, b.contains("A switch is not a round") && b.contains("one free hit"))
-        assertTrue(b, b.contains("gives the same free hit"))
+        // R18-B (227 / 264): Adam's wording, "the wild Pokémon attacks once", never "a free hit"; the switch waits for the answer, the item works at once
+        assertTrue(b, b.contains("A switch is not a round") && b.contains("the wild Pokémon attacks it once") && b.contains("waits for your answer"))
+        assertTrue(b, b.contains("works at once, then the wild Pokémon attacks your Main once"))
+        assertFalse(b, b.contains("free hit"))
         // Smart / Smartest never pick an attack the target is immune to; the Main then uses Struggle
         assertTrue(b, b.contains("never an attack the target is immune to") && b.contains("Struggle"))
         val healing = text(GameGuide.HEALING)
         assertFalse(healing, healing.contains("takes one turn"))
-        assertTrue(healing, healing.contains("free hit"))
+        assertTrue(healing, healing.contains("works at once, then the wild Pokémon attacks once"))
+        assertFalse(healing, healing.contains("free hit"))
     }
 
     @Test fun noGuideSentenceIsEmptyOrUnfinished() {

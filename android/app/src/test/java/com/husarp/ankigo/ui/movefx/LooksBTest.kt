@@ -132,7 +132,8 @@ class LooksBTest {
         assertTrue(tinted); assertTrue(hue); assertTrue(maxX > 1.5f * unit)
         val a = r.stage.rec.last(true)!!; val t = r.stage.rec.last(false)!!
         assertNull(a.matrix); assertNull(t.matrix); assertEquals(0f, t.dx, eps); assertEquals(1f, t.sx, eps); assertEquals(1f, t.sy, eps)
-        assertTrue(r.stage.rec.poses.none { it.attacker && it.dx != 0f })       // floats only, never sideways
+        // floats; sideways only by R18-C's small lean toward the target (PLAN 228)
+        assertTrue(r.stage.rec.poses.none { it.attacker && (it.dx < -eps || it.dx > FxLean.UNITS * unit + eps) })
     }
 
     @Test fun psychicHasThreeWavesClosingOnTheTarget() {

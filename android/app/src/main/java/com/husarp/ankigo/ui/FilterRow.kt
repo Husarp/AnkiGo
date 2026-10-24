@@ -9,29 +9,24 @@ import android.graphics.drawable.InsetDrawable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextUtils
-import android.text.style.ForegroundColorSpan
 import android.text.style.ReplacementSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Type
 
 // PLAN 192F2 / 192E, X9, X10 (Adam's version): the ONE control row of the Box and the Pokédex (legend "?", sort & filter button, the
-// active-filter chip, quick chips for filters that are off), the words of the active chip and of the empty states, and the width plan.
+// active-filter chip, quick chips that toggle in place, R18 253), the words of the active chip and of the empty states, and the width plan.
 
 /** The words of the filter row and the empty states. Pure Kotlin (no views), unit-tested. */
 object FilterRowText {
-    /** A piece of the active chip's label: a type symbol (the name follows as a [Txt]), plain text, the pink heart, or the yellow star. */
+    /** A piece of the active chip's label: a type symbol (the name follows as a [Txt]) or plain text. */
     sealed class Piece {
         class Sym(val type: Type) : Piece()
         class Txt(val s: String) : Piece()
-        object Heart : Piece()
-        object Star : Piece()
     }
 
     /** "Water + Ice · All of" (symbols before the names), 3 and more types "3 types · Any of". Nothing picked = no pieces. */
@@ -57,12 +52,15 @@ object FilterRowText {
         }
     }
 
-    /** The label pieces of the active chip, filters joined with " · ". [show] = the Box "Show" choice that is on (null = All). Empty = no active chip. */
-    fun activePieces(types: TypeFilter, show: BoxFilter? = null, wishlist: Boolean = false, gens: Set<Int> = emptySet()): List<Piece> {
+    /**
+     * The label pieces of the active chip, filters joined with " · ". R18 253: only what the SHEET filters (types, generations, and the Box
+     * "Show" choices that have no quick chip); a filter with a quick chip (Wishlist, Favourites, Shiny, In team) is the lit chip itself and
+     * is not repeated here. [show] = the Box "Show" choice that is on (null = All). Empty = no active chip.
+     */
+    fun activePieces(types: TypeFilter, show: BoxFilter? = null, gens: Set<Int> = emptySet()): List<Piece> {
         val groups = ArrayList<List<Piece>>()
         if (types.active) groups += typePieces(types)
-        if (show != null && show != BoxFilter.ALL) groups += if (show == BoxFilter.FAVOURITES) listOf(Piece.Heart, Piece.Txt(show.label)) else listOf(Piece.Txt(show.label))
-        if (wishlist) groups += listOf(Piece.Star, Piece.Txt("Wishlist"))
+        if (show != null && show != BoxFilter.ALL && !show.hasQuickChip) groups += listOf(Piece.Txt(show.label))
         if (gens.isNotEmpty()) groups += listOf(Piece.Txt(gensLabel(gens)))
         val out = ArrayList<Piece>()
         groups.forEachIndexed { i, g -> if (i > 0) out += Piece.Txt(" · "); out += g }
@@ -111,6 +109,7 @@ object FilterRowText {
         val parts = listOfNotNull(
             subject(adjectives, f.typeFilter),
             if (f.wishlistOnly) "on your wishlist" else null,
+            if (f.favouritesOnly) "with a favourite copy" else null,
             if (f.gens.isNotEmpty()) "in ${gensLabel(f.gens)}" else null,
             if (q.isEmpty()) null else if (q.all { it.isDigit() }) "numbered “$q”" else "named “$q”",
         )
@@ -120,47 +119,64 @@ object FilterRowText {
 
 /** The width plan of the filter row (pixels): who gets how much. Pure, unit-tested. */
 object FilterRowPlan {
-    /** [sortW] / [activeW]: the widths given to the sort chip and the active chip (0 = none); [quickShown]: how many quick chips fit, in order. */
-    data class Plan(val sortW: Int, val activeW: Int, val quickShown: Int)
+    /**
+     * [sortW] / [activeW]: the widths given to the sort chip and the active chip (0 = none); [shown]: for each quick chip, in order, whether it
+     * fits; [quickShown] = how many are shown; [legendShown] = false when the "?" had to go (see [plan]).
+     */
+    data class Plan(val sortW: Int, val activeW: Int, val quickShown: Int, val shown: List<Boolean> = emptyList(), val legendShown: Boolean = true)
 
     /**
      * [avail] = the row's width. The legend chip ([legendW]) and the sort chip (natural [sortW], never below [sortMinW]) come first; the
-     * active chip ([activeW], 0 = none) gets the rest but never less than [activeMinW] (its icons and the ✕), so the sort chip gives way
-     * before an active filter is hidden; the quick chips ([quickW]) follow in order while they fit, the rest hide. [gap] between chips.
+     * active chip ([activeW], 0 = none) gets the rest but never less than [activeMinW], so the sort chip gives way before an active filter
+     * is hidden; the quick chips ([quickW]) follow. R18 253: a lit quick chip ([quickLit]) is a filter that is on, so it is never the one
+     * hidden: its width is kept free before the sort chip and the active chip take theirs, and the unlit chips hide first (in order, a
+     * small chip behind one that does not fit stays hidden too). Last resort, when the lit chips, the active chip and the sort chip still
+     * do not fit with the legend: the "?" legend goes (it is no filter). [gap] between chips.
      */
-    fun plan(avail: Int, legendW: Int, sortW: Int, sortMinW: Int, activeW: Int, activeMinW: Int, quickW: List<Int>, gap: Int): Plan {
-        val reserve = if (activeW > 0) gap + activeMinW else 0
-        val sort = minOf(sortW, maxOf(avail - legendW - gap - reserve, minOf(sortMinW, sortW)))
-        var x = legendW + gap + sort
+    fun plan(
+        avail: Int, legendW: Int, sortW: Int, sortMinW: Int, activeW: Int, activeMinW: Int, quickW: List<Int>, gap: Int,
+        quickLit: List<Boolean> = emptyList(),
+    ): Plan {
+        fun lit(i: Int) = quickLit.getOrElse(i) { false }
+        val litTotal = quickW.indices.filter { lit(it) }.sumOf { gap + quickW[it] }
+        val reserve = (if (activeW > 0) gap + activeMinW else 0) + litTotal
+        val legendShown = litTotal == 0 || legendW + gap + minOf(sortMinW, sortW) + reserve <= avail
+        val lead = if (legendShown) legendW + gap else 0
+        val sort = minOf(sortW, maxOf(avail - lead - reserve, minOf(sortMinW, sortW)))
+        var x = lead + sort
         var active = 0
         if (activeW > 0) {
-            active = maxOf(activeMinW, minOf(activeW, avail - x - gap))
+            active = maxOf(activeMinW, minOf(activeW, avail - x - gap - litTotal))
             x += gap + active
         }
-        var shown = 0
-        for (w in quickW) {
-            if (x + gap + w > avail) break
-            x += gap + w; shown++
+        val shown = BooleanArray(quickW.size)
+        for (i in quickW.indices) if (lit(i) && x + gap + quickW[i] <= avail) { x += gap + quickW[i]; shown[i] = true }
+        var stopped = false
+        for (i in quickW.indices) {
+            if (lit(i)) continue
+            if (stopped || x + gap + quickW[i] > avail) { stopped = true; continue }
+            x += gap + quickW[i]; shown[i] = true
         }
-        return Plan(sort, active, shown)
+        return Plan(sort, active, shown.count { it }, shown.toList(), legendShown)
     }
 }
 
 /**
- * The row: [legend], [sort], the optional [active] chip, then the [quick] chips. One line that never scrolls: the sort chip's name and the
- * active chip's label shrink, the quick chips hide (in order) when they don't fit.
+ * The row: [legend], [sort], the optional [active] chip, then the [quick] chips (a toggle each, lit while its filter is on). One line that
+ * never scrolls: the sort chip's name and the active chip's label shrink, the quick chips hide when they don't fit (unlit ones first).
  */
 internal class FilterRow(ctx: Context) : ViewGroup(ctx) {
     private var legend: View? = null
     private var sort: View? = null
     private var active: ActiveChip? = null
     private var quick: List<View> = emptyList()
+    private var quickLit: List<Boolean> = emptyList()
     private val gap = Ui.dp(ctx, 6)
     private var rowH = 0
 
-    fun set(legend: View, sort: View, active: ActiveChip?, quick: List<View>) {
+    fun set(legend: View, sort: View, active: ActiveChip?, quick: List<View>, quickLit: List<Boolean> = emptyList()) {
         removeAllViews()
-        this.legend = legend; this.sort = sort; this.active = active; this.quick = quick
+        this.legend = legend; this.sort = sort; this.active = active; this.quick = quick; this.quickLit = quickLit
         addView(legend); addView(sort)
         active?.let { addView(it) }
         quick.forEach { addView(it) }
@@ -174,17 +190,19 @@ internal class FilterRow(ctx: Context) : ViewGroup(ctx) {
         val so = sort!!
         val unspec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
         val avail = if (MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE / 4 else MeasureSpec.getSize(widthSpec) - paddingLeft - paddingRight
+        lg.visibility = VISIBLE
         lg.measure(unspec, unspec); so.measure(unspec, unspec)
         quick.forEach { it.visibility = VISIBLE; it.measure(unspec, unspec) }
         val ac = active
         ac?.measure(unspec, unspec)
         val plan = FilterRowPlan.plan(
             avail, lg.measuredWidth, so.measuredWidth, minOf(so.measuredWidth, Ui.dp(context, SORT_MIN_DP)),
-            ac?.measuredWidth ?: 0, ac?.minWidthPx ?: 0, quick.map { it.measuredWidth }, gap,
+            ac?.measuredWidth ?: 0, ac?.minWidthPx ?: 0, quick.map { it.measuredWidth }, gap, quickLit,
         )
         so.measure(MeasureSpec.makeMeasureSpec(plan.sortW, MeasureSpec.AT_MOST), unspec)
         ac?.measure(MeasureSpec.makeMeasureSpec(plan.activeW, MeasureSpec.EXACTLY), unspec)
-        quick.forEachIndexed { i, v -> if (i >= plan.quickShown) v.visibility = GONE }
+        if (!plan.legendShown) lg.visibility = GONE
+        quick.forEachIndexed { i, v -> if (!plan.shown.getOrElse(i) { false }) v.visibility = GONE }
         rowH = children().filter { it.visibility != GONE }.maxOf { it.measuredHeight }
         val used = children().filter { it.visibility != GONE }.sumOf { it.measuredWidth } + gap * (children().count { it.visibility != GONE } - 1)
         setMeasuredDimension(if (MeasureSpec.getMode(widthSpec) == MeasureSpec.EXACTLY) MeasureSpec.getSize(widthSpec) else used + paddingLeft + paddingRight, rowH + paddingTop + paddingBottom)
@@ -207,24 +225,22 @@ internal class FilterRow(ctx: Context) : ViewGroup(ctx) {
         const val SORT_MIN_DP = 104
 
         /**
-         * The row of a screen: [legend], [sort] and, while any filter is on ([pieces] not empty), the active chip (a tap opens the sheet
-         * through [onOpen]; its ✕ runs [onClear]), then the [quick] chips of the filters that are off.
+         * The row of a screen: [legend], [sort] and, while a sheet filter is on ([pieces] not empty), the active chip (a tap opens the sheet
+         * through [onOpen]), then the [quick] chips, each with whether it is lit (its filter is on).
          */
-        fun make(ctx: Context, legend: View, sort: View, pieces: List<FilterRowText.Piece>, onOpen: () -> Unit, onClear: () -> Unit, quick: List<View>): FilterRow =
-            FilterRow(ctx).also { it.set(legend, sort, if (pieces.isEmpty()) null else ActiveChip(ctx, pieces, onOpen, onClear), quick) }
+        fun make(ctx: Context, legend: View, sort: View, pieces: List<FilterRowText.Piece>, onOpen: () -> Unit, quick: List<Pair<View, Boolean>>): FilterRow =
+            FilterRow(ctx).also { it.set(legend, sort, if (pieces.isEmpty()) null else ActiveChip(ctx, pieces, onOpen), quick.map { q -> q.first }, quick.map { q -> q.second }) }
     }
 }
 
 /**
- * The active-filter chip (F2 look: a soft accent fill with an accent ring, no "Filters:" word): the filters that are on, then a ✕ that
- * clears them all. A tap on the body opens the sheet ([onOpen]). Its label shrinks with "…" ([minWidthPx] is the least it gets: the
- * first symbol and the ✕), so the chip and its ✕ are always visible.
+ * The active-filter chip (F2 look: a soft accent fill with an accent ring): the filters the sheet holds that are on (types, generations,
+ * the Box "Show" choices without a quick chip). R18 253: no ✕; a tap opens the sheet, whose "Clear" turns them off. Its label shrinks with
+ * "…" ([minWidthPx] is the least it gets: the first symbol), so the chip is always visible.
  */
-internal class ActiveChip(ctx: Context, pieces: List<FilterRowText.Piece>, onOpen: () -> Unit, onClear: () -> Unit) : LinearLayout(ctx) {
+internal class ActiveChip(ctx: Context, pieces: List<FilterRowText.Piece>, onOpen: () -> Unit) : LinearLayout(ctx) {
     val label: TextView
-    val clearButton: ImageView
-    private val minLabel = Ui.dp(ctx, 44)
-    private val xW = Ui.dp(ctx, 48)
+    private val minLabel = Ui.dp(ctx, 52)
 
     init {
         orientation = HORIZONTAL
@@ -245,29 +261,19 @@ internal class ActiveChip(ctx: Context, pieces: List<FilterRowText.Piece>, onOpe
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             text = spannable(ctx, pieces, this)
-            setPadding(Ui.dp(ctx, 10), 0, 0, 0)
+            setPadding(Ui.dp(ctx, 10), 0, Ui.dp(ctx, 10), 0)
         }
         addView(label, LayoutParams(0, -2, 1f))
-        clearButton = ImageView(ctx).apply {
-            setImageResource(R.drawable.ic_close)
-            setColorFilter(accent)
-            scaleType = ImageView.ScaleType.CENTER_INSIDE
-            val p = Ui.dp(ctx, 18)
-            setPadding(p, p, p, p) // a 12 dp ✕ in a 48 x 48 dp touch area
-            contentDescription = "Clear all filters"
-            setOnClickListener { onClear() }
-        }
-        addView(clearButton, LayoutParams(xW, Ui.dp(ctx, 48)))
     }
 
-    /** The least width: the first symbol, an ellipsis and the ✕. */
-    val minWidthPx: Int get() = minLabel + xW
+    /** The least width: the first symbol and an ellipsis. */
+    val minWidthPx: Int get() = minLabel
 
     override fun onMeasure(widthSpec: Int, heightSpec: Int) {
         if (MeasureSpec.getMode(widthSpec) == MeasureSpec.EXACTLY) return super.onMeasure(widthSpec, heightSpec)
-        // natural width: the whole label and the ✕ (the label is a weighted 0 dp child, so measure it by hand)
+        // natural width: the whole label (the label is a weighted 0 dp child, so measure it by hand)
         label.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        setMeasuredDimension(maxOf(minWidthPx, label.measuredWidth + xW), maxOf(Ui.dp(context, 48), label.measuredHeight))
+        setMeasuredDimension(maxOf(minWidthPx, label.measuredWidth), maxOf(Ui.dp(context, 48), label.measuredHeight))
     }
 
     private fun spannable(ctx: Context, pieces: List<FilterRowText.Piece>, tv: TextView): CharSequence {
@@ -277,15 +283,6 @@ internal class ActiveChip(ctx: Context, pieces: List<FilterRowText.Piece>, onOpe
             is FilterRowText.Piece.Txt -> sb.append(p.s)
             is FilterRowText.Piece.Sym -> sb.append("￼").also {
                 sb.setSpan(IconSpan(TypeChips.tinted(ctx, p.type, TypeChips.ink(ctx, p.type)), size, Ui.dp(ctx, 4)), sb.length - 1, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-            FilterRowText.Piece.Heart -> sb.append("￼").also {
-                val d = ContextCompat.getDrawable(ctx, R.drawable.ic_heart)!!.mutate().also { h -> h.setTint(Ui.c(ctx, R.color.ag_pink)) }
-                sb.setSpan(IconSpan(d, size, Ui.dp(ctx, 4)), sb.length - 1, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-            FilterRowText.Piece.Star -> {
-                val at = sb.length
-                sb.append("★ ")
-                sb.setSpan(ForegroundColorSpan(Ui.c(ctx, R.color.ag_yellow)), at, at + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
         }
         return sb

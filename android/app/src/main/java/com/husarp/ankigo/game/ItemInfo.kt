@@ -12,9 +12,9 @@ data class ItemFact(val title: String, val text: String)
 object ItemInfo {
     // ---- PLAN 168 API (R14 batch 2) ----
 
-    private const val FIGHT_RULE = "On your **main** it takes **one turn**: the wild Pokémon attacks once. That happens only after your " +
-        "**first answer** of a fight; before it, also after \"Next battle\", it is free."
-    private const val MAIN_ONLY = "On a Pokémon on the bench it never takes a turn."
+    private const val FIGHT_RULE = "On your **main** in a fight it works **at once**, then the wild Pokémon attacks once (your answers' dots don't change). " +
+        "Before your **first answer** of a fight, also after \"Next battle\", the wild one doesn't attack."
+    private const val MAIN_ONLY = "Used on a Pokémon on the bench, it never brings an attack."
     private const val HOLD_RULE = "Give it to a Pokémon from the Bag. A Pokémon holds **one item**; the old one goes back to the Bag."
     private const val THROW_RULE = "Throw it from a fight (the ball button) or from the Bag while a wild Pokémon is out. **Throwing is not a turn**: you are not attacked."
     private const val NO_DESCRIPTION = "No description."
@@ -32,7 +32,7 @@ object ItemInfo {
     private fun isOldBall(id: String) = id in Tuning.OLD_BALLS
 
     /** The tile line (Shop tiles; about 18 characters, no bold marks): "20 % catch", "Heals 20 HP", "Evolves Applin", "Main: ×2 money". [data] null = no species names. */
-    fun short(data: GameData?, item: String): String {
+    fun short(data: GameData?, item: String, caught: Set<Int>? = null): String {
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {
             ItemKind.BALL -> when {
@@ -45,7 +45,7 @@ object ItemInfo {
                 if (item in Items.RETIRED) "Does nothing here"
                 else if (item == LINKING_CORD) "Trade evolvers"
                 else {
-                    val from = evoPairs(data, item).map { it.from }.distinct()
+                    val from = fromNames(evoPairs(data, item), caught)
                     when {
                         from.isEmpty() -> "Evolution item"
                         from.size == 1 -> "Evolves ${from[0]}"
@@ -67,7 +67,7 @@ object ItemInfo {
     }
 
     /** The row line (Bag rows, under the name of an opened card, the deal card; about 40 characters, no bold marks). */
-    fun line(data: GameData?, item: String): String {
+    fun line(data: GameData?, item: String, caught: Set<Int>? = null): String {
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {
             ItemKind.BALL -> when {
@@ -76,7 +76,7 @@ object ItemInfo {
                 else -> "${Catching.ballChance(item)} % to catch · a miss: it runs away"
             }
             ItemKind.HEAL -> if (def.cures) "Heals all HP, cures a status" else healLine(def)
-            ItemKind.EVOLUTION -> evolutionLine(data, item)
+            ItemKind.EVOLUTION -> evolutionLine(data, item, caught)
             ItemKind.HELD -> when (item) {
                 "lucky-egg" -> "Holder gets ×${nice(Tuning.LUCKY_EGG)} XP"
                 "amulet-coin", "luck-incense" -> "Main holds it: ×2 money"
@@ -91,7 +91,7 @@ object ItemInfo {
     }
 
     /** The full text of an opened card, in blocks. Never empty for a catalogue item; an unknown item gets one generic block. */
-    fun facts(data: GameData?, item: String): List<ItemFact> {
+    fun facts(data: GameData?, item: String, caught: Set<Int>? = null): List<ItemFact> {
         val def = Items.def(item) ?: return listOf(ItemFact(WHAT, NO_DESCRIPTION))
         return when (def.kind) {
             ItemKind.BALL -> ballFacts(item)
@@ -113,7 +113,7 @@ object ItemInfo {
                 ItemFact(WHAT, RETIRED_WHAT),
                 ItemFact(HOW, "You can't use it. If you already own one, it stays in the Bag."),
             ) else listOf(
-                ItemFact(WHAT, evolutionWhat(data, item)),
+                ItemFact(WHAT, evolutionWhat(data, item, caught)),
                 ItemFact(HOW, "Use it from the Bag on a Pokémon that evolves with it. A Pokémon holding an **Everstone** won't evolve."),
                 ItemFact(FIGHT, "$FIGHT_RULE $MAIN_ONLY"),
             )
@@ -223,7 +223,7 @@ object ItemInfo {
     }
 
     /** One "from into to" pair an evolution item makes, with its time of day / gender rule. */
-    private data class EvoPair(val from: String, val to: String, val time: String?, val gender: Char?)
+    private data class EvoPair(val from: String, val to: String, val time: String?, val gender: Char?, val fromNum: Int = 0, val toNum: Int = 0)
 
     /**
      * Every pair [item] evolves, from the species data (Progression.itemEvolutions rules): ITEM with that item, TRADE with that held item;
@@ -240,41 +240,89 @@ object ItemInfo {
                     EvoKind.OTHER -> item == LINKING_CORD
                     else -> false
                 }
-                if (hit) EvoPair(sp.name, into.name, e.time, e.gender) else null
+                if (hit) EvoPair(sp.name, into.name, e.time, e.gender, sp.num, into.num) else null
             }
         }.distinct()
     }
 
-    private fun evolutionLine(data: GameData?, item: String): String {
+    // ---- R18-H (PLAN 238): a Pokémon never caught is not named ----
+
+    /** What stands for a species that is not in the Pokédex as caught ("seen" does not count). */
+    private const val UNKNOWN = "an unknown Pokémon"
+    private fun unknown(n: Int) = if (n == 1) UNKNOWN else "$n unknown Pokémon"
+    /** [caught] null = no state (tests, previews): every name shows. */
+    private fun known(caught: Set<Int>?, num: Int) = caught == null || num in caught
+
+    /** The distinct from-species of [pairs], by name for the caught ones; each not caught one is "???" (the tile has no room for more). Caught ones first. */
+    private fun fromNames(pairs: List<EvoPair>, caught: Set<Int>?): List<String> {
+        val froms = pairs.distinctBy { it.fromNum }
+        val (kn, un) = froms.partition { known(caught, it.fromNum) }
+        return kn.map { it.from }.distinct() + un.map { "???" }
+    }
+
+    private fun evolutionLine(data: GameData?, item: String, caught: Set<Int>?): String {
         if (item in Items.RETIRED) return "Does nothing here: no Pokémon uses it"
         if (item == LINKING_CORD) return "Evolves Pokémon that evolve by trade"
         val pairs = evoPairs(data, item)
-        val from = pairs.map { it.from }.distinct()
-        val one = if (pairs.size == 1) "Evolves ${pairs[0].from} into ${pairs[0].to}" else null
+        if (pairs.isEmpty()) return "Evolves Pokémon that evolve with it"
+        if (pairs.size == 1) {
+            val p = pairs[0]
+            val fromKnown = known(caught, p.fromNum)
+            val one = when {
+                !fromKnown && !known(caught, p.toNum) -> "Evolves $UNKNOWN"
+                else -> "Evolves ${if (fromKnown) p.from else UNKNOWN} into ${if (known(caught, p.toNum)) p.to else UNKNOWN}"
+            }
+            if (one.length <= 40) return one
+        }
+        val froms = pairs.distinctBy { it.fromNum }
+        val names = froms.filter { known(caught, it.fromNum) }.map { it.from }.distinct()
+        val unk = froms.size - froms.count { known(caught, it.fromNum) }
+        val total = names.size + unk
         return when {
-            from.isEmpty() -> "Evolves Pokémon that evolve with it"
-            one != null && one.length <= 40 -> one
-            from.size == 1 -> "Evolves ${from[0]}"
-            from.size == 2 && "Evolves ${from[0]} and ${from[1]}".length <= 40 -> "Evolves ${from[0]} and ${from[1]}"
-            else -> "Evolves ${from[0]} and ${from.size - 1} more"
+            names.isEmpty() -> "Evolves ${unknown(unk)}"
+            total == 1 -> "Evolves ${names[0]}"
+            total == 2 && unk == 0 && "Evolves ${names[0]} and ${names[1]}".length <= 40 -> "Evolves ${names[0]} and ${names[1]}"
+            names.size == 1 && "Evolves ${names[0]} and ${unknown(unk)}".length <= 40 -> "Evolves ${names[0]} and ${unknown(unk)}"
+            else -> "Evolves ${names[0]} and ${total - 1} more"
         }
     }
 
-    private fun evolutionWhat(data: GameData?, item: String): String {
+    /** The "from into to" entries of the card: unknown targets of one caught species and fully unknown pairs are merged ("2 unknown Pokémon"), no duplicates. */
+    private fun evoEntries(pairs: List<EvoPair>, caught: Set<Int>?, common: String?): List<String> {
+        fun tags(p: EvoPair): String {
+            val t = listOfNotNull(
+                if (common == null) p.time?.let { "$it only" } else null,
+                when (p.gender) { 'F' -> "female only"; 'M' -> "male only"; else -> null },
+            )
+            return if (t.isEmpty()) "" else " (${t.joinToString(", ")})"
+        }
+        val groups = pairs.groupBy { p ->
+            val f = known(caught, p.fromNum); val t = known(caught, p.toNum)
+            when { !f && !t -> "U"; f && !t -> "F:${p.fromNum}"; else -> "P:${p.fromNum}>${p.toNum}" }
+        }
+        val out = groups.filterKeys { it != "U" }.map { (key, g) ->
+            val p = g[0]
+            if (key.startsWith("F:")) "**${p.from}** into **${unknown(g.size)}**" + if (g.size == 1) tags(p) else ""
+            else "**${if (known(caught, p.fromNum)) p.from else UNKNOWN}** into **${p.to}**" + tags(p)
+        }
+        // the pairs of which nothing is known come last: alone "an unknown Pokémon", after other entries "and another unknown Pokémon"
+        val n = groups["U"]?.size ?: return out
+        return out + when {
+            out.isEmpty() -> "**${unknown(n)}**"
+            n == 1 -> "and **another unknown Pokémon**"
+            else -> "and **$n other unknown Pokémon**"
+        }
+    }
+
+    private fun evolutionWhat(data: GameData?, item: String, caught: Set<Int>?): String {
         val pairs = evoPairs(data, item)
         val cord = item == LINKING_CORD
         if (pairs.isEmpty()) return if (cord) "Evolves Pokémon that normally evolve **by trade**." else "Evolves the Pokémon that need it."
         val times = pairs.map { it.time }.distinct()
         val common = times.singleOrNull()
-        fun label(p: EvoPair): String {
-            val tags = listOfNotNull(
-                if (common == null) p.time?.let { "$it only" } else null,
-                when (p.gender) { 'F' -> "female only"; 'M' -> "male only"; else -> null },
-            )
-            return "**${p.from}** into **${p.to}**" + if (tags.isEmpty()) "" else " (${tags.joinToString(", ")})"
-        }
-        val shown = pairs.take(MAX_PAIRS).joinToString(", ") { label(it) }
-        val more = if (pairs.size > MAX_PAIRS) ", and ${pairs.size - MAX_PAIRS} more" else ""
+        val entries = evoEntries(pairs, caught, common)
+        val shown = entries.take(MAX_PAIRS).joinToString(", ")
+        val more = if (entries.size > MAX_PAIRS) ", and ${entries.size - MAX_PAIRS} more" else ""
         val head = if (cord) "Evolves Pokémon that normally evolve **by trade**, and a few with special rules: " else "Evolves "
         val time = if (common != null) " Works only at **$common**." else ""
         return "$head$shown$more.$time"
@@ -283,7 +331,7 @@ object ItemInfo {
     private fun heldWhat(item: String): String = when (item) {
         "lucky-egg" -> "The Pokémon holding it gets **×${nice(Tuning.LUCKY_EGG)} XP** from wins and catches. It works for your **main** and for the **Exp. Share** holder."
         "amulet-coin", "luck-incense" -> "While your **main** holds it, the money you earn for answers and wins is **doubled**, all day. " +
-            "The slower pay after each ${Tuning.CASH_TIER} ₽ still applies, so you keep getting double at every step. It does nothing on a Pokémon that is not your main."
+            "The slower pay after each ${Tuning.CASH_TIER} coins still applies, so you keep getting double at every step. It does nothing on a Pokémon that is not your main."
         "everstone" -> "A Pokémon holding it **never evolves**: not by level, friendship, stone or trade. Take it back to let the Pokémon evolve."
         "macho-brace" -> "Your **main** gets **double EVs** from each win, defeat or catch (as always, up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
             "It does nothing on a Pokémon that is not your main."
@@ -313,8 +361,8 @@ object ItemInfo {
         null -> ""
     }
 
-    /** R13 Part C: an item used on the main during a fight takes one turn (Game.useItem). */
-    const val FIGHT_TURN = "On your main during a fight it takes one turn: the wild Pokémon attacks once."
+    /** R13 Part C / R18-B: an item used on the main during a fight works at once, then the wild one attacks once (Game.useItem); no dot is filled. */
+    const val FIGHT_TURN = "On your main in a fight it works at once, then the wild Pokémon attacks once (not before your first answer of the fight)."
 
     /** What a TM does, for the popup: it teaches a move and is never used up. */
     fun tmHowToUse(): String = "Teaches this move to a Pokémon that can learn it. A TM is never used up."

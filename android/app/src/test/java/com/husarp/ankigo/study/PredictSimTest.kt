@@ -53,24 +53,42 @@ class PredictSimTest {
         )
     }
 
-    private class Run(val answers: Int, val predicted: Int, val swaps: Int, val waits: Int)
+    private class Run(val answers: Int, val predicted: Int, val swaps: Int, val waits: Int, val ahead: Int = 0, val wrongWrites: Int = 0)
 
-    private fun session(seed: Int, rule: Boolean): Run {
+    /**
+     * [ahead] (R18-A, 278) > 0: the user answers the shown-ahead card before the write of the answer before it ran (taps come faster than
+     * the writes, which apply one after the other, each [0, 4.5 s] after the previous). A write for a card that is not first is NOT made
+     * (AnkiDroid only answers its first card; the queue's check refuses it): it is counted in [Run.wrongWrites].
+     */
+    private fun session(seed: Int, rule: Boolean, ahead: Int = 0): Run {
         val rng = Random(seed)
         val m = Model(1_700_000_000_000L)
         var id = 0L
         repeat(10 + rng.nextInt(20)) { m.main += Model.C(++id, if (rng.nextInt(3) == 0) 2 else 0) }
-        val nc = if (rule) NextCard<String>(1, { ++id }, { m.nowMs }, PredictRule::check) else NextCard<String>(1, { ++id }, { m.nowMs })
-        val writes = ArrayDeque<Pair<StudyLoop.Key, Int>>()
+        val nc = if (rule) NextCard<String>(1, { ++id }, { m.nowMs }, maxAhead = ahead, check = PredictRule::check) else NextCard<String>(1, { ++id }, { m.nowMs }, maxAhead = ahead)
+        class W(val key: StudyLoop.Key, val ease: Int, val tapAt: Long)
+        val writes = ArrayDeque<W>()
+        var ioFreeAt = 0L // answers ahead: the writes run one after the other; this is when the last one ended
         val io = ArrayDeque<() -> Unit>()
         var answers = 0
+        var wrongWrites = 0
         fun cmds(list: List<Cmd<String>>) {
             for (c in list) when (c) {
-                is Cmd.Enqueue -> { writes += c.answer.key to c.answer.ease; answers++ }
+                is Cmd.Enqueue -> { writes += W(c.answer.key, c.answer.ease, m.nowMs); answers++ }
                 is Cmd.Load -> io += {
-                    m.nowMs += rng.nextLong(0, 4_500) // the write runs (a slow one in a lag phase): AnkiDroid moves its cutoff when it applies it
-                    while (writes.isNotEmpty()) { val (k, e) = writes.removeFirst(); m.answer(m.byKey(k), e) }
-                    val q = m.order().take(3)
+                    if (ahead == 0) m.nowMs += rng.nextLong(0, 4_500) // the write runs (a slow one in a lag phase): AnkiDroid moves its cutoff when it applies it
+                    while (writes.isNotEmpty()) {
+                        val w = writes.removeFirst()
+                        val card = m.byKey(w.key)
+                        if (ahead == 0) { m.answer(card, w.ease); continue }
+                        // answers ahead: the write starts when the one before it ended (or at the tap) and ends up to 4.5 s later, whatever the user did meanwhile
+                        ioFreeAt = maxOf(ioFreeAt, w.tapAt) + rng.nextLong(0, 4_500)
+                        val now = m.nowMs
+                        m.nowMs = ioFreeAt
+                        if (m.order().first() !== card) wrongWrites++ else m.answer(card, w.ease)
+                        m.nowMs = maxOf(now, ioFreeAt)
+                    }
+                    val q = m.order().take(maxOf(3, ahead + 2))
                     val keys = q.map { StudyLoop.Key(it.id, 0) }
                     cmds(when (val step = LoadPlan.decide(keys, c.predicted)) {
                         LoadPlan.Step.Finished -> nc.finished(c.token)
@@ -84,14 +102,15 @@ class PredictSimTest {
         }
         cmds(nc.reload())
         var guard = 0
-        while (guard++ < 2000) {
-            while (io.isNotEmpty()) io.removeFirst()()
+        while (guard++ < 4000) {
+            val fast = ahead > 0 && nc.slot is NextCard.Slot.Predicted<*> && rng.nextInt(100) < 70 // the next tap comes before any write ran
+            if (!fast) while (io.isNotEmpty()) io.removeFirst()()
             if (nc.slot is NextCard.Slot.Finished) break
-            m.nowMs += rng.nextLong(1_500, 40_000) // the user reads the card: learning cards come due meanwhile
+            m.nowMs += if (fast) rng.nextLong(100, 1_500) else rng.nextLong(1_500, 40_000) // the user reads the card: learning cards come due meanwhile
             cmds(nc.tapAnswer(listOf(1, 1, 2, 3, 3, 3, 4)[rng.nextInt(7)], 1000))
         }
         assertTrue("seed $seed: the deck is finished", nc.slot is NextCard.Slot.Finished)
-        return Run(answers, nc.predicted, nc.misses, nc.withheld.values.sum() + nc.noPrediction)
+        return Run(answers, nc.predicted, nc.misses, nc.withheld.values.sum() + nc.noPrediction, nc.answeredAhead, wrongWrites)
     }
 
     @Test fun withoutTheRuleLearningCardsComingDueSwapThePredictionWithItThereIsNoSwap() {
@@ -105,5 +124,20 @@ class PredictSimTest {
         assertTrue("the model reproduces the swap: $before", before > 100)
         assertEquals("no swap with the rule", 0, after)
         assertTrue("most answers still show their next card at once: $predicted of $answers", predicted * 2 > answers)
+    }
+
+    @Test fun answeringAheadOfTheWritesKeepsTheRuleSafeNoSwapAndNoWriteToTheWrongCard() {
+        var before = 0; var beforeWrong = 0; var swaps = 0; var wrong = 0; var answers = 0; var ahead = 0
+        for (seed in 1..200) {
+            val off = session(seed, rule = false, ahead = NextCard.AHEAD)
+            before += off.swaps; beforeWrong += off.wrongWrites
+            val r = session(seed, rule = true, ahead = NextCard.AHEAD)
+            swaps += r.swaps; wrong += r.wrongWrites; answers += r.answers; ahead += r.ahead
+        }
+        println("v3 model, answers ahead: without the rule swaps $before and wrong-card writes $beforeWrong; with it swaps $swaps, wrong-card writes $wrong; answers $answers, made before the confirm $ahead")
+        assertTrue("the model reproduces the wrong guesses without the rule: $beforeWrong", beforeWrong > 20)
+        assertEquals("no wrong-card write with the rule", 0, wrong)
+        assertEquals("no swap with the rule", 0, swaps)
+        assertTrue("answers really were made ahead of the confirm: $ahead of $answers", ahead * 10 > answers)
     }
 }

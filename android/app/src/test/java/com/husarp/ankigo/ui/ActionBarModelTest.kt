@@ -385,14 +385,7 @@ class ActionBarModelTest {
         assertEquals(HalfState.Note("No move"), m.mine)
     }
 
-    // ---- PLAN 206 (R14-B1-D): the line while a switch waits for the next answer
-
-    @Test fun theQueuedLineSaysSwitchingAfterThisCard() {
-        assertEquals("Switching after this card…", ActionBarModel.queuedLine())
-        assertEquals("Switching after this card…", ActionBarModel.queuedLine(null))
-        assertEquals("Switching after this card…", ActionBarModel.queuedLine(" "))
-        assertEquals("Switching to {{Pikachu}} after this card…", ActionBarModel.queuedLine("Pikachu"))
-    }
+    // ---- PLAN 206 / R18-B (227): a switch that waits draws nothing on the bar (a toast says it)
 
     @Test fun aQueuedSwitchChangesNoHalfAndIsNotABattleLine() {
         val m = ActionBarModel()

@@ -346,7 +346,7 @@ class NextCardTest {
         }
     }
 
-    // ---- R10-X1: a prediction shows only when it is safe; "Show answer" on a predicted card waits for the confirm
+    // ---- R10-X1: a prediction shows only when it is safe
 
     /** card 1 confirmed with card 2 prepared for it (token 1); the check answers [why] and records what it was asked. */
     private class Checked(var why: PredictRule.Why = PredictRule.Why.SAFE) {
@@ -412,73 +412,20 @@ class NextCardTest {
         assertEquals("AnkiDroid changed the order", swapTo(c.card(9), listOf(c.key(9), c.key(2))))
     }
 
-    @Test fun showAnswerOnAPredictedCardIsHeldAndOpensWithTheConfirm() {
+    // R18-A (278): "Show answer" on a predicted card is not held any more (the old R10-X1 tests of holdFlip / Confirm.flip are gone with it):
+    // the screen opens the answer side from the prepared card at once, and the confirm only refreshes the buttons on whatever side the user is.
+    @Test fun aConfirmNeverOpensOrClosesASide() {
         val r = ready(); r.nc.tapAnswer(3, 1)
-        assertTrue(r.nc.holdFlip())
-        assertFalse("one held at a time", r.nc.holdFlip())
-        assertTrue((r.nc.slot as NextCard.Slot.Predicted<String>).flipHeld)
         val cmds = r.nc.confirmed(2, key(2), queue(2, 3), refresh = { "$it*" })
-        assertEquals(Cmd.Confirm(card(2, "c2*"), flip = true), cmds[0])
+        assertEquals(Cmd.Confirm(card(2, "c2*")), cmds[0])
         assertEquals(NextCard.Slot.Confirmed(card(2, "c2*"), 2), r.nc.slot)
     }
 
-    @Test fun aConfirmWithoutAHeldShowAnswerDoesNotOpenIt() {
+    @Test fun aSwapOfAPredictedCardAlwaysShowsTheQuestionOfTheRealCard() {
         val r = ready(); r.nc.tapAnswer(3, 1)
-        assertEquals(Cmd.Confirm(card(2), flip = false), r.nc.confirmed(2, key(2), queue(2, 3))[0])
-    }
-
-    @Test fun aSwapDropsAHeldShowAnswer() {
-        val r = ready(); r.nc.tapAnswer(3, 1); r.nc.holdFlip()
         val cmds = r.nc.swapped(2, card(5), queue(5, 6))
         assertEquals("the new card shows its question", Cmd.Show(card(5), predicted = false), cmds[0])
         assertTrue(cmds.none { it is Cmd.Confirm })
         assertEquals(NextCard.Slot.Confirmed(card(5), 2), r.nc.slot)
-        assertFalse("nothing to hold on a confirmed card", r.nc.holdFlip())
-    }
-
-    @Test fun showAnswerIsHeldOnlyOnAPredictedCardWithNoHeldTap() {
-        val r = ready()
-        assertFalse("a confirmed card flips at once", r.nc.holdFlip())
-        val r2 = Rig(); r2.nc.reload()
-        assertFalse("nothing shown", r2.nc.holdFlip())
-        val r3 = ready(); r3.nc.tapAnswer(3, 1); r3.nc.tapAnswer(4, 9)
-        assertFalse("a tap is held already", r3.nc.holdFlip())
-    }
-
-    @Test fun randomEventOrdersNeverOpenAHeldShowAnswerOnAnotherCard() {
-        for (seed in 1..300) {
-            val rng = Random(seed)
-            var seq = 0L
-            val nc = NextCard<String>(1, { ++seq }) { _, _, _ -> if (rng.nextInt(4) == 0) PredictRule.Why.LEARNING_DUE else PredictRule.Why.SAFE }
-            var heldOn: StudyLoop.Key? = null // the predicted card a "Show answer" is held on
-            var tokenAsked = 0
-            fun run(cmds: List<Cmd<String>>) {
-                for (c in cmds) when (c) {
-                    is Cmd.Show, Cmd.ShowWaiting, Cmd.ShowFinished, is Cmd.ShowError -> heldOn = null
-                    is Cmd.Confirm -> {
-                        if (c.flip) assertEquals("seed $seed: opened on ${c.card.key}", heldOn, c.card.key)
-                        heldOn = null
-                    }
-                    is Cmd.Load -> tokenAsked = c.token
-                    else -> {}
-                }
-            }
-            run(nc.reload())
-            repeat(150) {
-                val t = (tokenAsked - 1 + rng.nextInt(3)).coerceAtLeast(0)
-                val n = 1 + rng.nextInt(6)
-                val q = (0 until 1 + rng.nextInt(3)).map { key(n + it) }
-                when (rng.nextInt(10)) {
-                    0 -> run(nc.loaded(t, card(n), q))
-                    1 -> run(nc.swapped(t, card(n), q))
-                    2 -> run(nc.confirmed(t, key(1 + rng.nextInt(6)), q))
-                    3 -> run(nc.finished(t))
-                    4 -> nc.prepared(key(1 + rng.nextInt(6)), t, card(n))
-                    5, 6 -> run(nc.tapAnswer(1 + rng.nextInt(4), 10))
-                    7, 8 -> { val s = nc.slot; if (nc.holdFlip()) heldOn = (s as NextCard.Slot.Predicted<String>).card.key }
-                    9 -> if (rng.nextInt(4) == 0) run(nc.reload())
-                }
-            }
-        }
     }
 }

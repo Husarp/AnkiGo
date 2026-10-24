@@ -31,15 +31,16 @@ import com.husarp.ankigo.ui.FoldGroup
 import com.husarp.ankigo.ui.Ui
 import com.husarp.ankigo.ui.showCard
 import com.husarp.ankigo.update.Updates
-import com.husarp.ankigo.update.UpdatesActivity
 
 /** The step-0 test screen (C-checks, LIVE watch, report), now reached from Settings -> Diagnostics. */
 class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
     override val closesWhenLeft = true // PLAN 222
     companion object {
         private const val COPY_MAX = 400_000
-        const val NOT_TOP_TITLE = "Save answers for cards that aren't first (test)"
-        const val NOT_TOP_SUB = "When AnkiDroid puts another card first, AnkiGo still tries to save your answer, or saves it when that card is first again today. Turn off if answers go wrong."
+
+        /** R18 256: the log box is 35 % of the window, at least 200 dp, and never taller than the window minus [RESERVED_DP] for the bars and buttons. Pure. */
+        fun logHeightDp(windowDp: Float): Float = minOf(maxOf(200f, windowDp * 0.35f), maxOf(0f, windowDp - RESERVED_DP))
+        private const val RESERVED_DP = 120f
     }
 
     private val bg = Executors.newSingleThreadExecutor()
@@ -128,20 +129,12 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             row("C3 Media: pick media folder" to { pickTree() }, "C3 Media: import .apkg" to { pickApkg() }))
         group("Widgets",
             row("C8 Pin motivation widget" to { pin(MotivationWidget::class.java) }, "C8 Pin study widget" to { pin(StudyWidget::class.java) }))
-        // PLAN 195: on by default; Adam turns it off if his phone shows trouble with answers to cards that aren't first
-        val study = getSharedPreferences("study", 0)
-        group("App",
-            row("Updates (version ${Updates.current(this)})" to { startActivity(Intent(this, UpdatesActivity::class.java)) }),
-            Form.switchRow(this, NOT_TOP_TITLE, NOT_TOP_SUB, study.getBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, true)) { on ->
-                study.edit().putBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, on).apply()
-                Report.log("SETTINGS", "${com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF} -> $on")
-            })
 
         return root
     }
 
-    /** About 70 % of the window, but never under 320 dp. */
-    private fun logHeightPx(): Int = maxOf(Ui.dp(this, 320), (resources.displayMetrics.heightPixels * 0.7f).toInt())
+    /** About 35 % of the window, but never under 200 dp (PLAN 256); see [logHeightDp]. */
+    private fun logHeightPx(): Int = (logHeightDp(resources.displayMetrics.heightPixels / resources.displayMetrics.density) * resources.displayMetrics.density).toInt()
 
     /** "Full screen": the log text in a dialog that fills the window, scrolled to the end (a snapshot: new lines don't follow there). */
     private fun showFullLog() {

@@ -19,8 +19,8 @@ import java.time.LocalDate
 import kotlin.random.Random
 
 /*
- * R4-V11: the four battle charts (damage dealt / taken / blocked, misses) and the All time card with the battle tiles.
- * PNGs: r4v11-dealt, r4v11-taken, r4v11-blocked, r4v11-misses (30 days, one bar tapped), r4v11-dealt-week (90 days),
+ * R4-V11: the All time card with the battle tiles (the four battle charts were removed in R18 item 233).
+ * PNGs:
  * r4v11-sheet (the metric list with the new chips), r4v11-alltime (the whole page). Light + dark.
  */
 class R4V11Shots {
@@ -64,11 +64,6 @@ class R4V11Shots {
         }
     }
 
-    @Test fun dealt() = shoot("r4v11-dealt") { it.preset(metric = ChartMetric.DMG_DEALT, period = ChartPeriod.D30, bar = 26) }
-    @Test fun taken() = shoot("r4v11-taken") { it.preset(metric = ChartMetric.DMG_TAKEN, period = ChartPeriod.D30, bar = 26) }
-    @Test fun blocked() = shoot("r4v11-blocked") { it.preset(metric = ChartMetric.DMG_BLOCKED, period = ChartPeriod.D30, bar = 26) }
-    @Test fun misses() = shoot("r4v11-misses") { it.preset(metric = ChartMetric.MISSES, period = ChartPeriod.D30, bar = 26) }
-    @Test fun dealtThreeMonths() = shoot("r4v11-dealt-week") { it.preset(metric = ChartMetric.DMG_DEALT, period = ChartPeriod.D90, bar = 5) }
     @Test fun metricSheet() = shoot("r4v11-sheet") { it.preset(sheet = true) }
-    @Test fun wholePage() = shoot("r4v11-alltime", listOf(Variants.TALL)) { it.preset(metric = ChartMetric.DMG_TAKEN, period = ChartPeriod.D30) }
+    @Test fun wholePage() = shoot("r4v11-alltime", listOf(Variants.TALL)) { it.preset(metric = ChartMetric.REVIEWS, period = ChartPeriod.D30) }
 }

@@ -88,7 +88,7 @@ object AchievementTable {
         tiered("goals", "Study", "Daily goal reached", "Days you reached the daily goal (not in a row)", Metric.GOALS_REACHED, "target", 5, 30, 100, 300, 1_000),
 
         // ---- Battle (battle and progress) ----
-        tiered("defeats", "Battle", "Wild Pokémon defeated", "Wild Pokémon your main knocked out or caught", Metric.DEFEATS, "crossed-swords", 10, 100, 1_000, 5_000, 15_000),
+        tiered("defeats", "Battle", "Battles won", "Wild Pokémon your main knocked out or caught", Metric.DEFEATS, "crossed-swords", 10, 100, 1_000, 5_000, 15_000),
         tiered("damage-dealt", "Battle", "Damage dealt", "HP your Pokémon took off wild ones", Metric.DAMAGE_DEALT, "sword", 1_000, 20_000, 200_000, 1_000_000, 3_000_000),
         tiered("damage-taken", "Battle", "Damage taken", "HP your Pokémon lost", Metric.DAMAGE_TAKEN, "heart-broken", 500, 10_000, 100_000, 500_000, 1_500_000),
         tiered("damage-blocked", "Battle", "Damage blocked", "Damage you didn't take thanks to resisting", Metric.DAMAGE_BLOCKED, "shield", 200, 5_000, 50_000, 200_000, 600_000),
@@ -110,8 +110,8 @@ object AchievementTable {
         tiered("ball-catches", "Collection", "Ball catches", "Catches with a thrown ball (not the auto-catch rule)", Metric.BALL_CATCHES, "ball-catch", 1, 10, 50, 200, 500),
 
         // ---- Economy ----
-        tiered("money-earned", "Economy", "Money earned", "₽ earned from answers and won battles", Metric.MONEY_EARNED, "coin", 2_000, 20_000, 100_000, 365_000, 1_000_000),
-        tiered("money-spent", "Economy", "Money spent", "₽ spent in the Shop", Metric.MONEY_SPENT, "bag", 1_000, 10_000, 75_000, 250_000, 750_000),
+        tiered("money-earned", "Economy", "Money earned", "Coins earned from answers and won battles", Metric.MONEY_EARNED, "coin", 2_000, 20_000, 100_000, 365_000, 1_000_000),
+        tiered("money-spent", "Economy", "Money spent", "Coins spent in the Shop", Metric.MONEY_SPENT, "bag", 1_000, 10_000, 75_000, 250_000, 750_000),
         tiered("items-used", "Economy", "Items used", "Potions, stones, held items given", Metric.ITEMS_USED, "potion", 5, 50, 250, 1_000, 3_000),
         tiered("tms", "Economy", "TMs taught", "Moves taught with a TM", Metric.TMS_TAUGHT, "tm", 1, 5, 20, 50, 100),
         tiered("items-found", "Economy", "Items found", "Random items after answers", Metric.ITEMS_FOUND, "gift", 1, 25, 100, 500, 1_500),

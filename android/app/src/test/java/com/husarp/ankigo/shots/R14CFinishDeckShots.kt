@@ -120,6 +120,9 @@ class R14CFinishDeckShots {
             events(act).enqueue(defeatBatch())
             flush(ctx)
             assertTrue("a result holds", events(act).holding)
+            // R18 FIX-1: the row swap is the hold notice posted on the main looper (R609FlowTest tests that); under a heavy machine load it is not
+            // always played by the flush, so this test runs the same step itself and no longer depends on the timing
+            call(act, "showButtons")
             assertEquals("Continue, next battle", rowText(act))
             lastAnswerIn(act)
             assertEquals("Finish deck, see the summary", rowText(act))

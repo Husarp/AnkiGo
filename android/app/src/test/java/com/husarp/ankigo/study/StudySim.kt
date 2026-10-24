@@ -15,7 +15,7 @@ val QueuedAnswer.id: Long get() = tookMs
  *
  * The ground truth is kept apart from the code under test and [check] tests the invariants against it.
  */
-class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemStore()) {
+class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemStore(), val maxAhead: Int = 0, val tryNotTop: Boolean = false) {
     class Shown(val key: StudyLoop.Key, val predicted: Boolean)
 
     // ---- ground truth (survives a death)
@@ -30,6 +30,8 @@ class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemSt
     val restoreProblems = ArrayList<String>()
     var deaths = 0
     var journalFailed = 0
+    var prepares = 0 // R18 RV-9: Prepare tasks the io thread ran
+    var learnReads = 0 // R18 RV-9: the deck's learning-card reads (AnkiDroid `searchCards`) the io thread made for them
 
     // ---- the pretend screen
     var displayed: Shown? = null
@@ -40,6 +42,7 @@ class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemSt
     var heldShown = 0
     val shows = ArrayList<String>() // "P:name" predicted, "C:name" loaded, "K:name" confirmed, for assertions
     val timeline = ArrayList<String>() // "end:<id>" when a write is resolved, "confirm:<name>" when a card becomes the real one
+    val log = ArrayList<Pair<Long, String>>() // R18-A: (virtual ms, what the screen did) for every reducer command: "show:P:c101/0", "show:C:..", "confirm:..", "enqueue:<ease>"
 
     var policy: ((StudySim, Boolean) -> Unit)? = null // (sim, idle)
     var meddle: ((StudySim) -> Unit)? = null // events outside the app, between io tasks only
@@ -49,8 +52,10 @@ class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemSt
     inner class Proc {
         val io = ArrayDeque<() -> Unit>()
         val main = ArrayDeque<() -> Unit>()
-        val queue = AnswerQueue(fake, store, HookImpl(this), waiter, { fake.clock.ms })
-        val nc = NextCard<String>(deckId, queue::nextSeq, { fake.clock.ms })
+        val queue = AnswerQueue(fake, store, HookImpl(this), waiter, { fake.clock.ms }, tryNotTop = { tryNotTop })
+        val nc = NextCard<String>(deckId, queue::nextSeq, { fake.clock.ms }, maxAhead = maxAhead)
+        /** R18 RV-9: like the screen, the Prepares and the held tap's next card of one load share ONE learning read ([LearnCache]). */
+        val learn = LearnCache { learnReads++; PredictRule.learnRead(emptyList(), deckId, fake.clock.ms) }
     }
 
     lateinit var p: Proc
@@ -116,14 +121,19 @@ class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemSt
     // ---- the reducer's commands
 
     fun cmds(list: List<Cmd<String>>) {
+        for (c in list) log += fake.clock.ms to when (c) {
+            is Cmd.Show -> "show:${if (c.predicted) "P" else "C"}:${c.card.view}"; is Cmd.Confirm -> "confirm:${c.card.view}"; is Cmd.Enqueue -> "enqueue:${c.answer.ease}:c${c.answer.nid}/${c.answer.ord}"
+            is Cmd.ShowHeld -> "held:${c.ease}"; Cmd.ShowWaiting -> "waiting"; Cmd.ShowFinished -> "finished"; is Cmd.ShowError -> "error"; is Cmd.Refuse -> "refuse"
+            is Cmd.Load -> "load:${c.token}"; is Cmd.Prepare -> "prepare:${c.key.nid}"
+        }
         for (c in list) when (c) {
             is Cmd.Load -> { val proc = p; proc.io += { load(proc, c.token, c.predicted) } }
             is Cmd.Prepare -> { val proc = p; proc.io += { prepare(proc, c) } }
             is Cmd.Enqueue -> {
                 val a = c.answer
-                if (p.queue.size != 0) violations += "answer ${a.seq} made while another answer was unresolved"
+                if (maxAhead == 0 && p.queue.size != 0) violations += "answer ${a.seq} made while another answer was unresolved" // R18-A: with maxAhead > 0 answers are made ahead of the write on purpose
                 val d = displayed
-                if (d == null || d.predicted || d.key != a.key) violations += "answer ${a.seq} acted on ${if (d == null) "no card" else if (d.predicted) "a predicted card" else "another card"}"
+                if (d == null || (d.predicted && maxAhead == 0) || d.key != a.key) violations += "answer ${a.seq} acted on ${if (d == null) "no card" else if (d.predicted) "a predicted card" else "another card"}"
                 p.queue.enqueue(a)
                 made += a
                 val proc = p
@@ -150,13 +160,13 @@ class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemSt
     private fun load(proc: Proc, token: Int, predicted: StudyLoop.Key?) {
         try {
             proc.queue.ensureSelected(deckId) { fake.select(deckId) }
-            val q = fake.top(deckId, 3)
+            val q = fake.top(deckId, maxOf(3, maxAhead + 2))
             when (val step = LoadPlan.decide(q, predicted)) {
                 LoadPlan.Step.Finished -> post(proc) { cmds(proc.nc.finished(token)) }
                 is LoadPlan.Step.Confirm -> {
                     // while a tap is held the card after it is prepared right here, so the held tap's own next card shows at once
                     val heldNow = (proc.nc.slot as? NextCard.Slot.Predicted<*>)?.held != null
-                    val next = if (heldNow && q.size > 1) try { prepared(q[1]) } catch (e: Exception) { null } else null
+                    val next = if (heldNow && q.size > 1) try { prepared(q[1]).copy(learning = proc.learn.get(token)) } catch (e: Exception) { null } else null
                     post(proc) { cmds(proc.nc.confirmed(token, step.key, q, next) { "$it*" }) }
                 }
                 is LoadPlan.Step.Fetch -> { val pr = prepared(step.key); post(proc) { cmds(if (predicted != null) proc.nc.swapped(token, pr, q) else proc.nc.loaded(token, pr, q)) } }
@@ -168,7 +178,8 @@ class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemSt
 
     private fun prepare(proc: Proc, c: Cmd.Prepare) {
         try {
-            val pr = prepared(c.key)
+            val pr = prepared(c.key).copy(learning = proc.learn.get(c.forToken))
+            prepares++
             post(proc) { proc.nc.prepared(c.forKey, c.forToken, pr) }
         } catch (e: Exception) { /* no prediction */ }
     }

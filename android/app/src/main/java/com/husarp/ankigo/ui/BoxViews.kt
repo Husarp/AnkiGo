@@ -48,6 +48,16 @@ internal object BoxViews {
         }
     }
 
+    /**
+     * R18 253: a quick chip of the filter row, a toggle in place: lit ([on], the [chip] accent look) while its filter is on, a tap flips it.
+     * TalkBack reads "<label>, on" / "<label>, off" (the label without the star).
+     */
+    fun quickChip(ctx: Context, label: String, on: Boolean, heart: Boolean = false, onClick: () -> Unit): TextView =
+        chip(ctx, label, on, heart, onClick).apply {
+            isSelected = on
+            contentDescription = "${label.removePrefix("★ ")}, ${if (on) "on" else "off"}"
+        }
+
     /** "Brave · IV 142" (nature, then the six IVs added up): the second line of a copy in the sheet. */
     fun copyNote(mon: Mon): String = "${mon.nature.label} · IV ${mon.ivs.total}"
 }

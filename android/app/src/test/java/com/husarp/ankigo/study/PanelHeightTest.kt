@@ -44,8 +44,8 @@ class PanelHeightTest {
         assertEquals(300, PanelHeight.clamp(900, 300))
         assertEquals(180, PanelHeight.clamp(180, 300))
         assertEquals(34, PanelHeight.clamp(180, 10))         // a tiny window still gets the Mini line
-        // 869 dp phone: body ~ 869 - 24; panel max = body - top bar - bar - buttons - 120
-        assertEquals(845 - 46 - 24 - 64 - 120, PanelHeight.maxDp(845, PanelHeight.buttonsDp(1)))
+        // 869 dp phone: body ~ 869 - 24; panel max = body - top bar (49: R18, the 48 dp row + its line) - bar - buttons - 120
+        assertEquals(845 - 49 - 24 - 64 - 120, PanelHeight.maxDp(845, PanelHeight.buttonsDp(1)))
     }
 
     @Test fun tapCyclesTheThreePresets() {

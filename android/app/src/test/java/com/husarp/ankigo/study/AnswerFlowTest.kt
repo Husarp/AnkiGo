@@ -206,6 +206,15 @@ class AnswerFlowTest {
         assertTrue(t.line(), t.line().endsWith("; this visit: predicted 3 (hit 2, swap 1), waited 1 (learning card due 1)"))
     }
 
+    @Test fun anAnswerMadeBeforeItsCardWasConfirmedAndAHeldTapAreNamedInTheLine() { // R18-A (278)
+        val t = AnswerTiming(0, all)
+        assertFalse(t.line().contains("confirmed")); assertFalse(t.line().contains("held"))
+        t.ahead = true
+        assertTrue(t.line(), t.line().contains("made before its card was confirmed"))
+        t.heldMs = 1850
+        assertTrue(t.line(), t.line().contains("tap held 1850 ms for the confirm"))
+    }
+
     @Test fun theWriteQueueLengthAndMainWaitShowOnlyWhenKnown() {
         val t = AnswerTiming(0, all)
         assertFalse(t.line().contains("write queue")); assertFalse(t.line().contains("main wait"))

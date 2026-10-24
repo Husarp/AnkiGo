@@ -137,7 +137,7 @@ object AchievementPopup {
             val gift = pendingGifts.first()
             pendingGifts = pendingGifts.drop(1)
             shownGift = gift
-            d.setContentView(giftLayer(a, GameRepo.data, gift, onNice = { finish() }))
+            d.setContentView(giftLayer(a, GameRepo.data, gift, onNice = { finish() }, caught = GameRepo.state?.caught))
         } else { // the found items
             val batch = pendingItems
             pendingItems = emptyList()
@@ -292,9 +292,9 @@ object AchievementPopup {
     /**
      * R14-B2-D: the full-window layer of the "Daily gift" popup (shots render this view): the item's picture (or the TM disc), the name with its
      * count in words ("3 Poké Balls", "Great Ball", "TM Thunderbolt"), what it does, and the goal-streak line. A tap outside the card or on
-     * "Nice" calls [onNice]. [data] null = no game data (the TM shows its move id and no type colour).
+     * "Nice" calls [onNice]. [data] null = no game data (the TM shows its move id and no type colour). [caught] (R18-H, PLAN 238): the Pokédex's caught species, so a stone does not name a Pokémon you never caught.
      */
-    fun giftLayer(ctx: Context, data: GameData?, gift: GiftPop, onNice: () -> Unit): View {
+    fun giftLayer(ctx: Context, data: GameData?, gift: GiftPop, onNice: () -> Unit, caught: Set<Int>? = null): View {
         val frame = FrameLayout(ctx).apply { isClickable = true; setOnClickListener { onNice() } }
         val box = cardBox(ctx)
         box.setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14))
@@ -308,7 +308,7 @@ object AchievementPopup {
         box.addView(Ui.text(ctx, 22f, 900, R.color.ag_text).apply { text = DailyGift.name(data, gift.item, gift.tm, gift.count); gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 8) })
         val what = when {
-            gift.item != null -> ItemInfo.line(data, gift.item)
+            gift.item != null -> ItemInfo.line(data, gift.item, caught)
             else -> data?.let { ItemInfo.plain(ItemInfo.moveEffect(it, gift.tm.orEmpty())) }?.takeIf { it.isNotBlank() } ?: ItemInfo.tmHowToUse()
         }
         box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = what; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })

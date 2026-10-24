@@ -53,6 +53,28 @@ class DexFilterTest {
         assertEquals(listOf(4, 25), run(DexFilter(wishlistOnly = true)))
     }
 
+    @Test fun favouritesOnlyKeepsSpeciesWithAFavouriteCopy() {
+        // R18 253: owning a favourite copy of Bulba and Chiko (not Pika), AND with the rest
+        val fav = setOf(1, 152)
+        fun r(f: DexFilter) = f.apply(all, last, wish, gens, null, fav).map { it.num }
+        assertEquals(listOf(1, 152), r(DexFilter(favouritesOnly = true)))
+        assertEquals(listOf(152), r(DexFilter(favouritesOnly = true, gens = setOf(2))))
+        assertEquals(listOf(1), r(DexFilter(favouritesOnly = true, types = setOf(Type.POISON))))
+        assertEquals(emptyList<Int>(), r(DexFilter(favouritesOnly = true, wishlistOnly = true))) // Pika and Char are on the wishlist, neither is a favourite
+        assertEquals(listOf(1, 4, 25, 125, 152, 252), r(DexFilter())) // off: no effect
+        assertTrue(DexFilter(favouritesOnly = true).active)
+        assertEquals(0, DexFilter(favouritesOnly = true).sheetActive) // not a sheet filter
+    }
+
+    @Test fun favouriteSpeciesComeFromTheOwnedFavouriteCopies() {
+        val d = TestData.data(listOf(TestData.species(25), TestData.species(4)))
+        val a = TestData.mon(d, 25, 5, uid = "a").also { it.favourite = true }
+        val b = TestData.mon(d, 25, 7, uid = "b")
+        val c = TestData.mon(d, 4, 5, uid = "c")
+        assertEquals(setOf(25), DexFilter.favouriteSpecies(listOf(a, b, c)))
+        assertEquals(emptySet<Int>(), DexFilter.favouriteSpecies(listOf(b, c)))
+    }
+
     @Test fun searchByNameIsCaseInsensitiveAndContains() {
         assertEquals(listOf(25), run(DexFilter(query = "PIK")))
         assertEquals(listOf(125, 252), run(DexFilter(query = "e")))

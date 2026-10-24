@@ -109,7 +109,7 @@ class R4V2Shots {
             for (g in listOf("STUDY", "BATTLE", "COLLECTION", "ECONOMY", "SPECIAL", "BADGES")) assertTrue(g, g in t)
             for (g in AchievementTable.GROUPS) assertTrue("chip $g", g in t) // the jump chips (the headers are in capitals)
             assertTrue("Answers given" in t && "31,240 / 100,000" in t)
-            assertTrue("Wild Pokémon defeated" in t)
+            assertTrue("Battles won" in t)
             assertTrue("Epic" in t) // the answers row
             assertTrue("Not yet" in t)
             assertTrue("Earned" in t) // the earned one-offs
@@ -139,7 +139,7 @@ class R4V2Shots {
             call(lastPage!!, "render")
             assertEquals("Economy", lastPage!!.achievementsView().tab())
             val t = texts(screen)
-            assertFalse("BATTLE" in t || "Wild Pokémon defeated" in t)
+            assertFalse("BATTLE" in t || "Battles won" in t)
             assertTrue("Money earned" in t)
             screen
         }
@@ -171,7 +171,7 @@ class R4V2Shots {
             val close = views.filter { AchPageMath.close(it) }
             assertTrue(close.isNotEmpty())
             for (v in close) assertTrue(v.title, v.title in t)
-            assertFalse("a far row stays out", "Wild Pokémon defeated" in t && !close.any { it.id == "defeats" })
+            assertFalse("a far row stays out", "Battles won" in t && !close.any { it.id == "defeats" })
             screen
         }
         paparazzi.shootPage("r4v2-filter-recent", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->

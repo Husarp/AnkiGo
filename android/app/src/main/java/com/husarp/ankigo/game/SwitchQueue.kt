@@ -16,15 +16,18 @@ object SwitchQueue {
         return battle.wild.hp > 0 && main.hp > 0
     }
 
-    /** The toast / result text of a queued switch (Adam's wording: the wild one attacks once, never "a free hit"). */
-    fun queuedText(name: String) = "$name comes in after this card · the wild attacks once"
+    /**
+     * The toast / result text of a queued switch (R18-B: Adam's picked wording). The attack is in [MENU_SUB], and in the Help text:
+     * the wild Pokémon attacks once, never "a free hit".
+     */
+    fun queuedText(name: String) = "Switching to $name on your next move."
 
     /** The result text when the queue was cancelled (the main was picked again). */
     fun cancelledText(name: String) = "$name stays in."
 
     /** The sub line of "Make main" in the Team / Compare menus while a fight is on (outside a fight there is none). */
-    const val MENU_SUB = "After this card · the wild attacks once"
+    const val MENU_SUB = "On your next move · the wild Pokémon attacks once"
 
     /** The marker on the queued Pokémon's Team row. */
-    const val ROW_MARK = "After this card"
+    const val ROW_MARK = "On your next move"
 }

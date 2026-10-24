@@ -51,15 +51,15 @@ class HeatmapLayoutTest {
         assertEquals(W, r.cells.last().x + r.cells.last().w, 0.01f)       // uses the whole width
         assertEquals(0f, r.cells.first().x, 0.001f)
         assertTrue(r.cells.zipWithNext().all { (a, b) -> a.x < b.x })       // oldest left
-        assertEquals(r.cells.first().y + r.cells.first().h + 16f, r.height, 0.01f)
+        assertEquals(r.cells.first().y + r.cells.first().h + 20f, r.height, 0.01f)
     }
 
-    @Test fun stripHasTheLettersUnderMondayWednesdayFridayAndSunday() {
+    @Test fun stripHasAllSevenLettersUnderTheCells() {
         val r = layout(HeatmapLayout.Mode.STRIP, "2026-10-18", 7, 4)    // Mon 12 .. Sun 18
-        assertEquals(listOf("M", "W", "F", "S"), r.letters.map { it.text })
-        for ((letter, day) in listOf("M" to "2026-10-12", "W" to "2026-10-14", "F" to "2026-10-16", "S" to "2026-10-18")) {
+        assertEquals(listOf("M", "T", "W", "T", "F", "S", "S"), r.letters.map { it.text })
+        for ((i, day) in (12..18).map { "2026-10-$it" }.withIndex()) {
             val c = r.cell(day)
-            val l = r.letters.first { it.text == letter }
+            val l = r.letters[i]
             assertEquals(c.x + c.w / 2, l.x, 0.01f)
             assertTrue(l.centered)
             assertTrue(l.cy > c.y + c.h)                                      // under the cell
@@ -99,7 +99,7 @@ class HeatmapLayoutTest {
         val rows = rowsOf(r)
         // Sep 19-20 | Sep 21-27 | Sep 28-30 | Oct 1-4 | Oct 5-11 | Oct 12-18: the month change starts a new row
         assertEquals(listOf(2, 7, 3, 4, 7, 7), rows.map { it.size })
-        assertEquals(r.height, 14f + rows.size * 38f, 0.01f)
+        assertEquals(r.height, 18f + rows.size * 38f, 0.01f)
     }
 
     @Test fun aNewMonthStartsANewRowInItsWeekdaysColumn() {
@@ -128,14 +128,14 @@ class HeatmapLayoutTest {
 
     @Test fun rowLettersFollowTheTurnedColumns() {
         val r = layout(HeatmapLayout.Mode.ROWS, "2026-10-14", 30, 6)      // last column Wednesday
-        // columns, left to right: Thu Fri Sat Sun Mon Tue Wed -> letters F (col 1), S (3), M (4), W (6)
-        assertEquals(listOf("F", "S", "M", "W"), r.letters.map { it.text })
+        // columns, left to right: Thu Fri Sat Sun Mon Tue Wed
+        assertEquals(listOf("T", "F", "S", "S", "M", "T", "W"), r.letters.map { it.text })
         val step = (W - 24f) / 7 + 4f
         val cw = (W - 24f) / 7
-        assertEquals(listOf(1, 3, 4, 6).map { it * step + cw / 2 }, r.letters.map { it.x })
+        assertEquals((0..6).map { it * step + cw / 2 }, r.letters.map { it.x })
         assertTrue(r.letters.all { it.centered && it.cy < 14f })           // above the grid
         val sunday = layout(HeatmapLayout.Mode.ROWS, "2026-10-18", 30, 6)
-        assertEquals(listOf("M", "W", "F", "S"), sunday.letters.map { it.text })
+        assertEquals(listOf("M", "T", "W", "T", "F", "S", "S"), sunday.letters.map { it.text })
     }
 
     @Test fun rowsMonthNameOnlyWithEmptyCellsBeforeTheFirst() {
@@ -210,7 +210,7 @@ class HeatmapLayoutTest {
 
     @Test fun weeksCellSizeFollowsTheWidth() {
         val r = layout(HeatmapLayout.Mode.WEEKS, "2026-10-14", 90, 13)
-        val cw = (W - 18f - 3f * 12) / 13
+        val cw = (W - 22f - 3f * 12) / 13
         assertEquals(cw, r.cells[0].w, 0.01f)
         assertEquals(cw, r.cells[0].h, 0.01f)
         assertEquals(10f, r.labelSp, 0f)
@@ -222,7 +222,7 @@ class HeatmapLayoutTest {
     @Test fun aYearHas53ColumnsTinyCellsAtLeast7DpTallAndASmallerGap() {
         val r = layout(HeatmapLayout.Mode.WEEKS, "2026-10-14", 365, 53)
         assertEquals(53, r.cells.map { it.x }.distinct().size)
-        val cw = (W - 18f - 2f * 52) / 53
+        val cw = (W - 22f - 2f * 52) / 53
         assertEquals(cw, r.cells[0].w, 0.01f)
         assertEquals(7f, r.cells[0].h, 0.001f)                              // height >= 7 dp
         assertEquals(8.5f, r.labelSp, 0f)                                   // small cells: smaller labels
@@ -234,12 +234,12 @@ class HeatmapLayoutTest {
 
     @Test fun weekLettersAreOnTheLeftAtTheirRows() {
         val r = layout(HeatmapLayout.Mode.WEEKS, "2026-10-14", 90, 13)
-        assertEquals(listOf("M", "W", "F", "S"), r.letters.map { it.text })
+        assertEquals(listOf("M", "T", "W", "T", "F", "S", "S"), r.letters.map { it.text })
         val ch = r.cells[0].h
-        val rowsAt = listOf(0, 2, 4, 6).map { 16f + it * (ch + 3f) + ch / 2 }
+        val rowsAt = (0..6).map { 16f + it * (ch + 3f) + ch / 2 }
         assertEquals(rowsAt, r.letters.map { it.cy })
         assertTrue(r.letters.all { it.x == 0f && !it.centered })
-        assertTrue(r.cells.all { it.x >= 18f })
+        assertTrue(r.cells.all { it.x >= 22f })
     }
 
     @Test fun weekMonthNamesAreOnTopAndNeverCloserThan24Dp() {
@@ -247,7 +247,7 @@ class HeatmapLayoutTest {
             val r = layout(HeatmapLayout.Mode.WEEKS, "2026-10-14", weeks.second, weeks.first)
             assertTrue(r.months.isNotEmpty())
             assertTrue(r.months.all { it.cy < 16f && !it.centered })
-            assertEquals(18f, r.months.first().x, 0.001f)                 // the first column is always named
+            assertEquals(22f, r.months.first().x, 0.001f)                 // the first column is always named
             assertTrue(r.months.zipWithNext().all { (a, b) -> b.x - a.x > 24f })
         }
         val year = layout(HeatmapLayout.Mode.WEEKS, "2026-10-14", 365, 53)

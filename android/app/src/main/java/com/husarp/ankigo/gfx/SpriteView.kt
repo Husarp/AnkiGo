@@ -95,6 +95,22 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
             updateIdle()
         }
 
+    /**
+     * R18-C (PLAN 247): true = the idle playback follows Settings → Battle "Pokémon movement" ([com.husarp.ankigo.ui.MotionPrefs]): an
+     * animated picture plays once, holds its first frame for a pause (2 / 5 / 12 s, changed by up to 30 % at random each time), plays
+     * again; a still picture's [idleMotion] float does the same; Never = the first frame only, no float. Only the arena's two sprites
+     * set it (lists, the Buddy widget and the viewer keep playing as before). Attacks, hits and faints are transforms of the view
+     * and are not affected.
+     */
+    var followMovement: Boolean = false
+        set(v) { if (v != field) { field = v; updateAnimation() } }
+
+    /** The movement step in force: the setting for a [followMovement] view, else always. */
+    private fun movementStep(): Int = if (followMovement) com.husarp.ankigo.ui.MotionPrefs.step(context) else com.husarp.ankigo.ui.MotionPrefs.ALWAYS
+
+    /** R18 NICE-3: [movementStep] read once per [updateAnimation] and when a play ends, not on every frame (it reads two SharedPreferences). */
+    private var stepNow: Int = com.husarp.ankigo.ui.MotionPrefs.ALWAYS
+
     /** True while the idle motion animator runs (for tests). */
     internal val idleRunning: Boolean get() = idleAnim != null
     /** How many times the idle animator was started (for tests: a snapshot host detaches the view again afterwards). */
@@ -126,9 +142,26 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         ticking = false
         val img = image ?: return@Runnable
         if (!img.animated) return@Runnable
+        val step = stepNow
+        if (step == com.husarp.ankigo.ui.MotionPrefs.NEVER) {   // R18-C: the setting went to Never meanwhile: the first frame, no more ticks
+            holding = false; frame = 0; invalidate()
+            return@Runnable
+        }
+        holding = false
         frame = (frame + 1) % img.frames.size
         invalidate()
-        schedule()
+        // R18-C: the animation has played once (it is back on its first frame): hold it for a pause, then play again
+        if (frame == 0) stepNow = movementStep() // a play is over: pick up a setting that changed meanwhile
+        if (frame == 0 && com.husarp.ankigo.ui.MotionPrefs.pauses(stepNow)) holdFirstFrame(stepNow) else schedule()
+    }
+    /** R18-C: the first frame is held for a pause between two plays (the next [tick] starts the next play). */
+    private var holding = false
+
+    private fun holdFirstFrame(step: Int) {
+        if (ticking) return
+        holding = true
+        ticking = true
+        postDelayed(tick, com.husarp.ankigo.ui.MotionPrefs.jitteredPauseMs(step, java.util.concurrent.ThreadLocalRandom.current().nextFloat()))
     }
 
     fun setImage(img: SpriteImage?) {
@@ -136,7 +169,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         boundsFor = null; bounds = null
         measureFoot()
         frame = 0
-        removeCallbacks(tick); ticking = false
+        removeCallbacks(tick); ticking = false; holding = false
         requestLayout()
         invalidate()
         updateAnimation()
@@ -322,35 +355,63 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     private fun updateAnimation() {
         val img = image
         val run = android.animation.ValueAnimator.areAnimatorsEnabled() && !context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false) && img != null && img.animated && isAttachedToWindow && windowVisibility == VISIBLE && isShown
-        if (run) schedule() else { removeCallbacks(tick); ticking = false }
+        stepNow = movementStep()
+        if (run) {
+            val step = stepNow
+            if (step == com.husarp.ankigo.ui.MotionPrefs.NEVER) {   // R18-C: a still picture, the first frame
+                removeCallbacks(tick); ticking = false; holding = false
+                if (frame != 0) { frame = 0; invalidate() }
+            } else if (!ticking) {
+                if (holding) holdFirstFrame(step) else schedule()   // a pause that was cut short by hiding the view starts again
+            }
+        } else { removeCallbacks(tick); ticking = false }
         updateIdle()
     }
 
-    /** PLAN 205: starts or stops the idle motion by [idleShouldRun]. */
+    /** PLAN 205: starts or stops the idle motion by [idleShouldRun]. R18-C: it follows the "Pokémon movement" pauses (one float, a pause, one float ...; Never = none). */
     private fun updateIdle(detaching: Boolean = false) {
         val img = image
+        val step = movementStep()
         val run = idleShouldRun(idleMotion, img != null, img != null && img.animated,
             android.animation.ValueAnimator.areAnimatorsEnabled(),
             context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false),
-            !detaching && isAttachedToWindow && windowVisibility == VISIBLE && isShown)
+            !detaching && isAttachedToWindow && windowVisibility == VISIBLE && isShown) && com.husarp.ankigo.ui.MotionPrefs.moves(step)
         if (run) {
-            if (idleAnim != null) return
+            if (idleAnim != null || idlePausing) return
             idleStarts++
+            val pauses = com.husarp.ankigo.ui.MotionPrefs.pauses(step)
             val period = if (idleSlot == 0) IDLE_PERIOD_MS else IDLE_PERIOD_MS + 300L
             idleAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
                 duration = period
-                if (idleSlot == 1) startDelay = period / 2
-                repeatCount = android.animation.ValueAnimator.INFINITE
+                if (pauses) {
+                    // one float, then a pause (the animator is gone while it waits, so nothing redraws)
+                    addListener(object : android.animation.AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(a: android.animation.Animator) {
+                            idleAnim = null
+                            idlePhase = 0f; invalidate()
+                            idlePausing = true
+                            postDelayed(idleRestart, com.husarp.ankigo.ui.MotionPrefs.jitteredPauseMs(step, java.util.concurrent.ThreadLocalRandom.current().nextFloat()))
+                        }
+                    })
+                } else {
+                    if (idleSlot == 1) startDelay = period / 2
+                    repeatCount = android.animation.ValueAnimator.INFINITE
+                }
                 interpolator = android.view.animation.LinearInterpolator()
                 addUpdateListener { idlePhase = it.animatedValue as Float; invalidate() }
                 start()
             }
         } else {
-            idleAnim?.let { it.removeAllUpdateListeners(); it.cancel() }
+            removeCallbacks(idleRestart); idlePausing = false
+            idleAnim?.let { it.removeAllListeners(); it.removeAllUpdateListeners(); it.cancel() }
             idleAnim = null
             if (idlePhase != 0f) { idlePhase = 0f; invalidate() }
         }
     }
+
+    /** R18-C: true while the idle float waits for its next play (a pause of "Pokémon movement"). */
+    private var idlePausing = false
+    private val idleRestart = Runnable { idlePausing = false; updateIdle() }
 
     override fun onAttachedToWindow() { super.onAttachedToWindow(); updateAnimation() }
     override fun onDetachedFromWindow() { removeCallbacks(tick); ticking = false; super.onDetachedFromWindow(); updateIdle(detaching = true) }

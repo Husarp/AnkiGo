@@ -44,6 +44,18 @@ object LevelTier {
         return sb.append(after)
     }
 
+    /** R18-G (PLAN 254): a title with the level in it, "Stats · Lv 23": the dot grey, "Lv 23" in its tier colour; the plain text is [DetailFormat.levelTitle]. */
+    fun titled(ctx: Context, title: String, level: Int): CharSequence {
+        val sb = SpannableStringBuilder(title)
+        val dot = sb.length + 1
+        sb.append(" · ")
+        sb.setSpan(ForegroundColorSpan(Ui.c(ctx, R.color.ag_sub0)), dot, dot + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val s = sb.length
+        sb.append(label(level))
+        sb.setSpan(ForegroundColorSpan(color(ctx, level)), s, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return sb
+    }
+
     /** The tier colour as a colour int. */
     fun color(ctx: Context, level: Int): Int = Ui.c(ctx, colorRes(level))
 }

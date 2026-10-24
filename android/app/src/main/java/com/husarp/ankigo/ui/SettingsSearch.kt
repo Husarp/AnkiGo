@@ -46,6 +46,7 @@ object SettingsSearch {
         CatalogSection.SOUNDS -> SettingsSection.SOUND
         CatalogSection.BATTLE -> SettingsSection.BATTLE
         CatalogSection.STUDY -> SettingsSection.STUDY
+        CatalogSection.WIDGETS -> SettingsSection.WIDGETS
         CatalogSection.REMINDERS -> SettingsSection.REMINDERS
         CatalogSection.GAME -> SettingsSection.GAME
         CatalogSection.DATA -> when (e.sub) {

@@ -75,8 +75,11 @@ class R10DetailsShots {
 
     private fun find(v: View, text: String): TextView? = texts(v).firstOrNull { it.text.toString() == text }
 
-    /** The Info section's generation text must sit inside its parent, not be cut, and not touch the evolution view next to / above it. */
-    private fun checkGeneration(root: View, sp: Species, standalone: Boolean, stacked: Boolean? = null) {
+    /**
+     * The Info section's generation text must sit inside its parent, not be cut, and right-aligned at the bottom of the section
+     * (R18-G, PLAN 243: the evolution line moved out of Info into the card under the bars, so the generation line stands alone).
+     */
+    private fun checkGeneration(root: View, sp: Species) {
         val want = DetailFormat.generation(sp.gen)
         val g = texts(root).single { it.text.toString() == want }
         val p = g.parent as ViewGroup
@@ -85,21 +88,8 @@ class R10DetailsShots {
         assertTrue("gen has a size", g.width > 0 && g.height > 0)
         val l = g.layout
         assertTrue("gen text not cut", l != null && l.getEllipsisCount(l.lineCount - 1) == 0)
-        val prev = p.getChildAt(p.indexOfChild(g) - 1)
-        if (standalone) {
-            assertTrue("the evolution/generation row", p is com.husarp.ankigo.ui.EvoGenRow)
-            // "Does not evolve" never wraps over several lines; the generation sits beside it or, when they don't fit, under it at the right
-            assertEquals("Does not evolve on one line", 1, (prev as TextView).lineCount)
-            if (stacked != null) assertEquals("stacked layout", stacked, (p as com.husarp.ankigo.ui.EvoGenRow).stacked)
-            if ((p as com.husarp.ankigo.ui.EvoGenRow).stacked) {
-                assertTrue("gen under the evolution text (${prev.bottom} <= ${g.top})", prev.bottom <= g.top)
-                assertEquals("gen right-aligned", p.width, g.right)
-            } else {
-                assertTrue("gen right of the evolution text (${prev.right} <= ${g.left})", prev.right <= g.left)
-            }
-        } else {
-            assertTrue("gen under the tree (${prev.bottom} <= ${g.top})", prev.bottom <= g.top)
-        }
+        assertEquals("gen right-aligned", p.width - p.paddingRight, g.right)
+        assertEquals("gen is the last line of Info", p.childCount - 1, p.indexOfChild(g))
     }
 
     private fun shoot(name: String, variants: List<Variant>, scale: Float, frac: Float, after: (Context, View) -> Unit = { _, _ -> }, open: (Context) -> Unit) {
@@ -190,16 +180,16 @@ class R10DetailsShots {
         // made-up generations so the region name shows: 3 on the standalone one, 8 on the evolving one
         for ((variants, scale) in listOf(listOf(Variants.PHONE, F340) to 1f, listOf(F320) to 2.0f)) {
             val sx = if (scale == 1f) "" else "-big"
-            shoot("info-standalone$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(92), true, scale > 1f) }) { ctx ->
+            shoot("info-standalone$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(92)) }) { ctx ->
                 setGen(92, 3); MonDetail.show(TeamPage(ctx, NoHost), gd, st.mon("t4")!!)
             }
-            shoot("info-evolving$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(25), false) }) { ctx ->
+            shoot("info-evolving$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(25)) }) { ctx ->
                 setGen(25, 8); MonDetail.show(TeamPage(ctx, NoHost), gd, st.mon("t1")!!)
             }
-            shoot("info-dex-standalone$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(150), true, scale > 1f) }) { ctx ->
+            shoot("info-dex-standalone$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(150)) }) { ctx ->
                 setGen(150, 9); DexDetail.show(DexPage(ctx, NoHost), gd.sp(150))
             }
-            shoot("info-dex-branch$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(133), false) }) { ctx ->
+            shoot("info-dex-branch$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(133)) }) { ctx ->
                 DexDetail.show(DexPage(ctx, NoHost), gd.sp(133))
             }
         }

@@ -195,19 +195,14 @@ object StatsChartMath {
 
     /**
      * "Nothing in the period" for one metric, worded for that metric (R4 fix N2): the metric's noun reads as a unit in the tiles ("HP dealt",
-     * "₽ earned", "min"), not after "No".
+     * "coins earned", "min"), not after "No".
      */
     fun emptyText(m: ChartMetric): String = when (m) {
         ChartMetric.RETENTION -> "No answers counted in this period yet."
         ChartMetric.TIME -> "No study time in this period yet."
         ChartMetric.DUE -> "Nothing due in this period."
         ChartMetric.MONEY -> "No money earned in this period yet."
-        ChartMetric.MONEY_SPENT -> "No money spent in this period yet."
         ChartMetric.XP -> "No XP earned in this period yet."
-        ChartMetric.HEALING -> "No healing items used in this period yet."
-        ChartMetric.DMG_DEALT -> "No damage dealt in this period yet."
-        ChartMetric.DMG_TAKEN -> "No damage taken in this period yet."
-        ChartMetric.DMG_BLOCKED -> "No damage blocked in this period yet."
         ChartMetric.BUTTONS -> "No answers in this period yet."
         else -> "No ${m.noun} in this period yet." // reviews, new cards, answers, catches, battles won, misses, calendar reviews
     }
@@ -266,9 +261,9 @@ object StatsChartMath {
     fun title(s: ChartSeries): String =
         if (s.kind == ChartKind.TIME) "${s.metric.label} ${s.grain.label.lowercase(Locale.US)}" else s.metric.label
 
-    /** The small hint on the right of the title. */
+    /** The small hint on the right of the title (R18 item 234: the calendar has none, its bottom-left line says it). */
     fun hint(s: ChartSeries): String = when (s.kind) {
-        ChartKind.HEATMAP -> "tap a day for its count"
+        ChartKind.HEATMAP -> ""
         ChartKind.CATEGORY -> "tap a bar for details"
         ChartKind.TIME -> "tap a bar for its ${when (s.grain) { ChartGrain.DAY -> "day"; ChartGrain.WEEK -> "week"; ChartGrain.MONTH -> "month" }}"
     }

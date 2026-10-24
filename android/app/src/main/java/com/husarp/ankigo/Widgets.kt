@@ -24,16 +24,26 @@ object Widgets {
         }
     }
 
+    /** The Buddy widget's tap (and the other plain widget taps): a trampoline reads Settings -> Widgets -> "Open AnkiGo on" at TAP time (R18 263). */
     fun openApp(ctx: Context): PendingIntent =
-        PendingIntent.getActivity(ctx, 0, com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.BATTLE), PendingIntent.FLAG_IMMUTABLE)
+        PendingIntent.getActivity(ctx, REQ_OPEN_APP, openAppIntent(ctx), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+    /** The Intent behind [openApp]: [com.husarp.ankigo.ui.WidgetTapActivity] with its own action. */
+    fun openAppIntent(ctx: Context): Intent =
+        Intent(ctx, com.husarp.ankigo.ui.WidgetTapActivity::class.java).setAction(com.husarp.ankigo.ui.WidgetTapActivity.ACTION_OPEN)
 
     /** The 1x1 Study now widget's tap: AnkiGo's Study tab. */
     fun openStudy(ctx: Context): PendingIntent =
-        PendingIntent.getActivity(ctx, 0, com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.STUDY), PendingIntent.FLAG_IMMUTABLE)
+        PendingIntent.getActivity(ctx, REQ_OPEN_STUDY, com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.STUDY), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
     /** The motivation widget's tap: a trampoline decides at tap time between the Study tab (cards due) and the battle. */
     fun openStudyOrBattle(ctx: Context): PendingIntent =
-        PendingIntent.getActivity(ctx, 0, Intent(ctx, com.husarp.ankigo.ui.WidgetTapActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        PendingIntent.getActivity(ctx, REQ_STUDY_OR_BATTLE, Intent(ctx, com.husarp.ankigo.ui.WidgetTapActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+
+    /** Own request codes: two PendingIntents with the same component and request code are the same to Android (extras don't count). */
+    const val REQ_STUDY_OR_BATTLE = 0
+    const val REQ_OPEN_APP = 1
+    const val REQ_OPEN_STUDY = 2
 
     fun bcast(ctx: Context, cls: Class<*>, action: String, code: Int, ease: Int = 0): PendingIntent =
         PendingIntent.getBroadcast(ctx, code, Intent(ctx, cls).setAction(action).putExtra("ease", ease),

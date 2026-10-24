@@ -148,7 +148,9 @@ class R9W3CompareShots {
         assertEquals(6, msgs.size)
         assertTrue(msgs[0].startsWith("Rock moves hit Zorblax 4×"))
         assertTrue(msgs.last().startsWith("Zorblax's own-type moves hit"))
-        val heads = boxes(v).map { ((it as LinearLayout).getChildAt(0) as LinearLayout).let { h -> (0 until h.childCount).map { i -> (h.getChildAt(i) as TextView).text.toString() } } }
+        // R18 RV-3: the head row starts with the group's icon (an ImageView): read only its TextViews
+        val heads = boxes(v).map { ((it as LinearLayout).getChildAt(0) as LinearLayout).let { h -> (0 until h.childCount).mapNotNull { i -> (h.getChildAt(i) as? TextView)?.text?.toString() } } }
+        assertTrue("the group icon leads the head", ((boxes(v)[0] as LinearLayout).getChildAt(0) as LinearLayout).getChildAt(0) is android.widget.ImageView)
         assertEquals(listOf("Very weak against", "×4"), heads[0])
         assertEquals(listOf("Strong against", "×2"), heads.last())
     }

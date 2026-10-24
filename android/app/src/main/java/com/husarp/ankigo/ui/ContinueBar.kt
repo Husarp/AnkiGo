@@ -55,9 +55,9 @@ object ContinueBar {
     fun description(deck: Anki.Deck): String = "Continue ${deck.name.substringAfterLast("::")}, ${deck.total} due"
 
     /**
-     * The small green Continue button (accent square with a play icon; 32 dp look in a 48 dp touch area), shared by the Pokémon tab's
-     * battle card and the full-screen Battle view's top bar (PLAN 204) so they look the same. Hidden until [bindButton] gets a deck.
-     * Its layout params are for a horizontal LinearLayout.
+     * The small green Continue button (accent square with a play icon; 32 dp look in a 48 dp touch area) of the Pokémon tab's battle
+     * card. R18-J (261): the full-screen Battle view's top bar no longer has one (its Continue bar under the bar is the only one).
+     * Hidden until [bindButton] gets a deck. Its layout params are for a horizontal LinearLayout.
      */
     fun button(ctx: Context): View = FrameLayout(ctx).apply {
         visibility = View.GONE
@@ -75,9 +75,6 @@ object ContinueBar {
         b.setOnClickListener { onTap(deck) }
         b.visibility = View.VISIBLE
     }
-
-    /** The top bar's button shows only for a qualifying deck, while the top bar is on screen (tall window) and never in PiP. Pure. */
-    fun topButtonShown(deck: Anki.Deck?, topBarShown: Boolean, inPip: Boolean): Boolean = deck != null && topBarShown && !inPip
 
     /** A delayed AnkiDroid start still runs only for a request that is wanted and an Activity that is not leaving. Pure. */
     fun mayStart(finishing: Boolean, destroyed: Boolean, wanted: Boolean): Boolean = !finishing && !destroyed && wanted

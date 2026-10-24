@@ -40,7 +40,7 @@ class ChartMetricsTest {
             names(ChartGroup.STUDY),
         )
         assertEquals(
-            listOf("Money earned", "Catches", "Battles won", "XP earned", "Healing used", "Money spent", "Damage dealt", "Damage taken", "Damage blocked", "Misses"),
+            listOf("Money earned", "Catches", "Battles won", "XP earned"),
             names(ChartGroup.GAME),
         )
         assertEquals(listOf("Pokédex progress", "Pokémon per type", "Shinies & rare"), names(ChartGroup.COLLECTION))
@@ -49,10 +49,7 @@ class ChartMetricsTest {
     @Test fun gameGroupKeepsTheMockupOrder() {
         val game = ChartMetric.menu.first { it.first == ChartGroup.GAME }.second
         assertEquals(
-            listOf(
-                ChartMetric.MONEY, ChartMetric.CATCHES, ChartMetric.WINS, ChartMetric.XP, ChartMetric.HEALING, ChartMetric.MONEY_SPENT,
-                ChartMetric.DMG_DEALT, ChartMetric.DMG_TAKEN, ChartMetric.DMG_BLOCKED, ChartMetric.MISSES,
-            ),
+            listOf(ChartMetric.MONEY, ChartMetric.CATCHES, ChartMetric.WINS, ChartMetric.XP),
             game,
         )
     }
@@ -77,32 +74,13 @@ class ChartMetricsTest {
         }
         assertEquals(ChartKind.HEATMAP, ChartMetric.STREAK_CALENDAR.kind); assertTrue(ChartMetric.STREAK_CALENDAR.usesPeriod)
         assertEquals(ChartKind.TIME, ChartMetric.REVIEWS.kind)
-        assertEquals(ChartKind.TIME, ChartMetric.MONEY_SPENT.kind); assertEquals(ChartKind.TIME, ChartMetric.HEALING.kind)
         assertFalse(ChartMetric.CARD_STATES.usesPeriod)
     }
 
-    // ---------------------------------------------------------------- money spent, healing used
-
-    @Test fun moneySpentAndHealingReadTheirDayLogFields() {
-        val h = mapOf(date(0) to log(spent = 1200, heal = 2), date(2) to log(spent = 300, heal = 1, cash = 999))
-        val spent = build(ChartMetric.MONEY_SPENT, ChartPeriod.D7, history = h, deck = "Some deck")
-        assertEquals(1500.0, spent.total, 0.0); assertEquals(1200.0, spent.best, 0.0); assertEquals(today, spent.bestDay)
-        assertEquals("₽", spent.unit); assertEquals(listOf("Spent"), spent.seriesNames); assertFalse(spent.deckApplies)
-        assertEquals(listOf(1200.0), spent.bars.last().values)
-        val heal = build(ChartMetric.HEALING, ChartPeriod.D7, history = h)
-        assertEquals(3.0, heal.total, 0.0); assertEquals(2.0, heal.best, 0.0); assertEquals("items", heal.unit)
-        assertFalse(heal.empty)
-        // the money earned keeps its own field
-        assertEquals(999.0, build(ChartMetric.MONEY, ChartPeriod.D7, history = h).total, 0.0)
-        assertTrue(build(ChartMetric.MONEY_SPENT, ChartPeriod.D7).empty)
-        assertTrue(build(ChartMetric.HEALING, ChartPeriod.D30).empty)
-    }
-
-    @Test fun moneySpentAndHealingTapText() {
-        val h = mapOf(date(0) to log(spent = 1200, heal = 1), date(1) to log(heal = 3))
-        assertEquals(listOf("Wed 14 Oct · 1,200 ₽ spent"), build(ChartMetric.MONEY_SPENT, ChartPeriod.D7, history = h).bars.last().detail)
-        assertEquals(listOf("Wed 14 Oct · 1 healing item"), build(ChartMetric.HEALING, ChartPeriod.D7, history = h).bars.last().detail)
-        assertEquals(listOf("Tue 13 Oct · 3 healing items"), build(ChartMetric.HEALING, ChartPeriod.D7, history = h).bars[5].detail)
+    // R18 item 233: the six charts are gone from the list (the counting behind them stays)
+    @Test fun theSixRemovedChartsAreGone() {
+        val names = ChartMetric.values().map { it.name }
+        for (n in listOf("HEALING", "MONEY_SPENT", "DMG_DEALT", "DMG_TAKEN", "DMG_BLOCKED", "MISSES")) assertFalse(n, n in names)
     }
 
     // ---------------------------------------------------------------- bar size (granularity)
@@ -245,9 +223,9 @@ class ChartMetricsTest {
     @Test fun moneyShowsThousandsAndDecimals() {
         val h = mapOf(date(0) to log(cash = 12_345), date(1) to log(cash = 10))
         val s = build(ChartMetric.MONEY, ChartPeriod.D7, history = h)
-        assertEquals(listOf("Wed 14 Oct · 12,345 ₽ earned"), s.bars.last().detail)
+        assertEquals(listOf("Wed 14 Oct · 12,345 coins earned"), s.bars.last().detail)
         val w = build(ChartMetric.MONEY, ChartPeriod.D30, history = h, grain = ChartGrain.WEEK)
-        assertEquals(listOf("12 – 14 Oct · 12,355 ₽ earned", "Average 4,118.3 ₽ earned a day"), w.bars.last().detail) // 3 days in the last week
+        assertEquals(listOf("12 – 14 Oct · 12,355 coins earned", "Average 4,118.3 coins earned a day"), w.bars.last().detail) // 3 days in the last week
     }
 
     // ---------------------------------------------------------------- card states

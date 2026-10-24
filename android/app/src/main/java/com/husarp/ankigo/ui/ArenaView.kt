@@ -51,8 +51,8 @@ enum class FloatStyle { DAMAGE, BIG, HEAL, MISS }
  */
 class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // ---- sprite boxes: holder (bobs) > sprite (lunge / shake / faint / enter) ----
-    val enemySprite = SpriteView(ctx).apply { scaleDp = 2f; idleMotion = true }   // PLAN 205: a still picture floats
-    val playerSprite = SpriteView(ctx).apply { scaleDp = 2f; idleMotion = true }
+    val enemySprite = SpriteView(ctx).apply { scaleDp = 2f; idleMotion = true; followMovement = true }   // PLAN 205: a still picture floats
+    val playerSprite = SpriteView(ctx).apply { scaleDp = 2f; idleMotion = true; followMovement = true }
     private val ball = ImageView(ctx).apply { visibility = GONE }
     private val enemyHolder = FrameLayout(ctx).apply { clipChildren = false; clipToPadding = false }
     private val playerHolder = FrameLayout(ctx).apply { clipChildren = false; clipToPadding = false }
@@ -763,19 +763,45 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         // the attack animations' textures are decoded now, on a background thread (once per process), not inside the first frame
         if (!reduceMotion() && AppPrefs.attackAnimations(context)) com.husarp.ankigo.ui.movefx.FxArt.of(context).warmUp()
         if (!ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) return
+        startBobs()
+    }
+
+    /**
+     * R18-C (PLAN 247): the idle bob follows "Pokémon movement" ([com.husarp.ankigo.ui.MotionPrefs]): as before at Always, none at Never,
+     * and at the steps between one up-and-down, then a pause (jittered per pause, so the two sides do not bob in step), then again.
+     * A change of the setting shows when the arena is shown again.
+     */
+    private fun startBobs() {
+        val step = com.husarp.ankigo.ui.MotionPrefs.step(context)
+        if (step != bobStep) { stopBobs(); bobStep = step }
+        if (!com.husarp.ankigo.ui.MotionPrefs.moves(step)) return
         if (bobs.isEmpty()) {
-            bobs += bob(enemyHolder, 1600)
-            bobs += bob(playerHolder, 1900)
+            bobs += bob(enemyHolder, 1600, step)
+            bobs += bob(playerHolder, 1900, step)
         }
         bobs.forEach { if (!it.isStarted) it.start() }
     }
+
+    private fun stopBobs() {
+        bobs.forEach { it.cancel() }
+        bobs.clear()
+        bobRestarts.forEach { removeCallbacks(it) }
+        bobRestarts.clear()
+        enemyHolder.translationY = 0f; playerHolder.translationY = 0f
+    }
+
+    /** The step the bobs were built for (-1 = none yet), and the pending restarts of the paused bobs. */
+    private var bobStep = -1
+    private val bobRestarts = ArrayList<Runnable>()
 
     /** The idle bob must not keep the screen redrawing while the app is in the background. */
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
         if (visibility != VISIBLE) moveFx.clear()   // nothing keeps drawing (or leaves a sprite posed) off screen
+        val on = visibility == VISIBLE && ValueAnimator.areAnimatorsEnabled() && !context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
+        if (on && isAttachedToWindow && com.husarp.ankigo.ui.MotionPrefs.step(context) != bobStep) { startBobs(); return }   // R18-C: the setting changed meanwhile
         bobs.forEach {
-            if (visibility == VISIBLE && ValueAnimator.areAnimatorsEnabled() && !context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) { if (it.isPaused) it.resume() else if (!it.isStarted) it.start() }
+            if (on) { if (it.isPaused) it.resume() else if (!it.isStarted) it.start() }
             else if (it.isStarted && !it.isPaused) it.pause()
         }
     }
@@ -836,19 +862,31 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     override fun onDetachedFromWindow() {
         stopTurnAnim()
         hideStatusBubble()
-        bobs.forEach { it.cancel() }
-        bobs.clear()
+        stopBobs()
+        bobStep = -1
         cancelAnimations()
         super.onDetachedFromWindow()
     }
 
     /** Idle bob: translationY 0 -> -3 dp, alternating (mockup `bob`). */
-    private fun bob(v: View, ms: Long): ObjectAnimator =
+    private fun bob(v: View, ms: Long, step: Int = com.husarp.ankigo.ui.MotionPrefs.ALWAYS): ObjectAnimator =
         ObjectAnimator.ofFloat(v, View.TRANSLATION_Y, 0f, -Ui.dp(context, 3f)).apply {
             duration = ms
-            repeatCount = ValueAnimator.INFINITE
             repeatMode = ValueAnimator.REVERSE
             interpolator = AccelerateDecelerateInterpolator()
+            if (!com.husarp.ankigo.ui.MotionPrefs.pauses(step)) { repeatCount = ValueAnimator.INFINITE; return@apply }
+            repeatCount = 1   // R18-C: one up-and-down, then the pause
+            val a = this
+            val again = Runnable { if (bobs.contains(a) && !a.isStarted && isAttachedToWindow && windowVisibility == VISIBLE) a.start() }
+            bobRestarts += again
+            addListener(object : AnimatorListenerAdapter() {
+                private var cancelled = false
+                override fun onAnimationCancel(an: Animator) { cancelled = true }
+                override fun onAnimationStart(an: Animator) { cancelled = false }
+                override fun onAnimationEnd(an: Animator) {
+                    if (!cancelled) postDelayed(again, com.husarp.ankigo.ui.MotionPrefs.jitteredPauseMs(step, kotlin.random.Random.nextFloat()))
+                }
+            })
         }
 
     // ---------------------------------------------------------------- background (R7-07)
@@ -1451,6 +1489,25 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val token = liftAttacker(holder, raise = true, particles = false)
         launch(ObjectAnimator.ofPropertyValuesHolder(spr, x, y).setDuration(ms).also { it.interpolator = DecelerateInterpolator() }) {
             spr.translationX = 0f; spr.translationY = 0f
+            dropAttacker(token)
+        }
+    }
+
+    /**
+     * R18-C (PLAN 228): the plain fallback of a special or status move (the "Attack animations" setting off, or no look to play): the
+     * user leans a little toward the target and back ([FxLean.DP] dp, eased, [ms] long), much smaller than the [lunge]. Sideways only
+     * and never raised above the cards (only travelling attackers are, R9-B5); ends at rest (listener and cancel paths as the lunge's).
+     * Reduced motion: none.
+     */
+    fun lean(byPlayer: Boolean, ms: Long) {
+        if (reduceMotion()) return
+        val spr = if (byPlayer) playerSprite else enemySprite
+        val dx = Ui.dp(context, if (byPlayer) com.husarp.ankigo.ui.movefx.FxLean.DP else -com.husarp.ankigo.ui.movefx.FxLean.DP)
+        val x = PropertyValuesHolder.ofKeyframe(View.TRANSLATION_X, Keyframe.ofFloat(0f, 0f), Keyframe.ofFloat(0.45f, dx), Keyframe.ofFloat(1f, 0f))
+        val holder = if (byPlayer) playerHolder else enemyHolder
+        val token = liftAttacker(holder, raise = false, particles = false)
+        launch(ObjectAnimator.ofPropertyValuesHolder(spr, x).setDuration(ms).also { it.interpolator = AccelerateDecelerateInterpolator() }) {
+            spr.translationX = 0f
             dropAttacker(token)
         }
     }

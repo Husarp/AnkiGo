@@ -22,8 +22,25 @@ object StudyRules {
      * [frozenAt]: the timer pill's stopped value (-1 = it runs).
      */
     data class AnswerKeep(val key: StudyLoop.Key, val before: Map<String, String?>, val typed: String, val frozenAt: Long) {
-        fun same(key: StudyLoop.Key, now: Map<String, String?>): Boolean = key == this.key && before["_id"] != null && now == before
+        /**
+         * Same card, not answered / rescheduled / buried meanwhile: the scheduling columns agree ([AnswerState.COMPARE]). Every other
+         * column may differ: a flag, a move to another deck and an edit of the note (PLAN 246) must not take the answer side away.
+         */
+        fun same(key: StudyLoop.Key, now: Map<String, String?>): Boolean = key == this.key && before["_id"] != null && AnswerState.same(before, now)
     }
+
+    /** PLAN 246: what the study screen does when the write of a card action is over. */
+    enum class AfterAction { ERROR, KEEP_CARD, NEXT_CARD }
+
+    /** A failed write is an error; a flag keeps the card as it is (answer side, buttons); bury and suspend take the card out of the queue, so the next one loads. */
+    fun afterAction(action: String, saved: Boolean): AfterAction = when {
+        !saved -> AfterAction.ERROR
+        action == "flag" -> AfterAction.KEEP_CARD
+        else -> AfterAction.NEXT_CARD
+    }
+
+    /** PLAN 246: the card's row with its new flag (0 = none), as the screen shows it right after the flag was written. */
+    fun withFlag(row: Map<String, String?>, value: Int): Map<String, String?> = row + ("flags" to value.coerceIn(0, 7).toString())
 
     enum class SpriteSource { ANIMATED, STATIC, PLACEHOLDER }
     fun spriteSource(animated: Boolean, static: Boolean) = when {

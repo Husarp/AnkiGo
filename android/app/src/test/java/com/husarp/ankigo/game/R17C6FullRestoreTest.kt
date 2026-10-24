@@ -140,6 +140,6 @@ class R17C6FullRestoreTest {
         assertEquals("Heals all HP", ItemInfo.short(data, "max-potion"))
         assertEquals("Heals all HP and cures a status", Items.def("full-restore")!!.note)
         assertEquals("Heals all HP", Items.def("max-potion")!!.note)
-        for (id in listOf("full-restore", "max-potion", "potion")) assertTrue(id, fact(id, "In a fight").contains("**one turn**"))
+        for (id in listOf("full-restore", "max-potion", "potion")) assertTrue(id, fact(id, "In a fight").contains("**at once**"))
     }
 }

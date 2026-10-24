@@ -53,6 +53,10 @@ class AnswerTiming(val tapAt: Long, private val needs: Set<String> = setOf(GAME,
     /** How many tries the ANSWER call needed (the line shows it when more than one). */
     var attempts = 1
 
+    /** R18-A (278): the answer was made on a card AnkiDroid had not confirmed yet ([ahead]), or the tap was held for the confirm and waited [heldMs] ms (-1: not held). */
+    var ahead = false
+    var heldMs = -1L
+
     /** The next card: [HIT] the predicted card was the real one, [MISS] it was swapped away, [NONE] nothing was predicted. "" = not known. */
     var next = ""
 
@@ -90,6 +94,8 @@ class AnswerTiming(val tapAt: Long, private val needs: Set<String> = setOf(GAME,
             if (PAGE in ms) "page loaded ${v(PAGE)}" else null,
             if (COUNTS in ms) "deck counts read after it ${v(COUNTS)}" else null,
             if (loadRetries >= 0) "load retries $loadRetries" else null,
+            if (ahead) "made before its card was confirmed" else null,
+            if (heldMs >= 0) "tap held $heldMs ms for the confirm" else null,
             if (mainWait >= 0) "main wait $mainWait ms" else null,
             if (polls >= 0) "detector polls meanwhile $polls" else null,
         )

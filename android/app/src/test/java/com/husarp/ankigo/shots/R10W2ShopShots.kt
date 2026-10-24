@@ -159,8 +159,8 @@ class R10W2ShopShots {
             // the TMs are tiles of the specials now
             assertTrue("TM Thunderbolt" in t && "TM Body Slam" in t)
             assertTrue("the old TM list heading is gone", "TODAY'S TMS" !in t)
-            assertTrue("no ₽ text where the coin shows", t.none { it.endsWith(" ₽") && it != "Refresh shop · 100 ₽" })
-            assertTrue("the Refresh button stays", "Refresh shop · ${Tuning.REROLL_PRICE} ₽" in t)
+            assertTrue("no currency text where the coin shows", t.none { it.endsWith(" coins") })
+            assertTrue("the Refresh button stays", "Refresh shop · ${com.husarp.ankigo.ui.CoinText.MARK}${Tuning.REROLL_PRICE}" in t)
         }) { ctx -> shopTab(ctx, WEEKDAY).second }
     }
 
@@ -259,7 +259,7 @@ class R10W2ShopShots {
         shoot("prices", listOf(PRICES), check = { _, v ->
             val t = texts(v)
             assertTrue(t.toString(), "300" in t && "700" in t && "490" in t)
-            assertTrue("no ₽ text on a price", t.none { it.contains("₽") })
+            assertTrue("no currency text on a price", t.none { it.contains("coins") })
         }) { ctx ->
             val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL

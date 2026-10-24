@@ -332,7 +332,7 @@ class R4V1Shots {
         val (_, screen) = shopPage(ctx)
         val btn = findText(screen) { it.startsWith("Refresh shop") }
         assertNotNull(texts(screen).toString(), btn)
-        assertEquals("Refresh shop · 100 ₽", btn!!.text.toString())
+        assertEquals("Refresh shop · ${com.husarp.ankigo.ui.CoinText.MARK}100", btn!!.text.toString())
         var row: View? = btn
         while (row != null && !row.isClickable) row = row.parent as? View
         assertEquals("a full-strength button when the money is there", 1f, row!!.alpha, 0f)

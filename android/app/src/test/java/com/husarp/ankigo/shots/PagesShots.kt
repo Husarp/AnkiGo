@@ -265,7 +265,7 @@ class PagesShots {
         dialog("pages-dlg-evolved") { ctx ->
             Pickers.evolved(ctx, GameEvent.Evolved("t2", gd.sp(2).name, gd.sp(3).name, 3), false)
         }
-        appDialog("pages-dlg-confirm") { ctx -> Pickers.confirm(ctx, "Refresh the shop?", "New items and TMs for 100 ₽.", "Refresh") {} }
+        appDialog("pages-dlg-confirm") { ctx -> Pickers.confirm(ctx, "Refresh the shop?", "New items and TMs for 100 coins.", "Refresh") {} }
         appDialog("pages-dlg-release") { ctx -> Pickers.confirm(ctx, "Release Sparkmouse?", "Sparkmouse (Lv 26) will be gone for good.", "Release…") {} }
         dialog("pages-dlg-pickitem") { ctx -> Pickers.pickItem(ctx, "Use which item?", st, listOf("potion", "super-potion", "thunder-stone", "rare-candy")) {} }
         dialog("pages-dlg-pickball") { ctx -> Pickers.pickItem(ctx, "Throw which ball?", st, listOf("poke-ball", "great-ball", "ultra-ball")) {} }

@@ -68,9 +68,12 @@ object MonTags {
         TagKind.NEW, TagKind.HELD, TagKind.SHINY, TagKind.REGIONAL,
     )
 
-    /** [of] plus Team (in the team, the main too) and Favourite, in [DETAIL_ORDER]: what the details header shows. */
+    /**
+     * [of] plus Team (in the team, the main too) and Favourite, in [DETAIL_ORDER]: what the details header shows. R18-G (PLAN 239): the held
+     * item and the Exp. Share are not tags here any more; the Holding row under the HP and XP bars shows them ([HoldingPlan]).
+     */
     fun detailTags(data: GameData, state: GameState, mon: Mon, now: Long = System.currentTimeMillis()): List<MonTag> {
-        val out = ArrayList(of(data, state, mon, now))
+        val out = ArrayList(of(data, state, mon, now).filter { it.kind != TagKind.HELD && it.kind != TagKind.EXP_SHARE })
         if (mon.uid in state.team) out += MonTag(TagKind.TEAM, "Team")
         if (mon.favourite) out += MonTag(TagKind.FAVOURITE, "Favourite")
         // the star is the tag's icon here, so the name is just "Shiny"

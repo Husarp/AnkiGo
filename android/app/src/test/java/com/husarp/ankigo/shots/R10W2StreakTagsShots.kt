@@ -114,6 +114,10 @@ class R10W2StreakTagsShots {
             paparazzi.snapshot(frame, "r10w2d-tags-$name-$label-${theme.name.lowercase()}", 1000)
             val tags = labels(scene)
             assertEquals(expect, tags.map { it.label.text.toString() })
+            if (name == "main") { // R18-G (PLAN 239): its Lucky Egg and the Exp. Share are in the Holding row under the bars, once each, not tags
+                val said = all(scene).filterIsInstance<TextView>().map { it.text.toString() }
+                assertEquals(1, said.count { it == "Lucky Egg" }); assertEquals(1, said.count { it == "Exp. Share" })
+            }
             tags.forEach { assertCentred(it) }
             // no background on a tag; the TalkBack text lists them
             tags.forEach { assertTrue(it.background == null) }
@@ -136,8 +140,9 @@ class R10W2StreakTagsShots {
     }
 
     @Test fun tagsMainTeamShareItem() {
-        shoot("main", listOf(Variants.PHONE, F340, F320), 1f, ::mainTeamShare, listOf("Main", "Team", "Exp. Share", "Can evolve", "Lucky Egg"))
-        shoot("main", listOf(F320), 2f, ::mainTeamShare, listOf("Main", "Team", "Exp. Share", "Can evolve", "Lucky Egg"))
+        // R18-G (PLAN 239): the held item and the Exp. Share left the header tags (they are the Holding row)
+        shoot("main", listOf(Variants.PHONE, F340, F320), 1f, ::mainTeamShare, listOf("Main", "Team", "Can evolve"))
+        shoot("main", listOf(F320), 2f, ::mainTeamShare, listOf("Main", "Team", "Can evolve"))
     }
 
     @Test fun tagsTeamFavouriteEvolveShiny() {

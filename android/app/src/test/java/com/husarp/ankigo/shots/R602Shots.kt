@@ -105,19 +105,23 @@ class R602Shots {
     }
 
     /** Titles of the sections in screen order (the bar texts). */
-    private fun order(t: List<String>) = listOf("Stats", "Moves", "Matchups", "Training", "Info").filter { it in t }
+    private fun order(t: List<String>) = listOf("Stats", "Moves", "Matchups", "Training", "Info").filter { title -> t.any { it == title || it.startsWith("$title · ") } }
 
     @Test fun own() = dialog("r602-own", check = { t ->
         assertEquals(listOf("Stats", "Moves", "Matchups", "Training", "Info"), order(t))
-        assertTrue("Caught has its own line", t.contains("Caught") && t.contains("Defeats") && t.contains("Height") && t.contains("Weight"))
+        assertTrue("Caught has its own line", t.contains("Caught") && t.contains("Wins") && t.contains("Height") && t.contains("Weight"))
     }) { ctx -> withInfo(25); MonDetail.show(TeamPage(ctx, NoHost), gd, rich()) }
 
     @Test fun dex() = dialog("r602-dex", listOf(Variants.PHONE, Variants.SPLIT)) { ctx -> withInfo(25); DexDetail.show(DexPage(ctx, NoHost), gd.sp(25)) }
 
     @Test fun wild() = dialog("r602-wild", check = { t ->
         assertEquals("same order as your own details, without Training", listOf("Stats", "Moves", "Matchups", "Info"), order(t))
-        assertFalse(t.any { it == "Nature" || it == "IVs" || it == "EVs" || it == "Friendship" || it == "Held item" || it == "Ability" || it == "Defeats" })
+        assertFalse(t.any { it == "Nature" || it == "IVs" || it == "EVs" || it == "Friendship" || it == "Held item" || it == "Ability" || it == "Defeats" || it == "Wins" })
         assertTrue(t.contains("Tier") && t.contains("Pokédex") && t.contains("Total"))
+        // R18-G (PLAN 254 / 243): the level is in the Stats title, and its evolution is in the card under the types (no Holding for a wild one)
+        assertTrue("Stats title carries the level", t.any { it.startsWith("Stats · Lv ") })
+        assertTrue(t.none { it.contains("· Lv ") && it.startsWith("#") })
+        assertTrue(t.contains("Evolution") && !t.contains("Holding"))
         assertEquals("every move is still unknown", 2, t.count { it == "?" })
     }) { ctx -> BattleShotKit.bound(ctx); withInfo(GameRepo.state!!.battle!!.wild.species); assertTrue(BattleDetails.showWild(ctx)) }
 

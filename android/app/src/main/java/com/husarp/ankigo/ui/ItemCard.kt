@@ -86,7 +86,7 @@ internal object ItemCard {
         val ctx: Context = page
         val isTm = spec.item == null
         val move = spec.move?.let { page.data.move(it) }
-        val line = if (isTm) null else ItemInfo.line(page.data, spec.item.orEmpty())
+        val line = if (isTm) null else ItemInfo.line(page.data, spec.item.orEmpty(), page.state.caught)
         val lead: View = if (isTm) tmLead(ctx, move) else Bits.itemTile(ctx, spec.item.orEmpty(), 48)
         val titles = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -120,11 +120,11 @@ internal object ItemCard {
         val data = page.data
         val isTm = spec.item == null
         val move = spec.move?.let { data.move(it) }
-        val below = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = dp(ctx, 10f) }
+        val below = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = dp(ctx, 12f) }
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             if (move != null) addView(moveBlock(ctx, page, move), below)
-            val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty())
+            val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty(), page.state.caught)
             for (f in facts) addView(factBlock(ctx, f.title, f.text), LinearLayout.LayoutParams(below))
             if (isTm) addView(whoButton(ctx, page, spec.move.orEmpty(), nameOf(page, spec)), Form.lp(ctx, 0))
         }
@@ -160,12 +160,15 @@ internal object ItemCard {
 
     // ---- the text blocks ----
 
-    /** One block: its title (11 sp, caps, letter-spaced, grey) and its text (13.5 sp, bold parts in the text colour). */
+    /** One block: its title (PLAN 236: 12.5 sp, caps, letter-spaced, in the accent colour; [Ui.c] turns ag_mauve into the chosen accent) and its text (13.5 sp, bold parts in the text colour). */
     private fun factBlock(ctx: Context, title: String, text: String): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
-        addView(Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply { this.text = title.uppercase(); letterSpacing = 0.06f })
-        addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub1).apply { this.text = styled(ctx, text); setLineSpacing(0f, 1.1f) }, Form.lp(ctx, 2))
+        addView(Ui.text(ctx, TITLE_SP, 900, R.color.ag_mauve).apply { this.text = title.uppercase(); letterSpacing = 0.06f })
+        addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub1).apply { this.text = styled(ctx, text); setLineSpacing(0f, 1.1f) }, Form.lp(ctx, 3))
     }
+
+    /** PLAN 236: the size of a text block's title (it was 11 sp grey). */
+    internal const val TITLE_SP = 12.5f
 
     // ---- the TM's move block ----
 

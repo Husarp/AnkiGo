@@ -189,7 +189,7 @@ class GameData(
     fun sp(num: Int): Species = species.getValue(num)
     fun move(id: String): Move? = moves[id]
     /**
-     * The Shop price in ₽ (0 = never sold): PokeAPI's. PLAN 171: a ball PokeAPI sells costs AnkiGo's own price instead (Tuning.BALL_PRICE),
+     * The Shop price in coins (0 = never sold): PokeAPI's. PLAN 171: a ball PokeAPI sells costs AnkiGo's own price instead (Tuning.BALL_PRICE),
      * and Ankimon's other balls (Tuning.OLD_BALLS) are never sold.
      */
     fun price(item: String): Int {

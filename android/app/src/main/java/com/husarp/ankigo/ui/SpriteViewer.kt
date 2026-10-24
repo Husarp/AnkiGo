@@ -143,7 +143,9 @@ object SpriteViewer {
         scaleType = ImageView.ScaleType.CENTER_INSIDE
         val p = Ui.dp(ctx, 12)
         setPadding(p, p, p, p)
-        background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 14, ctx)
+        // R18-D (226): no tile behind the glyph; a round ripple on touch
+        background = android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf((Ui.c(ctx, R.color.ag_ov) and 0x00ffffff) or 0x33000000), null, null)
         contentDescription = label
         isClickable = true; isFocusable = true
     }

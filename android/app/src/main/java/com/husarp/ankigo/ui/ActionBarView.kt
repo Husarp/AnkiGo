@@ -13,7 +13,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.GameEvent
 import kotlin.math.max
@@ -37,13 +36,6 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
 
     private var wholeLine = false
     private var pausedLine = false
-
-    // PLAN 206: the line "Switching after this card…" while a switch waits for the next answer
-    private var queuedLine = false
-    private var queuedText = ""
-    private var queuedFrom: String? = null   // the main's uid when the line went up: if the queue ends and the main is still it, the switch was cancelled
-    private var smallLook = false
-    private val queueWatch: () -> Unit = { syncQueued() }
 
     /** The panel's text floor ([PanelFit]); texts made later start at it. */
     var floorSp = 0f
@@ -73,9 +65,8 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     /** Takes one played event in: the halves follow the moves of the fight. */
     fun observe(e: GameEvent) {
         val changed = model.observe(e)
-        if (e is GameEvent.SwitchQueued) { setQueued(e.uid?.let { e.name }); return }   // PLAN 206: queued = the line goes up, cancelled = it goes
-        if (changed.isEmpty()) return
-        if (wholeLine) { wholeLine = false; queuedLine = false; sync(); syncQueued() }   // a move (the switch came in, the next round ...) ends the queue line; one still waiting in the saved game comes back
+        if (changed.isEmpty()) return   // R18-B: a queued switch changes nothing here (a toast says it); the bar keeps its segments
+        if (wholeLine) { wholeLine = false; sync() }   // a move ends a line about the whole battle
         for (s in changed) {
             if (bubbleSide == s) closeBubble()
             val h = half(s)
@@ -90,41 +81,12 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     fun showLine(kind: LogKind, pill: String, text: String, pop: Boolean) {
         line.show(kind, pill, text, pop && isAttachedToWindow && !still(), floorSp)
         wholeLine = true
-        queuedLine = false
         sync()
     }
 
-    /**
-     * PLAN 206: a switch waits for the next answer: [name] (the Pokémon that comes in) goes up as a line across the bar until a move
-     * arrives (the switch coming in is the first one); null takes the line away (the switch was cancelled). The same text again
-     * changes nothing. The name is left out in a short bar, where the line must stay one line.
-     */
-    fun setQueued(name: String?) {
-        if (name == null) {
-            if (!queuedLine) return
-            queuedLine = false; wholeLine = false
-            sync()
-            return
-        }
-        val compact = smallLook || (height > 0 && height < 40f * resources.displayMetrics.density)
-        val text = ActionBarModel.queuedLine(if (compact) null else name)
-        if (queuedLine && wholeLine && queuedText == text) return
-        queuedFrom = GameRepo.state?.main?.uid
-        showLine(LogKind.SYS, "SWITCH", text, pop = true)
-        queuedLine = true; queuedText = text
-    }
-
-    /**
-     * PLAN 206: follows the saved game: a queue made anywhere (the Team list, another window) shows here too, also when this screen
-     * comes back to the front. The line is dropped by the game only when no switch came in (a cancelled or stale queue); a queue that
-     * was applied by an answer stays until the switch plays (its MainChanged ends it in [observe]).
-     */
-    internal fun syncQueued() {
-        val st = GameRepo.state ?: return
-        val queued = st.queuedMain
-        if (queued != null) setQueued(queued.name)
-        else if (queuedLine && st.main?.uid == queuedFrom) setQueued(null)
-    }
+    /** Kept only so a local screenshot file still compiles: a queued switch no longer puts a line on the bar (R18-B, PLAN 227). */
+    @Suppress("UNUSED_PARAMETER")
+    fun setQueued(name: String?) {}
 
     /** The "Paused" pill replaces the segments with the line while paused in a small window or the Study strip. */
     fun setPaused(on: Boolean) {
@@ -142,7 +104,6 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
 
     /** The line card's look for the host: [small] = one short line, [legacy] = the study strip, [flat] = edge to edge (Study, short). */
     fun setLook(small: Boolean, legacy: Boolean, flat: Boolean) {
-        smallLook = small
         line.setLook(small, legacy, flat, floorSp)
         row.flat = flat
     }
@@ -151,7 +112,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     fun setCharge(goal: Int, buttons: List<Int>) {
         dots.pips.render(goal, buttons)
         line.pips.render(goal, buttons)
-        dots.contentDescription = "Battle charge ${buttons.size} of $goal"
+        dots.contentDescription = "Battle charge ${buttons.size} of $goal" + if (buttons.lastOrNull() == StudyCharge.SWITCH) ", the last one a switch" else ""
         line.pips.contentDescription = dots.contentDescription
     }
 
@@ -200,14 +161,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
         if (visibility != VISIBLE) closeBubble()
     }
 
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        GameRepo.addListener(queueWatch)   // PLAN 206
-        syncQueued()
-    }
-
     override fun onDetachedFromWindow() {
-        GameRepo.removeListener(queueWatch)
         closeBubble()
         super.onDetachedFromWindow()
     }
@@ -231,7 +185,6 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     internal fun halfView(side: BarSide): View = half(side)
     internal fun bubbleViews(): Int = (0 until (layer?.childCount ?: 0)).count { layer?.getChildAt(it) is MoveBubble }
     internal fun lineShown(): Boolean = line.visibility == VISIBLE
-    internal fun queuedShown(): String? = if (queuedLine && wholeLine) queuedText else null   // PLAN 206
     internal fun segmentOrder(): List<String> = (0 until row.childCount).map { when (row.getChildAt(it)) { mineHalf -> "mine"; theirsHalf -> "theirs"; else -> "dots" } }
 
     private fun toggleBubble(side: BarSide) {
@@ -499,7 +452,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
         }
     }
 
-    /** The turn's charge pips, 10 dp each; the colour is the answer button (red again, peach hard, green good, blue easy). */
+    /** The turn's charge pips, 10 dp each; the colour is the answer button (red again, peach hard, green good, blue easy; mauve = the answer a switch came in with). */
     private class PipRow(ctx: Context) : LinearLayout(ctx) {
         private val pips = List(4) { View(ctx) }
 
@@ -512,7 +465,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             pips.forEachIndexed { i, v ->
                 v.visibility = if (i < goal) VISIBLE else GONE
                 val button = buttons.getOrNull(i)
-                val tone = when (button) { 1 -> R.color.ag_red; 2 -> R.color.ag_peach; 3 -> R.color.ag_green; 4 -> R.color.ag_blue; 0 -> R.color.ag_ov; else -> R.color.ag_s0 }
+                val tone = when (button) { 1 -> R.color.ag_red; 2 -> R.color.ag_peach; 3 -> R.color.ag_green; 4 -> R.color.ag_blue; StudyCharge.SWITCH -> R.color.ag_mauve; 0 -> R.color.ag_ov; else -> R.color.ag_s0 }
                 v.background = Ui.rounded(Ui.c(context, tone), 5, context).apply {
                     if (button == null) setStroke(Ui.dp(context, 1.5f).toInt(), Ui.c(context, R.color.ag_s1))
                 }

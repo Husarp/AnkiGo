@@ -40,6 +40,7 @@ class DexSortInfo(val data: GameData, val state: GameState)
 /**
  * The Pokédex filters and sort, pure Kotlin. All parts combine with AND.
  * - [owned]: Owned = at least one of that species in the team or box now; Not owned = the rest (seen-only and never met).
+ * - [favouritesOnly]: only species with a favourite copy of yours (R18 253).
  * - [gens]: multi-select, empty = every enabled gen. [types]: the picked types, matched by [typeMatch] (in pick order; the rules are [TypeFilter]'s). [wishlistOnly]: only the wishlist.
  * - [query]: name (contains) or number (prefix of "25" or of the padded "025"; a leading "#" is ignored), case-insensitive.
  *   The number is the national one ([Species.baseNum]): "19" also finds Alolan Rattata. Sorted by number, a form follows its base species.
@@ -62,14 +63,18 @@ data class DexFilter(
     val level: Int = 100,
     /** PLAN 192: any of the picked [types] (default), all of them, or only them (see [TypeMatch]). */
     val typeMatch: TypeMatch = TypeMatch.ANY,
+    /** R18 253: only species of which you own at least one Pokémon marked favourite (the "Favourites" quick chip). */
+    val favouritesOnly: Boolean = false,
 ) {
     /**
      * @param all every species to consider (usually the enabled gens)
      * @param lastCaught species number -> newest caughtAt among the mons you own now (absent = not owned), see [lastCaught]
      * @param info the collection, for the LEVEL, FIRST_SEEN and CURRENT-basis sorts (null: those have no values, so the list stays in number order)
+     * @param favourites species numbers with at least one favourite Pokémon you own ([favouriteSpecies]), for [favouritesOnly]
      */
     fun apply(
         all: List<Species>, lastCaught: Map<Int, Long>, wishlist: Set<Int>, enabledGens: Set<Int>, info: DexSortInfo? = null,
+        favourites: Set<Int> = emptySet(),
     ): List<Species> {
         val q = query.trim().removePrefix("#").lowercase()
         val digits = q.isNotEmpty() && q.all { it.isDigit() }
@@ -77,6 +82,7 @@ data class DexFilter(
             sp.gen in enabledGens &&
                 (gens.isEmpty() || sp.gen in gens) &&
                 (!wishlistOnly || sp.num in wishlist) &&
+                (!favouritesOnly || sp.num in favourites) &&
                 typeFilter.matches(sp.types) &&
                 when (owned) {
                     DexOwned.ALL -> true
@@ -115,12 +121,15 @@ data class DexFilter(
         if (q.startsWith("0")) "%03d".format(num).startsWith(q) else num.toString().startsWith(q)
 
     /** Anything beyond the defaults (the empty state offers "Clear filters" while this is on). */
-    val active get() = owned != DexOwned.ALL || gens.isNotEmpty() || types.isNotEmpty() || wishlistOnly || query.isNotBlank()
+    val active get() = owned != DexOwned.ALL || gens.isNotEmpty() || types.isNotEmpty() || wishlistOnly || favouritesOnly || query.isNotBlank()
 
     /** How many of the filters that live in the sort sheet are on (wishlist, generations, types), for the sort chip's description. */
     val sheetActive get() = (if (wishlistOnly) 1 else 0) + (if (gens.isNotEmpty()) 1 else 0) + (if (types.isNotEmpty()) 1 else 0)
 
     companion object {
+        /** R18 253: the species numbers of which you own at least one favourite Pokémon. */
+        fun favouriteSpecies(mons: List<Mon>): Set<Int> = mons.filter { it.favourite }.map { it.species }.toSet()
+
         /** Species number -> newest caughtAt among the mons you own now. */
         fun lastCaught(mons: List<Mon>): Map<Int, Long> {
             val m = HashMap<Int, Long>()

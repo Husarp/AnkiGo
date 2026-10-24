@@ -151,7 +151,7 @@ object Economy {
      * PLAN 198 (it replaced PLAN 125's "the whole amount every Nth time"), the money curve (linear, reset each game day; no hard cap):
      * the day's money comes in tiers of Tuning.CASH_TIER and every counted answer earns Tuning.CASH_PER_ANSWER / tier, where
      * tier = state.cashToday / CASH_TIER + 1 at that moment (cashToday = the day's base money paid so far, before any x2). So an
-     * answer is worth 5, 2.5, 1.67, 1.25, 1 ... ₽. The earnings are added to one exact running fraction of the day
+     * answer is worth 5, 2.5, 1.67, 1.25, 1 ... coins. The earnings are added to one exact running fraction of the day
      * (state.cashFracNum / cashFracDen, shared with the wins, never a Double) and the whole coins in it are paid out at once ([earn]).
      * Amulet Coin / Luck Incense on the main: the paid coins are doubled, and the tiers follow the coins BEFORE the doubling
      * (state.cashToday), so the item doubles the day's money at every tier and never makes the curve steeper sooner.
@@ -164,7 +164,7 @@ object Economy {
     /**
      * R13 Part C, PLAN 198: a won fight (a wild Pokémon defeated, or caught by the auto rule or a ball; never a miss, an escape or a
      * release) earns Tuning.CASH_PER_WIN / tier on the same curve and the same running fraction as the answers ([payAnswer]), so a
-     * win is worth 10, 5, 3.33, 2.5, 2 ... ₽. Its money counts toward the day's tiers like an answer's, and Amulet Coin / Luck
+     * win is worth 10, 5, 3.33, 2.5, 2 ... coins. Its money counts toward the day's tiers like an answer's, and Amulet Coin / Luck
      * Incense doubles the paid coins the same way. Emits Cash(DEFEAT) when at least one whole coin was paid.
      */
     fun onWin(state: GameState, events: MutableList<GameEvent>) {
@@ -172,7 +172,7 @@ object Economy {
     }
 
     /**
-     * Adds [base] / tier ₽ to the day's exact fraction and pays out its whole coins: cashToday grows by the paid coins (base),
+     * Adds [base] / tier coins to the day's exact fraction and pays out its whole coins: cashToday grows by the paid coins (base),
      * cash by the same coins, x2 with Amulet Coin / Luck Incense on the main. No event when this action paid 0 coins.
      * Overflow guard: if the denominator would pass [MAX_FRAC_DEN] (about 1e12; it cannot in a normal day, the denominators are
      * the least common multiples of the tiers so far), the unpaid rest (under one coin) is rounded DOWN to a denominator of
@@ -385,7 +385,7 @@ object Shop {
         return ActionResult(true, "New stock for ${money(price)}", spent(data, state, price, now))
     }
 
-    private fun money(n: Int) = "$n ₽"
+    private fun money(n: Int) = if (n == 1) "1 coin" else "$n coins"
 }
 
 object Trainer {

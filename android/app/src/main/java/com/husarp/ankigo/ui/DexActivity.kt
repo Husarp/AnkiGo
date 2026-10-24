@@ -40,8 +40,9 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     private lateinit var sortPill: View        // the sort chip as last drawn (a new one each render)
     private lateinit var emptyView: EmptyState
     // Kept while the page lives. Search + sort re-filter in place (render would rebuild the header and drop the keyboard).
-    // The sort (PLAN 48/55) and the type filter (PLAN 192, X8) are remembered; the other filters are not.
-    private var filter = DexFilter().withSort(SortViews.loadDex(base)).withTypeFilter(SortPrefs.loadType(base, SortPrefs.TypeWhere.DEX))
+    // The sort (PLAN 48/55), the type filter (PLAN 192, X8) and the other filters (R18 249: owner, generations, wishlist, favourites) are
+    // remembered; the search text is not, it always starts empty.
+    private var filter = SortPrefs.loadDexFilter(base, DexFilter().withSort(SortViews.loadDex(base)).withTypeFilter(SortPrefs.loadType(base, SortPrefs.TypeWhere.DEX)))
     private var shown: List<Species> = emptyList()
     private val cols = GridMath.columns(base.resources.configuration.screenWidthDp) // 3 / 4 / 5 / 6 by the window width (R4-V5)
 
@@ -112,7 +113,10 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     }
 
     /** A filter changed: an embedded page draws itself (nobody listens for it), a standalone one asks to be drawn. */
-    private fun redraw() { if (embedded) render() else requestRender() }
+    private fun redraw() {
+        SortPrefs.saveDexFilter(this, filter) // R18 249: every filter change goes through here
+        if (embedded) render() else requestRender()
+    }
 
     override fun render() {
         val st = state
@@ -140,38 +144,40 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
 
     private fun filtered(): List<Species> {
         val st = state
-        return filter.apply(data.species.values.toList(), DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens, DexSortInfo(data, st))
+        return filter.apply(data.species.values.toList(), DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens, DexSortInfo(data, st), DexFilter.favouriteSpecies(st.mons))
     }
 
     // ---- the one filter row (PLAN 192, X10): "?" legend, sort & filter button, active-filter chip, quick chips ----
 
     /**
-     * The row under the search field, never scrolling: the legend, the sort & filter button (its sheet holds ALL filters), the
-     * active-filter chip while a sheet filter is on (✕ clears them), then the quick chip for the filter that is off (★ Wishlist).
-     * The All / Owned / Not owned switch and the search field are their own controls above and are not part of the chip.
+     * The row under the search field, never scrolling: the legend, the sort & filter button, the active-filter chip while a sheet
+     * filter is on (types, generations; a tap opens the sheet, whose Clear turns them off), then the quick chips ★ Wishlist and
+     * Favourites (R18 253): they toggle in place, lit while on. The All / Owned / Not owned switch and the search field are their own
+     * controls above and are not part of the chip.
      */
     private fun drawRow() {
         val ctx = this
         rowBox.removeAllViews()
         sortPill = SortViews.sortChip(ctx, filter.spec(), filter.sheetActive) { openSortSheet() }
-        val quick = ArrayList<View>()
-        if (!filter.wishlistOnly) quick += BoxViews.chip(ctx, "★ Wishlist", false) { setSheetFilters(true, filter.gens) }
+        val quick = listOf(
+            BoxViews.quickChip(ctx, "★ Wishlist", filter.wishlistOnly) { setSheetFilters(!filter.wishlistOnly, filter.gens) } to filter.wishlistOnly,
+            BoxViews.quickChip(ctx, "Favourites", filter.favouritesOnly, heart = true) { setFavouritesOnly(!filter.favouritesOnly) } to filter.favouritesOnly,
+        )
         rowBox.addView(FilterRow.make(ctx, TileViews.legendChip(ctx, dex = true), sortPill,
-            FilterRowText.activePieces(filter.typeFilter, null, filter.wishlistOnly, filter.gens),
-            onOpen = { openSortSheet() }, onClear = { clearSheetFilters() }, quick = quick), LinearLayout.LayoutParams(-1, -2))
+            FilterRowText.activePieces(filter.typeFilter, null, filter.gens),
+            onOpen = { openSortSheet() }, quick = quick), LinearLayout.LayoutParams(-1, -2))
     }
 
-    /** The ✕ of the active chip: the type filter, the wishlist and the generations off (the search and All / Owned / Not owned stay). */
-    private fun clearSheetFilters() {
-        filter = filter.withTypeFilter(TypeFilter()).copy(wishlistOnly = false, gens = emptySet())
-        SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, filter.typeFilter)
+    /** R18 253: the Favourites quick chip. */
+    private fun setFavouritesOnly(on: Boolean) {
+        filter = filter.copy(favouritesOnly = on)
         redraw()
         list.setSelection(0)
     }
 
     /** The empty state's "Clear filters": every Pokédex filter off, also All / Owned / Not owned and the search text. */
     private fun clearFilters() {
-        filter = filter.withTypeFilter(TypeFilter()).copy(wishlistOnly = false, gens = emptySet(), owned = DexOwned.ALL, query = "")
+        filter = filter.withTypeFilter(TypeFilter()).copy(wishlistOnly = false, favouritesOnly = false, gens = emptySet(), owned = DexOwned.ALL, query = "")
         SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, filter.typeFilter)
         search.setText("") // its watcher re-filters with the empty query
         redraw()

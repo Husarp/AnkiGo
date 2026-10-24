@@ -68,7 +68,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     private fun itemRow(id: String): View {
         val ctx = s
         val n = state.count(id)
-        val line = ItemInfo.plain(ItemInfo.line(data, id))
+        val line = ItemInfo.plain(ItemInfo.line(data, id, state.caught))
         val row = Bits.cardRow(ctx, Bits.itemTile(ctx, id), Bits.bodyText(ctx, Items.name(id), line), countView("×$n"))
         row.contentDescription = ItemCardPlan.detailsLabel("${Items.name(id)}, $line, $n owned")
         row.setOnClickListener { host.openCard(CardKeys.bagItem(id)) }

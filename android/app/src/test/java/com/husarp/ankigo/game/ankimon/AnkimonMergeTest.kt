@@ -721,7 +721,7 @@ class AnkimonMergeTest {
         ) = ImportReport(added, upgraded, 0, emptyList(), seen, caught, cashBefore, cashAfter, items, tms, team)
         val five = (1..5).associate { "item-$it" to (0 to 1) }
         assertEquals(
-            "adds 37 Pokémon, upgrades 4; Pokédex +12; ₽ 3,100 → 12,400; 5 items",
+            "adds 37 Pokémon, upgrades 4; Pokédex +12; coins 3,100 → 12,400; 5 items",
             rep(37, 4, 12, 9, 3100, 12400, five).summary(),
         )
         assertEquals("nothing new", rep().summary())
@@ -729,7 +729,7 @@ class AnkimonMergeTest {
         assertEquals("upgrades 2 Pokémon", rep(upgraded = 2).summary())
         assertEquals("Pokédex +3", rep(seen = 3, caught = 1).summary())
         assertEquals("Pokédex +2", rep(seen = 0, caught = 2).summary())
-        assertEquals("₽ 100 → 1,234,567", rep(cashAfter = 1_234_567).summary())
+        assertEquals("coins 100 → 1,234,567", rep(cashAfter = 1_234_567).summary())
         assertEquals("1 item", rep(items = mapOf("potion" to (1 to 2))).summary())
         assertEquals("1 TM; new team", rep(tms = 1, team = true).summary())
         assertEquals("adds 1 Pokémon; 3 TMs", rep(added = 1, tms = 3).summary())
@@ -739,7 +739,7 @@ class AnkimonMergeTest {
         val state = GameState()
         state.cash = 100
         val r = merge(sv(am("a", 1), am("b", 16), seen = setOf(25), cash = 2500, items = mapOf("poke-ball" to 3)), state)
-        assertEquals("adds 2 Pokémon; Pokédex +3; ₽ 100 → 2,500; 1 item", r.summary())
+        assertEquals("adds 2 Pokémon; Pokédex +3; coins 100 → 2,500; 1 item", r.summary())
     }
 
     // ---- save file round trip ---------------------------------------------------------------------------------------

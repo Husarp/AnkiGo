@@ -144,6 +144,7 @@ class AnswerHost(
         override fun outcome(o: AnswerOutcome) {
             val at = env.elapsed()
             val writeMs = if (o.isTerminal || o is AnswerOutcome.Waiting) at - drainStart else -1L
+            if (writeMs >= 0) drainStart = at   // R18-A: answers made ahead are written one after the other in one drain: each one's time starts where the one before it ended
             env.post(Runnable { onOutcome(o, writeMs, at) })
         }
     }

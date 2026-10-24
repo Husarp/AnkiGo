@@ -76,7 +76,7 @@ object BattleEngine {
      * - order: higher priority first, then higher effective speed; a tie goes to the wild one;
      * - every damage the main deals is multiplied by [multiplier] and every damage the wild one deals by [enemyPower]
      *   (Round 10: RoundRule picks both from the answers), and is at least 1 when the move hits a non-immune target;
-     * - a fainted Pokémon doesn't act; end-of-turn burn/poison damage for both.
+     * - a fainted Pokémon doesn't act; end-of-turn burn/poison damage for both, unless one of them fainted in the round (R18: the fight is over then).
      * Returns Attack / Effect / Splash / Fainted events in order. Does NOT resolve catch/defeat/heal.
      * An Attack's damage is what really came off the target's HP (never more than it had left).
      * Round 10 (W9): [moveChoice] is how both sides pick their move (see [MoveChooser]); RANDOM (the default here) is the old rule,
@@ -425,6 +425,8 @@ object BattleEngine {
                 act(p, if (p) playerMove else enemyMove)
                 checkFaint(true); checkFaint(false)
             }
+            // R18 (PLAN 259): a faint ends the fight (Game.settleFight drops the battle either way; mainline ends a wild battle at the KO): no end of round
+            if (wild.hp <= 0 || main.hp <= 0) return
             // the end of the round: the rule sets first, then burn / poison damage (the engine's own)
             rulesEach { it.endOfRound(this) }
             checkFaint(true); checkFaint(false)

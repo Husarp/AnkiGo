@@ -1,0 +1,85 @@
+# AnkiGo release notes, newest first. Bundled in the app (What's new on Settings > Updates, and the card after an update).
+# "## <version>" starts a block; each "- " line is one change. "text @ Settings → X → Y" shows the setting's path under the text.
+# "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
+# Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
+
+## 0.24.0
+- Pokémon details: one card shows what the Pokémon holds and its evolution line. The level sits next to Stats, and every title explains itself when tapped.
+- "Wins" replaces "Defeats" in the details (a catch counts too); the achievement is now called Battles won.
+- Matchups show arrow icons, and the multiplier without a pill.
+- What's new: this list, and a card after each update. @ Settings → Updates
+- Switching in a fight: a message says who comes in on your next move, and the switch's dot on the bar is mauve.
+- Special and status moves make your Pokémon lean a little toward the target.
+- Choose how often the battle Pokémon move when idle. @ Settings → Battle panel & windows → Pokémon movement
+- Choose where the app icon and the Buddy widget open: Study (the default), Battle or the last screen. @ Settings → Widgets → Open AnkiGo on
+- No boxes behind the battle panel's chips and the small buttons.
+- Pokédex and Box filters are kept; the quick chips (Wishlist, the new Favourites, Shiny, In team) turn on and off in place.
+- Stats: the chart remembers its choice, six rarely used charts are gone, and the streak calendar shows all seven day letters.
+- Item card titles are in your accent colour; evolution items don't name Pokémon you haven't caught.
+- Money shows a coin icon, or the word "coins", everywhere.
+- "Save answers for cards that aren't first" moved to the Study page. @ Settings → Study → Advanced
+- The Diagnostics log box is smaller.
+### Fixes
+- Editing a card's note, or moving it to a deck inside the one you study, keeps the answer side.
+- No more lag while AnkiDroid saves an answer: the next card opens at once, and you can show its answer and answer it right away.
+- Your Pokémon's status goes at once when you win, and it takes no burn or poison damage after the wild one faints.
+- The Battle view shows one Continue button.
+- The money in the Shop and on the Pokémon tab no longer jumps from 0 when the page opens.
+
+## 0.23.0
+- EVs and friendship now grow with every win, also when you catch a Pokémon. Friendship stops at 255; the new Soothe Bell gives ×1.5.
+- Abilities work in battle, for your Pokémon and the wild ones: Intimidate, Static, Levitate, Sturdy and about 200 more. The details say what each one does.
+- Moves that did nothing now work: Protect, Substitute, Reflect, Leech Seed, Rest, Belly Drum, Haze, Yawn, Taunt, Encore, Transform, Metronome and many more.
+- Weather and terrain last 5 turns and change damage, healing and some moves.
+- Flinching, confusion, binding moves, Outrage-style locks, crash damage, and moves whose power depends on the fight (Low Kick, Reversal, Return …).
+- Charge moves (Solar Beam, Dig, Fly …) take one turn to charge. Hyper Beam and Giga Impact need a turn to recharge.
+- Full Restore also cures your Main's status in a fight. 9 missing evolution items can now be found or bought.
+- New Moves and effects page in Help.
+### Fixes
+- Smart move choice no longer wastes a turn on Counter, Protect and similar moves when they would do nothing.
+- Shedinja has 1 HP, as in the main games.
+
+## 0.22.2
+### Fixes
+- Card styles: when you change a note type's styling or templates in AnkiDroid, the next card in AnkiGo uses the new look.
+- Flagging a card no longer sends it back to the question side.
+
+## 0.22.1
+### Fixes
+- Coming back to the app: each tab starts at its main page, and screens opened from a tab (Diagnostics, Updates, Help …) are closed. A running study session or battle is never reset.
+- Stats tab: tapping it while an achievement's details are open closes them.
+
+## 0.22.0
+- Team: each Pokémon has a ⋯ button for its options. Make main during a fight waits for the current card.
+- Box and Pokédex: one filter row with a funnel button and quick chips. New type filter (Any of, All of, Only) inside Sort and filter.
+- Pokémon size in lists. @ Settings → Look → Pokémon size in lists
+- The Can evolve mark is a green double chevron, also on Team rows.
+- Read more: a Bulbapedia link in the Pokémon details.
+- Tapping the tab you are on goes back to its main page.
+- Diagnostics: the page scrolls, groups fold, and the log has a full-screen view.
+### Fixes
+- The status icon goes away when the fight ends; status damage shows in its colour.
+- Download everything: the cries of Pikachu, Meltan and Melmetal now download, and the log names each file that fails.
+
+## 0.21.0
+- Tapping an item in the Shop or the Bag opens a window with its text and buttons.
+- Caught Pokémon move in the Pokédex and the Box. @ Settings → Look → Animate Pokémon in lists
+- Download everything: one button gets all pictures, animations, item icons, backgrounds and cries.
+- View settings has its own full screen with a live battle preview.
+### Fixes
+- Newer Pokémon (gen 6 and up) are no longer drawn blurry.
+- Pokédex types: the Ground chip is back in place, and a new Any of / All of switch.
+
+## 0.20.0
+- Every item has a short and a full description. Evolution items list their Pokémon, TMs show power, accuracy and who can learn them.
+- Shop and Bag: item cards open in place. Bag items no longer act on a tap: open the card, then Use, Give, Throw or Teach.
+- Trade balls in the Bag: 5 Poké Balls for 1 Great Ball, 3 Great Balls for 1 Ultra Ball.
+- Daily gift: reaching the daily goal gives one item instead of money; better gifts with a longer streak.
+- Master Ball: one for the top Best streak tier (365 days); never sold.
+- New app icon, coin icon and five item icons.
+- New cards: one OK button, off by default. @ Settings → Study → New cards: one OK button
+- Deck finished: the last battle plays out, then a Finish deck button.
+- Money: each win or answer pays an exact share.
+
+### Fixes
+- Battle: info boxes no longer hide under the frame, XP bars fill across a level-up, and "can't move" says why (asleep, frozen, paralyzed).

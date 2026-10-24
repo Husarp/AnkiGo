@@ -86,8 +86,10 @@ object MonDetail {
         val nameText = Ui.text(a, if (compact) 18f else 20f, 900, R.color.ag_text).apply {
             text = styledName(a, mon)
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
-            // leave room for the pencil (and the sprite when it sits beside the text): the dialog is at most about 88 % of the window wide
-            maxWidth = Ui.dp(a, ((a.resources.configuration.screenWidthDp * 0.88f).toInt() - 2 * pad - 48 - 8 - if (compact) spriteDp + 12 + (if (page != null) HEART_COMPACT_DP else 0) else 0).coerceAtLeast(100))
+            // leave room for the pencil (and the sprite and the heart when they sit beside the text) in the dialog's real width
+            // (R18-G: the heart is 48 dp to touch now, so the old 88 % guess, which was 10 dp short of it, no longer leaves a name room)
+            maxWidth = Ui.dp(a, (AppDialogRules.widthDp(a.resources.configuration.screenWidthDp) - 2 * pad - 48 - 4 -
+                if (compact) spriteDp + 12 + (if (page != null) HEART_DP else 0) else 0).coerceAtLeast(100))
         }
         val nameRow = LinearLayout(a).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -99,8 +101,9 @@ object MonDetail {
                 setImageResource(R.drawable.ic_pencil)
                 setColorFilter(Ui.c(a, R.color.ag_sub1), android.graphics.PorterDuff.Mode.SRC_IN)
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
-                setPadding(Ui.dp(a, 15), Ui.dp(a, 15), Ui.dp(a, 15), Ui.dp(a, 15))
                 contentDescription = "Rename"
+                background = DetailParts.bareRipple(a)
+                setPadding(Ui.dp(a, 15), Ui.dp(a, 15), Ui.dp(a, 15), Ui.dp(a, 15))
                 setOnClickListener {
                     MonActions(page).rename(mon) {
                         GameRepo.state?.mon(mon.uid)?.let { m -> nameText.text = styledName(a, m) }
@@ -110,7 +113,7 @@ object MonDetail {
             nameRow.addView(pencil, LinearLayout.LayoutParams(Ui.dp(a, 48), Ui.dp(a, 48)))
         }
         val numText = Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
-            text = LevelTier.line(a, "#%03d · ".format(sp.baseNum), mon.level, " · %s".format(mon.nature.label))
+            text = DetailFormat.numLine(sp.baseNum, mon.nature.label) // the level is in the Stats title (R18-G, PLAN 254)
             if (!compact) gravity = Gravity.CENTER
         }
         val typeRow = Bits.typeRow(a, sp.types)
@@ -127,13 +130,13 @@ object MonDetail {
                 gravity = Gravity.CENTER_VERTICAL
                 addView(img, LinearLayout.LayoutParams(Ui.dp(a, spriteDp), Ui.dp(a, spriteDp)))
                 addView(side, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 12) })
-                if (page != null) addView(heartButton(a, page, mon, HEART_COMPACT_DP), LinearLayout.LayoutParams(Ui.dp(a, HEART_COMPACT_DP), Ui.dp(a, HEART_COMPACT_DP)))
+                if (page != null) addView(heartButton(a, page, mon), LinearLayout.LayoutParams(Ui.dp(a, HEART_DP), Ui.dp(a, HEART_DP)))
             }, LinearLayout.LayoutParams(-1, -2))
         } else {
             // the sprite centred, the heart button at the right of the header
             col.addView(FrameLayout(a).apply {
                 addView(img, FrameLayout.LayoutParams(Ui.dp(a, spriteDp), Ui.dp(a, spriteDp), Gravity.CENTER_HORIZONTAL))
-                if (page != null) addView(heartButton(a, page, mon, 48), FrameLayout.LayoutParams(Ui.dp(a, 48), Ui.dp(a, 48), Gravity.END or Gravity.TOP))
+                if (page != null) addView(heartButton(a, page, mon), FrameLayout.LayoutParams(Ui.dp(a, HEART_DP), Ui.dp(a, HEART_DP), Gravity.END or Gravity.TOP))
             }, LinearLayout.LayoutParams(-1, -2))
             col.addView(nameRow, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(a, 8) })
             col.addView(numText, LinearLayout.LayoutParams(-1, -2))
@@ -142,24 +145,38 @@ object MonDetail {
                 it.topMargin = Ui.dp(a, 4)
             })
         }
-        // the state marks that tiles no longer show (held item, can evolve, fainted, regional form) and the other tags
+        // the state marks that tiles no longer show (can evolve, fainted, regional form) and the other tags; the held item and the Exp. Share are in the Holding row (R18-G)
         val tags = GameRepo.state?.let { MonTags.detailTags(data, it, mon) }.orEmpty()
         if (tags.isNotEmpty()) col.addView(DetailSections.marks(a, tags), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
 
-        // HP and XP, numbers
+        // HP and XP, numbers; the two bars are one tap area (48 dp tall) that explains both (R18-G, PLAN 241)
         val maxHp = stats.hp
         val hpFrac = mon.hp.toFloat() / maxHp.coerceAtLeast(1)
-        col.addView(barLine(a, "HP", "${mon.hp} / $maxHp", hpFrac, Ui.hpColor(a, hpFrac), 7),
-            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         val need = Progression.xpToNext(data, mon)
         val maxed = mon.level >= Tuning.MAX_LEVEL || need <= 0
-        col.addView(barLine(a, "XP", if (maxed) "Max level" else "XP ${mon.xp} / $need", if (maxed) 1f else mon.xp.toFloat() / need,
-            Ui.c(a, R.color.ag_sky), 5, BarMeaning.XP), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+        col.addView(LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(barLine(a, "HP", "${mon.hp} / $maxHp", hpFrac, Ui.hpColor(a, hpFrac), 7), LinearLayout.LayoutParams(-1, -2))
+            addView(barLine(a, "XP", if (maxed) "Max level" else "XP ${mon.xp} / $need", if (maxed) 1f else mon.xp.toFloat() / need,
+                Ui.c(a, R.color.ag_sky), 5, BarMeaning.XP), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+            DetailParts.tapRow(this, StatInfo.BARS)
+        }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
         // sections that open on tap; the open ones are remembered (DetailOpen)
         val mem = DetailSections.memory(a)
-        val seen = GameRepo.state?.let { it.seen + it.caught }.orEmpty()
-        col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${stats.total}") {
+        val state = GameRepo.state
+        val seen = state?.let { it.seen + it.caught }.orEmpty()
+        lateinit var dlg: AppDialog
+        // R18-G (PLAN 243B + 239): the card under the bars: Holding (item, Exp. Share; "Give item" where there are Options), then Evolution
+        val give: (() -> Unit)? = if (page != null) ({
+            // like Options → "Give item…": the details close once a picker really opens (nothing to give = just the toast)
+            if (state != null && HoldingPlan.giveable(state, mon).isNotEmpty()) dlg.dismiss()
+            MonActions(page).giveItem(mon)
+        }) else null
+        col.addView(DetailTopCard.forMon(a, data, state, mon, sp, seen, compact, page, give, if (page != null) { s -> DexDetail.show(page, s) } else null),
+            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
+        col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${stats.total}", titleLevel = mon.level) {
             DetailSections.statsBody(a, stats, mon.level, mon.nature, sp, compact)
         })
         col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves") { DetailSections.moves(a, data, mon.moves, compact) })
@@ -169,14 +186,12 @@ object MonDetail {
         // R17C-9a: under the ability, what it does in AnkiGo (an ability with no sentence yet shows none), then the others of its kind on their own line
         val abilityLines = listOfNotNull(AbilityText.of(mon.ability), others?.let { "Others of its kind: $it" }).joinToString("\n").ifEmpty { null }
         col.addView(DetailSections.infoSection(a, mem, data, sp,
-            listOf(mon.defeats.toString() to "Defeats"),
+            listOf(mon.defeats.toString() to "Wins"), // since R17C a catch is a win too; the saved field stays `defeats` (PLAN 273)
             Triple("Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }, abilityLines),
-            if (mon.shownName != mon.name) mon.name else null, seen, compact,
-            lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–"),
-            onTap = if (page != null) { s -> DexDetail.show(page, s) } else null))
+            if (mon.shownName != mon.name) mon.name else null, compact,
+            lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–")))
 
         if (page == null) { Pickers.info(a, "Details", DetailSections.scroll(a, col)); return }
-        lateinit var dlg: AppDialog
         lateinit var more: View
         more = DetailParts.secondaryButton(a, "Options") {
             // the menu hangs on this button, so the details close only once a row was tapped
@@ -191,21 +206,22 @@ object MonDetail {
         Pickers.show(dlg)
     }
 
-    private const val HEART_COMPACT_DP = 40
+    /** The favourite heart's touch size (R18-G, PLAN 226: 48 dp in every window) and its drawn size. */
+    private const val HEART_DP = 48
+    private const val HEART_ICON_DP = 22
 
     /**
-     * The favourite button of the header (PLAN 81): a rounded heart button, [sizeDp] touch size. Off = grey outline heart on the quiet
-     * pill; on = pink heart on a pink-tinted pill. It flips the favourite through the page and repaints itself.
+     * The favourite button of the header (PLAN 81, bare since R18-G / PLAN 226): just the heart, [HEART_DP] to touch, a round ripple.
+     * Off = grey outline heart; on = pink heart. It flips the favourite through the page and repaints itself.
      */
-    private fun heartButton(a: Context, page: GamePage, mon: Mon, sizeDp: Int): View = ImageView(a).apply {
+    private fun heartButton(a: Context, page: GamePage, mon: Mon): View = ImageView(a).apply {
         scaleType = ImageView.ScaleType.CENTER_INSIDE
-        val iconPad = Ui.dp(a, (sizeDp - 18) / 2)
+        val iconPad = Ui.dp(a, (HEART_DP - HEART_ICON_DP) / 2)
+        background = DetailParts.bareRipple(a)
+        setPadding(iconPad, iconPad, iconPad, iconPad) // after the background, which can reset the padding
         fun paint(on: Boolean) {
             setImageResource(if (on) R.drawable.ic_heart else R.drawable.ic_heart_outline)
             setColorFilter(Ui.c(a, if (on) R.color.ag_pink else R.color.ag_sub1), android.graphics.PorterDuff.Mode.SRC_IN)
-            val fill = if (on) Bits.blend(Ui.c(a, R.color.ag_pink), Ui.c(a, R.color.ag_card), 0.22f) else Ui.c(a, R.color.ag_mantle)
-            background = android.graphics.drawable.InsetDrawable(Ui.rounded(fill, 12, a), Ui.dp(a, 6))
-            setPadding(iconPad, iconPad, iconPad, iconPad) // after the background, which resets the padding
             contentDescription = if (on) "Remove from favourites" else "Add to favourites"
         }
         paint(page.state.mon(mon.uid)?.favourite ?: mon.favourite)

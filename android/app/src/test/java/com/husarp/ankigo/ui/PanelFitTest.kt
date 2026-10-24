@@ -51,9 +51,9 @@ class PanelFitTest {
     }
 
     @Test fun narrowPhoneScalesSlightlyForTheStatsBar() {
-        // the five chips need 366 dp (R9-B7: the streak chip has no box): a 360 dp phone is drawn at 360 / 366
-        val f = fit(360, 800)
-        assertEquals(360f / 366f, f.scale, 0.005f)
+        // the five chips need 326 dp (R18-D: no chip has a box), the arena 330 dp: a 300 dp window is drawn at 300 / 330
+        val f = fit(300, 800)
+        assertEquals(300f / 330f, f.scale, 0.005f)
         assertEquals("SLX", kept(f))
         assertFalse(f.middle) // the sprites shrink a little so the corners still work
     }
@@ -113,7 +113,7 @@ class PanelFitTest {
     @Test fun smallWindowsCompactCards() {
         // compact cards leave much more room: the stats bar fits down to 320 x 180 and the log down to 240 x 135
         val expect = listOf(
-            Triple(200, 200, "-LX"), Triple(240, 135, "-LX"), Triple(320, 180, "SLX"), Triple(240, 190, "-LX"),
+            Triple(200, 200, "-LX"), Triple(240, 135, "-LX"), Triple(320, 180, "SLX"), Triple(240, 190, "SLX"),
             Triple(340, 480, "SLX"), Triple(412, 250, "SLX"), Triple(412, 400, "SLX"), Triple(412, 869, "SLX"),
         )
         for ((w, h, parts) in expect) {
@@ -191,7 +191,7 @@ class PanelFitTest {
         // measured on the real views at floor 8 (PanelFitShots.calibration keeps this honest at other floors)
         assertEquals(52.6f, PanelFit.Heights.log(2, 8f) - 8f, 0.3f)
         assertEquals(75f, PanelFit.Heights.footer(8f, true), 0.5f)
-        assertEquals(346f, PanelFit.Heights.chips(8f), 0.5f)
+        assertEquals(306f, PanelFit.Heights.chips(8f), 0.5f) // R18-D: no boxes behind the chips
         val c = ArenaGeo.cards(8f, false, true)
         assertEquals(59.4f, c.wildH, 0.5f)    // R9 D12-A: name line, number line, 7 dp bar; the status badge sits in the name line (no row)
         assertEquals(74.7f, c.playerH, 0.5f)  // ... and our XP line (3 dp bar + its number) right under the bar

@@ -50,6 +50,7 @@ import com.husarp.ankigo.study.Cmd
 import com.husarp.ankigo.study.CountsGate
 import com.husarp.ankigo.study.CountsPolicy
 import com.husarp.ankigo.study.DeckNames
+import com.husarp.ankigo.study.LearnCache
 import com.husarp.ankigo.study.LoadPlan
 import com.husarp.ankigo.study.NextCard
 import com.husarp.ankigo.study.PendingAnswers
@@ -80,7 +81,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
      */
     private val host get() = StudyIo.host(applicationContext)
     private fun io(task: () -> Unit) = host.submit(this, Runnable(task))
-    private val nc by lazy { NextCard<StudyCard>(deckId, { host.nextSeq() }, check = PredictRule::check) }   // which card is on screen and whether AnkiDroid confirmed it; R10-X1: a prediction shows only when it is safe
+    private val nc by lazy { NextCard<StudyCard>(deckId, { host.nextSeq() }, check = PredictRule::check, maxAhead = NextCard.AHEAD) }   // which card is on screen and whether AnkiDroid confirmed it; R10-X1: a prediction shows only when it is safe; R18-A: a predicted card can be flipped and answered while the earlier write runs
     private val countsIo = Executors.newSingleThreadExecutor()   // R4 fix B1: only the deck counts' read runs here, so answers and card loads on [io] never wait behind it
     private val countsGate = CountsGate()                        // which counts reads may still be shown (main thread)
     private val main = Handler(Looper.getMainLooper())
@@ -181,10 +182,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private val deckOptions = ScreenMemo { Anki.deckOptions(this, deckId) }   // AnkiDroid builds its whole deck tree to answer this
     private var lastCounts: Anki.Deck? = null     // the deck's counts shown with a card: the last exact read minus the answers since (main thread)
     private var pageTiming: AnswerTiming? = null  // the answer whose next card's page is loading: its timing line waits for the page
-    private var predictedNow = false              // the card on screen is the one AnkiDroid is expected to give next, not confirmed yet (taps are held, no card actions)
+    private var predictedNow = false              // the card on screen is the one AnkiDroid is expected to give next, not confirmed yet (no card actions; an answer is made ahead or held, see NextCard)
     @Volatile private var heldEase = 0            // a tap on a predicted card waits for its confirmation (0 = none); read by the io side too
-    private var flipHeld = false                  // R10-X1: "Show answer" on a predicted card waits for its confirmation (a card that could still be swapped never shows its answer)
-    private var flipQuiet = false                 // R10-X1: that held flip opening now: no second click
+    private var heldAt = 0L                       // R18-A: when that tap was held (the STUDY line says how long it waited)
     private var typedShown = ""                   // PLAN 175: what was typed in when the answer side opened (it shows again after a resume)
     private var keepAnswer: StudyRules.AnswerKeep? = null   // PLAN 175: the answer side to show again if the resume's reload finds the same card
     private var inFlight = 0                      // answers made on this screen and not resolved yet ("card N" counts them)
@@ -292,8 +292,10 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Ui.c(this@StudyActivity, R.color.ag_peach)) }
         }
         top.addView(savingDot, StudyUi.lp(Ui.dp(this, 8), Ui.dp(this, 8)).also { it.marginStart = Ui.dp(this, 7) })
-        top.addView(StudyUi.iconButton(this, R.drawable.ic_more_vert, "Card actions") { actions() }, StudyUi.lp(Ui.dp(this, 34), Ui.dp(this, 34)).also { it.marginStart = Ui.dp(this, 6) })
-        topBar.addView(top, StudyUi.lp(-1, Ui.dp(this, 45)))
+        // R18 (NICE-7): the ⋯ touch area is 48 x 48 dp (was 34): icon padding 7 -> 14 dp keeps the 20 dp icon, the margins give back the 7 dp it took on each side
+        top.addView(StudyUi.iconButton(this, R.drawable.ic_more_vert, "Card actions") { actions() }.apply { setPadding(Ui.dp(context, 14), Ui.dp(context, 14), Ui.dp(context, 14), Ui.dp(context, 14)) },
+            StudyUi.lp(Ui.dp(this, 48), Ui.dp(this, 48)).also { it.marginStart = -Ui.dp(this, 2); it.marginEnd = -Ui.dp(this, 6) })
+        topBar.addView(top, StudyUi.lp(-1, Ui.dp(this, 48)))
         topBar.addView(StudyUi.line(this))
         cardColumn.addView(topBar)
         summaryBar = Ui.appBar(this, deckName.substringAfterLast("::"), "done").apply { visibility = View.GONE }
@@ -685,7 +687,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
         if (finished) buttons.removeAllViews() else if (waiting) disableButtons(buttons)
         finished = false; lastSummary = null; finishArgs = null; finishTapped = false; locked = true; card = null; pageReady = false; jsSnap = null
-        predictedNow = false; heldEase = 0; flipHeld = false
+        predictedNow = false; heldEase = 0; heldAt = 0L
         topBar.visibility = View.VISIBLE; summaryBar.visibility = View.GONE; cardSurface.visibility = View.VISIBLE
         web.visibility = View.VISIBLE; showNotice(false); updateSwipe()
         if (waiting) { layout(); syncTiming() }
@@ -696,7 +698,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         for (c in cmds) when (c) {
             is Cmd.Enqueue -> answerMade(c.answer)
             is Cmd.Show -> showCard(c.card, c.predicted)
-            is Cmd.Confirm -> cardConfirmed(c.card, c.flip)
+            is Cmd.Confirm -> cardConfirmed(c.card)
             Cmd.ShowWaiting -> resetForLoading(waiting = true)
             is Cmd.ShowHeld -> showHeld(c.ease)
             Cmd.ShowFinished -> if (!finished) resetForLoading(waiting = true)   // the summary follows, behind the last game step
@@ -709,7 +711,11 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             is Cmd.Prepare -> startPrepare(c)
         }
     }
-    /** An answer was made on a CONFIRMED card (a tap, or a held tap whose card was just confirmed): queued in order for the background write. */
+    /**
+     * An answer was made (a tap, a key, a swipe, a card script, a held tap whose card was just confirmed): queued in order for the background
+     * write. R18-A: it can be on a card AnkiDroid has not confirmed yet ([predictedNow], [AnswerTiming.ahead]: answered ahead of the write).
+     * An automatic answer is the exception: it still waits for the confirm ([syncAuto] `waitsForConfirm`), the safe choice.
+     */
     private fun answerMade(a: QueuedAnswer) {
         val buttons = card?.buttons ?: a.buttons
         // PLAN 155: the one place that decides OK (every tap, key, swipe, auto answer and card script comes through here): the ease AnkiDroid gets and whether the game counts it neutrally
@@ -719,6 +725,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         while (timings.size >= 6) timings.remove(timings.keys.first())?.let { if (it.flush()) Report.log("STUDY", it.line()) }
         val timing = AnswerTiming(SystemClock.elapsedRealtime(), AnswerTiming.ALL_PARTS)
         timing.pollsAtTap = LiveSession.polls; timing.queueAtTap = host.queue.size
+        timing.ahead = predictedNow   // R18-A: still true here = made on a card AnkiDroid has not confirmed yet (NextCard answered it ahead of the write)
+        if (heldAt != 0L) { timing.heldMs = SystemClock.elapsedRealtime() - heldAt; heldAt = 0L }   // a held tap acting now waited this long for the confirm
         timing.wait = nc.lastWait   // R10-X1: why this answer's next card waits ("" = the prediction shows)
         timings[answer.seq] = timing; answerTiming = timing
         tickets[answer.seq] = pending.start()   // the summary waits for the game step of this answer
@@ -760,29 +768,25 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         if (!predicted && mediaBlocked && prefs.getString("missing", "Ask") == "Always open in AnkiDroid") openAnki()
         answerTiming?.takeIf { !it.has(AnswerTiming.SHOWN) }?.let { t -> pageTiming = t; timingPart(t, AnswerTiming.SHOWN, SystemClock.elapsedRealtime() - t.tapAt) }
     }
-    /** The predicted card on screen is the real one: its buttons and next times now come from AnkiDroid; the side the user is on stays. [openAnswer]: a held "Show answer" opens now. */
-    private fun cardConfirmed(p: Prepared<StudyCard>, openAnswer: Boolean = false) {
+    /**
+     * The predicted card on screen is the real one: its buttons and next times now come from AnkiDroid; the side the user is on stays.
+     * R18-A: the user may be on the answer side already ("Show answer" is not held), with a finger on a button: the row is only rebuilt when
+     * its buttons or times really changed.
+     */
+    private fun cardConfirmed(p: Prepared<StudyCard>) {
         val n = p.view.review
+        val changed = card?.buttons != n.buttons || card?.nextTimes != n.nextTimes
         predictedNow = false; answeredSinceCard = false
         card = n; stats = p.before
         jsBase = jsBase.copy(buttons = n.buttons, nextTimes = n.nextTimes); jsSnap = jsSnap?.copy(buttons = n.buttons, nextTimes = n.nextTimes)
         if (heldEase != 0) return   // the tap that was held acts right now: the commands after this one carry it out
         if (mediaBlocked && prefs.getString("missing", "Ask") == "Always open in AnkiDroid") openAnki()
-        if (openAnswer && flipHeld) {   // R10-X1: the held "Show answer" opens on the confirmed card (its click was given at the tap)
-            flipHeld = false; locked = false
-            flipQuiet = true; flip(); flipQuiet = false
-            return
-        }
-        showButtons(); syncTiming()   // the answer-side countdown starts in full now
-    }
-    /** R10-X1: "Show answer" on a predicted card waits for its confirmation: the button stays marked as pressed, nothing else takes a tap. */
-    private fun showHeldFlip() {
-        flipHeld = true; locked = true
-        showButtons(); syncTiming()
+        if (changed) showButtons()
+        syncTiming()   // the answer-side countdown starts in full now
     }
     /** A tap on a predicted card: the click and haptic were given at the tap; the answer is made once AnkiDroid confirms this card. The pressed button stays marked, the others dim. */
     private fun showHeld(ease: Int) {
-        heldEase = ease; locked = true
+        heldEase = ease; locked = true; heldAt = SystemClock.elapsedRealtime()
         showButtons(); syncTiming()
     }
     /** Asks AnkiDroid what its queue says now (the io thread runs it behind any answer being written) and tells [nc] the result. */
@@ -794,7 +798,10 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     private var queueReviews = emptyList<Anki.Review>()   // the queue the last load read (io thread only): the prediction is prepared from it
     private fun loadTask(token: Int, predicted: StudyLoop.Key?, countsTicket: CountsGate.Ticket, timing: AnswerTiming?) {
-        if (token != generation) return   // replaced before it ran: nobody wants its card
+        if (token != generation) {   // replaced before it ran (a newer answer's load, R18-A: answers made ahead): nobody wants its card
+            timing?.let { t -> postMain { if (t.note.isEmpty()) t.note = "its load was replaced by a newer one"; timingPart(t, AnswerTiming.NEXT, -1); timingPart(t, AnswerTiming.COUNTS, -1); timingPart(t, AnswerTiming.CONFIRMED, -1) } }
+            return
+        }
         val app = applicationContext
         val ioStart = SystemClock.elapsedRealtime()
         var listMs = -1L   // how long the deck list took before the card could show (Diagnostics: the summary, a sub-deck's name once)
@@ -822,9 +829,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             fun select() = host.ensureSelected(deckId) { Anki.selectDeck(app, deckId) }   // once per visit, again after a failure
             select()
             var decks: List<Anki.Deck>? = null
-            // ONE queue read (3 cards: the top one and the next two); asked again only when it throws, or when it is empty although the deck's counts say cards are due
+            // ONE queue read (the top card and the NextCard.AHEAD + 1 after it, which the screen prepares to answer ahead of the write); asked again only when it throws, or when it is empty although the deck's counts say cards are due
             fun readQueue() = QueueRead.read(
-                query = { Anki.nextCards(app, deckId, 3) },
+                query = { Anki.nextCards(app, deckId, NextCard.AHEAD + 2) },
                 dueCount = {
                     val listStart = SystemClock.elapsedRealtime()
                     val all = Anki.decks(app)
@@ -867,7 +874,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                 is LoadPlan.Step.Confirm -> {
                     // The predicted card is on top. A tap is held on it: the card after it is prepared right here, so the held answer's own next card shows at once too.
                     val fresh = reviews.first()
-                    val next = if (heldEase != 0 && reviews.size > 1) runCatching { prepare(reviews[1], flagsOk).copy(learning = learnRead()) }.getOrNull() else null
+                    val next = if (heldEase != 0 && reviews.size > 1) runCatching { prepare(reviews[1], flagsOk).copy(learning = learnCache.get(token)) }.getOrNull() else null
                     queueReviews = reviews
                     val ioMs = ioDone()
                     postMain {
@@ -934,11 +941,13 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             val review = queueReviews.firstOrNull { it.nid == c.key.nid && it.ord == c.key.ord } ?: return@io
             if (host.queue.waitingAnswers().any { it.key == c.key }) return@io   // PLAN 195: its waiting answer is written by the load, it never shows
             val p = try { prepare(review, support.get().second) } catch (e: Exception) { return@io }   // no prediction: the next answer waits for the real card
-            val withLearning = p.copy(learning = learnRead())   // R10-X1: with the deck's learning cards, the tap can tell whether it is safe to show
+            val withLearning = p.copy(learning = learnCache.get(c.forToken))   // R10-X1: with the deck's learning cards, the tap can tell whether it is safe to show (R18 RV-9: one read per load)
             postMain { if (!isDestroyed && !isFinishing) nc.prepared(c.forKey, c.forToken, withLearning) }
         }
     }
-    /** R10-X1: the studied deck's intraday learning cards and when they are due, read (io thread) with each prepared next card; a failed read makes the next answer wait. */
+    /** R18 RV-9: the learning read of the last load that had one, shared by the Prepares of that load (io thread only). */
+    private val learnCache = LearnCache { learnRead() }
+    /** R10-X1: the studied deck's intraday learning cards and when they are due, read (io thread) with the prepared next cards of a load; a failed read makes the next answer wait. */
     private fun learnRead(): PredictRule.LearnRead {
         val at = System.currentTimeMillis()
         val rows = runCatching { Anki.searchCards(applicationContext, PredictRule.learnQuery(deckName), PredictRule.LEARN_COLS) }.getOrNull()
@@ -1097,14 +1106,14 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private fun flip() {
         if (heldContinue()) return
         if (locked || flipped || mediaBlocked || card == null) return
-        if (!flipQuiet) GameSound.ui(this, SoundId.SHOW_ANSWER, clickMuted())
-        // R10-X1: a predicted card could still be swapped away: its answer side waits for AnkiDroid's confirmation (it never shows on a card that goes)
-        if (predictedNow) { if (nc.holdFlip()) showHeldFlip(); return }
+        GameSound.ui(this, SoundId.SHOW_ANSWER, clickMuted())
+        // R18-A: also on a predicted card, at once: the answer is in the prepared card, and waiting for AnkiDroid's confirmation (queued behind a slow write) was the lag. A wrong prediction is swapped for the real card's question.
         Report.log("STUDY", "show answer: note ${card?.nid}, ord ${card?.ord}")   // R13 Part E
         locked = true; syncTiming()
         cancelKeyboard(); hideKeyboard()   // the battle is visible again once the answer shows
+        val side = sideNo   // R18-A: a wrong prediction swapped meanwhile shows its own question (showQuestion moved sideNo): this answer side is not for it
         web.evaluateJavascript("document.getElementById('typeans')?.value || ''") { raw ->
-            if (isDestroyed || card == null) return@evaluateJavascript
+            if (isDestroyed || card == null || side != sideNo) return@evaluateJavascript
             val typed = runCatching { org.json.JSONArray("[$raw]").getString(0) }.getOrDefault("")
             val page = page(answerHtml, "a", typed); avAuto = page.autoplay; avAll = page.av; typeInQuestion = false
             flipped = true; locked = false; sideNo++; pageReady = false; allowAt = SystemClock.elapsedRealtime() + 300; typedShown = typed
@@ -1201,7 +1210,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
         if (!flipped) {
             val hint = if (keyboardLayout() && prefs.getBoolean(TypeInRules.PREF_ENTER, TypeInRules.ENTER_DEFAULT)) "or press Enter" else null
-            buttons.addView(StudyUi.answer(this, "Show answer", null, R.color.ag_mauve, enabled, hint) { flip() }.also { if (flipHeld) markHeld(it, true) }, StudyUi.lp(-1, Ui.dp(this, 48)))
+            buttons.addView(StudyUi.answer(this, "Show answer", null, R.color.ag_mauve, enabled, hint) { flip() }, StudyUi.lp(-1, Ui.dp(this, 48)))
             return
         }
         val n = card ?: return
@@ -1228,9 +1237,10 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         v.contentDescription = "${v.contentDescription}, saving"
     }
     /**
-     * The one gate for every answer (buttons, keys 1-4, swipe, the auto timer, card JavaScript). On a CONFIRMED card [nc] queues the
-     * answer for the background write and the next card shows at once; on a predicted card the tap is only held (the click and haptic
-     * are given now), and acts when AnkiDroid confirms that card.
+     * The one gate for every answer (buttons, keys 1-4, swipe, the auto timer, card JavaScript). [nc] queues the answer for the
+     * background write and the next card shows at once. On a predicted card (not confirmed by AnkiDroid yet) R18-A answers it at once
+     * too, behind the write before it, while a safe next card is prepared and fewer than [NextCard.AHEAD] answers are ahead; else the tap
+     * is only held (the click and haptic are given now), and acts when AnkiDroid confirms that card.
      */
     private fun answer(ease: Int) {
         if (heldContinue()) return
@@ -1240,7 +1250,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val slot = nc.slot
         if (slot !is NextCard.Slot.Confirmed<*> && !(slot is NextCard.Slot.Predicted<*> && slot.held == null)) return   // nothing to answer yet
         pauseClock(); val took = elapsed.coerceAtMost(maxTime)
-        Report.log("STUDY", "answer tap: ease $ease of ${c.buttons}, ${took} ms, note ${c.nid}, ord ${c.ord}" + if (slot is NextCard.Slot.Predicted<*>) " (held: card not confirmed yet)" else "")   // R13 Part E
+        Report.log("STUDY", "answer tap: ease $ease of ${c.buttons}, ${took} ms, note ${c.nid}, ord ${c.ord}" + if (slot is NextCard.Slot.Predicted<*>) " (card not confirmed yet)" else "")   // R13 Part E
         GameSound.ui(this, SoundUiRules.answerSound(c.buttons, ease), clickMuted())   // one click per answer: taps, swipes, keys and the auto timer all come through here
         if (prefs.getBoolean("haptic", true)) web.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
         perform(nc.tapAnswer(ease, took))
@@ -1342,7 +1352,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             if (runCatching { startActivity(Intent(action)) }.isSuccess) return
     }
     private fun showError(message: String) {
-        predictedNow = false; heldEase = 0; flipHeld = false   // an error ends a prediction: the retry asks AnkiDroid again
+        predictedNow = false; heldEase = 0   // an error ends a prediction: the retry asks AnkiDroid again
         locked = true; notice.removeAllViews(); styleNotice(); showNotice(true)
         notice.addView(StudyUi.label(this, message, 13, R.color.ag_red, 900))
         val row = StudyUi.row(this)
@@ -1456,20 +1466,25 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
             main.post {
                 if (isDestroyed) return@post
-                when {
-                    !result.getOrDefault(false) -> showError("This change wasn't saved.")
-                    action == "flag" -> { locked = false; showButtons(); syncTiming() }   // PLAN 246: a flag keeps the card as it is (the answer stays shown)
-                    else -> loadNext()
+                when (StudyRules.afterAction(action, result.getOrDefault(false))) {
+                    StudyRules.AfterAction.ERROR -> showError("This change wasn't saved.")
+                    StudyRules.AfterAction.KEEP_CARD -> { flagShown(flag); locked = false; showButtons(); syncTiming() }   // PLAN 246: a flag keeps the card as it is (the answer stays shown)
+                    StudyRules.AfterAction.NEXT_CARD -> loadNext()
                 }
             }
         }
+    }
+    /** PLAN 246: the flag was written: what the screen knows about the card (the row, the card scripts' snapshot) follows at once. */
+    private fun flagShown(value: Int) {
+        stats = StudyRules.withFlag(stats, value)
+        jsBase = jsBase.copy(flag = value); jsSnap = jsSnap?.copy(flag = value)
     }
     /** The card's own deck (the home deck when it sits in a filtered deck right now). */
     private fun homeDeckId(): Long = stats["original_deck_id"]?.toLongOrNull()?.takeIf { it != 0L } ?: stats["deck_id"]?.toLongOrNull() ?: deckId
     /** A deck or note change starts: the card is locked until it is over (as for bury / suspend). */
     private fun lockForChange() { locked = true; showButtons(); syncTiming() }
     /** It is over: the next card when this one is gone or elsewhere, else the card is usable again. Deleting or moving is not an answer: nothing of the game runs. */
-    private fun changeDone(gone: Boolean) { if (gone) loadNext() else { locked = false; showButtons(); syncTiming() } }
+    private fun changeDone(gone: Boolean) { if (gone) loadNext(answerKeep()) else { locked = false; showButtons(); syncTiming() } }   // PLAN 246: a card moved inside the studied deck is still first: its answer side comes back
     /** A deck / note change of the card on show: locked NOW (before any read or question), and its callbacks only act while this same card is on show. */
     private fun startChange(): com.husarp.ankigo.deck.CardChange =
         com.husarp.ankigo.deck.CardChange({ generation }, { lockForChange() }, { changeDone(false) }, { changeDone(true) }).also { it.begin() }
@@ -1629,7 +1644,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             result(R.drawable.ic_star, "${mon.optString("name")} Lv $from${if (to != from) " → $to" else ""}", if (mon.optBoolean("evolved")) "evolved" else "level up", R.color.ag_mauve, mon.optInt("species"), shiny = mon.optBoolean("shiny"))
         }
         result(R.drawable.ic_swords, "Defeated / caught", "$defeated / ${caught.size}", R.color.ag_sub1)
-        result(R.drawable.ic_money, "Coins", "+$coins ₽", R.color.ag_yellow)
+        result(R.drawable.ic_money, "Coins", "+$coins", R.color.ag_yellow)
         if (foundItems.isEmpty()) result(R.drawable.ic_gift, "Found", "No items", R.color.ag_teal)
         else foundItems.distinct().forEach { item -> result(R.drawable.ic_gift, "Found", com.husarp.ankigo.game.Items.name(item), R.color.ag_teal, item = item) }
         summary.addView(results, StudyUi.spaced(this, 6))

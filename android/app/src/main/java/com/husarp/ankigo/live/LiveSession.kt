@@ -13,6 +13,7 @@ import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.stats.LiveTimeFile
 import com.husarp.ankigo.stats.LiveTimer
 import com.husarp.ankigo.study.NewCardOk
+import com.husarp.ankigo.ui.CoinText
 import com.husarp.ankigo.ui.LogKind
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -368,7 +369,8 @@ object LiveSession {
             else -> {}
         }
         val n = batch.size
-        val text = "Caught up $n answer${if (n == 1) "" else "s"} made while AnkiGo was closed: $won won, $caught caught, +$cash ₽"
+        val text = "Caught up $n answer${if (n == 1) "" else "s"} made while AnkiGo was closed: $won won, $caught caught" +
+            (if (cash > 0) ", ${CoinText.plus(cash)}" else "")
         sendLog(LogKind.SYS, "CAUGHT UP", text, redraw = true)
         refreshWidgetsFor(app, events)
     }

@@ -13,7 +13,9 @@ import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.ImageView
 import androidx.annotation.ColorRes
+import androidx.annotation.DrawableRes
 import androidx.core.view.AccessibilityDelegateCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
@@ -41,6 +43,17 @@ internal object MatchupBoxes {
         MatchupGroup.STRONGLY_RESISTS -> R.color.ag_mu_quarter
         MatchupGroup.IMMUNE -> R.color.ag_mu_zero
         MatchupGroup.STRONG_AGAINST -> R.color.ag_mu_strong
+    }
+
+    /** R18-K (176): the group's icon, drawn in the group colour: arrows up for weak, down for resists, a ban for immune, a burst for "strong against". */
+    @DrawableRes
+    fun iconRes(g: MatchupGroup): Int = when (g) {
+        MatchupGroup.VERY_WEAK -> R.drawable.ic_mu_up2
+        MatchupGroup.WEAK -> R.drawable.ic_mu_up1
+        MatchupGroup.RESISTS -> R.drawable.ic_mu_down1
+        MatchupGroup.STRONGLY_RESISTS -> R.drawable.ic_mu_down2
+        MatchupGroup.IMMUNE -> R.drawable.ic_mu_ban
+        MatchupGroup.STRONG_AGAINST -> R.drawable.ic_mu_burst
     }
 
     /** The box: rounded fill with the bar on its left edge (clipped to the rounded corners). */
@@ -81,14 +94,15 @@ internal object MatchupBoxes {
         val dark = TypeChips.isDark(ctx)
         val col = Ui.c(ctx, colorRes(group))
         val fill = MatchupGroups.boxColor(Ui.c(ctx, R.color.ag_card), Ui.c(ctx, R.color.ag_mantle), dark)
-        val barW = dp(3f)
+        // R18-K (176): the details box has no colour bar; its icon on the left carries the group. Compare's cells keep the bar.
+        val barW = if (compact) dp(3f) else 0
         val padStart = barW + dp(if (compact) 3f else 8f)
         val padEnd = dp(if (compact) 3f else 8f)
         val message = MatchupGroups.toast(group, types, name)
 
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            background = BarBox(fill, col, Ui.dp(ctx, 10f), barW.toFloat())
+            background = if (compact) BarBox(fill, col, Ui.dp(ctx, 10f), barW.toFloat()) else Ui.rounded(fill, 10, ctx)
             setPadding(padStart, dp(if (compact) 4f else 6f), padEnd, dp(if (compact) 5f else 7f))
             minimumHeight = dp(48f) // a real touch target even where the box is short
             gravity = Gravity.CENTER_VERTICAL
@@ -104,12 +118,15 @@ internal object MatchupBoxes {
         }
 
         val label = Ui.text(ctx, textSp, 900, if (group == MatchupGroup.IMMUNE) R.color.ag_sub1 else colorRes(group)).apply { text = group.label; maxLines = 1 }
+        // Compare's cells: the pill on the group colour. Details (R18-K): just the multiplier, in the colour the pill had.
         val pill = Ui.text(ctx, textSp + 0.5f, 900, R.color.ag_text).apply {
             text = group.pill
-            setTextColor(MatchupGroups.pillInk(col))
-            background = Ui.rounded(col, 6, ctx)
-            setPadding(dp(6f), 0, dp(6f), 0)
             includeFontPadding = false
+            if (compact) {
+                setTextColor(MatchupGroups.pillInk(col))
+                background = Ui.rounded(col, 6, ctx)
+                setPadding(dp(6f), 0, dp(6f), 0)
+            } else setTextColor(col)
         }
         val innerW = roomPx?.let { it - padStart - padEnd }
         val gap = dp(6f)
@@ -117,6 +134,11 @@ internal object MatchupBoxes {
         // line and ellipsizes, the pill (measured first, no weight) always shows in full.
         val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         if (!compact) {
+            head.addView(ImageView(ctx).apply {
+                setImageResource(iconRes(group))
+                setColorFilter(col)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(24f), dp(24f)).also { it.marginEnd = gap })
             label.ellipsize = android.text.TextUtils.TruncateAt.END
             head.addView(label, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginEnd = gap })
         }

@@ -27,7 +27,7 @@ class CatchTilesPlanTest {
         assertEquals("New · #147", t[0].value)
         assertEquals("Ball A", t[1].label); assertEquals("Throw 2", t[1].value); assertEquals("· 12 %", t[1].extra); assertEquals("ball-a", t[1].ball)
         assertEquals("Mainy", t[2].label); assertEquals("+120 XP", t[2].value)
-        assertEquals("+10 ₽", t[3].value)
+        assertEquals("+10", t[3].value)
     }
 
     @Test fun reCatchAndAutoCatch() {
@@ -70,7 +70,7 @@ class CatchTilesPlanTest {
             GameEvent.BallThrow("ball-a", 12, true, 3), caught(true), xp("a", "A", 10), xp("b", "B", 20), GameEvent.Cash(10, 110, CashKind.DEFEAT),
         )
         val r = CatchTilesPlan.rowTiles(s)
-        assertEquals(listOf("New #147", "Throw 1 · 12 %", "+30 XP", "+10 ₽"), r.map { it.value })
+        assertEquals(listOf("New #147", "Throw 1 · 12 %", "+30 XP", "+10"), r.map { it.value })
         assertEquals("ball-a", r[1].ball)
     }
 

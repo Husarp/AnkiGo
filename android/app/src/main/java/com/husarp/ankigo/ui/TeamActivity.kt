@@ -63,8 +63,8 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private val detailsOnce = DetailsOnce()
 
     // The Box lists every owned Pokémon (team members carry a mark); copies of a species collapse into one "×N" tile.
-    private var boxFilter = BoxFilter.ALL
-    private var boxTypes = SortPrefs.loadType(base, SortPrefs.TypeWhere.BOX) // PLAN 192 (X8): the type filter is remembered for the Box; the Show filter above is not
+    private var boxFilter = SortPrefs.loadShow(base) // R18 249: the Show choice is remembered for the Box
+    private var boxTypes = SortPrefs.loadType(base, SortPrefs.TypeWhere.BOX) // PLAN 192 (X8): the type filter is remembered for the Box
     private var grouped = AppPrefs.boxGrouped(base)
     private var boxSort = SortPrefs.load(base, SortPrefs.Where.BOX) // PLAN 48/55: remembered for the Box
     private var tileValues: Map<BoxTile, String> = emptyMap() // the number a stat sort shows on each tile
@@ -85,7 +85,10 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     override fun buildBar(): View {
-        appBar = Ui.appBar(this, "Pokémon", "0", pillIconRes = R.drawable.ic_money) // the coins on every section; the counts sit in the sections
+        // the coins on every section; the counts sit in the sections. R18 RV-6: start with the real amount (never a "0" that jumps)
+        val first = ShopPlan.firstPill(GameRepo.status == GameRepo.Status.READY, GameRepo.state?.cash)
+        appBar = Ui.appBar(this, "Pokémon", first, pillIconRes = R.drawable.ic_money)
+        appBar.setPill(first)
         return appBar
     }
 
@@ -422,19 +425,22 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     /**
      * PLAN 192 (X10, Adam's version): the ONE row under the tabs, never scrolling: the "?" legend, the sort & filter button (the sheet
-     * holds ALL filters), the active-filter chip while any filter is on (✕ clears them all), then quick chips for the filters that are
-     * off (♥ Favourites, Shiny), as many as fit. Show stays one choice: a quick chip switches to its filter.
+     * holds ALL filters), the active-filter chip while a sheet filter is on (types, Show choices without a quick chip; a tap opens the
+     * sheet, whose Clear turns them off), then the quick chips (R18 253: Favourites, Shiny, In team), as many as fit, lit ones first.
+     * Show stays one choice: a lit chip turns it off (Show = All), another chip switches to its filter.
      */
     private fun boxControls(): View {
         val ctx = this
         val st = state
         val shownSpec = boxSort.copy(key = MonSort.effectiveKey(boxSort, st)) // no battle: "vs the wild one" works as "strongest attack"
         sortPill = SortViews.sortChip(ctx, shownSpec, boxFiltersOn()) { openSortSheet() }
-        val quick = ArrayList<View>()
-        if (boxFilter != BoxFilter.FAVOURITES) quick += BoxViews.chip(ctx, "Favourites", false, heart = true) { setBoxFilter(BoxFilter.FAVOURITES) }
-        if (boxFilter != BoxFilter.SHINY) quick += BoxViews.chip(ctx, "Shiny", false) { setBoxFilter(BoxFilter.SHINY) }
+        val quick = listOf(
+            BoxViews.quickChip(ctx, "Favourites", boxFilter == BoxFilter.FAVOURITES, heart = true) { toggleBoxFilter(BoxFilter.FAVOURITES) } to (boxFilter == BoxFilter.FAVOURITES),
+            BoxViews.quickChip(ctx, "Shiny", boxFilter == BoxFilter.SHINY) { toggleBoxFilter(BoxFilter.SHINY) } to (boxFilter == BoxFilter.SHINY),
+            BoxViews.quickChip(ctx, "In team", boxFilter == BoxFilter.IN_TEAM) { toggleBoxFilter(BoxFilter.IN_TEAM) } to (boxFilter == BoxFilter.IN_TEAM),
+        )
         return FilterRow.make(ctx, TileViews.legendChip(ctx, dex = false), sortPill, FilterRowText.activePieces(boxTypes, boxFilter),
-            onOpen = { openSortSheet() }, onClear = { clearBoxFilters() }, quick = quick)
+            onOpen = { openSortSheet() }, quick = quick)
     }
 
     private lateinit var sortPill: View // the sort chip as last drawn (tests click it)
@@ -449,8 +455,12 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private fun setBoxFilter(f: BoxFilter) {
         if (f == boxFilter) return
         boxFilter = f
+        SortPrefs.saveShow(this, f) // R18 249
         requestRender()
     }
+
+    /** R18 253: a quick chip: a lit one turns Show off (All), another one switches to its filter. */
+    private fun toggleBoxFilter(f: BoxFilter) = setBoxFilter(if (boxFilter == f) BoxFilter.ALL else f)
 
     /** The type filter changed (the sheet): remembered for the Box, the grid follows. */
     private fun setBoxTypes(f: TypeFilter) {
@@ -461,9 +471,9 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         boxList.setSelection(0)
     }
 
-    /** The ✕ of the active chip and the empty state's "Clear filters": every Box filter off (Show = All, types and mode), the sort and grouping stay. */
+    /** The empty state's "Clear filters": every Box filter off (Show = All, types and mode), the sort and grouping stay. */
     private fun clearBoxFilters() {
-        boxFilter = BoxFilter.ALL
+        setBoxFilter(BoxFilter.ALL)
         setBoxTypes(TypeFilter())
         requestRender()
     }
@@ -606,8 +616,9 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             contentDescription = label
             val pad = Ui.dp(ctx, 14)
             setPadding(pad, pad, pad, pad)
-            val inset = Ui.dp(ctx, 6)
-            background = InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx), inset)
+            // R18-D (226): bare glyph, no tile behind it; a round ripple on touch
+            background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf((Ui.c(ctx, R.color.ag_ov) and 0x00ffffff) or 0x33000000), null, null)
             setColorFilter(Ui.c(ctx, if (enabled) R.color.ag_text else R.color.ag_ov), PorterDuff.Mode.SRC_IN)
             alpha = if (enabled) 1f else 0.45f
             isEnabled = enabled

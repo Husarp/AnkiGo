@@ -1,8 +1,8 @@
 package com.husarp.ankigo.game
 
 /**
- * Round 10 (W10): the words for the wild one's attack in the turn a switch takes (R13 Part C: or an item used on the Main in a
- * fight), for the screens that do not show the battle (Team, Box, Compare, Bag: the action's toast says it). Pure Kotlin; the hit
+ * Round 10 (W10): the words for the wild one's attack that comes with a switch (R13 Part C: or an item used on the Main in a
+ * fight; R18-B: it is "the wild Pokémon attacks once", never "a free hit"), for the screens that do not show the battle (Team, Box, Compare, Bag: the action's toast says it). Pure Kotlin; the hit
  * itself is [BattleEngine.switchHit], played by [Game].
  */
 object SwitchHitText {

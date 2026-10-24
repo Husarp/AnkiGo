@@ -127,12 +127,15 @@ sealed class GameEvent {
     /** The wild Pokémon left without a result (escape item). */
     data class Fled(val name: String) : GameEvent()
 
-    /** The main changed (team switch). */
-    data class MainChanged(val uid: String, val name: String) : GameEvent()
+    /**
+     * The main changed (team switch). R18-B: [queued] = a switch queued earlier ([SwitchQueued]) that an answer applied; it comes
+     * after that answer's events, so the Study dots draw the answer's dot in the switch colour.
+     */
+    data class MainChanged(val uid: String, val name: String, val queued: Boolean = false) : GameEvent()
 
     /**
      * Round 10 (W10): comes right after a [MainChanged] in a fight. The wild one [wildName] attacks the incoming Pokémon [monName]
-     * ONCE (the switch took one turn, one dot); the Attack / Effect / Fainted events of that one action follow. [hp] / [maxHp] = the
+     * ONCE (the switch is no round: no dot is filled for it); the Attack / Effect / Fainted events of that one action follow. [hp] / [maxHp] = the
      * Pokémon's HP BEFORE the hit, so a panel can show it at that value until the hit lands (the saved game already has the HP after
      * it). R13 Part C: [item] set = not a switch but that item used on the Main in a fight (it took the turn); no [MainChanged] then.
      */
@@ -141,7 +144,7 @@ sealed class GameEvent {
     /**
      * PLAN 206: a switch was made while a card shows: [uid] ([name]) comes in right after that card is answered (the card you saw is
      * fought by the Pokémon that is out); then [MainChanged] (and the wild one's [SwitchHit]) follow, with that answer's events. Plays
-     * no animation: the action bar says "Switching after this card…". [uid] null = the queue was cancelled (the main was picked again):
+     * no animation: a toast says "Switching to X on your next move.". [uid] null = the queue was cancelled (the main was picked again):
      * [name] is the Pokémon that stays out.
      */
     data class SwitchQueued(val uid: String?, val name: String) : GameEvent()

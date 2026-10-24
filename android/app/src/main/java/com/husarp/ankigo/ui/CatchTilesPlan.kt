@@ -34,7 +34,7 @@ object CatchTilesPlan {
         } else {
             out += Tile(Kind.XP, "${s.xp.size} Pokémon", "+${s.xp.sumOf { it.xp }} XP")
         }
-        if (s.coins > 0) out += Tile(Kind.COINS, "Coins", "+${s.coins} ₽")
+        if (s.coins > 0) out += Tile(Kind.COINS, "Coins", "+${s.coins}")
         return out
     }
 
@@ -49,7 +49,7 @@ object CatchTilesPlan {
             out += Tile(Kind.DEFEATED, "", "Defeated")
         }
         if (s.xp.isNotEmpty()) out += Tile(Kind.XP, "", "+${s.xp.sumOf { it.xp }} XP")
-        if (s.coins > 0) out += Tile(Kind.COINS, "", "+${s.coins} ₽")
+        if (s.coins > 0) out += Tile(Kind.COINS, "", "+${s.coins}")
         return out
     }
 

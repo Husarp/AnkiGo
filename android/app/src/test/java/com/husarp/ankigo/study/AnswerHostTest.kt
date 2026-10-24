@@ -165,6 +165,26 @@ class AnswerHostTest {
         } finally { gate.release.countDown(); r.close() }
     }
 
+    @Test fun anAnswerMadeAheadReportsItsOwnWriteTimeNotTheOneBeforeItsToo() { // R18-A (278): the STUDY line's "save+verify" of a chained answer
+        val fake = newFake(); val gate = Gate(fake)
+        val r = Rig(fake, gate)
+        try {
+            r.host.start()
+            val screen = Screen(); r.host.register(screen)
+            val cards = fake.queueOf(deck).toList()
+            val a = entry(r.host, fake, cards[0]); val b = entry(r.host, fake, cards[1])
+            r.host.enqueue(a, "front", screen); r.host.enqueue(b, "front", screen)   // the second is made while the first write is still running
+            assertTrue(gate.inWrite.await(10, TimeUnit.SECONDS))
+            Thread.sleep(400)
+            gate.release.countDown()
+            r.env.pumpUntil { fake.revlog.size == 2 }
+            r.env.pumpUntil { screen.outcomes.size == 2 }
+            val (first, second) = screen.outcomes.map { it.second.writeMs }
+            assertTrue("the first write took the 400 ms it was held: $first", first >= 350)
+            assertTrue("the second one is not charged with it: $second", second < 250)
+        } finally { gate.release.countDown(); r.close() }
+    }
+
     @Test fun tasksRunInTheOrderTheyWereSubmitted() {
         val r = Rig()
         try {

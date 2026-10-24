@@ -9,7 +9,7 @@ import org.junit.Test
 import java.time.LocalDateTime
 import java.time.ZoneId
 
-/** R10-W2-D: the details header tags (Main, Team, Exp. Share, Favourite, ... in one fixed order) and the streak "Best" rule. */
+/** R10-W2-D: the details header tags (Main, Team, Favourite, ... in one fixed order; R18-G: no held item / Exp. Share) and the streak "Best" rule. */
 class DetailTagsTest {
     private val data = TestData.world()
     private val now = LocalDateTime.of(2026, 10, 14, 12, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -42,14 +42,16 @@ class DetailTagsTest {
         m.shiny = true; m.heldItem = "lucky-egg"; m.caughtAt = now; m.hp = 0; m.favourite = true
         st.settings.xpShareUid = m.uid
         val tags = MonTags.detailTags(d, st, m, now)
+        // R18-G (PLAN 239): the held item and the Exp. Share are in the Holding row now, not among the header tags
         assertEquals(
-            listOf(TagKind.MAIN, TagKind.TEAM, TagKind.EXP_SHARE, TagKind.FAVOURITE, TagKind.FAINTED, TagKind.CAN_EVOLVE,
-                TagKind.NEW, TagKind.HELD, TagKind.SHINY, TagKind.REGIONAL),
+            listOf(TagKind.MAIN, TagKind.TEAM, TagKind.FAVOURITE, TagKind.FAINTED, TagKind.CAN_EVOLVE,
+                TagKind.NEW, TagKind.SHINY, TagKind.REGIONAL),
             tags.map { it.kind },
         )
-        assertEquals("Team", tags[1].label); assertEquals("Favourite", tags[3].label)
-        assertEquals("lucky-egg", tags[7].item)
-        assertEquals("Shiny", tags[8].label)
+        assertEquals("Team", tags[1].label); assertEquals("Favourite", tags[2].label)
+        assertEquals("Shiny", tags[6].label)
+        // the plain tag list (Box tiles, widgets) still has both
+        assertTrue(MonTags.of(d, st, m, now).map { it.kind }.containsAll(listOf(TagKind.EXP_SHARE, TagKind.HELD)))
     }
 
     @Test fun theOldTagListIsUnchanged() {

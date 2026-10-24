@@ -64,18 +64,11 @@ class R4FixBTest {
 
     // ---------------- N2: the empty-chart text reads naturally for every metric
 
-    @Test fun theBattleNumbersSayDamageNotHp() {
-        assertEquals("No damage dealt in this period yet.", StatsChartMath.emptyText(ChartMetric.DMG_DEALT))
-        assertEquals("No damage taken in this period yet.", StatsChartMath.emptyText(ChartMetric.DMG_TAKEN))
-        assertEquals("No damage blocked in this period yet.", StatsChartMath.emptyText(ChartMetric.DMG_BLOCKED))
-        assertEquals("No misses in this period yet.", StatsChartMath.emptyText(ChartMetric.MISSES))
-    }
-
     @Test fun noMetricReadsLikeAUnit() {
         for (m in ChartMetric.entries) {
             val t = StatsChartMath.emptyText(m)
             assertFalse("$m: $t", t.startsWith("No HP "))
-            assertFalse("$m: $t", t.startsWith("No ₽ "))
+            assertFalse("$m: $t", t.startsWith("No coins "))
             assertFalse("$m: $t", t.startsWith("No min "))
             assertFalse("$m: $t", t.startsWith("No % "))
             assertTrue("$m: $t", t.endsWith("."))
@@ -84,9 +77,7 @@ class R4FixBTest {
 
     @Test fun otherGameAndStudyMetricsAreWordedToo() {
         assertEquals("No money earned in this period yet.", StatsChartMath.emptyText(ChartMetric.MONEY))
-        assertEquals("No money spent in this period yet.", StatsChartMath.emptyText(ChartMetric.MONEY_SPENT))
         assertEquals("No XP earned in this period yet.", StatsChartMath.emptyText(ChartMetric.XP))
-        assertEquals("No healing items used in this period yet.", StatsChartMath.emptyText(ChartMetric.HEALING))
         assertEquals("No study time in this period yet.", StatsChartMath.emptyText(ChartMetric.TIME))
         assertEquals("No catches in this period yet.", StatsChartMath.emptyText(ChartMetric.CATCHES))
         assertEquals("No battles won in this period yet.", StatsChartMath.emptyText(ChartMetric.WINS))
@@ -95,7 +86,7 @@ class R4FixBTest {
 
     @Test fun theChartShowsTheMetricText() {
         val today = "2026-10-14"
-        for (m in listOf(ChartMetric.DMG_DEALT, ChartMetric.DMG_TAKEN, ChartMetric.DMG_BLOCKED, ChartMetric.MISSES)) {
+        for (m in listOf(ChartMetric.MONEY, ChartMetric.XP, ChartMetric.CATCHES, ChartMetric.WINS)) {
             val s = ChartData.build(m, ChartPeriod.D30, null, StatsSnapshot(), emptyMap(), today)
             assertEquals(m.name, StatsChartMath.emptyText(m), StatsChartMath.emptyMessage(s, null, null))
         }

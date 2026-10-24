@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
+import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
@@ -75,7 +76,10 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     }
 
     override fun buildBar(): View {
-        appBar = Ui.appBar(this, "Shop", "0", pillIconRes = R.drawable.ic_money)
+        // PLAN 237: start with the real amount (the game is usually loaded when you switch to this tab), or no pill until render() knows it: never "0"
+        val first = ShopPlan.firstPill(GameRepo.status == GameRepo.Status.READY, GameRepo.state?.cash)
+        appBar = Ui.appBar(this, "Shop", first, pillIconRes = R.drawable.ic_money)
+        appBar.setPill(first)
         // "?" opens the guide chapter about money (R3-V3b)
         appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) { openMoneyHelp() }
         return appBar
@@ -202,7 +206,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             val price = ShopPlan.price(data, st.day, deal.item)
             val name = Items.name(deal.item)
             content.addView(ShopViews.dealCard(ctx, deal.item, name, price, ShopPlan.endsText(st.settings.dayStartHour, hoursToNewDay()),
-                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item))) { openCard(CardKeys.DEAL) }, gap)
+                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))) { openCard(CardKeys.DEAL) }, gap)
         }
 
         // always in stock: the basics at their normal price
@@ -241,7 +245,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         is ShopPlan.Tile.Item -> {
             val price = ShopPlan.price(data, state.day, t.id)
             val name = Items.name(t.id)
-            val short = ItemInfo.plain(ItemInfo.short(data, t.id))
+            val short = ItemInfo.plain(ItemInfo.short(data, t.id, state.caught))
             ShopViews.tile(this, Bits.itemTile(this, t.id, 36), name, priceView(price, 14f),
                 ItemCardPlan.detailsLabel(ShopPlan.describe("$name, $short", price)), sub = short) { openCard(key) }
         }
@@ -289,7 +293,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         if (act { g -> Shop.buyTm(g.data, g.state, move) }.ok) GameSound.ui(this, SoundId.BUY)
     }
 
-    /** "Refresh shop · 100 ₽": the accent button with the refresh icon (greyed, with a toast on tap, when the money is not enough). */
+    /** "Refresh shop · [coin] 100": the accent button with the refresh icon (greyed, with a toast on tap, when the money is not enough). */
     private fun refreshButton(): View {
         val ctx = this
         val ink = Ui.c(ctx, R.color.ag_base)
@@ -300,19 +304,19 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx)
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 8), Ui.dp(ctx, 14), Ui.dp(ctx, 8))
             alpha = if (state.cash >= Tuning.REROLL_PRICE) 1f else 0.45f
-            contentDescription = "Refresh shop for ${Tuning.REROLL_PRICE} ₽"
+            contentDescription = "Refresh shop for ${CoinText.word(Tuning.REROLL_PRICE)}"
             addView(android.widget.ImageView(ctx).apply {
                 setImageResource(R.drawable.ic_sync)
                 setColorFilter(ink, android.graphics.PorterDuff.Mode.SRC_IN)
             }, LinearLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18)).also { it.marginEnd = Ui.dp(ctx, 7) })
-            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = "Refresh shop · ${Tuning.REROLL_PRICE} ₽"; maxLines = 2; gravity = Gravity.CENTER })
+            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = TextUtils.concat("Refresh shop · ", CoinText.of(this, "${Tuning.REROLL_PRICE}")); maxLines = 2; gravity = Gravity.CENTER })
             setOnClickListener { reroll() }
         }
     }
 
     private fun reroll() {
-        if (state.cash < Tuning.REROLL_PRICE) { Ui.toast(this, "Not enough money (need ${Tuning.REROLL_PRICE} ₽)"); return }
-        Pickers.confirm(this, "Refresh the shop?", "New items and TMs for ${Tuning.REROLL_PRICE} ₽.", "Refresh") {
+        if (state.cash < Tuning.REROLL_PRICE) { Ui.toast(this, "Not enough money (need ${CoinText.word(Tuning.REROLL_PRICE)})"); return }
+        Pickers.confirm(this, "Refresh the shop?", "New items and TMs for ${CoinText.word(Tuning.REROLL_PRICE)}.", "Refresh") {
             act { g -> Shop.reroll(g.data, g.state, g.rng) }
         }
     }

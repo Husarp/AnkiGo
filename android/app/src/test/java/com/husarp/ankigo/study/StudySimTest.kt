@@ -372,7 +372,7 @@ class StudySimTest {
         }
     }
 
-    private fun randomRun(seed: Int): StudySim {
+    private fun randomRun(seed: Int, maxAhead: Int = 0): StudySim {
         val rng = Random(seed)
         val ords = 1 + rng.nextInt(2)
         val fake = StudySim.deck(deck, 5 + rng.nextInt(10), ords)
@@ -385,7 +385,7 @@ class StudySimTest {
         val learning = rng.nextInt(4) == 0
         fake.afterApply = { _, _ -> if (learning && rng.nextInt(4) == 0) fake.queueOf(deck).randomOrNull(rng)?.let { fake.moveToTop(it) } }
         fake.chaos = chaos(rng, intArrayOf(2))
-        val s = StudySim(fake, deck)
+        val s = StudySim(fake, deck, maxAhead = maxAhead)
         s.policy = StudySim.randomUser(rng)
         s.meddle = { sim ->
             if (rng.nextInt(100) < 4) {
@@ -417,5 +417,21 @@ class StudySimTest {
         // the mix really exercised the hard paths (so a test that never fails cannot hide here)
         assertTrue("deaths $deaths", deaths >= 20); assertTrue("not written $notWritten", notWritten >= 15)
         assertTrue("misses $misses", misses >= 40); assertTrue("retries $retries", retries >= 100); assertTrue("answers $answers", answers >= 2000)
+    }
+
+    /** R18-A (278): the same mix with answers made ahead of the confirm (the production setting): the same invariants, a good share answered ahead. */
+    @Test fun twoHundredRandomSeededRunsAnsweringAheadOfTheConfirmKeepEveryInvariant() {
+        var deaths = 0; var answers = 0; var notWritten = 0; var misses = 0; var ahead = 0
+        for (seed in 1..200) {
+            val s = try { randomRun(seed, maxAhead = NextCard.AHEAD).also { it.check() } } catch (e: AssertionError) { throw AssertionError("seed $seed: ${e.message}", e) }
+            assertTrue("seed $seed ended with the deck unfinished", s.finished && s.fake.queueOf(deck).isEmpty())
+            assertEquals("seed $seed: nothing left queued", 0, s.p.queue.size)
+            deaths += s.deaths; answers += s.made.size
+            notWritten += s.outcomes.values.count { it.any { o -> o is AnswerOutcome.NotWritten } }
+            misses += s.p.nc.misses; ahead += s.p.nc.answeredAhead
+        }
+        println("random runs, answering ahead: deaths=$deaths answers=$answers notWrittenAnswers=$notWritten predictionMisses=$misses answeredAhead=$ahead")
+        assertTrue("deaths $deaths", deaths >= 20); assertTrue("not written $notWritten", notWritten >= 15)
+        assertTrue("answers made ahead of the confirm: $ahead", ahead >= 100); assertTrue("answers $answers", answers >= 2000)
     }
 }

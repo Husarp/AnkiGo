@@ -67,6 +67,7 @@ object BottomNav {
 
     /** Builds the bar for [activity], with [current] highlighted. Add it at the bottom of the screen. */
     fun create(activity: Activity, current: Tab): View {
+        OpenOnPrefs.setLastTab(activity, current) // R18 263: "Open AnkiGo on: Last tab"
         val col = Ui.c(activity, R.color.ag_mauve)
         val idle = Ui.c(activity, R.color.ag_sub0)
         val bar = NavBar(activity)
@@ -162,6 +163,7 @@ object BottomNav {
     private fun dotParams(ctx: Context) = FrameLayout.LayoutParams(Ui.dp(ctx, 12), Ui.dp(ctx, 12), Gravity.TOP or Gravity.END).also { it.rightMargin = Ui.dp(ctx, 2) }
 
     private fun open(activity: Activity, to: Tab) {
+        OpenOnPrefs.setLastTab(activity, to)
         Nav.open(activity, to.dest)
         @Suppress("DEPRECATION")
         activity.overridePendingTransition(0, 0)

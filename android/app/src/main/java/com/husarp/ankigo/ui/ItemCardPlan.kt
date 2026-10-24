@@ -101,7 +101,7 @@ internal object ItemCardPlan {
     const val KNOWS_IT = "knows it"
 
     /** The Shop's Buy button when the money is short: the toast. */
-    fun poor(price: Int): String = "Not enough money (need ${Bits.fmt(price)} ₽)"
+    fun poor(price: Int): String = "Not enough money (need ${Bits.fmt(price)} coins)"
 
     // ---- trade-up (Bag) ----
 
@@ -125,7 +125,7 @@ internal object ItemCardPlan {
         val goes = BallTrade.list(o.take)
         val sells = BallTrade.worth(o.take)
         val buys = BallTrade.worth(listOf(o.give to 1))
-        val head = if (sells != null && buys != null) "$goes (${Bits.fmt(sells)} ₽ in the Shop) for 1 ${Items.name(o.give)} (${Bits.fmt(buys)} ₽)." else "$goes for 1 ${Items.name(o.give)}."
+        val head = if (sells != null && buys != null) "$goes (${Bits.fmt(sells)} coins in the Shop) for 1 ${Items.name(o.give)} (${Bits.fmt(buys)} coins)." else "$goes for 1 ${Items.name(o.give)}."
         val left = BallTrade.keep(state, o)
         val keep = if (left > 0) "You keep $left ${ItemInfo.plural(Items.name(o.from), left)}." else "You keep no ${ItemInfo.plural(Items.name(o.from), 2)}."
         return "$head **On purpose worse than buying.** $keep"

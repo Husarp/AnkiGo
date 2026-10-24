@@ -48,7 +48,7 @@ class ShopRefreshTest {
                 s.cash = 10_000
                 val r = Shop.buy(data, s, item)
                 assertTrue("$item on $day: ${r.message}", r.ok)
-                assertEquals("Bought ${Items.name(item)} for ${data.price(item)} ₽", r.message)
+                assertEquals("Bought ${Items.name(item)} for ${data.price(item)} coins", r.message)
                 assertEquals(10_000 - data.price(item), s.cash)
                 assertEquals(1, s.count(item))
             }
@@ -146,7 +146,7 @@ class ShopRefreshTest {
         assertEquals(data.price("great-ball"), Shop.priceOf(data, s, "great-ball"))
         s.cash = 100_000
         val r = Shop.buy(data, s, d.item)
-        assertEquals("Bought ${Items.name(d.item)} for ${d.price} ₽", r.message)
+        assertEquals("Bought ${Items.name(d.item)} for ${d.price} coins", r.message)
         assertEquals(100_000 - d.price, s.cash)
     }
 
@@ -249,7 +249,7 @@ class ShopRefreshTest {
         val expected = Shop.priceOf(data, s, sp.item!!)
         val r = Shop.buy(data, s, sp.item!!)
         assertTrue(r.message, r.ok)
-        assertEquals("Bought ${Items.name(sp.item!!)} for $expected ₽", r.message)
+        assertEquals("Bought ${Items.name(sp.item!!)} for $expected coins", r.message)
         assertEquals(100_000 - expected, s.cash)
         // on the Sunday it is still there, and several can be bought
         s.day = sat.plusDays(1).toString(); Shop.ensureToday(data, s); s.shopItems.remove(sp.item)
@@ -266,7 +266,7 @@ class ShopRefreshTest {
         val s = state(sat.toString()); s.shopTms.remove(sp.tm); s.cash = 5_000
         val r = Shop.buyTm(data, s, sp.tm!!)
         assertTrue(r.message, r.ok)
-        assertEquals("Bought ${Items.tmName(data, sp.tm!!)} for 1000 ₽", r.message)
+        assertEquals("Bought ${Items.tmName(data, sp.tm!!)} for 1000 coins", r.message)
         assertEquals(4_000, s.cash); assertTrue(sp.tm!! in s.tms)
         val again = Shop.buyTm(data, s, sp.tm!!)
         assertFalse(again.ok); assertEquals("You already own ${Items.tmName(data, sp.tm!!)}", again.message)
@@ -304,7 +304,7 @@ class ShopRefreshTest {
         val s = state("2026-10-13")
         val d = Shop.dealFor(data, s.day)!!
         s.cash = d.price - 1
-        assertEquals("Not enough money (need ${d.price} ₽)", Shop.buy(data, s, d.item).message)
+        assertEquals("Not enough money (need ${d.price} coins)", Shop.buy(data, s, d.item).message)
         assertEquals(d.price - 1, s.cash)
     }
 

@@ -15,6 +15,7 @@ import com.husarp.ankigo.game.DuplicateResult
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.StatCalc
+import com.husarp.ankigo.game.SwitchQueue
 import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.sound.GameSound
 import com.husarp.ankigo.ui.movefx.MoveFxCatalog
@@ -45,6 +46,11 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     private var factor = 1.0
     private var lastButton = 0
     private var mult = 1.0
+    /**
+     * PLAN 259: the fight is over on screen (the wild one fainted / was caught / fled, [clearStatuses]) until the next Encounter or round: an Effect
+     * that still plays after it (the Main's end-of-round burn / poison damage in the same batch) must not bring its status badge back.
+     */
+    private var fightOver = false
     private var wildMult = 1.0   // R10-B22: the wild one's damage factor of this round (shown on its attack line like the Main's)
     private var logWhole = true           // R9 D3: the line of the event being played is about the whole battle (the bar shows it); else it is only spoken
     /** The next fight's Encounter, held back while the result tiles show (it plays with the next answer's events). */
@@ -105,6 +111,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         xpRun = null
         panel.hideCatchTiles()
         epoch++
+        fightOver = false
         queue.clear()
         busy = false
         dirty = false
@@ -221,6 +228,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             before = s.before; next = ((s.next as? Item.Ev)?.e as? GameEvent.Encounter); after = s.after
         }
         epoch++
+        fightOver = false
         busy = false
         mult = 1.0; wildMult = 1.0
         handler.removeCallbacksAndMessages(null)
@@ -295,7 +303,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         if (caught > 0) parts += "$caught caught"
         if (levels > 0) parts += "$levels level-up${if (levels == 1) "" else "s"}"
         if (evolved > 0) parts += "$evolved evolved"
-        if (cash > 0) parts += "+$cash ₽"
+        if (cash > 0) parts += CoinText.plus(cash)
         return "Played fast: " + parts.joinToString(", ")
     }
 
@@ -317,6 +325,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     /** PLAN 216: the fight is over (the wild one fainted, was caught or fled): both status badges go at once, not with the next Encounter. */
     private fun clearStatuses() {
+        fightOver = true
         arena.setPlayerStatus(null)
         arena.setEnemyStatus(null)
     }
@@ -425,7 +434,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 log(kind(lastButton), label(lastButton), "charging ${e.answers}/${e.of} — the next answer attacks")
                 return d(450)
             }
-            is GameEvent.RoundStart -> { mult = e.multiplier; wildMult = e.enemyPower; return 0 }
+            is GameEvent.RoundStart -> { fightOver = false; mult = e.multiplier; wildMult = e.enemyPower; return 0 }
 
             is GameEvent.Attack -> return playAttack(e)
             is GameEvent.Splash -> {
@@ -435,7 +444,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             is GameEvent.Effect -> {
                 log(LogKind.SYS, "EFFECT", e.text)
                 floats(e)
-                if (e.onPlayer) arena.setPlayerStatus(e.status) else arena.setEnemyStatus(e.status)
+                if (!fightOver) { if (e.onPlayer) arena.setPlayerStatus(e.status) else arena.setEnemyStatus(e.status) }   // PLAN 259: after the win no badge comes back
                 if (e.maxHp > 0) {
                     if (e.onPlayer) arena.setPlayerHp(e.hp, e.maxHp, true) else arena.setEnemyHp(e.hp, e.maxHp, true)
                 }
@@ -512,16 +521,21 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             }
             is GameEvent.MainChanged -> {
                 log(LogKind.SYS, "SWITCH", "Go, ${em(e.name)}!")
+                fightOver = false
                 panel.refreshPlayer(e.uid)   // the one this event brings in, not the save's main: fight events made elsewhere can hold several switches (PLAN 191)
                 arena.setPlayerStatus(null)   // a switch starts clean (the battle side is reset): a status comes with its own Effect event
-                // R10 W10: a free hit follows: the saved game already has the HP after it, the bar shows the HP before until the hit lands
+                // R10 W10: the wild one's attack follows: the saved game already has the HP after it, the bar shows the HP before until the hit lands
                 val hit = (queue.firstOrNull() as? Item.Ev)?.e as? GameEvent.SwitchHit
                 if (hit != null) arena.setPlayerHp(hit.hp, hit.maxHp, false)
                 arena.enter(true, d(450))
                 if (GameRepo.state?.mon(e.uid)?.shiny == true) arena.shinyBurst(true, d(ShinyBurst.DELAY_MS))
                 return d(800)
             }
-            is GameEvent.SwitchQueued -> return 0   // PLAN 206: nothing to animate; the action bar (observeStudyEvent above) shows "Switching after this card…" or drops it
+            is GameEvent.SwitchQueued -> {
+                // PLAN 206 / R18-B (227): nothing to animate and no line on the bar (it keeps its segments): a small toast says it
+                Ui.toast(panel, if (e.uid != null) SwitchQueue.queuedText(e.name) else SwitchQueue.cancelledText(e.name))
+                return 0
+            }
             is GameEvent.SwitchHit -> {
                 wildMult = Tuning.SWITCH_HIT_POWER   // the turn's attack is at normal power: no "×0" left over from a round where the wild one stayed quiet
                 if (e.item != null) {
@@ -535,7 +549,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             }
             is GameEvent.Cash -> {
                 panel.setCoins(e.total, true)
-                panel.floatAtCoins("+${e.amount} ₽")
+                panel.floatAtCoins("+${e.amount}")
                 return 0
             }
             is GameEvent.DailyGift -> { // R14-B2-D: the goal moment's gift (it replaced the money bonus): its own log line, the Bag count may have changed
@@ -692,7 +706,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         } else null
         if (run == null) {
             sound(e)
-            arena.lunge(e.byPlayer, d(350))
+            if (com.husarp.ankigo.ui.movefx.FxLean.leansCategory(e.category)) arena.lean(e.byPlayer, d(com.husarp.ankigo.ui.movefx.FxLean.TOTAL_MS))   // R18-C: special / status lean, physical lunges
+            else arena.lunge(e.byPlayer, d(350))
             after(300) { afterHit(e) }
             return d(800)
         }
@@ -734,6 +749,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         panel.cancelEnemyReveal()
         arena.resetEnemySide()
         arena.setEnemyShown(false)
+        fightOver = false
         arena.setEnemyStatus(null)
         arena.setPlayerStatus(null)
         arena.setBackdrop(sp?.types.orEmpty(), BackdropCatalog.seed(e.wildUid), BackdropCatalog.isLegendary(sp))   // R8-03: one of the pictures for this wild Pokémon's type, random per encounter

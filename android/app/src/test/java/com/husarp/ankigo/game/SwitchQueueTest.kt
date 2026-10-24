@@ -73,7 +73,7 @@ class SwitchQueueTest {
         assertEquals("t1", g.state.pendingMain)
         assertEquals("t1", g.state.queuedMain!!.uid)
         assertSame(wild, g.state.battle!!.wild) // the fight goes on, nothing was hit
-        assertEquals("${t1.name} comes in after this card · the wild attacks once", r.message)
+        assertEquals("Switching to ${t1.name} on your next move.", r.message)
     }
 
     @Test fun theWordingNeverSaysFreeHitOrCostsYourTurn() {
@@ -143,7 +143,7 @@ class SwitchQueueTest {
         val hit = e.indexOfFirst { it is GameEvent.SwitchHit }
         val attack = e.indexOfFirst { it is GameEvent.Attack }
         assertTrue("$e", counted in 0 until charge && charge < changed && changed < hit && hit < attack)
-        assertEquals(GameEvent.MainChanged("t1", t1.name), e[changed])
+        assertEquals(GameEvent.MainChanged("t1", t1.name, queued = true), e[changed])
         assertEquals(GameEvent.SwitchHit("Ratty", t1.name, hpBefore, StatCalc.maxHp(data, t1)), e[hit])
         assertEquals(1, e.of<GameEvent.Attack>().count { !it.byPlayer })
         assertTrue(e.of<GameEvent.Attack>().none { it.byPlayer })

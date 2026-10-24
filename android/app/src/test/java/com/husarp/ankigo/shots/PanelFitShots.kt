@@ -177,7 +177,7 @@ class PanelFitShots {
     // ---------------------------------------------------------------- animations under scaling
 
     /**
-     * The "+40 ₽" that floats up from the coin chip must start on the chip even though the panel is drawn scaled (it is
+     * The "+40" that floats up from the coin chip must start on the chip even though the panel is drawn scaled (it is
      * added to the overlay inside the scaled container). The panel is laid out by a first snapshot, then the float is
      * added and the second snapshot catches it 250 ms into its rise.
      */
@@ -191,7 +191,7 @@ class PanelFitShots {
             val frame = android.widget.FrameLayout(ctx).apply { addView(p, android.widget.FrameLayout.LayoutParams(-1, -1)) }
             val name = "${size.name.lowercase()}-${theme.name.lowercase()}"
             paparazzi.snapshot(frame, "pf-coins-before-$name", 0)
-            p.floatAtCoins("+40 ₽")
+            p.floatAtCoins("+40")
             paparazzi.snapshot(frame, "pf-coins-$name", 250)
         }
     }

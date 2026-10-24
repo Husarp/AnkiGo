@@ -10,15 +10,13 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.ui.ContinueBar
 import com.husarp.ankigo.ui.Ui
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 
 /*
- * R14-G (PLAN 204): the small green Continue button in the full-screen Battle view's top bar (before Pop out), built by the
- * shared ContinueBar.button. The bar here mirrors GameActivity.buildTopBar. Shots: r14g-topbar-* (with a deck / without).
+ * R14-G (PLAN 204), changed by R18-J (261): the full-screen Battle view's top bar no longer holds the small green Continue button.
+ * The bar here mirrors GameActivity.buildTopBar. Shot: r14g-topbar-*.
  */
 class R14GBattleContinueShots {
     @get:Rule val paparazzi = Shots.rule()
@@ -40,39 +38,30 @@ class R14GBattleContinueShots {
         layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48))
     }
 
-    private fun bar(ctx: Context, d: Anki.Deck?, taps: MutableList<Anki.Deck>): View = LinearLayout(ctx).apply {
+    private fun bar(ctx: Context): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = android.view.Gravity.CENTER_VERTICAL
         setBackgroundColor(Ui.c(ctx, R.color.ag_base))
         setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4))
         addView(icon(ctx, R.drawable.ic_back, "Back", R.color.ag_text))
         addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = "Battle"; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
-        addView(ContinueBar.button(ctx).also { ContinueBar.bindButton(it, d) { x -> taps += x } })
         addView(icon(ctx, R.drawable.ic_pip, "Pop out: small battle window"))
         addView(icon(ctx, R.drawable.ic_more_vert, "Menu"))
     }
 
-    @Test fun topBarWithAContinueButton() = paparazzi.shootPage("r14g-topbar-deck", listOf(Variants.PHONE)) { bar(it, deck, ArrayList()) }
-
-    @Test fun topBarWithoutOne() = paparazzi.shootPage("r14g-topbar-none", listOf(Variants.PHONE)) { bar(it, null, ArrayList()) }
-
-    @Test fun theButtonShowsWithADeckAndTapStudiesIt() {
-        paparazzi.shootPage("r14g-topbar-tap", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
-            val taps = ArrayList<Anki.Deck>()
-            val b = bar(ctx, deck, taps)
-            val btn = find(b, "Continue Verbs, 20 due")
-            assertNotNull(btn)
-            assertEquals(View.VISIBLE, btn!!.visibility)
-            assertTrue(btn.performClick())
-            assertEquals(listOf(deck), taps)
-            b
-        }
+    @Test fun topBarWithoutAContinueButton() {
+        paparazzi.shootPage("r14g-topbar-none", listOf(Variants.PHONE)) { bar(it) }
     }
 
-    @Test fun noDeckOrPipOrNoBarHidesIt() {
-        assertTrue(ContinueBar.topButtonShown(deck, topBarShown = true, inPip = false))
-        assertFalse(ContinueBar.topButtonShown(null, topBarShown = true, inPip = false))
-        assertFalse(ContinueBar.topButtonShown(deck, topBarShown = true, inPip = true))
-        assertFalse(ContinueBar.topButtonShown(deck, topBarShown = false, inPip = false))
+    /** R18-J (261): the top bar has no Continue button any more (the Continue bar under it is the only one); the shared button stays for the Pokémon tab's card. */
+    @Test fun noContinueButtonInTheTopBar() {
+        paparazzi.shootPage("r14g-topbar-tap", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
+            val b = bar(ctx)
+            assertNull(find(b, "Continue Verbs, 20 due"))
+            val card = ContinueBar.button(ctx).also { ContinueBar.bindButton(it, deck) { } }
+            assertEquals(View.VISIBLE, card.visibility)
+            assertEquals("Continue Verbs, 20 due", card.contentDescription)
+            b
+        }
     }
 }

@@ -48,7 +48,7 @@ object BattleDetails {
             setPadding(Ui.dp(ctx, pad), Ui.dp(ctx, 4), Ui.dp(ctx, pad), Ui.dp(ctx, 8))
         }
 
-        // header: sprite, name (♂/♀ in colour, ★ when shiny), #num / level, types
+        // header: sprite, name (♂/♀ in colour, ★ when shiny), #num, types (R18-G, PLAN 254: the level is in the Stats title, as in your own Pokémon's details)
         val img = ImageView(ctx)
         MonPreview.show(ctx, battle.wild.lookNum(data), info.shiny, img, idle = true)
         img.setOnClickListener { SpriteViewer.show(ctx, battle.wild.lookNum(data), info.shiny) } // R10-B1: full-screen viewer
@@ -58,7 +58,7 @@ object BattleDetails {
             if (!compact) gravity = Gravity.CENTER
         }
         val num = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply {
-            text = LevelTier.line(ctx, "#%03d · ".format(info.dexNum), info.level)
+            text = "#%03d".format(info.dexNum)
             if (!compact) gravity = Gravity.CENTER
         }
         val types = Bits.typeRow(ctx, info.types)
@@ -82,11 +82,13 @@ object BattleDetails {
         }
 
         // the same sections, in the same order and look as the details of your own Pokémon (MonDetail); what a wild one can not have
-        // or must not show (HP/XP, Training, ability, caught date, defeats) is left out
+        // or must not show (HP/XP, Holding, Training, ability, caught date, wins) is left out
         val sp = data.sp(battle.wild.species)
         val mem = DetailSections.memory(ctx)
         val seen = st.seen + st.caught
-        col.addView(DetailSections.section(ctx, mem, DetailSection.STATS, "Total ${info.stats.total}") {
+        // R18-G (PLAN 243B): its evolution line is in the card under the types, as in the Pokédex entry (the line shows ??? for what you have not seen)
+        col.addView(DetailTopCard.evolutionOnly(ctx, data, sp, seen, compact, null), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10) })
+        col.addView(DetailSections.section(ctx, mem, DetailSection.STATS, "Total ${info.stats.total}", titleLevel = info.level) {
             DetailSections.statsBody(ctx, info.stats, info.level, null, sp, compact)
         })
         // moves it has used in this fight; the others stay "?"
@@ -100,8 +102,8 @@ object BattleDetails {
             }
         })
         col.addView(DetailSections.section(ctx, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(info.matchups)) { DetailSections.matchups(ctx, info.types, info.name) })
-        col.addView(DetailSections.infoSection(ctx, mem, data, sp, emptyList(), null, null, seen, compact,
-            lines = listOf("Tier" to info.tier.label, "Pokédex" to if (info.dex == WildDex.CAUGHT) "Caught" else "Seen, not caught yet"), onTap = null))
+        col.addView(DetailSections.infoSection(ctx, mem, data, sp, emptyList(), null, null, compact,
+            lines = listOf("Tier" to info.tier.label, "Pokédex" to if (info.dex == WildDex.CAUGHT) "Caught" else "Seen, not caught yet")))
         Pickers.info(ctx, "Wild Pokémon", DetailSections.scroll(ctx, col))
         return true
     }

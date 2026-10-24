@@ -16,7 +16,7 @@ import org.junit.Test
 
 /*
  * R16-3-L (PLAN 220): the Diagnostics page. The whole page scrolls (status card, log, option groups), the groups start folded and a tap on
- * a bar folds / unfolds one, the log box is tall (about 70 % of the window, at least 320 dp) and "Full screen" shows it in a dialog.
+ * a bar folds / unfolds one, the log box is 35 % of the window since R18 256 (was 70 %, at least 320 dp; now at least 200 dp) and "Full screen" shows it in a dialog.
  * Shots at 360 and 412 dp wide, light + dark: folded with a long log, one group open, the full-screen log.
  */
 class R16LDiagnosticsShots {
@@ -76,7 +76,7 @@ class R16LDiagnosticsShots {
     @Test fun aFoldBarTogglesItsGroup() {
         val content = page(setup()).second
         val bars = headers(content)
-        assertEquals(listOf("AnkiDroid", "Checks", "Media", "Widgets", "App"), bars.map { title(it) })
+        assertEquals(listOf("AnkiDroid", "Checks", "Media", "Widgets"), bars.map { title(it) })
         bars.forEach { assertFalse("${title(it)} starts folded", FoldGroup.isOpen(group(it))) }
         val checks = bars.first { title(it) == "Checks" }
         checks.performClick()
@@ -96,9 +96,9 @@ class R16LDiagnosticsShots {
         content.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
         content.layout(0, 0, w, h)
         val log = getField(a, "logScroll") as ScrollView
-        assertTrue("log box at least 320 dp, got ${log.height / d}", log.height >= 320 * d)
+        assertTrue("log box about 35 % of the window (R18 256), got ${log.height / d}", log.height >= 200 * d && log.height <= 320 * d)
         val page = (content as ViewGroup).getChildAt(1) as ScrollView
-        assertTrue("page taller than the window, so it scrolls", page.getChildAt(0).height > page.height)
+        // R18 256: with the shorter log box the folded page may fit the window; it is still one ScrollView
         assertTrue("log box lies inside the page's scrolling content", log.parent.parent === page || log.parent === page.getChildAt(0))
         // the log sits right under the status card (its buttons, then the box), above the option groups
         val body = page.getChildAt(0) as ViewGroup

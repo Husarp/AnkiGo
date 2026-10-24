@@ -9,6 +9,7 @@ enum class CatalogSection(val title: String) {
     SOUNDS("Sounds"),
     BATTLE("Battle"),
     STUDY("Study"),
+    WIDGETS("Widgets"),
     REMINDERS("Reminders"),
     GAME("Game"),
     DATA("Data & import"),
@@ -33,6 +34,7 @@ object SettingsCatalog {
     private val SO = CatalogSection.SOUNDS
     private val B = CatalogSection.BATTLE
     private val ST = CatalogSection.STUDY
+    private val W = CatalogSection.WIDGETS
     private val R = CatalogSection.REMINDERS
     private val G = CatalogSection.GAME
     private val D = CatalogSection.DATA
@@ -76,6 +78,7 @@ object SettingsCatalog {
         s("cardsUnderOwn", B, "Battle panel", "Stat card under its own Pokémon", "Without a background picture. Off: the classic layout, each card on the opposite side"),
         s("xpAnimation", B, "Battle panel", "XP animation", "Sparks fly into your Pokémon when it gains XP"),
         s("attackAnimations", B, "Battle panel", "Attack animations", "Each move plays its own animation; off: a simple step and shake"),
+        s("pokemonMovement", B, "Battle panel", "Pokémon movement", "How often the battle Pokémon move when idle; off while reduced motion is on"),   // R18-C, PLAN 247
         s("backgroundPictures", B, "Battle panel", "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (8–400 KB each); off: plain"),
         s("turnDots", B, "Battle panel", "Turn dots", "Where the charge dots sit in the bar under the battle picture"),
         s("infoBoxAbove", B, "Info box style", "Number above the bar", "Default; the HP number above a full-width bar, the type names beside it"),
@@ -117,6 +120,10 @@ object SettingsCatalog {
         s("pictureSetup", ST, "", "Set up pictures", "Checks AnkiDroid's pictures and shows what to fix"),
         s("mediaApkg", ST, "", "Import a media copy (.apkg)", "Optional; use a legacy-format export with media"),
         s("mediaFolder", ST, "", "Pick AnkiDroid media folder", "Choose collection.media in the public AnkiDroid folder"),
+        s("saveNotFirst", ST, "Advanced", "Save answers for cards that aren't first (test)", "Turn off if answers go wrong when AnkiDroid shows another card first"),
+
+        // Widgets
+        s("openOn", W, "", "Open AnkiGo on", "Where the app icon and the Buddy widget take you"),
 
         // Reminders (ids match ReminderPrefs fields, PLAN 85)
         s("dueOn", R, "Cards due", "Cards due reminder", "Remind me when enough cards are waiting"),
@@ -147,7 +154,7 @@ object SettingsCatalog {
         s("dailyAverage", G, "Difficulty", "Daily goal", "Reviews a day, the same or per weekday; a bigger goal makes rare Pokémon likelier"),
         s("dayStartHour", G, "Difficulty", "New day starts at", "Answers before this hour count for the day before"),
 s("catchAlways", G, "When you beat a wild Pokémon", "Always catch", "Every wild Pokémon you beat is caught"),
-s("catchNew", G, "When you beat a wild Pokémon", "Catch only new species", "Others are defeated: the same XP and ₽; default"),
+s("catchNew", G, "When you beat a wild Pokémon", "Catch only new species", "Others are defeated: the same XP and coins; default"),
 s("catchBetter", G, "When you beat a wild Pokémon", "Catch new species and better copies", "A higher-level copy replaces your old one"),
 s("catchDefeat", G, "When you beat a wild Pokémon", "Defeat", "Catch only shinies and protected kinds; the rest are defeated"),
         s("protectLegendary", G, "Always catch", "Legendary", "Always caught, even with Defeat"),

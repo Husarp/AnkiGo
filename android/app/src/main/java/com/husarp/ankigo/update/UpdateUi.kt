@@ -40,7 +40,7 @@ private fun open(ctx: Context, url: String) {
  * Pill button in the app's style: the view is [heightDp] tall (touch target, 48 dp), the filled pill inside it is
  * [visualDp] tall. Primary = mauve with `ag_base` text, secondary = `ag_s0` with normal text.
  */
-private fun pillButton(ctx: Context, label: String, primary: Boolean, textSp: Float, visualDp: Int, hPadDp: Int, onClick: () -> Unit): TextView {
+internal fun pillButton(ctx: Context, label: String, primary: Boolean, textSp: Float, visualDp: Int, hPadDp: Int, onClick: () -> Unit): TextView {
     val fill = Ui.rounded(Ui.c(ctx, if (primary) R.color.ag_mauve else R.color.ag_s0), 12, ctx)
     val ripple = RippleDrawable(ColorStateList.valueOf(0x33000000), fill, null)
     val inset = Ui.dp(ctx, (48 - visualDp) / 2)
@@ -124,7 +124,9 @@ class UpdateBanner(ctx: Context) : UpdatesView(ctx) {
     private var away = false
     /** Switched off from outside (picture-in-picture). */
     var suppressed = false
-        set(v) { field = v; render(Updates.state) }
+        set(v) { field = v; render(Updates.state); onSuppressed?.invoke(v) }
+    /** R18-K: the "installed" card above the banner follows [suppressed]. */
+    internal var onSuppressed: ((Boolean) -> Unit)? = null
     /** False in the screenshots (no animation, no timer): the banner is drawn at its final position. */
     var animated = true
 
@@ -243,15 +245,20 @@ class UpdateBanner(ctx: Context) : UpdatesView(ctx) {
  */
 class UpdateOverlay(ctx: Context, content: View) : FrameLayout(ctx) {
     val banner = UpdateBanner(ctx)
+    /** R18-K (PLAN 201a): shows once after an update, above the banner. */
+    val whatsNew = WhatsNewCard(ctx)
     init {
         addView(content, LayoutParams(-1, -1))
-        addView(banner, LayoutParams(-1, -2, Gravity.TOP))
+        val top = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; clipChildren = false; clipToPadding = false }
+        top.addView(whatsNew, LinearLayout.LayoutParams(-1, -2))
+        top.addView(banner, LinearLayout.LayoutParams(-1, -2))
+        addView(top, LayoutParams(-1, -2, Gravity.TOP))
+        banner.onSuppressed = { whatsNew.suppressed = it }
     }
 }
 
 /** Settings → Updates: cards with the auto-check switch, version + CHECK NOW, and the update status. */
-class UpdateSection(ctx: Context) : UpdatesView(ctx) {
-    private val cur = Updates.current(ctx)
+class UpdateSection(ctx: Context, private val cur: String = Updates.current(ctx), notes: List<WhatsNew.Version> = WhatsNew.load(ctx)) : UpdatesView(ctx) {
     private val checkBtn = pillButton(ctx, "CHECK NOW", false, 13f, 40, 14) { Updates.checkNow(ctx) }
     private lateinit var getBtn: TextView
     private val statusCard = Ui.card(ctx).apply { setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 12), Ui.dp(ctx, 14), Ui.dp(ctx, 12)) }
@@ -274,6 +281,7 @@ class UpdateSection(ctx: Context) : UpdatesView(ctx) {
         statusCard.addView(btnRow, Form.lp(ctx, 8))
         statusCard.addView(progress, Form.lp(ctx, 4))
         addView(statusCard, Form.lp(ctx, 12))
+        addView(WhatsNewList(ctx, notes, cur), Form.lp(ctx, 12))   // R18-K (PLAN 201b): under the version card, under GET UPDATE when one waits
         addView(Form.body(ctx, "Android asks you to confirm every update, and only an update signed with AnkiGo's own key installs.", 12f, R.color.ag_sub0).apply {
             setTypeface(Ui.font(ctx, 700))
             setPadding(Ui.dp(ctx, 4), 0, Ui.dp(ctx, 4), 0)
@@ -294,11 +302,11 @@ class UpdateSection(ctx: Context) : UpdatesView(ctx) {
 }
 
 /** The Updates screen: app bar + the cards. Split out of onCreate so the design screenshots can build it. */
-internal fun updatesScreen(ctx: Context): View {
+internal fun updatesScreen(ctx: Context, cur: String = Updates.current(ctx), notes: List<WhatsNew.Version> = WhatsNew.load(ctx)): View {
     val root = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(ctx, R.color.ag_base)) }
     root.addView(Ui.appBar(ctx, "Updates", back = true))
     val scroll = ScrollView(ctx).apply {
-        addView(UpdateSection(ctx).apply { setPadding(Ui.dp(ctx, 16), 0, Ui.dp(ctx, 16), Ui.dp(ctx, 28)) })
+        addView(UpdateSection(ctx, cur, notes).apply { setPadding(Ui.dp(ctx, 16), 0, Ui.dp(ctx, 16), Ui.dp(ctx, 28)) })
     }
     root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
     return root

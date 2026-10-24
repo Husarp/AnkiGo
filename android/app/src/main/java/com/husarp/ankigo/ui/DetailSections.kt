@@ -52,8 +52,10 @@ object DetailSections {
     /**
      * One section: a card whose bar (title, the small [summary] while closed, chevron) opens and closes it; [body] is built the first
      * time it opens, [onFirstOpen] runs then (the Pokédex text download). The open answer is kept per section ([DetailOpen]).
+     * [titleLevel] (R18-G, PLAN 254): the title carries a level, "Stats · Lv 23" in its band colour, open or folded.
      */
-    fun section(a: Context, mem: DetailOpen, s: DetailSection, summary: CharSequence?, title: String = s.title, onFirstOpen: (() -> Unit)? = null, body: () -> View): View {
+    fun section(a: Context, mem: DetailOpen, s: DetailSection, summary: CharSequence?, title: String = s.title, onFirstOpen: (() -> Unit)? = null,
+                titleLevel: Int? = null, body: () -> View): View {
         val card = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 14, a)
@@ -70,7 +72,7 @@ object DetailSections {
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = Ui.dp(a, 48)
             setPadding(Ui.dp(a, 14), 0, Ui.dp(a, 8), 0)
-            addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = title }, LinearLayout.LayoutParams(-2, -2))
+            addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = if (titleLevel != null) LevelTier.titled(a, title, titleLevel) else title }, LinearLayout.LayoutParams(-2, -2))
             addView(sum, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 10) })
             addView(chevron, LinearLayout.LayoutParams(Ui.dp(a, 24), Ui.dp(a, 24)).also { it.marginStart = Ui.dp(a, 4) })
         }
@@ -87,7 +89,7 @@ object DetailSections {
             holder.visibility = if (open) View.VISIBLE else View.GONE
             sum.visibility = if (open || summary.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
             chevron.rotation = if (open) 90f else 0f
-            bar.contentDescription = "$title, ${if (open) "open" else "closed"}"
+            bar.contentDescription = "${if (titleLevel != null) DetailFormat.levelTitle(title, titleLevel) else title}, ${if (open) "open" else "closed"}"
         }
         apply(mem.isOpen(s))
         bar.setOnClickListener { apply(mem.toggle(s)) }
@@ -165,9 +167,9 @@ object DetailSections {
         addView(DetailParts.statHint(a))
         val max = DetailMath.monStatMax(level)
         Stat.entries.forEach { s ->
-            addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), if (nature == null) 0 else DetailMath.natureDir(nature, s), sp.base[s], compact))
+            addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), if (nature == null) 0 else DetailMath.natureDir(nature, s), sp.base[s], compact, wholeRow = true))
         }
-        addView(DetailParts.totalRow(a, stats.total, sp.base.total))
+        addView(DetailParts.totalRow(a, stats.total, sp.base.total, wholeRow = true))
     }
 
     // ---------- Moves ----------
@@ -344,11 +346,18 @@ object DetailSections {
 
     // ---------- Training ----------
 
-    private fun fact(a: Context, label: String, tap: StatInfoText?, value: CharSequence, sub: CharSequence?, compact: Boolean): View = LinearLayout(a).apply {
+    /**
+     * One row of Training / Info: the title in the left 70 dp column, the value (and a small second line) at the right. R18-G: the title
+     * sits on the row's middle (PLAN 242A, it stuck to the top next to a two-line value), and with a [tap] explanation the WHOLE row opens
+     * it, at least 48 dp tall (PLAN 241).
+     */
+    internal fun fact(a: Context, label: String, tap: StatInfoText?, value: CharSequence, sub: CharSequence?, compact: Boolean): View = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
         setPadding(0, Ui.dp(a, if (compact) 6 else 8), 0, Ui.dp(a, if (compact) 6 else 8))
         val lab = Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = label }
-        addView(if (tap != null) DetailParts.tapInfo(lab, tap).also { it.minimumHeight = 0 } else lab, LinearLayout.LayoutParams(Ui.dp(a, 70), -2))
+        if (tap != null) DetailParts.tapRow(this, tap)
+        addView(lab, LinearLayout.LayoutParams(Ui.dp(a, 70), -2))
         addView(LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = value })
@@ -356,9 +365,9 @@ object DetailSections {
         }, LinearLayout.LayoutParams(0, -2, 1f))
     }
 
-    private fun divider(a: Context): View = View(a).apply { setBackgroundColor(Ui.c(a, R.color.ag_s0)); alpha = 0.6f }
+    internal fun divider(a: Context): View = View(a).apply { setBackgroundColor(Ui.c(a, R.color.ag_s0)); alpha = 0.6f }
 
-    /** Nature (+ what it does), IVs, EVs, friendship and the held item of one of your Pokémon. */
+    /** Nature (+ what it does), IVs, EVs and friendship of one of your Pokémon (R18-G: the held item is in the Holding row under the bars now). */
     fun training(a: Context, mon: Mon, compact: Boolean): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         col.addView(fact(a, "Nature", StatInfo.NATURE, mon.nature.label, DetailMath.natureEffect(mon.nature), compact))
@@ -370,19 +379,6 @@ object DetailSections {
             if (evTotal == 0) "none yet" else DetailFormat.perStat(mon.evs, long = true, skipZero = true), compact))
         col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
         col.addView(fact(a, "Friendship", StatInfo.FRIENDSHIP, DetailFormat.friendship(mon.friendship), null, compact))
-        col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
-        val held = mon.heldItem
-        col.addView(LinearLayout(a).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, Ui.dp(a, if (compact) 6 else 8), 0, Ui.dp(a, if (compact) 6 else 8))
-            addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Held item" }, LinearLayout.LayoutParams(Ui.dp(a, 70), -2))
-            if (held == null) addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = "none" })
-            else {
-                addView(ImageView(a).also { Ui.itemIcon(a, held, it) }, LinearLayout.LayoutParams(Ui.dp(a, 22), Ui.dp(a, 22)))
-                addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = Items.name(held) }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 6) })
-            }
-        })
         return col
     }
 
@@ -435,6 +431,9 @@ object DetailSections {
 
     private fun caption(a: Context, text: String): TextView = Ui.text(a, 10f, 900, R.color.ag_sub0).apply { this.text = text.uppercase(); letterSpacing = 0.08f }
 
+    /** The cells with a title that has an explanation (R18-G, PLAN 241): the whole cell opens it. */
+    private val CELL_INFO = mapOf("Wins" to StatInfo.WINS)
+
     private fun cells(a: Context, items: List<Pair<String, String>>): View? {
         if (items.isEmpty()) return null
         return LinearLayout(a).apply {
@@ -442,9 +441,11 @@ object DetailSections {
             items.forEach { (v, l) ->
                 addView(LinearLayout(a).apply {
                     orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER_HORIZONTAL
-                    addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = v; maxLines = 1 })
-                    addView(Ui.text(a, 10f, 700, R.color.ag_sub0).apply { text = l })
+                    gravity = Gravity.CENTER
+                    // wrapped widths: the design centres each value over its label (full-width texts sat at the left)
+                    addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = v; maxLines = 1 }, LinearLayout.LayoutParams(-2, -2))
+                    addView(Ui.text(a, 10f, 700, R.color.ag_sub0).apply { text = l }, LinearLayout.LayoutParams(-2, -2))
+                    CELL_INFO[l]?.let { DetailParts.tapRow(this, it) }
                 }, LinearLayout.LayoutParams(0, -2, 1f))
             }
         }
@@ -473,12 +474,13 @@ object DetailSections {
 
     /**
      * The Info section: Pokédex text and category (loaded the first time it opens; never blocks), height / weight, [extra] cells
-     * (defeats; short values only), then each of [lines] (label, value) on its own full-width line (the long caught date, the
-     * wild Pokémon's tier), the abilities, and the evolution line. [abilities] = (label, value, small line under it) or null.
+     * (wins; short values only), then each of [lines] (label, value) on its own full-width line (the long caught date, the
+     * wild Pokémon's tier), the abilities, and the generation at the bottom right. [abilities] = (label, value, small line under it) or null.
+     * R18-G (PLAN 243): the evolution line is not here any more, it stands in the card under the HP and XP bars.
      */
     private fun info(a: Context, data: GameData, sp: Species, extra: List<Pair<String, String>>, lines: List<Pair<String, String>>,
                      abilities: Triple<String, String, String?>?,
-                     speciesLine: String?, seen: Set<Int>, compact: Boolean, onTap: ((Species) -> Unit)?): Pair<View, () -> Unit> {
+                     speciesLine: String?, compact: Boolean): Pair<View, () -> Unit> {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         val head = caption(a, "Pokédex")
         val text = Ui.text(a, 12f, 700, R.color.ag_text).apply { setLineSpacing(0f, 1.1f); text = "Loading the Pokédex text…" }
@@ -503,14 +505,8 @@ object DetailSections {
             col.addView(fact(a, abilities.first, null, abilities.second, abilities.third, compact))
         }
         col.addView(divider(a), LinearLayout.LayoutParams(-1, 1).also { it.topMargin = Ui.dp(a, 4); it.bottomMargin = Ui.dp(a, 10) })
-        // R10-B18: the generation at the bottom-right, opposite the evolution text (standalone) or under the tree
-        val gen = Ui.text(a, 11f, 700, R.color.ag_sub0).apply { this.text = DetailFormat.generation(sp.gen); gravity = Gravity.END }
-        if (EvoLine.of(data, sp).standalone) {
-            col.addView(EvoGenRow(a, evolution(a, data, sp, seen, compact, onTap), gen), LinearLayout.LayoutParams(-1, -2))
-        } else {
-            col.addView(evolution(a, data, sp, seen, compact, onTap))
-            col.addView(gen, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
-        }
+        // R10-B18: the generation at the bottom-right
+        col.addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply { this.text = DetailFormat.generation(sp.gen); gravity = Gravity.END }, LinearLayout.LayoutParams(-1, -2))
         val load = {
             dexLoader(a, sp.baseNum) { e ->
                 if (e?.text != null) text.text = e.text else text.text = "Not downloaded yet — needs internet"
@@ -522,10 +518,10 @@ object DetailSections {
 
     /** The Info section as a whole: the Pokédex text is asked for the first time it opens. */
     fun infoSection(a: Context, mem: DetailOpen, data: GameData, sp: Species, extra: List<Pair<String, String>>, abilities: Triple<String, String, String?>?,
-                    speciesLine: String?, seen: Set<Int>, compact: Boolean, lines: List<Pair<String, String>> = emptyList(), onTap: ((Species) -> Unit)?): View {
+                    speciesLine: String?, compact: Boolean, lines: List<Pair<String, String>> = emptyList()): View {
         var load: () -> Unit = {}
-        return section(a, mem, DetailSection.INFO, "Pokédex, evolution", onFirstOpen = { load() }) {
-            val (v, l) = info(a, data, sp, extra, lines, abilities, speciesLine, seen, compact, onTap)
+        return section(a, mem, DetailSection.INFO, "Pokédex", onFirstOpen = { load() }) {
+            val (v, l) = info(a, data, sp, extra, lines, abilities, speciesLine, compact)
             load = l
             v
         }
@@ -554,53 +550,5 @@ internal class TapWatchScroll(ctx: Context) : android.widget.ScrollView(ctx) {
         if (ev.actionMasked == android.view.MotionEvent.ACTION_UP && !moved) watchers.toList().forEach { it.tapped() }
         if (ev.actionMasked == android.view.MotionEvent.ACTION_UP || ev.actionMasked == android.view.MotionEvent.ACTION_CANCEL) watchers.toList().forEach { it.end() }
         return handled
-    }
-}
-
-/**
- * R10-FIX (M1): the info row of a species that does not evolve: [evo] ("Does not evolve") on the left, [gen] at the right on the same
- * line while both fit side by side; when they do not (a big font on a narrow screen) the generation goes right-aligned on its own line
- * under the evolution text, as for an evolving species.
- */
-internal class EvoGenRow(ctx: Context, private val evo: View, private val gen: View) : ViewGroup(ctx) {
-    private val gap = Ui.dp(ctx, 8)
-    private val under = Ui.dp(ctx, 6)
-
-    /** True when the last measure put the generation under the evolution text. */
-    internal var stacked = false
-        private set
-
-    init { addView(evo); addView(gen) }
-
-    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
-        val limit = if (MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE / 4 else MeasureSpec.getSize(widthSpec)
-        val unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        evo.measure(unspecified, unspecified)
-        gen.measure(unspecified, unspecified)
-        stacked = evo.measuredWidth + gap + gen.measuredWidth > limit
-        val height: Int
-        if (stacked) {
-            evo.measure(MeasureSpec.makeMeasureSpec(limit, MeasureSpec.AT_MOST), unspecified)
-            gen.measure(MeasureSpec.makeMeasureSpec(limit, MeasureSpec.AT_MOST), unspecified)
-            height = evo.measuredHeight + under + gen.measuredHeight
-        } else {
-            height = maxOf(evo.measuredHeight, gen.measuredHeight)
-        }
-        val width = if (MeasureSpec.getMode(widthSpec) == MeasureSpec.EXACTLY) limit
-            else if (stacked) minOf(limit, maxOf(evo.measuredWidth, gen.measuredWidth)) else evo.measuredWidth + gap + gen.measuredWidth
-        setMeasuredDimension(width, height)
-    }
-
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        val w = r - l
-        if (stacked) {
-            evo.layout(0, 0, evo.measuredWidth, evo.measuredHeight)
-            val top = evo.measuredHeight + under
-            gen.layout(w - gen.measuredWidth, top, w, top + gen.measuredHeight)
-        } else {
-            val h = b - t
-            evo.layout(0, h - evo.measuredHeight, evo.measuredWidth, h)
-            gen.layout(w - gen.measuredWidth, h - gen.measuredHeight, w, h)
-        }
     }
 }

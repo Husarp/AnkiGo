@@ -105,14 +105,14 @@ class ItemCardPlanTest {
         assertEquals("Trade 5 Poké Balls for 1 Great Ball", ItemCardPlan.tradeLabel(o))
         assertEquals("Trade 5 for 1", ItemCardPlan.tradeGo(o))
         assertEquals(
-            "5 Poké Balls (1,000 ₽ in the Shop) for 1 Great Ball (700 ₽). **On purpose worse than buying.** You keep 2 Poké Balls.",
+            "5 Poké Balls (1,000 coins in the Shop) for 1 Great Ball (700 coins). **On purpose worse than buying.** You keep 2 Poké Balls.",
             ItemCardPlan.tradeConfirm(s, o),
         )
         val g = state("great-ball" to 3)
         val og = BallTrade.offer(g, "great-ball")!!
         assertEquals("Trade 3 Great Balls for 1 Ultra Ball", ItemCardPlan.tradeLabel(og))
         assertEquals(
-            "3 Great Balls (2,100 ₽ in the Shop) for 1 Ultra Ball (1,500 ₽). **On purpose worse than buying.** You keep no Great Balls.",
+            "3 Great Balls (2,100 coins in the Shop) for 1 Ultra Ball (1,500 coins). **On purpose worse than buying.** You keep no Great Balls.",
             ItemCardPlan.tradeConfirm(g, og),
         )
     }
@@ -141,7 +141,7 @@ class ItemCardPlanTest {
     }
 
     @Test fun theMoneyToastIsTheOldOne() {
-        assertEquals("Not enough money (need 1,500 ₽)", ItemCardPlan.poor(1500))
+        assertEquals("Not enough money (need 1,500 coins)", ItemCardPlan.poor(1500))
     }
 
     // ---- bold marks ----

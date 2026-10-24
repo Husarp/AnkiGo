@@ -28,7 +28,12 @@ object MoveFx {
     }
 
     /** Runs [look]'s builder on [script]; the registry of the looks. */
-    internal fun build(script: FxScript, look: MoveLook): FxTimes = when (look) {
+    internal fun build(script: FxScript, look: MoveLook): FxTimes {
+        if (FxLean.leans(look)) script.lean(0f)   // R18-C (PLAN 228): first in the timeline, so the look's own poses add to it
+        return buildLook(script, look)
+    }
+
+    private fun buildLook(script: FxScript, look: MoveLook): FxTimes = when (look) {
         MoveLook.TACKLE -> TackleFx.build(script)
         MoveLook.HIT_TEMPLATE -> HitTemplateFx.build(script)
         MoveLook.EMBER -> EmberFx.build(script) // R7-04

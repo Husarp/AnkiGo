@@ -84,7 +84,7 @@ class R16FFilterRowShots {
     private fun boxRow(p: TeamPage) = call(p, "boxControls") as FilterRow
     private fun dexRow(p: DexPage): FilterRow { render(p); return (getField(p, "rowBox") as ViewGroup).getChildAt(0) as FilterRow }
 
-    /** One line, nothing scrolls, nothing outside the row, and an active chip keeps its ✕ in view. */
+    /** One line, nothing scrolls, nothing outside the row, and an active chip stays in view. */
     private fun assertOneLine(ctx: Context, row: FilterRow, windowDp: Int, what: String) {
         layoutRow(ctx, row, windowDp)
         val w = Ui.dp(ctx, windowDp - 24)
@@ -99,7 +99,7 @@ class R16FFilterRowShots {
             right = c.right
         }
         all(row).filterIsInstance<ActiveChip>().forEach { a ->
-            assertTrue("$what: the ✕ is inside its chip", a.clearButton.width > 0 && a.clearButton.right <= a.width && a.left + a.clearButton.right <= w)
+            assertTrue("$what: the chip is in view", a.width > 0 && a.right <= w)
         }
     }
 
@@ -109,7 +109,8 @@ class R16FFilterRowShots {
         "none" to { c -> boxPage(c) },
         "two-all" to { c -> boxPage(c, tf(TypeMatch.ALL, 2)) },
         "fav-only" to { c -> boxPage(c, tf(TypeMatch.ONLY, 1), BoxFilter.FAVOURITES) },
-        "long" to { c -> boxPage(c, tf(TypeMatch.ANY, 3), BoxFilter.FAVOURITES, longSort) },
+        "shiny" to { c -> boxPage(c, TypeFilter(), BoxFilter.SHINY) },
+        "long" to { c -> boxPage(c, tf(TypeMatch.ANY, 3), BoxFilter.CAN_EVOLVE, longSort) },
         "team" to { c -> boxPage(c, TypeFilter(), BoxFilter.IN_TEAM) },
         "evolve-long" to { c -> boxPage(c, tf(TypeMatch.ANY, 3), BoxFilter.CAN_EVOLVE, longSort) },
     )
@@ -147,7 +148,7 @@ class R16FFilterRowShots {
             val box = boxRow(boxPage(ctx))
             layoutRow(ctx, box, 360)
             assertTrue("no active chip", all(box).none { it is ActiveChip })
-            assertEquals("all quick chips fit at 360: ${texts(box)}", listOf("?", "Favourites", "Shiny"), texts(box).filter { it == "?" || it == "Favourites" || it == "Shiny" })
+            assertTrue("Favourites and Shiny fit at 360: ${texts(box)}", listOf("?", "Favourites", "Shiny").all { it in texts(box) })
             assertTrue("the funnel sort button", texts(box).any { it.startsWith("Level") })
             val dex = dexRow(dexPage(ctx, DexFilter()).also { it.root })
             layoutRow(ctx, dex, 360)
@@ -159,14 +160,13 @@ class R16FFilterRowShots {
 
     @Test fun anActiveFilterIsNeverHiddenQuickChipsHideInstead() {
         paparazzi.shootPage("r16f-row-long", listOf(w360), themes = listOf(Theme.LIGHT)) { ctx ->
-            val row = boxRow(boxPage(ctx, tf(TypeMatch.ANY, 3), BoxFilter.FAVOURITES, longSort))
+            val row = boxRow(boxPage(ctx, tf(TypeMatch.ANY, 3), BoxFilter.CAN_EVOLVE, longSort))
             layoutRow(ctx, row, 360)
             val chip = all(row).filterIsInstance<ActiveChip>().single()
-            assertTrue("the chip and its ✕ are in view", chip.width > 0 && chip.right <= Ui.dp(ctx, 336))
+            assertTrue("the chip is in view", chip.width > 0 && chip.right <= Ui.dp(ctx, 336))
             assertTrue("the sort chip still shows its arrow and note", all(row).filterIsInstance<TextView>().any { it.text.toString().startsWith("· Lv 50") })
-            // the quick chip that is on moved into the active chip: no Favourites quick chip, and Shiny hides when there is no room
-            assertTrue("no Favourites quick chip", all(row).filterIsInstance<TextView>().none { it.visibility == View.VISIBLE && it.text.toString() == "Favourites" })
-            // a long label is cut with "…" instead of pushing the ✕ out
+            // the quick chips (all unlit) hide when there is no room; the filter chip stays
+            // a long label is cut with "…" instead of pushing out the chip's end
             assertTrue("the label is cut with an ellipsis", chip.label.layout.getEllipsisCount(0) > 0)
             pageScreen(ctx, boxPage(ctx))
         }
@@ -174,20 +174,26 @@ class R16FFilterRowShots {
 
     // ------------------------------------------------------------------ what the row's buttons do
 
-    @Test fun theBoxQuickChipSwitchesTheShowChoiceAndTheActiveChipsXClearsAllFilters() {
+    @Test fun theBoxQuickChipsToggleInPlaceAndTheSheetClearsTheRest() {
         paparazzi.shootPage("r16f-box-actions", listOf(w412), themes = listOf(Theme.LIGHT)) { ctx ->
             val p = boxPage(ctx, tf(TypeMatch.ANY, 1), BoxFilter.FAVOURITES); p.root
             var row = boxRow(p)
-            assertTrue("Favourites is on: it is in the active chip, not a quick chip", all(row).filterIsInstance<TextView>().none { it.text.toString() == "Favourites" })
-            assertTrue("Shiny is offered", all(row).filterIsInstance<TextView>().any { it.text.toString() == "Shiny" })
+            fun chip(t: String) = all(row).filterIsInstance<TextView>().first { it.text.toString() == t }
+            assertTrue("Favourites is on: a lit quick chip, still there", chip("Favourites").isSelected)
+            assertFalse("Shiny is off", chip("Shiny").isSelected)
             // Shiny while Favourites is on switches to Shiny (Show stays one choice); the type filter stays
-            all(row).filterIsInstance<TextView>().first { it.text.toString() == "Shiny" }.performClick()
+            chip("Shiny").performClick()
             assertEquals(BoxFilter.SHINY, getField(p, "boxFilter"))
             assertEquals(tf(TypeMatch.ANY, 1), getField(p, "boxTypes"))
-            // the ✕ clears Show and the types, keeps the sort and the grouping
             render(p); row = boxRow(p)
-            all(row).filterIsInstance<ActiveChip>().single().clearButton.performClick()
+            assertTrue(chip("Shiny").isSelected); assertFalse(chip("Favourites").isSelected)
+            // a lit chip tapped again turns Show off
+            chip("Shiny").performClick()
             assertEquals(BoxFilter.ALL, getField(p, "boxFilter"))
+            // the sheet's Clear turns the sheet filters (the types) off, the sort and the grouping stay
+            render(p); row = boxRow(p)
+            assertTrue("the chip names the type filter", all(row).any { it is ActiveChip })
+            tap(p.sortSheet().build(maxBody(ctx)), "Clear")
             assertEquals(TypeFilter(), getField(p, "boxTypes"))
             assertEquals(SortSpec.of(SortKey.LEVEL), getField(p, "boxSort"))
             assertEquals(true, getField(p, "grouped"))
@@ -197,18 +203,22 @@ class R16FFilterRowShots {
         }
     }
 
-    @Test fun theDexQuickChipAndTheActiveChipsXKeepSearchAndOwned() {
+    @Test fun theDexQuickChipsToggleInPlaceAndKeepSearchAndOwned() {
         paparazzi.shootPage("r16f-dex-actions", listOf(w412), themes = listOf(Theme.LIGHT)) { ctx ->
             val p = dexPage(ctx, DexFilter(owned = DexOwned.OWNED, query = "a", types = top.take(1).toSet(), typeMatch = TypeMatch.ONLY, gens = setOf(1, 2))); p.root
             var row = dexRow(p)
-            assertTrue("★ Wishlist is offered while it is off", "★ Wishlist" in texts(row))
-            all(row).filterIsInstance<TextView>().first { it.text.toString() == "★ Wishlist" }.performClick()
+            fun chip(t: String) = all(row).filterIsInstance<TextView>().first { it.text.toString() == t }
+            assertFalse("★ Wishlist is off", chip("★ Wishlist").isSelected)
+            chip("★ Wishlist").performClick()
             assertTrue((getField(p, "filter") as DexFilter).wishlistOnly)
             row = dexRow(p)
-            val chipWords = all(row).filterIsInstance<ActiveChip>().single().contentDescription.toString()
-            assertTrue("it moved into the active chip: $chipWords", "Wishlist" in chipWords)
-            assertTrue("and is no quick chip any more", all(row).filterIsInstance<TextView>().none { it.text.toString() == "★ Wishlist" })
-            all(row).filterIsInstance<ActiveChip>().single().clearButton.performClick()
+            assertTrue("it stays where it is, lit", chip("★ Wishlist").isSelected)
+            val words = all(row).filterIsInstance<ActiveChip>().single().contentDescription.toString()
+            assertTrue("and is not repeated in the filter chip: $words", "Wishlist" !in words)
+            chip("★ Wishlist").performClick()
+            assertFalse((getField(p, "filter") as DexFilter).wishlistOnly)
+            // the sheet's Clear: types and generations off; the search and All / Owned / Not owned stay
+            tap(p.sortSheet().build(maxBody(ctx)), "Clear")
             val f = getField(p, "filter") as DexFilter
             assertFalse(f.wishlistOnly); assertTrue(f.gens.isEmpty()); assertEquals(TypeFilter(), f.typeFilter)
             assertEquals("All / Owned / Not owned stays", DexOwned.OWNED, f.owned)
@@ -227,7 +237,7 @@ class R16FFilterRowShots {
             val dex = DexPage(ctx, NoHost); dex.root
             val dexSheet = dex.sortSheet().build(maxBody(ctx))
             tap(dexSheet, "All of"); tap(dexSheet, "Fire")
-            // new page instances: each screen has its own filter back; the Show filter and the other Pokédex filters are not remembered
+            // new page instances: each screen has its own type filter back (R18 249 keeps the other filters too: see R18FFilterShots)
             val box2 = TeamPage(ctx, NoHost)
             assertEquals(TypeFilter(linkedSetOf(Type.WATER, Type.ICE), TypeMatch.ONLY), getField(box2, "boxTypes"))
             assertEquals(BoxFilter.ALL, getField(box2, "boxFilter"))

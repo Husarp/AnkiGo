@@ -62,8 +62,6 @@ class GameActivity : AgActivity() {
     private lateinit var deckPane: View       // Study view: the deck list with pull-to-refresh
     private lateinit var homeRoot: View
     private var continueDeck: Anki.Deck? = null
-    private var topContinue: View? = null      // PLAN 204: small green Continue button in the top bar (before Pop out)
-    private var topContinueDeck: Anki.Deck? = null // its deck: the card rule (no "hide today"), set by loadContinue
     private var homeView = HomeView.STUDY
     private var parts: HomeLayout.Parts? = null  // what the last layout decision showed ([relayout])
     private var studyOnly = false             // "Study without the game" was chosen at first run
@@ -113,6 +111,13 @@ class GameActivity : AgActivity() {
         // the view survives a recreation; else the Intent says (the launcher start has no extra: Study)
         homeView = HomeView.of(savedInstanceState?.getString(HomeView.EXTRA_VIEW))
             ?: HomeNav.viewFromIntent(intent?.getStringExtra(HomeView.EXTRA_VIEW), null)
+        // R18 263 "Open AnkiGo on": a plain launcher start follows the setting (Study / Battle / the last tab)
+        if (savedInstanceState == null && OpenOnPrefs.launcherStartUsesSetting(intent?.hasCategory(Intent.CATEGORY_LAUNCHER) == true,
+                intent?.getStringExtra(HomeView.EXTRA_VIEW), intent?.getBooleanExtra(HomeView.EXTRA_POP_OUT, false) == true)) {
+            val d = OpenOnPrefs.dest(this)
+            if (d == Dest.BATTLE) homeView = HomeView.BATTLE
+            else if (d != Dest.STUDY) window.decorView.post { startActivity(Nav.intent(this, d)) } // another tab: the home screen waits behind it
+        }
         battleOrigin = if (savedInstanceState != null) Dest.entries.firstOrNull { it.name == savedInstanceState.getString(STATE_ORIGIN) }
             else HomeNav.originAfter(intent?.getStringExtra(HomeView.EXTRA_VIEW), intent?.getStringExtra(HomeView.EXTRA_FROM), null)
         popOutPending = savedInstanceState == null && intent?.getBooleanExtra(HomeView.EXTRA_POP_OUT, false) == true
@@ -229,6 +234,7 @@ class GameActivity : AgActivity() {
     internal fun setHomeView(v: HomeView) {
         if (homeView == v) return
         homeView = v
+        OpenOnPrefs.setLastScreen(this, if (v == HomeView.BATTLE) Dest.BATTLE else Dest.STUDY) // R18 RV-5: "Last tab" remembers the view
         if (v != HomeView.BATTLE) battleOrigin = null // the way back belongs to the battle that was opened
         relayout()
     }
@@ -241,7 +247,6 @@ class GameActivity : AgActivity() {
         setPadding(Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 8), Ui.dp(this@GameActivity, 4))
         addView(topButton(R.drawable.ic_back, "Back", R.color.ag_text) { onBackPressed() })
         addView(Ui.text(this@GameActivity, 18f, 900, R.color.ag_text).apply { text = "Battle"; maxLines = 1; letterSpacing = -0.014f }, LinearLayout.LayoutParams(0, -2, 1f))
-        addView(ContinueBar.button(this@GameActivity).also { topContinue = it })
         addView(topButton(R.drawable.ic_pip, "Pop out: small battle window") { popOut() })
         addView(topButton(R.drawable.ic_more_vert, "Menu") { showMenu(it) })
     }
@@ -253,6 +258,9 @@ class GameActivity : AgActivity() {
         val p = Ui.dp(this@GameActivity, 12)
         setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(Ui.dp(this@GameActivity, 48), Ui.dp(this@GameActivity, 48))
+        // R18-D (226): bare glyph with a round ripple
+        background = android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf((Ui.c(this@GameActivity, R.color.ag_ov) and 0x00ffffff) or 0x33000000), null, null)
         setOnClickListener(onClick)
     }
 
@@ -290,15 +298,6 @@ class GameActivity : AgActivity() {
     private fun updateContinueVisibility() {
         val want = if (continueDeck != null && topBar.visibility == View.VISIBLE && !inPip) View.VISIBLE else View.GONE
         if (continueSlot.visibility != want) continueSlot.visibility = want
-        val b = topContinue ?: return
-        val shown = ContinueBar.topButtonShown(topContinueDeck, topBar.visibility == View.VISIBLE, inPip)
-        ContinueBar.bindButton(b, topContinueDeck.takeIf { shown }) { openContinue(it) }
-    }
-
-    /** PLAN 204: the top bar's Continue button deck (null hides it). */
-    internal fun setTopContinueDeck(deck: Anki.Deck?) {
-        topContinueDeck = deck
-        updateContinueVisibility()
     }
 
     /** Shows the Continue bar for [deck] (null removes it). */
@@ -315,14 +314,12 @@ class GameActivity : AgActivity() {
     /** Reads AnkiDroid's deck list off the main thread; no permission or no AnkiDroid means no bar. Never blocks the battle. */
     private fun loadContinue() {
         val gen = ++continueGen
-        if (!Anki.hasPermission(this) || Anki.installed(this).none { it.pkg == Anki.pkg }) { setContinueDeck(null); setTopContinueDeck(null); return }
+        if (!Anki.hasPermission(this) || Anki.installed(this).none { it.pkg == Anki.pkg }) { setContinueDeck(null); return }
         Thread {
             val decks = runCatching { Anki.decks(this) }.getOrNull()
             val deck = decks?.let { ContinueBar.pick(this, it) }
-            val topDeck = decks?.let { ContinueBar.forCard(this, it) }
             runOnUiThread {
                 if (destroyed || gen != continueGen) return@runOnUiThread
-                setTopContinueDeck(topDeck)
                 // the × may have been tapped while the thread ran: the hidden-day rule is checked again here
                 setContinueDeck(deck?.takeIf { ContinueBar.hiddenDay(this) != ContinueBar.today() })
             }
@@ -392,6 +389,7 @@ class GameActivity : AgActivity() {
             setHomeView(HomeView.STUDY) // back from AnkiDroid (not through the PiP window): the Study view
         }
         internalNav = false
+        OpenOnPrefs.setLastScreen(this, if (homeView == HomeView.BATTLE) Dest.BATTLE else Dest.STUDY) // R18 RV-5
         updatePipParams()
         FloatBattleService.startIfWanted(this)
         loadContinue()

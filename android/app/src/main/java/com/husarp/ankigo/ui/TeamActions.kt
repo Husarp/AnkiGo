@@ -118,7 +118,7 @@ internal class MonActions(private val s: GamePage) {
 
     // ---- held items ----
 
-    private fun giveItem(mon: Mon) {
+    fun giveItem(mon: Mon) { // R18-G: also the Holding row of the details ("Give item")
         val held = state.bag.keys.filter { Items.def(it)?.kind == ItemKind.HELD && state.count(it) > 0 && it != mon.heldItem }
             .sortedBy { Items.name(it) }
         if (held.isEmpty()) { Ui.toast(s, "No held items in the bag"); return }

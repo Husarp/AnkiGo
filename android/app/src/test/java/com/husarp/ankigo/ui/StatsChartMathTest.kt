@@ -204,6 +204,7 @@ class StatsChartMathTest {
         assertEquals("Last year", StatsChartMath.periodLabel(ChartMetric.REVIEWS, ChartPeriod.D365))
         val s = build(ChartMetric.BUTTONS, ChartPeriod.D30, emptyMap())
         assertEquals("Buttons pressed per day", StatsChartMath.title(s)); assertEquals("tap a bar for its day", StatsChartMath.hint(s))
+        assertEquals("", StatsChartMath.hint(build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D30, emptyMap()))) // R18 234: the calendar has no top-right hint
         assertEquals("Card states", StatsChartMath.title(ChartData.build(ChartMetric.CARD_STATES, ChartPeriod.D30, null, StatsSnapshot(), emptyMap(), today)))
     }
 }

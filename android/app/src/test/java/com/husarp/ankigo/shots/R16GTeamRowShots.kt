@@ -65,7 +65,7 @@ class R16GTeamRowShots {
     @Test fun queuedSwitch() = paparazzi.shootPage("r16g-queued", both) { ctx ->
         st.pendingMain = st.team[1]
         val root = TeamPage(ctx, NoHost).let { p -> pageScreen(ctx, p).also { draw(p) } }
-        assertTrue(texts(root).any { it.contains("AFTER THIS CARD", ignoreCase = true) || it.contains("after this card", ignoreCase = true) })
+        assertTrue(texts(root).any { it.contains("ON YOUR NEXT MOVE", ignoreCase = true) || it.contains("on your next move", ignoreCase = true) })
         root
     }
 

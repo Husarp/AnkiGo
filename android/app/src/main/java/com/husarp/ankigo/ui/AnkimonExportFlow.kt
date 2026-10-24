@@ -234,7 +234,7 @@ object AnkimonExportFlow {
 
     // ---- text (pure) ----
 
-    /** "312 Pokémon (5 new from this phone, 2 released, 14 kept as they were) · team of 6 · ₽ 12,400 · Pokédex 210". */
+    /** "312 Pokémon (5 new from this phone, 2 released, 14 kept as they were) · team of 6 · 12,400 coins · Pokédex 210". */
     internal fun summary(r: ExportReport): String {
         val notes = buildList {
             if (r.added > 0 && !r.fresh) add("${r.added} new from this phone")
@@ -243,10 +243,10 @@ object AnkimonExportFlow {
         }
         val mons = "${Bits.fmt(r.mons)} Pokémon" + if (notes.isEmpty()) "" else " (${notes.joinToString(", ")})"
         val team = if (r.team > 0) "team of ${r.team}" else "no team"
-        return listOf(mons, team, "₽ ${Bits.fmt(r.cash)}", "Pokédex ${Bits.fmt(r.caught)}").joinToString(" · ")
+        return listOf(mons, team, CoinText.word(r.cash, Bits.fmt(r.cash)), "Pokédex ${Bits.fmt(r.caught)}").joinToString(" · ")
     }
 
-    /** Keeps "team of 6", "₽ 12,400", "Pokédex 210" in one piece when the line wraps (the first part may wrap). */
+    /** Keeps "team of 6", "12,400 coins", "Pokédex 210" in one piece when the line wraps (the first part may wrap). */
     private fun noBreaks(line: String): String =
         line.split(" · ").mapIndexed { i, p -> if (i == 0) p else p.replace(' ', '\u00A0') }.joinToString(" · ")
 

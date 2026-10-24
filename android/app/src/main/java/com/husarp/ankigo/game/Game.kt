@@ -63,7 +63,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.pendingMain = null; state.pendingCycle = false // first: whatever happens below, the switch is never applied twice
         if (state.mon(uid) == null || uid !in state.team || state.team.firstOrNull() == uid) return emptyList()
         // a queued [cycleMain] keeps its rotation of the first three ([A,B,C] -> [B,C,A]) while the one it queued is still next in line
-        return if (cycle && state.team.getOrNull(1) == uid) rotateMain().events else setMain(uid).events
+        val events = if (cycle && state.team.getOrNull(1) == uid) rotateMain().events else setMain(uid).events
+        return events.map { if (it is GameEvent.MainChanged) it.copy(queued = true) else it } // R18-B: the Study dots mark this answer as the switch's
     }
 
     private fun answer(a: Answer): List<GameEvent> {
@@ -383,8 +384,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     }
 
     /**
-     * R13 Part C: uses [item] from the Bag ([ItemUse.use]). A healing or evolution item used on the Main in a fight takes one turn (one
-     * dot), like a switch: after it works the wild one attacks the Main once ([switchHit], marker with [item]); your next answer
+     * R13 Part C: uses [item] from the Bag ([ItemUse.use]). A healing or evolution item used on the Main in a fight takes one turn
+     * (no dot is filled, no round counted), like a switch: after it works the wild one attacks the Main once ([switchHit], marker with [item]); your next answer
      * attacks as normal. The same moments as a switch are free of it ([itemTakesATurn]); items given to hold, TMs, fossils and items
      * used on another Pokémon never take a turn, and balls / escape items have their own rules ([throwBall], [escape]).
      */

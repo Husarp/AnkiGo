@@ -145,14 +145,14 @@ class HelpContentTest {
         assertTrue(catching.contains("1 in ${Tuning.SHINY_ODDS}"))
         assertTrue(catching.contains("while it still has HP") && catching.contains("caught automatically"))
         assertTrue(catching.contains("used up whether it works or not") && catching.contains("runs away"))   // PLAN 171
-        assertTrue(catching.contains("throws like a Great Ball") && catching.contains("the same XP and you the same ${Tuning.CASH_PER_WIN} ₽ as for a defeat"))   // PLAN 171, 170, R13 Part C
+        assertTrue(catching.contains("throws like a Great Ball") && catching.contains("the same XP and you the same ${Tuning.CASH_PER_WIN} coins as for a defeat"))   // PLAN 171, 170, R13 Part C
         val items = chapterText(GameGuide.ITEMS)
         assertTrue(items.contains("${Tuning.ITEM_COUNTDOWN.first} to ${Tuning.ITEM_COUNTDOWN.last}"))
         assertTrue(items.contains("level ${Tuning.FOSSIL_LEVEL}"))
         val money = chapterText(GameGuide.MONEY)
         assertTrue(money.contains("${Tuning.SHOP_BASE_SLOTS} items"))
         assertTrue(money.contains("${Tuning.REROLL_PRICE}") && money.contains("${Tuning.TM_PRICE}"))
-        assertTrue(money.contains("Poké Ball costs 200 ₽") && money.contains("Great Ball 700 ₽") && money.contains("Ultra Ball 1,500 ₽") && money.contains("Master Ball is never sold"))   // R13 Part C
+        assertTrue(money.contains("Poké Ball costs 200 coins") && money.contains("Great Ball 700 coins") && money.contains("Ultra Ball 1,500 coins") && money.contains("Master Ball is never sold"))   // R13 Part C
     }
 
     @Test fun moneyAndHealingUseThePendingNumbersInOnePlace() {
@@ -163,7 +163,7 @@ class HelpContentTest {
         assertEquals(0.5, n.benchRestPercentPerAnswer, 0.0)
         val money = chapterText(GameGuide.MONEY)
         assertTrue(money.contains("+5 for every answer") && money.contains("+10 for every wild Pokémon you defeat or catch") && !money.contains("At most 500"))
-        assertTrue(money.contains("in the first 500 ₽ every answer pays 5 ₽ and every win 10 ₽") && money.contains("in the next 500 ₽ half of that (an answer 2.5 ₽, paid in whole coins as they add up), then a third, a quarter"))
+        assertTrue(money.contains("in the first 500 coins every answer pays 5 coins and every win 10 coins") && money.contains("in the next 500 coins half of that (an answer 2.5 coins, paid in whole coins as they add up), then a third, a quarter"))
         // R14-B2-D: the daily gift replaced the money bonus; the whole table is in the guide
         assertTrue(money.contains("Daily gift: the first time you reach your daily goal each day, you get one gift in your Bag"))
         assertTrue(money.contains("On day 1 it is common 75%, uncommon 22% or rare 3%") && money.contains("common 40%, uncommon 40% and rare 20% after 30 days in a row"))

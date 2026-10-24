@@ -70,6 +70,15 @@ internal object ShopPlan {
 
     private fun fmt(n: Int): String = String.format(java.util.Locale.US, "%,d", n)
 
+    /**
+     * PLAN 237 (R18-H): the money pill's FIRST text, when the bar is built: the real amount when the game is loaded ([cash] not null),
+     * else "" (the pill stays hidden until the amount is known, never a "0" that jumps to the amount and changes the pill's width).
+     */
+    fun pillText(cash: Int?): String = if (cash == null) "" else fmt(cash)
+
+    /** [pillText] for a page that builds its bar: the amount only while the game is [ready] (the Shop and the Pokémon tab share it, R18 RV-6). */
+    fun firstPill(ready: Boolean, cash: Int?): String = pillText(if (ready) cash else null)
+
     /** The weekend card's second line. */
     const val WEEKEND_NOTE = "Rare in the daily stock · until Sunday night"
 }

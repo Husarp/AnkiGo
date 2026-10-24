@@ -181,7 +181,8 @@ class R4NavShots {
             assertTrue("the bar says Shop", "Shop" in shown)
             assertTrue("coins in the bar pill", "5,000" in shown)
 
-            val item = st.shopItems.first()
+            // the daily stock is drawn from the date: take the first item the 5,000 coins can pay (a Fossil costs 7,000)
+            val item = st.shopItems.first { com.husarp.ankigo.game.Shop.priceOf(GameRepo.data!!, st, it) <= 5000 }
             val price = com.husarp.ankigo.game.Shop.priceOf(GameRepo.data!!, st, item)
             val n0 = st.count(item)
             call(p, "buyItem", item)

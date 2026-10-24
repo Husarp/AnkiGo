@@ -325,7 +325,9 @@ class LooksATest {
         assertTrue(stage.poses.filter { !it.attacker }.takeLast(5).all { it.matrix == null })
         frames(s, t.total)
         assertEquals(0f, stage.last(false)!!.dx, eps); assertNull(stage.last(false)!!.matrix)
-        assertEquals(0, stage.count(true))
+        // R18-C (PLAN 228): the user only leans a little toward the target (special move) and never moves otherwise
+        assertTrue(stage.poses.filter { it.attacker }.all { it.dy == 0f && it.dx >= -eps && it.dx <= FxLean.UNITS * unit + eps })
+        assertEquals(0f, stage.last(true)!!.dx, eps)
     }
 
     @Test fun iceBeamShattersIntoEighteenShards() {

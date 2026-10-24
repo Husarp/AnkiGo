@@ -129,7 +129,7 @@ class HelpModelTest {
         assertEquals(365, n.masterBallStreakDays)
         val money = GameGuide.chapter(GameGuide.MONEY)!!.let { (listOf(it.intro) + it.points).joinToString(" ") }
         assertTrue(money.contains("+${Tuning.CASH_PER_ANSWER} for every answer"))
-        assertTrue(money.contains("in the first ${Tuning.CASH_TIER} ₽ every answer pays ${Tuning.CASH_PER_ANSWER} ₽ and every win ${Tuning.CASH_PER_WIN} ₽") && money.contains("then a third, a quarter"))   // PLAN 125's curve
+        assertTrue(money.contains("in the first ${Tuning.CASH_TIER} coins every answer pays ${Tuning.CASH_PER_ANSWER} coins and every win ${Tuning.CASH_PER_WIN} coins") && money.contains("then a third, a quarter"))   // PLAN 125's curve
         assertTrue(money.contains("+${Tuning.CASH_PER_WIN} for every wild Pokémon you defeat or catch"))   // R13 Part C
         // Adam's decision: the coin / incense doubles the answer and win money (R14-B2-D: the daily goal gives a gift now, not money)
         assertTrue(money.contains("Amulet Coin") && money.contains("Luck Incense") && money.contains("doubles the money of your answers and wins"))

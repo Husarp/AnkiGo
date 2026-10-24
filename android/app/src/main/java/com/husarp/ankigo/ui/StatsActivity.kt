@@ -40,6 +40,7 @@ import com.husarp.ankigo.stats.ChartData
 import com.husarp.ankigo.stats.ChartGrain
 import com.husarp.ankigo.stats.ChartKind
 import com.husarp.ankigo.stats.ChartMetric
+import com.husarp.ankigo.stats.ChartPrefs
 import com.husarp.ankigo.stats.ChartPeriod
 import com.husarp.ankigo.stats.ChartSeries
 import com.husarp.ankigo.stats.CollectionStats
@@ -83,11 +84,18 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     private val statsListener: () -> Unit = { requestRender() }
     private var refreshWanted = false
 
-    // what the chart shows (kept while the page lives); a tap's choice is kept over re-renders
+    // what the chart shows: saved on every change (R18 item 232) and read when the page opens; a tap's choice is kept over re-renders
     private var metric = ChartMetric.REVIEWS
     private var period = ChartPeriod.D30
     private var deck: String? = null
     private var grain: ChartGrain? = null
+    init {
+        ChartPrefs.load(base).let { metric = it.metric; period = it.period; deck = it.deck; grain = it.grain }
+    }
+
+    /** The chart's current choice (saved with [saveChoice]). */
+    internal fun choice() = ChartPrefs.Choice(metric, period, deck, grain)
+    private fun saveChoice() = ChartPrefs.save(this, choice())
     private var barSel = -1
     private var genSel = -1
     private var heatDay: String? = null
@@ -228,7 +236,16 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 Report.fail("STATS", "reading the deck list for the chart", e)
                 emptyList()
             }
-            Handler(Looper.getMainLooper()).post { decksLoading = false; if (alive) { decks = names; requestRender() } }
+            Handler(Looper.getMainLooper()).post {
+                decksLoading = false
+                if (alive) {
+                    decks = names
+                    // R18 item 232: a saved deck that is gone = all decks
+                    val known = ChartPrefs.withKnownDeck(choice(), names)
+                    if (known.deck != deck) { deck = known.deck; saveChoice() }
+                    requestRender()
+                }
+            }
         }.start()
     }
 
@@ -416,7 +433,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 for ((i, p) in StatsChartMath.periods(metric).withIndex()) menu.item(i, StatsChartMath.periodLabel(metric, p), if (p == series.period) R.drawable.ic_check else R.drawable.ic_blank)
                 menu.show { i ->
                     val p = StatsChartMath.periods(metric)[i]
-                    if (p != period) { period = p; grain = null; resetPicks(); requestRender() }
+                    if (p != period) { period = p; grain = null; saveChoice(); resetPicks(); requestRender() }
                 }
             })
         }
@@ -427,7 +444,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             if (decks.isEmpty()) menu.item(-1, "No decks found", R.drawable.ic_blank, enabled = false, sub = "Allow AnkiGo to read AnkiDroid")
             menu.show { i ->
                 val d = if (i <= 0) null else decks.getOrNull(i - 1)
-                if (i >= 0 && d != deck) { deck = d; resetPicks(); requestRender() }
+                if (i >= 0 && d != deck) { deck = d; saveChoice(); resetPicks(); requestRender() }
             }
         })
         val grains = ChartData.grains(metric, series.period)
@@ -435,7 +452,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             row.addView(chip(series.grain.label, grains.size > 1) { anchor ->
                 val menu = AppMenu(anchor)
                 for ((i, g) in grains.withIndex()) menu.item(i, g.label, if (g == series.grain) R.drawable.ic_check else R.drawable.ic_blank)
-                menu.show { i -> if (grains[i] != grain) { grain = grains[i]; resetPicks(); requestRender() } }
+                menu.show { i -> if (grains[i] != grain) { grain = grains[i]; saveChoice(); resetPicks(); requestRender() } }
             })
         }
         return row
@@ -475,15 +492,9 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         ChartMetric.BUTTONS -> listOf(R.color.ag_red, R.color.ag_peach, R.color.ag_green, R.color.ag_blue)
         ChartMetric.DUE -> listOf(R.color.ag_yellow)
         ChartMetric.MONEY -> listOf(R.color.ag_yellow)
-        ChartMetric.MONEY_SPENT -> listOf(R.color.ag_peach)
         ChartMetric.CATCHES -> listOf(R.color.ag_teal)
         ChartMetric.WINS -> listOf(R.color.ag_red)
         ChartMetric.XP -> listOf(R.color.ag_sky)
-        ChartMetric.HEALING -> listOf(R.color.ag_pink)
-        ChartMetric.DMG_DEALT -> listOf(R.color.ag_red)
-        ChartMetric.DMG_TAKEN -> listOf(R.color.ag_peach)
-        ChartMetric.DMG_BLOCKED -> listOf(R.color.ag_blue)
-        ChartMetric.MISSES -> listOf(R.color.ag_mauve)
         ChartMetric.CARD_STATES -> CardState.values().map {
             when (it) {
                 CardState.NEW -> R.color.ag_blue; CardState.LEARNING -> R.color.ag_peach; CardState.RELEARNING -> R.color.ag_red
@@ -504,7 +515,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val card = Ui.card(this).apply { setPadding(dp(14), dp(12), dp(14), dp(10)) }
         val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         head.addView(Ui.text(this, 13f, 900, R.color.ag_text).apply { text = title ?: StatsChartMath.title(s); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
-        if (message == null) head.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply { text = StatsChartMath.hint(s); maxLines = 1 }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(8) })
+        if (message == null && StatsChartMath.hint(s).isNotEmpty()) head.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply { text = StatsChartMath.hint(s); maxLines = 1 }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(8) })
         card.addView(head)
         val tones = tonesFor(s)
         val legend = if (message == null) StatsChartMath.legend(s) else emptyList()
@@ -609,6 +620,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             metric = m
             if (period !in StatsChartMath.periods(m)) period = ChartPeriod.D30
             grain = null
+            saveChoice()
             resetPicks()
         }
         requestRender()

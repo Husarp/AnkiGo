@@ -54,6 +54,9 @@ object DexDetail {
         })
 
         val compact = DetailParts.compact(a)
+        // R18-G (PLAN 243B): the evolution line is in the card under the types (the same as in your Pokémon's details, without Holding)
+        col.addView(DetailTopCard.evolutionOnly(a, data, sp, state.seen + state.caught, compact) { other -> show(a, other) },
+            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         // sections that open on tap (DetailOpen); a species has no Training of its own; its Moves are the level-up learnset (R10-B4)
         val mem = DetailSections.memory(a)
         col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${sp.base.total}", title = "Base stats") {
@@ -65,13 +68,13 @@ object DexDetail {
                     setPadding(0, 0, 0, Ui.dp(a, 2))
                 })
                 Stat.entries.forEach { s ->
-                    val row = DetailParts.statRow(a, s, sp.base[s], DetailMath.fraction(sp.base[s], BASE_MAX), 0, null, compact) as LinearLayout
+                    val row = DetailParts.statRow(a, s, sp.base[s], DetailMath.fraction(sp.base[s], BASE_MAX), 0, null, compact, wholeRow = true) as LinearLayout
                     val r = StatCalc.range(sp.base[s], s)
                     row.addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = if (r.first == r.last) "${r.first}" else "${r.first}\u2013${r.last}"; gravity = Gravity.END; maxLines = 1 },
                         LinearLayout.LayoutParams(Ui.dp(a, 58), -2))
                     addView(row)
                 }
-                addView(DetailParts.totalRow(a, sp.base.total, null))
+                addView(DetailParts.totalRow(a, sp.base.total, null, wholeRow = true))
             }
         })
         val learn = sp.levelMoves.distinct()
@@ -81,8 +84,7 @@ object DexDetail {
             })
         }
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, sp.name) })
-        col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), DetailFormat.allAbilities(sp)?.let { Triple("Abilities", it, null) }, null,
-            state.seen + state.caught, compact) { other -> show(a, other) })
+        col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), DetailFormat.allAbilities(sp)?.let { Triple("Abilities", it, null) }, null, compact))
 
         col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))
         val mine = copies(state.mons, sp.num)

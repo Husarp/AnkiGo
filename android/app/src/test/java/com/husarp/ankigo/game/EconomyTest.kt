@@ -83,7 +83,7 @@ class EconomyTest {
         assertTrue(cash(ev).all { it.kind == CashKind.ANSWER })
     }
 
-    // ---- PLAN 125: the linear money curve (the old hard 500 ₽ a day is gone) ----
+    // ---- PLAN 125: the linear money curve (the old hard 500 coins a day is gone) ----
 
     /** [n] more counted answers; returns the Cash events they made. */
     private fun answers(s: GameState, n: Int): List<GameEvent.Cash> {
@@ -178,7 +178,7 @@ class EconomyTest {
         assertEquals(listOf(2, 3), answers(s, 2).map { it.amount })
         s.main!!.heldItem = "amulet-coin"
         assertEquals("a win is doubled the same way: 10/2 = 5, x2", listOf(10), wins(s, 1).map { it.amount })
-        // over a whole day the item doubles the money exactly: 600 answers pay 1500 ₽ without it, 3000 with it
+        // over a whole day the item doubles the money exactly: 600 answers pay 1500 coins without it, 3000 with it
         val plain = state(); answers(plain, 600)
         val coin = state(); coin.main!!.heldItem = "amulet-coin"; answers(coin, 600)
         assertEquals(1500, plain.cash); assertEquals(3000, coin.cash)
@@ -322,11 +322,11 @@ class EconomyTest {
         assertEquals(ActionResult(false, "Not in today's shop"), Shop.buy(data, s, "ultra-ball"))
         s.cash = 199
         val no = Shop.buy(data, s, "poke-ball")
-        assertFalse(no.ok); assertEquals("Not enough money (need 200 ₽)", no.message)   // PLAN 171 / R13 Part C: 200 ₽
+        assertFalse(no.ok); assertEquals("Not enough money (need 200 coins)", no.message)   // PLAN 171 / R13 Part C: 200 coins
         assertEquals(199, s.cash); assertEquals(0, s.count("poke-ball"))
         s.cash = 1000
         val ok = Shop.buy(data, s, "poke-ball")
-        assertTrue(ok.ok); assertEquals("Bought Poké Ball for 200 ₽", ok.message)
+        assertTrue(ok.ok); assertEquals("Bought Poké Ball for 200 coins", ok.message)
         assertEquals(800, s.cash); assertEquals(1, s.count("poke-ball"))
         Shop.buy(data, s, "poke-ball")
         assertEquals(2, s.count("poke-ball"))
@@ -338,11 +338,11 @@ class EconomyTest {
         s.shopDay = s.day; s.shopTms += listOf("thunderbolt", "watergun")
         assertFalse(Shop.buyTm(data, s, "ember").ok)
         s.cash = 999
-        assertEquals("Not enough money (need 1000 ₽)", Shop.buyTm(data, s, "thunderbolt").message)
+        assertEquals("Not enough money (need 1000 coins)", Shop.buyTm(data, s, "thunderbolt").message)
         assertTrue("thunderbolt" !in s.tms)
         s.cash = 1500
         val ok = Shop.buyTm(data, s, "thunderbolt")
-        assertTrue(ok.ok); assertEquals("Bought TM Thunderbolt for 1000 ₽", ok.message)
+        assertTrue(ok.ok); assertEquals("Bought TM Thunderbolt for 1000 coins", ok.message)
         assertEquals(500, s.cash); assertTrue("thunderbolt" in s.tms)
         s.cash = 5000
         val dup = Shop.buyTm(data, s, "thunderbolt")
@@ -355,7 +355,7 @@ class EconomyTest {
         Shop.ensureToday(d, s)
         val items = s.shopItems.toList(); val tms = s.shopTms.toList()
         val poor = Shop.reroll(d, s, TestData.rng(3))
-        assertFalse(poor.ok); assertEquals("Not enough money (need 100 ₽)", poor.message)
+        assertFalse(poor.ok); assertEquals("Not enough money (need 100 coins)", poor.message)
         assertEquals(items, s.shopItems)
         s.cash = 250
         var changed = false
@@ -380,7 +380,7 @@ class EconomyTest {
         assertEquals("other items keep PokeAPI's price", 700, data.price("super-potion"))
         val s = state()
         s.shopDay = s.day; s.shopItems += "great-ball"; s.cash = 1000
-        assertEquals("Bought Great Ball for 700 ₽", Shop.buy(data, s, "great-ball").message)
+        assertEquals("Bought Great Ball for 700 coins", Shop.buy(data, s, "great-ball").message)
         s.shopItems += "net-ball"
         assertEquals("Not in today's shop", Shop.buy(data, s, "net-ball").message)
         assertEquals("Not in today's shop", Shop.buy(data, s, "master-ball").message)
@@ -413,7 +413,7 @@ class EconomyTest {
         for (seed in 1..20) { t.cash = 100; Shop.reroll(d, t, TestData.rng(seed)); assertFalse("ultra-ball" in t.shopItems) }
         // and it can be bought there
         s.cash = 2000
-        assertEquals("Bought Ultra Ball for 1500 ₽", Shop.buy(d, s, "ultra-ball").message)
+        assertEquals("Bought Ultra Ball for 1500 coins", Shop.buy(d, s, "ultra-ball").message)
     }
 
     @Test fun anOldBallLeftInTodaysStockLeavesIt() {

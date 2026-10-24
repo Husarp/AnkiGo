@@ -1,10 +1,16 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.PorterDuff
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -179,6 +185,36 @@ object DetailParts {
         setOnClickListener { showInfo(context, i) }
     }
 
+    /** The touch feedback of a row that fills its width: a soft grey ripple inside the row's own bounds. */
+    fun rowRipple(a: Context): android.graphics.drawable.Drawable =
+        RippleDrawable(ColorStateList.valueOf(Ui.c(a, R.color.ag_s1) and 0x00FFFFFF or 0x55000000), null, ColorDrawable(Color.BLACK))
+
+    /** The touch feedback of a bare icon button (no tile behind it): a round ripple over its whole 48 dp touch area. */
+    fun bareRipple(a: Context): android.graphics.drawable.Drawable =
+        RippleDrawable(ColorStateList.valueOf(Ui.c(a, R.color.ag_s1) and 0x00FFFFFF or 0x55000000), null,
+            GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.BLACK) })
+
+    /**
+     * R18-G (PLAN 241): the WHOLE row [v] (title and value) opens the popup for [i], at least [DetailFormat.TAP_MIN_DP] dp tall, with a
+     * ripple. For a row whose title is only a small part of it (the title alone was a tiny target).
+     */
+    fun tapRow(v: View, i: StatInfoText): View = v.apply {
+        minimumHeight = Ui.dp(context, DetailFormat.TAP_MIN_DP)
+        isClickable = true
+        val l = paddingLeft; val t = paddingTop; val r = paddingRight; val b = paddingBottom
+        background = rowRipple(context)
+        setPadding(l, t, r, b) // a new background can reset the padding
+        tag = i // the tests find the tappable rows by it
+        // no contentDescription: a screen reader reads the row's own texts (title and value); the action says what a tap does
+        accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, "explain ${i.title}"))
+            }
+        }
+        setOnClickListener { showInfo(context, i) }
+    }
+
     /** Small grey "Tap a stat name ..." line at the top of a stats block. */
     fun statHint(a: Context): View = Ui.text(a, 11f, 700, R.color.ag_ov).apply {
         text = StatInfo.HINT
@@ -195,15 +231,16 @@ object DetailParts {
 
     /**
      * One stat row: label, value (+ ▲/▼ [dir] in green/red), coloured bar of [frac], and the small grey [base] at the end
-     * (null = none, the Pokédex).
+     * (null = none, the Pokédex). [wholeRow] (R18-G, PLAN 241): the whole row, at least 48 dp tall, opens the explanation, not just the label.
      */
-    fun statRow(a: Context, stat: Stat, value: Int, frac: Float, dir: Int, base: Int?, compact: Boolean): View = LinearLayout(a).apply {
+    fun statRow(a: Context, stat: Stat, value: Int, frac: Float, dir: Int, base: Int?, compact: Boolean, wholeRow: Boolean = false): View = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         val v = Ui.dp(a, if (compact) 2 else 3)
         setPadding(0, v, 0, v)
-        addView(tapInfo(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = DetailMath.LABELS[stat.ordinal]; gravity = Gravity.CENTER_VERTICAL }, StatInfo.of(stat)),
-            LinearLayout.LayoutParams(Ui.dp(a, 32), -2))
+        val label = Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = DetailMath.LABELS[stat.ordinal]; gravity = Gravity.CENTER_VERTICAL }
+        if (wholeRow) tapRow(this, StatInfo.of(stat))
+        addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(Ui.dp(a, 32), -2))
         addView(Ui.text(a, 13f, 900, R.color.ag_text).apply { text = value.toString(); gravity = Gravity.END }, LinearLayout.LayoutParams(Ui.dp(a, 34), -2))
         addView(Ui.text(a, 11f, 900, if (dir > 0) R.color.ag_green else R.color.ag_red).apply {
             text = DetailMath.arrow(dir); gravity = Gravity.CENTER
@@ -216,16 +253,18 @@ object DetailParts {
     }
 
     /**
-     * "Total   NNN" row under the stat bars; [base] is the grey base total at the end. The label and the number sit in the same
+     * "Total   NNN" row under the stat bars; [base] is the grey base total at the end ([wholeRow]: the whole row, 48 dp tall, is the tap target). The label and the number sit in the same
      * 66 dp (label + value columns of [statRow]) and the number ends exactly where the stat numbers above end.
      */
-    fun totalRow(a: Context, total: Int, base: Int?): View = LinearLayout(a).apply {
+    fun totalRow(a: Context, total: Int, base: Int?, wholeRow: Boolean = false): View = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, Ui.dp(a, 4), 0, 0)
+        if (wholeRow) tapRow(this, StatInfo.TOTAL)
         addView(android.widget.FrameLayout(a).apply {
             val big = total < 1000 // a 4-digit total (high levels) gets the normal sizes, so the label and the number never touch
-            addView(tapInfo(Ui.text(a, if (big) 14f else 12f, 800, R.color.ag_sub0).apply { text = "Total"; gravity = Gravity.CENTER_VERTICAL }, StatInfo.TOTAL),
+            val label = Ui.text(a, if (big) 14f else 12f, 800, R.color.ag_sub0).apply { text = "Total"; gravity = Gravity.CENTER_VERTICAL }
+            addView(if (wholeRow) label else tapInfo(label, StatInfo.TOTAL),
                 android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.START or Gravity.CENTER_VERTICAL))
             addView(Ui.text(a, if (big) 15f else 13f, 900, R.color.ag_text).apply { text = total.toString(); gravity = Gravity.END },
                 android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL))

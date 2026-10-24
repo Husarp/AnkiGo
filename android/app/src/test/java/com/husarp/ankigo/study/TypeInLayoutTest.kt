@@ -9,7 +9,7 @@ class TypeInLayoutTest {
 
     @Test fun keyboardClosedKeepsTheNormalLayout() {
         val p = plan(800, 0)
-        assertFalse(p.compact); assertEquals(204, p.battleDp); assertEquals(64, p.buttonDp); assertEquals(800 - 46 - 204 - 64, p.cardDp)
+        assertFalse(p.compact); assertEquals(204, p.battleDp); assertEquals(64, p.buttonDp); assertEquals(800 - 49 - 204 - 64, p.cardDp)
     }
     @Test fun otherCardsNeverChange() {
         val p = plan(800, 300, typeIn = false)
@@ -18,12 +18,12 @@ class TypeInLayoutTest {
     @Test fun phoneWithKeyboardGivesTheCardEverythingAboveTheButton() {
         val p = plan(800, 300)
         assertTrue(p.compact); assertEquals(0, p.battleDp); assertEquals(TypeInLayout.BUTTON_DP, p.buttonDp)
-        assertEquals(800 - 300 - 46 - 64, p.cardDp); assertFalse(p.cardScrolls)
+        assertEquals(800 - 300 - 49 - 64, p.cardDp); assertFalse(p.cardScrolls)
         assertEquals(800 - 300, p.topBarDp + p.cardDp + p.buttonDp)   // the three blocks end exactly at the keyboard
     }
     @Test fun splitScreenStillFitsCardAndButton() {
         val p = plan(400, 200)   // 412x400 window, a 200 dp keyboard
-        assertTrue(p.compact); assertEquals(200 - 46 - 64, p.cardDp); assertTrue(p.cardScrolls)
+        assertTrue(p.compact); assertEquals(200 - 49 - 64, p.cardDp); assertTrue(p.cardScrolls)
         assertEquals(200, p.topBarDp + p.cardDp + p.buttonDp)
     }
     @Test fun noRoomLeftTheCardScrollsAndTheButtonStaysAboveTheKeyboard() {

@@ -277,7 +277,7 @@ class R14B2BShots {
             val t = texts(screen)
             assertNoArrows(screen)
             assertNull("no window is open", ShopCardKit.findDesc(screen, "Close"))
-            for (id in listOf("poke-ball", "great-ball", "tart-apple")) assertTrue(id, ItemInfo.plain(ItemInfo.short(gd, id)) in t)
+            for (id in listOf("poke-ball", "great-ball", "tart-apple")) assertTrue(id, ItemInfo.plain(ItemInfo.short(gd, id, st.caught)) in t)
             assertTrue("a TM tile shows its type, not a line", "Electric" in t || "ELECTRIC" in t || t.any { it.equals("Electric", true) })
         }) { ctx -> ShopCardKit.page(ctx, null).second }
     }
@@ -328,7 +328,7 @@ class R14B2BShots {
         shoot("bag-trade-confirm", listOf(P412), check = { _, screen ->
             val t = texts(screen)
             assertTrue("Cancel" in t && "Trade 5 for 1" in t)
-            assertTrue(t.toString(), t.any { it.startsWith("5 Poké Balls (1,000 ₽ in the Shop) for 1 Great Ball (700 ₽). On purpose worse than buying. You keep 2 Poké Balls.") })
+            assertTrue(t.toString(), t.any { it.startsWith("5 Poké Balls (1,000 coins in the Shop) for 1 Great Ball (700 coins). On purpose worse than buying. You keep 2 Poké Balls.") })
             assertTrue("5 ×" in t && "1 ×" in t && "for" in t)
             assertTrue("no arrow glyphs", t.none { it.contains("→") || it.contains("⇄") })
             assertTrue("the Throw button hides while the confirm shows", "Throw" !in t)

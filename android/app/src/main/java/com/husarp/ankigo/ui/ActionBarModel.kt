@@ -158,7 +158,10 @@ class ActionBarModel {
         /** What a half says in a round in which that side made no move. */
         const val NO_MOVE = "No move"
 
-        /** PLAN 206: the bar's line while a switch waits for the next answer; with the incoming Pokémon's [name] when the bar has room for it ({{ }} = mauve). */
+        /**
+         * R18-B (PLAN 227): the bar no longer shows a line while a switch waits; a toast says "Switching to X on your next move." and
+         * the bar keeps its segments. Only the old text is kept, for a local screenshot file that still calls it.
+         */
         fun queuedLine(name: String? = null) = if (name.isNullOrBlank()) "Switching after this card…" else "Switching to {{$name}} after this card…"
 
         /** "Wild Psyduck" whether or not the name already has "Wild" in front. */
@@ -191,7 +194,7 @@ class ActionBarModel {
             is GameEvent.BallThrow, is GameEvent.LevelUp, is GameEvent.MoveLearned, is GameEvent.MoveSkipped, is GameEvent.Evolved,
             is GameEvent.MainHealed, is GameEvent.Healed, is GameEvent.MainChanged, is GameEvent.XpGained, is GameEvent.Charge,
             is GameEvent.Duplicate, is GameEvent.SwitchHit -> LineScope.SIDE   // PLAN 173: a switch draws no whole-bar line
-            is GameEvent.SwitchQueued -> LineScope.SIDE   // PLAN 206: its line is [ActionBarView.setQueued] (also derived from the saved game), not a battle line
+            is GameEvent.SwitchQueued -> LineScope.SIDE   // PLAN 206 / R18-B: a toast says it (EventPlayer); the bar keeps its normal look
             is GameEvent.Info -> if (e.text.endsWith("broke free!")) LineScope.SIDE else LineScope.WHOLE
             is GameEvent.AchievementReached -> LineScope.POPUP
             is GameEvent.DailyGift -> LineScope.WHOLE   // R14-B2-D: like ItemFound, its line ("Daily gift: ...") goes across the bar although the popup shows it too

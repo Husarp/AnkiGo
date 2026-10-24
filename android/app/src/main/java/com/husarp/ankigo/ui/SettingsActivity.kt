@@ -310,7 +310,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                     Form.row(this, "The game isn't loaded", "Its options show here once it is. Data and backups still work.", null),
                 )), Form.lp(this, 12))
             }
-            SettingsSection.STUDY -> content.addView(studyCard(), Form.lp(this, 12))
+            SettingsSection.STUDY -> {
+                content.addView(studyCard(), Form.lp(this, 12))
+                content.addView(Form.sect(this, "Advanced"))
+                content.addView(studyAdvancedCard(), Form.lp(this, 12)) // R18 255: moved here from Diagnostics
+            }
+            SettingsSection.WIDGETS -> content.addView(widgetsCard(), Form.lp(this, 12)) // R18 263
             SettingsSection.BATTLE -> battleSection()
             SettingsSection.REMINDERS -> {
                 // a search result for a reminder setting: its sheet opens (the rows here are custom views, there is no row to highlight)
@@ -343,6 +348,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             SettingsSection.LOOK -> SettingsSummary.look(AppPrefs.theme(this), AppPrefs.accent(this), AppPrefs.uiScale(this))
             SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, com.husarp.ankigo.game.DailyGoal.forSettings(st, loaded?.day), st.goalByWeekday != null)
             SettingsSection.STUDY -> SettingsSummary.study(study.getBoolean("inAnkiDroid", false), study.getBoolean("swipe", false), study.getInt("zoom", 100))
+            SettingsSection.WIDGETS -> OpenOnPrefs.summary(OpenOnPrefs.choice(this))
             SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this), AppPrefs.cardsUnderOwn(this))
             SettingsSection.REMINDERS -> SettingsSummary.reminders(com.husarp.ankigo.remind.ReminderStore.load(this))
             SettingsSection.HELP -> "How the game works · fix a problem"
@@ -440,7 +446,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         for (g in SettingsSearch.groups(subs, GAME_GROUPS)) {
             if (g.title.isNotEmpty()) content.addView(Form.sect(this, g.title, if (g.title == "Always catch") "options 2 to 4" else null))
             if (g.title == CATCH_GROUP) content.addView(Ui.text(this, 12f, 600, R.color.ag_sub0).apply {
-                text = "Defeat or catch: the same XP, EVs, friendship and ₽. A catch gives you the Pokémon."
+                text = "Defeat or catch: the same XP, EVs, friendship and coins. A catch gives you the Pokémon."
                 setPadding(dp(4), 0, dp(4), dp(8))
             })
             content.addView(Form.cardOf(this, g.rows.map { rows[it] }), if (g.title.isEmpty()) Form.lp(this, 12) else Form.lp())
@@ -591,6 +597,31 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             },
     ))
 
+    /** R18 255: the switch that used to be in Diagnostics → App. Same key, default, title, sub text and log line, so nothing resets. */
+    private fun studyAdvancedCard(): View {
+        val study = getSharedPreferences("study", 0)
+        return Form.cardOf(this, listOf(
+            Form.switchRow(this, "Save answers for cards that aren't first (test)",
+                "When AnkiDroid puts another card first, AnkiGo still tries to save your answer, or saves it when that card is first again today. Turn off if answers go wrong.",
+                study.getBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, true)) { on ->
+                study.edit().putBoolean(com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF, on).apply()
+                Report.log("SETTINGS", "${com.husarp.ankigo.study.StudyIo.NOT_TOP_PREF} -> $on")
+            },
+        ))
+    }
+
+    /** R18 263: Settings -> Widgets, one card: where the app icon and the Buddy widget take you ([OpenOnPrefs]). */
+    private fun widgetsCard(): View {
+        val choices = OpenOn.entries
+        return Form.cardOf(this, listOf(
+            Form.stackRow(this, "Open AnkiGo on", "Where the app icon and the Buddy widget take you.",
+                Form.segmented(this, choices.map { it.label }, choices.indexOf(OpenOnPrefs.choice(this))) { i ->
+                    OpenOnPrefs.setChoice(this, choices[i])
+                    Report.log("SETTINGS", "openOn -> ${choices[i].key}")
+                }),
+        ))
+    }
+
     /** The current value of a pick-one row, shown on its right (the grey line under the title is the explanation). */
     private fun valueText(v: String?): View = Ui.text(this, 13f, 800, R.color.ag_sub1).apply { text = v ?: "" }
 
@@ -738,6 +769,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 AppPrefs.xpAnimation(this)) { AppPrefs.setXpAnimation(this, it) },
             Form.switchRow(this, "Attack animations", "Each move plays its own animation; off: a simple step and shake",
                 AppPrefs.attackAnimations(this)) { AppPrefs.setAttackAnimations(this, it) },
+            pokemonMovementRow(),
             Form.switchRow(this, "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (8–400 KB each); off: plain",
                 AppPrefs.backgroundPictures(this)) { AppPrefs.setBackgroundPictures(this, it) },
             turnDotsRow(),
@@ -763,6 +795,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private fun pokemonSizeRow(): View {
         val (bar, label) = PokemonSizeSlider.make(this, AppPrefs.pokemonSize(this), "Pokémon size") { AppPrefs.setPokemonSize(this, it) }
         return Form.stackRow(this, "Pokémon size", null, bar, label)
+    }
+
+    /** R18-C (PLAN 247): how often the two battle Pokémon move when idle (Always .. Never); attacks, hits and faints always play. */
+    private fun pokemonMovementRow(): View {
+        val (bar, label) = MotionSlider.make(this, MotionPrefs.step(this), "Pokémon movement") { MotionPrefs.setStep(this, it) }
+        return Form.stackRow(this, "Pokémon movement", "How often the battle Pokémon move when idle. Attacks, hits and faints always play. Off while reduced motion is on.", bar, label)
     }
 
     /** Round 9 D3: where the charge dots sit in the battle's action bar (Study): between the two moves, or at the right end. */

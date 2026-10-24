@@ -147,7 +147,7 @@ class R10W2AchievementsShots {
             assertTrue(t.toString(), "All · ${AchPageMath.tiersReached(views)} of ${AchPageMath.tiersTotal(views)} tiers" in t)
             assertTrue("Show: All" in t)
             for (g in AchievementTable.GROUPS) assertTrue("header $g", g.uppercase() in t) // All = every group under its header
-            assertTrue("Answers given" in t && "Wild Pokémon defeated" in t)
+            assertTrue("Answers given" in t && "Battles won" in t)
         }) { ctx -> page(ctx) }
     }
 
@@ -175,10 +175,10 @@ class R10W2AchievementsShots {
             assertEquals("Economy", lastPage!!.achievementsView().tab())
             val t = texts(screen)
             assertTrue("Money earned" in t)
-            assertFalse("Wild Pokémon defeated" in t)
+            assertFalse("Battles won" in t)
             for (n in TABS) assertTrue("tab $n still there", n in t)
             tap(screen, "All")
-            assertTrue("Wild Pokémon defeated" in texts(screen))
+            assertTrue("Battles won" in texts(screen))
             screen
         }
     }

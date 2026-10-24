@@ -32,7 +32,21 @@ object StatInfo {
     val NATURE = StatInfoText("Nature", "Raises one stat by 10 % and lowers another by 10 %. Five natures change nothing. The arrows mark the two stats.")
     val NATURE_UP = StatInfoText("▲ Raised stat", "This nature gives this stat +10 %.")
     val NATURE_DOWN = StatInfoText("▼ Lowered stat", "This nature gives this stat −10 %.")
-    val LEVEL = StatInfoText("Level", "Stats grow with level. Defeating enemies and Anki reviews give XP.")
+    val LEVEL = StatInfoText("Level", "Stats grow with level. Wins and catches give XP.")
+
+    // R18-G (PLAN 241): the titles of the details that had no explanation yet.
+    /** The HP and XP bars under the header share one tap area (two bars are not two 48 dp rows). */
+    val BARS = StatInfoText("HP and XP",
+        "HP is how much damage it can take before it faints. XP grows with every win or catch (the Exp. Share holder gets half of it); " +
+            "when the bar is full the Pokémon goes up a level. At Lv ${Tuning.MAX_LEVEL} it gains none.")
+    val WINS = StatInfoText("Wins",
+        "Every wild Pokémon you beat while this one is your main, knocked out or caught. Each win gives it XP, EVs and friendship.")
+    val HOLDING = StatInfoText("Holding",
+        "A Pokémon holds one item at a time; tap the item to read what it does. The Exp. Share counts as held too: its holder gets half " +
+            "of each win's XP and your main the other half (nothing is shared while the holder is your main). Give or take items from Options.")
+    val EVOLUTION = StatInfoText("Evolution",
+        "What this Pokémon evolves from and into, and what it takes: a level, an item such as a stone, friendship or a Linking Cord. " +
+            "A tap on one you have seen opens its Pokédex entry; the others show as ???.")
 
     /** Compare row keys ("hp", "base_atk", "total", "ivs", "nature", "level"...) to their text, null when none. */
     fun forKey(key: String): StatInfoText? {
@@ -48,5 +62,5 @@ object StatInfo {
     }
 
     /** All texts, for the tests. */
-    fun all(): List<StatInfoText> = Stat.entries.map(::of) + listOf(TOTAL, IV, EV, FRIENDSHIP, NATURE, NATURE_UP, NATURE_DOWN, LEVEL)
+    fun all(): List<StatInfoText> = Stat.entries.map(::of) + listOf(TOTAL, IV, EV, FRIENDSHIP, NATURE, NATURE_UP, NATURE_DOWN, LEVEL, BARS, WINS, HOLDING, EVOLUTION)
 }

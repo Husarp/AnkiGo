@@ -99,7 +99,7 @@ class ChartDataTest {
         assertEquals(2.0, total(ChartMetric.CATCHES), 0.0)
         assertEquals(4.0, total(ChartMetric.WINS), 0.0)
         assertEquals(78.0, total(ChartMetric.MONEY), 0.0)
-        assertEquals("₽", build(ChartMetric.MONEY, ChartPeriod.D7).unit)
+        assertEquals("coins", build(ChartMetric.MONEY, ChartPeriod.D7).unit)
     }
 
     @Test fun buttonsAreStackedAgainHardGoodEasy() {

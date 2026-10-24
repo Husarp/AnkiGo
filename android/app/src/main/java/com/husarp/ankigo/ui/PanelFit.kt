@@ -9,7 +9,7 @@ import kotlin.math.min
  * [Fit.virtualH] and draws that scaled by [Fit.scale], so sprites, texts, bars, pills, log and chips all shrink together.
  *
  * - Scale: `s = min(1, w / REF_W, h / REF_H)`, where REF_* is the smallest window the chosen set of parts looks right in
- *   unscaled: 366 dp wide (the stats bar's five chips; 330 dp for the arena alone) and 212 dp of arena + log card + stats
+ *   unscaled: 330 dp wide (the stats bar's five chips need 326 dp, the arena alone 330 dp) and 212 dp of arena + log card + stats
  *   bar (about 347 dp; the arena is 180 dp with compact cards). Never above 1.
  * - Text floor: nothing is drawn under [MIN_SP] on screen. A text that would fall under it is drawn at the virtual size
  *   `max(design, MIN_SP / s)` ([Fit.floorSp]); the virtual window grows with 1 / s, so it mostly still fits. If it does
@@ -25,8 +25,8 @@ object PanelFit {
     /** No text is drawn under this many sp on screen. */
     const val MIN_SP = 8f
 
-    /** Smallest unscaled width (virtual dp) of the stats bar: its chips row (346 dp, measured on the real views) + 20 dp padding. */
-    const val REF_W_STATS = 366f
+    /** Smallest unscaled width (virtual dp) of the stats bar: its chips row (306 dp, measured on the real views) + 20 dp padding. */
+    const val REF_W_STATS = 326f
 
     /**
      * The smallest scale before parts step out: about 8 / 14, where the biggest text (the 14 sp names) reaches the floor.
@@ -141,10 +141,9 @@ object PanelFit {
         fun chipH(floor: Float) = TextMath.line(TextMath.at(11f, floor)) + 8f
 
         /**
-         * Width of the chips row: 20 dp gaps and 18 dp padding + label margin per chip (100 dp; the streak chip has 4 dp side padding,
-         * no box, since R9-B7), plus icons and label texts (246 dp at 11 sp).
+         * Width of the chips row: 20 dp gaps and 18 dp padding + label margin per chip (60 dp; no chip has a box since R18-D, so 4 dp side padding each), plus icons and label texts (246 dp at 11 sp).
          */
-        fun chips(floor: Float) = 100f + 246f * TextMath.at(11f, floor) / 11f
+        fun chips(floor: Float) = 60f + 246f * TextMath.at(11f, floor) / 11f
     }
 }
 

@@ -49,7 +49,10 @@ object HeatmapLayout {
     }
 
     private val EMPTY = Result(emptyList(), emptyList(), emptyList(), 0f, 10f, 0f)
-    private val LET = mapOf(0 to "M", 2 to "W", 4 to "F", 6 to "S")
+    /** R18 item 234: all seven weekday letters (Monday = 0). */
+    private val LET = mapOf(0 to "M", 1 to "T", 2 to "W", 3 to "T", 4 to "F", 5 to "S", 6 to "S")
+    /** R18 item 234: the extra space between the letters and the grid, dp. */
+    private const val LETTER_GAP = 4f
 
     /** [days]: consecutive game days, oldest first, the last one is [today]; [widthDp] the width of the view. */
     fun layout(mode: Mode, allDays: List<Day>, today: String, widthDp: Float): Result {
@@ -82,17 +85,17 @@ object HeatmapLayout {
             val x = i * (cw + gap)
             val d = days[i]
             cells += Cell(d.key, d.level, x, top, cw, ch, if (n <= 14) dates[i].dayOfMonth.toString() else null, d.key == today)
-            LET[dow(dates[i])]?.let { letters += Label(it, x + cw / 2, top + ch + 12f - 3.5f, true) }
+            LET[dow(dates[i])]?.let { letters += Label(it, x + cw / 2, top + ch + 12f - 3.5f + LETTER_GAP, true) }
             if (i == 0 || dates[i].dayOfMonth == 1) months += Label(month(dates[i]), x, 9f - 3.5f, false)
         }
-        return Result(cells, letters, months, top + ch + 16f, if (cw < 10f) 8.5f else 10f, gap / 2)
+        return Result(cells, letters, months, top + ch + 16f + LETTER_GAP, if (cw < 10f) 8.5f else 10f, gap / 2)
     }
 
     private fun rows(days: List<Day>, dates: List<LocalDate>, today: String, todayDate: LocalDate, w: Float): Result {
         val gap = 4f
         val cw = (w - gap * 6) / 7
         val ch = min(cw, 34f)
-        val top = 14f
+        val top = 14f + LETTER_GAP
         val colOf = { d: LocalDate -> ((dow(d) - dow(todayDate) + 6) % 7 + 7) % 7 } // today's weekday = column 6
         val cells = ArrayList<Cell>(days.size)
         val months = ArrayList<Label>()
@@ -117,7 +120,7 @@ object HeatmapLayout {
     private fun weeks(days: List<Day>, dates: List<LocalDate>, today: String, w: Float): Result {
         val lead = dow(dates.first())
         val cols = ceil((lead + days.size) / 7.0).toInt()
-        val leftW = 18f
+        val leftW = 18f + LETTER_GAP
         val topH = 16f
         val gap = if (cols > 30) 2f else 3f
         val cw = min(40f, (w - leftW - gap * (cols - 1)) / cols)

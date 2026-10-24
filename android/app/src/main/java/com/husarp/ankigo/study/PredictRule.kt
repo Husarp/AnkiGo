@@ -77,6 +77,14 @@ object PredictRule {
         return if (first) Why.LEARNING_DUE else Why.SAFE
     }
 
+    /**
+     * R18-A: may a card be shown AHEAD of a write that is not applied yet, after an answer that was itself made ahead? Only a main-queue card
+     * (new, review, interday learning): the cards answered before it come back as learning cards, and when no main-queue card is left AnkiDroid
+     * puts such a card right after the next learning card, so it jumps in front of a card read behind it (Again on A, then on B: A is
+     * back before C). An intraday learning card ([INTRADAY] queue) as the next card is not safe then; that tap waits for the confirm.
+     */
+    fun aheadOk(next: Prepared<*>): Boolean = next.before["queue"] !in INTRADAY
+
     /** Why a prediction was swapped away, for the STUDY line: [top] is AnkiDroid's real next card, [queue] the read it came with. */
     fun swapCause(answered: StudyLoop.Key?, predicted: StudyLoop.Key, top: Prepared<*>, queue: List<StudyLoop.Key>): String = when {
         top.key == answered -> "the answered card came back"

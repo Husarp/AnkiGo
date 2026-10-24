@@ -42,7 +42,7 @@ data class ImportReport(
     val notInFile: Int = 0,                          // Pokémon on the phone that were on the PC once but aren't in this file (they stay)
     val unsupported: List<String> = emptyList(),     // "<name or #id>: <reason>": newly kept as "Not supported yet" (raw data kept, shown greyed)
 ) {
-    /** One short line, e.g. "adds 37 Pokémon, upgrades 4; Pokédex +12; ₽ 3,100 → 12,400; 5 items" ("nothing new" when empty). */
+    /** One short line, e.g. "adds 37 Pokémon, upgrades 4; Pokédex +12; coins 3,100 → 12,400; 5 items" ("nothing new" when empty). */
     fun summary(): String {
         val parts = mutableListOf<String>()
         when {
@@ -53,7 +53,7 @@ data class ImportReport(
         if (unsupported.isNotEmpty()) parts += "keeps ${unsupported.size} as Not supported yet"
         val dex = maxOf(seenAdded, caughtAdded)
         if (dex > 0) parts += "Pokédex +$dex"
-        if (cashAfter != cashBefore) parts += "₽ ${money(cashBefore)} → ${money(cashAfter)}"
+        if (cashAfter != cashBefore) parts += "coins ${money(cashBefore)} → ${money(cashAfter)}"
         if (itemsRaised.isNotEmpty()) parts += if (itemsRaised.size == 1) "1 item" else "${itemsRaised.size} items"
         if (tmsAdded > 0) parts += if (tmsAdded == 1) "1 TM" else "$tmsAdded TMs"
         if (teamChanged) parts += "new team"

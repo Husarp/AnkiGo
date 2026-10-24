@@ -77,7 +77,7 @@ class BattleLogPage(base: Context, host: PageHost) : GamePage(base, host) {
                 setPadding(dp(10), dp(8), dp(10), dp(8))
             }
             b.result.forEach { box.addView(line(it), lp(2)) }
-            if (coins > 0) box.addView(line(LogLine(Tone.PLAIN, "+$coins ₽ earned in this fight")), lp(2))
+            if (coins > 0) box.addView(line(LogLine(Tone.PLAIN, "${CoinText.plus(coins)} earned in this fight")), lp(2))
             card.addView(box, lp(10))
         }
         if (b.rounds.isEmpty()) {
@@ -145,7 +145,7 @@ class BattleLogPage(base: Context, host: PageHost) : GamePage(base, host) {
             text = a.card; maxLines = 1; ellipsize = TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(8) })
         if (a.catchUp) row.addView(Ui.text(this, 10f, 700, R.color.ag_sub0).apply { text = "catch-up" }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(6) })
-        if (a.coins > 0) row.addView(Ui.text(this, 11f, 900, R.color.ag_yellow).apply { text = "+${a.coins} ₽" }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(6) })
+        if (a.coins > 0) row.addView(Ui.text(this, 11f, 900, R.color.ag_yellow).apply { text = CoinText.of(this, "+${a.coins}") }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(6) })
         return row
     }
 

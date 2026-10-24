@@ -29,6 +29,10 @@ enum class BoxFilter(val label: String, val none: String? = null) {
     /** R6-06: the holder can be any owned Pokémon, also one in the Box. */
     HOLDS_XP_SHARE("Holds Exp. Share", "None of your Pokémon holds the Exp. Share."),
     CAN_EVOLVE("Can evolve now", "No Pokémon can evolve right now."),
+    ;
+
+    /** R18 253: these three have a quick chip in the Box row (it toggles Show); the others are only in the sheet, so the "Filters" chip names them. */
+    val hasQuickChip: Boolean get() = this == FAVOURITES || this == SHINY || this == IN_TEAM
 }
 
 /** The sort toggle of the copies sheet: highest level first, or latest caught first. */

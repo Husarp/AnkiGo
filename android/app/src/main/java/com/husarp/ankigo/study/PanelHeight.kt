@@ -14,7 +14,8 @@ object PanelHeight {
     const val MIN_CARD = 120
     /** The drag bar's touch height. */
     const val BAR = 24
-    const val TOP_BAR = 46
+    /** The study top bar: the 48 dp row (R18: was 45, the ⋯ button got a 48 dp touch area) + its 1 dp line. */
+    const val TOP_BAR = 49
     /** A tap this close (dp) to a preset height counts as being on it. */
     private const val SAME = 2
 

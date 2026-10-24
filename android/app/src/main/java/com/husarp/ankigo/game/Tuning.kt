@@ -140,7 +140,7 @@ object Tuning {
         "premier-ball", "net-ball", "dive-ball", "dusk-ball", "heal-ball", "luxury-ball", "nest-ball", "quick-ball", "repeat-ball", "timer-ball",
     )
     const val OLD_BALL_AS = "great-ball"
-    /** PLAN 171 (prices: Adam, R13 Part C): ball prices in ₽ (not PokeAPI's 200 / 600 / 800). 0 = never sold (the Master Ball, every [OLD_BALLS] one). */
+    /** PLAN 171 (prices: Adam, R13 Part C): ball prices in coins (not PokeAPI's 200 / 600 / 800). 0 = never sold (the Master Ball, every [OLD_BALLS] one). */
     val BALL_PRICE = mapOf("poke-ball" to 200, "great-ball" to 700, "ultra-ball" to 1_500, "master-ball" to 0)
     /** PLAN 171: the Ultra Ball is in the Shop on about one game day in this many (date-seeded, see Shop.ultraBallDay); never in the daily draw. */
     const val ULTRA_BALL_EVERY_DAYS = 7

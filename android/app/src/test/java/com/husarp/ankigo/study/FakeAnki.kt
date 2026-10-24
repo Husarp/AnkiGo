@@ -64,6 +64,7 @@ class FakeAnki(val clock: FakeClock = FakeClock()) : AnswerProvider {
     var chaos: ((String) -> F)? = null
     var slowMs = 900L
     var duringWrite: (() -> Unit)? = null // runs inside every ANSWER call (the user acts while the write runs)
+    var ticker: ((from: Long, to: Long) -> Unit)? = null // R18-A: runs before every provider call with the virtual time the call takes (user actions that fall inside it fire at their own times)
     val calls = HashMap<String, Int>()
     var notTopWrites = 0 // ANSWER calls whose key was not the top of the selected deck: the engine must never make one
     var swallowed = 0
@@ -93,6 +94,8 @@ class FakeAnki(val clock: FakeClock = FakeClock()) : AnswerProvider {
 
     fun delete(c: Card) { cards.remove(c.id); queues[c.deck]?.remove(c) }
 
+    private fun spend(ms: Long) { ticker?.invoke(clock.ms, clock.ms + ms); clock.ms += ms }
+
     private fun fault(op: String): F {
         calls[op] = (calls[op] ?: 0) + 1
         return plans[op]?.pollFirst() ?: chaos?.invoke(op) ?: F.NONE
@@ -118,7 +121,7 @@ class FakeAnki(val clock: FakeClock = FakeClock()) : AnswerProvider {
     private fun <R> op(name: String, effect: () -> R): R {
         val f = fault(name)
         when (f) { F.THROW_BEFORE, F.THROW -> throw IllegalStateException("$name failed"); F.DIE_BEFORE -> throw Die(); else -> {} }
-        clock.ms += if (f == F.SLOW) slowMs else 5
+        spend(if (f == F.SLOW) slowMs else 5)
         val r = effect()
         when (f) { F.THROW_AFTER -> throw IllegalStateException("$name failed after it was done"); F.DIE_AFTER -> throw Die(); else -> {} }
         return r
@@ -134,7 +137,7 @@ class FakeAnki(val clock: FakeClock = FakeClock()) : AnswerProvider {
     override fun stats(key: StudyLoop.Key): Map<String, String?>? {
         val f = fault("stats")
         when (f) { F.THROW_BEFORE, F.THROW -> throw IllegalStateException("stats failed"); F.DIE_BEFORE -> throw Die(); F.NULL -> return null; else -> {} }
-        clock.ms += if (f == F.SLOW) slowMs else 5
+        spend(if (f == F.SLOW) slowMs else 5)
         val c = card(key) ?: return null
         val row = mapOf(
             "_id" to c.id.toString(), "note_id" to c.nid.toString(), "deck_id" to c.deck.toString(), "reps" to c.reps.toString(),
@@ -147,7 +150,7 @@ class FakeAnki(val clock: FakeClock = FakeClock()) : AnswerProvider {
     override fun answer(key: StudyLoop.Key, ease: Int, ms: Long) {
         val f = fault("answer")
         when (f) { F.THROW_BEFORE, F.THROW -> throw IllegalStateException("answer failed"); F.DIE_BEFORE -> throw Die(); else -> {} }
-        clock.ms += if (f == F.SLOW) slowMs else 20
+        spend(if (f == F.SLOW) slowMs else 20L)
         duringWrite?.invoke()
         val top = queues[selected]?.firstOrNull()
         if (top == null || top.key != key) notTopWrites++

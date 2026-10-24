@@ -216,7 +216,7 @@ internal object AbilityText {
         Row("aurabreak", "Aura Break", "Fairy Aura and Dark Aura make Fairy and Dark moves deal ${x(AbilitiesMore.AURA_BREAK)} times the damage instead."),
         Row("gorillatactics", "Gorilla Tactics", "Its Attack is ${x(AbilitiesMore.GORILLA_TACTICS)} times higher, but it keeps using the first move it used."),
         Row("neutralizinggas", "Neutralizing Gas", "While it is in the fight, no other ability does anything."),
-        Row("stakeout", "Stakeout", "Its attacks deal double damage to a Pokémon that has just come into the fight, like the free hit when you switch."),
+        Row("stakeout", "Stakeout", "Its attacks deal double damage to a Pokémon that has just come into the fight, like the wild one's attack when you switch."),
         Row("corrosion", "Corrosion", "It can poison Steel and Poison types."),
         Row("watercompaction", "Water Compaction", "When a Water move hits it, its Defense rises by ${AbilitiesMore.WATER_COMPACTION_STAGES}."),
         Row("goodasgold", "Good as Gold", "Status moves used on it fail."),

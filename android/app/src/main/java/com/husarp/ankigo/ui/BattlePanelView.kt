@@ -158,12 +158,12 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     private val tools = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private var toolsWanted = true
     private val menuButton = iconButton(R.drawable.ic_menu, "Menu: Team, Pokédex, Shop, Settings") { onMenu(it) }
-    private val comboChip = Ui.chip(ctx, R.drawable.ic_bolt, R.color.ag_sub0)
+    private val comboChip = Ui.chip(ctx, R.drawable.ic_bolt, R.color.ag_sub0, plain = true)
     private val streakFlame = StreakFlame(ctx)
     private val streakChip = Ui.chip(ctx, streakFlame, R.color.ag_red)
-    private val coinChip = Ui.chip(ctx, R.drawable.ic_money, R.color.ag_yellow)
-    private val itemChip = Ui.chip(ctx, R.drawable.ic_gift, R.color.ag_teal)
-    private val ballChip = Ui.chip(ctx, R.drawable.ic_ball, R.color.ag_sub1)
+    private val coinChip = Ui.chip(ctx, R.drawable.ic_money, R.color.ag_yellow, plain = true)
+    private val itemChip = Ui.chip(ctx, R.drawable.ic_gift, R.color.ag_teal, plain = true)
+    private val ballChip = Ui.chip(ctx, R.drawable.ic_ball, R.color.ag_sub1, plain = true)
     private val chips = PanelChipRow(ctx)
     private val overlay = FrameLayout(ctx).apply { clipChildren = false; clipToPadding = false }
     private var shownCombo = 0
@@ -298,6 +298,11 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         chips.hideOrder = listOf(itemChip, streakChip) // least important first (only when even the scaled row is too wide)
         ballChip.setOnClickListener { com.husarp.ankigo.sound.GameSound.ui(ctx, com.husarp.ankigo.sound.SoundId.BALL_BTN, clickMuted()); onBalls() }
         ballChip.contentDescription = "Poké Balls"
+        // R18-D (123): bare chip, a ripple on touch; the 48 dp touch area is added by [PanelChipRow]
+        ballChip.foreground = android.util.TypedValue().let { tv ->
+            ctx.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, tv, true)
+            androidx.core.content.ContextCompat.getDrawable(ctx, tv.resourceId)
+        }
 
         footer.addView(goalRow, LinearLayout.LayoutParams(-1, -2))
         footer.addView(chips, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dpi(4) })
@@ -413,8 +418,10 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
             setImageResource(icon)
             setColorFilter(Ui.c(context, R.color.ag_sub0), PorterDuff.Mode.SRC_IN)
             setPadding(dpi(5), dpi(5), dpi(5), dpi(5))
-            background = Ui.rounded(Ui.c(context, R.color.ag_mantle), 8, context)
         }, LayoutParams(dpi(26), dpi(26), Gravity.CENTER))
+        // R18-D (226): no tile behind the glyph; a round ripple on touch
+        box.foreground = android.graphics.drawable.RippleDrawable(
+            android.content.res.ColorStateList.valueOf((Ui.c(context, R.color.ag_ov) and 0x00ffffff) or 0x33000000), null, null)
         box.contentDescription = description
         box.setOnClickListener { onClick(box) }
         return box
@@ -772,11 +779,11 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         shownBalls = n
     }
 
-    /** "+5 ₽" floats up from the coin chip. */
+    /** "+5" with the coin icon floats up from the coin chip. */
     fun floatAtCoins(text: String) {
         val tv = Ui.text(context, 13f, 900, R.color.ag_yellow)
         TextFloor.set(tv, 13f, fit.floorSp)
-        tv.text = text
+        tv.text = CoinText.of(tv, text)
         tv.setShadowLayer(Ui.dp(context, 6f), 0f, Ui.dp(context, 1f), Ui.c(context, R.color.ag_base))
         // The overlay sits inside the scaled container: its position is the chip's layout offset in that container's own dp,
         // not a screen coordinate (those are scaled).
@@ -1051,13 +1058,54 @@ private class PanelChipRow(ctx: Context) : ViewGroup(ctx) {
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        var x = 0
+        // R18-D (123): the chips are spread over the whole line with even gaps (space-evenly), no boxes behind them
+        val shown = (0 until childCount).map { getChildAt(it) }.filter { it.visibility != GONE && it !in hidden }
+        val free = (r - l) - shown.sumOf { it.measuredWidth }
+        val space = max(gap, free / (shown.size + 1))
+        var x = if (free / (shown.size + 1) >= gap) space else 0
         for (i in 0 until childCount) {
             val k = getChildAt(i)
             if (k.visibility == GONE) continue
             if (k in hidden) { k.layout(0, 0, 0, 0); continue }
             k.layout(x, 0, x + k.measuredWidth, k.measuredHeight)
-            x += k.measuredWidth + gap
+            x += k.measuredWidth + space
         }
+        // a clickable chip keeps a 48 dp touch area although the row is only as tall as its chips (R18 RV-8): a view only gets touches
+        // inside its own bounds, so the delegate sits on the parent (the footer) with the rects in the parent's coordinates
+        val host = parent as? View ?: return
+        val min = Ui.dp(context, 48)
+        val tc = TouchDelegateGroup(host, left, top)
+        for (k in shown) if (k.isClickable) tc.add(delegateRect(k.left, k.top, k.right, k.bottom, min).also { it.offset(left, top) }, k)
+        if (tc.isEmpty()) { if (host.touchDelegate is TouchDelegateGroup) host.touchDelegate = null } else host.touchDelegate = tc
+    }
+
+    companion object {
+        /** The touch rect of a chip at [l],[t],[r],[b]: grown to at least [min] px wide and tall, around the chip (pure, tested). */
+        fun delegateRect(l: Int, t: Int, r: Int, b: Int, min: Int): android.graphics.Rect {
+            val padX = max(0, (min - (r - l)) / 2); val padY = max(0, (min - (b - t)) / 2)
+            return android.graphics.Rect(l - padX, t - padY, r + padX, b + padY)
+        }
+    }
+}
+
+/**
+ * R18-D: one touch delegate for several children (a view has only one). The rects are in the host's coordinates; the children sit in a
+ * row at ([dx], [dy]) inside the host, so the event is moved by that and by the child's own position.
+ */
+private class TouchDelegateGroup(host: View, private val dx: Int, private val dy: Int) : android.view.TouchDelegate(android.graphics.Rect(), host) {
+    private val items = ArrayList<Pair<android.graphics.Rect, View>>()
+    private var active: View? = null
+    fun add(r: android.graphics.Rect, v: View) { items += r to v }
+    fun isEmpty() = items.isEmpty()
+    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+        val x = event.x.toInt(); val y = event.y.toInt()
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) active = items.firstOrNull { it.first.contains(x, y) }?.second
+        val v = active ?: return false
+        val e = android.view.MotionEvent.obtain(event)
+        e.offsetLocation(-(dx + v.left).toFloat(), -(dy + v.top).toFloat())
+        val ok = v.dispatchTouchEvent(e)
+        e.recycle()
+        if (event.actionMasked == android.view.MotionEvent.ACTION_UP || event.actionMasked == android.view.MotionEvent.ACTION_CANCEL) active = null
+        return ok
     }
 }
