@@ -1120,14 +1120,14 @@ class GameTest {
     @Test fun changingTheMainMidFightDropsTheChargedMoves() {
         val g = game(state = roster(3))
         g.fight()
-        g.state.battle!!.player.charged += "solarbeam"
-        g.state.battle!!.enemy.charged += "fly"
+        g.state.battle!!.player.charging = "solarbeam"
+        g.state.battle!!.enemy.charging = "fly"
         assertTrue(g.setMain("t2").ok)
-        assertTrue(g.state.battle!!.player.charged.isEmpty())
-        assertEquals(setOf("fly"), g.state.battle!!.enemy.charged) // the wild one keeps its charge
-        g.state.battle!!.player.charged += "dig"
+        assertNull(g.state.battle!!.player.charging)
+        assertEquals("fly", g.state.battle!!.enemy.charging) // the wild one keeps its charge (this switch is free: nothing answered yet; a costly one releases it, SwitchHitTest)
+        g.state.battle!!.player.charging = "dig"
         assertTrue(g.cycleMain(cardShowing = false).ok) // PLAN 206: with a card showing the cycle only queues the switch (SwitchQueueTest)
-        assertTrue(g.state.battle!!.player.charged.isEmpty())
+        assertNull(g.state.battle!!.player.charging)
     }
 
     @Test fun cycleMainRotatesTheFirstThree() {

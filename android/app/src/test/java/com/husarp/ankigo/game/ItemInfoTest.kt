@@ -104,7 +104,12 @@ class ItemInfoTest {
         val fight = fact("potion", "In a fight")
         assertTrue(fight.contains("**main**") && fight.contains("**one turn**") && fight.contains("**first answer**") && fight.contains("attacks once"))
         assertTrue(fight.contains("bench"))
+        // R17C-6: Full Restore cures a status in a fight, Max Potion does not (the old "no status problems" text was false)
         for (id in listOf("full-restore", "max-potion")) assertTrue(fact(id, "What it does").contains("**all HP**") && fact(id, "What it does").contains("status"))
+        for (id in listOf("full-restore", "max-potion")) assertFalse(id, fact(id, "What it does").contains("no status problems"))
+        assertTrue(fact("full-restore", "What it does").contains("**cures**"))
+        assertTrue(fact("max-potion", "What it does").contains("**doesn't** cure"))
+        assertEquals("All HP + status", ItemInfo.short(data, "full-restore"))
     }
 
     // ---- evolution items ----
@@ -173,6 +178,11 @@ class ItemInfoTest {
         assertTrue(fact("everstone", "What it does").contains("level, friendship, stone or trade"))
         assertEquals("Main: ×2 EVs", ItemInfo.short(data, "macho-brace"))
         assertTrue(fact("macho-brace", "What it does").contains("252") && fact("macho-brace", "What it does").contains("510"))
+        assertTrue(fact("macho-brace", "What it does").contains("each win"))   // R17C-2: not only defeats
+        assertTrue(fact("power-band", "What it does").contains("each win"))
+        assertEquals("Main: ×1.5 friendship", ItemInfo.short(data, "soothe-bell"))
+        assertEquals("Main holds it: ×1.5 friendship", ItemInfo.line(data, "soothe-bell"))
+        assertTrue(fact("soothe-bell", "What it does").contains("**×1.5 friendship**") && fact("soothe-bell", "What it does").contains("255"))
         assertEquals("Main: +8 Speed EVs", ItemInfo.short(data, "power-anklet"))
         assertEquals("Main: +8 Sp. Atk EVs", ItemInfo.short(data, "power-lens"))
         assertTrue(fact("power-band", "What it does").contains("**8 extra Sp. Def EVs**"))
@@ -262,6 +272,8 @@ class ItemInfoTest {
 
     @Test fun theOldHelpersStillWork() {
         assertTrue(ItemInfo.howToUse("poke-ball").contains("Throw"))
+        assertFalse(ItemInfo.howToUse("poke-ball").contains("good throw"))   // R17C-6: a throw catches by chance, not by skill
+        assertEquals("Use it from the Bag to revive an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}.", ItemInfo.howToUse("helix-fossil"))
         assertEquals("", ItemInfo.howToUse("not-an-item"))
         assertTrue(ItemInfo.tmHowToUse().contains("never used up"))
         assertEquals("Heals 20 HP", ItemInfo.effect("potion"))

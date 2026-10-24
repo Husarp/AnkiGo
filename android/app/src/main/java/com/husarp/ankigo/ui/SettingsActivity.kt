@@ -440,7 +440,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         for (g in SettingsSearch.groups(subs, GAME_GROUPS)) {
             if (g.title.isNotEmpty()) content.addView(Form.sect(this, g.title, if (g.title == "Always catch") "options 2 to 4" else null))
             if (g.title == CATCH_GROUP) content.addView(Ui.text(this, 12f, 600, R.color.ag_sub0).apply {
-                text = "Defeat or catch: the same XP and ₽ (a defeat also gives EVs). A catch gives you the Pokémon."
+                text = "Defeat or catch: the same XP, EVs, friendship and ₽. A catch gives you the Pokémon."
                 setPadding(dp(4), 0, dp(4), dp(8))
             })
             content.addView(Form.cardOf(this, g.rows.map { rows[it] }), if (g.title.isEmpty()) Form.lp(this, 12) else Form.lp())

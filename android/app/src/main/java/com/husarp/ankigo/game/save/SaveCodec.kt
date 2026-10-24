@@ -2,9 +2,11 @@ package com.husarp.ankigo.game.save
 
 import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.Battle
+import com.husarp.ankigo.game.BattleField
 import com.husarp.ankigo.game.BattleSide
 import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.DayLog
+import com.husarp.ankigo.game.FieldRules
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.MoveChoice
@@ -153,10 +155,22 @@ object SaveCodec {
         kv("level", u.level); kv("shiny", u.shiny); kv("reason", u.reason); kv("raw", u.raw)
     }
 
+    /** A string-keyed map as a JSON object, keys sorted (deterministic output). */
+    private fun <V> W.map(k: String, m: Map<String, V>) { key(k); obj { for ((a, b) in m.toSortedMap()) kv(a, b) } }
+
     private fun writeSide(w: W, s: BattleSide) = w.obj {
         list("boosts", s.boosts.toList())
         kv("status", s.status); kv("statusTurns", s.statusTurns)
-        list("charged", s.charged.sorted())
+        // R17C-3: an old save's `charged` list (the old charge rule) is ignored; the charge now lives in `charging`
+        map("volatiles", s.volatiles); map("notes", s.notes)
+        kv("charging", s.charging); kv("lastMove", s.lastMove); kv("lastMoveFailed", s.lastMoveFailed)
+        kv("actions", s.actions); kv("entered", s.entered); kv("timesHit", s.timesHit)
+    }
+
+    private fun writeField(w: W, f: BattleField) = w.obj {
+        kv("weather", f.weather); kv("weatherTurns", f.weatherTurns)
+        kv("terrain", f.terrain); kv("terrainTurns", f.terrainTurns)
+        map("rooms", f.rooms); map("player", f.player); map("enemy", f.enemy)
     }
 
     private fun writeBattle(w: W, b: Battle) = w.obj {
@@ -168,6 +182,7 @@ object SaveCodec {
         kv("startedAt", b.startedAt); kv("wildMaxHp", b.wildMaxHp)
         kv("failedThrows", b.failedThrows)
         list("buttons", b.buttons)
+        key("field"); writeField(this, b.field) // R17C-1
     }
 
     private fun writeSettings(w: W, s: Settings) = w.obj {
@@ -236,10 +251,33 @@ object SaveCodec {
         reason = o.str("reason", ""), raw = o.strOrNull("raw"),
     )
 
+    /** A JSON object of numbers as a map (a missing or damaged entry is left out). */
+    private fun JSONObject.intMap(k: String): MutableMap<String, Int> {
+        val out = mutableMapOf<String, Int>()
+        optJSONObject(k)?.let { m -> for (a in m.keys()) if (m.has2(a)) (m.opt(a) as? Number)?.let { out[a] = it.toInt() } }
+        return out
+    }
+
+    private fun JSONObject.strMap(k: String): MutableMap<String, String> {
+        val out = mutableMapOf<String, String>()
+        optJSONObject(k)?.let { m -> for (a in m.keys()) if (m.has2(a)) out[a] = m.getString(a) }
+        return out
+    }
+
     private fun readSide(o: JSONObject?): BattleSide =
         if (o == null) BattleSide() else BattleSide(
-            o.intArray("boosts", 7), o.strOrNull("status"), o.int("statusTurns", 0),
-            (o.strList("charged") ?: emptyList()).toMutableSet(),
+            boosts = o.intArray("boosts", 7), status = o.strOrNull("status"), statusTurns = o.int("statusTurns", 0),
+            volatiles = o.intMap("volatiles"), notes = o.strMap("notes"),
+            charging = o.strOrNull("charging"), lastMove = o.strOrNull("lastMove"), lastMoveFailed = o.bool("lastMoveFailed", false),
+            actions = o.int("actions", 0).coerceAtLeast(0), entered = o.bool("entered", false), timesHit = o.int("timesHit", 0).coerceAtLeast(0),
+        )
+
+    private fun readField(o: JSONObject?): BattleField =
+        if (o == null) BattleField() else BattleField(
+            // R17C FIX-A: a weather / terrain key the rules don't know (a damaged save, a downgrade) is dropped: it would crash the end of the round
+            weather = o.strOrNull("weather")?.takeIf { FieldRules.isWeather(it) }, weatherTurns = o.int("weatherTurns", 0).coerceAtLeast(0),
+            terrain = o.strOrNull("terrain")?.takeIf { FieldRules.isTerrain(it) }, terrainTurns = o.int("terrainTurns", 0).coerceAtLeast(0),
+            rooms = o.intMap("rooms"), player = o.intMap("player"), enemy = o.intMap("enemy"),
         )
 
     /** A battle is transient; one without a readable wild Pokémon is dropped (the next answer starts a new one). */
@@ -254,6 +292,7 @@ object SaveCodec {
             wildMaxHp = o.intOrNull("wildMaxHp")?.coerceAtLeast(1),
             failedThrows = o.int("failedThrows", 0).coerceAtLeast(0), // old saves: 0
             buttons = (o.intList("buttons") ?: emptyList()).map { it.coerceIn(0, 4) }.toMutableList(), // old saves: none, Game.onAnswer restores them from the tally
+            field = readField(o.optJSONObject("field")), // R17C-1: an old save has none = an empty field
         )
     }
 

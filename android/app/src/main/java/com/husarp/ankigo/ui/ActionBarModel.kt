@@ -146,6 +146,8 @@ class ActionBarModel {
                 put(side, HalfState.Moved(next))
                 return listOf(side)
             }
+            // R17C-1: lasting conditions, the field, residual damage and stopped moves: the floats and the battle log show them, the bar keeps its notes
+            EffectKind.VOLATILE, EffectKind.FIELD, EffectKind.RESIDUAL, EffectKind.BLOCKED -> return emptyList()
             else -> return emptyList()   // drain, recoil, heals, cures, burn damage ...: floats show them
         }
     }
@@ -167,6 +169,12 @@ class ActionBarModel {
             key == "par" -> "Can't move: paralyzed"
             key == "slp" -> "Can't move: asleep"
             key == "frz" -> "Can't move: frozen"
+            // R17C-1: keys of CoreRules (R17C-3) and Abilities (R17C-9)
+            key == "flinch" -> "Can't move: flinched"
+            key == "attract" -> "Can't move: in love"
+            key == "recharge" -> "Can't move: recharging"
+            key == "confusion" -> "Hurt itself in confusion"
+            key == "truant" -> "Can't move: loafing around"
             "paralyzed" in text -> "Can't move: paralyzed"
             "asleep" in text -> "Can't move: asleep"
             "frozen" in text -> "Can't move: frozen"

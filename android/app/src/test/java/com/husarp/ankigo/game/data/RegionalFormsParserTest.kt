@@ -290,7 +290,7 @@ id,evolved_species_id,evolution_trigger_id,minimum_level,minimum_happiness
     }
 
     @Test fun anOlderCacheFormatIsRefusedSoDataStoreRebuilds() {
-        val old = Parsers.encodeCache(data).replaceFirst("\"format\":3", "\"format\":1")
+        val old = Parsers.encodeCache(data).replaceFirst("\"format\":4", "\"format\":1")
         try { Parsers.decodeCache(old); fail("format 1 must be refused") } catch (e: IllegalStateException) {
             assertTrue(e.message!!.contains("format"))
         }

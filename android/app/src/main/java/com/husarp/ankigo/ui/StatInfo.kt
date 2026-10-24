@@ -25,7 +25,10 @@ object StatInfo {
     val IV = StatInfoText("IV (Individual value)",
         "Hidden bonus from 0 to 31 per stat, set when the Pokémon is found and never changes. Higher means a bit more of that stat.")
     val EV = StatInfoText("EV (Effort value)",
-        "Grows as it wins battles (Power items add more). Up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in all; every 4 EV is worth about 1 stat point at Lv 100.")
+        "Grows with every win, defeat or catch (Power items add more). Up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in all; every 4 EV is worth about 1 stat point at Lv 100.")
+    val FRIENDSHIP = StatInfoText("Friendship",
+        "Grows by ${Tuning.FRIENDSHIP_GAIN.first} to ${Tuning.FRIENDSHIP_GAIN.last} with each win you make while it is your main (a Soothe Bell makes it ×${Tuning.SOOTHE_BELL}), up to ${Tuning.FRIENDSHIP_MAX}. " +
+            "Some Pokémon evolve once it is high enough, usually ${Tuning.DEFAULT_MIN_FRIENDSHIP}. It also makes Return stronger and Frustration weaker.")
     val NATURE = StatInfoText("Nature", "Raises one stat by 10 % and lowers another by 10 %. Five natures change nothing. The arrows mark the two stats.")
     val NATURE_UP = StatInfoText("▲ Raised stat", "This nature gives this stat +10 %.")
     val NATURE_DOWN = StatInfoText("▼ Lowered stat", "This nature gives this stat −10 %.")
@@ -45,5 +48,5 @@ object StatInfo {
     }
 
     /** All texts, for the tests. */
-    fun all(): List<StatInfoText> = Stat.entries.map(::of) + listOf(TOTAL, IV, EV, NATURE, NATURE_UP, NATURE_DOWN, LEVEL)
+    fun all(): List<StatInfoText> = Stat.entries.map(::of) + listOf(TOTAL, IV, EV, FRIENDSHIP, NATURE, NATURE_UP, NATURE_DOWN, LEVEL)
 }

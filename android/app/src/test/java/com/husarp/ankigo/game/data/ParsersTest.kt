@@ -411,7 +411,7 @@ id,evolved_species_id,evolution_trigger_id,version_group_id,is_default,trigger_i
 
     @Test fun secondaries() {
         assertEquals(Secondary(10, status = "brn"), mv("flamethrower").secondary)
-        assertEquals(Secondary(30, flinch = true), mv("bite").secondary)
+        assertEquals(Secondary(30, flinch = true, volatileStatus = "flinch"), mv("bite").secondary) // R17C-1: volatileStatus too
         assertEquals(Secondary(10, status = "brn"), mv("firefang").secondary) // first of "secondaries"
         assertEquals(Secondary(100, selfBoosts = mapOf("atk" to 1)), mv("poweruppunch").secondary)
         assertEquals(Secondary(100, boosts = mapOf("spd" to -2)), mv("acidspray").secondary)
@@ -490,7 +490,7 @@ id,evolved_species_id,evolution_trigger_id,version_group_id,is_default,trigger_i
 
     @Test fun cacheRoundTripIsExact() {
         val json = Parsers.encodeCache(data)
-        assertTrue(json.contains("\"format\":3"))
+        assertTrue(json.contains("\"format\":4"))
         val back = Parsers.decodeCache(json)
         assertEquals(data.builtAt, back.builtAt)
         assertEquals(data.species, back.species)
@@ -509,9 +509,9 @@ id,evolved_species_id,evolution_trigger_id,version_group_id,is_default,trigger_i
 
     @Test fun cacheRejectsOtherFormatsAndGarbage() {
         val json = Parsers.encodeCache(data)
-        assertTrue(fails { Parsers.decodeCache(json.replace("\"format\":3", "\"format\":1")) }.contains("format"))
+        assertTrue(fails { Parsers.decodeCache(json.replace("\"format\":4", "\"format\":1")) }.contains("format"))
         assertTrue(fails { Parsers.decodeCache("not json") }.isNotEmpty())
-        assertTrue(fails { Parsers.decodeCache("{\"format\":3}") }.contains("damaged"))
+        assertTrue(fails { Parsers.decodeCache("{\"format\":4}") }.contains("damaged"))
         assertTrue(fails { Parsers.decodeCache(json.take(json.length / 2)) }.isNotEmpty())
     }
 

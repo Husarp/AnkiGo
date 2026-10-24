@@ -81,23 +81,64 @@ class MoveTextTest {
         assertEquals("Raises your Attack by 1.", say(dmg().copy(secondary = Secondary(100, selfBoosts = mapOf("atk" to 1)))))
         assertEquals("Burns the target.", say(dmg().copy(secondary = Secondary(100, status = "brn"))))
         assertEquals("Lowers the target's Speed by 1.", say(dmg().copy(secondary = Secondary(100, boosts = mapOf("spe" to -1)))))
-        // flinch is not in the engine: nothing is said about it
-        assertEquals("Deals damage with no extra effect.", say(dmg().copy(secondary = Secondary(30, flinch = true))))
+        // R17C-3: flinch is in the engine (only when you move first)
+        assertEquals("May make the target flinch (30 %) if you move first.", say(dmg().copy(secondary = Secondary(30, flinch = true))))
+        assertEquals("Makes the target flinch if you move first.", say(dmg().copy(secondary = Secondary(100, flinch = true, volatileStatus = "flinch"))))
+        assertEquals("May confuse the target (20 %).", say(dmg().copy(secondary = Secondary(20, volatileStatus = "confusion"))))
+        // a second secondary is rolled too (the fangs)
+        assertEquals("May burn the target (10 %). May make the target flinch (10 %) if you move first.",
+            say(dmg().copy(secondary = Secondary(10, status = "brn"), moreSecondaries = listOf(Secondary(10, flinch = true, volatileStatus = "flinch")))))
     }
 
     @Test fun neverMisses() {
         assertEquals("Never misses.", say(dmg(acc = null)))
         assertFalse(say(status().copy(boosts = mapOf("atk" to 1))).contains("Never misses"))
         assertFalse(say(dmg(power = 0, acc = null).copy(ohko = true)).contains("Never misses"))
+        // R17C-10: a status move says it only when it changes the target's status or stats (not for a field move, a swap or a copy)
+        assertEquals("Lowers the target's Attack by 1. Never misses.", say(status(target = "normal").copy(boosts = mapOf("atk" to -1))))
+        assertEquals("Burns the target. Never misses.", say(status(target = "normal").copy(status = "brn")))
+        assertFalse(say(status("trickroom", target = "all").copy(pseudoWeather = "trickroom")).contains("Never misses"))
+        assertFalse(say(status("transform", target = "normal")).contains("Never misses"))
+        assertFalse(say(status("mirrormove", target = "normal")).contains("Never misses"))
     }
 
     @Test fun chargeMoves() {
-        assertEquals("Charges the first time you use it in a fight, then hits every time.", say(dmg("solarbeam")))
-        assertEquals("Charges first, then hits on the next use.", say(dmg("fly")))
+        // R17C-3 (PLAN 267): the charge turn, then your very next move is the hit
+        // R17C-7: Solar Beam says what the sun and the bad weather do to it; R17C-10: after its charge sentence, so "hits at once" reads as the exception
+        assertEquals("Charges on the first turn, then hits with your next move. In harsh sunlight it hits at once. In rain, a sandstorm, hail or snow its power is halved.", say(dmg("solarbeam")))
+        assertEquals("Charges on the first turn, then hits with your next move.", say(dmg("fly")))
+        assertEquals("Charges on the first turn, then hits with your next move.", say(dmg("xcharge").copy(flags = setOf("charge"))))
+        assertEquals("Charges on the first turn and raises your Defense by 1, then hits with your next move.", say(dmg("skullbash")))
+        assertEquals("Charges on the first turn and raises your Sp. Atk by 1, then hits with your next move.", say(dmg("meteorbeam")))
+        assertEquals("Raises your Sp. Atk, Sp. Def and Speed by 2. Charges on the first turn, then takes effect with your next move.",
+            say(status("geomancy").copy(boosts = mapOf("spa" to 2, "spd" to 2, "spe" to 2))))
+    }
+
+    @Test fun rechargeAndCrashAndLocks() {
+        assertEquals("After a hit, your next move is a rest turn to recharge.", say(dmg("hyperbeam").copy(selfVolatile = "mustrecharge")))
+        assertEquals("After a hit, your next move is a rest turn to recharge.", say(dmg("x").copy(flags = setOf("recharge"))))
+        assertEquals("If it misses or has no effect, you lose half of your max HP.", say(dmg("highjumpkick").copy(crashDamage = true)))
+        assertEquals("You lose half of your max HP after using it.", say(dmg("steelbeam").copy(mindBlownRecoil = true)))
+        assertEquals("You lose half of your max HP after using it.", say(dmg("chloroblast")))
+        assertEquals("Locks you into using it for 2–3 moves in a row, then you become confused.", say(dmg("outrage").copy(selfVolatile = "lockedmove")))
+        assertEquals("Holds the target for 4–5 turns: it loses an eighth of its max HP at the end of each turn.", say(dmg("wrap").copy(volatileStatus = "partiallytrapped")))
+        assertEquals("Confuses the target.", say(status("confuseray", "normal", 100).copy(volatileStatus = "confusion")))
+    }
+
+    @Test fun neverPickedMovesSayWhy() {
+        assertEquals("It does nothing, so it is never used.", say(status("splash")))
+        assertEquals("Never used in AnkiGo battles: it needs a partner Pokémon.", say(status("helpinghand", "adjacentAlly")))
+        assertEquals("Never used in AnkiGo battles: it only works when Pokémon switch in or out.", say(status("roar", "normal", 100).copy(priority = -6)))
+        assertEquals("Never used in AnkiGo battles: it needs held items.", say(dmg("fling", power = 0)))
+        assertEquals("Never used in AnkiGo battles: AnkiGo has no PP.", say(status("spite", "normal", 100)))
+        assertEquals("Never used in AnkiGo battles: AnkiGo has no critical hits.", say(status("focusenergy")))
+        assertEquals("Never used in AnkiGo battles: it would end every fight on its own.", say(status("perishsong", "all")))
     }
 
     @Test fun statusMoveWithNothingTheEngineUses() {
-        assertEquals("Has no effect in AnkiGo battles.", say(status("protect").copy(priority = 4)))
+        // R17C-5: Protect is built now (SideMoves), so a move nothing handles stands for the old rule
+        assertEquals("Has no effect in AnkiGo battles.", say(status("unhandledmove").copy(priority = 4)))
+        assertTrue(say(status("protect").copy(priority = 4)).startsWith("Blocks every move aimed at you for the rest of the turn."))
         // a bad status code or empty boosts is not a use either
         assertEquals("Has no effect in AnkiGo battles.", say(status().copy(status = "xyz", boosts = mapOf("atk" to 0))))
     }

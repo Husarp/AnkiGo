@@ -15,6 +15,7 @@ data class ItemDef(
     val kind: ItemKind,
     val heal: Int = 0,           // HEAL: HP restored (Ankimon fixed amounts); Int.MAX_VALUE = full
     val fossil: Int? = null,     // FOSSIL: species revived
+    val cures: Boolean = false,  // R17C-6, HEAL: also cures the Main's battle status (Full Restore)
     val note: String = "",       // one short line for the shop/bag ("Heals 20 HP", "Holder gets x1.5 XP", "Evolves some Pokémon")
 )
 
@@ -44,7 +45,21 @@ object Items {
         "dawn-stone", "ice-stone", "oval-stone", "razor-claw", "razor-fang", "kings-rock", "metal-coat", "dragon-scale",
         "up-grade", "prism-scale", "deep-sea-tooth", "deep-sea-scale", "protector", "electirizer", "magmarizer", "dubious-disc",
         "reaper-cloth", "sachet", "whipped-dream", "tart-apple", "sweet-apple", "cracked-pot", "chipped-pot", "linking-cord",
+        // R17C-6: the nine items whose Pokémon could not evolve before. PokeAPI sells the first six (Shop pool, random finds); Black
+        // Augurite, Peat Block and Metal Alloy have price 0 there, so they are only found (random finds, never sold). The Masterpiece Teacup
+        // is left out: it evolves Poltchageist-Artisan, a form AnkiGo has no species for, so no Pokémon here could use it.
+        "auspicious-armor", "malicious-armor", "galarica-cuff", "galarica-wreath", "syrupy-apple", "unremarkable-teacup",
+        "black-augurite", "peat-block", "metal-alloy",
     )
+
+    /**
+     * R17C-FIX: items that stay in the catalogue only so a bag (or an Ankimon import) that already holds one keeps it: never sold, never
+     * found. The Chipped Pot evolves Polteageist-Antique, a form AnkiGo has no species for, so no Pokémon here can use it.
+     */
+    val RETIRED: Set<String> = setOf("chipped-pot")
+
+    /** R17C-6: the one healing item that also cures the Main's burn / poison / paralysis / sleep / freeze in a fight (Max Potion heals HP only). */
+    const val FULL_RESTORE = "full-restore"
 
     private val HELD = listOf(
         "lucky-egg" to "Holder gets ×1.5 XP",
@@ -58,6 +73,7 @@ object Items {
         "power-lens" to "Main holds it: +8 Sp. Atk EVs",
         "power-band" to "Main holds it: +8 Sp. Def EVs",
         "power-anklet" to "Main holds it: +8 Speed EVs",
+        "soothe-bell" to "Main holds it: ×1.5 friendship",
     )
 
     private val FOSSILS = listOf(
@@ -70,9 +86,11 @@ object Items {
     val ALL: Map<String, ItemDef> = buildList {
         addAll(balls())
         HEALS.forEach { (id, hp) ->
-            add(ItemDef(id, ItemKind.HEAL, heal = hp, note = if (hp == Int.MAX_VALUE) "Heals all HP" else "Heals $hp HP"))
+            val cures = id == FULL_RESTORE
+            add(ItemDef(id, ItemKind.HEAL, heal = hp, cures = cures,
+                note = if (cures) "Heals all HP and cures a status" else if (hp == Int.MAX_VALUE) "Heals all HP" else "Heals $hp HP"))
         }
-        EVOLUTION.forEach { add(ItemDef(it, ItemKind.EVOLUTION, note = "Evolves Pokémon that evolve with it")) }
+        EVOLUTION.forEach { add(ItemDef(it, ItemKind.EVOLUTION, note = if (it in RETIRED) "Does nothing here" else "Evolves Pokémon that evolve with it")) }
         HELD.forEach { (id, note) -> add(ItemDef(id, ItemKind.HELD, note = note)) }
         listOf("poke-doll", "fluffy-tail").forEach { add(ItemDef(it, ItemKind.ESCAPE, note = "Skip this wild Pokémon")) }
         FOSSILS.forEach { (id, sp) -> add(ItemDef(id, ItemKind.FOSSIL, fossil = sp, note = "Revives an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}")) }
@@ -92,11 +110,11 @@ object Items {
     /** "TM Thunderbolt" style name for a TM move id. */
     fun tmName(data: GameData, move: String): String = "TM " + (data.move(move)?.name ?: move)
 
-    /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; the Master Ball and the old Ankimon balls have price 0). */
-    fun shopPool(data: GameData): List<String> = ALL.keys.filter { data.price(it) > 0 }.sorted()
+    /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; the Master Ball, the old Ankimon balls and the [RETIRED] items are not sold). */
+    fun shopPool(data: GameData): List<String> = ALL.keys.filter { it !in RETIRED && data.price(it) > 0 }.sorted()
 
-    /** Ankimon random-item pool: catalogue items except balls. */
-    fun dropPool(): List<String> = ALL.values.filter { it.kind != ItemKind.BALL }.map { it.id }.sorted()
+    /** Ankimon random-item pool: catalogue items except balls and the [RETIRED] items. */
+    fun dropPool(): List<String> = ALL.values.filter { it.kind != ItemKind.BALL && it.id !in RETIRED }.map { it.id }.sorted()
 }
 
 object Economy {
@@ -204,7 +222,7 @@ object Shop {
      * PLAN 171: an item that is no longer sold (an old Ankimon ball drawn before the update) leaves today's stock.
      */
     fun ensureToday(data: GameData, state: GameState) {
-        state.shopItems.removeAll { data.price(it) <= 0 }
+        state.shopItems.removeAll { data.price(it) <= 0 || it in Items.RETIRED } // R17C-FIX: a Chipped Pot drawn before the update leaves the stock too
         if (state.shopDay == state.day) return
         val (items, tms) = stockFor(data, state.day, state.trainerLevel)
         setStock(state, items, tms)
@@ -335,7 +353,7 @@ object Shop {
     fun buy(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis()): ActionResult {
         val onSale = item in state.shopItems || item in Tuning.SHOP_BASICS || dealFor(data, state.day)?.item == item ||
             weekendFor(data, state.day)?.item == item
-        if (!onSale || data.price(item) <= 0) return ActionResult(false, "Not in today's shop")
+        if (!onSale || data.price(item) <= 0 || item in Items.RETIRED) return ActionResult(false, "Not in today's shop")
         val price = priceOf(data, state, item)
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
@@ -441,12 +459,25 @@ object ItemUse {
     private fun target(state: GameState, uid: String?, defaultMain: Boolean): Mon? =
         if (uid != null) state.mon(uid) else if (defaultMain) state.main else null
 
-    /** Can [item] be used on [mon] right now (heal: hurt; evolution item: Progression.itemEvolution != null; held: anyone)? */
+    /** R17C-6: the battle status ("brn" "psn" "tox" "par" "slp" "frz") of [mon] when it is the Main in a fight, else null (only the Main has a status, and only in a fight). */
+    private fun battleStatus(state: GameState, mon: Mon): String? =
+        if (mon.uid == state.main?.uid) state.battle?.player?.status else null
+
+    /** R17C-6: the status word of a cure line ("X's burn was healed."); sleep and freeze use the battle's own lines ("woke up", "thawed out"). */
+    private fun cureText(name: String, status: String): String = when (status) {
+        "slp" -> "$name woke up."
+        "frz" -> "$name thawed out."
+        "par" -> "$name's paralysis was healed."
+        "psn", "tox" -> "$name's poison was healed."
+        else -> "$name's burn was healed."
+    }
+
+    /** Can [item] be used on [mon] right now (heal: hurt, or Full Restore with a status in a fight; evolution item: Progression.itemEvolution != null; held: anyone)? */
     fun canUse(data: GameData, state: GameState, item: String, mon: Mon?, now: Long = System.currentTimeMillis()): Boolean {
         val def = Items.def(item) ?: return false
         if (state.count(item) <= 0) return false
         return when (def.kind) {
-            ItemKind.HEAL -> (mon ?: state.main)?.let { it.hp < StatCalc.maxHp(data, it) } ?: false
+            ItemKind.HEAL -> (mon ?: state.main)?.let { it.hp < StatCalc.maxHp(data, it) || (def.cures && battleStatus(state, it) != null) } ?: false
             ItemKind.EVOLUTION -> mon != null && Progression.itemEvolution(data, mon, item, now) != null
             ItemKind.HELD -> mon != null && mon.heldItem != item
             ItemKind.FOSSIL -> data.species.containsKey(def.fossil)
@@ -469,13 +500,23 @@ object ItemUse {
             ItemKind.HEAL -> {
                 val mon = target(state, targetUid, true) ?: return ActionResult(false, "No Pokémon to heal.")
                 val missing = StatCalc.maxHp(data, mon) - mon.hp
-                if (missing <= 0) return ActionResult(false, "${mon.name} is already healthy.")
+                // R17C-6: Full Restore also cures the Main's battle status; at full HP it still works when there is a status to cure.
+                val status = if (def.cures) battleStatus(state, mon) else null
+                if (missing <= 0 && status == null) return ActionResult(false, "${mon.name} is already healthy.")
                 val healed = minOf(missing, def.heal)
                 mon.hp += healed
+                var message = if (healed > 0) "$name healed ${mon.name} by $healed HP" else "$name cured ${mon.name}"
+                if (status != null) {
+                    val side = state.battle!!.player
+                    side.status = null; side.statusTurns = 0
+                    side.volatiles.remove(CoreRules.SLEEP_TURNS) // R17C-FIX6: Rest's fixed sleep length goes with the sleep, like every other cure
+                    events += GameEvent.Effect(true, cureText(mon.name, status), mon.hp, StatCalc.maxHp(data, mon), null, EffectKind.STATUS_CURED, status)
+                    if (healed > 0) message += " and cured its status"
+                }
                 Economy.take(state, item)
                 StudyStats.addHealItem(state)
                 Badges.award(state, 20, events, now)
-                return used(data, state, now, events, "$name healed ${mon.name} by $healed HP")
+                return used(data, state, now, events, message)
             }
             ItemKind.EVOLUTION -> {
                 val mon = target(state, targetUid, false) ?: return ActionResult(false, "Choose a Pokémon first.")

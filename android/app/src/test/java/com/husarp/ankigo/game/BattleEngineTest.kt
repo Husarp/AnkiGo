@@ -323,8 +323,14 @@ class BattleEngineTest {
 
     @Test fun ohkoRulesAndAccuracy() {
         // fails against a higher level, no accuracy roll
-        val weak = round(mon(19, 10, "fissure"), mon(19, 20, "splash"), acts = false)
-        assertTrue(weak.attacks().single().failed)
+        // (R17C FIX-A: a Main whose only attack can't hurt uses Struggle in Random too, so it has a second move and the seed that picks Fissure is looked for)
+        var tried = 0
+        for (s in 1..40) {
+            val weak = round(mon(19, 10, "fissure", "tackle"), mon(19, 20, "splash"), acts = false, seed = s).attacks().single()
+            if (weak.moveId == "fissure") { tried++; assertTrue(weak.failed) }
+        }
+        assertTrue(tried > 0)
+        assertEquals("struggle", round(mon(19, 10, "fissure"), mon(19, 20, "splash"), acts = false).attacks().single().moveId)
         // hits for exactly the target's HP; accuracy = 30 + level difference (here 40 %)
         var hits = 0
         for (s in 1..600) {
@@ -555,7 +561,7 @@ class BattleEngineTest {
         assertEquals(e1, e2)
     }
 
-    // ---------------------------------------------------------------- charge moves (poke-engine charge flag)
+    // ---------------------------------------------------------------- charge moves (R17C-3: the charge turn, then the next action is the hit)
 
     @Test fun chargeMoveChargesFirstThenHits() {
         val main = mon(19, 20, "solarbeam"); val wild = mon(150, 100, "splash")
@@ -566,42 +572,45 @@ class BattleEngineTest {
         assertTrue(ev1.attacks().isEmpty())
         assertEquals(listOf("Ratty absorbed light!"), ev1.effects())
         assertTrue(ev1.filterIsInstance<Effect>().single().onPlayer)
-        assertEquals(setOf("solarbeam"), b.player.charged)
+        assertEquals("solarbeam", b.player.charging)
         val ev2 = round(main, wild, acts = false, b = b)
         assertEquals(1, ev2.attacks().size)
         assertTrue(wild.hp < before)
+        assertNull("the charge is over after the hit", b.player.charging)
     }
 
-    @Test fun solarBeamStaysChargedAndKeepsHitting() {
+    @Test fun aChargeMoveChargesAgainAfterTheHit() {
+        // R17C-3 (Adam's rule): no "stays charged for the whole fight" any more
         val main = mon(19, 20, "solarbeam"); val wild = mon(150, 100, "splash")
         val b = battle(wild)
-        round(main, wild, acts = false, b = b)
         for (i in 1..3) {
             val hp = wild.hp
-            val ev = round(main, wild, acts = false, b = b)
-            assertEquals(1, ev.attacks().size)
+            assertEquals(listOf("Ratty absorbed light!"), round(main, wild, acts = false, b = b).effects())
+            assertEquals(hp, wild.hp)
+            assertEquals(1, round(main, wild, acts = false, b = b).attacks().size)
             assertTrue(wild.hp < hp)
-            assertEquals(setOf("solarbeam"), b.player.charged)
+            assertNull(b.player.charging)
         }
     }
 
-    @Test fun flyLosesTheChargeAfterTheHitAndChargesAgain() {
+    @Test fun flyChargesThenHitsAndChargesAgain() {
         val main = mon(19, 20, "fly"); val wild = mon(150, 100, "splash")
         val b = battle(wild)
         val before = wild.hp
         assertEquals(listOf("Ratty flew up high!"), round(main, wild, acts = false, b = b).effects())
         assertEquals(before, wild.hp)
+        assertEquals("fly", b.player.charging)
         assertEquals(1, round(main, wild, acts = false, b = b).attacks().size)
-        assertTrue(b.player.charged.isEmpty())
+        assertNull(b.player.charging)
         val hp = wild.hp
         val ev = round(main, wild, acts = false, b = b)
         assertEquals(listOf("Ratty flew up high!"), ev.effects())
         assertTrue(ev.attacks().isEmpty())
         assertEquals(hp, wild.hp)
-        assertEquals(setOf("fly"), b.player.charged)
+        assertEquals("fly", b.player.charging)
     }
 
-    @Test fun anyUseCountsEvenAMissAndTheWildOneChargesToo() {
+    @Test fun theWildOneChargesToo() {
         val main = mon(19, 20, "tackle"); val wild = mon(150, 100, "solarbeam")
         val b = battle(wild)
         val mainHp = main.hp
@@ -609,29 +618,31 @@ class BattleEngineTest {
         assertEquals(listOf("Mindlord absorbed light!"), ev1.effects().filter { "absorbed" in it })
         assertFalse(ev1.filterIsInstance<Effect>().first { "absorbed" in it.text }.onPlayer)
         assertEquals(mainHp, main.hp)
-        assertEquals(setOf("solarbeam"), b.enemy.charged); assertTrue(b.player.charged.isEmpty())
+        assertEquals("solarbeam", b.enemy.charging); assertNull(b.player.charging)
         round(main, wild, b = b)
         assertTrue(main.hp < mainHp)
+        assertNull(b.enemy.charging)
     }
 
     @Test fun aSleepingUserCannotCharge() {
         val main = mon(19, 20, "solarbeam"); val wild = mon(150, 100, "splash")
         val b = battle(wild); b.player.status = "slp"
         for (s in 1..40) round(main, wild, acts = false, seed = s, b = b)
-        // whenever it woke up it charged (once), and never hit before that
-        assertTrue(b.player.charged.isEmpty() || b.player.charged == setOf("solarbeam"))
+        // whenever it woke up it charged, and a charge that could not go on (it slept) is lost: never a hit before it charged
+        assertTrue(b.player.charging == null || b.player.charging == "solarbeam")
         val asleep = battle(mon(150, 100, "splash")); asleep.player.status = "slp"
         val ev = BattleEngine.playRound(data, asleep, main, 1.0, false, object : Random() {
             override fun nextBits(bitCount: Int) = 0x7FFFFFFF shr (31 - bitCount) // never wakes
         })
         assertTrue(ev.effects().contains("Ratty is fast asleep."))
-        assertTrue(asleep.player.charged.isEmpty())
+        assertNull(asleep.player.charging)
     }
 
-    @Test fun chargeTablesMatchPokeEngine() {
+    @Test fun chargeTableIsTheFallbackForMovesWithoutFlags() {
         assertEquals(17, Tuning.CHARGE_MOVES.size)
-        assertTrue(Tuning.CHARGE_CLEARS_AFTER_USE.all { it in Tuning.CHARGE_MOVES })
-        assertEquals(6, Tuning.CHARGE_CLEARS_AFTER_USE.size)
+        assertTrue(CoreRules.isCharge(data.move("solarbeam")!!)) // a fixture without flags
+        assertTrue(CoreRules.isCharge(Move("x", "X", Type.NORMAL, Category.PHYSICAL, 50, 100, flags = setOf("charge"))))
+        assertFalse(CoreRules.isCharge(data.move("tackle")!!))
     }
 
     // ---------------------------------------------------------------- status rules (poke-engine) and Effect.status

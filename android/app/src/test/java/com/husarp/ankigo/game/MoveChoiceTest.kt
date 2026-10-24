@@ -28,7 +28,8 @@ class MoveChoiceTest {
         Move("agility", "Agility", Type.PSYCHIC, Category.STATUS, 0, null, target = "self", boosts = mapOf("spe" to 2)),
         Move("willowisp", "Will-O-Wisp", Type.FIRE, Category.STATUS, 0, 85, status = "brn"),
         Move("sleeppowder", "Sleep Powder", Type.GRASS, Category.STATUS, 0, 75, status = "slp"),
-        Move("raindance", "Rain Dance", Type.WATER, Category.STATUS, 0, null, target = "all"),
+        // R17C-7: Rain Dance does something now; this is a field move the engine does not model, for the "never useful" cases
+        Move("mockfield", "Mock Field", Type.WATER, Category.STATUS, 0, null, target = "all"),
         Move("bigmiss", "Big Miss", Type.NORMAL, Category.PHYSICAL, 120, 50),
         Move("scratch", "Scratch", Type.NORMAL, Category.PHYSICAL, 40, 100),
         Move("zap", "Zap", Type.ELECTRIC, Category.PHYSICAL, 40, 100),
@@ -289,7 +290,7 @@ class MoveChoiceTest {
     }
 
     @Test fun aMoveTheEngineDoesNotModelIsNeverUseful() {
-        assertUseless("Rain Dance", "raindance")
+        assertUseless("Mock Field", "mockfield")
         assertUseless("Splash", "splash")
         assertUseless("Mimic", "mimic")
     }
@@ -326,8 +327,8 @@ class MoveChoiceTest {
     @Test fun aWildOneWithNothingUsefulUsesARandomMoveOfAll() {
         for (c in smart) {
             // an immune attack and a status move that does nothing: both are "nothing left", so any of the two
-            val p = picks(c, mon(ELECTRIC, 30, "tackle", "raindance"), mon(GHOST, 30, "tackle"), isMain = false)
-            assertEquals("$c", setOf("tackle", "raindance"), p.keys)
+            val p = picks(c, mon(ELECTRIC, 30, "tackle", "mockfield"), mon(GHOST, 30, "tackle"), isMain = false)
+            assertEquals("$c", setOf("tackle", "mockfield"), p.keys)
             assertEquals("$c", 0.5, p.getValue("tackle") / 3000.0, 0.05)
             // a lone immune attack is used (nothing else is left)
             assertEquals(setOf("tackle"), picks(c, mon(ELECTRIC, 30, "tackle"), mon(GHOST, 30, "tackle"), isMain = false).keys)
@@ -339,7 +340,7 @@ class MoveChoiceTest {
 
     @Test fun aWildOneWithOnlyStatusMovesUsesTheUsefulOnes() {
         for (c in smart) {
-            val p = picks(c, mon(ELECTRIC, 30, "growl", "splash", "raindance"), mon(WATER, 30, "tackle"), isMain = false)
+            val p = picks(c, mon(ELECTRIC, 30, "growl", "splash", "mockfield"), mon(WATER, 30, "tackle"), isMain = false)
             assertEquals("$c", setOf("growl"), p.keys)
             // nothing useful at all (a Magikarp-like): random among its moves, as before
             assertEquals(setOf("splash"), picks(c, mon(ELECTRIC, 30, "splash"), mon(WATER, 30, "tackle"), isMain = false).keys)

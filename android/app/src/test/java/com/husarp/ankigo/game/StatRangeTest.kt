@@ -17,8 +17,10 @@ class StatRangeTest {
     }
 
     @Test fun smallBaseAndLowerLevel() {
-        // base 1, Lv 100: HP 110+2=112 .. 110+(2+31+63)=206 ; other floor(7*0.9)=6 .. floor((5+96)*1.1)=111
-        assertEquals(112..206, StatCalc.range(1, Stat.HP))
+        // base 2, Lv 100: HP 110+4=114 .. 110+(4+31+63)=208 ; other (base 1) floor(7*0.9)=6 .. floor((5+96)*1.1)=111
+        // R17C-FIX1: base 1 is Shedinja's HP (always 1, see R17CFixBShedinjaTest), so the small HP base here is 2
+        assertEquals(114..208, StatCalc.range(2, Stat.HP))
+        assertEquals(1..1, StatCalc.range(1, Stat.HP))
         assertEquals(6..111, StatCalc.range(1, Stat.DEF))
         // Lv 50, base 100: HP 10+50+100=160 .. 60+floor(294/2)=207
         assertEquals(160..207, StatCalc.range(100, Stat.HP, 50))

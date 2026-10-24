@@ -9,6 +9,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
+import com.husarp.ankigo.game.AbilityText
 import com.husarp.ankigo.game.EvoLine
 import com.husarp.ankigo.game.Evolution
 import com.husarp.ankigo.game.GameData
@@ -165,9 +166,11 @@ object MonDetail {
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, mon.shownName) })
         col.addView(DetailSections.section(a, mem, DetailSection.TRAINING, mon.nature.label) { DetailSections.training(a, mon, compact) })
         val others = DetailFormat.otherAbilities(sp, mon.ability)
+        // R17C-9a: under the ability, what it does in AnkiGo (an ability with no sentence yet shows none), then the others of its kind on their own line
+        val abilityLines = listOfNotNull(AbilityText.of(mon.ability), others?.let { "Others of its kind: $it" }).joinToString("\n").ifEmpty { null }
         col.addView(DetailSections.infoSection(a, mem, data, sp,
             listOf(mon.defeats.toString() to "Defeats"),
-            Triple("Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }, others?.let { "Others of its kind: $it" }),
+            Triple("Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }, abilityLines),
             if (mon.shownName != mon.name) mon.name else null, seen, compact,
             lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–"),
             onTap = if (page != null) { s -> DexDetail.show(page, s) } else null))

@@ -75,6 +75,8 @@ sealed class GameEvent {
     data class Effect(
         val onPlayer: Boolean, val text: String, val hp: Int, val maxHp: Int, val status: String? = null,
         val kind: EffectKind = EffectKind.OTHER, val stat: String? = null, val stages: Int = 0, val amount: Int = 0,
+        /** R17C-1: the short float text the emitter chose ("Confused", "Protected", "Rain", "Seeded"); null = none (the kind decides). */
+        val label: String? = null,
     ) : GameEvent()
 
     data class Fainted(val player: Boolean, val name: String) : GameEvent()
@@ -157,8 +159,12 @@ data class ActionResult(val ok: Boolean, val message: String, val events: List<G
  * [GameEvent.Effect.stages] really applied; STAT_LIMIT is "won't go higher/lower" (stages = the attempted sign).
  * STATUS_CURED carries the cured status key in `stat` ("slp" woke up, "frz" thawed). DRAIN/HEAL/RECOIL/STATUS_DAMAGE carry
  * the HP really gained / lost in [GameEvent.Effect.amount] (always positive). CHARGE = the charge turn of a two-turn move.
+ * R17C-1: VOLATILE = a lasting condition starts / ends on one side ([GameEvent.Effect.stat] = its key, [GameEvent.Effect.stages] = +1 start / -1 end);
+ * FIELD = weather, terrain, a room or a side condition starts / ends (stat = key, stages +1 / -1); RESIDUAL = HP lost to a lasting effect (amount);
+ * BLOCKED = a move was stopped by protection, an ability or an immunity (stat = key). VOLATILE / FIELD / BLOCKED carry the float text in
+ * [GameEvent.Effect.label]. CANT_MOVE's `stat` also takes "flinch" "attract" "recharge" "confusion" "truant" besides the status keys.
  */
-enum class EffectKind { OTHER, STATUS_APPLIED, STATUS_CURED, CANT_MOVE, STAT_CHANGE, STAT_LIMIT, DRAIN, RECOIL, HEAL, STATUS_DAMAGE, CHARGE }
+enum class EffectKind { OTHER, STATUS_APPLIED, STATUS_CURED, CANT_MOVE, STAT_CHANGE, STAT_LIMIT, DRAIN, RECOIL, HEAL, STATUS_DAMAGE, CHARGE, VOLATILE, FIELD, RESIDUAL, BLOCKED }
 
 /** Why a [GameEvent.Healed] happened: a level gained, a wild Pokémon defeated, or one caught (auto rule or ball). */
 enum class HealReason { LEVEL_UP, DEFEAT, CATCH }

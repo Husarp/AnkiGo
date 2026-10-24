@@ -33,7 +33,7 @@ object Parsers {
         val itemsCsv: String,      // PokeAPI items.csv (cost)
     )
 
-    private const val CACHE_FORMAT = 3 // 3: height, weight, hidden ability (R4-04); 2: regional forms (form, baseNum, spriteId on every species)
+    private const val CACHE_FORMAT = 4 // 4: R17C-1 move rule data (flags, conditions, extra secondaries ...); 3: height, weight, hidden ability (R4-04); 2: regional forms (form, baseNum, spriteId on every species)
     private const val MAX_NUM = 1025
     private val HALF_HP_MOVES = setOf("superfang", "naturesmadness", "ruination")
     private val SKIPPED_NONSTANDARD = setOf("CAP", "Future", "Gmax")
@@ -248,7 +248,8 @@ object Parsers {
         fun ev(kind: EvoKind, level: Int? = null, item: String? = null, move: String? = null, moveType: Type? = null, minFriendship: Int? = null) =
             Evolution(to, kind, level, item, move, moveType, time, gender, minFriendship, cond)
         return when (type) {
-            // A few useItem entries (Kleavor) carry the item name in evoCondition instead of evoItem.
+            // A useItem entry without evoItem would carry the item name in evoCondition (none does in the pinned data: Kleavor has evoItem "Black Augurite"
+            // and its condition is a note like "in Legends: Arceus"); kept as a fallback, an unknown name just ends as an item no shop sells.
             "useItem" -> (item ?: cond?.let { itemId(it) })?.let { ev(EvoKind.ITEM, item = it) } ?: ev(EvoKind.OTHER)
             "levelHold" -> item?.let { ev(EvoKind.ITEM, item = it) } ?: ev(EvoKind.OTHER)
             "trade" -> ev(EvoKind.TRADE, item = item)
@@ -295,6 +296,9 @@ object Parsers {
 
     private fun flag(m: JSONObject, key: String) = m.has(key) && m.opt(key) != false
 
+    /** The moves of a Showdown moves.json text alone (the same parsing as [build]; for tests and the real-data check). */
+    internal fun parseMoves(movesJson: String): Map<String, Move> = buildMoves(json("moves.json", movesJson))
+
     private fun buildMoves(o: JSONObject): Map<String, Move> {
         val out = LinkedHashMap<String, Move>()
         for (id in o.keys()) {
@@ -310,16 +314,21 @@ object Parsers {
             val ohko = m.has("ohko")
             val halfHp = id in HALF_HP_MOVES
             var power = m.optInt("basePower", 0)
+            // R17C: the flat 60 only marks "no listed power": MovePower (basePower hook) gives Low Kick, Return, Flail ... their real power in a fight,
+            // and the details hide the number for them (MoveText.showsPower)
             if (cat != Category.STATUS && power == 0 && dmg == null && !ohko && !halfHp) power = Tuning.UNKNOWN_POWER
-            val sec = (m.optJSONObject("secondary") ?: m.optJSONArray("secondaries")?.optJSONObject(0))?.let { s ->
-                Secondary(
-                    chance = s.optInt("chance", 100),
-                    status = s.optString("status", "").takeIf { it.isNotEmpty() },
-                    boosts = boostMap(s.optJSONObject("boosts")),
-                    selfBoosts = boostMap(s.optJSONObject("self")?.optJSONObject("boosts")),
-                    flinch = s.optString("volatileStatus", "") == "flinch",
-                )
-            }
+            // R17C-1: Showdown gives either `secondary` (one) or `secondaries` (several: Fire Fang = burn + flinch); the first stays `secondary`
+            // R17C FIX-A: an empty `secondary: {}` (Diamond Storm) is no secondary; a `self: {chance, boosts}` (Diamond Storm: 50 % Defense +2) is one
+            // (a secondary that only raises the user), not a sure self boost. Same cache shape (a secondary with selfBoosts): the format stays 4.
+            val selfObj = m.optJSONObject("self")
+            val selfChance = selfObj?.takeIf { it.has("chance") && it.has("boosts") }
+            // R17C FIX (manager): only Diamond Storm's empty one is dropped (its self chance takes its place); Stone Axe and Ceaseless Edge keep
+            // theirs, so Sheer Force still boosts them as in the games
+            val secs = ((m.optJSONObject("secondary")?.takeIf { it.length() > 0 || selfChance == null }?.let { listOf(it) }
+                ?: m.optJSONArray("secondaries")?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it) } }
+                ?: emptyList()).map { secondaryOf(it) }) +
+                listOfNotNull(selfChance?.let { Secondary(chance = it.optInt("chance", 100), selfBoosts = boostMap(it.optJSONObject("boosts"))) })
+            val sec = secs.firstOrNull()
             val hit = m.opt("multihit")
             val multi = when (hit) {
                 is Number -> hit.toInt()..hit.toInt()
@@ -332,7 +341,7 @@ object Parsers {
                 priority = m.optInt("priority", 0), critRatio = m.optInt("critRatio", 1),
                 target = m.optString("target", "normal"),
                 boosts = boostMap(m.optJSONObject("boosts")),
-                selfBoosts = boostMap(m.optJSONObject("self")?.optJSONObject("boosts")),
+                selfBoosts = if (selfChance != null) null else boostMap(selfObj?.optJSONObject("boosts")),
                 status = m.optString("status", "").takeIf { it.isNotEmpty() },
                 secondary = sec,
                 drain = pair(m.optJSONArray("drain")), recoil = pair(m.optJSONArray("recoil")), heal = pair(m.optJSONArray("heal")),
@@ -341,11 +350,49 @@ object Parsers {
                 levelDamage = dmg == "level",
                 halfHp = halfHp, ohko = ohko,
                 selfDestruct = m.has("selfdestruct"),
+                selfDestructIfHit = m.optString("selfdestruct", "") == "ifHit", // R17C FIX-A
                 willCrit = flag(m, "willCrit"),
+                flags = m.optJSONObject("flags")?.let { f -> f.keys().asSequence().filter { k -> flag(f, k) }.toSet() } ?: emptySet(),
+                volatileStatus = idOrNull(m.optString("volatileStatus", "")),
+                selfVolatile = idOrNull(m.optJSONObject("self")?.optString("volatileStatus", "") ?: ""),
+                sideCondition = idOrNull(m.optString("sideCondition", "")),
+                weather = idOrNull(m.optString("weather", "")),
+                terrain = idOrNull(m.optString("terrain", "")),
+                pseudoWeather = idOrNull(m.optString("pseudoWeather", "")),
+                slotCondition = idOrNull(m.optString("slotCondition", "")),
+                moreSecondaries = secs.drop(1),
+                crashDamage = flag(m, "hasCrashDamage"),
+                mindBlownRecoil = flag(m, "mindBlownRecoil"),
+                offensiveStat = idOrNull(m.optString("overrideOffensiveStat", "")),
+                offensiveFromTarget = m.optString("overrideOffensivePokemon", "") == "target",
+                defensiveStat = idOrNull(m.optString("overrideDefensiveStat", "")),
+                ignoreDefensive = flag(m, "ignoreDefensive"),
+                ignoreEvasion = flag(m, "ignoreEvasion"),
+                breaksProtect = flag(m, "breaksProtect"),
+                multiAccuracy = flag(m, "multiaccuracy"),
+                sleepUsable = flag(m, "sleepUsable"),
+                selfSwitch = flag(m, "selfSwitch"),
+                forceSwitch = flag(m, "forceSwitch"),
+                ignoreImmunity = flag(m, "ignoreImmunity"),
+                // the data has no mark for a code part: a secondary with a chance and nothing data-driven is one (Tri Attack, Direct Claw ...)
+                secondaryOnHit = secs.any { it.status == null && it.boosts == null && it.selfBoosts == null && it.volatileStatus == null },
             )
         }
         return out
     }
+
+    /** One Showdown secondary object. */
+    private fun secondaryOf(s: JSONObject) = Secondary(
+        chance = s.optInt("chance", 100),
+        status = s.optString("status", "").takeIf { it.isNotEmpty() },
+        boosts = boostMap(s.optJSONObject("boosts")),
+        selfBoosts = boostMap(s.optJSONObject("self")?.optJSONObject("boosts")),
+        flinch = s.optString("volatileStatus", "") == "flinch",
+        volatileStatus = s.optString("volatileStatus", "").takeIf { it.isNotEmpty() },
+    )
+
+    /** A Showdown condition name as an id ("RainDance" -> "raindance"); blank = none. */
+    private fun idOrNull(s: String): String? = moveId(s).takeIf { it.isNotEmpty() }
 
     private fun boostMap(o: JSONObject?): Map<String, Int>? =
         o?.takeIf { it.length() > 0 }?.let { b -> b.keys().asSequence().associateWith { b.getInt(it) } }
@@ -472,10 +519,14 @@ object Parsers {
     private fun pairJson(p: Pair<Int, Int>?): Any = p?.let { JSONArray(listOf(it.first, it.second)) } ?: nul()
     private fun pairOf(a: JSONArray, i: Int): Pair<Int, Int>? = if (a.isNull(i)) null else a.getJSONArray(i).let { it.getInt(0) to it.getInt(1) }
 
+    private fun secondaryJson(s: Secondary): JSONArray =
+        JSONArray(listOf(s.chance, s.status ?: nul(), boostsJson(s.boosts), boostsJson(s.selfBoosts), if (s.flinch) 1 else 0, s.volatileStatus ?: nul()))
+
+    private fun secondaryFromArray(a: JSONArray): Secondary =
+        Secondary(a.getInt(0), optS(a, 1), boostsOf(a.opt(2)), boostsOf(a.opt(3)), a.getInt(4) == 1, if (a.length() > 5) optS(a, 5) else null)
+
     private fun encodeMove(m: Move): JSONArray {
-        val sec: Any = m.secondary?.let {
-            JSONArray(listOf(it.chance, it.status ?: nul(), boostsJson(it.boosts), boostsJson(it.selfBoosts), if (it.flinch) 1 else 0))
-        } ?: nul()
+        val sec: Any = m.secondary?.let { secondaryJson(it) } ?: nul()
         val flags = (if (m.levelDamage) 1 else 0) or (if (m.halfHp) 2 else 0) or (if (m.ohko) 4 else 0) or
             (if (m.selfDestruct) 8 else 0) or (if (m.willCrit) 16 else 0)
         return JSONArray(listOf(
@@ -483,14 +534,45 @@ object Parsers {
             boostsJson(m.boosts), boostsJson(m.selfBoosts), m.status ?: nul(), sec,
             pairJson(m.drain), pairJson(m.recoil), pairJson(m.heal),
             m.multihit?.let { JSONArray(listOf(it.first, it.last)) } ?: nul(), m.fixedDamage ?: nul(), flags,
+            encodeMoveRules(m), // 19 (format 4)
         ))
+    }
+
+    /** R17C-1: index 19 of a move: an object with ONLY the rule fields that are not at their default (short keys). */
+    private fun encodeMoveRules(m: Move): JSONObject {
+        val o = JSONObject()
+        if (m.flags.isNotEmpty()) o.put("fl", JSONArray(m.flags.sorted()))
+        m.volatileStatus?.let { o.put("vs", it) }
+        m.selfVolatile?.let { o.put("sv", it) }
+        m.sideCondition?.let { o.put("sc", it) }
+        m.weather?.let { o.put("we", it) }
+        m.terrain?.let { o.put("te", it) }
+        m.pseudoWeather?.let { o.put("pw", it) }
+        m.slotCondition?.let { o.put("sl", it) }
+        if (m.moreSecondaries.isNotEmpty()) o.put("ms", JSONArray(m.moreSecondaries.map { secondaryJson(it) }))
+        if (m.crashDamage) o.put("cd", 1)
+        if (m.mindBlownRecoil) o.put("mb", 1)
+        m.offensiveStat?.let { o.put("os", it) }
+        if (m.offensiveFromTarget) o.put("ot", 1)
+        m.defensiveStat?.let { o.put("ds", it) }
+        if (m.ignoreDefensive) o.put("id", 1)
+        if (m.ignoreEvasion) o.put("ie", 1)
+        if (m.breaksProtect) o.put("bp", 1)
+        if (m.multiAccuracy) o.put("ma", 1)
+        if (m.sleepUsable) o.put("su", 1)
+        if (m.selfSwitch) o.put("ss", 1)
+        if (m.forceSwitch) o.put("fs", 1)
+        if (m.ignoreImmunity) o.put("ii", 1)
+        if (m.secondaryOnHit) o.put("so", 1)
+        if (m.selfDestructIfHit) o.put("sh", 1) // R17C FIX-A (additive: a cache without it reads false; the format stays 4)
+        return o
     }
 
     private fun decodeMove(a: JSONArray): Move {
         val flags = a.getInt(18)
-        val sec = if (a.isNull(12)) null else a.getJSONArray(12).let { s ->
-            Secondary(s.getInt(0), optS(s, 1), boostsOf(s.opt(2)), boostsOf(s.opt(3)), s.getInt(4) == 1)
-        }
+        val sec = if (a.isNull(12)) null else secondaryFromArray(a.getJSONArray(12))
+        val r = a.getJSONObject(19) // format 4 always writes it (an empty object for a move with no rule data)
+        val ms = r.optJSONArray("ms")
         return Move(
             id = a.getString(0), name = a.getString(1),
             type = Type.parse(a.getString(2)) ?: fail("Cache: unknown type ${a.getString(2)}"),
@@ -502,6 +584,22 @@ object Parsers {
             fixedDamage = optI(a, 17),
             levelDamage = flags and 1 != 0, halfHp = flags and 2 != 0, ohko = flags and 4 != 0,
             selfDestruct = flags and 8 != 0, willCrit = flags and 16 != 0,
+            flags = r.optJSONArray("fl")?.let { strs(it).toSet() } ?: emptySet(),
+            volatileStatus = r.optString("vs", "").takeIf { it.isNotEmpty() },
+            selfVolatile = r.optString("sv", "").takeIf { it.isNotEmpty() },
+            sideCondition = r.optString("sc", "").takeIf { it.isNotEmpty() },
+            weather = r.optString("we", "").takeIf { it.isNotEmpty() },
+            terrain = r.optString("te", "").takeIf { it.isNotEmpty() },
+            pseudoWeather = r.optString("pw", "").takeIf { it.isNotEmpty() },
+            slotCondition = r.optString("sl", "").takeIf { it.isNotEmpty() },
+            moreSecondaries = if (ms == null) emptyList() else (0 until ms.length()).map { secondaryFromArray(ms.getJSONArray(it)) },
+            crashDamage = r.has("cd"), mindBlownRecoil = r.has("mb"),
+            offensiveStat = r.optString("os", "").takeIf { it.isNotEmpty() },
+            offensiveFromTarget = r.has("ot"),
+            defensiveStat = r.optString("ds", "").takeIf { it.isNotEmpty() },
+            ignoreDefensive = r.has("id"), ignoreEvasion = r.has("ie"), breaksProtect = r.has("bp"),
+            multiAccuracy = r.has("ma"), sleepUsable = r.has("su"), selfSwitch = r.has("ss"), forceSwitch = r.has("fs"),
+            ignoreImmunity = r.has("ii"), secondaryOnHit = r.has("so"), selfDestructIfHit = r.has("sh"),
         )
     }
 

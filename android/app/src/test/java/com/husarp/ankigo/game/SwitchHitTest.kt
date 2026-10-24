@@ -506,7 +506,7 @@ class SwitchHitTest {
             val g = game(seed = seed, choice = c, wildMoves = listOf("fly", "tackle"))
             val e = g.cycleMain(cardShowing = false).events
             assertEquals("$c $seed", "Tackle", e.of<GameEvent.Attack>().single().move)
-            assertTrue(g.state.battle!!.enemy.charged.isEmpty())
+            assertNull(g.state.battle!!.enemy.charging)
         }
     }
 
@@ -516,19 +516,19 @@ class SwitchHitTest {
         val r = g.cycleMain(cardShowing = false)
         assertTrue(r.events.any { it is GameEvent.Effect && it.kind == EffectKind.CHARGE })
         assertEquals(before, g.state.main!!.hp)
-        assertEquals(setOf("fly"), g.state.battle!!.enemy.charged) // as in a round: it hits the next time
+        assertEquals("fly", g.state.battle!!.enemy.charging) // as in a round: its next action is the hit
         assertEquals("${g.state.main!!.name} is your main now — the wild Ratty was charging up.", r.message)
     }
 
-    @Test fun aChargeMoveThatIsAlreadyChargedHitsLikeAnyOther() {
-        var flew = false
-        for (seed in 1..60) {
+    @Test fun aWildOneThatIsChargingReleasesTheChargeInTheFreeHit() {
+        // R17C-3: its very next action is the hit, whatever it would have picked
+        for (seed in 1..30) {
             val g = game(seed = seed, wildMoves = listOf("fly", "tackle"))
-            g.state.battle!!.enemy.charged += "fly"
+            g.state.battle!!.enemy.charging = "fly"
             val a = g.cycleMain(cardShowing = false).events.of<GameEvent.Attack>().single()
-            if (a.move == "Fly") { flew = true; assertTrue(a.damage > 0) }
+            assertEquals("Fly", a.move); assertTrue(a.damage > 0)
+            assertNull(g.state.battle!!.enemy.charging)
         }
-        assertTrue(flew)
     }
 
     // ---------------------------------------------------------------- stats, achievements, save

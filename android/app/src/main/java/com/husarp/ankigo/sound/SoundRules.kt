@@ -97,8 +97,9 @@ object SoundRules {
         }
         EffectKind.STATUS_DAMAGE -> when (e.status) { "brn" -> fx(SoundId.BURN_TICK); "psn", "tox" -> fx(SoundId.POISON_TICK); else -> null }
         EffectKind.CHARGE -> fx(SoundId.CHARGE)
+        EffectKind.RESIDUAL -> fx(SoundId.BURN_TICK) // R17C-1: HP lost to a lasting effect ticks like a burn
         EffectKind.OTHER, EffectKind.STATUS_CURED, EffectKind.CANT_MOVE, EffectKind.STAT_LIMIT,
-        EffectKind.DRAIN, EffectKind.RECOIL, EffectKind.HEAL -> null
+        EffectKind.DRAIN, EffectKind.RECOIL, EffectKind.HEAL, EffectKind.VOLATILE, EffectKind.FIELD, EffectKind.BLOCKED -> null
     }
 
     /** The settings group that switches [cue]. */

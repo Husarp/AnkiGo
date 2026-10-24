@@ -186,7 +186,7 @@ object AnkimonExport {
 
     private fun statMap(s: Stats): Map<String, Int> = STAT_KEYS.zip(s.toList()).toMap(LinkedHashMap())
 
-    /** Ankimon's level-scaled stats (pokemon_obj.py calc_stat): the same formulas as the game's. */
+    /** Ankimon's level-scaled stats (pokemon_obj.py calc_stat): the same formulas as the game's (R17C-FIX1: a base HP of 1, Shedinja, is 1 HP, the game's mainline rule). */
     private fun statsOf(base: Stats, iv: Stats, ev: Stats, level: Int, nature: Nature) = Stats(
         StatCalc.hp(base.hp, iv.hp, ev.hp, level),
         StatCalc.other(base.atk, iv.atk, ev.atk, level, nature.mult(Stat.ATK)),

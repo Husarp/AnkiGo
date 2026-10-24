@@ -2,6 +2,7 @@ package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stats
+import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.TypeMatchups
 import java.util.Locale
 
@@ -39,7 +40,9 @@ object DetailFormat {
     fun weight(kg: Double?): String? = kg?.takeIf { it > 0 }?.let { String.format(Locale.US, "%.1f kg", it) }
 
     const val IV_MAX_TOTAL = 6 * 31
-    const val FRIENDSHIP_MAX = 255
+
+    /** "255 / 255": friendship as the details show it (an older save's number above the cap shows as the cap). */
+    fun friendship(value: Int): String = "${value.coerceIn(0, Tuning.FRIENDSHIP_MAX)} / ${Tuning.FRIENDSHIP_MAX}"
 
     /** "142 / 186" */
     fun ivTotal(ivs: Stats): String = "${ivs.total} / $IV_MAX_TOTAL"

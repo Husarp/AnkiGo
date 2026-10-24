@@ -89,13 +89,13 @@ class HelpContentTest {
 
     // ---- Game guide
 
-    @Test fun guideCoversTheEightTopicsWithUniqueIds() {
+    @Test fun guideCoversTheNineTopicsWithUniqueIds() {
         val ids = GameGuide.chapters().map { it.id }
         assertEquals(
-            listOf(GameGuide.BATTLES, GameGuide.LEVELS, GameGuide.TYPES, GameGuide.STATS, GameGuide.CATCHING, GameGuide.MONEY, GameGuide.HEALING, GameGuide.ITEMS),
+            listOf(GameGuide.BATTLES, GameGuide.MOVES, GameGuide.LEVELS, GameGuide.TYPES, GameGuide.STATS, GameGuide.CATCHING, GameGuide.MONEY, GameGuide.HEALING, GameGuide.ITEMS),
             ids,
         )
-        assertEquals(8, ids.toSet().size)
+        assertEquals(9, ids.toSet().size)   // R17C-10: Moves and effects joined the eight
         for (c in GameGuide.chapters()) {
             assertTrue(c.title.isNotBlank() && c.intro.isNotBlank())
             assertTrue(c.points.isNotEmpty() && c.points.all { it.isNotBlank() })

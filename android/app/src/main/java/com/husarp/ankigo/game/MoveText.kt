@@ -2,8 +2,10 @@ package com.husarp.ankigo.game
 
 /**
  * R9-B6: what a move does in AnkiGo's battle, in plain words. Built only from the fields the battle engine really uses (Showdown's
- * own texts are not in the data we download): no crits (they are off), no flinch, no "secondary" on status moves, and so on.
+ * own texts are not in the data we download): no crits (they are off), no "secondary" on status moves, and so on.
  * Pure (no android.*). Every move gets at least one sentence, each ending in a full stop.
+ * R17C-10 order of the sentences: what the move does (damage rule, hits, stats, drain / recoil, secondaries), then the charge sentence and
+ * what the rule sets add (so "Charges ..., then hits ..." comes before "In harsh sunlight it hits at once"), then priority, then accuracy.
  */
 object MoveText {
     /** The engine's own "this move targets the user" list (BattleEngine.SELF_TARGETS). */
@@ -23,11 +25,13 @@ object MoveText {
 
     /** True when a "power" number means something: a damaging move with power and no fixed / level / half-HP / one-hit-KO rule. */
     fun showsPower(m: Move): Boolean =
-        m.damaging && m.power > 0 && !m.levelDamage && m.fixedDamage == null && !m.halfHp && !m.ohko
+        m.damaging && m.power > 0 && !m.levelDamage && m.fixedDamage == null && !m.halfHp && !m.ohko && m.id !in MovePower.VARIABLE_POWER
 
     fun describe(m: Move): String {
+        CoreRules.neverPickedText(m.id)?.let { return it } // R17C-3: a move that means nothing in a 1-vs-1 wild fight says why (it is never picked)
         val lines = ArrayList<String>()   // what the move does
         val extras = ArrayList<String>()  // when it goes, whether it can miss, charging
+        val ruleLines = BattleRules.ALL.flatMap { it.describe(m) } // R17C-1: what the rule sets add, after the engine's own lines
 
         if (m.damaging) {
             val rule = when {
@@ -41,11 +45,18 @@ object MoveText {
             m.multihit?.let { r ->
                 lines += if (r.first == r.last) "Hits ${r.first} times." else "Hits ${r.first}–${r.last} times."
             }
+            // R17C-1: which stats the damage formula uses
+            if (m.defensiveStat == "def") lines += "Hits the target's Defense instead of its Sp. Def."
+            if (m.offensiveStat == "def") lines += "Uses your Defense instead of your Attack."
+            if (m.offensiveFromTarget) lines += "Uses the target's Attack instead of yours."
+            if (m.ignoreDefensive || m.ignoreEvasion) lines += "Ignores the target's stat changes."
             m.drain?.let { (a, b) -> lines += "Heals you by ${part(a, b)} the damage dealt." }
             m.recoil?.let { (a, b) -> lines += "You take ${part(a, b)} the damage dealt as recoil." }
-            if (m.selfDestruct) lines += "You faint after using it."
+            if (m.selfDestruct) lines += if (m.selfDestructIfHit) "You faint after using it if it hits." else "You faint after using it." // R17C FIX-A: Final Gambit needs a hit
             m.selfBoosts?.let { lines += boostSentences(it, "your", "Raises", "Lowers") }
-            m.secondary?.let { lines += secondary(it) }
+            for (sec in m.allSecondaries) lines += secondary(sec) // R17C-3: a second secondary (the fangs) is rolled too
+            chargeSentence(m)?.let { lines += it }
+            lines += ruleLines
         } else {
             val self = m.target in SELF_TARGETS
             val who = if (self) "you" else "the target"
@@ -55,23 +66,29 @@ object MoveText {
             m.selfBoosts?.let { lines += boostSentences(it, "your", "Raises", "Lowers") }
             m.heal?.let { (a, b) -> lines += "Heals you by ${part(a, b)} your max HP." }
             if (m.id in Tuning.POWDER_MOVES) lines += "Fails against Grass types."
+            chargeSentence(m)?.let { lines += it }
+            lines += ruleLines
             // the engine does nothing else with a status move: "But nothing happened."
             if (lines.isEmpty()) return "Has no effect in AnkiGo battles."
         }
 
         if (m.priority > 0) extras += "Usually goes first."
         else if (m.priority < 0) extras += "Usually goes last."
-        if (m.id in Tuning.CHARGE_MOVES) {
-            val then = if (m.damaging) "hits" else "takes effect"
-            extras += if (m.id in Tuning.CHARGE_CLEARS_AFTER_USE) "Charges first, then $then on the next use."
-            else "Charges the first time you use it in a fight, then $then every time."
-        }
-        // a status move aimed at the user can't miss anyway; a one-hit KO ignores its accuracy (the engine uses a level rule)
-        if (m.accuracy == null && !m.ohko && (m.damaging || m.target !in SELF_TARGETS)) extras += "Never misses."
+        // a one-hit KO ignores its accuracy (the engine uses a level rule). R17C-10: a status move says "Never misses." only when it changes the
+        // target's status or stats (a field move, a swap or a copy aims at no Pokémon's luck: the sentence would only confuse)
+        if (m.accuracy == null && !m.ohko && (m.damaging || (m.target !in SELF_TARGETS && (m.status != null || m.boosts != null)))) extras += "Never misses."
 
         // a damaging move with nothing else to say about it (when priority / never-misses / charging follow, that is enough)
         if (m.damaging && lines.isEmpty() && extras.isEmpty()) lines += "Deals damage with no extra effect."
         return (lines + extras).joinToString(" ")
+    }
+
+    /** R17C-3 (PLAN 267): the charge turn, then the user's very next move is the hit (or the effect) by itself; null for a move that doesn't charge. */
+    private fun chargeSentence(m: Move): String? {
+        if (!CoreRules.isCharge(m)) return null
+        val rise = Tuning.CHARGE_TURN_RISE[m.id]?.let { boostSentences(it, "your", "raises", "lowers").firstOrNull() }?.removeSuffix(".")
+        val then = if (m.damaging) "hits" else "takes effect"
+        return "Charges on the first turn" + (rise?.let { " and $it" } ?: "") + ", then $then with your next move."
     }
 
     /** "half", "a third of", "a quarter of", "three quarters of" (fraction reduced); anything else "33 % of". Read it before "the damage". */

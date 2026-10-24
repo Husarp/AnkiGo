@@ -369,7 +369,7 @@ object DetailSections {
         col.addView(fact(a, "EVs", StatInfo.EV, "$evTotal / ${Tuning.EV_TOTAL_CAP}",
             if (evTotal == 0) "none yet" else DetailFormat.perStat(mon.evs, long = true, skipZero = true), compact))
         col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
-        col.addView(fact(a, "Friendship", null, "${mon.friendship} / ${DetailFormat.FRIENDSHIP_MAX}", null, compact))
+        col.addView(fact(a, "Friendship", StatInfo.FRIENDSHIP, DetailFormat.friendship(mon.friendship), null, compact))
         col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
         val held = mon.heldItem
         col.addView(LinearLayout(a).apply {

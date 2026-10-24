@@ -138,7 +138,7 @@ object SetupText {
 /** Short names, and the made-up demo values the guide pictures show. */
 object GuideDemo {
     private val SHORT = mapOf(
-        GameGuide.BATTLES to "Battles & XP", GameGuide.LEVELS to "Levels & evolving", GameGuide.TYPES to "Types",
+        GameGuide.BATTLES to "Battles & XP", GameGuide.MOVES to "Moves", GameGuide.LEVELS to "Levels & evolving", GameGuide.TYPES to "Types",
         GameGuide.STATS to "Stats & natures", GameGuide.CATCHING to "Catching", GameGuide.MONEY to "Money",
         GameGuide.HEALING to "Healing", GameGuide.ITEMS to "Items",
     )

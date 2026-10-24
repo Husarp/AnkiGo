@@ -5,6 +5,7 @@ import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Evolution
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.MoveText
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
@@ -229,7 +230,7 @@ object CompareTable {
                 if (m == null) Cell.Text(DASH) else Cell.Moves(m.moves.map { id ->
                     val mv = data.move(id)
                     if (mv == null) MoveCell(id, null, DASH, id)
-                    else MoveCell(mv.name, mv.type, if (mv.damaging && mv.power > 0) mv.power.toString() else DASH, id)
+                    else MoveCell(mv.name, mv.type, if (MoveText.showsPower(mv)) mv.power.toString() else DASH, id) // R17C-FIX12: a variable-power move shows a dash, not the parser's 60
                 })
             }, section = "Moves")
         }

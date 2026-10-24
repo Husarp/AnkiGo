@@ -121,6 +121,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         battle.tally = 0
         battle.answers = 0
         battle.buttons.clear()
+        battle.team = state.team.mapNotNull { state.mon(it) } // R17C-4: Beat Up hits once for each team member with HP
         events += BattleEngine.playRound(data, battle, main, plan.multiplier, plan.enemyActs, rng, plan.enemyPower, plan.mainActs, state.settings.moveChoice)
         settleFight(battle, main, events)
         return events
@@ -338,7 +339,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val main = state.main
         if (main != null && main.uid != oldMain) {
             val battle = state.battle
-            battle?.player = BattleSide()
+            battle?.switchOutMain(data, oldMon) // R17C-1: the rule sets' onLeave, then a fresh side for the new main
             events += GameEvent.MainChanged(main.uid, main.name)
             refreshNext() // the wild level follows the main's level
             if (battle != null && oldMon != null && switchCostsAHit(battle, oldMon, main)) {

@@ -52,7 +52,7 @@ enum class Nature(val plus: Stat?, val minus: Stat?) {
 /** How a species evolves into [to]. Built from Showdown's evoType/evoLevel/evoItem/evoMove/evoCondition + PokeAPI min happiness. */
 enum class EvoKind {
     LEVEL,       // reach [Evolution.level] (optionally [time]/[gender]/[condition])
-    FRIENDSHIP,  // friendship >= minFriendship after a defeat (optionally [time], [moveType] for Sylveon)
+    FRIENDSHIP,  // friendship >= minFriendship, checked after every win: a defeat or a catch (optionally [time], [moveType] for Sylveon)
     ITEM,        // use [item] from the bag (stones, apples, pots; also Showdown "levelHold" items like Oval Stone)
     TRADE,       // Ankimon turns trades into item use: [item] if the trade needs a held item, else Linking Cord
     LEVEL_MOVE,  // level up while knowing [move]
@@ -112,6 +112,8 @@ data class Secondary(
     val boosts: Map<String, Int>? = null,     // to the target
     val selfBoosts: Map<String, Int>? = null, // to the user
     val flinch: Boolean = false,
+    /** R17C-1: Showdown `volatileStatus` of this secondary ("flinch", "confusion" ...). [flinch] stays true exactly when this is "flinch". */
+    val volatileStatus: String? = null,
 )
 
 /** A move from Showdown's moves.json. Boost keys use Showdown names: atk def spa spd spe accuracy evasion. */
@@ -120,7 +122,7 @@ data class Move(
     val name: String,
     val type: Type,
     val category: Category,
-    val power: Int,                  // basePower; damaging moves with basePower 0 and no special rule get Tuning.UNKNOWN_POWER
+    val power: Int,                  // basePower; a damaging move with basePower 0 and no fixed / level / half-HP / one-hit-KO rule gets Tuning.UNKNOWN_POWER (60) from the parser, and a rule set may replace it (MovePower.basePower: Low Kick, Return ...)
     val accuracy: Int?,              // null = never misses (Showdown accuracy: true)
     val priority: Int = 0,
     val critRatio: Int = 1,
@@ -139,8 +141,42 @@ data class Move(
     val ohko: Boolean = false,
     val selfDestruct: Boolean = false,
     val willCrit: Boolean = false,
+    // ---- R17C-1: the rest of Showdown's move data, for the rule sets (BattleRules). Every id below is a Showdown toID (lower case, letters and digits). ----
+    /** Every Showdown `flags` key with a truthy value: contact, sound, punch, bite, pulse, slicing, bullet, powder, wind, protect, heal, charge, recharge, dance ... */
+    val flags: Set<String> = emptySet(),
+    /** Showdown top-level `volatileStatus` (the condition the move puts on its target: confusion, taunt, partiallytrapped, protect ...). */
+    val volatileStatus: String? = null,
+    /** Showdown `self.volatileStatus` (what the move puts on its user: mustrecharge, lockedmove, uproar, rage, roost, glaiverush). */
+    val selfVolatile: String? = null,
+    val sideCondition: String? = null,   // reflect, tailwind, spikes ...
+    val weather: String? = null,         // raindance, sunnyday, sandstorm, hail, snowscape
+    val terrain: String? = null,         // electricterrain, grassyterrain, mistyterrain, psychicterrain
+    val pseudoWeather: String? = null,   // trickroom, gravity, wonderroom, mudsport ...
+    val slotCondition: String? = null,   // wish, healingwish, lunardance, revivalblessing
+    /** Showdown `secondaries[1..]`: [secondary] stays the first one; see [allSecondaries]. */
+    val moreSecondaries: List<Secondary> = emptyList(),
+    val crashDamage: Boolean = false,       // hasCrashDamage: High Jump Kick, Jump Kick ... (hurts the user when it misses)
+    val mindBlownRecoil: Boolean = false,   // Mind Blown, Steel Beam: the user loses half its max HP
+    val offensiveStat: String? = null,      // overrideOffensiveStat ("def": Body Press)
+    val offensiveFromTarget: Boolean = false, // overrideOffensivePokemon == "target" (Foul Play)
+    val defensiveStat: String? = null,      // overrideDefensiveStat ("def": Psyshock, Psystrike, Secret Sword)
+    val ignoreDefensive: Boolean = false,   // Sacred Sword, Darkest Lariat: the target's defense stage is ignored
+    val ignoreEvasion: Boolean = false,     // the target's evasion stage is ignored in the hit chance
+    val breaksProtect: Boolean = false,
+    val multiAccuracy: Boolean = false,     // Triple Axel: accuracy is rolled for every hit
+    val sleepUsable: Boolean = false,       // Sleep Talk, Snore: usable while asleep
+    val selfSwitch: Boolean = false,        // U-turn, Volt Switch ...
+    val forceSwitch: Boolean = false,       // Dragon Tail, Roar ...
+    val ignoreImmunity: Boolean = false,    // true or an object in Showdown
+    /** A secondary with a code-only part (Tri Attack's random status, Direct Claw ...): its `chance` is data, what it does is in the game's code. */
+    val secondaryOnHit: Boolean = false,
+    /** R17C FIX-A: Showdown `selfdestruct: "ifHit"` (Final Gambit): [selfDestruct] is also true, but the user only faints when the move hit (not against an immune target). `"always"` (Explosion) = false. */
+    val selfDestructIfHit: Boolean = false,
 ) {
     val damaging get() = category != Category.STATUS
+
+    /** [secondary] first, then [moreSecondaries]: the engine rolls each of them. */
+    val allSecondaries: List<Secondary> get() = if (secondary == null) moreSecondaries else listOf(secondary) + moreSecondaries
 }
 
 class GameData(
@@ -216,12 +252,47 @@ class UnsupportedMon(
 /** The name to show for an owned Pokémon: its nickname when it has one, else the species name. */
 val Mon.shownName: String get() = nickname?.takeIf { it.isNotBlank() } ?: name
 
-/** Per-battle state of one side (resets for every new wild Pokémon and when someone faints). */
+/**
+ * Per-battle state of one side: ONE Pokémon's fight state. It resets for every new wild Pokémon and is replaced by a fresh one when the
+ * Main is switched (Game.changed). What must survive a switch lives in [BattleField] (Reflect, Tailwind, Wish ...).
+ * R17C-1: the extra state for the rule sets ([BattleRules]); every new field has a default and an old save loads without it.
+ */
 class BattleSide(
     val boosts: IntArray = IntArray(7), // atk def spa spd spe accuracy evasion, each -6..+6
     var status: String? = null,         // "par" "brn" "psn" "tox" "slp" "frz"
     var statusTurns: Int = 0,           // sleep turns left / toxic counter
-    val charged: MutableSet<String> = mutableSetOf(), // charge moves (ids) already charged in this fight
+    /** Lasting conditions of this Pokémon: key -> turns left / a counter / an HP value ("confusion" -> 3, "substitute" -> 25). The rule that owns the key says what the number means. */
+    val volatiles: MutableMap<String, Int> = mutableMapOf(),
+    /** Text values of the rules (a move id, a species, types ...): key -> text. */
+    val notes: MutableMap<String, String> = mutableMapOf(),
+    /** The move id being charged (a two-turn move between its two turns): the user's next action is that move's hit (R17C-3, CoreRules). */
+    var charging: String? = null,
+    /** The move id this Pokémon used last in this fight (null = none yet). */
+    var lastMove: String? = null,
+    /** The last move failed or missed. */
+    var lastMoveFailed: Boolean = false,
+    /** Actions it made since it entered: counted at the END of each action, so a hook sees the number of EARLIER actions (0 = this is its first). */
+    var actions: Int = 0,
+    /** Its "enters the fight" hooks ran ([BattleRules.onEnter]). */
+    var entered: Boolean = false,
+    /** Damaging hits it took since it entered. */
+    var timesHit: Int = 0,
+)
+
+/**
+ * R17C-1: field-wide effects of a fight, saved with the [Battle]. [weather] keys: "rain" "sun" "sand" "hail" "snow"; [terrain]: "electric"
+ * "grassy" "misty" "psychic"; [rooms] (key -> turns left): "trickroom", "gravity", "wonderroom" ...; [player] / [enemy] = the conditions of
+ * each SIDE that survive a switch (Reflect, Light Screen, Tailwind, Wish ... : key -> turns left). Turns count down at the end of a round.
+ * Who sets and reads which key is the rule sets' business (FieldRules, SideMoves); the engine only saves them.
+ */
+class BattleField(
+    var weather: String? = null,
+    var weatherTurns: Int = 0,
+    var terrain: String? = null,
+    var terrainTurns: Int = 0,
+    val rooms: MutableMap<String, Int> = mutableMapOf(),
+    val player: MutableMap<String, Int> = mutableMapOf(),
+    val enemy: MutableMap<String, Int> = mutableMapOf(),
 )
 
 enum class Outcome { CATCH, DEFEAT }
@@ -239,7 +310,11 @@ class Battle(
     var wildMaxHp: Int? = null,     // encounter-only pace override; never carried into a caught Pokémon
     var failedThrows: Int = 0,      // ball throws that missed in this fight (R4 fix B8): the catch card says "Throw N" from it, whichever screen watched the fight
     var buttons: MutableList<Int> = ArrayList(), // R10-B22: the buttons (1 Again .. 4 Easy) of this round's answers so far; who attacks depends on them (see RoundRule)
+    val field: BattleField = BattleField(),      // R17C-1: weather, terrain, rooms, side conditions (an old save has none)
 ) {
+    /** R17C-4: the Main's team (Pokémon with a uid), for Beat Up (one hit per member with HP). [Game] fills it before each round; never saved, empty = just the Main. */
+    var team: List<Mon> = emptyList()
+
     fun maxWildHp(data: GameData): Int = wildMaxHp?.coerceAtLeast(1) ?: StatCalc.maxHp(data, wild)
 }
 

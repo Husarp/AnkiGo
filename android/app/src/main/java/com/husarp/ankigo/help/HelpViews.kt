@@ -369,7 +369,7 @@ internal object HelpViews {
     // ---------- game guide ----------
 
     @DrawableRes fun chapterIcon(id: String): Int = when (id) {
-        GameGuide.BATTLES -> R.drawable.ic_swords
+        GameGuide.BATTLES, GameGuide.MOVES -> R.drawable.ic_swords   // R17C-10: the Moves chapter shares the battle icon
         GameGuide.LEVELS -> R.drawable.ic_up
         GameGuide.TYPES -> R.drawable.ic_flame
         GameGuide.STATS -> R.drawable.ic_stats

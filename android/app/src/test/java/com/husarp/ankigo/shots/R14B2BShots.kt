@@ -41,7 +41,7 @@ internal object ShopCardKit {
         val species = base.species.mapValues { (num, sp) -> if (num in learners) sp.copy(tmMoves = sp.tmMoves + "thunderbolt") else sp }
         val prices = base.itemPrices + mapOf(
             "poke-ball" to 200, "great-ball" to 600, "ultra-ball" to 800, "tart-apple" to 2200, "sweet-apple" to 2200, "cracked-pot" to 1600,
-            "chipped-pot" to 38000, "linking-cord" to 8000, "amulet-coin" to 10000, "lucky-egg" to 10000, "poke-doll" to 300, "helix-fossil" to 7000,
+            "dragon-scale" to 38000, "linking-cord" to 8000, "amulet-coin" to 10000, "lucky-egg" to 10000, "poke-doll" to 300, "helix-fossil" to 7000,
             "fire-stone" to 3000, "everstone" to 3000, "super-potion" to 700, "potion" to 200,
         )
         return GameData(species, base.moves, base.growth, prices)
@@ -108,7 +108,7 @@ internal object ShopCardKit {
         val stage = Stage(ctx, p, pageScreen(ctx, p))
         st.day = day
         st.shopDay = day
-        st.shopItems.clear(); st.shopItems += listOf("great-ball", "tart-apple", "cracked-pot", "linking-cord", "amulet-coin", "chipped-pot")
+        st.shopItems.clear(); st.shopItems += listOf("great-ball", "tart-apple", "cracked-pot", "linking-cord", "amulet-coin", "dragon-scale")
         st.shopTms.clear(); st.shopTms += listOf("thunderbolt", "watergun", "earthquake")
         st.cash = cash
         setup()

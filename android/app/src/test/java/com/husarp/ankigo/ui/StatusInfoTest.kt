@@ -25,4 +25,12 @@ class StatusInfoTest {
         assertTrue(StatusInfo.of("brn")!!.line.contains("1/16")); assertTrue(StatusInfo.of("psn")!!.line.contains("1/8"))
         assertTrue(StatusInfo.of("tox")!!.line.contains("15/16"))
     }
+
+    /** R17C-10: Rest's fixed sleep, Uproar, the thaw rule and Magic Guard are in the badge texts. */
+    @Test fun textsFollowTheNewRules() {
+        assertTrue(StatusInfo.of("slp")!!.line.contains("After Rest it sleeps through exactly ${com.husarp.ankigo.game.SideMoves.REST_SLEEP} tries"))
+        assertTrue(StatusInfo.of("slp")!!.line.contains("Uproar"))
+        assertTrue(StatusInfo.of("frz")!!.line.contains("each time it tries"))
+        for (id in listOf("brn", "psn", "tox")) assertTrue(id, StatusInfo.of(id)!!.line.contains("Magic Guard"))
+    }
 }

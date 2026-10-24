@@ -33,64 +33,108 @@ enum class MoveChoice(val label: String) {
  * 3. The Main with nothing that can hurt: Struggle (all modes). Otherwise it uses a move that hurts [Tuning.SMART_DAMAGE_SHARE]
  *    of the time when it also has a useful status move (always when it has none), else one useful status move.
  *    The wild one with no move that hurts uses a useful status move, and with nothing useful a random move of all its moves.
+ *    R17C-1: the fight is a [BattleView]: a move a rule says [BattleRules.moveBlocked] is not picked (a side with nothing else still tries
+ *    one and fails at the action), a move a rule says [BattleRules.forcedMove] is used without a pick, types and stats are the effective
+ *    ones, and a status move first asks [BattleRules.useful]. R17C-3: a move in [CoreRules.NEVER_PICKED] is left out in every mode (Random too)
+ *    while the Pokémon has another move; with only such moves the Main uses Struggle and the wild one one of them (it does nothing).
  * 4. SMARTEST picks the attack by [expectedDamage]: the strongest with [Tuning.SMARTEST_BEST_SHARE], else the second strongest
  *    (a tie is broken by chance; a single attack is simply that one). A move that makes its user faint (Explosion) is left out
- *    unless it is the only attack that hurts.
+ *    unless it is the only attack that hurts. R17C FIX-A: a charge or recharge move needs two actions per hit, so its expected damage is halved
+ *    (not a charge move whose charge turn a rule skips, like Solar Beam in the sun).
+ * R17C FIX-A: the answers of [BattleRules.useful] combine as "any false wins" ([rulesUseful]); RANDOM's Struggle fallback uses the same "can hurt"
+ * test as SMART (RANDOM itself still picks among all moves, also one that fails); a move in [CoreRules.MAIN_NEVER_PICKED] (Poltergeist: wild
+ * Pokémon hold no item) is left out for the Main in every mode, like [CoreRules.NEVER_PICKED].
  */
 object MoveChooser {
     /** The Main's move against the battle's wild one ([battle].player is the Main's side). */
     fun pickMain(choice: MoveChoice, data: GameData, battle: Battle, main: Mon, rng: Random): Move =
-        pick(choice, data, rng, main, battle.player, StatCalc.maxHp(data, main), battle.wild, battle.enemy, attackerIsMain = true)
+        pick(choice, SimpleView.of(data, battle, main), true, rng)
 
     /** The wild one's move against [main] (the Main on the field). */
     fun pickWild(choice: MoveChoice, data: GameData, battle: Battle, main: Mon, rng: Random): Move =
-        pick(choice, data, rng, battle.wild, battle.enemy, battle.maxWildHp(data), main, battle.player, attackerIsMain = false)
+        pick(choice, SimpleView.of(data, battle, main), false, rng)
 
     /**
      * [attacker] with its battle side [aSide] and full HP [aMaxHp] picks a move against [defender] / [dSide];
      * [attackerIsMain] only matters when nothing can hurt the defender (Struggle for the Main, a random move for the wild one).
+     * The fight is just these two Pokémon and sides (a [SimpleView] without a battle); use the [BattleView] overload inside a fight.
      */
     fun pick(
         choice: MoveChoice, data: GameData, rng: Random,
         attacker: Mon, aSide: BattleSide, aMaxHp: Int, defender: Mon, dSide: BattleSide, attackerIsMain: Boolean,
     ): Move {
+        val view = if (attackerIsMain) SimpleView(data, attacker, defender, aSide, dSide, mainMaxHp = aMaxHp)
+        else SimpleView(data, defender, attacker, dSide, aSide, wildMaxHp = aMaxHp)
+        return pick(choice, view, attackerIsMain, rng)
+    }
+
+    /**
+     * The move the side [attackerIsMain] (true = the Main) uses in the fight [view]. A rule's [BattleRules.forcedMove] comes first; the
+     * moves it may pick from are its effective [BattleView.moves] without the ones a rule says [BattleRules.moveBlocked].
+     */
+    fun pick(choice: MoveChoice, view: BattleView, attackerIsMain: Boolean, rng: Random): Move {
+        val p = attackerIsMain
+        rulesFirst { it.forcedMove(view, p) }?.let { return it }
+        val everything = view.moves(p)
+        // R17C-3: moves that mean nothing in a 1-vs-1 wild fight are never picked (CoreRules.NEVER_PICKED). With only such moves the Main
+        // uses Struggle and the wild one uses one of them ("But nothing happened.")
+        val all = everything.filter { it.id !in CoreRules.NEVER_PICKED && !(p && it.id in CoreRules.MAIN_NEVER_PICKED) }
+        if (all.isEmpty()) return if (p) BattleEngine.struggle(view.data) else everything[rng.nextInt(everything.size)]
+        val known = all.filter { m -> rulesFirst { it.moveBlocked(view, p, m) } == null }
         if (choice == MoveChoice.RANDOM) {
-            return if (attackerIsMain) BattleEngine.pickPlayerMove(data, attacker, defender, rng) else BattleEngine.pickWildMove(data, attacker, rng)
+            return if (p) BattleEngine.pickPlayerMove(view, known, rng) else (known.ifEmpty { all }).let { it[rng.nextInt(it.size)] }
         }
-        val known = BattleEngine.knownMoves(data, attacker)
-        val dTypes = data.sp(defender.species).types
-        val hurting = known.filter { it.damaging && canHurt(it, attacker, defender, dTypes) }
-        if (hurting.isEmpty() && attackerIsMain) return BattleEngine.struggle(data)
-        val useful = known.filter { !it.damaging && statusUseful(choice, it, data, attacker, aSide, aMaxHp, defender, dSide) }
+        // R17C-4: a damaging move a rule says would surely fail now (Dream Eater on an awake target ...) is not "hurting"
+        val hurting = known.filter { it.damaging && canHurt(view, p, it) && rulesUseful(view, p, it) != false }
+        if (hurting.isEmpty() && p) return BattleEngine.struggle(view.data)
+        val useful = known.filter { !it.damaging && statusUseful(choice, it, view, p) }
         if (hurting.isEmpty()) {
-            val pool = useful.ifEmpty { known }
+            val pool = useful.ifEmpty { known }.ifEmpty { all }
             return pool[rng.nextInt(pool.size)]
         }
         if (useful.isNotEmpty() && rng.nextDouble() >= Tuning.SMART_DAMAGE_SHARE) return useful[rng.nextInt(useful.size)]
-        return if (choice == MoveChoice.SMARTEST) strongest(data, rng, hurting, attacker, aSide, defender, dSide)
-        else hurting[rng.nextInt(hurting.size)]
+        return if (choice == MoveChoice.SMARTEST) strongest(view, p, rng, hurting) else hurting[rng.nextInt(hurting.size)]
     }
 
     /** True when [move] could do damage to [defender] (not immune; a one-hit KO needs a target that is not above the user). */
     fun canHurt(move: Move, attacker: Mon, defender: Mon, defenderTypes: List<Type>): Boolean =
         TypeChart.eff(move.type, defenderTypes) > 0 && !(move.ohko && defender.level > attacker.level)
 
+    /** [canHurt] in a fight: the move's type for this hit against the target's effective types. */
+    fun canHurt(view: BattleView, p: Boolean, move: Move): Boolean {
+        val h = BattleEngine.newHit(view, p, view.mon(p), view.side(p), view.mon(!p), view.side(!p), move)
+        val eff = rulesChain(TypeChart.eff(h.type, view.types(!p))) { r, e -> r.effectiveness(h, e) }
+        return eff > 0 && !(move.ohko && view.mon(!p).level > view.mon(p).level)
+    }
+
     /** True when the status move [move] used by [attacker] could still change something (see the class text). */
     fun statusUseful(
         choice: MoveChoice, move: Move, data: GameData,
         attacker: Mon, aSide: BattleSide, aMaxHp: Int, defender: Mon, dSide: BattleSide,
-    ): Boolean {
+    ): Boolean = statusUseful(choice, move, SimpleView(data, attacker, defender, aSide, dSide, mainMaxHp = aMaxHp), true)
+
+    /**
+     * [statusUseful] in a fight: the side [p] is the user. The rules' [BattleRules.useful] answers first ([rulesUseful]: any false wins, else the
+     * first non-null); without one the engine's own rule from the class text decides.
+     */
+    fun statusUseful(choice: MoveChoice, move: Move, view: BattleView, p: Boolean): Boolean {
         val self = move.target in BattleEngine.SELF_TARGETS
-        val dTypes = data.sp(defender.species).types
-        if (move.id in Tuning.POWDER_MOVES && Type.GRASS in dTypes) return false
-        val target = if (self) attacker else defender
-        val tSide = if (self) aSide else dSide
+        // R17C FIX-A: a substitute stops the other side's status moves (sound moves and moves that bypass it go through)
+        if (SideMoves.aimedAtFoe(view, p, move) && SideMoves.SUBSTITUTE in view.side(!p).volatiles &&
+            !SideMoves.passesSubstitute(move) && !Abilities.infiltrates(view, p)) return false
+        rulesUseful(view, p, move)?.let { return it }
+        val attacker = view.mon(p)
+        val aSide = view.side(p)
+        if (move.id in Tuning.POWDER_MOVES && Type.GRASS in view.types(!p)) return false
+        val tp = if (self) p else !p
+        val target = view.mon(tp)
+        val tSide = view.side(tp)
         move.status?.let { s ->
-            if (tSide.status == null && target.hp > 0 && BattleEngine.canHaveStatus(data.sp(target.species).types, s, move.type)) return true
+            if (tSide.status == null && target.hp > 0 && BattleEngine.canHaveStatus(view.types(tp), s, move.type)) return true
         }
         if (move.boosts?.let { canMoveStage(choice, tSide, it) } == true) return true
         if (move.selfBoosts?.let { canMoveStage(choice, aSide, it) } == true) return true
-        if (move.heal != null && attacker.hp < aMaxHp) return true
+        if (move.heal != null && attacker.hp < view.maxHp(p)) return true
         return false
     }
 
@@ -105,10 +149,10 @@ object MoveChooser {
     }
 
     /** SMARTEST: the strongest of [attacks] with [Tuning.SMARTEST_BEST_SHARE], else the second strongest; no self-destruct move while another attack is left. */
-    private fun strongest(data: GameData, rng: Random, attacks: List<Move>, attacker: Mon, aSide: BattleSide, defender: Mon, dSide: BattleSide): Move {
+    private fun strongest(view: BattleView, p: Boolean, rng: Random, attacks: List<Move>): Move {
         val pool = attacks.filter { !it.selfDestruct }.ifEmpty { attacks }
         if (pool.size == 1) return pool[0]
-        val ranked = pool.shuffled(rng).map { it to expectedDamage(data, attacker, aSide, defender, dSide, it) }.sortedByDescending { it.second }
+        val ranked = pool.shuffled(rng).map { it to expectedDamage(view, p, it) }.sortedByDescending { it.second }
         return (if (rng.nextDouble() < Tuning.SMARTEST_BEST_SHARE) ranked[0] else ranked[1]).first
     }
 
@@ -122,9 +166,26 @@ object MoveChooser {
      * them: the user's level (Seismic Toss), the fixed number, half the target's HP (Super Fang); a one-hit KO is the target's
      * HP times its chance to hit (30 % plus the level difference).
      */
-    fun expectedDamage(data: GameData, attacker: Mon, aSide: BattleSide, defender: Mon, dSide: BattleSide, move: Move): Double {
-        val hit = BattleEngine.damage(data, attacker, aSide, defender, dSide, move, UNUSED_RNG, forceCrit = false, forceRoll = AVERAGE_ROLL)
-        return hit.damage * averageHits(move.multihit) * hitChance(attacker, aSide, defender, dSide, move)
+    fun expectedDamage(data: GameData, attacker: Mon, aSide: BattleSide, defender: Mon, dSide: BattleSide, move: Move): Double =
+        expectedDamage(SimpleView(data, attacker, defender, aSide, dSide), true, move)
+
+    /** [expectedDamage] in a fight: the side [p] attacks the other one with [move]. */
+    fun expectedDamage(view: BattleView, p: Boolean, move: Move): Double {
+        val hit = BattleEngine.damage(
+            view.data, view.mon(p), view.side(p), view.mon(!p), view.side(!p), move, UNUSED_RNG,
+            forceCrit = false, forceRoll = AVERAGE_ROLL, view = view, attackerIsMain = p,
+        )
+        return hit.damage * averageHits(move.multihit) * hitChance(view, p, move) * actionsFactor(view, p, move)
+    }
+
+    /**
+     * R17C FIX-A: a move with a charge turn (unless a rule skips it) or a rest turn after the hit needs two actions per hit, so it deals half per
+     * action; every second action of a SMARTEST side that prefers it would otherwise deal nothing.
+     */
+    private fun actionsFactor(view: BattleView, p: Boolean, move: Move): Double = when {
+        CoreRules.isRecharge(move) -> 0.5
+        CoreRules.isCharge(move) && view.side(p).charging != move.id && !BattleEngine.skipsCharge(view, p, move) -> 0.5
+        else -> 1.0
     }
 
     /** The engine's multi-hit counts: 2..5 hits as 35 / 35 / 15 / 15 %, any other range evenly. */
@@ -134,10 +195,12 @@ object MoveChooser {
         else -> (r.first + r.last) / 2.0
     }
 
-    private fun hitChance(attacker: Mon, aSide: BattleSide, defender: Mon, dSide: BattleSide, move: Move): Double {
-        if (move.ohko) return (30 + attacker.level - defender.level).coerceIn(0, 100) / 100.0
-        val acc = move.accuracy ?: return 1.0
-        val stage = (aSide.boosts[5] - dSide.boosts[6]).coerceIn(-6, 6)
-        return (acc * BattleEngine.accStageMult(stage)).coerceIn(0.0, 100.0) / 100.0
+    private fun hitChance(view: BattleView, p: Boolean, move: Move): Double {
+        val attacker = view.mon(p)
+        val defender = view.mon(!p)
+        val h = BattleEngine.newHit(view, p, attacker, view.side(p), defender, view.side(!p), move)
+        if (move.ohko) return if (BattleEngine.neverMisses(h)) 1.0 else (30 + attacker.level - defender.level).coerceIn(0, 100) / 100.0
+        val acc = rulesChain(move.accuracy?.toDouble()) { r, a -> r.accuracy(h, a) } ?: return 1.0
+        return (acc * BattleEngine.accStageMult(BattleEngine.accuracyStage(h))).coerceIn(0.0, 100.0) / 100.0 // R17C-9a: Unaware, Keen Eye
     }
 }

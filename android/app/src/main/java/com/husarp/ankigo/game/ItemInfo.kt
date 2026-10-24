@@ -40,9 +40,10 @@ object ItemInfo {
                 isOldBall(item) -> "Like a ${Items.name(Tuning.OLD_BALL_AS)}"
                 else -> "${Catching.ballChance(item)} % catch"
             }
-            ItemKind.HEAL -> healLine(def)
+            ItemKind.HEAL -> if (def.cures) "All HP + status" else healLine(def)
             ItemKind.EVOLUTION -> {
-                if (item == LINKING_CORD) "Trade evolvers"
+                if (item in Items.RETIRED) "Does nothing here"
+                else if (item == LINKING_CORD) "Trade evolvers"
                 else {
                     val from = evoPairs(data, item).map { it.from }.distinct()
                     when {
@@ -57,6 +58,7 @@ object ItemInfo {
                 "amulet-coin", "luck-incense" -> "Main: ×2 money"
                 "everstone" -> "Never evolves"
                 "macho-brace" -> "Main: ×2 EVs"
+                "soothe-bell" -> "Main: ×${nice(Tuning.SOOTHE_BELL)} friendship"
                 else -> POWER_STATS[item]?.let { "Main: +8 $it EVs" } ?: NO_DESCRIPTION
             }
             ItemKind.ESCAPE -> "Skip this wild one"
@@ -73,13 +75,14 @@ object ItemInfo {
                 isOldBall(item) -> "Like a ${Items.name(Tuning.OLD_BALL_AS)}: ${Catching.ballChance(item)} % to catch"
                 else -> "${Catching.ballChance(item)} % to catch · a miss: it runs away"
             }
-            ItemKind.HEAL -> healLine(def)
+            ItemKind.HEAL -> if (def.cures) "Heals all HP, cures a status" else healLine(def)
             ItemKind.EVOLUTION -> evolutionLine(data, item)
             ItemKind.HELD -> when (item) {
                 "lucky-egg" -> "Holder gets ×${nice(Tuning.LUCKY_EGG)} XP"
                 "amulet-coin", "luck-incense" -> "Main holds it: ×2 money"
                 "everstone" -> "Holder never evolves"
                 "macho-brace" -> "Main holds it: ×2 EVs"
+                "soothe-bell" -> "Main holds it: ×${nice(Tuning.SOOTHE_BELL)} friendship"
                 else -> POWER_STATS[item]?.let { "Main holds it: +8 $it EVs" } ?: NO_DESCRIPTION
             }
             ItemKind.ESCAPE -> "Skip this wild Pokémon"
@@ -94,14 +97,22 @@ object ItemInfo {
             ItemKind.BALL -> ballFacts(item)
             ItemKind.HEAL -> {
                 val all = def.heal == Int.MAX_VALUE
+                // R17C-6: a status (burn, poison, paralysis, sleep, freeze) exists only on the main in a fight; Full Restore cures it, Max Potion does not.
                 listOf(
-                    ItemFact(WHAT, if (all) "Heals **all HP** of one of your Pokémon. Full Restore and Max Potion do the same here: there are no status problems in AnkiGo."
-                    else "Heals one of your Pokémon by **${def.heal} HP**, never above its maximum."),
-                    ItemFact(HOW, "Use it from the Bag. It **can't** be used on a Pokémon at full HP."),
+                    ItemFact(WHAT, when {
+                        def.cures -> "Heals **all HP** of one of your Pokémon. In a fight it also **cures** your main's burn, poison, paralysis, sleep or freeze. A status ends with the fight anyway."
+                        all -> "Heals **all HP** of one of your Pokémon. It **doesn't** cure a status: only a Full Restore does that."
+                        else -> "Heals one of your Pokémon by **${def.heal} HP**, never above its maximum."
+                    }),
+                    ItemFact(HOW, if (def.cures) "Use it from the Bag. It **can't** be used on a Pokémon at full HP, except on your main when it has a status in a fight."
+                    else "Use it from the Bag. It **can't** be used on a Pokémon at full HP."),
                     ItemFact(FIGHT, "$FIGHT_RULE $MAIN_ONLY"),
                 )
             }
-            ItemKind.EVOLUTION -> listOf(
+            ItemKind.EVOLUTION -> if (item in Items.RETIRED) listOf(
+                ItemFact(WHAT, RETIRED_WHAT),
+                ItemFact(HOW, "You can't use it. If you already own one, it stays in the Bag."),
+            ) else listOf(
                 ItemFact(WHAT, evolutionWhat(data, item)),
                 ItemFact(HOW, "Use it from the Bag on a Pokémon that evolves with it. A Pokémon holding an **Everstone** won't evolve."),
                 ItemFact(FIGHT, "$FIGHT_RULE $MAIN_ONLY"),
@@ -165,12 +176,16 @@ object ItemInfo {
     private const val HOW = "How to use"
     private const val FIGHT = "In a fight"
     private const val LINKING_CORD = "linking-cord"
+    /** R17C-FIX: the text of an [Items.RETIRED] item (the Chipped Pot): kept in the catalogue for the bags that hold one. */
+    private const val RETIRED_WHAT = "Does **nothing** in AnkiGo: the only Pokémon that evolves with it is a form the game doesn't have. It is not sold or found any more."
 
     /** The words of a move text that get bold marks (longest first, so "Badly poisons" wins over "poisons"). */
     private val KEY_WORDS = Regex(
         "Puts (?:you|the target) to sleep|put (?:you|the target) to sleep|Badly poisons|badly poison|Paralyzes|paralyze|Burns|burn|Poisons|poison|" +
             "Freezes|freeze|Knocks the target out in one hit|Usually goes first|Usually goes last|Never misses|Raises|raise|Lowers|lower|" +
-            "Heals you|recoil|Hits \\d+(?:–\\d+)? times|Charges first|Charges the first time",
+            "Heals you|recoil|Hits \\d+(?:–\\d+)? times|Charges on the first turn|" +   // R17C-3: the charge sentence of MoveText
+            // R17C-10: the key verbs of the new rules (whole words, so "confused" or "flinched" inside a longer sentence stay plain)
+            "Confuses|\\bconfuse\\b|\\bflinch\\b|Blocks|Holds the target|\\brecharge\\b|Cures|\\bfall in love\\b|Seeds the target|Swaps|Copies",
     )
 
     private fun nice(d: Double): String = if (d == Math.floor(d)) d.toInt().toString() else d.toString()
@@ -231,6 +246,7 @@ object ItemInfo {
     }
 
     private fun evolutionLine(data: GameData?, item: String): String {
+        if (item in Items.RETIRED) return "Does nothing here: no Pokémon uses it"
         if (item == LINKING_CORD) return "Evolves Pokémon that evolve by trade"
         val pairs = evoPairs(data, item)
         val from = pairs.map { it.from }.distinct()
@@ -269,10 +285,13 @@ object ItemInfo {
         "amulet-coin", "luck-incense" -> "While your **main** holds it, the money you earn for answers and wins is **doubled**, all day. " +
             "The slower pay after each ${Tuning.CASH_TIER} ₽ still applies, so you keep getting double at every step. It does nothing on a Pokémon that is not your main."
         "everstone" -> "A Pokémon holding it **never evolves**: not by level, friendship, stone or trade. Take it back to let the Pokémon evolve."
-        "macho-brace" -> "Your **main** gets **double EVs** from each defeat (as always, up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
+        "macho-brace" -> "Your **main** gets **double EVs** from each win, defeat or catch (as always, up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
             "It does nothing on a Pokémon that is not your main."
+        "soothe-bell" -> "Your **main** gets **×${nice(Tuning.SOOTHE_BELL)} friendship** from each win, defeat or catch (+${Tuning.FRIENDSHIP_GAIN.first} to ${Tuning.FRIENDSHIP_GAIN.last} becomes " +
+            "+${(Tuning.FRIENDSHIP_GAIN.first * Tuning.SOOTHE_BELL).toInt()} to ${(Tuning.FRIENDSHIP_GAIN.last * Tuning.SOOTHE_BELL).toInt()}), up to ${Tuning.FRIENDSHIP_MAX}. " +
+            "Friendship evolves some Pokémon and powers Return. It does nothing on a Pokémon that is not your main."
         else -> POWER_STATS[item]?.let {
-            "Your **main** gets **8 extra $it EVs** from each defeat, on top of the usual EVs (up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
+            "Your **main** gets **8 extra $it EVs** from each win, defeat or catch, on top of the usual EVs (up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
                 "It does nothing on a Pokémon that is not your main."
         } ?: NO_DESCRIPTION
     }
@@ -284,12 +303,13 @@ object ItemInfo {
 
     /** Where and how the item is used (one sentence). */
     fun howToUse(item: String): String = when (Items.def(item)?.kind) {
-        ItemKind.BALL -> "Throw it from the Bag at a wild Pokémon in battle. A good throw catches it; the ball is used up either way."
+        ItemKind.BALL -> "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
         ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"
-        ItemKind.EVOLUTION -> "Use it from the Bag on a Pokémon that evolves with it. $FIGHT_TURN"
+        ItemKind.EVOLUTION -> if (item in Items.RETIRED) "No Pokémon in AnkiGo evolves with it, so it can't be used."
+            else "Use it from the Bag on a Pokémon that evolves with it. $FIGHT_TURN"
         ItemKind.HELD -> "Give it to a Pokémon from the Bag. A Pokémon holds one item at a time."
         ItemKind.ESCAPE -> "Use it from the Bag to leave the wild Pokémon in battle and meet a new one."
-        ItemKind.FOSSIL -> "Use it from the Bag to revive an ancient Pokémon at Lv 5."
+        ItemKind.FOSSIL -> "Use it from the Bag to revive an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}."
         null -> ""
     }
 

@@ -447,7 +447,8 @@ object AnkimonMerge {
         state.team.clear()
         state.team.addAll(uids)
         state.pendingMain = null // PLAN 206: the import sets the team: a switch that was waiting for the next answer is dropped
-        // A new main starts the fight fresh (no boosts or status carried over from the old one).
+        // A new main starts the fight fresh (no boosts or status carried over from the old one). R17C-FIX17: an import is not a switch the
+        // player made, so the rule sets' onLeave hooks do not run (no Regenerator heal for the old main from an import).
         if (uids.first() != oldMain) state.battle?.player = BattleSide()
         return changed
     }

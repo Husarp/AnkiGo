@@ -44,7 +44,7 @@ class SaveCodecTest {
         val wild = mon(9, "Wildmon", 'M')
         s.battle = Battle(
             wild = wild, tier = Tier.LEGENDARY,
-            player = BattleSide(intArrayOf(1, -2, 3, -4, 5, -6, 0), "par", 0, mutableSetOf("solarbeam", "fly")),
+            player = BattleSide(intArrayOf(1, -2, 3, -4, 5, -6, 0), "par", 0).also { it.charging = "solarbeam" },
             enemy = BattleSide(intArrayOf(0, 0, 0, 0, 0, 2, -1), "slp", 3),
             tally = 25, answers = 3, override = Outcome.CATCH, rounds = 4, startedAt = 1_800_000_000_000L,
         )
@@ -107,7 +107,7 @@ class SaveCodecTest {
         assertEquals("Wildmon", bt.wild.name); assertEquals(Tier.LEGENDARY, bt.tier); assertEquals(Outcome.CATCH, bt.override)
         assertArrayEquals(intArrayOf(1, -2, 3, -4, 5, -6, 0), bt.player.boosts)
         assertEquals("par", bt.player.status); assertEquals("slp", bt.enemy.status); assertEquals(3, bt.enemy.statusTurns)
-        assertEquals(setOf("solarbeam", "fly"), bt.player.charged); assertTrue(bt.enemy.charged.isEmpty())
+        assertEquals("solarbeam", bt.player.charging); assertNull(bt.enemy.charging)
         assertEquals(25, bt.tally); assertEquals(3, bt.answers); assertEquals(4, bt.rounds); assertEquals(1_800_000_000_000L, bt.startedAt)
         assertEquals(133, b.nextSpecies); assertEquals(Tier.BABY, b.nextTier); assertTrue(b.nextShiny); assertEquals(1234567890123L, b.nextSeed)
         assertArrayEquals(intArrayOf(1, 2, 3, 4, 5), b.buttonsToday)
@@ -199,7 +199,7 @@ class SaveCodecTest {
             """{"schema":1,"mons":[{"uid":"a","species":1,"level":1}],
                |"battle":{"wild":{"uid":"w","species":1,"level":1},"player":{"boosts":[1,2],"status":"par"}}}""".trimMargin(),
         )
-        assertTrue(b.battle!!.player.charged.isEmpty()); assertTrue(b.battle!!.enemy.charged.isEmpty())
+        assertNull(b.battle!!.player.charging); assertNull(b.battle!!.enemy.charging)
         assertEquals("par", b.battle!!.player.status)
     }
 

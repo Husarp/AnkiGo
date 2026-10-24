@@ -265,13 +265,15 @@ class ProgressionTest {
         assertTrue(m.friendship in 5..9)
     }
 
-    @Test fun rewardCatchIsTheFullDefeatXp() {
+    @Test fun rewardCatchIsTheFullDefeatXpAndTheSameEvsAndFriendship() {
         val (s, m) = st(1, 5)
         val e = ev()
         Progression.rewardCatch(data, s, m, wild16(10), noon, Random(1), e)
         assertEquals(72, e.of<GameEvent.XpGained>().single().xp)
         assertEquals(Progression.xpForDefeat(data.sp(wild16(10).species), 10), 72)
-        assertEquals(0, m.defeats); assertEquals(Stats.ZERO, m.evs)
+        assertEquals(0, m.defeats) // the win itself is counted by Game, not here
+        assertEquals(Stats(1, 0, 0, 0, 0, 0), m.evs) // R17C-2: a catch win gives the EVs and friendship a defeat gives
+        assertTrue(m.friendship in 5..9)
     }
 
     @Test fun rewardCatchFullXpIsSplitByExpShareAndBoostedByLuckyEgg() {

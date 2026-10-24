@@ -48,7 +48,7 @@ class HelpShots {
     @Test fun guideBattles() = paparazzi.shootPage("help-guide-battles", all) { screen(it, HelpRoute.Guide(GameGuide.BATTLES)) }
 
     @Test fun guideOthers() {
-        for (id in listOf(GameGuide.LEVELS, GameGuide.TYPES, GameGuide.STATS, GameGuide.CATCHING, GameGuide.MONEY, GameGuide.HEALING, GameGuide.ITEMS)) {
+        for (id in listOf(GameGuide.MOVES, GameGuide.LEVELS, GameGuide.TYPES, GameGuide.STATS, GameGuide.CATCHING, GameGuide.MONEY, GameGuide.HEALING, GameGuide.ITEMS)) {
             paparazzi.shootPage("help-guide-$id", listOf(Variants.PHONE)) { screen(it, HelpRoute.Guide(id)) }
         }
     }

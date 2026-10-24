@@ -67,7 +67,7 @@ object DexDetail {
                 Stat.entries.forEach { s ->
                     val row = DetailParts.statRow(a, s, sp.base[s], DetailMath.fraction(sp.base[s], BASE_MAX), 0, null, compact) as LinearLayout
                     val r = StatCalc.range(sp.base[s], s)
-                    row.addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = "${r.first}\u2013${r.last}"; gravity = Gravity.END; maxLines = 1 },
+                    row.addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = if (r.first == r.last) "${r.first}" else "${r.first}\u2013${r.last}"; gravity = Gravity.END; maxLines = 1 },
                         LinearLayout.LayoutParams(Ui.dp(a, 58), -2))
                     addView(row)
                 }

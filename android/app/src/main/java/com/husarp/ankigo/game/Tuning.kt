@@ -46,7 +46,11 @@ object Tuning {
     /** AnkiGo: crit chance by crit stage (1 = normal). Ankimon's engine has no crits; added on request. */
     val CRIT_CHANCE = doubleArrayOf(0.0, 1.0 / 24, 1.0 / 8, 1.0 / 2, 1.0)
     const val ROLL_MIN = 85 // damage roll 85..100 %
-    /** Damaging moves whose power depends on things we don't model (Low Kick, Flail, Gyro Ball...). AnkiGo. */
+    /**
+     * The flat power of a damaging move whose data has basePower 0 and no fixed / level / half-HP / one-hit-KO rule (and the score Progression gives a
+     * fixed-damage move). R17C: MovePower now works out the real power of the moves that depend on the fight (Low Kick, Flail, Gyro Ball ...); this is
+     * only what is left for a move no rule knows. AnkiGo.
+     */
     const val UNKNOWN_POWER = 60
     const val STRUGGLE = "struggle"
     const val SPLASH = "splash"
@@ -64,27 +68,58 @@ object Tuning {
     const val PARA_SKIP = 0.25
     const val PARA_SPEED = 0.5
     const val FREEZE_THAW = 0.2
-    /** Sleep (poke-engine): no turn counter, each move attempt wakes the sleeper with this chance and it acts at once. */
+    /** Sleep (poke-engine): no turn counter, each move attempt wakes the sleeper with this chance and it acts at once. R17C-3: a sleeper with `volatiles["sleepTurns"]` (Rest) sleeps exactly that many attempts instead. */
     const val WAKE_CHANCE = 0.33
     /** A frozen Pokémon that uses one of these moves thaws and acts (poke-engine THAW_IF_USES). */
     val THAW_IF_USES = setOf("scald", "flamewheel", "sacredfire", "flareblitz", "fusionflare", "steameruption", "scorchingsands")
     /** Besides every damaging Fire move, these also thaw a frozen target they hit (THAW_IF_HIT_BY). */
     val THAW_IF_HIT_BY = setOf("scald", "steameruption", "scorchingsands")
     /**
-     * Charge moves (poke-engine `charge` flag, 17 of them): the first time one is picked in a fight the user only charges
-     * (no damage, no accuracy roll), the next time it hits. The charge is kept on that side for the rest of the fight.
+     * Charge moves (the `charge` flag of the data, 17 of them; this list is the fallback for a move without flags, e.g. a test fixture).
+     * R17C-3 (PLAN 267, Adam's rule): the first use only charges (no damage, no accuracy roll); the user's VERY NEXT action is the hit,
+     * automatically, whatever it picked (and normal accuracy); then the charge is over, also when the hit misses or fails. A user that
+     * can't act on that next action (asleep, frozen, flinched, confused self-hit, in love, ...) loses the charge. NOT copied from
+     * poke-engine: the side that charged Dig / Fly / Dive / Bounce / Phantom Force / Shadow Force is NOT untouchable meanwhile. A wild one
+     * only moves after weak answers and could stay untouchable for dozens of cards, and an answer must never miss because of it.
      */
     val CHARGE_MOVES = setOf(
         "bounce", "dig", "dive", "electroshot", "fly", "freezeshock", "geomancy", "iceburn", "meteorbeam", "phantomforce",
         "razorwind", "shadowforce", "skullbash", "skyattack", "skydrop", "solarbeam", "solarblade",
     )
-    /**
-     * These lose the charge after the hit (poke-engine after_move); every other charge move keeps it, so e.g. Solar Beam
-     * charges once per fight and then hits whenever it is picked (copied from Ankimon). NOT copied: poke-engine also makes
-     * a side that charged one of these untouchable until it uses the move again. A wild one only moves after weak answers
-     * and could stay untouchable for dozens of cards, so AnkiGo does not model that.
-     */
-    val CHARGE_CLEARS_AFTER_USE = setOf("fly", "bounce", "dig", "dive", "phantomforce", "shadowforce")
+    /** R17C-3: what the charge turn itself raises on the user (mainline; code in Showdown, not data): move id -> stat stages. */
+    val CHARGE_TURN_RISE = mapOf(
+        "skullbash" to mapOf("def" to 1), "meteorbeam" to mapOf("spa" to 1), "electroshot" to mapOf("spa" to 1),
+    )
+
+    // ---- Lasting conditions of moves (R17C-3; a "turn" here is one battle round, a switch's free hit is not one) ----
+    /** Confusion lasts this many of the confused one's own action attempts (mainline 2-5); the last one snaps out of it and acts. */
+    val CONFUSION_TURNS = 2..5
+    /** Chance that a confused one hurts itself instead of moving (mainline gen 7+: 33 %). */
+    const val CONFUSION_SELF_HIT = 1.0 / 3.0
+    /** The confusion self-hit: a typeless physical hit of this power with the Pokémon's own Attack / Defense and stages (no STAB, type or crit, no answers factor). */
+    const val CONFUSION_POWER = 40
+    /** Infatuation: chance that the in-love Pokémon can't move in an action attempt (mainline 50 %). */
+    const val LOVE_STOPS = 0.5
+    /** A locked move (Outrage, Thrash, Petal Dance, Raging Fury) is used 2-3 times in a row in all, then the user is confused by fatigue. */
+    val LOCK_TURNS = 2..3
+    /** Uproar is used 3 times in a row in all; while it lasts nobody falls asleep and sleepers wake at the end of the round. */
+    const val UPROAR_TURNS = 3
+    /** A binding move (Wrap, Fire Spin, Whirlpool ...) holds the target this many rounds; each end of round it loses 1/[BIND_DIVISOR] of its max HP. */
+    val BIND_TURNS = 4..5
+    const val BIND_DIVISOR = 8
+    /** Salt Cure: until the fight ends, each end of round 1/[SALT_CURE_DIVISOR] of the max HP, 1/[SALT_CURE_WEAK_DIVISOR] for a Water or Steel type. */
+    const val SALT_CURE_DIVISOR = 8
+    const val SALT_CURE_WEAK_DIVISOR = 4
+    /** Syrup Bomb: this many rounds, each end of round the target's Speed falls by 1. */
+    const val SYRUP_TURNS = 3
+    /** Psychic Noise's Heal Block lasts this many rounds (R17C-8 says what it blocks). */
+    const val PSYCHIC_NOISE_HEAL_BLOCK = 2
+    /** Crash damage (High Jump Kick ...) and the HP cost of Mind Blown / Steel Beam / Chloroblast: this share of the max HP, as 1/n. */
+    const val CRASH_DIVISOR = 2
+    const val MIND_BLOWN_DIVISOR = 2
+    /** Tri Attack (20 %): one of these at random. Dire Claw (50 %): one of the second list. */
+    val TRI_ATTACK_STATUSES = listOf("brn", "par", "frz")
+    val DIRE_CLAW_STATUSES = listOf("psn", "par", "slp")
     /** Powder moves fail against Grass types (poke-engine POWDER flag). */
     val POWDER_MOVES = setOf("sleeppowder", "stunspore", "poisonpowder", "spore", "powder", "ragepowder", "magicpowder")
 
@@ -112,7 +147,7 @@ object Tuning {
 
     // ---- XP, levels, EVs, friendship ----
     const val XP_DIVISOR = 7.0          // XP = ceil(base_exp * level / 7)
-    /** AnkiGo: a wild Pokémon caught at 0 HP also gives its defeat XP (Ankimon: none; there you pick catch/defeat by hand). */
+    /** AnkiGo: a wild Pokémon caught at 0 HP also gives what a defeat gives: XP, EVs, friendship (Ankimon: nothing; there you pick catch/defeat by hand). */
     const val CATCH_GIVES_XP = true
     const val MAX_LEVEL = 100
     const val MAX_LEVELS_PER_GAIN = 10
@@ -121,8 +156,9 @@ object Tuning {
     const val EV_STAT_CAP = 252
     const val EV_TOTAL_CAP = 510
     const val WILD_EV_PER_LEVEL = 5.1   // wild EV budget = level * 5.1
-    val FRIENDSHIP_GAIN = 5..9
-    const val SOOTHE_BELL = 1.5
+    val FRIENDSHIP_GAIN = 5..9          // per win (defeat or catch) while it is the Main
+    const val FRIENDSHIP_MAX = 255      // R17C-2: friendship stops here (an older save's higher number shows as 255)
+    const val SOOTHE_BELL = 1.5         // Soothe Bell on the Main: friendship gain x1.5
     const val DEFAULT_MIN_FRIENDSHIP = 160
     const val DAY_FROM_HOUR = 6         // day 6:00-18:00, night otherwise
     const val NIGHT_FROM_HOUR = 18

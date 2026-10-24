@@ -129,7 +129,7 @@ object Progression {
         return if (m.multihit != null) base * 3 else base
     }
 
-    /** Adds an EV yield (Macho Brace x2, Power items +8 to their stat), caps 252 per stat / 510 total. */
+    /** Adds an EV yield of one win (Macho Brace x2, Power items +8 to their stat), caps 252 per stat / 510 total. */
     fun addEvs(mon: Mon, yield: Stats) {
         val gain = yield.toList().toMutableList()
         if (mon.heldItem == "macho-brace") {
@@ -149,11 +149,23 @@ object Progression {
     }
 
     /**
+     * R17C-2 (PLAN 240): what every WIN gives the Main besides XP: the wild species' EV yield ([addEvs]: Macho Brace x2, Power items +8)
+     * and +5..9 friendship (Soothe Bell x1.5), capped at [Tuning.FRIENDSHIP_MAX] (a higher number from an older save is cut here).
+     * A defeat, an auto catch and a ball catch all come through here, so they all give the same. The Exp. Share holder gets neither.
+     */
+    private fun winBonus(data: GameData, main: Mon, wild: Mon, rng: Random) {
+        addEvs(main, data.sp(wild.species).evYield)
+        var friend = Tuning.FRIENDSHIP_GAIN.random(rng)
+        if (main.heldItem == "soothe-bell") friend = (friend * Tuning.SOOTHE_BELL).toInt()
+        main.friendship = min(Tuning.FRIENDSHIP_MAX, main.friendship + friend)
+    }
+
+    /**
      * Everything a Defeat gives (Ankimon): XP to the main = xpForDefeat; classic Exp. Share (settings.xpShareUid,
      * if set, owned and not the main): main and holder each get int(xp * 0.5); Lucky Egg x1.5 for whoever holds it;
-     * EV yield and +5..9 friendship (Soothe Bell x1.5) to the main; main.defeats++; then the main's level evolution
-     * if one is due (after the level-ups), otherwise its friendship evolution. The same evolution check runs for the
-     * Exp. Share holder after it levels.
+     * EV yield and +5..9 friendship (Soothe Bell x1.5, up to 255) to the main ([winBonus], the same as a catch win gives);
+     * main.defeats++; then the main's level evolution if one is due (after the level-ups), otherwise its friendship
+     * evolution. The same evolution check runs for the Exp. Share holder after it levels.
      */
     fun rewardDefeat(data: GameData, state: GameState, main: Mon, wild: Mon, now: Long, rng: Random, events: MutableList<GameEvent>) {
         val wildSp = data.sp(wild.species)
@@ -166,10 +178,7 @@ object Progression {
         if (holder?.heldItem == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
 
         events += GameEvent.Defeated(wild.species, wild.name, xp)
-        addEvs(main, wildSp.evYield)
-        var friend = Tuning.FRIENDSHIP_GAIN.random(rng)
-        if (main.heldItem == "soothe-bell") friend = (friend * Tuning.SOOTHE_BELL).toInt()
-        main.friendship += friend
+        winBonus(data, main, wild, rng)
         main.defeats++
 
         gainXp(data, state, main, mainXp, events)
@@ -181,10 +190,11 @@ object Progression {
     }
 
     /**
-     * AnkiGo: XP for a wild Pokémon the auto rule CATCHES at 0 HP (Tuning.CATCH_GIVES_XP). Ankimon gives none, but there
-     * you choose catch or defeat by hand; with the choice automatic, catching every new species would starve the team
-     * of XP for weeks. The full defeat XP (Exp. Share, Lucky Egg apply) and the level-evolution check; no EVs or friendship
-     * (defeat-only, as in Ankimon). The win itself (main.defeats, state.defeats, trainer XP) is counted by Game.resolveWild.
+     * AnkiGo: what a wild Pokémon the auto rule or a ball CATCHES at 0 HP gives. Ankimon gives nothing for a catch, but there you
+     * choose catch or defeat by hand; with the choice automatic, most wins are catches (R17C-2: they gave no EVs, so the Main's EVs
+     * stayed 0). So a catch win gives exactly what a defeat gives: the full defeat XP (Exp. Share, Lucky Egg apply), the EVs and the
+     * friendship ([winBonus]), and the same evolution checks (level, else friendship). Counting the win itself (main.defeats,
+     * state.defeats, trainer XP) stays with Game (resolveWild / throwBall).
      */
     fun rewardCatch(data: GameData, state: GameState, main: Mon, wild: Mon, now: Long, rng: Random, events: MutableList<GameEvent>) {
         val xp = xpForDefeat(data.sp(wild.species), wild.level)
@@ -194,9 +204,11 @@ object Progression {
         var holderXp = half
         if (main.heldItem == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
         if (holder?.heldItem == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
+        winBonus(data, main, wild, rng)
         gainXp(data, state, main, mainXp, events)
         if (holder != null) gainXp(data, state, holder, holderXp, events)
-        levelEvolution(data, state, main, now)?.let { evolve(data, state, main, it, rng, events) }
+        (levelEvolution(data, state, main, now) ?: friendshipEvolution(data, state, main, now))
+            ?.let { evolve(data, state, main, it, rng, events) }
         if (holder != null) levelEvolution(data, state, holder, now)?.let { evolve(data, state, holder, it, rng, events) }
     }
 
