@@ -517,7 +517,7 @@ object WidgetRender {
                     sprite(m.species, m.shiny, m.name, x, barTop + 4f - size, size)
                     val bx = x + (size - 22f) / 2f
                     roundRect(bx, barTop, bx + 22f, barTop + 4f, 2f, col(R.color.ag_s0))
-                    if (m.hpFrac > 0f) roundRect(bx, barTop, bx + max(2f, 22f * m.hpFrac), barTop + 4f, 2f, Ui.hpColor(ctx, m.hpFrac))
+                    if (m.hpFrac > 0f) roundRect(bx, barTop, bx + max(2f, 22f * m.hpFrac), barTop + 4f, 2f, Ui.hpColor(ctx, m.hpFrac, com.husarp.ankigo.GameRepo.data?.species?.get(m.species)?.types?.firstOrNull()))
                 }
             }
         }

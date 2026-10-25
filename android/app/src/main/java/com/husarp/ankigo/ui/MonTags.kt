@@ -54,7 +54,8 @@ object MonTags {
         if (state.team.firstOrNull() == mon.uid) out += MonTag(TagKind.MAIN, "Main")
         if (mon.hp <= 0) out += MonTag(TagKind.FAINTED, "Fainted")
         if (canEvolve(data, state, mon, now)) out += MonTag(TagKind.CAN_EVOLVE, "Can evolve")
-        if (mon.caughtAt != 0L && dayKey(state, mon.caughtAt) == dayKey(state, now)) out += MonTag(TagKind.NEW, "New")
+        // PLAN 280 / R19: details and compare follow the Box's previously seen IDs too.
+        if (caughtToday(state, mon, now) && mon.uid !in state.viewedMons) out += MonTag(TagKind.NEW, "New")
         if (state.settings.xpShareUid == mon.uid) out += MonTag(TagKind.EXP_SHARE, "Exp. Share")
         mon.heldItem?.let { out += MonTag(TagKind.HELD, "Holds ${Items.name(it)}", it) }
         if (mon.shiny) out += MonTag(TagKind.SHINY, "★ Shiny")
@@ -111,8 +112,8 @@ data class MonMark(val tag: TagKind, val kind: MarkKind, val icon: String, val l
 data class MonMarks(val types: List<Type>, val isNew: Boolean, val tags: List<MonMark>) {
     companion object {
         /**
-         * [seen] = uids the player has already opened (the screen keeps that set; this stays pure): NEW is today's rule
-         * (caught during this game day, [MonTags.of]) and goes away once the Pokémon is in [seen].
+         * PLAN 280 / R19: [seen] contains details already opened and IDs from earlier Box visits ([BoxSeenPrefs]).
+         * NEW still requires a catch during the current game day; an explicit [seen] set can hide more IDs.
          */
         fun of(data: GameData, state: GameState, mon: Mon, now: Long = System.currentTimeMillis(), seen: Set<String> = state.viewedMons): MonMarks {
             val all = MonTags.of(data, state, mon, now)
@@ -142,7 +143,7 @@ data class MonMarks(val types: List<Type>, val isNew: Boolean, val tags: List<Mo
  * tile (a star icon on the Team row), never a ★ icon on a tile.
  */
 enum class TileMark(val label: String, val legend: String) {
-    NEW("New", "Caught today and not opened yet"),
+    NEW("New", "Caught today and not seen in an earlier Box visit"),
     FAVOURITE("Favourite", "A favourite"),
     SHINY("Shiny", "Shiny: a golden glow behind the sprite"),
     IN_TEAM("In team", "In your team"),
@@ -151,7 +152,7 @@ enum class TileMark(val label: String, val legend: String) {
 }
 
 object TileMarks {
-    /** NEW = caught during this game day and not opened yet (today's NEW rule + [GameState.viewedMons]). */
+    /** PLAN 280 / R19: caught this game day, with neither details opened nor an earlier Box visit. */
     fun isNew(state: GameState, mon: Mon, now: Long = System.currentTimeMillis()): Boolean =
         mon.uid !in state.viewedMons && MonTags.caughtToday(state, mon, now)
 

@@ -347,7 +347,10 @@ internal class SortSheet(
         return sheet
     }
 
-    private fun changed() { onChange(spec, showIndex); fill() }
+    /** R19 251: the "too many types" notice under the type chips is on; any other change of the sheet turns it off (see [changed]). */
+    private var typeNotice = false
+
+    private fun changed(notice: Boolean = false) { typeNotice = notice; onChange(spec, showIndex); fill() }
 
     /** Anything on in this sheet that "Clear" would switch off (a type mode alone filters nothing). */
     private fun anyFilterOn(): Boolean =
@@ -470,7 +473,12 @@ internal class SortSheet(
                 isSelected = on
                 setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 12), Ui.dp(ctx, 2), Ui.dp(ctx, 12)) // 42 dp segments in a 48 dp control
                 background = if (on) Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx) else null
-                setOnClickListener { if (t.filter.match != m) { t.filter = t.filter.withMatch(m); t.set(t.filter); changed() } }
+                setOnClickListener {
+                    if (t.filter.match != m) {
+                        val dropped = t.filter.dropsPicks(m) // R19 251: explain why picks went
+                        t.filter = t.filter.withMatch(m); t.set(t.filter); changed(notice = dropped)
+                    }
+                }
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }
         body.addView(row, LinearLayout.LayoutParams(-1, -2))
@@ -484,11 +492,21 @@ internal class SortSheet(
                 TypeChips.styleFilter(this, ty, on)
                 setOnClickListener {
                     val next = t.filter.toggle(ty)
-                    if (next == null) Ui.toast(ctx, TypeFilter.FULL) else { t.filter = next; t.set(next); changed() }
+                    if (next == null) { typeNotice = true; fill() } // R19 251: refused, say why right here (no toast)
+                    else { t.filter = next; t.set(next); changed() }
                 }
             })
         }
         body.addView(f, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+        if (typeNotice) body.addView(typeNoticeView(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+    }
+
+    /** R19 251: the small warning line right under the type chips (read out by TalkBack when it appears). */
+    private fun typeNoticeView(): View = Ui.text(ctx, 12f, 800, R.color.ag_peach).apply {
+        text = TypeFilter.TOO_MANY
+        setLineSpacing(0f, 1.1f)
+        setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 2), Ui.dp(ctx, 4), Ui.dp(ctx, 2))
+        accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
     }
 
     /** Ascending / Descending as one switch (the look of the stat basis switch). */

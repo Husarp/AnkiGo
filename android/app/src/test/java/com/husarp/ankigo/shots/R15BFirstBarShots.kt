@@ -58,7 +58,7 @@ class R15BFirstBarShots {
         }
     }
 
-    @Test fun aNewsLineStillTakesTheWholeBarAndAMoveBringsTheSegmentsBack() {
+    @Test fun aNewsLineIsAToastAndTheBarKeepsItsSegments() {   // R19-H (PLAN 257): no message takes the whole bar any more
         paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.SPLIT, Theme.LIGHT))
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
@@ -66,7 +66,8 @@ class R15BFirstBarShots {
         val b = bar(p)
         assertFalse(b.lineShown())
         p.setLog(LogKind.SYS, "FAST", "Played fast: 3 answers", false)
-        assertTrue(b.lineShown())
+        assertFalse(b.lineShown())
+        assertEquals(listOf("mine", "dots", "theirs"), b.segmentOrder())
         p.observeStudyEvent(GameEvent.Attack(true, "A", "B", "Zap", Type.ELECTRIC, Category.SPECIAL, 3, 1, 1.0, false, false, false, 10, 30, 20, 30))
         assertFalse(b.lineShown())
     }

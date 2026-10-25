@@ -41,8 +41,8 @@ class R3V9Shots {
             listOf(tv(FloatKind.SUPER, "Super effective!"), tv(FloatKind.CRIT, "Critical!")),
             listOf(tv(FloatKind.STATUS, "Burned"), tv(FloatKind.STATUS, "Fell asleep"), tv(FloatKind.STATUS, "Can't move")),
             listOf(tv(FloatKind.HESITATE, "Hesitated"), tv(FloatKind.INFO, "ATK max")),
-            listOf(tv(FloatKind.STAT_UP, "ATK ↑", stat = "ATK", stages = 1), tv(FloatKind.STAT_UP, "SPE ↑↑", stat = "SPE", stages = 2), tv(FloatKind.STAT_UP, "SPA ↑↑↑", stat = "SPA", stages = 3)),
-            listOf(tv(FloatKind.STAT_DOWN, "DEF ↓", stat = "DEF", stages = 1), tv(FloatKind.STAT_DOWN, "ACC ↓↓", stat = "ACC", stages = 2), tv(FloatKind.STAT_DOWN, "EVA ↓↓↓", stat = "EVA", stages = 3)),
+            listOf(tv(FloatKind.STAT_UP, "Attack up 1", stat = "ATK", stages = 1), tv(FloatKind.STAT_UP, "Speed up 2", stat = "SPE", stages = 2), tv(FloatKind.STAT_UP, "Special Attack up 3", stat = "SPA", stages = 3)),
+            listOf(tv(FloatKind.STAT_DOWN, "Defense down 1", stat = "DEF", stages = 1), tv(FloatKind.STAT_DOWN, "Accuracy down 2", stat = "ACC", stages = 2), tv(FloatKind.STAT_DOWN, "Evasion down 3", stat = "EVA", stages = 3)),
         )
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -107,7 +107,7 @@ class R3V9Shots {
         a.floatText(FloatText(false, "-31", FloatKind.BIG_DAMAGE))
         a.floatText(FloatText(false, "Super effective!", FloatKind.SUPER))
         a.floatText(FloatText(false, "Critical!", FloatKind.CRIT))
-        a.floatText(FloatText(true, "ATK ↑↑", FloatKind.STAT_UP, "ATK", 2))
+        a.floatText(FloatText(true, "Attack up 2", FloatKind.STAT_UP, "ATK", 2))
         a.floatText(FloatText(true, "Hesitated", FloatKind.HESITATE))
         a.floatText(FloatText(true, "+12", FloatKind.HEAL))
     }
@@ -117,7 +117,7 @@ class R3V9Shots {
 
     private fun round2(a: ArenaView) {
         a.floatText(FloatText(false, "Miss", FloatKind.MISS))
-        a.floatText(FloatText(false, "DEF ↓↓↓", FloatKind.STAT_DOWN, "DEF", 3))
+        a.floatText(FloatText(false, "Defense down 3", FloatKind.STAT_DOWN, "DEF", 3))
         a.floatText(FloatText(true, "Not very effective", FloatKind.NOT_VERY))
         a.floatText(FloatText(true, "Burned", FloatKind.STATUS))
         a.floatText(FloatText(true, "-9", FloatKind.DAMAGE))

@@ -20,8 +20,8 @@ import org.junit.Test
 /**
  * R18-B (PLAN 227): the Study bar around a switch. Real events of the real [com.husarp.ankigo.game.Game] (FakeGame's team and fight)
  * are played through the panel in order. PNGs r18b-*: the bar after a queued switch (normal segments, the toast on top), after it
- * came in on the first card of a round (mauve dot, "Switched to X") and on the card that ended the round (both dots, the last one
- * mauve), and after an item was used (dots as they were). Light + dark, split screen.
+ * came in on the first card of a round ("Switched to X") and on the card that ended the round (both dots), and after an item was used
+ * (dots as they were). R19-T (PLAN 288): the switch no longer colours a dot (it was mauve in R18-B). Light + dark, split screen.
  */
 class R18BSwitchShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()

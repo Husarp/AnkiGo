@@ -493,7 +493,7 @@ internal object HelpViews {
     }
 
     private fun blockVisual(ctx: Context, v: GuideVisual): View = when (v.id) {
-        GuideVisualId.HP_BAR -> barRow(ctx, { it.set(GuideDemo.hpFraction, Ui.hpColor(ctx, GuideDemo.hpFraction), false) }, v.caption)
+        GuideVisualId.HP_BAR -> barRow(ctx, { it.set(GuideDemo.hpFraction, Ui.hpColor(ctx, GuideDemo.hpFraction, null), false) }, v.caption)
         GuideVisualId.XP_BAR -> barRow(ctx, { it.setMeaning(BarMeaning.XP, GuideDemo.xpFraction, false) }, v.caption)
         GuideVisualId.STAT_BARS -> statBars(ctx, v.caption)
         GuideVisualId.MATCHUP_TABLE -> matchupBlock(ctx, v.caption)

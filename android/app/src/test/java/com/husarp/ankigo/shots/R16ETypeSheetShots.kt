@@ -23,6 +23,7 @@ import com.husarp.ankigo.ui.TypeMatch
 import com.husarp.ankigo.ui.Ui
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -119,10 +120,11 @@ class R16ETypeSheetShots {
             tap(sheet, "All of")
             assertEquals(TypeMatch.ALL, h.types.match)
             assertEquals("Has both Water and Ice.", sentence(sheet))
-            // a third pick in All of is refused with the toast, nothing changes
+            // a third pick in All of is refused; R19 251: the notice under the chips says why (no toast), nothing changes
             Ui.lastToast = null
             tap(sheet, "Fire")
-            assertEquals("All of: pick up to 2 types", Ui.lastToast)
+            assertTrue(texts(sheet).contains(TypeFilter.TOO_MANY))
+            assertNull(Ui.lastToast)
             assertEquals(linkedSetOf(Type.WATER, Type.ICE), h.types.types)
             tap(sheet, "Only")
             assertEquals("No type outside Water + Ice: pure Water, pure Ice and Water/Ice stay.", sentence(sheet))

@@ -42,7 +42,7 @@ class SpriteImage(val frames: List<Bitmap>, val delays: IntArray) {
  * (Showdown's, mirrored by PokeAPI under the national number / form id) fill the rest of gens 6-9 and the regional
  * forms. They are never used for a base species #1-649, which always has the pixel ones.
  * Static 96x96 PNGs (Pokédex, team, widgets) come from PokeAPI sprites/pokemon/{num}.png (shiny/{num}.png);
- * item icons from PokeAPI sprites/items/{id}.png. PokeAPI URLs are pinned to DataStore.SPRITES_COMMIT.
+ * item icons from PokeAPI sprites/items/{id}.png. PokeAPI URLs are pinned to DataStore.SPRITES_COMMIT (item icons: DataStore.ITEM_SPRITES_COMMIT).
  */
 /** Where sprites come from (pure functions, unit-tested). */
 internal object SpriteUrls {
@@ -81,7 +81,8 @@ internal object SpriteUrls {
     fun staticChain(num: Int, shiny: Boolean) =
         listOf(static(num, shiny), "${jsDelivr()}pokemon/${if (shiny) "shiny/" else ""}$num.png")
 
-    fun item(id: String) = "${pokeApi()}items/$id.png"
+    /** Item icon URL: pinned to [DataStore.ITEM_SPRITES_COMMIT] (R19-E), not the Pokémon pin; there is no jsDelivr fallback for items. */
+    fun item(id: String) = "https://raw.githubusercontent.com/PokeAPI/sprites/${DataStore.ITEM_SPRITES_COMMIT}/sprites/items/$id.png"
 
     fun isGif(b: ByteArray) = b.size > 6 && b[0] == 'G'.code.toByte() && b[1] == 'I'.code.toByte() &&
         b[2] == 'F'.code.toByte() && b[3] == '8'.code.toByte()
@@ -137,7 +138,7 @@ internal class ByteLru<V : Any>(private val maxBytes: Long, private val sizeOf: 
  * (Showdown's, mirrored by PokeAPI under the national number / form id) fill the rest of gens 6-9 and the regional
  * forms. They are never used for a base species #1-649, which always has the pixel ones.
  * Static 96x96 PNGs (Pokédex, team, widgets) come from PokeAPI sprites/pokemon/{num}.png (shiny/{num}.png);
- * item icons from PokeAPI sprites/items/{id}.png. PokeAPI URLs are pinned to DataStore.SPRITES_COMMIT.
+ * item icons from PokeAPI sprites/items/{id}.png. PokeAPI URLs are pinned to DataStore.SPRITES_COMMIT (item icons: DataStore.ITEM_SPRITES_COMMIT).
  */
 object Sprites {
     fun enabled(ctx: Context) = !ctx.getSharedPreferences("firstrun", 0).getBoolean("skipSprites", false)
@@ -182,6 +183,12 @@ object Sprites {
                 File(dir, sub).listFiles()?.forEach { if (it.name.endsWith(".png") || it.name.endsWith(".missing")) it.delete() }
             }
             try { dir.mkdirs(); mark.writeText("1") } catch (_: IOException) { }
+        }
+        // R19: an item pin change retries old 404s immediately; keep the icons already fetched.
+        val itemMark = File(dir, ".items-" + DataStore.ITEM_SPRITES_COMMIT.take(8))
+        if (!itemMark.isFile) {
+            File(dir, "item").listFiles()?.forEach { if (it.name.endsWith(".missing")) it.delete() }
+            try { dir.mkdirs(); itemMark.writeText("1") } catch (_: IOException) { }
         }
         // Every Pokédex picture exists, so a "not found" note in static/ is always a wrong one (version 0.2.0 saved one for an
         // error page; a note blocked the picture for 7 days). Dropped once; the pictures themselves stay.

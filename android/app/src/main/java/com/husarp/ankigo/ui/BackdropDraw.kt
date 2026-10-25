@@ -88,4 +88,40 @@ internal object BackdropDraw {
     fun visible(l: Layout, w: Float, h: Float) = floatArrayOf(
         max(-w * OVERSCAN, l.picL), max(-h * OVERSCAN, l.picT), min(w * (1f + OVERSCAN), l.picR), min(h * (1f + OVERSCAN), l.picB),
     )
+
+    /**
+     * R19-F: a reduced copy of the picture, for a picture that lands under [BackdropSharp.HARD_MIN] screen px per file px. [srcL]..[srcB]
+     * is the part of the FILE it is made from (file pixels), [outW] x [outH] its size in screen pixels, and [dstL]..[dstB] where it lands
+     * in the panel (the layer's rectangle, [visible]: panel plus the jolt's room, cut to the picture). [sameView] = it shows the same part
+     * of the picture in the same place (a change of screen scale alone only changes the size of the copy).
+     */
+    data class Sharp(
+        val srcL: Float, val srcT: Float, val srcR: Float, val srcB: Float,
+        val outW: Int, val outH: Int,
+        val dstL: Float, val dstT: Float, val dstR: Float, val dstB: Float,
+    ) {
+        fun sameView(o: Sharp) = srcL == o.srcL && srcT == o.srcT && srcR == o.srcR && srcB == o.srcB &&
+            dstL == o.dstL && dstT == o.dstT && dstR == o.dstR && dstB == o.dstB
+    }
+
+    /**
+     * The copy the picture needs in a [w] x [h] panel ([l] from [layout]), or null when the GPU can draw it with no smoothing. [bx] / [by]
+     * = file pixels per catalog pixel (a file of another size is scaled to the catalog's), [fileW] x [fileH] the file's size, [screen] =
+     * how much the panel is scaled on the screen (the study layouts and small windows draw a "virtual" panel scaled down).
+     */
+    fun sharp(l: Layout, w: Float, h: Float, bx: Float, by: Float, fileW: Int, fileH: Int, screen: Float): Sharp? {
+        if (!(screen > 0f) || fileW <= 0 || fileH <= 0 || !(bx > 0f) || !(by > 0f)) return null
+        val sx = l.kx / bx // panel px per file px
+        val sy = l.ky / by
+        if (BackdropSharp.hard(min(sx, sy) * screen)) return null
+        val v = visible(l, w, h)
+        if (v[2] - v[0] < 1f || v[3] - v[1] < 1f) return null
+        val outW = max(1, Math.round((v[2] - v[0]) * screen))
+        val outH = max(1, Math.round((v[3] - v[1]) * screen))
+        return Sharp(
+            ((v[0] - l.picL) / sx).coerceIn(0f, fileW.toFloat()), ((v[1] - l.picT) / sy).coerceIn(0f, fileH.toFloat()),
+            ((v[2] - l.picL) / sx).coerceIn(0f, fileW.toFloat()), ((v[3] - l.picT) / sy).coerceIn(0f, fileH.toFloat()),
+            outW, outH, v[0], v[1], v[2], v[3],
+        )
+    }
 }

@@ -51,16 +51,16 @@ class NeutralOkUiTest {
         assertEquals(BattleLogBuilder.OK, back.single().rounds.single().answers.single().button)
     }
 
-    @Test fun theChargeDotsStayAsTheyAre() {
+    @Test fun theOkFillsAGreyDotLikeAnyAnswer() {   // R19-T (PLAN 284): it used to leave the dots as they were
         val c = StudyCharge()
         c.observe(counted(3), 2); c.observe(GameEvent.Charge(10, 1, 2), 2)
         assertEquals(listOf(3), c.filled)
         c.observe(counted(1, neutral = true), 2)
-        assertEquals("the OK fills no pip and clears nothing", listOf(3), c.filled)
-        c.observe(counted(4), 2); c.observe(GameEvent.RoundStart(1.5, 30, false), 2)
-        assertEquals(listOf(3, 4), c.filled)
+        assertEquals("the OK fills the second dot, in grey", listOf(3, StudyCharge.OK), c.filled)
+        c.observe(GameEvent.RoundStart(0.5, 10, false), 2)
+        assertEquals("the finished round keeps both dots", listOf(3, StudyCharge.OK), c.filled)
         c.observe(counted(1, neutral = true), 2)
-        assertEquals("not even after a finished round", listOf(3, 4), c.filled)
+        assertEquals("the next answer starts a new round", listOf(StudyCharge.OK), c.filled)
     }
 
     @Test fun noHesitatedFloatForAnOkButStillForARealAgain() {

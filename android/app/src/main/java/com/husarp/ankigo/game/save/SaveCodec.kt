@@ -10,6 +10,7 @@ import com.husarp.ankigo.game.FieldRules
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.MoveChoice
+import com.husarp.ankigo.game.PendingAsk
 import com.husarp.ankigo.game.Nature
 import com.husarp.ankigo.game.Outcome
 import com.husarp.ankigo.game.Settings
@@ -83,6 +84,7 @@ object SaveCodec {
             kv("starterUid", state.starterUid); list("starterSeen", state.starterSeen.sorted()); list("starterCaught", state.starterCaught.sorted()) // R9-W4-B
             kv("pendingMain", state.pendingMain) // PLAN 206: the switch waiting for the next answer (null = none; a save without the key is an old one)
             kv("pendingCycle", state.pendingCycle) // PLAN 206: that switch is a team cycle (a save without the key: false)
+            if (state.asks.isNotEmpty()) { key("asks"); arr { state.asks.forEach { writeAsk(this, it) } } } // R19-P (PLAN 281): only while a question waits, so a save without any is byte for byte what it was
             key("settings"); writeSettings(this, state.settings)
         }
         return w.toString()
@@ -150,6 +152,12 @@ object SaveCodec {
         kv("look", m.look); kv("restFrac", m.restFrac)
     }
 
+    /** R19-P (PLAN 281): one waiting question; the wild Pokémon of a catch question is written whole. */
+    private fun writeAsk(w: W, a: PendingAsk) = w.obj {
+        kv("kind", a.kind.name); kv("uid", a.uid); kv("tier", a.tier.name); kv("oldUid", a.oldUid); kv("at", a.at)
+        a.wild?.let { key("wild"); writeMon(this, it) }
+    }
+
     private fun writeUnsupported(w: W, u: UnsupportedMon) = w.obj {
         kv("ankimonId", u.ankimonId); kv("speciesId", u.speciesId); kv("name", u.name); kv("nickname", u.nickname)
         kv("level", u.level); kv("shiny", u.shiny); kv("reason", u.reason); kv("raw", u.raw)
@@ -190,6 +198,7 @@ object SaveCodec {
         kv("fasterStartV2", s.fasterStart)
         kv("autoReleaseDuplicates", s.autoReleaseDuplicates)
         kv("moveChoice", s.moveChoice.name)
+        if (s.askMe) kv("askMe", true) // R19-P (PLAN 281): written only when on, so every other save is byte for byte what it was
         kv("autoMode", s.autoMode)
         kv("protectLegendary", s.protectLegendary); kv("protectMythical", s.protectMythical)
         kv("protectUltra", s.protectUltra); kv("protectStarter", s.protectStarter)
@@ -245,6 +254,16 @@ object SaveCodec {
         )
     }
 
+    /** A waiting question; one that can not be read (no uid, a catch question without its wild Pokémon, an unknown kind) is dropped, nothing else is touched. */
+    private fun readAsk(o: JSONObject): PendingAsk? {
+        val kind = PendingAsk.Kind.entries.firstOrNull { it.name == o.strOrNull("kind") } ?: return null
+        val uid = o.strOrNull("uid") ?: return null
+        val wild = try { o.optJSONObject("wild")?.let { readMon(it) } } catch (e: Exception) { null }
+        if (kind == PendingAsk.Kind.CATCH && wild == null) return null
+        if (kind == PendingAsk.Kind.REPLACE && o.strOrNull("oldUid") == null) return null
+        return PendingAsk(kind, uid, wild, enumOr(o.strOrNull("tier"), Tier.NORMAL), o.strOrNull("oldUid"), o.long("at", 0))
+    }
+
     private fun readUnsupported(o: JSONObject): UnsupportedMon = UnsupportedMon(
         ankimonId = o.getString("ankimonId"), speciesId = o.intOrNull("speciesId"), name = o.str("name", ""),
         nickname = o.strOrNull("nickname"), level = o.int("level", 1), shiny = o.bool("shiny", false),
@@ -291,7 +310,7 @@ object SaveCodec {
             rounds = o.int("rounds", 0), startedAt = o.long("startedAt", 0),
             wildMaxHp = o.intOrNull("wildMaxHp")?.coerceAtLeast(1),
             failedThrows = o.int("failedThrows", 0).coerceAtLeast(0), // old saves: 0
-            buttons = (o.intList("buttons") ?: emptyList()).map { it.coerceIn(0, 4) }.toMutableList(), // old saves: none, Game.onAnswer restores them from the tally
+            buttons = (o.intList("buttons") ?: emptyList()).map { it.coerceIn(0, Tuning.BUTTON_OK) }.toMutableList(), // old saves: none, Game.onAnswer restores them from the tally; R19-T: 5 = the OK of a new card
             field = readField(o.optJSONObject("field")), // R17C-1: an old save has none = an empty field
         )
     }
@@ -307,6 +326,7 @@ object SaveCodec {
         s.protectStarter = o.bool("protectStarter", s.protectStarter)
         s.protectRegional = o.bool("protectRegional", s.protectRegional)
         s.autoReleaseDuplicates = o.bool("autoReleaseDuplicates", false)
+        s.askMe = o.bool("askMe", false) // R19-P: a save without the key is an old one
         com.husarp.ankigo.game.CatchChoice.normalize(s) // R10-X2: an old switch-on save with mode 1/2 keeps its mode, switch off
         s.moveChoice = MoveChoice.parse(o.strOrNull("moveChoice")) // missing or unknown = SMART (old saves too)
         o.intList("wishlist")?.let { s.wishlist.clear(); s.wishlist.addAll(it) }
@@ -409,6 +429,13 @@ object SaveCodec {
         readAchievements(o, s)
         s.pendingMain = o.strOrNull("pendingMain")?.takeIf { it in known && it in s.team && it != s.team.firstOrNull() } // PLAN 206: only a team member that is not the main can still be waiting
         s.pendingCycle = s.pendingMain != null && o.bool("pendingCycle", false)
+        o.optJSONArray("asks")?.let { a -> // R19-P (PLAN 281): an old save has none; at most AskMe.MAX_WAITING are kept (the newest)
+            for (i in 0 until a.length()) {
+                val q = try { readAsk(a.getJSONObject(i)) } catch (e: Exception) { null } ?: continue
+                if (s.asks.none { it.kind == q.kind && it.uid == q.uid }) s.asks += q
+            }
+            while (s.asks.size > com.husarp.ankigo.game.AskMe.MAX_WAITING) s.asks.removeAt(0)
+        }
         // Decoded and filled with defaults, so it is a current-schema state now.
         s.schema = GameState.SCHEMA
         return s

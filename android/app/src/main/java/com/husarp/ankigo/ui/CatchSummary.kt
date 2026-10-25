@@ -16,6 +16,7 @@ data class CatchSummary(
     val xp: List<XpLine>,
     val coins: Int, // answer + win money of the batch (R13 Part C); the once-a-day goal bonus is not part of the fight
     val next: String,
+    val ask: Boolean = false, // R19-P (PLAN 281): a defeat whose catch question waits ("Ask me"): the tile says "Your call"
 ) {
     /** [isNew] = first of its species; [number] = national Pokédex number. */
     data class PokedexLine(val isNew: Boolean, val number: Int) {
@@ -53,7 +54,7 @@ data class CatchSummary(
                 XpLine(uid, list.last().name, list.sumOf { it.xp }, list.last().level, uid in levelled)
             }.filter { it.xp > 0 }
             val coins = events.filterIsInstance<GameEvent.Cash>().filter { it.kind != CashKind.DAILY_BONUS }.sumOf { it.amount }
-            return CatchSummary(caught != null, caught?.name ?: defeated!!.name, pokedex, throwLine, xp, coins, NEXT_TEXT)
+            return CatchSummary(caught != null, caught?.name ?: defeated!!.name, pokedex, throwLine, xp, coins, NEXT_TEXT, ask = caught == null && defeated?.ask == true)
         }
 
         /** Failed throws in [events] (the events since the fight began): what to pass as `earlierThrows` for the batch that ends it. */

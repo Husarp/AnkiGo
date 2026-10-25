@@ -20,13 +20,18 @@ import kotlin.math.max
 /**
  * The bar under the battle picture (Round 9 D3-E): separate rounded segments `[ my last move | dots | their last move ]` (or
  * `[ my move | their move | dots ]`), the halves like the Pokémon-details move row. Tapping a half pops [MoveBubble] over the arena
- * (the bar never changes height). The bar keeps the log slot's size in every host; a line about the whole battle ([showLine])
- * replaces the segments across the full width until the next move. [ActionBarModel] holds what the halves show.
+ * (the bar never changes height). The bar keeps the log slot's size in every host. R19-H (PLAN 257): no message ever takes the whole bar
+ * again (they are card toasts, [ArenaToastLayer]); only the "Paused" line of a small window or the Study strip replaces the segments.
+ * [ActionBarModel] holds what the halves show.
  *
  * It is the `logBox` of [BattlePanelView]; the panel lays it out at the size the old log card had.
  */
 internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
-    val model = ActionBarModel()
+    val model = ActionBarModel { player ->
+        val battle = com.husarp.ankigo.GameRepo.state?.battle
+        val id = (if (player) battle?.player else battle?.enemy)?.charging
+        id?.let { com.husarp.ankigo.GameRepo.data?.move(it) }
+    }
 
     private val mineHalf = HalfView(ctx, BarSide.MINE)
     private val theirsHalf = HalfView(ctx, BarSide.THEIRS)
@@ -34,13 +39,12 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     private val row = SegmentRow(ctx, mineHalf, theirsHalf, dots)
     private val line = LineBox(ctx)
 
-    private var wholeLine = false
     private var pausedLine = false
 
     /** The panel's text floor ([PanelFit]); texts made later start at it. */
     var floorSp = 0f
 
-    /** The charge dots show (the Study screen); they sit by [dotsPlace]. */
+    /** The charge dots show (the Study screen; R19-B: also picture-in-picture, split screen and the floating window); they sit by [dotsPlace]. */
     var dotsOn = false
         set(v) { field = v; row.dotsOn = v; line.pips.visibility = if (v) VISIBLE else GONE }
 
@@ -60,13 +64,17 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
         mineHalf.bind(model.mine, floorSp); theirsHalf.bind(model.theirs, floorSp)
     }
 
+    companion object {
+        /** R19-B: under this segment-row width (dp) the dots take their small form so the two halves keep their room (290 = two halves of 118 dp, where the move tile still shows, beside the 44 dp segment) (picture-in-picture, the small floating window). */
+        const val NARROW_DP = 290
+    }
+
     // ---------------------------------------------------------------- what is shown
 
     /** Takes one played event in: the halves follow the moves of the fight. */
     fun observe(e: GameEvent) {
         val changed = model.observe(e)
         if (changed.isEmpty()) return   // R18-B: a queued switch changes nothing here (a toast says it); the bar keeps its segments
-        if (wholeLine) { wholeLine = false; sync() }   // a move ends a line about the whole battle
         for (s in changed) {
             if (bubbleSide == s) closeBubble()
             val h = half(s)
@@ -76,13 +84,6 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun half(s: BarSide) = if (s == BarSide.MINE) mineHalf else theirsHalf
-
-    /** Shows a line about the whole battle across the full bar, until the next move arrives. */
-    fun showLine(kind: LogKind, pill: String, text: String, pop: Boolean) {
-        line.show(kind, pill, text, pop && isAttachedToWindow && !still(), floorSp)
-        wholeLine = true
-        sync()
-    }
 
     /** Kept only so a local screenshot file still compiles: a queued switch no longer puts a line on the bar (R18-B, PLAN 227). */
     @Suppress("UNUSED_PARAMETER")
@@ -96,15 +97,14 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun sync() {
-        val lineOn = wholeLine || pausedLine
-        line.visibility = if (lineOn) VISIBLE else GONE
-        row.visibility = if (lineOn) INVISIBLE else VISIBLE
-        if (lineOn) closeBubble()
+        line.visibility = if (pausedLine) VISIBLE else GONE
+        row.visibility = if (pausedLine) INVISIBLE else VISIBLE
+        if (pausedLine) closeBubble()
     }
 
-    /** The line card's look for the host: [small] = one short line, [legacy] = the study strip, [flat] = edge to edge (Study, short). */
+    /** The "Paused" line's look for the host: [small] = one short line, [legacy] = the study strip, [flat] = edge to edge (Study, short). */
     fun setLook(small: Boolean, legacy: Boolean, flat: Boolean) {
-        line.setLook(small, legacy, flat, floorSp)
+        line.setLook(small, legacy, flat)
         row.flat = flat
     }
 
@@ -112,23 +112,17 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     fun setCharge(goal: Int, buttons: List<Int>) {
         dots.pips.render(goal, buttons)
         line.pips.render(goal, buttons)
-        dots.contentDescription = "Battle charge ${buttons.size} of $goal" + if (buttons.lastOrNull() == StudyCharge.SWITCH) ", the last one a switch" else ""
+        dots.contentDescription = "Battle charge ${buttons.size} of $goal" + if (buttons.lastOrNull() == StudyCharge.OK) ", the last one an OK with no power" else ""
         line.pips.contentDescription = dots.contentDescription
     }
 
-    fun applyLiveRegion() {
-        line.text.accessibilityLiveRegion =
-            if (context.getSharedPreferences("study", 0).getBoolean("speakBattle", true)) ACCESSIBILITY_LIVE_REGION_POLITE else ACCESSIBILITY_LIVE_REGION_NONE
-    }
-
-    /** A battle line the bar does not show (a move, or something about one side): spoken only, when Settings → Read battle log says so. */
+    /** A battle line the bar does not show (a move, something about one side, a toast): spoken only, when Settings → Read battle log says so. */
     fun announce(text: String) {
         if (!context.getSharedPreferences("study", 0).getBoolean("speakBattle", true) || !isAttachedToWindow) return
         announceForAccessibility(text.replace("{{", "").replace("}}", ""))
     }
 
     fun cancelAnimations() {
-        line.cancelAnimations()
         mineHalf.animate().cancel(); theirsHalf.animate().cancel()
         mineHalf.scaleX = 1f; mineHalf.scaleY = 1f; mineHalf.alpha = 1f
         theirsHalf.scaleX = 1f; theirsHalf.scaleY = 1f; theirsHalf.alpha = 1f
@@ -137,14 +131,6 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     private fun still() = !ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
 
     // ---------------------------------------------------------------- size
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        // a short bar (one-line hosts, under ~40 dp) shows one line of text in the line card
-        val h = MeasureSpec.getSize(heightMeasureSpec) / resources.displayMetrics.density
-        val lines = if (h < 40f) 1 else 2
-        if (line.text.maxLines != lines) line.text.maxLines = lines   // setMaxLines asks for a layout even when unchanged
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-    }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -185,6 +171,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     internal fun halfView(side: BarSide): View = half(side)
     internal fun bubbleViews(): Int = (0 until (layer?.childCount ?: 0)).count { layer?.getChildAt(it) is MoveBubble }
     internal fun lineShown(): Boolean = line.visibility == VISIBLE
+    internal fun dotsSmall(): Boolean = row.smallDots
     internal fun segmentOrder(): List<String> = (0 until row.childCount).map { when (row.getChildAt(it)) { mineHalf -> "mine"; theirsHalf -> "theirs"; else -> "dots" } }
 
     private fun toggleBubble(side: BarSide) {
@@ -259,6 +246,8 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     /** The two halves and the dots, in a row with 4 dp gaps (the dots at the setting's place). */
     private class SegmentRow(ctx: Context, private val mine: HalfView, private val theirs: HalfView, private val dots: DotsSegment) : ViewGroup(ctx) {
         private val gap = Ui.dp(ctx, 4)
+        /** Whether the dots are in their small form (set while measuring; read by tests). */
+        val smallDots: Boolean get() = dots.small
         var dotsOn = false
             set(v) { field = v; order() }
         var dotsPlace = DotsPlace.MIDDLE
@@ -286,6 +275,8 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             val innerH = h - paddingTop - paddingBottom
             var used = 0
             var n = 0
+            // R19-B: a bar too tight for two readable halves plus the full dots segment (picture-in-picture, the small floating window) gets the small dots
+            dots.setSmall(innerW < Ui.dp(context, NARROW_DP))
             for (i in 0 until childCount) {
                 val k = getChildAt(i)
                 if (k === dots) {
@@ -343,7 +334,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
         private fun keyOf(s: HalfState) = when (s) {
             is HalfState.Empty -> "-"
             is HalfState.Note -> "n:" + s.text
-            is HalfState.Moved -> "m:${s.move.move}:${s.move.damage}:${s.move.missed}:${s.move.type}:${s.move.category}"
+            is HalfState.Moved -> "m:${s.move.move}:${s.move.damage}:${s.move.missed}:${s.move.type}:${s.move.category}:${s.move.charging}"
         }
 
         fun setOpen(open: Boolean) {
@@ -390,7 +381,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
                         addView(t, LayoutParams(Ui.dp(context, tileDp), Ui.dp(context, tileDp)).also { it.marginStart = gap })
                     }
                     contentDescription = "${if (mine) "Your" else "Wild"} last move: ${m.move}" +
-                        (if (m.missed) ", missed" else "") + ". ${DetailSections.kindName(m.category)}" +
+                        (if (m.missed) ", missed" else "") + ". ${if (m.charging) "Charging" else DetailSections.kindName(m.category)}" +
                         (m.type?.let { ", ${it.label} type" } ?: "") + ". Tap for details"
                 }
                 else -> {
@@ -412,7 +403,15 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val chip = m.type?.let { Ui.typeChip(context, it) }
-            val word = Ui.text(context, 10f, 800, R.color.ag_sub0).apply { text = DetailSections.kindName(m.category); maxLines = 1 }.also { kind = it }
+            val word = Ui.text(context, 10f, 800, R.color.ag_sub0).apply { text = if (m.charging) "Charging" else DetailSections.kindName(m.category); maxLines = 1
+                // PLAN 266B: keep the type chip; a small clock replaces the usual kind word.
+                if (m.charging) {
+                    val clock = context.getDrawable(R.drawable.ic_clock)?.mutate()
+                    clock?.setTint(Ui.c(context, R.color.ag_peach))
+                    clock?.setBounds(0, 0, Ui.dp(context, 11), Ui.dp(context, 11))
+                    setCompoundDrawables(clock, null, null, null)
+                    compoundDrawablePadding = Ui.dp(context, 2)
+                } }.also { kind = it }
             val gap = Ui.dp(context, 5)
             if (side == BarSide.MINE) {
                 chip?.let { addView(it, LayoutParams(-2, -2)) }
@@ -442,6 +441,8 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     /** The charge dots on a segment of their own: 4 dp gaps, at least 44 dp wide. */
     private class DotsSegment(ctx: Context) : LinearLayout(ctx) {
         val pips = PipRow(ctx)
+        var small = false
+            private set
 
         init {
             gravity = Gravity.CENTER
@@ -450,9 +451,19 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 12, ctx)   // the same card colour as the two move halves (mantle read as black in dark)
             addView(pips, LayoutParams(-2, -2))
         }
+
+        /** R19-B: the small form for a narrow bar: 6 dp pips, 3 dp apart, a 24 dp segment (the full one is 10 dp pips in 44 dp). Called while measuring, so no re-layout request. */
+        fun setSmall(on: Boolean) {
+            if (small == on) return
+            small = on
+            minimumWidth = Ui.dp(context, if (on) 24 else 44)
+            val side = Ui.dp(context, if (on) 4 else 8)
+            setPadding(side, 0, side, 0)
+            pips.setSmall(on)
+        }
     }
 
-    /** The turn's charge pips, 10 dp each; the colour is the answer button (red again, peach hard, green good, blue easy; mauve = the answer a switch came in with). */
+    /** The turn's charge pips, 10 dp each; the colour is the answer button (red again, peach hard, green good, blue easy; grey OK skips attacks). */
     private class PipRow(ctx: Context) : LinearLayout(ctx) {
         private val pips = List(4) { View(ctx) }
 
@@ -461,11 +472,20 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             pips.forEachIndexed { i, p -> addView(p, LayoutParams(Ui.dp(ctx, 10), Ui.dp(ctx, 10)).also { if (i > 0) it.marginStart = Ui.dp(ctx, 4) }) }
         }
 
+        /** The small form (R19-B): 6 dp pips with 3 dp gaps; edits the layout params only (the caller measures right after). */
+        fun setSmall(on: Boolean) {
+            pips.forEachIndexed { i, p ->
+                val lp = p.layoutParams as LayoutParams
+                lp.width = Ui.dp(context, if (on) 6 else 10); lp.height = lp.width
+                if (i > 0) lp.marginStart = Ui.dp(context, if (on) 3 else 4)
+            }
+        }
+
         fun render(goal: Int, buttons: List<Int>) {
             pips.forEachIndexed { i, v ->
                 v.visibility = if (i < goal) VISIBLE else GONE
                 val button = buttons.getOrNull(i)
-                val tone = when (button) { 1 -> R.color.ag_red; 2 -> R.color.ag_peach; 3 -> R.color.ag_green; 4 -> R.color.ag_blue; StudyCharge.SWITCH -> R.color.ag_mauve; 0 -> R.color.ag_ov; else -> R.color.ag_s0 }
+                val tone = when (button) { 1 -> R.color.ag_red; 2 -> R.color.ag_peach; 3 -> R.color.ag_green; 4 -> R.color.ag_blue; StudyCharge.OK, 0 -> R.color.ag_ov; else -> R.color.ag_s0 }   // R19-T (PLAN 284): the OK of a new card is a grey dot (no power); the empty one is lighter and outlined
                 v.background = Ui.rounded(Ui.c(context, tone), 5, context).apply {
                     if (button == null) setStroke(Ui.dp(context, 1.5f).toInt(), Ui.c(context, R.color.ag_s1))
                 }
@@ -473,14 +493,12 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
         }
     }
 
-    /** Today's plain one-card line (coloured pill + text, the accent strip at its left): for lines about the whole battle. */
+    /**
+     * The "Paused" line, the only line left (R19-H: every message is a toast): the peach pill on the card with its strip at the left, the
+     * charge dots at the end. It replaces the segments while paused in a small window or the Study strip.
+     */
     private class LineBox(ctx: Context) : LinearLayout(ctx) {
         private val bg = PanelAccentCard(Ui.c(ctx, R.color.ag_card), Ui.c(ctx, R.color.ag_s1), Ui.dp(ctx, 12f), Ui.dp(ctx, 4f))
-        val text = Ui.text(ctx, 13f, 700, R.color.ag_text).apply {
-            maxLines = 2
-            ellipsize = TextUtils.TruncateAt.END
-            setLineSpacing(0f, 1.2f)
-        }
         val pips = PipRow(ctx)
         private val pausedPill = Ui.text(ctx, 10f, 900, R.color.ag_crust).apply {
             this.text = "Paused"
@@ -489,81 +507,31 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             background = Ui.rounded(Ui.c(ctx, R.color.ag_peach), 7, ctx)
             visibility = GONE
         }
-        private var pill: TextView? = null
-        private var accentAnim: ValueAnimator? = null
-        private var small = false
-        private var legacy = false
         var flat = false
             private set
-        private var size = 13f
-        private var paused = false
 
         init {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             background = bg
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 8), Ui.dp(ctx, 10), Ui.dp(ctx, 8))   // 4 dp strip + the mockup's 10 dp
-            addView(pausedPill, LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 6) })
-            addView(text, LayoutParams(0, -2, 1f))
+            addView(pausedPill, LayoutParams(-2, -2))
+            addView(View(ctx), LayoutParams(0, 1, 1f))   // the dots go to the end
             addView(pips, LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 7) })
         }
 
-        fun setLook(small: Boolean, legacy: Boolean, flat: Boolean, floor: Float) {
-            this.small = small; this.legacy = legacy; this.flat = flat
+        fun setLook(small: Boolean, legacy: Boolean, flat: Boolean) {
+            this.flat = flat
             when {
                 flat -> setPadding(Ui.dp(context, 12), Ui.dp(context, 5), Ui.dp(context, 10), Ui.dp(context, 5))
                 legacy -> setPadding(Ui.dp(context, 10), Ui.dp(context, 2), Ui.dp(context, 8), Ui.dp(context, 2))
                 else -> setPadding(Ui.dp(context, 14), Ui.dp(context, if (small) 4 else 8), Ui.dp(context, 10), Ui.dp(context, if (small) 4 else 8))
             }
             bg.cornerRadius = if (flat) 0f else Ui.dp(context, 12f)
-            TextFloor.set(text, if (legacy) 12f else size, floor)
-            pill?.let { stylePill(it, floor) }
         }
 
         fun setPaused(on: Boolean) {
-            paused = on
             pausedPill.visibility = if (on) VISIBLE else GONE
-            pill?.visibility = if (on) GONE else VISIBLE
-        }
-
-        private fun stylePill(p: TextView, floor: Float) {
-            TextFloor.apply(p, floor)
-            if (legacy) {
-                (p.background as? GradientDrawable)?.cornerRadius = Ui.dp(context, 6f)
-                TextFloor.set(p, 9.5f, 0f)
-                p.setPadding(Ui.dp(context, 6), Ui.dp(context, 2), Ui.dp(context, 6), Ui.dp(context, 2))
-                (p.layoutParams as? LayoutParams)?.marginEnd = Ui.dp(context, 7)
-            }
-        }
-
-        fun show(kind: LogKind, pillText: String, line: String, pop: Boolean, floor: Float) {
-            pill?.let { removeView(it) }
-            val p = Ui.pill(context, pillText, kind.tone)
-            addView(p, 1, LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(context, 8) })   // after the "Paused" pill
-            p.visibility = if (paused) GONE else VISIBLE
-            pill = p
-            stylePill(p, floor)
-            size = if (line.length > 64) 12f else 13f
-            TextFloor.set(text, if (legacy) 12f else size, floor)
-            text.text = PanelText.rich(context, line)
-            val to = Ui.c(context, kind.border)
-            accentAnim?.cancel()
-            if (pop) {
-                val from = bg.accent
-                accentAnim = ValueAnimator.ofObject(android.animation.ArgbEvaluator(), from, to).setDuration(200).also { a ->
-                    a.addUpdateListener { bg.accent = it.animatedValue as Int }
-                    a.start()
-                }
-                animate().cancel()
-                scaleX = 0.97f; scaleY = 0.97f; alpha = 0.6f
-                animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(250).start()
-            } else bg.accent = to
-        }
-
-        fun cancelAnimations() {
-            accentAnim?.cancel()
-            animate().cancel()
-            scaleX = 1f; scaleY = 1f; alpha = 1f
         }
     }
 }

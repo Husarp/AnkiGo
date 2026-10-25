@@ -51,13 +51,19 @@ class BackdropCatalogTest {
                 assertEquals(b.id, 500, b.h)
             }
         }
-        // all of Adam's kept pictures are WebP, soft (not crisp); only Showdown's are crisp PNGs
+        // all of Adam's kept pictures are WebP; R19-F (PLAN 274): they are pixel art too, so every picture is crisp (drawn without smoothing)
         val webp = all.filter { it.ext == "webp" }.map { it.id }.toSet()
         assertEquals(batch1 + batch2.keys + batch3 + batch4 + batch5, webp)
         for ((id, size) in batch2) { val b = BackdropCatalog.byId(id)!!; assertEquals(id, size, b.w to b.h) }
         for (id in batch3 + batch4 + batch5) { val b = BackdropCatalog.byId(id)!!; assertEquals(id, 1024 to 687, b.w to b.h) }
-        assertTrue(all.filter { it.ext == "webp" }.all { it.source == BackdropSource.OWN && !it.crisp })
+        assertTrue(all.filter { it.ext == "webp" && it.id != "factory" }.all { it.source == BackdropSource.OWN && it.crisp })
         assertTrue(all.filter { it.source == BackdropSource.SHOWDOWN }.all { it.crisp })
+        // R19-F2 (PLAN 274 changes): Showdown's 12 and the factory keep today's drawing (no reduced copy; the factory smoothed), the other 22 are sharp
+        val today = all.filter { !it.sharp }.map { it.id }.toSet()
+        assertEquals(all.filter { it.source == BackdropSource.SHOWDOWN }.map { it.id }.toSet() + "factory", today)
+        assertEquals(13, today.size)
+        assertFalse(BackdropCatalog.byId("factory")!!.crisp)
+        assertEquals(22, all.count { it.sharp })
         // the dark ones are flagged
         assertEquals(setOf("deep-sea-cave", "night-forest", "crystal-storm", "haunted-mansion", "mine", "snow-aurora", "stormy-plains", "dark-town", "dark-forest", "psychic-lab"), all.filter { it.dark }.map { it.id }.toSet())
     }
@@ -157,7 +163,7 @@ class BackdropCatalogTest {
         for (id in listOf("legendary-shrine", "ruins-courtyard", "dark-town")) {
             val b = BackdropCatalog.byId(id)!!
             assertEquals(id, .44f, b.player.s, 1e-6f); assertEquals(id, .32f, b.wild.s, 1e-6f)
-            assertTrue(id, !b.crisp)
+            assertTrue(id, b.crisp)
         }
     }
 
@@ -179,7 +185,7 @@ class BackdropCatalogTest {
             assertEquals(id, "$id.webp", com.husarp.ankigo.data.Backdrops.fileName(b))
             assertEquals(id, 1, b.rev); assertEquals(id, BackdropSource.OWN, b.source)
             assertEquals(id, .44f, b.player.s, 1e-6f); assertEquals(id, .32f, b.wild.s, 1e-6f)
-            assertFalse(id, b.crisp)
+            assertTrue(id, b.crisp)
             assertEquals(id, id == "dark-forest", b.dark) // the only night picture
         }
         val marsh = BackdropCatalog.byId("poison-marsh")!! // the feet stand on the two dark ovals: ours lower left, the wild one mid right
@@ -194,7 +200,7 @@ class BackdropCatalogTest {
         assertEquals("psychic-lab.webp", com.husarp.ankigo.data.Backdrops.fileName(b))
         assertEquals(1, b.rev); assertEquals(BackdropSource.OWN, b.source); assertEquals(1024, b.w); assertEquals(687, b.h)
         assertEquals(.44f, b.player.s, 1e-6f); assertEquals(.32f, b.wild.s, 1e-6f)
-        assertFalse(b.crisp); assertTrue(b.dark) // dim purple interior: no extra dusk tint in the dark theme
+        assertTrue(b.crisp); assertTrue(b.dark) // dim purple interior: no extra dusk tint in the dark theme
         // ours on the clear floor right of the shelf/cart corner (x < .37, y > .75); the wild one on the floor in the middle/back
         assertTrue(b.player.x in .40f..0.45f && b.player.y in .72f..0.76f)
         assertTrue(b.wild.x in .58f..0.68f && b.wild.y in .50f..0.60f)

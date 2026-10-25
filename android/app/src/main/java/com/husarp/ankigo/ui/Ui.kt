@@ -132,9 +132,9 @@ object Ui {
     /** The type chip (symbol and/or name in the type colour on a soft tint, "Show types as"): [TypeChips.chip], the one renderer. */
     fun typeChip(ctx: Context, type: Type): TextView = TypeChips.chip(ctx, type)
 
-    /** HP bar colour: green above 50 %, yellow above 20 %, else red. */
-    fun hpColor(ctx: Context, frac: Float): Int =
-        c(ctx, if (frac > 0.5f) R.color.ag_green else if (frac > 0.2f) R.color.ag_yellow else R.color.ag_red)
+    /** PLAN 163 / R19: selected HP palette; unknown types use the smooth blend. */
+    fun hpColor(ctx: Context, frac: Float, type: Type? = null): Int =
+        HpColors.color(frac, HpColorPrefs.mode(ctx), TypeChips.isDark(ctx), type?.let { typeColor(it) })
 
     // ---------- shapes ----------
 

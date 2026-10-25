@@ -358,8 +358,8 @@ object BattleEngine {
         // ---- writing events ----
 
         /** Writes an [GameEvent.Effect] for [p]: the line [text], its [kind] and the numbers the kind carries ([label] = the short float text). */
-        fun fx(p: Boolean, text: String, kind: EffectKind = EffectKind.OTHER, stat: String? = null, stages: Int = 0, amount: Int = 0, label: String? = null) {
-            out += GameEvent.Effect(p, text, mon(p).hp, maxHp(p), side(p).status, kind, stat, stages, amount, label)
+        fun fx(p: Boolean, text: String, kind: EffectKind = EffectKind.OTHER, stat: String? = null, stages: Int = 0, amount: Int = 0, label: String? = null, into: Int = 0, intoShiny: Boolean = false) {
+            out += GameEvent.Effect(p, text, mon(p).hp, maxHp(p), side(p).status, kind, stat, stages, amount, label, into, intoShiny)
         }
 
         /** [p] regains up to [amount] HP (never above its max); the event carries what it really gained. [label] = a short float text (an ability's name). */
@@ -406,6 +406,9 @@ object BattleEngine {
 
         fun play(enemyActs: Boolean, mainActs: Boolean) {
             acting[idx(false)] = enemyActs; acting[idx(true)] = mainActs // known before the picks: a reactive move is not picked for an action that won't come
+            // R19-FIX (CX-3): a Pokémon that has not entered the fight yet does so BEFORE the moves are picked and the order is set: Imposter's
+            // Ditto has transformed by then, so its first action is a real move of the copied set, with the copied speed and priority
+            if ((enemyActs || mainActs) && wild.hp > 0 && main.hp > 0) enterBoth()
             val playerMove: Move? = if (mainActs) MoveChooser.pick(moveChoice, this, true, rng) else null
             val enemyMove: Move? = if (enemyActs) MoveChooser.pick(moveChoice, this, false, rng) else null
             planned[idx(true)] = playerMove; planned[idx(false)] = enemyMove
@@ -437,6 +440,8 @@ object BattleEngine {
         fun wildStrikes() {
             if (main.hp <= 0 || wild.hp <= 0) return // nothing to hit, or nobody left to hit with
             acting[idx(true)] = false // the Main does not act in a free hit
+            enterBoth() // R19-FIX (CX-3): the entry hooks (the incoming Main's, an Imposter wild one's) run before the wild move is picked
+            if (main.hp <= 0 || wild.hp <= 0) return
             act(false, pickSwitchHitMove(data, battle, main, rng, moveChoice, this))
             checkFaint(true); checkFaint(false)
             rulesEach { it.afterFreeHit(this) } // R17C FIX-A: a free hit is no round: what lasts "until the end of the round" ends here, not in the next real round

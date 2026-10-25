@@ -73,7 +73,8 @@ internal object AbilityMoves {
         if (text != null) r.fx(q, text, EffectKind.OTHER, label = if (id.isEmpty()) "Suppressed" else Abilities.name(id))
         if (id.isEmpty()) return
         settle(r, q)
-        if (start && r.mon(q).hp > 0) Abilities.enter(r, q, id)
+        // R19-FIX (NICE-6): Imposter transforms only when its Pokémon enters the fight (Showdown): a Skill Swap that hands it over does not start it
+        if (start && r.mon(q).hp > 0 && id != "imposter") Abilities.enter(r, q, id)
     }
 
     /** The status of [q] is cured when its (new) ability stops it (Insomnia and sleep, Limber and paralysis ...). */

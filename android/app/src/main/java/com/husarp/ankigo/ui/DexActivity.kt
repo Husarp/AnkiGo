@@ -34,7 +34,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     private lateinit var list: ListView
     private lateinit var header: LinearLayout
     private lateinit var topBox: LinearLayout     // hero + progress, rebuilt on every render
-    private lateinit var segBox: LinearLayout     // All / Owned / Not owned
+    private lateinit var segBox: LinearLayout     // All / Owned / Seen / Not owned
     private lateinit var rowBox: LinearLayout     // the one filter row (PLAN 192 / X10), rebuilt on every render
     private lateinit var search: EditText         // built once so typing keeps focus
     private lateinit var sortPill: View        // the sort chip as last drawn (a new one each render)
@@ -81,12 +81,12 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             divider = null
             dividerHeight = 0
             setSelector(ColorDrawable(Color.TRANSPARENT))
-            setPadding(0, 0, 0, Ui.dp(this@DexPage, 12))
+            setPadding(0, 0, 0, Ui.dp(this@DexPage, 12) + BackToTop.room(this@DexPage)) // R19 250: room for the back-to-top arrow
             clipToPadding = false
             addHeaderView(header, null, false)
             adapter = this@DexPage.adapter
         }
-        return list
+        return BackToTop.wrap(list)
     }
 
     /** PLAN 218: the list goes back to its top (also as the Pokédex section of the Pokémon tab). */
@@ -144,7 +144,8 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
 
     private fun filtered(): List<Species> {
         val st = state
-        return filter.apply(data.species.values.toList(), DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens, DexSortInfo(data, st), DexFilter.favouriteSpecies(st.mons))
+        return filter.apply(data.species.values.toList(), DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens, DexSortInfo(data, st), DexFilter.favouriteSpecies(st.mons),
+            DexFilter.seenNotCaught(st.seen, st.caught))
     }
 
     // ---- the one filter row (PLAN 192, X10): "?" legend, sort & filter button, active-filter chip, quick chips ----
@@ -152,7 +153,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     /**
      * The row under the search field, never scrolling: the legend, the sort & filter button, the active-filter chip while a sheet
      * filter is on (types, generations; a tap opens the sheet, whose Clear turns them off), then the quick chips ★ Wishlist and
-     * Favourites (R18 253): they toggle in place, lit while on. The All / Owned / Not owned switch and the search field are their own
+     * Favourites (R18 253): they toggle in place, lit while on. The All / Owned / Seen / Not owned switch and the search field are their own
      * controls above and are not part of the chip.
      */
     private fun drawRow() {
@@ -175,7 +176,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         list.setSelection(0)
     }
 
-    /** The empty state's "Clear filters": every Pokédex filter off, also All / Owned / Not owned and the search text. */
+    /** The empty state's "Clear filters": every Pokédex filter off, also All / Owned / Seen / Not owned and the search text. */
     private fun clearFilters() {
         filter = filter.withTypeFilter(TypeFilter()).copy(wishlistOnly = false, favouritesOnly = false, gens = emptySet(), owned = DexOwned.ALL, query = "")
         SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, filter.typeFilter)
@@ -321,17 +322,31 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         val ctx = this
         segBox.background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
         segBox.setPadding(Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3))
-        for ((key, label) in listOf(DexOwned.ALL to "All", DexOwned.OWNED to "Owned", DexOwned.NOT_OWNED to "Not owned")) {
+        for ((key, label) in listOf(DexOwned.ALL to "All", DexOwned.OWNED to "Owned", DexOwned.SEEN to "Seen", DexOwned.NOT_OWNED to "Not owned")) {
             val on = filter.owned == key
             segBox.addView(Ui.text(ctx, 12f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply {
                 text = label
                 gravity = Gravity.CENTER
-                maxLines = 1
-                setPadding(0, Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12)) // 42 dp segments in a 48 dp control
+                maxLines = 2 // four segments: with a big system font "Not owned" wraps to two lines, and a word that is still too wide shrinks (R19 252)
+                addOnLayoutChangeListener { v, l, _, r, _, ol, _, or, _ -> if (r - l != or - ol) shrinkToWords(v as TextView) }
+                if (key == DexOwned.SEEN) contentDescription = "Seen, not caught"
+                setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 12), Ui.dp(ctx, 2), Ui.dp(ctx, 12)) // 42 dp segments in a 48 dp control
                 background = if (on) Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx) else null
                 setOnClickListener { filter = filter.copy(owned = key); redraw(); list.setSelection(0) }
-            }, LinearLayout.LayoutParams(0, -2, 1f))
+            }, LinearLayout.LayoutParams(0, -1, 1f)) // equal height when one of them wraps
         }
+    }
+
+    /** R19 252: the text size of a segment goes down (not below 8 sp) until its longest word fits the segment, so a big system font never cuts a word. */
+    private fun shrinkToWords(t: TextView) {
+        val room = t.width - t.paddingLeft - t.paddingRight
+        if (room <= 0) return
+        val probe = android.graphics.Paint(t.paint)
+        val words = t.text.split(" ")
+        val min = Ui.dp(this, 8f) * resources.configuration.fontScale
+        var px = t.textSize
+        while (px > min && words.any { probe.apply { textSize = px }.measureText(it) > room }) px -= 1f
+        if (px != t.textSize) t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, px)
     }
 
     /** The search field: its own full-width line (R16 X10: the sort chip lives in the filter row now). */

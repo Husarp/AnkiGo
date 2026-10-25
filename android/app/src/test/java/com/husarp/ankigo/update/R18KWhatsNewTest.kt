@@ -83,7 +83,7 @@ class R18KWhatsNewTest {
         assertTrue("whats_new.txt not found from ${File(".").absolutePath}", f.exists())
         val v = WhatsNew.parse(f.readText())
         assertTrue(v.size >= 7)
-        assertEquals("0.24.0", v.first().version)
+        assertEquals("0.25.0", v.first().version)
         for (b in v) for (i in b.items) {
             assertTrue("${b.version}: ${i.text}", i.text.endsWith(".") || i.text.endsWith("…)") || i.text.endsWith(")."))
             assertFalse("no arrow glyph in a text (${b.version})", i.text.contains("→"))

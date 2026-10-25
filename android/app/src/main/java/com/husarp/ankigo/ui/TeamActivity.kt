@@ -44,6 +44,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private lateinit var teamCol: LinearLayout
     private lateinit var cardSlot: FrameLayout // the battle card's place at the top of the Team section (never emptied by drawTeam)
     private lateinit var boxList: ListView
+    private lateinit var boxFrame: View        // R19 250: the Box list with its back-to-top arrow; shown / hidden instead of the list
     private lateinit var boxHeader: LinearLayout
     private lateinit var unsupportedBox: LinearLayout // "Not supported yet" (PLAN 67), the end of the Box list
     private lateinit var dexBody: View
@@ -57,6 +58,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     // A plain open of the tab is on Team (R1-02); a jump through Nav can ask for a section. The section chosen inside a visit is kept only while this page lives.
     private var section: TeamSection = start ?: TeamSection.TEAM
+    private var boxVisitOpen = false // PLAN 280 / R19: ordinary redraws are still the same Box visit.
     private var editing = false
     private var pickOn = false
     private val picks = PickSet()
@@ -119,12 +121,13 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             divider = null
             dividerHeight = 0
             setSelector(ColorDrawable(Color.TRANSPARENT))
-            setPadding(0, 0, 0, gap)
+            setPadding(0, 0, 0, gap + BackToTop.room(this@TeamPage)) // R19 250: room for the back-to-top arrow
             clipToPadding = false
             addHeaderView(boxHeader, null, false)
             addFooterView(unsupportedBox, null, false)
             adapter = this@TeamPage.adapter
         }
+        boxFrame = BackToTop.wrap(boxList)
         dexBody = dexPage.embeddedBody()
 
         pickHint = Ui.text(this, 12f, 700, R.color.ag_sub0).apply { maxLines = 2 }
@@ -149,7 +152,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
         val content = FrameLayout(this).apply {
             addView(teamScroll, FrameLayout.LayoutParams(-1, -1))
-            addView(boxList, FrameLayout.LayoutParams(-1, -1))
+            addView(boxFrame, FrameLayout.LayoutParams(-1, -1))
             addView(dexBody, FrameLayout.LayoutParams(-1, -1))
         }
         return LinearLayout(this).apply {
@@ -162,6 +165,10 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     override fun render() {
         val st = state
+        if (visible && section == TeamSection.BOX && !boxVisitOpen) {
+            BoxSeenPrefs.open(this, st)
+            boxVisitOpen = true
+        }
         picks.keepOwned { st.mon(it) != null }
         val team = st.teamMons()
         val mons = BoxTiles.filter(st.mons, boxFilter, st.team, st.settings.xpShareUid, ::canEvolve, boxTypes, ::typesOf)
@@ -178,7 +185,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         adapter.notifyDataSetChanged()
         dexPage.renderEmbedded()
         teamScroll.visibility = if (section == TeamSection.TEAM) View.VISIBLE else View.GONE
-        boxList.visibility = if (section == TeamSection.BOX) View.VISIBLE else View.GONE
+        boxFrame.visibility = if (section == TeamSection.BOX) View.VISIBLE else View.GONE
         dexBody.visibility = if (section == TeamSection.DEX) View.VISIBLE else View.GONE
         drawPickBar()
         syncBattleCard()
@@ -194,6 +201,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     override fun onHide() {
+        boxVisitOpen = false
         visible = false
         battleCard?.stop() // nothing animates, nothing holds the live session while the page is not in front
         super.onHide()
@@ -215,6 +223,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     internal fun showSection(s: TeamSection) {
         if (s == section) return
+        boxVisitOpen = false
         section = s
         editing = false
         requestRender()
@@ -699,6 +708,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         f.addView(check, FrameLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18), Gravity.START or Gravity.BOTTOM).also {
             it.leftMargin = Ui.dp(ctx, 3); it.bottomMargin = Ui.dp(ctx, 3)
         })
+        BoxViews.wrapTile(f, img) // PLAN 282 / R19: contain the pile inside the existing cell
         f.tag = Cell(img, glow, lv, count, marksLeft, marksRight, check, value, strip)
     }
 
@@ -707,7 +717,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val cell = f.tag as Cell
         val uid = cell.uid ?: return
         val picked = pickOn && picks.has(ComparePick.Owned(uid))
-        f.background = PickKit.cardBg(this, 10, picked)
+        BoxViews.tileBackground(f, PickKit.cardBg(this, 10, picked))
         PickKit.bindBadge(cell.check, pickOn, picked)
     }
 
@@ -726,6 +736,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         bindPick(f)
         cell.img.sizeStep = AppPrefs.listSpriteSize(this) // PLAN 215
         Ui.staticSprite(this, mon.lookNum(data), mon.shiny, cell.img)
+        BoxViews.bindDupes(f, cell.img, tile, data) // PLAN 282; NEW visit/marks hook stays unchanged
         LevelTier.style(cell.lv, mon.level)
         cell.count.text = if (tile.isGroup) "×${tile.count}" else ""
         cell.count.visibility = if (tile.isGroup) View.VISIBLE else View.GONE

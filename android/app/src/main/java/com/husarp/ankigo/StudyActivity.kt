@@ -37,7 +37,6 @@ import com.husarp.ankigo.sound.SoundPrefs
 import com.husarp.ankigo.sound.SoundRules
 import com.husarp.ankigo.study.NextDeck
 import com.husarp.ankigo.study.NewCardOk
-import com.husarp.ankigo.study.GentleCards
 import com.husarp.ankigo.study.CardSpeech
 import com.husarp.ankigo.study.JsApi
 import com.husarp.ankigo.study.PanelHeight
@@ -46,6 +45,7 @@ import com.husarp.ankigo.study.AnswerNotes
 import com.husarp.ankigo.study.AnswerOutcome
 import com.husarp.ankigo.study.AnswerTiming
 import com.husarp.ankigo.study.AutoAdvance
+import com.husarp.ankigo.study.CalmCard
 import com.husarp.ankigo.study.Cmd
 import com.husarp.ankigo.study.CountsGate
 import com.husarp.ankigo.study.CountsPolicy
@@ -138,6 +138,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private var autoFired = -1                 // the side whose auto-advance already acted
     private var frozenAt = -1L                 // the timer pill's value once the answer is shown (deck: stop timer on answer)
     private var timerRed = false
+    private var calmOn = false                 // R19-N (PLAN 130): the calm card covers the next card while a result waits for Continue; nothing of that card runs
+    private var avHeld = false                 // the question's sounds / speech wait for the calm card to end
+    private lateinit var calmView: View
     private lateinit var timerPill: TextView
     private lateinit var countdown: CountdownBar
     private val auto = AutoAdvance(main, { if (reduceMotion()) 1000L else 66L }, { countdown.fraction = it }, { fireAuto() })
@@ -221,6 +224,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         Anki.load(this)
         deckId = intent.getLongExtra("deckId", 0); deckName = intent.getStringExtra("deckName") ?: "Deck"
         prefs.edit().putLong("lastDeck", deckId).putString("lastName", deckName).apply()
+        NewCardOk.dropOldGentle(prefs)   // R19-FIX (NICE-8): the old gentle-bookkeeping key is gone for good
         Report.log("STUDY", "deck opened: $deckName (id $deckId)")   // R13 Part E
         val tablet = resources.configuration.smallestScreenWidthDp >= com.husarp.ankigo.study.StudyLayout.TABLET_DP
         panelDp = PanelHeight.restore(prefs.getInt("panelDp", -1), prefs.getInt("height", -1), tablet)
@@ -266,6 +270,18 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
         }
     }
+    /** R19-N (PLAN 130, 130A "Quiet words"): a quiet icon, "Battle over" and a hint where the next card will show. */
+    private fun calmCard(): View = StudyUi.column(this).apply {
+        visibility = View.GONE; isClickable = true; gravity = Gravity.CENTER
+        setBackgroundColor(Ui.c(context, R.color.ag_anki_bg))
+        contentDescription = CalmCard.DESCRIPTION
+        setPadding(Ui.dp(context, 24), 0, Ui.dp(context, 24), 0)
+        addView(ImageView(context).apply {
+            setImageResource(R.drawable.ic_swords); setColorFilter(Ui.c(context, R.color.ag_mauve)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, StudyUi.lp(Ui.dp(context, 34), Ui.dp(context, 34)))
+        addView(StudyUi.label(context, CalmCard.TITLE, 17, R.color.ag_text, 800).apply { gravity = Gravity.CENTER }, StudyUi.spaced(context, 6))
+        addView(StudyUi.label(context, CalmCard.HINT, 13, R.color.ag_sub1, 600).apply { gravity = Gravity.CENTER }, StudyUi.spaced(context, 6))
+    }
     /** The screen's views, without the Activity setup; split out of onCreate so the design screenshots can build them. */
     internal fun buildContent(): View {
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@StudyActivity, R.color.ag_base)) }
@@ -305,7 +321,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         cardSurface.addView(countdown, StudyUi.lp(-1, Ui.dp(this, 3)))
         web = WebView(this).apply { setBackgroundColor(Ui.c(context, R.color.ag_anki_bg)) }
         swipe = SwipeFrame(this, web).also { it.onSwipe = { ease -> answer(ease) } }
-        cardSurface.addView(swipe, StudyUi.lp(-1, 0, 1f))
+        calmView = calmCard()
+        // R19-N: the calm card lies over the (already loading) card, so Continue shows it at once; it takes the touches, the card behind is hidden from TalkBack
+        cardSurface.addView(FrameLayout(this).apply { addView(swipe, FrameLayout.LayoutParams(-1, -1)); addView(calmView, FrameLayout.LayoutParams(-1, -1)) }, StudyUi.lp(-1, 0, 1f))
         notice = StudyUi.column(this).apply { visibility = View.GONE }
         noticeScroll = object : ScrollView(this) {
             override fun onMeasure(w: Int, h: Int) {
@@ -523,6 +541,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         // a predicted card is checked by the load queued behind its answer: reloading now would drop it (and a held tap with it)
         if (::web.isInitialized && (finished || card != null && !locked && !predictedNow)) loadNext(answerKeep())
         syncTiming()
+        window.decorView.post { com.husarp.ankigo.ui.CatchAskPopup.offer(this) }   // R19-P (PLAN 281): a catch question that waited (fight ended in AnkiDroid, the floating window or PiP) opens now
     }
     /** R9-C6 / R9-W5-A: the main was changed (sent to the box, another look, a name...) in Team / Pokédex while this screen waited in the back stack: its card and picture follow (idle only). */
     internal fun refreshMain() { if (::panel.isInitialized && ::events.isInitialized && events.idle && !events.playPending()) panel.refreshMain() }   // PLAN 191: fight events made on another screen (an item on the main from the Bag, a team edit) play now, once
@@ -533,6 +552,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         studiedWritten = false
         super.onPause()
     }
+    /** The card's answer clock starts when the card is on screen: not in the background, not behind the calm card (R19-N). */
+    private fun startClock() { if (shownAt == 0L && CalmCard.clockMayRun(calmOn, background)) shownAt = SystemClock.elapsedRealtime() }
     private fun pauseClock() { if (shownAt != 0L) elapsed += SystemClock.elapsedRealtime() - shownAt; shownAt = 0 }
     override fun onWindowFocusChanged(hasFocus: Boolean) { super.onWindowFocusChanged(hasFocus); if (::countdown.isInitialized) syncTiming() }
 
@@ -566,7 +587,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         timerPill.visibility = if (shown) View.VISIBLE else View.GONE
         subtitle.visibility = if (shown && timerPill.parent === subRow) View.GONE else View.VISIBLE   // narrow bar: the pill takes the subtitle's place
         if (!shown) return
-        val ms = if (frozenAt >= 0) frozenAt else StudyTiming.taken(elapsed, shownAt, SystemClock.elapsedRealtime(), maxTime)
+        val ms = CalmCard.pillMs(calmOn, if (frozenAt >= 0) frozenAt else StudyTiming.taken(elapsed, shownAt, SystemClock.elapsedRealtime(), maxTime))   // R19-N: 0:00 and still while the calm card waits
         val red = StudyTiming.atMax(ms, maxTime)
         if (red != timerRed) styleTimer(red)
         timerPill.text = StudyTiming.clock(ms); timerPill.contentDescription = StudyTiming.timerDescription(ms)
@@ -643,7 +664,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }, "AnkiGoJs")
         web.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView, url: String) {
-                if (!flipped && card != null && !background && shownAt == 0L) shownAt = SystemClock.elapsedRealtime()
+                if (!flipped && card != null) startClock()
                 pageReady = true; syncTiming()
                 pageTiming?.let { pageTiming = null; timingPart(it, AnswerTiming.PAGE, SystemClock.elapsedRealtime() - it.tapAt) }
                 keyboardForPage()
@@ -687,9 +708,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
         if (finished) buttons.removeAllViews() else if (waiting) disableButtons(buttons)
         finished = false; lastSummary = null; finishArgs = null; finishTapped = false; locked = true; card = null; pageReady = false; jsSnap = null
-        predictedNow = false; heldEase = 0; heldAt = 0L
+        predictedNow = false; heldEase = 0; heldAt = 0L; avHeld = false
         topBar.visibility = View.VISIBLE; summaryBar.visibility = View.GONE; cardSurface.visibility = View.VISIBLE
-        web.visibility = View.VISIBLE; showNotice(false); updateSwipe()
+        web.visibility = View.VISIBLE; showNotice(false); updateSwipe(); applyCalm()
         if (waiting) { layout(); syncTiming() }
     }
     /** Carries out what [nc] decided, in order (an answer's list is: queue it, show the next card or wait, ask for the real one behind the write). */
@@ -704,7 +725,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             Cmd.ShowFinished -> if (!finished) resetForLoading(waiting = true)   // the summary follows, behind the last game step
             is Cmd.ShowError -> showError(c.message)
             is Cmd.Refuse -> {   // the card's state could not be read: nothing was queued, the card stays as it was
-                if (!background && shownAt == 0L) shownAt = SystemClock.elapsedRealtime()
+                startClock()
                 Ui.toast(this, "That answer could not be saved (${c.reason}). Reload the card.")
             }
             is Cmd.Load -> startLoad(c.token, c.predicted)
@@ -719,7 +740,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private fun answerMade(a: QueuedAnswer) {
         val buttons = card?.buttons ?: a.buttons
         // PLAN 155: the one place that decides OK (every tap, key, swipe, auto answer and card script comes through here): the ease AnkiDroid gets and whether the game counts it neutrally
-        val ok = NewCardOk.settle(prefs.getBoolean(NewCardOk.PREF, false), a.before["queue"]?.toIntOrNull(), a.nid, a.ord, buttons, a.ease.coerceAtMost(buttons), gentleCards())
+        val ok = NewCardOk.settle(prefs.getBoolean(NewCardOk.PREF, false), a.before["queue"]?.toIntOrNull(), buttons, a.ease.coerceAtMost(buttons))
         val answer = a.copy(ease = ok.ease, buttons = buttons, neutral = ok.neutral)
         if (ok.neutral) Report.log("STUDY", "OK on a new card: note ${a.nid}, ord ${a.ord}, queue ${a.before["queue"]}; AnkiDroid gets Again, the game a neutral answer")
         while (timings.size >= 6) timings.remove(timings.keys.first())?.let { if (it.flush()) Report.log("STUDY", it.line()) }
@@ -943,7 +964,21 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             val p = try { prepare(review, support.get().second) } catch (e: Exception) { return@io }   // no prediction: the next answer waits for the real card
             val withLearning = p.copy(learning = learnCache.get(c.forToken))   // R10-X1: with the deck's learning cards, the tap can tell whether it is safe to show (R18 RV-9: one read per load)
             postMain { if (!isDestroyed && !isFinishing) nc.prepared(c.forKey, c.forToken, withLearning) }
+            prepareLearning(c, withLearning)
         }
+    }
+    /**
+     * R19-R (278b): beside the card straight after the confirmed one, the learning card that would jump in front of it once it is due
+     * ([PredictRule.learningToPrepare]) is prepared by id too, so a tap that finds it due can show it at once instead of waiting behind the
+     * write. It is not in the queue read, so its buttons are those of [next] and its next times stay empty until the confirm brings them. Io thread.
+     */
+    private fun prepareLearning(c: Cmd.Prepare, next: Prepared<StudyCard>) {
+        val top = queueReviews.firstOrNull() ?: return
+        if (c.forKey != StudyLoop.Key(top.nid, top.ord)) return   // only the Prepare of the first card after the confirmed one
+        val key = PredictRule.learningToPrepare(c.forKey, next)?.key ?: return
+        if (host.queue.waitingAnswers().any { it.key == key }) return   // PLAN 195: an answer of it still waits for its write
+        val p = try { prepare(Anki.Review(key.nid, key.ord, next.view.review.buttons, emptyList(), emptyList()), support.get().second) } catch (e: Exception) { return }   // not prepared: the answer waits as before
+        postMain { if (!isDestroyed && !isFinishing) nc.preparedLearning(c.forKey, c.forToken, p) }
     }
     /** R18 RV-9: the learning read of the last load that had one, shared by the Prepares of that load (io thread only). */
     private val learnCache = LearnCache { learnRead() }
@@ -1099,7 +1134,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         cancelKeyboard()
         val page = page(question, "q", null); avAuto = page.autoplay; avAll = page.av; typeInQuestion = page.typeIn
         web.loadDataWithBaseURL(CardHtml.BASE, page.html, "text/html", "UTF-8", null)
-        showButtons(); playAv(avAuto); syncTiming(); refreshKeyboardLayout()
+        showButtons(); avHeld = calmOn; if (!calmOn) playAv(avAuto)   // R19-N: behind the calm card nothing is read out until Continue
+        syncTiming(); refreshKeyboardLayout()
     }
     /** The quiet-on-card-audio rule for a button click (the same rule the battle sounds use). */
     private fun clickMuted() = SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev)
@@ -1119,6 +1155,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             flipped = true; locked = false; sideNo++; pageReady = false; allowAt = SystemClock.elapsedRealtime() + 300; typedShown = typed
             if (opts.stopTimerOnAnswer) frozenAt = StudyTiming.taken(elapsed, shownAt, SystemClock.elapsedRealtime(), maxTime)
             web.loadDataWithBaseURL(CardHtml.BASE, page.html, "text/html", "UTF-8", null)
+            avHeld = false
             web.announceForAccessibility("Answer shown"); refreshKeyboardLayout(); showButtons(); playAv(avAuto); syncTiming()
         }
     }
@@ -1146,6 +1183,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     /** The page of the current side finished loading: open the keyboard on a type-in question after a short moment, close it on any other card. */
     private fun keyboardForPage() {
         cancelKeyboard()
+        if (calmOn) return   // R19-N: the keyboard of a type-in card opens when Continue shows the card (applyCalm)
         when (TypeInRules.onPageReady(typeInQuestion, flipped, resumedNow)) {
             TypeInRules.Keyboard.HIDE -> hideKeyboard()
             TypeInRules.Keyboard.KEEP -> {}
@@ -1196,7 +1234,32 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     /** A request to flip or answer (button, key, swipe, tap on the card, card script) while [holding]: it acts as Continue and the card stays. True = it did. */
     private fun heldContinue(): Boolean { releaseHiddenHold(); return heldContinueNow() }
     private fun heldContinueNow() = finishArgs == null && ContinueRule.onRequest(holding()) == ContinueRule.Act.CONTINUE && continueBattle()   // PLAN 129: waiting to finish, only the Finish deck button acts
+    /**
+     * R19-N (PLAN 130, 130A): the calm card covers the next card while a result holds the next battle and the card was not seen yet
+     * ([CalmCard.on]); the card's own clock, countdown, speech and keyboard wait for Continue. Called from [showButtons], which every change of
+     * the hold, the card or its side passes through; does nothing unless the answer changed.
+     */
+    private fun applyCalm() {
+        if (!::calmView.isInitialized) return
+        val on = CalmCard.on(holding(), card != null, flipped, finished, finishArgs != null)
+        if (on == calmOn) return
+        calmOn = on
+        calmView.visibility = if (on) View.VISIBLE else View.GONE
+        swipe.importantForAccessibility = if (on) View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS else View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+        if (on) {
+            // the card was up for a moment before the result arrived: that moment is not its time. R19-FIX (RV-6): its sound was cut, so
+            // Continue plays it again ([avHeld]; a calm card that was on when the question was drawn set it already)
+            avHeld = true; stopAudio(); cancelKeyboard(); shownAt = 0; elapsed = 0
+            calmView.announceForAccessibility(CalmCard.DESCRIPTION)
+        } else if (card != null && !flipped && !finished && finishArgs == null) {
+            // Continue: the card shows now, and only now do its clock, speech and keyboard start
+            if (pageReady) { startClock(); if (typeInQuestion) keyboardForPage() }
+            if (avHeld) { avHeld = false; playAv(avAuto) }
+        }
+        syncTiming()
+    }
     private fun showButtons() {
+        applyCalm()
         buttons.removeAllViews(); updateSwipe()
         val enabled = !locked && !mediaBlocked
         val rowKind = ContinueRule.row(flipped, holding(), finishArgs != null)
@@ -1216,15 +1279,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val n = card ?: return
         AnswerRow.fill(this, buttons, n.buttons, n.nextTimes, okRow(), studyPlan().answerRows == 2, enabled, heldEase, { v, pressed -> markHeld(v, pressed) }) { answer(it) }   // PLAN 155: a new card may get the OK row
     }
-    /** PLAN 155 "New cards: one OK button": the card on screen is new (or the gentle first learning step of one) and the setting is on. */
-    private fun okRow(): Boolean {
-        val n = card ?: return false
-        val on = prefs.getBoolean(NewCardOk.PREF, false)
-        return on && NewCardOk.rowApplies(true, stats["queue"]?.toIntOrNull(), gentleCards().has(n.nid, n.ord))
-    }
-    private var gentle: GentleCards? = null
-    /** The cards whose next showing is gentle (a new card that got OK): in memory, kept in the "study" prefs so a restart keeps them. */
-    private fun gentleCards(): GentleCards = gentle ?: GentleCards(prefs.getString(NewCardOk.GENTLE_PREF, null), { prefs.edit().putString(NewCardOk.GENTLE_PREF, it).apply() }).also { gentle = it }
+    /** PLAN 283 / R19: OK only on the first showing as a new card. Old gentle prefs are ignored. */
+    private fun okRow(): Boolean = card != null &&
+        NewCardOk.rowApplies(prefs.getBoolean(NewCardOk.PREF, false), stats["queue"]?.toIntOrNull())
     /** A tap is held for the predicted card: the pressed button stays marked (pressed look, an outline), the others dim; none takes another tap. */
     private fun markHeld(v: View, pressed: Boolean) {
         v.isEnabled = false

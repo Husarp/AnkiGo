@@ -67,10 +67,12 @@ class R17C10TextsTest {
         val b = text(GameGuide.BATTLES)
         assertFalse(b, b.contains("A turn is one dot"))
         assertFalse(b, b.contains("takes one turn"))
-        // R18-B (227 / 264): Adam's wording, "the wild Pokémon attacks once", never "a free hit"; the switch waits for the answer, the item works at once
-        assertTrue(b, b.contains("A switch is not a round") && b.contains("the wild Pokémon attacks it once") && b.contains("waits for your answer"))
+        // R18-B (227 / 264): the switch waits for the answer, the item works at once; R19-T (288): Adam's toast says "free hit" for the switch only
+        assertTrue(b, b.contains("A switch is not a round") && b.contains("the wild Pokémon gets one free hit on it") && b.contains("waits for your answer"))
         assertTrue(b, b.contains("works at once, then the wild Pokémon attacks your Main once"))
-        assertFalse(b, b.contains("free hit"))
+        assertFalse(b, b.contains("turns mauve"))
+        assertTrue(b, b.contains("The switch fills no dot") && b.contains("the next battle still waits for Continue"))
+        assertTrue(b, b.contains("The OK button on a new card") && b.contains("OK + OK is an empty round"))   // R19-T (284)
         // Smart / Smartest never pick an attack the target is immune to; the Main then uses Struggle
         assertTrue(b, b.contains("never an attack the target is immune to") && b.contains("Struggle"))
         val healing = text(GameGuide.HEALING)

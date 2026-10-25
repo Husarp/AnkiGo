@@ -26,12 +26,15 @@ data class TypeFilter(val types: Set<Type> = emptySet(), val match: TypeMatch = 
         else -> speciesTypes.isNotEmpty() && speciesTypes.all { it in types }
     }
 
-    /** This filter with [t] picked or un-picked; null = refused (All of already has [MAX_ALL_TYPES] picks and [t] is a new one: the caller toasts [FULL]). */
+    /** This filter with [t] picked or un-picked; null = refused (All of already has [MAX_ALL_TYPES] picks and [t] is a new one: the sheet shows [TOO_MANY]). */
     fun toggle(t: Type): TypeFilter? = when {
         t in types -> copy(types = types - t)
         match == TypeMatch.ALL && types.size >= MAX_ALL_TYPES -> null
         else -> copy(types = types + t)
     }
+
+    /** R19 251: true when switching to [m] drops picks (All of keeps only the last [MAX_ALL_TYPES]); the sheet explains it with [TOO_MANY]. */
+    fun dropsPicks(m: TypeMatch): Boolean = m == TypeMatch.ALL && types.size > MAX_ALL_TYPES
 
     /** This filter with the match mode [m]; switching to All of with more than [MAX_ALL_TYPES] picked keeps the ones picked last. */
     fun withMatch(m: TypeMatch): TypeFilter =
@@ -63,8 +66,8 @@ data class TypeFilter(val types: Set<Type> = emptySet(), val match: TypeMatch = 
         /** All of takes at most this many picked types (a species has at most two). */
         const val MAX_ALL_TYPES = 2
 
-        /** The toast when All of refuses a third type. */
-        const val FULL = "All of: pick up to $MAX_ALL_TYPES types"
+        /** R19 251: the notice under the type chips when All of refuses a third type (or drops picks on the switch to All of). */
+        const val TOO_MANY = "A Pokémon has at most $MAX_ALL_TYPES types, so All of can't match ${MAX_ALL_TYPES + 1}."
 
         /** The filter saved by [encode]; null, unknown or garbled = nothing picked, Any of. */
         fun decode(s: String?): TypeFilter {

@@ -329,14 +329,15 @@ class R9W3BoxesShots {
             a.setPlayerStatus("par")
             val tag = "$hostName ${if (pic) "picture" else "plain"} ${style.name}"
             paparazzi.snapshot(frame, "r9w3-status-touch", 0)
-            // a real touch (down, up) at a point of the arena; true = the badge's row got it (pressed on the down, consumed by the arena both times).
-            // The click itself is posted to the looper, which a Paparazzi test does not run: that a click opens the bubble is checked above.
+            // a real touch (down, up) at a point of the arena; true = the badge's row got it (R19 RV-8: the arena takes a touch in a badge's area
+            // itself, consumes both events and clicks the row on the up, so "got it" = the status note changed: a first tap opens it, the next one
+            // closes it, as any tap anywhere closes an open note).
             fun tap(row: View, x: Float, y: Float): Boolean {
+                val before = a.bubbleOpen()
                 val t = android.os.SystemClock.uptimeMillis()
                 val dn = a.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, x, y, 0))
-                val pressed = row.isPressed
                 val up = a.dispatchTouchEvent(MotionEvent.obtain(t, t + 40, MotionEvent.ACTION_UP, x, y, 0))
-                return dn && pressed && up
+                return dn && up && a.bubbleOpen() != before
             }
             for (wild in listOf(true, false)) {
                 val who = if (wild) "wild" else "ours"

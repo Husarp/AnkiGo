@@ -22,8 +22,9 @@ object Duplicates {
     /**
      * What the rule says about one wild Pokémon of an owned species: [higher] = it beats the best owned copy
      * ([bestLevel]); [release] = the copy to let go after the catch (null: none may go, so both are kept; [kept] says why).
+     * R19-P: [best] = the best-level copy a kept pair is about, so one that only holds a place can ask "Release the old one?" ([AskMe]).
      */
-    class Verdict(val higher: Boolean, val bestLevel: Int, val release: Mon?, val kept: Keep?)
+    class Verdict(val higher: Boolean, val bestLevel: Int, val release: Mon?, val kept: Keep?, val best: Mon? = null)
 
     /** Null when the rule does not apply (setting off, or no copy of the wild one's species is owned). */
     fun verdict(data: GameData, state: GameState, wild: Mon): Verdict? {
@@ -35,7 +36,7 @@ object Duplicates {
         // Only a best-level copy is the one being replaced; if none of them may go, nothing is released.
         val top = owned.filter { it.level == best }
         val target = top.firstOrNull { keepReason(data, state, it) == null }
-        return Verdict(true, best, target, if (target == null) keepReason(data, state, top.first()) else null)
+        return Verdict(true, best, target, if (target == null) keepReason(data, state, top.first()) else null, best = top.first()) // R19-P: [best] = the copy a kept pair is about
     }
 
     /** Why [mon] must be kept, or null when the rule may release it. The first matching reason wins. */
@@ -93,5 +94,8 @@ class ReleasePlan(val release: List<String>, val groups: List<Group>, val keptPr
     val keptCount: Int get() = keptProtected.values.sum()
 }
 
-/** [Catching.decide] with what goes with it: the duplicate verdict when [Duplicates] acted on this fight, else null. */
-class CatchPlan(val outcome: Outcome, val duplicate: Duplicates.Verdict? = null)
+/**
+ * [Catching.decide] with what goes with it: the duplicate verdict when [Duplicates] acted on this fight, else null; R19-P: [ask] = the
+ * "Ask me" verdict when the fight ends with a question (the outcome is DEFEAT, paid as one; see [AskMe]).
+ */
+class CatchPlan(val outcome: Outcome, val duplicate: Duplicates.Verdict? = null, val ask: AskMe.Better? = null)

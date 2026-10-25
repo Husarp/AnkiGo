@@ -43,6 +43,11 @@ object StudyStats {
         prune(state)
     }
 
+    /** R19-P (PLAN 281): a catch answered after its fight ended: today's [DayLog.caught] (+ shinies); the win itself was counted when the fight ended. */
+    fun addLateCatch(state: GameState, shiny: Boolean) {
+        today(state)?.let { it.caught++; if (shiny) it.shinies++ }
+    }
+
     /** Money spent in the Shop goes into today's [DayLog.spent] (called by Shop.buy / buyTm / reroll after a successful purchase). */
     fun addSpent(state: GameState, amount: Int) {
         if (amount <= 0) return

@@ -174,6 +174,7 @@ internal object AbilitiesMore : BattleRules {
         val n = r.mon(p).name
         when (ab) {
             "screencleaner" -> screenCleaner(r, p)
+            "imposter" -> MoveControl.transformInto(r, p)   // R19-L (PLAN 271): it transforms into the Pokémon facing it on entering (Ditto)
             "supersweetsyrup" -> once(r, p, ab) { syrup(r, p) }
             "electricsurge" -> terrain(r, p, ab, "electric")
             "psychicsurge" -> terrain(r, p, ab, "psychic")

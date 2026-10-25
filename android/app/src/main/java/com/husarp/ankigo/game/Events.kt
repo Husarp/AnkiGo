@@ -77,6 +77,8 @@ sealed class GameEvent {
         val kind: EffectKind = EffectKind.OTHER, val stat: String? = null, val stages: Int = 0, val amount: Int = 0,
         /** R17C-1: the short float text the emitter chose ("Confused", "Protected", "Rain", "Seeded"); null = none (the kind decides). */
         val label: String? = null,
+        /** R19-L (PLAN 271): Transform: the Pokédex number of the picture the Pokémon turns into (0 = no change of picture) and whether that one is shiny. */
+        val into: Int = 0, val intoShiny: Boolean = false,
     ) : GameEvent()
 
     data class Fainted(val player: Boolean, val name: String) : GameEvent()
@@ -87,8 +89,11 @@ sealed class GameEvent {
     /** The wild Pokémon joined the collection. [newSpecies] = first of its kind (new Pokédex entry). */
     data class Caught(val uid: String, val species: Int, val name: String, val level: Int, val shiny: Boolean, val ball: String?, val newSpecies: Boolean, val toTeam: Boolean) : GameEvent()
 
-    /** The wild Pokémon was defeated; XP follows as XpGained events. */
-    data class Defeated(val species: Int, val name: String, val xp: Int) : GameEvent()
+    /**
+     * The wild Pokémon was defeated; XP follows as XpGained events. R19-P (PLAN 281): [ask] = it is a better copy of a species you own
+     * and "Ask me" is the catch rule: the fight counts as won (same XP and coins), the catch question waits in [GameState.asks].
+     */
+    data class Defeated(val species: Int, val name: String, val xp: Int, val ask: Boolean = false) : GameEvent()
 
     /**
      * "Auto-release duplicates" acted on a wild [name] ([level]) of a species you own (best copy [ownedLevel]); comes after
@@ -98,6 +103,8 @@ sealed class GameEvent {
     data class Duplicate(
         val name: String, val level: Int, val ownedLevel: Int, val result: DuplicateResult,
         val releasedName: String? = null, val keptBecause: String? = null,
+        /** R19-P (PLAN 281): KEPT_BOTH because the old copy holds a place (Team / favourite / Exp. Share): "Release the old one?" waits in [GameState.asks]. */
+        val ask: Boolean = false,
     ) : GameEvent()
 
     /**

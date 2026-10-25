@@ -444,7 +444,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val game = SettingsSearch.entriesOf(SettingsSection.GAME)
         val subs = rows.map { r -> game.firstOrNull { it.title == Form.titleOf(r) }?.sub ?: "" }
         for (g in SettingsSearch.groups(subs, GAME_GROUPS)) {
-            if (g.title.isNotEmpty()) content.addView(Form.sect(this, g.title, if (g.title == "Always catch") "options 2 to 4" else null))
+            if (g.title.isNotEmpty()) content.addView(Form.sect(this, g.title, if (g.title == "Always catch") "options 2 to 5" else null))
             if (g.title == CATCH_GROUP) content.addView(Ui.text(this, 12f, 600, R.color.ag_sub0).apply {
                 text = "Defeat or catch: the same XP, EVs, friendship and coins. A catch gives you the Pokémon."
                 setPadding(dp(4), 0, dp(4), dp(8))
@@ -499,7 +499,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 AppLook.setMatchupChips(this, chipLooks[i]); render()
             })
         val listSize = ListSizePreview.row(this, AppPrefs.listSpriteSize(this)) { AppPrefs.setListSpriteSize(this, it) } // PLAN 215
-        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size, listSize))
+        // PLAN 282 / R19: Box duplicates, independent switches in Look.
+        val stacked = Form.switchRow(this, "Stacked cards", "Cards peek behind groups of copies in the Box", BoxDupePrefs.get(this).stacked) { BoxDupePrefs.setStacked(this, it) }
+        val two = Form.switchRow(this, "Show two Pokémon", "Two sprites for groups of copies in the Box; keeps the count", BoxDupePrefs.get(this).two) { BoxDupePrefs.setTwo(this, it) }
+        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size, listSize, stacked, two))
     }
 
     /** The look changed: this screen recreates itself (Activity) or tells the player the window needs reopening (floating card). */
@@ -776,6 +779,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         )))
         content.addView(Form.sect(this, "Battle look"))
         content.addView(infoBoxCard())
+        content.addView(Form.cardOf(this, listOf(   // R19-A (PLAN 276): both boxes bigger where the arena has room; every open battle view follows live
+            Form.switchRow(this, "Bigger info boxes", "When the arena has room", InfoBoxPrefs.big(this)) { InfoBoxPrefs.setBig(this, it) },
+        )), Form.lp(this, 8))
+        content.addView(Form.cardOf(this, listOf(HpColorPrefs.row(this, openChoosers))), Form.lp(this, 8)) // PLAN 163 / R19
         content.addView(hpBarsCard(), Form.lp(this, 8))
         content.addView(battleFrameCard(), Form.lp(this, 8))
         content.addView(Form.sect(this, "Small battle windows"))

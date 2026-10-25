@@ -11,7 +11,10 @@ import java.time.ZonedDateTime
 import java.util.TimeZone
 import kotlin.random.Random
 
-/** PLAN 155 (R14-B2-F): the OK of a new card is a neutral answer: counted like an Again press, but it never enters the battle round. */
+/**
+ * PLAN 155 (R14-B2-F): the OK of a new card is a neutral answer: counted like an Again press, no combo change.
+ * R19-T (PLAN 284): it is also one of the round's answers, with no power (the round rules are in R19TTurnsTest).
+ */
 class NeutralAnswerTest {
     private val data = TestData.world()
     private val now = ZonedDateTime.of(2026, 10, 13, 12, 0, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli()
@@ -43,16 +46,16 @@ class NeutralAnswerTest {
         assertEquals(1, g.state.buttonsToday[1])
     }
 
-    @Test fun anOkAddsNoChargeAndNoRoundAndNobodyAttacks() {
+    @Test fun anOkIsOneOfTheRoundsAnswersWithNoPowerAndNobodyAttacksYet() {   // R19-T (PLAN 284): it used to add no charge at all
         val g = game(); val wild = g.fight(hp = 36)
         val mainHp = g.state.main!!.hp
         val ev = g.answer(1, neutral = true)
-        assertTrue(ev.of<GameEvent.Charge>().isEmpty())
+        assertEquals(listOf(GameEvent.Charge(0, 1, 2)), ev.of<GameEvent.Charge>())
         assertTrue(ev.of<GameEvent.RoundStart>().isEmpty())
         assertTrue(ev.of<GameEvent.Attack>().isEmpty())
         assertTrue(ev.of<GameEvent.Splash>().isEmpty())
         val b = g.state.battle!!
-        assertEquals(0, b.answers); assertEquals(0, b.tally); assertTrue(b.buttons.isEmpty())
+        assertEquals(1, b.answers); assertEquals(0, b.tally); assertEquals(listOf(Tuning.BUTTON_OK), b.buttons)
         assertEquals(36, wild.hp); assertEquals(mainHp, g.state.main!!.hp)
     }
 
@@ -93,24 +96,23 @@ class NeutralAnswerTest {
         assertEquals(g.state.day, g.state.lastGoalDay)
     }
 
-    @Test fun aNormalAnswerAfterAnOkContinuesTheRoundAsIfTheOkWereNotThere() {
-        val with = game(); with.fight(); with.answer(3); with.answer(1, neutral = true)
-        assertEquals(1, with.state.battle!!.answers)   // the OK between did not fill the second slot
+    @Test fun aNormalAnswerAfterAnOkCompletesTheRoundWithThatAnswersPowerOnly() {   // R19-T (PLAN 284)
+        val with = game(); with.fight(); with.answer(1, neutral = true)
+        assertEquals(1, with.state.battle!!.answers)   // the OK filled the first slot
         val evWith = with.answer(3)
-        val without = game(); without.fight(); without.answer(3)
-        val evWithout = without.answer(3)
-        assertEquals(evWithout.of<GameEvent.RoundStart>(), evWith.of<GameEvent.RoundStart>())
-        assertEquals(1, evWith.of<GameEvent.RoundStart>().size)
-        assertEquals(0, with.state.battle!!.answers); assertEquals(0, with.state.battle!!.tally)
+        val start = evWith.of<GameEvent.RoundStart>().single()
+        assertEquals(RoundRule.plan(listOf(3)).multiplier, start.multiplier, 0.0)   // Good's strength alone, not Good + Good
+        assertEquals(10, start.points)
+        assertEquals(0, with.state.battle!!.answers); assertEquals(0, with.state.battle!!.tally); assertTrue(with.state.battle!!.buttons.isEmpty())
     }
 
-    @Test fun anOkFirstThingInTheDayStillStartsTheFightButNoRound() {
+    @Test fun anOkFirstThingInTheDayStillStartsTheFightAndFillsADot() {
         val g = game(); g.state.battle = null
         val ev = g.answer(1, neutral = true)
         assertEquals(1, ev.of<GameEvent.Encounter>().size)
-        assertTrue(ev.of<GameEvent.Charge>().isEmpty())
+        assertEquals(1, ev.of<GameEvent.Charge>().size)   // R19-T (PLAN 284): the first answer of the fight, in grey
         val b = g.state.battle!!
-        assertEquals(0, b.answers); assertTrue(b.buttons.isEmpty())
+        assertEquals(1, b.answers); assertEquals(listOf(Tuning.BUTTON_OK), b.buttons)
     }
 
     @Test fun offIsExactlyToday() {

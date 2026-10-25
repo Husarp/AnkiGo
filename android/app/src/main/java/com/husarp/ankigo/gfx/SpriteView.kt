@@ -42,6 +42,9 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     /** 0..1 hit flash strength; animate it for the flash effect. */
     var flash: Float = 0f
         set(v) { val c = v.coerceIn(0f, 1f); if (c != field) { field = c; invalidate() } }
+    /** R19-L (PLAN 271, Transform): 0..1 how far the picture's colours are washed to pure white (1 = a white shape, its edges kept). */
+    var whiteout: Float = 0f
+        set(v) { val c = v.coerceIn(0f, 1f); if (c != field) { field = c; invalidate() } }
 
     /**
      * Move animations (round 7): a 4 x 5 colour matrix (20 floats, android.graphics.ColorMatrix order) applied AFTER the flash;
@@ -319,7 +322,8 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         if (silhouette) return PorterDuffColorFilter(silhouetteColor, PorterDuff.Mode.SRC_IN)
         val f = flash
         val fx = fxMatrix
-        if (f <= 0f) return if (fx != null && fx.size == 20) ColorMatrixColorFilter(ColorMatrix(fx)) else null
+        val w = whiteout
+        if (f <= 0f && w <= 0f) return if (fx != null && fx.size == 20) ColorMatrixColorFilter(ColorMatrix(fx)) else null
         // CSS brightness(2.2) saturate(.3) at full strength, blended from the identity.
         val sat = 1f + (0.3f - 1f) * f
         val b = 1f + (2.2f - 1f) * f
@@ -330,6 +334,15 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
             0f, 0f, b, 0f, 0f,
             0f, 0f, 0f, 1f, 0f,
         )))
+        if (w > 0f) {   // toward white: colour x (1 - w) + 255 x w, alpha kept
+            val k = 1f - w; val o = 255f * w
+            cm.postConcat(ColorMatrix(floatArrayOf(
+                k, 0f, 0f, 0f, o,
+                0f, k, 0f, 0f, o,
+                0f, 0f, k, 0f, o,
+                0f, 0f, 0f, 1f, 0f,
+            )))
+        }
         if (fx != null && fx.size == 20) cm.postConcat(ColorMatrix(fx))
         return ColorMatrixColorFilter(cm)
     }

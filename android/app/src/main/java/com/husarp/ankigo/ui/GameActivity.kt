@@ -284,7 +284,7 @@ class GameActivity : AgActivity() {
         val sink = hold && panelShown()
         if (sink && !sinkOn) {
             sinkOn = true
-            panel?.renderAll()
+            panel?.renderAll(); panel?.restoreStudyCharge()   // R19-B: events missed while away: the dots follow the save, like the picture
             LiveSession.addSink(liveSink)
         } else if (!sink && sinkOn) {
             sinkOn = false
@@ -397,9 +397,10 @@ class GameActivity : AgActivity() {
         if (bound) {
             panel?.refreshPrefs()   // Settings may have changed the card layout / compact cards while we were away
             val events = act { it.tick() }
-            if (events.isEmpty()) { if (panelShown() && player?.idle != false) panel?.renderAll() } else handleEvents(events)
+            if (events.isEmpty()) { if (panelShown() && player?.idle != false) { panel?.renderAll(); panel?.restoreStudyCharge() } } else handleEvents(events)
             if (panelShown()) player?.playPending() // PLAN 191: fight events made on another screen (an item on the main from the Bag, a team edit) play now, once
             runPendingPopOut()
+            window.decorView.post { CatchAskPopup.offer(this) } // R19-P (PLAN 281): a catch question that waited opens now (not in PiP; see [offer])
         } else {
             startLoad()
         }
@@ -535,10 +536,23 @@ class GameActivity : AgActivity() {
         // expanded from PiP during a "Study in AnkiDroid" hand-over: show the battle (Back from it goes to the Study view)
         else if (studyReturn.fromStudy) { homeView = HomeView.BATTLE; battleOrigin = null }
         panel?.setCompact(inPip)
+        updateTurnDots()
         // the layout listener re-decides by height; decide now so the bars don't flash in PiP
         relayout()
         if (!inPip) content.requestLayout()
         updateContinueVisibility()
+        if (!inPip) content.post { CatchAskPopup.offer(this) } // R19-P (PLAN 281): back from picture-in-picture: the question that waited opens
+    }
+
+    /** R19-B (PLAN 275): split screen, like picture-in-picture, is where you study in AnkiDroid next to the battle: the turn dots show there. */
+    override fun onMultiWindowModeChanged(isInMultiWindowMode: Boolean, newConfig: Configuration) {
+        super.onMultiWindowModeChanged(isInMultiWindowMode, newConfig)
+        updateTurnDots()
+    }
+
+    /** The action bar's turn dots: on in picture-in-picture and split screen, off on the full-screen Battle tab. */
+    private fun updateTurnDots() {
+        panel?.setTurnDots(inPip || isInMultiWindowMode)
     }
 
     /** The PiP buttons Pause and Resume come back as broadcasts (the Open button starts this activity directly). */
@@ -619,7 +633,9 @@ class GameActivity : AgActivity() {
         p.arena.onWildTap = { openWildInfo() }
         p.setPaused(LiveSession.paused)
         if (inPip) p.setCompact(true)
+        p.restoreStudyCharge()   // R19-B: the turn dots start from the save; the played events carry them on from there
         panel = p
+        updateTurnDots()
         player = EventPlayer(p)
         bound = true
         fillContent(force = true) // puts the panel in the battle's area (and draws it) when that is on screen
@@ -890,10 +906,14 @@ class GameActivity : AgActivity() {
         if (GameRepo.state?.main?.uid == uid && GameRepo.state?.pendingMain == null) return
         // The animations still waiting end first (the saved game has their numbers), so the switch starts from the fight as it stands:
         // then the short "Go, X!" plays, and the wild one's free hit on the new main (R10 W10) with its floating damage text after it.
-        player?.finishNow()
+        // R19-T (PLAN 285): a result holds the next fight (Continue): finishNow would let it go (the tiles go, the wild one appears), so a switch
+        // made there leaves it alone and plays under the result; while the rewards still play it waits for the tap, as the Study screen does.
+        val holding = player?.holding == true
+        if (holding && player?.idle == false) return
+        if (!holding) player?.finishNow()
         // PLAN 206: AnkiDroid shows a card unless a result holds the next fight: then the pick is queued, to come in right after that
         // card is answered (the bar says "Switching after this card…"); picking the main again cancels it.
-        val cardShowing = player?.holding != true
+        val cardShowing = !holding
         val r = try { GameRepo.run(this) { it.requestMain(uid, cardShowing) } } catch (t: Throwable) { Report.fail("PANEL", "requestMain", t); return }
         handleEvents(r.events)
     }

@@ -17,6 +17,12 @@ import java.io.IOException
 object DataStore {
     const val POKEAPI_COMMIT = "81d20919845b6a445969b9265aab5cec6b04cece"
     const val SPRITES_COMMIT = "0dc105d5b12416932f29b594078282ab4be045f5"
+    /**
+     * R19-E (PLAN 272): item icons only. The Pokémon pin above has no `sprites/items/` file for the nine R17C evolution items; this
+     * commit (PokeAPI/sprites master, 2026-10-20) has them. A separate pin because the assets-1 mirror keys every file by its commit
+     * ([com.husarp.ankigo.data.Mirror.keyFor]): moving [SPRITES_COMMIT] would make every Pokémon sprite miss the mirror until a new mirror release.
+     */
+    const val ITEM_SPRITES_COMMIT = "97a7832d307311c0e1c6ea9035308bf80cc94f81"
     const val USER_AGENT = "AnkiGo (personal Android app; github.com/Husarp/AnkiGo)"
 
     private const val SHOWDOWN = "https://play.pokemonshowdown.com/data/"

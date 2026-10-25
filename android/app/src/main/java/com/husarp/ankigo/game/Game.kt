@@ -56,7 +56,10 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return events
     }
 
-    /** PLAN 206: the queued switch comes in now (today's [setMain] path: MainChanged, and the wild one's attack when [switchCostsAHit]). A queue gone stale (left the team, already the main) is dropped. */
+    /**
+     * PLAN 206: the queued switch comes in now (today's [setMain] path: MainChanged, and the wild one's free hit when [switchCostsAHit]). A queue gone stale (left the team, already the main) is dropped.
+     * R19-T (PLAN 288): the switch takes none of the round's answers and marks no dot; the hit comes on top of the normal flow.
+     */
     private fun applyQueuedMain(): List<GameEvent> {
         val uid = state.pendingMain ?: return emptyList()
         val cycle = state.pendingCycle
@@ -64,7 +67,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (state.mon(uid) == null || uid !in state.team || state.team.firstOrNull() == uid) return emptyList()
         // a queued [cycleMain] keeps its rotation of the first three ([A,B,C] -> [B,C,A]) while the one it queued is still next in line
         val events = if (cycle && state.team.getOrNull(1) == uid) rotateMain().events else setMain(uid).events
-        return events.map { if (it is GameEvent.MainChanged) it.copy(queued = true) else it } // R18-B: the Study dots mark this answer as the switch's
+        return events.map { if (it is GameEvent.MainChanged) it.copy(queued = true) else it } // R18-B: marks the switch as a queued one (R19-T: the Study dots no longer use it)
     }
 
     private fun answer(a: Answer): List<GameEvent> {
@@ -104,11 +107,12 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         events += ensureEncounter()
         val battle = state.battle ?: return events
-        if (a.neutral) return events   // PLAN 155: counted above (reviews, money, goal, stats), but not part of a round: no Charge, nobody attacks
         // R10-B22: who attacks depends on each answer, not on the point sum. A battle saved before keeps only the sum: restore the buttons from it.
         if (battle.buttons.size != battle.answers) { battle.buttons.clear(); battle.buttons += RoundRule.restore(battle.answers, battle.tally) }
-        battle.tally += points
-        battle.buttons += button
+        // R19-T (PLAN 284): the OK of a new card (PLAN 155) is one of the round's answers, a neutral move: it fills a dot and counts toward the
+        // round, but has no points and no power ([RoundRule] skips it). It was counted above (reviews, money, goal, stats), the combo is untouched.
+        battle.tally += if (a.neutral) 0 else points
+        battle.buttons += if (a.neutral) Tuning.BUTTON_OK else button
         battle.answers++
         val n = roundAnswers
         if (battle.answers < n) {
@@ -156,9 +160,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val plan = Catching.plan(data, state, battle)
         when (plan.outcome) {
             Outcome.CATCH -> {
-                Catching.addToCollection(data, state, battle.wild, battle.tier, null, now, events)
+                val caught = Catching.addToCollection(data, state, battle.wild, battle.tier, null, now, events)
                 state.ballCatches.merge("auto", 1, Int::plus)
-                plan.duplicate?.let { swapDuplicate(it, battle.wild, events) }
+                plan.duplicate?.let { swapDuplicate(it, battle.wild, caught, events) }
                 if (Tuning.CATCH_GIVES_XP) Progression.rewardCatch(data, state, main, battle.wild, now, rng, events)
                 Healing.healMain(data, main, HealReason.CATCH, events) // after the rewards
                 // A catch is a win like a defeat: defeat counters + trainer XP by tier.
@@ -175,19 +179,135 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 state.defeats++
                 Economy.onWin(state, events)
                 plan.duplicate?.let { events += GameEvent.Duplicate(battle.wild.name, battle.wild.level, it.bestLevel, DuplicateResult.DEFEATED) }
+                if (plan.ask != null) askToCatch(battle, now, events) // R19-P (PLAN 281): paid as a defeat; "Catch / Catch and replace / Don't catch" waits
             }
         }
+    }
+
+    /**
+     * R19-P (PLAN 281): "Ask me" met a better copy of a species you own. The fight is over and paid (the Defeated event, XP, coins), the wild
+     * Pokémon itself is kept in [GameState.asks] until [answerCatch]; the Defeated event says so ([GameEvent.Defeated.ask]) for the screens.
+     */
+    private fun askToCatch(battle: Battle, now: Long, events: MutableList<GameEvent>) {
+        enqueueAsk(PendingAsk(PendingAsk.Kind.CATCH, battle.wild.uid, battle.wild, battle.tier, at = now))
+        val i = events.indexOfLast { it is GameEvent.Defeated }
+        if (i >= 0) events[i] = (events[i] as GameEvent.Defeated).copy(ask = true)
+    }
+
+    /** Adds [ask] to the waiting questions (one per kind and Pokémon), oldest dropped beyond [AskMe.MAX_WAITING]. */
+    private fun enqueueAsk(ask: PendingAsk) {
+        state.asks.removeAll { it.kind == ask.kind && it.uid == ask.uid }
+        state.asks += ask
+        while (state.asks.size > AskMe.MAX_WAITING) state.asks.removeAt(0)
+    }
+
+    /**
+     * R19-P (PLAN 281): the player's answer to the catch question [uid] (a [PendingAsk.Kind.CATCH]). Answered exactly once: the question is
+     * taken out FIRST, a second answer (a second screen, a double tap) finds nothing and changes nothing (not ok).
+     *  - DONT: nothing is added; the fight stays a defeat (it was paid already).
+     *  - CATCH: the wild Pokémon joins the Box with its own level, IVs, nature, moves... (as an auto catch); both copies stay. The win was
+     *    counted at the fight's end, so the catch only adds the catch counters ([GameState.catchWins] keeps "battles won" right).
+     *  - REPLACE: CATCH, then the copy it beat ([AskMe.better] looked at NOW: not better any more = both are kept; a shiny or protected copy
+     *    is never released) goes. A copy that holds a place (Team / favourite / Exp. Share) is not released here: a release question
+     *    ([PendingAsk.Kind.REPLACE], the 2B window) follows; a plain copy goes at once.
+     * The result carries the other events (badges, achievements, a main that changed) but no Caught event: the fight's events were played.
+     */
+    fun answerCatch(uid: String, choice: AskChoice): ActionResult {
+        val ask = state.asks.firstOrNull { it.kind == PendingAsk.Kind.CATCH && it.uid == uid } ?: return ActionResult(false, NOTHING_WAITING)
+        state.asks.remove(ask)
+        val wild = ask.wild ?: return ActionResult(false, NOTHING_WAITING)
+        if (choice == AskChoice.DONT) return ActionResult(true, "${wild.name} was not caught.")
+        val now = clock()
+        val better = if (choice == AskChoice.REPLACE) AskMe.better(state, wild) else null
+        val events = mutableListOf<GameEvent>()
+        val caught = Catching.addToCollection(data, state, wild, ask.tier, null, now, events)
+        state.ballCatches.merge("auto", 1, Int::plus)
+        state.catchWins++ // the win itself (defeats) was counted when the fight ended
+        StudyStats.addLateCatch(state, caught.shiny)
+        Achievements.settle(data, state, now, events)
+        var text = "${wild.name} (Lv ${wild.level}) was caught."
+        val old = better?.yours?.takeIf { it.uid != caught.uid && AskMe.canReplace(data, state, it) }
+        if (old != null) {
+            if (AskMe.needsWindow(data, state, old)) enqueueAsk(PendingAsk(PendingAsk.Kind.REPLACE, caught.uid, oldUid = old.uid, at = now))
+            else {
+                val moved = swapCopies(caught, old, keepPlace = true)
+                events += moved.events
+                text = "${wild.name} (Lv ${wild.level}) was caught; your Lv ${old.level} one was released."
+            }
+        }
+        return ActionResult(true, text, events.filter { it !is GameEvent.Caught })
+    }
+
+    /**
+     * R19-P (PLAN 281): the answer to a release question ([PendingAsk.Kind.REPLACE]) for the better copy [newUid]: [release] = release the
+     * old one (No / closing the window: false, both stay). With [keepPlace] the new one takes the old one's Team slot, favourite heart and
+     * Exp. Share, without it the old one's place goes with it (a team is never left empty: the new one takes the last slot then). The old
+     * one's held item goes to the Bag like in any release. Exactly once, like [answerCatch]; a Pokémon that changed meanwhile releases
+     * nothing ([Duplicates.CHANGED_NOTHING]). R19-FIX (CX-1): the pair is checked again here ([AskMe.stillReplaces]): an old copy that
+     * evolved, got a shiny / protected mark or is no longer worse than the new one is kept, with [AskMe.STALE] as the answer.
+     */
+    fun answerReplace(newUid: String, release: Boolean, keepPlace: Boolean): ActionResult {
+        val ask = state.asks.firstOrNull { it.kind == PendingAsk.Kind.REPLACE && it.uid == newUid } ?: return ActionResult(false, NOTHING_WAITING)
+        state.asks.remove(ask)
+        if (!release) return ActionResult(true, "Kept both.")
+        val new = state.mon(ask.uid)
+        val old = ask.oldUid?.let { state.mon(it) }
+        if (new == null || old == null || new.uid == old.uid) return ActionResult(false, Duplicates.CHANGED_NOTHING)
+        if (!AskMe.stillReplaces(data, state, new, old)) return ActionResult(false, AskMe.STALE)
+        return swapCopies(new, old, keepPlace).let { it.copy(message = "${old.shownName} (Lv ${old.level}) was released; ${new.shownName} (Lv ${new.level}) took over.") }
+    }
+
+    /** The waiting question to show first ([AskMe.next]); null = none. */
+    fun nextAsk(): PendingAsk? = AskMe.next(state)
+
+    /** The text of a second answer to a question that is gone. */
+    private val NOTHING_WAITING get() = "Nothing is waiting for an answer."
+
+    /**
+     * Releases [old] and puts [new] in its place (R19-P). The release is [release]'s: the held item goes to the Bag, the Ankimon export
+     * removes it. [keepPlace]: the Team slot (the main too), the favourite heart and the Exp. Share go to [new]; else they go with [old]
+     * and a team left empty takes [new]. A changed main is the usual team change ([changed]) but costs no wild hit: nothing was switched
+     * out, a better copy came in.
+     */
+    private fun swapCopies(new: Mon, old: Mon, keepPlace: Boolean): ActionResult {
+        val oldMain = state.team.firstOrNull()
+        val oldMainMon = state.main
+        val slot = state.team.indexOf(old.uid)
+        val shared = state.settings.xpShareUid == old.uid
+        old.heldItem?.let { Economy.give(state, it) }
+        old.heldItem = null
+        if (keepPlace) {
+            if (slot >= 0) {
+                state.team[slot] = new.uid
+                // R19-FIX (CX-2): the new copy may be in the Team already (added while the question waited): one entry only, the old slot's
+                val twin = state.team.indices.firstOrNull { it != slot && state.team[it] == new.uid }
+                if (twin != null) state.team.removeAt(twin)
+            }
+            if (old.favourite) new.favourite = true
+            if (shared) state.settings.xpShareUid = new.uid
+        } else {
+            state.team.remove(old.uid)
+            if (shared) state.settings.xpShareUid = null
+            if (state.team.isEmpty()) state.team += new.uid
+        }
+        state.mons.remove(old)
+        rememberReleased(old.ankimonId ?: old.uid)
+        return changed("${old.name} was released.", oldMain, oldMainMon, free = true)
     }
 
     /**
      * Auto-release duplicates, after the wild one was caught: lets the replaced copy go like a manual release (the Ankimon
      * export removes it), or keeps both when it may not go. The copy is checked again here; it is never in the team.
      */
-    private fun swapDuplicate(dup: Duplicates.Verdict, wild: Mon, events: MutableList<GameEvent>) {
+    private fun swapDuplicate(dup: Duplicates.Verdict, wild: Mon, caught: Mon, events: MutableList<GameEvent>) {
         val old = dup.release?.takeIf { it in state.mons && Duplicates.keepReason(data, state, it) == null }
         if (old == null) {
+            // R19-P (PLAN 281): a best copy that only holds a place (Team / favourite / Exp. Share) is not dropped silently or kept silently:
+            // both are kept for now and "Release the old one?" waits for the answer ([answerReplace])
+            val holder = dup.best?.takeIf { it in state.mons && AskMe.needsWindow(data, state, it) }
+            if (holder != null) enqueueAsk(PendingAsk(PendingAsk.Kind.REPLACE, caught.uid, oldUid = holder.uid, at = clock()))
             events += GameEvent.Duplicate(wild.name, wild.level, dup.bestLevel, DuplicateResult.KEPT_BOTH,
-                keptBecause = (dup.kept ?: dup.release?.let { Duplicates.keepReason(data, state, it) })?.label)
+                keptBecause = (dup.kept ?: dup.release?.let { Duplicates.keepReason(data, state, it) })?.label, ask = holder != null)
             return
         }
         state.mons.remove(old)
@@ -330,9 +450,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * Success result after a team change. When the main differs from [oldMain], the fight (if any) goes on with the new
      * one on fresh stat stages and status, and a MainChanged event says so. The new main keeps its own HP (Ankimon).
      * Round 10 (W10): with a wild one in the fight the switch costs a hit, see [switchHit]. [oldMon] = the Pokémon that was the main
-     * before (looked up by [oldMain] unless the caller removed it from the game, like [release]).
+     * before (looked up by [oldMain] unless the caller removed it from the game, like [release]). [free] (R19-P): no wild hit for the change.
      */
-    private fun changed(message: String, oldMain: String?, oldMon: Mon? = oldMain?.let { state.mon(it) }): ActionResult {
+    private fun changed(message: String, oldMain: String?, oldMon: Mon? = oldMain?.let { state.mon(it) }, free: Boolean = false): ActionResult {
         val events = mutableListOf<GameEvent>()
         var text = message
         // PLAN 206: a queued switch whose Pokémon left the team (box, released, import) or is the main now has nothing to wait for
@@ -343,7 +463,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             battle?.switchOutMain(data, oldMon) // R17C-1: the rule sets' onLeave, then a fresh side for the new main
             events += GameEvent.MainChanged(main.uid, main.name)
             refreshNext() // the wild level follows the main's level
-            if (battle != null && oldMon != null && switchCostsAHit(battle, oldMon, main)) {
+            if (!free && battle != null && oldMon != null && switchCostsAHit(battle, oldMon, main)) { // R19-P: [free] = a better copy took the place (swapCopies), nothing retreated
                 val hit = switchHit(battle, main)
                 events += hit
                 text = SwitchHitText.withHit(message, hit, named = main.name in message)

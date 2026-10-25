@@ -134,9 +134,9 @@ class InfoBoxLookTest {
         assertEquals(0xFFF3F3F7.toInt(), ink.text)
         assertEquals(0xFFC3CBE2.toInt(), ink.sub)
         assertEquals(0xFF3B4460.toInt(), ink.track)
-        assertEquals("HP green", 0xFF5FD35A.toInt(), ink.hp(0.9f))
-        assertEquals("HP yellow", 0xFFF2C94C.toInt(), ink.hp(0.4f))
-        assertEquals("HP red is the dark palette's", InfoBoxSkin.DARK_RED, ink.hp(0.1f))
+        assertEquals("HP blend", HpColors.color(0.9f, dark = true), ink.hp(0.9f))
+        assertEquals("HP blend", HpColors.color(0.4f, dark = true), ink.hp(0.4f))
+        assertEquals("HP blend", HpColors.color(0.1f, dark = true), ink.hp(0.1f))
         assertEquals("XP sky", 0xFF5AB8FF.toInt(), ink.xp)
     }
 
@@ -206,10 +206,9 @@ class InfoBoxLookTest {
         assertEquals(InfoBoxSkin.DARK_TIERS[0], ink.tier(5))
         assertEquals(InfoBoxSkin.DARK_TIERS[5], ink.tier(54))
         assertEquals(InfoBoxSkin.DARK_TIERS[9], ink.tier(100))
-        // the same cut-offs as Ui.hpColor: above 50 % green, above 20 % yellow, else red
-        assertEquals(InfoBoxSkin.DARK_GREEN, ink.hp(1f)); assertEquals(InfoBoxSkin.DARK_GREEN, ink.hp(0.51f))
-        assertEquals(InfoBoxSkin.DARK_YELLOW, ink.hp(0.5f)); assertEquals(InfoBoxSkin.DARK_YELLOW, ink.hp(0.21f))
-        assertEquals(InfoBoxSkin.DARK_RED, ink.hp(0.2f)); assertEquals(InfoBoxSkin.DARK_RED, ink.hp(0f))
+        // PLAN 163 / R19: every fixed dark skin follows the shared smooth default.
+        for (f in listOf(1f, 0.51f, 0.5f, 0.21f, 0.2f, 0f))
+            assertEquals(HpColors.color(f, dark = true), ink.hp(f))
         assertEquals(InfoBoxSkin.DARK_SKY, ink.xp)
     }
 

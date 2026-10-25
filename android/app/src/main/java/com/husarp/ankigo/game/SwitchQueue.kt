@@ -18,9 +18,15 @@ object SwitchQueue {
 
     /**
      * The toast / result text of a queued switch (R18-B: Adam's picked wording). The attack is in [MENU_SUB], and in the Help text:
-     * the wild Pokémon attacks once, never "a free hit".
+     * the wild Pokémon attacks once. R19-T (PLAN 288): when the free hit really comes, the battle's own toast says it ([freeHitText]).
      */
     fun queuedText(name: String) = "Switching to $name on your next move."
+
+    /**
+     * R19-T (PLAN 288): the battle's card toast when a switch gave the wild Pokémon [wildName] (no "Wild" in front) its one extra attack. The
+     * switch takes no dot and none of the round's answers; `{{...}}` turns the name mauve.
+     */
+    fun freeHitText(wildName: String) = "Switched! Wild {{$wildName}} gets a free hit."
 
     /** The result text when the queue was cancelled (the main was picked again). */
     fun cancelledText(name: String) = "$name stays in."

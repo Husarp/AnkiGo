@@ -7,7 +7,7 @@ import com.husarp.ankigo.game.Type
 
 /**
  * Round 8 battle backgrounds (pure, JVM-tested): the 35 pictures (round 9 dropped 17 of the 43, then added 3 + 5 + 1), their stand points and which types get them. 12 are Pokémon
- * Showdown's, 23 are Adam's own art (batch 1 and 2, sharpened in round 9; batch 3: the legendary shrine, ruins-courtyard and dark-town; batch 4: dark-forest, fire-savanna, ice-lake, fighting-training, poison-marsh; wave 5: psychic-lab). Stand points: the STAGE table of docs/design/backgrounds-stage.html (Showdown, Adam 3:2 and wide) and
+ * Showdown's, 23 are Adam's own art (R19-F, PLAN 274: they are pixel art too, so 34 are `crisp` with the sharp drawing of [BackdropSharp]; 274 changes: Showdown's 12 keep today's drawing (`sharp` false) and the factory its smoothed one (`crisp` false); batch 1 and 2, sharpened in round 9; batch 3: the legendary shrine, ruins-courtyard and dark-town; batch 4: dark-forest, fire-savanna, ice-lake, fighting-training, poison-marsh; wave 5: psychic-lab). Stand points: the STAGE table of docs/design/backgrounds-stage.html (Showdown, Adam 3:2 and wide) and
  * backgrounds-stage-r8.html (batches 1 and 2, measured for round 8). A wild Pokémon gets one of its type's pictures at random per encounter,
  * the same for the whole fight ([pick] with a seed from the wild one's uid), also after a restart or a redraw from the save.
  */
@@ -15,7 +15,7 @@ internal object BackdropCatalog {
     private fun p(x: Float, y: Float, s: Float) = StandPoint(x, y, s)
 
     private fun showdown(id: String, w: Int, player: StandPoint, wild: StandPoint) =
-        Backdrop(id, BackdropSource.SHOWDOWN, "png", w, 500, player, wild, crisp = true, dark = false)
+        Backdrop(id, BackdropSource.SHOWDOWN, "png", w, 500, player, wild, crisp = true, dark = false, sharp = false) // R19-F2: today's drawing at every size
 
     private fun own(id: String, ext: String, w: Int, h: Int, player: StandPoint, wild: StandPoint, crisp: Boolean, dark: Boolean = false, rev: Int = 1) =
         Backdrop(id, BackdropSource.OWN, ext, w, h, player, wild, crisp, dark, rev)
@@ -35,35 +35,35 @@ internal object BackdropCatalog {
         showdown("route", 753, p(.25f, .81f, .44f), p(.70f, .48f, .32f)),
         showdown("volcanocave", 753, p(.28f, .76f, .44f), p(.70f, .48f, .32f)),
         // Adam's batch 1 (1264 x 848 WebP, soft), sharpened in round 9 (rev 2; night-forest retouched + sharpened = rev 3)
-        own("dragon-peak", "webp", 1264, 848, p(.30f, .85f, .44f), p(.79f, .61f, .32f), crisp = false, rev = 2),
-        own("deep-sea-cave", "webp", 1264, 848, p(.30f, .815f, .44f), p(.80f, .615f, .32f), crisp = false, dark = true, rev = 2),
-        own("night-forest", "webp", 1264, 848, p(.35f, .78f, .44f), p(.74f, .59f, .32f), crisp = false, dark = true, rev = 3),
-        own("factory", "webp", 1264, 848, p(.31f, .82f, .44f), p(.72f, .66f, .32f), crisp = false, rev = 2),
+        own("dragon-peak", "webp", 1264, 848, p(.30f, .85f, .44f), p(.79f, .61f, .32f), crisp = true, rev = 2),
+        own("deep-sea-cave", "webp", 1264, 848, p(.30f, .815f, .44f), p(.80f, .615f, .32f), crisp = true, dark = true, rev = 2),
+        own("night-forest", "webp", 1264, 848, p(.35f, .78f, .44f), p(.74f, .59f, .32f), crisp = true, dark = true, rev = 3),
+        own("factory", "webp", 1264, 848, p(.31f, .82f, .44f), p(.72f, .66f, .32f), crisp = false, rev = 2), // R19-F2: today's smoothed drawing
         // Adam's batch 2 (WebP, soft; 1264 x 848 or 1376 x 768), sharpened in round 9 (rev 2)
-        own("canyon", "webp", 1375, 768, p(.33f, .74f, .46f), p(.73f, .47f, .33f), crisp = false, rev = 2),
-        own("cliff-clouds", "webp", 1376, 768, p(.30f, .76f, .46f), p(.80f, .53f, .33f), crisp = false, rev = 2),
-        own("crystal-storm", "webp", 1264, 848, p(.33f, .70f, .44f), p(.77f, .48f, .32f), crisp = false, dark = true, rev = 2),
-        own("flower-field", "webp", 1264, 848, p(.30f, .79f, .44f), p(.74f, .48f, .32f), crisp = false, rev = 2),
-        own("haunted-mansion", "webp", 1264, 848, p(.30f, .79f, .44f), p(.695f, .605f, .30f), crisp = false, dark = true, rev = 2),
-        own("jungle", "webp", 1264, 848, p(.30f, .83f, .44f), p(.85f, .625f, .32f), crisp = false, rev = 2),
-        own("mine", "webp", 1264, 848, p(.32f, .72f, .44f), p(.76f, .50f, .32f), crisp = false, dark = true, rev = 2),
-        own("snow-aurora", "webp", 1376, 768, p(.32f, .79f, .46f), p(.79f, .58f, .33f), crisp = false, dark = true, rev = 2),
-        own("stormy-plains", "webp", 1264, 848, p(.30f, .76f, .44f), p(.74f, .49f, .32f), crisp = false, dark = true, rev = 2),
-        own("sunset-beach", "webp", 1376, 768, p(.30f, .76f, .46f), p(.80f, .53f, .33f), crisp = false, rev = 2),
+        own("canyon", "webp", 1375, 768, p(.33f, .74f, .46f), p(.73f, .47f, .33f), crisp = true, rev = 2),
+        own("cliff-clouds", "webp", 1376, 768, p(.30f, .76f, .46f), p(.80f, .53f, .33f), crisp = true, rev = 2),
+        own("crystal-storm", "webp", 1264, 848, p(.33f, .70f, .44f), p(.77f, .48f, .32f), crisp = true, dark = true, rev = 2),
+        own("flower-field", "webp", 1264, 848, p(.30f, .79f, .44f), p(.74f, .48f, .32f), crisp = true, rev = 2),
+        own("haunted-mansion", "webp", 1264, 848, p(.30f, .79f, .44f), p(.695f, .605f, .30f), crisp = true, dark = true, rev = 2),
+        own("jungle", "webp", 1264, 848, p(.30f, .83f, .44f), p(.85f, .625f, .32f), crisp = true, rev = 2),
+        own("mine", "webp", 1264, 848, p(.32f, .72f, .44f), p(.76f, .50f, .32f), crisp = true, dark = true, rev = 2),
+        own("snow-aurora", "webp", 1376, 768, p(.32f, .79f, .46f), p(.79f, .58f, .33f), crisp = true, dark = true, rev = 2),
+        own("stormy-plains", "webp", 1264, 848, p(.30f, .76f, .44f), p(.74f, .49f, .32f), crisp = true, dark = true, rev = 2),
+        own("sunset-beach", "webp", 1376, 768, p(.30f, .76f, .46f), p(.80f, .53f, .33f), crisp = true, rev = 2),
         // Adam's batch 3 (1024 x 687 WebP, de-dithered where needed and sharpened; stand points checked in every arena shape with the design page).
         // The shrine is in no type list: only a Legendary / Mythical encounter gets it (rev 2 = the new picture; the dropped round-8 one was rev 1).
-        own(SHRINE, "webp", 1024, 687, p(.30f, .88f, .44f), p(.72f, .70f, .32f), crisp = false, rev = 2),
-        own("ruins-courtyard", "webp", 1024, 687, p(.30f, .84f, .44f), p(.71f, .62f, .32f), crisp = false),
-        own("dark-town", "webp", 1024, 687, p(.30f, .86f, .44f), p(.68f, .60f, .32f), crisp = false, dark = true),
+        own(SHRINE, "webp", 1024, 687, p(.30f, .88f, .44f), p(.72f, .70f, .32f), crisp = true, rev = 2),
+        own("ruins-courtyard", "webp", 1024, 687, p(.30f, .84f, .44f), p(.71f, .62f, .32f), crisp = true),
+        own("dark-town", "webp", 1024, 687, p(.30f, .86f, .44f), p(.68f, .60f, .32f), crisp = true, dark = true),
         // Adam's batch 4 (round 9 wave 4; 1024 x 687 WebP, sharpened; the checker de-dithered in the fighting-training and poison-marsh skies). Poison-marsh: the two feet stand on its two dark ovals.
-        own("dark-forest", "webp", 1024, 687, p(.28f, .84f, .44f), p(.70f, .58f, .32f), crisp = false, dark = true),
-        own("fire-savanna", "webp", 1024, 687, p(.30f, .84f, .44f), p(.66f, .64f, .32f), crisp = false),
-        own("ice-lake", "webp", 1024, 687, p(.30f, .86f, .44f), p(.68f, .62f, .32f), crisp = false),
-        own("fighting-training", "webp", 1024, 687, p(.30f, .84f, .44f), p(.64f, .58f, .32f), crisp = false),
-        own("poison-marsh", "webp", 1024, 687, p(.28f, .80f, .44f), p(.73f, .56f, .32f), crisp = false),
+        own("dark-forest", "webp", 1024, 687, p(.28f, .84f, .44f), p(.70f, .58f, .32f), crisp = true, dark = true),
+        own("fire-savanna", "webp", 1024, 687, p(.30f, .84f, .44f), p(.66f, .64f, .32f), crisp = true),
+        own("ice-lake", "webp", 1024, 687, p(.30f, .86f, .44f), p(.68f, .62f, .32f), crisp = true),
+        own("fighting-training", "webp", 1024, 687, p(.30f, .84f, .44f), p(.64f, .58f, .32f), crisp = true),
+        own("poison-marsh", "webp", 1024, 687, p(.28f, .80f, .44f), p(.73f, .56f, .32f), crisp = true),
         // Round 9 wave 5: the psychic lab (1024 x 687 WebP, sharpened, clean sky/floor so not de-dithered). Dim purple interior = a night-type picture (dark: no extra dusk tint, mean luma 64 of 255).
         // Feet on the clear floor: the lower-left shelf/cart corner (x < .37, y > .75) and the cables/pedestal/tables stay free.
-        own("psychic-lab", "webp", 1024, 687, p(.42f, .74f, .44f), p(.62f, .56f, .32f), crisp = false, dark = true),
+        own("psychic-lab", "webp", 1024, 687, p(.42f, .74f, .44f), p(.62f, .56f, .32f), crisp = true, dark = true),
     )
 
     private val BY_ID: Map<String, Backdrop> = ALL.associateBy { it.id }

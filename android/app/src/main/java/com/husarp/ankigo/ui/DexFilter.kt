@@ -7,7 +7,8 @@ import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.Type
 
-enum class DexOwned { ALL, OWNED, NOT_OWNED }
+/** The Pokédex owner switch. R19 252: [SEEN] = seen, never caught (the grey ones); it sits between Owned and Not owned in the switch. */
+enum class DexOwned { ALL, OWNED, SEEN, NOT_OWNED }
 
 /**
  * The Pokédex sorts. [LAST_CAUGHT] needs the owned-copies map; the stat sorts read [DexFilter.basis]/[DexFilter.stat]/
@@ -39,7 +40,8 @@ class DexSortInfo(val data: GameData, val state: GameState)
 
 /**
  * The Pokédex filters and sort, pure Kotlin. All parts combine with AND.
- * - [owned]: Owned = at least one of that species in the team or box now; Not owned = the rest (seen-only and never met).
+ * - [owned]: Owned = at least one of that species in the team or box now; Seen = met but never caught (the grey cells, [seenOnly]);
+ *   Not owned = everything not owned now (never met, seen only, and caught-then-released).
  * - [favouritesOnly]: only species with a favourite copy of yours (R18 253).
  * - [gens]: multi-select, empty = every enabled gen. [types]: the picked types, matched by [typeMatch] (in pick order; the rules are [TypeFilter]'s). [wishlistOnly]: only the wishlist.
  * - [query]: name (contains) or number (prefix of "25" or of the padded "025"; a leading "#" is ignored), case-insensitive.
@@ -71,10 +73,11 @@ data class DexFilter(
      * @param lastCaught species number -> newest caughtAt among the mons you own now (absent = not owned), see [lastCaught]
      * @param info the collection, for the LEVEL, FIRST_SEEN and CURRENT-basis sorts (null: those have no values, so the list stays in number order)
      * @param favourites species numbers with at least one favourite Pokémon you own ([favouriteSpecies]), for [favouritesOnly]
+     * @param seenOnly species numbers seen but never caught ([seenNotCaught]), for [DexOwned.SEEN]
      */
     fun apply(
         all: List<Species>, lastCaught: Map<Int, Long>, wishlist: Set<Int>, enabledGens: Set<Int>, info: DexSortInfo? = null,
-        favourites: Set<Int> = emptySet(),
+        favourites: Set<Int> = emptySet(), seenOnly: Set<Int> = emptySet(),
     ): List<Species> {
         val q = query.trim().removePrefix("#").lowercase()
         val digits = q.isNotEmpty() && q.all { it.isDigit() }
@@ -87,6 +90,7 @@ data class DexFilter(
                 when (owned) {
                     DexOwned.ALL -> true
                     DexOwned.OWNED -> sp.num in lastCaught
+                    DexOwned.SEEN -> sp.num in seenOnly
                     DexOwned.NOT_OWNED -> sp.num !in lastCaught
                 } &&
                 (q.isEmpty() || sp.name.lowercase().contains(q) || (digits && numMatches(sp.baseNum, q)))
@@ -127,6 +131,12 @@ data class DexFilter(
     val sheetActive get() = (if (wishlistOnly) 1 else 0) + (if (gens.isNotEmpty()) 1 else 0) + (if (types.isNotEmpty()) 1 else 0)
 
     companion object {
+        /**
+         * R19 252: the species the Pokédex draws grey: seen and never caught. A species you caught once and released has been caught
+         * ([caught] is ever caught), so it is drawn in colour and is not "Seen" (it is "Not owned" now).
+         */
+        fun seenNotCaught(seen: Set<Int>, caught: Set<Int>): Set<Int> = seen.filter { it !in caught }.toSet()
+
         /** R18 253: the species numbers of which you own at least one favourite Pokémon. */
         fun favouriteSpecies(mons: List<Mon>): Set<Int> = mons.filter { it.favourite }.map { it.species }.toSet()
 

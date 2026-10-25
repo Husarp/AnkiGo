@@ -149,7 +149,7 @@ class MirrorTest {
         assertEquals("gh/PokeAPI/cries@${CryUrls.COMMIT}/cries/pokemon/latest/7.ogg", Mirror.keyFor(cry[0]))
         assertEquals("showdown/data/pokedex.json", Mirror.keyFor(DataStore.SOURCES.getValue("pokedex.json")))
         assertEquals("showdown/fx/bg-forest.png", Mirror.keyFor(Backdrops.url("forest")))
-        assertEquals("gh/PokeAPI/sprites@${DataStore.SPRITES_COMMIT}/sprites/items/test-item.png", Mirror.keyFor(SpriteUrls.item("test-item")))
+        assertEquals("gh/PokeAPI/sprites@${DataStore.ITEM_SPRITES_COMMIT}/sprites/items/test-item.png", Mirror.keyFor(SpriteUrls.item("test-item")))
     }
 
     // ---- pack reads ----

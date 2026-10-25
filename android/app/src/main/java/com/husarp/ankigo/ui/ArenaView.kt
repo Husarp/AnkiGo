@@ -10,7 +10,9 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
+import android.os.SystemClock
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextUtils
@@ -34,6 +36,8 @@ import android.widget.TextView
 import com.husarp.ankigo.R
 import com.husarp.ankigo.data.Backdrops
 import com.husarp.ankigo.data.Sprites
+import com.husarp.ankigo.game.Battle
+import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.Type
 import com.husarp.ankigo.gfx.SpriteView
 import kotlin.math.abs
@@ -70,6 +74,19 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val pStatus = StatusRow(ctx)
     // elevated above the stat cards (the study strip lifts them by 2 dp, and a higher z draws over any sibling order)
     private val bubble = StatusBubble(ctx).apply { visibility = GONE; elevation = Ui.dp(ctx, 8f); outlineProvider = null }
+    // R19-K (PLAN 269 A): the word chips of the lasting conditions, one layer inside [cardLayer] (above the boxes); see "condition chips" below
+    private val marks = ConditionMarksView(ctx)
+    /** What the chips show right now: moved by the played events ([conditionEffect]) and settled from the saved fight ([syncConditions]). */
+    val conditions = ConditionBoard()
+
+    private var conditionList: ConditionList? = null
+    private var listSlot: ConditionMarks.Slot? = null
+    private val hideList = Runnable { hideConditionList() }
+    // the bubbles closed by the touch that began a tap: a click on the same trigger straight after means "close", not "open again"
+    private var touchClosedStatus: StatusRow? = null
+    private var touchClosedList: ConditionMarks.Slot? = null
+    private var touchClosedAt = 0L
+    private val dismissal = BubbleDismiss.Armed(onTouch = { x, y -> if (!touchOnList(x, y)) closeBubblesFromTouch() }, onBack = { closeBubbles() })
     private val eHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0)
     private val eHp = BarView(ctx).apply { ghostOnDrop = true }
     private val eHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }   // compact cards: HP bar + "61 / 61 HP" side by side
@@ -286,6 +303,22 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     var pokemonSize: Float = 1f
         set(v) { if (abs(v - field) > 0.0001f) { field = v; requestLayout() } }
 
+    /**
+     * R19-A (PLAN 276): "Bigger info boxes" ([InfoBoxPrefs]): both boxes start [InfoBoxPrefs.BIG] times bigger where the arena has room (the tall
+     * Battle tab). Read from the setting when the arena is made and again when it is shown; a change in Settings reaches an open arena through [bigWatch].
+     */
+    var bigBoxes: Boolean = InfoBoxPrefs.big(ctx)
+        set(v) { if (v != field) { field = v; requestLayout() } }
+
+    // the prefs hold the listener weakly: it is kept here
+    private val bigWatch = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == InfoBoxPrefs.KEY) post { bigBoxes = InfoBoxPrefs.big(context) }
+    }
+
+    /** The box scale factor of "Bigger info boxes" for a [w] x [h] px arena: [InfoBoxPrefs.BIG] where it has room, else 1; the study layouts never have room. */
+    private fun bigFactor(w: Int, h: Int, d: Float): Float =
+        if (compact || studyStrip) 1f else InfoBoxPrefs.factor(bigBoxes, w / d * panelScale, h / d * panelScale)
+
     /** The picture's stage and the layout made from it while a picture shows (null = plain mode); see [layoutStage]. */
     internal var stageNow: Stage? = null
         private set
@@ -300,7 +333,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     private val live = LinkedHashSet<Animator>()
     private val floats = ArrayList<View>()
-    private class Flying(val onPlayer: Boolean, val rect: FloatSpot.Rect)
+    private class Flying(val onPlayer: Boolean, val rect: FloatSpot.Rect, val onPokemon: Boolean = false)
     private val flying = ArrayList<Flying>()       // floating texts on screen (or waiting to start): their start boxes
     private class XpShown(val view: XpCardView, val x: Int, val top: Int)
     private val xpQueue = ArrayDeque<Pair<XpCard, (SpriteView) -> Unit>>()
@@ -360,6 +393,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         addView(moveFx, LayoutParams(-1, -1))
         cardLayer.addView(enemyBlock, LayoutParams(0, -2))
         cardLayer.addView(playerCard, LayoutParams(0, -2))
+        cardLayer.addView(marks, LayoutParams(-1, -1))
         addView(cardLayer, LayoutParams(-1, -1))
         addView(newTag, LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT))
         addView(stars, LayoutParams(-1, -1))
@@ -370,6 +404,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         bubble.setOnClickListener { hideStatusBubble() }
         eStatus.onTap = { showStatusBubble(it) }
         pStatus.onTap = { showStatusBubble(it) }
+        // R19-K: a tap on a chip, on "+N" or on an info box lists the conditions (the boxes take the tap only while there is something to list)
+        marks.onTap = { showConditionList(it) }
+        enemyBlock.setOnClickListener { showConditionList(ConditionMarks.Slot.WILD) }
+        playerCard.setOnClickListener { showConditionList(ConditionMarks.Slot.OURS) }
+        enemyBlock.isClickable = false
+        playerCard.isClickable = false
 
         // Nothing until the first encounter.
         setEnemyShown(false)
@@ -408,6 +448,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         }
         val w = MeasureSpec.getSize(widthMeasureSpec)
         if (!layoutStage(w, h)) { if (compact || studyStrip) layoutStudy(w, h) else layoutPlan(w, h) }
+        // R19-A (PLAN 277): the layouts above move the two boxes by their margins, and the boxes sit one level down (in [cardLayer]). When only
+        // the arena asked for a new layout (the picture arrived, a sprite's art changed, a setting), that layer's own measure was skipped
+        // (same size) and its layout with it: the boxes stayed where the old plan put them while the NEW sticker (a direct child) moved on.
+        cardLayer.forceLayout()
         placeNewTag()
         super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
     }
@@ -423,7 +467,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val c0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle)
         val c = ArenaGeo.Cards(c0.wildW, c0.wildH + extraHeight(enemyBlock, c0.wildW, d, c0.wildH),
             c0.playerW, c0.playerH + extraHeight(playerCard, c0.playerW, d, c0.playerH))
-        val p0 = ArenaGeo.plan(w / d, h / d, c, cardsCompact, cardsUnderOwn, frameSafe())   // PLAN 140: the cards stay inside the frame's safe area
+        val p0 = ArenaGeo.plan(w / d, h / d, c, cardsCompact, cardsUnderOwn, frameSafe(), bigFactor(w, h, d))   // PLAN 140: the cards stay inside the frame's safe area; R19-A: "Bigger info boxes"
         val sized = PokemonSize.fitHolders(w / d, h / d, p0.wildSprite, p0.playerSprite, listOf(p0.wildCard, p0.playerCard), pokemonSize)
         val p = if (sized.changed) sizedPlan(p0, sized) else p0   // Round 10 B20: the same plan at 100 %
         setSpriteFactor(if (sized.changed) sized.f else 1f)
@@ -488,9 +532,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val fullSp = if (cardsCompact) InfoBoxGeo.COMPACT_SP else InfoBoxGeo.smallestSp(infoBoxStyle, wantXpText && xpOn && wantXpBar, reduced = false)
         val minSp = if (cardsCompact) InfoBoxGeo.COMPACT_SP else InfoBoxGeo.smallestSp(infoBoxStyle, xpText = false, reduced = true)
         // The boxes keep clear of each sprite's REAL art box (the pixels it draws, R9 D1) at the planned frame, not of the frame or a flat 85 % of it.
+        // R19-A (PLAN 276): "Bigger info boxes" where the arena has room; the HUD look has no boxes to grow (its text sits on the picture)
+        val boost = if (InfoBoxSkin.corners(infoBoxLook)) 1f else bigFactor(w, h, d)
         fun planAt(size: Float, atOne: Float) = StageGeo.plan(w / d, h / d, stage, wildW, c.wildH, playerW, c.playerH, k0,
             panelScale, floorSp, frameInsetDp, { side -> enemySprite.artShare(side * d) }, { side -> playerSprite.artShare(side * d) },
-            cr.wildH, cr.playerH, minSp, fullSp, size, atOne, InfoBoxSkin.corners(infoBoxLook), frameSafe())   // Round 10 W7: the HUD look = the corners mode; PLAN 140: the frame's safe area
+            cr.wildH, cr.playerH, minSp, fullSp, size, atOne, InfoBoxSkin.corners(infoBoxLook), frameSafe(), boost)   // Round 10 W7: the HUD look = the corners mode; PLAN 140: the frame's safe area; R19-A: "Bigger info boxes"
         // Round 10 B20: the plan at 100 % first (the layout before the setting); a Pokémon size draws both sprites that many times what a
         // frame 1 / size as big would ([SpriteView.sizeFactor]) and is planned with its sprites like that. A bigger size is used only while it
         // stays clear and its rule step is not lower than the 100 % plan's (so it is never a smaller Pokémon than 100 %).
@@ -760,6 +806,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        InfoBoxPrefs.watch(context, bigWatch)
+        bigBoxes = InfoBoxPrefs.big(context)   // R19-A: a change made while the arena was away
         // the attack animations' textures are decoded now, on a background thread (once per process), not inside the first frame
         if (!reduceMotion() && AppPrefs.attackAnimations(context)) com.husarp.ankigo.ui.movefx.FxArt.of(context).warmUp()
         if (!ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) return
@@ -860,8 +908,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     override fun onDetachedFromWindow() {
+        InfoBoxPrefs.unwatch(context, bigWatch)
         stopTurnAnim()
         hideStatusBubble()
+        hideConditionList()   // R19-K: and stop watching the window for taps
         stopBobs()
         bobStep = -1
         cancelAnimations()
@@ -1025,7 +1075,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun setEnemyHp(hp: Int, max: Int, animate: Boolean) {
         val f = if (max > 0) hp.toFloat() / max else 0f
         eHpFrac = f
-        eHp.set(f, hpColorOf(f), animate)
+        eHp.set(f, hpColorOf(f, eTypeColor), animate)
         eHpStr = DisplayNumbers.hp(hp, max)
         showHpText(eHpText, eHp, eHpStr)
     }
@@ -1037,7 +1087,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /** The sticker follows the wild card: shown only while the card is (and the species is new). */
-    private fun showNewTag() { newTag.visibility = if (wildIsNew && cardShown) VISIBLE else INVISIBLE; updateNewTag() }
+    private fun showNewTag() { newTag.visibility = if (wildIsNew && cardShown) VISIBLE else INVISIBLE; updateNewTag(); placeMarks() }   // R19-K: the wild box and the sticker came or went: the chips are placed again
 
     /**
      * The study strips' compact look (narrow split-screen strip): the info cards keep name, level and HP (no type chips, XP number or
@@ -1235,6 +1285,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private val statusTouch = StatusTouch.Delegate(this)
+    private var statusGesture: Boolean? = null
 
     /**
      * Gives each shown status badge a touch area of at least 48 x 48 dp on screen ([StatusTouch]): the badge is a small square in the
@@ -1270,8 +1321,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      * room above), kept inside the arena. It goes away after about 3 s, on the next tap on a badge or on the bubble.
      */
     private fun showStatusBubble(row: StatusRow) {
-        val showing = bubble.visibility == VISIBLE && bubbleFor === row
+        // R19-K (PLAN 287): the touch that began this tap already closed the bubble (it closes on any tap); on the same badge that means "close", not "open again"
+        val showing = (bubble.visibility == VISIBLE && bubbleFor === row) || (touchClosedStatus === row && SystemClock.uptimeMillis() - touchClosedAt < SWALLOW_MS)
         hideStatusBubble()
+        hideConditionList()
         val info = StatusInfo.of(row.status)
         val badge = row.badge
         if (showing || info == null || badge == null || width <= 0 || height <= 0) return
@@ -1299,18 +1352,197 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         bubble.bringToFront()
         requestLayout()
         postDelayed(hideBubble, 3000)
+        watchForClose()
     }
 
     private fun hideStatusBubble() {
         removeCallbacks(hideBubble)
         bubble.visibility = GONE
         bubbleFor = null
+        watchForClose()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (bubbleFor != null) hideStatusBubble()
+        hideConditionList()
         invalidateGlass()
+    }
+
+    // ---------------------------------------------------------------- condition chips (R19-K, PLAN 269 A) and the bubbles that close (PLAN 287)
+
+    /** Settles the chips to the saved fight [b] (null = no fight), as the panel is drawn from it. */
+    fun syncConditions(b: Battle?) { if (conditions.syncFrom(b)) marksChanged() }
+
+    /** An Effect line played: a condition starts or ends in step with it ([b] = the saved fight, for the turns). */
+    fun conditionEffect(e: GameEvent.Effect, b: Battle?) { if (conditions.applyEffect(e, b)) marksChanged() }
+
+    /** The fight is over / a new one starts: no chips. */
+    fun clearConditions() { if (conditions.clear()) marksChanged() }
+
+    /** Our Pokémon left the field (switched out or fainted): its own conditions go; our side's and the field's stay. */
+    fun conditionsSwitched() { if (conditions.dropOurVolatiles()) marksChanged() }
+
+    private fun marksChanged() {
+        val any = conditions.size > 0
+        enemyBlock.isClickable = any
+        playerCard.isClickable = any
+        if (!any) hideConditionList()
+        placeMarks()
+        conditionList?.let { showConditionList(listSlot ?: ConditionMarks.Slot.WILD, reopen = true) }
+    }
+
+    /** Text size of a chip (design sp, raised to the panel's floor): the boxes' small text; it does not grow with a big box, so more chips fit a row. */
+    private fun chipSp() = TextMath.at(10.5f, floorSp)
+
+    private fun boxOf(v: View): ConditionSpot.R = ConditionSpot.R(v.left.toFloat(), v.top.toFloat(), v.left + v.width * v.scaleX, v.top + v.height * v.scaleY)
+
+    private fun artR(holder: View, spr: SpriteView, m: Int): ConditionSpot.R? =
+        if (holder.visibility != VISIBLE || holder.width <= 0) null else artBox(holder, spr, m).let { ConditionSpot.R(it.l.toFloat(), it.t.toFloat(), it.r.toFloat(), it.b.toFloat()) }
+
+    /** What a chip keeps clear of, in this arena's px: both boxes, both pictures (with a little room), the NEW sticker, the frame's corners. */
+    private fun markScene(): ConditionSpot.Scene {
+        val d = Ui.dp(context, 1f)
+        val safe = frameSafe()?.let { FrameSafe(it.edge * d, it.top * d, it.corner * d) }
+        val out = ArrayList<ConditionSpot.R>()
+        val room = d * 0.5f
+        if (enemyBlock.visibility == VISIBLE && enemyBlock.width > 0) out += boxOf(enemyBlock).grow(room)
+        if (playerCard.visibility == VISIBLE && playerCard.width > 0) out += boxOf(playerCard).grow(room)
+        artR(enemyHolder, enemySprite, (3 * d).toInt())?.let { out += it }
+        artR(playerHolder, playerSprite, (3 * d).toInt())?.let { out += it }
+        if (newTag.visibility == VISIBLE && newTag.width > 0) {
+            val r = RectF(0f, 0f, newTag.width.toFloat(), newTag.height.toFloat())
+            newTag.matrix.mapRect(r)
+            r.offset(newTag.left.toFloat(), newTag.top.toFloat())
+            out += ConditionSpot.R(r.left, r.top, r.right, r.bottom).grow(d)
+        }
+        return ConditionSpot.Scene(width.toFloat(), height.toFloat(), safe, out, inset = 2f * d)
+    }
+
+    internal var onMarksPlaced: () -> Unit = {}
+
+    /** Puts the rows: the wild one's under its box, ours above its box, the field's in a corner; each only in free room ([ConditionSpot.all]). */
+    private fun placeMarks() {
+        if (width <= 0 || height <= 0 || (conditions.size == 0 && marks.shownRows.isEmpty())) return
+        val m = ChipMetrics(context, chipSp())
+        val scene = markScene()
+        val wildOn = enemyBlock.visibility == VISIBLE && enemyBlock.width > 0
+        val ourOn = playerCard.visibility == VISIBLE && playerCard.width > 0
+        val wild = conditions.of(ConditionMarks.Slot.WILD)
+        val ours = conditions.of(ConditionMarks.Slot.OURS)
+        val field = conditions.of(ConditionMarks.Slot.FIELD)
+        fun widths(ms: List<ConditionMarks.Mark>) = FloatArray(ms.size) { m.width(ms[it]) }
+        val all = ConditionSpot.all(scene, if (wildOn) boxOf(enemyBlock) else null, if (ourOn) boxOf(playerCard) else null,
+            widths(wild), widths(ours), widths(field), ConditionSpot.Sizes(m.gap, m.lift, m.height, m::moreWidth))
+        marks.setRow(ConditionMarks.Slot.WILD, all.wild, wild, m)
+        marks.setRow(ConditionMarks.Slot.OURS, all.ours, ours, m)
+        marks.setRow(ConditionMarks.Slot.FIELD, all.field, field, m)
+        onMarksPlaced()
+    }
+
+    /** The chips (tests): every chip's rectangle in this arena's px. */
+    internal fun markRects(): List<RectF> = marks.chipRects()
+
+    internal fun markRows(): Collection<ConditionMarksView.Row> = marks.shownRows
+
+    /** The chips' text size in virtual sp (tests: on screen it is this times [panelScale], never under the panel's floor). */
+    internal fun chipTextSp(): Float = chipSp()
+
+    /** What the chips keep clear of (tests): the same scene [placeMarks] used. */
+    internal fun markScenePublic(): ConditionSpot.Scene = markScene()
+
+    internal fun conditionListShown(): ConditionList? = conditionList
+
+    /**
+     * A tap on a chip row, its "+N" or an info box: every condition of the fight with its turns left, in a bubble by the row (the tapped side's
+     * section first). Another tap anywhere, Back, or about 8 s closes it. [reopen] = the content changed under an open list: drawn again, no toggle.
+     */
+    private fun showConditionList(slot: ConditionMarks.Slot, reopen: Boolean = false) {
+        val toggle = !reopen && (conditionList != null && listSlot == slot || (touchClosedList == slot && SystemClock.uptimeMillis() - touchClosedAt < SWALLOW_MS))
+        hideConditionList()
+        if (toggle || conditions.size == 0 || width <= 0 || height <= 0) return
+        hideStatusBubble()
+        val d = Ui.dp(context, 1f)
+        val margin = (6 * d).toInt()
+        val safe = frameSafe()
+        val sx = ((safe?.edge ?: 0f) * d).toInt() + margin
+        val sy = ((safe?.top ?: 0f) * d).toInt() + margin
+        val sb = ((safe?.edge ?: 0f) * d).toInt() + margin
+        val maxW = (width - 2 * sx).coerceAtLeast(1)
+        val maxH = (height - sy - sb).coerceAtLeast(1)
+        val list = ConditionList(context, floorSp)
+        list.build(ConditionSections.of(conditions, slot, enemyName, pName.text.toString()), maxW, maxH)
+        val lw = min(list.measuredWidth, maxW)
+        val lh = min(list.measuredHeight, maxH)
+        // by the row that was tapped (below it, else above it), else by the box; kept inside the room the frame leaves
+        val anchor = marks.rowOf(slot)?.bounds ?: boxOf(if (slot == ConditionMarks.Slot.OURS) playerCard else enemyBlock).let { RectF(it.l, it.t, it.r, it.b) }
+        val x = (anchor.centerX() - lw / 2f).toInt().coerceIn(sx, (width - sx - lw).coerceAtLeast(sx))
+        val below = anchor.bottom + 4 * d
+        val y = (if (below + lh <= height - sb) below else anchor.top - 4 * d - lh).toInt().coerceIn(sy, (height - sb - lh).coerceAtLeast(sy))
+        popLayer.addView(list, LayoutParams(lw, lh, Gravity.TOP or Gravity.LEFT).also { it.setMargins(x, y, 0, 0) })
+        list.setOnClickListener { hideConditionList() }
+        conditionList = list
+        listSlot = slot
+        removeCallbacks(hideList)
+        postDelayed(hideList, LIST_MS)
+        if (!reopen) announceForAccessibility(list.spoken)
+        watchForClose()
+        requestLayout()
+    }
+
+    private fun hideConditionList() {
+        removeCallbacks(hideList)
+        conditionList?.let { popLayer.removeView(it) }
+        conditionList = null
+        listSlot = null
+        watchForClose()
+    }
+
+    /** Armed while a small bubble is open: any tap elsewhere and Back close it ([BubbleDismiss]). */
+    private fun watchForClose() {
+        if (bubble.visibility == VISIBLE || conditionList != null) BubbleDismiss.arm(this, dismissal) else BubbleDismiss.disarm(this, dismissal)
+    }
+
+    /** A new touch began (not yet seen by the view it lands on): the open bubbles close; a click on their own trigger straight after toggles instead of reopening. */
+    private fun closeBubblesFromTouch() {
+        if (!bubbleOpen()) return
+        touchClosedStatus = if (bubble.visibility == VISIBLE) bubbleFor else null
+        touchClosedList = listSlot
+        touchClosedAt = SystemClock.uptimeMillis()
+        closeBubbles()
+    }
+
+    /** Back (or a touch): every small bubble of the arena closes. */
+    private fun closeBubbles() {
+        hideStatusBubble()
+        hideConditionList()
+    }
+
+    /** True while a status note or the conditions list is open (tests). */
+    internal fun bubbleOpen(): Boolean = bubble.visibility == VISIBLE || conditionList != null
+
+    /** Watches the first touch of every gesture in the arena for the open bubbles (windows without an activity are watched only here); it never takes the touch. */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN && bubbleOpen() && !(conditionList?.let { ev.x >= it.left && ev.x <= it.right && ev.y >= it.top && ev.y <= it.bottom } ?: false)) closeBubblesFromTouch()
+        // Status targets take priority over a clickable condition box.
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            statusGesture = listOf(true, false).firstOrNull { statusTouchArea(it)?.contains(ev.x.toInt(), ev.y.toInt()) == true }
+        }
+        statusGesture?.let { wild ->
+            if (ev.actionMasked == MotionEvent.ACTION_UP) {
+                if (statusTouchArea(wild)?.contains(ev.x.toInt(), ev.y.toInt()) == true) (if (wild) eStatus else pStatus).performClick()
+                statusGesture = null
+            } else if (ev.actionMasked == MotionEvent.ACTION_CANCEL) statusGesture = null
+            return true
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    /** A touch at ([x], [y]) in the window's coordinates is on the open conditions list (which may scroll, so a touch on it does not close it). */
+    private fun touchOnList(x: Float, y: Float): Boolean {
+        val list = conditionList ?: return false
+        val r = android.graphics.Rect()
+        return list.getGlobalVisibleRect(r) && r.contains(x.toInt(), y.toInt())
     }
 
     // ---------------------------------------------------------------- player side
@@ -1344,7 +1576,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun setPlayerHp(hp: Int, max: Int, animate: Boolean) {
         val f = if (max > 0) hp.toFloat() / max else 0f
         pHpFrac = f
-        pHp.set(f, hpColorOf(f), animate)
+        pHp.set(f, hpColorOf(f, pTypeColor), animate)
         hpCount?.cancel()
         val from = pHpShown
         pHpShown = hp
@@ -1388,7 +1620,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun inkText() = ink?.text ?: Ui.c(context, R.color.ag_text)
     private fun inkSub() = ink?.sub ?: Ui.c(context, R.color.ag_sub0)
     private fun levelColor(level: Int) = ink?.tier(level) ?: LevelTier.color(context, level)
-    private fun hpColorOf(f: Float) = ink?.hp(f) ?: Ui.hpColor(context, f)
+    private fun hpColorOf(f: Float, type: Int): Int {
+        HpColorPrefs.watch(this) { (it as ArenaView).applyInk() }
+        return ink?.hp(f, HpColorPrefs.mode(context), type.takeIf { it != 0 })
+            ?: HpColors.color(f, HpColorPrefs.mode(context), TypeChips.isDark(context), type.takeIf { it != 0 })
+    }
 
     /** The XP bar's fill at [f]: the look's sky, or the meaning colour of the chosen bar style. */
     private fun setXpBar(f: Float, animate: Boolean, durationMs: Long = 450) {
@@ -1456,8 +1692,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         pLevel.setTextColor(if (pLvl > 0) levelColor(pLvl) else sub)
         val track = ink?.track ?: Ui.c(context, R.color.ag_s0)
         eHp.setTrackColor(track); pHp.setTrackColor(track); pXp.setTrackColor(track)
-        if (eHpFrac >= 0f) eHp.set(eHpFrac, hpColorOf(eHpFrac), false)
-        if (pHpFrac >= 0f) pHp.set(pHpFrac, hpColorOf(pHpFrac), false)
+        if (eHpFrac >= 0f) eHp.set(eHpFrac, hpColorOf(eHpFrac, eTypeColor), false)
+        if (pHpFrac >= 0f) pHp.set(pHpFrac, hpColorOf(pHpFrac, pTypeColor), false)
         setXpBar(pXpShown, false)
         eStatus.dark = ink != null
         pStatus.dark = ink != null
@@ -1577,6 +1813,27 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     fun flashPlayer(ms: Long, times: Int) = flash(playerSprite, ms, times)
 
+    /**
+     * R19-L (PLAN 271, pick A): a Pokémon transforms. Its picture goes white over [ms] (a few sparkles round it, [TransformFlash]), [swap]
+     * runs at the whitest moment (the copy's picture loads there) and the white fades off the copy. With reduced motion, or before the
+     * sprite box has a size, [swap] runs at once and nothing flashes. A redraw that cancels the flash leaves the picture to the saved game.
+     */
+    fun transformFlash(player: Boolean, ms: Long, swap: () -> Unit) {
+        val spr = if (player) playerSprite else enemySprite
+        val box = if (player) playerHolder else enemyHolder
+        if (reduceMotion() || ms <= 0L || box.width <= 0 || box.height <= 0 || !isAttachedToWindow) { swap(); return }
+        var swapped = false
+        val a = ValueAnimator.ofFloat(0f, TransformFlash.DURATION_MS.toFloat()).setDuration(ms)
+        a.interpolator = LinearInterpolator()
+        a.addUpdateListener {
+            val t = it.animatedValue as Float
+            spr.whiteout = TransformFlash.white(t)
+            if (!swapped && t >= TransformFlash.SWAP_MS) { swapped = true; swap() }
+        }
+        fx.add(TransformFlashFx(box.left + box.width / 2f, ShinyBurst.centreY(box.top.toFloat(), box.height.toFloat()), TransformFlash.scale(box.width.toFloat(), box.height.toFloat()), ms))
+        launch(a) { spr.whiteout = 0f; if (!swapped) swap() }
+    }
+
     /** The old four number styles, now drawn by [floatText]. */
     fun floatNumber(onPlayer: Boolean, text: String, style: FloatStyle) {
         val kind = when (style) {
@@ -1595,9 +1852,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         listOf(enemyBlock, playerCard).filter { !shownOnly || (it.visibility == VISIBLE && it.width > 0) }.map { v -> FloatSpot.Rect(v.left - pad, v.top - pad, v.left + (v.width * v.scaleX).toInt() + pad, v.top + (v.height * v.scaleY).toInt() + pad) }
 
     /**
-     * A floating battle text in the comic style ([FloatTextView]) pops in over the Pokémon it belongs to, holds a moment, then
-     * rises and fades (about 1.1 s). Kept inside the arena and off the stat cards ([FloatSpot.placeClear]); texts of one
-     * round start 0.23 s apart and sit one under the other, so they never print over each other.
+     * A floating battle text in the comic style ([FloatTextView]) pops in above the head of the Pokémon it belongs to (on it when
+     * there is no room above, [FloatSpot.placeHead]), holds a moment, then rises and fades (about 1.1 s). Kept inside the arena and
+     * off the stat cards; texts of one round start 0.23 s apart and pile upward, so they never print over each other.
      */
     fun floatText(ft: FloatText) {
         val holder = if (ft.onPlayer) playerHolder else enemyHolder
@@ -1606,20 +1863,24 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         tv.measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED)
         val tvW = tv.measuredWidth
         val tvH = tv.measuredHeight
-        val drawn = spr.drawnHeight()
-        val top = if (drawn > 0) max(holder.top - dpi(8), holder.bottom + spr.drawnBottomInset() - drawn - dpi(8)) else holder.top + dpi(6)
-        val left = holder.left + (holder.width - tvW) / 2
         val mine = flying.filter { it.onPlayer == ft.onPlayer }   // texts of this side wait for each other
-        // Not laid out yet (no size): the old free-floating start. Otherwise keep the whole rise inside the arena.
-        val spot = if (width > 0 && height > 0) FloatSpot.placeClear(left, top, width, height, tvW, tvH, dpi(34), flying.map { it.rect }, cardBoxes(dpi(2)), dpi(2))
-        else FloatSpot.Spot(left, top, dpi(34))
+        // R19-I (PLAN 244B): above the target's head (its real picture), the next ones piled upward; no room above (a short Study
+        // arena, a stat card in the way): ON the Pokémon, never beside it. Not laid out yet (no size): the old free-floating start.
+        var onPokemon = false
+        val spot = if (width > 0 && height > 0) {
+            val safeTop = dpi(2) + ((frameSafe()?.top ?: 0f) * Ui.dp(context, 1f)).toInt()
+            FloatSpot.placeHead(artBox(holder, spr, 0), width, height, tvW, tvH, dpi(34), flying.map { it.rect }, cardBoxes(dpi(2)), dpi(2), dpi(4), safeTop, forceOn = mine.any { it.onPokemon }).also { onPokemon = it.onPokemon }.spot
+        } else {
+            val drawn = spr.drawnHeight()
+            FloatSpot.Spot(holder.left + (holder.width - tvW) / 2, if (drawn > 0) max(holder.top - dpi(8), holder.bottom + spr.drawnBottomInset() - drawn - dpi(8)) else holder.top + dpi(6), dpi(34))
+        }
         val lp = LayoutParams(-2, -2, Gravity.TOP or Gravity.LEFT)
         lp.leftMargin = spot.left
         lp.topMargin = spot.top
         if (lifted != null) tv.translationZ = Ui.dp(context, ATTACK_Z_DP + 2f)   // the number pops at the hit: over the attacker and its particles (R9-B5)
         addView(tv, lp)
         floats += tv
-        val rec = Flying(ft.onPlayer, FloatSpot.Rect(spot.left, spot.top, spot.left + tvW, spot.top + tvH))
+        val rec = Flying(ft.onPlayer, FloatSpot.Rect(spot.left, spot.top, spot.left + tvW, spot.top + tvH), onPokemon)
         flying += rec
         val done = { removeView(tv); floats -= tv; flying -= rec }
         if (reduceMotion()) {   // no pop, no rise: just show, then fade out
@@ -1652,6 +1913,16 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun xpObstacles(): List<FloatSpot.Rect> {
         val m = dpi(3)
         return cardBoxes(m * 2) + artBox(enemyHolder, enemySprite, m) + artBox(playerHolder, playerSprite, m)
+    }
+
+    /** R19-H (PLAN 257): what an arena toast keeps clear of, in this arena's px: both stat cards, both pictures, and the battle frame's safe area. */
+    internal fun toastKeepOff(): KeepOff {
+        val m = dpi(3)
+        val (wildCard, ourCard) = cardBoxes(m)
+        val d = Ui.dp(context, 1f)
+        val safe = frameSafe()?.let { FrameSafe(it.edge * d, it.top * d, it.corner * d) }
+        val chips = marks.chipRects().map { FloatSpot.Rect(Math.floor(it.left.toDouble()).toInt(), Math.floor(it.top.toDouble()).toInt(), Math.ceil(it.right.toDouble()).toInt(), Math.ceil(it.bottom.toDouble()).toInt()) }   // R19-K: a toast keeps off the condition chips too
+        return KeepOff(ourCard, wildCard, artBox(playerHolder, playerSprite, m), artBox(enemyHolder, enemySprite, m), safe, chips)
     }
 
     /** The picture a sprite really draws (bottom-centred in its holder), [m] px of room round it. */
@@ -1752,6 +2023,14 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val box = if (player) playerHolder else enemyHolder
         if (box.width <= 0 || box.height <= 0) return null
         return ShinyBurstFx(box.left + box.width / 2f, ShinyBurst.centreY(box.top.toFloat(), box.height.toFloat()), ShinyBurst.scale(box.width.toFloat(), box.height.toFloat()))
+    }
+
+    /** Test-only: the Transform flash frozen at [atMs] (the picture's white and the sparkles; a still frame for the screenshot tests). */
+    internal fun transformStill(player: Boolean, atMs: Float) {
+        val box = if (player) playerHolder else enemyHolder
+        if (box.width <= 0 || box.height <= 0) return
+        (if (player) playerSprite else enemySprite).whiteout = TransformFlash.white(atMs)
+        fx.showStill(TransformFlashFx(box.left + box.width / 2f, ShinyBurst.centreY(box.top.toFloat(), box.height.toFloat()), TransformFlash.scale(box.width.toFloat(), box.height.toFloat())), atMs)
     }
 
     /** Test-only: the burst frozen at [atMs] (a still frame for the screenshot tests). */
@@ -1918,7 +2197,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val spr = if (player) playerSprite else enemySprite
         spr.animate().cancel()
         if (player) stopTurnAnim()
-        spr.translationX = 0f; spr.translationY = 0f; spr.alpha = 1f; spr.scaleX = 1f; spr.scaleY = 1f; spr.flash = 0f
+        spr.translationX = 0f; spr.translationY = 0f; spr.alpha = 1f; spr.scaleX = 1f; spr.scaleY = 1f; spr.flash = 0f; spr.whiteout = 0f
         spr.visibility = VISIBLE
         if (lifted === (if (player) playerHolder else enemyHolder)) forceDrop()   // this side's animations are cancelled: whatever lifted it is over
     }
@@ -2030,6 +2309,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         super.onLayout(changed, l, t, r, b)
         updateNewTag()
         updateStatusTouch()
+        placeMarks()   // R19-K: the cards, pictures and the sticker are in place now
         if (banner.visibility == VISIBLE) {
             val was = bannerFit
             if (!placeBanner()) { banner.animate().cancel(); banner.visibility = GONE; return }   // the arena shrank: no clear spot any more
@@ -2106,6 +2386,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     companion object {
         private const val FLOAT_STAGGER_MS = 230L
+        /** R19-K: how long the conditions list stays when nobody taps (ms), and the time after a closing touch in which a click on the same trigger counts as "close". */
+        private const val LIST_MS = 8000L
+        private const val SWALLOW_MS = 700L
         private const val XP_EDGE_DP = 8
         /** R9-W6 CX-A: room the banner leaves over the ball for the "+N XP" number (dp). */
         private const val NUMBER_ROOM_DP = 28

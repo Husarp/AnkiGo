@@ -22,13 +22,21 @@ enum class DotsPlace(val label: String) {
 }
 
 /** What a chip in the move bubble means; the look ([MoveBubbleLook]) picks its colours from it. */
-enum class BubbleTone { GOOD, BAD, NEUTRAL, IMMUNE, CRIT, STATUS, BOOST, MUTED }
+/** R19-C: STAT_UP / STAT_DOWN are the stat pills ([StatPillView]) of a stat change. */
+enum class BubbleTone { GOOD, BAD, NEUTRAL, IMMUNE, CRIT, STATUS, STAT_UP, STAT_DOWN, MUTED }
 
 /** The small symbol in front of a chip's label (a status chip shows the status badge instead). */
 enum class ChipIcon { NONE, UP, DOWN, IMMUNE, CRIT, MISS }
 
-/** One chip of the bubble. [status] = the engine status key of a [BubbleTone.STATUS] chip ("brn" ...). */
-data class BubbleChip(val label: String, val tone: BubbleTone, val icon: ChipIcon = ChipIcon.NONE, val status: String? = null)
+/**
+ * One chip of the bubble. [status] = the engine status key of a [BubbleTone.STATUS] chip ("brn" ...). A stat pill
+ * ([BubbleTone.STAT_UP] / [BubbleTone.STAT_DOWN]) carries the engine stat key in [stat] and the signed stages in [stages]; its [label]
+ * is what a screen reader says ("Attack up 2").
+ */
+data class BubbleChip(
+    val label: String, val tone: BubbleTone, val icon: ChipIcon = ChipIcon.NONE, val status: String? = null,
+    val stat: String? = null, val stages: Int = 0,
+)
 
 /** How the big number of the bubble is coloured: [RED] = damage to us, [MUTED] = no number (missed, no effect, failed). */
 enum class DamageTone { PLAIN, RED, MUTED }
@@ -37,11 +45,12 @@ enum class DamageTone { PLAIN, RED, MUTED }
 data class BubbleContent(
     val who: String, val move: String, val type: Type?,
     val damage: String?, val damageTone: DamageTone, val chips: List<BubbleChip>,
+    val lines: List<String> = emptyList(),
 ) {
     /** The bubble read out for TalkBack: "Wild Gnarlpup used Bite: −12 HP, Super effective ×2". */
     fun spoken(): String = buildString {
         append(who).append(" used ").append(move)
-        val parts = listOfNotNull(damage) + chips.map { it.label }
+        val parts = listOfNotNull(damage) + chips.map { it.label } + lines
         if (parts.isNotEmpty()) append(": ").append(parts.joinToString(", "))
     }
 }
@@ -57,6 +66,8 @@ data class BarMove(
     val side: BarSide, val who: String, val move: String, val type: Type?, val category: Category,
     val damage: Int, val hits: Int, val effectiveness: Double, val crit: Boolean, val missed: Boolean, val failed: Boolean,
     val status: String? = null, val shifts: List<StatShift> = emptyList(),
+    /** PLAN 266: a charge is a tappable move; its sentence belongs only in the bubble. */
+    val charging: Boolean = false, val chargeText: String? = null,
 )
 
 /** What one half of the bar holds: nothing yet in this fight, a note instead of a move (it could not move), or a move. */
@@ -68,7 +79,7 @@ sealed class HalfState {
 
 /** What a battle line is about, so the panel knows where it goes (see [ActionBarModel.scope]). */
 enum class LineScope {
-    /** About the whole battle (the app's own news): shown across the full bar until the next move. */
+    /** About the whole battle (the app's own news): a card toast at the arena's top-left (R19-H); the bar keeps its segments. */
     WHOLE,
     /** About a move or its effects: it is on the bar already, and in the bubble; the line is only spoken. */
     MOVE,
@@ -85,7 +96,10 @@ enum class LineScope {
  * Round 11 (PLAN 137): a round start refreshes BOTH halves to "No move", so a side that does not act (only the wild one attacks, or
  * only you) never keeps its move of the round before; the Attack / Splash / Effect events of the round then fill what happened.
  */
-class ActionBarModel {
+class ActionBarModel(
+    /** R19: the live charged move, when available; sentence fallback also works for uncaught wild Pokémon. */
+    private val chargeMove: (Boolean) -> com.husarp.ankigo.game.Move? = { null },
+) {
     var mine: HalfState = HalfState.Empty
         private set
     var theirs: HalfState = HalfState.Empty
@@ -132,7 +146,16 @@ class ActionBarModel {
         val own = if (e.onPlayer) BarSide.MINE else BarSide.THEIRS
         when (e.kind) {
             EffectKind.CANT_MOVE -> { open = null; put(own, HalfState.Note(cantMove(e.stat ?: e.status, e.text))); return listOf(own) }
-            EffectKind.CHARGE -> { open = null; put(own, HalfState.Note(e.text)); return listOf(own) }
+            EffectKind.CHARGE -> {
+                val known = chargeMove(e.onPlayer)
+                val fallback = chargeFromText(e.text)
+                val move = known ?: fallback.second
+                val who = e.text.substringBefore(fallback.first).trim().ifEmpty { "Pokémon" }
+                put(own, HalfState.Moved(BarMove(own, if (e.onPlayer) who else wild(who), move.name, move.type, move.category,
+                    0, 0, 1.0, false, false, false, charging = true, chargeText = e.text)))
+                open = own // Skull Bash / Meteor Beam can raise a stat on the charge turn.
+                return listOf(own)
+            }
             EffectKind.STATUS_APPLIED, EffectKind.STAT_CHANGE -> {
                 val side = open ?: return emptyList()
                 val m = (half(side) as? HalfState.Moved)?.move ?: return emptyList()
@@ -208,6 +231,9 @@ class ActionBarModel {
 
         /** The bubble of [m]: header, the big number, and the chips (see the D3-E2 mockup's `parts()`). */
         fun bubble(m: BarMove): BubbleContent {
+            if (m.charging) return BubbleContent(m.who, m.move, m.type, "Charging", DamageTone.MUTED,
+                m.shifts.map { BubbleChip(StatPill.spoken(it.stat, it.stages), if (it.stages > 0) BubbleTone.STAT_UP else BubbleTone.STAT_DOWN, stat = it.stat, stages = it.stages) },
+                chargeLines(m))
             val mine = m.side == BarSide.MINE
             val chips = ArrayList<BubbleChip>()
             fun done(damage: String?, tone: DamageTone) = BubbleContent(m.who, m.move, m.type, damage, tone, chips)
@@ -232,9 +258,37 @@ class ActionBarModel {
                 if (m.hits > 1) chips += BubbleChip("×${m.hits} hits", BubbleTone.NEUTRAL)
             }
             m.status?.let { s -> StatusInfo.of(s)?.let { chips += BubbleChip(it.name, BubbleTone.STATUS, status = it.status) } }
-            for (s in m.shifts) chips += BubbleChip(shift(s), BubbleTone.BOOST)
+            for (s in m.shifts) chips += BubbleChip(StatPill.spoken(s.stat, s.stages), if (s.stages > 0) BubbleTone.STAT_UP else BubbleTone.STAT_DOWN, stat = s.stat, stages = s.stages)
             if (!damaging && chips.isEmpty()) chips += BubbleChip("Status move", BubbleTone.MUTED)
             return if (damaging) done("$MINUS${m.damage} HP", if (mine) DamageTone.PLAIN else DamageTone.RED) else done(null, DamageTone.PLAIN)
+        }
+
+        /** PLAN 266 / 267: Tuning deliberately gives Dig / Fly no protection between actions. */
+        fun chargeLines(m: BarMove): List<String> = buildList {
+            m.chargeText?.let { add(it) }
+            add("Charging this turn: no damage. Its next action uses this move automatically.")
+            add("If it cannot act, the charge is lost.")
+            if (m.move in setOf("Dig", "Fly", "Dive", "Bounce", "Phantom Force", "Shadow Force"))
+                add("It can still be hit while charging in AnkiGo.")
+        }
+
+        /** R19: old CHARGE events contain only the engine sentence. Live state resolves ambiguous Solar Blade / Shadow Force. */
+        private fun chargeFromText(text: String): Pair<String, com.husarp.ankigo.game.Move> {
+            val rules = listOf(
+                Triple(" absorbed light!", "Solar Beam", Type.GRASS), Triple(" flew up high!", "Fly", Type.FLYING),
+                Triple(" sprang up!", "Bounce", Type.FLYING), Triple(" burrowed its way under the ground!", "Dig", Type.GROUND),
+                Triple(" hid underwater!", "Dive", Type.WATER), Triple(" vanished instantly!", "Phantom Force", Type.GHOST),
+                Triple(" tucked in its head!", "Skull Bash", Type.NORMAL), Triple(" became cloaked in a harsh light!", "Sky Attack", Type.FLYING),
+                Triple(" whipped up a whirlwind!", "Razor Wind", Type.NORMAL), Triple(" became cloaked in a freezing light!", "Freeze Shock", Type.ICE),
+                Triple(" became cloaked in freezing air!", "Ice Burn", Type.ICE), Triple(" is overflowing with space power!", "Meteor Beam", Type.ROCK),
+                Triple(" absorbed electricity!", "Electro Shot", Type.ELECTRIC), Triple(" is absorbing power!", "Geomancy", Type.FAIRY),
+                Triple(" took ", "Sky Drop", Type.FLYING),
+            )
+            val (suffix, name, type) = rules.firstOrNull { text.contains(it.first) }
+                ?: Triple(" is charging up!", "Charge move", Type.NORMAL)
+            val physical = name in setOf("Fly", "Bounce", "Dig", "Dive", "Phantom Force", "Skull Bash", "Sky Attack", "Freeze Shock", "Sky Drop")
+            return suffix to com.husarp.ankigo.game.Move(name.lowercase().replace(" ", ""), name, type,
+                if (name == "Geomancy") Category.STATUS else if (physical) Category.PHYSICAL else Category.SPECIAL, 0, null)
         }
 
         private fun times(x: Double) = if (x == Math.rint(x)) x.toInt().toString() else String.format(java.util.Locale.US, "%.2f", x).trimEnd('0').trimEnd('.')
@@ -244,15 +298,6 @@ class ActionBarModel {
             Math.abs(x - 0.25) < 1e-9 -> "¼"
             Math.abs(x - 0.125) < 1e-9 -> "⅛"
             else -> times(x)
-        }
-
-        private fun shift(s: StatShift): String {
-            val name = when (s.stat) {
-                "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Sp. Atk"; "spd" -> "Sp. Def"; "spe" -> "Speed"
-                "accuracy" -> "Accuracy"; "evasion" -> "Evasion"; else -> s.stat
-            }
-            val n = minOf(3, Math.abs(s.stages))
-            return "$name " + (if (s.stages > 0) "↑" else "↓").repeat(n)
         }
     }
 }

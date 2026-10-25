@@ -7,9 +7,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** PLAN 155 (R14-B2-F): "New cards: one OK button", the pure parts: the row rule, the one decision, the gentle set, the journal. */
+/** PLAN 155 (R14-B2-F): "New cards: one OK button", the pure parts: the row rule, the one decision, the journal. */
 class NewCardOkTest {
-    private fun gentle(raw: String? = null, now: () -> Long = { 1_000L }) = GentleCards(raw, {}, now)
 
     // ---- the row ----
 
@@ -25,18 +24,18 @@ class NewCardOkTest {
         assertTrue(NewCardOk.row(4, true).drop(1).none { it.ok })
     }
 
-    @Test fun theRowAppliesOnlyWithTheSettingOnAndANewOrGentleCard() {
-        assertFalse("setting off", NewCardOk.rowApplies(false, 0, false))
-        assertFalse("setting off, gentle", NewCardOk.rowApplies(false, 1, true))
-        assertTrue("new card", NewCardOk.rowApplies(true, 0, false))
-        assertTrue("new card that is also gentle", NewCardOk.rowApplies(true, 0, true))
-        assertTrue("gentle card in learning", NewCardOk.rowApplies(true, 1, true))
-        assertTrue("gentle card in day learning", NewCardOk.rowApplies(true, 3, true))
-        assertFalse("learning card, not gentle", NewCardOk.rowApplies(true, 1, false))
-        assertFalse("review card", NewCardOk.rowApplies(true, 2, false))
-        assertFalse("a gentle entry on a card that is a review by now", NewCardOk.rowApplies(true, 2, true))
-        assertFalse("unknown queue", NewCardOk.rowApplies(true, null, false))
-        assertFalse("suspended", NewCardOk.rowApplies(true, -1, true))
+    @Test fun theRowAppliesOnlyWithTheSettingOnAndANewCard() {
+        assertFalse("setting off", NewCardOk.rowApplies(false, 0))
+        assertFalse("setting off, gentle", NewCardOk.rowApplies(false, 1))
+        assertTrue("new card", NewCardOk.rowApplies(true, 0))
+        assertTrue("new card that is also gentle", NewCardOk.rowApplies(true, 0))
+        assertFalse("old gentle card in learning", NewCardOk.rowApplies(true, 1))
+        assertFalse("old gentle card in day learning", NewCardOk.rowApplies(true, 3))
+        assertFalse("learning card, not gentle", NewCardOk.rowApplies(true, 1))
+        assertFalse("review card", NewCardOk.rowApplies(true, 2))
+        assertFalse("a gentle entry on a card that is a review by now", NewCardOk.rowApplies(true, 2))
+        assertFalse("unknown queue", NewCardOk.rowApplies(true, null))
+        assertFalse("suspended", NewCardOk.rowApplies(true, -1))
     }
 
     // ---- the one decision ----
@@ -54,96 +53,17 @@ class NewCardOkTest {
         for (b in 2..4) for (e in 1..b) assertEquals("no OK row: nothing changes", NewCardOk.Resolved(e, false), NewCardOk.resolve(false, b, e))
     }
 
-    @Test fun settingOffChangesNothingAndTouchesNothing() {
-        val g = gentle("5:0:900")
-        for (b in 2..4) for (e in 1..b) assertEquals(NewCardOk.Resolved(e, false), NewCardOk.settle(false, 0, 5, 0, b, e, g))
-        assertEquals("5:0:900", g.text())
-        assertEquals(1, g.size)
+    @Test fun settingOffChangesNothing() {
+        for (b in 2..4) for (e in 1..b)
+            assertEquals(NewCardOk.Resolved(e, false), NewCardOk.settle(false, 0, b, e))
     }
 
-    @Test fun anOkOnANewCardMakesItGentleOnceAndGoodDoesNot() {
-        val g = gentle()
-        assertEquals(NewCardOk.Resolved(1, true), NewCardOk.settle(true, 0, 11, 0, 4, 1, g))
-        assertTrue(g.has(11, 0))
-        assertFalse("another card, or the other side of the note, is not gentle", g.has(11, 1) || g.has(12, 0))
-        // Good on a new card: no OK, nothing remembered
-        assertEquals(NewCardOk.Resolved(3, false), NewCardOk.settle(true, 0, 12, 0, 4, 3, g))
-        assertFalse(g.has(12, 0))
-    }
-
-    @Test fun theGentleShowingGetsTheOkRowOnceThenAgainIsNormal() {
-        val g = gentle()
-        NewCardOk.settle(true, 0, 11, 0, 4, 1, g)                       // OK on the new card
-        // its next showing (queue 1): the OK row applies, and an OK there is neutral again but is not remembered a second time
-        assertTrue(NewCardOk.rowApplies(true, 1, g.has(11, 0)))
-        assertEquals(NewCardOk.Resolved(1, true), NewCardOk.settle(true, 1, 11, 0, 4, 1, g))
-        assertFalse("used up", g.has(11, 0))
-        // after that Again is an ordinary Again
-        assertFalse(NewCardOk.rowApplies(true, 1, g.has(11, 0)))
-        assertEquals(NewCardOk.Resolved(1, false), NewCardOk.settle(true, 1, 11, 0, 4, 1, g))
-    }
-
-    @Test fun aGoodOnTheGentleShowingUsesItUpAsWell() {
-        val g = gentle()
-        NewCardOk.settle(true, 0, 11, 0, 4, 1, g)
-        assertEquals(NewCardOk.Resolved(3, false), NewCardOk.settle(true, 1, 11, 0, 4, 3, g))
-        assertFalse(g.has(11, 0))
-    }
-
-    @Test fun aReviewCardIsNeverOk() {
-        val g = gentle()
-        assertEquals(NewCardOk.Resolved(1, false), NewCardOk.settle(true, 2, 11, 0, 4, 1, g))
-        assertEquals(NewCardOk.Resolved(2, false), NewCardOk.settle(true, 2, 11, 0, 4, 2, g))
-        assertFalse(g.has(11, 0))
-    }
-
-    // ---- the gentle set ----
-
-    @Test fun gentleEntriesAreDroppedAfterADay() {
-        var t = 1_000L
-        val g = gentle(null) { t }
-        g.add(1, 0)
-        t += GentleCards.DAY_MS
-        assertTrue("exactly a day: still there", g.has(1, 0))
-        t += 1
-        assertFalse(g.has(1, 0))
-        assertEquals("", g.text())
-    }
-
-    @Test fun theSetStaysSmallAndTheOldestGoFirst() {
-        var t = 0L
-        val g = gentle(null) { t++ }
-        for (n in 1..GentleCards.MAX + 5) g.add(n.toLong(), 0)
-        assertEquals(GentleCards.MAX, g.size)
-        assertFalse(g.has(1, 0)); assertFalse(g.has(5, 0))
-        assertTrue(g.has(6, 0)); assertTrue(g.has((GentleCards.MAX + 5).toLong(), 0))
-    }
-
-    @Test fun theSetSurvivesARestartThroughItsText() {
-        var saved = ""
-        val a = GentleCards(null, { saved = it }) { 5_000L }
-        a.add(10, 0); a.add(10, 1); a.add(20, 2)
-        a.remove(10, 0)
-        val b = GentleCards(saved, {}) { 5_100L }   // the next process reads what was saved
-        assertFalse(b.has(10, 0)); assertTrue(b.has(10, 1)); assertTrue(b.has(20, 2))
-        assertEquals(2, b.size)
-    }
-
-    @Test fun anUnreadableSavedTextIsJustEmptyAndAClockThatWentBackDropsEntries() {
-        assertEquals(0, gentle("garbage,1:x:3,::,:::,4:5").size)
-        assertEquals(1, gentle("garbage,7:1:900").size)
-        val future = gentle("9:0:${1_000L + GentleCards.DAY_MS + 5}")   // saved "tomorrow": the phone's clock moved back
-        assertFalse(future.has(9, 0))
-    }
-
-    @Test fun addingACardAgainRefreshesItsTime() {
-        var t = 0L
-        val g = gentle(null) { t }
-        g.add(1, 0)
-        t = GentleCards.DAY_MS - 10
-        g.add(1, 0)
-        t = GentleCards.DAY_MS + 100
-        assertTrue("the second add started a new day", g.has(1, 0))
+    @Test fun theFirstLearningShowingAndEveryLaterShowingAreNormal() {
+        assertEquals(NewCardOk.Resolved(1, true), NewCardOk.settle(true, 0, 4, 1))
+        for (queue in listOf(1, 3, 2)) for (ease in 1..4) {
+            assertFalse(NewCardOk.rowApplies(true, queue))
+            assertEquals(NewCardOk.Resolved(ease, false), NewCardOk.settle(true, queue, 4, ease))
+        }
     }
 
     // ---- companion mode ----

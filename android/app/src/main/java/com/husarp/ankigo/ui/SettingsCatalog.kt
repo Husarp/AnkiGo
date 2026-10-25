@@ -52,6 +52,10 @@ object SettingsCatalog {
         s("scale", L, "", "Interface size", "Text, cards and Pokémon get bigger or smaller together"),
         s("listSpriteSize", L, "", "Pokémon size in lists", "Pokédex and Box pictures"),   // PLAN 215
 
+        // PLAN 282 / R19
+        s("boxStackedCards", L, "Box", "Stacked cards", "Cards peek behind groups of copies in the Box"),
+        s("boxTwoPokemon", L, "Box", "Show two Pokémon", "Two sprites for groups of copies in the Box; keeps the count"),
+
         // Sounds
         s("answerSounds", SO, "Study buttons", "Answer buttons", "A click for Again, Hard, Good and Easy"),
         s("showAnswerSound", SO, "Study buttons", "Show answer", "A click when you show the answer"),
@@ -89,6 +93,8 @@ object SettingsCatalog {
         s("infoBoxLookPlate", B, "Info box style", "Dark plate", "Deep navy with a gold trim and light text, the same in light and dark"),
         s("infoBoxLookHud", B, "Info box style", "HUD in the corners", "No box: outlined text and bars on the picture, yours and the wild one in opposite corners"),
         s("infoBoxLookType", B, "Info box style", "Type colour", "Washed with the Pokémon's first type colour, with a stripe on the left"),
+        s("bigInfoBoxes", B, "Info box style", "Bigger info boxes", "When the arena has room"),   // R19-A, PLAN 276
+        s("hpColours", B, "HP / XP bars", "HP bar colours", "Three steps, a smooth blend (default), or the Pokémon's type colour"), // PLAN 163 / R19
         s("hpBarsToday", B, "HP / XP bars", "Today", "Default; flat rounded bars on a grey track"),
         s("hpBarsPixel", B, "HP / XP bars", "Pixel", "Hard pixel edges, a cut-corner outline, filled in 5 % steps"),
         s("frameNone", B, "Battle frame", "No frame", "Default; the battle picture reaches the edge"),
@@ -157,6 +163,7 @@ s("catchAlways", G, "When you beat a wild Pokémon", "Always catch", "Every wild
 s("catchNew", G, "When you beat a wild Pokémon", "Catch only new species", "Others are defeated: the same XP and coins; default"),
 s("catchBetter", G, "When you beat a wild Pokémon", "Catch new species and better copies", "A higher-level copy replaces your old one"),
 s("catchDefeat", G, "When you beat a wild Pokémon", "Defeat", "Catch only shinies and protected kinds; the rest are defeated"),
+s("catchAsk", G, "When you beat a wild Pokémon", "Ask me", "A better copy of one you own (level or IV total) waits for your answer"),
         s("protectLegendary", G, "Always catch", "Legendary", "Always caught, even with Defeat"),
         s("protectMythical", G, "Always catch", "Mythical", "Always caught, even with Defeat"),
         s("protectUltra", G, "Always catch", "Ultra Beast", "Always caught, even with Defeat"),

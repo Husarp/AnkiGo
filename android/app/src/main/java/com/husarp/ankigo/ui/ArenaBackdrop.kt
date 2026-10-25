@@ -22,11 +22,13 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.View
 import com.husarp.ankigo.R
 import com.husarp.ankigo.data.BackdropPic
 import com.husarp.ankigo.data.Backdrops
 import com.husarp.ankigo.Report
 import com.husarp.ankigo.ui.movefx.Joltable
+import kotlin.math.abs
 
 /**
  * The arena's background (round 7, stage rule round 8). Plain mode is the gradient the arena always had (`ag_arena_top` ->
@@ -34,7 +36,10 @@ import com.husarp.ankigo.ui.movefx.Joltable
  * cover crop, centred, bottom first). A picture that had to shrink (the stage is [Stage.shrunk]) is drawn over its blurred, darkened
  * copy, which covers the panel, and its edges fade into the blur over [BackdropDraw.FADE] of their size. [jolt] (Earthquake) moves
  * picture and blur up or down; the blur is drawn first then too, so no gap shows. Pixel-art pictures ([Backdrop.crisp]) are scaled
- * without filtering, soft ones with. The dark theme's dusk tint ([BackdropTint]) is added to day pictures only, blur included.
+ * without filtering, soft ones with. R19-F (PLAN 274, [BackdropSharp]): a picture that lands under [BackdropSharp.HARD_MIN] screen px per
+ * file px (a smaller arena; the panel's own on-screen scale counts, [screenScale]) is reduced once, off the main thread, to the pixels it
+ * occupies and then drawn 1:1 ([Frame.sharp]); until that copy is there, and for every other size, the GPU draws the file itself.
+ * The dark theme's dusk tint ([BackdropTint]) is added to day pictures only, blur included.
  * While a picture loads, or if it cannot be had, the background is plain; a picture already showing stays until the next one
  * is there (a new encounter with the same scene never flashes). When the next one is there it cross-fades in over
  * [BackdropFade.DURATION_MS] (also gradient -> first picture); the outgoing picture keeps its own crop, blur and tint (its own [Frame]).
@@ -79,6 +84,27 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         private set
 
     /**
+     * R19-F: how much the screen scales this panel: the product of the `scaleX` of the views above it (the battle panel lays itself out at a
+     * "virtual" size and draws it scaled down in small windows); 1 when it is on no view. Tests and the preview set their own.
+     */
+    var screenScale: () -> Float = {
+        var k = 1f
+        var v = callback as? View
+        while (v != null) { k *= v.scaleX; v = v.parent as? View }
+        k
+    }
+    private var screen = 1f
+
+    /** Reads [screenScale]; a real change (over half a percent) makes the pictures work out their reduced copies again. */
+    private fun syncScale() {
+        val k = screenScale().let { if (it > 0.05f && it < 16f) it else 1f }
+        if (abs(k - screen) < 0.005f * screen) return
+        screen = k
+        cur?.refreshSharp()
+        old?.refreshSharp()
+    }
+
+    /**
      * Called when the picture appears (true; also when another picture replaces the one showing, at the start of the fade, so the
      * arena can lay its Pokémon on the new stand points) or goes (false).
      */
@@ -118,6 +144,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         if (stage === this.stage) return
         this.stage = stage
         val c = cur ?: return
+        syncScale()
         c.stage = stage
         c.relayout()
         invalidateSelf()
@@ -166,6 +193,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         wanted = null
         shown = null
         val had = cur != null
+        cur?.release()
         cur = null
         endFade()
         invalidateSelf()
@@ -176,6 +204,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
     private fun apply(bg: Backdrop, loaded: BackdropPic) {
         wanted = null
         shown = bg
+        syncScale()
         val f = Frame(bg, loaded, stage)
         val fade = !reduceMotion()
         if (!fade) {
@@ -186,13 +215,15 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
             // another fade is under way: its outgoing side stays, or becomes the blend on screen now (never a jump back to a whole picture)
             when (BackdropFade.outgoingAt(fadeStart >= 0L, if (fadeStart >= 0L) clock() - fadeStart else 0L)) {
                 BackdropFade.Outgoing.KEEP -> {}
-                BackdropFade.Outgoing.INCOMING -> { releaseSnap(); old = cur }
+                BackdropFade.Outgoing.INCOMING -> { releaseSnap(); old?.release(); old = cur }
                 BackdropFade.Outgoing.SNAPSHOT -> freeze()
             }
         }
         fading = fade
         fadeStart = -1L
+        val prev = cur
         cur = f
+        if (prev != null && prev !== old) prev.release() // replaced and not fading out: its reduced copy is not needed
         f.relayout()
         invalidateSelf()
         onPictureChange(true)
@@ -200,6 +231,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
     }
 
     private fun endFade() {
+        old?.release()
         old = null
         releaseSnap()
         fading = false
@@ -222,6 +254,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         compose(canvas, BackdropFade.alpha255(clock() - fadeStart, false), 0f)
         releaseSnap()
         snap = bmp
+        old?.release()
         old = null
     }
 
@@ -236,6 +269,13 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         var fadeX: Shader? = null
         var fadeY: Shader? = null
 
+        /** R19-F: the reduced copy of the picture ([BackdropSharp]) where the GPU's nearest neighbour would not do (see [BackdropDraw.sharp]); null until it is made. */
+        var sharp: Bitmap? = null
+        private val sharpMatrix = Matrix()
+        private var spec: BackdropDraw.Sharp? = null // what [sharp] is, or is being made, for; null = the GPU draws the file itself
+        private var made: BackdropDraw.Sharp? = null // what [sharp] shows
+        private var gen = 0 // a copy for an older request is dropped
+
         init {
             val m = BackdropTint.matrix(dark && !bg.dark)
             val filter = if (m == null) null else ColorMatrixColorFilter(ColorMatrix(m))
@@ -246,7 +286,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         /** Works out where everything lands for the current stage and panel size; the fade shaders are built here, not per frame. */
         fun relayout() {
             val b = bounds
-            if (b.width() <= 0 || b.height() <= 0) { layout = null; fadeX = null; fadeY = null; layer.setEmpty(); return }
+            if (b.width() <= 0 || b.height() <= 0) { layout = null; fadeX = null; fadeY = null; layer.setEmpty(); refreshSharp(); return }
             val w = b.width().toFloat()
             val h = b.height().toFloat()
             val s = stage
@@ -266,6 +306,72 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
             // the fading layer: the picture's own bounds cut to the panel plus the jolt's room, so a jolt never shows blur over sharp picture
             val v = BackdropDraw.visible(l, w, h)
             layer.set(v[0], v[1], v[2], v[3])
+            refreshSharp()
+        }
+
+        /** Works out whether (and which) reduced copy the picture needs for the current layout and screen scale, and asks for it when it is new. */
+        fun refreshSharp() {
+            val l = layout
+            val want = if (l == null || !bg.sharp) null else BackdropDraw.sharp(
+                l, bounds.width().toFloat(), bounds.height().toFloat(),
+                pic.bitmap.width.toFloat() / bg.w, pic.bitmap.height.toFloat() / bg.h, pic.bitmap.width, pic.bitmap.height, screen,
+            )?.takeIf { it.srcR - it.srcL >= 1f && it.srcB - it.srcT >= 1f }
+            if (want == spec) return
+            spec = want
+            gen++
+            val m = made
+            if (want == null || m == null || !want.sameView(m)) { sharp = null; made = null } // an older copy of the same view stays until the new size is there
+            if (want != null) schedule(want, gen)
+        }
+
+        /** After a short wait (a dragged panel height changes the layout every frame): the copy is made in the background and handed back on the main thread. */
+        private fun schedule(want: BackdropDraw.Sharp, g: Int) {
+            val r = BackdropSharp.runner
+            r.main(BackdropSharp.DEBOUNCE_MS, Runnable {
+                if (g != gen) return@Runnable
+                r.background(Runnable {
+                    if (g != gen) return@Runnable
+                    val bmp = try { make(want) } catch (_: Throwable) { null } // out of memory etc.: the GPU keeps drawing the file
+                    r.main(0L, Runnable { deliver(want, bmp, g, !r.inPlace) })
+                })
+            })
+        }
+
+        private fun make(want: BackdropDraw.Sharp): Bitmap {
+            val src = pic.bitmap
+            val px = IntArray(src.width * src.height)
+            src.getPixels(px, 0, src.width, 0, 0, src.width, src.height)
+            val out = BackdropSharp.resample(px, src.width, src.height, want.srcL, want.srcT, want.srcR, want.srcB, want.outW, want.outH)
+            val bmp = Bitmap.createBitmap(want.outW, want.outH, Bitmap.Config.ARGB_8888)
+            bmp.setPixels(out, 0, want.outW, 0, 0, want.outW, want.outH)
+            return bmp
+        }
+
+        private fun deliver(want: BackdropDraw.Sharp, bmp: Bitmap?, g: Int, redraw: Boolean) {
+            if (g != gen || bmp == null) return // a newer layout came meanwhile, or no copy could be made
+            sharp = bmp
+            made = want
+            sharpMatrix.setScale((want.dstR - want.dstL) / want.outW, (want.dstB - want.dstT) / want.outH)
+            sharpMatrix.postTranslate(want.dstL, want.dstT)
+            if (redraw) invalidateSelf() // made in place (the preview renderer): the layout or draw that asked for it is already under way
+        }
+
+        /** This picture is no longer drawn: a copy still being made is dropped (the bitmap itself is left to the garbage collector; a recorded frame may still hold it). */
+        fun release() {
+            gen++
+            spec = null; made = null; sharp = null
+        }
+
+        /** The picture itself: the reduced copy when there is one, else the file (nearest neighbour; filtered only while the copy for a reduction is not there yet, or for a soft picture). */
+        private fun drawPicture(canvas: Canvas) {
+            val s = sharp
+            if (s != null) {
+                paint.isFilterBitmap = false
+                canvas.drawBitmap(s, sharpMatrix, paint)
+            } else {
+                paint.isFilterBitmap = spec != null || !bg.crisp
+                canvas.drawBitmap(pic.bitmap, picMatrix, paint)
+            }
         }
 
         /** Draws this picture (blur first when it shows) at the jolt's offset; the canvas is at the panel's top left and clipped to it. */
@@ -275,11 +381,11 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
             canvas.translate(0f, jolt)
             if (stage?.shrunk == true || jolt != 0f || l.anyFade) canvas.drawBitmap(pic.blur, blurMatrix, blurPaint)
             if (!l.anyFade) {
-                canvas.drawBitmap(pic.bitmap, picMatrix, paint)
+                drawPicture(canvas)
             } else {
                 // a shrunk picture: drawn in its own layer ([layer]), whose sides that end inside the panel are multiplied by a ramp (DST_IN)
                 val sv = canvas.saveLayer(layer, null)
-                canvas.drawBitmap(pic.bitmap, picMatrix, paint)
+                drawPicture(canvas)
                 fadeX?.let { fadePaint.shader = it; canvas.drawRect(layer, fadePaint) }
                 fadeY?.let { fadePaint.shader = it; canvas.drawRect(layer, fadePaint) }
                 canvas.restoreToCount(sv)
@@ -298,6 +404,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
 
     override fun onBoundsChange(bounds: Rect) {
         gradient.bounds = bounds
+        syncScale()
         if (fading && (fadeStart >= 0L || snap != null)) endFade() // a resize in the middle of a fade just finishes it (a snapshot is of the old size)
         cur?.relayout()
         old?.relayout()
@@ -306,6 +413,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
     override fun draw(canvas: Canvas) {
         val c = cur
         if (c?.layout == null) { gradient.draw(canvas); return }
+        syncScale()
         // the fade: its clock starts at the first frame drawn; at the end the outgoing picture is let go
         var a = 255
         var again = false

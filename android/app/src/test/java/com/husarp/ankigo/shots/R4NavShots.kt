@@ -208,12 +208,12 @@ class R4NavShots {
             assertTrue(texts(screen).any { it.startsWith("TEAM") }) // the section header on the Team body ("TEAM · n / 6")
             p.showSection(TeamSection.BOX)
             call(p, "render")
-            assertEquals(View.VISIBLE, (getField(p, "boxList") as View).visibility)
+            assertEquals(View.VISIBLE, (getField(p, "boxFrame") as View).visibility)
             assertEquals(View.GONE, (getField(p, "teamScroll") as View).visibility)
             assertTrue(texts(screen).none { it.startsWith("TEAM") })
             p.showSection(TeamSection.TEAM)
             call(p, "render")
-            assertEquals(View.GONE, (getField(p, "boxList") as View).visibility)
+            assertEquals(View.GONE, (getField(p, "boxFrame") as View).visibility)
             assertTrue(texts(screen).any { it.startsWith("TEAM") })
             screen
         }

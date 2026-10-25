@@ -33,8 +33,15 @@ object Tuning {
     /** Your Main attacks whenever one answer is Good or Easy; its damage multiplier is the sum of these (index = button, 0 unknown counts as Good). */
     val MAIN_POWER = doubleArrayOf(0.5, 0.0, 0.0, 0.5, 1.0)
     /**
-     * AnkiGo (Round 10, W10): switching the Main in a fight takes one turn (one dot): the wild one attacks the incoming Pokémon once at
-     * this power, the same as one Again. R13 (Part C): so does an item used on the Main in a fight (Game.useItem).
+     * R19-T (PLAN 284): the "button" of the OK on a new card in a round's answers ([Battle.buttons]): a neutral move. It fills one of the
+     * [CARDS_PER_ROUND] answers (and one grey dot) but has no power at all ([RoundRule] skips it): the round's attacks come from the other
+     * answer alone, and OK + OK is an empty round. Not an index of [POINTS] / [WILD_POWER] / [MAIN_POWER]; the battle log's own code for it is the same number.
+     */
+    const val BUTTON_OK = 5
+    /**
+     * AnkiGo (Round 10, W10): switching the Main in a fight costs one extra wild action (R19: no dot is filled and no answer slot is used,
+     * it is not a round): the wild one attacks the incoming Pokémon once at this power, the same as one Again. R13 (Part C): so does an item
+     * used on the Main in a fight (Game.useItem).
      */
     val SWITCH_HIT_POWER = WILD_POWER[1]
 

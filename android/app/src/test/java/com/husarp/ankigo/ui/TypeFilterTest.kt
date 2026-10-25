@@ -70,7 +70,7 @@ class TypeFilterTest {
         assertEquals(listOf(Type.WATER, Type.ICE), f.types.toList()) // nothing changed
         assertEquals(listOf(Type.ICE), f.toggle(Type.WATER)!!.types.toList()) // un-picking always works
         assertEquals(listOf(Type.ICE, Type.FIRE), f.toggle(Type.WATER)!!.toggle(Type.FIRE)!!.types.toList())
-        assertEquals("All of: pick up to 2 types", TypeFilter.FULL)
+        assertEquals("A Pokémon has at most 2 types, so All of can't match 3.", TypeFilter.TOO_MANY) // R19 251: a notice in the sheet, no toast
     }
 
     @Test fun anyAndOnlyTakeAnyNumberOfPicks() {

@@ -104,7 +104,7 @@ object FilterRowText {
     /** What an empty Pokédex says and why: "No pure Poison Pokémon in Gen 1–3.", "No Pokémon named “abc”.". */
     fun emptyDex(f: DexFilter): String {
         if (!f.active) return "No Pokémon to show."
-        val adjectives = listOfNotNull(when (f.owned) { DexOwned.OWNED -> "owned"; DexOwned.NOT_OWNED -> "unowned"; DexOwned.ALL -> null })
+        val adjectives = listOfNotNull(when (f.owned) { DexOwned.OWNED -> "owned"; DexOwned.SEEN -> "seen-only"; DexOwned.NOT_OWNED -> "unowned"; DexOwned.ALL -> null })
         val q = f.query.trim().removePrefix("#")
         val parts = listOfNotNull(
             subject(adjectives, f.typeFilter),

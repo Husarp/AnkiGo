@@ -90,16 +90,16 @@ class FloatTextsTest {
         assertEquals(listOf(FloatText(true, "Can't move", FloatKind.STATUS)), FloatTexts.of(fx(EffectKind.CANT_MOVE), on))
     }
 
-    @Test fun statChangeLabelsAndArrows() {
+    @Test fun statChangeSpokenTextAndBadge() {
         fun stat(k: String, n: Int, onPlayer: Boolean = true) = FloatTexts.of(fx(EffectKind.STAT_CHANGE, onPlayer = onPlayer, stat = k, stages = n), on)
-        assertEquals(listOf("ATK ↑" to FloatKind.STAT_UP), stat("atk", 1).pairs())
-        assertEquals(listOf("DEF ↓" to FloatKind.STAT_DOWN), stat("def", -1).pairs())
-        assertEquals(listOf("SPE ↑↑" to FloatKind.STAT_UP), stat("spe", 2).pairs())
-        assertEquals(listOf("ACC ↓" to FloatKind.STAT_DOWN), stat("accuracy", -1).pairs())
-        assertEquals(listOf("EVA ↑" to FloatKind.STAT_UP), stat("evasion", 1).pairs())
-        assertEquals(listOf("SPA ↑↑↑" to FloatKind.STAT_UP), stat("spa", 3).pairs())
-        assertEquals(listOf("SPD ↓↓↓" to FloatKind.STAT_DOWN), stat("spd", -3).pairs())
-        assertEquals(listOf("ATK ↑↑↑" to FloatKind.STAT_UP), stat("atk", 6).pairs()) // never more than three arrows
+        assertEquals(listOf("Attack up 1" to FloatKind.STAT_UP), stat("atk", 1).pairs())
+        assertEquals(listOf("Defense down 1" to FloatKind.STAT_DOWN), stat("def", -1).pairs())
+        assertEquals(listOf("Speed up 2" to FloatKind.STAT_UP), stat("spe", 2).pairs())
+        assertEquals(listOf("Accuracy down 1" to FloatKind.STAT_DOWN), stat("accuracy", -1).pairs())
+        assertEquals(listOf("Evasion up 1" to FloatKind.STAT_UP), stat("evasion", 1).pairs())
+        assertEquals(listOf("Special Attack up 3" to FloatKind.STAT_UP), stat("spa", 3).pairs())
+        assertEquals(listOf("Special Defense down 3" to FloatKind.STAT_DOWN), stat("spd", -3).pairs())
+        assertEquals(listOf("Attack up 6" to FloatKind.STAT_UP), stat("atk", 6).pairs()) // speech keeps the real count; drawn chevrons stay capped
         assertEquals(false, stat("atk", 1, onPlayer = false).single().onPlayer)
         assertEquals(emptyList<FloatText>(), stat("atk", 0))
         assertEquals(emptyList<FloatText>(), stat("zzz", 1))

@@ -15,6 +15,7 @@ import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Items
 import kotlin.math.max
+import kotlin.math.min
 
 /**
  * The catch result tiles (PLAN 40, pick 8A): Pokédex, the throw, XP, coins as small rounded tiles with a coloured icon, a small
@@ -67,7 +68,9 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
         gravity = Gravity.CENTER_VERTICAL
         val row = TileRow(context)
         val h = if (next) dpi(26) else rowH - dpi(4)
-        for (t in CatchTilesPlan.rowTiles(s)) row.addView(miniTile(t, max(dpi(14), h - dpi(6))))
+        val ic = max(dpi(14), min(dpi(16), h - dpi(6)))
+        for (t in CatchTilesPlan.rowTiles(s)) row.addView(miniTile(t, ic), TileRow.full())
+        for (t in CatchTilesPlan.rowTiles(s, compact = true)) row.addView(miniTile(t, ic), TileRow.compact())
         addView(row, LayoutParams(-1, if (next) h else -2))
         if (next) addView(nextLine(s.next, cont), LayoutParams(-1, -2).also { it.topMargin = dpi(1) })
     }
@@ -78,24 +81,24 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
         CatchTilesPlan.Kind.DEX -> R.color.ag_teal
         CatchTilesPlan.Kind.DEFEATED -> R.color.ag_red
         CatchTilesPlan.Kind.THROW -> R.color.ag_red
-        CatchTilesPlan.Kind.AUTO -> R.color.ag_mauve
         CatchTilesPlan.Kind.XP -> R.color.ag_blue
         CatchTilesPlan.Kind.COINS -> R.color.ag_yellow
+        CatchTilesPlan.Kind.ASK -> R.color.ag_teal
     }
 
     @DrawableRes private fun icon(k: CatchTilesPlan.Kind) = when (k) {
         CatchTilesPlan.Kind.DEX -> R.drawable.ic_dex
         CatchTilesPlan.Kind.DEFEATED -> R.drawable.ic_swords
-        CatchTilesPlan.Kind.THROW, CatchTilesPlan.Kind.AUTO -> R.drawable.ic_ball
+        CatchTilesPlan.Kind.THROW -> R.drawable.ic_ball
         CatchTilesPlan.Kind.XP -> R.drawable.ic_up
         CatchTilesPlan.Kind.COINS -> R.drawable.ic_money
+        CatchTilesPlan.Kind.ASK -> R.drawable.ic_ball
     }
 
-    /** The round icon holder: [sizePx] wide, the tone at 18 % behind a tinted icon (the ball is the real item picture). */
+    /** R19 174B: a bare icon, [sizePx] wide; the ball stays the real item picture. */
     private fun iconBox(t: CatchTilesPlan.Tile, sizePx: Int): View {
         val color = Ui.c(context, tone(t.kind))
         val box = FrameLayout(context)
-        box.background = Ui.rounded((color and 0x00FFFFFF) or 0x2E000000, sizePx / 2f / context.resources.displayMetrics.density, context)
         val pad = (sizePx * 0.2f).toInt()
         val img = ImageView(context)
         if (t.ball != null) {
@@ -130,14 +133,21 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
         return tile
     }
 
+    /** R19 174B: a bare icon (no circle behind it) and the words; the tile says the whole fact to TalkBack. */
     private fun miniTile(t: CatchTilesPlan.Tile, iconPx: Int): View {
         val tile = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            contentDescription = t.value
+            contentDescription = t.desc.ifEmpty { t.value }
         }
-        tile.addView(iconBox(t, iconPx), LayoutParams(iconPx, iconPx).also { it.marginEnd = dpi(4) })
-        tile.addView(Ui.text(context, 11f, 900, R.color.ag_text).apply { text = t.value; oneLine() })
+        val img = ImageView(context).apply { importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        if (t.ball != null) Ui.itemIcon(context, t.ball, img)
+        else {
+            img.setImageResource(icon(t.kind))
+            if (t.kind != CatchTilesPlan.Kind.COINS) img.setColorFilter(Ui.c(context, tone(t.kind)), PorterDuff.Mode.SRC_IN)  // the gold money stack is never tinted
+        }
+        tile.addView(img, LayoutParams(iconPx, iconPx).also { it.marginEnd = dpi(5) })
+        tile.addView(Ui.text(context, 11.5f, 900, R.color.ag_text).apply { text = t.value; oneLine(); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
         return tile
     }
 
@@ -162,24 +172,45 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
 
     private fun TextView.oneLine() { maxLines = 1; ellipsize = TextUtils.TruncateAt.END }
 
-    /** A row that never wraps: the tiles from the end drop out when they do not fit. */
+    /**
+     * A light row that never wraps: the full-word tiles, or (when those do not fit) the compact-word ones; if even those do not fit
+     * the tiles from the end drop out. Children are added with [full] / [compact] layout params.
+     */
     private class TileRow(ctx: Context) : ViewGroup(ctx) {
-        private val gap = Ui.dp(ctx, 10)
+        class P(val compact: Boolean) : ViewGroup.LayoutParams(-2, -2)
+        companion object { fun full() = P(false); fun compact() = P(true) }
+
+        private val gap = Ui.dp(ctx, 16)
         private val shown = HashSet<View>()
+
+        override fun checkLayoutParams(p: ViewGroup.LayoutParams?) = p is P
+        override fun generateDefaultLayoutParams() = P(false)
+
+        private fun fit(compact: Boolean, avail: Int, into: MutableSet<View>): Int {
+            var x = 0
+            var h = 0
+            for (i in 0 until childCount) {
+                val k = getChildAt(i)
+                if ((k.layoutParams as P).compact != compact) continue
+                k.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+                val need = x + (if (x > 0) gap else 0) + k.measuredWidth
+                if (need > avail && into.isNotEmpty()) continue
+                into += k
+                x = need
+                h = max(h, k.measuredHeight)
+            }
+            return h
+        }
 
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val avail = MeasureSpec.getSize(widthMeasureSpec)
-            var x = 0
-            var h = 0
             shown.clear()
+            var h = fit(false, avail, shown)
+            val all = (0 until childCount).count { !(getChildAt(it).layoutParams as P).compact }
+            if (shown.size < all) { shown.clear(); h = fit(true, avail, shown) }
             for (i in 0 until childCount) {
                 val k = getChildAt(i)
-                k.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-                val need = x + (if (x > 0) gap else 0) + k.measuredWidth
-                if (need > avail && shown.isNotEmpty()) continue
-                shown += k
-                x = need
-                h = max(h, k.measuredHeight)
+                k.visibility = if (k in shown) View.VISIBLE else View.GONE
             }
             val hs = MeasureSpec.getSize(heightMeasureSpec)
             setMeasuredDimension(avail, if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.EXACTLY) hs else h)

@@ -25,33 +25,61 @@ object FloatSpot {
     /** Vertical offsets (in text heights) tried when a text would print over another one that is still showing. */
     private val STACK = intArrayOf(0, 1, -1, 2, -2, 3, -3)
 
+    /** R19-I: where [placeHead] put a text: its [spot], and whether it had to fall back onto the Pokémon ([onPokemon]). */
+    data class HeadSpot(val spot: Spot, val onPokemon: Boolean)
+
     /**
-     * [place], but also keeping the text clear of the [obstacles] (the stat cards: the whole rise must miss them, so the
-     * text slides sideways to the nearest free left) and of the [taken] start rectangles of texts still on screen (it
-     * moves down / up in steps of its own height + [gap], last resort sideways). When nothing is free it takes the spot with the least overlap.
+     * R19-I (PLAN 244, pick B): a text [tvW] x [tvH] for the Pokémon whose real picture is [art], in an arena [w] x [h]. The first one
+     * sits just above the head ([lift] px over it), centred on the picture; the next ones pile upward ([gap] between them, stepping over
+     * every [taken] start rectangle). It may slide sideways (only while its middle stays over the picture) just to get clear of a stat card. A stack that would leave
+     * the arena's safe top ([safeTop]) or hit an obstacle (a stat card) does not fit: the text then sits ON the Pokémon, centred on the
+     * picture (further ones above / below that, clear of [taken]) - never beside it. [forceOn]: an earlier text of this side already sits on the
+     * Pokémon, so the rest of the pile does too (one pile, not half above and half on it). The rise is [maxRise], cut to the room above
+     * the text (down to the safe top and the obstacles over it).
      */
-    fun placeClear(left: Int, top: Int, w: Int, h: Int, tvW: Int, tvH: Int, maxRise: Int, taken: List<Rect>, obstacles: List<Rect>, gap: Int): Spot {
-        val first = place(left, top, w, h, tvW, tvH, maxRise)
+    fun placeHead(art: Rect, w: Int, h: Int, tvW: Int, tvH: Int, maxRise: Int, taken: List<Rect>, obstacles: List<Rect>, gap: Int, lift: Int, safeTop: Int, forceOn: Boolean = false): HeadSpot {
         val maxL = maxOf(0, w - tvW)
-        val lefts = ArrayList<Int>()
-        lefts += first.left
-        for (o in obstacles + taken) { lefts += (o.r + gap).coerceIn(0, maxL); lefts += (o.l - gap - tvW).coerceIn(0, maxL) }
-        val ordered = lefts.distinct().sortedBy { kotlin.math.abs(it - first.left) }
-        fun area(a: Rect, b: Rect): Long {
-            val x = minOf(a.r, b.r) - maxOf(a.l, b.l)
-            val y = minOf(a.b, b.b) - maxOf(a.t, b.t)
-            return if (x > 0 && y > 0) x.toLong() * y else 0L
+        val mid = (art.l + art.r) / 2
+        val l0 = (mid - tvW / 2).coerceIn(0, maxL)
+        // sideways steps that keep the text's middle over the picture
+        val step = maxOf(1, tvW / 4)
+        val lefts = (listOf(0) + (1..8).flatMap { listOf(it * step, -it * step) })
+            .map { (l0 + it).coerceIn(0, maxL) }
+            .filter { l -> val c = l + tvW / 2; c >= art.l && c <= art.r || l == l0 }
+            .distinct()
+        fun riseOf(l: Int, t: Int): Int {
+            var room = t - safeTop
+            for (o in obstacles) if (o.l < l + tvW && l < o.r && o.b <= t) room = minOf(room, t - o.b)
+            return minOf(maxRise, maxOf(0, room))
         }
-        var best = first
+        for (l in if (forceOn) emptyList() else lefts) {
+            var bottom = art.t - lift
+            repeat(8) {
+                val r = Rect(l, bottom - tvH, l + tvW, bottom)
+                val over = taken.filter { it.hits(r) }.minOfOrNull { it.t }
+                if (over != null) bottom = over - gap
+            }
+            val top = bottom - tvH
+            val r = Rect(l, top, l + tvW, bottom)
+            if (top < safeTop || taken.any { it.hits(r) }) break   // the stack is out of room: on the Pokémon, never slid sideways
+            if (obstacles.any { it.hits(r) }) continue               // a stat card is in the way: slide along the head
+            return HeadSpot(Spot(l, top, riseOf(l, top)), false)
+        }
+        // no room above the head: on the Pokémon, centred on its picture, the next ones stepping up / down from there
+        val l = l0
+        val top0 = ((art.t + art.b - tvH) / 2).coerceIn(0, maxOf(0, h - tvH))
+        fun overlap(r: Rect): Long = taken.sumOf { o ->
+            val x = minOf(r.r, o.r) - maxOf(r.l, o.l); val y = minOf(r.b, o.b) - maxOf(r.t, o.t)
+            if (x > 0 && y > 0) x.toLong() * y else 0L
+        }
+        var best = top0
         var bestScore = Long.MAX_VALUE
-        for (l in ordered) for (k in STACK) {
-            val s = place(l, top + k * (tvH + gap), w, h, tvW, tvH, maxRise)
-            val swept = Rect(s.left, s.top - s.rise, s.left + tvW, s.top + tvH)
-            val start = Rect(s.left, s.top, s.left + tvW, s.top + tvH)
-            val score = taken.sumOf { area(start, it) } + 4L * obstacles.sumOf { area(swept, it) }
-            if (score == 0L) return s
-            if (score < bestScore) { bestScore = score; best = s }
+        for (k in STACK) {
+            val t = (top0 + k * (tvH + gap)).coerceIn(0, maxOf(0, h - tvH))
+            val score = overlap(Rect(l, t, l + tvW, t + tvH))
+            if (score == 0L) { best = t; bestScore = 0L; break }
+            if (score < bestScore) { bestScore = score; best = t }
         }
-        return best
+        return HeadSpot(Spot(l, best, minOf(maxRise, maxOf(0, best))), true)
     }
 }

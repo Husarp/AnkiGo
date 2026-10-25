@@ -17,8 +17,10 @@ import kotlin.math.min
  *    panel (near an edge it becomes edge-aligned).
  * 3. A box keeps a gap ([gap]) from both Pokémon's real art boxes and ours from the wild box. If that fails, in steps: (a) right
  *    next to its own Pokémon (just above / under its art box), boxes down to [SHARE_NEAR]; (b) the edge-aligned spots; (c) shrink on
- *    to [SHARE_MIN]; (d) the other vertical side. Boxes always shrink before the Pokémon: only when all of that fails do the sprites
- *    get smaller (frames x .9 .. .6 around their feet) and the whole search runs again.
+ *    to [SHARE_MIN]. Boxes always shrink before the Pokémon: only when all of that fails do the sprites get smaller (frames x .9 ..
+ *    .6 around their feet) and the whole search runs again. R19-A (PLAN 277): (d) the other vertical side comes last of all, only
+ *    when nothing fits on a box's own side at any sprite scale (before, it came at the first sprite scale, ahead of smaller Pokémon),
+ *    so a box stays where its NEW mark is.
  * 4. Nothing is clear anywhere: the pair with the least cover (then the least nearness) at the smallest box, [StagePlan.clear] false.
  *
  * With a battle frame ([inset] > 0) the "panel" for the boxes is the arena inset by that much on every side. PLAN 140: [FrameSafe]
@@ -101,6 +103,9 @@ internal object StageGeo {
     private val PHASE_FROM = intArrayOf(0, 0, 0, 1, 0)
     private val PHASE_TO = intArrayOf(1, 1, 1, 2, 2)
 
+    /** R19-A: the phase that may use the other vertical side (level 3); the phases before it keep every box on its own side. */
+    private val LAST_PHASE = PHASE_LEVEL.size - 1
+
     /**
      * The box scales of a panel: where the boxes start, the smallest they get while sitting right by their Pokémon, and the smallest
      * of all; [full] = the scale from which the optional parts (chips, XP number) are readable, under it a box is reduced (0 = no text floor).
@@ -125,12 +130,14 @@ internal object StageGeo {
      * `panelScale * max(1, floorSp / 12)`, so a card only needs the rest of the way to the wanted on-screen share.
      * [minSp]: the smallest text (sp) a reduced box draws, [fullSp] the smallest of a full one (default: the same); both 0 = no
      * text floor. No scale goes under [textScale] of [minSp], so no text is drawn under the readable size.
+     * R19-A (PLAN 276): [boost] (1 = today) raises only where the boxes START ([InfoBoxPrefs.factor]); the scales a box may shrink to
+     * ([BoxScales.near], [BoxScales.min]) stay as they are, so a box that does not fit big shrinks down to today's size before a Pokémon does.
      */
-    fun boxScales(onScreenH: Float, panelScale: Float, floorSp: Float, k0: Float, minSp: Float = 0f, fullSp: Float = minSp): BoxScales {
+    fun boxScales(onScreenH: Float, panelScale: Float, floorSp: Float, k0: Float, minSp: Float = 0f, fullSp: Float = minSp, boost: Float = 1f): BoxScales {
         val already = max(panelScale, 0.01f) * max(1f, floorSp / 12f)
         fun kv(screen: Float) = k0 * min(1f, screen / already)
         val readable = textScale(minSp, panelScale, floorSp)
-        val start = max(kv(targetShare(onScreenH)), readable)
+        val start = max(kv(targetShare(onScreenH)) * max(boost, 1f), readable)
         return BoxScales(start, max(min(start, kv(SHARE_NEAR)), readable), max(min(start, kv(SHARE_MIN)), readable), max(readable, textScale(fullSp, panelScale, floorSp)))
     }
 
@@ -165,7 +172,8 @@ internal object StageGeo {
      * [ArtShare.DEFAULT]. The heights are the full boxes'; [wildCardHReduced] / [playerCardHReduced] the same boxes with their optional
      * parts dropped (used under the scale [BoxScales.full], where [StagePlan.reduced] is true); [minSp] / [fullSp] the smallest text
      * of a reduced / full box in design sp (both 0 = no readability floor). [sizeScale]: the Pokémon size (Round 10 B20, 1 = today; [frameScales]);
-     * [atOne]: for a size under 1, the frame scale the same panel gets at 1 (0 = worked out here).
+     * [atOne]: for a size under 1, the frame scale the same panel gets at 1 (0 = worked out here). [boost]: R19-A, the "Bigger info boxes"
+     * factor for the boxes' start scale ([boxScales]; 1 = none).
      */
     fun plan(
         w: Float, h: Float, stage: Stage,
@@ -178,25 +186,28 @@ internal object StageGeo {
         sizeScale: Float = 1f, atOne: Float = 0f,
         corners: Boolean = false,
         safe: FrameSafe? = null,
+        boost: Float = 1f,
     ): StagePlan {
         val onScreen = h * panelScale
-        val scales = boxScales(onScreen, panelScale, floorSp, k0, minSp, fullSp)
+        val scales = boxScales(onScreen, panelScale, floorSp, k0, minSp, fullSp, boost)
         val run = Run(w, h, max(0f, inset), gap(onScreen, panelScale), isTall(w, h), stage,
             floatArrayOf(playerCardW, wildCardW), floatArrayOf(playerCardH, wildCardH), floatArrayOf(playerCardHReduced, wildCardHReduced),
             scales.full, wildArt, playerArt, safe?.takeUnless { it.none })
         // a size under 100 % is that share of the frame the same panel gets at 100 % (given, or worked out first)
         val one = if (sizeScale < 1f - F_EPS && !(atOne > 0f)) plan(w, h, stage, wildCardW, wildCardH, playerCardW, playerCardH, k0, panelScale, floorSp, inset,
-            wildArt, playerArt, wildCardHReduced, playerCardHReduced, minSp, fullSp, 1f, 0f, corners, safe).spriteScale else if (atOne > 0f) atOne else 1f
+            wildArt, playerArt, wildCardHReduced, playerCardHReduced, minSp, fullSp, 1f, 0f, corners, safe, boost).spriteScale else if (atOne > 0f) atOne else 1f
         val chain = frameScales(sizeScale, one)
         val big = sizeScale > 1f + F_EPS
-        for ((i, f) in chain.withIndex()) {
+        // R19-A (PLAN 277): a box goes to the other vertical side (the last phase) only when nothing fits on its own side at ANY sprite
+        // scale: first every scale with phases 0..3 (smaller boxes, then smaller Pokémon), then every scale again with the last phase.
+        for (pass in 0..1) for ((i, f) in chain.withIndex()) {
             run.setFrames(f)
             if (big && i < chain.lastIndex && !run.bigFramesOk()) continue   // a bigger Pokémon must keep its real art inside the arena and off the other one (the last step always runs)
             if (corners) {   // Round 10 W7 (the HUD look): the two corners at the start scale, no search; the Pokémon keep their frame
                 run.keepCorners(scales.start)
                 return run.result(scales.start, f, true)
             }
-            for (ph in PHASE_LEVEL.indices) {
+            for (ph in if (pass == 0) 0 until LAST_PHASE else LAST_PHASE until PHASE_LEVEL.size) {
                 val hi = scales.at(PHASE_FROM[ph])
                 val lo = scales.at(PHASE_TO[ph])
                 var k = hi

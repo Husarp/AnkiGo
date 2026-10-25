@@ -27,7 +27,7 @@ import kotlin.random.Random
 /**
  * R18-B (PLAN 227 a): a switch queued on a card, played in event order through what the Study screen holds: the action bar's model
  * ([ActionBarModel]) and the dots ([StudyCharge]). Real [Game] events (made-up species), both cases: the first card of a round and
- * the card that ends the round. The arena (HP of the incoming Pokémon) takes its numbers from the same events: the checks here are
+ * the card that ends the round. R19-T (PLAN 288): the switch fills / colours no dot any more. The arena (HP of the incoming Pokémon) takes its numbers from the same events: the checks here are
  * on those numbers. An item used in a fight keeps the dots as they are.
  */
 class R18BSwitchFlowTest {
@@ -88,12 +88,12 @@ class R18BSwitchFlowTest {
         assertTrue(wildMove.move.who.startsWith("Wild"))
         assertTrue(t1.hp < before)
         assertEquals("the hit is the one the marker announced", before - wildMove.move.damage, t1.hp)
-        // the dot of the answer is drawn in the switch colour; the round is not over
-        assertEquals(listOf(StudyCharge.SWITCH), screen.dots.filled)
+        // R19-T (PLAN 288): the switch marks no dot: the answer's own colour stays; the round is not over
+        assertEquals(listOf(3), screen.dots.filled)
         assertEquals(2, screen.dots.goal)
     }
 
-    @Test fun aSwitchQueuedOnTheRoundEndingCardKeepsTheFullDotsWithTheLastOneSwitch() {
+    @Test fun aSwitchQueuedOnTheRoundEndingCardKeepsTheFullDotsInTheAnswersColours() {
         val g = game()
         g.state.battle!!.answers = 1; g.state.battle!!.tally = Tuning.POINTS[3]; g.state.battle!!.buttons += 3
         val screen = Screen()
@@ -106,7 +106,7 @@ class R18BSwitchFlowTest {
         screen.play(e)
         assertEquals("t1", g.state.main!!.uid)
         assertTrue("the round was played", e.any { it is GameEvent.RoundStart })
-        assertEquals("both dots stay until the next answer, the last one is the switch's", listOf(3, StudyCharge.SWITCH), screen.dots.filled)
+        assertEquals("both dots stay until the next answer, in the colours of the two answers (R19-T: none is the switch's)", listOf(3, 4), screen.dots.filled)
         assertEquals(HalfState.Note("Switched to ${t1.name}"), screen.bar.mine)
         assertTrue(screen.bar.theirs is HalfState.Moved)
         // the next answer starts a new round: ordinary dots again
@@ -126,12 +126,12 @@ class R18BSwitchFlowTest {
         assertEquals(listOf(2), screen.dots.filled)
     }
 
-    @Test fun theNeutralOkOfANewCardDoesNotMarkThePreviousDot() {
+    @Test fun aQueuedSwitchNeverRecoloursTheGreyOkDotEither() {
         val screen = Screen()
         screen.dots.observe(GameEvent.Counted(3, 10, 1, 1, false), 2)
-        screen.dots.observe(GameEvent.Counted(3, 0, 1, 1, false, neutral = true), 2)
+        screen.dots.observe(GameEvent.Counted(1, 0, 1, 1, false, neutral = true), 2)
         screen.dots.observe(GameEvent.MainChanged("t1", "X", queued = true), 2)
-        assertEquals(listOf(3), screen.dots.filled)
+        assertEquals(listOf(3, StudyCharge.OK), screen.dots.filled)   // R19-T (PLAN 284 / 288)
     }
 
     @Test fun anItemOnTheMainWorksAtOnceAndLeavesTheDotsAlone() {
@@ -156,6 +156,7 @@ class R18BSwitchFlowTest {
         assertEquals("Pika stays in.", SwitchQueue.cancelledText("Pika"))
         assertEquals("On your next move · the wild Pokémon attacks once", SwitchQueue.MENU_SUB)
         assertEquals("On your next move", SwitchQueue.ROW_MARK)
+        assertEquals("Switched! Wild {{Ratty}} gets a free hit.", SwitchQueue.freeHitText("Ratty"))   // R19-T (PLAN 288): only the battle's own toast says it so
         val g = game()
         val q = g.requestMain("t1")
         val e = g.onAnswer(Answer(1, 3, now))

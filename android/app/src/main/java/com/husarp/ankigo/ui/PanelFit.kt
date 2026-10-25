@@ -243,13 +243,14 @@ internal object ArenaGeo {
      * (BESIDE, short ones); not [own]: the classic corners. What does not fit gives the middle layout. One rule from
      * picture-in-picture to tablet, and it also grows: the sprites' scale `a` goes from the mockup's size up to 40 % of
      * the arena's height (60 % of its width, at most 4), the cards' scale `k` up to 1.4. The first (a, k) that fits wins:
-     * biggest sprites first, then biggest cards. Our sprite box is the enlarged 140 x 128 one.
+     * biggest sprites first, then biggest cards. Our sprite box is the enlarged 140 x 128 one. R19-A (PLAN 276): [boost] (1 = today)
+     * multiplies the cards' top scale only ("Bigger info boxes", [InfoBoxPrefs.factor]); the search still steps down to 1 for each sprite scale.
      */
-    fun plan(w: Float, h: Float, c: Cards, compact: Boolean, own: Boolean = true, safe: FrameSafe? = null): Plan {
+    fun plan(w: Float, h: Float, c: Cards, compact: Boolean, own: Boolean = true, safe: FrameSafe? = null, boost: Float = 1f): Plan {
         val ref = refH(compact)
         val base = (h / ref).coerceIn(0.66f, 1.5f)
         val aMax = max(base, min(0.4f * h / 128f, min(0.6f * w / 140f, 4f)))
-        val k0 = min(w / 300f, h / 430f).coerceIn(1f, 1.4f)
+        val k0 = min(w / 300f, h / 430f).coerceIn(1f, 1.4f) * max(boost, 1f)   // R19-A (PLAN 276): "Bigger info boxes" raises only the top scale; the search still goes down to 1
         val low = min(base, A_CORNERS)
         val found = if (own) search(aMax, low, k0) { a, k -> under(w, h, c, a, k).kept(w, h, safe) } ?: search(aMax, low, k0) { a, k -> beside(w, h, c, ref, a, k).kept(w, h, safe) }
         else search(aMax, low, k0) { a, k -> corners(w, h, c, ref, a, k).kept(w, h, safe) }

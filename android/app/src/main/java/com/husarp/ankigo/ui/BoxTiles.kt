@@ -38,6 +38,18 @@ enum class BoxFilter(val label: String, val none: String? = null) {
 /** The sort toggle of the copies sheet: highest level first, or latest caught first. */
 enum class CopySort(val label: String) { LEVEL("Level"), RECENT("Recent") }
 
+/** PLAN 282 / R19: singles stay plain; groups keep their count with either visual cue. */
+data class BoxDupePlan(val cards: Int, val sprites: Int, val count: Int) {
+    val insetDp: Int get() = if (cards > 0) 7 else 0
+    companion object {
+        fun of(count: Int, stacked: Boolean, two: Boolean) = BoxDupePlan(
+            if (stacked) (count - 1).coerceIn(0, 2) else 0,
+            if (two && count > 1) 2 else 1,
+            count,
+        )
+    }
+}
+
 object BoxTiles {
     /**
      * [team] = the uids of the team (for [BoxFilter.IN_TEAM]); [xpShareUid] = the holder of the Exp. Share (for [BoxFilter.HOLDS_XP_SHARE]); [canEvolve] answers [BoxFilter.CAN_EVOLVE] (see [MonTags.canEvolve]).

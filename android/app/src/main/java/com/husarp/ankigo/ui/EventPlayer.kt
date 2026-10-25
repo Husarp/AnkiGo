@@ -64,7 +64,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     fun enqueue(events: List<GameEvent>) {
         if (events.isEmpty()) return
-        releaseTiles()
+        if (NextFight.releasesHold(events)) releaseTiles()   // R19-T (PLAN 285): a switch made on the Continue screen plays under the result; only an answer starts the next fight
         val summary = CatchSummary.of(events, data = GameRepo.data) // the throw number comes with the BallThrow event (counted by the fight in the game state)
         // R9 C5: a won / caught fight with a next one behind it holds that one from now on (Continue shows at once, the rewards keep playing);
         // screens whose Continue sits under the result tiles queue the tiles right behind the fight's end so they show early too
@@ -81,6 +81,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         if (at == events.size) queue.addLast(Item.Tiles(summary!!))
         for (e in events) if (e is GameEvent.Encounter) panel.prefetchBackdrop(e.species, e.wildUid)   // R9 C4: its picture loads while the rewards play
         if (early) panel.holdEarly()
+        if (CatchAskPopup.waiting(events)) queue.addLast(Item.Act { CatchAskPopup.offer(panel.context) }) // R19-P (PLAN 281): "Ask me" / "Release the old one?" opens once the rewards played (not in a floating window or PiP: it waits)
         pump()
     }
 
@@ -275,7 +276,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             logWhole = false
             log(LogKind.SYS, "NEW", "A wild ${em(bare(lone.name))}" + (if (lone.shiny) " ${em("(shiny!)")}" else "") + " appeared!")
         }
-        else if (events.isNotEmpty()) panel.setLog(LogKind.SYS, "FAST", summary(events))
+        else if (events.isNotEmpty() && !onlyASwitch(events)) panel.setLog(LogKind.SYS, "FAST", summary(events))
+        events.firstOrNull { it is GameEvent.SwitchHit && it.item == null }?.let { panel.toast(ToastKind.SWITCH, SwitchQueue.freeHitText(bare((it as GameEvent.SwitchHit).wildName))) }   // R19-T (PLAN 288): reduced motion explains the switch's hit too
         // One answer's fight result still shows its tiles (no animation needed); a pile of answers gets only the summary line.
         result?.let { r ->
             if (events.count { it is GameEvent.Counted } <= 1 && panel.showCatchTiles(r, false) == CatchTilesPlan.Mode.HOLD) {
@@ -285,6 +287,10 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         }
         dirty = false
     }
+
+    /** R19-T: a batch of a switch (or an item) with no answer in it: "Played fast: 0 answers" would say nothing. */
+    private fun onlyASwitch(events: List<GameEvent>) =
+        events.none { it is GameEvent.Counted || it is GameEvent.BallThrow } && events.any { it is GameEvent.MainChanged || it is GameEvent.SwitchHit }
 
     private fun summary(events: List<GameEvent>): String {
         var answers = 0; var won = 0; var caught = 0; var levels = 0; var evolved = 0; var cash = 0
@@ -326,8 +332,10 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     /** PLAN 216: the fight is over (the wild one fainted, was caught or fled): both status badges go at once, not with the next Encounter. */
     private fun clearStatuses() {
         fightOver = true
+        panel.showOwnPlayerPicture()   // R19-L: a transform ends with the fight: our own picture is back
         arena.setPlayerStatus(null)
         arena.setEnemyStatus(null)
+        arena.clearConditions()   // R19-K: no chips after the fight
     }
 
     /** Looks ahead in the queue: after the wild one fainted, does a Caught (not a Defeated) come first? */
@@ -414,7 +422,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         if (e !is GameEvent.Attack && e !is GameEvent.Encounter) sound(e)   // an attack sounds from [playAttack]: with its animation, when the hit lands; a new wild one's cry when it comes in
         when (e) {
             is GameEvent.Counted -> {
-                if (e.neutral) {   // PLAN 155: the OK of a new card: counted, but no charge, no float, nobody attacks; the combo stays as it was
+                if (e.neutral) {   // PLAN 155 / R19-T (284): the OK of a new card: counted, a grey dot (the Charge / round events follow), no float, no power; the combo stays as it was
                     panel.setGoal(e.reviewsToday, st?.let { DailyGoal.today(it) } ?: 100, true)
                     panel.setCombo(e.cardStreak, true)
                     log(LogKind.NEUTRAL, "OK", com.husarp.ankigo.study.NewCardOk.LOG_LINE)
@@ -445,14 +453,17 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 log(LogKind.SYS, "EFFECT", e.text)
                 floats(e)
                 if (!fightOver) { if (e.onPlayer) arena.setPlayerStatus(e.status) else arena.setEnemyStatus(e.status) }   // PLAN 259: after the win no badge comes back
+                if (!fightOver) arena.conditionEffect(e, st?.battle)   // R19-K (PLAN 269): a condition's chip starts / ends with its line
                 if (e.maxHp > 0) {
                     if (e.onPlayer) arena.setPlayerHp(e.hp, e.maxHp, true) else arena.setEnemyHp(e.hp, e.maxHp, true)
                 }
+                if (e.into > 0 && !fightOver) playTransform(e)?.let { return it }   // R19-L (PLAN 271)
                 return d(550)
             }
             is GameEvent.Fainted -> {
                 if (e.player) {
                     arena.setPlayerStatus(null)   // PLAN 216: it left the field: its badge goes with the faint
+                    arena.conditionsSwitched()   // R19-K: its own conditions go with it
                     arena.faint(true, d(500))
                     log(LogKind.AGAIN, "FAINT", "${em(e.name)} fainted!")
                     return d(800)
@@ -466,7 +477,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             is GameEvent.BallThrow -> return playBallThrow(e)
             is GameEvent.Caught -> return playCaught(e)
             is GameEvent.Defeated -> {
-                log(LogKind.GOOD, "WIN", "Wild ${em(bare(e.name))} fainted! +${e.xp} XP")
+                log(LogKind.GOOD, "WIN", "Wild ${em(bare(e.name))} fainted! +${e.xp} XP." + if (e.ask) " It is better than yours: catch it?" else "") // R19-P (PLAN 281)
                 return d(650)
             }
             is GameEvent.XpGained -> {
@@ -524,6 +535,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 fightOver = false
                 panel.refreshPlayer(e.uid)   // the one this event brings in, not the save's main: fight events made elsewhere can hold several switches (PLAN 191)
                 arena.setPlayerStatus(null)   // a switch starts clean (the battle side is reset): a status comes with its own Effect event
+                arena.conditionsSwitched()   // R19-K: so do its conditions (what our side keeps, like Reflect, stays)
                 // R10 W10: the wild one's attack follows: the saved game already has the HP after it, the bar shows the HP before until the hit lands
                 val hit = (queue.firstOrNull() as? Item.Ev)?.e as? GameEvent.SwitchHit
                 if (hit != null) arena.setPlayerHp(hit.hp, hit.maxHp, false)
@@ -532,8 +544,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 return d(800)
             }
             is GameEvent.SwitchQueued -> {
-                // PLAN 206 / R18-B (227): nothing to animate and no line on the bar (it keeps its segments): a small toast says it
-                Ui.toast(panel, if (e.uid != null) SwitchQueue.queuedText(e.name) else SwitchQueue.cancelledText(e.name))
+                // PLAN 206 / R18-B (227): nothing to animate and no line on the bar (it keeps its segments): a card toast says it (R19-H, PLAN 257)
+                panel.toast(ToastKind.SWITCH, if (e.uid != null) SwitchQueue.queuedText(e.name) else SwitchQueue.cancelledText(e.name))
                 return 0
             }
             is GameEvent.SwitchHit -> {
@@ -544,6 +556,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                     log(LogKind.AGAIN, "WILD", "Used ${em(Items.name(e.item))} on ${em(e.monName)} — ${wild(e.wildName)} attacks once!")
                 } else {
                     log(LogKind.AGAIN, "WILD", "Switched to ${em(e.monName)} — ${wild(e.wildName)} attacks once!")
+                    // R19-T (PLAN 288): a switch takes no dot; the toast says why the wild one attacks now
+                    panel.toast(ToastKind.SWITCH, SwitchQueue.freeHitText(bare(e.wildName)))
                 }
                 return d(500)
             }
@@ -663,6 +677,27 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         }
     }
 
+    /**
+     * R19-L (PLAN 271, pick A): the Pokémon goes white with sparkles and the copy's picture (the target's, shiny or not as the target is)
+     * takes over at the whitest moment. The info box keeps its own name. Null: nothing to show (the species is not known).
+     */
+    private fun playTransform(e: GameEvent.Effect): Long? {
+        val sp = GameRepo.data?.species?.get(e.into) ?: return null
+        val my = epoch
+        arena.transformFlash(e.onPlayer, d(TransformFlash.DURATION_MS)) {
+            if (my == epoch) {
+                if (e.onPlayer) {
+                    PanelSprites.showMain(ctx, arena.playerSprite, sp, e.intoShiny)
+                    panel.notePlayerSprite(sp.num, e.intoShiny)
+                } else {
+                    PanelSprites.show(ctx, arena.enemySprite, sp, SpriteKind.FRONT, e.intoShiny, false)
+                    panel.noteEnemySprite(sp.num, e.intoShiny)
+                }
+            }
+        }
+        return d(TransformFlash.DURATION_MS + 200)
+    }
+
     /** Auto-release duplicates: one log line says what happened to the wild one (a swap also shows on the "Gotcha!" banner). */
     private fun playDuplicate(e: GameEvent.Duplicate): Long {
         val who = em(bare(e.name))
@@ -752,6 +787,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         fightOver = false
         arena.setEnemyStatus(null)
         arena.setPlayerStatus(null)
+        arena.clearConditions()   // R19-K: the new fight starts with none
         arena.setBackdrop(sp?.types.orEmpty(), BackdropCatalog.seed(e.wildUid), BackdropCatalog.isLegendary(sp))   // R8-03: one of the pictures for this wild Pokémon's type, random per encounter
         arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty())
         arena.setEnemyHp(e.hp, e.maxHp, false)

@@ -88,6 +88,9 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     // ---- action bar (round 9 D3): the log slot under the arena: my last move | dots | their last move, details in a bubble ----
     private val logBox = ActionBarView(ctx)
 
+    // ---- R19-H (PLAN 257): the toasts (the old whole-bar lines): small cards at the arena's top-left, above your Pokémon; the bar keeps its segments ----
+    private val toasts = ArenaToastLayer(ctx).also { layer -> arena.onMarksPlaced = { layer.reposition() } }
+
     // ---- catch result tiles (PLAN 40): they take the log card's place after a catch or a defeat ----
     private val tiles = CatchTilesView(ctx).apply { visibility = GONE }
     private var tilesOn = false
@@ -177,7 +180,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         private fun look(): Pair<com.husarp.ankigo.game.Species, Boolean>? {
             val data = GameRepo.data ?: return null
             val m = GameRepo.state?.main ?: return null
-            return m.lookSpecies(data) to m.shiny
+            return playerLookOf(m, data)
         }
         override fun facingFront(): Boolean = AppPrefs.playerFront(context)
         override fun hasFront(): Boolean {
@@ -287,6 +290,14 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
         // log / action bar: the bubble opens in the overlay, inside the scaled layer
         logBox.attachBubbleLayer(overlay)
+        // toasts: the arena (in the scaled layer's px) is their place; they keep off the stat cards, the pictures and the "Paused" badge
+        toasts.arenaRect = { if (arena.visibility == VISIBLE && arena.width > 0 && arena.height > 0) android.graphics.Rect(arena.left, arena.top, arena.right, arena.bottom) else null }
+        toasts.keepOff = {
+            val k = arena.toastKeepOff()
+            if (pausedBadge.visibility != VISIBLE) k else KeepOff(k.ourCard, k.wildCard, k.ourArt, k.wildArt, k.safe,
+                k.extra + listOf(FloatSpot.Rect(pausedBadge.left - arena.left, pausedBadge.top - arena.top, pausedBadge.right - arena.left, pausedBadge.bottom - arena.top)))
+        }
+        toasts.announce = { logBox.announce(it) }
 
         // footer: goal bar, goal text, tool buttons, menu; then the chips
         goalRow.addView(goalBar, goalBarLp)
@@ -314,6 +325,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         column.addView(footer, LinearLayout.LayoutParams(-1, -2))
 
         scaler.addView(column, LayoutParams(-1, -1))
+        scaler.addView(toasts, LayoutParams(-1, -1))   // R19-H: over the arena and its frame, under the move bubble
         scaler.addView(overlay, LayoutParams(-1, -1))
         scaler.addView(pausedBadge, LayoutParams(-2, -2, Gravity.TOP or Gravity.START).also { it.setMargins(dpi(6), dpi(6), 0, 0) })
         addView(scaler, LayoutParams(-1, -1))
@@ -380,6 +392,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
             logBox.layoutParams = logLp
         }
         logBox.floorSp = f.floorSp
+        toasts.floorSp = f.floorSp; toasts.panelScale = f.scale
         logBox.closeBubble()   // the window changed under it
         for (v in listOf(strip, logBox, footer, pausedBadge)) TextFloor.apply(v, f.floorSp)
         updatePausedPill()
@@ -486,10 +499,9 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         requestLayout()
     }
 
-    /** The plain log line's paddings, text size and pill for the current mode (the segments follow the bar's own size). */
+    /** The bar's look for the current mode: the "Paused" line's paddings (the segments follow the bar's own size). */
     private fun applyLogLook() {
         logBox.setLook(small, legacy, flatBar)
-        logBox.applyLiveRegion()
     }
 
     /** The study strip: the old compact look (one 26 dp log line, no footer, no strip), at scale 1. */
@@ -539,15 +551,25 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
      */
     fun observeStudyEvent(event: GameEvent) {
         logBox.observe(event)
-        if (!study) return
+        // R19-B: the charge is followed on every screen (cheap), so the dots are right the moment picture-in-picture / split screen / the floating window shows them
         studyCharge.observe(event, com.husarp.ankigo.game.Tuning.CARDS_PER_ROUND)
         renderCharge()
     }
 
-    /** One pending answer can be reconstructed exactly from the saved tally; multiple choices stay neutral. */
+    /**
+     * R19-B (PLAN 275): the turn dots outside the Study screen: on in picture-in-picture, split screen and the floating battle window
+     * (where you study in AnkiDroid next to the battle), off on the full-screen Battle tab. The Study screen keeps them on always.
+     * The charge itself follows the played events and was restored at creation ([restoreStudyCharge]), so switching is no jump.
+     */
+    fun setTurnDots(on: Boolean) {
+        logBox.dotsOn = on || study
+        renderCharge()
+    }
+
+    /** The dots from the save: the saved buttons of the round's answers (R19-T: the grey OK too); an older save without them reads one answer from the tally, more stay neutral. */
     fun restoreStudyCharge() {
         val battle = GameRepo.state?.battle
-        studyCharge.restore(battle?.answers ?: 0, battle?.tally ?: 0, com.husarp.ankigo.game.Tuning.CARDS_PER_ROUND)
+        studyCharge.restore(battle?.answers ?: 0, battle?.tally ?: 0, com.husarp.ankigo.game.Tuning.CARDS_PER_ROUND, battle?.buttons.orEmpty())
         renderCharge()
     }
 
@@ -567,13 +589,28 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     // ---------------------------------------------------------------- log
 
     /**
-     * Shows a line about the whole battle across the full bar (the app's own news, hints, errors): coloured pill + text, until the
-     * next move arrives. `{{...}}` in [text] turns mauve. [pop] plays the short scale/fade-in (mockup `.pop`, 250 ms). Lines
-     * about a move or one side are not shown here (the halves and the arena show them): they go to [sayBattle].
+     * R19-H (PLAN 257): a line about the whole battle (the app's own news, hints, errors) is a card toast at the arena's top-left, above your
+     * Pokémon ([toast]); the action bar keeps its segments, no line ever takes it. The pill word and [kind] pick the toast's icon
+     * ([ToastKind.of]); `{{...}}` in [text] turns mauve. [pop] false = no sliding. Lines about a move or one side are not shown here (the
+     * halves and the arena show them): they go to [sayBattle].
      */
     fun setLog(kind: LogKind, pill: String, text: String, pop: Boolean = true) {
-        logBox.showLine(kind, pill, text, pop)
+        val k = ToastKind.of(kind, pill, text)
+        val (main, sub) = ToastText.split(k, text)
+        toast(k, main, sub, pop)
     }
+
+    /**
+     * R19-H: a small card toast, top-left of the arena, sliding in from the left edge for about 2.5 s; a tap closes it. One at a time:
+     * more wait in a short row, an equal one within a few seconds is merged ([ToastQueue]). [sub] = a small second line (only where there is
+     * room). `{{...}}` in [text] turns mauve. Other code (a switch's free hit ...) calls this with a [ToastKind].
+     */
+    fun toast(kind: ToastKind, text: String, sub: String? = null, pop: Boolean = true) {
+        toasts.show(kind, text, sub, pop)
+    }
+
+    /** The toast showing now (tests). */
+    internal val toastLayer: ArenaToastLayer get() = toasts
 
     /** A battle line the bar does not show: only spoken (TalkBack, when "Read battle log" is on). */
     fun sayBattle(text: String) = logBox.announce(text)
@@ -807,6 +844,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         arena.resetFx()
         renderEnemy(st, data)
         renderPlayer(st, data)
+        arena.syncConditions(if (enemyHeld) null else st.battle)   // R19-K (PLAN 269): the condition chips follow the saved fight
         renderFooter(st)
         prefetch(st, data)
     }
@@ -831,8 +869,9 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         arena.setEnemyHp(w.hp, if (sp != null) b.maxWildHp(data) else max(w.hp, 1), false)
         arena.setNewTag(w.species !in st.caught)
         if (sp != null) {
-            val key = "${w.species}:${w.shiny}"
-            if (key != enemyKey) { enemyKey = key; PanelSprites.show(context, arena.enemySprite, sp, SpriteKind.FRONT, w.shiny, false) }
+            val (shown, shiny) = TransformSprite.wild(b, data) ?: (sp to w.shiny)   // R19-L (PLAN 271): a transformed wild one shows its target's picture
+            val key = "${shown.num}:$shiny"
+            if (key != enemyKey) { enemyKey = key; PanelSprites.show(context, arena.enemySprite, shown, SpriteKind.FRONT, shiny, false) }
         }
         if (wait) {
             val gen = revealGen
@@ -867,9 +906,23 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
     /** The main's picture follows the chosen look (purely visual); nothing is reloaded while the picture is already the right one. */
     private fun showPlayerPicture(m: Mon, data: GameData) {
-        val look = m.lookSpecies(data)
-        val key = playerKeyOf(look.num, m.shiny)
-        if (key != playerKey) { playerKey = key; playerLook = look to m.shiny; PanelSprites.showMain(context, arena.playerSprite, look, m.shiny) }
+        val (look, shiny) = playerLookOf(m, data)
+        val key = playerKeyOf(look.num, shiny)
+        if (key != playerKey) { playerKey = key; playerLook = look to shiny; PanelSprites.showMain(context, arena.playerSprite, look, shiny) }
+    }
+
+    /** The picture [m] shows (and whether shiny): its chosen look, or while it is transformed in the saved fight (R19-L, PLAN 271) the target's. */
+    private fun playerLookOf(m: Mon, data: GameData): Pair<com.husarp.ankigo.game.Species, Boolean> {
+        val st = GameRepo.state
+        return TransformSprite.player(m, if (st?.main?.uid == m.uid) st.battle else null, data)
+    }
+
+    /** R19-L: the transform is over (the fight ended): the main's own picture comes back; nothing happens when it is already showing. */
+    fun showOwnPlayerPicture() {
+        val st = GameRepo.state ?: return
+        val data = GameRepo.data ?: return
+        val m = st.main ?: return
+        if (data.species[m.species] != null) showPlayerPicture(m, data)
     }
 
     /**
@@ -957,6 +1010,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     fun cancelAnimations() {
         arena.cancelAnimations()
         logBox.cancelAnimations()
+        toasts.settle()   // R19-H: a toast sliding in is where it belongs; it keeps its time
         logBox.closeBubble()
         overlay.removeAllViews()
         listOf(comboChip, coinChip, ballChip, itemChip, streakChip).forEach { it.animate().cancel(); it.scaleX = 1f; it.scaleY = 1f }

@@ -87,6 +87,11 @@ sealed class Cmd<out T> {
  *    answer still checks that its card is first in AnkiDroid's queue right before it is written ([AnswerQueue]); a card that is not (the
  *    prediction was wrong) is not written the usual way (PLAN 195's not-first path decides) and the final load swaps the screen to the real card.
  *    Else (the cap is reached, nothing safe to show next) the tap is held as before and acts when AnkiDroid confirms that card.
+ * R19-R (278b): when [PredictRule] says LEARNING_DUE (a learning card came due while the card was on screen) the answer used to wait for the
+ * real next card, behind the write. If the due learning card (due by the tap or within the write slack) is the unique earliest one ([PredictRule.firstLearning]) and was prepared by id
+ * ([preparedLearning]), that card is predicted instead: shown at once, the confirm behind the write swaps it if it was wrong. Only after an
+ * answer on a CONFIRMED card: an answer made ahead keeps the rule above (no learning card ahead, [PredictRule.aheadOk]), and a tap on the
+ * predicted learning card itself is held until it is confirmed (nothing is prepared behind it).
  * Up to [maxAhead] + 1 cards after the confirmed one are prepared (queue order, [Cmd.Prepare]) so the chain of answers has cards to show.
  * [maxAhead] = 0 is the old behaviour (every tap on a predicted card is held).
  */
@@ -110,8 +115,11 @@ class NextCard<T>(
 
     data class Held(val ease: Int, val tookMs: Long)
 
-    /** The cards prepared for the queue positions after [base] (the card on screen), in order; valid for load [token] only. */
-    private class Chain<T>(val base: StudyLoop.Key, val token: Int, val cards: ArrayList<Prepared<T>>)
+    /**
+     * The cards prepared for the queue positions after [base] (the card on screen), in order; valid for load [token] only. R19-R: [learn] =
+     * the learning card that would jump in front of the first of them once it is due ([PredictRule.learningToPrepare]), prepared by id.
+     */
+    private class Chain<T>(val base: StudyLoop.Key, val token: Int, val cards: ArrayList<Prepared<T>>, var learn: Prepared<T>? = null)
 
     var slot: Slot<T> = Slot.Loading(0)
         private set
@@ -137,6 +145,10 @@ class NextCard<T>(
     var answeredAhead = 0
         private set
 
+    /** R19-R: predictions that were the due learning card instead of a wait (counted in [predicted] too). */
+    var predictedLearning = 0
+        private set
+
     /** R10-X1: answers whose prepared next card [check] held back, by reason. */
     val withheld: Map<PredictRule.Why, Int> get() = waitsBy
     private val waitsBy = LinkedHashMap<PredictRule.Why, Int>()
@@ -152,6 +164,7 @@ class NextCard<T>(
         val waits = withheld.filterValues { it > 0 }.map { (why, n) -> why.label to n } + listOfNotNull(if (noPrediction > 0) NOTHING to noPrediction else null)
         return "predicted $predicted (hit $hits, swap $misses), waited ${waits.sumOf { it.second }}" +
             (if (waits.isEmpty()) "" else waits.joinToString(", ", " (", ")") { "${it.first} ${it.second}" }) +
+            (if (predictedLearning > 0) ", predicted learning $predictedLearning" else "") +
             (if (answeredAhead > 0) ", answered before the confirm $answeredAhead" else "") +
             (if (heldDropped > 0) ", held taps dropped $heldDropped" else "")
     }
@@ -244,10 +257,23 @@ class NextCard<T>(
     fun prepared(forKey: StudyLoop.Key, forToken: Int, card: Prepared<T>) {
         val s = slot as? Slot.Confirmed<T> ?: return
         if (forToken != token || s.token != forToken) return
-        val c = chain?.takeIf { it.base == s.card.key && it.token == forToken } ?: Chain(s.card.key, forToken, ArrayList<Prepared<T>>()).also { chain = it }
+        val c = chainOf(s, forToken)
         val tail = c.cards.lastOrNull()?.key ?: c.base
         if (forKey != tail || card.key == forKey || card.key == c.base || c.cards.any { it.key == card.key } || c.cards.size > maxAhead) return
         c.cards += card
+    }
+
+    private fun chainOf(s: Slot.Confirmed<T>, forToken: Int): Chain<T> =
+        chain?.takeIf { it.base == s.card.key && it.token == forToken } ?: Chain(s.card.key, forToken, ArrayList<Prepared<T>>()).also { chain = it }
+
+    /**
+     * R19-R (278b): the learning card prepared by id for the CONFIRMED card [forKey] of load [forToken] ([PredictRule.learningToPrepare]).
+     * It is shown instead of a wait only when a tap finds it the unique earliest due learning card ([PredictRule.firstLearning]); else it is never used.
+     */
+    fun preparedLearning(forKey: StudyLoop.Key, forToken: Int, card: Prepared<T>) {
+        val s = slot as? Slot.Confirmed<T> ?: return
+        if (forToken != token || s.token != forToken || s.card.key != forKey || card.key == forKey) return
+        chainOf(s, forToken).learn = card
     }
 
     /** An answer button was tapped (ease 1..4) after [tookMs] ms on the card. */
@@ -306,9 +332,13 @@ class NextCard<T>(
         val c = chain?.takeIf { it.base == card.key && it.token == token }
         val made = c?.cards?.firstOrNull()
         // each write still ahead of this one can move AnkiDroid's learning cutoff: look further into the future by [PredictRule.SLACK_MS] each
-        val why = if (made == null) null else check(card, unburst(made), at + depth * PredictRule.SLACK_MS)
+        val seen = made?.let { unburst(it) }
+        val why = if (seen == null) null else check(card, seen, at + depth * PredictRule.SLACK_MS)
         val guess = made?.takeIf { why == PredictRule.Why.SAFE && (!onPredicted || PredictRule.aheadOk(it)) }   // R18-A: after an answer made ahead only a main-queue card may be shown ahead
         if (onPredicted && guess == null) return null
+        // R19-R (278b): a learning card came due: instead of the wait, the due card itself when it is certainly the first (never after an answer made ahead: just returned above)
+        val learn = if (seen != null && guess == null && why == PredictRule.Why.LEARNING_DUE) c?.learn?.takeIf { PredictRule.firstLearning(card, seen, it, at) } else null
+        val shown = guess ?: learn
         val a = QueuedAnswer(newSeq(), deckId, card.key.nid, card.key.ord, cardId, card.before, ease, tookMs, at)
         val rest = if (guess != null && c != null) c.cards.drop(1) else emptyList()
         chain = null
@@ -318,14 +348,15 @@ class NextCard<T>(
         token++
         val out = ArrayList<Cmd<T>>(3)
         out += Cmd.Enqueue(a)
-        if (guess != null) {
+        if (shown != null) {
             predicted++
             if (onPredicted) answeredAhead++
+            if (learn != null) predictedLearning++
             lastWait = ""
-            slot = Slot.Predicted(guess, token, a.seq)
-            if (rest.isNotEmpty()) chain = Chain(guess.key, token, ArrayList(rest))
-            out += Cmd.Show(guess, predicted = true)
-            out += Cmd.Load(token, guess.key)
+            slot = Slot.Predicted(shown, token, a.seq)
+            if (rest.isNotEmpty()) chain = Chain(shown.key, token, ArrayList(rest))
+            out += Cmd.Show(shown, predicted = true)
+            out += Cmd.Load(token, shown.key)
         } else {
             if (why == null) noPrediction++ else waitsBy[why] = (waitsBy[why] ?: 0) + 1 // nothing prepared / prepared but not safe to show
             lastWait = why?.label ?: NOTHING

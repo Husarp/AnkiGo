@@ -72,7 +72,8 @@ internal abstract class MoveBubbleLook(protected val ctx: Context) {
             BubbleTone.IMMUNE -> ChipColors(soft(R.color.ag_blue, 22), txt)
             BubbleTone.CRIT -> ChipColors(c(R.color.ag_yellow), 0xFF1E1E2E.toInt())
             BubbleTone.STATUS -> ChipColors(ColorUtils.blendARGB(card, StatusBadge.fillColor(ctx, chip.status), 0.22f), txt)
-            BubbleTone.BOOST -> ChipColors(soft(R.color.ag_teal, 24), txt)
+            BubbleTone.STAT_UP -> ChipColors(StatPill.background(ctx, true), StatPill.ink(true)) // R19-C: drawn as a pill
+            BubbleTone.STAT_DOWN -> ChipColors(StatPill.background(ctx, false), StatPill.ink(false))
             BubbleTone.MUTED -> ChipColors(c(R.color.ag_mantle), c(if (chip.icon == ChipIcon.NONE) R.color.ag_sub0 else R.color.ag_sub1))
         }
     }
@@ -265,6 +266,55 @@ internal class MoveBubble(ctx: Context, private val look: MoveBubbleLook) : View
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 
+    private val dismissal = BubbleDismiss.Armed(
+        onTouch = { x, y -> outsideAt(x, y) }, onBack = ::dismissFromHost,
+    )
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        BubbleDismiss.arm(this, dismissal)
+    }
+
+    override fun onDetachedFromWindow() {
+        BubbleDismiss.disarm(this, dismissal)
+        super.onDetachedFromWindow()
+    }
+
+    /** PLAN 287: raw coordinates also cover taps outside the panel, through a scaled host. */
+    internal fun outsideDown(event: android.view.MotionEvent) {
+        if (event.actionMasked != android.view.MotionEvent.ACTION_DOWN) return
+        val at = IntArray(2).also { rootView.getLocationOnScreen(it) }
+        outsideAt(event.rawX - at[0], event.rawY - at[1])
+    }
+
+    private fun outsideAt(x: Float, y: Float) {
+        val bounds = android.graphics.Rect()
+        fun contains(v: View): Boolean = v.getGlobalVisibleRect(bounds) && bounds.contains(x.toInt(), y.toInt())
+        if (contains(this)) return
+        // The two halves retain their existing toggle / take-over click behaviour.
+        fun onHalf(v: View): Boolean {
+            if (v is ActionBarView) return BarSide.entries.any {
+                v.halfView(it).isClickable && contains(v.halfView(it))
+            }
+            return v is ViewGroup && (0 until v.childCount).any { onHalf(v.getChildAt(it)) }
+        }
+        if (!onHalf(rootView)) dismissFromHost()
+    }
+
+    internal fun backKey(event: android.view.KeyEvent): Boolean {
+        if (event.keyCode != android.view.KeyEvent.KEYCODE_BACK) return false
+        if (event.action == android.view.KeyEvent.ACTION_UP && !event.isCanceled) dismissFromHost()
+        return true
+    }
+
+    internal fun dismissFromHost() {
+        fun close(v: View) {
+            if (v is ActionBarView) v.closeBubble()
+            else if (v is ViewGroup) (0 until v.childCount).map { v.getChildAt(it) }.forEach { close(it) }
+        }
+        close(rootView)
+    }
+
     fun bind(c: BubbleContent) {
         content = c
         removeAllViews(); chipViews.clear()
@@ -280,9 +330,17 @@ internal class MoveBubble(ctx: Context, private val look: MoveBubbleLook) : View
             }.also { addView(it) }
         }
         for (chip in c.chips) chipViews += chipView(chip).also { addView(it) }
+        // PLAN 266: prose wraps beneath Charging; no damage or effectiveness is claimed on this turn.
+        for (line in c.lines) chipViews += Ui.text(context, 12f, 600, R.color.ag_text).apply {
+            text = line
+            setTextColor(look.text)
+            tag = "charge-line"
+        }.also { addView(it) }
     }
 
     private fun chipView(chip: BubbleChip): View {
+        val pillStat = chip.stat
+        if ((chip.tone == BubbleTone.STAT_UP || chip.tone == BubbleTone.STAT_DOWN) && pillStat != null && chip.stages != 0) return StatPillView(context, pillStat, chip.stages) // R19-C
         val colors = look.chipColors(chip)
         val sp = 11.5f
         return LinearLayout(context).apply {
@@ -346,8 +404,11 @@ internal class MoveBubble(ctx: Context, private val look: MoveBubbleLook) : View
         val hdrW = if (look.band) w - hp[0] - hp[2] else min(hdr.measuredWidth, w - hp[0] - hp[2])
         hdr.measure(MeasureSpec.makeMeasureSpec(max(hdrW, 0), MeasureSpec.EXACTLY), unspec)
         val inner = w - bp[0] - bp[2]
+        chipViews.filter { it.tag == "charge-line" }.forEach {
+            it.measure(MeasureSpec.makeMeasureSpec(max(0, inner), MeasureSpec.EXACTLY), unspec)
+        }
         val besideW = if (num != null) inner - numW - gap else inner
-        stacked = num != null && chipViews.isNotEmpty() && widest > besideW   // too wide to sit beside the number: under it
+        stacked = num != null && chipViews.isNotEmpty() && (content?.lines?.isNotEmpty() == true || widest > besideW)   // too wide to sit beside the number: under it
         val flowW = if (stacked || num == null) inner else besideW
         chipAt.clear()
         var x = 0; var y = 0; var rowH = 0

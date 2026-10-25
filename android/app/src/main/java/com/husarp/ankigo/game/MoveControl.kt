@@ -59,6 +59,8 @@ internal object MoveControl : BattleRules {
     private const val T_STATS = "mc.tstats"
     private const val T_MOVES = "mc.tmoves"
     private const val T_ABILITY = "mc.tab"
+    private const val T_LOOK = "mc.tlook"       // R19-L (PLAN 271): the Pokédex number of the picture the target shows (its chosen look) ...
+    private const val T_SHINY = "mc.tshiny"     // ... and "1" when the target is shiny: the copy shows both
     private const val MIMIC = "mc.mimic"
     private const val SKETCH = "mc.sketch"
     private const val OVERRIDE = "mc.o."
@@ -584,7 +586,8 @@ internal object MoveControl : BattleRules {
 
     /**
      * [p]'s Pokémon turns into the other one for the rest of the fight: its types, stats (not HP), stat changes, moves and ability (through the
-     * hooks), and the weight for the weight moves. The picture does not change. False against a Pokémon that has transformed or hides behind a
+     * hooks), and the weight for the weight moves. R19-L (PLAN 271): the picture changes too, to the target's (shiny or not as the target looks, see
+     * [transformLook]); the event says which one. False against a Pokémon that has transformed or hides behind a
      * substitute, or when [p] has transformed already. An ability like Imposter calls this too.
      */
     fun transformInto(r: Round, p: Boolean): Boolean {
@@ -597,11 +600,24 @@ internal object MoveControl : BattleRules {
         s.notes[TYPES] = ownTypes(r, tp).joinToString(",") { it.name }
         s.notes[T_MOVES] = r.moves(tp).joinToString(",") { it.id }
         s.notes[T_ABILITY] = r.ability(tp)
+        val target = r.mon(tp)
+        val look = target.lookSpecies(r.data).num
+        s.notes[T_LOOK] = look.toString()
+        if (target.shiny) s.notes[T_SHINY] = "1" else s.notes.remove(T_SHINY)
         for (key in STAT_KEYS) s.notes.remove(OVERRIDE + key)
         s.volatiles.remove(POWER_TRICK); s.volatiles.remove(POWER_SHIFT)
         System.arraycopy(t.boosts, 0, s.boosts, 0, 7)
-        note(r, p, "${name(r, p)} transformed into ${name(r, tp)}!", "transform", "Transformed")
+        r.fx(p, "${name(r, p)} transformed into ${name(r, tp)}!", EffectKind.VOLATILE, "transform", 1, label = "Transformed", into = look, intoShiny = target.shiny)
         return true
+    }
+
+    /**
+     * R19-L (PLAN 271): the picture [side]'s Pokémon shows while it is transformed (Pokédex number, shiny), null when it is not. The panel draws a
+     * redraw or a restart from this (the notes are saved); an old save without the look notes shows the copied species, not shiny.
+     */
+    fun transformLook(side: BattleSide): Pair<Int, Boolean>? {
+        val num = side.notes[T_LOOK]?.toIntOrNull() ?: side.notes[TRANSFORMED]?.toIntOrNull() ?: return null
+        return num to (side.notes[T_SHINY] == "1")
     }
 
     // ---- types ----
@@ -936,7 +952,7 @@ internal object MoveControl : BattleRules {
             "defensecurl" -> "Rollout and Ice Ball deal double damage after you curl up."
             "minimize" -> "Stomp, Body Slam and similar moves never miss you and deal double damage to you."
             "tarshot" -> "The target takes double damage from Fire moves."
-            "transform" -> "Turns you into the target until the fight ends: its types, stats (not HP), stat changes, moves and ability. Your picture does not change."
+            "transform" -> "Turns you into the target until the fight ends: its types, stats (not HP), stat changes, moves and ability. Your picture becomes the target's."
             "soak" -> "Makes the target a pure Water type."
             "magicpowder" -> "Makes the target a pure Psychic type."
             "reflecttype" -> "Your types become the same as the target's."

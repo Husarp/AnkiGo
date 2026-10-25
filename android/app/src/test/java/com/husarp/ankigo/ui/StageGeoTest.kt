@@ -228,7 +228,8 @@ class StageGeoTest {
             if (p.spriteScale < 1f) {
                 // sprites shrank: even the smallest box at the bigger sprite scale had no ok pair at any spot
                 val bigger = frames[frames.indexOfFirst { abs(it - p.spriteScale) < 0.001f } - 1]
-                assertFalse("$id ${w}x$h: at f $bigger an ok pair existed at the smallest box", Oracle.anyOk(w, h, st, 150f, 64f, 156f, 70f, sc.min, bigger, StageGeo.gap(h, 1f), 0f, fullArt, fullArt))
+                // R19-A: the other side (level 3) only counts as "something fit" when the plan itself is on it: smaller Pokémon come first
+                assertFalse("$id ${w}x$h: at f $bigger an ok pair existed at the smallest box", Oracle.anyOk(w, h, st, 150f, 64f, 156f, 70f, sc.min, bigger, StageGeo.gap(h, 1f), 0f, fullArt, fullArt, if (p.level == 3) 3 else 2))
             }
         }
         assertTrue("some crowded panels are solved by smaller boxes alone ($shrunkBoxes)", shrunkBoxes > 0)
@@ -245,7 +246,7 @@ class StageGeoTest {
                 smaller++
                 for (cand in frames) {
                     if (cand <= p.spriteScale + 0.001f) break
-                    assertFalse("$id ${w}x$h: f=$cand had an ok pair at the smallest box", Oracle.anyOk(w, h, st, 160f, 70f, 160f, 70f, sc.min, cand, StageGeo.gap(h, 1f), 0f, fullArt, fullArt))
+                    assertFalse("$id ${w}x$h: f=$cand had an ok pair at the smallest box", Oracle.anyOk(w, h, st, 160f, 70f, 160f, 70f, sc.min, cand, StageGeo.gap(h, 1f), 0f, fullArt, fullArt, if (p.level == 3) 3 else 2))
                 }
             }
         }
@@ -392,6 +393,30 @@ class StageGeoTest {
         assertTrue("the grid reaches reduced boxes", reducedPlans > 0)
     }
 
+    // ---------------------------------------------------------------- R19-A (PLAN 277): the other side comes last of all
+
+    @Test fun aBoxGoesToTheOtherSideOnlyWhenNothingFitsOnItsOwnSideAtAnySpriteScale() {
+        var other = 0
+        var keptWithSmallerSprites = 0
+        for (id in BackdropCatalog.ALL.map { it.id }) for ((w, h) in listOf(260f to 150f, 220f to 140f, 300f to 170f, 206f to 136f, 412f to 265f, 300f to 200f)) {
+            val st = fit(id, w, h)
+            val sc = StageGeo.boxScales(h, 1f, 0f, 1f)
+            val p = StageGeo.plan(w, h, st, 160f, 70f, 160f, 70f, 1f, wildArt = fullArt, playerArt = fullArt)
+            if (p.clear && p.level == 3) {
+                other++
+                for (f in frames) assertFalse("$id ${w}x$h: the box left its side though f=$f had a pair on it",
+                    Oracle.anyOwnSide(w, h, st, 160f, 70f, 160f, 70f, sc.start, sc.min, f, StageGeo.gap(h, 1f), 0f, fullArt, fullArt))
+            }
+            if (p.clear && p.level <= 2 && p.spriteScale < 1f - 0.001f) {
+                // the old order: the other side at the first sprite scale that fails on its own sides, ahead of smaller Pokémon
+                val f0 = frames[frames.indexOfFirst { abs(it - p.spriteScale) < 0.001f } - 1]
+                if (Oracle.anyOk(w, h, st, 160f, 70f, 160f, 70f, sc.min, f0, StageGeo.gap(h, 1f), 0f, fullArt, fullArt, 3)) keptWithSmallerSprites++
+            }
+        }
+        println("R19-A: $other plans on the other side, $keptWithSmallerSprites kept on their own side with smaller Pokémon")
+        assertTrue("some plans keep their side with smaller Pokémon where the other side used to be taken ($keptWithSmallerSprites)", keptWithSmallerSprites > 0)
+    }
+
     private fun abs(v: Float) = if (v < 0f) -v else v
 
     /** A straight, allocation-happy port of `autoRule` in docs/design/boxes-layout.html (Box objects, lists), the independent oracle. */
@@ -437,17 +462,23 @@ class StageGeoTest {
         }
 
         fun anyOk(vw: Float, vh: Float, st: Stage, ww: Float, wh: Float, pw: Float, ph: Float, k: Float, f: Float, g: Float, inset: Float,
-                  wa: (Float) -> ArtShare?, pa: (Float) -> ArtShare?): Boolean {
+                  wa: (Float) -> ArtShare?, pa: (Float) -> ArtShare?, maxLevel: Int = 3): Boolean {
             val tall = vh > vw * 1.1f
             val wArt = artOf(wa, st.wildFeetX, st.wildFeetY, st.wildFrame * f)
             val pArt = artOf(pa, st.playerFeetX, st.playerFeetY, st.playerFrame * f)
             for (oy in spots(!tall)) for (ow in spots(tall)) {
+                if (oy.level > maxLevel || ow.level > maxLevel) continue
                 val y = place(oy, st.playerFeetX, pArt, pw * k, ph * k, vw, vh, inset, g)
                 val w = place(ow, st.wildFeetX, wArt, ww * k, wh * k, vw, vh, inset, g)
                 if (ok(y, w, wArt, pArt, g)) return true
             }
             return false
         }
+
+        /** R19-A: an ok pair on the boxes' own sides (levels 0..2) at any box scale from [hi] down to [lo] with the sprites at [f]. */
+        fun anyOwnSide(vw: Float, vh: Float, st: Stage, ww: Float, wh: Float, pw: Float, ph: Float, hi: Float, lo: Float, f: Float, g: Float, inset: Float,
+                       wa: (Float) -> ArtShare?, pa: (Float) -> ArtShare?): Boolean =
+            range(hi, lo).any { k -> anyOk(vw, vh, st, ww, wh, pw, ph, k, f, g, inset, wa, pa, 2) }
 
         private fun ok(y: ArenaGeo.Box, w: ArenaGeo.Box, wa: ArenaGeo.Box, pa: ArenaGeo.Box, g: Float) =
             !grow(y, g).hits(wa) && !grow(y, g).hits(pa) && !grow(w, g).hits(wa) && !grow(w, g).hits(pa) && !grow(y, g).hits(w)
@@ -478,15 +509,17 @@ class StageGeoTest {
             val wildSpots = spots(tall)
             var worst: Out? = null
             var worstScore = Double.MAX_VALUE
-            for (f in floatArrayOf(1f, 0.9f, 0.8f, 0.7f, 0.6f)) {
+            // R19-A: the other side (the last phase) only after every sprite scale failed on the boxes' own sides
+            for (pass in 0..1) for (f in floatArrayOf(1f, 0.9f, 0.8f, 0.7f, 0.6f)) {
                 val wArt = artOf(wa, st.wildFeetX, st.wildFeetY, st.wildFrame * f)
                 val pArt = artOf(pa, st.playerFeetX, st.playerFeetY, st.playerFrame * f)
-                for ((level, hi, lo) in phases) for (k in range(hi, lo)) for (oy in oursSpots) for (ow in wildSpots) {
+                for ((level, hi, lo) in if (pass == 0) phases.dropLast(1) else phases.takeLast(1)) for (k in range(hi, lo)) for (oy in oursSpots) for (ow in wildSpots) {
                     if (oy.level > level || ow.level > level) continue
                     val y = place(oy, st.playerFeetX, pArt, pw * k, pH(k) * k, vw, vh, inset, g)
                     val w = place(ow, st.wildFeetX, wArt, ww * k, wH(k) * k, vw, vh, inset, g)
                     if (ok(y, w, wArt, pArt, g)) return Out(w, y, k, f, true, red(k))
                 }
+                if (pass == 0) continue
                 for (oy in oursSpots) for (ow in wildSpots) {
                     val y = place(oy, st.playerFeetX, pArt, pw * kMin, pH(kMin) * kMin, vw, vh, inset, g)
                     val w = place(ow, st.wildFeetX, wArt, ww * kMin, wH(kMin) * kMin, vw, vh, inset, g)

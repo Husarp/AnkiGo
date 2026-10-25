@@ -74,4 +74,16 @@ class BattleCacheTest {
         Sprites.upgradeBattleCache(dir)
         assertTrue(File(front, "1010.png").isFile)
     }
+    @Test fun itemPinChangeClearsOnlyOldMissingNotesOnce() {
+        val items = File(dir, "item").apply { mkdirs() }
+        val missing = File(items, "potion.missing").apply { writeText("old 404") }
+        val picture = File(items, "poke-ball.png").apply { writeBytes(png) }
+        File(dir, ".items-oldpin").writeText("1")
+        Sprites.upgradeBattleCache(dir)
+        assertFalse(missing.exists())
+        assertTrue(picture.isFile)
+        missing.writeText("new 404")
+        Sprites.upgradeBattleCache(dir)
+        assertTrue("new misses keep their retry delay", missing.isFile)
+    }
 }

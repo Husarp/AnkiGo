@@ -118,8 +118,8 @@ internal object InfoBoxSkin {
         /** The tier colour of a level (0..9 by [tierIndex]). */
         val tiers: IntArray,
     ) {
-        /** HP bar colour: green above 50 %, yellow above 20 %, else red ([Ui.hpColor]). */
-        fun hp(frac: Float): Int = if (frac > 0.5f) green else if (frac > 0.2f) yellow else red
+        /** PLAN 163 / R19: fixed dark boxes use the same selected HP palette. */
+        fun hp(frac: Float, mode: HpColors.Mode = HpColors.Mode.B, type: Int? = null): Int = HpColors.color(frac, mode, true, type)
 
         fun tier(level: Int): Int = tiers[tierIndex(level)]
     }

@@ -44,6 +44,11 @@ class Backdrop(
     val dark: Boolean,
     /** File revision: a retouched picture gets a new file name so a phone with the old one downloads it again; 1 = the original name. */
     val rev: Int = 1,
+    /**
+     * R19-F2 (PLAN 274 changes): the picture gets the sharp drawing of [BackdropSharp] (the reduced copy under its threshold). False = today's
+     * drawing at every size (the file itself, nearest when [crisp] else filtered). Showdown's 12 and the factory keep today's.
+     */
+    val sharp: Boolean = crisp,
 )
 
 /**

@@ -332,7 +332,8 @@ object Catching {
      * first (CATCH -> CATCH; DEFEAT -> DEFEAT, except a protected kind is caught anyway); then the wishlist -> CATCH;
      * then the automatic mode: mode 1 CATCH; mode 2 CATCH if shiny or protected else DEFEAT;
      * mode 3 CATCH if the species was never caught, or shiny, or protected, else DEFEAT.
-     * With Settings.autoReleaseDuplicates on, an owned species goes first by [Duplicates] (see [plan]).
+     * With Settings.autoReleaseDuplicates on, an owned species goes first by [Duplicates] (see [plan]). With "Ask me" ([AskMe]) a better
+     * copy of an owned species is a DEFEAT here whose [CatchPlan.ask] says the question is to be asked.
      */
     fun decide(data: GameData, state: GameState, battle: Battle): Outcome = plan(data, state, battle).outcome
 
@@ -347,11 +348,14 @@ object Catching {
             null -> {}
         }
         val special = wild.shiny || protected
+        val asking = settings.askMe && settings.autoMode == 3 // R19-P (PLAN 281): "Ask me" is mode 3 plus a question; it never runs together with the swap
         // Auto-release duplicates: higher than the best copy = catch (and swap); not higher = defeat, unless it is special.
-        val dup = Duplicates.verdict(data, state, wild)
+        val dup = if (asking) null else Duplicates.verdict(data, state, wild)
         if (dup != null && dup.higher) return CatchPlan(Outcome.CATCH, dup)
         if (dup != null && !special && wild.species !in settings.wishlist) return CatchPlan(Outcome.DEFEAT, dup)
         if (wild.species in settings.wishlist) return CatchPlan(Outcome.CATCH)
+        // R19-P: a better copy of a species you own is defeated for the rewards and waits for the answer; a shiny / protected one is caught as always
+        if (asking && !special) AskMe.better(state, wild)?.let { return CatchPlan(Outcome.DEFEAT, ask = it) }
         return CatchPlan(when (settings.autoMode) {
             1 -> Outcome.CATCH
             2 -> if (special) Outcome.CATCH else Outcome.DEFEAT

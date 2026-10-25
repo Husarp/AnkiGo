@@ -335,6 +335,7 @@ class Settings(
     var fasterStart: Boolean = false, // off by default; saved as fasterStartV2 (the old fasterStart key is ignored, so old saves start off)
     var autoReleaseDuplicates: Boolean = false, // off by default (old saves too): a wild copy of an owned species is defeated, or swapped in when higher (see Duplicates)
     var moveChoice: MoveChoice = MoveChoice.SMART,      // Round 10 W9: how both sides pick their move; missing or unknown in a save = SMART
+    var askMe: Boolean = false,                         // R19-P (PLAN 281): the catch option "Ask me" (with autoMode 3 and no swap; see CatchChoice); off in old saves
 )
 
 /**
@@ -418,6 +419,8 @@ class GameState(
     var pendingMain: String? = null,
     /** PLAN 206: the queued switch came from [Game.cycleMain]: the answer rotates the first three as the cycle does, not [Game.setMain]'s move to the front. Meaningful only with [pendingMain]. */
     var pendingCycle: Boolean = false,
+    /** R19-P (PLAN 281): the catch / release questions waiting for the player ([AskMe]); empty in an old save, answered exactly once, never exported to Ankimon. */
+    val asks: MutableList<PendingAsk> = mutableListOf(),
     val settings: Settings = Settings(),
 ) {
     fun mon(uid: String?): Mon? = mons.firstOrNull { it.uid == uid }

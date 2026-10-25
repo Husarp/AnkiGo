@@ -362,12 +362,13 @@ class R9ActionBarShots {
         assertFalse(b.bubbleOpen)
     }
 
-    @Test fun aLineAboutTheWholeBattleClosesItAndTheNextMoveBringsTheBarBack() {
+    @Test fun aLineAboutTheWholeBattleIsAToastAndTheBarAndItsBubbleStayAsTheyAre() {
+        // R19-H (PLAN 257): the line is a card toast at the arena's top-left now; it no longer takes the bar (or closes the bubble)
         val (p, b) = ready()
         b.halfView(BarSide.MINE).performClick()
         p.setLog(LogKind.SYS, "INFO", "Something about the whole battle", false)
-        assertFalse(b.bubbleOpen)
-        assertTrue(b.lineShown())
+        assertTrue(b.bubbleOpen)
+        assertFalse(b.lineShown())
         turn(p, atk(true, "Zap", Type.ELECTRIC, Category.SPECIAL, 3))
         assertFalse(b.lineShown())
     }

@@ -17,6 +17,13 @@ package com.husarp.ankigo.study
  * So the answer waits when an intraday learning card other than the answered and the predicted one is due by the time AnkiDroid applies
  * the answer ([SLACK_MS] after the tap) and would sort before the predicted card; also when the learning cards could not be read, or
  * that read is older than [MAX_AGE_MS] (a day rollover or a change made in AnkiDroid rebuilds the queue: nothing is safe then).
+ *
+ * R19-R (278b): the wait is the one visible lag left (the card comes only with the real queue read, behind a write that can take seconds),
+ * and in that case the learning read already says which card jumps to the front: the due learning card with the earliest due time. When
+ * exactly one such card is the earliest, due by the tap or within [SLACK_MS] after it ([firstLearning]; Adam's 278b addition: a card due
+ * seconds after the tap counts as next), it is prepared by id beside the next card ([learningToPrepare]) and shown at once as a
+ * predicted card, like any other prediction; the confirm behind the write swaps it away if it was wrong (a write faster than the due
+ * time), and nothing is written to the wrong card. A tie for the earliest time stays a wait.
  */
 object PredictRule {
     enum class Why(val label: String) {
@@ -26,8 +33,11 @@ object PredictRule {
         UNREAD("learning cards unread"),
     }
 
-    /** An intraday learning card ([cardId]) and when it is due (epoch seconds, AnkiDroid's raw `due` of queue 1). */
-    data class Due(val cardId: Long, val dueSecs: Long)
+    /**
+     * An intraday learning card ([cardId]) and when it is due (epoch seconds, AnkiDroid's raw `due` of queue 1). R19-R: [key] = its note and
+     * card number, when the read gave them (the card can be prepared by them).
+     */
+    data class Due(val cardId: Long, val dueSecs: Long, val key: StudyLoop.Key? = null)
 
     /** The studied deck's intraday learning cards as read at [at] (epoch ms) with a prepared card; [due] null = they could not be read. */
     data class LearnRead(val at: Long, val due: List<Due>?)
@@ -37,7 +47,7 @@ object PredictRule {
     const val MAX_AGE_MS = 10 * 60_000L
 
     /** The columns of the learning read (the official `cards` URI, AnkiDroid 2.24+). */
-    val LEARN_COLS = arrayOf("_id", "queue", "due", "deck_id", "original_deck_id")
+    val LEARN_COLS = arrayOf("_id", "queue", "due", "deck_id", "original_deck_id", "note_id", "ord")
 
     /** Queues whose `due` is a time of day in seconds: learning / relearning (1) and filtered-deck preview repeats (4). */
     private val INTRADAY = setOf("1", "4")
@@ -59,7 +69,8 @@ object PredictRule {
             val odid = r["original_deck_id"]?.toLongOrNull() ?: 0L
             if (odid != 0L && r["deck_id"]?.toLongOrNull() != deckId) return@mapNotNull null
             val id = r["_id"]?.toLongOrNull() ?: return@mapNotNull null
-            Due(id, r["due"]?.toLongOrNull() ?: return@mapNotNull null)
+            val nid = r["note_id"]?.toLongOrNull(); val ord = r["ord"]?.toIntOrNull()
+            Due(id, r["due"]?.toLongOrNull() ?: return@mapNotNull null, if (nid != null && ord != null) StudyLoop.Key(nid, ord) else null)
         }
         return LearnRead(at, due)
     }
@@ -69,12 +80,53 @@ object PredictRule {
         val read = next.learning ?: return Why.UNREAD
         val due = read.due ?: return Why.UNREAD
         if (now - read.at !in 0..MAX_AGE_MS) return Why.OLD // also a clock that went back
-        val skip = setOf(answered.before["_id"]?.toLongOrNull(), next.before["_id"]?.toLongOrNull())
-        // a learning card read second keeps its place before cards due after it; a main-queue card goes behind every one that comes due
+        return if (comingFirst(due, answered.before["_id"]?.toLongOrNull(), next, now + SLACK_MS).isNotEmpty()) Why.LEARNING_DUE else Why.SAFE
+    }
+
+    /**
+     * The learning cards of [due] (the read of [next]) that would sort before [next] when AnkiDroid applies the answer by [by] (epoch ms):
+     * all but the answered card ([answeredId]) and [next] itself, due by [by]. A learning card read second keeps its place before cards due
+     * after it; a main-queue card goes behind every one that comes due.
+     */
+    private fun comingFirst(due: List<Due>, answeredId: Long?, next: Prepared<*>, by: Long): List<Due> {
+        val skip = setOf(answeredId, next.before["_id"]?.toLongOrNull())
         val nextDue = if (next.before["queue"] in INTRADAY) next.before["due"]?.toLongOrNull() else null
-        val by = now + SLACK_MS
-        val first = due.any { it.cardId !in skip && it.dueSecs * 1000 <= by && (nextDue == null || it.dueSecs < nextDue) }
-        return if (first) Why.LEARNING_DUE else Why.SAFE
+        return due.filter { it.cardId !in skip && it.dueSecs * 1000 <= by && (nextDue == null || it.dueSecs < nextDue) }
+    }
+
+    /** The earliest of [cards] by due time; null when there is none or two share the earliest time (the order of equals is not certain). */
+    private fun earliest(cards: List<Due>): Due? {
+        val first = cards.minByOrNull { it.dueSecs } ?: return null
+        return first.takeIf { cards.count { c -> c.dueSecs == it.dueSecs } == 1 }
+    }
+
+    /**
+     * R19-R: is [learn] (a prepared learning card) the first card AnkiDroid gives after [answered] is answered at [now], in the case
+     * [check] says LEARNING_DUE for [next]? When it is the earliest of the learning cards due by the tap or within [SLACK_MS] after it
+     * (R19-FIX RV-1, Adam's 278b addition: AnkiDroid moves its cutoff to a moment at or after the tap, so a card due by the tap is in and a
+     * card due seconds later most likely is; a wrong guess is swapped by the confirm), and alone at that time. Also its own state has to
+     * agree with the read (still an intraday learning card with that due time).
+     */
+    fun firstLearning(answered: Prepared<*>, next: Prepared<*>, learn: Prepared<*>, now: Long): Boolean {
+        if (check(answered, next, now) != Why.LEARNING_DUE) return false
+        val due = next.learning?.due ?: return false
+        val first = earliest(comingFirst(due, answered.before["_id"]?.toLongOrNull(), next, now + SLACK_MS)) ?: return false
+        return first.cardId == learn.before["_id"]?.toLongOrNull() &&
+            learn.before["queue"] in INTRADAY && learn.before["due"]?.toLongOrNull() == first.dueSecs
+    }
+
+    /**
+     * R19-R: the learning card to prepare by id while [answered] (the confirmed card) is on screen and [next] is prepared behind it: the
+     * earliest intraday learning card of the read, alone at that time, that can still be due while the read is valid (a tap later than
+     * [MAX_AGE_MS] after the read waits anyway). Null = nothing to prepare, or no card id to prepare it by.
+     */
+    fun learningToPrepare(answered: StudyLoop.Key, next: Prepared<*>): Due? {
+        val read = next.learning ?: return null
+        val due = read.due ?: return null
+        val nextId = next.before["_id"]?.toLongOrNull()
+        val nextDue = if (next.before["queue"] in INTRADAY) next.before["due"]?.toLongOrNull() else null
+        val able = due.filter { it.key != answered && it.cardId != nextId && it.dueSecs * 1000 <= read.at + MAX_AGE_MS && (nextDue == null || it.dueSecs < nextDue) }
+        return earliest(able)?.takeIf { it.key != null }
     }
 
     /**

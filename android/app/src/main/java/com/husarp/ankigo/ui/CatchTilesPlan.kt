@@ -7,10 +7,11 @@ import com.husarp.ankigo.game.GameEvent
  * The texts come only from a [CatchSummary], so every number is a real one.
  */
 object CatchTilesPlan {
-    enum class Kind { DEX, DEFEATED, THROW, AUTO, XP, COINS }
+    enum class Kind { DEX, DEFEATED, THROW, XP, COINS, ASK }
 
-    /** [label] = the small line above, [value] = the big one, [extra] = the grey tail after it ("· 12 %"); [ball] = the item id for the ball picture. */
-    data class Tile(val kind: Kind, val label: String, val value: String, val extra: String = "", val ball: String? = null)
+    /** [label] = the small line above, [value] = the big one, [extra] = the grey tail after it ("· 12 %"); [ball] = the item id for the ball picture;
+     * [desc] = what TalkBack reads (empty = [value]). */
+    data class Tile(val kind: Kind, val label: String, val value: String, val extra: String = "", val ball: String? = null, val desc: String = "")
 
     /** Most XP tiles drawn one by one; more Pokémon than this share one "N Pokémon" tile. */
     const val MAX_XP_TILES = 2
@@ -24,8 +25,10 @@ object CatchTilesPlan {
         if (s.caught) {
             s.pokedex?.let { out += Tile(Kind.DEX, "Pokédex", it.text) }
             val t = s.throwInfo
-            out += if (t != null) Tile(Kind.THROW, ballName(t.ball), "Throw ${t.number}", "· ${t.chance} %", t.ball)
-            else Tile(Kind.AUTO, "Catch", "Caught automatically")
+            // R19 174B: a catch by the auto rule threw no ball, so it gets no tile ("New #N" already says it was caught).
+            if (t != null) out += Tile(Kind.THROW, ballName(t.ball), "Throw ${t.number}", "· ${t.chance} %", t.ball)
+        } else if (s.ask) {
+            out += Tile(Kind.ASK, "Your call", s.name, desc = askDesc(s)) // R19-P (PLAN 281)
         } else {
             out += Tile(Kind.DEFEATED, "Defeated", s.name)
         }
@@ -38,20 +41,32 @@ object CatchTilesPlan {
         return out
     }
 
-    /** The one-line layout's tiles (small windows, short panels): short values, all the XP in one. */
-    fun rowTiles(s: CatchSummary): List<Tile> {
+    /**
+     * The one-line layout's tiles (small windows, short panels; R19 174B: bare icons + words in one light line): short values, all
+     * the XP in one. [compact] = the shorter words for a width where the full ones do not fit.
+     */
+    fun rowTiles(s: CatchSummary, compact: Boolean = false): List<Tile> {
         val out = ArrayList<Tile>()
         if (s.caught) {
-            s.pokedex?.let { out += Tile(Kind.DEX, "", if (it.isNew) "New #${it.number}" else "Caught before") }
+            s.pokedex?.let {
+                val v = if (it.isNew) "New #${it.number}" else if (compact) "Caught" else "Caught before"
+                out += Tile(Kind.DEX, "", v, desc = if (it.isNew) "Caught, new, number ${it.number}" else "Caught before")
+            }
             val t = s.throwInfo
-            out += if (t != null) Tile(Kind.THROW, "", "Throw ${t.number} · ${t.chance} %", ball = t.ball) else Tile(Kind.AUTO, "", "Auto")
+            if (t != null) out += Tile(Kind.THROW, "", if (compact) "Throw ${t.number}" else "Throw ${t.number} · ${t.chance} %", ball = t.ball,
+                desc = "Throw ${t.number}, ${t.chance} percent chance")
+        } else if (s.ask) {
+            out += Tile(Kind.ASK, "", "Your call", desc = askDesc(s)) // R19-P (PLAN 281)
         } else {
             out += Tile(Kind.DEFEATED, "", "Defeated")
         }
-        if (s.xp.isNotEmpty()) out += Tile(Kind.XP, "", "+${s.xp.sumOf { it.xp }} XP")
-        if (s.coins > 0) out += Tile(Kind.COINS, "", "+${s.coins}")
+        if (s.xp.isNotEmpty()) { val n = s.xp.sumOf { it.xp }; out += Tile(Kind.XP, "", "+$n XP", desc = "$n XP") }
+        if (s.coins > 0) out += Tile(Kind.COINS, "", "+${s.coins}", desc = "${s.coins} coins")
         return out
     }
+
+    /** TalkBack for the "Your call" tile (R19-P, PLAN 281). */
+    private fun askDesc(s: CatchSummary) = "A better ${s.name} is waiting: catch it?"
 
     /** What the panel does with a result. */
     enum class Mode {

@@ -50,32 +50,72 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
     private val th = ink.height().toFloat()
     private val inkMid = (ink.top + ink.bottom) / 2f
     private val skewPad = if (badge) 0f else abs(text.textSkewX) * th * 0.5f
+    // R19-C: the chevron of mockup A1-C / A1-A: box 8 wide, 4 high, the next stage 5 units lower, stroke 2.4 (StatPill's shape)
     private val chevW = sizePx * 0.62f
-    private val chevH = chevW * 0.55f
-    private val chevStep = chevH * 0.78f
+    private val chevH = chevW * 0.5f
+    private val chevStep = chevW * 0.625f
+    private val chevStroke = chevW * 0.3f
     private val contentW: Float
     private val contentH: Float
+    /** R19-I: the burst's font share (the text inside it is smaller so no letter touches the star) and the badge's side padding. */
+    private val burstFit: FloatFrame.Burst?
+    private val badgePad: Float
+    /** R19-I: the room kept between the outline's outer edge and the view's edge. */
+    private val room = FloatFrame.ROOM_DP * d
 
     init {
+        val total = chevH + (ft.stages - 1).coerceAtLeast(0) * chevStep
+        val badgeH = max(max(th + sizePx * 0.55f, total + sizePx * 0.6f), FloatFrame.pillMinH(max(th, total + max(1.6f * d, chevStroke)), d))
+        burstFit = if (burst) FloatFrame.burst(tw, th, tw + skewPad + sizePx * 2.7f, th + sizePx * 1.3f, d) else null
+        badgePad = if (badge) FloatFrame.pillPad(sizePx * 0.6f, badgeH, d) { pad ->
+            val w = pad + chevW + 3f * d + tw + pad
+            val cx = -w / 2f + pad + chevW / 2f
+            val chev = FloatFrame.Ink(cx, 0f, chevW + max(1.6f * d, chevStroke), total + max(1.6f * d, chevStroke))
+            val txt = FloatFrame.Ink(cx + chevW / 2f + 3f * d + tw / 2f, 0f, tw, th)
+            w to listOf(chev, txt)
+        } else 0f
+        burstFit?.let { text.textSize = sizePx * it.k }
         contentW = when {
-            badge -> sizePx * 0.6f + chevW + 3f * d + tw + sizePx * 0.6f
-            burst -> tw + skewPad + sizePx * 2.7f
-            statusBadge != null -> tw + skewPad + 2f * strokePx + th * 1.4f
-            else -> tw + skewPad + 2f * strokePx
+            badge -> badgePad + chevW + 3f * d + tw + badgePad
+            burst -> burstFit!!.w
+            statusBadge != null -> tw + FloatFrame.SKEW * th + 2f * strokePx + th * 1.4f + 2f * room
+            else -> tw + FloatFrame.SKEW * th + 2f * strokePx + 2f * room
         }
         contentH = when {
-            badge -> max(th + sizePx * 0.55f, chevH + (ft.stages - 1) * chevStep + sizePx * 0.6f)
-            burst -> th + sizePx * 1.3f
-            statusBadge != null -> th * 1.3f + 2f * strokePx
-            else -> th + 2f * strokePx
+            badge -> badgeH
+            burst -> burstFit!!.h
+            statusBadge != null -> th * 1.3f + 2f * strokePx + 2f * room
+            else -> th + 2f * strokePx + 2f * room
         }
         isClickable = false
-        contentDescription = if (badge) "${ft.stat} ${if (ft.kind == FloatKind.STAT_UP) "up" else "down"} ${ft.stages}" else FloatTexts.spoken(ft.text, ft.kind, ft.stat)
+        contentDescription = FloatTexts.spoken(ft.text, ft.kind, ft.stat)
     }
 
     private val rad = Math.toRadians(tiltDeg.toDouble())
     private val boxW = ceil(contentW * abs(cos(rad)) + contentH * abs(sin(rad))).toInt()
     private val boxH = ceil(contentW * abs(sin(rad)) + contentH * abs(cos(rad))).toInt()
+
+    /**
+     * R19-I: the least room (dp) between the real ink (letters, chevrons) and the frame round it: the burst's or the pill's drawn edge, or
+     * for a plain outlined text the view's edge past the outline. [FloatFrame.ROOM_DP] or more for every kind.
+     */
+    internal fun frameRoomDp(): Float {
+        val px = when {
+            burst -> FloatFrame.burstRoom(FloatFrame.skewedInk(tw, th, burstFit!!.k), contentW, contentH, d)
+            badge -> {
+                val total = chevH + (ft.stages - 1) * chevStep
+                val cx = -contentW / 2f + badgePad + chevW / 2f
+                FloatFrame.pillRoom(listOf(
+                    FloatFrame.Ink(cx, 0f, chevW + max(1.6f * d, chevStroke), total + max(1.6f * d, chevStroke)),
+                    FloatFrame.Ink(cx + chevW / 2f + 3f * d + tw / 2f, 0f, tw, th)), contentW, contentH, d)
+            }
+            else -> {
+                val left = if (statusBadge != null) room else (contentW - (tw + FloatFrame.SKEW * th)) / 2f - strokePx
+                minOf(left, (contentW - (tw + FloatFrame.SKEW * th)) / 2f - strokePx, (contentH - th) / 2f - strokePx)
+            }
+        }
+        return px / d
+    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) = setMeasuredDimension(boxW, boxH)
 
@@ -85,7 +125,8 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
         canvas.save()
         canvas.translate(width / 2f, height / 2f)
         canvas.rotate(tiltDeg)
-        val baseline = -inkMid
+        val k = burstFit?.k ?: 1f
+        val baseline = -inkMid * k
         when {
             badge -> drawBadge(canvas, baseline)
             burst -> {
@@ -93,16 +134,16 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
                 text.style = Paint.Style.FILL
                 text.color = Look.BURST_INK
                 text.clearShadowLayer()
-                canvas.drawText(label, -tw / 2f, baseline, text)
+                canvas.drawText(label, -(tw + FloatFrame.SKEW * th) * k / 2f, baseline, text)   // R19-I: the lean's overhang centred too
             }
             else -> {
-                var tx = -tw / 2f
+                var tx = -(tw + FloatFrame.SKEW * th) / 2f
                 if (statusBadge != null) {
                     val b = (th * 1.3f).toInt()
-                    tx = -contentW / 2f + strokePx + th * 1.4f
+                    tx = -contentW / 2f + room + strokePx + th * 1.4f
                     statusBadge.layout(0, 0, b, b)
                     canvas.save()
-                    canvas.translate(-contentW / 2f + strokePx, -b / 2f)
+                    canvas.translate(-contentW / 2f + room + strokePx, -b / 2f)
                     statusBadge.draw(canvas)
                     canvas.restore()
                 }
@@ -154,10 +195,10 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
         canvas.drawRoundRect(r, contentH / 2f, contentH / 2f, line)
         // chevrons: one per stage, stacked, pointing up for a rise and down for a drop
         val up = ft.kind == FloatKind.STAT_UP
-        val cx = r.left + sizePx * 0.6f + chevW / 2f
+        val cx = r.left + badgePad + chevW / 2f
         val total = chevH + (ft.stages - 1) * chevStep
         line.color = 0xFFFFFFFF.toInt()
-        line.strokeWidth = max(1.6f * d, sizePx * 0.17f)
+        line.strokeWidth = max(1.6f * d, chevStroke)
         val path = Path()
         for (i in 0 until ft.stages) {
             val top = -total / 2f + i * chevStep

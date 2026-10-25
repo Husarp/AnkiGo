@@ -29,6 +29,13 @@ object NextFight {
     }
 
     /**
+     * R19-T (PLAN 285): true when the batch [events] lets a held next fight go. Only an answer or a ball throw does ("the next answer
+     * starts it", [EventPlayer.enqueue]). A switch made on the Continue screen (MainChanged, a SwitchQueued note, the free hit) plays under
+     * the result tiles and the next fight still waits for the Continue tap.
+     */
+    fun releasesHold(events: List<GameEvent>): Boolean = events.any { it is GameEvent.Counted || it is GameEvent.BallThrow }
+
+    /**
      * C5, screens whose Continue sits under the result tiles ([EventPlayer] with the panel's own Continue): where in [events] the tiles
      * are queued so they show, with their Continue, right after the fight's end instead of after the rewards. Right behind the
      * Defeated / Caught event (and the Duplicate event that belongs to a catch): [EventPlayer] looks ahead over those two.

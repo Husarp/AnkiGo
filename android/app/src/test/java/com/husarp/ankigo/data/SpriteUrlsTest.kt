@@ -70,7 +70,7 @@ class SpriteUrlsTest {
     @Test fun staticAndItemUrls() {
         assertEquals("${api}pokemon/25.png", SpriteUrls.static(25, false))
         assertEquals("${api}pokemon/shiny/25.png", SpriteUrls.static(25, true))
-        assertEquals("${api}items/potion.png", SpriteUrls.item("potion"))
+        assertEquals("https://raw.githubusercontent.com/PokeAPI/sprites/${DataStore.ITEM_SPRITES_COMMIT}/sprites/items/potion.png", SpriteUrls.item("potion"))
     }
 
     @Test fun magicBytesAreChecked() {

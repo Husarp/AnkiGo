@@ -154,10 +154,12 @@ class ActionBarModelTest {
         assertTrue(m.observe(effect(false, EffectKind.STATUS_APPLIED, status = "brn")).isEmpty())
     }
 
-    @Test fun aChargeTurnAndASplashAreNotes() {
+    @Test fun aChargeTurnIsAMoveAndASplashIsANote() {
         val m = ActionBarModel()
         m.observe(effect(true, EffectKind.CHARGE, "Sparkmouse absorbed light!"))
-        assertEquals(HalfState.Note("Sparkmouse absorbed light!"), m.mine)
+        assertTrue(m.mine is HalfState.Moved)
+        assertTrue(moved(m, BarSide.MINE).charging)
+        assertEquals("Sparkmouse absorbed light!", moved(m, BarSide.MINE).chargeText)
         assertEquals(listOf(BarSide.THEIRS), m.observe(GameEvent.Splash("Gnarlpup")))
         assertTrue(m.theirs is HalfState.Note)
     }
@@ -268,15 +270,16 @@ class ActionBarModelTest {
         m.observe(effect(false, EffectKind.STAT_CHANGE, stat = "def", stages = 1))
         m.observe(effect(false, EffectKind.STAT_CHANGE, stat = "atk", stages = -2))
         val c = ActionBarModel.bubble(moved(m, BarSide.THEIRS))
-        assertEquals(listOf("Defense ↑", "Attack ↓↓"), labels(c))
-        assertTrue(c.chips.all { it.tone == BubbleTone.BOOST }); assertNull(c.damage)
+        assertEquals(listOf("Defense up 1", "Attack down 2"), labels(c))
+        assertEquals(listOf(BubbleTone.STAT_UP, BubbleTone.STAT_DOWN), c.chips.map { it.tone }); assertNull(c.damage)
     }
 
-    @Test fun threeStagesStopAtThreeArrows() {
+    @Test fun speechKeepsSixStagesWhileChevronsStayCapped() {
         val m = ActionBarModel()
         m.observe(attack(true, "Swords Dance", Type.NORMAL, Category.STATUS, 0))
         m.observe(effect(true, EffectKind.STAT_CHANGE, stat = "spa", stages = 6))
-        assertEquals(listOf("Sp. Atk ↑↑↑"), labels(ActionBarModel.bubble(moved(m, BarSide.MINE))))
+        assertEquals(listOf("Special Attack up 6"), labels(ActionBarModel.bubble(moved(m, BarSide.MINE))))
+        assertEquals(3, StatPill.count(6))
     }
 
     @Test fun aStatusMoveWithNoOutcomeSaysSo() {
@@ -289,7 +292,7 @@ class ActionBarModelTest {
         m.observe(attack(true, "Power-Up Punch", Type.FIGHTING, Category.PHYSICAL, 14, crit = true, eff = 2.0))
         m.observe(effect(true, EffectKind.STAT_CHANGE, stat = "atk", stages = 1))
         m.observe(effect(false, EffectKind.STATUS_APPLIED, status = "par"))
-        assertEquals(listOf("Super effective ×2", "CRIT!", "Paralysed", "Attack ↑"), labels(ActionBarModel.bubble(moved(m, BarSide.MINE))))
+        assertEquals(listOf("Super effective ×2", "CRIT!", "Paralysed", "Attack up 1"), labels(ActionBarModel.bubble(moved(m, BarSide.MINE))))
     }
 
     @Test fun theBubbleIsReadOutInOneSentence() {

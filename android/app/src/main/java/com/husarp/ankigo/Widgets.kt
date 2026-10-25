@@ -30,15 +30,15 @@ object Widgets {
 
     /** The Intent behind [openApp]: [com.husarp.ankigo.ui.WidgetTapActivity] with its own action. */
     fun openAppIntent(ctx: Context): Intent =
-        Intent(ctx, com.husarp.ankigo.ui.WidgetTapActivity::class.java).setAction(com.husarp.ankigo.ui.WidgetTapActivity.ACTION_OPEN)
+        Intent(ctx, com.husarp.ankigo.ui.WidgetTapActivity::class.java).setAction(com.husarp.ankigo.ui.WidgetTapActivity.ACTION_OPEN).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     /** The 1x1 Study now widget's tap: AnkiGo's Study tab. */
     fun openStudy(ctx: Context): PendingIntent =
-        PendingIntent.getActivity(ctx, REQ_OPEN_STUDY, com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.STUDY), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        PendingIntent.getActivity(ctx, REQ_OPEN_STUDY, com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.STUDY).addFlags(com.husarp.ankigo.ui.WidgetTapActivity.APP_TASK_FLAGS), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
 
     /** The motivation widget's tap: a trampoline decides at tap time between the Study tab (cards due) and the battle. */
     fun openStudyOrBattle(ctx: Context): PendingIntent =
-        PendingIntent.getActivity(ctx, REQ_STUDY_OR_BATTLE, Intent(ctx, com.husarp.ankigo.ui.WidgetTapActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        PendingIntent.getActivity(ctx, REQ_STUDY_OR_BATTLE, Intent(ctx, com.husarp.ankigo.ui.WidgetTapActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
 
     /** Own request codes: two PendingIntents with the same component and request code are the same to Android (extras don't count). */
     const val REQ_STUDY_OR_BATTLE = 0
@@ -170,9 +170,11 @@ class StudyWidget : AppWidgetProvider() {
         }
         val leaf = (deckName ?: "?").substringAfterLast("::")
         rv.setTextViewText(R.id.s_deck, leaf)
-        rv.setOnClickPendingIntent(R.id.s_open, PendingIntent.getActivity(ctx, id * 10 + 8,
-            Intent(ctx, StudyActivity::class.java).putExtra("deckId", deckId).putExtra("deckName", deckName ?: "?")
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+        rv.setOnClickPendingIntent(R.id.s_open, PendingIntent.getActivities(ctx, id * 10 + 8,
+            arrayOf(com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.STUDY)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), Intent(ctx, StudyActivity::class.java).putExtra("deckId", deckId).putExtra("deckName", deckName ?: "?")
+                // PLAN 286: reuse the app task; recreate an existing review so the selected deck is read in onCreate.
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
 
         if (action == ANSWER) {
             val nid = p.getLong(key(StudyWidgetPrefs.NID), 0); val ord = p.getInt(key(StudyWidgetPrefs.ORD), 0)

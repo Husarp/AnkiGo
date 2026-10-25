@@ -69,6 +69,7 @@ internal class FloatBattleView(
         bind()
         if (!window.isShowing) {
             panel?.renderAll() // everything that happened while it was hidden
+            panel?.restoreStudyCharge()
             if (!window.show()) return false
         } else refreshPicture()
         attach()
@@ -131,6 +132,8 @@ internal class FloatBattleView(
             if (panel != null) return
             val p = BattlePanelView(window.context)
             p.setCompact(true)
+            p.setTurnDots(true)      // R19-B (PLAN 275): the turn dots in the floating window too
+            p.restoreStudyCharge()   // from the save; the played events carry them on
             p.arena.stageZoom = 0.72f // the picture may zoom in up to ~28 % in this small window (R8-04)
             p.setCornerClearance(Ui.dp(window.context, 26)) // keeps the log clear of the resize grip
             p.onGrant = { onOpenGame() } // the permission dialog needs an activity

@@ -3,6 +3,34 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 0.25.0
+- Battle messages (item found, daily gift, played fast …) slide in as a small card at the top left of the arena; the bar always shows the two moves.
+- "Super effective!" and the other hit texts appear above the hit Pokémon's head, not on it.
+- Battle conditions (confusion, Leech Seed, Reflect, weather …) show as small chips on the info cards with the turns left; tap one to see them all.
+- Charge moves (Dig, Fly, Solar Beam …) show as a move tile with "Charging"; tap it to read what happens.
+- Transform: Ditto takes the target's picture with a bright flash.
+- Stat changes show as small green or red pills in the move details.
+- The battle result is one light line; the unclear "Auto" is gone.
+- Between battles the card area says "Battle over" until you tap Continue; the next card and its timer start then.
+- Choose the HP bar colours: three steps, a smooth blend (the new default) or the Pokémon's type colour. @ Settings → Battle panel & windows → HP bar colours
+- Bigger info boxes when the arena has room. @ Settings → Battle panel & windows → Bigger info boxes
+- "Ask me" when you beat a better copy of a Pokémon you own: catch it, catch it and replace yours, or let it go. @ Settings → Game → When you beat a wild Pokémon
+- Duplicates in the Box look like a small pile of cards, or show two Pokémon side by side. @ Settings → Look → Box
+- NEW in the Box goes once you've seen it.
+- Turn dots also show in picture-in-picture, split screen and the floating window.
+- OK on a new card fills a grey turn dot: an answer with no power.
+- Switching your Pokémon fills no dot; the wild Pokémon gets one free hit, and a card says so.
+- Pokédex: a back-to-top arrow (also in the Box), a "Seen" filter, and a clear note when "All of" has too many types.
+- Sharper battle backgrounds.
+- Pictures for the 9 evolution items added in 0.23.0.
+- When a learning card comes due, it shows at once instead of waiting for AnkiDroid's save.
+### Fixes
+- The wild info box stays next to its NEW mark.
+- The OK button shows only once per new card.
+- Switching your Pokémon on the Continue screen no longer starts the next battle.
+- Opening AnkiGo from a widget no longer makes it vanish from Recents.
+- Info bubbles in the battle close when you tap anywhere else or press Back.
+
 ## 0.24.0
 - Pokémon details: one card shows what the Pokémon holds and its evolution line. The level sits next to Stats, and every title explains itself when tapped.
 - "Wins" replaces "Defeats" in the details (a catch counts too); the achievement is now called Battles won.

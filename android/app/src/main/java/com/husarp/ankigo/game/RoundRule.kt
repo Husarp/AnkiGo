@@ -8,7 +8,8 @@ import kotlin.math.roundToInt
  * stay quiet). Buttons: 1 Again, 2 Hard, 3 Good, 4 Easy, 0 unknown (counts as Good).
  * - The wild one attacks when at least one answer is Again or Hard, at [Tuning.WILD_POWER] summed over the round.
  * - Your Main attacks when at least one answer is Good or Easy, with the multiplier [Tuning.MAIN_POWER] summed over the round.
- * Both can attack in one round. Pure Kotlin.
+ * Both can attack in one round. R19-T (PLAN 284): the OK of a new card ([Tuning.BUTTON_OK]) is one of the round's answers with no power at
+ * all: only the other answer counts, and OK + OK is an empty round (nobody attacks). Pure Kotlin.
  */
 object RoundRule {
     /** [multiplier] scales the Main's damage (only meaningful when [mainActs]); [enemyPower] scales the wild one's (only when [enemyActs]). */
@@ -17,6 +18,7 @@ object RoundRule {
     fun plan(buttons: List<Int>): Plan {
         var main = 0.0; var wild = 0.0; var mainActs = false; var enemyActs = false
         for (b in buttons) {
+            if (b == Tuning.BUTTON_OK) continue   // R19-T (PLAN 284): a neutral move: neither side gains any power from it
             val i = b.coerceIn(0, 4)
             if (Tuning.MAIN_POWER[i] > 0.0) mainActs = true
             if (Tuning.WILD_POWER[i] > 0.0) enemyActs = true

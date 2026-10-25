@@ -13,7 +13,7 @@ import kotlin.random.Random
 
 /**
  * R17C-8: Transform (Ditto's only move): the types, stats except HP, stat changes, moves, ability and weight of the target for the rest of the
- * fight; both sides; the fail cases; the damage formula uses the copied stats. The picture does not change (nothing here touches the sprite).
+ * fight; both sides; the fail cases; the damage formula uses the copied stats. R19-L: the picture changes too (R19LTransformTest).
  * "Blobby" (level 30) is the Ditto, "Torchy" a Fire type with very different stats.
  */
 class R17C8TransformTest {
@@ -134,7 +134,7 @@ class R17C8TransformTest {
         assertEquals(3, back.player.boosts[2])
     }
 
-    @Test fun transformTextIsPlainAndSaysTheSpriteStaysTheSame() {
+    @Test fun transformTextIsPlainAndSaysThePictureBecomesTheTargets() {
         val text = MoveText.describe(data.move("transform")!!)
         assertTrue(text, text.startsWith("Turns you into the target until the fight ends: its types, stats (not HP), stat changes, moves and ability."))
         assertTrue("picture" in text && text.endsWith("."))

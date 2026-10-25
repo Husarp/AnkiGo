@@ -30,7 +30,7 @@ object SortPrefs {
     private const val DEX_FILTER_KEY = "dexFilter"
     private const val BOX_SHOW_KEY = "show.box"
 
-    /** The Pokédex filters kept besides the type filter: "OWNED;1,2,3;1;0" = owner, generations, wishlist only, favourites only. */
+    /** The Pokédex filters kept besides the type filter: "OWNED;1,2,3;1;0" = owner (ALL / OWNED / SEEN / NOT_OWNED), generations, wishlist only, favourites only. */
     fun encodeDex(f: DexFilter): String =
         "${f.owned.name};${f.gens.sorted().joinToString(",")};${if (f.wishlistOnly) 1 else 0};${if (f.favouritesOnly) 1 else 0}"
 

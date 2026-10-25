@@ -11,7 +11,8 @@ enum class FloatKind { DAMAGE, BIG_DAMAGE, MISS, NO_EFFECT, NOT_VERY, SUPER, CRI
 
 /**
  * One floating text: at the player's Pokémon ([onPlayer]) or the wild one. A stat change also carries its short label
- * ([stat], "ATK") and how many stages ([stages], 1..3, the direction is the kind), which the view draws as an arrow badge.
+ * ([stat], "ATK") and how many stages ([stages], 1..3, the direction is the kind), which the view draws as a badge with chevrons
+ * (R19-C: [text] is then only the spoken line, "Attack up 2").
  * PLAN 217: a STATUS_DAMAGE float carries the status key ("brn" / "psn" / "tox") in [stat]; the view colours it like that status' badge.
  */
 data class FloatText(val onPlayer: Boolean, val text: String, val kind: FloatKind, val stat: String? = null, val stages: Int = 0)
@@ -100,9 +101,10 @@ object FloatTexts {
                 val label = statLabel(e.stat) ?: return emptyList()
                 if (e.stages == 0) emptyList()
                 else {
-                    val n = minOf(3, kotlin.math.abs(e.stages))
-                    if (e.stages > 0) listOf(FloatText(p, "$label ${"↑".repeat(n)}", FloatKind.STAT_UP, label, n))
-                    else listOf(FloatText(p, "$label ${"↓".repeat(n)}", FloatKind.STAT_DOWN, label, n))
+                    // R19-C: the text is the spoken line ("Attack up 2"); the view draws the pill look from [stat] + [stages]
+                    val n = StatPill.count(e.stages)
+                    val said = StatPill.spoken(e.stat!!, e.stages)
+                    listOf(FloatText(p, said, if (e.stages > 0) FloatKind.STAT_UP else FloatKind.STAT_DOWN, label, n))
                 }
             }
             EffectKind.STAT_LIMIT -> statLabel(e.stat)?.let { listOf(FloatText(p, "$it ${if (e.stages > 0) "max" else "min"}", FloatKind.INFO)) } ?: emptyList()
@@ -141,14 +143,6 @@ object FloatTexts {
         else -> null
     }
 
-    private fun statLabel(stat: String?): String? = when (stat) {
-        "atk" -> "ATK"
-        "def" -> "DEF"
-        "spa" -> "SPA"
-        "spd" -> "SPD"
-        "spe" -> "SPE"
-        "accuracy" -> "ACC"
-        "evasion" -> "EVA"
-        else -> null
-    }
+    /** The comic capitals of [StatPill.shortName]: "ATK", "SPA" ... */
+    private fun statLabel(stat: String?): String? = StatPill.shortName(stat)?.uppercase(java.util.Locale.ROOT)
 }

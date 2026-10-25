@@ -34,9 +34,8 @@ class CatchTilesPlanTest {
         val re = CatchTilesPlan.tiles(summary(GameEvent.BallThrow("ball-a", 8, true, 1), caught(false)), ballName)
         assertEquals("Caught before", re[0].value)
         val auto = CatchTilesPlan.tiles(summary(caught(true, ball = null)), ballName)
-        assertEquals(listOf(Kind.DEX, Kind.AUTO), auto.map { it.kind })
-        assertEquals("Caught automatically", auto[1].value)
-        assertNull(auto[1].ball)
+        assertEquals(listOf(Kind.DEX), auto.map { it.kind })   // R19 174B: no "Auto" tile
+        assertEquals(listOf(Kind.DEX), CatchTilesPlan.rowTiles(summary(caught(true, ball = null))).map { it.kind })
     }
 
     @Test fun levelUpAndNoCoinsNoXp() {
