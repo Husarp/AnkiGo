@@ -75,14 +75,14 @@ class MoveFxCatalogTest {
         assertEquals(MoveLook.ORB_TEMPLATE, plan("x", Type.GRASS, SPECIAL, 80).look)
     }
 
-    @Test fun rule3TypesWithoutAPickUsePlainTemplates() {
+    @Test fun rule3TypesWithoutAPickUseTintedKits() {
         val fc = plan("flashcannon", Type.STEEL, SPECIAL, 80)
-        assertEquals(MoveLook.ORB_TEMPLATE, fc.look); assertEquals(FxKit.PLAIN, fc.kit); assertEquals(1f, fc.k, 0f)
+        assertEquals(MoveLook.ORB_TEMPLATE, fc.look); assertEquals(FxKit.STEEL, fc.kit); assertEquals(1f, fc.k, 0f)
         assertEquals(FxPalettes.of(Type.STEEL), fc.palette)
         val noPick = listOf(Type.FIGHTING, Type.POISON, Type.FLYING, Type.BUG, Type.ROCK, Type.DRAGON, Type.DARK, Type.STEEL, Type.FAIRY)
         for (t in noPick) {
             val hit = plan("x", t, PHYSICAL, 80)
-            assertEquals(MoveLook.HIT_TEMPLATE, hit.look); assertEquals(FxKit.PLAIN, hit.kit)
+            assertEquals(MoveLook.HIT_TEMPLATE, hit.look); assertEquals(FxKit.valueOf(t.name), hit.kit)
             assertEquals(sqrt(2f), hit.k, 0.001f)
             assertEquals(FxPalettes.of(t), hit.palette)
             assertEquals(MoveLook.ORB_TEMPLATE, plan("x", t, SPECIAL, 80).look)

@@ -43,11 +43,7 @@ object MonTags {
 
     /** True when [mon] can evolve right now: by level, by friendship or with an evolution item in the bag. */
     fun canEvolve(data: GameData, state: GameState, mon: Mon, now: Long = System.currentTimeMillis()): Boolean =
-        Progression.levelEvolution(data, state, mon, now) != null ||
-            Progression.friendshipEvolution(data, state, mon, now) != null ||
-            state.bag.any { (item, n) ->
-                n > 0 && Items.def(item)?.kind == ItemKind.EVOLUTION && Progression.itemEvolution(data, mon, item) != null
-            }
+        Progression.readyEvolutions(data, state, mon, now).isNotEmpty()
 
     fun of(data: GameData, state: GameState, mon: Mon, now: Long = System.currentTimeMillis()): List<MonTag> {
         val out = ArrayList<MonTag>()

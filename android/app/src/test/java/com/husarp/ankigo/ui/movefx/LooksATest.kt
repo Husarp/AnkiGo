@@ -143,14 +143,14 @@ class LooksATest {
     // ---- Water jet ----
     @Test fun waterJetTimings() {
         val (_, _, t) = run(MoveLook.WATER_JET)
-        assertEquals(290f, t.impact, 0f)
-        assertEquals(120f + 170f + 420f + 170f + 650f, t.total, 0f)
-        assertEquals(290f + 420f + 140f, t.done, 0f)
+        assertEquals(220f, t.impact, 0f)
+        assertEquals(120f + 100f + 180f + 90f + 650f, t.total, 0f)
+        assertEquals(220f + 180f + 140f, t.done, 0f)
         val big = run(MoveLook.WATER_JET, k = 1.6f).third
-        assertEquals(290f, big.impact, 0f)
-        assertEquals(t.total + 420f * .6f, big.total, eps)               // the stream time grows with k
-        assertEquals(t.done + 420f * .6f, big.done, eps)
-        assertEquals(290f, run(MoveLook.WATER_JET, react = false).third.done, 0f)
+        assertEquals(220f, big.impact, 0f)
+        assertEquals(t.total + 180f * .6f, big.total, eps)               // the stream time grows with k
+        assertEquals(t.done + 180f * .6f, big.done, eps)
+        assertEquals(220f, run(MoveLook.WATER_JET, react = false).third.done, 0f)
     }
 
     @Test fun waterJetShapeGrowsHoldsAndDrains() {
@@ -191,7 +191,7 @@ class LooksATest {
         assertTrue(s.particles.count { it.img == "drop" } > 10)
         assertTrue(s.particles.size <= FxScript.MAX_PARTICLES)
         val (_, s2, _) = run(MoveLook.WATER_JET)
-        frames(s2, 250f)                                                // before the head arrives: nothing splashes
+        frames(s2, 200f)                                                // before the head arrives: nothing splashes
         assertEquals(0, s2.particles.count { it.img == "drop" })
     }
 

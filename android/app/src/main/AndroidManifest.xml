@@ -29,6 +29,11 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <queries>
+        <!-- URI animation frames are granted only to home-screen hosts. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
         <package android:name="com.ichi2.anki" />
         <package android:name="com.ichi2.anki.A" />
         <package android:name="com.ichi2.anki.B" />
@@ -50,8 +55,8 @@
     <application
         android:name=".AnkiGoApp"
         android:label="AnkiGo"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
         android:requestLegacyExternalStorage="true"
         android:resizeableActivity="true"
         android:theme="@style/AppTheme"
@@ -187,6 +192,10 @@
             android:label="Updates"
             android:exported="false" />
 
+        <receiver android:name=".ui.WidgetPinReceiver" android:exported="false" />
+        <activity android:name=".ui.WidgetLookActivity" android:theme="@style/GameTheme" android:exported="true">
+            <intent-filter><action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" /></intent-filter>
+        </activity>
         <!-- Wide widget: the next wild Pokémon as a silhouette, today's progress, the team. -->
         <receiver
             android:name=".MotivationWidget"

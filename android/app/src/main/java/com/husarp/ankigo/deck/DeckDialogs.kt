@@ -52,7 +52,7 @@ internal object DeckDialogs {
      * [create] gets the typed text and runs the creation on its own thread; it reports back through [Name.fail] (the dialog stays open with
      * the message) or [Name.done] (the dialog closes).
      */
-    class Name(private val ctx: Context, private val title: String, private val inside: String?, private val hint: String, private val create: (String, Name) -> Unit) {
+    class Name(private val ctx: Context, private val title: String, private val inside: String?, private val hint: String, private val parentPicker: ((TextView) -> Unit)? = null, private val create: (String, Name) -> Unit) {
         private lateinit var input: EditText
         private lateinit var error: TextView
         private lateinit var make: TextView
@@ -62,7 +62,10 @@ internal object DeckDialogs {
         /** The dialog's content (the screenshots build it without a window). */
         fun view(): View {
             val box = DeckViews.box(ctx, title)
-            if (inside != null) box.addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { text = "Inside $inside"; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.MIDDLE },
+            if (parentPicker != null) box.addView(DeckViews.button(ctx, "Inside · ${inside ?: "Top level"} ▾") { }.apply {
+                setOnClickListener { parentPicker.invoke(this) }
+            }, LinearLayout.LayoutParams(-1, -2))
+            if (inside != null && parentPicker == null) box.addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { text = "Inside $inside"; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.MIDDLE },
                 LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
             input = EditText(ctx).apply {
                 this.hint = this@Name.hint
@@ -113,6 +116,7 @@ internal object DeckDialogs {
 
         private fun submit() {
             if (working.get()) return
+            if (parentPicker != null && typed.contains("::")) { problem("Type only the deck name; choose its parent above."); return }
             DeckTexts.nameProblem(typed)?.let { problem(it); return }
             problem(null)
             working.set(true); DeckViews.enable(make, false)

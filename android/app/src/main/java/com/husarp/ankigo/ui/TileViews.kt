@@ -155,7 +155,7 @@ internal class ShinyGlow(ctx: Context) : View(ctx) {
 
 internal object TileViews {
     /** The NEW sticker: small red tilted text, no background (the Round 2 look of the wild card's sticker). */
-    fun newSticker(ctx: Context): android.widget.TextView = Ui.text(ctx, 8f, 900, R.color.ag_red).apply {
+    fun newSticker(ctx: Context): android.widget.TextView = Ui.text(ctx, 8f, 900, R.color.ag_new_tag).apply {
         text = "NEW"
         maxLines = 1
         letterSpacing = 0.04f

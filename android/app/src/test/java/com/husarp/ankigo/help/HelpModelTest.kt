@@ -47,6 +47,8 @@ class HelpModelTest {
                 when (b.action) {
                     HelpAction.HELP_PAGE -> assertTrue("${p.id} -> ${b.arg}", HelpContent.page(b.arg.orEmpty()) != null && b.arg != p.id)
                     HelpAction.OPEN_URL -> assertTrue(b.arg!!.startsWith("https://"))
+                    HelpAction.OPEN_SETTINGS -> assertTrue(b.arg == "@ANKIMON" ||
+                        com.husarp.ankigo.ui.SettingsCatalog.all.any { it.id == b.arg })
                     else -> assertNull(b.arg)
                 }
             }

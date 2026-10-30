@@ -54,14 +54,14 @@ class R19BTurnDotsTest {
         val p = BattlePanelView(ctx()).also { it.renderAll() }
         val b = bar(p)
         assertFalse("the full Battle tab: no dots", b.dotsOn)
-        assertEquals(listOf("mine", "theirs"), b.segmentOrder())
+        assertEquals(listOf("mine", "dots", "theirs"), b.segmentOrder())
         p.setCompact(true)
         p.setTurnDots(true)   // picture-in-picture / split screen / the floating window
         assertTrue(b.dotsOn)
         assertEquals(listOf("mine", "dots", "theirs"), b.segmentOrder())
         p.setTurnDots(false)
         assertFalse(b.dotsOn)
-        assertEquals(listOf("mine", "theirs"), b.segmentOrder())
+        assertEquals(listOf("mine", "dots", "theirs"), b.segmentOrder())
     }
 
     @Test fun theStudyScreenKeepsItsDotsWhateverIsSet() {

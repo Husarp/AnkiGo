@@ -47,8 +47,10 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
 
     fun width(m: ConditionMarks.Mark): Float {
         val n = m.number
-        return padH * 2f + word.measureText(m.word) + if (n != null) num.measureText(" · $n") else 0f
+        return padH * 2f + iconWidth(m.key) + word.measureText(m.word) + if (n != null) num.measureText(" · $n") else 0f
     }
+
+    fun iconWidth(key: String): Float = if (FieldIcons.of(key) != null || key in setOf("switchtrap", "spikes", "toxicspikes", "stealthrock", "stickyweb")) textPx * 1.35f else 0f
 
     fun moreWidth(n: Int): Float = padH * 2f + num.measureText("+$n")
 
@@ -135,7 +137,11 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
         line.strokeWidth = max(1f, m.textPx * 0.07f)
         line.color = m.stroke()
         for (row in rows.values) for (c in row.chips) {
-            fill.color = c.mark?.let { m.fill(it.def.group) } ?: m.moreFill()
+            fill.color = c.mark?.let {
+                if (it.key.startsWith("stat.")) ColorUtils.blendARGB(Ui.c(context, R.color.ag_card),
+                    Ui.c(context, if (it.value > 0) R.color.ag_green else R.color.ag_red), if (ChipMetrics.isDark(context)) .22f else .13f)
+                else m.fill(it.def.group)
+            } ?: m.moreFill()
             canvas.drawRoundRect(c.rect, m.radius, m.radius, fill)
             canvas.drawRoundRect(c.rect, m.radius, m.radius, line)
             if (downSlot == row.slot) {
@@ -147,7 +153,24 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
             if (mk == null) {
                 canvas.drawText("+${c.more}", c.rect.left + (c.rect.width() - m.num.measureText("+${c.more}")) / 2f, base, m.num)
             } else {
-                val x0 = c.rect.left + (c.rect.width() - m.width(mk)) / 2f + m.textPx * 0.7f
+                var x0 = c.rect.left + (c.rect.width() - m.width(mk)) / 2f + m.textPx * 0.7f
+                if (m.iconWidth(mk.key) > 0f) {
+                    val fieldIcon = FieldIcons.of(mk.key)
+                    val icon = fieldIcon ?: when (mk.key) {
+                        "switchtrap" -> R.drawable.ic_mu_ban
+                        "toxicspikes" -> R.drawable.ic_type_poison
+                        "stickyweb" -> R.drawable.ic_type_bug
+                        else -> R.drawable.ic_type_rock
+                    }
+                    context.getDrawable(icon)?.mutate()?.let {
+                        val size = m.textPx.toInt()
+                        val top = (c.rect.centerY() - size / 2f).toInt()
+                        if (fieldIcon == null) it.setTint(m.hue(mk.def.group)); it.setBounds(x0.toInt(), top, x0.toInt() + size, top + size)
+                        it.draw(canvas)
+                    }
+                    x0 += m.iconWidth(mk.key)
+                }
+                m.word.color = if (mk.key.startsWith("stat.")) Ui.c(context, if (mk.value > 0) R.color.ag_green else R.color.ag_red) else Ui.c(context, R.color.ag_text)
                 canvas.drawText(mk.word, x0, base, m.word)
                 mk.number?.let { canvas.drawText(" · $it", x0 + m.word.measureText(mk.word), base, m.num) }
             }
@@ -218,7 +241,7 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
     }
 
     /** What a screen reader says for the whole list. */
-    val spoken: String get() = sections.joinToString(" ") { s -> (s.title?.let { "$it. " } ?: "") + s.marks.joinToString(". ") { it.spoken } + "." }
+    val spoken: String get() = sections.joinToString(" ") { s -> (s.title?.let { "$it. " } ?: "") + s.marks.joinToString(". ") { it.spoken + FieldExplanation.current(it) } + "." }
 
     private class Item(val title: String?, val mark: ConditionMarks.Mark?)
 
@@ -229,12 +252,12 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         setTextSize(TypedValue.COMPLEX_UNIT_SP, TextMath.at(if (i.mark == null) sp - 0.5f else sp, floorSp))
         includeFontPadding = false
         setLineSpacing(0f, 1.1f)
-        maxLines = if (wrap) 2 else 1
+        maxLines = if (i.mark?.let { FieldIcons.of(it.key) } != null) Int.MAX_VALUE else if (wrap) 2 else 1
         val mk = i.mark
         if (mk == null) { text = i.title; setTextColor(context.getColor(R.color.ag_sub1)) }
         else {
             val dot = "\u25CF "
-            val s = SpannableStringBuilder(dot).append(mk.line)
+            val s = SpannableStringBuilder(dot).append(mk.line + FieldExplanation.current(mk))
             s.setSpan(ForegroundColorSpan(m.hue(mk.def.group)), 0, dot.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             s.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), dot.length, dot.length + mk.def.word.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             text = s

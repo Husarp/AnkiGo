@@ -60,7 +60,8 @@ enum class LogKind(@ColorRes val tone: Int, @ColorRes val border: Int) {
  * parts shrink together, texts keep an 8 sp floor, and only in a window too small even for that do the stats bar, the
  * log line and the XP numbers step out, in that order. Nothing scrolls.
  */
-class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
+class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)) {
+    private val ctx: Context get() = context
     val arena = ArenaView(ctx)
 
     var onGrant: () -> Unit = {}
@@ -90,6 +91,29 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
     // ---- R19-H (PLAN 257): the toasts (the old whole-bar lines): small cards at the arena's top-left, above your Pokémon; the bar keeps its segments ----
     private val toasts = ArenaToastLayer(ctx).also { layer -> arena.onMarksPlaced = { layer.reposition() } }
+
+    // PLAN 309: saved queue drives the reminder, including a newly opened / resumed panel.
+    internal val switchNotice = LinearLayout(ctx).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
+        visibility = GONE
+    }
+    private val switchIcon = ImageView(ctx)
+    private var switchIconKey: String? = null
+
+    internal fun refreshSwitchNotice() {
+        val st = GameRepo.state
+        val mon = st?.pendingMain?.let { st.mon(it) }
+        val data = GameRepo.data
+        switchNotice.visibility = if (mon != null && data != null && toasts.shown?.kind != ToastKind.SWITCH) VISIBLE else GONE
+        if (mon == null || data == null) { switchIconKey = null; return }
+        val key = "${mon.uid}:${mon.lookSpecies(data).num}:${mon.shiny}"
+        if (switchIconKey != key) {
+            switchIconKey = key
+            MonPreview.show(context, mon.lookSpecies(data).num, mon.shiny, switchIcon, idle = true)
+        }
+        switchNotice.contentDescription = "Switching to ${mon.name} on your next move"
+    }
 
     // ---- catch result tiles (PLAN 40): they take the log card's place after a catch or a defeat ----
     private val tiles = CatchTilesView(ctx).apply { visibility = GONE }
@@ -209,7 +233,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     /** A swipe in another battle view changed the facing: load the picture again here. */
     private val facingWatch = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "playerFront") post { if (isAttachedToWindow) refreshPlayer() }
-        if (key == BattleFrame.KEY) post { if (isAttachedToWindow) refreshPrefs() }   // Settings picked another frame: every open panel (Study, float window...) follows
+        if (key == "alwaysShowXpBar" || key == BattleFrame.KEY) post { if (isAttachedToWindow) refreshPrefs() }   // Settings picked another frame: every open panel (Study, float window...) follows
         if (key == DotsPlace.KEY) post { if (isAttachedToWindow) refreshPrefs() }     // ... and another place for the turn dots
         if (key == InfoBoxStyle.KEY) post { if (isAttachedToWindow) refreshPrefs() }  // ... and another design for the info boxes
         if (key == InfoBoxLook.KEY) post { if (isAttachedToWindow) refreshPrefs() }   // ... and another look for them (Round 10 W7)
@@ -250,6 +274,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
      * unchanged, so the changes that come with every answer cost one comparison.
      */
     private val gameWatch: () -> Unit = {
+        refreshSwitchNotice()
         if (isAttachedToWindow && isShown && windowVisibility == VISIBLE && hostIdle() && !onPendingFight()) refreshMain()
     }
 
@@ -266,7 +291,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
-        if (visibility == VISIBLE) post(takePending)
+        if (visibility == VISIBLE) post { takePending.run(); refreshSwitchNotice() }
     }
 
     override fun onAttachedToWindow() {
@@ -274,9 +299,11 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         AppPrefs.watchPlayerFront(context, facingWatch)
         GameRepo.addListener(gameWatch)
         post(takePending)
+        refreshSwitchNotice()
     }
 
     override fun onDetachedFromWindow() {
+        dotFlight.cancel()
         GameRepo.removeListener(gameWatch)
         AppPrefs.unwatchPlayerFront(context, facingWatch)
         super.onDetachedFromWindow()
@@ -325,6 +352,25 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         column.addView(footer, LinearLayout.LayoutParams(-1, -2))
 
         scaler.addView(column, LayoutParams(-1, -1))
+        switchNotice.addView(switchIcon, LinearLayout.LayoutParams(dpi(32), dpi(32)))
+        switchNotice.addView(ImageView(context).apply {
+            setImageResource(R.drawable.ic_swap)
+            imageTintList = android.content.res.ColorStateList.valueOf(Ui.c(context, R.color.ag_mauve))
+        }, LinearLayout.LayoutParams(dpi(24), dpi(24)))
+        switchNotice.addView(Ui.text(context, 16f, 800, R.color.ag_text).apply {
+            text = "✕"; gravity = Gravity.CENTER
+            contentDescription = "Cancel the queued switch"
+            setOnClickListener {
+                GameRepo.state?.main?.uid?.let { uid ->
+                    GameRepo.runOffscreen(context) { it.requestMain(uid) }
+                    refreshSwitchNotice()
+                }
+            }
+        }, LinearLayout.LayoutParams(dpi(48), dpi(48)))
+        scaler.addView(switchNotice, LayoutParams(-2, -2, Gravity.TOP or Gravity.END).also {
+            it.setMargins(dpi(6), dpi(6), dpi(6), 0)
+        })
+        toasts.onChanged = { refreshSwitchNotice() }
         scaler.addView(toasts, LayoutParams(-1, -1))   // R19-H: over the arena and its frame, under the move bubble
         scaler.addView(overlay, LayoutParams(-1, -1))
         scaler.addView(pausedBadge, LayoutParams(-2, -2, Gravity.TOP or Gravity.START).also { it.setMargins(dpi(6), dpi(6), 0, 0) })
@@ -369,6 +415,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     /** Applies a decision: which parts show, the text floor, the log's height. Does nothing when it did not change. */
     private fun apply(f: PanelFit.Fit) {
         fit = f
+        frameDrawable.element = arena.backdropElement
         if (f == applied) return
         applied = f
         arena.configure(f.floorSp, f.compactCards, f.xp)
@@ -416,6 +463,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         arena.infoBoxLook = AppPrefs.infoBoxLook(context)
         arena.hpBarLook = AppPrefs.hpBarLook(context)
         arena.pokemonSize = PokemonSize.factor(AppPrefs.pokemonSize(context))
+        arena.refreshXpVisibility()
         frameStyle = AppPrefs.battleFrame(context)
         logBox.dotsPlace = AppPrefs.turnDots(context)
         applied = null
@@ -573,6 +621,19 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
         renderCharge()
     }
 
+    private val dotFlight by lazy { TurnDotFlight(overlay) }
+
+    internal fun flyTurnDots(ms: Long): Long {
+        val buttons = studyCharge.filled
+        val sources = logBox.flightSources()
+        if (sources.size < buttons.size || buttons.isEmpty() || !logBox.isShown || arena.width <= 0) return 0L
+        val targets = buttons.map { if (it == 1) arena.enemySprite else arena.playerSprite }
+        dotFlight.start(sources.take(buttons.size), targets, buttons, ms)
+        studyCharge.consume()
+        renderCharge()
+        return ms
+    }
+
     private fun renderCharge() = logBox.setCharge(studyCharge.goal, studyCharge.filled)
 
     /** Shows a small "Paused" pill in the bar while paused (small windows and the study strip; the normal panel has the strip). */
@@ -607,6 +668,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
      */
     fun toast(kind: ToastKind, text: String, sub: String? = null, pop: Boolean = true) {
         toasts.show(kind, text, sub, pop)
+        refreshSwitchNotice()
     }
 
     /** The toast showing now (tests). */
@@ -839,6 +901,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
 
     /** Redraws everything from the saved state, no animation. Call when nothing is being played. */
     fun renderAll() {
+        refreshSwitchNotice()
         val st = GameRepo.state ?: return
         val data = GameRepo.data ?: return
         arena.resetFx()
@@ -1008,6 +1071,7 @@ class BattlePanelView(ctx: Context) : FrameLayout(ctx) {
     }
 
     fun cancelAnimations() {
+        dotFlight.cancel()
         arena.cancelAnimations()
         logBox.cancelAnimations()
         toasts.settle()   // R19-H: a toast sliding in is where it belongs; it keeps its time

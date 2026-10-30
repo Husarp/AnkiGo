@@ -75,8 +75,8 @@ object HelpFixes {
         HelpContent.PICTURES_SYNC -> listOf(HelpButton(HelpAction.OPEN_ANKIDROID, "Open AnkiDroid"))
         HelpContent.ANSWERS_NOT_DETECTED -> listOf(HelpButton(HelpAction.OPEN_DIAGNOSTICS, "Open Diagnostics"))
         HelpContent.WIDGET_NOT_UPDATING -> listOf(HelpButton(HelpAction.OPEN_DIAGNOSTICS, "Open Diagnostics"))
-        HelpContent.BATTLE_POPS_UP -> listOf(HelpButton(HelpAction.OPEN_SETTINGS, "Open Settings"))
-        HelpContent.ANKIMON_IMPORT_EXPORT -> listOf(HelpButton(HelpAction.OPEN_SETTINGS, "Open Settings"))
+        HelpContent.BATTLE_POPS_UP -> listOf(HelpButton(HelpAction.OPEN_SETTINGS, "Open Settings", "leaveMode"))
+        HelpContent.ANKIMON_IMPORT_EXPORT -> listOf(HelpButton(HelpAction.OPEN_SETTINGS, "Open Settings", "@ANKIMON"))
         else -> emptyList()
     }
 

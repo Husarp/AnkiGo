@@ -70,16 +70,16 @@ class R14B2CIconShots {
         }
     }
 
-    /** The launcher icon as a launcher draws it (layoutlib cannot inflate an <adaptive-icon>, so this draws background colour + foreground itself): the 72 dp mask window of the 108 dp canvas, cut to a circle or a rounded square. */
+    /** The restored legacy launcher vector at launcher sizes, with round and square previews. */
     private class Mask(ctx: Context, private val sizeDp: Int, private val circle: Boolean) : View(ctx) {
-        private val fg = ctx.getDrawable(R.drawable.ic_launcher_foreground)!!
+        private val fg = ctx.getDrawable(R.drawable.ic_launcher)!!
         private val bgPaint = Paint().apply { color = ctx.getColor(R.color.ic_launcher_background) }
         private val px = Ui.dp(ctx, sizeDp)
         override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(px, px)
         override fun onDraw(c: Canvas) {
-            val k = px / 72f
-            c.scale(k, k); c.translate(-18f, -18f)
-            val clip = Path().apply { if (circle) addCircle(54f, 54f, 36f, Path.Direction.CW) else addRoundRect(RectF(18f, 18f, 90f, 90f), 14f, 14f, Path.Direction.CW) }
+            val k = px / 108f
+            c.scale(k, k)
+            val clip = Path().apply { if (circle) addCircle(54f, 54f, 54f, Path.Direction.CW) else addRoundRect(RectF(0f, 0f, 108f, 108f), 14f, 14f, Path.Direction.CW) }
             c.clipPath(clip)
             c.drawRect(0f, 0f, 108f, 108f, bgPaint)
             fg.setBounds(0, 0, 108, 108); fg.draw(c)

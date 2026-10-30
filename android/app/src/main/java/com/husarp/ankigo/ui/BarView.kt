@@ -351,7 +351,35 @@ class BarView(ctx: Context) : View(ctx) {
             for (sp in GoalSparks.frame(sparkLevel, t)) {
                 sparkPaint.color = sp.color
                 sparkPaint.alpha = (sp.alpha.coerceIn(0f, 1f) * 255f + 0.5f).toInt()
-                canvas.drawCircle(r.left + r.width() * sp.x, r.top - sp.rise * k, sp.radius * k, sparkPaint)
+                canvas.save()
+                canvas.translate(r.left + r.width() * sp.x, r.top - sp.rise * k)
+                canvas.rotate(sp.rotation)
+                val size = sp.radius * k
+                val p = android.graphics.Path()
+                when (sp.shape) {
+                    0 -> canvas.drawCircle(0f, 0f, size, sparkPaint)
+                    1 -> { // four curved rays
+                        val a = size * 1.5f; val b = size * .34f
+                        p.moveTo(0f, -a); p.quadTo(b, -b, a, 0f); p.quadTo(b, b, 0f, a)
+                        p.quadTo(-b, b, -a, 0f); p.quadTo(-b, -b, 0f, -a); p.close()
+                    }
+                    2 -> { p.moveTo(0f, -size*1.25f); p.lineTo(size*.8f, 0f); p.lineTo(0f, size*1.25f); p.lineTo(-size*.8f, 0f); p.close() }
+                    3 -> {
+                        val a = size*1.2f; val b = size*.34f
+                        val xy = floatArrayOf(-b,-a,b,-a,b,-b,a,-b,a,b,b,b,b,a,-b,a,-b,b,-a,b,-a,-b,-b,-b)
+                        p.moveTo(xy[0],xy[1]); for (i in 2 until xy.size step 2) p.lineTo(xy[i],xy[i+1]); p.close()
+                    }
+                    4 -> {
+                        for (i in 0 until 10) {
+                            val a = -Math.PI/2 + i*Math.PI/5
+                            val rad = size*1.45f*(if (i%2 == 0) 1f else .45f)
+                            val x = kotlin.math.cos(a).toFloat()*rad; val y = kotlin.math.sin(a).toFloat()*rad
+                            if (i == 0) p.moveTo(x,y) else p.lineTo(x,y)
+                        }; p.close()
+                    }
+                }
+                if (sp.shape != 0) canvas.drawPath(p, sparkPaint)
+                canvas.restore()
             }
         }
 

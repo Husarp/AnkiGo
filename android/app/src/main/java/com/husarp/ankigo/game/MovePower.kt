@@ -135,7 +135,7 @@ internal object MovePower : BattleRules {
         "crushgrip", "wringout", "hardpress", "gyroball", "electroball", "return", "pikapapow", "veeveevolley", "frustration",
         "storedpower", "powertrip", "punishment", "magnitude", "present", "trumpcard", "ragefist",
         "psywave", "endeavor", "finalgambit", "counter", "mirrorcoat", "metalburst", "comeuppance",
-        "beatup", "bide", "spitup",
+        "beatup", "bide", "spitup", "fling",
     )
 
     // ---- reading the fight ----
@@ -566,7 +566,7 @@ internal object MovePower : BattleRules {
             "focuspunch" -> "It loses its focus and can't move if it was hit earlier this round."
             "dreameater" -> "Fails unless the target is asleep."
             "snore" -> "Fails unless it is asleep."
-            "poltergeist" -> "Fails unless the target holds an item. Wild Pokémon hold no items, so a player’s Pokémon never uses it."
+            "poltergeist" -> "Fails unless the target holds an item."
             "synchronoise" -> "Fails unless the target shares a type with itself."
             "lastresort" -> "Fails unless it has used all its other moves in this fight."
             "futuresight", "doomdesire" -> "Hits the target 2 rounds after it is used, with the damage worked out when it is used; only one can wait for each side."

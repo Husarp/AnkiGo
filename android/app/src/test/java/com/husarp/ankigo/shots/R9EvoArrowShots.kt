@@ -122,7 +122,7 @@ class R9EvoArrowShots {
                 val tag = "$name/$w/${theme.name}/${if (compact) "compact" else "full"}"
                 // the section itself: the chain must fit in its width and be drawn whole
                 val fit = (sec as ViewGroup).getChildAt(0) as ViewGroup
-                val tree = fit.getChildAt(0)
+                val tree = fit
                 val drawn = tree.measuredWidth * tree.scaleX
                 if (drawn > fit.width + 1) all += "$tag: tree drawn $drawn px in ${fit.width}"
                 if (tree.scaleX < 0.75f) all += "$tag: drawn at scale ${tree.scaleX}"
@@ -133,7 +133,7 @@ class R9EvoArrowShots {
         assertTrue(all.size.toString() + "\n" + all.joinToString("\n"), all.isEmpty())
     }
 
-    @Test fun theNormalLookStaysWhenItFits() {
+    @Test fun rowsReplaceArrowsWithoutScaling() {
         paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, Theme.LIGHT))
         val c = Shots.files(paparazzi.context)
         FakeGame.install(c)
@@ -141,10 +141,10 @@ class R9EvoArrowShots {
         for ((name, compact, arrowDp) in listOf(Triple("short", false, 30), Triple("three", false, 30), Triple("short", true, 22))) {
             val sec = section(c, name, compact)
             measure(sec, 412, c)
-            val tree = ((sec as ViewGroup).getChildAt(0) as ViewGroup).getChildAt(0)
+            val tree = (sec as ViewGroup).getChildAt(0)
             assertEquals("$name $compact: not scaled", 1f, tree.scaleX, 0f)
             val arrows = ArrayList<View>().also { fun walk(v: View) { if (v is DetailSections.ArrowView) it += v; if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i)) }; walk(tree) }
-            assertTrue(arrows.isNotEmpty())
+            assertTrue("279A replaces arrows with rows", arrows.isEmpty())
             arrows.forEach { assertEquals("$name $compact: arrow length", Ui.dp(c, arrowDp), it.measuredWidth) }
         }
     }

@@ -60,7 +60,7 @@ class R16LDiagnosticsShots {
     @Test fun oneGroupOpen() {
         paparazzi.shootPage("r16l-open", widths) { ctx ->
             val content = page(ctx).second
-            headers(content).first { title(it) == "Checks" }.performClick()
+            headers(content).first { title(it) == "CHECKS" }.performClick()
             content
         }
     }
@@ -76,12 +76,12 @@ class R16LDiagnosticsShots {
     @Test fun aFoldBarTogglesItsGroup() {
         val content = page(setup()).second
         val bars = headers(content)
-        assertEquals(listOf("AnkiDroid", "Checks", "Media", "Widgets"), bars.map { title(it) })
+        assertEquals(listOf("ANKIDROID", "CHECKS", "MEDIA", "WIDGETS"), bars.map { title(it) })
         bars.forEach { assertFalse("${title(it)} starts folded", FoldGroup.isOpen(group(it))) }
-        val checks = bars.first { title(it) == "Checks" }
+        val checks = bars.first { title(it) == "CHECKS" }
         checks.performClick()
         assertTrue(FoldGroup.isOpen(group(checks)))
-        assertFalse("other groups stay folded", FoldGroup.isOpen(group(bars.first { title(it) == "Media" })))
+        assertFalse("other groups stay folded", FoldGroup.isOpen(group(bars.first { title(it) == "MEDIA" })))
         assertTrue(checks.contentDescription.toString().endsWith("open"))
         checks.performClick()
         assertFalse(FoldGroup.isOpen(group(checks)))

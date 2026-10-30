@@ -43,7 +43,7 @@ enum class MoveChoice(val label: String) {
  *    (not a charge move whose charge turn a rule skips, like Solar Beam in the sun).
  * R17C FIX-A: the answers of [BattleRules.useful] combine as "any false wins" ([rulesUseful]); RANDOM's Struggle fallback uses the same "can hurt"
  * test as SMART (RANDOM itself still picks among all moves, also one that fails); a move in [CoreRules.MAIN_NEVER_PICKED] (Poltergeist: wild
- * Pokémon hold no item) is left out for the Main in every mode, like [CoreRules.NEVER_PICKED].
+ * Pokémon normally hold no item) is left out for the Main while the wild target holds none.
  */
 object MoveChooser {
     /** The Main's move against the battle's wild one ([battle].player is the Main's side). */
@@ -78,7 +78,7 @@ object MoveChooser {
         val everything = view.moves(p)
         // R17C-3: moves that mean nothing in a 1-vs-1 wild fight are never picked (CoreRules.NEVER_PICKED). With only such moves the Main
         // uses Struggle and the wild one uses one of them ("But nothing happened.")
-        val all = everything.filter { it.id !in CoreRules.NEVER_PICKED && !(p && it.id in CoreRules.MAIN_NEVER_PICKED) }
+        val all = everything.filter { it.id !in CoreRules.NEVER_PICKED && !(p && it.id in CoreRules.MAIN_NEVER_PICKED && view.mon(!p).heldItem == null) }
         if (all.isEmpty()) return if (p) BattleEngine.struggle(view.data) else everything[rng.nextInt(everything.size)]
         val known = all.filter { m -> rulesFirst { it.moveBlocked(view, p, m) } == null }
         if (choice == MoveChoice.RANDOM) {

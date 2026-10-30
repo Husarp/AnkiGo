@@ -25,6 +25,7 @@ internal object R17C7 {
         // terrain
         field("electricterrain", Type.ELECTRIC), field("grassyterrain", Type.GRASS), field("mistyterrain", Type.FAIRY), field("psychicterrain", Type.PSYCHIC),
         // rooms and sports
+        field("magicroom", Type.PSYCHIC, priority = -7),
         field("trickroom", Type.PSYCHIC, priority = -7), field("gravity", Type.PSYCHIC), field("wonderroom", Type.PSYCHIC),
         field("mudsport", Type.GROUND), field("watersport", Type.WATER), field("iondeluge", Type.ELECTRIC, priority = 1),
         // clearing moves and Growth

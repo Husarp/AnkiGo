@@ -98,7 +98,8 @@ object AnkiStatsStore {
     private fun work(app: Context, today: String, dayStartHour: Int) {
         val time = readTime(app, dayStartHour)
         val live = readLiveTime(app, dayStartHour)
-        update { it.copy(timeByDay = time, liveTimeByDay = live) }
+        update { it.copy(timeByDay = time.time, liveTimeByDay = live.time, timedAnswersByDay =
+            (time.counts.keys + live.counts.keys).associateWith { day -> (time.counts[day] ?: 0L) + (live.counts[day] ?: 0L) }) }
         Anki.load(app)
         val access = AnkiAccess.decide(
             installed = Anki.installed(app).any { it.pkg == Anki.pkg },
@@ -183,21 +184,21 @@ object AnkiStatsStore {
     private fun failureText(t: Throwable): String = (t.message ?: t.javaClass.simpleName).take(60)
 
     /** ms per game day from AnkiGo's own review log; AnkiDroid is not involved. */
-    private fun readTime(app: Context, dayStartHour: Int): Map<String, Long> = try {
+    private fun readTime(app: Context, dayStartHour: Int): TimedAnswers = try {
         val f = Local.reviewsFile(app)
-        if (!f.exists()) emptyMap() else f.useLines { timeInAnkiGo(it) { ms -> AnkiGoTime.dayKey(ms, dayStartHour) } }
+        if (!f.exists()) TimedAnswers(emptyMap(), emptyMap()) else f.useLines { timedAnswers(it, false) { ms -> AnkiGoTime.dayKey(ms, dayStartHour) } }
     } catch (e: Exception) {
         Report.fail("STATS", "reading AnkiGo's own review log", e)
-        emptyMap()
+        TimedAnswers(emptyMap(), emptyMap())
     }
 
     /** ms per game day of the answers AnkiGo timed itself while watching AnkiDroid live (`live-time.csv`). */
-    private fun readLiveTime(app: Context, dayStartHour: Int): Map<String, Long> = try {
+    private fun readLiveTime(app: Context, dayStartHour: Int): TimedAnswers = try {
         val f = LiveTimeFile.file(app.filesDir)
-        if (!f.exists()) emptyMap() else f.useLines { timeLive(it) { ms -> AnkiGoTime.dayKey(ms, dayStartHour) } }
+        if (!f.exists()) TimedAnswers(emptyMap(), emptyMap()) else f.useLines { timedAnswers(it, true) { ms -> AnkiGoTime.dayKey(ms, dayStartHour) } }
     } catch (e: Exception) {
         Report.fail("STATS", "reading the live time log", e)
-        emptyMap()
+        TimedAnswers(emptyMap(), emptyMap())
     }
 
     private fun readCache(app: Context): AnkiStats? {

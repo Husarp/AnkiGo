@@ -86,16 +86,34 @@ internal object HelpViews {
 
     /** A help text with its menu and button names in grey boxes ([HelpText]). */
     fun rich(ctx: Context, text: String, sizeSp: Float = 13f, weight: Int = 600, @ColorRes tone: Int = R.color.ag_text): TextView {
-        val sb = SpannableStringBuilder()
-        val box = Ui.c(ctx, R.color.ag_s0)
+        val sb = SpannableStringBuilder(text)
+        val links = HelpSettingsLinks.find(text)
+        var offset = 0
         for (p in HelpText.pieces(text)) {
-            if (!p.boxed) { sb.append(p.text); continue }
-            val st = sb.length
-            sb.append(' ').append(p.text).append(' ')
-            sb.setSpan(BackgroundColorSpan(box), st, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            offset = text.indexOf(p.text, offset).coerceAtLeast(offset)
+            if (p.boxed && links.none { offset < it.end && offset + p.text.length > it.start }) {
+                sb.setSpan(BackgroundColorSpan(Ui.c(ctx, R.color.ag_s0)), offset, offset + p.text.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            offset += p.text.length
+        }
+        for (link in links) {
+            sb.setSpan(object : android.text.style.ClickableSpan() {
+                override fun onClick(widget: View) { HelpSettingsLinks.open(ctx, link.setting) }
+                override fun updateDrawState(ds: android.text.TextPaint) {
+                    ds.color = Ui.c(ctx, R.color.ag_mauve); ds.isUnderlineText = true; ds.isFakeBoldText = true
+                }
+            }, link.start, link.end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        // The design uses a compact › in actionable paths; replacing one character preserves span ranges.
+        links.forEach { link -> for (i in link.start until link.end) if (sb[i] == '→') sb.replace(i, i + 1, "›") }
+        for ((name, colour) in listOf("Again" to R.color.ag_red, "Hard" to R.color.ag_peach, "Good" to R.color.ag_green, "Easy" to R.color.ag_blue)) {
+            Regex("\\b$name\\b").findAll(sb).forEach {
+                sb.setSpan(android.text.style.ForegroundColorSpan(Ui.c(ctx, colour)), it.range.first, it.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
         }
         return Ui.text(ctx, sizeSp, weight, tone).apply {
             setText(sb)
+            if (links.isNotEmpty()) movementMethod = android.text.method.LinkMovementMethod.getInstance()
             setLineSpacing(0f, 1.18f)
         }
     }
@@ -115,10 +133,7 @@ internal object HelpViews {
     fun heading(ctx: Context, @ColorRes dot: Int, title: String): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(View(ctx).apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Ui.c(ctx, dot)) }
-        }, LinearLayout.LayoutParams(dp(ctx, 8), dp(ctx, 8)).also { it.marginEnd = dp(ctx, 7) })
-        addView(Ui.text(ctx, 11f, 900, R.color.ag_text).apply { text = title.uppercase(); letterSpacing = 0.06f })
+        addView(Ui.text(ctx, 11f, 900, R.color.ag_text).apply { Ui.decorateHeading(this, title); letterSpacing = 0.06f })
     }
 
     fun sectionTone(kind: SectionKind): Int = when (kind) {
@@ -176,8 +191,7 @@ internal object HelpViews {
     /** The result next to "Check pictures now": green tick, red cross, or grey (nothing to test). */
     fun resultChip(ctx: Context, check: PictureCheck): TextView {
         val tone = when (check.ok) { true -> R.color.ag_green; false -> R.color.ag_red; null -> R.color.ag_sub1 }
-        return Ui.text(ctx, 12f, 900, tone).apply {
-            text = (when (check.ok) { true -> "✓ "; false -> "✗ "; null -> "" }) + check.text
+        return rich(ctx, (when (check.ok) { true -> "✓ "; false -> "✗ "; null -> "" }) + check.text, 12f, 900, tone).apply {
             setPadding(dp(ctx, 10), dp(ctx, 7), dp(ctx, 10), dp(ctx, 7))
             background = Ui.rounded(
                 if (check.ok == null) Ui.c(ctx, R.color.ag_s0) else Bits.blend(Ui.c(ctx, tone), Ui.c(ctx, R.color.ag_card), 0.2f), 10, ctx,
@@ -496,7 +510,7 @@ internal object HelpViews {
         GuideVisualId.HP_BAR -> barRow(ctx, { it.set(GuideDemo.hpFraction, Ui.hpColor(ctx, GuideDemo.hpFraction, null), false) }, v.caption)
         GuideVisualId.XP_BAR -> barRow(ctx, { it.setMeaning(BarMeaning.XP, GuideDemo.xpFraction, false) }, v.caption)
         GuideVisualId.STAT_BARS -> statBars(ctx, v.caption)
-        GuideVisualId.MATCHUP_TABLE -> matchupBlock(ctx, v.caption)
+        GuideVisualId.MATCHUP_TABLE -> GuideTypeChart.picker(ctx)
         GuideVisualId.LEVEL_COLOURS -> LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             val flow = LeftFlow(ctx, dp(ctx, 8))
@@ -540,14 +554,45 @@ internal object HelpViews {
                 g.addView(inlineCell(ctx, v))
             } else {
                 flush()
-                out += blockVisual(ctx, v)
+                if (v.id in listOf(GuideVisualId.HP_BAR, GuideVisualId.XP_BAR, GuideVisualId.LEVEL_COLOURS)) {
+                    val box = (out.lastOrNull() as? LinearLayout)?.takeIf { it.tag == "bar-group" }
+                        ?: LinearLayout(ctx).apply {
+                            tag = "bar-group"; orientation = LinearLayout.VERTICAL
+                            setPadding(dp(ctx, 10), dp(ctx, 12), dp(ctx, 10), dp(ctx, 12))
+                            background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
+                        }.also { out += it }
+                    box.addView(blockVisual(ctx, v), lp(ctx, if (box.childCount == 0) 0 else 10))
+                } else out += blockVisual(ctx, v)
             }
         }
         flush()
-        for (p in ch.points) out += LinearLayout(ctx).apply {
+        fun bullet(p: String): View = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(Ui.text(ctx, 13f, 900, R.color.ag_mauve).apply { text = "•" }, LinearLayout.LayoutParams(dp(ctx, 14), -2))
             addView(rich(ctx, p, 13f, 600, R.color.ag_sub1), LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        val short = GuideLessons.shortPoints(ch)
+        short.forEach { out += bullet(it) }
+        GuideLessons.details(ch).forEach { (title, points) ->
+            val fold = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(ctx, 10), dp(ctx, 6), dp(ctx, 10), dp(ctx, 10))
+                background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx)
+            }
+            val head = Ui.text(ctx, 13f, 800, R.color.ag_text).apply {
+                text = "$title  ›"; minimumHeight = dp(ctx, 44); gravity = Gravity.CENTER_VERTICAL
+            }
+            val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+            points.forEach { point ->
+                point.split(Regex("(?<!Sp\\.)(?<=[.!?]) (?=[A-Z])")).forEach { body.addView(bullet(it), lp(ctx, 8)) }
+            }
+            fold.addView(head); fold.addView(body)
+            head.setOnClickListener {
+                val open = body.visibility != View.VISIBLE
+                body.visibility = if (open) View.VISIBLE else View.GONE
+                head.text = title + if (open) "  ⌄" else "  ›"
+            }
+            out += fold
         }
         return out
     }

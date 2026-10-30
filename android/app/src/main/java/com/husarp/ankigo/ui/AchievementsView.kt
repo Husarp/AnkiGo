@@ -16,6 +16,7 @@ import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.AchievementTable
 import java.time.ZoneId
 
+// R22 (PLAN 180, list B): tier-tinted squares, three per row, under the existing summary and group tabs.
 // R4-V2 (PLAN 79, pick 2A): the Achievements section of the Stats tab: a header with the tiers reached per tier, then the rows grouped
 // Study / Battle / Collection / Economy / Special / Badges. A tap on a row opens its detail sheet ([AchievementDetail]) over the page.
 // The data is Achievements.view (R4-03).
@@ -71,13 +72,15 @@ class AchievementsView(private val page: GamePage) {
             addView(View(page).apply { setBackgroundColor(Ui.c(page, R.color.ag_s0)) }, FrameLayout.LayoutParams(-1, dp(1), Gravity.BOTTOM))
             addView(tabScroll, FrameLayout.LayoutParams(-1, -2))
         }
-        col.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        val afterLayout: () -> Unit = {
             pending?.let { pending = null; it() }
             if (revealTab) {
                 revealTab = false
                 selectedTab?.let { t -> tabScroll.scrollTo((t.left + t.width / 2 - tabScroll.width / 2).coerceAtLeast(0), 0) }
             }
         }
+        col.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> afterLayout() }
+        col.viewTreeObserver.addOnGlobalLayoutListener { afterLayout() }
         layer = FrameLayout(page).apply { visibility = View.GONE }
         return FrameLayout(page).apply {
             addView(scroll, FrameLayout.LayoutParams(-1, -1))
@@ -119,6 +122,7 @@ class AchievementsView(private val page: GamePage) {
 
     fun render() {
         val st = page.state
+        AchievementNotice.seen(page)
         val views = Achievements.view(st, page.data)
         val at = now()
         // "See it": the row's tab, and the filter out of the way when it would hide the row
@@ -127,30 +131,38 @@ class AchievementsView(private val page: GamePage) {
             if (!AchPageMath.shows(AchPageMath.groups(views, filter, at, st.achSince), fid)) filter = AchFilter.ALL
         }
         val groups = AchPageMath.groups(views, filter, at, st.achSince)
-        tab = AchPageMath.tabOrAll(groups, tab)
+        if (tab != "Secret") tab = AchPageMath.tabOrAll(groups, tab)
         col.removeAllViews()
         rowViews.clear()
         col.addView(summary(views))
-        col.addView(tabs(AchPageMath.tabs(groups)), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(8); it.marginStart = -dp(16); it.marginEnd = -dp(16) })
-        col.addView(countRow(AchPageMath.countLine(groups, tab)))
+        col.addView(tabs(AchPageMath.tabs(groups) + "Secret"), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(8); it.marginStart = -dp(16); it.marginEnd = -dp(16) })
+        col.addView(countRow(if (tab == "Secret") "Secret · 0 of 0 found" else AchPageMath.countLine(groups, tab)))
 
-        val shown = AchPageMath.tabGroups(groups, tab)
+        val shown = if (tab == "Secret") emptyList() else AchPageMath.tabGroups(groups, tab)
         var any = false
         for (g in shown) {
             if (g.empty) continue
             any = true
             if (tab == AchPageMath.ALL_TAB) col.addView(Bits.sect(page, g.name, AchPageMath.groupCount(g.all)))
-            for (v in g.shown) col.addView(row(v).also { rowViews[v.id] = it }, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = dp(8) })
+            for (chunk in g.shown.chunked(3)) {
+                val gridRow = LinearLayout(page).apply { orientation = LinearLayout.HORIZONTAL }
+                for (i in 0..2) {
+                    val v = chunk.getOrNull(i)
+                    val tile = if (v == null) View(page) else tile(v).also { rowViews[v.id] = it }
+                    gridRow.addView(tile, LinearLayout.LayoutParams(0, -2, 1f).also { if (i > 0) it.marginStart = dp(8) })
+                }
+                col.addView(gridRow, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = dp(8) })
+            }
         }
         if (!any) col.addView(Ui.text(page, 13f, 700, R.color.ag_sub0).apply {
-            text = AchPageMath.emptyText(filter, tab)
+            text = if (tab == "Secret") "No secret achievements yet" else AchPageMath.emptyText(filter, tab)
             gravity = Gravity.CENTER
             setPadding(0, dp(28), 0, dp(12))
         }, LinearLayout.LayoutParams(-1, -2))
 
         focusId?.let { fid ->
             pending = {
-                rowViews[fid]?.let { scroll.scrollTo(0, (it.top - dp(8)).coerceAtLeast(0)) }
+                rowViews[fid]?.let { scroll.scrollTo(0, (it.top + (it.parent as View).top - dp(8)).coerceAtLeast(0)) }
                 if (focusId == fid) focusId = null
             }
             revealTab = true
@@ -213,7 +225,7 @@ class AchievementsView(private val page: GamePage) {
         row.addView(Ui.text(page, 12f, 800, R.color.ag_sub0).apply { text = line }, LinearLayout.LayoutParams(0, -2, 1f))
         val btn = Ui.text(page, 12f, 800, R.color.ag_sub1).apply {
             text = AchPageMath.showLabel(filter)
-            Ui.touchPill(this, Ui.rounded(Ui.c(page, R.color.ag_card), 12, page), 30, 12)
+            Ui.touchPill(this, Ui.rounded(Ui.c(page, R.color.ag_card), 12, page), 32, 12)
             page.getDrawable(R.drawable.ic_expand)?.mutate()?.let { d ->
                 d.setBounds(0, 0, dp(16), dp(16))
                 d.setTint(Ui.c(page, R.color.ag_sub1))
@@ -256,64 +268,37 @@ class AchievementsView(private val page: GamePage) {
         }
     }
 
-    // ---- rows ----
-
-    private fun row(v: AchView): View {
-        val card = LinearLayout(page).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = Ui.rounded(Ui.c(page, R.color.ag_card), 14, page)
-            setPadding(dp(12), dp(10), dp(12), dp(10))
+    // Pick B: tier-tinted squares, icon, title and a shape for every tier.
+    internal fun tile(v: AchView): View {
+        val hidden = v.group == "Secret" && v.tier < 0
+        val color = AchStyle.medalColor(page, v.tier, v.oneOff && v.tier >= 0)
+        val card = object : LinearLayout(page) {
+            override fun onMeasure(w: Int, h: Int) {
+                super.onMeasure(w, h)
+                super.onMeasure(w, MeasureSpec.makeMeasureSpec(maxOf(measuredWidth, measuredHeight), MeasureSpec.EXACTLY))
+            }
+        }.apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(4), dp(8), dp(4), dp(8))
+            val base = Ui.c(page, R.color.ag_card)
+            background = Ui.rounded(if (v.tier < 0) base else androidx.core.graphics.ColorUtils.blendARGB(base, color, .17f), 10, page)
+            contentDescription = "${if (hidden) "???" else v.title}, ${if (v.tier < 0) "Not yet" else if (v.oneOff) "Earned" else AchievementTable.tierName(v.tier)}"
             isClickable = true
             setOnClickListener { openId = v.id; page.requestRender() }
         }
-        val special = v.oneOff && v.tier >= 0
-        card.addView(AchMedal(page, 44).apply { set(AchStyle.icon(v.icon), v.tier, special) }, LinearLayout.LayoutParams(dp(44), dp(44)))
-        val body = LinearLayout(page).apply { orientation = LinearLayout.VERTICAL }
-        card.addView(body, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(12) })
-
-        val r1 = LinearLayout(page).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        r1.addView(Ui.text(page, 14f, 800, R.color.ag_text).apply { text = v.title; maxLines = 1; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
-        body.addView(r1, LinearLayout.LayoutParams(-1, -2))
-
-        if (v.oneOff) {
-            r1.addView(Ui.text(page, 11f, 900, if (special) R.color.ag_green else R.color.ag_sub0).apply { text = if (special) "Earned" else "Not yet" }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(8) })
-            body.addView(Ui.text(page, 11f, 700, R.color.ag_sub0).apply {
-                text = if (special) AchPageMath.reachedText(v.dates.firstOrNull(), page.state.achSince, zone, 0 in v.inferred).replace("Reached", "Earned") else v.desc
-                maxLines = 2; ellipsize = TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(3) })
-            return card
-        }
-
-        r1.addView(tierTag(v), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(8) })
-        val nextTier = (v.tier + 1).coerceAtMost(4)
-        body.addView(BarView(page).apply { set(v.progress, AchStyle.tierColor(page, if (v.next == null) v.tier else nextTier), false) },
-            LinearLayout.LayoutParams(-1, dp(6)).also { it.topMargin = dp(7) })
-        val r3 = LinearLayout(page).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        r3.addView(Ui.text(page, 11f, 700, R.color.ag_sub0).apply {
-            text = if (v.next == null) AchPageMath.fmtValue(v) else "${AchPageMath.fmtValue(v)} / ${AchPageMath.fmtNext(v)}"
-            maxLines = 1
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        if (v.next == null) r3.addView(Ui.text(page, 11f, 800, R.color.ag_sub0).apply { text = "Top tier" })
-        else {
-            r3.addView(Ui.text(page, 11f, 700, R.color.ag_sub0).apply { text = "next" })
-            r3.addView(ImageView(page).apply { setImageDrawable(AchStyle.shape(nextTier, AchStyle.tierColor(page, nextTier))) }, LinearLayout.LayoutParams(dp(10), dp(10)).also { it.marginStart = dp(4) })
-            r3.addView(Ui.text(page, 11f, 700, R.color.ag_sub0).apply { text = AchievementTable.tierName(nextTier) }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(3) })
-        }
-        body.addView(r3, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(4) })
+        if (v.group == "Secret") card.addView(AchMedal(page, 60).apply { set(if (hidden) R.drawable.ic_ach_lock else AchStyle.icon(v.icon), v.tier, v.tier >= 0) }, LinearLayout.LayoutParams(dp(60), dp(60)))
+        else card.addView(ImageView(page).apply { setImageResource(AchStyle.icon(v.icon)); setColorFilter(color) }, LinearLayout.LayoutParams(dp(34), dp(34)))
+        card.addView(Ui.text(page, 11f, 800, if (v.tier < 0) R.color.ag_sub0 else R.color.ag_text).apply {
+            text = if (hidden) "???" else v.title; gravity = Gravity.CENTER; maxLines = 3; ellipsize = TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(6) })
+        if (v.group == "Secret") return card
+        val pips = LinearLayout(page).apply { gravity = Gravity.CENTER }
+        for (t in v.tiers.indices) pips.addView(ImageView(page).apply {
+            setImageDrawable(if (v.oneOff && v.tier >= 0) page.getDrawable(R.drawable.ic_check)?.mutate()?.also { it.setTint(color) }
+                else AchStyle.shape(t, if (t <= v.tier) AchStyle.tierColor(page, t) else AchStyle.alpha(Ui.c(page, R.color.ag_ov), .45f)))
+        }, LinearLayout.LayoutParams(dp(10), dp(10)).also { it.marginStart = dp(2); it.marginEnd = dp(2) })
+        card.addView(pips, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(3) })
         return card
-    }
-
-    /** "◆ Rare" in the tier's colour, or "Not yet" before the first tier. */
-    private fun tierTag(v: AchView): View {
-        val tag = LinearLayout(page).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        if (v.tier < 0) {
-            tag.addView(Ui.text(page, 11f, 800, R.color.ag_sub0).apply { text = "Not yet" })
-            return tag
-        }
-        val color = AchStyle.tierColor(page, v.tier)
-        tag.addView(ImageView(page).apply { setImageDrawable(AchStyle.shape(v.tier, color)) }, LinearLayout.LayoutParams(dp(11), dp(11)))
-        tag.addView(Ui.text(page, 11f, 900, R.color.ag_text).apply { text = AchievementTable.tierName(v.tier); setTextColor(color) }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(4) })
-        return tag
     }
 }

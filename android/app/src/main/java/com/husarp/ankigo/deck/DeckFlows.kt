@@ -67,10 +67,21 @@ internal object DeckFlows {
 
     // ---- new deck / subdeck ---------------------------------------------------------------------------------------
 
-    /** "New deck" (a plain deck, "A::B" makes a subdeck) or, with [parent], "New subdeck" inside it. [onCreated] runs after a deck was made. */
+    /** One name field and an Inside control; [parent] supplies the initial parent for New subdeck. */
     fun newDeck(act: Activity, parent: Anki.Deck?, onCreated: (DeckResult) -> Unit) {
-        DeckDialogs.Name(act, if (parent == null) "New deck" else "New subdeck", parent?.name, if (parent == null) "Name, or Parent::Child" else "Subdeck name") { typed, dlg ->
-            val full = if (parent == null) typed.trim() else DeckTexts.subdeckName(parent.name, typed)
+        var chosenParent = parent
+        DeckDialogs.Name(act, if (parent == null) "New deck" else "New subdeck", parent?.name, "Deck name", { label ->
+            io.execute {
+                val result = runCatching { Anki.decks(act.applicationContext) }
+                ui(act) { result.onSuccess { decks ->
+                    ParentDeckPicker.show(act, decks, chosenParent) { picked ->
+                        chosenParent = picked
+                        label.text = "Inside · ${picked?.name?.replace("::", " › ") ?: "Top level"} ▾"
+                    }
+                }.onFailure { DeckDialogs.say(act, "Couldn't load decks", plain(it as? Exception ?: Exception(it))) } }
+            }
+        }) { typed, dlg ->
+            val full = chosenParent?.let { DeckTexts.subdeckName(it.name, typed) } ?: typed.trim()
             io.execute {
                 val r = deckOps(act.applicationContext).createDeck(full)
                 ui(act) { if (r.ok) { dlg.done(); Ui.toast(act, r.message); onCreated(r) } else dlg.fail(r.message) }

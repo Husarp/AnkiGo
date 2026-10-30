@@ -790,6 +790,7 @@ class GameActivity : AgActivity() {
         m.item(4, "Settings", R.drawable.ic_settings)
         val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
         m.item(5, "Switch Pokémon", R.drawable.ic_swap, enabled = blocker == null, sub = blocker)
+        m.item(12, "Use item", R.drawable.ic_ball)
         m.item(6, "Stats", R.drawable.ic_stats)
         m.item(7, "Battle log", R.drawable.ic_swords)
         m.item(11, "View settings", R.drawable.ic_palette)   // R10 B19: Pokémon size, facing, info boxes, frame... in one sheet
@@ -806,6 +807,7 @@ class GameActivity : AgActivity() {
                 3 -> openScreen(FloatPage.SHOP, Dest.SHOP)
                 4 -> openScreen(FloatPage.SETTINGS, Dest.SETTINGS)
                 5 -> openSwitchPopup()
+                12 -> showBallDialog()
                 6 -> openStats()
                 7 -> openStats(BattleLogActivity::class.java)
                 11 -> ViewSettingsSheet.open(this)
@@ -897,6 +899,7 @@ class GameActivity : AgActivity() {
     private fun openSwitchPopup() {
         val data = GameRepo.data ?: return
         val st = GameRepo.state ?: return
+        GameRepo.game?.switchBlocker()?.let { Ui.toast(this, it); return }
         SwitchPopup.show(this, data, st) { switchMain(it) }
     }
 
@@ -913,15 +916,13 @@ class GameActivity : AgActivity() {
         // card is answered (the bar says "Switching after this card…"); picking the main again cancels it.
         val cardShowing = !holding
         val r = try { GameRepo.run(this) { it.requestMain(uid, cardShowing) } } catch (t: Throwable) { Report.fail("PANEL", "requestMain", t); return }
+        if (!r.ok) Ui.toast(this, r.message)
         handleEvents(r.events)
     }
 
     /** Optional: pick a ball to throw at the wild Pokémon, with each ball's chance. */
     private fun showBallDialog() {
-        val st = GameRepo.state ?: return
-        val battle = st.battle
-        if (battle == null) { Ui.toast(this, "No wild Pokémon right now"); return }
-        BallThrowUi.show(this, st) { ball -> handleEvents(act { it.throwBall(ball) }) }   // PLAN 171: each chance, and what a miss costs
+        BattleBag.show(this) { handleEvents(it) }
     }
 
     /** The ⋯ entry that flips catch <-> defeat for this fight: its label says what a tap will do; null when no wild Pokémon is on stage. */

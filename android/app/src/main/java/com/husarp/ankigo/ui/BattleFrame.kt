@@ -32,6 +32,20 @@ enum class BattleFrameStyle(
         when (d) { 0 -> 0xFF1B1B26.toInt(); 1 -> 0x99FFFFFF.toInt(); else -> 0 }
     }),
 
+    AUTOMATIC("Automatic: matches the background", "Simple pixel frame tinted by the background's element", 2, 2,
+        { _, d, _ -> if (d == 0) 0xFF1B1B26.toInt() else 0x99FFFFFF.toInt() }),
+
+    SEA("Waves", "The sea and beach frame", 4, 4, { i, d, side ->
+        val phase = (i + if (side == 'b' || side == 'r') 4 else 0) % 8
+        when (d) {
+            0 -> 0xFF0B3B5C.toInt()
+            1 -> if (phase == 0) 0xFFFFFFFF.toInt() else if (phase < 4) 0xFFE8F7FF.toInt() else 0xFF8FD3F4.toInt()
+            2 -> if (phase < 4) 0xFF5FB4E6.toInt() else 0xFF2E86C1.toInt()
+            else -> 0xFF1F6FA5.toInt()
+        }
+    }, listOf("kkkkkkkk", "kwwwwwwk", "kwBBBBBk", "kwBddddk", "kwBdkkkk", "kwBdk...", "kwBdk...", "kkkk...."),
+        mapOf('k' to 0xFF0B3B5C.toInt(), 'w' to 0xFFE8F7FF.toInt(), 'B' to 0xFF8FD3F4.toInt(), 'd' to 0xFF1F6FA5.toInt())),
+
     WOOD("Wood", "Brown planks with brass corners", 3, 3, { i, d, _ ->
         when (d) {
             0 -> 0xFF2B180B.toInt()
@@ -112,7 +126,7 @@ enum class BattleFrameStyle(
         private val ICICLES = intArrayOf(0, 0, 3, 1, 0, 2, 0, 0, 4, 1, 0)
 
         /** The saved choice ([BattleFrame.KEY] holds the enum name); unknown or missing = [NONE]. */
-        fun parse(name: String?): BattleFrameStyle = entries.firstOrNull { it.name == name } ?: NONE
+        fun parse(name: String?): BattleFrameStyle = entries.firstOrNull { it.name == name && it != ICE } ?: NONE
     }
 }
 
@@ -213,6 +227,33 @@ class BattleFrameDrawable(style: BattleFrameStyle = BattleFrameStyle.NONE, unit:
     var unit: Int = unit.coerceAtLeast(1)
         private set
 
+    private var elementColors: IntArray? = null
+    var element: String? = null
+        set(value) { if (field != value) { field = value; elementColors = palette(value); invalidateSelf() } }
+
+    private fun palette(element: String?): IntArray? {
+        return when (element?.lowercase()) {
+            "water", "sea", "beach" -> intArrayOf(0xFF0B3B5C.toInt(), 0xFFBFE9FF.toInt())
+            "grass", "bug", "forest" -> intArrayOf(0xFF16301A.toInt(), 0xFFB8E3A0.toInt())
+            "fire" -> intArrayOf(0xFF2A0C08.toInt(), 0xFFFFD43B.toInt())
+            "rock", "ground", "cave" -> intArrayOf(0xFF26211D.toInt(), 0xFFD6CBBB.toInt())
+            "ice", "snow" -> intArrayOf(0xFF2F5278.toInt(), 0xFFFFFFFF.toInt())
+            else -> {
+                val type = com.husarp.ankigo.game.Type.entries.firstOrNull { it.name.equals(element, true) }
+                    ?: return null
+                val tint = Ui.typeColor(type)
+                intArrayOf(androidx.core.graphics.ColorUtils.blendARGB(tint, android.graphics.Color.BLACK, .72f),
+                    androidx.core.graphics.ColorUtils.blendARGB(tint, android.graphics.Color.WHITE, .65f))
+            }
+        }
+    }
+
+    private fun edge(s: BattleFrameStyle, i: Int, depth: Int, side: Char): Int {
+        val colors = elementColors
+        return if ((s == BattleFrameStyle.SIMPLE || s == BattleFrameStyle.AUTOMATIC) && colors != null)
+            colors.getOrElse(depth) { 0 } else s.edge(i, depth, side)
+    }
+
     private val paint = Paint().also { it.isAntiAlias = false; it.isFilterBitmap = false; it.style = Paint.Style.FILL }
 
     /** Changes style or unit and redraws; does nothing when nothing changed. */
@@ -262,7 +303,7 @@ class BattleFrameDrawable(style: BattleFrameStyle = BattleFrameStyle.NONE, unit:
         var run = 0
         var from = 0
         for (i in 0..n) {
-            val c = if (i < n) s.edge(i, d, side) else 0
+            val c = if (i < n) edge(s, i, d, side) else 0
             if (c == run && i < n) continue
             if (run != 0) fill(canvas, run, from * unit, y, i * unit, y + unit)
             run = c
@@ -274,7 +315,7 @@ class BattleFrameDrawable(style: BattleFrameStyle = BattleFrameStyle.NONE, unit:
         var run = 0
         var from = 0
         for (i in 0..n) {
-            val c = if (i < n) s.edge(i, d, side) else 0
+            val c = if (i < n) edge(s, i, d, side) else 0
             if (c == run && i < n) continue
             if (run != 0) fill(canvas, run, x, from * unit, x + unit, i * unit)
             run = c

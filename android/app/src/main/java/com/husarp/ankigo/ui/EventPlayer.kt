@@ -117,6 +117,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         busy = false
         dirty = false
         handler.removeCallbacksAndMessages(null)
+        GameSound.cancelPending()
         panel.cancelAnimations()
     }
 
@@ -441,7 +442,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 log(kind(lastButton), label(lastButton), "charging ${e.answers}/${e.of} — the next answer attacks")
                 return d(450)
             }
-            is GameEvent.RoundStart -> { fightOver = false; mult = e.multiplier; wildMult = e.enemyPower; return 0 }
+            is GameEvent.RoundStart -> { fightOver = false; mult = e.multiplier; wildMult = e.enemyPower; return if (AppPrefs.flyingTurnDots(ctx)) panel.flyTurnDots(d(500)) else 0 }
 
             is GameEvent.Attack -> return playAttack(e)
             is GameEvent.Splash -> {
@@ -740,8 +741,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         } else null
         if (run == null) {
             sound(e)
-            if (com.husarp.ankigo.ui.movefx.FxLean.leansCategory(e.category)) arena.lean(e.byPlayer, d(com.husarp.ankigo.ui.movefx.FxLean.TOTAL_MS))   // R18-C: special / status lean, physical lunges
-            else arena.lunge(e.byPlayer, d(350))
+            if (e.category == Category.SPECIAL && e.moveId != "recover") arena.lean(e.byPlayer, d(com.husarp.ankigo.ui.movefx.FxLean.TOTAL_MS))   // R18-C: special / status lean, physical lunges
+            else if (e.category == Category.PHYSICAL) arena.lunge(e.byPlayer, d(350))
             after(300) { afterHit(e) }
             return d(800)
         }

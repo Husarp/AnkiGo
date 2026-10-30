@@ -190,7 +190,7 @@ class HealingTest {
         assertTrue(e.isEmpty()); assertEquals(0, main.hp) // fainted: no heal
     }
 
-    @Test fun evolvingStillHealsFullyAndAddsNoDefeatHeal() {
+    @Test fun explicitEvolutionHealsFullyAfterNormalRewardHeals() {
         val s = TestData.state(data, 1, 15, listOf("tackle")) // Leafling 15 evolves at 16
         val main = s.main!!
         main.hp = 5
@@ -199,9 +199,16 @@ class HealingTest {
         val g = game(s)
         g.fight(19, 40, hp = 1)
         g.answer(); val e = g.answer()
-        assertEquals(1, e.of<GameEvent.Evolved>().size)
+        assertTrue(e.of<GameEvent.Evolved>().isEmpty())
+        assertEquals(1, main.species)
+        assertTrue(main.hp < maxHp(main))
+        assertEquals(listOf(HealReason.LEVEL_UP, HealReason.DEFEAT), e.of<GameEvent.Healed>().map { it.reason })
+        val choice = g.chooseEvolution(main.uid, 2)
+        assertTrue(choice.ok)
+        assertEquals(1, choice.events.of<GameEvent.Evolved>().size)
+        assertEquals(2, main.species)
         assertEquals(maxHp(main), main.hp)
-        assertEquals(listOf(HealReason.LEVEL_UP), e.of<GameEvent.Healed>().map { it.reason })
+        assertTrue(choice.events.of<GameEvent.Healed>().isEmpty())
     }
 
     @Test fun aFaintedMainIsStillFullyHealedAndGetsNoHealedEvent() {

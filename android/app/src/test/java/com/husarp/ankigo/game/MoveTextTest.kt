@@ -128,11 +128,11 @@ class MoveTextTest {
     @Test fun neverPickedMovesSayWhy() {
         assertEquals("It does nothing, so it is never used.", say(status("splash")))
         assertEquals("Never used in AnkiGo battles: it needs a partner Pokémon.", say(status("helpinghand", "adjacentAlly")))
-        assertEquals("Never used in AnkiGo battles: it only works when Pokémon switch in or out.", say(status("roar", "normal", 100).copy(priority = -6)))
-        assertEquals("Never used in AnkiGo battles: it needs held items.", say(dmg("fling", power = 0)))
+        assertEquals("Never used in AnkiGo battles: it only works when Pokémon switch in or out.", say(status("batonpass", "self")))
+        assertEquals("Throws away its held item to deal damage. Power depends on the item. Fails without an active held item.", say(dmg("fling", power = 0)))
         assertEquals("Never used in AnkiGo battles: AnkiGo has no PP.", say(status("spite", "normal", 100)))
         assertEquals("Never used in AnkiGo battles: AnkiGo has no critical hits.", say(status("focusenergy")))
-        assertEquals("Never used in AnkiGo battles: it would end every fight on its own.", say(status("perishsong", "all")))
+        assertEquals("Both Pokémon faint after three more turns unless they leave the fight. Soundproof blocks it.", say(status("perishsong", "all")))
     }
 
     @Test fun statusMoveWithNothingTheEngineUses() {

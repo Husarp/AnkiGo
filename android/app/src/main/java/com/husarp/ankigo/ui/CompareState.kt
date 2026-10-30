@@ -142,6 +142,10 @@ object CompareStore {
     private const val GROUP = "compare_group"
     private const val COLLAPSED = "compare_collapsed"
 
+    fun loadColours(ctx: android.content.Context): Boolean = prefs(ctx).getBoolean("compare_colours", true)
+
+    fun saveColours(ctx: android.content.Context, on: Boolean) = prefs(ctx).edit().putBoolean("compare_colours", on).apply()
+
     fun loadMode(ctx: android.content.Context): CompareMode =
         CompareMode.entries.firstOrNull { it.name == prefs(ctx).getString(MODE, null) } ?: CompareMode.VS_REFERENCE
 

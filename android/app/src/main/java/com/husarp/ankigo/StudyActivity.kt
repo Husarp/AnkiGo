@@ -319,7 +319,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         cardSurface = StudyUi.column(this).apply { setBackgroundColor(Ui.c(context, R.color.ag_anki_bg)) }
         countdown = CountdownBar(this).apply { visibility = View.GONE }
         cardSurface.addView(countdown, StudyUi.lp(-1, Ui.dp(this, 3)))
-        web = WebView(this).apply { setBackgroundColor(Ui.c(context, R.color.ag_anki_bg)) }
+        web = com.husarp.ankigo.study.ExplainWebView(this, { canExplain() }, { explainCard(it) }, { sideNo }).apply { setBackgroundColor(Ui.c(context, R.color.ag_anki_bg)) }
         swipe = SwipeFrame(this, web).also { it.onSwipe = { ease -> answer(ease) } }
         calmView = calmCard()
         // R19-N: the calm card lies over the (already loading) card, so Continue shows it at once; it takes the touches, the card behind is hidden from TalkBack
@@ -360,9 +360,11 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                 if (will != null) m.item(5, com.husarp.ankigo.ui.CatchChoiceText.menuLabel(will), R.drawable.ic_ball)
                 val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
                 m.item(6, "Switch Pokémon", R.drawable.ic_swap, enabled = blocker == null, sub = blocker)
+                m.item(8, "Use item", R.drawable.ic_ball)
                 m.item(7, "View settings", R.drawable.ic_palette)   // R10 B19
                 m.show { i ->
-                    if (i == 5) toggleCatch()
+                    if (i == 8) throwBall()
+                    else if (i == 5) toggleCatch()
                     else if (i == 6) switchPokemon()
                     else if (i == 7) openViewSettings()
                     else if (i == 4) startActivity(Intent(this, BattleLogActivity::class.java))
@@ -561,6 +563,12 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private fun styleTimer(red: Boolean) {
         timerRed = red
         timerPill.setTextColor(Ui.c(this, if (red) R.color.ag_red else R.color.ag_sub1))
+        timerPill.gravity = Gravity.CENTER_VERTICAL
+        timerPill.compoundDrawablePadding = Ui.dp(this, 4)
+        timerPill.setCompoundDrawablesRelative(getDrawable(R.drawable.ic_clock)?.mutate()?.apply {
+            setTint(Ui.c(this@StudyActivity, if (red) R.color.ag_red else R.color.ag_sub1))
+            setBounds(0, 0, Ui.dp(this@StudyActivity, 14), Ui.dp(this@StudyActivity, 14))
+        }, null, null, null)
         timerPill.background = Ui.rounded(if (red) StudyUi.blend(Ui.c(this, R.color.ag_red), Ui.c(this, R.color.ag_s0), .16f) else Ui.c(this, R.color.ag_s0), 9, this)
     }
     /** The pill sits before the counts; in a narrow card column (split screen) it moves to the title's second line so the deck name keeps its room. */
@@ -1419,9 +1427,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     private fun throwBall() {
         if (!events.idle) return
-        val st = GameRepo.state ?: return
-        com.husarp.ankigo.ui.BallThrowUi.show(this, st) { ball ->   // PLAN 171: each ball's chance, and what a miss costs
-            val result = GameRepo.act(this) { it.throwBall(ball) }
+        com.husarp.ankigo.ui.BattleBag.show(this) { result ->
             record(result); events.enqueue(result); LiveSession.refreshWidgetsFor(this, result)
         }
     }
@@ -1442,6 +1448,17 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         dialog.setOnDismissListener { if (actionSheet === dialog) actionSheet = null; syncTiming() }
         syncTiming()
     }
+    private fun canExplain() = !isDestroyed && !isFinishing && card != null && !finished && !calmOn && !locked
+
+    private fun explainCard(selected: String? = null) {
+        if (!canExplain()) return
+        val prompt = com.husarp.ankigo.study.CardExplain.prompt(question, answerHtml, flipped, selected,
+            prefs.getString(com.husarp.ankigo.study.CardExplain.PREF_TEMPLATE, null)
+                ?: com.husarp.ankigo.study.CardExplain.DEFAULT_TEMPLATE)
+        try { startActivity(com.husarp.ankigo.study.CardExplain.intent(prompt)) }
+        catch (_: android.content.ActivityNotFoundException) { Ui.toast(this, "No browser found to open Google") }
+    }
+
     /** The card-actions sheet's content (the dialog around it is made by [actions]); [dismiss] closes that dialog. */
     internal fun actionSheetContent(dismiss: () -> Unit): View {
         val sheet = StudyUi.column(this).apply {
@@ -1471,6 +1488,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             if (sub != null) text.addView(StudyUi.label(this, sub, 10.5f, if (danger) R.color.ag_red else R.color.ag_sub0))
             row.addView(text, StudyUi.lp(0, -2, 1f)); sheet.addView(row)
         }
+        if (canExplain()) action(R.drawable.ic_help, "Explain this card", com.husarp.ankigo.study.CardExplain.NOTICE) { explainCard() }
         // PLAN 70: edit / move / delete through AnkiDroid's official API (deck/DeckOps.kt), on top
         action(R.drawable.ic_pencil, "Edit note", "Fields of this card's note") { editNote() }
         action(R.drawable.ic_move, "Move to deck…", "This card only") { moveCard() }
@@ -1478,6 +1496,17 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         sheet.addView(StudyUi.line(this), StudyUi.lp(-1, Ui.dp(this, 1)).also { it.setMargins(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4)) })
         action(R.drawable.ic_bury, "Bury card", "Back tomorrow") { writeAction("bury") }
         action(R.drawable.ic_pause, "Suspend card", "Unsuspend later in AnkiDroid's browser") { writeAction("suspend") }
+        if ((stats["_id"]?.toLongOrNull() ?: 0L) > 0L) {
+            action(R.drawable.ic_undo, "Reset card", "Open this card in AnkiDroid, then choose Reset") {
+                val id = stats["_id"]?.toLongOrNull() ?: return@action
+                AppDialog.Builder(this).setMessage("AnkiDroid must reset this card. In its browser, select the card and choose Reset. This makes it new again.")
+                    .setPositiveButton("Open card in AnkiDroid") { _, _ ->
+                        try { startActivity(Anki.resetCardIntent(id)) }
+                        catch (_: android.content.ActivityNotFoundException) { showError("This AnkiDroid version can't open the card browser") }
+                    }.setNegativeButton("Cancel", null).showCard()
+            }
+        }
+
         if (Anki.flagsSupported(this)) {
             val flags = StudyUi.row(this).apply { setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8)) }
             flags.addView(StudyUi.icon(this, R.drawable.ic_flag), StudyUi.lp(Ui.dp(this, 20), Ui.dp(this, 20)).also { it.marginEnd = Ui.dp(this, 12) })
@@ -1721,7 +1750,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val next = NextDeck.pick(decks.map { NextDeck.D(it.id, it.name, it.total) }, deckId, deckName)   // PLAN 147: a sibling subdeck first, never a parent
         buttons.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 10))
         buttons.layoutParams = LinearLayout.LayoutParams(StudyUi.pageWidth(this), -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
-        if (next != null) buttons.addView(StudyUi.finishedPrimary(this, "Next deck: ${next.name} · ${next.total} due") {
+        if (next != null) buttons.addView(StudyUi.finishedNextDeck(this, next.name, next.total) {
             Report.log("STUDY", "next deck: ${next.name} (id ${next.id})")   // R13 Part E
             startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", next.id).putExtra("deckName", next.name)); finish()
         })

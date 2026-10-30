@@ -22,7 +22,7 @@ enum class Accent(val label: String, @ColorRes val res: Int) {
 }
 
 /**
- * The app's look settings: theme (System / Light / Dark), accent colour and interface size. Theme and size are applied
+ * The app's look settings: theme (System / Light / Dark), accent colour, interface size and app text size. Theme and size are applied
  * to each screen's resources before it builds anything ([wrap], from [AgActivity] and the floating windows); the accent
  * replaces `ag_mauve` wherever colours go through [Ui.c]. A change bumps [generation]: every [AgActivity] that was built
  * with an older look recreates itself when it comes back to the front.
@@ -65,23 +65,24 @@ object AppLook {
         AppPrefs.putLook(ctx, "matchupChips", look.name)
     }
 
+    internal fun textChanged() { generation++ }
+
     fun setScale(ctx: Context, percent: Int) {
         AppPrefs.putScale(ctx, percent)
         generation++
     }
 
     /**
-     * [base] with the chosen theme and interface size, or [base] itself when both are the defaults. The override holds
-     * only those two fields (uiMode night bits, densityDpi), so the system's font size and the window size still change
-     * as usual (split-screen resize keeps working).
+     * [base] with the chosen theme, interface density and app text multiplier. The text multiplier builds on the
+     * system font size; the override leaves the window size alone (split-screen resize keeps working).
      */
     fun wrap(base: Context): Context {
         val theme = AppPrefs.theme(base)
         val scale = AppPrefs.uiScale(base)
-        if (theme == ThemeMode.SYSTEM && scale == 100) return base
+        if (theme == ThemeMode.SYSTEM && scale == 100 && TextSizes.get(base, "app") == 100) return base
         val now = base.resources.configuration
         val cfg = Configuration()
-        cfg.fontScale = 0f // 0 = undefined: keep the system font size
+        cfg.fontScale = now.fontScale * TextSizes.get(base, "app") / 100f
         if (theme != ThemeMode.SYSTEM) {
             val night = if (theme == ThemeMode.DARK) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
             cfg.uiMode = (now.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night

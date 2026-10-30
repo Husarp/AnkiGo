@@ -68,19 +68,17 @@ internal object CoreRules : BattleRules {
      * one that uses one of them ("But nothing happened.", the Magikarp feel). Used anyway (forced, called): "But nothing happened.", no effect.
      */
     val NEVER_PICKED: Map<String, String> =
-        group("partner", "helpinghand followme ragepowder spotlight afteryou quash allyswitch aromaticmist coaching decorate healpulse floralhealing " +
-            "purify instruct holdhands gearup magneticflux assist") +
-        group("switching", "roar whirlwind teleport batonpass shedtail healingwish lunardance revivalblessing memento spikes toxicspikes stealthrock " +
-            "stickyweb meanlook block spiderweb fairylock octolock") +
-        group("items", "fling trick switcheroo bestow recycle embargo magicroom naturalgift belch stuffcheeks teatime corrosivegas") +
+        group("partner", "helpinghand followme ragepowder spotlight afteryou quash allyswitch aromaticmist coaching " +
+            "holdhands") +
+        group("switching", "batonpass shedtail healingwish lunardance") +
+        group("items", "naturalgift belch stuffcheeks teatime") +
         group("pp", "spite grudge") +
         group("crits", "focusenergy laserfocus dragoncheer luckychant") +
-        group("fight", "perishsong") +
-        group("nothing", "splash celebrate happyhour")
+        group("nothing", "splash celebrate")
 
     /**
      * R17C FIX-A: moves that can never work for the MAIN (the wild one may use them): the move choice leaves them out for the Main in every mode,
-     * like [NEVER_PICKED]. Poltergeist needs a target that holds an item, and wild Pokémon hold none.
+     * like [NEVER_PICKED]. Poltergeist needs a target that holds an item; its Main exclusion applies only while the wild one holds none.
      */
     val MAIN_NEVER_PICKED: Set<String> = setOf("poltergeist")
 
@@ -88,10 +86,9 @@ internal object CoreRules : BattleRules {
     val reasonText: Map<String, String> = mapOf(
         "partner" to "Never used in AnkiGo battles: it needs a partner Pokémon.",
         "switching" to "Never used in AnkiGo battles: it only works when Pokémon switch in or out.",
-        "items" to "Never used in AnkiGo battles: it needs held items.",
+        "items" to "Never used in AnkiGo battles: it needs berries, which AnkiGo does not have.",
         "pp" to "Never used in AnkiGo battles: AnkiGo has no PP.",
         "crits" to "Never used in AnkiGo battles: AnkiGo has no critical hits.",
-        "fight" to "Never used in AnkiGo battles: it would end every fight on its own.",
         "nothing" to "It does nothing, so it is never used.",
     )
 
@@ -154,7 +151,7 @@ internal object CoreRules : BattleRules {
     // ---------------------------------------------------------------- hooks
 
     override val handles: Set<String> =
-        setOf("confuseray", "supersonic", "sweetkiss", "teeterdance", "swagger", "flatter", "attract")
+        setOf("confuseray", "supersonic", "sweetkiss", "teeterdance", "swagger", "flatter", "attract", "embargo", "perishsong")
 
     /** What [p] must do now instead of picking: rest, finish a charge, repeat a locked move or Uproar. */
     override fun forcedMove(v: BattleView, p: Boolean): Move? {
@@ -174,6 +171,19 @@ internal object CoreRules : BattleRules {
     /** Confusion moves (Confuse Ray ... Swagger, Flatter: their stat part first) and Attract. */
     override fun statusMove(r: Round, p: Boolean, move: Move): Boolean? {
         val tp = !p
+        when (move.id) {
+            "embargo" -> return r.addVolatile(tp, "embargo", 5, byFoe = true,
+                text = "${r.mon(tp).name}'s held item was disabled for 5 turns!", label = "Embargo")
+            "perishsong" -> {
+                var worked = false
+                for (q in listOf(true, false)) if (r.mon(q).hp > 0 && "perishsong" !in r.side(q).volatiles && r.ability(q) != "soundproof") {
+                    r.side(q).volatiles["perishsong"] = 4
+                    r.fx(q, "${r.mon(q).name} will faint in three turns!", EffectKind.VOLATILE, "perishsong")
+                    worked = true
+                }
+                return worked
+            }
+        }
         when (move.volatileStatus) {
             CONFUSION -> {
                 var worked = false
@@ -364,6 +374,14 @@ internal object CoreRules : BattleRules {
             val s = r.side(q)
             val m = r.mon(q)
             s.volatiles.remove(FLINCH); s.notes.remove(RAISED)
+            s.volatiles["embargo"]?.let { left ->
+                if (left <= 1) r.removeVolatile(q, "embargo", "${m.name}'s held item works again!")
+                else s.volatiles["embargo"] = left - 1
+            }
+            s.volatiles["perishsong"]?.let { left ->
+                if (left <= 1) { s.volatiles.remove("perishsong"); r.hurt(q, m.hp, "${m.name}'s perish count fell to zero!", EffectKind.RESIDUAL) }
+                else { s.volatiles["perishsong"] = left - 1; r.fx(q, "${m.name}'s perish count is ${left - 1}!") }
+            }
             if (m.hp <= 0) continue
             if (awake && s.status == "slp") {
                 s.status = null; s.statusTurns = 0; s.volatiles.remove(SLEEP_TURNS)
@@ -411,6 +429,8 @@ internal object CoreRules : BattleRules {
 
     /** The Smart choice: a confusion / love move only while it can still work; a never-picked move never. Everything else: ask the engine's own rule. */
     override fun useful(v: BattleView, p: Boolean, move: Move): Boolean? {
+        if (move.id == "embargo") return v.mon(!p).heldItem != null && "embargo" !in v.side(!p).volatiles
+        if (move.id == "perishsong") return listOf(true, false).any { "perishsong" !in v.side(it).volatiles && v.ability(it) != "soundproof" }
         if (move.id in NEVER_PICKED) return false
         return when (move.volatileStatus) {
             CONFUSION -> if (move.damaging) null else canConfuse(v, !p)
@@ -435,6 +455,8 @@ internal object CoreRules : BattleRules {
 
     override fun describe(m: Move): List<String> {
         val out = ArrayList<String>()
+        if (m.id == "embargo") out += "Disables the target's held item for 5 turns."
+        if (m.id == "perishsong") out += "Both Pokémon faint after three more turns unless they leave the fight. Soundproof blocks it."
         if (isRecharge(m)) out += "After a hit, its next move is a rest turn to recharge."
         for (sec in m.allSecondaries) secondaryText(m, sec)?.let { out += it }
         when (m.volatileStatus) {

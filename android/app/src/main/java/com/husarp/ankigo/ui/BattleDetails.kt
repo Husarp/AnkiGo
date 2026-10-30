@@ -20,7 +20,7 @@ import com.husarp.ankigo.game.lookNum
  */
 object BattleDetails {
     /** Shows the details of [uid] over whatever [ctx] belongs to (an Activity or an overlay window). False when there is nothing to show. */
-    fun show(ctx: Context, uid: String): Boolean {
+    fun show(ctx: Context, uid: String, focusMove: String? = null): Boolean {
         val data = GameRepo.data ?: return false
         val mon = GameRepo.state?.mon(uid) ?: return false
         val host = object : PageHost {
@@ -28,15 +28,15 @@ object BattleDetails {
             override fun closePage() {}
             override fun startForResult(intent: Intent, onResult: (Int, Intent?) -> Unit) { ctx.startActivity(intent) }
         }
-        MonDetail.show(BarePage(ctx, host), data, mon)
+        MonDetail.show(BarePage(ctx, host), data, mon, focusMove)
         return true
     }
 
     /**
      * Tap on the wild Pokémon in a battle (PLAN 93): a read-only info window on top of the battle, from [WildInfo] (so never IVs,
-     * nature, EVs or moves it has not used). Close returns to the battle, which keeps running underneath. False when there is nothing to show.
+     * nature, EVs or unused moves of an uncaught species). Close returns to the battle, which keeps running underneath. False when there is nothing to show.
      */
-    fun showWild(ctx: Context): Boolean {
+    fun showWild(ctx: Context, focusMove: String? = null): Boolean {
         val data = GameRepo.data ?: return false
         val st = GameRepo.state ?: return false
         val battle = st.battle ?: return false
@@ -88,23 +88,23 @@ object BattleDetails {
         val seen = st.seen + st.caught
         // R18-G (PLAN 243B): its evolution line is in the card under the types, as in the Pokédex entry (the line shows ??? for what you have not seen)
         col.addView(DetailTopCard.evolutionOnly(ctx, data, sp, seen, compact, null), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10) })
-        col.addView(DetailSections.section(ctx, mem, DetailSection.STATS, "Total ${info.stats.total}", titleLevel = info.level) {
-            DetailSections.statsBody(ctx, info.stats, info.level, null, sp, compact)
+        col.addView(DetailSections.section(ctx, mem, DetailSection.STATS, "Total ${info.stats.total}", titleLevel = info.level, boosts = battle.enemy.boosts) {
+            DetailSections.statsBody(ctx, info.stats, info.level, null, sp, compact, battle.enemy.boosts)
         })
-        // moves it has used in this fight; the others stay "?"
+        // A caught species reveals its actual current moves; otherwise only used moves are known.
         val known = info.moves.mapNotNull { it.id }
         val unknown = info.moves.count { it.id == null }
-        col.addView(DetailSections.section(ctx, mem, DetailSection.MOVES, "${known.size} of ${info.moves.size} known") {
+        col.addView(DetailSections.section(ctx, mem, DetailSection.MOVES, "${known.size} of ${info.moves.size} known", forceOpen = focusMove != null) {
             LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(Ui.text(ctx, 11f, 700, R.color.ag_ov).apply { text = "A move shows once it has used it in this fight." })
-                addView(DetailSections.moves(ctx, data, known, compact, unknown))
+                addView(Ui.text(ctx, 11f, 700, R.color.ag_ov).apply { text = if (info.dex == WildDex.CAUGHT) "You have caught this species: all its current moves are known." else "A move shows once it has used it in this fight." })
+                addView(DetailSections.moves(ctx, data, known, compact, unknown, focusMove = focusMove))
             }
         })
         col.addView(DetailSections.section(ctx, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(info.matchups)) { DetailSections.matchups(ctx, info.types, info.name) })
         col.addView(DetailSections.infoSection(ctx, mem, data, sp, emptyList(), null, null, compact,
             lines = listOf("Tier" to info.tier.label, "Pokédex" to if (info.dex == WildDex.CAUGHT) "Caught" else "Seen, not caught yet")))
-        Pickers.info(ctx, "Wild Pokémon", DetailSections.scroll(ctx, col))
+        Pickers.info(ctx, "Wild Pokémon", DetailSections.scroll(ctx, col, focusMove))
         return true
     }
 

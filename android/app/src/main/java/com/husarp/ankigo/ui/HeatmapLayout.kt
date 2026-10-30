@@ -135,6 +135,16 @@ object HeatmapLayout {
         for (r in 0..6) LET[r]?.let { letters += Label(it, 0f, topH + r * (chh + gap) + chh / 2, false) }
         val months = ArrayList<Label>()
         val firstMonday = dates.first().minusDays(lead.toLong())
+        val first = dates.first()
+        if (first.dayOfYear == 1 && dates.last() == LocalDate.of(first.year, 12, 31)) {
+            for (m in 1..12) {
+                val date = LocalDate.of(first.year, m, 1)
+                val slot = lead + date.dayOfYear - 1
+                val x = leftW + (slot / 7) * (cw + gap)
+                months += Label(month(date), x.coerceAtMost(w - 20f), topH - 5f - fs * .35f, false)
+            }
+            return Result(cells, letters, months, topH + 7 * chh + 6 * gap, fs, gap / 2)
+        }
         var lastMonth = -1
         var lastX = -99f
         for (c in 0 until cols) {

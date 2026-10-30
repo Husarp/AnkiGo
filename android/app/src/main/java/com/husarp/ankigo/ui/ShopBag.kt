@@ -22,6 +22,9 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     private val data get() = s.data
     private val state get() = s.state
 
+    private var heldOnly = false
+    private fun holders(id: String) = state.mons.filter { it.heldItem == id }
+
     private val groups = listOf(
         "Balls" to listOf(ItemKind.BALL),
         "Healing" to listOf(ItemKind.HEAL),
@@ -34,55 +37,54 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     /** Fills [into] with the bag sections. */
     fun fill(into: LinearLayout) {
         val ctx = s
-        val owned = state.bag.filter { it.value > 0 }.keys
+        val filter = LinearLayout(ctx)
+        for (held in listOf(false, true)) filter.addView(Ui.text(ctx, 13f, 900, if (heldOnly == held) R.color.ag_mauve else R.color.ag_sub0).apply {
+            text = if (held) "Held" else "All"
+            setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 12), Ui.dp(ctx, 16), Ui.dp(ctx, 12))
+            setOnClickListener { heldOnly = held; s.requestRender() }
+        })
+        into.addView(filter)
+        val owned = (state.bag.filter { it.value > 0 }.keys + state.mons.mapNotNull { it.heldItem }).filter { !heldOnly || holders(it).isNotEmpty() }
         var any = false
         fun section(title: String, ids: List<String>) {
             if (ids.isEmpty()) return
             any = true
-            val n = ids.sumOf { state.count(it) }
+            val n = ids.sumOf { state.count(it) + holders(it).size }
             into.addView(Bits.sect(ctx, title, "$n item${if (n == 1) "" else "s"}"))
-            for (id in ids.sortedBy { Items.name(it) }) into.addView(itemRow(id), rowLp())
+            BagTiles.rows(into, ids.distinct().sortedBy { Items.name(it) }.map { itemRow(it) })
         }
         for ((title, kinds) in groups) section(title, owned.filter { Items.def(it)?.kind in kinds })
         // anything the catalogue doesn't know
         section("Other", owned.filter { id -> groups.none { (_, k) -> Items.def(id)?.kind in k } })
 
-        if (state.tms.isNotEmpty()) {
+        if (!heldOnly && state.tms.isNotEmpty()) {
             any = true
             into.addView(Bits.sect(ctx, "TMs", "${state.tms.size} owned"))
-            for (move in state.tms.sortedBy { data.move(it)?.name ?: it }) into.addView(tmRow(move), rowLp())
+            BagTiles.rows(into, state.tms.sortedBy { data.move(it)?.name ?: it }.map { tmRow(it) })
         }
         if (!any) into.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply {
-            text = "Your bag is empty. Items drop while you study, and the shop sells more."
+            text = if (heldOnly) "None of your Pokémon holds an item." else "Your bag is empty. Items drop while you study, and the shop sells more."
             setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 16), Ui.dp(ctx, 4), 0)
         })
     }
 
-    /** A row has its own 6 dp below (Bits.cardRow). */
-    private fun rowLp(): LinearLayout.LayoutParams = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(s, 6) }
-
-    /** The count "×N" at the right of a row. */
-    private fun countView(count: String): View = Ui.text(s, 13f, 900, R.color.ag_sub1).apply { text = count }
-
-    /** A row: icon, name, the item's line, "×N". A tap opens its window (it no longer acts). */
+    /** Square inventory tile; a tap opens the existing item window. */
     private fun itemRow(id: String): View {
         val ctx = s
-        val n = state.count(id)
+        val n = state.count(id) + holders(id).size
         val line = ItemInfo.plain(ItemInfo.line(data, id, state.caught))
-        val row = Bits.cardRow(ctx, Bits.itemTile(ctx, id), Bits.bodyText(ctx, Items.name(id), line), countView("×$n"))
-        row.contentDescription = ItemCardPlan.detailsLabel("${Items.name(id)}, $line, $n owned")
+        val row = BagTiles.tile(ctx, Bits.itemTile(ctx, id, 48), Items.name(id), line + if (holders(id).isNotEmpty()) " · Held" else "", "×$n")
+        if (holders(id).isNotEmpty()) row.background = Ui.rounded(Bits.blend(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_card), 0.12f), 12, ctx)
+        row.contentDescription = ItemCardPlan.detailsLabel("${Items.name(id)}, $line, $n owned" + if (holders(id).isNotEmpty()) ", Held" else "")
         row.setOnClickListener { host.openCard(CardKeys.bagItem(id)) }
         return row
     }
 
-    /** A TM row: name and type chip (no count: a TM is owned once). */
+    /** TM tile retains its type disc; a TM is owned once. */
     private fun tmRow(move: String): View {
         val ctx = s
         val m = data.move(move)
-        val tile = Bits.tmTile(ctx, m?.type)
-        val mid = Bits.bodyText(ctx, Items.tmName(data, move), null)
-        if (m != null) mid.addView(Bits.typeRow(ctx, listOf(m.type)), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
-        val row = Bits.cardRow(ctx, tile, mid, null)
+        val row = BagTiles.tile(ctx, Bits.tmTile(ctx, m?.type, 48), Items.tmName(data, move), m?.type?.label.orEmpty(), "")
         row.contentDescription = ItemCardPlan.detailsLabel("${Items.tmName(data, move)}, ${m?.type?.label.orEmpty()}")
         row.setOnClickListener { host.openCard(CardKeys.bagTm(move)) }
         return row
@@ -95,7 +97,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
      * while the window is kept open (Y5), showing 0.
      */
     fun spec(key: String): ItemCard.Spec? {
-        CardKeys.bagItemId(key)?.let { id -> return if (state.count(id) > 0 || host.open.keepEmpty) itemSpec(id) else null }
+        CardKeys.bagItemId(key)?.let { id -> return if (state.count(id) > 0 || holders(id).isNotEmpty() || host.open.keepEmpty) itemSpec(id) else null }
         CardKeys.bagTmMove(key)?.let { move -> return if (move in state.tms) tmSpec(move) else null }
         return null
     }
@@ -104,7 +106,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     private fun itemSpec(id: String): ItemCard.Spec {
         val kind = Items.def(id)?.kind
         val none = state.count(id) <= 0 // Y5: a window kept open after a trade took the last ball
-        val act = BagAct.of(kind)?.let { a -> ItemCard.Act(a.label, a.usableNow(state) && !none, if (none) "You have none" else a.offFight) { tap(id) { host.closeCard() } } }
+        val act = BagAct.of(kind)?.let { a -> ItemCard.Act(a.label, a.usableNow(state) && !none, if (none) { if (holders(id).isNotEmpty()) "No free copies" else "You have none" } else a.offFight) { tap(id) { host.closeCard() } } }
         val offer = if (kind == ItemKind.BALL) BallTrade.offer(state, id) else null
         val trade = offer?.let { o ->
             val confirming = host.open.confirming && offer.canTrade
@@ -113,7 +115,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
                 onCancel = { host.open.confirmTrade(false); s.requestRender() },
                 onConfirm = { tradeUp(id) })
         }
-        return ItemCard.Spec(id, act = act, trade = trade)
+        return ItemCard.Spec(id, act = act, trade = trade, holders = holders(id))
     }
 
     private fun tmSpec(move: String): ItemCard.Spec =

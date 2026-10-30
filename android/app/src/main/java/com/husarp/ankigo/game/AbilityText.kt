@@ -254,16 +254,16 @@ internal object AbilityText {
     private const val LOOKS = "it only changes how the Pokémon looks."
     private const val FORMS = "AnkiGo has no form changes."
     private const val CRITS = "AnkiGo has no critical hits."
-    private const val HAZARDS = "there are no entry hazards in fights."
+    private const val HAZARDS = "its automatic Toxic Spikes effect is not implemented."
 
     /** Why an ability can do nothing here -> its abilities as "id=Name" pairs. */
     private val NO_EFFECT_GROUPS: Map<String, String> = linkedMapOf(
         ITEMS to "gluttony=Gluttony pickup=Pickup unburden=Unburden cheekpouch=Cheek_Pouch ripen=Ripen klutz=Klutz pickpocket=Pickpocket magician=Magician " +
-            "ballfetch=Ball_Fetch cudchew=Cud_Chew honeygather=Honey_Gather unnerve=Unnerve stickyhold=Sticky_Hold",
-        PARTNER to "healer=Healer plus=Plus minus=Minus telepathy=Telepathy friendguard=Friend_Guard battery=Battery powerspot=Power_Spot receiver=Receiver " +
+            "ballfetch=Ball_Fetch cudchew=Cud_Chew honeygather=Honey_Gather unnerve=Unnerve",
+        PARTNER to "healer=Healer telepathy=Telepathy friendguard=Friend_Guard battery=Battery powerspot=Power_Spot receiver=Receiver " +
             "commander=Commander dancer=Dancer hospitality=Hospitality curiousmedicine=Curious_Medicine",
-        SWITCH to "runaway=Run_Away naturalcure=Natural_Cure magnetpull=Magnet_Pull arenatrap=Arena_Trap shadowtag=Shadow_Tag wimpout=Wimp_Out " +
-            "emergencyexit=Emergency_Exit zerotohero=Zero_to_Hero suctioncups=Suction_Cups",
+        SWITCH to "runaway=Run_Away naturalcure=Natural_Cure magnetpull=Magnet_Pull wimpout=Wimp_Out " +
+            "emergencyexit=Emergency_Exit zerotohero=Zero_to_Hero",
         KNOCK_OUT to "beastboost=Beast_Boost moxie=Moxie soulheart=Soul-Heart chillingneigh=Chilling_Neigh grimneigh=Grim_Neigh supremeoverlord=Supreme_Overlord",
         PP to "pressure=Pressure",
         INFO to "frisk=Frisk anticipation=Anticipation forewarn=Forewarn",
@@ -281,7 +281,14 @@ internal object AbilityText {
         }
     }
 
-    private val BUILT_BY_ID: Map<String, Row> = (ROWS + MORE).associateBy { it.id }
+    private val BUILT_BY_ID: Map<String, Row> = (ROWS + MORE + listOf(
+        Row("stickyhold", "Sticky Hold", "Trick, Switcheroo and Corrosive Gas can't take its held item."),
+        Row("plus", "Plus", "Gear Up raises its Attack and Sp. Atk by 1; Magnetic Flux raises its Defense and Sp. Def by 1."),
+        Row("minus", "Minus", "Gear Up raises its Attack and Sp. Atk by 1; Magnetic Flux raises its Defense and Sp. Def by 1."),
+        Row("suctioncups", "Suction Cups", "Roar and Whirlwind can't force it out of the wild battle."),
+        Row("arenatrap", "Arena Trap", "Stops grounded opponents from switching for 3 rounds after entry. Ghost types can still switch."),
+        Row("shadowtag", "Shadow Tag", "Stops opponents from switching for 3 rounds after entry. Ghost types and other Shadow Tag users can still switch."),
+    )).associateBy { it.id }
     private val BY_ID: Map<String, Row> = BUILT_BY_ID + SKIPPED.associate { it.second.id to it.second }
 
     /** The ids of every ability that works in battle (= the abilities [Abilities] and [AbilitiesMore] build). */

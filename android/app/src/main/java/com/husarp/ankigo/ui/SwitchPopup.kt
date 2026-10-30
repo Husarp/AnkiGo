@@ -1,5 +1,8 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.Hazards
+import com.husarp.ankigo.game.SimpleView
+import com.husarp.ankigo.game.BattleSide
 import com.husarp.ankigo.game.lookNum
 import android.content.Context
 import android.text.SpannableString
@@ -33,6 +36,13 @@ object SwitchPopup {
      */
     fun show(a: Context, data: GameData, state: GameState, header: String? = null, swap: Boolean = false, onPick: (String) -> Unit) {
         lateinit var dlg: AppDialog
+        if (!swap) {
+            val battle = state.battle
+            val main = state.main
+            if (battle != null && main != null) Hazards.blocker(SimpleView.of(data, battle, main))?.let {
+                Ui.toast(a, it); return
+            }
+        }
         val body = content(a, data, state,
             onPick = { dlg.dismiss(); onPick(it) },
             onDetails = { MonDetail.show(a, data, it) },
@@ -55,6 +65,13 @@ object SwitchPopup {
         if (header != null) col.addView(Ui.text(a, 13f, 800, R.color.ag_sub1).apply { text = header },
             LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(a, 12) })
 
+        if (!swap && state.battle?.field?.player?.keys?.any { it in Hazards.hazards } == true) {
+            val names = state.battle!!.field.player.filterKeys { it in Hazards.hazards }.map { (id, n) ->
+                (data.move(id)?.name ?: ConditionMarks.def(id)?.word ?: id) + if (n > 1) " ×$n" else ""
+            }.joinToString(", ")
+            col.addView(Ui.text(a, 12f, 700, R.color.ag_sub1).apply { text = "On your side: $names. Effects apply when a Pokémon switches in." },
+                LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(a, 8) })
+        }
         val mons = state.team.mapNotNull { state.mon(it) }
         val mainUid = state.team.firstOrNull()
         val grid = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
@@ -65,7 +82,11 @@ object SwitchPopup {
                 val lp = LinearLayout.LayoutParams(0, -2, 1f).also {
                     if (i > 0) it.marginStart = Ui.dp(a, 8)
                 }
-                row.addView(if (mon != null) card(a, data, mon, mon.uid == mainUid, compact, swap, onPick, onDetails) else View(a), lp)
+                row.addView(if (mon != null) card(a, data, mon, mon.uid == mainUid, compact, swap, onPick, onDetails,
+                    if (swap || mon.uid == mainUid) 0 else state.battle?.let { b ->
+                        val v = SimpleView(data, mon, b.wild, BattleSide(), b.enemy, battle = b)
+                        Hazards.entryDamage(v, true)
+                    } ?: 0) else View(a), lp)
             }
             grid.addView(row, LinearLayout.LayoutParams(-1, -2).also { if (r > 0) it.topMargin = Ui.dp(a, 8) })
         }
@@ -73,7 +94,7 @@ object SwitchPopup {
         return Bits.scroll(a, col)
     }
 
-    private fun card(a: Context, data: GameData, mon: Mon, isMain: Boolean, compact: Boolean, swap: Boolean, onPick: (String) -> Unit, onDetails: (Mon) -> Unit): View {
+    private fun card(a: Context, data: GameData, mon: Mon, isMain: Boolean, compact: Boolean, swap: Boolean, onPick: (String) -> Unit, onDetails: (Mon) -> Unit, hazardDamage: Int = 0): View {
         val fainted = mon.hp <= 0
         val maxHp = StatCalc.maxHp(data, mon).coerceAtLeast(1)
         val frac = (mon.hp.toFloat() / maxHp).coerceIn(0f, 1f)
@@ -100,6 +121,9 @@ object SwitchPopup {
                 if (fainted) { val lv = text.length; text = SpannableString("$text · fainted").apply { setSpan(ForegroundColorSpan(Ui.c(a, R.color.ag_sub0)), lv, length, 0) } }
                 maxLines = 1; gravity = Gravity.CENTER
             }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 2) })
+            if (hazardDamage > 0) addView(Ui.text(a, 11f, 800, R.color.ag_red).apply {
+                text = "−$hazardDamage HP on entry"; gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 3) })
             addView(BarView(a).apply { set(frac, Ui.hpColor(a, frac), false) },
                 LinearLayout.LayoutParams(-1, Ui.dp(a, 5)).also { it.topMargin = Ui.dp(a, 6) })
         }

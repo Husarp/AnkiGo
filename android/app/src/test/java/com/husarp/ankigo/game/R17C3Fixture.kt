@@ -59,6 +59,7 @@ internal object R17C3 {
         Move("chloroblast", "Chloroblast", Type.GRASS, S, 150, 95),
         Move("wildswing", "Wild Swing", N, P, 40, 1),
         // never picked
+        Move("batonpass", "Baton Pass", N, ST, 0, null, target = "self", selfSwitch = true),
         Move("fling", "Fling", Type.DARK, P, 60, 100),
         Move("roar", "Roar", N, ST, 0, null, target = "normal"),
         Move("helpinghand", "Helping Hand", N, ST, 0, null, target = "adjacentAlly", priority = 5),

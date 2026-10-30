@@ -355,6 +355,15 @@ object BattleEngine {
         /** The answers-based damage factor of [p]'s attacks in this round (the Main's multiplier, the wild one's power). */
         fun damageScale(p: Boolean): Double = if (p) mult else enemyPower
 
+        val escaped: Boolean get() = this.field.player[RemainingMoves.ESCAPED] == 1
+
+        /** The current wild battle ends immediately, through the same event as an escape item. */
+        fun escapeWild() {
+            if (escaped) return
+            field.player[RemainingMoves.ESCAPED] = 1
+            out += GameEvent.Fled(wild.name)
+        }
+
         // ---- writing events ----
 
         /** Writes an [GameEvent.Effect] for [p]: the line [text], its [kind] and the numbers the kind carries ([label] = the short float text). */
@@ -427,6 +436,7 @@ object BattleEngine {
             for (p in order) {
                 act(p, if (p) playerMove else enemyMove)
                 checkFaint(true); checkFaint(false)
+                if (escaped) return
             }
             // R18 (PLAN 259): a faint ends the fight (Game.settleFight drops the battle either way; mainline ends a wild battle at the KO): no end of round
             if (wild.hp <= 0 || main.hp <= 0) return
@@ -444,6 +454,7 @@ object BattleEngine {
             if (main.hp <= 0 || wild.hp <= 0) return
             act(false, pickSwitchHitMove(data, battle, main, rng, moveChoice, this))
             checkFaint(true); checkFaint(false)
+            if (escaped) return
             rulesEach { it.afterFreeHit(this) } // R17C FIX-A: a free hit is no round: what lasts "until the end of the round" ends here, not in the next real round
         }
 

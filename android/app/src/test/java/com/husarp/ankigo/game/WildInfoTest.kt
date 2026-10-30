@@ -59,6 +59,16 @@ class WildInfoTest {
         assertEquals(WildDex.CAUGHT, WildInfo.of(data, s, battle(), emptySet())!!.dex)
     }
 
+    @Test fun previouslyCaughtSpeciesShowsTheActualWildMovesFromTheStart() {
+        val state = TestData.state(data)
+        state.caught += 92
+        val b = battle(moves = listOf("shadowball", "hypnosis"))
+        val info = WildInfo.of(data, state, b, emptySet())!!
+        assertEquals(listOf("shadowball", "hypnosis"), info.moves.map { it.id })
+        state.mons.removeAll { it.species == 92 } // catch history survives releases
+        assertEquals(info.moves, WildInfo.of(data, state, b, emptySet())!!.moves)
+    }
+
     @Test fun unknownSpeciesGivesNothing() {
         val b = battle()
         b.wild.species = 99999

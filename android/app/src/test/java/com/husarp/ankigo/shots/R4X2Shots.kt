@@ -58,6 +58,7 @@ class R4X2Shots {
 
     @Test fun unknownMoves() = paparazzi.shootWith("r4x2-unknown", listOf(Size.PHONE, Size.SPLIT)) { ctx ->
         val b = BattleShotKit.bound(ctx)
+        GameRepo.state!!.caught.remove(GameRepo.state!!.battle!!.wild.species)
         val scene = window(ctx)
         val t = texts(scene)
         assertEquals("every move is still unknown", 2, t.count { it == "?" })
@@ -65,10 +66,23 @@ class R4X2Shots {
         FrameLayout(ctx).apply { addView(b.root, FrameLayout.LayoutParams(-1, -1)); addView(scene, FrameLayout.LayoutParams(-1, -1)) }
     }
 
+    @Test fun caughtSpeciesShowsEveryCurrentMoveImmediately() = paparazzi.shootWith("r22m-wild-known", listOf(Size.PHONE)) { ctx ->
+        val st = GameRepo.state!!
+        val wild = st.battle!!.wild
+        st.caught += wild.species
+        val scene = window(ctx)
+        val t = texts(scene)
+        assertEquals(0, t.count { it == "?" })
+        for (id in wild.moves) assertTrue(id, GameRepo.data!!.move(id)!!.name in t)
+        assertFalse(t.any { it == "IV" || it == "EV" || it.contains("Nature") })
+        scene
+    }
+
     @Test fun usedMovesAndTier() = paparazzi.shootWith("r4x2-used", listOf(Size.PHONE, Size.FLOATBATTLE)) { ctx ->
         openInfo()
         val st = GameRepo.state!!
         val battle = st.battle!!
+        st.caught.remove(battle.wild.species)
         battle.tier = Tier.LEGENDARY
         battle.wild.shiny = true
         battle.wild.gender = 'F'

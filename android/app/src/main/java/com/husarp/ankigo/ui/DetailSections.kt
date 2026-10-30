@@ -55,7 +55,7 @@ object DetailSections {
      * [titleLevel] (R18-G, PLAN 254): the title carries a level, "Stats · Lv 23" in its band colour, open or folded.
      */
     fun section(a: Context, mem: DetailOpen, s: DetailSection, summary: CharSequence?, title: String = s.title, onFirstOpen: (() -> Unit)? = null,
-                titleLevel: Int? = null, body: () -> View): View {
+                titleLevel: Int? = null, boosts: IntArray? = null, forceOpen: Boolean = false, body: () -> View): View {
         val card = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 14, a)
@@ -72,8 +72,25 @@ object DetailSections {
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = Ui.dp(a, 48)
             setPadding(Ui.dp(a, 14), 0, Ui.dp(a, 8), 0)
-            addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = if (titleLevel != null) LevelTier.titled(a, title, titleLevel) else title }, LinearLayout.LayoutParams(-2, -2))
-            addView(sum, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 10) })
+            addView(ImageView(a).apply {
+                setImageResource(when (s) {
+                    DetailSection.STATS -> R.drawable.ic_stats
+                    DetailSection.MOVES -> R.drawable.ic_swords
+                    DetailSection.MATCHUPS -> R.drawable.ic_compare
+                    DetailSection.TRAINING -> R.drawable.ic_bolt
+                    else -> R.drawable.ic_info
+                })
+                setColorFilter(Ui.c(a, R.color.ag_mauve))
+            }, LinearLayout.LayoutParams(Ui.dp(a, 16), Ui.dp(a, 16)).also { it.marginEnd = Ui.dp(a, 6) })
+            addView(FlowRow(a, Ui.dp(a, 4), centered = false).apply {
+                addView(Ui.text(a, 12f, 900, R.color.ag_mauve).apply {
+                    text = if (titleLevel != null) LevelTier.titled(a, title.uppercase(), titleLevel) else title.uppercase()
+                })
+                if (boosts != null) ConditionMarks.STAT_KEYS.forEachIndexed { i, key ->
+                    if (boosts[i] != 0) addView(StatPillView(a, key, boosts[i]))
+                }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(sum, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 10) })
             addView(chevron, LinearLayout.LayoutParams(Ui.dp(a, 24), Ui.dp(a, 24)).also { it.marginStart = Ui.dp(a, 4) })
         }
         val holder = FrameLayout(a)
@@ -87,12 +104,16 @@ object DetailSections {
                 onFirstOpen?.invoke()
             }
             holder.visibility = if (open) View.VISIBLE else View.GONE
-            sum.visibility = if (open || summary.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
+            sum.visibility = if (open || summary.isNullOrEmpty()) View.GONE else View.VISIBLE
             chevron.rotation = if (open) 90f else 0f
             bar.contentDescription = "${if (titleLevel != null) DetailFormat.levelTitle(title, titleLevel) else title}, ${if (open) "open" else "closed"}"
         }
-        apply(mem.isOpen(s))
-        bar.setOnClickListener { apply(mem.toggle(s)) }
+        apply(forceOpen || mem.isOpen(s))
+        bar.setOnClickListener {
+            // A focused move can open this window without changing the saved fold preference.
+            if (holder.visibility == View.VISIBLE && !mem.isOpen(s)) apply(false)
+            else apply(mem.toggle(s))
+        }
         card.layoutParams = LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) }
         return card
     }
@@ -159,17 +180,31 @@ object DetailSections {
     // ---------- Stats ----------
 
     /**
-     * The Stats section body: hint, the six bars with [stats] (▲/▼ from [nature]; null = no arrows) and the grey base of [sp] at the
-     * end, then the Total row. Your Pokémon's details and the wild Pokémon's window build the same block.
+     * The Stats section body: six stat bars with battle changes, grey species bases, Total, then the nature summary. Your Pokémon's details and the wild Pokémon's window build the same block.
      */
-    fun statsBody(a: Context, stats: Stats, level: Int, nature: Nature?, sp: Species, compact: Boolean): View = LinearLayout(a).apply {
+    fun statsBody(a: Context, stats: Stats, level: Int, nature: Nature?, sp: Species, compact: Boolean, boosts: IntArray? = null): View = LinearLayout(a).apply {
         orientation = LinearLayout.VERTICAL
         addView(DetailParts.statHint(a))
         val max = DetailMath.monStatMax(level)
         Stat.entries.forEach { s ->
-            addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), if (nature == null) 0 else DetailMath.natureDir(nature, s), sp.base[s], compact, wholeRow = true))
+            addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), 0, sp.base[s], compact, wholeRow = true, stage = if (s == Stat.HP) 0 else boosts?.getOrNull(s.ordinal - 1) ?: 0))
         }
         addView(DetailParts.totalRow(a, stats.total, sp.base.total, wholeRow = true))
+        if (nature != null) addView(Ui.text(a, 12f, 700, R.color.ag_sub1).apply {
+            val line = android.text.SpannableStringBuilder("Nature: ${nature.label}")
+            fun part(text: String, color: Int) {
+                val start = line.length; line.append(text)
+                line.setSpan(android.text.style.ForegroundColorSpan(Ui.c(a, color)), start, line.length, 0)
+            }
+            if (nature.plus == null || nature.minus == null) line.append(" (no change)")
+            else {
+                fun short(s: Stat) = when (s) { Stat.ATK -> "Atk"; Stat.DEF -> "Def"; Stat.SPE -> "Spe"; else -> DetailMath.statName(s) }
+                part("  ▲ ${short(nature.plus)} +10%", R.color.ag_green)
+                part(", ▼ ${short(nature.minus)} −10%", R.color.ag_red)
+            }
+            text = line
+            setPadding(0, Ui.dp(a, 8), 0, 0)
+        })
     }
 
     // ---------- Moves ----------
@@ -185,7 +220,7 @@ object DetailSections {
     /** The round-cornered tile with a move-kind icon: peach burst = Physical, blue rings = Special, grey half-circle = Status. */
     fun kindTile(a: Context, c: Category, sizeDp: Int): View = FrameLayout(a).apply {
         val tone = Ui.c(a, kindTone(c))
-        background = Ui.rounded(Bits.blend(tone, Ui.c(a, R.color.ag_mantle), 0.2f), 9, a)
+        background = null
         addView(ImageView(a).apply {
             setImageResource(kindIcon(c))
             setColorFilter(tone, PorterDuff.Mode.SRC_IN)
@@ -198,7 +233,7 @@ object DetailSections {
      * [unknown] = moves that are not known yet (the wild Pokémon's unused ones): a grey "?" line each, after the known ones.
      * [levels] (R10-B4, the Pokédex entry's learnset) = one small label per id ("Lv 12") at the start of its row.
      */
-    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0, levels: List<String>? = null): View {
+    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0, levels: List<String>? = null, focusMove: String? = null): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         val tap = MoveTap()
         if (ids.isEmpty() && unknown == 0) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "No moves" })
@@ -215,6 +250,7 @@ object DetailSections {
                 addView(Ui.text(a, 9f, 700, R.color.ag_sub0).apply { text = label })
             }
             val row = LinearLayout(a).apply {
+                tag = "detail-move:$id"
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 minimumHeight = Ui.dp(a, 48)
@@ -247,6 +283,13 @@ object DetailSections {
                 m.accuracy?.let { "accuracy $it" }).joinToString(", ")
             row.contentDescription = "$said. Tap for what it does"
             row.setOnClickListener { tap.toggle(row, desc, said) }
+            if (id == focusMove) row.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    v.removeOnAttachStateChangeListener(this)
+                    tap.toggle(row, desc, said)
+                }
+                override fun onViewDetachedFromWindow(v: View) {}
+            })
             // a touch that starts on a row belongs to the row's click alone: the scroll's outside-tap must not also act on it
             row.setOnTouchListener { _, ev -> if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) tap.downOnRow(); false }
             col.addView(LinearLayout(a).apply {
@@ -284,7 +327,19 @@ object DetailSections {
     }
 
     /** The ScrollView of a details window: like [Bits.scroll], and it lets an open move text close on a tap anywhere. */
-    internal fun scroll(ctx: Context, child: View): android.widget.ScrollView = TapWatchScroll(ctx).apply { addView(child) }
+    internal fun scroll(ctx: Context, child: View, focusMove: String? = null): android.widget.ScrollView = TapWatchScroll(ctx).apply {
+        addView(child)
+        if (focusMove != null) addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
+                val target = child.findViewWithTag<View>("detail-move:$focusMove") ?: return
+                removeOnLayoutChangeListener(this)
+                val rect = android.graphics.Rect()
+                target.getDrawingRect(rect)
+                offsetDescendantRectToMyCoords(target, rect)
+                scrollTo(0, rect.top - paddingTop)
+            }
+        })
+    }
 
     /**
      * The one move whose "what it does" is open (at most one). Tapping its row again or another row, or any plain tap in the details
@@ -423,10 +478,7 @@ object DetailSections {
     fun evolution(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onTap: ((Species) -> Unit)?): View {
         val line = EvoLine.of(data, sp)
         if (line.standalone) return Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Does not evolve" }
-        val tree = EvoTreeView(a, data, line.root, sp, seen, compact, onTap)
-        // centred when it fits; when it does not (the 340 dp floating card) the tree first takes a narrower look (shorter arrows with
-        // the method wrapped, smaller sprites, stacked downwards), then is drawn smaller: never clipped, never scrolling sideways
-        return FitWidth(a).apply { addView(tree) }
+        return EvolutionRows(a, data, line.root, sp, seen, onTap)
     }
 
     private fun caption(a: Context, text: String): TextView = Ui.text(a, 10f, 900, R.color.ag_sub0).apply { this.text = text.uppercase(); letterSpacing = 0.08f }

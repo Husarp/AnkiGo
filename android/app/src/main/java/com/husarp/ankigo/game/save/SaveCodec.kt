@@ -59,7 +59,7 @@ object SaveCodec {
                         value(v.reviews); value(v.won); value(v.caught); value(v.shinies); value(v.xp); value(v.cash)
                         v.buttons.forEach { value(it) }
                         value(v.spent); value(v.healItems)
-                        value(v.dmgDealt); value(v.dmgTaken); value(v.dmgBlocked); value(v.misses)
+                        value(v.dmgDealt); value(v.dmgTaken); value(v.dmgBlocked); value(v.misses); value(v.dailyGoal)
                     }
                 }
             }
@@ -353,7 +353,7 @@ object SaveCodec {
             s.history[k] = DayLog(
                 a.optInt(0), a.optInt(1), a.optInt(2), a.optInt(3), a.optInt(4), a.optInt(5),
                 IntArray(5) { a.optInt(6 + it) }, a.optInt(11), a.optInt(12),
-                a.optInt(13), a.optInt(14), a.optInt(15), a.optInt(16),
+                a.optInt(13), a.optInt(14), a.optInt(15), a.optInt(16), a.optInt(17).coerceAtLeast(0),
             )
         }
     }

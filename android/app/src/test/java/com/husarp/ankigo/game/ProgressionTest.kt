@@ -351,38 +351,110 @@ class ProgressionTest {
         assertEquals(36, xs[0].xp); assertEquals(54, xs[1].xp)
     }
 
-    @Test fun rewardDefeatLevelEvolves() {
+    @Test fun rewardDefeatMakesEvolutionReadyWithoutEvolving() {
         val (s, m) = st(1, 15)
-        m.moves.clear(); m.moves += "tackle"
         val e = ev()
-        // wild lv 50 Mindlord (baseExp 340): xp = 2429, enough for 15 -> 16 (721)
         Progression.rewardDefeat(data, s, m, TestData.mon(data, 150, 50, uid = "wild"), noon, Random(1), e)
-        assertEquals(2, m.species)
-        assertEquals("Leafbud", m.name)
-        val ei = e.indexOfFirst { it is GameEvent.Evolved }
-        assertTrue(ei > e.indexOfLast { it is GameEvent.LevelUp })
-        assertTrue(16 in s.badges)
-        assertEquals(1, s.evolutions)
+        assertEquals(1, m.species)
+        assertTrue(e.none { it is GameEvent.Evolved })
+        assertEquals(listOf(2), Progression.readyEvolutions(data, s, m, noon).map { it.to })
+        assertEquals(0, s.evolutions)
     }
 
-    @Test fun rewardDefeatFriendshipEvolution() {
-        val (s, m) = st(172, 5, listOf("tackle"))
+    @Test fun rewardDefeatMakesFriendshipReadyWithoutEvolving() {
+        val (s, m) = st(172, 5)
         m.friendship = 159
         val e = ev()
-        Progression.rewardDefeat(data, s, m, wild16(1), noon, Random(1), e) // +5..9 -> >= 164
-        assertEquals(25, m.species)
-        assertTrue(e.any { it is GameEvent.Evolved })
+        Progression.rewardDefeat(data, s, m, wild16(1), noon, Random(1), e)
+        assertEquals(172, m.species)
+        assertTrue(e.none { it is GameEvent.Evolved })
+        assertEquals(listOf(25), Progression.readyEvolutions(data, s, m, noon).map { it.to })
     }
 
-    @Test fun rewardDefeatHolderEvolves() {
+    @Test fun rewardDefeatHolderWaitsForChoice() {
         val (s, m) = st(16, 5)
         val h = TestData.mon(data, 1, 15, uid = "holder")
         s.mons += h
-        s.settings.xpShareUid = "holder"
+        s.settings.xpShareUid = h.uid
         val e = ev()
         Progression.rewardDefeat(data, s, m, TestData.mon(data, 150, 50, uid = "wild"), noon, Random(1), e)
-        assertEquals(2, h.species)
-        assertEquals("holder", e.of<GameEvent.Evolved>().single().uid)
+        assertEquals(1, h.species)
+        assertTrue(e.none { it is GameEvent.Evolved })
+        assertEquals(listOf(2), Progression.readyEvolutions(data, s, h, noon).map { it.to })
+    }
+
+    @Test fun everyReadyBranchIsOfferedAndItemIsConsumedOnlyOnChoice() {
+        val evolutions = listOf(Evolution(11, EvoKind.ITEM, item = "water-stone"),
+            Evolution(12, EvoKind.ITEM, item = "thunder-stone"), Evolution(13, EvoKind.FRIENDSHIP, time = "day", minFriendship = 160))
+        val d = TestData.data(listOf(TestData.species(10, evolutions = evolutions), TestData.species(11), TestData.species(12), TestData.species(13)))
+        val s = TestData.state(d, 10, 20)
+        val m = s.main!!
+        m.friendship = 160
+        s.bag["water-stone"] = 1; s.bag["thunder-stone"] = 1
+        assertEquals(listOf(11, 12, 13), Progression.readyEvolutions(d, s, m, noon).map { it.to })
+        assertEquals(listOf(11, 12), Progression.readyEvolutions(d, s, m, midnight).map { it.to })
+        m.heldItem = "everstone"
+        assertTrue(Progression.readyEvolutions(d, s, m, noon).isEmpty())
+        m.heldItem = null
+        assertTrue(Game(d, s, Random(1)) { noon }.chooseEvolution(m.uid, 12).ok)
+        assertEquals(12, m.species)
+        assertEquals(1, s.count("water-stone"))
+        assertEquals(0, s.count("thunder-stone"))
+    }
+
+    @Test fun selectedBranchWinsEvenWhenTwoTargetsUseTheSameItem() {
+        val d = TestData.data(listOf(TestData.species(10, evolutions = listOf(
+            Evolution(11, EvoKind.ITEM, item = "water-stone"), Evolution(12, EvoKind.ITEM, item = "water-stone"))),
+            TestData.species(11), TestData.species(12)))
+        val s = TestData.state(d, 10)
+        s.bag["water-stone"] = 1
+        assertTrue(Game(d, s, Random(1)) { noon }.chooseEvolution(s.main!!.uid, 12).ok)
+        assertEquals(12, s.main!!.species)
+        assertEquals(0, s.count("water-stone"))
+    }
+
+    @Test fun explicitEvolutionRespectsSuppressedEverstoneForEveryBranch() {
+        val d = TestData.data(listOf(TestData.species(10, evolutions = listOf(
+            Evolution(11, EvoKind.LEVEL, level = 5), Evolution(12, EvoKind.ITEM, item = "water-stone"))),
+            TestData.species(11), TestData.species(12), TestData.species(20)))
+        for (suppression in listOf("embargo", "magicroom")) for (target in listOf(11, 12)) {
+            val s = TestData.state(d, 10, 20)
+            val m = s.main!!
+            m.heldItem = "everstone"
+            s.bag["water-stone"] = 1
+            s.battle = Battle(TestData.mon(d, 20, 20, uid = "wild"), Tier.NORMAL)
+            assertTrue(Progression.readyEvolutions(d, s, m, noon).isEmpty())
+            if (suppression == "embargo") s.battle!!.player.volatiles[suppression] = 5
+            else s.battle!!.field.rooms[suppression] = 5
+            assertEquals(listOf(11, 12), Progression.readyEvolutions(d, s, m, noon).map { it.to })
+            assertTrue(Game(d, s, Random(1)) { noon }.chooseEvolution(m.uid, target).ok)
+            assertEquals(target, m.species)
+            assertEquals(if (target == 12) 0 else 1, s.count("water-stone"))
+        }
+    }
+
+    @Test fun explicitLevelAndFriendshipEvolutionSettleAchievementsImmediately() {
+        for ((species, target) in listOf(1 to 2, 172 to 25)) {
+            val (s, m) = st(species, 16)
+            m.friendship = 255
+            Achievements.onReady(s, data, noon - 1)
+            assertTrue(s.achTiers["evolutions"].orEmpty().isEmpty())
+            val choice = Game(data, s, Random(1)) { noon }.chooseEvolution(m.uid, target)
+            assertTrue(choice.ok)
+            assertEquals(listOf(noon), s.achTiers["evolutions"])
+            assertTrue(choice.events.of<GameEvent.AchievementReached>().any { it.id == "evolutions" && it.tier == 0 })
+            assertEquals(1, choice.events.of<GameEvent.Evolved>().size)
+        }
+    }
+
+    @Test fun explicitEvolutionRechecksAndCannotRepeat() {
+        val (s, m) = st(1, 16)
+        val game = Game(data, s, Random(1)) { noon }
+        assertFalse(game.chooseEvolution(m.uid, 3).ok)
+        assertTrue(game.chooseEvolution(m.uid, 2).ok)
+        assertEquals(2, m.species)
+        assertFalse(game.chooseEvolution(m.uid, 2).ok)
+        assertEquals(1, s.evolutions)
     }
 
     // ---- level evolution ----

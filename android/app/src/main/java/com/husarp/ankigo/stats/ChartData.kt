@@ -33,6 +33,7 @@ enum class ChartMetric(
     // Study
     REVIEWS("Reviews", ChartGroup.STUDY, "bars", ChartKind.TIME, "cards", "reviews", listOf("Cards"), true),
     TIME("Time studied", ChartGroup.STUDY, "clock", ChartKind.TIME, "min", "min", listOf("In AnkiGo", "Live"), false),
+    SECONDS_PER_CARD("Seconds per card", ChartGroup.STUDY, "speed", ChartKind.TIME, "s / card", "s / card", listOf("Seconds per card"), false),
     RETENTION("Retention", ChartGroup.STUDY, "check", ChartKind.TIME, "%", "% kept", listOf("Retention"), false),
     NEW_CARDS("New cards", ChartGroup.STUDY, "plus", ChartKind.TIME, "cards", "new cards", listOf("New cards"), true),
     BUTTONS("Buttons pressed", ChartGroup.STUDY, "gamepad", ChartKind.TIME, "answers", "answers", listOf("Again", "Hard", "Good", "Easy"), false),
@@ -88,6 +89,7 @@ enum class ChartPeriod(val days: Int, val defaultGrain: ChartGrain) {
 data class Bar(
     val label: String, val startDay: String, val endDay: String, val values: List<Double>, val hasData: Boolean = true,
     val detail: List<String> = emptyList(),
+    val dailyGoal: Int? = null,
 )
 
 /**
@@ -174,7 +176,7 @@ object ChartData {
      */
     fun build(
         metric: ChartMetric, period: ChartPeriod, deck: String?, snap: StatsSnapshot, history: Map<String, DayLog>, today: String,
-        grain: ChartGrain? = null, goal: Int = Tuning.DAILY_AVERAGE, collection: CollectionStats? = null, goalFor: ((String) -> Int)? = null,
+        grain: ChartGrain? = null, goal: Int = Tuning.DAILY_AVERAGE, collection: CollectionStats? = null, goalFor: ((String) -> Int)? = null, calendarYear: Int? = null,
     ): ChartSeries {
         val p = effectivePeriod(metric, period)
         val d = deck?.takeIf { it.isNotBlank() }
@@ -182,10 +184,26 @@ object ChartData {
             ?: return ChartSeries(metric, p, d, emptyList(), 0.0, 0.0, 0.0, null, metric.unit, "", false, true)
         when (metric.kind) {
             ChartKind.CATEGORY -> return categories(metric, p, d, snap, today, collection)
-            ChartKind.HEATMAP -> return heatmap(metric, p, d, snap, history, today, t, goal, goalFor)
+            ChartKind.HEATMAP -> return heatmap(metric, p, d, snap, history, today, t, goal, goalFor, calendarYear)
             ChartKind.TIME -> Unit
         }
         val g = effectiveGrain(metric, p, grain)
+        if (metric == ChartMetric.SECONDS_PER_CARD) {
+            val days = (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
+            fun average(dates: List<LocalDate>): Double? = StatsText.secondsPerCard(
+                dates.sumOf { snap.timeTotalOn(it.toString()) }, dates.sumOf { snap.timedAnswersByDay[it.toString()] ?: 0L })
+            val bars = buckets(days, g, p).map { grp ->
+                val value = average(grp.dates)
+                Bar(grp.label, grp.dates.first().toString(), grp.dates.last().toString(), listOf(value ?: 0.0), value != null,
+                    listOf("${periodText(grp.dates.first(), grp.dates.last(), t)} · ${StatsText.averageText(value)}"))
+            }
+            val daily = days.mapNotNull { day -> average(listOf(day))?.let { day to it } }
+            val fastest = daily.minByOrNull { it.second }
+            val total = average(days)
+            return ChartSeries(metric, p, d, bars, total ?: 0.0,
+                if (daily.isEmpty()) 0.0 else daily.map { it.second }.average(), fastest?.second ?: 0.0,
+                fastest?.first?.toString(), metric.unit, StatsText.TIMED_SOURCE, false, total == null, grain = g)
+        }
         val plan = plan(metric, p, d, snap, history, today)
         val forward = metric == ChartMetric.DUE
         val days = if (forward) (1..p.days).map { t.plusDays(it.toLong()) } else (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
@@ -197,7 +215,8 @@ object ChartData {
             val values = finish(metric, sum)
             val has = hasData(metric, sum)
             Bar(grp.label, grp.dates.first().toString(), grp.dates.last().toString(), values, hasData = has,
-                detail = if (plan.loading) emptyList() else barDetail(metric, grp.dates, sum, values, has, t))
+                detail = if (plan.loading) emptyList() else barDetail(metric, grp.dates, sum, values, has, t),
+                dailyGoal = if (metric == ChartMetric.REVIEWS && g == ChartGrain.DAY) (history[grp.dates.first().toString()]?.dailyGoal?.takeIf { it > 0 } ?: goalFor?.invoke(grp.dates.first().toString()) ?: goal).coerceAtLeast(1) else null)
         }
 
         val daily = perDay.map { (date, v) -> date to dayNumber(metric, v) }
@@ -272,7 +291,7 @@ object ChartData {
             ChartMetric.WINS -> game("AnkiGo") { it.won }
             ChartMetric.MONEY -> game("AnkiGo") { it.cash }
             // not time metrics: [build] hands these to categories() / heatmap() before it asks for a plan
-            ChartMetric.CARD_STATES, ChartMetric.STREAK_CALENDAR, ChartMetric.DEX_PROGRESS, ChartMetric.PER_TYPE, ChartMetric.SHINIES_RARE ->
+            ChartMetric.SECONDS_PER_CARD, ChartMetric.CARD_STATES, ChartMetric.STREAK_CALENDAR, ChartMetric.DEX_PROGRESS, ChartMetric.PER_TYPE, ChartMetric.SHINIES_RARE ->
                 Plan(1, { doubleArrayOf(0.0) }, "", false)
         }
     }
@@ -398,18 +417,24 @@ object ChartData {
 
     /** The calendar of the period's weeks: cards answered per day (AnkiDroid's count, else AnkiGo's own), heat measured against [goal]. */
     private fun heatmap(
-        metric: ChartMetric, p: ChartPeriod, deck: String?, snap: StatsSnapshot, history: Map<String, DayLog>, today: String, t: LocalDate, goal: Int, goalFor: ((String) -> Int)?,
+        metric: ChartMetric, p: ChartPeriod, deck: String?, snap: StatsSnapshot, history: Map<String, DayLog>, today: String, t: LocalDate, goal: Int, goalFor: ((String) -> Int)?, calendarYear: Int?,
     ): ChartSeries {
-        val weeks = heatmapWeeks(p)
+        val end = calendarYear?.let { LocalDate.of(it, 12, 31) } ?: t
+        val yearFirst = calendarYear?.let { LocalDate.of(it, 1, 1) }
+        val weeks = if (yearFirst != null) ((java.time.temporal.ChronoUnit.DAYS.between(yearFirst.with(DayOfWeek.MONDAY), end) / 7) + 1).toInt() else heatmapWeeks(p)
         // the REVIEWS numbers of all decks; D30 so the "history still loading" note shows (the calendar reaches past 7 days)
         val plan = plan(ChartMetric.REVIEWS, ChartPeriod.D30, null, snap, history, today)
-        val gridFirst = t.with(DayOfWeek.MONDAY).minusWeeks((weeks - 1).toLong())
+        val gridFirst = end.with(DayOfWeek.MONDAY).minusWeeks((weeks - 1).toLong())
         // the grid is whole weeks, but only the requested period counts (its first days before the period are empty cells)
-        val periodFirst = t.minusDays((p.days - 1).toLong())
+        val periodFirst = yearFirst ?: t.minusDays((p.days - 1).toLong())
         val first = if (periodFirst.isAfter(gridFirst)) periodFirst else gridFirst
-        val days = generateSequence(first) { it.plusDays(1) }.takeWhile { !it.isAfter(t) }.toList()
-        val counts = days.associate { it.toString() to plan.value(it.toString())[0].toInt() }
-        val grid = StudyStats.heatmapFromCounts(counts, goal, today, weeks, first.toString(), goalFor)
+        val days = generateSequence(first) { it.plusDays(1) }.takeWhile { !it.isAfter(end) }.toList()
+        val counts = days.associate { date ->
+            val key = date.toString()
+            key to if (calendarYear != null && snap.stats != null && key !in snap.stats.perDay)
+                (history[key]?.reviews ?: 0) else plan.value(key)[0].toInt()
+        }
+        val grid = StudyStats.heatmapFromCounts(counts, goal, end.toString(), weeks, first.toString(), goalFor)
         val bars = days.map { date ->
             val n = counts.getValue(date.toString())
             Bar(date.dayOfMonth.toString(), date.toString(), date.toString(), listOf(n.toDouble()), true, heatDetail(date, n, goalFor?.invoke(date.toString()) ?: goal, t))
@@ -417,7 +442,7 @@ object ChartData {
         val total = counts.values.sumOf { it.toDouble() }
         val best = bars.filter { it.values[0] > 0.0 }.maxByOrNull { it.values[0] }
         return ChartSeries(
-            metric, p, deck, bars, total, total / days.size, best?.values?.get(0) ?: 0.0, best?.startDay, metric.unit, plan.source,
+            metric, p, deck, bars, total, total / days.size, best?.values?.get(0) ?: 0.0, best?.startDay, metric.unit, if (calendarYear != null) "Available study history · AnkiDroid counts where available, otherwise AnkiGo" else plan.source,
             false, total <= 0.0, heatmap = grid,
         )
     }
@@ -456,6 +481,7 @@ object ChartData {
 
     /** [v] with its word: "43 reviews", "1h 05m" (TIME, [v] in minutes), "67 %" (RETENTION). */
     fun valueText(metric: ChartMetric, v: Double): String = when (metric) {
+        ChartMetric.SECONDS_PER_CARD -> StatsText.averageText(v)
         ChartMetric.TIME -> StatsText.duration(Math.round(v * 60_000.0))
         ChartMetric.RETENTION -> "${Math.round(v)} %"
         else -> "${num(v)} ${nounFor(metric, v)}"

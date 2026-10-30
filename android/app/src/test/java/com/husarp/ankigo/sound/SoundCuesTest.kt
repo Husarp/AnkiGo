@@ -134,7 +134,8 @@ class SoundCuesTest {
             assertEquals("$id", SoundGroup.BATTLE, id.group)
         for (id in ids("STAT_UP", "STAT_DOWN", "BURN", "BURN_TICK", "POISON", "POISON_TICK", "PARALYSIS", "SLEEP", "FREEZE", "SHINY", "EVO_START",
             "EVO_DONE", "LEARNED", "ITEM", "CASH", "BADGE", "HEALED", "GOAL", "XP_ABSORB")) assertEquals("$id", SoundGroup.MOMENTS, id.group)
-        assertEquals(41, SoundId.entries.size)
+        for (t in com.husarp.ankigo.game.Type.entries) assertEquals(SoundGroup.BATTLE, TypeSfx.id(t).group)
+        assertEquals(59, SoundId.entries.size)
         assertTrue(SoundId.entries.none { it.group == SoundGroup.CRIES })
     }
 
@@ -150,7 +151,7 @@ class SoundCuesTest {
         for (s in SoftSound.entries) assertEquals(s.name, SoundId.valueOf(s.name).soft?.name)
         assertEquals(35, SoftSound.entries.size)
         assertEquals("stat_up-v1.wav", SoundId.STAT_UP.file)
-        assertTrue(SoundId.entries.filter { it.soft == null }.map { it.name }.toSet() == setOf("HIT", "SUPER", "WEAK", "FAINT", "CATCH", "LEVEL_UP"))
+        assertTrue(SoundId.entries.filter { it.soft == null && TypeSfx.type(it) == null }.map { it.name }.toSet() == setOf("HIT", "SUPER", "WEAK", "FAINT", "CATCH", "LEVEL_UP"))
     }
 
     // ---- shouldPlay with groups ----

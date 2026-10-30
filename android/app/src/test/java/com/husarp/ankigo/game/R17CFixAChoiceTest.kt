@@ -66,6 +66,12 @@ class R17CFixAChoiceTest {
         assertEquals(setOf("struggle"), picks(MoveChoice.RANDOM, F.main("poltergeist"), darkWild()).keys)
     }
 
+    @Test fun poltergeistCanBePickedForTheMainAfterTheWildOneReceivesAnItem() {
+        val wild = F.wild("tackle", sp = 905).also { it.heldItem = "lucky-egg" }
+        val seen = picks(MoveChoice.RANDOM, F.main("poltergeist", "tackle"), wild).keys
+        assertTrue("poltergeist" in seen)
+    }
+
     @Test fun poltergeistStillWorksForTheWildOneAgainstAnItem() {
         val seen = picks(MoveChoice.RANDOM, F.main("tackle", sp = 905), F.wild("poltergeist", "tackle"), p = false).keys
         assertTrue("poltergeist" in seen) // the wild one's RANDOM pick is unchanged

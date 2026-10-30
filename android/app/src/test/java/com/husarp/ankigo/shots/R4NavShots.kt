@@ -52,7 +52,7 @@ class R4NavShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
 
     @Before fun storeOff() { AnkiStatsStore.enabled = false; AnkiStatsStore.snapshot = StatsSnapshot() }
-    @After fun storeOn() { AnkiStatsStore.enabled = true; AnkiStatsStore.snapshot = StatsSnapshot() }
+    @After fun storeOn() { AnkiStatsStore.enabled = true; AnkiStatsStore.snapshot = StatsSnapshot(); Shots.files(paparazzi.context).getSharedPreferences("study", 0).edit().remove("reduceMotion").commit() }
 
     private val FLOAT = Variant("float", Size.FLOAT.wDp, Size.FLOAT.hDp)
     private val sizes = listOf(Variants.PHONE, Variants.SPLIT, FLOAT)
@@ -172,6 +172,8 @@ class R4NavShots {
     /** R10 W11: the Shop is its own tab (a standalone ShopPage); its buy flow and the Bag switch work as they did inside the Pokémon tab. */
     @Test fun theShopTabShowsTheShopAndBuying() {
         paparazzi.shootPage("r4n-shop-buy", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
+            ctx.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true).commit()
+            st.cash = 5000
             val p = ShopPage(ctx, NoHost)
             val screen = pageScreen(ctx, p)
             st.cash = 5000

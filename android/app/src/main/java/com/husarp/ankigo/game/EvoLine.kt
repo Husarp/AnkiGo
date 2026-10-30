@@ -64,6 +64,25 @@ class EvoLine(val root: EvoNode, val current: Species) {
             return EvoNode(sp, via, kids)
         }
 
+        fun explanation(data: GameData, e: Evolution): String = buildList {
+            when (e.kind) {
+                EvoKind.LEVEL -> add("Reach level ${e.level ?: 1}.")
+                EvoKind.FRIENDSHIP -> add("Reach ${e.minFriendship ?: Tuning.DEFAULT_MIN_FRIENDSHIP} friendship. Winning battles (including catches) raises friendship by 5–9; holding a Soothe Bell multiplies the gain by 1.5.")
+                EvoKind.LEVEL_MOVE -> add("Know ${e.move?.let { data.move(it)?.name ?: it } ?: "the required move"}.")
+                else -> add("Have ${Items.name(Progression.evolutionItem(e)!!)} in the Bag. Choosing Evolve uses one up.")
+            }
+            if (e.time == "day") add("Day is 06:00–18:00 on your phone clock.")
+            if (e.time == "night") add("Night is 18:00–06:00 on your phone clock.")
+            e.moveType?.let { add("Know a ${it.label}-type move.") }
+            e.gender?.let { add("Requires a ${if (it == 'M') "male" else "female"} Pokémon.") }
+            e.condition?.replace("during the day", "")?.replace("at night", "")?.trim()?.takeIf { it.isNotEmpty() && e.kind != EvoKind.OTHER }?.let {
+                val checked = it in setOf("with an Atk stat > its Def stat", "with an Atk stat < its Def stat",
+                    "with an Atk stat equal to its Def stat", "with a Dark-type in the party")
+                add(it.replaceFirstChar { c -> c.uppercase() } + if (checked) "." else " (this extra condition is not checked in AnkiGo).")
+            }
+            add("When ready, choose Evolve in your Pokémon's Evolution section. An Everstone blocks evolution.")
+        }.joinToString("\n\n")
+
         /** "Lv 16", "Thunder Stone", "Linking Cord", "Friendship", "knows Mimic" (+ day/night, other conditions). */
         fun method(data: GameData, e: Evolution): String {
             val base = when (e.kind) {
@@ -77,7 +96,7 @@ class EvoLine(val root: EvoNode, val current: Species) {
             val extra = listOfNotNull(
                 e.time,
                 e.moveType?.let { "${it.label}-type move" },
-                e.condition?.takeIf { e.kind != EvoKind.OTHER },
+                e.condition?.takeIf { e.kind != EvoKind.OTHER }?.replace("during the day", "")?.replace("at night", "")?.trim()?.takeIf { it.isNotEmpty() },
             )
             return if (extra.isEmpty()) base else "$base, ${extra.joinToString(", ")}"
         }

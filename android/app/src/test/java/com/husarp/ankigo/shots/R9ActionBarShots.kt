@@ -271,6 +271,29 @@ class R9ActionBarShots {
         return p to bar(p)
     }
 
+    @Test fun r21dBubbleOpensBothSidesAtTheirMove() {
+        for (side in BarSide.entries) {
+            val (panel, bar) = ready()
+            val state = com.husarp.ankigo.GameRepo.state!!
+            val mon = if (side == BarSide.MINE) state.main!! else state.battle!!.wild
+            mon.moves.clear(); mon.moves.add("tackle")
+            val event = atk(side == BarSide.MINE, "Tackle", Type.NORMAL, Category.PHYSICAL, 5)
+            com.husarp.ankigo.GameRepo.wildMoves.observe(listOf(event), state.battle)
+            turn(panel, event)
+            bar.openBubble(side)
+            assertTrue(bar.bubbleOpen)
+            fun bubble(v: View): View? {
+                if (v is com.husarp.ankigo.ui.MoveBubble) return v
+                if (v is android.view.ViewGroup) for (i in 0 until v.childCount) bubble(v.getChildAt(i))?.let { return it }
+                return null
+            }
+            val popup = bubble(panel) ?: error("no move bubble")
+            val dialog = DialogShots.capture { popup.performClick() } ?: error("no details opened for $side")
+            assertFalse(bar.bubbleOpen)
+            assertTrue(dialog.content().findViewWithTag<View>("detail-move:tackle") != null)
+        }
+    }
+
     private fun touch(v: View, action: Int, x: Float, y: Float): Boolean {
         val t = SystemClock.uptimeMillis()
         return v.dispatchTouchEvent(MotionEvent.obtain(t, t, action, x, y, 0))
@@ -385,13 +408,14 @@ class R9ActionBarShots {
 
     @Test fun theDotsSitWhereTheSettingSays() {
         val (p, b) = ready()
+        b.observe(atk(true, "Tackle", Type.NORMAL, Category.PHYSICAL, 3))
         b.dotsOn = true
         b.dotsPlace = DotsPlace.MIDDLE
         assertEquals(listOf("mine", "dots", "theirs"), b.segmentOrder())
         b.dotsPlace = DotsPlace.RIGHT_END
         assertEquals(listOf("mine", "theirs", "dots"), b.segmentOrder())
         b.dotsOn = false
-        assertEquals(listOf("mine", "theirs"), b.segmentOrder())
+        assertEquals(listOf("mine", "theirs", "dots"), b.segmentOrder())
         assertTrue(p.width > 0)
     }
 }

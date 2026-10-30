@@ -44,12 +44,12 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     /** The panel's text floor ([PanelFit]); texts made later start at it. */
     var floorSp = 0f
 
-    /** The charge dots show (the Study screen; R19-B: also picture-in-picture, split screen and the floating window); they sit by [dotsPlace]. */
+    /** Legacy host flag. R21 keeps the dots visible in every host; before any move they stay in the middle. */
     var dotsOn = false
-        set(v) { field = v; row.dotsOn = v; line.pips.visibility = if (v) VISIBLE else GONE }
+        set(v) { field = v; updateDots(); line.pips.visibility = VISIBLE }
 
     var dotsPlace = DotsPlace.MIDDLE
-        set(v) { field = v; row.dotsPlace = v }
+        set(v) { field = v; updateDots() }
 
     /** True while the bar sits edge to edge (the Study strip): the segments get an inset of their own. */
     val flat: Boolean get() = line.flat
@@ -58,10 +58,12 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
         addView(row, LayoutParams(-1, -1))
         addView(line, LayoutParams(-1, -1))
         line.visibility = GONE
-        line.pips.visibility = GONE
+        line.pips.visibility = VISIBLE
         mineHalf.setOnClickListener { toggleBubble(BarSide.MINE) }
         theirsHalf.setOnClickListener { toggleBubble(BarSide.THEIRS) }
         mineHalf.bind(model.mine, floorSp); theirsHalf.bind(model.theirs, floorSp)
+        setCharge(2, emptyList())
+        updateDots()
     }
 
     companion object {
@@ -75,6 +77,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
     fun observe(e: GameEvent) {
         val changed = model.observe(e)
         if (changed.isEmpty()) return   // R18-B: a queued switch changes nothing here (a toast says it); the bar keeps its segments
+        updateDots()
         for (s in changed) {
             if (bubbleSide == s) closeBubble()
             val h = half(s)
@@ -82,6 +85,14 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             if (fresh && model.half(s) !is HalfState.Empty) h.pop(still())
         }
     }
+
+    private fun updateDots() {
+        val empty = model.mine is HalfState.Empty && model.theirs is HalfState.Empty
+        row.dotsOn = true
+        row.dotsPlace = if (empty) DotsPlace.MIDDLE else dotsPlace
+    }
+
+    internal fun flightSources(): List<View> = dots.pips.visiblePips()
 
     private fun half(s: BarSide) = if (s == BarSide.MINE) mineHalf else theirsHalf
 
@@ -182,6 +193,17 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
         closeBubble()
         val b = MoveBubble(context, MoveBubbleLook.create(context, bubbleVariant))
         b.bind(ActionBarModel.bubble(move))
+        b.setOnClickListener {
+            val data = com.husarp.ankigo.GameRepo.data ?: return@setOnClickListener
+            val state = com.husarp.ankigo.GameRepo.state ?: return@setOnClickListener
+            val ids = if (side == BarSide.MINE) state.main?.moves.orEmpty() else state.battle?.wild?.moves.orEmpty()
+            val id = ids.firstOrNull { data.move(it)?.name == move.move } ?: return@setOnClickListener
+            closeBubble()
+            if (side == BarSide.MINE) state.main?.uid?.let { BattleDetails.show(context, it, id) }
+            else BattleDetails.showWild(context, id)
+        }
+        b.contentDescription = ActionBarModel.bubble(move).spoken() + ". Tap to open Pokémon details at this move"
+
         TextFloor.apply(b, floorSp)
         val d = resources.displayMetrics.density
         val width = if (layer.width > 0) layer.width else root.width
@@ -480,6 +502,8 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
                 if (i > 0) lp.marginStart = Ui.dp(context, if (on) 3 else 4)
             }
         }
+
+        fun visiblePips(): List<View> = pips.filter { it.visibility == VISIBLE }
 
         fun render(goal: Int, buttons: List<Int>) {
             pips.forEachIndexed { i, v ->

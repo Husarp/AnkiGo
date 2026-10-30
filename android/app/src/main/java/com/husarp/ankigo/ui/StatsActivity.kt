@@ -87,6 +87,8 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     // what the chart shows: saved on every change (R18 item 232) and read when the page opens; a tap's choice is kept over re-renders
     private var metric = ChartMetric.REVIEWS
     private var period = ChartPeriod.D30
+    private var calendarYear: Int? = null
+    private fun studiedYears(): List<Int> = (state.history.filterValues { it.reviews > 0 }.keys + AnkiStatsStore.snapshot.stats?.perDay.orEmpty().filterValues { it > 0 }.keys).mapNotNull { it.take(4).toIntOrNull() }.distinct().sortedDescending()
     private var deck: String? = null
     private var grain: ChartGrain? = null
     init {
@@ -126,9 +128,10 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     internal fun preset(
         metric: ChartMetric = this.metric, period: ChartPeriod = this.period, deck: String? = null, grain: ChartGrain? = null,
         bar: Int = -1, sheet: Boolean = false, heatDay: String? = null, decks: List<String> = this.decks,
-        section: StatsSection = this.section,
+        section: StatsSection = this.section, calendarYear: Int? = null,
     ) {
         this.section = section
+        this.calendarYear = calendarYear
         this.metric = metric; this.period = period; this.deck = deck; this.grain = grain
         barSel = bar; sheetOpen = sheet; this.heatDay = heatDay; this.decks = decks
     }
@@ -269,13 +272,24 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val snap = AnkiStatsStore.snapshot
         val anki = snap.stats
         val collection = CollectionStats.of(data, state, System.currentTimeMillis())
-        val series = ChartData.build(metric, period, deck, snap, state.history, today, grain, goal = s.goal, collection = collection, goalFor = { DailyGoal.forDay(state, it) })
+        val series = ChartData.build(metric, period, deck, snap, state.history, today, grain, goal = s.goal, collection = collection, goalFor = { state.history[it]?.dailyGoal?.takeIf { g -> g > 0 } ?: DailyGoal.forDay(state, it) }, calendarYear = calendarYear.takeIf { metric == ChartMetric.STREAK_CALENDAR })
         AnkiStatsStore.requestSeries(this, ChartData.seriesKeys(metric, period, deck, today))
 
         content.addView(trainerCard())
         content.addView(streakCard(s), lp(14))
         content.addView(metricButton())
         content.addView(filterChips(series), lp(8))
+        if (metric == ChartMetric.STREAK_CALENDAR && calendarYear != null) {
+            val years = StatsSheets.FlowLayout(this)
+            studiedYears().forEach { y ->
+                years.addView(chip(if (calendarYear == y) "✓ $y" else "$y", true) { calendarYear = y; resetPicks(); requestRender() }.apply {
+                    setCompoundDrawablesRelative(null, null, null, null)
+                    isSelected = calendarYear == y
+                    contentDescription = "Year $y" + if (isSelected) ", selected" else ""
+                })
+            }
+            content.addView(years, lp(4))
+        }
         val message = StatsChartMath.emptyMessage(series, snap.access, snap.message)
         if (message == null) content.addView(tileRow(StatsChartMath.tiles(series)), lp(8)) // zeros would only mislead while loading
         content.addView(chartCard(series, message, snap, today, barSel) { barSel = it }, lp(8))
@@ -290,7 +304,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 "Cards, not reviews: a card answered twice counts once. Retention is an estimate: cards answered in the last 30 days (not new then) that you didn't answer Again.", body), lp(14))
         }
         content.addView(sectionCard(R.drawable.ic_clock, "Study time", R.color.ag_green, null,
-            "Counts study in AnkiGo plus answers it timed live in AnkiDroid (split screen, floating). AnkiDroid doesn't share its own study time.",
+            StatsText.TIMED_SOURCE,
             timeRow(snap, today, R.color.ag_green)), lp(14))
         val allTime = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         allTime.addView(tiles(s, R.color.ag_yellow))
@@ -305,6 +319,8 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     // ---- 0. trainer card (R6-06: moved here from the Pokémon tab) ----
 
     /** Name, coins, trainer level + rank and the XP bar; the Achievements chip opens the Achievements section of this tab. */
+    private var previousCash: Int? = null
+
     private fun trainerCard(): View {
         val st = state
         val card = Ui.card(this).apply { setPadding(dp(14), dp(12), dp(14), dp(12)) }
@@ -322,7 +338,8 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
         }
         if (short) top.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dp(6); it.topMargin = -dp(12); it.bottomMargin = -dp(12) })
-        top.addView(Ui.chip(this, R.drawable.ic_money, R.color.ag_yellow, plain = true).also { it.setText(Bits.fmt(st.cash)) })
+        top.addView(Ui.chip(this, R.drawable.ic_money, R.color.ag_yellow, plain = true).also { it.setMoney(st.cash, previousCash) })
+        previousCash = st.cash
         card.addView(top)
 
         val need = Trainer.xpForNext(st.trainerLevel)
@@ -419,7 +436,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
     /** A rounded square in a faint [tone] with the [icon] in it. */
     private fun iconTile(@DrawableRes icon: Int, @ColorRes tone: Int, sizeDp: Int, iconDp: Int): View = FrameLayout(this).apply {
-        background = Ui.rounded(ColorUtils.setAlphaComponent(c(tone), 46), (sizeDp * 0.3f), this@StatsPage)
+        background = null
         addView(ImageView(this@StatsPage).apply { setImageResource(icon); setColorFilter(c(tone)) }, FrameLayout.LayoutParams(dp(iconDp), dp(iconDp), Gravity.CENTER))
     }
 
@@ -427,12 +444,16 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     private fun filterChips(series: ChartSeries): View {
         val row = StatsSheets.FlowLayout(this)
         if (metric.usesPeriod) {
-            row.addView(chip(StatsChartMath.periodLabel(metric, series.period), true) { anchor ->
+            row.addView(chip(if (metric == ChartMetric.STREAK_CALENDAR && calendarYear != null) "Year" else StatsChartMath.periodLabel(metric, series.period), true) { anchor ->
                 val menu = AppMenu(anchor)
-                for ((i, p) in StatsChartMath.periods(metric).withIndex()) menu.item(i, StatsChartMath.periodLabel(metric, p), if (p == series.period) R.drawable.ic_check else R.drawable.ic_blank)
+                for ((i, p) in StatsChartMath.periods(metric).withIndex()) menu.item(i, StatsChartMath.periodLabel(metric, p), if (p == series.period && calendarYear == null) R.drawable.ic_check else R.drawable.ic_blank)
+                if (metric == ChartMetric.STREAK_CALENDAR) menu.item(99, "Year", if (calendarYear != null) R.drawable.ic_check else R.drawable.ic_blank, enabled = studiedYears().isNotEmpty())
                 menu.show { i ->
+                    if (i == 99) { calendarYear = studiedYears().firstOrNull(); period = ChartPeriod.D365; resetPicks(); requestRender(); return@show }
+                    val wasYear = calendarYear != null
+                    calendarYear = null
                     val p = StatsChartMath.periods(metric)[i]
-                    if (p != period) { period = p; grain = null; saveChoice(); resetPicks(); requestRender() }
+                    if (p != period || wasYear) { period = p; grain = null; saveChoice(); resetPicks(); requestRender() }
                 }
             })
         }
@@ -485,6 +506,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     /** The bar colours of [s]: the answer buttons' own colours for Buttons, one colour per metric otherwise. */
     private fun tonesFor(s: ChartSeries): List<Int> = when (s.metric) {
         ChartMetric.REVIEWS, ChartMetric.ANSWERS -> listOf(R.color.ag_mauve)
+        ChartMetric.SECONDS_PER_CARD -> listOf(R.color.ag_green)
         ChartMetric.TIME -> listOf(R.color.ag_blue, R.color.ag_teal)
         ChartMetric.RETENTION -> listOf(R.color.ag_green)
         ChartMetric.NEW_CARDS -> listOf(R.color.ag_sky)
@@ -517,6 +539,14 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         if (message == null && StatsChartMath.hint(s).isNotEmpty()) head.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply { text = StatsChartMath.hint(s); maxLines = 1 }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(8) })
         card.addView(head)
         val tones = tonesFor(s)
+        if (message == null && s.bars.any { it.dailyGoal != null }) card.addView(Ui.text(this, 11f, 800, R.color.ag_sub1).apply {
+            text = "Daily goal · faded: partly done · solid: goal met"
+            compoundDrawablePadding = dp(5)
+            setCompoundDrawablesRelative(getDrawable(R.drawable.ic_flag)?.mutate()?.apply {
+                setTint(c(R.color.ag_sub1)); setBounds(0, 0, dp(13), dp(13))
+            }, null, null, null)
+            setPadding(0, dp(4), 0, 0)
+        })
         val legend = if (message == null) StatsChartMath.legend(s) else emptyList()
         if (legend.isNotEmpty()) {
             val flow = StatsSheets.FlowLayout(this, 12)
@@ -541,7 +571,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 charts += this
             }, lp(8))
         }
-        val source = if (s.kind == ChartKind.HEATMAP) StatsText.heatmapNote(snap, System.currentTimeMillis()) else s.source.takeIf { message == null && it.isNotBlank() }?.let { "Source: $it" }
+        val source = if (s.kind == ChartKind.HEATMAP && calendarYear != null) "${s.source}. Older days not retained by either source cannot be recovered." else if (s.kind == ChartKind.HEATMAP) StatsText.heatmapNote(snap, System.currentTimeMillis()) else s.source.takeIf { message == null && it.isNotBlank() }?.let { "Source: $it" }
         if (!source.isNullOrBlank()) card.addView(note(source), lp(6))
         return card
     }
@@ -557,6 +587,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 ChartPeriod.D30 -> HeatmapLayout.Mode.ROWS
                 else -> HeatmapLayout.Mode.WEEKS
             })
+            calendarYear?.let { contentDescription = "Reviews in $it: ${s.heatmap!!.total}" }
             selectedDay = heatDay
             onDayTap = { d -> heatDay = StatsChartMath.tapPick(heatDay, d, null); selectedDay = heatDay; fillHeatSlot(slot, s) }
             closeHeat = { heatDay = null; selectedDay = null; fillHeatSlot(slot, s) }
@@ -781,6 +812,13 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 sb.setSpan(ForegroundColorSpan(Ui.c(this@StatsPage, R.color.ag_sub1)), 0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 sb.append(StatsText.duration(AnkiGoTime.lastDays(snap.timeTotalByDay, today, 7)))
             }
+        })
+        col.addView(Ui.text(this, 12f, 800, R.color.ag_text).apply {
+            text = "Today · Avg " + StatsText.averageText(StatsText.secondsPerCard(snap.timeTotalOn(today), snap.timedAnswersByDay[today] ?: 0L))
+        })
+        col.addView(Ui.text(this, 12f, 800, R.color.ag_text).apply {
+            text = "Last 30 days · Avg " + StatsText.averageText(StatsText.secondsPerCard(
+                AnkiGoTime.lastDays(snap.timeTotalByDay, today, 30), AnkiGoTime.lastDays(snap.timedAnswersByDay, today, 30)))
         })
         row.addView(col, LinearLayout.LayoutParams(0, -2, 2f).also { it.marginStart = dp(12) })
         return row

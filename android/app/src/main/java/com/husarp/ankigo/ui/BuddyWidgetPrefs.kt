@@ -12,7 +12,7 @@ import com.husarp.ankigo.R
  * falls back to the main ([WidgetSnapshot.forBuddy]). Same idea as [StudyWidgetPrefs]; the SharedPreferences wrappers are thin.
  *
  * The widget's look is per id too: `b<id>.ring` ([BuddyRing]: "app" | "type" | "pick:<colour>") and `b<id>.anim`
- * (the two-frame hop); a missing key means the default (app colours, no animation).
+ * (real animation frames); a missing key means the default (app colours, no animation).
  */
 object BuddyWidgetPrefs {
     /** Follow the current main (the default). */
@@ -22,7 +22,7 @@ object BuddyWidgetPrefs {
     fun ringKey(id: Int) = "b$id.ring"
     fun animKey(id: Int) = "b$id.anim"
 
-    fun choice(p: SharedPreferences, id: Int): String = p.getString(key(id), null)?.takeIf { it.isNotEmpty() } ?: MAIN
+    fun choice(p: SharedPreferences, id: Int): String = p.getString(key(id), p.getString(key(0), null))?.takeIf { it.isNotEmpty() } ?: MAIN
 
     fun set(p: SharedPreferences, id: Int, choice: String) { p.edit().putString(key(id), choice).apply() }
 
@@ -33,20 +33,23 @@ object BuddyWidgetPrefs {
         ed.apply()
     }
 
-    fun ring(p: SharedPreferences, id: Int): BuddyRing = BuddyRing.parse(p.getString(ringKey(id), null))
+    fun ring(p: SharedPreferences, id: Int): BuddyRing = BuddyRing.parse(p.getString(ringKey(id), p.getString(ringKey(0), null)))
 
     fun setRing(p: SharedPreferences, id: Int, ring: BuddyRing) { p.edit().putString(ringKey(id), ring.format()).apply() }
 
-    fun anim(p: SharedPreferences, id: Int): Boolean = p.getBoolean(animKey(id), false)
+    fun anim(p: SharedPreferences, id: Int): Boolean = p.getBoolean(animKey(id), p.getBoolean(animKey(0), false))
 
     fun setAnim(p: SharedPreferences, id: Int, on: Boolean) { p.edit().putBoolean(animKey(id), on).apply() }
 
-    fun look(p: SharedPreferences, id: Int) = BuddyLook(ring(p, id), anim(p, id))
+    fun look(p: SharedPreferences, id: Int) = BuddyLook(ring(p, id), anim(p, id), layout(p, id))
+
+    fun layout(p: SharedPreferences, id: Int) = p.getString("b$id.layout", p.getString("b0.layout", "A"))?.takeIf { it in listOf("A", "B", "C") } ?: "A"
+    fun setLayout(p: SharedPreferences, id: Int, value: String) { p.edit().putString("b$id.layout", value).apply() }
 
     /** Called when widgets are deleted. */
     fun forget(p: SharedPreferences, ids: IntArray) {
         val ed = p.edit()
-        for (id in ids) { ed.remove(key(id)); ed.remove(ringKey(id)); ed.remove(animKey(id)) }
+        for (id in ids) { ed.remove(key(id)); ed.remove(ringKey(id)); ed.remove(animKey(id)); ed.remove("b$id.layout") }
         ed.apply()
     }
 
@@ -61,8 +64,8 @@ object BuddyWidgetPrefs {
         runCatching { AppWidgetManager.getInstance(ctx).getAppWidgetIds(ComponentName(ctx, BuddyWidget::class.java)) }.getOrDefault(IntArray(0))
 }
 
-/** How one Buddy widget looks besides its Pokémon: the [ring] colour and whether the Pokémon [hop]s (two frames, see WidgetRender). */
-data class BuddyLook(val ring: BuddyRing = BuddyRing.APP, val hop: Boolean = false)
+/** How one Buddy widget looks besides its Pokémon: the [ring] colour and whether the Pokémon moves ([hop] is the legacy preference name). */
+data class BuddyLook(val ring: BuddyRing = BuddyRing.APP, val hop: Boolean = false, val layout: String = "A")
 
 /**
  * The ring colour setting: [Mode.APP] keeps the goal colours of Settings → Look → Progress bars (the default),

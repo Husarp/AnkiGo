@@ -29,10 +29,10 @@ class BattleHistorySaveTest {
         return SaveCodec.decode(o.toString()).history.getValue(day)
     }
 
-    @Test fun seventeenNumbersAreWrittenInOrderWithEveryOldPositionKept() {
+    @Test fun eighteenNumbersAreWrittenInOrderWithEveryOldPositionKept() {
         val h = JSONObject(SaveCodec.encode(state())).getJSONObject("history")
-        assertEquals("[100,7,2,1,1234,4321,1,20,30,40,9,2600,4,5500,3100,640,17]", h.getJSONArray("2026-10-12").toString())
-        assertEquals("[5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]", h.getJSONArray("2026-10-13").toString())
+        assertEquals("[100,7,2,1,1234,4321,1,20,30,40,9,2600,4,5500,3100,640,17,0]", h.getJSONArray("2026-10-12").toString())
+        assertEquals("[5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]", h.getJSONArray("2026-10-13").toString())
     }
 
     @Test fun theFourBattleNumbersRoundTrip() {
@@ -50,6 +50,7 @@ class BattleHistorySaveTest {
 
     @Test fun aThirteenNumberRound3ArrayLoadsWithZeros() {
         val d = withArray("2026-10-12", "[100,7,2,1,1234,4321,1,20,30,40,9,2600,4]")
+        assertEquals(0, d.dailyGoal)
         assertEquals(0, d.dmgDealt); assertEquals(0, d.dmgTaken); assertEquals(0, d.dmgBlocked); assertEquals(0, d.misses)
         assertEquals(2600, d.spent); assertEquals(4, d.healItems); assertEquals(1234, d.xp)
     }

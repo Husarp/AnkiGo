@@ -29,6 +29,13 @@ object MoveText {
 
     fun describe(m: Move): String {
         CoreRules.neverPickedText(m.id)?.let { return it } // R17C-3: a move that means nothing in a 1-vs-1 wild fight says why (it is never picked)
+        RemainingMoves.texts[m.id]?.let { text ->
+            return text + when {
+                m.priority > 0 -> " Usually goes first."
+                m.priority < 0 -> " Usually goes last."
+                else -> ""
+            }
+        }
         val lines = ArrayList<String>()   // what the move does
         val extras = ArrayList<String>()  // when it goes, whether it can miss, charging
         val ruleLines = BattleRules.ALL.flatMap { it.describe(m) }.map(StageText::explain) // R17C-1: what the rule sets add, after the engine's own lines

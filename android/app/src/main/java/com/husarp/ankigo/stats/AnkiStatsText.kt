@@ -34,6 +34,8 @@ data class StatsSnapshot(
     val timeByDay: Map<String, Long> = emptyMap(),
     /** ms per game day AnkiGo measured for answers detected live (split screen, PiP, floating); [timeLive]. */
     val liveTimeByDay: Map<String, Long> = emptyMap(),
+    /** Valid timed entries from both local logs; never the game's catch-up answer count. */
+    val timedAnswersByDay: Map<String, Long> = emptyMap(),
     /** Per-deck / on-demand AnkiDroid reads for the chart ([AnkiSeriesCache]). */
     val series: Map<SeriesKey, SeriesData> = emptyMap(),
 ) {
@@ -45,6 +47,11 @@ data class StatsSnapshot(
 }
 
 object StatsText {
+    const val TIMED_SOURCE = "Counts study in AnkiGo plus answers timed live in AnkiDroid (split screen, floating). Excludes catch-up answers and time AnkiDroid did not share."
+
+    fun secondsPerCard(ms: Long, answers: Long): Double? = if (answers > 0) ms / 1000.0 / answers else null
+    fun averageText(seconds: Double?): String = seconds?.let { String.format(Locale.US, "%.1f s / card", it) } ?: "–"
+
     fun reason(access: AnkiAccess?, message: String? = null): String = when (access) {
         AnkiAccess.NO_PERMISSION -> "Allow AnkiGo to read AnkiDroid to see its stats"
         AnkiAccess.ANKIDROID_TOO_OLD -> "AnkiDroid 2.24 or newer is needed to see its stats"

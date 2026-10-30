@@ -13,6 +13,7 @@ class BuddyWidget : AppWidgetProvider() {
     }
 
     override fun onDeleted(ctx: Context, appWidgetIds: IntArray) {
+        WidgetLooks.forget(ctx.getSharedPreferences("spike",0),"buddy",appWidgetIds)
         BuddyWidgetPrefs.forget(ctx.getSharedPreferences("spike", 0), appWidgetIds)
     }
 

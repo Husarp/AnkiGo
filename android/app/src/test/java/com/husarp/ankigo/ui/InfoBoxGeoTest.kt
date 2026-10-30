@@ -6,6 +6,17 @@ import org.junit.Test
 
 /** ROUND 9 wave 3 D12: the info boxes' two designs as pure numbers ([InfoBoxStyle], [InfoBoxGeo]) and the readability they promise. */
 class InfoBoxGeoTest {
+    @Test fun hiddenXpRemovesTheWholeRowFromBothCardModels() {
+        for (style in InfoBoxStyle.entries) for (floor in listOf(8f, 16f)) {
+            val shown = ArenaGeo.cards(floor, false, true, style)
+            val hidden = ArenaGeo.cards(floor, false, true, style, xpBar = false)
+            assertEquals(shown.wildH, hidden.wildH, 0f)
+            val row = if (style == InfoBoxStyle.INSIDE) 10f * TextMath.bar(floor)
+                else maxOf(3f * TextMath.bar(floor), TextMath.line(TextMath.at(InfoBoxGeo.XP, floor)))
+            assertEquals(3f + row, shown.playerH - hidden.playerH, .001f)
+        }
+    }
+
     private fun line(sp: Float) = TextMath.line(sp)
 
     @Test fun theChoiceParsesByNameAndAnythingElseIsTheAboveStyle() {
@@ -57,7 +68,8 @@ class InfoBoxGeoTest {
     @Test fun aReducedBoxDropsTheXpNumberSoItIsShorterAndTheWildSymbolsCostAtMostOneDp() {
         for (style in InfoBoxStyle.entries) {
             assertTrue("$style ours", InfoBoxGeo.height(style, false, 8f, true, true) < InfoBoxGeo.height(style, false, 8f, true, false) - 5f)
-            assertEquals("$style: with no XP number the box is reduced already", InfoBoxGeo.height(style, false, 8f, false, false), InfoBoxGeo.height(style, false, 8f, true, true), 0.001f)
+            val symbolExtra = if (style == InfoBoxStyle.ABOVE) 15f - maxOf(line(10.5f), line(8.5f) + 2f) else 0f
+            assertEquals("$style: reduced type symbols need slightly more room than chips", InfoBoxGeo.height(style, false, 8f, false, false) + symbolExtra, InfoBoxGeo.height(style, false, 8f, true, true), 0.001f)
         }
         // the wild symbols (15 dp) are a hair taller than the chips (8.5 sp text): the row never moves by more than that
         val a = InfoBoxGeo.height(InfoBoxStyle.ABOVE, true, 8f, true, false)
@@ -81,7 +93,7 @@ class InfoBoxGeoTest {
         }
         // the XP number is what the xp flag turns off
         assertTrue(ArenaGeo.cards(8f, false, false, InfoBoxStyle.ABOVE).playerH < above.playerH)
-        assertEquals(ArenaGeo.cards(8f, false, true, InfoBoxStyle.ABOVE, reduced = true).playerH, ArenaGeo.cards(8f, false, false, InfoBoxStyle.ABOVE).playerH, 0.001f)
+        assertEquals(ArenaGeo.cards(8f, false, true, InfoBoxStyle.ABOVE, reduced = true).playerH, ArenaGeo.cards(8f, false, false, InfoBoxStyle.ABOVE).playerH + 15f - maxOf(line(10.5f), line(8.5f) + 2f), 0.001f)
     }
 
     @Test fun theSmallestTextOfAFullBoxIsTheOptionalPartAndOfAReducedBoxTheHpNumber() {

@@ -9,14 +9,14 @@ import kotlin.math.sin
 /*
  * Water Gun (docs/design/attack-anims-v2/v2-fx.js `waterjet`, "B-style thick jet, redrawn by us and less white"): a wavy thick blue
  * jet shoots from the attacker to the target, holds, and drains back; droplets and two rings splash where it lands. The size
- * factor k widens the jet and holds it longer.
+ * factor k widens the jet and holds it longer. R22 pick B: 120 delay + 100 travel + 180 hold + 90 drain = 490 ms at k = 1.
  */
 internal object WaterJetFx {
     /** Mockup ms: the jet starts at [S], its head needs [G] to reach the target, it drains over [OUT]; [BASE_HOLD] is the stream time at k = 1. */
     const val S = 120f
-    const val G = 170f
-    const val OUT = 170f
-    const val BASE_HOLD = 420f
+    const val G = 100f
+    const val OUT = 90f
+    const val BASE_HOLD = 180f
     const val RECOIL = 150f
 
     fun hold(k: Float): Float = BASE_HOLD * k

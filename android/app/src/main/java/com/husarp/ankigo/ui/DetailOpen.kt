@@ -17,6 +17,7 @@ import java.util.Locale
 
 /** The sections of the details, in screen order. [key] is the saved name (never rename), [open] whether it starts open. */
 enum class DetailSection(val key: String, val title: String, val open: Boolean) {
+    EVOLUTION("evolution", "Evolution", true),
     STATS("stats", "Stats", true),
     MOVES("moves", "Moves", true),
     MATCHUPS("matchups", "Matchups", false),

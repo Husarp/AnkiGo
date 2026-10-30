@@ -248,16 +248,24 @@ object AnkiGoTime {
  * ms spent per game day from Local's reviews.csv lines `epochMillis,nid,ord,ease,ms,source`. [dayKey] maps an instant to its
  * game day. Lines that can't be read (also a half-written last line) are skipped; one answer counts at most [AnkiGoTime.MAX_ANSWER_MS].
  */
-fun timeInAnkiGo(lines: Sequence<String>, dayKey: (Long) -> String): Map<String, Long> {
-    val out = HashMap<String, Long>()
+fun timeInAnkiGo(lines: Sequence<String>, dayKey: (Long) -> String): Map<String, Long> =
+    timedAnswers(lines, false, dayKey).time
+
+/** Time and denominator come from exactly the same valid entries; catch-up answers have no entry. */
+data class TimedAnswers(val time: Map<String, Long>, val counts: Map<String, Long>)
+
+fun timedAnswers(lines: Sequence<String>, live: Boolean, dayKey: (Long) -> String): TimedAnswers {
+    val time = HashMap<String, Long>()
+    val counts = HashMap<String, Long>()
     for (line in lines) {
         val p = line.split(',')
-        if (p.size < 5) continue
+        if (if (live) p.size != 2 else p.size < 5) continue
         val at = p[0].trim().toLongOrNull() ?: continue
-        val ms = p[4].trim().toLongOrNull() ?: continue
+        val ms = p[if (live) 1 else 4].trim().toLongOrNull() ?: continue
         if (at <= 0 || ms < 0) continue
         val day = try { dayKey(at) } catch (_: Exception) { continue }
-        out[day] = (out[day] ?: 0L) + minOf(ms, AnkiGoTime.MAX_ANSWER_MS)
+        time[day] = (time[day] ?: 0L) + minOf(ms, if (live) LIVE_ANSWER_CAP_MS else AnkiGoTime.MAX_ANSWER_MS)
+        counts[day] = (counts[day] ?: 0L) + 1L
     }
-    return out
+    return TimedAnswers(time, counts)
 }

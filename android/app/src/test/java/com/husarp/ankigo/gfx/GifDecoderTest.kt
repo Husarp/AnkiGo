@@ -116,6 +116,17 @@ class GifDecoderTest {
 
     // ---- tests ----
 
+    @Test fun widgetBudgetKeepsAllOrEverySecondOtherwiseRefuses() {
+        val frames=(0 until 4).map { Img(0,0,2,2,IntArray(4){1},delayCs=5) }.toTypedArray()
+        val bytes=gif(2,2,pal,*frames)
+        assertEquals(4,GifDecoder.decode(bytes,16,maxStep=2).frames.size)
+        val half=GifDecoder.decode(bytes,8,maxStep=2)
+        assertEquals(2,half.frames.size)
+        assertEquals(200,half.frames.sumOf { it.delayMs })
+        try { GifDecoder.decode(bytes,4,maxStep=2); fail("must fall back to a still rather than thin further") }
+        catch (_: IllegalArgumentException) { }
+    }
+
     @Test fun twoFramesWithDelays() {
         val bytes = gif(2, 2, pal,
             Img(0, 0, 2, 2, intArrayOf(1, 1, 1, 1), delayCs = 5),

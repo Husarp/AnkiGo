@@ -53,6 +53,38 @@ import java.lang.ref.WeakReference
 // in words, what the item does and the goal-streak line. An achievement tier with a reward (the Master Ball) says so on its popup.
 
 object AchievementPopup {
+    internal val modes = listOf("Pop-up", "Small note", "Off")
+    internal fun mode(ctx: Context): Int = ctx.getSharedPreferences("look", 0).getInt("achievementPopup", 1).coerceIn(0, 2)
+    internal fun setMode(ctx: Context, mode: Int) { ctx.getSharedPreferences("look", 0).edit().putInt("achievementPopup", mode.coerceIn(0, 2)).apply() }
+    private var note: View? = null
+    private fun dismissNote() {
+        note?.animate()?.cancel()
+        note?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        note = null
+    }
+
+    /** Only this compact card consumes touches; studying underneath stays available. */
+    internal fun noteCard(ctx: Context, batch: List<AchCelebration>, tap: () -> Unit): View {
+        val c = batch.first()
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
+            elevation = Ui.dp(ctx, 8f)
+            setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 14), Ui.dp(ctx, 8))
+            addView(AchMedal(ctx, 38).apply { set(AchStyle.icon(AchievementTable.row(c.rowId)?.icon.orEmpty()), c.tier, c.tier < 0) }, LinearLayout.LayoutParams(Ui.dp(ctx, 38), Ui.dp(ctx, 38)))
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(Ui.text(ctx, 11f, 900, R.color.ag_text).apply { text = if (batch.size == 1) c.tierName else "Achievements unlocked"; setTextColor(colorOf(ctx, c)) })
+                addView(Ui.text(ctx, 13.5f, 800, R.color.ag_text).apply { text = if (batch.size == 1) c.title else "${batch.size} achievements"; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END })
+                if (batch.size == 1) AchPageMath.rewardOf(c.rowId, c.tier)?.let { reward ->
+                    addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = AchPageMath.rewardPopupText(reward) })
+                }
+            }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 10) })
+            isClickable = true; setOnClickListener { tap() }
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+    }
+
     /** Wait a moment after the action so the answer's own animation is not covered at once. */
     internal const val DELAY_MS = 700L
 
@@ -76,7 +108,7 @@ object AchievementPopup {
     /** Daily gifts waiting for a screen (tests). */
     internal fun waitingGifts(): List<GiftPop> = pendingGifts
 
-    internal fun reset() { pending.clear(); shown = emptyList(); pendingItems = emptyList(); shownItems = emptyList(); pendingGifts = emptyList(); shownGift = null; front = null; dialog = null }
+    internal fun reset() { dismissNote(); pending.clear(); shown = emptyList(); pendingItems = emptyList(); shownItems = emptyList(); pendingGifts = emptyList(); shownGift = null; front = null; dialog = null }
 
     /** The events of one action: what is worth a celebration is queued and shown (see the file comment). */
     fun offer(events: List<GameEvent>) {
@@ -96,6 +128,7 @@ object AchievementPopup {
     /** An AnkiGo screen left the front: its open popup closes and its batch goes back to the queue. */
     fun paused(a: Activity) {
         if (front?.get() !== a) return
+        if (note != null) { pending.addAll(0, shown); shown = emptyList(); dismissNote() }
         front = null
         dialog?.let { d ->
             if (d.isShowing) {
@@ -115,7 +148,27 @@ object AchievementPopup {
 
     private fun tryShow() {
         val a = front?.get() ?: return
-        if ((pending.isEmpty() && pendingItems.isEmpty() && pendingGifts.isEmpty()) || dialog?.isShowing == true || a.isFinishing || a.isDestroyed || a.isInPictureInPictureMode) return
+        if ((pending.isEmpty() && pendingItems.isEmpty() && pendingGifts.isEmpty()) || dialog?.isShowing == true || note != null || a.isFinishing || a.isDestroyed || a.isInPictureInPictureMode) return
+        if (pending.isNotEmpty() && mode(a) != 0) {
+            val batch = pending.toList(); pending.clear()
+            if (mode(a) == 2) { schedule(); return }
+            shown = batch
+            val host = a.window.decorView as? ViewGroup ?: return
+            val card = noteCard(a, batch) {
+                shown = emptyList(); dismissNote(); Nav.openAchievement(a, batch.first().rowId); schedule()
+            }
+            note = card
+            // Decor is a FrameLayout: position below the status/app bars, at the right.
+            host.addView(card, FrameLayout.LayoutParams(minOf(Ui.dp(a, 250), a.resources.displayMetrics.widthPixels - Ui.dp(a, 16)), -2, Gravity.TOP or Gravity.RIGHT).also {
+                it.topMargin = Ui.dp(a, 60); it.rightMargin = Ui.dp(a, 8)
+            })
+            if (android.animation.ValueAnimator.areAnimatorsEnabled() && !a.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) {
+                card.translationX = Ui.dp(a, 270).toFloat(); card.alpha = 0f
+                card.animate().translationX(0f).alpha(1f).setDuration(220).start()
+            }
+            handler.postDelayed({ if (note === card) { shown = emptyList(); dismissNote(); schedule() } }, 4400)
+            return
+        }
         val d = Dialog(a, android.R.style.Theme_Translucent_NoTitleBar)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
         d.window?.apply {
@@ -196,7 +249,7 @@ object AchievementPopup {
         stage.addView(AchMedal(ctx, medalDp).apply { set(AchStyle.icon(AchievementTable.row(c.rowId)?.icon ?: ""), c.tier, special = c.tier < 0) },
             FrameLayout.LayoutParams(Ui.dp(ctx, medalDp), Ui.dp(ctx, medalDp), Gravity.CENTER))
         box.addView(stage, LinearLayout.LayoutParams(-1, -2))
-        box.addView(Ui.text(ctx, 24f, 900, R.color.ag_text).apply { text = if (c.tier < 0) "Badge!" else c.word; setTextColor(color) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
+        box.addView(Ui.text(ctx, 22f, 900, R.color.ag_text).apply { text = if (c.tier < 0) "Badge!" else c.word; setTextColor(color) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
         val sub = if (c.threshold != null) "${c.title} · ${AchPageMath.fmt(AchievementTable.row(c.rowId)?.metric, c.threshold)}" else c.title
         box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = sub; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         AchPageMath.rewardOf(c.rowId, c.tier)?.let { reward -> // R14-B2-D: "Reward: a Master Ball, in your Bag"
@@ -333,9 +386,9 @@ object AchievementPopup {
             setOnClickListener { tap() }
         }
         return LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(btn(see, false, onSee), LinearLayout.LayoutParams(0, -2, 1f))
-            addView(btn("Nice", true, onNice), LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8) })
+            orientation = LinearLayout.VERTICAL
+            addView(btn(see, true, onSee), LinearLayout.LayoutParams(-1, -2))
+            addView(btn("Nice", false, onNice), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 8) })
         }
     }
 

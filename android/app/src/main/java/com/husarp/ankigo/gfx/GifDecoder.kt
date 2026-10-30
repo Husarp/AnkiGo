@@ -6,7 +6,7 @@ package com.husarp.ankigo.gfx
 object GifDecoder {
     /** One composed frame: width*height ARGB pixels (0 = transparent), shown for delayMs (min 20; 0/10 -> 100 like browsers). */
     class Frame(val pixels: IntArray, val delayMs: Int)
-    class Gif(val width: Int, val height: Int, val frames: List<Frame>)
+    class Gif(val width: Int, val height: Int, val frames: List<Frame>, val frameStep: Int = 1)
 
     /** Thrown internally when the data ends in the middle of a block. */
     private class Truncated : Exception()
@@ -19,8 +19,9 @@ object GifDecoder {
      * whose canvas is over [MAX_CANVAS_PIXELS]. A file that is cut off later returns the frames decoded so far.
      * [maxPixels] caps the kept frames (frames x width x height): over it, only every 2nd (3rd, ...) frame is kept and
      * shown for the skipped frames' time too, so a long 3D animation plays at the same speed with less memory.
+     * [maxStep] can refuse excessive thinning (the Buddy allows all frames or every second frame, otherwise stays still).
      */
-    fun decode(bytes: ByteArray, maxPixels: Long = Long.MAX_VALUE): Gif {
+    fun decode(bytes: ByteArray, maxPixels: Long = Long.MAX_VALUE, maxStep: Int = Int.MAX_VALUE): Gif {
         require(bytes.size >= 13) { "not a GIF (too short)" }
         require(bytes[0] == 'G'.code.toByte() && bytes[1] == 'I'.code.toByte() && bytes[2] == 'F'.code.toByte() &&
             bytes[3] == '8'.code.toByte() && (bytes[4] == '7'.code.toByte() || bytes[4] == '9'.code.toByte()) &&
@@ -41,6 +42,7 @@ object GifDecoder {
             val count = countFrames(bytes, r.pos)
             val perFrame = width.toLong() * height
             val step = if (count * perFrame <= maxPixels) 1 else ((count * perFrame + maxPixels - 1) / maxPixels.coerceAtLeast(perFrame)).toInt()
+            require(step <= maxStep) { "animation needs more frame thinning than allowed" }
             return decodeFrames(r, width, height, globalTable, frames, step.coerceAtLeast(1))
         } catch (e: Truncated) {
             throw IllegalArgumentException("GIF is cut off before the first frame")
@@ -131,7 +133,7 @@ object GifDecoder {
             if (frames.isEmpty()) throw e
         }
         if (frames.isEmpty()) throw IllegalArgumentException("GIF has no frames")
-        return Gif(width, height, frames)
+        return Gif(width, height, frames, step)
     }
 
     private fun clearRect(canvas: IntArray, width: Int, height: Int, rect: IntArray) {

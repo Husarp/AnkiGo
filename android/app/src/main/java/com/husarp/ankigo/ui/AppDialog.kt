@@ -140,10 +140,10 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
             card.addView(f, LinearLayout.LayoutParams(-1, -2))
         }
         if (buttons.isNotEmpty()) {
-            val row = ButtonRow(ctx).apply { setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 10)) }
-            for (which in intArrayOf(DialogInterface.BUTTON_NEUTRAL, DialogInterface.BUTTON_NEGATIVE, DialogInterface.BUTTON_POSITIVE)) {
+            val row = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 10)) }
+            for (which in intArrayOf(DialogInterface.BUTTON_POSITIVE, DialogInterface.BUTTON_NEUTRAL, DialogInterface.BUTTON_NEGATIVE)) {
                 val b = buttons[which] ?: continue
-                row.addView(makeButton(ctx, which, b).also { buttonViews[which] = it })
+                row.addView(makeButton(ctx, which, b).also { buttonViews[which] = it }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 6) })
             }
             card.addView(row, LinearLayout.LayoutParams(-1, -2))
         } else if (hasBody) {
@@ -178,8 +178,8 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
         val positive = which == DialogInterface.BUTTON_POSITIVE
         val fillColor = Ui.c(ctx, R.color.ag_mauve)
         val textColor = if (positive) AppDialogRules.onFill(fillColor, Ui.c(ctx, R.color.ag_crust), TypeInk::contrast) else Ui.c(ctx, R.color.ag_sub1)
-        val shape: Drawable = Ui.rounded(if (positive) fillColor else Color.TRANSPARENT, 22, ctx)
-        val ripple = RippleDrawable(ink(if (positive) 0x44 else 0x22, if (positive) Color.WHITE else Ui.c(ctx, R.color.ag_text)), shape, Ui.rounded(Color.BLACK, 22, ctx))
+        val shape: Drawable = Ui.rounded(if (positive) fillColor else Ui.c(ctx, R.color.ag_mantle), 12, ctx)
+        val ripple = RippleDrawable(ink(if (positive) 0x44 else 0x22, if (positive) Color.WHITE else Ui.c(ctx, R.color.ag_text)), shape, Ui.rounded(Color.BLACK, 12, ctx))
         return AppButton(ctx).apply {
             typeface = Ui.font(ctx, 900)
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -187,7 +187,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
             includeFontPadding = false
             setTextColor(textColor)
             text = b.text
-            Ui.touchPill(this, ripple, 44, if (positive) 22 else 16)
+            Ui.touchPill(this, ripple, 44, 16)
             setOnClickListener { b.listener?.onClick(this@AppDialog, which); dismiss() }
         }
     }

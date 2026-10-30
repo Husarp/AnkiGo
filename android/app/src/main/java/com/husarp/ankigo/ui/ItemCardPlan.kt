@@ -17,6 +17,14 @@ internal class OpenCard {
     var key: String? = null
         private set
 
+    var quantity = 1
+        private set
+    var buying = false
+        private set
+    fun cycleQuantity() { quantity = when (quantity) { 1 -> 3; 3 -> 5; else -> 1 }; buying = false }
+    fun askBuy() { buying = key != null }
+    fun bought() { buying = false }
+
     /** The trade confirm of the open ball window is showing. */
     var confirming: Boolean = false
         private set
@@ -33,6 +41,7 @@ internal class OpenCard {
 
     /** A tap on a tile, row or card of [k]: its window is the open one (the one that was open is replaced). */
     fun open(k: String) {
+        quantity = 1; buying = false
         key = k
         confirming = false
         keepEmpty = false
@@ -40,7 +49,7 @@ internal class OpenCard {
 
     fun confirmTrade(on: Boolean) { confirming = on && key != null }
 
-    fun reset() { key = null; confirming = false; keepEmpty = false }
+    fun reset() { quantity = 1; buying = false; key = null; confirming = false; keepEmpty = false }
 }
 
 /** The keys of the items: where the tile is (a Shop section or the Bag) plus what it shows, so the page can find the item again after a re-render. */

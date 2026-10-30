@@ -43,6 +43,22 @@ class MonTagsTest {
         assertTrue(TagKind.CAN_EVOLVE !in kinds(it, it.mons[0]))
     }
 
+    @Test fun itemReadinessUsesTheGivenTimeAndSuppressedEverstone() {
+        val d = TestData.data(listOf(TestData.species(10, evolutions = listOf(
+            Evolution(11, EvoKind.ITEM, item = "water-stone", time = "night"))), TestData.species(11)))
+        val st = TestData.state(d, 10, 20)
+        val mon = st.main!!
+        st.bag["water-stone"] = 1
+        val night = ms(2026, 10, 14, 22, 0)
+        assertTrue(!MonTags.canEvolve(d, st, mon, now))
+        assertTrue(MonTags.canEvolve(d, st, mon, night))
+        mon.heldItem = "everstone"
+        assertTrue(!MonTags.canEvolve(d, st, mon, night))
+        st.battle = com.husarp.ankigo.game.Battle(TestData.mon(d, 11, 20), com.husarp.ankigo.game.Tier.NORMAL)
+        st.battle!!.player.volatiles["embargo"] = 5
+        assertTrue(MonTags.canEvolve(d, st, mon, night))
+    }
+
     @Test fun newUsesDayStartHour() {
         val st = TestData.state(data, 19, 10); st.settings.dayStartHour = 4
         val m = st.mons[0]

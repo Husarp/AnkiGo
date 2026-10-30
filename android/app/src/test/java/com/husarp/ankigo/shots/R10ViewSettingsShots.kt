@@ -51,18 +51,18 @@ class R10ViewSettingsShots {
     private fun sheet(ctx: Context, height: ViewSettingsSheet.PanelHeightPart?): View = ViewSettingsScreen(ctx, height).root
 
     @Test fun theRowsAndTheirOrder() {
-        assertEquals(listOf("SIZE", "FACING", "INFO_BOX", "BARS", "FRAME", "CARD_OWN", "COMPACT", "BACKGROUND"), ViewSettingsSheet.parts(false).map { it.name })
-        assertEquals(listOf("SIZE", "FACING", "INFO_BOX", "BARS", "FRAME", "CARD_OWN", "COMPACT", "BACKGROUND", "HEIGHT"), ViewSettingsSheet.parts(true).map { it.name })
+        assertEquals(listOf("SIZE", "FACING", "INFO_BOX", "BARS", "XP", "FRAME", "CARD_OWN", "COMPACT", "BACKGROUND"), ViewSettingsSheet.parts(false).map { it.name })
+        assertEquals(listOf("SIZE", "FACING", "INFO_BOX", "BARS", "XP", "FRAME", "CARD_OWN", "COMPACT", "BACKGROUND", "HEIGHT"), ViewSettingsSheet.parts(true).map { it.name })
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         val titles = { h: ViewSettingsSheet.PanelHeightPart? -> texts(sheet(ctx, h)) }
         val battle = titles(null)
         val study = titles(ViewSettingsSheet.PanelHeightPart({ 1 }) {})
-        for (t in listOf("View settings", "POKÉMON SIZE", "FACING", "Info box style", "HP / XP bars", "Battle frame", "Stat card under its own Pokémon", "Compact stat cards", "Background pictures")) {
+        for (t in listOf("View settings", "POKÉMON SIZE", "FACING", "Info box style", "HP / XP bars", "Battle frame", "Always show XP bar", "Stat card under its own Pokémon", "Compact stat cards", "Background pictures")) {
             assertTrue("battle page has '$t'", t in battle)
             assertTrue("study page has '$t'", t in study)
         }
-        for (s in BattleFrameStyle.entries) assertTrue("a tile for ${s.label}", s.label in battle)
+        for (s in BattleFrameStyle.entries.filter { it != BattleFrameStyle.ICE }) assertTrue("a tile for ${s.label}", s.label in battle)
         for (s in InfoBoxStyle.entries) assertTrue("an option for ${s.label}", s.label in battle)
         assertFalse("no panel height row in the Battle tab", "PANEL HEIGHT" in battle)
         assertTrue("panel height row on the Study screen", "PANEL HEIGHT" in study)
@@ -111,7 +111,8 @@ class R10ViewSettingsShots {
         val panel = getField(act, "panel") as BattlePanelView
         val l = labels(MenuKit.capture { panel.onMenu(View(ctx)) })
         assertTrue(l.toString(), "View settings" in l)
-        assertEquals("after Switch Pokémon", l.indexOf("Switch Pokémon") + 1, l.indexOf("View settings"))
+        assertEquals("after Switch Pokémon", l.indexOf("Switch Pokémon") + 1, l.indexOf("Use item"))
+        assertEquals("after Use item", l.indexOf("Use item") + 1, l.indexOf("View settings"))
         // the sheet's Panel height row goes through the Study screen's own setPanelDp: Full / Strip / Mini = the handle's presets
         val part = act.viewSettingsHeight()
         assertNotNull("the stacked layout has the handle", part)
@@ -173,13 +174,17 @@ class R10ViewSettingsShots {
         assertEquals(InfoBoxStyle.ABOVE, AppPrefs.infoBoxStyle(ctx))
         tap(root, InfoBoxStyle.INSIDE.label); assertEquals(InfoBoxStyle.INSIDE, AppPrefs.infoBoxStyle(ctx))
         assertEquals(BattleFrameStyle.NONE, AppPrefs.battleFrame(ctx))
-        for (s in BattleFrameStyle.entries) { tap(root, s.label); assertEquals(s, AppPrefs.battleFrame(ctx)) }
+        for (s in BattleFrameStyle.entries.filter { it != BattleFrameStyle.ICE }) { tap(root, s.label); assertEquals(s, AppPrefs.battleFrame(ctx)) }
         // the three switches
         val was = Triple(AppPrefs.cardsUnderOwn(ctx), AppPrefs.compactCards(ctx), AppPrefs.backgroundPictures(ctx))
         tap(root, "Stat card under its own Pokémon"); assertEquals(!was.first, AppPrefs.cardsUnderOwn(ctx))
         tap(root, "Compact stat cards"); assertEquals(!was.second, AppPrefs.compactCards(ctx))
         tap(root, "Background pictures"); assertEquals(!was.third, AppPrefs.backgroundPictures(ctx))
-        assertEquals(3, find(root, { it is Switch }).size)
+        tap(root, "Always show XP bar")
+        assertTrue(ctx.getSharedPreferences("study", 0).getBoolean("alwaysShowXpBar", false))
+        tap(root, "Always show XP bar")
+        assertFalse(ctx.getSharedPreferences("study", 0).getBoolean("alwaysShowXpBar", true))
+        assertEquals(4, find(root, { it is Switch }).size)
         // the panel height is the page's own until it closes (the full check is in R15FViewSettingsShots)
         tap(root, "Mini"); tap(root, "Full"); tap(root, "Strip")
         assertEquals("the host hears nothing while the page is open", -1, picked)

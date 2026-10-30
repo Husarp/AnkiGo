@@ -33,6 +33,8 @@ internal fun soundCard(ctx: Context): View {
     ))
     val battle = card(R.drawable.ic_flame, "Battle", listOf(
         group("Battle effects", "Hits, faint, catch, level up, misses", SoundGroup.BATTLE, SoundId.HIT),
+        Form.soundRow(ctx, "Move type sounds", "Soft sound for each move type, together with the hit", SoundPrefs.typeSounds(ctx),
+            { GameSound.preview(ctx, SoundId.TYPE_WATER)?.let { Ui.toast(ctx, it) } }) { SoundPrefs.setTypeSounds(ctx, it) },
         group("Status & moments", "Burn, poison, shiny, evolution, XP, cash, goals", SoundGroup.MOMENTS, SoundId.STAT_UP),
         volume("Battle effects volume", SoundChannel.BATTLE),
     ))

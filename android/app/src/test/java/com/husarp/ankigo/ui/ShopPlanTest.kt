@@ -134,9 +134,11 @@ class ShopPlanTest {
         assertEquals("nothing measured", 20f, BottomNav.labelSizePx(160f, 20f, 10f, 0f), 0f)
     }
 
-    @Test fun talkBackSaysNewStockOnlyForTheShopTabWithTheDot() {
+    @Test fun talkBackNamesTheShopAndAchievementDots() {
         assertEquals("Shop, new stock", BottomNav.describe(BottomNav.Tab.SHOP, true))
         assertEquals("Shop", BottomNav.describe(BottomNav.Tab.SHOP, false))
-        for (t in BottomNav.Tab.entries.filter { it != BottomNav.Tab.SHOP }) assertEquals(t.label, BottomNav.describe(t, true))
+        assertEquals("Stats, new achievements", BottomNav.describe(BottomNav.Tab.STATS, true))
+        assertEquals("Stats", BottomNav.describe(BottomNav.Tab.STATS, false))
+        for (t in BottomNav.Tab.entries.filter { it != BottomNav.Tab.SHOP && it != BottomNav.Tab.STATS }) assertEquals(t.label, BottomNav.describe(t, true))
     }
 }

@@ -55,7 +55,14 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     fun buildAppBar(): AppBar {
         appBar = Ui.appBar(act, "Study")
         // "New deck" (PLAN 70): shown once AnkiDroid is known to take changes (see render)
-        newDeckButton = StudyUi.iconButton(act, R.drawable.ic_plus, "New deck") { DeckFlows.newDeck(act, null) { refresh() } }.apply {
+        newDeckButton = StudyUi.iconButton(act, R.drawable.ic_more_vert, "Deck menu") {
+            AppMenu(newDeckButton!!).apply {
+                item(1, "New deck", R.drawable.ic_plus)
+                item(2, "Browse all cards", R.drawable.ic_open)
+                show { id -> if (id == 1) DeckFlows.newDeck(act, null) { refresh() }
+                    else runCatching { act.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("anki://x-callback-url/browser?search=")).setPackage(Anki.pkg)) }.onFailure { Ui.toast(act, "Couldn't open AnkiDroid Browse") } }
+            }
+        }.apply {
             setColorFilter(Ui.c(context, R.color.ag_mauve))
             setPadding(Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11)); visibility = View.GONE
         }.also {
@@ -165,12 +172,39 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             }, StudyUi.lp(Ui.dp(act, 46), Ui.dp(act, 46)).also { it.marginStart = Ui.dp(act, 10) })
             resumeSlot.addView(resume); resumeSlot.visibility = View.VISIBLE
         }
-        content.addView(StudyUi.section(act, "Decks"))
-        val columns = StudyUi.row(act).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, DeckCounts.END_PAD_DP), Ui.dp(context, 3)) }
+        val favourites = favouriteIds().mapNotNull { id -> decks.firstOrNull { it.id == id } }
         val countWidth = DeckCounts.columnWidth(act, decks)
+        if (favourites.isNotEmpty()) {
+            section("Favourites", "favouritesCollapsed")
+            if (!prefs.getBoolean("favouritesCollapsed", false)) for (deck in favourites) {
+                val row = StudyUi.row(act).apply {
+                    minimumHeight = Ui.dp(act, 58)
+                    setPadding(Ui.dp(act, 14), Ui.dp(act, 8), Ui.dp(act, DeckCounts.END_PAD_DP), Ui.dp(act, 8))
+                    background = StudyUi.gradient(act, R.color.ag_yellow, .16f, 12)
+                    setOnClickListener { open(deck) }; setOnLongClickListener { deckMenu(deck, this); true }
+                }
+                val labels = StudyUi.column(act)
+                labels.addView(StudyUi.label(act, deck.name.substringAfterLast("::") + " ★", 14, R.color.ag_text, 800).apply {
+                    val starred = android.text.SpannableString(text)
+                    starred.setSpan(android.text.style.ForegroundColorSpan(Ui.c(act, R.color.ag_yellow)), starred.length - 1, starred.length, 0)
+                    text = starred
+                })
+                val path = deck.name.substringBeforeLast("::", "").replace("::", " › ")
+                if (path.isNotEmpty()) labels.addView(StudyUi.label(act, path, 11, R.color.ag_sub0))
+                row.addView(labels, StudyUi.lp(0, -2, 1f))
+                DeckCounts.addTo(row, act, deck, countWidth)
+                content.addView(row, StudyUi.lp().apply { bottomMargin = Ui.dp(act, 5) })
+            }
+        }
+        section("Decks", "decksCollapsed")
+        if (prefs.getBoolean("decksCollapsed", false)) return
+        val columns = StudyUi.row(act).apply { gravity = Gravity.END; setPadding(0, 0, Ui.dp(context, DeckCounts.END_PAD_DP), Ui.dp(context, 3)) }
         DeckCounts.addHeader(columns, act, countWidth)
         content.addView(columns)
         if (decks.isEmpty()) content.addView(StudyUi.label(act, "No decks found. Open AnkiDroid once, then refresh."))
+        val look = DeckListLook.get(act)
+        var family: LinearLayout? = null
+        var familyName: String? = null
         for (r in DeckTree.rows(decks, expanded)) {
             val deck = r.deck
             val row = StudyUi.row(act).apply {
@@ -195,13 +229,46 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             row.addView(zone, StudyUi.lp(Ui.dp(act, 48), -1))
             val name = StudyUi.row(act)
             name.addView(StudyUi.ellipsis(StudyUi.label(act, deck.name.substringAfterLast("::"), 14, R.color.ag_text, 800)), StudyUi.lp(0, -2, 1f))
+            if (deck.id in favouriteIds()) name.addView(StudyUi.icon(act, R.drawable.ic_star, R.color.ag_yellow), StudyUi.lp(Ui.dp(act, 16), Ui.dp(act, 16)))
             if (deck.dyn) name.addView(StudyUi.label(act, "FILTERED", 9, R.color.ag_teal, 900).apply {
                 background = Ui.rounded((Ui.c(context, R.color.ag_teal) and 0x00ffffff) or 0x29000000, 5, context)
                 setPadding(Ui.dp(context, 5), Ui.dp(context, 1), Ui.dp(context, 5), Ui.dp(context, 1))
             }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(act, 5) })
             row.addView(name, StudyUi.lp(0, -2, 1f).also { it.marginEnd = Ui.dp(act, 6); it.topMargin = Ui.dp(act, 8); it.bottomMargin = Ui.dp(act, 8) })
             DeckCounts.addTo(row, act, deck, countWidth)
-            content.addView(row, StudyUi.lp().also { it.marginStart = Ui.dp(act, r.depth * 16); it.bottomMargin = Ui.dp(act, 5) })
+            if (look != DeckListLook.TODAY && r.depth == 0 && r.hasChildren) {
+                row.background = Ui.rounded(Bits.blend(Ui.c(act, R.color.ag_mauve), Ui.c(act, R.color.ag_card), .12f), 12, act)
+            }
+            when (look) {
+                DeckListLook.TODAY -> content.addView(row, StudyUi.lp().also { it.marginStart = Ui.dp(act, r.depth * 16); it.bottomMargin = Ui.dp(act, 5) })
+                DeckListLook.BRANCHES -> {
+                    val branch = object : FrameLayout(act) {
+                        private val paint = android.graphics.Paint().apply { color = Ui.c(act, R.color.ag_mauve); strokeWidth = Ui.dp(act, 2).toFloat(); alpha = 100 }
+                        override fun dispatchDraw(canvas: android.graphics.Canvas) {
+                            for (level in 0 until r.depth) {
+                                val x = Ui.dp(act, level * 18 + 8).toFloat()
+                                canvas.drawLine(x, 0f, x, height.toFloat(), paint)
+                            }
+                            super.dispatchDraw(canvas)
+                        }
+                    }
+                    branch.addView(row, FrameLayout.LayoutParams(-1, -2).apply { leftMargin = Ui.dp(act, r.depth * 18) })
+                    content.addView(branch, StudyUi.lp())
+                }
+                DeckListLook.FAMILIES -> {
+                    val root = deck.name.substringBefore("::")
+                    if (family == null || root != familyName) {
+                        familyName = root
+                        family = StudyUi.column(act).apply {
+                            background = Ui.rounded(Ui.c(act, R.color.ag_card), 14, act)
+                            setPadding(Ui.dp(act, 8), Ui.dp(act, 8), Ui.dp(act, 8), Ui.dp(act, 8))
+                        }
+                        content.addView(family, StudyUi.lp().apply { bottomMargin = Ui.dp(act, 10) })
+                    }
+                    if (!r.hasChildren) row.background = null
+                    family!!.addView(row, StudyUi.lp().apply { marginStart = Ui.dp(act, r.depth * 14) })
+                }
+            }
         }
     }
 
@@ -215,6 +282,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
      */
     fun deckMenu(deck: Anki.Deck, anchor: View): AppMenu {
         val menu = AppMenu(anchor)
+        menu.item(4, if (deck.id in favouriteIds()) "Remove from favourites" else "Add to favourites", R.drawable.ic_star)
         if (canManage() && !deck.dyn) {
             menu.item(MENU_SUBDECK, "New subdeck…", R.drawable.ic_plus)
             menu.item(MENU_MOVE_ALL, "Move all cards…", R.drawable.ic_move)
@@ -222,6 +290,11 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
         menu.item(MENU_ANKI, "Study in AnkiDroid", R.drawable.ic_open)
         menu.show { id ->
             when (id) {
+                4 -> {
+                    val ids = favouriteIds().toMutableList()
+                    if (!ids.remove(deck.id)) ids.add(deck.id)
+                    prefs.edit().putString("favouriteDecks", ids.joinToString(",")).apply(); render()
+                }
                 MENU_SUBDECK -> DeckFlows.newDeck(act, deck) {
                     expanded = expanded + deck.id
                     prefs.edit().putStringSet("expandedDecks", DeckTree.encode(expanded)).apply(); refresh()
@@ -231,6 +304,16 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             }
         }
         return menu
+    }
+
+    private fun favouriteIds(): List<Long> = prefs.getString("favouriteDecks", "").orEmpty().split(",").mapNotNull { it.toLongOrNull() }.distinct()
+
+    private fun section(title: String, key: String) {
+        content.addView(StudyUi.section(act, title + if (prefs.getBoolean(key, false)) " ▸" else " ▾").apply {
+            minimumHeight = Ui.dp(act, 48)
+            contentDescription = "$title, ${if (prefs.getBoolean(key, false)) "collapsed" else "expanded"}"
+            setOnClickListener { prefs.edit().putBoolean(key, !prefs.getBoolean(key, false)).apply(); render() }
+        })
     }
 
     private fun open(deck: Anki.Deck) {

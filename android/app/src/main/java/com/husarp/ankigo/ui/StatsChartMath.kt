@@ -199,6 +199,7 @@ object StatsChartMath {
      */
     fun emptyText(m: ChartMetric): String = when (m) {
         ChartMetric.RETENTION -> "No answers counted in this period yet."
+        ChartMetric.SECONDS_PER_CARD -> "No timed answers in this period yet."
         ChartMetric.TIME -> "No study time in this period yet."
         ChartMetric.DUE -> "Nothing due in this period."
         ChartMetric.MONEY -> "No money earned in this period yet."
@@ -210,6 +211,11 @@ object StatsChartMath {
     /** The three key numbers above the chart: total, a day on average and the best day (a category chart: its total and its biggest bar). */
     fun tiles(s: ChartSeries): List<StatTile> {
         val m = s.metric
+        if (m == ChartMetric.SECONDS_PER_CARD) return listOf(
+            StatTile(StatsText.averageText(s.total.takeUnless { s.empty }), "per timed answer"),
+            StatTile(StatsText.averageText(s.perDayAvg.takeUnless { s.empty }), "average of timed days"),
+            StatTile(StatsText.averageText(s.best.takeUnless { s.empty }), s.bestDay?.let { "fastest day (${dayShort(it)})" } ?: "fastest day"),
+        )
         if (s.kind == ChartKind.CATEGORY) {
             val total = when (m) {
                 ChartMetric.DEX_PROGRESS -> StatTile("${Math.round(s.total)} %", "of the Pokédex caught")

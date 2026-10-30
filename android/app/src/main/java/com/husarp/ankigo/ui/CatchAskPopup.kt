@@ -148,18 +148,9 @@ object CatchAskPopup {
         val b1 = button(ctx, "Catch", "keep both", Style.PRIMARY, true, stacked = short) { onPick(AskChoice.CATCH) }
         val b2 = button(ctx, "Catch and replace", m.replaceSub, Style.SOFT, m.canReplace, stacked = short) { onPick(AskChoice.REPLACE) }
         val b3 = button(ctx, "Don't catch", "move on", Style.GREY, true, stacked = short) { onPick(AskChoice.DONT) }
-        if (short) {
-            col.addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                addView(b1, LinearLayout.LayoutParams(0, -1, 1f))
-                addView(b2, LinearLayout.LayoutParams(0, -1, 1.25f).also { it.marginStart = gap })
-                addView(b3, LinearLayout.LayoutParams(0, -1, 1f).also { it.marginStart = gap })
-            }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 8) })
-        } else {
-            col.addView(b1, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 12) })
-            col.addView(b2, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap })
-            col.addView(b3, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap })
-        }
+        col.addView(b1, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 12) })
+        col.addView(b2, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap })
+        col.addView(b3, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = gap })
         return col
     }
 

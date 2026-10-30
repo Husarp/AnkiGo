@@ -55,7 +55,7 @@ class R3V7Shots {
 
     private fun deckScreen(ctx: Context, granted: Boolean = true): Pair<StudyHome, View> {
         val ss = ShotCtx(ctx, granted = granted)
-        ss.getSharedPreferences("study", 0).edit().putLong("lastDeck", 0).apply()
+        ss.getSharedPreferences("study", 0).edit().putLong("lastDeck", 0).remove("favouriteDecks").apply()
         val b = StudyDeckKit.compose(ss)
         setField(b.home, "decks", decks.sortedBy { it.name })
         setField(b.home, "expanded", setOf(1L, 2L))
@@ -69,7 +69,7 @@ class R3V7Shots {
         paparazzi.shootWith("r3v7-deckmenu", both) { ctx ->
             val (act, root) = deckScreen(ctx)
             val menu = MenuKit.capture { act.deckMenu(decks[2], View(ctx)) }!!
-            assertEquals(listOf("New subdeck…", "Move all cards…", "Study in AnkiDroid"), labels(menu))
+            assertEquals(listOf("Add to favourites", "New subdeck…", "Move all cards…", "Study in AnkiDroid"), labels(menu))
             MenuKit.over(ctx, root, menu, Gravity.TOP, 300)
         }
     }
@@ -78,14 +78,14 @@ class R3V7Shots {
         paparazzi.shootWith("r3v7-deckmenu-filtered", listOf(Size.PHONE)) { ctx ->
             val (act, root) = deckScreen(ctx)
             val menu = MenuKit.capture { act.deckMenu(decks[6], View(ctx)) }!!
-            // a filtered deck holds no subdeck and no cards of its own: only the AnkiDroid entry is left (nothing greyed)
-            assertEquals(listOf("Study in AnkiDroid"), labels(menu))
+            // AnkiDroid management is unavailable here; local favourites and the Study entry remain.
+            assertEquals(listOf("Add to favourites", "Study in AnkiDroid"), labels(menu))
             MenuKit.over(ctx, root, menu, Gravity.TOP, 420)
         }
         paparazzi.shootWith("r3v7-deckmenu-nopermission", listOf(Size.PHONE)) { ctx ->
             val (act, root) = deckScreen(ctx, granted = false)
             val menu = MenuKit.capture { act.deckMenu(decks[2], View(ctx)) }!!
-            assertEquals(listOf("Study in AnkiDroid"), labels(menu))
+            assertEquals(listOf("Add to favourites", "Study in AnkiDroid"), labels(menu))
             root
         }
     }

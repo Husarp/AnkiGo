@@ -112,8 +112,15 @@ internal object SettingsHomeSearch {
     }
 
     /** Tints [row] with the accent for a moment, so the player sees which setting the search led to. */
-    fun flash(row: View) {
+    fun flash(row: View, ring: Boolean = false) {
         val old = row.background
+        if (ring) {
+            row.background = Ui.rounded(Ui.c(row.context, R.color.ag_card), 14, row.context).apply {
+                setStroke(Ui.dp(row.context, 2), Ui.c(row.context, R.color.ag_mauve))
+            }
+            row.postDelayed({ row.background = old }, 1000)
+            return
+        }
         row.background = ColorDrawable((Ui.c(row.context, R.color.ag_mauve) and 0x00FFFFFF) or 0x33000000)
         row.postDelayed({ row.background = old }, 1800)
     }

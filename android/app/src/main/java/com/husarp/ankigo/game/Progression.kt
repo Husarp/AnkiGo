@@ -130,13 +130,13 @@ object Progression {
     }
 
     /** Adds an EV yield of one win (Macho Brace x2, Power items +8 to their stat), caps 252 per stat / 510 total. */
-    fun addEvs(mon: Mon, yield: Stats) {
+    fun addEvs(mon: Mon, yield: Stats, heldItem: String? = mon.heldItem) {
         val gain = yield.toList().toMutableList()
-        if (mon.heldItem == "macho-brace") {
+        if (heldItem == "macho-brace") {
             for (i in gain.indices) gain[i] *= 2
         } else {
             val idx = listOf("power-weight", "power-bracer", "power-belt", "power-lens", "power-band", "power-anklet")
-                .indexOf(mon.heldItem)
+                .indexOf(heldItem)
             if (idx >= 0) gain[idx] += 8
         }
         val cur = mon.evs.toList().toMutableList()
@@ -153,10 +153,10 @@ object Progression {
      * and +5..9 friendship (Soothe Bell x1.5), capped at [Tuning.FRIENDSHIP_MAX] (a higher number from an older save is cut here).
      * A defeat, an auto catch and a ball catch all come through here, so they all give the same. The Exp. Share holder gets neither.
      */
-    private fun winBonus(data: GameData, main: Mon, wild: Mon, rng: Random) {
-        addEvs(main, data.sp(wild.species).evYield)
+    private fun winBonus(data: GameData, state: GameState, main: Mon, wild: Mon, rng: Random) {
+        addEvs(main, data.sp(wild.species).evYield, state.activeHeldItem(main))
         var friend = Tuning.FRIENDSHIP_GAIN.random(rng)
-        if (main.heldItem == "soothe-bell") friend = (friend * Tuning.SOOTHE_BELL).toInt()
+        if (state.activeHeldItem(main) == "soothe-bell") friend = (friend * Tuning.SOOTHE_BELL).toInt()
         main.friendship = min(Tuning.FRIENDSHIP_MAX, main.friendship + friend)
     }
 
@@ -164,8 +164,7 @@ object Progression {
      * Everything a Defeat gives (Ankimon): XP to the main = xpForDefeat; classic Exp. Share (settings.xpShareUid,
      * if set, owned and not the main): main and holder each get int(xp * 0.5); Lucky Egg x1.5 for whoever holds it;
      * EV yield and +5..9 friendship (Soothe Bell x1.5, up to 255) to the main ([winBonus], the same as a catch win gives);
-     * main.defeats++; then the main's level evolution if one is due (after the level-ups), otherwise its friendship
-     * evolution. The same evolution check runs for the Exp. Share holder after it levels.
+     * main.defeats++. Evolution is always an explicit choice in the details (including for the Exp. Share holder).
      */
     fun rewardDefeat(data: GameData, state: GameState, main: Mon, wild: Mon, now: Long, rng: Random, events: MutableList<GameEvent>) {
         val wildSp = data.sp(wild.species)
@@ -174,26 +173,23 @@ object Progression {
         val half = (xp * Tuning.XP_SHARE_PART).toInt()
         var mainXp = if (holder != null) half else xp
         var holderXp = half
-        if (main.heldItem == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
-        if (holder?.heldItem == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
+        if (state.activeHeldItem(main) == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
+        if (holder != null && state.activeHeldItem(holder) == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
 
         events += GameEvent.Defeated(wild.species, wild.name, xp)
-        winBonus(data, main, wild, rng)
+        winBonus(data, state, main, wild, rng)
         main.defeats++
 
         gainXp(data, state, main, mainXp, events)
         if (holder != null) gainXp(data, state, holder, holderXp, events)
 
-        (levelEvolution(data, state, main, now) ?: friendshipEvolution(data, state, main, now))
-            ?.let { evolve(data, state, main, it, rng, events) }
-        if (holder != null) levelEvolution(data, state, holder, now)?.let { evolve(data, state, holder, it, rng, events) }
     }
 
     /**
      * AnkiGo: what a wild Pokémon the auto rule or a ball CATCHES at 0 HP gives. Ankimon gives nothing for a catch, but there you
      * choose catch or defeat by hand; with the choice automatic, most wins are catches (R17C-2: they gave no EVs, so the Main's EVs
      * stayed 0). So a catch win gives exactly what a defeat gives: the full defeat XP (Exp. Share, Lucky Egg apply), the EVs and the
-     * friendship ([winBonus]), and the same evolution checks (level, else friendship). Counting the win itself (main.defeats,
+     * friendship ([winBonus]). Evolution waits for the player's choice. Counting the win itself (main.defeats,
      * state.defeats, trainer XP) stays with Game (resolveWild / throwBall).
      */
     fun rewardCatch(data: GameData, state: GameState, main: Mon, wild: Mon, now: Long, rng: Random, events: MutableList<GameEvent>) {
@@ -202,19 +198,36 @@ object Progression {
         val half = (xp * Tuning.XP_SHARE_PART).toInt()
         var mainXp = if (holder != null) half else xp
         var holderXp = half
-        if (main.heldItem == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
-        if (holder?.heldItem == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
-        winBonus(data, main, wild, rng)
+        if (state.activeHeldItem(main) == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
+        if (holder != null && state.activeHeldItem(holder) == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
+        winBonus(data, state, main, wild, rng)
         gainXp(data, state, main, mainXp, events)
         if (holder != null) gainXp(data, state, holder, holderXp, events)
-        (levelEvolution(data, state, main, now) ?: friendshipEvolution(data, state, main, now))
-            ?.let { evolve(data, state, main, it, rng, events) }
-        if (holder != null) levelEvolution(data, state, holder, now)?.let { evolve(data, state, holder, it, rng, events) }
+    }
+
+    /** Every currently available branch, without choosing one for the player. */
+    fun readyEvolutions(data: GameData, state: GameState, mon: Mon, now: Long): List<Evolution> {
+        if (state.activeHeldItem(mon) == EVERSTONE) return emptyList()
+        return data.sp(mon.species).evolutions.filter { e ->
+            data.species.containsKey(e.to) && timeOk(e, now) && genderOk(e, mon) && when (e.kind) {
+                EvoKind.LEVEL -> e.level != null && mon.level >= e.level && conditionOk(data, state, e, mon)
+                EvoKind.LEVEL_MOVE -> e.move != null && e.move in mon.moves && mon.level >= (e.level ?: 0)
+                EvoKind.FRIENDSHIP -> mon.friendship >= (e.minFriendship ?: Tuning.DEFAULT_MIN_FRIENDSHIP) &&
+                    (e.moveType == null || mon.moves.any { data.move(it)?.type == e.moveType })
+                else -> state.count(evolutionItem(e)!!) > 0 && e in itemEvolutions(data, mon, evolutionItem(e)!!, state.activeHeldItem(mon))
+            }
+        }.distinctBy { it.to }
+    }
+
+    fun evolutionItem(e: Evolution): String? = when (e.kind) {
+        EvoKind.ITEM, EvoKind.TRADE -> e.item ?: LINKING_CORD
+        EvoKind.OTHER -> LINKING_CORD
+        else -> null
     }
 
     /** Level-based evolution that is due now (LEVEL with time/gender/condition, LEVEL_MOVE), or null. Everstone blocks. */
     fun levelEvolution(data: GameData, state: GameState, mon: Mon, now: Long): Evolution? {
-        if (mon.heldItem == EVERSTONE) return null
+        if (state.activeHeldItem(mon) == EVERSTONE) return null
         return data.sp(mon.species).evolutions.firstOrNull { e ->
             data.species.containsKey(e.to) && when (e.kind) {
                 EvoKind.LEVEL -> e.level != null && mon.level >= e.level
@@ -226,7 +239,7 @@ object Progression {
 
     /** Friendship evolution that is due now (friendship >= minFriendship, time, Fairy move for Sylveon), or null. Everstone blocks. */
     fun friendshipEvolution(data: GameData, state: GameState, mon: Mon, now: Long): Evolution? {
-        if (mon.heldItem == EVERSTONE) return null
+        if (state.activeHeldItem(mon) == EVERSTONE) return null
         return data.sp(mon.species).evolutions.firstOrNull { e ->
             e.kind == EvoKind.FRIENDSHIP && data.species.containsKey(e.to) &&
                 mon.friendship >= (e.minFriendship ?: Tuning.DEFAULT_MIN_FRIENDSHIP) && timeOk(e, now) &&
@@ -239,18 +252,18 @@ object Progression {
      * without an item, or OTHER, with "linking-cord"; a day/night-bound one (Razor Claw, Razor Fang, Oval Stone) only at
      * that time (Ankimon evolution_time_allows). Everstone blocks.
      */
-    fun itemEvolution(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis()): Evolution? =
-        itemEvolutions(data, mon, item).firstOrNull { timeOk(it, now) }
+    fun itemEvolution(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis(), heldItem: String? = mon.heldItem): Evolution? =
+        itemEvolutions(data, mon, item, heldItem).firstOrNull { timeOk(it, now) }
 
     /** "day" or "night" when the time of day is the ONLY thing keeping [item] from evolving [mon] now (Ankimon item_evolution_time_requirement), else null. */
-    fun itemEvolutionTimeNeeded(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis()): String? =
-        if (itemEvolution(data, mon, item, now) != null) null else itemEvolutionAnyTime(data, mon, item)?.time
+    fun itemEvolutionTimeNeeded(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis(), heldItem: String? = mon.heldItem): String? =
+        if (itemEvolution(data, mon, item, now, heldItem) != null) null else itemEvolutionAnyTime(data, mon, item, heldItem)?.time
 
     /** The evolution [item] triggers on [mon] whatever the time of day. */
-    fun itemEvolutionAnyTime(data: GameData, mon: Mon, item: String): Evolution? = itemEvolutions(data, mon, item).firstOrNull()
+    fun itemEvolutionAnyTime(data: GameData, mon: Mon, item: String, heldItem: String? = mon.heldItem): Evolution? = itemEvolutions(data, mon, item, heldItem).firstOrNull()
 
-    private fun itemEvolutions(data: GameData, mon: Mon, item: String): List<Evolution> {
-        if (mon.heldItem == EVERSTONE) return emptyList()
+    private fun itemEvolutions(data: GameData, mon: Mon, item: String, heldItem: String?): List<Evolution> {
+        if (heldItem == EVERSTONE) return emptyList()
         return data.sp(mon.species).evolutions.filter { e ->
             data.species.containsKey(e.to) && genderOk(e, mon) && when (e.kind) {
                 EvoKind.ITEM -> e.item == item

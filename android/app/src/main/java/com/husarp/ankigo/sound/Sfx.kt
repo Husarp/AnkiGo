@@ -9,7 +9,7 @@ import kotlin.math.sin
 
 /**
  * The sounds. [file] is the cache file name; bump the "-v1" when a sound is redesigned. [group] = the settings group that switches it.
- * The first six are the original battle sounds ([Sfx]); the rest carry the names of [SoftSound] (made by [SoftSfx]).
+ * The first six are the original battle sounds ([Sfx]); soft event cues use [SoftSound], and TYPE_* uses [TypeSfx].
  */
 enum class SoundId(val file: String, val group: SoundGroup) {
     HIT("hit-v1.wav", SoundGroup.BATTLE), SUPER("super-v1.wav", SoundGroup.BATTLE), WEAK("weak-v1.wav", SoundGroup.BATTLE),
@@ -34,9 +34,27 @@ enum class SoundId(val file: String, val group: SoundGroup) {
     GOOD("good-v2.wav", SoundGroup.ANSWER_BUTTONS), EASY("easy-v2.wav", SoundGroup.ANSWER_BUTTONS),
     SHOW_ANSWER("show_answer-v2.wav", SoundGroup.SHOW_ANSWER),
     TAB("tab-v2.wav", SoundGroup.MENUS), MENU("menu-v2.wav", SoundGroup.MENUS), BALL_BTN("ball_btn-v2.wav", SoundGroup.MENUS),
-    BUY("buy-v2.wav", SoundGroup.SHOP);
+    BUY("buy-v2.wav", SoundGroup.SHOP),
+    TYPE_NORMAL("type-normal-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_FIRE("type-fire-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_WATER("type-water-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_ELECTRIC("type-electric-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_GRASS("type-grass-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_ICE("type-ice-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_FIGHTING("type-fighting-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_POISON("type-poison-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_GROUND("type-ground-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_FLYING("type-flying-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_PSYCHIC("type-psychic-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_BUG("type-bug-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_ROCK("type-rock-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_GHOST("type-ghost-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_DRAGON("type-dragon-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_DARK("type-dark-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_STEEL("type-steel-a-v1.wav", SoundGroup.BATTLE),
+    TYPE_FAIRY("type-fairy-a-v1.wav", SoundGroup.BATTLE);
 
-    /** The soft recipe that makes this sound, or null for the six original battle sounds. */
+    /** The soft event recipe, or null for the original battle and move-type recipes. */
     val soft: SoftSound? get() = SoftSound.entries.firstOrNull { it.name == name }
 }
 
@@ -57,6 +75,7 @@ object Sfx {
     }
 
     fun samples(id: SoundId): ShortArray {
+        TypeSfx.type(id)?.let { return TypeSfx.samples(it) }
         id.soft?.let { return SoftSfx.samples(it) }
         val b = Buf(when (id) {
             SoundId.HIT -> 0.24; SoundId.SUPER -> 0.40; SoundId.WEAK -> 0.16

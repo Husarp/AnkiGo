@@ -22,8 +22,7 @@ import com.husarp.ankigo.game.SwitchQueue
 import com.husarp.ankigo.game.quietUnlessHit
 import com.husarp.ankigo.game.shownName
 
-// PLAN item 53 (R3-V5, pick 5A): the Compare screen. Mode switch on top (vs reference / best of all), a chip row (rows, sort,
-// filter, fully evolved) and the table of CompareGrid. All the choices live in CompareState; the screen only draws them.
+// Compare has one reference view, a remembered Colours chip and explicit comparison levels (PLAN 136 / 189).
 
 class ComparePage(base: Context, host: PageHost, private val picks: List<ComparePick>) : GamePage(base, host) {
     override val tab: BottomNav.Tab? = null
@@ -32,6 +31,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     private lateinit var holder: FrameLayout
     private var cmp: CompareState? = null
     private var evolved = false
+    private var colours = CompareStore.loadColours(this)
+    private var sameLevel: Int? = null
     private var rows: RowChoice = CompareStore.loadRows(this)
     /** How many columns fit (0 = automatic); always automatic when the screen opens (R9 C1), the choice lives as long as the screen. */
     internal var fit: Int = CompareFit.atOpen()
@@ -57,10 +58,13 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     }
 
     public override fun render() {
-        val data = CompareTable.build(data, state, picks, evolved)
+        val data = CompareTable.build(data, state, picks, evolved, sameLevel)
+        if (evolved || sameLevel != null) sameLevel = data.rowOrNull("level")?.cells
+            ?.mapNotNull { (it as? Cell.Text)?.value }?.maxOrNull() ?: sameLevel
         full = data
         val st = cmp?.also { it.fit(data) }
-            ?: CompareState(CompareStore.loadMode(this)).also { cmp = it; it.fit(data); onNewState?.invoke(it) }
+            ?: CompareState().also { cmp = it; it.fit(data); onNewState?.invoke(it) }
+        st.mode = CompareMode.VS_REFERENCE
         holder.removeAllViews()
         // the shown group (a table of Pokédex entries only has base stats); a sort on a row of the hidden group moves to the same row of the shown one
         val shownGroup = CompareGroups.effective(data, group)
@@ -84,7 +88,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
                     gravity = Gravity.CENTER
                     minHeight = dp(48)
                     setPadding(dp(20), 0, dp(20), 0)
-                    background = Ui.rounded(c(R.color.ag_mauve), 14, this@ComparePage)
+                    setTextColor(Ui.onAccent(this@ComparePage))
+                    background = Ui.rounded(c(R.color.ag_mauve), 12, this@ComparePage)
                     setOnClickListener { st.resetView(); requestRender() }
                 }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(12) })
             }
@@ -98,7 +103,7 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             onHead = { pos, anchor -> headMenu(anchor, data, display, pos) },
             onLabel = { row, anchor -> tapLabel(row, anchor) },
             onMove = { from, to -> display.getOrNull(from)?.let { st.moveTo(data, it, to); requestRender() } },
-            collapsed = folded, onSection = { title -> toggleSection(title) },
+            colours = colours, collapsed = folded, onSection = { title -> toggleSection(title) },
             onLabelLong = { row, anchor -> holdLabel(row, anchor) })
         grid.restore(lastX, lastY)
         grid.onScrolled = { x, y -> lastX = x; lastY = y }
@@ -107,28 +112,20 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val chips = chipViews(data, st)
         if (Ui.shortWindow(this)) {
-            // little height: the mode switch becomes two chips at the start of the one chip row
-            val all = modeChips(st) + groupChips(data, shownGroup) + chips
+            // Little height: the stat groups share the chip row.
+            val all = groupChips(data, shownGroup) + chips
             col.addView(SortViews.scrollRow(this, all).also { it.setPadding(side, 0, side, 0); (it as? android.view.ViewGroup)?.clipToPadding = false }, LinearLayout.LayoutParams(-1, -2))
         } else {
-            col.addView(switches(data, st, shownGroup), LinearLayout.LayoutParams(-1, -2).also { it.setMargins(side + dp(4), dp(2), side + dp(4), dp(0)) })
+            col.addView(switches(data, shownGroup), LinearLayout.LayoutParams(-1, -2).also { it.setMargins(side + dp(4), dp(2), side + dp(4), dp(0)) })
             col.addView(SortViews.scrollRow(this, chips).also { it.setPadding(side, 0, side, 0); (it as? android.view.ViewGroup)?.clipToPadding = false }, LinearLayout.LayoutParams(-1, -2))
         }
+        if (data.columns.any { it.mon != null }) col.addView(levelControls(), LinearLayout.LayoutParams(-1, -2).also { it.setMargins(side, 0, side, dp(6)) })
         col.addView(grid.root, LinearLayout.LayoutParams(-1, 0, 1f).also { it.setMargins(side, 0, side, dp(4)) })
-        col.addView(legend(st.mode == CompareMode.VS_REFERENCE), LinearLayout.LayoutParams(-1, -2).also { it.setMargins(side + dp(4), 0, side, dp(6)) })
+        if (colours) col.addView(legend(true), LinearLayout.LayoutParams(-1, -2).also { it.setMargins(side + dp(4), 0, side, dp(6)) })
         holder.addView(col, FrameLayout.LayoutParams(-1, -1))
     }
 
     // ---------- the controls ----------
-
-    private fun setMode(st: CompareState, m: CompareMode) {
-        if (st.mode == m) return
-        st.mode = m
-        CompareStore.saveMode(this, m)
-        requestRender()
-    }
-
-    private fun modeLabel(m: CompareMode) = if (m == CompareMode.VS_REFERENCE) "Vs reference" else "Best of all"
 
     /** R10-F (B9): a tap on a section header folds / opens its rows; remembered. */
     private fun toggleSection(title: String) {
@@ -167,32 +164,53 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
         return row
     }
 
-    /** The mode switch, and next to it (when both groups have rows) the "Stats | Base stats" switch; stacked in a very narrow window. */
-    private fun switches(data: CompareData, st: CompareState, shown: CompareGroup): View {
-        val modes = segmented(CompareMode.entries.map(::modeLabel), st.mode.ordinal, if (CompareGroups.switchable(data)) 12f else 13f) { setMode(st, CompareMode.entries[it]) }
-        if (!CompareGroups.switchable(data)) return modes
-        val groups = segmented(CompareGroup.entries.map(::groupLabel), shown.ordinal, 12f) { setGroup(CompareGroup.entries[it]) }
-        val narrow = resources.configuration.screenWidthDp in 1..339
-        return LinearLayout(this).apply {
-            orientation = if (narrow) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
-            if (narrow) {
-                addView(modes, LinearLayout.LayoutParams(-1, -2))
-                addView(groups, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(4) })
-            } else {
-                addView(modes, LinearLayout.LayoutParams(0, -2, 1f))
-                addView(groups, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(8) })
-            }
-        }
-    }
+    /** The remaining stat-group switch. */
+    private fun switches(data: CompareData, shown: CompareGroup): View =
+        if (CompareGroups.switchable(data)) segmented(CompareGroup.entries.map(::groupLabel), shown.ordinal, 12f) { setGroup(CompareGroup.entries[it]) }
+        else View(this)
 
-    private fun modeChips(st: CompareState): List<View> =
-        CompareMode.entries.map { m -> BoxViews.chip(this, modeLabel(m), m == st.mode) { setMode(st, m) } }
+    private fun levelControls(): View = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(Ui.text(this@ComparePage, 12f, 800, R.color.ag_sub0).apply {
+            text = if (sameLevel == null) "Stats at: current levels" else "Stats at: Lv $sameLevel (all)"
+        })
+        addView(LinearLayout(this@ComparePage).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(segmented(listOf("Current levels", "Same level"), if (sameLevel == null) 0 else 1, 12f) {
+                if (it == 0) { evolved = false; sameLevel = null }
+                else sameLevel = full?.rowOrNull("level")?.cells?.mapNotNull { (it as? Cell.Text)?.value }?.maxOrNull() ?: 1
+                requestRender()
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            if (sameLevel != null) {
+                fun step(label: String, delta: Int) = Ui.text(this@ComparePage, 16f, 900, R.color.ag_mauve).apply {
+                    text = label; gravity = Gravity.CENTER; minWidth = dp(40); minHeight = dp(48)
+                    contentDescription = if (delta < 0) "Lower comparison level" else "Raise comparison level"
+                    setOnClickListener { sameLevel = (sameLevel!! + delta).coerceIn(1, 100); requestRender() }
+                }
+                addView(step("−", -1))
+                addView(Ui.text(this@ComparePage, 14f, 900, R.color.ag_text).apply { text = sameLevel.toString() })
+                addView(step("+", 1))
+            }
+        })
+    }
 
     private fun groupChips(data: CompareData, shown: CompareGroup): List<View> =
         if (!CompareGroups.switchable(data)) emptyList() else CompareGroup.entries.map { g -> BoxViews.chip(this, groupLabel(g), g == shown) { setGroup(g) } }
 
     private fun chipViews(data: CompareData, st: CompareState): List<View> {
         val out = ArrayList<View>()
+        out += BoxViews.chip(this, "Colours", colours) {
+            colours = !colours; CompareStore.saveColours(this, colours); requestRender()
+        }.apply {
+            isSelected = colours
+            contentDescription = "Colours, ${if (colours) "on" else "off"}"
+            val palette = getDrawable(R.drawable.ic_palette)!!.mutate()
+            palette.setTint(c(if (colours) R.color.ag_crust else R.color.ag_sub1))
+            palette.setBounds(0, 0, dp(14), dp(14))
+            setCompoundDrawablesRelative(palette, null, null, null)
+            compoundDrawablePadding = dp(5)
+        }
         val all = data.rows.size
         val hidden = data.rows.count { !rows.visible(it.key) }
         out += BoxViews.chip(this, if (hidden == 0) "Rows: all" else "Rows: ${all - hidden} of $all", hidden > 0) { showRows(data) }
@@ -465,7 +483,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             text = "Done"
             gravity = Gravity.CENTER
             minHeight = dp(48)
-            background = Ui.rounded(c(R.color.ag_mauve), 14, this@ComparePage)
+            setTextColor(Ui.onAccent(this@ComparePage))
+            background = Ui.rounded(c(R.color.ag_mauve), 12, this@ComparePage)
             setOnClickListener { close() }
         }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(10) })
         return sheet

@@ -12,7 +12,9 @@ import kotlin.random.Random
  * [SimpleView] (no round), so only the rules that need the running round are left to R17C4TimingTest.
  */
 class R17C4PowerTest {
-    private val data = R17C4Fixture.data()
+    private val data = R17C4Fixture.data().let {
+        GameData(it.species, it.moves + ("fling" to Move("fling", "Fling", Type.DARK, Category.PHYSICAL, 60, 100)), it.growth, it.itemPrices)
+    }
     private val F = R17C4Fixture
 
     private fun mon(sp: Species, lv: Int = 50, vararg moves: String) = TestData.mon(data, sp.num, lv, moves.toList().ifEmpty { listOf("tackle") })
@@ -379,7 +381,7 @@ class R17C4PowerTest {
         val ids = MovePower.VARIABLE_POWER - "spitup" // Spit Up is R17C-5's
         for (id in ids) {
             val h = hit(id, user, foe)
-            assertTrue("$id keeps the flat 60", MovePower.basePower(h) != null || MovePower.fixedDamage(h) != null)
+            assertTrue("$id keeps the flat 60", rulesFirst { it.basePower(h) } != null || rulesFirst { it.fixedDamage(h) } != null)
         }
     }
 

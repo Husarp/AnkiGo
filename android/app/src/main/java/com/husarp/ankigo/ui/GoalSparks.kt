@@ -19,7 +19,7 @@ object GoalSparks {
     private val COUNTS = intArrayOf(0, 3, 6, 10)
 
     /** One spark: [x] is a fraction of the bar width (0..1), [rise] how far above the bar's top edge (dp), [radius] in dp, [alpha] 0..1. */
-    class Spark(val x: Float, val rise: Float, val radius: Float, val alpha: Float, val color: Int)
+    class Spark(val x: Float, val rise: Float, val radius: Float, val alpha: Float, val color: Int, val shape: Int = 0, val rotation: Float = 0f)
 
     /** Sparks shown at flame [level] (0 = none, 1..3), clamped. */
     fun count(level: Int): Int = COUNTS[level.coerceIn(0, COUNTS.size - 1)]
@@ -28,7 +28,7 @@ object GoalSparks {
     fun maxRise(level: Int): Float = if (count(level) == 0) 0f else 10f + 5f * level.coerceIn(1, 3)
 
     /** The largest spark radius (dp), for sizing the area to redraw. */
-    const val MAX_RADIUS = 1.6f
+    const val MAX_RADIUS = 5.1f
 
     private fun frac(v: Double): Double = v - Math.floor(v)
 
@@ -48,7 +48,9 @@ object GoalSparks {
             Spark(
                 x = frac(i * 0.618).toFloat(),
                 rise = q * up,
-                radius = 1.2f + 0.4f * frac(i * 0.3).toFloat(),
+                radius = floatArrayOf(3f, 1.7f, 2.4f, 2.6f, 2.6f, 3.4f)[i % 6],
+                shape = intArrayOf(1, 0, 2, 3, 4, 1)[i % 6],
+                rotation = .5f * (q * 2 + i) * 180f / Math.PI.toFloat(),
                 alpha = 1f - q,
                 color = if (i % 2 == 1) COLOR_ODD else COLOR_EVEN,
             )

@@ -354,7 +354,7 @@ class GameTest {
         assertEquals(1, ev.of<GameEvent.Encounter>().size)
     }
 
-    @Test fun defeatingLevelsUpAndEvolvesTheMain() {
+    @Test fun defeatingLevelsUpThenThePlayerChoosesEvolution() {
         val s = TestData.state(data, 1, 15, listOf("tackle")) // Leafling 15, evolves at 16
         val g = game(state = s)
         s.caught += 19
@@ -365,8 +365,13 @@ class GameTest {
         val ev = g.answer(3)
         assertEquals(16, s.main!!.level)
         assertEquals(1, ev.of<GameEvent.LevelUp>().size)
+        assertEquals(1, s.main!!.species)
+        assertTrue(ev.of<GameEvent.Evolved>().isEmpty())
+        assertEquals(0, s.evolutions)
+        val choice = g.chooseEvolution(s.main!!.uid, 2)
+        assertTrue(choice.ok)
         assertEquals(2, s.main!!.species)
-        assertEquals(GameEvent.Evolved("main", "Leafling", "Leafbud", 2), ev.of<GameEvent.Evolved>().single())
+        assertEquals(GameEvent.Evolved("main", "Leafling", "Leafbud", 2), choice.events.of<GameEvent.Evolved>().single())
         assertEquals(1, s.evolutions)
     }
 
@@ -1454,7 +1459,14 @@ class GameTest {
         Game(data, state, Random(2)) { now }.also { it.tick(); it.pickStarter(1) }
         simulate(state, seed = 5, answers = 3000, tapsPerMille = 0, againPercent = 5)
         assertTrue("main level ${state.main!!.level}", state.main!!.level >= 16)
-        assertTrue("evolutions ${state.evolutions}", state.evolutions >= 1)
+        assertEquals(0, state.evolutions)
+        assertEquals(1, state.main!!.species)
+        assertTrue("absorb" in state.main!!.moves)
+        val choice = Game(data, state, Random(2)) { now }.chooseEvolution(state.main!!.uid, 2)
+        assertTrue(choice.ok)
+        assertEquals(1, state.evolutions)
+        assertEquals(2, state.main!!.species)
+        assertTrue("bulletseed" in state.main!!.moves)
         assertTrue("defeats ${state.defeats}", state.defeats > 100)
     }
 

@@ -236,7 +236,7 @@ class R10W2ChooserShots {
                 bars.tileFor(look).performClick()
                 assertEquals(look, AppPrefs.hpBarLook(ctx)); assertEquals(look.label, bars.valueText)
             }
-            for (f in BattleFrameStyle.entries) {
+            for (f in BattleFrameStyle.entries.filter { it != BattleFrameStyle.ICE }) {
                 frame.tileFor(f).performClick()
                 assertEquals(f, AppPrefs.battleFrame(ctx)); assertEquals(f.label, frame.valueText)
                 assertEquals("${f.label}, selected", frame.tileFor(f).contentDescription)
@@ -314,7 +314,7 @@ class R10W2ChooserShots {
     @Test fun aSearchHitOpensTheBattleSectionAndExpandsTheRightEntry() {
         val ctx = config(phone)
         val ids = SettingsCatalog.all.filter { LookChoosers.titleFor(it.id) != null }.map { it.id }
-        assertEquals("2 layouts + 6 looks + 7 frames + 2 bars", 17, ids.size)
+        assertEquals("2 layouts + 6 looks + 8 frames + 2 bars", 18, ids.size)
         for (id in ids) {
             val (_, v) = battlePage(ctx, id)
             val want = LookChoosers.titleFor(id)!!

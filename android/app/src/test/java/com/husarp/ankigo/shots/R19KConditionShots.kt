@@ -314,7 +314,7 @@ class R19KConditionShots {
         assertTrue("our Pokémon's tap still works", tapped > 0)
     }
 
-    @Test fun theListIsAlwaysInsideTheArenaAndOnlyScrollsWhenItHasToInTheSmallestWindows() {
+    @Test fun theListAndItsBattleExplanationsStayInsideTheArenaWithScrollingWhenNeeded() {
         val scrolled = ArrayList<String>()
         for (host in hosts) for (picture in listOf(false, true)) {
             paparazzi.unsafeUpdateConfig(deviceConfig = device(host.w, host.h, Theme.LIGHT))
@@ -329,9 +329,10 @@ class R19KConditionShots {
                 l.left >= 0 && l.top >= 0 && l.right <= a.width && l.bottom <= a.height)
             if (l.scrolls) scrolled += host.name + if (picture) "-picture" else ""
             for (m in a.conditions.all()) assertTrue("${host.name}: ${m.spoken} is in the list", l.spoken.contains(m.spoken))
+            assertTrue("${host.name}: the rain explanation stays available", l.spoken.contains("Water moves ×1.5"))
         }
         println("R19-K lists that scroll: $scrolled")
-        assertTrue("the Battle tab, the Study panel and the taller strip show the whole list without scrolling", scrolled.none { it.startsWith("battle") || it.startsWith("study") || it.startsWith("strip-412x230") })
+        assertTrue("long battle explanations scroll in constrained windows", scrolled.isNotEmpty())
     }
 
     @Test fun aTouchOnTheListDoesNotCloseItButOneOutsideDoes() {

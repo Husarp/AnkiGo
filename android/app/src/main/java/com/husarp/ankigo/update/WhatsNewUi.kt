@@ -103,7 +103,7 @@ class WhatsNewList(ctx: Context, versions: List<WhatsNew.Version> = WhatsNew.loa
         orientation = VERTICAL
         background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
         setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 12), Ui.dp(ctx, 14), Ui.dp(ctx, 6))
-        addView(Ui.text(ctx, 12f, 900, R.color.ag_sub0).apply { text = "WHAT'S NEW"; letterSpacing = 0.06f })
+        addView(Ui.text(ctx, 12f, 900, R.color.ag_sub0).apply { Ui.decorateHeading(this, "What's new"); letterSpacing = 0.06f })
         shown.forEachIndexed { i, v -> addView(versionBlock(ctx, v, open = i == 0, first = i == 0)) }
         visibility = if (shown.isEmpty()) GONE else VISIBLE
     }
@@ -149,14 +149,14 @@ class WhatsNewList(ctx: Context, versions: List<WhatsNew.Version> = WhatsNew.loa
             visibility = GONE
             fixes.forEach { addView(item(ctx, it), LayoutParams(-1, -2).also { lp -> lp.bottomMargin = Ui.dp(ctx, 3) }) }
         }
-        val head = LinearLayout(ctx).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = Ui.dp(ctx, 40) }
+        val head = LinearLayout(ctx).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = Ui.dp(ctx, 48) }
         head.addView(Ui.text(ctx, 13f, 800, R.color.ag_sub0).apply { text = "Bugs & fixes (${fixes.size})" }, LayoutParams(0, -2, 1f))
         val chev = ImageView(ctx).apply {
             setImageResource(R.drawable.ic_expand)
             setColorFilter(Ui.c(ctx, R.color.ag_sub0), PorterDuff.Mode.SRC_IN)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
-        head.addView(chev, LayoutParams(Ui.dp(ctx, 20), Ui.dp(ctx, 20)))
+        head.addView(chev, LayoutParams(Ui.dp(ctx, 24), Ui.dp(ctx, 24)))
         fun sync() {
             val isOpen = list.visibility == VISIBLE
             chev.rotation = if (isOpen) 180f else 0f

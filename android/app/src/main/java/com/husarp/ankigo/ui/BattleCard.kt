@@ -114,13 +114,13 @@ internal class BattleCard(
         }
         card.addView(header(), LinearLayout.LayoutParams(-1, -2))
         card.addView(panel, LinearLayout.LayoutParams(-1, Ui.dp(ctx, panelDp(ctx.resources.configuration.screenHeightDp.toFloat()))))
-        // taps on the panel's arena / your Pokémon open the battle too (not the details they open in the full battle);
+        // The arena opens the battle; either Pokémon opens its details.
         // R6-06: a tap on the wild Pokémon opens its info window on top of this tab instead (not while an animation plays)
         panel.arena.setOnClickListener { host.expand() }
-        panel.arena.onPlayerTap = { host.expand() }
+        panel.arena.onPlayerTap = { if (player.idle) GameRepo.state?.main?.uid?.let { BattleDetails.show(ctx, it) } }
         panel.arena.onWildTap = { if (player.idle) BattleDetails.showWild(ctx) }
         panel.arena.canTurn = { player.idle } // PLAN 34: swipe to turn, not while an animation plays
-        panel.arena.setPlayerTapHint("Your Pokémon. Tap to open the battle")
+        panel.arena.setPlayerTapHint("Your Pokémon. Tap for its details")
         panel.arena.setWildTapHint("Wild Pokémon. Tap for its details")
         panel.setOnClickListener { host.expand() }
         panel.onGrant = { host.grantAccess() }

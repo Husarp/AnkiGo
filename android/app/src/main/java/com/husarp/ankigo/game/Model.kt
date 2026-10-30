@@ -350,6 +350,7 @@ class DayLog(
     var xp: Int = 0, var cash: Int = 0, val buttons: IntArray = IntArray(5),
     var spent: Int = 0, var healItems: Int = 0,
     var dmgDealt: Int = 0, var dmgTaken: Int = 0, var dmgBlocked: Int = 0, var misses: Int = 0,
+    var dailyGoal: Int = 0, // 0 = legacy day, use current settings
 )
 
 class GameState(
@@ -459,3 +460,10 @@ class GameState(
  * "New cards: one OK button" answer: it counts like an Again press (reviews, money, goal, stats) but stays out of the battle round.
  */
 data class Answer(val cardId: Long, val button: Int, val at: Long, val catchUp: Boolean = false, val neutral: Boolean = false)
+
+/** Battle suppression never removes an owned item. Benched Pokémon keep their item's effects. */
+internal fun GameState.activeHeldItem(mon: Mon): String? {
+    val fight = battle ?: return mon.heldItem
+    val side = when (mon.uid) { main?.uid -> fight.player; fight.wild.uid -> fight.enemy; else -> return mon.heldItem }
+    return mon.heldItem.takeUnless { (side.volatiles["embargo"] ?: 0) > 0 || (fight.field.rooms["magicroom"] ?: 0) > 0 }
+}

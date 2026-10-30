@@ -81,9 +81,14 @@ class R9StudyShots {
                 v.contentDescription?.let { out += it.toString() }
                 if (v is ViewGroup) for (i in 0 until v.childCount) names(v.getChildAt(i), out)
             }
-            val found = mutableListOf<String>().also { names(b.home.buildAppBar(), it) }
+            val bar = b.home.buildAppBar()
+            val found = mutableListOf<String>().also { names(bar, it) }
             assertTrue("no Sync button in the bar: $found", found.none { it.contains("Sync", ignoreCase = true) })
-            assertTrue("New deck stays: $found", found.contains("New deck"))
+            assertTrue("deck menu stays: $found", found.contains("Deck menu"))
+            fun menuButton(v: View): View? = if (v.contentDescription == "Deck menu") v else
+                (v as? ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { menuButton(g.getChildAt(it)) } }
+            val menu = MenuKit.capture { menuButton(bar)!!.performClick() }!!
+            assertEquals(listOf("New deck", "Browse all cards"), menu.describe().map { it.second })
             b.root
         }
     }

@@ -27,7 +27,7 @@ object StageText {
         }
     }
 
-    val table: String = "Stat stages add up from 0 and stop at −6 and +6; switching out resets them. Factors below start from stage 0. " +
+    val table: String = "Stat stages add up from 0 and stop at −6 and +6. They last the whole fight, across rounds; a new fight, fainting or switching out resets them. Factors below start from stage 0. " +
         "Attack, Defense, Sp. Atk, Sp. Def and Speed: " + (1..6).joinToString("; ") { "+$it ×${factor(it)}, −$it ×${factor(-it)}" } + ". " +
         "Accuracy and evasion: " + (1..6).joinToString("; ") { "+$it ×${factor(it, true)}, −$it ×${factor(-it, true)}" } +
         ". Subtract the target's evasion stage from its accuracy stage, clamp the result to −6…+6, then multiply accuracy by that stage's factor. For example, +2 accuracy against +1 evasion gives ×4/3. Smart move choice stops raising accuracy or evasion at ±${Tuning.SMART_ACC_EVA_LIMIT}."

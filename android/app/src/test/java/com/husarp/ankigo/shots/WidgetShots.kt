@@ -107,8 +107,9 @@ class WidgetShots {
 
     private fun study(ctx: Context, deck: String, text: String, showBtn: Boolean, answerBtns: Boolean): RemoteViews {
         val rv = RemoteViews(ctx.packageName, R.layout.widget_study)
-        rv.setTextViewText(R.id.s_deck, deck.substringAfterLast("::"))
-        rv.setTextViewText(R.id.s_text, text)
+        com.husarp.ankigo.ui.WidgetLooks.study(ctx,rv,0)
+        com.husarp.ankigo.ui.WidgetLooks.studyDeck(rv, deck.substringAfterLast("::"))
+        com.husarp.ankigo.ui.WidgetLooks.studyText(rv, text)
         fun vis(on: Boolean) = if (on) View.VISIBLE else View.GONE
         rv.setViewVisibility(R.id.s_show, vis(showBtn))
         for (id in listOf(R.id.s_again, R.id.s_hard, R.id.s_good, R.id.s_easy)) rv.setViewVisibility(id, vis(answerBtns))
@@ -123,7 +124,7 @@ class WidgetShots {
     @Test fun studyNoPermission() = shoot("widget-study-nopermission", 250, 180, { c, _ ->
         // permission case in the code never sets the deck: the layout's own "AnkiGo study" label stays
         RemoteViews(c.packageName, R.layout.widget_study).also {
-            it.setTextViewText(R.id.s_text, "Open AnkiGo and grant the AnkiDroid permission first.")
+            com.husarp.ankigo.ui.WidgetLooks.studyText(it, "Open AnkiGo and grant the AnkiDroid permission first.")
             for (id in listOf(R.id.s_show, R.id.s_again, R.id.s_hard, R.id.s_good, R.id.s_easy)) it.setViewVisibility(id, View.GONE)
         }
     })

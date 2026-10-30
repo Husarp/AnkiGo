@@ -46,6 +46,7 @@ class R10CompareGridShots {
         CompareStore.saveCollapsed(ctx, SectionChoice())
         CompareStore.saveRows(ctx, RowChoice())
         CompareStore.saveFit(ctx, CompareFit.AUTO)
+        CompareStore.saveColours(ctx, true)
     }
 
     private val float = Variant("float", Size.FLOAT.wDp, Size.FLOAT.hDp)
@@ -65,7 +66,8 @@ class R10CompareGridShots {
     private val onlyMoves = RowChoice(setOf("level", "hp", "atk", "def", "spa", "spd", "spe", "total", "base_hp", "base_atk", "base_def", "base_spa", "base_spd",
         "base_spe", "base_total", "nature", "ivs", "weak", "resist", "immune", "evo", "becomes"))
 
-    private fun page(ctx: Context, mode: CompareMode, picks: List<ComparePick> = five, collapsed: SectionChoice = SectionChoice(), rows: RowChoice = RowChoice()): ComparePage {
+    private fun page(ctx: Context, mode: CompareMode, picks: List<ComparePick> = five, collapsed: SectionChoice = SectionChoice(), rows: RowChoice = RowChoice(), colours: Boolean = true): ComparePage {
+        CompareStore.saveColours(ctx, colours)
         CompareStore.saveMode(ctx, mode); CompareStore.saveRows(ctx, rows); CompareStore.saveFit(ctx, CompareFit.AUTO)
         CompareStore.saveCollapsed(ctx, collapsed)
         return ComparePage(ctx, NoHost, picks)
@@ -122,8 +124,8 @@ class R10CompareGridShots {
                 assertTrue("all texts of a strongly filled cell wear the ink", texts.isNotEmpty() && texts.all { it.currentTextColor == look.ink })
             }
         }
-        // the ref sub line stays on the reference's number
-        assertTrue(all(refCell).filterIsInstance<TextView>().any { it.text == "ref" })
+        // Colours carries the comparison, so numeric cells have no reference/difference sub-lines.
+        assertFalse(all(row).filterIsInstance<TextView>().any { it.text == "ref" || it.text.toString().matches(Regex("[+−][0-9]+")) })
     }
 
     @Test fun vsReference() = paparazzi.shootPage("r10cmp-vs", phoneFloat) { ctx ->
@@ -133,21 +135,29 @@ class R10CompareGridShots {
         screen
     }
 
-    @Test fun bestOfAllKeepsItsRule() = paparazzi.shootPage("r10cmp-best", phoneFloat) { ctx ->
+    @Test fun oldBestOfAllUsesReferenceColours() = paparazzi.shootPage("r10cmp-best", phoneFloat) { ctx ->
         val p = page(ctx, best)
         val screen = shown(ctx, p)
+        checkVs(ctx, p.root)
+        assertTrue(all(p.root).filterIsInstance<TextView>().none { it.text == "Best of all" || it.text == "Vs reference" })
+        screen
+    }
+
+    @Test fun coloursOffShowsExactDifferencesWithoutValueFills() = paparazzi.shootPage("r10cmp-plain", phoneFloat) { ctx ->
+        val p = page(ctx, vs, colours = false)
+        val screen = shown(ctx, p)
         val table = CompareTable.build(GameRepo.data!!, GameRepo.state!!, five, false)
-        val vals = table.row("atk").cells.map { (it as Cell.Text).value }
         val row = dataRows(p.root, five.size).first { labelOf(it) == "Atk" }
-        val band = bg(row)!!
-        val dark = TypeChips.isDark(ctx)
-        val pos = com.husarp.ankigo.ui.CompareModes.scale(vals)
-        for (i in 0 until five.size) {
-            val want = pos[i]?.let { CompareScale.look(it, band, dark).fill }
-            assertEquals("column $i", want, bg(row.getChildAt(i + 1)))
+        val diffs = com.husarp.ankigo.ui.CompareModes.diffs(table, 0).getValue("atk")
+        assertTrue(all(row.getChildAt(1)).filterIsInstance<TextView>().any { it.text == "ref" })
+        for (i in 1 until five.size) {
+            val cell = row.getChildAt(i + 1)
+            assertNull(bg(cell))
+            val expected = com.husarp.ankigo.ui.CompareModes.diffLabel(diffs[i])
+            val rendered = all(cell).filterIsInstance<TextView>().map { it.text.toString() }.filter { it.matches(Regex("[+−][0-9]+")) }
+            assertEquals(if (expected.isEmpty()) emptyList<String>() else listOf(expected), rendered)
         }
-        // no column is a reference there: no head says so, no cell is the grey
-        assertTrue(all(p.root).filterIsInstance<TextView>().none { it.text == "reference" || it.text == "ref" })
+        assertFalse(all(p.root).filterIsInstance<TextView>().any { it.text == "better than the reference" })
         screen
     }
 
@@ -159,7 +169,8 @@ class R10CompareGridShots {
         val bestPage = page(ctx, best)
         shown(ctx, bestPage)
         val bw = all(bestPage.root).filterIsInstance<TextView>().map { it.text.toString() }
-        assertTrue(bw.toString(), "worst" in bw && "best" in bw && "same value, same colour" in bw)
+        assertTrue(bw.toString(), "worse" in bw && "better than the reference" in bw)
+        assertFalse("worst" in bw || "best" in bw || "same value, same colour" in bw)
         s1
     }
 

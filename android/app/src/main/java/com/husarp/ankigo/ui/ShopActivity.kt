@@ -40,6 +40,12 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     private lateinit var tabShop: TextView
     private lateinit var tabBag: TextView
     private var showBag = false
+
+    internal fun openBag() {
+        closeCard()
+        showBag = true
+        requestRender()
+    }
     private val bag by lazy { BagActions(this, MonActions(this), this) }
 
     // the open item: its key survives a re-render (Buy keeps its window open with the new count) but not leaving the page
@@ -142,7 +148,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         val st = state
         markSeen()
         appBar.setPill(Bits.fmt(st.cash))
-        val bagCount = st.bag.values.sum() + st.tms.size
+        val bagCount = st.bag.values.sum() + st.tms.size + st.mons.count { it.heldItem != null }
         tabShop.text = "Shop"
         tabBag.text = "Bag · $bagCount"
         for ((t, on) in listOf(tabShop to !showBag, tabBag to showBag)) {
@@ -185,7 +191,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         is ShopPlan.Tile.Tm -> tmSpec(t.move)
     }
 
-    /** A Shop item with its Buy button (the deal's item at the deal price, with the old price struck through). */
+    /** A Shop item with its current price for affordability and the two-tap purchase action. */
     private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state.day, item), false) { buyItem(item) })
 
     /** A Shop TM with Buy, or "✓ Owned" once it is yours. */
@@ -201,7 +207,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         val cols = ShopPlan.columns(resources.configuration.screenWidthDp, resources.configuration.fontScale)
         val gap = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 4) }
 
-        // the deal of the day (F5 option A): the card at the top; a tap opens its window (Buy shows the old price struck through)
+        // The deal card keeps its unit and old prices; a tap opens the item window for confirmation.
         Shop.dealFor(data, st.day)?.let { deal ->
             val price = ShopPlan.price(data, st.day, deal.item)
             val name = Items.name(deal.item)
@@ -288,10 +294,13 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     }
 
     private fun buyItem(item: String) {
-        if (act { g -> Shop.buy(g.data, g.state, item) }.ok) GameSound.ui(this, SoundId.BUY)
+        val quantity = open.quantity
+        open.bought()
+        if (act { g -> Shop.buy(g.data, g.state, item, quantity = quantity) }.ok) GameSound.ui(this, SoundId.BUY)
     }
 
     private fun buyTm(move: String) {
+        open.bought()
         if (act { g -> Shop.buyTm(g.data, g.state, move) }.ok) GameSound.ui(this, SoundId.BUY)
     }
 
@@ -326,5 +335,24 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
 
 /** The Shop tab: a thin shell around [ShopPage] (R10 W11; Dest.SHOP). */
 class ShopActivity : PageActivity() {
-    override fun createPage(): GamePage = ShopPage(this, this)
+    private lateinit var shop: ShopPage
+    override fun createPage(): GamePage = ShopPage(this, this).also {
+        shop = it
+        if (intent.getBooleanExtra(EXTRA_BAG, false)) it.openBag()
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_BAG, false)) shop.openBag()
+    }
+
+    companion object {
+        const val EXTRA_BAG = "open_bag"
+        internal fun openBag(a: Context) {
+            val intent = Nav.intent(a, Dest.SHOP).putExtra(EXTRA_BAG, true)
+            if (Ui.findActivity(a) == null) intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            a.startActivity(intent)
+        }
+    }
 }

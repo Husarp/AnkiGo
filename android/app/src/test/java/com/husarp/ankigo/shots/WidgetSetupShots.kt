@@ -39,8 +39,9 @@ class WidgetSetupShots {
 
     private fun study(ctx: Context, deck: String, text: String, showBtn: Boolean, answerBtns: Boolean, changeBtn: Boolean = false): RemoteViews {
         val rv = RemoteViews(ctx.packageName, R.layout.widget_study)
-        rv.setTextViewText(R.id.s_deck, deck.substringAfterLast("::"))
-        rv.setTextViewText(R.id.s_text, text)
+        com.husarp.ankigo.ui.WidgetLooks.study(ctx,rv,0)
+        com.husarp.ankigo.ui.WidgetLooks.studyDeck(rv, deck.substringAfterLast("::"))
+        com.husarp.ankigo.ui.WidgetLooks.studyText(rv, text)
         fun vis(on: Boolean) = if (on) View.VISIBLE else View.GONE
         rv.setViewVisibility(R.id.s_show, vis(showBtn))
         rv.setViewVisibility(R.id.s_change, vis(changeBtn))

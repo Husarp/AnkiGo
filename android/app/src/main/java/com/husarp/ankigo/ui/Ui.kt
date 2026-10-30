@@ -37,6 +37,29 @@ import java.util.concurrent.ConcurrentHashMap
 object Ui {
     private val fonts = ConcurrentHashMap<Int, Typeface>()
 
+    fun onAccent(ctx: Context): Int = AppDialogRules.onFill(c(ctx, R.color.ag_mauve), c(ctx, R.color.ag_crust), TypeInk::contrast)
+
+    /** Coloured caps with a bare section icon, shared by page and sheet headings. */
+    fun decorateHeading(view: TextView, title: String) {
+        val ctx = view.context
+        view.text = title.uppercase(java.util.Locale.ROOT)
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+        view.setTextColor(c(ctx, R.color.ag_mauve))
+        val icon = when {
+            title.contains("sound", true) -> R.drawable.ic_sound
+            title.contains("stat", true) -> R.drawable.ic_stats
+            title.contains("type", true) || title.contains("filter", true) -> R.drawable.ic_filter
+            title.contains("move", true) || title.contains("battle", true) -> R.drawable.ic_swords
+            title.contains("sort", true) -> R.drawable.ic_sort_asc
+            else -> R.drawable.ic_info
+        }
+        androidx.core.content.ContextCompat.getDrawable(ctx, icon)?.mutate()?.let {
+            it.setTint(c(ctx, R.color.ag_mauve)); it.setBounds(0, 0, dp(ctx, 16), dp(ctx, 16))
+            view.setCompoundDrawablesRelative(it, null, null, null)
+            view.compoundDrawablePadding = dp(ctx, 6)
+        }
+    }
+
     fun dp(ctx: Context, v: Int): Int = (v * ctx.resources.displayMetrics.density + 0.5f).toInt()
     fun dp(ctx: Context, v: Float): Float = v * ctx.resources.displayMetrics.density
 
@@ -330,6 +353,7 @@ class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, cust
     }
     // the gold money stack (R10-W5) keeps its own colours: only the text takes the tone
     private val tintsIcon = customIcon == null && iconRes != R.drawable.ic_money
+    private val moneyIcon = customIcon == null && iconRes == R.drawable.ic_money
     val label: TextView = Ui.text(ctx, 11f, 800, toneRes).apply {
         maxLines = 1
         layoutParams = LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).also {
@@ -342,7 +366,7 @@ class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, cust
         gravity = Gravity.CENTER_VERTICAL
         // the streak flame (the only custom icon) never sits in its own box (R9-B7): no background, side padding trimmed
         // [plain] (R10-B17) drops the box the same way, for a chip drawn straight on a card
-        val boxed = customIcon == null && !plain
+        val boxed = false
         val side = if (boxed) 7 else 2
         setPadding(Ui.dp(ctx, side), Ui.dp(ctx, 4), Ui.dp(ctx, side), Ui.dp(ctx, 4))
         if (boxed) background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 9, ctx)
@@ -351,7 +375,12 @@ class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, cust
         setTone(toneRes)
     }
 
-    fun setText(text: CharSequence) { label.text = text }
+    private val moneyRoll by lazy { MoneyRoll(label) }
+    fun setText(text: CharSequence) {
+        val amount = if (moneyIcon) MoneyRoll.parse(text) else null
+        if (amount != null) moneyRoll.set(amount) else if (moneyIcon) moneyRoll.reset(text) else label.text = text
+    }
+    fun setMoney(amount: Int, initial: Int? = null) { moneyRoll.set(amount, initial) }
 
     /** Recolours icon and text, e.g. the combo chip goes `ag_sub0` at zero. */
     fun setTone(@ColorRes toneRes: Int) {
@@ -416,7 +445,7 @@ class AppBar(
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(Ui.dp(ctx, 9), Ui.dp(ctx, 5), Ui.dp(ctx, 9), Ui.dp(ctx, 5))
-                background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx)
+                background = null
                 if (pillIconRes != 0) {
                     addView(ImageView(ctx).apply {
                         setImageResource(pillIconRes)
@@ -435,8 +464,14 @@ class AppBar(
         }
     }
 
+    private val moneyPill = pillIconRes == R.drawable.ic_money
+    private val moneyRoll by lazy { pill?.let { MoneyRoll(it) } }
     /** Changes the pill text (no-op when the bar has no pill). */
-    fun setPill(text: String) { pill?.text = text; pillBox?.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE } // empty = no pill
+    fun setPill(text: String) {
+        val amount = if (moneyPill) MoneyRoll.parse(text) else null
+        if (amount != null) moneyRoll?.set(amount) else if (moneyPill) moneyRoll?.reset(text) else pill?.text = text
+        pillBox?.visibility = if (text.isEmpty()) View.GONE else View.VISIBLE
+    } // empty = no pill
 
     /** A small icon button on the right, left of the pill (the Shop's "?"). 48 dp touch area around a 22 dp icon. */
     fun addAction(@DrawableRes icon: Int, description: String, @ColorRes tone: Int = R.color.ag_text, onClick: () -> Unit): ImageView {

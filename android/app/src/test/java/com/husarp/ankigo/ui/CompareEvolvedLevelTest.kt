@@ -47,7 +47,7 @@ class CompareEvolvedLevelTest {
         assertEquals("Lv 32", c.text)
         assertEquals(32, c.value)
         assertEquals(32, c.level)
-        assertEquals(listOf("evolves"), c.sub)
+        assertEquals(listOf("raised from 5"), c.sub)
         assertEquals(3, t.columns[0].shown.num)
     }
 
@@ -137,7 +137,28 @@ class CompareEvolvedLevelTest {
     @Test fun twoOwnedColumnsCompareOnTheEffectiveLevel() {
         val a = mon(1, 5, "a"); val b = mon(3, 31, "b")
         val t = CompareTable.build(data, state(a, b), listOf(ComparePick.Owned("a"), ComparePick.Owned("b")), true)
-        assertEquals(listOf(32, 31), t.row("level").cells.map { (it as Cell.Text).value })
-        assertEquals(listOf(true, false), t.row("level").cells.map { (it as Cell.Text).best })
+        assertEquals(listOf(32, 32), t.row("level").cells.map { (it as Cell.Text).value })
+        assertEquals(listOf(true, true), t.row("level").cells.map { (it as Cell.Text).best })
     }
+
+    @Test fun chosenLevelAppliesToEveryOwnedColumnAndStats() {
+        val a = mon(1, 5, "a"); val b = mon(3, 31, "b")
+        val picks = listOf(ComparePick.Owned("a"), ComparePick.Owned("b"))
+        val t = CompareTable.build(data, state(a, b), picks, false, 50)
+        assertEquals(listOf(50, 50), t.row("level").cells.map { (it as Cell.Text).value })
+        assertEquals(listOf("raised from 31"), levelCell(t, 1).sub)
+        assertEquals(StatCalc.stats(data.sp(1), a, 50).hp, (t.row("hp").cells[0] as Cell.Text).value)
+        val evolved = CompareTable.build(data, state(a, b), picks, true, 20)
+        assertEquals(listOf(32, 32), evolved.row("level").cells.map { (it as Cell.Text).value })
+        val kept = CompareTable.build(data, state(a, b), picks, true, 50)
+        assertEquals(listOf(50, 50), kept.row("level").cells.map { (it as Cell.Text).value })
+    }
+    @Test fun fullyEvolvedKeepsChosenLevelUnlessAFormNeedsMore() {
+        val a = mon(930, 40, "a"); val b = mon(3, 60, "b")
+        val t = CompareTable.build(data, state(a, b),
+            listOf(ComparePick.Owned("a"), ComparePick.Owned("b")), true, 20)
+        assertEquals(listOf(20, 20), t.row("level").cells.map { (it as Cell.Text).value })
+        assertEquals(listOf("adjusted from 60"), levelCell(t, 1).sub)
+    }
+
 }

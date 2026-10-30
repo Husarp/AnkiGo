@@ -391,6 +391,7 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
         leaving = false
         waitingForLayout = false
         queue.clear()
+        onChanged()
     }
 
     /** Closes the showing card now (a tap): it slides out like at the end of its time. */
@@ -443,6 +444,7 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
         c.layout(cardLeft, top, cardLeft + c.measuredWidth, top + c.measuredHeight)   // we may be inside a layout pass: this card would wait for the next one
         c.setOnClickListener { dismiss() }
         card = c
+        onChanged()
         leaving = false
         val now = clock()
         if (!resume) {
@@ -491,11 +493,14 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
             .withEndAction { finish() }.start()
     }
 
+    var onChanged: () -> Unit = {}
+
     private fun finish() {
         card?.let { it.animate().cancel(); removeView(it) }
         card = null
         leaving = false
         queue.finish(clock())?.let { present(it, resume = false) }
+        onChanged()
     }
 
     internal fun reposition() {

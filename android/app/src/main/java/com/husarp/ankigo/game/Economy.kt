@@ -195,11 +195,12 @@ object Economy {
         state.cashFracNum = num; state.cashFracDen = den
         if (paid <= 0) return
         val coins = paid.toInt()
-        val held = state.main?.heldItem
+        val held = state.main?.let { state.activeHeldItem(it) }
         val amount = if (held == "amulet-coin" || held == "luck-incense") coins * 2 else coins
+        val bonusAmount = if (state.battle?.field?.player?.get("happyhour") == 1) amount * 2 else amount
         state.cashToday += coins
-        state.cash += amount
-        events += GameEvent.Cash(amount, state.cash, kind)
+        state.cash += bonusAmount
+        events += GameEvent.Cash(bonusAmount, state.cash, kind)
     }
 
     private const val MAX_FRAC_DEN = 1_000_000_000_000L
@@ -349,17 +350,21 @@ object Shop {
         return mutableListOf<GameEvent>().also { Achievements.check(state, data, now, it) }
     }
 
-    /** Buys one [item] for [priceOf]: from today's stock, the always-on-sale [basics], today's deal or today's weekend stone. */
-    fun buy(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis()): ActionResult {
+    /** Buys [quantity] copies of [item] atomically at [priceOf]: from today's stock, the always-on-sale [basics], today's deal or today's weekend stone. */
+    fun buy(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis(), quantity: Int = 1): ActionResult {
+        if (quantity !in setOf(1, 3, 5)) return ActionResult(false, "Invalid quantity")
         val onSale = item in state.shopItems || item in Tuning.SHOP_BASICS || dealFor(data, state.day)?.item == item ||
             weekendFor(data, state.day)?.item == item
         if (!onSale || data.price(item) <= 0 || item in Items.RETIRED) return ActionResult(false, "Not in today's shop")
-        val price = priceOf(data, state, item)
+        val total = priceOf(data, state, item).toLong() * quantity
+        if (total > Int.MAX_VALUE) return ActionResult(false, "Not enough money")
+        val price = total.toInt()
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
         StudyStats.addSpent(state, price)
-        Economy.give(state, item)
-        return ActionResult(true, "Bought ${Items.name(item)} for ${money(price)}", spent(data, state, price, now))
+        Economy.give(state, item, quantity)
+        val label = if (quantity == 1) Items.name(item) else "$quantity × ${Items.name(item)}"
+        return ActionResult(true, "Bought $label for ${money(price)}", spent(data, state, price, now))
     }
 
     /** TMs cost 1000, can be owned once, never used up. Today's TMs or today's weekend TM. */
@@ -478,7 +483,7 @@ object ItemUse {
         if (state.count(item) <= 0) return false
         return when (def.kind) {
             ItemKind.HEAL -> (mon ?: state.main)?.let { it.hp < StatCalc.maxHp(data, it) || (def.cures && battleStatus(state, it) != null) } ?: false
-            ItemKind.EVOLUTION -> mon != null && Progression.itemEvolution(data, mon, item, now) != null
+            ItemKind.EVOLUTION -> mon != null && Progression.itemEvolution(data, mon, item, now, state.activeHeldItem(mon)) != null
             ItemKind.HELD -> mon != null && mon.heldItem != item
             ItemKind.FOSSIL -> data.species.containsKey(def.fossil)
             ItemKind.BALL, ItemKind.ESCAPE -> false
@@ -490,7 +495,7 @@ object ItemUse {
      * Progression.itemEvolution/evolve. FOSSIL: revives the species at Lv 5 into the collection (badge 19).
      * HELD: gives it to the target (the old held item goes back to the bag). Uses up the item except HELD moves it.
      */
-    fun use(data: GameData, state: GameState, item: String, targetUid: String?, rng: Random, now: Long): ActionResult {
+    fun use(data: GameData, state: GameState, item: String, targetUid: String?, rng: Random, now: Long, evolutionTo: Int? = null): ActionResult {
         val def = Items.def(item) ?: return ActionResult(false, "You can't use that.")
         val name = Items.name(item)
         if (state.count(item) <= 0) return ActionResult(false, "You have no $name.")
@@ -520,9 +525,10 @@ object ItemUse {
             }
             ItemKind.EVOLUTION -> {
                 val mon = target(state, targetUid, false) ?: return ActionResult(false, "Choose a Pokémon first.")
-                val evo = Progression.itemEvolution(data, mon, item, now) ?: return ActionResult(
+                val evo = (if (evolutionTo == null) Progression.itemEvolution(data, mon, item, now, state.activeHeldItem(mon)) else
+                    Progression.readyEvolutions(data, state, mon, now).firstOrNull { it.to == evolutionTo && Progression.evolutionItem(it) == item }) ?: return ActionResult(
                     false,
-                    when (Progression.itemEvolutionTimeNeeded(data, mon, item, now)) {
+                    when (Progression.itemEvolutionTimeNeeded(data, mon, item, now, state.activeHeldItem(mon))) {
                         "night" -> "${mon.name} evolves with $name only at night."
                         "day" -> "${mon.name} evolves with $name only during the day."
                         else -> "It won't have any effect."

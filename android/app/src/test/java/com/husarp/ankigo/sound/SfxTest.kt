@@ -10,7 +10,7 @@ import kotlin.math.abs
 
 class SfxTest {
     /** The six original battle sounds; the soft ones ([SoftSound]) are checked by the tests of [SoftSfx]. */
-    private val LEGACY = SoundId.entries.filter { it.soft == null }
+    private val LEGACY = SoundId.entries.filter { it.soft == null && TypeSfx.type(it) == null }
 
     private fun peak(s: ShortArray) = s.maxOf { abs(it.toInt()) } / 32767.0
 

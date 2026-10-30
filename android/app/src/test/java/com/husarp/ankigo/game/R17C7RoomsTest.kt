@@ -81,9 +81,9 @@ class R17C7RoomsTest {
     }
 
     @Test fun theCountdownLeavesRoomsOfOtherSetsAlone() {
-        val b = battle(); room(b, "magicroom", 3)
+        val b = battle(); room(b, "another-set-room", 3)
         R17C7.play(main("tackle"), b, listOf("tackle", "tackle", "tackle", "tackle"))
-        assertEquals(3, b.field.rooms["magicroom"])
+        assertEquals(3, b.field.rooms["another-set-room"])
     }
 
     // ---------------------------------------------------------------- Trick Room

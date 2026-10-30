@@ -108,11 +108,18 @@ class R4V2Shots {
             assertTrue(AchPageMath.tiersReached(views).toString() in t)
             for (g in listOf("STUDY", "BATTLE", "COLLECTION", "ECONOMY", "SPECIAL", "BADGES")) assertTrue(g, g in t)
             for (g in AchievementTable.GROUPS) assertTrue("chip $g", g in t) // the jump chips (the headers are in capitals)
-            assertTrue("Answers given" in t && "31,240 / 100,000" in t)
-            assertTrue("Battles won" in t)
-            assertTrue("Epic" in t) // the answers row
-            assertTrue("Not yet" in t)
-            assertTrue("Earned" in t) // the earned one-offs
+            assertTrue("Answers given" in t && "Battles won" in t)
+            fun descriptions(v: View): List<String> = listOfNotNull(v.contentDescription?.toString()) +
+                if (v is ViewGroup) (0 until v.childCount).flatMap { descriptions(v.getChildAt(it)) } else emptyList()
+            val tiles = descriptions(screen)
+            assertTrue("Answers given, Epic" in tiles)
+            assertTrue(tiles.any { it.endsWith(", Not yet") })
+            assertTrue(tiles.any { it.endsWith(", Earned") })
+            val detail = com.husarp.ankigo.ui.AchievementDetail.sheet(ctx, views.first { it.id == "answers" }, st.achSince, UTC)
+            val detailTexts = texts(detail)
+            assertTrue(detailTexts.any { it.startsWith("31,240 / 100,000") })
+            for (tier in listOf("Common", "Rare", "Epic", "Legendary", "Mythical"))
+                assertTrue(tier, detailTexts.any { it.startsWith("$tier · ") })
             assertTrue("All" in t && "Show: All" in t) // R10 W2: the tab and the Show button (the filters are in its menu)
             screen
         }

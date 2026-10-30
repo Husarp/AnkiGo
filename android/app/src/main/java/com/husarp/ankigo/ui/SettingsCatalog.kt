@@ -44,6 +44,7 @@ object SettingsCatalog {
 
     val all: List<SettingInfo> = listOf(
         // Look
+        s("achievementPopup", L, "", "Achievement pop-ups", "Pop-up, a small note, or off when you earn an achievement"),
         s("theme", L, "", "Theme", "Light, dark, or follow the phone"),
         s("accent", L, "", "Accent", "The colour used for buttons, ticks and highlights"),
         s("barStyle", L, "", "Progress bars", "XP blue, goals orange, Pokédex teal; or all accent, or a gradient"),
@@ -52,6 +53,9 @@ object SettingsCatalog {
         s("scale", L, "", "Interface size", "Text, cards and Pokémon get bigger or smaller together"),
         s("listSpriteSize", L, "", "Pokémon size in lists", "Pokédex and Box pictures"),   // PLAN 215
 
+        s("appText", L, "", "App text", "Independent menu and app text size"),
+        s("battleText", L, "", "Battle text", "Info boxes, move bar and arena messages"),
+        s("deckListLook", L, "", "Deck list", "Today, connected branches, or one card per family"),
         // PLAN 282 / R19
         s("boxStackedCards", L, "Box", "Stacked cards", "Cards peek behind groups of copies in the Box"),
         s("boxTwoPokemon", L, "Box", "Show two Pokémon", "Two sprites for groups of copies in the Box; keeps the count"),
@@ -63,6 +67,7 @@ object SettingsCatalog {
         s("shopSounds", SO, "UI sounds", "Shop", "A click when you buy something"),
         s("volumeButtons", SO, "UI sounds", "UI sounds volume", "How loud the button clicks are"),
         s("battleSounds", SO, "Battle", "Battle effects", "Hits, faint, catch, level up and misses during battles"),
+        s("typeSounds", SO, "Battle", "Move type sounds", "Soft sound for each move type, together with the hit"),
         s("momentSounds", SO, "Battle", "Status & moments", "Burn, poison, shiny, evolution, XP, cash and goal sounds"),
         s("volumeBattle", SO, "Battle", "Battle effects volume", "How loud the battle sounds are"),
         s("cries", SO, "Pokémon cries", "Pokémon cries", "Plays a cry when a Pokémon appears; each one downloads once, ~7 KB"),
@@ -81,6 +86,7 @@ object SettingsCatalog {
         s("pokemonSize", B, "Battle panel", "Pokémon size", "How big both Pokémon are in the battle (80–130 %); they stay clear of the info boxes"),
         s("cardsUnderOwn", B, "Battle panel", "Stat card under its own Pokémon", "Without a background picture. Off: the classic layout, each card on the opposite side"),
         s("xpAnimation", B, "Battle panel", "XP animation", "Sparks fly into your Pokémon when it gains XP"),
+        s("flyingTurnDots", B, "Battle panel", "Flying turn dots", "Both dots sink into the attacking Pokémon before its moves"),
         s("attackAnimations", B, "Battle panel", "Attack animations", "Each move plays its own animation; off: a simple step and shake"),
         s("pokemonMovement", B, "Battle panel", "Pokémon movement", "How often the battle Pokémon move when idle; off while reduced motion is on"),   // R18-C, PLAN 247
         s("backgroundPictures", B, "Battle panel", "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (8–400 KB each); off: plain"),
@@ -99,15 +105,17 @@ object SettingsCatalog {
         s("hpBarsPixel", B, "HP / XP bars", "Pixel", "Hard pixel edges, a cut-corner outline, filled in 5 % steps"),
         s("frameNone", B, "Battle frame", "No frame", "Default; the battle picture reaches the edge"),
         s("frameSimple", B, "Battle frame", "Simple pixel", "A thin pixel frame around the battle picture, the quietest one"),
+        s("frameAutomatic", B, "Battle frame", "Automatic: matches the background", "Simple pixel frame tinted by the background element"),
+        s("frameSea", B, "Battle frame", "Waves", "The sea and beach pixel frame"),
         s("frameWood", B, "Battle frame", "Wood", "A pixel frame of brown planks with brass corners around the battle picture"),
         s("frameStone", B, "Battle frame", "Stone", "A pixel frame of grey bricks around the battle picture"),
         s("frameGold", B, "Battle frame", "Gold", "A shiny gold pixel frame with rubies around the battle picture"),
-        s("frameIce", B, "Battle frame", "Ice", "A pale blue pixel frame with icicles around the battle picture"),
         s("frameMetal", B, "Battle frame", "Dark metal", "A dark steel pixel frame with rivets around the battle picture"),
         s("statsBarSmall", B, "Small battle windows", "Show stats bar in small windows", "Off gives the battle more room in small windows"),
         s("compactCards", B, "Small battle windows", "Compact stat cards", "Only name and HP on the battle cards"),
 
         // Study
+        s("explainTemplate", ST, "", "Google browser prompt", "Explain this card opens Google in the browser; tap to edit the prompt"),
         s("inAnkiDroid", ST, "", "Tapping a deck opens AnkiDroid", "Off: you study inside AnkiGo"),
         s("reduceMotion", ST, "", "Remove battle animations", "Fewer moving effects; also follows Android's Remove animations"),
         s("tapShow", ST, "", "Tap the card to show the answer", "Off: use the Show answer button, a key or a swipe"),
@@ -117,7 +125,7 @@ object SettingsCatalog {
         s("newCardOk", ST, "", "New cards: one OK button", com.husarp.ankigo.study.NewCardOk.SETTING_NOTE),   // PLAN 155
         s("swipe", ST, "", "Swipe to answer", "On the answer side: left Again, down Hard, right Good, up Easy"),
         s("speakBattle", ST, "", "Read battle log with TalkBack", "Off keeps the card reading uninterrupted"),
-        s("zoom", ST, "", "Card text size", "Makes the card text bigger or smaller"),
+        s("zoom", L, "", "Anki card text", "Makes the card text bigger or smaller"),
         s("timer", ST, "", "Answer timer", "Shows a countdown on the card, or follows the deck"),
         s("autoAdvance", ST, "", "Auto-advance", "Moves on by itself using the deck's seconds, or the times below"),
         s("autoQuestionSecs", ST, "", "Show the answer after", "Seconds before the answer shows by itself"),

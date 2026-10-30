@@ -62,7 +62,7 @@ class R18GDetailsShots {
 
     private class MapStore(private val open: Set<String>) : DetailOpenStore {
         private val m = HashMap<String, Boolean>()
-        override fun get(key: String): Boolean? = m[key] ?: (key in open)
+        override fun get(key: String): Boolean? = m[key] ?: (key == "evolution" || key in open)
         override fun set(key: String, open: Boolean) { m[key] = open }
     }
 
@@ -162,7 +162,7 @@ class R18GDetailsShots {
             assertTrue("Main holds it: ×2 money" in t)
             assertFalse("no Held item row in Training", "Held item" in t)
             // 254A: the level is in the Stats title, in its band colour, and out of the line under the name
-            val title = texts(scene).single { it.text.toString() == "Stats · Lv 23" }
+            val title = texts(scene).single { it.text.toString() == "STATS · Lv 23" }
             val sp = title.text as Spanned
             val lv = sp.getSpans(0, sp.length, ForegroundColorSpan::class.java).single { sp.getSpanStart(it) == "Stats · ".length }
             assertEquals(LevelTier.color(ctx, 23), lv.foregroundColor)
@@ -182,31 +182,28 @@ class R18GDetailsShots {
         DetailSections.storeOf = { MapStore(emptySet()) }
         dialog("pikachu-folded", listOf(0f), check = { _, scene ->
             val t = strings(scene)
-            assertTrue("Stats · Lv 23" in t)
+            assertTrue("STATS · Lv 23" in t)
             assertTrue("Total ${StatCalc.stats(gd.sp(25), st.mon("t1")!!).total}" in t)
         }) { ctx -> MonDetail.show(TeamPage(ctx, NoHost), gd, pikachu()) }
     }
 
     @Test fun expShareHolderWithEightEvolutions() {
         DetailSections.storeOf = { MapStore(emptySet()) }
-        dialog("eevee", listOf(0f), setup = { st.settings.xpShareUid = "t6" }, check = { ctx, scene ->
+        dialog("eevee", listOf(0f), setup = { st.settings.xpShareUid = "t6"; st.bag.clear() }, check = { ctx, scene ->
             val t = strings(scene)
             assertEquals("the Exp. Share shows once (no tag under the types)", 1, t.count { it == "Exp. Share" })
             assertTrue("It and your Main each get half the XP" in t)
             assertFalse("Nothing" in t)
-            // the eight methods, under the names, in a grid of three per line
-            val labels = listOf("Water Stone", "Thunder Stone", "Fire Stone", "Leaf Stone", "Ice Stone", "Friendship, day", "Friendship, night", "Friendship, Fairy-type move")
+            // 279A: every branch gets its own readable row and grey condition.
+            val labels = listOf("Water Stone", "Thunder Stone", "Fire Stone", "Leaf Stone", "Ice Stone",
+                "Friendship 160\nin the daytime", "Friendship 160\nat night", "Friendship 160\nknows a Fairy move")
             val cells = labels.map { l -> texts(scene).single { it.text.toString() == l } }
             val tops = cells.map { top(it, scene) }.distinct().sorted()
-            val lefts = cells.map { left(it, scene) + it.width / 2 }.sorted()
-            assertTrue("three lines of targets, not eight: tops $tops", tops.size == 3)
-            // each cell column is shared by up to three lines: at most three distinct centres (±3 px for the centring)
-            assertTrue("three columns: $lefts", lefts.fold(ArrayList<Int>()) { acc, x -> if (acc.none { abs(it - x) <= Ui.dp(ctx, 12) }) acc.add(x); acc }.size == 3)
-            // the arrow into the grid sits on the picture of Eevee
-            assertArrowsOnThePictures(ctx, scene)
-            // the whole evolution line is about 270 dp tall, not 560
-            val evo = views(scene).filterIsInstance<ArrowCol>().first()
-            assertTrue("grid height ${(evo.parent as View).height}", (evo.parent as View).height < Ui.dp(ctx, 320))
+            assertEquals("eight separate target rows", 8, tops.size)
+            cells.zipWithNext().forEach { (first, second) ->
+                assertTrue("conditions do not overlap", top(second, scene) >= top(first, scene) + first.height)
+            }
+            assertRowConditions(ctx, scene)
         }) { ctx -> MonDetail.show(TeamPage(ctx, NoHost), gd, st.mon("t6")!!) }
     }
 
@@ -215,7 +212,7 @@ class R18GDetailsShots {
         dialog("nothing", listOf(0f), setup = { st.bag["lucky-egg"] = 1 }, check = { ctx, scene ->
             val t = strings(scene)
             assertTrue("Nothing" in t && "Give item" in t)
-            assertTrue("Evolution" in t && "Does not evolve" in t)
+            assertTrue("EVOLUTION" in t && "Does not evolve" in t)
             val give = texts(scene).single { it.text.toString() == "Give item" }
             assertTrue(give.isClickable && give.height >= Ui.dp(ctx, 48))
             // "Give item" opens the picker of Options → "Give item…" and the details close
@@ -266,9 +263,44 @@ class R18GDetailsShots {
         // Atk, Def, SpA, SpD, Spe, HP, Total, HP and XP, Nature, IVs, EVs, Friendship, Holding, Evolution, Wins
         val said = rows.map { (it.tag as StatInfoText).title }
         listOf("HP (Hit points)", "Attack", "Defense", "Special Attack", "Special Defense", "Speed", "Total", "HP and XP", "Nature", "IV (Individual value)",
-            "EV (Effort value)", "Friendship", "Holding", "Evolution", "Wins").forEach { assertTrue("$it opens an explanation; there are $said", it in said) }
+            "EV (Effort value)", "Friendship", "Holding", "Wins").forEach { assertTrue("$it opens an explanation; there are $said", it in said) }
         rows.forEach { assertTrue("${(it.tag as StatInfoText).title}: ${it.height} px tall", it.height >= Ui.dp(ctx, 48)) }
         assertTrue("whole rows, not the 32 dp label: ${rows.map { it.width }}", rows.all { it.width > Ui.dp(ctx, 90) })
+    }
+
+    @Test fun readyEvolutionsShowEachAvailableChoice() {
+        DetailSections.storeOf = { MapStore(setOf("evolution")) }
+        dialog("r22j-ready", listOf(0f, 0.4f), setup = {
+            st.bag.clear()
+            st.bag["water-stone"] = 1
+            st.bag["thunder-stone"] = 1
+        }, check = { _, scene ->
+            assertTrue("ready heading", "Ready to evolve" in strings(scene))
+            assertEquals(2, strings(scene).count { it == "Evolve" })
+            assertEquals(2, strings(scene).count { it == "Conditions met" })
+        }) { ctx ->
+            val mon = st.mons.first { it.species == 133 }
+            mon.friendship = 0
+            MonDetail.show(TeamPage(ctx, NoHost), gd, mon)
+        }
+    }
+
+    @Test fun evolutionFoldsAndConditionsAreGreyTappableLabels() {
+        val store = MapStore(setOf("evolution"))
+        DetailSections.storeOf = { store }
+        val ctx = Shots.files(paparazzi.context)
+        FakeGame.install(ctx)
+        val v = com.husarp.ankigo.ui.DetailTopCard.evolutionOnly(ctx, gd, gd.sp(25), st.seen + st.caught, false, null)
+        measureAndLayout(v, ctx, 412, 869)
+        val label = texts(v).first { it.text.toString() == "Thunder Stone" }
+        assertTrue((label.parent as View).isClickable)
+        assertNotNull((label.parent as View).background)
+        assertEquals(0, label.paintFlags and android.graphics.Paint.UNDERLINE_TEXT_FLAG)
+        val heading = texts(v).first { it.text.toString() == "EVOLUTION" }
+        (heading.parent.parent as View).performClick()
+        assertFalse(DetailSections.memory(ctx).isOpen(com.husarp.ankigo.ui.DetailSection.EVOLUTION))
+        (heading.parent.parent as View).performClick()
+        assertTrue(DetailSections.memory(ctx).isOpen(com.husarp.ankigo.ui.DetailSection.EVOLUTION))
     }
 
     // ---------- 242A: the titles sit on the middle of their rows ----------
@@ -307,14 +339,11 @@ class R18GDetailsShots {
     }
 
     /** Every arrow's centre line is within 1 px of the centre of a picture (the one it points at, or comes from for a grid). */
-    private fun assertArrowsOnThePictures(ctx: Context, root: View) {
-        val images = views(root).filterIsInstance<android.widget.ImageView>().filter { it.width in Ui.dp(ctx, 28)..Ui.dp(ctx, 48) && it.contentDescription == null }
-        val arrows = views(root).filterIsInstance<DetailSections.ArrowView>().filter { it.width > it.height }
-        assertTrue(arrows.isNotEmpty())
-        arrows.forEach { a ->
-            val y = top(a, root) + a.height / 2
-            assertTrue("arrow at $y: picture centres ${images.map { top(it, root) + it.height / 2 }}", images.any { abs(top(it, root) + it.height / 2 - y) <= 1 })
-        }
+    private fun assertRowConditions(ctx: Context, root: View) {
+        assertTrue("279A uses rows instead of arrows", views(root).none { it is DetailSections.ArrowView })
+        val conditions = views(root).filter { it.contentDescription?.startsWith("Explain ") == true }
+        assertTrue(conditions.isNotEmpty())
+        conditions.forEach { assertTrue(it.isClickable && it.width > 0 && it.height >= Ui.dp(ctx, 40)) }
     }
 
     private fun lineData(vararg methods: Pair<Int, Evolution>, extra: List<Species> = emptyList()): GameData {
@@ -332,7 +361,7 @@ class R18GDetailsShots {
         }
     }
 
-    @Test fun theArrowStaysOnThePicturesCentreWhateverItsLabel() {
+    @Test fun rowConditionsRemainTappableForEveryMethod() {
         paparazzi.unsafeUpdateConfig(deviceConfig = PHONE.device(Theme.LIGHT))
         val c = Shots.files(paparazzi.context)
         // a one-line, a two-line and a three-line method; one arrow each, then three branches stacked with all three
@@ -340,15 +369,15 @@ class R18GDetailsShots {
             Evolution(2, EvoKind.LEVEL, level = 40, time = "night", condition = "holding Razor Fang at night"))) {
             val v = tree(c, lineData(2 to method), 1)
             measureAndLayout(v, c, 412)
-            assertArrowsOnThePictures(c, v)
+            assertRowConditions(c, v)
         }
         val stacked = tree(c, lineData(2 to Evolution(2, EvoKind.FRIENDSHIP), 3 to Evolution(3, EvoKind.ITEM, item = "thunder-stone"),
             4 to Evolution(4, EvoKind.LEVEL, level = 40, time = "night", condition = "holding Razor Fang at night")), 1)
         measureAndLayout(stacked, c, 412)
-        assertArrowsOnThePictures(c, stacked)
+        assertRowConditions(c, stacked)
     }
 
-    @Test fun theArrowStaysOnTheCentreInAStackedBranchWithItsOwnBranches() {
+    @Test fun nestedBranchesUseReadableRows() {
         paparazzi.unsafeUpdateConfig(deviceConfig = PHONE.device(Theme.LIGHT))
         val c = Shots.files(paparazzi.context)
         // Birdie -> Ratty2 (-> Ratty4, Ratty5) and Birdie -> Ratty3: the arrow into Ratty2 stands on Ratty2's picture, which is centred among its own two branches
@@ -358,10 +387,10 @@ class R18GDetailsShots {
             TestData.species(3, "Ratty3", prevo = 1), TestData.species(4, "Ratty4", prevo = 2), TestData.species(5, "Ratty5", prevo = 2)))
         val v = tree(c, data, 1)
         measureAndLayout(v, c, 412)
-        assertArrowsOnThePictures(c, v)
+        assertRowConditions(c, v)
     }
 
-    @Test fun threeToAGridOfThreePerLineAndNoOverlap() {
+    @Test fun branchesHaveOneRowEachWithConditionsBesideNames() {
         paparazzi.unsafeUpdateConfig(deviceConfig = PHONE.device(Theme.LIGHT))
         val c = Shots.files(paparazzi.context)
         val data = lineData(2 to Evolution(2, EvoKind.ITEM, item = "water-stone"), 3 to Evolution(3, EvoKind.ITEM, item = "thunder-stone"),
@@ -369,11 +398,11 @@ class R18GDetailsShots {
         val v = tree(c, data, 1)
         measureAndLayout(v, c, 412)
         val names = listOf("Ratty2", "Ratty3", "Ratty4", "Ratty5").map { n -> texts(v).single { it.text.toString() == n } }
-        assertEquals("three on the first line, one on the second", listOf(3, 1), names.groupBy { top(it, v) }.toSortedMap().values.map { it.size })
+        assertEquals("279A: one row per Pokémon", listOf(1, 1, 1, 1), names.groupBy { top(it, v) }.toSortedMap().values.map { it.size })
         // every method text hangs under its own name, never over the next line's name
-        val methods = listOf("Water Stone", "Thunder Stone", "Friendship, night", "Fire Stone").map { m -> texts(v).single { it.text.toString() == m } }
-        names.zip(methods).forEach { (n, m) -> assertTrue("${n.text}: method under the name", top(m, v) >= top(n, v) + n.height) }
-        assertArrowsOnThePictures(c, v)
+        val methods = listOf("Water Stone", "Thunder Stone", "Friendship 160\nat night", "Fire Stone").map { m -> texts(v).single { it.text.toString() == m } }
+        names.zip(methods).forEach { (n, m) -> assertTrue("${n.text}: condition beside the name", top(m, v) < top(n, v) + n.height && top(m, v) + m.height > top(n, v)) }
+        assertRowConditions(c, v)
     }
 
     // ---------- the Pokédex entry ----------
@@ -383,7 +412,7 @@ class R18GDetailsShots {
         DetailSections.dexLoader = { _, _, done -> done(sample) }
         dialog("dex", listOf(0f, 1f), check = { _, scene ->
             val t = strings(scene)
-            assertTrue("the evolution is in the card under the types" , "Evolution" in t)
+            assertTrue("the evolution is in the card under the types" , "EVOLUTION" in t)
             assertFalse("no Holding for a species", "Holding" in t)
             assertTrue("Abilities" in t)
         }) { ctx -> DexDetail.show(DexPage(ctx, NoHost), gd.sp(25)) }

@@ -1,7 +1,6 @@
 package com.husarp.ankigo.ui
 
 import android.content.Context
-import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.SpannableStringBuilder
 import android.text.Spanned
@@ -38,9 +37,10 @@ internal object ItemCard {
         val buy: Buy? = null,
         val act: Act? = null,
         val trade: Trade? = null,
+        val holders: List<com.husarp.ankigo.game.Mon> = emptyList(),
     )
 
-    /** The Shop's Buy button: [price] (a deal shows the old price struck through); [owned] (a TM) shows "✓ Owned" instead; [onBuy] runs after the money check. */
+    /** The Shop purchase: [price] checks affordability; amounts stay on the Shop list. Owned TMs cannot be bought twice. */
     class Buy(val price: ShopPlan.Price, val owned: Boolean, val onBuy: () -> Unit)
 
     /** The Bag's action button. [offLine] is the small line of a button that cannot be used now ([enabled] false); a tap on it says the same in a toast. */
@@ -98,6 +98,19 @@ internal object ItemCard {
             gravity = Gravity.CENTER_VERTICAL
             addView(lead)
             addView(titles, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(ctx, 10f) })
+            if (spec.holders.isNotEmpty()) addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(Ui.text(ctx, 11f, 800, R.color.ag_mauve).apply { text = "Held by"; gravity = Gravity.END })
+                val holders = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    for (mon in spec.holders) addView(LinearLayout(ctx).apply {
+                        gravity = Gravity.CENTER_VERTICAL
+                        addView(TileSprite(ctx).apply { Ui.staticSprite(ctx, mon.species, mon.shiny, this) }, LinearLayout.LayoutParams(dp(ctx, 28f), dp(ctx, 28f)))
+                        addView(Ui.text(ctx, 11f, 800, R.color.ag_text).apply { text = mon.nickname?.takeIf { it.isNotBlank() } ?: mon.name }, LinearLayout.LayoutParams(0, -2, 1f))
+                    })
+                }
+                addView(android.widget.ScrollView(ctx).apply { addView(holders) }, LinearLayout.LayoutParams(-1, dp(ctx, minOf(spec.holders.size, 3) * 28f)))
+            }, LinearLayout.LayoutParams(0, -2, 0.85f))
             addView(closeButton(ctx, onClose), LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)).also { it.marginStart = dp(ctx, 4f); it.marginEnd = -dp(ctx, 8f) })
         }
     }
@@ -125,6 +138,27 @@ internal object ItemCard {
             orientation = LinearLayout.VERTICAL
             if (move != null) addView(moveBlock(ctx, page, move), below)
             val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty(), page.state.caught)
+            if (!isTm) {
+                val pairs = ItemInfo.evoPairs(data, spec.item.orEmpty())
+                if (pairs.isNotEmpty()) addView(factBlock(ctx, "Evolves", ""), below)
+                val known = page.state.caught
+                fun species(num: Int): View = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
+                    val sp = data.sp(num)
+                    addView(TileSprite(ctx).apply { Ui.staticSprite(ctx, num, false, this) }, LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)))
+                    addView(Ui.text(ctx, 12f, 800, R.color.ag_text).apply { text = sp.name; gravity = Gravity.CENTER })
+                    contentDescription = "${sp.name}. Opens details"
+                    setOnClickListener { DexDetail.show(page, sp) }
+                }
+                for (pair in pairs.filter { it.fromNum in known || it.toNum in known }) addView(LinearLayout(ctx).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    if (pair.fromNum in known) addView(species(pair.fromNum), LinearLayout.LayoutParams(0, -2, 1f))
+                    if (pair.fromNum in known && pair.toNum in known) addView(Ui.text(ctx, 22f, 900, R.color.ag_mauve).apply { text = "⟶" })
+                    if (pair.toNum in known) addView(species(pair.toNum), LinearLayout.LayoutParams(0, -2, 1f))
+                }, below)
+                val unknown = pairs.flatMap { listOf(it.fromNum, it.toNum) }.distinct().count { it !in known }
+                if (unknown > 0) addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub0).apply { text = "…and $unknown unknown" }, below)
+            }
             for (f in facts) addView(factBlock(ctx, f.title, f.text), LinearLayout.LayoutParams(below))
             if (isTm) addView(whoButton(ctx, page, spec.move.orEmpty(), nameOf(page, spec)), Form.lp(ctx, 0))
         }
@@ -137,13 +171,13 @@ internal object ItemCard {
         val isTm = spec.item == null
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            val own = if (isTm) ItemInfo.tmOwnLine(spec.move in state.tms) else ItemInfo.ownLine(spec.item.orEmpty(), state.count(spec.item.orEmpty()))
+            val own = if (isTm) ItemInfo.tmOwnLine(spec.move in state.tms) else ItemInfo.ownLine(spec.item.orEmpty(), state.count(spec.item.orEmpty()) + spec.holders.size)
             addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub0).apply { text = styled(ctx, own) }, Form.lp(ctx, 0))
 
             val trade = spec.trade
             if (trade == null || !trade.confirming) {
                 val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-                spec.buy?.let { row.addView(buyView(ctx, state.cash, it), LinearLayout.LayoutParams(0, -2, 1f)) }
+                spec.buy?.let { row.addView(buyView(page, spec, it), LinearLayout.LayoutParams(0, -2, 1f)) }
                 spec.act?.let { row.addView(actView(ctx, it), LinearLayout.LayoutParams(0, -2, 1f)) }
                 if (row.childCount > 0) addView(row, Form.lp(ctx, 10))
             }
@@ -163,8 +197,17 @@ internal object ItemCard {
     /** One block: its title (PLAN 236: 12.5 sp, caps, letter-spaced, in the accent colour; [Ui.c] turns ag_mauve into the chosen accent) and its text (13.5 sp, bold parts in the text colour). */
     private fun factBlock(ctx: Context, title: String, text: String): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
-        addView(Ui.text(ctx, TITLE_SP, 900, R.color.ag_mauve).apply { this.text = title.uppercase(); letterSpacing = 0.06f })
-        addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub1).apply { this.text = styled(ctx, text); setLineSpacing(0f, 1.1f) }, Form.lp(ctx, 3))
+        addView(Ui.text(ctx, TITLE_SP, 900, R.color.ag_mauve).apply {
+            Ui.decorateHeading(this, title)
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, TITLE_SP)
+            letterSpacing = 0.06f
+            val icon = when (title) { "Evolves" -> R.drawable.ic_evolve; "In a fight" -> R.drawable.ic_swords; "How to use" -> R.drawable.ic_item_bag; else -> R.drawable.ic_info }
+            androidx.core.content.ContextCompat.getDrawable(ctx, icon)?.mutate()?.let {
+                it.setTint(Ui.c(ctx, R.color.ag_mauve)); it.setBounds(0, 0, dp(ctx, 16f), dp(ctx, 16f))
+                setCompoundDrawablesRelative(it, null, null, null)
+            }
+        })
+        if (text.isNotEmpty()) addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub1).apply { this.text = styled(ctx, text); setLineSpacing(0f, 1.1f) }, Form.lp(ctx, 3))
     }
 
     /** PLAN 236: the size of a text block's title (it was 11 sp grey). */
@@ -270,32 +313,26 @@ internal object ItemCard {
         if (sub != null) addView(Ui.text(ctx, 11f, 800, R.color.ag_text).apply { text = sub; setTextColor(ink); gravity = Gravity.CENTER }, Form.lp(ctx, 1))
     }
 
-    /** Buy: "Buy" + (the old price struck through for a deal) + coin + price on the yellow tint; faded, with a toast on tap, when the money is short. "✓ Owned" for a TM you own. */
-    private fun buyView(ctx: Context, cash: Int, b: Buy): View {
+    /** Buy becomes Sure? for the second tap. Quantity changes cancel that confirmation; TMs remain single purchases. */
+    private fun buyView(page: GamePage, spec: Spec, b: Buy): View {
+        val ctx: Context = page
         if (b.owned) return Ui.text(ctx, 14f, 900, R.color.ag_green).apply { text = "✓ Owned"; gravity = Gravity.CENTER; minimumHeight = dp(ctx, 44f) }
-        val fill = Bits.blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f)
-        val row = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            minimumHeight = dp(ctx, 46f)
-            background = Ui.rounded(fill, 13, ctx)
-            isClickable = true
-            addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = "Buy" })
-            b.price.was?.let { was ->
-                addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = Bits.fmt(was); paintFlags = paintFlags or Paint.STRIKE_THRU_TEXT_FLAG },
-                    LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(ctx, 6f) })
-            }
-            addView(ImageView(ctx).apply { setImageResource(R.drawable.ic_money); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO },
-                LinearLayout.LayoutParams(dp(ctx, 14f), dp(ctx, 14f)).also { it.marginStart = dp(ctx, 6f); it.marginEnd = dp(ctx, 4f) })
-            addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = Bits.fmt(b.price.now) })
-            val enough = cash >= b.price.now
-            alpha = if (enough) 1f else 0.45f
-            contentDescription = (if (b.price.was != null) "Buy for ${Bits.fmt(b.price.now)}, instead of ${Bits.fmt(b.price.was)}" else "Buy for ${Bits.fmt(b.price.now)}") +
-                if (enough) "" else ", not enough money"
-            setOnClickListener {
-                if (!enough) Ui.toast(ctx, ItemCardPlan.poor(b.price.now)) else b.onBuy()
-            }
+        val open = (page as CardHost).open
+        val quantity = if (spec.item == null) 1 else open.quantity
+        val total = b.price.now.toLong() * quantity
+        val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        val go = button(ctx, Bits.blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f), Ui.c(ctx, R.color.ag_text), if (open.buying) "Sure?" else "Buy")
+        go.alpha = if (page.state.cash >= total) 1f else 0.45f
+        go.setOnClickListener {
+            if (page.state.cash < total) Ui.toast(ctx, "Not enough money")
+            else if (!open.buying) { open.askBuy(); page.requestRender() }
+            else b.onBuy()
         }
+        row.addView(go, LinearLayout.LayoutParams(0, -2, 0.85f))
+        if (spec.item != null) row.addView(button(ctx, Ui.c(ctx, R.color.ag_mantle), Ui.c(ctx, R.color.ag_text), "×$quantity").apply {
+            contentDescription = "Quantity $quantity. Cycle 1, 3, 5"
+            setOnClickListener { open.cycleQuantity(); page.requestRender() }
+        }, LinearLayout.LayoutParams(0, -2, 0.15f).also { it.marginStart = dp(ctx, 6f) })
         return row
     }
 

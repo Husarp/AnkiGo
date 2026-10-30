@@ -16,7 +16,7 @@ class R17C9bTextTest {
     private val noEffectPrefix = "No effect in AnkiGo battles: "
 
     @Test fun everyBuiltAbilityHasAShortPlainSentence() {
-        assertEquals("102 + 115", 217, AbilityText.ids.size)
+        assertEquals("219 existing + 4 move interactions", 223, AbilityText.ids.size)
         assertEquals(AbilityText.ids, Abilities.BUILT)
         for (id in AbilityText.ids) {
             val t = AbilityText.of(id)
@@ -60,20 +60,20 @@ class R17C9bTextTest {
     @Test fun theAbilitiesThatDoNothingSayWhyInThePlannedWords() {
         val reasons = AbilityText.noEffectByReason
         val expected = mapOf(
-            "there are no held items in fights." to 13,
-            "it helps a partner Pokémon." to 12,
-            "it works when Pokémon switch or run." to 9,
+            "there are no held items in fights." to 12,
+            "it helps a partner Pokémon." to 10,
+            "it works when Pokémon switch or run." to 6,
             "a fight ends when a Pokémon faints." to 6,
             "AnkiGo has no PP." to 1,
             "it only shows information." to 3,
             "it only changes how the Pokémon looks." to 1,
             "AnkiGo has no form changes." to 11,
             "AnkiGo has no critical hits." to 6,
-            "there are no entry hazards in fights." to 1,
+            "its automatic Toxic Spikes effect is not implemented." to 1,
         )
         assertEquals(expected.keys, reasons.keys)
         for ((reason, n) in expected) assertEquals(reason, n, reasons.getValue(reason).size)
-        assertEquals(63, AbilityText.noEffect.size)
+        assertEquals(57, AbilityText.noEffect.size)
         for (id in AbilityText.noEffect) {
             val t = AbilityText.of(id)
             assertNotNull(id, t)
@@ -83,7 +83,7 @@ class R17C9bTextTest {
         }
         // the ones the audit named
         for (id in listOf("sniper", "superluck", "battlearmor", "shellarmor", "angerpoint", "merciless")) assertTrue(id, id in reasons.getValue("AnkiGo has no critical hits."))
-        assertTrue("toxicdebris" in reasons.getValue("there are no entry hazards in fights."))
+        assertTrue("toxicdebris" in reasons.getValue("its automatic Toxic Spikes effect is not implemented."))
         assertTrue("pressure" in reasons.getValue("AnkiGo has no PP."))
         assertEquals("No effect in AnkiGo battles: AnkiGo has no PP.", AbilityText.of("Pressure"))
     }

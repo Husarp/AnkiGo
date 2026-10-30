@@ -29,7 +29,7 @@ internal object FoldGroup {
             setPadding(Ui.dp(ctx, 14), 0, Ui.dp(ctx, 8), 0)
             tag = HEADER_TAG
             isClickable = true
-            addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = title }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { Ui.decorateHeading(this, title) }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(chevron, LinearLayout.LayoutParams(Ui.dp(ctx, 24), Ui.dp(ctx, 24)))
         }
         val body = LinearLayout(ctx).apply {

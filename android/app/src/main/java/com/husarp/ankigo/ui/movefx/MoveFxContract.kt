@@ -11,6 +11,7 @@ import com.husarp.ankigo.ui.FxEffect
 
 /** The approved move looks, and the three category templates of the page's fallback rules 2 and 3. */
 enum class MoveLook {
+    DRAIN, HEAL, MULTI_HIT, RECOIL,
     TACKLE, EMBER, WATER_JET, THUNDERBOLT, VINE_WHIP, ICE_BEAM, PSYCHIC, SHADOW_BALL, EARTHQUAKE,
     /** Physical template: Tackle's lunge, then an impact burst at the target made of the kit's particles. */
     HIT_TEMPLATE,
@@ -24,9 +25,10 @@ enum class MoveLook {
  * Whose particles a template uses. Rule 2 (the type has a picked move, the category differs): that type's own particles
  * (FIRE = Ember's pixel flames and embers, WATER = droplets, ELECTRIC = sparks, GRASS = pixel leaves, ICE = ice shards and
  * frost stars, PSYCHIC = rings and twirls, GHOST = purple wisps, GROUND = dirt, NORMAL = Tackle's stars and sparks).
- * Rule 3 (the type has no pick): PLAIN, the template's own particles in the palette's colours.
+ * PLAN 248b: the nine types without an original pick use their own mixes of tinted fxk textures.
+ * PLAIN remains available for the original generic look and comparison shots.
  */
-enum class FxKit { NORMAL, FIRE, WATER, ELECTRIC, GRASS, ICE, PSYCHIC, GHOST, GROUND, PLAIN }
+enum class FxKit { NORMAL, FIRE, WATER, ELECTRIC, GRASS, ICE, PSYCHIC, GHOST, GROUND, FIGHTING, POISON, FLYING, BUG, ROCK, DRAGON, DARK, STEEL, FAIRY, PLAIN }
 
 /**
  * Colours (ARGB) a template draws with, like the page's Shadow Ball tint: [deep] = the orb / the dark ring, [glow] = the light

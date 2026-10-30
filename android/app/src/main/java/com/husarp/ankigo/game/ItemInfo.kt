@@ -223,13 +223,13 @@ object ItemInfo {
     }
 
     /** One "from into to" pair an evolution item makes, with its time of day / gender rule. */
-    private data class EvoPair(val from: String, val to: String, val time: String?, val gender: Char?, val fromNum: Int = 0, val toNum: Int = 0)
+    data class EvoPair(val from: String, val to: String, val time: String?, val gender: Char?, val fromNum: Int = 0, val toNum: Int = 0)
 
     /**
      * Every pair [item] evolves, from the species data (Progression.itemEvolutions rules): ITEM with that item, TRADE with that held item;
      * Linking Cord = TRADE without an item + OTHER. Base forms first, then regional ones; the same pair is listed once.
      */
-    private fun evoPairs(data: GameData?, item: String): List<EvoPair> {
+    fun evoPairs(data: GameData?, item: String): List<EvoPair> {
         if (data == null) return emptyList()
         return data.species.values.sortedBy { it.num }.flatMap { sp ->
             sp.evolutions.mapNotNull { e ->

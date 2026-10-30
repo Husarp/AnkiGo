@@ -37,6 +37,7 @@ object StudyStats {
         }
         if (reviews + won + caught + shinies + xp + cash + dealt + taken + blocked + misses == 0 || state.day.isEmpty()) return
         val log = state.history.getOrPut(state.day) { DayLog() }
+        if (reviews > 0 && log.dailyGoal == 0) log.dailyGoal = DailyGoal.forSettings(state.settings, state.day)
         log.reviews += reviews; log.won += won; log.caught += caught; log.shinies += shinies; log.xp += xp; log.cash += cash
         log.dmgDealt += dealt; log.dmgTaken += taken; log.dmgBlocked += blocked; log.misses += misses
         for (i in buttons.indices) log.buttons[i] += buttons[i]

@@ -359,7 +359,7 @@ internal object LookChoosers {
 
     /** "Battle frame": the seven frames, each around a small plain picture. */
     fun frame(ctx: Context, boxed: Boolean, keepOpen: MutableSet<String>? = null): LookChooser<BattleFrameStyle> =
-        LookChooser(ctx, FRAME, BattleFrameStyle.entries, AppPrefs.battleFrame(ctx), { it.label },
+        LookChooser(ctx, FRAME, BattleFrameStyle.entries.filter { it != BattleFrameStyle.ICE }, AppPrefs.battleFrame(ctx), { it.label },
             { style ->
                 // the plain stand-in picture is the arena's own gradient (as behind the info box previews), the frame sits on top of it
                 BattleFramePreview(ctx, style).also {

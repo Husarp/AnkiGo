@@ -15,7 +15,7 @@ class R2SmallShots {
         val row = android.widget.LinearLayout(ctx)
         for (c in intArrayOf(0xFFFFFFFF.toInt(), 0xFF000000.toInt(), 0xFF6A5ACD.toInt())) {
             val f = FrameLayout(ctx).apply { setBackgroundColor(c) }
-            f.addView(ImageView(ctx).apply { setImageResource(R.drawable.ic_launcher_foreground) }, FrameLayout.LayoutParams(300, 300))
+            f.addView(ImageView(ctx).apply { setImageResource(R.drawable.ic_launcher) }, FrameLayout.LayoutParams(300, 300))
             row.addView(f, android.widget.LinearLayout.LayoutParams(320, 320))
         }
         row

@@ -19,12 +19,12 @@ import kotlin.random.Random
  */
 class R17C3NeverPickedTest {
     private val data = R17C3.data
-    private val never = listOf("roar", "helpinghand", "focusenergy", "spite", "perishsong", "celebrate", "fling", "splash")
+    private val never = listOf("batonpass", "helpinghand", "focusenergy", "spite", "celebrate", "splash")
 
-    @Test fun theListHasTheFiftyEightMovesOfTheAuditInSevenReasons() {
-        assertEquals(58, CoreRules.NEVER_PICKED.size)
+    @Test fun theRemainingExclusionsMatchTheAudit() {
+        assertEquals(26, CoreRules.NEVER_PICKED.size)
         val perReason = CoreRules.NEVER_PICKED.values.groupingBy { it }.eachCount()
-        assertEquals(mapOf("partner" to 18, "switching" to 18, "items" to 12, "pp" to 2, "crits" to 4, "fight" to 1, "nothing" to 3), perReason)
+        assertEquals(mapOf("partner" to 10, "switching" to 4, "items" to 4, "pp" to 2, "crits" to 4, "nothing" to 2), perReason)
         assertEquals(CoreRules.reasonText.keys, perReason.keys)
         for (r in CoreRules.reasonText.values) assertTrue(r, r.endsWith("."))
     }
@@ -41,16 +41,16 @@ class R17C3NeverPickedTest {
 
     @Test fun aMainWithOnlyNeverPickedMovesUsesStruggle() {
         for (choice in MoveChoice.entries) {
-            val b = R17C3.battle(R17C3.wild("tackle")); val m = R17C3.main("splash", "roar", "celebrate")
+            val b = R17C3.battle(R17C3.wild("tackle")); val m = R17C3.main("splash", "batonpass", "celebrate")
             assertEquals("$choice", Tuning.STRUGGLE, MoveChooser.pickMain(choice, data, b, m, Random(3)).id)
         }
     }
 
     @Test fun aWildOneWithOnlyNeverPickedMovesStillUsesOneAndNothingHappens() {
         for (choice in MoveChoice.entries) {
-            val b = R17C3.battle(R17C3.wild("splash", "roar")); val m = R17C3.main("tackle")
+            val b = R17C3.battle(R17C3.wild("splash", "batonpass")); val m = R17C3.main("tackle")
             val picked = (1..30).map { MoveChooser.pickWild(choice, data, b, m, Random(it)).id }.toSet()
-            assertEquals("$choice", setOf("splash", "roar"), picked)
+            assertEquals("$choice", setOf("splash", "batonpass"), picked)
         }
         // in a round: "But nothing happened.", and nobody is hurt (the Magikarp feel)
         val m = R17C3.main("tackle"); val b = R17C3.battle(R17C3.wild("splash"))
@@ -64,7 +64,7 @@ class R17C3NeverPickedTest {
 
     @Test fun aNeverPickedMoveThatIsUsedAnywayDoesNothing() {
         val force = object : BattleRules {
-            override fun forcedMove(v: BattleView, p: Boolean): Move? = if (p) v.data.move("fling") else v.data.move("roar")
+            override fun forcedMove(v: BattleView, p: Boolean): Move? = if (p) v.data.move("helpinghand") else v.data.move("batonpass")
         }
         R17C3.withRules(force) {
             val m = R17C3.main("tackle"); val w = R17C3.wild("tackle"); val b = R17C3.battle(w)
@@ -78,18 +78,18 @@ class R17C3NeverPickedTest {
 
     @Test fun theMoveTextSaysWhy() {
         assertEquals("Never used in AnkiGo battles: it needs a partner Pokémon.", MoveText.describe(data.move("helpinghand")!!))
-        assertEquals("Never used in AnkiGo battles: it only works when Pokémon switch in or out.", MoveText.describe(data.move("roar")!!))
-        assertEquals("Never used in AnkiGo battles: it needs held items.", MoveText.describe(data.move("fling")!!))
+        assertEquals("Never used in AnkiGo battles: it only works when Pokémon switch in or out.", MoveText.describe(data.move("batonpass")!!))
+        assertTrue(MoveText.describe(data.move("fling")!!).contains("Throws away its held item"))
         assertEquals("Never used in AnkiGo battles: AnkiGo has no PP.", MoveText.describe(data.move("spite")!!))
         assertEquals("Never used in AnkiGo battles: AnkiGo has no critical hits.", MoveText.describe(data.move("focusenergy")!!))
-        assertEquals("Never used in AnkiGo battles: it would end every fight on its own.", MoveText.describe(data.move("perishsong")!!))
+        assertTrue(MoveText.describe(data.move("perishsong")!!).contains("faint after three more turns"))
         assertEquals("It does nothing, so it is never used.", MoveText.describe(data.move("celebrate")!!))
         assertEquals("It does nothing, so it is never used.", MoveText.describe(data.move("splash")!!))
         assertEquals("Deals damage with no extra effect.", MoveText.describe(data.move("tackle")!!))
     }
 
     @Test fun theConfusionAndLoveMovesAreTheOnesTheSetImplements() {
-        assertEquals(setOf("confuseray", "supersonic", "sweetkiss", "teeterdance", "swagger", "flatter", "attract"), CoreRules.handles)
+        assertEquals(setOf("confuseray", "supersonic", "sweetkiss", "teeterdance", "swagger", "flatter", "attract", "embargo", "perishsong"), CoreRules.handles)
         assertTrue(CoreRules.handles.none { it in CoreRules.NEVER_PICKED })
     }
 
@@ -152,7 +152,7 @@ class R17C3NeverPickedTest {
         moves!!
         for (m in moves.values.filter { CoreRules.isCharge(it) }) {
             val t = MoveText.describe(m)
-            assertTrue("${m.id}: $t", "Charges on the first turn" in t && t.contains("with your next move."))
+            assertTrue("${m.id}: $t", "Charges on the first turn" in t && t.contains("with its next move."))
         }
         for (m in moves.values.filter { CoreRules.isRecharge(it) }) {
             assertTrue(m.id, "After a hit, its next move is a rest turn to recharge." in MoveText.describe(m))

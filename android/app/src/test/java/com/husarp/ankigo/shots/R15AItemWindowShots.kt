@@ -185,6 +185,7 @@ class R15AItemWindowShots {
             val bag0 = bagTab.text.toString()
             assertTrue(ItemInfo.plain(ItemInfo.ownLine("great-ball", n0)) in texts(stage))
             ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Buy" }).single()); stage.render()
+            ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Sure?" }).single()); stage.render()
             assertEquals(n0 + 1, st.count("great-ball"))
             assertTrue(st.cash < cash0)
             assertSame("the same window, drawn again", w, p.itemWindow)
@@ -193,6 +194,7 @@ class R15AItemWindowShots {
             assertTrue("the list behind counts the bag again: $bag0 to ${bagTab.text}", bagTab.text.toString() != bag0)
             // and again: still one window
             ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Buy" }).single()); stage.render()
+            ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Sure?" }).single()); stage.render()
             assertTrue(ItemInfo.plain(ItemInfo.ownLine("great-ball", n0 + 2)) in texts(stage))
             assertEquals(1, ShopCardKit.windowsShown)
             stage

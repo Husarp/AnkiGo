@@ -224,12 +224,15 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private fun rebuildBar() {
         val s = section
         barHolder.removeAllViews()
-        barHolder.addView(Ui.appBar(this, s?.title ?: "Settings", back = s != null, onBack = { goHome() }),
+        barHolder.addView(Ui.appBar(this, s?.title ?: "Settings", back = s != null, onBack = { if (helpEntry) host.closePage() else goHome() }),
             FrameLayout.LayoutParams(-1, -2))
     }
 
     /** Back from a section to the list. False when already on the list (the caller goes on with its own back). */
+    var helpEntry = false
+
     fun goHome(): Boolean {
+        if (helpEntry) return false
         if (section == null) return false
         open(null)
         return true
@@ -315,7 +318,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 content.addView(Form.sect(this, "Advanced"))
                 content.addView(studyAdvancedCard(), Form.lp(this, 12)) // R18 255: moved here from Diagnostics
             }
-            SettingsSection.WIDGETS -> content.addView(widgetsCard(), Form.lp(this, 12)) // R18 263
+            SettingsSection.WIDGETS -> { content.addView(widgetsCard(), Form.lp(this, 12)); content.addView(WidgetLookActivity.tiles(this), Form.lp(this, 12)) } // R18 263
             SettingsSection.BATTLE -> battleSection()
             SettingsSection.REMINDERS -> {
                 // a search result for a reminder setting: its sheet opens (the rows here are custom views, there is no row to highlight)
@@ -398,6 +401,11 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     }
 
     /** Opens the section that holds [info] and scrolls to its row (a section that starts its own screen just starts it). */
+    fun restoreHelpSetting(info: SettingInfo) {
+        pendingFocus = info
+        restoreSection(SettingsSearch.sectionOf(info).name)
+    }
+
     fun openSetting(info: SettingInfo) {
         val target = SettingsSearch.sectionOf(info)
         pendingFocus = info.takeIf { target.opens }
@@ -416,7 +424,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 while (v !== content && v.parent is View) { y += v.top; v = v.parent as View }
                 scroll.smoothScrollTo(0, (y - dp(80)).coerceAtLeast(0))
             }
-            SettingsHomeSearch.flash(chooser.header)
+            SettingsHomeSearch.flash(chooser.header, helpEntry)
             return
         }
         val row = Form.rowsIn(content).firstOrNull { Form.titleOf(it) == info.title } ?: return
@@ -426,7 +434,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             while (v !== content && v.parent is View) { y += v.top; v = v.parent as View }
             scroll.smoothScrollTo(0, (y - dp(80)).coerceAtLeast(0))
         }
-        SettingsHomeSearch.flash(row)
+        SettingsHomeSearch.flash(if (helpEntry && info.id == "leaveMode") row.parent as? View ?: row else row, helpEntry)
     }
 
     /** Gives every settings row inside [root] its one-line explanation from [SettingsCatalog] (rows without an entry keep what they have). */
@@ -502,7 +510,69 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         // PLAN 282 / R19: Box duplicates, independent switches in Look.
         val stacked = Form.switchRow(this, "Stacked cards", "Cards peek behind groups of copies in the Box", BoxDupePrefs.get(this).stacked) { BoxDupePrefs.setStacked(this, it) }
         val two = Form.switchRow(this, "Show two Pokémon", "Two sprites for groups of copies in the Box; keeps the count", BoxDupePrefs.get(this).two) { BoxDupePrefs.setTwo(this, it) }
-        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size, listSize, stacked, two))
+        val deckLook = Form.stackRow(this, "Deck list", "A: connected branches · B: one card per family. Today keeps the current look.",
+            Form.segmented(this, listOf("Today", "A", "B"), DeckListLook.entries.indexOf(DeckListLook.get(this))) {
+                DeckListLook.put(this, DeckListLook.entries[it])
+            })
+        val achievements = Form.stackRow(this, "Achievement pop-ups", "What shows when you earn one",
+            Form.segmented(this, AchievementPopup.modes, AchievementPopup.mode(this)) { i -> AchievementPopup.setMode(this, i) })
+        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size,
+            textSizeRow("app", "App text"), textSizeRow("battle", "Battle text"), textSizeRow("card", "Anki card text"),
+            deckLook, listSize, stacked, two, achievements))
+    }
+
+    private fun textSizeRow(kind: String, title: String): View {
+        val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        column.addView(Form.stepperRow(this, title, null, TextSizes.get(this, kind), 80, 150, 10, { "$it%" }) {
+            TextSizes.put(this, kind, it)
+            if (kind == "app") looked()
+        })
+        column.addView(Form.secondary(this, "Preview") { textPreview(kind, title) }.apply { contentDescription = "Preview $title" },
+            LinearLayout.LayoutParams(-2, -2).apply { gravity = Gravity.END; topMargin = dp(4); marginEnd = dp(14); bottomMargin = dp(10) })
+        return column
+    }
+
+    private fun textPreview(kind: String, title: String) {
+        dialog?.dismiss()
+        dialog = AppDialog.Builder(this).setTitle(title).setView(textPreviewContent(kind))
+            .setPositiveButton("Close", null).create().also { Pickers.show(it) }
+    }
+
+    private fun textPreviewContent(kind: String): View {
+        val sample = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(20), dp(16), dp(20))
+        }
+        fun line(text: String, size: Float = 16f, color: Int = R.color.ag_text) {
+            sample.addView(Ui.text(this, size * TextSizes.get(this, kind) / TextSizes.get(this, "app"), 800, color).apply {
+                this.text = text
+                setPadding(0, dp(10), 0, dp(10))
+            })
+        }
+        when (kind) {
+            "battle" -> {
+                sample.background = Ui.rounded(Ui.c(this, R.color.ag_mantle), 14, this)
+                line("Pikachu  Lv 18     HP 42 / 54", 16f)
+                val sprites = LinearLayout(this).apply { gravity = Gravity.CENTER; orientation = LinearLayout.HORIZONTAL }
+                for (num in listOf(25, 7)) {
+                    val sprite = ImageView(this)
+                    Ui.staticSprite(this, num, false, sprite)
+                    sprites.addView(sprite, LinearLayout.LayoutParams(0, dp(84), 1f))
+                }
+                sample.addView(sprites)
+                line("Squirtle  Lv 18     HP 38 / 50", 16f)
+                line("Thunder Shock · 3 / 4", 14f, R.color.ag_blue)
+                line("Pikachu used Thunder Shock!", 14f)
+            }
+            "card" -> {
+                sample.background = Ui.rounded(Ui.c(this, R.color.ag_card), 14, this)
+                line("What is 水?", 24f)
+                sample.addView(Form.divider(this))
+                line("Water", 24f, R.color.ag_blue)
+            }
+            else -> { line("Study", 24f); line("DECKS", 12f, R.color.ag_sub0); line("Languages     8 · 3 · 21"); line("    Japanese     5 · 1 · 12"); line("Continue studying", 16f, R.color.ag_mauve) }
+        }
+        return sample
     }
 
     /** The look changed: this screen recreates itself (Activity) or tells the player the window needs reopening (floating card). */
@@ -529,7 +599,29 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         if (::content.isInitialized) render()
     }
 
+    private fun editExplainPrompt() {
+        val prefs = getSharedPreferences("study", 0)
+        val field = EditText(this).apply {
+            setText(prefs.getString(com.husarp.ankigo.study.CardExplain.PREF_TEMPLATE, null)
+                ?: com.husarp.ankigo.study.CardExplain.DEFAULT_TEMPLATE)
+            minLines = 4; maxLines = 8
+            gravity = Gravity.TOP or Gravity.START
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            typeface = Ui.font(this@SettingsPage, 700)
+            textSize = 14f
+            setTextColor(Ui.c(this@SettingsPage, R.color.ag_text))
+            filters = arrayOf(InputFilter.LengthFilter(1000))
+            Ui.tintEdit(this)
+        }
+        Pickers.show(AppDialog.Builder(this).setTitle("Google browser prompt").setView(field)
+            .setPositiveButton("Save") { _, _ ->
+                prefs.edit().putString(com.husarp.ankigo.study.CardExplain.PREF_TEMPLATE,
+                    field.text.toString().trim().ifBlank { com.husarp.ankigo.study.CardExplain.DEFAULT_TEMPLATE }).apply()
+            }.setNegativeButton("Cancel", null).create())
+    }
+
     private fun studyCard(): View = Form.cardOf(this, listOf(
+            Form.row(this, "Google browser prompt", "Explain this card opens Google in the browser; tap to edit the prompt", null) { editExplainPrompt() },
             Form.switchRow(this, "Tapping a deck opens AnkiDroid", "Off: study inside AnkiGo", getSharedPreferences("study", 0).getBoolean("inAnkiDroid", false)) {
                 getSharedPreferences("study", 0).edit().putBoolean("inAnkiDroid", it).apply()
             },
@@ -556,9 +648,6 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             },
             Form.switchRow(this, "Read battle log with TalkBack", "Turn off to keep the card reading uninterrupted", getSharedPreferences("study", 0).getBoolean("speakBattle", true)) {
                 getSharedPreferences("study", 0).edit().putBoolean("speakBattle", it).apply()
-            },
-            Form.stepperRow(this, "Card text size", null, getSharedPreferences("study", 0).getInt("zoom", 100), 80, 150, 10, { "$it%" }) {
-                getSharedPreferences("study", 0).edit().putInt("zoom", it).apply()
             },
             Form.row(this, "Answer timer", null, valueText(getSharedPreferences("study", 0).getString("timer", com.husarp.ankigo.study.StudyTiming.AS_DECK))) {
                 Pickers.show(AppDialog.Builder(this).setItems(com.husarp.ankigo.study.StudyTiming.TIMER_MODES.toTypedArray()) { _, i ->
@@ -770,6 +859,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 AppPrefs.cardsUnderOwn(this)) { AppPrefs.setCardsUnderOwn(this, it) },
             Form.switchRow(this, "XP animation", "Sparks fly into your Pokémon when it gains XP",
                 AppPrefs.xpAnimation(this)) { AppPrefs.setXpAnimation(this, it) },
+            Form.switchRow(this, "Flying turn dots", "Both dots sink into the attacking Pokémon before its moves",
+                AppPrefs.flyingTurnDots(this)) { AppPrefs.setFlyingTurnDots(this, it) },
             Form.switchRow(this, "Attack animations", "Each move plays its own animation; off: a simple step and shake",
                 AppPrefs.attackAnimations(this)) { AppPrefs.setAttackAnimations(this, it) },
             pokemonMovementRow(),
@@ -1328,7 +1419,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             "Pokémon and Pokémon names © Nintendo / Creatures / GAME FREAK. Data: PokeAPI, Pokémon Showdown. " +
                 "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). " +
                 "Attack effects: Kenney Particle Pack (CC0) and Pokémon Showdown effect images (CC0); Ember and Vine Whip pixel art drawn for AnkiGo. " +
-                "Streak flame: animated Noto Emoji by Google (CC BY 4.0, resized). " +
+                "Streak flame: animated Noto Emoji by Google (CC BY 4.0, resized; animation modified for AnkiGo). " +
                 "Battle backgrounds: Pokémon Showdown's (art by Smogon artists) and scenes made for AnkiGo, downloaded when needed, not part of the app. " +
                 "Pictures, cries and game data come from AnkiGo's own copy on GitHub first and from the original sites second.", 12, R.color.ag_sub0), Form.lp(this, 6))
         return box
@@ -1394,7 +1485,12 @@ class SettingsActivity : PageActivity() {
     }
 
     override fun createPage(): GamePage = SettingsPage(this, this).also {
-        it.restoreSection(restore)
+        val target = intent.getStringExtra("helpSetting")
+        it.helpEntry = target != null
+        it.restoreSection(restore ?: target?.takeIf { v -> v.startsWith("@") }?.drop(1))
+        if (restore == null && target != null && !target.startsWith("@")) {
+            SettingsCatalog.all.firstOrNull { info -> info.id == target }?.let { info -> it.restoreHelpSetting(info) }
+        }
         it.restoreChoosers(restoreChoosers)
         settingsPage = it
     }

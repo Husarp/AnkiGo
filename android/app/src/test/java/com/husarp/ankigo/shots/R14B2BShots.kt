@@ -249,12 +249,14 @@ class R14B2BShots {
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")), setup = { st.tms += "thunderbolt" }).second }
     }
 
-    @Test fun theDealOpensWithTheOldPriceStruckThrough() {
+    @Test fun theDealOpensWithNoPriceInsideThePopup() {
         val day = lazy { ShopCardKit.dayWithDeal(ShopCardKit.world(), "super-potion") }
         shoot("shop-deal", listOf(P412), check = { _, screen ->
             val deal = Shop.dealFor(gd, day.value)!!
             val struck = ShopCardKit.allText(screen, { it.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG != 0 })
-            assertEquals(struck.map { it.text }.toString(), listOf(com.husarp.ankigo.ui.Bits.fmt(deal.oldPrice)), struck.map { it.text.toString() })
+            assertTrue("the popup no longer repeats a struck-through price", struck.isEmpty())
+            val popup = (screen as ShopCardKit.Stage).page.itemWindow!!.view
+            assertTrue("no coin amount in popup", com.husarp.ankigo.ui.Bits.fmt(deal.price) !in texts(popup))
             assertTrue("the deal card stays under the window", "DEAL OF THE DAY" in texts(screen))
             assertTrue("Buy" in texts(screen))
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.DEAL, day = day.value).second }

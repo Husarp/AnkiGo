@@ -1,0 +1,101 @@
+package com.husarp.ankigo.shots
+
+import android.view.View
+import app.cash.paparazzi.Paparazzi
+import com.husarp.ankigo.GameRepo
+import com.husarp.ankigo.ui.*
+import org.junit.Assert.*
+import org.junit.Rule
+import org.junit.Test
+
+class R22IShopTest {
+    @get:Rule val paparazzi: Paparazzi = Shots.rule()
+    private fun setup() = Shots.files(paparazzi.context).also {
+        FakeGame.scenario = FakeGame.Scenario.MID_GAME
+        FakeGame.withSprites = true
+        FakeGame.install(it)
+        ShopCardKit.install()
+    }
+    private fun tap(view: View, label: String) = ShopCardKit.tap(ShopCardKit.findText(view) { it == label })
+
+    @Test fun buyRequiresTwoTapsAndChangingQuantityDisarmsIt() {
+        val ctx = setup()
+        val (page, stage) = ShopCardKit.page(ctx, CardKeys.basic(ShopPlan.Tile.Item("poke-ball")))
+        val state = GameRepo.state!!
+        val cash = state.cash
+        val count = state.count("poke-ball")
+        tap(stage, "Buy"); stage.render()
+        assertEquals(cash, state.cash)
+        assertTrue(ShopCardKit.texts(stage).contains("Sure?"))
+        paparazzi.snapshot(stage, "r22i-confirm")
+        tap(stage, "×1"); stage.render()
+        assertFalse(page.open.buying)
+        tap(stage, "Buy"); stage.render()
+        tap(stage, "Sure?"); stage.render()
+        assertEquals(count + 3, state.count("poke-ball"))
+        assertEquals(cash - 600, state.cash)
+        assertFalse(page.open.buying)
+    }
+    @Test fun heldItemWithNoFreeCopiesIsVisibleAndCannotBeGivenAgain() {
+        val ctx = setup()
+        val (page, stage) = ShopCardKit.page(ctx, CardKeys.bagItem("amulet-coin"), bag = true, setup = {
+            val state = GameRepo.state!!
+            state.bag.clear()
+            state.mons.first().heldItem = "amulet-coin"
+        })
+        val text = ShopCardKit.texts(stage)
+        assertTrue(text.toString(), text.contains("Held by"))
+        assertTrue(text.contains("No free copies"))
+        assertTrue(text.contains("All"))
+        assertTrue(text.contains("Held"))
+        paparazzi.snapshot(stage, "r22i-held")
+        GameRepo.state!!.mons.forEach { it.heldItem = "amulet-coin" }
+        stage.render()
+        assertTrue(ShopCardKit.texts(stage).contains("No free copies"))
+        paparazzi.snapshot(stage, "r22i-held-many")
+        page.closeCard(); stage.render()
+        tap(stage, "Held"); stage.render()
+        assertTrue(ShopCardKit.texts(stage).any { it == "Amulet Coin" })
+    }
+    @Test fun evolutionShowsOnlyCaughtSpritesAndOneUnknownCount() {
+        val ctx = setup()
+        val (_, stage) = ShopCardKit.page(ctx, CardKeys.bagItem("thunder-stone"), bag = true, setup = {
+            val state = GameRepo.state!!
+            state.bag["thunder-stone"] = 1
+            state.caught.clear(); state.caught += 25
+        })
+        val text = ShopCardKit.texts(stage)
+        assertFalse(text.toString(), text.any { it.contains("???") })
+        assertTrue(text.toString(), text.contains("…and 3 unknown"))
+        assertTrue(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(25).name}. Opens details")!!.isClickable)
+        paparazzi.snapshot(stage, "r22i-evolution")
+        GameRepo.state!!.caught += listOf(26, 133, 135)
+        stage.render()
+        val allKnown = ShopCardKit.texts(stage)
+        assertFalse(allKnown.any { it.startsWith("…and") })
+        assertEquals(2, allKnown.count { it == "⟶" })
+        for (num in listOf(25, 26, 133, 135)) assertTrue(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(num).name}. Opens details")!!.isClickable)
+        paparazzi.snapshot(stage, "r22i-evolution-known")
+    }
+
+    @Test fun tmConfirmsOnceAndHasNoQuantityControl() {
+        val ctx = setup()
+        val (_, stage) = ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")), setup = { GameRepo.state!!.tms.clear() })
+        assertFalse(ShopCardKit.texts(stage).contains("×1"))
+        tap(stage, "Buy"); stage.render()
+        assertFalse("thunderbolt" in GameRepo.state!!.tms)
+        tap(stage, "Sure?"); stage.render()
+        assertTrue("thunderbolt" in GameRepo.state!!.tms)
+        assertTrue(ShopCardKit.texts(stage).contains("✓ Owned"))
+    }
+    @Test fun insufficientMoneyDoesNotArmConfirmation() {
+        val ctx = setup()
+        val (page, stage) = ShopCardKit.page(ctx, CardKeys.basic(ShopPlan.Tile.Item("poke-ball")), cash = 199)
+        val count = GameRepo.state!!.count("poke-ball")
+        tap(stage, "Buy"); stage.render()
+        assertFalse(page.open.buying)
+        assertEquals(199, GameRepo.state!!.cash)
+        assertEquals(count, GameRepo.state!!.count("poke-ball"))
+    }
+
+}

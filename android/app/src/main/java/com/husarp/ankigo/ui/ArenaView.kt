@@ -128,7 +128,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val pLevel = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val pHp = BarView(ctx).apply { ghostOnDrop = true }
     private val pHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { maxLines = 1 }
-    private val pHpLabel = Ui.text(ctx, InfoBoxGeo.NUM, 800, R.color.ag_sub0).apply { maxLines = 1; text = "HP" }   // above style: "HP" before the number
+    private val pTypes = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+    private val pIcons = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+    private var playerTypes: List<Type> = emptyList()
     private val pXpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { maxLines = 1 }
     private val pXp = BarView(ctx)
     private val pHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }   // compact cards: HP bar + "61 / 61 HP" side by side
@@ -140,7 +142,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val eRow = NameRow(ctx, eName, eLevel)
     private val pRow = NameRow(ctx, pName, pLevel)
     private val eNumRow = ChipsNumberRow(ctx, eTypes, eIcons, eHpText)    // above style, wild: the type chips and the HP number
-    private val pNumRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }   // above style, ours: "HP" and the HP number
+    private val pNumRow = ChipsNumberRow(ctx, pTypes, pIcons, pHpText)   // above style, ours: type chips and the HP number
     private val pXpRow = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }    // above style, ours: the XP bar and its number
 
     // ---- catch moment ----
@@ -212,6 +214,18 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private var wantTypes = true
     private var wantXpText = true
     private var wantXpBar = true
+    private var xpArriving = false
+    private val hideXpBar = Runnable { xpArriving = false; updateCards() }
+    fun refreshXpVisibility() { updateCards() }
+    private fun xpBarVisible() = wantXpBar && (xpArriving || context.getSharedPreferences("study", 0).getBoolean("alwaysShowXpBar", false))
+    private fun revealXpBar(ms: Long) {
+        removeCallbacks(hideXpBar)
+        if (!xpArriving) {
+            xpArriving = true; updateCards()
+            if (!reduceMotion()) { pXp.translationY = -dpi(6).toFloat(); pXp.animate().translationY(0f).setDuration(180).start() }
+        }
+        postDelayed(hideXpBar, ms + 450)
+    }
     private var plan: ArenaGeo.Plan? = null
 
     /**
@@ -344,7 +358,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     init {
         clipChildren = true
         // PLAN 140: nothing inside the info boxes (and the layers that hold the boxes and the pop-ups) cuts a child at its own bounds
-        for (g in listOf<ViewGroup>(cardLayer, popLayer, enemyBlock, enemyCard, playerCard, eRow, pRow, eNumRow, pNumRow, pXpRow, eHpBox, pHpBox, eTypes, eIcons, eStatus, pStatus)) {
+        for (g in listOf<ViewGroup>(cardLayer, popLayer, enemyBlock, enemyCard, playerCard, eRow, pRow, eNumRow, pNumRow, pXpRow, eHpBox, pHpBox, eTypes, eIcons, pTypes, pIcons, eStatus, pStatus)) {
             g.clipChildren = false
             g.clipToPadding = false
         }
@@ -464,7 +478,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun layoutPlan(w: Int, h: Int) {
         val d = Ui.dp(context, 1f)
         // the real cards can be taller than the model's at a big system font: the plan is made for their real height (0 extra at the normal size)
-        val c0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle)
+        val c0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, xpBar = xpBarVisible())
         val c = ArenaGeo.Cards(c0.wildW, c0.wildH + extraHeight(enemyBlock, c0.wildW, d, c0.wildH),
             c0.playerW, c0.playerH + extraHeight(playerCard, c0.playerW, d, c0.playerH))
         val p0 = ArenaGeo.plan(w / d, h / d, c, cardsCompact, cardsUnderOwn, frameSafe(), bigFactor(w, h, d))   // PLAN 140: the cards stay inside the frame's safe area; R19-A: "Bigger info boxes"
@@ -516,8 +530,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         }
         val study = compact || studyStrip
         // The boxes' sizes are the model's ([InfoBoxGeo]: calibrated on the real views by the shots), with their optional parts and without.
-        val c0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle)
-        val cr0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, reduced = true)
+        val c0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, xpBar = xpBarVisible())
+        val cr0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, reduced = true, xpBar = xpBarVisible())
         val widths = studyCardWidths(w)
         val wildW = if (study) widths.first / d else c0.wildW
         val playerW = if (study) widths.second / d else c0.playerW
@@ -529,7 +543,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val cr = ArenaGeo.Cards(cr0.wildW, cr0.wildH + wildExtra, cr0.playerW, cr0.playerH + playerExtra)
         val k0 = if (study) 1f else min(w / d / 300f, h / d / 430f).coerceIn(1f, 1.4f)
         // The smallest text of a full and of a reduced box: no box is drawn so small that it falls under the readable size (R9 wave 3).
-        val fullSp = if (cardsCompact) InfoBoxGeo.COMPACT_SP else InfoBoxGeo.smallestSp(infoBoxStyle, wantXpText && xpOn && wantXpBar, reduced = false)
+        val fullSp = if (cardsCompact) InfoBoxGeo.COMPACT_SP else InfoBoxGeo.smallestSp(infoBoxStyle, wantXpText && xpOn && xpBarVisible(), reduced = false)
         val minSp = if (cardsCompact) InfoBoxGeo.COMPACT_SP else InfoBoxGeo.smallestSp(infoBoxStyle, xpText = false, reduced = true)
         // The boxes keep clear of each sprite's REAL art box (the pixels it draws, R9 D1) at the planned frame, not of the frame or a flat 85 % of it.
         // R19-A (PLAN 276): "Bigger info boxes" where the arena has room; the HUD look has no boxes to grow (its text sits on the picture)
@@ -954,6 +968,17 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /** The plain gradient with the two platform ellipses. */
+    val backdropElement: String? get() = backdrop.shown?.let { bg ->
+        when {
+            bg.id.contains("beach") || bg.id.contains("sea") -> "water"
+            bg.id.contains("forest") || bg.id.contains("jungle") || bg.id.contains("meadow") || bg.id.contains("flower") -> "grass"
+            bg.id.contains("snow") || bg.id.contains("ice") -> "ice"
+            bg.id.contains("volcano") || bg.id.contains("lava") || bg.id.contains("fire") -> "fire"
+            bg.id.contains("cave") -> "rock"
+            bg.id.contains("desert") || bg.id.contains("canyon") -> "ground"
+            else -> Type.entries.firstOrNull { type -> BackdropCatalog.options(type).any { it.id == bg.id } }?.name
+        }
+    }
     fun setPlainBackdrop() = backdrop.plain()
 
     private var lastBackdrop: Triple<List<Type>, Int, Boolean>? = null
@@ -1048,7 +1073,16 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             eTypes.addView(TypeChips.chip(context, t, dark = insideDark()).also { it.maxLines = 1; sz(it, InfoBoxGeo.CHIP) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
             eIcons.addView(typeSquare(t), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(2) })
         }
+        buildPlayerTypes()
         fitSquares()
+    }
+
+    private fun buildPlayerTypes() {
+        pTypes.removeAllViews(); pIcons.removeAllViews()
+        for (t in playerTypes) {
+            pTypes.addView(TypeChips.chip(context, t, dark = insideDark()).also { it.maxLines = 1; sz(it, InfoBoxGeo.CHIP) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
+            pIcons.addView(typeSquare(t), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(2) })
+        }
     }
 
     /** A type as a small coloured square with its symbol in it (D12 `typeIcons`): the inside style's, and the swap for chips that do not fit. */
@@ -1064,8 +1098,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun fitSquares() {
         val side = dpf(InfoBoxGeo.SQUARE * TextMath.bar(floorSp))
         val pad = (side * 2f / 15f + 0.5f).toInt()
-        for (i in 0 until eIcons.childCount) {
-            val v = eIcons.getChildAt(i)
+        for (v in (0 until eIcons.childCount).map { eIcons.getChildAt(it) } + (0 until pIcons.childCount).map { pIcons.getChildAt(it) }) {
             val lp = v.layoutParams
             if (lp.width != side || lp.height != side) { lp.width = side; lp.height = side; v.layoutParams = lp }
             v.setPadding(pad, pad, pad, pad)
@@ -1128,7 +1161,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /** Which parts of the box show: the type chips / symbols, the XP bar, the XP number (not in a reduced box, not when the panel stepped the XP numbers out). */
-    private fun xpTextShown() = wantXpText && xpOn && !partsReduced && !cardsCompact && wantXpBar
+    private fun xpTextShown() = wantXpText && xpOn && !partsReduced && !cardsCompact && xpBarVisible()
 
     /** The inside style: the HP / XP numbers are written in their bars (compact cards never). */
     private val inside get() = infoBoxStyle == InfoBoxStyle.INSIDE && !cardsCompact
@@ -1158,7 +1191,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
                 nameRow(eRow, eName, eStatus, eLevel)
                 nameRow(pRow, pName, pStatus, pLevel)
                 eNumRow.addView(eTypes, lp(-2, -2)); eNumRow.addView(eIcons, lp(-2, -2)); eNumRow.addView(View(context), lp(0, 1).also { it.weight = 1f }); eNumRow.addView(eHpText, lp(-2, -2, start = 6))
-                pNumRow.addView(pHpLabel, lp(-2, -2)); pNumRow.addView(View(context), lp(0, 1).also { it.weight = 1f }); pNumRow.addView(pHpText, lp(-2, -2, start = 6))
+                pNumRow.addView(pTypes, lp(-2, -2)); pNumRow.addView(pIcons, lp(-2, -2)); pNumRow.addView(View(context), lp(0, 1).also { it.weight = 1f }); pNumRow.addView(pHpText, lp(-2, -2, start = 6))
                 pXpRow.addView(pXp, lp(0, dpi(3), start = 0).also { it.weight = 1f }); pXpRow.addView(pXpText, lp(-2, -2, start = 5))
                 enemyCard.addView(eRow, lp(-1, -2)); enemyCard.addView(eNumRow, lp(-1, -2, top = 3)); enemyCard.addView(eHp, lp(-1, dpi(7), top = 3))
                 playerCard.addView(pRow, lp(-1, -2)); playerCard.addView(pNumRow, lp(-1, -2, top = 3)); playerCard.addView(pHp, lp(-1, dpi(7), top = 3)); playerCard.addView(pXpRow, lp(-1, -2, top = 3))
@@ -1166,7 +1199,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             1 -> {   // number inside the bar
                 for (c in listOf(enemyCard, playerCard)) c.setPadding(dpi(8), dpi(6), dpi(8), dpi(7))
                 nameRow(eRow, eName, eStatus, eLevel, symbols = eIcons)
-                nameRow(pRow, pName, pStatus, pLevel)
+                nameRow(pRow, pName, pStatus, pLevel, symbols = pIcons)
                 enemyCard.addView(eRow, lp(-1, -2)); enemyCard.addView(eHp, lp(-1, dpi(14), top = 5))
                 playerCard.addView(pRow, lp(-1, -2)); playerCard.addView(pHp, lp(-1, dpi(14), top = 5)); playerCard.addView(pXp, lp(-1, dpi(10), top = 3))
             }
@@ -1193,20 +1226,23 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         for (t in listOf(eLevel, pLevel)) sz(t, InfoBoxGeo.LV)
         val numSp = if (full) InfoBoxGeo.NUM else InfoBoxGeo.COMPACT_SP
         for (t in listOf(eHpText, pHpText)) sz(t, numSp)
-        sz(pHpLabel, InfoBoxGeo.NUM)
         sz(pXpText, InfoBoxGeo.XP)
-        for (i in 0 until eTypes.childCount) (eTypes.getChildAt(i) as? TextView)?.let { sz(it, InfoBoxGeo.CHIP) }
+        for (row in listOf(eTypes, pTypes)) for (i in 0 until row.childCount) (row.getChildAt(i) as? TextView)?.let { sz(it, InfoBoxGeo.CHIP) }
         eHpText.setTextColor(if (full) inkText() else inkSub())
         pHpText.setTextColor(if (full) inkText() else inkSub())
         // what shows
         eNumRow.visibility = vis(full && !inside)
         pNumRow.visibility = vis(full && !inside)
+        pNumRow.typesShown = typesOn
+        pNumRow.iconsOnly = partsReduced
+        pRow.dropAllowed = typesOn
+        if (inside) pIcons.visibility = vis(typesOn)
         eNumRow.typesShown = typesOn
         eNumRow.iconsOnly = partsReduced
         eRow.dropAllowed = typesOn
         if (inside) eIcons.visibility = vis(typesOn)
-        pXpRow.visibility = vis(wantXpBar && full && !inside)
-        pXp.visibility = vis(wantXpBar && full)
+        pXpRow.visibility = vis(xpBarVisible() && full && !inside)
+        pXp.visibility = vis(xpBarVisible() && full)
         pXpText.visibility = vis(xpTextShown())
         eRow.tight = cardsCompact
         pRow.tight = cardsCompact
@@ -1564,8 +1600,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     fun setPlayerName(name: String) { pName.text = name }
 
-    /** Round 10 W7: our Pokémon's types; the type look washes our box with the first one's colour (nothing else shows them). */
+    /** Our types use the same chips / symbols as the wild card, and tint the type-colour look. */
     fun setPlayerTypes(types: List<Type>) {
+        playerTypes = types
+        buildPlayerTypes()
+        fitSquares()
         val c = types.firstOrNull()?.let { Ui.typeColor(it) } ?: 0
         if (c == pTypeColor) return
         pTypeColor = c
@@ -1596,6 +1635,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     /** XP bar (3 dp, sky) and the "XP 640 / 1000" label. */
     fun setPlayerXp(current: Int, needed: Int, animate: Boolean, durationMs: Long = 450) {
+        if (animate) revealXpBar(durationMs)
         val f = (if (needed > 0) current.toFloat() / needed else 1f).coerceIn(0f, 1f)
         pXpShown = f
         xpTrace?.invoke("bar ${"%.2f".format(java.util.Locale.US, f)}${if (animate) " slide" else ""}")
@@ -1685,7 +1725,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val text = inkText()
         val sub = inkSub()
         eName.setTextColor(text); pName.setTextColor(text)
-        pHpLabel.setTextColor(sub); pXpText.setTextColor(sub)
+        pXpText.setTextColor(sub)
         val full = !cardsCompact
         eHpText.setTextColor(if (full) text else sub); pHpText.setTextColor(if (full) text else sub)
         eLevel.setTextColor(if (eLvl > 0) levelColor(eLvl) else sub)
@@ -1699,7 +1739,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         pStatus.dark = ink != null
         if (enemyTypes.isNotEmpty()) buildEnemyTypes()
         val sh = InfoBoxSkin.textShadow(look)
-        for (t in listOf(eName, pName, eLevel, pLevel, eHpText, pHpText, pHpLabel, pXpText)) {
+        for (t in listOf(eName, pName, eLevel, pLevel, eHpText, pHpText, pXpText)) {
             if (sh == null) t.setShadowLayer(0f, 0f, 0f, 0)
             else t.setShadowLayer(Ui.dp(context, sh.radiusDp), Ui.dp(context, sh.dxDp), Ui.dp(context, sh.dyDp), sh.color)
         }
@@ -2056,6 +2096,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         stopXp()
         xpFx = e
         xpFillSpec = fill
+        revealXpBar(plan.lastLanding.toLong())
         xpLastLandingMs = plan.lastLanding.toLong()
         xpPlan = plan
         fx.add(e)
@@ -2323,6 +2364,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     /** Stops every running animation and removes leftovers (floating numbers too); sprites keep whatever they show. */
     fun cancelAnimations() {
+        removeCallbacks(hideXpBar); xpArriving = false; updateCards()
+        pXp.animate().cancel(); pXp.translationY = 0f
         stopAnimators()
         fx.clear()
         moveFx.clear()
@@ -2347,6 +2390,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun resetFx() {
         stopAnimators()
         fx.clear()
+        removeCallbacks(hideXpBar); xpArriving = false; updateCards()
         xpFillSpec = null   // the save is redrawn next: a late fill step must not undo it
         moveFx.clear()
         clearBall()

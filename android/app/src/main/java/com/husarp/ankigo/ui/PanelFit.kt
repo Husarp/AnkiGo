@@ -228,14 +228,14 @@ internal object ArenaGeo {
      * numbers show. [reduced]: the optional parts are dropped (the wild type chips become symbols, no XP number); only picture mode
      * asks for it ([StageGeo]). Compact cards (the pref, small windows) keep their own shape: name + a thin bar with the HP number.
      */
-    fun cards(floor: Float, compact: Boolean, xp: Boolean, style: InfoBoxStyle = InfoBoxStyle.DEFAULT, reduced: Boolean = false): Cards {
+    fun cards(floor: Float, compact: Boolean, xp: Boolean, style: InfoBoxStyle = InfoBoxStyle.DEFAULT, reduced: Boolean = false, xpBar: Boolean = true): Cards {
         val k = max(1f, floor / 12f)
         if (compact) {
             val h = InfoBoxGeo.compactHeight(floor)
             return Cards(140f * k, h, 140f * k, h)
         }
         val w = InfoBoxGeo.width(floor)
-        return Cards(w, InfoBoxGeo.height(style, true, floor, xp, reduced), w, InfoBoxGeo.height(style, false, floor, xp, reduced))
+        return Cards(w, InfoBoxGeo.height(style, true, floor, xp, reduced), w, InfoBoxGeo.height(style, false, floor, xp, reduced, xpBar))
     }
 
     /**

@@ -99,8 +99,12 @@ object CompareTable {
      * along the first-branch path picked → final (a step without a level, like a stone or friendship, adds nothing). Equals
      * [Mon.level] when [picked] is already final or the Pokémon is already past those levels.
      */
-    fun evolvedLevel(data: GameData, picked: Species, mon: Mon): Int {
-        var level = mon.level
+    fun evolvedLevel(data: GameData, picked: Species, mon: Mon): Int =
+        maxOf(mon.level, requiredEvolutionLevel(data, picked))
+
+    /** Only the form requirement; a chosen common level may be below a real level. */
+    private fun requiredEvolutionLevel(data: GameData, picked: Species): Int {
+        var level = 1
         var cur = picked
         val seen = HashSet<Int>().also { it += picked.num }
         while (true) {
@@ -163,7 +167,7 @@ object CompareTable {
         return Cell.Text(n.label, sub = listOf(eff))
     }
 
-    fun build(data: GameData, state: GameState, picks: List<ComparePick>, evolved: Boolean): CompareData {
+    fun build(data: GameData, state: GameState, picks: List<ComparePick>, evolved: Boolean, sameLevel: Int? = null): CompareData {
         val columns = picks.mapNotNull { p ->
             when (p) {
                 is ComparePick.Owned -> state.mon(p.uid)?.let { m -> data.species[m.species]?.let { sp -> Triple(p, m, sp) } }
@@ -186,19 +190,22 @@ object CompareTable {
 
         val owned = columns.map { it.mon }
         val anyOwned = owned.any { it != null }
-        // "Fully evolved": an owned column whose form changed shows the level its final form is first reached at (R9-B10)
-        val levels: List<Int?> = columns.map { c ->
-            c.mon?.let { m -> if (evolved && c.shown.num != c.picked.num) evolvedLevel(data, c.picked, m) else m.level }
-        }
+        val minimum = columns.mapNotNull { c -> c.mon?.let { m ->
+            if (evolved) evolvedLevel(data, c.picked, m) else m.level
+        } }.maxOrNull() ?: 1
+        val required = if (evolved) columns.filter { it.mon != null }
+            .maxOfOrNull { requiredEvolutionLevel(data, it.picked) } ?: 1 else 1
+        val common = if (evolved || sameLevel != null) maxOf(sameLevel ?: minimum, required) else null
+        val levels: List<Int?> = columns.map { c -> c.mon?.let { common ?: it.level } }
         val stats: List<Stats?> = columns.mapIndexed { i, c -> c.mon?.let { StatCalc.stats(c.shown, it, levels[i] ?: it.level) } }
         val rows = ArrayList<CompareRow>()
 
         if (anyOwned) {
             val row = numeric("level", "Level", levels) { "Lv $it" }
-            // the small grey line "evolves" marks a level raised by the evolution (a sub line, so a narrow column never wraps the "Lv")
+            // Mark every simulated level and show its real starting level.
             rows += row.copy(cells = row.cells.mapIndexed { i, c ->
-                val raised = owned[i]?.let { m -> (levels[i] ?: m.level) > m.level } == true
-                if (raised && c is Cell.Text) c.copy(sub = c.sub + "evolves") else c
+                val raised = owned[i]?.let { m -> (levels[i] ?: m.level) != m.level } == true
+                if (raised && c is Cell.Text) c.copy(sub = c.sub + "${if (levels[i]!! > owned[i]!!.level) "raised" else "adjusted"} from ${owned[i]!!.level}") else c
             })
         }
         rows += CompareRow("types", "Types", columns.map { Cell.TypeChips(it.shown.types) })

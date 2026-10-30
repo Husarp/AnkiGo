@@ -337,9 +337,10 @@ internal class SortSheet(
         }, LinearLayout.LayoutParams(-1, -2))
 
         go = Ui.text(ctx, 14f, 900, R.color.ag_crust).apply {
+            setTextColor(Ui.onAccent(ctx))
             gravity = Gravity.CENTER
             minHeight = Ui.dp(ctx, 48)
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 14, ctx)
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx)
             setOnClickListener { dismiss() }
         }
         sheet.addView(go, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10) })
@@ -365,7 +366,7 @@ internal class SortSheet(
     }
 
     private fun section(title: String): View = Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply {
-        text = title.uppercase()
+        Ui.decorateHeading(this, title)
         letterSpacing = 0.06f
         setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 10), 0, Ui.dp(ctx, 2))
     }

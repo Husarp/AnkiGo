@@ -646,10 +646,10 @@ open class R17C4TimingTest {
             // Snore awake / asleep
             assertEquals(setOf("tackle"), picks(choice, mon(F.HITTER, "snore", "tackle"), mon(F.TANK)))
             assertTrue("snore" in picks(choice, mon(F.HITTER, "snore", "tackle"), mon(F.TANK)) { it.player.status = "slp" })
-            // Poltergeist: wild Pokémon hold no item, so the Main never picks it (R17C FIX-A: CoreRules.MAIN_NEVER_PICKED, also with an item on the target);
+            // Poltergeist is excluded while the wild target holds no item; item transfers can make it usable.
             // the wild one picks it against a Main's item (R17CFixAChoiceTest)
             assertEquals(setOf("tackle"), picks(choice, mon(F.HITTER, "poltergeist", "tackle"), mon(F.TANK)))
-            assertEquals(setOf("tackle"), picks(choice, mon(F.HITTER, "poltergeist", "tackle"), mon(F.TANK).also { it.heldItem = "oran-berry" }))
+            assertTrue("poltergeist" in picks(choice, mon(F.HITTER, "poltergeist", "tackle"), mon(F.TANK).also { it.heldItem = "lucky-egg" }))
             // Synchronoise without / with a shared type
             assertEquals(setOf("tackle"), picks(choice, mon(F.HITTER, "synchronoise", "tackle"), mon(F.TANK)))
             assertTrue("synchronoise" in picks(choice, mon(F.HITTER, "synchronoise", "tackle"), mon(F.FLYER)))

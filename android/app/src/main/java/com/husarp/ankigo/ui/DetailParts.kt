@@ -233,7 +233,7 @@ object DetailParts {
      * One stat row: label, value (+ ▲/▼ [dir] in green/red), coloured bar of [frac], and the small grey [base] at the end
      * (null = none, the Pokédex). [wholeRow] (R18-G, PLAN 241): the whole row, at least 48 dp tall, opens the explanation, not just the label.
      */
-    fun statRow(a: Context, stat: Stat, value: Int, frac: Float, dir: Int, base: Int?, compact: Boolean, wholeRow: Boolean = false): View = LinearLayout(a).apply {
+    fun statRow(a: Context, stat: Stat, value: Int, frac: Float, dir: Int, base: Int?, compact: Boolean, wholeRow: Boolean = false, stage: Int = 0): View = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         val v = Ui.dp(a, if (compact) 2 else 3)
@@ -241,12 +241,11 @@ object DetailParts {
         val label = Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = DetailMath.LABELS[stat.ordinal]; gravity = Gravity.CENTER_VERTICAL }
         if (wholeRow) tapRow(this, StatInfo.of(stat))
         addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(Ui.dp(a, 32), -2))
-        addView(Ui.text(a, 13f, 900, R.color.ag_text).apply { text = value.toString(); gravity = Gravity.END }, LinearLayout.LayoutParams(Ui.dp(a, 34), -2))
+        addView(Ui.text(a, 13f, 900, if (stage > 0) R.color.ag_green else if (stage < 0) R.color.ag_red else R.color.ag_text).apply { text = if (stage == 0) value.toString() else kotlin.math.max(1, (value * com.husarp.ankigo.game.BattleEngine.stageMult(stage)).toInt()).toString(); gravity = Gravity.END }, LinearLayout.LayoutParams(Ui.dp(a, 34), -2))
         addView(Ui.text(a, 11f, 900, if (dir > 0) R.color.ag_green else R.color.ag_red).apply {
             text = DetailMath.arrow(dir); gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(Ui.dp(a, 16), -2))
-        val bar = BarView(a)
-        bar.set(frac, Ui.c(a, DetailMath.statColor(stat)), false)
+        val bar = StatChangeBar(a, frac, stage, Ui.c(a, DetailMath.statColor(stat)))
         addView(bar, LinearLayout.LayoutParams(0, Ui.dp(a, 7), 1f).also { it.marginEnd = Ui.dp(a, 8) })
         if (base != null) addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = base.toString(); gravity = Gravity.END },
             LinearLayout.LayoutParams(Ui.dp(a, 28), -2))

@@ -53,7 +53,7 @@ class EvoTreeView(ctx: Context, data: GameData, root: EvoNode, private val curre
             orientation = VERTICAL
             node.children.forEach { c ->
                 val arrow = DetailSections.ArrowView(a, 30)
-                val label = c.via?.let { v -> Ui.text(a, 9.5f, 800, R.color.ag_sub0).apply { text = EvoLine.method(data, v); gravity = Gravity.CENTER } }
+                val label = c.via?.let { v -> Ui.text(a, 9.5f, 800, R.color.ag_sub0).apply { text = EvoLine.method(data, v); gravity = Gravity.CENTER; condition(this, data, v) } }
                 val col = ArrowCol(a, arrow, label)
                 val row = LinearLayout(a).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
                 row.addView(col, LayoutParams(-2, -2))
@@ -80,7 +80,7 @@ class EvoTreeView(ctx: Context, data: GameData, root: EvoNode, private val curre
                 gravity = Gravity.CENTER_HORIZONTAL
                 addView(spot(a, c, grid = true), LayoutParams(-2, -2))
                 c.via?.let { v ->
-                    addView(Ui.text(a, 9.5f, 800, R.color.ag_sub0).apply { text = EvoLine.method(data, v); gravity = Gravity.CENTER }.also { gridLabels += it },
+                    addView(Ui.text(a, 9.5f, 800, R.color.ag_sub0).apply { text = EvoLine.method(data, v); gravity = Gravity.CENTER; condition(this, data, v) }.also { gridLabels += it },
                         LayoutParams(-2, -2))
                 }
             })
@@ -94,6 +94,36 @@ class EvoTreeView(ctx: Context, data: GameData, root: EvoNode, private val curre
             addView(col, LayoutParams(-2, -2))
             addView(grid, LayoutParams(-2, -2))
             joins += Join(this, true)
+        }
+    }
+
+    private fun condition(label: TextView, data: GameData, e: com.husarp.ankigo.game.Evolution) {
+        val a = label.context
+        label.setTextColor(Ui.c(a, R.color.ag_mauve))
+        label.background = Ui.rounded(Ui.c(a, R.color.ag_s0), 5, a)
+        label.setPadding(Ui.dp(a, 4), Ui.dp(a, 5), Ui.dp(a, 4), Ui.dp(a, 5))
+        label.contentDescription = "Explain ${label.text}"
+        label.setOnClickListener {
+            val dialog = android.app.Dialog(a).apply {
+                requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+                setCanceledOnTouchOutside(true)
+            }
+            val body = LinearLayout(a).apply {
+                orientation = VERTICAL
+                setPadding(Ui.dp(a, 20), Ui.dp(a, 12), Ui.dp(a, 20), Ui.dp(a, 20))
+                addView(Ui.text(a, 18f, 900, R.color.ag_mauve).apply { text = EvoLine.method(data, e) })
+                addView(Ui.text(a, 14f, 700, R.color.ag_text).apply { text = EvoLine.explanation(data, e) })
+                addView(DetailParts.secondaryButton(a, "Close") { dialog.dismiss() })
+            }
+            dialog.setContentView(SheetKit.dialog(dialog, android.widget.ScrollView(a).apply { addView(body) }))
+            dialog.window?.apply {
+                setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+                addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+                setDimAmount(.48f)
+                setGravity(Gravity.BOTTOM)
+            }
+            dialog.show()
+            dialog.window?.setLayout(minOf(a.resources.displayMetrics.widthPixels, Ui.dp(a, 600)), -2)
         }
     }
 

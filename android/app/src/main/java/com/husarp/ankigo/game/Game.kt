@@ -62,6 +62,10 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      */
     private fun applyQueuedMain(): List<GameEvent> {
         val uid = state.pendingMain ?: return emptyList()
+        switchBlocker()?.let {
+            state.pendingMain = null; state.pendingTeam = null; state.pendingCycle = false
+            return listOf(GameEvent.Info(it))
+        }
         val team = state.pendingTeam
         state.pendingTeam = null
         val cycle = state.pendingCycle
@@ -144,6 +148,12 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * a Main that fainted is healed at once and the wild one is lost (Ankimon), then the next encounter starts if the fight is over.
      */
     private fun settleFight(battle: Battle, main: Mon, events: MutableList<GameEvent>) {
+        if (battle.field.player[RemainingMoves.ESCAPED] == 1) {
+            state.battle = null
+            events += ensureEncounter()
+            refreshNext()
+            return
+        }
         if (battle.wild.hp <= 0) {
             resolveWild(battle, main, events)
             state.battle = null
@@ -474,6 +484,16 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             battle?.switchOutMain(data, oldMon) // R17C-1: the rule sets' onLeave, then a fresh side for the new main
             events += GameEvent.MainChanged(main.uid, main.name)
             refreshNext() // the wild level follows the main's level
+            if (battle != null && battle.wild.hp > 0 && main.hp > 0 && !free) {
+                val entry = BattleEngine.Round(data, battle, main, 1.0, 1.0, rng)
+                Hazards.onEnter(entry, true)
+                entry.checkFaint(true)
+                if (battle.field.player.any { (id, layers) -> id in Hazards.hazards && layers > 0 })
+                    battle.player.volatiles["hazards.entered"] = 1
+                events += entry.events
+            } else if (free && battle != null && battle.field.player.any { (id, layers) -> id in Hazards.hazards && layers > 0 }) {
+                battle.player.volatiles["hazards.entered"] = 1
+            }
             if (!free && battle != null && oldMon != null && switchCostsAHit(battle, oldMon, main)) { // R19-P: [free] = a better copy took the place (swapCopies), nothing retreated
                 val hit = switchHit(battle, main)
                 events += hit
@@ -483,7 +503,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 val settle = mutableListOf<GameEvent>()
                 settleFight(battle, main, settle)
                 events += settle
-                text = SwitchHitText.withFaintedIn(message)
+                text = if (events.any { it is GameEvent.Fainted && it.player })
+                    message.trimEnd('.') + " — it fainted on entry: it is back at full HP, but the wild one is lost."
+                else SwitchHitText.withFaintedIn(message)
             }
         }
         return ActionResult(true, text, events)
@@ -514,19 +536,31 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return hit
     }
 
+    /** Explicit, revalidated evolution choice; item evolutions keep the existing use-item behavior. */
+    fun chooseEvolution(uid: String, to: Int): ActionResult {
+        val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
+        val evo = Progression.readyEvolutions(data, state, mon, clock()).firstOrNull { it.to == to }
+            ?: return ActionResult(false, "Evolution conditions are no longer met.")
+        Progression.evolutionItem(evo)?.let { return useItem(it, uid, to) }
+        val events = mutableListOf<GameEvent>()
+        Progression.evolve(data, state, mon, evo, rng, events)
+        Achievements.settle(data, state, clock(), events)
+        return ActionResult(true, "Evolved into ${mon.name}!", events)
+    }
+
     /**
      * R13 Part C: uses [item] from the Bag ([ItemUse.use]). A healing or evolution item used on the Main in a fight takes one turn
      * (no dot is filled, no round counted), like a switch: after it works the wild one attacks the Main once ([switchHit], marker with [item]); your next answer
      * attacks as normal. The same moments as a switch are free of it ([itemTakesATurn]); items given to hold, TMs, fossils and items
      * used on another Pokémon never take a turn, and balls / escape items have their own rules ([throwBall], [escape]).
      */
-    fun useItem(item: String, targetUid: String?): ActionResult {
+    fun useItem(item: String, targetUid: String?, evolutionTo: Int? = null): ActionResult {
         val main = state.main
         val battle = state.battle
         val kind = Items.def(item)?.kind
         val onMain = main != null && (targetUid ?: if (kind == ItemKind.HEAL) main.uid else null) == main.uid
         val turn = onMain && battle != null && (kind == ItemKind.HEAL || kind == ItemKind.EVOLUTION) && itemTakesATurn(battle, main!!)
-        val r = ItemUse.use(data, state, item, targetUid, rng, clock())
+        val r = ItemUse.use(data, state, item, targetUid, rng, clock(), evolutionTo)
         if (!r.ok || !turn || battle == null || state.battle !== battle) return r
         val mon = state.main ?: return r
         if (mon.hp <= 0 || battle.wild.hp <= 0) return r
@@ -543,6 +577,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
     /** Puts [uid] first. A Pokémon from the box takes a free team place, or the last member's when the team is full. */
     internal fun setMain(uid: String): ActionResult {
+        if (uid != state.main?.uid) switchBlocker()?.let { return ActionResult(false, it) }
         state.pendingTeam = null; state.pendingCycle = false
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         val old = state.team.firstOrNull()
@@ -558,6 +593,13 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return changed(message, old)
     }
 
+    /** The current trapping source and rounds left, shared by every switch entry point. */
+    fun switchBlocker(): String? {
+        val b = state.battle ?: return null
+        val main = state.main ?: return null
+        return Hazards.blocker(SimpleView.of(data, b, main))
+    }
+
     /**
      * PLAN 206 (decided): a switch made while a card shows takes effect right after that card is answered, so nobody picks the
      * fighter after seeing the question. The card you saw is fought by the Pokémon that is out; the switch's one wild attack stays
@@ -571,6 +613,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * [onAnswer] (the own study screen and the companion / PiP mode alike).
      */
     fun requestMain(uid: String, cardShowing: Boolean = true): ActionResult {
+        if (uid != state.main?.uid) switchBlocker()?.let { return ActionResult(false, it) }
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         state.pendingTeam = null
         val main = state.main
@@ -606,6 +649,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * ([GameState.pendingCycle]).
      */
     fun cycleMain(cardShowing: Boolean = true): ActionResult {
+        switchBlocker()?.let { return ActionResult(false, it) }
         cycleMainBlocker()?.let { return ActionResult(false, it) }
         if (cardShowing && SwitchQueue.waitsForAnswer(state)) {
             val r = requestMain(state.team[1], cardShowing = true)
@@ -661,6 +705,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     private fun editTeam(team: List<String>, message: String, cardShowing: Boolean = true): ActionResult {
         val old = state.team.firstOrNull()
         val incoming = team.firstOrNull()
+        if (incoming != old) switchBlocker()?.let { return ActionResult(false, it) }
         if (incoming != null && incoming != old && cardShowing && SwitchQueue.waitsForAnswer(state)) {
             state.pendingMain = incoming; state.pendingCycle = false; state.pendingTeam = team
             val name = state.mon(incoming)!!.name
@@ -715,6 +760,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     }
 
     fun release(uid: String, cardShowing: Boolean = true): ActionResult {
+        if (uid == state.main?.uid) switchBlocker()?.let { return ActionResult(false, it) }
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         if (state.main?.uid == uid && cardShowing && SwitchQueue.waitsForAnswer(state)) return ActionResult(false, "Switch to another Pokémon before releasing your Main during a fight.")
         if (mon.favourite) return ActionResult(false, "Remove ${mon.shownName} from favourites first.")

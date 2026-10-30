@@ -21,7 +21,7 @@ object MoveFxCatalog {
         Pick("earthquake", MoveLook.EARTHQUAKE, Type.GROUND, Category.PHYSICAL, 100, FxKit.GROUND),
     )
 
-    /** Types that have a picked move (any category) -> their kit (rule 2); the others use PLAIN (rule 3). */
+    /** Types with an original picked move retain their kit; the other nine use the tinted C texture kits. */
     private val kits: Map<Type, FxKit> = picks.associate { it.type to it.kit }
 
     /**
@@ -31,14 +31,23 @@ object MoveFxCatalog {
     fun plan(moveId: String, type: Type?, category: Category, power: Int): MoveFxPlan {
         val t = type ?: Type.NORMAL
         val palette = FxPalettes.of(t)
+        // Only these four picked moves get new behaviour; other moves keep their rules and looks.
+        val behaviour = when (moveId) {
+            "absorb" -> MoveLook.DRAIN
+            "recover" -> MoveLook.HEAL
+            "furyswipes" -> MoveLook.MULTI_HIT
+            "doubleedge" -> MoveLook.RECOIL
+            else -> null
+        }
+        if (behaviour != null) return MoveFxPlan(behaviour, 1f, kits[t] ?: FxKit.valueOf(t.name), palette)
         // The picked moves themselves.
         picks.firstOrNull { it.id == moveId }?.let { return MoveFxPlan(it.look, 1f, it.kit, FxPalettes.of(it.type)) }
         // Rule 1: same type and category as a pick.
         picks.firstOrNull { it.type == t && it.category == category }?.let {
             return MoveFxPlan(it.look, k(power, it.power), it.kit, palette)
         }
-        // Rules 2 and 3: the category template, with the type's own kit or PLAIN.
-        val kit = kits[t] ?: FxKit.PLAIN
+        // Category templates retain the original kits or use the new type-tinted C kits.
+        val kit = kits[t] ?: FxKit.valueOf(t.name)
         return when (category) {
             Category.PHYSICAL -> MoveFxPlan(MoveLook.HIT_TEMPLATE, k(power, 40), kit, palette)
             Category.SPECIAL -> MoveFxPlan(MoveLook.ORB_TEMPLATE, k(power, 80), kit, palette)

@@ -36,7 +36,7 @@ class ChartMetricsTest {
         fun names(g: ChartGroup) = ChartMetric.menu.first { it.first == g }.second.map { it.label }
         assertEquals(listOf("Study", "Game", "Collection"), ChartMetric.menu.map { it.first.label })
         assertEquals(
-            listOf("Reviews", "Time studied", "Retention", "New cards", "Buttons pressed", "Card states", "Due forecast", "Streak calendar"),
+            listOf("Reviews", "Time studied", "Seconds per card", "Retention", "New cards", "Buttons pressed", "Card states", "Due forecast", "Streak calendar"),
             names(ChartGroup.STUDY),
         )
         assertEquals(

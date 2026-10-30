@@ -64,6 +64,74 @@ internal object FieldRules : BattleRules {
     /** Gravity: every accuracy times 5/3. */
     private const val GRAVITY_ACCURACY = 5.0 / 3.0
 
+    /** Live chip explanation. Uses the same effective types, grounding and constants as the rules. */
+    fun explain(key: String, v: BattleView): String {
+        val n = "Your ${v.mon(true).name}"
+        val types = v.types(true)
+        fun times(x: Double) = "×" + "%.2f".format(java.util.Locale.US, x).trimEnd('0').trimEnd('.')
+        val grounded = v.grounded(true)
+        val lines = mutableListOf<String>()
+        if (key in WEATHERS && v.weather() == null) return "Weather effects are suppressed by Cloud Nine or Air Lock."
+        when (key) {
+            "rain", "sun" -> {
+                val boosted = if (key == "rain") Type.WATER else Type.FIRE
+                val weakened = if (key == "rain") Type.FIRE else Type.WATER
+                lines += "${boosted.label} moves ${times(WEATHER_BOOST)} damage; ${weakened.label} moves ${times(WEATHER_WEAKEN)} damage for both sides."
+                if (boosted in types) lines += "$n's ${boosted.label} moves ${times(WEATHER_BOOST)} damage."
+                if (weakened in types) lines += "$n's ${weakened.label} moves ${times(WEATHER_WEAKEN)} damage."
+                if (key == "sun") lines += "Nobody can be frozen. Hydro Steam is boosted instead of weakened."
+            }
+            "sand", "hail" -> {
+                val proof = if (key == "sand") types.any { it in SAND_PROOF_TYPES } || v.ability(true) in SAND_PROOF_ABILITIES
+                    else types.any { it in HAIL_PROOF_TYPES } || v.ability(true) in HAIL_PROOF_ABILITIES
+                lines += if (proof) "$n takes no weather damage." else "$n loses ${max(1, v.maxHp(true) / RESIDUAL_DIVISOR)} HP (1/$RESIDUAL_DIVISOR max HP) at the end of each turn, except the weather's last turn."
+                if (key == "sand" && Type.ROCK in types) lines += "$n's Sp. Def ${times(DEFENSE_BOOST)}."
+            }
+            "snow" -> lines += if (Type.ICE in types) "$n's Defense ${times(DEFENSE_BOOST)}." else "$n gets no Defense boost; only Ice types do. Snow does no weather damage."
+            "electric", "grassy", "misty", "psychic" -> {
+                lines += if (grounded) "$n is on the ground, so the terrain affects it." else "$n is off the ground, so the terrain does not affect it."
+                if (grounded) when (key) {
+                    "electric" -> lines += "$n's Electric moves ${times(TERRAIN_BOOST)} damage; it can't fall asleep."
+                    "grassy" -> lines += "$n's Grass moves ${times(TERRAIN_BOOST)} damage; heals ${max(1, v.maxHp(true) / RESIDUAL_DIVISOR)} HP (1/$RESIDUAL_DIVISOR max HP) each turn unless healing is blocked. Earthquake, Bulldoze and Magnitude hit it for ${times(TERRAIN_WEAKEN)} damage."
+                    "misty" -> lines += "$n can't get a status or confusion; Dragon moves hit it for ${times(TERRAIN_WEAKEN)} damage."
+                    "psychic" -> lines += "$n's Psychic moves ${times(TERRAIN_BOOST)} damage; opposing moves with increased priority can't hit it."
+                }
+                lines += "The same rules apply to a grounded wild Pokémon."
+            }
+            "trickroom" -> lines += "$n ${if (actsFirst(v, true)) "moves first" else "moves second"} among moves with the same priority; the slower Pokémon goes first."
+            "magicroom" -> lines += "Held items do nothing for either active Pokémon. $n keeps its item, and its effects return when Magic Room ends."
+            "wonderroom" -> lines += "$n's Defense and Sp. Def are swapped, as are the wild Pokémon's."
+            "gravity" -> lines += "Both Pokémon are on the ground. Move accuracy ${times(GRAVITY_ACCURACY)}. Fly, Bounce, Sky Drop, High Jump Kick, Jump Kick, Flying Press, Magnet Rise, Telekinesis and Splash can't be used."
+            "mudsport" -> lines += "Both sides' Electric moves deal one third of their damage."
+            "watersport" -> lines += "Both sides' Fire moves deal one third of their damage."
+            "iondeluge" -> lines += "Both sides' Normal moves become Electric for the rest of this turn."
+        }
+        val ability = v.ability(true)
+        val weatherAbility = when (key) {
+            "rain" -> setOf("swiftswim", "raindish", "dryskin", "hydration")
+            "sun" -> setOf("chlorophyll", "solarpower", "dryskin", "leafguard", "flowergift", "harvest")
+            "sand" -> setOf("sandrush", "sandforce", "sandveil")
+            "hail", "snow" -> setOf("slushrush", "icebody", "snowcloak")
+            "electric" -> if (grounded) setOf("surgesurfer") else emptySet()
+            else -> emptySet()
+        }
+        if (ability in weatherAbility) AbilityText.of(ability)?.let { lines += "$n — ${AbilityText.name(ability)}: $it" }
+        // Special field interactions only for moves this Pokémon actually knows.
+        val related = when (key) {
+            "rain" -> RAIN_SURE_MOVES + SOLAR_MOVES + setOf("weatherball", "electroshot")
+            "sun" -> RAIN_SURE_MOVES + SOLAR_MOVES + setOf("weatherball", "growth", "hydrosteam")
+            "hail", "snow" -> SOLAR_MOVES + setOf("weatherball", "blizzard")
+            "sand" -> SOLAR_MOVES + setOf("weatherball")
+            "electric" -> setOf("terrainpulse", "risingvoltage")
+            "grassy" -> setOf("terrainpulse", "grassyglide")
+            "misty" -> setOf("terrainpulse", "mistyexplosion")
+            "psychic" -> setOf("terrainpulse", "expandingforce")
+            else -> emptySet()
+        }
+        for (move in v.moves(true).filter { it.id in related }) lines += "$n's ${move.name}: ${describe(move).joinToString(" ")}"
+        return lines.joinToString(" ")
+    }
+
     // ---- keys ----
     private const val TRICK_ROOM = "trickroom"
     private const val GRAVITY = "gravity"
@@ -97,6 +165,7 @@ internal object FieldRules : BattleRules {
     private class Room(val key: String, val start: (String) -> String, val label: String, val end: String?)
 
     private val ROOMS: Map<String, Room> = listOf(
+        Room("magicroom", { "Held items were disabled for five turns!" }, "Magic Room", "Magic Room wore off!"),
         Room(TRICK_ROOM, { "$it twisted the dimensions!" }, "Trick Room", "The twisted dimensions returned to normal!"),
         Room(GRAVITY, { "Gravity intensified!" }, "Gravity", "Gravity returned to normal!"),
         Room(WONDER_ROOM, { "It created a bizarre area in which the Defense and Sp. Def stats are swapped!" }, "Wonder Room",
@@ -110,7 +179,7 @@ internal object FieldRules : BattleRules {
     private val WEATHER_MOVES = mapOf("raindance" to "rain", "sunnyday" to "sun", "sandstorm" to "sand", "hail" to "hail", "snowscape" to "snow", "chillyreception" to "snow")
     private val TERRAIN_MOVES = mapOf("electricterrain" to "electric", "grassyterrain" to "grassy", "mistyterrain" to "misty", "psychicterrain" to "psychic")
     /** The rooms that are switched off by using the move again; the other rooms fail when they are already up. */
-    private val TOGGLE_ROOMS = setOf(TRICK_ROOM, WONDER_ROOM)
+    private val TOGGLE_ROOMS = setOf(TRICK_ROOM, WONDER_ROOM, "magicroom")
     private val ROOM_MOVES = ROOMS.keys
 
     /** Never misses in rain, 50 % accurate in harsh sunlight. */
@@ -510,6 +579,7 @@ internal object FieldRules : BattleRules {
         WEATHER_MOVES[move.id]?.let { return v.field.weather != it }
         TERRAIN_MOVES[move.id]?.let { return v.field.terrain != it }
         return when (move.id) {
+            "magicroom" -> if (room(v, "magicroom")) v.mon(p).heldItem != null else v.mon(!p).heldItem != null
             TRICK_ROOM -> speedOf(v, p) != speedOf(v, !p) && !actsFirst(v, p) // only when it turns a slower move order around in your favour
             WONDER_ROOM, GRAVITY, MUD_SPORT, WATER_SPORT, ION_DELUGE -> !room(v, move.id)
             "defog" -> {
@@ -555,6 +625,7 @@ internal object FieldRules : BattleRules {
                 "at the end of each turn. Earthquake, Bulldoze and Magnitude deal half damage to them."
             "mistyterrain" -> "Fills the air with mist for $TERRAIN_TURNS turns. Pokémon on the ground can't get a status or become confused, and Dragon moves deal half damage to them."
             "psychicterrain" -> "Twists the ground for $TERRAIN_TURNS turns. Pokémon on the ground deal 1.3 times the damage with Psychic moves and can't be hit by moves that go first."
+            "magicroom" -> "For $ROOM_TURNS turns held items do nothing. Using it again ends it."
             TRICK_ROOM -> "For $ROOM_TURNS turns the slower Pokémon moves first. Using it again ends it."
             GRAVITY -> "For $ROOM_TURNS turns every Pokémon is on the ground and every move is two thirds more accurate. Fly, Bounce, Sky Drop, High Jump Kick, " +
                 "Jump Kick, Flying Press, Magnet Rise, Telekinesis and Splash can't be used."

@@ -100,7 +100,7 @@ internal object MoveControl : BattleRules {
     /** Telekinesis fails on these species (national numbers: Diglett, Dugtrio, Sandygast, Palossand). */
     private val NO_TELEKINESIS = setOf(50, 51, 769, 770)
     /** Moves that call another move: never called themselves, so a call never loops. */
-    private val CALLERS = setOf("metronome", "sleeptalk", "copycat", "mirrormove", "mefirst", "naturepower", "assist")
+    private val CALLERS = setOf("metronome", "sleeptalk", "copycat", "mirrormove", "mefirst", "naturepower", "assist", "instruct")
     /** Mainline: Metronome can't call these (used only when the data has no `metronome` flag). */
     private val METRONOME_EXCLUDED = CALLERS + setOf(
         "afteryou", "belch", "bestow", "celebrate", "chatter", "counter", "covet", "craftyshield", "destinybond", "detect", "endure", "feint",
@@ -715,7 +715,7 @@ internal object MoveControl : BattleRules {
     // ---- calling moves ----
 
     /** A move another move may call: no never-picked move, no calling move, no move with a charge turn, a rest turn or a lock (those need their own turns). */
-    private fun callable(m: Move): Boolean =
+    internal fun callable(m: Move): Boolean =
         m.id != Tuning.STRUGGLE && m.id !in CoreRules.NEVER_PICKED && m.id !in CALLERS && !CoreRules.isCharge(m) && !CoreRules.isRecharge(m) &&
             m.selfVolatile != CoreRules.LOCKED && m.selfVolatile != CoreRules.UPROAR
 

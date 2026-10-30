@@ -32,7 +32,7 @@ internal class ViewSettingsSheet(
     class PanelHeightPart(val current: () -> Int, val set: (Int) -> Unit)
 
     /** The rows, top to bottom. */
-    enum class Part { SIZE, FACING, INFO_BOX, BARS, FRAME, CARD_OWN, COMPACT, BACKGROUND, HEIGHT }
+    enum class Part { SIZE, FACING, INFO_BOX, BARS, XP, FRAME, CARD_OWN, COMPACT, BACKGROUND, HEIGHT }
 
     /**
      * The rows in one vertical column (the page scrolls it). [onHeight] hears a pick in the Panel height row (0 Full, 1 Strip, 2 Mini); it is
@@ -45,7 +45,7 @@ internal class ViewSettingsSheet(
     }
 
     private fun section(title: String): View = Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply {
-        text = title.uppercase()
+        Ui.decorateHeading(this, title)
         letterSpacing = 0.06f
         setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 10), 0, Ui.dp(ctx, 2))
     }
@@ -76,6 +76,9 @@ internal class ViewSettingsSheet(
                 body.addView(hint("Which side of your Pokémon you see; swiping across it turns it."))
             }
             Part.INFO_BOX -> body.addView(LookChoosers.infoBox(ctx, boxed = true), choosers)
+            Part.XP -> body.addView(switchRow("Always show XP bar", "Otherwise shown only while XP comes in", ctx.getSharedPreferences("study", 0).getBoolean("alwaysShowXpBar", false)) {
+                ctx.getSharedPreferences("study", 0).edit().putBoolean("alwaysShowXpBar", it).apply()
+            }, full)
             Part.BARS -> body.addView(LookChoosers.bars(ctx, boxed = true), choosers)
             Part.FRAME -> body.addView(LookChoosers.frame(ctx, boxed = true), choosers)
             Part.CARD_OWN -> body.addView(switchRow("Stat card under its own Pokémon", "Without a background picture", AppPrefs.cardsUnderOwn(ctx)) { AppPrefs.setCardsUnderOwn(ctx, it) },

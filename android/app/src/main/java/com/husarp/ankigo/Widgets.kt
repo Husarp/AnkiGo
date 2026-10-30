@@ -58,6 +58,10 @@ object Widgets {
 
 /** Wide game widget (4x2): the next wild Pokémon as a silhouette, today's goal, the team. Drawn by ui/WidgetRender. */
 class MotivationWidget : AppWidgetProvider() {
+    override fun onDeleted(ctx: Context, appWidgetIds: IntArray) {
+        com.husarp.ankigo.ui.WidgetLooks.forget(ctx.getSharedPreferences("spike",0),"wide",appWidgetIds)
+    }
+
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
         val pr = goAsync()
         WidgetRender.async(pr) { WidgetRender.update(ctx, mgr, ids, WidgetRender.Kind.WIDE) }
@@ -128,6 +132,7 @@ class StudyWidget : AppWidgetProvider() {
     }
 
     override fun onDeleted(ctx: Context, appWidgetIds: IntArray) {
+        com.husarp.ankigo.ui.WidgetLooks.forget(ctx.getSharedPreferences("spike",0),"study",appWidgetIds)
         StudyWidgetPrefs.forget(ctx.getSharedPreferences("spike", 0), appWidgetIds)
     }
 
@@ -148,6 +153,7 @@ class StudyWidget : AppWidgetProvider() {
         rv.setOnClickPendingIntent(R.id.s_easy, b(ANSWER, 5, 4))
         rv.setOnClickPendingIntent(R.id.s_refresh, b(NEXT, 7))
         rv.setOnClickPendingIntent(R.id.s_deck, setup)
+        rv.setOnClickPendingIntent(R.id.s_deck_d, setup)
         rv.setOnClickPendingIntent(R.id.s_change_deck, setup)
         rv.setOnClickPendingIntent(R.id.s_change, setup)
 
@@ -165,11 +171,11 @@ class StudyWidget : AppWidgetProvider() {
             }
         }
         if (deckId == 0L) {
-            rv.setTextViewText(R.id.s_deck, "Choose a deck")
+            com.husarp.ankigo.ui.WidgetLooks.studyDeck(rv, "Choose a deck")
             show(ctx, rv, id, "Nothing due in AnkiDroid.", showBtn = false, answerBtns = false, changeBtn = true); return
         }
         val leaf = (deckName ?: "?").substringAfterLast("::")
-        rv.setTextViewText(R.id.s_deck, leaf)
+        com.husarp.ankigo.ui.WidgetLooks.studyDeck(rv, leaf)
         rv.setOnClickPendingIntent(R.id.s_open, PendingIntent.getActivities(ctx, id * 10 + 8,
             arrayOf(com.husarp.ankigo.ui.Nav.intent(ctx, com.husarp.ankigo.ui.Dest.STUDY)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), Intent(ctx, StudyActivity::class.java).putExtra("deckId", deckId).putExtra("deckName", deckName ?: "?")
@@ -219,13 +225,14 @@ class StudyWidget : AppWidgetProvider() {
     }
 
     private fun show(ctx: Context, rv: RemoteViews, id: Int, text: String, showBtn: Boolean, answerBtns: Boolean, changeBtn: Boolean = false) {
-        rv.setTextViewText(R.id.s_text, text)
+        com.husarp.ankigo.ui.WidgetLooks.studyText(rv, text)
         rv.setViewVisibility(R.id.s_show, if (showBtn) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.s_change, if (changeBtn) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.s_again, if (answerBtns) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.s_hard, if (answerBtns) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.s_good, if (answerBtns) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.s_easy, if (answerBtns) View.VISIBLE else View.GONE)
+        com.husarp.ankigo.ui.WidgetLooks.study(ctx, rv, id)
         AppWidgetManager.getInstance(ctx).updateAppWidget(id, rv)
     }
 }

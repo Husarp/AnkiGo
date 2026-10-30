@@ -97,9 +97,10 @@ class StatsChartView(ctx: Context) : View(ctx) {
 
     private fun drawBars(canvas: Canvas, s: ChartSeries) {
         val n = s.bars.size
-        val axis = StatsChartMath.axis(s.metric, peak(s))
+        val goals = s.bars.mapNotNull { it.dailyGoal }
+        val axis = StatsChartMath.axis(s.metric, max(peak(s), goals.maxOrNull()?.toDouble() ?: 0.0))
         plotL = axis.labels.maxOf { label.measureText(it) } + dp(10f)
-        plotR = width - dp(2f)
+        plotR = width - if (goals.isNotEmpty()) label.measureText("Goal ${goals.maxOrNull()}") + dp(10f) else dp(2f)
         plotT = dp(8f)
         plotB = height - dp(22f)
         val ph = plotB - plotT
@@ -144,11 +145,31 @@ class StatsChartView(ctx: Context) : View(ctx) {
             for ((part, v) in bar.values.withIndex()) {
                 if (v <= 0.0) continue
                 val h = (v / total).toFloat() * (plotB - top)
-                fill.color = tone(part); fill.alpha = alpha
+                fill.color = tone(part); fill.alpha = (alpha * (bar.dailyGoal?.let { if (total >= it) 1f else .22f + .55f * (total / it).toFloat() } ?: 1f)).toInt()
                 canvas.drawRect(cx - barW / 2, y - h, cx + barW / 2, y, fill)
                 y -= h
             }
             canvas.restore()
+        }
+
+        // Goal segments follow the stored goal of each day, over even taller bars.
+        if (goals.isNotEmpty()) {
+            val goalPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = color(R.color.ag_text); strokeWidth = dp(1.5f)
+                pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(5f), dp(4f)), 0f)
+            }
+            val goalPath = Path()
+            for ((i, b) in s.bars.withIndex()) b.dailyGoal?.let { g ->
+                val y = plotB - (g / axis.max).toFloat() * ph
+                if (i == 0) goalPath.moveTo(plotL, y) else goalPath.lineTo(plotL + i * slot, y)
+                goalPath.lineTo(plotL + (i + 1) * slot, y)
+            }
+            goalPaint.style = Paint.Style.STROKE
+            canvas.drawPath(goalPath, goalPaint)
+            label.textAlign = Paint.Align.LEFT
+            s.bars.last().dailyGoal?.let { g ->
+                canvas.drawText("Goal $g", plotR + dp(5f), plotB - (g / axis.max).toFloat() * ph - lh, label)
+            }
         }
 
         // x labels

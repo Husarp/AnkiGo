@@ -34,6 +34,10 @@ object MoveFx {
     }
 
     private fun buildLook(script: FxScript, look: MoveLook): FxTimes = when (look) {
+        MoveLook.DRAIN -> BehaviourFx.drain(script)
+        MoveLook.HEAL -> BehaviourFx.heal(script)
+        MoveLook.MULTI_HIT -> BehaviourFx.multi(script)
+        MoveLook.RECOIL -> BehaviourFx.recoil(script)
         MoveLook.TACKLE -> TackleFx.build(script)
         MoveLook.HIT_TEMPLATE -> HitTemplateFx.build(script)
         MoveLook.EMBER -> EmberFx.build(script) // R7-04

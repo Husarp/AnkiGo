@@ -1,176 +1,28 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Study widget (T34): app card (ag_base, 24dp), leaf deck name, 40dp icon buttons, mauve Show answer pill, coloured answer pills.
-     RemoteViews can't use Nunito, so sans-serif-medium/bold with the ag_* colours (both palettes by the night qualifier). -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@drawable/widget_game_bg"
-    android:orientation="vertical"
-    android:padding="12dp">
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/s_deck"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif-medium"
-            android:maxLines="1"
-            android:text="AnkiGo study"
-            android:textColor="@color/ag_sub0"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-
-        <ImageButton
-            android:id="@+id/s_change_deck"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/widget_icon_btn"
-            android:contentDescription="Change deck"
-            android:padding="9dp"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_swap"
-            android:tint="@color/ag_text" />
-        <ImageButton
-            android:id="@+id/s_refresh"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/widget_icon_btn"
-            android:contentDescription="s_refresh"
-            android:padding="9dp"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_sync"
-            android:tint="@color/ag_text" />
-        <ImageButton
-            android:id="@+id/s_open"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:layout_marginStart="4dp"
-            android:background="@drawable/widget_icon_btn"
-            android:contentDescription="s_open"
-            android:padding="9dp"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_open"
-            android:tint="@color/ag_text" />
+<?xml version='1.0' encoding='utf-8'?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent">
+  <ImageView android:id="@+id/s_surface" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" />
+  <ImageView android:id="@+id/s_surface_d" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" android:visibility="gone" />
+  <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:padding="12dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+      <FrameLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1">
+        <TextView android:id="@+id/s_deck" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:maxLines="1" android:text="AnkiGo study" android:textColor="@color/ag_sub0" android:textSize="13sp" android:textStyle="bold" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <TextView android:id="@+id/s_deck_d" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:maxLines="1" android:text="AnkiGo study" android:textColor="@color/ag_sub0" android:textSize="13sp" android:textStyle="bold" android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone" />
+      </FrameLayout>
+      <ImageButton android:id="@+id/s_change_deck" android:layout_width="36dp" android:layout_height="36dp" android:layout_marginStart="6dp" android:background="@drawable/widget_icon_btn" android:contentDescription="Change deck" android:padding="9dp" android:scaleType="fitCenter" android:src="@drawable/ic_swap" android:tint="@color/ag_text" />
+      <ImageButton android:id="@+id/s_refresh" android:layout_width="36dp" android:layout_height="36dp" android:layout_marginStart="6dp" android:background="@drawable/widget_icon_btn" android:contentDescription="s_refresh" android:padding="9dp" android:scaleType="fitCenter" android:src="@drawable/ic_sync" android:tint="@color/ag_text" />
+      <ImageButton android:id="@+id/s_open" android:layout_width="36dp" android:layout_height="36dp" android:layout_marginStart="4dp" android:background="@drawable/widget_icon_btn" android:contentDescription="s_open" android:padding="9dp" android:scaleType="fitCenter" android:src="@drawable/ic_open" android:tint="@color/ag_text" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/s_text"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:ellipsize="end"
-        android:fontFamily="sans-serif-medium"
-        android:gravity="center"
-        android:text="Tap refresh to load a card"
-        android:textColor="@color/ag_text"
-        android:textSize="16sp" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/s_show"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
-            android:background="@drawable/widget_pill_mauve"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:maxLines="1"
-            android:text="Show answer"
-            android:textColor="@color/ag_base"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-        <TextView
-            android:id="@+id/s_change"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_weight="1"
-            android:background="@drawable/widget_pill_mauve"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:maxLines="1"
-            android:text="Change deck"
-            android:textColor="@color/ag_base"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-        <TextView
-            android:id="@+id/s_again"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="0dp"
-            android:layout_weight="1"
-            android:background="@drawable/widget_pill_red"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:maxLines="1"
-            android:text="Again"
-            android:textColor="@color/ag_base"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-        <TextView
-            android:id="@+id/s_hard"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="@drawable/widget_pill_peach"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:maxLines="1"
-            android:text="Hard"
-            android:textColor="@color/ag_base"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-        <TextView
-            android:id="@+id/s_good"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="@drawable/widget_pill_green"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:maxLines="1"
-            android:text="Good"
-            android:textColor="@color/ag_base"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
-        <TextView
-            android:id="@+id/s_easy"
-            android:layout_width="0dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="@drawable/widget_pill_blue"
-            android:ellipsize="end"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:maxLines="1"
-            android:text="Easy"
-            android:textColor="@color/ag_base"
-            android:textSize="13sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+      <TextView android:id="@+id/s_text" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:gravity="center" android:text="Tap refresh to load a card" android:textColor="@color/ag_text" android:textSize="16sp" android:layout_width="match_parent" android:layout_height="match_parent" />
+      <TextView android:id="@+id/s_text_d" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:gravity="center" android:text="Tap refresh to load a card" android:textColor="@color/ag_text" android:textSize="16sp" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" />
+    </FrameLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+      <TextView android:id="@+id/s_show" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/widget_pill_mauve" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:gravity="center" android:maxLines="1" android:text="Show answer" android:textColor="@color/ag_base" android:textSize="14sp" android:textStyle="bold" />
+      <TextView android:id="@+id/s_change" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/widget_pill_mauve" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:gravity="center" android:maxLines="1" android:text="Change deck" android:textColor="@color/ag_base" android:textSize="14sp" android:textStyle="bold" android:visibility="gone" />
+      <TextView android:id="@+id/s_again" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="0dp" android:layout_weight="1" android:background="@drawable/widget_pill_red" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:gravity="center" android:maxLines="1" android:text="Again" android:textColor="@color/ag_base" android:textSize="13sp" android:textStyle="bold" android:visibility="gone" />
+      <TextView android:id="@+id/s_hard" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:layout_weight="1" android:background="@drawable/widget_pill_peach" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:gravity="center" android:maxLines="1" android:text="Hard" android:textColor="@color/ag_base" android:textSize="13sp" android:textStyle="bold" android:visibility="gone" />
+      <TextView android:id="@+id/s_good" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:layout_weight="1" android:background="@drawable/widget_pill_green" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:gravity="center" android:maxLines="1" android:text="Good" android:textColor="@color/ag_base" android:textSize="13sp" android:textStyle="bold" android:visibility="gone" />
+      <TextView android:id="@+id/s_easy" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:layout_weight="1" android:background="@drawable/widget_pill_blue" android:ellipsize="end" android:fontFamily="sans-serif-medium" android:gravity="center" android:maxLines="1" android:text="Easy" android:textColor="@color/ag_base" android:textSize="13sp" android:textStyle="bold" android:visibility="gone" />
     </LinearLayout>
-</LinearLayout>
+  </LinearLayout>
+</FrameLayout>

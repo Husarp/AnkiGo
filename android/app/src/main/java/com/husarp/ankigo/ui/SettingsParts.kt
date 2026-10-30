@@ -38,6 +38,7 @@ internal object Form {
             text = label
             gravity = Gravity.CENTER
             setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 13), Ui.dp(ctx, 16), Ui.dp(ctx, 13))
+            setTextColor(AppDialogRules.onFill(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_crust), TypeInk::contrast))
             background = ripple(ctx, Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx))
             isClickable = true
             setOnClickListener { onClick() }
@@ -52,7 +53,7 @@ internal object Form {
             text = label
             gravity = Gravity.CENTER
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 11), Ui.dp(ctx, 14), Ui.dp(ctx, 11))
-            background = ripple(ctx, Ui.rounded(Ui.c(ctx, if (onPage) R.color.ag_s0 else R.color.ag_mantle), 11, ctx))
+            background = ripple(ctx, Ui.rounded(Ui.c(ctx, if (onPage) R.color.ag_s0 else R.color.ag_mantle), 12, ctx))
             isClickable = true
             setOnClickListener { onClick() }
         }
@@ -68,7 +69,10 @@ internal object Form {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 14), Ui.dp(ctx, 4), Ui.dp(ctx, 8))
-        addView(Ui.text(ctx, 12f, 900, R.color.ag_sub0).apply {
+        addView(android.widget.ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_star); setColorFilter(Ui.c(ctx, R.color.ag_mauve))
+        }, LinearLayout.LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.marginEnd = Ui.dp(ctx, 6) })
+        addView(Ui.text(ctx, 12f, 900, R.color.ag_mauve).apply {
             text = title.uppercase()
             letterSpacing = 0.06f
         }, lp(ViewGroup.LayoutParams.WRAP_CONTENT, weight = 1f))
@@ -183,17 +187,13 @@ internal object Form {
     /** Equal-width pills, one selected (mauve = the accent). Drawn with [toggleChip], so no platform radio buttons. */
     fun segmented(ctx: Context, labels: List<String>, selected: Int, onPick: (Int) -> Unit): LinearLayout =
         LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            val chips = ArrayList<TextView>()
-            labels.forEachIndexed { i, label ->
-                val chip = toggleChip(ctx, label, i == selected) {
-                    chips.forEachIndexed { k, c -> setChip(c, k == i) }
-                    onPick(i)
+            val box = this
+            fun draw(index: Int) {
+                SectionSwitch.draw(ctx, box, labels.map { SectionSwitch.Seg(it, R.drawable.ic_blank) }, index) {
+                    draw(it); onPick(it)
                 }
-                chip.isSelected = i == selected
-                chips += chip
-                addView(chip, lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { if (i > 0) it.marginStart = Ui.dp(ctx, 6) })
             }
+            draw(selected)
         }
 
     /** Round colour swatches (the palette's own colours, not the chosen accent); the picked one has a ring and a tick. */
@@ -261,7 +261,7 @@ internal object Form {
                     setImageResource(R.drawable.ic_play)
                     setColorFilter(Ui.c(ctx, R.color.ag_mauve), android.graphics.PorterDuff.Mode.SRC_IN)
                     setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8))
-                    background = Ui.rounded((Ui.c(ctx, R.color.ag_mauve) and 0x00FFFFFF) or 0x29000000, 14, ctx)
+                    background = null
                 }, FrameLayout.LayoutParams(Ui.dp(ctx, 28), Ui.dp(ctx, 28), Gravity.CENTER))
             }, LinearLayout.LayoutParams(Ui.dp(ctx, 44), Ui.dp(ctx, 48)))
             addView(sw)
@@ -321,7 +321,7 @@ internal object Form {
             text = sign
             gravity = Gravity.CENTER
             // 38 dp look inside a 48 x 48 dp touch area
-            background = android.graphics.drawable.InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx), Ui.dp(ctx, 5))
+            background = null
             minWidth = Ui.dp(ctx, 48)
             minHeight = Ui.dp(ctx, 48)
             contentDescription = if (d > 0) "More" else "Less"
@@ -376,7 +376,7 @@ internal object Form {
     fun setChip(chip: TextView, on: Boolean) {
         val ctx = chip.context
         chip.setTextColor(Ui.c(ctx, if (on) R.color.ag_crust else R.color.ag_text))
-        Ui.touchPill(chip, Ui.rounded(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_mantle), 10, ctx), 32, 4)
+        Ui.touchPill(chip, Ui.rounded(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_mantle), 12, ctx), 32, 4)
     }
 }
 

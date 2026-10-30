@@ -59,11 +59,11 @@ internal object PsychicFx {
         private val m = FxColor.identity()
 
         /** Floats the attacker for [ms] mockup ms from [t0]; the glow disc and the tint pulse as the mockup's blur did (6..12 px at 120 ms). */
-        fun float(s: FxScript, ms: Float, t0: Float = 0f) {
+        fun float(s: FxScript, ms: Float, t0: Float = 0f, bob: Boolean = true) {
             val u = s.u
             s.tween(t0, ms) { p, now ->
                 if (p >= 1f) { s.attacker.reset(); return@tween }
-                s.attacker.set(y = -sin(now / 90f) * 3f, filter = tint(.12f + .1f * (.5f + .5f * sin(now / 120f))))
+                s.attacker.set(y = if (bob) -sin(now / 90f) * 3f else 0f, filter = tint(.12f + .1f * (.5f + .5f * sin(now / 120f))))
             }
             val a = s.space.fromAttacker(0f, 0f)
             s.proc(t0, t0 + ms) { c, p, now ->
@@ -99,12 +99,12 @@ internal object AuraFx {
     const val FLOAT_MS = 900f
     const val TOTAL = 1000f
 
-    fun build(s: FxScript): FxTimes {
+    fun build(s: FxScript, moving: Boolean = false): FxTimes {
         val k = s.k
         val u = s.u
         val pal = s.plan.palette
         val a = s.space.fromAttacker(0f, 0f)
-        PsychicFx.Glow(pal.glow, pal.glow).float(s, FLOAT_MS)
+        PsychicFx.Glow(pal.glow, pal.glow).float(s, FLOAT_MS, bob = moving)
         // a soft dark base under the glow, so the aura also shows on a bright arena
         s.proc(0f, FLOAT_MS) { c, p, _ ->
             val fade = if (p > .85f) (1f - p) / .15f else 1f
@@ -156,6 +156,19 @@ internal object AuraFx {
                 if (s.chance(.5f)) "dirt_01" else "dirt_02", 0xFF9A7448.toInt(), x, a.y + s.space.len(40f),
                 vx = s.rnd(-40f, 40f), vy = -s.rnd(110f, 160f), ay = 560f, s0 = s.rnd(12f, 22f), s1 = 8f, life = 440f, rot = s.rnd(0f, 6f), vrot = s.rnd(-4f, 4f), a0 = .95f,
             )
+            FxKit.FIGHTING, FxKit.POISON, FxKit.FLYING, FxKit.BUG, FxKit.ROCK,
+            FxKit.DRAGON, FxKit.DARK, FxKit.STEEL, FxKit.FAIRY -> {
+                val key = when (kit) {
+                    FxKit.FIGHTING, FxKit.DARK -> "slash_03"
+                    FxKit.POISON -> "circle_05"
+                    FxKit.FLYING, FxKit.DRAGON -> "twirl_01"
+                    FxKit.BUG -> "spark_01"
+                    FxKit.ROCK -> "dirt_01"
+                    FxKit.STEEL -> "star_08"
+                    else -> "star_01"
+                }
+                s.particle(key, s.plan.palette.glow, x, y, vy = vy, s0 = 22f, s1 = 5f, life = 420f)
+            }
             FxKit.PLAIN -> Unit
         }
     }

@@ -33,7 +33,7 @@ data class WildMoveSlot(val id: String?, val name: String?)
 enum class WildDex { SEEN, CAUGHT }
 
 /**
- * The facts of the info window. Only things a player may see: IVs, nature, EVs, ability, held item and unused moves are
+ * The facts of the info window. Only things a player may see: IVs, nature, EVs, ability, held item and unused moves of an uncaught species are
  * not in here, so no screen can show them by mistake.
  */
 data class WildInfo(
@@ -73,7 +73,7 @@ data class WildInfo(
             val wild = battle.wild
             val sp = data.species[wild.species] ?: return null
             val used = usedMoves.map { it.lowercase() }.toSet()
-            val known = wild.moves.mapNotNull { id -> data.move(id)?.takeIf { it.name.lowercase() in used } }
+            val known = wild.moves.mapNotNull { id -> data.move(id)?.takeIf { wild.species in state.caught || it.name.lowercase() in used } }
                 .distinctBy { it.id }.map { WildMoveSlot(it.id, it.name) }
             // known moves first, then one "?" for each of the rest: the slot order of the real list never shows
             val unknown = List((wild.moves.size - known.size).coerceAtLeast(0)) { WildMoveSlot(null, null) }

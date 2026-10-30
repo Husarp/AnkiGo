@@ -156,20 +156,20 @@ object SoftSfx {
 
     // ------------------------------------------------------------------ the renderer (S39.mkP, style 'soft')
 
-    private class Pen {
+    internal class Pen {
         private val buf = DoubleArray((MAX_S * RATE).toInt())
         private var end = 0
         private var burst = 0
 
         /** A tone gliding f0 -> f1 over [dur] seconds starting at [t]. [tri] = triangle instead of sine + octave. */
-        fun s(t: Double, f0: Double, f1: Double, dur: Double, amp: Double, rise: Boolean = false, tri: Boolean = false, bell: Boolean = false, atk: Double = 0.004) {
-            osc(t, f0, f1, dur, amp, rise, atk, tri, 1.0)
+        fun s(t: Double, f0: Double, f1: Double, dur: Double, amp: Double, rise: Boolean = false, tri: Boolean = false, bell: Boolean = false, atk: Double = 0.004, vibHz: Double = 0.0, vibDepth: Double = 0.0) {
+            osc(t, f0, f1, dur, amp, rise, atk, tri, 1.0, vibHz, vibDepth)
             if (!tri) osc(t, f0 * 2, f1 * 2, dur, amp * 0.25, rise, atk, false, 1.0) // the soft second layer
             if (bell) s(t, f0 * 2.76, f1 * 2.76, dur * 0.5, amp * 0.18) // a bell partial: plain sine, half as long
         }
 
-        fun n(t: Double, f: Double, dur: Double, amp: Double, tri: Boolean = false, bell: Boolean = false, atk: Double = 0.004) =
-            s(t, f, f, dur, amp, tri = tri, bell = bell, atk = atk)
+        fun n(t: Double, f: Double, dur: Double, amp: Double, tri: Boolean = false, bell: Boolean = false, atk: Double = 0.004, vibHz: Double = 0.0, vibDepth: Double = 0.0) =
+            s(t, f, f, dur, amp, tri = tri, bell = bell, atk = atk, vibHz = vibHz, vibDepth = vibDepth)
 
         /** A short click at pitch [f] (default 45 ms). */
         fun ui(t: Double, f: Double, amp: Double, dur: Double = 0.045) = n(t, f, dur, amp * 0.8, atk = 0.002)
@@ -194,7 +194,7 @@ object SoftSfx {
             }
         }
 
-        private fun osc(t: Double, f0: Double, f1: Double, dur: Double, amp: Double, rise: Boolean, atk: Double, tri: Boolean, scale: Double) {
+        private fun osc(t: Double, f0: Double, f1: Double, dur: Double, amp: Double, rise: Boolean, atk: Double, tri: Boolean, scale: Double, vibHz: Double = 0.0, vibDepth: Double = 0.0) {
             if (max(f0, f1) >= NYQ_LIMIT) return // above Nyquist: skip rather than alias
             val start = (t * RATE).roundToInt()
             val n = (dur * RATE).roundToInt()
@@ -205,7 +205,7 @@ object SoftSfx {
                 val idx = start + i
                 if (idx >= buf.size) break
                 val tt = i.toDouble() / RATE
-                val f = if (f0 == f1) f0 else f0 * ratio.pow(tt / dur)
+                val f = (if (f0 == f1) f0 else f0 * ratio.pow(tt / dur)) + sin(2 * PI * vibHz * tt) * vibDepth
                 ph += 2 * PI * f / RATE
                 val w = if (tri) triangle(ph, f) else sin(ph)
                 buf[idx] += w * envelope(tt, dur, a, rise, atk)

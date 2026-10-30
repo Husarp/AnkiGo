@@ -162,6 +162,9 @@ object AppPrefs {
     fun setXpAnimation(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("xpAnimation", on).apply()
 
     /** Each move plays its own attack animation (round 7, docs/design/attack-anims-v2.html; Settings → Battle). Off: the old step + shake. Default on. */
+    fun flyingTurnDots(ctx: Context): Boolean = prefs(ctx).getBoolean("flyingTurnDots", false)
+    fun setFlyingTurnDots(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("flyingTurnDots", on).apply()
+
     fun attackAnimations(ctx: Context): Boolean = prefs(ctx).getBoolean("attackAnimations", true)
 
     fun setAttackAnimations(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("attackAnimations", on).apply()

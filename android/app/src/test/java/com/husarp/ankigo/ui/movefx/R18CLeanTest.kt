@@ -29,8 +29,8 @@ class R18CLeanTest {
     }
 
     @Test fun specialAndStatusLooksLeanPhysicalOnesDoNot() {
-        val lean = listOf(MoveLook.EMBER, MoveLook.WATER_JET, MoveLook.THUNDERBOLT, MoveLook.ICE_BEAM, MoveLook.PSYCHIC, MoveLook.SHADOW_BALL, MoveLook.ORB_TEMPLATE, MoveLook.AURA_TEMPLATE)
-        val still = listOf(MoveLook.TACKLE, MoveLook.VINE_WHIP, MoveLook.EARTHQUAKE, MoveLook.HIT_TEMPLATE)
+        val lean = listOf(MoveLook.EMBER, MoveLook.WATER_JET, MoveLook.THUNDERBOLT, MoveLook.ICE_BEAM, MoveLook.PSYCHIC, MoveLook.SHADOW_BALL, MoveLook.ORB_TEMPLATE, MoveLook.DRAIN)
+        val still = listOf(MoveLook.TACKLE, MoveLook.VINE_WHIP, MoveLook.EARTHQUAKE, MoveLook.HIT_TEMPLATE, MoveLook.AURA_TEMPLATE, MoveLook.HEAL, MoveLook.MULTI_HIT, MoveLook.RECOIL)
         for (l in lean) assertTrue("$l", FxLean.leans(l))
         for (l in still) assertFalse("$l", FxLean.leans(l))
         assertEquals(MoveLook.entries.toSet(), (lean + still).toSet())
@@ -40,14 +40,14 @@ class R18CLeanTest {
         for (t in Type.entries) for (power in listOf(0, 40, 90)) {
             assertFalse("$t physical", FxLean.leans(MoveFxCatalog.plan("", t, Category.PHYSICAL, power).look))
             assertTrue("$t special", FxLean.leans(MoveFxCatalog.plan("", t, Category.SPECIAL, power).look))
-            assertTrue("$t status", FxLean.leans(MoveFxCatalog.plan("", t, Category.STATUS, 0).look))
+            assertFalse("$t status", FxLean.leans(MoveFxCatalog.plan("", t, Category.STATUS, 0).look))
         }
         for ((id, cat) in listOf("tackle" to Category.PHYSICAL, "vinewhip" to Category.PHYSICAL, "earthquake" to Category.PHYSICAL, "ember" to Category.SPECIAL, "psychic" to Category.SPECIAL, "shadowball" to Category.SPECIAL)) {
             assertEquals(id, cat != Category.PHYSICAL, FxLean.leans(MoveFxCatalog.plan(id, null, cat, 40).look))
         }
         // the plain fallback ("Attack animations" off) follows the category
         assertFalse(FxLean.leansCategory(Category.PHYSICAL))
-        assertTrue(FxLean.leansCategory(Category.SPECIAL)); assertTrue(FxLean.leansCategory(Category.STATUS))
+        assertTrue(FxLean.leansCategory(Category.SPECIAL)); assertFalse(FxLean.leansCategory(Category.STATUS))
     }
 
     @Test fun theLeanCurveIsSmallEasedAndEndsAtRest() {
@@ -76,7 +76,7 @@ class R18CLeanTest {
     }
 
     @Test fun theWildOneLeansTheOtherWay() {
-        val xs = dxs(MoveLook.AURA_TEMPLATE, 600f, reverse = true)
+        val xs = dxs(MoveLook.ORB_TEMPLATE, 600f, reverse = true)
         assertTrue(xs.min() < -FxLean.UNITS * unit * 0.9f)
         for (x in xs) { assertTrue(x >= -FxLean.UNITS * unit - eps); assertTrue(x <= eps) }
     }

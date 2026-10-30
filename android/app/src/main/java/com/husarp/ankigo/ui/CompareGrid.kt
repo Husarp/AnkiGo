@@ -119,6 +119,7 @@ internal class CompareGrid(
     private val collapsed: SectionChoice = SectionChoice(),
     private val onSection: (String) -> Unit = {},
     /** R10-G (B12): a long press on a row label (a number row: the sort menu; another row: its info). */
+    private val colours: Boolean = true,
     private val onLabelLong: (CompareRow, View) -> Unit = { _, _ -> },
 ) {
     private val ctx: Context = page
@@ -503,7 +504,7 @@ internal class CompareGrid(
                     // R10-F (B8): in "vs reference" a number is filled by how much better / worse it is than the reference (relative, not ranked)
                     val refValue = if (vs && row.numeric) (row.cells.getOrNull(0) as? Cell.Text)?.value else null
                     val scale = pos?.let { scaleLook(it, band) }
-                        ?: if (refValue != null && i != 0 && cell.value != null) CompareScale.vsRef(cell.value, refValue, band, TypeChips.isDark(ctx)) else null
+                        ?: if (colours && refValue != null && i != 0 && cell.value != null) CompareScale.vsRef(cell.value, refValue, band, TypeChips.isDark(ctx)) else null
                     box.addView(Ui.text(ctx, look.valueSp, if (top) 900 else 700, R.color.ag_text).apply {
                         text = cell.text
                         gravity = Gravity.CENTER
@@ -511,14 +512,14 @@ internal class CompareGrid(
                         cell.level?.let { if (pos == null && scale?.fill == null) setTextColor(LevelTier.color(ctx, it)) }
                         scale?.ink?.let { setTextColor(it) } // a strong fill takes white / dark ink
                     }, LinearLayout.LayoutParams(-2, -2))
-                    if (vs && row.numeric) {
+                    if (vs && row.numeric && !colours) {
                         if (i == 0) box.addView(small("ref", R.color.ag_sub0), LinearLayout.LayoutParams(-2, -2))
                         else if (CompareModes.diffLabel(diff).isNotEmpty()) box.addView(small(CompareModes.diffLabel(diff), when (CompareModes.diffSign(diff)) {
                             1 -> R.color.ag_green; -1 -> R.color.ag_red; else -> R.color.ag_sub0
                         }, 900).also { tv -> scale?.ink?.let { tv.setTextColor(it) } }, LinearLayout.LayoutParams(-2, -2)) // an equal value shows nothing (no "±0"); on a strong fill it takes the fill's ink
                     }
                     scale?.fill?.let { box.setBackgroundColor(it) }
-                    for (s in cell.sub) box.addView(small(s, R.color.ag_sub0), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
+                    for (s in cell.sub) box.addView(small(s, if ((s.startsWith("raised") || s.startsWith("adjusted"))) R.color.ag_mauve else R.color.ag_sub0), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
                 }
             }
             is Cell.TypeChips -> {

@@ -55,6 +55,9 @@ object SoundPrefs {
     fun volume(ctx: Context) = volume(ctx, SoundChannel.BATTLE)
     fun setVolume(ctx: Context, pct: Int) { setVolume(ctx, SoundChannel.BATTLE, pct); setVolume(ctx, SoundChannel.CRIES, pct) }
 
+    fun typeSounds(ctx: Context) = prefs(ctx).getBoolean("typeSounds", true)
+    fun setTypeSounds(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("typeSounds", on).apply()
+
     fun quietOnCardAudio(ctx: Context) = prefs(ctx).getBoolean("quietCard", true)
     fun setQuietOnCardAudio(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("quietCard", on).apply()
 }

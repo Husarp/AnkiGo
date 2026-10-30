@@ -42,6 +42,7 @@ object ConditionMarks {
 
     /** The lasting conditions of one Pokémon (`BattleSide.volatiles`), most important first. Round-long ones (flinch, Protect ...) have no chip. */
     private val VOLATILES: List<Def> = listOf(
+        v("switchtrap", "Trapped", Group.HINDER, Num.TURNS, 9),
         v("confusion", "Confused", Group.HINDER, Num.TURNS, 10),
         v("attract", "In love", Group.HINDER, Num.NONE, 11),
         v("partiallytrapped", "Trapped", Group.HINDER, Num.TURNS, 12),
@@ -82,6 +83,10 @@ object ConditionMarks {
 
     /** The conditions of one SIDE that survive a switch (`BattleField.player` / `enemy`: key -> turns left). */
     private val SIDES: List<Def> = listOf(
+        Def("spikes", Kind.SIDE, "Spikes", Group.HINDER, Num.LAYERS, 35),
+        Def("toxicspikes", Kind.SIDE, "Toxic Spikes", Group.DRAIN, Num.LAYERS, 36),
+        Def("stealthrock", Kind.SIDE, "Stealth Rock", Group.HINDER, Num.NONE, 37),
+        Def("stickyweb", Kind.SIDE, "Sticky Web", Group.HINDER, Num.NONE, 38),
         s("reflect", "Reflect", 50), s("lightscreen", "Light Screen", 51), s("auroraveil", "Aurora Veil", 52),
         s("safeguard", "Safeguard", 53), s("mist", "Mist", 54), s("tailwind", "Tailwind", 55), s("wish", "Wish", 56),
         s("mp.fs", "Future Sight", 57),
@@ -99,11 +104,15 @@ object ConditionMarks {
         f("electric", Kind.TERRAIN, "Electric Terrain", Group.TERRAIN, 2, UNTIL_TERRAIN), f("grassy", Kind.TERRAIN, "Grassy Terrain", Group.TERRAIN, 2, UNTIL_TERRAIN),
         f("misty", Kind.TERRAIN, "Misty Terrain", Group.TERRAIN, 2, UNTIL_TERRAIN), f("psychic", Kind.TERRAIN, "Psychic Terrain", Group.TERRAIN, 2, UNTIL_TERRAIN),
         f("trickroom", Kind.ROOM, "Trick Room", Group.ROOM, 3, ""), f("gravity", Kind.ROOM, "Gravity", Group.ROOM, 4, ""),
+        f("magicroom", Kind.ROOM, "Magic Room", Group.ROOM, 5, ""),
         f("wonderroom", Kind.ROOM, "Wonder Room", Group.ROOM, 5, ""), f("mudsport", Kind.ROOM, "Mud Sport", Group.ROOM, 6, ""),
         f("watersport", Kind.ROOM, "Water Sport", Group.ROOM, 7, ""), f("iondeluge", Kind.ROOM, "Ion Deluge", Group.ROOM, 8, ""),
     )
 
-    private val BY_KEY: Map<String, Def> = (VOLATILES + SIDES + FIELDS).associateBy { it.key }
+    val STAT_KEYS = listOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
+    private val STAT_DEFS = STAT_KEYS.mapIndexed { i, key -> v("stat.$key", StatPill.shortName(key)!!, Group.BOOST, Num.NONE, -10 + i) }
+
+    private val BY_KEY: Map<String, Def> = (VOLATILES + SIDES + FIELDS + STAT_DEFS).associateBy { it.key }
     private val VOLATILE_KEYS: Set<String> = VOLATILES.map { it.key }.toSet()
     private val SIDE_KEYS: Set<String> = SIDES.map { it.key }.toSet()
 
@@ -113,7 +122,7 @@ object ConditionMarks {
     fun def(key: String): Def? = BY_KEY[key]
 
     /** The chip's word; Stockpile carries its layers in the word ("Stockpile 2"). */
-    fun word(d: Def, value: Int): String = if (d.num == Num.LAYERS) "${d.word} ${max(1, value)}" else d.word
+    fun word(d: Def, value: Int): String = if (d.key.startsWith("stat.")) "${d.word} ${if (value > 0) "↑" else "↓"}${abs(value)}" else if (d.num == Num.LAYERS) "${d.word}${if (d.key == "spikes" || d.key == "toxicspikes") " ×" else " "}${max(1, value)}" else d.word
 
     /**
      * The number on the chip: the turns left (never under 1 while it is there), or null when the rule's number is not turns (a Substitute's HP,
@@ -128,7 +137,13 @@ object ConditionMarks {
     fun turnsLeft(n: Int): String = "$n turn${if (n == 1) "" else "s"} left"
 
     /** The list line after the word: the turns left, or what the number is; blank when there is nothing to add (no turn limit). */
-    fun detail(d: Def, value: Int): String = when (d.num) {
+    fun detail(d: Def, value: Int): String = if (d.key.startsWith("stat.")) {
+        val key = d.key.removePrefix("stat.")
+        val multiplier = if (key == "accuracy" || key == "evasion") {
+            if (value >= 0) (3.0 + value) / 3.0 else 3.0 / (3.0 - value)
+        } else com.husarp.ankigo.game.BattleEngine.stageMult(value)
+        "${StatPill.spoken(key, value)} (×${"%.2f".format(java.util.Locale.US, multiplier)}). Lasts this fight; resets on switching or fainting."
+    } else when (d.num) {
         Num.TURNS -> number(d, value)?.let { turnsLeft(it) } ?: d.noTurns
         Num.HP -> "${max(0, value)} HP left"
         Num.LAYERS -> "${max(1, value)} layer${if (value == 1) "" else "s"}"
@@ -157,6 +172,10 @@ object ConditionMarks {
         val out = ArrayList<Triple<Slot, Def, Int>>()
         fun volatiles(map: Map<String, Int>, slot: Slot) { for ((k, value) in map) if (k in VOLATILE_KEYS) out += Triple(slot, BY_KEY.getValue(k), value) }
         fun sides(map: Map<String, Int>, slot: Slot) { for ((k, value) in map) if (k in SIDE_KEYS && value > 0) out += Triple(slot, BY_KEY.getValue(k), value) }
+        fun stats(side: com.husarp.ankigo.game.BattleSide, slot: Slot) {
+            side.boosts.forEachIndexed { i, value -> if (value != 0) out += Triple(slot, STAT_DEFS[i], value) }
+        }
+        stats(b.enemy, Slot.WILD); stats(b.player, Slot.OURS)
         volatiles(b.enemy.volatiles, Slot.WILD); volatiles(b.player.volatiles, Slot.OURS)
         sides(b.field.enemy, Slot.WILD); sides(b.field.player, Slot.OURS)
         b.field.weather?.let { w -> BY_KEY[w]?.takeIf { it.kind == Kind.WEATHER }?.let { out += Triple(Slot.FIELD, it, b.field.weatherTurns) } }
@@ -255,6 +274,12 @@ class ConditionBoard {
      * A broken Substitute and a Destiny Bond that came true (stages 0) end. True = changed.
      */
     fun applyEffect(e: GameEvent.Effect, b: Battle?): Boolean {
+        if (e.kind == EffectKind.STAT_CHANGE) {
+            val key = "stat.${e.stat ?: return false}"
+            val slot = if (e.onPlayer) ConditionMarks.Slot.OURS else ConditionMarks.Slot.WILD
+            val held = b?.let { ConditionMarks.fromBattle(it).firstOrNull { mark -> mark.first == slot && mark.second.key == key } }
+            return if (held == null) end(slot, key) else start(slot, key, held.third)
+        }
         val key = e.stat ?: return false
         val d = ConditionMarks.def(key) ?: return false
         if (e.kind != EffectKind.VOLATILE && e.kind != EffectKind.FIELD) return false
@@ -449,7 +474,7 @@ internal object ConditionSpot {
         val taken = ArrayList<R>()
         fun keep(p: Placed?): Placed? { p?.let { taken += it.rect.grow(z.lift * 0.5f) }; return p }
         val w = if (wildCard == null) null else keep(side(scene, wildCard, true, wild, z.gap, z.lift, z.moreW, z.rowH, taken))
-        val o = if (ourCard == null) null else keep(side(scene, ourCard, false, ours, z.gap, z.lift, z.moreW, z.rowH, taken))
+        val o = if (ourCard == null) null else keep(side(scene, ourCard, true, ours, z.gap, z.lift, z.moreW, z.rowH, taken))
         val f = keep(corner(scene, field, z.gap, z.moreW, z.rowH, z.lift * 2f, taken))
         return All(w, o, f)
     }

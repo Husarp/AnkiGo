@@ -63,7 +63,7 @@ object BottomNav {
     fun dotShown(lastSeenDay: String?, today: String?): Boolean = !today.isNullOrEmpty() && Shop.unseen(lastSeenDay, today)
 
     /** The TalkBack text of [tab]: its label, with "new stock" while the Shop's dot is on. */
-    fun describe(tab: Tab, dot: Boolean): String = if (tab == Tab.SHOP && dot) "${tab.label}, new stock" else tab.label
+    fun describe(tab: Tab, dot: Boolean): String = if (tab == Tab.SHOP && dot) "${tab.label}, new stock" else if (tab == Tab.STATS && dot) "${tab.label}, new achievements" else tab.label
 
     /** Builds the bar for [activity], with [current] highlighted. Add it at the bottom of the screen. */
     fun create(activity: Activity, current: Tab): View {
@@ -109,6 +109,11 @@ object BottomNav {
                     if (!isHere(activity, tab)) { com.husarp.ankigo.sound.GameSound.ui(activity, com.husarp.ankigo.sound.SoundId.TAB); open(activity, tab) }
                     else reselect(activity) // PLAN 218: no tab sound, nothing opens: the screen goes back to its top page
                 }
+            }
+            if (tab == Tab.STATS) {
+                val achDot = dotView(activity)
+                pillBox.addView(achDot, dotParams(activity))
+                bar.achievements(item, achDot)
             }
             if (tab == Tab.SHOP && !on) { // the Shop screen itself shows no dot: opening it is what clears it
                 val dot = dotView(activity)
@@ -175,13 +180,22 @@ object BottomNav {
      * GameRepo), and when the window comes back (the Shop tab stored today's day while another screen was in front).
      */
     private class NavBar(private val activity: Activity) : LinearLayout(activity) {
+        private var achItem: View? = null
+        private var achDot: View? = null
+        fun achievements(item: View, dot: View) { achItem = item; achDot = dot }
         private var shopItem: View? = null
         private var dot: View? = null
         private val onGame: () -> Unit = { refresh() }
+        private val onPrefs = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "achievementsSeen") refresh()
+        }
 
         fun shop(item: View, dotView: View) { shopItem = item; dot = dotView }
 
         fun refresh() {
+            val unseen = AchievementNotice.unseen(activity)
+            achDot?.visibility = if (unseen) View.VISIBLE else View.GONE
+            achItem?.contentDescription = describe(Tab.STATS, unseen)
             val d = dot ?: return
             val on = dotShown(AppPrefs.shopSeenDay(activity), GameRepo.state?.day)
             d.visibility = if (on) View.VISIBLE else View.GONE
@@ -191,11 +205,13 @@ object BottomNav {
         override fun onAttachedToWindow() {
             super.onAttachedToWindow()
             GameRepo.addListener(onGame)
+            activity.getSharedPreferences("look", 0).registerOnSharedPreferenceChangeListener(onPrefs)
             refresh()
         }
 
         override fun onDetachedFromWindow() {
             GameRepo.removeListener(onGame)
+            activity.getSharedPreferences("look", 0).unregisterOnSharedPreferenceChangeListener(onPrefs)
             super.onDetachedFromWindow()
         }
 

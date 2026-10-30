@@ -19,6 +19,7 @@ class StudyNowWidget : AppWidgetProvider() {
     }
 
     override fun onDeleted(ctx: Context, appWidgetIds: IntArray) {
+        WidgetLooks.forget(ctx.getSharedPreferences("spike",0),"now",appWidgetIds)
         StudyNowPrefs.forget(ctx.getSharedPreferences("spike", 0), appWidgetIds)
     }
 }

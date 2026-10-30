@@ -19,6 +19,15 @@ class EvoLineTest {
         sp(1004, "Sparkcat", 1002),
     ))
 
+    @Test fun dayAppearsOnceAndExplanationGivesActionAndHours() {
+        val e = Evolution(1002, EvoKind.FRIENDSHIP, time = "day", condition = "during the day", minFriendship = 160)
+        assertEquals("Friendship, day", EvoLine.method(branched, e))
+        val text = EvoLine.explanation(branched, e)
+        assertTrue(text.contains("160 friendship"))
+        assertTrue(text.contains("06:00–18:00"))
+        assertTrue(text.contains("Soothe Bell"))
+    }
+
     @Test fun theWholeLineIsTheSameFromAnyMember() {
         for (num in 1001..1004) {
             val line = EvoLine.of(branched, branched.sp(num))

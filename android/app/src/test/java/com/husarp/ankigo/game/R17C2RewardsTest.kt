@@ -103,21 +103,21 @@ class R17C2RewardsTest {
 
     // ---- evolution after a catch win ----
 
-    @Test fun aCatchWinCanEvolveByFriendship() {
+    @Test fun aCatchWinWaitsForFriendshipChoice() {
         val (s, m) = st(172, 5)
         m.friendship = 159
         val e = ev()
         Progression.rewardCatch(data, s, m, wild16(1), noon, Random(1), e) // +5..9 -> 164 or more
-        assertEquals(25, m.species)
-        assertTrue(e.any { it is GameEvent.Evolved })
+        assertEquals(172, m.species)
+        assertTrue(e.none { it is GameEvent.Evolved })
     }
 
-    @Test fun aCatchWinStillEvolvesByLevelFirst() {
+    @Test fun aCatchWinWaitsForLevelChoice() {
         val (s, m) = st(1, 15)
         val e = ev()
         Progression.rewardCatch(data, s, m, TestData.mon(data, 150, 50, uid = "wild"), noon, Random(1), e)
-        assertEquals(2, m.species)
-        assertTrue(e.any { it is GameEvent.Evolved })
+        assertEquals(1, m.species)
+        assertTrue(e.none { it is GameEvent.Evolved })
     }
 
     @Test fun anEverstoneStopsTheFriendshipEvolutionOfACatchWin() {

@@ -81,9 +81,9 @@ class CryLevelTest {
     }
 
     @Test fun anEntranceCryIsNoLouderThanTheBattleSounds() {
-        // Same slider settings for both: a levelled cry (target RMS, then the entrance factor) against the RMS of the battle sounds.
+        // Compare the primary battle cues; quieter type accents mix underneath them.
         val cry = CryLevel.TARGET_RMS_DB + CryLevel.db(CryLevel.ENTRANCE_FACTOR.toDouble())
-        val battle = SoundId.entries.filter { it.group == SoundGroup.BATTLE }.associateWith { CryLevel.db(CryLevel.rms(Sfx.samples(it))) }
+        val battle = SoundId.entries.filter { it.group == SoundGroup.BATTLE && TypeSfx.type(it) == null }.associateWith { CryLevel.db(CryLevel.rms(Sfx.samples(it))) }
         val sorted = battle.values.sorted()
         val median = sorted[sorted.size / 2]
         assertTrue("cry $cry vs median $median", cry <= median)

@@ -47,8 +47,11 @@ class HelpScreen(
 
     private lateinit var scroll: ScrollView
     private lateinit var content: LinearLayout
+    private lateinit var guideNav: android.widget.FrameLayout
     private lateinit var barHolder: android.widget.FrameLayout
     private val openIds = LinkedHashSet<String>()
+    internal val currentGuideChapter: String?
+        get() = if (route is HelpRoute.Guide) openIds.firstOrNull() ?: GameGuide.BATTLES else null
     private val history = ArrayList<HelpRoute>()
     private val main = Handler(Looper.getMainLooper())
     private var scrollTo: String? = null
@@ -61,7 +64,7 @@ class HelpScreen(
     private fun dp(v: Int) = Ui.dp(this, v)
 
     init {
-        (start as? HelpRoute.Guide)?.chapter?.let { openIds += it; scrollTo = it }
+        (start as? HelpRoute.Guide)?.let { openIds += it.chapter ?: GameGuide.BATTLES; scrollTo = it.chapter }
     }
 
     override fun buildBar(): View {
@@ -83,8 +86,14 @@ class HelpScreen(
             setPadding(dp(16), dp(2), dp(16), dp(28))
         }
         scroll = ScrollView(this).apply { addView(content) }
+        guideNav = android.widget.FrameLayout(this).apply { setPadding(dp(16), 0, dp(16), 0) }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(guideNav, LinearLayout.LayoutParams(-1, -2))
+            addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        }
         render()
-        return scroll
+        return root
     }
 
     /** Back inside the screen: true when it moved (page or guide to the home). False = nothing left, the caller leaves. */
@@ -108,13 +117,15 @@ class HelpScreen(
         route = to
         openIds.clear()
         scrollTo = null
-        (to as? HelpRoute.Guide)?.chapter?.let { openIds += it; scrollTo = it }
+        (to as? HelpRoute.Guide)?.let { openIds += it.chapter ?: GameGuide.BATTLES; scrollTo = it.chapter }
         render()
         if (scrollTo == null && ::scroll.isInitialized) scroll.scrollTo(0, 0)
     }
 
     override fun render() {
         content.removeAllViews()
+        guideNav.removeAllViews()
+        guideNav.visibility = if (route is HelpRoute.Guide) View.VISIBLE else View.GONE
         rebuildBar()
         when (val r = route) {
             HelpRoute.Home -> home()
@@ -171,6 +182,9 @@ class HelpScreen(
         }
         content.addView(box, HelpViews.lp(this))
 
+        content.addView(Form.secondary(this, "Setup guide", onPage = true) {
+            startScreen(Intent(this, com.husarp.ankigo.ui.FirstRunActivity::class.java).putExtra("setupOnly", true).addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION))
+        }, HelpViews.lp(this, 12))
         content.addView(Form.sect(this, "Fix a problem", "works offline"))
         val rows = HelpContent.pages.map { p -> HelpViews.problemRow(this, p) { show(HelpRoute.Problem(p.id)) } }
         content.addView(Form.cardOf(this, rows))
@@ -253,16 +267,20 @@ class HelpScreen(
 
     private fun guide() {
         val chapters = GameGuide.chapters()
-        val perRow = if (resources.configuration.screenWidthDp >= 330) 2 else 1
-        chapters.chunked(perRow).forEachIndexed { ri, row ->
-            val line = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            row.forEachIndexed { ci, ch ->
-                line.addView(HelpViews.tocChip(this, ch.id, ri * perRow + ci + 1, tile = false) { openChapter(ch.id) },
-                    LinearLayout.LayoutParams(0, -2, 1f).also { if (ci > 0) it.marginStart = dp(8) })
-            }
-            repeat(perRow - row.size) { line.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f).also { it.marginStart = dp(8) }) }
-            content.addView(line, HelpViews.lp(this, if (ri == 0) 4 else 8))
-        }
+        val current = chapters.indexOfFirst { it.id in openIds }.coerceAtLeast(0)
+        val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        nav.addView(Form.secondary(this, "←", onPage = true) { openChapter(chapters[(current - 1).coerceAtLeast(0)].id) }.apply {
+            contentDescription = "Previous lesson"; isEnabled = current > 0
+        }, LinearLayout.LayoutParams(dp(48), -2))
+        nav.addView(Form.secondary(this, chapters[current].title + " ▾", onPage = true) {
+            com.husarp.ankigo.ui.AppDialog.Builder(this).setTitle("Chapters")
+                .setItems(chapters.map { it.title }.toTypedArray<CharSequence>()) { _, i -> openChapter(chapters[i].id) }
+                .setNegativeButton("Cancel", null).create().also { com.husarp.ankigo.ui.Pickers.show(it) }
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        nav.addView(Form.secondary(this, "Next lesson →", onPage = true) { openChapter(chapters[(current + 1).coerceAtMost(chapters.lastIndex)].id) }.apply {
+            isEnabled = current < chapters.lastIndex
+        }, LinearLayout.LayoutParams(-2, -2))
+        guideNav.addView(nav, android.widget.FrameLayout.LayoutParams(-1, -2))
         val heads = HashMap<String, View>()
         chapters.forEachIndexed { i, ch ->
             val isOpen = ch.id in openIds
@@ -289,12 +307,13 @@ class HelpScreen(
     }
 
     private fun toggle(id: String) {
-        if (!openIds.remove(id)) openIds += id
+        if (!openIds.remove(id)) { openIds.clear(); openIds += id }
         render()
     }
 
     /** A contents entry: open that chapter (if closed) and scroll to it. */
     private fun openChapter(id: String) {
+        openIds.clear()
         openIds += id
         scrollTo = id
         render()
@@ -316,7 +335,7 @@ internal object HelpActions {
                 HelpAction.IMPORT_APKG -> importApkg(page)
                 HelpAction.HELP_PAGE -> b.arg?.let { page.show(HelpRoute.Problem(it)) }
                 HelpAction.OPEN_DIAGNOSTICS -> page.startScreen(Intent(ctx, DiagnosticsActivity::class.java))
-                HelpAction.OPEN_SETTINGS -> page.startScreen(Nav.intent(ctx, Dest.SETTINGS))
+                HelpAction.OPEN_SETTINGS -> if (b.arg != null) HelpSettingsLinks.open(ctx, b.arg) else page.startScreen(Nav.intent(ctx, Dest.SETTINGS))
                 HelpAction.OPEN_URL -> b.arg?.let { page.startScreen(Intent(Intent.ACTION_VIEW, Uri.parse(it))) }
             }
         } catch (e: Exception) {
@@ -378,7 +397,7 @@ class HelpActivity : PageActivity() {
         when (val r = screen?.route) {
             is HelpRoute.Problem -> outState.putString(EXTRA_PAGE, r.id)
             HelpRoute.Setup -> outState.putString(EXTRA_PAGE, HelpRoutes.SETUP)
-            is HelpRoute.Guide -> outState.putString(EXTRA_CHAPTER, r.chapter ?: HelpRoutes.GUIDE)
+            is HelpRoute.Guide -> outState.putString(EXTRA_CHAPTER, screen?.currentGuideChapter ?: HelpRoutes.GUIDE)
             else -> {}
         }
     }

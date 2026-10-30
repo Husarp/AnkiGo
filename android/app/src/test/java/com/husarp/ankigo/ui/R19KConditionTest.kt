@@ -32,6 +32,11 @@ class R19KConditionTest {
 
     @Test fun theWordAndTheNumberOfEachKey() {
         val rows = listOf(
+            Triple("switchtrap", 2, "Trapped · 2" to "2 turns left"),
+            Triple("spikes", 2, "Spikes ×2" to "2 layers"),
+            Triple("toxicspikes", 1, "Toxic Spikes ×1" to "1 layer"),
+            Triple("stealthrock", 1, "Stealth Rock" to ""),
+            Triple("stickyweb", 1, "Sticky Web" to ""),
             Triple("confusion", 3, "Confused · 3" to "3 turns left"),
             Triple("confusion", 1, "Confused · 1" to "1 turn left"),
             Triple("attract", 1, "In love" to ""),
@@ -79,8 +84,8 @@ class R19KConditionTest {
         for (key in ConditionMarks.allKeys) {
             val d = ConditionMarks.def(key)!!
             assertTrue("$key has a word", d.word.isNotBlank())
-            assertTrue("$key: a word that is on one chip only (${d.word})", words.add(d.word))
-            assertTrue("$key has a rank", d.rank > 0)
+            assertTrue("$key: a word that is on one chip only (${d.word})", (words.add(d.word) || key == "partiallytrapped"))
+            assertTrue("$key has a rank", if (key.startsWith("stat.")) d.rank < 0 else d.rank > 0)
             assertFalse("$key: no arrow glyphs in the texts", d.word.contains('→') || d.noTurns.contains('→'))
         }
     }

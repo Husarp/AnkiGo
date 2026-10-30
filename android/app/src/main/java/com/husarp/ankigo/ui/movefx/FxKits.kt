@@ -24,7 +24,44 @@ internal object FxKits {
             FxKit.PSYCHIC -> psychic(s, atMs, hitSpot)
             FxKit.GHOST -> s.at(atMs) { darkBurst(s, hitSpot, s.plan.palette, s.k, .8f) }
             FxKit.GROUND -> s.at(atMs) { ground(s, hitSpot) }
+            FxKit.FIGHTING, FxKit.POISON, FxKit.FLYING, FxKit.BUG, FxKit.ROCK,
+            FxKit.DRAGON, FxKit.DARK, FxKit.STEEL, FxKit.FAIRY -> s.at(atMs) { tinted(s, kit, hitSpot) }
             FxKit.PLAIN -> s.at(atMs) { plain(s, hitSpot) }
+        }
+    }
+
+    /** PLAN 248b C: existing fxk textures, in the type palette and the page's distinct mixes. */
+    private fun tinted(s: FxScript, kit: FxKit, at: FxPt) {
+        val p = s.plan.palette
+        fun tex(key: String, size: Float, end: Float, life: Float, tint: Int = p.glow, rot: Float = 0f, spin: Float = 0f) =
+            s.particle(key, tint, at.x, at.y, s0 = size * s.k, s1 = end * s.k, life = life, rot = rot, vrot = spin)
+        fun burst(key: String, n: Int, size: Float, life: Float, tint: Int = p.glow, gravity: Float = 0f) =
+            s.burst(key, tint, at, n, 110f, life, size * s.k, 6f, gravity = gravity)
+        when (kit) {
+            FxKit.FIGHTING -> {
+                tex("star_06", 20f, 78f, 300f)
+                repeat(2) { tex("slash_03", 60f, 70f, 260f, p.spark, -.7f + it * 1.5f) }
+                burst("dirt_02", 6, 16f, 440f, p.deep)
+            }
+            FxKit.POISON -> {
+                tex("smoke_05", 20f, 80f, 560f, p.smoke)
+                tex("circle_05", 14f, 60f, 360f)
+                repeat(5) { s.particle("circle_05", p.glow, at.x + s.rnd(-14f, 14f) * s.u, at.y, vy = -s.rnd(20f, 50f), s0 = 14f, s1 = 6f, life = 520f) }
+            }
+            FxKit.FLYING -> {
+                repeat(2) { tex("twirl_01", 34f, 84f, 480f, p.glow, it * 3.1f, if (it == 0) 5f else -5f) }
+                tex("light_02", 10f, 64f, 320f, p.spark)
+            }
+            FxKit.BUG -> { burst("spark_01", 6, 26f, 400f); tex("star_04", 16f, 64f, 300f, p.spark); tex("circle_05", 10f, 56f, 300f) }
+            FxKit.ROCK -> { burst("dirt_01", 6, 20f, 640f, p.deep, 260f); tex("smoke_08", 16f, 76f, 420f, p.smoke); tex("star_06", 20f, 62f, 240f) }
+            FxKit.DRAGON -> {
+                repeat(2) { tex("twirl_01", 30f, 84f, 520f, p.glow, it * 3.1f, if (it == 0) -4f else 4f) }
+                tex("magic_05", 20f, 80f, 420f, p.spark); burst("flame_05", 4, 26f, 520f)
+            }
+            FxKit.DARK -> { tex("smoke_08", 24f, 86f, 560f, p.deep); repeat(2) { tex("slash_03", 62f, 72f, 300f, p.glow, -.6f + it * 3.1f) } }
+            FxKit.STEEL -> { tex("star_08", 24f, 86f, 300f, p.spark); tex("slash_03", 64f, 72f, 260f, p.glow, .4f); tex("circle_02", 10f, 60f, 320f); burst("spark_01", 5, 24f, 360f, p.spark) }
+            FxKit.FAIRY -> { tex("magic_05", 20f, 84f, 460f); burst("star_01", 7, 14f, 620f, p.spark); tex("circle_05", 10f, 60f, 380f) }
+            else -> Unit
         }
     }
 

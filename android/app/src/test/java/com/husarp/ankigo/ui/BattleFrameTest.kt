@@ -115,7 +115,7 @@ class BattleFrameTest {
     }
 
     @Test fun savedNameParsesAndUnknownMeansNone() {
-        for (s in BattleFrameStyle.entries) assertEquals(s, BattleFrameStyle.parse(s.name))
+        for (s in BattleFrameStyle.entries) assertEquals(if (s == BattleFrameStyle.ICE) BattleFrameStyle.NONE else s, BattleFrameStyle.parse(s.name))
         assertEquals(BattleFrameStyle.NONE, BattleFrameStyle.parse(null))
         assertEquals(BattleFrameStyle.NONE, BattleFrameStyle.parse(""))
         assertEquals(BattleFrameStyle.NONE, BattleFrameStyle.parse("LEAF"))
@@ -123,7 +123,7 @@ class BattleFrameTest {
     }
 
     @Test fun theLeafFrameIsNotOffered() {
-        assertEquals(listOf("NONE", "SIMPLE", "WOOD", "STONE", "GOLD", "ICE", "METAL"), BattleFrameStyle.entries.map { it.name })
+        assertEquals(listOf("NONE", "SIMPLE", "AUTOMATIC", "SEA", "WOOD", "STONE", "GOLD", "ICE", "METAL"), BattleFrameStyle.entries.map { it.name })
     }
 
     @Test fun oneArtPixelIsTwoDpOnScreen() {

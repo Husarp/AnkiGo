@@ -46,6 +46,7 @@ internal fun pillButton(ctx: Context, label: String, primary: Boolean, textSp: F
     val inset = Ui.dp(ctx, (48 - visualDp) / 2)
     return Ui.text(ctx, textSp, 900, if (primary) R.color.ag_base else R.color.ag_text).apply {
         text = label
+        if (primary) setTextColor(Ui.onAccent(ctx))
         gravity = Gravity.CENTER
         minHeight = Ui.dp(ctx, 48)
         background = InsetDrawable(ripple, 0, inset, 0, inset)
@@ -151,7 +152,7 @@ class UpdateBanner(ctx: Context) : UpdatesView(ctx) {
             setColorFilter(Ui.c(ctx, R.color.ag_mauve), PorterDuff.Mode.SRC_IN)
             val pad = Ui.dp(ctx, 8)
             setPadding(pad, pad, pad, pad)
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve) and 0x00FFFFFF or 0x2E000000, 11, ctx)
+            background = null
         }, LayoutParams(Ui.dp(ctx, 36), Ui.dp(ctx, 36)).also { it.marginEnd = Ui.dp(ctx, 10) })
         val texts = LinearLayout(ctx).apply { orientation = VERTICAL; addView(title); addView(subtitle, LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) }) }
         row.addView(texts, LayoutParams(0, -2, 1f))

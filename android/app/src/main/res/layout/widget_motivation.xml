@@ -5,7 +5,7 @@
     android:id="@+id/m_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_game_bg">
+    android:background="@android:color/transparent">
 
     <ImageView
         android:id="@+id/m_img_l"

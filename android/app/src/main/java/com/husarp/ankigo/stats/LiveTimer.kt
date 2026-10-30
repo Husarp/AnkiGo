@@ -69,16 +69,5 @@ object LiveTimeFile {
  * ms spent per game day from live-time.csv lines `epochMillis,ms`. [dayKey] maps an instant to its game day. Lines that
  * can't be read (also a half-written last line) are skipped; one answer counts at most [LIVE_ANSWER_CAP_MS].
  */
-fun timeLive(lines: Sequence<String>, dayKey: (Long) -> String): Map<String, Long> {
-    val out = HashMap<String, Long>()
-    for (line in lines) {
-        val p = line.split(',')
-        if (p.size != 2) continue
-        val at = p[0].trim().toLongOrNull() ?: continue
-        val ms = p[1].trim().toLongOrNull() ?: continue
-        if (at <= 0 || ms < 0) continue
-        val day = try { dayKey(at) } catch (_: Exception) { continue }
-        out[day] = (out[day] ?: 0L) + minOf(ms, LIVE_ANSWER_CAP_MS)
-    }
-    return out
-}
+fun timeLive(lines: Sequence<String>, dayKey: (Long) -> String): Map<String, Long> =
+    timedAnswers(lines, true, dayKey).time

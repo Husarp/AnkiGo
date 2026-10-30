@@ -32,8 +32,11 @@ class LookChooserTest {
             assertEquals(id, "HP / XP bars", SettingsCatalog.byId(id)!!.sub)
         }
         val frames = SettingsCatalog.all.filter { it.sub == "Battle frame" }
-        assertEquals(BattleFrameStyle.entries.size, frames.size)
+        assertEquals(BattleFrameStyle.entries.count { it != BattleFrameStyle.ICE }, frames.size)
         for (e in frames) assertEquals(e.id, LookChoosers.FRAME, LookChoosers.titleFor(e.id))
+        assertNull(SettingsCatalog.byId("frameIce"))
+        assertNotNull(SettingsCatalog.byId("frameAutomatic"))
+        assertNotNull(SettingsCatalog.byId("frameSea"))
         assertNull(LookChoosers.titleFor("pokemonSize"))
         assertNull(LookChoosers.titleFor("turnDots"))
         assertNull(LookChoosers.titleFor("fasterStart"))
@@ -46,7 +49,7 @@ class LookChooserTest {
         }
         for (look in HpBarLook.entries) assertEquals(look.label, SettingsCatalog.byId("hpBars" + look.name.lowercase().replaceFirstChar(Char::uppercase))!!.title)
         for (s in InfoBoxStyle.entries) assertTrue(SettingsCatalog.all.any { it.title == s.label && it.sub == "Info box style" })
-        for (s in BattleFrameStyle.entries) assertTrue(SettingsCatalog.all.any { it.title == s.label && it.sub == "Battle frame" })
+        for (s in BattleFrameStyle.entries.filter { it != BattleFrameStyle.ICE }) assertTrue(SettingsCatalog.all.any { it.title == s.label && it.sub == "Battle frame" })
     }
 
     @Test fun searchFindsAnEntryByItsOwnWords() {

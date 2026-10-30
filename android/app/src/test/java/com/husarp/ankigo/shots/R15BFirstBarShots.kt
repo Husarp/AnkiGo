@@ -54,7 +54,7 @@ class R15BFirstBarShots {
             val b = bar(studyPanel(ctx, false))
             assertFalse("no legacy line before the first answer", b.lineShown())
             b.dotsOn = true; b.dotsPlace = place
-            assertEquals(if (place == DotsPlace.RIGHT_END) listOf("mine", "theirs", "dots") else listOf("mine", "dots", "theirs"), b.segmentOrder())
+            assertEquals(listOf("mine", "dots", "theirs"), b.segmentOrder())
         }
     }
 

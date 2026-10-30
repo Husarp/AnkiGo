@@ -42,7 +42,8 @@ internal object StudyUi {
     }
     fun section(ctx: Context, title: String, note: String? = null) = row(ctx).apply {
         setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 14), Ui.dp(ctx, 4), Ui.dp(ctx, 8))
-        addView(label(ctx, title.uppercase(), 12, R.color.ag_sub0, 900).apply { letterSpacing = .058f }, lp(0, -2, 1f))
+        addView(icon(ctx, R.drawable.ic_book, R.color.ag_mauve), lp(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.marginEnd = Ui.dp(ctx, 6) })
+        addView(label(ctx, title.uppercase(), 12, R.color.ag_mauve, 900).apply { letterSpacing = .058f }, lp(0, -2, 1f))
         if (note != null) addView(label(ctx, note, 12, R.color.ag_sub0))
     }
     fun icon(ctx: Context, resource: Int, tone: Int = R.color.ag_sub1) = ImageView(ctx).apply {
@@ -61,7 +62,8 @@ internal object StudyUi {
         label(ctx, text, 12, if (primary) R.color.ag_base else R.color.ag_text, 900).apply {
             gravity = Gravity.CENTER
             setPadding(Ui.dp(ctx, 10), Ui.dp(ctx, 7), Ui.dp(ctx, 10), Ui.dp(ctx, 7))
-            background = ripple(ctx, Ui.rounded(Ui.c(ctx, if (primary) R.color.ag_mauve else R.color.ag_s0), 10, ctx))
+            if (primary) setTextColor(AppDialogRules.onFill(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_crust), TypeInk::contrast))
+            background = ripple(ctx, Ui.rounded(Ui.c(ctx, if (primary) R.color.ag_mauve else R.color.ag_s0), 12, ctx))
             setOnClickListener { action() }
         }
 
@@ -72,6 +74,21 @@ internal object StudyUi {
     }
 
     /** A [primary] button of the deck-finished screen: the same 48 dp minimum height as [secondary] ("Back to decks"). */
+    fun finishedNextDeck(ctx: Context, name: String, due: Int, action: () -> Unit): View = row(ctx).apply {
+        background = ripple(ctx, Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 14, ctx))
+        val ink = AppDialogRules.onFill(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_crust), TypeInk::contrast)
+        minimumHeight = Ui.dp(ctx, 64)
+        setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 12), Ui.dp(ctx, 16), Ui.dp(ctx, 12))
+        contentDescription = "Next deck: $name, $due due"
+        setOnClickListener { action() }
+        val labels = column(ctx)
+        val path = name.substringBeforeLast("::", "").replace("::", " › ")
+        if (path.isNotEmpty()) labels.addView(label(ctx, path, 11).apply { setTextColor(ink) })
+        labels.addView(label(ctx, name.substringAfterLast("::"), 17, R.color.ag_text, 900).apply { setTextColor(ink) })
+        addView(labels, lp(0, -2, 1f).apply { marginEnd = Ui.dp(ctx, 12) })
+        addView(label(ctx, "$due due", 13, R.color.ag_text, 800).apply { setTextColor(ink) })
+    }
+
     fun finishedPrimary(ctx: Context, text: String, action: () -> Unit) = primary(ctx, text, action).apply { minimumHeight = Ui.dp(ctx, 48) }
 
     /** The secondary look next to [primary]: same size, corner radius and text size, `ag_s0` fill; at least 48 dp tall. */

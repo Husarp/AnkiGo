@@ -22,6 +22,7 @@ internal object StatsSheets {
     @DrawableRes fun icon(id: String): Int = when (id) {
         "bars" -> R.drawable.ic_stats
         "clock" -> R.drawable.ic_clock
+        "speed" -> R.drawable.ic_bolt
         "check" -> R.drawable.ic_check
         "plus" -> R.drawable.ic_plus
         "gamepad" -> R.drawable.ic_game
@@ -66,7 +67,7 @@ internal object StatsSheets {
 
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         for ((group, metrics) in ChartMetric.menu) {
-            body.addView(Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply { text = group.label.uppercase(); letterSpacing = 0.06f },
+            body.addView(Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply { Ui.decorateHeading(this, group.label); letterSpacing = 0.06f },
                 LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10); it.bottomMargin = Ui.dp(ctx, 2) })
             val flow = FlowLayout(ctx)
             for (m in metrics) flow.addView(chip(ctx, m, m == current, onPick))
@@ -81,7 +82,7 @@ internal object StatsSheets {
         return Ui.text(ctx, 12.5f, 800, if (on) R.color.ag_crust else R.color.ag_sub1).apply {
             text = m.label
             maxLines = 1
-            Ui.touchPill(this, Ui.rounded(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_mantle), 14, ctx), 34, 12)
+            Ui.touchPill(this, Ui.rounded(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_mantle), 12, ctx), 32, 12)
             ctx.getDrawable(icon(m.icon))?.mutate()?.let { d ->
                 d.setTint(ink)
                 val s = Ui.dp(ctx, 14)

@@ -16,18 +16,19 @@ import com.husarp.ankigo.game.Species
 
 /**
  * R18-G (PLAN 243B + 239B / 239S1, docs/design/round17-details.html): the grey card right under the HP and XP bars of the Pokémon details.
- * It never folds. Your Pokémon's card holds the Holding row (its item and the Exp. Share) and, under a thin line, the Evolution; the
- * Pokédex entry and the wild Pokémon's window have the Evolution only. The whole title row of each part opens its explanation.
+ * Evolution can fold. Your Pokémon's card holds the Holding row (its item and the Exp. Share) and, under a thin line, the Evolution; the
+ * Pokédex entry and the wild Pokémon's window have the Evolution only. Tapping a condition explains it.
  */
 internal object DetailTopCard {
     /** Your Pokémon's card: Holding, then Evolution. [give] = the "Give item" action (null = no Options in this window, so no button). */
     fun forMon(a: Context, data: GameData, state: GameState?, mon: Mon, sp: Species, seen: Set<Int>, compact: Boolean,
-               page: GamePage?, give: (() -> Unit)?, onSpecies: ((Species) -> Unit)?): View =
-        card(a, listOf(holding(a, data, state, mon, page, give), evolution(a, data, sp, seen, compact, onSpecies)))
+               page: GamePage?, give: (() -> Unit)?, onSpecies: ((Species) -> Unit)?, onEvolved: (() -> Unit)? = null): View =
+        card(a, listOf(holding(a, data, state, mon, page, give), evolution(a, data, sp, seen, compact, onSpecies, state, mon, page, onEvolved)))
 
     /** The Pokédex entry's / wild Pokémon's card: the Evolution only (a species holds nothing). */
     fun evolutionOnly(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?): View =
-        card(a, listOf(evolution(a, data, sp, seen, compact, onSpecies)))
+        card(a, listOf(evolution(a, data, sp, seen, compact, onSpecies,
+            state = com.husarp.ankigo.GameRepo.state.takeIf { com.husarp.ankigo.GameRepo.data === data })))
 
     /** The card with its [parts] one under the other, a thin line between them. */
     private fun card(a: Context, parts: List<View>): View = LinearLayout(a).apply {
@@ -115,17 +116,28 @@ internal object DetailTopCard {
     // ---------- Evolution ----------
 
     /**
-     * The Evolution part: the small "Evolution" title (the whole title row opens [StatInfo.EVOLUTION]) and the evolution line centred
-     * under it; a Pokémon whose line is just itself gets one row, "Evolution   Does not evolve".
+     * The collapsible evolution line and, for an owned Pokémon, every evolution currently ready to choose.
      */
-    private fun evolution(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?): View {
-        if (EvoLine.of(data, sp).standalone) return DetailSections.fact(a, "Evolution", StatInfo.EVOLUTION, "Does not evolve", null, compact)
-        val heading: TextView = Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Evolution"; gravity = Gravity.CENTER_VERTICAL }
-        DetailParts.tapRow(heading, StatInfo.EVOLUTION)
-        return LinearLayout(a).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(heading, LinearLayout.LayoutParams(-1, -2))
-            addView(DetailSections.evolution(a, data, sp, seen, compact, onSpecies), LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(a, 10) })
+    private fun evolution(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?, state: GameState? = null, mon: Mon? = null, page: GamePage? = null, onEvolved: (() -> Unit)? = null): View {
+        return DetailSections.section(a, DetailSections.memory(a), DetailSection.EVOLUTION, null) {
+            LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(EvolutionRows(a, data, EvoLine.of(data, sp).root, sp, seen, onSpecies, state, mon), LinearLayout.LayoutParams(-1, -2))
+                if (state != null && mon != null && page != null && state.mon(mon.uid) != null) {
+                    val ready = com.husarp.ankigo.game.Progression.readyEvolutions(data, state, mon, System.currentTimeMillis())
+                    if (ready.isNotEmpty()) addView(Ui.text(a, 14f, 900, R.color.ag_mauve).apply { text = "Ready to evolve" })
+                    ready.forEach { e ->
+                        val row = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
+                        row.addView(EvolutionRows(a, data, com.husarp.ankigo.game.EvoNode(sp, null, listOf(com.husarp.ankigo.game.EvoNode(data.sp(e.to), e, emptyList()))), sp, seen + sp.num + e.to, onSpecies, state, mon))
+                        row.addView(Ui.text(a, 12f, 800, R.color.ag_green).apply { text = "Conditions met" })
+                        row.addView(DetailParts.secondaryButton(a, "Evolve") {
+                            val result = page.act { g -> g.chooseEvolution(mon.uid, e.to) }
+                            if (result.ok) onEvolved?.invoke()
+                        })
+                        addView(row, LinearLayout.LayoutParams(-1, -2))
+                    }
+                }
+            }
         }
     }
 }

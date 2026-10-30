@@ -36,6 +36,9 @@ internal class StudyCharge {
         }
     }
 
+    /** Presentation only: the round has spent its dots; the next Counted still starts a fresh round. */
+    fun consume() { choices.clear() }
+
     companion object {
         /** The "button" value of the grey dot of an OK answer ([Tuning.BUTTON_OK]); 1 to 4 are the answer buttons, 0 = unknown. */
         const val OK = Tuning.BUTTON_OK

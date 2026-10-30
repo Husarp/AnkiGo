@@ -92,7 +92,8 @@ class GoalSparksTest {
         val f = GoalSparks.frame(3, 777L)
         f.forEachIndexed { i, s ->
             assertEquals(if (i % 2 == 1) 0xFFFFD447.toInt() else 0xFFFB8F2B.toInt(), s.color)
-            assertEquals(1.2f + 0.4f * ((i * 0.3) % 1.0).toFloat(), s.radius, 1e-4f)
+            assertEquals(floatArrayOf(3f, 1.7f, 2.4f, 2.6f, 2.6f, 3.4f)[i % 6], s.radius, 1e-4f)
+            assertEquals(intArrayOf(1, 0, 2, 3, 4, 1)[i % 6], s.shape)
         }
     }
 

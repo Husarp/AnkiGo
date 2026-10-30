@@ -43,6 +43,8 @@ import java.time.LocalDate
 class R10W2ShopShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
 
+    @org.junit.After fun resetMotion() { Shots.files(paparazzi.context).getSharedPreferences("study", 0).edit().remove("reduceMotion").commit() }
+
     private val st get() = GameRepo.state!!
     private val gd get() = GameRepo.data!!
 
@@ -120,6 +122,7 @@ class R10W2ShopShots {
     /** The Shop tab drawn on [day]: onShow's roll-over ticks to the real day, so the day is forced afterwards and the page drawn again. */
     private fun shopTab(ctx: Context, day: String, cash: Int = 5000, tms: List<String> = listOf("thunderbolt", "bodyslam", "earthquake")): Pair<ShopPage, View> {
         AppPrefs.setShopSeenDay(ctx, "never")
+        st.cash = cash
         val p = ShopPage(ctx, NoHost)
         val screen = pageScreen(ctx, p)
         forceDay(day, cash, tms)
@@ -197,7 +200,7 @@ class R10W2ShopShots {
 
     @Test fun theBagSwitchIsStillThereAndOwnedTmsSayOwned() {
         shoot("bag", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT), check = { _, screen ->
-            assertTrue("Bag · ${st.bag.values.sum() + st.tms.size}" in texts(screen))
+            assertTrue("Bag · ${st.bag.values.sum() + st.tms.size + st.mons.count { it.heldItem != null }}" in texts(screen))
             assertTrue("the Bag replaced the shop", "TODAY'S SPECIALS" !in texts(screen))
         }) { ctx ->
             val (p, screen) = shopTab(ctx, WEEKDAY)
@@ -299,14 +302,16 @@ class R10W2ShopShots {
         return out
     }
 
-    @Test fun theWindowOfTheDealShowsTheOldPriceStruckThroughOnItsBuyButton() {
+    @Test fun itemWindowsKeepPricesOnTheShopListAndShowBuyAndQuantity() {
         shoot("card-deal", listOf(Variants.PHONE), check = { _, v ->
             val t = texts(v)
             val deal = Shop.dealFor(gd, WEEKDAY)!!
-            assertEquals("the old price, struck through, once (on the Buy button; the deal card behind draws its own line)", listOf(Bits.fmt(deal.oldPrice)), struck(v))
+            assertTrue("no prices struck through in the popup", struck((v as ShopCardKit.Stage).page.itemWindow!!.view).isEmpty())
             assertTrue("the new price", Bits.fmt(deal.price) in t)
             assertTrue("the deal card stays under the window", "DEAL OF THE DAY" in t)
-            assertTrue(descriptions(v).any { it.startsWith("Buy for ${Bits.fmt(deal.price)}") })
+            assertTrue("Buy" in texts(v))
+            assertTrue("×1" in texts(v))
+            assertFalse("popup has no coin amount", Bits.fmt(deal.price) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))
         }) { ctx ->
             val (p, screen) = shopTab(ctx, WEEKDAY)
             val stage = ShopCardKit.Stage(ctx, p, screen)
@@ -316,7 +321,8 @@ class R10W2ShopShots {
         shoot("card-plain", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT), check = { _, v ->
             val basic = Shop.basics().first()
             assertTrue("nothing struck through on a plain price", struck(v).isEmpty())
-            assertTrue(descriptions(v).any { it == "Buy for ${Bits.fmt(gd.price(basic))}" })
+            assertTrue("Buy" in texts(v))
+            assertFalse("popup has no coin amount", Bits.fmt(gd.price(basic)) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))
             assertTrue("no Price row", "Price" !in texts(v))
         }) { ctx ->
             val (p, screen) = shopTab(ctx, WEEKDAY)
@@ -328,6 +334,8 @@ class R10W2ShopShots {
 
     @Test fun aDealPurchaseChargesTheDealPriceAsOftenAsYouLike() {
         shoot("buy", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
+            // This checks purchase totals; animation timing has its own counter tests.
+            ctx.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true).commit()
             val (p, screen) = shopTab(ctx, WEEKDAY, cash = 20_000)
             val deal = Shop.dealFor(gd, WEEKDAY)!!
             val n0 = st.count(deal.item)
@@ -389,7 +397,9 @@ class R10W2ShopShots {
             val bar = items(col.getChildAt(n))
             assertEquals(5, bar.size)
             val shopHasDot = dot && tab != BottomNav.Tab.SHOP
-            val expect = listOf("Study", "Pokémon", if (shopHasDot) "Shop, new stock" else "Shop", "Stats", "Settings")
+            val achievements = com.husarp.ankigo.ui.AchievementNotice.unseen(ctx)
+            val expect = listOf("Study", "Pokémon", if (shopHasDot) "Shop, new stock" else "Shop", if (achievements) "Stats, new achievements" else "Stats", "Settings")
+            assertEquals(if (achievements) View.VISIBLE else View.GONE, dotOf(bar[3])!!.visibility)
             assertEquals("$tab", expect, bar.map { it.contentDescription.toString() })
             if (tab == BottomNav.Tab.SHOP) assertNull("on the Shop tab itself there is no dot", dotOf(bar[2]))
             else assertEquals("$tab", if (shopHasDot) View.VISIBLE else View.GONE, dotOf(bar[2])!!.visibility)

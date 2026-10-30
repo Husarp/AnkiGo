@@ -47,6 +47,7 @@ class R9W3BoxesShots {
 
     @After fun cleanUp() {
         Backdrops.forget()
+        Shots.files(paparazzi.context).getSharedPreferences("study", 0).edit().remove("alwaysShowXpBar").commit()
         BattleShotKit.reset()
     }
 
@@ -282,6 +283,7 @@ class R9W3BoxesShots {
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(size, Theme.LIGHT).copy(fontScale = scale))
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx)
+            ctx.getSharedPreferences("study", 0).edit().putBoolean("alwaysShowXpBar", true).commit()
             AppPrefs.setInfoBoxStyle(ctx, InfoBoxStyle.INSIDE)
             val sc = build(ctx, pic)
             fill(sc.arena, false)

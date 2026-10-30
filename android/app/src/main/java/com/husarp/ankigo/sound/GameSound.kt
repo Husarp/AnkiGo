@@ -114,7 +114,8 @@ object GameSound {
         try {
             val c = app(ctx)
             val shiny = e is GameEvent.MainChanged && GameRepo.state?.mon(e.uid)?.shiny == true
-            val cues = SoundRules.cuesFor(e, ballShown, shiny)
+            val cues = SoundRules.cuesFor(e, ballShown, shiny) +
+                listOfNotNull(TypeSfx.cue(e, SoundPrefs.typeSounds(c)))
             if (e is GameEvent.Encounter) prefetchCries(c, e.species)
             if (cues.isEmpty()) return
             val sc = context(c, quietNow(muted))
@@ -176,7 +177,8 @@ object GameSound {
 
     /** True when [cue] may start right now: its group is on, its volume above 0, the ringer normal and the card quiet rule not active. */
     private fun allowedNow(c: Context, cue: Cue) = try {
-        SoundRules.shouldPlay(cue, context(c, quietNow(false)))
+        SoundRules.shouldPlay(cue, context(c, quietNow(false))) &&
+            (cue !is Cue.Effect || TypeSfx.type(cue.id) == null || SoundPrefs.typeSounds(c))
     } catch (t: Throwable) { Report.fail(TAG, "checking $cue", t); false }
 
     private fun play(c: Context, cue: Cue, delayMs: Long) {

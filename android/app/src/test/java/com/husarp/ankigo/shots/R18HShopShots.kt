@@ -13,6 +13,7 @@ import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.TestData
 import com.husarp.ankigo.ui.CardKeys
 import com.husarp.ankigo.ui.ShopPlan
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -81,6 +82,7 @@ class R18HShopShots {
             assertEquals(texts(screen).toString(), 3, titles.size)
             val accent = ctx.getColor(com.husarp.ankigo.ui.AppLook.accentRes(ctx))
             for (t in titles) {
+                assertNotNull("shared heading keeps its icon", t.compoundDrawablesRelative[0])
                 assertEquals("12.5 sp title", 12.5f, t.textSize / ctx.resources.displayMetrics.scaledDensity, 0.01f)
                 assertEquals("the accent colour", accent, t.currentTextColor)
                 assertNotEquals("not the old grey", ctx.getColor(R.color.ag_sub0), t.currentTextColor)
@@ -132,6 +134,10 @@ class R18HShopShots {
             val t = texts(screen)
             assertTrue(t.toString(), "5,000" in t)
             assertTrue("never a first 0", ShopPlan.pillText(null) == "")
-        }) { ctx -> ShopCardKit.page(ctx, null, cash = 5000).second }
+        }) { ctx ->
+            // Each shot has isolated preferences; keep this initial-balance screenshot still.
+            ctx.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true).commit()
+            ShopCardKit.page(ctx, null, cash = 5000).second
+        }
     }
 }

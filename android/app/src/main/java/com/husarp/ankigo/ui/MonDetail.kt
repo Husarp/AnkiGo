@@ -64,7 +64,7 @@ object MonDetail {
         }
     }
 
-    fun show(a: Context, data: GameData, mon: Mon) {
+    fun show(a: Context, data: GameData, mon: Mon, focusMove: String? = null) {
         // opened = seen: the NEW mark of its Box tile / Team row goes away (R4-V5)
         GameRepo.state?.let { st -> if (TileMarks.isNew(st, mon)) GameRepo.act(a) { it.markViewed(mon.uid) } }
         val page = a as? GamePage
@@ -174,12 +174,15 @@ object MonDetail {
             if (state != null && HoldingPlan.giveable(state, mon).isNotEmpty()) dlg.dismiss()
             MonActions(page).giveItem(mon)
         }) else null
-        col.addView(DetailTopCard.forMon(a, data, state, mon, sp, seen, compact, page, give, if (page != null) { s -> DexDetail.show(page, s) } else null),
+        col.addView(DetailTopCard.forMon(a, data, state, mon, sp, seen, compact, page, give, if (page != null) { s -> DexDetail.show(page, s) } else null, onEvolved = {
+            dlg.dismiss()
+            show(a, data, mon)
+        }),
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
-        col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${stats.total}", titleLevel = mon.level) {
-            DetailSections.statsBody(a, stats, mon.level, mon.nature, sp, compact)
+        col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${stats.total}", titleLevel = mon.level, boosts = state?.battle?.takeIf { state.main?.uid == mon.uid }?.player?.boosts) {
+            DetailSections.statsBody(a, stats, mon.level, mon.nature, sp, compact, state?.battle?.takeIf { state.main?.uid == mon.uid }?.player?.boosts)
         })
-        col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves") { DetailSections.moves(a, data, mon.moves, compact) })
+        col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves", forceOpen = focusMove != null) { DetailSections.moves(a, data, mon.moves, compact, focusMove = focusMove) })
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, mon.shownName) })
         col.addView(DetailSections.section(a, mem, DetailSection.TRAINING, mon.nature.label) { DetailSections.training(a, mon, compact) })
         val others = DetailFormat.otherAbilities(sp, mon.ability)
@@ -191,7 +194,7 @@ object MonDetail {
             if (mon.shownName != mon.name) mon.name else null, compact,
             lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–")))
 
-        if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col)).setCloseAtTop().showCard(); return }
+        if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col, focusMove)).setCloseAtTop().showCard(); return }
         lateinit var more: View
         more = DetailParts.secondaryButton(a, "Options") {
             // the menu hangs on this button, so the details close only once a row was tapped
@@ -201,7 +204,7 @@ object MonDetail {
         val pinned = FrameLayout(a).apply {
             addView(more, FrameLayout.LayoutParams(-1, -2).also { it.setMargins(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 4)) })
         }
-        dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col)).setFooter(pinned)
+        dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col, focusMove)).setFooter(pinned)
             .setCloseAtTop().create()
         Pickers.show(dlg)
     }

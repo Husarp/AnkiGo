@@ -105,7 +105,7 @@ class R602Shots {
     }
 
     /** Titles of the sections in screen order (the bar texts). */
-    private fun order(t: List<String>) = listOf("Stats", "Moves", "Matchups", "Training", "Info").filter { title -> t.any { it == title || it.startsWith("$title · ") } }
+    private fun order(t: List<String>) = listOf("Stats", "Moves", "Matchups", "Training", "Info").filter { title -> t.any { it.equals(title, ignoreCase = true) || it.startsWith("$title · ", ignoreCase = true) } }
 
     @Test fun own() = dialog("r602-own", check = { t ->
         assertEquals(listOf("Stats", "Moves", "Matchups", "Training", "Info"), order(t))
@@ -119,11 +119,17 @@ class R602Shots {
         assertFalse(t.any { it == "Nature" || it == "IVs" || it == "EVs" || it == "Friendship" || it == "Held item" || it == "Ability" || it == "Defeats" || it == "Wins" })
         assertTrue(t.contains("Tier") && t.contains("Pokédex") && t.contains("Total"))
         // R18-G (PLAN 254 / 243): the level is in the Stats title, and its evolution is in the card under the types (no Holding for a wild one)
-        assertTrue("Stats title carries the level", t.any { it.startsWith("Stats · Lv ") })
+        assertTrue("Stats title carries the level", t.any { it.startsWith("Stats · Lv ", ignoreCase = true) })
         assertTrue(t.none { it.contains("· Lv ") && it.startsWith("#") })
-        assertTrue(t.contains("Evolution") && !t.contains("Holding"))
+        assertTrue(t.contains("EVOLUTION") && t.none { it.equals("Holding", ignoreCase = true) })
         assertEquals("every move is still unknown", 2, t.count { it == "?" })
-    }) { ctx -> BattleShotKit.bound(ctx); withInfo(GameRepo.state!!.battle!!.wild.species); assertTrue(BattleDetails.showWild(ctx)) }
+    }) { ctx ->
+        BattleShotKit.bound(ctx)
+        val species = GameRepo.state!!.battle!!.wild.species
+        GameRepo.state!!.caught.remove(species)
+        withInfo(species)
+        assertTrue(BattleDetails.showWild(ctx))
+    }
 
     /** The Total number ends where the stat numbers end, and the label never touches it (also for a 4-digit total). */
     @Test fun totalRowAlignsWithTheStatNumbers() {

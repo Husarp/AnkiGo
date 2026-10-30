@@ -292,6 +292,9 @@ object Anki {
         component = android.content.ComponentName(pkg, "com.ichi2.anki.IntentHandler")
         putExtra("EXTRA_DECK_ID", deckId)
     }
+    /** Official browser deep link; cid narrows the search to this card, including sibling templates. */
+    fun resetCardIntent(cardId: Long) = android.content.Intent(android.content.Intent.ACTION_VIEW,
+        Uri.parse("anki://x-callback-url/browser?search=cid:$cardId")).setPackage(pkg)
     fun editIntent(nid: Long) = android.content.Intent(android.content.Intent.ACTION_VIEW,
         Uri.parse("anki://x-callback-url/browser?search=nid:$nid")).setPackage(pkg)
     fun launchIntent(ctx: Context) = ctx.packageManager.getLaunchIntentForPackage(pkg)

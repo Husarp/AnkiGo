@@ -78,8 +78,8 @@ internal object FirstRunJob {
 }
 
 /**
- * First start, one activity whose steps swap in place: 1 AnkiDroid access, 2 data + pictures download, 3 starter,
- * 4 split-screen hint. Starts at the first step that isn't done and finishes with RESULT_OK after step 4.
+ * First start: AnkiDroid access, download, starter, optional Study / Game / Look pages, then the split-screen hint.
+ * Settings can reopen just the three optional pages. Existing values are never reset when they open.
  */
 class FirstRunActivity : AgActivity() {
     override val showsUpdateBanner = false
@@ -112,7 +112,7 @@ class FirstRunActivity : AgActivity() {
             denied = savedInstanceState.getBoolean("denied")
         }
         render()
-        if (step == 0) GameRepo.load(this) { goTo(openStep()) }
+        if (step == 0) GameRepo.load(this) { goTo(if (intent.getBooleanExtra("setupOnly", false)) 6 else openStep()) }
     }
 
     /** The screen's views (content + actions); onCreate sets them as the Activity's content. */
@@ -186,7 +186,7 @@ class FirstRunActivity : AgActivity() {
         !permOk() -> 1
         GameRepo.status == GameRepo.Status.NEED_DATA || GameRepo.data == null || !staticsOk() -> 2
         GameRepo.status == GameRepo.Status.NEED_STARTER -> 3
-        else -> 4
+        else -> if (prefs.getBoolean("optionsDone", false)) 4 else 6
     }
 
     private fun goTo(n: Int) {
@@ -212,12 +212,13 @@ class FirstRunActivity : AgActivity() {
             3 -> stepStarter()
             4 -> stepSplit()
             5 -> stepSaveProblem()
+            6, 7, 8 -> stepOptions()
         }
     }
 
     private fun header(title: String, n: Int) {
         content.addView(Ui.text(this, 12f, 900, R.color.ag_sub0).apply {
-            text = "STEP $n OF 4"
+            text = "STEP $n OF 7"
             letterSpacing = 0.06f
         })
         content.addView(Ui.text(this, 28f, 900, R.color.ag_text).apply {
@@ -389,7 +390,7 @@ class FirstRunActivity : AgActivity() {
     /** Imported a save that came with a team: the starter question is answered, go on as if a starter was picked. */
     private fun afterImport(imported: Boolean) {
         if (step != 3) return
-        if (imported && GameRepo.state?.starterChosen == true) goTo(4) else render()
+        if (imported && GameRepo.state?.starterChosen == true) goTo(6) else render()
     }
 
     private fun starterCard(data: GameData, num: Int): View {
@@ -430,14 +431,14 @@ class FirstRunActivity : AgActivity() {
             val st = GameRepo.state
             if (st != null && !st.starterChosen) GameRepo.act(this) { it.pickStarter(num) }
             runCatching { Sprites.prefetch(this, sp, false) }
-            goTo(4)
+            goTo(6)
         }
     }
 
     // ---------- step 4: split screen ----------
 
     private fun stepSplit() {
-        header("Use it in split screen", 4)
+        header("Use it in split screen", 7)
         content.addView(SplitPicture(this), Form.lp(h = dp(170)).also { it.topMargin = dp(16) })
         val steps = listOf(
             "Open AnkiDroid.",
@@ -459,6 +460,110 @@ class FirstRunActivity : AgActivity() {
             finish()
         })
     }
+
+    private fun completeOptions() {
+        prefs.edit().putBoolean("optionsDone", true).apply()
+        if (intent.getBooleanExtra("setupOnly", false)) finish() else goTo(4)
+    }
+
+    /** Three optional pages; controls use the same storage and defaults as Settings. */
+    private fun stepOptions() {
+        val page = step - 6
+        header(listOf("Study", "Game", "Look")[page], page + 4)
+        content.addView(Form.body(this, "Defaults are ready. Change anything here or later in Settings.", 13, R.color.ag_sub0), Form.lp(this, 8))
+        when (page) {
+            0 -> setupStudy()
+            1 -> setupGame()
+            2 -> setupLook()
+        }
+        actions.addView(Form.primary(this, if (page == 2) "Done" else "Next") {
+            if (page == 2) completeOptions() else goTo(step + 1)
+        })
+        if (page > 0) actions.addView(Form.secondary(this, "Back", onPage = true) { goTo(step - 1) }, Form.lp(this, 6))
+        actions.addView(Form.secondary(this, "Skip setup", onPage = true) { completeOptions() }, Form.lp(this, 6))
+    }
+
+    private fun setupStudy() {
+        val study = getSharedPreferences("study", 0)
+        val rows = listOf(
+            Form.switchRow(this, "Tapping a deck opens AnkiDroid", "Off: study inside AnkiGo", study.getBoolean("inAnkiDroid", false)) { study.edit().putBoolean("inAnkiDroid", it).apply() },
+            Form.switchRow(this, "Tap the card to show the answer", "Off: use the Show answer button", study.getBoolean("tapShow", true)) { study.edit().putBoolean("tapShow", it).apply() },
+            Form.switchRow(this, "Swipe to answer", "← Again · ↓ Hard · → Good · ↑ Easy", study.getBoolean("swipe", false)) { study.edit().putBoolean("swipe", it).apply() },
+            Form.switchRow(this, "Vibrate on answer", "A short vibration when you answer", study.getBoolean("haptic", true)) { study.edit().putBoolean("haptic", it).apply() },
+            setupChoice("Answer timer", "Shows time spent on the current answer; study time still counts normally.",
+                com.husarp.ankigo.study.StudyTiming.TIMER_MODES,
+                study.getString("timer", com.husarp.ankigo.study.StudyTiming.AS_DECK).orEmpty()) {
+                study.edit().putString("timer", it).apply(); render()
+            },
+        )
+        content.addView(Form.cardOf(this, rows), Form.lp(this, 16))
+    }
+
+    private fun editSetup(change: (com.husarp.ankigo.game.Settings) -> Unit) {
+        GameRepo.run(this) { change(it.state.settings) }; GameRepo.scheduleSave(this)
+    }
+
+    private fun setupGame() {
+        val settings = GameRepo.state?.settings ?: return
+        val catch = com.husarp.ankigo.game.CatchChoice.of(settings)
+        val rows = listOf(
+            Form.row(this, "Generations", "Which Pokémon you can meet. Keep at least one enabled.", Ui.text(this, 12f, 800, R.color.ag_sub1).apply { text = settings.gens.sorted().joinToString(", ") }) {
+                val choices = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+                for (gen in 1..9) {
+                    lateinit var chip: android.widget.TextView
+                    chip = Form.toggleChip(this, "Gen $gen", gen in settings.gens) {
+                        val on = gen in settings.gens
+                        if (on && settings.gens.size == 1) Ui.toast(this, "At least one generation must stay on")
+                        else {
+                            editSetup { if (on) it.gens.remove(gen) else it.gens.add(gen) }
+                            Form.setChip(chip, !on)
+                        }
+                    }
+                    choices.addView(chip)
+                }
+                AppDialog.Builder(this).setTitle("Generations").setView(choices).setPositiveButton("Done") { _, _ -> render() }.create().also { Pickers.show(it) }
+            },
+            Form.row(this, "Daily goal", "Reviews per day. A bigger goal also makes rare Pokémon more likely.", Ui.text(this, 12f, 800, R.color.ag_sub1).apply { text = DailyGoalPicker.valueText(settings, GameRepo.state?.day) }) {
+                DailyGoalPicker.show(this, settings, GameRepo.state?.day, { editSetup(it) }) { render() }
+            },
+            setupChoice("When you beat a wild Pokémon", catch.explain,
+                com.husarp.ankigo.game.CatchChoice.entries.map { it.title }, catch.title) { name ->
+                editSetup { com.husarp.ankigo.game.CatchChoice.apply(it, com.husarp.ankigo.game.CatchChoice.entries.first { c -> c.title == name }) }; render()
+            },
+            setupChoice("Move choice", "Applies to both sides. Smart avoids moves that do nothing; Smartest also prefers stronger attacks.",
+                com.husarp.ankigo.game.MoveChoice.entries.map { it.label }, settings.moveChoice.label) { name ->
+                editSetup { it.moveChoice = com.husarp.ankigo.game.MoveChoice.entries.first { m -> m.label == name } }; render()
+            },
+            Form.switchRow(this, "Faster start", "Shorter battles below Lv 15. Default: off. Applies to the next encounter.", settings.fasterStart) { v -> editSetup { it.fasterStart = v } },
+        )
+        content.addView(Form.cardOf(this, rows), Form.lp(this, 16))
+    }
+
+    private fun setupLook() {
+        // Real battle components watch their preferences, so the preview follows HP picks immediately.
+        val preview = BattlePanelView(this).apply {
+            setStudyLayout(true, false); renderAll(); arena.setEnemyShown(true)
+        }
+        content.addView(preview, LinearLayout.LayoutParams(-1, dp(190)).also { it.topMargin = dp(12) })
+        content.addView(Form.cardOf(this, listOf(
+            setupChoice("Theme", "Follow the phone, or choose a light or dark page.", ThemeMode.entries.map { it.label }, AppPrefs.theme(this).label) { name ->
+                AppLook.setTheme(this, ThemeMode.entries.first { it.label == name }); recreate()
+            },
+            setupChoice("Accent", "Colour for buttons and highlights.", Accent.entries.map { it.label }, AppPrefs.accent(this).label) { name ->
+                AppLook.setAccent(this, Accent.entries.first { it.label == name }); render()
+            },
+            setupChoice("HP bar colours", "Three steps, a smooth blend (default), or type colour.", HpColors.Mode.entries.map { it.label }, HpColorPrefs.mode(this).label) { name ->
+                HpColorPrefs.set(this, HpColors.Mode.entries.first { it.label == name }); render()
+            },
+        )), Form.lp(this, 12))
+    }
+
+    private fun setupChoice(title: String, note: String, options: List<String>, selected: String, pick: (String) -> Unit): View =
+        Form.row(this, title, note, Ui.text(this, 12f, 800, R.color.ag_sub1).apply { text = selected }) {
+            AppDialog.Builder(this).setTitle(title).setItems(options.map { if (it == selected) "✓ $it" else it }.toTypedArray<CharSequence>()) { d, i ->
+                d.dismiss(); pick(options[i])
+            }.setNegativeButton("Cancel", null).create().also { Pickers.show(it) }
+        }
 
     // ---------- save problem (not a numbered step) ----------
 

@@ -72,12 +72,12 @@ enum class HpBarLook(val label: String, val sub: String) {
  * on screen. [ArenaGeo.cards] builds the boxes' sizes from them, [ArenaView] the views.
  *
  * A box is 160 dp wide. Its parts: the name line (name 14 sp, the status badge 13 dp, "Lv" 12 sp), then
- * - [InfoBoxStyle.ABOVE]: the number line (wild: the type chips on the left, 8.5 sp; yours: "HP"; the HP number right, 10.5 sp), the
+ * - [InfoBoxStyle.ABOVE]: the number line (both: the type chips on the left, 8.5 sp; the HP number right, 10.5 sp), the
  *   7 dp HP bar, and yours the XP line (a 3 dp bar and "XP a / b", 9 sp);
  * - [InfoBoxStyle.INSIDE]: the HP bar 14 dp with its number inside (9.5 sp) and yours the XP bar 10 dp with its number inside (8 sp);
- *   the wild type symbols (15 dp squares) sit in the name line.
+ *   the type symbols (15 dp squares) sit in the name line.
  *
- * "Reduced" boxes drop what is the smallest text: the wild type chips become the symbols and the XP number goes (its bar stays), so a
+ * "Reduced" boxes drop what is the smallest text: the type chips become the symbols and the XP number goes (its bar stays), so a
  * box can be drawn smaller before any text falls under [PanelFit.MIN_SP] on screen ([smallestSp]).
  */
 internal object InfoBoxGeo {
@@ -114,7 +114,7 @@ internal object InfoBoxGeo {
      * The height of a box (dp). [wild]: the wild one (type chips / symbols, no XP). [xpText]: the XP number shows (yours only);
      * [reduced]: the optional parts are dropped (wild A: symbols instead of chips; no XP number).
      */
-    fun height(style: InfoBoxStyle, wild: Boolean, floor: Float, xpText: Boolean, reduced: Boolean): Float {
+    fun height(style: InfoBoxStyle, wild: Boolean, floor: Float, xpText: Boolean, reduced: Boolean, xpBar: Boolean = true): Float {
         val b = TextMath.bar(floor)
         val num = TextMath.line(TextMath.at(NUM, floor))
         return when (style) {
@@ -125,13 +125,13 @@ internal object InfoBoxGeo {
                     PAD_TOP + name + GAP + max(num, chips) + GAP + 7f * b + PAD_BOTTOM
                 } else {
                     val xp = if (xpText && !reduced) max(3f * b, TextMath.line(TextMath.at(XP, floor))) else 3f * b
-                    PAD_TOP + name + GAP + num + GAP + 7f * b + GAP + xp + PAD_BOTTOM
+                    PAD_TOP + name + GAP + max(num, if (reduced) SQUARE * b else TextMath.line(TextMath.at(CHIP, floor)) + 2f) + GAP + 7f * b + (if (xpBar) GAP + xp else 0f) + PAD_BOTTOM
                 }
             }
             InfoBoxStyle.INSIDE -> {
-                val name = nameRow(floor, squares = wild)
+                val name = nameRow(floor, squares = true)
                 val base = PAD_TOP + name + GAP_INSIDE + 14f * b + PAD_BOTTOM
-                if (wild) base else base + GAP + (if (xpText && !reduced) 10f else 4f) * b
+                if (wild || !xpBar) base else base + GAP + (if (xpText && !reduced) 10f else 4f) * b
             }
         }
     }

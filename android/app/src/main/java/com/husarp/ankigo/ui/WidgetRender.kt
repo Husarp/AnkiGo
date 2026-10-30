@@ -191,32 +191,76 @@ object WidgetRender {
         }.start()
     }
 
+    private val moneyRequests = java.util.concurrent.ConcurrentHashMap<Int, Any>()
+    private val shownMoney = java.util.concurrent.ConcurrentHashMap<Int, Int>()
+
     /** Draws and pushes every id of one widget kind. Blocking: call from a background thread. */
     fun update(ctx: Context, mgr: AppWidgetManager, ids: IntArray, kind: Kind) {
         if (ids.isEmpty()) return
         if (kind == Kind.STUDY_NOW) { updateStudyNow(ctx, mgr, ids); return }
+        val request = Any()
+        synchronized(moneyRequests) { ids.forEach { moneyRequests[it] = request } }
         val prefs = ctx.getSharedPreferences("spike", 0)
         val choices = if (kind == Kind.BUDDY) ids.associateWith { BuddyWidgetPrefs.choice(prefs, it) } else emptyMap()
         val snap = snapshot(ctx, choices.values.filter { it != BuddyWidgetPrefs.MAIN }.toSet(), withDue = kind == Kind.BUDDY)
         val still = reduceMotion(ctx)
         for (id in ids) {
             val (w, h) = sizeDp(ctx, mgr.getAppWidgetOptions(id), kind)
+            val appearance = WidgetLooks.read(prefs, if (kind == Kind.BUDDY) "buddy" else "wide", id)
             val shown = choices[id]?.let { snap?.forBuddy(it) } ?: snap
             val look = if (kind == Kind.BUDDY) BuddyWidgetPrefs.look(prefs, id) else BuddyLook()
-            val rv = if (kind == Kind.BUDDY && look.hop && !still && shown?.buddyMon != null) buddyHopViews(ctx, shown, w, h, look) else {
+            val rv = if (kind == Kind.BUDDY && look.hop && !still && shown?.buddyMon != null) buddyHopViews(ctx, shown, w, h, look, appearance) else {
                 val rv = RemoteViews(ctx.packageName, kind.layout)
-                rv.setImageViewBitmap(kind.imgLight, render(ctx, kind, shown, w, h, night = false, look = look))
-                rv.setImageViewBitmap(kind.imgDark, render(ctx, kind, shown, w, h, night = true, look = look))
+                rv.setImageViewBitmap(kind.imgLight, render(ctx, kind, shown, w, h, night = false, look = look, appearance = appearance))
+                rv.setImageViewBitmap(kind.imgDark, render(ctx, kind, shown, w, h, night = true, look = look, appearance = appearance))
                 rv
             }
             if (kind == Kind.BUDDY) {
-                val b = shown?.buddyMon
-                rv.setContentDescription(kind.root, if (shown == null || b == null) "Buddy" else BuddyText.description(b.name, shown.today, shown.goal, shown.due, shown.streak))
+                rv.setContentDescription(kind.root, buddyDescription(shown))
             }
             rv.setOnClickPendingIntent(kind.root, if (kind == Kind.WIDE) Widgets.openStudyOrBattle(ctx) else Widgets.openApp(ctx))
-            mgr.updateAppWidget(id, rv)
+            val previous = shownMoney[id]
+            if (kind == Kind.WIDE && !still && shown != null && previous != null && previous != shown.cash) {
+                // RemoteViews are drawn by another process. Send a short, finite sequence of bitmap frames;
+                // a newer update cancels this sequence before it can overwrite the new balance.
+                val start = android.os.SystemClock.uptimeMillis()
+                val duration = MoneyRollMath.duration(previous, shown.cash)
+                while (moneyRequests[id] === request) {
+                    val progress = ((android.os.SystemClock.uptimeMillis() - start).toFloat() / duration).coerceAtMost(1f)
+                    val amount = MoneyRollMath.value(previous, shown.cash, 1f - (1f - progress) * (1f - progress))
+                    val frameViews = RemoteViews(ctx.packageName, kind.layout)
+                    frameViews.setImageViewBitmap(kind.imgLight, moneyFrame(ctx, shown, amount, w, h, false, look, appearance))
+                    frameViews.setImageViewBitmap(kind.imgDark, moneyFrame(ctx, shown, amount, w, h, true, look, appearance))
+                    frameViews.setOnClickPendingIntent(kind.root, Widgets.openStudyOrBattle(ctx))
+                    synchronized(moneyRequests) {
+                        if (moneyRequests[id] === request) { mgr.updateAppWidget(id, frameViews); shownMoney[id] = amount }
+                    }
+                    if (progress >= 1f) break
+                    Thread.sleep(minOf(80L, maxOf(1L, duration - (android.os.SystemClock.uptimeMillis() - start))))
+                }
+            } else synchronized(moneyRequests) {
+                if (moneyRequests[id] === request) {
+                    try { mgr.updateAppWidget(id, rv) } catch (e: RuntimeException) {
+                        if (kind != Kind.BUDDY) throw e
+                        val reduced = if (look.hop && !still && shown != null) runCatching { BuddyFrames.views(ctx, shown, w, h, look, appearance, 2) }.getOrNull() else null
+                        val fallback = reduced ?: buddyStillViews(ctx, shown, w, h, look, appearance)
+                        fallback.setContentDescription(kind.root, buddyDescription(shown))
+                        fallback.setOnClickPendingIntent(kind.root, Widgets.openApp(ctx))
+                        try { mgr.updateAppWidget(id, fallback) } catch (_: RuntimeException) {
+                            val finalStill = buddyStillViews(ctx, shown, w, h, look, appearance)
+                            finalStill.setContentDescription(kind.root, buddyDescription(shown))
+                            finalStill.setOnClickPendingIntent(kind.root, Widgets.openApp(ctx)); mgr.updateAppWidget(id, finalStill)
+                        }
+                    }
+                    shown?.let { shownMoney[id] = it.cash }
+                }
+            }
         }
     }
+
+    internal fun moneyFrame(ctx: Context, snap: WidgetSnapshot, amount: Int, w: Float, h: Float,
+                            night: Boolean, look: BuddyLook, appearance: WidgetLook): Bitmap =
+        render(ctx, Kind.WIDE, snap.copy(cash = amount), w, h, night, look, appearance = appearance)
 
     /**
      * R5-07: the 1x1 Study now widget needs the due count and (R6-08) today's goal progress for its colour, both read once
@@ -228,9 +272,10 @@ object WidgetRender {
         for (id in ids) {
             val (w, h) = sizeDp(ctx, mgr.getAppWidgetOptions(id), Kind.STUDY_NOW)
             val bg = StudyNowPrefs.bg(prefs, id)
+            val appearance = WidgetLooks.read(prefs, "now", id)
             val rv = RemoteViews(ctx.packageName, Kind.STUDY_NOW.layout)
-            rv.setImageViewBitmap(Kind.STUDY_NOW.imgLight, render(ctx, Kind.STUDY_NOW, snap, w, h, night = false, studyBg = bg))
-            rv.setImageViewBitmap(Kind.STUDY_NOW.imgDark, render(ctx, Kind.STUDY_NOW, snap, w, h, night = true, studyBg = bg))
+            rv.setImageViewBitmap(Kind.STUDY_NOW.imgLight, render(ctx, Kind.STUDY_NOW, snap, w, h, night = false, studyBg = bg, appearance = appearance))
+            rv.setImageViewBitmap(Kind.STUDY_NOW.imgDark, render(ctx, Kind.STUDY_NOW, snap, w, h, night = true, studyBg = bg, appearance = appearance))
             rv.setContentDescription(Kind.STUDY_NOW.root, StudyNow.description(snap.due, snap.today, snap.goal))
             rv.setOnClickPendingIntent(Kind.STUDY_NOW.root, Widgets.openStudy(ctx))
             mgr.updateAppWidget(id, rv)
@@ -241,23 +286,21 @@ object WidgetRender {
     private fun reduceMotion(ctx: Context) =
         !android.animation.ValueAnimator.areAnimatorsEnabled() || ctx.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
 
-    /** Bytes one hop frame may take: four of them (light and dark, two frames) stay within the two bitmaps of a still widget. */
-    private const val HOP_FRAME_BYTES = WidgetLogic.MAX_BITMAP_BYTES / 2
-
-    /**
-     * The hopping Buddy: a ViewFlipper (layout widget_buddy_anim, flips by itself every ~550 ms and stops when the home
-     * screen is not shown) over two pre-drawn frames per colour scheme: the normal picture, and the same with the Pokémon
-     * lifted a little. The home screen cannot run a frame loop, so this is as light as an animation can be there.
-     */
-    internal fun buddyHopViews(ctx: Context, snap: WidgetSnapshot, w: Float, h: Float, look: BuddyLook): RemoteViews {
-        val rv = RemoteViews(ctx.packageName, R.layout.widget_buddy_anim)
-        fun frame(night: Boolean, hop: Boolean) = render(ctx, Kind.BUDDY, snap, w, h, night, look, hop, HOP_FRAME_BYTES)
-        rv.setImageViewBitmap(R.id.b_img_l1, frame(night = false, hop = false))
-        rv.setImageViewBitmap(R.id.b_img_l2, frame(night = false, hop = true))
-        rv.setImageViewBitmap(R.id.b_img_d1, frame(night = true, hop = false))
-        rv.setImageViewBitmap(R.id.b_img_d2, frame(night = true, hop = true))
-        return rv
+    private fun buddyDescription(s: WidgetSnapshot?): String {
+        val mon=s?.buddyMon ?: return "Buddy"
+        return BuddyText.description(mon.name,s.today,s.goal,s.due,s.streak)
     }
+
+    /** Real sprite animation, or a still picture when frames cannot be decoded or served. */
+    internal fun buddyHopViews(ctx: Context, snap: WidgetSnapshot, w: Float, h: Float, look: BuddyLook, appearance: WidgetLook = WidgetLook()): RemoteViews {
+        return runCatching { BuddyFrames.views(ctx, snap, w, h, look, appearance) }.getOrNull() ?: buddyStillViews(ctx, snap, w, h, look, appearance)
+    }
+
+    private fun buddyStillViews(ctx: Context, snap: WidgetSnapshot?, w: Float, h: Float, look: BuddyLook, appearance: WidgetLook): RemoteViews =
+        RemoteViews(ctx.packageName, R.layout.widget_buddy).apply {
+            setImageViewBitmap(R.id.b_img_l, render(ctx, Kind.BUDDY, snap, w, h, false, look=look, appearance=appearance))
+            setImageViewBitmap(R.id.b_img_d, render(ctx, Kind.BUDDY, snap, w, h, true, look=look, appearance=appearance))
+        }
 
     /** The widget's current size in dp from its options (portrait: min width x max height; landscape: max width x min height). */
     fun sizeDp(ctx: Context, o: Bundle?, kind: Kind): Pair<Float, Float> {
@@ -305,20 +348,21 @@ object WidgetRender {
 
     /**
      * One widget bitmap, [wDp] x [hDp] of layout, in the light or dark colours. [snap] null = no save yet.
-     * [look] and [hop] (the lifted frame of the hopping Pokémon) are for the Buddy widget; [maxBytes] caps the bitmap size.
+     * [look] is for the Buddy widget; [maxBytes] caps the bitmap size. The legacy [hop] argument is ignored; motion uses real frames.
      */
     fun render(ctx: Context, kind: Kind, snap: WidgetSnapshot?, wDp: Float, hDp: Float, night: Boolean,
                look: BuddyLook = BuddyLook(), hop: Boolean = false, maxBytes: Int = WidgetLogic.MAX_BITMAP_BYTES,
-               studyBg: StudyNowBg = StudyNowBg.SYSTEM): Bitmap {
+               studyBg: StudyNowBg = StudyNowBg.SYSTEM, appearance: WidgetLook = WidgetLook(), hideSprite: Boolean = false): Bitmap {
         // the 1x1 widget's White / Black background fixes its colours in both bitmaps
-        val dark = if (kind == Kind.STUDY_NOW) studyBg.dark(night) else night
-        val themed = themed(ctx, dark)
+        val dark = appearance.dark(if (kind == Kind.STUDY_NOW) studyBg.dark(night) else night)
+        val themed = themed(ctx, appearance.dark(dark))
         val k = WidgetLogic.pixelsPerDp(wDp, hDp, ctx.resources.displayMetrics.density, maxBytes)
         val bmp = Bitmap.createBitmap(max(1, (wDp * k).roundToInt()), max(1, (hDp * k).roundToInt()), Bitmap.Config.ARGB_8888)
-        val d = Draw(themed, ctx, bmp, k)
+        val d = Draw(themed, ctx, bmp, k, appearance, hideSprite)
+        d.roundRect(0f, 0f, wDp, hDp, 24f, appearance.background(themed, snap?.buddyMon?.type))
         when (kind) {
             Kind.WIDE -> d.wide(snap, wDp, hDp)
-            Kind.BUDDY -> d.buddy(snap, wDp, hDp, look, hop)
+            Kind.BUDDY -> d.buddy(snap, wDp, hDp, look)
             Kind.STUDY_NOW -> d.studyNow(snap, wDp, hDp, studyBg, dark)
         }
         return bmp
@@ -332,7 +376,7 @@ object WidgetRender {
     }
 
     /** Canvas helpers; all coordinates are dp (the canvas is scaled by [k]); text sizes are dp too, so the font scale doesn't change a widget. */
-    private class Draw(val ctx: Context, val spriteCtx: Context, val bmp: Bitmap, val k: Float) {
+    private class Draw(val ctx: Context, val spriteCtx: Context, val bmp: Bitmap, val k: Float, val appearance: WidgetLook = WidgetLook(), val hideSprite: Boolean = false) {
         val canvas = Canvas(bmp).apply { scale(k, k) }
         val fill = Paint(Paint.ANTI_ALIAS_FLAG)
         val pixel = Paint().apply { isFilterBitmap = false; isAntiAlias = false }
@@ -386,6 +430,7 @@ object WidgetRender {
 
         /** Static sprite in a [size] square, pixel-crisp; null bitmap -> a coloured disc with two letters of [name]. */
         fun sprite(num: Int, shiny: Boolean, name: String, x: Float, y: Float, size: Float) {
+            if (hideSprite) return
             val b = Sprites.staticBitmap(spriteCtx, num, shiny)
             if (b == null) {
                 val type = com.husarp.ankigo.GameRepo.data?.species?.get(num)?.types?.firstOrNull() ?: com.husarp.ankigo.game.Type.NORMAL
@@ -433,13 +478,15 @@ object WidgetRender {
             }
         }
 
-        fun goalBar(x: Float, y: Float, w: Float, progress: Float) {
+        fun goalBar(x: Float, y: Float, w: Float, progress: Float, solid: Int? = null) {
             roundRect(x, y, x + w, y + 7f, 3.5f, col(R.color.ag_s0))
             val fw = if (progress <= 0f) 0f else max(7f, w * progress)
             if (fw > 0f) {
                 val f = BarTones.fill(ctx, BarMeaning.GOAL, progress)
-                val to = f.gradientTo
-                if (to != null) fill.shader = LinearGradient(x, 0f, x + fw, 0f, f.color, to, Shader.TileMode.CLAMP) else fill.color = f.color
+                val to = if (solid==null && appearance.accent == "goal") f.gradientTo else null
+                if (solid != null) fill.color=solid
+                else if (appearance.accent != "goal") fill.color = col(BuddyRing.pickRes(appearance.accent))
+                else if (to != null) fill.shader = LinearGradient(x, 0f, x + fw, 0f, f.color, to, Shader.TileMode.CLAMP) else fill.color = f.color
                 canvas.drawRoundRect(x, y, x + fw, y + 7f, 3.5f, 3.5f, fill)
                 fill.shader = null
             }
@@ -524,103 +571,90 @@ object WidgetRender {
 
         // ---------------- buddy widget ----------------
 
-        /**
-         * 64K: the Pokémon in a goal ring (a green check on it when the goal is reached), "32 / 50 today" and "32 done · 48 left"
-         * under it, and at the very bottom the streak: a flame and the number, no pill (R6-08; hidden at 0). [hop] = the lifted
-         * frame of the hopping Pokémon.
-         */
-        fun buddy(s: WidgetSnapshot?, w: Float, h: Float, look: BuddyLook = BuddyLook(), hop: Boolean = false) {
-            val padX = 8f
-            val padY = 6f
+        /** Picked A (ring), B (bar) and C (open gauge), with separate number regions at each size. */
+        fun buddy(s: WidgetSnapshot?, w: Float, h: Float, look: BuddyLook = BuddyLook()) {
+            val space=BuddyGeometry.space(w,h)
+            val rw=space.width; val rh=space.height
+            val wide=rw>=220f; val short=rh<100f
+            canvas.save(); canvas.translate(space.offsetX,space.offsetY); canvas.scale(space.scale,space.scale)
             val main = s?.buddyMon
-            val ts = (min(w, h) / 150f).coerceIn(0.85f, 1.3f) // text grows a little with the widget
-            val goalH = 18f * ts
-            val subH = 14f * ts
-            val streakH = if ((s?.streak ?: 0) > 0 && s?.buddyMon != null) 12f * ts else 0f
-            val textH = goalH + 1f + subH + if (streakH > 0f) 1f + streakH else 0f
-            val gap = 6f
-            val ring = min(min(w - 2 * padX, h - 2 * padY - textH - gap), 130f).coerceAtLeast(36f)
-            val total = ring + gap + textH
-            val cx = w / 2f
-            val top = max(padY / 2f, (h - total) / 2f)
-            val cy = top + ring / 2f
-            val stroke = ring * 0.09f
-            val r = ring / 2f - stroke / 2f
-            val oval = RectF(cx - r, cy - r, cx + r, cy + r)
-
-            fill.shader = null
-            val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = stroke; strokeCap = Paint.Cap.ROUND }
-            ringPaint.color = col(R.color.ag_s0)
-            canvas.drawCircle(cx, cy, r, ringPaint)
             if (s == null || main == null) {
-                line("?", cx, cy - 16f, 32f, paint(26f, 900, R.color.ag_mauve), Paint.Align.CENTER)
-                val msg = if (s == null) "Open AnkiGo to choose your starter" else "Open AnkiGo to pick a main"
-                block(msg, padX, top + ring + 4f, w - 2 * padX, paint(12f, 800, R.color.ag_text), 2, center = true)
-                return
+                block("Open AnkiGo to choose your starter", 8f, rh / 3, rw - 16, paint(12f, 800, R.color.ag_text), 3, true)
+                canvas.restore(); return
             }
-            if (s.progress > 0f) {
+            val g = BuddyGeometry.of(rw, rh, look.layout)
+            val cx = g.cx; val cy = g.top + g.size / 2
+            val ring = Paint(3).apply { style = Paint.Style.STROKE; strokeWidth = g.size * .065f; strokeCap = Paint.Cap.ROUND }
+            val oval = RectF(cx-g.size/2+3, g.top+3, cx+g.size/2-3, g.top+g.size-3)
+            val arc = if (look.layout == "C") 270f else 360f
+            val start = if (look.layout == "C") 135f else -90f
+            if (look.layout != "B") {
+                ring.color = col(R.color.ag_s0); canvas.drawArc(oval, start, arc, false, ring)
                 val solid = look.ring.solid(main.type?.let { Ui.typeColor(it) }) { col(BuddyRing.pickRes(it)) }
-                if (solid != null) ringPaint.color = solid else {
-                    val f = BarTones.fill(ctx, BarMeaning.GOAL, s.progress)
-                    val to = f.gradientTo
-                    if (to != null) {
-                        val sweep = SweepGradient(cx, cy, f.color, to)
-                        sweep.setLocalMatrix(android.graphics.Matrix().apply { setRotate(-90f, cx, cy) })
-                        ringPaint.shader = sweep
-                    } else ringPaint.color = f.color
+                val tone = BarTones.fill(ctx, BarMeaning.GOAL, s.progress)
+                ring.color = solid ?: if (appearance.accent != "goal") col(BuddyRing.pickRes(appearance.accent)) else tone.color
+                if (solid==null && appearance.accent=="goal" && tone.gradientTo!=null) {
+                    ring.shader=SweepGradient(cx,cy,tone.color,tone.gradientTo).apply {
+                        setLocalMatrix(android.graphics.Matrix().apply { setRotate(start,cx,cy) })
+                    }
                 }
-                canvas.drawArc(oval, -90f, 360f * s.progress, false, ringPaint)
+                canvas.drawArc(oval, start, arc * s.progress, false, ring)
             }
-            val inner = ring * 0.8333f
-            val spriteTop = cy - inner / 2f - inner * 0.02f
-            canvas.save()
-            if (hop) { // 2nd frame: up 7 % of its size, a touch taller, feet stay put
-                canvas.translate(0f, -inner * 0.07f)
-                canvas.scale(1f, 1.03f, cx, spriteTop + inner)
+            val progressColour=look.ring.solid(main.type?.let { Ui.typeColor(it) }) { col(BuddyRing.pickRes(it)) }
+            sprite(main.species, main.shiny, main.name, g.spriteLeft, g.spriteTop, g.spriteSize)
+            if (s.goalDone && look.layout != "B") icon(R.drawable.ic_check, cx + g.size*.22f, g.top+g.size*.72f, 18f, col(R.color.ag_green))
+            fun goal(x: Float, y: Float, width: Float, size: Float, centered: Boolean = false, unit: Boolean = true) {
+                val text = BuddyText.goal(s.today, s.goal)
+                val (t, p) = fitted(text, if (unit) width*.69f else width, size, 6f, 900, R.color.ag_text)
+                val left = if (centered) x + width/2 - p.measureText(t)/2 else x
+                line(t, left, y, size+3, p)
+                if (unit) line("today", left+p.measureText(t)+3, y+size*.25f, size, paint(size*.58f, 700, R.color.ag_sub1))
             }
-            sprite(main.species, main.shiny, main.name, cx - inner / 2f, spriteTop, inner)
+            fun streak(x: Float, y: Float, width: Float, size: Float) {
+                if (s.streak <= 0) return
+                val (t,p) = fitted("${s.streak}", (width-size-5).coerceAtLeast(8f), size*.85f, 6f, 900, R.color.ag_red)
+                if (!flame(x, y, size)) icon(R.drawable.ic_flame, x, y, size, col(R.color.ag_red))
+                line(t, x+size+4, y, size, p)
+            }
+            fun due(x: Float, y: Float, width: Float, size: Float, unit: Boolean = true) {
+                if (s.due == null) return
+                val (t,p) = fitted(if(unit) "${s.due} left" else "${s.due}", width, size, 6f, 800, R.color.ag_sub0)
+                line(t, x, y, size+3, p)
+            }
+            if (short) {
+                val x = 70f
+                goal(x, 5f, if (wide) 126f else 62f, if (wide) 20f else 15f, unit=wide)
+                if (look.layout == "B") goalBar(x, 32f, rw-x-12, s.progress, progressColour)
+                if (look.layout == "B" && !wide) {
+                    // The mockup shares this row: two strictly separate boxes, shrinking both counts as needed.
+                    streak(64f,44f,32f,15f)
+                    due(102f,44f,30f,11f,unit=false)
+                } else {
+                    due(x, if (look.layout == "B") 44f else 28f, if (wide) 120f else 62f, 11f)
+                    streak(if (wide) rw-75 else x, if (wide) 10f else 44f, 65f, if (wide) 26f else 16f)
+                }
+            } else if (wide) {
+                if (look.layout == "C") {
+                    goal(cx-g.size/2, 100f, g.size, 17f, centered=true, unit=false)
+                    line("today", cx, 120f, 12f, paint(11f,700,R.color.ag_sub1), Paint.Align.CENTER)
+                    streak(12f, 25f, 75f, 25f); due(12f, 85f, 75f, 18f, unit=false)
+                    if (s.streak > 0) line("day streak", 12f, 54f, 13f, paint(10f,700,R.color.ag_sub1))
+                    if (s.due != null) line("cards left", 12f, 109f, 13f, paint(10f,700,R.color.ag_sub1))
+                } else {
+                    goal(146f, 20f, 128f, 22f)
+                    if (look.layout == "A") roundRect(146f,62f,274f,63f,0f,col(R.color.ag_s0))
+                    if (look.layout == "B") goalBar(146f, 54f, 126f, s.progress, progressColour)
+                    streak(146f, 79f, 62f, 26f); due(218f, 82f, 58f, 20f, unit=false)
+                    if (s.streak > 0) line("day streak", 146f, 110f, 13f, paint(10f,700,R.color.ag_sub1))
+                    if (s.due != null) line("cards left", 218f, 110f, 13f, paint(10f,700,R.color.ag_sub1))
+                }
+            } else {
+                goal(0f, if (look.layout == "C") 86f else if (look.layout == "B") 82f else 96f, rw, 17f, centered=true, unit=look.layout!="C")
+                if (look.layout == "C") line("today", rw/2, 105f, 11f, paint(10f,700,R.color.ag_sub1), Paint.Align.CENTER)
+                if (look.layout == "B") goalBar(16f, 106f, rw-32, s.progress, progressColour)
+                streak(10f, 119f, 57f, 20f); due(80f, 121f, 50f, 13f)
+            }
             canvas.restore()
-
-            // badges sit on the ring at 45 degrees; a thin ring of the card colour separates them from it
-            val edge = r * 0.7071f
-            val halo = 2.5f
-            if (s.goalDone) {
-                val d = max(15f, ring * 0.27f)
-                val bx = cx + edge
-                val by = cy + edge
-                fill.shader = null
-                fill.color = col(R.color.ag_base); canvas.drawCircle(bx, by, d / 2f + halo, fill)
-                fill.color = col(R.color.ag_green); canvas.drawCircle(bx, by, d / 2f, fill)
-                icon(R.drawable.ic_check, bx - d * 0.39f, by - d * 0.39f, d * 0.78f, 0xFFFFFFFF.toInt())
-            }
-
-            // "32 / 50 today": the numbers bold and bigger, "today" small
-            val maxW = w - 2 * padX
-            var y = top + ring + gap
-            val numTxt = BuddyText.goal(s.today, s.goal)
-            val np = paint(15f * ts, 900, R.color.ag_text)
-            val up = paint(11f * ts, 700, R.color.ag_sub1)
-            val sp = 3f * ts
-            fun lineW() = np.measureText(numTxt) + sp + up.measureText(BuddyText.UNIT)
-            while (lineW() > maxW && np.textSize > 8f) { np.textSize -= 0.5f; up.textSize = np.textSize * 11f / 15f }
-            val x0 = cx - lineW() / 2f
-            val fm = np.fontMetrics
-            val base = y + goalH / 2f - (fm.ascent + fm.descent) / 2f
-            np.textAlign = Paint.Align.LEFT; up.textAlign = Paint.Align.LEFT
-            canvas.drawText(numTxt, x0, base, np)
-            canvas.drawText(BuddyText.UNIT, x0 + np.measureText(numTxt) + sp, base, up)
-            y += goalH + 1f
-            val (cnt, cp) = fitted(BuddyText.counts(s.today, s.due), maxW, 10.5f * ts, 7.5f, 800, R.color.ag_sub0)
-            line(cnt, cx, y, subH, cp, Paint.Align.CENTER)
-            if (streakH > 0f) { // R6-08: the streak at the very bottom, flame + number, no background
-                y += subH + 1f
-                val sp2 = paint(streakH * 0.95f, 900, R.color.ag_red)
-                val txt = "${s.streak}"
-                val fl = streakH * 0.9f
-                val tw = fl + 2f + sp2.measureText(txt)
-                if (!flame(cx - tw / 2f, y + (streakH - fl) / 2f, fl)) icon(R.drawable.ic_flame, cx - tw / 2f, y + (streakH - fl) / 2f, fl, col(R.color.ag_red))
-                line(txt, cx - tw / 2f + fl + 2f, y, streakH, sp2)
-            }
         }
 
         /**
@@ -637,8 +671,8 @@ object WidgetRender {
                 StudyNowBg.WHITE -> 0xFFFFFFFF.toInt()
                 StudyNowBg.BLACK -> 0xFF000000.toInt()
             }
-            roundRect(0f, 0f, w, h, 22f * sc, surface)
-            val tone = StudyNow.tone(state, s?.progress ?: 0f, GoalPalette(col(R.color.ag_red), col(R.color.ag_peach), col(R.color.ag_green)))
+            // Shared appearance supplies the surface (including transparency).
+            val tone = if (appearance.accent != "goal") col(BuddyRing.pickRes(appearance.accent)) else StudyNow.tone(state, s?.progress ?: 0f, GoalPalette(col(R.color.ag_red), col(R.color.ag_peach), col(R.color.ag_green)))
             val neutral = if (dark) 0xFFFFFFFF.toInt() else col(R.color.ag_text)
             val number = StudyNow.badge(due)
             val isz = 24f * sc

@@ -61,6 +61,10 @@ internal object AchievementDetail {
             LinearLayout.LayoutParams(Ui.dp(ctx, 36), Ui.dp(ctx, 4)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 10), Ui.dp(ctx, 16), Ui.dp(ctx, 4)) }
         body.addView(hero(ctx, v), LinearLayout.LayoutParams(-1, -2))
+        if (v.group == "Secret" && v.tier < 0) {
+            sheet.addView(CappedScroll(ctx).apply { addView(body) }, LinearLayout.LayoutParams(-1, -2))
+            return sheet
+        }
         val row = AchievementTable.row(v.id)
         if (v.oneOff) body.addView(oneOffLine(ctx, v, achSince, zone), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         else for (s in AchPageMath.ladder(v)) body.addView(step(ctx, v, s, achSince, zone), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 8) })
@@ -73,14 +77,15 @@ internal object AchievementDetail {
     }
 
     private fun hero(ctx: Context, v: AchView): View {
+        val hidden = v.group == "Secret" && v.tier < 0
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         val short = Ui.shortWindow(ctx) || ctx.resources.configuration.screenHeightDp in 1..459
-        col.addView(AchMedal(ctx, if (short) 56 else 76).apply { set(AchStyle.icon(v.icon), v.tier, special = v.oneOff && v.tier >= 0) })
-        col.addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = v.title; gravity = Gravity.CENTER },
+        col.addView(AchMedal(ctx, if (short) 56 else 76).apply { set(if (hidden) R.drawable.ic_ach_lock else AchStyle.icon(v.icon), v.tier, special = v.oneOff && v.tier >= 0) })
+        col.addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = if (hidden) "Secret" else v.title; gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 6) })
-        col.addView(Ui.text(ctx, 12.5f, 700, R.color.ag_sub0).apply { text = v.desc; gravity = Gravity.CENTER },
+        col.addView(Ui.text(ctx, 12.5f, 700, R.color.ag_sub0).apply { text = if (hidden) "???" else v.desc; gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 3) })
-        if (!v.oneOff) col.addView(Ui.text(ctx, 28f, 900, R.color.ag_text).apply { text = AchPageMath.fmtValue(v); gravity = Gravity.CENTER },
+        if (!hidden && !v.oneOff) col.addView(Ui.text(ctx, 28f, 900, R.color.ag_text).apply { text = AchPageMath.fmtValue(v); gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         return col
     }
