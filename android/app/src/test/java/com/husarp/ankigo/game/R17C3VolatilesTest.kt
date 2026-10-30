@@ -595,8 +595,8 @@ class R17C3VolatilesTest {
         assertTrue(say("wrap").startsWith("Holds the target for 4–5 turns"))
         assertFalse("switch" in say("wrap").lowercase()) // binding never blocks a switch: the text says nothing about it
         assertTrue(say("bite").contains("flinch"))
-        assertEquals("Raises the target's Attack by 2. Confuses the target.", say("swagger"))
-        assertEquals("Makes the target fall in love if one of you is male and the other female. A Pokémon in love can't move half of the time.", say("attract"))
+        assertEquals("Raises the target's Attack by 2 stages (×2). Confuses the target.", say("swagger"))
+        assertEquals("Makes the target fall in love if one of the two Pokémon is male and the other female. A Pokémon in love can't move half of the time.", say("attract"))
         assertTrue(say("sparklingaria").endsWith("Cures the target's burn."))
         assertTrue(MoveText.describe(data.move("triattack")!!.copy(secondary = Secondary(20))).contains("May burn, paralyze or freeze the target (20 %)."))
         assertTrue(say("alluringvoice").contains("Confuses the target if its stats were raised this turn."))

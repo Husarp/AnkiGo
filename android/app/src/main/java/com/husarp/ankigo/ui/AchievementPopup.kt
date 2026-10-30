@@ -147,6 +147,7 @@ object AchievementPopup {
         d.setOnCancelListener { finish() }
         dialog = d
         d.show()
+        AwayWindows.track(d) { it.dismiss() }
     }
 
     // ---- the popup's look (shots render this view) ----

@@ -462,8 +462,9 @@ internal class ReminderScreen(
         contentDescription = d.name
         addView(ImageView(ctx).apply {
             val shown = on || inside
-            setImageResource(if (shown) R.drawable.ic_checkbox_on else R.drawable.ic_checkbox_off)
-            setColorFilter(Ui.c(ctx, if (on) R.color.ag_mauve else if (inside) R.color.ag_sub0 else R.color.ag_ov), PorterDuff.Mode.SRC_IN)
+            setImageResource(if (shown) R.drawable.ic_selection_tick else R.drawable.ic_checkbox_off)
+            if (shown) { clearColorFilter(); alpha = if (on) 1f else 0.7f }
+            else setColorFilter(Ui.c(ctx, R.color.ag_ov), PorterDuff.Mode.SRC_IN)
         }, LinearLayout.LayoutParams(Ui.dp(ctx, 22), Ui.dp(ctx, 22)))
         addView(Ui.text(ctx, 14f, 700, R.color.ag_text).apply {
             text = d.name.substringAfterLast("::")

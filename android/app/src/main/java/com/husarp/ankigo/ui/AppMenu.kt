@@ -75,6 +75,7 @@ class AppMenu(private val anchor: View) {
         pw.setOnDismissListener { if (window === pw) window = null }
         window = pw
         pw.showAtLocation(anchor, Gravity.TOP or Gravity.START, spot.x, spot.y)
+        AwayWindows.track(pw) { it.dismiss() }
     }
 
     /** Measures [frame] and returns where its window goes (see [MenuPlacement]); also used again when "More" changes its height. */

@@ -154,9 +154,9 @@ class R18BSwitchFlowTest {
     @Test fun theWordsSayTheRealRuleNeverAFreeHit() {
         assertEquals("Switching to Pika on your next move.", SwitchQueue.queuedText("Pika"))
         assertEquals("Pika stays in.", SwitchQueue.cancelledText("Pika"))
-        assertEquals("On your next move · the wild Pokémon attacks once", SwitchQueue.MENU_SUB)
+        assertEquals("On your next move · the wild Pokémon uses one free move", SwitchQueue.MENU_SUB)
         assertEquals("On your next move", SwitchQueue.ROW_MARK)
-        assertEquals("Switched! Wild {{Ratty}} gets a free hit.", SwitchQueue.freeHitText("Ratty"))   // R19-T (PLAN 288): only the battle's own toast says it so
+        assertEquals("Switched! Wild {{Ratty}} gets a free move.", SwitchQueue.freeHitText("Ratty"))   // R19-T (PLAN 288): only the battle's own toast says it so
         val g = game()
         val q = g.requestMain("t1")
         val e = g.onAnswer(Answer(1, 3, now))

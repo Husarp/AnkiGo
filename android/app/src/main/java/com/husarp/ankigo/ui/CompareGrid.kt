@@ -79,8 +79,7 @@ private class SnapScroll(ctx: Context) : HorizontalScrollView(ctx) {
 
     override fun fling(velocityX: Int) {
         flung = true
-        val dir = if (velocityX > 0) 1 else -1
-        smoothScrollTo(snap(scrollX + dir * step * 0.5f + dir), 0)
+        super.fling(velocityX)
     }
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {

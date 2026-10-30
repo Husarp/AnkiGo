@@ -188,17 +188,15 @@ class SwitchQueueTest {
         assertEquals(2, g.state.battle!!.rounds)
     }
 
-    @Test fun onTheFirstCardOfAFightTheSwitchWaitsForTheFirstAnswerAndThenAttacksOnce() {
+    @Test fun onTheFirstCardOfAFightTheSwitchIsImmediateAndFree() {
         val g = game()
-        g.state.battle!!.rounds = 0 // nothing answered in this fight yet
+        g.state.battle!!.rounds = 0
         val r = g.requestMain("t1")
-        assertEquals("t1", g.state.pendingMain) // queued even on the first card: no peeking before the first answer either
-        assertTrue(r.events.single() is GameEvent.SwitchQueued)
-        assertEquals("t0", g.state.main!!.uid)
-        val e = answer(g)
+        assertNull(g.state.pendingMain)
         assertEquals("t1", g.state.main!!.uid)
-        assertEquals(1, e.of<GameEvent.SwitchHit>().size) // the first answer was given: the switch costs the attack
-        assertEquals(1, e.of<GameEvent.Attack>().count { !it.byPlayer })
+        assertTrue(r.events.single() is GameEvent.MainChanged)
+        assertTrue(r.events.none { it is GameEvent.SwitchHit })
+        assertTrue(answer(g).none { it is GameEvent.SwitchHit })
     }
 
     @Test fun anAnswerThatEndsTheFightLetsTheSwitchInWithoutAnAttack() {
@@ -317,12 +315,13 @@ class SwitchQueueTest {
         assertNull(b.state.pendingMain)
     }
 
-    @Test fun aBoxPokemonIsSwitchedAtOnceTheCallerAddsItToTheTeamFirst() {
+    @Test fun aBoxPokemonUsesTheQueueWhetherOrNotTheCallerAddsItFirst() {
         val g = game()
-        val r = g.requestMain("b3") // not in the team: the old setMain (a free team place, or the last member's)
-        assertEquals("b3", g.state.main!!.uid)
+        val r = g.requestMain("b3")
+        assertEquals("t0", g.state.main!!.uid)
         assertTrue(r.ok)
-        assertNull(g.state.pendingMain)
+        assertEquals("b3", g.state.pendingMain)
+        assertEquals("b3", g.state.pendingTeam!!.first())
         val h = game()
         assertTrue(h.toTeam("b3").ok)
         val q = h.requestMain("b3")
@@ -400,7 +399,7 @@ class SwitchQueueTest {
     @Test fun aQueuedPokemonThatBecomesTheMainByATeamEditIsNotSwitchedInAgain() {
         val g = game()
         g.requestMain("t1")
-        assertTrue(g.moveInTeam("t1", -1).ok) // the Team edit makes it the main at once (the old rules)
+        assertTrue(g.moveInTeam("t1", -1, cardShowing = false).ok) // with no card, the edit replaces the pending queue at once
         assertEquals("t1", g.state.main!!.uid)
         assertNull(g.state.pendingMain)
         assertTrue(answer(g).none { it is GameEvent.MainChanged })

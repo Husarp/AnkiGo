@@ -26,7 +26,7 @@ import org.junit.Test
  * queue; Paparazzi's looper only moves inside [advance], as in R9NextFightFlowTest):
  *  - PLAN 285: a switch made while a won fight's result holds the next fight plays under the result; the next wild one stays out and
  *    the hold stays until Continue is tapped (a plain answer still releases it).
- *  - PLAN 288: the free hit of a switch raises the "Switched! Wild X gets a free hit." card toast; an item's hit does not.
+ *  - PLAN 288: the free hit of a switch raises the "Switched! Wild X gets a free move." card toast; an item's hit does not.
  */
 class R19TSwitchHoldTest {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
@@ -152,7 +152,7 @@ class R19TSwitchHoldTest {
         val player = EventPlayer(panel, continueOnPanel = false)
         player.enqueue(listOf(GameEvent.SwitchHit("Wild Gnarlpup", "Ivysaurus", 40, 60)))   // the hit's own event plays at once (a MainChanged before it takes 800 ms)
         assertEquals(ToastKind.SWITCH, panel.toastLayer.shown?.kind)
-        assertEquals("Switched! Wild {{Gnarlpup}} gets a free hit.", panel.toastLayer.shown?.text)
+        assertEquals("Switched! Wild {{Gnarlpup}} gets a free move.", panel.toastLayer.shown?.text)
     }
 
     @Test fun anItemsHitIsNotASwitchAndRaisesNoSwitchToast() {

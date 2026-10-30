@@ -709,8 +709,8 @@ class R17C1EngineTest {
 
     @Test fun theOtherStatSentencesAreInTheMoveText() {
         assertTrue("Hits the target's Defense instead of its Sp. Def." in MoveText.describe(data.move("psyshockish")!!))
-        assertTrue("Uses your Defense instead of your Attack." in MoveText.describe(data.move("bodypressish")!!))
-        assertTrue("Uses the target's Attack instead of yours." in MoveText.describe(data.move("foulplayish")!!))
+        assertTrue("Uses its Defense instead of its Attack." in MoveText.describe(data.move("bodypressish")!!))
+        assertTrue("Uses the target's Attack instead of its own." in MoveText.describe(data.move("foulplayish")!!))
         assertTrue("Ignores the target's stat changes." in MoveText.describe(data.move("swordish")!!))
         assertFalse("instead" in MoveText.describe(data.move("plainphysical")!!))
     }

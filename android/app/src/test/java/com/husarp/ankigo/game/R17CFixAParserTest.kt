@@ -32,7 +32,7 @@ class R17CFixAParserTest {
         assertEquals(Secondary(50, selfBoosts = mapOf("def" to 2)), m.secondary)
         assertEquals(1, m.allSecondaries.size) // the empty `secondary: {}` is no second secondary
         assertFalse(m.secondaryOnHit)
-        assertTrue(MoveText.describe(m), "May raise your Defense by 2 (50 %)." in MoveText.describe(m))
+        assertTrue(MoveText.describe(m), "May raise its Defense by 2 stages (×2) (50 %)." in MoveText.describe(m))
     }
 
     @Test fun otherSelfBoostsAreNotTouched() {

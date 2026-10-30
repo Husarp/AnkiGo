@@ -191,7 +191,7 @@ object MonDetail {
             if (mon.shownName != mon.name) mon.name else null, compact,
             lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–")))
 
-        if (page == null) { Pickers.info(a, "Details", DetailSections.scroll(a, col)); return }
+        if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col)).setCloseAtTop().showCard(); return }
         lateinit var more: View
         more = DetailParts.secondaryButton(a, "Options") {
             // the menu hangs on this button, so the details close only once a row was tapped
@@ -202,7 +202,7 @@ object MonDetail {
             addView(more, FrameLayout.LayoutParams(-1, -2).also { it.setMargins(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 4)) })
         }
         dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col)).setFooter(pinned)
-            .setPositiveButton("Close", null).create()
+            .setCloseAtTop().create()
         Pickers.show(dlg)
     }
 

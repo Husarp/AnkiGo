@@ -62,8 +62,15 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      */
     private fun applyQueuedMain(): List<GameEvent> {
         val uid = state.pendingMain ?: return emptyList()
+        val team = state.pendingTeam
+        state.pendingTeam = null
         val cycle = state.pendingCycle
         state.pendingMain = null; state.pendingCycle = false // first: whatever happens below, the switch is never applied twice
+        if (team != null && team.firstOrNull() == uid && team.all { state.mon(it) != null }) {
+            val old = state.team.firstOrNull()
+            state.team.clear(); state.team.addAll(team)
+            return changed("${state.main?.name} is your main now.", old).events.map { if (it is GameEvent.MainChanged) it.copy(queued = true) else it }
+        }
         if (state.mon(uid) == null || uid !in state.team || state.team.firstOrNull() == uid) return emptyList()
         // a queued [cycleMain] keeps its rotation of the first three ([A,B,C] -> [B,C,A]) while the one it queued is still next in line
         val events = if (cycle && state.team.getOrNull(1) == uid) rotateMain().events else setMain(uid).events
@@ -455,8 +462,12 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     private fun changed(message: String, oldMain: String?, oldMon: Mon? = oldMain?.let { state.mon(it) }, free: Boolean = false): ActionResult {
         val events = mutableListOf<GameEvent>()
         var text = message
-        // PLAN 206: a queued switch whose Pokémon left the team (box, released, import) or is the main now has nothing to wait for
-        state.pendingMain?.let { if (it !in state.team || it == state.team.firstOrNull()) state.pendingMain = null }
+        // A replacement may still be in the Box; validate its queued team before dropping the whole switch together.
+        val pending = state.pendingMain
+        val pendingTeam = state.pendingTeam
+        val valid = pending != null && pending != state.team.firstOrNull() && state.mon(pending) != null &&
+            (if (pendingTeam != null) pendingTeam.firstOrNull() == pending && pendingTeam.all { state.mon(it) != null } else pending in state.team)
+        if (!valid) { state.pendingMain = null; state.pendingTeam = null; state.pendingCycle = false }
         val main = state.main
         if (main != null && main.uid != oldMain) {
             val battle = state.battle
@@ -531,7 +542,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         main.hp > 0 && battle.wild.hp > 0 && (battle.rounds > 0 || battle.answers > 0)
 
     /** Puts [uid] first. A Pokémon from the box takes a free team place, or the last member's when the team is full. */
-    fun setMain(uid: String): ActionResult {
+    internal fun setMain(uid: String): ActionResult {
+        state.pendingTeam = null; state.pendingCycle = false
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         val old = state.team.firstOrNull()
         if (old == uid) return ActionResult(true, "${mon.name} is already your main.")
@@ -549,7 +561,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     /**
      * PLAN 206 (decided): a switch made while a card shows takes effect right after that card is answered, so nobody picks the
      * fighter after seeing the question. The card you saw is fought by the Pokémon that is out; the switch's one wild attack stays
-     * (it comes with the switch, see [switchCostsAHit]). The first card of a fight follows the same rule.
+     * (it comes with the switch, see [switchCostsAHit]). Before the first answer of a fight the switch is immediate and free.
      *
      * With [cardShowing] and a fight on ([SwitchQueue.fightOn]) and [uid] a team member other than the main: [uid] is queued
      * ([GameState.pendingMain], a newer pick replaces an older one), the result has a [GameEvent.SwitchQueued] and the main stays.
@@ -560,13 +572,20 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      */
     fun requestMain(uid: String, cardShowing: Boolean = true): ActionResult {
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
+        state.pendingTeam = null
         val main = state.main
         if (main != null && main.uid == uid) {
             if (state.pendingMain == null) return setMain(uid) // "already your main"
             state.pendingMain = null
             return ActionResult(true, SwitchQueue.cancelledText(main.name), listOf(GameEvent.SwitchQueued(null, main.name)))
         }
-        if (cardShowing && uid in state.team && SwitchQueue.fightOn(state)) {
+        if (uid !in state.team) {
+            val team = state.team.toMutableList()
+            if (team.size >= 6) team.removeAt(team.lastIndex)
+            team.add(0, uid)
+            return editTeam(team, "${mon.name} is your main now.", cardShowing)
+        }
+        if (cardShowing && SwitchQueue.waitsForAnswer(state)) {
             state.pendingMain = uid; state.pendingCycle = false
             return ActionResult(true, SwitchQueue.queuedText(mon.name), listOf(GameEvent.SwitchQueued(uid, mon.name)))
         }
@@ -588,12 +607,12 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      */
     fun cycleMain(cardShowing: Boolean = true): ActionResult {
         cycleMainBlocker()?.let { return ActionResult(false, it) }
-        if (cardShowing && SwitchQueue.fightOn(state)) {
+        if (cardShowing && SwitchQueue.waitsForAnswer(state)) {
             val r = requestMain(state.team[1], cardShowing = true)
             if (state.pendingMain != null) state.pendingCycle = true
             return r
         }
-        state.pendingMain = null
+        state.pendingMain = null; state.pendingTeam = null; state.pendingCycle = false
         return rotateMain()
     }
 
@@ -604,43 +623,52 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return changed("${state.main?.name ?: "?"} is your main now.", old)
     }
 
-    fun moveInTeam(uid: String, delta: Int): ActionResult {
+    fun moveInTeam(uid: String, delta: Int, cardShowing: Boolean = true): ActionResult {
         val from = state.team.indexOf(uid)
         if (from < 0) return ActionResult(false, "That Pokémon is not in your team.")
         val to = (from + delta).coerceIn(0, state.team.size - 1)
         if (to == from) return ActionResult(false, "It can't move any further.")
-        val old = state.team.first()
-        state.team.removeAt(from)
-        state.team.add(to, uid)
-        return changed("Moved ${state.mon(uid)?.name ?: "it"} to place ${to + 1}.", old)
+        val team = state.team.toMutableList()
+        team.removeAt(from); team.add(to, uid)
+        return editTeam(team, "Moved ${state.mon(uid)?.name ?: "it"} to place ${to + 1}.", cardShowing)
     }
 
-    fun toBox(uid: String): ActionResult {
+    fun toBox(uid: String, cardShowing: Boolean = true): ActionResult {
         if (uid !in state.team) return ActionResult(false, "That Pokémon is not in your team.")
         if (state.team.size <= 1) return ActionResult(false, "Your team needs at least one Pokémon.")
-        val old = state.team.first()
-        state.team.remove(uid)
-        return changed("${state.mon(uid)?.name ?: "It"} went to the box.", old)
+        return editTeam(state.team.filter { it != uid }, "${state.mon(uid)?.name ?: "It"} went to the box.", cardShowing)
     }
 
     fun toTeam(uid: String): ActionResult {
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         if (uid in state.team) return ActionResult(false, "${mon.name} is already in your team.")
         if (state.team.size >= 6) return ActionResult(false, "Your team is full (6).")
-        state.team.add(uid)
-        return ActionResult(true, "${mon.name} joined your team.")
+        return editTeam(state.team + uid, "${mon.name} joined your team.")
     }
 
     /** R6-06: [inUid] (from the box) takes [outUid]'s place in the team; [outUid] goes to the box. A new main triggers the usual main-change events. */
-    fun swapIntoTeam(inUid: String, outUid: String): ActionResult {
+    fun swapIntoTeam(inUid: String, outUid: String, cardShowing: Boolean = true): ActionResult {
         val mon = state.mon(inUid) ?: return ActionResult(false, "Pokémon not found.")
         val out = state.mon(outUid) ?: return ActionResult(false, "Pokémon not found.")
         if (inUid in state.team) return ActionResult(false, "${mon.name} is already in your team.")
         val slot = state.team.indexOf(outUid)
         if (slot < 0) return ActionResult(false, "That Pokémon is not in your team.")
-        val old = state.team.first()
-        state.team[slot] = inUid
-        return changed("${mon.name} joined your team; ${out.name} went to the box.", old)
+        val team = state.team.toMutableList().also { it[slot] = inUid }
+        return editTeam(team, "${mon.name} joined your team; ${out.name} went to the box.", cardShowing)
+    }
+
+    /** Every team edit that replaces the active fighter uses the same queue as Make main. */
+    private fun editTeam(team: List<String>, message: String, cardShowing: Boolean = true): ActionResult {
+        val old = state.team.firstOrNull()
+        val incoming = team.firstOrNull()
+        if (incoming != null && incoming != old && cardShowing && SwitchQueue.waitsForAnswer(state)) {
+            state.pendingMain = incoming; state.pendingCycle = false; state.pendingTeam = team
+            val name = state.mon(incoming)!!.name
+            return ActionResult(true, SwitchQueue.queuedText(name), listOf(GameEvent.SwitchQueued(incoming, name)))
+        }
+        if (state.pendingTeam != null) { state.pendingTeam = null; state.pendingMain = null; state.pendingCycle = false }
+        state.team.clear(); state.team.addAll(team)
+        return changed(message, old)
     }
 
     fun setXpShare(uid: String?): ActionResult {
@@ -686,8 +714,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return ActionResult(true, "${mon.shownName} now looks like ${pick.name}.")
     }
 
-    fun release(uid: String): ActionResult {
+    fun release(uid: String, cardShowing: Boolean = true): ActionResult {
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
+        if (state.main?.uid == uid && cardShowing && SwitchQueue.waitsForAnswer(state)) return ActionResult(false, "Switch to another Pokémon before releasing your Main during a fight.")
         if (mon.favourite) return ActionResult(false, "Remove ${mon.shownName} from favourites first.")
         if (state.mons.size <= 1) return ActionResult(false, "You can't release your only Pokémon.")
         if (state.team.size == 1 && state.team[0] == uid) {

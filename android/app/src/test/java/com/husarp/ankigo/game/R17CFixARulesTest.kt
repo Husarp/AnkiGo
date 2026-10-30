@@ -104,7 +104,7 @@ class R17CFixARulesTest {
         assertEquals(1, b.enemy.volatiles["charge"])
         repeat(4) { F.round(m, b, "tackle", null) }
         assertEquals(1, b.enemy.volatiles["charge"]) // no countdown: a wild one acts rarely
-        assertTrue(MoveText.describe(data.move("charge")!!).contains("Your next Electric move deals double damage."))
+        assertTrue(MoveText.describe(data.move("charge")!!).contains("Its next Electric move deals double damage."))
         assertEquals("When a move hits it, its next Electric move deals double damage.", AbilityText.of("Electromorphosis"))
     }
 
@@ -114,24 +114,24 @@ class R17CFixARulesTest {
         val outrage = data.move("outrage")!!
         val uproar = data.move("uproar")!!
         val bide = data.move("bide")!!
-        assertTrue(MoveText.describe(outrage), "2–3 moves in a row, then you become confused." in MoveText.describe(outrage))
+        assertTrue(MoveText.describe(outrage), "2–3 moves in a row, then it becomes confused." in MoveText.describe(outrage))
         assertTrue(MoveText.describe(uproar), "3 moves in a row." in MoveText.describe(uproar))
-        assertTrue(MoveText.describe(bide), "Stores energy for 2 of your moves" in MoveText.describe(bide))
-        assertFalse("turns, then you become confused" in MoveText.describe(outrage))
+        assertTrue(MoveText.describe(bide), "Stores energy for 2 of its moves" in MoveText.describe(bide))
+        assertFalse("turns, then it becomes confused" in MoveText.describe(outrage))
         assertFalse("for 3 turns" in MoveText.describe(uproar))
-        assertTrue("While you keep using it" in MoveText.describe(data.move("rage")!!))
+        assertTrue("While it keeps using it" in MoveText.describe(data.move("rage")!!))
     }
 
     @Test fun finalGambitSaysItNeedsAHitAndWonderGuardSaysStruggle() {
-        assertEquals("You faint after using it if it hits. Deals damage equal to your current HP.", MoveText.describe(data.move("finalgambit")!!))
+        assertEquals("It faints after using it if it hits. Deals damage equal to its current HP.", MoveText.describe(data.move("finalgambit")!!))
         val explosion = MoveText.describe(data.move("explosion")!!)
-        assertTrue(explosion, explosion.startsWith("You faint after using it.") && "if it hits" !in explosion)
+        assertTrue(explosion, explosion.startsWith("It faints after using it.") && "if it hits" !in explosion)
         assertEquals("Only super-effective moves and Struggle hurt it.", AbilityText.of("Wonder Guard"))
     }
 
     @Test fun theNewMovesSpeakAndNothingSaysHasNoEffect() {
         val parting = MoveText.describe(data.move("partingshot")!!)
-        assertEquals("Lowers the target's Attack and Sp. Atk by 1. You do not switch out.", parting)
+        assertEquals("Lowers the target's Attack and Sp. Atk by 1 stage (×2/3). It does not switch out.", parting)
         assertTrue(MoveText.describe(data.move("powder")!!).contains("The target's Fire move this turn fails, and it loses a quarter of its max HP."))
         assertTrue(MoveText.describe(data.move("spectralthief")!!).contains("Steals the target's raised stats for itself before it hits."))
     }

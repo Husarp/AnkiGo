@@ -35,6 +35,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
     private var message: CharSequence? = null
     private var customView: View? = null
     private var footer: View? = null
+    private var closeAtTop = false
     private var items: Array<out CharSequence>? = null
     private var itemListener: DialogInterface.OnClickListener? = null
     private var cancelable = true
@@ -69,7 +70,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
     val window: Window? get() = dlg.window
     val isShowing: Boolean get() = made?.isShowing == true
 
-    fun show() = dlg.show()
+    fun show() { dlg.show(); AwayWindows.track(this) { it.dismiss() } }
     override fun dismiss() { made?.dismiss() }
     override fun cancel() { made?.cancel() }
 
@@ -90,6 +91,11 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
             orientation = LinearLayout.VERTICAL
             background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 20, ctx)
             maxHeightPx = ctx.resources.displayMetrics.heightPixels - Ui.dp(ctx, 48)
+        }
+        if (closeAtTop) {
+            card.addView(makeButton(ctx, DialogInterface.BUTTON_POSITIVE, Btn("Close", null)).also {
+                buttonViews[DialogInterface.BUTTON_POSITIVE] = it
+            }, LinearLayout.LayoutParams(-2, -2).also { it.setMargins(Ui.dp(ctx, 12), Ui.dp(ctx, 8), 0, 0) })
         }
         val hasBody = message != null || customView != null || items != null
         title?.let { t ->
@@ -241,6 +247,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
     class Builder(private val ctx: Context) {
         private val d = AppDialog(ctx)
 
+        fun setCloseAtTop() = apply { d.closeAtTop = true }
         fun setTitle(t: CharSequence?) = apply { d.title = t }
         fun setMessage(m: CharSequence?) = apply { d.message = m }
         fun setView(v: View?) = apply { d.customView = v }

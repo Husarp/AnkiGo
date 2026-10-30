@@ -203,6 +203,7 @@ internal class ViewSettingsScreen(
             if (Ui.findActivity(ctx) == null) setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
         dialog.show()
+        AwayWindows.track(dialog) { it.dismiss() }
         dialog.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
     }
 

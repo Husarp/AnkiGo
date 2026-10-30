@@ -785,8 +785,7 @@ class GameActivity : AgActivity() {
     /** The ⋯ menu entries. "Switch Pokémon" is greyed with the reason under it when it can't work. */
     internal fun fillMenu(m: AppMenu) {
         m.item(8, "Pop out", R.drawable.ic_pip, sub = "Small battle window over other apps", dividerAfter = true)
-        m.item(1, "Pokémon", R.drawable.ic_team)
-        m.item(2, "Pokédex", R.drawable.ic_dex)
+        m.item(1, "Team", R.drawable.ic_team)
         m.item(3, "Shop", R.drawable.ic_shop)
         m.item(4, "Settings", R.drawable.ic_settings)
         val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
@@ -804,7 +803,6 @@ class GameActivity : AgActivity() {
         m.show { id ->
             when (id) {
                 1 -> openScreen(FloatPage.TEAM, Dest.TEAM)
-                2 -> openScreen(FloatPage.DEX, Dest.DEX)
                 3 -> openScreen(FloatPage.SHOP, Dest.SHOP)
                 4 -> openScreen(FloatPage.SETTINGS, Dest.SETTINGS)
                 5 -> openSwitchPopup()

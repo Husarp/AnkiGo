@@ -15,6 +15,7 @@ import com.husarp.ankigo.sound.SoundPrefs
  * and its own volume slider, then the quiet-on-card-audio rule and a test row. Prefs live in [SoundPrefs].
  */
 internal fun soundCard(ctx: Context): View {
+    SoundPrefs.migrateVolumes(ctx)
     fun group(title: String, sub: String?, g: SoundGroup, hear: SoundId?) =
         Form.soundRow(ctx, title, sub, SoundPrefs.groupOn(ctx, g), hear?.let { id -> { GameSound.preview(ctx, id)?.let { Ui.toast(ctx, it) } } }) {
             SoundPrefs.setGroupOn(ctx, g, it)
@@ -23,17 +24,17 @@ internal fun soundCard(ctx: Context): View {
         Form.sliderRow(ctx, title, SoundPrefs.volume(ctx, ch)) { SoundPrefs.setVolume(ctx, ch, it) }
     fun card(icon: Int, title: String, rows: List<View>) = Form.cardOf(ctx, rows).also { it.addView(Form.cardTitle(ctx, icon, title), 0) }
 
-    val buttons = card(R.drawable.ic_study, "Study buttons", listOf(
+    val buttons = card(R.drawable.ic_study, "UI sounds", listOf(
         group("Answer buttons", "Again, Hard, Good, Easy", SoundGroup.ANSWER_BUTTONS, SoundId.GOOD),
         group("Show answer", null, SoundGroup.SHOW_ANSWER, SoundId.SHOW_ANSWER),
         group("Menus & tabs", "Tabs, menus, ball button", SoundGroup.MENUS, SoundId.TAB),
         group("Shop", null, SoundGroup.SHOP, SoundId.BUY),
-        volume("Button volume", SoundChannel.BUTTONS),
+        volume("UI sounds volume", SoundChannel.BUTTONS),
     ))
     val battle = card(R.drawable.ic_flame, "Battle", listOf(
         group("Battle effects", "Hits, faint, catch, level up, misses", SoundGroup.BATTLE, SoundId.HIT),
         group("Status & moments", "Burn, poison, shiny, evolution, XP, cash, goals", SoundGroup.MOMENTS, SoundId.STAT_UP),
-        volume("Battle volume", SoundChannel.BATTLE),
+        volume("Battle effects volume", SoundChannel.BATTLE),
     ))
     val cries = card(R.drawable.ic_sound, "Pokémon cries", listOf(
         group("Pokémon cries", "Downloaded once each, ~7 KB", SoundGroup.CRIES, null),

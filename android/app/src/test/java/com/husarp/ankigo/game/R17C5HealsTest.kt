@@ -478,15 +478,15 @@ class R17C5HealsTest {
 
     @Test fun theTextsGiveTheNumbers() {
         fun say(id: String) = MoveText.describe(data.move(id)!!)
-        assertEquals("Heals you by half your max HP: two thirds in the sun, a quarter in rain, a sandstorm, hail or snow.", say("moonlight"))
-        assertEquals("Heals you by half your max HP: two thirds in a sandstorm.", say("shoreup"))
-        assertTrue(say("rest"), "you sleep through exactly 2 tries to move and wake up on the next one" in say("rest")) // R17C-10: "tries": the sleep counts the sleeper's own moves
-        assertEquals("At the end of the next turn, your team's Pokémon is healed by half your max HP.", say("wish"))
+        assertEquals("Heals itself by half its max HP: two thirds in the sun, a quarter in rain, a sandstorm, hail or snow.", say("moonlight"))
+        assertEquals("Heals itself by half its max HP: two thirds in a sandstorm.", say("shoreup"))
+        assertTrue(say("rest"), "it sleeps through exactly 2 tries to move and wakes up on the next one" in say("rest")) // R17C-10: "tries": the sleep counts the sleeper's own moves
+        assertEquals("At the end of the next turn, its team's Pokémon is healed by half its max HP.", say("wish"))
         assertTrue(say("swallow"), "a quarter" in say("swallow") && "all of it with 3" in say("swallow"))
-        assertEquals("Its power is 100 times your stockpile, which it then ends. Fails with none.", say("spitup"))
-        assertTrue(say("bellydrum"), "half" in say("bellydrum") && "Fails when your HP is half of your max HP or less." in say("bellydrum"))
-        assertTrue(say("clangoroussoul"), "a third" in say("clangoroussoul") && "a third of your max HP or less" in say("clangoroussoul"))
-        assertEquals("Raises your Attack, Sp. Atk and Speed by 2. Pay half your max HP first. Fails when your HP is half of your max HP or less.", say("filletaway"))
+        assertEquals("Its power is 100 times its stockpile, which it then ends. Fails with none.", say("spitup"))
+        assertTrue(say("bellydrum"), "half" in say("bellydrum") && "Fails when its HP is half of its max HP or less." in say("bellydrum"))
+        assertTrue(say("clangoroussoul"), "a third" in say("clangoroussoul") && "a third of its max HP or less" in say("clangoroussoul"))
+        assertEquals("Raises its Attack, Sp. Atk and Speed by 2 stages (×2). Pays half its max HP first. Fails when its HP is half of its max HP or less.", say("filletaway"))
         assertEquals("Sets every stat change of both Pokémon back to 0.", say("haze").removeSuffix(" Never misses."))
     }
 }

@@ -12,7 +12,7 @@ data class ItemFact(val title: String, val text: String)
 object ItemInfo {
     // ---- PLAN 168 API (R14 batch 2) ----
 
-    private const val FIGHT_RULE = "On your **main** in a fight it works **at once**, then the wild Pokémon attacks once (your answers' dots don't change). " +
+    private const val FIGHT_RULE = "On your **main** in a fight it works **at once**, then the wild Pokémon uses one free move (your answers' dots don't change). " +
         "Before your **first answer** of a fight, also after \"Next battle\", the wild one doesn't attack."
     private const val MAIN_ONLY = "Used on a Pokémon on the bench, it never brings an attack."
     private const val HOLD_RULE = "Give it to a Pokémon from the Bag. A Pokémon holds **one item**; the old one goes back to the Bag."
@@ -181,9 +181,9 @@ object ItemInfo {
 
     /** The words of a move text that get bold marks (longest first, so "Badly poisons" wins over "poisons"). */
     private val KEY_WORDS = Regex(
-        "Puts (?:you|the target) to sleep|put (?:you|the target) to sleep|Badly poisons|badly poison|Paralyzes|paralyze|Burns|burn|Poisons|poison|" +
+        "Puts (?:itself|the target) to sleep|put (?:itself|the target) to sleep|Badly poisons|badly poison|Paralyzes|paralyze|Burns|burn|Poisons|poison|" +
             "Freezes|freeze|Knocks the target out in one hit|Usually goes first|Usually goes last|Never misses|Raises|raise|Lowers|lower|" +
-            "Heals you|recoil|Hits \\d+(?:–\\d+)? times|Charges on the first turn|" +   // R17C-3: the charge sentence of MoveText
+            "Heals itself|recoil|Hits \\d+(?:–\\d+)? times|Charges on the first turn|" +   // R17C-3: the charge sentence of MoveText
             // R17C-10: the key verbs of the new rules (whole words, so "confused" or "flinched" inside a longer sentence stay plain)
             "Confuses|\\bconfuse\\b|\\bflinch\\b|Blocks|Holds the target|\\brecharge\\b|Cures|\\bfall in love\\b|Seeds the target|Swaps|Copies",
     )
@@ -361,8 +361,8 @@ object ItemInfo {
         null -> ""
     }
 
-    /** R13 Part C / R18-B: an item used on the main during a fight works at once, then the wild one attacks once (Game.useItem); no dot is filled. */
-    const val FIGHT_TURN = "On your main in a fight it works at once, then the wild Pokémon attacks once (not before your first answer of the fight)."
+    /** R13 Part C / R18-B: an item used on the main during a fight works at once, then the wild one uses one free move (Game.useItem); no dot is filled. */
+    const val FIGHT_TURN = "On your main in a fight it works at once, then the wild Pokémon uses one free move (not before your first answer of the fight)."
 
     /** What a TM does, for the popup: it teaches a move and is never used up. */
     fun tmHowToUse(): String = "Teaches this move to a Pokémon that can learn it. A TM is never used up."

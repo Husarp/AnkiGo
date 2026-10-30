@@ -31,11 +31,11 @@ object MoveText {
         CoreRules.neverPickedText(m.id)?.let { return it } // R17C-3: a move that means nothing in a 1-vs-1 wild fight says why (it is never picked)
         val lines = ArrayList<String>()   // what the move does
         val extras = ArrayList<String>()  // when it goes, whether it can miss, charging
-        val ruleLines = BattleRules.ALL.flatMap { it.describe(m) } // R17C-1: what the rule sets add, after the engine's own lines
+        val ruleLines = BattleRules.ALL.flatMap { it.describe(m) }.map(StageText::explain) // R17C-1: what the rule sets add, after the engine's own lines
 
         if (m.damaging) {
             val rule = when {
-                m.levelDamage -> "Deals damage equal to your level."
+                m.levelDamage -> "Deals damage equal to its level."
                 m.fixedDamage != null -> "Always deals ${m.fixedDamage} damage."
                 m.halfHp -> "Takes off half of the target's current HP."
                 m.ohko -> "Knocks the target out in one hit, but fails against a higher-level target."
@@ -47,24 +47,24 @@ object MoveText {
             }
             // R17C-1: which stats the damage formula uses
             if (m.defensiveStat == "def") lines += "Hits the target's Defense instead of its Sp. Def."
-            if (m.offensiveStat == "def") lines += "Uses your Defense instead of your Attack."
-            if (m.offensiveFromTarget) lines += "Uses the target's Attack instead of yours."
+            if (m.offensiveStat == "def") lines += "Uses its Defense instead of its Attack."
+            if (m.offensiveFromTarget) lines += "Uses the target's Attack instead of its own."
             if (m.ignoreDefensive || m.ignoreEvasion) lines += "Ignores the target's stat changes."
-            m.drain?.let { (a, b) -> lines += "Heals you by ${part(a, b)} the damage dealt." }
-            m.recoil?.let { (a, b) -> lines += "You take ${part(a, b)} the damage dealt as recoil." }
-            if (m.selfDestruct) lines += if (m.selfDestructIfHit) "You faint after using it if it hits." else "You faint after using it." // R17C FIX-A: Final Gambit needs a hit
-            m.selfBoosts?.let { lines += boostSentences(it, "your", "Raises", "Lowers") }
+            m.drain?.let { (a, b) -> lines += "Heals itself by ${part(a, b)} the damage dealt." }
+            m.recoil?.let { (a, b) -> lines += "It takes ${part(a, b)} the damage dealt as recoil." }
+            if (m.selfDestruct) lines += if (m.selfDestructIfHit) "It faints after using it if it hits." else "It faints after using it." // R17C FIX-A: Final Gambit needs a hit
+            m.selfBoosts?.let { lines += boostSentences(it, "its", "Raises", "Lowers") }
             for (sec in m.allSecondaries) lines += secondary(sec) // R17C-3: a second secondary (the fangs) is rolled too
             chargeSentence(m)?.let { lines += it }
             lines += ruleLines
         } else {
             val self = m.target in SELF_TARGETS
-            val who = if (self) "you" else "the target"
-            val whose = if (self) "your" else "the target's"
+            val who = if (self) "itself" else "the target"
+            val whose = if (self) "its" else "the target's"
             m.status?.let { s -> STATUS_THIRD[s]?.let { lines += it.replace("{}", who) + "." } }
             m.boosts?.let { lines += boostSentences(it, whose, "Raises", "Lowers") }
-            m.selfBoosts?.let { lines += boostSentences(it, "your", "Raises", "Lowers") }
-            m.heal?.let { (a, b) -> lines += "Heals you by ${part(a, b)} your max HP." }
+            m.selfBoosts?.let { lines += boostSentences(it, "its", "Raises", "Lowers") }
+            m.heal?.let { (a, b) -> lines += "Heals itself by ${part(a, b)} its max HP." }
             if (m.id in Tuning.POWDER_MOVES) lines += "Fails against Grass types."
             chargeSentence(m)?.let { lines += it }
             lines += ruleLines
@@ -86,9 +86,9 @@ object MoveText {
     /** R17C-3 (PLAN 267): the charge turn, then the user's very next move is the hit (or the effect) by itself; null for a move that doesn't charge. */
     private fun chargeSentence(m: Move): String? {
         if (!CoreRules.isCharge(m)) return null
-        val rise = Tuning.CHARGE_TURN_RISE[m.id]?.let { boostSentences(it, "your", "raises", "lowers").firstOrNull() }?.removeSuffix(".")
+        val rise = Tuning.CHARGE_TURN_RISE[m.id]?.let { boostSentences(it, "its", "raises", "lowers").firstOrNull() }?.removeSuffix(".")
         val then = if (m.damaging) "hits" else "takes effect"
-        return "Charges on the first turn" + (rise?.let { " and $it" } ?: "") + ", then $then with your next move."
+        return "Charges on the first turn" + (rise?.let { " and $it" } ?: "") + ", then $then with its next move."
     }
 
     /** "half", "a third of", "a quarter of", "three quarters of" (fraction reduced); anything else "33 % of". Read it before "the damage". */
@@ -121,24 +121,24 @@ object MoveText {
             if (text != null) out += (if (may) "May $text" else text) + "$tag."
         }
         s.boosts?.let { out += boostSentences(it, "the target's", if (may) "May raise" else "Raises", if (may) "May lower" else "Lowers", tag) }
-        s.selfBoosts?.let { out += boostSentences(it, "your", if (may) "May raise" else "Raises", if (may) "May lower" else "Lowers", tag) }
+        s.selfBoosts?.let { out += boostSentences(it, "its", if (may) "May raise" else "Raises", if (may) "May lower" else "Lowers", tag) }
         return out
     }
 
     /**
-     * "Raises your Attack and Speed by 1 and Defense by 2." (stats with the same amount share a "by"); one sentence for the rises and
+     * "Raises its Attack and Speed by 1 and Defense by 2." (stats with the same amount share a "by"); one sentence for the rises and
      * one for the drops. Keys the engine does not know are skipped, like the engine does.
      */
     private fun boostSentences(map: Map<String, Int>, whose: String, up: String, down: String, tag: String = ""): List<String> {
         fun one(verb: String, sign: Int): String? {
-            val byAmount = LinkedHashMap<Int, MutableList<String>>()
+            val byAmount = LinkedHashMap<Pair<Int, Boolean>, MutableList<String>>()
             for ((i, key) in BOOST_KEYS.withIndex()) {
                 val v = map[key] ?: continue
                 if (v == 0 || (v > 0) != (sign > 0)) continue
-                byAmount.getOrPut(Math.abs(v)) { ArrayList() } += BOOST_LABELS[i]
+                byAmount.getOrPut(Math.abs(v) to (key == "accuracy" || key == "evasion")) { ArrayList() } += BOOST_LABELS[i]
             }
             if (byAmount.isEmpty()) return null
-            val groups = byAmount.entries.map { (n, labels) -> "${join(labels)} by $n" }
+            val groups = byAmount.entries.map { (n, labels) -> "${join(labels)} by ${StageText.amount(n.first * sign, n.second)}" }
             return "$verb $whose ${join(groups)}$tag."
         }
         return listOfNotNull(one(up, 1), one(down, -1))

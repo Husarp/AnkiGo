@@ -149,7 +149,7 @@ class R4NavShots {
         FakeGame.install(ctx)
         val m = AppMenu(View(ctx))
         FloatBattleView(object : ContextWrapper(ctx) { override fun getApplicationContext(): Context = this }, {}, {}, {}).fillMenu(m)
-        assertEquals(listOf("Open AnkiGo", "Pause watching AnkiDroid", "Pokémon", "Pokédex", "Shop", "Settings", "View settings", "Help"), m.describe().map { it.second })
+        assertEquals(listOf("Open AnkiGo", "Pause watching AnkiDroid", "Team", "Shop", "Settings", "View settings", "Help"), m.describe().map { it.second })
         BattleShotKit.reset()
     }
 

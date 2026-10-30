@@ -306,8 +306,8 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             }
             if (!inTeam || team.indexOf(mon.uid) > 0) {
                 when {
-                    inTeam -> add(5, "Set as main", R.drawable.ic_star, sub = SwitchQueue.MENU_SUB.takeIf { SwitchQueue.fightOn(this.state) }, tone = R.color.ag_yellow) { act { g -> g.requestMain(mon.uid).quietUnlessHit() } } // PLAN 206: in a fight it waits for the next answer; the change is visible: no toast (unless it cost a hit)
-                    team.size < 6 -> add(5, "Set as main", R.drawable.ic_star, sub = SwitchQueue.MENU_SUB.takeIf { SwitchQueue.fightOn(this.state) }, tone = R.color.ag_yellow) {
+                    inTeam -> add(5, "Set as main", R.drawable.ic_star, sub = SwitchQueue.MENU_SUB.takeIf { SwitchQueue.waitsForAnswer(this.state) }, tone = R.color.ag_yellow) { act { g -> g.requestMain(mon.uid).quietUnlessHit() } } // PLAN 206: in a fight it waits for the next answer; the change is visible: no toast (unless it cost a hit)
+                    team.size < 6 -> add(5, "Set as main", R.drawable.ic_star, sub = SwitchQueue.MENU_SUB.takeIf { SwitchQueue.waitsForAnswer(this.state) }, tone = R.color.ag_yellow) {
                         act { g -> g.toTeam(mon.uid).let { r -> if (r.ok) g.requestMain(mon.uid).quietUnlessHit() else r } }
                     }
                     main != null -> add(5, "Set as main", R.drawable.ic_star, sub = "${main.shownName} goes to the box", tone = R.color.ag_yellow) {
@@ -364,6 +364,7 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             if (Ui.findActivity(this@ComparePage) == null) setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
         dialog.show()
+        AwayWindows.track(dialog) { it.dismiss() }
         dialog.window?.setLayout(minOf(resources.displayMetrics.widthPixels, dp(600)), -2)
     }
 

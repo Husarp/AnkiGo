@@ -1236,7 +1236,7 @@ class GameTest {
         g.fight()
         g.state.battle!!.player.boosts[2] = 3
         g.state.battle!!.rounds = 1 // R11-135: a round was played, so the switch costs the hit
-        val r = g.swapIntoTeam("b6", "t0")
+        val r = g.swapIntoTeam("b6", "t0", cardShowing = false)
         assertTrue(r.ok)
         assertEquals(listOf("b6", "t1", "t2", "t3", "t4", "t5"), g.state.team)
         assertEquals(GameEvent.MainChanged("b6", g.state.mon("b6")!!.name), r.events[0])
@@ -1259,7 +1259,7 @@ class GameTest {
         val wild = g.fight()
         g.state.battle!!.player.boosts[2] = 3
         g.state.battle!!.rounds = 1 // R11-135: a round was played, so the switch costs the hit
-        val r = g.toBox("t0")
+        val r = g.toBox("t0", cardShowing = false)
         assertEquals(listOf("t1", "t2"), g.state.team)
         assertEquals(GameEvent.MainChanged("t1", g.state.mon("t1")!!.name), r.events[0])
         assertTrue(r.events[1] is GameEvent.SwitchHit) // R10 W10: switching in a fight costs a hit (the details are in SwitchHitTest)

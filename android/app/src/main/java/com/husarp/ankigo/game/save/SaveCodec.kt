@@ -83,6 +83,7 @@ object SaveCodec {
             kv("achLadder", state.achLadder) // R9-B2: always written; a save without the key is ladder 1 (5-tier "types" / "highest-level")
             kv("starterUid", state.starterUid); list("starterSeen", state.starterSeen.sorted()); list("starterCaught", state.starterCaught.sorted()) // R9-W4-B
             kv("pendingMain", state.pendingMain) // PLAN 206: the switch waiting for the next answer (null = none; a save without the key is an old one)
+            state.pendingTeam?.let { list("pendingTeam", it) }
             kv("pendingCycle", state.pendingCycle) // PLAN 206: that switch is a team cycle (a save without the key: false)
             if (state.asks.isNotEmpty()) { key("asks"); arr { state.asks.forEach { writeAsk(this, it) } } } // R19-P (PLAN 281): only while a question waits, so a save without any is byte for byte what it was
             key("settings"); writeSettings(this, state.settings)
@@ -427,7 +428,9 @@ object SaveCodec {
         o.strList("viewedMons")?.let { s.viewedMons += it } // old saves: empty, so only today's NEW rule decides
         readSettings(o.optJSONObject("settings"), s.settings)
         readAchievements(o, s)
-        s.pendingMain = o.strOrNull("pendingMain")?.takeIf { it in known && it in s.team && it != s.team.firstOrNull() } // PLAN 206: only a team member that is not the main can still be waiting
+        s.pendingTeam = o.strList("pendingTeam")?.takeIf { it.isNotEmpty() && it.size <= 6 && it.distinct().size == it.size && it.all { uid -> uid in known } }
+        s.pendingMain = o.strOrNull("pendingMain")?.takeIf { it in known && (it in s.team || it == s.pendingTeam?.firstOrNull()) && it != s.team.firstOrNull() } // PLAN 206: only a team member that is not the main can still be waiting
+        if (s.pendingMain == null) s.pendingTeam = null
         s.pendingCycle = s.pendingMain != null && o.bool("pendingCycle", false)
         o.optJSONArray("asks")?.let { a -> // R19-P (PLAN 281): an old save has none; at most AskMe.MAX_WAITING are kept (the newest)
             for (i in 0 until a.length()) {

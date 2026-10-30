@@ -11,19 +11,19 @@
     <color name="ag_text">#4c4f69</color>
     <color name="ag_sub1">#5c5f77</color>
     <color name="ag_sub0">#6c6f85</color>
-    <color name="ag_red">#d20f39</color>
-    <!-- the battle's NEW sticker: a plain strong red in both themes (ag_red is pink in dark) -->
+    <color name="ag_red">#d20934</color>
+    <!-- the battle's NEW sticker: a plain strong red in both themes (separate from the answer-button red) -->
     <color name="ag_new_tag">#e0102f</color>
-    <color name="ag_peach">#fe640b</color>
-    <color name="ag_yellow">#df8e1d</color>
-    <color name="ag_green">#40a02b</color>
-    <color name="ag_teal">#179299</color>
-    <color name="ag_blue">#1e66f5</color>
-    <color name="ag_sky">#04a5e5</color>
-    <color name="ag_lav">#7287fd</color>
-    <color name="ag_mauve">#8839ef</color>
-    <color name="ag_pink">#ea76cb</color>
-    <color name="ag_lime">#8a9a12</color>
+    <color name="ag_peach">#ff6004</color>
+    <color name="ag_yellow">#df8b17</color>
+    <color name="ag_green">#3c9f26</color>
+    <color name="ag_teal">#129097</color>
+    <color name="ag_blue">#1260fb</color>
+    <color name="ag_sky">#00a2e3</color>
+    <color name="ag_lav">#6a80ff</color>
+    <color name="ag_mauve">#842ef4</color>
+    <color name="ag_pink">#ed6dcb</color>
+    <color name="ag_lime">#88980d</color>
     <!-- Switch (settings): off track fill, off outline + knob, on knob -->
     <color name="ag_sw_track">#e6e9ef</color>
     <color name="ag_sw_line">#7c7f93</color>

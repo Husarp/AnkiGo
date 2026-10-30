@@ -30,6 +30,19 @@ object SoundPrefs {
     }
     fun setVolume(ctx: Context, ch: SoundChannel, pct: Int) = prefs(ctx).edit().putInt(SoundDefaults.volumeKey(ch), pct.coerceIn(0, 100)).apply()
 
+    /** Keep the effective legacy volumes once, without changing any channel already set by the player. */
+    fun migrateVolumes(ctx: Context) {
+        val p = prefs(ctx)
+        if (!p.contains(SoundDefaults.OLD_VOLUME_KEY)) return
+        val missing = SoundChannel.entries.filter { !p.contains(SoundDefaults.volumeKey(it)) }
+        if (missing.isEmpty()) return
+        val e = p.edit()
+        missing.forEach { ch ->
+            e.putInt(SoundDefaults.volumeKey(ch), SoundDefaults.volume(ch) { key -> if (p.contains(key)) p.getInt(key, 0) else null })
+        }
+        e.apply()
+    }
+
     // ---- the old single switches and slider (thin aliases until the grouped settings replace them) ----
 
     fun battleSounds(ctx: Context) = groupOn(ctx, SoundGroup.BATTLE)

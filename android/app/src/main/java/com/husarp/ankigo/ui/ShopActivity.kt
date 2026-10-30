@@ -209,6 +209,12 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
                 ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))) { openCard(CardKeys.DEAL) }, gap)
         }
 
+        // the weekend special (Saturday and Sunday only)
+        Shop.weekendFor(data, st.day)?.let { w ->
+            content.addView(Bits.sect(ctx, "Weekend special", "Sat & Sun"))
+            content.addView(weekendCard(w), LinearLayout.LayoutParams(-1, -2))
+        }
+
         // always in stock: the basics at their normal price
         content.addView(Bits.sect(ctx, "Always in stock"))
         tileRows(Shop.basics().map { ShopPlan.Tile.Item(it) }, cols, CardKeys::basic)
@@ -220,11 +226,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         if (specials.isEmpty()) content.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Nothing in the shop yet." })
         tileRows(specials, cols, CardKeys::special)
 
-        // the weekend special (Saturday and Sunday only)
-        Shop.weekendFor(data, st.day)?.let { w ->
-            content.addView(Bits.sect(ctx, "Weekend special", "Sat & Sun"))
-            content.addView(weekendCard(w), LinearLayout.LayoutParams(-1, -2))
-        }
+
     }
 
     /** [tiles] in rows of [cols] equal tiles (the last row is filled up with blanks so its tiles keep the width); a tap on a tile opens its window. */

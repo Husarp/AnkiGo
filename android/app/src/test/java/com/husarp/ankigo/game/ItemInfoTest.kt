@@ -102,8 +102,8 @@ class ItemInfoTest {
         assertTrue(fact("potion", "What it does").contains("**20 HP**") && fact("potion", "What it does").contains("never above"))
         assertTrue(fact("potion", "How to use").contains("**can't**"))
         val fight = fact("potion", "In a fight")
-        assertTrue(fight.contains("**main**") && fight.contains("**at once**") && fight.contains("**first answer**") && fight.contains("attacks once"))   // R18-B (264)
-        assertFalse(fight.contains("one turn") || fight.contains("free"))
+        assertTrue(fight.contains("**main**") && fight.contains("**at once**") && fight.contains("**first answer**") && fight.contains("uses one free move"))   // R18-B (264)
+        assertFalse(fight.contains("one turn") || fight.contains("free hit") || fight.contains("free attack"))
         assertTrue(fight.contains("bench"))
         // R17C-6: Full Restore cures a status in a fight, Max Potion does not (the old "no status problems" text was false)
         for (id in listOf("full-restore", "max-potion")) assertTrue(fact(id, "What it does").contains("**all HP**") && fact(id, "What it does").contains("status"))
@@ -230,7 +230,7 @@ class ItemInfoTest {
         assertEquals("", ItemInfo.moveEffect(data, "tackle"))
         assertEquals("", ItemInfo.moveEffect(data, "no-such-move"))
         for (m in data.moves.keys) assertTrue(m, marksBalanced(ItemInfo.moveEffect(data, m)))
-        assertTrue(ItemInfo.moveEffect(data, "absorb").contains("**Heals you**"))
+        assertTrue(ItemInfo.moveEffect(data, "absorb").contains("**Heals itself**"))
     }
 
     // ---- plurals, own lines, marks ----

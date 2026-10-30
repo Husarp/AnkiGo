@@ -68,15 +68,14 @@ internal object PickKit {
 
     fun badge(ctx: Context): ImageView = ImageView(ctx).apply { visibility = View.GONE }
 
-    /** Shows the tick badge while picking: ticked = accent, empty = grey outline. */
+    /** Shows a bare outlined tick while picking; an unticked choice keeps its square outline. */
     fun bindBadge(img: ImageView, picking: Boolean, picked: Boolean) {
         val ctx = img.context
         img.visibility = if (picking) View.VISIBLE else View.GONE
         if (picked) {
-            // ticked: the empty box's square filled with the accent (the box fills 18 of the icon's 24 units, so inset 1/8 per side) + a tick
-            img.setImageResource(R.drawable.ic_checkbox_tick)
-            img.setColorFilter(Ui.c(ctx, R.color.ag_crust), PorterDuff.Mode.SRC_IN)
-            img.background = android.graphics.drawable.InsetDrawable(Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 3, ctx), .125f)
+            img.setImageResource(R.drawable.ic_selection_tick)
+            img.clearColorFilter()
+            img.background = null
             img.setPadding(0, 0, 0, 0)
         } else {
             img.setImageResource(R.drawable.ic_checkbox_off)

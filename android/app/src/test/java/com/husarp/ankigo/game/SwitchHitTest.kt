@@ -74,16 +74,16 @@ class SwitchHitTest {
 
     private class Path(val name: String, val newMain: String, val act: (Game) -> ActionResult)
 
-    /** Every way the Main can change (the UI only calls these). */
+    /** The immediate paths with no card showing; R20SwitchTest covers their queued paths. */
     private val paths = listOf(
         Path("setMain: a team member", "t2") { it.setMain("t2") },
         Path("setMain: a box Pokémon joins the team", "b3") { it.setMain("b3") },
         Path("cycleMain", "t1") { it.cycleMain(cardShowing = false) },
-        Path("moveInTeam: the second one up", "t1") { it.moveInTeam("t1", -1) },
-        Path("moveInTeam: the main down", "t1") { it.moveInTeam("t0", 1) },
-        Path("toBox: the main", "t1") { it.toBox("t0") },
-        Path("swapIntoTeam: a box Pokémon for the main", "b3") { it.swapIntoTeam("b3", "t0") },
-        Path("release: the main", "t1") { it.release("t0") },
+        Path("moveInTeam: the second one up", "t1") { it.moveInTeam("t1", -1, cardShowing = false) },
+        Path("moveInTeam: the main down", "t1") { it.moveInTeam("t0", 1, cardShowing = false) },
+        Path("toBox: the main", "t1") { it.toBox("t0", cardShowing = false) },
+        Path("swapIntoTeam: a box Pokémon for the main", "b3") { it.swapIntoTeam("b3", "t0", cardShowing = false) },
+        Path("release: the main", "t1") { it.release("t0", cardShowing = false) },
     )
 
     // ---------------------------------------------------------------- the rule
@@ -137,7 +137,7 @@ class SwitchHitTest {
         assertEquals("${g.state.main!!.name} is your main now — the wild Ratty hit it for $hit HP.", r.message)
         // a message that does not name the new main: the hit names it
         val g2 = game()
-        val r2 = g2.toBox("t0")
+        val r2 = g2.toBox("t0", cardShowing = false)
         val hit2 = r2.events.of<GameEvent.Attack>().single().damage
         assertEquals("${g2.state.mon("t0")!!.name} went to the box — the wild Ratty hit ${g2.state.main!!.name} for $hit2 HP.", r2.message)
     }
@@ -161,9 +161,9 @@ class SwitchHitTest {
         val r = g.setMain("t0")
         assertTrue(r.events.isEmpty())
         // moves that leave the Main where it is
-        val r2 = g.moveInTeam("t1", 1)
+        val r2 = g.moveInTeam("t1", 1, cardShowing = false)
         assertTrue(r2.ok && r2.events.isEmpty())
-        val r3 = g.toBox("t2")
+        val r3 = g.toBox("t2", cardShowing = false)
         assertTrue(r3.ok && r3.events.isEmpty())
         assertEquals("t0", g.state.main!!.uid)
         assertEquals(before, g.state.main!!.hp)

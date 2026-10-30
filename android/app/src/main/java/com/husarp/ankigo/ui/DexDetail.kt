@@ -141,7 +141,7 @@ object DexDetail {
         col.addView(star, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         col.addView(hint, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
-        dlg = AppDialog.Builder(a).setTitle(sp.name).setView(DetailSections.scroll(a, col)).setPositiveButton("Close", null).create()
+        dlg = AppDialog.Builder(a).setTitle(sp.name).setView(DetailSections.scroll(a, col)).setCloseAtTop().create()
         Pickers.show(dlg)
     }
 

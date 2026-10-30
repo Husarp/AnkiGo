@@ -159,8 +159,8 @@ object ReplaceWindow {
         var on = startOn
         val box = ImageView(ctx)
         fun draw() {
-            box.setImageResource(if (on) R.drawable.ic_checkbox_on else R.drawable.ic_checkbox_off)
-            box.setColorFilter(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_ov), PorterDuff.Mode.SRC_IN)
+            box.setImageResource(if (on) R.drawable.ic_selection_tick else R.drawable.ic_checkbox_off)
+            if (on) box.clearColorFilter() else box.setColorFilter(Ui.c(ctx, R.color.ag_ov), PorterDuff.Mode.SRC_IN)
         }
         draw()
         return LinearLayout(ctx).apply {

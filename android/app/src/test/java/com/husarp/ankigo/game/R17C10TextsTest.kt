@@ -68,8 +68,8 @@ class R17C10TextsTest {
         assertFalse(b, b.contains("A turn is one dot"))
         assertFalse(b, b.contains("takes one turn"))
         // R18-B (227 / 264): the switch waits for the answer, the item works at once; R19-T (288): Adam's toast says "free hit" for the switch only
-        assertTrue(b, b.contains("A switch is not a round") && b.contains("the wild Pokémon gets one free hit on it") && b.contains("waits for your answer"))
-        assertTrue(b, b.contains("works at once, then the wild Pokémon attacks your Main once"))
+        assertTrue(b, b.contains("A switch is not a round") && b.contains("the wild Pokémon gets one free move on it") && b.contains("waits for your answer"))
+        assertTrue(b, b.contains("works at once, then the wild Pokémon uses one free move on your Main"))
         assertFalse(b, b.contains("turns mauve"))
         assertTrue(b, b.contains("The switch fills no dot") && b.contains("the next battle still waits for Continue"))
         assertTrue(b, b.contains("The OK button on a new card") && b.contains("OK + OK is an empty round"))   // R19-T (284)
@@ -77,7 +77,7 @@ class R17C10TextsTest {
         assertTrue(b, b.contains("never an attack the target is immune to") && b.contains("Struggle"))
         val healing = text(GameGuide.HEALING)
         assertFalse(healing, healing.contains("takes one turn"))
-        assertTrue(healing, healing.contains("works at once, then the wild Pokémon attacks once"))
+        assertTrue(healing, healing.contains("works at once, then the wild Pokémon uses one free move"))
         assertFalse(healing, healing.contains("free hit"))
     }
 
@@ -111,7 +111,7 @@ class R17C10TextsTest {
             "healbell" to status("healbell", "allyTeam"),
         )
         val data = TestData.data(emptyList(), moves)
-        assertEquals("May make the target **flinch** (30 %) if you move first.", ItemInfo.moveEffect(data, "headbutt"))
+        assertEquals("May make the target **flinch** (30 %) if it moves first.", ItemInfo.moveEffect(data, "headbutt"))
         assertEquals("May **confuse** the target (10 %).", ItemInfo.moveEffect(data, "psybeam"))
         assertEquals("**Confuses** the target.", ItemInfo.moveEffect(data, "confuseray"))
         assertTrue(ItemInfo.moveEffect(data, "hyperbeam"), ItemInfo.moveEffect(data, "hyperbeam").contains("rest turn to **recharge**"))

@@ -153,9 +153,9 @@ class R19HToastShots {
     @Test fun otherCodeCanRaiseAToastWithAKindAndAText() {
         val p = studyPanel(ctx())
         measure(p, 412, 400)
-        p.toast(ToastKind.SWITCH, "Switched! Wild {{Gnarlpup}} gets a free hit.")
+        p.toast(ToastKind.SWITCH, "Switched! Wild {{Gnarlpup}} gets a free move.")
         assertEquals(ToastKind.SWITCH, p.toastLayer.shown?.kind)
-        assertEquals("Switched! Wild {{Gnarlpup}} gets a free hit.", p.toastLayer.shown?.text)
+        assertEquals("Switched! Wild {{Gnarlpup}} gets a free move.", p.toastLayer.shown?.text)
     }
 
     @Test fun thePausedLineIsTheOnlyLineLeftAndItStillWorks() {

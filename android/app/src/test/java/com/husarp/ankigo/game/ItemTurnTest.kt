@@ -55,7 +55,7 @@ class ItemTurnTest {
         val marker = r.events.of<GameEvent.SwitchHit>().single()
         assertEquals(GameEvent.SwitchHit("Ratty", main.name, healedTo, StatCalc.maxHp(data, main), "potion"), marker)
         val attacks = r.events.of<GameEvent.Attack>()
-        assertEquals("the wild one attacks once, the Main doesn't", 1, attacks.size)
+        assertEquals("the wild one uses one free move, the Main doesn't", 1, attacks.size)
         assertFalse(attacks.single().byPlayer)
         assertEquals(healedTo - attacks.single().damage, main.hp)
         assertTrue(r.message, r.message.startsWith("Potion healed ${main.name} by 20 HP — the wild Ratty"))

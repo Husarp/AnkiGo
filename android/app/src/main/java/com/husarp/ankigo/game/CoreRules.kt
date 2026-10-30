@@ -435,22 +435,22 @@ internal object CoreRules : BattleRules {
 
     override fun describe(m: Move): List<String> {
         val out = ArrayList<String>()
-        if (isRecharge(m)) out += "After a hit, your next move is a rest turn to recharge."
+        if (isRecharge(m)) out += "After a hit, its next move is a rest turn to recharge."
         for (sec in m.allSecondaries) secondaryText(m, sec)?.let { out += it }
         when (m.volatileStatus) {
             CONFUSION -> if (!m.damaging) out += "Confuses the target."
-            ATTRACT -> out += "Makes the target fall in love if one of you is male and the other female. A Pokémon in love can't move half of the time."
+            ATTRACT -> out += "Makes the target fall in love if one of the two Pokémon is male and the other female. A Pokémon in love can't move half of the time."
             BOUND -> out += "Holds the target for ${Tuning.BIND_TURNS.first}–${Tuning.BIND_TURNS.last} turns: it loses " +
                 "${MoveText.part(1, Tuning.BIND_DIVISOR)} its max HP at the end of each turn."
         }
         when (m.selfVolatile) {
             // R17C FIX-A: these count the user's own uses (a wild Pokémon that does not act in a round uses none), so they say "moves", not "turns"
-            LOCKED -> out += "Locks you into using it for ${Tuning.LOCK_TURNS.first}–${Tuning.LOCK_TURNS.last} moves in a row, then you become confused."
-            UPROAR -> out += "Locks you into using it for ${Tuning.UPROAR_TURNS} moves in a row. While it lasts nobody can fall asleep, and sleepers wake up."
-            GLAIVE_RUSH -> out += "After it hits, moves against you never miss and deal double damage until your next move."
+            LOCKED -> out += "Locks itself into using it for ${Tuning.LOCK_TURNS.first}–${Tuning.LOCK_TURNS.last} moves in a row, then it becomes confused."
+            UPROAR -> out += "Locks itself into using it for ${Tuning.UPROAR_TURNS} moves in a row. While it lasts nobody can fall asleep, and sleepers wake up."
+            GLAIVE_RUSH -> out += "After it hits, moves against itself never miss and deal double damage until its next move."
         }
-        if (m.crashDamage) out += "If it misses or has no effect, you lose half of your max HP."
-        if (hpCost(m)) out += "You lose half of your max HP after using it."
+        if (m.crashDamage) out += "If it misses or has no effect, it loses half of its max HP."
+        if (hpCost(m)) out += "It loses half of its max HP after using it."
         return out
     }
 
@@ -461,7 +461,7 @@ internal object CoreRules : BattleRules {
         val tag = if (sure) "" else " (${s.chance} %)"
         return when {
             s.flinch || s.volatileStatus == "flinch" ->
-                if (sure) "Makes the target flinch if you move first." else "May make the target flinch$tag if you move first."
+                if (sure) "Makes the target flinch if it moves first." else "May make the target flinch$tag if it moves first."
             s.volatileStatus == CONFUSION -> if (sure) "Confuses the target." else "May confuse the target$tag."
             s.volatileStatus == HEAL_BLOCK -> "Stops the target from healing for ${Tuning.PSYCHIC_NOISE_HEAL_BLOCK} turns."
             s.volatileStatus == SALT_CURE ->

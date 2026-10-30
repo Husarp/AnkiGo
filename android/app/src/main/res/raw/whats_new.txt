@@ -3,6 +3,20 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 0.26.0
+- Switch freely before your first answer of a battle. Later switches wait for your answer, then give the wild Pokémon one free move. Switching fills no answer dot.
+- Move descriptions use “itself” and “its”, so they read correctly for either Pokémon. Stat changes explain stages and their multipliers; the game rules include the full tables.
+- Stronger colours, with a clearer red Again button in dark mode.
+- Selected Pokémon have a plain outlined tick instead of a badge, including Compare picks and other selection lists.
+- Sound settings clearly separate battle effects, UI sounds and cries, each with its own volume. Existing volume choices are kept.
+- Battle menu says Team and leaves out Pokédex. Pokémon details have Close at the top left.
+- Shop shows the Weekend special just below the sale. Statistics drops the extra Charts heading.
+- OK on a new card quietly fills its grey dot, without a pop-up.
+### Fixes
+- Fast flicks through Compare scroll freely.
+- Extra windows and sheets close when you return after leaving the app, including when returning without a full screen restart.
+- Replacing the Main from a full-team picker, reordering the team or sending the Main to the Box follows the same battle switch rule as Make main. A waiting replacement is kept when the game is saved.
+
 ## 0.25.0
 - Battle messages (item found, daily gift, played fast …) slide in as a small card at the top left of the arena; the bar always shows the two moves.
 - "Super effective!" and the other hit texts appear above the hit Pokémon's head, not on it.

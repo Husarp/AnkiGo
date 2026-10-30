@@ -70,7 +70,10 @@ class MenuShots {
 
     private fun battleMenu(ctx: Context): AppMenu? {
         val b = BattleShotKit.bound(ctx)
-        return MenuKit.capture { b.call("showMenu", b.root) }
+        return MenuKit.capture { b.call("showMenu", b.root) }.also { m ->
+            assertEquals("Team", m!!.describe().first { it.first == 1 }.second)
+            assertFalse(m.describe().any { it.second == "Pokédex" })
+        }
     }
 
     @Test fun battleCard() {

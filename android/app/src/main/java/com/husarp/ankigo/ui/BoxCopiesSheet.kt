@@ -153,6 +153,7 @@ internal class BoxCopiesSheet(
             if (Ui.findActivity(ctx) == null) setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
         dialog.show()
+        AwayWindows.track(dialog) { it.dismiss() }
         dialog.window?.setLayout(minOf(ctx.resources.displayMetrics.widthPixels, Ui.dp(ctx, 600)), -2)
     }
 

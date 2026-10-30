@@ -19,7 +19,7 @@ import org.junit.Test
 /**
  * R14-D (PLAN 206 + 191), changed in R18-B (227): a switch made while a card shows waits for the next answer. The action bar keeps its
  * segments (a toast says "Switching to X on your next move."); the queued Pokémon's Team row says "On your next move"; the Team menu
- * row says "Make main" with "On your next move · the wild Pokémon attacks once" in a fight.
+ * row says "Make main" with "On your next move · the wild Pokémon uses one free move" in a fight.
  * PNGs: r14d-bar-queued, r14d-team-queued, r14d-menu-make, r14d-menu-cancel (phone, light + dark).
  */
 class R14DSwitchQueueShots {

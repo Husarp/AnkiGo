@@ -46,12 +46,14 @@ object Pickers {
             dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
         dialog.show()
+        AwayWindows.track(dialog) { it.dismiss() }
     }
 
     /** [show] for a platform dialog (the system time picker): over other apps (no Activity) its window becomes an overlay window, else `show()` throws BadTokenException. */
     fun showSystem(dialog: android.app.Dialog) {
         if (Ui.findActivity(dialog.context) == null) dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         dialog.show()
+        AwayWindows.track(dialog) { it.dismiss() }
     }
 
     /** A plain list of text choices. */

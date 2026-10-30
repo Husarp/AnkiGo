@@ -408,7 +408,7 @@ class R17C7WeatherTest {
         assertTrue(say("electroshot").contains("In rain it hits at once."))
         assertTrue(say("thunder").contains("Never misses in rain"))
         assertTrue(say("blizzard").contains("Never misses in hail or snow."))
-        assertTrue(say("growth").contains("In harsh sunlight it raises them by 2 instead."))
+        assertTrue(say("growth").contains("In harsh sunlight it raises them by 2 stages (×2) instead."))
         assertTrue(say("weatherball").contains("double power in any weather"))
         assertTrue(say("hydrosteam").contains("1.5 times"))
         for (id in listOf("raindance", "sunnyday", "sandstorm", "hail", "snowscape", "chillyreception", "solarbeam", "weatherball", "growth")) {

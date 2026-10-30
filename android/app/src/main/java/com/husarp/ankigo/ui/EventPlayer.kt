@@ -425,8 +425,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 if (e.neutral) {   // PLAN 155 / R19-T (284): the OK of a new card: counted, a grey dot (the Charge / round events follow), no float, no power; the combo stays as it was
                     panel.setGoal(e.reviewsToday, st?.let { DailyGoal.today(it) } ?: 100, true)
                     panel.setCombo(e.cardStreak, true)
-                    log(LogKind.NEUTRAL, "OK", com.husarp.ankigo.study.NewCardOk.LOG_LINE)
-                    return d(450)
+                    return 0
                 }
                 lastButton = e.button
                 if (!e.catchUp) floats(e)   // an Again answer: "Hesitated"
@@ -553,9 +552,9 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 if (e.item != null) {
                     // R13 Part C: an item used on the main in a fight took the turn: the bar shows the HP after the item, then the attack lands
                     arena.setPlayerHp(e.hp, e.maxHp, true)
-                    log(LogKind.AGAIN, "WILD", "Used ${em(Items.name(e.item))} on ${em(e.monName)} — ${wild(e.wildName)} attacks once!")
+                    log(LogKind.AGAIN, "WILD", "Used ${em(Items.name(e.item))} on ${em(e.monName)} — ${wild(e.wildName)} uses one free move!")
                 } else {
-                    log(LogKind.AGAIN, "WILD", "Switched to ${em(e.monName)} — ${wild(e.wildName)} attacks once!")
+                    log(LogKind.AGAIN, "WILD", "Switched to ${em(e.monName)} — ${wild(e.wildName)} uses one free move!")
                     // R19-T (PLAN 288): a switch takes no dot; the toast says why the wild one attacks now
                     panel.toast(ToastKind.SWITCH, SwitchQueue.freeHitText(bare(e.wildName)))
                 }

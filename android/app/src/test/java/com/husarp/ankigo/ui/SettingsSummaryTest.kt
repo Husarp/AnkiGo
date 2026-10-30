@@ -32,9 +32,9 @@ class SettingsSummaryTest {
 
     @Test fun soundLine() {
         assertEquals("Off", SettingsSummary.sound(null, null, null))
-        assertEquals("Buttons 40% · battle 70% · cries 70%", SettingsSummary.sound(40, 70, 70))
+        assertEquals("UI 40% · battle 70% · cries 70%", SettingsSummary.sound(40, 70, 70))
         assertEquals("Battle 30%", SettingsSummary.sound(null, 30, null))
-        assertEquals("Buttons 0% · cries 50%", SettingsSummary.sound(0, null, 50))
+        assertEquals("UI 0% · cries 50%", SettingsSummary.sound(0, null, 50))
     }
 
     @Test fun downloadsAndSizes() {

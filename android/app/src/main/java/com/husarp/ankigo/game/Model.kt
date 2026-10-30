@@ -419,6 +419,8 @@ class GameState(
     var pendingMain: String? = null,
     /** PLAN 206: the queued switch came from [Game.cycleMain]: the answer rotates the first three as the cycle does, not [Game.setMain]'s move to the front. Meaningful only with [pendingMain]. */
     var pendingCycle: Boolean = false,
+    /** PLAN 313: a team edit that changes the Main waits with the switch, including replacement from the Box. */
+    var pendingTeam: List<String>? = null,
     /** R19-P (PLAN 281): the catch / release questions waiting for the player ([AskMe]); empty in an old save, answered exactly once, never exported to Ankimon. */
     val asks: MutableList<PendingAsk> = mutableListOf(),
     val settings: Settings = Settings(),
@@ -427,7 +429,7 @@ class GameState(
     val main: Mon? get() = mon(team.firstOrNull())
 
     /** PLAN 206: the team member queued to come in after the next answer, or null (nothing queued, or the queue went stale: it left the team, or it is the main already). */
-    val queuedMain: Mon? get() = pendingMain?.takeIf { it in team && it != team.firstOrNull() }?.let { mon(it) }
+    val queuedMain: Mon? get() = pendingMain?.takeIf { (it in team || it in pendingTeam.orEmpty()) && it != team.firstOrNull() }?.let { mon(it) }
     fun teamMons(): List<Mon> = team.mapNotNull { mon(it) }
     fun boxMons(): List<Mon> = mons.filter { it.uid !in team }
 

@@ -34,7 +34,7 @@ class R17C4TextTest {
     @Test fun theMoveTextCarriesItAndNeverFallsBackToNoExtraEffect() {
         for (m in built) {
             val text = MoveText.describe(m)
-            assertTrue("${m.id}: '$text'", MovePower.describe(m)[0] in text)
+            assertTrue("${m.id}: '$text'", StageText.explain(MovePower.describe(m)[0]) in text)
             assertFalse("${m.id}: '$text'", "no extra effect" in text)
             assertTrue(text.endsWith("."))
         }

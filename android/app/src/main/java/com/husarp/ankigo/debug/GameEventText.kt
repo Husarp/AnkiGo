@@ -48,7 +48,7 @@ object GameEventText {
         is GameEvent.Healed -> "Healed ${e.name} +${e.amount} hp=${e.hp}/${e.maxHp} ${e.reason}"
         is GameEvent.Fled -> "Fled ${e.name}"
         is GameEvent.MainChanged -> "MainChanged -> ${e.name}"
-        is GameEvent.SwitchHit -> "TurnHit ${e.item?.let { "item ${Items.name(it)} on" } ?: "switch to"} ${e.monName} hp=${e.hp}/${e.maxHp}; ${e.wildName} attacks once"
+        is GameEvent.SwitchHit -> "TurnHit ${e.item?.let { "item ${Items.name(it)} on" } ?: "switch to"} ${e.monName} hp=${e.hp}/${e.maxHp}; ${e.wildName} uses one free move"
         is GameEvent.SwitchQueued -> if (e.uid == null) "SwitchQueued cancelled, ${e.name} stays in" else "SwitchQueued -> ${e.name} after this card"
         is GameEvent.Info -> "Info: ${e.text}"
     }.replace('\n', ' ').take(400)

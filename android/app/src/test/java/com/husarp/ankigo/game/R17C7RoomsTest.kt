@@ -415,7 +415,7 @@ class R17C7RoomsTest {
         assertTrue(say("iondeluge").contains("Normal moves become Electric moves"))
         assertTrue(say("defog").contains("Ends Reflect, Light Screen, Aurora Veil, Safeguard and Mist on the target's side, and the terrain."))
         assertTrue(say("courtchange").contains("Swaps"))
-        assertTrue(say("tidyup").contains("Raises your Attack and Speed by 1 and removes all substitutes."))
+        assertTrue(say("tidyup").contains("Raises its Attack and Speed by 1 stage (×1.5) and removes all substitutes."))
         assertTrue(say("plasmafists").contains("become Electric moves"))
     }
 

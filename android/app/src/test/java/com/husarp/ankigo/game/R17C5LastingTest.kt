@@ -365,6 +365,6 @@ class R17C5LastingTest {
         assertTrue(say("yawn"), "end of the next turn" in say("yawn"))
         assertTrue(say("destinybond"), "twice in a row" in say("destinybond"))
         assertTrue(say("aquaring"), "a sixteenth" in say("aquaring"))
-        assertTrue(say("rapidspin"), "Frees you from Leech Seed and from binding moves." in say("rapidspin"))
+        assertTrue(say("rapidspin"), "Frees itself from Leech Seed and from binding moves." in say("rapidspin"))
     }
 }

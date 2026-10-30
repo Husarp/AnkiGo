@@ -90,7 +90,7 @@ class BattleLogBuilder(
             is GameEvent.SwitchHit -> {
                 wildPower = Tuning.SWITCH_HIT_POWER // R10 W10: the turn a switch takes is at normal power, whatever the round before had
                 val why = e.item?.let { "Used ${com.husarp.ankigo.game.Items.name(it)} on ${e.monName}" } ?: "Switched to ${e.monName}"   // R13 Part C: or an item
-                moves().lines += LogLine(Tone.PLAIN, "$why — the wild ${e.wildName.removePrefix("Wild ")} attacks once!")
+                moves().lines += LogLine(Tone.PLAIN, "$why — the wild ${e.wildName.removePrefix("Wild ")} uses one free move!")
             }
             is GameEvent.Effect -> effect(e)
             is GameEvent.Fainted -> moves().lines += LogLine(if (e.player) Tone.BAD else Tone.GOOD, "${e.name} fainted")

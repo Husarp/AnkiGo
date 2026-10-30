@@ -104,6 +104,7 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
             if (Ui.findActivity(ctx) == null) setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
         d.show()
+        AwayWindows.track(d) { it.dismiss() }
         d.window?.setLayout(minOf(ctx.resources.displayMetrics.widthPixels, Ui.dp(ctx, 600)), -2)
     }
 

@@ -89,7 +89,7 @@ class R10ViewSettingsShots {
         FloatBattleView(object : android.content.ContextWrapper(ctx) { override fun getApplicationContext(): Context = this }, {}, {}, {}).fillMenu(m)
         val l = labels(m)
         assertTrue(l.toString(), "View settings" in l)
-        assertEquals(listOf("Open AnkiGo", "Pause watching AnkiDroid", "Pokémon", "Pokédex", "Shop", "Settings", "View settings", "Help"), l)
+        assertEquals(listOf("Open AnkiGo", "Pause watching AnkiDroid", "Team", "Shop", "Settings", "View settings", "Help"), l)
     }
 
     private fun studyScreen(ctx: Context): StudyActivity {

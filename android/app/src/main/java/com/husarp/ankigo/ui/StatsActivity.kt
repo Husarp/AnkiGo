@@ -274,7 +274,6 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
         content.addView(trainerCard())
         content.addView(streakCard(s), lp(14))
-        content.addView(sectTitle(R.drawable.ic_stats, "Charts", R.color.ag_mauve))
         content.addView(metricButton())
         content.addView(filterChips(series), lp(8))
         val message = StatsChartMath.emptyMessage(series, snap.access, snap.message)

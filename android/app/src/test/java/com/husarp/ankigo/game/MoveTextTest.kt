@@ -29,7 +29,7 @@ class MoveTextTest {
 
     @Test fun damageRules() {
         assertEquals("Always deals 40 damage.", say(dmg(power = 0).copy(fixedDamage = 40)))
-        assertEquals("Deals damage equal to your level.", say(dmg(power = 0).copy(levelDamage = true)))
+        assertEquals("Deals damage equal to its level.", say(dmg(power = 0).copy(levelDamage = true)))
         assertEquals("Takes off half of the target's current HP.", say(dmg(power = 0).copy(halfHp = true)))
         assertEquals("Knocks the target out in one hit, but fails against a higher-level target.", say(dmg(power = 0, acc = 30).copy(ohko = true)))
         assertEquals("Hits 2–5 times.", say(dmg().copy(multihit = 2..5)))
@@ -39,13 +39,13 @@ class MoveTextTest {
     @Test fun priorityDrainRecoilSelfDestruct() {
         assertEquals("Usually goes first.", say(dmg().copy(priority = 1)))
         assertEquals("Usually goes last.", say(dmg().copy(priority = -3)))
-        assertEquals("Heals you by half the damage dealt.", say(dmg().copy(drain = 1 to 2)))
-        assertEquals("Heals you by a quarter of the damage dealt.", say(dmg().copy(drain = 2 to 8)))
-        assertEquals("You take a quarter of the damage dealt as recoil.", say(dmg().copy(recoil = 1 to 4)))
-        assertEquals("You take a third of the damage dealt as recoil.", say(dmg().copy(recoil = 33 to 99)))
-        assertEquals("You take 33 % of the damage dealt as recoil.", say(dmg().copy(recoil = 33 to 100)))
-        assertEquals("You faint after using it.", say(dmg().copy(selfDestruct = true)))
-        assertEquals("Heals you by three quarters of the damage dealt.", say(dmg().copy(drain = 3 to 4)))
+        assertEquals("Heals itself by half the damage dealt.", say(dmg().copy(drain = 1 to 2)))
+        assertEquals("Heals itself by a quarter of the damage dealt.", say(dmg().copy(drain = 2 to 8)))
+        assertEquals("It takes a quarter of the damage dealt as recoil.", say(dmg().copy(recoil = 1 to 4)))
+        assertEquals("It takes a third of the damage dealt as recoil.", say(dmg().copy(recoil = 33 to 99)))
+        assertEquals("It takes 33 % of the damage dealt as recoil.", say(dmg().copy(recoil = 33 to 100)))
+        assertEquals("It faints after using it.", say(dmg().copy(selfDestruct = true)))
+        assertEquals("Heals itself by three quarters of the damage dealt.", say(dmg().copy(drain = 3 to 4)))
     }
 
     @Test fun statusMoves() {
@@ -53,40 +53,40 @@ class MoveTextTest {
         assertEquals("Paralyzes the target.", say(status(target = "normal", acc = 90).copy(status = "par")))
         assertEquals("Badly poisons the target.", say(status(target = "normal", acc = 90).copy(status = "tox")))
         assertEquals("Burns the target. Never misses.", say(status(target = "normal").copy(status = "brn")))
-        assertEquals("Puts you to sleep. Heals you by half your max HP.", say(status().copy(status = "slp", heal = 1 to 2)))
-        assertEquals("Heals you by a third of your max HP.", say(status().copy(heal = 1 to 3)))
+        assertEquals("Puts itself to sleep. Heals itself by half its max HP.", say(status().copy(status = "slp", heal = 1 to 2)))
+        assertEquals("Heals itself by a third of its max HP.", say(status().copy(heal = 1 to 3)))
         assertEquals("Fails against Grass types.".let { "Puts the target to sleep. $it" },
             say(status("spore", "normal", 100).copy(status = "slp")))
     }
 
     @Test fun boosts() {
-        assertEquals("Raises your Attack by 2.", say(status().copy(boosts = mapOf("atk" to 2))))
-        assertEquals("Raises your Attack and Speed by 1.", say(status().copy(boosts = mapOf("spe" to 1, "atk" to 1))))
-        assertEquals("Raises your Attack and Speed by 2 and Defense by 1.", say(status().copy(boosts = mapOf("atk" to 2, "def" to 1, "spe" to 2))))
-        assertEquals("Lowers the target's Defense by 1.", say(status(target = "normal", acc = 100).copy(boosts = mapOf("def" to -1))))
-        assertEquals("Raises your Attack by 2. Lowers your Defense and Sp. Def by 1.", say(status().copy(boosts = mapOf("atk" to 2, "def" to -1, "spd" to -1))))
-        assertEquals("Lowers the target's accuracy by 1.", say(status(target = "allAdjacentFoes", acc = 100).copy(boosts = mapOf("accuracy" to -1))))
-        assertEquals("Raises your evasiveness by 1.", say(status().copy(boosts = mapOf("evasion" to 1))))
-        assertEquals("Raises your Sp. Atk by 1. Usually goes first.", say(status().copy(selfBoosts = mapOf("spa" to 1), priority = 1)))
+        assertEquals("Raises its Attack by 2 stages (×2).", say(status().copy(boosts = mapOf("atk" to 2))))
+        assertEquals("Raises its Attack and Speed by 1 stage (×1.5).", say(status().copy(boosts = mapOf("spe" to 1, "atk" to 1))))
+        assertEquals("Raises its Attack and Speed by 2 stages (×2) and Defense by 1 stage (×1.5).", say(status().copy(boosts = mapOf("atk" to 2, "def" to 1, "spe" to 2))))
+        assertEquals("Lowers the target's Defense by 1 stage (×2/3).", say(status(target = "normal", acc = 100).copy(boosts = mapOf("def" to -1))))
+        assertEquals("Raises its Attack by 2 stages (×2). Lowers its Defense and Sp. Def by 1 stage (×2/3).", say(status().copy(boosts = mapOf("atk" to 2, "def" to -1, "spd" to -1))))
+        assertEquals("Lowers the target's accuracy by 1 stage (×3/4).", say(status(target = "allAdjacentFoes", acc = 100).copy(boosts = mapOf("accuracy" to -1))))
+        assertEquals("Raises its evasiveness by 1 stage (×4/3).", say(status().copy(boosts = mapOf("evasion" to 1))))
+        assertEquals("Raises its Sp. Atk by 1 stage (×1.5). Usually goes first.", say(status().copy(selfBoosts = mapOf("spa" to 1), priority = 1)))
         // the user's own stat change after a hit
-        assertEquals("Lowers your Defense by 1.", say(dmg().copy(selfBoosts = mapOf("def" to -1))))
+        assertEquals("Lowers its Defense by 1 stage (×2/3).", say(dmg().copy(selfBoosts = mapOf("def" to -1))))
     }
 
     @Test fun secondaryEffects() {
         assertEquals("May burn the target (10 %).", say(dmg().copy(secondary = Secondary(10, status = "brn"))))
         assertEquals("May put the target to sleep (30 %).", say(dmg().copy(secondary = Secondary(30, status = "slp"))))
-        assertEquals("May lower the target's Sp. Def by 1 (10 %).", say(dmg().copy(secondary = Secondary(10, boosts = mapOf("spd" to -1)))))
-        assertEquals("May raise your Attack by 1 (10 %).", say(dmg().copy(secondary = Secondary(10, selfBoosts = mapOf("atk" to 1)))))
+        assertEquals("May lower the target's Sp. Def by 1 stage (×2/3) (10 %).", say(dmg().copy(secondary = Secondary(10, boosts = mapOf("spd" to -1)))))
+        assertEquals("May raise its Attack by 1 stage (×1.5) (10 %).", say(dmg().copy(secondary = Secondary(10, selfBoosts = mapOf("atk" to 1)))))
         // a sure effect: no "May", no "(100 %)"
-        assertEquals("Raises your Attack by 1.", say(dmg().copy(secondary = Secondary(100, selfBoosts = mapOf("atk" to 1)))))
+        assertEquals("Raises its Attack by 1 stage (×1.5).", say(dmg().copy(secondary = Secondary(100, selfBoosts = mapOf("atk" to 1)))))
         assertEquals("Burns the target.", say(dmg().copy(secondary = Secondary(100, status = "brn"))))
-        assertEquals("Lowers the target's Speed by 1.", say(dmg().copy(secondary = Secondary(100, boosts = mapOf("spe" to -1)))))
+        assertEquals("Lowers the target's Speed by 1 stage (×2/3).", say(dmg().copy(secondary = Secondary(100, boosts = mapOf("spe" to -1)))))
         // R17C-3: flinch is in the engine (only when you move first)
-        assertEquals("May make the target flinch (30 %) if you move first.", say(dmg().copy(secondary = Secondary(30, flinch = true))))
-        assertEquals("Makes the target flinch if you move first.", say(dmg().copy(secondary = Secondary(100, flinch = true, volatileStatus = "flinch"))))
+        assertEquals("May make the target flinch (30 %) if it moves first.", say(dmg().copy(secondary = Secondary(30, flinch = true))))
+        assertEquals("Makes the target flinch if it moves first.", say(dmg().copy(secondary = Secondary(100, flinch = true, volatileStatus = "flinch"))))
         assertEquals("May confuse the target (20 %).", say(dmg().copy(secondary = Secondary(20, volatileStatus = "confusion"))))
         // a second secondary is rolled too (the fangs)
-        assertEquals("May burn the target (10 %). May make the target flinch (10 %) if you move first.",
+        assertEquals("May burn the target (10 %). May make the target flinch (10 %) if it moves first.",
             say(dmg().copy(secondary = Secondary(10, status = "brn"), moreSecondaries = listOf(Secondary(10, flinch = true, volatileStatus = "flinch")))))
     }
 
@@ -95,7 +95,7 @@ class MoveTextTest {
         assertFalse(say(status().copy(boosts = mapOf("atk" to 1))).contains("Never misses"))
         assertFalse(say(dmg(power = 0, acc = null).copy(ohko = true)).contains("Never misses"))
         // R17C-10: a status move says it only when it changes the target's status or stats (not for a field move, a swap or a copy)
-        assertEquals("Lowers the target's Attack by 1. Never misses.", say(status(target = "normal").copy(boosts = mapOf("atk" to -1))))
+        assertEquals("Lowers the target's Attack by 1 stage (×2/3). Never misses.", say(status(target = "normal").copy(boosts = mapOf("atk" to -1))))
         assertEquals("Burns the target. Never misses.", say(status(target = "normal").copy(status = "brn")))
         assertFalse(say(status("trickroom", target = "all").copy(pseudoWeather = "trickroom")).contains("Never misses"))
         assertFalse(say(status("transform", target = "normal")).contains("Never misses"))
@@ -105,22 +105,22 @@ class MoveTextTest {
     @Test fun chargeMoves() {
         // R17C-3 (PLAN 267): the charge turn, then your very next move is the hit
         // R17C-7: Solar Beam says what the sun and the bad weather do to it; R17C-10: after its charge sentence, so "hits at once" reads as the exception
-        assertEquals("Charges on the first turn, then hits with your next move. In harsh sunlight it hits at once. In rain, a sandstorm, hail or snow its power is halved.", say(dmg("solarbeam")))
-        assertEquals("Charges on the first turn, then hits with your next move.", say(dmg("fly")))
-        assertEquals("Charges on the first turn, then hits with your next move.", say(dmg("xcharge").copy(flags = setOf("charge"))))
-        assertEquals("Charges on the first turn and raises your Defense by 1, then hits with your next move.", say(dmg("skullbash")))
-        assertEquals("Charges on the first turn and raises your Sp. Atk by 1, then hits with your next move.", say(dmg("meteorbeam")))
-        assertEquals("Raises your Sp. Atk, Sp. Def and Speed by 2. Charges on the first turn, then takes effect with your next move.",
+        assertEquals("Charges on the first turn, then hits with its next move. In harsh sunlight it hits at once. In rain, a sandstorm, hail or snow its power is halved.", say(dmg("solarbeam")))
+        assertEquals("Charges on the first turn, then hits with its next move.", say(dmg("fly")))
+        assertEquals("Charges on the first turn, then hits with its next move.", say(dmg("xcharge").copy(flags = setOf("charge"))))
+        assertEquals("Charges on the first turn and raises its Defense by 1 stage (×1.5), then hits with its next move.", say(dmg("skullbash")))
+        assertEquals("Charges on the first turn and raises its Sp. Atk by 1 stage (×1.5), then hits with its next move.", say(dmg("meteorbeam")))
+        assertEquals("Raises its Sp. Atk, Sp. Def and Speed by 2 stages (×2). Charges on the first turn, then takes effect with its next move.",
             say(status("geomancy").copy(boosts = mapOf("spa" to 2, "spd" to 2, "spe" to 2))))
     }
 
     @Test fun rechargeAndCrashAndLocks() {
-        assertEquals("After a hit, your next move is a rest turn to recharge.", say(dmg("hyperbeam").copy(selfVolatile = "mustrecharge")))
-        assertEquals("After a hit, your next move is a rest turn to recharge.", say(dmg("x").copy(flags = setOf("recharge"))))
-        assertEquals("If it misses or has no effect, you lose half of your max HP.", say(dmg("highjumpkick").copy(crashDamage = true)))
-        assertEquals("You lose half of your max HP after using it.", say(dmg("steelbeam").copy(mindBlownRecoil = true)))
-        assertEquals("You lose half of your max HP after using it.", say(dmg("chloroblast")))
-        assertEquals("Locks you into using it for 2–3 moves in a row, then you become confused.", say(dmg("outrage").copy(selfVolatile = "lockedmove")))
+        assertEquals("After a hit, its next move is a rest turn to recharge.", say(dmg("hyperbeam").copy(selfVolatile = "mustrecharge")))
+        assertEquals("After a hit, its next move is a rest turn to recharge.", say(dmg("x").copy(flags = setOf("recharge"))))
+        assertEquals("If it misses or has no effect, it loses half of its max HP.", say(dmg("highjumpkick").copy(crashDamage = true)))
+        assertEquals("It loses half of its max HP after using it.", say(dmg("steelbeam").copy(mindBlownRecoil = true)))
+        assertEquals("It loses half of its max HP after using it.", say(dmg("chloroblast")))
+        assertEquals("Locks itself into using it for 2–3 moves in a row, then it becomes confused.", say(dmg("outrage").copy(selfVolatile = "lockedmove")))
         assertEquals("Holds the target for 4–5 turns: it loses an eighth of its max HP at the end of each turn.", say(dmg("wrap").copy(volatileStatus = "partiallytrapped")))
         assertEquals("Confuses the target.", say(status("confuseray", "normal", 100).copy(volatileStatus = "confusion")))
     }
@@ -138,7 +138,7 @@ class MoveTextTest {
     @Test fun statusMoveWithNothingTheEngineUses() {
         // R17C-5: Protect is built now (SideMoves), so a move nothing handles stands for the old rule
         assertEquals("Has no effect in AnkiGo battles.", say(status("unhandledmove").copy(priority = 4)))
-        assertTrue(say(status("protect").copy(priority = 4)).startsWith("Blocks every move aimed at you for the rest of the turn."))
+        assertTrue(say(status("protect").copy(priority = 4)).startsWith("Blocks every move aimed at itself for the rest of the turn."))
         // a bad status code or empty boosts is not a use either
         assertEquals("Has no effect in AnkiGo battles.", say(status().copy(status = "xyz", boosts = mapOf("atk" to 0))))
     }

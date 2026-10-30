@@ -201,7 +201,6 @@ internal class FloatBattleView(
             }
             val page = when (id) {
                 1 -> FloatPage.TEAM
-                2 -> FloatPage.DEX
                 3 -> FloatPage.SHOP
                 else -> FloatPage.SETTINGS
             }
@@ -214,8 +213,7 @@ internal class FloatBattleView(
         m.item(8, "Open AnkiGo", R.drawable.ic_open)
         if (paused) m.item(9, "Resume watching", R.drawable.ic_play)
         else m.item(9, "Pause watching AnkiDroid", R.drawable.ic_pause)
-        m.item(1, "Pokémon", R.drawable.ic_team)
-        m.item(2, "Pokédex", R.drawable.ic_dex)
+        m.item(1, "Team", R.drawable.ic_team)
         m.item(3, "Shop", R.drawable.ic_shop)
         m.item(4, "Settings", R.drawable.ic_settings)
         m.item(10, "View settings", R.drawable.ic_palette)

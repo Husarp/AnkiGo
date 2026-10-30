@@ -136,7 +136,7 @@ class R17C8TransformTest {
 
     @Test fun transformTextIsPlainAndSaysThePictureBecomesTheTargets() {
         val text = MoveText.describe(data.move("transform")!!)
-        assertTrue(text, text.startsWith("Turns you into the target until the fight ends: its types, stats (not HP), stat changes, moves and ability."))
+        assertTrue(text, text.startsWith("Turns itself into the target until the fight ends: its types, stats (not HP), stat changes, moves and ability."))
         assertTrue("picture" in text && text.endsWith("."))
     }
 }

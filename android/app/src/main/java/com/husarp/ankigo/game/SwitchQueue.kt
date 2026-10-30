@@ -16,9 +16,13 @@ object SwitchQueue {
         return battle.wild.hp > 0 && main.hp > 0
     }
 
+    /** Before the first answer there is no switch cost, even with the first card visible. */
+    fun waitsForAnswer(state: GameState): Boolean = fightOn(state) &&
+        state.battle!!.let { it.rounds > 0 || it.answers > 0 }
+
     /**
      * The toast / result text of a queued switch (R18-B: Adam's picked wording). The attack is in [MENU_SUB], and in the Help text:
-     * the wild Pokémon attacks once. R19-T (PLAN 288): when the free hit really comes, the battle's own toast says it ([freeHitText]).
+     * the wild Pokémon uses one free move. R19-T (PLAN 288): when the free hit really comes, the battle's own toast says it ([freeHitText]).
      */
     fun queuedText(name: String) = "Switching to $name on your next move."
 
@@ -26,13 +30,13 @@ object SwitchQueue {
      * R19-T (PLAN 288): the battle's card toast when a switch gave the wild Pokémon [wildName] (no "Wild" in front) its one extra attack. The
      * switch takes no dot and none of the round's answers; `{{...}}` turns the name mauve.
      */
-    fun freeHitText(wildName: String) = "Switched! Wild {{$wildName}} gets a free hit."
+    fun freeHitText(wildName: String) = "Switched! Wild {{$wildName}} gets a free move."
 
     /** The result text when the queue was cancelled (the main was picked again). */
     fun cancelledText(name: String) = "$name stays in."
 
     /** The sub line of "Make main" in the Team / Compare menus while a fight is on (outside a fight there is none). */
-    const val MENU_SUB = "On your next move · the wild Pokémon attacks once"
+    const val MENU_SUB = "On your next move · the wild Pokémon uses one free move"
 
     /** The marker on the queued Pokémon's Team row. */
     const val ROW_MARK = "On your next move"

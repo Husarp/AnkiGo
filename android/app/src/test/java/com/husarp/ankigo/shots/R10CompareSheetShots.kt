@@ -301,10 +301,16 @@ class R10CompareSheetShots {
         val ctx = Shots.files(paparazzi.context); FakeGame.install(ctx)
         val p = page(ctx, mixed)
         shown(ctx, p)
+        // One answer must leave the fight on so this test observes the queued switch's free move too.
+        st.battle!!.answers = 0; st.battle!!.tally = 0; st.battle!!.buttons.clear()
         val before = st.team.toList()
         assertEquals(6, before.size)
         val m = headMenu(p, 2)
         m.pick(idOf(m, "Set as main")) // the box Pokémon takes the main's place, the main goes to the box
+        assertEquals("replacement waits for the answer", before, st.team.toList())
+        assertEquals("b1", st.pendingMain)
+        val switch = GameRepo.game!!.onAnswer(com.husarp.ankigo.game.Answer(90002L, 3, System.currentTimeMillis()))
+        assertTrue(switch.any { it is com.husarp.ankigo.game.GameEvent.SwitchHit })
         assertEquals(listOf("b1") + before.drop(1), st.team.toList())
         // Add to team… opens the swap picker
         p.render()

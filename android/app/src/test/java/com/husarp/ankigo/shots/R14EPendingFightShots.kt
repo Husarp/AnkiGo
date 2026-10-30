@@ -67,7 +67,7 @@ class R14EPendingFightShots {
 
     private fun page(c: Context) = TeamPage(c, NoHost)
 
-    /** A Potion on the main from the Bag (a page, not a battle host): the wild one attacks once. */
+    /** A Potion on the main from the Bag (a page, not a battle host): the wild one uses one free move. */
     private fun heal(c: Context): ActionResult = MonActions(page(c)).runUse("potion", "t1")
 
     private fun settle(host: View, name: String, ms: Long = 4000) {
@@ -157,7 +157,7 @@ class R14EPendingFightShots {
     @Test fun withoutAFightNothingIsKept() {
         val c = ctx()
         st.battle = null
-        page(c).act { it.moveInTeam("t2", -1) }
+        page(c).act { it.moveInTeam("t2", -1, cardShowing = false) }
         assertTrue(GameRepo.pendingFightEvents().isEmpty())
     }
 
@@ -194,10 +194,10 @@ class R14EPendingFightShots {
 
     @Test fun aSwitchedInPokemonComesInAtItsHpBeforeTheHit() {
         val edits: List<Pair<String, (TeamPage) -> ActionResult>> = listOf(
-            "move the second member up" to { p -> p.act { it.moveInTeam("t2", -1) } },
-            "send the main to the box" to { p -> p.act { it.toBox("t1") } },
-            "release the main" to { p -> p.act { it.release("t1") } },
-            "swap a box Pokémon in for the main (team full)" to { p -> p.act { it.swapIntoTeam("b8", "t1") } },
+            "move the second member up" to { p -> p.act { it.moveInTeam("t2", -1, cardShowing = false) } },
+            "send the main to the box" to { p -> p.act { it.toBox("t1", cardShowing = false) } },
+            "release the main" to { p -> p.act { it.release("t1", cardShowing = false) } },
+            "swap a box Pokémon in for the main (team full)" to { p -> p.act { it.swapIntoTeam("b8", "t1", cardShowing = false) } },
             "set another one as main at once" to { p -> p.act { it.setMain("t3") } },
         )
         for (reduce in listOf(false, true)) for ((what0, edit) in edits) {
@@ -361,7 +361,7 @@ class R14EPendingFightShots {
         assertTrue(card.isLive)
         val player = getField(card, "player") as EventPlayer
         assertTrue(player.idle)
-        val r = p.act { it.toBox("t1") } // a team edit on the very page the card sits on
+        val r = p.act { it.toBox("t1", cardShowing = false) } // a team edit on the very page the card sits on
         assertTrue(r.ok)
         assertTrue(GameRepo.pendingFightEvents().isNotEmpty())
         card.refresh() // what the page's render does after the action

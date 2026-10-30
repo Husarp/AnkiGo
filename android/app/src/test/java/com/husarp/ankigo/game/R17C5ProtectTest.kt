@@ -331,12 +331,12 @@ class R17C5ProtectTest {
     @Test fun theTextsSayWhatTheCodeDoes() {
         fun say(id: String) = MoveText.describe(data.move(id)!!)
         val protect = say("protect")
-        assertTrue(protect, protect.startsWith("Blocks every move aimed at you for the rest of the turn."))
+        assertTrue(protect, protect.startsWith("Blocks every move aimed at itself for the rest of the turn."))
         assertTrue(protect, "only helps in a turn in which the other Pokémon also attacks" in protect)
         assertTrue(protect, "1 time in 3" in protect && "then 1 in 9" in protect)
-        assertTrue(say("kingsshield"), "Attack lowered by 1" in say("kingsshield"))
+        assertTrue(say("kingsshield"), "Attack lowered by 1 stage (×2/3)" in say("kingsshield"))
         assertTrue(say("spikyshield"), "an eighth of its max HP" in say("spikyshield"))
-        assertTrue(say("obstruct"), "Defense lowered by 2" in say("obstruct"))
+        assertTrue(say("obstruct"), "Defense lowered by 2 stages (×1/2)" in say("obstruct"))
         assertTrue(say("feint"), "Goes through Protect and similar moves, and ends them." in say("feint"))
         for (id in SideMoves.handles) assertTrue("$id says something", say(id).let { it.endsWith(".") && it != "Has no effect in AnkiGo battles." })
     }

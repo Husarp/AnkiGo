@@ -155,7 +155,7 @@ class R17C3NeverPickedTest {
             assertTrue("${m.id}: $t", "Charges on the first turn" in t && t.contains("with your next move."))
         }
         for (m in moves.values.filter { CoreRules.isRecharge(it) }) {
-            assertTrue(m.id, "After a hit, your next move is a rest turn to recharge." in MoveText.describe(m))
+            assertTrue(m.id, "After a hit, its next move is a rest turn to recharge." in MoveText.describe(m))
         }
         for (m in moves.values.filter { m -> m.allSecondaries.any { it.flinch } }) {
             assertTrue(m.id, "flinch" in MoveText.describe(m))

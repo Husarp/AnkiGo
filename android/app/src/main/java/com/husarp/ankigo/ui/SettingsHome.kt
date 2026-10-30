@@ -82,7 +82,7 @@ object SettingsSummary {
 
     /** Volumes of the channels that have something switched on (null = all of that channel's groups are off); "Off" when none. */
     fun sound(buttons: Int?, battle: Int?, cries: Int?): String =
-        listOfNotNull(buttons?.let { "Buttons $it%" }, battle?.let { "battle $it%" }, cries?.let { "cries $it%" })
+        listOfNotNull(buttons?.let { "UI $it%" }, battle?.let { "battle $it%" }, cries?.let { "cries $it%" })
             .joinToString(" · ").ifEmpty { "Off" }.replaceFirstChar { it.uppercase() }
 
     fun downloads(dataBytes: Long, pictureBytes: Long, working: Boolean): String =

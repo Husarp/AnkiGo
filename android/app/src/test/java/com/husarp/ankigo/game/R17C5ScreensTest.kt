@@ -269,12 +269,12 @@ class R17C5ScreensTest {
 
     @Test fun theTextsGiveTheNumbers() {
         fun say(id: String) = MoveText.describe(data.move(id)!!)
-        assertEquals("For 5 turns, physical moves hurt your team half as much.", say("reflect"))
-        assertEquals("For 5 turns, special moves hurt your team half as much.", say("lightscreen"))
-        assertEquals("For 5 turns, physical and special moves hurt your team half as much. It fails unless it is hailing or snowing.", say("auroraveil"))
-        assertEquals("For 5 turns, the other Pokémon can't give your team a status or confusion.", say("safeguard"))
-        assertEquals("For 5 turns, the other Pokémon can't lower your stats.", say("mist"))
-        assertEquals("For 4 turns, your Speed is doubled.", say("tailwind"))
+        assertEquals("For 5 turns, physical moves hurt its team half as much.", say("reflect"))
+        assertEquals("For 5 turns, special moves hurt its team half as much.", say("lightscreen"))
+        assertEquals("For 5 turns, physical and special moves hurt its team half as much. It fails unless it is hailing or snowing.", say("auroraveil"))
+        assertEquals("For 5 turns, the other Pokémon can't give its team a status or confusion.", say("safeguard"))
+        assertEquals("For 5 turns, the other Pokémon can't lower its stats.", say("mist"))
+        assertEquals("For 4 turns, its Speed is doubled.", say("tailwind"))
         assertTrue(say("brickbreak"), "Breaks the target's Reflect, Light Screen and Aurora Veil first." in say("brickbreak"))
     }
 }

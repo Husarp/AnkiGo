@@ -129,7 +129,7 @@ class R9StaleMainShots {
         val t = tab(c)
         val before = settle(t.screen, t.panel.arena.playerSprite, "r9-stalemain-tab-0")
         assertEquals("the first main's picture", colours[25], before)
-        val r = t.page.act { it.toBox("t1") }
+        val r = t.page.act { it.toBox("t1", cardShowing = false) }
         assertEquals(true, r.ok)
         assertEquals("t2", GameRepo.state!!.main!!.uid)
         val after = settle(t.screen, t.panel.arena.playerSprite, "r9-stalemain-tab-1")
@@ -145,12 +145,12 @@ class R9StaleMainShots {
 
     /** Every way the main changes outside the panel's own event stream (the Pokémon tab, the Pokédex, items, an import). */
     private val changes: List<Pair<String, (Game) -> Unit>> = listOf(
-        "send to box" to { g -> assertTrue(g.toBox("t1").ok) },
+        "send to box" to { g -> assertTrue(g.toBox("t1", cardShowing = false).ok) },
         "make main from the team" to { g -> assertTrue(g.setMain("t3").ok) },
-        "make main from the box (the team is full: the old main goes to the box)" to { g -> assertTrue(g.swapIntoTeam("b1", "t1").ok) },
+        "make main from the box (the team is full: the old main goes to the box)" to { g -> assertTrue(g.swapIntoTeam("b1", "t1", cardShowing = false).ok) },
         "make main from the box while the team is full (the last member goes to the box)" to { g -> assertTrue(g.setMain("b2").ok) },
-        "move the second member up" to { g -> assertTrue(g.moveInTeam("t2", -1).ok) },
-        "release the main" to { g -> assertTrue(g.release("t1").ok) },
+        "move the second member up" to { g -> assertTrue(g.moveInTeam("t2", -1, cardShowing = false).ok) },
+        "release the main" to { g -> assertTrue(g.release("t1", cardShowing = false).ok) },
         "next team member as main" to { g -> assertTrue(g.cycleMain(cardShowing = false).ok) },
         "evolve the main with a stone" to { g -> assertTrue(ItemUse.use(g.data, g.state, "thunder-stone", "t1", g.rng, g.clock()).ok) },
     )
@@ -178,7 +178,7 @@ class R9StaleMainShots {
         val panel = panelOf(c)
         val own = settle(panel, panel.arena.playerSprite, "r9-stalemain-busy-0")
         panel.hostIdle = { false }   // an animation still plays: its events draw the new main, not the saved game
-        assertEquals("busy host: untouched", own, settleAfter(panel, panel.arena.playerSprite, "r9-stalemain-busy-1") { GameRepo.run(c) { g -> g.toBox("t1") } })
+        assertEquals("busy host: untouched", own, settleAfter(panel, panel.arena.playerSprite, "r9-stalemain-busy-1") { GameRepo.run(c) { g -> g.toBox("t1", cardShowing = false) } })
         panel.hostIdle = { true }
         panel.refreshMain()   // what the host does when it is idle again
         assertEquals(colours[2], settle(panel, panel.arena.playerSprite, "r9-stalemain-busy-2"))
@@ -216,7 +216,7 @@ class R9StaleMainShots {
         val window = getField(v, "window")!!
         val root = getField(window, "root") as View
         val own = settle(root, panel.arena.playerSprite, "r9-stalemain-float-0")
-        GameRepo.run(c) { g -> g.toBox("t1") }
+        GameRepo.run(c) { g -> g.toBox("t1", cardShowing = false) }
         v.refreshPicture()   // what show() does for a window that is already up (the service calls it on every game change)
         val after = settle(root, panel.arena.playerSprite, "r9-stalemain-float-1")
         assertEquals(colours[2], after)
@@ -234,7 +234,7 @@ class R9StaleMainShots {
         val panel = getField(act, "panel") as BattlePanelView
         panel.renderAll()
         val own = settle(root, panel.arena.playerSprite, "r9-stalemain-study-0")
-        GameRepo.run(c) { g -> g.toBox("t1") }   // the Pokémon tab opened from its menu
+        GameRepo.run(c) { g -> g.toBox("t1", cardShowing = false) }   // the Pokémon tab opened from its menu
         act.refreshMain()   // what onResume calls
         val after = settle(root, panel.arena.playerSprite, "r9-stalemain-study-1")
         assertEquals(colours[2], after)
@@ -252,7 +252,7 @@ class R9StaleMainShots {
         val root = getField(getField(v, "window")!!, "root") as View
         val own = settle(root, panel.arena.playerSprite, "r9-stalemain-floatbusy-0")
         (getField(v, "player") as com.husarp.ankigo.ui.EventPlayer).enqueue(listOf(GameEvent.Info("one"), GameEvent.Info("two")))
-        GameRepo.run(c) { g -> g.toBox("t1") }
+        GameRepo.run(c) { g -> g.toBox("t1", cardShowing = false) }
         v.refreshPicture()
         assertEquals("floating window, busy: untouched", own, settle(root, panel.arena.playerSprite, "r9-stalemain-floatbusy-1"))
 
@@ -289,12 +289,12 @@ class R9StaleMainShots {
             step("an answer: HP, XP, cash", 0) { g -> g.state.mon("t1")!!.hp -= 1; g.state.mon("t1")!!.xp += 9; g.state.cash += 5 }
             step("a favourite in the box", 0) { g -> g.setFavourite("b3", true) }
             step("an evolution stone on the main", 1) { g -> ItemUse.use(g.data, g.state, "thunder-stone", "t1", g.rng, g.clock()) }
-            step("send the main to the box", 1) { g -> g.toBox("t1") }
+            step("send the main to the box", 1) { g -> g.toBox("t1", cardShowing = false) }
             step("make another one main", 1) { g -> g.setMain("t4") }
-            step("move in the team", 1) { g -> g.moveInTeam("t5", -1) }
+            step("move in the team", 1) { g -> g.moveInTeam("t5", -1, cardShowing = false) }
             step("a new look", 1) { g -> assertTrue(g.setLook("t2", 1).ok) }
             step("a nickname", 1) { g -> g.rename("t3", "Zippy") }
-            step("release a team member", 1) { g -> g.release("t5") }
+            step("release a team member", 1) { g -> g.release("t5", cardShowing = false) }
             step("the same again changes nothing", 0) { g -> assertTrue(g.setLook("t2", 1).ok) }
         } finally {
             GameRepo.widgetRefresh = old
@@ -320,7 +320,7 @@ class R9StaleMainShots {
             step("an answer: HP, XP of the picked one", 0) { g -> g.state.mon("b3")!!.hp -= 1; g.state.mon("b3")!!.xp += 9 }
             step("a nickname of the picked boxed one", 1) { g -> g.rename("b3", "Zippy") }
             step("the same again changes nothing", 0) { g -> g.rename("b3", "Zippy") }
-            step("release the picked boxed one", 1) { g -> g.release("b3") }
+            step("release the picked boxed one", 1) { g -> g.release("b3", cardShowing = false) }
         } finally {
             GameRepo.widgetRefresh = old
             GameRepo.widgetPicked = oldPicked

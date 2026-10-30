@@ -68,12 +68,12 @@ class R10SmallShots {
 
     // ------------------------------------------------------------------ B6
 
-    @Test fun tickedBadgeIsTheSameSquareAsTheEmptyOne() {
+    @Test fun selectedMarkIsABareTickWithoutABadge() {
         paparazzi.shootWith("r10small-badges") { ctx ->
             val on = PickKit.badge(ctx); val off = PickKit.badge(ctx)
             PickKit.bindBadge(on, true, true); PickKit.bindBadge(off, true, false)
-            val bg = (on.background as InsetDrawable).drawable as GradientDrawable
-            assertTrue("rounded square, not a disc", bg.cornerRadius < Ui.dp(ctx, 26) / 4f)
+            assertNull("a bare tick has no badge background", on.background)
+            assertNull("keep both outline and ink colours", on.colorFilter)
             assertNull(off.background)
             val row = LinearLayout(ctx).apply {
                 setBackgroundColor(Ui.c(ctx, R.color.ag_base)); setPadding(40, 40, 40, 40)

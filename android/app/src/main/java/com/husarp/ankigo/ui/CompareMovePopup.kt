@@ -103,6 +103,7 @@ object CompareMovePopup {
         window = pw
         if (!still(ctx)) { card.alpha = 0f; card.animate().alpha(1f).setDuration(AppToastRules.FADE_MS).start() } // reduced motion: no fade
         pw.showAtLocation(anchor, Gravity.TOP or Gravity.START, spot.x, spot.y)
+        AwayWindows.track(pw) { it.dismiss() }
     }
 
     private fun still(ctx: Context): Boolean = AppToastRules.still(

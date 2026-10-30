@@ -117,12 +117,12 @@ internal object AbilityMoves {
 
     /** The sentences [MoveText] shows for the seven moves (through [AbilitiesMore.describe]). */
     val TEXT: Map<String, String> = mapOf(
-        "entrainment" to "The target's ability becomes your ability for the rest of the fight. Fails if either ability can't be changed.",
+        "entrainment" to "The target's ability becomes its ability for the rest of the fight. Fails if either ability can't be changed.",
         "gastroacid" to "The target's ability does nothing for the rest of the fight. Fails if it can't be suppressed.",
-        "roleplay" to "Your ability becomes the target's for the rest of the fight. Fails if it can't be copied.",
+        "roleplay" to "Its ability becomes the target's for the rest of the fight. Fails if it can't be copied.",
         "simplebeam" to "The target's ability becomes Simple for the rest of the fight.",
-        "skillswap" to "You and the target swap abilities for the rest of the fight. Fails if either ability can't be swapped.",
+        "skillswap" to "The user and the target swap abilities for the rest of the fight. Fails if either ability can't be swapped.",
         "worryseed" to "The target's ability becomes Insomnia for the rest of the fight, and a sleeping target wakes up.",
-        "doodle" to "Your ability becomes the target's for the rest of the fight. Fails if it can't be copied.",
+        "doodle" to "Its ability becomes the target's for the rest of the fight. Fails if it can't be copied.",
     )
 }

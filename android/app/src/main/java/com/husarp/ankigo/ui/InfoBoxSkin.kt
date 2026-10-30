@@ -18,13 +18,13 @@ internal object InfoBoxSkin {
     // ---- the dark theme's palette (res/values-night/colors.xml; a test compares them) ----
     const val DARK_TEXT = 0xFFCDD6F4.toInt()
     const val DARK_SUB0 = 0xFFA6ADC8.toInt()
-    const val DARK_RED = 0xFFF38BA8.toInt()
-    const val DARK_PEACH = 0xFFFAB387.toInt()
-    const val DARK_YELLOW = 0xFFF9E2AF.toInt()
-    const val DARK_GREEN = 0xFFA6E3A1.toInt()
-    const val DARK_SKY = 0xFF89DCEB.toInt()
-    const val DARK_LAV = 0xFFB4BEFE.toInt()
-    const val DARK_MAUVE = 0xFFCBA6F7.toInt()
+    const val DARK_RED = 0xFFFF5B59.toInt()
+    const val DARK_PEACH = 0xFFFFA770.toInt()
+    const val DARK_YELLOW = 0xFFFCDE9A.toInt()
+    const val DARK_GREEN = 0xFF96E290.toInt()
+    const val DARK_SKY = 0xFF75DBED.toInt()
+    const val DARK_LAV = 0xFFA1AEFF.toInt()
+    const val DARK_MAUVE = 0xFFC191FA.toInt()
 
     /** Level tiers 0..9 (bronze .. master) in the dark theme. */
     val DARK_TIERS = intArrayOf(

@@ -33,7 +33,7 @@ internal class MonActions(private val s: GamePage) {
         val idx = state.team.indexOf(mon.uid)
         val main = state.main
         // PLAN 206 / 191: in a fight "Make main" waits for the next answer, and the wild one attacks once; the row says so
-        val makeSub = SwitchQueue.MENU_SUB.takeIf { SwitchQueue.fightOn(state) }
+        val makeSub = SwitchQueue.MENU_SUB.takeIf { SwitchQueue.waitsForAnswer(state) }
         if (idx >= 0) {
             if (idx > 0 && state.queuedMain?.uid == mon.uid && main != null) {
                 add("Cancel the switch", R.drawable.ic_close, sub = "${main.shownName} stays in", tone = R.color.ag_yellow) { s.act { g -> g.requestMain(main.uid) } }

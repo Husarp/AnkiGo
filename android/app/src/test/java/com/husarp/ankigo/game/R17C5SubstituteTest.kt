@@ -227,6 +227,6 @@ class R17C5SubstituteTest {
 
     @Test fun theTextSaysWhatItCostsAndStops() {
         val t = MoveText.describe(data.move("substitute")!!)
-        assertTrue(t, "a quarter of your max HP" in t && "not sound moves" in t && t.endsWith("."))
+        assertTrue(t, "a quarter of its max HP" in t && "not sound moves" in t && t.endsWith("."))
     }
 }

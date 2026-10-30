@@ -125,6 +125,10 @@ abstract class AgActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (seenLeaves != leaves) {
+            seenLeaves = leaves
+            onAppReturned()
+        }
         Updates.onResume(this)   // every screen: check at launch and every return, carry on a waiting install
         updateOverlay?.banner?.resetAway()
         if (lookGeneration != AppLook.generation) {
@@ -154,6 +158,7 @@ abstract class AgActivity : Activity() {
 
     /** PLAN 222: the user left the app while this screen was open and is back: start fresh. Default: [closesWhenLeft] screens close. */
     open fun onAppReturned() {
+        AwayWindows.dismissAll()
         if (closesWhenLeft) finish()
     }
 
