@@ -48,6 +48,7 @@ class R14CFinishDeckShots {
     private fun screen(ctx: Context): Pair<StudyActivity, View> {
         ctx.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true).commit()
         val act = attach(StudyActivity(), ShotCtx(ctx))
+        act.finishQueueCheck = { done -> done(Result.success(true)) }
         setField(act, "deckId", 2L); setField(act, "deckName", "Geography::Capitals")
         val root = act.buildContent()
         setField(act, "card", Anki.Review(10L, 0, 4, listOf("<1m", "6m", "1d", "4d"), emptyList()))
@@ -90,6 +91,33 @@ class R14CFinishDeckShots {
             val line = getField(act, "summaryView") as ViewGroup
             assertEquals("Deck finished · tap Finish deck", (line.getChildAt(0) as TextView).text.toString())
             measure(root, Size.PHONE, ctx)
+            root
+        }
+    }
+
+    @Test fun finishWaitsForTheLastMomentQueueCheck() {
+        paparazzi.shootWith("r23l-finish-recheck", listOf(Size.PHONE)) { ctx ->
+            val (act, root) = screen(ctx)
+            var complete: ((Result<Boolean>) -> Unit)? = null
+            act.finishQueueCheck = { done -> complete = done }
+            lastAnswerIn(act)
+            row(act).getChildAt(0).performClick()
+            assertFalse("no summary before the final provider read", finished(act))
+            assertNotNull(complete)
+            complete!!(Result.success(true))
+            assertTrue("only a freshly empty queue may finish", finished(act))
+            root
+        }
+    }
+
+    @Test fun filteredFinishDoesNotReadTheNormalDeckQueue() {
+        paparazzi.shootWith("r1-filtered-finish", listOf(Size.PHONE)) { ctx ->
+            val (act, root) = screen(ctx)
+            act.intent = android.content.Intent().putExtra("filterSession", "filter-session-test")
+            act.finishQueueCheck = { error("Filtered completion must not read the normal scheduler") }
+            call(act, "checkedSummary", Triple(emptyList<Anki.Deck>(), 0, 0))
+            assertTrue(finished(act))
+            assertFalse(ShopCardKit.texts(root).contains("Custom study in AnkiDroid"))
             root
         }
     }

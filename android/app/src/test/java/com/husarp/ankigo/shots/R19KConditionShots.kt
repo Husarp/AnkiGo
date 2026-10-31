@@ -458,8 +458,8 @@ class R19KConditionShots {
     // ---------------------------------------------------------------- the events
 
     private fun play(player: EventPlayer, e: GameEvent) {
-        val m = EventPlayer::class.java.getDeclaredMethod("play", GameEvent::class.java).also { it.isAccessible = true }
-        m.invoke(player, e)
+        val m = EventPlayer::class.java.getDeclaredMethod("play", GameEvent::class.java, Boolean::class.javaPrimitiveType).also { it.isAccessible = true }
+        m.invoke(player, e, false)
     }
 
     @Test fun aConditionAppearsAndGoesInStepWithItsLine() {

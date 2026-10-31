@@ -9,21 +9,25 @@ class R22IPurchaseTest {
         for (quantity in listOf(1, 3, 5)) {
             val state = TestData.state(data)
             state.bag.clear()
-            val total = Shop.priceOf(data, state, "poke-ball") * quantity
+            Shop.ensureToday(data, state)
+            val ball = Shop.dailyBalls(state.day).first()
+            val total = Shop.priceOf(data, state, ball) * quantity
             state.cash = total - 1
-            assertFalse(Shop.buy(data, state, "poke-ball", quantity = quantity).ok)
+            assertFalse(Shop.buy(data, state, ball, quantity = quantity).ok)
             assertEquals(total - 1, state.cash)
-            assertEquals(0, state.count("poke-ball"))
+            assertEquals(0, state.count(ball))
             state.cash = total
-            assertTrue(Shop.buy(data, state, "poke-ball", quantity = quantity).ok)
+            assertTrue(Shop.buy(data, state, ball, quantity = quantity).ok)
             assertEquals(0, state.cash)
-            assertEquals(quantity, state.count("poke-ball"))
+            assertEquals(quantity, state.count(ball))
         }
     }
     @Test fun invalidBatchDoesNotSpendAnything() {
         val state = TestData.state(data)
+        Shop.ensureToday(data, state)
+        val ball = Shop.dailyBalls(state.day).first()
         state.cash = 10000
-        assertFalse(Shop.buy(data, state, "poke-ball", quantity = 2).ok)
+        assertFalse(Shop.buy(data, state, ball, quantity = 2).ok)
         assertEquals(10000, state.cash)
     }
 }

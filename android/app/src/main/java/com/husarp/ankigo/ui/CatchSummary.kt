@@ -24,7 +24,7 @@ data class CatchSummary(
     }
 
     /** [number] = which throw of this fight caught it (1 = first); [chance] = that ball's real catch chance in %. */
-    data class ThrowLine(val ball: String, val number: Int, val chance: Int)
+    data class ThrowLine(val ball: String, val number: Int, val chance: Int, val special: String? = null)
 
     /** XP one Pokémon gained in this batch (all its XpGained summed); [level] = its level after, [leveledUp] = a level came with it. */
     data class XpLine(val uid: String, val name: String, val xp: Int, val level: Int, val leveledUp: Boolean)
@@ -47,7 +47,7 @@ data class CatchSummary(
                 PokedexLine(it.newSpecies, data?.species?.get(it.species)?.baseNum ?: it.species)
             }
             val throwLine = if (caught != null) throws.lastOrNull { it.success }?.let {
-                ThrowLine(it.ball, if (it.number > 0) it.number else earlierThrows + throws.size, it.chance)
+                ThrowLine(it.ball, if (it.number > 0) it.number else earlierThrows + throws.size, it.chance, it.special)
             } else null
             val levelled = events.filterIsInstance<GameEvent.LevelUp>().map { it.uid }.toSet()
             val xp = events.filterIsInstance<GameEvent.XpGained>().groupBy { it.uid }.map { (uid, list) ->

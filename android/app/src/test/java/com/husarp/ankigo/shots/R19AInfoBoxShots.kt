@@ -263,4 +263,41 @@ class R19AInfoBoxShots {
             check(Math.abs(a.cardScale - offScale) < 0.0001f && boxes(a).zip(off).all { (x, y) -> Math.abs(x - y) < 0.01f }) { "$host picture=$picture: off again is not as before" }
         }
     }
+    @Test fun widerBoxesFitAndRestoreLiveWithBothTypeNamesWhenThereIsRoom() {
+        for (picture in listOf(false, true)) {
+            paparazzi.unsafeUpdateConfig(deviceConfig = device(412, 869, Theme.LIGHT))
+            val ctx = Shots.files(paparazzi.context)
+            install(ctx)
+            InfoBoxPrefs.setWide(ctx, false)
+            val sc = battle(ctx)
+            val a = sc.arena
+            a.setNewTag(true); a.setEnemyCardShown(true)
+            a.infoBoxStyle = com.husarp.ankigo.ui.InfoBoxStyle.ABOVE
+            val types: android.widget.LinearLayout = field(a, "eTypes")
+            val icons: android.widget.LinearLayout = field(a, "eIcons")
+            a.setEnemyInfo("Zapdos", 30, false, listOf(com.husarp.ankigo.game.Type.ELECTRIC, com.husarp.ankigo.game.Type.FLYING))
+            if (picture) {
+                val bg = BackdropCatalog.byId("forest")!!
+                load(ctx, bg); field<ArenaBackdrop>(a, "backdrop").request(bg, false)
+            }
+            relayout(sc); relayout(sc)
+            val off: View = field(a, "enemyBlock")
+            val oldWidth = off.width
+            InfoBoxPrefs.setWide(ctx, true)
+            a.wideBoxes = true
+            relayout(sc); relayout(sc)
+            check(off.width > oldWidth) { "picture=$picture: width did not grow" }
+            check(types.visibility == View.VISIBLE && icons.visibility == View.GONE) { "picture=$picture: both names should fit" }
+            check(problems(sc, picture).isEmpty()) { problems(sc, picture).toString() }
+            paparazzi.snapshot(sc.root, "r23n-wide-picture-$picture", 1000)
+            InfoBoxPrefs.setWide(ctx, false)
+            a.wideBoxes = false
+            relayout(sc); relayout(sc)
+            check(off.width == oldWidth) { "original width not restored" }
+            InfoBoxPrefs.setWide(ctx, true)
+            check(InfoBoxPrefs.wide(ctx))
+            InfoBoxPrefs.setWide(ctx, false)
+        }
+    }
+
 }

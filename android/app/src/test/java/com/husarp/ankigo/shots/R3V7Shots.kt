@@ -69,7 +69,7 @@ class R3V7Shots {
         paparazzi.shootWith("r3v7-deckmenu", both) { ctx ->
             val (act, root) = deckScreen(ctx)
             val menu = MenuKit.capture { act.deckMenu(decks[2], View(ctx)) }!!
-            assertEquals(listOf("Add to favourites", "New subdeck…", "Move all cards…", "Study in AnkiDroid"), labels(menu))
+            assertEquals(listOf("Deck status", "Add to favourites", "New subdeck…", "Move all cards…", "Study in AnkiDroid"), labels(menu))
             MenuKit.over(ctx, root, menu, Gravity.TOP, 300)
         }
     }
@@ -78,14 +78,14 @@ class R3V7Shots {
         paparazzi.shootWith("r3v7-deckmenu-filtered", listOf(Size.PHONE)) { ctx ->
             val (act, root) = deckScreen(ctx)
             val menu = MenuKit.capture { act.deckMenu(decks[6], View(ctx)) }!!
-            // AnkiDroid management is unavailable here; local favourites and the Study entry remain.
-            assertEquals(listOf("Add to favourites", "Study in AnkiDroid"), labels(menu))
+            // Management is unavailable here; status can explain provider limits, and favourites/Study remain.
+            assertEquals(listOf("Deck status", "Add to favourites", "Study in AnkiDroid"), labels(menu))
             MenuKit.over(ctx, root, menu, Gravity.TOP, 420)
         }
         paparazzi.shootWith("r3v7-deckmenu-nopermission", listOf(Size.PHONE)) { ctx ->
             val (act, root) = deckScreen(ctx, granted = false)
             val menu = MenuKit.capture { act.deckMenu(decks[2], View(ctx)) }!!
-            assertEquals(listOf("Add to favourites", "Study in AnkiDroid"), labels(menu))
+            assertEquals(listOf("Deck status", "Add to favourites", "Study in AnkiDroid"), labels(menu))
             root
         }
     }

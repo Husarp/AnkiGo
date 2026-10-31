@@ -581,9 +581,9 @@ class R17C9bReactionTest {
         assertEquals((plainAfterFree - m2.hp).toDouble(), (before - m.hp).toDouble(), 3.0)
     }
 
-    @Test fun noAbilityAndTheAbilitiesThatDoNothingChangeNothing() {
-        // a Pokémon with no ability, an unknown one and one that does nothing in AnkiGo play a round like before
-        for (ab in listOf("", "Testability", "Pressure", "Run Away")) {
+    @Test fun unknownAndEscapeOnlyAbilitiesDoNotChangeRoundActions() {
+        // Empty/unknown abilities and the escape-only Run Away still allow both round actions.
+        for (ab in listOf("", "Testability", "Run Away")) {
             val w = R17C9b.wild(ab, 801, "tackle"); val b = R17C9b.battle(w)
             val e = R17C9b.round(R17C9b.main(ab, "tackle"), b, "tackle", "tackle")
             assertEquals(ab, 2, e.attacks().size)

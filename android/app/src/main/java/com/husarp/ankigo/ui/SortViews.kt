@@ -280,8 +280,12 @@ internal class SortSheet(
     private val dex: DexPart? = null,
     /** The type filter (Box and Pokédex); null = no Type section. */
     private val type: TypePart? = null,
+    private val shows: ShowsPart? = null,
 ) {
-    /** The "Group duplicates" switch row of the Box (hidden while the Box is picking for Compare). */
+    /** Independent Box requirements; empty means All. */
+    class ShowsPart(var picked: Set<BoxFilter>, val set: (Set<BoxFilter>) -> Unit)
+
+    /** The "Group duplicates" switch row of the Box (hidden while picking for Compare). */
     class GroupToggle(var on: Boolean, val set: (Boolean) -> Unit)
 
     /**
@@ -355,11 +359,12 @@ internal class SortSheet(
 
     /** Anything on in this sheet that "Clear" would switch off (a type mode alone filters nothing). */
     private fun anyFilterOn(): Boolean =
-        showIndex != 0 || dex?.wishlistOnly == true || dex?.picked?.isNotEmpty() == true || type?.filter?.active == true
+        shows?.picked?.isNotEmpty() == true || showIndex != 0 || dex?.wishlistOnly == true || dex?.picked?.isNotEmpty() == true || type?.filter?.active == true
 
     /** "Clear": every filter off (Show = All, wishlist, generations, types and the mode back to Any of); the sort and "Group duplicates" stay. */
     private fun clearFilters() {
         showIndex = 0
+        shows?.let { it.picked = emptySet(); it.set(it.picked) }
         dex?.let { it.wishlistOnly = false; it.picked = emptySet(); it.set(false, emptySet()) }
         type?.let { it.filter = TypeFilter(); it.set(it.filter) }
         changed()
@@ -414,7 +419,20 @@ internal class SortSheet(
             body.addView(basisSwitch(), LinearLayout.LayoutParams(-1, -2))
             if (spec.basis == StatBasis.AT_LEVEL) body.addView(levelStepper(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         }
-        if (showLabels != null) {
+        if (shows != null) {
+            body.addView(section("Show"))
+            body.addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = "Match all selected" })
+            val f = flow()
+            BoxFilter.entries.forEach { option ->
+                val selected = if (option == BoxFilter.ALL) shows.picked.isEmpty() else option in shows.picked
+                f.addView(BoxViews.chip(ctx, option.label, selected, heart = option == BoxFilter.FAVOURITES) {
+                    shows.picked = if (option == BoxFilter.ALL) emptySet() else if (option in shows.picked) shows.picked - option else shows.picked + option
+                    shows.set(shows.picked)
+                    changed()
+                })
+            }
+            body.addView(f, LinearLayout.LayoutParams(-1, -2))
+        } else if (showLabels != null) {
             body.addView(section("Show"))
             val f = flow()
             showLabels.forEachIndexed { i, label ->

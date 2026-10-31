@@ -77,7 +77,7 @@ class R3X1Shots {
             assertNotNull(d)
             val scene = DialogShots.scene(ctx, d!!)
             assertTrue("Options", texts(scene).any { it == "Options" })
-            assertTrue("Close", texts(scene).any { it.equals("Close", true) })
+            assertTrue("Back", descs(scene).any { it == "Back to Pokémon" })
             assertTrue("Rename pencil", descs(scene).any { it == "Rename" })
             scene
         }

@@ -44,7 +44,11 @@ class R14B2CIconShots {
 
     @Test fun items() {
         paparazzi.shootWith("r14b2c-items", sizes = listOf(Size.PHONE)) { ctx ->
-            val big = row(ctx, 10, *drawn.map { Bits.itemTile(ctx, it, 56) }.toTypedArray())
+            val big = row(ctx, 10, *drawn.map {
+                Bits.itemTile(ctx, it, 56).apply {
+                    org.junit.Assert.assertNull("PLAN 338: bare item icon", background)
+                }
+            }.toTypedArray())
             val mid = row(ctx, 6, *drawn.map { Bits.itemTile(ctx, it, 36) }.toTypedArray())
             val small = row(ctx, 6, *drawn.map { Bits.itemTile(ctx, it, 28) }.toTypedArray())
             val rows = LinearLayout(ctx).apply {

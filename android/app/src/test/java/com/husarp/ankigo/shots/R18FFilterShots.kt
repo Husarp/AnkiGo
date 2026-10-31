@@ -115,7 +115,7 @@ class R18FFilterShots {
 
     private fun tap(v: View, text: String) { assertTrue("$text has a click listener", all(v).filterIsInstance<TextView>().first { it.text.toString() == text }.performClick()) }
 
-    @Test fun theBoxQuickChipsAreOneChoiceAndTapAgainTurnsItOff() {
+    @Test fun theBoxQuickChipsCombineAndTapAgainTurnsOnlyThatOneOff() {
         paparazzi.shootPage("r18f-box-toggle", listOf(w412), themes = listOf(Theme.LIGHT)) { ctx ->
             val p = TeamPage(ctx, NoHost)
             p.preset(TeamSection.BOX, filter = BoxFilter.ALL, group = true, sort = SortSpec.of(SortKey.LEVEL), types = TypeFilter())
@@ -124,15 +124,15 @@ class R18FFilterShots {
             assertEquals(listOf("Favourites", "Shiny", "In team"), chips(row).map { it.text.toString() }.filter { it in setOf("Favourites", "Shiny", "In team") })
             assertTrue("none lit", listOf("Favourites", "Shiny", "In team").none { chip(row, it).isSelected })
             chip(row, "In team").performClick()
-            assertEquals(BoxFilter.IN_TEAM, getField(p, "boxFilter")); row = boxRow(p)
+            assertEquals(setOf(BoxFilter.IN_TEAM), getField(p, "boxFilter")); row = boxRow(p)
             assertTrue(chip(row, "In team").isSelected); assertEquals("In team, on", chip(row, "In team").contentDescription.toString())
             assertTrue("no filters chip: In team is the lit chip", all(row).none { it is ActiveChip })
-            chip(row, "Shiny").performClick() // another one switches, the first goes unlit
-            assertEquals(BoxFilter.SHINY, getField(p, "boxFilter")); row = boxRow(p)
-            assertTrue(chip(row, "Shiny").isSelected && !chip(row, "In team").isSelected)
+            chip(row, "Shiny").performClick() // independent requirements combine
+            assertEquals(setOf(BoxFilter.IN_TEAM, BoxFilter.SHINY), getField(p, "boxFilter")); row = boxRow(p)
+            assertTrue(chip(row, "Shiny").isSelected && chip(row, "In team").isSelected)
             chip(row, "Shiny").performClick() // tap again = off
-            assertEquals(BoxFilter.ALL, getField(p, "boxFilter")); row = boxRow(p)
-            assertTrue(listOf("Favourites", "Shiny", "In team").none { chip(row, it).isSelected })
+            assertEquals(setOf(BoxFilter.IN_TEAM), getField(p, "boxFilter")); row = boxRow(p)
+            assertTrue(chip(row, "In team").isSelected && !chip(row, "Shiny").isSelected)
             View(ctx)
         }
     }
@@ -141,12 +141,36 @@ class R18FFilterShots {
         paparazzi.shootPage("r18f-box-sheetonly", listOf(w412), themes = listOf(Theme.LIGHT)) { ctx ->
             val p = TeamPage(ctx, NoHost); p.root
             tap(p.sortSheet().build(maxBody(ctx)), "Can evolve now")
-            assertEquals(BoxFilter.CAN_EVOLVE, getField(p, "boxFilter"))
+            assertEquals(setOf(BoxFilter.CAN_EVOLVE), getField(p, "boxFilter"))
             val row = boxRow(p)
             assertTrue("Can evolve now" in all(row).filterIsInstance<ActiveChip>().single().contentDescription.toString())
             assertTrue("no quick chip is lit", listOf("Favourites", "Shiny", "In team").none { chip(row, it).isSelected })
             tap(p.sortSheet().build(maxBody(ctx)), "Clear")
-            assertEquals(BoxFilter.ALL, getField(p, "boxFilter"))
+            assertEquals(emptySet<BoxFilter>(), getField(p, "boxFilter"))
+            View(ctx)
+        }
+    }
+
+    @Test fun favouritesInTeamHoldingAnItemCombineInSheetAndPersistUntilAllOrClear() {
+        paparazzi.shootPage("r23n-box-combined", listOf(w412), themes = listOf(Theme.LIGHT)) { ctx ->
+            val p = TeamPage(ctx, NoHost); p.root
+            val sheet = p.sortSheet().build(maxBody(ctx))
+            for (label in listOf("Favourites", "In team", "Holds an item")) tap(sheet, label)
+            val expected = setOf(BoxFilter.FAVOURITES, BoxFilter.IN_TEAM, BoxFilter.HOLDS_ITEM)
+            assertEquals(expected, getField(p, "boxFilter"))
+            val matching = st.mons.count { it.favourite && it.uid in st.team && it.heldItem != null }
+            assertTrue("Show $matching Pokémon" in chips(sheet).map { it.text.toString() })
+            assertEquals(expected, getField(TeamPage(ctx, NoHost), "boxFilter"))
+            assertTrue(chip(boxRow(p), "Favourites").isSelected)
+            assertTrue(chip(boxRow(p), "In team").isSelected)
+            tap(sheet, "All")
+            assertEquals(emptySet<BoxFilter>(), getField(p, "boxFilter"))
+            assertEquals(emptySet<BoxFilter>(), getField(TeamPage(ctx, NoHost), "boxFilter"))
+            tap(sheet, "Holds an item"); tap(sheet, "Holds Exp. Share"); tap(sheet, "Can evolve now")
+            assertEquals(setOf(BoxFilter.HOLDS_ITEM, BoxFilter.HOLDS_XP_SHARE, BoxFilter.CAN_EVOLVE), getField(p, "boxFilter"))
+            tap(sheet, "Clear")
+            assertEquals(emptySet<BoxFilter>(), getField(p, "boxFilter"))
+            assertEquals(emptySet<BoxFilter>(), getField(TeamPage(ctx, NoHost), "boxFilter"))
             View(ctx)
         }
     }
@@ -194,16 +218,16 @@ class R18FFilterShots {
             val p = TeamPage(ctx, NoHost); p.root
             chip(boxRow(p), "Shiny").performClick()
             val p2 = TeamPage(ctx, NoHost)
-            assertEquals(BoxFilter.SHINY, getField(p2, "boxFilter"))
+            assertEquals(setOf(BoxFilter.SHINY), getField(p2, "boxFilter"))
             p2.root
             assertTrue(chip(boxRow(p2), "Shiny").isSelected)
             p2.onTabReselected() // item 222 on the Box: back to the top, same filters
-            assertEquals(BoxFilter.SHINY, getField(p2, "boxFilter"))
+            assertEquals(setOf(BoxFilter.SHINY), getField(p2, "boxFilter"))
             // sheet-only choices are kept too; Clear in the sheet is kept
             tap(p2.sortSheet().build(maxBody(ctx)), "Holds an item")
-            assertEquals(BoxFilter.HOLDS_ITEM, getField(TeamPage(ctx, NoHost), "boxFilter"))
+            assertEquals(setOf(BoxFilter.SHINY, BoxFilter.HOLDS_ITEM), getField(TeamPage(ctx, NoHost), "boxFilter"))
             tap(p2.sortSheet().build(maxBody(ctx)), "Clear")
-            assertEquals(BoxFilter.ALL, getField(TeamPage(ctx, NoHost), "boxFilter"))
+            assertEquals(emptySet<BoxFilter>(), getField(TeamPage(ctx, NoHost), "boxFilter"))
             View(ctx)
         }
     }

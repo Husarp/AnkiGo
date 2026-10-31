@@ -53,10 +53,10 @@ class BackdropsTest {
         assertEquals(File(File(dir, "bg"), "forest.png"), f) // round 7's cached Showdown files keep their names
         assertTrue(f.path.startsWith(dir.path))
         assertEquals(File(File(dir, "bg"), "factory-2.webp"), Backdrops.file(dir, alley))
-        assertEquals(35, BackdropCatalog.ALL.map { Backdrops.file(dir, it) }.toSet().size)
+        assertEquals(47, BackdropCatalog.ALL.map { Backdrops.file(dir, it) }.toSet().size)
     }
 
-    @Test fun picturesNeedSpriteDownloadsAndTheSettingBothOn() {
+    @Test fun newDownloadsNeedSpriteDownloadsAndTheSettingBothOn() {
         assertTrue(Backdrops.allowed(spritesOn = true, picturesOn = true))
         assertFalse(Backdrops.allowed(spritesOn = false, picturesOn = true))
         assertFalse(Backdrops.allowed(spritesOn = true, picturesOn = false))
@@ -194,9 +194,8 @@ class BackdropsTest {
         assertEquals(File(dir, "bg/night-forest-3.webp"), Backdrops.file(dir, nf))
         assertEquals(Mirror.ownUrl("bg-canyon-2.webp"), Backdrops.url(BackdropCatalog.byId("canyon")!!))
         // round 9 wave 3: the two new normal pictures are revision 1 (bg-<id>.webp); the new shrine is revision 2 (the dropped round-8 one was 1)
-        assertEquals(BackdropCatalog.ALL.filter { it.source == BackdropSource.OWN }.map { it.id }.toSet() - setOf("ruins-courtyard", "dark-town", "dark-forest", "fire-savanna", "ice-lake", "fighting-training", "poison-marsh", "psychic-lab"), BackdropCatalog.ALL.filter { it.rev != 1 }.map { it.id }.toSet())
-        assertEquals(setOf(3), BackdropCatalog.ALL.filter { it.rev == 3 }.map { it.rev }.toSet())
-        assertEquals(listOf("night-forest"), BackdropCatalog.ALL.filter { it.rev == 3 }.map { it.id })
+        assertEquals(setOf("night-forest", "crystal-storm", "flower-field"), BackdropCatalog.ALL.filter { it.rev == 3 }.map { it.id }.toSet())
+        assertEquals(2, BackdropCatalog.byId("poison-marsh")!!.rev)
         BackdropCatalog.ALL.filter { it.rev == 1 }.forEach {
             assertEquals(it.id, "${it.id}.${it.ext}", Backdrops.fileName(it))
             if (it.source == BackdropSource.OWN) assertEquals(it.id, Mirror.ownUrl("bg-${it.id}.${it.ext}"), Backdrops.url(it))

@@ -89,7 +89,7 @@ object SettingsCatalog {
         s("flyingTurnDots", B, "Battle panel", "Flying turn dots", "Both dots sink into the attacking Pokémon before its moves"),
         s("attackAnimations", B, "Battle panel", "Attack animations", "Each move plays its own animation; off: a simple step and shake"),
         s("pokemonMovement", B, "Battle panel", "Pokémon movement", "How often the battle Pokémon move when idle; off while reduced motion is on"),   // R18-C, PLAN 247
-        s("backgroundPictures", B, "Battle panel", "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (8–400 KB each); off: plain"),
+        s("backgroundPictures", B, "Battle panel", "Background pictures", "A scene from your enabled backgrounds; off: plain"),
         s("turnDots", B, "Battle panel", "Turn dots", "Where the charge dots sit in the bar under the battle picture"),
         s("infoBoxAbove", B, "Info box style", "Number above the bar", "Default; the HP number above a full-width bar, the type names beside it"),
         s("infoBoxInside", B, "Info box style", "Number inside the bar", "A thicker bar with the HP number written in it; the shortest boxes"),
@@ -99,6 +99,7 @@ object SettingsCatalog {
         s("infoBoxLookPlate", B, "Info box style", "Dark plate", "Deep navy with a gold trim and light text, the same in light and dark"),
         s("infoBoxLookHud", B, "Info box style", "HUD in the corners", "No box: outlined text and bars on the picture, yours and the wild one in opposite corners"),
         s("infoBoxLookType", B, "Info box style", "Type colour", "Washed with the Pokémon's first type colour, with a stripe on the left"),
+        s("wideInfoBoxes", B, "Info box style", "Wider info boxes", "More room for both type names"),
         s("bigInfoBoxes", B, "Info box style", "Bigger info boxes", "When the arena has room"),   // R19-A, PLAN 276
         s("hpColours", B, "HP / XP bars", "HP bar colours", "Three steps, a smooth blend (default), or the Pokémon's type colour"), // PLAN 163 / R19
         s("hpBarsToday", B, "HP / XP bars", "Today", "Default; flat rounded bars on a grey track"),
@@ -184,7 +185,7 @@ s("catchAsk", G, "When you beat a wild Pokémon", "Ask me", "A better copy of on
         // Data & import
         s("gameDataSize", D, "Downloads", "Game data", "How much space the downloaded game data takes"),
         s("picturesSize", D, "Downloads", "Pictures", "How much space the downloaded pictures take"),
-        s("spritesEnabled", D, "Downloads", "Download pictures as needed", "Off: simple placeholders instead of pictures"),
+        s("spritesEnabled", D, "Downloads", "Download pictures as needed", "Off: no new downloads; pictures already saved are still used"),
         s("lastSaved", D, "Save & backups", "Last saved", "When your game was last written to the phone"),
         s("exportSave", D, "Save & backups", "Export save", "Writes your game to a file you can keep"),
         s("importSave", D, "Save & backups", "Import save…", "Loads a saved file; your current game is kept as a backup first"),

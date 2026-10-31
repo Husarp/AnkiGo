@@ -34,16 +34,17 @@ class R20UiTest {
         error("missing render")
     }
 
-    @Test fun detailsCloseComesBeforeTheTitleAndBody() {
+    @Test fun detailsBackSharesThePinnedTitleHeader() {
         val c = ctx()
         var d: AppDialog? = null
         Pickers.interceptApp = { d = it }
         MonDetail.show(TeamPage(c, NoHost), GameRepo.data!!, GameRepo.state!!.main!!)
         val card = d!!.content() as LinearLayout
-        assertEquals("Close", (card.getChildAt(0) as TextView).text.toString())
-        assertEquals("Details", (card.getChildAt(1) as TextView).text.toString())
-        assertEquals(1, texts(card).count { it == "Close" })
-        assertTrue(card.getChildAt(0).isClickable)
+        val header = card.getChildAt(0) as ViewGroup
+        val back = all(header).single { it.contentDescription == "Back to Pokémon" }
+        assertTrue(back.isClickable)
+        assertEquals(listOf("Details"), texts(header))
+        assertEquals(0, texts(card).count { it == "Close" })
     }
 
     @Test fun statsHasReviewsWithoutARedundantChartsHeading() {

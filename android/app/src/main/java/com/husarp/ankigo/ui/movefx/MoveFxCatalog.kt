@@ -28,18 +28,22 @@ object MoveFxCatalog {
      * The look for one move. [moveId] = Showdown id ("ember", "" = not known), [type] null = typeless (Struggle: plays as
      * Normal), [power] = base power (0 = none: k = 1).
      */
-    fun plan(moveId: String, type: Type?, category: Category, power: Int): MoveFxPlan {
+    fun plan(moveId: String, type: Type?, category: Category, power: Int,
+        multiHit: Boolean = false, recoil: Boolean = false, hits: Int = 4, showRecoil: Boolean = true): MoveFxPlan {
         val t = type ?: Type.NORMAL
         val palette = FxPalettes.of(t)
-        // Only these four picked moves get new behaviour; other moves keep their rules and looks.
-        val behaviour = when (moveId) {
-            "absorb" -> MoveLook.DRAIN
-            "recover" -> MoveLook.HEAL
-            "furyswipes" -> MoveLook.MULTI_HIT
-            "doubleedge" -> MoveLook.RECOIL
+        // Behaviour groups come from the move data / battle event, never a hand-maintained move list.
+        val behaviour = when {
+            multiHit -> MoveLook.MULTI_HIT
+            recoil -> MoveLook.RECOIL
+            moveId in drains -> MoveLook.DRAIN
+            moveId in heals -> MoveLook.HEAL
+            moveId in blasts -> MoveLook.BLAST
+            moveId == "furyswipes" -> MoveLook.MULTI_HIT
+            moveId == "doubleedge" -> MoveLook.RECOIL
             else -> null
         }
-        if (behaviour != null) return MoveFxPlan(behaviour, 1f, kits[t] ?: FxKit.valueOf(t.name), palette)
+        if (behaviour != null) return MoveFxPlan(behaviour, 1f, kits[t] ?: FxKit.valueOf(t.name), palette, hits.coerceAtLeast(0), showRecoil)
         // The picked moves themselves.
         picks.firstOrNull { it.id == moveId }?.let { return MoveFxPlan(it.look, 1f, it.kit, FxPalettes.of(it.type)) }
         // Rule 1: same type and category as a pick.
@@ -54,6 +58,13 @@ object MoveFxCatalog {
             Category.STATUS -> MoveFxPlan(MoveLook.AURA_TEMPLATE, 1f, kit, palette)
         }
     }
+
+    // Explicit design-page families, including callback-based heals absent from the heal fraction field.
+    internal val drains = "absorb bitterblade bouncybubble drainingkiss drainpunch dreameater gigadrain hornleech leechlife matchagotcha megadrain oblivionwing paraboliccharge".split(" ").toSet()
+    internal val heals = "healorder milkdrink recover roost slackoff softboiled moonlight morningsun shoreup synthesis rest swallow strengthsap purify junglehealing lunarblessing lifedew".split(" ").toSet()
+    private val blasts = setOf("explosion", "selfdestruct", "mistyexplosion")
+
+    fun preparation(type: Type): MoveFxPlan = MoveFxPlan(MoveLook.CHARGE, 1f, kits[type] ?: FxKit.valueOf(type.name), FxPalettes.of(type))
 
     /** Rule 4: sqrt(power / base) kept in 0.8..1.6; 1 when the move has no power. */
     private fun k(power: Int, base: Int): Float =

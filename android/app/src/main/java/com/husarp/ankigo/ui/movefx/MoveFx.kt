@@ -34,6 +34,8 @@ object MoveFx {
     }
 
     private fun buildLook(script: FxScript, look: MoveLook): FxTimes = when (look) {
+        MoveLook.CHARGE -> BehaviourFx.charge(script)
+        MoveLook.BLAST -> BehaviourFx.blast(script)
         MoveLook.DRAIN -> BehaviourFx.drain(script)
         MoveLook.HEAL -> BehaviourFx.heal(script)
         MoveLook.MULTI_HIT -> BehaviourFx.multi(script)

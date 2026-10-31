@@ -132,7 +132,7 @@ class R17C5HealsTest {
         val e2 = round(m, b, listOf("wish", "splash"), listOf("splash"))
         assertEquals(1 + max / 2, m.hp)
         assertTrue(e2.lines().contains("Fastie's wish came true!"))
-        assertTrue(b.field.player.isEmpty())
+        assertTrue(b.field.player.keys.none { !it.startsWith("ab.") })
     }
 
     @Test fun aWishThatIsWaitingMakesAnotherFail() {

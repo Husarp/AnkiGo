@@ -53,6 +53,16 @@ class R15AItemWindowShots {
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx)
             ShopCardKit.install()
+            // PLAN 338: item and TM headers keep their slots, with no icon backdrop.
+            val page = com.husarp.ankigo.ui.ShopPage(ctx, NoHost)
+            for (spec in listOf(com.husarp.ankigo.ui.ItemCard.Spec("great-ball"),
+                com.husarp.ankigo.ui.ItemCard.Spec(null, move = "thunderbolt"))) {
+                val header = com.husarp.ankigo.ui.ItemCard.header(page, spec) {} as ViewGroup
+                val icon = header.getChildAt(0)
+                assertNull("bare item/TM header icon", icon.background)
+                assertEquals(Ui.dp(ctx, 48), icon.layoutParams.width)
+                assertEquals(Ui.dp(ctx, 48), icon.layoutParams.height)
+            }
             val view = build(ctx)
             val frame = FrameLayout(ctx).apply { addView(view, FrameLayout.LayoutParams(-1, -1)) }
             layoutNow(ctx, frame)
@@ -146,10 +156,10 @@ class R15AItemWindowShots {
     @Test fun theWindowOfABallInTheBagShowsTheTradeConfirm() {
         shoot("win-trade", listOf(P412), check = { _, screen ->
             val t = texts(screen)
-            assertTrue("Cancel" in t && "Trade 5 for 1" in t)
+            assertTrue("Cancel" in t && "Trade 10 for 1" in t)
         }) { ctx ->
-            val (_, screen) = bagPage(ctx, CardKeys.bagItem("poke-ball"))
-            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 5 Poké Balls for 1 Great Ball" }); screen.render()
+            val (_, screen) = bagPage(ctx, CardKeys.bagItem("poke-ball")) { st.bag["poke-ball"] = 10 }
+            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 10 Poké Balls for 1 Great Ball" }); screen.render()
             screen
         }
     }

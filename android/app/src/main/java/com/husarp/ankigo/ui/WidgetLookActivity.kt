@@ -84,14 +84,14 @@ class WidgetLookActivity : AgActivity() {
     private fun transparencyRow(): View {
         val value=StudyUi.label(this,"${look().transparency}%",13,R.color.ag_sub1)
         val slider=android.widget.SeekBar(this).apply {
-            max=100; progress=look().transparency; minimumHeight=Ui.dp(context,40)
+            max=20; progress=(look().transparency+2)/5; minimumHeight=Ui.dp(context,40)
             contentDescription="Background see-through"
             progressTintList=android.content.res.ColorStateList.valueOf(Ui.c(context,R.color.ag_mauve))
             thumbTintList=progressTintList
             setOnSeekBarChangeListener(object: android.widget.SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(bar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
-                    value.text="$progress%"
-                    if(fromUser)save(look().copy(transparency=progress))
+                    value.text="${progress*5}%"
+                    if(fromUser)save(look().copy(transparency=progress*5))
                 }
                 override fun onStartTrackingTouch(bar: android.widget.SeekBar) {}
                 override fun onStopTrackingTouch(bar: android.widget.SeekBar) {}
@@ -115,6 +115,7 @@ class WidgetLookActivity : AgActivity() {
                 else save(look().copy(tint=if(it==0)"plain" else "type"))
             }))
             if (kind=="buddy") {
+                options.addView(sizeRow())
                 options.addView(Form.stackRow(this,"Buddy layout","A: ring · B: goal bar · C: open gauge",Form.segmented(this,listOf("A","B","C"),listOf("A","B","C").indexOf(BuddyWidgetPrefs.layout(prefs,widgetId))) {
                     BuddyWidgetPrefs.setLayout(prefs,widgetId,listOf("A","B","C")[it]); Widgets.refreshAll(this,study=false); renderPreview()
                 }))
@@ -154,12 +155,13 @@ class WidgetLookActivity : AgActivity() {
                     if (kind=="buddy") {
                         val old=BuddyWidgetPrefs.look(prefs,id)
                         val choice=BuddyWidgetPrefs.choice(prefs,id)
-                        BuddyWidgetPrefs.setLayout(prefs,id,old.layout); BuddyWidgetPrefs.setRing(prefs,id,old.ring)
+                        BuddyWidgetPrefs.setSize(prefs,id,old.size); BuddyWidgetPrefs.setLayout(prefs,id,old.layout); BuddyWidgetPrefs.setRing(prefs,id,old.ring)
                         BuddyWidgetPrefs.setAnim(prefs,id,old.hop); BuddyWidgetPrefs.set(prefs,id,choice)
                     }
                 }
                 WidgetLooks.write(prefs,kind,0,look())
                 if(kind=="buddy") {
+                    BuddyWidgetPrefs.setSize(prefs,0,BuddyWidgetPrefs.size(prefs,widgetId))
                     BuddyWidgetPrefs.setLayout(prefs,0,BuddyWidgetPrefs.layout(prefs,widgetId))
                     BuddyWidgetPrefs.setRing(prefs,0,BuddyWidgetPrefs.ring(prefs,widgetId)); BuddyWidgetPrefs.setAnim(prefs,0,BuddyWidgetPrefs.anim(prefs,widgetId))
                     BuddyWidgetPrefs.set(prefs,0,BuddyWidgetPrefs.choice(prefs,widgetId))
@@ -169,27 +171,136 @@ class WidgetLookActivity : AgActivity() {
         },StudyUi.spaced(this,16))
         rows.addView(StudyUi.primary(this,"Done") { finish() },StudyUi.spaced(this,8))
     }
-    /** C keeps the page compact; the existing Main / Team / Box choices live in a separate sheet. No item-151 filters. */
-    private fun showPokemonSheet() {
+    private fun sizeRow(): View {
+        val value=StudyUi.label(this,"${BuddyWidgetPrefs.size(prefs,widgetId)}%",13,R.color.ag_sub1)
+        val slider=android.widget.SeekBar(this).apply {
+            max=50; progress=BuddyWidgetPrefs.size(prefs,widgetId)-50
+            contentDescription="Pokémon size"
+            progressTintList=android.content.res.ColorStateList.valueOf(Ui.c(context,R.color.ag_mauve))
+            thumbTintList=progressTintList
+            minimumHeight=Ui.dp(context,40)
+            setOnSeekBarChangeListener(object: android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                    value.text="${progress+50}%"
+                    if(fromUser) {
+                        BuddyWidgetPrefs.setSize(prefs,widgetId,progress+50)
+                        handler.removeCallbacks(refresh); handler.postDelayed(refresh,200)
+                        renderPreview()
+                    }
+                }
+                override fun onStartTrackingTouch(bar: android.widget.SeekBar) {}
+                override fun onStopTrackingTouch(bar: android.widget.SeekBar) {}
+            })
+        }
+        return Form.stackRow(this,"Pokémon size","Scale within the layout",slider,value)
+    }
+    internal fun showPokemonSheet(show: Boolean = true): View {
         val state=GameRepo.state
-        val mons=state?.let { it.teamMons()+it.boxMons().sortedWith(compareByDescending<com.husarp.ankigo.game.Mon>{ m -> m.level }.thenBy { m -> m.shownName }) } ?: emptyList()
-        val choices=listOf(BuddyWidgetPrefs.MAIN)+mons.map { it.uid }
-        val labels=listOf("Current main — follows your team")+mons.map { mon ->
-            val where=if(mon.uid in state!!.team) "Team" else "Box"
-            "${if(mon.shiny) "★ " else ""}${mon.shownName} · Lv ${mon.level} · $where"
+        val mons=state?.let { it.teamMons()+it.boxMons() } ?: emptyList()
+        val selected=BuddyWidgetPrefs.choice(prefs,widgetId)
+        var sort=BuddyPicker.Sort.LEVEL
+        var filters=BuddyPicker.Filters()
+        val body=StudyUi.column(this)
+        val search=android.widget.EditText(this).apply { hint="Search Pokémon name"; isSingleLine=true; contentDescription=hint }
+        body.setPadding(Ui.dp(this,16),Ui.dp(this,8),Ui.dp(this,16),Ui.dp(this,8))
+        search.setTextColor(Ui.c(this,R.color.ag_text)); search.setHintTextColor(Ui.c(this,R.color.ag_sub0))
+        Ui.tintEdit(search)
+        val chips=StudyUi.row(this)
+        val list=android.widget.ListView(this).apply { divider=null; setBackgroundColor(Ui.c(context,R.color.ag_card)) }
+        var choices=emptyList<String>()
+        val dialog=if(show) AlertDialog.Builder(this).setTitle("Pokémon").setView(body).setNegativeButton("Cancel",null).create() else null
+        fun update() {
+            val found=BuddyPicker.mons(mons,selected,search.text.toString(),sort,filters,state?.team ?: emptyList()) {
+                GameRepo.data?.species?.get(it.lookNum(GameRepo.data))?.types ?: emptyList()
+            }
+            chips.removeAllViews()
+            chips.addView(BoxViews.chip(this,"Type${if(filters.types.active) " (${filters.types.types.size})" else ""}",filters.types.active) {
+                val content=StudyUi.column(this).apply { setPadding(Ui.dp(context,16),0,Ui.dp(context,16),Ui.dp(context,12)) }
+                val note=StudyUi.label(this,filters.types.sentence(),12,R.color.ag_sub1)
+                content.addView(note)
+                content.addView(ChipFlow(this,Ui.dp(this,6),-Ui.dp(this,8)).apply {
+                    for(type in com.husarp.ankigo.game.Type.entries) addView(Ui.text(context,12f,800,R.color.ag_sub1).apply {
+                        text=type.label
+                        TypeChips.styleFilter(this,type,type in filters.types.types)
+                        isSelected=type in filters.types.types
+                        setOnClickListener {
+                            filters=filters.copy(types=filters.types.toggle(type)!!)
+                            isSelected=type in filters.types.types
+                            TypeChips.styleFilter(this,type,isSelected)
+                            note.text=filters.types.sentence()
+                            update()
+                        }
+                    })
+                })
+                AlertDialog.Builder(this).setTitle("Type · any of").setView(ScrollView(this).apply { addView(content) })
+                    .setPositiveButton("Done",null).setNeutralButton("Clear") { _,_ -> filters=filters.copy(types=TypeFilter()); update() }.show()
+            })
+            chips.addView(BoxViews.quickChip(this,"Favourites",filters.favourites,heart=true) { filters=filters.copy(favourites=!filters.favourites); update() })
+            chips.addView(BoxViews.quickChip(this,"Shiny",filters.shiny) { filters=filters.copy(shiny=!filters.shiny); update() })
+            val follow=!filters.active && (search.text.isNullOrBlank() || "Current main".contains(search.text.toString(),ignoreCase=true))
+            choices=(if(follow)listOf(BuddyWidgetPrefs.MAIN) else emptyList())+found.map { it.uid }
+            val labels=(if(follow)listOf("Current main — follows your team") else emptyList())+found.map {
+                "${if(it.shiny) "★ " else ""}${it.shownName} · Lv ${it.level} · ${if(it.uid in state!!.team) "Team" else "Box"}"
+            }
+            // An explicitly picked Pokémon leads even the follow-main option.
+            val index=choices.indexOf(selected)
+            val order=choices.indices.toMutableList().apply { if(index>0) { remove(index); add(0,index) } }
+            choices=order.map { choices[it] }
+            val ordered=order.map { labels[it] }
+            list.adapter=object: android.widget.BaseAdapter() {
+                override fun getCount()=choices.size
+                override fun getItem(position: Int)=choices[position]
+                override fun getItemId(position: Int)=position.toLong()
+                override fun getView(position: Int, recycled: View?, parent: android.view.ViewGroup): View {
+                    val mon=mons.firstOrNull { it.uid==choices[position] }
+                    val row=StudyUi.row(this@WidgetLookActivity).apply {
+                        gravity=android.view.Gravity.CENTER_VERTICAL
+                        minimumHeight=Ui.dp(context,64)
+                        setPadding(Ui.dp(context,8),Ui.dp(context,4),Ui.dp(context,8),Ui.dp(context,4))
+                        if(choices[position]==selected) background=Ui.rounded(Ui.c(context,R.color.ag_mantle),12,context)
+                    }
+                    if(mon!=null) row.addView(ImageView(this@WidgetLookActivity).apply { Ui.staticSprite(context,mon.lookNum(GameRepo.data),mon.shiny,this) },StudyUi.lp(Ui.dp(this@WidgetLookActivity,48),Ui.dp(this@WidgetLookActivity,48)))
+                    row.addView(StudyUi.column(this@WidgetLookActivity).apply {
+                        addView(StudyUi.label(context,mon?.shownName ?: "Current main",14))
+                        addView(StudyUi.label(context,if(mon==null) "Follows your team" else "Lv ${mon.level} · ${if(mon.uid in state!!.team) "Team" else "Box"}${if(mon.favourite) " · Favourite" else ""}${if(mon.shiny) " · Shiny" else ""}",12,R.color.ag_sub1))
+                        if(mon!=null) addView(StudyUi.row(context).apply {
+                            for(type in GameRepo.data?.species?.get(mon.lookNum(GameRepo.data))?.types ?: emptyList())
+                                addView(TypeChips.chip(context,type),StudyUi.lp(-2,-2).apply { marginEnd=Ui.dp(context,4) })
+                        })
+                    },StudyUi.lp(0,-2,1f))
+                    if(choices[position]==selected) row.addView(StudyUi.label(this@WidgetLookActivity,"Selected",11,R.color.ag_mauve))
+                    row.contentDescription=ordered[position]+if(choices[position]==selected) ", selected" else ""
+                    return row
+                }
+            }
+            list.setItemChecked(choices.indexOf(selected),true)
         }
-        val current=choices.indexOf(BuddyWidgetPrefs.choice(prefs,widgetId)).coerceAtLeast(0)
-        val dialog=AlertDialog.Builder(this).setTitle("Pokémon")
-            .setSingleChoiceItems(labels.toTypedArray(),current) { sheet,index ->
-                BuddyWidgetPrefs.set(prefs,widgetId,choices[index])
-                Widgets.refreshAll(this,study=false)
-                sheet.dismiss(); render()
-            }.setNegativeButton("Cancel",null).create()
-        dialog.show()
-        dialog.window?.apply {
+        body.addView(search)
+        body.addView(Form.segmented(this,listOf("Level","Name","Recently caught"),0) { sort=BuddyPicker.Sort.values()[it]; update() })
+        body.addView(Form.segmented(this,listOf("All","Team","Box"),0) { filters=filters.copy(place=BuddyPicker.Place.values()[it]); update() })
+        body.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false; addView(chips) })
+        list.choiceMode=android.widget.ListView.CHOICE_MODE_SINGLE
+        val empty=StudyUi.label(this,"No Pokémon match",14,R.color.ag_sub1)
+        body.addView(empty)
+        body.addView(list,StudyUi.lp(-1,0,1f))
+        list.emptyView=empty
+        search.addTextChangedListener(object: android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { update() }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        list.setOnItemClickListener { _,_,index,_ ->
+            BuddyWidgetPrefs.set(prefs,widgetId,choices[index]); Widgets.refreshAll(this,study=false)
+            dialog?.dismiss(); render()
+        }
+        update()
+        dialog?.show()
+        dialog?.window?.apply {
             setGravity(android.view.Gravity.BOTTOM)
-            setLayout(-1,minOf((resources.displayMetrics.heightPixels*.8f).toInt(),Ui.dp(this@WidgetLookActivity,100+labels.size.coerceAtMost(12)*56)))
+            setLayout(-1,(resources.displayMetrics.heightPixels*.85f).toInt())
+            setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
+        return body
     }
     companion object {
         val names = linkedMapOf("buddy" to "Buddy","wide" to "A wild one is waiting","study" to "Study","now" to "Study now")

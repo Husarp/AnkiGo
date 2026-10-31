@@ -19,8 +19,9 @@ class SpentHealStatsTest {
         assertTrue(Shop.buy(data, s, "poke-ball").ok)
         assertTrue(Shop.buy(data, s, "great-ball").ok)
         assertTrue(Shop.buy(data, s, "poke-ball").ok)
-        assertEquals(200 + 700 + 200, s.history.getValue(s.day).spent)   // PLAN 171's ball prices (R13 Part C: 200 / 700)
-        assertEquals(5000 - 1100, s.cash)
+        val spent = 2 * Shop.priceOf(data, s, "poke-ball") + Shop.priceOf(data, s, "great-ball")
+        assertEquals(spent, s.history.getValue(s.day).spent)   // the actual daily prices charged
+        assertEquals(5000 - spent, s.cash)
         assertEquals(0, s.history.getValue(s.day).healItems)
     }
 
@@ -63,8 +64,8 @@ class SpentHealStatsTest {
         Shop.buy(data, s, "poke-ball")
         s.day = "2026-10-14"; s.shopDay = s.day
         Shop.buy(data, s, "poke-ball")
-        assertEquals(200, s.history.getValue("2026-10-13").spent)
-        assertEquals(200, s.history.getValue("2026-10-14").spent)
+        assertEquals(Shop.priceOf(data, "2026-10-13", "poke-ball"), s.history.getValue("2026-10-13").spent)
+        assertEquals(Shop.priceOf(data, "2026-10-14", "poke-ball"), s.history.getValue("2026-10-14").spent)
     }
 
     @Test fun spentKeepsTheDayLogsOtherNumbers() {
@@ -73,7 +74,7 @@ class SpentHealStatsTest {
         s.shopDay = s.day; s.shopItems += "poke-ball"; s.cash = 1000
         Shop.buy(data, s, "poke-ball")
         val d = s.history.getValue(s.day)
-        assertEquals(12, d.reviews); assertEquals(30, d.xp); assertEquals(40, d.cash); assertEquals(200, d.spent)
+        assertEquals(12, d.reviews); assertEquals(30, d.xp); assertEquals(40, d.cash); assertEquals(Shop.priceOf(data, s, "poke-ball"), d.spent)
     }
 
     @Test fun addSpentIgnoresZeroNegativeAndAGameWithoutADay() {

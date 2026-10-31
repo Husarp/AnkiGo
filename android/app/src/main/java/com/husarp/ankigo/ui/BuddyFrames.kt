@@ -38,7 +38,7 @@ object BuddyFrames {
         rv.setImageViewBitmap(R.id.b_img_l1, WidgetRender.render(ctx, WidgetRender.Kind.BUDDY, snap, w, h, false, look=look, appearance=appearance, hideSprite=true))
         rv.setImageViewBitmap(R.id.b_img_d1, WidgetRender.render(ctx, WidgetRender.Kind.BUDDY, snap, w, h, true, look=look, appearance=appearance, hideSprite=true))
         val space=BuddyGeometry.space(w,h)
-        val g=BuddyGeometry.of(space.width,space.height,look.layout)
+        val g=BuddyGeometry.of(space.width,space.height,look.layout).scaled(look.size)
         val density=ctx.resources.displayMetrics.density
         val left=space.offsetX+g.spriteLeft*space.scale
         val top=space.offsetY+g.spriteTop*space.scale

@@ -39,7 +39,7 @@ object XpCardSpot {
      * edge win, then the ones nearest a side edge. Up to [max] spots, each placed after the previous one counted as an
      * obstacle, so they never overlap. Empty = no room.
      */
-    fun anywhere(w: Int, h: Int, cardW: Int, cardH: Int, edge: Int, gap: Int, obstacles: List<FloatSpot.Rect>, max: Int = 2): List<Pos> {
+    fun anywhere(w: Int, h: Int, cardW: Int, cardH: Int, edge: Int, gap: Int, obstacles: List<FloatSpot.Rect>, max: Int = 2, topRight: Boolean = false): List<Pos> {
         if (cardW <= 0 || cardH <= 0 || w < cardW + 2 * edge || h < cardH + 2 * edge) return emptyList()
         val taken = ArrayList(obstacles)
         val out = ArrayList<Pos>()
@@ -57,7 +57,8 @@ object XpCardSpot {
             for (y in ys) for (x in xs) {
                 val r = FloatSpot.Rect(x, y, x + cardW, y + cardH)
                 if (taken.any { it.hits(r) }) continue
-                val key = minOf(y, h - cardH - y).toLong() * 100000L + minOf(x, w - cardW - x)
+                val key = if (topRight) 2L * y + 8L * (w - cardW - x)
+                    else minOf(y, h - cardH - y).toLong() * 100000L + minOf(x, w - cardW - x)
                 if (key < bestKey) { bestKey = key; best = Pos(x, y) }
             }
             val b = best ?: return out

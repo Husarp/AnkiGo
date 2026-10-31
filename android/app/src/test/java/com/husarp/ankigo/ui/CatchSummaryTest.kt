@@ -79,4 +79,25 @@ class CatchSummaryTest {
         val s = CatchSummary.of(listOf(caught(true, species = 10100)), data = d)!!
         assertEquals(19, s.pokedex!!.number)
     }
+    @Test fun combinedThrowKeepsOneRegularIconAndUsesCombinedName() {
+        val summary = CatchSummary.of(listOf(
+            GameEvent.BallThrow("ultra-ball", 80, true, 0, special = "heal-ball"), caught(true, "ultra-ball"),
+        ))!!
+        assertEquals("heal-ball", summary.throwInfo!!.special)
+        val tile = CatchTilesPlan.tiles(summary, com.husarp.ankigo.game.Items::name).single { it.kind == CatchTilesPlan.Kind.THROW }
+        assertEquals("Ultra Heal Ball", tile.label)
+        assertEquals("ultra-ball", tile.ball)
+    }
+
+    @Test fun regularPickerExcludesSpecialsButKeepsTheirSavedCounts() {
+        val state = com.husarp.ankigo.game.TestData.state(com.husarp.ankigo.game.TestData.world())
+        state.bag.clear()
+        state.bag.putAll(mapOf("poke-ball" to 2, "great-ball" to 1, "net-ball" to 4, "heal-ball" to 3))
+        assertEquals(listOf("poke-ball", "great-ball"), BallThrowUi.balls(state))
+        assertEquals("Poké Ball  ×2  ·  20%", BallThrowUi.label(state, "poke-ball"))
+        assertEquals(4, state.count("net-ball"))
+        state.bag.remove("poke-ball"); state.bag.remove("great-ball")
+        assertTrue(BallThrowUi.balls(state).isEmpty())
+    }
+
 }

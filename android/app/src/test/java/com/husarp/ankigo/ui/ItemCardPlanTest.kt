@@ -100,39 +100,32 @@ class ItemCardPlanTest {
     }
 
     @Test fun theTradeButtonAndItsConfirmAreInWordsNotArrows() {
-        val s = state("poke-ball" to 7)
+        val s = state("poke-ball" to 12)
         val o = BallTrade.offer(s, "poke-ball")!!
-        assertEquals("Trade 5 Poké Balls for 1 Great Ball", ItemCardPlan.tradeLabel(o))
-        assertEquals("Trade 5 for 1", ItemCardPlan.tradeGo(o))
+        assertEquals("Trade 10 Poké Balls for 1 Great Ball", ItemCardPlan.tradeLabel(o))
+        assertEquals("Trade 10 for 1", ItemCardPlan.tradeGo(o))
         assertEquals(
-            "5 Poké Balls (1,000 coins in the Shop) for 1 Great Ball (700 coins). **On purpose worse than buying.** You keep 2 Poké Balls.",
+            "10 Poké Balls (2,000 coins in the Shop) for 1 Great Ball (600 coins). **On purpose worse than buying.** You keep 2 Poké Balls.",
             ItemCardPlan.tradeConfirm(s, o),
         )
-        val g = state("great-ball" to 3)
+        val g = state("great-ball" to 6)
         val og = BallTrade.offer(g, "great-ball")!!
-        assertEquals("Trade 3 Great Balls for 1 Ultra Ball", ItemCardPlan.tradeLabel(og))
+        assertEquals("Trade 6 Great Balls for 1 Ultra Ball", ItemCardPlan.tradeLabel(og))
         assertEquals(
-            "3 Great Balls (2,100 coins in the Shop) for 1 Ultra Ball (1,500 coins). **On purpose worse than buying.** You keep no Great Balls.",
+            "6 Great Balls (3,600 coins in the Shop) for 1 Ultra Ball (1,200 coins). **On purpose worse than buying.** You keep no Great Balls.",
             ItemCardPlan.tradeConfirm(g, og),
         )
     }
 
-    @Test fun theConfirmNamesExactlyWhatGoesWhenOldBallsAreIn() {
-        val s = state("great-ball" to 4, "net-ball" to 1)
-        val o = BallTrade.offer(s, "great-ball")!!
-        assertEquals(
-            "1 Net Ball and 2 Great Balls for 1 Ultra Ball. **On purpose worse than buying.** You keep 2 Great Balls.",
-            ItemCardPlan.tradeConfirm(s, o),
-        )
-        // an old ball's own card counts Great Balls too
-        val n = BallTrade.offer(s, "net-ball")!!
-        assertEquals("Trade 3 Great Balls for 1 Ultra Ball", ItemCardPlan.tradeLabel(n))
-        assertTrue(ItemCardPlan.tradeConfirm(s, n).endsWith("You keep no Net Balls."))
+    @Test fun specialsHaveNoTradeButton() {
+        val s = state("great-ball" to 5, "net-ball" to 100)
+        assertFalse(BallTrade.offer(s, "great-ball")!!.canTrade)
+        assertNull(BallTrade.offer(s, "net-ball"))
     }
 
     @Test fun tooFewSaysHowManyYouNeed() {
         val o = BallTrade.offer(state("poke-ball" to 3), "poke-ball")!!
-        assertEquals("Need 5, you have 3", ItemCardPlan.tradeShort(o))
+        assertEquals("Need 10, you have 3", ItemCardPlan.tradeShort(o))
     }
 
     @Test fun talkBackSaysTheTileOpensDetails() {

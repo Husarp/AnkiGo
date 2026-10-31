@@ -159,6 +159,15 @@ object LiveSession {
     fun expectOwn(row: com.husarp.ankigo.CardState, pinned: Boolean = false) { detector?.expectOwn(row.id, row.reps + 1, pinned) }
     fun cancelOwn(row: com.husarp.ankigo.CardState) { detector?.cancelOwn(row.id, row.reps + 1) }
 
+    /** A local answer never changes live snapshots or registers an expected Anki write. */
+    fun practiceAnswer(ctx: Context, cardId: Long, button: Int, neutral: Boolean = false): List<GameEvent> {
+        app = ctx.applicationContext
+        flushCatchUp()
+        val events = act { g -> g.onPracticeAnswer(GameAnswer(cardId, button, System.currentTimeMillis(), false, neutral)) }
+        deliver(events)
+        return events
+    }
+
     /**
      * R10-B23: an own answer counts in the game at the TAP, with its exact button ([before] = the card as it was shown); the
      * write to AnkiDroid follows in the background. From now on the detector expects the card's rep change (pinned until

@@ -233,7 +233,7 @@ object DetailSections {
      * [unknown] = moves that are not known yet (the wild Pokémon's unused ones): a grey "?" line each, after the known ones.
      * [levels] (R10-B4, the Pokédex entry's learnset) = one small label per id ("Lv 12") at the start of its row.
      */
-    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0, levels: List<String>? = null, focusMove: String? = null): View {
+    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0, levels: List<String>? = null, focusMove: String? = null, knownMoves: List<String>? = ids.takeIf { levels == null }): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         val tap = MoveTap()
         if (ids.isEmpty() && unknown == 0) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "No moves" })
@@ -274,7 +274,7 @@ object DetailSections {
                 else if (showPower) addView(View(a), LinearLayout.LayoutParams(Ui.dp(a, 40), 1))
             }
             val desc = Ui.text(a, 12f, 700, R.color.ag_text).apply {
-                text = MoveText.describe(m)
+                text = MoveText.describe(m, knownMoves?.mapNotNull(data::move))
                 visibility = View.GONE
                 background = Ui.rounded(Bits.blend(Ui.c(a, R.color.ag_sub0), Ui.c(a, R.color.ag_mantle), 0.14f), 10, a)
                 setPadding(Ui.dp(a, 10), Ui.dp(a, 7), Ui.dp(a, 10), Ui.dp(a, 8))

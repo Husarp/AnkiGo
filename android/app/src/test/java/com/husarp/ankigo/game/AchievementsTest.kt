@@ -52,7 +52,7 @@ class AchievementsTest {
     @Test fun tieredRowsHaveFiveAscendingThresholdsAndOneOffsOne() { // R9-B2: 3 when easy (exactly "types" and "highest-level")
         for (r in AchievementTable.ROWS) {
             if (r.ankimonBadge == null) {
-                assertEquals(r.id, if (r.id in setOf("types", "highest-level")) 3 else 5, r.tiers.size)
+                assertEquals(r.id, if (r.oneOff) 1 else if (r.id in setOf("types", "highest-level", "ball-catches", "tms", "items-found")) 3 else 5, r.tiers.size)
                 assertTrue(r.id, r.metric != null)
                 assertTrue(r.id, r.tiers.zipWithNext().all { (a, b) -> a < b })
                 assertTrue(r.id, r.tiers.first() >= 1)
@@ -69,29 +69,29 @@ class AchievementsTest {
     }
 
     // R4-V2b: Adam's list edits
-    private val DROPPED = listOf("combo", "good", "easy")
+    private val DROPPED = listOf("combo", "good", "easy", "damage-dealt", "damage-taken", "damage-blocked", "misses", "super-effective", "dex-caught", "dex-seen", "balls-thrown", "money-spent", "items-used")
     private val BY_GROUP = mapOf(
         "Study" to listOf("answers", "streak-days", "cards-day", "days-studied", "study-time", "new-cards", "goals"),
-        "Battle" to listOf("defeats", "damage-dealt", "damage-taken", "damage-blocked", "misses", "super-effective", "total-xp", "total-levels", "highest-level", "evolutions"),
-        "Collection" to listOf("catches", "dex-caught", "dex-seen", "types", "balls-thrown", "ball-catches"),
-        "Economy" to listOf("money-earned", "money-spent", "items-used", "tms", "items-found"),
+        "Battle" to listOf("defeats", "total-xp", "total-levels", "highest-level", "evolutions"),
+        "Collection" to listOf("catches", "types", "ball-catches"),
+        "Economy" to listOf("money-earned", "tms", "items-found"),
         "Special" to listOf("shinies", "legendary-mythical", "comebacks"),
     )
 
     @Test fun theDroppedRowsAreGoneAndTheirIdsStayFree() {
         for (id in DROPPED) assertNull(id, AchievementTable.row(id))
-        assertEquals(31, AchievementTable.ROWS.count { !it.oneOff })
-        assertEquals(11, AchievementTable.ROWS.count { it.oneOff })
+        assertEquals(21, AchievementTable.ROWS.count { !it.oneOff })
+        assertEquals(22, AchievementTable.ROWS.count { it.oneOff })
         // their counters stay in the engine
         assertTrue(Metric.entries.containsAll(listOf(Metric.BEST_COMBO, Metric.GOOD_PRESSES, Metric.EASY_PRESSES)))
         assertTrue(AchievementTable.ROWS.none { it.metric in listOf(Metric.BEST_COMBO, Metric.GOOD_PRESSES, Metric.EASY_PRESSES) })
         // Adam kept these
         assertEquals(listOf(15_000L), AchievementTable.row("defeats")!!.tiers.takeLast(1))
-        for (id in listOf("damage-dealt", "damage-taken", "damage-blocked", "misses")) assertNotNull(id, AchievementTable.row(id))
+        for (id in listOf("damage-dealt", "damage-taken", "damage-blocked", "misses")) assertNull(id, AchievementTable.row(id))
     }
 
     @Test fun everyRowIsInItsGroupAndTheSixGroupsComeInOrder() {
-        assertEquals(listOf("Study", "Battle", "Collection", "Economy", "Special", "Badges"), AchievementTable.GROUPS)
+        assertEquals(listOf("Study", "Battle", "Collection", "Economy", "Special", "Badges", "Secret"), AchievementTable.GROUPS)
         for ((g, ids) in BY_GROUP) assertEquals(g, ids, AchievementTable.ROWS.filter { it.group == g }.map { it.id })
         assertTrue(AchievementTable.ROWS.filter { it.group == "Badges" }.all { it.ankimonBadge != null })
         assertEquals(11, AchievementTable.ROWS.count { it.group == "Badges" })
@@ -682,10 +682,11 @@ class AchievementsTest {
         val s = looked()
         s.cash = 5_000
         s.shopItems += "potion"
-        val results = (1..5).map { Shop.buy(data, s, "potion", NOW) } // 5 x 200 = 1 000: Common
-        assertEquals(1_000L, counter(s, Metric.MONEY_SPENT))
+        val results = (1..5).map { Shop.buy(data, s, "potion", NOW) } // Five purchases at the rebalanced daily price.
+        assertEquals(500L, counter(s, Metric.MONEY_SPENT))
+        assertEquals(4500, s.cash)
         assertTrue(results.take(4).all { r -> r.events.isEmpty() })
-        assertEquals(listOf(GameEvent.AchievementReached("money-spent", 0, "Money spent", "Common")), results[4].events)
+        assertTrue(results[4].events.isEmpty())
     }
 
     @Test fun healingAnItemCountsAsUsedAndATmAsTaught() {

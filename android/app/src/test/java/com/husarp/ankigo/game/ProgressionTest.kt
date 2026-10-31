@@ -746,7 +746,7 @@ class ProgressionTest {
         assertEquals(50, Catching.ballChance("great-ball"))
         assertEquals(80, Catching.ballChance("ultra-ball"))
         assertEquals(100, Catching.ballChance("master-ball"))
-        for (old in Tuning.OLD_BALLS) assertEquals(old, 50, Catching.ballChance(old))
+        for (old in Tuning.OLD_BALLS) assertEquals(old, 0, Catching.ballChance(old))
         assertEquals(10, Tuning.OLD_BALLS.size)
         assertEquals(0, Catching.ballChance("mystery-ball"))
     }
@@ -758,7 +758,7 @@ class ProgressionTest {
         val e = ev()
         val c = Catching.addToCollection(data, s, w, Tier.NORMAL, "poke-ball", 555L, e)
         assertNotEquals("wild", c.uid)
-        assertEquals(Stats.ZERO, c.evs); assertEquals(0, c.xp); assertEquals(0, c.friendship); assertNull(c.heldItem)
+        assertEquals(w.evs, c.evs); assertEquals(0, c.xp); assertEquals(0, c.friendship); assertNull(c.heldItem)
         assertEquals(StatCalc.maxHp(data, c), c.hp)
         assertEquals(555L, c.caughtAt); assertEquals(12, c.level); assertTrue(c.shiny)
         assertEquals(0, c.defeats)

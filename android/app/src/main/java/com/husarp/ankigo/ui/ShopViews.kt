@@ -82,7 +82,19 @@ internal object ShopViews {
 
     /** The price as the page shows it: the discount layout while it is discounted, else coin + amount. [nowSp] is the size of the amount (the new price of a discount). */
     fun price(ctx: Context, p: ShopPlan.Price, normalSp: Float = 12.5f, nowSp: Float = 17f, coinDp: Int = 13): View =
-        if (p.was != null) priceDeal(ctx, p.was, p.now, nowSp) else priceNormal(ctx, p.now, normalSp, coinDp)
+        LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(if (p.was != null) priceDeal(ctx, p.was, p.now, nowSp) else priceNormal(ctx, p.now, normalSp, coinDp))
+            p.normal?.let { normal ->
+                addView(Ui.text(ctx, 12f, 900, if (p.daily < normal) R.color.ag_green else R.color.ag_text).apply {
+                    text = if (p.daily < normal) " ↓" else " ↑"
+                    contentDescription = "Normal price: $normal coins"
+                    setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8))
+                    setOnClickListener { android.widget.Toast.makeText(ctx, "Normal price: ${Bits.fmt(normal)} coins", android.widget.Toast.LENGTH_SHORT).show() }
+                })
+            }
+        }
 
     // ---- the item tiles ("always in stock", "today's specials") ----
 
@@ -198,18 +210,10 @@ internal object ShopViews {
         }
     }
 
-    /** The lit 52 dp tile of the deal: a peach glow in the middle fading into the mantle colour. */
-    private fun litTile(ctx: Context, item: String, peach: Int, dark: Boolean): View {
+    /** The bare deal icon, retaining its 52 dp slot and 38 dp picture. */
+    private fun dealIcon(ctx: Context, item: String): View {
         val size = Ui.dp(ctx, 52)
-        val bg = GradientDrawable().apply {
-            gradientType = GradientDrawable.RADIAL_GRADIENT
-            setGradientCenter(0.5f, 0.45f)
-            gradientRadius = size * 0.62f
-            colors = intArrayOf(Bits.blend(peach, Ui.c(ctx, R.color.ag_card), if (dark) 0.35f else 0.3f), Ui.c(ctx, R.color.ag_mantle))
-            cornerRadius = Ui.dp(ctx, 14f)
-        }
         return FrameLayout(ctx).apply {
-            background = bg
             val img = ImageView(ctx)
             Ui.itemIcon(ctx, item, img)
             addView(img, FrameLayout.LayoutParams(Ui.dp(ctx, 38), Ui.dp(ctx, 38), Gravity.CENTER))
@@ -219,7 +223,7 @@ internal object ShopViews {
 
     /**
      * The deal of the day (F5 option A): a soft peach glow from the left, a thin peach edge, the "−30 %" ribbon across the top-right corner,
-     * "✦ DEAL OF THE DAY", the item on a lit tile with its name, effect and "ends at midnight · 7 h", and the discount price on the right.
+     * "✦ DEAL OF THE DAY", the bare item icon with its name, effect and "ends at midnight · 7 h", and the discount price on the right.
      * A tap calls [onTap] (PLAN 210: the item's window opens, with Buy at the deal price). [line] is the text under the name.
      */
     fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String, line: String = ItemInfo.effect(item), onTap: () -> Unit): View {
@@ -256,7 +260,7 @@ internal object ShopViews {
         val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(litTile(ctx, item, peach, dark))
+            addView(dealIcon(ctx, item))
             addView(middle, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12); it.marginEnd = Ui.dp(ctx, 8) })
             addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 6) }) // clear of the ribbon in the corner
         }

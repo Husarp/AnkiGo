@@ -41,7 +41,10 @@ object BuddyWidgetPrefs {
 
     fun setAnim(p: SharedPreferences, id: Int, on: Boolean) { p.edit().putBoolean(animKey(id), on).apply() }
 
-    fun look(p: SharedPreferences, id: Int) = BuddyLook(ring(p, id), anim(p, id), layout(p, id))
+    fun look(p: SharedPreferences, id: Int) = BuddyLook(ring(p, id), anim(p, id), layout(p, id), size(p, id))
+
+    fun size(p: SharedPreferences, id: Int) = p.getInt("b$id.size", p.getInt("b0.size", 100)).coerceIn(50, 100)
+    fun setSize(p: SharedPreferences, id: Int, value: Int) { p.edit().putInt("b$id.size", value.coerceIn(50, 100)).apply() }
 
     fun layout(p: SharedPreferences, id: Int) = p.getString("b$id.layout", p.getString("b0.layout", "A"))?.takeIf { it in listOf("A", "B", "C") } ?: "A"
     fun setLayout(p: SharedPreferences, id: Int, value: String) { p.edit().putString("b$id.layout", value).apply() }
@@ -49,7 +52,7 @@ object BuddyWidgetPrefs {
     /** Called when widgets are deleted. */
     fun forget(p: SharedPreferences, ids: IntArray) {
         val ed = p.edit()
-        for (id in ids) { ed.remove(key(id)); ed.remove(ringKey(id)); ed.remove(animKey(id)); ed.remove("b$id.layout") }
+        for (id in ids) { ed.remove(key(id)); ed.remove(ringKey(id)); ed.remove(animKey(id)); ed.remove("b$id.layout"); ed.remove("b$id.size") }
         ed.apply()
     }
 
@@ -65,7 +68,7 @@ object BuddyWidgetPrefs {
 }
 
 /** How one Buddy widget looks besides its Pokémon: the [ring] colour and whether the Pokémon moves ([hop] is the legacy preference name). */
-data class BuddyLook(val ring: BuddyRing = BuddyRing.APP, val hop: Boolean = false, val layout: String = "A")
+data class BuddyLook(val ring: BuddyRing = BuddyRing.APP, val hop: Boolean = false, val layout: String = "A", val size: Int = 100)
 
 /**
  * The ring colour setting: [Mode.APP] keeps the goal colours of Settings → Look → Progress bars (the default),

@@ -12,12 +12,14 @@ import com.husarp.ankigo.game.DailyGift
 import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.DuplicateResult
+import com.husarp.ankigo.game.EffectKind
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.SwitchQueue
 import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.sound.GameSound
+import com.husarp.ankigo.ui.movefx.BehaviourFx
 import com.husarp.ankigo.ui.movefx.MoveFxCatalog
 import com.husarp.ankigo.ui.PanelText.em
 import java.util.Locale
@@ -64,6 +66,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     fun enqueue(events: List<GameEvent>) {
         if (events.isEmpty()) return
+        AchievementPopup.playbackStarted(this)
         if (NextFight.releasesHold(events)) releaseTiles()   // R19-T (PLAN 285): a switch made on the Continue screen plays under the result; only an answer starts the next fight
         val summary = CatchSummary.of(events, data = GameRepo.data) // the throw number comes with the BallThrow event (counted by the fight in the game state)
         // R9 C5: a won / caught fight with a next one behind it holds that one from now on (Continue shows at once, the rewards keep playing);
@@ -102,6 +105,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     /** Runs [block] in order with the events (e.g. a log line for a catch-up batch). */
     fun enqueueAction(block: () -> Unit) {
+        AchievementPopup.playbackStarted(this)
         queue.addLast(Item.Act(block))
         pump()
     }
@@ -119,6 +123,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         handler.removeCallbacksAndMessages(null)
         GameSound.cancelPending()
         panel.cancelAnimations()
+        AchievementPopup.playbackFinished(this)
     }
 
     /**
@@ -143,6 +148,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             val item = queue.removeFirstOrNull()
             if (item == null) {
                 if (dirty) { dirty = false; panel.renderAll() }
+                AchievementPopup.playbackFinished(this)
                 return
             }
             val answers = queue.count { it is Item.Ev && it.e is GameEvent.Counted } + if (item is Item.Ev && item.e is GameEvent.Counted) 1 else 0
@@ -414,7 +420,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     // ---------------------------------------------------------------- one event
 
     /** Starts the visuals of [e]; returns how long (ms) to wait before the next event. */
-    private fun play(e: GameEvent): Long {
+    private fun play(e: GameEvent, immediateFloats: Boolean = false): Long {
         if (e is GameEvent.Encounter && panel.holdsNextFight && !answerWaiting()) { parked = e; return 0 }   // under the result tiles: the next answer starts it
         val st = GameRepo.state
         val data = GameRepo.data
@@ -451,13 +457,18 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             }
             is GameEvent.Effect -> {
                 log(LogKind.SYS, "EFFECT", e.text)
-                floats(e)
+                floats(e, immediateFloats)
                 if (!fightOver) { if (e.onPlayer) arena.setPlayerStatus(e.status) else arena.setEnemyStatus(e.status) }   // PLAN 259: after the win no badge comes back
                 if (!fightOver) arena.conditionEffect(e, st?.battle)   // R19-K (PLAN 269): a condition's chip starts / ends with its line
                 if (e.maxHp > 0) {
                     if (e.onPlayer) arena.setPlayerHp(e.hp, e.maxHp, true) else arena.setEnemyHp(e.hp, e.maxHp, true)
                 }
                 if (e.into > 0 && !fightOver) playTransform(e)?.let { return it }   // R19-L (PLAN 271)
+                if (e.kind == EffectKind.CHARGE && AppPrefs.attackAnimations(ctx)) {
+                    val type = ActionBarModel.chargeFromText(e.text).second.type
+                    val run = arena.playMove(MoveFxCatalog.preparation(type), e.onPlayer, false, (1.0 / factor).toFloat())
+                    if (run != null) return run.doneMs
+                }
                 return d(550)
             }
             is GameEvent.Fainted -> {
@@ -567,7 +578,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 return 0
             }
             is GameEvent.DailyGift -> { // R14-B2-D: the goal moment's gift (it replaced the money bonus): its own log line, the Bag count may have changed
-                log(LogKind.SYS, "GOAL", DailyGift.logText(DailyGift.name(data, e.item, e.tm, e.count), e.streakDays))
+                // The queued gift screen already describes this reward.
                 if (st != null) panel.setBalls(BattlePanelView.ballCount(st), true)
                 return d(900)
             }
@@ -620,12 +631,14 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         val lead = arena.xpAbsorb(if (animated) e.xp else 0, factor.toFloat(), fill, { rate, last -> GameSound.xpOrb(ctx, rate, last, muted()) }, fromBall)
         val lastLand = if (lead > 0L) arena.xpLastLandingMs else 0L
         if (levelUp) {
-            if (!animated) {   // XP animation off: the end state at once (the LevelUp event changes the level number)
+            if (!animated) {   // XP animation off: both number and bar reach the end state together.
+                arena.setPlayerLevel(e.level)
                 arena.setPlayerXp(e.xpInLevel, e.xpForLevel, false)
                 return d(300)
             }
-            // fill to the end (the orbs do it; without orbs the bar slides there), then per level: hold, level number, empty, slide on
+            // R23 / PLAN 351: show each gained level while its bar grows, including the first orb-driven fill.
             val segs = XpLoop.segments(e.level - crossed, arena.xpShown, e.level, frac)
+            atMs(0) { arena.setPlayerLevel(segs[0].level + 1) }
             var t = lastLand
             if (lead <= 0L) {
                 val ms = d(XpLoop.runMs(segs[0].length))
@@ -639,7 +652,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 val ms = if (seg.length <= 0f) 0L else d(XpLoop.runMs(seg.length))   // (d is never 0)
                 t += d(XpLoop.HOLD_MS)
                 atMs(t) {
-                    arena.setPlayerLevel(seg.level)
+                    if (seg.toEnd) arena.setPlayerLevel(seg.level + 1)
                     arena.setPlayerXp(0, need, false)
                     if (ms > 0L) arena.setPlayerXp(cur, need, true, ms) else arena.setPlayerXp(cur, need, false)
                 }
@@ -654,7 +667,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     }
 
     /** The floating texts of [e] (damage, Miss, effectiveness, status words, stat badges, +HP, Hesitated), via the pure mapper. */
-    private fun floats(e: GameEvent) = FloatTexts.of(e, FloatContext(Tuning.CRITS)).forEach { arena.floatText(it) }
+    private fun floats(e: GameEvent, immediate: Boolean = false) = FloatTexts.of(e, FloatContext(Tuning.CRITS)).forEach { arena.floatText(it, immediate) }
 
     /**
      * Another team member's XP: a card slides in between the two Pokémon (pick 9A). The level-up / evolve events that belong to
@@ -734,9 +747,18 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             wildMult = 1.0
             log(LogKind.AGAIN, "WILD", sb.toString())
         }
+        val recoil = queue.takeWhile { (it as? Item.Ev)?.e is GameEvent.Effect }
+            .filterIsInstance<Item.Ev>().firstOrNull {
+                val effect = it.e as GameEvent.Effect
+                effect.moveRecoil && effect.amount > 0 && effect.onPlayer == e.byPlayer
+            }
         // Round 7: the move's own animation (the setting is on, the move connects, the arena can show it); it has its own lunge and hit
         val run = if (AppPrefs.attackAnimations(ctx) && !e.missed && !e.failed) {
-            val plan = MoveFxCatalog.plan(e.moveId, e.moveType, e.category, e.power)
+            val move = GameRepo.data?.move(e.moveId)
+            val plan = MoveFxCatalog.plan(e.moveId, e.moveType, e.category, e.power,
+                multiHit = e.multiHit || move?.multihit != null || e.hits > 1,
+                recoil = e.recoilMove || move?.recoil != null || e.moveId == Tuning.STRUGGLE || recoil != null,
+                hits = e.hits.coerceAtLeast(0), showRecoil = recoil != null)
             arena.playMove(plan, e.byPlayer, react = e.damage > 0, speed = (1.0 / factor).toFloat())
         } else null
         if (run == null) {
@@ -747,24 +769,54 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             return d(800)
         }
         sound(e, run.impactMs)
-        atMs(run.impactMs) { afterHit(e, animated = true) }
-        return ArenaMoveStage.Geo.waitMs(run.doneMs, run.impactMs, factor)
+        val hitEffects = queue.takeWhile { (it as? Item.Ev)?.e is GameEvent.Effect }
+            .filterIsInstance<Item.Ev>().filter {
+                (it.e as GameEvent.Effect).hitIndex in 0 until e.hits && e.multiHit
+            }
+        hitEffects.forEach { queue.remove(it) }
+        fun hitEffectsAt(index: Int) {
+            hitEffects.filter { (it.e as GameEvent.Effect).hitIndex == index }
+                .forEach { play(it.e, immediateFloats = true) }
+        }
+        val recoilEffect = recoil?.e as? GameEvent.Effect
+        // The final attack HP can include later healing (e.g. Shell Bell). Recoil's own event
+        // gives the exact HP immediately before its loss, without adding that loss to later HP.
+        val shownAttack = MoveHitPlayback.beforeRecoil(e, recoilEffect)
+        val hits = MoveHitPlayback.hits(shownAttack)
+        if (hits.isEmpty()) atMs(run.impactMs) {
+            afterHit(shownAttack, animated = true)
+            hitEffects.forEach { play(it.e, immediateFloats = true) }
+        }
+        else hits.forEachIndexed { index, hit ->
+            atMs(d(BehaviourFx.hitTime(index).toLong())) {
+                afterHit(hit, animated = true, updateUser = index == hits.lastIndex)
+                hitEffectsAt(index)
+            }
+        }
+        // Move recoil is already an exact HP event. Play its number with the flash, once.
+        if (recoil != null) {
+            queue.remove(recoil)
+            atMs(d(BehaviourFx.RECOIL_AT.toLong())) { play(recoil.e, immediateFloats = true) }
+        }
+        val lastHitMs = if (hits.isNotEmpty()) d(BehaviourFx.hitTime(hits.lastIndex).toLong()) else run.impactMs
+        val lastNumberMs = if (recoil != null) maxOf(lastHitMs, d(BehaviourFx.RECOIL_AT.toLong())) else lastHitMs
+        return ArenaMoveStage.Geo.waitMs(run.doneMs, lastNumberMs, factor)
     }
 
     /** The hit has landed: the target's shake and flash (plain path only), the floating numbers and the HP bars. */
-    private fun afterHit(e: GameEvent.Attack, animated: Boolean = false) {
+    private fun afterHit(e: GameEvent.Attack, animated: Boolean = false, updateUser: Boolean = true) {
         val onPlayer = !e.byPlayer
         if (!animated && !e.missed && !e.failed && e.damage > 0) {
             arena.hit(onPlayer, d(380))
         }
-        floats(e)
+        floats(e, immediate = animated && e.multiHit)
         // HP of the target, and of the user (drain, recoil, heal)
         if (e.byPlayer) {
             if (e.targetMaxHp > 0) arena.setEnemyHp(e.targetHp, e.targetMaxHp, true)
-            if (e.userMaxHp > 0) arena.setPlayerHp(e.userHp, e.userMaxHp, true)   // drain / heal float from their Effect event
+            if (updateUser && e.userMaxHp > 0) arena.setPlayerHp(e.userHp, e.userMaxHp, true)   // drain / heal float from their Effect event
         } else {
             if (e.targetMaxHp > 0) arena.setPlayerHp(e.targetHp, e.targetMaxHp, true)
-            if (e.userMaxHp > 0) arena.setEnemyHp(e.userHp, e.userMaxHp, true)
+            if (updateUser && e.userMaxHp > 0) arena.setEnemyHp(e.userHp, e.userMaxHp, true)
         }
     }
 
@@ -823,7 +875,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     /** Optional ball tap: the wild one goes into the ball, wobbles, then breaks free or stays (Caught follows). */
     private fun playBallThrow(e: GameEvent.BallThrow): Long {
         if (e.success) clearStatuses()   // PLAN 216: this ball takes it: the fight ends with the throw (a broken-free ball keeps the fight and the badges)
-        log(LogKind.SYS, "CATCH", "Throw: ${em(Items.name(e.ball))} · ${e.chance}%…")
+        log(LogKind.SYS, "CATCH", "Throw: ${em(com.husarp.ankigo.game.Catching.throwName(e.ball, e.special))} · ${e.chance}%…")
         GameRepo.state?.let { panel.setBalls(BattlePanelView.ballCount(it), true) }
         arena.setEnemyCardShown(false)
         arena.enemyIntoBall(d(350))

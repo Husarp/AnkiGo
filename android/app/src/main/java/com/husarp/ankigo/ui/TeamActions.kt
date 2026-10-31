@@ -175,7 +175,10 @@ internal class MonActions(private val s: GamePage) {
         } else {
             val name = data.move(move)?.name ?: move
             Pickers.pickMove(s, "${mon.shownName} knows 4 moves. Forget one for $name?", data, mon) { i ->
-                s.act { ItemUse.teachTm(it.data, it.state, move, mon.uid, i) }
+                val warning = com.husarp.ankigo.game.LinkedMoves.replacementWarning(data, mon.moves, i, move)
+                val teach = { s.act { ItemUse.teachTm(it.data, it.state, move, mon.uid, i) }; Unit }
+                if (warning == null) teach()
+                else Pickers.confirm(s, "Linked move warning", warning, "Teach", teach)
             }
         }
     }

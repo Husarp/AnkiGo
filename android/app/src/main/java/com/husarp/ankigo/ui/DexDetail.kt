@@ -62,6 +62,7 @@ object DexDetail {
         col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${sp.base.total}", title = "Base stats") {
             LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
+                DetailFormat.allAbilities(sp)?.let { addView(DetailSections.fact(a, "Abilities", null, it, null, compact)) }
                 addView(DetailParts.statHint(a))
                 addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply {
                     text = "Grey, right: lowest to highest at Lv 100."
@@ -84,7 +85,7 @@ object DexDetail {
             })
         }
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, sp.name) })
-        col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), DetailFormat.allAbilities(sp)?.let { Triple("Abilities", it, null) }, null, compact))
+        col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), null, null, compact))
 
         col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))
         val mine = copies(state.mons, sp.num)

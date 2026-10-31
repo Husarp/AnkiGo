@@ -129,7 +129,7 @@ class R17C5ScreensTest {
             val withScreens = round(m, b, listOf("splash"), listOf(id), Random(7))
             val without = round(m2, b2, listOf("splash"), listOf(id), Random(7))
             assertEquals("$id hits as if there were no screens", without.attacks().first { !it.byPlayer }.damage, withScreens.attacks().first { !it.byPlayer }.damage)
-            assertTrue("$id ends them", mainSide(b).isEmpty())
+            assertTrue("$id ends them", mainSide(b).keys.none { !it.startsWith("ab.") })
             val gone = withScreens.kinds(EffectKind.FIELD).map { it.text }
             assertEquals(listOf("Fastie's Reflect was shattered!", "Fastie's Light Screen was shattered!", "Fastie's Aurora Veil was shattered!"), gone)
         }
@@ -139,7 +139,7 @@ class R17C5ScreensTest {
         val m = main("brickbreak"); val w = wild("splash"); val b = battle(w)
         wildSide(b)[SideMoves.REFLECT] = 5
         round(m, b, listOf("brickbreak"), listOf("splash"))
-        assertTrue(wildSide(b).isEmpty())
+        assertTrue(wildSide(b).keys.none { !it.startsWith("ab.") })
         val m2 = main("brickbreak"); val w2 = wild("protect"); val b2 = battle(w2)
         wildSide(b2)[SideMoves.REFLECT] = 5
         round(m2, b2, listOf("brickbreak"), listOf("protect"))

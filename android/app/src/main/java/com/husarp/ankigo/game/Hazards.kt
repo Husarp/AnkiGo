@@ -40,6 +40,7 @@ internal object Hazards : BattleRules {
 
     fun blocker(v: BattleView, p: Boolean = true): String? {
         if (v.mon(p).hp <= 0 || v.mon(!p).hp <= 0 || Type.GHOST in v.types(p)) return null
+        if (v.ability(!p) == "magnetpull" && Type.STEEL in v.types(p)) return "Magnet Pull is in effect — you can’t switch."
         val s = v.side(p)
         val n = s.volatiles[TRAP] ?: run {
             if (!v.side(!p).entered) {

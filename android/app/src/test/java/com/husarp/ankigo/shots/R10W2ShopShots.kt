@@ -302,7 +302,7 @@ class R10W2ShopShots {
         return out
     }
 
-    @Test fun itemWindowsKeepPricesOnTheShopListAndShowBuyAndQuantity() {
+    @Test fun itemWindowsShowDailyPricesAlongsideBuyAndQuantity() {
         shoot("card-deal", listOf(Variants.PHONE), check = { _, v ->
             val t = texts(v)
             val deal = Shop.dealFor(gd, WEEKDAY)!!
@@ -311,7 +311,7 @@ class R10W2ShopShots {
             assertTrue("the deal card stays under the window", "DEAL OF THE DAY" in t)
             assertTrue("Buy" in texts(v))
             assertTrue("×1" in texts(v))
-            assertFalse("popup has no coin amount", Bits.fmt(deal.price) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))
+            assertTrue("popup shows today's purchase price", Bits.fmt(deal.price) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))
         }) { ctx ->
             val (p, screen) = shopTab(ctx, WEEKDAY)
             val stage = ShopCardKit.Stage(ctx, p, screen)
@@ -322,7 +322,7 @@ class R10W2ShopShots {
             val basic = Shop.basics().first()
             assertTrue("nothing struck through on a plain price", struck(v).isEmpty())
             assertTrue("Buy" in texts(v))
-            assertFalse("popup has no coin amount", Bits.fmt(gd.price(basic)) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))
+            assertTrue("popup shows today's purchase price", Bits.fmt(Shop.priceOf(gd, WEEKDAY, basic)) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))
             assertTrue("no Price row", "Price" !in texts(v))
         }) { ctx ->
             val (p, screen) = shopTab(ctx, WEEKDAY)

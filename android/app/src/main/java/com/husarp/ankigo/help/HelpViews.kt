@@ -122,7 +122,7 @@ internal object HelpViews {
 
     private fun tintedIcon(ctx: Context, @DrawableRes icon: Int, @ColorRes tone: Int, sizeDp: Int): ImageView = ImageView(ctx).apply {
         setImageResource(icon)
-        setColorFilter(Ui.c(ctx, tone))
+        if (icon != R.drawable.ic_coin) setColorFilter(Ui.c(ctx, tone))
         layoutParams = LinearLayout.LayoutParams(dp(ctx, sizeDp), dp(ctx, sizeDp))
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
@@ -494,7 +494,7 @@ internal object HelpViews {
             val id = v.arg.orEmpty()
             val def = Items.def(id)
             val cap = v.caption.ifBlank {
-                Items.name(id) + if (def?.kind == ItemKind.BALL) "\n${Catching.ballChance(id)} %" else ""
+                Items.name(id) + if (def?.kind == ItemKind.BALL) if (id in com.husarp.ankigo.game.Tuning.OLD_BALLS) "\nSpecial" else "\n${Catching.ballChance(id)} %" else ""
             }
             cell(ctx, Bits.itemTile(ctx, id, 44), cap)
         }

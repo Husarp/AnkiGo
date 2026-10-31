@@ -179,33 +179,36 @@ object MonDetail {
             show(a, data, mon)
         }),
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
+        val others = DetailFormat.otherAbilities(sp, mon.ability)
+        val abilityLines = listOfNotNull(AbilityText.of(mon.ability), others?.let { "Others of its kind: $it" }).joinToString("\n").ifEmpty { null }
         col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${stats.total}", titleLevel = mon.level, boosts = state?.battle?.takeIf { state.main?.uid == mon.uid }?.player?.boosts) {
-            DetailSections.statsBody(a, stats, mon.level, mon.nature, sp, compact, state?.battle?.takeIf { state.main?.uid == mon.uid }?.player?.boosts)
+            LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(DetailSections.fact(a, "Ability", null, mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }, abilityLines, compact))
+                addView(DetailSections.statsBody(a, stats, mon.level, mon.nature, sp, compact, state?.battle?.takeIf { state.main?.uid == mon.uid }?.player?.boosts))
+            }
         })
         col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves", forceOpen = focusMove != null) { DetailSections.moves(a, data, mon.moves, compact, focusMove = focusMove) })
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, mon.shownName) })
         col.addView(DetailSections.section(a, mem, DetailSection.TRAINING, mon.nature.label) { DetailSections.training(a, mon, compact) })
-        val others = DetailFormat.otherAbilities(sp, mon.ability)
-        // R17C-9a: under the ability, what it does in AnkiGo (an ability with no sentence yet shows none), then the others of its kind on their own line
-        val abilityLines = listOfNotNull(AbilityText.of(mon.ability), others?.let { "Others of its kind: $it" }).joinToString("\n").ifEmpty { null }
         col.addView(DetailSections.infoSection(a, mem, data, sp,
             listOf(mon.defeats.toString() to "Wins"), // since R17C a catch is a win too; the saved field stays `defeats` (PLAN 273)
-            Triple("Ability", mon.ability.ifEmpty { "–" }.replaceFirstChar { it.uppercase() }, abilityLines),
+            null,
             if (mon.shownName != mon.name) mon.name else null, compact,
             lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–")))
 
-        if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col, focusMove)).setCloseAtTop().showCard(); return }
+        if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col, focusMove)).setBackAtTop().showCard(); return }
         lateinit var more: View
         more = DetailParts.secondaryButton(a, "Options") {
             // the menu hangs on this button, so the details close only once a row was tapped
             MonActions(page).menu(mon, more) { dlg.dismiss() }
         }
-        // "Options" is pinned under the scrolling details (AppDialog footer, just above Close), compact or not
+        // "Options" is pinned under the scrolling details (AppDialog footer, below the details), compact or not
         val pinned = FrameLayout(a).apply {
             addView(more, FrameLayout.LayoutParams(-1, -2).also { it.setMargins(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 4)) })
         }
         dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col, focusMove)).setFooter(pinned)
-            .setCloseAtTop().create()
+            .setBackAtTop().create()
         Pickers.show(dlg)
     }
 

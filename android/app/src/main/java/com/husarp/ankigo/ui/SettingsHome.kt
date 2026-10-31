@@ -21,6 +21,7 @@ enum class SettingsSection(val title: String, @DrawableRes val icon: Int, @Color
     GAME("Game", R.drawable.ic_game, R.color.ag_green),
     STUDY("Study", R.drawable.ic_study, R.color.ag_blue),
     BATTLE("Battle panel & windows", R.drawable.ic_pip, R.color.ag_peach),
+    BACKGROUNDS("Backgrounds", R.drawable.ic_palette, R.color.ag_peach),
     WIDGETS("Widgets", R.drawable.ic_grid, R.color.ag_lime),
     REMINDERS("Reminders", R.drawable.ic_bell, R.color.ag_red),
     SOUND("Sound", R.drawable.ic_sound, R.color.ag_pink),
@@ -37,7 +38,7 @@ enum class SettingsSection(val title: String, @DrawableRes val icon: Int, @Color
     companion object {
         /** The home list in order, in groups (one card each). */
         val GROUPS: List<List<SettingsSection>> = listOf(
-            listOf(LOOK, GAME, STUDY, BATTLE, WIDGETS, REMINDERS),
+            listOf(LOOK, GAME, STUDY, BATTLE, BACKGROUNDS, WIDGETS, REMINDERS),
             listOf(SOUND, DOWNLOADS, ANKIMON, SAVE),
             listOf(HELP, UPDATES, DIAGNOSTICS, ABOUT),
         )

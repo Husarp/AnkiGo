@@ -7,6 +7,14 @@ import org.junit.Test
 class WidgetDueTest {
     private fun deck(id: Long, name: String, new: Int = 0, learn: Int = 0, review: Int = 0) = Anki.Deck(id, name, learn, review, new, false)
 
+    @Test fun parentWithNewCardsMatchesStudyCountRatherThanNinety() {
+        val parent = deck(1, "Study", new = 20, learn = 7, review = 20)
+        val child = deck(2, "Study::Child", new = 20, learn = 3, review = 20)
+        assertEquals(90, parent.total + child.total)
+        assertEquals(47, parent.total)
+        assertEquals(parent.total, WidgetDue.totalDue(listOf(child, parent)))
+    }
+
     @Test fun emptyListIsZero() = assertEquals(0, WidgetDue.totalDue(emptyList()))
 
     @Test fun addsNewLearnAndReview() =

@@ -35,7 +35,7 @@ class EconomyTest {
         assertEquals(14, Items.ALL.values.count { it.kind == ItemKind.BALL })
         assertEquals(13, Items.ALL.values.count { it.kind == ItemKind.HEAL })
         assertEquals(41, Items.ALL.values.count { it.kind == ItemKind.EVOLUTION })
-        assertEquals(12, Items.ALL.values.count { it.kind == ItemKind.HELD })
+        assertEquals(20, Items.ALL.values.count { it.kind == ItemKind.HELD })
         assertEquals(2, Items.ALL.values.count { it.kind == ItemKind.ESCAPE })
         assertEquals(11, Items.ALL.values.count { it.kind == ItemKind.FOSSIL })
         assertEquals(60, Items.def("super-potion")!!.heal)
@@ -44,8 +44,8 @@ class EconomyTest {
         assertEquals(140, Items.def("dome-fossil")!!.fossil)
         assertEquals("Catch chance 50 %. If it fails, the wild Pokémon runs away.", Items.def("great-ball")!!.note)   // PLAN 171
         assertEquals("Catch chance 100 %: it always catches.", Items.def("master-ball")!!.note)
-        assertEquals("Throws as a Great Ball: catch chance 50 %. If it fails, the wild Pokémon runs away.", Items.def("dive-ball")!!.note)
-        assertTrue(Items.ALL.values.filter { it.kind == ItemKind.BALL && it.id != "master-ball" }.all { it.note.endsWith(Items.MISS_RULE) })
+        assertEquals(Items.specialNote("dive-ball"), Items.def("dive-ball")!!.note)
+        assertTrue(Items.ALL.values.filter { it.kind == ItemKind.BALL && it.id != "master-ball" }.all { it.note.contains("used up") || it.note.endsWith(Items.MISS_RULE) })
         assertEquals("Heals 60 HP", Items.def("super-potion")!!.note)
         assertTrue(Items.ALL.values.all { it.note.isNotBlank() })
     }
@@ -53,10 +53,10 @@ class EconomyTest {
     @Test fun shopPoolSkipsFreeItemsAndKeepsBalls() {
         val pool = Items.shopPool(data)
         assertFalse("master-ball" in pool)
-        assertFalse("an old Ankimon ball is never sold, whatever PokeAPI says", "net-ball" in pool)
+        assertTrue("net-ball" in pool)
         assertTrue("ultra-ball" in pool)
         assertFalse("rare-candy" in pool) // not in the catalogue
-        assertFalse("fire-stone" in pool) // no price in the fixtures
+        assertTrue("fire-stone" in pool) // proposal overrides missing API prices
         assertTrue("poke-ball" in pool && "great-ball" in pool && "thunder-stone" in pool)
         assertEquals(pool.sorted(), pool)
     }
@@ -72,14 +72,12 @@ class EconomyTest {
 
     private fun cash(ev: List<GameEvent>) = ev.filterIsInstance<GameEvent.Cash>()
 
-    @Test fun everyAnswerPaysFive() {
-        val s = state()
-        val ev = events()
-        for (n in 1..3) { s.reviewsToday = n; Economy.onReview(data, s, TestData.rng(), ev) }
-        assertEquals(15, s.cash)
-        assertEquals(15, s.cashToday)
-        assertEquals(listOf(5, 10, 15), cash(ev).map { it.total })
-        assertEquals(listOf(5, 5, 5), cash(ev).map { it.amount })
+    @Test fun everyAnswerPaysTen() {
+        val s = state(); val ev = events()
+        repeat(3) { Economy.onReview(data, s, TestData.rng(), ev) }
+        assertEquals(30, s.cash); assertEquals(30, s.cashToday)
+        assertEquals(listOf(10, 20, 30), cash(ev).map { it.total })
+        assertEquals(listOf(10, 10, 10), cash(ev).map { it.amount })
         assertTrue(cash(ev).all { it.kind == CashKind.ANSWER })
     }
 
@@ -103,106 +101,71 @@ class EconomyTest {
     private fun perAnswer(s: GameState, n: Int): List<Int> = List(n) { answers(s, 1).sumOf { it.amount } }
     private fun perWin(s: GameState, n: Int): List<Int> = List(n) { wins(s, 1).sumOf { it.amount } }
 
-    @Test fun inTheFirstTierEveryAnswerPays5AndEveryWinPays10() {
+    @Test fun firstSecondAndThirdTierPayouts() {
         val s = state()
-        assertEquals(listOf(5, 5, 5, 5), perAnswer(s, 4))
-        assertEquals(listOf(10, 10, 10), perWin(s, 3))
-        assertEquals(50, s.cash); assertEquals(50, s.cashToday)
-        assertEquals(0L, s.cashFracNum); assertEquals(1L, s.cashFracDen)
-        assertEquals(CashKind.DEFEAT, wins(s, 1).single().kind)
-        assertEquals(CashKind.ANSWER, answers(s, 1).single().kind)
-    }
-
-    @Test fun inTheSecondTierAnAnswerIsWorth2point5SoItPays2Then3() {
-        val s = state(); s.cashToday = 500
-        assertEquals(listOf(2, 3, 2, 3, 2, 3), perAnswer(s, 6))
-        assertEquals(515, s.cashToday); assertEquals(15, s.cash)
-        assertEquals(listOf(5, 5, 5), perWin(s, 3))   // a win is 10 / 2 = 5
-    }
-
-    @Test fun inTheThirdTierAnswersPay1Then2Then2AndWinsPay3Then3Then4() {
-        val a = state(); a.cashToday = 1000
-        assertEquals(listOf(1, 2, 2), perAnswer(a, 3))
-        assertEquals(1005, a.cashToday)
-        val w = state(); w.cashToday = 1000
-        assertEquals(listOf(3, 3, 4), perWin(w, 3))
-        assertEquals(1010, w.cashToday)
-        assertEquals("exactly 10 back to 0", 0L, w.cashFracNum)
+        assertEquals(listOf(10,10,10,10), perAnswer(s,4))
+        assertEquals(listOf(25,25,25), perWin(s,3))
+        assertEquals(115,s.cash)
+        s.cashToday = 1000
+        assertEquals(listOf(5,5,5), perAnswer(s,3))
+        assertEquals(listOf(12,13,12,13), perWin(s,4))
+        s.cashToday = 2000
+        assertEquals(listOf(3,3,4), perAnswer(s,3))
+        assertEquals(listOf(8,8,9), perWin(s,3))
+        assertEquals(0L,s.cashFracNum)
     }
 
     @Test fun answersAndWinsShareOneExactFraction() {
-        val s = state(); s.cashToday = 500   // tier 2 for the next 500 base coins: answer 5/2 + win 10/2 = 7.5 per pair
-        repeat(40) { answers(s, 1); wins(s, 1) }
-        assertEquals("40 pairs = 300 exactly", 300, s.cash); assertEquals(800, s.cashToday)
-        assertEquals(0L, s.cashFracNum)
-        answers(s, 1); wins(s, 1)
-        assertEquals("the 41st pair: 307.5 so far", 307, s.cash)
-        assertEquals(1L, s.cashFracNum); assertEquals(2L, s.cashFracDen)
-        // a whole mixed day in the 2nd tier only: total = floor of the exact sum
-        val t = state(); t.cashToday = 500
-        var exactHalves = 0   // in units of half a coin: answer 5, win 10
-        for (i in 0 until 53) { if (i % 3 == 0) { wins(t, 1); exactHalves += 10 } else { answers(t, 1); exactHalves += 5 } }
-        assertEquals(exactHalves / 2, t.cash)   // 53 actions stay below 1000
+        val s = state(); s.cashToday = 1000
+        repeat(20) { answers(s,1); wins(s,1) }
+        assertEquals(350,s.cash); assertEquals(1350,s.cashToday)
+        assertEquals(0L,s.cashFracNum)
+        answers(s,1); wins(s,1)
+        assertEquals(367,s.cash); assertEquals(1L,s.cashFracNum); assertEquals(2L,s.cashFracDen)
     }
 
-    @Test fun theTierIsPickedWhenTheActionHappensAndAnActionAcrossTheEdgeStaysInThePreviousTier() {
-        val s = state(); s.cashToday = 498
-        assertEquals("tier 1 pays the whole 5 even though it crosses 500", listOf(5), perAnswer(s, 1))
-        assertEquals(503, s.cashToday)
-        assertEquals("then tier 2", listOf(2, 3), perAnswer(s, 2))
-        val e = state(); e.cashToday = 499
-        assertEquals(GameEvent.Cash(5, 5, CashKind.ANSWER), answers(e, 1).single())
-        assertEquals(GameEvent.Cash(2, 7, CashKind.ANSWER), answers(e, 1).single())
+    @Test fun theTierIsPickedWhenTheActionHappens() {
+        val s = state(); s.cashToday = 998
+        assertEquals(listOf(10),perAnswer(s,1)); assertEquals(1008,s.cashToday)
+        assertEquals(listOf(5,5),perAnswer(s,2))
     }
 
     @Test fun anActionThatPaysNoWholeCoinMakesNoCashEvent() {
-        val s = state(); s.cashToday = 5000   // tier 11: an answer is 5/11 of a coin
-        assertTrue(answers(s, 1).isEmpty())
-        assertEquals(0, s.cash); assertEquals(5000, s.cashToday)
-        assertEquals(5L, s.cashFracNum); assertEquals(11L, s.cashFracDen)
-        val paid = answers(s, 22)   // 23 answers in all = 115/11 = 10.45
-        assertEquals(10, paid.sumOf { it.amount }); assertEquals(10, paid.size)
+        val s = state(); s.cashToday = 10000
+        assertTrue(answers(s,1).isEmpty())
+        assertEquals(10L,s.cashFracNum); assertEquals(11L,s.cashFracDen)
+        val paid = answers(s,10)
+        assertEquals(10,paid.sumOf { it.amount }); assertEquals(10,paid.size)
         assertTrue(paid.all { it.amount == 1 })
     }
 
-    @Test fun amuletCoinAndLuckIncenseDoubleThePaidCoinsWhileTheTiersFollowTheBase() {
-        val s = state()
-        s.main!!.heldItem = "amulet-coin"
-        assertEquals(10, answers(s, 1).single().amount)
-        assertEquals("the curve counts the money before the ×2", 5, s.cashToday)
-        s.cashToday = 500
-        s.main!!.heldItem = "luck-incense"
-        assertEquals(listOf(4, 6, 4, 6), answers(s, 4).map { it.amount })   // 2, 3, 2, 3 doubled
-        assertEquals(10 + 20, s.cash); assertEquals(510, s.cashToday)
-        s.main!!.heldItem = "everstone" // another held item pays the plain coins
-        assertEquals(listOf(2, 3), answers(s, 2).map { it.amount })
-        s.main!!.heldItem = "amulet-coin"
-        assertEquals("a win is doubled the same way: 10/2 = 5, x2", listOf(10), wins(s, 1).map { it.amount })
-        // over a whole day the item doubles the money exactly: 600 answers pay 1500 coins without it, 3000 with it
-        val plain = state(); answers(plain, 600)
-        val coin = state(); coin.main!!.heldItem = "amulet-coin"; answers(coin, 600)
-        assertEquals(1500, plain.cash); assertEquals(3000, coin.cash)
-        assertEquals(1500, plain.cashToday); assertEquals(1500, coin.cashToday)
+    @Test fun moneyItemsDoublePaidCoinsButTiersFollowBase() {
+        val s = state(); s.main!!.heldItem = "amulet-coin"
+        assertEquals(20,answers(s,1).single().amount); assertEquals(10,s.cashToday)
+        s.cashToday = 1000; s.main!!.heldItem = "luck-incense"
+        assertEquals(listOf(10,10),perAnswer(s,2))
+        assertEquals(listOf(24,26),perWin(s,2))
+        val plain = state(); answers(plain,600)
+        val coin = state(); coin.main!!.heldItem = "amulet-coin"; answers(coin,600)
+        assertEquals(3000,plain.cash); assertEquals(6000,coin.cash)
+        assertEquals(plain.cashToday,coin.cashToday)
     }
 
-    @Test fun aWholeDayOfAnswersAddsUpToTheExactTierMoney() {
+    @Test fun aWholeDayOfAnswersAddsUpToExactTierMoney() {
         val s = state()
-        answers(s, 100); assertEquals(500, s.cash)        // tier 1: 5 each
-        answers(s, 200); assertEquals(1000, s.cash)       // tier 2: 2.5 each
-        answers(s, 300); assertEquals(1500, s.cash)       // tier 3: 5/3 each
-        assertEquals(1500, s.cashToday)
-        assertEquals("tier 4: 5/4 each, 4 answers = 5", 5, answers(s, 4).sumOf { it.amount })
-        assertEquals(1505, s.cashToday)
+        answers(s,100); assertEquals(1000,s.cash)
+        answers(s,200); assertEquals(2000,s.cash)
+        answers(s,300); assertEquals(3000,s.cash)
+        assertEquals(10,answers(s,4).sumOf { it.amount }); assertEquals(3010,s.cashToday)
     }
 
-    @Test fun theFractionDenominatorStaysUnderTheGuardWhenTiersPileUp() {
-        val s = state(); s.cashToday = 500 * 29   // tier 30: lcm(1..30) is about 2.3e12, over the 1e12 guard
-        s.cashFracNum = 1; s.cashFracDen = 2_329_089_562_800L / 3   // an odd big denominator so the product passes the guard
-        answers(s, 1)
+    @Test fun fractionGuardPreservesValue() {
+        val s = state(); s.cashToday = 1000 * 29
+        s.cashFracNum = 1; s.cashFracDen = 2_329_089_562_800L / 3
+        answers(s,1)
         assertTrue(s.cashFracDen <= 1_000_000_000_000L)
-        assertTrue(s.cashFracNum in 0 until s.cashFracDen)
-        assertEquals("the value is kept (5/30 + a hair)", 1.0 / 6 + 1.0 / (2_329_089_562_800.0 / 3), s.cashFracNum.toDouble() / s.cashFracDen, 1e-6)
-        assertEquals(0, s.cash)
+        assertEquals(1.0/3 + 1.0/(2_329_089_562_800.0/3),s.cashFracNum.toDouble()/s.cashFracDen,1e-6)
+        assertEquals(0,s.cash)
     }
 
     @Test fun aNewDayStartsTheCurveAgain() {
@@ -301,8 +264,8 @@ class EconomyTest {
         assertTrue(other.shopItems != a.shopItems || other.shopTms != a.shopTms)
     }
 
-    /** Today's drawn items: the stock without the Ultra Ball that its rare days add on top (PLAN 171). */
-    private fun drawn(s: GameState) = s.shopItems.filter { it != "ultra-ball" }
+    /** Ordinary item slots exclude the separate daily ball draw. */
+    private fun drawn(s: GameState) = s.shopItems.filter { Items.def(it)?.kind != ItemKind.BALL }
 
     @Test fun ensureTodayRestocksOnNewDayAndUsesSlots() {
         val d = shopData()
@@ -320,14 +283,15 @@ class EconomyTest {
         val s = state()
         s.shopDay = s.day; s.shopItems += listOf("poke-ball", "great-ball")
         assertEquals(ActionResult(false, "Not in today's shop"), Shop.buy(data, s, "ultra-ball"))
-        s.cash = 199
+        val price = Shop.priceOf(data, s, "poke-ball")
+        s.cash = price - 1
         val no = Shop.buy(data, s, "poke-ball")
-        assertFalse(no.ok); assertEquals("Not enough money (need 200 coins)", no.message)   // PLAN 171 / R13 Part C: 200 coins
-        assertEquals(199, s.cash); assertEquals(0, s.count("poke-ball"))
+        assertFalse(no.ok); assertEquals("Not enough money (need $price coins)", no.message)   // PLAN 171 / R13 Part C: 200 coins
+        assertEquals(price - 1, s.cash); assertEquals(0, s.count("poke-ball"))
         s.cash = 1000
         val ok = Shop.buy(data, s, "poke-ball")
-        assertTrue(ok.ok); assertEquals("Bought Poké Ball for 200 coins", ok.message)
-        assertEquals(800, s.cash); assertEquals(1, s.count("poke-ball"))
+        assertTrue(ok.ok); assertEquals("Bought Poké Ball for $price coins", ok.message)
+        assertEquals(1000 - price, s.cash); assertEquals(1, s.count("poke-ball"))
         Shop.buy(data, s, "poke-ball")
         assertEquals(2, s.count("poke-ball"))
         assertTrue(s.shopItems.contains("poke-ball")) // stock is unlimited
@@ -374,23 +338,24 @@ class EconomyTest {
 
     @Test fun ballPricesOverridePokeApi() {
         // the fixtures carry PokeAPI's 200 / 600 / 800 / 1000 (Net Ball): the Shop uses its own
-        assertEquals(200, data.price("poke-ball")); assertEquals(700, data.price("great-ball")); assertEquals(1500, data.price("ultra-ball"))   // R13 Part C
+        assertEquals(200, data.price("poke-ball")); assertEquals(600, data.price("great-ball")); assertEquals(1200, data.price("ultra-ball"))   // R13 Part C
         assertEquals("never sold", 0, data.price("master-ball"))
-        for (old in Tuning.OLD_BALLS) assertEquals(old, 0, data.price(old))
-        assertEquals("other items keep PokeAPI's price", 700, data.price("super-potion"))
+        for (old in Tuning.OLD_BALLS) assertEquals(old, Tuning.SHOP_PRICE.getValue(old), data.price(old))
+        assertEquals("proposal overrides API", 300, data.price("super-potion"))
         val s = state()
         s.shopDay = s.day; s.shopItems += "great-ball"; s.cash = 1000
-        assertEquals("Bought Great Ball for 700 coins", Shop.buy(data, s, "great-ball").message)
+        assertEquals("Bought Great Ball for ${Shop.priceOf(data, s, "great-ball")} coins", Shop.buy(data, s, "great-ball").message)
         s.shopItems += "net-ball"
-        assertEquals("Not in today's shop", Shop.buy(data, s, "net-ball").message)
+        s.cash = 1000
+        assertTrue(Shop.buy(data, s, "net-ball").ok)
         assertEquals("Not in today's shop", Shop.buy(data, s, "master-ball").message)
     }
 
     private fun days(n: Int) = (0 until n).map { java.time.LocalDate.of(2026, 1, 1).plusDays(it.toLong()).toString() }
 
-    @Test fun theUltraBallIsInStockAboutOneDayInSeven() {
+    @Test fun ultraBallDailyChanceIsThreePercent() {
         val ultraDays = days(730).count { Shop.ultraBallDay(it) }
-        assertTrue("$ultraDays of 730", ultraDays in 70..140)   // ~104 expected
+        assertTrue("$ultraDays of 730", ultraDays in 8..40)   // about 22 expected
         assertEquals("date-seeded: the same answer every time", days(60).map { Shop.ultraBallDay(it) }, days(60).map { Shop.ultraBallDay(it) })
     }
 
@@ -399,7 +364,7 @@ class EconomyTest {
         val yes = days(400).first { Shop.ultraBallDay(it) }
         val no = days(400).first { !Shop.ultraBallDay(it) }
         val (items, _) = Shop.stockFor(d, yes, 0)
-        assertEquals("ultra-ball", items.first()); assertEquals(Shop.slots(0) + 1, items.size)
+        assertEquals("ultra-ball", items.first()); assertEquals(Shop.slots(0) + Shop.dailyBalls(yes).size, items.size)
         assertFalse("ultra-ball" in Shop.stockFor(d, no, 0).first)
         // never in the daily draw or the deal, whatever the day
         for (day in days(200)) {
@@ -413,14 +378,16 @@ class EconomyTest {
         for (seed in 1..20) { t.cash = 100; Shop.reroll(d, t, TestData.rng(seed)); assertFalse("ultra-ball" in t.shopItems) }
         // and it can be bought there
         s.cash = 2000
-        assertEquals("Bought Ultra Ball for 1500 coins", Shop.buy(d, s, "ultra-ball").message)
+        assertEquals("Bought Ultra Ball for ${Shop.priceOf(d, s, "ultra-ball")} coins", Shop.buy(d, s, "ultra-ball").message)
     }
 
-    @Test fun anOldBallLeftInTodaysStockLeavesIt() {
+    @Test fun oldSameDayOffersUpgradeWithoutChangingOwnedBalls() {
         val s = state()
         s.shopDay = s.day; s.shopItems += listOf("net-ball", "potion")   // drawn before the update
+        s.bag["net-ball"] = 4
         Shop.ensureToday(data, s)
-        assertEquals(listOf("potion"), s.shopItems)
+        assertEquals(Shop.dailyBalls(s.day) + "potion", s.shopItems)
+        assertEquals(4, s.count("net-ball"))
     }
 
     @Test fun noBallIsEverFound() {

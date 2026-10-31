@@ -11,6 +11,11 @@ import android.content.SharedPreferences
  * the JVM tests cover it.
  */
 object InfoBoxPrefs {
+    const val WIDTH_KEY = "wideInfoBoxes"
+    fun wide(ctx: Context): Boolean = prefs(ctx).getBoolean(WIDTH_KEY, false)
+    fun setWide(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean(WIDTH_KEY, on).apply()
+    fun width(normal: Float, wide: Boolean): Float = normal * if (wide) 1.4f else 1f
+
     const val KEY = "bigInfoBoxes"
     private const val FILE = "ankigo_ui"
 

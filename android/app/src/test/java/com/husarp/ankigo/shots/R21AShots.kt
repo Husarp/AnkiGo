@@ -110,7 +110,7 @@ class R21AShots {
         layout()
         val frame = getField(panel, "frameDrawable") as BattleFrameDrawable
         assertEquals("water", frame.element)
-        setField(backdrop, "shown", BackdropCatalog.byId("volcanocave"))
+        setField(backdrop, "shown", BackdropCatalog.byId("fire-savanna"))
         layout()
         assertEquals("fire", frame.element)
         panel

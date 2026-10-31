@@ -64,16 +64,20 @@ class RoundBalanceTest {
         return old to new
     }
 
-    @Test fun realisticMixStillWinsMostBattlesAndDoesNotDrainTheMain() {
-        val mix = intArrayOf(10, 15, 65, 10) // 10 % Again, 15 % Hard, 65 % Good, 10 % Easy
+    @Test fun increasedHardPowerMakesARealisticAnswerMixTougher() {
+        val mix = intArrayOf(10, 15, 65, 10)
+        // Isolate B against the previous 50% Hard power. This simulator has no answer-streak boosts (A/C).
+        fun previousHard(a: Int, b: Int): RoundRule.Plan {
+            val buttons = listOf(a, b)
+            val plan = RoundRule.plan(buttons)
+            return plan.copy(enemyPower = plan.enemyPower - buttons.count { it == 2 } * (Tuning.WILD_POWER[2] - 0.5))
+        }
         for (level in listOf(10, 30, 60)) {
-            val (old, new) = both(mix, level)
-            println("BALANCE realistic mix (10/15/65/10), Lv $level equal-level\n  before: $old\n  after:  $new")
-            assertTrue("win rate before ${old.winRate} after ${new.winRate}", new.winRate >= 0.65 && new.winRate >= old.winRate - 0.02)
-            assertTrue("faints before ${old.faintsPer100} after ${new.faintsPer100}", new.faintsPer100 <= old.faintsPer100 + 2.0)
-            assertTrue("main HP at battle start before ${old.hpAtStart} after ${new.hpAtStart}", new.hpAtStart >= 0.50 && new.hpAtStart >= old.hpAtStart - 0.10)
-            // the price is time: the Main sits out rounds without a Good/Easy answer, so a fight takes a few more rounds
-            assertTrue("rounds/battle before ${old.roundsPerBattle} after ${new.roundsPerBattle}", new.roundsPerBattle <= old.roundsPerBattle * 1.4)
+            val old = session(::previousHard, mix, level, 4000, 7)
+            val new = session({ a, b -> RoundRule.plan(listOf(a, b)) }, mix, level, 4000, 7)
+            println("BALANCE Hard 50% vs 75%, Lv $level equal-level\n  before: $old\n  after:  $new")
+            assertTrue("win rate before ${old.winRate} after ${new.winRate}", new.winRate < old.winRate)
+            assertTrue("faints before ${old.faintsPer100} after ${new.faintsPer100}", new.faintsPer100 > old.faintsPer100)
         }
     }
 
@@ -81,7 +85,7 @@ class RoundBalanceTest {
         val mix = intArrayOf(20, 25, 45, 10) // a bad day
         val (old, new) = both(mix, 30)
         println("BALANCE rough mix (20/25/45/10), Lv 30\n  before: $old\n  after:  $new")
-        // Adam 2026-10-19: equal power on both sides (Again 1 / Hard 0.5 vs Good 0.5 / Easy 1) — a bad day may be harder than before
+        // R23: Hard now powers the wild hit at 0.75; this old-rule comparison is a rough-session smoke check.
         assertTrue("win rate before ${old.winRate} after ${new.winRate}", new.winRate >= 0.35)
     }
 

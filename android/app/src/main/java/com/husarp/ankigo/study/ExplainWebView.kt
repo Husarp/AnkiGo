@@ -7,7 +7,7 @@ import android.view.MenuItem
 import android.webkit.WebView
 import org.json.JSONArray
 
-/** Keeps Android's selection toolbar and adds one action; no JavaScript bridge is exposed to card HTML. */
+/** Keeps Android's selection toolbar and adds one action; template actions use the host’s separate JavaScript bridge. */
 class ExplainWebView(context: Context, private val allowed: () -> Boolean, private val explain: (String) -> Unit, private val pageVersion: () -> Int = { 0 }) : WebView(context) {
     private val explainId = 0x416e6b
     override fun startActionMode(callback: ActionMode.Callback): ActionMode? = super.startActionMode(wrap(callback))

@@ -65,7 +65,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private val detailsOnce = DetailsOnce()
 
     // The Box lists every owned Pokémon (team members carry a mark); copies of a species collapse into one "×N" tile.
-    private var boxFilter = SortPrefs.loadShow(base) // R18 249: the Show choice is remembered for the Box
+    private var boxFilter = SortPrefs.loadShows(base) // R18 249: the Show choice is remembered for the Box
     private var boxTypes = SortPrefs.loadType(base, SortPrefs.TypeWhere.BOX) // PLAN 192 (X8): the type filter is remembered for the Box
     private var grouped = AppPrefs.boxGrouped(base)
     private var boxSort = SortPrefs.load(base, SortPrefs.Where.BOX) // PLAN 48/55: remembered for the Box
@@ -232,11 +232,11 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     /** Test hook: opens the page on [s]. */
     internal fun preset(
         s: TeamSection = section, edit: Boolean = false, pick: List<ComparePick>? = null,
-        filter: BoxFilter = boxFilter, group: Boolean = grouped, sort: SortSpec = boxSort, types: TypeFilter = boxTypes,
+        filter: BoxFilter = boxFilter.singleOrNull() ?: BoxFilter.ALL, group: Boolean = grouped, sort: SortSpec = boxSort, types: TypeFilter = boxTypes,
     ) {
         section = s
         editing = edit
-        boxFilter = filter
+        boxFilter = if (filter == BoxFilter.ALL) emptySet() else setOf(filter)
         boxTypes = types
         grouped = group
         boxSort = sort
@@ -427,7 +427,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         if (tiles.isEmpty()) {
             // X9 (192E): say why the box shows nothing and offer "Clear filters" while a filter is on; a really empty box has no button
             boxHeader.addView(EmptyState(this, 28) { clearBoxFilters() }.also {
-                it.set(FilterRowText.emptyBox(boxFilter, boxTypes), boxFilter != BoxFilter.ALL || boxTypes.active)
+                it.set(FilterRowText.emptyBox(boxFilter, boxTypes), boxFilter.isNotEmpty() || boxTypes.active)
             })
         }
     }
@@ -444,9 +444,9 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val shownSpec = boxSort.copy(key = MonSort.effectiveKey(boxSort, st)) // no battle: "vs the wild one" works as "strongest attack"
         sortPill = SortViews.sortChip(ctx, shownSpec, boxFiltersOn()) { openSortSheet() }
         val quick = listOf(
-            BoxViews.quickChip(ctx, "Favourites", boxFilter == BoxFilter.FAVOURITES, heart = true) { toggleBoxFilter(BoxFilter.FAVOURITES) } to (boxFilter == BoxFilter.FAVOURITES),
-            BoxViews.quickChip(ctx, "Shiny", boxFilter == BoxFilter.SHINY) { toggleBoxFilter(BoxFilter.SHINY) } to (boxFilter == BoxFilter.SHINY),
-            BoxViews.quickChip(ctx, "In team", boxFilter == BoxFilter.IN_TEAM) { toggleBoxFilter(BoxFilter.IN_TEAM) } to (boxFilter == BoxFilter.IN_TEAM),
+            BoxViews.quickChip(ctx, "Favourites", BoxFilter.FAVOURITES in boxFilter, heart = true) { toggleBoxFilter(BoxFilter.FAVOURITES) } to (BoxFilter.FAVOURITES in boxFilter),
+            BoxViews.quickChip(ctx, "Shiny", BoxFilter.SHINY in boxFilter) { toggleBoxFilter(BoxFilter.SHINY) } to (BoxFilter.SHINY in boxFilter),
+            BoxViews.quickChip(ctx, "In team", BoxFilter.IN_TEAM in boxFilter) { toggleBoxFilter(BoxFilter.IN_TEAM) } to (BoxFilter.IN_TEAM in boxFilter),
         )
         return FilterRow.make(ctx, TileViews.legendChip(ctx, dex = false), sortPill, FilterRowText.activePieces(boxTypes, boxFilter),
             onOpen = { openSortSheet() }, quick = quick)
@@ -459,17 +459,21 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private fun typesOf(mon: Mon): List<Type> = data.species[mon.species]?.types ?: emptyList()
 
     /** How many filters are on (the Show choice, the type filter): the sort chip's description says so. */
-    private fun boxFiltersOn(): Int = (if (boxFilter != BoxFilter.ALL) 1 else 0) + (if (boxTypes.active) 1 else 0)
+    private fun boxFiltersOn(): Int = boxFilter.size + (if (boxTypes.active) 1 else 0)
 
     private fun setBoxFilter(f: BoxFilter) {
-        if (f == boxFilter) return
-        boxFilter = f
-        SortPrefs.saveShow(this, f) // R18 249
+        setBoxFilters(if (f == BoxFilter.ALL) emptySet() else setOf(f))
+    }
+
+    private fun setBoxFilters(filters: Set<BoxFilter>) {
+        if (filters == boxFilter) return
+        boxFilter = filters
+        SortPrefs.saveShows(this, filters) // R18 249
         requestRender()
     }
 
-    /** R18 253: a quick chip: a lit one turns Show off (All), another one switches to its filter. */
-    private fun toggleBoxFilter(f: BoxFilter) = setBoxFilter(if (boxFilter == f) BoxFilter.ALL else f)
+    /** Independent quick chips toggle only their own requirement. */
+    private fun toggleBoxFilter(f: BoxFilter) = setBoxFilters(if (f in boxFilter) boxFilter - f else boxFilter + f)
 
     /** The type filter changed (the sheet): remembered for the Box, the grid follows. */
     private fun setBoxTypes(f: TypeFilter) {
@@ -499,16 +503,15 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     /** The sheet itself (tests build its view and click through it; there is no window to show a dialog in). */
     internal fun sortSheet(): SortSheet {
-        val labels = BoxFilter.entries.map { it.label }
         return SortSheet(
-            this, SortText.boxKeys, boxSort, MonSort.vsWildAvailable(state), labels, boxFilter.ordinal,
+            this, SortText.boxKeys, boxSort, MonSort.vsWildAvailable(state), null, 0,
             if (pickOn) null else SortSheet.GroupToggle(grouped) { on -> grouped = on; AppPrefs.setBoxGrouped(this, on); requestRender() },
             count = { BoxTiles.filter(state.mons, boxFilter, state.team, state.settings.xpShareUid, ::canEvolve, boxTypes, ::typesOf).size },
-            onChange = { spec, show ->
+            onChange = { spec, _ ->
                 if (spec != boxSort) setBoxSort(spec)
-                BoxFilter.entries.getOrNull(show)?.let { setBoxFilter(it) }
             },
             type = SortSheet.TypePart(boxTypes) { setBoxTypes(it) },
+            shows = SortSheet.ShowsPart(boxFilter) { setBoxFilters(it) },
         )
     }
 

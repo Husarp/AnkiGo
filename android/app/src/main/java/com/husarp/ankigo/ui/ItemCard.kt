@@ -81,7 +81,7 @@ internal object ItemCard {
     private fun nameOf(page: GamePage, spec: Spec): String =
         if (spec.item == null) Items.tmName(page.data, spec.move.orEmpty()) else Items.name(spec.item)
 
-    /** The header: icon tile, name, the one line (an item only) and the close button ([onClose]; 48 dp to touch, the glyph is smaller). */
+    /** The header: bare icon, name, the one line (an item only) and the close button ([onClose]; 48 dp to touch, the glyph is smaller). */
     fun header(page: GamePage, spec: Spec, onClose: () -> Unit): View {
         val ctx: Context = page
         val isTm = spec.item == null
@@ -185,9 +185,8 @@ internal object ItemCard {
         }
     }
 
-    /** The 48 dp tile of a TM in the card header: the move's type disc on the quiet tile colour. */
+    /** The bare TM disc in its unchanged 48 dp header slot. */
     private fun tmLead(ctx: Context, move: Move?): View = FrameLayout(ctx).apply {
-        background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx)
         addView(Bits.tmTile(ctx, move?.type, 44), FrameLayout.LayoutParams(dp(ctx, 44f), dp(ctx, 44f), Gravity.CENTER))
         layoutParams = LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f))
     }
@@ -328,6 +327,7 @@ internal object ItemCard {
             else if (!open.buying) { open.askBuy(); page.requestRender() }
             else b.onBuy()
         }
+        go.addView(ShopViews.price(ctx, b.price.copy(was = null)))
         row.addView(go, LinearLayout.LayoutParams(0, -2, 0.85f))
         if (spec.item != null) row.addView(button(ctx, Ui.c(ctx, R.color.ag_mantle), Ui.c(ctx, R.color.ag_text), "×$quantity").apply {
             contentDescription = "Quantity $quantity. Cycle 1, 3, 5"

@@ -22,6 +22,7 @@ class WidgetPinReceiver : BroadcastReceiver() {
             BuddyWidgetPrefs.setLayout(p,id,intent.getStringExtra("layout")?:"A")
             BuddyWidgetPrefs.setRing(p,id,BuddyRing.parse(intent.getStringExtra("ring")))
             BuddyWidgetPrefs.setAnim(p,id,intent.getBooleanExtra("moving",false))
+            BuddyWidgetPrefs.setSize(p,id,intent.getIntExtra("size",100))
         }
         if(kind=="study") StudyWidgetPrefs.setDeck(p,id,intent.getLongExtra("deck",0L),intent.getStringExtra("deckName")?:"")
         if (kind=="study") com.husarp.ankigo.StudyWidget.requestUpdate(ctx,id) else Widgets.refreshAll(ctx,study=false)
@@ -31,6 +32,7 @@ class WidgetPinReceiver : BroadcastReceiver() {
             val p=ctx.getSharedPreferences("spike",0)
             val intent=Intent(ctx,WidgetPinReceiver::class.java).putExtra("kind",kind)
                 .putExtra("alpha",look.transparency).putExtra("theme",look.theme).putExtra("accent",look.accent).putExtra("tint",look.tint)
+                .putExtra("size",BuddyWidgetPrefs.size(p,id))
                 .putExtra("mon",BuddyWidgetPrefs.choice(p,id)).putExtra("layout",BuddyWidgetPrefs.layout(p,id))
                 .putExtra("ring",BuddyWidgetPrefs.ring(p,id).format()).putExtra("moving",BuddyWidgetPrefs.anim(p,id))
                 .putExtra("deck",StudyWidgetPrefs.deckId(p,id)).putExtra("deckName",StudyWidgetPrefs.deckName(p,id))

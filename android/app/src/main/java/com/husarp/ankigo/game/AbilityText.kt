@@ -3,7 +3,7 @@ package com.husarp.ankigo.game
 /**
  * R17C-9a / 9b: what each ability does in AnkiGo, in one plain sentence (shown under the ability in the details of your Pokémon), and the
  * ability's display name. One row per ability that [Abilities] (the first 102 rows) and [AbilitiesMore] (the rest) build; every other ability of the
- * species data is in [NO_EFFECT] with the reason it can do nothing in AnkiGo ("No effect in AnkiGo battles: there are no held items in fights."). A
+ * species data has a concrete effect or a PLAN 336 singles adaptation. A
  * sentence is true to the code (the numbers come from the same constants), starts with the effect and ends with a full stop. "Turn" is one battle round.
  *
  * [of] takes a name as the game stores it ("Keen Eye", "keeneye", "KEEN EYE"); a name that is no ability of the game gives null. [ids] are the abilities
@@ -242,9 +242,8 @@ internal object AbilityText {
         Row("illuminate", "Illuminate", "The other Pokémon can't lower its accuracy, and it ignores the target's evasiveness."),
     )
 
-    // ---------------------------------------------------------------- the abilities that do nothing in AnkiGo
+    // ---------------------------------------------------------------- PLAN 336 inventory and adaptations
 
-    private const val NO_EFFECT = "No effect in AnkiGo battles: "
     private const val ITEMS = "there are no held items in fights."
     private const val PARTNER = "it helps a partner Pokémon."
     private const val SWITCH = "it works when Pokémon switch or run."
@@ -274,31 +273,92 @@ internal object AbilityText {
         HAZARDS to "toxicdebris=Toxic_Debris",
     )
 
-    private val SKIPPED: List<Pair<String, Row>> = NO_EFFECT_GROUPS.flatMap { (reason, pairs) ->
+    private val ADAPTED_TEXT: Map<String, String> = mapOf(
+        "gluttony" to "Supported pinch berries activate at half HP instead of a quarter.",
+        "pickup" to "After a won wild fight, has a 10% chance to find one Potion.",
+        "unburden" to "Doubles Speed for the rest of this fight after losing a held item; starting empty gives no bonus.",
+        "cheekpouch" to "Eating a held berry restores an extra third of max HP.",
+        "ripen" to "Doubles supported held berries’ healing and stat boosts.",
+        "klutz" to "Suppresses held berries and prevents using its held item with Fling; reward items still work.",
+        "pickpocket" to "After taking contact damage, steals the opposing held item if empty-handed. Sticky Hold prevents theft.",
+        "magician" to "After dealing move damage, steals the target’s held item if empty-handed. Sticky Hold prevents theft.",
+        "ballfetch" to "Returns the first failed capture ball to the Bag if it holds no item.",
+        "cudchew" to "Repeats its consumed held berry’s effect at the end of the following round.",
+        "honeygather" to "After a won wild fight, has a 10% chance to find 5 coins.",
+        "unnerve" to "Stops the opposing Pokémon from eating its held berry.",
+        "healer" to "At round end, has a 30% chance to cure its own major status.",
+        "telepathy" to "Takes 10% less move damage.",
+        "friendguard" to "Takes 25% less move damage.",
+        "battery" to "Deals 30% more special-move damage.",
+        "powerspot" to "Deals 30% more move damage.",
+        "receiver" to "On entry, copies the last fainted teammate’s ability, except ability-copying abilities.",
+        "commander" to "On entry, raises its own Attack, Defense, Sp. Atk, Sp. Def and Speed by 2, once per fight.",
+        "dancer" to "Copies an opposing dance move immediately, without using its normal action. Copies cannot loop.",
+        "hospitality" to "On entry, heals itself by a quarter of max HP, once per fight.",
+        "curiousmedicine" to "On entry, clears its own negative stat stages, once per fight.",
+        "runaway" to "The existing escape-item action succeeds without consuming a Poké Doll or Fluffy Tail, even when trapped.",
+        "naturalcure" to "Cures its major status when switched out alive during a fight.",
+        "magnetpull" to "Stops opposing Steel types from voluntarily switching while active. Ghost types are exempt.",
+        "wimpout" to "When damage crosses half HP, offers the team switch picker once per fight if a conscious replacement exists.",
+        "emergencyexit" to "When damage crosses half HP, offers the team switch picker once per fight if a conscious replacement exists.",
+        "zerotohero" to "After switching out alive, its attacking stats are multiplied by 1.5 when it returns in this fight.",
+        "beastboost" to "Once per fight, its damaging hit leaving a living opponent at half HP or below raises its highest non-HP stat by 1. Ties: Attack, Defense, Sp. Atk, Sp. Def, Speed.",
+        "moxie" to "Once per fight, its damaging hit leaving a living opponent at half HP or below raises Attack by 1.",
+        "soulheart" to "Once per fight, raises Sp. Atk by 1 when a living opponent reaches half HP or below.",
+        "chillingneigh" to "Once per fight, its damaging hit leaving a living opponent at half HP or below raises Attack by 1.",
+        "grimneigh" to "Once per fight, its damaging hit leaving a living opponent at half HP or below raises Sp. Atk by 1.",
+        "supremeoverlord" to "On entry, counts fainted teammates: deals 10% more move damage per fainted teammate, up to five.",
+        "pressure" to "Takes 10% less move damage; there is no PP resource.",
+        "frisk" to "On entry, reveals the opponent’s held item, or No held item.",
+        "anticipation" to "On entry, names opposing super-effective and one-hit-KO moves, or reports none.",
+        "forewarn" to "On entry, names every opposing move tied for highest base power.",
+        "illusion" to "Takes 10% less damage from its first damaging hit in the fight; no sprite disguise.",
+        "forecast" to "Battle type becomes Fire in sun, Water in rain, Ice in hail or snow, and Normal otherwise.",
+        "flowergift" to "In sun, its own Attack and Sp. Def are multiplied by 1.5.",
+        "stancechange" to "Damaging moves swap its Attack with Defense and Sp. Atk with Sp. Def; King’s Shield restores the original stance.",
+        "schooling" to "At level 20 or above, multiplies its attacking stats by 1.5 while above a quarter HP.",
+        "shieldsdown" to "Above half HP, blocks new major status. At half HP or below, has 1.5× Speed instead.",
+        "iceface" to "Blocks the first physical hit’s damage. Starting or entering hail or snow restores the shield once per fight.",
+        "hungerswitch" to "Aura Wheel alternates between Electric and Dark at each round end, starting Electric.",
+        "gulpmissile" to "After Surf or completed Dive, the next damaging hit triggers quarter-max-HP retaliation: lowers the attacker’s Defense by 1 if loaded above half HP, otherwise paralyzes it.",
+        "multitype" to "Its battle type matches its first known damaging move; without one, keeps its original type.",
+        "rkssystem" to "Its battle type matches its first known damaging move; without one, keeps its original type.",
+        "terashift" to "On entry, raises Defense and Sp. Def by 1, once per fight.",
+        "sniper" to "Every fourth successful damaging hit deals 1.5× damage; counter resets each fight.",
+        "superluck" to "Every fourth successful damaging hit deals 1.25× damage; counter resets each fight.",
+        "battlearmor" to "Takes 10% less move damage.",
+        "shellarmor" to "Takes 10% less move damage.",
+        "angerpoint" to "Once per fight, raises Attack by 2 after a single opposing move removes at least a quarter of its max HP.",
+        "merciless" to "Deals 1.5× move damage against poisoned or badly poisoned opponents.",
+        "toxicdebris" to "After taking physical-move damage, poisons the attacker if it can be poisoned.",
+        "plus" to "Sp. Atk ×1.5 while another conscious teammate has Plus or Minus. Gear Up raises its Attack and Sp. Atk by 1; Magnetic Flux raises its Defense and Sp. Def by 1.",
+        "minus" to "Sp. Atk ×1.5 while another conscious teammate has Plus or Minus. Gear Up raises its Attack and Sp. Atk by 1; Magnetic Flux raises its Defense and Sp. Def by 1.",
+    )
+    private val ADAPTED: List<Row> = NO_EFFECT_GROUPS.values.flatMap { pairs ->
         pairs.split(' ').map { pair ->
             val (id, name) = pair.split('=')
-            reason to Row(id, name.replace('_', ' '), NO_EFFECT + reason)
+            Row(id, name.replace('_', ' '), ADAPTED_TEXT.getValue(id))
         }
     }
 
     private val BUILT_BY_ID: Map<String, Row> = (ROWS + MORE + listOf(
-        Row("stickyhold", "Sticky Hold", "Trick, Switcheroo and Corrosive Gas can't take its held item."),
+        Row("stickyhold", "Sticky Hold", "Opposing Trick, Switcheroo, Corrosive Gas, Pickpocket and Magician can't take its held item. Its own item consumption still works."),
         Row("plus", "Plus", "Gear Up raises its Attack and Sp. Atk by 1; Magnetic Flux raises its Defense and Sp. Def by 1."),
         Row("minus", "Minus", "Gear Up raises its Attack and Sp. Atk by 1; Magnetic Flux raises its Defense and Sp. Def by 1."),
         Row("suctioncups", "Suction Cups", "Roar and Whirlwind can't force it out of the wild battle."),
         Row("arenatrap", "Arena Trap", "Stops grounded opponents from switching for 3 rounds after entry. Ghost types can still switch."),
         Row("shadowtag", "Shadow Tag", "Stops opponents from switching for 3 rounds after entry. Ghost types and other Shadow Tag users can still switch."),
-    )).associateBy { it.id }
-    private val BY_ID: Map<String, Row> = BUILT_BY_ID + SKIPPED.associate { it.second.id to it.second }
+    ) + ADAPTED + listOf("plus", "minus").map { Row(it, it.replaceFirstChar(Char::uppercase), ADAPTED_TEXT.getValue(it)) }).associateBy { it.id }
+    private val BY_ID: Map<String, Row> = BUILT_BY_ID
 
     /** The ids of every ability that works in battle (= the abilities [Abilities] and [AbilitiesMore] build). */
     val ids: Set<String> get() = BUILT_BY_ID.keys
 
-    /** The ids of the abilities that do nothing in AnkiGo (their sentence says why). */
-    val noEffect: Set<String> get() = SKIPPED.map { it.second.id }.toSet()
+    /** Compatibility inventory: PLAN 336 gives every former entry an effect. */
+    val noEffect: Set<String> get() = emptySet()
 
-    /** Why the abilities that do nothing can't do anything here: the reason sentence (without "No effect in AnkiGo battles: ") -> their ids. */
-    val noEffectByReason: Map<String, Set<String>> get() = SKIPPED.groupBy({ it.first }, { it.second.id }).mapValues { it.value.toSet() }
+    /** Compatibility grouping; empty since PLAN 336. */
+    val noEffectByReason: Map<String, Set<String>> get() = emptyMap()
 
     /** The sentence for the ability [name] ("Static", "keeneye" ...), or null when it is no ability of the game. */
     fun of(name: String?): String? = name?.let { BY_ID[BattleView.normalizeAbility(it)]?.text }

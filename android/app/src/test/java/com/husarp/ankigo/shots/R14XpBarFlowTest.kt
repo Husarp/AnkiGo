@@ -15,8 +15,8 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * R14 PLAN 138: through the real [EventPlayer] / [ArenaView], a gain that crosses a level plays "fill to the end, hold, the level
- * number changes, the bar starts from EMPTY and slides on", once per level (the arena's [xpTrace] hears what the bar and level are told).
+ * PLAN 138 / 351: through the real EventPlayer / ArenaView, the level number changes as its fill starts,
+ * then the bar holds, restarts from empty and slides on once per level. xpTrace records their order.
  * Without orbs (the renderer has no window: `xpOnScreen` false) the bar is slid by the player itself, so the loop is what is tested.
  */
 class R14XpBarFlowTest {
@@ -74,13 +74,14 @@ class R14XpBarFlowTest {
 
     private fun up(uid: String, level: Int) = GameEvent.LevelUp(uid, "Mainy", level, 30, 40)
 
-    @Test fun oneLevelFillsToTheEndHoldsChangesTheLevelAndRestartsFromEmpty() {
+    @Test fun oneLevelChangesTheNumberAsTheFillStartsThenHoldsAndRestartsFromEmpty() {
         val (trace, lv) = play(true) { uid, l ->
             listOf(GameEvent.XpGained(uid, "Mainy", 60, l + 1, 20, 100, 80, listOf(90)), up(uid, l + 1))
         }
         val i = trace.indexOf("bar 1.00 slide")
         assertTrue(trace.toString(), i >= 0)
-        assertEquals(listOf("bar 1.00 slide", "level ${lv + 1}", "bar 0.00", "bar 0.20 slide"), trace.subList(i, i + 4))
+        assertEquals("level changes before the fill starts", "level ${lv + 1}", trace[i - 1])
+        assertEquals(listOf("bar 1.00 slide", "bar 0.00", "bar 0.20 slide"), trace.subList(i, i + 3))
         assertEquals("the final value is the last bar", "bar 0.20 slide", trace.last { it.startsWith("bar") })
         assertEquals("the LevelUp event does not set the level a second time: $trace", 1, trace.count { it.startsWith("level") })
     }
@@ -91,9 +92,9 @@ class R14XpBarFlowTest {
         }
         val i = trace.indexOf("bar 1.00 slide")
         assertEquals(
-            listOf("bar 1.00 slide", "level ${lv + 1}", "bar 0.00", "bar 1.00 slide", "level ${lv + 2}", "bar 0.00", "bar 1.00 slide",
-                "level ${lv + 3}", "bar 0.00", "bar 0.50 slide"),
-            trace.subList(i, i + 10))
+            listOf("bar 1.00 slide", "level ${lv + 2}", "bar 0.00", "bar 1.00 slide", "level ${lv + 3}", "bar 0.00", "bar 1.00 slide",
+                "bar 0.00", "bar 0.50 slide"),
+            trace.subList(i, i + 9))
         assertEquals(3, trace.count { it.startsWith("level") })
     }
 
@@ -102,14 +103,14 @@ class R14XpBarFlowTest {
             listOf(GameEvent.XpGained(uid, "Mainy", 20, l + 1, 0, 100, 80, listOf(100)), up(uid, l + 1))
         }
         val i = trace.indexOf("bar 1.00 slide")
-        assertEquals(listOf("bar 1.00 slide", "level ${lv + 1}", "bar 0.00", "bar 0.00"), trace.subList(i, i + 4))
+        assertEquals(listOf("bar 1.00 slide", "bar 0.00", "bar 0.00"), trace.subList(i, i + 3))
     }
 
     @Test fun withTheXpAnimationOffTheEndStateComesAtOnce() {
         val (trace, lv) = play(false) { uid, l ->
             listOf(GameEvent.XpGained(uid, "Mainy", 60, l + 1, 20, 100, 80, listOf(90)), up(uid, l + 1))
         }
-        assertEquals("the bar is told the final value once, without a slide; the LevelUp event sets the level", listOf("bar 0.20", "level ${lv + 1}"), trace)
+        assertEquals("number and bar update together without a slide", listOf("level ${lv + 1}", "bar 0.20"), trace)
     }
 
     @Test fun aGainThatStaysInTheLevelIsStillOnePlainSlide() {

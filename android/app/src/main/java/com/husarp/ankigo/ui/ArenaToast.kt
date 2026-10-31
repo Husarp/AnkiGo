@@ -23,7 +23,7 @@ import kotlin.math.max
 /*
  * R19-H (PLAN 257, pick A "Card toast", from the LEFT): the old whole-bar lines (Played fast, New card OK, Redo after undo, Undo in
  * AnkiDroid, Caught up, Daily gift, Item found, Badge, Trainer level, New day, Daily goal / Info lines, Switching after this card) are
- * small cards at the top-left of the arena, above your Pokémon: they slide in from the left edge, stay about 2.5 s, slide out; a tap
+ * small cards at the top-right of the arena, above your Pokémon: they slide in from the left edge, stay about 2.5 s, slide out; a tap
  * closes one. The action bar keeps its segments. Everything here that is not a View is pure (unit-tested): [ToastKind], [ToastText],
  * [ToastQueue], [ToastLook], [ToastSpot]. The panel raises one with [BattlePanelView.toast] (or [BattlePanelView.setLog], which maps
  * its kind / pill to a [ToastKind]).
@@ -50,7 +50,7 @@ enum class ToastKind(@DrawableRes val icon: Int, val neutral: Boolean = false) {
     /** A badge or an achievement. */
     BADGE(R.drawable.ic_ach_trophy),
     /** A new trainer level. */
-    TRAINER(R.drawable.ic_ach_crown),
+    TRAINER(R.drawable.ic_trainer_rank),
     /** The day changed: the daily goal starts again. */
     NEW_DAY(R.drawable.ic_calendar),
     /** The daily goal was reached. */
@@ -179,7 +179,7 @@ object ToastLook {
     const val FULL_H = 200f
     const val COMPACT_H = 110f
 
-    /** [arenaShown] false = no arena (the Study "mini" bar): the smallest card over the panel's top-left. */
+    /** [arenaShown] false = no arena (the Study "mini" bar): the smallest card over the panel's top-right. */
     fun of(onScreenWdp: Float, onScreenHdp: Float, arenaShown: Boolean = true): Look {
         val tier = when {
             !arenaShown -> Tier.TINY
@@ -202,9 +202,9 @@ internal class KeepOff(
 )
 
 /**
- * Where a toast sits (pure, px of the arena). First choice: the top-left corner, inside the battle frame's safe area, a margin in: above
+ * Where a toast sits (pure, px of the arena). First choice: the top-right corner, inside the battle frame's safe area, a margin in: above
  * your Pokémon, which the layouts leave free (the wild one stands top-right; your info box is under or beside your Pokémon). When
- * something is in the way (a layout with a card at the top-left) the toast takes the free place nearest to that corner; nothing free: the
+ * something is in the way (a layout with a card at the top-right) the toast takes the free place nearest to that corner; nothing free: the
  * place that covers the least. What it covers counts by weight: your info box most, then the wild one's, then the pictures (their
  * transparent edges do not count: only the inner part of a picture's box); a little over a picture's top is better than a spot far from the corner (the left side is the place, not the right).
  */
@@ -224,13 +224,13 @@ internal object ToastSpot {
     /** A picture's box is the drawn image's, with the empty edges of the sprite: only this inner share of each side counts as covered. */
     private const val ART_CORE = 0.10f
 
-    /** One share of covering costs this many card heights of distance from the corner; sideways counts [SIDEWAYS] times as much as down (the left side is the place). */
+    /** One share of covering costs this many card heights of distance from the corner; sideways counts [SIDEWAYS] times as much as down (the right side is the place). */
     private const val COVER_COST = 100.0
     private const val SIDEWAYS = 8.0
 
     fun place(w: Int, h: Int, aw: Int, ah: Int, margin: Int, gap: Int, keep: KeepOff?): Spot {
         val safe = keep?.safe?.takeIf { !it.none }
-        val x0 = (safe?.edge ?: 0f).toInt() + margin
+        val x0 = max(0, aw - w - (safe?.edge ?: 0f).toInt() - margin)
         val y0 = (safe?.top ?: 0f).toInt() + margin
         fun fit(x: Int, y: Int): IntArray {
             if (safe != null) {
@@ -249,9 +249,14 @@ internal object ToastSpot {
             val r = FloatSpot.Rect(x, y, x + w, y + h)
             return weighted.sumOf { (k, wt) -> wt * area(r, k) / own }
         }
-        fun cost(p: IntArray) = COVER_COST * covered(p[0], p[1]) + (SIDEWAYS * abs(p[0] - first[0]) + 2.0 * abs(p[1] - first[1])) / max(1, h)
+        fun cost(p: IntArray): Double {
+            val r = FloatSpot.Rect(p[0], p[1], p[0] + w, p[1] + h)
+            val chipPenalty = if (keep.extra.any { it.hits(r) }) 1_000_000_000.0 else 0.0
+            return chipPenalty + COVER_COST * covered(p[0], p[1]) +
+                (SIDEWAYS * abs(p[0] - first[0]) + 2.0 * abs(p[1] - first[1])) / max(1, h)
+        }
         // a margin is kept on every side of the arena (a card never touches its edge)
-        val xs = (listOf(x0) + weighted.map { it.first.r + gap }).filter { it + w + margin <= aw }.distinct()
+        val xs = (listOf(x0) + weighted.flatMap { listOf(it.first.r + gap, it.first.l - gap - w) }).filter { it >= margin && it + w + margin <= aw }.distinct()
         val ys = (listOf(y0) + weighted.flatMap { listOf(it.first.b + gap, it.first.t - gap - h) }).filter { it >= margin && it + h + margin <= ah }.distinct()
         var best = first
         var bestCost = cost(first)
@@ -325,8 +330,8 @@ internal class ToastCard(ctx: Context, val item: ToastQueue.Item, look: ToastLoo
 }
 
 /**
- * The toast layer of the battle panel: a full-size layer over the panel (the arena's top-left is its place), above the arena's frame.
- * It takes no touches except a card's own (a tap closes it). One card at a time ([ToastQueue]); it slides in from the left edge, holds,
+ * The toast layer of the battle panel: a full-size layer over the panel (the arena's top-right is its place), above the arena's frame.
+ * It takes no touches except a card's own (a tap closes it). One card at a time ([ToastQueue]); it slides in from the right edge, holds,
  * slides out; reduced motion (or `pop` false) = it comes and goes without sliding. Main thread only.
  */
 internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
@@ -334,7 +339,7 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
     var floorSp = 0f
     var panelScale = 1f
 
-    /** The arena in this layer's px (null / empty = no arena on screen: the toast sits over the panel's top-left, smallest form). */
+    /** The arena in this layer's px (null / empty = no arena on screen: the toast sits over the panel's top-right, smallest form). */
     var arenaRect: () -> Rect? = { null }
 
     /** What the toast keeps clear of, in the ARENA's px (null = nothing known). */
@@ -403,7 +408,15 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
     private fun still(item: ToastQueue.Item) =
         !item.pop || !ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
 
+    internal var blocked: () -> Boolean = { false }
+    internal val hasMessages: Boolean get() = queue.showing != null
+
+    internal fun resumeBlocked() {
+        if (card == null) queue.showing?.let { present(it, resume = false) }
+    }
+
     private fun present(item: ToastQueue.Item, resume: Boolean) {
+        if (blocked()) return
         removeCallbacks(hideRun)
         if (waitingForLayout && clock() - waitingSince > 5000L) { clear(); return }
         if (width <= 0 || height <= 0) {
@@ -437,6 +450,14 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
                 if (s2.cost < spot.cost - 1.0) { c = narrow; spot = s2 }
             }
         }
+        // If no free place exists in a tiny window, wait for a layout with room for the chips.
+        val chipRect = FloatSpot.Rect(spot.left, spot.top, spot.left + c.measuredWidth, spot.top + c.measuredHeight)
+        if (keep?.extra?.any { it.hits(chipRect) } == true) {
+            card?.let { it.animate().cancel(); removeView(it) }; card = null
+            waitingForLayout = true
+            waitingSince = clock()
+            return
+        }
         card?.let { it.animate().cancel(); removeView(it) }
         cardLeft = area.left + spot.left
         val top = area.top + spot.top
@@ -452,7 +473,7 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
             shownAt = now; slideMs = if (slide) IN_MS else 0L
             hideAt = now + slideMs + queue.holdMs(item)
             if (slide) {
-                c.translationX = -(cardLeft + c.measuredWidth).toFloat()
+                c.translationX = (width - cardLeft).toFloat()
                 c.animate().translationX(0f).setDuration(IN_MS).setInterpolator(DecelerateInterpolator()).start()
             }
         }
@@ -489,7 +510,7 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
         leaving = true
         c.isClickable = false
         if (item == null || still(item) || !c.isAttachedToWindow) { finish(); return }
-        c.animate().translationX(-(cardLeft + c.width).toFloat()).alpha(0f).setDuration(OUT_MS).setInterpolator(AccelerateInterpolator())
+        c.animate().translationX((width - cardLeft).toFloat()).alpha(0f).setDuration(OUT_MS).setInterpolator(AccelerateInterpolator())
             .withEndAction { finish() }.start()
     }
 

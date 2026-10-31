@@ -198,7 +198,6 @@ object Bits {
 
     /** The 40 dp `ag_mantle` tile with an item icon (mockup `.item .ic`). */
     fun itemTile(ctx: Context, item: String, sizeDp: Int = 40): FrameLayout = FrameLayout(ctx).apply {
-        background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx)
         val img = ImageView(ctx)
         Ui.itemIcon(ctx, item, img)
         val inner = Ui.dp(ctx, sizeDp * 3 / 4)

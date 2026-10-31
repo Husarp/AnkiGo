@@ -89,8 +89,8 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     // ---- action bar (round 9 D3): the log slot under the arena: my last move | dots | their last move, details in a bubble ----
     private val logBox = ActionBarView(ctx)
 
-    // ---- R19-H (PLAN 257): the toasts (the old whole-bar lines): small cards at the arena's top-left, above your Pokémon; the bar keeps its segments ----
-    private val toasts = ArenaToastLayer(ctx).also { layer -> arena.onMarksPlaced = { layer.reposition() } }
+    // ---- R19-H (PLAN 257): the toasts (the old whole-bar lines): small cards at the arena's top-right, above your Pokémon; the bar keeps its segments ----
+    private val toasts = ArenaToastLayer(ctx).also { layer -> arena.onMarksPlaced = { layer.reposition(); arena.repositionSideCards() } }
 
     // PLAN 309: saved queue drives the reminder, including a newly opened / resumed panel.
     internal val switchNotice = LinearLayout(ctx).apply {
@@ -173,7 +173,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         visibility = GONE
     }
 
-    /** The "Paused" pill over the arena's top-left corner while paused and the log line has stepped out (the smallest windows). */
+    /** The "Paused" pill over the arena's top-right corner while paused and the log line has stepped out (the smallest windows). */
     private val pausedBadge = newPausedPill()
 
     // ---- footer ----
@@ -240,7 +240,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         if (key == HpBarLook.KEY) post { if (isAttachedToWindow) refreshPrefs() }     // ... and another look for their HP / XP bars (Round 10 W8)
         // Round 10 B19: the battle's "View settings" sheet changes these from any host; every open panel follows live
         if (key == PokemonSize.KEY || key == "cardsUnderOwn" || key == "compactCards") post { if (isAttachedToWindow) refreshPrefs() }
-        if (key == "backgroundPictures") post { if (isAttachedToWindow) arena.reapplyBackdrop() }
+        if (key == "backgroundPictures" || key == "disabledBackdrops") post { if (isAttachedToWindow) arena.reapplyBackdrop() }
     }
 
     /** Round 9 (D2): the battle frame drawn over the arena. [frameStyle] is the saved choice; [updateFrame] fits it to the panel scale. */
@@ -370,7 +370,10 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         scaler.addView(switchNotice, LayoutParams(-2, -2, Gravity.TOP or Gravity.END).also {
             it.setMargins(dpi(6), dpi(6), dpi(6), 0)
         })
-        toasts.onChanged = { refreshSwitchNotice() }
+        toasts.blocked = { arena.sideCardShowing }
+        arena.otherSideMessageWaiting = { toasts.hasMessages }
+        arena.onSideCardFinished = { toasts.resumeBlocked() }
+        toasts.onChanged = { refreshSwitchNotice(); arena.resumeSideCards() }
         scaler.addView(toasts, LayoutParams(-1, -1))   // R19-H: over the arena and its frame, under the move bubble
         scaler.addView(overlay, LayoutParams(-1, -1))
         scaler.addView(pausedBadge, LayoutParams(-2, -2, Gravity.TOP or Gravity.START).also { it.setMargins(dpi(6), dpi(6), 0, 0) })
@@ -650,7 +653,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     // ---------------------------------------------------------------- log
 
     /**
-     * R19-H (PLAN 257): a line about the whole battle (the app's own news, hints, errors) is a card toast at the arena's top-left, above your
+     * R19-H (PLAN 257): a line about the whole battle (the app's own news, hints, errors) is a card toast at the arena's top-right, above your
      * Pokémon ([toast]); the action bar keeps its segments, no line ever takes it. The pill word and [kind] pick the toast's icon
      * ([ToastKind.of]); `{{...}}` in [text] turns mauve. [pop] false = no sliding. Lines about a move or one side are not shown here (the
      * halves and the arena show them): they go to [sayBattle].
@@ -662,7 +665,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     }
 
     /**
-     * R19-H: a small card toast, top-left of the arena, sliding in from the left edge for about 2.5 s; a tap closes it. One at a time:
+     * R19-H: a small card toast, top-right of the arena, sliding in from the right edge for about 2.5 s; a tap closes it. One at a time:
      * more wait in a short row, an equal one within a few seconds is merged ([ToastQueue]). [sub] = a small second line (only where there is
      * room). `{{...}}` in [text] turns mauve. Other code (a switch's free hit ...) calls this with a [ToastKind].
      */
@@ -910,6 +913,19 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         arena.syncConditions(if (enemyHeld) null else st.battle)   // R19-K (PLAN 269): the condition chips follow the saved fight
         renderFooter(st)
         prefetch(st, data)
+        val battle = st.battle
+        if (battle?.field?.player?.get(com.husarp.ankigo.game.AbilityAdaptations.SWITCH_OFFER) == 1 && Ui.findActivity(ctx) != null && isShown) {
+            post {
+                if (st.battle !== battle || !isShown) return@post
+                if (battle.field.player.remove(com.husarp.ankigo.game.AbilityAdaptations.SWITCH_OFFER) != 1) return@post
+                GameRepo.saveNow(ctx)
+                SwitchPopup.show(ctx, data, st, header = "Your ability offers a switch") { uid ->
+                    val result = GameRepo.run(ctx) { it.requestMain(uid, cardShowing = true) }
+                    if (!result.ok) Ui.toast(ctx, result.message)
+                    refreshSwitchNotice()
+                }
+            }
+        }
     }
 
     private fun renderEnemy(st: GameState, data: GameData) {

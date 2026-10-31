@@ -3,6 +3,34 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.0.0
+- Choose what to study with deck/tag filters, per-deck free study, ten recent setups and starred favourites. Practise cards that aren't due without changing their Anki schedule; those answers give half XP and no answer or win money.
+- Write on your cards with a whiteboard, coloured pens, eraser, undo and clear. It clears for each new card and remembers whether you left it on.
+- Deck status opens by long-pressing a deck or subdeck. Search decks, include subdecks and see known percentage, card states, due cards, cards introduced this week and study streak.
+- Interactive templates keep their scripts, steps and tap actions. Compatible dictionary terms and linked notes open floating reference windows; MathJax symbol classes work offline.
+- Battle backgrounds have refreshed scenes and replacement art. Choose which appear in Settings, Backgrounds, with a preview and switch for every scene.
+- Pokémon Info works offline, with Pokédex text and categories available on first open.
+- Combined ball throws pair a regular ball with one optional special. Matching specials improve catch chances; Heal and Luxury improve caught Pokémon's IVs. Repeat can return after a throw: 50% on a miss, 25% on a catch; the regular ball is spent.
+- Daily ball offers include one regular ball and a 50% chance of a special. Trade 10 Poké Balls for a Great Ball or 6 Great Balls for an Ultra Ball; specials cannot be traded.
+- Rebalanced money and prices give 10 coins per answer and 25 per win before the daily income curve. Each income step is now 1,000 coins wide. Item prices vary by up to 10% daily and stay the same through Refresh; tap ↓ or ↑ for the normal price. Deals take 30% off that day's price.
+- Wild Pokémon have level-scaled EVs in their species' stats and keep them when caught. Encounters range from one level below to five above your Main, within levels 1–100.
+- Your answers shape battles: two Agains in a row add one wild Attack stage, once per streak; Hard gives wild attacks 75% power. After three rounds without Good or Easy, the wild Pokémon announces and uses its strongest move. New-card OK remains neutral.
+- Previously inactive abilities now have AnkiGo battle or reward effects explained in details. Held berries work with Gluttony, Ripen, Cheek Pouch, Cud Chew and Unnerve. Wimp Out and Emergency Exit offer a switch; Pickup, Honey Gather and Ball Fetch can recover rewards.
+- Linked moves get clearer descriptions naming only combinations your Pokémon knows. New Pokémon pair Defense Curl, Charge and Stockpile with usable partners; teaching a TM warns before breaking a combination.
+- Move animations cover draining and self-healing families, type-coloured preparation glows, and explosive flashes and shockwaves. Multi-hit moves show a layered slash and actual damage number for each landed hit; recoil moves show clearer impacts and a fading red flash/shake with the user's damage number.
+- Achievements have a streamlined list, eleven secret discoveries, Epic caps for Ball catches, TMs taught and Items found, and consistent study-time progress in hours.
+- Buddy widgets offer name search, level/name/recent-catch sorting, type/Team/Box/favourite/shiny filters and selected-first results. Adjust Pokémon size with a live preview; sprites fit clear of progress rings and bars. Goal counters are smaller and better spaced, without the old check mark. Widget transparency moves in 5% steps, with common colour and tint choices.
+- Pokémon details place abilities above stats and have a pinned back arrow beside the title. Combine Box filters to find favourites in your team holding an item. Wider battle info boxes give type names more room.
+- Fresh artwork adds the selected pixel-art coin stack across money displays and widgets, plus a star-rank icon for trainer levels and Stats. Item and TM icons have bare backgrounds in details, Shop and Bag.
+### Fixes
+- Berry healing stays with the hit that triggered it during multi-hit moves; HP stays accurate throughout the move.
+- Study cards stay in place until answered or skipped. Due learning/review cards take priority over new cards; a last-moment queue check catches cards becoming due before the finished screen.
+- Battle side messages wait for one another near the top right, clear of condition chips. Achievement and reward pop-ups wait for animations; daily gifts avoid a duplicate alert.
+- Level numbers update as XP bars grow, including team XP cards.
+- Saved backgrounds remain visible with picture downloads off; the switch explains that saved pictures stay available.
+- Pokémon details no longer suggest unobtainable Hidden Abilities under “Others of its kind”.
+- Widget card counts avoid counting parent decks twice, matching Study.
+
 ## 0.27.0
 - Battle frames can match the scenery, with Automatic and the new Waves frame. The old Ice frame has been retired.
 - Stat changes stay visible throughout a fight and in Pokémon details. Nature bonuses are explained together beneath the stat bars.

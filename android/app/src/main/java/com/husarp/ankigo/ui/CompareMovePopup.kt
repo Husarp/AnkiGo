@@ -66,10 +66,10 @@ object CompareMovePopup {
     }
 
     /** Opens the popup of [move] next to [anchor] (replacing the one that is open). */
-    fun show(anchor: View, move: Move) {
+    fun show(anchor: View, move: Move, knownMoves: List<Move>? = null) {
         dismiss()
         val ctx = anchor.context
-        val card = content(ctx, move)
+        val card = content(ctx, move, knownMoves)
         shown = true
         content = card
         timer.after(SHOW_MS, autoClose)
@@ -117,7 +117,7 @@ object CompareMovePopup {
     }
 
     /** The popup's card inside a transparent frame that leaves room for its shadow. Screenshots render this. */
-    internal fun content(ctx: Context, m: Move): View {
+    internal fun content(ctx: Context, m: Move, knownMoves: List<Move>? = null): View {
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
@@ -151,7 +151,7 @@ object CompareMovePopup {
                 m.accuracy?.let { addView(num(it.toString(), "Accuracy"), LinearLayout.LayoutParams(-2, -2)) }
             }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 8) })
         }
-        val effect = MoveText.describe(m)
+        val effect = MoveText.describe(m, knownMoves)
         if (effect.isNotBlank()) {
             card.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub1).apply {
                 text = effect

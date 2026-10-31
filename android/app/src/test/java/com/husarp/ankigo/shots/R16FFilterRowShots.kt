@@ -181,15 +181,15 @@ class R16FFilterRowShots {
             fun chip(t: String) = all(row).filterIsInstance<TextView>().first { it.text.toString() == t }
             assertTrue("Favourites is on: a lit quick chip, still there", chip("Favourites").isSelected)
             assertFalse("Shiny is off", chip("Shiny").isSelected)
-            // Shiny while Favourites is on switches to Shiny (Show stays one choice); the type filter stays
+            // Shiny combines with Favourites; the type filter stays
             chip("Shiny").performClick()
-            assertEquals(BoxFilter.SHINY, getField(p, "boxFilter"))
+            assertEquals(setOf(BoxFilter.FAVOURITES, BoxFilter.SHINY), getField(p, "boxFilter"))
             assertEquals(tf(TypeMatch.ANY, 1), getField(p, "boxTypes"))
             render(p); row = boxRow(p)
-            assertTrue(chip("Shiny").isSelected); assertFalse(chip("Favourites").isSelected)
-            // a lit chip tapped again turns Show off
+            assertTrue(chip("Shiny").isSelected); assertTrue(chip("Favourites").isSelected)
+            // a lit chip tapped again removes only itself
             chip("Shiny").performClick()
-            assertEquals(BoxFilter.ALL, getField(p, "boxFilter"))
+            assertEquals(setOf(BoxFilter.FAVOURITES), getField(p, "boxFilter"))
             // the sheet's Clear turns the sheet filters (the types) off, the sort and the grouping stay
             render(p); row = boxRow(p)
             assertTrue("the chip names the type filter", all(row).any { it is ActiveChip })
@@ -240,7 +240,7 @@ class R16FFilterRowShots {
             // new page instances: each screen has its own type filter back (R18 249 keeps the other filters too: see R18FFilterShots)
             val box2 = TeamPage(ctx, NoHost)
             assertEquals(TypeFilter(linkedSetOf(Type.WATER, Type.ICE), TypeMatch.ONLY), getField(box2, "boxTypes"))
-            assertEquals(BoxFilter.ALL, getField(box2, "boxFilter"))
+            assertEquals(emptySet<BoxFilter>(), getField(box2, "boxFilter"))
             val dex2 = DexPage(ctx, NoHost)
             assertEquals(TypeFilter(linkedSetOf(Type.FIRE), TypeMatch.ALL), (getField(dex2, "filter") as DexFilter).typeFilter)
             // clearing in the sheet is remembered too
@@ -269,7 +269,7 @@ class R16FFilterRowShots {
             assertTrue("48 dp touch", empty.clear.minHeight >= Ui.dp(ctx, 48))
             empty.clear.performClick()
             assertEquals(TypeFilter(), getField(p, "boxTypes"))
-            assertEquals(BoxFilter.ALL, getField(p, "boxFilter"))
+            assertEquals(emptySet<BoxFilter>(), getField(p, "boxFilter"))
             // the screen to shoot: an empty result with its button
             pageScreen(ctx, boxPage(ctx, TypeFilter(linkedSetOf(t), TypeMatch.ONLY), BoxFilter.FAVOURITES))
         }

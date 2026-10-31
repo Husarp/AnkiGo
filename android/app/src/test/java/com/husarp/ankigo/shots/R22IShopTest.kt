@@ -20,10 +20,10 @@ class R22IShopTest {
 
     @Test fun buyRequiresTwoTapsAndChangingQuantityDisarmsIt() {
         val ctx = setup()
-        val (page, stage) = ShopCardKit.page(ctx, CardKeys.basic(ShopPlan.Tile.Item("poke-ball")))
+        val (page, stage) = ShopCardKit.page(ctx, CardKeys.basic(ShopPlan.Tile.Item("potion")))
         val state = GameRepo.state!!
         val cash = state.cash
-        val count = state.count("poke-ball")
+        val count = state.count("potion")
         tap(stage, "Buy"); stage.render()
         assertEquals(cash, state.cash)
         assertTrue(ShopCardKit.texts(stage).contains("Sure?"))
@@ -32,8 +32,8 @@ class R22IShopTest {
         assertFalse(page.open.buying)
         tap(stage, "Buy"); stage.render()
         tap(stage, "Sure?"); stage.render()
-        assertEquals(count + 3, state.count("poke-ball"))
-        assertEquals(cash - 600, state.cash)
+        assertEquals(count + 3, state.count("potion"))
+        assertEquals(cash - 3 * com.husarp.ankigo.game.Shop.priceOf(GameRepo.data!!, state, "potion"), state.cash)
         assertFalse(page.open.buying)
     }
     @Test fun heldItemWithNoFreeCopiesIsVisibleAndCannotBeGivenAgain() {
@@ -90,12 +90,13 @@ class R22IShopTest {
     }
     @Test fun insufficientMoneyDoesNotArmConfirmation() {
         val ctx = setup()
-        val (page, stage) = ShopCardKit.page(ctx, CardKeys.basic(ShopPlan.Tile.Item("poke-ball")), cash = 199)
-        val count = GameRepo.state!!.count("poke-ball")
+        val price = com.husarp.ankigo.game.Shop.priceOf(GameRepo.data!!, ShopCardKit.WEEKDAY, "potion")
+        val (page, stage) = ShopCardKit.page(ctx, CardKeys.basic(ShopPlan.Tile.Item("potion")), cash = price - 1)
+        val count = GameRepo.state!!.count("potion")
         tap(stage, "Buy"); stage.render()
         assertFalse(page.open.buying)
-        assertEquals(199, GameRepo.state!!.cash)
-        assertEquals(count, GameRepo.state!!.count("poke-ball"))
+        assertEquals(price - 1, GameRepo.state!!.cash)
+        assertEquals(count, GameRepo.state!!.count("potion"))
     }
 
 }

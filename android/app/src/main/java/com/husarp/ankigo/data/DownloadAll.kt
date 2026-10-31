@@ -293,7 +293,11 @@ internal object DownloadAll {
      */
     fun fetcher(ctx: Context, firstError: AtomicReference<String?>, reasons: MutableMap<String, String>): (Job) -> Unit {
         val app = ctx.applicationContext
-        return fetching(layout(app), GameSound.cryStoreOf(app), firstError, reasons, { Sprites.enabled(app) }) { url, p -> Mirror.get(url, progress = p) }
+        val fetch = fetching(layout(app), GameSound.cryStoreOf(app), firstError, reasons, { Sprites.enabled(app) }) { url, p -> Mirror.get(url, progress = p) }
+        return { job ->
+            if (job.kind == Kind.BACKGROUND && Sprites.enabled(app)) Backdrops.installBundled(app, Sprites.dir(app), job.bg!!)
+            fetch(job)
+        }
     }
 
     /**

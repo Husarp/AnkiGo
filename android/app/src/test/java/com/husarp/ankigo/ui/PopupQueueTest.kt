@@ -36,6 +36,19 @@ class PopupQueueTest {
         assertEquals(0, AchievementPopup.waitingGifts().size)
     }
 
+    @Test fun allBattleHostsMustFinishBeforePopupsCanShow() {
+        val first = Any(); val second = Any()
+        AchievementPopup.playbackStarted(first)
+        AchievementPopup.playbackStarted(second)
+        AchievementPopup.offer(listOf(GameEvent.ItemFound("potion", 1)))
+        org.junit.Assert.assertTrue(AchievementPopup.waitingForPlayback)
+        AchievementPopup.playbackFinished(first)
+        org.junit.Assert.assertTrue(AchievementPopup.waitingForPlayback)
+        AchievementPopup.playbackFinished(second)
+        org.junit.Assert.assertFalse(AchievementPopup.waitingForPlayback)
+        assertEquals(1, AchievementPopup.waitingItems().size)
+    }
+
     // ---- R14-B2-D: the Daily gift popup shares the queue ----
 
     @Test fun aDailyGiftWaitsInItsOwnQueue() {

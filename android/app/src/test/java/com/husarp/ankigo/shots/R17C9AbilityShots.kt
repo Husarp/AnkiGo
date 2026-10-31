@@ -25,7 +25,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * R17C-9a: the Info section of your Pokémon's details with the ability under its name: "Static", then what it does in AnkiGo, then the other abilities
+ * R17C-9a: the Stats section of your Pokémon's details with the ability under its name: "Static", then what it does in AnkiGo, then the other abilities
  * of its kind on their own line. PNGs: r17c9-ability-<size>-<theme> (light + dark; phone and a float-sized window).
  */
 class R17C9AbilityShots {
@@ -68,7 +68,7 @@ class R17C9AbilityShots {
     }
 
     @Test fun abilityLine() {
-        DetailSections.storeOf = { object : DetailOpenStore { override fun get(key: String) = key == "info"; override fun set(key: String, open: Boolean) {} } }
+        DetailSections.storeOf = { object : DetailOpenStore { override fun get(key: String) = key == "stats"; override fun set(key: String, open: Boolean) {} } }
         DetailSections.dexLoader = { _, _, done -> done(sample) }
         var checked = false
         paparazzi.shootPage("r17c9-ability", listOf(Variants.PHONE, FLOAT)) { ctx: Context ->
@@ -77,17 +77,32 @@ class R17C9AbilityShots {
             // the line under the ability: its sentence, then the others of its kind on their own line
             val sub = texts(scene).firstOrNull { it.text.toString().startsWith(AbilityText.of("Static")!!) }
             assertNotNull("the ability's sentence is shown", sub)
-            assertEquals(AbilityText.of("Static") + "\nOthers of its kind: Spark Eye · Quick Wings (hidden)", sub!!.text.toString())
+            assertEquals(AbilityText.of("Static") + "\nOthers of its kind: Spark Eye", sub!!.text.toString())
             assertTrue("the ability's name is above it", texts(scene).any { it.text.toString() == "Static" })
             checked = true
             object : FrameLayout(ctx) {
                 override fun dispatchDraw(canvas: android.graphics.Canvas) {
-                    // the Info section is the last one: the end of the scroll shows it
-                    scrolls(scene).maxByOrNull { it.getChildAt(0)?.height ?: 0 }?.let { sc -> sc.scrollTo(0, (sc.getChildAt(0).height - sc.height).coerceAtLeast(0)) }
+                    // Keep the ability at the top of Stats visible in short windows.
+                    sub.requestRectangleOnScreen(android.graphics.Rect(0, 0, sub.width, sub.height), true)
                     super.dispatchDraw(canvas)
                 }
             }.apply { addView(scene, FrameLayout.LayoutParams(-1, -1)) }
         }
         assertTrue(checked)
     }
+    @Test fun hiddenOnlyAlternativeHidesOthersLine() {
+        DetailSections.storeOf = { object : DetailOpenStore { override fun get(key: String) = key == "stats"; override fun set(key: String, open: Boolean) {} } }
+        DetailSections.dexLoader = { _, _, done -> done(sample) }
+        paparazzi.shootPage("r23h-hidden-only-ability", listOf(Variants.PHONE)) { ctx: Context ->
+            val mon = staticMon()
+            @Suppress("UNCHECKED_CAST") val map = gd.species as MutableMap<Int, com.husarp.ankigo.game.Species>
+            map[25] = gd.sp(25).copy(abilities = listOf("Static"))
+            val d = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), gd, mon) } ?: error("no dialog was shown")
+            val scene = DialogShots.scene(ctx, d)
+            assertTrue("the ability effect remains", texts(scene).any { it.text.toString() == AbilityText.of("Static") })
+            assertTrue("no unavailable alternative is shown", texts(scene).none { it.text.contains("Others of its kind:") || it.text.contains("Quick Wings") })
+            scene
+        }
+    }
+
 }

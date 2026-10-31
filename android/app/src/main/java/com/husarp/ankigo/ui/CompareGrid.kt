@@ -549,7 +549,7 @@ internal class CompareGrid(
                         val mv = page.data.move(m.id)
                         if (mv != null) {
                             contentDescription = CompareMovePopup.said(mv) + ". Tap for details"
-                            setOnClickListener { CompareMovePopup.show(it, mv) }
+                            setOnClickListener { CompareMovePopup.show(it, mv, cell.moves.mapNotNull { move -> page.data.move(move.id) }) }
                         }
                     }, LinearLayout.LayoutParams(-2, -2).also { if (k > 0) it.topMargin = dp(6) })
                 }

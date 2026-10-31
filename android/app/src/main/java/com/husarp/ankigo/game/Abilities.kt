@@ -212,6 +212,7 @@ internal object Abilities : BattleRules {
             "turboblaze" -> announce(r, p, ab, "${r.mon(p).name} is radiating a blazing aura!")
             else -> AbilitiesMore.enter(r, p, ab)
         }
+        AbilityAdaptations.enter(r, p, ab)
     }
 
     private fun intimidate(r: Round, p: Boolean) {

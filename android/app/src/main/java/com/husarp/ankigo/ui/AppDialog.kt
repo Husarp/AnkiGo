@@ -36,6 +36,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
     private var customView: View? = null
     private var footer: View? = null
     private var closeAtTop = false
+    private var backAtTop = false
     private var items: Array<out CharSequence>? = null
     private var itemListener: DialogInterface.OnClickListener? = null
     private var cancelable = true
@@ -98,7 +99,24 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
             }, LinearLayout.LayoutParams(-2, -2).also { it.setMargins(Ui.dp(ctx, 12), Ui.dp(ctx, 8), 0, 0) })
         }
         val hasBody = message != null || customView != null || items != null
-        title?.let { t ->
+        if (backAtTop) {
+            card.addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 8))
+                addView(android.widget.ImageView(ctx).apply {
+                    setImageResource(R.drawable.ic_back)
+                    setColorFilter(Ui.c(ctx, R.color.ag_sub1))
+                    setPadding(Ui.dp(ctx, 13), Ui.dp(ctx, 13), Ui.dp(ctx, 13), Ui.dp(ctx, 13))
+                    contentDescription = "Back to Pokémon"
+                    background = RippleDrawable(ink(0x22, Ui.c(ctx, R.color.ag_text)), null, ColorDrawable(Color.BLACK))
+                    setOnClickListener { dismiss() }
+                }, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
+                addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = title },
+                    LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12) })
+            }, LinearLayout.LayoutParams(-1, -2))
+        }
+        title?.takeUnless { backAtTop }?.let { t ->
             card.addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply {
                 text = t
                 setPadding(Ui.dp(ctx, 24), Ui.dp(ctx, 24), Ui.dp(ctx, 24), Ui.dp(ctx, if (hasBody) 12 else 4))
@@ -248,6 +266,8 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
         private val d = AppDialog(ctx)
 
         fun setCloseAtTop() = apply { d.closeAtTop = true }
+        /** Pinned bare back arrow beside the title; dismisses to the originating screen. */
+        fun setBackAtTop() = apply { d.backAtTop = true }
         fun setTitle(t: CharSequence?) = apply { d.title = t }
         fun setMessage(m: CharSequence?) = apply { d.message = m }
         fun setView(v: View?) = apply { d.customView = v }

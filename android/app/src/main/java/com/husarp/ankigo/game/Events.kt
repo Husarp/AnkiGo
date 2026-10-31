@@ -63,6 +63,11 @@ sealed class GameEvent {
         val missed: Boolean, val failed: Boolean,
         val targetHp: Int, val targetMaxHp: Int, val userHp: Int, val userMaxHp: Int,
         val moveId: String = "", val power: Int = 0,
+        /** Actual HP removed by each landed hit, including zero for a substitute. Presentation only. */
+        val hitDamages: List<Int> = emptyList(),
+        val multiHit: Boolean = false, val recoilMove: Boolean = false,
+        /** Actual target HP after each hit and its immediate effects (berries can heal between hits). */
+        val hitTargetHps: List<Int> = emptyList(),
     ) : GameEvent()
 
     /** The wild one did nothing because the round went well (Ankimon: Splash). */
@@ -79,12 +84,16 @@ sealed class GameEvent {
         val label: String? = null,
         /** R19-L (PLAN 271): Transform: the Pokédex number of the picture the Pokémon turns into (0 = no change of picture) and whether that one is shiny. */
         val into: Int = 0, val intoShiny: Boolean = false,
+        /** True only for a move's own recoil/HP cost, not contact abilities or crash damage. */
+        val moveRecoil: Boolean = false,
+        /** Presentation index within the preceding multi-hit attack; -1 for ordinary effects. */
+        val hitIndex: Int = -1,
     ) : GameEvent()
 
     data class Fainted(val player: Boolean, val name: String) : GameEvent()
 
     /** A ball was thrown (optional tap). [success] = it caught the wild Pokémon. [number] = which throw of this fight it was (1 = the first; 0 = not known, an event made without a fight). */
-    data class BallThrow(val ball: String, val chance: Int, val success: Boolean, val left: Int, val number: Int = 0) : GameEvent()
+    data class BallThrow(val ball: String, val chance: Int, val success: Boolean, val left: Int, val number: Int = 0, val special: String? = null) : GameEvent()
 
     /** The wild Pokémon joined the collection. [newSpecies] = first of its kind (new Pokédex entry). */
     data class Caught(val uid: String, val species: Int, val name: String, val level: Int, val shiny: Boolean, val ball: String?, val newSpecies: Boolean, val toTeam: Boolean) : GameEvent()

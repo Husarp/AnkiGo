@@ -134,7 +134,7 @@ class DailyGiftTest {
 
     @Test fun aStoneIsAPricedEvolutionStone() {
         val stones = DailyGift.stones(data)
-        assertEquals(listOf("moon-stone", "thunder-stone"), stones) // the world prices these two only
+        assertEquals(listOf("dawn-stone", "dusk-stone", "fire-stone", "ice-stone", "leaf-stone", "moon-stone", "oval-stone", "shiny-stone", "sun-stone", "thunder-stone", "water-stone"), stones)
         assertTrue(stones.all { Items.def(it)!!.kind == ItemKind.EVOLUTION && data.price(it) > 0 })
         val seen = days(800).mapNotNull { DailyGift.draw(data, it, 30)!!.item }.filter { it.endsWith("-stone") }.toSet()
         assertEquals(stones.toSet(), seen)
@@ -176,11 +176,12 @@ class DailyGiftTest {
 
     // ---- empty pools fall back ----
 
-    @Test fun anEmptyRarePoolFallsBackDownTheTiers() {
-        // no priced stone, no TM, no Ultra Ball entry: nothing rare can be given
+    @Test fun missingApiPricesKeepTuningStonesAndTheOtherGiftTiers() {
+        // Tuning prices keep stones available even without API prices; there are no TMs or fixed rare items.
         val bare = GameData(data.species.mapValues { (_, sp) -> sp.copy(tmMoves = emptySet()) }, data.moves, data.growth, emptyMap())
         val g = days(300).map { DailyGift.draw(bare, it, 30, rareItems = emptyList())!! }
-        assertTrue(g.none { it.tm != null || it.item!!.endsWith("-stone") || it.item == "ultra-ball" })
+        assertTrue(g.none { it.tm != null || it.item == "ultra-ball" })
+        assertTrue(g.any { it.item in DailyGift.stones(bare) })
         assertTrue("the uncommon and common pools still give", g.any { it.item == "great-ball" } && g.any { it.item == "potion" })
     }
 
@@ -200,9 +201,12 @@ class DailyGiftTest {
             val g = DailyGift.draw(data, day, 15, common = junk + Tuning.GIFT_COMMON, uncommon = junk, rareItems = junk)!!
             if (g.item != null) assertNotNull(g.item, Items.def(g.item))
         }
-        // nothing at all to give (no stone, no TM, no catalogue item in any pool): null, so no event
+        // Unknown explicit pool items remain excluded; Tuning-priced stones may still fill rare slots.
         val bare = GameData(emptyMap(), emptyMap(), emptyMap(), emptyMap())
-        for (day in days(50)) for (s in listOf(1, 15, 30)) assertNull(DailyGift.draw(bare, day, s, common = junk, uncommon = junk, rareItems = junk))
+        val gifts = days(50).flatMap { day -> listOf(1, 15, 30).map { streak -> DailyGift.draw(bare, day, streak, common = junk, uncommon = junk, rareItems = junk) } }
+        assertTrue(gifts.any { it == null })
+        assertTrue(gifts.any { it != null })
+        assertTrue(gifts.filterNotNull().all { it.tm == null && it.item in DailyGift.stones(bare) })
     }
 
     // ---- give ----

@@ -101,7 +101,7 @@ class R19Fix2UiTest {
         layer.show(ToastKind.NEWS, "Ready.", pop = false)
         val old = layer.shownCard!!
         layer.keepOff = { KeepOff(FloatSpot.Rect(0, 300, 200, 400), FloatSpot.Rect(300, 300, 500, 400),
-            FloatSpot.Rect(0, 250, 100, 300), FloatSpot.Rect(400, 250, 500, 300), extra = listOf(FloatSpot.Rect(0, 0, 250, 100))) }
+            FloatSpot.Rect(0, 250, 100, 300), FloatSpot.Rect(400, 250, 500, 300), extra = listOf(FloatSpot.Rect(old.left, old.top, old.right, old.bottom))) }
         layer.reposition()
         assertNotSame(old, layer.shownCard)
         assertTrue(layer.shownCard!!.left != old.left || layer.shownCard!!.top != old.top)

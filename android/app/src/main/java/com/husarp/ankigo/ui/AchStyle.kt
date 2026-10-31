@@ -135,9 +135,11 @@ class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
     private val cut = Paint(Paint.ANTI_ALIAS_FLAG)
     private val mark = Paint(Paint.ANTI_ALIAS_FLAG)
     private val tick = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+    private var coinIcon = false
     private val shapeDrawables = HashMap<Int, Drawable>()
 
     fun set(@DrawableRes iconRes: Int, tier: Int, special: Boolean = false, ground: Int = Ui.c(context, R.color.ag_card)) {
+        coinIcon = iconRes == R.drawable.ic_coin
         this.tier = tier; this.special = special; this.ground = ground
         icon = context.getDrawable(iconRes)?.mutate()
         nudge = AchStyle.nudge(iconRes)
@@ -166,7 +168,7 @@ class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
             val h = s * 0.27f
             val ox = nudge.first * h / 12f; val oy = nudge.second * h / 12f // the icon box is 2h wide for 24 viewport units
             it.setBounds((cx - h + ox).toInt(), (cy - h + oy).toInt(), (cx + h + ox).toInt(), (cy + h + oy).toInt())
-            it.setTint(if (locked) AchStyle.mix(color, ground, 0.8f) else color)
+            if (!coinIcon) it.setTint(if (locked) AchStyle.mix(color, ground, 0.8f) else color)
             it.draw(canvas)
         }
         if (locked) return

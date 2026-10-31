@@ -125,7 +125,8 @@ class R707Shots {
         AppPrefs.setBackgroundPictures(ctx, true)
         Sprites.setEnabled(ctx, false)
         p.renderAll()
-        assertTrue("plain with downloads off", !back.showsPicture)
+        render(frame, "cached-downloads-off")
+        assertTrue("saved picture remains with downloads off", back.showsPicture)
 
         Sprites.setEnabled(ctx, true)
         p.renderAll(); render(frame, "back")
@@ -138,7 +139,11 @@ class R707Shots {
     @Test fun nothingIsDownloadedWhileOffAndAMissingPictureIsPlain() {
         paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, Theme.LIGHT))
         val ctx = Shots.files(paparazzi.context)
-        FakeGame.install(ctx)   // empty picture cache
+        FakeGame.install(ctx)
+        // Select an unbundled scene explicitly and remove any copied screenshot cache.
+        GameRepo.state!!.battle!!.wild.uid = ""
+        assertEquals("beach", wildPicture().id)
+        Backdrops.file(Sprites.dir(ctx), wildPicture()).parentFile!!.deleteRecursively()
         var asked = 0
         Backdrops.get = { _, _ -> asked++; null }
         val p = BattlePanelView(ctx)

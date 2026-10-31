@@ -189,6 +189,7 @@ object SaveCodec {
         key("enemy"); writeSide(this, b.enemy)
         kv("tally", b.tally); kv("answers", b.answers); kv("override", b.override?.name); kv("rounds", b.rounds)
         kv("startedAt", b.startedAt); kv("wildMaxHp", b.wildMaxHp)
+        kv("againStreak", b.againStreak); kv("pressuredRounds", b.pressuredRounds)
         kv("failedThrows", b.failedThrows)
         list("buttons", b.buttons)
         key("field"); writeField(this, b.field) // R17C-1
@@ -312,6 +313,8 @@ object SaveCodec {
             wildMaxHp = o.intOrNull("wildMaxHp")?.coerceAtLeast(1),
             failedThrows = o.int("failedThrows", 0).coerceAtLeast(0), // old saves: 0
             buttons = (o.intList("buttons") ?: emptyList()).map { it.coerceIn(0, Tuning.BUTTON_OK) }.toMutableList(), // old saves: none, Game.onAnswer restores them from the tally; R19-T: 5 = the OK of a new card
+            againStreak = o.int("againStreak", 0).coerceIn(0, Tuning.WILD_AGAIN_STREAK + 1),
+            pressuredRounds = o.int("pressuredRounds", 0).coerceIn(0, Tuning.WILD_STRONGEST_ROUNDS - 1),
             field = readField(o.optJSONObject("field")), // R17C-1: an old save has none = an empty field
         )
     }

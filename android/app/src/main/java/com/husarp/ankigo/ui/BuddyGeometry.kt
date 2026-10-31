@@ -4,6 +4,10 @@ data class BuddySpace(val width: Float, val height: Float, val scale: Float, val
 
 /** Same coordinates for the still canvas and the RemoteViews animation overlay. */
 data class BuddyGeometry(val cx: Float, val top: Float, val size: Float, val spriteLeft: Float, val spriteTop: Float, val spriteSize: Float) {
+    fun scaled(percent: Int): BuddyGeometry {
+        val next = spriteSize * (percent.coerceIn(50, 100) / 100f)
+        return copy(spriteLeft = spriteLeft + (spriteSize-next)/2, spriteTop = spriteTop + (spriteSize-next)/2, spriteSize = next)
+    }
     companion object {
         fun space(w: Float, h: Float): BuddySpace {
             val rw=if(w>=220f)286f else 140f
@@ -21,8 +25,12 @@ data class BuddyGeometry(val cx: Float, val top: Float, val size: Float, val spr
                 val sz = if(short)58f else if(wide)124f else 82f
                 return BuddyGeometry(cx,top,size,if(short)3f else if(wide)8f else 30f,if(short)5f else if(wide)8f else 0f,sz)
             }
-            val spriteSize = if (layout == "C") size * (if(short).58f else .52f) else size * .833f
-            return BuddyGeometry(cx, top, size, cx-spriteSize/2, if(layout=="C")top+size*(if(short).12f else .14f) else top+size/2-spriteSize/2-size*.02f, spriteSize)
+            // Inscribe the entire image rectangle (including opaque corners) inside the
+            // ring's inner edge, with a 2dp gap. This also bounds every animated frame.
+            val innerRadius = size / 2 - 3f - size * .065f / 2 - 2f
+            val spriteSize = minOf(innerRadius * kotlin.math.sqrt(2f),
+                if (layout == "C") size * .52f else size)
+            return BuddyGeometry(cx, top, size, cx-spriteSize/2, top+size/2-spriteSize/2, spriteSize)
         }
     }
 }

@@ -203,14 +203,14 @@ class R803Shots {
     }
 
     @Test fun shrunk() = shoot("r8-03-shrunk", listOf(Size.PHONE)) { ctx ->
-        val reef = scene(ctx, "beach"); val forest = scene(ctx, "forest"); val garden = scene(ctx, "jungle"); val temple = scene(ctx, "stormy-plains")
+        val reef = scene(ctx, "beach"); val forest = scene(ctx, "forest"); val garden = scene(ctx, "jungle"); val temple = scene(ctx, "crystal-storm")
         sheet(ctx,
             row(ctx, cell(ctx, "wide: beach 380 x 110, blur left + right, edges fade", 380, 110, Panel(ctx, reef, 1.35f))),
             row(
                 ctx,
                 cell(ctx, "tall: forest 120 x 300, blur top + bottom", 120, 300, Panel(ctx, forest, 2.2f)),
                 cell(ctx, "both: jungle 150 x 150", 150, 150, Panel(ctx, garden, 1.5f)),
-                cell(ctx, "stormy-plains 90 x 220", 90, 220, Panel(ctx, temple, 2.8f)),
+                cell(ctx, "crystal-storm 90 x 220", 90, 220, Panel(ctx, temple, 2.8f)),
             ),
         )
     }
@@ -748,6 +748,10 @@ class R803Shots {
 
     @Test fun aMissingPictureTurnsThePanelPlainAndAsksOnlyWhenAllowed() {
         val ctx = setUp(Theme.LIGHT)
+        // Missing-file checks also need a clean negative-cache marker directory.
+        Backdrops.file(Sprites.dir(ctx), bg("river")).parentFile!!.deleteRecursively()
+        Backdrops.installBundled(ctx, Sprites.dir(ctx), bg("canyon"))
+        assertFalse("Unbundled scenes must not install a missing/empty asset", Backdrops.file(Sprites.dir(ctx), bg("canyon")).exists())
         var asked = 0
         Backdrops.get = { _, _ -> asked++; null }
         val back = ArenaBackdrop(ctx)

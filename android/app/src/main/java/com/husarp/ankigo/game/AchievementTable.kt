@@ -7,7 +7,7 @@ package com.husarp.ankigo.game
 //
 // LIST: the proposal in docs/design/round4.html section 3 with Adam's edits (.loki/picks/round4-achievements.txt, R4-V2b): "Best combo",
 // "Good presses" and "Easy presses" are dropped (their counters stay in the engine; their ids are never reused; saved dates for them
-// are kept as unknown ids), groups fixed: 32 tiered rows + the 11 one-offs (group "Badges"). Two of them are "external" (R4-07): "Study time" (AnkiGo's own timer files, in MINUTES) and
+// are kept as unknown ids), original groups: tiered rows + the 11 one-offs (group "Badges"). Two of them are "external" (R4-07): "Study time" (AnkiGo's own timer files, in MINUTES) and
 // "New cards learned" (AnkiDroid's history) are measured outside the game save and fed in by stats/AchievementFeed.kt
 // through Achievements.feed. ROWS are listed in page order: group by group in [GROUPS] order.
 
@@ -38,7 +38,8 @@ object AchievementTable {
      * came with): recomputed once, tiers reached only through the inflated value locked again. A save older than this is brought up
      * once by Achievements.migrate (GameState.achLadder remembers the version); a new game starts at [LADDER].
      */
-    const val LADDER = 3
+    // R23 part 4: remove ten rows, cap three more ladders at Epic; preserve unknown saved ids.
+    const val LADDER = 4
 
     /** R14-B2 fix Y2: the threshold of the tier of row [id] that gives [item] as its reward (the days of the "Best streak" tier that gives the Master Ball), so texts can't drift from the rule. Null when no tier does. */
     fun rewardThreshold(id: String, item: String): Long? =
@@ -51,7 +52,7 @@ object AchievementTable {
     val TIER_NAMES = listOf("Common", "Rare", "Epic", "Legendary", "Mythical")
 
     /** The page's groups, in page order (every row's group is one of these, and ROWS follow this order). */
-    val GROUPS = listOf("Study", "Battle", "Collection", "Economy", "Special", "Badges")
+    val GROUPS = listOf("Study", "Battle", "Collection", "Economy", "Special", "Badges", "Secret")
 
     fun tierName(tier: Int): String = TIER_NAMES.getOrElse(tier) { "Tier ${tier + 1}" }
 
@@ -72,6 +73,9 @@ object AchievementTable {
     private fun badge(badge: Int, id: String, title: String, desc: String, icon: String) =
         AchRow(id, "Badges", title, desc, null, listOf(1L), icon, ankimonBadge = badge)
 
+    private fun secret(id: String, title: String, desc: String, metric: Metric) =
+        AchRow(id, "Secret", title, desc, metric, listOf(1L), "sparkle")
+
     val ROWS: List<AchRow> = listOf(
         // ---- Study ----
         tiered("answers", "Study", "Answers given", "Cards you answer while AnkiGo is running", Metric.ANSWERS, "cards", 500, 5_000, 25_000, 100_000, 250_000),
@@ -83,17 +87,12 @@ object AchievementTable {
             tierBadges = listOf(1, 2, 4, 12, 13)),
         tiered("days-studied", "Study", "Days studied", "Days with at least one answer", Metric.DAYS_STUDIED, "days", 7, 30, 100, 365, 1_000),
         // External (fed by stats/AchievementFeed.kt): the thresholds of Study time are minutes: 1 h, 10 h, 50 h, 200 h, 500 h.
-        tiered("study-time", "Study", "Study time", "Time spent answering, measured by AnkiGo", Metric.STUDY_MINUTES, "clock", 60, 600, 3_000, 12_000, 30_000),
+        tiered("study-time", "Study", "Study time", "Hours spent answering, measured by AnkiGo", Metric.STUDY_MINUTES, "clock", 60, 600, 3_000, 12_000, 30_000),
         tiered("new-cards", "Study", "New cards learned", "Cards answered for the very first time", Metric.NEW_CARDS, "new-card", 50, 500, 2_000, 5_000, 10_000),
         tiered("goals", "Study", "Daily goal reached", "Days you reached the daily goal (not in a row)", Metric.GOALS_REACHED, "target", 5, 30, 100, 300, 1_000),
 
         // ---- Battle (battle and progress) ----
         tiered("defeats", "Battle", "Battles won", "Wild Pokémon your main knocked out or caught", Metric.DEFEATS, "crossed-swords", 10, 100, 1_000, 5_000, 15_000),
-        tiered("damage-dealt", "Battle", "Damage dealt", "HP your Pokémon took off wild ones", Metric.DAMAGE_DEALT, "sword", 1_000, 20_000, 200_000, 1_000_000, 3_000_000),
-        tiered("damage-taken", "Battle", "Damage taken", "HP your Pokémon lost", Metric.DAMAGE_TAKEN, "heart-broken", 500, 10_000, 100_000, 500_000, 1_500_000),
-        tiered("damage-blocked", "Battle", "Damage blocked", "Damage you didn't take thanks to resisting", Metric.DAMAGE_BLOCKED, "shield", 200, 5_000, 50_000, 200_000, 600_000),
-        tiered("misses", "Battle", "Misses", "Attacks that missed, yours or the wild one's", Metric.MISSES, "miss", 10, 100, 1_000, 5_000, 15_000),
-        tiered("super-effective", "Battle", "Super-effective hits", "Your hits that were super effective", Metric.SUPER_EFFECTIVE, "bolt", 25, 250, 2_500, 10_000, 30_000),
         // R13 Part F: a Lv 100 Pokémon gains no XP, so the top tiers mean raising many Pokémon to 100 (~0.8-1.25 M XP each): 10 M ≈ 10
         // raised ≈ 1-1.5 years of daily study (was 5 M / 20 M).
         tiered("total-xp", "Battle", "Total XP", "XP your Pokémon have gained with you", Metric.TOTAL_XP, "xp", 10_000, 100_000, 1_000_000, 3_000_000, 10_000_000),
@@ -103,18 +102,13 @@ object AchievementTable {
 
         // ---- Collection ----
         tiered("catches", "Collection", "Pokémon caught", "Every catch, duplicates too", Metric.CATCHES, "ball", 10, 100, 500, 2_000, 5_000),
-        tiered("dex-caught", "Collection", "Pokédex caught", "Different species caught", Metric.DEX_CAUGHT, "dex-caught", 25, 100, 250, 500, 800),
-        tiered("dex-seen", "Collection", "Pokédex seen", "Different species met", Metric.DEX_SEEN, "dex", 50, 150, 400, 700, 1_000),
         tiered3("types", "Collection", "Types caught", "Different types among your Pokémon (18 in all)", Metric.TYPES_CAUGHT, "types", 6, 10, 18),
-        tiered("balls-thrown", "Collection", "Balls thrown", "Balls you threw at wild Pokémon", Metric.BALLS_THROWN, "ball-throw", 5, 50, 250, 1_000, 3_000),
-        tiered("ball-catches", "Collection", "Ball catches", "Catches with a thrown ball (not the auto-catch rule)", Metric.BALL_CATCHES, "ball-catch", 1, 10, 50, 200, 500),
+        tiered3("ball-catches", "Collection", "Ball catches", "Catches with a thrown ball (not the auto-catch rule)", Metric.BALL_CATCHES, "ball-catch", 1, 10, 50),
 
         // ---- Economy ----
         tiered("money-earned", "Economy", "Money earned", "Coins earned from answers and won battles", Metric.MONEY_EARNED, "coin", 2_000, 20_000, 100_000, 365_000, 1_000_000),
-        tiered("money-spent", "Economy", "Money spent", "Coins spent in the Shop", Metric.MONEY_SPENT, "bag", 1_000, 10_000, 75_000, 250_000, 750_000),
-        tiered("items-used", "Economy", "Items used", "Potions, stones, held items given", Metric.ITEMS_USED, "potion", 5, 50, 250, 1_000, 3_000),
-        tiered("tms", "Economy", "TMs taught", "Moves taught with a TM", Metric.TMS_TAUGHT, "tm", 1, 5, 20, 50, 100),
-        tiered("items-found", "Economy", "Items found", "Random items after answers", Metric.ITEMS_FOUND, "gift", 1, 25, 100, 500, 1_500),
+        tiered3("tms", "Economy", "TMs taught", "Moves taught with a TM", Metric.TMS_TAUGHT, "tm", 1, 5, 20),
+        tiered3("items-found", "Economy", "Items found", "Random items after answers", Metric.ITEMS_FOUND, "gift", 1, 25, 100),
 
         // ---- Special ----
         tiered("shinies", "Special", "Shinies caught", "Shiny Pokémon caught", Metric.SHINIES, "sparkle", 1, 3, 10, 25, 50),
@@ -133,5 +127,16 @@ object AchievementTable {
         badge(16, "first-evolution", "Evolved a Pokémon", "First evolution", "badge-evolve"),
         badge(19, "first-fossil", "Revived a fossil", "Turned a fossil into a Pokémon", "badge-fossil"),
         badge(20, "first-heal", "Healing does good", "Used a healing item", "badge-heal"),
+        secret("one-shot", "One-shot", "Knock out a wild Pokémon from full HP with a single move.", Metric.ONE_SHOT),
+        secret("last-breath", "Last Breath", "Win a fight with your Pokémon on 1 HP.", Metric.LAST_BREATH),
+        secret("combo-20", "Combo ×20", "Chain a ×20 combo.", Metric.COMBO_20),
+        secret("revolving-door", "Revolving Door", "Switch six times in one battle.", Metric.REVOLVING_DOOR),
+        secret("perfect-throw", "Perfect Throw", "Catch with a Poké Ball on the first throw at full HP.", Metric.PERFECT_THROW),
+        secret("david-goliath", "David and Goliath", "Beat a wild Pokémon 20 levels above you.", Metric.DAVID_GOLIATH),
+        secret("night-owl", "Night Owl", "Answer a card at 3 a.m..", Metric.NIGHT_OWL),
+        secret("easy-street", "Easy Street", "Seven Easy answers in a row.", Metric.EASY_STREET),
+        secret("deja-vu", "Déjà Vu", "Catch the same species five times.", Metric.DEJA_VU),
+        secret("bully", "Bully", "Defeat a wild Pokémon while yours is 20 or more levels higher.", Metric.BULLY),
+        secret("glow-up", "Glow-up", "Evolve a Pokémon during a battle.", Metric.GLOW_UP),
     )
 }

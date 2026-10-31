@@ -102,6 +102,8 @@ class NextCard<T>(
     private val now: () -> Long = { System.currentTimeMillis() },
     /** R18-A: how many answers may be made on cards AnkiDroid has not confirmed yet, one after the other (the app passes [AHEAD]; 0 = every such tap is held). */
     val maxAhead: Int = 0,
+    /** Read the current due queue before showing each next card (R23: 349/350/352). */
+    val freshNext: Boolean = false,
     /** R10-X1: may the prepared next card show at once (`PredictRule::check`)? Anything but SAFE makes the answer wait. Default: always. */
     private val check: (answered: Prepared<T>, next: Prepared<T>, now: Long) -> PredictRule.Why = { _, _, _ -> PredictRule.Why.SAFE },
 ) {
@@ -305,7 +307,7 @@ class NextCard<T>(
 
     /** The Prepare commands for the queue positions [from]..[maxAhead] + 1 after [p] (each for the card before it), as far as the read goes. */
     private fun prepareNext(p: Prepared<T>, queue: List<StudyLoop.Key>, from: Int): List<Cmd<T>> {
-        if (queue.firstOrNull() != p.key) return emptyList()
+        if (freshNext || queue.firstOrNull() != p.key) return emptyList()
         val out = ArrayList<Cmd<T>>(maxAhead + 1)
         for (i in from..maxAhead + 1) {
             val k = queue.getOrNull(i) ?: break
@@ -338,7 +340,7 @@ class NextCard<T>(
         if (onPredicted && guess == null) return null
         // R19-R (278b): a learning card came due: instead of the wait, the due card itself when it is certainly the first (never after an answer made ahead: just returned above)
         val learn = if (seen != null && guess == null && why == PredictRule.Why.LEARNING_DUE) c?.learn?.takeIf { PredictRule.firstLearning(card, seen, it, at) } else null
-        val shown = guess ?: learn
+        val shown = if (freshNext) null else guess ?: learn
         val a = QueuedAnswer(newSeq(), deckId, card.key.nid, card.key.ord, cardId, card.before, ease, tookMs, at)
         val rest = if (guess != null && c != null) c.cards.drop(1) else emptyList()
         chain = null

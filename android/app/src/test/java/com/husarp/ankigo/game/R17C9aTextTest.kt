@@ -10,7 +10,7 @@ import org.junit.Test
 /** R17C-9a: the sentence of every ability the game builds (shown under the ability in the details): plain, short, true and ending with a full stop. */
 class R17C9aTextTest {
     @Test fun everyBuiltAbilityHasAShortPlainSentence() {
-        assertTrue("102 of R17C-9a and 115 of R17C-9b are built: ${Abilities.BUILT.size}", Abilities.BUILT.size in 210..225) // R17C-9b: was 100..110
+        assertEquals("223 existing abilities plus 57 formerly inactive abilities", 280, Abilities.BUILT.size)
         for (id in Abilities.BUILT) {
             val t = AbilityText.of(id)
             assertNotNull(id, t)

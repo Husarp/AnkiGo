@@ -49,6 +49,14 @@ object SortPrefs {
     fun loadDexFilter(ctx: Context, base: DexFilter): DexFilter = loadDexFilter(prefs(ctx), base)
     fun saveDexFilter(ctx: Context, f: DexFilter) = saveDexFilter(prefs(ctx), f)
 
+    fun decodeShows(s: String?): Set<BoxFilter> = s.orEmpty().split(',').mapNotNull { name ->
+        BoxFilter.entries.firstOrNull { it.name == name && it != BoxFilter.ALL }
+    }.toSet()
+    fun loadShows(ctx: Context): Set<BoxFilter> = decodeShows(prefs(ctx).getString(BOX_SHOW_KEY, null))
+    fun saveShows(ctx: Context, filters: Set<BoxFilter>) {
+        prefs(ctx).edit().putString(BOX_SHOW_KEY, filters.filter { it != BoxFilter.ALL }.sortedBy { it.ordinal }.joinToString(",") { it.name }).apply()
+    }
+
     /** The Box "Show" choice; unknown or missing = All. */
     fun decodeShow(s: String?): BoxFilter = BoxFilter.entries.firstOrNull { it.name == s } ?: BoxFilter.ALL
     fun loadShow(p: SharedPreferences): BoxFilter = decodeShow(p.getString(BOX_SHOW_KEY, null))

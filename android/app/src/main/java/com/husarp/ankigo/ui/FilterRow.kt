@@ -87,6 +87,21 @@ object FilterRowText {
         return if (multiOnly) "$base with only ${n.joinToString(" + ")} types" else base
     }
 
+    fun activePieces(types: TypeFilter, shows: Set<BoxFilter>): List<Piece> {
+        val out = activePieces(types).toMutableList()
+        shows.sortedBy { it.ordinal }.filter { it != BoxFilter.ALL && !it.hasQuickChip }.forEach {
+            if (out.isNotEmpty()) out += Piece.Txt(" · ")
+            out += Piece.Txt(it.label)
+        }
+        return out
+    }
+
+    fun emptyBox(shows: Set<BoxFilter>, types: TypeFilter): String = when (shows.size) {
+        0 -> emptyBox(BoxFilter.ALL, types)
+        1 -> emptyBox(shows.first(), types)
+        else -> "No Pokémon match all selected filters: ${shows.sortedBy { it.ordinal }.joinToString(", ") { it.label }}."
+    }
+
     /** What an empty Box says and why, e.g. "No pure Poison Pokémon in your box.". With no filter on it is the plain "Your box is empty…" (no button). */
     fun emptyBox(show: BoxFilter, types: TypeFilter): String {
         if (show == BoxFilter.ALL && !types.active) return "Your box is empty. Pokémon you catch beyond six wait here."

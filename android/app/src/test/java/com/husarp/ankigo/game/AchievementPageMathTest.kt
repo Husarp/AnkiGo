@@ -176,8 +176,8 @@ class AchievementPageMathTest {
     @Test fun theWholeTableTotalsItsTiers() {
         val data = TestData.world()
         val views = Achievements.view(TestData.state(data), data)
-        assertEquals(AchievementTable.ROWS.filter { !it.oneOff }.sumOf { it.tiers.size }, AchPageMath.tiersTotal(views)) // 3 for "types" / "highest-level", else 5
-        assertEquals(AchievementTable.ROWS.count { !it.oneOff } * 5 - 4, AchPageMath.tiersTotal(views))
+        assertEquals(AchievementTable.ROWS.filter { !it.oneOff }.sumOf { it.tiers.size }, AchPageMath.tiersTotal(views)) // five tiered rows stop at Epic
+        assertEquals(AchievementTable.ROWS.count { !it.oneOff } * 5 - 10, AchPageMath.tiersTotal(views))
     }
 
     // ---- ladder and texts ----
@@ -202,8 +202,8 @@ class AchievementPageMathTest {
         assertEquals("188 to go", AchPageMath.toGo(view(tier = 1, value = 312)))
         assertEquals("", AchPageMath.toGo(view(tier = 4, value = 9_000)))
         assertEquals("31,240", AchPageMath.fmt(Metric.ANSWERS, 31_240))
-        assertEquals("41 h", AchPageMath.fmt(Metric.STUDY_MINUTES, 2_500))
-        assertEquals("30 min", AchPageMath.fmt(Metric.STUDY_MINUTES, 30))
+        assertEquals("41.67 h", AchPageMath.fmt(Metric.STUDY_MINUTES, 2_500))
+        assertEquals("0.50 h", AchPageMath.fmt(Metric.STUDY_MINUTES, 30))
     }
 
     @Test fun datesReadBeforeWhenTheyAreTheStartOfTracking() {
@@ -221,8 +221,8 @@ class AchievementPageMathTest {
         assertEquals(AchSource.SAVE, src("catches"))
         assertEquals(AchSource.SAVE, src("cards-day"))
         assertEquals(AchSource.HISTORY, src("money-earned"))
-        assertEquals(AchSource.HISTORY, src("balls-thrown")) // "good" left the list (R4-V2b)
-        assertEquals(AchSource.SINCE_UPDATE, src("damage-dealt"))
+        assertEquals(AchSource.HISTORY, src("days-studied"))
+        assertEquals(AchSource.SINCE_UPDATE, src("comebacks"))
         assertEquals(AchSource.SINCE_UPDATE, src("tms"))
         assertEquals(AchSource.EXTERNAL, src("study-time"))
         assertEquals(AchSource.EXTERNAL, src("new-cards"))

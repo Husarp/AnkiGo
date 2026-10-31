@@ -13,10 +13,9 @@ import java.util.concurrent.Executor
 import java.util.concurrent.Executors
 
 /**
- * Battle backgrounds (round 9: the 35 pictures of [com.husarp.ankigo.ui.BackdropCatalog]), downloaded on demand (never in the repo
- * or the APK) into `Sprites.dir(ctx)/bg/<fileName>`, so the Downloads size and "clear pictures" include them. Showdown's come from
- * `fx/bg-<id>.png` (the AnkiGo mirror first, [Mirror.get]), Adam's own from the `assets-1` release ([Mirror.ownUrl]). Only while
- * "Download pictures as needed" and the background-pictures setting are both on ([allowed]); a missing picture is the plain gradient.
+ * Battle backgrounds (the approved pictures of [com.husarp.ankigo.ui.BackdropCatalog]), loaded from compact bundled art or downloaded on demand into `Sprites.dir(ctx)/bg/<fileName>`, so the Downloads size and "clear pictures" include them. Showdown's come from
+ * `fx/bg-<id>.png` (the AnkiGo mirror first, [Mirror.get]), Adam's own from the `assets-1` release ([Mirror.ownUrl]). New downloads require
+ * both settings on ([allowed]); saved pictures show whenever background pictures are on. A missing picture is the plain gradient.
  * The pure parts (URL, file, gate, blur maths in [BackdropBlur]) are unit-tested; [load] decodes off the main thread, makes the
  * blurred copy there too, and keeps at most [KEEP] pictures (each with its blur) in memory.
  */
@@ -50,7 +49,7 @@ object Backdrops {
     /** Where [bg] is (or will be) saved under the sprite folder [spritesDir]: `bg/<fileName>` (round 7's Showdown files are the same names). */
     fun file(spritesDir: File, bg: Backdrop) = File(File(spritesDir, "bg"), fileName(bg))
 
-    /** Pictures show and download only with sprite downloads on AND the background setting on. */
+    /** New pictures download only with sprite downloads on AND the background setting on; cached pictures do not need downloads. */
     fun allowed(spritesOn: Boolean, picturesOn: Boolean) = spritesOn && picturesOn
 
     /** Runs the loads off the main thread; a var only so the design screenshots can load in place. */
@@ -104,10 +103,30 @@ object Backdrops {
         val dir = Sprites.dir(ctx)
         val gen = currentGeneration()
         pool.execute {
-            val pic = try { fetchBlocking(dir, bg, download, get) } catch (_: Throwable) { null }
+            val pic = try {
+                // Approved new art ships as compact WebP; old pictures retain their existing cache/download path.
+                installBundled(ctx, dir, bg)
+                fetchBlocking(dir, bg, download, get)
+            } catch (_: Throwable) { null }
             val callbacks = finish(gen, bg.id, pic) ?: return@execute
             main.post { callbacks.forEach { it(pic) } }
         }
+    }
+
+    /** Install compact approved art into the same cache used by on-demand and Download all. */
+    @Synchronized
+    internal fun installBundled(ctx: Context, dir: File, bg: Backdrop) {
+        val cached = file(dir, bg)
+        if (cached.isFile) return
+        val temp = File(cached.path + ".bundled")
+        try {
+            ctx.assets.open("backdrops/" + fileName(bg)).use { input ->
+                cached.parentFile?.mkdirs()
+                temp.outputStream().use { input.copyTo(it) }
+                if (temp.length() > 0 && temp.renameTo(cached)) deleteStale(dir, bg)
+            }
+        } catch (_: Exception) { /* Optional bundled art must not block the existing cache/download fallback. */ }
+        finally { temp.delete() }
     }
 
     /** The cached file, else (when [download]) the downloaded one, decoded and blurred; null if there is none. Background threads only. */

@@ -26,7 +26,7 @@ object FxLean {
 
     /** Only projectile looks lean; the physical looks and stationary self/status effects do not. */
     fun leans(look: MoveLook): Boolean = when (look) {
-        MoveLook.HEAL, MoveLook.MULTI_HIT, MoveLook.RECOIL, MoveLook.AURA_TEMPLATE,
+        MoveLook.CHARGE, MoveLook.BLAST, MoveLook.HEAL, MoveLook.MULTI_HIT, MoveLook.RECOIL, MoveLook.AURA_TEMPLATE,
         MoveLook.TACKLE, MoveLook.VINE_WHIP, MoveLook.EARTHQUAKE, MoveLook.HIT_TEMPLATE -> false
         MoveLook.EMBER, MoveLook.WATER_JET, MoveLook.THUNDERBOLT, MoveLook.ICE_BEAM, MoveLook.PSYCHIC,
         MoveLook.DRAIN, MoveLook.SHADOW_BALL, MoveLook.ORB_TEMPLATE -> true

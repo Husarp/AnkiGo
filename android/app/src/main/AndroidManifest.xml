@@ -81,6 +81,7 @@
         </activity>
 
         <activity android:name=".ui.FirstRunActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".study.FilterActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.TeamActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.DexActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".ui.ShopActivity" android:theme="@style/GameTheme" android:exported="false" />

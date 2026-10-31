@@ -15,7 +15,7 @@ import java.time.ZonedDateTime
 import java.util.TimeZone
 import kotlin.random.Random
 
-/** R10 T5: always in stock (Poké Ball + Potion), the deal of the day (-30 %), the weekend special, one price rule, the tab dot. */
+/** R10 T5: always in stock (Potion), the deal of the day (-30 %), the weekend special, one price rule, the tab dot. */
 class ShopRefreshTest {
     private val base = TestData.world()
     private val data = GameData(
@@ -35,11 +35,11 @@ class ShopRefreshTest {
 
     // ---- always in stock ----
 
-    @Test fun theBasicsAreTheBallAndThePotion() {
-        assertEquals(listOf("poke-ball", "potion"), Shop.basics())
+    @Test fun onlyPotionsAreAlwaysInStock() {
+        assertEquals(listOf("potion"), Shop.basics())
     }
 
-    @Test fun basicsAreBuyableEveryDayAtTheNormalPriceWhateverTheStockIs() {
+    @Test fun basicsAreBuyableEveryDayAtTheDailyPriceWhateverTheStockIs() {
         for (offset in 0 until 40L) {
             val day = LocalDate.parse("2026-10-01").plusDays(offset).toString()
             val s = state(day)
@@ -48,8 +48,8 @@ class ShopRefreshTest {
                 s.cash = 10_000
                 val r = Shop.buy(data, s, item)
                 assertTrue("$item on $day: ${r.message}", r.ok)
-                assertEquals("Bought ${Items.name(item)} for ${data.price(item)} coins", r.message)
-                assertEquals(10_000 - data.price(item), s.cash)
+                assertEquals("Bought ${Items.name(item)} for ${Shop.priceOf(data, s, item)} coins", r.message)
+                assertEquals(10_000 - Shop.priceOf(data, s, item), s.cash)
                 assertEquals(1, s.count(item))
             }
         }
@@ -60,7 +60,7 @@ class ShopRefreshTest {
             val day = LocalDate.parse("2026-10-01").plusDays(offset).toString()
             val (items, tms) = Shop.stockFor(data, day, level)
             assertTrue(items.none { it in Shop.basics() })
-            val drawn = if (Shop.ultraBallDay(day)) items.drop(1) else items   // PLAN 171: the Ultra Ball's rare days add it first
+            val drawn = items.filter { Items.def(it)?.kind != ItemKind.BALL }
             assertEquals(Shop.slots(level), drawn.size); assertEquals(Shop.slots(level), tms.size)
             assertEquals(items.size, items.toSet().size)
             assertTrue(items.all { it in Items.shopPool(data) })
@@ -73,15 +73,15 @@ class ShopRefreshTest {
             s.cash = 1000
             assertTrue(Shop.reroll(data, s, Random(seed)).ok)
             assertTrue(s.shopItems.none { it in Shop.basics() })
-            assertEquals(5, s.shopItems.size)
+            assertEquals(5 + Shop.dailyBalls(s.day).size, s.shopItems.size)
         }
     }
 
-    @Test fun aBasicWithoutAPriceIsNotSold() {
-        val noBall = GameData(data.species, data.moves, data.growth, data.itemPrices - "poke-ball")
-        val s = TestData.state(noBall).also { it.day = "2026-10-13"; it.cash = 1000; Shop.ensureToday(noBall, it) }
-        assertEquals(ActionResult(false, "Not in today's shop"), Shop.buy(noBall, s, "poke-ball"))
-        assertEquals(1000, s.cash)
+    @Test fun aBasicWithoutApiPriceUsesProposalPrice() {
+        val noPotion = GameData(data.species, data.moves, data.growth, data.itemPrices - "potion")
+        val s = TestData.state(noPotion).also { it.day = "2026-10-13"; it.cash = 1000; Shop.ensureToday(noPotion, it) }
+        assertTrue(Shop.buy(noPotion, s, "potion").ok)
+        assertEquals(1000 - Shop.priceOf(noPotion, s, "potion"), s.cash)
     }
 
     // ---- deal of the day ----
@@ -105,7 +105,7 @@ class ShopRefreshTest {
             assertEquals(d, Shop.dealFor(data, day))
             assertTrue(d.item in Items.shopPool(data))
             assertTrue(d.item !in Shop.basics())
-            assertEquals(data.price(d.item), d.oldPrice)
+            assertEquals(Shop.dailyPrice(data, day, d.item), d.oldPrice)
             assertEquals(Shop.dealPrice(d.oldPrice), d.price)
             assertTrue(d.price in 1 until d.oldPrice || d.oldPrice == 1)
             seen += d.item
@@ -113,11 +113,11 @@ class ShopRefreshTest {
         assertTrue("the deal changes from day to day", seen.size > 3)
     }
 
-    @Test fun noItemPoolMeansNoDeal() {
+    @Test fun proposalProvidesDealPoolWithoutApiPrices() {
         val broke = GameData(data.species, data.moves, data.growth, emptyMap())
-        assertNull(Shop.dealFor(broke, "2026-10-13"))
+        assertNotNull(Shop.dealFor(broke, "2026-10-13"))
         val onlyBasics = GameData(data.species, data.moves, data.growth, mapOf("poke-ball" to 200, "potion" to 200))
-        assertNull(Shop.dealFor(onlyBasics, "2026-10-13"))
+        assertNotNull(Shop.dealFor(onlyBasics, "2026-10-13"))
     }
 
     @Test fun theDealPriceHoldsForAnyNumberOfBuysAndIsNotInTheStock() {
@@ -143,18 +143,18 @@ class ShopRefreshTest {
         val d = Shop.dealFor(data, s.day)!!
         s.shopItems.clear(); s.shopItems += listOf(d.item, "great-ball")
         assertEquals(d.price, Shop.priceOf(data, s, d.item))
-        assertEquals(data.price("great-ball"), Shop.priceOf(data, s, "great-ball"))
+        assertEquals(Shop.dailyPrice(data, s.day, "great-ball"), Shop.priceOf(data, s, "great-ball"))
         s.cash = 100_000
         val r = Shop.buy(data, s, d.item)
         assertEquals("Bought ${Items.name(d.item)} for ${d.price} coins", r.message)
         assertEquals(100_000 - d.price, s.cash)
     }
 
-    @Test fun otherItemsAndTheBasicsKeepTheirNormalPrice() {
+    @Test fun otherItemsAndBasicsUseTheirDailyPrice() {
         val s = state("2026-10-13")
         val d = Shop.dealFor(data, s.day)!!
-        for (item in Items.shopPool(data).filter { it != d.item }) assertEquals(data.price(item), Shop.priceOf(data, s, item))
-        for (item in Shop.basics()) assertEquals(data.price(item), Shop.priceOf(data, s, item))
+        for (item in Items.shopPool(data).filter { it != d.item }) assertEquals(Shop.dailyPrice(data, s.day, item), Shop.priceOf(data, s, item))
+        for (item in Shop.basics()) assertEquals(Shop.dailyPrice(data, s.day, item), Shop.priceOf(data, s, item))
     }
 
     @Test fun theDealOfYesterdayIsNotOnSaleToday() {
@@ -169,11 +169,11 @@ class ShopRefreshTest {
 
     // ---- weekend special ----
 
-    @Test fun onlyTheGameWeekendHasASpecialAndSaturdayEqualsSunday() {
+    @Test fun onlyTheGameWeekendHasASpecialWithSameItemBothDays() {
         for (sat in saturdays) {
             val sp = Shop.weekendFor(data, sat.toString())
             assertNotNull(sp)
-            assertEquals(sp, Shop.weekendFor(data, sat.plusDays(1).toString()))
+            assertEquals(sp!!.id, Shop.weekendFor(data, sat.plusDays(1).toString())!!.id)
             assertEquals(sat.plusDays(1).toString(), sp!!.endsDay)
             for (i in 2..6L) assertNull("weekday ${sat.plusDays(i)}", Shop.weekendFor(data, sat.plusDays(i).toString()))
             assertNull(Shop.weekendFor(data, sat.minusDays(1).toString()))
@@ -182,7 +182,7 @@ class ShopRefreshTest {
         }
     }
 
-    @Test fun theSpecialIsAPricedStoneOrAStrongTmAtTheNormalPriceAndBothKindsComeUp() {
+    @Test fun weekendStoneUsesDailyPriceAndTmStaysFixed() {
         val kinds = mutableSetOf<Boolean>()
         for (sat in saturdays) {
             val sp = Shop.weekendFor(data, sat.toString())!!
@@ -194,9 +194,9 @@ class ShopRefreshTest {
                 assertEquals(Tuning.TM_PRICE, sp.price)
                 assertEquals(sp.tm, sp.id)
             } else {
-                assertTrue(sp.item in stones)
+                assertTrue(sp.item in Items.ALL.keys)
                 assertTrue(sp.item!!.endsWith("-stone"))
-                assertEquals(data.price(sp.item!!), sp.price)
+                assertEquals(Shop.priceOf(data, sat.toString(), sp.item!!), sp.price)
                 assertEquals(sp.item, sp.id)
             }
         }
@@ -204,7 +204,7 @@ class ShopRefreshTest {
         assertEquals(90, Tuning.WEEKEND_TM_MIN_POWER)
     }
 
-    @Test fun anEmptyKindFallsBackToTheOtherAndNothingMeansNone() {
+    @Test fun proposalStonesRemainAvailableWithoutApiPrices() {
         val weakTms = GameData(
             base.species + (900 to TestData.species(900, "Tmmon", tmMoves = setOf("bodyslam", "watergun", "shadowball"))),
             base.moves, base.growth, base.itemPrices,
@@ -213,8 +213,8 @@ class ShopRefreshTest {
         val neither = GameData(weakTms.species, weakTms.moves, weakTms.growth, data.itemPrices - "thunder-stone" - "moon-stone")
         for (sat in saturdays) {
             assertFalse(Shop.weekendFor(weakTms, sat.toString())!!.isTm)
-            assertTrue(Shop.weekendFor(noStones, sat.toString())!!.isTm)
-            assertNull(Shop.weekendFor(neither, sat.toString()))
+            assertNotNull(Shop.weekendFor(noStones, sat.toString()))
+            assertFalse(Shop.weekendFor(neither, sat.toString())!!.isTm)
         }
     }
 
@@ -231,7 +231,7 @@ class ShopRefreshTest {
         assertNull(Shop.weekendFor(data, g.dayKey(at(2026, 10, 17, 2))))
         assertTrue(Shop.isWeekend(g.dayKey(at(2026, 10, 17, 4))))
         assertTrue(Shop.isWeekend(g.dayKey(at(2026, 10, 19, 2))))
-        assertEquals(Shop.weekendFor(data, "2026-10-17"), Shop.weekendFor(data, g.dayKey(at(2026, 10, 19, 2))))
+        assertEquals(Shop.weekendFor(data, "2026-10-17")!!.id, Shop.weekendFor(data, g.dayKey(at(2026, 10, 19, 2)))!!.id)
         assertFalse(Shop.isWeekend(g.dayKey(at(2026, 10, 19, 4))))
         g.state.settings.dayStartHour = 0
         assertTrue(Shop.isWeekend(g.dayKey(at(2026, 10, 17, 0))))
@@ -318,7 +318,7 @@ class ShopRefreshTest {
         val sp = Shop.weekendFor(data, sat.toString())!!
         val w = state(sat.toString()); w.cash = 100_000
         Shop.buyTm(data, w, sp.tm!!)
-        val dealPaid = d.price + data.price("potion")
+        val dealPaid = d.price + Shop.priceOf(data, s, "potion")
         assertEquals(dealPaid.toLong(), s.counters[Metric.MONEY_SPENT.name])
         assertEquals(dealPaid, s.history[s.day]!!.spent)
         assertEquals(100_000 - dealPaid, s.cash)
@@ -348,7 +348,7 @@ class ShopRefreshTest {
         val price = Shop.priceOf(data, back, item)
         assertTrue(Shop.buy(data, back, item).ok)
         assertEquals(100_000 - price, back.cash)
-        assertTrue(Shop.buy(data, back, "poke-ball").ok)
+        assertTrue(Shop.buy(data, back, "potion").ok)
         val tm = back.shopTms.first()
         assertTrue(Shop.buyTm(data, back.also { it.cash = 2000 }, tm).ok)
         assertEquals(1000, back.cash)

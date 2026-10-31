@@ -14,10 +14,10 @@ internal object GuideLessons {
 
     fun details(ch: GuideChapter): List<Pair<String, List<String>>> {
         if (ch.id == GameGuide.BATTLES) return listOf(
-            "Answer power and OK" to ch.points.slice(1..4),
-            "Switching and items · a switch costs one hit" to ch.points.slice(5..7),
-            "Move choice · Smart is the default" to ch.points.slice(8..9),
-            "XP and held items" to ch.points.drop(10),
+            "Answer power and OK" to ch.points.slice(1..6),
+            "Switching and items · a switch costs one hit" to ch.points.slice(7..9),
+            "Move choice · Smart is the default" to ch.points.slice(10..11),
+            "XP and held items" to ch.points.drop(12),
         )
         val remaining = ch.points.filter { it !in shortPoints(ch) }
         return remaining.map { p ->

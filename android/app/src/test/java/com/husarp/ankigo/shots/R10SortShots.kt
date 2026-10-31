@@ -228,7 +228,7 @@ class R10SortShots {
             val shiny = st.mons.count { it.shiny }
             assertTrue(shiny >= 1)
             tap(sheet, "Shiny")
-            assertEquals(BoxFilter.SHINY, getField(p, "boxFilter"))
+            assertEquals(setOf(BoxFilter.SHINY), getField(p, "boxFilter"))
             assertEquals("Show $shiny Pokémon", texts(sheet).first { it.startsWith("Show ") && it.endsWith("Pokémon") })
             sheetOver(ctx, screen, sheet)
         }

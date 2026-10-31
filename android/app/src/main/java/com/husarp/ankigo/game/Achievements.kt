@@ -13,6 +13,9 @@ import kotlin.math.max
 
 /** What an achievement counts. The names of the COUNTED ones are the keys in GameState.counters: never rename them. */
 enum class Metric(val counted: Boolean, val external: Boolean = false) {
+    // R23 part 4: one-off secrets, awarded by the existing action paths.
+    ONE_SHOT(true), LAST_BREATH(true), COMBO_20(true), REVOLVING_DOOR(true), PERFECT_THROW(true),
+    DAVID_GOLIATH(true), NIGHT_OWL(true), EASY_STREET(true), DEJA_VU(true), GLOW_UP(true), BULLY(true),
     // ---- derived from the save ----
     CATCHES(false),           // wild catches, or the Pokémon you own when that is more (imports)
     ANSWERS(false),           // GameState.totalReviews
@@ -310,6 +313,10 @@ object Achievements {
             kept.forEachIndexed { t, o -> if (o in oldInferred) state.achInferred += inferredKey(id, t) }
         }
         if (state.achLadder < 3) log(fixLifetimeTotals(state))
+        for (id in listOf("ball-catches", "tms", "items-found")) {
+            state.achTiers[id]?.let { while (it.size > 3) it.removeAt(it.lastIndex) }
+            state.achInferred.removeAll { it.startsWith("$id/") && (it.substringAfter('/').toIntOrNull() ?: 0) >= 3 }
+        }
         state.achLadder = AchievementTable.LADDER
         return true
     }
@@ -368,7 +375,8 @@ object Achievements {
     fun onReady(state: GameState, data: GameData, now: Long, log: (String) -> Unit = {}) = check(state, data, now, mutableListOf(), silent = true, log = log)
 
     /** One action done: count its events, then check the tiers (the new AchievementReached events are appended to [events]). */
-    fun settle(data: GameData, state: GameState, now: Long, events: MutableList<GameEvent>) {
+    fun settle(data: GameData, state: GameState, now: Long, events: MutableList<GameEvent>, answerAt: Long = now) {
+        SecretAchievements.count(state, answerAt, events)
         count(state, events)
         check(state, data, now, events)
     }
@@ -379,8 +387,11 @@ object Achievements {
         val reached = max(dates.size, reachedTiers(row, state, data))
         val value = row.ankimonBadge?.let { if (it in state.badges) 1L else 0L } ?: value(row.metric!!, state, data)
         val next = row.tiers.getOrNull(reached)
+        val hidden = row.group == "Secret" && reached == 0
         AchView(
-            id = row.id, group = row.group, title = row.title, desc = row.desc, icon = row.icon, oneOff = row.oneOff, ankimonBadge = row.ankimonBadge,
+            id = row.id, group = row.group, title = if (hidden) "???" else row.title,
+            desc = if (hidden) "???" else row.desc, icon = if (hidden) "unknown" else row.icon,
+            oneOff = row.oneOff, ankimonBadge = row.ankimonBadge,
             tier = reached - 1, tierName = if (reached > 0) AchievementTable.tierName(reached - 1) else null,
             dates = dates, value = value, next = next,
             progress = if (next == null) 1f else (value.toDouble() / next).coerceIn(0.0, 1.0).toFloat(),

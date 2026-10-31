@@ -429,7 +429,7 @@ object WidgetRender {
         }
 
         /** Static sprite in a [size] square, pixel-crisp; null bitmap -> a coloured disc with two letters of [name]. */
-        fun sprite(num: Int, shiny: Boolean, name: String, x: Float, y: Float, size: Float) {
+        fun sprite(num: Int, shiny: Boolean, name: String, x: Float, y: Float, size: Float, fit: Boolean = false) {
             if (hideSprite) return
             val b = Sprites.staticBitmap(spriteCtx, num, shiny)
             if (b == null) {
@@ -439,7 +439,12 @@ object WidgetRender {
                 canvas.save(); canvas.scale(1f/k, 1f/k); placeholder.draw(canvas); canvas.restore()
                 return
             }
-            canvas.drawBitmap(b, Rect(0, 0, b.width, b.height), RectF(x, y, x + size, y + size), pixel)
+            val scale = size / maxOf(b.width, b.height)
+            val width = if (fit) b.width * scale else size
+            val height = if (fit) b.height * scale else size
+            val left = x + (size-width)/2
+            val top = y + (size-height)/2
+            canvas.drawBitmap(b, Rect(0, 0, b.width, b.height), RectF(left, top, left+width, top+height), pixel)
         }
 
         /** Same sprite as a flat silhouette: ag_text at the mockup's strength (R.integer.ag_sil of 255). */
@@ -582,7 +587,7 @@ object WidgetRender {
                 block("Open AnkiGo to choose your starter", 8f, rh / 3, rw - 16, paint(12f, 800, R.color.ag_text), 3, true)
                 canvas.restore(); return
             }
-            val g = BuddyGeometry.of(rw, rh, look.layout)
+            val g = BuddyGeometry.of(rw, rh, look.layout).scaled(look.size)
             val cx = g.cx; val cy = g.top + g.size / 2
             val ring = Paint(3).apply { style = Paint.Style.STROKE; strokeWidth = g.size * .065f; strokeCap = Paint.Cap.ROUND }
             val oval = RectF(cx-g.size/2+3, g.top+3, cx+g.size/2-3, g.top+g.size-3)
@@ -601,8 +606,7 @@ object WidgetRender {
                 canvas.drawArc(oval, start, arc * s.progress, false, ring)
             }
             val progressColour=look.ring.solid(main.type?.let { Ui.typeColor(it) }) { col(BuddyRing.pickRes(it)) }
-            sprite(main.species, main.shiny, main.name, g.spriteLeft, g.spriteTop, g.spriteSize)
-            if (s.goalDone && look.layout != "B") icon(R.drawable.ic_check, cx + g.size*.22f, g.top+g.size*.72f, 18f, col(R.color.ag_green))
+            sprite(main.species, main.shiny, main.name, g.spriteLeft, g.spriteTop, g.spriteSize, fit=true)
             fun goal(x: Float, y: Float, width: Float, size: Float, centered: Boolean = false, unit: Boolean = true) {
                 val text = BuddyText.goal(s.today, s.goal)
                 val (t, p) = fitted(text, if (unit) width*.69f else width, size, 6f, 900, R.color.ag_text)
@@ -622,8 +626,8 @@ object WidgetRender {
                 line(t, x, y, size+3, p)
             }
             if (short) {
-                val x = 70f
-                goal(x, 5f, if (wide) 126f else 62f, if (wide) 20f else 15f, unit=wide)
+                val x = if(look.layout=="C")76f else 70f
+                goal(x, 5f, if (wide) 126f else 62f, if(look.layout=="C") { if(wide)16f else 12f } else if (wide) 20f else 15f, unit=wide)
                 if (look.layout == "B") goalBar(x, 32f, rw-x-12, s.progress, progressColour)
                 if (look.layout == "B" && !wide) {
                     // The mockup shares this row: two strictly separate boxes, shrinking both counts as needed.
@@ -635,8 +639,8 @@ object WidgetRender {
                 }
             } else if (wide) {
                 if (look.layout == "C") {
-                    goal(cx-g.size/2, 100f, g.size, 17f, centered=true, unit=false)
-                    line("today", cx, 120f, 12f, paint(11f,700,R.color.ag_sub1), Paint.Align.CENTER)
+                    goal(cx-g.size*.275f, 109f, g.size*.55f, 12f, centered=true, unit=false)
+                    line("today", cx, 126f, 10f, paint(11f,700,R.color.ag_sub1), Paint.Align.CENTER)
                     streak(12f, 25f, 75f, 25f); due(12f, 85f, 75f, 18f, unit=false)
                     if (s.streak > 0) line("day streak", 12f, 54f, 13f, paint(10f,700,R.color.ag_sub1))
                     if (s.due != null) line("cards left", 12f, 109f, 13f, paint(10f,700,R.color.ag_sub1))
@@ -649,8 +653,8 @@ object WidgetRender {
                     if (s.due != null) line("cards left", 218f, 110f, 13f, paint(10f,700,R.color.ag_sub1))
                 }
             } else {
-                goal(0f, if (look.layout == "C") 86f else if (look.layout == "B") 82f else 96f, rw, 17f, centered=true, unit=look.layout!="C")
-                if (look.layout == "C") line("today", rw/2, 105f, 11f, paint(10f,700,R.color.ag_sub1), Paint.Align.CENTER)
+                goal(if(look.layout=="C")38f else 0f, if (look.layout == "C") 95f else if (look.layout == "B") 82f else 96f, if(look.layout=="C")rw-76 else rw, if(look.layout=="C")12f else 17f, centered=true, unit=look.layout!="C")
+                if (look.layout == "C") line("today", rw/2, 111f, 10f, paint(10f,700,R.color.ag_sub1), Paint.Align.CENTER)
                 if (look.layout == "B") goalBar(16f, 106f, rw-32, s.progress, progressColour)
                 streak(10f, 119f, 57f, 20f); due(80f, 121f, 50f, 13f)
             }

@@ -255,6 +255,7 @@ internal object FieldRules : BattleRules {
         f.weather = key
         f.weatherTurns = max(0, turns)
         r.fx(byP, info.start, EffectKind.FIELD, key, 1, label = info.label)
+        if (key in setOf("hail", "snow")) for (p in listOf(true, false)) AbilityAdaptations.refreshIce(r, p)
         return true
     }
 

@@ -59,7 +59,9 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             AppMenu(newDeckButton!!).apply {
                 item(1, "New deck", R.drawable.ic_plus)
                 item(2, "Browse all cards", R.drawable.ic_open)
-                show { id -> if (id == 1) DeckFlows.newDeck(act, null) { refresh() }
+                item(3, "Choose what to study", R.drawable.ic_book)
+                show { id -> if (id == 3) act.startActivity(Intent(act, com.husarp.ankigo.study.FilterActivity::class.java))
+                    else if (id == 1) DeckFlows.newDeck(act, null) { refresh() }
                     else runCatching { act.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("anki://x-callback-url/browser?search=")).setPackage(Anki.pkg)) }.onFailure { Ui.toast(act, "Couldn't open AnkiDroid Browse") } }
             }
         }.apply {
@@ -282,6 +284,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
      */
     fun deckMenu(deck: Anki.Deck, anchor: View): AppMenu {
         val menu = AppMenu(anchor)
+        menu.item(MENU_STATUS, "Deck status", R.drawable.ic_stats)
         menu.item(4, if (deck.id in favouriteIds()) "Remove from favourites" else "Add to favourites", R.drawable.ic_star)
         if (canManage() && !deck.dyn) {
             menu.item(MENU_SUBDECK, "New subdeck…", R.drawable.ic_plus)
@@ -290,6 +293,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
         menu.item(MENU_ANKI, "Study in AnkiDroid", R.drawable.ic_open)
         menu.show { id ->
             when (id) {
+                MENU_STATUS -> com.husarp.ankigo.deck.DeckStatusSheet.show(act, deck)
                 4 -> {
                     val ids = favouriteIds().toMutableList()
                     if (!ids.remove(deck.id)) ids.add(deck.id)
@@ -336,5 +340,6 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
         const val MENU_SUBDECK = 1
         const val MENU_MOVE_ALL = 2
         const val MENU_ANKI = 3
+        const val MENU_STATUS = 5
     }
 }

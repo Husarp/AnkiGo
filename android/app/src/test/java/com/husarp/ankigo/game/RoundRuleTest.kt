@@ -16,12 +16,12 @@ class RoundRuleTest {
 
     @Test fun badAnswersMakeTheWildOneAttackScaledByEachAnswer() {
         assertEquals(2.0, plan(AGAIN, AGAIN).enemyPower, 1e-9)
-        assertEquals(1.5, plan(AGAIN, HARD).enemyPower, 1e-9)
-        assertEquals(1.0, plan(HARD, HARD).enemyPower, 1e-9)
+        assertEquals(1.75, plan(AGAIN, HARD).enemyPower, 1e-9)
+        assertEquals(1.5, plan(HARD, HARD).enemyPower, 1e-9)
         assertEquals(1.0, plan(AGAIN, GOOD).enemyPower, 1e-9)
         assertEquals(1.0, plan(AGAIN, EASY).enemyPower, 1e-9)
-        assertEquals(0.5, plan(HARD, GOOD).enemyPower, 1e-9)
-        assertEquals(0.5, plan(HARD, EASY).enemyPower, 1e-9)
+        assertEquals(0.75, plan(HARD, GOOD).enemyPower, 1e-9)
+        assertEquals(0.75, plan(HARD, EASY).enemyPower, 1e-9)
         for (p in listOf(plan(AGAIN, AGAIN), plan(AGAIN, HARD), plan(HARD, HARD), plan(AGAIN, GOOD), plan(HARD, EASY))) assertTrue(p.enemyActs)
     }
 
@@ -48,7 +48,7 @@ class RoundRuleTest {
     @Test fun anUnknownButtonCountsAsGoodAndHardIsMilderThanAgain() {
         assertEquals(plan(GOOD, GOOD), plan(0, GOOD))
         assertEquals(plan(GOOD, GOOD), plan(0, 0))
-        assertTrue(Tuning.WILD_POWER[HARD] < Tuning.WILD_POWER[AGAIN] / 1.5) // clearly milder
+        assertTrue(Tuning.WILD_POWER[HARD] < Tuning.WILD_POWER[AGAIN]) // clearly milder
     }
 
     @Test fun restoreGivesTheExactButtonOfASingleOldAnswer() {
@@ -85,7 +85,8 @@ class RoundRuleTest {
     }
 
     @Test fun mixedRoundBothAttackInSpeedOrder() {
-        val (ev, _) = play(plan(HARD, EASY), main = mon(19, 20, "tackle"), wild = mon(150, 40, "tackle"))
+        // R23 Hard is 75%: both sides must survive the first hit for this to test speed order.
+        val (ev, _) = play(plan(HARD, EASY), main = mon(150, 40, "tackle"), wild = mon(150, 50, "tackle"))
         val attacks = ev.filterIsInstance<GameEvent.Attack>()
         assertEquals(listOf(false, true), attacks.map { it.byPlayer }) // the faster wild one first, as before
         assertTrue(ev.filterIsInstance<GameEvent.Splash>().isEmpty())

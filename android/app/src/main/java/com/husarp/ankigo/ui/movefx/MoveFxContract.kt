@@ -11,7 +11,7 @@ import com.husarp.ankigo.ui.FxEffect
 
 /** The approved move looks, and the three category templates of the page's fallback rules 2 and 3. */
 enum class MoveLook {
-    DRAIN, HEAL, MULTI_HIT, RECOIL,
+    CHARGE, BLAST, DRAIN, HEAL, MULTI_HIT, RECOIL,
     TACKLE, EMBER, WATER_JET, THUNDERBOLT, VINE_WHIP, ICE_BEAM, PSYCHIC, SHADOW_BALL, EARTHQUAKE,
     /** Physical template: Tackle's lunge, then an impact burst at the target made of the kit's particles. */
     HIT_TEMPLATE,
@@ -40,7 +40,13 @@ data class FxPalette(val deep: Int, val glow: Int, val smoke: Int, val spark: In
  * What to play for one move. [k] = size factor, sqrt(power / the base look's power) kept in 0.8..1.6 (1 when the move has no
  * power, e.g. status moves); multi-shot looks fire more shots with it (Ember: round(10 * k)), streams last longer (Water Gun).
  */
-data class MoveFxPlan(val look: MoveLook, val k: Float, val kit: FxKit, val palette: FxPalette)
+data class MoveFxPlan(
+    val look: MoveLook, val k: Float, val kit: FxKit, val palette: FxPalette,
+    /** Actual landed hits during battle; four is retained for the original Fury Swipes preview. */
+    val hitCount: Int = 4,
+    /** Recoil prevention must not produce a false damage reaction. */
+    val showRecoil: Boolean = true,
+)
 
 /**
  * What a running move animation may touch on the arena (ArenaView implements it, R7-05). Positions are pixels of the layer the

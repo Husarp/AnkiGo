@@ -418,7 +418,7 @@ class R17C9aTurnTest {
     @Test fun anUnknownOrEmptyAbilityChangesNothing() {
         fun run(ab: String): List<String> { val b = R17C9.battle(R17C9.wild(ab, 801, "tackle")); return R17C9.round(R17C9.main(ab, "tackle", "watergun"), b, "tackle", "tackle", Random(5)).lines() + listOf(b.wild.hp.toString()) }
         assertEquals(run(""), run("Testability"))
-        assertEquals(run(""), run("Pressure"))
+        assertFalse("Pressure now reduces move damage", run("") == run("Pressure"))
     }
 
     @Test fun theAbilityIsMatchedByItsNormalizedId() {

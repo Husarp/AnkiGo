@@ -30,7 +30,8 @@ class ShopPlanTest {
             // a basic is never the deal and keeps its one normal price
             for (basic in Shop.basics()) {
                 val b = ShopPlan.price(data, day, basic)
-                assertEquals(data.price(basic), b.now)
+                assertEquals(Shop.dailyPrice(data, day, basic), b.now)
+                assertEquals(if (b.daily != data.price(basic)) data.price(basic) else null, b.normal)
                 assertNull(b.was)
                 assertFalse(b.discounted)
             }

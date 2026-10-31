@@ -327,4 +327,11 @@ class BattleLogBuilderTest {
         assertEquals("Birdie was healed to 30 HP · the wild one is lost", first.result.single().text)
         assertEquals("Next", b.battles[1].wild)
     }
+    @Test fun combinedBallThrowUsesCombinedName() {
+        val log = builder()
+        log.feed(encounter("Wild"))
+        log.feed(listOf(GameEvent.BallThrow("ultra-ball", 80, false, 0, special = "heal-ball")))
+        assertEquals("Threw Ultra Heal Ball · 80% · it broke free and ran away", log.battles[0].rounds[0].lines[0].text)
+    }
+
 }

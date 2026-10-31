@@ -58,7 +58,7 @@ list.forEach(function(it){
             tapHide -> "AnkiGo.unflip()"
             else -> return ""
         }
-        return "document.addEventListener('click',function(e){if(!e.target.closest('input,a,button,textarea,select'))$call});"
+        return "document.addEventListener('click',function(e){if(!e.defaultPrevented&&!e.target.closest('input,a,button,textarea,select')&&!e.target.closest('details,summary,.term,[data-term],[onclick]'))$call});"
     }
 
     /**
@@ -148,7 +148,7 @@ ${if (dark) "body.nightMode{background:#202124;color:#e8eaed}" else ""}
 ${if (io) "<script>${IoScript.JS}</script>" else ""}
 <script>${JsApiScript.token(jsPage)}${JsApiScript.JS}</script>
 <script>
-window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]},startup:{typeset:true},
+window.MathJax={loader:{load:['[tex]/html']},tex:{packages:{'[+]':['html']},inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]},startup:{typeset:true},
  options:{ignoreHtmlClass:'tex2jax_ignore'}};
 window.onerror=function(m,s,l){try{AnkiGo.jsError(m+' @'+s+':'+l)}catch(e){}};
 </script>

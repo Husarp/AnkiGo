@@ -319,6 +319,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 content.addView(studyAdvancedCard(), Form.lp(this, 12)) // R18 255: moved here from Diagnostics
             }
             SettingsSection.WIDGETS -> { content.addView(widgetsCard(), Form.lp(this, 12)); content.addView(WidgetLookActivity.tiles(this), Form.lp(this, 12)) } // R18 263
+            SettingsSection.BACKGROUNDS -> content.addView(BackdropPrefs.page(this))
             SettingsSection.BATTLE -> battleSection()
             SettingsSection.REMINDERS -> {
                 // a search result for a reminder setting: its sheet opens (the rows here are custom views, there is no row to highlight)
@@ -352,6 +353,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, com.husarp.ankigo.game.DailyGoal.forSettings(st, loaded?.day), st.goalByWeekday != null)
             SettingsSection.STUDY -> SettingsSummary.study(study.getBoolean("inAnkiDroid", false), study.getBoolean("swipe", false), study.getInt("zoom", 100))
             SettingsSection.WIDGETS -> OpenOnPrefs.summary(OpenOnPrefs.choice(this))
+            SettingsSection.BACKGROUNDS -> "${BackdropCatalog.ALL.count { it.id !in BackdropPrefs.disabled(this) }} of ${BackdropCatalog.ALL.size} enabled"
             SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this), AppPrefs.cardsUnderOwn(this))
             SettingsSection.REMINDERS -> SettingsSummary.reminders(com.husarp.ankigo.remind.ReminderStore.load(this))
             SettingsSection.HELP -> "How the game works · fix a problem"
@@ -864,13 +866,14 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.switchRow(this, "Attack animations", "Each move plays its own animation; off: a simple step and shake",
                 AppPrefs.attackAnimations(this)) { AppPrefs.setAttackAnimations(this, it) },
             pokemonMovementRow(),
-            Form.switchRow(this, "Background pictures", "A scene that fits the wild Pokémon's type, downloaded once (8–400 KB each); off: plain",
+            Form.switchRow(this, "Background pictures", "A scene from your enabled backgrounds; off: plain",
                 AppPrefs.backgroundPictures(this)) { AppPrefs.setBackgroundPictures(this, it) },
             turnDotsRow(),
         )))
         content.addView(Form.sect(this, "Battle look"))
         content.addView(infoBoxCard())
         content.addView(Form.cardOf(this, listOf(   // R19-A (PLAN 276): both boxes bigger where the arena has room; every open battle view follows live
+            Form.switchRow(this, "Wider info boxes", "More room for both type names; fits the arena", InfoBoxPrefs.wide(this)) { InfoBoxPrefs.setWide(this, it) },
             Form.switchRow(this, "Bigger info boxes", "When the arena has room", InfoBoxPrefs.big(this)) { InfoBoxPrefs.setBig(this, it) },
         )), Form.lp(this, 8))
         content.addView(Form.cardOf(this, listOf(HpColorPrefs.row(this, openChoosers))), Form.lp(this, 8)) // PLAN 163 / R19
@@ -1061,7 +1064,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             else -> {}
         }
         // the row has its own 14 dp padding: pull it out of the buttons' padding so its text lines up with the other rows
-        actions.addView(Form.switchRow(this, "Download pictures as needed", "Off: use placeholders", Sprites.enabled(this)) { Sprites.setEnabled(this, it) },
+        actions.addView(Form.switchRow(this, "Download pictures as needed", "Off: no new downloads; pictures already saved are still used", Sprites.enabled(this)) { Sprites.setEnabled(this, it) },
             LinearLayout.LayoutParams(-1, -2).also { it.setMargins(-dp(14), 0, -dp(14), 0) })
         // PLAN 167: everything (pictures, battle animations incl. shiny, item icons, backgrounds, cries) in one go
         val left = SettingsJobs.left?.takeIf { it.gens == gensNow }
@@ -1420,7 +1423,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). " +
                 "Attack effects: Kenney Particle Pack (CC0) and Pokémon Showdown effect images (CC0); Ember and Vine Whip pixel art drawn for AnkiGo. " +
                 "Streak flame: animated Noto Emoji by Google (CC BY 4.0, resized; animation modified for AnkiGo). " +
-                "Battle backgrounds: Pokémon Showdown's (art by Smogon artists) and scenes made for AnkiGo, downloaded when needed, not part of the app. " +
+                "Battle backgrounds: Pokémon Showdown's (art by Smogon artists) and scenes made for AnkiGo, included in the app or downloaded when needed. " +
                 "Pictures, cries and game data come from AnkiGo's own copy on GitHub first and from the original sites second.", 12, R.color.ag_sub0), Form.lp(this, 6))
         return box
     }

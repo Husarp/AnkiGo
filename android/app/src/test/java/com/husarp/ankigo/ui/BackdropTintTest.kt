@@ -30,7 +30,7 @@ class BackdropTintTest {
         // the arena asks for `dark = darkTheme && !bg.dark`: a picture that is a night scene already stays as it is in both themes
         for (bg in BackdropCatalog.ALL.filter { it.dark }) assertNull(bg.id, BackdropTint.matrix(dark = !bg.dark))
         for (bg in BackdropCatalog.ALL.filter { !it.dark }) assertTrue(bg.id, BackdropTint.matrix(dark = !bg.dark) != null)
-        assertEquals(10, BackdropCatalog.ALL.count { it.dark })
+        assertEquals(12, BackdropCatalog.ALL.count { it.dark })
     }
 
     @Test fun theMatrixKeepsAlphaAndHasNoOffset() {

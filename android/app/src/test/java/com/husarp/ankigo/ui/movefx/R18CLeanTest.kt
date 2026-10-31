@@ -30,7 +30,7 @@ class R18CLeanTest {
 
     @Test fun specialAndStatusLooksLeanPhysicalOnesDoNot() {
         val lean = listOf(MoveLook.EMBER, MoveLook.WATER_JET, MoveLook.THUNDERBOLT, MoveLook.ICE_BEAM, MoveLook.PSYCHIC, MoveLook.SHADOW_BALL, MoveLook.ORB_TEMPLATE, MoveLook.DRAIN)
-        val still = listOf(MoveLook.TACKLE, MoveLook.VINE_WHIP, MoveLook.EARTHQUAKE, MoveLook.HIT_TEMPLATE, MoveLook.AURA_TEMPLATE, MoveLook.HEAL, MoveLook.MULTI_HIT, MoveLook.RECOIL)
+        val still = listOf(MoveLook.CHARGE, MoveLook.BLAST, MoveLook.TACKLE, MoveLook.VINE_WHIP, MoveLook.EARTHQUAKE, MoveLook.HIT_TEMPLATE, MoveLook.AURA_TEMPLATE, MoveLook.HEAL, MoveLook.MULTI_HIT, MoveLook.RECOIL)
         for (l in lean) assertTrue("$l", FxLean.leans(l))
         for (l in still) assertFalse("$l", FxLean.leans(l))
         assertEquals(MoveLook.entries.toSet(), (lean + still).toSet())

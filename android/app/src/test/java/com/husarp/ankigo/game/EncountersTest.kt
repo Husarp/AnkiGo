@@ -165,13 +165,13 @@ class EncountersTest {
 
     @Test fun wildLevelBounds() {
         val rng = Random(7)
-        repeat(500) { assertTrue(Encounters.wildLevel(50, rng) in 47..53) }
-        repeat(500) { assertTrue(Encounters.wildLevel(1, rng) in 1..4) }
-        repeat(500) { assertTrue(Encounters.wildLevel(2, rng) in 1..5) }
-        repeat(500) { assertTrue(Encounters.wildLevel(98, rng) in 95..100) }
-        repeat(50) { assertEquals(100, Encounters.wildLevel(100, rng)) }
+        repeat(500) { assertTrue(Encounters.wildLevel(50, rng) in 49..55) }
+        repeat(500) { assertTrue(Encounters.wildLevel(1, rng) in 1..6) }
+        repeat(500) { assertTrue(Encounters.wildLevel(2, rng) in 1..7) }
+        repeat(500) { assertTrue(Encounters.wildLevel(98, rng) in 97..100) }
+        repeat(500) { assertTrue(Encounters.wildLevel(100, rng) in 99..100) }
         val seen = (1..2000).map { Encounters.wildLevel(50, rng) }.toSet()
-        assertEquals((47..53).toSet(), seen)
+        assertEquals((49..55).toSet(), seen)
     }
 
     // ---- pool ----
@@ -299,13 +299,7 @@ class EncountersTest {
         val rng = Random(99)
         for (level in listOf(1, 2, 5, 20, 37, 50, 77, 99, 100)) repeat(200) {
             val m = Encounters.makeWild(world, Encounters.Roll(16, Tier.NORMAL, false), level, rng, 5L)
-            val budget = minOf(510, level * 51 / 10)
-            val evs = m.evs.toList()
-            assertTrue("level $level evs $evs", evs.sum() <= budget)
-            assertTrue(evs.all { it in 0..252 })
-            val total = evs.sum()
-            // within 6 of the budget unless the 252 cap/shape (random split with capped part, level 99-100 fixed styles) stops it
-            if (evs.none { it == 252 } && level < 98) assertTrue("level $level evs $evs budget $budget", total >= budget - 6)
+            assertEquals(Stats(minOf(252, level * Tuning.WILD_EV_PER_LEVEL), 0, 0, 0, 0, 0), m.evs)
             assertEquals(StatCalc.maxHp(world, m), m.hp)
         }
     }
@@ -319,14 +313,7 @@ class EncountersTest {
         assertEquals(0L, m.caughtAt) // wild: set only when caught (Progression.newMon contract)
     }
 
-    @Test fun allFourEvStylesAppear() {
-        val rng = Random(4)
-        val shapes = (1..400).map { Encounters.makeWild(world, Encounters.Roll(16, Tier.NORMAL, false), 100, rng, 0L).evs }
-        assertTrue(shapes.any { it == Stats(84, 84, 84, 84, 84, 84) })
-        assertTrue(shapes.any { it == Stats(4, 0, 252, 0, 252, 0) })
-        assertTrue(shapes.any { s -> s.toList().count { it == 252 } == 2 && s.toList().contains(4) && s != Stats(4, 0, 252, 0, 252, 0) })
-        assertTrue(shapes.any { s -> s.toList().distinct().size > 3 })
-    }
+
 }
 
 /** Wishlist weighting (T42) and generation 9 pools, made-up species. */

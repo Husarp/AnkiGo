@@ -32,12 +32,29 @@ object ItemInfo {
     private fun isOldBall(id: String) = id in Tuning.OLD_BALLS
 
     /** The tile line (Shop tiles; about 18 characters, no bold marks): "20 % catch", "Heals 20 HP", "Evolves Applin", "Main: ×2 money". [data] null = no species names. */
+    private fun berryStat(item: String): String = when (AbilityAdaptations.berries[item]) {
+        "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Sp. Atk"; "spd" -> "Sp. Def"; "spe" -> "Speed"; else -> ""
+    }
+    private fun berryLine(item: String): String = when (item) {
+        "oran-berry" -> "At half HP: heals 10 HP; consumed"
+        "sitrus-berry" -> "At half HP: heals ¼ max HP; consumed"
+        "figy-berry" -> "At ¼ HP: heals ⅓ max HP; consumed"
+        else -> "At ¼ HP: +1 ${berryStat(item)}; consumed"
+    }
+
     fun short(data: GameData?, item: String, caught: Set<Int>? = null): String {
+        if (item in AbilityAdaptations.berries) return when (item) {
+            "oran-berry" -> "Held: heals 10 HP"
+            "sitrus-berry" -> "Held: heals ¼ HP"
+            "figy-berry" -> "Held: heals ⅓ HP"
+            else -> "Held: +1 ${berryStat(item)}"
+        }
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {
             ItemKind.BALL -> when {
                 isMaster(item) -> "Always catches"
-                isOldBall(item) -> "Like a ${Items.name(Tuning.OLD_BALL_AS)}"
+                item == "repeat-ball" -> "Returns ${Tuning.REPEAT_RETURN_MISS_PERCENT}% / ${Tuning.REPEAT_RETURN_CATCH_PERCENT}%"
+                isOldBall(item) -> Items.specialSummary(item)
                 else -> "${Catching.ballChance(item)} % catch"
             }
             ItemKind.HEAL -> if (def.cures) "All HP + status" else healLine(def)
@@ -68,11 +85,12 @@ object ItemInfo {
 
     /** The row line (Bag rows, under the name of an opened card, the deal card; about 40 characters, no bold marks). */
     fun line(data: GameData?, item: String, caught: Set<Int>? = null): String {
+        if (item in AbilityAdaptations.berries) return berryLine(item)
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {
             ItemKind.BALL -> when {
                 isMaster(item) -> "Always catches · can't be bought"
-                isOldBall(item) -> "Like a ${Items.name(Tuning.OLD_BALL_AS)}: ${Catching.ballChance(item)} % to catch"
+                isOldBall(item) -> Items.specialSummary(item)
                 else -> "${Catching.ballChance(item)} % to catch · a miss: it runs away"
             }
             ItemKind.HEAL -> if (def.cures) "Heals all HP, cures a status" else healLine(def)
@@ -202,15 +220,15 @@ object ItemInfo {
                 ItemFact(HOW, THROW_RULE),
             )
             isOldBall(item) -> listOf(
-                ItemFact(WHAT, "An old ball from Ankimon. It throws like a **${Items.name(Tuning.OLD_BALL_AS)}** (${Catching.ballChance(item)} %) and is used up either way. $miss It is not sold or found any more."),
-                ItemFact(HOW, "$THROW_RULE In the Bag it counts as a ${Items.name(Tuning.OLD_BALL_AS)} when you trade 3 for 1 Ultra Ball."),
+                ItemFact(WHAT, Items.specialNote(item)),
+                ItemFact(HOW, "Choose a regular ball, then one optional special. Shop prices vary daily. $miss"),
             )
             else -> {
                 val pct = Catching.ballChance(item)
-                val extra = if (item == "ultra-ball") " Sold only about **one day a week**." else ""
+                val extra = if (item == "ultra-ball") " Available in the daily regular-ball draw." else ""
                 val trade = when (item) {
-                    "poke-ball" -> " In the Bag you can trade 5 Poké Balls for 1 Great Ball."
-                    "great-ball" -> " In the Bag you can trade 3 Great Balls for 1 Ultra Ball."
+                    "poke-ball" -> " In the Bag you can trade ${Tuning.POKE_FOR_GREAT} Poké Balls for 1 Great Ball."
+                    "great-ball" -> " In the Bag you can trade ${Tuning.GREAT_FOR_ULTRA} Great Balls for 1 Ultra Ball."
                     else -> ""
                 }
                 val article = if (pct == 80) "an" else "a"
@@ -328,7 +346,7 @@ object ItemInfo {
         return "$head$shown$more.$time"
     }
 
-    private fun heldWhat(item: String): String = when (item) {
+    private fun heldWhat(item: String): String = if (item in AbilityAdaptations.berries) berryLine(item) + ". Activates automatically while held in battle. Gluttony, Ripen, Cheek Pouch and Cud Chew can improve it; Klutz and opposing Unnerve prevent activation." else when (item) {
         "lucky-egg" -> "The Pokémon holding it gets **×${nice(Tuning.LUCKY_EGG)} XP** from wins and catches. It works for your **main** and for the **Exp. Share** holder."
         "amulet-coin", "luck-incense" -> "While your **main** holds it, the money you earn for answers and wins is **doubled**, all day. " +
             "The slower pay after each ${Tuning.CASH_TIER} coins still applies, so you keep getting double at every step. It does nothing on a Pokémon that is not your main."
@@ -351,7 +369,7 @@ object ItemInfo {
 
     /** Where and how the item is used (one sentence). */
     fun howToUse(item: String): String = when (Items.def(item)?.kind) {
-        ItemKind.BALL -> "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
+        ItemKind.BALL -> if (item == "repeat-ball") Items.specialNote(item) else "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
         ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"
         ItemKind.EVOLUTION -> if (item in Items.RETIRED) "No Pokémon in AnkiGo evolves with it, so it can't be used."
             else "Use it from the Bag on a Pokémon that evolves with it. $FIGHT_TURN"

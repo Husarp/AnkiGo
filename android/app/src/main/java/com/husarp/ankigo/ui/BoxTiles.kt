@@ -51,6 +51,13 @@ data class BoxDupePlan(val cards: Int, val sprites: Int, val count: Int) {
 }
 
 object BoxTiles {
+    /** Independent Show requirements combine with AND, before grouping copies. */
+    fun filter(
+        mons: List<Mon>, filters: Set<BoxFilter>, team: Collection<String> = emptyList(), xpShareUid: String? = null,
+        canEvolve: (Mon) -> Boolean = { false }, types: TypeFilter = TypeFilter(), typesOf: (Mon) -> List<Type> = { emptyList() },
+    ): List<Mon> = filters.fold(mons) { found, f -> filter(found, f, team, xpShareUid, canEvolve) }
+        .let { found -> if (types.active) found.filter { types.matches(typesOf(it)) } else found }
+
     /**
      * [team] = the uids of the team (for [BoxFilter.IN_TEAM]); [xpShareUid] = the holder of the Exp. Share (for [BoxFilter.HOLDS_XP_SHARE]); [canEvolve] answers [BoxFilter.CAN_EVOLVE] (see [MonTags.canEvolve]).
      * PLAN 192: [types] is the separate type filter (it also applies with any [f], X7); [typesOf] gives a Pokémon's species types (a regional form has its own).

@@ -26,7 +26,7 @@ object CatchTilesPlan {
             s.pokedex?.let { out += Tile(Kind.DEX, "Pokédex", it.text) }
             val t = s.throwInfo
             // R19 174B: a catch by the auto rule threw no ball, so it gets no tile ("New #N" already says it was caught).
-            if (t != null) out += Tile(Kind.THROW, ballName(t.ball), "Throw ${t.number}", "· ${t.chance} %", t.ball)
+            if (t != null) out += Tile(Kind.THROW, (if (t.special == null) ballName(t.ball) else com.husarp.ankigo.game.Catching.throwName(t.ball, t.special)), "Throw ${t.number}", "· ${t.chance} %", t.ball)
         } else if (s.ask) {
             out += Tile(Kind.ASK, "Your call", s.name, desc = askDesc(s)) // R19-P (PLAN 281)
         } else {

@@ -306,7 +306,7 @@ class R18GDetailsShots {
     // ---------- 242A: the titles sit on the middle of their rows ----------
 
     @Test fun titlesAreCentredInTheirRows() {
-        DetailSections.storeOf = { MapStore(setOf("training", "info")) }
+        DetailSections.storeOf = { MapStore(setOf("stats", "training", "info")) }
         DetailSections.dexLoader = { _, _, done -> done(sample) }
         paparazzi.unsafeUpdateConfig(deviceConfig = PHONE.device(Theme.LIGHT))
         val ctx = Shots.files(paparazzi.context)
@@ -405,6 +405,17 @@ class R18GDetailsShots {
         assertRowConditions(c, v)
     }
 
+    @Test fun abilityIsAboveStatsAndAbsentFromInfoForOwnedPokemon() {
+        DetailSections.storeOf = { MapStore(setOf("stats", "info")) }
+        DetailSections.dexLoader = { _, _, done -> done(sample) }
+        dialog("ability-stats", listOf(0f), check = { _, scene ->
+            val t = strings(scene)
+            assertEquals(1, t.count { it == "Ability" })
+            assertTrue(t.indexOf("Ability") < t.lastIndexOf("HP"))
+            assertTrue("Static" in t)
+        }) { ctx -> MonDetail.show(TeamPage(ctx, NoHost), gd, pikachu()) }
+    }
+
     // ---------- the Pokédex entry ----------
 
     @Test fun dexEntry() {
@@ -414,7 +425,8 @@ class R18GDetailsShots {
             val t = strings(scene)
             assertTrue("the evolution is in the card under the types" , "EVOLUTION" in t)
             assertFalse("no Holding for a species", "Holding" in t)
-            assertTrue("Abilities" in t)
+            assertEquals(1, t.count { it == "Abilities" })
+            assertTrue(t.indexOf("Abilities") < t.lastIndexOf("HP"))
         }) { ctx -> DexDetail.show(DexPage(ctx, NoHost), gd.sp(25)) }
     }
 

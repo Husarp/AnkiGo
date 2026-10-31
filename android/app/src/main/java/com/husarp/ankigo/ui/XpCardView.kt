@@ -72,14 +72,15 @@ internal class XpCardView(ctx: Context, val card: XpCard, val slim: Boolean, flo
             postDelayed({ bar.setMeaning(BarMeaning.XP, card.barTo, true) }, START_MS)
             return
         }
-        // PLAN 182: from the XP it had, to the end; then per level: hold, "Level up! Lv N", empty, on to the next end
+        // PLAN 182 / 351: announce each gained level as its fill starts; retain the hold and empty restart.
         var t = START_MS
         for ((i, s) in segs.withIndex()) {
             val ms = XpLoop.runMs(s.length)
             if (i > 0) t += XpLoop.HOLD_MS
             val at = t
             postDelayed({
-                if (i > 0) { levelUpText(s.level); bar.setMeaning(BarMeaning.XP, 0f, false) }
+                if (s.toEnd) levelUpText(s.level + 1)
+                if (i > 0) bar.setMeaning(BarMeaning.XP, 0f, false)
                 bar.setMeaning(BarMeaning.XP, s.to, ms > 0L, maxOf(ms, 1L))
             }, at)
             t += ms

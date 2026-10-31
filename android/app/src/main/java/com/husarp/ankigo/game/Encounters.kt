@@ -123,11 +123,10 @@ object Encounters {
         return min
     }
 
-    /** main level -3..+3, at least 1, at most 100 (100 when main is 100). */
+    /** Main level -1..+5, clamped to 1..100. */
     fun wildLevel(mainLevel: Int, rng: Random): Int {
-        if (mainLevel >= Tuning.MAX_LEVEL) return Tuning.MAX_LEVEL
-        val lo = maxOf(1, mainLevel - Tuning.WILD_LEVEL_SPREAD)
-        val hi = minOf(Tuning.MAX_LEVEL, maxOf(1, mainLevel + Tuning.WILD_LEVEL_SPREAD))
+        val lo = maxOf(1, mainLevel + Tuning.WILD_LEVEL_SPREAD.first)
+        val hi = minOf(Tuning.MAX_LEVEL, maxOf(1, mainLevel + Tuning.WILD_LEVEL_SPREAD.last))
         return rng.nextInt(lo, hi + 1)
     }
 
@@ -203,34 +202,22 @@ object Encounters {
         return Roll(picked, tier, rng.nextInt(Tuning.SHINY_ODDS) == 0)
     }
 
-    /** Builds the wild Mon (Progression.newMon) with a random EV spread worth level*5.1 (max 252/stat, 510 total). */
+    /** Builds the wild Mon (Progression.newMon) with level-scaled species EV yields (max 252/stat, 510 total). */
     fun makeWild(data: GameData, roll: Roll, level: Int, rng: Random, now: Long): Mon {
         val mon = Progression.newMon(data, roll.species, level, rng, now, roll.shiny)
         mon.tier = roll.tier
-        mon.evs = wildEvs(level, rng)
+        mon.evs = wildEvs(level, data.sp(roll.species).evYield)
         mon.hp = StatCalc.maxHp(data, mon)
         return mon
     }
 
-    /** Ankimon get_ev_spread (4 styles) scaled down to the level's budget, shape kept (scale_ev_spread_to_level). */
-    private fun wildEvs(level: Int, rng: Random): Stats {
-        val cap = Tuning.EV_STAT_CAP
-        val shape = when (rng.nextInt(4)) {
-            0 -> { // random split of 510 over six stats
-                val cuts = (0..Tuning.EV_TOTAL_CAP).shuffled(rng).take(5).sorted()
-                val edges = listOf(0) + cuts + listOf(Tuning.EV_TOTAL_CAP)
-                List(6) { minOf(cap, edges[it + 1] - edges[it]) }
-            }
-            1 -> { // two random stats at 252, a third at 4
-                val s = (0..5).shuffled(rng)
-                MutableList(6) { 0 }.also { it[s[0]] = cap; it[s[1]] = cap; it[s[2]] = 4 }
-            }
-            2 -> listOf(4, 0, cap, 0, cap, 0) // hp + def + spd
-            else -> List(6) { 84 }
+    /** Species yield times level and the tuning multiplier; caps apply before proportional total scaling. */
+    private fun wildEvs(level: Int, yield: Stats): Stats {
+        val capped = yield.toList().map {
+            (it * level.coerceIn(1, Tuning.MAX_LEVEL) * Tuning.WILD_EV_PER_LEVEL).coerceIn(0, Tuning.EV_STAT_CAP)
         }
-        val budget = minOf(Tuning.EV_TOTAL_CAP, (level * 51) / 10) // floor(level * 5.1), kept in integers
-        val total = shape.sum()
-        val out = if (total <= budget) shape else shape.map { minOf(cap, it * budget / total) }
-        return Stats.of(out)
+        val total = capped.sum()
+        return Stats.of(if (total <= Tuning.EV_TOTAL_CAP) capped else
+            capped.map { it * Tuning.EV_TOTAL_CAP / total })
     }
 }

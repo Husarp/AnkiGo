@@ -241,7 +241,7 @@ class R4V2Shots {
             screen
         }
         paparazzi.shootPage("r4v2-detail-damage", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
-            val screen = page(ctx, open = "damage-dealt")
+            val screen = page(ctx, open = "items-found")
             assertTrue(texts(screen).any { it.startsWith("Counted since the update (") })
             screen
         }
@@ -324,8 +324,8 @@ class R4V2Shots {
     }
 
     @Test fun popupSingleEveryTier() {
-        paparazzi.shootPage("r4v2-popup-epic", listOf(Variants.PHONE, SMALL)) { ctx -> scene(ctx, listOf(one("dex-caught", 2))) }
-        paparazzi.shoot("r4v2-popup-epic", listOf(Size.SPLIT_TINY, Size.LAND, Size.TABLET)) { ctx -> scene(ctx, listOf(one("dex-caught", 2))) }
+        paparazzi.shootPage("r4v2-popup-epic", listOf(Variants.PHONE, SMALL)) { ctx -> scene(ctx, listOf(one("defeats", 2))) }
+        paparazzi.shoot("r4v2-popup-epic", listOf(Size.SPLIT_TINY, Size.LAND, Size.TABLET)) { ctx -> scene(ctx, listOf(one("defeats", 2))) }
         for (t in listOf(0, 1, 3, 4)) paparazzi.shootPage("r4v2-popup-tier$t", listOf(SMALL)) { ctx -> scene(ctx, listOf(one("catches", t))) }
         paparazzi.shootPage("r4v2-popup-oneoff", listOf(SMALL), themes = listOf(Theme.LIGHT)) { ctx ->
             val v = scene(ctx, listOf(AchCelebration("first-catch", "First Pokémon caught", -1, "Special", null)))
@@ -336,9 +336,9 @@ class R4V2Shots {
 
     @Test fun popupWordsAndButtons() {
         paparazzi.shootPage("r4v2-popup-words", listOf(SMALL), themes = listOf(Theme.LIGHT)) { ctx ->
-            val v = scene(ctx, listOf(one("dex-caught", 2)))
+            val v = scene(ctx, listOf(one("defeats", 2)))
             val t = texts(v)
-            assertTrue(t.toString(), "Epic!" in t && "Pokédex caught · 250" in t && "Nice" in t && "See it" in t)
+            assertTrue(t.toString(), "Epic!" in t && "Battles won · 1,000" in t && "Nice" in t && "See it" in t)
             assertFalse("See all" in t)
             v
         }
@@ -347,17 +347,17 @@ class R4V2Shots {
     @Test fun popupButtonsCallBack() {
         paparazzi.shootPage("r4v2-popup-taps", listOf(SMALL), themes = listOf(Theme.LIGHT)) { ctx ->
             var nice = 0; var seen: String? = "none"
-            val layer = AchievementPopup.layer(ctx, listOf(one("dex-caught", 2)), onNice = { nice++ }, onSee = { seen = it })
+            val layer = AchievementPopup.layer(ctx, listOf(one("defeats", 2)), onNice = { nice++ }, onSee = { seen = it })
             fun tap(s: String) { var v: View? = findText(layer) { it == s }; while (v != null && !v.isClickable) v = v.parent as? View; v!!.performClick() }
             tap("Nice"); assertEquals(1, nice)
-            tap("See it"); assertEquals("dex-caught", seen)
+            tap("See it"); assertEquals("defeats", seen)
             layer
         }
     }
 
     @Test fun popupMany() {
         paparazzi.shootPage("r4v2-popup-many", listOf(Variants.PHONE, SMALL)) { ctx ->
-            val items = listOf(one("dex-caught", 2), one("catches", 1), one("answers", 3), AchCelebration("first-evolution", "Evolved a Pokémon", -1, "Special", null), one("shinies", 0))
+            val items = listOf(one("defeats", 2), one("catches", 1), one("answers", 3), AchCelebration("first-evolution", "Evolved a Pokémon", -1, "Special", null), one("shinies", 0))
             val v = scene(ctx, items)
             assertTrue("5 achievements unlocked" in texts(v))
             assertTrue("See it" in texts(v) && "Nice" in texts(v))
@@ -365,9 +365,9 @@ class R4V2Shots {
             v
         }
         paparazzi.shoot("r4v2-popup-many", listOf(Size.SPLIT_TINY)) { ctx ->
-            scene(ctx, listOf(one("dex-caught", 2), one("catches", 1), one("answers", 3), AchCelebration("first-evolution", "Evolved a Pokémon", -1, "Special", null)))
+            scene(ctx, listOf(one("defeats", 2), one("catches", 1), one("answers", 3), AchCelebration("first-evolution", "Evolved a Pokémon", -1, "Special", null)))
         }
-        paparazzi.shootPage("r4v2-popup-two", listOf(SMALL), themes = listOf(Theme.LIGHT)) { ctx -> scene(ctx, listOf(one("dex-caught", 2), one("catches", 1))) }
+        paparazzi.shootPage("r4v2-popup-two", listOf(SMALL), themes = listOf(Theme.LIGHT)) { ctx -> scene(ctx, listOf(one("defeats", 2), one("catches", 1))) }
     }
 
     // ---------- the hook ----------

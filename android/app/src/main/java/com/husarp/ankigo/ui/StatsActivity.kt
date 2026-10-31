@@ -344,6 +344,11 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
         val need = Trainer.xpForNext(st.trainerLevel)
         val mid = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        mid.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_trainer_rank)
+            setColorFilter(c(R.color.ag_mauve))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(14), dp(14)).also { it.marginEnd = dp(5) })
         mid.addView(Ui.text(this, 12f, 800, R.color.ag_sub1).apply { text = "Trainer Lv ${st.trainerLevel} · ${Trainer.rank(st)}" }, LinearLayout.LayoutParams(0, -2, 1f))
         mid.addView(Ui.text(this, 11f, 800, R.color.ag_sub0).apply { text = "XP ${st.trainerXp} / $need" })
         card.addView(mid, lp(4))

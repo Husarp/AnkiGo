@@ -7,6 +7,14 @@ import org.junit.Test
 class XpCardSpotTest {
     private fun box(l: Int, t: Int, r: Int, b: Int) = FloatSpot.Rect(l, t, r, b)
 
+    @Test fun topRightMessagesKeepBothSidesChipsClear() {
+        val chips = listOf(box(240, 4, 396, 45), box(170, 170, 396, 220))
+        val spot = XpCardSpot.anywhere(400, 240, 150, 30, 4, 4, chips, max = 1, topRight = true).single()
+        assertEquals(246, spot.x)
+        assertEquals(49, spot.y)
+        org.junit.Assert.assertTrue(chips.none { it.hits(box(spot.x, spot.y, spot.x + 150, spot.y + 30)) })
+    }
+
     @Test fun emptyColumnStacksUpToMaxCentred() {
         val tops = XpCardSpot.slots(300, 8, 170, 40, 6, 4, emptyList())
         assertEquals(3, tops.size)

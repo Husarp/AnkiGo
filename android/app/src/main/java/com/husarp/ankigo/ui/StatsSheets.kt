@@ -84,7 +84,7 @@ internal object StatsSheets {
             maxLines = 1
             Ui.touchPill(this, Ui.rounded(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_mantle), 12, ctx), 32, 12)
             ctx.getDrawable(icon(m.icon))?.mutate()?.let { d ->
-                d.setTint(ink)
+                if (icon(m.icon) != R.drawable.ic_coin) d.setTint(ink)
                 val s = Ui.dp(ctx, 14)
                 d.setBounds(0, 0, s, s)
                 setCompoundDrawablesRelative(d, null, null, null)

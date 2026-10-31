@@ -324,8 +324,17 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     var bigBoxes: Boolean = InfoBoxPrefs.big(ctx)
         set(v) { if (v != field) { field = v; requestLayout() } }
 
+    var wideBoxes: Boolean = InfoBoxPrefs.wide(ctx)
+        set(v) { if (v != field) { field = v; requestLayout() } }
+
+    private fun cardWidths(c: ArenaGeo.Cards) = ArenaGeo.Cards(
+        InfoBoxPrefs.width(c.wildW, wideBoxes), c.wildH, InfoBoxPrefs.width(c.playerW, wideBoxes), c.playerH)
+
+    private fun cardWidthDp() = InfoBoxPrefs.width(InfoBoxGeo.W, wideBoxes).toInt()
+
     // the prefs hold the listener weakly: it is kept here
     private val bigWatch = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == InfoBoxPrefs.WIDTH_KEY) post { wideBoxes = InfoBoxPrefs.wide(context) }
         if (key == InfoBoxPrefs.KEY) post { bigBoxes = InfoBoxPrefs.big(context) }
     }
 
@@ -478,7 +487,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun layoutPlan(w: Int, h: Int) {
         val d = Ui.dp(context, 1f)
         // the real cards can be taller than the model's at a big system font: the plan is made for their real height (0 extra at the normal size)
-        val c0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, xpBar = xpBarVisible())
+        val c0 = cardWidths(ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, xpBar = xpBarVisible()))
         val c = ArenaGeo.Cards(c0.wildW, c0.wildH + extraHeight(enemyBlock, c0.wildW, d, c0.wildH),
             c0.playerW, c0.playerH + extraHeight(playerCard, c0.playerW, d, c0.playerH))
         val p0 = ArenaGeo.plan(w / d, h / d, c, cardsCompact, cardsUnderOwn, frameSafe(), bigFactor(w, h, d))   // PLAN 140: the cards stay inside the frame's safe area; R19-A: "Bigger info boxes"
@@ -530,8 +539,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         }
         val study = compact || studyStrip
         // The boxes' sizes are the model's ([InfoBoxGeo]: calibrated on the real views by the shots), with their optional parts and without.
-        val c0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, xpBar = xpBarVisible())
-        val cr0 = ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, reduced = true, xpBar = xpBarVisible())
+        val c0 = cardWidths(ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, xpBar = xpBarVisible()))
+        val cr0 = cardWidths(ArenaGeo.cards(floorSp, cardsCompact, xpOn, infoBoxStyle, reduced = true, xpBar = xpBarVisible()))
         val widths = studyCardWidths(w)
         val wildW = if (study) widths.first / d else c0.wildW
         val playerW = if (study) widths.second / d else c0.playerW
@@ -638,7 +647,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** The study layouts' card widths in px (wild, ours): the same numbers [layoutStudy] uses. */
     private fun studyCardWidths(w: Int): Pair<Int, Int> {
         val max = ((w - dpi(30)) / 2).coerceAtLeast(dpi(if (studyStrip) 96 else 100))
-        return min(dpi(InfoBoxGeo.W.toInt()), max) to min(dpi(InfoBoxGeo.W.toInt()), max)
+        return min(dpi(cardWidthDp()), max) to min(dpi(cardWidthDp()), max)
     }
 
     /**
@@ -727,8 +736,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         place(playerHolder, px(140f), px(128f), Gravity.BOTTOM or Gravity.LEFT, px(22f), 0, 0, px(6f))
         val infoMax = ((w - dpi(30)) / 2).coerceAtLeast(dpi(if (compact) 100 else 120))
         val edge = if (compact) 6 else 10
-        place(enemyBlock, min(dpi(InfoBoxGeo.W.toInt()), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(edge), dpi(edge), 0, 0)
-        place(playerCard, min(dpi(InfoBoxGeo.W.toInt()), infoMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(edge), dpi(if (compact) 6 else 12))
+        place(enemyBlock, min(dpi(cardWidthDp()), infoMax), -2, Gravity.TOP or Gravity.LEFT, dpi(edge), dpi(edge), 0, 0)
+        place(playerCard, min(dpi(cardWidthDp()), infoMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(edge), dpi(if (compact) 6 else 12))
         if (studyStrip) {
             // Approved 146 dp strip geometry, scaled only when landscape supplies extra arena height.
             val scale = (h / Ui.dp(context, 146f)).coerceIn(.6f, 1.5f)
@@ -739,8 +748,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             place(playerHolder, sp(116), sp(96), Gravity.BOTTOM or Gravity.LEFT, sp(14), 0, 0, sp(2))
             // a narrow pane: the cards may go down to 96 dp (the name shortens) so ours covers no more of our sprite's box than before the HP number moved up
             val stripMax = ((w - dpi(30)) / 2).coerceAtLeast(dpi(96))
-            place(enemyBlock, min(dpi(InfoBoxGeo.W.toInt()), stripMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
-            place(playerCard, min(dpi(InfoBoxGeo.W.toInt()), stripMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(8), dpi(8))
+            place(enemyBlock, min(dpi(cardWidthDp()), stripMax), -2, Gravity.TOP or Gravity.LEFT, dpi(8), dpi(8), 0, 0)
+            place(playerCard, min(dpi(cardWidthDp()), stripMax), -2, Gravity.BOTTOM or Gravity.RIGHT, 0, 0, dpi(8), dpi(8))
         }
         clearStudyCards(w, h)
         setSpriteFactor(studySize(w, h))
@@ -821,6 +830,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         InfoBoxPrefs.watch(context, bigWatch)
+        wideBoxes = InfoBoxPrefs.wide(context)
         bigBoxes = InfoBoxPrefs.big(context)   // R19-A: a change made while the arena was away
         // the attack animations' textures are decoded now, on a background thread (once per process), not inside the first frame
         if (!reduceMotion() && AppPrefs.attackAnimations(context)) com.husarp.ankigo.ui.movefx.FxArt.of(context).warmUp()
@@ -958,13 +968,14 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /**
      * The battle background for a wild Pokémon with [types] ([BackdropCatalog.pick]): one of its type's pictures, [seed] (from the
      * wild one's uid, [BackdropCatalog.seed]) fixing which for the whole fight; the plain gradient until it is there. Plain too
-     * while pictures or downloads are off in the settings ([Backdrops.allowed]).
+     * while background pictures are off; saved pictures still show with downloads off.
      */
     fun setBackdrop(types: List<Type>, seed: Int, legendary: Boolean = false) {
         lastBackdrop = Triple(types, seed, legendary)
         val download = Backdrops.allowed(Sprites.enabled(context), AppPrefs.backgroundPictures(context))
-        if (!download) { backdrop.plain(); return }
-        backdrop.request(BackdropCatalog.pick(types, seed, legendary), download)
+        if (!AppPrefs.backgroundPictures(context)) { backdrop.plain(); return }
+        val scene = BackdropCatalog.pickEnabled(types, seed, legendary, BackdropPrefs.disabled(context))
+        if (scene == null) backdrop.plain() else backdrop.request(scene, download)
     }
 
     /** The plain gradient with the two platform ellipses. */
@@ -1025,7 +1036,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** R9 C4: starts loading the background of a queued encounter (its wild one's types / uid are known) so it is ready when the wild one comes. */
     fun prefetchBackdrop(types: List<Type>, seed: Int, legendary: Boolean = false) {
         val download = Backdrops.allowed(Sprites.enabled(context), AppPrefs.backgroundPictures(context))
-        if (download) backdrop.prefetch(BackdropCatalog.pick(types, seed, legendary), download)
+        if (AppPrefs.backgroundPictures(context)) BackdropCatalog.pickEnabled(types, seed, legendary, BackdropPrefs.disabled(context))?.let {
+            backdrop.prefetch(it, download)
+        }
     }
 
     /** The two plain-mode ellipses show only while no picture does (the picture has its own ground spots). */
@@ -1896,7 +1909,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      * there is no room above, [FloatSpot.placeHead]), holds a moment, then rises and fades (about 1.1 s). Kept inside the arena and
      * off the stat cards; texts of one round start 0.23 s apart and pile upward, so they never print over each other.
      */
-    fun floatText(ft: FloatText) {
+    fun floatText(ft: FloatText, immediate: Boolean = false) {
         val holder = if (ft.onPlayer) playerHolder else enemyHolder
         val spr = if (ft.onPlayer) playerSprite else enemySprite
         val tv = FloatTextView(context, ft, floorSp)
@@ -1927,7 +1940,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             tv.animate().alpha(0f).setStartDelay(900).setDuration(500).withEndAction(done).start()
             return
         }
-        val delay = min(3, mine.size) * FLOAT_STAGGER_MS
+        val delay = if (immediate) 0L else min(3, mine.size) * FLOAT_STAGGER_MS
         tv.alpha = 0f; tv.scaleX = 0.6f; tv.scaleY = 0.6f
         tv.animate().alpha(1f).scaleX(1f).scaleY(1f).setStartDelay(delay).setDuration(150).setInterpolator(OvershootInterpolator()).withEndAction {
             if (tv.parent == null) return@withEndAction
@@ -1939,8 +1952,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // ---------------------------------------------------------------- team XP cards
 
     /**
-     * Queues the XP card of a team member (pick 9A): it slides in from the left edge, between the two Pokémon, stays a moment
-     * and slides away. [loadSprite] puts the mini sprite in. Several stack in the free gap or play one after another; with no
+     * Queues the XP card of a team member (pick 9A): it slides in at the top right, clear of both Pokémon’s chips, stays a moment
+     * and slides away. [loadSprite] puts the mini sprite in. Cards play one after another; with no
      * room even for the slim card (tiny window) it is skipped. It sits on no sprite and no stat card, and takes no touches.
      */
     fun showXpCard(card: XpCard, loadSprite: (SpriteView) -> Unit) {
@@ -1974,20 +1987,41 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         return FloatSpot.Rect(x - m, y - m, x + aw + m, min(y + ah, v.bottom) + m)
     }
 
+    internal val sideCardShowing: Boolean get() = xpActive.isNotEmpty()
+    internal var onSideCardFinished: () -> Unit = {}
+    internal var otherSideMessageWaiting: () -> Boolean = { false }
+    internal fun resumeSideCards() = pumpXp()
+    internal fun repositionSideCards() {
+        // Conditions can change while a reward card is still on screen.
+        for (shown in xpActive) {
+            val v = shown.view
+            val spot = XpCardSpot.anywhere(width, height, v.measuredWidth, v.measuredHeight,
+                dpi(XP_EDGE_DP), dpi(4), xpObstacles() + toastKeepOff().extra, max = 1, topRight = true).firstOrNull()
+            v.visibility = if (spot == null) INVISIBLE else VISIBLE
+            if (spot != null) {
+                val lp = v.layoutParams as LayoutParams
+                if (lp.leftMargin != spot.x || lp.topMargin != spot.y) {
+                    lp.leftMargin = spot.x; lp.topMargin = spot.y; v.layoutParams = lp
+                }
+            }
+        }
+    }
+
     private fun pumpXp() {
+        if (xpActive.isNotEmpty() || otherSideMessageWaiting()) return
         while (xpQueue.isNotEmpty()) {
             if (width <= 0 || height <= 0) { xpQueue.clear(); return }
             val (card, load) = xpQueue.first()
             val slimOnly = compact || studyStrip || height < dpi(190)
-            val obstacles = xpObstacles()
+            val obstacles = xpObstacles() + toastKeepOff().extra
             var made: XpCardView? = null
             var spots: List<XpCardSpot.Pos> = emptyList()
             for (slim in if (slimOnly) listOf(true) else listOf(false, true)) {
                 val v = XpCardView(context, card, slim, floorSp)
                 val w = min(dpi(if (slim) 160 else 188), (width * (if (slim) 0.72f else 0.55f)).toInt())
                 v.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.UNSPECIFIED)
-                val t = XpCardSpot.slots(height, dpi(XP_EDGE_DP), w, v.measuredHeight, dpi(6), dpi(4), obstacles)
-                if (t.isNotEmpty()) { made = v; spots = t.map { XpCardSpot.Pos(dpi(XP_EDGE_DP), it) }; break }
+                val t = XpCardSpot.anywhere(width, height, w, v.measuredHeight, dpi(XP_EDGE_DP), dpi(4), obstacles, max = 1, topRight = true)
+                if (t.isNotEmpty()) { made = v; spots = t; break }
             }
             if (made == null) {
                 // Small window: the slim one-line card in any free spot (along the top or bottom edge, or beside a stat card),
@@ -1997,7 +2031,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
                     for (wDp in if (micro) intArrayOf(88, 80) else intArrayOf(160, 132)) {
                         val w = min(dpi(wDp), (width * 0.72f).toInt())
                         v.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.UNSPECIFIED)
-                        val t = XpCardSpot.anywhere(width, height, w, v.measuredHeight, dpi(if (micro) 2 else 4), dpi(2), obstacles)
+                        val t = XpCardSpot.anywhere(width, height, w, v.measuredHeight, dpi(if (micro) 2 else 4), dpi(2), obstacles, max = 1, topRight = true)
                         if (t.isNotEmpty()) { made = v; spots = t; break@search }
                     }
                 }
@@ -2009,6 +2043,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
                 ?: return   // all places busy: the next one leaves
             xpQueue.removeFirst()
             slideXp(v, spot, load)
+            return // The next card starts only after this one has left.
         }
     }
 
@@ -2017,7 +2052,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         popLayer.addView(v, LayoutParams(v.measuredWidth, v.measuredHeight, Gravity.TOP or Gravity.LEFT).also { it.leftMargin = spot.x; it.topMargin = spot.y })   // PLAN 207: above the frame
         val shown = XpShown(v, spot.x, spot.y)
         xpActive += shown
-        val finish = { popLayer.removeView(v); xpActive -= shown; pumpXp() }
+        val finish = { popLayer.removeView(v); xpActive -= shown; onSideCardFinished(); pumpXp() }
         val hold = if (v.card.levelUp) maxOf(2500L, v.playMs + 900L) else 1800L   // PLAN 182: a loop of several levels needs longer
         if (reduceMotion()) {   // no slide: there, and gone after a moment
             v.play(true)
@@ -2374,6 +2409,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         xpQueue.clear()
         xpActive.toList().forEach { it.view.animate().cancel(); popLayer.removeView(it.view) }
         xpActive.clear()
+        onSideCardFinished()
         floats.toList().forEach { it.animate().cancel(); removeView(it) }
         floats.clear()
         flying.clear()

@@ -169,11 +169,11 @@ class R19HToastTest {
     private fun keep(ourCard: FloatSpot.Rect = far, wildCard: FloatSpot.Rect = far, ourArt: FloatSpot.Rect = far, wildArt: FloatSpot.Rect = far, safe: FrameSafe? = null) =
         KeepOff(ourCard, wildCard, ourArt, wildArt, safe)
 
-    @Test fun firstChoiceIsTheTopLeftCornerAMarginIn() {
+    @Test fun firstChoiceIsTheTopRightCornerAMarginIn() {
         val s = ToastSpot.place(150, 30, 412, 260, 10, 4, keep(ourCard = r(100, 200, 260, 255), wildArt = r(280, 20, 380, 120)))
-        assertEquals(10, s.left); assertEquals(10, s.top); assertFalse(s.coversOurCard)
+        assertEquals(252, s.left); assertTrue(s.top >= 10); assertFalse(s.coversOurCard)
         val n = ToastSpot.place(150, 30, 412, 260, 10, 4, null)
-        assertEquals(10, n.left); assertEquals(10, n.top)
+        assertEquals(252, n.left); assertEquals(10, n.top)
     }
 
     @Test fun withABattleFrameItSitsInsideTheSafeArea() {
@@ -195,7 +195,7 @@ class R19HToastTest {
         // the picture's box (its inner part) reaches 15 px into the corner place; every other place covers an info box: the corner stays
         val art = r(30, 10, 330, 260)
         val s = ToastSpot.place(300, 40, 412, 400, 10, 4, keep(ourArt = art, ourCard = r(10, 270, 340, 390), wildCard = r(250, 150, 410, 250)))
-        assertEquals(10, s.left); assertEquals(10, s.top)
+        assertEquals(102, s.left); assertEquals(10, s.top)
     }
 
     @Test fun aBigCoverOfAPictureMovesTheCard() {

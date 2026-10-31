@@ -72,10 +72,10 @@ class ItemInfoTest {
             assertTrue(id, fact(id, "How to use").contains("**Throwing is not a turn**"))
             assertEquals(2, ItemInfo.facts(data, id).size)   // balls have no "In a fight" block: the rule is in How to use
         }
-        assertTrue(fact("ultra-ball", "What it does").contains("**one day a week**"))
+        assertTrue(fact("ultra-ball", "What it does").contains("daily regular-ball draw"))
         assertFalse(fact("great-ball", "What it does").contains("one day a week"))
-        assertTrue(fact("poke-ball", "How to use").contains("5 Poké Balls for 1 Great Ball"))
-        assertTrue(fact("great-ball", "How to use").contains("3 Great Balls for 1 Ultra Ball"))
+        assertTrue(fact("poke-ball", "How to use").contains("10 Poké Balls for 1 Great Ball"))
+        assertTrue(fact("great-ball", "How to use").contains("6 Great Balls for 1 Ultra Ball"))
     }
 
     @Test fun theMasterBallAlwaysCatchesAndCannotBeBought() {
@@ -85,11 +85,15 @@ class ItemInfoTest {
         assertFalse(what.contains("runs away"))
     }
 
-    @Test fun anOldBallThrowsLikeAGreatBallAndCountsForTheTrade() {
+    @Test fun specialsExplainCombinationAndTheirEffect() {
         for (id in Tuning.OLD_BALLS) {
-            assertEquals("Like a Great Ball", ItemInfo.short(data, id))
-            assertTrue(id, fact(id, "What it does").contains("50 %") && fact(id, "What it does").contains("runs away"))
-            assertTrue(id, fact(id, "How to use").contains("counts as a Great Ball"))
+            if (id == "repeat-ball") {
+                assertEquals("Returns ${Tuning.REPEAT_RETURN_MISS_PERCENT}% / ${Tuning.REPEAT_RETURN_CATCH_PERCENT}%", ItemInfo.short(data, id))
+                assertTrue(ItemInfo.line(data, id).contains("miss") && ItemInfo.line(data, id).contains("catch"))
+                assertTrue(fact(id, "What it does").contains("no catch bonus"))
+            } else assertEquals(Items.specialSummary(id), ItemInfo.short(data, id))
+            assertEquals(Items.specialNote(id), fact(id, "What it does"))
+            assertTrue(fact(id, "How to use").contains("regular ball"))
         }
     }
 
@@ -168,6 +172,7 @@ class ItemInfoTest {
             assertEquals("Main holds it: ×2 money", ItemInfo.line(data, id))
             val text = ItemInfo.plain(all(id))
             assertTrue(id, text.contains("main") && text.contains("answers and wins") && text.contains("doubled"))
+            assertTrue(id, text.contains("after each 1000 coins"))
             assertFalse(id, text.contains("cash", true) || text.contains("bonus", true))
         }
     }

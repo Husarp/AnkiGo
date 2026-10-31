@@ -44,8 +44,9 @@ object Progression {
         }
         val ability = if (sp.abilities.isEmpty()) "" else sp.abilities[rng.nextInt(sp.abilities.size)]
         // Moves the data doesn't know can't be used in a fight, so they are never handed out.
-        val moves = movesUpTo(sp, level).filter { data.move(it) != null }.shuffled(rng).take(4)
+        val picked = movesUpTo(sp, level).filter { data.move(it) != null }.shuffled(rng).take(4)
             .ifEmpty { listOf(Tuning.FALLBACK_MOVE) }
+        val moves = LinkedMoves.generated(data, sp, picked)
         val mon = Mon(
             uid = java.util.UUID.randomUUID().toString(), species = species, name = sp.name, level = level, xp = 0,
             ivs = ivs, evs = Stats.ZERO, nature = nature, gender = gender, shiny = shiny, ability = ability,
@@ -176,12 +177,12 @@ object Progression {
         if (state.activeHeldItem(main) == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
         if (holder != null && state.activeHeldItem(holder) == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
 
-        events += GameEvent.Defeated(wild.species, wild.name, xp)
+        events += GameEvent.Defeated(wild.species, wild.name, Tuning.studyXp(xp, state.practiceRewards))
         winBonus(data, state, main, wild, rng)
         main.defeats++
 
-        gainXp(data, state, main, mainXp, events)
-        if (holder != null) gainXp(data, state, holder, holderXp, events)
+        gainXp(data, state, main, Tuning.studyXp(mainXp, state.practiceRewards), events)
+        if (holder != null) gainXp(data, state, holder, Tuning.studyXp(holderXp, state.practiceRewards), events)
 
     }
 
@@ -201,8 +202,8 @@ object Progression {
         if (state.activeHeldItem(main) == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
         if (holder != null && state.activeHeldItem(holder) == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
         winBonus(data, state, main, wild, rng)
-        gainXp(data, state, main, mainXp, events)
-        if (holder != null) gainXp(data, state, holder, holderXp, events)
+        gainXp(data, state, main, Tuning.studyXp(mainXp, state.practiceRewards), events)
+        if (holder != null) gainXp(data, state, holder, Tuning.studyXp(holderXp, state.practiceRewards), events)
     }
 
     /** Every currently available branch, without choosing one for the player. */
@@ -298,6 +299,7 @@ object Progression {
         } else { state.starterSeen -= sp.num; state.starterCaught -= sp.num }
         Wishlist.onCaught(state, sp.num)
         state.evolutions++
+        if (state.battle != null) Achievements.bump(state, Metric.GLOW_UP)
         events += GameEvent.Evolved(mon.uid, from, sp.name, sp.num)
         for (m in sp.levelMoves.filter { it.level == 0 }.map { it.move }.distinct()) learnMove(data, mon, m, events)
         Badges.award(state, 16, events)
@@ -376,23 +378,52 @@ object Catching {
         })
     }
 
-    /**
-     * Ball chance in percent (Tuning.BALL_CHANCE). PLAN 171: one of Ankimon's other balls ([Tuning.OLD_BALLS]) throws as a Great Ball
-     * (no type bonus any more, whatever the wild one's types); anything else is 0.
-     */
+    /** Regular ball chance; a special cannot be thrown alone. */
     fun ballChance(ball: String): Int =
-        Tuning.BALL_CHANCE[ball] ?: if (ball in Tuning.OLD_BALLS) Tuning.BALL_CHANCE.getValue(Tuning.OLD_BALL_AS) else 0
+        Tuning.BALL_CHANCE[ball] ?: 0
+
+    fun ballChance(ball: String, special: String?, data: GameData, state: GameState, battle: Battle, now: Long): Int {
+        val base = ballChance(ball)
+        if (base == 0 || ball == "master-ball") return base
+        val wild = battle.wild
+        val types = data.sp(wild.species).types
+        val bonus = when (special) {
+            "net-ball" -> if (Type.WATER in types || Type.BUG in types) Tuning.SPECIAL_BONUS else 0
+            "dive-ball" -> if (Type.WATER in types) Tuning.SPECIAL_BONUS else 0
+            "dusk-ball" -> if (!Progression.isDay(now)) Tuning.SPECIAL_BONUS else 0
+            "quick-ball" -> if (battle.rounds == 0) Tuning.SPECIAL_BONUS else 0
+            "timer-ball" -> (battle.rounds * Tuning.TIMER_BONUS_PER_ROUND).coerceAtMost(Tuning.SPECIAL_BONUS)
+            "nest-ball" -> if (wild.level <= Tuning.NEST_MAX_LEVEL) Tuning.SPECIAL_BONUS else 0
+            "repeat-ball" -> 0
+            "premier-ball" -> if (wild.shiny || battle.tier in listOf(Tier.LEGENDARY, Tier.MYTHICAL, Tier.ULTRA)) Tuning.SPECIAL_BONUS else 0
+            else -> 0
+        }
+        return (base + bonus).coerceAtMost(Tuning.BALL_CHANCE_CAP)
+    }
+
+    fun specialIvs(ivs: Stats, special: String?): Stats {
+        if (special != "heal-ball" && special != "luxury-ball") return ivs
+        fun add(v: Int, hp: Boolean = false) = (v + when (special) {
+            "heal-ball" -> if (hp) Tuning.HEAL_IV_BONUS else 0
+            "luxury-ball" -> Tuning.LUXURY_IV_BONUS
+            else -> 0
+        }).coerceAtMost(Tuning.BALL_IV_CAP)
+        return Stats(add(ivs.hp, true), add(ivs.atk), add(ivs.def), add(ivs.spa), add(ivs.spd), add(ivs.spe))
+    }
+
+    fun throwName(ball: String, special: String?): String = if (special == null) Items.name(ball)
+        else Items.name(ball).removeSuffix(" Ball") + " " + Items.name(special)
 
     /**
      * Adds the wild Pokémon to the collection (Ankimon catch: keeps level, IVs, nature, ability, gender, shiny, moves;
-     * EVs 0, friendship 0, XP 0, no held item, full HP, new uid, caughtAt = now). Joins the team if it has fewer than
+     * keeps EVs, friendship 0, XP 0, no held item, full HP, new uid, caughtAt = now). Joins the team if it has fewer than
      * 6, else the box. Marks seen + caught, state.catches++, catch badges (first catch, first of each tier).
      * Emits Caught. No XP (Ankimon gives none for catching).
      */
-    fun addToCollection(data: GameData, state: GameState, wild: Mon, tier: Tier, ball: String?, now: Long, events: MutableList<GameEvent>): Mon {
+    fun addToCollection(data: GameData, state: GameState, wild: Mon, tier: Tier, ball: String?, now: Long, events: MutableList<GameEvent>, special: String? = null): Mon {
         val mon = Mon(
             uid = java.util.UUID.randomUUID().toString(), species = wild.species, name = wild.name, level = wild.level, xp = 0,
-            ivs = wild.ivs, evs = Stats.ZERO, nature = wild.nature, gender = wild.gender, shiny = wild.shiny,
+            ivs = specialIvs(wild.ivs, special), evs = wild.evs, nature = wild.nature, gender = wild.gender, shiny = wild.shiny,
             ability = wild.ability, moves = wild.moves.toMutableList(), hp = 1, friendship = 0, heldItem = null,
             caughtAt = now, defeats = 0, tier = tier,
         )

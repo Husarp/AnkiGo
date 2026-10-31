@@ -249,14 +249,14 @@ class R14B2BShots {
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")), setup = { st.tms += "thunderbolt" }).second }
     }
 
-    @Test fun theDealOpensWithNoPriceInsideThePopup() {
+    @Test fun theDealOpensWithTodaysPurchasePrice() {
         val day = lazy { ShopCardKit.dayWithDeal(ShopCardKit.world(), "super-potion") }
         shoot("shop-deal", listOf(P412), check = { _, screen ->
             val deal = Shop.dealFor(gd, day.value)!!
             val struck = ShopCardKit.allText(screen, { it.paintFlags and Paint.STRIKE_THRU_TEXT_FLAG != 0 })
             assertTrue("the popup no longer repeats a struck-through price", struck.isEmpty())
             val popup = (screen as ShopCardKit.Stage).page.itemWindow!!.view
-            assertTrue("no coin amount in popup", com.husarp.ankigo.ui.Bits.fmt(deal.price) !in texts(popup))
+            assertTrue("today's purchase price in popup", com.husarp.ankigo.ui.Bits.fmt(deal.price) in texts(popup))
             assertTrue("the deal card stays under the window", "DEAL OF THE DAY" in texts(screen))
             assertTrue("Buy" in texts(screen))
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.DEAL, day = day.value).second }
@@ -279,7 +279,7 @@ class R14B2BShots {
             val t = texts(screen)
             assertNoArrows(screen)
             assertNull("no window is open", ShopCardKit.findDesc(screen, "Close"))
-            for (id in listOf("poke-ball", "great-ball", "tart-apple")) assertTrue(id, ItemInfo.plain(ItemInfo.short(gd, id, st.caught)) in t)
+            for (id in listOf("potion", "great-ball", "tart-apple")) assertTrue(id, ItemInfo.plain(ItemInfo.short(gd, id, st.caught)) in t)
             assertTrue("a TM tile shows its type, not a line", "Electric" in t || "ELECTRIC" in t || t.any { it.equals("Electric", true) })
         }) { ctx -> ShopCardKit.page(ctx, null).second }
     }
@@ -311,7 +311,7 @@ class R14B2BShots {
     // ---------- the Bag ----------
 
     private fun bagPage(ctx: Context, key: String?, setup: () -> Unit = {}) =
-        ShopCardKit.page(ctx, key, bag = true, setup = { st.bag.clear(); st.bag.putAll(ShopCardKit.bag()); st.tms.clear(); st.tms += listOf("thunderbolt", "bodyslam"); setup() })
+        ShopCardKit.page(ctx, key, bag = true, setup = { st.bag.clear(); st.bag.putAll(ShopCardKit.bag()); st.bag["poke-ball"] = 12; st.tms.clear(); st.tms += listOf("thunderbolt", "bodyslam"); setup() })
 
     @Test fun aPokeBallOpensWithThrowAndTheTradeButton() {
         shoot("bag-poke", listOf(P412, P360), check = { _, screen ->
@@ -319,38 +319,38 @@ class R14B2BShots {
             assertTrue(t.toString(), "Poké Ball" in t)
             assertNoArrows(screen)
             assertTrue("Throw" in t)
-            assertTrue(t.toString(), "Trade 5 Poké Balls for 1 Great Ball" in t)
+            assertTrue(t.toString(), "Trade 10 Poké Balls for 1 Great Ball" in t)
             assertTrue("no arrow glyphs", t.none { it.contains("→") || it.contains("⇄") })
             assertTrue("a fight is on in the fake game, so Throw is usable", t.none { it == "Balls are thrown from a fight" })
-            assertTrue("You own 7 Poké Balls" in t.map { ItemInfo.plain(it) })
+            assertTrue("You own 12 Poké Balls" in t.map { ItemInfo.plain(it) })
         }) { ctx -> bagPage(ctx, CardKeys.bagItem("poke-ball")).second }
     }
 
     @Test fun theTradeConfirmIsInsideTheWindowAndOneTapTradesOneBatch() {
         shoot("bag-trade-confirm", listOf(P412), check = { _, screen ->
             val t = texts(screen)
-            assertTrue("Cancel" in t && "Trade 5 for 1" in t)
-            assertTrue(t.toString(), t.any { it.startsWith("5 Poké Balls (1,000 coins in the Shop) for 1 Great Ball (700 coins). On purpose worse than buying. You keep 2 Poké Balls.") })
-            assertTrue("5 ×" in t && "1 ×" in t && "for" in t)
+            assertTrue("Cancel" in t && "Trade 10 for 1" in t)
+            assertTrue(t.toString(), t.any { it.startsWith("10 Poké Balls (2,000 coins in the Shop) for 1 Great Ball (600 coins). On purpose worse than buying. You keep 2 Poké Balls.") })
+            assertTrue("10 ×" in t && "1 ×" in t && "for" in t)
             assertTrue("no arrow glyphs", t.none { it.contains("→") || it.contains("⇄") })
             assertTrue("the Throw button hides while the confirm shows", "Throw" !in t)
         }) { ctx ->
             val (_, screen) = bagPage(ctx, CardKeys.bagItem("poke-ball"))
-            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 5 Poké Balls for 1 Great Ball" }); screen.render()
+            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 10 Poké Balls for 1 Great Ball" }); screen.render()
             screen
         }
         shoot("bag-trade-done", listOf(P412), themes = listOf(Theme.LIGHT)) { ctx ->
             val (p, screen) = bagPage(ctx, CardKeys.bagItem("poke-ball"))
             val w = p.itemWindow
-            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 5 Poké Balls for 1 Great Ball" }); screen.render()
-            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 5 for 1" }); screen.render()
+            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 10 Poké Balls for 1 Great Ball" }); screen.render()
+            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 10 for 1" }); screen.render()
             assertEquals(2, st.count("poke-ball"))
             assertEquals(4, st.count("great-ball"))
             val t = texts(screen)
             assertSame("the window stays, drawn again", w, p.itemWindow)
             assertTrue("the confirm is closed", "Cancel" !in t)
             assertTrue(t.toString(), "You own 2 Poké Balls" in t.map { ItemInfo.plain(it) })
-            assertTrue("2 Poké Balls are too few for another batch", t.any { it == "Need 5, you have 2" })
+            assertTrue("2 Poké Balls are too few for another batch", t.any { it == "Need 10, you have 2" })
             screen
         }
     }
@@ -360,13 +360,13 @@ class R14B2BShots {
             val t = texts(screen)
             assertNotNull("the window stays open", ShopCardKit.findDesc(screen, "Close"))
             assertTrue(t.toString(), "You don't own any Poké Balls yet" in t.map { ItemInfo.plain(it) })
-            assertTrue(t.toString(), "Need 5, you have 0" in t)
+            assertTrue(t.toString(), "Need 10, you have 0" in t)
             assertTrue("Throw is off with no ball", "You have none" in t)
             assertTrue("the Poké Ball row is gone from the list behind", "Poké Ball" !in texts((screen as ShopCardKit.Stage).screen))
         }) { ctx ->
-            val (p, screen) = bagPage(ctx, CardKeys.bagItem("poke-ball"), setup = { st.bag["poke-ball"] = 5 })
-            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 5 Poké Balls for 1 Great Ball" }); screen.render()
-            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 5 for 1" }); screen.render()
+            val (p, screen) = bagPage(ctx, CardKeys.bagItem("poke-ball"), setup = { st.bag["poke-ball"] = 10 })
+            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 10 Poké Balls for 1 Great Ball" }); screen.render()
+            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 10 for 1" }); screen.render()
             assertEquals(0, st.count("poke-ball"))
             assertEquals(4, st.count("great-ball"))
             assertNotNull(p.itemWindow)
@@ -386,32 +386,27 @@ class R14B2BShots {
     @Test fun tooFewBallsGreysTheTradeButton() {
         shoot("bag-poke-few", listOf(P412), check = { _, screen ->
             val t = texts(screen)
-            assertTrue(t.toString(), "Need 5, you have 3" in t)
-            assertTrue("Trade 5 Poké Balls for 1 Great Ball" in t)
+            assertTrue(t.toString(), "Need 10, you have 3" in t)
+            assertTrue("Trade 10 Poké Balls for 1 Great Ball" in t)
         }) { ctx ->
             val (_, screen) = bagPage(ctx, CardKeys.bagItem("poke-ball")) { st.bag["poke-ball"] = 3 }
-            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 5 Poké Balls for 1 Great Ball" }); screen.render()
+            ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Trade 10 Poké Balls for 1 Great Ball" }); screen.render()
             assertEquals("a tap on the greyed button opens no confirm", 0, texts(screen).count { it == "Cancel" })
             assertEquals(3, st.count("poke-ball"))
             screen
         }
     }
 
-    @Test fun aGreatBallAndAnOldBallTradeUp() {
+    @Test fun greatBallsTradeAndSpecialsHaveNoTrade() {
         shoot("bag-great", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen ->
-            assertTrue("Trade 3 Great Balls for 1 Ultra Ball" in texts(screen))
+            assertTrue("Trade 6 Great Balls for 1 Ultra Ball" in texts(screen))
         }) { ctx -> bagPage(ctx, CardKeys.bagItem("great-ball")).second }
-        shoot("bag-oldball", listOf(P412), check = { _, screen ->
-            val t = texts(screen)
-            assertTrue(t.toString(), "Net Ball" in t)
-            assertTrue(t.toString(), "Trade 3 for 1" in t)
-            assertTrue(t.toString(), t.any { it.startsWith("1 Net Ball and 2 Great Balls for 1 Ultra Ball.") })
-        }) { ctx ->
-            val (_, screen) = bagPage(ctx, CardKeys.bagItem("net-ball")) { st.bag["net-ball"] = 1 }
-            assertTrue("an old ball's window counts Great Balls", "Trade 3 Great Balls for 1 Ultra Ball" in texts(screen))
-            ShopCardKit.tap(ShopCardKit.findText(screen) { it.startsWith("Trade 3 Great Balls") }); screen.render()
-            screen
-        }
+        shoot("bag-special", listOf(P412), check = { _, screen ->
+            val text = texts(screen)
+            assertTrue("Net Ball" in text)
+            assertTrue(text.none { it.startsWith("Trade") })
+            assertTrue(text.any { it.contains("regular ball") })
+        }) { ctx -> bagPage(ctx, CardKeys.bagItem("net-ball")) { st.bag["net-ball"] = 1 }.second }
     }
 
     @Test fun ultraAndMasterBallsHaveNoTradeButton() {
@@ -429,7 +424,7 @@ class R14B2BShots {
             val (p, screen) = bagPage(ctx, CardKeys.bagItem("poke-ball")) { st.battle = null }
             ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Throw" })
             assertNull(st.battle)
-            assertEquals(7, st.count("poke-ball"))
+            assertEquals(12, st.count("poke-ball"))
             assertNotNull("a greyed button only says why: the window stays", p.itemWindow)
             screen
         }
@@ -487,7 +482,7 @@ class R14B2BShots {
         shoot("bag-folded", listOf(P412, P360), check = { _, screen ->
             val t = texts(screen)
             assertNoArrows(screen)
-            assertTrue("×7" in t && "×3" in t)
+            assertTrue("×12" in t && "×3" in t)
             assertTrue("the Escape group", "ESCAPE" in t)
         }) { ctx -> bagPage(ctx, null).second }
         shoot("bag-tap", listOf(P412), themes = listOf(Theme.LIGHT)) { ctx ->
@@ -524,4 +519,21 @@ class R14B2BShots {
             screen
         }
     }
+    @Test fun combinedBallPickerShowsRegularThenOptionalSpecialRow() {
+        shoot("combined-ball-picker", listOf(P412, P360), check = { _, view ->
+            val text = texts(view)
+            assertTrue("Regular ball" in text && "Special ball (optional)" in text)
+            assertTrue(text.any { it.startsWith("Ultra Heal Ball") })
+            assertTrue(text.any { it.contains("HP IV +10") })
+            assertTrue(text.any { it.contains(com.husarp.ankigo.game.Items.MISS_RULE) })
+        }) { ctx ->
+            st.bag.clear()
+            st.bag.putAll(mapOf("poke-ball" to 3, "ultra-ball" to 2, "heal-ball" to 1))
+            val dialog = com.husarp.ankigo.ui.BallThrowUi.dialog(ctx, st, "ultra-ball") { _, _ -> }
+            val view = dialog.content()
+            ShopCardKit.tap(ShopCardKit.findText(view) { it.startsWith("Heal Ball ×") })
+            view
+        }
+    }
+
 }

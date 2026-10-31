@@ -9,7 +9,7 @@ import kotlin.random.Random
 
 enum class ItemKind { BALL, HEAL, EVOLUTION, HELD, ESCAPE, FOSSIL }
 
-/** An item that does something in AnkiGo. Prices are NOT here: they come from PokeAPI items.csv (GameData.price). */
+/** An item that does something in AnkiGo. Normal prices come from GameData.price (Tuning overrides, then PokeAPI). */
 data class ItemDef(
     val id: String,              // PokeAPI item id, e.g. "thunder-stone"
     val kind: ItemKind,
@@ -20,15 +20,45 @@ data class ItemDef(
 )
 
 object Items {
-    /**
-     * PLAN 171: the four ball tiers, then Ankimon's other balls (kept so the Ankimon import and balls already in a bag still work; they
-     * throw as a Great Ball and are never sold or found). Every ball's text says what a miss costs.
-     */
+    /** Regular balls and optional specials; IDs and inventory counts remain compatible with old saves. */
     private fun balls() = Tuning.BALL_CHANCE.map { (id, pct) ->
         ItemDef(id, ItemKind.BALL, note = if (pct >= 100) "Catch chance $pct %: it always catches." else "Catch chance $pct %. $MISS_RULE")
     } + Tuning.OLD_BALLS.map { id ->
-        ItemDef(id, ItemKind.BALL, note = "Throws as a ${name(Tuning.OLD_BALL_AS)}: catch chance ${Catching.ballChance(id)} %. $MISS_RULE")
+        ItemDef(id, ItemKind.BALL, note = specialNote(id))
     }
+
+    fun specialSummary(id: String): String = when (id) {
+        "repeat-ball" -> "Returns ${Tuning.REPEAT_RETURN_MISS_PERCENT}% miss / ${Tuning.REPEAT_RETURN_CATCH_PERCENT}% catch"
+        "heal-ball" -> "HP IV +${Tuning.HEAL_IV_BONUS} (max ${Tuning.BALL_IV_CAP})"
+        "luxury-ball" -> "All IVs +${Tuning.LUXURY_IV_BONUS} (max ${Tuning.BALL_IV_CAP})"
+        "timer-ball" -> "+${Tuning.TIMER_BONUS_PER_ROUND}%/round, max +${Tuning.SPECIAL_BONUS}%"
+        else -> "+${Tuning.SPECIAL_BONUS}% " + when (id) {
+            "net-ball" -> "on Water/Bug"
+            "dive-ball" -> "on Water"
+            "dusk-ball" -> "at night"
+            "quick-ball" -> "first turn"
+            "nest-ball" -> "at Lv ≤${Tuning.NEST_MAX_LEVEL}"
+            "premier-ball" -> "on shiny/rare"
+            else -> ""
+        }
+    }
+
+    fun specialNote(id: String): String = if (id == "repeat-ball")
+        "Combine with a regular ball: no catch bonus. The Repeat Ball returns with ${Tuning.REPEAT_RETURN_MISS_PERCENT}% chance on a miss, ${Tuning.REPEAT_RETURN_CATCH_PERCENT}% on a catch. The regular ball is always used up."
+    else when (id) {
+        "heal-ball" -> "Combine with a regular ball: HP IV +${Tuning.HEAL_IV_BONUS}, capped at ${Tuning.BALL_IV_CAP}."
+        "luxury-ball" -> "Combine with a regular ball: every IV +${Tuning.LUXURY_IV_BONUS}, capped at ${Tuning.BALL_IV_CAP}. Friendship stays earned."
+        else -> "Combine with a regular ball: up to +${Tuning.SPECIAL_BONUS} percentage points (max ${Tuning.BALL_CHANCE_CAP}%). " + when (id) {
+            "net-ball" -> "Against Water or Bug Pokémon."
+            "dive-ball" -> "Against Water Pokémon."
+            "dusk-ball" -> "At night."
+            "quick-ball" -> "Before the first battle round."
+            "timer-ball" -> "+${Tuning.TIMER_BONUS_PER_ROUND} per completed round."
+            "nest-ball" -> "At level ${Tuning.NEST_MAX_LEVEL} or below."
+            "premier-ball" -> "Against shiny, Legendary, Mythical or Ultra Beast Pokémon."
+            else -> ""
+        } + " Chance bonuses do nothing with a Master Ball."
+    } + " Both balls are used up, even on a miss."
 
     /** PLAN 171: what a failed throw costs, said wherever a ball is chosen or explained. */
     const val MISS_RULE = "If it fails, the wild Pokémon runs away."
@@ -91,6 +121,12 @@ object Items {
                 note = if (cures) "Heals all HP and cures a status" else if (hp == Int.MAX_VALUE) "Heals all HP" else "Heals $hp HP"))
         }
         EVOLUTION.forEach { add(ItemDef(it, ItemKind.EVOLUTION, note = if (it in RETIRED) "Does nothing here" else "Evolves Pokémon that evolve with it")) }
+        AbilityAdaptations.berries.keys.forEach { add(ItemDef(it, ItemKind.HELD, note = when (it) {
+            "oran-berry" -> "At half HP: heals 10 HP; consumed"
+            "sitrus-berry" -> "At half HP: heals ¼ max HP; consumed"
+            "figy-berry" -> "At ¼ HP: heals ⅓ max HP; consumed"
+            else -> "At ¼ HP: +1 ${when (AbilityAdaptations.berries[it]) { "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Sp. Atk"; "spd" -> "Sp. Def"; else -> "Speed" }}; consumed"
+        })) }
         HELD.forEach { (id, note) -> add(ItemDef(id, ItemKind.HELD, note = note)) }
         listOf("poke-doll", "fluffy-tail").forEach { add(ItemDef(it, ItemKind.ESCAPE, note = "Skip this wild Pokémon")) }
         FOSSILS.forEach { (id, sp) -> add(ItemDef(id, ItemKind.FOSSIL, fossil = sp, note = "Revives an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}")) }
@@ -110,7 +146,7 @@ object Items {
     /** "TM Thunderbolt" style name for a TM move id. */
     fun tmName(data: GameData, move: String): String = "TM " + (data.move(move)?.name ?: move)
 
-    /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; the Master Ball, the old Ankimon balls and the [RETIRED] items are not sold). */
+    /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; the Master Ball and [RETIRED] items are not sold). */
     fun shopPool(data: GameData): List<String> = ALL.keys.filter { it !in RETIRED && data.price(it) > 0 }.sorted()
 
     /** Ankimon random-item pool: catalogue items except balls and the [RETIRED] items. */
@@ -179,6 +215,7 @@ object Economy {
      * 1,000,000: the money already paid stays exact, at most a millionth of a coin is dropped.
      */
     private fun earn(state: GameState, base: Int, kind: CashKind, events: MutableList<GameEvent>) {
+        if (state.practiceRewards && !Tuning.PRACTICE_PAYS_MONEY) return
         val tier = state.cashToday.coerceAtLeast(0).toLong() / Tuning.CASH_TIER + 1
         val oldDen = state.cashFracDen.coerceAtLeast(1)
         var num = state.cashFracNum.coerceAtLeast(0) * tier + base.toLong() * oldDen    // num/oldDen + base/tier = num / (oldDen * tier)
@@ -219,12 +256,20 @@ object Shop {
         data.species.values.flatMap { it.tmMoves }.filter { it in data.moves }.distinct().sorted()
 
     /**
-     * If state.shopDay != state.day: today's stock = date-seeded sample of slots() items and slots() TMs (+ the Ultra Ball on its days).
-     * PLAN 171: an item that is no longer sold (an old Ankimon ball drawn before the update) leaves today's stock.
+     * A new day draws regular items/TMs plus one regular ball and an optional special.
+     * Retired or unsold items are removed from existing stock.
      */
     fun ensureToday(data: GameData, state: GameState) {
         state.shopItems.removeAll { data.price(it) <= 0 || it in Items.RETIRED } // R17C-FIX: a Chipped Pot drawn before the update leaves the stock too
-        if (state.shopDay == state.day) return
+        if (state.shopDay == state.day) {
+            // Upgrade an already-open day's old ball offers without changing owned inventory or rerolled items/TMs.
+            val balls = dailyBalls(state.day)
+            if (state.shopItems.filter { Items.def(it)?.kind == ItemKind.BALL } != balls) {
+                state.shopItems.removeAll { Items.def(it)?.kind == ItemKind.BALL }
+                state.shopItems.addAll(0, balls)
+            }
+            return
+        }
         val (items, tms) = stockFor(data, state.day, state.trainerLevel)
         setStock(state, items, tms)
     }
@@ -236,32 +281,35 @@ object Shop {
     fun stockFor(data: GameData, day: String, trainerLevel: Int): Pair<List<String>, List<String>> =
         draw(data, Random(day.hashCode()), trainerLevel, day)
 
-    /** slots() items and TMs drawn with [rng]; on an [ultraBallDay] the Ultra Ball comes first, on top of the drawn items (a reroll keeps it). */
+    /** Item/TM rerolls preserve the date-seeded daily balls. */
     private fun draw(data: GameData, rng: Random, trainerLevel: Int, day: String): Pair<List<String>, List<String>> {
         val n = slots(trainerLevel)
         val items = dailyPool(data).shuffled(rng).take(n)
         val tms = tmPool(data).shuffled(rng).take(n)
-        val ultra = if (ultraBallDay(day) && data.price(ULTRA_BALL) > 0) listOf(ULTRA_BALL) else emptyList()
-        return ultra + items to tms
+        return dailyBalls(day) + items to tms
     }
 
-    private const val ULTRA_BALL = "ultra-ball"
+    fun dailyBalls(day: String): List<String> {
+        val rng = Random(("balls:$day").hashCode())
+        fun pick(weights: Map<String, Int>): String {
+            var roll = rng.nextInt(weights.values.sum())
+            for ((id, weight) in weights) { roll -= weight; if (roll < 0) return id }
+            error("Empty weights")
+        }
+        val regular = pick(Tuning.REGULAR_SHOP_WEIGHTS)
+        return listOf(regular) + if (rng.nextInt(100) < Tuning.SPECIAL_SHOP_PERCENT)
+            listOf(pick(Tuning.SPECIAL_SHOP_WEIGHTS)) else emptyList()
+    }
 
-    /**
-     * PLAN 171: is the Ultra Ball in the Shop on game day [day]? About one day in Tuning.ULTRA_BALL_EVERY_DAYS, seeded by the date like
-     * the rest of the stock, so a reroll neither brings it nor takes it away.
-     */
-    fun ultraBallDay(day: String): Boolean = Random(("ultra:$day").hashCode()).nextInt(Tuning.ULTRA_BALL_EVERY_DAYS) == 0
+    fun ultraBallDay(day: String): Boolean = "ultra-ball" in dailyBalls(day)
 
-    /**
-     * The items the daily draw and the deal pick from: the shop's item pool minus the always-on-sale [basics] and the Ultra Ball
-     * (PLAN 171: it has its own rare days, [ultraBallDay], and is never the deal).
-     */
-    private fun dailyPool(data: GameData): List<String> = Items.shopPool(data).filter { it !in Tuning.SHOP_BASICS && it != ULTRA_BALL }
+    private fun dailyPool(data: GameData): List<String> = Items.shopPool(data).filter {
+        it !in Tuning.SHOP_BASICS && Items.def(it)?.kind != ItemKind.BALL
+    }
 
     // ---- always in stock, deal of the day, weekend special (R10 T5; all derived from the game day, nothing is saved) ----
 
-    /** Poké Ball and Potion: on sale every day at their normal price, whatever the daily stock is. */
+    /** Potions remain on sale every day; balls come from the daily draw. */
     fun basics(): List<String> = Tuning.SHOP_BASICS
 
     /** The deal of the day: [item] at [price] instead of [oldPrice] (-Tuning.DEAL_PERCENT %, at least 1). */
@@ -278,11 +326,11 @@ object Shop {
         val pool = dailyPool(data)
         if (pool.isEmpty()) return null
         val item = pool[Random(("deal:$day").hashCode()).nextInt(pool.size)]
-        val normal = data.price(item)
+        val normal = dailyPrice(data, day, item)
         return Deal(item, normal, dealPrice(normal))
     }
 
-    /** The weekend special: an evolution stone ([item]) or a strong TM ([tm]; exactly one is set) at its normal [price], on sale until [endsDay] (the Sunday). */
+    /** The weekend special: an evolution stone at its daily price or a fixed-price TM, on sale until Sunday. */
     data class Special(val item: String?, val tm: String?, val price: Int, val endsDay: String) {
         val isTm: Boolean get() = tm != null
         /** The item id, or the TM's move id. */
@@ -314,15 +362,25 @@ object Shop {
         return when {
             stones.isEmpty() && tms.isEmpty() -> null
             tms.isEmpty() || (wantStone && stones.isNotEmpty()) ->
-                stones[rng.nextInt(stones.size)].let { Special(it, null, data.price(it), ends) }
+                stones[rng.nextInt(stones.size)].let { Special(it, null, priceOf(data, day, it), ends) }
             else -> tms[rng.nextInt(tms.size)].let { Special(null, it, Tuning.TM_PRICE, ends) }
         }
     }
 
-    /** What an item costs on game day [day]: the deal price for that day's deal item, else its normal price. One price per item per day. */
+    /** Date + item seeded, independent of stock and rerolls. Round half up using the varied price's band. */
+    fun dailyPrice(data: GameData, day: String, item: String): Int {
+        val normal = data.price(item)
+        if (normal <= 0) return normal
+        val pct = Random(("price:$day:$item").hashCode()).nextInt(-Tuning.SHOP_VARIATION_PERCENT, Tuning.SHOP_VARIATION_PERCENT + 1)
+        val varied = normal.toLong() * (100 + pct)
+        val step = if (varied < Tuning.SHOP_ROUND_THRESHOLD * 100L) Tuning.SHOP_ROUND_SMALL else Tuning.SHOP_ROUND_LARGE
+        return (((varied + step * 50L) / (step * 100L)) * step).toInt().coerceAtLeast(1)
+    }
+
+    /** One price per item per day: 30% off the daily price for the deal, otherwise the daily price. */
     fun priceOf(data: GameData, day: String, item: String): Int {
         val deal = dealFor(data, day)
-        return if (deal != null && deal.item == item) deal.price else data.price(item)
+        return if (deal != null && deal.item == item) deal.price else dailyPrice(data, day, item)
     }
 
     fun priceOf(data: GameData, state: GameState, item: String): Int = priceOf(data, state.day, item)
@@ -399,7 +457,7 @@ object Trainer {
 
     /** Trainer XP for a Defeat by tier (Normal 10, Baby 16, Ultra 30, Legendary 120, Mythical 160, else 0). Emits TrainerLevelUp. */
     fun addDefeatXp(state: GameState, tier: Tier, events: MutableList<GameEvent>) {
-        val gain = Tuning.TRAINER_XP[tier] ?: 0
+        val gain = Tuning.studyXp(Tuning.TRAINER_XP[tier] ?: 0, state.practiceRewards)
         if (gain <= 0) return
         state.trainerXp += gain
         while (state.trainerXp >= xpForNext(state.trainerLevel)) {

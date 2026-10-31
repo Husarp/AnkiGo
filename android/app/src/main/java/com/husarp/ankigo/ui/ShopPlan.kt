@@ -11,8 +11,8 @@ import java.util.Calendar
  * The game rules themselves (deal, weekend special, always in stock) are [Shop].
  */
 internal object ShopPlan {
-    /** A price as the page shows it: [now] is what the buy costs; [was] is the normal price while a deal makes it cheaper (the old one is drawn struck through). */
-    data class Price(val now: Int, val was: Int? = null) {
+    /** [now] is charged; [was] is the daily price before a deal, struck through. [normal] enables the daily variation arrow; [daily] gives its direction. */
+    data class Price(val now: Int, val was: Int? = null, val normal: Int? = null, val daily: Int = now) {
         val discounted: Boolean get() = was != null
     }
 
@@ -20,7 +20,8 @@ internal object ShopPlan {
     fun price(data: GameData, day: String, item: String): Price {
         val normal = data.price(item)
         val now = Shop.priceOf(data, day, item)
-        return Price(now, if (now < normal) normal else null)
+        val daily = Shop.dailyPrice(data, day, item)
+        return Price(now, if (Shop.dealFor(data, day)?.item == item) daily else null, if (daily != normal) normal else null, daily)
     }
 
     /** A TM costs [Tuning.TM_PRICE], never discounted. */

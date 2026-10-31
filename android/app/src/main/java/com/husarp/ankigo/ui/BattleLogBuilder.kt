@@ -204,7 +204,7 @@ class BattleLogBuilder(
         val r = LogRound(RoundKind.BALL).also { b.rounds += it; trim(b) }
         r.lines += LogLine(
             if (e.success) Tone.GOOD else Tone.SUB,
-            "Threw ${prettyItem(e.ball)} · ${e.chance}% · " + if (e.success) "caught" else "it broke free and ran away",
+            "Threw ${if (e.special == null) prettyItem(e.ball) else com.husarp.ankigo.game.Catching.throwName(e.ball, e.special)} · ${e.chance}% · " + if (e.success) "caught" else "it broke free and ran away",
         )
     }
 

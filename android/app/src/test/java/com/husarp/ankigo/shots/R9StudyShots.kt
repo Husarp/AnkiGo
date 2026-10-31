@@ -88,7 +88,7 @@ class R9StudyShots {
             fun menuButton(v: View): View? = if (v.contentDescription == "Deck menu") v else
                 (v as? ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { menuButton(g.getChildAt(it)) } }
             val menu = MenuKit.capture { menuButton(bar)!!.performClick() }!!
-            assertEquals(listOf("New deck", "Browse all cards"), menu.describe().map { it.second })
+            assertEquals(listOf("New deck", "Browse all cards", "Choose what to study"), menu.describe().map { it.second })
             b.root
         }
     }

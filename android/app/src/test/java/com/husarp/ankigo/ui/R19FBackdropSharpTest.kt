@@ -162,7 +162,7 @@ class R19FBackdropSharpTest {
     @Test fun onAPhoneTheBattleTabNeedsNoCopyButThePipDoes() {
         val battle = hosts[0]; val pip = hosts[2]
         val none = BackdropCatalog.ALL.count { BackdropDraw.sharp(scaled(it, battle.wDp, battle.hDp, density), battle.wDp * density, battle.hDp * density, 1f, 1f, it.w, it.h, battle.screen) == null }
-        assertEquals("all 35 are drawn hard on the Battle tab", 35, none)
+        assertEquals("all backgrounds are drawn hard on the Battle tab", BackdropCatalog.ALL.size, none)
         val some = BackdropCatalog.ALL.count { BackdropDraw.sharp(scaled(it, pip.wDp, pip.hDp, density), pip.wDp * density, pip.hDp * density, 1f, 1f, it.w, it.h, pip.screen) != null }
         assertTrue("the picture-in-picture reduces most of them ($some)", some >= 20)
     }
@@ -172,12 +172,12 @@ class R19FBackdropSharpTest {
         assertFalse(BackdropCatalog.byId("factory")!!.crisp)
     }
 
-    /** R19-F2 (274 changes): the sharp drawing (reduced copy under the threshold) is for Adam's 22 others only; Showdown's 12 and the factory are today's at every scale. */
-    @Test fun showdownAndFactoryKeepTodaysDrawingTheOther22AreSharp() {
+    /** Showdown and the factory keep their original drawing; other own scenes use the sharp copy. */
+    @Test fun showdownAndFactoryKeepTodaysDrawingOtherOwnScenesAreSharp() {
         val today = BackdropCatalog.ALL.filter { !it.sharp }
-        assertEquals(13, today.size)
-        assertTrue(today.filter { it.source == BackdropSource.SHOWDOWN }.size == 12 && today.any { it.id == "factory" })
-        assertEquals(22, BackdropCatalog.ALL.count { it.sharp && it.source == BackdropSource.OWN })
+        assertEquals(12, today.size)
+        assertTrue(today.filter { it.source == BackdropSource.SHOWDOWN }.size == 11 && today.any { it.id == "factory" })
+        assertEquals(35, BackdropCatalog.ALL.count { it.sharp && it.source == BackdropSource.OWN })
         // today's Showdown = nearest neighbour, the factory = filtered
         assertTrue(today.filter { it.source == BackdropSource.SHOWDOWN }.all { it.crisp })
     }

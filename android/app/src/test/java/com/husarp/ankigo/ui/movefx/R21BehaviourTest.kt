@@ -6,11 +6,11 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class R21BehaviourTest {
-    @Test fun onlyThePickedMovesGetNewBehaviour() {
+    @Test fun pickedMovesAndApprovedFamiliesGetBehaviour() {
         val cases = mapOf("absorb" to MoveLook.DRAIN, "recover" to MoveLook.HEAL, "furyswipes" to MoveLook.MULTI_HIT, "doubleedge" to MoveLook.RECOIL)
         cases.forEach { (id, look) -> assertEquals(look, MoveFxCatalog.plan(id, Type.NORMAL, Category.SPECIAL, 80).look) }
         assertEquals(MoveLook.AURA_TEMPLATE, MoveFxCatalog.plan("growl", Type.NORMAL, Category.STATUS, 0).look)
-        assertEquals(MoveLook.ORB_TEMPLATE, MoveFxCatalog.plan("gigadrain", Type.GRASS, Category.SPECIAL, 75).look)
+        assertEquals(MoveLook.DRAIN, MoveFxCatalog.plan("gigadrain", Type.GRASS, Category.SPECIAL, 75).look)
     }
 
     @Test fun everyNewLookRestoresAndHasNoLatePosesInBothDirections() {
@@ -39,7 +39,7 @@ class R21BehaviourTest {
         }
     }
 
-    @Test fun drainReturnsLightToTheUserAndSwipesHaveFourSlashes() {
+    @Test fun drainReturnsLightToTheUserAndSwipesHaveFourLayeredImpacts() {
         val st = RecStage()
         val s = MoveFx.script(st, plan(MoveLook.DRAIN), true, 3)!!
         MoveFx.build(s, MoveLook.DRAIN)
@@ -50,11 +50,11 @@ class R21BehaviourTest {
         val multi = MoveFx.script(st, plan(MoveLook.MULTI_HIT), true, 3)!!
         MoveFx.build(multi, MoveLook.MULTI_HIT)
         var slashes = 0
-        for (ms in listOf(380f, 550f, 720f, 890f)) {
+        for (ms in listOf(380f, 630f, 880f, 1130f)) {
             multi.advance(ms)
             slashes += multi.particles.count { it.img == "slash_03" && it.t0 == ms }
         }
-        assertEquals(4, slashes)
+        assertEquals(12, slashes) // three layers for each of four real impacts
     }
 
     @Test fun allNineMissingTypesHaveTheirOwnTintedTextures() {

@@ -84,11 +84,18 @@ object BattleEngine {
      */
     fun playRound(
         data: GameData, battle: Battle, main: Mon, multiplier: Double, enemyActs: Boolean, rng: Random,
-        enemyPower: Double = 1.0, mainActs: Boolean = true, moveChoice: MoveChoice = MoveChoice.RANDOM,
+        enemyPower: Double = 1.0, mainActs: Boolean = true, moveChoice: MoveChoice = MoveChoice.RANDOM, forceStrongest: Boolean = false,
     ): List<GameEvent> {
         val r = Round(data, battle, main, multiplier.coerceAtLeast(0.0), enemyPower.coerceAtLeast(0.0), rng, moveChoice)
-        r.play(enemyActs, mainActs)
+        r.play(enemyActs, mainActs, forceStrongest)
         battle.rounds++
+        return r.events
+    }
+
+    fun weaknessBoost(data: GameData, battle: Battle, main: Mon, rng: Random, choice: MoveChoice): List<GameEvent> {
+        val r = Round(data, battle, main, 0.0, 0.0, rng, choice)
+        r.fx(false, "${battle.wild.name} smells weakness!")
+        r.boost(false, mapOf("atk" to Tuning.WILD_ATTACK_STAGES), byFoe = false)
         return r.events
     }
 
@@ -367,8 +374,8 @@ object BattleEngine {
         // ---- writing events ----
 
         /** Writes an [GameEvent.Effect] for [p]: the line [text], its [kind] and the numbers the kind carries ([label] = the short float text). */
-        fun fx(p: Boolean, text: String, kind: EffectKind = EffectKind.OTHER, stat: String? = null, stages: Int = 0, amount: Int = 0, label: String? = null, into: Int = 0, intoShiny: Boolean = false) {
-            out += GameEvent.Effect(p, text, mon(p).hp, maxHp(p), side(p).status, kind, stat, stages, amount, label, into, intoShiny)
+        fun fx(p: Boolean, text: String, kind: EffectKind = EffectKind.OTHER, stat: String? = null, stages: Int = 0, amount: Int = 0, label: String? = null, into: Int = 0, intoShiny: Boolean = false, moveRecoil: Boolean = false) {
+            out += GameEvent.Effect(p, text, mon(p).hp, maxHp(p), side(p).status, kind, stat, stages, amount, label, into, intoShiny, moveRecoil)
         }
 
         /** [p] regains up to [amount] HP (never above its max); the event carries what it really gained. [label] = a short float text (an ability's name). */
@@ -388,7 +395,9 @@ object BattleEngine {
             if (n <= 0) return
             val before = mon(p).hp
             mon(p).hp = maxOf(0, before - n)
-            fx(p, text, kind, amount = before - mon(p).hp, label = label)
+            fx(p, text, kind, amount = before - mon(p).hp, label = label, moveRecoil = source == Indirect.RECOIL || source == Indirect.STRUGGLE || source == Indirect.MIND_BLOWN)
+            val lost = before - mon(p).hp
+            if (lost > 0) rulesEach { it.afterIndirectDamage(this, p, lost) }
         }
 
         /**
@@ -413,13 +422,16 @@ object BattleEngine {
 
         // ---- the round ----
 
-        fun play(enemyActs: Boolean, mainActs: Boolean) {
+        fun play(enemyActs: Boolean, mainActs: Boolean, forceStrongest: Boolean = false) {
             acting[idx(false)] = enemyActs; acting[idx(true)] = mainActs // known before the picks: a reactive move is not picked for an action that won't come
             // R19-FIX (CX-3): a Pokémon that has not entered the fight yet does so BEFORE the moves are picked and the order is set: Imposter's
             // Ditto has transformed by then, so its first action is a real move of the copied set, with the copied speed and priority
             if ((enemyActs || mainActs) && wild.hp > 0 && main.hp > 0) enterBoth()
             val playerMove: Move? = if (mainActs) MoveChooser.pick(moveChoice, this, true, rng) else null
-            val enemyMove: Move? = if (enemyActs) MoveChooser.pick(moveChoice, this, false, rng) else null
+            val enemyMove: Move? = if (enemyActs) {
+                if (forceStrongest) MoveChooser.pickStrongest(this, false, rng) else MoveChooser.pick(moveChoice, this, false, rng)
+            } else null
+            if (forceStrongest && enemyMove != null) fx(false, "${wild.name} uses its strongest move: ${enemyMove.name}!")
             planned[idx(true)] = playerMove; planned[idx(false)] = enemyMove
 
             val playerPriority = playerMove?.let { m -> m.priority + rulesSum { it.priority(this, true, m) } } ?: 0
@@ -598,11 +610,12 @@ object BattleEngine {
 
         private fun attackEvent(
             p: Boolean, move: Move, damage: Int = 0, hits: Int = 0, eff: Double = 1.0, crit: Boolean = false,
-            missed: Boolean = false, failed: Boolean = false,
+            missed: Boolean = false, failed: Boolean = false, hitDamages: List<Int> = emptyList(), hitTargetHps: List<Int> = emptyList(),
         ) = GameEvent.Attack(
             p, mon(p).name, mon(!p).name, move.name, if (move.id == Tuning.STRUGGLE) null else effectiveType(p, move), move.category,
             damage, hits, eff, crit, missed, failed, mon(!p).hp, maxHp(!p), mon(p).hp, maxHp(p),
-            moveId = move.id, power = move.power,
+            moveId = move.id, power = move.power, hitDamages = hitDamages, hitTargetHps = hitTargetHps,
+            multiHit = move.multihit != null || hits > 1, recoilMove = move.recoil != null || move.id == Tuning.STRUGGLE || move.mindBlownRecoil || move.id == "chloroblast",
         )
 
         /** R17C FIX-A: the type the move has in this hit (-ate abilities, Normalize, Weather Ball, Electrify ...): the Attack event animates it, not the move's own. */
@@ -639,9 +652,12 @@ object BattleEngine {
 
             val struggle = move.id == Tuning.STRUGGLE
             val hits = rulesFirst { it.hits(this, p, move) } ?: move.multihit?.let { multiHits(it) } ?: 1
+            val hitDamages = ArrayList<Int>()
+            val hitTargetHps = ArrayList<Int>()
             var total = 0; var dealt = 0; var done = 0; var crit = false; var eff = 1.0 // R17C-5: dealt = total + what a substitute took (drain / recoil)
             while (done < hits && t.hp > 0 && u.hp > 0) { // R17C-9a: a user that fainted from Rough Skin hits no more
                 if (done > 0 && move.multiAccuracy && !accuracyHit(p, move, done)) break // R17C-4: Triple Axel, Population Bomb: every hit rolls its accuracy, the first miss ends the move
+                val effectsFrom = out.size
                 val h = newHit(this, p, u, side(p), t, side(!p), move, done)
                 val r = computeDamage(h, rng)
                 eff = r.effectiveness
@@ -652,6 +668,7 @@ object BattleEngine {
                 d = rulesChain(d) { rule, x -> rule.takeDamage(this, !p, h, x) }
                 d = d.coerceIn(0, t.hp)
                 val sub = absorbed
+                hitDamages += d
                 t.hp -= d; total += d; dealt += d + sub; absorbed = 0; done++
                 if (d + sub > 0) lastTaken[idx(!p)] = TakenHit(h.category, d + sub, p, move.id) // R17C FIX-A: a substitute's share counts for Counter & co
                 if (d > 0) {
@@ -660,6 +677,10 @@ object BattleEngine {
                     side(!p).timesHit++
                     rulesEach { rule -> rule.afterDamage(this, !p, h, d) }
                 }
+                hitTargetHps += t.hp
+                if (move.multihit != null || hits > 1) for (i in effectsFrom until out.size) {
+                    (out[i] as? GameEvent.Effect)?.let { out[i] = it.copy(hitIndex = done - 1) }
+                }
             }
             val hit = eff > 0
             if (hit && u.hp > 0) { // R17C-9a: a user that fainted from Rough Skin drains and takes recoil no more
@@ -667,7 +688,11 @@ object BattleEngine {
                 if (struggle) hurt(p, maxOf(1, maxHp(p) / 4), "${u.name} is damaged by recoil!", EffectKind.RECOIL, source = Indirect.STRUGGLE)
                 else move.recoil?.let { (a, b) -> hurt(p, maxOf(1, dealt * a / b), "${u.name} is damaged by recoil!", EffectKind.RECOIL, source = Indirect.RECOIL) }
             }
-            if (move.selfDestruct && (hit || !move.selfDestructIfHit)) { u.hp = 0 } // R17C FIX-A: Final Gambit ("ifHit") needs a hit: an immune target does not take the user down
+            if (move.selfDestruct && (hit || !move.selfDestructIfHit)) {
+                val lost = u.hp
+                u.hp = 0
+                if (lost > 0) fx(p, "${u.name} sacrificed its remaining HP!", EffectKind.RECOIL, amount = lost)
+            } // R17C FIX-A: Final Gambit ("ifHit") needs a hit: an immune target does not take the user down
             if (hit && u.hp > 0) move.selfBoosts?.let { boost(p, it, byFoe = false) }
             if (hit && total > 0) thawByHit(!p, move)
             if (hit) rulesEach { it.afterHit(this, p, move, total) }
@@ -680,7 +705,7 @@ object BattleEngine {
                     rulesEach { it.secondary(this, p, move, sec) }
                 }
             }
-            return attackEvent(p, move, total, done, eff, crit)
+            return attackEvent(p, move, total, done, eff, crit, hitDamages = hitDamages, hitTargetHps = hitTargetHps)
         }
 
         private fun multiHits(r: IntRange): Int {
@@ -831,6 +856,8 @@ object BattleEngine {
             val before = mon(p).hp
             mon(p).hp = maxOf(0, before - n)
             events += GameEvent.Effect(p, text, mon(p).hp, maxHp(p), side(p).status, EffectKind.STATUS_DAMAGE, amount = before - mon(p).hp)
+            val lost = before - mon(p).hp
+            if (lost > 0) rulesEach { it.afterIndirectDamage(this, p, lost) }
         }
     }
 }

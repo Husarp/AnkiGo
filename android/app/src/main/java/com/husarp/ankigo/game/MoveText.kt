@@ -27,7 +27,7 @@ object MoveText {
     fun showsPower(m: Move): Boolean =
         m.damaging && m.power > 0 && !m.levelDamage && m.fixedDamage == null && !m.halfHp && !m.ohko && m.id !in MovePower.VARIABLE_POWER
 
-    fun describe(m: Move): String {
+    fun describe(m: Move, knownMoves: List<Move>? = null): String {
         CoreRules.neverPickedText(m.id)?.let { return it } // R17C-3: a move that means nothing in a 1-vs-1 wild fight says why (it is never picked)
         RemainingMoves.texts[m.id]?.let { text ->
             return text + when {
@@ -38,7 +38,7 @@ object MoveText {
         }
         val lines = ArrayList<String>()   // what the move does
         val extras = ArrayList<String>()  // when it goes, whether it can miss, charging
-        val ruleLines = BattleRules.ALL.flatMap { it.describe(m) }.map(StageText::explain) // R17C-1: what the rule sets add, after the engine's own lines
+        val ruleLines = BattleRules.ALL.flatMap { it.describe(m) }.mapNotNull { contextualLine(m, it, knownMoves) }.map(StageText::explain) // R17C-1: what the rule sets add, after the engine's own lines
 
         if (m.damaging) {
             val rule = when {
@@ -89,6 +89,30 @@ object MoveText {
         if (m.damaging && lines.isEmpty() && extras.isEmpty()) lines += "Deals damage with no extra effect."
         return (lines + extras).joinToString(" ")
     }
+
+    /**
+     * Only hide optional synergies of the user's own moves. Target-dependent interactions and prerequisites
+     * (such as Swallow needing stockpile) remain visible. Null means a generic Dex/TM description.
+     */
+    private fun contextualLine(m: Move, line: String, known: List<Move>?): String? {
+        if (known == null) return line
+        val ids = known.map { it.id }.toSet()
+        return when (m.id) {
+            "defensecurl" -> if (ids.any { it == "rollout" || it == "iceball" })
+                line.replace("Rollout and Ice Ball deal", linkedSubject(known.filter { LinkedMoves.empowers(m.id, it) }, "deal", "deals")) else null
+            "charge" -> if (known.any { LinkedMoves.empowers(m.id, it) })
+                "Its next Electric attack (${join(known.filter { LinkedMoves.empowers(m.id, it) }.map { it.name })}) deals double damage." else null
+            "stockpile" -> if (ids.any { it == "swallow" || it == "spitup" })
+                line.replace("Swallow and Spit Up use", linkedSubject(known.filter { LinkedMoves.empowers(m.id, it) }, "use", "uses")).let { if (known.count { LinkedMoves.empowers(m.id, it) } == 1) it.replace("and take the rises", "and takes the rises") else it }
+                else line.substringBefore(" Swallow")
+            "rollout", "iceball" -> if ("defensecurl" in ids) line
+                else line.replace(", and double again after Defense Curl", "")
+            else -> line
+        }
+    }
+
+    private fun linkedSubject(moves: List<Move>, plural: String, singular: String): String =
+        join(moves.map { it.name }) + " " + if (moves.size == 1) singular else plural
 
     /** R17C-3 (PLAN 267): the charge turn, then the user's very next move is the hit (or the effect) by itself; null for a move that doesn't charge. */
     private fun chargeSentence(m: Move): String? {

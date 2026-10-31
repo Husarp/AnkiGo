@@ -190,12 +190,12 @@ class GameData(
     fun move(id: String): Move? = moves[id]
     /**
      * The Shop price in coins (0 = never sold): PokeAPI's. PLAN 171: a ball PokeAPI sells costs AnkiGo's own price instead (Tuning.BALL_PRICE),
-     * and Ankimon's other balls (Tuning.OLD_BALLS) are never sold.
+     * and PLAN 342 items use Tuning.SHOP_PRICE.
      */
     fun price(item: String): Int {
-        val raw = itemPrices[item] ?: 0
-        if (raw <= 0) return 0
-        return Tuning.BALL_PRICE[item] ?: if (item in Tuning.OLD_BALLS) 0 else raw
+        Tuning.BALL_PRICE[item]?.let { return it }
+        Tuning.SHOP_PRICE[item]?.let { return it }
+        return (itemPrices[item] ?: 0).coerceAtLeast(0)
     }
 }
 
@@ -310,6 +310,8 @@ class Battle(
     var wildMaxHp: Int? = null,     // encounter-only pace override; never carried into a caught Pokémon
     var failedThrows: Int = 0,      // ball throws that missed in this fight (R4 fix B8): the catch card says "Throw N" from it, whichever screen watched the fight
     var buttons: MutableList<Int> = ArrayList(), // R10-B22: the buttons (1 Again .. 4 Easy) of this round's answers so far; who attacks depends on them (see RoundRule)
+    var againStreak: Int = 0, // capped: one boost per uninterrupted streak
+    var pressuredRounds: Int = 0, // rounds without Good/Easy; OK-only rounds pause
     val field: BattleField = BattleField(),      // R17C-1: weather, terrain, rooms, side conditions (an old save has none)
 ) {
     /** R17C-4: the Main's team (Pokémon with a uid), for Beat Up (one hit per member with HP). [Game] fills it before each round; never saved, empty = just the Main. */
@@ -426,6 +428,9 @@ class GameState(
     val asks: MutableList<PendingAsk> = mutableListOf(),
     val settings: Settings = Settings(),
 ) {
+    /** Scoped to a local practice answer; never serialized. */
+    internal var practiceRewards = false
+
     fun mon(uid: String?): Mon? = mons.firstOrNull { it.uid == uid }
     val main: Mon? get() = mon(team.firstOrNull())
 

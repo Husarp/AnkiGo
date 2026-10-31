@@ -9,10 +9,11 @@ import com.husarp.ankigo.game.data.DexTextParser
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.Executors
+import java.util.zip.GZIPInputStream
+import org.json.JSONObject
 
-// PLAN item 60: Pokédex text + category per species, fetched on demand the first time its Info is opened (PokeAPI
-// pokemon-species/{baseNum}) and kept in filesDir/dextext/{baseNum}.json (a few hundred bytes each). Offline or any error: null,
-// nothing is cached, so the next open tries again. Parsing is game/data/DexTextParser.kt. No bulk download.
+// English text ships in assets/dextext.json.gz. Missing bundled entries use the existing
+// filesDir/dextext cache, then PokeAPI as a last resort.
 
 object DexText {
     private const val TAG = "DEXTEXT"
@@ -24,6 +25,27 @@ object DexText {
 
     private fun file(ctx: Context, baseNum: Int) = File(File(ctx.filesDir, "dextext"), "$baseNum.json")
 
+    @Volatile private var bundle: JSONObject? = null
+
+    private fun bundled(ctx: Context, baseNum: Int): DexEntry? {
+        val entries = bundle ?: synchronized(this) {
+            bundle ?: try {
+                ctx.assets.open("dextext.json.gz").use { input ->
+                    GZIPInputStream(input).bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()) }
+                }.also { bundle = it }
+            } catch (_: IOException) { return null }
+              catch (_: org.json.JSONException) { return null }
+        }
+        return bundledEntry(entries, baseNum)
+    }
+
+    internal fun bundledEntry(entries: JSONObject, baseNum: Int): DexEntry? =
+        entries.optJSONObject(baseNum.toString())?.let { DexTextParser.decode(it.toString()) }?.takeUnless { it.empty }
+
+    /** Shared lookup order; fallbacks are lazy so bundled entries never need disk cache or network. */
+    internal fun resolve(bundled: () -> DexEntry?, cached: () -> DexEntry?, online: () -> DexEntry?): DexEntry? =
+        bundled() ?: cached() ?: online()
+
     /** Blocking (background thread): the cached entry of species [baseNum], or null when it was never fetched. */
     fun cached(ctx: Context, baseNum: Int): DexEntry? {
         val f = file(ctx, baseNum)
@@ -31,11 +53,14 @@ object DexText {
         return try { DexTextParser.decode(f.readText()) } catch (e: IOException) { null }
     }
 
-    /** Blocking (background thread): the cached entry, else one request (8 s timeouts); null when offline or the answer is unusable. */
+    /** Blocking (background thread): bundled, cached, then one request (8 s timeouts). */
     fun fetch(ctx: Context, baseNum: Int): DexEntry? {
         if (baseNum <= 0) return null
+        return resolve({ bundled(ctx, baseNum) }, { cached(ctx, baseNum) }, { download(ctx, baseNum) })
+    }
+
+    private fun download(ctx: Context, baseNum: Int): DexEntry? {
         Report.init(ctx)
-        cached(ctx, baseNum)?.let { return it }
         val entry = try {
             val bytes = Http.get("$URL$baseNum/", TIMEOUT_MS) ?: return null
             DexTextParser.parse(String(bytes, Charsets.UTF_8))

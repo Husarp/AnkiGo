@@ -96,6 +96,15 @@ object MoveChooser {
         return if (choice == MoveChoice.SMARTEST) strongest(view, p, rng, hurting) else hurting[rng.nextInt(hurting.size)]
     }
 
+    /** Deterministic best rank in SMARTEST's order; existing forced/blocked move rules still apply. */
+    fun pickStrongest(view: BattleView, p: Boolean, rng: Random): Move {
+        rulesFirst { it.forcedMove(view, p) }?.let { return it }
+        val attacks = view.moves(p).filter { it.id !in CoreRules.NEVER_PICKED && it.damaging &&
+            rulesFirst { r -> r.moveBlocked(view, p, it) } == null && canHurt(view, p, it) && rulesUseful(view, p, it) != false }
+        val pool = attacks.filter { !it.selfDestruct }.ifEmpty { attacks }
+        return pool.maxByOrNull { expectedDamage(view, p, it) } ?: pick(MoveChoice.SMARTEST, view, p, rng)
+    }
+
     /** True when [move] could do damage to [defender] (not immune; a one-hit KO needs a target that is not above the user). */
     fun canHurt(move: Move, attacker: Mon, defender: Mon, defenderTypes: List<Type>): Boolean =
         TypeChart.eff(move.type, defenderTypes) > 0 && !(move.ohko && defender.level > attacker.level)

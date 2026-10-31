@@ -8,6 +8,8 @@ import kotlin.math.roundToInt
  * stay quiet). Buttons: 1 Again, 2 Hard, 3 Good, 4 Easy, 0 unknown (counts as Good).
  * - The wild one attacks when at least one answer is Again or Hard, at [Tuning.WILD_POWER] summed over the round.
  * - Your Main attacks when at least one answer is Good or Easy, with the multiplier [Tuning.MAIN_POWER] summed over the round.
+ * R23: two consecutive Agains boost wild Attack once per streak; three rounds without Good/Easy force the strongest pick.
+ * OK pauses both streaks. Hard contributes 75% wild power.
  * Both can attack in one round. R19-T (PLAN 284): the OK of a new card ([Tuning.BUTTON_OK]) is one of the round's answers with no power at
  * all: only the other answer counts, and OK + OK is an empty round (nobody attacks). Pure Kotlin.
  */
@@ -25,6 +27,24 @@ object RoundRule {
             main += Tuning.MAIN_POWER[i]; wild += Tuning.WILD_POWER[i]
         }
         return Plan(mainActs, tidy(main), enemyActs, tidy(wild))
+    }
+
+    /** OK is transparent; every other non-Again answer starts a fresh streak. */
+    fun answerBoost(battle: Battle, button: Int): Boolean {
+        if (button == Tuning.BUTTON_OK) return false
+        battle.againStreak = if (button == 1) (battle.againStreak + 1).coerceAtMost(Tuning.WILD_AGAIN_STREAK + 1) else 0
+        return battle.againStreak == Tuning.WILD_AGAIN_STREAK
+    }
+
+    /** One forced strongest pick each third eligible round. Unknown answers count as Good. */
+    fun strongestRound(battle: Battle, buttons: List<Int>): Boolean {
+        val rated = buttons.filter { it != Tuning.BUTTON_OK }
+        if (rated.isEmpty()) return false
+        if (plan(rated).mainActs) { battle.pressuredRounds = 0; return false }
+        battle.pressuredRounds++
+        if (battle.pressuredRounds < Tuning.WILD_STRONGEST_ROUNDS) return false
+        battle.pressuredRounds = 0
+        return true
     }
 
     /**

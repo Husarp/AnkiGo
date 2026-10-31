@@ -1,32 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Money (PLAN 144, round 14): the picked "144C" gold coin without its outer rim ring: soft gold gradient face, inner groove (light offset
-     lines under the dark ball lines and button) and a shine. Fixed colours, the same in light and dark: never tint it. The drawing is
-     unchanged in a 24 grid; the viewport is cropped to the face (+ outline), 3.25..20.75, so the coin fills the icon box. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="24dp" android:height="24dp" android:viewportWidth="17.5" android:viewportHeight="17.5">
-    <group android:translateX="-3.25" android:translateY="-3.25">
-        <!-- gold face r 8.4; radial gradient cx .35 cy .3 r .9 of its 3.6..20.4 box = centre 9.48,8.64 radius 15.12 -->
-        <path android:strokeColor="#8F5D06" android:strokeWidth="0.7"
-            android:pathData="M3.6,12a8.4,8.4 0 1,0 16.8,0a8.4,8.4 0 1,0 -16.8,0Z">
-            <aapt:attr name="android:fillColor">
-                <gradient android:type="radial" android:centerX="9.48" android:centerY="8.64" android:gradientRadius="15.12">
-                    <item android:offset="0" android:color="#FFE98A" />
-                    <item android:offset="0.6" android:color="#F4C33F" />
-                    <item android:offset="1" android:color="#D9981C" />
-                </gradient>
-            </aapt:attr>
-        </path>
-        <!-- light edge, 0.75 below the dark lines -->
-        <group android:translateY="0.75">
-            <path android:strokeColor="#D9FFF4C4" android:strokeWidth="1.8" android:pathData="M3.9,12h5M15.1,12h5" />
-            <path android:strokeColor="#D9FFF4C4" android:strokeWidth="1.8"
-                android:pathData="M9.1,12a2.9,2.9 0 1,0 5.8,0a2.9,2.9 0 1,0 -5.8,0Z" />
-        </group>
-        <path android:strokeColor="#8F5D06" android:strokeWidth="1.8" android:pathData="M3.9,12h5M15.1,12h5" />
-        <path android:fillColor="#F4C33F" android:strokeColor="#8F5D06" android:strokeWidth="1.8"
-            android:pathData="M9.1,12a2.9,2.9 0 1,0 5.8,0a2.9,2.9 0 1,0 -5.8,0Z" />
-        <path android:strokeColor="#CCFFFFFF" android:strokeWidth="1.3" android:strokeLineCap="round"
-            android:pathData="M6.2,8.2a7,7 0 0,1 4.3,-3.1" />
-    </group>
-</vector>
+<!-- PLAN 341 C: Bonsaiheldin, CC0. See assets/coin-stack-SOURCES.txt. -->
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/coin_stack" android:filter="false" android:antialias="false" android:gravity="fill" />

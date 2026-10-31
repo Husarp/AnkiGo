@@ -167,6 +167,9 @@ internal interface BattleRules {
      */
     fun indirectDamage(r: Round, p: Boolean, source: String, amount: Int): Int = amount
 
+    /** HP was lost to a cost or indirect damage: threshold abilities and held berries observe the actual loss. */
+    fun afterIndirectDamage(r: Round, p: Boolean, damage: Int) {}
+
     /**
      * The HP [to] gains by draining the other side (drain moves, Leech Seed), chained: [amount] so far. Return what [to] really heals; a hook that
      * turns it into a loss (Liquid Ooze) hurts [to] itself, writes the line and returns 0. R17C-9a.
@@ -263,7 +266,7 @@ internal interface BattleRules {
     val handles: Set<String> get() = emptySet()
 
     companion object {
-        private val DEFAULT: List<BattleRules> by lazy { listOf(CoreRules, RemainingMoves, MovePower, Hazards, SideMoves, FieldRules, MoveControl, Abilities, AbilitiesMore) }
+        private val DEFAULT: List<BattleRules> by lazy { listOf(CoreRules, RemainingMoves, MovePower, Hazards, SideMoves, FieldRules, MoveControl, Abilities, AbilitiesMore, AbilityAdaptations) }
 
         @Volatile private var injected: List<BattleRules>? = null
 
@@ -366,6 +369,7 @@ internal class Hit(
  */
 internal fun Battle.switchOutMain(data: GameData, oldMon: Mon?) {
     if (oldMon != null) rulesEach { it.onLeave(this, data, true, oldMon) }
+    field.player.remove(AbilityAdaptations.SWITCH_OFFER)
     player = BattleSide()
 }
 

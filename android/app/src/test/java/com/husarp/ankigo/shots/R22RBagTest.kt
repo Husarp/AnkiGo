@@ -13,9 +13,10 @@ import org.junit.Test
 class R22RBagTest {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
     private fun all(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
-    @Test fun bagHasChancesMissRuleAndDirectThrow() {
+    @Test fun bagHasChancesMissRuleAndCombinedThrow() {
         val ctx = Shots.files(paparazzi.context); FakeGame.install(ctx)
         GameRepo.state!!.bag["poke-ball"] = 2
+        GameRepo.state!!.bag["heal-ball"] = 1
         var dialog: AppDialog? = null
         Pickers.interceptApp = { dialog = it }
         try {
@@ -25,8 +26,14 @@ class R22RBagTest {
             val views = all(dialog!!.content())
             assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("20% to catch") })
             assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("runs away") })
+            assertFalse(views.filterIsInstance<TextView>().any { it.text.toString() == "0% to catch" })
             views.first { it.contentDescription?.toString()?.startsWith("Poké Ball,") == true }.performClick()
+            assertFalse("Picking a regular ball must wait for the combined throw", called)
+            assertEquals(2, GameRepo.state!!.count("poke-ball"))
+            all(dialog!!.content()).filterIsInstance<TextView>().first { it.text.toString().startsWith("Heal Ball ×") }.performClick()
+            dialog!!.button(android.content.DialogInterface.BUTTON_POSITIVE)!!.performClick()
             assertTrue(called)
+            assertEquals(0, GameRepo.state!!.count("heal-ball"))
             assertEquals(1, GameRepo.state!!.count("poke-ball"))
         } finally { Pickers.interceptApp = null }
     }

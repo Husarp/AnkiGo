@@ -31,14 +31,18 @@ internal object BattleBag {
             BagTiles.rows(body, ids.map { id ->
                 val held = st.mons.count { it.heldItem == id }
                 val enabled = st.count(id) > 0 && (kind != ItemKind.BALL && kind != ItemKind.ESCAPE || st.battle?.wild?.hp?.let { it > 0 } == true)
-                val note = if (st.count(id) <= 0) "No free copies · Held" else if (!enabled) "No wild Pokémon" else if (kind == ItemKind.BALL) "${Catching.ballChance(id)}% to catch" else ItemInfo.plain(ItemInfo.line(data, id, st.caught))
+                val note = if (st.count(id) <= 0) "No free copies · Held" else if (!enabled) "No wild Pokémon" else if (kind == ItemKind.BALL) { if (id in Tuning.OLD_BALLS) Items.specialNote(id) else "${Catching.ballChance(id)}% to catch" } else ItemInfo.plain(ItemInfo.line(data, id, st.caught))
                 BagTiles.tile(ctx, Bits.itemTile(ctx, id), Items.name(id), note + if (held > 0 && st.count(id) > 0) " · Held" else "", "×${st.count(id) + held}").apply {
                     alpha = if (enabled) 1f else .45f
                     isEnabled = enabled
                     setOnClickListener {
                         dialog.dismiss()
                         when (kind) {
-                            ItemKind.BALL -> onEvents(GameRepo.act(ctx) { it.throwBall(id) })
+                            ItemKind.BALL -> {
+                                val choose: (String, String?) -> Unit = { regular, special -> onEvents(GameRepo.act(ctx) { it.throwBall(regular, special) }) }
+                                if (id in Tuning.OLD_BALLS) BallThrowUi.show(ctx, st, choose)
+                                else BallThrowUi.special(ctx, st, id, choose)
+                            }
                             ItemKind.ESCAPE -> Pickers.confirm(ctx, "Use ${Items.name(id)}?", "The wild Pokémon leaves and a new one appears.", "Use") { onEvents(GameRepo.act(ctx) { it.escape(id) }) }
                             ItemKind.FOSSIL -> Pickers.confirm(ctx, "Revive fossil?", "Use ${Items.name(id)} to revive an ancient Pokémon at Lv 5?", "Revive") { use(id, null) }
                             else -> pick(ctx, data, st, id) { mon ->

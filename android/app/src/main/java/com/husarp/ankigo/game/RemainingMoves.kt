@@ -27,7 +27,7 @@ internal object RemainingMoves : BattleRules {
     override val handles = texts.keys
 
     private fun active(v: BattleView, p: Boolean): String? = v.mon(p).heldItem.takeUnless {
-        (v.side(p).volatiles["embargo"] ?: 0) > 0 || (v.field.rooms["magicroom"] ?: 0) > 0
+        v.ability(p) == "klutz" || (v.side(p).volatiles["embargo"] ?: 0) > 0 || (v.field.rooms["magicroom"] ?: 0) > 0
     }
     private fun sticky(v: BattleView, p: Boolean) = v.mon(p).heldItem != null && Abilities.abVs(v, !p) == "stickyhold"
     private fun flingPower(item: String): Int = when {

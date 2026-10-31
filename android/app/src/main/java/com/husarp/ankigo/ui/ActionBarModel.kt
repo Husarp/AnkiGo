@@ -273,7 +273,7 @@ class ActionBarModel(
         }
 
         /** R19: old CHARGE events contain only the engine sentence. Live state resolves ambiguous Solar Blade / Shadow Force. */
-        private fun chargeFromText(text: String): Pair<String, com.husarp.ankigo.game.Move> {
+        internal fun chargeFromText(text: String): Pair<String, com.husarp.ankigo.game.Move> {
             val rules = listOf(
                 Triple(" absorbed light!", "Solar Beam", Type.GRASS), Triple(" flew up high!", "Fly", Type.FLYING),
                 Triple(" sprang up!", "Bounce", Type.FLYING), Triple(" burrowed its way under the ground!", "Dig", Type.GROUND),

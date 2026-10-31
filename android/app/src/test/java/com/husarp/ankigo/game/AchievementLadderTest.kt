@@ -33,7 +33,7 @@ class AchievementLadderTest {
 
     @Test fun onlyTheTwoEasyRowsHaveThreeTiers() {
         val three = AchievementTable.ROWS.filter { it.ankimonBadge == null && it.tiers.size == 3 }.map { it.id }
-        assertEquals(listOf("highest-level", "types"), three.sorted())
+        assertEquals(listOf("ball-catches", "highest-level", "items-found", "tms", "types"), three.sorted())
         assertEquals(listOf(6L, 10L, 18L), AchievementTable.row("types")!!.tiers)
         assertEquals(listOf(25L, 50L, 100L), AchievementTable.row("highest-level")!!.tiers)
         assertEquals(listOf(1, 2, 4), AchievementTable.REMAP["types"])

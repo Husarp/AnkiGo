@@ -8,6 +8,11 @@ import org.junit.Test
 class SettingsCatalogTest {
     private val all = SettingsCatalog.all
 
+    @Test fun downloadsExplainThatSavedPicturesStillShow() {
+        assertEquals("Off: no new downloads; pictures already saved are still used",
+            all.single { it.id == "spritesEnabled" }.explain)
+    }
+
     @Test fun idsAreUnique() {
         assertEquals(emptyList<String>(), all.groupBy { it.id }.filter { it.value.size > 1 }.keys.toList())
     }

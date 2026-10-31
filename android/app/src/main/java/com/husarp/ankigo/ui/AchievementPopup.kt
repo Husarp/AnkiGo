@@ -88,6 +88,12 @@ object AchievementPopup {
     /** Wait a moment after the action so the answer's own animation is not covered at once. */
     internal const val DELAY_MS = 700L
 
+    // Weak owners avoid holding a destroyed battle host alive. All access is on the UI thread.
+    private val playback = java.util.Collections.newSetFromMap(java.util.WeakHashMap<Any, Boolean>())
+    internal fun playbackStarted(owner: Any) { playback.add(owner) }
+    internal fun playbackFinished(owner: Any) { if (playback.remove(owner)) schedule() }
+    internal val waitingForPlayback: Boolean get() = playback.isNotEmpty()
+
     private val pending = ArrayList<AchCelebration>()
     private var pendingItems: List<ItemFind> = emptyList()
     private var shownItems: List<ItemFind> = emptyList()
@@ -108,7 +114,7 @@ object AchievementPopup {
     /** Daily gifts waiting for a screen (tests). */
     internal fun waitingGifts(): List<GiftPop> = pendingGifts
 
-    internal fun reset() { dismissNote(); pending.clear(); shown = emptyList(); pendingItems = emptyList(); shownItems = emptyList(); pendingGifts = emptyList(); shownGift = null; front = null; dialog = null }
+    internal fun reset() { playback.clear(); dismissNote(); pending.clear(); shown = emptyList(); pendingItems = emptyList(); shownItems = emptyList(); pendingGifts = emptyList(); shownGift = null; front = null; dialog = null }
 
     /** The events of one action: what is worth a celebration is queued and shown (see the file comment). */
     fun offer(events: List<GameEvent>) {
@@ -148,6 +154,7 @@ object AchievementPopup {
 
     private fun tryShow() {
         val a = front?.get() ?: return
+        if (waitingForPlayback) { schedule(); return }
         if ((pending.isEmpty() && pendingItems.isEmpty() && pendingGifts.isEmpty()) || dialog?.isShowing == true || note != null || a.isFinishing || a.isDestroyed || a.isInPictureInPictureMode) return
         if (pending.isNotEmpty() && mode(a) != 0) {
             val batch = pending.toList(); pending.clear()

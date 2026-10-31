@@ -96,7 +96,7 @@ class R17CFixBItemsTest {
         s.cash = 1_000_000
         assertFalse(Shop.buy(priced, s, "chipped-pot", now).ok)
         Shop.ensureToday(priced, s)
-        assertEquals(listOf("great-ball"), s.shopItems.toList())
+        assertEquals(Shop.dailyBalls(s.day), s.shopItems.toList())
         assertEquals(0, s.count("chipped-pot"))
         assertEquals(1_000_000, s.cash)
     }

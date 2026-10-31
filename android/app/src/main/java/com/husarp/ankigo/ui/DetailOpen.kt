@@ -78,12 +78,11 @@ object DetailFormat {
         return "weak to $names ${top.label}$more"
     }
 
-    /** "Others of its kind: Keen Eye · Gale Wings (hidden)": the abilities of [sp] except [current]; null when there is none. */
+    /** Other obtainable abilities of [sp] except [current]; hidden abilities are display-only in the Pokédex. Null when none. */
     fun otherAbilities(sp: Species, current: String?): String? {
         fun norm(s: String) = s.filter { it.isLetterOrDigit() }.lowercase()
         val own = current?.let(::norm)
-        val list = sp.abilities.filter { norm(it) != own }.map { it } +
-            listOfNotNull(sp.hiddenAbility?.takeIf { norm(it) != own }?.let { "$it (hidden)" })
+        val list = sp.abilities.filter { norm(it) != own }
         return list.takeIf { it.isNotEmpty() }?.joinToString(" · ")
     }
 

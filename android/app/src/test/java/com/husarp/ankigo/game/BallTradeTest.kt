@@ -13,21 +13,21 @@ class BallTradeTest {
 
     private fun noNegative(s: GameState) = assertTrue(s.bag.toString(), s.bag.values.all { it > 0 })
 
-    @Test fun fivePokeBallsMakeOneGreatBall() {
-        val s = state("poke-ball" to 7)
+    @Test fun tenPokeBallsMakeOneGreatBall() {
+        val s = state("poke-ball" to 12)
         val r = BallTrade.trade(s, "poke-ball")
         assertTrue(r.message, r.ok)
-        assertEquals("Traded 5 Poké Balls for 1 Great Ball", r.message)
+        assertEquals("Traded 10 Poké Balls for 1 Great Ball", r.message)
         assertEquals(2, s.count("poke-ball"))
         assertEquals(1, s.count("great-ball"))
         noNegative(s)
     }
 
-    @Test fun threeGreatBallsMakeOneUltraBall() {
-        val s = state("great-ball" to 3)
+    @Test fun sixGreatBallsMakeOneUltraBall() {
+        val s = state("great-ball" to 6)
         val r = BallTrade.trade(s, "great-ball")
         assertTrue(r.message, r.ok)
-        assertEquals("Traded 3 Great Balls for 1 Ultra Ball", r.message)
+        assertEquals("Traded 6 Great Balls for 1 Ultra Ball", r.message)
         assertEquals("a count that reaches zero leaves the bag", false, "great-ball" in s.bag)
         assertEquals(1, s.count("ultra-ball"))
         noNegative(s)
@@ -38,10 +38,10 @@ class BallTradeTest {
         val before = s.bag.toMap()
         val p = BallTrade.trade(s, "poke-ball")
         assertFalse(p.ok)
-        assertEquals("Need 5, you have 4", p.message)
+        assertEquals("Need 10, you have 4", p.message)
         val g = BallTrade.trade(s, "great-ball")
         assertFalse(g.ok)
-        assertEquals("Need 3, you have 2", g.message)
+        assertEquals("Need 6, you have 2", g.message)
         assertEquals(before, s.bag.toMap())
         assertEquals(0, s.count("ultra-ball"))
     }
@@ -63,15 +63,15 @@ class BallTradeTest {
     }
 
     @Test fun theOfferSaysWhatGoesAndWhatYouGet() {
-        val s = state("poke-ball" to 7)
+        val s = state("poke-ball" to 12)
         val o = BallTrade.offer(s, "poke-ball")!!
         assertEquals("great-ball", o.give)
-        assertEquals(5, o.need)
-        assertEquals(7, o.have)
-        assertEquals(listOf("poke-ball" to 5), o.take)
+        assertEquals(10, o.need)
+        assertEquals(12, o.have)
+        assertEquals(listOf("poke-ball" to 10), o.take)
         assertTrue(o.canTrade)
         assertEquals(2, BallTrade.keep(s, o))
-        assertEquals("the offer itself takes nothing", 7, s.count("poke-ball"))
+        assertEquals("the offer itself takes nothing", 12, s.count("poke-ball"))
     }
 
     @Test fun anOfferWithTooFewKeepsTheCountsAndTakesNothing() {
@@ -79,43 +79,34 @@ class BallTradeTest {
         val o = BallTrade.offer(s, "poke-ball")!!
         assertFalse(o.canTrade)
         assertEquals(3, o.have)
-        assertEquals(5, o.need)
+        assertEquals(10, o.need)
         assertTrue(o.take.isEmpty())
     }
 
-    @Test fun oldBallsCountAsGreatBallsAndGoFirst() {
-        val s = state("great-ball" to 4, "net-ball" to 1)
-        val o = BallTrade.offer(s, "great-ball")!!
-        assertEquals(5, o.have)
-        assertEquals(listOf("net-ball" to 1, "great-ball" to 2), o.take)
-        assertTrue(o.usesOldBalls)
-        val r = BallTrade.trade(s, "great-ball")
-        assertEquals("Traded 1 Net Ball and 2 Great Balls for 1 Ultra Ball", r.message)
-        assertEquals(0, s.count("net-ball"))
-        assertEquals(2, s.count("great-ball"))
-        assertEquals(1, s.count("ultra-ball"))
-        noNegative(s)
+    @Test fun specialsDoNotCountAsGreatBalls() {
+        val s = state("great-ball" to 5, "net-ball" to 100)
+        assertFalse(BallTrade.offer(s, "great-ball")!!.canTrade)
+        assertNull(BallTrade.offer(s, "net-ball"))
+        assertFalse(BallTrade.trade(s, "net-ball").ok)
+        assertEquals(100, s.count("net-ball"))
     }
 
-    @Test fun anOldBallsOwnCardTradesToo() {
-        val s = state("dive-ball" to 3)
-        val o = BallTrade.offer(s, "dive-ball")!!
-        assertEquals("ultra-ball", o.give)
-        assertEquals(listOf("dive-ball" to 3), o.take)
-        assertTrue(BallTrade.trade(s, "dive-ball").ok)
-        assertEquals(setOf("ultra-ball"), s.bag.keys)
+    @Test fun specialCardsHaveNoTrade() {
+        val s = state("great-ball" to 6)
+        for (id in Tuning.OLD_BALLS) {
+            s.bag[id] = 1
+            assertNull(BallTrade.offer(s, id))
+            assertFalse(BallTrade.trade(s, id).ok)
+            assertEquals(1, s.count(id))
+        }
+        assertEquals(6, s.count("great-ball"))
     }
 
-    @Test fun oldBallsAloneCanBeEnoughAndAreUsedFewestFirstThenByName() {
-        val s = state("timer-ball" to 2, "dusk-ball" to 1, "luxury-ball" to 1, "great-ball" to 1)
-        val o = BallTrade.offer(s, "great-ball")!!
-        // the one you have fewest of first, ties by name: dusk (1), luxury (1), then timer (2): 1 + 1 + 1 = 3
-        assertEquals(listOf("dusk-ball" to 1, "luxury-ball" to 1, "timer-ball" to 1), o.take)
-        val r = BallTrade.trade(s, "great-ball")
-        assertEquals("Traded 1 Dusk Ball, 1 Luxury Ball and 1 Timer Ball for 1 Ultra Ball", r.message)
-        assertEquals(1, s.count("timer-ball"))
-        assertEquals(1, s.count("great-ball"))
-        noNegative(s)
+    @Test fun manySpecialsCannotSupplyMissingGreatBalls() {
+        val s = state("great-ball" to 5, "net-ball" to 100)
+        val before = s.bag.toMap()
+        assertFalse(BallTrade.trade(s, "great-ball").ok)
+        assertEquals(before, s.bag.toMap())
     }
 
     @Test fun oldBallsDoNotHelpThePokeBallTrade() {
@@ -124,33 +115,26 @@ class BallTradeTest {
         assertFalse(BallTrade.trade(s, "poke-ball").ok)
     }
 
-    @Test fun greatBallsStillCountWhenOnlySomeAreOldAndTheTotalIsEnough() {
-        val s = state("great-ball" to 1, "net-ball" to 1, "premier-ball" to 1)
-        val o = BallTrade.offer(s, "net-ball")!!
-        assertEquals(3, o.have)
-        assertEquals(listOf("net-ball" to 1, "premier-ball" to 1, "great-ball" to 1), o.take)
-        assertTrue(BallTrade.trade(s, "net-ball").ok)
-        assertTrue(s.bag.keys.toString(), s.bag.keys == setOf("ultra-ball"))
+    @Test fun specialTradeDoesNotConsumeInventory() {
+        val s = state("great-ball" to 5, "net-ball" to 100)
+        assertFalse(BallTrade.offer(s, "great-ball")!!.canTrade)
+        assertNull(BallTrade.offer(s, "net-ball"))
+        assertFalse(BallTrade.trade(s, "net-ball").ok)
+        assertEquals(100, s.count("net-ball"))
     }
 
     @Test fun repeatedTapsAreOneBatchEach() {
-        val s = state("poke-ball" to 12)
-        assertTrue(BallTrade.trade(s, "poke-ball").ok)
-        assertEquals(7, s.count("poke-ball"))
-        assertEquals(1, s.count("great-ball"))
-        assertTrue(BallTrade.trade(s, "poke-ball").ok)
-        assertEquals(2, s.count("poke-ball"))
-        assertEquals(2, s.count("great-ball"))
-        assertFalse("12 balls make two batches, not three", BallTrade.trade(s, "poke-ball").ok)
-        assertEquals(2, s.count("poke-ball"))
-        assertEquals(2, s.count("great-ball"))
+        val s = state("poke-ball" to 22)
+        repeat(2) { assertTrue(BallTrade.trade(s, "poke-ball").ok) }
+        assertEquals(2, s.count("poke-ball")); assertEquals(2, s.count("great-ball"))
+        assertFalse(BallTrade.trade(s, "poke-ball").ok)
         noNegative(s)
     }
 
     @Test fun aChainFromPokeToUltra() {
-        val s = state("poke-ball" to 15)
-        repeat(3) { assertTrue(BallTrade.trade(s, "poke-ball").ok) }
-        assertEquals(3, s.count("great-ball"))
+        val s = state("poke-ball" to 60)
+        repeat(6) { assertTrue(BallTrade.trade(s, "poke-ball").ok) }
+        assertEquals(6, s.count("great-ball"))
         assertTrue(BallTrade.trade(s, "great-ball").ok)
         assertEquals(setOf("ultra-ball"), s.bag.keys)
         assertNotNull(BallTrade.offer(s, "poke-ball"))
@@ -163,11 +147,11 @@ class BallTradeTest {
         assertEquals("1 Dive Ball, 1 Net Ball and 1 Great Ball", BallTrade.list(listOf("dive-ball" to 1, "net-ball" to 1, "great-ball" to 1)))
     }
 
-    @Test fun theShopWorthIsOnlyThereWhenNoOldBallIsIn() {
+    @Test fun shopWorthUsesCurrentBallPrices() {
         assertEquals(1000, BallTrade.worth(listOf("poke-ball" to 5)))
-        assertEquals(2100, BallTrade.worth(listOf("great-ball" to 3)))
-        assertEquals(700, BallTrade.worth(listOf("great-ball" to 1)))
-        assertNull(BallTrade.worth(listOf("net-ball" to 1, "great-ball" to 2)))
+        assertEquals(3600, BallTrade.worth(listOf("great-ball" to 6)))
+        assertEquals(600, BallTrade.worth(listOf("great-ball" to 1)))
+        assertEquals(1600, BallTrade.worth(listOf("net-ball" to 1, "great-ball" to 2)))
     }
 
     @Test fun tradingIsWorseThanBuying() {

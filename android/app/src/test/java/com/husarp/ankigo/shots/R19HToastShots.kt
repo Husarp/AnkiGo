@@ -210,13 +210,13 @@ class R19HToastShots {
         assertEquals(0f, c.translationX, 0f); assertEquals(1f, c.alpha, 0f)
     }
 
-    @Test fun withMotionItStartsOffTheLeftEdge() {
+    @Test fun withMotionItStartsOffTheRightEdge() {
         val p = studyPanel(ctx(still = false))
         measure(p, 412, 400)
         p.setLog(LogKind.SYS, "ITEM", "Found a Potion!")
         val c = p.toastLayer.shownCard!!
         val animators = android.animation.ValueAnimator.areAnimatorsEnabled()
-        if (animators) assertTrue("starts left of the panel", c.translationX < 0f && c.translationX + cardRect(p).right <= 0f)
+        if (animators) assertTrue("starts right of the panel", c.translationX > 0f && c.translationX + cardRect(p).left >= p.toastLayer.width)
         p.cancelAnimations()   // a skipped batch: the slide ends where it belongs
         assertEquals(0f, c.translationX, 0f)
         assertEquals("the toast is still there", ToastKind.ITEM, p.toastLayer.shown?.kind)
@@ -262,12 +262,12 @@ class R19HToastShots {
         return Triple(p, cardRect(p), arenaRect(p))
     }
 
-    @Test fun inTheStudyPanelItSitsAtTheArenasTopLeftAndKeepsOffYourInfoBox() {
+    @Test fun inTheStudyPanelItSitsAtTheArenasTopRightAndKeepsOffYourInfoBox() {
         val (p, card, arena) = placeIn(Size.SPLIT, strip = false)
         assertTrue("inside the arena", arena.contains(card))
         val keep = p.arena.toastKeepOff()
         assertFalse("your info box stays visible", hits(Rect(card.left - arena.left, card.top - arena.top, card.right - arena.left, card.bottom - arena.top), keep.ourCard))
-        assertTrue("on the left side", card.left < arena.width() / 4)
+        assertTrue("on the right side", card.right - arena.left > arena.width() * 3 / 4)
         assertTrue("near the top", card.top - arena.top < arena.height() / 3)
     }
 
@@ -317,6 +317,20 @@ class R19HToastShots {
         "switch" to { p -> p.setLog(LogKind.SYS, "SWITCH", SwitchQueue.queuedText("Puddlet")) },
         "caughtup" to { p -> p.setLog(LogKind.SYS, "CAUGHT UP", "Caught up 5 answers made while AnkiGo was closed: 1 won, 0 caught, +25 coins") },
     )
+
+    /** Option C must remain legible in full, compact and tiny hosts, in both palettes. */
+    @Test fun trainerRankShots() {
+        assertEquals(com.husarp.ankigo.R.drawable.ic_trainer_rank, ToastKind.TRAINER.icon)
+        for (size in listOf(Size.PHONE, Size.SPLIT, Size.PIP_169M)) {
+            shoot("r23r-trainer-${size.name.lowercase()}", size) { ctx ->
+                studyPanel(ctx, strip = size == Size.PIP_169M).also {
+                    measure(it, size.wDp, size.hDp)
+                    it.setLog(LogKind.SYS, "TRAINER", "Trainer level {{12}}!")
+                    assertEquals(ToastKind.TRAINER, it.toastLayer.shown?.kind)
+                }
+            }
+        }
+    }
 
     @Test fun studyPanelShots() {
         for ((k, raise) in kinds) shoot("r19h-study-$k", Size.SPLIT) { ctx -> studyPanel(ctx).also { turn(it, *moves); raise(it) } }

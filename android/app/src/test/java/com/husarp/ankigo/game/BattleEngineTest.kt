@@ -546,7 +546,11 @@ class BattleEngineTest {
         val boom = Move("explosion", "Explosion", Type.NORMAL, Category.PHYSICAL, 250, 100, selfDestruct = true)
         val d2 = TestData.data(data.species.values.toList(), TestData.MOVES + (boom.id to boom))
         val m = TestData.mon(d2, 19, 20, listOf("explosion"))
+        val remaining = m.hp
         val ev2 = BattleEngine.playRound(d2, Battle(TestData.mon(d2, 150, 100, listOf("splash")), Tier.NORMAL), m, 1.0, false, Random(1))
+        val sacrifice = ev2.filterIsInstance<Effect>().single { it.kind == EffectKind.RECOIL }
+        assertEquals(remaining, sacrifice.amount)
+        assertEquals(0, sacrifice.hp)
         assertEquals(0, m.hp)
         assertEquals(1, ev2.count { it is Fainted && it.player })
     }

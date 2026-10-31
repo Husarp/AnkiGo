@@ -180,13 +180,16 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         val battle = state.battle
         if (battle == null) { Ui.toast(s, "No wild Pokémon right now. Throw balls from a battle."); return }
         val wild = battle.wild
-        val chance = Catching.ballChance(ball)
         close()
-        Pickers.confirm(s, "Throw ${Items.name(ball)}?", "Throw at wild ${wild.name} (chance $chance%)? ${Items.MISS_RULE}", "Throw") {
-            val events = GameRepo.act(s) { it.throwBall(ball) }
-            s.report(ballMessage(events, wild.name), events)
-            s.requestRender()
+        val choose: (String, String?) -> Unit = { regular, special ->
+            Pickers.confirm(s, "Throw ${Catching.throwName(regular, special)}?", Items.MISS_RULE, "Throw") {
+                val events = GameRepo.act(s) { it.throwBall(regular, special) }
+                s.report(ballMessage(events, wild.name), events)
+                s.requestRender()
+            }
         }
+        if (ball in com.husarp.ankigo.game.Tuning.OLD_BALLS) BallThrowUi.show(s, state, choose)
+        else BallThrowUi.special(s, state, ball, choose)
     }
 
     private fun ballMessage(events: List<GameEvent>, wildName: String): String {

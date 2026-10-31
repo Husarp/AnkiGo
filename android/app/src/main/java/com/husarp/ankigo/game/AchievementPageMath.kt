@@ -215,7 +215,7 @@ object AchPageMath {
 
     /** "31,240"; the study time (minutes) as "41 h" / "30 min". */
     fun fmt(metric: Metric?, v: Long): String {
-        if (metric == Metric.STUDY_MINUTES) return if (v >= 60) String.format(Locale.US, "%,d h", v / 60) else "$v min"
+        if (metric == Metric.STUDY_MINUTES) return String.format(Locale.US, "%,.2f h", v / 60.0).replace(".00 h", " h")
         return String.format(Locale.US, "%,d", v)
     }
 
@@ -242,7 +242,12 @@ object AchPageMath {
         val out = ArrayList<AchCelebration>()
         fun add(c: AchCelebration) { if (out.none { it.rowId == c.rowId && it.tier == c.tier }) out += c }
         for (e in events) when (e) {
-            is GameEvent.AchievementReached -> add(AchCelebration(e.id, e.title, e.tier, e.tierName, AchievementTable.row(e.id)?.tiers?.getOrNull(e.tier)))
+            is GameEvent.AchievementReached -> {
+                val row = AchievementTable.row(e.id) ?: continue
+                if (e.tier !in row.tiers.indices) continue
+                if (row.oneOff) add(AchCelebration(e.id, e.title, -1, "Badge", null))
+                else add(AchCelebration(e.id, e.title, e.tier, e.tierName, row.tiers[e.tier]))
+            }
             is GameEvent.BadgeEarned -> forBadge(e.id)?.let { (row, t) ->
                 if (row.oneOff) add(AchCelebration(row.id, row.title, -1, "Badge", null))
                 else add(AchCelebration(row.id, row.title, t, AchievementTable.tierName(t), row.tiers.getOrNull(t)))

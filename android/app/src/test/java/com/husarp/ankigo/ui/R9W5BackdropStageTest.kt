@@ -5,11 +5,11 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-// ROUND 9 wave 5 (R9-W5-C): the psychic-lab picture in every arena host shape of
+// R23: approved new and replacement pictures in every arena host shape of
 // docs/design/r9/arena.js (R9_SHAPES: on-screen size in dp, the panel's draw scale s, the floating window's 0.72 zoom): both Pokémon's
 // feet inside the arena, their frames (feet row up to the 0.82 art height, half a frame to each side) not cut off.
 class R9W5BackdropStageTest {
-    private val ids = listOf("psychic-lab")
+    private val ids = BackdropCatalog.GENERAL.toList() + listOf("forest-tech-b", "crystal-storm", "flower-field")
 
     // name, on-screen width, height (dp), draw scale s, zoom
     private val shapes = listOf(
