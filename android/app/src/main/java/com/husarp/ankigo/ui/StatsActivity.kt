@@ -277,7 +277,10 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
         content.addView(trainerCard())
         content.addView(streakCard(s), lp(14))
-        content.addView(metricButton())
+        // PLAN 367: summary first; keep the chart controls together directly above the chart.
+        val message = StatsChartMath.emptyMessage(series, snap.access, snap.message)
+        if (message == null) content.addView(tileRow(StatsChartMath.tiles(series)), lp(14)) // zeros would only mislead while loading
+        content.addView(metricButton(), lp(14))
         content.addView(filterChips(series), lp(8))
         if (metric == ChartMetric.STREAK_CALENDAR && calendarYear != null) {
             val years = StatsSheets.FlowLayout(this)
@@ -290,8 +293,6 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             }
             content.addView(years, lp(4))
         }
-        val message = StatsChartMath.emptyMessage(series, snap.access, snap.message)
-        if (message == null) content.addView(tileRow(StatsChartMath.tiles(series)), lp(8)) // zeros would only mislead while loading
         content.addView(chartCard(series, message, snap, today, barSel) { barSel = it }, lp(8))
 
         if (anki != null) { // pick 11A: one card per section, a coloured header, the numbers in soft rounded cells, the small print behind the (i)

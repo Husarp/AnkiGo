@@ -139,13 +139,13 @@ class R602Shots {
         fun right(v: View, root: View): Int { var x = v.right; var p = v.parent; while (p is View && p !== root) { x += p.left; p = p.parent }; return x }
         fun find(v: View, t: String): TextView? =
             if (v is TextView && v.text.toString() == t) v else (v as? ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { find(g.getChildAt(it), t) } }
-        for (total in listOf(95, 950, 1234)) {
+        for (total in listOf(95, 950, 1234)) for (stage in listOf(0, 2)) {
             val col = android.widget.LinearLayout(ctx).apply { orientation = android.widget.LinearLayout.VERTICAL }
-            col.addView(com.husarp.ankigo.ui.DetailParts.statRow(ctx, com.husarp.ankigo.game.Stat.HP, 208, 0.5f, 0, 35, false))
+            col.addView(com.husarp.ankigo.ui.DetailParts.statRow(ctx, com.husarp.ankigo.game.Stat.ATK, 208, 0.5f, 0, 35, false, stage = stage))
             col.addView(com.husarp.ankigo.ui.DetailParts.totalRow(ctx, total, 320))
             col.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
             col.layout(0, 0, col.measuredWidth, col.measuredHeight)
-            val stat = find(col, "208")!!
+            val stat = find(col, if (stage == 0) "208" else "208 → 416")!!
             val num = find(col, total.toString())!!
             val label = find(col, "Total")!!
             assertEquals("number of $total ends with the stat numbers", right(stat, col), right(num, col))

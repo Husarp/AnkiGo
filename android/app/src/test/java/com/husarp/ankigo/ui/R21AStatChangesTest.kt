@@ -20,10 +20,21 @@ class R21AStatChangesTest {
         val board = ConditionBoard(); board.syncFrom(b)
         val marks = board.of(ConditionMarks.Slot.OURS)
         assertEquals(listOf("stat.atk", "stat.spa", "confusion"), marks.map { it.key })
-        assertEquals("Atk ↑6", marks[0].chipText)
-        assertEquals("SpA ↓2", marks[1].chipText)
+        assertEquals("Atk +6", marks[0].chipText)
+        assertEquals("SpA −2", marks[1].chipText)
         assertTrue(marks[0].detail.contains("×4.00"))
         assertTrue(marks[1].detail.contains("×0.50"))
+    }
+    @Test fun signedChipsCoverEveryStageAndHideZero() {
+        val b = battle()
+        val board = ConditionBoard()
+        for (stage in -6..6) {
+            b.player.boosts[0] = stage
+            board.syncFrom(b)
+            val marks = board.of(ConditionMarks.Slot.OURS)
+            if (stage == 0) assertTrue(marks.isEmpty())
+            else assertEquals("Atk ${if (stage > 0) "+" else "−"}${kotlin.math.abs(stage)}", marks.single().chipText)
+        }
     }
     @Test fun switchAndNewFightRemoveStages() {
         val b = battle(); b.player.boosts[0] = 2; b.enemy.boosts[4] = -1

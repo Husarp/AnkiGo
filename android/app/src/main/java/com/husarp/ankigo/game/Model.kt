@@ -391,6 +391,7 @@ class GameState(
     var totalReviews: Long = 0,
     val badges: MutableSet<Int> = mutableSetOf(),
     var shopDay: String? = null,
+    var shopRefreshes: Int = 0,
     val shopItems: MutableList<String> = mutableListOf(),
     val shopTms: MutableList<String> = mutableListOf(),
     val redo: MutableMap<Long, Int> = mutableMapOf(), // card id -> answers to ignore after an AnkiDroid undo

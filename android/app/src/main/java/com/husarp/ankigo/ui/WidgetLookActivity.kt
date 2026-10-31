@@ -208,7 +208,7 @@ class WidgetLookActivity : AgActivity() {
         val chips=StudyUi.row(this)
         val list=android.widget.ListView(this).apply { divider=null; setBackgroundColor(Ui.c(context,R.color.ag_card)) }
         var choices=emptyList<String>()
-        val dialog=if(show) AlertDialog.Builder(this).setTitle("Pokémon").setView(body).setNegativeButton("Cancel",null).create() else null
+        val dialog=AppDialog.Builder(this).setTitle("Pokémon").setView(body, scrollsItself=true).setNegativeButton("Cancel",null).create()
         fun update() {
             val found=BuddyPicker.mons(mons,selected,search.text.toString(),sort,filters,state?.team ?: emptyList()) {
                 GameRepo.data?.species?.get(it.lookNum(GameRepo.data))?.types ?: emptyList()
@@ -291,16 +291,14 @@ class WidgetLookActivity : AgActivity() {
         })
         list.setOnItemClickListener { _,_,index,_ ->
             BuddyWidgetPrefs.set(prefs,widgetId,choices[index]); Widgets.refreshAll(this,study=false)
-            dialog?.dismiss(); render()
+            dialog.dismiss(); render()
         }
         update()
-        dialog?.show()
-        dialog?.window?.apply {
-            setGravity(android.view.Gravity.BOTTOM)
-            setLayout(-1,(resources.displayMetrics.heightPixels*.85f).toInt())
-            setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        if (show) {
+            Pickers.show(dialog)
+            dialog.window?.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         }
-        return body
+        return dialog.content()
     }
     companion object {
         val names = linkedMapOf("buddy" to "Buddy","wide" to "A wild one is waiting","study" to "Study","now" to "Study now")

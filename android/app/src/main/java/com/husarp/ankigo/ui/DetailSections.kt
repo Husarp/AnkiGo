@@ -185,6 +185,10 @@ object DetailSections {
     fun statsBody(a: Context, stats: Stats, level: Int, nature: Nature?, sp: Species, compact: Boolean, boosts: IntArray? = null): View = LinearLayout(a).apply {
         orientation = LinearLayout.VERTICAL
         addView(DetailParts.statHint(a))
+        addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply {
+            text = "Normal → current · tick = normal · faded tail = lost value"
+            setPadding(0, 0, 0, Ui.dp(a, 4))
+        })
         val max = DetailMath.monStatMax(level)
         Stat.entries.forEach { s ->
             addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), 0, sp.base[s], compact, wholeRow = true, stage = if (s == Stat.HP) 0 else boosts?.getOrNull(s.ordinal - 1) ?: 0))

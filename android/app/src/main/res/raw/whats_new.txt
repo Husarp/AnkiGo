@@ -3,6 +3,20 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.0.1
+- Roomier Shop cards have larger item pictures, clearer prices and compact Buy buttons. Daily and purple weekend specials each have their own place.
+- Shop refresh prices start at 100 coins, rise by 100 with each refresh and reset the next game day.
+- Larger Bag items come with quick category filters that fit in two rows.
+- Help lessons show one chapter at a time, with a chapter picker and paired navigation arrows. Larger named type icons and colourful chapter symbols make things easier to find.
+- Stats puts summary numbers first and keeps chart controls directly above the chart, with more space below the streak card.
+- Widget Pokémon picker now matches the app's rounded, themed dialogs.
+- Scroll bars match AnkiGo's rounded game style in light and dark themes.
+- Water attacks land with a fuller crown-shaped splash at the same quick speed.
+- Battle stat changes show signed stages and clearer normal/current comparisons in Pokémon details.
+### Fixes
+- Fixed study cards showing Web page not available. The same loading fix applies to previews and template windows, preserving offline media and math support.
+- Price coins are clearer and keep their proportions; unnecessary fight instructions are removed from evolution items, fossils and held items.
+
 ## 1.0.0
 - Choose what to study with deck/tag filters, per-deck free study, ten recent setups and starred favourites. Practise cards that aren't due without changing their Anki schedule; those answers give half XP and no answer or win money.
 - Write on your cards with a whiteboard, coloured pens, eraser, undo and clear. It clears for each new card and remembers whether you left it on.

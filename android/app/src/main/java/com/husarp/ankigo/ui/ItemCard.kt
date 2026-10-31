@@ -327,7 +327,9 @@ internal object ItemCard {
             else if (!open.buying) { open.askBuy(); page.requestRender() }
             else b.onBuy()
         }
-        go.addView(ShopViews.price(ctx, b.price.copy(was = null)))
+        go.orientation = LinearLayout.HORIZONTAL
+        go.getChildAt(0).layoutParams = LinearLayout.LayoutParams(-2, -2)
+        go.addView(ShopViews.price(ctx, b.price.copy(was = null)), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(ctx, 8f) })
         row.addView(go, LinearLayout.LayoutParams(0, -2, 0.85f))
         if (spec.item != null) row.addView(button(ctx, Ui.c(ctx, R.color.ag_mantle), Ui.c(ctx, R.color.ag_text), "×$quantity").apply {
             contentDescription = "Quantity $quantity. Cycle 1, 3, 5"

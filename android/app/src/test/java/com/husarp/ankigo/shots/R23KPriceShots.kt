@@ -22,11 +22,10 @@ class R23KPriceShots {
         paparazzi.shoot("r1-purchase-card", sizes = listOf(Size.PHONE)) { ctx ->
             ShopCardKit.install()
             val day = (0L..100L).map { java.time.LocalDate.parse(ShopCardKit.WEEKDAY).plusDays(it).toString() }
-                .first { "great-ball" in com.husarp.ankigo.game.Shop.dailyBalls(it) && ShopPlan.price(com.husarp.ankigo.GameRepo.data!!, it, "great-ball").normal != null }
+                .first { "great-ball" in com.husarp.ankigo.game.Shop.dailyBalls(it) && com.husarp.ankigo.game.Shop.dailyPrice(com.husarp.ankigo.GameRepo.data!!, it, "great-ball") != com.husarp.ankigo.GameRepo.data!!.price("great-ball") }
             val (page, stage) = ShopCardKit.page(ctx, com.husarp.ankigo.ui.CardKeys.special(ShopPlan.Tile.Item("great-ball")), day = day)
             val price = ShopPlan.price(page.data, day, "great-ball")
-            val arrow = texts(page.itemWindow!!.view).first { it.contentDescription == "Normal price: ${price.normal} coins" }
-            assertTrue(arrow.hasOnClickListeners())
+            assertFalse(texts(page.itemWindow!!.view).any { it.text.toString().contains("↑") || it.text.toString().contains("↓") })
             val buy = texts(page.itemWindow!!.view).first { it.text == "Buy" }
             buy.parent.let { it as View }.performClick()
             stage.render()
@@ -36,22 +35,16 @@ class R23KPriceShots {
         }
     }
 
-    @Test fun dailyArrowsAndDealRenderWithNormalPriceAction() {
+    @Test fun dailyPricesAndDealRenderWithoutArrows() {
         val ctx = paparazzi.context
         val panel = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Ui.c(ctx, R.color.ag_card))
         }
-        val cheaper = ShopViews.price(ctx, ShopPlan.Price(540, normal = 600))
-        val down = texts(cheaper).single { it.text.toString().contains("↓") }
-        assertEquals(Ui.c(ctx, R.color.ag_green), down.currentTextColor)
-        assertTrue(down.hasOnClickListeners())
-        assertEquals("Normal price: 600 coins", down.contentDescription)
-        panel.addView(cheaper)
-        val dearer = ShopViews.price(ctx, ShopPlan.Price(660, normal = 600))
-        assertTrue(texts(dearer).single { it.text.toString().contains("↑") }.hasOnClickListeners())
-        panel.addView(dearer)
-        panel.addView(ShopViews.price(ctx, ShopPlan.Price(378, was = 540, normal = 600, daily = 540)))
+        panel.addView(ShopViews.price(ctx, ShopPlan.Price(540)))
+        panel.addView(ShopViews.price(ctx, ShopPlan.Price(660)))
+        panel.addView(ShopViews.price(ctx, ShopPlan.Price(378, was = 540)))
+        assertFalse(texts(panel).any { it.text.toString().contains("↑") || it.text.toString().contains("↓") })
         val fixed = ShopViews.price(ctx, ShopPlan.tmPrice())
         assertFalse(texts(fixed).any { it.text.toString().contains("↑") || it.text.toString().contains("↓") })
         panel.addView(fixed)

@@ -34,6 +34,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
     private var title: CharSequence? = null
     private var message: CharSequence? = null
     private var customView: View? = null
+    private var customScrollsItself = false
     private var footer: View? = null
     private var closeAtTop = false
     private var backAtTop = false
@@ -123,7 +124,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
             }, LinearLayout.LayoutParams(-1, -2))
         }
         if (hasBody) {
-            val own = customView?.takeIf { items == null && scrollsItself(it) }
+            val own = customView?.takeIf { items == null && (customScrollsItself || scrollsItself(it)) }
             val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
             message?.let { m ->
                 body.addView(Ui.text(ctx, 14f, 700, R.color.ag_sub1).apply {
@@ -270,7 +271,8 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
         fun setBackAtTop() = apply { d.backAtTop = true }
         fun setTitle(t: CharSequence?) = apply { d.title = t }
         fun setMessage(m: CharSequence?) = apply { d.message = m }
-        fun setView(v: View?) = apply { d.customView = v }
+        /** Mark a container with a scrolling list so it receives the remaining height without an outer ScrollView. */
+        fun setView(v: View?, scrollsItself: Boolean = false) = apply { d.customView = v; d.customScrollsItself = scrollsItself }
 
         /** A view pinned between the body and the button row: it never scrolls away (give it its own side margins). */
         fun setFooter(v: View?) = apply { d.footer = v }

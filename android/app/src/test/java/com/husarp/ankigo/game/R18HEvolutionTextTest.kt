@@ -126,7 +126,7 @@ class R18HEvolutionTextTest {
 
     @Test fun theItemsOwnNameAndThePlainBlocksStay() {
         val facts = ItemInfo.facts(data, "tart-apple", emptySet())
-        assertEquals(listOf("What it does", "How to use", "In a fight"), facts.map { it.title })
+        assertEquals(listOf("What it does", "How to use"), facts.map { it.title })
         assertEquals("Tart Apple", Items.name("tart-apple"))
         // other kinds do not depend on the Pokédex at all
         assertEquals(ItemInfo.facts(data, "potion", null), ItemInfo.facts(data, "potion", emptySet()))

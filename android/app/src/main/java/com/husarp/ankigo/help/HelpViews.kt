@@ -383,14 +383,27 @@ internal object HelpViews {
     // ---------- game guide ----------
 
     @DrawableRes fun chapterIcon(id: String): Int = when (id) {
-        GameGuide.BATTLES, GameGuide.MOVES -> R.drawable.ic_swords   // R17C-10: the Moves chapter shares the battle icon
-        GameGuide.LEVELS -> R.drawable.ic_up
-        GameGuide.TYPES -> R.drawable.ic_flame
+        GameGuide.BATTLES -> R.drawable.ic_swords
+        GameGuide.MOVES -> R.drawable.ic_kind_special
+        GameGuide.LEVELS -> R.drawable.ic_evolve
+        GameGuide.TYPES -> R.drawable.ic_type_fire
         GameGuide.STATS -> R.drawable.ic_stats
         GameGuide.CATCHING -> R.drawable.ic_ball
-        GameGuide.MONEY -> R.drawable.ic_coin
+        GameGuide.MONEY -> R.drawable.ic_money
         GameGuide.HEALING -> R.drawable.ic_heart
-        else -> R.drawable.ic_shop
+        else -> R.drawable.ic_item_bag
+    }
+
+    fun chapterTone(id: String): Int = when (id) {
+        GameGuide.BATTLES -> R.color.ag_peach
+        GameGuide.MOVES -> R.color.ag_blue
+        GameGuide.LEVELS -> R.color.ag_green
+        GameGuide.TYPES -> R.color.ag_red
+        GameGuide.STATS -> R.color.ag_lav
+        GameGuide.CATCHING -> R.color.ag_mauve
+        GameGuide.MONEY -> R.color.ag_yellow
+        GameGuide.HEALING -> R.color.ag_pink
+        else -> R.color.ag_teal
     }
 
     /** A contents entry: icon + "N. Short name" (the Guide page, two per row) or icon over name (the Help home tile). */
@@ -400,7 +413,7 @@ internal object HelpViews {
         minimumHeight = dp(ctx, if (tile) 64 else 48)
         setPadding(dp(ctx, 6), dp(ctx, 6), dp(ctx, 6), dp(ctx, 6))
         background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 12, ctx)
-        addView(tintedIcon(ctx, chapterIcon(id), R.color.ag_mauve, if (tile) 20 else 18), LinearLayout.LayoutParams(dp(ctx, if (tile) 20 else 18), dp(ctx, if (tile) 20 else 18)))
+        addView(tintedIcon(ctx, chapterIcon(id), chapterTone(id), 24), LinearLayout.LayoutParams(dp(ctx, 24), dp(ctx, 24)))
         val name = GuideDemo.shortTitle(id)
         addView(Ui.text(ctx, if (tile) 10f else 12f, 800, R.color.ag_text).apply {
             text = if (tile) name else "$number. $name"
@@ -419,7 +432,7 @@ internal object HelpViews {
         minimumHeight = dp(ctx, 52)
         setPadding(dp(ctx, 14), dp(ctx, 8), dp(ctx, 12), dp(ctx, 8))
         addView(Ui.text(ctx, 13f, 900, R.color.ag_sub0).apply { text = number.toString() }, LinearLayout.LayoutParams(dp(ctx, 18), -2))
-        addView(tintedIcon(ctx, chapterIcon(ch.id), R.color.ag_mauve, 20), LinearLayout.LayoutParams(dp(ctx, 20), dp(ctx, 20)).also { it.marginStart = dp(ctx, 4); it.marginEnd = dp(ctx, 10) })
+        addView(tintedIcon(ctx, chapterIcon(ch.id), chapterTone(ch.id), 24), LinearLayout.LayoutParams(dp(ctx, 24), dp(ctx, 24)).also { it.marginStart = dp(ctx, 4); it.marginEnd = dp(ctx, 10) })
         addView(Ui.text(ctx, 14f, 800, R.color.ag_text).apply { text = ch.title }, LinearLayout.LayoutParams(0, -2, 1f))
         addView(tintedIcon(ctx, if (open) R.drawable.ic_expand else R.drawable.ic_chevron, R.color.ag_mauve, 22), LinearLayout.LayoutParams(dp(ctx, 22), dp(ctx, 22)))
         isClickable = true
@@ -559,7 +572,6 @@ internal object HelpViews {
                         ?: LinearLayout(ctx).apply {
                             tag = "bar-group"; orientation = LinearLayout.VERTICAL
                             setPadding(dp(ctx, 10), dp(ctx, 12), dp(ctx, 10), dp(ctx, 12))
-                            background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
                         }.also { out += it }
                     box.addView(blockVisual(ctx, v), lp(ctx, if (box.childCount == 0) 0 else 10))
                 } else out += blockVisual(ctx, v)
@@ -577,7 +589,6 @@ internal object HelpViews {
             val fold = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(ctx, 10), dp(ctx, 6), dp(ctx, 10), dp(ctx, 10))
-                background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 10, ctx)
             }
             val head = Ui.text(ctx, 13f, 800, R.color.ag_text).apply {
                 text = "$title  ›"; minimumHeight = dp(ctx, 44); gravity = Gravity.CENTER_VERTICAL

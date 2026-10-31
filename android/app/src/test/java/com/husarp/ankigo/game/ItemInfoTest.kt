@@ -125,7 +125,7 @@ class ItemInfoTest {
         assertEquals("Evolves **Applin** into **Flapple**.", fact("tart-apple", "What it does"))
         assertEquals("Evolves **Applin** into **Appletun**.", fact("sweet-apple", "What it does"))
         assertTrue(fact("tart-apple", "How to use").contains("**Everstone**"))
-        assertTrue(fact("tart-apple", "In a fight").contains("**at once**"))
+        assertFalse(ItemInfo.facts(data, "tart-apple").any { it.title == "In a fight" })
     }
 
     @Test fun aStoneListsEveryPairAndTheShortLineCountsTheRest() {
@@ -194,7 +194,14 @@ class ItemInfoTest {
         assertTrue(fact("power-band", "What it does").contains("**8 extra Sp. Def EVs**"))
         for (id in Items.ALL.values.filter { it.kind == ItemKind.HELD }.map { it.id }) {
             assertTrue(id, fact(id, "How to use").contains("**one item**") && fact(id, "How to use").contains("old one goes back"))
-            assertTrue(id, fact(id, "In a fight").contains("**not a turn**"))
+            assertFalse(id, ItemInfo.facts(data, id).any { it.title == "In a fight" })
+        }
+    }
+
+    @Test fun nonBattleItemKindsHaveNoFightInstructions() {
+        for (def in Items.ALL.values.filter { it.kind in setOf(ItemKind.EVOLUTION, ItemKind.FOSSIL, ItemKind.HELD) }) {
+            assertFalse(def.id, ItemInfo.facts(data, def.id).any { it.title == "In a fight" })
+            assertFalse(def.id, ItemInfo.howToUse(def.id).contains("in a fight"))
         }
     }
 
@@ -214,7 +221,7 @@ class ItemInfoTest {
         assertEquals("Revives Omanyte at Lv 5", ItemInfo.line(data, "helix-fossil"))
         val what = fact("helix-fossil", "What it does")
         assertTrue(what.contains("**Omanyte**") && what.contains("**Lv 5**") && what.contains("used up"))
-        assertTrue(fact("helix-fossil", "In a fight").contains("not a turn"))
+        assertFalse(ItemInfo.facts(data, "helix-fossil").any { it.title == "In a fight" })
         assertEquals("Revives a Pokémon", ItemInfo.short(null, "helix-fossil"))
         assertEquals("Revives a Pokémon at Lv 5", ItemInfo.line(null, "helix-fossil"))
         assertEquals("Revives a Pokémon", ItemInfo.short(data, "dome-fossil"))   // species 140 is not in this small world

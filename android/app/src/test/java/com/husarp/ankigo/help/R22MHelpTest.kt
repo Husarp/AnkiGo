@@ -38,6 +38,13 @@ class R22MHelpTest {
         assertTrue(text.contains("Required items are used up"))
         assertFalse(text.contains("evolve after a win"))
     }
+    @Test fun shopGuideMatchesTheCurrentPriceControls() {
+        val text = GameGuide.chapters().first { it.id == GameGuide.MONEY }.points.joinToString(" ")
+        assertFalse(text.contains("Tap ↓ or ↑"))
+        assertTrue(text.contains("Refresh keeps prices"))
+        assertTrue(text.contains("costs 100 more each time"))
+        assertTrue(text.contains("resets the next game day"))
+    }
     @Test fun internalLinksResolveSpecificSettings() {
         val links = HelpSettingsLinks.find("Open Settings → Battle panel & windows → On leaving. Then Settings → Game → Battle.")
         assertEquals(listOf("leaveMode", "moveChoiceSmart"), links.map { it.setting })

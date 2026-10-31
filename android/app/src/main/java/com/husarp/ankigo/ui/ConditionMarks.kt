@@ -122,7 +122,7 @@ object ConditionMarks {
     fun def(key: String): Def? = BY_KEY[key]
 
     /** The chip's word; Stockpile carries its layers in the word ("Stockpile 2"). */
-    fun word(d: Def, value: Int): String = if (d.key.startsWith("stat.")) "${d.word} ${if (value > 0) "↑" else "↓"}${abs(value)}" else if (d.num == Num.LAYERS) "${d.word}${if (d.key == "spikes" || d.key == "toxicspikes") " ×" else " "}${max(1, value)}" else d.word
+    fun word(d: Def, value: Int): String = if (d.key.startsWith("stat.")) "${d.word} ${if (value > 0) "+" else "−"}${abs(value)}" else if (d.num == Num.LAYERS) "${d.word}${if (d.key == "spikes" || d.key == "toxicspikes") " ×" else " "}${max(1, value)}" else d.word
 
     /**
      * The number on the chip: the turns left (never under 1 while it is there), or null when the rule's number is not turns (a Substitute's HP,

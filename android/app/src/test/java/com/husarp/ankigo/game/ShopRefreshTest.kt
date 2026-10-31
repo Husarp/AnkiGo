@@ -70,7 +70,7 @@ class ShopRefreshTest {
     @Test fun aRerollNeverDrawsABasicEither() {
         val s = state("2026-10-13", level = 10)
         for (seed in 1..40) {
-            s.cash = 1000
+            s.cash = 100_000
             assertTrue(Shop.reroll(data, s, Random(seed)).ok)
             assertTrue(s.shopItems.none { it in Shop.basics() })
             assertEquals(5 + Shop.dailyBalls(s.day).size, s.shopItems.size)
@@ -134,7 +134,7 @@ class ShopRefreshTest {
     @Test fun aPaidRefreshDoesNotChangeTheDeal() {
         val s = state("2026-10-13")
         val before = Shop.dealFor(data, s.day)
-        for (seed in 1..10) { s.cash = 500; assertTrue(Shop.reroll(data, s, Random(seed)).ok) }
+        for (seed in 1..10) { s.cash = 100_000; assertTrue(Shop.reroll(data, s, Random(seed)).ok) }
         assertEquals(before, Shop.dealFor(data, s.day))
     }
 

@@ -12,7 +12,6 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Shop
-import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.sound.GameSound
 import com.husarp.ankigo.sound.SoundId
 
@@ -204,7 +203,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     private fun fillShop() {
         val ctx = this
         val st = state
-        val cols = ShopPlan.columns(resources.configuration.screenWidthDp, resources.configuration.fontScale)
+        val cols = 1
         val gap = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 4) }
 
         // The deal card keeps its unit and old prices; a tap opens the item window for confirmation.
@@ -217,20 +216,25 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
 
         // the weekend special (Saturday and Sunday only)
         Shop.weekendFor(data, st.day)?.let { w ->
-            content.addView(Bits.sect(ctx, "Weekend special", "Sat & Sun"))
             content.addView(weekendCard(w), LinearLayout.LayoutParams(-1, -2))
         }
 
+        content.addView(Bits.sect(ctx, "Basics"))
         // always in stock: the basics at their normal price
-        content.addView(Bits.sect(ctx, "Always in stock"))
         tileRows(Shop.basics().map { ShopPlan.Tile.Item(it) }, cols, CardKeys::basic)
+        tileRows(st.shopItems.filter { Items.def(it)?.kind == com.husarp.ankigo.game.ItemKind.BALL }
+            .map { ShopPlan.Tile.Item(it) }, cols, CardKeys::special)
 
         // today's specials: title and "new in N h", then the "Refresh shop" button (a real button, so it is easy to find; PLAN 108), then the tiles
         content.addView(Bits.sect(ctx, "Today's specials", "new in ${hoursToNewDay()} h"))
         content.addView(refreshButton(), LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 10) })
-        val specials = ShopPlan.specials(st.shopItems, st.shopTms)
+        val specials = ShopPlan.specials(st.shopItems.filter { Items.def(it)?.kind != com.husarp.ankigo.game.ItemKind.BALL }, emptyList())
         if (specials.isEmpty()) content.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Nothing in the shop yet." })
         tileRows(specials, cols, CardKeys::special)
+        if (st.shopTms.isNotEmpty()) {
+            content.addView(Bits.sect(ctx, "TMs"))
+            tileRows(st.shopTms.map { ShopPlan.Tile.Tm(it) }, cols, CardKeys::special)
+        }
 
 
     }
@@ -254,7 +258,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             val price = ShopPlan.price(data, state.day, t.id)
             val name = Items.name(t.id)
             val short = ItemInfo.plain(ItemInfo.short(data, t.id, state.caught))
-            ShopViews.tile(this, Bits.itemTile(this, t.id, 36), name, priceView(price, 14f),
+            ShopViews.tile(this, ShopViews.itemArt(this, t.id, 64), name, priceView(price, 14f),
                 ItemCardPlan.detailsLabel(ShopPlan.describe("$name, $short", price)), sub = short) { openCard(key) }
         }
         is ShopPlan.Tile.Tm -> tmTile(t.move, key)
@@ -271,7 +275,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         val name = Items.tmName(data, move)
         val price = ShopPlan.tmPrice()
         val bottom = if (owned) ShopViews.owned(this) else priceView(price, 14f)
-        return ShopViews.tile(this, Bits.tmTile(this, m?.type, 36), name, bottom,
+        return ShopViews.tile(this, Bits.tmTile(this, m?.type, 64), name, bottom,
             ItemCardPlan.detailsLabel(ShopPlan.describe(listOfNotNull(name, m?.type?.label).joinToString(", "), price, owned)),
             subView = m?.let { Ui.typeChip(this, it.type) }) { openCard(key) }
     }
@@ -283,12 +287,12 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             val owned = w.id in state.tms
             val name = Items.tmName(data, w.id)
             val price = ShopPlan.tmPrice()
-            ShopViews.weekendCard(ctx, Bits.tmTile(ctx, data.move(w.id)?.type, 40), name, ShopPlan.WEEKEND_NOTE,
+            ShopViews.weekendCard(ctx, Bits.tmTile(ctx, data.move(w.id)?.type, 48), name, ShopPlan.WEEKEND_NOTE,
                 if (owned) ShopViews.owned(ctx, 14f) else priceView(price, 17f), ItemCardPlan.detailsLabel(ShopPlan.describe(name, price, owned))) { openCard(CardKeys.WEEKEND) }
         } else {
             val price = ShopPlan.price(data, state.day, w.id)
             val name = Items.name(w.id)
-            ShopViews.weekendCard(ctx, Bits.itemTile(ctx, w.id, 40), name, ShopPlan.WEEKEND_NOTE, priceView(price, 17f),
+            ShopViews.weekendCard(ctx, ShopViews.itemArt(ctx, w.id, 48), name, ShopPlan.WEEKEND_NOTE, priceView(price, 17f),
                 ItemCardPlan.detailsLabel(ShopPlan.describe(name, price))) { openCard(CardKeys.WEEKEND) }
         }
     }
@@ -311,23 +315,23 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            minimumHeight = Ui.dp(ctx, 44)
+            minimumHeight = Ui.dp(ctx, 48)
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx)
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 8), Ui.dp(ctx, 14), Ui.dp(ctx, 8))
-            alpha = if (state.cash >= Tuning.REROLL_PRICE) 1f else 0.45f
-            contentDescription = "Refresh shop for ${CoinText.word(Tuning.REROLL_PRICE)}"
+            alpha = if (state.cash >= Shop.refreshPrice(state)) 1f else 0.45f
+            contentDescription = "Refresh shop for ${CoinText.word(Shop.refreshPrice(state))}"
             addView(android.widget.ImageView(ctx).apply {
                 setImageResource(R.drawable.ic_sync)
                 setColorFilter(ink, android.graphics.PorterDuff.Mode.SRC_IN)
             }, LinearLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18)).also { it.marginEnd = Ui.dp(ctx, 7) })
-            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = TextUtils.concat("Refresh shop · ", CoinText.of(this, "${Tuning.REROLL_PRICE}")); maxLines = 2; gravity = Gravity.CENTER })
+            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = TextUtils.concat("Refresh shop · ", CoinText.of(this, "${Shop.refreshPrice(state)}")); maxLines = 2; gravity = Gravity.CENTER })
             setOnClickListener { reroll() }
         }
     }
 
     private fun reroll() {
-        if (state.cash < Tuning.REROLL_PRICE) { Ui.toast(this, "Not enough money (need ${CoinText.word(Tuning.REROLL_PRICE)})"); return }
-        Pickers.confirm(this, "Refresh the shop?", "New items and TMs for ${CoinText.word(Tuning.REROLL_PRICE)}.", "Refresh") {
+        if (state.cash < Shop.refreshPrice(state)) { Ui.toast(this, "Not enough money (need ${CoinText.word(Shop.refreshPrice(state))})"); return }
+        Pickers.confirm(this, "Refresh the shop?", "New items and TMs for ${CoinText.word(Shop.refreshPrice(state))}.", "Refresh") {
             act { g -> Shop.reroll(g.data, g.state, g.rng) }
         }
     }

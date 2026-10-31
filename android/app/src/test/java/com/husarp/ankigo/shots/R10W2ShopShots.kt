@@ -147,11 +147,11 @@ class R10W2ShopShots {
     @Test fun aWeekdayShowsTheDealTheBasicsAndTheSpecialsButNoWeekendCard() {
         shoot("weekday", listOf(Variants.PHONE, TALL), check = { _, screen ->
             val t = texts(screen)
-            assertTrue(t.toString(), "DEAL OF THE DAY" in t)
-            assertTrue("ALWAYS IN STOCK" in t)
+            assertTrue(t.toString(), t.any { it.startsWith("DEAL OF THE DAY · ") })
+            assertTrue("BASICS" in t)
             assertTrue("TODAY'S SPECIALS" in t)
             assertTrue(t.any { it.startsWith("new in ") && it.endsWith(" h") })
-            assertTrue("no weekend card on a Wednesday", "WEEKEND SPECIAL" !in t)
+            assertTrue("no weekend card on a Wednesday", t.none { it.startsWith("WEEKEND SPECIAL") })
             assertTrue("Poké Ball" in t && "Potion" in t)
             // the deal: its name once on the card, the old price struck through (a text of its own) and the new price
             val deal = Shop.dealFor(gd, WEEKDAY)!!
@@ -171,8 +171,8 @@ class R10W2ShopShots {
         for (day in listOf(SATURDAY, SUNDAY)) {
             shoot("weekend-${day.takeLast(2)}", listOf(TALL), themes = listOf(Theme.LIGHT, Theme.DARK), check = { _, screen ->
                 val t = texts(screen)
-                assertTrue(t.toString(), "WEEKEND SPECIAL" in t)
-                assertTrue("Sat & Sun" in t)
+                assertTrue(t.toString(), "WEEKEND SPECIAL · SAT & SUN" in t)
+                assertFalse("ALWAYS IN STOCK" in t)
                 assertTrue(ShopPlan.WEEKEND_NOTE in t)
                 val w = Shop.weekendFor(gd, day)!!
                 assertTrue(if (w.isTm) Items.tmName(gd, w.id) in t else Items.name(w.id) in t)
@@ -184,7 +184,7 @@ class R10W2ShopShots {
         val day = lazy { saturdayWith(true) }
         shoot("weekend-tm", listOf(TALL), check = { _, screen ->
             val t = texts(screen)
-            assertTrue(t.toString(), "WEEKEND SPECIAL" in t)
+            assertTrue(t.toString(), "WEEKEND SPECIAL · SAT & SUN" in t)
             assertTrue(Items.tmName(gd, Shop.weekendFor(gd, day.value)!!.id) in t)
             assertTrue(Bits.fmt(Tuning.TM_PRICE) in t)
         }) { ctx -> withTmWorld(); shopTab(ctx, day.value, tms = listOf("thunderbolt", "watergun")).second }
@@ -215,11 +215,11 @@ class R10W2ShopShots {
     }
 
     @Test fun narrowAndBigTextKeepsEverythingReadable() {
-        // 320 dp at font 2.0: two tiles across, nothing cut (the nav labels are checked in the bar test)
+        // 320 dp at font 2.0: full-width cards (the nav labels are checked in the bar test)
         shoot("weekday", listOf(W320), scale = 2f, check = { ctx, screen ->
             assertTrue(ctx.resources.configuration.fontScale == 2.0f)
             val t = texts(screen)
-            assertTrue("DEAL OF THE DAY" in t && "ALWAYS IN STOCK" in t)
+            assertTrue(t.any { it.startsWith("DEAL OF THE DAY · ") } && "BASICS" in t)
         }) { ctx -> shopTab(ctx, SATURDAY).second }
         shoot("weekday", listOf(Variants.PHONE), scale = 1.3f, themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, WEEKDAY).second }
         shoot("weekday", listOf(W320), themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, SATURDAY).second }
@@ -243,7 +243,7 @@ class R10W2ShopShots {
     @Test fun theDealCardCloseUp() {
         shoot("deal-card", listOf(CARD), check = { _, v ->
             val t = texts(v)
-            assertTrue(t.toString(), "DEAL OF THE DAY" in t)
+            assertTrue(t.toString(), t.any { it.startsWith("DEAL OF THE DAY · ") })
             assertTrue("Super Potion" in t)
             assertTrue("700" in t && "490" in t)
         }) { ctx ->
@@ -308,7 +308,7 @@ class R10W2ShopShots {
             val deal = Shop.dealFor(gd, WEEKDAY)!!
             assertTrue("no prices struck through in the popup", struck((v as ShopCardKit.Stage).page.itemWindow!!.view).isEmpty())
             assertTrue("the new price", Bits.fmt(deal.price) in t)
-            assertTrue("the deal card stays under the window", "DEAL OF THE DAY" in t)
+            assertTrue("the deal card stays under the window", t.any { it.startsWith("DEAL OF THE DAY · ") })
             assertTrue("Buy" in texts(v))
             assertTrue("×1" in texts(v))
             assertTrue("popup shows today's purchase price", Bits.fmt(deal.price) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))
@@ -349,7 +349,7 @@ class R10W2ShopShots {
             assertTrue(Bits.fmt(20_000 - 2 * deal.price) in texts(screen))
             // a tap on the deal card opens its item window (not a dialog), with the count in words
             val stage = ShopCardKit.Stage(ctx, p, screen)
-            val card = clickable(findText(screen) { it == "DEAL OF THE DAY" })!!
+            val card = clickable(findText(screen) { it.startsWith("DEAL OF THE DAY · ") })!!
             assertNull(DialogShots.capture { card.performClick() })
             stage.render()
             assertTrue("the item window is open", p.itemWindow != null)

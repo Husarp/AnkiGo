@@ -8,7 +8,7 @@ import kotlin.math.sin
 
 /*
  * Water Gun (docs/design/attack-anims-v2/v2-fx.js `waterjet`, "B-style thick jet, redrawn by us and less white"): a wavy thick blue
- * jet shoots from the attacker to the target, holds, and drains back; droplets and two rings splash where it lands. The size
+ * jet shoots from the attacker to the target, holds, and drains back; a solid crown and sideways droplets splash where it lands. The size
  * factor k widens the jet and holds it longer. R22 pick B: 120 delay + 100 travel + 180 hold + 90 drain = 490 ms at k = 1.
  */
 internal object WaterJetFx {
@@ -36,17 +36,18 @@ internal object WaterJetFx {
             shape.draw(c, k, sp.unit, ms)
         }
         val hitAt = S + G
-        s.ticks(hitAt, hold + 60f) { _, _ ->                       // the splash spreads sideways
-            repeat(2) {
-                s.particle(
-                    "drop", 0, b.x + sp.len(s.rnd(-10f, 10f)), b.y + sp.len(s.rnd(-12f, 12f)),
-                    vx = s.rnd(-1f, 1f) * 200f * k, vy = s.rnd(-190f, -40f), ay = 640f,
-                    s0 = s.rnd(10f, 18f) * k, s1 = 5f, life = 520f, a0 = .95f, follow = true, stretch = 1.3f,
-                )
-            }
+        // Pure script construction must not initialize Android native drawing paths.
+        val crown by lazy { WaterCrownShape() }
+        s.proc(hitAt, hitAt + 320f) { c, p, _ ->
+            crown.draw(c, b.x, b.y, sp.unit * k, sp.dir, p)
         }
-        for (t in floatArrayOf(0f, 200f)) {
-            s.at(hitAt + t) { s.particle("circle_02", 0xFF6DBDFF.toInt(), b.x, b.y, s0 = 24f, s1 = 140f * k, life = 400f, add = true) }
+        s.at(hitAt) {
+            repeat(10) { i ->
+                val side = if (i % 2 == 0) 1f else -1f
+                s.particle("drop", 0, b.x, b.y,
+                    vx = side * (135f + i / 2 * 20f) * k, vy = -100f - (i / 2 % 4) * 35f, ay = 640f,
+                    s0 = s.rnd(10f, 18f) * k, s1 = 5f, life = 520f, a0 = .95f, follow = true, stretch = 1.3f)
+            }
         }
         val hitMs = hold + 140f
         s.hit(hitAt, hitMs, push = 16f)
@@ -122,5 +123,31 @@ internal class WaterJetShape(val n: Int = 30) {
         const val LIGHT = 0xFF5FB6FF.toInt()
         const val HIGH = 0xFFBFE6FF.toInt()
         const val GLINT = 0xFFE8F7FF.toInt()
+    }
+}
+
+/** Pick B: solid scalloped crown, centred at contact, with a curved pale highlight. */
+internal class WaterCrownShape {
+    private val body = android.graphics.Path().apply {
+        moveTo(0f, 13f); quadTo(-34f, 17f, -48f, -17f)
+        lineTo(-28f, -6f); lineTo(-29f, -30f); lineTo(-10f, -10f)
+        lineTo(0f, -36f); lineTo(12f, -10f); lineTo(31f, -30f)
+        lineTo(28f, -5f); lineTo(49f, -17f); quadTo(35f, 19f, 0f, 13f); close()
+    }
+    private val shine = android.graphics.Path().apply {
+        moveTo(-36f, -2f); quadTo(0f, 24f, 38f, -2f)
+    }
+    fun draw(c: FxCanvas, x: Float, y: Float, unit: Float, dir: Float, progress: Float) {
+        val scale = if (progress < .375f) .15f + .85f * progress / .375f else 1f + .2f * (progress - .375f) / .625f
+        val opacity = if (progress < .375f) 1f else (1f - progress) / .625f
+        c.save(); c.translate(x, y); c.scale(unit * scale * dir, unit * scale)
+        val paint = c.paint
+        paint.reset(); paint.isAntiAlias = true; paint.color = 0xFF5FB6FF.toInt(); paint.alpha = (opacity * 255).toInt()
+        c.raw.drawPath(body, paint)
+        paint.style = android.graphics.Paint.Style.STROKE; paint.strokeWidth = 1f; paint.color = 0xFF1A5FB8.toInt(); paint.alpha = (opacity * 255).toInt()
+        c.raw.drawPath(body, paint)
+        paint.strokeWidth = 2f; paint.color = 0xFFBFE6FF.toInt(); paint.alpha = (opacity * 255).toInt()
+        c.raw.drawPath(shine, paint)
+        c.restore()
     }
 }

@@ -133,12 +133,10 @@ object ItemInfo {
             ) else listOf(
                 ItemFact(WHAT, evolutionWhat(data, item, caught)),
                 ItemFact(HOW, "Use it from the Bag on a Pokémon that evolves with it. A Pokémon holding an **Everstone** won't evolve."),
-                ItemFact(FIGHT, "$FIGHT_RULE $MAIN_ONLY"),
             )
             ItemKind.HELD -> listOf(
                 ItemFact(WHAT, heldWhat(item)),
                 ItemFact(HOW, HOLD_RULE),
-                ItemFact(FIGHT, "Giving an item to hold is **not a turn**."),
             )
             ItemKind.ESCAPE -> listOf(
                 ItemFact(WHAT, "Makes the wild Pokémon go away, and a new one appears. You get **no XP** and **no money** for it."),
@@ -149,7 +147,6 @@ object ItemInfo {
                 ItemFact(WHAT, "Brings ${fossilName(data, def)?.let { "**$it**" } ?: "an ancient Pokémon"} back at **Lv ${Tuning.FOSSIL_LEVEL}**. " +
                     "It joins your team or your Box, and the fossil is used up."),
                 ItemFact(HOW, "Use it from the Bag."),
-                ItemFact(FIGHT, "Reviving a fossil is **not a turn**."),
             )
         }
     }
@@ -372,7 +369,7 @@ object ItemInfo {
         ItemKind.BALL -> if (item == "repeat-ball") Items.specialNote(item) else "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
         ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"
         ItemKind.EVOLUTION -> if (item in Items.RETIRED) "No Pokémon in AnkiGo evolves with it, so it can't be used."
-            else "Use it from the Bag on a Pokémon that evolves with it. $FIGHT_TURN"
+            else "Use it from the Bag on a Pokémon that evolves with it."
         ItemKind.HELD -> "Give it to a Pokémon from the Bag. A Pokémon holds one item at a time."
         ItemKind.ESCAPE -> "Use it from the Bag to leave the wild Pokémon in battle and meet a new one."
         ItemKind.FOSSIL -> "Use it from the Bag to revive an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}."

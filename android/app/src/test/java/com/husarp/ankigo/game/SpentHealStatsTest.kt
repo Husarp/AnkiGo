@@ -39,7 +39,7 @@ class SpentHealStatsTest {
         s.cash = 500
         assertTrue(Shop.reroll(data, s, TestData.rng(2)).ok)
         assertTrue(Shop.reroll(data, s, TestData.rng(3)).ok)
-        assertEquals(2 * Tuning.REROLL_PRICE, s.history.getValue(s.day).spent)
+        assertEquals(2 * Tuning.REROLL_PRICE + Tuning.REROLL_PRICE_STEP, s.history.getValue(s.day).spent)
     }
 
     @Test fun failedPurchasesAddNothing() {

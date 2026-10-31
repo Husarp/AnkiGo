@@ -31,7 +31,6 @@ class ShopPlanTest {
             for (basic in Shop.basics()) {
                 val b = ShopPlan.price(data, day, basic)
                 assertEquals(Shop.dailyPrice(data, day, basic), b.now)
-                assertEquals(if (b.daily != data.price(basic)) data.price(basic) else null, b.normal)
                 assertNull(b.was)
                 assertFalse(b.discounted)
             }
@@ -58,18 +57,6 @@ class ShopPlanTest {
         val list = ShopPlan.specials(listOf("a", "b"), listOf("m1", "m2", "m3"))
         assertEquals(listOf(ShopPlan.Tile.Item("a"), ShopPlan.Tile.Item("b"), ShopPlan.Tile.Tm("m1"), ShopPlan.Tile.Tm("m2"), ShopPlan.Tile.Tm("m3")), list)
         assertTrue(ShopPlan.specials(emptyList(), emptyList()).isEmpty())
-    }
-
-    @Test fun threeTilesAcrossUnlessTheTextIsTooBigForTheWidth() {
-        assertEquals(3, ShopPlan.columns(412, 1f))
-        assertEquals(3, ShopPlan.columns(340, 1f)) // the floating card
-        assertEquals(3, ShopPlan.columns(320, 1f))
-        assertEquals(3, ShopPlan.columns(412, 1.3f))
-        assertEquals(3, ShopPlan.columns(360, 1.15f))
-        assertEquals("320 dp at font 2.0", 2, ShopPlan.columns(320, 2f))
-        assertEquals("412 dp at font 2.0", 2, ShopPlan.columns(412, 2f))
-        assertEquals(3, ShopPlan.columns(869, 2f)) // landscape
-        assertEquals("a font scale under 1 counts as 1", 3, ShopPlan.columns(320, 0.85f))
     }
 
     // ---- PLAN 168 / 210: the tile keys (an open tile now opens a window; the grid never changes) ----

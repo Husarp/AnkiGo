@@ -122,6 +122,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     private var enemyHeld = false
     private var tilesTimed = false   // the result runs on the small-window timeout ([CatchTilesPlan.Mode.TIMED]); a HOLD result becomes one when the window shrinks
     private val hideTilesRun = Runnable { hideCatchTiles() }
+    private val holdHandler = android.os.Handler(android.os.Looper.getMainLooper())
     /**
      * The held next wild one was let go because the window shrank under a result ([CatchResultShift]), not by the next answer: whoever
      * parked its Encounter ([EventPlayer]) plays it now. Without a listener the panel draws the wild one from the saved game itself.
@@ -750,7 +751,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     private fun holdChanged() {
         if (holdPosted || holdsNextFight == holdTold) return
         holdPosted = true
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
+        holdHandler.post {
             holdPosted = false
             val now = holdsNextFight
             if (now != holdTold) { holdTold = now; onHoldChanged?.invoke(now) }
@@ -796,7 +797,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     private fun releaseHeld(wasHeld: Boolean) {
         if (!wasHeld) return
         // posted on the main looper (not from inside a measure pass; also when the view is detached)
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
+        holdHandler.post {
             val listener = onHeldReleased
             if (listener != null) listener()
             else {

@@ -48,7 +48,7 @@ class TemplateWindows(private val activity: Activity) {
         web.addJavascriptInterface(TemplateBridge({ key, subject -> activity.runOnUiThread { term(key, subject) } }, { id -> activity.runOnUiThread { note(id) } }), "AnkiGo")
         web.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = true
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse = resource(activity, request)
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? = resource(activity, request)
         }
         val row = LinearLayout(activity).apply {
             setPadding(Ui.dp(activity, 12), Ui.dp(activity, 8), Ui.dp(activity, 12), 0)
@@ -74,8 +74,15 @@ class TemplateWindows(private val activity: Activity) {
         load(web, "Loading…", ""); ready(web)
     }
     companion object {
-        fun resource(activity: Activity, request: WebResourceRequest): WebResourceResponse {
+        fun resource(activity: Activity, request: WebResourceRequest): WebResourceResponse? {
             val uri = request.url
+            when (CardResourcePolicy.route(request.isForMainFrame, uri.host, uri.path)) {
+                // loadDataWithBaseURL owns the document; never replace it with a media 404.
+                CardResourcePolicy.Route.DOCUMENT -> return null
+                // The pre-1.0 offline policy: external subresources get empty success.
+                CardResourcePolicy.Route.EMPTY -> return WebResourceResponse("text/plain", "UTF-8", "".byteInputStream())
+                CardResourcePolicy.Route.MEDIA -> Unit
+            }
             val name = uri.path?.trimStart('/').orEmpty()
             val stream = if (uri.scheme == "https" && uri.host == "ankigo.media") {
                 if (name.startsWith("mathjax/") || name == "fonts/Nunito.ttf") runCatching { activity.assets.open(name) }.getOrNull() else Media.open(activity, name)

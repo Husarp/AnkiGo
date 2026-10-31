@@ -47,7 +47,7 @@ class R22MHelpShots {
     @Test fun lessonButtonsUpdateTheCurrentChapter() = paparazzi.shootPage("r22m-lesson-navigation", listOf(Variants.PHONE)) { ctx ->
         val page = com.husarp.ankigo.help.HelpScreen(ctx, NoHost, com.husarp.ankigo.help.HelpRoute.Guide(com.husarp.ankigo.help.GameGuide.BATTLES), false)
         val root = pageScreen(ctx, page)
-        views(root).filterIsInstance<android.widget.TextView>().first { it.text.toString() == "Next lesson →" }.performClick()
+        views(root).first { it.contentDescription == "Next lesson" }.performClick()
         assertEquals(com.husarp.ankigo.help.GameGuide.MOVES, page.currentGuideChapter)
         views(root).first { it.contentDescription == "Previous lesson" }.performClick()
         assertEquals(com.husarp.ankigo.help.GameGuide.BATTLES, page.currentGuideChapter)
@@ -93,11 +93,10 @@ class R22MHelpShots {
         val page = com.husarp.ankigo.help.HelpScreen(ctx, NoHost,
             com.husarp.ankigo.help.HelpRoute.Guide(com.husarp.ankigo.help.GameGuide.TYPES), false)
         val root = pageScreen(ctx, page)
-        fun click(label: String) = views(root).filterIsInstance<android.widget.TextView>()
-            .first { it.text.toString() == label }.performClick()
-        click("Next lesson →")
+        fun click(label: String) = views(root).first { it.contentDescription == label }.performClick()
+        click("Next lesson")
         assertTrue(views(root).filterIsInstance<android.widget.TextView>().any { it.text.toString() == "Stats, IVs, EVs and natures ▾" })
-        click("←")
+        click("Previous lesson")
         assertTrue(views(root).filterIsInstance<android.widget.TextView>().any { it.text.toString() == "Types and matchups ▾" })
         root
     }

@@ -342,6 +342,7 @@ object Tuning {
     const val SHOP_SLOTS_PER_LEVELS = 5
     const val TM_PRICE = 1000
     const val REROLL_PRICE = 100
+    const val REROLL_PRICE_STEP = 100
     val SHOP_BASICS = listOf("potion") // always on sale at their normal price; not part of the daily draw
     const val DEAL_PERCENT = 30             // the deal of the day: this much off (price = round(normal * 0.7), at least 1)
     const val WEEKEND_TM_MIN_POWER = 90     // the weekend special is an evolution stone or a TM of a move at least this strong

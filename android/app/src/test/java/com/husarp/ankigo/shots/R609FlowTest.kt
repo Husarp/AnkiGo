@@ -236,6 +236,37 @@ class R609FlowTest {
         assertTrue("the answer buttons are back", answerRow(act).childCount >= 1 && rowText(act) != "Continue, next battle")
     }
 
+    @Test fun theAnswerRowStillGetsTheHoldNoticeAfterGarbageCollection() {
+        val c = ctx()
+        val act = study(c, flipped = true)
+        events(act).enqueue(defeatBatch())
+        assertTrue(events(act).holding)
+        System.gc()   // layoutlib queues callbacks under weak Handler keys
+        flush(c)
+        assertEquals("Continue, next battle", rowText(act))
+        assertEquals(1, answerRow(act).childCount)
+        answerRow(act).getChildAt(0).performClick()
+        assertFalse(events(act).holding)
+        assertEquals(true, getField(act, "flipped"))
+        assertTrue("the answer buttons are back", answerRow(act).childCount >= 1 && rowText(act) != "Continue, next battle")
+    }
+
+    @Test fun theHeldEncounterIsReleasedAfterGarbageCollectionWhenThePanelShrinks() {
+        val c = ctx()
+        val panel = BattlePanelView(c)
+        val player = EventPlayer(panel)
+        measure(panel, 412, 869)
+        player.enqueue(defeatBatch())
+        assertNotNull(parked(player))
+        panel.setCompact(true)
+        measure(panel, 320, 180)
+        assertFalse(player.holding)
+        System.gc()
+        flush(c, panel)
+        assertNull("the released encounter played", parked(player))
+        assertTrue(player.idle)
+    }
+
     @Test fun aFlipRequestWhileAResultHoldsActsAsContinueAndLeavesTheCard() {
         val c = ctx()
         val act = study(c)

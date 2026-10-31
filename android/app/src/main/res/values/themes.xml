@@ -3,11 +3,23 @@
     <!-- Android 15 forces edge-to-edge for targetSdk 35; these plain View screens don't handle insets yet. -->
     <style name="AppTheme" parent="@android:style/Theme.Material.Light.DarkActionBar">
         <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+        <!-- View-level defaults also reach WebView, text fields and custom ScrollView subclasses. -->
+        <item name="android:scrollbarSize">3dp</item>
+        <item name="android:scrollbarThumbVertical">@drawable/game_scrollbar_thumb</item>
+        <item name="android:scrollbarThumbHorizontal">@drawable/game_scrollbar_thumb</item>
+        <item name="android:scrollbarTrackVertical">@null</item>
+        <item name="android:scrollbarTrackHorizontal">@null</item>
     </style>
 
     <!-- The game screens (no action bar; Catppuccin Latte from colors.xml). values-night swaps in the dark parent. -->
     <style name="GameTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+        <!-- View-level defaults also reach WebView, text fields and custom ScrollView subclasses. -->
+        <item name="android:scrollbarSize">3dp</item>
+        <item name="android:scrollbarThumbVertical">@drawable/game_scrollbar_thumb</item>
+        <item name="android:scrollbarThumbHorizontal">@drawable/game_scrollbar_thumb</item>
+        <item name="android:scrollbarTrackVertical">@null</item>
+        <item name="android:scrollbarTrackHorizontal">@null</item>
         <item name="android:windowBackground">@color/ag_base</item>
         <item name="android:statusBarColor">@color/ag_mantle</item>
         <item name="android:navigationBarColor">@color/ag_mantle</item>

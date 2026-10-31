@@ -51,7 +51,8 @@ class LooksATest {
         val v = run(MoveLook.VINE_WHIP).second
         val i = run(MoveLook.ICE_BEAM).second
         assertEquals(10, e.procs.size)                                  // one proc per fireball
-        assertEquals(1, w.procs.size)                                   // the jet
+        assertEquals(2, w.procs.size)                                   // the jet and picked crown
+        assertTrue(w.procs.any { it.s == 220f && it.e == 540f })
         assertEquals(1, v.procs.size)                                   // the vine buffer
         assertEquals(10, i.procs.size)                                  // 4 shards + 2 iceballs + 3 wisps + the cube
     }
@@ -188,7 +189,7 @@ class LooksATest {
     @Test fun waterJetSplashesFromTheLanding() {
         val (_, s, _) = run(MoveLook.WATER_JET)
         frames(s, 600f)
-        assertTrue(s.particles.count { it.img == "drop" } > 10)
+        assertTrue(s.particles.count { it.img == "drop" } == 10)
         assertTrue(s.particles.size <= FxScript.MAX_PARTICLES)
         val (_, s2, _) = run(MoveLook.WATER_JET)
         frames(s2, 200f)                                                // before the head arrives: nothing splashes

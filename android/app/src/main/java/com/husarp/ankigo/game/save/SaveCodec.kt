@@ -65,6 +65,7 @@ object SaveCodec {
             }
             list("badges", state.badges.sorted())
             kv("shopDay", state.shopDay)
+            kv("shopRefreshes", state.shopRefreshes)
             list("shopItems", state.shopItems); list("shopTms", state.shopTms)
             key("redo"); obj { for ((k, v) in state.redo.toSortedMap()) kv(k.toString(), v) }
             kv("liveDay", state.liveDay); kv("liveSnapshot", state.liveSnapshot)
@@ -419,6 +420,7 @@ object SaveCodec {
         readHistory(o.optJSONObject("history"), s)
         o.intList("badges")?.let { s.badges += it }
         s.shopDay = o.strOrNull("shopDay")
+        s.shopRefreshes = o.optInt("shopRefreshes", 0).coerceAtLeast(0)
         o.strList("shopItems")?.let { s.shopItems += it }
         o.strList("shopTms")?.let { s.shopTms += it }
         o.optJSONObject("redo")?.let { r -> for (k in r.keys()) k.toLongOrNull()?.let { id -> s.redo[id] = r.getInt(k) } }

@@ -128,9 +128,9 @@ class R17CFixBItemsTest {
         assertTrue(how, how.contains("can't use it") && how.contains("stays in the Bag"))
         assertTrue("no fight block: it takes no turn", facts.none { it.title == "In a fight" })
         assertEquals("No Pokémon in AnkiGo evolves with it, so it can't be used.", ItemInfo.howToUse("chipped-pot"))
-        // its twin is untouched
+        // Its twin remains usable, with no battle-only instructions.
         assertEquals("Evolution item", ItemInfo.short(data, "cracked-pot"))
         assertEquals("Evolves Pokémon that evolve with it", Items.def("cracked-pot")!!.note)
-        assertTrue(ItemInfo.facts(data, "cracked-pot").any { it.title == "In a fight" })
+        assertFalse(ItemInfo.facts(data, "cracked-pot").any { it.title == "In a fight" })
     }
 }

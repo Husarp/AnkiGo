@@ -63,8 +63,9 @@ class R20UiTest {
         val page = ShopPage(c, NoHost)
         val v = page.root; render(page)
         val ts = texts(v)
-        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL") >= 0)
-        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL") < ts.indexOf("ALWAYS IN STOCK"))
+        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL · SAT & SUN") >= 0)
+        assertTrue(ts.toString(), ts.indexOf("BASICS") >= 0)
+        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL · SAT & SUN") < ts.indexOf("BASICS"))
         page.onGone()
     }
 

@@ -131,6 +131,7 @@ internal object ShopCardKit {
     }
 
     fun findText(v: View, pred: (String) -> Boolean): TextView? {
+        if (v is Stage) v.page.itemWindow?.view?.let { return findText(it, pred) }
         if (v is TextView && v.visibility != View.GONE && pred(v.text.toString())) return v
         if (v is ViewGroup) for (i in 0 until v.childCount) findText(v.getChildAt(i), pred)?.let { return it }
         return null
@@ -145,6 +146,7 @@ internal object ShopCardKit {
     }
 
     fun allText(v: View, pred: (TextView) -> Boolean, out: MutableList<TextView> = ArrayList()): List<TextView> {
+        if (v is Stage) v.page.itemWindow?.view?.let { return allText(it, pred, out) }
         if (v.visibility == View.GONE) return out
         if (v is TextView && pred(v)) out += v
         if (v is ViewGroup) for (i in 0 until v.childCount) allText(v.getChildAt(i), pred, out)
@@ -242,7 +244,7 @@ class R14B2BShots {
 
     @Test fun anOwnedTmSaysOwnedInsteadOfBuy() {
         shoot("shop-tm-owned", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen ->
-            val t = texts(screen)
+            val t = texts((screen as ShopCardKit.Stage).page.itemWindow!!.view)
             assertTrue("✓ Owned" in t)
             assertTrue("You own this TM" in t)
             assertTrue("Buy" !in t)
@@ -257,7 +259,7 @@ class R14B2BShots {
             assertTrue("the popup no longer repeats a struck-through price", struck.isEmpty())
             val popup = (screen as ShopCardKit.Stage).page.itemWindow!!.view
             assertTrue("today's purchase price in popup", com.husarp.ankigo.ui.Bits.fmt(deal.price) in texts(popup))
-            assertTrue("the deal card stays under the window", "DEAL OF THE DAY" in texts(screen))
+            assertTrue("the deal card stays under the window", texts(screen).any { it.startsWith("DEAL OF THE DAY") })
             assertTrue("Buy" in texts(screen))
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.DEAL, day = day.value).second }
     }
@@ -266,7 +268,7 @@ class R14B2BShots {
         val sat = "2026-10-17"
         shoot("shop-weekend", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen ->
             val t = texts(screen)
-            assertTrue("WEEKEND SPECIAL" in t)
+            assertTrue(t.any { it.startsWith("WEEKEND SPECIAL") })
             assertTrue("the weekend card is still there", ShopPlan.WEEKEND_NOTE in t)
             assertNotNull(ShopCardKit.findDesc(screen, "Close"))
             assertTrue("Buy" in t)
@@ -287,7 +289,7 @@ class R14B2BShots {
     @Test fun tooLittleMoneyFadesBuyAndTheWindowStaysOpen() {
         shoot("shop-poor", listOf(P412), themes = listOf(Theme.LIGHT)) { ctx ->
             val (p, screen) = ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Item("tart-apple")), cash = 100)
-            val buy = ShopCardKit.allText(screen, { it.text.toString() == "Buy" }).single()
+            val buy = ShopCardKit.allText(p.itemWindow!!.view, { it.text.toString() == "Buy" }).single()
             var v: View = buy
             while (v.alpha == 1f && v.parent is View) v = v.parent as View
             assertTrue("Buy is faded", v.alpha < 1f)

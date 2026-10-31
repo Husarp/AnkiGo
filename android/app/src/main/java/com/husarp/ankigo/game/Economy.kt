@@ -270,6 +270,7 @@ object Shop {
             }
             return
         }
+        state.shopRefreshes = 0
         val (items, tms) = stockFor(data, state.day, state.trainerLevel)
         setStock(state, items, tms)
     }
@@ -438,13 +439,18 @@ object Shop {
         return ActionResult(true, "Bought $name for ${money(price)}", spent(data, state, price, now))
     }
 
-    /** 100: a fresh random stock for today. */
+    fun refreshPrice(state: GameState): Int = (Tuning.REROLL_PRICE.toLong() +
+        (if (state.shopDay == state.day) state.shopRefreshes.toLong() else 0L) * Tuning.REROLL_PRICE_STEP).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+
+    /** Each successful refresh costs one more step, reset at the next game day. */
     fun reroll(data: GameData, state: GameState, rng: Random, now: Long = System.currentTimeMillis()): ActionResult {
-        val price = Tuning.REROLL_PRICE
+        ensureToday(data, state)
+        val price = refreshPrice(state)
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
         StudyStats.addSpent(state, price)
         restock(data, state, rng)
+        state.shopRefreshes++
         return ActionResult(true, "New stock for ${money(price)}", spent(data, state, price, now))
     }
 

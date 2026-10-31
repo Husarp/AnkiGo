@@ -15,12 +15,14 @@ internal class StatChangeBar(ctx: Context, private val normal: Float, private va
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val shape = Path()
     override fun onDraw(canvas: Canvas) {
-        val w = width.toFloat(); val h = height.toFloat(); val radius = h / 2f
+        val w = width.toFloat(); val inset = Ui.dp(context, 3).toFloat(); val h = height.toFloat() - 2 * inset; val radius = h / 2f
+        canvas.save(); canvas.translate(0f, inset)
         paint.color = Ui.c(context, R.color.ag_s0)
         canvas.drawRoundRect(0f, 0f, w, h, radius, radius, paint)
         val current = (normal * BattleEngine.stageMult(stage)).toFloat().coerceIn(0f, 1f)
         val extent = maxOf(normal, current) * w
-        shape.reset(); shape.addRoundRect(RectF(0f, 0f, extent, h), radius, radius, Path.Direction.CW)
+        shape.reset(); if (stage == 0) shape.addRoundRect(RectF(0f, 0f, extent, h), radius, radius, Path.Direction.CW)
+        else shape.addRect(0f, 0f, extent, h, Path.Direction.CW)
         canvas.save(); canvas.clipPath(shape)
         paint.color = if (stage < 0) ColorUtils.setAlphaComponent(color, 65) else color
         canvas.drawRect(0f, 0f, extent, h, paint)
@@ -29,7 +31,12 @@ internal class StatChangeBar(ctx: Context, private val normal: Float, private va
             paint.shader = android.graphics.LinearGradient(normal * w - h, 0f, extent, 0f,
                 intArrayOf(color, paint.color), null, android.graphics.Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, extent, h, paint); paint.shader = null
-        } else canvas.drawRoundRect(0f, 0f, current * w, h, radius, radius, paint)
+        } else if (stage == 0) canvas.drawRoundRect(0f, 0f, current * w, h, radius, radius, paint)
+        else canvas.drawRect(0f, 0f, current * w, h, paint)
+        canvas.restore()
+        paint.color = ColorUtils.setAlphaComponent(Ui.c(context, R.color.ag_text), 153)
+        val tick = (normal.coerceIn(0f, 1f) * w).coerceIn(1f, maxOf(1f, w - 1f))
+        canvas.drawRect(tick - 1f, -inset, tick + 1f, h + inset, paint)
         canvas.restore()
     }
 }

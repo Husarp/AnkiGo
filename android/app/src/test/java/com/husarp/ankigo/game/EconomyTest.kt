@@ -324,9 +324,9 @@ class EconomyTest {
         s.cash = 250
         var changed = false
         for (seed in 1..5) {
-            s.cash = 250
+            s.cash = 1000
             assertTrue(Shop.reroll(d, s, TestData.rng(seed)).ok)
-            assertEquals(150, s.cash)
+            assertEquals(1000 - seed * Tuning.REROLL_PRICE_STEP, s.cash)
             assertEquals(s.day, s.shopDay)
             assertEquals(3, drawn(s).size); assertEquals(3, s.shopTms.size)
             if (s.shopItems != items || s.shopTms != tms) changed = true
@@ -373,9 +373,9 @@ class EconomyTest {
         }
         // a reroll on its day keeps it, a reroll on another day never brings it
         val s = state(); s.day = yes; Shop.ensureToday(d, s)
-        for (seed in 1..20) { s.cash = 100; Shop.reroll(d, s, TestData.rng(seed)); assertEquals("ultra-ball", s.shopItems.first()) }
+        for (seed in 1..20) { s.cash = 100_000; Shop.reroll(d, s, TestData.rng(seed)); assertEquals("ultra-ball", s.shopItems.first()) }
         val t = state(); t.day = no; Shop.ensureToday(d, t)
-        for (seed in 1..20) { t.cash = 100; Shop.reroll(d, t, TestData.rng(seed)); assertFalse("ultra-ball" in t.shopItems) }
+        for (seed in 1..20) { t.cash = 100_000; Shop.reroll(d, t, TestData.rng(seed)); assertFalse("ultra-ball" in t.shopItems) }
         // and it can be bought there
         s.cash = 2000
         assertEquals("Bought Ultra Ball for ${Shop.priceOf(d, s, "ultra-ball")} coins", Shop.buy(d, s, "ultra-ball").message)

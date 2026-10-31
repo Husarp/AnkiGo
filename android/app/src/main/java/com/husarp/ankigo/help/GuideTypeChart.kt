@@ -19,37 +19,58 @@ internal object GuideTypeChart {
     fun picker(ctx: Context): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         addView(HelpViews.rich(ctx, "Move type → defending type: ×2 strong, ×½ weak, ×0 no effect."))
-        val types = LeftFlow(ctx, Ui.dp(ctx, 6))
+        val types = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        val cells = ArrayList<View>()
         val result = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         var selected = Type.FIRE
         var defending = false
         fun select(t: Type) {
             selected = t
             result.removeAllViews()
+            result.addView(LinearLayout(ctx).apply {
+                gravity = Gravity.CENTER
+                addView(android.widget.ImageView(ctx).apply {
+                    setImageDrawable(TypeChips.tinted(ctx, t, TypeChips.ink(ctx, t)))
+                }, LinearLayout.LayoutParams(Ui.dp(ctx, 36), Ui.dp(ctx, 36)))
+                addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = " ${t.label}" })
+            }, HelpViews.lp(ctx, 10))
             result.addView(HelpViews.rich(ctx, if (defending) "Moves hitting this Pokémon type" else "This move type against Pokémon"))
-            result.addView(Ui.typeChip(ctx, t), HelpViews.lp(ctx, 10, -2))
             for ((label, mult) in listOf((if (defending) "Hit hard by ×2" else "Strong against ×2") to 2.0, (if (defending) "Resists ×½" else "Weak against ×½") to 0.5, (if (defending) "Immune to ×0" else "No effect ×0") to 0.0)) {
                 result.addView(HelpViews.rich(ctx, label), HelpViews.lp(ctx, 8))
                 val flow = LeftFlow(ctx, Ui.dp(ctx, 5))
                 targets(t, mult, defending).forEach { flow.addView(Ui.typeChip(ctx, it)) }
                 if (flow.childCount == 0) result.addView(HelpViews.rich(ctx, "None")) else result.addView(flow)
             }
-            for (i in 0 until types.childCount) {
+            for (i in cells.indices) {
                 val type = Type.entries[i]
-                types.getChildAt(i).apply {
+                cells[i].apply {
                     isSelected = type == t
-                    background = Ui.rounded(TypeChips.fill(ctx, type), 10, ctx).apply {
+                    background = Ui.rounded(if (type == t) TypeChips.fill(ctx, type) else android.graphics.Color.TRANSPARENT, 10, ctx).apply {
                         if (type == t) setStroke(Ui.dp(ctx, 2), TypeChips.ink(ctx, type))
                     }
                 }
             }
         }
-        Type.entries.forEach { t -> types.addView(TypeChips.chip(ctx, t, TypeStyle.ICON).apply {
-            width = Ui.dp(ctx, 42); height = Ui.dp(ctx, 42)
-            gravity = Gravity.CENTER
-            contentDescription = "Show ${t.name.lowercase()} matchups"
-            setOnClickListener { select(t) }
-        }) }
+        Type.entries.chunked(4).forEach { rowTypes ->
+            val row = LinearLayout(ctx).apply { gravity = Gravity.CENTER }
+            rowTypes.forEach { t ->
+                val cell = LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    minimumHeight = Ui.dp(ctx, 56)
+                    addView(android.widget.ImageView(ctx).apply {
+                        setImageDrawable(TypeChips.tinted(ctx, t, TypeChips.ink(ctx, t)))
+                    }, LinearLayout.LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32)))
+                    addView(Ui.text(ctx, 10f, 800, R.color.ag_text).apply { text = t.label; gravity = Gravity.CENTER })
+                    contentDescription = "Show ${t.name.lowercase()} matchups"
+                    setOnClickListener { select(t) }
+                }
+                cells += cell
+                row.addView(cell, LinearLayout.LayoutParams(0, -2, 1f))
+            }
+            repeat(4 - rowTypes.size) { row.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f)) }
+            types.addView(row, HelpViews.lp(ctx, 6))
+        }
         val modes = LookChoosers.segmented(ctx, listOf("Attack", "Defend"), 0) { i ->
             defending = i == 1; select(selected)
         }

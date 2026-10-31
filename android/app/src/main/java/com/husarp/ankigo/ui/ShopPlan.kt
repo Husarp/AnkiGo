@@ -7,21 +7,20 @@ import java.util.Calendar
 
 /**
  * What the Shop tab shows, worked out without Views (R10 W11, so the rules are tested on the JVM): the price an item has today and the
- * price it would have without the deal, the tiles of "Today's specials", the number of tile columns, and the "ends at midnight" line.
+ * price it would have without the deal, the tiles of "Today's specials", and the "ends at midnight" line.
  * The game rules themselves (deal, weekend special, always in stock) are [Shop].
  */
 internal object ShopPlan {
-    /** [now] is charged; [was] is the daily price before a deal, struck through. [normal] enables the daily variation arrow; [daily] gives its direction. */
-    data class Price(val now: Int, val was: Int? = null, val normal: Int? = null, val daily: Int = now) {
+    /** [now] is charged; [was] is the daily price before a deal, struck through. */
+    data class Price(val now: Int, val was: Int? = null) {
         val discounted: Boolean get() = was != null
     }
 
     /** The price of [item] on game day [day]: the deal price with the normal one as [Price.was] for that day's deal item, else just the normal price. */
     fun price(data: GameData, day: String, item: String): Price {
-        val normal = data.price(item)
         val now = Shop.priceOf(data, day, item)
         val daily = Shop.dailyPrice(data, day, item)
-        return Price(now, if (Shop.dealFor(data, day)?.item == item) daily else null, if (daily != normal) normal else null, daily)
+        return Price(now, if (Shop.dealFor(data, day)?.item == item) daily else null)
     }
 
     /** A TM costs [Tuning.TM_PRICE], never discounted. */
@@ -40,12 +39,6 @@ internal object ShopPlan {
 
     /** The ribbon of the deal card: "−30 %". */
     fun ribbon(): String = "−${Tuning.DEAL_PERCENT} %"
-
-    /**
-     * Tiles per row: three, as in the mockup, unless the window is so narrow for its text size that a price like "4,800" would not fit in a third
-     * of it (320 dp wide at font 2.0, 412 dp at 2.0 ...): then two. [widthDp] is the window width, [fontScale] the user's text scale.
-     */
-    fun columns(widthDp: Int, fontScale: Float): Int = if (widthDp / fontScale.coerceAtLeast(1f) >= 300f) 3 else 2
 
     /** Whole hours (at least 1) until the next game day starts ([dayStartHour], local time) from [now] (epoch ms). */
     fun hoursToNewDay(now: Long, dayStartHour: Int): Int {

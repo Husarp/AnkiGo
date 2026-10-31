@@ -14,7 +14,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.webkit.JavascriptInterface
-import android.webkit.MimeTypeMap
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -399,11 +398,7 @@ class NoteEditActivity : AgActivity() {
                 return true
             }
             override fun shouldInterceptRequest(view: WebView, req: WebResourceRequest): WebResourceResponse? {
-                if (req.url.host != "ankigo.media") return WebResourceResponse("text/plain", "UTF-8", "".byteInputStream())
-                val name = req.url.path?.trimStart('/') ?: return null
-                val stream = (if (name.startsWith("mathjax/") || name == "fonts/Nunito.ttf") runCatching { assets.open(name) }.getOrNull() else Media.open(this@NoteEditActivity, name))
-                    ?: return WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", emptyMap(), "".byteInputStream())
-                return WebResourceResponse(MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.')) ?: "application/octet-stream", null, stream)
+                return com.husarp.ankigo.study.TemplateWindows.resource(this@NoteEditActivity, req)
             }
         }
     }.also { web = it }

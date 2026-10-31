@@ -3,10 +3,7 @@ package com.husarp.ankigo.ui
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.PorterDuff
-import android.graphics.RectF
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.view.Gravity
@@ -22,11 +19,19 @@ import com.husarp.ankigo.game.ItemInfo
 // (F5 option A), the item tiles and the weekend card. The page that puts them together is ShopPage (ShopActivity.kt).
 
 internal object ShopViews {
+    /** Bare, unsmoothed inventory art at the requested size. */
+    fun itemArt(ctx: Context, id: String, size: Int): View = ImageView(ctx).apply {
+        Ui.itemIcon(ctx, id, this)
+        layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, size), Ui.dp(ctx, size))
+    }
+
     private fun px(ctx: Context, dp: Float) = Math.round(Ui.dp(ctx, dp))
 
-    /** The money coin ([R.drawable.ic_money], fixed gold, never tinted) at [dp] square, [endDp] clear of what follows it. For a LinearLayout. */
+    /** The money coin ([R.drawable.coin_stack], fixed gold, never tinted) at [dp] square, [endDp] clear of what follows it. For a LinearLayout. */
     private fun coin(ctx: Context, dp: Int, endDp: Int, faded: Boolean = false) = ImageView(ctx).apply {
-        setImageResource(R.drawable.ic_money)
+        setImageResource(R.drawable.coin_stack)
+        (drawable as? android.graphics.drawable.BitmapDrawable)?.isFilterBitmap = false
+        scaleType = ImageView.ScaleType.FIT_CENTER
         if (faded) alpha = 0.65f
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, dp), Ui.dp(ctx, dp)).also { it.marginEnd = Ui.dp(ctx, endDp) }
@@ -86,14 +91,6 @@ internal object ShopViews {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(if (p.was != null) priceDeal(ctx, p.was, p.now, nowSp) else priceNormal(ctx, p.now, normalSp, coinDp))
-            p.normal?.let { normal ->
-                addView(Ui.text(ctx, 12f, 900, if (p.daily < normal) R.color.ag_green else R.color.ag_text).apply {
-                    text = if (p.daily < normal) " ↓" else " ↑"
-                    contentDescription = "Normal price: $normal coins"
-                    setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8))
-                    setOnClickListener { android.widget.Toast.makeText(ctx, "Normal price: ${Bits.fmt(normal)} coins", android.widget.Toast.LENGTH_SHORT).show() }
-                })
-            }
         }
 
     // ---- the item tiles ("always in stock", "today's specials") ----
@@ -103,21 +100,31 @@ internal object ShopViews {
      * TM's type chip) and [bottom] (the price, or "Owned") at the bottom. A tap calls [onTap] (PLAN 210: it opens the item's window; no arrow).
      */
     fun tile(ctx: Context, lead: View, name: String, bottom: View, description: String, sub: String? = null, subView: View? = null, onTap: () -> Unit): View = LinearLayout(ctx).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER_HORIZONTAL
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
         background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
-        setPadding(Ui.dp(ctx, 6), Ui.dp(ctx, 9), Ui.dp(ctx, 6), Ui.dp(ctx, 11))
-        isClickable = true
+        setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 6), Ui.dp(ctx, 8), Ui.dp(ctx, 6))
         contentDescription = description
         setOnClickListener { onTap() }
         addView(lead)
-        addView(Ui.text(ctx, 12f, 900, R.color.ag_text).apply {
-            text = name; gravity = Gravity.CENTER; minLines = 2; maxLines = 3
-        }, Form.lp(ctx, 6))
-        sub?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it; gravity = Gravity.CENTER; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END }, Form.lp(ctx, 2)) }   // PLAN 168: ItemInfo.short
-        subView?.let { addView(it, LinearLayout.LayoutParams(-2, -2).also { lp -> lp.topMargin = Ui.dp(ctx, 3) }) }
-        addView(View(ctx), LinearLayout.LayoutParams(1, 0, 1f)) // prices line up at the bottom of equal tiles
-        addView(bottom, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+        val largeText = ctx.resources.configuration.fontScale >= 1.5f
+        val buy = if (bottom is TextView) null else Ui.text(ctx, 13f, 900, R.color.ag_base).apply {
+            text = "Buy"; gravity = Gravity.CENTER
+            contentDescription = "Buy $name"
+            minimumWidth = Ui.dp(ctx, 48); minimumHeight = Ui.dp(ctx, 48)
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx)
+            setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0)
+            setOnClickListener { onTap() }
+        }
+        addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
+            sub?.let { addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = it }) }
+            subView?.let { addView(it) }
+            addView(bottom)
+            if (largeText && buy != null) addView(buy, LinearLayout.LayoutParams(-2, -2))
+        }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8); it.marginEnd = Ui.dp(ctx, 6) })
+        if (!largeText && buy != null) addView(buy)
     }
 
     /** "✓ Owned" in a TM tile or card. */
@@ -125,80 +132,32 @@ internal object ShopViews {
 
     // ---- the weekend card ----
 
-    /** The weekend special: a card with a yellow edge (mockup T5), the item / TM tile, its name, [note] and the price on the right. */
+    /** A smaller purple companion to the peach daily-deal card. */
     fun weekendCard(ctx: Context, lead: View, name: String, note: String, right: View, description: String, onTap: () -> Unit): View = LinearLayout(ctx).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        background = GradientDrawable().apply {
-            setColor(Ui.c(ctx, R.color.ag_card))
-            cornerRadius = Ui.dp(ctx, 14f)
-            setStroke(px(ctx, 1.5f), Ui.c(ctx, R.color.ag_yellow))
-        }
-        setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 10), Ui.dp(ctx, 12), Ui.dp(ctx, 10))
-        isClickable = true
+        orientation = LinearLayout.VERTICAL
+        val purple = Ui.c(ctx, R.color.ag_mauve)
+        val card = Ui.c(ctx, R.color.ag_card)
+        background = glowBackground(ctx, Bits.blend(purple, card, 0.16f), card, purple)
+        setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4))
         contentDescription = description
         setOnClickListener { onTap() }
-        addView(lead)
+        addView(Ui.text(ctx, 10f, 900, R.color.ag_mauve).apply { text = "WEEKEND SPECIAL · SAT & SUN" })
         addView(LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
-            addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = note }, Form.lp(ctx, 2))
-        }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 10); it.marginEnd = Ui.dp(ctx, 8) })
-        addView(right)
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(lead)
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
+                addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = note })
+            }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8); it.marginEnd = Ui.dp(ctx, 6) })
+            if (ctx.resources.configuration.fontScale < 1.5f) addView(right)
+        })
+        if (ctx.resources.configuration.fontScale >= 1.5f) addView(right,
+            LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.END })
     }
 
     // ---- the deal card (F5 option A) ----
-
-    /** The "−30 %" ribbon across a card's top-right corner (mockup `.rib`): drawn clipped to the card's rounded corner. It does not scale with the text size (a badge, not text). */
-    private class CornerRibbon(ctx: Context, private val label: String, private val fill: Int, private val ink: Int) : View(ctx) {
-        private val d = ctx.resources.displayMetrics.density
-        private val radius = 16f * d
-        private val band = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = fill }
-        private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33000000 }
-        private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = ink; textSize = 10.5f * d; textAlign = Paint.Align.CENTER; isFakeBoldText = true
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            letterSpacing = 0.03f
-        }
-        private val clip = Path()
-        private val poly = Path()
-        private val rect = RectF()
-
-        init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
-
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val s = Math.round(64f * d)
-            setMeasuredDimension(s, s)
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            val w = width.toFloat()
-            // only the card's own corner: a rounded rectangle whose top-right corner is the card's
-            clip.rewind()
-            rect.set(-w, 0f, w, height * 2f)
-            clip.addRoundRect(rect, floatArrayOf(0f, 0f, radius, radius, 0f, 0f, 0f, 0f), Path.Direction.CW)
-            canvas.save()
-            canvas.clipPath(clip)
-            // the band runs down-right across the corner: between the lines y = x - k1 and y = x - k2 (18 dp thick)
-            val k1 = 20f * d
-            val k2 = k1 + 18f * d * 1.4142f
-            poly.rewind()
-            poly.moveTo(k1, 0f); poly.lineTo(k2, 0f); poly.lineTo(w, w - k2); poly.lineTo(w, w - k1); poly.close()
-            canvas.save()
-            canvas.translate(0f, d)
-            canvas.drawPath(poly, shadow)
-            canvas.restore()
-            canvas.drawPath(poly, band)
-            val mx = (k1 + k2) / 2f / 2f + w / 2f   // the middle of the band's centre line, between the top edge and the right edge
-            val my = (w - (k1 + k2) / 2f) / 2f
-            canvas.save()
-            canvas.rotate(45f, mx, my)
-            val fm = text.fontMetrics
-            canvas.drawText(label, mx, my - (fm.ascent + fm.descent) / 2f, text)
-            canvas.restore()
-            canvas.restore()
-        }
-    }
 
     /** The glow: from [glow] at the left to the card colour at 70 % of the width. */
     private fun glowBackground(ctx: Context, glow: Int, card: Int, edge: Int): GradientDrawable {
@@ -210,13 +169,13 @@ internal object ShopViews {
         }
     }
 
-    /** The bare deal icon, retaining its 52 dp slot and 38 dp picture. */
+    /** The bare 64 dp deal icon. */
     private fun dealIcon(ctx: Context, item: String): View {
-        val size = Ui.dp(ctx, 52)
+        val size = Ui.dp(ctx, 64)
         return FrameLayout(ctx).apply {
             val img = ImageView(ctx)
             Ui.itemIcon(ctx, item, img)
-            addView(img, FrameLayout.LayoutParams(Ui.dp(ctx, 38), Ui.dp(ctx, 38), Gravity.CENTER))
+            addView(img, FrameLayout.LayoutParams(Ui.dp(ctx, 64), Ui.dp(ctx, 64), Gravity.CENTER))
             layoutParams = LinearLayout.LayoutParams(size, size)
         }
     }
@@ -239,7 +198,7 @@ internal object ShopViews {
                 setColorFilter(labelCol, PorterDuff.Mode.SRC_IN)
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LinearLayout.LayoutParams(Ui.dp(ctx, 12), Ui.dp(ctx, 12)).also { it.marginEnd = Ui.dp(ctx, 4) })
-            addView(Ui.text(ctx, 10.5f, 900, R.color.ag_text).apply { text = "DEAL OF THE DAY"; setTextColor(labelCol); letterSpacing = 0.07f; maxLines = 1 })
+            addView(Ui.text(ctx, 10.5f, 900, R.color.ag_text).apply { text = "DEAL OF THE DAY · ${ShopPlan.ribbon()}"; setTextColor(labelCol); letterSpacing = 0.07f })
         }
         val clock = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -262,13 +221,16 @@ internal object ShopViews {
             gravity = Gravity.CENTER_VERTICAL
             addView(dealIcon(ctx, item))
             addView(middle, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12); it.marginEnd = Ui.dp(ctx, 8) })
-            addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 6) }) // clear of the ribbon in the corner
+            if (ctx.resources.configuration.fontScale < 1.5f)
+                addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 6) })
         }
         val body = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 10), Ui.dp(ctx, 14), Ui.dp(ctx, 10))
+            setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4))
             addView(label)
-            addView(row, Form.lp(ctx, 6))
+            addView(row, Form.lp(ctx, 0))
+            if (ctx.resources.configuration.fontScale >= 1.5f) addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f),
+                LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.END })
         }
         return FrameLayout(ctx).apply {
             background = glowBackground(ctx, Bits.blend(peach, card, if (dark) 0.2f else 0.16f), card, Bits.blend(peach, card, 0.6f))
@@ -276,7 +238,6 @@ internal object ShopViews {
             contentDescription = description
             setOnClickListener { onTap() }
             addView(body, FrameLayout.LayoutParams(-1, -2))
-            addView(CornerRibbon(ctx, ShopPlan.ribbon(), peach, MatchupGroups.pillInk(peach)), FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END))
         }
     }
 }

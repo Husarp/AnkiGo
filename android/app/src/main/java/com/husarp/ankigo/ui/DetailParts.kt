@@ -230,36 +230,58 @@ object DetailParts {
     }
 
     /**
-     * One stat row: label, value (+ ▲/▼ [dir] in green/red), coloured bar of [frac], and the small grey [base] at the end
+     * One stat row: label, normal → current value, coloured bar with normal tick, and grey species [base]
      * (null = none, the Pokédex). [wholeRow] (R18-G, PLAN 241): the whole row, at least 48 dp tall, opens the explanation, not just the label.
      */
     fun statRow(a: Context, stat: Stat, value: Int, frac: Float, dir: Int, base: Int?, compact: Boolean, wholeRow: Boolean = false, stage: Int = 0): View = LinearLayout(a).apply {
-        orientation = LinearLayout.HORIZONTAL
+        orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_VERTICAL
         val v = Ui.dp(a, if (compact) 2 else 3)
         setPadding(0, v, 0, v)
         val label = Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = DetailMath.LABELS[stat.ordinal]; gravity = Gravity.CENTER_VERTICAL }
         if (wholeRow) tapRow(this, StatInfo.of(stat))
-        addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(Ui.dp(a, 32), -2))
-        addView(Ui.text(a, 13f, 900, if (stage > 0) R.color.ag_green else if (stage < 0) R.color.ag_red else R.color.ag_text).apply { text = if (stage == 0) value.toString() else kotlin.math.max(1, (value * com.husarp.ankigo.game.BattleEngine.stageMult(stage)).toInt()).toString(); gravity = Gravity.END }, LinearLayout.LayoutParams(Ui.dp(a, 34), -2))
-        addView(Ui.text(a, 11f, 900, if (dir > 0) R.color.ag_green else R.color.ag_red).apply {
-            text = DetailMath.arrow(dir); gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(Ui.dp(a, 16), -2))
-        val bar = StatChangeBar(a, frac, stage, Ui.c(a, DetailMath.statColor(stat)))
-        addView(bar, LinearLayout.LayoutParams(0, Ui.dp(a, 7), 1f).also { it.marginEnd = Ui.dp(a, 8) })
-        if (base != null) addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = base.toString(); gravity = Gravity.END },
+        if (base == null) {
+            // The Pokédex appends a range column to its existing horizontal base-stat row.
+            orientation = LinearLayout.HORIZONTAL
+            addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(Ui.dp(a, 32), -2))
+            addView(Ui.text(a, 13f, 900, R.color.ag_text).apply { text = value.toString(); gravity = Gravity.END }, LinearLayout.LayoutParams(Ui.dp(a, 34), -2))
+            addView(View(a), LinearLayout.LayoutParams(Ui.dp(a, 16), 1))
+            addView(StatChangeBar(a, frac, 0, Ui.c(a, DetailMath.statColor(stat))),
+                LinearLayout.LayoutParams(0, Ui.dp(a, 13), 1f).also { it.marginEnd = Ui.dp(a, 8) })
+            return@apply
+        }
+        val line = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        line.addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(0, -2, 1f))
+        val effective = kotlin.math.max(1, (value * com.husarp.ankigo.game.BattleEngine.stageMult(stage)).toInt())
+        val numbers = Ui.text(a, 13f, 900, if (stage > 0) R.color.ag_green else if (stage < 0) R.color.ag_red else R.color.ag_text).apply {
+            text = if (stage == 0) value.toString() else "$value → $effective"
+            gravity = Gravity.END
+        }
+        line.addView(numbers, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(a, 8) })
+        if (base != null) line.addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = base.toString(); gravity = Gravity.END },
             LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
+        addView(line, LinearLayout.LayoutParams(-1, -2))
+        addView(StatChangeBar(a, frac, stage, Ui.c(a, DetailMath.statColor(stat))),
+            LinearLayout.LayoutParams(-1, Ui.dp(a, 13)).also { it.topMargin = Ui.dp(a, 4) })
     }
 
     /**
-     * "Total   NNN" row under the stat bars; [base] is the grey base total at the end ([wholeRow]: the whole row, 48 dp tall, is the tap target). The label and the number sit in the same
-     * 66 dp (label + value columns of [statRow]) and the number ends exactly where the stat numbers above end.
+     * "Total   NNN" row under the stat bars; [base] is the grey base total at the end ([wholeRow]: the whole row, 48 dp tall, is the tap target). The total is the normal stat total, independent of temporary battle stages.
      */
     fun totalRow(a: Context, total: Int, base: Int?, wholeRow: Boolean = false): View = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, Ui.dp(a, 4), 0, 0)
         if (wholeRow) tapRow(this, StatInfo.TOTAL)
+        if (base != null) {
+            val label = Ui.text(a, 14f, 800, R.color.ag_sub0).apply { text = "Total"; gravity = Gravity.CENTER_VERTICAL }
+            addView(if (wholeRow) label else tapInfo(label, StatInfo.TOTAL), LinearLayout.LayoutParams(0, -2, 1f).also { it.marginEnd = Ui.dp(a, 8) })
+            addView(Ui.text(a, 15f, 900, R.color.ag_text).apply { text = total.toString(); gravity = Gravity.END },
+                LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(a, 8) })
+            addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = base.toString(); gravity = Gravity.END },
+                LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
+            return@apply
+        }
         addView(android.widget.FrameLayout(a).apply {
             val big = total < 1000 // a 4-digit total (high levels) gets the normal sizes, so the label and the number never touch
             val label = Ui.text(a, if (big) 14f else 12f, 800, R.color.ag_sub0).apply { text = "Total"; gravity = Gravity.CENTER_VERTICAL }
@@ -269,8 +291,6 @@ object DetailParts {
                 android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.END or Gravity.CENTER_VERTICAL))
         }, LinearLayout.LayoutParams(Ui.dp(a, 32 + 34), -2))
         addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
-        if (base != null) addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = base.toString(); gravity = Gravity.END },
-            LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
     }
 
     /** Move line for small windows: type chip, then the name over the small power / accuracy line (nothing gets cut). */

@@ -27,7 +27,7 @@ import com.husarp.ankigo.ui.Nav
 import com.husarp.ankigo.ui.Ui
 
 // TICKET R3-V3a (PLAN 44, pick 3): the Help screen. Home = the game guide on top, problem pages below; a problem page
-// (what you see / why / what to do / check); the game guide on one page where each chapter opens and closes.
+// (what you see / why / what to do / check); the game guide with one lesson selected from its top bar.
 // Everything works offline: the texts are in HelpContent / GameGuide.
 
 /** The Help screen as a page: no bottom bar, works without a loaded game. Back goes from a page to the home, then leaves. */
@@ -268,50 +268,50 @@ class HelpScreen(
     private fun guide() {
         val chapters = GameGuide.chapters()
         val current = chapters.indexOfFirst { it.id in openIds }.coerceAtLeast(0)
-        val nav = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        nav.addView(Form.secondary(this, "←", onPage = true) { openChapter(chapters[(current - 1).coerceAtLeast(0)].id) }.apply {
-            contentDescription = "Previous lesson"; isEnabled = current > 0
-        }, LinearLayout.LayoutParams(dp(48), -2))
-        nav.addView(Form.secondary(this, chapters[current].title + " ▾", onPage = true) {
-            com.husarp.ankigo.ui.AppDialog.Builder(this).setTitle("Chapters")
-                .setItems(chapters.map { it.title }.toTypedArray<CharSequence>()) { _, i -> openChapter(chapters[i].id) }
-                .setNegativeButton("Cancel", null).create().also { com.husarp.ankigo.ui.Pickers.show(it) }
-        }, LinearLayout.LayoutParams(0, -2, 1f))
-        nav.addView(Form.secondary(this, "Next lesson →", onPage = true) { openChapter(chapters[(current + 1).coerceAtMost(chapters.lastIndex)].id) }.apply {
-            isEnabled = current < chapters.lastIndex
-        }, LinearLayout.LayoutParams(-2, -2))
-        guideNav.addView(nav, android.widget.FrameLayout.LayoutParams(-1, -2))
-        val heads = HashMap<String, View>()
-        chapters.forEachIndexed { i, ch ->
-            val isOpen = ch.id in openIds
-            val card = Ui.card(this)
-            val head = HelpViews.chapterHeader(this, ch, i + 1, isOpen) { toggle(ch.id) }
-            card.addView(head)
-            if (isOpen) {
-                val body = LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(dp(14), dp(2), dp(14), dp(14))
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        val picker = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            minimumHeight = dp(48)
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            contentDescription = "Choose chapter"
+            addView(Ui.text(this@HelpScreen, 14f, 900, R.color.ag_text).apply { text = chapters[current].title + " ▾" })
+            addView(Ui.text(this@HelpScreen, 11f, 700, R.color.ag_sub0).apply { text = "Lesson ${current + 1} of ${chapters.size}" })
+            setOnClickListener {
+                val rows = LinearLayout(this@HelpScreen).apply { orientation = LinearLayout.VERTICAL }
+                val dialog = com.husarp.ankigo.ui.AppDialog.Builder(this@HelpScreen).setTitle("Chapters")
+                    .setView(ScrollView(this@HelpScreen).apply { addView(rows) })
+                    .setNegativeButton("Cancel", null).create()
+                chapters.forEachIndexed { i, ch ->
+                    rows.addView(HelpViews.chapterHeader(this@HelpScreen, ch, i + 1, false) {
+                        dialog.dismiss(); openChapter(ch.id)
+                    })
                 }
-                HelpViews.chapterBody(this, ch).forEachIndexed { n, v -> body.addView(v, HelpViews.lp(this, if (n == 0) 0 else 10)) }
-                card.addView(body)
+                com.husarp.ankigo.ui.Pickers.show(dialog)
             }
-            heads[ch.id] = card
-            content.addView(card, HelpViews.lp(this, if (i == 0) 14 else 8))
         }
-        val target = scrollTo
-        if (target != null) {
-            scrollTo = null
-            val v = heads[target]
-            if (v != null) scroll.post { scroll.scrollTo(0, (v.top - dp(8)).coerceAtLeast(0)) }
+        nav.addView(picker, LinearLayout.LayoutParams(0, -2, 1f))
+        fun arrow(previous: Boolean) = android.widget.ImageView(this).apply {
+            setImageResource(R.drawable.ic_back)
+            setColorFilter(Ui.c(this@HelpScreen, R.color.ag_text))
+            if (!previous) rotation = 180f
+            setPadding(dp(13), dp(13), dp(13), dp(13))
+            contentDescription = if (previous) "Previous lesson" else "Next lesson"
+            isEnabled = if (previous) current > 0 else current < chapters.lastIndex
+            alpha = if (isEnabled) 1f else 0.4f
+            setOnClickListener { openChapter(chapters[(current + if (previous) -1 else 1).coerceIn(chapters.indices)].id) }
         }
+        nav.addView(arrow(true), LinearLayout.LayoutParams(dp(48), dp(48)))
+        nav.addView(arrow(false), LinearLayout.LayoutParams(dp(48), dp(48)))
+        guideNav.addView(nav, android.widget.FrameLayout.LayoutParams(-1, -2))
+        HelpViews.chapterBody(this, chapters[current]).forEach { content.addView(it, HelpViews.lp(this, 10)) }
+        scrollTo = null
+        scroll.scrollTo(0, 0)
     }
 
-    private fun toggle(id: String) {
-        if (!openIds.remove(id)) { openIds.clear(); openIds += id }
-        render()
-    }
-
-    /** A contents entry: open that chapter (if closed) and scroll to it. */
+    /** Select one lesson and return its reading area to the top. */
     private fun openChapter(id: String) {
         openIds.clear()
         openIds += id
