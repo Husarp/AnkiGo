@@ -99,7 +99,7 @@ internal class ViewSettingsSheet(
 
     /** A 48 dp row: the label (with a grey line under it) and a switch. */
     private fun switchRow(label: String, sub: String, checked: Boolean, onSet: (Boolean) -> Unit): View {
-        val sw = Switch(ctx).apply {
+        val sw = MotionSwitch(ctx).apply {
             isChecked = checked
             Ui.tintSwitch(this)
             setOnCheckedChangeListener { _, on -> onSet(on) }

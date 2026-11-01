@@ -160,14 +160,14 @@ class R16JTabTopShots {
         assertEquals(StatsSection.ACHIEVEMENTS, getField(page, "section"))
     }
 
-    // PLAN 222: back in the app after leaving it, a page starts at its top page (Settings: the home list; Stats: no sheet open).
-    @Test fun comingBackToTheAppStartsAtTheTopPage() {
+    // PLAN 412 supersedes Settings reset on app return; Stats still closes its sheet (PLAN 222).
+    @Test fun comingBackKeepsSettingsSectionAndClosesStatsSheet() {
         val ctx = setup()
         val settings = SettingsPage(ShotCtx(ctx), NoHost)
         layout(ctx, pageScreen(ctx, settings))
         settings.open(SettingsSection.DOWNLOADS)
         settings.onAppReturned()
-        assertEquals("Settings is back on its home list", null, settings.section)
+        assertEquals("Settings keeps its current section", SettingsSection.DOWNLOADS, settings.section)
 
         val stats = StatsPage(ctx, NoHost, StatsSection.STATISTICS)
         val screen = pageScreen(ctx, stats)

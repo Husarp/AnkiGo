@@ -3,6 +3,33 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.2.0
+- Screens and controls have short transitions and reward feedback. Taps act immediately, the tab bar stays in place, and reduced motion turns the new effects off.
+- Shop shows item prices at the right; tap an item to buy. Buying several items shows their total price, and timers show hours and minutes. Weekend specials have a simpler heading and offer eleven exclusive held items outside regular stock and deals.
+- Day and night deals switch at 06:00 and 21:00, offering different discounted items with a countdown.
+- Item gifts arrive after 60–140 answers. Older longer countdowns are shortened while existing progress below 60 stays.
+- Achievements show unread dots in the top-right corner of their cards and the Achievements tab.
+- Battle stats show a normal-value tick only when changed, keeping the faded tail for lowered stats.
+- Background previews are sharper, work offline and load while you scroll. Deck look A has more space between decks.
+- Settings remembers your last section for one minute; switching apps keeps the current page. Battle-log reading with TalkBack starts off and preserves your saved choice.
+- Game help explains catching, XP, money, Shop stock and achievement rewards more accurately. Daily gifts have a complete heading and clearer reward, destination and streak explanations; catch settings, evolution requirements and held-item effects are clearer too.
+- Compact Study view makes more room for cards. Turn it on in Study settings or the battle menu; the vertical ⋮ beside Show answer and the grading controls keeps the menu within reach. Normal Study places the menu beside a wider daily progress bar.
+- Whiteboard turns on or off from the card’s ⋯ menu and remembers your choice. Pick a colour, toggle the eraser, undo strokes or clearing, and add writing room with floating jump buttons.
+- Stat stages share matching arrows everywhere, with a second row for stages four through six. Multipliers have compact diagonal fractions, and changed values have a smaller arrow.
+- Pokémon details keep Options and Close together below the scrolling content, with a soft fade. Back goes one step; Close closes that screen’s detail windows. Wild details share the back header, and Stats shows the full Level label with battle changes on their own row.
+- Achievement details remember the Pokémon behind newly earned Pokémon achievements, with its icon and name. Older achievements show when the Pokémon was not recorded. Secret badges use the revised drawings.
+- Tab bar styles have readable names and distinct short animations, with immediate selected text colours.
+- Google browser prompt has a roomier editor and Reset to default; Save applies your draft and Cancel discards it.
+### Fixes
+- Returning to a battle result or changing Pokémon keeps the next battle waiting for Continue. Continue chooses its opponent for your final selected Pokémon.
+- Offline imported card styles can load correctly, and note types can retain their own night colours.
+- Pokémon/item pictures and diagnostics load with fewer pauses. Leaving battle or closing the floating window no longer waits for disk saves.
+- Card audio opens media in the background and ignores stale results after a card change; slow widget queries no longer keep Android broadcasts open indefinitely.
+- Wild Pokémon meet the near ground in the windmill, coral, oasis and graveyard scenes across battle-window shapes, without shifting Pokémon or their info boxes.
+- Healing text starts with the HP bar, and new battles clear both move labels to No move yet.
+- Stat explanations open without shifting the details card behind them.
+- Scrollbars stay thin during navigation, appear in response to scrolling and use neutral grey in both themes.
+
 ## 1.1.0
 - Battle stat chips open a compact explanation for just that Pokémon and stat, showing its stage and multiplier.
 - Battle frames can automatically match every scenery with crisp, plain coloured rims.

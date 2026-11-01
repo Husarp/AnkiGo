@@ -7,7 +7,7 @@ import java.util.Calendar
 
 /**
  * What the Shop tab shows, worked out without Views (R10 W11, so the rules are tested on the JVM): the price an item has today and the
- * price it would have without the deal, the tiles of "Today's specials", and the "ends at midnight" line.
+ * price it would have without the deal, the tiles of "Today's specials", and the countdown to the next game day.
  * The game rules themselves (deal, weekend special, always in stock) are [Shop].
  */
 internal object ShopPlan {
@@ -17,10 +17,10 @@ internal object ShopPlan {
     }
 
     /** The price of [item] on game day [day]: the deal price with the normal one as [Price.was] for that day's deal item, else just the normal price. */
-    fun price(data: GameData, day: String, item: String): Price {
-        val now = Shop.priceOf(data, day, item)
+    fun price(data: GameData, day: String, item: String, time: Long = System.currentTimeMillis()): Price {
+        val now = Shop.priceOf(data, day, item, time)
         val daily = Shop.dailyPrice(data, day, item)
-        return Price(now, if (Shop.dealFor(data, day)?.item == item) daily else null)
+        return Price(now, if (Shop.dealFor(data, day, time)?.item == item) daily else null)
     }
 
     /** A TM costs [Tuning.TM_PRICE], never discounted. */
@@ -40,20 +40,27 @@ internal object ShopPlan {
     /** The ribbon of the deal card: "−30 %". */
     fun ribbon(): String = "−${Tuning.DEAL_PERCENT} %"
 
-    /** Whole hours (at least 1) until the next game day starts ([dayStartHour], local time) from [now] (epoch ms). */
-    fun hoursToNewDay(now: Long, dayStartHour: Int): Int {
+    /** Whole minutes (at least 1) until the next game day starts ([dayStartHour], local time) from [now] (epoch ms). */
+    fun minutesToNewDay(now: Long, dayStartHour: Int): Int {
         val next = Calendar.getInstance().apply {
             timeInMillis = now
             set(Calendar.HOUR_OF_DAY, dayStartHour)
             set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
             if (timeInMillis <= now) add(Calendar.DAY_OF_YEAR, 1)
         }.timeInMillis
-        return ((next - now + 3_599_999L) / 3_600_000L).toInt().coerceAtLeast(1)
+        return ((next - now + 59_999L) / 60_000L).toInt().coerceAtLeast(1)
     }
 
-    /** "ends at midnight · 7 h" (the day starts at midnight) or "ends at 04:00 · 7 h" (another day-start hour). */
-    fun endsText(dayStartHour: Int, hoursLeft: Int): String =
-        "ends at " + (if (dayStartHour == 0) "midnight" else String.format(java.util.Locale.US, "%02d:00", dayStartHour)) + " · $hoursLeft h"
+    fun hoursToNewDay(now: Long, dayStartHour: Int): Int = (minutesToNewDay(now, dayStartHour) + 59) / 60
+
+    fun countdown(minutesLeft: Int): String = "${minutesLeft / 60} h ${minutesLeft % 60} min"
+
+    fun endsText(minutesLeft: Int): String = "Ends in ${countdown(minutesLeft)}"
+
+    fun dealEndsText(now: Long): String {
+        val minutes = ((Shop.dealEndsAt(now) - now + 59_999L) / 60_000L).coerceAtLeast(1)
+        return "Ends in ${minutes / 60} h ${minutes % 60} min"
+    }
 
     /** What TalkBack reads for a shop tile or card: "Poké Ball, 200", "Super Potion, deal, 490 instead of 700", "TM Surf, owned". */
     fun describe(name: String, price: Price, owned: Boolean = false): String = when {
@@ -74,5 +81,5 @@ internal object ShopPlan {
     fun firstPill(ready: Boolean, cash: Int?): String = pillText(if (ready) cash else null)
 
     /** The weekend card's second line. */
-    const val WEEKEND_NOTE = "Rare in the daily stock · until Sunday night"
+    const val WEEKEND_NOTE = "Weekend only · until Sunday night"
 }

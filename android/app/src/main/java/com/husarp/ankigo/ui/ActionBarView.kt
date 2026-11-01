@@ -86,6 +86,15 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
         }
     }
 
+    /** A saved battle can arrive without an Encounter being played on this panel. */
+    fun clearMoves() {
+        model.reset()
+        closeBubble()
+        mineHalf.bind(model.mine, floorSp)
+        theirsHalf.bind(model.theirs, floorSp)
+        updateDots()
+    }
+
     private fun updateDots() {
         val empty = model.mine is HalfState.Empty && model.theirs is HalfState.Empty
         row.dotsOn = true
@@ -129,7 +138,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
 
     /** A battle line the bar does not show (a move, something about one side, a toast): spoken only, when Settings → Read battle log says so. */
     fun announce(text: String) {
-        if (!context.getSharedPreferences("study", 0).getBoolean("speakBattle", true) || !isAttachedToWindow) return
+        if (!context.getSharedPreferences("study", 0).getBoolean("speakBattle", false) || !isAttachedToWindow) return
         announceForAccessibility(text.replace("{{", "").replace("}}", ""))
     }
 

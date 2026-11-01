@@ -1,5 +1,7 @@
 package com.husarp.ankigo.update
 
+import com.husarp.ankigo.ui.MotionScrollView
+
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -306,7 +308,7 @@ class UpdateSection(ctx: Context, private val cur: String = Updates.current(ctx)
 internal fun updatesScreen(ctx: Context, cur: String = Updates.current(ctx), notes: List<WhatsNew.Version> = WhatsNew.load(ctx)): View {
     val root = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(ctx, R.color.ag_base)) }
     root.addView(Ui.appBar(ctx, "Updates", back = true))
-    val scroll = ScrollView(ctx).apply {
+    val scroll = MotionScrollView(ctx).apply {
         addView(UpdateSection(ctx, cur, notes).apply { setPadding(Ui.dp(ctx, 16), 0, Ui.dp(ctx, 16), Ui.dp(ctx, 28)) })
     }
     root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))

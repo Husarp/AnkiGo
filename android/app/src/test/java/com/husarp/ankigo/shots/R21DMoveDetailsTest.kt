@@ -56,6 +56,7 @@ class R21DMoveDetailsTest {
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         val act = attach(com.husarp.ankigo.StudyActivity(), ShotCtx(ctx))
+        act.buildContent()
         setField(act, "stats", mapOf("_id" to "123456789"))
         val sheet = act.actionSheetContent { }
         val label = views(sheet).filterIsInstance<TextView>().single { it.text.toString() == "Reset card" }

@@ -26,7 +26,9 @@ internal object WindowStack {
     }
     private fun update(context: Context) {
         val current = windows(context)
-        current.forEach { it.stackChanged(current.size >= 2) }
+        // Covered cards keep their geometry and scroll position while a popup is open.
+        // Refresh the exposed card when it becomes the top window again.
+        current.lastOrNull()?.stackChanged(current.size >= 2)
     }
     fun stacked(context: Context) = windows(context).size >= 2
     fun closeAll(context: Context) = windows(context).asReversed().forEach { it.closeFromStack() }

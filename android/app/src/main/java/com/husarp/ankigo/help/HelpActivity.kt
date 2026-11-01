@@ -1,5 +1,7 @@
 package com.husarp.ankigo.help
 
+import com.husarp.ankigo.ui.MotionScrollView
+
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -85,7 +87,7 @@ class HelpScreen(
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(2), dp(16), dp(28))
         }
-        scroll = ScrollView(this).apply { addView(content) }
+        scroll = MotionScrollView(this).apply { addView(content) }
         guideNav = android.widget.FrameLayout(this).apply { setPadding(dp(16), 0, dp(16), 0) }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -282,7 +284,7 @@ class HelpScreen(
             setOnClickListener {
                 val rows = LinearLayout(this@HelpScreen).apply { orientation = LinearLayout.VERTICAL }
                 val dialog = com.husarp.ankigo.ui.AppDialog.Builder(this@HelpScreen).setTitle("Chapters")
-                    .setView(ScrollView(this@HelpScreen).apply { addView(rows) })
+                    .setView(MotionScrollView(this@HelpScreen).apply { addView(rows) })
                     .setNegativeButton("Cancel", null).create()
                 chapters.forEachIndexed { i, ch ->
                     rows.addView(HelpViews.chapterHeader(this@HelpScreen, ch, i + 1, false) {

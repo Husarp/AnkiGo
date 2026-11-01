@@ -1,5 +1,7 @@
 package com.husarp.ankigo.study
 
+import com.husarp.ankigo.ui.MotionWebView
+
 import android.app.Activity
 import com.husarp.ankigo.ui.AppDialog
 import com.husarp.ankigo.ui.StudyUi
@@ -41,7 +43,7 @@ class TemplateWindows(private val activity: Activity) {
     }
     private fun show(title: String, initialSubject: String = "", ready: (WebView) -> Unit) {
         if (activity.isFinishing || activity.isDestroyed) return
-        val web = WebView(activity).apply { tag = true }
+        val web = MotionWebView(activity).apply { tag = true }
         web.settings.javaScriptEnabled = true
         web.settings.allowFileAccess = false
         web.settings.allowContentAccess = false

@@ -337,7 +337,7 @@ object Tuning {
     val GIFT_COMMON = listOf("poke-ball" to 3, "potion" to 2, "super-potion" to 1)    // item to count; each entry equally likely in its tier
     val GIFT_UNCOMMON = listOf("great-ball" to 2, "hyper-potion" to 1, "poke-ball" to 5)
     val GIFT_RARE_ITEMS = listOf("ultra-ball" to 1)  // the rare tier also holds one evolution stone and one TM (see DailyGift)
-    val ITEM_COUNTDOWN = 3..385         // reviews until the next random item
+    val ITEM_COUNTDOWN = 60..140         // reviews until the next random item
     const val SHOP_BASE_SLOTS = 3       // + trainer level / 5
     const val SHOP_SLOTS_PER_LEVELS = 5
     const val TM_PRICE = 1000
@@ -345,7 +345,6 @@ object Tuning {
     const val REROLL_PRICE_STEP = 100
     val SHOP_BASICS = listOf("potion") // always on sale at their normal price; not part of the daily draw
     const val DEAL_PERCENT = 30             // the deal of the day: this much off (price = round(normal * 0.7), at least 1)
-    const val WEEKEND_TM_MIN_POWER = 90     // the weekend special is an evolution stone or a TM of a move at least this strong
 
     // ---- Healing (AnkiGo's own rules, PLAN 80; Ankimon has none of these). Whole HP, never above max HP. ----
     const val LEVEL_UP_HEAL_PERCENT = 25 // of max HP per level gained, on top of the HP the new level adds (min 1)

@@ -48,27 +48,32 @@ internal object PanelSprites {
         }
 
         fun fallbackFront() {
-            val cached = Sprites.cached(ctx, sp, SpriteKind.FRONT, shiny)
-            if (cached != null) { load(cached, true); return }
             Sprites.fetch(ctx, sp, SpriteKind.FRONT, shiny) { f -> if (current() && f != null) load(f, true) }
         }
 
-        val static = Sprites.staticFile(ctx, sp.num, shiny)
-        val source = com.husarp.ankigo.study.StudyRules.spriteSource(Sprites.cached(ctx, sp, kind, shiny) != null, static.isFile)
-        if (source == com.husarp.ankigo.study.StudyRules.SpriteSource.STATIC) load(static, kind == SpriteKind.BACK || flipFront)
-        val cached = Sprites.cached(ctx, sp, kind, shiny)
-        if (cached != null) {
-            // Cached: keep the old picture for the few ms the decode takes instead of flashing the placeholder.
-            load(cached, flipFront)
-            return
-        }
-        view.mirror = false
-        if (source != com.husarp.ankigo.study.StudyRules.SpriteSource.STATIC) view.setImage(null)
-        view.setPlaceholder(sp.name.take(2), Ui.typeColor(sp.types.firstOrNull() ?: com.husarp.ankigo.game.Type.NORMAL))
-        Sprites.fetch(ctx, sp, kind, shiny) { f ->
-            if (!current()) return@fetch
-            if (f != null) load(f, flipFront)
-            else if (kind == SpriteKind.BACK && mirrorFrontIfNoBack) fallbackFront()
+        // Even cache probes and the one-time cache migration can stall on storage.
+        pool.execute {
+            val cached = Sprites.cached(ctx, sp, kind, shiny)
+            val static = Sprites.staticFile(ctx, sp.num, shiny)
+            val local = cached ?: static.takeIf { it.isFile }
+            val img = local?.let { Sprites.decode(it) }
+            main.post {
+                if (!current()) return@post
+                if (img != null) {
+                    view.mirror = if (cached != null) flipFront else kind == SpriteKind.BACK || flipFront
+                    view.setImage(img)
+                } else {
+                    view.mirror = false
+                    view.setImage(null)
+                    view.setPlaceholder(sp.name.take(2), Ui.typeColor(sp.types.firstOrNull() ?: com.husarp.ankigo.game.Type.NORMAL))
+                }
+                if (cached != null) return@post
+                Sprites.fetch(ctx, sp, kind, shiny) { f ->
+                    if (!current()) return@fetch
+                    if (f != null) load(f, flipFront)
+                    else if (kind == SpriteKind.BACK && mirrorFrontIfNoBack) fallbackFront()
+                }
+            }
         }
     }
 

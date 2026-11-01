@@ -4,7 +4,7 @@ import android.content.Context
 
 /** Stable saved names; older saves default to the soft rectangle. */
 enum class TabBarStyle(val label: String) {
-    A3("A-3"), C1("C-1"), D3("D-3"), E1("E-1");
+    A3("Bold name"), C1("Sliding box"), D3("Top line"), E1("Name on selected");
     companion object {
         fun get(ctx: Context): TabBarStyle = entries.firstOrNull {
             it.name == ctx.applicationContext.getSharedPreferences("ankigo_ui", 0).getString("tabBarStyle", null)

@@ -43,7 +43,7 @@ class BuddyWidgetSetupActivity : AgActivity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(this@BuddyWidgetSetupActivity, R.color.ag_base)) }
         root.addView(Ui.appBar(this, "Buddy widget", "Pick a Pokémon", back = true))
         content = StudyUi.column(this).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 16)) }
-        val scroll = ScrollView(this).apply { addView(content, android.widget.FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
+        val scroll = MotionScrollView(this).apply { addView(content, android.widget.FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
         root.addView(scroll, StudyUi.lp(-1, 0, 1f))
         return root
     }

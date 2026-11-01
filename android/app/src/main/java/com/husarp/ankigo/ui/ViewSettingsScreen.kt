@@ -119,7 +119,7 @@ internal class ViewSettingsScreen(
             background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 16, ctx)
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 4), Ui.dp(ctx, 14), Ui.dp(ctx, 14))
         }
-        scroll = ScrollView(ctx).apply {
+        scroll = MotionScrollView(ctx).apply {
             isVerticalScrollBarEnabled = false
             clipToPadding = false
             addView(CappedColumn(ctx, Ui.dp(ctx, ViewSettingsPlan.ROWS_MAX_DP)).apply {

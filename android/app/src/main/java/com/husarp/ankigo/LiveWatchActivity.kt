@@ -1,5 +1,7 @@
 package com.husarp.ankigo
 
+import com.husarp.ankigo.ui.MotionScrollView
+
 import android.app.Activity
 import android.content.Intent
 import android.graphics.Color
@@ -92,7 +94,7 @@ class LiveWatchActivity : Activity() {
         status = TextView(this).apply { textSize = 10f; setTextColor(Color.GRAY) }
         root.addView(big); root.addView(sub); root.addView(statsView); root.addView(status)
         listView = TextView(this).apply { textSize = 12f; typeface = Typeface.MONOSPACE; setTextIsSelectable(true) }
-        root.addView(ScrollView(this).apply { addView(listView) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(MotionScrollView(this).apply { addView(listView) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
     }
 
@@ -334,8 +336,12 @@ class LiveWatchActivity : Activity() {
     private fun show(a: String, b: String) = main.post { big.text = a; big.setTextColor(Color.rgb(200, 30, 30)); sub.text = b }
 
     private fun share() {
-        val text = "AnkiGo report\n\n" + Report.all()
-        startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, "AnkiGo report").putExtra(Intent.EXTRA_TEXT, text.takeLast(400_000)), "Share report"))
+        worker.post {
+            val text = "AnkiGo report\n\n" + Report.all()
+            main.post {
+                if (!isFinishing && !isDestroyed) startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_SUBJECT, "AnkiGo report").putExtra(Intent.EXTRA_TEXT, text.takeLast(400_000)), "Share report"))
+            }
+        }
     }
 
     companion object {

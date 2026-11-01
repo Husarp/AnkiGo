@@ -51,10 +51,9 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
     private val inkMid = (ink.top + ink.bottom) / 2f
     private val skewPad = if (badge) 0f else abs(text.textSkewX) * th * 0.5f
     // R19-C: the chevron of mockup A1-C / A1-A: box 8 wide, 4 high, the next stage 5 units lower, stroke 2.4 (StatPill's shape)
-    private val chevW = sizePx * 0.62f
-    private val chevH = chevW * 0.5f
-    private val chevStep = chevW * 0.625f
-    private val chevStroke = chevW * 0.3f
+    private val chevUnit = sizePx * 0.62f / 12f
+    private val chevW = StatPill.boxWidth(StatPill.count(ft.stages)) * chevUnit
+    private val chevStroke = StatPill.STROKE * chevUnit
     private val contentW: Float
     private val contentH: Float
     /** R19-I: the burst's font share (the text inside it is smaller so no letter touches the star) and the badge's side padding. */
@@ -64,7 +63,7 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
     private val room = FloatFrame.ROOM_DP * d
 
     init {
-        val total = chevH + (ft.stages - 1).coerceAtLeast(0) * chevStep
+        val total = StatPill.boxHeight(StatPill.count(ft.stages)) * chevUnit
         val badgeH = max(max(th + sizePx * 0.55f, total + sizePx * 0.6f), FloatFrame.pillMinH(max(th, total + max(1.6f * d, chevStroke)), d))
         burstFit = if (burst) FloatFrame.burst(tw, th, tw + skewPad + sizePx * 2.7f, th + sizePx * 1.3f, d) else null
         badgePad = if (badge) FloatFrame.pillPad(sizePx * 0.6f, badgeH, d) { pad ->
@@ -103,7 +102,7 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
         val px = when {
             burst -> FloatFrame.burstRoom(FloatFrame.skewedInk(tw, th, burstFit!!.k), contentW, contentH, d)
             badge -> {
-                val total = chevH + (ft.stages - 1) * chevStep
+                val total = StatPill.boxHeight(StatPill.count(ft.stages)) * chevUnit
                 val cx = -contentW / 2f + badgePad + chevW / 2f
                 FloatFrame.pillRoom(listOf(
                     FloatFrame.Ink(cx, 0f, chevW + max(1.6f * d, chevStroke), total + max(1.6f * d, chevStroke)),
@@ -196,17 +195,15 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
         // chevrons: one per stage, stacked, pointing up for a rise and down for a drop
         val up = ft.kind == FloatKind.STAT_UP
         val cx = r.left + badgePad + chevW / 2f
-        val total = chevH + (ft.stages - 1) * chevStep
+        val total = StatPill.boxHeight(StatPill.count(ft.stages)) * chevUnit
         line.color = 0xFFFFFFFF.toInt()
-        line.strokeWidth = max(1.6f * d, chevStroke)
-        val path = Path()
-        for (i in 0 until ft.stages) {
-            val top = -total / 2f + i * chevStep
-            path.reset()
-            if (up) { path.moveTo(cx - chevW / 2f, top + chevH); path.lineTo(cx, top); path.lineTo(cx + chevW / 2f, top + chevH) }
-            else { path.moveTo(cx - chevW / 2f, top); path.lineTo(cx, top + chevH); path.lineTo(cx + chevW / 2f, top) }
-            canvas.drawPath(path, line)
-        }
+        line.strokeWidth = StatPill.STROKE
+        val path = Path().also { StatPill.chevrons(it, StatPill.count(ft.stages), up) }
+        canvas.save()
+        canvas.translate(cx - chevW / 2f, -total / 2f)
+        canvas.scale(chevUnit, chevUnit)
+        canvas.drawPath(path, line)
+        canvas.restore()
         text.style = Paint.Style.FILL
         text.color = 0xFFFFFFFF.toInt()
         text.clearShadowLayer()

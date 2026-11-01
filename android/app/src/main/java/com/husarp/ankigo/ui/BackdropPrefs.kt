@@ -2,6 +2,7 @@ package com.husarp.ankigo.ui
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Switch
@@ -26,12 +27,7 @@ internal object BackdropPrefs {
         BackdropCatalog.ALL.groupBy { if (it.dark) "Dark scenes" else "Bright scenes" }.forEach { (title, scenes) ->
             addView(Form.sect(ctx, title))
             scenes.forEach { bg ->
-                val image = ImageView(ctx).apply {
-                    contentDescription = bg.id.replace('-', ' ')
-                    scaleType = ImageView.ScaleType.FIT_CENTER
-                    adjustViewBounds = true
-                    ctx.assets.open("backdrop-thumbs/${bg.id}.webp").use { setImageBitmap(BitmapFactory.decodeStream(it)) }
-                }
+                val image = Preview(ctx, bg)
                 val sw = Switch(ctx).apply {
                     isChecked = bg.id !in disabled(ctx)
                     Ui.tintSwitch(this)
@@ -43,8 +39,54 @@ internal object BackdropPrefs {
                     }
                 }
                 val row = Form.row(ctx, bg.id.replace('-', ' ').replaceFirstChar { it.titlecase() }, "Allow this scene to appear as a battle background", sw) { sw.toggle() }
-                addView(Form.cardOf(ctx, listOf(image.apply { layoutParams = LinearLayout.LayoutParams(-1, -2) }, row)), Form.lp(ctx, 8))
+                addView(Form.cardOf(ctx, listOf(image.apply { layoutParams = LinearLayout.LayoutParams(-1, Ui.dp(ctx, 210)) }, row)), Form.lp(ctx, 8))
             }
+        }
+    }
+
+    internal var previewPool: java.util.concurrent.Executor = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "background-previews").apply { isDaemon = true }
+    }
+
+    /** Fixed bounds avoid scroll jumps; only visible previews request art, and offscreen bitmaps are released. */
+    internal class Preview(ctx: Context, private val bg: Backdrop) : ImageView(ctx) {
+        private var requested = false
+        @Volatile private var generation = 0
+        private val visible = Rect()
+        private val update = android.view.ViewTreeObserver.OnPreDrawListener {
+            refresh()
+            true
+        }
+        init {
+            contentDescription = bg.id.replace('-', ' ')
+            scaleType = ScaleType.FIT_CENTER
+        }
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            viewTreeObserver.addOnPreDrawListener(update)
+        }
+        override fun onDetachedFromWindow() {
+            viewTreeObserver.removeOnPreDrawListener(update)
+            clear()
+            super.onDetachedFromWindow()
+        }
+        private fun clear() { generation++; requested = false; setImageDrawable(null) }
+        internal fun refresh() {
+            if (!getGlobalVisibleRect(visible)) {
+                if (requested) clear()
+                return
+            }
+            if (requested) return
+            requested = true
+            val token = ++generation
+            // Bundled sharp art works offline. Drop queued work after scrolling away.
+            val app = context.applicationContext
+            previewPool.execute {
+                if (token != generation) return@execute
+                val thumb = runCatching { app.assets.open("backdrop-thumbs/${bg.id}.webp").use { BitmapFactory.decodeStream(it) } }.getOrNull()
+                post { if (token == generation && drawable == null) setImageBitmap(thumb) }
+            }
+
         }
     }
 }

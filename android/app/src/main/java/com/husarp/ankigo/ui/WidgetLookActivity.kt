@@ -52,7 +52,7 @@ class WidgetLookActivity : AgActivity() {
         root.addView(preview, StudyUi.lp(-1, Ui.dp(this, 160)))
         root.addView(Form.segmented(this, listOf("Look", "Content"), tab) { tab=it; render() })
         rows = StudyUi.column(this).apply { setPadding(Ui.dp(context,12),0,Ui.dp(context,12),Ui.dp(context,16)) }
-        root.addView(ScrollView(this).apply { addView(rows) }, StudyUi.lp(-1,0,1f))
+        root.addView(MotionScrollView(this).apply { addView(rows) }, StudyUi.lp(-1,0,1f))
         render()
         return root
     }
@@ -208,7 +208,7 @@ class WidgetLookActivity : AgActivity() {
         search.setTextColor(Ui.c(this,R.color.ag_text)); search.setHintTextColor(Ui.c(this,R.color.ag_sub0))
         Ui.tintEdit(search)
         val chips=StudyUi.row(this)
-        val list=android.widget.ListView(this).apply { divider=null; setBackgroundColor(Ui.c(context,R.color.ag_card)) }
+        val list=MotionListView(this).apply { divider=null; setBackgroundColor(Ui.c(context,R.color.ag_card)) }
         var choices=emptyList<String>()
         val dialog=AppDialog.Builder(this).setTitle("Pokémon").setView(body, scrollsItself=true).setNegativeButton("Cancel",null).create()
         fun update() {
@@ -234,7 +234,7 @@ class WidgetLookActivity : AgActivity() {
                         }
                     })
                 })
-                AlertDialog.Builder(this).setTitle("Type · any of").setView(ScrollView(this).apply { addView(content) })
+                AlertDialog.Builder(this).setTitle("Type · any of").setView(MotionScrollView(this).apply { addView(content) })
                     .setPositiveButton("Done",null).setNeutralButton("Clear") { _,_ -> filters=filters.copy(types=TypeFilter()); update() }.show()
             })
             chips.addView(BoxViews.quickChip(this,"Favourites",filters.favourites,heart=true) { filters=filters.copy(favourites=!filters.favourites); update() })
@@ -280,7 +280,7 @@ class WidgetLookActivity : AgActivity() {
         body.addView(search)
         body.addView(Form.segmented(this,listOf("Level","Name","Recently caught"),0) { sort=BuddyPicker.Sort.values()[it]; update() })
         body.addView(Form.segmented(this,listOf("All","Team","Box"),0) { filters=filters.copy(place=BuddyPicker.Place.values()[it]); update() })
-        body.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false; addView(chips) })
+        body.addView(MotionHorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false; addView(chips) })
         list.choiceMode=android.widget.ListView.CHOICE_MODE_SINGLE
         val empty=StudyUi.label(this,"No Pokémon match",14,R.color.ag_sub1)
         body.addView(empty)

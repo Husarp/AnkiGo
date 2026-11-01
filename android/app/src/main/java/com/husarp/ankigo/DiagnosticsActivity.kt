@@ -1,5 +1,7 @@
 package com.husarp.ankigo
 
+import com.husarp.ankigo.ui.MotionScrollView
+
 import com.husarp.ankigo.game.lookNum
 import android.app.Activity
 import com.husarp.ankigo.ui.AppDialog
@@ -56,7 +58,16 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
         title = "Diagnostics"
         setContentView(buildContent())
 
-        logView.text = Report.all().takeLast(20000)
+        bg.execute {
+            val text = Report.all().takeLast(20000)
+            val history = text.lineSequence().toHashSet()
+            main.post {
+                if (!isFinishing && !isDestroyed) {
+                    val live = logView.text.toString().lineSequence().filter { it.isNotEmpty() && it !in history }.joinToString("\n", postfix = "\n")
+                    logView.text = text + live
+                }
+            }
+        }
         Report.listener = { line -> main.post { logView.append(line + "\n") } }
         Report.log("C12b", "=== AnkiGo started; Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
         refreshHeader(log = true)
@@ -73,7 +84,7 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 4), Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 12))
         }
-        root.addView(ScrollView(this).apply { isFillViewport = false; addView(body, ViewGroup.LayoutParams(-1, -2)) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(MotionScrollView(this).apply { isFillViewport = false; addView(body, ViewGroup.LayoutParams(-1, -2)) }, LinearLayout.LayoutParams(-1, 0, 1f))
 
         // status card
         header = Ui.text(this, 12f, 700, R.color.ag_sub1).apply { setLineSpacing(0f, 1.15f) }
@@ -90,7 +101,7 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
         body.addView(logActions, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, 10) })
         // not selectable: a focused log made fullScroll pan the whole window up, hiding the buttons (Copy report covers copying)
         logView = Ui.text(this, 11f, 600, R.color.ag_sub1).apply { typeface = Typeface.MONOSPACE; setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8)) }
-        logScroll = ScrollView(this).apply {
+        logScroll = MotionScrollView(this).apply {
             background = Ui.rounded(Ui.c(this@DiagnosticsActivity, R.color.ag_mantle), 12, this@DiagnosticsActivity)
             isNestedScrollingEnabled = true
             // a drag that starts in the log scrolls the log, not the page
@@ -143,7 +154,7 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             this.text = logView.text
             setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8))
         }
-        val scroll = ScrollView(this).apply {
+        val scroll = MotionScrollView(this).apply {
             val side = Ui.dp(context, 16)
             background = InsetDrawable(Ui.rounded(Ui.c(context, R.color.ag_mantle), 12, context), side, 0, side, 0)
             setPadding(side, 0, side, 0)

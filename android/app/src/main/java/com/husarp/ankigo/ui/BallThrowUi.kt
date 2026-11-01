@@ -72,7 +72,7 @@ internal object BallThrowUi {
                 choices += Triple(choice, id, isSpecial)
                 row.addView(choice, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = Ui.dp(ctx, 6) })
             }
-            body.addView(HorizontalScrollView(ctx).apply { addView(row); isHorizontalScrollBarEnabled = true })
+            body.addView(MotionHorizontalScrollView(ctx).apply { addView(row); isHorizontalScrollBarEnabled = true })
         }
         row("Regular ball", regulars, false)
         if (specials.isNotEmpty()) row("Special ball (optional)", listOf(null) + specials, true)

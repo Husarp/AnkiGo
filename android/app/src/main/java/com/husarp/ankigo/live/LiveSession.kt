@@ -116,7 +116,7 @@ object LiveSession {
         timer.stop()
         flushCatchUp()
         saveSnapshot()
-        GameRepo.saveNow(app)
+        GameRepo.saveInBackground(app)
     }
 
     /**

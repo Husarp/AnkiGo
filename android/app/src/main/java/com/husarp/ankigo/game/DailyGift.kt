@@ -13,7 +13,7 @@ import kotlin.random.Random
 // Each entry of a tier is equally likely:
 //   common:   3 Poké Balls, 2 Potions, 1 Super Potion
 //   uncommon: 2 Great Balls, 1 Hyper Potion, 5 Poké Balls
-//   rare:     1 Ultra Ball, 1 evolution stone (a "-stone" evolution item the Shop sells, as the weekend special picks them), 1 TM the player
+//   rare:     1 Ultra Ball, 1 evolution stone (a priced "-stone" evolution item), 1 TM the player
 //             does not own yet (a move of Shop.tmPool; if every TM is owned, or there are none: a stone instead)
 // Never a Master Ball, never an item the catalogue (Items.ALL) does not hold. A tier with nothing to give falls back to the tier below.
 // The draw is seeded by the game day (Random("gift:<day>")), so a restart, the floating window or the live detector can never change it.
@@ -36,7 +36,7 @@ object DailyGift {
         return GiftChances(common = 100.0 - rare - uncommon, uncommon = uncommon, rare = rare)
     }
 
-    /** The evolution stones a gift can hold: the "-stone" evolution items that have a price in [data] (the weekend special's list), sorted. */
+    /** The evolution stones a gift can hold: the "-stone" evolution items that have a price in [data], sorted. */
     fun stones(data: GameData): List<String> =
         Items.ALL.values.filter { it.kind == ItemKind.EVOLUTION && it.id.endsWith("-stone") && data.price(it.id) > 0 }.map { it.id }.sorted()
 

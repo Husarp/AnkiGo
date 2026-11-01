@@ -84,9 +84,14 @@ class SaveStore(val dir: File) {
 
     /** state.seq++, state.savedAt = now, returns SaveCodec.encode(state). Call on the thread that owns the state (main). */
     fun prepare(state: GameState, now: Long = System.currentTimeMillis()): String {
+        return prepareSnapshot(state, now).invoke()
+    }
+
+    /** Capture on the state owner; the returned JSON encoder can run on the single save writer. */
+    fun prepareSnapshot(state: GameState, now: Long = System.currentTimeMillis()): () -> String {
         state.seq++
         state.savedAt = now
-        return SaveCodec.encode(state)
+        return SaveCodec.snapshot(state)
     }
 
     /**

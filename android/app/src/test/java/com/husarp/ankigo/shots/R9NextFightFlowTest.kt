@@ -326,15 +326,15 @@ class R9NextFightFlowTest {
         assertFalse(player.continueBattle())
     }
 
-    @Test fun leavingTheScreenDuringTheRewardsEndsThemAndDropsTheHold() {
+    @Test fun leavingTheScreenDuringTheRewardsEndsThemAndKeepsTheHold() {
         val c = ctx()
         val panel = BattlePanelView(c)
         val player = EventPlayer(panel, continueOnPanel = false)
         measure(panel, 412, 869)
         player.enqueue(defeatBatch())
         assertTrue(player.holding); assertFalse(player.idle)
-        player.dropHold()   // what onStop does
-        assertFalse(player.holding); assertFalse(panel.tilesShown)
+        player.pauseHeldResult()   // what onStop does
+        assertTrue(player.holding); assertTrue(panel.tilesShown)
         assertTrue("nothing is left to play to an invisible panel", player.idle)
     }
 

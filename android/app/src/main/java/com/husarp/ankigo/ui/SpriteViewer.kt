@@ -202,20 +202,18 @@ object SpriteViewer {
             val t = fresh()
             backIsTurnedFront = false
             onChange()
-            val battle = sp?.let { Sprites.cached(ctx, it, SpriteKind.FRONT, shiny) }
-            val staticNow = Sprites.staticBitmap(ctx, num, shiny)
+            val context = ctx
+            val staticNow = Sprites.staticBitmap(context, num, shiny)
             if (staticNow != null) view.setImage(SpriteImage(listOf(staticNow), intArrayOf(0))) else view.setImage(null)
-            if (battle != null && battle.name.endsWith(".gif", ignoreCase = true)) {
-                PanelSprites.pool.execute {
-                    val img = Sprites.decode(battle)
-                    main.post {
-                        if (token !== t) return@post
-                        if (img != null && img.animated) view.setImage(img) else if (staticNow == null) staticFallback(t, battle)
-                    }
+            PanelSprites.pool.execute {
+                val battle = sp?.let { Sprites.cached(context, it, SpriteKind.FRONT, shiny) }
+                val img = battle?.takeIf { it.name.endsWith(".gif", ignoreCase = true) }?.let { Sprites.decode(it) }
+                main.post {
+                    if (token !== t) return@post
+                    if (img != null && img.animated) view.setImage(img)
+                    else if (staticNow == null) staticFallback(t, battle)
                 }
-                return
             }
-            if (staticNow == null) staticFallback(t, battle)
         }
 
         /** No animated picture and no static one on disk: fetch the static PNG, else show the cached battle PNG, else the placeholder ball. */
@@ -244,8 +242,6 @@ object SpriteViewer {
                     main.post { if (token !== t) return@post; if (img != null) view.setImage(img) else noBack(t) }
                 }
             }
-            val cached = Sprites.cached(ctx, s, SpriteKind.BACK, shiny)
-            if (cached != null) { decode(cached); return }
             fetchBack(ctx, s, shiny) { f ->
                 if (token !== t) return@fetchBack
                 if (f != null) decode(f) else noBack(t)

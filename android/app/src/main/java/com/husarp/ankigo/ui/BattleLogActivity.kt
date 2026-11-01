@@ -32,7 +32,7 @@ class BattleLogPage(base: Context, host: PageHost) : GamePage(base, host) {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(2), dp(16), dp(28))
         }
-        return ScrollView(this).apply { isFillViewport = true; addView(content) }
+        return MotionScrollView(this).apply { isFillViewport = true; addView(content) }
     }
 
     override fun onShow() {

@@ -96,7 +96,7 @@ internal object StatsSheets {
     }
 
     /** A ScrollView that stops short of the window's top (a strip of scrim stays visible) and scrolls when its content is taller. */
-    private class CappedScroll(ctx: Context) : ScrollView(ctx) {
+    private class CappedScroll(ctx: Context) : MotionScrollView(ctx) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val size = MeasureSpec.getSize(heightMeasureSpec)
             val cap = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) Ui.dp(context, 520) else (size - Ui.dp(context, 40)).coerceAtLeast(Ui.dp(context, 96))

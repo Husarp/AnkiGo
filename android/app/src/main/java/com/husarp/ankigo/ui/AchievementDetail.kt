@@ -12,6 +12,7 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.game.AchPageMath
 import com.husarp.ankigo.game.AchStep
 import com.husarp.ankigo.game.AchView
+import com.husarp.ankigo.game.AchievementPokemon
 import com.husarp.ankigo.game.AchievementTable
 import java.time.ZoneId
 
@@ -20,7 +21,7 @@ import java.time.ZoneId
 
 internal object AchievementDetail {
     /** A ScrollView that stops short of the window's top (a strip of scrim stays visible) and scrolls when its content is taller. */
-    private class CappedScroll(ctx: Context) : ScrollView(ctx) {
+    private class CappedScroll(ctx: Context) : MotionScrollView(ctx) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val size = MeasureSpec.getSize(heightMeasureSpec)
             val cap = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) Ui.dp(context, 560) else (size - Ui.dp(context, 40)).coerceAtLeast(Ui.dp(context, 96))
@@ -67,13 +68,36 @@ internal object AchievementDetail {
         }
         if (v.oneOff) body.addView(oneOffLine(ctx, v, achSince, zone), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         else for (s in AchPageMath.ladder(v)) body.addView(step(ctx, v, s, achSince, zone), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 8) })
+        if (v.tier >= 0 && AchievementPokemon.applies(v)) body.addView(witness(ctx, v), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         AchievementTable.row(v.id)?.let { row ->
-            if (AchPageMath.source(row) != com.husarp.ankigo.game.AchSource.SINCE_UPDATE) {
+            if (AchPageMath.source(row) != com.husarp.ankigo.game.AchSource.SINCE_UPDATE && row.ankimonBadge == null) {
                 body.addView(note(ctx, AchPageMath.sourceNote(row, "")), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 12) })
             }
         }
         sheet.addView(CappedScroll(ctx).apply { isVerticalScrollBarEnabled = false; addView(body) }, LinearLayout.LayoutParams(-1, -2))
         return sheet
+    }
+
+    private fun witness(ctx: Context, v: AchView): View = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = "Earned with" })
+        val mon = v.pokemon.lastOrNull()
+        if (mon == null) addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Pokémon not recorded" })
+        else addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(ImageView(ctx).apply {
+                Ui.staticSprite(ctx, mon.num, mon.shiny, this)
+                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32)))
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = mon.name })
+                if (!v.oneOff) addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
+                    text = "Most recent · ${v.pokemon.size} Pokémon contributed"
+                })
+            }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8) })
+        }, LinearLayout.LayoutParams(-1, -2))
     }
 
     private fun hero(ctx: Context, v: AchView): View {

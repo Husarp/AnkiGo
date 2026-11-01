@@ -130,16 +130,18 @@ class R10DetailsShots {
                 val t = texts(scene).map { it.text.toString() }
                 assertEquals(2, t.count { it == "Start" }); assertTrue("Lv 26" in t)
                 assertTrue("3 moves" in t)
-                assertNotNull(find(scene, "My Pokémon")); assertNotNull(find(scene, "Options")); assertNull(find(scene, "Details"))
+                assertNotNull(find(scene, "My Pokémon")); assertNotNull(find(scene, "Options")); assertNotNull(find(scene, "Details"))
             }) { ctx -> DexDetail.show(DexPage(ctx, NoHost), gd.sp(25)) }
         }
-        shoot("dex-owned-big", listOf(F320), 2.0f, 0.45f) { ctx -> DexDetail.show(DexPage(ctx, NoHost), gd.sp(25)) }
+        shoot("dex-owned-big", listOf(F320), 2.0f, 0.45f, after = { _, scene ->
+            assertEquals("Details stays whole at 200% text", 1, find(scene, "Details")!!.lineCount)
+        }) { ctx -> DexDetail.show(DexPage(ctx, NoHost), gd.sp(25)) }
     }
 
     @Test fun dexSeenOnlyHasNoMyPokemon() {
         allOpen()
         shoot("dex-seen", listOf(Variants.PHONE, F340), 1f, 0f, after = { _, scene ->
-            assertNull(find(scene, "My Pokémon")); assertNull(find(scene, "Options")); assertNull(find(scene, "Details"))
+            assertNull(find(scene, "My Pokémon")); assertNull(find(scene, "Options")); assertNotNull(find(scene, "Details"))
         }) { ctx -> DexDetail.show(DexPage(ctx, NoHost), gd.sp(150)) }
     }
 

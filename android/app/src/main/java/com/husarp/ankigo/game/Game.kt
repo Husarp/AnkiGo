@@ -187,6 +187,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     private fun resolveWild(battle: Battle, main: Mon, events: MutableList<GameEvent>) {
         AbilityAdaptations.onWin(state, rng, events)
         val now = clock()
+        AchievementPokemon.record(state, "defeats", main, data)
+        if (main.hp > 0 && main.hp * 100 < StatCalc.maxHp(data, main) * Achievements.COMEBACK_PERCENT)
+            AchievementPokemon.record(state, "comebacks", main, data)
         SecretAchievements.win(state, battle, main)
         val plan = Catching.plan(data, state, battle)
         when (plan.outcome) {
@@ -358,7 +361,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val main = state.main ?: return emptyList()
         val now = clock()
         // Ankimon rolls the wild one when it appears, with that moment's state; the seed only fixes the random draws.
-        val r = state.nextSeed?.let { Random(it) } ?: rng
+        val encounterSeed = state.nextSeed
+        val r = encounterSeed?.let { Random(it) } ?: rng
         val level = Encounters.wildLevel(main.level, r)
         val roll = Encounters.roll(data, state, level, r)
 
@@ -368,7 +372,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val fullHp = StatCalc.maxHp(data, wild)
         val encounterHp = Tuning.wildHp(fullHp, main.level, state.settings.fasterStart)
         wild.hp = encounterHp
-        state.battle = Battle(wild, roll.tier, startedAt = now, wildMaxHp = encounterHp.takeIf { it != fullHp })
+        state.battle = Battle(wild, roll.tier, startedAt = now, wildMaxHp = encounterHp.takeIf { it != fullHp }).also { it.encounterSeed = encounterSeed }
 
         // Seed of the one after this; the prediction (widget silhouette, sprite prefetch) follows the current state.
         state.nextSeed = rng.nextLong()
@@ -380,6 +384,20 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 wild.hp, encounterHp, willCatch(), newSpecies, wild.uid,
             ),
         )
+    }
+
+    /** PLAN 388: only a result's unseen, untouched encounter may be picked again for a changed Main. */
+    fun reselectHeldEncounter(wildUid: String): List<GameEvent> {
+        val b = state.battle ?: return emptyList()
+        if (state.main == null) return emptyList()
+        if (b.wild.uid != wildUid || b.rounds != 0 || b.answers != 0 || b.failedThrows != 0 || b.buttons.isNotEmpty()) return emptyList()
+        val followingSeed = state.nextSeed
+        state.nextSeed = b.encounterSeed ?: followingSeed
+        state.battle = null
+        val events = ensureEncounter()
+        state.nextSeed = followingSeed
+        refreshNext()
+        return events
     }
 
     /**
@@ -417,7 +435,12 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val success = rng.nextInt(100) < chance
         val events = mutableListOf<GameEvent>(GameEvent.BallThrow(ball, chance, success, state.count(ball), battle.failedThrows + 1, special)) // the fight itself counts its throws (saved with it)
         if (success) {
-            state.main?.let { SecretAchievements.win(state, battle, it) }
+            state.main?.let {
+                AchievementPokemon.record(state, "defeats", it, data)
+                if (it.hp > 0 && it.hp * 100 < StatCalc.maxHp(data, it) * Achievements.COMEBACK_PERCENT)
+                    AchievementPokemon.record(state, "comebacks", it, data)
+                SecretAchievements.win(state, battle, it)
+            }
             if (ball == "poke-ball" && battle.failedThrows == 0 && battle.wild.hp == battle.maxWildHp(data)) Achievements.bump(state, Metric.PERFECT_THROW)
             AbilityAdaptations.onWin(state, rng, events)
             val now = clock()

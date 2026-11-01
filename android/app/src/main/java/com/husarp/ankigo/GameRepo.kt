@@ -30,7 +30,7 @@ import java.util.concurrent.TimeUnit
 /**
  * The one place that holds the loaded game for the whole app process (activities + widgets).
  * All game calls happen on the main thread through [act]; saving is coalesced on a background thread
- * (encode on main, write on background). Saves live in filesDir/game (Android backup includes it).
+ * (capture on main, encode/write on background). Saves live in filesDir/game (Android backup includes it).
  */
 object GameRepo {
     enum class Status { LOADING, NEED_DATA, NEED_STARTER, READY, SAVE_ERROR }
@@ -345,29 +345,38 @@ object GameRepo {
     }
 
     /**
-     * Main thread: bumps seq and encodes the state, then hands the JSON to the single writer thread (so writes can't
-     * overtake each other). Null when there is nothing to save (SAVE_ERROR: never write over unreadable saves).
+     * Main thread: bumps seq and captures scalar values, then escapes/assembles JSON and writes on the single
+     * writer thread (so writes can't overtake each other). Null when there is nothing to save (SAVE_ERROR: never write over unreadable saves).
      */
     private fun submitSave(app: Context): Future<*>? {
         val st = held ?: return null
         val store = store(app)
         val day = st.day
-        val json = try {
-            store.prepare(st)
+        val encode = try {
+            store.prepareSnapshot(st)
         } catch (e: Exception) {
             Report.fail(TAG, "encoding the save", e)
             return null
         }
         return writer.submit(Runnable {
             try {
-                store.write(json, day)
+                store.write(encode(), day)
             } catch (e: Exception) {
                 Report.fail(TAG, "writing the save", e) // the game keeps running; the next change tries again
             }
         })
     }
 
-    /** Synchronous save (onStop, before the process may die). */
+    /** Queue the current snapshot immediately without waiting for storage in a lifecycle callback. */
+    fun saveInBackground(ctx: Context) {
+        val app = ctx.applicationContext
+        if (!isMain()) { handler.post { saveInBackground(app) }; return }
+        handler.removeCallbacks(saveRunnable)
+        saveQueued = false
+        submitSave(app)
+    }
+
+    /** Synchronous barrier for explicit restore/reset operations; never use in lifecycle callbacks. */
     fun saveNow(ctx: Context) {
         if (!isMain()) { scheduleSave(ctx); return }
         handler.removeCallbacks(saveRunnable)

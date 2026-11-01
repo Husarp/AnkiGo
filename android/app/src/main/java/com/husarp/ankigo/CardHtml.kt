@@ -139,11 +139,14 @@ img{max-width:100%;height:auto}
 .ag-placeholder{width:210px;max-width:100%;height:118px;border:2px dashed ${if (dark) "#3c4043" else "#e3e3e3"};border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:${if (dark) "#9aa0a6" else "#5f6368"};font-size:12px;margin:8px auto 0;font-family:Nunito,sans-serif;font-weight:700;overflow-wrap:anywhere}
 .ag-placeholder svg{width:30px;height:30px}
 ${if (io) IoScript.CSS else ""}
-/* Note-type typography and cloze styles take precedence over the defaults. */
+</style>
+<!-- Keep note CSS in its own stylesheet: @import must precede all ordinary rules. -->
+<style id="ag-note-style">
 $css
-/* Keep the frame padding and AnkiDroid night surface around the note's CSS. */
+</style>
+<style>
+/* Keep the study frame padding around the note's CSS. */
 body{margin:0;padding:14px 18px${if (side == "q") ";padding-bottom:30px" else ""}}
-${if (dark) "body.nightMode{background:#202124;color:#e8eaed}" else ""}
 </style>
 ${if (io) "<script>${IoScript.JS}</script>" else ""}
 <script>${JsApiScript.token(jsPage)}${JsApiScript.JS}</script>

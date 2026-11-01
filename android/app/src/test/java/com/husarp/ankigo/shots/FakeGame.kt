@@ -115,6 +115,9 @@ object FakeGame {
     fun sprites(ctx: Context, on: Boolean) {
         val dir = Sprites.dir(ctx)
         dir.deleteRecursively()
+        // Production migrates on a worker before loading. Fixtures create new pictures after migration,
+        // otherwise the first asynchronous load would remove these generated legacy battle PNGs.
+        Sprites.upgradeBattleCache(dir)
         if (!on) return
         if (Shots.spriteSource.isDirectory) { Shots.spriteSource.copyRecursively(dir, overwrite = true); return }
         for (sp in data.species.values) {

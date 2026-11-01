@@ -96,39 +96,26 @@ class StudyWidget : AppWidgetProvider() {
             SHOW, ANSWER, NEXT -> {
                 val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
                 if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
-                Report.init(ctx); Anki.load(ctx)
-                Report.log("WIDGET", "study widget $id: ${intent.action?.substringAfterLast('.')}${intent.getIntExtra("ease", 0).takeIf { it > 0 }?.let { " ease $it" } ?: ""}")   // R13 Part E
                 val pr = goAsync()
-                Thread {
-                    try {
-                        handle(ctx, intent.action!!, intent.getIntExtra("ease", 0), id)
-                    } catch (e: Exception) {
-                        Report.fail("C8", "study widget ${intent.action}", e)
-                    } finally {
-                        pr.finish()
-                    }
-                }.start()
+                WidgetRender.async(pr) {
+                    Report.init(ctx); Anki.load(ctx)
+                    Report.log("WIDGET", "study widget $id: ${intent.action?.substringAfterLast('.')}")
+                    handle(ctx, intent.action!!, intent.getIntExtra("ease", 0), id)
+                }
             }
             else -> super.onReceive(ctx, intent)
         }
     }
 
     override fun onUpdate(ctx: Context, mgr: AppWidgetManager, ids: IntArray) {
-        Report.init(ctx); Anki.load(ctx)
         val pr = goAsync()
-        Thread {
-            try {
-                for (id in ids) {
-                    try {
-                        handle(ctx, NEXT, 0, id)
-                    } catch (e: Exception) {
-                        Report.fail("C8", "study widget update $id", e)
-                    }
-                }
-            } finally {
-                pr.finish()
+        WidgetRender.async(pr) {
+            Report.init(ctx); Anki.load(ctx)
+            for (id in ids) {
+                try { handle(ctx, NEXT, 0, id) }
+                catch (e: Exception) { Report.fail("C8", "study widget update $id", e) }
             }
-        }.start()
+        }
     }
 
     override fun onDeleted(ctx: Context, appWidgetIds: IntArray) {

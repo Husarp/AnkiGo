@@ -23,9 +23,9 @@ class R19CStatPillTest {
         assertNull(StatPill.shortName("hp")); assertNull(StatPill.shortName(null))
     }
 
-    @Test fun stagesAreClampedToOneToThree() {
-        assertEquals(listOf(1, 1, 2, 3, 3, 3), listOf(0, 1, 2, 3, 4, 6).map { StatPill.count(it) })
-        assertEquals(listOf(1, 2, 3, 3), listOf(-1, -2, -3, -6).map { StatPill.count(it) })
+    @Test fun stagesRetainAllSixArrows() {
+        assertEquals(listOf(1, 1, 2, 3, 4, 6), listOf(0, 1, 2, 3, 4, 6).map { StatPill.count(it) })
+        assertEquals(listOf(1, 2, 3, 6), listOf(-1, -2, -3, -6).map { StatPill.count(it) })
     }
 
     @Test fun spokenSaysDirectionAndStages() {
@@ -45,10 +45,14 @@ class R19CStatPillTest {
         assertTrue(StatPill.UP != StatPill.DOWN)
     }
 
-    @Test fun theChevronStackGrowsByFiveUnitsPerStage() {
+    @Test fun aSecondRowDistinguishesFourThroughSix() {
+        for (n in 4..6) {
+            assertEquals(21f, StatPill.boxHeight(n), 0f)
+            assertEquals(36f, StatPill.boxWidth(n), 0f)
+        }
         assertEquals(11f, StatPill.boxHeight(1), 0f)
-        assertEquals(16f, StatPill.boxHeight(2), 0f)
-        assertEquals(21f, StatPill.boxHeight(3), 0f)
+        assertEquals(11f, StatPill.boxHeight(2), 0f)
+        assertEquals(11f, StatPill.boxHeight(3), 0f)
     }
 
     @Test fun theBubbleGetsAPillChipPerShift() {

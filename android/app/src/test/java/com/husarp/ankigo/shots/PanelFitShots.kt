@@ -142,7 +142,7 @@ class PanelFitShots {
     // ---------------------------------------------------------------- the study screen's panel
 
     /** The Study screen with the panel in [heightMode] (0 full panel, 1 strip), as StatusShots builds it. */
-    private fun study(ctx: Context, heightMode: Int): View {
+    private fun study(ctx: Context, heightMode: Int, verify: (com.husarp.ankigo.StudyActivity) -> Unit = {}): View {
         val act = attach(com.husarp.ankigo.StudyActivity(), ShotCtx(ctx))
         setField(act, "deckId", 2L)
         setField(act, "deckName", "Geography::Capitals")
@@ -163,6 +163,7 @@ class PanelFitShots {
         b.enemy.status = "par"; b.player.status = "brn"
         panel.renderAll(); panel.restoreStudyCharge()
         call(act, "showButtons")
+        verify(act)
         return root
     }
 
@@ -172,6 +173,79 @@ class PanelFitShots {
         paparazzi.shootWith("pf-study-full-cc1", listOf(Size.PHONE)) { ctx -> prefs(ctx, true); study(ctx, 0) }
         paparazzi.shootWith("pf-study-strip", listOf(Size.PHONE, Size.SPLIT)) { ctx -> prefs(ctx, false); study(ctx, 1) }
         paparazzi.shootWith("pf-study-strip-cc1", listOf(Size.PHONE, Size.SPLIT)) { ctx -> prefs(ctx, true); study(ctx, 1) }
+    }
+
+    @Test fun compactStudy() {
+        for (compact in listOf(false, true)) {
+            paparazzi.shootWith("r26o-study-${if (compact) "compact" else "normal"}", listOf(Size.PHONE, Size.SPLIT)) { ctx ->
+                ctx.getSharedPreferences("study", 0).edit().putBoolean("compactView", compact).apply()
+                prefs(ctx, false)
+                study(ctx, 0) { act ->
+                    val buttons = getField(act, "buttons") as ViewGroup
+                    fun find(v: View, desc: String): View? = if (v.contentDescription == desc) v else
+                        (v as? ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { find(g.getChildAt(it), desc) } }
+                    org.junit.Assert.assertEquals(compact, find(buttons, "Battle menu") != null)
+                    if (compact) {
+                        val before = getField(act, "flipped")
+                        // The menu child has its own click; it cannot invoke the answer's listener.
+                        val panel = getField(act, "panel") as BattlePanelView
+                        val originalMenu = panel.onMenu
+                        var taps = 0
+                        panel.onMenu = { taps++ }
+                        find(buttons, "Battle menu")!!.performClick()
+                        org.junit.Assert.assertEquals(1, taps)
+                        setField(act, "locked", true); call(act, "showButtons")
+                        org.junit.Assert.assertTrue(find(buttons, "Battle menu")!!.isEnabled)
+                        find(buttons, "Battle menu")!!.performClick()
+                        org.junit.Assert.assertEquals(2, taps)
+                        setField(act, "locked", false); call(act, "showButtons")
+                        panel.onMenu = originalMenu
+                        org.junit.Assert.assertEquals(before, getField(act, "flipped"))
+                        setField(act, "flipped", true); call(act, "showButtons")
+                        org.junit.Assert.assertNotNull(find(buttons, "Battle menu"))
+                        val battle = GameRepo.state!!.battle
+                        val card = getField(act, "card")
+                        val panelDp = getField(act, "panelDp")
+                        ctx.getSharedPreferences("study", 0).edit().putBoolean("compactView", false).apply()
+                        call(act, "layout")
+                        org.junit.Assert.assertEquals(true, getField(act, "flipped"))
+                        org.junit.Assert.assertSame(card, getField(act, "card"))
+                        org.junit.Assert.assertSame(battle, GameRepo.state!!.battle)
+                        org.junit.Assert.assertEquals(panelDp, getField(act, "panelDp"))
+                        org.junit.Assert.assertNull(find(buttons, "Battle menu"))
+                        ctx.getSharedPreferences("study", 0).edit().putBoolean("compactView", true).apply()
+                        setField(act, "flipped", false); call(act, "layout"); call(act, "showButtons")
+                    }
+                }
+            }
+        }
+        paparazzi.shootWith("r26o-study-compact-answer", listOf(Size.SMALL, Size.PHONE)) { ctx ->
+            ctx.getSharedPreferences("study", 0).edit().putBoolean("compactView", true).apply()
+            prefs(ctx, false)
+            study(ctx, 0) { act -> setField(act, "flipped", true); call(act, "showButtons") }
+        }
+    }
+
+    @Test fun compactMenuStaysEnabledWhileNextCardLoads() {
+        val ctx = Shots.files(paparazzi.context)
+        FakeGame.install(ctx)
+        ctx.getSharedPreferences("study", 0).edit().putBoolean("compactView", true).apply()
+        study(ctx, 0) { act ->
+            val panel = getField(act, "panel") as BattlePanelView
+            var taps = 0
+            panel.onMenu = { taps++ }
+            call(act, "resetForLoading", true)
+            val buttons = getField(act, "buttons") as ViewGroup
+            fun all(v: View): List<View> = listOf(v) + if (v is ViewGroup)
+                (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
+            val menu = all(buttons).single { it.contentDescription == "Battle menu" }
+            org.junit.Assert.assertTrue("Loading must keep the compact menu enabled", menu.isEnabled)
+            org.junit.Assert.assertTrue(all(buttons).filter { it.isClickable && it !== menu }.all { !it.isEnabled })
+            menu.performClick()
+            org.junit.Assert.assertEquals(1, taps)
+            org.junit.Assert.assertNull(getField(act, "card"))
+            org.junit.Assert.assertTrue(getField(act, "locked") as Boolean)
+        }
     }
 
     // ---------------------------------------------------------------- animations under scaling

@@ -1,5 +1,7 @@
 package com.husarp.ankigo.study
 
+import com.husarp.ankigo.ui.MotionScrollView
+
 import android.app.Dialog
 import android.database.ContentObserver
 import android.content.Intent
@@ -76,7 +78,7 @@ class FilterActivity : AgActivity() {
             addAction(R.drawable.ic_info, "About this screen") { showInfo() }
         })
         content = StudyUi.column(this).apply { setPadding(Ui.dp(context, 16), 0, Ui.dp(context, 16), 0) }
-        root.addView(ScrollView(this).apply { addView(content) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        root.addView(MotionScrollView(this).apply { addView(content) }, LinearLayout.LayoutParams(-1, 0, 1f))
         count = StudyUi.label(this, "Loading decks…", 14).apply { gravity = Gravity.CENTER; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
         start = StudyUi.primary(this, "Start") { launch() }.apply { isEnabled = false; alpha = .45f }
         root.addView(StudyUi.line(this))

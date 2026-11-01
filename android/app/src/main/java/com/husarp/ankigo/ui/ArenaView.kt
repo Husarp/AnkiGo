@@ -1656,7 +1656,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /** XP bar (3 dp, sky) and the "XP 640 / 1000" label. */
-    fun setPlayerXp(current: Int, needed: Int, animate: Boolean, durationMs: Long = 450) {
+    fun setPlayerXp(current: Int, needed: Int, animate: Boolean, durationMs: Long = 650) {
         if (animate) revealXpBar(durationMs)
         val f = (if (needed > 0) current.toFloat() / needed else 1f).coerceIn(0f, 1f)
         pXpShown = f
@@ -1691,7 +1691,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** The XP bar's fill at [f]: the look's sky, or the meaning colour of the chosen bar style. */
     private fun setXpBar(f: Float, animate: Boolean, durationMs: Long = 450) {
         val i = ink
-        if (i == null) pXp.setMeaning(BarMeaning.XP, f, animate, durationMs) else { pXp.clearGradient(); pXp.set(f, i.xp, animate, durationMs) }
+        if (i == null) pXp.setMeaning(BarMeaning.XP, f, animate && UiMotion.enabled(context), durationMs, UiMotion.curve) else { pXp.clearGradient(); pXp.set(f, i.xp, animate && UiMotion.enabled(context), durationMs, UiMotion.curve) }
     }
 
     /** Test-only (PLAN 138): hears what the XP bar and the level number are told, in order ("bar 1.00", "bar 0.00", "bar 0.40 slide", "level 11"). */
@@ -1949,7 +1949,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             tv.animate().alpha(0f).setStartDelay(900).setDuration(500).withEndAction(done).start()
             return
         }
-        val delay = if (immediate) 0L else min(3, mine.size) * FLOAT_STAGGER_MS
+        val delay = if (immediate || ft.kind == FloatKind.HEAL) 0L else min(3, mine.size) * FLOAT_STAGGER_MS
         tv.alpha = 0f; tv.scaleX = 0.6f; tv.scaleY = 0.6f
         tv.animate().alpha(1f).scaleX(1f).scaleY(1f).setStartDelay(delay).setDuration(150).setInterpolator(OvershootInterpolator()).withEndAction {
             if (tv.parent == null) return@withEndAction

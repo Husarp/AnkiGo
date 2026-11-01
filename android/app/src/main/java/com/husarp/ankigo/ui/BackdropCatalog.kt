@@ -12,8 +12,8 @@ internal object BackdropCatalog {
     private fun showdown(id: String, w: Int, player: StandPoint, wild: StandPoint) =
         Backdrop(id, BackdropSource.SHOWDOWN, "png", w, 500, player, wild, crisp = true, dark = false, sharp = false) // R19-F2: today's drawing at every size
 
-    private fun own(id: String, ext: String, w: Int, h: Int, player: StandPoint, wild: StandPoint, crisp: Boolean, dark: Boolean = false, rev: Int = 1) =
-        Backdrop(id, BackdropSource.OWN, ext, w, h, player, wild, crisp, dark, rev)
+    private fun own(id: String, ext: String, w: Int, h: Int, player: StandPoint, wild: StandPoint, crisp: Boolean, dark: Boolean = false, rev: Int = 1, ground: StandPoint = wild, groundZoom: Float = 1f) =
+        Backdrop(id, BackdropSource.OWN, ext, w, h, player, wild, crisp, dark, rev, wildGround = ground, groundZoom = groundZoom)
 
     val ALL: List<Backdrop> = listOf(
         // Pokémon Showdown (753 x 500, beach 700 x 500), pixel art
@@ -55,20 +55,22 @@ internal object BackdropCatalog {
         own("fighting-training", "webp", 1024, 687, p(.30f, .84f, .44f), p(.64f, .58f, .32f), crisp = true),
         own("poison-marsh", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 2),
         // R23: approved new scenes (only 40 and 43 use palette-cleaned art).
+        // PLAN 391: keep the sprite spots fixed; align the artwork's measured near ground
+        // underneath them through BackdropDraw.stageCrop (never species-specific offsets).
         own("forest-tech-b", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("autumn-forest", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("toxic-cave", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("countryside-route", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("windy-hilltop", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
+        own("windy-hilltop", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.78f, .66f, .32f), groundZoom = 1.35f),
         own("bamboo-dojo", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("coral-shallows", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
+        own("coral-shallows", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.79f, .45f, .32f), groundZoom = .75f),
         own("snowy-pines", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("power-plant", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("desert-oasis", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
+        own("desert-oasis", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.78f, .61f, .32f), groundZoom = 1.2f),
         own("starry-plateau", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1),
         own("lava-field", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("night-rooftops", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1),
-        own("old-graveyard", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1),
+        own("old-graveyard", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1, ground = p(.73f, .68f, .32f), groundZoom = 1.45f),
         own("starry-plateau-galaxy", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1),
     )
 

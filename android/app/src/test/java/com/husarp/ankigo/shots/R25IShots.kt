@@ -15,7 +15,7 @@ class R25IShots {
     private fun views(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { views(v.getChildAt(it)) } else emptyList()
     private fun text(v: View, label: String) = views(v).filterIsInstance<TextView>().single { it.text.toString() == label }
 
-    @Test fun speciesActionIsPinnedOppositeCloseAndKeepsStackControls() {
+    @Test fun speciesOptionsAndCloseStayPinnedAndCloseTheStack() {
         for (theme in Theme.entries) for (width in listOf(320, 360)) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Variant("w$width", width, 640).device(theme))
             val ctx = Shots.files(paparazzi.context)
@@ -26,24 +26,26 @@ class R25IShots {
             try {
                 parent.joinStack(); d.joinStack()
                 val root = d.content()
-                val action = text(root, "My Pokémon")
+                val action = text(root, "Options")
+                val myPokemon = text(root, "My Pokémon")
                 val close = text(root, "Close")
                 val all = text(root, "Close all")
                 assertSame(close.parent, action.parent)
-                assertSame(close.parent, all.parent)
-                assertEquals(View.VISIBLE, all.visibility)
+                assertNotSame(close.parent, myPokemon.parent)
+                assertNotSame(close.parent, all.parent)
+                assertEquals(View.GONE, (all.parent as View).visibility)
                 paparazzi.snapshot(DialogShots.scene(ctx, d), "r25i-species-$width-${theme.name}")
-                assertTrue(close.right <= all.left)
-                assertTrue(all.right <= action.left)
+                assertTrue(action.right <= close.left)
                 val row = action.parent as ViewGroup
-                assertTrue(action.right <= row.width - row.paddingRight)
+                assertTrue(action.left >= row.paddingLeft)
+                assertTrue(close.right <= row.width - row.paddingRight)
                 assertTrue(action.width > 0)
                 assertEquals("action text fits", 1, action.layout.lineCount)
                 val before = IntArray(2).also { action.getLocationInWindow(it) }
                 views(root).filterIsInstance<ScrollView>().forEach { it.scrollTo(0, 10000) }
                 val after = IntArray(2).also { action.getLocationInWindow(it) }
                 assertArrayEquals("action stays pinned while body scrolls", before, after)
-                all.performClick()
+                close.performClick()
                 val fresh = AppDialog.Builder(page).setCloseAtTop().create()
                 try {
                     fresh.joinStack()

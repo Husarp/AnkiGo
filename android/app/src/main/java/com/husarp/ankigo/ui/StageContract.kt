@@ -49,6 +49,10 @@ class Backdrop(
      * drawing at every size (the file itself, nearest when [crisp] else filtered). Showdown's 12 and the factory keep today's.
      */
     val sharp: Boolean = crisp,
+    /** Actual ground in the artwork; the background moves to meet the unchanged wild sprite spot. */
+    val wildGround: StandPoint = wild,
+    /** Uniform artwork zoom around wildGround; independent of sprite scale. */
+    val groundZoom: Float = 1f,
 )
 
 /**

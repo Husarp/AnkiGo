@@ -79,6 +79,7 @@ class AchView(
     val progress: Float,        // value / next, 0..1 (1 at the top)
     val tiers: List<Long>,
     val inferred: Set<Int> = emptySet(),
+    val pokemon: List<AchPokemon> = emptyList(),
 )
 
 /** The four battle numbers of one Attack event (see [Achievements.attackNumbers]). */
@@ -272,6 +273,23 @@ object Achievements {
             if (reached <= dates.size) { claimRewards(state, row, dates); continue } // a tier dated by an older version still gets its reward (Y1)
             val quiet = silent || migrated || known == null || row.ankimonBadge != null
             val guessed = silent || migrated || known == null // reached before AnkiGo looked: [now] is only when it was first seen
+            if (!guessed && row.group == "Secret" && AchievementPokemon.isPokemonSecret(row.id) && dates.isEmpty()) {
+                val uid = when (row.id) {
+                    "perfect-throw", "deja-vu" -> events.filterIsInstance<GameEvent.Caught>().lastOrNull()?.uid
+                    "glow-up" -> events.filterIsInstance<GameEvent.Evolved>().lastOrNull()?.uid
+                    else -> if (events.any { it is GameEvent.Attack || it is GameEvent.Defeated || it is GameEvent.Caught || it is GameEvent.MainChanged }) state.main?.uid else null
+                }
+                val source = when (row.id) {
+                    "perfect-throw", "deja-vu" -> "catches"
+                    "glow-up" -> "evolutions"
+                    "revolving-door" -> null
+                    else -> "defeats"
+                }
+                // The win can evolve its main before this check; keep the identity captured at the qualifying action.
+                val snapshot = source?.let { state.achPokemon[it]?.lastOrNull { mon -> mon.uid == uid } }
+                if (snapshot != null) state.achPokemon[row.id] = mutableListOf(snapshot)
+                else uid?.let { state.mon(it) }?.let { AchievementPokemon.record(state, row.id, it, data) }
+            }
             for (t in dates.size until reached) {
                 val badge = row.ankimonBadge ?: row.tierBadges.getOrNull(t) // a tier that IS a badge: the badge's date, and BadgeEarned has said it
                 val badgeDate = badge?.let { state.badgeAt[it] }
@@ -396,6 +414,7 @@ object Achievements {
             dates = dates, value = value, next = next,
             progress = if (next == null) 1f else (value.toDouble() / next).coerceIn(0.0, 1.0).toFloat(),
             tiers = row.tiers,
+            pokemon = if (hidden) emptyList() else state.achPokemon[row.ankimonBadge?.let { "badge/$it" } ?: row.id].orEmpty().toList(),
             inferred = dates.indices.filterTo(HashSet()) { inferredKey(row.id, it) in state.achInferred },
         )
     }

@@ -173,7 +173,7 @@ class AppMenu(private val anchor: View) {
             card.addView(v, LinearLayout.LayoutParams(-1, -2))
             if (r.dividerAfter) card.addView(View(ctx).apply { setBackgroundColor(Ui.c(ctx, R.color.ag_s0)) }, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 1)).also { it.topMargin = Ui.dp(ctx, 2); it.bottomMargin = Ui.dp(ctx, 4) })
         }
-        val scroll = ScrollView(ctx).apply { isVerticalScrollBarEnabled = false; addView(card, FrameLayout.LayoutParams(-2, -2)) }
+        val scroll = MotionScrollView(ctx).apply { isVerticalScrollBarEnabled = false; addView(card, FrameLayout.LayoutParams(-2, -2)) }
         val pad = Ui.dp(ctx, PAD_DP)
         // card shadow needs space around it in the frame
         val cap = Ui.dp(ctx, MAX_DP + 2 * PAD_DP)

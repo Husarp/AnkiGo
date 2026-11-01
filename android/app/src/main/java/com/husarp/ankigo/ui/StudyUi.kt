@@ -52,7 +52,7 @@ internal object StudyUi {
     fun iconButton(ctx: Context, resource: Int, description: String, action: () -> Unit) = icon(ctx, resource).apply {
         setPadding(Ui.dp(ctx, 7), Ui.dp(ctx, 7), Ui.dp(ctx, 7), Ui.dp(ctx, 7))
         background = ripple(ctx, Ui.rounded(Color.TRANSPARENT, 10, ctx))
-        contentDescription = description; setOnClickListener { action() }
+        contentDescription = description; setOnClickListener { UiMotion.press(this); action() }
     }
     fun ripple(ctx: Context, shape: GradientDrawable) = RippleDrawable(
         ColorStateList.valueOf((Ui.c(ctx, R.color.ag_ov) and 0x00ffffff) or 0x33000000), shape, null)
@@ -64,7 +64,7 @@ internal object StudyUi {
             setPadding(Ui.dp(ctx, 10), Ui.dp(ctx, 7), Ui.dp(ctx, 10), Ui.dp(ctx, 7))
             if (primary) setTextColor(AppDialogRules.onFill(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_crust), TypeInk::contrast))
             background = ripple(ctx, Ui.rounded(Ui.c(ctx, if (primary) R.color.ag_mauve else R.color.ag_s0), 12, ctx))
-            setOnClickListener { action() }
+            setOnClickListener { UiMotion.press(this); action() }
         }
 
     fun primary(ctx: Context, text: String, action: () -> Unit) = smallButton(ctx, text, true, action).apply {
@@ -80,7 +80,7 @@ internal object StudyUi {
         minimumHeight = Ui.dp(ctx, 64)
         setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 12), Ui.dp(ctx, 16), Ui.dp(ctx, 12))
         contentDescription = "Next deck: $name, $due due"
-        setOnClickListener { action() }
+        setOnClickListener { UiMotion.press(this); action() }
         val labels = column(ctx)
         val path = name.substringBeforeLast("::", "").replace("::", " › ")
         if (path.isNotEmpty()) labels.addView(label(ctx, path, 11).apply { setTextColor(ink) })
@@ -112,7 +112,7 @@ internal object StudyUi {
             isEnabled = enabled; alpha = if (enabled) 1f else .55f
             contentDescription = if (interval != null) "$text, next in $interval" else if (hint != null) "$text, $hint" else text
             isFocusable = true
-            setOnClickListener { action() }
+            setOnClickListener { UiMotion.press(this); action() }
             setOnTouchListener { v, e ->
                 if (v.isEnabled) when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> { v.scaleX = .95f; v.scaleY = .95f }

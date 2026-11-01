@@ -73,24 +73,29 @@ class R14B2EIdleTest {
         val img = ImageView(c)
         MonPreview.show(c, mon.species, mon.shiny, img, idle = true)
         val seen = mutableListOf<String>()
-        // added after the float's own listener, so it runs right after the float started on attach
-        img.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {
-                seen += "attached running=${MonPreview.idleRunning(img)} listening=${MonPreview.idleListening(img)}"
-                dispatch(img, "dispatchOnWindowVisibilityChange", View.GONE)
-                seen += "window gone running=${MonPreview.idleRunning(img)}"
-                dispatch(img, "dispatchOnWindowVisibilityChange", View.VISIBLE)
-                seen += "window visible running=${MonPreview.idleRunning(img)}"
-                img.visibility = View.INVISIBLE
-                dispatch(img, "dispatchOnPreDraw")
-                seen += "view hidden running=${MonPreview.idleRunning(img)}"
-                img.visibility = View.VISIBLE
-                dispatch(img, "dispatchOnPreDraw")
-                seen += "view shown running=${MonPreview.idleRunning(img)}"
+        // Cache lookup completes asynchronously; exercise visibility once the still image is ready.
+        img.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (!MonPreview.idleRunning(img)) return true
+                img.viewTreeObserver.removeOnPreDrawListener(this)
+                img.post {
+                    seen += "attached running=${MonPreview.idleRunning(img)} listening=${MonPreview.idleListening(img)}"
+                    dispatch(img, "dispatchOnWindowVisibilityChange", View.GONE)
+                    seen += "window gone running=${MonPreview.idleRunning(img)}"
+                    dispatch(img, "dispatchOnWindowVisibilityChange", View.VISIBLE)
+                    seen += "window visible running=${MonPreview.idleRunning(img)}"
+                    img.visibility = View.INVISIBLE
+                    dispatch(img, "dispatchOnPreDraw")
+                    seen += "view hidden running=${MonPreview.idleRunning(img)}"
+                    img.visibility = View.VISIBLE
+                    dispatch(img, "dispatchOnPreDraw")
+                    seen += "view shown running=${MonPreview.idleRunning(img)}"
+                }
+                return true
             }
-            override fun onViewDetachedFromWindow(v: View) {}
         })
-        shot(img, "r14b2e-detail-visibility")
+        val frame = FrameLayout(c).apply { addView(img, FrameLayout.LayoutParams(288, 288)) }
+        paparazzi.gif(frame, "r14b2e-detail-visibility", 0, 1000, 5)
         assertEquals(listOf(
             "attached running=true listening=true",
             "window gone running=false",

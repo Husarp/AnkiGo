@@ -59,9 +59,9 @@ class AchievementsView(private val page: GamePage) {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(2), dp(16), dp(28))
         }
-        scroll = ScrollView(page).apply { addView(col) }
+        scroll = MotionScrollView(page).apply { addView(col) }
         tabRow = LinearLayout(page).apply { orientation = LinearLayout.HORIZONTAL }
-        tabScroll = HorizontalScrollView(page).apply {
+        tabScroll = MotionHorizontalScrollView(page).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             clipToPadding = false
@@ -289,7 +289,7 @@ class AchievementsView(private val page: GamePage) {
             setOnClickListener { openId = v.id; page.requestRender() }
         }
         if (AchievementNotice.unseen(page, v.id)) {
-            card.addView(AchievementNotice.dot(page))
+            AchievementNotice.corner(card)
             card.contentDescription = "${card.contentDescription}, new achievement"
         }
         card.addView(ImageView(page).apply { setImageResource(if (hidden) R.drawable.ic_ach_lock else AchStyle.icon(v.icon)); setColorFilter(color) }, LinearLayout.LayoutParams(dp(34), dp(34)))
@@ -304,4 +304,5 @@ class AchievementsView(private val page: GamePage) {
         card.addView(pips, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(3) })
         return card
     }
+
 }

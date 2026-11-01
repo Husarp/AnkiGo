@@ -50,7 +50,7 @@ class StudyNowSetupActivity : AgActivity() {
         content.addView(Form.cardOf(this, listOf(Form.stackRow(this, "Widget background", "Choose the Study widget’s background colour, or use System to follow your phone’s light or dark theme.", control))),
             StudyUi.lp().also { it.bottomMargin = Ui.dp(this, 8) })
         content.addView(StudyUi.primary(this, "Done") { done() }, StudyUi.spaced(this, 8))
-        val scroll = ScrollView(this).apply { addView(content, android.widget.FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
+        val scroll = MotionScrollView(this).apply { addView(content, android.widget.FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
         root.addView(scroll, StudyUi.lp(-1, 0, 1f))
         return root
     }

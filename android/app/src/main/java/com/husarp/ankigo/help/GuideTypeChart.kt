@@ -1,5 +1,8 @@
 package com.husarp.ankigo.help
 
+import com.husarp.ankigo.ui.MotionScrollView
+import com.husarp.ankigo.ui.MotionHorizontalScrollView
+
 import android.content.Context
 import android.view.Gravity
 import android.view.View
@@ -114,7 +117,7 @@ internal object GuideTypeChart {
             }
             table.addView(row)
         }
-        return HorizontalScrollView(ctx).apply { addView(table) }
+        return MotionHorizontalScrollView(ctx).apply { addView(table) }
     }
 
     private fun full(ctx: Context) {
@@ -123,7 +126,7 @@ internal object GuideTypeChart {
             addView(HelpViews.rich(ctx, "Row = attacker; column = Pokémon hit. Blank = ×1. Blue = ×2; orange = ×½; grey = ×0."), HelpViews.lp(ctx, 12))
             addView(grid(ctx), HelpViews.lp(ctx, 12))
         }
-        AppDialog.Builder(ctx).setTitle("Type chart").setView(ScrollView(ctx).apply { addView(body) })
+        AppDialog.Builder(ctx).setTitle("Type chart").setView(MotionScrollView(ctx).apply { addView(body) })
             .setPositiveButton("Back", null).create().also { Pickers.show(it) }
     }
 }

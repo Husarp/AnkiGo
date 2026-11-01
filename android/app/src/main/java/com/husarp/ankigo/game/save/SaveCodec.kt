@@ -32,7 +32,11 @@ class SaveFormatException(message: String, val newerSchema: Boolean = false, cau
  * Decoding is tolerant: unknown fields are ignored and missing optional fields get the Model defaults.
  */
 object SaveCodec {
-    fun encode(state: GameState): String {
+    fun encode(state: GameState): String = snapshot(state).invoke()
+
+    /** Capture scalar values on the state owner's thread; escape and assemble JSON later on a worker.
+     * No mutable game objects or collections escape into the returned encoder. */
+    fun snapshot(state: GameState): () -> String {
         val w = W()
         w.obj {
             kv("schema", state.schema) // first, so a reader can check it before anything else
@@ -79,6 +83,13 @@ object SaveCodec {
             key("achTiers"); obj { for ((k, v) in state.achTiers.toSortedMap()) { key(k); arr { v.forEach { value(it) } } } }
             list("achInferred", state.achInferred.sorted()) // R4 fix A3: tiers whose date is only "first seen"; a save without the key has none flagged
             list("rewardsClaimed", state.rewardsClaimed.sorted()) // R14-B2 fix Y1: tier rewards already given; a save without the key has none claimed
+            key("achPokemon"); obj {
+                for ((k, mons) in state.achPokemon.toSortedMap()) {
+                    key(k); arr { for (m in mons) obj {
+                        kv("uid", m.uid); kv("name", m.name); kv("num", m.num); kv("shiny", m.shiny)
+                    } }
+                }
+            }
             key("badgeAt"); obj { for ((k, v) in state.badgeAt.toSortedMap()) kv(k.toString(), v) }
             kv("achSince", state.achSince)
             kv("achLadder", state.achLadder) // R9-B2: always written; a save without the key is ladder 1 (5-tier "types" / "highest-level")
@@ -89,7 +100,7 @@ object SaveCodec {
             if (state.asks.isNotEmpty()) { key("asks"); arr { state.asks.forEach { writeAsk(this, it) } } } // R19-P (PLAN 281): only while a question waits, so a save without any is byte for byte what it was
             key("settings"); writeSettings(this, state.settings)
         }
-        return w.toString()
+        return { w.toString() }
     }
 
     /**
@@ -120,25 +131,30 @@ object SaveCodec {
      * and in the JVM test library, which breaks binary compatibility between the two.
      */
     private class W {
-        private val sb = StringBuilder()
+        private val tokens = ArrayList<Any?>()
         private var needComma = false
 
-        private fun sep() { if (needComma) sb.append(',') }
-        fun obj(f: W.() -> Unit) { sep(); sb.append('{'); needComma = false; f(); sb.append('}'); needComma = true }
-        fun arr(f: W.() -> Unit) { sep(); sb.append('['); needComma = false; f(); sb.append(']'); needComma = true }
-        fun key(k: String) { sep(); sb.append(JSONObject.quote(k)).append(':'); needComma = false }
+        private fun sep() { if (needComma) tokens.add(',') }
+        fun obj(f: W.() -> Unit) { sep(); tokens.add('{'); needComma = false; f(); tokens.add('}'); needComma = true }
+        fun arr(f: W.() -> Unit) { sep(); tokens.add('['); needComma = false; f(); tokens.add(']'); needComma = true }
+        fun key(k: String) { sep(); tokens.add(k); tokens.add(':'); needComma = false }
         fun value(v: Any?) {
             sep()
-            when (v) {
-                null -> sb.append("null")
-                is Number, is Boolean -> sb.append(v.toString())
-                else -> sb.append(JSONObject.quote(v.toString()))
-            }
+            tokens.add(when (v) {
+                null, is Number, is Boolean -> v
+                else -> v.toString()
+            })
             needComma = true
         }
         fun kv(k: String, v: Any?) { key(k); value(v) }
         fun list(k: String, items: Collection<Any?>) { key(k); arr { items.forEach { value(it) } } }
-        override fun toString() = sb.toString()
+        override fun toString() = buildString {
+            for (token in tokens) when (token) {
+                null -> append("null")
+                is Char, is Number, is Boolean -> append(token)
+                else -> append(JSONObject.quote(token.toString()))
+            }
+        }
     }
 
     private fun W.stats(k: String, s: Stats) = list(k, s.toList())
@@ -374,6 +390,18 @@ object SaveCodec {
         }
         o.strList("achInferred")?.let { s.achInferred += it }
         o.strList("rewardsClaimed")?.let { s.rewardsClaimed += it }
+        o.optJSONObject("achPokemon")?.let { records ->
+            for (k in records.keys()) records.optJSONArray(k)?.let { a ->
+                val mons = mutableListOf<com.husarp.ankigo.game.AchPokemon>()
+                for (i in 0 until a.length()) a.optJSONObject(i)?.let { m ->
+                    val num = m.optInt("num", 0)
+                    val name = m.optString("name", "")
+                    val uid = m.optString("uid", "")
+                    if (num > 0 && name.isNotBlank() && uid.isNotBlank()) mons += com.husarp.ankigo.game.AchPokemon(uid, name, num, m.optBoolean("shiny", false))
+                }
+                s.achPokemon[k] = mons
+            }
+        }
         o.optJSONObject("badgeAt")?.let { b -> for (k in b.keys()) k.toIntOrNull()?.let { id -> s.badgeAt[id] = b.optLong(k, 0) } }
         s.achSince = o.long("achSince", 0)
         s.achLadder = o.int("achLadder", 1)
@@ -411,7 +439,7 @@ object SaveCodec {
         s.nextSeed = if (o.has2("nextSeed")) o.getLong("nextSeed") else null
         s.day = o.str("day", ""); s.reviewsToday = o.int("reviewsToday", 0); s.cashToday = o.int("cashToday", 0); s.cashFracNum = o.long("cashFracNum", 0); s.cashFracDen = o.long("cashFracDen", 1)
         if (s.cashFracDen < 1 || s.cashFracNum < 0 || s.cashFracNum >= s.cashFracDen) { s.cashFracNum = 0; s.cashFracDen = 1 }   // PLAN 198: an old save (cashWait/winWait) or a broken pair starts the day's fraction at 0
-        s.itemCountdown = o.int("itemCountdown", 0)
+        s.itemCountdown = o.int("itemCountdown", 0).coerceAtMost(Tuning.ITEM_COUNTDOWN.last)
         o.intArray("buttonsToday", s.buttonsToday.size).copyInto(s.buttonsToday)
         s.cardStreak = o.int("cardStreak", 0); s.bestCardStreak = o.int("bestCardStreak", 0)
         s.streakDays = o.int("streakDays", 0); s.lastGoalDay = o.strOrNull("lastGoalDay")

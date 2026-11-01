@@ -178,17 +178,15 @@ object WidgetRender {
         STUDY_NOW(R.layout.widget_study_now, R.id.sn_img_l, R.id.sn_img_d, R.id.sn_root, 70f, 70f),
     }
 
-    /** Runs [work] on a background thread; [pr] (from goAsync) is finished when it ends. */
+    /** A slow provider or GIF decode must not keep an Android broadcast open indefinitely.
+     * The worker may finish its in-flight operation later; finishing the broadcast does not cancel it. */
     fun async(pr: BroadcastReceiver.PendingResult?, work: () -> Unit) {
-        Thread {
-            try {
-                work()
-            } catch (e: Throwable) {
-                Report.fail("T15", "widget update", e)
-            } finally {
-                pr?.finish()
-            }
-        }.start()
+        com.husarp.ankigo.remind.TickDeadline.run(
+            com.husarp.ankigo.remind.TickDeadline.LIMIT_MS,
+            work = { work() },
+            onError = { Report.fail("T15", "widget update", it) },
+            onEnd = { pr?.finish() },
+        )
     }
 
     private val moneyRequests = java.util.concurrent.ConcurrentHashMap<Int, Any>()

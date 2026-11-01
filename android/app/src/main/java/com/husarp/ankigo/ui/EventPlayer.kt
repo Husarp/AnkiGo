@@ -57,6 +57,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     private var logWhole = true           // R9 D3: the line of the event being played is about the whole battle (the bar shows it); else it is only spoken
     /** The next fight's Encounter, held back while the result tiles show (it plays with the next answer's events). */
     private var parked: GameEvent.Encounter? = null
+    private var waitingMain: String? = null
     /** R9-W6 CX-A: the player's XpGained whose burst already played inside the Caught step; its own step only waits for what is left ([doneAt] = uptime ms). */
     private class XpRun(val ev: GameEvent.XpGained, val doneAt: Long)
     private var xpRun: XpRun? = null
@@ -83,7 +84,10 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         }
         if (at == events.size) queue.addLast(Item.Tiles(summary!!))
         for (e in events) if (e is GameEvent.Encounter) panel.prefetchBackdrop(e.species, e.wildUid)   // R9 C4: its picture loads while the rewards play
-        if (early) panel.holdEarly()
+        if (early) {
+            waitingMain = GameRepo.state?.main?.uid
+            panel.holdEarly()
+        }
         if (CatchAskPopup.waiting(events)) queue.addLast(Item.Act { CatchAskPopup.offer(panel.context) }) // R19-P (PLAN 281): "Ask me" / "Release the old one?" opens once the rewards played (not in a floating window or PiP: it waits)
         pump()
     }
@@ -112,6 +116,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     /** Drops everything waiting and stops the animations. The caller redraws from the state afterwards. */
     fun clear() {
+        waitingMain = null
         parked = null
         xpRun = null
         panel.hideCatchTiles()
@@ -207,11 +212,24 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
      */
     fun continueBattle(): Boolean {
         if (!panel.holdsNextFight) return false
+        reselectForMain()
         if (!idle) { skipToNextFight(); return true }   // R9 C5: the rewards still play (Continue came at once): they end now
         releaseTiles()
         dirty = true   // nothing parked: the wild one is drawn from the saved game when the queue is done
         pump()
         return true
+    }
+
+    private fun reselectForMain() {
+        val main = GameRepo.state?.main?.uid ?: return
+        if (waitingMain == null || waitingMain == main) return
+        val old = parked ?: queue.filterIsInstance<Item.Ev>().map { it.e }.filterIsInstance<GameEvent.Encounter>().firstOrNull() ?: return
+        val next = GameRepo.run(ctx) { it.reselectHeldEncounter(old.wildUid) }.singleOrNull() as? GameEvent.Encounter ?: return
+        if (parked != null) parked = next
+        val items = queue.map { if (it is Item.Ev && it.e is GameEvent.Encounter && it.e.wildUid == old.wildUid) Item.Ev(next) else it }
+        queue.clear(); queue.addAll(items)
+        waitingMain = main
+        panel.prefetchBackdrop(next.species, next.wildUid)
     }
 
     /**
@@ -220,7 +238,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
      * panel is drawn from the saved game with the next wild one still held back (it is not drawn), queued actions run, the result
      * tiles go, and the Encounter plays as usual (new background first, C4). What follows the Encounter in the queue plays after it.
      */
-    private fun skipToNextFight() {
+    private fun skipToNextFight(release: Boolean = true) {
         val items = ArrayList<Item>()
         while (queue.isNotEmpty()) items += queue.removeFirst()
         val held = parked
@@ -245,6 +263,14 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         for (item in before) if (item is Item.Ev) panel.observeStudyEvent(item.e)
         panel.renderAll()   // still holding: the player side, the footer and the numbers come from the saved game, the next wild one waits
         for (item in before) if (item is Item.Act) try { item.block() } catch (t: Throwable) { Report.fail("PANEL", "queued action", t) }
+        if (!release) {
+            for (item in before) if (item is Item.Tiles) panel.showCatchTiles(item.summary, false)
+            parked = next
+            for (item in after) if (item is Item.Ev) panel.observeStudyEvent(item.e)
+            panel.renderAll()
+            AchievementPopup.playbackFinished(this)
+            return
+        }
         panel.hideCatchTiles()
         if (next != null) queue.addLast(Item.Ev(next))
         queue.addAll(after)
@@ -252,16 +278,9 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         pump()
     }
 
-    /**
-     * The screen is left under a result: it goes without an entrance (nothing is played to an invisible panel) and the new wild one
-     * is drawn from the saved game, so nobody comes back to a stuck Continue.
-     */
-    fun dropHold() {
-        if (!panel.holdsNextFight) return
-        if (!idle) { finishNow(); return }   // R9 C5: the hold started with the winning batch, its rewards may still play: they end, the saved game shows
-        parked = null
-        panel.hideCatchTiles()
-        panel.renderAll()
+    /** Leaving the host settles rewards silently, but its result and Continue still wait on return. */
+    fun pauseHeldResult() {
+        if (holding && !idle) skipToNextFight(release = false)
     }
 
     /** Too many answers waiting: no animations, one summary line, then the saved state. */

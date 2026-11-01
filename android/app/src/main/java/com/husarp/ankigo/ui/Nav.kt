@@ -70,6 +70,7 @@ object Nav {
     fun open(ctx: Context, dest: Dest, from: Dest? = null) {
         val i = intent(ctx, dest, from).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         if (Ui.findActivity(ctx) == null) i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (dest != Dest.SETTINGS) (Ui.findActivity(ctx) as? SettingsActivity)?.leavingSettings()
         ctx.startActivity(i)
     }
 

@@ -90,7 +90,7 @@ object FlowMath {
  * Wrapping row (centred lines unless [centered] is false) for the tag pills and the matchup chips. A child goes on the line while
  * it fits in what is left of it (children's margins count); [gapPx] is between children, [lineGapPx] between lines.
  */
-class FlowRow(ctx: Context, private val gapPx: Int, private val centered: Boolean = true, private val lineGapPx: Int = gapPx) : ViewGroup(ctx) {
+class FlowRow(ctx: Context, private val gapPx: Int, private val centered: Boolean = true, private val lineGapPx: Int = gapPx, private val alignEnd: Boolean = false) : ViewGroup(ctx) {
     private val kids = ArrayList<View>()
     private var lines: List<FlowMath.Line> = emptyList()
     private val lineH = ArrayList<Int>()
@@ -131,7 +131,7 @@ class FlowRow(ctx: Context, private val gapPx: Int, private val centered: Boolea
         var y = paddingTop
         val inner = r - l - paddingLeft - paddingRight
         lines.forEachIndexed { n, line ->
-            var x = paddingLeft + if (centered) ((inner - line.width) / 2).coerceAtLeast(0) else 0
+            var x = paddingLeft + if (alignEnd) (inner - line.width).coerceAtLeast(0) else if (centered) ((inner - line.width) / 2).coerceAtLeast(0) else 0
             val h = lineH[n]
             for (i in line.start until line.end) {
                 val c = kids[i]
@@ -251,10 +251,16 @@ object DetailParts {
             return@apply
         }
         val line = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        line.addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(0, -2, 1f))
+        if (stage == 0) {
+            line.addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(0, -2, 1f))
+        } else {
+            val pill = StatPillView(a, listOf("hp", "atk", "def", "spa", "spd", "spe")[stat.ordinal], stage)
+            line.addView(if (wholeRow) pill else tapInfo(pill, StatInfo.of(stat)), LinearLayout.LayoutParams(-2, -2))
+            line.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
+        }
         val effective = kotlin.math.max(1, (value * com.husarp.ankigo.game.BattleEngine.stageMult(stage)).toInt())
         val numbers = Ui.text(a, 13f, 900, if (stage > 0) R.color.ag_green else if (stage < 0) R.color.ag_red else R.color.ag_text).apply {
-            text = if (stage == 0) value.toString() else "$value → $effective"
+            text = if (stage == 0) value.toString() else StatTypography.format("$value → $effective")
             gravity = Gravity.END
         }
         line.addView(numbers, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(a, 8) })

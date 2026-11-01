@@ -10,7 +10,6 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
-import android.view.animation.DecelerateInterpolator
 import android.widget.AbsListView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -99,6 +98,8 @@ class SheetDragger(private val sheet: View, private val scrim: View?, private va
 
     private fun begin(ev: MotionEvent) {
         if (disposed) return
+        UiMotion.finish(sheet)
+        scrim?.let { UiMotion.finish(it) }
         anim?.cancel()
         tracker?.recycle(); tracker = VelocityTracker.obtain()
         downY = ev.rawY; startY = ev.rawY; inHandle = ev.y < handleZonePx || onVisibleHandle(ev); dragging = false
@@ -158,16 +159,16 @@ class SheetDragger(private val sheet: View, private val scrim: View?, private va
         val h = sheet.height.toFloat()
         if (!cancelled && SheetDrag.shouldClose(off, h, vy, sheet.resources.displayMetrics.density)) {
             if (still()) { close(); return }
-            slide(off, h, SheetDrag.slideMs(off, h)) { close() }
+            UiMotion.depart(sheet) { close() }
         } else {
-            if (still()) apply(0f) else slide(off, 0f, 200) {}
+            if (still()) apply(0f) else slide(off, 0f, 180) {}
         }
     }
 
     private fun slide(from: Float, to: Float, ms: Long, done: () -> Unit) {
         anim = ValueAnimator.ofFloat(from, to).apply {
             duration = ms
-            interpolator = DecelerateInterpolator()
+            interpolator = UiMotion.curve
             addUpdateListener { apply(it.animatedValue as Float) }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 var cancelled = false
@@ -256,6 +257,12 @@ object SheetKit {
 
     /** A sheet inside the page's layout ([scrim] = the dark layer behind it, a tap on it is the caller's): handle ensured, drag wired, [onClose] runs when it is dragged away. */
     fun layer(sheet: DragSheet, scrim: View, onClose: () -> Unit) {
+        sheet.post {
+            if (sheet.isAttachedToWindow) {
+                UiMotion.run(sheet, UiMotion.SHEET_MS, { f -> sheet.translationY = sheet.height * (1f - f) })
+                UiMotion.run(scrim, UiMotion.SHEET_MS, { f -> scrim.alpha = f })
+            }
+        }
         ensureHandle(sheet)
         val scroll = findScroll(sheet)
         sheet.dragger = SheetDragger(sheet, scrim, scroll, zone(sheet.context, findHandle(sheet), scroll), onClose, handle = findHandle(sheet))
@@ -264,11 +271,14 @@ object SheetKit {
     /**
      * The content view for [dialog]'s window (`dialog.setContentView(SheetKit.dialog(dialog, content))`): [content] with a handle (added if
      * missing) and the drag. The window's own content view follows the finger; the window dim fades with it; dragged away it closes through
-     * `dialog.cancel()` (= the same as a tap outside: the cancel and the dismiss listeners both run), without the window's exit animation.
+     * `dialog.cancel()` (= the same as a tap outside: the cancel and the dismiss listeners both run), with the selected window exit animation.
      */
-    fun dialog(dialog: Dialog, content: View): View = host(dialog.context, content,
-        { dialog.window?.setWindowAnimations(0); dialog.cancel() },
+    fun dialog(dialog: Dialog, content: View): View {
+        dialog.window?.setWindowAnimations(UiMotion.windowStyle(dialog.context, sheet = true))
+        return host(dialog.context, content,
+        { dialog.window?.setWindowAnimations(UiMotion.windowStyle(dialog.context, sheet = true)); dialog.cancel() },
         { dim -> dialog.window?.setDimAmount(dim) })
+    }
 
     /** [dialog] without the Dialog (the view part): [close] runs when the sheet is dragged away, [setDim] gets the new window dim while it moves. */
     fun host(ctx: Context, content: View, close: () -> Unit, setDim: (Float) -> Unit): DragSheet {

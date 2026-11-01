@@ -91,6 +91,7 @@ object DexDetail {
         val mine = copies(state.mons, sp.num)
         col.addView(line(a, "Owned", mine.size.toString()))
         lateinit var dlg: AppDialog
+        var optionsButton: View? = null
         if (mine.isNotEmpty()) {
             // Options works on one copy; with several the player picks which first
             fun withCopy(f: (Mon) -> Unit) {
@@ -99,7 +100,7 @@ object DexDetail {
             }
             val options = DetailParts.secondaryButton(a, "Options") {}
             options.setOnClickListener { withCopy { MonActions(a).menu(it, options) { dlg.dismiss() } } }
-            col.addView(options, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+            optionsButton = options
         }
 
         // wishlist star toggle: wishlisted species are always caught by the auto rule
@@ -136,10 +137,10 @@ object DexDetail {
         col.addView(star, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         col.addView(hint, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
-        dlg = AppDialog.Builder(a).setTitle(sp.name).setView(DetailSections.scroll(a, col)).setCloseAtTop().apply {
+        dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(a, col)), true).setDetailsFooter(optionsButton, contextLabel = "Species info").apply {
             if (mine.isNotEmpty()) {
-                // Highest-level copy first, without a picker; stays visible while the species body scrolls.
-                setTopAction(DetailParts.secondaryButton(a, "My Pokémon") { openMon(a, data, mine[0]) }.apply {
+                // Highest-level copy first, without a picker; Options and Close stay in the footer.
+                col.addView(DetailParts.secondaryButton(a, "My Pokémon") { openMon(a, data, mine[0]) }.apply {
                     setPadding(Ui.dp(a, 10), 0, Ui.dp(a, 10), 0)
                 })
             }

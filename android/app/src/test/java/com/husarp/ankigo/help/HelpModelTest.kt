@@ -134,9 +134,9 @@ class HelpModelTest {
         assertTrue(money.contains("in the first ${Tuning.CASH_TIER} coins every answer pays ${Tuning.CASH_PER_ANSWER} coins and every win ${Tuning.CASH_PER_WIN} coins") && money.contains("then a third, a quarter"))   // PLAN 125's curve
         assertTrue(money.contains("+${Tuning.CASH_PER_WIN} for every wild Pokémon you defeat or catch"))   // R13 Part C
         // Adam's decision: the coin / incense doubles the answer and win money (R14-B2-D: the daily goal gives a gift now, not money)
-        assertTrue(money.contains("Amulet Coin") && money.contains("Luck Incense") && money.contains("doubles the money of your answers and wins"))
+        assertTrue(money.contains("Amulet Coin") && money.contains("Luck Incense") && money.contains("doubles the coins paid for answers and wins"))
         assertFalse(money.contains("bonus of"))
-        assertTrue(money.contains("Daily gift") && money.contains("it is never a Master Ball") && money.contains("doesn't touch your money"))
+        assertTrue(money.contains("Daily gift") && money.contains("is never a Master Ball") && money.contains("It gives no coins"))
         assertTrue(Items.def("amulet-coin") != null && Items.def("luck-incense") != null)
     }
 

@@ -131,6 +131,7 @@ abstract class AgActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        UiMotion.arrive(this)
         if (seenLeaves != leaves) {
             seenLeaves = leaves
             onAppReturned()

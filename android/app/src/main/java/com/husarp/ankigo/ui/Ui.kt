@@ -133,7 +133,11 @@ object Ui {
     }
 
     /** A TextView in Nunito. Font padding is off so heights match the mockup's CSS line boxes. */
-    fun text(ctx: Context, sizeSp: Float, weight: Int, @ColorRes colorRes: Int): TextView = TextView(ctx).apply {
+    fun text(ctx: Context, sizeSp: Float, weight: Int, @ColorRes colorRes: Int): TextView = object : TextView(ctx) {
+        override fun setText(text: CharSequence?, type: TextView.BufferType?) {
+            super.setText(text?.let { StatTypography.format(it) }, type)
+        }
+    }.apply {
         typeface = font(ctx, weight)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp)
         setTextColor(c(ctx, colorRes))
@@ -296,8 +300,7 @@ object Ui {
         }
         val type = com.husarp.ankigo.GameRepo.data?.species?.get(num)?.types?.firstOrNull() ?: Type.NORMAL
         view.setImageDrawable(SpritePlaceholder(typeColor(type)))
-        if (!download) return
-        Sprites.fetchStatic(ctx, num, shiny) { bmp ->
+        Sprites.loadStatic(ctx, num, shiny, download) { bmp ->
             if (bmp != null && view.getTag(R.id.ag_tag_sprite) == key) view.setImageDrawable(pixelBitmap(ctx, bmp))
         }
     }

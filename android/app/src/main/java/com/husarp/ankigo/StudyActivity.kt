@@ -1,5 +1,8 @@
 package com.husarp.ankigo
 
+import com.husarp.ankigo.ui.MotionScrollView
+import com.husarp.ankigo.ui.MotionHorizontalScrollView
+
 import com.husarp.ankigo.game.lookNum
 import android.app.Activity
 import com.husarp.ankigo.ui.AppDialog
@@ -84,6 +87,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private fun io(task: () -> Unit) = host.submit(this, Runnable(task))
     private val nc by lazy { NextCard<StudyCard>(deckId, { host.nextSeq() }, check = PredictRule::check, maxAhead = NextCard.AHEAD, freshNext = true) }   // R23: show only a freshly selected card; asynchronous preparation never replaces it
     private val countsIo = Executors.newSingleThreadExecutor()   // R4 fix B1: only the deck counts' read runs here, so answers and card loads on [io] never wait behind it
+    private val audioIo = Executors.newSingleThreadExecutor { r -> Thread(r, "study-audio").apply { isDaemon = true } }
     private val countsGate = CountsGate()                        // which counts reads may still be shown (main thread)
     private val main = Handler(Looper.getMainLooper())
     private val prefs by lazy { getSharedPreferences("study", 0) }
@@ -101,6 +105,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private lateinit var cardColumn: LinearLayout
     private lateinit var side: LinearLayout
     private lateinit var web: WebView
+    private lateinit var whiteboardTools: WhiteboardTools
+    private lateinit var whiteboardPaper: com.husarp.ankigo.ui.WhiteboardPaper
     private lateinit var whiteboard: Whiteboard
     private lateinit var swipe: SwipeFrame
     private var swipeOn = false   // the "Swipe to answer" setting, read when the screen resumes
@@ -108,6 +114,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private lateinit var noticeScroll: ScrollView
     private lateinit var answerDivider: View
     private lateinit var buttons: LinearLayout
+    private var compactMenu: View? = null
     private lateinit var header: TextView
     private lateinit var handleBar: FrameLayout
     private lateinit var gap: View
@@ -159,6 +166,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private var panelDp = -1      // the battle panel's height in dp (stacked layout); -1 = the preset of heightMode
     private var appliedBodyDp = -1
     private var audio: MediaPlayer? = null
+    @Volatile private var audioRequest = 0L
     private var avAuto = emptyList<TtsRules.Av>()  // sounds and speech that play by themselves on this side
     private var avAll = emptyList<TtsRules.Av>()   // every sound/speech button of the page, by number
     private var speech: CardSpeech? = null         // created on the first card with speech
@@ -331,7 +339,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         web = com.husarp.ankigo.study.ExplainWebView(this, { canExplain() }, { explainCard(it) }, { sideNo }).apply { setBackgroundColor(Ui.c(context, R.color.ag_anki_bg)) }
         swipe = SwipeFrame(this, web).also { it.onSwipe = { ease -> answer(ease) } }
         whiteboard = Whiteboard(this)
-        cardSurface.addView(WhiteboardTools(this, whiteboard), StudyUi.lp(-1, -2))
+        whiteboardTools = WhiteboardTools(this, whiteboard)
+        cardSurface.addView(whiteboardTools, StudyUi.lp(-1, -2))
         calmView = calmCard()
         // R19-N: the calm card lies over the (already loading) card, so Continue shows it at once; it takes the touches, the card behind is hidden from TalkBack
         practiceNotice = StudyUi.iconButton(this, R.drawable.ic_practice_alert, "Free study information") {
@@ -341,14 +350,16 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             setPadding(Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11), Ui.dp(context, 11))
             background = Ui.rounded(0x66000000, 12, this@StudyActivity)
         }
+        whiteboardPaper = com.husarp.ankigo.ui.WhiteboardPaper(this, swipe, whiteboard)
+        whiteboardTools.onChanged = { whiteboardPaper.setBoardOn(it) }
+        whiteboardPaper.setBoardOn(whiteboardTools.isOn)
         cardSurface.addView(FrameLayout(this).apply {
-            addView(swipe, FrameLayout.LayoutParams(-1, -1))
-            addView(whiteboard, FrameLayout.LayoutParams(-1, -1))
+            addView(whiteboardPaper, FrameLayout.LayoutParams(-1, -1))
             addView(practiceNotice, FrameLayout.LayoutParams(Ui.dp(context, 44), Ui.dp(context, 44), Gravity.BOTTOM or Gravity.END))
             addView(calmView, FrameLayout.LayoutParams(-1, -1))
         }, StudyUi.lp(-1, 0, 1f))
         notice = StudyUi.column(this).apply { visibility = View.GONE }
-        noticeScroll = object : ScrollView(this) {
+        noticeScroll = object : MotionScrollView(this) {
             override fun onMeasure(w: Int, h: Int) {
                 if (notice.visibility == View.GONE) { super.onMeasure(w, View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.EXACTLY)); return }
                 val available = View.MeasureSpec.getSize(h)
@@ -374,19 +385,21 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         panel.onHoldChanged = { if (!isDestroyed && !finished) { releaseHiddenHold(); showButtons(); syncTiming() } }   // a result starts / stops holding the next battle: the row swaps its button, the auto timer pauses / restarts
         events.muted = { SoundRules.quietNow(SoundPrefs.quietOnCardAudio(this), audioNow, audioPrev) }
         panel.onMenu = { anchor ->
-            if (events.idle) {
+            run {
                 val m = AppMenu(anchor)
-                    .item(0, "Pokémon", R.drawable.ic_team).item(1, "Bag / Shop", R.drawable.ic_shop)
-                    .item(2, "Pokédex", R.drawable.ic_dex).item(3, "Settings", R.drawable.ic_settings).item(4, "Battle log", R.drawable.ic_swords)
+                    .item(9, "Compact view", R.drawable.ic_book, sub = if (compactStudy()) "On" else "Off", dividerAfter = true)
+                    .item(0, "Pokémon", R.drawable.ic_team, enabled = events.idle).item(1, "Bag / Shop", R.drawable.ic_shop, enabled = events.idle)
+                    .item(2, "Pokédex", R.drawable.ic_dex, enabled = events.idle).item(3, "Settings", R.drawable.ic_settings, enabled = events.idle).item(4, "Battle log", R.drawable.ic_swords, enabled = events.idle)
                 // one-off catch <-> defeat for this fight, only while a wild Pokémon is on stage; the label says what a tap does
                 val will = if (GameRepo.state?.battle != null && !events.holding) try { GameRepo.game?.willCatch() } catch (t: Throwable) { null } else null
-                if (will != null) m.item(5, com.husarp.ankigo.ui.CatchChoiceText.menuLabel(will), R.drawable.ic_ball)
+                if (events.idle && will != null) m.item(5, com.husarp.ankigo.ui.CatchChoiceText.menuLabel(will), R.drawable.ic_ball)
                 val blocker = try { GameRepo.game?.cycleMainBlocker() } catch (t: Throwable) { null }
-                m.item(6, "Switch Pokémon", R.drawable.ic_swap, enabled = blocker == null, sub = blocker)
-                m.item(8, "Use item", R.drawable.ic_ball)
-                m.item(7, "View settings", R.drawable.ic_palette)   // R10 B19
+                m.item(6, "Switch Pokémon", R.drawable.ic_swap, enabled = events.idle && blocker == null, sub = blocker)
+                m.item(8, "Use item", R.drawable.ic_ball, enabled = events.idle)
+                m.item(7, "View settings", R.drawable.ic_palette, enabled = events.idle)   // R10 B19
                 m.show { i ->
-                    if (i == 8) throwBall()
+                    if (i == 9) { prefs.edit().putBoolean("compactView", !compactStudy()).apply(); layout(); showButtons() }
+                    else if (i == 8) throwBall()
                     else if (i == 5) toggleCatch()
                     else if (i == 6) switchPokemon()
                     else if (i == 7) openViewSettings()
@@ -476,12 +489,13 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val mode = plan.mode ?: PanelHeight.mode(panelHeightDp(plan), plan.panelDp(0))
         heightMode = mode
         panel.setStudyLayout(mode != 0, mode == 2)
+        panel.setCompactStudy(compactStudy())
         // Compact info cards (name, level, HP bar) on the study strip's sprite geometry: full cards cannot sit beside the sprites in ~200 dp.
         if (narrow) { panel.arena.setCompact(false); panel.arena.setCompact(true) }
         panel.layoutParams = when {
             narrow -> StudyUi.lp(-1, Ui.dp(this, 170))
             wide -> StudyUi.lp(-1, 0, 1f)
-            else -> StudyUi.lp(-1, Ui.dp(this, panelHeightDp(plan)))
+            else -> StudyUi.lp(-1, Ui.dp(this, visiblePanelDp(panelHeightDp(plan))))
         }
         gap.layoutParams = StudyUi.lp(-1, 0, if (narrow) 1f else 0f)
         answerDivider.visibility = if (finished) View.VISIBLE else View.GONE
@@ -527,7 +541,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         if (save) { panelDp = shown; prefs.edit().putInt("panelDp", shown).apply() }
         val mode = PanelHeight.mode(shown, plan.panelDp(0))
         if (mode != heightMode) { heightMode = mode; panel.setStudyLayout(mode != 0, mode == 2) }
-        panel.layoutParams = StudyUi.lp(-1, Ui.dp(this, shown))
+        panel.layoutParams = StudyUi.lp(-1, Ui.dp(this, visiblePanelDp(shown)))
     }
     /** Drag the bar like a split-screen divider: the panel follows the finger, on release it snaps to a preset within reach. */
     private fun handleDrag() = object : View.OnTouchListener {
@@ -552,7 +566,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
     }
     override fun onStart() { super.onStart(); started = true; BattleScreen.setVisible(this, true); LiveSession.addSink(sink); LiveSession.hold(this, this) }
-    override fun onStop() { started = false; events.dropHold(); LiveSession.removeSink(sink); LiveSession.release(this, this); BattleScreen.setVisible(this, false); super.onStop() }
+    override fun onStop() { started = false; events.pauseHeldResult(); LiveSession.removeSink(sink); LiveSession.release(this, this); BattleScreen.setVisible(this, false); super.onStop() }
     override fun onResume() {
         super.onResume(); background = false; resumedNow = true; FloatBattleService.startIfWanted(this)
         GameSound.setStudyQuiet(this) { clickMuted() }   // shared menu / tab clicks and delayed battle sounds honour "quiet on cards with sound"
@@ -562,6 +576,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         host.invalidateSelection(); host.retryNow()   // AnkiDroid's selected deck may have changed meanwhile; an answer waiting to be saved tries again at once
         countsFirst = true; studiedWritten = false
         if (shownAt != 0L) shownAt = SystemClock.elapsedRealtime()
+        if (::panel.isInitialized) { layout(); if (!finished) showButtons() }
         swipeOn = prefs.getBoolean("swipe", false); if (::swipe.isInitialized) updateSwipe()
         // a predicted card is checked by the load queued behind its answer: reloading now would drop it (and a held tap with it)
         if (::web.isInitialized && (finished || card != null && !locked && !predictedNow)) loadNext(answerKeep())
@@ -666,7 +681,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         timings.clear()
         host.unregister(listener); host.cancelOwner(this)   // the host (its io thread, the answers) stays: only what this screen queued and has not started is dropped
         if (isFinishing) filterFile?.let { file -> file.delete(); java.io.File(file.path + ".position").delete() }
-        countsIo.shutdown(); super.onDestroy()
+        audioIo.shutdownNow(); countsIo.shutdown(); super.onDestroy()
     }
     /** Leaving while an answer is still being saved: just leave (the host keeps writing, in order), but say so. */
     override fun finish() {
@@ -884,7 +899,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     /** Shows the question side of [p]: a card AnkiDroid gave (confirmed), or the one it is expected to give next ([predicted]: its answers only wait). */
     private fun showCard(p: Prepared<StudyCard>, predicted: Boolean) {
-        whiteboard.clear()   // every new presentation, including the same note scheduled again
+        whiteboardPaper.reset()   // every new presentation, including the same note scheduled again
         val v = p.view
         val n = v.review
         Report.log("STUDY", "card shown: deck ${v.cardDeckName.ifEmpty { deckName }}, note ${p.key.nid}, ord ${p.key.ord}, card ${p.before["_id"]}, queue ${p.before["queue"]}, reps ${p.before["reps"]}" + if (predicted) " (predicted)" else "")
@@ -1373,6 +1388,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         swipe.setState(showing && !locked, card?.buttons ?: 4, showing)
     }
     private fun disableButtons(v: View) {
+        if (v === compactMenu) return
         if (v !== buttons) { v.isEnabled = false; if (v.isClickable) v.alpha = .55f }
         if (v is ViewGroup) for (i in 0 until v.childCount) disableButtons(v.getChildAt(i))
     }
@@ -1418,7 +1434,46 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
         syncTiming()
     }
+    private fun compactStudy() = prefs.getBoolean("compactView", false)
+
+    /** Reclaim the hidden rows without overwriting the user's normal-view height or changing its mode. */
+    private fun visiblePanelDp(dp: Int) = if (!compactStudy()) dp else when (heightMode) {
+        0 -> (dp - 86).coerceAtLeast(100)
+        1 -> (dp - 34).coerceAtLeast(66)
+        else -> dp
+    }
+
     private fun showButtons() {
+        compactMenu = null
+        fillAnswerButtons()
+        if (compactStudy()) {
+            val singleHeight = buttons.takeIf { it.childCount == 1 }?.getChildAt(0)?.layoutParams?.height
+                ?.takeIf { it == Ui.dp(this, 48) } ?: -1
+            val content = StudyUi.column(this).apply { gravity = Gravity.CENTER_VERTICAL }
+            while (buttons.childCount > 0) {
+                val child = buttons.getChildAt(0); buttons.removeView(child)
+                content.addView(child, child.layoutParams)
+            }
+            val row = StudyUi.row(this)
+            row.addView(content, StudyUi.lp(0, -1, 1f))
+            val menu = StudyUi.iconButton(this, R.drawable.ic_more_vert, "Battle menu") { }.apply {
+                val pad = Ui.dp(this@StudyActivity, 14)
+                setPadding(pad, pad, pad, pad)
+            }
+            compactMenu = menu
+            menu.setOnClickListener { panel.onMenu(menu) }
+            if (!flipped) {
+                val fill = com.husarp.ankigo.ui.ShowAnswerColor.get(this).fill
+                row.background = Ui.rounded(fill ?: Ui.c(this, R.color.ag_mauve), 12, this)
+                val dark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
+                menu.setColorFilter(if (fill != null || !dark) Color.WHITE else Ui.c(this, R.color.ag_crust))
+            }
+            row.addView(menu, StudyUi.lp(Ui.dp(this, 48), -1))
+            buttons.addView(row, StudyUi.lp(-1, singleHeight))
+        }
+    }
+
+    private fun fillAnswerButtons() {
         applyCalm()
         buttons.removeAllViews(); updateSwipe()
         val enabled = !locked && !mediaBlocked
@@ -1628,6 +1683,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         who.addView(StudyUi.ellipsis(StudyUi.label(this, preview.ifEmpty { cardName }.take(120), 14, R.color.ag_text, 900)))
         who.addView(StudyUi.ellipsis(StudyUi.label(this, "$modelName · Card ${(card?.ord ?: 0) + 1} · $deckName", 11, R.color.ag_sub0, 800)))
         sheet.addView(who)
+        sheet.addView(Form.switchRow(this, "Whiteboard", "Write on the card", whiteboardTools.isOn) { whiteboardTools.setBoardOn(it) })
         fun action(icon: Int, title: String, sub: String? = null, danger: Boolean = false, faded: Boolean = false, block: () -> Unit) {
             val row = StudyUi.row(this).apply {
                 setPadding(Ui.dp(context, 10), Ui.dp(context, 8), Ui.dp(context, 10), Ui.dp(context, 8))
@@ -1681,7 +1737,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         action(R.drawable.ic_undo, "Undo…", "Not possible in AnkiGo. Use Undo in AnkiDroid", faded = true) {
             AppDialog.Builder(this).setMessage("AnkiGo can't undo answers, bury, suspend or delete. Use Undo in AnkiDroid. The battle doesn't rewind; a redo won't count twice.").setPositiveButton("Open AnkiDroid") { _, _ -> openAnki() }.setNegativeButton("Back", null).showCard()
         }
-        val scroll = object : ScrollView(this) {
+        val scroll = object : MotionScrollView(this) {
             override fun onMeasure(w: Int, h: Int) {
                 super.onMeasure(w, View.MeasureSpec.makeMeasureSpec((resources.displayMetrics.heightPixels * .85f).toInt(), View.MeasureSpec.AT_MOST))
             }
@@ -1885,7 +1941,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             }
             // Up to 7 sprites spread over the full card width (as in the mockup); more scroll sideways.
             if (spread) summary.addView(sprites)
-            else summary.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(sprites) })
+            else summary.addView(MotionHorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(sprites) })
         }
         val results = StudyUi.column(this).apply {
             background = Ui.rounded(Ui.c(context, R.color.ag_card), 14, context)
@@ -1924,7 +1980,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         goalRow.addView(StudyUi.label(this, if (today >= goal) "Goal done · $today" else "$today / $goal", 12, R.color.ag_text, 900))
         goalRow.addView(Ui.chip(this, com.husarp.ankigo.ui.StreakFlame(this).apply { alive = (st?.streakDays ?: 0) > 0 }, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
         summary.addView(goalRow, StudyUi.spaced(this, 6))
-        summaryView = ScrollView(this).apply { addView(summary, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
+        summaryView = MotionScrollView(this).apply { addView(summary, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
         val next = NextDeck.pick(decks.map { NextDeck.D(it.id, it.name, it.total) }, deckId, deckName)   // PLAN 147: a sibling subdeck first, never a parent
         buttons.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 10))
         buttons.layoutParams = LinearLayout.LayoutParams(StudyUi.pageWidth(this), -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
@@ -1951,6 +2007,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     private fun openUrl(url: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
     private fun stopAudio() {
+        audioRequest++ // invalidates a media lookup still blocked in storage or a document provider
         soundQueue.clear(); audio?.release(); audio = null; speech?.stop()
         if (audioBusy) { audioBusy = false; audioIdle() }
     }
@@ -1963,16 +2020,37 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             (speech ?: CardSpeech(this).also { speech = it }).speak(item) { playNextSound() }
             return
         }
-        val found = Media.find(this, next.file ?: return playNextSound()) ?: return playNextSound()
-        try {
-            val p = MediaPlayer(); audio = p
-            if (found.file != null) p.setDataSource(found.file.absolutePath) else p.setDataSource(this, found.uri!!)
-            p.setOnPreparedListener { it.start() }
-            p.setOnCompletionListener { it.release(); audio = null; playNextSound() }
-            p.setOnErrorListener { mp, _, _ -> mp.release(); audio = null; playNextSound(); true }
-            p.prepareAsync()
-        } catch (_: Exception) { audio?.release(); audio = null; playNextSound() }
+        val file = next.file ?: return playNextSound()
+        val request = ++audioRequest
+        val app = applicationContext
+        audioIo.execute {
+            if (request != audioRequest) return@execute
+            // SAF lookup and setDataSource may both call a remote document provider.
+            // Keep this separate from the answer queue: a slow media tree must not delay a rating.
+            var prepared: MediaPlayer? = null
+            try {
+                val found = Media.find(app, file)
+                if (found != null) {
+                    val p = MediaPlayer()
+                    prepared = p
+                    if (found.file != null) p.setDataSource(found.file.absolutePath) else p.setDataSource(app, found.uri!!)
+                }
+            } catch (_: Exception) { prepared?.release(); prepared = null }
+            val p = prepared
+            main.post {
+                if (request != audioRequest || isDestroyed) { p?.release(); return@post }
+                if (p == null) { playNextSound(); return@post }
+                try {
+                    audio = p
+                    p.setOnPreparedListener { if (audio === it) it.start() }
+                    p.setOnCompletionListener { it.release(); if (audio === it) { audio = null; playNextSound() } }
+                    p.setOnErrorListener { mp, _, _ -> mp.release(); if (audio === mp) { audio = null; playNextSound() }; true }
+                    p.prepareAsync()
+                } catch (_: Exception) { p.release(); audio = null; playNextSound() }
+            }
+        }
     }
+
     @Deprecated("Deprecated in Java")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

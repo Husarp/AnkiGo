@@ -118,16 +118,16 @@ class R609FlowTest {
         assertFalse("nothing left to continue", player.continueBattle())
     }
 
-    @Test fun leavingTheScreenDropsTheHoldWithoutAnEntrance() {
+    @Test fun leavingTheScreenKeepsTheHoldWithoutAnEntrance() {
         val panel = BattlePanelView(ctx())
         val player = EventPlayer(panel)
         measure(panel, 412, 869)
         player.enqueue(defeatBatch())
-        player.dropHold()
-        assertFalse(player.holding); assertFalse(panel.tilesShown)
-        assertNull(parked(player))
+        player.pauseHeldResult()
+        assertTrue(player.holding); assertTrue(panel.tilesShown)
+        assertNotNull(parked(player))
         assertTrue(player.idle)
-        player.dropHold()   // nothing held: harmless
+        player.pauseHeldResult()   // repeated stops keep the same hold
     }
 
     @Test fun aSmallWindowNeverHoldsSoThereIsNothingToContinue() {
@@ -295,12 +295,12 @@ class R609FlowTest {
         assertEquals(false, getField(act, "flipped"))
     }
 
-    @Test fun leavingTheScreenDropsTheHold() {
+    @Test fun leavingTheScreenKeepsTheHold() {
         val c = ctx()
         val act = study(c)
         events(act).enqueue(defeatBatch())
-        events(act).dropHold()   // what onStop does
-        assertFalse(events(act).holding)
+        events(act).pauseHeldResult()   // what onStop does
+        assertTrue(events(act).holding)
     }
 
     @Test fun aHiddenPanelReleasesTheHoldSoNoContinueComesLaterForAFlippedCard() {

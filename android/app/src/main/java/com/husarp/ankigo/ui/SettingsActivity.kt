@@ -181,7 +181,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     private var handledDataDone = false
 
     /** The open section, or null on the home list. */
-    var section: SettingsSection? = null
+    private var homeScrollY = 0
+    private var motionGeneration = 0
+    var section: SettingsSection? = SettingsReturn.section(this)
         private set
 
     /** What the search box holds (kept across opening a result and coming back), and the setting to scroll to after a render. */
@@ -246,9 +248,23 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     /** Opens [s] (null = the list). */
     fun open(s: SettingsSection?) {
         saveName()
-        section = s
-        render()
-        if (::scroll.isInitialized) scroll.scrollTo(0, 0)
+        val forward = s != null
+        if (section == null && forward && ::scroll.isInitialized) homeScrollY = scroll.scrollY
+        val generation = ++motionGeneration
+        val change = {
+            section = s; SettingsReturn.remember(this, section); render()
+            if (::scroll.isInitialized) {
+                scroll.scrollTo(0, 0)
+                scroll.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+                    override fun onPreDraw(): Boolean {
+                        scroll.viewTreeObserver.removeOnPreDrawListener(this)
+                        if (generation == motionGeneration) scroll.scrollTo(0, if (s == null) homeScrollY else 0)
+                        return true
+                    }
+                })
+            }
+        }
+        if (::scroll.isInitialized) UiMotion.axis(root, forward, change) else change()
     }
 
     override fun buildBody(): View {
@@ -256,14 +272,21 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), 0, dp(16), dp(28))
         }
-        scroll = ScrollView(this).apply { addView(content) }
+        scroll = MotionScrollView(this).apply { addView(content) }
         live = WeakReference(this)
         render()
         if (loaded == null) GameRepo.load(this) { if (alive) render() }
         return scroll
     }
 
+    // Returning from another app preserves the section, even after a long absence.
+    private var hiddenAt: Long? = null
+    internal fun leavingSettings() { hiddenAt = SettingsReturn.now() }
+    override fun onAppReturned() {} // Settings keeps its current section when another app was in front.
+
     override fun onShow() {
+        if (hiddenAt?.let { !SettingsReturn.withinMinute(it, SettingsReturn.now()) } == true) open(null)
+        hiddenAt = null
         super.onShow()
         SettingsJobs.everything.listener = everyListener
         SettingsJobs.data.listener = dataListener
@@ -275,6 +298,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     }
 
     override fun onHide() {
+        SettingsReturn.remember(this, section)
         saveName()
         flushScale(recreate = false)
         super.onHide()
@@ -504,10 +528,14 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             main.removeCallbacks(applyScale)
             main.postDelayed(applyScale, SCALE_DELAY_MS)
         }
-        val tabBar = Form.stackRow(this, "Bottom tab bar", "Bold name, sliding box, top line, or name only.",
-            Form.segmented(this, TabBarStyle.entries.map { it.label }, TabBarStyle.entries.indexOf(TabBarStyle.get(this))) {
-                AppLook.setTabBarStyle(this, TabBarStyle.entries[it]); looked()
-            })
+        val tabBar = Form.row(this, "Bottom tab bar", TabBarStyle.get(this).label, null) {
+            Pickers.show(AppDialog.Builder(this).setTitle("Bottom tab bar")
+                .setItems(TabBarStyle.entries.map {
+                    it.label + if (it == TabBarStyle.C1) " (default)" else ""
+                }.toTypedArray()) { _, index ->
+                    AppLook.setTabBarStyle(this, TabBarStyle.entries[index]); looked()
+                }.setNegativeButton("Cancel", null).create())
+        }
         val bars = BarStyle.entries
         val barStyle = Form.stackRow(this, "Progress bars", "XP blue, goals orange, Pokédex teal; or all in the accent, or a gradient.",
             Form.segmented(this, bars.map { it.label }, bars.indexOf(AppPrefs.barStyle(this))) { i ->
@@ -621,27 +649,13 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     }
 
     private fun editExplainPrompt() {
-        val prefs = getSharedPreferences("study", 0)
-        val field = EditText(this).apply {
-            setText(prefs.getString(com.husarp.ankigo.study.CardExplain.PREF_TEMPLATE, null)
-                ?: com.husarp.ankigo.study.CardExplain.DEFAULT_TEMPLATE)
-            minLines = 4; maxLines = 8
-            gravity = Gravity.TOP or Gravity.START
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-            typeface = Ui.font(this@SettingsPage, 700)
-            textSize = 14f
-            setTextColor(Ui.c(this@SettingsPage, R.color.ag_text))
-            filters = arrayOf(InputFilter.LengthFilter(1000))
-            Ui.tintEdit(this)
-        }
-        Pickers.show(AppDialog.Builder(this).setTitle("Google browser prompt").setView(field)
-            .setPositiveButton("Save") { _, _ ->
-                prefs.edit().putString(com.husarp.ankigo.study.CardExplain.PREF_TEMPLATE,
-                    field.text.toString().trim().ifBlank { com.husarp.ankigo.study.CardExplain.DEFAULT_TEMPLATE }).apply()
-            }.setNegativeButton("Cancel", null).create())
+        Pickers.show(ExplainPromptDialog.create(this))
     }
 
     private fun studyCard(): View = groupedCard(listOf(
+            Form.switchRow(this, "Compact view", "More room for the card; hide battle counters, daily goal and action bar", getSharedPreferences("study", 0).getBoolean("compactView", false)) {
+                getSharedPreferences("study", 0).edit().putBoolean("compactView", it).apply()
+            },
             Form.row(this, "Google browser prompt", "Explain this card opens Google in the browser; tap to edit the prompt", null) { editExplainPrompt() },
             Form.switchRow(this, "Tapping a deck opens AnkiDroid", "Off: study inside AnkiGo", getSharedPreferences("study", 0).getBoolean("inAnkiDroid", false)) {
                 getSharedPreferences("study", 0).edit().putBoolean("inAnkiDroid", it).apply()
@@ -667,7 +681,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.switchRow(this, "Swipe to answer", "Answer side: ← Again · ↓ Hard · → Good · ↑ Easy", getSharedPreferences("study", 0).getBoolean("swipe", false)) {
                 getSharedPreferences("study", 0).edit().putBoolean("swipe", it).apply()
             },
-            Form.switchRow(this, "Read battle log with TalkBack", "Turn off to keep the card reading uninterrupted", getSharedPreferences("study", 0).getBoolean("speakBattle", true)) {
+            Form.switchRow(this, "Read battle log with TalkBack", "Turn off to keep the card reading uninterrupted", getSharedPreferences("study", 0).getBoolean("speakBattle", false)) {
                 getSharedPreferences("study", 0).edit().putBoolean("speakBattle", it).apply()
             },
             Form.row(this, "Answer timer", null, valueText(getSharedPreferences("study", 0).getString("timer", com.husarp.ankigo.study.StudyTiming.AS_DECK))) {
@@ -1513,13 +1527,15 @@ class SettingsActivity : PageActivity() {
     override fun createPage(): GamePage = SettingsPage(this, this).also {
         val target = intent.getStringExtra("helpSetting")
         it.helpEntry = target != null
-        it.restoreSection(restore ?: target?.takeIf { v -> v.startsWith("@") }?.drop(1))
+        if (restore != null || target != null) it.restoreSection(restore ?: target?.takeIf { v -> v.startsWith("@") }?.drop(1))
         if (restore == null && target != null && !target.startsWith("@")) {
             SettingsCatalog.all.firstOrNull { info -> info.id == target }?.let { info -> it.restoreHelpSetting(info) }
         }
         it.restoreChoosers(restoreChoosers)
         settingsPage = it
     }
+
+    internal fun leavingSettings() { settingsPage?.leavingSettings() }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)

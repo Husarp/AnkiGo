@@ -19,9 +19,8 @@ import java.util.zip.ZipInputStream
  *  3. our own copy imported from an AnkiDroid .apkg export (legacy format).
  */
 object Media {
-    private var safIndex: Map<String, Uri>? = null
-    private var safTreeLoaded: String? = null
-    val lastSource = HashMap<String, String>()
+    @Volatile private var safCache: Pair<String, Map<String, Uri>>? = null
+    val lastSource = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     fun ownDir(ctx: Context) = File(ctx.filesDir, "media").apply { mkdirs() }
 
@@ -40,12 +39,12 @@ object Media {
     fun treeUri(ctx: Context): Uri? = ctx.getSharedPreferences("spike", 0).getString("mediaTree", null)?.let(Uri::parse)
     fun setTree(ctx: Context, uri: Uri) {
         ctx.getSharedPreferences("spike", 0).edit().putString("mediaTree", uri.toString()).apply()
-        safIndex = null
+        safCache = null
     }
 
     private fun safIndex(ctx: Context): Map<String, Uri> {
         val tree = treeUri(ctx) ?: return emptyMap()
-        if (safIndex != null && safTreeLoaded == tree.toString()) return safIndex!!
+        safCache?.takeIf { it.first == tree.toString() }?.let { return it.second }
         val m = HashMap<String, Uri>()
         try {
             val docId = DocumentsContract.getTreeDocumentId(tree)
@@ -62,7 +61,7 @@ object Media {
         } catch (e: Exception) {
             Report.fail("MEDIA", "SAF index", e)
         }
-        safIndex = m; safTreeLoaded = tree.toString()
+        safCache = tree.toString() to m // publish key and immutable index together; never lock the UI behind a provider query
         return m
     }
 
@@ -106,7 +105,7 @@ object Media {
         }
         Report.log("MEDIA", "imported copy: ${ownDir(ctx).list()?.size ?: 0} files")
         if (treeUri(ctx) != null) {
-            safIndex = null
+            safCache = null
             safIndex(ctx)
         }
     }

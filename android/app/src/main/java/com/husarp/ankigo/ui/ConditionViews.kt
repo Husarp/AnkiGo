@@ -36,7 +36,7 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
     private val fm = word.fontMetrics
     private val padH = textPx * 0.7f
     val padV = textPx * 0.28f
-    val height: Float = padV * 2f + (fm.descent - fm.ascent)
+    val height: Float = padV * 2f + max(fm.descent - fm.ascent, textPx * 1.75f)
     val radius: Float = height * 0.42f
 
     /** Space between two chips of a row. */
@@ -47,7 +47,7 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
 
     fun width(m: ConditionMarks.Mark): Float {
         val n = m.number
-        return padH * 2f + iconWidth(m.key) + word.measureText(m.word) + if (n != null) num.measureText(" · $n") else 0f
+        return padH * 2f + iconWidth(m.key) + word.measureText(if (m.key.startsWith("stat.")) m.def.word else m.word) + (if (m.key.startsWith("stat.")) textPx * (StatPill.boxWidth(StatPill.count(m.value)) / 12f + 0.3f) else 0f) + if (n != null) num.measureText(" · $n") else 0f
     }
 
     fun iconWidth(key: String): Float = if (FieldIcons.of(key) != null || key in setOf("switchtrap", "spikes", "toxicspikes", "stealthrock", "stickyweb")) textPx * 1.35f else 0f
@@ -174,7 +174,17 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
                     x0 += m.iconWidth(mk.key)
                 }
                 m.word.color = if (mk.key.startsWith("stat.")) Ui.c(context, if (mk.value > 0) R.color.ag_green else R.color.ag_red) else Ui.c(context, R.color.ag_text)
-                canvas.drawText(mk.word, x0, base, m.word)
+                if (mk.key.startsWith("stat.")) {
+                    canvas.drawText(mk.def.word, x0, base, m.word)
+                    val path = android.graphics.Path().also { StatPill.chevrons(it, StatPill.count(mk.value), mk.value > 0) }
+                    canvas.save()
+                    val unit = m.textPx / 12f
+                    canvas.translate(x0 + m.word.measureText(mk.def.word) + m.textPx * 0.3f, c.rect.centerY() - StatPill.boxHeight(StatPill.count(mk.value)) * unit / 2f)
+                    canvas.scale(unit, unit)
+                    val stroke = Paint(m.word).apply { style = Paint.Style.STROKE; strokeWidth = StatPill.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+                    canvas.drawPath(path, stroke)
+                    canvas.restore()
+                } else canvas.drawText(mk.word, x0, base, m.word)
                 mk.number?.let { canvas.drawText(" · $it", x0 + m.word.measureText(mk.word), base, m.num) }
             }
         }
@@ -335,7 +345,7 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         }
         if (body.measuredHeight + padH > maxH) {   // still taller than the arena: it scrolls
             removeView(body)
-            scroll = ScrollView(context).apply { isVerticalScrollBarEnabled = false; overScrollMode = OVER_SCROLL_NEVER; addView(body, LayoutParams(-2, -2)) }
+            scroll = MotionScrollView(context).apply { isVerticalScrollBarEnabled = false; overScrollMode = OVER_SCROLL_NEVER; addView(body, LayoutParams(-2, -2)) }
             addView(scroll, LayoutParams(-2, -2))
         }
         measure(MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))
@@ -354,13 +364,10 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         val key = mark.key.removePrefix("stat.")
         val name = StatPill.longName(key)
         val n = mark.value
-        val multiplier = if (key == "accuracy" || key == "evasion") {
-            if (n >= 0) (3.0 + n) / 3.0 else 3.0 / (3.0 - n)
-        } else com.husarp.ankigo.game.BattleEngine.stageMult(n)
-        val factor = "%.2f".format(java.util.Locale.US, multiplier).trimEnd('0').trimEnd('.')
+        val factor = com.husarp.ankigo.game.StageText.factor(n, key == "accuracy" || key == "evasion")
         val hue = context.getColor(if (n > 0) R.color.ag_green else R.color.ag_red)
         fun label(value: String, sp: Float, color: Int, weight: Int = 700) = TextView(context).apply {
-            text = value
+            text = StatTypography.format(value)
             typeface = Ui.font(context, weight)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, TextMath.at(sp, floorSp))
             setTextColor(color)
@@ -379,11 +386,7 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         title.addView(label(name, 15f, context.getColor(R.color.ag_text), 900), LinearLayout.LayoutParams(0, -2, 1f))
         title.addView(label("×$factor", 24f, hue, 900), LinearLayout.LayoutParams(-2, -2).apply { marginStart = Ui.dp(context, 8) })
         col.addView(title, LinearLayout.LayoutParams(-1, -2))
-        val magnitude = kotlin.math.abs(n).coerceIn(0, 6)
-        col.addView(label("●".repeat(magnitude) + "○".repeat(6 - magnitude) + "   ${if (n > 0) "+" else "−"}$magnitude / 6", 13f, hue, 900).apply {
-            setPadding(0, Ui.dp(context, 6), 0, Ui.dp(context, 6))
-            contentDescription = StatPill.spoken(key, n) + ", out of 6 stages"
-        })
+        col.addView(StatPillView(context, key, n))
         col.addView(label("$name is $factor× its normal value.", 12f, context.getColor(R.color.ag_sub1)))
         col.addView(label("Until switching, fainting or a new opponent.", 12f, context.getColor(R.color.ag_sub1)).apply { setPadding(0, Ui.dp(context, 5), 0, 0) })
         val cardW = min(maxW, Ui.dp(context, 288))
@@ -391,7 +394,7 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         body.measure(MeasureSpec.makeMeasureSpec(cardW - pad * 2, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
         if (body.measuredHeight + pad * 2 > maxH) {
             removeView(body)
-            scroll = ScrollView(context).apply { addView(body, LayoutParams(-1, -2)) }
+            scroll = MotionScrollView(context).apply { addView(body, LayoutParams(-1, -2)) }
             addView(scroll, LayoutParams(-1, -1))
         }
         measure(MeasureSpec.makeMeasureSpec(cardW, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))

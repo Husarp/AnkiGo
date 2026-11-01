@@ -126,7 +126,7 @@ class FirstRunActivity : AgActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(8), dp(20), dp(16))
         }
-        root.addView(ScrollView(this).apply { addView(content) }, Form.lp(h = 0, weight = 1f))
+        root.addView(MotionScrollView(this).apply { addView(content) }, Form.lp(h = 0, weight = 1f))
         root.addView(actions)
         return root
     }
@@ -582,7 +582,7 @@ class FirstRunActivity : AgActivity() {
 }
 
 /** The generation chips in a row that scrolls sideways when there are too many for a narrow panel. */
-private class GenScroller(ctx: Context, chips: LinearLayout) : HorizontalScrollView(ctx) {
+private class GenScroller(ctx: Context, chips: LinearLayout) : MotionHorizontalScrollView(ctx) {
     init {
         isHorizontalScrollBarEnabled = false
         overScrollMode = OVER_SCROLL_NEVER

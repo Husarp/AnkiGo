@@ -39,6 +39,14 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     private lateinit var tabShop: TextView
     private lateinit var tabBag: TextView
     private var showBag = false
+    private val dealClock = android.os.Handler(android.os.Looper.getMainLooper())
+    private val updateDeal = object : Runnable {
+        override fun run() {
+            requestRender()
+            val now = System.currentTimeMillis()
+            dealClock.postDelayed(this, 60_000L - now % 60_000L)
+        }
+    }
 
     internal fun openBag() {
         closeCard()
@@ -71,11 +79,13 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     }
 
     override fun onHide() {
+        dealClock.removeCallbacks(updateDeal)
         closeCard()
         super.onHide()
     }
 
     override fun onGone() {
+        dealClock.removeCallbacks(updateDeal)
         closeWindow()
         super.onGone()
     }
@@ -115,7 +125,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             addView(tabs, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 4) })
             addView(content)
         }
-        scroll = ScrollView(ctx).apply { addView(col) }
+        scroll = MotionScrollView(ctx).apply { addView(col) }
         return scroll
     }
 
@@ -125,6 +135,8 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     override fun onShow() {
         super.onShow()
         rollDay()
+        dealClock.removeCallbacks(updateDeal)
+        dealClock.postDelayed(updateDeal, 60_000L - System.currentTimeMillis() % 60_000L)
     }
 
     /** New game day: roll the day over and restock once (not in render(), which GameRepo's listener would loop on). */
@@ -198,19 +210,19 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
 
     // ---- shop tab ----
 
-    private fun hoursToNewDay(): Int = ShopPlan.hoursToNewDay(System.currentTimeMillis(), state.settings.dayStartHour)
-
     private fun fillShop() {
         val ctx = this
         val st = state
         val cols = 1
+        val minutesLeft = ShopPlan.minutesToNewDay(System.currentTimeMillis(), st.settings.dayStartHour)
 
         // The deal card keeps its unit and old prices; a tap opens the item window for confirmation.
-        val dailyOffer = Shop.dealFor(data, st.day)?.let { deal ->
-            val price = ShopPlan.price(data, st.day, deal.item)
+        val dealNow = System.currentTimeMillis()
+        val dailyOffer = Shop.dealFor(data, st.day, dealNow)?.let { deal ->
+            val price = ShopPlan.price(data, st.day, deal.item, dealNow)
             val name = Items.name(deal.item)
-            ShopViews.dealCard(ctx, deal.item, name, price, ShopPlan.endsText(st.settings.dayStartHour, hoursToNewDay()),
-                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))) { openCard(CardKeys.DEAL) }
+            ShopViews.dealCard(ctx, deal.item, name, price, ShopPlan.dealEndsText(dealNow),
+                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught)), night = Shop.isNight(dealNow)) { openCard(CardKeys.DEAL) }
         }
 
         // the weekend special (Saturday and Sunday only)
@@ -224,7 +236,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             .map { ShopPlan.Tile.Item(it) }, cols, CardKeys::special)
 
         // today's specials: title and "new in N h", then the "Refresh shop" button (a real button, so it is easy to find; PLAN 108), then the tiles
-        content.addView(Bits.sect(ctx, "Today's specials", "new in ${hoursToNewDay()} h"))
+        content.addView(Bits.sect(ctx, "Today's specials", "New in ${ShopPlan.countdown(minutesLeft)}"))
         content.addView(refreshButton(), LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 10) })
         val specials = ShopPlan.specials(st.shopItems.filter { Items.def(it)?.kind != com.husarp.ankigo.game.ItemKind.BALL }, emptyList())
         if (specials.isEmpty()) content.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Nothing in the shop yet." })
@@ -278,7 +290,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             subView = m?.let { Ui.typeChip(this, it.type) }) { openCard(key) }
     }
 
-    /** The weekend special: an evolution stone or a strong TM at its normal price, until Sunday night. */
+    /** The weekend special: an exclusive held item at its fixed price, until Sunday night. */
     private fun weekendCard(w: Shop.Special): View {
         val ctx = this
         return if (w.isTm) {
@@ -298,12 +310,12 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     private fun buyItem(item: String) {
         val quantity = open.quantity
         open.bought()
-        if (act { g -> Shop.buy(g.data, g.state, item, quantity = quantity) }.ok) GameSound.ui(this, SoundId.BUY)
+        if (act { g -> Shop.buy(g.data, g.state, item, quantity = quantity) }.ok) { GameSound.ui(this, SoundId.BUY); window?.purchase(appBar.pill ?: appBar) }
     }
 
     private fun buyTm(move: String) {
         open.bought()
-        if (act { g -> Shop.buyTm(g.data, g.state, move) }.ok) GameSound.ui(this, SoundId.BUY)
+        if (act { g -> Shop.buyTm(g.data, g.state, move) }.ok) { GameSound.ui(this, SoundId.BUY); window?.purchase(appBar.pill ?: appBar) }
     }
 
     /** "Refresh shop · [coin] 100": the accent button with the refresh icon (greyed, with a toast on tap, when the money is not enough). */

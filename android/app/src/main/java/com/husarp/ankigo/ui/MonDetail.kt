@@ -197,18 +197,15 @@ object MonDetail {
             if (mon.shownName != mon.name) mon.name else null, compact,
             lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–")))
 
-        if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col, focusMove)).setBackAtTop().showCard(); return }
+        if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusMove)), true).setDetailsFooter().showCard(); return }
         lateinit var more: View
         more = DetailParts.secondaryButton(a, "Options") {
             // the menu hangs on this button, so the details close only once a row was tapped
             MonActions(page).menu(mon, more) { dlg.dismiss() }
         }
         // "Options" is pinned under the scrolling details (AppDialog footer, below the details), compact or not
-        val pinned = FrameLayout(a).apply {
-            addView(more, FrameLayout.LayoutParams(-1, -2).also { it.setMargins(Ui.dp(a, 20), Ui.dp(a, 4), Ui.dp(a, 20), Ui.dp(a, 4)) })
-        }
-        dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailSections.scroll(a, col, focusMove)).setFooter(pinned)
-            .setBackAtTop().create()
+        dlg = AppDialog.Builder(a).setTitle("Details")
+            .setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusMove)), true).setDetailsFooter(more).create()
         Pickers.show(dlg)
     }
 

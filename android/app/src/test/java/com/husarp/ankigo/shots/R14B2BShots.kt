@@ -32,6 +32,8 @@ import org.junit.Test
  * R15-A tests and the old popup tests that became card shots.
  */
 internal object ShopCardKit {
+    fun dealHeading(): String = if (Shop.isNight(System.currentTimeMillis())) "DEAL OF THE NIGHT" else "DEAL OF THE DAY"
+
     const val WEEKDAY = "2026-10-14" // a Wednesday
 
     /** The fake world with a price for every item the cards show, and several species that can learn Thunderbolt by TM. */
@@ -259,7 +261,7 @@ class R14B2BShots {
             assertTrue("the popup no longer repeats a struck-through price", struck.isEmpty())
             val popup = (screen as ShopCardKit.Stage).page.itemWindow!!.view
             assertTrue("today's purchase price in popup", com.husarp.ankigo.ui.Bits.fmt(deal.price) in texts(popup))
-            assertTrue("the deal card stays under the window", texts(screen).any { it.startsWith("DEAL OF THE DAY") })
+            assertTrue("the deal card stays under the window", texts(screen).any { it.startsWith(ShopCardKit.dealHeading()) })
             assertTrue("Buy" in texts(screen))
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.DEAL, day = day.value).second }
     }

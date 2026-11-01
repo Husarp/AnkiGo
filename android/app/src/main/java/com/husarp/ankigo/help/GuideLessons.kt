@@ -19,8 +19,10 @@ internal object GuideLessons {
             "Move choice · Smart is the default" to ch.points.slice(10..11),
             "XP and held items" to ch.points.drop(12),
         )
-        val remaining = ch.points.filter { it !in shortPoints(ch) }
-        return remaining.map { p ->
+        val giftPoints = if (ch.id == GameGuide.MONEY) ch.points.slice(4..6) else emptyList()
+        val remaining = ch.points.filter { it !in shortPoints(ch) && it !in giftPoints }
+        val giftSection = if (giftPoints.isEmpty()) emptyList() else listOf("Daily gift and goal streak" to giftPoints)
+        return giftSection + remaining.map { p ->
             val title = p.substringBefore(':').takeIf { it.length <= 40 }
                 ?: p.substringBefore('.').split(' ').take(5).joinToString(" ")
             title to listOf(p)

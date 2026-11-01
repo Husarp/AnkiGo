@@ -158,15 +158,24 @@ object Sprites {
     internal const val DECODE_MAX_PIXELS = 2_000_000L
 
     private val main by lazy { Handler(Looper.getMainLooper()) }
-    private val pool by lazy {
+    internal var pool: java.util.concurrent.Executor = run {
         Executors.newFixedThreadPool(4) { r -> Thread(r, "sprites").apply { isDaemon = true } }
     }
-    private val inflight = HashMap<String, MutableList<(Any?) -> Unit>>()
+    private val inflight = HashMap<Pair<Context, String>, MutableList<(Any?) -> Unit>>()
+    private val roots = java.util.Collections.synchronizedMap(java.util.WeakHashMap<Context, File>())
 
     private val images = ByteLru<SpriteImage>(IMAGE_CACHE_BYTES) { img -> img.frames.sumOf { it.byteCount.toLong() } }
-    private val bitmaps = ByteLru<Bitmap>(BITMAP_CACHE_BYTES) { it.byteCount.toLong() }
+    private data class CachedBitmap(val modified: Long, val bitmap: Bitmap)
+    private val bitmaps = ByteLru<CachedBitmap>(BITMAP_CACHE_BYTES) { it.bitmap.byteCount.toLong() }
 
-    fun dir(ctx: Context): File = File(ctx.noBackupFilesDir, "sprites").also { if (!upgraded) upgradeBattleCache(it) }
+    // Android directory getters may mkdir/stat even when a File object is all we need.
+    // Bulk UI bitmap lookups use only this worker-populated root cache.
+    fun dir(ctx: Context): File {
+        val app = ctx.applicationContext
+        val root = roots[app] ?: File(app.noBackupFilesDir, "sprites").also { roots[app] = it }
+        if (Looper.myLooper() != Looper.getMainLooper() && !upgraded) upgradeBattleCache(root)
+        return root
+    }
 
     @Volatile private var upgraded = false
 
@@ -176,7 +185,6 @@ object Sprites {
      * GIFs, the static pictures and item icons stay.
      */
     @Synchronized internal fun upgradeBattleCache(dir: File) {
-        upgraded = true
         val mark = File(dir, ".battle-v2")
         if (!mark.isFile) {
             for (sub in listOf("front", "back")) {
@@ -197,6 +205,7 @@ object Sprites {
             File(dir, "static").listFiles()?.forEach { if (it.name.endsWith(".missing")) it.delete() }
             try { dir.mkdirs(); staticMark.writeText("1") } catch (_: IOException) { }
         }
+        upgraded = true
     }
 
     private fun baseName(num: Int, shiny: Boolean) = if (shiny) "${num}s" else "$num"
@@ -211,11 +220,9 @@ object Sprites {
 
     /** Fetches (background pool, fallback chain) and calls back on the main thread with the file or null. */
     fun fetch(ctx: Context, sp: Species, kind: SpriteKind, shiny: Boolean, cb: (File?) -> Unit) {
-        val done = cached(ctx, sp, kind, shiny)
-        if (done != null) { main.post { cb(done) }; return }
-        if (!enabled(ctx)) { main.post { cb(null) }; return }
-        val key = File(folder(ctx, kind), baseName(sp.num, shiny)).path
-        enqueue(key, { fetchBlocking(ctx, sp, kind, shiny) }) { cb(it as File?) }
+        val app = ctx.applicationContext
+        val key = app to "battle:$kind:${baseName(sp.num, shiny)}"
+        enqueue(key, { fetchBlocking(app, sp, kind, shiny) }) { cb(it as File?) }
     }
 
     /** Blocking variant (background threads only). */
@@ -266,17 +273,31 @@ object Sprites {
 
     private fun staticFileIn(staticDir: File, num: Int, shiny: Boolean = false): File = File(staticDir, baseName(num, shiny) + ".png")
 
-    /** Decoded static PNG from disk (LRU cached), or null if not downloaded. Never touches the network. */
-    fun staticBitmap(ctx: Context, num: Int, shiny: Boolean = false): Bitmap? = diskBitmap(staticFile(ctx, num, shiny))
+    /** UI callers read memory only; workers may read/decode disk. Use [loadStatic] to warm a cold cache. */
+    fun staticBitmap(ctx: Context, num: Int, shiny: Boolean = false): Bitmap? {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            val root = roots[ctx.applicationContext] ?: return null
+            return bitmaps.get(staticFileIn(File(root, "static"), num, shiny).path)?.bitmap
+        }
+        return diskBitmap(staticFile(ctx, num, shiny))
+    }
 
     /** Downloads a missing static PNG in the background, then calls back on the main thread. */
     fun fetchStatic(ctx: Context, num: Int, shiny: Boolean, cb: (Bitmap?) -> Unit) {
-        val file = staticFile(ctx, num, shiny)
-        diskBitmap(file)?.let { main.post { cb(it) }; return }
-        if (!enabled(ctx)) { main.post { cb(null) }; return }
-        enqueue(file.path, {
-            download(File(file.parentFile, baseName(num, shiny)), SpriteUrls.staticChain(num, shiny), retryMissingMs = RETRY_EXPECTED_MS)
-            diskBitmap(file)
+        loadStatic(ctx, num, shiny, download = true, cb)
+    }
+
+    /** Local lookup and decoding also run on the pool, including when downloads are disabled. */
+    fun loadStatic(ctx: Context, num: Int, shiny: Boolean, download: Boolean, cb: (Bitmap?) -> Unit) {
+        val app = ctx.applicationContext
+        val key = app to "static:${baseName(num, shiny)}:$download"
+        // Local-only requests must not swallow a simultaneous request that allows downloading.
+        enqueue(key, {
+            val file = staticFile(app, num, shiny)
+            diskBitmap(file) ?: if (download && enabled(app)) {
+                download(File(file.parentFile, baseName(num, shiny)), SpriteUrls.staticChain(num, shiny), retryMissingMs = RETRY_EXPECTED_MS)
+                diskBitmap(file)
+            } else null
         }) { cb(it as Bitmap?) }
     }
 
@@ -375,6 +396,7 @@ object Sprites {
         val get: HttpGet = { url, p -> try { realGet(url, p) } catch (e: IOException) { error = "${e.javaClass.simpleName}: ${e.message}"; throw e } }
         val file = staticFile(ctx, num, shiny)
         file.delete()
+        bitmaps.clear() // a retry must not return the old decoded picture
         val got = download(File(file.parentFile, baseName(num, shiny)), SpriteUrls.staticChain(num, shiny), retries = 1, get = get, ignoreMissing = true)
         return when {
             got != null && diskBitmap(file) != null -> "downloaded"
@@ -384,17 +406,25 @@ object Sprites {
         }
     }
 
-    /** Item icon from disk (LRU), or null. */
-    fun itemBitmap(ctx: Context, item: String): Bitmap? = diskBitmap(itemFile(ctx, item))
+    /** Item icon: memory only on the UI thread, disk allowed on workers. */
+    fun itemBitmap(ctx: Context, item: String): Bitmap? {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            val root = roots[ctx.applicationContext] ?: return null
+            return bitmaps.get(File(File(root, "item"), "$item.png").path)?.bitmap
+        }
+        return diskBitmap(itemFile(ctx, item))
+    }
 
     /** Downloads a missing item icon in the background, then calls back on the main thread (null if PokeAPI has none). */
     fun fetchItem(ctx: Context, item: String, cb: (Bitmap?) -> Unit) {
-        val file = itemFile(ctx, item)
-        diskBitmap(file)?.let { main.post { cb(it) }; return }
-        if (!enabled(ctx)) { main.post { cb(null) }; return }
-        enqueue(file.path, {
-            download(File(file.parentFile, item), listOf(SpriteUrls.item(item)))
-            diskBitmap(file)
+        val app = ctx.applicationContext
+        val key = app to "item:$item"
+        enqueue(key, {
+            val file = itemFile(app, item)
+            diskBitmap(file) ?: if (enabled(app)) {
+                download(File(file.parentFile, item), listOf(SpriteUrls.item(item)))
+                diskBitmap(file)
+            } else null
         }) { cb(it as Bitmap?) }
     }
 
@@ -415,17 +445,17 @@ object Sprites {
 
     private fun diskBitmap(file: File): Bitmap? {
         if (!file.isFile) return null
-        val key = "${file.path}|${file.lastModified()}"
-        bitmaps.get(key)?.let { return it }
+        val modified = file.lastModified()
+        bitmaps.get(file.path)?.takeIf { it.modified == modified }?.let { return it.bitmap }
         val bmp = try { decodePng(file.readBytes()) } catch (_: Exception) { null } ?: return null
-        bitmaps.put(key, bmp)
+        bitmaps.put(file.path, CachedBitmap(modified, bmp))
         return bmp
     }
 
     /**
      * Runs [work] once on the pool per [key]; every caller waiting for the same key gets the result on the main thread.
      */
-    private fun enqueue(key: String, work: () -> Any?, cb: (Any?) -> Unit) {
+    private fun enqueue(key: Pair<Context, String>, work: () -> Any?, cb: (Any?) -> Unit) {
         val start: Boolean
         synchronized(inflight) {
             val waiting = inflight[key]

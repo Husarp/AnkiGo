@@ -153,7 +153,7 @@ class ShopRefreshTest {
     @Test fun otherItemsAndBasicsUseTheirDailyPrice() {
         val s = state("2026-10-13")
         val d = Shop.dealFor(data, s.day)!!
-        for (item in Items.shopPool(data).filter { it != d.item }) assertEquals(Shop.dailyPrice(data, s.day, item), Shop.priceOf(data, s, item))
+        for (item in Items.shopPool(data).filter { it != d.item && it !in Shop.weekendPrices }) assertEquals(Shop.dailyPrice(data, s.day, item), Shop.priceOf(data, s, item))
         for (item in Shop.basics()) assertEquals(Shop.dailyPrice(data, s.day, item), Shop.priceOf(data, s, item))
     }
 
@@ -182,39 +182,38 @@ class ShopRefreshTest {
         }
     }
 
-    @Test fun weekendStoneUsesDailyPriceAndTmStaysFixed() {
-        val kinds = mutableSetOf<Boolean>()
+    @Test fun weekendUsesExclusiveFixedPricesAndCoversAllElevenItems() {
+        val seen = mutableSetOf<String>()
         for (sat in saturdays) {
             val sp = Shop.weekendFor(data, sat.toString())!!
-            assertTrue("exactly one of item / tm", (sp.item == null) != (sp.tm == null))
-            kinds += sp.isTm
-            if (sp.isTm) {
-                assertTrue(sp.tm in strongTms)
-                assertTrue((data.moves.getValue(sp.tm!!).power) >= Tuning.WEEKEND_TM_MIN_POWER)
-                assertEquals(Tuning.TM_PRICE, sp.price)
-                assertEquals(sp.tm, sp.id)
-            } else {
-                assertTrue(sp.item in Items.ALL.keys)
-                assertTrue(sp.item!!.endsWith("-stone"))
-                assertEquals(Shop.priceOf(data, sat.toString(), sp.item!!), sp.price)
-                assertEquals(sp.item, sp.id)
-            }
+            assertFalse(sp.isTm)
+            assertTrue(sp.item in Shop.weekendPrices)
+            assertEquals(Shop.weekendPrices[sp.item], sp.price)
+            assertEquals(sp.price, Shop.priceOf(data, sat.plusDays(1).toString(), sp.item!!))
+            seen += sp.id
         }
-        assertEquals(setOf(true, false), kinds)
-        assertEquals(90, Tuning.WEEKEND_TM_MIN_POWER)
+        assertEquals(Shop.weekendPrices.keys, seen)
     }
 
-    @Test fun proposalStonesRemainAvailableWithoutApiPrices() {
-        val weakTms = GameData(
-            base.species + (900 to TestData.species(900, "Tmmon", tmMoves = setOf("bodyslam", "watergun", "shadowball"))),
-            base.moves, base.growth, base.itemPrices,
-        )
-        val noStones = GameData(data.species, data.moves, data.growth, data.itemPrices - "thunder-stone" - "moon-stone")
-        val neither = GameData(weakTms.species, weakTms.moves, weakTms.growth, data.itemPrices - "thunder-stone" - "moon-stone")
+    @Test fun exclusiveItemsNeverEnterNormalStockRerollsOrDealsAndOldStockIsCleaned() {
+        assertEquals(mapOf(
+            "lucky-egg" to 6000, "amulet-coin" to 6000, "luck-incense" to 6000,
+            "macho-brace" to 2500, "soothe-bell" to 2500,
+            "power-weight" to 2000, "power-bracer" to 2000, "power-belt" to 2000,
+            "power-lens" to 2000, "power-band" to 2000, "power-anklet" to 2000,
+        ), Shop.weekendPrices)
         for (sat in saturdays) {
-            assertFalse(Shop.weekendFor(weakTms, sat.toString())!!.isTm)
-            assertNotNull(Shop.weekendFor(noStones, sat.toString()))
-            assertFalse(Shop.weekendFor(neither, sat.toString())!!.isTm)
+            val s = state(sat.toString(), 100)
+            s.cash = 100000
+            assertTrue(s.shopItems.none { it in Shop.weekendPrices })
+            assertTrue(Shop.dealFor(data, s.day)!!.item !in Shop.weekendPrices)
+            assertTrue(Shop.reroll(data, s, Random(sat.hashCode())).ok)
+            assertTrue(s.shopItems.none { it in Shop.weekendPrices })
+            s.shopItems.addAll(Shop.weekendPrices.keys)
+            val inventory = s.bag.toMap()
+            Shop.ensureToday(data, s)
+            assertTrue(s.shopItems.none { it in Shop.weekendPrices })
+            assertEquals(inventory, s.bag)
         }
     }
 
@@ -240,10 +239,10 @@ class ShopRefreshTest {
 
     // ---- buy / buyTm accept and reject each source ----
 
-    private fun satWith(tm: Boolean) = saturdays.first { Shop.weekendFor(data, it.toString())!!.isTm == tm }
+    private fun satWith() = saturdays.first()
 
-    @Test fun theWeekendStoneIsBoughtOnTheWeekendOnlyAtItsPrice() {
-        val sat = satWith(tm = false)
+    @Test fun theWeekendItemIsBoughtOnTheWeekendOnlyAtItsPrice() {
+        val sat = satWith()
         val sp = Shop.weekendFor(data, sat.toString())!!
         val s = state(sat.toString()); s.shopItems.remove(sp.item); s.cash = 100_000
         val expected = Shop.priceOf(data, s, sp.item!!)
@@ -255,39 +254,26 @@ class ShopRefreshTest {
         s.day = sat.plusDays(1).toString(); Shop.ensureToday(data, s); s.shopItems.remove(sp.item)
         assertTrue(Shop.buy(data, s, sp.item!!).ok)
         assertEquals(2, s.count(sp.item!!))
-        // on Monday it is not (unless the stock or the deal happens to hold the same stone)
+        // On Monday the reserved item cannot be bought.
         s.day = sat.plusDays(2).toString(); Shop.ensureToday(data, s); s.shopItems.remove(sp.item)
-        if (Shop.dealFor(data, s.day)!!.item != sp.item) assertEquals(ActionResult(false, "Not in today's shop"), Shop.buy(data, s, sp.item!!))
+        assertEquals(ActionResult(false, "Not in today's shop"), Shop.buy(data, s, sp.item!!))
     }
 
-    @Test fun theWeekendTmIsBoughtOnceAtThePriceAndAnOwnedOneIsRefused() {
-        val sat = satWith(tm = true)
-        val sp = Shop.weekendFor(data, sat.toString())!!
-        val s = state(sat.toString()); s.shopTms.remove(sp.tm); s.cash = 5_000
-        val r = Shop.buyTm(data, s, sp.tm!!)
-        assertTrue(r.message, r.ok)
-        assertEquals("Bought ${Items.tmName(data, sp.tm!!)} for 1000 coins", r.message)
-        assertEquals(4_000, s.cash); assertTrue(sp.tm!! in s.tms)
-        val again = Shop.buyTm(data, s, sp.tm!!)
-        assertFalse(again.ok); assertEquals("You already own ${Items.tmName(data, sp.tm!!)}", again.message)
-        assertEquals(4_000, s.cash)
-        // a TM is not an item: buy() refuses it
-        assertFalse(Shop.buy(data, s, sp.tm!!).ok)
-    }
-
-    @Test fun theWeekendTmIsRefusedOnWeekdaysAndOtherTmsStillNeedTheStock() {
-        val sat = satWith(tm = true)
-        val sp = Shop.weekendFor(data, sat.toString())!!
-        val s = state(sat.plusDays(2).toString()); s.shopTms.remove(sp.tm); s.cash = 5_000
-        assertEquals(ActionResult(false, "Not in today's shop"), Shop.buyTm(data, s, sp.tm!!))
-        assertEquals(5_000, s.cash)
-        // on the weekend a TM that is neither in the stock nor the special is refused
-        s.day = sat.toString(); Shop.ensureToday(data, s)
-        val stray = strongTms.first { it != sp.tm && it !in s.shopTms }
-        assertFalse(Shop.buyTm(data, s, stray).ok)
-        // a stock TM works as before
+    @Test fun tmsStillNeedNormalStockAndCanOnlyBeOwnedOnce() {
+        val s = state(saturdays.first().toString()); s.cash = 5000
         val listed = s.shopTms.first()
-        if (listed !in s.tms) assertTrue(Shop.buyTm(data, s, listed).ok)
+        assertTrue(Shop.buyTm(data, s, listed).ok)
+        assertEquals(4000, s.cash)
+        assertFalse(Shop.buyTm(data, s, listed).ok)
+        s.shopTms.clear()
+        assertFalse(Shop.buyTm(data, s, strongTms.first()).ok)
+    }
+
+    @Test fun staleReservedStockCannotBeBoughtOnAWeekday() {
+        val s = state("2026-10-14"); s.cash = 100000
+        s.shopItems.addAll(Shop.weekendPrices.keys)
+        for (item in Shop.weekendPrices.keys) assertFalse(Shop.buy(data, s, item).ok)
+        assertEquals(100000, s.cash)
     }
 
     @Test fun anItemOutsideEverySourceIsRefusedAndKeepsTheMoney() {
@@ -314,16 +300,16 @@ class ShopRefreshTest {
         val s = state("2026-10-13"); s.cash = 100_000
         val d = Shop.dealFor(data, s.day)!!
         Shop.buy(data, s, d.item); Shop.buy(data, s, "potion")
-        val sat = satWith(tm = true)
+        val sat = satWith()
         val sp = Shop.weekendFor(data, sat.toString())!!
         val w = state(sat.toString()); w.cash = 100_000
-        Shop.buyTm(data, w, sp.tm!!)
+        Shop.buy(data, w, sp.item!!)
         val dealPaid = d.price + Shop.priceOf(data, s, "potion")
         assertEquals(dealPaid.toLong(), s.counters[Metric.MONEY_SPENT.name])
         assertEquals(dealPaid, s.history[s.day]!!.spent)
         assertEquals(100_000 - dealPaid, s.cash)
-        assertEquals(1000L, w.counters[Metric.MONEY_SPENT.name])
-        assertEquals(1000, w.history[w.day]!!.spent)
+        assertEquals(sp.price.toLong(), w.counters[Metric.MONEY_SPENT.name])
+        assertEquals(sp.price, w.history[w.day]!!.spent)
     }
 
     // ---- the tab dot ----

@@ -1,0 +1,4 @@
+<resources>
+    <style name="MotionDialog"><item name="android:windowEnterAnimation">@anim/motion_dialog_in</item><item name="android:windowExitAnimation">@anim/motion_dialog_out</item></style>
+    <style name="MotionSheet"><item name="android:windowEnterAnimation">@anim/motion_sheet_in</item><item name="android:windowExitAnimation">@anim/motion_sheet_out</item></style>
+</resources>

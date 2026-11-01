@@ -161,7 +161,7 @@ class FloatTextsTest {
         val up = FloatTexts.of(fx(EffectKind.STAT_CHANGE, stat = "spe", stages = 2), on).single()
         assertEquals("SPE" to 2, up.stat to up.stages)
         val down = FloatTexts.of(fx(EffectKind.STAT_CHANGE, stat = "accuracy", stages = -6), on).single()
-        assertEquals("ACC" to 3, down.stat to down.stages) // never more than three chevrons
+        assertEquals("ACC" to 6, down.stat to down.stages) // six chevrons in two rows
         assertEquals(FloatKind.STAT_DOWN, down.kind)
     }
 

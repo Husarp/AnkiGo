@@ -19,6 +19,14 @@ class SettingsCatalogTest {
         assertEquals("Look · Theme & colours", SettingsSearch.match("bottom tab bar").first().where)
     }
 
+    @Test fun compactViewCanBeFoundInStudySettings() {
+        val hit = SettingsSearch.match("compact view").first()
+        assertEquals("compactView", hit.info.id)
+        assertEquals(SettingsSection.STUDY, SettingsSearch.sectionOf(hit.info))
+        assertEquals("Study · Study & accessibility", hit.where)
+        assertEquals("Compact view", hit.info.title)
+    }
+
     @Test fun automaticFrameExplanationFollowsTheSceneryPick() {
         assertEquals("Draw a plain pixel rim coloured for the displayed scenery; dark mode uses a darker palette",
             SettingsCatalog.byId("frameAutomatic")!!.explain)

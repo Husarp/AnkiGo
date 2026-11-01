@@ -143,9 +143,9 @@ class HelpContentTest {
         assertTrue(catching.contains("Ultra Ball ${Tuning.BALL_CHANCE["ultra-ball"]}%"))
         assertTrue(catching.contains("Master Ball ${Tuning.BALL_CHANCE["master-ball"]}%"))
         assertTrue(catching.contains("1 in ${Tuning.SHINY_ODDS}"))
-        assertTrue(catching.contains("while it still has HP") && catching.contains("caught automatically"))
+        assertTrue(catching.contains("while it still has HP") && catching.contains("your catch rule decides"))
         assertTrue(catching.contains("used up whether it works or not") && catching.contains("runs away"))   // PLAN 171
-        assertTrue(catching.contains("Ultra Heal Ball") && catching.contains("the same XP and you the same ${Tuning.CASH_PER_WIN} coins as for a defeat"))   // PLAN 171, 170, R13 Part C
+        assertTrue(catching.contains("Ultra Heal Ball") && catching.contains("the same XP and money as for a defeat (base ${Tuning.CASH_PER_WIN} coins"))   // PLAN 171, 170, R13 Part C
         val items = chapterText(GameGuide.ITEMS)
         assertTrue(items.contains("${Tuning.ITEM_COUNTDOWN.first} to ${Tuning.ITEM_COUNTDOWN.last}"))
         assertTrue(items.contains("level ${Tuning.FOSSIL_LEVEL}"))
@@ -165,7 +165,7 @@ class HelpContentTest {
         assertTrue(money.contains("+10 for every answer") && money.contains("+25 for every wild Pokémon you defeat or catch") && !money.contains("At most 500"))
         assertTrue(money.contains("in the first 1000 coins every answer pays 10 coins and every win 25 coins") && money.contains("in the next 1000 coins half of that (an answer 5.0 coins, paid in whole coins as they add up), then a third, a quarter"))
         // R14-B2-D: the daily gift replaced the money bonus; the whole table is in the guide
-        assertTrue(money.contains("Daily gift: the first time you reach your daily goal each day, you get one gift in your Bag"))
+        assertTrue(money.contains("Daily gift: reach your daily goal to receive one randomly chosen gift per game day"))
         assertTrue(money.contains("On day 1 it is common 75%, uncommon 22% or rare 3%") && money.contains("common 40%, uncommon 40% and rare 20% after 30 days in a row"))
         assertTrue(money.contains("Common: 3 Poké Balls, 2 Potions or a Super Potion. Uncommon: 2 Great Balls, a Hyper Potion or 5 Poké Balls. Rare: an Ultra Ball, an evolution stone or a TM you don't own yet."))
         assertTrue(money.contains("The Master Ball is never sold: you get one for reaching the top tier of Best streak (365 days in a row)."))

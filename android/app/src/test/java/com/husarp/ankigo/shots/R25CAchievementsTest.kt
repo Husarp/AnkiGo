@@ -41,6 +41,15 @@ class R25CAchievementsTest {
             assertTrue(descendants(screen).any { it.contentDescription == "Achievements, new achievements" })
             assertTrue(descendants(screen).any { it.contentDescription?.startsWith("Answers given,") == true && it.contentDescription.toString().endsWith("new achievement") })
             paparazzi.snapshot(screen, "r25c-unread-grid")
+            val card = descendants(screen).first { it.contentDescription?.startsWith("Answers given,") == true } as ViewGroup
+            val dot = (card.foreground as android.graphics.drawable.LayerDrawable).getDrawable(0).bounds
+            assertEquals(Ui.dp(ctx, 8), dot.top)
+            assertEquals(card.width - Ui.dp(ctx, 8), dot.right)
+            assertEquals(Ui.dp(ctx, 8), dot.width())
+            assertTrue(dot.bottom < card.height / 2)
+            assertFalse("Only the foreground paints the unread dot", descendants(screen).any { it.contentDescription == "New achievement" })
+            assertEquals("Cards remain direct grid children", 3, (card.parent as ViewGroup).childCount)
+
             page.achievementsView().open("answers"); call(page, "render")
             assertFalse(AchievementNotice.unseen(ctx, "answers"))
             assertTrue(AchievementNotice.unseen(ctx, "catches"))

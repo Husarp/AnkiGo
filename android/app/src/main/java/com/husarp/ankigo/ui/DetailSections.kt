@@ -52,7 +52,7 @@ object DetailSections {
     /**
      * One section: a card whose bar (title, the small [summary] while closed, chevron) opens and closes it; [body] is built the first
      * time it opens, [onFirstOpen] runs then (the Pokédex text download). The open answer is kept per section ([DetailOpen]).
-     * [titleLevel] (R18-G, PLAN 254): the title carries a level, "Stats · Lv 23" in its band colour, open or folded.
+     * [titleLevel]: a second row carries the full level and right-aligned battle changes, open or folded.
      */
     fun section(a: Context, mem: DetailOpen, s: DetailSection, summary: CharSequence?, title: String = s.title, onFirstOpen: (() -> Unit)? = null,
                 titleLevel: Int? = null, boosts: IntArray? = null, forceOpen: Boolean = false, body: () -> View): View {
@@ -84,17 +84,25 @@ object DetailSections {
             }, LinearLayout.LayoutParams(Ui.dp(a, 16), Ui.dp(a, 16)).also { it.marginEnd = Ui.dp(a, 6) })
             addView(FlowRow(a, Ui.dp(a, 4), centered = false).apply {
                 addView(Ui.text(a, 12f, 900, R.color.ag_mauve).apply {
-                    text = if (titleLevel != null) LevelTier.titled(a, title.uppercase(), titleLevel) else title.uppercase()
+                    text = title.uppercase()
                 })
-                if (boosts != null) ConditionMarks.STAT_KEYS.forEachIndexed { i, key ->
-                    if (boosts[i] != 0) addView(StatPillView(a, key, boosts[i]))
-                }
             }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(sum, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 10) })
             addView(chevron, LinearLayout.LayoutParams(Ui.dp(a, 24), Ui.dp(a, 24)).also { it.marginStart = Ui.dp(a, 4) })
         }
         val holder = FrameLayout(a)
         card.addView(bar, LinearLayout.LayoutParams(-1, -2))
+        if (titleLevel != null) card.addView(LinearLayout(a).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(Ui.dp(a, 14), 0, Ui.dp(a, 14), Ui.dp(a, 8))
+            addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Level $titleLevel"; setTextColor(LevelTier.color(a, titleLevel)) })
+            addView(FlowRow(a, Ui.dp(a, 4), centered = false, alignEnd = true).apply {
+                if (boosts != null) ConditionMarks.STAT_KEYS.forEachIndexed { i, key ->
+                    if (boosts.getOrElse(i) { 0 } != 0) addView(StatPillView(a, key, boosts[i]))
+                }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }, LinearLayout.LayoutParams(-1, -2))
         card.addView(holder, LinearLayout.LayoutParams(-1, -2))
         var built = false
         fun apply(open: Boolean) {
@@ -185,10 +193,6 @@ object DetailSections {
     fun statsBody(a: Context, stats: Stats, level: Int, nature: Nature?, sp: Species, compact: Boolean, boosts: IntArray? = null): View = LinearLayout(a).apply {
         orientation = LinearLayout.VERTICAL
         addView(DetailParts.statHint(a))
-        addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply {
-            text = "Normal → current · tick = normal · faded tail = lost value"
-            setPadding(0, 0, 0, Ui.dp(a, 4))
-        })
         val max = DetailMath.monStatMax(level)
         Stat.entries.forEach { s ->
             addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), 0, sp.base[s], compact, wholeRow = true, stage = if (s == Stat.HP) 0 else boosts?.getOrNull(s.ordinal - 1) ?: 0))
@@ -588,7 +592,7 @@ object DetailSections {
  * The details window's ScrollView (MonDetail, BattleDetails): tells its [watchers] about every touch that goes down and every
  * plain tap (no scrolling) on it, without taking the touch, so the open move text can close on a tap anywhere in the details.
  */
-internal class TapWatchScroll(ctx: Context) : android.widget.ScrollView(ctx) {
+internal class TapWatchScroll(ctx: Context) : MotionScrollView(ctx) {
     interface Watcher { fun down(); fun tapped(); fun end() {} }
 
     val watchers = ArrayList<Watcher>()

@@ -25,6 +25,7 @@ import com.husarp.ankigo.ui.BubbleDismiss
 import com.husarp.ankigo.ui.ConditionMarks
 import com.husarp.ankigo.ui.EventPlayer
 import com.husarp.ankigo.ui.PanelFit
+import com.husarp.ankigo.ui.StatPill
 import com.husarp.ankigo.ui.Ui
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -286,19 +287,26 @@ class R19KConditionShots {
             val ctx = Shots.files(paparazzi.context)
             val sc = setup(ctx, host, 1, picture = false)
             val b = GameRepo.state!!.battle!!
-            b.player.boosts[0] = if (host == hosts[6]) 0 else 1; b.player.boosts[1] = -2; b.enemy.boosts[0] = 3; b.enemy.boosts[1] = -1
+            b.player.boosts[0] = if (host == hosts[6]) 0 else 1; b.player.boosts[1] = -2
+            // Full-sized hosts exercise multiple wild stats; narrow hosts need a direct chip beside the overflow.
+            b.enemy.boosts[0] = if (host == hosts[0]) 3 else 0; b.enemy.boosts[1] = -1
             sc.arena.syncConditions(b)
             layoutScene(sc)
-            val key = if (slot == ConditionMarks.Slot.OURS) "stat.def" else "stat.atk"
+            val key = if (slot == ConditionMarks.Slot.OURS || host != hosts[0]) "stat.def" else "stat.atk"
             val chip = sc.arena.markRows().first { it.slot == slot }.chips.first { it.mark?.key == key }
             val c = chip.rect
             val t = android.os.SystemClock.uptimeMillis()
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, c.centerX(), c.centerY(), 0))
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t + 40, MotionEvent.ACTION_UP, c.centerX(), c.centerY(), 0))
             val spoken = sc.arena.conditionListShown()!!.spoken
-            assertTrue(spoken, spoken.contains(if (slot == ConditionMarks.Slot.OURS) "Defense down 2" else "Attack up 3"))
-            assertFalse(spoken, spoken.contains(if (slot == ConditionMarks.Slot.OURS) "Attack" else "Defense"))
-            assertFalse(spoken, spoken.contains(if (slot == ConditionMarks.Slot.OURS) "Attack up 3" else "Defense down 2"))
+            val stat = key.removePrefix("stat.")
+            val index = ConditionMarks.STAT_KEYS.indexOf(stat)
+            val side = if (slot == ConditionMarks.Slot.OURS) b.player else b.enemy
+            val other = if (slot == ConditionMarks.Slot.OURS) b.enemy else b.player
+            assertTrue(spoken, spoken.contains(StatPill.spoken(stat, side.boosts[index])))
+            assertFalse(spoken, spoken.contains(if (stat == "def") "Attack" else "Defense"))
+            assertFalse("the other side's same stat is excluded: $spoken", spoken.contains(StatPill.spoken(stat, other.boosts[index])))
+            assertFalse(spoken, spoken.contains("Confused") || spoken.contains("In love"))
             layoutScene(sc)
             val card = sc.arena.conditionListShown()!!
             assertTrue("card fits arena width", card.left >= 0 && card.right <= sc.arena.width)

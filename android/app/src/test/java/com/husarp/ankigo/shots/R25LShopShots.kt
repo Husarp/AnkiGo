@@ -26,7 +26,7 @@ class R25LShopShots {
             val (_, stage) = ShopCardKit.page(ctx, null, day = "2026-10-31")
             paparazzi.snapshot(stage, "r25l-shop-$width-$scale-${theme.name.lowercase()}")
             val views = all(stage)
-            val dailyTitle = views.filterIsInstance<TextView>().single { it.text.startsWith("DEAL OF THE DAY") }
+            val dailyTitle = views.filterIsInstance<TextView>().single { it.text.startsWith(ShopCardKit.dealHeading()) }
             val label = dailyTitle.parent as LinearLayout
             val body = label.parent as LinearLayout
             val daily = body.parent as View

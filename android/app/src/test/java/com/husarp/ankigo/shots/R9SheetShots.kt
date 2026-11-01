@@ -222,6 +222,7 @@ class R9SheetShots {
     @Test fun studyActions() {
         paparazzi.shootPage("r9sheet-study", one) { ctx ->
             val act = attach(StudyActivity(), ShotCtx(ctx))
+            act.buildContent()
             setField(act, "question", "<div>Capital of Australia?</div>")
             setField(act, "modelName", "Basic"); setField(act, "cardName", "Card 1"); setField(act, "deckName", "Geography::Capitals")
             val make = { act.actionSheetContent { } }

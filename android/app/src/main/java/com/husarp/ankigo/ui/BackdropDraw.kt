@@ -42,6 +42,25 @@ internal object BackdropDraw {
     }
 
     /**
+     * PLAN 391: position the artwork under the existing sprite feet. Most scenes need no correction.
+     * A corrected scene translates its measured ground to the stage's fixed wild spot and zooms
+     * uniformly by its measured scene zoom. The existing blur fills exposed edges.
+     * Coral zooms out so its foreground beach also stays under our Pokémon.
+     * Neither sprite positions/sizes nor HUD layout change when the artwork needs adjustment.
+     */
+    fun stageCrop(bg: Backdrop, stage: Stage): Crop {
+        val base = Crop(stage.cropX, stage.cropY, stage.cropW, stage.cropH)
+        if (bg.wildGround === bg.wild) return base
+        val u = (bg.wild.x * bg.w - base.x) / base.w
+        val v = (bg.wild.y * bg.h - base.y) / base.h
+        val gx = bg.wildGround.x * bg.w
+        val gy = bg.wildGround.y * bg.h
+        val cw = base.w / bg.groundZoom
+        val ch = base.h / bg.groundZoom
+        return Crop(gx - u * cw, gy - v * ch, cw, ch)
+    }
+
+    /**
      * The result, in panel pixels: the picture's rectangle ([picL]..[picR], [picT]..[picB]; it sticks out of the panel when the
      * crop is inside it), the scale from picture pixels ([kx], [ky]), which sides of it end inside the panel and so fade into the
      * blur, and the blurred copy's rectangle.

@@ -317,6 +317,9 @@ class Battle(
     /** R17C-4: the Main's team (Pokémon with a uid), for Beat Up (one hit per member with HP). [Game] fills it before each round; never saved, empty = just the Main. */
     var team: List<Mon> = emptyList()
 
+    /** In-memory roll seed, retained while a result holds this encounter off screen. */
+    internal var encounterSeed: Long? = null
+
     fun maxWildHp(data: GameData): Int = wildMaxHp?.coerceAtLeast(1) ?: StatCalc.maxHp(data, wild)
 }
 
@@ -410,6 +413,7 @@ class GameState(
     val achTiers: MutableMap<String, MutableList<Long>> = mutableMapOf(), // achievement id -> epoch ms each tier was reached, in order; an id with an empty list = looked at, nothing reached yet (see Achievements.check)
     val achInferred: MutableSet<String> = linkedSetOf(),       // "<id>/<tier>" of reached tiers whose date is only the day AnkiGo first saw them (silent look, backfill, a first external feed), not the day they happened (R4 fix A3)
     val rewardsClaimed: MutableSet<String> = linkedSetOf(),    // "<achievement id>/<tier>" of tier rewards already put in the Bag (R14-B2 fix Y1): a reward comes once, even when the item is used up; an old save has none
+    val achPokemon: MutableMap<String, MutableList<AchPokemon>> = mutableMapOf(),
     val badgeAt: MutableMap<Int, Long> = mutableMapOf(),       // Ankimon badge id -> epoch ms it was earned here (old badges have none)
     var achSince: Long = 0,                                    // epoch ms the achievement tracking began (0 = not yet; set by the first Achievements.check)
     /** Version of the achievement tier ladders this save's [achTiers] / [achInferred] are written for (AchievementTable.LADDER). A new game starts current; a save without the key is 1; Achievements.migrate remaps an older one once (R9-B2). */

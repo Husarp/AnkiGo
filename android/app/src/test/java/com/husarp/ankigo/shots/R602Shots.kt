@@ -118,8 +118,8 @@ class R602Shots {
         assertEquals("same order as your own details, without Training", listOf("Stats", "Moves", "Matchups", "Info"), order(t))
         assertFalse(t.any { it == "Nature" || it == "IVs" || it == "EVs" || it == "Friendship" || it == "Held item" || it == "Ability" || it == "Defeats" || it == "Wins" })
         assertTrue(t.contains("Tier") && t.contains("Pokédex") && t.contains("Total"))
-        // R18-G (PLAN 254 / 243): the level is in the Stats title, and its evolution is in the card under the types (no Holding for a wild one)
-        assertTrue("Stats title carries the level", t.any { it.startsWith("Stats · Lv ", ignoreCase = true) })
+        // PLAN 405: the full level label is below the Stats title; evolution stays under the types.
+        assertTrue("Stats shows the full level label", t.contains("Level ${GameRepo.state!!.battle!!.wild.level}"))
         assertTrue(t.none { it.contains("· Lv ") && it.startsWith("#") })
         assertTrue(t.contains("EVOLUTION") && t.none { it.equals("Holding", ignoreCase = true) })
         assertEquals("every move is still unknown", 2, t.count { it == "?" })

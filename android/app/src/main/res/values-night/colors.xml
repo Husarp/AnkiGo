@@ -63,4 +63,5 @@
     <color name="ag_mu_quarter">#34d77a</color>
     <color name="ag_mu_zero">#8d93ab</color>
     <color name="ag_mu_strong">#5c9dff</color>
+    <color name="ag_scrollbar">#A3A3A3</color>
 </resources>

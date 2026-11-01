@@ -109,7 +109,7 @@ internal object ItemCard {
                         addView(Ui.text(ctx, 11f, 800, R.color.ag_text).apply { text = mon.nickname?.takeIf { it.isNotBlank() } ?: mon.name }, LinearLayout.LayoutParams(0, -2, 1f))
                     })
                 }
-                addView(android.widget.ScrollView(ctx).apply { addView(holders) }, LinearLayout.LayoutParams(-1, dp(ctx, minOf(spec.holders.size, 3) * 28f)))
+                addView(MotionScrollView(ctx).apply { addView(holders) }, LinearLayout.LayoutParams(-1, dp(ctx, minOf(spec.holders.size, 3) * 28f)))
             }, LinearLayout.LayoutParams(0, -2, 0.85f))
             closeAll?.let { addView(it, LinearLayout.LayoutParams(-2, -2)) }
             addView(closeButton(ctx, onClose), LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)).also { it.marginStart = dp(ctx, 4f); it.marginEnd = -dp(ctx, 8f) })
@@ -330,7 +330,7 @@ internal object ItemCard {
         }
         go.orientation = LinearLayout.HORIZONTAL
         go.getChildAt(0).layoutParams = LinearLayout.LayoutParams(-2, -2)
-        go.addView(ShopViews.price(ctx, b.price.copy(was = null)), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(ctx, 8f) })
+        go.addView(ShopViews.price(ctx, ShopPlan.Price(total.toInt())), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(ctx, 8f) })
         row.addView(go, LinearLayout.LayoutParams(0, -2, 0.85f))
         if (spec.item != null) row.addView(button(ctx, Ui.c(ctx, R.color.ag_mantle), Ui.c(ctx, R.color.ag_text), "×$quantity").apply {
             contentDescription = "Quantity $quantity. Cycle 1, 3, 5"

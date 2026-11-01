@@ -31,6 +31,7 @@ import com.husarp.ankigo.R
  * so does a tap on a list row.
  */
 class AppDialog internal constructor(val context: Context) : DialogInterface, StackWindow {
+    private var sideMarginDp = 16
     private var title: CharSequence? = null
     private var message: CharSequence? = null
     private var customView: View? = null
@@ -39,6 +40,8 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     private var closeAtTop = false
     private var topAction: View? = null
     private var backAtTop = false
+    private var detailsFooter = false
+    private var headerContext: String? = null
     private var items: Array<out CharSequence>? = null
     private var itemListener: DialogInterface.OnClickListener? = null
     private var cancelable = true
@@ -62,7 +65,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
                 setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
                 addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
                 setDimAmount(0.48f)
-                val wDp = AppDialogRules.widthDp(this@AppDialog.context.resources.configuration.screenWidthDp)
+                val wDp = (this@AppDialog.context.resources.configuration.screenWidthDp - 2 * sideMarginDp).coerceIn(0, AppDialogRules.MAX_WIDTH_DP)
                 setLayout(Ui.dp(this@AppDialog.context, wDp), ViewGroup.LayoutParams.WRAP_CONTENT)
             }
             setCancelable(cancelable)
@@ -76,11 +79,11 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
 
     fun show() {
         joinStack()
-        try { dlg.show() } catch (e: RuntimeException) { leftStack(); throw e }
+        try { dlg.window?.setWindowAnimations(UiMotion.windowStyle(context)); dlg.show() } catch (e: RuntimeException) { leftStack(); throw e }
         AwayWindows.track(this) { it.dismiss() }
     }
-    override fun dismiss() { leftStack(); made?.dismiss() }
-    override fun cancel() { leftStack(); made?.cancel() }
+    override fun dismiss() { leftStack(); made?.window?.setWindowAnimations(UiMotion.windowStyle(context)); made?.dismiss() }
+    override fun cancel() { leftStack(); made?.window?.setWindowAnimations(UiMotion.windowStyle(context)); made?.cancel() }
 
     fun setOnDismissListener(l: DialogInterface.OnDismissListener?) { dismissListener = l }
     fun setOnCancelListener(l: DialogInterface.OnCancelListener?) { cancelListener = l }
@@ -90,8 +93,8 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     internal fun joinStack() = WindowStack.add(this)
     private fun leftStack() = WindowStack.remove(this)
     override fun stackChanged(stacked: Boolean) {
-        closeAllView?.visibility = if (stacked) View.VISIBLE else View.GONE
-        (closeAllView?.parent as? View)?.visibility = if (stacked || closeAtTop) View.VISIBLE else View.GONE
+        closeAllView?.visibility = if (stacked && !detailsFooter) View.VISIBLE else View.GONE
+        (closeAllView?.parent as? View)?.visibility = if (!detailsFooter && (stacked || closeAtTop)) View.VISIBLE else View.GONE
     }
     private fun updateStackControl() = stackChanged(WindowStack.stacked(context))
 
@@ -142,12 +145,16 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
                     setImageResource(R.drawable.ic_back)
                     setColorFilter(Ui.c(ctx, R.color.ag_sub1))
                     setPadding(Ui.dp(ctx, 13), Ui.dp(ctx, 13), Ui.dp(ctx, 13), Ui.dp(ctx, 13))
-                    contentDescription = "Back to Pokémon"
+                    contentDescription = "Back to previous screen"
                     background = RippleDrawable(ink(0x22, Ui.c(ctx, R.color.ag_text)), null, ColorDrawable(Color.BLACK))
                     setOnClickListener { dismiss() }
                 }, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
                 addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = title },
-                    LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12) })
+                    LinearLayout.LayoutParams(if (headerContext == null) 0 else -2, -2, if (headerContext == null) 1f else 0f).also { it.marginStart = Ui.dp(ctx, 12) })
+                headerContext?.let { label ->
+                    addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = label; gravity = Gravity.END },
+                        LinearLayout.LayoutParams(0, -2, 1f))
+                }
             }, LinearLayout.LayoutParams(-1, -2))
         }
         title?.takeUnless { backAtTop }?.let { t ->
@@ -181,13 +188,23 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
                 body.addView(itemRow(label, i), LinearLayout.LayoutParams(-1, -2).also { if (i == 0 && title == null && message == null) it.topMargin = Ui.dp(ctx, 8) })
             }
             if (own == null) {
-                card.addView(ScrollView(ctx).apply {
+                card.addView(MotionScrollView(ctx).apply {
                     overScrollMode = View.OVER_SCROLL_NEVER
                     addView(body, ViewGroup.LayoutParams(-1, -2))
                 }, LinearLayout.LayoutParams(-1, 0, 1f))
             }
         }
-        footer?.let { f -> // pinned: never scrolled, between the body and the buttons
+        if (detailsFooter) {
+            val row = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(Ui.dp(ctx, 20), Ui.dp(ctx, 4), Ui.dp(ctx, 20), Ui.dp(ctx, 4))
+            }
+            footer?.let { row.addView(it, LinearLayout.LayoutParams(0, -2, 1f).also { p -> p.marginEnd = Ui.dp(ctx, 8) }) }
+            row.addView(makeButton(ctx, BUTTON_POSITIVE, Btn("Close", DialogInterface.OnClickListener { _, _ -> WindowStack.closeAll(context) })),
+                LinearLayout.LayoutParams(0, -2, 1f))
+            card.addView(row, LinearLayout.LayoutParams(-1, -2))
+        }
+        footer?.takeUnless { detailsFooter }?.let { f -> // pinned: never scrolled, between the body and the buttons
             (f.parent as? ViewGroup)?.removeView(f)
             card.addView(f, LinearLayout.LayoutParams(-1, -2))
         }
@@ -240,7 +257,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
             setTextColor(textColor)
             text = b.text
             Ui.touchPill(this, ripple, 44, 16)
-            setOnClickListener { b.listener?.onClick(this@AppDialog, which); dismiss() }
+            setOnClickListener { UiMotion.press(this); b.listener?.onClick(this@AppDialog, which); dismiss() }
         }
     }
 
@@ -304,6 +321,10 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
         fun setTopAction(v: View) = apply { d.topAction = v; d.closeAtTop = true }
         /** Pinned bare back arrow beside the title; dismisses to the originating screen. */
         fun setBackAtTop() = apply { d.backAtTop = true }
+        /** Details keep Close in their fixed footer; Back always dismisses only this card. */
+        fun setDetailsFooter(options: View? = null, contextLabel: String? = null) = apply {
+            d.detailsFooter = true; d.footer = options; d.backAtTop = true; d.headerContext = contextLabel
+        }
         fun setTitle(t: CharSequence?) = apply { d.title = t }
         fun setMessage(m: CharSequence?) = apply { d.message = m }
         /** Mark a container with a scrolling list so it receives the remaining height without an outer ScrollView. */
@@ -315,6 +336,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
         fun setPositiveButton(text: CharSequence, l: DialogInterface.OnClickListener?) = apply { d.buttons[DialogInterface.BUTTON_POSITIVE] = Btn(text, l) }
         fun setNegativeButton(text: CharSequence, l: DialogInterface.OnClickListener?) = apply { d.buttons[DialogInterface.BUTTON_NEGATIVE] = Btn(text, l) }
         fun setNeutralButton(text: CharSequence, l: DialogInterface.OnClickListener?) = apply { d.buttons[DialogInterface.BUTTON_NEUTRAL] = Btn(text, l) }
+        fun setSideMargin(dp: Int) = apply { d.sideMarginDp = dp }
         fun setCancelable(c: Boolean) = apply { d.cancelable = c }
         fun setOnDismissListener(l: DialogInterface.OnDismissListener?) = apply { d.dismissListener = l }
         fun setOnCancelListener(l: DialogInterface.OnCancelListener?) = apply { d.cancelListener = l }

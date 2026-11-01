@@ -1,5 +1,7 @@
 package com.husarp.ankigo.deck
 
+import com.husarp.ankigo.ui.MotionScrollView
+
 import android.app.Activity
 import android.app.Dialog
 import android.text.Editable
@@ -74,7 +76,7 @@ internal object DeckStatusSheet {
             val search = EditText(act).apply { hint = "Search decks"; Ui.tintEdit(this); setSingleLine() }
             picker.addView(search)
             val list = LinearLayout(act).apply { orientation = LinearLayout.VERTICAL }
-            picker.addView(ScrollView(act).apply { addView(list) }, LinearLayout.LayoutParams(-1, Ui.dp(act, 320)))
+            picker.addView(MotionScrollView(act).apply { addView(list) }, LinearLayout.LayoutParams(-1, Ui.dp(act, 320)))
             val pickDialog = DeckFlows.showSheet(act, picker)
             io.execute {
                 val decks = runCatching { Anki.decks(act).sortedBy { it.name } }
@@ -101,7 +103,7 @@ internal object DeckStatusSheet {
         }
         sub.setOnCheckedChangeListener { _, on -> include = on; load() }
         box.addView(DeckViews.button(act, "Close") { dialog.dismiss() })
-        dialog = DeckFlows.showSheet(act, ScrollView(act).apply { addView(box) })
+        dialog = DeckFlows.showSheet(act, MotionScrollView(act).apply { addView(box) })
         dialog.setOnDismissListener { closed = true; generation.incrementAndGet() }
         load()
     }

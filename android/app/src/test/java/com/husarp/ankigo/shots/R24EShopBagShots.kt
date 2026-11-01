@@ -25,13 +25,14 @@ class R24EShopBagShots {
             val ctx = setup()
             val (page, stage) = ShopCardKit.page(ctx, null, day = "2026-10-31")
             paparazzi.snapshot(stage, "r24e-shop-$width-$scale-${theme.name.lowercase()}")
-            val buy = all(stage).first { it.contentDescription == "Buy Potion" }
-            assertTrue(buy.width >= Ui.dp(ctx, 48))
-            assertTrue(buy.height >= Ui.dp(ctx, 48))
-            var card = buy.parent as View
-            while (card.background == null && card.parent is View) card = card.parent as View
+            assertFalse("Shop tiles no longer have separate Buy controls", all(stage).any { it.contentDescription == "Buy Potion" })
+            val title = all(stage).filterIsInstance<android.widget.TextView>().first { it.text.toString() == "Potion" }
+            var card = title.parent as View
+            while (!card.isClickable && card.parent is View) card = card.parent as View
+            assertTrue(card.isClickable)
+            assertTrue(card.height >= Ui.dp(ctx, 48))
             assertTrue(card.width >= Ui.dp(ctx, width - 30))
-            buy.performClick(); stage.render()
+            card.performClick(); stage.render()
             assertNotNull(page.itemWindow)
             page.closeCard()
             page.openBag(); stage.render()

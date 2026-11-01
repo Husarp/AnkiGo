@@ -147,7 +147,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(2), dp(16), dp(28))
         }
-        statsScroll = object : ScrollView(this) {
+        statsScroll = object : MotionScrollView(this) {
             // a touch anywhere except on the chart / calendar itself (they handle their own taps) closes an open info box (R4-X1 item 1)
             override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
                 if (ev.actionMasked == MotionEvent.ACTION_DOWN) {

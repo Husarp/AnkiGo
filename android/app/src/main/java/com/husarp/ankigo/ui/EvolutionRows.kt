@@ -116,7 +116,7 @@ internal class EvolutionRows(
         }
         val width = minOf(Ui.dp(a, 300), a.resources.displayMetrics.widthPixels - Ui.dp(a, 24))
         body.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        val popup = PopupWindow(ScrollView(a).apply { addView(body) }, width,
+        val popup = PopupWindow(MotionScrollView(a).apply { addView(body) }, width,
             minOf(body.measuredHeight, Ui.dp(a, 320), a.resources.displayMetrics.heightPixels / 2), true)
         popup.setBackgroundDrawable(ColorDrawable(0))
         popup.isOutsideTouchable = true

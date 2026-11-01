@@ -132,7 +132,7 @@ internal class BoxCopiesSheet(
     }
 
     /** A ScrollView that never grows past [maxPx]: the sheet grows with its copies, then scrolls. */
-    private class MaxHeightScroll(ctx: Context, private val maxPx: Int) : ScrollView(ctx) {
+    private class MaxHeightScroll(ctx: Context, private val maxPx: Int) : MotionScrollView(ctx) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val cap = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) maxPx else minOf(maxPx, MeasureSpec.getSize(heightMeasureSpec))
             super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST))

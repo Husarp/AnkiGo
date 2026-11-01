@@ -77,7 +77,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         header.addView(searchField(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, gapTop - 4) }) // its own full-width line
         header.addView(rowBox, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(this, 2) })
         header.addView(emptyView)
-        list = ListView(this).apply {
+        list = MotionListView(this).apply {
             divider = null
             dividerHeight = 0
             setSelector(ColorDrawable(Color.TRANSPARENT))

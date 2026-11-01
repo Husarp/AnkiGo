@@ -41,25 +41,35 @@ internal object MonPreview {
         // PLAN 205 (R14): a view reused for another Pokémon starts over; [idle] (the three details pictures) floats a STILL picture only
         IdleFloat.stop(view)
         val sp = GameRepo.data?.species?.get(num)
-        val front = if (sp == null || silhouette) null else Sprites.cached(ctx, sp, SpriteKind.FRONT, shiny)
-        val static = Sprites.staticFile(ctx, num, shiny).isFile
-        if (sp == null || source(front?.name, static) != StudyRules.SpriteSource.ANIMATED) {
-            Ui.staticSprite(ctx, num, shiny, view, silhouette)
-            if (idle && !silhouette) IdleFloat.start(view)
-            return
-        }
-        // Animated sprite is on disk: static picture (or placeholder, no download) until the decode lands.
-        Ui.staticSprite(ctx, num, shiny, view, download = false)
         val token = Any()
+        view.scaleType = ImageView.ScaleType.FIT_CENTER
         view.setTag(R.id.ag_tag_sprite, token)
+        if (silhouette) {
+            val g = ctx.resources.getInteger(R.integer.ag_sil)
+            view.colorFilter = android.graphics.PorterDuffColorFilter(0xFF000000.toInt() or (g shl 16) or (g shl 8) or g, android.graphics.PorterDuff.Mode.SRC_IN)
+            view.alpha = .7f
+        } else {
+            view.clearColorFilter()
+            view.alpha = 1f
+        }
+        view.setImageDrawable(SpritePlaceholder(Ui.typeColor(sp?.types?.firstOrNull() ?: com.husarp.ankigo.game.Type.NORMAL)))
         PanelSprites.pool.execute {
-            val img = Sprites.decode(front!!)
+            val front = if (sp == null || silhouette) null else Sprites.cached(ctx, sp, SpriteKind.FRONT, shiny)
+            val img = front?.takeIf { it.name.endsWith(".gif", ignoreCase = true) }?.let { Sprites.decode(it) }
             main.post {
                 if (view.getTag(R.id.ag_tag_sprite) !== token) return@post
-                if (img == null || !img.animated) { if (idle) IdleFloat.start(view); return@post } // the decode failed: it stays a still picture
-                IdleFloat.stop(view)
-                view.setImageDrawable(animation(ctx, img))
-                (view.drawable as? AnimationDrawable)?.start()
+                if (img == null || !img.animated) {
+                    // Callers may style seen-but-not-caught previews while the lookup is pending.
+                    val tint = view.colorFilter
+                    val opacity = view.alpha
+                    Ui.staticSprite(ctx, num, shiny, view, silhouette)
+                    view.colorFilter = tint
+                    view.alpha = opacity
+                    if (idle && !silhouette) IdleFloat.start(view)
+                } else {
+                    view.setImageDrawable(animation(ctx, img))
+                    (view.drawable as? AnimationDrawable)?.start()
+                }
             }
         }
     }

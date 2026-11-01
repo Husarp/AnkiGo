@@ -25,13 +25,13 @@ class R23ZShots {
                 MonDetail.show(TeamPage(ctx, NoHost), FakeGame.data, com.husarp.ankigo.GameRepo.state!!.mons.first())
             } ?: error("No details")
             DialogShots.scene(ctx, d).also { scene ->
-                val back = views(scene).single { it.contentDescription == "Back to Pokémon" }
+                val back = views(scene).single { it.contentDescription == "Back to previous screen" }
                 assertEquals(Ui.dp(ctx, 48), back.layoutParams.width)
                 assertEquals(Ui.dp(ctx, 48), back.layoutParams.height)
                 val labels = views(scene).filterIsInstance<TextView>().map { it.text.toString() }
                 assertTrue("Details" in labels)
                 assertTrue("Options" in labels)
-                assertFalse("Close" in labels)
+                assertTrue("Close" in labels)
                 assertTrue(back.isClickable)
                 val heading = views(scene).filterIsInstance<TextView>().single { it.text.toString() == "Details" }
                 assertSame(back.parent, heading.parent)

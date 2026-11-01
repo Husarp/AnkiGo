@@ -290,7 +290,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
             val w = b.width().toFloat()
             val h = b.height().toFloat()
             val s = stage
-            val crop = if (s != null && s.cropW > 0f && s.cropH > 0f) BackdropDraw.Crop(s.cropX, s.cropY, s.cropW, s.cropH)
+            val crop = if (s != null && s.cropW > 0f && s.cropH > 0f) BackdropDraw.stageCrop(bg, s)
             else BackdropDraw.coverCrop(bg.w, bg.h, w, h)
             val l = BackdropDraw.layout(bg.w, bg.h, crop, pic.blur.width, pic.blur.height, w, h)
             layout = l

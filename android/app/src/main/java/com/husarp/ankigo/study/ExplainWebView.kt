@@ -1,5 +1,7 @@
 package com.husarp.ankigo.study
 
+import com.husarp.ankigo.ui.MotionWebView
+
 import android.content.Context
 import android.view.ActionMode
 import android.view.Menu
@@ -8,7 +10,7 @@ import android.webkit.WebView
 import org.json.JSONArray
 
 /** Keeps Android's selection toolbar and adds one action; template actions use the host’s separate JavaScript bridge. */
-class ExplainWebView(context: Context, private val allowed: () -> Boolean, private val explain: (String) -> Unit, private val pageVersion: () -> Int = { 0 }) : WebView(context) {
+class ExplainWebView(context: Context, private val allowed: () -> Boolean, private val explain: (String) -> Unit, private val pageVersion: () -> Int = { 0 }) : MotionWebView(context) {
     private val explainId = 0x416e6b
     override fun startActionMode(callback: ActionMode.Callback): ActionMode? = super.startActionMode(wrap(callback))
     override fun startActionMode(callback: ActionMode.Callback, type: Int): ActionMode? = super.startActionMode(wrap(callback), type)

@@ -26,7 +26,7 @@ internal object SectionSwitch {
         box.setPadding(Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3))
         for ((i, s) in segs.withIndex()) {
             val seg = if (style == Style.TABS) tab(ctx, s, i == selected) else segment(ctx, s, i == selected)
-            if (s.unread) seg.addView(AchievementNotice.dot(ctx))
+            if (s.unread) AchievementNotice.corner(seg)
             seg.contentDescription = s.label + if (s.unread) ", new achievements" else ""
             seg.setOnClickListener { onPick(i) }
             box.addView(seg, LinearLayout.LayoutParams(0, -2, 1f).also { if (style == Style.TABS && i > 0) it.marginStart = Ui.dp(ctx, 2) })

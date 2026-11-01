@@ -105,6 +105,11 @@ class R25EShots {
             (labels.single { it.text.toString() == "Ivysaur" }.parent as View).performClick()
             assertEquals(2, tapped)
             paparazzi.snapshot(rows, "r25e-evolution-${theme.name}")
+            assertNull(images[0].colorFilter)
+            assertNotNull("Seen-only greyscale survives async image completion", images[1].colorFilter)
+            assertEquals(.55f, images[1].alpha, .001f)
+            assertNotNull("Unseen silhouette stays tinted after loading", images[2].colorFilter)
+            assertEquals(.7f, images[2].alpha, .001f)
             // Ever-caught colour survives release.
             state.caught.add(2)
             state.mons.clear()

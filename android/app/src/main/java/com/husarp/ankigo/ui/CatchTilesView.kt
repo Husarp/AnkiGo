@@ -25,6 +25,13 @@ import kotlin.math.min
  */
 internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
     init { orientation = VERTICAL }
+    private var lastReward: CatchSummary? = null
+    private var animateReward = false
+    private fun reward(s: CatchSummary) { animateReward = s != lastReward; lastReward = s }
+    override fun onVisibilityChanged(changedView: View, visibility: Int) {
+        super.onVisibilityChanged(changedView, visibility)
+        if (visibility != VISIBLE) lastReward = null
+    }
 
     private fun dpi(v: Int) = Ui.dp(context, v)
 
@@ -39,6 +46,7 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
 
     /** Fills the view with the big layout for [s]; [next] adds the NEXT line, [cont] its Continue tap (see [setContinue]). */
     fun bindGrid(s: CatchSummary, next: Boolean, cont: (() -> Unit)? = null) {
+        reward(s)
         removeAllViews()
         setContinue(cont)
         background = null
@@ -61,6 +69,7 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
      * short tiles in a row; [rowH] px tall. [next] puts the NEXT line under the row (the panel has room for it).
      */
     fun bindRow(s: CatchSummary, next: Boolean, rowH: Int, radiusDp: Float, cont: (() -> Unit)? = null) {
+        reward(s)
         removeAllViews()
         setContinue(cont)
         background = Ui.rounded(Ui.c(context, R.color.ag_card), radiusDp, context)
@@ -129,6 +138,7 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
             text = if (t.extra.isEmpty()) t.value else SpanTail.tail(context, t.value, " " + t.extra)
             oneLine()
         }
+        if (animateReward && (t.kind == CatchTilesPlan.Kind.XP || t.kind == CatchTilesPlan.Kind.COINS)) UiMotion.count(value, value.text)
         col.addView(value)
         tile.addView(col, LayoutParams(0, -2, 1f))
         return tile
@@ -148,7 +158,8 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
             if (t.kind != CatchTilesPlan.Kind.COINS) img.setColorFilter(Ui.c(context, tone(t.kind)), PorterDuff.Mode.SRC_IN)  // the gold money stack is never tinted
         }
         tile.addView(img, LayoutParams(iconPx, iconPx).also { it.marginEnd = dpi(5) })
-        tile.addView(Ui.text(context, 11.5f, 900, R.color.ag_text).apply { text = t.value; oneLine(); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO })
+        tile.addView(Ui.text(context, 11.5f, 900, R.color.ag_text).apply { text = t.value; oneLine(); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            if (animateReward && (t.kind == CatchTilesPlan.Kind.XP || t.kind == CatchTilesPlan.Kind.COINS)) UiMotion.count(this, text) })
         return tile
     }
 

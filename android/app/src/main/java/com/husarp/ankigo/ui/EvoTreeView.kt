@@ -115,7 +115,7 @@ class EvoTreeView(ctx: Context, data: GameData, root: EvoNode, private val curre
                 addView(Ui.text(a, 14f, 700, R.color.ag_text).apply { text = EvoLine.explanation(data, e) })
                 addView(DetailParts.secondaryButton(a, "Close") { dialog.dismiss() })
             }
-            dialog.setContentView(SheetKit.dialog(dialog, android.widget.ScrollView(a).apply { addView(body) }))
+            dialog.setContentView(SheetKit.dialog(dialog, MotionScrollView(a).apply { addView(body) }))
             dialog.window?.apply {
                 setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
                 addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)

@@ -79,7 +79,7 @@ internal object BattleBag {
         Pickers.show(dialog)
     }
 
-    private class BagScroll(ctx: Context) : android.widget.ScrollView(ctx) {
+    private class BagScroll(ctx: Context) : MotionScrollView(ctx) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val limit = minOf(Ui.dp(context, 340), (resources.displayMetrics.heightPixels * .55f).toInt())
             val available = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) limit else minOf(limit, MeasureSpec.getSize(heightMeasureSpec))

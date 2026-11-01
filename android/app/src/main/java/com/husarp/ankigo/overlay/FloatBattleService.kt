@@ -116,7 +116,7 @@ class FloatBattleService : Service() {
         LiveSession.release(this, this)
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java).cancel(NOTE_ID)
-        GameRepo.saveNow(this)
+        GameRepo.saveInBackground(this)
         super.onDestroy()
     }
 

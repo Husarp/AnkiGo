@@ -470,7 +470,7 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
                 setOnClickListener { sw.toggle() }
             }, LinearLayout.LayoutParams(-1, -2))
         }
-        sheet.addView(object : ScrollView(this) {
+        sheet.addView(object : MotionScrollView(this) {
             override fun onMeasure(w: Int, h: Int) {
                 val cap = if (MeasureSpec.getMode(h) == MeasureSpec.UNSPECIFIED) maxBodyPx else minOf(maxBodyPx, MeasureSpec.getSize(h))
                 super.onMeasure(w, MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST))

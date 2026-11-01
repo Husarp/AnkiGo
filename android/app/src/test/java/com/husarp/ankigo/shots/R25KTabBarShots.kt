@@ -8,6 +8,7 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.ui.BottomNav
 import com.husarp.ankigo.ui.TabBarStyle
 import com.husarp.ankigo.ui.Ui
+import com.husarp.ankigo.ui.UiMotion
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -54,25 +55,28 @@ class R25KTabBarShots {
         val row = BottomNav.HighlightRow(ctx, BottomNav.Tab.STUDY, TabBarStyle.C1)
         assertEquals(0f, row.position, 0f)
         assertEquals(Ui.c(ctx, R.color.ag_blue), row.colour)
-        assertNull(getField(row, "animator")) // first show is still
+        ctx.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", false).commit()
         var completed = false
         row.moveTo(BottomNav.Tab.SETTINGS) { completed = true }
-        val animator = getField(row, "animator") as ValueAnimator
-        assertEquals(250L, animator.duration)
-        animator.currentPlayTime = 125
-        assertTrue(row.position > 0f && row.position < 4f)
-        assertNotEquals(Ui.c(ctx, R.color.ag_blue), row.colour)
-        assertNotEquals(Ui.c(ctx, R.color.ag_teal), row.colour)
-        assertFalse(completed)
-        animator.end()
-        assertEquals(4f, row.position, 0f)
-        assertEquals(Ui.c(ctx, R.color.ag_teal), row.colour)
-        assertTrue(completed)
-        row.onWindowFocusChanged(true) // the retained Study activity returns
+        assertTrue("navigation commits on the tap", completed)
+        // The source bar stays still. The destination owns the faster indicator slide.
         assertEquals(0f, row.position, 0f)
-        assertEquals(Ui.c(ctx, R.color.ag_blue), row.colour)
         val restored = BottomNav.HighlightRow(ctx, BottomNav.Tab.SETTINGS, TabBarStyle.C1)
+        restored.arriveFrom(BottomNav.Tab.STUDY)
+        @Suppress("UNCHECKED_CAST")
+        val jobs = getField(UiMotion, "jobs") as Map<android.view.View, ValueAnimator>
+        val animator = jobs[restored]!!
+        assertEquals(140L, animator.duration)
+        animator.currentPlayTime = 75
+        assertTrue(restored.position > 0f && restored.position < 4f)
+        assertNotEquals(Ui.c(ctx, R.color.ag_blue), restored.colour)
+        assertNotEquals(Ui.c(ctx, R.color.ag_teal), restored.colour)
+        UiMotion.finish(restored)
         assertEquals(4f, restored.position, 0f)
-        assertNull(getField(restored, "animator"))
+        assertEquals(Ui.c(ctx, R.color.ag_teal), restored.colour)
+        assertNull(jobs[restored])
+        row.onWindowFocusChanged(true)
+        assertEquals(0f, row.position, 0f)
+
     }
 }

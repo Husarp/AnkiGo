@@ -7,6 +7,8 @@
 // Copyright (c) 2021 Nicolai Weitkemper <kontakt@nicolaiweitkemper.de>
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.ui.MotionHorizontalScrollView
+
 import android.content.Context
 import android.graphics.*
 import android.view.MotionEvent
@@ -21,6 +23,23 @@ internal class Whiteboard(ctx: Context) : View(ctx) {
     init { contentDescription = "Whiteboard drawing area" }
     private data class Stroke(val path: Path, val paint: Paint)
     private val strokes = mutableListOf<Stroke>()
+    private val history = mutableListOf<List<Stroke>>()
+    val inkBottom: Int get() {
+        if (strokes.isEmpty() || width == 0 || height == 0) return 0
+        // A small alpha mask accounts for erased ink, without allocating a full document bitmap.
+        val scale = minOf(1f, 256f / width)
+        val mask = Bitmap.createBitmap((width * scale).toInt().coerceAtLeast(1),
+            kotlin.math.ceil(height * scale).toInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
+        try {
+            val canvas = Canvas(mask); canvas.scale(scale, scale); onDraw(canvas)
+            val row = IntArray(mask.width)
+            for (y in mask.height - 1 downTo 0) {
+                mask.getPixels(row, 0, row.size, 0, y, row.size, 1)
+                if (row.any { Color.alpha(it) != 0 }) return ((y + 1) / scale).toInt()
+            }
+            return 0
+        } finally { mask.recycle() }
+    }
     private var path: Path? = null
     private var activePaint: Paint? = null
     private var x = 0f
@@ -33,8 +52,9 @@ internal class Whiteboard(ctx: Context) : View(ctx) {
         strokeWidth = Ui.dp(context, if (erasing) 22 else 3).toFloat()
         if (erasing) xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
-    fun clear() { strokes.clear(); cancelStroke(); invalidate() }
-    fun undo() { cancelStroke(); if (strokes.isNotEmpty()) strokes.removeAt(strokes.lastIndex); invalidate() }
+    fun reset() { strokes.clear(); history.clear(); cancelStroke(); invalidate() }
+    fun clear() { if (strokes.isNotEmpty()) history.add(strokes.toList()); strokes.clear(); cancelStroke(); invalidate() }
+    fun undo() { cancelStroke(); if (history.isNotEmpty()) { strokes.clear(); strokes.addAll(history.removeAt(history.lastIndex)) }; invalidate() }
     private fun cancelStroke() { path = null; activePaint = null }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -45,7 +65,7 @@ internal class Whiteboard(ctx: Context) : View(ctx) {
     }
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.pointerCount > 1 || event.actionMasked == MotionEvent.ACTION_CANCEL) {
-            cancelStroke(); invalidate(); return true
+            cancelStroke(); parent?.requestDisallowInterceptTouchEvent(false); invalidate(); return true
         }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
@@ -60,7 +80,7 @@ internal class Whiteboard(ctx: Context) : View(ctx) {
                 }
             }
             MotionEvent.ACTION_UP -> {
-                path?.let { it.lineTo(event.x, event.y); strokes.add(Stroke(it, activePaint!!)) }
+                path?.let { it.lineTo(event.x, event.y); history.add(strokes.toList()); strokes.add(Stroke(it, activePaint!!)) }
                 cancelStroke(); performClick()
             }
         }
@@ -69,26 +89,48 @@ internal class Whiteboard(ctx: Context) : View(ctx) {
     override fun performClick(): Boolean { super.performClick(); return true }
 }
 
-/** Always reachable hide toggle; tools scroll on narrow phones without covering the card or answers. */
+/** Compact tools; the only visibility switch lives in Card actions. */
 internal class WhiteboardTools(ctx: Context, val board: Whiteboard) : LinearLayout(ctx) {
     companion object { const val PREF = "whiteboardOn" }
     private val prefs = ctx.getSharedPreferences("study", 0)
-    private val tools = LinearLayout(ctx)
-    private val toggle = button("Write") { setBoardOn(board.visibility != View.VISIBLE) }
+    var onChanged: ((Boolean) -> Unit)? = null
+    val isOn get() = board.visibility == View.VISIBLE
+    private val colour = button("●") { palette() }.apply { textSize = 26f }
+    private val eraser = button("Eraser") { board.erasing = !board.erasing; refresh() }
     init {
         setBackgroundColor(Ui.c(ctx, R.color.ag_base))
-        addView(toggle)
-        addView(HorizontalScrollView(ctx).apply {
-            isHorizontalScrollBarEnabled = false; addView(tools)
-        }, LayoutParams(0, -2, 1f))
-        tools.addView(button("Pen") { board.erasing = false })
-        listOf("Ink" to R.color.ag_text, "Red" to R.color.ag_red, "Blue" to R.color.ag_blue, "Green" to R.color.ag_green).forEach { (name, color) ->
-            tools.addView(button(name) { board.ink = Ui.c(ctx, color); board.erasing = false }.apply { setTextColor(Ui.c(ctx, color)) })
-        }
-        tools.addView(button("Eraser") { board.erasing = true })
-        tools.addView(button("Undo") { board.undo() })
+        val tools = LinearLayout(ctx)
+        addView(MotionHorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(tools) }, LayoutParams(-1, -2))
+        tools.addView(button("Undo") { board.undo() }.apply {
+            val arrow = context.getDrawable(R.drawable.ic_undo)!!.mutate()
+            arrow.setTint(Ui.c(context, R.color.ag_text)); arrow.setBounds(0, 0, Ui.dp(context, 20), Ui.dp(context, 20))
+            setCompoundDrawables(arrow, null, null, null); compoundDrawablePadding = Ui.dp(context, 4)
+        })
+        tools.addView(eraser)
         tools.addView(button("Clear") { board.clear() })
-        setBoardOn(prefs.getBoolean(PREF, false))
+        tools.addView(colour)
+        setBoardOn(prefs.getBoolean(PREF, true)); refresh()
+    }
+    internal fun colours(): List<Pair<String, Int>> {
+        val dark = (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        return listOf("Text" to Ui.c(context, R.color.ag_text), "Red" to Ui.c(context, R.color.ag_red), "Blue" to Ui.c(context, R.color.ag_blue),
+            "Green" to Ui.c(context, R.color.ag_green), "Orange" to Ui.c(context, R.color.ag_peach),
+            (if (dark) "White" else "Black") to (if (dark) Color.WHITE else Color.BLACK))
+    }
+    private fun palette() {
+        val choices = colours()
+        AppDialog.Builder(context).setTitle("Colour").setItems(choices.map { (name, value) -> android.text.SpannableString("●  $name").apply {
+            setSpan(android.text.style.ForegroundColorSpan(value), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } }.toTypedArray()) { _, which ->
+            board.ink = choices[which].second; board.erasing = false; refresh()
+        }.showCard()
+    }
+    private fun refresh() {
+        colour.setTextColor(board.ink)
+        colour.contentDescription = "Whiteboard colour: " + (colours().firstOrNull { it.second == board.ink }?.first ?: "Text")
+        eraser.isSelected = board.erasing
+        eraser.text = if (board.erasing) "Eraser ✓" else "Eraser"
+        eraser.contentDescription = "Eraser, " + if (board.erasing) "selected" else "off"
     }
     private fun button(label: String, action: () -> Unit) = StudyUi.label(context, label, 13, R.color.ag_text, 700).apply {
         gravity = android.view.Gravity.CENTER
@@ -99,9 +141,64 @@ internal class WhiteboardTools(ctx: Context, val board: Whiteboard) : LinearLayo
     }
     internal fun setBoardOn(on: Boolean) {
         board.visibility = if (on) View.VISIBLE else View.GONE
-        tools.visibility = if (on) View.VISIBLE else View.GONE
-        toggle.text = if (on) "Hide writing" else "Write"
-        toggle.contentDescription = if (on) "Hide whiteboard" else "Show whiteboard"
+        visibility = if (on) View.VISIBLE else View.GONE
         prefs.edit().putBoolean(PREF, on).apply()
+        onChanged?.invoke(on)
+    }
+}
+
+/** Full-width document, with controls above (never inside) its ink input layer. */
+internal class WhiteboardPaper(ctx: Context, private val card: View, private val board: Whiteboard) : android.widget.FrameLayout(ctx) {
+    private val document = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    private val paper = android.widget.FrameLayout(ctx)
+    private val scroll = MotionScrollView(ctx)
+    private var pages = 0
+    private var enabled = true
+    private val more = StudyUi.label(ctx, "+ More room", 14, R.color.ag_text, 700).apply {
+        gravity = android.view.Gravity.CENTER; minHeight = Ui.dp(ctx, 48)
+        setBackgroundColor(Ui.c(ctx, R.color.ag_base))
+        setOnClickListener { if (pages < 20) { pages++; resize() } }
+    }
+    private val jumps = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    init {
+        paper.addView(card, LayoutParams(-1, -1)); paper.addView(board, LayoutParams(-1, -1))
+        document.addView(paper); document.addView(more, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 56)))
+        scroll.isFillViewport = true; scroll.addView(document); addView(scroll, LayoutParams(-1, -1))
+        listOf("↑" to "Jump to top", "↓" to "Jump to last ink or card end").forEachIndexed { index, (text, label) ->
+            jumps.addView(StudyUi.label(ctx, text, 24, R.color.ag_text, 700).apply {
+                gravity = android.view.Gravity.CENTER; contentDescription = label
+                setBackgroundColor(Ui.c(ctx, R.color.ag_base))
+                setOnClickListener {
+                    val bottom = if (index == 0) 0 else board.inkBottom
+                    scroll.smoothScrollTo(0, if (index == 0) 0 else if (bottom > 0)
+                        (bottom - scroll.height / 2).coerceAtLeast(0) else paper.height - scroll.height)
+                }
+            }, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)).apply { topMargin = Ui.dp(ctx, 4) })
+        }
+        addView(jumps, LayoutParams(-2, -2, android.view.Gravity.BOTTOM or android.view.Gravity.END).apply { rightMargin = Ui.dp(ctx, 8) })
+        paper.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> positionJumps() }
+        scroll.setOnScrollChangeListener { _, _, _, _, _ -> positionJumps() }
+    }
+    override fun onMeasure(widthSpec: Int, heightSpec: Int) {
+        resize(MeasureSpec.getSize(heightSpec))
+        super.onMeasure(widthSpec, heightSpec)
+    }
+    fun setBoardOn(on: Boolean) { enabled = on; resize() }
+    fun reset() { pages = 0; board.reset(); scroll.scrollTo(0, 0); resize() }
+    private fun positionJumps() {
+        jumps.translationY = -((scroll.height - (paper.height - scroll.scrollY)).coerceAtLeast(0) + Ui.dp(context, 8)).toFloat()
+    }
+    private fun resize(available: Int = height) {
+        if (available == 0) return
+        val cardHeight = (available - if (enabled) Ui.dp(context, 56) else 0).coerceAtLeast(1)
+        if (card.layoutParams.height != cardHeight) card.layoutParams = (card.layoutParams as LayoutParams).apply { height = cardHeight }
+        val wanted = cardHeight + available * (if (enabled) pages else 0)
+        if (paper.layoutParams?.height != wanted) paper.layoutParams = LinearLayout.LayoutParams(-1, wanted)
+        more.visibility = if (enabled) View.VISIBLE else View.GONE
+        val label = if (pages == 20) "Room limit reached" else "+ More room"
+        if (more.text.toString() != label) more.text = label
+        more.isEnabled = pages < 20
+        jumps.visibility = if (enabled && pages > 0) View.VISIBLE else View.GONE
+        positionJumps()
     }
 }

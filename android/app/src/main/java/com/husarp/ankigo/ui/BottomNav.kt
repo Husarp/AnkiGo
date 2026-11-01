@@ -22,7 +22,7 @@ import com.husarp.ankigo.game.Shop
  * The 5-tab bottom bar (mockup `.bnav`): Study (open book) / Pokémon (Poké Ball outline) / Shop / Stats / Settings. The Pokémon tab holds Team, Box
  * and Pokédex as sections; the Stats tab holds Statistics and Achievements; the Shop is a tab of its own (R10 W11) and its icon carries a
  * small red dot while the day's stock hasn't been looked at ([Shop.unseen]). The selected tab uses its own palette colour
- * using the chosen tab-bar style. Tapping another tab opens its screen through [Nav] (brought to front, no animation)
+ * using the chosen tab-bar style. Tapping another tab opens its screen through [Nav] (brought to front, directional content slide)
  * and closes the current one unless that is the home screen ([isHome]), so Back from any tab ends up on the home screen.
  * Tapping the current tab goes back to that tab's top page ([reselect], PLAN 218).
  * The home screen is Study (and the full-screen battle, its second view, which has no bar).
@@ -109,7 +109,7 @@ object BottomNav {
                     .also { it.topMargin = Ui.dp(activity, 2) })
                 contentDescription = tab.label
                 setOnClickListener {
-                    if (!isHere(activity, tab)) { com.husarp.ankigo.sound.GameSound.ui(activity, com.husarp.ankigo.sound.SoundId.TAB); row.moveTo(tab) { open(activity, tab) } }
+                    if (!isHere(activity, tab)) { com.husarp.ankigo.sound.GameSound.ui(activity, com.husarp.ankigo.sound.SoundId.TAB); UiMotion.prepareTab(activity, current, tab); row.moveTo(tab) { open(activity, tab) } }
                     else reselect(activity) // PLAN 218: no tab sound, nothing opens: the screen goes back to its top page
                 }
             }
@@ -144,35 +144,46 @@ object BottomNav {
         Tab.SETTINGS -> R.color.ag_teal
     })
 
-    /** One indicator shared by all cells: position and colour use the same animation fraction. */
+    /** Destination-owned motion: selection ink is final from the first frame. */
     internal class HighlightRow(ctx: Context, private val current: Tab, private val style: TabBarStyle) : LinearLayout(ctx) {
         internal var position = current.ordinal.toFloat()
             private set
         internal var colour = tone(ctx, current)
             private set
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        private var animator: android.animation.ValueAnimator? = null
         internal fun moveTo(tab: Tab, done: () -> Unit) {
-            if (animator != null) return
-            if (style != TabBarStyle.C1 || tab == current) { done(); return }
-            val start = position
-            val from = colour
-            animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 250
-                addUpdateListener {
-                    val f = it.animatedValue as Float
-                    position = start + (tab.ordinal - start) * f
-                    colour = android.animation.ArgbEvaluator().evaluate(f, from, tone(context, tab)) as Int
-                    invalidate()
-                }
-                addListener(object : android.animation.AnimatorListenerAdapter() {
-                    private var cancelled = false
-                    override fun onAnimationCancel(animation: android.animation.Animator) { cancelled = true }
-                    override fun onAnimationEnd(animation: android.animation.Animator) { animator = null; if (!cancelled) done() }
-                })
-            }
-            animator?.start()
+            // Navigation commits on this tap; the destination animates its own indicator.
+            done()
         }
+        internal fun arriveFrom(tab: Tab) {
+            if (tab == current) return
+            val start = tab.ordinal.toFloat()
+            val from = tone(context, tab)
+            val duration = when (style) {
+                TabBarStyle.A3, TabBarStyle.C1 -> 140L
+                TabBarStyle.D3 -> 130L
+                TabBarStyle.E1 -> 160L
+            }
+            UiMotion.run(this, duration, { f ->
+                position = if (style == TabBarStyle.C1) start + (current.ordinal - start) * f else current.ordinal.toFloat()
+                colour = if (style == TabBarStyle.C1) android.animation.ArgbEvaluator().evaluate(f, from, tone(context, current)) as Int else tone(context, current)
+                reveal = f
+                val item = getChildAt(current.ordinal) as? LinearLayout
+                val label = item?.getChildAt(1)
+                val icon = (item?.getChildAt(0) as? FrameLayout)?.getChildAt(0)
+                when (style) {
+                    TabBarStyle.A3 -> { label?.scaleX = .84f + .16f * f; label?.scaleY = .84f + .16f * f }
+                    TabBarStyle.E1 -> {
+                        icon?.scaleX = (20f + 8f * f) / 28f; icon?.scaleY = (20f + 8f * f) / 28f
+                        label?.alpha = f; label?.translationY = Ui.dp(context, 3f) * (1f - f)
+                    }
+                    else -> Unit
+                }
+                invalidate()
+            })
+        }
+        private var reveal = 1f
+
         override fun dispatchDraw(canvas: Canvas) {
             val cell = (width - paddingLeft - paddingRight) / 5f
             val left = paddingLeft + cell * position
@@ -183,24 +194,17 @@ object BottomNav {
                         (height - paddingBottom).toFloat(), Ui.dp(context, 6f), Ui.dp(context, 6f), paint)
                 }
                 TabBarStyle.D3 -> {
-                    paint.color = colour
-                    canvas.drawRoundRect(left + Ui.dp(context, 4), -Ui.dp(context, 1f), left + cell - Ui.dp(context, 4),
+                    paint.color = (colour and 0x00ffffff) or (((.35f + .65f * reveal) * 255).toInt() shl 24)
+                    val half = (cell / 2f - Ui.dp(context, 4)) * (.15f + .85f * reveal)
+                    canvas.drawRoundRect(left + cell / 2f - half, -Ui.dp(context, 1f), left + cell / 2f + half,
                         Ui.dp(context, 2f), Ui.dp(context, 3f), Ui.dp(context, 3f), paint)
                 }
                 else -> Unit
             }
             super.dispatchDraw(canvas)
         }
-        override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
-            super.onWindowFocusChanged(hasWindowFocus)
-            if (hasWindowFocus) {
-                animator?.cancel()
-                position = current.ordinal.toFloat()
-                colour = tone(context, current)
-                invalidate()
-            }
-        }
-        override fun onDetachedFromWindow() { animator?.cancel(); super.onDetachedFromWindow() }
+        override fun onDetachedFromWindow() { UiMotion.finish(this); super.onDetachedFromWindow() }
+
     }
 
     /**
@@ -250,7 +254,7 @@ object BottomNav {
      * The bar view: owns the Shop tab's dot. It is worked out when the bar is built, when the game changes (a new game day comes in through
      * GameRepo), and when the window comes back (the Shop tab stored today's day while another screen was in front).
      */
-    private class NavBar(private val activity: Activity) : LinearLayout(activity) {
+    internal class NavBar(private val activity: Activity) : LinearLayout(activity) {
         private var achItem: View? = null
         private var achDot: View? = null
         fun achievements(item: View, dot: View) { achItem = item; achDot = dot }
@@ -265,11 +269,11 @@ object BottomNav {
 
         fun refresh() {
             val unseen = AchievementNotice.unseen(activity)
-            achDot?.visibility = if (unseen) View.VISIBLE else View.GONE
+            achDot?.let { UiMotion.notice(it, unseen) }
             achItem?.contentDescription = describe(Tab.STATS, unseen)
             val d = dot ?: return
             val on = dotShown(AppPrefs.shopSeenDay(activity), GameRepo.state?.day)
-            d.visibility = if (on) View.VISIBLE else View.GONE
+            UiMotion.notice(d, on)
             shopItem?.contentDescription = describe(Tab.SHOP, on)
         }
 

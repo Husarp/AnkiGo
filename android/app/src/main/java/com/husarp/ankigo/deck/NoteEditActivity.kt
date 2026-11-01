@@ -1,5 +1,8 @@
 package com.husarp.ankigo.deck
 
+import com.husarp.ankigo.ui.MotionScrollView
+import com.husarp.ankigo.ui.MotionWebView
+
 import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -166,7 +169,7 @@ class NoteEditActivity : AgActivity() {
 
         val body = FrameLayout(this)
         column = StudyUi.column(this).apply { setPadding(Ui.dp(context, 16), Ui.dp(context, 2), Ui.dp(context, 16), Ui.dp(context, 20)) }
-        editScroll = ScrollView(this).apply {
+        editScroll = MotionScrollView(this).apply {
             isFillViewport = false
             addView(column, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL))
         }
@@ -374,7 +377,7 @@ class NoteEditActivity : AgActivity() {
         }.html
     }
 
-    private fun webView(): WebView = web ?: WebView(this).apply {
+    private fun webView(): WebView = web ?: MotionWebView(this).apply {
         settings.javaScriptEnabled = true
         settings.allowFileAccess = false; settings.allowContentAccess = false
         setBackgroundColor(Color.TRANSPARENT)

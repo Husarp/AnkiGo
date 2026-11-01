@@ -77,7 +77,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     /** The sticky CONTINUE slot above the scrolling deck list with pull-to-refresh (both are filled by [render] / [refresh]). */
     fun buildBody(): View {
         content = StudyUi.column(act).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
-        val scroll = ScrollView(act).apply { addView(content, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
+        val scroll = MotionScrollView(act).apply { addView(content, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }
         deckScroll = scroll
         pull = PullRefreshLayout(act, scroll).apply { onRefresh = { refresh(true) } }
         resumeSlot = StudyUi.column(act).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 4)); visibility = View.GONE }
@@ -254,7 +254,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
                             super.dispatchDraw(canvas)
                         }
                     }
-                    branch.addView(row, FrameLayout.LayoutParams(-1, -2).apply { leftMargin = Ui.dp(act, r.depth * 18) })
+                    branch.addView(row, FrameLayout.LayoutParams(-1, -2).apply { leftMargin = Ui.dp(act, r.depth * 18); bottomMargin = Ui.dp(act, 6) })
                     content.addView(branch, StudyUi.lp())
                 }
                 DeckListLook.FAMILIES -> {

@@ -26,11 +26,13 @@ object Report {
     fun init(ctx: Context) {
         if (writer != null) return
         val dir = ctx.applicationContext.filesDir
-        val w = LogWriter(RotatingLog(dir, "report", MAX_BYTES))
+        val w = LogWriter(openFiles = { RotatingLog(dir, "report", MAX_BYTES) })
         writer = w
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler(w.handler(prev) { drainQueued() })
-        File(dir, "game-events.log").delete(); File(dir, "game-events.log.tmp").delete() // R13 Part E: the old ids-only ring is part of this log now
+        worker.execute {
+            File(dir, "game-events.log").delete(); File(dir, "game-events.log.tmp").delete()
+        } // obsolete log cleanup must not touch storage during Activity/service startup
     }
 
     fun log(tag: String, msg: String) {

@@ -71,7 +71,7 @@ object AchievementPopup {
             background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
             elevation = Ui.dp(ctx, 8f)
             setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 14), Ui.dp(ctx, 8))
-            addView(AchMedal(ctx, 38).apply { set(AchStyle.icon(AchievementTable.row(c.rowId)?.icon.orEmpty()), c.tier, c.tier < 0) }, LinearLayout.LayoutParams(Ui.dp(ctx, 38), Ui.dp(ctx, 38)))
+            addView(AchMedal(ctx, 38).apply { set(AchStyle.icon(AchievementTable.row(c.rowId)?.icon.orEmpty()), c.tier, c.tier < 0); UiMotion.pop(this, badge = true) }, LinearLayout.LayoutParams(Ui.dp(ctx, 38), Ui.dp(ctx, 38)))
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(Ui.text(ctx, 11f, 900, R.color.ag_text).apply { text = if (batch.size == 1) c.tierName else "Achievements unlocked"; setTextColor(colorOf(ctx, c)) })
@@ -169,10 +169,7 @@ object AchievementPopup {
             host.addView(card, FrameLayout.LayoutParams(minOf(Ui.dp(a, 250), a.resources.displayMetrics.widthPixels - Ui.dp(a, 16)), -2, Gravity.TOP or Gravity.RIGHT).also {
                 it.topMargin = Ui.dp(a, 60); it.rightMargin = Ui.dp(a, 8)
             })
-            if (android.animation.ValueAnimator.areAnimatorsEnabled() && !a.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)) {
-                card.translationX = Ui.dp(a, 270).toFloat(); card.alpha = 0f
-                card.animate().translationX(0f).alpha(1f).setDuration(220).start()
-            }
+            UiMotion.run(card, 180, { f -> card.alpha = f })
             handler.postDelayed({ if (note === card) { shown = emptyList(); dismissNote(); schedule() } }, 4400)
             return
         }
@@ -206,6 +203,7 @@ object AchievementPopup {
         }
         d.setOnCancelListener { finish() }
         dialog = d
+        d.window?.setWindowAnimations(UiMotion.windowStyle(a))
         d.show()
         AwayWindows.track(d) { it.dismiss() }
     }
@@ -226,7 +224,7 @@ object AchievementPopup {
     }
 
     /** The card in a ScrollView that stops short of the window's edges and keeps a phone-like width in wide windows. */
-    private fun cardScroll(ctx: Context, card: View): ScrollView = object : ScrollView(ctx) {
+    private fun cardScroll(ctx: Context, card: View): ScrollView = object : MotionScrollView(ctx) {
         override fun onMeasure(w: Int, h: Int) {
             val cap = MeasureSpec.getSize(h) - Ui.dp(ctx, 24)
             val wide = Ui.dp(ctx, 400) // wide windows (landscape, tablet): a phone-like card in the middle
@@ -255,6 +253,7 @@ object AchievementPopup {
         stage.addView(Burst(ctx, color), FrameLayout.LayoutParams(-1, Ui.dp(ctx, stageDp)))
         stage.addView(AchMedal(ctx, medalDp).apply { set(AchStyle.icon(AchievementTable.row(c.rowId)?.icon ?: ""), c.tier, special = c.tier < 0) },
             FrameLayout.LayoutParams(Ui.dp(ctx, medalDp), Ui.dp(ctx, medalDp), Gravity.CENTER))
+        UiMotion.pop(stage.getChildAt(1), badge = true)
         box.addView(stage, LinearLayout.LayoutParams(-1, -2))
         box.addView(Ui.text(ctx, 22f, 900, R.color.ag_text).apply { text = if (c.tier < 0) "Badge!" else c.word; setTextColor(color) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
         val sub = if (c.threshold != null) "${c.title} · ${AchPageMath.fmt(AchievementTable.row(c.rowId)?.metric, c.threshold)}" else c.title

@@ -161,11 +161,10 @@ class R18GDetailsShots {
             assertEquals("the item shows once", 1, t.count { it == "Amulet Coin" })
             assertTrue("Main holds it: ×2 money" in t)
             assertFalse("no Held item row in Training", "Held item" in t)
-            // 254A: the level is in the Stats title, in its band colour, and out of the line under the name
-            val title = texts(scene).single { it.text.toString() == "STATS · Lv 23" }
-            val sp = title.text as Spanned
-            val lv = sp.getSpans(0, sp.length, ForegroundColorSpan::class.java).single { sp.getSpanStart(it) == "Stats · ".length }
-            assertEquals(LevelTier.color(ctx, 23), lv.foregroundColor)
+            // PLAN 405: the full level stays visible on its own row, retaining its band colour.
+            assertTrue("STATS" in t)
+            val level = texts(scene).single { it.text.toString() == "Level 23" }
+            assertEquals(LevelTier.color(ctx, 23), level.currentTextColor)
             assertTrue("#025 · Hasty" in t || t.any { it.endsWith("· Hasty") && !it.contains("Lv") })
             assertTrue(t.none { it.contains("Lv 23 ·") })
             // 273: Wins
@@ -178,11 +177,11 @@ class R18GDetailsShots {
     }
 
     @Test fun pikachuDarkAndLightFolded() {
-        // the top of the window with Stats folded: the level stays in the title, "Total" at the right
+        // PLAN 405: the level stays on row two while folded; Total stays in the heading.
         DetailSections.storeOf = { MapStore(emptySet()) }
         dialog("pikachu-folded", listOf(0f), check = { _, scene ->
             val t = strings(scene)
-            assertTrue("STATS · Lv 23" in t)
+            assertTrue("STATS" in t); assertTrue("Level 23" in t)
             assertTrue("Total ${StatCalc.stats(gd.sp(25), st.mon("t1")!!).total}" in t)
         }) { ctx -> MonDetail.show(TeamPage(ctx, NoHost), gd, pikachu()) }
     }

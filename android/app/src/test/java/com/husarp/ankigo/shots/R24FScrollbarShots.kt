@@ -23,7 +23,7 @@ class R24FScrollbarShots {
         val attrs = ctx.obtainStyledAttributes(intArrayOf(
             android.R.attr.scrollbarThumbVertical, android.R.attr.scrollbarThumbHorizontal))
         try {
-            for (i in 0..1) assertEquals(R.drawable.game_scrollbar_thumb, attrs.getResourceId(i, 0))
+            for (i in 0..1) assertEquals(if (i == 0) R.drawable.game_scrollbar_thumb else R.drawable.game_scrollbar_thumb_horizontal, attrs.getResourceId(i, 0))
         } finally { attrs.recycle() }
         assertEquals(Ui.dp(ctx, 3), ScrollView(ctx).scrollBarSize)
     }
@@ -35,12 +35,12 @@ class R24FScrollbarShots {
                 android.R.attr.scrollbarSize))
             try {
                 for (i in 0..1) {
-                    assertEquals(R.drawable.game_scrollbar_thumb, attrs.getResourceId(i, 0))
+                    assertEquals(if (i == 0) R.drawable.game_scrollbar_thumb else R.drawable.game_scrollbar_thumb_horizontal, attrs.getResourceId(i, 0))
                     val thumb = attrs.getDrawable(i)!!
                     val bitmap = Bitmap.createBitmap(12, 60, Bitmap.Config.ARGB_8888)
                     thumb.setBounds(0, 0, 12, 60)
                     thumb.draw(Canvas(bitmap))
-                    assertEquals(ctx.getColor(R.color.ag_mauve), bitmap.getPixel(6, 30))
+                    assertEquals(ctx.getColor(R.color.ag_scrollbar), bitmap.getPixel(if (i == 0) 11 else 6, if (i == 0) 30 else 59))
                     assertEquals("rounded corner", 0, bitmap.getPixel(0, 0))
                 }
                 assertEquals(Ui.dp(ctx, 3), attrs.getDimensionPixelSize(2, 0))
@@ -49,7 +49,7 @@ class R24FScrollbarShots {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundColor(Ui.c(ctx, R.color.ag_base))
                 for (custom in listOf(false, true)) {
-                    val scroll = if (custom) TapWatchScroll(ctx) else ScrollView(ctx)
+                    val scroll = if (custom) TapWatchScroll(ctx) else com.husarp.ankigo.ui.MotionScrollView(ctx)
                     scroll.isScrollbarFadingEnabled = false
                     scroll.addView(LinearLayout(ctx).apply {
                         orientation = LinearLayout.VERTICAL
@@ -61,7 +61,7 @@ class R24FScrollbarShots {
                     assertEquals(Ui.dp(ctx, 3), scroll.scrollBarSize)
                     addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
                 }
-                addView(HorizontalScrollView(ctx).apply {
+                addView(com.husarp.ankigo.ui.MotionHorizontalScrollView(ctx).apply {
                     isHorizontalScrollBarEnabled = true
                     isScrollbarFadingEnabled = false
                     addView(TextView(ctx).apply {

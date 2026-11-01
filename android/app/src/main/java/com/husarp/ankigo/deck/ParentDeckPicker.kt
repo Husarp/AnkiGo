@@ -1,5 +1,7 @@
 package com.husarp.ankigo.deck
 
+import com.husarp.ankigo.ui.MotionScrollView
+
 import android.app.Activity
 import android.app.Dialog
 import android.text.Editable
@@ -32,7 +34,7 @@ internal object ParentDeckPicker {
         }
         box.addView(search)
         val list = StudyUi.column(act)
-        box.addView(ScrollView(act).apply { addView(list) }, StudyUi.lp(-1, Ui.dp(act, 320)))
+        box.addView(MotionScrollView(act).apply { addView(list) }, StudyUi.lp(-1, Ui.dp(act, 320)))
         fun choose(deck: Anki.Deck?) { onPick(deck) }
         fun bind() {
             list.removeAllViews()

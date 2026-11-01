@@ -185,6 +185,11 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     /** The tool buttons and the menu button, which show and hide together ([setFooterTools], and never in small windows). */
     private val tools = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private var toolsWanted = true
+    private var compactStudy = false
+    fun setCompactStudy(on: Boolean) {
+        if (compactStudy == on) return
+        compactStudy = on; applied = null; asked = null; requestLayout()
+    }
     private val menuButton = iconButton(R.drawable.ic_menu, "Menu: Team, Pokédex, Shop, Settings") { onMenu(it) }
     private val comboChip = Ui.chip(ctx, R.drawable.ic_bolt, R.color.ag_sub0, plain = true)
     private val streakFlame = StreakFlame(ctx)
@@ -393,7 +398,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         val w = if (MeasureSpec.getMode(widthMeasureSpec) == MeasureSpec.UNSPECIFIED) dpi(PanelFit.REF_W_STATS.toInt()) else MeasureSpec.getSize(widthMeasureSpec)
         val h = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) dpi(340) else MeasureSpec.getSize(heightMeasureSpec)
         val f = if (legacy) PanelFit.Fit(1f, w / d, h / d, 0f, stats = false, log = true, xp = true, tools = false, logLines = 1, compactCards = compactCards, middle = false, ok = true)
-        else decide(w / d, h / d)
+        else decide(w / d, h / d + if (compactStudy) 86f else 0f)
         apply(f)
         scaler.measure(MeasureSpec.makeMeasureSpec((w / f.scale).roundToInt(), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec((h / f.scale).roundToInt(), MeasureSpec.EXACTLY))
         scaler.pivotX = 0f; scaler.pivotY = 0f
@@ -430,10 +435,11 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         updateFrame(f.scale)
         strip.visibility = if (statusOk || legacy) GONE else VISIBLE
         stripText.maxLines = if (small) 1 else 2
-        footer.visibility = if (f.stats) VISIBLE else GONE
-        logBox.visibility = if (f.log && !tilesOn) VISIBLE else GONE
+        footer.visibility = if (f.stats && !compactStudy) VISIBLE else GONE
+        logBox.visibility = if (f.log && !tilesOn && !compactStudy) VISIBLE else GONE
         tiles.visibility = if (f.log && tilesOn) VISIBLE else GONE
         tools.visibility = if (f.tools && toolsWanted) VISIBLE else GONE
+        menuButton.visibility = if (f.tools && toolsWanted && !compactStudy) VISIBLE else GONE
         val k = TextMath.bar(f.floorSp)
         goalBarLp.height = dpf(8f * k)
         goalBar.layoutParams = goalBarLp
@@ -503,7 +509,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
      */
     fun addToolButton(@DrawableRes icon: Int, description: String, onClick: (View) -> Unit): View {
         val b = iconButton(icon, description, onClick)
-        tools.addView(b, tools.indexOfChild(menuButton), buttonLp())
+        tools.addView(b, if (study) tools.childCount else tools.indexOfChild(menuButton), buttonLp())
         return b
     }
 
@@ -587,6 +593,13 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
 
     /** Study-only presentation; PiP and floating windows scale the normal panel instead. */
     fun setStudyLayout(small: Boolean, mini: Boolean) {
+        if (!study) {
+            // PLAN 399 B applies to Study; other battle surfaces keep their ball counter.
+            tools.removeView(menuButton)
+            chips.removeView(ballChip)
+            chips.addView(menuButton, buttonLp())
+            applied = null
+        }
         study = true
         setCompact(small)
         arena.setStudyStrip(small)
@@ -600,11 +613,18 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         renderCharge()
     }
 
+    private var actionBattleUid: String? = null
+
     /**
      * Every played event comes through here, in the order it plays: the action bar's halves follow the moves (round 9 D3), and on the
      * Study screen the charge colours follow the same queue as attacks, so quick answers cannot jump the visuals ahead.
      */
     fun observeStudyEvent(event: GameEvent) {
+        if (event is GameEvent.Encounter) {
+            actionBattleUid = event.wildUid.ifEmpty { GameRepo.state?.battle?.wild?.uid }
+        } else if (actionBattleUid == null) {
+            actionBattleUid = GameRepo.state?.battle?.wild?.uid
+        }
         logBox.observe(event)
         // R19-B: the charge is followed on every screen (cheap), so the dots are right the moment picture-in-picture / split screen / the floating window shows them
         studyCharge.observe(event, com.husarp.ankigo.game.Tuning.CARDS_PER_ROUND)
@@ -771,7 +791,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         tilesTimed = false
         tilesSummary = null
         tiles.visibility = GONE
-        logBox.visibility = if (fit.log) VISIBLE else GONE
+        logBox.visibility = if (fit.log && !compactStudy) VISIBLE else GONE
         requestLayout()
         holdChanged()
     }
@@ -922,7 +942,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
             post {
                 if (st.battle !== battle || !isShown) return@post
                 if (battle.field.player.remove(com.husarp.ankigo.game.AbilityAdaptations.SWITCH_OFFER) != 1) return@post
-                GameRepo.saveNow(ctx)
+                GameRepo.saveInBackground(ctx)
                 SwitchPopup.show(ctx, data, st, header = "Your ability offers a switch") { uid ->
                     val result = GameRepo.run(ctx) { it.requestMain(uid, cardShowing = true) }
                     if (!result.ok) Ui.toast(ctx, result.message)
@@ -941,6 +961,10 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
             return
         }
         val w = b.wild
+        if (actionBattleUid != w.uid) {
+            logBox.clearMoves()
+            actionBattleUid = w.uid
+        }
         val sp = data.species[w.species]
         cancelEnemyReveal()
         arena.setBackdrop(sp?.types.orEmpty(), BackdropCatalog.seed(w.uid), BackdropCatalog.isLegendary(sp))   // R8-03: a restart / PiP / floating window shows the same picture

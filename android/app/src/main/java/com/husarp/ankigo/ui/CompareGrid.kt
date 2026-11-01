@@ -57,7 +57,7 @@ internal class CompareLook(ctx: Context, columns: Int, val fit: Int = CompareFit
 }
 
 /** A horizontal scroller that stops on whole columns ([step] px) and reports its position. */
-private class SnapScroll(ctx: Context) : HorizontalScrollView(ctx) {
+private class SnapScroll(ctx: Context) : MotionHorizontalScrollView(ctx) {
     var step = 0
     var onScroll: ((Int) -> Unit)? = null
     private var flung = false
@@ -142,7 +142,7 @@ internal class CompareGrid(
 
     private val stickyX = ArrayList<View>()
     private val hsv = SnapScroll(ctx)
-    private val vsv = ScrollView(ctx)
+    private val vsv = MotionScrollView(ctx)
     private lateinit var head: View
     var onScrolled: ((Int, Int) -> Unit)? = null
 

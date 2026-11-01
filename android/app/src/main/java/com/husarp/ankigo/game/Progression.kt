@@ -85,7 +85,9 @@ object Progression {
             mon.hp = Healing.levelUpHp(mon.hp, oldMax, maxHp)
             later += GameEvent.LevelUp(mon.uid, mon.name, mon.level, mon.hp, maxHp)
             if (isMain && mon.hp > hpBefore) later += GameEvent.Healed(mon.uid, mon.name, mon.hp - hpBefore, mon.hp, maxHp, HealReason.LEVEL_UP)
-            Badges.award(state, 5, later)
+            Badges.award(state, 5, later, pokemon = mon, data = data)
+            AchievementPokemon.record(state, "total-levels", mon, data)
+            if (mon.level >= (state.mons.maxOfOrNull { it.level } ?: 0)) AchievementPokemon.record(state, "highest-level", mon, data)
             for (lm in sp0.levelMoves.filter { it.level == mon.level && it.level > 0 }.map { it.move }.distinct()) {
                 learnMove(data, mon, lm, later)
             }
@@ -95,6 +97,7 @@ object Progression {
             val need = xpToNext(data, mon)
             if (need > 0) mon.xp = min(mon.xp, need - 1)
         }
+        AchievementPokemon.record(state, "total-xp", mon, data)
         events += GameEvent.XpGained(mon.uid, mon.name, xp, mon.level, mon.xp, xpToNext(data, mon), before, crossed)
         events += later
         return gained
@@ -302,7 +305,8 @@ object Progression {
         if (state.battle != null) Achievements.bump(state, Metric.GLOW_UP)
         events += GameEvent.Evolved(mon.uid, from, sp.name, sp.num)
         for (m in sp.levelMoves.filter { it.level == 0 }.map { it.move }.distinct()) learnMove(data, mon, m, events)
-        Badges.award(state, 16, events)
+        Badges.award(state, 16, events, pokemon = mon, data = data)
+        AchievementPokemon.record(state, "evolutions", mon, data)
     }
 
     /** Day = 6:00-18:00 on the phone clock. */
@@ -428,6 +432,8 @@ object Catching {
             caughtAt = now, defeats = 0, tier = tier,
         )
         mon.hp = StatCalc.maxHp(data, mon)
+        val previousTypes = Achievements.value(Metric.TYPES_CAUGHT, state, data)
+        val previousRare = Achievements.value(Metric.LEGENDARY_MYTHICAL, state, data)
         val newSpecies = wild.species !in state.caught
         val toTeam = false // R11-B (PLAN 134): a catch always goes to the Box; the player adds it to the team by hand
         state.mons += mon
@@ -437,12 +443,18 @@ object Catching {
         Wishlist.onCaught(state, mon.species) // caught now: it leaves the wishlist (this fight's plan was made already)
         state.catches++
         events += GameEvent.Caught(mon.uid, mon.species, mon.name, mon.level, mon.shiny, ball, newSpecies, toTeam)
-        Badges.award(state, 7, events, now)
+        Badges.award(state, 7, events, now, mon, data)
+        AchievementPokemon.record(state, "catches", mon, data)
+        if (Achievements.value(Metric.TYPES_CAUGHT, state, data) > previousTypes) AchievementPokemon.record(state, "types", mon, data)
+        if (mon.level >= (state.mons.maxOfOrNull { it.level } ?: 0)) AchievementPokemon.record(state, "highest-level", mon, data)
+        if (mon.shiny) AchievementPokemon.record(state, "shinies", mon, data)
+        if (Achievements.value(Metric.LEGENDARY_MYTHICAL, state, data) > previousRare) AchievementPokemon.record(state, "legendary-mythical", mon, data)
+        if (ball != null) AchievementPokemon.record(state, "ball-catches", mon, data)
         val tierBadge = when (tier) {
             Tier.NORMAL -> 17; Tier.BABY -> 18; Tier.ULTRA -> 8; Tier.LEGENDARY -> 9; Tier.MYTHICAL -> 10
             else -> null
         }
-        if (tierBadge != null) Badges.award(state, tierBadge, events, now)
+        if (tierBadge != null) Badges.award(state, tierBadge, events, now, mon, data)
         return mon
     }
 }

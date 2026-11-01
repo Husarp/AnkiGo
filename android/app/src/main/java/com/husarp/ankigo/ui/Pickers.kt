@@ -118,7 +118,7 @@ object Pickers {
     /** A list of [n] custom rows ([bind] builds row i); picking one closes the dialog and calls [onPick]. */
     fun rows(a: Context, title: String, n: Int, bind: (Int) -> View, onPick: (Int) -> Unit) {
         lateinit var dlg: AppDialog
-        val list = ListView(a).apply {
+        val list = MotionListView(a).apply {
             divider = null
             dividerHeight = 0
             // rows carry 12 dp (start) and 16 dp (end) of their own: with this the content lines up with the dialog title (24 dp)
@@ -327,7 +327,7 @@ object Bits {
     /** Small filled label for the Pokémon's gender. */
     fun genderSign(g: Char): String = when (g) { 'M' -> "♂"; 'F' -> "♀"; else -> "–" }
 
-    fun scroll(ctx: Context, child: View): ScrollView = ScrollView(ctx).apply { addView(child) }
+    fun scroll(ctx: Context, child: View): ScrollView = MotionScrollView(ctx).apply { addView(child) }
 }
 
 /** A cell that keeps a fixed height/width ratio ([ratio] 1 = square). */

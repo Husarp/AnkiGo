@@ -107,24 +107,13 @@ internal object ShopViews {
         contentDescription = description
         setOnClickListener { onTap() }
         addView(lead)
-        val largeText = ctx.resources.configuration.fontScale >= 1.5f
-        val buy = if (bottom is TextView) null else Ui.text(ctx, 13f, 900, R.color.ag_base).apply {
-            text = "Buy"; gravity = Gravity.CENTER
-            contentDescription = "Buy $name"
-            minimumWidth = Ui.dp(ctx, 48); minimumHeight = Ui.dp(ctx, 48)
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx)
-            setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0)
-            setOnClickListener { onTap() }
-        }
         addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
             sub?.let { addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = it }) }
             subView?.let { addView(it, LinearLayout.LayoutParams(-2, -2)) }
-            addView(bottom)
-            if (largeText && buy != null) addView(buy, LinearLayout.LayoutParams(-2, -2))
         }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8); it.marginEnd = Ui.dp(ctx, 6) })
-        if (!largeText && buy != null) addView(buy)
+        addView(bottom)
     }
 
     /** "✓ Owned" in a TM tile or card. */
@@ -160,7 +149,7 @@ internal object ShopViews {
         setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4))
         contentDescription = description
         setOnClickListener { onTap() }
-        addView(Ui.text(ctx, 10f, 900, R.color.ag_mauve).apply { text = "WEEKEND SPECIAL · SAT & SUN"; gravity = Gravity.CENTER
+        addView(Ui.text(ctx, 10f, 900, R.color.ag_mauve).apply { text = "WEEKEND SPECIAL"; gravity = Gravity.CENTER
             minimumHeight = Ui.text(ctx, 10.5f, 900, R.color.ag_text).lineHeight
         }, LinearLayout.LayoutParams(-1, -2))
         addView(LinearLayout(ctx).apply {
@@ -207,7 +196,7 @@ internal object ShopViews {
      * "✦ DEAL OF THE DAY", the bare item icon with its name, effect and "ends at midnight · 7 h", and the discount price on the right.
      * A tap calls [onTap] (PLAN 210: the item's window opens, with Buy at the deal price). [line] is the text under the name.
      */
-    fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String, line: String = ItemInfo.effect(item), onTap: () -> Unit): View {
+    fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String, line: String = ItemInfo.effect(item), night: Boolean = false, onTap: () -> Unit): View {
         val dark = TypeChips.isDark(ctx)
         val peach = Ui.c(ctx, R.color.ag_peach)
         val card = Ui.c(ctx, R.color.ag_card)
@@ -220,7 +209,7 @@ internal object ShopViews {
                 setColorFilter(labelCol, PorterDuff.Mode.SRC_IN)
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LinearLayout.LayoutParams(Ui.dp(ctx, 12), Ui.dp(ctx, 12)).also { it.marginEnd = Ui.dp(ctx, 4) })
-            addView(Ui.text(ctx, 10.5f, 900, R.color.ag_text).apply { text = "DEAL OF THE DAY · ${ShopPlan.ribbon()}"; setTextColor(labelCol); letterSpacing = 0.07f })
+            addView(Ui.text(ctx, 10.5f, 900, R.color.ag_text).apply { text = "${if (night) "DEAL OF THE NIGHT" else "DEAL OF THE DAY"} · ${ShopPlan.ribbon()}"; setTextColor(labelCol); letterSpacing = 0.07f })
         }
         val clock = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL

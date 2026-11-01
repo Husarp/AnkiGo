@@ -44,7 +44,7 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
     private val headBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     private val bodyBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(0, Ui.dp(ctx, 10), 0, Ui.dp(ctx, 6)) }
     private val footBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(0, Ui.dp(ctx, 4), 0, 0) }
-    private val scroll = ScrollView(ctx).apply {
+    private val scroll = MotionScrollView(ctx).apply {
         isVerticalScrollBarEnabled = false
         isVerticalFadingEdgeEnabled = true // a cut-off line at the bottom says the body goes on
         setFadingEdgeLength(Ui.dp(ctx, 18))
@@ -95,6 +95,52 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
         dialog?.window?.setTitle(title)
     }
 
+    /** Decorative coin flight; the transaction is already saved when this is called. */
+    fun purchase(origin: View) {
+        view.post { if (isShowing) animatePurchase(origin) }
+    }
+    private fun animatePurchase(origin: View) {
+        val host = dialog?.window?.decorView as? android.view.ViewGroup ?: return
+        val target = headBox.getChildAt(0) as? android.view.ViewGroup ?: return
+        val item = target.getChildAt(0) ?: return
+        val coin = ctx.getDrawable(R.drawable.ic_money)?.mutate() ?: return
+        val start = IntArray(2); val end = IntArray(2); val base = IntArray(2)
+        origin.getLocationOnScreen(start); item.getLocationOnScreen(end); host.getLocationOnScreen(base)
+        val sx = start[0] + origin.width / 2f - base[0]
+        val sy = start[1] + origin.height / 2f - base[1]
+        val dx = end[0] + item.width / 2f - base[0] - sx
+        val dy = end[1] + item.height / 2f - base[1] - sy
+        if (!UiMotion.enabled(ctx)) return
+        val behind = page.host.hostActivity?.window?.decorView as? android.view.ViewGroup
+        val backCoin = behind?.let { ctx.getDrawable(R.drawable.ic_money)?.mutate() }
+        val backBase = IntArray(2)
+        behind?.getLocationOnScreen(backBase)
+        if (backCoin != null) behind?.overlay?.add(backCoin)
+        host.overlay.add(coin)
+        // Coin flight uses the proposal's separate (.3,0,.5,1) curve.
+        val flight = android.view.animation.PathInterpolator(.3f, 0f, .5f, 1f)
+        UiMotion.run(host, 600, { eased ->
+            val f = eased
+            val first = f < .45f
+            val t = if (first) f / .45f else (f - .45f) / .55f
+            val x = sx + if (first) (dx * .55f + Ui.dp(ctx, 36)) * t else dx * .55f + Ui.dp(ctx, 36) + (dx * .45f - Ui.dp(ctx, 36)) * t
+            val y = sy + if (first) (dy * .2f - Ui.dp(ctx, 24)) * t else dy * .2f - Ui.dp(ctx, 24) + (dy * .8f + Ui.dp(ctx, 24)) * t
+            val scale = if (first) 1f + .1f * t else 1.1f - .5f * t
+            val half = Ui.dp(ctx, 12) * scale
+            coin.setBounds((x-half).toInt(), (y-half).toInt(), (x+half).toInt(), (y+half).toInt())
+            coin.alpha = if (first) 255 else ((1f-t)*255).toInt()
+            backCoin?.apply {
+                val bx = x + base[0] - backBase[0]; val by = y + base[1] - backBase[1]
+                setBounds((bx-half).toInt(), (by-half).toInt(), (bx+half).toInt(), (by+half).toInt())
+                alpha = coin.alpha
+            }
+        }, { host.overlay.remove(coin); if (backCoin != null) behind?.overlay?.remove(backCoin) }, easing = flight)
+        UiMotion.run(item, 600, { f ->
+            val scale = if (f < .65f) 1f + .05f*f/.65f else 1.05f-.05f*(f-.65f)/.35f
+            item.scaleX = scale; item.scaleY = scale
+        })
+    }
+
     /** Puts the window on the screen (once; later calls do nothing). */
     fun show() {
         if (done || shown) return
@@ -112,6 +158,7 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(SheetDrag.DIM); setGravity(Gravity.BOTTOM)
             setTitle(title)
+            setWindowAnimations(UiMotion.windowStyle(ctx, sheet = true))
             if (Ui.findActivity(ctx) == null) setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
         d.show()
@@ -145,7 +192,7 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
     private fun closeDialog() {
         val d = dialog ?: return
         dialog = null
-        d.window?.setWindowAnimations(0)
+        d.window?.setWindowAnimations(UiMotion.windowStyle(ctx, sheet = true))
         try { d.dismiss() } catch (_: IllegalArgumentException) { /* its Activity is already gone, and the window with it */ }
     }
 

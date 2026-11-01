@@ -143,16 +143,18 @@ class GameActivity : AgActivity() {
             setBackgroundColor(Ui.c(this@GameActivity, R.color.ag_base))
         }
         homeRoot = root
+        val pageContent = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(pageContent, LinearLayout.LayoutParams(-1, 0, 1f))
         studyBar = home.buildAppBar().also { it.visibility = View.GONE }
-        root.addView(studyBar, LinearLayout.LayoutParams(-1, -2))
+        pageContent.addView(studyBar, LinearLayout.LayoutParams(-1, -2))
         topBar = buildTopBar().also { it.visibility = View.GONE }
-        root.addView(topBar, LinearLayout.LayoutParams(-1, -2))
+        pageContent.addView(topBar, LinearLayout.LayoutParams(-1, -2))
         continueSlot = FrameLayout(this).also { it.visibility = View.GONE }
-        root.addView(continueSlot, LinearLayout.LayoutParams(-1, -2))
+        pageContent.addView(continueSlot, LinearLayout.LayoutParams(-1, -2))
         // the battle's area (or the Study view's status slot) and the deck list share the area between the bars; [relayout] sizes them for the view
         content = CappedFrame(this).also { capped = it }
         deckPane = home.buildBody().also { it.visibility = View.GONE }
-        root.addView(LinearLayout(this).apply {
+        pageContent.addView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
             addView(deckPane, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -289,7 +291,7 @@ class GameActivity : AgActivity() {
         } else if (!sink && sinkOn) {
             sinkOn = false
             LiveSession.removeSink(liveSink)
-            player?.clear()
+            if (player?.holding == true) player?.pauseHeldResult() else player?.clear()
         }
         if (!hold && holding) { holding = false; LiveSession.release(this, this) }
     }
@@ -417,8 +419,8 @@ class GameActivity : AgActivity() {
         if (bound) LiveSession.saveSnapshot()
         syncLive() // the sink goes, then the last hold is released (which saves)
         if (bound) {
-            player?.clear()
-            GameRepo.saveNow(this)
+            if (player?.holding == true) player?.pauseHeldResult() else player?.clear()
+            GameRepo.saveInBackground(this)
             Widgets.refreshAll(this)
         }
         super.onStop()
@@ -677,7 +679,7 @@ class GameActivity : AgActivity() {
                 LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(this, 10) })
         }
         content.removeAllViews()
-        content.addView(ScrollView(this).apply {
+        content.addView(MotionScrollView(this).apply {
             val m = Ui.dp(this@GameActivity, 14)
             setPadding(m, m, m, m)
             clipToPadding = false

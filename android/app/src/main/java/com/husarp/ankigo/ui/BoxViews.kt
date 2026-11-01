@@ -130,7 +130,7 @@ internal object BoxViews {
                 setCompoundDrawablesRelative(d, null, null, null)
                 compoundDrawablePadding = Ui.dp(ctx, 5)
             }
-            setOnClickListener { onClick() }
+            setOnClickListener { UiMotion.pop(this); onClick() }
         }
     }
 

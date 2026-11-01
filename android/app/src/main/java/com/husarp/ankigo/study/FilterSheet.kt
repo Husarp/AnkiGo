@@ -1,5 +1,7 @@
 package com.husarp.ankigo.study
 
+import com.husarp.ankigo.ui.MotionScrollView
+
 import android.content.Context
 import android.view.View
 import android.widget.*
@@ -28,7 +30,7 @@ internal class FilterSheet(private val ctx: Context, title: String, close: () ->
         head.addView(StudyUi.label(ctx, title, 17, R.color.ag_text, 900), StudyUi.lp(0, -2, 1f))
         head.addView(StudyUi.iconButton(ctx, R.drawable.ic_close, "Close sheet", close), StudyUi.lp(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
         view.addView(head)
-        view.addView(ScrollView(ctx).apply { addView(body) }, StudyUi.lp(-1, -2, 1f))
+        view.addView(MotionScrollView(ctx).apply { addView(body) }, StudyUi.lp(-1, -2, 1f))
         view.addView(footer)
     }
     fun loading(close: () -> Unit = {}) {

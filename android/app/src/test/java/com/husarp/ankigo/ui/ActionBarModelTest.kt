@@ -274,12 +274,12 @@ class ActionBarModelTest {
         assertEquals(listOf(BubbleTone.STAT_UP, BubbleTone.STAT_DOWN), c.chips.map { it.tone }); assertNull(c.damage)
     }
 
-    @Test fun speechKeepsSixStagesWhileChevronsStayCapped() {
+    @Test fun speechAndChevronsKeepAllSixStages() {
         val m = ActionBarModel()
         m.observe(attack(true, "Swords Dance", Type.NORMAL, Category.STATUS, 0))
         m.observe(effect(true, EffectKind.STAT_CHANGE, stat = "spa", stages = 6))
         assertEquals(listOf("Special Attack up 6"), labels(ActionBarModel.bubble(moved(m, BarSide.MINE))))
-        assertEquals(3, StatPill.count(6))
+        assertEquals(6, StatPill.count(6))
     }
 
     @Test fun aStatusMoveWithNoOutcomeSaysSo() {

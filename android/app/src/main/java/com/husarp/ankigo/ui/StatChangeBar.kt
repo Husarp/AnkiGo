@@ -34,9 +34,11 @@ internal class StatChangeBar(ctx: Context, private val normal: Float, private va
         } else if (stage == 0) canvas.drawRoundRect(0f, 0f, current * w, h, radius, radius, paint)
         else canvas.drawRect(0f, 0f, current * w, h, paint)
         canvas.restore()
-        paint.color = ColorUtils.setAlphaComponent(Ui.c(context, R.color.ag_text), 153)
-        val tick = (normal.coerceIn(0f, 1f) * w).coerceIn(1f, maxOf(1f, w - 1f))
-        canvas.drawRect(tick - 1f, -inset, tick + 1f, h + inset, paint)
+        if (stage != 0) {
+            paint.color = ColorUtils.setAlphaComponent(Ui.c(context, R.color.ag_text), 153)
+            val tick = normal.coerceIn(0f, 1f) * w
+            canvas.drawRect(tick - 1f, -inset, tick + 1f, h + inset, paint)
+        }
         canvas.restore()
     }
 }

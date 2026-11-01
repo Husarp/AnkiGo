@@ -15,11 +15,11 @@ import kotlin.math.max
 
 /**
  * R19-C (PLAN 125 X1): the stat-change pill of round 10 mockup A1-C. A short stat name (Atk / Def / SpA / SpD / Spe / Acc / Eva)
- * and drawn chevrons, one per stage (at most three), stacked; green for a rise, red for a drop. The pure rules live here; the
+ * and drawn chevrons, one per stage, in rows of up to three; green for a rise, red for a drop. The pure rules live here; the
  * move bubble's chip is a [StatPillView]; the floating badge over the Pokémon ([FloatTextView]) shares the chevron shape.
  */
 object StatPill {
-    const val MAX_STAGES = 3
+    const val MAX_STAGES = 6
 
     /** The mockup's green and red (text + chevrons; the pill is a tint of the same colour). */
     const val UP = 0xFF2E9E4F.toInt()
@@ -42,10 +42,10 @@ object StatPill {
         else -> stat
     }
 
-    /** How many chevrons a change of [stages] (signed) draws: its size, 1..3 (a change of 6 shows three). */
+    /** How many chevrons a change of [stages] (signed) draws: its size, 1..6 (a change of 6 shows six). */
     fun count(stages: Int): Int = abs(stages).coerceIn(1, MAX_STAGES)
 
-    /** "Attack up 2" / "Defense down 1" (the stages as really applied; only drawn chevrons are capped). */
+    /** "Attack up 2" / "Defense down 1" (the stages as really applied; all six stages are drawn). */
     fun spoken(stat: String, stages: Int): String = "${longName(stat)} ${if (stages > 0) "up" else "down"} ${abs(stages)}"
 
     fun isDark(ctx: Context): Boolean =
@@ -57,27 +57,29 @@ object StatPill {
 
     fun ink(up: Boolean): Int = if (up) UP else DOWN
 
-    // The chevron in the mockup's 12 x 11 box (viewBox units): M2 7 L6 3 L10 7, the next stage 5 units lower; stroke 2.4, round caps.
+    // The chevron in the mockup's 12 x 11 box (viewBox units): M2 7 L6 3 L10 7, three arrows per row, the second row 10 units lower; stroke 2.4, round caps.
     const val BOX_W = 12f
     private const val BOX_H = 11f
-    private const val STEP = 5f
     const val STROKE = 2.4f
 
-    /** Height of [n] stacked chevrons in box units. */
-    fun boxHeight(n: Int): Float = BOX_H + STEP * (n - 1)
+    /** Height of [n] chevrons in two rows in box units. */
+    fun boxHeight(n: Int): Float = BOX_H + if (n > 3) 10f else 0f
 
-    /** Adds the [n] stacked chevrons of a rise ([up]) or a drop to [path], in box units (x 0..12, y 0..boxHeight). */
+    fun boxWidth(n: Int): Float = BOX_W * minOf(n, 3)
+
+    /** Adds the [n] chevrons in rows of three of a rise ([up]) or a drop to [path], in box units (x 0..12, y 0..boxHeight). */
     fun chevrons(path: Path, n: Int, up: Boolean) {
         for (i in 0 until n) {
-            val y = i * STEP
-            if (up) { path.moveTo(2f, y + 7f); path.lineTo(6f, y + 3f); path.lineTo(10f, y + 7f) }
-            else { path.moveTo(2f, y + 3f); path.lineTo(6f, y + 7f); path.lineTo(10f, y + 3f) }
+            val y = (i / 3) * 10f
+            val x = (i % 3) * BOX_W
+            if (up) { path.moveTo(x + 2f, y + 7f); path.lineTo(x + 6f, y + 3f); path.lineTo(x + 10f, y + 7f) }
+            else { path.moveTo(x + 2f, y + 3f); path.lineTo(x + 6f, y + 7f); path.lineTo(x + 10f, y + 3f) }
         }
     }
 }
 
 /**
- * The pill as a view: rounded 9 dp tint, the short name in 12 sp bold, then the stacked chevrons (13 dp wide box, as the mockup's svg).
+ * The pill as a view: rounded 9 dp tint, the short name in 12 sp bold, then the chevrons in rows of three (13 dp wide box, as the mockup's svg).
  * [stages] is signed (positive = rise). Read by TalkBack as "Attack up 2".
  */
 internal class StatPillView(ctx: Context, val stat: String, val stages: Int) : View(ctx) {
@@ -114,7 +116,7 @@ internal class StatPillView(ctx: Context, val stat: String, val stages: Int) : V
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val w = padX * 2 + textW + gap + StatPill.BOX_W * unit
+        val w = padX * 2 + textW + gap + StatPill.boxWidth(n) * unit
         val h = padY * 2 + max(textH, boxH)
         setMeasuredDimension(Math.ceil(w.toDouble()).toInt(), Math.ceil(h.toDouble()).toInt())
     }

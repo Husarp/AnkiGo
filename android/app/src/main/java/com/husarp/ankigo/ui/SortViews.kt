@@ -228,7 +228,7 @@ internal object SortViews {
     fun scrollRow(ctx: Context, views: List<View>): View {
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         views.forEachIndexed { i, v -> row.addView(v, LinearLayout.LayoutParams(-2, -2).also { if (i > 0) it.marginStart = Ui.dp(ctx, 6) }) }
-        return HorizontalScrollView(ctx).apply {
+        return MotionHorizontalScrollView(ctx).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(row, FrameLayout.LayoutParams(-2, -2))
@@ -589,7 +589,7 @@ internal class SortSheet(
 
     /** A 48 dp row: the label and a switch ("Group duplicates", "Only wishlist"). */
     private fun switchRow(label: String, checked: Boolean, onSet: (Boolean) -> Unit): View {
-        val sw = android.widget.Switch(ctx).apply {
+        val sw = MotionSwitch(ctx).apply {
             isChecked = checked
             Ui.tintSwitch(this)
             setOnCheckedChangeListener { _, on -> onSet(on) }
@@ -605,7 +605,7 @@ internal class SortSheet(
     }
 
     /** A ScrollView that never grows past [maxPx]: the sheet grows with its content, then scrolls. */
-    private class MaxHeightScroll(ctx: Context, private val maxPx: Int) : ScrollView(ctx) {
+    private class MaxHeightScroll(ctx: Context, private val maxPx: Int) : MotionScrollView(ctx) {
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
             val cap = if (MeasureSpec.getMode(heightMeasureSpec) == MeasureSpec.UNSPECIFIED) maxPx else minOf(maxPx, MeasureSpec.getSize(heightMeasureSpec))
             super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST))

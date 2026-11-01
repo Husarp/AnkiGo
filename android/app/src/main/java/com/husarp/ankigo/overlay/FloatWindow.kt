@@ -156,6 +156,7 @@ class FloatWindow(
             x = box.x
             y = box.y
             title = "AnkiGo"
+            windowAnimations = com.husarp.ankigo.ui.UiMotion.windowStyle(context)
         }
         return try {
             focusable = false
@@ -171,9 +172,14 @@ class FloatWindow(
     /** Removes the window but keeps this object for [show] again. */
     fun hide() {
         if (lp == null) return
+        lp?.let { params ->
+            params.windowAnimations = com.husarp.ankigo.ui.UiMotion.windowStyle(context)
+            try { wm.updateViewLayout(root, params) } catch (_: Exception) { }
+        }
         lp = null
+        com.husarp.ankigo.ui.UiMotion.finish(root)
         try {
-            wm.removeViewImmediate(root)
+            wm.removeView(root)
         } catch (e: Exception) {
             Report.fail("floatwin", "remove $key", e)
         }

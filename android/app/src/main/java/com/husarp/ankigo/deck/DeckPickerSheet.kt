@@ -1,5 +1,7 @@
 package com.husarp.ankigo.deck
 
+import com.husarp.ankigo.ui.MotionScrollView
+
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
@@ -56,7 +58,7 @@ internal class DeckPickerSheet(
             setPadding(Ui.dp(context, 12), Ui.dp(context, 12), Ui.dp(context, 12), Ui.dp(context, 12))
         }, StudyUi.lp(Ui.dp(ctx, 48), Ui.dp(ctx, 48)).also { it.setMargins(0, -Ui.dp(ctx, 6), -Ui.dp(ctx, 10), -Ui.dp(ctx, 6)) })
         sheet.addView(head, StudyUi.lp(-1, -2))
-        val scroll = ScrollView(ctx).apply { isVerticalScrollBarEnabled = false; addView(list) }
+        val scroll = MotionScrollView(ctx).apply { isVerticalScrollBarEnabled = false; addView(list) }
         sheet.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f).also { it.topMargin = Ui.dp(ctx, 4) })
         go = DeckViews.button(ctx, action, R.color.ag_mauve) { pick() }
         sheet.addView(go, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10) })

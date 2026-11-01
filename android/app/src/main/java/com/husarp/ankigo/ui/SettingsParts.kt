@@ -41,7 +41,7 @@ internal object Form {
             setTextColor(AppDialogRules.onFill(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_crust), TypeInk::contrast))
             background = ripple(ctx, Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx))
             isClickable = true
-            setOnClickListener { onClick() }
+            setOnClickListener { UiMotion.press(this); onClick() }
         }
 
     /**
@@ -55,7 +55,7 @@ internal object Form {
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 11), Ui.dp(ctx, 14), Ui.dp(ctx, 11))
             background = ripple(ctx, Ui.rounded(Ui.c(ctx, if (onPage) R.color.ag_s0 else R.color.ag_mantle), 12, ctx))
             isClickable = true
-            setOnClickListener { onClick() }
+            setOnClickListener { UiMotion.press(this); onClick() }
         }
 
     /** Greys a button out and stops taps (or brings it back). */
@@ -159,7 +159,7 @@ internal object Form {
     }
 
     fun switchRow(ctx: Context, title: String, sub: String?, checked: Boolean, onChange: (Boolean) -> Unit): LinearLayout {
-        val sw = Switch(ctx).apply {
+        val sw = MotionSwitch(ctx).apply {
             isChecked = checked
             Ui.tintSwitch(this)
             setOnCheckedChangeListener { _, v -> onChange(v) }
@@ -245,7 +245,7 @@ internal object Form {
      * circle inside a 48 dp touch area; it does not toggle the switch.
      */
     fun soundRow(ctx: Context, title: String, sub: String?, checked: Boolean, onPlay: (() -> Unit)?, onChange: (Boolean) -> Unit): LinearLayout {
-        val sw = Switch(ctx).apply {
+        val sw = MotionSwitch(ctx).apply {
             isChecked = checked
             Ui.tintSwitch(this)
             setOnCheckedChangeListener { _, v -> onChange(v) }
@@ -368,7 +368,7 @@ internal object Form {
         Ui.text(ctx, 13f, 800, if (on) R.color.ag_crust else R.color.ag_text).apply {
             text = label
             isClickable = true
-            setOnClickListener { onClick() }
+            setOnClickListener { UiMotion.pop(this); onClick() }
             setChip(this, on)
         }
 

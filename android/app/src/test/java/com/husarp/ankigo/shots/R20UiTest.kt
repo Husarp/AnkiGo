@@ -40,12 +40,12 @@ class R20UiTest {
         Pickers.interceptApp = { d = it }
         MonDetail.show(TeamPage(c, NoHost), GameRepo.data!!, GameRepo.state!!.main!!)
         val card = d!!.content() as LinearLayout
-        val back = all(card).single { it.contentDescription == "Back to Pokémon" }
+        val back = all(card).single { it.contentDescription == "Back to previous screen" }
         val header = back.parent as ViewGroup
         assertSame(card, header.parent) // stays outside the scrolling body, after optional stack controls
         assertTrue(back.isClickable)
         assertEquals(listOf("Details"), texts(header))
-        assertEquals(0, texts(card).count { it == "Close" })
+        assertEquals(1, texts(card).count { it == "Close" })
     }
 
     @Test fun statsHasReviewsWithoutARedundantChartsHeading() {
@@ -64,9 +64,9 @@ class R20UiTest {
         val page = ShopPage(c, NoHost)
         val v = page.root; render(page)
         val ts = texts(v)
-        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL · SAT & SUN") >= 0)
+        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL") >= 0)
         assertTrue(ts.toString(), ts.indexOf("BASICS") >= 0)
-        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL · SAT & SUN") < ts.indexOf("BASICS"))
+        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL") < ts.indexOf("BASICS"))
         page.onGone()
     }
 

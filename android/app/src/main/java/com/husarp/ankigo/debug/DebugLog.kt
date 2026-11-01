@@ -119,7 +119,11 @@ class RotatingLog(private val dir: File, private val name: String = "report", va
  * The writer behind Report: [RotatingLog] under one lock, and the crash path that must reach the disk before the process dies.
  * Pure Kotlin (the Android worker thread is Report's).
  */
-class LogWriter(val files: RotatingLog, private val now: () -> LocalDateTime = { LocalDateTime.now() }) {
+class LogWriter private constructor(openFiles: () -> RotatingLog, private val now: () -> LocalDateTime) {
+    constructor(files: RotatingLog, now: () -> LocalDateTime = { LocalDateTime.now() }) : this({ files }, now)
+    /** Production initialization is lazy: RotatingLog's constructor may trim old files. */
+    constructor(openFiles: () -> RotatingLog) : this(openFiles, { LocalDateTime.now() })
+    val files: RotatingLog by lazy(openFiles)
     private val lock = Any()
 
     fun write(text: String, flush: Boolean) = synchronized(lock) {

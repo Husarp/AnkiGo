@@ -202,7 +202,7 @@ class EconomyTest {
         assertTrue(found.item in Items.dropPool())
         assertTrue(6 in s.badges)
         assertEquals(1, ev.filterIsInstance<GameEvent.BadgeEarned>().count { it.id == 6 })
-        assertTrue(s.itemCountdown in 3..385)
+        assertTrue(s.itemCountdown in 60..140)
         // same seed, same item
         val s2 = state(); s2.itemCountdown = 1; s2.reviewsToday = 1
         Economy.onReview(data, s2, Random(7), events())

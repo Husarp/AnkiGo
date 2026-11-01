@@ -130,7 +130,7 @@ class R10W2ShopShots {
         return p to screen
     }
 
-    /** Swaps the fake world for one with a species that learns strong TMs (the weekend special can then be a TM). */
+    /** Include strong TMs to verify that the weekend offer still uses held items. */
     private fun withTmWorld() {
         val base = TestData.world()
         val tmSpecies = TestData.species(900, "Tmmon", tmMoves = setOf("thunderbolt", "earthquake", "bodyslam"))
@@ -139,18 +139,15 @@ class R10W2ShopShots {
         val rebuild = GameRepo::class.java.getDeclaredMethod("rebuild"); rebuild.isAccessible = true; rebuild.invoke(GameRepo)
     }
 
-    private fun saturdayWith(tm: Boolean): String =
-        generateSequence(LocalDate.parse(SATURDAY)) { it.plusWeeks(1) }.take(80).map { it.toString() }.first { Shop.weekendFor(gd, it)?.isTm == tm }
-
     // ---------- the page ----------
 
     @Test fun aWeekdayShowsTheDealTheBasicsAndTheSpecialsButNoWeekendCard() {
         shoot("weekday", listOf(Variants.PHONE, TALL), check = { _, screen ->
             val t = texts(screen)
-            assertTrue(t.toString(), t.any { it.startsWith("DEAL OF THE DAY · ") })
+            assertTrue(t.toString(), t.any { it.startsWith(ShopCardKit.dealHeading() + " · ") })
             assertTrue("BASICS" in t)
             assertTrue("TODAY'S SPECIALS" in t)
-            assertTrue(t.any { it.startsWith("new in ") && it.endsWith(" h") })
+            assertTrue(t.any { it.startsWith("New in ") && it.endsWith(" min") })
             assertTrue("no weekend card on a Wednesday", t.none { it.startsWith("WEEKEND SPECIAL") })
             assertTrue("Poké Ball" in t && "Potion" in t)
             // the deal: its name once on the card, the old price struck through (a text of its own) and the new price
@@ -158,7 +155,7 @@ class R10W2ShopShots {
             assertTrue(Items.name(deal.item) in t)
             assertTrue(Bits.fmt(deal.oldPrice) in t)
             assertTrue(Bits.fmt(deal.price) in t)
-            assertTrue(t.any { it.startsWith("ends at ") && it.contains(" h") })
+            assertTrue(t.any { it.startsWith("Ends in ") && it.endsWith(" min") })
             // the TMs are tiles of the specials now
             assertTrue("TM Thunderbolt" in t && "TM Body Slam" in t)
             assertTrue("the old TM list heading is gone", "TODAY'S TMS" !in t)
@@ -171,7 +168,7 @@ class R10W2ShopShots {
         for (day in listOf(SATURDAY, SUNDAY)) {
             shoot("weekend-${day.takeLast(2)}", listOf(TALL), themes = listOf(Theme.LIGHT, Theme.DARK), check = { _, screen ->
                 val t = texts(screen)
-                assertTrue(t.toString(), "WEEKEND SPECIAL · SAT & SUN" in t)
+                assertTrue(t.toString(), "WEEKEND SPECIAL" in t)
                 assertFalse("ALWAYS IN STOCK" in t)
                 assertTrue(ShopPlan.WEEKEND_NOTE in t)
                 val w = Shop.weekendFor(gd, day)!!
@@ -180,14 +177,18 @@ class R10W2ShopShots {
         }
     }
 
-    @Test fun aWeekendTmCardShowsTheTmAndItsPrice() {
-        val day = lazy { saturdayWith(true) }
-        shoot("weekend-tm", listOf(TALL), check = { _, screen ->
+    @Test fun aWeekendHeldItemKeepsItsFixedPriceWhenStrongTmsExist() {
+        shoot("weekend-held", listOf(TALL), check = { _, screen ->
             val t = texts(screen)
-            assertTrue(t.toString(), "WEEKEND SPECIAL · SAT & SUN" in t)
-            assertTrue(Items.tmName(gd, Shop.weekendFor(gd, day.value)!!.id) in t)
-            assertTrue(Bits.fmt(Tuning.TM_PRICE) in t)
-        }) { ctx -> withTmWorld(); shopTab(ctx, day.value, tms = listOf("thunderbolt", "watergun")).second }
+            val offer = Shop.weekendFor(gd, SATURDAY)!!
+            assertTrue(t.toString(), "WEEKEND SPECIAL" in t)
+            assertFalse(offer.isTm)
+            assertTrue(offer.item in Shop.weekendPrices)
+            assertTrue(Items.name(offer.id) in t)
+            assertEquals(Shop.weekendPrices.getValue(offer.id), offer.price)
+            assertTrue(Bits.fmt(offer.price) in t)
+            assertTrue("Regular TM stock remains available", "TM Thunderbolt" in t && "TM Water Gun" in t)
+        }) { ctx -> withTmWorld(); shopTab(ctx, SATURDAY, tms = listOf("thunderbolt", "watergun")).second }
     }
 
     @Test fun tooLittleMoneyFadesThePricesButKeepsTheTilesTappable() {
@@ -219,7 +220,7 @@ class R10W2ShopShots {
         shoot("weekday", listOf(W320), scale = 2f, check = { ctx, screen ->
             assertTrue(ctx.resources.configuration.fontScale == 2.0f)
             val t = texts(screen)
-            assertTrue(t.any { it.startsWith("DEAL OF THE DAY · ") } && "BASICS" in t)
+            assertTrue(t.any { it.startsWith(ShopCardKit.dealHeading() + " · ") } && "BASICS" in t)
         }) { ctx -> shopTab(ctx, SATURDAY).second }
         shoot("weekday", listOf(Variants.PHONE), scale = 1.3f, themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, WEEKDAY).second }
         shoot("weekday", listOf(W320), themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, SATURDAY).second }
@@ -248,13 +249,13 @@ class R10W2ShopShots {
             assertTrue("700" in t && "490" in t)
         }) { ctx ->
             val price = ShopPlan.Price(490, 700)
-            val card = ShopViews.dealCard(ctx, "super-potion", Items.name("super-potion"), price, ShopPlan.endsText(0, 7), ShopPlan.describe("Super Potion", price)) {}
+            val card = ShopViews.dealCard(ctx, "super-potion", Items.name("super-potion"), price, ShopPlan.endsText(420), ShopPlan.describe("Super Potion", price)) {}
             assertEquals(1, descriptions(card).count { it.startsWith("Super Potion, deal, 490 instead of 700") })
             scene(ctx, card)
         }
         // the same card with the biggest text
         shoot("deal-card", listOf(CARD320), scale = 2f) { ctx ->
-            scene(ctx, ShopViews.dealCard(ctx, "super-potion", Items.name("super-potion"), ShopPlan.Price(490, 700), ShopPlan.endsText(0, 7), "deal") {})
+            scene(ctx, ShopViews.dealCard(ctx, "super-potion", Items.name("super-potion"), ShopPlan.Price(490, 700), ShopPlan.endsText(420), "deal") {})
         }
     }
 
@@ -308,7 +309,7 @@ class R10W2ShopShots {
             val deal = Shop.dealFor(gd, WEEKDAY)!!
             assertTrue("no prices struck through in the popup", struck((v as ShopCardKit.Stage).page.itemWindow!!.view).isEmpty())
             assertTrue("the new price", Bits.fmt(deal.price) in t)
-            assertTrue("the deal card stays under the window", t.any { it.startsWith("DEAL OF THE DAY · ") })
+            assertTrue("the deal card stays under the window", t.any { it.startsWith(ShopCardKit.dealHeading() + " · ") })
             assertTrue("Buy" in texts(v))
             assertTrue("×1" in texts(v))
             assertTrue("popup shows today's purchase price", Bits.fmt(deal.price) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))
@@ -349,7 +350,7 @@ class R10W2ShopShots {
             assertTrue(Bits.fmt(20_000 - 2 * deal.price) in texts(screen))
             // a tap on the deal card opens its item window (not a dialog), with the count in words
             val stage = ShopCardKit.Stage(ctx, p, screen)
-            val card = clickable(findText(screen) { it.startsWith("DEAL OF THE DAY · ") })!!
+            val card = clickable(findText(screen) { it.startsWith(ShopCardKit.dealHeading() + " · ") })!!
             assertNull(DialogShots.capture { card.performClick() })
             stage.render()
             assertTrue("the item window is open", p.itemWindow != null)

@@ -139,6 +139,7 @@ class R22LExplainTest {
         val c = Shots.files(paparazzi.context)
         FakeGame.install(c)
         val act = attach(StudyActivity(), ShotCtx(c))
+        act.buildContent()
         setField(act, "card", Anki.Review(10L, 0, 4, emptyList(), emptyList()))
         setField(act, "question", "Question")
         setField(act, "locked", false)

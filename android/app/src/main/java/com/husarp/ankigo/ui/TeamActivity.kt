@@ -104,7 +104,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         }
         cardSlot = FrameLayout(this).apply { visibility = View.GONE }
         teamCol.addView(cardSlot, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(this, 10) })
-        teamScroll = ScrollView(this).apply {
+        teamScroll = MotionScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             addView(teamCol, FrameLayout.LayoutParams(-1, -2))
         }
@@ -117,7 +117,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             orientation = LinearLayout.VERTICAL
             setPadding(gap, Ui.dp(this@TeamPage, 8), gap, 0)
         }
-        boxList = ListView(this).apply {
+        boxList = MotionListView(this).apply {
             divider = null
             dividerHeight = 0
             setSelector(ColorDrawable(Color.TRANSPARENT))

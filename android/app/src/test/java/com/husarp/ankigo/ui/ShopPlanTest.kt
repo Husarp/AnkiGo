@@ -73,8 +73,8 @@ class ShopPlanTest {
     }
 
     @Test fun endsAtMidnightOrAtTheDayStartHour() {
-        assertEquals("ends at midnight · 7 h", ShopPlan.endsText(0, 7))
-        assertEquals("ends at 04:00 · 1 h", ShopPlan.endsText(4, 1))
+        assertEquals("Ends in 7 h 0 min", ShopPlan.endsText(420))
+        assertEquals("Ends in 1 h 0 min", ShopPlan.endsText(60))
     }
 
     @Test fun hoursToTheNewDayRoundUpAndAreAtLeastOne() {
@@ -84,6 +84,10 @@ class ShopPlanTest {
             val t = java.time.ZonedDateTime.parse("2026-10-14T17:10:00Z").toInstant().toEpochMilli()
             assertEquals("17:10 -> midnight is 6 h 50 min away", 7, ShopPlan.hoursToNewDay(t, 0))
             assertEquals("17:10 -> next 04:00", 11, ShopPlan.hoursToNewDay(t, 4))
+            assertEquals(410, ShopPlan.minutesToNewDay(t, 0))
+            assertEquals("6 h 50 min", ShopPlan.countdown(410))
+            assertEquals("0 h 1 min", ShopPlan.countdown(1))
+            assertEquals(1, ShopPlan.minutesToNewDay(java.time.Instant.parse("2026-10-14T23:59:30Z").toEpochMilli(), 0))
             val justBefore = java.time.ZonedDateTime.parse("2026-10-14T23:59:30Z").toInstant().toEpochMilli()
             assertEquals(1, ShopPlan.hoursToNewDay(justBefore, 0))
             val exactly = java.time.ZonedDateTime.parse("2026-10-14T04:00:00Z").toInstant().toEpochMilli()

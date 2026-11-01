@@ -1,0 +1,12 @@
+Static Gen-5 Eevee and Snorlax sprites, downloaded 2026-11-01 from:
+https://play.pokemonshowdown.com/sprites/gen5/eevee.png
+https://play.pokemonshowdown.com/sprites/gen5/snorlax.png
+Pokémon artwork belongs to its respective owners; test fixtures only.
+
+backgrounds/: offline 640px WebP copies of actual battle art (not settings thumbnails).
+Showdown scenes: docs/design/round5b/bg/showdown/bg-<id>.png, originally
+https://play.pokemonshowdown.com/fx/bg-<id>.png (Pokémon Showdown artwork).
+Other scenes: downloaded 2026-11-01 from
+https://github.com/Husarp/AnkiGo/releases/download/assets-1/bg-<id>-<revision>.webp
+(revision from BackdropCatalog; omitted for revision 1). Adam's approved artwork.
+New scenes use production bundled art directly; no duplicate fixture.
