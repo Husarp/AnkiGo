@@ -272,7 +272,7 @@ class UpdateSection(ctx: Context, private val cur: String = Updates.current(ctx)
     }
     private val progress = UpdateProgress(ctx)
     init {
-        val switchRow = Form.switchRow(ctx, "Check for updates", "When the app opens or you come back to it.", Updates.checkEnabled(ctx)) { Updates.setCheckEnabled(ctx, it) }
+        val switchRow = Form.switchRow(ctx, "Check for updates", "Check for app updates when AnkiGo opens or you return to it.", Updates.checkEnabled(ctx)) { Updates.setCheckEnabled(ctx, it) }
         val versionRow = Form.row(ctx, "Version $cur", null, checkBtn).apply {
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 4), Ui.dp(ctx, 10), Ui.dp(ctx, 4))
         }

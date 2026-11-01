@@ -99,13 +99,7 @@ object DexDetail {
             }
             val options = DetailParts.secondaryButton(a, "Options") {}
             options.setOnClickListener { withCopy { MonActions(a).menu(it, options) { dlg.dismiss() } } }
-            // "My Pokémon" = the details of the best copy (copies() puts the highest level first), no picker
-            val details = DetailParts.secondaryButton(a, "My Pok\u00E9mon") { openMon(a, data, mine[0]) }
-            col.addView(LinearLayout(a).apply {
-                orientation = LinearLayout.HORIZONTAL
-                addView(options, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginEnd = Ui.dp(a, 4) })
-                addView(details, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 4) })
-            }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+            col.addView(options, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
         }
 
         // wishlist star toggle: wishlisted species are always caught by the auto rule
@@ -142,7 +136,14 @@ object DexDetail {
         col.addView(star, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         col.addView(hint, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
-        dlg = AppDialog.Builder(a).setTitle(sp.name).setView(DetailSections.scroll(a, col)).setCloseAtTop().create()
+        dlg = AppDialog.Builder(a).setTitle(sp.name).setView(DetailSections.scroll(a, col)).setCloseAtTop().apply {
+            if (mine.isNotEmpty()) {
+                // Highest-level copy first, without a picker; stays visible while the species body scrolls.
+                setTopAction(DetailParts.secondaryButton(a, "My Pokémon") { openMon(a, data, mine[0]) }.apply {
+                    setPadding(Ui.dp(a, 10), 0, Ui.dp(a, 10), 0)
+                })
+            }
+        }.create()
         Pickers.show(dlg)
     }
 

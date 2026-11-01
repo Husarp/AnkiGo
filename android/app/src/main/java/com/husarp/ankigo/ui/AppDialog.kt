@@ -30,13 +30,14 @@ import com.husarp.ankigo.R
  * give it its own side padding (24 dp lines it up with the title). A button tap runs its listener, then closes the dialog;
  * so does a tap on a list row.
  */
-class AppDialog internal constructor(val context: Context) : DialogInterface {
+class AppDialog internal constructor(val context: Context) : DialogInterface, StackWindow {
     private var title: CharSequence? = null
     private var message: CharSequence? = null
     private var customView: View? = null
     private var customScrollsItself = false
     private var footer: View? = null
     private var closeAtTop = false
+    private var topAction: View? = null
     private var backAtTop = false
     private var items: Array<out CharSequence>? = null
     private var itemListener: DialogInterface.OnClickListener? = null
@@ -47,6 +48,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
     private val buttons = LinkedHashMap<Int, Btn>()
     private val buttonViews = HashMap<Int, TextView>()
     private var built: View? = null
+    private var closeAllView: View? = null
 
     /** The platform dialog, made on first use (the content alone can be built and shot without a window). */
     private var made: Dialog? = null
@@ -65,19 +67,33 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
             }
             setCancelable(cancelable)
             setCanceledOnTouchOutside(cancelable)
-            setOnDismissListener { dismissListener?.onDismiss(this@AppDialog) }
+            setOnDismissListener { leftStack(); dismissListener?.onDismiss(this@AppDialog) }
             setOnCancelListener { cancelListener?.onCancel(this@AppDialog) }
         }
 
     val window: Window? get() = dlg.window
     val isShowing: Boolean get() = made?.isShowing == true
 
-    fun show() { dlg.show(); AwayWindows.track(this) { it.dismiss() } }
-    override fun dismiss() { made?.dismiss() }
-    override fun cancel() { made?.cancel() }
+    fun show() {
+        joinStack()
+        try { dlg.show() } catch (e: RuntimeException) { leftStack(); throw e }
+        AwayWindows.track(this) { it.dismiss() }
+    }
+    override fun dismiss() { leftStack(); made?.dismiss() }
+    override fun cancel() { leftStack(); made?.cancel() }
 
     fun setOnDismissListener(l: DialogInterface.OnDismissListener?) { dismissListener = l }
     fun setOnCancelListener(l: DialogInterface.OnCancelListener?) { cancelListener = l }
+
+    override val stackContext: Context get() = context
+    override fun closeFromStack() = dismiss()
+    internal fun joinStack() = WindowStack.add(this)
+    private fun leftStack() = WindowStack.remove(this)
+    override fun stackChanged(stacked: Boolean) {
+        closeAllView?.visibility = if (stacked) View.VISIBLE else View.GONE
+        (closeAllView?.parent as? View)?.visibility = if (stacked || closeAtTop) View.VISIBLE else View.GONE
+    }
+    private fun updateStackControl() = stackChanged(WindowStack.stacked(context))
 
     /** The button view of [which] (`BUTTON_POSITIVE` / `BUTTON_NEGATIVE` / `BUTTON_NEUTRAL`), or null when the dialog has none; for enabling / disabling it. */
     fun button(which: Int): TextView? { content(); return buttonViews[which] }
@@ -94,11 +110,28 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
             background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 20, ctx)
             maxHeightPx = ctx.resources.displayMetrics.heightPixels - Ui.dp(ctx, 48)
         }
-        if (closeAtTop) {
-            card.addView(makeButton(ctx, DialogInterface.BUTTON_POSITIVE, Btn("Close", null)).also {
-                buttonViews[DialogInterface.BUTTON_POSITIVE] = it
-            }, LinearLayout.LayoutParams(-2, -2).also { it.setMargins(Ui.dp(ctx, 12), Ui.dp(ctx, 8), 0, 0) })
+        val controls = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), 0)
         }
+        if (closeAtTop) controls.addView(makeButton(ctx, DialogInterface.BUTTON_POSITIVE, Btn("Close", null)).also {
+            buttonViews[DialogInterface.BUTTON_POSITIVE] = it
+        }, LinearLayout.LayoutParams(-2, -2))
+        controls.addView(Ui.text(ctx, 13f, 800, R.color.ag_mauve).apply {
+            text = "Close all"
+            minHeight = Ui.dp(ctx, 48)
+            gravity = Gravity.CENTER
+            setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0)
+            setOnClickListener { WindowStack.closeAll(context) }
+            closeAllView = this
+        }, LinearLayout.LayoutParams(-2, -2))
+        topAction?.let { action ->
+            controls.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
+            controls.addView(action, LinearLayout.LayoutParams(-2, -2))
+        }
+        card.addView(controls, LinearLayout.LayoutParams(-1, -2))
+        updateStackControl()
         val hasBody = message != null || customView != null || items != null
         if (backAtTop) {
             card.addView(LinearLayout(ctx).apply {
@@ -267,6 +300,8 @@ class AppDialog internal constructor(val context: Context) : DialogInterface {
         private val d = AppDialog(ctx)
 
         fun setCloseAtTop() = apply { d.closeAtTop = true }
+        /** An action pinned on the right, opposite Close; clicking it leaves this dialog open. */
+        fun setTopAction(v: View) = apply { d.topAction = v; d.closeAtTop = true }
         /** Pinned bare back arrow beside the title; dismisses to the originating screen. */
         fun setBackAtTop() = apply { d.backAtTop = true }
         fun setTitle(t: CharSequence?) = apply { d.title = t }

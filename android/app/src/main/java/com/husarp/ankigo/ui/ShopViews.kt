@@ -34,7 +34,7 @@ internal object ShopViews {
         scaleType = ImageView.ScaleType.FIT_CENTER
         if (faded) alpha = 0.65f
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, dp), Ui.dp(ctx, dp)).also { it.marginEnd = Ui.dp(ctx, endDp) }
+        layoutParams = LinearLayout.LayoutParams(Ui.dp(ctx, dp + 3), Ui.dp(ctx, dp + 3)).also { it.marginEnd = Ui.dp(ctx, endDp) }
     }
 
     /** A normal price: the coin and the amount (mockup `.pr`). */
@@ -120,7 +120,7 @@ internal object ShopViews {
             orientation = LinearLayout.VERTICAL
             addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
             sub?.let { addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = it }) }
-            subView?.let { addView(it) }
+            subView?.let { addView(it, LinearLayout.LayoutParams(-2, -2)) }
             addView(bottom)
             if (largeText && buy != null) addView(buy, LinearLayout.LayoutParams(-2, -2))
         }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8); it.marginEnd = Ui.dp(ctx, 6) })
@@ -132,7 +132,26 @@ internal object ShopViews {
 
     // ---- the weekend card ----
 
-    /** A smaller purple companion to the peach daily-deal card. */
+    /** Match the offer heights after text wrapping, including at larger font sizes. */
+    fun offers(ctx: Context, daily: View?, weekend: View?): View = object : LinearLayout(ctx) {
+        init {
+            orientation = VERTICAL
+            daily?.let { addView(it, LayoutParams(-1, -2).also { lp -> lp.bottomMargin = Ui.dp(ctx, 4) }) }
+            weekend?.let { addView(it, LayoutParams(-1, -2)) }
+        }
+
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            for (i in 0 until childCount) getChildAt(i).layoutParams.height = LayoutParams.WRAP_CONTENT
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            if (childCount == 2) {
+                val offerHeight = maxOf(getChildAt(0).measuredHeight, getChildAt(1).measuredHeight)
+                for (i in 0 until childCount) getChildAt(i).layoutParams.height = offerHeight
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            }
+        }
+    }
+
+    /** A purple companion matching the peach daily-deal card’s height. */
     fun weekendCard(ctx: Context, lead: View, name: String, note: String, right: View, description: String, onTap: () -> Unit): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         val purple = Ui.c(ctx, R.color.ag_mauve)
@@ -141,10 +160,13 @@ internal object ShopViews {
         setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4))
         contentDescription = description
         setOnClickListener { onTap() }
-        addView(Ui.text(ctx, 10f, 900, R.color.ag_mauve).apply { text = "WEEKEND SPECIAL · SAT & SUN" })
+        addView(Ui.text(ctx, 10f, 900, R.color.ag_mauve).apply { text = "WEEKEND SPECIAL · SAT & SUN"; gravity = Gravity.CENTER
+            minimumHeight = Ui.text(ctx, 10.5f, 900, R.color.ag_text).lineHeight
+        }, LinearLayout.LayoutParams(-1, -2))
         addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = Ui.dp(ctx, 64)
             addView(lead)
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
@@ -152,7 +174,7 @@ internal object ShopViews {
                 addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = note })
             }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8); it.marginEnd = Ui.dp(ctx, 6) })
             if (ctx.resources.configuration.fontScale < 1.5f) addView(right)
-        })
+        }, Form.lp(ctx, 6))
         if (ctx.resources.configuration.fontScale >= 1.5f) addView(right,
             LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.END })
     }
@@ -227,8 +249,9 @@ internal object ShopViews {
         val body = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4))
-            addView(label)
-            addView(row, Form.lp(ctx, 0))
+            addView(label, LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.CENTER_HORIZONTAL })
+            // The 64 dp icon plus 8 dp padding preserves 1.0.0’s 52 + 20 dp body height.
+            addView(row, Form.lp(ctx, 6))
             if (ctx.resources.configuration.fontScale >= 1.5f) addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f),
                 LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.END })
         }

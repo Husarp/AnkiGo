@@ -97,32 +97,34 @@ class WidgetLookActivity : AgActivity() {
                 override fun onStopTrackingTouch(bar: android.widget.SeekBar) {}
             })
         }
-        return Form.stackRow(this,"Background see-through","0% is solid, 100% shows only the wallpaper",slider,value)
+        return Form.stackRow(this,"Background see-through","Make the widget background see-through: 0% is solid and 100% shows your wallpaper",slider,value)
     }
     private fun render() {
         rows.removeAllViews(); renderPreview()
         if (tab == 0) {
             val options=StudyUi.column(this).apply { background=Ui.rounded(Ui.c(context,R.color.ag_card),16,context) }
             rows.addView(options,StudyUi.spaced(this,8))
+            rows.addView(Form.sect(this,"Colours & background"), 0)
             options.addView(transparencyRow())
-            options.addView(Form.stackRow(this,"Colours","Phone follows the phone's light or dark mode",
+            options.addView(Form.stackRow(this,"Colours","Choose light or dark widget colours, or follow your phone’s theme",
                 Form.segmented(this,listOf("Phone","Light","Dark"),listOf("phone","light","dark").indexOf(look().theme).coerceAtLeast(0)) { save(look().copy(theme=listOf("phone","light","dark")[it])) }))
             val accents = listOf("goal")+BuddyRing.PICKS
-            options.addView(Form.stackRow(this,"Accent colour","The goal ring, bars and highlights",Form.swatches(this,
+            options.addView(Form.stackRow(this,"Accent colour","Choose the colour of the widget’s goal ring, bars and highlights",Form.swatches(this,
                 accents.map { it to Ui.c(this,if(it=="goal")R.color.ag_sub0 else BuddyRing.pickRes(it)) },accents.indexOf(look().accent)) { save(look().copy(accent=accents[it])); render() }))
-            options.addView(Form.stackRow(this,"Card tint","The colour behind everything",Form.segmented(this,listOf("Plain","Type colour","Preset"),when(look().tint){"plain"->0;"type"->1;else->2}) {
+            options.addView(Form.stackRow(this,"Card tint","Colour the widget background with a plain fill, your Pokémon’s type or a preset",Form.segmented(this,listOf("Plain","Type colour","Preset"),when(look().tint){"plain"->0;"type"->1;else->2}) {
                 if (it==2) AlertDialog.Builder(this).setTitle("Card tint").setItems(BuddyRing.PICKS.toTypedArray()) { _,i -> save(look().copy(tint=BuddyRing.PICKS[i])) }.show()
                 else save(look().copy(tint=if(it==0)"plain" else "type"))
             }))
             if (kind=="buddy") {
+                options.addView(Form.sect(this,"Buddy layout & movement"))
                 options.addView(sizeRow())
-                options.addView(Form.stackRow(this,"Buddy layout","A: ring · B: goal bar · C: open gauge",Form.segmented(this,listOf("A","B","C"),listOf("A","B","C").indexOf(BuddyWidgetPrefs.layout(prefs,widgetId))) {
+                options.addView(Form.stackRow(this,"Buddy layout","Show the Buddy’s progress as a ring (A), goal bar (B) or open gauge (C)",Form.segmented(this,listOf("A","B","C"),listOf("A","B","C").indexOf(BuddyWidgetPrefs.layout(prefs,widgetId))) {
                     BuddyWidgetPrefs.setLayout(prefs,widgetId,listOf("A","B","C")[it]); Widgets.refreshAll(this,study=false); renderPreview()
                 }))
-                options.addView(Form.stackRow(this,"Progress colour","Goal colours, the Pokémon's type colour, or the accent colour",Form.segmented(this,listOf("Goal","Type","One colour"),BuddyWidgetPrefs.ring(prefs,widgetId).mode.ordinal) {
+                options.addView(Form.stackRow(this,"Progress colour","Colour the Buddy’s progress with goal colours, its Pokémon’s type or your accent",Form.segmented(this,listOf("Goal","Type","One colour"),BuddyWidgetPrefs.ring(prefs,widgetId).mode.ordinal) {
                     BuddyWidgetPrefs.setRing(prefs,widgetId,when(it){0->BuddyRing.APP;1->BuddyRing(BuddyRing.Mode.TYPE);else->BuddyRing(BuddyRing.Mode.PICK,look().accent.takeIf { c -> c!="goal" } ?: "mauve")}); Widgets.refreshAll(this,study=false); renderPreview()
                 }))
-                options.addView(Form.switchRow(this,"Moving Pokémon","Plays its real animation while the home screen is on; still with reduced motion",BuddyWidgetPrefs.anim(prefs,widgetId)) {
+                options.addView(Form.switchRow(this,"Moving Pokémon","Animate the Buddy Pokémon while the home screen is visible; reduced motion keeps it still",BuddyWidgetPrefs.anim(prefs,widgetId)) {
                     BuddyWidgetPrefs.setAnim(prefs,widgetId,it); Widgets.refreshAll(this,study=false)
                 })
             }
@@ -192,7 +194,7 @@ class WidgetLookActivity : AgActivity() {
                 override fun onStopTrackingTouch(bar: android.widget.SeekBar) {}
             })
         }
-        return Form.stackRow(this,"Pokémon size","Scale within the layout",slider,value)
+        return Form.stackRow(this,"Pokémon size","Resize the Buddy Pokémon within the widget",slider,value)
     }
     internal fun showPokemonSheet(show: Boolean = true): View {
         val state=GameRepo.state

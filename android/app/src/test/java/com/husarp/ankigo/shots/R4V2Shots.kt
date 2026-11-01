@@ -111,7 +111,7 @@ class R4V2Shots {
             assertTrue("Answers given" in t && "Battles won" in t)
             fun descriptions(v: View): List<String> = listOfNotNull(v.contentDescription?.toString()) +
                 if (v is ViewGroup) (0 until v.childCount).flatMap { descriptions(v.getChildAt(it)) } else emptyList()
-            val tiles = descriptions(screen)
+            val tiles = descriptions(screen).map { it.removeSuffix(", new achievement") }
             assertTrue("Answers given, Epic" in tiles)
             assertTrue(tiles.any { it.endsWith(", Not yet") })
             assertTrue(tiles.any { it.endsWith(", Earned") })
@@ -242,7 +242,7 @@ class R4V2Shots {
         }
         paparazzi.shootPage("r4v2-detail-damage", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
             val screen = page(ctx, open = "items-found")
-            assertTrue(texts(screen).any { it.startsWith("Counted since the update (") })
+            assertFalse(texts(screen).any { it.startsWith("Counted since the update") })
             screen
         }
         paparazzi.shootPage("r4v2-detail-time", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->

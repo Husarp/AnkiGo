@@ -158,10 +158,12 @@ internal class ReminderScreen(
     private fun drawRows() {
         root.removeAllViews()
         if (prefs.anyOn && !canPost()) root.addView(permissionRow(), lp())
+        root.addView(Form.sect(ctx, "Study & game reminders"))
         root.addView(
             Form.cardOf(ctx, listOf(ReminderTopic.DUE, ReminderTopic.GOAL, ReminderTopic.STREAK, ReminderTopic.DAILY, ReminderTopic.SHOP).map { row(it) }),
             lp(if (prefs.anyOn && !canPost()) 10 else 0),
         )
+        root.addView(Form.sect(ctx, "Quiet hours"))
         root.addView(Form.cardOf(ctx, listOf(row(ReminderTopic.QUIET))), lp(12))
     }
 
@@ -183,6 +185,12 @@ internal class ReminderScreen(
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             addView(Ui.text(ctx, 14f, 800, R.color.ag_text).apply { text = t.title; maxLines = 1; ellipsize = TextUtils.TruncateAt.END })
+            val id = when (t) {
+                ReminderTopic.DUE -> "dueOn"; ReminderTopic.GOAL -> "goalOn"
+                ReminderTopic.STREAK -> "streakOn"; ReminderTopic.DAILY -> "dailyGoalOn"
+                ReminderTopic.SHOP -> "shopOn"; ReminderTopic.QUIET -> "quietOn"
+            }
+            com.husarp.ankigo.ui.SettingsCatalog.byId(id)?.let { addView(Form.body(ctx, it.explain, 12f)) }
             addView(Ui.text(ctx, 11.5f, 700, R.color.ag_sub0).apply { text = summary(t); maxLines = 1; ellipsize = TextUtils.TruncateAt.END; tag = "sub" },
                 lp(1))
         }
@@ -276,7 +284,7 @@ internal class ReminderScreen(
                 }, lp(2))
                 when (prefs.dueMode) {
                     DueMode.FIXED -> body.addView(chipRow(listOf(timeChip(prefs.dueTime) { v -> change { it.copy(dueTime = v) } })))
-                    DueMode.APP_PICKS -> body.addView(note("The hour you study most."))
+                    DueMode.APP_PICKS -> body.addView(note("AnkiGo sends cards-due reminders around the hour you study most."))
                     DueMode.EVERY_HOURS -> body.addView(hourChips(prefs.dueEveryHours))
                 }
                 body.addView(label("Not more often than"))
@@ -334,10 +342,24 @@ internal class ReminderScreen(
         }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 10) })
     }
 
-    private fun label(text: String): View = Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply {
-        this.text = text.uppercase()
-        letterSpacing = 0.06f
-        setPadding(0, Ui.dp(ctx, 12), 0, 0)
+    private fun label(text: String): View = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(Form.sect(ctx, text))
+        val id = when (text) {
+            "Remind when at least" -> "dueMin"
+            "Time" -> "dueMode"
+            "Not more often than" -> "minGapHours"
+            "At most" -> "dailyCap"
+            "Decks" -> "decks"
+            "Count" -> "goalKind"
+            "Goal" -> "goalCount"
+            "Remind every" -> "dueEveryHours"
+            "Remind at" -> if (sheetTopic == ReminderTopic.STREAK) "streakTime" else "dailyGoalTime"
+            "From" -> "quietFrom"
+            "To" -> "quietTo"
+            else -> null
+        }
+        id?.let { com.husarp.ankigo.ui.SettingsCatalog.byId(it) }?.let { addView(note(it.explain)) }
     }
 
     private fun note(text: String): View = Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply {

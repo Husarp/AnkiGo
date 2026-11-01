@@ -9,8 +9,19 @@ class SettingsCatalogTest {
     private val all = SettingsCatalog.all
 
     @Test fun downloadsExplainThatSavedPicturesStillShow() {
-        assertEquals("Off: no new downloads; pictures already saved are still used",
+        assertEquals("Download missing Pokémon pictures as needed; off keeps using pictures already saved",
             all.single { it.id == "spritesEnabled" }.explain)
+    }
+
+    @Test fun tabBarBelongsWithThemeAndColoursAndSearchOpensThatGroup() {
+        val entry = SettingsCatalog.byId("tabBarStyle")!!
+        assertEquals("Theme & colours", entry.sub)
+        assertEquals("Look · Theme & colours", SettingsSearch.match("bottom tab bar").first().where)
+    }
+
+    @Test fun automaticFrameExplanationFollowsTheSceneryPick() {
+        assertEquals("Draw a plain pixel rim coloured for the displayed scenery; dark mode uses a darker palette",
+            SettingsCatalog.byId("frameAutomatic")!!.explain)
     }
 
     @Test fun idsAreUnique() {

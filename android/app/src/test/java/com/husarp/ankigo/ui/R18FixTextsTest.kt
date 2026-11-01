@@ -27,12 +27,12 @@ class R18FixTextsTest {
 
     @Test fun theOpenOnLineIsTrue() {
         val line = "Where the app icon and the Buddy widget take you"
-        assertTrue(SettingsCatalog.byId("openOn")!!.explain.startsWith(line))
+        assertEquals("Choose the screen opened by the app icon and Buddy widget", SettingsCatalog.byId("openOn")!!.explain)
         assertTrue(src("ui/SettingsActivity.kt").contains("\"$line.\""))
     }
 
     @Test fun theMovementLineSaysReducedMotionTurnsItOff() {
-        assertTrue(SettingsCatalog.byId("pokemonMovement")!!.explain.contains("off while reduced motion is on"))
+        assertTrue(SettingsCatalog.byId("pokemonMovement")!!.explain.contains("reduced motion stops this"))
         assertTrue(src("ui/SettingsActivity.kt").contains("Off while reduced motion is on."))
     }
 

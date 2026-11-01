@@ -204,20 +204,18 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         val ctx = this
         val st = state
         val cols = 1
-        val gap = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 4) }
 
         // The deal card keeps its unit and old prices; a tap opens the item window for confirmation.
-        Shop.dealFor(data, st.day)?.let { deal ->
+        val dailyOffer = Shop.dealFor(data, st.day)?.let { deal ->
             val price = ShopPlan.price(data, st.day, deal.item)
             val name = Items.name(deal.item)
-            content.addView(ShopViews.dealCard(ctx, deal.item, name, price, ShopPlan.endsText(st.settings.dayStartHour, hoursToNewDay()),
-                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))) { openCard(CardKeys.DEAL) }, gap)
+            ShopViews.dealCard(ctx, deal.item, name, price, ShopPlan.endsText(st.settings.dayStartHour, hoursToNewDay()),
+                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))) { openCard(CardKeys.DEAL) }
         }
 
         // the weekend special (Saturday and Sunday only)
-        Shop.weekendFor(data, st.day)?.let { w ->
-            content.addView(weekendCard(w), LinearLayout.LayoutParams(-1, -2))
-        }
+        val weekendOffer = Shop.weekendFor(data, st.day)?.let { weekendCard(it) }
+        content.addView(ShopViews.offers(ctx, dailyOffer, weekendOffer), LinearLayout.LayoutParams(-1, -2))
 
         content.addView(Bits.sect(ctx, "Basics"))
         // always in stock: the basics at their normal price

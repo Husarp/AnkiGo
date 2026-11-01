@@ -8,7 +8,6 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
-import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.view.View
 import androidx.annotation.ColorRes
@@ -35,7 +34,18 @@ object AchStyle {
         "trophy" to R.drawable.ic_ach_trophy, "level" to R.drawable.ic_ach_levels, "xp" to R.drawable.ic_star, "ball-throw" to R.drawable.ic_ball,
         "ball-catch" to R.drawable.ic_ach_ballcheck,
         // Economy
-        "coin" to R.drawable.ic_coin, "bag" to R.drawable.ic_shop, "potion" to R.drawable.ic_ach_potion, "tm" to R.drawable.ic_tm, "gift" to R.drawable.ic_gift,
+        "coin" to R.drawable.ic_ach_money, "bag" to R.drawable.ic_shop, "potion" to R.drawable.ic_ach_potion, "tm" to R.drawable.ic_ach_tm, "gift" to R.drawable.ic_gift,
+        "secret-one-shot" to R.drawable.ic_ach_secret_one_shot,
+        "secret-last-breath" to R.drawable.ic_ach_secret_last_breath,
+        "secret-combo-20" to R.drawable.ic_ach_secret_combo_20,
+        "secret-revolving-door" to R.drawable.ic_ach_secret_revolving_door,
+        "secret-perfect-throw" to R.drawable.ic_ach_secret_perfect_throw,
+        "secret-david-goliath" to R.drawable.ic_ach_secret_david_goliath,
+        "secret-night-owl" to R.drawable.ic_ach_secret_night_owl,
+        "secret-easy-street" to R.drawable.ic_ach_secret_easy_street,
+        "secret-deja-vu" to R.drawable.ic_ach_secret_deja_vu,
+        "secret-bully" to R.drawable.ic_ach_secret_bully,
+        "secret-glow-up" to R.drawable.ic_ach_secret_glow_up,
         // Special (Ankimon badges)
         "badge-ball" to R.drawable.ic_ball, "badge-normal" to R.drawable.ic_dex, "badge-baby" to R.drawable.ic_heart_outline,
         "badge-ultra" to R.drawable.ic_bolt, "badge-legendary" to R.drawable.ic_ach_crown, "badge-mythical" to R.drawable.ic_ach_sparkle,
@@ -51,7 +61,7 @@ object AchStyle {
      */
     private val NUDGE: Map<Int, Pair<Float, Float>> = mapOf(
         R.drawable.ic_flame to (-2f to 0.25f), R.drawable.ic_ach_fossil to (-1.8f to 0.6f), R.drawable.ic_bolt to (1f to 0f),
-        R.drawable.ic_shop to (0.75f to 0.1f), R.drawable.ic_ach_cards to (0f to -1f), R.drawable.ic_ach_crown to (0f to -0.75f),
+        R.drawable.ic_shop to (0.75f to 0.1f), R.drawable.ic_ach_cards to (0f to -1f), R.drawable.ic_ach_crown to (0f to -0.5f),
         R.drawable.ic_ach_easy to (0f to -0.8f), R.drawable.ic_ach_heart_broken to (0f to -0.68f), R.drawable.ic_gift to (0f to -0.76f),
     )
 
@@ -64,6 +74,15 @@ object AchStyle {
     }
 
     fun tierColor(ctx: Context, tier: Int): Int = ctx.getColor(tierRes(tier))
+
+    fun badgeColor(ctx: Context, key: String): Int = Ui.c(ctx, when (key) {
+        "badge-ultra", "badge-legendary", "badge-level" -> R.color.ag_yellow
+        "badge-baby", "badge-ball", "badge-heal" -> R.color.ag_red
+        "badge-mythical", "badge-item" -> R.color.ag_mauve
+        "badge-evolve" -> R.color.ag_green
+        "badge-fossil" -> R.color.ag_peach
+        else -> R.color.ag_sub0
+    })
 
     /** What colour a medal uses: a tier's, a reached one-off's (teal), or the grey of a locked one. */
     fun medalColor(ctx: Context, tier: Int, special: Boolean = false): Int =
@@ -121,7 +140,7 @@ object AchStyle {
 
 /**
  * The round medal (mockup `.med`): a disc tinted with the colour, a ring in the colour, the icon, and the tier's shape in a corner.
- * [set] with tier -1 and not special = locked (grey dashed ring). [special] = an earned one-off (teal, a tick in the corner).
+ * [set] with tier -1 and not special = locked (grey dashed ring). [special] = an earned one-off (colour alone, no corner mark).
  * [ground] is the colour behind the medal (the card), so the corner mark is cut out of the ring.
  */
 class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
@@ -133,13 +152,15 @@ class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
     private val disc = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val cut = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val mark = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val tick = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
-    private var coinIcon = false
+    private var badgeInk: Int? = null
+    private var bare = false
+    private var secret = false
     private val shapeDrawables = HashMap<Int, Drawable>()
 
     fun set(@DrawableRes iconRes: Int, tier: Int, special: Boolean = false, ground: Int = Ui.c(context, R.color.ag_card)) {
-        coinIcon = iconRes == R.drawable.ic_coin
+        badgeInk = if (special) AchStyle.ICONS.entries.firstOrNull { it.key.startsWith("badge-") && it.value == iconRes }?.let { AchStyle.badgeColor(context, it.key) } else null
+        secret = AchStyle.ICONS.any { it.key.startsWith("secret-") && it.value == iconRes }
+        bare = iconRes == R.drawable.ic_ach_lock || secret
         this.tier = tier; this.special = special; this.ground = ground
         icon = context.getDrawable(iconRes)?.mutate()
         nudge = AchStyle.nudge(iconRes)
@@ -153,41 +174,33 @@ class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
 
     override fun onDraw(canvas: Canvas) {
         val s = width.toFloat()
-        val color = AchStyle.medalColor(context, tier, special)
+        val color = if (secret) Ui.c(context, R.color.ag_teal) else badgeInk ?: AchStyle.medalColor(context, tier, special)
         val locked = tier < 0 && !special
         val stroke = (s * 0.045f).coerceAtLeast(Ui.dp(context, 1.5f))
         val r = s * 0.5f - stroke / 2 - s * 0.04f // leaves room for the corner mark
         val cx = s * 0.5f - s * 0.02f; val cy = cx
         disc.color = AchStyle.mix(color, ground, if (locked) 0.06f else 0.14f)
-        canvas.drawCircle(cx, cy, r, disc)
+        if (!bare) canvas.drawCircle(cx, cy, r, disc)
         ring.strokeWidth = stroke
         ring.color = color
         ring.pathEffect = if (locked) DashPathEffect(floatArrayOf(stroke * 2.2f, stroke * 1.6f), 0f) else null
-        canvas.drawCircle(cx, cy, r, ring)
+        if (!bare) canvas.drawCircle(cx, cy, r, ring)
         icon?.let {
-            val h = s * 0.27f
+            val h = s * if (bare) 0.45f else 0.27f
             val ox = nudge.first * h / 12f; val oy = nudge.second * h / 12f // the icon box is 2h wide for 24 viewport units
             it.setBounds((cx - h + ox).toInt(), (cy - h + oy).toInt(), (cx + h + ox).toInt(), (cy + h + oy).toInt())
-            if (!coinIcon) it.setTint(if (locked) AchStyle.mix(color, ground, 0.8f) else color)
+            it.setTint(if (locked) AchStyle.mix(color, ground, 0.8f) else color)
             it.draw(canvas)
         }
-        if (locked) return
-        // the corner mark: the tier's shape (or a tick for a one-off) on a disc of the ground colour
+        if (locked || special || bare) return
+        // Tier shapes remain on tiered medals; one-offs use colour alone.
         val m = s * 0.15f
         val mx = s * 0.78f; val my = s * 0.78f
         cut.color = ground
         canvas.drawCircle(mx, my, m + stroke * 0.8f, cut)
-        if (special) {
-            mark.color = color
-            canvas.drawCircle(mx, my, m, mark)
-            tick.color = ground; tick.strokeWidth = (m * 0.28f).coerceAtLeast(1.5f)
-            val p = Path().apply { moveTo(mx - m * 0.45f, my + m * 0.02f); lineTo(mx - m * 0.1f, my + m * 0.38f); lineTo(mx + m * 0.5f, my - m * 0.36f) }
-            canvas.drawPath(p, tick)
-        } else {
-            val d = shapeDrawables.getOrPut(tier) { AchStyle.shape(tier, color) }
-            val h = (m * 1.15f).toInt()
-            d.setBounds((mx - h).toInt(), (my - h).toInt(), (mx + h).toInt(), (my + h).toInt())
-            d.draw(canvas)
-        }
+        val d = shapeDrawables.getOrPut(tier) { AchStyle.shape(tier, color) }
+        val h = (m * 1.15f).toInt()
+        d.setBounds((mx - h).toInt(), (my - h).toInt(), (mx + h).toInt(), (my + h).toInt())
+        d.draw(canvas)
     }
 }

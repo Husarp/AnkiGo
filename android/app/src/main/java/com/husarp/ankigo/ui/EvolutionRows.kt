@@ -20,7 +20,8 @@ import com.husarp.ankigo.game.*
 internal class EvolutionRows(
     a: Context, private val data: GameData, root: EvoNode, private val current: Species,
     private val seen: Set<Int>, private val onSpecies: ((Species) -> Unit)?,
-    private val state: GameState? = null, private val mon: Mon? = null,
+    private val state: GameState? = com.husarp.ankigo.GameRepo.state.takeIf { com.husarp.ankigo.GameRepo.data === data },
+    private val mon: Mon? = null,
 ) : LinearLayout(a) {
     private var bubble: PopupWindow? = null
     private data class Branch(val row: View, val parent: View, val depth: Int)
@@ -52,7 +53,8 @@ internal class EvolutionRows(
 
     private fun append(node: EvoNode, parent: Species?, depth: Int, parentRow: View? = null) {
         val a = context
-        val visible = EvoLine.isSeen(node.species, seen)
+        val caught = node.species.num in state?.caught.orEmpty()
+        val visible = caught || EvoLine.isSeen(node.species, seen)
         val here = node.species.num == current.num
         val row = LinearLayout(a).apply {
             orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
@@ -62,11 +64,15 @@ internal class EvolutionRows(
         }
         row.addView(ImageView(a).apply {
             MonPreview.show(a, node.species.num, false, this, silhouette = !visible)
+            if (visible && !caught) {
+                colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) })
+                alpha = 0.55f
+            }
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LayoutParams(Ui.dp(a, 32), Ui.dp(a, 32)))
         val names = LinearLayout(a).apply {
             orientation = VERTICAL
-            addView(Ui.text(a, 12f, if (here) 900 else 800, if (!visible) R.color.ag_sub0 else R.color.ag_text).apply {
+            addView(Ui.text(a, 12f, if (here) 900 else 800, if (!caught) R.color.ag_sub0 else R.color.ag_text).apply {
                 text = if (visible) node.species.name.removeSuffix("-${node.species.form}") else "???"
             })
             if (visible) node.species.form?.let { form ->

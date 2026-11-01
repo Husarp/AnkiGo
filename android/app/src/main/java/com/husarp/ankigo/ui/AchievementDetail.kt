@@ -65,12 +65,12 @@ internal object AchievementDetail {
             sheet.addView(CappedScroll(ctx).apply { addView(body) }, LinearLayout.LayoutParams(-1, -2))
             return sheet
         }
-        val row = AchievementTable.row(v.id)
         if (v.oneOff) body.addView(oneOffLine(ctx, v, achSince, zone), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         else for (s in AchPageMath.ladder(v)) body.addView(step(ctx, v, s, achSince, zone), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 8) })
-        if (row != null) {
-            val since = if (achSince > 0) AchPageMath.date(achSince, zone) else "the update"
-            body.addView(note(ctx, AchPageMath.sourceNote(row, since)), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 12) })
+        AchievementTable.row(v.id)?.let { row ->
+            if (AchPageMath.source(row) != com.husarp.ankigo.game.AchSource.SINCE_UPDATE) {
+                body.addView(note(ctx, AchPageMath.sourceNote(row, "")), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 12) })
+            }
         }
         sheet.addView(CappedScroll(ctx).apply { isVerticalScrollBarEnabled = false; addView(body) }, LinearLayout.LayoutParams(-1, -2))
         return sheet
@@ -121,7 +121,6 @@ internal object AchievementDetail {
         }
         row.addView(body, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12) })
         when (s.state) {
-            AchStep.State.REACHED -> row.addView(ImageView(ctx).apply { setImageResource(R.drawable.ic_check); setColorFilter(Ui.c(ctx, R.color.ag_green)) }, LinearLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18)))
             AchStep.State.LOCKED -> row.addView(ImageView(ctx).apply { setImageResource(R.drawable.ic_ach_lock); setColorFilter(Ui.c(ctx, R.color.ag_sub0)); alpha = 0.7f }, LinearLayout.LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)))
             else -> {}
         }

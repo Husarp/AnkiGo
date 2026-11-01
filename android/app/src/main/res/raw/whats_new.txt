@@ -3,6 +3,22 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.1.0
+- Battle stat chips open a compact explanation for just that Pokémon and stat, showing its stage and multiplier.
+- Battle frames can automatically match every scenery with crisp, plain coloured rims.
+- Choose what to study has clearer numbered sections, removable decks, explained presets and an info sheet. Searchable deck and tag sheets keep changes local until Apply; tag lists load in bulk and stay cached during your visit.
+- Bottom tab bars offer four styles in Settings, Look: bold name, sliding box, top line or selected name only. The default box slides between tabs and blends into each tab’s colour.
+- Achievements show unread dots on Stats, the Achievements tab and each new achievement. Open its details to clear its dot; a later tier lights it again.
+- Achievement artwork refreshes money, daily goals, legendary crowns and TMs taught. Every secret has its own symbol, without a circle; completed badges use colour without extra check marks. The old counted-since-update footnote is gone.
+- Stats gives your trainer rank a larger title and icon, with your name below the XP bar. Small coin pictures are larger across prices, rewards and widgets.
+- Species details keep My Pokémon at the top right. Seen-only evolution species are grey; Pokémon you have caught stay in colour.
+- Stacked detail windows offer Close all beside Close when several are open. Back still closes one at a time.
+- Settings group longer pages into named sections and explain each option more clearly. Show answer can use AnkiDroid’s dark blue button colour, and Study favourites have a star icon.
+- Shop type tags fit their text, and the Deal of the day and Weekend special cards are roomier with centred headings.
+### Fixes
+- Repeated tag taps open one sheet, empty decks explain that they have no tags, and failed tag reads offer Retry.
+- Stat explanations keep the chosen side and stat as the battle changes, and close when that stat resets.
+
 ## 1.0.1
 - Roomier Shop cards have larger item pictures, clearer prices and compact Buy buttons. Daily and purple weekend specials each have their own place.
 - Shop refresh prices start at 100 coins, rise by 100 with each refresh and reset the next game day.

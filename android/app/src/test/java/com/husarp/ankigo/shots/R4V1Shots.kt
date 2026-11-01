@@ -318,7 +318,8 @@ class R4V1Shots {
             assertTrue("$s ${shown.take(6)}", "Stats" in shown)
             assertNull("$s a tab has no back arrow", findDescription(screen, "Back"))
             val box = getField(p, "switchBox") as ViewGroup
-            assertEquals(listOf("Statistics", "Achievements"), (0 until box.childCount).map { box.getChildAt(it).contentDescription.toString() })
+            val achievementLabel = "Achievements" + if (com.husarp.ankigo.ui.AchievementNotice.unseen(p)) ", new achievements" else ""
+            assertEquals(listOf("Statistics", achievementLabel), (0 until box.childCount).map { box.getChildAt(it).contentDescription.toString() })
             // the plain segmented switch: only the labels (no icons)
             for (i in 0 until box.childCount) assertTrue("$s", (box.getChildAt(i) as ViewGroup).getChildAt(0) is TextView)
         }

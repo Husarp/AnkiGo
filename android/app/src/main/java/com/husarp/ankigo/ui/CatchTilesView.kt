@@ -107,7 +107,8 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
         } else {
             img.setImageResource(icon(t.kind))
             if (t.kind != CatchTilesPlan.Kind.COINS) img.setColorFilter(color, PorterDuff.Mode.SRC_IN) // the gold money stack is never tinted
-            img.setPadding(pad, pad, pad, pad)
+            val inset = if (t.kind == CatchTilesPlan.Kind.COINS) pad / 2 else pad
+            img.setPadding(inset, inset, inset, inset)
         }
         box.addView(img, FrameLayout.LayoutParams(sizePx, sizePx, Gravity.CENTER))
         return box

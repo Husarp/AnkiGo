@@ -93,6 +93,9 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
 
     var metrics: ChipMetrics? = null
     var onTap: (ConditionMarks.Slot) -> Unit = {}
+    var onStatTap: (ConditionMarks.Mark) -> Unit = {}
+    private var downMark: ConditionMarks.Mark? = null
+    internal fun markAt(x: Float, y: Float): ConditionMarks.Mark? = slotAt(x, y)?.let { rows[it]?.chips?.firstOrNull { c -> x >= c.rect.left && x < c.rect.right }?.mark }
     private val rows = LinkedHashMap<ConditionMarks.Slot, Row>()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -195,10 +198,17 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
 
     override fun onTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { downSlot = slotAt(e.x, e.y); invalidate(); return downSlot != null }
+            MotionEvent.ACTION_DOWN -> { downSlot = slotAt(e.x, e.y); downMark = markAt(e.x, e.y); invalidate(); return downSlot != null }
             MotionEvent.ACTION_UP -> {
                 val s = downSlot; downSlot = null; invalidate()
-                if (s != null && slotAt(e.x, e.y) == s) { performClick(); onTap(s) }
+                if (s != null && slotAt(e.x, e.y) == s) {
+                    performClick()
+                    val mark = downMark
+                    if (mark?.id == markAt(e.x, e.y)?.id) {
+                        if (mark != null && mark.key.startsWith("stat.")) onStatTap(mark) else onTap(s)
+                    }
+                }
+                downMark = null
                 return s != null
             }
             MotionEvent.ACTION_CANCEL -> { downSlot = null; invalidate() }
@@ -329,6 +339,62 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
             addView(scroll, LayoutParams(-2, -2))
         }
         measure(MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))
+    }
+
+    /** PLAN 369 B: a smaller compact card, with a scroll fallback for short battle panels. */
+    fun buildStat(sections: List<ConditionSections.Section>, maxW: Int, maxH: Int, close: () -> Unit) {
+        this.sections = sections
+        unscroll()
+        body.removeAllViews()
+        columns = 1
+        val pad = Ui.dp(context, 12)
+        setPadding(pad, pad, pad, pad)
+        val section = sections.single()
+        val mark = section.marks.single()
+        val key = mark.key.removePrefix("stat.")
+        val name = StatPill.longName(key)
+        val n = mark.value
+        val multiplier = if (key == "accuracy" || key == "evasion") {
+            if (n >= 0) (3.0 + n) / 3.0 else 3.0 / (3.0 - n)
+        } else com.husarp.ankigo.game.BattleEngine.stageMult(n)
+        val factor = "%.2f".format(java.util.Locale.US, multiplier).trimEnd('0').trimEnd('.')
+        val hue = context.getColor(if (n > 0) R.color.ag_green else R.color.ag_red)
+        fun label(value: String, sp: Float, color: Int, weight: Int = 700) = TextView(context).apply {
+            text = value
+            typeface = Ui.font(context, weight)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, TextMath.at(sp, floorSp))
+            setTextColor(color)
+            includeFontPadding = false
+        }
+        val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+        val owner = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+        owner.addView(label(section.title.orEmpty(), 11f, context.getColor(R.color.ag_sub0)), LinearLayout.LayoutParams(0, -2, 1f))
+        owner.addView(label("×", 22f, context.getColor(R.color.ag_sub0)).apply {
+            gravity = Gravity.CENTER
+            contentDescription = "Close stat explanation"
+            setOnClickListener { close() }
+        }, LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)))
+        col.addView(owner, LinearLayout.LayoutParams(-1, -2))
+        val title = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
+        title.addView(label(name, 15f, context.getColor(R.color.ag_text), 900), LinearLayout.LayoutParams(0, -2, 1f))
+        title.addView(label("×$factor", 24f, hue, 900), LinearLayout.LayoutParams(-2, -2).apply { marginStart = Ui.dp(context, 8) })
+        col.addView(title, LinearLayout.LayoutParams(-1, -2))
+        val magnitude = kotlin.math.abs(n).coerceIn(0, 6)
+        col.addView(label("●".repeat(magnitude) + "○".repeat(6 - magnitude) + "   ${if (n > 0) "+" else "−"}$magnitude / 6", 13f, hue, 900).apply {
+            setPadding(0, Ui.dp(context, 6), 0, Ui.dp(context, 6))
+            contentDescription = StatPill.spoken(key, n) + ", out of 6 stages"
+        })
+        col.addView(label("$name is $factor× its normal value.", 12f, context.getColor(R.color.ag_sub1)))
+        col.addView(label("Until switching, fainting or a new opponent.", 12f, context.getColor(R.color.ag_sub1)).apply { setPadding(0, Ui.dp(context, 5), 0, 0) })
+        val cardW = min(maxW, Ui.dp(context, 288))
+        body.addView(col, LinearLayout.LayoutParams((cardW - pad * 2).coerceAtLeast(1), -2))
+        body.measure(MeasureSpec.makeMeasureSpec(cardW - pad * 2, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+        if (body.measuredHeight + pad * 2 > maxH) {
+            removeView(body)
+            scroll = ScrollView(context).apply { addView(body, LayoutParams(-1, -2)) }
+            addView(scroll, LayoutParams(-1, -1))
+        }
+        measure(MeasureSpec.makeMeasureSpec(cardW, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))
     }
 
     companion object {

@@ -25,6 +25,29 @@ class R19KConditionTest {
     private val data = TestData.world()
     private fun battle() = Battle(TestData.mon(data, 54, 25, listOf("tackle"), "wild"), Tier.NORMAL)
 
+    @Test fun statPopupContainsOnlyTheSelectedStatAndSide() {
+        val b = battle()
+        b.player.boosts[0] = 1
+        b.player.boosts[1] = -2
+        b.enemy.boosts[0] = 3
+        val board = ConditionBoard()
+        board.syncFrom(b)
+        for ((slot, expected) in listOf(Slot.OURS to 1, Slot.WILD to 3)) {
+            val sections = ConditionSections.stat(board, slot, "stat.atk", "Psyduck", "Pikachu")
+            assertEquals(1, sections.size)
+            assertEquals(1, sections.single().marks.size)
+            val mark = sections.single().marks.single()
+            assertEquals(slot, mark.slot)
+            assertEquals("stat.atk", mark.key)
+            assertEquals(expected, mark.value)
+            assertTrue(sections.single().title!!.contains(if (slot == Slot.OURS) "Pikachu" else "Psyduck"))
+        }
+        assertTrue(ConditionSections.stat(board, Slot.OURS, "stat.spe", "Psyduck", "Pikachu").isEmpty())
+        b.player.boosts[0] = 0
+        board.syncFrom(b)
+        assertTrue(ConditionSections.stat(board, Slot.OURS, "stat.atk", "Psyduck", "Pikachu").isEmpty())
+    }
+
     private fun effect(onPlayer: Boolean, kind: EffectKind, key: String, stages: Int, label: String? = null) =
         GameEvent.Effect(onPlayer, "text", 10, 20, null, kind, key, stages, 0, label)
 

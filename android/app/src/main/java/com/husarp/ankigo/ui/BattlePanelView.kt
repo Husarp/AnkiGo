@@ -420,6 +420,9 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     private fun apply(f: PanelFit.Fit) {
         fit = f
         frameDrawable.element = arena.backdropElement
+        frameDrawable.scenery = arena.backdropScenery
+        frameDrawable.dark = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
         if (f == applied) return
         applied = f
         arena.configure(f.floorSp, f.compactCards, f.xp)

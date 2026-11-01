@@ -313,7 +313,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     private fun favouriteIds(): List<Long> = prefs.getString("favouriteDecks", "").orEmpty().split(",").mapNotNull { it.toLongOrNull() }.distinct()
 
     private fun section(title: String, key: String) {
-        content.addView(StudyUi.section(act, title + if (prefs.getBoolean(key, false)) " ▸" else " ▾").apply {
+        content.addView(StudyUi.section(act, title + if (prefs.getBoolean(key, false)) " ▸" else " ▾", iconRes = if (key == "favouritesCollapsed") R.drawable.ic_star else R.drawable.ic_book).apply {
             minimumHeight = Ui.dp(act, 48)
             contentDescription = "$title, ${if (prefs.getBoolean(key, false)) "collapsed" else "expanded"}"
             setOnClickListener { prefs.edit().putBoolean(key, !prefs.getBoolean(key, false)).apply(); render() }

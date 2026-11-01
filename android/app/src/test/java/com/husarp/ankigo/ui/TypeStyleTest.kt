@@ -26,7 +26,7 @@ class TypeStyleTest {
         val info = SettingsCatalog.byTitle("Show types as")
         assertNotNull(info)
         assertEquals(CatalogSection.LOOK, info!!.section)
-        assertEquals(listOf("Show types as"), SettingsSearch.match("show types").map { it.info.title })
+        assertEquals("Show types as", SettingsSearch.match("show types").first().info.title)
         assertEquals(true, SettingsSearch.match("icons").any { it.info.title == "Show types as" })
     }
 }

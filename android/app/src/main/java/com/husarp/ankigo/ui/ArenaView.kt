@@ -81,6 +81,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     private var conditionList: ConditionList? = null
     private var listSlot: ConditionMarks.Slot? = null
+    private var listStat: String? = null
     private val hideList = Runnable { hideConditionList() }
     // the bubbles closed by the touch that began a tap: a click on the same trigger straight after means "close", not "open again"
     private var touchClosedStatus: StatusRow? = null
@@ -429,6 +430,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         pStatus.onTap = { showStatusBubble(it) }
         // R19-K: a tap on a chip, on "+N" or on an info box lists the conditions (the boxes take the tap only while there is something to list)
         marks.onTap = { showConditionList(it) }
+        marks.onStatTap = { showConditionList(it.slot, stat = it.key) }
         enemyBlock.setOnClickListener { showConditionList(ConditionMarks.Slot.WILD) }
         playerCard.setOnClickListener { showConditionList(ConditionMarks.Slot.OURS) }
         enemyBlock.isClickable = false
@@ -979,6 +981,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /** The plain gradient with the two platform ellipses. */
+    val backdropScenery: String? get() = backdrop.shown?.id
+
     val backdropElement: String? get() = backdrop.shown?.let { bg ->
         when {
             bg.id.contains("beach") || bg.id.contains("sea") -> "water"
@@ -1438,7 +1442,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         playerCard.isClickable = any
         if (!any) hideConditionList()
         placeMarks()
-        conditionList?.let { showConditionList(listSlot ?: ConditionMarks.Slot.WILD, reopen = true) }
+        conditionList?.let { showConditionList(listSlot ?: ConditionMarks.Slot.WILD, reopen = true, stat = listStat) }
     }
 
     /** Text size of a chip (design sp, raised to the panel's floor): the boxes' small text; it does not grow with a big box, so more chips fit a row. */
@@ -1506,7 +1510,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      * A tap on a chip row, its "+N" or an info box: every condition of the fight with its turns left, in a bubble by the row (the tapped side's
      * section first). Another tap anywhere, Back, or about 8 s closes it. [reopen] = the content changed under an open list: drawn again, no toggle.
      */
-    private fun showConditionList(slot: ConditionMarks.Slot, reopen: Boolean = false) {
+    private fun showConditionList(slot: ConditionMarks.Slot, reopen: Boolean = false, stat: String? = null) {
         val toggle = !reopen && (conditionList != null && listSlot == slot || (touchClosedList == slot && SystemClock.uptimeMillis() - touchClosedAt < SWALLOW_MS))
         hideConditionList()
         if (toggle || conditions.size == 0 || width <= 0 || height <= 0) return
@@ -1520,7 +1524,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val maxW = (width - 2 * sx).coerceAtLeast(1)
         val maxH = (height - sy - sb).coerceAtLeast(1)
         val list = ConditionList(context, floorSp)
-        list.build(ConditionSections.of(conditions, slot, enemyName, pName.text.toString()), maxW, maxH)
+        val sections = if (stat != null) ConditionSections.stat(conditions, slot, stat, enemyName, pName.text.toString()) else ConditionSections.of(conditions, slot, enemyName, pName.text.toString())
+        if (sections.isEmpty()) return
+        if (stat != null) list.buildStat(sections, maxW, maxH) { hideConditionList() }
+        else list.build(sections, maxW, maxH)
         val lw = min(list.measuredWidth, maxW)
         val lh = min(list.measuredHeight, maxH)
         // by the row that was tapped (below it, else above it), else by the box; kept inside the room the frame leaves
@@ -1529,9 +1536,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val below = anchor.bottom + 4 * d
         val y = (if (below + lh <= height - sb) below else anchor.top - 4 * d - lh).toInt().coerceIn(sy, (height - sb - lh).coerceAtLeast(sy))
         popLayer.addView(list, LayoutParams(lw, lh, Gravity.TOP or Gravity.LEFT).also { it.setMargins(x, y, 0, 0) })
-        list.setOnClickListener { hideConditionList() }
+        if (stat == null) list.setOnClickListener { hideConditionList() }
         conditionList = list
         listSlot = slot
+        listStat = stat
         removeCallbacks(hideList)
         postDelayed(hideList, LIST_MS)
         if (!reopen) announceForAccessibility(list.spoken)
@@ -1544,6 +1552,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         conditionList?.let { popLayer.removeView(it) }
         conditionList = null
         listSlot = null
+        listStat = null
         watchForClose()
     }
 

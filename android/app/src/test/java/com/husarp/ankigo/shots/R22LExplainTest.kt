@@ -113,7 +113,7 @@ class R22LExplainTest {
         page.open(com.husarp.ankigo.ui.SettingsSection.STUDY)
         val text = views(root).filterIsInstance<TextView>().map { it.text.toString() }
         assertTrue(text.contains("Google browser prompt"))
-        assertTrue(text.any { it.contains("opens Google in the browser") })
+        assertTrue(text.contains("Edit the Google search prompt used by Explain this card, which opens your browser"))
         assertEquals(com.husarp.ankigo.ui.SettingsSection.STUDY,
             com.husarp.ankigo.ui.SettingsSearch.sectionOf(com.husarp.ankigo.ui.SettingsCatalog.byId("explainTemplate")!!))
         val prefs = c.getSharedPreferences("study", 0)

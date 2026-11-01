@@ -47,7 +47,7 @@ class StudyNowSetupActivity : AgActivity() {
             StudyNowPrefs.setBg(prefs, widgetId, StudyNowBg.values()[i])
             Widgets.refreshAll(this, study = false)
         }
-        content.addView(Form.cardOf(this, listOf(Form.stackRow(this, "Widget background", "System follows the phone's light or dark mode. The icon, \"Study\" and the due number keep readable colours on each.", control))),
+        content.addView(Form.cardOf(this, listOf(Form.stackRow(this, "Widget background", "Choose the Study widget’s background colour, or use System to follow your phone’s light or dark theme.", control))),
             StudyUi.lp().also { it.bottomMargin = Ui.dp(this, 8) })
         content.addView(StudyUi.primary(this, "Done") { done() }, StudyUi.spaced(this, 8))
         val scroll = ScrollView(this).apply { addView(content, android.widget.FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)) }

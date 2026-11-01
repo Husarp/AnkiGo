@@ -349,7 +349,7 @@ class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, cust
         layoutParams = LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.topMargin = -Ui.dp(ctx, 2); it.bottomMargin = -Ui.dp(ctx, 2); it.marginStart = -Ui.dp(ctx, 1) }
     } ?: ImageView(ctx).apply {
         setImageResource(iconRes)
-        layoutParams = LayoutParams(Ui.dp(ctx, 13), Ui.dp(ctx, 13))
+        layoutParams = LayoutParams(Ui.dp(ctx, if (iconRes == R.drawable.ic_money) 17 else 13), Ui.dp(ctx, if (iconRes == R.drawable.ic_money) 17 else 13))
     }
     // the gold money stack (R10-W5) keeps its own colours: only the text takes the tone
     private val tintsIcon = customIcon == null && iconRes != R.drawable.ic_money
@@ -450,7 +450,7 @@ class AppBar(
                     addView(ImageView(ctx).apply {
                         setImageResource(pillIconRes)
                         if (pillIconRes != R.drawable.ic_money) setColorFilter(Ui.c(ctx, pillIconColorRes), PorterDuff.Mode.SRC_IN) // the gold money stack is never tinted
-                        layoutParams = LayoutParams(Ui.dp(ctx, 14), Ui.dp(ctx, 14)).also { it.marginEnd = Ui.dp(ctx, 4) }
+                        layoutParams = LayoutParams(Ui.dp(ctx, if (pillIconRes == R.drawable.ic_money) 18 else 14), Ui.dp(ctx, if (pillIconRes == R.drawable.ic_money) 18 else 14)).also { it.marginEnd = Ui.dp(ctx, 4) }
                     })
                 }
                 addView(tv)

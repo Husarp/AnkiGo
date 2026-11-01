@@ -300,6 +300,14 @@ class ConditionBoard {
 object ConditionSections {
     class Section(val title: String?, val marks: List<ConditionMarks.Mark>)
 
+    fun stat(board: ConditionBoard, slot: ConditionMarks.Slot, key: String, wildName: String, ourName: String): List<Section> {
+        if (!key.startsWith("stat.")) return emptyList()
+        val marks = board.of(slot).filter { it.key == key }
+        if (marks.isEmpty()) return emptyList()
+        val title = if (slot == ConditionMarks.Slot.OURS) "Your $ourName" else "Wild ${wildName.removePrefix("Wild ")}".trim()
+        return listOf(Section(title, marks))
+    }
+
     fun of(board: ConditionBoard, first: ConditionMarks.Slot, wildName: String, ourName: String): List<Section> {
         val order = listOf(first) + ConditionMarks.Slot.entries.filter { it != first }
         val parts = order.mapNotNull { slot -> board.of(slot).takeIf { it.isNotEmpty() }?.let { slot to it } }

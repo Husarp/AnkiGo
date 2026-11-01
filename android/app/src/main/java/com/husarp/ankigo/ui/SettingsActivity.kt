@@ -452,7 +452,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
     /** Game section: its rows in small groups named like the catalog's (Battle, Difficulty, Pokémon, Always catch). */
     private fun gameGroups(rows: List<View>) {
         val game = SettingsSearch.entriesOf(SettingsSection.GAME)
-        val subs = rows.map { r -> game.firstOrNull { it.title == Form.titleOf(r) }?.sub ?: "" }
+        val subs = rows.map { r -> game.firstOrNull { it.title == Form.rowsIn(r).firstOrNull()?.let(Form::titleOf) }?.sub ?: "" }
         for (g in SettingsSearch.groups(subs, GAME_GROUPS)) {
             if (g.title.isNotEmpty()) content.addView(Form.sect(this, g.title, if (g.title == "Always catch") "options 2 to 5" else null))
             if (g.title == CATCH_GROUP) content.addView(Ui.text(this, 12f, 600, R.color.ag_sub0).apply {
@@ -474,6 +474,17 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     // ---------- look ----------
 
+    /** Keep catalog groups and the visible page in sync, including settings-search destinations. */
+    private fun groupedCard(rows: List<View>): View = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        val entries = SettingsSearch.entriesOf(section!!)
+        val groups = rows.map { row -> entries.firstOrNull { it.title == Form.rowsIn(row).firstOrNull()?.let(Form::titleOf) }?.sub.orEmpty() }
+        for (group in SettingsSearch.groups(groups)) {
+            addView(Form.sect(this@SettingsPage, group.title.ifEmpty { "General" }))
+            addView(Form.cardOf(this@SettingsPage, group.rows.map { rows[it] }))
+        }
+    }
+
     private fun lookCard(): View {
         val themes = ThemeMode.entries
         val accents = Accent.entries
@@ -493,6 +504,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             main.removeCallbacks(applyScale)
             main.postDelayed(applyScale, SCALE_DELAY_MS)
         }
+        val tabBar = Form.stackRow(this, "Bottom tab bar", "Bold name, sliding box, top line, or name only.",
+            Form.segmented(this, TabBarStyle.entries.map { it.label }, TabBarStyle.entries.indexOf(TabBarStyle.get(this))) {
+                AppLook.setTabBarStyle(this, TabBarStyle.entries[it]); looked()
+            })
         val bars = BarStyle.entries
         val barStyle = Form.stackRow(this, "Progress bars", "XP blue, goals orange, Pokédex teal; or all in the accent, or a gradient.",
             Form.segmented(this, bars.map { it.label }, bars.indexOf(AppPrefs.barStyle(this))) { i ->
@@ -518,9 +533,13 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             })
         val achievements = Form.stackRow(this, "Achievement pop-ups", "What shows when you earn one",
             Form.segmented(this, AchievementPopup.modes, AchievementPopup.mode(this)) { i -> AchievementPopup.setMode(this, i) })
-        return Form.cardOf(this, listOf(theme, accent, barStyle, typeStyle, matchupChips, size,
+        val answer = Form.stackRow(this, "Show answer button colour", null,
+            Form.segmented(this, ShowAnswerColor.entries.map { it.label }, ShowAnswerColor.entries.indexOf(ShowAnswerColor.get(this))) {
+                ShowAnswerColor.put(this, ShowAnswerColor.entries[it])
+            })
+        return groupedCard(listOf(theme, accent, tabBar, barStyle, typeStyle, matchupChips, size,
             textSizeRow("app", "App text"), textSizeRow("battle", "Battle text"), textSizeRow("card", "Anki card text"),
-            deckLook, listSize, stacked, two, achievements))
+            deckLook, answer, listSize, stacked, two, achievements))
     }
 
     private fun textSizeRow(kind: String, title: String): View {
@@ -622,7 +641,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             }.setNegativeButton("Cancel", null).create())
     }
 
-    private fun studyCard(): View = Form.cardOf(this, listOf(
+    private fun studyCard(): View = groupedCard(listOf(
             Form.row(this, "Google browser prompt", "Explain this card opens Google in the browser; tap to edit the prompt", null) { editExplainPrompt() },
             Form.switchRow(this, "Tapping a deck opens AnkiDroid", "Off: study inside AnkiGo", getSharedPreferences("study", 0).getBoolean("inAnkiDroid", false)) {
                 getSharedPreferences("study", 0).edit().putBoolean("inAnkiDroid", it).apply()
@@ -1030,17 +1049,20 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val every = SettingsJobs.everything
         val dat = SettingsJobs.data
         everyBar = null; dataBar = null
-        val box = Ui.card(this)
-        box.addView(Form.row(this, "Game data", null, Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(Form.sect(this, "Storage used"))
+        val storage = Ui.card(this)
+        storage.addView(Form.row(this, "Game data", null, Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
             text = sizeText(DataStore.size(this@SettingsPage))
         }))
-        box.addView(Form.divider(this))
-        box.addView(Form.row(this, "Pictures", null, Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
+        storage.addView(Form.divider(this))
+        storage.addView(Form.row(this, "Pictures", null, Ui.text(this, 14f, 800, R.color.ag_sub1).apply {
             text = sizeText(Sprites.size(this@SettingsPage))
         }))
-        box.addView(Form.divider(this))
+        storage.addView(Form.divider(this))
 
-        val actions = LinearLayout(this).apply {
+        box.addView(storage)
+        val actions = Ui.card(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(14), dp(12), dp(14), dp(14))
         }
@@ -1107,6 +1129,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         Form.enable(clearBtn, !SettingsJobs.everythingBusy)
         actions.addView(clearBtn, Form.lp(this, 10))
         actions.addView(Form.body(this, "Pictures download again as you need them.", 12, R.color.ag_sub0), Form.lp(this, 6))
+        box.addView(Form.sect(this, "Downloads & cache"))
         box.addView(actions)
         return box
     }

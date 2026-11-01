@@ -257,6 +257,14 @@ object Anki {
         return ctx.contentResolver.update(uri("notes/$nid"), v, null, null)
     }
 
+    /** One projected note search instead of a provider round trip for every note/card. Includes subdecks. */
+    fun deckTags(ctx: Context, deckName: String): List<String> {
+        val cursor = ctx.contentResolver.query(uri("notes"), arrayOf("tags"),
+            "deck:${com.husarp.ankigo.study.StudyFilter.quote(deckName)}", null, null)
+        // The notes endpoint returns null for an empty search (documented provider behaviour).
+        return com.husarp.ankigo.study.StudyTags.parse(rows(cursor).mapNotNull { it["tags"] })
+    }
+
     fun searchCards(ctx: Context, query: String, cols: Array<String>): List<Map<String, String?>> =
         rows(ctx.contentResolver.query(uri("cards"), cols, query, null, null))
 

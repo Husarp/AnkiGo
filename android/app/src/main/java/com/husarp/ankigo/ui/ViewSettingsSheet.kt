@@ -40,15 +40,15 @@ internal class ViewSettingsSheet(
      */
     fun rows(onHeight: (Int) -> Unit = {}): LinearLayout {
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-        for (part in parts(panelHeight != null)) addPart(body, part, onHeight)
+        for (part in parts(panelHeight != null)) {
+            if (part == Part.INFO_BOX) body.addView(section("Info boxes & bars"))
+            if (part == Part.FRAME) body.addView(section("Arena & layout"))
+            addPart(body, part, onHeight)
+        }
         return body
     }
 
-    private fun section(title: String): View = Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply {
-        Ui.decorateHeading(this, title)
-        letterSpacing = 0.06f
-        setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 10), 0, Ui.dp(ctx, 2))
-    }
+    private fun section(title: String): View = Form.sect(ctx, title)
 
     private fun hint(text: String): View = Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
         this.text = text
@@ -68,23 +68,23 @@ internal class ViewSettingsSheet(
                     addView(bar, LinearLayout.LayoutParams(0, -2, 1f))
                     addView(label.apply { gravity = Gravity.END; minWidth = Ui.dp(ctx, 48) }, LinearLayout.LayoutParams(-2, -2))
                 }, full)
-                body.addView(hint("Both Pokémon, kept inside the picture and off the info boxes."))
+                body.addView(hint("Resize both battling Pokémon without covering the info boxes."))
             }
             Part.FACING -> {
                 body.addView(section("Facing"))
                 body.addView(segmented(listOf("Back", "Front"), if (AppPrefs.playerFront(ctx)) 1 else 0) { AppPrefs.setPlayerFront(ctx, it == 1) }, full)
-                body.addView(hint("Which side of your Pokémon you see; swiping across it turns it."))
+                body.addView(hint("Choose whether you see the front or back of your Pokémon; swipe it to turn it."))
             }
             Part.INFO_BOX -> body.addView(LookChoosers.infoBox(ctx, boxed = true), choosers)
-            Part.XP -> body.addView(switchRow("Always show XP bar", "Otherwise shown only while XP comes in", ctx.getSharedPreferences("study", 0).getBoolean("alwaysShowXpBar", false)) {
+            Part.XP -> body.addView(switchRow("Always show XP bar", "Keep the experience bar visible between XP gains", ctx.getSharedPreferences("study", 0).getBoolean("alwaysShowXpBar", false)) {
                 ctx.getSharedPreferences("study", 0).edit().putBoolean("alwaysShowXpBar", it).apply()
             }, full)
             Part.BARS -> body.addView(LookChoosers.bars(ctx, boxed = true), choosers)
             Part.FRAME -> body.addView(LookChoosers.frame(ctx, boxed = true), choosers)
-            Part.CARD_OWN -> body.addView(switchRow("Stat card under its own Pokémon", "Without a background picture", AppPrefs.cardsUnderOwn(ctx)) { AppPrefs.setCardsUnderOwn(ctx, it) },
+            Part.CARD_OWN -> body.addView(switchRow("Stat card under its own Pokémon", "Put each stat card below its own Pokémon when background pictures are off", AppPrefs.cardsUnderOwn(ctx)) { AppPrefs.setCardsUnderOwn(ctx, it) },
                 LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 6) })
-            Part.COMPACT -> body.addView(switchRow("Compact stat cards", "Only name and HP", AppPrefs.compactCards(ctx)) { AppPrefs.setCompactCards(ctx, it) }, full)
-            Part.BACKGROUND -> body.addView(switchRow("Background pictures", "A scene that fits the wild Pokémon's type", AppPrefs.backgroundPictures(ctx)) { AppPrefs.setBackgroundPictures(ctx, it) }, full)
+            Part.COMPACT -> body.addView(switchRow("Compact stat cards", "Show only the Pokémon’s name and HP on battle stat cards", AppPrefs.compactCards(ctx)) { AppPrefs.setCompactCards(ctx, it) }, full)
+            Part.BACKGROUND -> body.addView(switchRow("Background pictures", "Show a scene from your enabled backgrounds behind the battle", AppPrefs.backgroundPictures(ctx)) { AppPrefs.setBackgroundPictures(ctx, it) }, full)
             Part.HEIGHT -> {
                 val h = panelHeight ?: return
                 body.addView(section("Panel height"))

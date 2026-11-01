@@ -56,6 +56,11 @@ object AppLook {
         generation++
     }
 
+    fun setTabBarStyle(ctx: Context, style: TabBarStyle) {
+        TabBarStyle.put(ctx, style)
+        generation++
+    }
+
     fun setTypeStyle(ctx: Context, style: TypeStyle) {
         AppPrefs.putLook(ctx, "typeStyle", style.name)
         generation++

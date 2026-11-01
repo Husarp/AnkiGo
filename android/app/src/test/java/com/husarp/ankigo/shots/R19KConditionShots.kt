@@ -280,6 +280,39 @@ class R19KConditionShots {
         assertTrue(a.bubbleOpen())
     }
 
+    @Test fun r25StatChipTapExplainsOnlyThatSideAndStat() {
+        for (host in listOf(hosts[0], hosts[3], hosts[6])) for (theme in Theme.entries) for (slot in listOf(ConditionMarks.Slot.OURS, ConditionMarks.Slot.WILD)) {
+            paparazzi.unsafeUpdateConfig(deviceConfig = device(host.w, host.h, theme))
+            val ctx = Shots.files(paparazzi.context)
+            val sc = setup(ctx, host, 1, picture = false)
+            val b = GameRepo.state!!.battle!!
+            b.player.boosts[0] = if (host == hosts[6]) 0 else 1; b.player.boosts[1] = -2; b.enemy.boosts[0] = 3; b.enemy.boosts[1] = -1
+            sc.arena.syncConditions(b)
+            layoutScene(sc)
+            val key = if (slot == ConditionMarks.Slot.OURS) "stat.def" else "stat.atk"
+            val chip = sc.arena.markRows().first { it.slot == slot }.chips.first { it.mark?.key == key }
+            val c = chip.rect
+            val t = android.os.SystemClock.uptimeMillis()
+            sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, c.centerX(), c.centerY(), 0))
+            sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t + 40, MotionEvent.ACTION_UP, c.centerX(), c.centerY(), 0))
+            val spoken = sc.arena.conditionListShown()!!.spoken
+            assertTrue(spoken, spoken.contains(if (slot == ConditionMarks.Slot.OURS) "Defense down 2" else "Attack up 3"))
+            assertFalse(spoken, spoken.contains(if (slot == ConditionMarks.Slot.OURS) "Attack" else "Defense"))
+            assertFalse(spoken, spoken.contains(if (slot == ConditionMarks.Slot.OURS) "Attack up 3" else "Defense down 2"))
+            layoutScene(sc)
+            val card = sc.arena.conditionListShown()!!
+            assertTrue("card fits arena width", card.left >= 0 && card.right <= sc.arena.width)
+            assertTrue("card fits arena height", card.top >= 0 && card.bottom <= sc.arena.height)
+            paparazzi.snapshot(sc.root, "r25h-stat-${host.name}-${slot.name.lowercase()}-${theme.name.lowercase()}")
+            fun closeButton(v: View): View? {
+                if (v.contentDescription == "Close stat explanation") return v
+                return (v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { closeButton(g.getChildAt(it)) } }
+            }
+            assertTrue(closeButton(card)!!.performClick())
+            assertNull(sc.arena.conditionListShown())
+        }
+    }
+
     @Test fun aTapOnAChipOpensTheListAndTheBoxesAreNotTappableWithoutConditions() {
         paparazzi.unsafeUpdateConfig(deviceConfig = device(412, 869, Theme.LIGHT))
         val sc = setup(Shots.files(paparazzi.context), hosts[0], 3, picture = false)

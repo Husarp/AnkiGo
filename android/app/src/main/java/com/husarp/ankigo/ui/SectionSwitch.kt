@@ -15,7 +15,7 @@ import com.husarp.ankigo.R
  * [Style.SEGMENTED]: the Stats tab's Statistics · Achievements (the plain segmented control, the selected part raised).
  */
 internal object SectionSwitch {
-    class Seg(val label: String, @DrawableRes val icon: Int)
+    class Seg(val label: String, @DrawableRes val icon: Int, val unread: Boolean = false)
 
     enum class Style { TABS, SEGMENTED }
 
@@ -26,7 +26,8 @@ internal object SectionSwitch {
         box.setPadding(Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3))
         for ((i, s) in segs.withIndex()) {
             val seg = if (style == Style.TABS) tab(ctx, s, i == selected) else segment(ctx, s, i == selected)
-            seg.contentDescription = s.label
+            if (s.unread) seg.addView(AchievementNotice.dot(ctx))
+            seg.contentDescription = s.label + if (s.unread) ", new achievements" else ""
             seg.setOnClickListener { onPick(i) }
             box.addView(seg, LinearLayout.LayoutParams(0, -2, 1f).also { if (style == Style.TABS && i > 0) it.marginStart = Ui.dp(ctx, 2) })
         }

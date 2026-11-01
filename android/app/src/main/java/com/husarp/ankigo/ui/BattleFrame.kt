@@ -9,7 +9,7 @@ import kotlin.math.abs
 
 /**
  * The battle frame setting (Round 9 wave 2, D2; docs/design/round9.html `FR` + `drawFrame`): a pixel-art border around the battle
- * picture (the arena). [NONE] is the default (no frame). The colours are fixed art, the same in light and dark. One art pixel is
+ * picture (the arena). [NONE] is the default (no frame). Automatic follows the scenery and theme; the other styles use fixed art colours. One art pixel is
  * 2 dp on screen ([BattleFrame.unitPx]).
  *
  * A style is pure data: [t] pixels thick on every side, [reach] the most pixels any edge cell goes in (the ice's icicles hang
@@ -32,8 +32,8 @@ enum class BattleFrameStyle(
         when (d) { 0 -> 0xFF1B1B26.toInt(); 1 -> 0x99FFFFFF.toInt(); else -> 0 }
     }),
 
-    AUTOMATIC("Automatic: matches the background", "Simple pixel frame tinted by the background's element", 2, 2,
-        { _, d, _ -> if (d == 0) 0xFF1B1B26.toInt() else 0x99FFFFFF.toInt() }),
+    AUTOMATIC("Automatic: matches the background", "Plain rim coloured to match the scenery", 3, 3,
+        { _, d, _ -> SceneryRims.colors(null, false).getOrElse(d) { 0 } }),
 
     SEA("Waves", "The sea and beach frame", 4, 4, { i, d, side ->
         val phase = (i + if (side == 'b' || side == 'r') 4 else 0) % 8
@@ -227,6 +227,11 @@ class BattleFrameDrawable(style: BattleFrameStyle = BattleFrameStyle.NONE, unit:
     var unit: Int = unit.coerceAtLeast(1)
         private set
 
+    var scenery: String? = null
+        set(value) { if (field != value) { field = value; invalidateSelf() } }
+    var dark: Boolean = false
+        set(value) { if (field != value) { field = value; invalidateSelf() } }
+
     private var elementColors: IntArray? = null
     var element: String? = null
         set(value) { if (field != value) { field = value; elementColors = palette(value); invalidateSelf() } }
@@ -273,6 +278,20 @@ class BattleFrameDrawable(style: BattleFrameStyle = BattleFrameStyle.NONE, unit:
         val h = b.height()
         if (w <= 0 || h <= 0) return
         val u = unit
+        if (s == BattleFrameStyle.AUTOMATIC) {
+            val colors = SceneryRims.colors(scenery, dark)
+            // Nested rectangular bands use distance from the nearest edge, including corners.
+            for (d in 0..2) {
+                val l = d * u; val t = d * u
+                val r = w - d * u; val bottom = h - d * u
+                if (l >= r || t >= bottom) break
+                fill(canvas, colors[d], b.left + l, b.top + t, b.left + r, b.top + minOf(t + u, bottom))
+                fill(canvas, colors[d], b.left + l, b.top + maxOf(t, bottom - u), b.left + r, b.top + bottom)
+                fill(canvas, colors[d], b.left + l, b.top + t, b.left + minOf(l + u, r), b.top + bottom)
+                fill(canvas, colors[d], b.left + maxOf(l, r - u), b.top + t, b.left + r, b.top + bottom)
+            }
+            return
+        }
         val nx = (w + u - 1) / u
         val ny = (h + u - 1) / u
         val save = canvas.save()

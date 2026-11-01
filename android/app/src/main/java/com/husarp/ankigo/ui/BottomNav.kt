@@ -21,8 +21,8 @@ import com.husarp.ankigo.game.Shop
 /**
  * The 5-tab bottom bar (mockup `.bnav`): Study (open book) / Pokémon (Poké Ball outline) / Shop / Stats / Settings. The Pokémon tab holds Team, Box
  * and Pokédex as sections; the Stats tab holds Statistics and Achievements; the Shop is a tab of its own (R10 W11) and its icon carries a
- * small red dot while the day's stock hasn't been looked at ([Shop.unseen]). The selected tab is in the accent colour
- * with its icon on a 20 % accent pill. Tapping another tab opens its screen through [Nav] (brought to front, no animation)
+ * small red dot while the day's stock hasn't been looked at ([Shop.unseen]). The selected tab uses its own palette colour
+ * using the chosen tab-bar style. Tapping another tab opens its screen through [Nav] (brought to front, no animation)
  * and closes the current one unless that is the home screen ([isHome]), so Back from any tab ends up on the home screen.
  * Tapping the current tab goes back to that tab's top page ([reselect], PLAN 218).
  * The home screen is Study (and the full-screen battle, its second view, which has no bar).
@@ -68,11 +68,12 @@ object BottomNav {
     /** Builds the bar for [activity], with [current] highlighted. Add it at the bottom of the screen. */
     fun create(activity: Activity, current: Tab): View {
         OpenOnPrefs.setLastTab(activity, current) // R18 263: "Open AnkiGo on: Last tab"
-        val col = Ui.c(activity, R.color.ag_mauve)
+        val style = TabBarStyle.get(activity)
+        val col = tone(activity, current)
         val idle = Ui.c(activity, R.color.ag_sub0)
         val bar = NavBar(activity)
         val labels = ArrayList<TextView>()
-        val row = LinearLayout(activity).apply {
+        val row = HighlightRow(activity, current, style).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(Ui.dp(activity, 2), Ui.dp(activity, 6), Ui.dp(activity, 2), Ui.dp(activity, 2)) // 5 tabs: thin side padding keeps the labels on one line at 320 dp
         }
@@ -82,15 +83,15 @@ object BottomNav {
             val icon = ImageView(activity).apply {
                 setImageResource(tab.icon)
                 setColorFilter(tint, PorterDuff.Mode.SRC_IN)
-                layoutParams = FrameLayout.LayoutParams(Ui.dp(activity, 20), Ui.dp(activity, 20), Gravity.CENTER)
+                layoutParams = FrameLayout.LayoutParams(Ui.dp(activity, if (style == TabBarStyle.E1 && on) 28 else 20), Ui.dp(activity, if (style == TabBarStyle.E1 && on) 28 else 20), Gravity.CENTER)
             }
             val pillBox = FrameLayout(activity).apply {
-                if (on) background = Ui.rounded((col and 0x00FFFFFF) or 0x33000000, 10, activity)
-                layoutParams = LinearLayout.LayoutParams(Ui.dp(activity, 38), Ui.dp(activity, 24))
+                layoutParams = LinearLayout.LayoutParams(Ui.dp(activity, 38), Ui.dp(activity, if (style == TabBarStyle.E1 && on) 28 else 24))
                 addView(icon)
             }
-            val label = Ui.text(activity, 10f, 800, R.color.ag_sub0).apply {
+            val label = Ui.text(activity, if (style == TabBarStyle.A3 && on) 12f else 10f, if (style == TabBarStyle.A3 && on) 900 else 800, R.color.ag_sub0).apply {
                 text = tab.label
+                if (style == TabBarStyle.E1 && !on) visibility = View.GONE
                 setTextColor(tint)
                 gravity = Gravity.CENTER
                 maxLines = 1
@@ -98,7 +99,9 @@ object BottomNav {
             }
             val item = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
+                gravity = Gravity.CENTER
+                minimumHeight = Ui.dp(activity, if (style == TabBarStyle.E1) 56 else 48)
+                isSelected = on
                 setPadding(0, Ui.dp(activity, 4), 0, Ui.dp(activity, 4))
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 addView(pillBox)
@@ -106,7 +109,7 @@ object BottomNav {
                     .also { it.topMargin = Ui.dp(activity, 2) })
                 contentDescription = tab.label
                 setOnClickListener {
-                    if (!isHere(activity, tab)) { com.husarp.ankigo.sound.GameSound.ui(activity, com.husarp.ankigo.sound.SoundId.TAB); open(activity, tab) }
+                    if (!isHere(activity, tab)) { com.husarp.ankigo.sound.GameSound.ui(activity, com.husarp.ankigo.sound.SoundId.TAB); row.moveTo(tab) { open(activity, tab) } }
                     else reselect(activity) // PLAN 218: no tab sound, nothing opens: the screen goes back to its top page
                 }
             }
@@ -123,6 +126,7 @@ object BottomNav {
             row.addView(item)
         }
         fitLabels(activity, labels)
+        bar.clipChildren = false
         bar.orientation = LinearLayout.VERTICAL
         bar.setBackgroundColor(Ui.c(activity, R.color.ag_mantle))
         bar.addView(View(activity).apply { setBackgroundColor(Ui.c(activity, R.color.ag_s0)) },
@@ -130,6 +134,73 @@ object BottomNav {
         bar.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         bar.refresh()
         return bar
+    }
+
+    private fun tone(ctx: Context, tab: Tab) = ctx.getColor(when (tab) {
+        Tab.STUDY -> R.color.ag_blue
+        Tab.POKEMON -> R.color.ag_green
+        Tab.SHOP -> R.color.ag_peach
+        Tab.STATS -> R.color.ag_mauve
+        Tab.SETTINGS -> R.color.ag_teal
+    })
+
+    /** One indicator shared by all cells: position and colour use the same animation fraction. */
+    internal class HighlightRow(ctx: Context, private val current: Tab, private val style: TabBarStyle) : LinearLayout(ctx) {
+        internal var position = current.ordinal.toFloat()
+            private set
+        internal var colour = tone(ctx, current)
+            private set
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private var animator: android.animation.ValueAnimator? = null
+        internal fun moveTo(tab: Tab, done: () -> Unit) {
+            if (animator != null) return
+            if (style != TabBarStyle.C1 || tab == current) { done(); return }
+            val start = position
+            val from = colour
+            animator = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 250
+                addUpdateListener {
+                    val f = it.animatedValue as Float
+                    position = start + (tab.ordinal - start) * f
+                    colour = android.animation.ArgbEvaluator().evaluate(f, from, tone(context, tab)) as Int
+                    invalidate()
+                }
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    private var cancelled = false
+                    override fun onAnimationCancel(animation: android.animation.Animator) { cancelled = true }
+                    override fun onAnimationEnd(animation: android.animation.Animator) { animator = null; if (!cancelled) done() }
+                })
+            }
+            animator?.start()
+        }
+        override fun dispatchDraw(canvas: Canvas) {
+            val cell = (width - paddingLeft - paddingRight) / 5f
+            val left = paddingLeft + cell * position
+            when (style) {
+                TabBarStyle.C1 -> {
+                    paint.color = (colour and 0x00ffffff) or 0x29000000
+                    canvas.drawRoundRect(left + Ui.dp(context, 2), paddingTop.toFloat(), left + cell - Ui.dp(context, 2),
+                        (height - paddingBottom).toFloat(), Ui.dp(context, 6f), Ui.dp(context, 6f), paint)
+                }
+                TabBarStyle.D3 -> {
+                    paint.color = colour
+                    canvas.drawRoundRect(left + Ui.dp(context, 4), -Ui.dp(context, 1f), left + cell - Ui.dp(context, 4),
+                        Ui.dp(context, 2f), Ui.dp(context, 3f), Ui.dp(context, 3f), paint)
+                }
+                else -> Unit
+            }
+            super.dispatchDraw(canvas)
+        }
+        override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+            super.onWindowFocusChanged(hasWindowFocus)
+            if (hasWindowFocus) {
+                animator?.cancel()
+                position = current.ordinal.toFloat()
+                colour = tone(context, current)
+                invalidate()
+            }
+        }
+        override fun onDetachedFromWindow() { animator?.cancel(); super.onDetachedFromWindow() }
     }
 
     /**
@@ -187,7 +258,7 @@ object BottomNav {
         private var dot: View? = null
         private val onGame: () -> Unit = { refresh() }
         private val onPrefs = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == "achievementsSeen") refresh()
+            if (key == "achievementsSeen" || key?.startsWith("achievementSeen:") == true) refresh()
         }
 
         fun shop(item: View, dotView: View) { shopItem = item; dot = dotView }

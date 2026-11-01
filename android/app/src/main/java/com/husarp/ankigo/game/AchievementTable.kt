@@ -74,7 +74,7 @@ object AchievementTable {
         AchRow(id, "Badges", title, desc, null, listOf(1L), icon, ankimonBadge = badge)
 
     private fun secret(id: String, title: String, desc: String, metric: Metric) =
-        AchRow(id, "Secret", title, desc, metric, listOf(1L), "sparkle")
+        AchRow(id, "Secret", title, desc, metric, listOf(1L), "secret-$id")
 
     val ROWS: List<AchRow> = listOf(
         // ---- Study ----

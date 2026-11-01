@@ -40,8 +40,9 @@ class R20UiTest {
         Pickers.interceptApp = { d = it }
         MonDetail.show(TeamPage(c, NoHost), GameRepo.data!!, GameRepo.state!!.main!!)
         val card = d!!.content() as LinearLayout
-        val header = card.getChildAt(0) as ViewGroup
-        val back = all(header).single { it.contentDescription == "Back to Pokémon" }
+        val back = all(card).single { it.contentDescription == "Back to Pokémon" }
+        val header = back.parent as ViewGroup
+        assertSame(card, header.parent) // stays outside the scrolling body, after optional stack controls
         assertTrue(back.isClickable)
         assertEquals(listOf("Details"), texts(header))
         assertEquals(0, texts(card).count { it == "Close" })

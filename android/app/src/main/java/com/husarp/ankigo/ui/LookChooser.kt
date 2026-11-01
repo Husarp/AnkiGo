@@ -93,6 +93,14 @@ internal class LookChooser<T : Any>(
             addView(LinearLayout(ctx).apply {
                 orientation = VERTICAL
                 addView(titleView)
+                val explanation = when (title) {
+                    LookChoosers.INFO_BOX -> "Choose the layout and appearance of battle HP, name and type information"
+                    LookChoosers.FRAME -> "Choose the decorative frame around the battle background"
+                    LookChoosers.BARS -> "Choose the shape and fill style of battle HP and experience bars"
+                    "HP bar colours" -> SettingsCatalog.byId("hpColours")?.explain
+                    else -> null
+                }
+                explanation?.let { addView(Form.body(ctx, it, 12f), LayoutParams(-1, -2)) }
                 addView(valueView, LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
             }, LayoutParams(0, -2, 1f))
             addView(chevron, LayoutParams(Ui.dp(ctx, 24), Ui.dp(ctx, 24)).also { it.marginStart = Ui.dp(ctx, 8) })

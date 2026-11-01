@@ -461,10 +461,11 @@ object WidgetRender {
 
         fun chip(x: Float, y: Float, @DrawableRes iconRes: Int, @ColorRes tone: Int, text: String, streak: Boolean = false): Float {
             val p = paint(11f, 800, tone)
-            val w = 7f + 13f + 4f + p.measureText(text) + 7f
+            val iconSize = if (iconRes == R.drawable.ic_money) 17f else 13f
+            val w = 7f + iconSize + 4f + p.measureText(text) + 7f
             roundRect(x, y, x + w, y + WidgetLogic.CHIP_H, 9f, col(R.color.ag_mantle))
-            if (!streak || !flame(x + 5.5f, y + (WidgetLogic.CHIP_H - 16f) / 2f, 16f)) icon(iconRes, x + 7f, y + (WidgetLogic.CHIP_H - 13f) / 2f, 13f, col(tone))
-            line(text, x + 7f + 13f + 4f, y, WidgetLogic.CHIP_H, p)
+            if (!streak || !flame(x + 5.5f, y + (WidgetLogic.CHIP_H - 16f) / 2f, 16f)) icon(iconRes, x + 7f, y + (WidgetLogic.CHIP_H - iconSize) / 2f, iconSize, col(tone))
+            line(text, x + 7f + iconSize + 4f, y, WidgetLogic.CHIP_H, p)
             return w
         }
 
@@ -477,7 +478,7 @@ object WidgetRender {
                 Triple(R.drawable.ic_ball, R.color.ag_sub1, "${s.balls}"),
             )
             for ((ic, tone, text) in items) {
-                val w = 7f + 13f + 4f + paint(11f, 800, tone).measureText(text) + 7f
+                val w = 7f + (if (ic == R.drawable.ic_money) 17f else 13f) + 4f + paint(11f, 800, tone).measureText(text) + 7f
                 if (cx + w > maxX) break
                 cx += chip(cx, y, ic, tone, text, streak = ic == R.drawable.ic_flame && s.streak > 0) + 6f
             }

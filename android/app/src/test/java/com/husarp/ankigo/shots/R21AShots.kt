@@ -58,8 +58,8 @@ class R21AShots {
         }
     }
 
-    @Test fun simpleAndAutomaticFollowTheElementAndWavesKeepTheirPixels() {
-        for (style in listOf(BattleFrameStyle.SIMPLE, BattleFrameStyle.AUTOMATIC)) {
+    @Test fun simpleFollowsElementAutomaticFollowsSceneryAndWavesKeepTheirPixels() {
+        for (style in listOf(BattleFrameStyle.SIMPLE)) {
             val bitmap = android.graphics.Bitmap.createBitmap(40, 40, android.graphics.Bitmap.Config.ARGB_8888)
             val frame = BattleFrameDrawable(style, 2)
             frame.element = "water"; frame.setBounds(0, 0, 40, 40)
@@ -70,6 +70,22 @@ class R21AShots {
             assertEquals(0xFF2A0C08.toInt(), bitmap.getPixel(20, 0))
             assertEquals(0xFFFFD43B.toInt(), bitmap.getPixel(20, 2))
         }
+        val bitmap = android.graphics.Bitmap.createBitmap(40, 40, android.graphics.Bitmap.Config.ARGB_8888)
+        val automatic = BattleFrameDrawable(BattleFrameStyle.AUTOMATIC, 2).apply {
+            scenery = "beach"; element = "water"; setBounds(0, 0, 40, 40)
+        }
+        automatic.draw(android.graphics.Canvas(bitmap))
+        assertEquals(0xFFAB9264.toInt(), bitmap.getPixel(20, 0))
+        assertEquals(0xFFF0DAA3.toInt(), bitmap.getPixel(20, 2))
+        assertEquals(0xFF78694B.toInt(), bitmap.getPixel(20, 4))
+        automatic.element = "fire"
+        automatic.draw(android.graphics.Canvas(bitmap))
+        assertEquals(0xFFAB9264.toInt(), bitmap.getPixel(20, 0)) // actual scenery wins over encounter element
+        automatic.scenery = "lava-field"
+        automatic.draw(android.graphics.Canvas(bitmap))
+        assertEquals(0xFF59404B.toInt(), bitmap.getPixel(20, 0))
+        assertEquals(0xFFB17B65.toInt(), bitmap.getPixel(20, 2))
+        assertEquals(0xFF392B35.toInt(), bitmap.getPixel(20, 4))
         assertEquals(0xFF0B3B5C.toInt(), BattleFrameStyle.SEA.edge(0, 0, 't'))
         assertEquals(0xFFFFFFFF.toInt(), BattleFrameStyle.SEA.edge(0, 1, 't'))
         assertEquals(0xFF8FD3F4.toInt(), BattleFrameStyle.SEA.edge(0, 1, 'b'))

@@ -173,7 +173,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
     /** The segmented Statistics / Achievements switch (same look as the Pokémon tab's). */
     private fun drawSwitch() {
-        SectionSwitch.draw(this, switchBox, StatsSection.entries.map { SectionSwitch.Seg(it.label, it.icon) }, section.ordinal) { showSection(StatsSection.entries[it]) }
+        SectionSwitch.draw(this, switchBox, StatsSection.entries.map { SectionSwitch.Seg(it.label, it.icon, it == StatsSection.ACHIEVEMENTS && AchievementNotice.unseen(this)) }, section.ordinal) { showSection(StatsSection.entries[it]) }
     }
 
     /** PLAN 218: Statistics / Achievements are sections, not sub-pages: the shown one stays and scrolls to its top. PLAN 221: an open achievement sheet closes. */
@@ -259,6 +259,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         if (section == StatsSection.ACHIEVEMENTS) {
             sheetLayer.visibility = View.GONE
             achievements.render()
+            drawSwitch()
             return
         }
         content.removeAllViews()
@@ -326,8 +327,11 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val st = state
         val card = Ui.card(this).apply { setPadding(dp(14), dp(12), dp(14), dp(12)) }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        top.addView(Ui.text(this, 17f, 900, R.color.ag_text).apply { text = st.settings.trainerName; maxLines = 1 }, LinearLayout.LayoutParams(0, -2, 1f))
-        val short = Ui.shortWindow(this) // split screen: the badges chip goes next to the coins, saving a row
+        val identity = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        identity.addView(ImageView(this).apply { setImageResource(R.drawable.ic_trainer_rank); setColorFilter(c(R.color.ag_mauve)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(36), dp(44)).also { it.marginEnd = dp(8) })
+        identity.addView(Ui.text(this, 20f, 900, R.color.ag_text).apply { text = "Trainer level ${st.trainerLevel} · ${Trainer.rank(st)}" }, LinearLayout.LayoutParams(0, -2, 1f))
+        top.addView(identity, LinearLayout.LayoutParams(0, -2, 1f))
+        // Keep achievements below the bar so the larger title has room even in split screen.
         // 48 dp touch height around the small chip
         val badgesBox = FrameLayout(this).apply {
             minimumHeight = dp(48)
@@ -338,19 +342,12 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 setText("Achievements ${AchPageMath.tiersReached(Achievements.view(st, data))}")
             }, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL))
         }
-        if (short) top.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dp(6); it.topMargin = -dp(12); it.bottomMargin = -dp(12) })
         top.addView(Ui.chip(this, R.drawable.ic_money, R.color.ag_yellow, plain = true).also { it.setMoney(st.cash, previousCash) })
         previousCash = st.cash
         card.addView(top)
 
         val need = Trainer.xpForNext(st.trainerLevel)
-        val mid = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        mid.addView(ImageView(this).apply {
-            setImageResource(R.drawable.ic_trainer_rank)
-            setColorFilter(c(R.color.ag_mauve))
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(dp(14), dp(14)).also { it.marginEnd = dp(5) })
-        mid.addView(Ui.text(this, 12f, 800, R.color.ag_sub1).apply { text = "Trainer Lv ${st.trainerLevel} · ${Trainer.rank(st)}" }, LinearLayout.LayoutParams(0, -2, 1f))
+        val mid = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL or Gravity.RIGHT }
         mid.addView(Ui.text(this, 11f, 800, R.color.ag_sub0).apply { text = "XP ${st.trainerXp} / $need" })
         card.addView(mid, lp(4))
 
@@ -358,7 +355,10 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         bar.setMeaning(BarMeaning.XP, st.trainerXp.toFloat() / need.coerceAtLeast(1), false)
         card.addView(bar, LinearLayout.LayoutParams(-1, dp(7)).also { it.topMargin = dp(7) })
 
-        if (!short) card.addView(badgesBox, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -dp(2); it.bottomMargin = -dp(8) })
+        val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        bottom.addView(badgesBox)
+        bottom.addView(Ui.text(this, 14f, 900, R.color.ag_text).apply { text = st.settings.trainerName; gravity = Gravity.RIGHT; maxLines = 2 }, LinearLayout.LayoutParams(0, -2, 1f))
+        card.addView(bottom, lp(4))
         return card
     }
 

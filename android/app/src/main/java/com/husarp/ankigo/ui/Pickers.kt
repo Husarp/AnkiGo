@@ -41,7 +41,7 @@ object Pickers {
      * dialog becomes an overlay window when there is no Activity).
      */
     fun show(dialog: AppDialog) {
-        interceptApp?.let { it(dialog); return }
+        interceptApp?.let { dialog.joinStack(); it(dialog); return }
         if (Ui.findActivity(dialog.context) == null) {
             dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
         }
@@ -319,7 +319,7 @@ object Bits {
         alpha = if (enabled) 1f else 0.45f
         addView(ImageView(ctx).apply {
             setImageResource(R.drawable.ic_money)
-        }, LinearLayout.LayoutParams(Ui.dp(ctx, 12), Ui.dp(ctx, 12)).also { it.marginEnd = Ui.dp(ctx, 3) })
+        }, LinearLayout.LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.marginEnd = Ui.dp(ctx, 3) })
         addView(Ui.text(ctx, 12f, 900, R.color.ag_text).apply { text = fmt(price); maxLines = 1 })
         setOnClickListener { onClick() }
     }

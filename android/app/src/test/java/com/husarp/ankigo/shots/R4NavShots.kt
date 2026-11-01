@@ -110,9 +110,10 @@ class R4NavShots {
             val row = bar.getChildAt(1) as ViewGroup // under the 1 dp divider
             // the Shop tab's description may carry ", new stock" (the dot): only its label is compared here
             assertEquals(listOf("Study", "Pokémon", "Shop", "Stats", "Settings"), (0 until row.childCount).map { row.getChildAt(it).contentDescription.toString().substringBefore(",") })
-            // the highlighted tab has the accent pill behind its icon
-            val on = (0 until row.childCount).filter { (row.getChildAt(it) as ViewGroup).getChildAt(0).background != null }
+            // The selected cell and shared indicator agree; C-1 no longer puts a pill behind each icon.
+            val on = (0 until row.childCount).filter { row.getChildAt(it).isSelected }
             assertEquals(listOf(cur.ordinal), on)
+            assertEquals(cur.ordinal.toFloat(), (row as BottomNav.HighlightRow).position, 0f)
         }
     }
 
@@ -244,17 +245,17 @@ class R4NavShots {
             val team = TeamPage(ctx, NoHost)
             pageScreen(ctx, team)
             call(team, "render")
-            assertTrue("no trainer card on the Pokémon tab", texts(team.root).none { it.startsWith("Trainer Lv") })
+            assertTrue("no trainer card on the Pokémon tab", texts(team.root).none { it.startsWith("Trainer level") })
             assertTrue(texts(team.root).none { it.startsWith("Achievements") })
 
             val p = StatsPage(ctx, NoHost)
             val screen = pageScreen(ctx, p)
             call(p, "render")
-            assertTrue(texts(p.root).any { it.startsWith("Trainer Lv") })
+            assertTrue(texts(p.root).any { it.startsWith("Trainer level") })
             assertTrue(texts(p.root).any { it.startsWith("XP ") })
             tap(findText(p.root) { it.startsWith("Achievements") }!!)
             call(p, "render")
-            assertTrue("the Achievements section is showing", texts(p.root).none { it.startsWith("Trainer Lv") })
+            assertTrue("the Achievements section is showing", texts(p.root).none { it.startsWith("Trainer level") })
             screen
         }
     }

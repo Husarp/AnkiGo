@@ -5,15 +5,16 @@ import org.json.JSONObject
 
 /** Immutable setups: loading a favourite returns a value to edit, never the saved record. */
 data class DeckFilter(val id: Long, val name: String, val tags: Set<String> = emptySet(), val ignoreGlobal: Boolean = false, val free: Boolean = false)
-data class StudyFilter(val decks: List<DeckFilter> = emptyList(), val tags: Set<String> = emptySet()) {
+data class StudyFilter(val decks: List<DeckFilter> = emptyList(), val tags: Set<String> = emptySet(), val newOnly: Boolean = false) {
     fun search(): String = if (decks.isEmpty()) "cid:0" else decks.joinToString(" or ", "(", ")") { d ->
         val terms = mutableListOf("deck:${quote(d.name)}")
-        if (!d.free) terms += listOf(SCHEDULED, "-is:suspended", "-is:buried")
+        if (newOnly) terms += listOf("is:new", "-is:suspended", "-is:buried")
+        else if (!d.free) terms += listOf(SCHEDULED, "-is:suspended", "-is:buried")
         if (!d.ignoreGlobal) terms += tagQuery(tags)
         terms += tagQuery(d.tags)
         terms.filter { it.isNotEmpty() }.joinToString(" ", "(", ")")
     }
-    fun encode(): String = JSONObject().put("tags", JSONArray(tags.sorted())).put("decks", JSONArray(decks.map { d ->
+    fun encode(): String = JSONObject().put("newOnly", newOnly).put("tags", JSONArray(tags.sorted())).put("decks", JSONArray(decks.map { d ->
         JSONObject().put("id", d.id).put("name", d.name).put("tags", JSONArray(d.tags.sorted())).put("ignore", d.ignoreGlobal).put("free", d.free)
     })).toString()
     companion object {
@@ -27,7 +28,7 @@ data class StudyFilter(val decks: List<DeckFilter> = emptyList(), val tags: Set<
             val ds = o.getJSONArray("decks")
             return StudyFilter((0 until ds.length()).map { i -> ds.getJSONObject(i).let { d ->
                 DeckFilter(d.getLong("id"), d.getString("name"), tags(d.optJSONArray("tags")), d.optBoolean("ignore"), d.optBoolean("free"))
-            } }, tags(o.optJSONArray("tags")))
+            } }, tags(o.optJSONArray("tags")), o.optBoolean("newOnly"))
         }
         /** Tags belong to notes, not cards; sibling templates must not duplicate tags. */
         fun deckTags(noteIds: List<Long>, read: (Long) -> String?): List<String> = noteIds.distinct().flatMap {

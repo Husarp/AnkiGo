@@ -56,7 +56,8 @@ internal fun soundCard(ctx: Context): View {
         addView(buttons)
         addView(battle, Form.lp(ctx, 12))
         addView(cries, Form.lp(ctx, 12))
-        addView(rules, Form.lp(ctx, 12))
+        addView(Form.sect(ctx, "Playback & test"))
+        addView(rules)
     }
 }
 

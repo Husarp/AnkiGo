@@ -40,9 +40,9 @@ internal object StudyUi {
     fun line(ctx: Context) = View(ctx).apply {
         setBackgroundColor(Ui.c(ctx, R.color.ag_s0)); layoutParams = lp(-1, Ui.dp(ctx, 1))
     }
-    fun section(ctx: Context, title: String, note: String? = null) = row(ctx).apply {
+    fun section(ctx: Context, title: String, note: String? = null, iconRes: Int = R.drawable.ic_book) = row(ctx).apply {
         setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 14), Ui.dp(ctx, 4), Ui.dp(ctx, 8))
-        addView(icon(ctx, R.drawable.ic_book, R.color.ag_mauve), lp(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.marginEnd = Ui.dp(ctx, 6) })
+        addView(icon(ctx, iconRes, R.color.ag_mauve), lp(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.marginEnd = Ui.dp(ctx, 6) })
         addView(label(ctx, title.uppercase(), 12, R.color.ag_mauve, 900).apply { letterSpacing = .058f }, lp(0, -2, 1f))
         if (note != null) addView(label(ctx, note, 12, R.color.ag_sub0))
     }
@@ -100,12 +100,12 @@ internal object StudyUi {
     }
 
     /** .ab: independent label/interval typography, pressed scale and disabled alpha. */
-    fun answer(ctx: Context, text: String, interval: String?, tone: Int, enabled: Boolean, hint: String? = null, action: () -> Unit): View {
+    fun answer(ctx: Context, text: String, interval: String?, tone: Int, enabled: Boolean, hint: String? = null, fill: Int? = null, action: () -> Unit): View {
         val dark = ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        val ink = if (dark) Ui.c(ctx, R.color.ag_crust) else Color.WHITE
+        val ink = if (fill != null) Color.WHITE else if (dark) Ui.c(ctx, R.color.ag_crust) else Color.WHITE
         return column(ctx).apply {
             gravity = Gravity.CENTER
-            background = ripple(ctx, Ui.rounded(Ui.c(ctx, tone), 12, ctx))
+            background = ripple(ctx, Ui.rounded(fill ?: Ui.c(ctx, tone), 12, ctx))
             addView(label(ctx, text, if (interval == null) 15 else 14, R.color.ag_text, 900).apply { setTextColor(ink); gravity = Gravity.CENTER }, lp(-1, -2))
             if (interval != null) addView(label(ctx, interval, 11, R.color.ag_text, 800).apply { setTextColor(ink); alpha = .92f; gravity = Gravity.CENTER }, lp(-1, -2))
             else if (hint != null) addView(label(ctx, hint, 10, R.color.ag_text, 800).apply { setTextColor(ink); alpha = .92f; gravity = Gravity.CENTER }, lp(-1, -2))

@@ -23,7 +23,7 @@ class R23XFilterShots {
             val root = act.buildContent()
             setField(act, "decks", listOf(Anki.Deck(1, "Japanese", 1, 5, 2, false), Anki.Deck(2, "Medicine", 0, 2, 0, false)))
             setField(act, "filter", StudyFilter(listOf(DeckFilter(1, "Japanese", setOf("task"), true, true)), setOf("vocabulary")))
-            setField(act, "expanded", setOf(1L))
+            (getField(act, "tagCache") as StudyTags).put("Japanese", listOf("task", "vocabulary"), 0)
             call(act, "render", false)
             (getField(act, "count") as TextView).text = "186 cards match"
             val labels = texts(root).map { it.text.toString() }

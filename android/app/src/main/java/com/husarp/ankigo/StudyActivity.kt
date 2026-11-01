@@ -1433,7 +1433,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }
         if (!flipped) {
             val hint = if (keyboardLayout() && prefs.getBoolean(TypeInRules.PREF_ENTER, TypeInRules.ENTER_DEFAULT)) "or press Enter" else null
-            buttons.addView(StudyUi.answer(this, "Show answer", null, R.color.ag_mauve, enabled, hint) { flip() }, StudyUi.lp(-1, Ui.dp(this, 48)))
+            buttons.addView(StudyUi.answer(this, "Show answer", null, R.color.ag_mauve, enabled, hint, fill = com.husarp.ankigo.ui.ShowAnswerColor.get(this).fill) { flip() }, StudyUi.lp(-1, Ui.dp(this, 48)))
             return
         }
         val n = card ?: return

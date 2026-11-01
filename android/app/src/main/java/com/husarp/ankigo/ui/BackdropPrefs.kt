@@ -23,25 +23,28 @@ internal object BackdropPrefs {
         val guidance = Form.body(ctx, "Choose the scenes used in battle. At least one must stay on.")
         guidance.accessibilityLiveRegion = android.view.View.ACCESSIBILITY_LIVE_REGION_POLITE
         addView(guidance)
-        BackdropCatalog.ALL.forEach { bg ->
-            val image = ImageView(ctx).apply {
-                contentDescription = bg.id.replace('-', ' ')
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                adjustViewBounds = true
-                ctx.assets.open("backdrop-thumbs/${bg.id}.webp").use { setImageBitmap(BitmapFactory.decodeStream(it)) }
-            }
-            val sw = Switch(ctx).apply {
-                isChecked = bg.id !in disabled(ctx)
-                Ui.tintSwitch(this)
-                setOnCheckedChangeListener { _, on ->
-                    if (!setEnabled(ctx, bg.id, on)) {
-                        isChecked = true
-                        guidance.text = "Keep at least one background on."
+        BackdropCatalog.ALL.groupBy { if (it.dark) "Dark scenes" else "Bright scenes" }.forEach { (title, scenes) ->
+            addView(Form.sect(ctx, title))
+            scenes.forEach { bg ->
+                val image = ImageView(ctx).apply {
+                    contentDescription = bg.id.replace('-', ' ')
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    adjustViewBounds = true
+                    ctx.assets.open("backdrop-thumbs/${bg.id}.webp").use { setImageBitmap(BitmapFactory.decodeStream(it)) }
+                }
+                val sw = Switch(ctx).apply {
+                    isChecked = bg.id !in disabled(ctx)
+                    Ui.tintSwitch(this)
+                    setOnCheckedChangeListener { _, on ->
+                        if (!setEnabled(ctx, bg.id, on)) {
+                            isChecked = true
+                            guidance.text = "Keep at least one background on."
+                        }
                     }
                 }
+                val row = Form.row(ctx, bg.id.replace('-', ' ').replaceFirstChar { it.titlecase() }, "Allow this scene to appear as a battle background", sw) { sw.toggle() }
+                addView(Form.cardOf(ctx, listOf(image.apply { layoutParams = LinearLayout.LayoutParams(-1, -2) }, row)), Form.lp(ctx, 8))
             }
-            val row = Form.row(ctx, bg.id.replace('-', ' ').replaceFirstChar { it.titlecase() }, null, sw) { sw.toggle() }
-            addView(Form.cardOf(ctx, listOf(image.apply { layoutParams = LinearLayout.LayoutParams(-1, -2) }, row)), Form.lp(ctx, 8))
         }
     }
 }

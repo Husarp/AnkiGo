@@ -121,8 +121,8 @@ class AchievementsView(private val page: GamePage) {
     internal fun scrollY(): Int = scroll.scrollY
 
     fun render() {
+        openId?.let { AchievementNotice.seen(page, it) }
         val st = page.state
-        AchievementNotice.seen(page)
         val views = Achievements.view(st, page.data)
         val at = now()
         // "See it": the row's tab, and the filter out of the way when it would hide the row
@@ -271,7 +271,8 @@ class AchievementsView(private val page: GamePage) {
     // Pick B: tier-tinted squares, icon, title and a shape for every tier.
     internal fun tile(v: AchView): View {
         val hidden = v.group == "Secret" && v.tier < 0
-        val color = AchStyle.medalColor(page, v.tier, v.oneOff && v.tier >= 0)
+        val color = if (v.group == "Secret") Ui.c(page, if (hidden) R.color.ag_ov else R.color.ag_teal)
+            else if (v.oneOff && v.tier >= 0) AchStyle.badgeColor(page, v.icon) else AchStyle.medalColor(page, v.tier)
         val card = object : LinearLayout(page) {
             override fun onMeasure(w: Int, h: Int) {
                 super.onMeasure(w, h)
@@ -287,16 +288,18 @@ class AchievementsView(private val page: GamePage) {
             isClickable = true
             setOnClickListener { openId = v.id; page.requestRender() }
         }
-        if (v.group == "Secret") card.addView(AchMedal(page, 60).apply { set(if (hidden) R.drawable.ic_ach_lock else AchStyle.icon(v.icon), v.tier, v.tier >= 0) }, LinearLayout.LayoutParams(dp(60), dp(60)))
-        else card.addView(ImageView(page).apply { setImageResource(AchStyle.icon(v.icon)); setColorFilter(color) }, LinearLayout.LayoutParams(dp(34), dp(34)))
+        if (AchievementNotice.unseen(page, v.id)) {
+            card.addView(AchievementNotice.dot(page))
+            card.contentDescription = "${card.contentDescription}, new achievement"
+        }
+        card.addView(ImageView(page).apply { setImageResource(if (hidden) R.drawable.ic_ach_lock else AchStyle.icon(v.icon)); setColorFilter(color) }, LinearLayout.LayoutParams(dp(34), dp(34)))
         card.addView(Ui.text(page, 11f, 800, if (v.tier < 0) R.color.ag_sub0 else R.color.ag_text).apply {
             text = if (hidden) "???" else v.title; gravity = Gravity.CENTER; maxLines = 3; ellipsize = TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(6) })
-        if (v.group == "Secret") return card
+        if (v.oneOff) return card
         val pips = LinearLayout(page).apply { gravity = Gravity.CENTER }
         for (t in v.tiers.indices) pips.addView(ImageView(page).apply {
-            setImageDrawable(if (v.oneOff && v.tier >= 0) page.getDrawable(R.drawable.ic_check)?.mutate()?.also { it.setTint(color) }
-                else AchStyle.shape(t, if (t <= v.tier) AchStyle.tierColor(page, t) else AchStyle.alpha(Ui.c(page, R.color.ag_ov), .45f)))
+            setImageDrawable(AchStyle.shape(t, if (t <= v.tier) AchStyle.tierColor(page, t) else AchStyle.alpha(Ui.c(page, R.color.ag_ov), .45f)))
         }, LinearLayout.LayoutParams(dp(10), dp(10)).also { it.marginStart = dp(2); it.marginEnd = dp(2) })
         card.addView(pips, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(3) })
         return card

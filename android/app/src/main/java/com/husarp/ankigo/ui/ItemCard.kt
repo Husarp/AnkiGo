@@ -82,7 +82,7 @@ internal object ItemCard {
         if (spec.item == null) Items.tmName(page.data, spec.move.orEmpty()) else Items.name(spec.item)
 
     /** The header: bare icon, name, the one line (an item only) and the close button ([onClose]; 48 dp to touch, the glyph is smaller). */
-    fun header(page: GamePage, spec: Spec, onClose: () -> Unit): View {
+    fun header(page: GamePage, spec: Spec, closeAll: View? = null, onClose: () -> Unit): View {
         val ctx: Context = page
         val isTm = spec.item == null
         val move = spec.move?.let { page.data.move(it) }
@@ -111,6 +111,7 @@ internal object ItemCard {
                 }
                 addView(android.widget.ScrollView(ctx).apply { addView(holders) }, LinearLayout.LayoutParams(-1, dp(ctx, minOf(spec.holders.size, 3) * 28f)))
             }, LinearLayout.LayoutParams(0, -2, 0.85f))
+            closeAll?.let { addView(it, LinearLayout.LayoutParams(-2, -2)) }
             addView(closeButton(ctx, onClose), LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)).also { it.marginStart = dp(ctx, 4f); it.marginEnd = -dp(ctx, 8f) })
         }
     }

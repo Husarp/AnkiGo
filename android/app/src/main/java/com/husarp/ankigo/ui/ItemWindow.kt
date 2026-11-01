@@ -25,11 +25,20 @@ import com.husarp.ankigo.game.Items
  * counts); [dismiss] is the page closing it, a close by the user (✕, drag, outside, Back) calls [onClosed] once. A window over the floating
  * card has no Activity, so it becomes an overlay window then.
  */
-internal class ItemWindow(private val page: GamePage, private val onClosed: () -> Unit) {
+internal class ItemWindow(private val page: GamePage, private val onClosed: () -> Unit) : StackWindow {
     private val ctx: Context get() = page
     private var dialog: Dialog? = null
     private var shown = false
     private var done = false // closed, by the user or by [dismiss]: nothing more happens
+    override val stackContext: Context get() = ctx
+    override fun closeFromStack() = cancelByUser()
+    private val closeAll = Ui.text(ctx, 13f, 800, R.color.ag_mauve).apply {
+        text = "Close all"; gravity = Gravity.END or Gravity.CENTER_VERTICAL
+        minHeight = Ui.dp(ctx, 48)
+        setOnClickListener { WindowStack.closeAll(ctx) }
+        visibility = View.GONE
+    }
+    override fun stackChanged(stacked: Boolean) { closeAll.visibility = if (stacked) View.VISIBLE else View.GONE }
     private var title = "" // the item's name: what a screen reader says when the window opens
 
     private val headBox = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
@@ -78,7 +87,8 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
     /** Draws [spec] again in place (new counts, a new price, the trade confirm); the scroll position stays. */
     fun update(spec: ItemCard.Spec) {
         if (done) return
-        headBox.removeAllViews(); headBox.addView(ItemCard.header(page, spec, ::cancelByUser), LinearLayout.LayoutParams(-1, -2))
+        (closeAll.parent as? android.view.ViewGroup)?.removeView(closeAll)
+        headBox.removeAllViews(); headBox.addView(ItemCard.header(page, spec, closeAll, ::cancelByUser), LinearLayout.LayoutParams(-1, -2))
         bodyBox.removeAllViews(); bodyBox.addView(ItemCard.body(page, spec), LinearLayout.LayoutParams(-1, -2))
         footBox.removeAllViews(); footBox.addView(ItemCard.footer(page, spec), LinearLayout.LayoutParams(-1, -2))
         title = if (spec.item == null) Items.tmName(page.data, spec.move.orEmpty()) else Items.name(spec.item)
@@ -89,6 +99,7 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
     fun show() {
         if (done || shown) return
         shown = true
+        WindowStack.add(this)
         interceptShow?.let { it(this); return }
         val d = Dialog(ctx).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
         dialog = d
@@ -111,6 +122,7 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
     /** The page closes the window (another tab, the item is gone, the page is left): no [onClosed]. */
     fun dismiss() {
         if (done) return
+        WindowStack.remove(this)
         done = true
         shown = false
         closeDialog()
@@ -124,6 +136,7 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
 
     private fun userClosed() {
         if (done) return
+        WindowStack.remove(this)
         done = true
         shown = false
         onClosed()
