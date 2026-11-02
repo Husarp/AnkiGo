@@ -116,27 +116,20 @@ internal object DetailTopCard {
     // ---------- Evolution ----------
 
     /**
-     * The collapsible evolution line and, for an owned Pokémon, every evolution currently ready to choose.
+     * The collapsible evolution tree; owned Pokémon can choose ready branches from their requirement info.
      */
     private fun evolution(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?, state: GameState? = null, mon: Mon? = null, page: GamePage? = null, onEvolved: (() -> Unit)? = null): View {
         return DetailSections.section(a, DetailSections.memory(a), DetailSection.EVOLUTION, null) {
             LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(EvolutionRows(a, data, EvoLine.of(data, sp).root, sp, seen, onSpecies, state, mon), LinearLayout.LayoutParams(-1, -2))
-                if (state != null && mon != null && page != null && state.mon(mon.uid) != null) {
-                    val ready = com.husarp.ankigo.game.Progression.readyEvolutions(data, state, mon, System.currentTimeMillis())
-                    if (ready.isNotEmpty()) addView(Ui.text(a, 14f, 900, R.color.ag_mauve).apply { text = "Ready to evolve" })
-                    ready.forEach { e ->
-                        val row = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-                        row.addView(EvolutionRows(a, data, com.husarp.ankigo.game.EvoNode(sp, null, listOf(com.husarp.ankigo.game.EvoNode(data.sp(e.to), e, emptyList()))), sp, seen + sp.num + e.to, onSpecies, state, mon))
-                        row.addView(Ui.text(a, 12f, 800, R.color.ag_green).apply { text = "Conditions met" })
-                        row.addView(DetailParts.secondaryButton(a, "Evolve") {
+                val evolve: ((com.husarp.ankigo.game.Evolution) -> Unit)? =
+                    if (state != null && mon != null && page != null && state.mon(mon.uid) != null) {
+                        { e ->
                             val result = page.act { g -> g.chooseEvolution(mon.uid, e.to) }
                             if (result.ok) onEvolved?.invoke()
-                        })
-                        addView(row, LinearLayout.LayoutParams(-1, -2))
-                    }
-                }
+                        }
+                    } else null
+                addView(EvolutionRows(a, data, EvoLine.of(data, sp).root, sp, seen, onSpecies, state, mon, evolve), LinearLayout.LayoutParams(-1, -2))
             }
         }
     }

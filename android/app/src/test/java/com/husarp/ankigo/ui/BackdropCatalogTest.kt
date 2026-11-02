@@ -8,8 +8,8 @@ import org.junit.Test
 class BackdropCatalogTest {
     private val all get() = BackdropCatalog.ALL
     @Test fun approvedSetHasNoDroppedScenes() {
-        assertEquals(47, BackdropCatalog.ALL.size)
-        assertEquals(47, BackdropCatalog.ALL.map { it.id }.toSet().size)
+        assertEquals(51, BackdropCatalog.ALL.size)
+        assertEquals(51, BackdropCatalog.ALL.map { it.id }.toSet().size)
         for (id in listOf("stormy-plains", "psychic-lab", "volcanocave", "fairy-hill", "bamboo-dojo-v2")) assertNull(id, BackdropCatalog.byId(id))
         assertEquals(11, BackdropCatalog.ALL.count { it.source == BackdropSource.SHOWDOWN })
         assertEquals(14, BackdropCatalog.GENERAL.size)

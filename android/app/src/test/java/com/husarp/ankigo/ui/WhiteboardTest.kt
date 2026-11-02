@@ -74,24 +74,46 @@ class WhiteboardTest {
         assertEquals(View.VISIBLE, reopened.visibility)
         tools.setBoardOn(false)
     }
+    @Test fun leavingAppDismissesColourDropdown() {
+        AwayWindows.dismissAll()
+        val c = com.husarp.ankigo.shots.Shots.files(paparazzi.context)
+        val tools = WhiteboardTools(c, Whiteboard(c))
+        var dismissed = 0
+        val popup = object : android.widget.PopupWindow() {
+            override fun dismiss() { dismissed++ }
+        }
+        assertSame(popup, tools.paletteWindow(popup))
+        assertNotNull(popup.contentView)
+        AwayWindows.dismissAll()
+        assertEquals(1, dismissed)
+        AwayWindows.dismissAll()
+        assertEquals(1, dismissed)
+    }
+
     @Test fun paletteInBothThemes() {
-        paparazzi.shoot("r26-whiteboard-palette", listOf(com.husarp.ankigo.shots.Size.PHONE)) { ctx ->
+        paparazzi.shoot("r27d-whiteboard-palette", listOf(com.husarp.ankigo.shots.Size.SMALL)) { ctx ->
             val tools = WhiteboardTools(ctx, Whiteboard(ctx))
             fun all(v: View): List<View> = listOf(v) + if (v is android.view.ViewGroup)
                 (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
             val colour = all(tools).first { it.contentDescription?.toString()?.startsWith("Whiteboard colour:") == true }
-            val dialog = com.husarp.ankigo.shots.AppDialogShots.capture { colour.performClick() }!!
-            val labels = all(dialog.content()).filterIsInstance<android.widget.TextView>().map { it.text.toString() }
-            val dark = ctx.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
-            assertTrue(labels.any { it.endsWith(if (dark) "White" else "Black") })
-            assertFalse(labels.any { it.endsWith(if (dark) "Black" else "White") })
-            com.husarp.ankigo.shots.AppDialogShots.scene(ctx, dialog)
+            val palette = tools.paletteContent()
+            val swatches = all(palette).filter { it.contentDescription?.startsWith("Whiteboard colour:") == true }
+            assertEquals(6, swatches.size)
+            run {
+                swatches[2].performClick()
+                assertEquals(tools.colours()[2].second, tools.board.ink)
+                assertFalse(tools.board.erasing)
+            }
+            android.widget.LinearLayout(ctx).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                addView(tools); addView(palette)
+            }
         }
     }
 
     @Test fun studyOverlayStaysInsideCardAndBelowCalmCoverInBothThemes() {
         for (theme in com.husarp.ankigo.shots.Theme.values()) {
-            paparazzi.unsafeUpdateConfig(deviceConfig = com.husarp.ankigo.shots.Shots.device(com.husarp.ankigo.shots.Size.PHONE, theme))
+            paparazzi.unsafeUpdateConfig(deviceConfig = com.husarp.ankigo.shots.Variant("phone", 360, 800).device(theme))
             val c = com.husarp.ankigo.shots.Shots.files(paparazzi.context)
             com.husarp.ankigo.shots.FakeGame.install(c)
             val activity = com.husarp.ankigo.shots.attach(com.husarp.ankigo.StudyActivity(), com.husarp.ankigo.shots.ShotCtx(c))
@@ -110,6 +132,14 @@ class WhiteboardTest {
             com.husarp.ankigo.shots.call(activity, "showCard", prepared, true)
             (com.husarp.ankigo.shots.getField(activity, "whiteboardTools") as WhiteboardTools).setBoardOn(true)
             paparazzi.snapshot(field("root"), name = "whiteboard-${theme.name}")
+            val menu = activity.actionSheetContent {}
+            paparazzi.snapshot(menu, name = "d-whiteboard-menu-${theme.name}")
+            fun all(v: View): List<View> = listOf(v) + if (v is android.view.ViewGroup)
+                (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
+            val title = all(menu).filterIsInstance<android.widget.TextView>().single { it.text == "Whiteboard" }
+            val row = title.parent.parent as android.view.ViewGroup
+            assertTrue(all(row).any { it is android.widget.ImageView && it.drawable != null })
+            assertFalse(all(field("root")).filterIsInstance<android.widget.TextView>().any { it.text == "Whiteboard" })
             fun findMore(v: View): View? {
                 if (v is android.widget.TextView && v.text == "+ More room") return v
                 if (v is android.view.ViewGroup) for (i in 0 until v.childCount) findMore(v.getChildAt(i))?.let { return it }

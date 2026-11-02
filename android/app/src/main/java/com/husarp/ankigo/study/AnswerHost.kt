@@ -50,7 +50,7 @@ interface StudyListener {
 }
 
 /**
- * The process-wide host of the study answers (R9 wave 6): ONE single-thread io executor runs EVERY study provider call in order,
+ * The process-wide host of the study answers (R9 wave 6): ONE single-thread io executor runs scheduler calls and answer writes in order,
  * and an answer's write task ([AnswerQueue.drain]) blocks it until the answer is resolved, so a load queued after it sees AnkiDroid's
  * real queue. It lives as long as the process, so a screen that is closed (or killed) never stops an answer from being written.
  * Screens register a [StudyListener] (main thread). Pure Kotlin: Android comes in through [Env] (tests use a fake and a real executor).
@@ -141,6 +141,9 @@ class AnswerHost(
         override fun cancel(before: Map<String, String?>) = env.cancel(before)
         override fun journalFailed(reason: String) = env.log("the answer journal could not be written: $reason")
         override fun note(text: String) = env.log(text)
+        override fun answerTimed(answer: QueuedAnswer, attempt: Int, ms: Long) {
+            env.log("answer write: seq ${answer.seq} deck ${answer.deckId} card ${answer.cardId} attempt $attempt, ANSWER $ms ms")
+        }
         override fun outcome(o: AnswerOutcome) {
             val at = env.elapsed()
             val writeMs = if (o.isTerminal || o is AnswerOutcome.Waiting) at - drainStart else -1L
@@ -218,7 +221,9 @@ class AnswerHost(
     fun enqueue(a: QueuedAnswer, front: String?, owner: StudyListener?): Boolean {
         val meta = Meta(front, owner)
         metas[a.seq] = meta
+        val journalAt = env.elapsed()
         val persisted = queue.enqueue(a) // the journal first, then the entry can run
+        env.log("answer queued: seq ${a.seq} deck ${a.deckId} card ${a.cardId}, shown reps ${a.before["reps"]}, ease ${a.ease}, pending ${queue.size}, journal ${env.elapsed() - journalAt} ms")
         if (count == 0) since = env.elapsed()
         count++
         state = Unresolved(count, since, 0, null, false, a.seq)

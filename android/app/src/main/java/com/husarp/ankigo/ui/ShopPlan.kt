@@ -62,6 +62,15 @@ internal object ShopPlan {
         return "Ends in ${minutes / 60} h ${minutes % 60} min"
     }
 
+    /** The offer lasts through Sunday’s game day, including a custom day-start hour and DST. */
+    fun weekendEndsText(endsDay: String, dayStartHour: Int, now: Long = System.currentTimeMillis()): String {
+        val end = java.time.LocalDate.parse(endsDay).plusDays(1).atTime(dayStartHour, 0)
+            .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val minutes = ((end - now + 59_999L) / 60_000L).coerceAtLeast(1)
+        return if (minutes >= 1440) "Ends in ${minutes / 1440} d ${minutes % 1440 / 60} h"
+            else "Ends in ${minutes / 60} h ${minutes % 60} min"
+    }
+
     /** What TalkBack reads for a shop tile or card: "Poké Ball, 200", "Super Potion, deal, 490 instead of 700", "TM Surf, owned". */
     fun describe(name: String, price: Price, owned: Boolean = false): String = when {
         owned -> "$name, owned"
@@ -80,6 +89,4 @@ internal object ShopPlan {
     /** [pillText] for a page that builds its bar: the amount only while the game is [ready] (the Shop and the Pokémon tab share it, R18 RV-6). */
     fun firstPill(ready: Boolean, cash: Int?): String = pillText(if (ready) cash else null)
 
-    /** The weekend card's second line. */
-    const val WEEKEND_NOTE = "Weekend only · until Sunday night"
 }

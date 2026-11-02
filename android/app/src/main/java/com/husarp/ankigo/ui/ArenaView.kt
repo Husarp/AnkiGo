@@ -336,6 +336,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // the prefs hold the listener weakly: it is kept here
     private val bigWatch = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == InfoBoxPrefs.WIDTH_KEY) post { wideBoxes = InfoBoxPrefs.wide(context) }
+        if (key == RarityMark.KEY) post { refreshRarity() }
         if (key == InfoBoxPrefs.KEY) post { bigBoxes = InfoBoxPrefs.big(context) }
     }
 
@@ -831,6 +832,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        refreshRarity()
         InfoBoxPrefs.watch(context, bigWatch)
         wideBoxes = InfoBoxPrefs.wide(context)
         bigBoxes = InfoBoxPrefs.big(context)   // R19-A: a change made while the arena was away
@@ -1064,9 +1066,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         if (!shown) { enemyName = ""; if (bubbleFor === eStatus) hideStatusBubble() }
     }
 
-    fun setEnemyInfo(name: String, level: Int, shiny: Boolean, types: List<Type>) {
+    fun setEnemyInfo(name: String, level: Int, shiny: Boolean, types: List<Type>, tier: com.husarp.ankigo.game.Tier? = null) {
         enemyName = name
-        eName.text = if (shiny) {
+        enemyRarity = tier
+        enemyNameInk = if (shiny) {
             SpannableStringBuilder(name).also {
                 val at = it.length
                 it.append("  ★")
@@ -1074,6 +1077,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
                 it.setSpan(RelativeSizeSpan(12f / 14f), at, it.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
         } else name
+        eName.text = RarityMark.name(context, enemyNameInk, tier)
         eLvl = level
         eLevel.text = "Lv $level"; eLevel.setTextColor(levelColor(level))
         enemyTypes = types
@@ -1605,10 +1609,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     // ---------------------------------------------------------------- player side
 
-    fun setPlayerInfo(uid: String?, name: String, level: Int) {
+    fun setPlayerInfo(uid: String?, name: String, level: Int, tier: com.husarp.ankigo.game.Tier? = null) {
         playerUid = uid
         playerLevel = level
-        pName.text = name
+        playerNameInk = name
+        playerRarity = tier
+        pName.text = RarityMark.name(context, name, tier)
         pLvl = level
         pLevel.text = "Lv $level"; pLevel.setTextColor(levelColor(level))
     }
@@ -1620,7 +1626,15 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         pLevel.text = "Lv $level"; pLevel.setTextColor(levelColor(level))
     }
 
-    fun setPlayerName(name: String) { pName.text = name }
+    private var enemyRarity: com.husarp.ankigo.game.Tier? = null
+    private var enemyNameInk: CharSequence = ""
+    private var playerNameInk = ""
+    private fun refreshRarity() {
+        eName.text = RarityMark.name(context, enemyNameInk, enemyRarity)
+        pName.text = RarityMark.name(context, playerNameInk, playerRarity)
+    }
+    private var playerRarity: com.husarp.ankigo.game.Tier? = null
+    fun setPlayerName(name: String) { playerNameInk = name; pName.text = RarityMark.name(context, name, playerRarity) }
 
     /** Our types use the same chips / symbols as the wild card, and tint the type-colour look. */
     fun setPlayerTypes(types: List<Type>) {
@@ -2508,14 +2522,14 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
  */
 private class FitName(ctx: Context) : TextView(ctx) {
     /** The width of the name at full letter width. */
-    fun naturalWidth(): Int = kotlin.math.ceil(paint.measureText(text, 0, text.length) / textScaleX.toDouble()).toInt() + compoundPaddingLeft + compoundPaddingRight
+    fun naturalWidth(): Int = kotlin.math.ceil(android.text.Layout.getDesiredWidth(text, paint) / textScaleX.toDouble()).toInt() + compoundPaddingLeft + compoundPaddingRight
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
         val t = text
         val avail = measuredWidth - compoundPaddingLeft - compoundPaddingRight
         if (avail <= 0 || t.isNullOrEmpty()) return
-        val full = paint.measureText(t, 0, t.length) / textScaleX
+        val full = android.text.Layout.getDesiredWidth(t, paint) / textScaleX
         val want = if (full <= avail) 1f else max(MIN_SCALE, avail / full)
         if (kotlin.math.abs(want - textScaleX) > 0.005f) {
             textScaleX = want

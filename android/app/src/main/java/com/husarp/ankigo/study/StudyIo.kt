@@ -19,7 +19,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 /**
- * The process-wide study io (R9 wave 6, item 1): the one `ankigo-study-io` thread for EVERY study provider call, the answer write
+ * The process-wide study io (R9 wave 6, item 1): the one `ankigo-study-io` thread for ordered scheduler calls and the answer write
  * queue with its journal (`filesDir/study-answers.json`), and the game step of each answer (at the tap). It lives as long as the process: a
  * study screen being closed never stops an answer from being written. Created by the first screen (main thread); that restores the
  * journal and replays the answers it holds before anything else runs. The logic is in [AnswerHost].

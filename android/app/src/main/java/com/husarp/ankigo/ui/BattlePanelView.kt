@@ -971,7 +971,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         // R9 C4: a picture that is still loading changes the stand points when it comes: the wild one is drawn after it (at the latest after the cap)
         val wait = arena.backdropLoading
         arena.setEnemyShown(!wait)
-        arena.setEnemyInfo(w.name, w.level, w.shiny, sp?.types.orEmpty())
+        arena.setEnemyInfo(w.name, w.level, w.shiny, sp?.types.orEmpty(), b.tier)
         arena.setEnemyStatus(b.enemy.status)
         arena.setEnemyHp(w.hp, if (sp != null) b.maxWildHp(data) else max(w.hp, 1), false)
         arena.setNewTag(w.species !in st.caught)
@@ -1001,7 +1001,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         }
         val sp = data.species[m.species]
         playerSeen = playerSeenOf(m)
-        arena.setPlayerInfo(m.uid, m.shownName, m.level)
+        arena.setPlayerInfo(m.uid, m.shownName, m.level, m.tier)
         arena.setPlayerTypes(sp?.types.orEmpty())   // the type look washes our box with the first one's colour (Round 10 W7)
         val pre = preHit(m)   // PLAN 191: fight events from another screen still wait to play: the Pokémon is drawn as it is before the wild one's hit
         arena.setPlayerStatus(if (pre?.fresh == true) null else st.battle?.player?.status)

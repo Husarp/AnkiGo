@@ -3,6 +3,33 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.2.1
+- Battle rewards show the wild Pokémon’s rarity ball dropping and wobbling before XP streams out.
+- Tabs change directly, keeping the selected tab’s box animation.
+- Box search finds Pokémon by species name, nickname or number, together with your current filters.
+- Whiteboard tools have clearer icons and larger colour swatches in a small dropdown below the colour button.
+- Stat stages use tight, centred arrow columns and matching green/red chips across battles, move bubbles, details and floating changes.
+- Pokémon details keep the header readable on narrow screens and at large text sizes. Coloured nature effects have simpler spacing.
+- Evolution stays in one tree. Tap a requirement for its explanation, then tap Evolve twice in the same window to confirm. Missing requirements disable Evolve.
+- Explanation windows have padded scrolling text, item icons and section headings, with a close button that stays visible.
+- Shop offers use compact cards with filled headers, purple night deals and teal weekend specials. Weekend timers show days and hours, then hours and minutes.
+- Continue / next battle matches the AnkiDroid dark-blue Show answer option when selected.
+- Details stats use plain row names, distinct Attack and Defense colours, clearer rounded bars and normal-stat ticks, and a Base hint. Battle stage labels and arrows are centred in shorter chips.
+- Box stacks show duplicate Pokémon with distinct fanned lower corners in light and dark mode, keeping counts, team marks, favourites and comparison selection visible.
+- Stats focuses on seven study charts and compact collection/game milestones. Today's Again/Hard/Good/Easy chart shows counts and percentages; measured study time is combined, with source and coverage explanations retained.
+- Rarity marks add achievement-style gems beside Pokémon names in battle and details. Turn them off in Battle settings; names keep their usual colour.
+- Secret achievements use the selected new artwork, including a road-only Easy Street and corrected Perfect Throw arrowhead. Last Breath keeps its current icon.
+### Fixes
+- The whiteboard colour dropdown closes when you leave the app.
+- Study retries automatically when AnkiDroid has not supplied its next card yet.
+- Next cards are checked before they appear, preserving AnkiDroid’s order and avoiding a search-selected card jumping ahead and then being replaced.
+- Next-card content can prepare while an answer saves. Ordinary slow saves no longer show an orange warning dot; failed saves still do.
+- Evolution rows show black silhouettes for never-seen species, grey sprites for seen but uncaught species, and full colour for caught species. Viewing details or a ready evolution preview does not discover a species.
+- Missing evolution items say that you do not have them and explain their sources. Evolution sheets keep the action in place without Bag instructions.
+- Four new beach scenes can appear in Water encounters and can each be toggled in Backgrounds.
+- Background pictures always fill the battle window; old coral no longer has blurred side bands.
+- Glow-up now has the selected sprout icon.
+
 ## 1.2.0
 - Screens and controls have short transitions and reward feedback. Taps act immediately, the tab bar stays in place, and reduced motion turns the new effects off.
 - Shop shows item prices at the right; tap an item to buy. Buying several items shows their total price, and timers show hours and minutes. Weekend specials have a simpler heading and offer eleven exclusive held items outside regular stock and deals.

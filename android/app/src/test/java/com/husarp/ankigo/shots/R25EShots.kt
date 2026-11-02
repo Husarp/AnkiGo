@@ -109,7 +109,9 @@ class R25EShots {
             assertNotNull("Seen-only greyscale survives async image completion", images[1].colorFilter)
             assertEquals(.55f, images[1].alpha, .001f)
             assertNotNull("Unseen silhouette stays tinted after loading", images[2].colorFilter)
-            assertEquals(.7f, images[2].alpha, .001f)
+            assertEquals("Never-seen species stay opaque black", 1f, images[2].alpha, .001f)
+            assertEquals(android.graphics.PorterDuffColorFilter(android.graphics.Color.BLACK,
+                android.graphics.PorterDuff.Mode.SRC_IN), images[2].colorFilter)
             // Ever-caught colour survives release.
             state.caught.add(2)
             state.mons.clear()

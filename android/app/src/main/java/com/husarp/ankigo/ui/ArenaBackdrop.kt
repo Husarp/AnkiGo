@@ -33,8 +33,8 @@ import kotlin.math.abs
 /**
  * The arena's background (round 7, stage rule round 8). Plain mode is the gradient the arena always had (`ag_arena_top` ->
  * `ag_arena_bot`); picture mode draws a downloaded battle picture ([Backdrops]) cropped to a [Stage] ([setStage]; no stage yet = a
- * cover crop, centred, bottom first). A picture that had to shrink (the stage is [Stage.shrunk]) is drawn over its blurred, darkened
- * copy, which covers the panel, and its edges fade into the blur over [BackdropDraw.FADE] of their size. [jolt] (Earthquake) moves
+ * cover crop, centred, bottom first). The artwork crop always covers the panel, even if the sprite-safe stage is larger
+ * than the picture. A blurred, darkened copy underneath covers motion overscan. [jolt] (Earthquake) moves
  * picture and blur up or down; the blur is drawn first then too, so no gap shows. Pixel-art pictures ([Backdrop.crisp]) are scaled
  * without filtering, soft ones with. R19-F (PLAN 274, [BackdropSharp]): a picture that lands under [BackdropSharp.HARD_MIN] screen px per
  * file px (a smaller arena; the panel's own on-screen scale counts, [screenScale]) is reduced once, off the main thread, to the pixels it

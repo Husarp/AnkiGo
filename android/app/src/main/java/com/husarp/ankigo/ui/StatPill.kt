@@ -8,25 +8,17 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.util.TypedValue
 import android.view.View
-import androidx.core.graphics.ColorUtils
 import com.husarp.ankigo.R
 import kotlin.math.abs
 import kotlin.math.max
 
 /**
  * R19-C (PLAN 125 X1): the stat-change pill of round 10 mockup A1-C. A short stat name (Atk / Def / SpA / SpD / Spe / Acc / Eva)
- * and drawn chevrons, one per stage, in rows of up to three; green for a rise, red for a drop. The pure rules live here; the
+ * and drawn chevrons, one per stage, in columns of up to three; green for a rise, red for a drop. The pure rules live here; the
  * move bubble's chip is a [StatPillView]; the floating badge over the Pokémon ([FloatTextView]) shares the chevron shape.
  */
 object StatPill {
     const val MAX_STAGES = 6
-
-    /** The mockup's green and red (text + chevrons; the pill is a tint of the same colour). */
-    const val UP = 0xFF2E9E4F.toInt()
-    const val DOWN = 0xFFD6453D.toInt()
-
-    /** Tint strength of the pill: light 13 % (green) / 12 % (red), dark 22 % (both), as in the mockup. */
-    fun tint(up: Boolean, dark: Boolean): Float = if (dark) 0.22f else if (up) 0.13f else 0.12f
 
     /** The short label of an engine stat key ("atk", "accuracy" ...), or null for a key that is no battle stat. */
     fun shortName(stat: String?): String? = when (stat) {
@@ -51,45 +43,47 @@ object StatPill {
     fun isDark(ctx: Context): Boolean =
         (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
-    /** The pill's fill: the card colour tinted with the pill's colour (opaque, so it sits on any bubble). */
-    fun background(ctx: Context, up: Boolean): Int =
-        ColorUtils.blendARGB(ctx.getColor(R.color.ag_card), if (up) UP else DOWN, tint(up, isDark(ctx)))
+    /** Shared semantic palette, independent of the chosen accent. */
+    fun background(ctx: Context, up: Boolean): Int = if (isDark(ctx)) {
+        if (up) 0xFF293D34.toInt() else 0xFF462D3A.toInt()
+    } else if (up) 0xFFE9F5ED.toInt() else 0xFFFCECEF.toInt()
 
-    fun ink(up: Boolean): Int = if (up) UP else DOWN
+    fun ink(up: Boolean, dark: Boolean = false): Int = if (dark) {
+        if (up) 0xFF9BD4AD.toInt() else 0xFFFF9BAB.toInt()
+    } else if (up) 0xFF287944.toInt() else 0xFFB22C42.toInt()
 
-    // The chevron in the mockup's 12 x 11 box (viewBox units): M2 7 L6 3 L10 7, three arrows per row, the second row 10 units lower; stroke 2.4, round caps.
+    const val CHIP_SCALE = 0.8f
     const val BOX_W = 12f
-    private const val BOX_H = 11f
-    const val STROKE = 2.4f
+    const val STROKE = 2f
+    fun boxHeight(n: Int): Float = 25f
+    fun boxWidth(n: Int): Float = if (n > 3) 23f else 12f
 
-    /** Height of [n] chevrons in two rows in box units. */
-    fun boxHeight(n: Int): Float = BOX_H + if (n > 3) 10f else 0f
-
-    fun boxWidth(n: Int): Float = BOX_W * minOf(n, 3)
-
-    /** Adds the [n] chevrons in rows of three of a rise ([up]) or a drop to [path], in box units (x 0..12, y 0..boxHeight). */
+    /** Each column is centred independently, including the one/two arrows after stage three. */
     fun chevrons(path: Path, n: Int, up: Boolean) {
         for (i in 0 until n) {
-            val y = (i / 3) * 10f
-            val x = (i % 3) * BOX_W
-            if (up) { path.moveTo(x + 2f, y + 7f); path.lineTo(x + 6f, y + 3f); path.lineTo(x + 10f, y + 7f) }
-            else { path.moveTo(x + 2f, y + 3f); path.lineTo(x + 6f, y + 7f); path.lineTo(x + 10f, y + 3f) }
+            val column = i / 3
+            val count = minOf(3, n - column * 3)
+            val y = (25f - (4f + (count - 1) * 7f)) / 2f + (i % 3) * 7f
+            val x = column * 11f
+            path.moveTo(x + 2f, y + if (up) 4f else 0f)
+            path.lineTo(x + 6f, y + if (up) 0f else 4f)
+            path.lineTo(x + 10f, y + if (up) 4f else 0f)
         }
     }
 }
 
 /**
- * The pill as a view: rounded 9 dp tint, the short name in 12 sp bold, then the chevrons in rows of three (13 dp wide box, as the mockup's svg).
+ * The pill as a view: rounded 9 dp tint, the short name in 12 sp bold, then the chevrons in columns of three (8 dp chevrons, 7 dp vertical pitch).
  * [stages] is signed (positive = rise). Read by TalkBack as "Attack up 2".
  */
 internal class StatPillView(ctx: Context, val stat: String, val stages: Int) : View(ctx) {
     private val d = ctx.resources.displayMetrics.density
     private val up = stages > 0
     private val n = StatPill.count(stages)
-    private val ink = StatPill.ink(up)
+    private val ink = StatPill.ink(up, StatPill.isDark(ctx))
     private val fill = StatPill.background(ctx, up)
     private val label = StatPill.shortName(stat) ?: stat
-    private val unit = 13f * d / StatPill.BOX_W // dp per box unit: the mockup's 12-unit box is drawn 13 px wide
+    private val unit = d * StatPill.CHIP_SCALE
 
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Ui.font(ctx, 800)

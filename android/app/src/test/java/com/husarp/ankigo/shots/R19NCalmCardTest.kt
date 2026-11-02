@@ -112,6 +112,41 @@ class R19NCalmCardTest {
         assertEquals("Battle over", CalmCard.TITLE)
     }
 
+    /** PLAN 433: exercise the actual held-result row, including the compact menu wrapper. */
+    @Test fun continueMatchesShowAnswerColourInBothThemesAndLayouts() {
+        for (theme in Theme.entries) for (compact in listOf(false, true)) {
+            paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, theme))
+            val c = Shots.files(paparazzi.context)
+            FakeGame.install(c)
+            c.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true)
+                .putBoolean("compactView", compact).commit()
+            val act = study(c)
+            val gallery = android.widget.LinearLayout(c).apply { orientation = android.widget.LinearLayout.VERTICAL }
+            for (choice in com.husarp.ankigo.ui.ShowAnswerColor.entries) {
+                com.husarp.ankigo.ui.ShowAnswerColor.put(c, choice)
+                call(act, "showButtons")
+                if (!events(act).holding) hold(act)
+                val container = row(act)
+                fun descendants(v: View): List<View> = listOf(v) +
+                    if (v is ViewGroup) (0 until v.childCount).flatMap { descendants(v.getChildAt(it)) } else emptyList()
+                val button = descendants(container).first { it.contentDescription?.toString() == "Continue, next battle" }
+                val shape = (button.background as android.graphics.drawable.RippleDrawable).getDrawable(0) as android.graphics.drawable.GradientDrawable
+                val expected = choice.fill ?: com.husarp.ankigo.ui.Ui.c(c, com.husarp.ankigo.R.color.ag_mauve)
+                assertEquals(expected, shape.color!!.defaultColor)
+                if (choice.fill != null) {
+                    descendants(button).filterIsInstance<TextView>().forEach { assertEquals(android.graphics.Color.WHITE, it.currentTextColor) }
+                }
+                assertTrue(button.isEnabled)
+                gallery.addView(com.husarp.ankigo.ui.StudyUi.label(c, choice.label))
+                val displayed = container.getChildAt(0)
+                container.removeView(displayed)
+                gallery.addView(displayed)
+            }
+            paparazzi.snapshot(gallery, "r27i-continue-${theme.name.lowercase()}-${if (compact) "compact" else "normal"}")
+            com.husarp.ankigo.ui.ShowAnswerColor.put(c, com.husarp.ankigo.ui.ShowAnswerColor.DEFAULT)
+        }
+    }
+
     // ---------------------------------------------------------------- during the hold
 
     @Test fun duringTheHoldThePlaceholderShowsAndTheCardsClockDoesNotRun() {

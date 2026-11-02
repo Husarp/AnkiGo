@@ -117,7 +117,7 @@ internal object ItemCard {
     }
 
     /** The ✕ of the window: a quiet X on a 48 dp touch area. */
-    private fun closeButton(ctx: Context, onClose: () -> Unit): View = FrameLayout(ctx).apply {
+    internal fun closeButton(ctx: Context, onClose: () -> Unit): View = FrameLayout(ctx).apply {
         isClickable = true
         contentDescription = "Close"
         setOnClickListener { onClose() }
@@ -195,7 +195,7 @@ internal object ItemCard {
     // ---- the text blocks ----
 
     /** One block: its title (PLAN 236: 12.5 sp, caps, letter-spaced, in the accent colour; [Ui.c] turns ag_mauve into the chosen accent) and its text (13.5 sp, bold parts in the text colour). */
-    private fun factBlock(ctx: Context, title: String, text: String): View = LinearLayout(ctx).apply {
+    internal fun factBlock(ctx: Context, title: String, text: String): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         addView(Ui.text(ctx, TITLE_SP, 900, R.color.ag_mauve).apply {
             Ui.decorateHeading(this, title)

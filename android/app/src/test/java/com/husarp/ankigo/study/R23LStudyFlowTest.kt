@@ -34,15 +34,15 @@ class R23LStudyFlowTest {
         assertNull(DueOrder.first(listOf(row(1, 0), row(2, -1))))
     }
 
-    @Test fun nextReadPicksDueReviewAheadOfNewWithoutDuplicatingIt() {
+    @Test fun schedulerOrderIsKeptWhenSearchSuggestsADueReview() {
         val queue = listOf(key(1), key(2), key(3))
         val next = DueOrder.prioritize(queue, listOf(row(2, 2)), { error("unnecessary expanded read") }) { it }
-        assertEquals(listOf(key(2), key(1), key(3)), next)
+        assertEquals(queue, next)
     }
 
-    @Test fun dueCardBeyondPrefetchWindowIsFetchedFromScheduler() {
+    @Test fun emptySchedulerCanBeReadAgainWhenSearchReportsDueCards() {
         var expanded = 0
-        val next = DueOrder.prioritize(listOf(key(1)), listOf(row(9, 1)), { expanded++; listOf(key(1), key(9)) }) { it }
+        val next = DueOrder.prioritize(emptyList<StudyLoop.Key>(), listOf(row(9, 1)), { expanded++; listOf(key(9), key(1)) }) { it }
         assertEquals(key(9), next.first())
         assertEquals(1, expanded)
     }
@@ -62,8 +62,7 @@ class R23LStudyFlowTest {
         assertEquals("deck:\"A\\_B\" is:due -is:new", DueOrder.query("A_B"))
     }
 
-    @Test(expected = IllegalStateException::class)
-    fun dueLearningMissingFromSchedulerCannotProduceDeckFinished() {
-        DueOrder.prioritize(emptyList<StudyLoop.Key>(), listOf(row(9, 1)), { emptyList() }) { it }
+    @Test fun dueLearningMissingFromSchedulerLeavesRecoveryToTheCaller() {
+        assertTrue(DueOrder.prioritize(emptyList<StudyLoop.Key>(), listOf(row(9, 1)), { emptyList() }) { it }.isEmpty())
     }
 }

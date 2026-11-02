@@ -36,7 +36,7 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
     private val fm = word.fontMetrics
     private val padH = textPx * 0.7f
     val padV = textPx * 0.28f
-    val height: Float = padV * 2f + max(fm.descent - fm.ascent, textPx * 1.75f)
+    val height: Float = padV * 2f + max(fm.descent - fm.ascent, textPx * (25f * StatPill.CHIP_SCALE / 12f))
     val radius: Float = height * 0.42f
 
     /** Space between two chips of a row. */
@@ -47,7 +47,7 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
 
     fun width(m: ConditionMarks.Mark): Float {
         val n = m.number
-        return padH * 2f + iconWidth(m.key) + word.measureText(if (m.key.startsWith("stat.")) m.def.word else m.word) + (if (m.key.startsWith("stat.")) textPx * (StatPill.boxWidth(StatPill.count(m.value)) / 12f + 0.3f) else 0f) + if (n != null) num.measureText(" · $n") else 0f
+        return padH * 2f + iconWidth(m.key) + word.measureText(if (m.key.startsWith("stat.")) m.def.word else m.word) + (if (m.key.startsWith("stat.")) textPx * (StatPill.boxWidth(StatPill.count(m.value)) * StatPill.CHIP_SCALE / 12f + 0.3f) else 0f) + if (n != null) num.measureText(" · $n") else 0f
     }
 
     fun iconWidth(key: String): Float = if (FieldIcons.of(key) != null || key in setOf("switchtrap", "spikes", "toxicspikes", "stealthrock", "stickyweb")) textPx * 1.35f else 0f
@@ -71,7 +71,7 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
 
     fun stroke(): Int = ColorUtils.setAlphaComponent(ctx.getColor(R.color.ag_text), 0x24)
 
-    fun baseline(top: Float): Float = top + padV - fm.ascent
+    fun baseline(top: Float): Float = top + height / 2f - (fm.ascent + fm.descent) / 2f
 
     companion object {
         fun isDark(ctx: Context) = (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
@@ -141,12 +141,11 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
         line.color = m.stroke()
         for (row in rows.values) for (c in row.chips) {
             fill.color = c.mark?.let {
-                if (it.key.startsWith("stat.")) ColorUtils.blendARGB(Ui.c(context, R.color.ag_card),
-                    Ui.c(context, if (it.value > 0) R.color.ag_green else R.color.ag_red), if (ChipMetrics.isDark(context)) .22f else .13f)
+                if (it.key.startsWith("stat.")) StatPill.background(context, it.value > 0)
                 else m.fill(it.def.group)
             } ?: m.moreFill()
             canvas.drawRoundRect(c.rect, m.radius, m.radius, fill)
-            canvas.drawRoundRect(c.rect, m.radius, m.radius, line)
+            if (c.mark?.key?.startsWith("stat.") != true) canvas.drawRoundRect(c.rect, m.radius, m.radius, line)
             if (downSlot == row.slot) {
                 fill.color = ColorUtils.setAlphaComponent(context.getColor(R.color.ag_text), 32)
                 canvas.drawRoundRect(c.rect, m.radius, m.radius, fill)
@@ -173,12 +172,12 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
                     }
                     x0 += m.iconWidth(mk.key)
                 }
-                m.word.color = if (mk.key.startsWith("stat.")) Ui.c(context, if (mk.value > 0) R.color.ag_green else R.color.ag_red) else Ui.c(context, R.color.ag_text)
+                m.word.color = if (mk.key.startsWith("stat.")) StatPill.ink(mk.value > 0, StatPill.isDark(context)) else Ui.c(context, R.color.ag_text)
                 if (mk.key.startsWith("stat.")) {
                     canvas.drawText(mk.def.word, x0, base, m.word)
                     val path = android.graphics.Path().also { StatPill.chevrons(it, StatPill.count(mk.value), mk.value > 0) }
                     canvas.save()
-                    val unit = m.textPx / 12f
+                    val unit = m.textPx * StatPill.CHIP_SCALE / 12f
                     canvas.translate(x0 + m.word.measureText(mk.def.word) + m.textPx * 0.3f, c.rect.centerY() - StatPill.boxHeight(StatPill.count(mk.value)) * unit / 2f)
                     canvas.scale(unit, unit)
                     val stroke = Paint(m.word).apply { style = Paint.Style.STROKE; strokeWidth = StatPill.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }

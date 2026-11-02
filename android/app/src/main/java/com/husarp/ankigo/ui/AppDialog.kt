@@ -33,6 +33,7 @@ import com.husarp.ankigo.R
 class AppDialog internal constructor(val context: Context) : DialogInterface, StackWindow {
     private var sideMarginDp = 16
     private var title: CharSequence? = null
+    private var infoHeader: View? = null
     private var message: CharSequence? = null
     private var customView: View? = null
     private var customScrollsItself = false
@@ -149,15 +150,25 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
                     background = RippleDrawable(ink(0x22, Ui.c(ctx, R.color.ag_text)), null, ColorDrawable(Color.BLACK))
                     setOnClickListener { dismiss() }
                 }, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
-                addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = title },
-                    LinearLayout.LayoutParams(if (headerContext == null) 0 else -2, -2, if (headerContext == null) 1f else 0f).also { it.marginStart = Ui.dp(ctx, 12) })
-                headerContext?.let { label ->
-                    addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = label; gravity = Gravity.END },
-                        LinearLayout.LayoutParams(0, -2, 1f))
+                val largeLabel = headerContext != null && ctx.resources.configuration.fontScale >= 1.4f
+                if (largeLabel) {
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL
+                        addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = title }, LinearLayout.LayoutParams(-1, -2))
+                        addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = headerContext }, LinearLayout.LayoutParams(-1, -2))
+                    }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = Ui.dp(ctx, 12) })
+                } else {
+                    addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = title },
+                        LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12) })
+                    headerContext?.let { label ->
+                        addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = label; gravity = Gravity.END },
+                            LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = Ui.dp(ctx, 8) })
+                    }
                 }
             }, LinearLayout.LayoutParams(-1, -2))
         }
-        title?.takeUnless { backAtTop }?.let { t ->
+        infoHeader?.let { card.addView(it, LinearLayout.LayoutParams(-1, -2)) }
+        title?.takeUnless { backAtTop || infoHeader != null }?.let { t ->
             card.addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply {
                 text = t
                 setPadding(Ui.dp(ctx, 24), Ui.dp(ctx, 24), Ui.dp(ctx, 24), Ui.dp(ctx, if (hasBody) 12 else 4))
@@ -324,6 +335,17 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
         /** Details keep Close in their fixed footer; Back always dismisses only this card. */
         fun setDetailsFooter(options: View? = null, contextLabel: String? = null) = apply {
             d.detailsFooter = true; d.footer = options; d.backAtTop = true; d.headerContext = contextLabel
+        }
+        /** Fixed game-window header; the explanation below remains scrollable. */
+        fun setInfoHeader(title: String, item: String? = null) = apply {
+            d.infoHeader = LinearLayout(ctx).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 12), Ui.dp(ctx, 16), Ui.dp(ctx, 8))
+                item?.let { addView(Bits.itemTile(ctx, it, 40)) }
+                addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = title },
+                    LinearLayout.LayoutParams(0, -2, 1f).also { if (item != null) it.marginStart = Ui.dp(ctx, 10) })
+                addView(ItemCard.closeButton(ctx) { d.dismiss() }, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
+            }
         }
         fun setTitle(t: CharSequence?) = apply { d.title = t }
         fun setMessage(m: CharSequence?) = apply { d.message = m }

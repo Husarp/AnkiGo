@@ -5,13 +5,10 @@ import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.drawable.ColorDrawable
-import android.text.Editable
 import android.text.TextUtils
-import android.text.TextWatcher
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
 import android.widget.BaseAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -351,28 +348,9 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
 
     /** The search field: its own full-width line (R16 X10: the sort chip lives in the filter row now). */
     private fun searchField(): View {
-        val ctx = this
-        search = EditText(ctx).apply {
-            hint = "Search name or number"
-            typeface = Ui.font(ctx, 700)
-            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
-            setTextColor(Ui.c(ctx, R.color.ag_text))
-            setHintTextColor(Ui.c(ctx, R.color.ag_ov))
-            setSingleLine()
-            imeOptions = EditorInfo.IME_ACTION_SEARCH
-            background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
-            setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 8))
-            setText(filter.query)
-            Ui.tintEdit(this)
-            backgroundTintList = null // tintEdit tints the underline of a plain field; this one has its own rounded fill
-            addTextChangedListener(object : TextWatcher {
-                override fun afterTextChanged(s: Editable?) { filter = filter.copy(query = s?.toString().orEmpty()); refilter() }
-                override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) = Unit
-                override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) = Unit
-            })
-            setOnEditorActionListener { v, action, _ ->
-                if (action == EditorInfo.IME_ACTION_SEARCH) { v.clearFocus(); true } else false
-            }
+        search = MonSearch.field(this, filter.query) { query ->
+            filter = filter.copy(query = query)
+            refilter()
         }
         return search
     }

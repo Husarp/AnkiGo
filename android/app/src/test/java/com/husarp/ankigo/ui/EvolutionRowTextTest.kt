@@ -17,17 +17,30 @@ class EvolutionRowTextTest {
         assertFalse(EvolutionRowText.explanation(data, e, data.sp(135), setOf(135), null, mon).contains("124 of"))
     }
 
-    @Test fun itemInstructionsIncludeCountSourceAndBagWithoutSpoilingNames() {
+    @Test fun itemInstructionsIncludeAvailabilityAndShopWithoutBagOrSpoilers() {
         val e = Evolution(135, EvoKind.ITEM, item = "thunder-stone")
         val state = TestData.state(data, 133, 20).apply { bag.clear() }
         val text = EvolutionRowText.explanation(data, e, data.sp(133), emptySet(), state, null)
-        assertTrue(text.contains("open your Bag"))
-        assertTrue(text.contains("choose ???"))
-        assertTrue(text.contains("You own 0"))
+        assertFalse(text.contains("open your Bag"))
+        assertTrue(text.contains("You don't have a Thunder Stone"))
         assertTrue(text.contains("Shop"))
         assertFalse(text.contains("Eevee"))
         state.bag["thunder-stone"] = 2
+        val owned = EvolutionRowText.explanation(data, e, data.sp(133), emptySet(), state, null)
+        assertFalse(owned.contains("open your Bag"))
+        assertTrue(owned.contains("You own 2 Thunder Stone"))
+        assertFalse(owned.contains("Eevee"))
         assertTrue(EvolutionRowText.explanation(data, e, data.sp(133), setOf(133), state, null).contains("You own 2"))
+    }
+
+    @Test fun ownedItemOnPokemonExplainsTwoTapEvolve() {
+        val state = TestData.state(data, 133, 20).apply { bag["thunder-stone"] = 1 }
+        val text = EvolutionRowText.explanation(data, Evolution(135, EvoKind.ITEM, item = "thunder-stone"),
+            data.sp(133), setOf(133), state, state.main)
+        assertTrue(text.contains("Tap Evolve, then tap again"))
+        assertTrue(text.contains("can’t be undone"))
+        assertFalse(text.contains("open your Bag"))
+        assertTrue(text.contains("Shop"))
     }
 
     @Test fun tradeUsesActualAnkiGoItemAndDayClockIsExplained() {

@@ -17,7 +17,6 @@ import com.husarp.ankigo.R
 
 /** PLAN 386: decoration only. State and click listeners never wait for an animator. */
 object UiMotion {
-    const val TAB_MS = 220L
     const val AXIS_MS = 250L
     const val WINDOW_MS = 180L
     const val SHEET_MS = 240L
@@ -121,41 +120,27 @@ object UiMotion {
         }, { if (ghost != null) host.overlay.remove(ghost); old?.recycle() })
     }
 
-    private data class TabMove(val target: Class<out Activity>, val sign: Int, val bitmap: Bitmap?, val from: BottomNav.Tab)
+    // Keep only the destination's tab-bar animation. Capturing the whole outgoing page
+    // synchronously and cross-fading it over a newly built Activity stalls the tap and
+    // draws two screen-sized layers during the slide.
+    private data class TabMove(val target: Class<out Activity>, val from: BottomNav.Tab)
     private var pending: TabMove? = null
-    private fun body(a: Activity): View? {
-        fun find(v: View): View? {
-            if (v is ViewGroup) {
-                // PageActivity's page and GameActivity's main column both precede their bar.
-                for (i in 0 until v.childCount) if (v.getChildAt(i) is BottomNav.NavBar)
-                    return v.getChildAt(0)
-                for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { return it }
-            }
-            return null
-        }
-        val content = a.window?.decorView?.findViewById<View>(android.R.id.content) ?: return null
-        return find(content)
-    }
     fun prepareTab(a: Activity, from: BottomNav.Tab, to: BottomNav.Tab) {
-        pending?.bitmap?.recycle(); pending = null
-        if (enabled(a)) pending = TabMove(Nav.target(to.dest).screen, if (to.ordinal > from.ordinal) 1 else -1, body(a)?.let { picture(it) }, from)
+        pending = if (enabled(a)) TabMove(Nav.target(to.dest).screen, from) else null
     }
     fun arrive(a: Activity) {
         val move = pending ?: return
         if (move.target != a.javaClass) return
         pending = null
-        val root = a.window?.decorView?.findViewById<View>(android.R.id.content)
-        if (root == null) { move.bitmap?.recycle(); return }
+        val root = a.window?.decorView?.findViewById<View>(android.R.id.content) ?: return
         root.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 root.viewTreeObserver.removeOnPreDrawListener(this)
-                val v = body(a)
-                fun indicator(root: View) {
-                    if (root is BottomNav.HighlightRow) root.arriveFrom(move.from)
-                    if (root is ViewGroup) for (i in 0 until root.childCount) indicator(root.getChildAt(i))
+                fun indicator(view: View) {
+                    if (view is BottomNav.HighlightRow) view.arriveFrom(move.from)
+                    if (view is ViewGroup) for (i in 0 until view.childCount) indicator(view.getChildAt(i))
                 }
                 indicator(root)
-                if (v == null) move.bitmap?.recycle() else slide(v, move.bitmap, move.sign, 24, TAB_MS)
                 return true
             }
         })

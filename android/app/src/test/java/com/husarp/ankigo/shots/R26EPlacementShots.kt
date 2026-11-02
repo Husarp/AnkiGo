@@ -92,23 +92,12 @@ class R26EPlacementShots {
             for ((w, h) in listOf(412f to 869f, 412f to 400f, 869f to 300f, 240f to 135f, 200f to 200f)) {
                 val stage = StageFit.fit(bg, w, h)!!
                 val crop = BackdropDraw.stageCrop(bg, stage)
-                assertEquals(id, bg.wildGround.y * bg.h, crop.y + stage.wildFeetY / h * crop.h, .001f)
-                assertEquals(id, bg.wildGround.x * bg.w, crop.x + stage.wildFeetX / w * crop.w, .001f)
                 assertEquals(id, w / h, crop.w / crop.h, .001f)
-                if (bg.wildGround === bg.wild) {
-                    assertEquals(id, stage.cropX, crop.x, 0f)
-                    assertEquals(id, stage.cropY, crop.y, 0f)
-                    assertEquals(id, stage.cropW, crop.w, 0f)
-                    assertEquals(id, stage.cropH, crop.h, 0f)
-                } else {
-                    assertEquals(id, .74f, bg.wild.x, 0f)
-                    assertEquals(id, .54f, bg.wild.y, 0f)
-                    assertTrue(id, crop.w >= stage.cropW / 1.6f - .001f)
-                    val playerGroundX = (crop.x + stage.playerFeetX / w * crop.w) / bg.w
-                    val playerGroundY = (crop.y + stage.playerFeetY / h * crop.h) / bg.h
-                    assertTrue("$id player stays on foreground ground", playerGroundY in .78f.. .88f)
-                    assertTrue("$id player stays on the left clearing", playerGroundX in .16f.. .50f)
-                }
+                // R28: cover takes priority where measured-ground alignment would expose an edge.
+                val layout = BackdropDraw.layout(bg.w, bg.h, crop, 96, 64, w, h)
+                assertFalse("$id $w x $h must cover the panel", layout.anyFade)
+                assertTrue(id, crop.x >= -.001f && crop.y >= -.001f)
+                assertTrue(id, crop.x + crop.w <= bg.w + .001f && crop.y + crop.h <= bg.h + .001f)
                 assertTrue(id, stage.wildFeetY in 0f..h)
             }
         }

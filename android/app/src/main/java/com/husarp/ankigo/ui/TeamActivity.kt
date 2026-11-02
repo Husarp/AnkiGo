@@ -54,6 +54,8 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private val actions by lazy { MonActions(this) }
     private val dexPage by lazy { DexPage(this, host, this) }
     private var tiles: List<BoxTile> = emptyList()
+    private var boxQuery = ""
+    private lateinit var boxSearch: android.widget.EditText
     private var shown = 0 // Pokémon behind the tiles (after the filter)
 
     // A plain open of the tab is on Team (R1-02); a jump through Nav can ask for a section. The section chosen inside a visit is kept only while this page lives.
@@ -123,7 +125,17 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             setSelector(ColorDrawable(Color.TRANSPARENT))
             setPadding(0, 0, 0, gap + BackToTop.room(this@TeamPage)) // R19 250: room for the back-to-top arrow
             clipToPadding = false
-            addHeaderView(boxHeader, null, false)
+            addHeaderView(LinearLayout(this@TeamPage).apply {
+                orientation = LinearLayout.VERTICAL
+                boxSearch = MonSearch.field(this@TeamPage, boxQuery) { query ->
+                    boxQuery = query
+                    requestRender()
+                }
+                addView(boxSearch, LinearLayout.LayoutParams(-1, -2).apply {
+                    setMargins(gap, Ui.dp(this@TeamPage, 8), gap, Ui.dp(this@TeamPage, 8))
+                })
+                addView(boxHeader, LinearLayout.LayoutParams(-1, -2))
+            }, null, false)
             addFooterView(unsupportedBox, null, false)
             adapter = this@TeamPage.adapter
         }
@@ -171,7 +183,9 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         }
         picks.keepOwned { st.mon(it) != null }
         val team = st.teamMons()
-        val mons = BoxTiles.filter(st.mons, boxFilter, st.team, st.settings.xpShareUid, ::canEvolve, boxTypes, ::typesOf)
+        val mons = BoxTiles.filter(st.mons, boxFilter, st.team, st.settings.xpShareUid, ::canEvolve, boxTypes, ::typesOf).filter { mon ->
+            BoxSearch.matches(data, mon, boxQuery)
+        }
         shown = mons.size
         // while picking for Compare every copy is its own tile
         tiles = BoxTiles.sorted(data, st, BoxTiles.build(data, mons, grouped && !pickOn), boxSort)
@@ -427,7 +441,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         if (tiles.isEmpty()) {
             // X9 (192E): say why the box shows nothing and offer "Clear filters" while a filter is on; a really empty box has no button
             boxHeader.addView(EmptyState(this, 28) { clearBoxFilters() }.also {
-                it.set(FilterRowText.emptyBox(boxFilter, boxTypes), boxFilter.isNotEmpty() || boxTypes.active)
+                it.set(if (boxQuery.isNotBlank()) "No Pokémon match your search." else FilterRowText.emptyBox(boxFilter, boxTypes), boxQuery.isNotBlank() || boxFilter.isNotEmpty() || boxTypes.active)
             })
         }
     }
@@ -486,6 +500,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     /** The empty state's "Clear filters": every Box filter off (Show = All, types and mode), the sort and grouping stay. */
     private fun clearBoxFilters() {
+        boxSearch.setText("")
         setBoxFilter(BoxFilter.ALL)
         setBoxTypes(TypeFilter())
         requestRender()
@@ -720,7 +735,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val cell = f.tag as Cell
         val uid = cell.uid ?: return
         val picked = pickOn && picks.has(ComparePick.Owned(uid))
-        BoxViews.tileBackground(f, PickKit.cardBg(this, 10, picked))
+        BoxViews.tileBackground(f, PickKit.cardBg(this, 10, picked), picked)
         PickKit.bindBadge(cell.check, pickOn, picked)
     }
 

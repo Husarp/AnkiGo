@@ -54,7 +54,7 @@ object DetailMath {
     }
 
     @ColorRes fun statColor(s: Stat): Int = when (s) {
-        Stat.HP -> R.color.ag_green; Stat.ATK -> R.color.ag_peach; Stat.DEF -> R.color.ag_yellow
+        Stat.HP -> R.color.ag_green; Stat.ATK -> R.color.ag_peach; Stat.DEF -> R.color.ag_lav
         Stat.SPA -> R.color.ag_blue; Stat.SPD -> R.color.ag_teal; Stat.SPE -> R.color.ag_pink
     }
 
@@ -173,7 +173,7 @@ object DetailParts {
     fun showInfo(a: Context, i: StatInfoText) {
         val body = Ui.text(a, 14f, 700, R.color.ag_text).apply {
             text = i.text
-            setPadding(Ui.dp(a, 24), Ui.dp(a, 4), Ui.dp(a, 24), Ui.dp(a, 8))
+            setPadding(0, Ui.dp(a, 4), 0, 0)
         }
         Pickers.info(a, i.title, body)
     }
@@ -251,16 +251,10 @@ object DetailParts {
             return@apply
         }
         val line = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        if (stage == 0) {
-            line.addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(0, -2, 1f))
-        } else {
-            val pill = StatPillView(a, listOf("hp", "atk", "def", "spa", "spd", "spe")[stat.ordinal], stage)
-            line.addView(if (wholeRow) pill else tapInfo(pill, StatInfo.of(stat)), LinearLayout.LayoutParams(-2, -2))
-            line.addView(View(a), LinearLayout.LayoutParams(0, 1, 1f))
-        }
+        line.addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(0, -2, 1f))
         val effective = kotlin.math.max(1, (value * com.husarp.ankigo.game.BattleEngine.stageMult(stage)).toInt())
         val numbers = Ui.text(a, 13f, 900, if (stage > 0) R.color.ag_green else if (stage < 0) R.color.ag_red else R.color.ag_text).apply {
-            text = if (stage == 0) value.toString() else StatTypography.format("$value → $effective")
+            text = if (stage == 0) value.toString() else "$value → $effective"
             gravity = Gravity.END
         }
         line.addView(numbers, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(a, 8) })

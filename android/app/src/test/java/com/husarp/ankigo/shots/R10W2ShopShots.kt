@@ -144,7 +144,7 @@ class R10W2ShopShots {
     @Test fun aWeekdayShowsTheDealTheBasicsAndTheSpecialsButNoWeekendCard() {
         shoot("weekday", listOf(Variants.PHONE, TALL), check = { _, screen ->
             val t = texts(screen)
-            assertTrue(t.toString(), t.any { it.startsWith(ShopCardKit.dealHeading() + " · ") })
+            assertTrue(t.toString(), (ShopCardKit.dealHeading() in t && t.any { it.startsWith(ShopPlan.ribbon() + " · ") }))
             assertTrue("BASICS" in t)
             assertTrue("TODAY'S SPECIALS" in t)
             assertTrue(t.any { it.startsWith("New in ") && it.endsWith(" min") })
@@ -170,7 +170,7 @@ class R10W2ShopShots {
                 val t = texts(screen)
                 assertTrue(t.toString(), "WEEKEND SPECIAL" in t)
                 assertFalse("ALWAYS IN STOCK" in t)
-                assertTrue(ShopPlan.WEEKEND_NOTE in t)
+                assertTrue(t.count { it.startsWith("Ends in ") } >= 2)
                 val w = Shop.weekendFor(gd, day)!!
                 assertTrue(if (w.isTm) Items.tmName(gd, w.id) in t else Items.name(w.id) in t)
             }) { ctx -> shopTab(ctx, day).second }
@@ -220,7 +220,7 @@ class R10W2ShopShots {
         shoot("weekday", listOf(W320), scale = 2f, check = { ctx, screen ->
             assertTrue(ctx.resources.configuration.fontScale == 2.0f)
             val t = texts(screen)
-            assertTrue(t.any { it.startsWith(ShopCardKit.dealHeading() + " · ") } && "BASICS" in t)
+            assertTrue((ShopCardKit.dealHeading() in t && t.any { it.startsWith(ShopPlan.ribbon() + " · ") }) && "BASICS" in t)
         }) { ctx -> shopTab(ctx, SATURDAY).second }
         shoot("weekday", listOf(Variants.PHONE), scale = 1.3f, themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, WEEKDAY).second }
         shoot("weekday", listOf(W320), themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, SATURDAY).second }
@@ -244,13 +244,13 @@ class R10W2ShopShots {
     @Test fun theDealCardCloseUp() {
         shoot("deal-card", listOf(CARD), check = { _, v ->
             val t = texts(v)
-            assertTrue(t.toString(), t.any { it.startsWith("DEAL OF THE DAY · ") })
+            assertTrue(t.toString(), ("DEAL OF THE DAY" in t && t.any { it.startsWith(ShopPlan.ribbon() + " · ") }))
             assertTrue("Super Potion" in t)
             assertTrue("700" in t && "490" in t)
         }) { ctx ->
             val price = ShopPlan.Price(490, 700)
             val card = ShopViews.dealCard(ctx, "super-potion", Items.name("super-potion"), price, ShopPlan.endsText(420), ShopPlan.describe("Super Potion", price)) {}
-            assertEquals(1, descriptions(card).count { it.startsWith("Super Potion, deal, 490 instead of 700") })
+            assertEquals(1, descriptions(card).count { it.startsWith("DEAL OF THE DAY, Ends in ") && it.contains("Super Potion, deal, 490 instead of 700") })
             scene(ctx, card)
         }
         // the same card with the biggest text
@@ -309,7 +309,7 @@ class R10W2ShopShots {
             val deal = Shop.dealFor(gd, WEEKDAY)!!
             assertTrue("no prices struck through in the popup", struck((v as ShopCardKit.Stage).page.itemWindow!!.view).isEmpty())
             assertTrue("the new price", Bits.fmt(deal.price) in t)
-            assertTrue("the deal card stays under the window", t.any { it.startsWith(ShopCardKit.dealHeading() + " · ") })
+            assertTrue("the deal card stays under the window", (ShopCardKit.dealHeading() in t && t.any { it.startsWith(ShopPlan.ribbon() + " · ") }))
             assertTrue("Buy" in texts(v))
             assertTrue("×1" in texts(v))
             assertTrue("popup shows today's purchase price", Bits.fmt(deal.price) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))
@@ -350,7 +350,7 @@ class R10W2ShopShots {
             assertTrue(Bits.fmt(20_000 - 2 * deal.price) in texts(screen))
             // a tap on the deal card opens its item window (not a dialog), with the count in words
             val stage = ShopCardKit.Stage(ctx, p, screen)
-            val card = clickable(findText(screen) { it.startsWith(ShopCardKit.dealHeading() + " · ") })!!
+            val card = clickable(findText(screen) { it == ShopCardKit.dealHeading() })!!
             assertNull(DialogShots.capture { card.performClick() })
             stage.render()
             assertTrue("the item window is open", p.itemWindow != null)

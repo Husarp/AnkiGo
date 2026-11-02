@@ -201,12 +201,12 @@ object AnswerNotes {
 /**
  * A value read once per visit of the study screen (can this AnkiDroid study / flag cards, the deck's options: reading the
  * options makes AnkiDroid build its whole deck tree, too slow for every card). [get] reads it the first time, [reset] (the
- * screen resumed: AnkiDroid may have changed meanwhile) forgets it. A failed read is not kept. One thread only.
+ * screen resumed: AnkiDroid may have changed meanwhile) forgets it. A failed read is not kept. Access is synchronized for the content worker.
  */
 class ScreenMemo<T : Any>(private val read: () -> T) {
     private var value: T? = null
-    fun get(): T = value ?: read().also { value = it }
-    fun reset() { value = null }
+    @Synchronized fun get(): T = value ?: read().also { value = it }
+    @Synchronized fun reset() { value = null }
 }
 
 /**
@@ -254,7 +254,7 @@ class CountsGate {
  */
 class DeckNames(private val read: () -> Map<Long, String>) {
     @Volatile private var names: Map<Long, String>? = null
-    private val missed = HashSet<Long>()
+    private val missed = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
 
     fun name(id: Long): String? {
         names?.get(id)?.let { return it }

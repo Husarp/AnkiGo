@@ -51,7 +51,7 @@ class R19QDupesShots {
             val spec = android.view.View.MeasureSpec.makeMeasureSpec(size, android.view.View.MeasureSpec.EXACTLY)
             frame.measure(spec, spec); frame.layout(0, 0, size, size)
             val content = frame.getChildAt(0) as android.widget.FrameLayout
-            val inset = if (a && n > 1) Ui.dp(ctx, 7) else 0
+            val inset = if (a && n > 1) Ui.dp(ctx, 10) else 0
             val rear = content.getChildAt(0)
             if (c && n > 1) {
                 org.junit.Assert.assertEquals(sprite.top, rear.top)
@@ -61,11 +61,35 @@ class R19QDupesShots {
                 org.junit.Assert.assertTrue(frontLeft >= -0.01f)
                 org.junit.Assert.assertTrue(rearRight <= content.width + 0.01f)
             }
-            org.junit.Assert.assertEquals(size - inset, content.width)
-            org.junit.Assert.assertEquals(size - inset, content.height)
+            org.junit.Assert.assertEquals(size - inset - if (inset > 0) Ui.dp(ctx, 3) else 0, content.width)
+            org.junit.Assert.assertEquals(size - inset - if (inset > 0) Ui.dp(ctx, 2) else 0, content.height)
             org.junit.Assert.assertEquals(if (c && n > 1) 60f / 88f else 1f, sprite.scaleX, 0.001f)
             org.junit.Assert.assertEquals(if (c && n > 1) android.view.View.VISIBLE else android.view.View.GONE, content.getChildAt(0).visibility)
         }
+    }
+
+    @Test fun compareOutlineSurvivesPreferenceRebind() {
+        val ctx = Shots.files(paparazzi.context)
+        FakeGame.install(ctx)
+        val data = GameRepo.data!!
+        val frame = android.widget.FrameLayout(ctx)
+        val sprite = TileSprite(ctx)
+        frame.addView(sprite, android.widget.FrameLayout.LayoutParams(-1, -1))
+        BoxViews.wrapTile(frame, sprite)
+        val tile = BoxTile(List(3) { TestData.mon(data, 25, 100, uid = "picked$it") })
+        val picked = PickKit.cardBg(ctx, 10, true)
+        BoxViews.tileBackground(frame, picked, true)
+        for (stacked in listOf(true, false, true)) {
+            BoxDupePrefs.setStacked(ctx, stacked)
+            BoxViews.bindDupes(frame, sprite, tile, data)
+            org.junit.Assert.assertSame(picked, frame.getChildAt(0).background)
+            org.junit.Assert.assertEquals(stacked, frame.background != null)
+        }
+        BoxViews.tileBackground(frame, PickKit.cardBg(ctx, 10, false))
+        BoxViews.bindDupes(frame, sprite, BoxTile(listOf(tile.best)), data)
+        org.junit.Assert.assertNull(frame.background)
+        val margins = frame.getChildAt(0).layoutParams as android.widget.FrameLayout.LayoutParams
+        org.junit.Assert.assertEquals(listOf(0, 0, 0, 0), listOf(margins.leftMargin, margins.topMargin, margins.rightMargin, margins.bottomMargin))
     }
 
     @Test fun offOff() = shot("off-off", false, false)

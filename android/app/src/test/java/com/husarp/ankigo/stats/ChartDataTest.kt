@@ -107,8 +107,8 @@ class ChartDataTest {
         val s = build(ChartMetric.BUTTONS, ChartPeriod.D7, history = h)
         assertEquals(listOf("Again", "Hard", "Good", "Easy"), s.seriesNames)
         assertEquals(listOf(1.0, 2.0, 3.0, 4.0), s.bars.last().values)       // the unknown button (index 0) is left out
-        assertEquals(listOf(4.0, 0.0, 0.0, 1.0), s.bars[5].values)
-        assertEquals(15.0, s.total, 0.0)
+        assertEquals(1, s.bars.size)
+        assertEquals(10.0, s.total, 0.0)
         assertEquals(10.0, s.best, 0.0); assertEquals(today, s.bestDay)
     }
 
@@ -227,9 +227,9 @@ class ChartDataTest {
     @Test fun timeAddsInAppAndLiveInMinutes() {
         val snap = StatsSnapshot(timeByDay = mapOf(date(0) to 600_000L, date(1) to 120_000L), liveTimeByDay = mapOf(date(0) to 300_000L, date(2) to 60_000L))
         val s = build(ChartMetric.TIME, ChartPeriod.D7, snap)
-        assertEquals(listOf("In AnkiGo", "Live"), s.seriesNames)
-        assertEquals(listOf(10.0, 5.0), s.bars.last().values)
-        assertEquals(listOf(0.0, 1.0), s.bars[4].values)
+        assertEquals(listOf("Measured time"), s.seriesNames)
+        assertEquals(listOf(15.0), s.bars.last().values)
+        assertEquals(listOf(1.0), s.bars[4].values)
         assertEquals(18.0, s.total, 1e-9); assertEquals(15.0, s.best, 1e-9); assertEquals("min", s.unit); assertFalse(s.deckApplies)
     }
 

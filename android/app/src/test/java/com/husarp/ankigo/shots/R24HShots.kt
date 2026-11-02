@@ -28,7 +28,7 @@ class R24HShots {
         BattleShotKit.reset()
     }
 
-    @Test fun changedBarsHaveSquareEndsAndNormalTicks() {
+    @Test fun changedBarsHaveRoundedFillEndsAndNormalTicks() {
         val ctx = paparazzi.context
         val color = android.graphics.Color.RED
         for (stage in listOf(-2, 1)) {
@@ -38,8 +38,12 @@ class R24HShots {
             bar.layout(0, 0, 200, height)
             val bitmap = android.graphics.Bitmap.createBitmap(200, height, android.graphics.Bitmap.Config.ARGB_8888)
             bar.draw(android.graphics.Canvas(bitmap))
-            // Current down-stage bar reaches x=50 with a square end, including its top edge.
-            if (stage < 0) assertEquals(color, bitmap.getPixel(48, inset + 1))
+            // The lowered fill reaches x=50 at its centre, with a rounded top-right cap.
+            if (stage < 0) {
+                assertEquals(color, bitmap.getPixel(48, height / 2))
+                assertNotEquals(color, bitmap.getPixel(48, inset + 1))
+            }
+            assertNotEquals("Left cap stays rounded", bitmap.getPixel(1, height / 2), bitmap.getPixel(1, inset))
             // The normal reference extends above the track.
             assertTrue(android.graphics.Color.alpha(bitmap.getPixel(100, 1)) > 0)
         }

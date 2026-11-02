@@ -154,6 +154,7 @@ class NextCard<T>(
     /** R10-X1: answers whose prepared next card [check] held back, by reason. */
     val withheld: Map<PredictRule.Why, Int> get() = waitsBy
     private val waitsBy = LinkedHashMap<PredictRule.Why, Int>()
+    private var schedulerWaits = 0
 
     /** Why the last answer waited for its next card ("" = it showed the prediction); the cause of the last swap. */
     var lastWait = ""
@@ -163,7 +164,7 @@ class NextCard<T>(
 
     /** This visit's predictions and waits in one line, e.g. "predicted 12 (hit 11, swap 1), waited 3 (learning card due 2, nothing prepared 1)". */
     fun tally(): String {
-        val waits = withheld.filterValues { it > 0 }.map { (why, n) -> why.label to n } + listOfNotNull(if (noPrediction > 0) NOTHING to noPrediction else null)
+        val waits = withheld.filterValues { it > 0 }.map { (why, n) -> why.label to n } + listOfNotNull(if (noPrediction > 0) NOTHING to noPrediction else null, if (schedulerWaits > 0) "scheduler confirmation" to schedulerWaits else null)
         return "predicted $predicted (hit $hits, swap $misses), waited ${waits.sumOf { it.second }}" +
             (if (waits.isEmpty()) "" else waits.joinToString(", ", " (", ")") { "${it.first} ${it.second}" }) +
             (if (predictedLearning > 0) ", predicted learning $predictedLearning" else "") +
@@ -307,9 +308,9 @@ class NextCard<T>(
 
     /** The Prepare commands for the queue positions [from]..[maxAhead] + 1 after [p] (each for the card before it), as far as the read goes. */
     private fun prepareNext(p: Prepared<T>, queue: List<StudyLoop.Key>, from: Int): List<Cmd<T>> {
-        if (freshNext || queue.firstOrNull() != p.key) return emptyList()
+        if (queue.firstOrNull() != p.key) return emptyList()
         val out = ArrayList<Cmd<T>>(maxAhead + 1)
-        for (i in from..maxAhead + 1) {
+        for (i in from..(if (freshNext) 1 else maxAhead + 1)) {
             val k = queue.getOrNull(i) ?: break
             val before = queue[i - 1]
             if (k == before || k == p.key) break
@@ -360,8 +361,8 @@ class NextCard<T>(
             out += Cmd.Show(shown, predicted = true)
             out += Cmd.Load(token, shown.key)
         } else {
-            if (why == null) noPrediction++ else waitsBy[why] = (waitsBy[why] ?: 0) + 1 // nothing prepared / prepared but not safe to show
-            lastWait = why?.label ?: NOTHING
+            if (freshNext) schedulerWaits++ else if (why == null) noPrediction++ else waitsBy[why] = (waitsBy[why] ?: 0) + 1 // nothing prepared / prepared but not safe to show
+            lastWait = if (freshNext) "scheduler confirmation" else why?.label ?: NOTHING
             slot = Slot.Loading(token)
             out += Cmd.ShowWaiting
             out += Cmd.Load(token, null)

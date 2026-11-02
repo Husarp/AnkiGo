@@ -297,12 +297,12 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
             val owned = w.id in state.tms
             val name = Items.tmName(data, w.id)
             val price = ShopPlan.tmPrice()
-            ShopViews.weekendCard(ctx, Bits.tmTile(ctx, data.move(w.id)?.type, 48), name, ShopPlan.WEEKEND_NOTE,
+            ShopViews.weekendCard(ctx, Bits.tmTile(ctx, data.move(w.id)?.type, 48), name, ShopPlan.weekendEndsText(w.endsDay, state.settings.dayStartHour),
                 if (owned) ShopViews.owned(ctx, 14f) else priceView(price, 17f), ItemCardPlan.detailsLabel(ShopPlan.describe(name, price, owned))) { openCard(CardKeys.WEEKEND) }
         } else {
             val price = ShopPlan.price(data, state.day, w.id)
             val name = Items.name(w.id)
-            ShopViews.weekendCard(ctx, ShopViews.itemArt(ctx, w.id, 48), name, ShopPlan.WEEKEND_NOTE, priceView(price, 17f),
+            ShopViews.weekendCard(ctx, ShopViews.itemArt(ctx, w.id, 48), name, ShopPlan.weekendEndsText(w.endsDay, state.settings.dayStartHour), priceView(price, 17f),
                 ItemCardPlan.detailsLabel(ShopPlan.describe(name, price))) { openCard(CardKeys.WEEKEND) }
         }
     }

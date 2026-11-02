@@ -269,19 +269,72 @@ class R18GDetailsShots {
 
     @Test fun readyEvolutionsShowEachAvailableChoice() {
         DetailSections.storeOf = { MapStore(setOf("evolution")) }
-        dialog("r22j-ready", listOf(0f, 0.4f), setup = {
+        dialog("r27e-tree", listOf(0f), variants = listOf(W360), setup = {
             st.bag.clear()
             st.bag["water-stone"] = 1
             st.bag["thunder-stone"] = 1
         }, check = { _, scene ->
-            assertTrue("ready heading", "Ready to evolve" in strings(scene))
-            assertEquals(2, strings(scene).count { it == "Evolve" })
-            assertEquals(2, strings(scene).count { it == "Conditions met" })
+            assertFalse("no separate ready section", "Ready to evolve" in strings(scene))
+            assertEquals(0, strings(scene).count { it == "Evolve" })
+            val water = texts(scene).single { it.text.toString() == "Water Stone" }
+            val fire = texts(scene).single { it.text.toString() == "Fire Stone" }
+            assertEquals(Ui.c(water.context, com.husarp.ankigo.R.color.ag_green), water.currentTextColor)
+            assertEquals(Ui.c(fire.context, com.husarp.ankigo.R.color.ag_sub0), fire.currentTextColor)
+            val mon = st.mons.first { it.species == 133 }
+            val info = DialogShots.capture { (water.parent as View).performClick() } ?: error("no evolution info")
+            val infoScene = DialogShots.scene(water.context, info)
+            paparazzi.snapshot(infoScene, "r27e-info-${if (water.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
+            assertTrue("Evolve" in strings(infoScene))
+            val close = views(infoScene).single { it.contentDescription == "Close" }
+            assertTrue("fixed close outside scrolling text", scrolls(infoScene).none { views(it).contains(close) })
+            val body = texts(infoScene).single { it.text.contains("The Shop sells") }.parent as View
+            assertEquals(Ui.dp(body.context, 24), body.paddingLeft)
+            assertEquals(Ui.dp(body.context, 24), body.paddingRight)
+            assertFalse(strings(infoScene).any { "open your Bag" in it })
+            val secondDialog = DialogShots.capture { info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!.performClick() }
+            assertNull("first tap stays in the same dialog", secondDialog)
+            assertTrue(strings(infoScene).contains("Tap again to evolve"))
+            assertTrue(strings(infoScene).any { "can't be undone" in it })
+            assertEquals("first tap hasn't evolved", 133, mon.species)
+            paparazzi.snapshot(infoScene, "r27e-confirm-${if (water.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
+            info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_NEGATIVE)!!.performClick()
+            assertEquals("cancel preserves species", 133, mon.species)
+            assertEquals("cancel preserves item", 1, st.count("water-stone"))
+            val missing = DialogShots.capture { (fire.parent as View).performClick() } ?: error("no unmet info")
+            val missingScene = DialogShots.scene(fire.context, missing)
+            assertFalse("unmet branch disables action", missing.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!.isEnabled)
+            assertTrue(strings(missingScene).any { "You don't have a Fire Stone" in it })
+            assertTrue(strings(missingScene).any { "The Shop sells" in it })
+            assertFalse(strings(missingScene).any { "open your Bag" in it })
+            paparazzi.snapshot(missingScene, "r27e-missing-${if (fire.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
+
         }) { ctx ->
             val mon = st.mons.first { it.species == 133 }
             mon.friendship = 0
             MonDetail.show(TeamPage(ctx, NoHost), gd, mon)
         }
+    }
+
+    @Test fun evolutionActionRunsOnlyAfterSecondTap() {
+        val ctx = Shots.files(paparazzi.context)
+        FakeGame.install(ctx)
+        val mon = st.mons.first { it.species == 133 }
+        mon.friendship = 0
+        st.bag["water-stone"] = 1
+        var choices = 0
+        val tree = com.husarp.ankigo.ui.EvolutionRows(ctx, gd,
+            com.husarp.ankigo.game.EvoLine.of(gd, gd.sp(133)).root, gd.sp(133), st.seen, null, st, mon) { e ->
+            assertEquals(134, e.to)
+            choices++
+        }
+        val label = texts(tree).single { it.text.toString() == "Water Stone" }
+        val info = DialogShots.capture { (label.parent as View).performClick() } ?: error("no info")
+        val button = info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!
+        assertNull(DialogShots.capture { button.performClick() })
+        assertEquals("Tap again to evolve", button.text.toString())
+        assertEquals(0, choices)
+        button.performClick()
+        assertEquals(1, choices)
     }
 
     @Test fun evolutionFoldsAndConditionsAreGreyTappableLabels() {

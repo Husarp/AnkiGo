@@ -16,6 +16,10 @@ internal object BackdropCatalog {
         Backdrop(id, BackdropSource.OWN, ext, w, h, player, wild, crisp, dark, rev, wildGround = ground, groundZoom = groundZoom)
 
     val ALL: List<Backdrop> = listOf(
+        own("tropical-cove", "png", 1024, 685, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(0.74f, 0.51f, .32f), groundZoom = 1f),
+        own("coral-lagoon", "png", 1024, 683, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(0.74f, 0.49f, .32f), groundZoom = 1f),
+        own("sandbar-isle", "png", 1024, 685, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(0.74f, 0.48f, .32f), groundZoom = 1f),
+        own("reef-bay", "png", 1024, 683, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(0.74f, 0.49f, .32f), groundZoom = 1f),
         // Pokémon Showdown (753 x 500, beach 700 x 500), pixel art
         showdown("beach", 700, p(.30f, .86f, .44f), p(.68f, .58f, .32f)),
         showdown("city", 753, p(.30f, .86f, .44f), p(.68f, .56f, .32f)),
@@ -63,7 +67,7 @@ internal object BackdropCatalog {
         own("countryside-route", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("windy-hilltop", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.78f, .66f, .32f), groundZoom = 1.35f),
         own("bamboo-dojo", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("coral-shallows", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.79f, .45f, .32f), groundZoom = .75f),
+        own("coral-shallows", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.79f, .45f, .32f), groundZoom = 1f),
         own("snowy-pines", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("power-plant", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("desert-oasis", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.78f, .61f, .32f), groundZoom = 1.2f),
@@ -81,7 +85,7 @@ internal object BackdropCatalog {
     private val OPTIONS: Map<Type, List<String>> = mapOf(
         Type.NORMAL to listOf("meadow", "route", "flower-field", "sunset-beach"),
         Type.FIRE to listOf("desert", "fire-savanna"),
-        Type.WATER to listOf("beach", "river", "deep-sea-cave", "sunset-beach"),
+        Type.WATER to listOf("tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay", "beach", "river", "deep-sea-cave", "sunset-beach"),
         Type.GRASS to listOf("forest", "meadow", "flower-field", "jungle"),
         Type.ELECTRIC to listOf("city", "route", "crystal-storm"),
         Type.ICE to listOf("icecave", "snow-aurora", "ice-lake"),

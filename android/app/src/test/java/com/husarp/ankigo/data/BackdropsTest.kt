@@ -53,7 +53,7 @@ class BackdropsTest {
         assertEquals(File(File(dir, "bg"), "forest.png"), f) // round 7's cached Showdown files keep their names
         assertTrue(f.path.startsWith(dir.path))
         assertEquals(File(File(dir, "bg"), "factory-2.webp"), Backdrops.file(dir, alley))
-        assertEquals(47, BackdropCatalog.ALL.map { Backdrops.file(dir, it) }.toSet().size)
+        assertEquals(51, BackdropCatalog.ALL.map { Backdrops.file(dir, it) }.toSet().size)
     }
 
     @Test fun newDownloadsNeedSpriteDownloadsAndTheSettingBothOn() {

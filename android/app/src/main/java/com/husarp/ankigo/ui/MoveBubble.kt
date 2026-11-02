@@ -72,8 +72,8 @@ internal abstract class MoveBubbleLook(protected val ctx: Context) {
             BubbleTone.IMMUNE -> ChipColors(soft(R.color.ag_blue, 22), txt)
             BubbleTone.CRIT -> ChipColors(c(R.color.ag_yellow), 0xFF1E1E2E.toInt())
             BubbleTone.STATUS -> ChipColors(ColorUtils.blendARGB(card, StatusBadge.fillColor(ctx, chip.status), 0.22f), txt)
-            BubbleTone.STAT_UP -> ChipColors(StatPill.background(ctx, true), StatPill.ink(true)) // R19-C: drawn as a pill
-            BubbleTone.STAT_DOWN -> ChipColors(StatPill.background(ctx, false), StatPill.ink(false))
+            BubbleTone.STAT_UP -> ChipColors(StatPill.background(ctx, true), StatPill.ink(true, StatPill.isDark(ctx))) // R19-C: drawn as a pill
+            BubbleTone.STAT_DOWN -> ChipColors(StatPill.background(ctx, false), StatPill.ink(false, StatPill.isDark(ctx)))
             BubbleTone.MUTED -> ChipColors(c(R.color.ag_mantle), c(if (chip.icon == ChipIcon.NONE) R.color.ag_sub0 else R.color.ag_sub1))
         }
     }

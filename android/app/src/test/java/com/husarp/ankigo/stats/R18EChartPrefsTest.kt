@@ -14,15 +14,15 @@ class R18EChartPrefsTest {
     }
 
     @Test fun aSavedChoiceComesBackWhole() {
-        val c = dec("XP", "D90", "My deck", "WEEK")
-        assertEquals(ChartPrefs.Choice(ChartMetric.XP, ChartPeriod.D90, "My deck", ChartGrain.WEEK), c)
+        val c = dec("TIME", "D90", "My deck", "WEEK")
+        assertEquals(ChartPrefs.Choice(ChartMetric.TIME, ChartPeriod.D90, "My deck", ChartGrain.WEEK), c)
         // every field survives a name round trip
         val back = dec(c.metric.name, c.period.name, c.deck, c.grain?.name)
         assertEquals(c, back)
     }
 
     @Test fun anUnknownOrRemovedMetricFallsBackToReviews() {
-        for (n in listOf("HEALING", "MONEY_SPENT", "DMG_DEALT", "DMG_TAKEN", "DMG_BLOCKED", "MISSES", "NONSENSE", "")) {
+        for (n in listOf("HEALING", "MONEY_SPENT", "DMG_DEALT", "DMG_TAKEN", "DMG_BLOCKED", "MISSES", "NONSENSE", "", "XP", "RETENTION", "SECONDS_PER_CARD", "MONEY", "CATCHES", "WINS", "DEX_PROGRESS", "PER_TYPE", "SHINIES_RARE")) {
             assertEquals(n, ChartMetric.REVIEWS, dec(m = n, p = "D90").metric)
         }
     }
@@ -58,6 +58,6 @@ class R18EChartPrefsTest {
     @Test fun theRemovedChartsAreNotInTheShowList() {
         val listed = ChartMetric.menu.flatMap { it.second }.map { it.name }
         for (n in listOf("HEALING", "MONEY_SPENT", "DMG_DEALT", "DMG_TAKEN", "DMG_BLOCKED", "MISSES")) assertFalse(n, n in listed)
-        assertEquals(listOf("MONEY", "CATCHES", "WINS", "XP"), ChartMetric.menu.first { it.first == ChartGroup.GAME }.second.map { it.name })
+        assertEquals(listOf("REVIEWS", "TIME", "NEW_CARDS", "BUTTONS", "CARD_STATES", "DUE", "STREAK_CALENDAR"), listed)
     }
 }

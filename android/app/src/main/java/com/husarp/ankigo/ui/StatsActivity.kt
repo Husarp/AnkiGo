@@ -278,6 +278,9 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
         content.addView(trainerCard())
         content.addView(streakCard(s), lp(14))
+        if (anki != null) content.addView(sectionCard(R.drawable.ic_book, "Study", R.color.ag_blue, null,
+            "Cards today counts distinct AnkiDroid cards: a card answered twice counts once.",
+            tileGrid(listOf("Cards today" to Bits.fmt(anki.studied(today)), "Due now" to Bits.fmt(anki.dueNow)), R.color.ag_blue, 2)), lp(14))
         // PLAN 367: summary first; keep the chart controls together directly above the chart.
         val message = StatsChartMath.emptyMessage(series, snap.access, snap.message)
         if (message == null) content.addView(tileRow(StatsChartMath.tiles(series)), lp(14)) // zeros would only mislead while loading
@@ -295,26 +298,16 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             content.addView(years, lp(4))
         }
         content.addView(chartCard(series, message, snap, today, barSel) { barSel = it }, lp(8))
+        if (metric == ChartMetric.DUE && anki != null && deck == null)
+            content.addView(note("Tomorrow: ${Bits.fmt(anki.dueTomorrow)} · Next 7 days: ${Bits.fmt(anki.dueNext7)}"), lp(6))
 
-        if (anki != null) { // pick 11A: one card per section, a coloured header, the numbers in soft rounded cells, the small print behind the (i)
-            val tone = R.color.ag_blue
-            val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            body.addView(ankiTiles(anki, today, tone))
-            body.addView(note("New ${Bits.fmt(anki.counts.new)} · Learning ${Bits.fmt(anki.counts.learning)} · Relearning ${Bits.fmt(anki.counts.relearning)} · Buried ${Bits.fmt(anki.counts.buried)}"), lp(8))
-            body.addView(buttonsCard(anki, tone), lp(8))
-            content.addView(sectionCard(R.drawable.ic_book, "AnkiDroid", tone, null,
-                "Cards, not reviews: a card answered twice counts once. Retention is an estimate: cards answered in the last 30 days (not new then) that you didn't answer Again.", body), lp(14))
-        }
+
         content.addView(sectionCard(R.drawable.ic_clock, "Study time", R.color.ag_green, null,
             StatsText.TIMED_SOURCE,
             timeRow(snap, today, R.color.ag_green)), lp(14))
-        val allTime = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        allTime.addView(tiles(s, R.color.ag_yellow))
-        allTime.addView(summaryLine(s, anki), lp(10))
-        allTime.addView(battleTiles(s, R.color.ag_yellow), lp(10)) // R4-V11
-        allTime.addView(note("Damage and misses are counted since 0.13."), lp(6))
-        content.addView(sectionCard(R.drawable.ic_star, "All time", R.color.ag_yellow, null, null, allTime), lp(14))
         content.addView(collectionSection(collection, snap, today), lp(14))
+        content.addView(sectionCard(R.drawable.ic_star, "Game · all time", R.color.ag_yellow, null, null,
+            tiles(s, R.color.ag_yellow)), lp(14))
         syncSheet()
     }
 
@@ -449,6 +442,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     /** Period, deck and bar-size chips. A chip that doesn't apply to this metric is dimmed (the deck one) or left out (period / bar size of a picture of now). */
     private fun filterChips(series: ChartSeries): View {
         val row = StatsSheets.FlowLayout(this)
+        if (metric == ChartMetric.BUTTONS) row.addView(note("Today · AnkiGo answers"))
         if (metric.usesPeriod) {
             row.addView(chip(if (metric == ChartMetric.STREAK_CALENDAR && calendarYear != null) "Year" else StatsChartMath.periodLabel(metric, series.period), true) { anchor ->
                 val menu = AppMenu(anchor)
@@ -600,6 +594,10 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             heatRef = this
         }
         col.addView(map)
+        val studyDays = s.bars.count { it.values.sum() > 0 }
+        col.addView(note("${s.heatmap!!.total} ${if (s.source.startsWith("AnkiGo")) "answers" else "cards"} in the selected window · $studyDays study days"), lp(8))
+        val window = if (calendarYear != null) "Year $calendarYear" else "Last ${s.period.days} days"
+        col.addView(note("$window · ${StatsChartMath.num(if (studyDays > 0) s.total / studyDays else 0.0)} per study day"), lp(4))
         val legend = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL or Gravity.END }
         legend.addView(Ui.text(this, 10f, 700, R.color.ag_sub0).apply { text = "Less" })
         for (level in 0..4) {
@@ -668,24 +666,12 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
     private fun tiles(s: StudyStats.Summary, @ColorRes tint: Int = 0): View {
         val all = listOf(
-            "Reviews" to String.format(Locale.US, "%,d", s.reviews),
             "Battles won" to Bits.fmt(s.battlesWon),
             "Catches" to Bits.fmt(s.catches),
-            "Shinies" to Bits.fmt(s.shinies),
-            "Evolutions" to Bits.fmt(s.evolutions),
             "Best combo" to Bits.fmt(s.bestCombo),
         )
         return tileGrid(all, tint)
     }
-
-    /** R4-V11: the all-time battle numbers (GameState.counters, counted since 0.13), two tiles a row. */
-    private fun battleTiles(s: StudyStats.Summary, @ColorRes tint: Int = 0): View = tileGrid(
-        listOf(
-            "Damage dealt" to String.format(Locale.US, "%,d", s.damageDealt), "Damage taken" to String.format(Locale.US, "%,d", s.damageTaken),
-            "Damage blocked" to String.format(Locale.US, "%,d", s.damageBlocked), "Misses" to String.format(Locale.US, "%,d", s.misses),
-        ),
-        tint, perRow = 2,
-    )
 
     /** [items] (label to value) as rows of [perRow] tiles. */
     private fun tileGrid(items: List<Pair<String, String>>, @ColorRes tint: Int = 0, perRow: Int = 3): View {
@@ -777,35 +763,6 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
     // ---- 4. AnkiDroid ----
 
-    private fun ankiTiles(a: AnkiStats, today: String, @ColorRes tint: Int = 0): View = tileGrid(listOf(
-        "Studied today" to Bits.fmt(a.studied(today)),
-        "New today" to Bits.fmt(a.newIn(1)),
-        "Due now" to Bits.fmt(a.dueNow),
-        "Due tomorrow" to Bits.fmt(a.dueTomorrow),
-        "Next 7 days" to Bits.fmt(a.dueNext7),
-        "Retention (est.)" to (a.retention30?.let { "$it%" } ?: "–"),
-        "Young" to Bits.fmt(a.counts.young),
-        "Mature" to Bits.fmt(a.counts.mature),
-        "Suspended" to Bits.fmt(a.counts.suspended),
-    ), tint)
-
-    /** Again / Hard / Good / Easy card counts of the last 30 days, in the study buttons' colours. */
-    private fun buttonsCard(a: AnkiStats, @ColorRes tint: Int = 0): View {
-        val card = Ui.card(this).apply { setPadding(dp(14), dp(12), dp(14), dp(12)); if (tint != 0) background = softCell(tint) }
-        card.addView(Ui.text(this, 12f, 900, R.color.ag_text).apply { text = "Answer buttons · last 30 days" })
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        val counts = a.buttonsIn(30)
-        listOf("Again" to R.color.ag_red, "Hard" to R.color.ag_peach, "Good" to R.color.ag_green, "Easy" to R.color.ag_blue).forEachIndexed { i, (label, color) ->
-            val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            col.addView(Ui.text(this, 19f, 900, color).apply { text = Bits.fmt(counts[i]); gravity = Gravity.CENTER; maxLines = 1 }, LinearLayout.LayoutParams(-1, -2))
-            col.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply { text = label; gravity = Gravity.CENTER; maxLines = 1 },
-                LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(2) })
-            row.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
-        }
-        card.addView(row, lp(8))
-        return card
-    }
-
     // ---- 5. study time ----
 
     /** Today's time as a tile, the last 7 days beside it: study in AnkiGo plus the answers it timed live in AnkiDroid (split screen, floating). */
@@ -837,7 +794,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val tone = R.color.ag_teal
         val since = cs.firstCatch?.let { ms ->
             val d = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalDate()
-            "since ${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)}" + if (d.year != LocalDate.now().year) " ${d.year}" else ""
+            "Oldest ${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)}" + if (d.year != LocalDate.now().year) " ${d.year}" else ""
         }
         val panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         panel.addView(collectionTiles(cs, tone))
@@ -854,21 +811,10 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             sb.setSpan(AbsoluteSizeSpan(11, true), at, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             sb.setSpan(ForegroundColorSpan(c(R.color.ag_sub0)), at, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        val avg = if (cs.averageTeamLevel <= 0.0) "–" else if (cs.averageTeamLevel % 1.0 == 0.0) cs.averageTeamLevel.toInt().toString() else String.format(Locale.US, "%.1f", cs.averageTeamLevel)
-        val ball = cs.ballCatches.firstOrNull()?.first?.let { if (it == "auto") "Auto catch" else BattleLogBuilder.prettyItem(it) } ?: "–"
         val items = listOf<Triple<String, CharSequence, Int>>(
             Triple("Pokémon owned", Bits.fmt(cs.owned), R.color.ag_text),
             Triple("Pokédex caught", dex, R.color.ag_text),
             Triple("Shinies", Bits.fmt(cs.shinies), R.color.ag_text),
-            Triple("Duplicates", Bits.fmt(cs.duplicates), R.color.ag_text),
-            Triple("Legendary & Mythical", Bits.fmt(cs.legendaries + cs.mythicals), R.color.ag_text),
-            Triple("Highest level", cs.highest?.let { "Lv ${it.level}" } ?: "–", R.color.ag_blue),
-            Triple("Average team level", avg, R.color.ag_text),
-            Triple("Most used ball", ball, R.color.ag_text),
-            Triple("Rarest catch", cs.rarest?.name ?: "–", R.color.ag_text),
-            Triple("Wild catches", Bits.fmt(cs.totalCatches), R.color.ag_text),
-            Triple("Defeated or caught", Bits.fmt(cs.totalDefeats), R.color.ag_text),
-            Triple("Evolutions", Bits.fmt(cs.totalEvolutions), R.color.ag_text),
         )
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         for ((rowIndex, row) in items.chunked(3).withIndex()) {
@@ -878,15 +824,6 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         }
         return grid
     }
-
-    private fun summaryLine(s: StudyStats.Summary, anki: AnkiStats?): TextView =
-        Ui.text(this, 12f, 700, R.color.ag_sub1).apply {
-            gravity = Gravity.CENTER
-            // the same per-day source as the heatmap
-            val t = if (anki != null) StudyStats.dayTotals(anki.perDay.values) else StudyStats.DayTotals(s.daysStudied, s.avgPerDay, s.bestDay)
-            text = if (t.daysStudied == 0) "No study days logged yet."
-            else "${if (anki != null) "Last 365 days: studied" else "Studied"} ${t.daysStudied} ${if (t.daysStudied == 1) "day" else "days"} · avg ${Bits.fmt(t.avgPerDay)} per day · best day ${Bits.fmt(t.bestDay)}"
-        }
 
     private companion object { const val WEEKS = 18 }
 }

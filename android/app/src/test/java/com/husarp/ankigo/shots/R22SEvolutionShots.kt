@@ -42,12 +42,14 @@ class R22SEvolutionShots {
         val data = TestData.data(listOf(TestData.species(133, "Eevee")))
         var target: Boolean? = null
         val body = EvolutionRows.explanationContent(a, data, Evolution(135, EvoKind.ITEM, item = "thunder-stone"),
-            data.sp(133), setOf(133), TestData.state(data, 133, 20).apply { bag.clear() }, null) { target = it }
-        val text = views(body).filterIsInstance<TextView>().last().text as Spanned
-        val links = text.getSpans(0, text.length, ClickableSpan::class.java)
-        assertEquals(listOf("open your Bag", "Shop"), links.map { text.subSequence(text.getSpanStart(it), text.getSpanEnd(it)).toString() })
-        links[0].onClick(body); assertEquals(true, target)
-        links[1].onClick(body); assertEquals(false, target)
+            data.sp(133), setOf(133), TestData.state(data, 133, 20).apply { bag["thunder-stone"] = 1 }, null) { target = it }
+        val links = views(body).filterIsInstance<TextView>().mapNotNull { it.text as? Spanned }.flatMap { text ->
+            text.getSpans(0, text.length, ClickableSpan::class.java).map { span ->
+                text.subSequence(text.getSpanStart(span), text.getSpanEnd(span)).toString() to span
+            }
+        }
+        assertEquals(listOf("Shop"), links.map { it.first })
+        links[0].second.onClick(body); assertEquals(false, target)
         paparazzi.snapshot(body, "r22s-condition-bubble")
     }
 

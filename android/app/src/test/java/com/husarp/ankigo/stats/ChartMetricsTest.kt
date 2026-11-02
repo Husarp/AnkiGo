@@ -33,25 +33,12 @@ class ChartMetricsTest {
     // ---------------------------------------------------------------- the metric list
 
     @Test fun theMetricListIsGroupedLikeTheMockup() {
-        fun names(g: ChartGroup) = ChartMetric.menu.first { it.first == g }.second.map { it.label }
-        assertEquals(listOf("Study", "Game", "Collection"), ChartMetric.menu.map { it.first.label })
-        assertEquals(
-            listOf("Reviews", "Time studied", "Seconds per card", "Retention", "New cards", "Buttons pressed", "Card states", "Due forecast", "Streak calendar"),
-            names(ChartGroup.STUDY),
-        )
-        assertEquals(
-            listOf("Money earned", "Catches", "Battles won", "XP earned"),
-            names(ChartGroup.GAME),
-        )
-        assertEquals(listOf("Pokédex progress", "Pokémon per type", "Shinies & rare"), names(ChartGroup.COLLECTION))
+        assertEquals(listOf("Study"), ChartMetric.menu.map { it.first.label })
+        assertEquals(listOf("Cards studied", "Time studied", "New cards", "Answer buttons · today", "Card states", "Due forecast", "Streak calendar"), ChartMetric.menu.single().second.map { it.label })
     }
 
-    @Test fun gameGroupKeepsTheMockupOrder() {
-        val game = ChartMetric.menu.first { it.first == ChartGroup.GAME }.second
-        assertEquals(
-            listOf(ChartMetric.MONEY, ChartMetric.CATCHES, ChartMetric.WINS, ChartMetric.XP),
-            game,
-        )
+    @Test fun gameMilestonesAreOutsidePicker() {
+        assertFalse(ChartMetric.menu.any { it.first == ChartGroup.GAME })
     }
 
     @Test fun everyMetricHasALabelGroupAndIconAndAnswersIsLeftOutOfTheList() {
@@ -61,7 +48,7 @@ class ChartMetricsTest {
         }
         val listed = ChartMetric.menu.flatMap { it.second }
         assertFalse(ChartMetric.ANSWERS in listed)
-        assertEquals(ChartMetric.values().size - 1, listed.size)
+        assertEquals(7, listed.size)
         assertEquals(listed.size, listed.toSet().size)
         for ((g, ms) in ChartMetric.menu) assertTrue(ms.all { it.group == g })
         assertEquals(listed.size, listed.map { it.icon }.toSet().size) // one icon each
@@ -173,9 +160,9 @@ class ChartMetricsTest {
 
     @Test fun aDayBarSaysTheDayAndTheValue() {
         val s = build(ChartMetric.REVIEWS, ChartPeriod.D7, StatsSnapshot(stats = anki(mapOf(date(0) to 43, date(1) to 1)), access = AnkiAccess.OK))
-        assertEquals(listOf("Wed 14 Oct · 43 reviews"), s.bars.last().detail)
-        assertEquals(listOf("Tue 13 Oct · 1 review"), s.bars[5].detail)
-        assertEquals(listOf("Thu 8 Oct · 0 reviews"), s.bars.first().detail)
+        assertEquals(listOf("Wed 14 Oct · 43 cards"), s.bars.last().detail)
+        assertEquals(listOf("Tue 13 Oct · 1 card"), s.bars[5].detail)
+        assertEquals(listOf("Thu 8 Oct · 0 cards"), s.bars.first().detail)
         assertEquals(s.bars.last().detail, s.detailFor(today))
         assertEquals(s.bars[5].detail, s.detailFor(date(1)))
         assertTrue(s.detailFor("2020-01-01").isEmpty())
@@ -188,14 +175,14 @@ class ChartMetricsTest {
             listOf("Wed 14 Oct · 10 answers", "Again · 1 · 10 %", "Hard · 2 · 20 %", "Good · 3 · 30 %", "Easy · 4 · 40 %"),
             s.bars.last().detail,
         )
-        assertEquals(listOf("Tue 13 Oct · 0 answers"), s.bars[5].detail) // no part lines for an empty bar
+        assertEquals(1, s.bars.size) // no part lines for an empty bar
     }
 
     @Test fun timeBarsUseMinutesAndHoursAndSplitInAppFromLive() {
         val snap = StatsSnapshot(timeByDay = mapOf(date(0) to 600_000L, date(1) to 4_500_000L), liveTimeByDay = mapOf(date(0) to 300_000L))
         val s = build(ChartMetric.TIME, ChartPeriod.D7, snap)
-        assertEquals(listOf("Wed 14 Oct · 15 min", "In AnkiGo · 10 min · 67 %", "Live · 5 min · 33 %"), s.bars.last().detail)
-        assertEquals(listOf("Tue 13 Oct · 1h 15m", "In AnkiGo · 1h 15m · 100 %", "Live · 0 min · 0 %"), s.bars[5].detail)
+        assertEquals(listOf("Wed 14 Oct · 15 min"), s.bars.last().detail)
+        assertEquals(listOf("Tue 13 Oct · 1h 15m"), s.bars[5].detail)
         assertEquals(listOf("Mon 12 Oct · 0 min"), s.bars[4].detail)
     }
 
@@ -300,10 +287,10 @@ class ChartMetricsTest {
         assertEquals(85.0 / 30, s.perDayAvg, 1e-9)
         assertFalse(s.empty); assertFalse(s.deckApplies)
         assertEquals(grid.total, 85)
-        assertEquals("AnkiGo's own count (AnkiDroid isn't available)", s.source)
-        assertEquals(listOf("Wed 14 Oct · 60 reviews", "Daily goal reached (50)"), s.detailFor(today))
-        assertEquals(listOf("Tue 13 Oct · 20 reviews", "40 % of the daily goal (50)"), s.detailFor(date(1)))
-        assertEquals(listOf("Mon 12 Oct · 0 reviews"), s.detailFor(date(2)))
+        assertEquals("AnkiGo's own count: answers, not distinct cards (AnkiDroid isn't available)", s.source)
+        assertEquals(listOf("Wed 14 Oct · 60 cards", "Daily goal reached (50)"), s.detailFor(today))
+        assertEquals(listOf("Tue 13 Oct · 20 cards", "40 % of the daily goal (50)"), s.detailFor(date(1)))
+        assertEquals(listOf("Mon 12 Oct · 0 cards"), s.detailFor(date(2)))
         assertEquals(s.bars.last().detail, s.detailFor(today))
         assertEquals(s.bars.size, s.bars.map { it.startDay }.toSet().size)
     }
@@ -314,7 +301,7 @@ class ChartMetricsTest {
         assertEquals(4, s.heatmap!!.columns.size)
         assertEquals(110.0, s.total, 0.0)
         assertTrue(s.source.startsWith("AnkiDroid"))
-        assertEquals(listOf("Sun 11 Oct · 100 reviews", "Daily goal reached (100)"), s.detailFor(date(3)))
+        assertEquals(listOf("Sun 11 Oct · 100 cards", "Daily goal reached (100)"), s.detailFor(date(3)))
         assertEquals(listOf(4, 6, 13, 53), ChartPeriod.values().map { ChartData.heatmapWeeks(it) })
         assertEquals(13, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D90).heatmap!!.columns.size)
         assertEquals(53, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D365).heatmap!!.columns.size)
@@ -344,7 +331,7 @@ class ChartMetricsTest {
 
     @Test fun oneReviewReadsInTheSingular() {
         val s = build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D7, history = mapOf(date(0) to log(reviews = 1)), goal = 50)
-        assertEquals(listOf("Wed 14 Oct · 1 review", "2 % of the daily goal (50)"), s.detailFor(today))
+        assertEquals(listOf("Wed 14 Oct · 1 card", "2 % of the daily goal (50)"), s.detailFor(today))
     }
 
     // ---------------------------------------------------------------- collection charts
@@ -437,7 +424,7 @@ class ChartMetricsTest {
             assertEquals("$m $p $g", m.seriesNames.size, s.bars.first().values.size)
             assertEquals(m.kind, s.kind)
             if (m.kind == ChartKind.TIME) {
-                assertTrue("$m $p $g", s.grain in ChartData.effectivePeriod(m, p).grains)
+                assertTrue("$m $p $g", m == ChartMetric.BUTTONS || s.grain in ChartData.effectivePeriod(m, p).grains)
                 if (!s.loading) assertEquals("$m $p $g", s.bars.size, s.bars.count { it.detail.isNotEmpty() })
             }
             assertNotNull(s.bars.first().detail)

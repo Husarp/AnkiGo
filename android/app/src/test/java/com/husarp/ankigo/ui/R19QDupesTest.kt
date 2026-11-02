@@ -18,12 +18,12 @@ class R19QDupesTest {
         }
     }
     private fun matrix(a: Boolean, c: Boolean) {
-        for (n in listOf(1, 2, 5)) {
+        for (n in listOf(1, 2, 3, 5, 12)) {
             val plan = BoxDupePlan.of(n, a, c)
             assertEquals(if (a) minOf(n - 1, 2) else 0, plan.cards)
             assertEquals(if (c && n > 1) 2 else 1, plan.sprites)
             assertEquals(n, plan.count)
-            assertEquals(if (a && n > 1) 7 else 0, plan.insetDp)
+            assertEquals(if (a && n > 1) 10 else 0, plan.insetDp)
         }
     }
     @Test fun offOff() = matrix(false, false)

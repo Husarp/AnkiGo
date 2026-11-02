@@ -41,23 +41,21 @@ internal object BackdropDraw {
         return Crop((picW - cw) / 2f, picH - ch, cw, ch)
     }
 
-    /**
-     * PLAN 391: position the artwork under the existing sprite feet. Most scenes need no correction.
-     * A corrected scene translates its measured ground to the stage's fixed wild spot and zooms
-     * uniformly by its measured scene zoom. The existing blur fills exposed edges.
-     * Coral zooms out so its foreground beach also stays under our Pokémon.
-     * Neither sprite positions/sizes nor HUD layout change when the artwork needs adjustment.
+    /** Align measured ground under the fixed sprite feet, then constrain the artwork to cover the panel.
+     * Sprite layout remains unchanged, including in tall hosts whose safe box exceeds the picture.
      */
     fun stageCrop(bg: Backdrop, stage: Stage): Crop {
-        val base = Crop(stage.cropX, stage.cropY, stage.cropW, stage.cropH)
-        if (bg.wildGround === bg.wild) return base
-        val u = (bg.wild.x * bg.w - base.x) / base.w
-        val v = (bg.wild.y * bg.h - base.y) / base.h
-        val gx = bg.wildGround.x * bg.w
-        val gy = bg.wildGround.y * bg.h
-        val cw = base.w / bg.groundZoom
-        val ch = base.h / bg.groundZoom
-        return Crop(gx - u * cw, gy - v * ch, cw, ch)
+        val u = (bg.wild.x * bg.w - stage.cropX) / stage.cropW
+        val v = (bg.wild.y * bg.h - stage.cropY) / stage.cropH
+        val zoom = max(1f, bg.groundZoom)
+        val shrink = min(1f, min(bg.w * zoom / stage.cropW, bg.h * zoom / stage.cropH))
+        val cw = stage.cropW / zoom * shrink
+        val ch = stage.cropH / zoom * shrink
+        return Crop(
+            (bg.wildGround.x * bg.w - u * cw).coerceIn(0f, max(0f, bg.w - cw)),
+            (bg.wildGround.y * bg.h - v * ch).coerceIn(0f, max(0f, bg.h - ch)),
+            cw, ch,
+        )
     }
 
     /**

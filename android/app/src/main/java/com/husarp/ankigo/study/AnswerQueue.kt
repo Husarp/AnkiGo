@@ -324,6 +324,7 @@ class AnswerQueue(
                 top = provider.top(a.deckId, 1).firstOrNull()
             }
             if (top != key) {
+                note("answer top changed: seq ${a.seq} deck ${a.deckId} shown ${key.nid}/${key.ord}, scheduler $top; selection refreshed")
                 if (notTopOff || !tryNotTop()) return Step.Done(AnswerOutcome.NotWritten(a, AnswerOutcome.Reason.NOT_TOP, "the card is no longer first in AnkiDroid's queue"))
                 return notTopTry(s, top)
             }

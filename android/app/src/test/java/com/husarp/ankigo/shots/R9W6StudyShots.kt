@@ -92,23 +92,47 @@ class R9W6StudyShots {
         }
     }
 
-    @Test fun theSavingDotShowsAfterThreeHundredMillisecondsAndGoesWhenResolved() {
+    @Test fun slowSuccessfulWritesDoNotShowAProblemDot() {
         for (size in both) paparazzi.shootWith("r9w6-dot", listOf(size)) { ctx ->
             val (act, root) = screen(ctx)
             val dot = getField(act, "savingDot") as View
-            assertEquals("Saving your answer to AnkiDroid", dot.contentDescription)
+            assertEquals("Answer not saved yet; retrying in AnkiDroid", dot.contentDescription)
             assertEquals(View.GONE, dot.visibility)
             call(act, "applyUnresolved", unresolved(false, ageMs = 10))
             assertEquals("not for the first 300 ms", View.GONE, dot.visibility)
             call(act, "applyUnresolved", unresolved(false, ageMs = 2_000))
-            assertEquals(View.VISIBLE, dot.visibility)
+            assertEquals("a slow first write is not a failure", View.GONE, dot.visibility)
             assertEquals("no notice while nothing failed", View.GONE, (getField(act, "saveNotice") as View).visibility)
             measure(root, size, ctx)
-            assertTrue("the dot has a size", dot.width > 0 && dot.height > 0)
+            assertEquals(View.GONE, dot.visibility)
             call(act, "applyUnresolved", null)
             assertEquals(View.GONE, dot.visibility)
             call(act, "applyUnresolved", unresolved(false, ageMs = 2_000))
             measure(root, size, ctx)
+            root
+        }
+    }
+
+    @Test fun staleQueueRetriesKeepTheCardHiddenAndUseCalmWordingOnlyAfterAWait() {
+        for (size in both) paparazzi.shootWith("r27-queue-recovery", listOf(size)) { ctx ->
+            val (act, root) = screen(ctx, flipped = false)
+            setField(act, "card", null); setField(act, "locked", true)
+            setField(act, "generation", 4); setField(act, "resumedNow", true)
+            call(act, "retryQueue", 4, "counts report due cards but schedule is empty")
+            assertEquals(4, getField(act, "queueRecoveryToken"))
+            assertTrue("retry is scheduled while Study is active", getField(act, "queueRetry") is Runnable)
+            assertNull("no unconfirmed card is published", getField(act, "card"))
+            assertEquals(View.GONE, (getField(act, "notice") as View).visibility)
+            setField(act, "resumedNow", false)
+            setField(act, "queueRecoverySince", SystemClock.elapsedRealtime() - 11_000)
+            call(act, "retryQueue", 4, "counts report due cards but schedule is empty")
+            val notice = getField(act, "notice") as ViewGroup
+            assertEquals(View.VISIBLE, notice.visibility)
+            assertEquals(listOf("AnkiDroid is taking longer to return a card. AnkiGo will keep trying.", "Retry now"), texts(notice))
+            assertTrue(getField(act, "locked") as Boolean)
+            call(act, "clearQueueRecovery")
+            assertNull(getField(act, "queueRetry"))
+            assertNull(getField(act, "queueRecoveryToken"))
             root
         }
     }

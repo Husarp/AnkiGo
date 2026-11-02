@@ -38,17 +38,17 @@ class R23BackdropPrefsTest {
             if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
         }
         walk(page)
-        assertEquals(47,switches.size)
+        assertEquals(BackdropCatalog.ALL.size,switches.size)
         assertTrue(switches.all { it.isChecked })
         paparazzi.snapshot(android.widget.ScrollView(ctx).apply { addView(page) }, "r23-backgrounds")
         switches.forEach { it.isChecked=false }
         assertTrue(switches.last().isChecked)
-        assertEquals(46,BackdropPrefs.disabled(ctx).size)
+        assertEquals(BackdropCatalog.ALL.size - 1,BackdropPrefs.disabled(ctx).size)
     }
     @Test fun allBundledArtDecodesAndInstallsUnderItsRevision() {
         // Layoutlib supports opening assets, but does not implement AssetManager.list.
         val names = java.io.File("src/main/assets/backdrops").list()!!.toSet()
-        val bundledIds = BackdropCatalog.GENERAL + setOf("forest-tech-b", "crystal-storm", "flower-field", "poison-marsh")
+        val bundledIds = BackdropCatalog.GENERAL + setOf("forest-tech-b", "crystal-storm", "flower-field", "poison-marsh", "tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay")
         assertEquals(bundledIds.map { Backdrops.fileName(BackdropCatalog.byId(it)!!) }.toSet(), names)
         for (bg in BackdropCatalog.ALL) {
             ctx.assets.open("backdrop-thumbs/${bg.id}.webp").use { assertNotNull(android.graphics.BitmapFactory.decodeStream(it)) }

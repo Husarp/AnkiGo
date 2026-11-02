@@ -48,13 +48,13 @@ class R20UiTest {
         assertEquals(1, texts(card).count { it == "Close" })
     }
 
-    @Test fun statsHasReviewsWithoutARedundantChartsHeading() {
+    @Test fun statsHasStudyAnswersWithoutARedundantChartsHeading() {
         val c = ctx(); AnkiStatsStore.enabled = false
         val page = StatsPage(c, NoHost)
         val v = page.root
         render(page)
         assertFalse(texts(v).contains("Charts"))
-        assertTrue(texts(v).any { it.contains("Reviews") })
+        assertTrue(texts(v).any { it.contains("Answers per") && it.contains("AnkiGo") })
         page.onGone()
     }
 

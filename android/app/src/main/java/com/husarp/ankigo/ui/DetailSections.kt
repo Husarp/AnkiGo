@@ -192,7 +192,14 @@ object DetailSections {
      */
     fun statsBody(a: Context, stats: Stats, level: Int, nature: Nature?, sp: Species, compact: Boolean, boosts: IntArray? = null): View = LinearLayout(a).apply {
         orientation = LinearLayout.VERTICAL
-        addView(DetailParts.statHint(a))
+        addView(LinearLayout(a).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(DetailParts.statHint(a), LinearLayout.LayoutParams(0, -2, 1f))
+            addView(DetailParts.tapInfo(Ui.text(a, 10f, 700, R.color.ag_ov).apply {
+                text = "Base"; gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            }, StatInfoText("Base stats", "The species’ base stats, shared by all Pokémon of this species.")),
+                LinearLayout.LayoutParams(Ui.dp(a, 28), -2))
+        })
         val max = DetailMath.monStatMax(level)
         Stat.entries.forEach { s ->
             addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), 0, sp.base[s], compact, wholeRow = true, stage = if (s == Stat.HP) 0 else boosts?.getOrNull(s.ordinal - 1) ?: 0))
@@ -208,7 +215,7 @@ object DetailSections {
             else {
                 fun short(s: Stat) = when (s) { Stat.ATK -> "Atk"; Stat.DEF -> "Def"; Stat.SPE -> "Spe"; else -> DetailMath.statName(s) }
                 part("  ▲ ${short(nature.plus)} +10%", R.color.ag_green)
-                part(", ▼ ${short(nature.minus)} −10%", R.color.ag_red)
+                part("   ▼ ${short(nature.minus)} −10%", R.color.ag_red)
             }
             text = line
             setPadding(0, Ui.dp(a, 8), 0, 0)

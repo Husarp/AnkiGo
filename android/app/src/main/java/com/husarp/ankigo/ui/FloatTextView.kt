@@ -24,8 +24,14 @@ import kotlin.math.sin
 internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : View(ctx) {
     private val d = ctx.resources.displayMetrics.density
     private val badge = (ft.kind == FloatKind.STAT_UP || ft.kind == FloatKind.STAT_DOWN) && ft.stat != null && ft.stages > 0
+    private val stageStat = ft.stat?.let { raw ->
+        listOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
+            .firstOrNull { StatPill.shortName(it).equals(raw, ignoreCase = true) } ?: raw.lowercase(Locale.ROOT)
+    }
+    private val stagePill = if (badge) StatPillView(ctx, stageStat!!,
+        if (ft.kind == FloatKind.STAT_UP) ft.stages else -ft.stages) else null
     private val burst = ft.kind == FloatKind.SUPER
-    private val label = (if (badge) ft.stat!! else ft.text).uppercase(Locale.ROOT)
+    private val label = if (badge) StatPill.shortName(stageStat) ?: ft.stat!! else ft.text.uppercase(Locale.ROOT)
     private val sizePx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, TextMath.at(Look.sizeSp(ft.kind), floorSp), ctx.resources.displayMetrics)
     private val fillColor = if (ft.kind == FloatKind.STATUS_DAMAGE) InfoBoxSkin.statusFill(ft.stat) else Look.fill(ft.kind) // PLAN 217: the status badge colour
     /** PLAN 172: "can't move" floats carry the status key; its badge is drawn in front of the text. */
@@ -116,18 +122,23 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
         return px / d
     }
 
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) = setMeasuredDimension(boxW, boxH)
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        stagePill?.let {
+            it.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
+            setMeasuredDimension(it.measuredWidth, it.measuredHeight)
+        } ?: setMeasuredDimension(boxW, boxH)
+    }
 
     override fun onTouchEvent(event: MotionEvent?): Boolean = false
 
     override fun onDraw(canvas: Canvas) {
+        stagePill?.let { it.layout(0, 0, width, height); it.draw(canvas); return }
         canvas.save()
         canvas.translate(width / 2f, height / 2f)
         canvas.rotate(tiltDeg)
         val k = burstFit?.k ?: 1f
         val baseline = -inkMid * k
         when {
-            badge -> drawBadge(canvas, baseline)
             burst -> {
                 drawBurst(canvas)
                 text.style = Paint.Style.FILL
@@ -182,32 +193,6 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
         line.color = Look.OUTLINE
         line.strokeWidth = 2f * d
         canvas.drawPath(p, line)
-    }
-
-    private fun drawBadge(canvas: Canvas, baseline: Float) {
-        val r = RectF(-contentW / 2f, -contentH / 2f, contentW / 2f, contentH / 2f)
-        shape.style = Paint.Style.FILL
-        shape.color = fillColor
-        canvas.drawRoundRect(r, contentH / 2f, contentH / 2f, shape)
-        line.color = Look.OUTLINE
-        line.strokeWidth = 1.5f * d
-        canvas.drawRoundRect(r, contentH / 2f, contentH / 2f, line)
-        // chevrons: one per stage, stacked, pointing up for a rise and down for a drop
-        val up = ft.kind == FloatKind.STAT_UP
-        val cx = r.left + badgePad + chevW / 2f
-        val total = StatPill.boxHeight(StatPill.count(ft.stages)) * chevUnit
-        line.color = 0xFFFFFFFF.toInt()
-        line.strokeWidth = StatPill.STROKE
-        val path = Path().also { StatPill.chevrons(it, StatPill.count(ft.stages), up) }
-        canvas.save()
-        canvas.translate(cx - chevW / 2f, -total / 2f)
-        canvas.scale(chevUnit, chevUnit)
-        canvas.drawPath(path, line)
-        canvas.restore()
-        text.style = Paint.Style.FILL
-        text.color = 0xFFFFFFFF.toInt()
-        text.clearShadowLayer()
-        canvas.drawText(label, cx + chevW / 2f + 3f * d, baseline, text)
     }
 
     /** Sizes, colours and tilt per kind. Fixed colours: they sit on the arena's sky and sprites in both themes, behind a dark outline. */

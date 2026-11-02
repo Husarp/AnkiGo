@@ -1,0 +1,1 @@
+Eevee back sprite: existing docs/design/plan-kit/sprites/back/133.png, 96x96 PNG. Pokémon artwork belongs to its respective owners; test fixture only.

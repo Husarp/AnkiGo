@@ -3,15 +3,11 @@ package com.husarp.ankigo.ui
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.PorterDuff
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.view.Gravity
 import android.view.View
-import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextView
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.ItemInfo
 
@@ -121,135 +117,71 @@ internal object ShopViews {
 
     // ---- the weekend card ----
 
-    /** Match the offer heights after text wrapping, including at larger font sizes. */
-    fun offers(ctx: Context, daily: View?, weekend: View?): View = object : LinearLayout(ctx) {
-        init {
-            orientation = VERTICAL
-            daily?.let { addView(it, LayoutParams(-1, -2).also { lp -> lp.bottomMargin = Ui.dp(ctx, 4) }) }
-            weekend?.let { addView(it, LayoutParams(-1, -2)) }
-        }
-
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            for (i in 0 until childCount) getChildAt(i).layoutParams.height = LayoutParams.WRAP_CONTENT
-            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-            if (childCount == 2) {
-                val offerHeight = maxOf(getChildAt(0).measuredHeight, getChildAt(1).measuredHeight)
-                for (i in 0 until childCount) getChildAt(i).layoutParams.height = offerHeight
-                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-            }
-        }
+    fun offers(ctx: Context, daily: View?, weekend: View?): View = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        daily?.let { addView(it, LinearLayout.LayoutParams(-1, -2).also { lp -> lp.bottomMargin = Ui.dp(ctx, 8) }) }
+        weekend?.let { addView(it, LinearLayout.LayoutParams(-1, -2)) }
     }
 
-    /** A purple companion matching the peach daily-deal card’s height. */
-    fun weekendCard(ctx: Context, lead: View, name: String, note: String, right: View, description: String, onTap: () -> Unit): View = LinearLayout(ctx).apply {
-        orientation = LinearLayout.VERTICAL
-        val purple = Ui.c(ctx, R.color.ag_mauve)
+    fun weekendCard(ctx: Context, lead: View, name: String, note: String, right: View, description: String, onTap: () -> Unit): View =
+        offerCard(ctx, "WEEKEND SPECIAL", note, lead, name, "Weekend exclusive", right,
+            R.color.ag_teal, description, onTap)
+
+    fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String,
+                 line: String = ItemInfo.effect(item), night: Boolean = false, onTap: () -> Unit): View =
+        offerCard(ctx, if (night) "DEAL OF THE NIGHT" else "DEAL OF THE DAY", ends,
+            itemArt(ctx, item, 48), name, "${ShopPlan.ribbon()} · $line",
+            priceDeal(ctx, price.was ?: price.now, price.now, 17f),
+            if (night) R.color.ag_mauve else R.color.ag_peach, description, onTap)
+
+    /** Compact offer with a filled title band separated from its item and price. */
+    private fun offerCard(ctx: Context, title: String, ends: String, lead: View, name: String,
+                          detail: String, price: View, accentRes: Int, description: String, onTap: () -> Unit): View {
+        val accent = Ui.c(ctx, accentRes)
         val card = Ui.c(ctx, R.color.ag_card)
-        background = glowBackground(ctx, Bits.blend(purple, card, 0.16f), card, purple)
-        setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4))
-        contentDescription = description
-        setOnClickListener { onTap() }
-        addView(Ui.text(ctx, 10f, 900, R.color.ag_mauve).apply { text = "WEEKEND SPECIAL"; gravity = Gravity.CENTER
-            minimumHeight = Ui.text(ctx, 10.5f, 900, R.color.ag_text).lineHeight
-        }, LinearLayout.LayoutParams(-1, -2))
-        addView(LinearLayout(ctx).apply {
+        val ink = if (TypeChips.isDark(ctx)) accent else Bits.blend(0xFF000000.toInt(), accent, 0.35f)
+        fun shape(fill: Int, stroke: Int = 0) = GradientDrawable().apply {
+            setColor(fill)
+            cornerRadius = Ui.dp(ctx, 12f)
+            if (stroke > 0) setStroke(Ui.dp(ctx, stroke), accent)
+        }
+        val large = ctx.resources.configuration.fontScale >= 1.5f
+        val header = LinearLayout(ctx).apply {
+            orientation = if (large) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(Ui.dp(ctx, 10), Ui.dp(ctx, 7), Ui.dp(ctx, 10), Ui.dp(ctx, 7))
+            background = shape(Bits.blend(accent, card, 0.22f)).apply {
+                // Round only the outside top corners; the band fills both corners at the divider.
+                val radius = Ui.dp(ctx, 12f)
+                cornerRadii = floatArrayOf(radius, radius, radius, radius, 0f, 0f, 0f, 0f)
+            }
+            addView(Ui.text(ctx, 10f, 900, R.color.ag_text).apply { text = title; setTextColor(ink) },
+                if (orientation == LinearLayout.HORIZONTAL) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2))
+            addView(Ui.text(ctx, 10f, 700, R.color.ag_sub0).apply { text = ends })
+        }
+        val body = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = Ui.dp(ctx, 64)
+            background = shape(card)
+            setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 10), Ui.dp(ctx, 8))
             addView(lead)
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
-                addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = note })
+                addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = detail })
+                if (large) addView(price)
             }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8); it.marginEnd = Ui.dp(ctx, 6) })
-            if (ctx.resources.configuration.fontScale < 1.5f) addView(right)
-        }, Form.lp(ctx, 6))
-        if (ctx.resources.configuration.fontScale >= 1.5f) addView(right,
-            LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.END })
-    }
-
-    // ---- the deal card (F5 option A) ----
-
-    /** The glow: from [glow] at the left to the card colour at 70 % of the width. */
-    private fun glowBackground(ctx: Context, glow: Int, card: Int, edge: Int): GradientDrawable {
-        val colors = intArrayOf(glow, card, card)
-        return GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, colors).apply {
-            if (Build.VERSION.SDK_INT >= 29) setColors(colors, floatArrayOf(0f, 0.7f, 1f))
-            cornerRadius = Ui.dp(ctx, 16f)
-            setStroke(px(ctx, 1.5f), edge)
+            if (!large) addView(price)
         }
-    }
-
-    /** The bare 64 dp deal icon. */
-    private fun dealIcon(ctx: Context, item: String): View {
-        val size = Ui.dp(ctx, 64)
-        return FrameLayout(ctx).apply {
-            val img = ImageView(ctx)
-            Ui.itemIcon(ctx, item, img)
-            addView(img, FrameLayout.LayoutParams(Ui.dp(ctx, 64), Ui.dp(ctx, 64), Gravity.CENTER))
-            layoutParams = LinearLayout.LayoutParams(size, size)
-        }
-    }
-
-    /**
-     * The deal of the day (F5 option A): a soft peach glow from the left, a thin peach edge, the "−30 %" ribbon across the top-right corner,
-     * "✦ DEAL OF THE DAY", the bare item icon with its name, effect and "ends at midnight · 7 h", and the discount price on the right.
-     * A tap calls [onTap] (PLAN 210: the item's window opens, with Buy at the deal price). [line] is the text under the name.
-     */
-    fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String, line: String = ItemInfo.effect(item), night: Boolean = false, onTap: () -> Unit): View {
-        val dark = TypeChips.isDark(ctx)
-        val peach = Ui.c(ctx, R.color.ag_peach)
-        val card = Ui.c(ctx, R.color.ag_card)
-        val labelCol = if (dark) peach else Bits.blend(0xFF000000.toInt(), peach, 0.25f)
-        val label = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(ImageView(ctx).apply {
-                setImageResource(R.drawable.ic_ach_sparkle)
-                setColorFilter(labelCol, PorterDuff.Mode.SRC_IN)
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LinearLayout.LayoutParams(Ui.dp(ctx, 12), Ui.dp(ctx, 12)).also { it.marginEnd = Ui.dp(ctx, 4) })
-            addView(Ui.text(ctx, 10.5f, 900, R.color.ag_text).apply { text = "${if (night) "DEAL OF THE NIGHT" else "DEAL OF THE DAY"} · ${ShopPlan.ribbon()}"; setTextColor(labelCol); letterSpacing = 0.07f })
-        }
-        val clock = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(ImageView(ctx).apply {
-                setImageResource(R.drawable.ic_clock)
-                setColorFilter(Ui.c(ctx, R.color.ag_sub0), PorterDuff.Mode.SRC_IN)
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LinearLayout.LayoutParams(Ui.dp(ctx, 11), Ui.dp(ctx, 11)).also { it.marginEnd = Ui.dp(ctx, 4) })
-            addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = ends })
-        }
-        val middle = LinearLayout(ctx).apply {
+        return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            addView(Ui.text(ctx, 15f, 900, R.color.ag_text).apply { text = name })
-            addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = line })
-            addView(clock, Form.lp(ctx, 3))
-        }
-        val row = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(dealIcon(ctx, item))
-            addView(middle, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12); it.marginEnd = Ui.dp(ctx, 8) })
-            if (ctx.resources.configuration.fontScale < 1.5f)
-                addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 6) })
-        }
-        val body = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 4), Ui.dp(ctx, 8), Ui.dp(ctx, 4))
-            addView(label, LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.CENTER_HORIZONTAL })
-            // The 64 dp icon plus 8 dp padding preserves 1.0.0’s 52 + 20 dp body height.
-            addView(row, Form.lp(ctx, 6))
-            if (ctx.resources.configuration.fontScale >= 1.5f) addView(priceDeal(ctx, price.was ?: price.now, price.now, 17f),
-                LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.END })
-        }
-        return FrameLayout(ctx).apply {
-            background = glowBackground(ctx, Bits.blend(peach, card, if (dark) 0.2f else 0.16f), card, Bits.blend(peach, card, 0.6f))
-            isClickable = true
-            contentDescription = description
+            background = shape(card, 2)
+            setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 2), Ui.dp(ctx, 2), Ui.dp(ctx, 2))
+            addView(header, LinearLayout.LayoutParams(-1, -2))
+            addView(View(ctx).apply { setBackgroundColor(accent) }, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 1)))
+            addView(body, LinearLayout.LayoutParams(-1, -2))
+            contentDescription = "$title, $ends, $description"
             setOnClickListener { onTap() }
-            addView(body, FrameLayout.LayoutParams(-1, -2))
         }
     }
 }

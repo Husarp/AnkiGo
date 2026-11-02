@@ -114,7 +114,7 @@ class R15AItemWindowShots {
         }) { ctx -> ShopCardKit.page(ctx, null).second }
         shoot("shop-list-weekend", listOf(Variant("tall", 412, 1500)), themes = listOf(Theme.LIGHT), check = { _, screen ->
             noArrows(screen)
-            assertTrue(ShopPlan.WEEKEND_NOTE in texts(screen))
+            assertTrue(texts(screen).count { it.startsWith("Ends in ") } >= 2)
         }) { ctx -> ShopCardKit.page(ctx, null, day = "2026-10-17").second }
     }
 

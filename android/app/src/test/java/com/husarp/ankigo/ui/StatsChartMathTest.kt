@@ -155,15 +155,15 @@ class StatsChartMathTest {
         val h = (0 until 30).associate { date(it) to log(reviews = 10) } + (date(3) to log(reviews = 90))
         val tl = StatsChartMath.tiles(build(ChartMetric.ANSWERS, ChartPeriod.D30, h))
         assertEquals(StatTile("380", "answers"), tl[0])
-        assertEquals(StatTile("12.7", "a day on average"), tl[1])
-        assertEquals(StatTile("90", "best day (11 Oct)"), tl[2])
+        assertEquals(StatTile("12.7", "per calendar day · 30 days"), tl[1])
+        assertEquals(2, tl.size)
     }
 
     @Test fun tilesOfATimeChartAreDurations() {
         val snap = StatsSnapshot(timeByDay = mapOf(date(0) to 600_000L, date(1) to 3_000_000L), liveTimeByDay = mapOf(date(0) to 120_000L))
         val tl = StatsChartMath.tiles(build(ChartMetric.TIME, ChartPeriod.D7, emptyMap(), snap))
         assertEquals("1h 02m", tl[0].value); assertEquals("studied in total", tl[0].label)
-        assertEquals("50 min", tl[2].value); assertEquals("best day (13 Oct)", tl[2].label)
+        assertEquals(2, tl.size)
     }
 
     @Test fun tilesOfRetentionArePercentAndNoBestDayWithoutData() {
@@ -171,7 +171,7 @@ class StatsChartMathTest {
         val tl = StatsChartMath.tiles(build(ChartMetric.RETENTION, ChartPeriod.D7, h))
         assertEquals("90 %", tl[0].value); assertEquals("kept (not Again)", tl[0].label)
         val none = StatsChartMath.tiles(build(ChartMetric.REVIEWS, ChartPeriod.D7, emptyMap()))
-        assertEquals(StatTile("–", "best day"), none[2])
+        assertEquals(2, none.size)
     }
 
     @Test fun legendSharesAddUpAndStayNullWithoutData() {
@@ -203,7 +203,7 @@ class StatsChartMathTest {
         assertEquals("Next 7 days", StatsChartMath.periodLabel(ChartMetric.DUE, ChartPeriod.D7))
         assertEquals("Last year", StatsChartMath.periodLabel(ChartMetric.REVIEWS, ChartPeriod.D365))
         val s = build(ChartMetric.BUTTONS, ChartPeriod.D30, emptyMap())
-        assertEquals("Buttons pressed per day", StatsChartMath.title(s)); assertEquals("tap a bar for its day", StatsChartMath.hint(s))
+        assertEquals("Today’s answers", StatsChartMath.title(s)); assertEquals("tap a bar for its day", StatsChartMath.hint(s))
         assertEquals("", StatsChartMath.hint(build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D30, emptyMap()))) // R18 234: the calendar has no top-right hint
         assertEquals("Card states", StatsChartMath.title(ChartData.build(ChartMetric.CARD_STATES, ChartPeriod.D30, null, StatsSnapshot(), emptyMap(), today)))
     }

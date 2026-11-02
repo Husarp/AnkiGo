@@ -167,18 +167,19 @@ class R19FBackdropSharpTest {
         assertTrue("the picture-in-picture reduces most of them ($some)", some >= 20)
     }
 
-    @Test fun everyCatalogPictureIsCrispExceptTheFactory() {
-        assertTrue(BackdropCatalog.ALL.filter { it.id != "factory" }.all { it.crisp })
+    @Test fun catalogPicturesUseTheirApprovedFiltering() {
+        assertTrue(BackdropCatalog.ALL.filter { it.source == BackdropSource.SHOWDOWN || (it.ext != "png" && it.id != "factory") }.all { it.crisp })
         assertFalse(BackdropCatalog.byId("factory")!!.crisp)
     }
 
-    /** Showdown and the factory keep their original drawing; other own scenes use the sharp copy. */
-    @Test fun showdownAndFactoryKeepTodaysDrawingOtherOwnScenesAreSharp() {
+    /** Showdown, factory and smooth PNG beaches keep their approved drawing. */
+    @Test fun originalAndSmoothScenesKeepTheirApprovedDrawing() {
         val today = BackdropCatalog.ALL.filter { !it.sharp }
-        assertEquals(12, today.size)
+        assertEquals(16, today.size)
         assertTrue(today.filter { it.source == BackdropSource.SHOWDOWN }.size == 11 && today.any { it.id == "factory" })
         assertEquals(35, BackdropCatalog.ALL.count { it.sharp && it.source == BackdropSource.OWN })
-        // today's Showdown = nearest neighbour, the factory = filtered
+        assertTrue(today.filter { it.source == BackdropSource.OWN }.all { !it.crisp })
+        // today's Showdown = nearest neighbour, factory and PNG beaches = filtered
         assertTrue(today.filter { it.source == BackdropSource.SHOWDOWN }.all { it.crisp })
     }
 }

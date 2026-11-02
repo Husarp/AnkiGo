@@ -890,6 +890,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         content.addView(Form.sect(this, "Battle panel"))
         content.addView(Form.cardOf(this, listOf(
             pokemonSizeRow(),
+            Form.switchRow(this, "Pokémon rarity marks", "Show achievement tier gems beside names in battle info boxes and Pokémon details. Baby: blue diamond; Ultra Beast: purple hexagon; Legendary: gold sparkle; Mythical: red star. Normal and Starter have no mark. Names keep their normal colour.",
+                RarityMark.enabled(this)) { RarityMark.setEnabled(this, it) },
             Form.switchRow(this, "Stat card under its own Pokémon", "Without a background picture. Off: the classic layout, each card on the opposite side",
                 AppPrefs.cardsUnderOwn(this)) { AppPrefs.setCardsUnderOwn(this, it) },
             Form.switchRow(this, "XP animation", "Sparks fly into your Pokémon when it gains XP",
@@ -1457,7 +1459,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         box.addView(Ui.text(this, 14f, 800, R.color.ag_text).apply { text = "AnkiGo ${Updates.current(this@SettingsPage)}" })
         box.addView(Form.body(this,
             "Pokémon and Pokémon names © Nintendo / Creatures / GAME FREAK. Data: PokeAPI, Pokémon Showdown. " +
-                "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). " +
+                "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). Secret achievement icons: Tabler Icons © 2020–2026 Paweł Kuna (MIT, https://tabler.io/icons). " +
                 "Attack effects: Kenney Particle Pack (CC0) and Pokémon Showdown effect images (CC0); Ember and Vine Whip pixel art drawn for AnkiGo. " +
                 "Streak flame: animated Noto Emoji by Google (CC BY 4.0, resized; animation modified for AnkiGo). " +
                 "Battle backgrounds: Pokémon Showdown's (art by Smogon artists) and scenes made for AnkiGo, included in the app or downloaded when needed. " +

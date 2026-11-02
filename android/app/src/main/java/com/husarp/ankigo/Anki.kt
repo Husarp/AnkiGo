@@ -168,7 +168,7 @@ object Anki {
         fun fresh() = android.os.SystemClock.elapsedRealtime() - at < TYPE_CACHE_MS
     }
 
-    private val modelCache = HashMap<String, Cached<Model>>()
+    private val modelCache = java.util.concurrent.ConcurrentHashMap<String, Cached<Model>>()
     fun model(ctx: Context, mid: Long): Model? {
         modelCache["$pkg/$mid"]?.takeIf { it.fresh() }?.let { return it.value }
         val c = ctx.contentResolver.query(uri("models/$mid"), null, null, null, null) ?: return null
@@ -187,7 +187,7 @@ object Anki {
         }
     }
 
-    private val templateCache = HashMap<String, Cached<List<com.husarp.ankigo.study.TtsRules.Template>>>()
+    private val templateCache = java.util.concurrent.ConcurrentHashMap<String, Cached<List<com.husarp.ankigo.study.TtsRules.Template>>>()
     /** The card templates (question/answer format) of a note type; only read for cards that have speech. */
     fun templates(ctx: Context, mid: Long): List<com.husarp.ankigo.study.TtsRules.Template> {
         templateCache["$pkg/$mid"]?.takeIf { it.fresh() }?.let { return it.value }

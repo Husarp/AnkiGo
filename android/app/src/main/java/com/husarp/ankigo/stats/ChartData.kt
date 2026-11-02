@@ -31,17 +31,17 @@ enum class ChartMetric(
     val unit: String, val noun: String, val seriesNames: List<String>, val fromAnkiDroid: Boolean,
 ) {
     // Study
-    REVIEWS("Reviews", ChartGroup.STUDY, "bars", ChartKind.TIME, "cards", "reviews", listOf("Cards"), true),
-    TIME("Time studied", ChartGroup.STUDY, "clock", ChartKind.TIME, "min", "min", listOf("In AnkiGo", "Live"), false),
+    REVIEWS("Cards studied", ChartGroup.STUDY, "bars", ChartKind.TIME, "cards", "cards", listOf("Cards"), true),
+    TIME("Time studied", ChartGroup.STUDY, "clock", ChartKind.TIME, "min", "min", listOf("Measured time"), false),
     SECONDS_PER_CARD("Seconds per card", ChartGroup.STUDY, "speed", ChartKind.TIME, "s / card", "s / card", listOf("Seconds per card"), false),
     RETENTION("Retention", ChartGroup.STUDY, "check", ChartKind.TIME, "%", "% kept", listOf("Retention"), false),
     NEW_CARDS("New cards", ChartGroup.STUDY, "plus", ChartKind.TIME, "cards", "new cards", listOf("New cards"), true),
-    BUTTONS("Buttons pressed", ChartGroup.STUDY, "gamepad", ChartKind.TIME, "answers", "answers", listOf("Again", "Hard", "Good", "Easy"), false),
+    BUTTONS("Answer buttons · today", ChartGroup.STUDY, "gamepad", ChartKind.TIME, "answers", "answers", listOf("Again", "Hard", "Good", "Easy"), false),
     /** AnkiGo's own answer count; not in the metric list (Reviews already falls back to it when AnkiDroid isn't there). */
     ANSWERS("Answers", ChartGroup.STUDY, "bars", ChartKind.TIME, "answers", "answers", listOf("Answers"), false),
     CARD_STATES("Card states", ChartGroup.STUDY, "book", ChartKind.CATEGORY, "cards", "cards", listOf("Cards"), true),
     DUE("Due forecast", ChartGroup.STUDY, "calendar", ChartKind.TIME, "cards", "cards due", listOf("Due"), true),
-    STREAK_CALENDAR("Streak calendar", ChartGroup.STUDY, "flame", ChartKind.HEATMAP, "cards", "reviews", listOf("Cards"), true),
+    STREAK_CALENDAR("Streak calendar", ChartGroup.STUDY, "flame", ChartKind.HEATMAP, "cards", "cards", listOf("Cards"), true),
 
     // Game
     MONEY("Money earned", ChartGroup.GAME, "coin", ChartKind.TIME, "coins", "coins earned", listOf("Earned"), false),
@@ -54,16 +54,16 @@ enum class ChartMetric(
     PER_TYPE("Pokémon per type", ChartGroup.COLLECTION, "types", ChartKind.CATEGORY, "species", "caught", listOf("Caught"), false),
     SHINIES_RARE("Shinies & rare", ChartGroup.COLLECTION, "star", ChartKind.CATEGORY, "Pokémon", "Pokémon", listOf("Owned"), false);
 
-    /** In the metric list? Only [ANSWERS] isn't. */
-    val listed: Boolean get() = this != ANSWERS
+    /** PLAN 115: seven useful study charts; game and collection milestones live in their sections. */
+    val listed: Boolean get() = this in setOf(REVIEWS, TIME, NEW_CARDS, BUTTONS, CARD_STATES, DUE, STREAK_CALENDAR)
 
     /** A period applies (CATEGORY charts are a picture of now). */
-    val usesPeriod: Boolean get() = kind != ChartKind.CATEGORY
+    val usesPeriod: Boolean get() = kind != ChartKind.CATEGORY && this != BUTTONS
 
     companion object {
         /** The metric list as the mockup groups it: every [ChartGroup] with its listed metrics, in display order. */
         val menu: List<Pair<ChartGroup, List<ChartMetric>>> =
-            ChartGroup.values().map { g -> g to values().filter { it.group == g && it.listed } }
+            ChartGroup.values().map { g -> g to values().filter { it.group == g && it.listed } }.filter { it.second.isNotEmpty() }
     }
 }
 
@@ -133,7 +133,7 @@ object ChartData {
 
     /** The bar sizes the "Per day" filter offers for [metric] and [period]; empty for a CATEGORY or HEATMAP chart (no bar size). */
     fun grains(metric: ChartMetric, period: ChartPeriod): List<ChartGrain> =
-        if (metric.kind != ChartKind.TIME) emptyList() else effectivePeriod(metric, period).grains
+        if (metric.kind != ChartKind.TIME || metric == ChartMetric.BUTTONS) emptyList() else effectivePeriod(metric, period).grains
 
     /** The bar size really used: [grain] when it is one of [grains], else the period's default (e.g. MONTH for 7 days -> DAY). */
     fun effectiveGrain(metric: ChartMetric, period: ChartPeriod, grain: ChartGrain?): ChartGrain {
@@ -187,7 +187,7 @@ object ChartData {
             ChartKind.HEATMAP -> return heatmap(metric, p, d, snap, history, today, t, goal, goalFor, calendarYear)
             ChartKind.TIME -> Unit
         }
-        val g = effectiveGrain(metric, p, grain)
+        val g = if (metric == ChartMetric.BUTTONS) ChartGrain.DAY else effectiveGrain(metric, p, grain)
         if (metric == ChartMetric.SECONDS_PER_CARD) {
             val days = (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
             fun average(dates: List<LocalDate>): Double? = StatsText.secondsPerCard(
@@ -205,8 +205,9 @@ object ChartData {
                 fastest?.first?.toString(), metric.unit, StatsText.TIMED_SOURCE, false, total == null, grain = g)
         }
         val plan = plan(metric, p, d, snap, history, today)
+        val answerFallback = metric == ChartMetric.REVIEWS && snap.stats == null && d == null
         val forward = metric == ChartMetric.DUE
-        val days = if (forward) (1..p.days).map { t.plusDays(it.toLong()) } else (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
+        val days = if (metric == ChartMetric.BUTTONS) listOf(t) else if (forward) (1..p.days).map { t.plusDays(it.toLong()) } else (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
         val perDay = days.map { it to plan.value(it.toString()) }
 
         val bars = buckets(days, g, p).map { grp ->
@@ -215,7 +216,7 @@ object ChartData {
             val values = finish(metric, sum)
             val has = hasData(metric, sum)
             Bar(grp.label, grp.dates.first().toString(), grp.dates.last().toString(), values, hasData = has,
-                detail = if (plan.loading) emptyList() else barDetail(metric, grp.dates, sum, values, has, t),
+                detail = if (plan.loading) emptyList() else barDetail(if (answerFallback) ChartMetric.ANSWERS else metric, grp.dates, sum, values, has, t),
                 dailyGoal = if (metric == ChartMetric.REVIEWS && g == ChartGrain.DAY) (history[grp.dates.first().toString()]?.dailyGoal?.takeIf { it > 0 } ?: goalFor?.invoke(grp.dates.first().toString()) ?: goal).coerceAtLeast(1) else null)
         }
 
@@ -230,7 +231,7 @@ object ChartData {
         }
         val avg = when {
             retention -> if (withData.isEmpty()) 0.0 else withData.sumOf { dayNumber(metric, it.second) } / withData.size
-            else -> total / p.days
+            else -> total / days.size
         }
         // best single day: for RETENTION among the days that had answers, else any day above 0
         val bestPair = (if (retention) daily.filterIndexed { i, _ -> hasData(metric, perDay[i].second) } else daily.filter { it.second > 0.0 })
@@ -238,7 +239,7 @@ object ChartData {
         val empty = if (retention) withData.isEmpty() && ankiRetention == null else daily.all { it.second <= 0.0 }
         val source = if (retention) retentionSource(ankiRetention != null, withData.isNotEmpty()) else plan.source
         return ChartSeries(
-            metric, p, d, bars, total, avg, bestPair?.second ?: 0.0, bestPair?.first?.toString(), metric.unit, source,
+            metric, p, d, bars, total, avg, bestPair?.second ?: 0.0, bestPair?.first?.toString(), if (answerFallback) "answers" else metric.unit, source,
             plan.deckApplies, empty, plan.loading, grain = g,
         )
     }
@@ -256,7 +257,7 @@ object ChartData {
                     val note = if (p.days > AnkiStatsReader.QUICK_DAYS && st.historyCheckedAt == 0L) "AnkiDroid · history still loading" else "AnkiDroid"
                     Plan(1, { day -> doubleArrayOf(st.studied(day).toDouble()) }, note, true)
                 }
-                else -> game("AnkiGo's own count (AnkiDroid isn't available)") { it.reviews }
+                else -> game("AnkiGo's own count: answers, not distinct cards (AnkiDroid isn't available)") { it.reviews }
             }
             ChartMetric.NEW_CARDS -> fromSeries(metric, p, deck, snap, today)
             ChartMetric.DUE -> when {
@@ -270,8 +271,8 @@ object ChartData {
                 else -> Plan(1, { doubleArrayOf(0.0) }, StatsText.reason(snap.access, snap.message).ifBlank { "Reading AnkiDroid…" }, true, loading = snap.access == null)
             }
             ChartMetric.TIME -> Plan(
-                2, { day -> doubleArrayOf((snap.timeByDay[day] ?: 0L) / 60_000.0, (snap.liveTimeByDay[day] ?: 0L) / 60_000.0) },
-                "AnkiGo's own timer: study screen + live detection (AnkiDroid doesn't share its time)", false,
+                1, { day -> doubleArrayOf(snap.timeTotalOn(day) / 60_000.0) },
+                StatsText.TIMED_SOURCE, false,
             )
             ChartMetric.RETENTION -> Plan(
                 2, { day ->
@@ -489,7 +490,7 @@ object ChartData {
 
     /** [ChartMetric.noun] for [v]; exactly 1 gets the singular ("1 review"). */
     private fun nounFor(metric: ChartMetric, v: Double): String = if (v != 1.0) metric.noun else when (metric) {
-        ChartMetric.REVIEWS, ChartMetric.STREAK_CALENDAR -> "review"
+        ChartMetric.REVIEWS, ChartMetric.STREAK_CALENDAR -> "card"
         ChartMetric.NEW_CARDS -> "new card"
         ChartMetric.BUTTONS, ChartMetric.ANSWERS -> "answer"
         ChartMetric.DUE -> "card due"

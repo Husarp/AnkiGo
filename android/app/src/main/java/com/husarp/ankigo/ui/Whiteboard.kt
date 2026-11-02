@@ -103,11 +103,11 @@ internal class WhiteboardTools(ctx: Context, val board: Whiteboard) : LinearLayo
         addView(MotionHorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(tools) }, LayoutParams(-1, -2))
         tools.addView(button("Undo") { board.undo() }.apply {
             val arrow = context.getDrawable(R.drawable.ic_undo)!!.mutate()
-            arrow.setTint(Ui.c(context, R.color.ag_text)); arrow.setBounds(0, 0, Ui.dp(context, 20), Ui.dp(context, 20))
+            arrow.setTint(Ui.c(context, R.color.ag_text)); arrow.setBounds(0, 0, Ui.dp(context, 16), Ui.dp(context, 16))
             setCompoundDrawables(arrow, null, null, null); compoundDrawablePadding = Ui.dp(context, 4)
         })
-        tools.addView(eraser)
-        tools.addView(button("Clear") { board.clear() })
+        tools.addView(eraser.apply { toolIcon(this, R.drawable.ic_whiteboard_eraser, 18) })
+        tools.addView(button("Clear") { board.clear() }.apply { toolIcon(this, R.drawable.ic_close, 16) })
         tools.addView(colour)
         setBoardOn(prefs.getBoolean(PREF, true)); refresh()
     }
@@ -117,13 +117,44 @@ internal class WhiteboardTools(ctx: Context, val board: Whiteboard) : LinearLayo
             "Green" to Ui.c(context, R.color.ag_green), "Orange" to Ui.c(context, R.color.ag_peach),
             (if (dark) "White" else "Black") to (if (dark) Color.WHITE else Color.BLACK))
     }
+    private fun toolIcon(view: android.widget.TextView, icon: Int, size: Int) {
+        val drawable = context.getDrawable(icon)!!.mutate()
+        drawable.setTint(Ui.c(context, R.color.ag_text))
+        drawable.setBounds(0, 0, Ui.dp(context, size), Ui.dp(context, size))
+        view.setCompoundDrawables(drawable, null, null, null)
+        view.compoundDrawablePadding = Ui.dp(context, 4)
+    }
+    internal fun paletteContent(onPick: () -> Unit = {}): View = android.widget.GridLayout(context).apply {
+        columnCount = 3
+        setPadding(Ui.dp(context, 7), Ui.dp(context, 7), Ui.dp(context, 7), Ui.dp(context, 7))
+        background = android.graphics.drawable.GradientDrawable().apply {
+            setColor(Ui.c(context, R.color.ag_card)); cornerRadius = Ui.dp(context, 14).toFloat()
+            setStroke(Ui.dp(context, 1), Ui.c(context, R.color.ag_s0))
+        }
+        colours().forEach { (name, value) ->
+            addView(android.widget.FrameLayout(context).apply {
+                contentDescription = "Whiteboard colour: $name"
+                addView(View(context).apply {
+                    background = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.OVAL; setColor(value)
+                        if (value == board.ink) setStroke(Ui.dp(context, 2), Ui.c(context, R.color.ag_text))
+                    }
+                }, android.widget.FrameLayout.LayoutParams(Ui.dp(context, 32), Ui.dp(context, 32), android.view.Gravity.CENTER))
+                setOnClickListener { board.ink = value; board.erasing = false; refresh(); onPick() }
+            }, android.widget.GridLayout.LayoutParams().apply { width = Ui.dp(context, 48); height = Ui.dp(context, 48) })
+        }
+    }
+    internal fun paletteWindow(popup: android.widget.PopupWindow = android.widget.PopupWindow()): android.widget.PopupWindow {
+        popup.contentView = paletteContent { popup.dismiss() }
+        popup.width = Ui.dp(context, 158); popup.height = Ui.dp(context, 110)
+        popup.isFocusable = true
+        popup.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Color.TRANSPARENT))
+        popup.elevation = Ui.dp(context, 6).toFloat()
+        AwayWindows.track(popup) { it.dismiss() }
+        return popup
+    }
     private fun palette() {
-        val choices = colours()
-        AppDialog.Builder(context).setTitle("Colour").setItems(choices.map { (name, value) -> android.text.SpannableString("●  $name").apply {
-            setSpan(android.text.style.ForegroundColorSpan(value), 0, 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        } }.toTypedArray()) { _, which ->
-            board.ink = choices[which].second; board.erasing = false; refresh()
-        }.showCard()
+        paletteWindow().showAsDropDown(colour, 0, 0, android.view.Gravity.END)
     }
     private fun refresh() {
         colour.setTextColor(board.ink)

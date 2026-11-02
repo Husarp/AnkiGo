@@ -112,7 +112,11 @@ object Pickers {
     }
 
     fun info(a: Context, title: String, view: View) {
-        show(AppDialog.Builder(a).setTitle(title).setView(view).setPositiveButton("Close", null).create())
+        val body = FrameLayout(a).apply {
+            setPadding(Ui.dp(a, 24), 0, Ui.dp(a, 24), Ui.dp(a, 8))
+            addView(view, FrameLayout.LayoutParams(-1, -2))
+        }
+        show(AppDialog.Builder(a).setInfoHeader(title).setView(body).create())
     }
 
     /** A list of [n] custom rows ([bind] builds row i); picking one closes the dialog and calls [onPick]. */

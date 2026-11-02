@@ -2,9 +2,9 @@ package com.husarp.ankigo.ui
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.graphics.PorterDuff
+import android.graphics.*
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.LayerDrawable
+import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -21,6 +21,8 @@ internal object BoxViews {
         val rear = TileSprite(ctx).apply { alpha = 0.75f; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         var plan = BoxDupePlan.of(1, false, false)
         var refresh: (() -> Unit)? = null
+        var frontBackground: Drawable? = null
+        var picked = false
         private val prefs = ctx.getSharedPreferences("ankigo_ui", 0)
         private val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == BoxDupePrefs.STACKED || key == BoxDupePrefs.TWO) refresh?.invoke()
@@ -70,29 +72,59 @@ internal object BoxViews {
             Ui.staticSprite(frame.context, other.lookNum(data), other.shiny, content.rear)
         }
         val inset = Ui.dp(frame.context, content.plan.insetDp)
-        (content.layoutParams as FrameLayout.LayoutParams).apply { rightMargin = inset; bottomMargin = inset }
+        (content.layoutParams as FrameLayout.LayoutParams).apply {
+            rightMargin = inset; bottomMargin = inset
+            leftMargin = if (inset > 0) Ui.dp(frame.context, 3) else 0
+            topMargin = if (inset > 0) Ui.dp(frame.context, 2) else 0
+        }
         content.requestLayout()
-        tileBackground(frame, content.background ?: frame.background)
+        tileBackground(frame, content.frontBackground ?: content.background ?: frame.background, content.picked)
     }
 
     /** Keeps Compare's frame on the front card, including when only its tick changes. */
-    fun tileBackground(frame: FrameLayout, front: Drawable?) {
+    fun tileBackground(frame: FrameLayout, front: Drawable?, picked: Boolean = false) {
         val content = frame.getChildAt(0) as? TileContent ?: return
-        content.background = front
-        val ctx = frame.context
-        val layers = mutableListOf<Drawable>()
-        if (content.plan.cards == 2) layers += Ui.rounded(Ui.c(ctx, R.color.ag_s1), 10, ctx).apply {
-            setStroke(Ui.dp(ctx, 1), Ui.c(ctx, R.color.ag_ov))
+        content.frontBackground = front
+        content.picked = picked
+        content.background = if (content.plan.cards > 0 && !picked) {
+            (front?.constantState?.newDrawable()?.mutate() as? GradientDrawable)?.apply {
+                setStroke(Ui.dp(frame.context, 1), Ui.c(frame.context, R.color.ag_sub0))
+            } ?: front
+        } else front
+        frame.background = if (content.plan.cards > 0) FannedCards(frame.context, content.plan.cards) else null
+        frame.setPadding(0, 0, 0, 0)
+    }
+
+    /** PLAN 306 option C: exact lower fan geometry from the approved native design fixture. */
+    private class FannedCards(private val ctx: Context, private val cards: Int) : Drawable() {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private fun card(canvas: Canvas, rect: RectF, fill: Int) {
+            val radius = Ui.dp(ctx, 9f)
+            paint.style = Paint.Style.FILL; paint.color = fill
+            canvas.drawRoundRect(rect, radius, radius, paint)
+            paint.style = Paint.Style.STROKE; paint.color = Ui.c(ctx, R.color.ag_sub0)
+            paint.strokeWidth = Ui.dp(ctx, 1f)
+            canvas.drawRoundRect(rect, radius, radius, paint)
         }
-        if (content.plan.cards > 0) layers += Ui.rounded(Ui.c(ctx, R.color.ag_s0), 10, ctx).apply {
-            setStroke(Ui.dp(ctx, 1), Ui.c(ctx, R.color.ag_ov))
+        override fun draw(canvas: Canvas) {
+            val d = ctx.resources.displayMetrics.density
+            val w = bounds.width().toFloat(); val h = bounds.height().toFloat()
+            val save = canvas.save()
+            canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
+            if (cards == 2) {
+                val rear = canvas.save()
+                canvas.rotate(-6f, w * .5f, h * .7f)
+                card(canvas, RectF(8*d, 10*d, w-8*d, h-4*d), Ui.c(ctx, R.color.ag_s1))
+                canvas.restoreToCount(rear)
+            }
+            canvas.rotate(5f, w * .5f, h * .7f)
+            card(canvas, RectF(6*d, 8*d, w-8*d, h-6*d), Ui.c(ctx, R.color.ag_s0))
+            canvas.restoreToCount(save)
         }
-        frame.background = if (layers.isEmpty()) null else LayerDrawable(layers.toTypedArray()).apply {
-            paddingMode = LayerDrawable.PADDING_MODE_STACK
-            if (content.plan.cards == 2) setLayerInset(0, Ui.dp(ctx, 7), Ui.dp(ctx, 7), 0, 0)
-            setLayerInset(layers.lastIndex, Ui.dp(ctx, 3.5f).toInt(), Ui.dp(ctx, 3.5f).toInt(), Ui.dp(ctx, 3.5f).toInt(), Ui.dp(ctx, 3.5f).toInt())
-        }
-        frame.setPadding(0, 0, 0, 0) // Layer insets are visual; the front content already has its own margins
+        override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+        override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter }
+        @Deprecated("Deprecated in Java")
+        override fun getOpacity() = PixelFormat.TRANSLUCENT
     }
 
     /** Two people (outline, accent colour, no text, no background): marks a team member. Not the bottom bar's Team tab icon. */

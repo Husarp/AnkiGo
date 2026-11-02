@@ -271,7 +271,7 @@ class R14B2BShots {
         shoot("shop-weekend", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen ->
             val t = texts(screen)
             assertTrue(t.any { it.startsWith("WEEKEND SPECIAL") })
-            assertTrue("the weekend card is still there", ShopPlan.WEEKEND_NOTE in t)
+            assertTrue("the weekend card is still there", t.count { it.startsWith("Ends in ") } >= 2)
             assertNotNull(ShopCardKit.findDesc(screen, "Close"))
             assertTrue("Buy" in t)
             assertNoArrows(screen)

@@ -40,7 +40,7 @@ enum class CopySort(val label: String) { LEVEL("Level"), RECENT("Recent") }
 
 /** PLAN 282 / R19: singles stay plain; groups keep their count with either visual cue. */
 data class BoxDupePlan(val cards: Int, val sprites: Int, val count: Int) {
-    val insetDp: Int get() = if (cards > 0) 7 else 0
+    val insetDp: Int get() = if (cards > 0) 10 else 0
     companion object {
         fun of(count: Int, stacked: Boolean, two: Boolean) = BoxDupePlan(
             if (stacked) (count - 1).coerceIn(0, 2) else 0,

@@ -88,6 +88,9 @@ class R23FDownloadsTest {
         }
         val file = Sprites.staticFile(ctx, 25)
         png(file)
+        val warm = java.util.concurrent.FutureTask { Sprites.staticBitmap(ctx, 25) }
+        Thread(warm).start()
+        assertNotNull("Saved image decodes on a worker with downloads disabled", warm.get())
         assertNotNull(Sprites.staticBitmap(ctx, 25))
         assertNull(Sprites.staticBitmap(ctx, 99999))
     }

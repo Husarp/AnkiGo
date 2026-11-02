@@ -26,7 +26,9 @@ class R26HShots {
             val (_, stage) = ShopCardKit.page(ctx, null, day = "2026-10-31")
             paparazzi.snapshot(stage, "r26h-shop-${theme.name}-$scale")
             assertFalse(all(stage).filterIsInstance<TextView>().any { it.text == "Buy" })
-            assertTrue(all(stage).filterIsInstance<TextView>().any { it.text == "Weekend only · until Sunday night" })
+            val weekend = all(stage).filterIsInstance<TextView>().single { it.text == "WEEKEND SPECIAL" }.parent as View
+            assertTrue(all(weekend).filterIsInstance<TextView>().any { it.text.startsWith("Ends in ") })
+            assertFalse(all(stage).filterIsInstance<TextView>().any { it.text == "Weekend only · until Sunday night" })
             val tile = ShopViews.tile(ctx, ShopViews.itemArt(ctx, "potion", 36), "Potion",
                 ShopViews.priceNormal(ctx, 100), "Potion", sub = "Heals 20 HP") { ShopCardKit.windowsShown++ }
             paparazzi.snapshot(tile, "r26h-price-${theme.name}-$scale")
@@ -38,7 +40,7 @@ class R26HShots {
         }
     }
 
-    @Test fun statPixelsKeepTheLostTailAndSquareChangedEndsWithoutUnchangedTicks() {
+    @Test fun statPixelsKeepTheLostTailAndRoundedFillEndsWithoutUnchangedTicks() {
         val ctx = paparazzi.context
         val color = android.graphics.Color.rgb(100, 160, 200)
         fun pixels(stage: Int): android.graphics.Bitmap {
@@ -53,7 +55,12 @@ class R26HShots {
         assertTrue(android.graphics.Color.alpha(lower.getPixel(96, 1)) > 0)
         assertTrue(android.graphics.Color.alpha(higher.getPixel(96, 1)) > 0)
         val top = Ui.dp(ctx, 3)
-        assertEquals("Solid lowered fill has a square end", color, lower.getPixel(63, top))
+        assertEquals("Solid lowered fill remains opaque", color, lower.getPixel(56, 14))
+        assertNotEquals("Lowered fill has a rounded cap", color, lower.getPixel(63, top))
+        assertNotEquals("Raised fill has a rounded cap", higher.getPixel(143, 14), higher.getPixel(143, top))
+        for (bar in listOf(unchanged, lower, higher)) {
+            assertNotEquals("Left end stays rounded", bar.getPixel(1, 14), bar.getPixel(1, top))
+        }
         assertNotEquals("Lost part is preserved", lower.getPixel(80, 14), lower.getPixel(150, 14))
         assertNotEquals("Raised fill continues after the normal tick", higher.getPixel(120, 14), higher.getPixel(180, 14))
         assertEquals("Lost segment meets tick without rounded notch", lower.getPixel(93, 14), lower.getPixel(93, top))

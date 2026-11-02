@@ -204,7 +204,7 @@ object StatsChartMath {
         ChartMetric.DUE -> "Nothing due in this period."
         ChartMetric.MONEY -> "No money earned in this period yet."
         ChartMetric.XP -> "No XP earned in this period yet."
-        ChartMetric.BUTTONS -> "No answers in this period yet."
+        ChartMetric.BUTTONS -> "No answers counted today yet."
         else -> "No ${m.noun} in this period yet." // reviews, new cards, answers, catches, battles won, misses, calendar reviews
     }
 
@@ -224,8 +224,7 @@ object StatsChartMath {
                 ChartMetric.CARD_STATES -> StatTile(num(s.total), "cards counted")
                 else -> StatTile(num(s.total), m.noun)
             }
-            val best = s.bestLabel?.let { StatTile(categoryValue(m, s.best), (if (m == ChartMetric.DEX_PROGRESS) "furthest: " else "most: ") + it) }
-            return listOfNotNull(total, best)
+            return listOf(total)
         }
         fun v(x: Double): String = when (m) {
             ChartMetric.TIME -> StatsText.duration(Math.round(x * 60_000.0))
@@ -235,11 +234,10 @@ object StatsChartMath {
         val totalLabel = when (m) {
             ChartMetric.TIME -> "studied in total"
             ChartMetric.RETENTION -> "kept (not Again)"
-            else -> ChartData.valueText(m, s.total).substringAfter(' ')
+            else -> if (m == ChartMetric.REVIEWS && s.source.startsWith("AnkiGo")) "answers (AnkiGo)" else ChartData.valueText(m, s.total).substringAfter(' ')
         }
-        val bestWord = if (m == ChartMetric.DUE) "busiest day" else "best day"
-        val best = s.bestDay?.let { StatTile(v(s.best), "$bestWord (${dayShort(it)})") } ?: StatTile("–", bestWord)
-        return listOf(StatTile(v(s.total), totalLabel), StatTile(v(s.perDayAvg), "a day on average"), best)
+        return if (m == ChartMetric.BUTTONS) listOf(StatTile(v(s.total), "answers today"))
+        else listOf(StatTile(v(s.total), totalLabel), StatTile(v(s.perDayAvg), "per calendar day · ${s.period.days} days"))
     }
 
     private fun dayShort(day: String): String =
@@ -265,7 +263,7 @@ object StatsChartMath {
 
     /** The chart's title: "Reviews per day", "Card states". */
     fun title(s: ChartSeries): String =
-        if (s.kind == ChartKind.TIME) "${s.metric.label} ${s.grain.label.lowercase(Locale.US)}" else s.metric.label
+        if (s.metric == ChartMetric.REVIEWS && s.source.startsWith("AnkiGo")) "Answers per ${s.grain.name.lowercase(Locale.US)} · AnkiGo" else if (s.metric == ChartMetric.BUTTONS) "Today’s answers" else if (s.kind == ChartKind.TIME) "${s.metric.label} ${s.grain.label.lowercase(Locale.US)}" else s.metric.label
 
     /** The small hint on the right of the title (R18 item 234: the calendar has none, its bottom-left line says it). */
     fun hint(s: ChartSeries): String = when (s.kind) {

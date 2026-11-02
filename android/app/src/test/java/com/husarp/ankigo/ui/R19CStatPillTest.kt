@@ -38,21 +38,20 @@ class R19CStatPillTest {
         assertFalse(StatPill.spoken("spe", 1).any { it in "↑↓" })
     }
 
-    @Test fun tintIsStrongerInTheDarkTheme() {
-        assertTrue(StatPill.tint(true, dark = true) > StatPill.tint(true, dark = false))
-        assertEquals(0.22f, StatPill.tint(false, dark = true), 0f)
-        assertEquals(0.13f, StatPill.tint(true, dark = false), 0f)
-        assertTrue(StatPill.UP != StatPill.DOWN)
+    @Test fun semanticInkIsDistinctAndAdaptsToDarkTheme() {
+        assertTrue(StatPill.ink(true) != StatPill.ink(false))
+        assertTrue(StatPill.ink(true) != StatPill.ink(true, true))
+        assertTrue(StatPill.ink(false) != StatPill.ink(false, true))
     }
 
-    @Test fun aSecondRowDistinguishesFourThroughSix() {
+    @Test fun aSecondColumnDistinguishesFourThroughSix() {
         for (n in 4..6) {
-            assertEquals(21f, StatPill.boxHeight(n), 0f)
-            assertEquals(36f, StatPill.boxWidth(n), 0f)
+            assertEquals(25f, StatPill.boxHeight(n), 0f)
+            assertEquals(23f, StatPill.boxWidth(n), 0f)
         }
-        assertEquals(11f, StatPill.boxHeight(1), 0f)
-        assertEquals(11f, StatPill.boxHeight(2), 0f)
-        assertEquals(11f, StatPill.boxHeight(3), 0f)
+        assertEquals(25f, StatPill.boxHeight(1), 0f)
+        assertEquals(25f, StatPill.boxHeight(2), 0f)
+        assertEquals(25f, StatPill.boxHeight(3), 0f)
     }
 
     @Test fun theBubbleGetsAPillChipPerShift() {

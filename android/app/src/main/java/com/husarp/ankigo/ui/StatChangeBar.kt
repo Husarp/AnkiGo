@@ -21,8 +21,11 @@ internal class StatChangeBar(ctx: Context, private val normal: Float, private va
         canvas.drawRoundRect(0f, 0f, w, h, radius, radius, paint)
         val current = (normal * BattleEngine.stageMult(stage)).toFloat().coerceIn(0f, 1f)
         val extent = maxOf(normal, current) * w
-        shape.reset(); if (stage == 0) shape.addRoundRect(RectF(0f, 0f, extent, h), radius, radius, Path.Direction.CW)
-        else shape.addRect(0f, 0f, extent, h, Path.Direction.CW)
+        shape.reset()
+        // Only a lowered stat's faded tail ends flat at the normal tick.
+        val rightRadius = if (stage < 0) 0f else radius
+        shape.addRoundRect(RectF(0f, 0f, extent, h),
+            floatArrayOf(radius, radius, rightRadius, rightRadius, rightRadius, rightRadius, radius, radius), Path.Direction.CW)
         canvas.save(); canvas.clipPath(shape)
         paint.color = if (stage < 0) ColorUtils.setAlphaComponent(color, 65) else color
         canvas.drawRect(0f, 0f, extent, h, paint)
@@ -32,12 +35,12 @@ internal class StatChangeBar(ctx: Context, private val normal: Float, private va
                 intArrayOf(color, paint.color), null, android.graphics.Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, extent, h, paint); paint.shader = null
         } else if (stage == 0) canvas.drawRoundRect(0f, 0f, current * w, h, radius, radius, paint)
-        else canvas.drawRect(0f, 0f, current * w, h, paint)
+        else canvas.drawRoundRect(0f, 0f, current * w, h, radius, radius, paint)
         canvas.restore()
         if (stage != 0) {
-            paint.color = ColorUtils.setAlphaComponent(Ui.c(context, R.color.ag_text), 153)
+            paint.color = ColorUtils.setAlphaComponent(Ui.c(context, R.color.ag_text), 220)
             val tick = normal.coerceIn(0f, 1f) * w
-            canvas.drawRect(tick - 1f, -inset, tick + 1f, h + inset, paint)
+            canvas.drawRect(tick - Ui.dp(context, 1f), -inset, tick + Ui.dp(context, 1f), h + inset, paint)
         }
         canvas.restore()
     }

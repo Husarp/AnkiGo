@@ -29,16 +29,21 @@ class R25LShopShots {
             val dailyTitle = views.filterIsInstance<TextView>().single { it.text.startsWith(ShopCardKit.dealHeading()) }
             val label = dailyTitle.parent as LinearLayout
             val body = label.parent as LinearLayout
-            val daily = body.parent as View
+            val daily = body
             val weekendTitle = views.filterIsInstance<TextView>().single { it.text.startsWith("WEEKEND SPECIAL") }
-            val weekend = weekendTitle.parent as LinearLayout
-            assertEquals("Offer heights", daily.height, weekend.height)
-            // 1.0.0: 10 dp top + title + 6 dp gap + 52 dp icon slot + 10 dp bottom.
-            assertTrue("Historical deal height is retained as a minimum", daily.height >= label.height + Ui.dp(ctx, 78))
-            if (body.getChildAt(1).height == Ui.dp(ctx, 64))
-                assertEquals("Historical deal height without extra wrapping", label.height + Ui.dp(ctx, 78), body.height)
-            assertEquals("Daily heading centered", body.width / 2f, label.left + label.width / 2f, 1f)
-            assertEquals("Weekend heading centered", weekend.width / 2f, weekendTitle.left + weekendTitle.width / 2f, 1f)
+            val weekend = weekendTitle.parent.parent as LinearLayout
+            for (offer in listOf(daily, weekend)) {
+                assertTrue("Separated header and body", offer.childCount >= 3)
+                val header = offer.getChildAt(0)
+                val content = offer.getChildAt(2)
+                assertTrue("Body follows title bar", content.top >= header.bottom)
+                assertTrue("Frame encloses content", content.bottom <= offer.height - offer.paddingBottom)
+                for (text in all(offer).filterIsInstance<TextView>()) {
+                    val layout = text.layout ?: continue
+                    assertTrue("Text fits: ${text.text}", layout.getLineBottom(layout.lineCount - 1) <= text.height - text.paddingTop - text.paddingBottom)
+                    assertTrue("Text has width: ${text.text}", text.width > 0)
+                }
+            }
 
             val chip = Ui.typeChip(ctx, com.husarp.ankigo.game.Type.FIRE)
             val tile = ShopViews.tile(ctx, ShopViews.itemArt(ctx, "potion", 64), "TM · Ember",

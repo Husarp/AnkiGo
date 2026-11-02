@@ -28,7 +28,7 @@ class R26JSettingsShots {
                 if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
             }
             walk(page)
-            assertEquals(47, images.size)
+            assertEquals(51, images.size)
             assertEquals(0, requests)
             var firstLoaded = false
             var lastLoaded = false

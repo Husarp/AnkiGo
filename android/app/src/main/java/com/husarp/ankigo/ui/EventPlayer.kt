@@ -508,7 +508,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             is GameEvent.Caught -> return playCaught(e)
             is GameEvent.Defeated -> {
                 log(LogKind.GOOD, "WIN", "Wild ${em(bare(e.name))} fainted! +${e.xp} XP." + if (e.ask) " It is better than yours: catch it?" else "") // R19-P (PLAN 281)
-                return d(650)
+                return playDefeatBall(e)
             }
             is GameEvent.XpGained -> {
                 xpRun?.let { run ->   // R9-W6 CX-A: its burst played inside the Caught step already; only what is left of it is waited for
@@ -860,7 +860,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         arena.setPlayerStatus(null)
         arena.clearConditions()   // R19-K: the new fight starts with none
         arena.setBackdrop(sp?.types.orEmpty(), BackdropCatalog.seed(e.wildUid), BackdropCatalog.isLegendary(sp))   // R8-03: one of the pictures for this wild Pokémon's type, random per encounter
-        arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty())
+        arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty(), e.tier)
         arena.setEnemyHp(e.hp, e.maxHp, false)
         arena.setNewTag(e.newSpecies)
         if (sp != null) {
@@ -934,6 +934,24 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         }
         after(t + 1600) { endCatch() }
         return d(t + 1650)
+    }
+
+    /** PLAN 420: reuse the original rarity ball, drop, three wobbles and ball-origin XP. Visual only. */
+    private fun playDefeatBall(e: GameEvent.Defeated): Long {
+        arena.setEnemyCardShown(false)
+        arena.dropBall(CatchBall.forAuto(GameRepo.data?.species?.get(e.species)), d(450))
+        after(450) { arena.wobbleBall(d(1800)) }
+        val xp = upcomingPlayerXp()
+        after(2250) {
+            val wait = if (xp != null) startXp(xp, fromBall = true) else 0L
+            if (xp != null) xpRun = XpRun(xp, SystemClock.uptimeMillis() + wait)
+            val plan = if (xp != null) arena.xpPlan else null
+            if (plan != null) atMs(plan.ballFadeFrom.toLong()) { arena.fadeBall(plan.ballFadeMs.toLong()) }
+            val end = max(wait, plan?.let { (it.ballFadeFrom + it.ballFadeMs).toLong() } ?: 0L)
+            atMs(end) { arena.clearBall(); arena.setEnemyShown(false) }
+            resume(end + d(50))
+        }
+        return PENDING
     }
 
     /** The click: "Gotcha!" + stars + the log line ([xp] = the player's XP in the line, CX-A). */
