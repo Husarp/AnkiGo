@@ -1,63 +1,79 @@
 # AnkiGo
 
-A personal Pokémon companion for [AnkiDroid](https://github.com/ankidroid/Anki-Android). Study inside AnkiGo, or run it next to AnkiDroid in split screen, picture-in-picture or a floating window. Answers turn into a game.
+**Study your Anki cards and play a Pokémon game while you do it.**
 
-## Current state
+AnkiGo is an Android app for people who learn with [AnkiDroid](https://github.com/ankidroid/Anki-Android). Every card
+you answer becomes a move in a Pokémon battle: you catch Pokémon, level them up and fill your Pokédex just by studying.
+Nothing in the game needs a tap while you learn.
 
-0.4.0 adds in-app study: a Study tab with deck counts, card HTML/CSS, cloze and type-in, offline MathJax, readable media, answer intervals, verified writes and card actions. Each verified answer feeds the same game once. AnkiDroid 2.24+ and its database permission are required; flags need 2.25+.
+## Who it is for
 
-For pictures and sound, pick the public `collection.media` folder used by the F-Droid/GitHub AnkiDroid build, or import a legacy `.apkg` media copy. Cards with unavailable media offer AnkiDroid or “Answer anyway”. Play Store AnkiDroid can keep media private on Android 11+.
+- You study with AnkiDroid and want a reason to keep going every day.
+- You like Pokémon, or collecting and levelling things up.
+- You used the [Ankimon](https://github.com/h0tp-ftw/ankimon) add-on on the PC and want the same on your phone.
 
-HP and XP show numbers. Sprite downloads are optional, with type-coloured placeholders and downloads available later in Settings. Without game data, studying and diagnostics still work. Updates show asset size and byte/speed progress; game and picture downloads show estimated totals.
+## What you can do
 
-Existing features remain:
+### Study
 
-- **Import from Ankimon (PC).** In Anki, use Ankimon's menu *Game → Export Save File…*, copy the `.db` file to
-  the phone, then *Settings → Import Ankimon save…* in AnkiGo. You see what will change before anything does
-  ("adds 37 Pokémon, upgrades 4"). The import only adds: Pokémon you don't have yet are added, ones imported earlier
-  are upgraded if the file has them further along, the Pokédex is combined, and for items and coins the higher number
-  is kept, so importing the same file twice changes nothing. Nicknames and EVs come along; gens 1–8 (gen 9 when it is
-  switched on). Your current game is backed up first and can be restored under *Restore a backup*.
-- **Picture-in-picture.** Tap *Pop out* on the battle (or choose it in Settings for every time you leave AnkiGo) and the
-  battle shrinks into a small picture-in-picture window that keeps following your answers (buttons: Open, Pause/Resume).
-- **Floating windows** (optional, needs Android's "Display over other apps"): in split screen, Team, Pokédex, Shop and
-  Settings open in a small window you can move and resize over AnkiDroid, so the battle stays visible. Instead of
-  picture-in-picture you can also choose a floating battle window; it keeps running with a notification while AnkiGo
-  isn't in front.
+- Study your decks right inside AnkiGo, with the same cards, scheduling and answer buttons as AnkiDroid.
+- Or keep studying in AnkiDroid and run AnkiGo next to it: split screen, picture-in-picture or a small floating window.
+- Pick what to study: decks, tags, saved favourites, or extra practice that doesn't change your schedule.
+- Pictures, sound, maths and interactive card templates work, also offline.
+- Write on your cards with a whiteboard.
+- See each deck's progress: known cards, due cards and your study streak.
 
-The game itself: every answer you give becomes part of a Pokémon battle in AnkiGo's panel (two answers make one
-round): catch and collect Pokémon, level them up, evolve them, fill the Pokédex, earn coins for the daily shop.
-Nothing needs a tap while you study. AnkiGo started from the rules of the [Ankimon](https://github.com/h0tp-ftw/ankimon)
-Anki add-on, but has since gone its own way: its own battle engine, money, healing, catching, achievements and more.
-Saves can still be moved to and from Ankimon on the PC.
+### Play
 
-No Pokémon pictures or data are part of this repository or the APK. On first start AnkiGo downloads the game
-data (about 4 MB, from [PokeAPI](https://pokeapi.co) and [Pokémon Showdown](https://pokemonshowdown.com)) and
-optional small pictures (about 1 MB); battle animations download as you meet new Pokémon when picture downloads are enabled. Pokémon and Pokémon names
-are © Nintendo / Creatures / GAME FREAK.
+- Every two answers make one battle round. Good answers help you, a string of wrong ones makes the wild Pokémon stronger.
+- Catch Pokémon with different balls, train them, teach them moves and evolve them.
+- Grow your Bond with your partner Pokémon as you study together.
+- Earn coins and spend them in the daily Shop, with day and night deals.
+- Unlock achievements, collect daily gifts and find items as you answer.
+- Choose your battle scenery, animations and how the app looks.
 
-The step-0 test screens (live watch, checks, report) are under Settings → Diagnostics.
+### On your home screen
+
+- Widgets keep your buddy Pokémon on the home screen.
+
+### Bring your Ankimon save
+
+- Move your Pokémon from Ankimon on the PC to AnkiGo, and back again. You see what changes before anything does, and
+  your current game is backed up first.
+
+## What you need
+
+- An Android phone with **AnkiDroid 2.24 or newer**.
+- About 5 MB for the game data, downloaded on first start. Pokémon pictures are optional.
 
 ## Install
 
 1. Install AnkiDroid first.
-2. Download the newest `AnkiGo-X.Y.Z.apk` from [Releases](https://github.com/Husarp/AnkiGo/releases) and
-   open it on the phone (allow "Install unknown apps" for your browser or Files app when Android asks).
-3. Open AnkiGo and allow access to AnkiDroid when it asks. AnkiGo needs AnkiDroid's API permission
-   ("read and write to the AnkiDroid database") to show and answer cards through AnkiDroid’s scheduler. Companion mode only reads answers.
-4. Open Study and tap a deck to study here, or use the A button to study in AnkiDroid with AnkiGo as the companion.
+2. Download the newest `AnkiGo-X.Y.Z.apk` from [Releases](https://github.com/Husarp/AnkiGo/releases) and open it on the
+   phone (allow "Install unknown apps" when Android asks).
+3. Open AnkiGo and allow access to AnkiDroid. This lets AnkiGo show and answer your cards through AnkiDroid.
+4. Open **Study** and tap a deck, or study in AnkiDroid with AnkiGo next to it.
 
-After that, AnkiGo updates itself: it shows a banner when a new version is out, downloads it and hands it
-to Android's installer (Android asks you to confirm each update).
+AnkiGo tells you when a new version is out and installs it for you (Android asks you to confirm each update).
+
+## Good to know
+
+- **Pictures and sound on cards:** with the F-Droid or GitHub build of AnkiDroid, point AnkiGo to its `collection.media`
+  folder. The Play Store build can keep media private; cards then offer to open in AnkiDroid.
+- **Pokémon data:** no Pokémon pictures or data are in this repository or the app. AnkiGo downloads them from
+  [PokeAPI](https://pokeapi.co) and [Pokémon Showdown](https://pokemonshowdown.com). Pokémon and Pokémon names are
+  © Nintendo / Creatures / GAME FREAK.
+- **Where it came from:** AnkiGo started from the rules of the Ankimon add-on and has since gone its own way, with its
+  own battles, money, catching and achievements.
 
 ## Credits
 
 Icons: AnkiGo's own, plus some from [Material Symbols](https://github.com/google/material-design-icons) by Google
-(Apache License 2.0), e.g. the bottom bar's crossed swords (Battle) and closed book (Team / Pokédex).
+(Apache License 2.0).
 
 ## Licence
 
-**All rights reserved** — © 2026 Husarp. The code is public to read, and the releases are free to
-download and play, but the game may not be copied, changed, shared, sold or built upon without
-written permission. Third-party parts (fonts, MathJax, Material Symbols icons, Pokémon data and
-pictures) keep their own licences and owners. Full terms in [LICENSE](LICENSE).
+**All rights reserved** — © 2026 Husarp. The code is public to read, and the releases are free to download and play,
+but the game may not be copied, changed, shared, sold or built upon without written permission. Third-party parts
+(fonts, MathJax, Material Symbols icons, Pokémon data and pictures) keep their own licences and owners. Full terms in
+[LICENSE](LICENSE).
