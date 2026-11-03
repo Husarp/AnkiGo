@@ -12,6 +12,7 @@ import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.ItemUse
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 
 // TICKET T14 owns this file: the Bag tab of the Shop screen (owned items grouped, then TMs) and what a tap does.
@@ -176,13 +177,15 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
                 if (team.isEmpty()) return
                 close()
                 // main first (it is team[0]); HP shown so the choice is easy
-                Pickers.pickMon(s, "${Items.name(item)} on…", data, team, { Bits.hpText(data, it) }) { mons.runUse(item, it.uid) }
+                Pickers.pickMon(s, "${Items.name(item)} on…", data, team, { Bits.hpText(data, it) }) { mon ->
+                    Pickers.hold(s, "Use ${Items.name(item)}?", "Use ${Items.name(item)} on ${mon.shownName}?", "Use") { mons.runUse(item, mon.uid) }
+                }
             }
             ItemKind.EVOLUTION -> {
                 val ok = candidates().filter { ItemUse.canUse(data, state, item, it) || Progression.itemEvolutionTimeNeeded(data, it, item) != null } // time-blocked ones stay, hinted "(night)"
                 if (ok.isEmpty()) { Ui.toast(s, "No Pokémon can use ${Items.name(item)} right now"); return }
                 close()
-                Pickers.pickMon(s, "${Items.name(item)} on…", data, ok, { mon -> evoHint(item, mon) }) { mons.useItem(it, item) }
+                Pickers.pickMonNames(s, "${Items.name(item)} on…", ok) { mons.useItem(it, item) }
             }
             ItemKind.HELD -> {
                 val all = candidates().filter { it.heldItem != item }
@@ -195,7 +198,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
             ItemKind.FOSSIL -> {
                 val sp = def.fossil?.let { data.species[it] }?.name ?: "a Pokémon"
                 close()
-                Pickers.confirm(s, "Revive fossil?", "Use ${Items.name(item)} to revive $sp (Lv 5)?", "Revive") { mons.runUse(item, null) }
+                Pickers.hold(s, "Revive fossil?", "Use ${Items.name(item)} to revive $sp (Lv 5)?", "Revive") { mons.runUse(item, null) }
             }
             ItemKind.BALL -> throwBall(item, close)
             ItemKind.ESCAPE -> escape(item, close)
@@ -205,18 +208,13 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     /** Team first, then the box (by species number). */
     private fun candidates(): List<Mon> = state.teamMons() + state.boxMons().sortedWith(compareBy({ it.species }, { it.level }))
 
-    private fun evoHint(item: String, mon: Mon): String =
-        Progression.itemEvolutionAnyTime(data, mon, item)?.let { e ->
-            "→ ${data.sp(e.to).name}" + (Progression.itemEvolutionTimeNeeded(data, mon, item)?.let { " ($it)" } ?: "")
-        } ?: "Lv ${mon.level}"
-
     private fun throwBall(ball: String, close: () -> Unit) {
         val battle = state.battle
         if (battle == null) { Ui.toast(s, "No wild Pokémon right now. Throw balls from a battle."); return }
         val wild = battle.wild
         close()
         val choose: (String, String?) -> Unit = { regular, special ->
-            Pickers.confirm(s, "Throw ${Catching.throwName(regular, special)}?", Items.MISS_RULE, "Throw") {
+            Pickers.hold(s, "Throw ${Catching.throwName(regular, special)}?", Items.MISS_RULE, "Throw") {
                 val events = GameRepo.act(s) { it.throwBall(regular, special) }
                 s.report(ballMessage(events, wild.name), events)
                 s.requestRender()
@@ -237,7 +235,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         val battle = state.battle
         if (battle == null) { Ui.toast(s, "No wild Pokémon to escape from"); return }
         close()
-        Pickers.confirm(s, "Use ${Items.name(item)}?", "The wild ${battle.wild.name} leaves and a new one appears.", "Use") {
+        Pickers.hold(s, "Use ${Items.name(item)}?", "The wild ${battle.wild.name} leaves and a new one appears.", "Use") {
             val events = GameRepo.act(s) { it.escape(item) }
             val fled = events.filterIsInstance<GameEvent.Fled>().firstOrNull()
             s.report(if (fled != null) "${fled.name} left." else "Used ${Items.name(item)}.", events)

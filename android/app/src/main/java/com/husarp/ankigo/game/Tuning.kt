@@ -277,9 +277,9 @@ object Tuning {
     const val EV_STAT_CAP = 252
     const val EV_TOTAL_CAP = 510
     const val WILD_EV_PER_LEVEL = 2     // EVs per level per point of species EV yield
-    val FRIENDSHIP_GAIN = 5..9          // per win (defeat or catch) while it is the Main
-    const val FRIENDSHIP_MAX = 255      // R17C-2: friendship stops here (an older save's higher number shows as 255)
-    const val SOOTHE_BELL = 1.5         // Soothe Bell on the Main: friendship gain x1.5
+    val FRIENDSHIP_GAIN = 5..9          // legacy Ankimon/Return compatibility; earned Bond uses Bond.WIN_POINTS
+    const val FRIENDSHIP_MAX = 255      // legacy Ankimon/Return scale, not the Bond points cap
+    const val SOOTHE_BELL = 1.5         // Soothe Bell on the Main: Bond points ×1.5 (including half-point carry)
     const val DEFAULT_MIN_FRIENDSHIP = 160
     const val DAY_FROM_HOUR = 6         // day 6:00-18:00, night otherwise
     const val NIGHT_FROM_HOUR = 18
@@ -344,7 +344,7 @@ object Tuning {
     const val REROLL_PRICE = 100
     const val REROLL_PRICE_STEP = 100
     val SHOP_BASICS = listOf("potion") // always on sale at their normal price; not part of the daily draw
-    const val DEAL_PERCENT = 30             // the deal of the day: this much off (price = round(normal * 0.7), at least 1)
+    val DEAL_PERCENTS = listOf(20, 25, 30, 35, 40) // date-seeded, independently drawn for each day/night offer
 
     // ---- Healing (AnkiGo's own rules, PLAN 80; Ankimon has none of these). Whole HP, never above max HP. ----
     const val LEVEL_UP_HEAL_PERCENT = 25 // of max HP per level gained, on top of the HP the new level adds (min 1)

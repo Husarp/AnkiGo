@@ -111,6 +111,11 @@ object AchievementPopup {
     /** Found items waiting for a screen (tests). */
     internal fun waitingItems(): List<ItemFind> = pendingItems
 
+    /** Only suppress an arena notice when this drop has a card waiting or already on screen.
+     * Item cards are independent of the achievement notification preference. */
+    internal fun hasItemCard(drop: GameEvent.ItemFound): Boolean =
+        (pendingItems + shownItems).any { it.item == drop.item && it.total == drop.count }
+
     /** Daily gifts waiting for a screen (tests). */
     internal fun waitingGifts(): List<GiftPop> = pendingGifts
 

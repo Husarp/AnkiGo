@@ -54,21 +54,22 @@ class R23FDownloadsTest {
     @Test fun prefetchLoadsSavedBackgroundAndMissingBackgroundNeverDownloads() {
         val ctx = context()
         val types = listOf(Type.WATER)
-        val bg = BackdropCatalog.pick(types, 0, false)
+        val seed = (0..1000).first { BackdropCatalog.pick(types, it, false).source == com.husarp.ankigo.ui.BackdropSource.SHOWDOWN }
+        val bg = BackdropCatalog.pick(types, seed, false)
         png(Backdrops.file(Sprites.dir(ctx), bg))
         var asked = 0
         Backdrops.get = { _, _ -> asked++; null }
         val arena = ArenaView(ctx)
         AppPrefs.setBackgroundPictures(ctx, false)
-        arena.prefetchBackdrop(types, 0)
+        arena.prefetchBackdrop(types, seed)
         assertNull(Backdrops.inMemory(bg))
         AppPrefs.setBackgroundPictures(ctx, true)
-        arena.prefetchBackdrop(types, 0)
+        arena.prefetchBackdrop(types, seed)
         paparazzi.snapshot(arena, "r23f-prefetch", 100)
         assertNotNull(Backdrops.inMemory(bg))
         Backdrops.forget()
         Backdrops.file(Sprites.dir(ctx), bg).delete()
-        arena.setBackdrop(types, 0)
+        arena.setBackdrop(types, seed)
         paparazzi.snapshot(arena, "r23f-missing-background", 100)
         assertNull(arena.backdropElement)
         assertEquals(0, asked)

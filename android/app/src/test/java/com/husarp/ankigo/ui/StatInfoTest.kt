@@ -22,12 +22,9 @@ class StatInfoTest {
         assertTrue(StatInfo.EV.text.contains("252") && StatInfo.EV.text.contains("510"))
         assertTrue(StatInfo.NATURE.text.contains("10 %"))
         assertTrue(StatInfo.EV.text.contains("every win"))
-        assertTrue(StatInfo.FRIENDSHIP.text.contains("255") && StatInfo.FRIENDSHIP.text.contains("160") && StatInfo.FRIENDSHIP.text.contains("5 to 9"))
-        assertTrue(StatInfo.FRIENDSHIP.text.contains("Soothe Bell") && StatInfo.FRIENDSHIP.text.contains("Return"))
-        assertTrue(StatInfo.FRIENDSHIP in StatInfo.all())
-        assertEquals("255 / 255", DetailFormat.friendship(300))
-        assertEquals("0 / 255", DetailFormat.friendship(-3))
-        assertEquals("142 / 255", DetailFormat.friendship(142))
+        assertTrue(StatInfo.BOND.text.contains("50 / 125 / 250 / 500 / 800"))
+        assertTrue(StatInfo.BOND.text.contains("Soothe Bell") && StatInfo.BOND.text.contains("No decay"))
+        assertTrue(StatInfo.BOND in StatInfo.all())
         assertTrue(StatInfo.of(Stat.SPE).text.contains("first"))
     }
 

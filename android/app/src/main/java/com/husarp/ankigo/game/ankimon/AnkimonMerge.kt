@@ -2,6 +2,7 @@ package com.husarp.ankigo.game.ankimon
 
 import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.BattleSide
+import com.husarp.ankigo.game.Bond
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.ItemKind
@@ -331,7 +332,7 @@ object AnkimonMerge {
             uid = uid, species = sp.num, name = sp.name, level = level, xp = 0, ivs = ivs, evs = evs,
             nature = Nature.entries.firstOrNull { it.name.equals(m.nature?.trim(), ignoreCase = true) } ?: Nature.SERIOUS,
             gender = gender(m.gender, sp), shiny = m.shiny, ability = ability(m.ability, sp), moves = moves.toMutableList(),
-            hp = 1, friendship = (m.friendship ?: 0).coerceIn(0, 255), heldItem = heldItem,
+            hp = 1, bondPoints = Bond.fromLegacy(m.friendship ?: 0), friendship = (m.friendship ?: 0).coerceIn(0, 255), heldItem = heldItem,
             caughtAt = parseDate(m.capturedDate) ?: now, defeats = (m.defeated ?: 0).coerceAtLeast(0), tier = tier(m.tier),
             nickname = nickname(m, sp), ankimonId = m.individualId,
         )
@@ -421,6 +422,7 @@ object AnkimonMerge {
             val merged = Stats.of(ex.evs.toList().zip(file.evs.toList()) { a, b -> maxOf(a, b) })
             if (merged.total <= Tuning.EV_TOTAL_CAP) ex.evs = merged
             ex.friendship = maxOf(ex.friendship, file.friendship)
+            ex.bondPoints = maxOf(ex.bondPoints, file.bondPoints)
             ex.shiny = ex.shiny || file.shiny
             file.nickname?.let { ex.nickname = it }
             ex.hp = StatCalc.maxHp(data, ex)

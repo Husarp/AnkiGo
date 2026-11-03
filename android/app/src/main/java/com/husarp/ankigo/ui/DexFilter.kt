@@ -17,18 +17,18 @@ enum class DexOwned { ALL, OWNED, SEEN, NOT_OWNED }
  */
 enum class DexSort(val label: String, val naturalDescending: Boolean = false) {
     NUMBER("Number"), NAME("Name"), LAST_CAUGHT("Last caught", true),
-    LEVEL("Level", true), TOTAL("Total stats", true), STAT("One stat", true), CHOSEN_TOTAL("Chosen stats", true), FIRST_SEEN("First seen", true);
+    LEVEL("Level", true), TOTAL("Total stats", true), STAT("One stat", true), CHOSEN_TOTAL("Chosen stats", true), FIRST_SEEN("First seen", true), RECENTLY_EVOLVED("Recently evolved", true);
 
     /** The [SortKey] that does the same job. */
     val key: SortKey get() = when (this) {
-        NUMBER -> SortKey.DEX_NUMBER; NAME -> SortKey.NAME; LAST_CAUGHT -> SortKey.CAUGHT_DATE; LEVEL -> SortKey.LEVEL
+        RECENTLY_EVOLVED -> SortKey.RECENTLY_EVOLVED; NUMBER -> SortKey.DEX_NUMBER; NAME -> SortKey.NAME; LAST_CAUGHT -> SortKey.CAUGHT_DATE; LEVEL -> SortKey.LEVEL
         TOTAL -> SortKey.TOTAL; STAT -> SortKey.STAT; CHOSEN_TOTAL -> SortKey.CHOSEN_TOTAL; FIRST_SEEN -> SortKey.FIRST_SEEN
     }
 
     companion object {
         /** The Dex sort for a Box/Team sort key; keys a species can't have (attacks, caught date) give NUMBER. */
         fun fromKey(k: SortKey): DexSort = when (k) {
-            SortKey.DEX_NUMBER -> NUMBER; SortKey.NAME -> NAME; SortKey.LEVEL -> LEVEL; SortKey.TOTAL -> TOTAL; SortKey.STAT -> STAT
+            SortKey.RECENTLY_EVOLVED -> RECENTLY_EVOLVED; SortKey.DEX_NUMBER -> NUMBER; SortKey.NAME -> NAME; SortKey.LEVEL -> LEVEL; SortKey.TOTAL -> TOTAL; SortKey.STAT -> STAT
             SortKey.CHOSEN_TOTAL -> CHOSEN_TOTAL; SortKey.FIRST_SEEN -> FIRST_SEEN; SortKey.CAUGHT_DATE -> LAST_CAUGHT
             SortKey.STRONGEST_ATTACK, SortKey.VS_WILD -> NUMBER
         }

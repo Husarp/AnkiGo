@@ -163,11 +163,8 @@ abstract class AgActivity : Activity() {
         }
     }
 
-    /** PLAN 222: the user left the app while this screen was open and is back: start fresh. Default: [closesWhenLeft] screens close. */
-    open fun onAppReturned() {
-        AwayWindows.dismissAll()
-        if (closesWhenLeft) finish()
-    }
+    /** PLAN 448 supersedes the return reset: keep the owner Activity and its open windows. */
+    open fun onAppReturned() {}
 
     private companion object {
         /** How many times the user left the app (process-wide; each screen compares it with the count it last saw). */

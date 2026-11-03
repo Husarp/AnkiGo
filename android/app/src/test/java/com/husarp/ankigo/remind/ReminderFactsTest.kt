@@ -15,17 +15,19 @@ class ReminderFactsTest {
         GameData(w.species, w.moves, w.growth, w.itemPrices + mapOf("water-stone" to 3000, "fire-stone" to 3000, "fast-ball" to 1000))
     }
 
-    private fun state() = TestData.state(data).also { it.settings.dailyAverage = 50 }
+    private fun state() = TestData.state(data).also { it.settings.dailyAverage = 50; it.main!!.bondPoints = 125 }
 
     @Test fun worthHavingMeansAnyBallOrAnEvolutionItemThatFitsATeamMember() {
         val s = state() // team: Sparkmouse (evolves with thunder-stone), nothing else
         val stock = listOf("poke-ball", "thunder-stone", "water-stone", "moon-stone", "potion", "lucky-egg", "helix-fossil", "great-ball")
         assertEquals(listOf("poke-ball", "thunder-stone", "great-ball"), ReminderFacts.worthHaving(data, s, stock))
+        s.main!!.bondPoints = 0
+        assertEquals(listOf("poke-ball", "great-ball"), ReminderFacts.worthHaving(data, s, stock))
     }
 
     @Test fun anEvolutionItemForAPokemonOutsideTheTeamIsNotWorthIt() {
         val s = state()
-        s.mons += TestData.mon(data, 133, 10, uid = "boxed") // Fluffy (water-stone) sits in the box
+        s.mons += TestData.mon(data, 133, 10, uid = "boxed").apply { bondPoints = 125 } // Fluffy (water-stone) sits in the box
         assertEquals(emptyList<String>(), ReminderFacts.worthHaving(data, s, listOf("water-stone")))
         s.team += "boxed"
         assertEquals(listOf("water-stone"), ReminderFacts.worthHaving(data, s, listOf("water-stone")))
@@ -40,7 +42,7 @@ class ReminderFactsTest {
     @Test fun timeBoundEvolutionItemsStillCountAtAnyTimeOfDay() {
         val sp = TestData.species(900, "Daymon", evolutions = listOf(Evolution(901, EvoKind.ITEM, item = "dusk-stone", time = "night")))
         val d = GameData(data.species + (900 to sp) + (901 to TestData.species(901, "Nightmon")), data.moves, data.growth, data.itemPrices + ("dusk-stone" to 2000))
-        val s = TestData.state(d, species = 900)
+        val s = TestData.state(d, species = 900).apply { main!!.bondPoints = 125 }
         assertEquals(listOf("dusk-stone"), ReminderFacts.worthHaving(d, s, listOf("dusk-stone")))
     }
 

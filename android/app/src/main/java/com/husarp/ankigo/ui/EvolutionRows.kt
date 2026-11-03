@@ -22,7 +22,7 @@ internal class EvolutionRows(
     private val onEvolve: ((Evolution) -> Unit)? = null,
 ) : LinearLayout(a) {
     private var bubble: AppDialog? = null
-    private data class Branch(val row: View, val parent: View, val depth: Int)
+    private data class Branch(val row: View, val parent: View, val depth: Int, val names: View)
     private val branches = ArrayList<Branch>()
 
     override fun dispatchDraw(canvas: android.graphics.Canvas) {
@@ -31,7 +31,7 @@ internal class EvolutionRows(
         }
         branches.forEach { branch ->
             val x = Ui.dp(context, 6 + branch.depth * 16 - 8).toFloat()
-            val y = branch.row.top + branch.row.height / 2f
+            val y = branch.row.top + branch.names.top + branch.names.height / 2f
             canvas.drawLine(x, branch.parent.bottom.toFloat(), x, y, paint)
             canvas.drawLine(x, y, x + Ui.dp(context, 6), y, paint)
         }
@@ -54,7 +54,44 @@ internal class EvolutionRows(
         val caught = node.species.num in state?.caught.orEmpty()
         val visible = caught || EvoLine.isSeen(node.species, seen)
         val here = node.species.num == current.num
-        val row = LinearLayout(a).apply {
+        val row = object : LinearLayout(a) {
+            private var stacked = false
+            private val gap = Ui.dp(a, 4)
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val available = View.MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
+                stacked = childCount == 3 && View.MeasureSpec.getMode(widthMeasureSpec) != View.MeasureSpec.UNSPECIFIED &&
+                    available < Ui.dp(a, 250f * resources.configuration.fontScale)
+                if (!stacked) { super.onMeasure(widthMeasureSpec, heightMeasureSpec); return }
+                val icon = getChildAt(0)
+                val names = getChildAt(1)
+                val condition = getChildAt(2)
+                val margins = names.layoutParams as LayoutParams
+                val free = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                icon.measure(View.MeasureSpec.makeMeasureSpec(Ui.dp(a, 32), View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(Ui.dp(a, 32), View.MeasureSpec.EXACTLY))
+                names.measure(View.MeasureSpec.makeMeasureSpec(
+                    (available - icon.measuredWidth - margins.marginStart - margins.marginEnd).coerceAtLeast(1),
+                    View.MeasureSpec.EXACTLY), free)
+                condition.measure(View.MeasureSpec.makeMeasureSpec(available.coerceAtLeast(1), View.MeasureSpec.EXACTLY), free)
+                setMeasuredDimension(View.MeasureSpec.getSize(widthMeasureSpec), resolveSize(
+                    maxOf(minimumHeight, paddingTop + maxOf(icon.measuredHeight, names.measuredHeight) + gap +
+                        condition.measuredHeight + paddingBottom), heightMeasureSpec))
+            }
+            override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+                if (!stacked) { super.onLayout(changed, l, t, r, b); return }
+                val icon = getChildAt(0)
+                val names = getChildAt(1)
+                val condition = getChildAt(2)
+                val head = maxOf(icon.measuredHeight, names.measuredHeight)
+                val iconTop = paddingTop + (head - icon.measuredHeight) / 2
+                icon.layout(paddingLeft, iconTop, paddingLeft + icon.measuredWidth, iconTop + icon.measuredHeight)
+                val nameLeft = paddingLeft + icon.measuredWidth + (names.layoutParams as LayoutParams).marginStart
+                val nameTop = paddingTop + (head - names.measuredHeight) / 2
+                names.layout(nameLeft, nameTop, nameLeft + names.measuredWidth, nameTop + names.measuredHeight)
+                val below = paddingTop + head + gap
+                condition.layout(paddingLeft, below, width - paddingRight, below + condition.measuredHeight)
+            }
+        }.apply {
             orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             minimumHeight = Ui.dp(a, 48)
             setPadding(Ui.dp(a, 6 + depth * 16), Ui.dp(a, 4), Ui.dp(a, 6), Ui.dp(a, 4))
@@ -91,6 +128,10 @@ internal class EvolutionRows(
                 minimumHeight = Ui.dp(a, 40)
                 setPadding(Ui.dp(a, 6), Ui.dp(a, 5), Ui.dp(a, 6), Ui.dp(a, 5))
             }
+            if (met) condition.addView(Ui.text(a, 16f, 900, R.color.ag_green).apply {
+                text = "↑"
+                contentDescription = "Ready to evolve"
+            }, LayoutParams(Ui.dp(a, 20), -2))
             val item = Progression.evolutionItem(e)
             if (item != null) condition.addView(ImageView(a).apply {
                 Ui.itemIcon(a, item, this)
@@ -99,14 +140,14 @@ internal class EvolutionRows(
             }, LayoutParams(Ui.dp(a, 24), Ui.dp(a, 24)))
             else if (e.kind == EvoKind.FRIENDSHIP) condition.addView(Ui.text(a, 18f, 800, if (met) R.color.ag_pink else R.color.ag_sub0).apply { text = "♥" })
             condition.addView(Ui.text(a, 11f, 800, if (met) R.color.ag_green else R.color.ag_sub0).apply {
-                text = EvolutionRowText.condition(data, e)
+                text = EvolutionRowText.condition(data, e, mon?.takeIf { parent?.num == it.species })
             }, LayoutParams(0, -2, 1f).apply { marginStart = Ui.dp(a, 4) })
-            condition.contentDescription = "Explain ${EvolutionRowText.condition(data, e)}"
+            condition.contentDescription = "Explain ${EvolutionRowText.condition(data, e, mon?.takeIf { parent?.num == it.species })}"
             condition.setOnClickListener { showExplanation(e, parent) }
             row.addView(condition, LayoutParams(0, -2, 1.35f))
         }
         addView(row, LayoutParams(-1, -2).apply { topMargin = Ui.dp(a, 3) })
-        if (parentRow != null) branches += Branch(row, parentRow, depth)
+        if (parentRow != null) branches += Branch(row, parentRow, depth, names)
         node.children.forEach { append(it, node.species, depth + 1, row) }
     }
 
@@ -126,32 +167,21 @@ internal class EvolutionRows(
         if (onEvolve != null && mon != null && parent?.num == mon.species) {
             val dialog = AppDialog.Builder(a).setInfoHeader(EvolutionRowText.condition(data, e), Progression.evolutionItem(e)).setView(body)
                 .setNegativeButton("Close", null)
-            dialog.setPositiveButton("Evolve", null)
+            dialog.setPositiveButton("Hold to evolve", null)
             val window = dialog.create()
             info = window
-            var armed = false
             window.button(AppDialog.BUTTON_POSITIVE)!!.apply {
                 isEnabled = isReady(e, parent)
                 if (!isEnabled) {
                     background = Ui.rounded(Ui.c(a, R.color.ag_s0), 12, a)
                     setTextColor(Ui.c(a, R.color.ag_sub0))
                 }
-                setOnClickListener {
-                    if (isEnabled && isReady(e, parent)) {
-                        if (!armed) {
-                            armed = true
-                            text = "Tap again to evolve"
-                            (body as LinearLayout).addView(Ui.text(a, 13f, 800, R.color.ag_text).apply {
-                                text = "This can't be undone."
-                                setPadding(0, Ui.dp(a, 12), 0, 0)
-                            })
-                        } else {
-                            window.dismiss()
-                            onEvolve.invoke(e)
-                        }
-                    }
+                HoldToConfirm.bind(this, "evolve", allowed = { isReady(e, parent) }) {
+                    window.dismiss()
+                    onEvolve.invoke(e)
                 }
             }
+
             bubble = window
             Pickers.show(window)
             return
@@ -195,16 +225,22 @@ internal class EvolutionRows(
                     movementMethod = LinkMovementMethod.getInstance()
                 })
             }
+            if (mon != null && parent?.num == mon.species) addView(Ui.text(a, 13f, 800, R.color.ag_text).apply {
+                this.text = "This can't be undone."
+                setPadding(0, Ui.dp(a, 12), 0, 0)
+            })
         }
     }
 }
 
 internal object EvolutionRowText {
-    fun condition(data: GameData, e: Evolution): String = EvoLine.method(data, e)
-        .replace(Regex("^Lv "), "Level ")
-        .replace("Friendship", "Friendship ${e.minFriendship ?: Tuning.DEFAULT_MIN_FRIENDSHIP}")
-        .replace(", day", "\nin the daytime").replace(", night", "\nat night")
-        .replace(", Fairy-type move", "\nknows a Fairy move")
+    fun condition(data: GameData, e: Evolution, mon: Mon? = null): String {
+        val method = EvoLine.method(data, e)
+            .replace(Regex("^Lv "), "Level ")
+            .replace(", day", "\nin the daytime").replace(", night", "\nat night")
+            .replace(", Fairy-type move", "\nknows a Fairy move")
+        return method + if (mon != null && !Bond.allows(mon, e)) "\nNeeds ♥${Bond.requiredLevel(e)}" else ""
+    }
 
     fun explanation(data: GameData, e: Evolution, parent: Species?, seen: Set<Int>, state: GameState?, mon: Mon?): String {
         val item = Progression.evolutionItem(e)
@@ -212,14 +248,14 @@ internal object EvolutionRowText {
             (state?.let {
                 if (it.count(item) == 0) "You don't have a ${Items.name(item)}."
                 else "You own ${it.count(item)} ${Items.name(item)}." +
-                    if (mon != null && parent?.num == mon.species) " Tap Evolve, then tap again to evolve. This can’t be undone." else ""
+                    if (mon != null && parent?.num == mon.species) " Hold Evolve for one second to evolve." else ""
             } ?: "Requires ${Items.name(item)}.") +
                 "\n\nThe Shop sells evolution items on some days; they also drop while you study.\n\n"
-        } else if (e.kind == EvoKind.FRIENDSHIP && mon != null && parent?.num == mon.species) {
-            "Friendship now: ${mon.friendship} of ${e.minFriendship ?: Tuning.DEFAULT_MIN_FRIENDSHIP}.\n\n"
         } else ""
+        val bond = if (mon != null && parent?.num == mon.species)
+            "Bond now: ♥${Bond.level(mon.bondPoints)} · ${mon.bondPoints} points. Needs ♥${Bond.requiredLevel(e)}.\n\n" else ""
         val details = EvoLine.explanation(data, e)
         // The item paragraph already explains availability; retain all extra restrictions from the existing rules text.
-        return if (item == null) extra + details else extra + details.split("\n\n").drop(1).dropLast(1).joinToString("\n\n")
+        return if (item == null) bond + extra + details else extra + bond + details.split("\n\n").filterNot { it.startsWith("Have ") || it.startsWith("When ready") }.joinToString("\n\n")
     }
 }

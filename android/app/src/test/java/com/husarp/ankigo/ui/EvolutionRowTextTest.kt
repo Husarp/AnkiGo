@@ -9,12 +9,20 @@ class EvolutionRowTextTest {
 
     @Test fun friendshipShowsThresholdAndPlainTime() {
         val e = Evolution(135, EvoKind.FRIENDSHIP, minFriendship = 160, time = "night")
-        assertEquals("Friendship 160\nat night", EvolutionRowText.condition(data, e))
-        val mon = TestData.mon(data, 133, 20).apply { friendship = 124 }
+        assertEquals("Bond ♥3\nat night", EvolutionRowText.condition(data, e))
+        val mon = TestData.mon(data, 133, 20).apply { bondPoints = 124 }
         val text = EvolutionRowText.explanation(data, e, data.sp(133), setOf(133), null, mon)
-        assertTrue(text.contains("124 of 160"))
+        assertTrue(text.contains("♥1 · 124 points. Needs ♥3"))
         assertTrue(text.contains("18:00–06:00"))
-        assertFalse(EvolutionRowText.explanation(data, e, data.sp(135), setOf(135), null, mon).contains("124 of"))
+        assertFalse(EvolutionRowText.explanation(data, e, data.sp(135), setOf(135), null, mon).contains("Bond now:"))
+    }
+
+    @Test fun normalRowShowsBondGateAlongsideTheUsualRequirement() {
+        val e = Evolution(135, EvoKind.LEVEL, level = 16)
+        val mon = TestData.mon(data, 133, 40).apply { bondPoints = 124 }
+        assertEquals("Level 16\nNeeds ♥2", EvolutionRowText.condition(data, e, mon))
+        mon.bondPoints = 125
+        assertEquals("Level 16", EvolutionRowText.condition(data, e, mon))
     }
 
     @Test fun itemInstructionsIncludeAvailabilityAndShopWithoutBagOrSpoilers() {
@@ -33,12 +41,12 @@ class EvolutionRowTextTest {
         assertTrue(EvolutionRowText.explanation(data, e, data.sp(133), setOf(133), state, null).contains("You own 2"))
     }
 
-    @Test fun ownedItemOnPokemonExplainsTwoTapEvolve() {
+    @Test fun ownedItemOnPokemonExplainsHoldEvolve() {
         val state = TestData.state(data, 133, 20).apply { bag["thunder-stone"] = 1 }
         val text = EvolutionRowText.explanation(data, Evolution(135, EvoKind.ITEM, item = "thunder-stone"),
             data.sp(133), setOf(133), state, state.main)
-        assertTrue(text.contains("Tap Evolve, then tap again"))
-        assertTrue(text.contains("can’t be undone"))
+        assertTrue(text.contains("Hold Evolve for one second"))
+        assertFalse(text.contains("tap again"))
         assertFalse(text.contains("open your Bag"))
         assertTrue(text.contains("Shop"))
     }

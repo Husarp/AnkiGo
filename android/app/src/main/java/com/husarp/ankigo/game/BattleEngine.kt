@@ -374,8 +374,8 @@ object BattleEngine {
         // ---- writing events ----
 
         /** Writes an [GameEvent.Effect] for [p]: the line [text], its [kind] and the numbers the kind carries ([label] = the short float text). */
-        fun fx(p: Boolean, text: String, kind: EffectKind = EffectKind.OTHER, stat: String? = null, stages: Int = 0, amount: Int = 0, label: String? = null, into: Int = 0, intoShiny: Boolean = false, moveRecoil: Boolean = false) {
-            out += GameEvent.Effect(p, text, mon(p).hp, maxHp(p), side(p).status, kind, stat, stages, amount, label, into, intoShiny, moveRecoil)
+        fun fx(p: Boolean, text: String, kind: EffectKind = EffectKind.OTHER, stat: String? = null, stages: Int = 0, amount: Int = 0, label: String? = null, into: Int = 0, intoShiny: Boolean = false, moveRecoil: Boolean = false, hp: Int = mon(p).hp) {
+            out += GameEvent.Effect(p, text, hp, maxHp(p), side(p).status, kind, stat, stages, amount, label, into, intoShiny, moveRecoil)
         }
 
         /** [p] regains up to [amount] HP (never above its max); the event carries what it really gained. [label] = a short float text (an ability's name). */

@@ -480,7 +480,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         for (g in SettingsSearch.groups(subs, GAME_GROUPS)) {
             if (g.title.isNotEmpty()) content.addView(Form.sect(this, g.title, if (g.title == "Always catch") "options 2 to 5" else null))
             if (g.title == CATCH_GROUP) content.addView(Ui.text(this, 12f, 600, R.color.ag_sub0).apply {
-                text = "Defeat or catch: the same XP, EVs, friendship and coins. A catch gives you the Pokémon."
+                text = "Defeat or catch: the same XP, EVs, Bond points and coins. A catch gives you the Pokémon."
                 setPadding(dp(4), 0, dp(4), dp(8))
             })
             content.addView(Form.cardOf(this, g.rows.map { rows[it] }), if (g.title.isEmpty()) Form.lp(this, 12) else Form.lp())
@@ -565,9 +565,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.segmented(this, ShowAnswerColor.entries.map { it.label }, ShowAnswerColor.entries.indexOf(ShowAnswerColor.get(this))) {
                 ShowAnswerColor.put(this, ShowAnswerColor.entries[it])
             })
+        val detailsOrder = Form.row(this, "Details sections order", "Drag to arrange Pokémon details sections", null) { DetailOrderSettings.show(this) }
         return groupedCard(listOf(theme, accent, tabBar, barStyle, typeStyle, matchupChips, size,
             textSizeRow("app", "App text"), textSizeRow("battle", "Battle text"), textSizeRow("card", "Anki card text"),
-            deckLook, answer, listSize, stacked, two, achievements))
+            deckLook, answer, listSize, stacked, two, achievements, detailsOrder))
     }
 
     private fun textSizeRow(kind: String, title: String): View {
@@ -1460,10 +1461,14 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         box.addView(Form.body(this,
             "Pokémon and Pokémon names © Nintendo / Creatures / GAME FREAK. Data: PokeAPI, Pokémon Showdown. " +
                 "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). Secret achievement icons: Tabler Icons © 2020–2026 Paweł Kuna (MIT, https://tabler.io/icons). " +
+                "Bond artwork: filling Love Ball from PokéAPI sprites (© The Pokémon Company), recoloured and enlarged for AnkiGo. Source terms: Bond artwork licence below. " +
                 "Attack effects: Kenney Particle Pack (CC0) and Pokémon Showdown effect images (CC0); Ember and Vine Whip pixel art drawn for AnkiGo. " +
                 "Streak flame: animated Noto Emoji by Google (CC BY 4.0, resized; animation modified for AnkiGo). " +
                 "Battle backgrounds: Pokémon Showdown's (art by Smogon artists) and scenes made for AnkiGo, included in the app or downloaded when needed. " +
                 "Pictures, cries and game data come from AnkiGo's own copy on GitHub first and from the original sites second.", 12, R.color.ag_sub0), Form.lp(this, 6))
+        box.addView(Form.row(this, "Bond artwork licence", "PokéAPI · Love Ball", null) {
+            info("Bond artwork licence", assets.open("licenses/pokeapi-love-ball.txt").bufferedReader().use { it.readText() })
+        }, Form.lp(this, 6))
         return box
     }
 

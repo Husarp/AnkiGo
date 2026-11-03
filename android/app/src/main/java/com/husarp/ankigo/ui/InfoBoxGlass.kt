@@ -168,7 +168,7 @@ internal class ArenaGlass(
             paint.plain(Ui.c(ctx, R.color.ag_arena_top), Ui.c(ctx, R.color.ag_arena_bot), h.toFloat())
             return
         }
-        val crop = if (st != null && st.cropW > 0f && st.cropH > 0f) BackdropDraw.Crop(st.cropX, st.cropY, st.cropW, st.cropH)
+        val crop = if (st != null && st.cropW > 0f && st.cropH > 0f) BackdropDraw.stageCrop(b, st)
         else BackdropDraw.coverCrop(b.w, b.h, w.toFloat(), h.toFloat())
         val glass = GlassBlurCache.of(p)
         val l = BackdropDraw.layout(b.w, b.h, crop, p.blur.width, p.blur.height, w.toFloat(), h.toFloat())

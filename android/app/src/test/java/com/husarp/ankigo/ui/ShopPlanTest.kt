@@ -25,6 +25,7 @@ class ShopPlanTest {
             val p = ShopPlan.price(data, day, deal.item)
             assertEquals(day, deal.price, p.now)
             assertEquals(day, deal.oldPrice, p.was)
+            assertEquals(deal.percent, p.percent)
             assertTrue(p.discounted)
             assertTrue("the new price is smaller", p.now < p.was!!)
             // a basic is never the deal and keeps its one normal price
@@ -69,7 +70,7 @@ class ShopPlanTest {
     // ---- texts ----
 
     @Test fun theRibbonSaysTheDiscount() {
-        assertEquals("−30 %", ShopPlan.ribbon())
+        for (percent in Tuning.DEAL_PERCENTS) assertEquals("−$percent %", ShopPlan.ribbon(percent))
     }
 
     @Test fun endsAtMidnightOrAtTheDayStartHour() {

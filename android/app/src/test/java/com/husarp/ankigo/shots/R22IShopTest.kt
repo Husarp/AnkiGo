@@ -18,20 +18,20 @@ class R22IShopTest {
     }
     private fun tap(view: View, label: String) = ShopCardKit.tap(ShopCardKit.findText(view) { it == label })
 
-    @Test fun buyRequiresTwoTapsAndChangingQuantityDisarmsIt() {
+    @Test fun buyRequiresHoldAndUsesCurrentQuantity() {
         val ctx = setup()
         val (page, stage) = ShopCardKit.page(ctx, CardKeys.basic(ShopPlan.Tile.Item("potion")))
         val state = GameRepo.state!!
         val cash = state.cash
         val count = state.count("potion")
-        tap(stage, "Buy"); stage.render()
+        tap(stage, "Hold to buy"); stage.render()
         assertEquals(cash, state.cash)
-        assertTrue(ShopCardKit.texts(stage).contains("Sure?"))
+        assertTrue(ShopCardKit.texts(stage).contains("Hold to buy"))
         paparazzi.snapshot(stage, "r22i-confirm")
         tap(stage, "×1"); stage.render()
         assertFalse(page.open.buying)
-        tap(stage, "Buy"); stage.render()
-        tap(stage, "Sure?"); stage.render()
+        tap(stage, "Hold to buy"); stage.render()
+        (ShopCardKit.findText(stage) { it == "Hold to buy" }!!.parent as View).performLongClick(); stage.render()
         assertEquals(count + 3, state.count("potion"))
         assertEquals(cash - 3 * com.husarp.ankigo.game.Shop.priceOf(GameRepo.data!!, state, "potion"), state.cash)
         assertFalse(page.open.buying)
@@ -66,15 +66,16 @@ class R22IShopTest {
         })
         val text = ShopCardKit.texts(stage)
         assertFalse(text.toString(), text.any { it.contains("???") })
-        assertTrue(text.toString(), text.contains("…and 3 unknown"))
+        assertTrue(text.toString(), text.contains("…and 1 unknown"))
         assertTrue(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(25).name}. Opens details")!!.isClickable)
         paparazzi.snapshot(stage, "r22i-evolution")
         GameRepo.state!!.caught += listOf(26, 133, 135)
         stage.render()
         val allKnown = ShopCardKit.texts(stage)
         assertFalse(allKnown.any { it.startsWith("…and") })
-        assertEquals(2, allKnown.count { it == "⟶" })
-        for (num in listOf(25, 26, 133, 135)) assertTrue(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(num).name}. Opens details")!!.isClickable)
+        assertFalse(allKnown.any { it == "⟶" })
+        for (num in listOf(25, 133)) assertTrue(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(num).name}. Opens details")!!.isClickable)
+        for (num in listOf(26, 135)) assertNull(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(num).name}. Opens details"))
         paparazzi.snapshot(stage, "r22i-evolution-known")
     }
 
@@ -82,9 +83,9 @@ class R22IShopTest {
         val ctx = setup()
         val (_, stage) = ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")), setup = { GameRepo.state!!.tms.clear() })
         assertFalse(ShopCardKit.texts(stage).contains("×1"))
-        tap(stage, "Buy"); stage.render()
+        tap(stage, "Hold to buy"); stage.render()
         assertFalse("thunderbolt" in GameRepo.state!!.tms)
-        tap(stage, "Sure?"); stage.render()
+        (ShopCardKit.findText(stage) { it == "Hold to buy" }!!.parent as View).performLongClick(); stage.render()
         assertTrue("thunderbolt" in GameRepo.state!!.tms)
         assertTrue(ShopCardKit.texts(stage).contains("✓ Owned"))
     }
@@ -93,7 +94,7 @@ class R22IShopTest {
         val price = com.husarp.ankigo.game.Shop.priceOf(GameRepo.data!!, ShopCardKit.WEEKDAY, "potion")
         val (page, stage) = ShopCardKit.page(ctx, CardKeys.basic(ShopPlan.Tile.Item("potion")), cash = price - 1)
         val count = GameRepo.state!!.count("potion")
-        tap(stage, "Buy"); stage.render()
+        tap(stage, "Hold to buy"); stage.render()
         assertFalse(page.open.buying)
         assertEquals(price - 1, GameRepo.state!!.cash)
         assertEquals(count, GameRepo.state!!.count("potion"))

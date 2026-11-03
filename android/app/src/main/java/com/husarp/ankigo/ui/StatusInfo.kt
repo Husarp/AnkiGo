@@ -16,17 +16,17 @@ object StatusInfo {
 
     val all: List<Info> = listOf(
         Info("par", "PAR", "Paralysed",
-            "Paralysed: ${pct(Tuning.PARA_SKIP)} chance it can't move, and its speed is halved."),
+            "Paralysed: ${pct(Tuning.PARA_SKIP)} missed moves; Speed halved."),
         Info("brn", "BRN", "Burned",
-            "Burned: loses 1/16 of its HP each round, and its physical attacks do half damage. Some abilities (Magic Guard, Guts) change this."),
+            "Burned: loses 1/16 max HP/round; physical damage halved. Magic Guard/Guts can change this."),
         Info("psn", "PSN", "Poisoned",
-            "Poisoned: loses 1/8 of its HP each round. Some abilities (Magic Guard) stop this."),
+            "Poisoned: loses 1/8 max HP/round; Magic Guard prevents this."),
         Info("tox", "PSN", "Badly poisoned",
-            "Badly poisoned: loses more each round (1/16, 2/16, 3/16 ... up to 15/16 of its HP). Some abilities (Magic Guard) stop this."),
+            "Badly poisoned: loses 1/16 more max HP/round, up to 15/16; Magic Guard prevents this."),
         Info("slp", "SLP", "Asleep",
-            "Asleep: can't move, but has a ${pct(Tuning.WAKE_CHANCE)} chance to wake up each time it tries. After Rest it sleeps through exactly ${SideMoves.REST_SLEEP} tries and wakes up on the next one. An Uproar wakes it up."),
+            "Asleep: usually can't move; ${pct(Tuning.WAKE_CHANCE)} wake chance/try. After Rest it sleeps through exactly ${SideMoves.REST_SLEEP} tries. Uproar wakes it."),
         Info("frz", "FRZ", "Frozen",
-            "Frozen: can't move, ${pct(Tuning.FREEZE_THAW)} chance to thaw each time it tries; a Fire move that hits it thaws it at once."),
+            "Frozen: can't move; ${pct(Tuning.FREEZE_THAW)} thaw chance each time it tries. Fire hits or thawing moves thaw it."),
     )
 
     /** Info for an engine status, or null when there is none to show. */

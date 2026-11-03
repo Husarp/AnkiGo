@@ -281,42 +281,44 @@ class R19KConditionShots {
         assertTrue(a.bubbleOpen())
     }
 
-    @Test fun r25StatChipTapExplainsOnlyThatSideAndStat() {
+    @Test fun stageSummaryTapExplainsEveryChangedStatOnThatSide() {
         for (host in listOf(hosts[0], hosts[3], hosts[6])) for (theme in Theme.entries) for (slot in listOf(ConditionMarks.Slot.OURS, ConditionMarks.Slot.WILD)) {
             paparazzi.unsafeUpdateConfig(deviceConfig = device(host.w, host.h, theme))
             val ctx = Shots.files(paparazzi.context)
             val sc = setup(ctx, host, 1, picture = false)
             val b = GameRepo.state!!.battle!!
             b.player.boosts[0] = if (host == hosts[6]) 0 else 1; b.player.boosts[1] = -2
-            // Full-sized hosts exercise multiple wild stats; narrow hosts need a direct chip beside the overflow.
+            // One summary remains the tap target even when both Attack and Defense change.
             b.enemy.boosts[0] = if (host == hosts[0]) 3 else 0; b.enemy.boosts[1] = -1
             sc.arena.syncConditions(b)
             layoutScene(sc)
-            val key = if (slot == ConditionMarks.Slot.OURS || host != hosts[0]) "stat.def" else "stat.atk"
-            val chip = sc.arena.markRows().first { it.slot == slot }.chips.first { it.mark?.key == key }
+            val chip = sc.arena.markRows().first { it.slot == slot }.chips.single { it.stages.isNotEmpty() }
             val c = chip.rect
             val t = android.os.SystemClock.uptimeMillis()
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, c.centerX(), c.centerY(), 0))
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t + 40, MotionEvent.ACTION_UP, c.centerX(), c.centerY(), 0))
             val spoken = sc.arena.conditionListShown()!!.spoken
-            val stat = key.removePrefix("stat.")
-            val index = ConditionMarks.STAT_KEYS.indexOf(stat)
-            val side = if (slot == ConditionMarks.Slot.OURS) b.player else b.enemy
-            val other = if (slot == ConditionMarks.Slot.OURS) b.enemy else b.player
-            assertTrue(spoken, spoken.contains(StatPill.spoken(stat, side.boosts[index])))
-            assertFalse(spoken, spoken.contains(if (stat == "def") "Attack" else "Defense"))
-            assertFalse("the other side's same stat is excluded: $spoken", spoken.contains(StatPill.spoken(stat, other.boosts[index])))
+            val own = sc.arena.conditions.of(slot).filter { it.key.startsWith("stat.") }
+            assertEquals(own.map { it.key }, chip.stages.map { it.key })
+            for (mark in own) assertTrue(spoken, spoken.contains(com.husarp.ankigo.ui.ConditionExplanation.line(mark)))
+            val otherSlot = if (slot == ConditionMarks.Slot.OURS) ConditionMarks.Slot.WILD else ConditionMarks.Slot.OURS
+            for (mark in sc.arena.conditions.of(otherSlot).filter { it.key.startsWith("stat.") })
+                assertFalse("the other side is excluded: $spoken", spoken.contains(com.husarp.ankigo.ui.ConditionExplanation.line(mark)))
             assertFalse(spoken, spoken.contains("Confused") || spoken.contains("In love"))
             layoutScene(sc)
             val card = sc.arena.conditionListShown()!!
             assertTrue("card fits arena width", card.left >= 0 && card.right <= sc.arena.width)
             assertTrue("card fits arena height", card.top >= 0 && card.bottom <= sc.arena.height)
             paparazzi.snapshot(sc.root, "r25h-stat-${host.name}-${slot.name.lowercase()}-${theme.name.lowercase()}")
-            fun closeButton(v: View): View? {
-                if (v.contentDescription == "Close stat explanation") return v
-                return (v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).firstNotNullOfOrNull { closeButton(g.getChildAt(it)) } }
-            }
-            assertTrue(closeButton(card)!!.performClick())
+            fun labels(v: View): List<String> = (if (v is android.widget.TextView) listOf(v.text.toString()) else emptyList()) +
+                ((v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).flatMap { labels(g.getChildAt(it)) } } ?: emptyList())
+            val texts = labels(card)
+            assertFalse("no owner header", texts.any { it.contains("Wild ") || it.contains("Your ") })
+            assertFalse("no close button", texts.any { it == "×" || it == "✕" })
+            assertTrue("still explains the multiplier", texts.any { it.contains("×") })
+            val tap = android.os.SystemClock.uptimeMillis()
+            sc.arena.dispatchTouchEvent(MotionEvent.obtain(tap, tap, MotionEvent.ACTION_DOWN, card.left + card.width / 2f, card.top + card.height / 2f, 0))
+            sc.arena.dispatchTouchEvent(MotionEvent.obtain(tap, tap + 40, MotionEvent.ACTION_UP, card.left + card.width / 2f, card.top + card.height / 2f, 0))
             assertNull(sc.arena.conditionListShown())
         }
     }

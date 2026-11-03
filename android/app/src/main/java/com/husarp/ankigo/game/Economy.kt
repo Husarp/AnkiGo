@@ -47,7 +47,7 @@ object Items {
         "Combine with a regular ball: no catch bonus. The Repeat Ball returns with ${Tuning.REPEAT_RETURN_MISS_PERCENT}% chance on a miss, ${Tuning.REPEAT_RETURN_CATCH_PERCENT}% on a catch. The regular ball is always used up."
     else when (id) {
         "heal-ball" -> "Combine with a regular ball: HP IV +${Tuning.HEAL_IV_BONUS}, capped at ${Tuning.BALL_IV_CAP}."
-        "luxury-ball" -> "Combine with a regular ball: every IV +${Tuning.LUXURY_IV_BONUS}, capped at ${Tuning.BALL_IV_CAP}. Friendship stays earned."
+        "luxury-ball" -> "Combine with a regular ball: every IV +${Tuning.LUXURY_IV_BONUS}, capped at ${Tuning.BALL_IV_CAP}. Bond stays earned."
         else -> "Combine with a regular ball: up to +${Tuning.SPECIAL_BONUS} percentage points (max ${Tuning.BALL_CHANCE_CAP}%). " + when (id) {
             "net-ball" -> "Against Water or Bug Pokémon."
             "dive-ball" -> "Against Water Pokémon."
@@ -103,7 +103,7 @@ object Items {
         "power-lens" to "Main holds it: +8 Sp. Atk EVs",
         "power-band" to "Main holds it: +8 Sp. Def EVs",
         "power-anklet" to "Main holds it: +8 Speed EVs",
-        "soothe-bell" to "Main holds it: ×1.5 friendship",
+        "soothe-bell" to "Main holds it: ×1.5 Bond points",
     )
 
     private val FOSSILS = listOf(
@@ -203,8 +203,15 @@ object Economy {
      * win is worth 10, 5, 3.33, 2.5, 2 ... coins. Its money counts toward the day's tiers like an answer's, and Amulet Coin / Luck
      * Incense doubles the paid coins the same way. Emits Cash(DEFEAT) when at least one whole coin was paid.
      */
-    fun onWin(state: GameState, events: MutableList<GameEvent>) {
+    fun onWin(state: GameState, events: MutableList<GameEvent>, bondLevel: Int = Bond.level(state.main?.bondPoints ?: 0)) {
         earn(state, Tuning.CASH_PER_WIN, CashKind.DEFEAT, events)
+        // Flat earned bonus, after the daily curve and money items; practice still pays no coins.
+        val bonus = Bond.coins(bondLevel)
+        if (bonus > 0 && (!state.practiceRewards || Tuning.PRACTICE_PAYS_MONEY)) {
+            state.cash += bonus
+            state.cashToday += bonus
+            events += GameEvent.Cash(bonus, state.cash, CashKind.DEFEAT)
+        }
     }
 
     /**
@@ -320,11 +327,12 @@ object Shop {
     /** Potions remain on sale every day; balls come from the daily draw. */
     fun basics(): List<String> = Tuning.SHOP_BASICS
 
-    /** The deal of the day: [item] at [price] instead of [oldPrice] (-Tuning.DEAL_PERCENT %, at least 1). */
-    data class Deal(val item: String, val oldPrice: Int, val price: Int)
+    /** A date-seeded offer; the exact percentage survives price rounding. Nothing is persisted. */
+    data class Deal(val item: String, val oldPrice: Int, val price: Int, val percent: Int)
 
-    /** The deal price for a [normal] price: round(normal * (100 - DEAL_PERCENT) / 100), half up, at least 1. */
-    fun dealPrice(normal: Int): Int = ((normal * (100 - Tuning.DEAL_PERCENT) + 50) / 100).coerceAtLeast(1)
+    /** Round half up, at least one coin. Use Long so large normal prices cannot overflow. */
+    fun dealPrice(normal: Int, percent: Int): Int =
+        ((normal.toLong() * (100 - percent) + 50) / 100).coerceAtLeast(1).toInt()
 
     private fun localHour(now: Long): Int = java.util.Calendar.getInstance().apply { timeInMillis = now }.get(java.util.Calendar.HOUR_OF_DAY)
 
@@ -349,10 +357,15 @@ object Shop {
     fun dealFor(data: GameData, day: String, now: Long = System.currentTimeMillis()): Deal? {
         val pool = dailyPool(data)
         if (pool.isEmpty()) return null
-        val dayIndex = Random(("deal:$day").hashCode()).nextInt(pool.size)
+        val rng = Random(("deal:$day").hashCode())
+        val dayIndex = rng.nextInt(pool.size)
+        // Continue the existing seed after item selection; refreshes and purchases never reroll it.
+        val dayPercent = Tuning.DEAL_PERCENTS[rng.nextInt(Tuning.DEAL_PERCENTS.size)]
+        val nightPercent = Tuning.DEAL_PERCENTS[rng.nextInt(Tuning.DEAL_PERCENTS.size)]
+        val percent = if (isNight(now)) nightPercent else dayPercent
         val item = pool[(dayIndex + if (isNight(now) && pool.size > 1) 1 else 0) % pool.size]
         val normal = dailyPrice(data, day, item)
-        return Deal(item, normal, dealPrice(normal))
+        return Deal(item, normal, dealPrice(normal, percent), percent)
     }
 
     /** The weekend special: a fixed-price exclusive held item, on sale until Sunday. */
@@ -391,7 +404,7 @@ object Shop {
         return (((varied + step * 50L) / (step * 100L)) * step).toInt().coerceAtLeast(1)
     }
 
-    /** One price per item per day: 30% off the daily price for the deal, otherwise the daily price. */
+    /** One price per item per offer: the seeded discount off the daily price, otherwise the daily price. */
     fun priceOf(data: GameData, day: String, item: String, now: Long = System.currentTimeMillis()): Int {
         weekendPrices[item]?.let { return it }
         val deal = dealFor(data, day, now)
@@ -604,6 +617,8 @@ object ItemUse {
             }
             ItemKind.EVOLUTION -> {
                 val mon = target(state, targetUid, false) ?: return ActionResult(false, "Choose a Pokémon first.")
+                if (data.sp(mon.species).evolutions.any { Progression.evolutionItem(it) == item && !Bond.allows(mon, it) })
+                    return ActionResult(false, "${mon.name} needs Bond ♥2 before evolving.")
                 val evo = (if (evolutionTo == null) Progression.itemEvolution(data, mon, item, now, state.activeHeldItem(mon)) else
                     Progression.readyEvolutions(data, state, mon, now).firstOrNull { it.to == evolutionTo && Progression.evolutionItem(it) == item }) ?: return ActionResult(
                     false,
@@ -615,7 +630,7 @@ object ItemUse {
                 )
                 val from = mon.name
                 Economy.take(state, item)
-                Progression.evolve(data, state, mon, evo, rng, events)
+                Progression.evolve(data, state, mon, evo, rng, events, now)
                 return used(data, state, now, events, "$from evolved into ${mon.name}!")
             }
             ItemKind.FOSSIL -> {

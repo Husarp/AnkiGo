@@ -39,14 +39,18 @@ internal object BattleBag {
                         dialog.dismiss()
                         when (kind) {
                             ItemKind.BALL -> {
-                                val choose: (String, String?) -> Unit = { regular, special -> onEvents(GameRepo.act(ctx) { it.throwBall(regular, special) }) }
+                                val choose: (String, String?) -> Unit = { regular, special ->
+                                    Pickers.hold(ctx, "Throw ${Catching.throwName(regular, special)}?", Items.MISS_RULE, "Throw") {
+                                        onEvents(GameRepo.act(ctx) { it.throwBall(regular, special) })
+                                    }
+                                }
                                 if (id in Tuning.OLD_BALLS) BallThrowUi.show(ctx, st, choose)
                                 else BallThrowUi.special(ctx, st, id, choose)
                             }
-                            ItemKind.ESCAPE -> Pickers.confirm(ctx, "Use ${Items.name(id)}?", "The wild Pokémon leaves and a new one appears.", "Use") { onEvents(GameRepo.act(ctx) { it.escape(id) }) }
-                            ItemKind.FOSSIL -> Pickers.confirm(ctx, "Revive fossil?", "Use ${Items.name(id)} to revive an ancient Pokémon at Lv 5?", "Revive") { use(id, null) }
+                            ItemKind.ESCAPE -> Pickers.hold(ctx, "Use ${Items.name(id)}?", "The wild Pokémon leaves and a new one appears.", "Use") { onEvents(GameRepo.act(ctx) { it.escape(id) }) }
+                            ItemKind.FOSSIL -> Pickers.hold(ctx, "Revive fossil?", "Use ${Items.name(id)} to revive an ancient Pokémon at Lv 5?", "Revive") { use(id, null) }
                             else -> pick(ctx, data, st, id) { mon ->
-                                if (kind == ItemKind.EVOLUTION) Pickers.confirm(ctx, "Use ${Items.name(id)}?", "Use on ${mon.shownName}?", "Use") { use(id, mon) }
+                                if (kind == ItemKind.EVOLUTION || kind == ItemKind.HEAL) Pickers.hold(ctx, "Use ${Items.name(id)}?", "Use on ${mon.shownName}?", "Use") { use(id, mon) }
                                 else use(id, mon)
                             }
                         }
@@ -64,8 +68,15 @@ internal object BattleBag {
                         dialog.dismiss()
                         pick(ctx, data, st, move, tm = true) { mon ->
                             fun teach(index: Int?) {
-                                val r = GameRepo.run(ctx) { ItemUse.teachTm(it.data, it.state, move, mon.uid, index) }
-                                Ui.toast(ctx, r.message); onEvents(r.events)
+                                val warning = index?.let { LinkedMoves.replacementWarning(data, mon.moves, it, move) }
+                                val forgotten = index?.let { data.move(mon.moves[it])?.name ?: mon.moves[it] }
+                                val message = if (forgotten == null) "Teach ${m?.name ?: move} to ${mon.shownName}?"
+                                    else "${mon.shownName} will forget $forgotten and learn ${m?.name ?: move}."
+                                Pickers.hold(ctx, "Teach a TM", message + (warning?.let { "\n\n$it" } ?: ""), "Teach") {
+                                    val r = GameRepo.run(ctx) { ItemUse.teachTm(it.data, it.state, move, mon.uid, index) }
+                                    tmResult(r, { Ui.toast(ctx, it) }, onEvents)
+                                }
+
                             }
                             if (mon.moves.size < 4) teach(null)
                             else Pickers.pickMove(ctx, "Forget a move for ${m?.name ?: move}?", data, mon) { teach(it) }
@@ -77,6 +88,12 @@ internal object BattleBag {
         if (!any) body.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Your bag is empty. Items drop while you study, and the shop sells more." })
         dialog = AppDialog.Builder(ctx).setTitle("Use item").setView(BagScroll(ctx).apply { addView(body) }).setNegativeButton("Close", null).create()
         Pickers.show(dialog)
+    }
+
+    /** MoveLearned supplies success feedback; failed teaching still needs its explanation. */
+    internal fun tmResult(result: ActionResult, toast: (String) -> Unit, onEvents: (List<GameEvent>) -> Unit) {
+        if (!result.ok) toast(result.message)
+        onEvents(result.events)
     }
 
     private class BagScroll(ctx: Context) : MotionScrollView(ctx) {
@@ -92,19 +109,19 @@ internal object BattleBag {
             val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0) }
             val rows = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
             lateinit var dialog: AppDialog
-            var tab = "Box"; var query = ""; var level = false
+            var tab = "Box"; var query = ""; var sort = 0
             val tabLabels = mutableListOf<Pair<String, android.widget.TextView>>()
-            val sortLabels = mutableListOf<Pair<Boolean, android.widget.TextView>>()
+            val sortLabels = mutableListOf<Pair<Int, android.widget.TextView>>()
             fun render() {
                 tabLabels.forEach { (label, view) -> view.setTextColor(Ui.c(ctx, if (label == tab) R.color.ag_mauve else R.color.ag_sub0)) }
-                sortLabels.forEach { (byLevel, view) -> view.setTextColor(Ui.c(ctx, if (byLevel == level) R.color.ag_mauve else R.color.ag_sub0)) }
+                sortLabels.forEach { (sortIndex, view) -> view.setTextColor(Ui.c(ctx, if (sortIndex == sort) R.color.ag_mauve else R.color.ag_sub0)) }
                 rows.removeAllViews()
                 val source = if (!more) st.teamMons() else when (tab) { "Team" -> st.teamMons(); "Favourites" -> st.favouriteMons(); else -> st.boxMons() }
-                val mons = source.filter { it.shownName.contains(query, true) || it.name.contains(query, true) }.let { if (!more) it else if (level) it.sortedByDescending { m -> m.level } else it.sortedByDescending { m -> m.caughtAt } }
+                val mons = source.filter { it.shownName.contains(query, true) || it.name.contains(query, true) }.let { if (!more) it else when (sort) { 1 -> it.sortedByDescending { m -> m.level }; 2 -> it.sortedByDescending { m -> m.evolvedAt }; else -> it.sortedByDescending { m -> m.caughtAt } } }
                 for (mon in mons) {
                     val ok = if (tm) item in data.sp(mon.species).tmMoves && item !in mon.moves else ItemUse.canUse(data, st, item, mon)
                     val max = StatCalc.maxHp(data, mon)
-                    val hint = if (ok) Bits.hpText(data, mon) + (Progression.itemEvolutionAnyTime(data, mon, item)?.let { " · → ${data.sp(it.to).name}" } ?: "") else if (Items.def(item)?.kind == ItemKind.HEAL && mon.hp >= max) "Full HP" else Progression.itemEvolutionTimeNeeded(data, mon, item)?.let { "Needs $it" } ?: when {
+                    val hint = if (ok) if (Items.def(item)?.kind == ItemKind.EVOLUTION) "" else Bits.hpText(data, mon) else if (Items.def(item)?.kind == ItemKind.HEAL && mon.hp >= max) "Full HP" else Progression.itemEvolutionTimeNeeded(data, mon, item)?.let { "Needs $it" } ?: when {
                         tm -> "Cannot learn this move"
                         Items.def(item)?.kind == ItemKind.EVOLUTION -> "No evolution with this item"
                         Items.def(item)?.kind == ItemKind.HELD -> "Already holds ${Items.name(item)}"
@@ -112,8 +129,8 @@ internal object BattleBag {
                     }
                     val row = LinearLayout(ctx).apply {
                         orientation = LinearLayout.VERTICAL
-                        addView(Bits.monRow(ctx, data, mon, hint))
-                        addView(ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply { this.max = max; progress = mon.hp; progressTintList = android.content.res.ColorStateList.valueOf(Ui.c(ctx, if (mon.hp * 5 <= max) R.color.ag_red else if (mon.hp * 2 <= max) R.color.ag_yellow else R.color.ag_green)); progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Ui.c(ctx, R.color.ag_mantle)) }, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 6)).apply { setMargins(Ui.dp(ctx, 60), 0, Ui.dp(ctx, 16), Ui.dp(ctx, 6)) })
+                        if (Items.def(item)?.kind == ItemKind.EVOLUTION) addView(Bits.monNameRow(ctx, mon)) else addView(Bits.monRow(ctx, data, mon, hint))
+                        if (Items.def(item)?.kind != ItemKind.EVOLUTION) addView(ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply { this.max = max; progress = mon.hp; progressTintList = android.content.res.ColorStateList.valueOf(Ui.c(ctx, if (mon.hp * 5 <= max) R.color.ag_red else if (mon.hp * 2 <= max) R.color.ag_yellow else R.color.ag_green)); progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Ui.c(ctx, R.color.ag_mantle)) }, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 6)).apply { setMargins(Ui.dp(ctx, 60), 0, Ui.dp(ctx, 16), Ui.dp(ctx, 6)) })
                         alpha = if (ok) 1f else .45f
                         if (ok) setOnClickListener { dialog.dismiss(); onPick(mon) }
                     }
@@ -131,8 +148,8 @@ internal object BattleBag {
                     override fun afterTextChanged(s: Editable?) {}
                 }) })
                 val sorts = LinearLayout(ctx)
-                for (byLevel in listOf(false, true)) sorts.addView(Ui.text(ctx, 12f, 900, R.color.ag_mauve).apply { text = if (byLevel) "Highest level" else "Last caught"; sortLabels += byLevel to this; setPadding(12, 16, 12, 16); setOnClickListener { level = byLevel; render() } })
-                body.addView(sorts)
+                for (sortIndex in 0..2) sorts.addView(Ui.text(ctx, 12f, 900, R.color.ag_mauve).apply { text = listOf("Last caught", "Highest level", "Recently evolved")[sortIndex]; sortLabels += sortIndex to this; setPadding(12, 16, 12, 16); setOnClickListener { sort = sortIndex; render() } })
+                body.addView(MotionHorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(sorts) })
             }
             body.addView(rows)
             if (!more) body.addView(Ui.text(ctx, 14f, 900, R.color.ag_mauve).apply { text = "More Pokémon"; minHeight = Ui.dp(ctx, 48); setOnClickListener { dialog.dismiss(); window(true) } })

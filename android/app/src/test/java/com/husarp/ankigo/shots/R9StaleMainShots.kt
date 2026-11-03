@@ -60,6 +60,7 @@ class R9StaleMainShots {
         paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, Theme.LIGHT))
         val c = Shots.files(paparazzi.context)
         FakeGame.install(c)
+        GameRepo.state!!.main!!.bondPoints = 125
         val dir = Sprites.dir(c)
         for ((num, col) in colours) for (kind in listOf("front", "back", "static"))
             FakeSprites.write(FakeSprites.blob(96, col, back = kind == "back"), File(dir, "$kind/$num.png"))

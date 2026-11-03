@@ -29,6 +29,20 @@ class PopupQueueTest {
         assertEquals(2, AchievementPopup.waitingItems()[0].total)
     }
 
+    @Test fun onlyTheMatchingDropHasAGuaranteedCard() {
+        val drop = GameEvent.ItemFound("potion", 3)
+        org.junit.Assert.assertFalse(AchievementPopup.hasItemCard(drop))
+        AchievementPopup.offer(listOf(GameEvent.DailyGift("potion", null, 2, 3)))
+        org.junit.Assert.assertFalse(AchievementPopup.hasItemCard(drop))
+        AchievementPopup.offer(listOf(GameEvent.ItemFound("potion", 2)))
+        org.junit.Assert.assertFalse(AchievementPopup.hasItemCard(drop))
+        AchievementPopup.offer(listOf(drop))
+        org.junit.Assert.assertTrue(AchievementPopup.hasItemCard(drop))
+        org.junit.Assert.assertFalse(AchievementPopup.hasItemCard(GameEvent.ItemFound("poke-ball", 3)))
+        AchievementPopup.reset()
+        org.junit.Assert.assertFalse(AchievementPopup.hasItemCard(drop))
+    }
+
     @Test fun otherEventsQueueNothing() {
         AchievementPopup.offer(listOf(GameEvent.Info("hello")))
         assertEquals(0, AchievementPopup.waitingItems().size)

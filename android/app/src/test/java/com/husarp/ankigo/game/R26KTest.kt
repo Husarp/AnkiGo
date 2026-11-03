@@ -33,7 +33,7 @@ class R26KTest {
             val now = at(hour)
             val deal = Shop.dealFor(data, day, now)!!
             val state = TestData.state(data).apply { this.day = day; cash = 100000; shopItems.clear() }
-            assertEquals(Shop.dealPrice(deal.oldPrice), deal.price)
+            assertEquals(Shop.dealPrice(deal.oldPrice, deal.percent), deal.price)
             assertEquals(deal.price, ShopPlan.price(data, day, deal.item, now).now)
             assertTrue(Shop.buy(data, state, deal.item, now, 3).ok)
             assertEquals(100000 - 3 * deal.price, state.cash)

@@ -75,7 +75,7 @@ object ItemInfo {
                 "amulet-coin", "luck-incense" -> "Main: ×2 money"
                 "everstone" -> "Never evolves"
                 "macho-brace" -> "Main: ×2 EVs"
-                "soothe-bell" -> "Main: ×${nice(Tuning.SOOTHE_BELL)} friendship"
+                "soothe-bell" -> "Main: ×${nice(Tuning.SOOTHE_BELL)} Bond points"
                 else -> POWER_STATS[item]?.let { "Main: +8 $it EVs" } ?: NO_DESCRIPTION
             }
             ItemKind.ESCAPE -> "Skip this wild one"
@@ -100,7 +100,7 @@ object ItemInfo {
                 "amulet-coin", "luck-incense" -> "Main holds it: ×2 money"
                 "everstone" -> "Holder never evolves"
                 "macho-brace" -> "Main holds it: ×2 EVs"
-                "soothe-bell" -> "Main holds it: ×${nice(Tuning.SOOTHE_BELL)} friendship"
+                "soothe-bell" -> "Main holds it: ×${nice(Tuning.SOOTHE_BELL)} Bond points"
                 else -> POWER_STATS[item]?.let { "Main holds it: +8 $it EVs" } ?: NO_DESCRIPTION
             }
             ItemKind.ESCAPE -> "Skip this wild Pokémon"
@@ -347,12 +347,11 @@ object ItemInfo {
         "lucky-egg" -> "The Pokémon holding it gets **×${nice(Tuning.LUCKY_EGG)} XP** from wins and catches. It works for your **main** and for the **Exp. Share** holder."
         "amulet-coin", "luck-incense" -> "While your **main** holds it, the money you earn for answers and wins is **doubled**, all day. " +
             "The slower pay after each ${Tuning.CASH_TIER} coins still applies, so you keep getting double at every step. It does nothing on a Pokémon that is not your main."
-        "everstone" -> "A Pokémon holding it **never evolves**: not by level, friendship, stone or trade. Take it back to let the Pokémon evolve."
+        "everstone" -> "A Pokémon holding it **never evolves**: not by level, Bond, stone or trade. Take it back to let the Pokémon evolve."
         "macho-brace" -> "Your **main** gets **double EVs** from each win, defeat or catch (as always, up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
             "It does nothing on a Pokémon that is not your main."
-        "soothe-bell" -> "Your **main** gets **×${nice(Tuning.SOOTHE_BELL)} friendship** from each win, defeat or catch (+${Tuning.FRIENDSHIP_GAIN.first} to ${Tuning.FRIENDSHIP_GAIN.last} becomes " +
-            "+${(Tuning.FRIENDSHIP_GAIN.first * Tuning.SOOTHE_BELL).toInt()} to ${(Tuning.FRIENDSHIP_GAIN.last * Tuning.SOOTHE_BELL).toInt()}), up to ${Tuning.FRIENDSHIP_MAX}. " +
-            "Friendship evolves some Pokémon and powers Return. It does nothing on a Pokémon that is not your main."
+        "soothe-bell" -> "Your active fighter earns **×${nice(Tuning.SOOTHE_BELL)} Bond points**: normally +1 per answered card while fighting and +3 per win, defeat or catch. " +
+            "Half points carry over, including through saves. Bond levels ♥0–♥5 unlock evolutions and bonuses, with no decay. It does nothing on the bench."
         else -> POWER_STATS[item]?.let {
             "Your **main** gets **8 extra $it EVs** from each win, defeat or catch, on top of the usual EVs (up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
                 "It does nothing on a Pokémon that is not your main."

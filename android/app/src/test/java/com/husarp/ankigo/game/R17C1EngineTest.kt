@@ -59,7 +59,7 @@ class R17C1EngineTest {
     // ---------------------------------------------------------------- the sets and how they combine
 
     @Test fun theRuleSetsAreListedInTheDocumentedOrder() { // R17C-9b: AbilitiesMore comes after Abilities
-        assertEquals(listOf("CoreRules", "RemainingMoves", "MovePower", "Hazards", "SideMoves", "FieldRules", "MoveControl", "Abilities", "AbilitiesMore", "AbilityAdaptations"), BattleRules.ALL.map { it::class.simpleName })
+        assertEquals(listOf("CoreRules", "RemainingMoves", "MovePower", "Hazards", "SideMoves", "FieldRules", "MoveControl", "Abilities", "AbilitiesMore", "AbilityAdaptations", "BondRules"), BattleRules.ALL.map { it::class.simpleName })
     }
 
     @Test fun usingPutsTheRealListBack() {

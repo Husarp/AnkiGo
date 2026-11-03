@@ -109,10 +109,8 @@ internal class MonActions(private val s: GamePage) {
     }
 
     private fun release(mon: Mon) {
-        Pickers.confirm(s, "Release ${mon.shownName}?", "${mon.shownName} (Lv ${mon.level}) will be gone for good.", "Release…") {
-            Pickers.confirm(s, "Really release ${mon.shownName}?", "This can't be undone.", "Release") {
-                s.act { it.release(mon.uid) }
-            }
+        Pickers.hold(s, "Release ${mon.shownName}?", "${mon.shownName} (Lv ${mon.level}) will be gone for good.\n\nThis can't be undone.", "Release") {
+            s.act { it.release(mon.uid) }
         }
     }
 
@@ -143,7 +141,7 @@ internal class MonActions(private val s: GamePage) {
     fun useItem(mon: Mon, item: String) {
         val kind = Items.def(item)?.kind
         if (kind == ItemKind.EVOLUTION) {
-            Pickers.confirm(s, "Use ${Items.name(item)}?", "Use ${Items.name(item)} on ${mon.shownName}?", "Use") { runUse(item, mon.uid) }
+            Pickers.hold(s, "Use ${Items.name(item)}?", "Use ${Items.name(item)} on ${mon.shownName}?", "Use") { runUse(item, mon.uid) }
         } else {
             runUse(item, mon.uid)
         }
@@ -171,14 +169,17 @@ internal class MonActions(private val s: GamePage) {
     /** Teaches TM [move]; with 4 moves known it asks which one to forget. */
     fun teach(mon: Mon, move: String) {
         if (mon.moves.size < 4) {
-            s.act { ItemUse.teachTm(it.data, it.state, move, mon.uid, null) }
+            Pickers.hold(s, "Teach a TM", "Teach ${data.move(move)?.name ?: move} to ${mon.shownName}?", "Teach") {
+                s.act { ItemUse.teachTm(it.data, it.state, move, mon.uid, null) }
+            }
         } else {
             val name = data.move(move)?.name ?: move
             Pickers.pickMove(s, "${mon.shownName} knows 4 moves. Forget one for $name?", data, mon) { i ->
                 val warning = com.husarp.ankigo.game.LinkedMoves.replacementWarning(data, mon.moves, i, move)
                 val teach = { s.act { ItemUse.teachTm(it.data, it.state, move, mon.uid, i) }; Unit }
-                if (warning == null) teach()
-                else Pickers.confirm(s, "Linked move warning", warning, "Teach", teach)
+                val forgotten = data.move(mon.moves[i])?.name ?: mon.moves[i]
+                val message = "${mon.shownName} will forget $forgotten and learn $name." + (warning?.let { "\n\n$it" } ?: "")
+                Pickers.hold(s, "Teach a TM", message, "Teach", teach)
             }
         }
     }

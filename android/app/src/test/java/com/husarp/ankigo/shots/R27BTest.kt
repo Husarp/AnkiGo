@@ -78,7 +78,9 @@ class R27BTest {
         val e = Evolution(sp.num, EvoKind.ITEM, item = "fire-stone")
         st.bag.clear()
         val missing = EvolutionRows.explanationContent(ctx, data, e, sp, setOf(sp.num), st, mon) {}
-        val missingText = all(missing).filterIsInstance<TextView>().last().text as android.text.Spanned
+        assertEquals("This can't be undone.", all(missing).filterIsInstance<TextView>().last().text.toString())
+        val missingText = all(missing).filterIsInstance<TextView>().mapNotNull { it.text as? android.text.Spanned }
+            .single { it.toString().contains("Shop") }
         val links = missingText.getSpans(0, missingText.length, android.text.style.ClickableSpan::class.java)
         assertEquals(listOf("Shop"), links.map { missingText.subSequence(missingText.getSpanStart(it), missingText.getSpanEnd(it)).toString() })
         col.addView(missing)

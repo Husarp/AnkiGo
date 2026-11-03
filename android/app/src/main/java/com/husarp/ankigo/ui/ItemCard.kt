@@ -9,6 +9,7 @@ import android.text.style.MetricAffectingSpan
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -86,7 +87,11 @@ internal object ItemCard {
         val ctx: Context = page
         val isTm = spec.item == null
         val move = spec.move?.let { page.data.move(it) }
-        val line = if (isTm) null else ItemInfo.line(page.data, spec.item.orEmpty(), page.state.caught)
+        val sources = if (isTm) emptyList() else ItemInfo.evoPairs(page.data, spec.item.orEmpty()).map { it.fromNum }.distinct()
+        val line = if (isTm) null else if (sources.isNotEmpty()) {
+            if (sources.none { it in page.state.caught }) "Evolves ${sources.size} unknown Pokémon"
+            else ItemInfo.short(page.data, spec.item.orEmpty(), page.state.caught)
+        } else ItemInfo.line(page.data, spec.item.orEmpty(), page.state.caught)
         val lead: View = if (isTm) tmLead(ctx, move) else Bits.itemTile(ctx, spec.item.orEmpty(), 48)
         val titles = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -134,13 +139,13 @@ internal object ItemCard {
         val data = page.data
         val isTm = spec.item == null
         val move = spec.move?.let { data.move(it) }
+        val pairs = if (isTm) emptyList() else ItemInfo.evoPairs(data, spec.item.orEmpty())
         val below = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = dp(ctx, 12f) }
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             if (move != null) addView(moveBlock(ctx, page, move), below)
             val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty(), page.state.caught)
             if (!isTm) {
-                val pairs = ItemInfo.evoPairs(data, spec.item.orEmpty())
                 if (pairs.isNotEmpty()) addView(factBlock(ctx, "Evolves", ""), below)
                 val known = page.state.caught
                 fun species(num: Int): View = LinearLayout(ctx).apply {
@@ -148,19 +153,46 @@ internal object ItemCard {
                     val sp = data.sp(num)
                     addView(TileSprite(ctx).apply { Ui.staticSprite(ctx, num, false, this) }, LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)))
                     addView(Ui.text(ctx, 12f, 800, R.color.ag_text).apply { text = sp.name; gravity = Gravity.CENTER })
+                    val rules = pairs.filter { it.fromNum == num }
+                    val restrictions = if (rules.any { it.time == null && it.gender == null }) emptyList() else rules.mapNotNull { pair ->
+                        listOfNotNull(pair.time?.let { "$it only" }, when (pair.gender) {
+                            'F' -> "female only"; 'M' -> "male only"; else -> null
+                        }).takeIf { it.isNotEmpty() }?.joinToString(", ")
+                    }.distinct()
+                    if (restrictions.isNotEmpty()) addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
+                        text = restrictions.joinToString(" / "); gravity = Gravity.CENTER
+                    })
                     contentDescription = "${sp.name}. Opens details"
                     setOnClickListener { DexDetail.show(page, sp) }
                 }
-                for (pair in pairs.filter { it.fromNum in known || it.toNum in known }) addView(LinearLayout(ctx).apply {
-                    gravity = Gravity.CENTER_VERTICAL
-                    if (pair.fromNum in known) addView(species(pair.fromNum), LinearLayout.LayoutParams(0, -2, 1f))
-                    if (pair.fromNum in known && pair.toNum in known) addView(Ui.text(ctx, 22f, 900, R.color.ag_mauve).apply { text = "⟶" })
-                    if (pair.toNum in known) addView(species(pair.toNum), LinearLayout.LayoutParams(0, -2, 1f))
+                val sources = pairs.map { it.fromNum }.distinct()
+                val visible = sources.filter { it in known }
+                if (visible.isNotEmpty()) addView(object : GridLayout(ctx) {
+                    private var appliedColumns = 0
+                    init { for (num in visible) addView(species(num)) }
+                    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                        val columns = if (View.MeasureSpec.getSize(widthMeasureSpec) >= dp(ctx, 360f)) 4 else 3
+                        if (columns != appliedColumns) {
+                            // Clear the previous column bound before remapping after a window resize.
+                            columnCount = GridLayout.UNDEFINED
+                            for (i in 0 until childCount) getChildAt(i).layoutParams = LayoutParams().apply {
+                                width = 0; height = -2
+                                columnSpec = GridLayout.spec(i % columns, 1f)
+                                rowSpec = GridLayout.spec(i / columns)
+                                bottomMargin = dp(ctx, 12f)
+                            }
+                            columnCount = columns
+                            appliedColumns = columns
+                        }
+                        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+                    }
                 }, below)
-                val unknown = pairs.flatMap { listOf(it.fromNum, it.toNum) }.distinct().count { it !in known }
-                if (unknown > 0) addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub0).apply { text = "…and $unknown unknown" }, below)
+                val unknown = sources.count { it !in known }
+                if (unknown > 0) addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub0).apply {
+                    text = if (visible.isEmpty()) "Evolves $unknown unknown Pokémon" else "…and $unknown unknown"
+                }, below)
             }
-            for (f in facts) addView(factBlock(ctx, f.title, f.text), LinearLayout.LayoutParams(below))
+            for (f in facts.filterNot { pairs.isNotEmpty() && it.title == "What it does" }) addView(factBlock(ctx, f.title, f.text), LinearLayout.LayoutParams(below))
             if (isTm) addView(whoButton(ctx, page, spec.move.orEmpty(), nameOf(page, spec)), Form.lp(ctx, 0))
         }
     }
@@ -313,7 +345,7 @@ internal object ItemCard {
         if (sub != null) addView(Ui.text(ctx, 11f, 800, R.color.ag_text).apply { text = sub; setTextColor(ink); gravity = Gravity.CENTER }, Form.lp(ctx, 1))
     }
 
-    /** Buy becomes Sure? for the second tap. Quantity changes cancel that confirmation; TMs remain single purchases. */
+    /** Purchases require a deliberate hold; quantities and prices remain visible. */
     private fun buyView(page: GamePage, spec: Spec, b: Buy): View {
         val ctx: Context = page
         if (b.owned) return Ui.text(ctx, 14f, 900, R.color.ag_green).apply { text = "✓ Owned"; gravity = Gravity.CENTER; minimumHeight = dp(ctx, 44f) }
@@ -321,13 +353,9 @@ internal object ItemCard {
         val quantity = if (spec.item == null) 1 else open.quantity
         val total = b.price.now.toLong() * quantity
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        val go = button(ctx, Bits.blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f), Ui.c(ctx, R.color.ag_text), if (open.buying) "Sure?" else "Buy")
+        val go = button(ctx, Bits.blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f), Ui.c(ctx, R.color.ag_text), "Hold to buy")
         go.alpha = if (page.state.cash >= total) 1f else 0.45f
-        go.setOnClickListener {
-            if (page.state.cash < total) Ui.toast(ctx, "Not enough money")
-            else if (!open.buying) { open.askBuy(); page.requestRender() }
-            else b.onBuy()
-        }
+        HoldToConfirm.bind(go, "buy", allowed = { page.state.cash >= total }) { b.onBuy() }
         go.orientation = LinearLayout.HORIZONTAL
         go.getChildAt(0).layoutParams = LinearLayout.LayoutParams(-2, -2)
         go.addView(ShopViews.price(ctx, ShopPlan.Price(total.toInt())), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(ctx, 8f) })

@@ -40,15 +40,21 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
     val radius: Float = height * 0.42f
 
     /** Space between two chips of a row. */
-    val gap: Float = textPx * 0.4f
+    val gap: Float = textPx * 0.5f
 
     /** Space between a row and the box or sprite it sits by. */
-    val lift: Float = textPx * 0.25f
+    val lift: Float = textPx * 0.4f
 
     fun width(m: ConditionMarks.Mark): Float {
         val n = m.number
         return padH * 2f + iconWidth(m.key) + word.measureText(if (m.key.startsWith("stat.")) m.def.word else m.word) + (if (m.key.startsWith("stat.")) textPx * (StatPill.boxWidth(StatPill.count(m.value)) * StatPill.CHIP_SCALE / 12f + 0.3f) else 0f) + if (n != null) num.measureText(" · $n") else 0f
     }
+
+    /** One outer chip for the first two stages, with +N counting hidden stats. */
+    fun summaryWidth(stages: List<ConditionMarks.Mark>): Float =
+        stages.take(2).sumOf { (width(it) - textPx * 1.4f).toDouble() }.toFloat() +
+            textPx * 1.4f + gap * (min(2, stages.size) - 1).coerceAtLeast(0) +
+            if (stages.size > 2) gap + num.measureText("+${stages.size - 2}") else 0f
 
     fun iconWidth(key: String): Float = if (FieldIcons.of(key) != null || key in setOf("switchtrap", "spikes", "toxicspikes", "stealthrock", "stickyweb")) textPx * 1.35f else 0f
 
@@ -84,7 +90,7 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
  */
 internal class ConditionMarksView(ctx: Context) : View(ctx) {
     /** One chip on screen: its rectangle (this view's px) and what it says. */
-    class Chip(val rect: RectF, val mark: ConditionMarks.Mark?, val more: Int)
+    class Chip(val rect: RectF, val mark: ConditionMarks.Mark?, val more: Int, val stages: List<ConditionMarks.Mark> = emptyList())
 
     /** One placed row. */
     class Row(val slot: ConditionMarks.Slot, val chips: List<Chip>) {
@@ -93,7 +99,7 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
 
     var metrics: ChipMetrics? = null
     var onTap: (ConditionMarks.Slot) -> Unit = {}
-    var onStatTap: (ConditionMarks.Mark) -> Unit = {}
+    var onStagesTap: (ConditionMarks.Slot) -> Unit = {}
     private var downMark: ConditionMarks.Mark? = null
     internal fun markAt(x: Float, y: Float): ConditionMarks.Mark? = slotAt(x, y)?.let { rows[it]?.chips?.firstOrNull { c -> x >= c.rect.left && x < c.rect.right }?.mark }
     private val rows = LinkedHashMap<ConditionMarks.Slot, Row>()
@@ -113,15 +119,18 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
     /** Every chip rectangle on screen (tests, obstacles for the toasts). */
     fun chipRects(): List<RectF> = rows.values.flatMap { r -> r.chips.map { it.rect } }
 
-    /** Puts [placed] (a spot from [ConditionSpot]) with its first [ConditionRow.Fit.shown] of [marks] in the row of [slot]; null removes the row. */
+    /** Puts [placed] (a spot from [ConditionSpot]) with its first [ConditionRow.Fit.shown] display groups of [marks] in the row of [slot]; null removes the row. */
     fun setRow(slot: ConditionMarks.Slot, placed: ConditionSpot.Placed?, marks: List<ConditionMarks.Mark>, m: ChipMetrics) {
         if (placed == null) { if (rows.remove(slot) != null) invalidate(); return }
+        val groups = ConditionSummary.groups(marks)
         var x = placed.rect.l
         val top = placed.rect.t
         val chips = ArrayList<Chip>()
         for (i in 0 until placed.fit.shown) {
-            val w = m.width(marks[i])
-            chips += Chip(RectF(x, top, x + w, top + m.height), marks[i], 0)
+            val group = groups[i]
+            val stages = group.takeIf { it.first().key.startsWith("stat.") }.orEmpty()
+            val w = if (stages.isEmpty()) m.width(group.single()) else m.summaryWidth(stages)
+            chips += Chip(RectF(x, top, x + w, top + m.height), group.first(), 0, stages)
             x += w + m.gap
         }
         if (placed.fit.more > 0) {
@@ -140,7 +149,7 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
         line.strokeWidth = max(1f, m.textPx * 0.07f)
         line.color = m.stroke()
         for (row in rows.values) for (c in row.chips) {
-            fill.color = c.mark?.let {
+            fill.color = if (c.stages.isNotEmpty()) StatPill.background(context, c.stages.any { it.value > 0 }) else c.mark?.let {
                 if (it.key.startsWith("stat.")) StatPill.background(context, it.value > 0)
                 else m.fill(it.def.group)
             } ?: m.moreFill()
@@ -152,41 +161,52 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
             }
             val base = m.baseline(c.rect.top)
             val mk = c.mark
-            if (mk == null) {
+            if (c.stages.isNotEmpty()) {
+                var x = c.rect.left
+                for (stage in c.stages.take(2)) {
+                    drawMark(canvas, stage, RectF(x, c.rect.top, x + m.width(stage), c.rect.bottom), m, base)
+                    x += m.width(stage) - m.textPx * 1.4f + m.gap
+                }
+                if (c.stages.size > 2) canvas.drawText("+${c.stages.size - 2}", x + m.textPx * 0.7f, base, m.num)
+            } else if (mk == null) {
                 canvas.drawText("+${c.more}", c.rect.left + (c.rect.width() - m.num.measureText("+${c.more}")) / 2f, base, m.num)
             } else {
-                var x0 = c.rect.left + (c.rect.width() - m.width(mk)) / 2f + m.textPx * 0.7f
-                if (m.iconWidth(mk.key) > 0f) {
-                    val fieldIcon = FieldIcons.of(mk.key)
-                    val icon = fieldIcon ?: when (mk.key) {
-                        "switchtrap" -> R.drawable.ic_mu_ban
-                        "toxicspikes" -> R.drawable.ic_type_poison
-                        "stickyweb" -> R.drawable.ic_type_bug
-                        else -> R.drawable.ic_type_rock
-                    }
-                    context.getDrawable(icon)?.mutate()?.let {
-                        val size = m.textPx.toInt()
-                        val top = (c.rect.centerY() - size / 2f).toInt()
-                        if (fieldIcon == null) it.setTint(m.hue(mk.def.group)); it.setBounds(x0.toInt(), top, x0.toInt() + size, top + size)
-                        it.draw(canvas)
-                    }
-                    x0 += m.iconWidth(mk.key)
-                }
-                m.word.color = if (mk.key.startsWith("stat.")) StatPill.ink(mk.value > 0, StatPill.isDark(context)) else Ui.c(context, R.color.ag_text)
-                if (mk.key.startsWith("stat.")) {
-                    canvas.drawText(mk.def.word, x0, base, m.word)
-                    val path = android.graphics.Path().also { StatPill.chevrons(it, StatPill.count(mk.value), mk.value > 0) }
-                    canvas.save()
-                    val unit = m.textPx * StatPill.CHIP_SCALE / 12f
-                    canvas.translate(x0 + m.word.measureText(mk.def.word) + m.textPx * 0.3f, c.rect.centerY() - StatPill.boxHeight(StatPill.count(mk.value)) * unit / 2f)
-                    canvas.scale(unit, unit)
-                    val stroke = Paint(m.word).apply { style = Paint.Style.STROKE; strokeWidth = StatPill.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
-                    canvas.drawPath(path, stroke)
-                    canvas.restore()
-                } else canvas.drawText(mk.word, x0, base, m.word)
-                mk.number?.let { canvas.drawText(" · $it", x0 + m.word.measureText(mk.word), base, m.num) }
+                drawMark(canvas, mk, c.rect, m, base)
             }
         }
+    }
+
+    private fun drawMark(canvas: Canvas, mk: ConditionMarks.Mark, rect: RectF, m: ChipMetrics, base: Float) {
+        var x0 = rect.left + (rect.width() - m.width(mk)) / 2f + m.textPx * 0.7f
+        if (m.iconWidth(mk.key) > 0f) {
+            val fieldIcon = FieldIcons.of(mk.key)
+            val icon = fieldIcon ?: when (mk.key) {
+                "switchtrap" -> R.drawable.ic_mu_ban
+                "toxicspikes" -> R.drawable.ic_type_poison
+                "stickyweb" -> R.drawable.ic_type_bug
+                else -> R.drawable.ic_type_rock
+            }
+            context.getDrawable(icon)?.mutate()?.let {
+                val size = m.textPx.toInt()
+                val top = (rect.centerY() - size / 2f).toInt()
+                if (fieldIcon == null) it.setTint(m.hue(mk.def.group)); it.setBounds(x0.toInt(), top, x0.toInt() + size, top + size)
+                it.draw(canvas)
+            }
+            x0 += m.iconWidth(mk.key)
+        }
+        m.word.color = if (mk.key.startsWith("stat.")) StatPill.ink(mk.value > 0, StatPill.isDark(context)) else Ui.c(context, R.color.ag_text)
+        if (mk.key.startsWith("stat.")) {
+            canvas.drawText(mk.def.word, x0, base, m.word)
+            val path = android.graphics.Path().also { StatPill.chevrons(it, StatPill.count(mk.value), mk.value > 0) }
+            canvas.save()
+            val unit = m.textPx * StatPill.CHIP_SCALE / 12f
+            canvas.translate(x0 + m.word.measureText(mk.def.word) + m.textPx * 0.3f, rect.centerY() - StatPill.boxHeight(StatPill.count(mk.value)) * unit / 2f)
+            canvas.scale(unit, unit)
+            val stroke = Paint(m.word).apply { style = Paint.Style.STROKE; strokeWidth = StatPill.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+            canvas.drawPath(path, stroke)
+            canvas.restore()
+        } else canvas.drawText(mk.word, x0, base, m.word)
+        mk.number?.let { canvas.drawText(" · $it", x0 + m.word.measureText(mk.word), base, m.num) }
     }
 
     internal fun slotAt(x: Float, y: Float): ConditionMarks.Slot? {
@@ -214,7 +234,7 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
                     performClick()
                     val mark = downMark
                     if (mark?.id == markAt(e.x, e.y)?.id) {
-                        if (mark != null && mark.key.startsWith("stat.")) onStatTap(mark) else onTap(s)
+                        if (mark?.key?.startsWith("stat.") == true) onStagesTap(s) else onTap(s)
                     }
                 }
                 downMark = null
@@ -260,23 +280,23 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
     }
 
     /** What a screen reader says for the whole list. */
-    val spoken: String get() = sections.joinToString(" ") { s -> (s.title?.let { "$it. " } ?: "") + s.marks.joinToString(". ") { it.spoken + FieldExplanation.current(it) } + "." }
+    val spoken: String get() = sections.joinToString(" ") { s -> (s.title?.let { "$it. " } ?: "") + s.marks.joinToString(". ") { ConditionExplanation.spoken(it) } + "." }
 
     private class Item(val title: String?, val mark: ConditionMarks.Mark?)
 
     private fun items(): List<Item> = sections.flatMap { s -> (if (s.title != null) listOf(Item(s.title, null)) else emptyList()) + s.marks.map { Item(null, it) } }
 
-    private fun line(i: Item, wrap: Boolean, sp: Float): TextView = TextView(context).apply {
+    private fun line(i: Item, sp: Float): TextView = TextView(context).apply {
         typeface = Ui.font(context, if (i.mark == null) 900 else 700)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, TextMath.at(if (i.mark == null) sp - 0.5f else sp, floorSp))
         includeFontPadding = false
         setLineSpacing(0f, 1.1f)
-        maxLines = if (i.mark?.let { FieldIcons.of(it.key) } != null) Int.MAX_VALUE else if (wrap) 2 else 1
+        maxLines = Int.MAX_VALUE
         val mk = i.mark
         if (mk == null) { text = i.title; setTextColor(context.getColor(R.color.ag_sub1)) }
         else {
             val dot = "\u25CF "
-            val s = SpannableStringBuilder(dot).append(mk.line + FieldExplanation.current(mk))
+            val s = SpannableStringBuilder(dot).append(ConditionExplanation.line(mk))
             s.setSpan(ForegroundColorSpan(m.hue(mk.def.group)), 0, dot.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             s.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), dot.length, dot.length + mk.def.word.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             text = s
@@ -299,14 +319,14 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         return out
     }
 
-    /** The columns of [all]: [cols] of them, text [sp], each line on one line or ([wrap]) up to two; [colW] px wide each (0 = as wide as its text). */
-    private fun fill(all: List<Item>, cols: Int, sp: Float, wrap: Boolean, colW: Int = 0) {
+    /** The columns of [all]: [cols] of them, text [sp], with complete explanations wrapping as needed; [colW] px wide each (0 = as wide as its text). */
+    private fun fill(all: List<Item>, cols: Int, sp: Float, colW: Int = 0) {
         body.removeAllViews()
         val parts = split(all, cols)
         columns = parts.size
         for ((n, part) in parts.withIndex()) {
             val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-            for (it in part) col.addView(line(it, wrap, sp), LinearLayout.LayoutParams(-2, -2))
+            for (it in part) col.addView(line(it, sp), LinearLayout.LayoutParams(-2, -2))
             body.addView(col, LinearLayout.LayoutParams(if (colW > 0) colW else -2, -2).also { lp -> if (n > 0) lp.marginStart = Ui.dp(context, 10) })
         }
     }
@@ -320,10 +340,11 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
     /**
      * Fills the list with [sections] and measures it so it fits [maxW] x [maxH] px: every line on one line, in as few columns (up to
      * [MAX_COLUMNS]) as it takes, with the text from 11 sp down to 9 sp (never under the panel's floor) before a column has to be crowded.
-     * Nothing fits that way (a very small arena): columns of equal width at the smallest size, lines of up to two lines; a list that is still
+     * Nothing fits that way (a very small arena): columns of equal width at the smallest size, complete wrapped explanations; a list that is still
      * taller than the arena scrolls.
      */
     fun build(sections: List<ConditionSections.Section>, maxW: Int, maxH: Int) {
+        dismissTaps = null
         this.sections = sections
         unscroll()
         val all = items()
@@ -332,13 +353,13 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         val padH = paddingTop + paddingBottom
         fun measureBody() = body.measure(none, none)
         for (sp in SIZES) for (cols in 1..MAX_COLUMNS) {
-            fill(all, cols, sp, wrap = false)
+            fill(all, cols, sp)
             measureBody()
             if (body.measuredWidth + padW <= maxW && body.measuredHeight + padH <= maxH) { measure(MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST)); return }
         }
         for (cols in 1..MAX_COLUMNS) {
             val colW = ((maxW - padW - (cols - 1) * Ui.dp(context, 10)) / cols).coerceAtLeast(1)
-            fill(all, cols, SIZES.last(), wrap = true, colW = colW)
+            fill(all, cols, SIZES.last(), colW = colW)
             body.measure(MeasureSpec.makeMeasureSpec(maxW - padW, MeasureSpec.AT_MOST), none)
             if (body.measuredHeight + padH <= maxH || cols == MAX_COLUMNS) break
         }
@@ -350,9 +371,26 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         measure(MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))
     }
 
-    /** PLAN 369 B: a smaller compact card, with a scroll fallback for short battle panels. */
+    private var dismissTaps: android.view.GestureDetector? = null
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        // Observe taps even when the short-panel scroll fallback handles the gesture.
+        if (dismissTaps?.onTouchEvent(event) == true) return true
+        return super.dispatchTouchEvent(event)
+    }
+
+    /** A tap closes even when the scroll fallback receives the gesture. */
+    fun dismissOnTap(close: () -> Unit) {
+        setOnClickListener { close() }
+        dismissTaps = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapUp(e: MotionEvent): Boolean { performClick(); return true }
+        })
+    }
+
+    /** PLAN 462: compact stat explanation; tapping anywhere on the card closes it. */
     fun buildStat(sections: List<ConditionSections.Section>, maxW: Int, maxH: Int, close: () -> Unit) {
-        this.sections = sections
+        this.sections = sections.map { ConditionSections.Section(null, it.marks) }
+        dismissOnTap(close)
         unscroll()
         body.removeAllViews()
         columns = 1
@@ -373,20 +411,12 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
             includeFontPadding = false
         }
         val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-        val owner = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
-        owner.addView(label(section.title.orEmpty(), 11f, context.getColor(R.color.ag_sub0)), LinearLayout.LayoutParams(0, -2, 1f))
-        owner.addView(label("×", 22f, context.getColor(R.color.ag_sub0)).apply {
-            gravity = Gravity.CENTER
-            contentDescription = "Close stat explanation"
-            setOnClickListener { close() }
-        }, LinearLayout.LayoutParams(Ui.dp(context, 48), Ui.dp(context, 48)))
-        col.addView(owner, LinearLayout.LayoutParams(-1, -2))
         val title = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
         title.addView(label(name, 15f, context.getColor(R.color.ag_text), 900), LinearLayout.LayoutParams(0, -2, 1f))
         title.addView(label("×$factor", 24f, hue, 900), LinearLayout.LayoutParams(-2, -2).apply { marginStart = Ui.dp(context, 8) })
         col.addView(title, LinearLayout.LayoutParams(-1, -2))
         col.addView(StatPillView(context, key, n))
-        col.addView(label("$name is $factor× its normal value.", 12f, context.getColor(R.color.ag_sub1)))
+        col.addView(label(ConditionExplanation.effect(mark).substringBefore(" Until"), 12f, context.getColor(R.color.ag_sub1)))
         col.addView(label("Until switching, fainting or a new opponent.", 12f, context.getColor(R.color.ag_sub1)).apply { setPadding(0, Ui.dp(context, 5), 0, 0) })
         val cardW = min(maxW, Ui.dp(context, 288))
         body.addView(col, LinearLayout.LayoutParams((cardW - pad * 2).coerceAtLeast(1), -2))

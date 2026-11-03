@@ -278,7 +278,7 @@ class WidgetLookActivity : AgActivity() {
             list.setItemChecked(choices.indexOf(selected),true)
         }
         body.addView(search)
-        body.addView(Form.segmented(this,listOf("Level","Name","Recently caught"),0) { sort=BuddyPicker.Sort.values()[it]; update() })
+        body.addView(LookChoosers.segmented(this,listOf("Level","Name","Recently caught","Recently evolved"),0) { sort=BuddyPicker.Sort.values()[it]; update() })
         body.addView(Form.segmented(this,listOf("All","Team","Box"),0) { filters=filters.copy(place=BuddyPicker.Place.values()[it]); update() })
         body.addView(MotionHorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false; addView(chips) })
         list.choiceMode=android.widget.ListView.CHOICE_MODE_SINGLE

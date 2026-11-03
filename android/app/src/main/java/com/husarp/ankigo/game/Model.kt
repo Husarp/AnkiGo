@@ -230,6 +230,10 @@ class Mon(
     var favourite: Boolean = false, // player's favourite: kept in the AnkiGo save and backups only (not written into the Ankimon file); can't be released
     var look: Int? = null,          // chosen look: species number whose sprite to show (null = its current species). Visual only; AnkiGo save and backups only, never written into the Ankimon file (see Looks.kt)
     var restFrac: Int = 0,          // bench rest: the part of an HP built up so far, in 1/200 HP (0..199); AnkiGo save and backups only, not in the Ankimon file (see Healing.kt)
+    /** Last actual evolution; old saves have no inferred date. */
+    var evolvedAt: Long = 0,
+    var bondPoints: Int = 0,        // earned Bond points; separate from legacy Ankimon friendship
+    var bondHalf: Int = 0,          // Soothe Bell fractional carry (0 or 1 half point)
 )
 
 /**

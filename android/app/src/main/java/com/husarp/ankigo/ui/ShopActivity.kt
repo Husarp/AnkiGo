@@ -80,7 +80,6 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
 
     override fun onHide() {
         dealClock.removeCallbacks(updateDeal)
-        closeCard()
         super.onHide()
     }
 
@@ -334,16 +333,14 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
                 setImageResource(R.drawable.ic_sync)
                 setColorFilter(ink, android.graphics.PorterDuff.Mode.SRC_IN)
             }, LinearLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18)).also { it.marginEnd = Ui.dp(ctx, 7) })
-            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = TextUtils.concat("Refresh shop · ", CoinText.of(this, "${Shop.refreshPrice(state)}")); maxLines = 2; gravity = Gravity.CENTER })
-            setOnClickListener { reroll() }
+            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = TextUtils.concat("Hold to refresh · ", CoinText.of(this, "${Shop.refreshPrice(state)}")); maxLines = 2; gravity = Gravity.CENTER })
+            HoldToConfirm.bind(this, "refresh shop", allowed = { state.cash >= Shop.refreshPrice(state) }) { reroll() }
         }
     }
 
     private fun reroll() {
         if (state.cash < Shop.refreshPrice(state)) { Ui.toast(this, "Not enough money (need ${CoinText.word(Shop.refreshPrice(state))})"); return }
-        Pickers.confirm(this, "Refresh the shop?", "New items and TMs for ${CoinText.word(Shop.refreshPrice(state))}.", "Refresh") {
-            act { g -> Shop.reroll(g.data, g.state, g.rng) }
-        }
+        act { g -> Shop.reroll(g.data, g.state, g.rng) }
     }
 }
 

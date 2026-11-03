@@ -224,7 +224,7 @@ class R14B2BShots {
             assertNoArrows(screen)
             assertTrue(t.toString(), "WHAT IT DOES" in t)
             assertTrue(t.any { it.startsWith("You own ") && it.contains("Great Ball") })
-            assertTrue(t.toString(), t.any { it == "Buy" })
+            assertTrue(t.toString(), t.any { it == "Hold to buy" })
             assertTrue("no Trade in the Shop", t.none { it.startsWith("Trade ") && " for 1 " in it })
             assertTrue("no Price row any more", "Price" !in t && "PRICE" !in t)
             assertTrue("no stars", t.none { it.contains("**") })
@@ -240,7 +240,7 @@ class R14B2BShots {
             assertTrue("Who can learn it" in t)
             assertTrue(t.toString(), t.any { it.endsWith("of your Pokémon") })
             assertTrue("You don't own this TM yet" in t)
-            assertTrue("Buy" in t)
+            assertTrue("Hold to buy" in t)
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")), setup = ::someDontKnowThunderbolt).second }
     }
 
@@ -249,7 +249,7 @@ class R14B2BShots {
             val t = texts((screen as ShopCardKit.Stage).page.itemWindow!!.view)
             assertTrue("✓ Owned" in t)
             assertTrue("You own this TM" in t)
-            assertTrue("Buy" !in t)
+            assertTrue("Hold to buy" !in t)
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")), setup = { st.tms += "thunderbolt" }).second }
     }
 
@@ -262,7 +262,7 @@ class R14B2BShots {
             val popup = (screen as ShopCardKit.Stage).page.itemWindow!!.view
             assertTrue("today's purchase price in popup", com.husarp.ankigo.ui.Bits.fmt(deal.price) in texts(popup))
             assertTrue("the deal card stays under the window", texts(screen).any { it.startsWith(ShopCardKit.dealHeading()) })
-            assertTrue("Buy" in texts(screen))
+            assertTrue("Hold to buy" in texts(screen))
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.DEAL, day = day.value).second }
     }
 
@@ -273,7 +273,7 @@ class R14B2BShots {
             assertTrue(t.any { it.startsWith("WEEKEND SPECIAL") })
             assertTrue("the weekend card is still there", t.count { it.startsWith("Ends in ") } >= 2)
             assertNotNull(ShopCardKit.findDesc(screen, "Close"))
-            assertTrue("Buy" in t)
+            assertTrue("Hold to buy" in t)
             assertNoArrows(screen)
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.WEEKEND, day = sat).second }
     }
@@ -291,7 +291,7 @@ class R14B2BShots {
     @Test fun tooLittleMoneyFadesBuyAndTheWindowStaysOpen() {
         shoot("shop-poor", listOf(P412), themes = listOf(Theme.LIGHT)) { ctx ->
             val (p, screen) = ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Item("tart-apple")), cash = 100)
-            val buy = ShopCardKit.allText(p.itemWindow!!.view, { it.text.toString() == "Buy" }).single()
+            val buy = ShopCardKit.allText(p.itemWindow!!.view, { it.text.toString() == "Hold to buy" }).single()
             var v: View = buy
             while (v.alpha == 1f && v.parent is View) v = v.parent as View
             assertTrue("Buy is faded", v.alpha < 1f)
@@ -308,7 +308,7 @@ class R14B2BShots {
         shoot("shop-x2", listOf(Variant("w360", 360, 780)), scale = 2f, check = { ctx, screen ->
             assertTrue(ctx.resources.configuration.fontScale == 2.0f)
             assertTrue("Who can learn it" in texts(screen))
-            assertTrue("Buy" in texts(screen))
+            assertTrue("Hold to buy" in texts(screen))
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt"))).second }
     }
 
@@ -465,7 +465,7 @@ class R14B2BShots {
             assertTrue("Teach…" in t && "Who can learn it" in t)
             assertTrue("POWER" in t && "SPECIAL" in t)
             assertTrue("You own this TM" in t)
-            assertTrue("no Buy in the Bag", "Buy" !in t)
+            assertTrue("no Buy in the Bag", "Hold to buy" !in t)
         }) { ctx -> bagPage(ctx, CardKeys.bagTm("thunderbolt"), setup = ::someDontKnowThunderbolt).second }
     }
 

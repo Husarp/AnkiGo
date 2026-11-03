@@ -124,7 +124,7 @@ class TileMarksTest {
     }
 
     @Test fun holdsAnItemAndCanEvolveFilters() {
-        val st = TestData.state(data, 1, 16) // level evolution available
+        val st = TestData.state(data, 1, 16).apply { main!!.bondPoints = 125 } // level evolution available
         val held = TestData.mon(data, 16, 10, uid = "h").also { it.heldItem = "lucky-egg" }
         val plain = TestData.mon(data, 16, 10, uid = "p")
         st.mons += held; st.mons += plain

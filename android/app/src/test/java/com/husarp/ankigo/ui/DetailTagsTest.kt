@@ -37,7 +37,7 @@ class DetailTagsTest {
             9001, "Alolanthing", evolutions = listOf(Evolution(2, EvoKind.LEVEL, level = 5))
         ).copy(form = "Alola")
         val d = TestData.data(world)
-        val st = TestData.state(d, 9001, 10)
+        val st = TestData.state(d, 9001, 10).apply { main!!.bondPoints = 125 }
         val m = st.mons[0]
         m.shiny = true; m.heldItem = "lucky-egg"; m.caughtAt = now; m.hp = 0; m.favourite = true
         st.settings.xpShareUid = m.uid

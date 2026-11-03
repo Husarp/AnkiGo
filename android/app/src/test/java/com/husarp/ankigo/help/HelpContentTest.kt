@@ -1,5 +1,6 @@
 package com.husarp.ankigo.help
 
+import com.husarp.ankigo.game.Bond
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Tuning
 import org.junit.Assert.assertEquals
@@ -131,8 +132,8 @@ class HelpContentTest {
         assertTrue(battles.contains("×1.5 XP"))
         assertEquals(1.5, Tuning.LUCKY_EGG, 0.0)
         assertTrue(chapterText(GameGuide.LEVELS).contains("level ${Tuning.MAX_LEVEL}"))
-        assertTrue(chapterText(GameGuide.LEVELS).contains("${Tuning.DEFAULT_MIN_FRIENDSHIP}"))
-        assertTrue(chapterText(GameGuide.LEVELS).contains("${Tuning.FRIENDSHIP_GAIN.first} to ${Tuning.FRIENDSHIP_GAIN.last}"))
+        assertTrue(chapterText(GameGuide.LEVELS).contains(Bond.thresholds.drop(1).joinToString(" / ")))
+        assertTrue(chapterText(GameGuide.LEVELS).contains("+${Bond.CARD_POINTS} point per answered card while fighting and +${Bond.WIN_POINTS} per win"))
         assertTrue(chapterText(GameGuide.TYPES).contains("There are 18 types"))
         assertTrue(chapterText(GameGuide.TYPES).contains("×1.5"))
         val stats = chapterText(GameGuide.STATS)

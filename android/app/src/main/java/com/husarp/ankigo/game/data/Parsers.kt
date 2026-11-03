@@ -238,6 +238,8 @@ object Parsers {
         val level = if (e.has("evoLevel")) e.optInt("evoLevel") else null
         val cond = e.optString("evoCondition", "").takeIf { it.isNotEmpty() }
         val item = e.optString("evoItem", "").takeIf { it.isNotEmpty() }?.let { itemId(it) }
+        // Crabominable used to carry the obsolete Mount Lanakila location requirement.
+        if (to == 740) return Evolution(to, EvoKind.ITEM, item = "ice-stone")
         val time = when {
             cond == null -> null
             cond.contains("during the day", true) -> "day"
@@ -500,7 +502,7 @@ object Parsers {
                     to = e.getInt(0), kind = EvoKind.valueOf(e.getString(1)), level = optI(e, 2), item = optS(e, 3), move = optS(e, 4),
                     moveType = optS(e, 5)?.let { Type.parse(it) }, time = optS(e, 6), gender = optS(e, 7)?.get(0),
                     minFriendship = optI(e, 8), condition = optS(e, 9),
-                )
+                ).let { if (a.getInt(0) == 739 && it.to == 740) Evolution(740, EvoKind.ITEM, item = "ice-stone") else it }
             },
             baseExp = a.getInt(10), growthRate = a.getInt(11),
             evYield = Stats.of(intList(a.getJSONArray(12))),

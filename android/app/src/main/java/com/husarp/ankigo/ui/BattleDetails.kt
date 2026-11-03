@@ -104,6 +104,7 @@ object BattleDetails {
         col.addView(DetailSections.section(ctx, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(info.matchups)) { DetailSections.matchups(ctx, info.types, info.name) })
         col.addView(DetailSections.infoSection(ctx, mem, data, sp, emptyList(), null, null, compact,
             lines = listOf("Tier" to info.tier.label, "Pokédex" to if (info.dex == WildDex.CAUGHT) "Caught" else "Seen, not caught yet")))
+        DetailSections.applyOrder(col)
         AppDialog.Builder(ctx).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(ctx, col, focusMove)), true)
             .setDetailsFooter(contextLabel = "Wild Pokémon").showCard()
         return true

@@ -184,6 +184,10 @@ object AppPrefs {
 
     fun setDetailOpen(ctx: Context, key: String, open: Boolean) = prefs(ctx).edit().putBoolean("detailOpen_$key", open).apply()
 
+    fun detailOrder(ctx: Context): List<DetailSection> = DetailOrder.resolve(prefs(ctx).getString("detailSectionsOrder", "").orEmpty().split(","))
+    fun setDetailOrder(ctx: Context, order: List<DetailSection>) = prefs(ctx).edit()
+        .putString("detailSectionsOrder", DetailOrder.resolve(order.map { it.key }).joinToString(",") { it.key }).apply()
+
     /** App theme (Settings → Look). Default: follow the system. Applied by [AppLook]; change it through [AppLook.setTheme]. */
     fun theme(ctx: Context): ThemeMode =
         ThemeMode.entries.firstOrNull { it.name == prefs(ctx).getString("theme", null) } ?: ThemeMode.SYSTEM

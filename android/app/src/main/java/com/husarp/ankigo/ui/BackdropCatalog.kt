@@ -12,19 +12,24 @@ internal object BackdropCatalog {
     private fun showdown(id: String, w: Int, player: StandPoint, wild: StandPoint) =
         Backdrop(id, BackdropSource.SHOWDOWN, "png", w, 500, player, wild, crisp = true, dark = false, sharp = false) // R19-F2: today's drawing at every size
 
-    private fun own(id: String, ext: String, w: Int, h: Int, player: StandPoint, wild: StandPoint, crisp: Boolean, dark: Boolean = false, rev: Int = 1, ground: StandPoint = wild, groundZoom: Float = 1f) =
-        Backdrop(id, BackdropSource.OWN, ext, w, h, player, wild, crisp, dark, rev, wildGround = ground, groundZoom = groundZoom)
+    private fun own(id: String, ext: String, w: Int, h: Int, player: StandPoint, wild: StandPoint, crisp: Boolean, dark: Boolean = false, rev: Int = 1, ground: StandPoint = wild, groundZoom: Float = 1f, groundMaxHeight: Float = 1f) =
+        Backdrop(id, BackdropSource.OWN, ext, w, h, player, wild, crisp, dark, rev, wildGround = ground, groundZoom = groundZoom, groundMaxHeight = groundMaxHeight)
 
+    // PLAN 460: feet measured on the actual ground, checked through ArenaView at 420 dpi.
+    // The four beaches share their broad foreground sand (R29f); the remaining scenes
+    // use their measured ground pads or clear floor. Sprite frame fractions are unchanged.
     val ALL: List<Backdrop> = listOf(
-        own("tropical-cove", "png", 1024, 685, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(0.74f, 0.51f, .32f), groundZoom = 1f),
-        own("coral-lagoon", "png", 1024, 683, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(0.74f, 0.49f, .32f), groundZoom = 1f),
-        own("sandbar-isle", "png", 1024, 685, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(0.74f, 0.48f, .32f), groundZoom = 1f),
-        own("reef-bay", "png", 1024, 683, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(0.74f, 0.49f, .32f), groundZoom = 1f),
+        // R29: both feet on the foreground sand; height cap retains that footing in tall windows.
+        own("tropical-cove", "png", 1024, 685, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f),
+        own("coral-lagoon", "png", 1024, 683, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f),
+        own("sandbar-isle", "png", 1024, 685, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f),
+        own("reef-bay", "png", 1024, 683, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f),
+
         // Pokémon Showdown (753 x 500, beach 700 x 500), pixel art
-        showdown("beach", 700, p(.30f, .86f, .44f), p(.68f, .58f, .32f)),
-        showdown("city", 753, p(.30f, .86f, .44f), p(.68f, .56f, .32f)),
+        showdown("beach", 700, p(.30f, .77f, .44f), p(.71f, .46f, .32f)),
+        showdown("city", 753, p(.30f, .82f, .44f), p(.68f, .61f, .32f)),
         showdown("dampcave", 753, p(.30f, .79f, .44f), p(.70f, .48f, .32f)),
-        showdown("desert", 753, p(.30f, .82f, .44f), p(.64f, .55f, .32f)),
+        showdown("desert", 753, p(.30f, .78f, .44f), p(.64f, .56f, .32f)),
         showdown("earthycave", 753, p(.30f, .79f, .44f), p(.70f, .48f, .32f)),
         showdown("forest", 753, p(.30f, .78f, .44f), p(.68f, .50f, .32f)),
         showdown("icecave", 753, p(.30f, .79f, .44f), p(.70f, .48f, .32f)),
@@ -33,15 +38,15 @@ internal object BackdropCatalog {
         showdown("river", 753, p(.34f, .80f, .44f), p(.62f, .52f, .32f)),
         showdown("route", 753, p(.25f, .81f, .44f), p(.70f, .48f, .32f)),
         // Adam's batch 1 (1264 x 848 WebP, soft), sharpened in round 9 (rev 2; night-forest retouched + sharpened = rev 3)
-        own("dragon-peak", "webp", 1264, 848, p(.30f, .85f, .44f), p(.79f, .61f, .32f), crisp = true, rev = 2),
-        own("deep-sea-cave", "webp", 1264, 848, p(.30f, .815f, .44f), p(.80f, .615f, .32f), crisp = true, dark = true, rev = 2),
+        own("dragon-peak", "webp", 1264, 848, p(.30f, .81f, .44f), p(.80f, .60f, .32f), crisp = true, rev = 2),
+        own("deep-sea-cave", "webp", 1264, 848, p(.30f, .815f, .44f), p(.80f, .615f, .32f), crisp = true, dark = true, rev = 2, ground = p(.83f, .60f, .32f), groundZoom = 1.08f),
         own("night-forest", "webp", 1264, 848, p(.35f, .78f, .44f), p(.74f, .59f, .32f), crisp = true, dark = true, rev = 3),
         own("factory", "webp", 1264, 848, p(.31f, .82f, .44f), p(.72f, .66f, .32f), crisp = false, rev = 2), // R19-F2: today's smoothed drawing
         // Adam's batch 2 (WebP, soft; 1264 x 848 or 1376 x 768), sharpened in round 9 (rev 2)
         own("canyon", "webp", 1375, 768, p(.33f, .74f, .46f), p(.73f, .47f, .33f), crisp = true, rev = 2),
         own("cliff-clouds", "webp", 1376, 768, p(.30f, .76f, .46f), p(.80f, .53f, .33f), crisp = true, rev = 2),
         own("crystal-storm", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 3),
-        own("flower-field", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 3),
+        own("flower-field", "webp", 1024, 687, p(.30f, .76f, .44f), p(.74f, .47f, .32f), crisp = true, dark = false, rev = 3),
         own("haunted-mansion", "webp", 1264, 848, p(.30f, .79f, .44f), p(.695f, .605f, .30f), crisp = true, dark = true, rev = 2),
         own("jungle", "webp", 1264, 848, p(.30f, .83f, .44f), p(.85f, .625f, .32f), crisp = true, rev = 2),
         own("mine", "webp", 1264, 848, p(.32f, .72f, .44f), p(.76f, .50f, .32f), crisp = true, dark = true, rev = 2),
@@ -59,21 +64,20 @@ internal object BackdropCatalog {
         own("fighting-training", "webp", 1024, 687, p(.30f, .84f, .44f), p(.64f, .58f, .32f), crisp = true),
         own("poison-marsh", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 2),
         // R23: approved new scenes (only 40 and 43 use palette-cleaned art).
-        // PLAN 391: keep the sprite spots fixed; align the artwork's measured near ground
-        // underneath them through BackdropDraw.stageCrop (never species-specific offsets).
-        own("forest-tech-b", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
+        // Stand points are scene-wide, never species-specific offsets.
+        own("forest-tech-b", "webp", 1024, 687, p(.29f, .72f, .44f), p(.79f, .51f, .32f), crisp = true, dark = false, rev = 1),
         own("autumn-forest", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("toxic-cave", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("countryside-route", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("windy-hilltop", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.78f, .66f, .32f), groundZoom = 1.35f),
+        own("countryside-route", "webp", 1024, 687, p(.29f, .80f, .44f), p(.77f, .585f, .32f), crisp = true, dark = false, rev = 1),
+        own("windy-hilltop", "webp", 1024, 687, p(.29f, .79f, .44f), p(.78f, .66f, .32f), crisp = true, dark = false, rev = 1),
         own("bamboo-dojo", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("coral-shallows", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.79f, .45f, .32f), groundZoom = 1f),
+        own("coral-shallows", "webp", 1024, 687, p(.29f, .83f, .44f), p(.79f, .44f, .32f), crisp = true, dark = false, rev = 1),
         own("snowy-pines", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("power-plant", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
         own("desert-oasis", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.78f, .61f, .32f), groundZoom = 1.2f),
-        own("starry-plateau", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1),
-        own("lava-field", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("night-rooftops", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1),
+        own("starry-plateau", "webp", 1024, 687, p(.29f, .79f, .44f), p(.76f, .61f, .32f), crisp = true, dark = true, rev = 1),
+        own("lava-field", "webp", 1024, 687, p(.30f, .75f, .44f), p(.79f, .475f, .32f), crisp = true, dark = false, rev = 1),
+        own("night-rooftops", "webp", 1024, 687, p(.29f, .80f, .44f), p(.79f, .49f, .32f), crisp = true, dark = true, rev = 1),
         own("old-graveyard", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1, ground = p(.73f, .68f, .32f), groundZoom = 1.45f),
         own("starry-plateau-galaxy", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1),
     )

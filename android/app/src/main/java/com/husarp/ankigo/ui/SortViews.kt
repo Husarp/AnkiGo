@@ -39,13 +39,13 @@ object SortText {
 
     /** The keys of the Box and the Team picker, in the order the list and the sheet show them. */
     val boxKeys: List<SortKey> = listOf(
-        SortKey.LEVEL, SortKey.NAME, SortKey.DEX_NUMBER, SortKey.CAUGHT_DATE, SortKey.FIRST_SEEN,
+        SortKey.LEVEL, SortKey.NAME, SortKey.DEX_NUMBER, SortKey.CAUGHT_DATE, SortKey.FIRST_SEEN, SortKey.RECENTLY_EVOLVED,
         SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.STRONGEST_ATTACK, SortKey.VS_WILD,
     )
 
     /** The keys that make sense for a Pokédex species (no moves; "last caught" works from the owned copies). */
     val dexKeys: List<SortKey> = listOf(
-        SortKey.DEX_NUMBER, SortKey.NAME, SortKey.CAUGHT_DATE, SortKey.FIRST_SEEN,
+        SortKey.DEX_NUMBER, SortKey.NAME, SortKey.CAUGHT_DATE, SortKey.FIRST_SEEN, SortKey.RECENTLY_EVOLVED,
         SortKey.LEVEL, SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL,
     )
 
@@ -53,7 +53,7 @@ object SortText {
     fun keyLabel(k: SortKey): String = when (k) {
         SortKey.LEVEL -> "Level"; SortKey.TOTAL -> "Total stats"; SortKey.STAT -> "One stat"; SortKey.CHOSEN_TOTAL -> "Chosen stats"
         SortKey.STRONGEST_ATTACK -> "Strongest attack"; SortKey.VS_WILD -> "Best vs the wild one"; SortKey.NAME -> "Name"
-        SortKey.DEX_NUMBER -> "Pokédex no."; SortKey.CAUGHT_DATE -> "Last caught"; SortKey.FIRST_SEEN -> "First seen"
+        SortKey.DEX_NUMBER -> "Pokédex no."; SortKey.CAUGHT_DATE -> "Last caught"; SortKey.FIRST_SEEN -> "First seen"; SortKey.RECENTLY_EVOLVED -> "Recently evolved"
     }
 
     /** The chosen stats as the chip shows them: "Atk + Def", "4 stats", "All stats"; none ticked = "Chosen stats". */
@@ -81,7 +81,7 @@ object SortText {
             SortKey.LEVEL -> "Level"; SortKey.TOTAL -> "Total"; SortKey.STAT -> statLabel(spec.stat ?: Stat.HP)
             SortKey.CHOSEN_TOTAL -> chosenName(spec.chosenStats); SortKey.STRONGEST_ATTACK -> "Strongest attack"
             SortKey.VS_WILD -> "Best vs wild"; SortKey.NAME -> "Name"; SortKey.DEX_NUMBER -> "No."
-            SortKey.CAUGHT_DATE -> "Last caught"; SortKey.FIRST_SEEN -> "First seen"
+            SortKey.CAUGHT_DATE -> "Last caught"; SortKey.FIRST_SEEN -> "First seen"; SortKey.RECENTLY_EVOLVED -> "Recently evolved"
         }
         return Triple(name, if (spec.descending) "↓" else "↑", if (usesBasis(spec.key)) basisSuffix(spec) else "")
     }
@@ -92,7 +92,7 @@ object SortText {
     /** The direction in words, for the sheet's direction chip and the list's note. */
     fun directionLabel(key: SortKey, descending: Boolean): String = when (key) {
         SortKey.NAME -> if (descending) "Z → A" else "A → Z"
-        SortKey.CAUGHT_DATE, SortKey.FIRST_SEEN -> if (descending) "Newest first" else "Oldest first"
+        SortKey.CAUGHT_DATE, SortKey.FIRST_SEEN, SortKey.RECENTLY_EVOLVED -> if (descending) "Newest first" else "Oldest first"
         else -> if (descending) "High → low" else "Low → high"
     }
 

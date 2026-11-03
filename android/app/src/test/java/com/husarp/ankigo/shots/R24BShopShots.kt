@@ -55,7 +55,7 @@ class R24BShopShots {
             stage.measure(android.view.View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, 360), android.view.View.MeasureSpec.EXACTLY),
                 android.view.View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, 780), android.view.View.MeasureSpec.EXACTLY))
             stage.layout(0, 0, stage.measuredWidth, stage.measuredHeight)
-            val buy = ShopCardKit.findText(stage) { it == "Buy" }!!
+            val buy = ShopCardKit.findText(stage) { it == "Hold to buy" }!!
             val button = buy.parent as LinearLayout
             assertEquals(LinearLayout.HORIZONTAL, button.orientation)
             assertEquals(2, button.childCount)

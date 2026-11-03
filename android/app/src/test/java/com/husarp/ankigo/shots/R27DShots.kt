@@ -48,9 +48,9 @@ class R27DShots {
             for (sign in listOf(1,-1)) {
                 val metrics = ChipMetrics(ctx, 12f)
                 val marks = (4..6).map { n -> ConditionMarks.Mark("$n", ConditionMarks.Slot.OURS, ConditionMarks.def("stat.atk")!!, sign*n, n.toLong()) }
-                val w = marks.sumOf { metrics.width(it).toDouble() }.toFloat() + 2*metrics.gap
+                val w = metrics.summaryWidth(marks)
                 page.addView(ConditionMarksView(ctx).apply {
-                    setRow(ConditionMarks.Slot.OURS, ConditionSpot.Placed(ConditionSpot.R(0f,0f,w,metrics.height), ConditionRow.Fit(3,0,w),true),marks,metrics)
+                    setRow(ConditionMarks.Slot.OURS, ConditionSpot.Placed(ConditionSpot.R(0f,0f,w,metrics.height), ConditionRow.Fit(1,0,w),true),marks,metrics)
                 }, LinearLayout.LayoutParams(-1,(metrics.height+8).toInt()))
             }
             page.addView(DetailParts.statRow(ctx, com.husarp.ankigo.game.Stat.ATK,48,.5f,0,60,false,stage=-2))

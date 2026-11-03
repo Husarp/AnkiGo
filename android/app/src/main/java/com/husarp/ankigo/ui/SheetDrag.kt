@@ -257,12 +257,20 @@ object SheetKit {
 
     /** A sheet inside the page's layout ([scrim] = the dark layer behind it, a tap on it is the caller's): handle ensured, drag wired, [onClose] runs when it is dragged away. */
     fun layer(sheet: DragSheet, scrim: View, onClose: () -> Unit) {
-        sheet.post {
-            if (sheet.isAttachedToWindow) {
+        // Hide before the first draw: posting from an unattached sheet could flash its final position.
+        sheet.alpha = 0f
+        scrim.alpha = 0f
+        sheet.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int,
+                                        oldL: Int, oldT: Int, oldR: Int, oldB: Int) {
+                if (b <= t) return
+                sheet.removeOnLayoutChangeListener(this)
+                sheet.translationY = sheet.height.toFloat()
+                sheet.alpha = 1f
                 UiMotion.run(sheet, UiMotion.SHEET_MS, { f -> sheet.translationY = sheet.height * (1f - f) })
                 UiMotion.run(scrim, UiMotion.SHEET_MS, { f -> scrim.alpha = f })
             }
-        }
+        })
         ensureHandle(sheet)
         val scroll = findScroll(sheet)
         sheet.dragger = SheetDragger(sheet, scrim, scroll, zone(sheet.context, findHandle(sheet), scroll), onClose, handle = findHandle(sheet))

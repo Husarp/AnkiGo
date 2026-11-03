@@ -24,8 +24,7 @@ import org.junit.Test
 /** The scene of an [AppDialog] without a window: 48 % black scrim and the card centred, as the window shows it. */
 object AppDialogShots {
     fun scene(ctx: Context, d: AppDialog): View {
-        val dm = ctx.resources.displayMetrics
-        val w = Ui.dp(ctx, AppDialogRules.widthDp((dm.widthPixels / dm.density).toInt()))
+        val w = d.cardWidthPx()
         (d.content().parent as? android.view.ViewGroup)?.removeView(d.content()) // a dialog shot in several sizes / themes keeps one card
         return FrameLayout(ctx).apply {
             setBackgroundColor(Color.argb(122, 0, 0, 0))

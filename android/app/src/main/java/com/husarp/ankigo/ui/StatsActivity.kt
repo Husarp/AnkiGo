@@ -182,12 +182,8 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         if (section == StatsSection.ACHIEVEMENTS) achievements.scrollToY(0) else scrollToTop(statsScroll)
     }
 
-    /** PLAN 222: back in the app after leaving it: the "Show" sheet closes too, then as a reselect. */
-    override fun onAppReturned() {
-        sheetOpen = false
-        syncSheet()
-        onTabReselected()
-    }
+    /** PLAN 448: keep both the Show sheet and achievement details on app return. */
+    override fun onAppReturned() {} // Keep the current section and open sheet on a brief app switch.
 
     /** Test hook and Nav: shows [s]. The chart state (metric, period, deck, grain) is kept while the page lives. */
     internal fun showSection(s: StatsSection) {
@@ -635,6 +631,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
     /** Shows or hides the layer with the "Show" sheet, as [sheetOpen] says. */
     private fun syncSheet() {
+        if (sheetOpen && sheetLayer.visibility == View.VISIBLE && sheetLayer.childCount > 0) return
         sheetLayer.removeAllViews()
         if (!sheetOpen) { sheetLayer.visibility = View.GONE; return }
         sheetLayer.visibility = View.VISIBLE

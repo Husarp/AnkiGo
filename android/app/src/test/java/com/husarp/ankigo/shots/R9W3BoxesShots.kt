@@ -84,10 +84,11 @@ class R9W3BoxesShots {
     private class Scene(val root: View, val arena: ArenaView)
 
     private fun boxed(ctx: Context, wDp: Int, hDp: Int, pic: Boolean, setup: (BattlePanelView) -> Unit): Scene {
+        AppPrefs.setBackgroundPictures(ctx, pic)
         val p = BattlePanelView(ctx)
         setup(p)
         p.renderAll()
-        if (pic) picture(ctx, p.arena)
+        if (pic) picture(ctx, p.arena) else p.arena.setPlainBackdrop()
         val frame = FrameLayout(ctx).apply {
             setBackgroundColor(Ui.c(ctx, R.color.ag_base))
             addView(p, FrameLayout.LayoutParams(Ui.dp(ctx, wDp), Ui.dp(ctx, hDp), Gravity.TOP or Gravity.LEFT))
@@ -99,8 +100,9 @@ class R9W3BoxesShots {
         Triple("study-tall", Size.SPLIT) { c, pic -> boxed(c, 412, 400, pic) { it.setStudyLayout(false, false) } },
         Triple("strip", Size.SPLIT) { c, pic -> boxed(c, 412, 180, pic) { it.setStudyLayout(true, false) } },
         Triple("battle", Size.PHONE) { c, pic ->
+            AppPrefs.setBackgroundPictures(c, pic)
             val b = BattleShotKit.bound(c)
-            if (pic) picture(c, b.arena!!)
+            if (pic) picture(c, b.arena!!) else b.arena!!.setPlainBackdrop()
             Scene(b.root, b.arena!!)
         },
     )
@@ -295,10 +297,19 @@ class R9W3BoxesShots {
                 Triple("wild HP", field(sc.arena, "eHp"), "245 / 312"),
                 Triple("our HP", field(sc.arena, "pHp"), "198 / 301"),
                 Triple("our XP", field(sc.arena, "pXp"), "XP 6400 / 10000"))
-            // a reduced box (picture mode, small room) drops the XP number by design: its thin bar stays
-            val xpDropped = pic && sc.arena.stagePlanNow!!.reduced
+            // Check that the rendered bars honor both the panel and picture-stage layout policies.
+            var owner: android.view.ViewParent? = sc.arena.parent
+            while (owner != null && owner !is BattlePanelView) owner = owner.parent
+            val panelFit = (owner as BattlePanelView).currentFit
+            assertEquals("$tag: the requested picture/plain fixture", pic, sc.arena.backdropElement != null)
+            val xpDropped = !panelFit.xp || sc.arena.stagePlanNow?.reduced == true
             for ((who, bar, want) in bars) {
-                if (who == "our XP" && xpDropped) { assertEquals("$tag: reduced box has no XP number", null, bar.labelText()); continue }
+                if (who == "our XP" && xpDropped) {
+                    assertEquals("$tag: the layout steps out the XP number", null, bar.labelText())
+                    assertEquals(View.VISIBLE, bar.visibility)
+                    assertTrue("$tag: the thin XP bar stays", bar.height > 0)
+                    continue
+                }
                 assertEquals("$tag: $who number is set", want, bar.labelText())
                 val need = bar.labelNeedPx(bar.labelSp())
                 assertTrue("$tag: $who bar ${bar.height} px is as tall as its number (${need} px)", bar.height >= need)

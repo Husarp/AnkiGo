@@ -47,6 +47,7 @@ class AchievementsView(private val page: GamePage) {
     private var filter = AchFilter.ALL
     private var openId: String? = null
     private var focusId: String? = null
+    private var shownDetail: List<Any?>? = null
 
     /** The clock and the time zone the dates are worked out in (tests set them). */
     internal var now: () -> Long = { System.currentTimeMillis() }
@@ -98,7 +99,7 @@ class AchievementsView(private val page: GamePage) {
     }
 
     /** Closes the detail sheet. */
-    fun close() { openId = null; layer.removeAllViews(); layer.visibility = View.GONE }
+    fun close() { openId = null; shownDetail = null; layer.removeAllViews(); layer.visibility = View.GONE }
 
     /** Test hook: the filter that is on. */
     internal fun setFilter(f: AchFilter) { filter = f }
@@ -168,10 +169,16 @@ class AchievementsView(private val page: GamePage) {
             revealTab = true
         }
 
-        layer.removeAllViews()
         val v = openId?.let { id -> views.firstOrNull { it.id == id } }
-        if (v == null) { openId = null; layer.visibility = View.GONE }
-        else { layer.addView(AchievementDetail.layer(page, v, st.achSince, zone) { close() }, FrameLayout.LayoutParams(-1, -1)); layer.visibility = View.VISIBLE }
+        val detailKey = v?.let { listOf(it.id, it.tier, it.value, it.next, it.progress, it.dates,
+            it.inferred, it.pokemon, st.achSince, zone) }
+        if (v == null) close()
+        else if (shownDetail != detailKey || layer.childCount == 0) {
+            layer.removeAllViews()
+            shownDetail = detailKey
+            layer.addView(AchievementDetail.layer(page, v, st.achSince, zone) { close() }, FrameLayout.LayoutParams(-1, -1))
+            layer.visibility = View.VISIBLE
+        }
     }
 
     // ---- header ----

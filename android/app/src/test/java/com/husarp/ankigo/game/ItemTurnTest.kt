@@ -106,6 +106,7 @@ class ItemTurnTest {
 
     @Test fun anEvolutionItemOnTheMainInAFightTakesTheTurnAfterTheEvolution() {
         val g = game()
+        g.state.main!!.bondPoints = 125
         Economy.give(g.state, "thunder-stone")
         val r = g.useItem("thunder-stone", "t0")
         assertTrue(r.message, r.ok)

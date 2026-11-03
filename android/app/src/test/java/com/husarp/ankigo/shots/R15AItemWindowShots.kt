@@ -130,7 +130,7 @@ class R15AItemWindowShots {
     @Test fun theWindowOfABallInTheShopHasBuy() {
         shoot("win-ball-buy", listOf(P412, P360), check = { ctx, screen ->
             val t = texts(screen)
-            assertTrue("Buy" in t && "WHAT IT DOES" in t)
+            assertTrue("Hold to buy" in t && "WHAT IT DOES" in t)
             val sheet = (screen as ShopCardKit.Stage).page.itemWindow!!.view
             val dm = ctx.resources.displayMetrics
             assertTrue("the window sits at the bottom of the screen", boundsIn(screen, sheet).bottom == screen.height)
@@ -172,7 +172,7 @@ class R15AItemWindowShots {
                 val sheet = stage.page.itemWindow!!.view
                 val dm = ctx.resources.displayMetrics
                 assertTrue("at most 85 % of the screen: ${sheet.height} of ${dm.heightPixels}", sheet.height <= (dm.heightPixels * ItemWindow.MAX_SHARE).toInt() + 1)
-                val buy = ShopCardKit.allText(stage, { it.text.toString() == "Buy" }).single()
+                val buy = ShopCardKit.allText(stage, { it.text.toString() == "Hold to buy" }).single()
                 val b = boundsIn(stage, buy)
                 assertTrue("Buy is in view: $b of ${stage.height}", b.bottom <= stage.height && b.top >= stage.height - sheet.height)
                 val close = boundsIn(stage, ShopCardKit.findDesc(stage, "Close")!!)
@@ -194,8 +194,8 @@ class R15AItemWindowShots {
             val bagTab = getField(p, "tabBag") as TextView
             val bag0 = bagTab.text.toString()
             assertTrue(ItemInfo.plain(ItemInfo.ownLine("great-ball", n0)) in texts(stage))
-            ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Buy" }).single()); stage.render()
-            ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Sure?" }).single()); stage.render()
+            ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Hold to buy" }).single()); stage.render()
+            (ShopCardKit.allText(stage, { it.text.toString() == "Hold to buy" }).single().parent as View).performLongClick(); stage.render()
             assertEquals(n0 + 1, st.count("great-ball"))
             assertTrue(st.cash < cash0)
             assertSame("the same window, drawn again", w, p.itemWindow)
@@ -203,8 +203,8 @@ class R15AItemWindowShots {
             assertTrue(ItemInfo.plain(ItemInfo.ownLine("great-ball", n0 + 1)) in texts(stage))
             assertTrue("the list behind counts the bag again: $bag0 to ${bagTab.text}", bagTab.text.toString() != bag0)
             // and again: still one window
-            ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Buy" }).single()); stage.render()
-            ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Sure?" }).single()); stage.render()
+            ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Hold to buy" }).single()); stage.render()
+            (ShopCardKit.allText(stage, { it.text.toString() == "Hold to buy" }).single().parent as View).performLongClick(); stage.render()
             assertTrue(ItemInfo.plain(ItemInfo.ownLine("great-ball", n0 + 2)) in texts(stage))
             assertEquals(1, ShopCardKit.windowsShown)
             stage
@@ -260,7 +260,7 @@ class R15AItemWindowShots {
         }
     }
 
-    @Test fun switchingTheTabOrLeavingThePageClosesTheWindow() {
+    @Test fun tabsCloseTheWindowButPausingRetainsItUntilDestruction() {
         shoot("leave", listOf(P412), themes = listOf(Theme.LIGHT)) { ctx ->
             val (p, stage) = ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Item("great-ball")))
             assertNotNull(p.itemWindow)
@@ -275,14 +275,16 @@ class R15AItemWindowShots {
             assertNotNull(p.itemWindow)
             ShopCardKit.tap(getField(p, "tabShop") as TextView)
             assertNull(p.itemWindow)
-            // leaving the page
+            // A brief app switch keeps the exact window; destruction still closes it.
             p.openCard(CardKeys.special(ShopPlan.Tile.Item("great-ball"))); stage.render()
-            assertNotNull(p.itemWindow)
+            val retained = p.itemWindow!!
             p.onHide()
-            assertNull(p.itemWindow)
-            assertNull(p.open.key)
+            assertSame(retained, p.itemWindow)
+            assertNotNull(p.open.key)
             stage.render()
-            assertNull("it does not come back on the next render", p.itemWindow)
+            assertSame(retained, p.itemWindow)
+            p.onGone()
+            assertNull(p.itemWindow)
             stage
         }
     }
@@ -299,7 +301,7 @@ class R15AItemWindowShots {
             assertSame("another item changes the window's content, not the window", w, p.itemWindow)
             assertEquals(1, ShopCardKit.windowsShown)
             assertTrue("TM Thunderbolt" in texts(stage))
-            assertEquals("one ✕, one Buy: one sheet", 1, ShopCardKit.allText(stage, { it.text.toString() == "Buy" }).size)
+            assertEquals("one ✕, one Buy: one sheet", 1, ShopCardKit.allText(stage, { it.text.toString() == "Hold to buy" }).size)
             // the ✕ closes it for good; a render brings nothing back, a tap opens a fresh one
             ShopCardKit.tap(ShopCardKit.findDesc(stage, "Close"))
             assertNull(p.itemWindow)

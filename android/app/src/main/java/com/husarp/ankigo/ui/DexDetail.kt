@@ -87,6 +87,7 @@ object DexDetail {
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, sp.name) })
         col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), null, null, compact))
 
+        DetailSections.applyOrder(col)
         col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))
         val mine = copies(state.mons, sp.num)
         col.addView(line(a, "Owned", mine.size.toString()))

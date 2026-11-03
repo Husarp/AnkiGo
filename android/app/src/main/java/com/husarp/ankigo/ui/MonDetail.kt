@@ -191,12 +191,14 @@ object MonDetail {
         col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves", forceOpen = focusMove != null) { DetailSections.moves(a, data, mon.moves, compact, focusMove = focusMove) })
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, mon.shownName) })
         col.addView(DetailSections.section(a, mem, DetailSection.TRAINING, mon.nature.label) { DetailSections.training(a, mon, compact) })
+        col.addView(DetailSections.section(a, mem, DetailSection.BOND, BondSection.summary(mon)) { BondSection.body(a, mon) })
         col.addView(DetailSections.infoSection(a, mem, data, sp,
             listOf(mon.defeats.toString() to "Wins"), // since R17C a catch is a win too; the saved field stays `defeats` (PLAN 273)
             null,
             if (mon.shownName != mon.name) mon.name else null, compact,
             lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–")))
 
+        DetailSections.applyOrder(col)
         if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusMove)), true).setDetailsFooter().showCard(); return }
         lateinit var more: View
         more = DetailParts.secondaryButton(a, "Options") {

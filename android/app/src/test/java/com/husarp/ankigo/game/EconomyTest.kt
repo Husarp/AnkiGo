@@ -561,7 +561,7 @@ class EconomyTest {
     }
 
     @Test fun stoneEvolves() {
-        val s = state() // main is Sparkmouse Lv 20
+        val s = state().apply { main!!.bondPoints = 125 } // main is Sparkmouse Lv 20
         Economy.give(s, "thunder-stone")
         assertTrue(ItemUse.canUse(data, s, "thunder-stone", s.main))
         val r = ItemUse.use(data, s, "thunder-stone", "main", TestData.rng(), 0)
@@ -582,7 +582,7 @@ class EconomyTest {
             TestData.species(10, "Sneasel", evolutions = listOf(Evolution(11, EvoKind.ITEM, item = item, time = time))),
             TestData.species(11, "Weavile", prevo = 10),
         ))
-        return d to TestData.state(d, 10, 30)
+        return d to TestData.state(d, 10, 30).apply { main!!.bondPoints = 125 }
     }
 
     @Test fun timedItemEvolutionWorksOnlyAtTheRightTime() {
@@ -608,7 +608,7 @@ class EconomyTest {
 
     @Test fun plainStoneAndEverstoneAtAnyHour() {
         for (h in listOf(10, 22)) {
-            val s = state()
+            val s = state().apply { main!!.bondPoints = 125 }
             Economy.give(s, "thunder-stone")
             assertTrue(ItemUse.canUse(data, s, "thunder-stone", s.main, clock(h)))
             assertTrue(ItemUse.use(data, s, "thunder-stone", "main", TestData.rng(), clock(h)).ok)

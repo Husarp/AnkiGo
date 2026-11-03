@@ -95,20 +95,21 @@ class R18HShopShots {
     @Test fun anEvolutionCardNamesOnlyWhatYouCaught() {
         // Applin caught, Flapple not
         shoot("card-evo-from-caught", listOf(P412, P360), check = { _, screen ->
-            val t = texts(screen).map { com.husarp.ankigo.game.ItemInfo.plain(it) }
-            assertTrue(t.toString(), "Evolves Applin into an unknown Pokémon" in t || t.any { it == "Evolves Applin into an unknown Pokémon." })
+            val t = texts((screen as ShopCardKit.Stage).page.itemWindow!!.view).map { com.husarp.ankigo.game.ItemInfo.plain(it) }
+            assertTrue(t.toString(), "Applin" in t)
             assertTrue(t.toString(), t.none { it.contains("Flapple") })
         }) { ctx -> bagPage(ctx, CardKeys.bagItem("tart-apple")) { caughtOnly(4010) }.second }
         // nothing of it caught
         shoot("card-evo-none-caught", listOf(P412), check = { _, screen ->
-            val t = texts(screen).map { com.husarp.ankigo.game.ItemInfo.plain(it) }
-            assertTrue(t.toString(), t.any { it == "Evolves an unknown Pokémon." })
+            val t = texts((screen as ShopCardKit.Stage).page.itemWindow!!.view).map { com.husarp.ankigo.game.ItemInfo.plain(it) }
+            assertTrue(t.toString(), "Evolves 1 unknown Pokémon" in t)
             assertTrue(t.toString(), t.none { it.contains("Applin") || it.contains("Flapple") })
         }) { ctx -> bagPage(ctx, CardKeys.bagItem("tart-apple")) { caughtOnly(25) }.second }
-        // both caught: the full text
+        // Both caught: only the source belongs in the item window (PLAN 443).
         shoot("card-evo-both-caught", listOf(P412), check = { _, screen ->
-            val t = texts(screen).map { com.husarp.ankigo.game.ItemInfo.plain(it) }
-            assertTrue(t.toString(), t.any { it == "Evolves Applin into Flapple." })
+            val t = texts((screen as ShopCardKit.Stage).page.itemWindow!!.view).map { com.husarp.ankigo.game.ItemInfo.plain(it) }
+            assertTrue(t.toString(), "Applin" in t)
+            assertTrue(t.toString(), t.none { it.contains("Flapple") || it.contains(" into ") || it.contains("⟶") })
         }) { ctx -> bagPage(ctx, CardKeys.bagItem("tart-apple")) { caughtOnly(4010, 4011) }.second }
     }
 

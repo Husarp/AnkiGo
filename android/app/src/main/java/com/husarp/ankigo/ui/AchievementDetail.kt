@@ -71,7 +71,9 @@ internal object AchievementDetail {
         if (v.tier >= 0 && AchievementPokemon.applies(v)) body.addView(witness(ctx, v), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         AchievementTable.row(v.id)?.let { row ->
             if (AchPageMath.source(row) != com.husarp.ankigo.game.AchSource.SINCE_UPDATE && row.ankimonBadge == null) {
-                body.addView(note(ctx, AchPageMath.sourceNote(row, "")), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 12) })
+                val text = AchPageMath.sourceNote(row, "")
+                if (!text.startsWith("Counted from your save")) body.addView(note(ctx, text),
+                    LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 12) })
             }
         }
         sheet.addView(CappedScroll(ctx).apply { isVerticalScrollBarEnabled = false; addView(body) }, LinearLayout.LayoutParams(-1, -2))
@@ -104,7 +106,7 @@ internal object AchievementDetail {
         val hidden = v.group == "Secret" && v.tier < 0
         val col = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL }
         val short = Ui.shortWindow(ctx) || ctx.resources.configuration.screenHeightDp in 1..459
-        col.addView(AchMedal(ctx, if (short) 56 else 76).apply { set(if (hidden) R.drawable.ic_ach_lock else AchStyle.icon(v.icon), v.tier, special = v.oneOff && v.tier >= 0) })
+        col.addView(AchMedal(ctx, if (short) 56 else 76).apply { set(if (hidden) R.drawable.ic_ach_lock else AchStyle.icon(v.icon), v.tier, special = v.oneOff && v.tier >= 0, bareIcon = true) })
         col.addView(Ui.text(ctx, 18f, 900, R.color.ag_text).apply { text = if (hidden) "Secret" else v.title; gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 6) })
         col.addView(Ui.text(ctx, 12.5f, 700, R.color.ag_sub0).apply { text = if (hidden) "???" else v.desc; gravity = Gravity.CENTER },

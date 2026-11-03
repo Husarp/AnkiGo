@@ -58,11 +58,16 @@ internal object ShopViews {
 
     /**
      * A discounted price (mockup `priceD`): the old price on top, struck through with its faded coin, centred; under it the new price,
-     * larger ([nowSp]), in the text colour with a full coin.
+     * larger ([nowSp]), in the text colour with a full coin. A small discount pill sits to the left of this price column.
      */
-    fun priceDeal(ctx: Context, was: Int, now: Int, nowSp: Float = 17f, oldSp: Float = 11f): View = LinearLayout(ctx).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER_HORIZONTAL
+    fun priceDeal(ctx: Context, was: Int, now: Int, nowSp: Float = 17f, oldSp: Float = 11f,
+                  percent: Int = Math.round((was - now) * 100f / was.coerceAtLeast(1))): View = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        val amounts = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
         val old = StrikeRow(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -70,7 +75,7 @@ internal object ShopViews {
             addView(coin(ctx, 11, 2, faded = true))
             addView(Ui.text(ctx, oldSp, 800, R.color.ag_sub0).apply { text = Bits.fmt(was); maxLines = 1 })
         }
-        addView(old, LinearLayout.LayoutParams(-2, -2))
+        amounts.addView(old, LinearLayout.LayoutParams(-2, -2))
         val big = Math.round(nowSp * 0.95f)
         val fresh = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -78,7 +83,14 @@ internal object ShopViews {
             addView(coin(ctx, big, 4))
             addView(Ui.text(ctx, nowSp, 900, R.color.ag_text).apply { text = Bits.fmt(now); maxLines = 1 })
         }
-        addView(fresh, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
+        amounts.addView(fresh, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
+        addView(Ui.text(ctx, 10f, 900, R.color.ag_green).apply {
+            text = ShopPlan.ribbon(percent)
+            maxLines = 1
+            background = Ui.rounded(Bits.blend(Ui.c(ctx, R.color.ag_green), Ui.c(ctx, R.color.ag_card), 0.15f), 6, ctx)
+            setPadding(Ui.dp(ctx, 5), Ui.dp(ctx, 2), Ui.dp(ctx, 5), Ui.dp(ctx, 2))
+        }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(ctx, 5) })
+        addView(amounts)
     }
 
     /** The price as the page shows it: the discount layout while it is discounted, else coin + amount. [nowSp] is the size of the amount (the new price of a discount). */
@@ -86,7 +98,7 @@ internal object ShopViews {
         LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(if (p.was != null) priceDeal(ctx, p.was, p.now, nowSp) else priceNormal(ctx, p.now, normalSp, coinDp))
+            addView(if (p.was != null) priceDeal(ctx, p.was, p.now, nowSp, percent = p.percent ?: Math.round((p.was - p.now) * 100f / p.was.coerceAtLeast(1))) else priceNormal(ctx, p.now, normalSp, coinDp))
         }
 
     // ---- the item tiles ("always in stock", "today's specials") ----
@@ -130,8 +142,8 @@ internal object ShopViews {
     fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String,
                  line: String = ItemInfo.effect(item), night: Boolean = false, onTap: () -> Unit): View =
         offerCard(ctx, if (night) "DEAL OF THE NIGHT" else "DEAL OF THE DAY", ends,
-            itemArt(ctx, item, 48), name, "${ShopPlan.ribbon()} · $line",
-            priceDeal(ctx, price.was ?: price.now, price.now, 17f),
+            itemArt(ctx, item, 48), name, line,
+            price(ctx, price),
             if (night) R.color.ag_mauve else R.color.ag_peach, description, onTap)
 
     /** Compact offer with a filled title band separated from its item and price. */

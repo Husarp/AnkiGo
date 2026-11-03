@@ -12,15 +12,15 @@ import java.util.Calendar
  */
 internal object ShopPlan {
     /** [now] is charged; [was] is the daily price before a deal, struck through. */
-    data class Price(val now: Int, val was: Int? = null) {
+    data class Price(val now: Int, val was: Int? = null, val percent: Int? = null) {
         val discounted: Boolean get() = was != null
     }
 
     /** The price of [item] on game day [day]: the deal price with the normal one as [Price.was] for that day's deal item, else just the normal price. */
     fun price(data: GameData, day: String, item: String, time: Long = System.currentTimeMillis()): Price {
         val now = Shop.priceOf(data, day, item, time)
-        val daily = Shop.dailyPrice(data, day, item)
-        return Price(now, if (Shop.dealFor(data, day, time)?.item == item) daily else null)
+        val deal = Shop.dealFor(data, day, time)?.takeIf { it.item == item }
+        return Price(now, deal?.oldPrice, deal?.percent)
     }
 
     /** A TM costs [Tuning.TM_PRICE], never discounted. */
@@ -37,8 +37,8 @@ internal object ShopPlan {
     /** Today's items, then today's TMs, as one list of tiles in rows (the old separate TM list is gone). */
     fun specials(items: List<String>, tms: List<String>): List<Tile> = items.map { Tile.Item(it) } + tms.map { Tile.Tm(it) }
 
-    /** The ribbon of the deal card: "−30 %". */
-    fun ribbon(): String = "−${Tuning.DEAL_PERCENT} %"
+    /** The small pill beside the price; never part of the item effect text. */
+    fun ribbon(percent: Int): String = "−$percent %"
 
     /** Whole minutes (at least 1) until the next game day starts ([dayStartHour], local time) from [now] (epoch ms). */
     fun minutesToNewDay(now: Long, dayStartHour: Int): Int {

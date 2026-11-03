@@ -157,10 +157,10 @@ class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
     private var secret = false
     private val shapeDrawables = HashMap<Int, Drawable>()
 
-    fun set(@DrawableRes iconRes: Int, tier: Int, special: Boolean = false, ground: Int = Ui.c(context, R.color.ag_card)) {
+    fun set(@DrawableRes iconRes: Int, tier: Int, special: Boolean = false, ground: Int = Ui.c(context, R.color.ag_card), bareIcon: Boolean = false) {
         badgeInk = if (special) AchStyle.ICONS.entries.firstOrNull { it.key.startsWith("badge-") && it.value == iconRes }?.let { AchStyle.badgeColor(context, it.key) } else null
         secret = AchStyle.ICONS.any { it.key.startsWith("secret-") && it.value == iconRes }
-        bare = iconRes == R.drawable.ic_ach_lock || secret
+        bare = bareIcon || iconRes == R.drawable.ic_ach_lock || secret
         this.tier = tier; this.special = special; this.ground = ground
         icon = context.getDrawable(iconRes)?.mutate()
         nudge = AchStyle.nudge(iconRes)

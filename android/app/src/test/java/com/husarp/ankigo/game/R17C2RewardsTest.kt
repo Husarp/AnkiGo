@@ -191,7 +191,7 @@ class R17C2RewardsTest {
         assertEquals(ItemKind.HELD, def.kind)
         assertEquals("Soothe Bell", Items.name("soothe-bell"))
         assertTrue("soothe-bell" in Items.dropPool())
-        assertTrue(def.note.contains("friendship"))
+        assertTrue(def.note.contains("Bond points"))
     }
 
     // ---- the save keeps what the wins gave ----

@@ -21,9 +21,9 @@ class EvoLineTest {
 
     @Test fun dayAppearsOnceAndExplanationGivesActionAndHours() {
         val e = Evolution(1002, EvoKind.FRIENDSHIP, time = "day", condition = "during the day", minFriendship = 160)
-        assertEquals("Friendship, day", EvoLine.method(branched, e))
+        assertEquals("Bond ♥3, day", EvoLine.method(branched, e))
         val text = EvoLine.explanation(branched, e)
-        assertTrue(text.contains("160 friendship"))
+        assertTrue(text.contains("Bond ♥3 (250 points)"))
         assertTrue(text.contains("06:00–18:00"))
         assertTrue(text.contains("Soothe Bell"))
     }
@@ -52,7 +52,7 @@ class EvoLineTest {
         assertEquals(null, line.root.via)
         val mouse = line.root.children.single()
         assertEquals("Lv 16", EvoLine.method(branched, mouse.via!!))
-        assertEquals(listOf("Thunder Stone", "Friendship, night"), mouse.children.map { EvoLine.method(branched, it.via!!) })
+        assertEquals(listOf("Thunder Stone", "Bond ♥3, night"), mouse.children.map { EvoLine.method(branched, it.via!!) })
     }
 
     @Test fun aSpeciesWithoutALineIsStandalone() {

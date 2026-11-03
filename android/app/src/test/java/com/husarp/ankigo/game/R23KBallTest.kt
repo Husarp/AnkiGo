@@ -145,7 +145,7 @@ class R23KBallTest {
             seen += Shop.dailyPrice(data, "day-$day", "potion")
             val deal = Shop.dealFor(data, "day-$day")!!
             assertEquals(Shop.dailyPrice(data, "day-$day", deal.item), deal.oldPrice)
-            assertEquals(Shop.dealPrice(deal.oldPrice), Shop.priceOf(data, "day-$day", deal.item))
+            assertEquals(Shop.dealPrice(deal.oldPrice, deal.percent), Shop.priceOf(data, "day-$day", deal.item))
         }
         assertTrue(seen.size > 1)
         assertEquals(1000, Tuning.TM_PRICE); assertEquals(100, Tuning.REROLL_PRICE)

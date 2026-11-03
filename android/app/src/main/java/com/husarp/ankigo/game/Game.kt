@@ -126,6 +126,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         events += ensureEncounter()
         val battle = state.battle ?: return events
+        if (main.hp > 0 && battle.wild.hp > 0) Bond.add(main, Bond.CARD_POINTS, events, state.activeHeldItem(main) == "soothe-bell")
         // R10-B22: who attacks depends on each answer, not on the point sum. A battle saved before keeps only the sum: restore the buttons from it.
         if (battle.buttons.size != battle.answers) { battle.buttons.clear(); battle.buttons += RoundRule.restore(battle.answers, battle.tally) }
         // R19-T (PLAN 284): the OK of a new card (PLAN 155) is one of the round's answers, a neutral move: it fills a dot and counts toward the
@@ -191,6 +192,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (main.hp > 0 && main.hp * 100 < StatCalc.maxHp(data, main) * Achievements.COMEBACK_PERCENT)
             AchievementPokemon.record(state, "comebacks", main, data)
         SecretAchievements.win(state, battle, main)
+        val bondLevel = Bond.level(main.bondPoints)
         val plan = Catching.plan(data, state, battle)
         when (plan.outcome) {
             Outcome.CATCH -> {
@@ -204,14 +206,14 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 state.defeats++
                 state.catchWins++
                 Trainer.addDefeatXp(state, battle.tier, events)
-                Economy.onWin(state, events)
+                Economy.onWin(state, events, bondLevel)
             }
             Outcome.DEFEAT -> {
                 Progression.rewardDefeat(data, state, main, battle.wild, now, rng, events)
                 Healing.healMain(data, main, HealReason.DEFEAT, events) // after XP, level-ups and evolution
                 Trainer.addDefeatXp(state, battle.tier, events)
                 state.defeats++
-                Economy.onWin(state, events)
+                Economy.onWin(state, events, bondLevel)
                 plan.duplicate?.let { events += GameEvent.Duplicate(battle.wild.name, battle.wild.level, it.bestLevel, DuplicateResult.DEFEATED) }
                 if (plan.ask != null) askToCatch(battle, now, events) // R19-P (PLAN 281): paid as a defeat; "Catch / Catch and replace / Don't catch" waits
             }
@@ -435,6 +437,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val success = rng.nextInt(100) < chance
         val events = mutableListOf<GameEvent>(GameEvent.BallThrow(ball, chance, success, state.count(ball), battle.failedThrows + 1, special)) // the fight itself counts its throws (saved with it)
         if (success) {
+            val bondLevel = Bond.level(state.main?.bondPoints ?: 0)
             state.main?.let {
                 AchievementPokemon.record(state, "defeats", it, data)
                 if (it.hp > 0 && it.hp * 100 < StatCalc.maxHp(data, it) * Achievements.COMEBACK_PERCENT)
@@ -455,7 +458,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             state.defeats++
             state.catchWins++
             Trainer.addDefeatXp(state, battle.tier, events)
-            Economy.onWin(state, events)
+            Economy.onWin(state, events, bondLevel)
         } else {
             state.main?.let { main ->
                 val ab = SimpleView.of(data, battle, main).ability(true)
@@ -603,7 +606,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             ?: return ActionResult(false, "Evolution conditions are no longer met.")
         Progression.evolutionItem(evo)?.let { return useItem(it, uid, to) }
         val events = mutableListOf<GameEvent>()
-        Progression.evolve(data, state, mon, evo, rng, events)
+        Progression.evolve(data, state, mon, evo, rng, events, clock())
         Achievements.settle(data, state, clock(), events)
         return ActionResult(true, "Evolved into ${mon.name}!", events)
     }

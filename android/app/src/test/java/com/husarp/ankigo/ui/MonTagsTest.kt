@@ -29,13 +29,13 @@ class MonTagsTest {
     }
 
     @Test fun canEvolveByLevelFriendshipAndItem() {
-        val st = TestData.state(data, 1, 16)
+        val st = TestData.state(data, 1, 16).apply { main!!.bondPoints = 125 }
         assertTrue(TagKind.CAN_EVOLVE in kinds(st, st.mons[0]))
         val low = TestData.state(data, 1, 10)
         assertTrue(TagKind.CAN_EVOLVE !in kinds(low, low.mons[0]))
-        val fr = TestData.state(data, 172, 10); fr.mons[0].friendship = 200
+        val fr = TestData.state(data, 172, 10); fr.mons[0].bondPoints = 250
         assertTrue(TagKind.CAN_EVOLVE in kinds(fr, fr.mons[0]))
-        val it = TestData.state(data, 25, 10)
+        val it = TestData.state(data, 25, 10).apply { main!!.bondPoints = 125 }
         assertTrue(TagKind.CAN_EVOLVE !in kinds(it, it.mons[0]))
         it.bag["thunder-stone"] = 1
         assertTrue(TagKind.CAN_EVOLVE in kinds(it, it.mons[0]))
@@ -47,7 +47,7 @@ class MonTagsTest {
         val d = TestData.data(listOf(TestData.species(10, evolutions = listOf(
             Evolution(11, EvoKind.ITEM, item = "water-stone", time = "night"))), TestData.species(11)))
         val st = TestData.state(d, 10, 20)
-        val mon = st.main!!
+        val mon = st.main!!.apply { bondPoints = 125 }
         st.bag["water-stone"] = 1
         val night = ms(2026, 10, 14, 22, 0)
         assertTrue(!MonTags.canEvolve(d, st, mon, now))
@@ -75,7 +75,7 @@ class MonTagsTest {
             9001, "Alolanthing", evolutions = listOf(Evolution(2, EvoKind.LEVEL, level = 5))
         ).copy(form = "Alola")
         val d = TestData.data(world)
-        val st = TestData.state(d, 9001, 10)
+        val st = TestData.state(d, 9001, 10).apply { main!!.bondPoints = 125 }
         val m = st.mons[0]
         m.shiny = true; m.heldItem = "lucky-egg"; m.caughtAt = now; m.hp = 0
         st.settings.xpShareUid = m.uid
@@ -124,7 +124,7 @@ class MonTagsTest {
             9001, "Alolanthing", evolutions = listOf(Evolution(2, EvoKind.LEVEL, level = 5))
         ).copy(form = "Alola")
         val d = TestData.data(world)
-        val st = TestData.state(d, 9001, 10)
+        val st = TestData.state(d, 9001, 10).apply { main!!.bondPoints = 125 }
         val m = st.mons[0]
         m.shiny = true; m.heldItem = "lucky-egg"; m.hp = 0
         st.settings.xpShareUid = m.uid

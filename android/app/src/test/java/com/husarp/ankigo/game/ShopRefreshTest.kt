@@ -87,14 +87,14 @@ class ShopRefreshTest {
     // ---- deal of the day ----
 
     @Test fun theDealPriceIsRoundedHalfUpAndAtLeastOne() {
-        assertEquals(2100, Shop.dealPrice(3000))
-        assertEquals(490, Shop.dealPrice(700))
-        assertEquals(140, Shop.dealPrice(200))
-        assertEquals(4, Shop.dealPrice(5))   // 3.5 -> 4
-        assertEquals(1, Shop.dealPrice(2))   // 1.4 -> 1
-        assertEquals(1, Shop.dealPrice(1))   // 0.7 -> 1, never free
-        assertEquals(1, Shop.dealPrice(0))
-        assertEquals(30, Tuning.DEAL_PERCENT)
+        assertEquals(2100, Shop.dealPrice(3000, 30))
+        assertEquals(490, Shop.dealPrice(700, 30))
+        assertEquals(140, Shop.dealPrice(200, 30))
+        assertEquals(4, Shop.dealPrice(5, 30))   // 3.5 -> 4
+        assertEquals(1, Shop.dealPrice(2, 30))   // 1.4 -> 1
+        assertEquals(1, Shop.dealPrice(1, 30))   // 0.7 -> 1, never free
+        assertEquals(1, Shop.dealPrice(0, 30))
+        assertEquals(listOf(20, 25, 30, 35, 40), Tuning.DEAL_PERCENTS)
     }
 
     @Test fun theDealIsOneFixedNonBasicItemOfThePoolWithTheDiscount() {
@@ -106,7 +106,7 @@ class ShopRefreshTest {
             assertTrue(d.item in Items.shopPool(data))
             assertTrue(d.item !in Shop.basics())
             assertEquals(Shop.dailyPrice(data, day, d.item), d.oldPrice)
-            assertEquals(Shop.dealPrice(d.oldPrice), d.price)
+            assertEquals(Shop.dealPrice(d.oldPrice, d.percent), d.price)
             assertTrue(d.price in 1 until d.oldPrice || d.oldPrice == 1)
             seen += d.item
         }

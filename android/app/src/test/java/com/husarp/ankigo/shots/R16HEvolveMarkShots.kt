@@ -62,8 +62,9 @@ class R16HEvolveMarkShots {
 
     @Test fun copiesSheetRow() {
         for (v in listOf(Variants.PHONE)) paparazzi.shootPage("r16h-copies", listOf(v)) { ctx ->
-            st.mons += TestData.mon(gd, 25, 12, listOf("tackle"), "x2").also { it.shiny = true; it.favourite = true; it.caughtAt = 1_760_200_000_000 }
+            st.mons += TestData.mon(gd, 25, 12, listOf("tackle"), "x2").also { it.shiny = true; it.bondPoints = 125; it.favourite = true; it.caughtAt = 1_760_200_000_000 }
             st.settings.xpShareUid = "x2"
+            st.mons.filter { it.species == 25 }.forEach { it.bondPoints = 125 }
             val p = TeamPage(ctx, NoHost); p.preset(TeamSection.BOX)
             val screen = pageScreen(ctx, p)
             val tile = BoxTiles.build(gd, st.mons.filter { it.species == 25 }, true).single()
@@ -99,7 +100,7 @@ class R16HEvolveMarkShots {
 
     @Test fun detailsHeader() {
         paparazzi.shootPage("r16h-details", listOf(STRIP)) { ctx ->
-            val mon = st.mon("t1")!!.also { it.shiny = true }
+            val mon = st.mon("t1")!!.also { it.shiny = true; it.bondPoints = 125 }
             val tags = MonTags.detailTags(gd, st, mon)
             assertTrue(TagKind.CAN_EVOLVE in tags.map { it.kind })
             FrameLayout(ctx).apply {
@@ -112,7 +113,7 @@ class R16HEvolveMarkShots {
 
     @Test fun teamRow() {
         for (v in listOf(Variants.PHONE)) paparazzi.shootPage("r16h-team", listOf(v)) { ctx ->
-            st.mon("t1")!!.also { it.shiny = true }   // t1: Pikachu with the thunder stone in the bag = can evolve
+            st.mon("t1")!!.also { it.shiny = true; it.bondPoints = 125 }   // t1: Pikachu with the thunder stone in the bag = can evolve
             val p = TeamPage(ctx, NoHost); p.preset(TeamSection.TEAM)
             val screen = pageScreen(ctx, p)
             // the page renders on the next message-loop turn; the checks need the rows now

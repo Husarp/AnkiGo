@@ -281,60 +281,36 @@ class R803Shots {
 
     private val sand = 0xFFC86432.toInt() // (200, 100, 50)
 
-    @Test fun aCropThatFitsIsOnlyThePictureAndAShrunkOneHasBlurAtTheSides() {
+    @Test fun fittingAndShrunkLandscapeStagesKeepThePictureAcrossTheWholeWindow() {
         val ctx = setUp(Theme.LIGHT)
         val bgx = flatBackdrop("flat-a")
-        BackdropScenes.flat(bgx, sand, Sprites.dir(ctx))
-        preload(ctx, bgx)
+        BackdropScenes.flat(bgx, sand, Sprites.dir(ctx)); preload(ctx, bgx)
         val back = ArenaBackdrop(ctx)
         var told: Boolean? = null
         back.onPictureChange = { told = it }
         back.request(bgx, false)
         assertEquals(true, told); assertSame(bgx, back.shown); assertTrue(back.showsPicture)
-
-        // no stage: the cover crop, nothing but the picture everywhere
-        back.setStage(null)
-        val plain = drawn(back, 300, 100)
-        for ((x, y) in listOf(0 to 0, 299 to 0, 0 to 99, 299 to 99, 150 to 50)) assertEquals("($x,$y)", sand, plain.getPixel(x, y))
-
-        // a stage that fits
-        back.setStage(stageFor(bgx, 300f, 100f, 1f))
-        val fit = drawn(back, 300, 100)
-        for ((x, y) in listOf(0 to 0, 299 to 99, 150 to 50)) assertEquals(sand, fit.getPixel(x, y))
-
-        // a shrunk one (window 1.5 x wider than the picture): blur at both sides, the picture in the middle, a fade between
-        val st = stageFor(bgx, 300f, 100f, 1.5f)
-        assertTrue(st.shrunk)
-        back.setStage(st)
-        val shrunk = drawn(back, 300, 100)
-        assertEquals("the picture is in the middle", sand, shrunk.getPixel(150, 50))
-        val left = shrunk.getPixel(2, 50); val right = shrunk.getPixel(297, 50)
-        assertTrue("blur is darker than the picture", r(left) < r(sand) - 40 && r(right) < r(sand) - 40)
-        assertTrue("same on both sides", Math.abs(r(left) - r(right)) <= 2)
-        // a flat picture: the blur is the picture x .55 brightness, then more saturation
-        assertEquals((200 * 0.55f), r(left).toFloat(), 14f)
-        assertTrue("saturation: red-blue spread grew", (r(left) - b(left)) > (200 - 50) * 0.55f)
-        // the fade: walking in from the left, the colour goes from blur to picture without a jump over 7 % of the picture width
-        var prev = r(left); var maxStep = 0
-        for (x in 3 until 150) { val c = r(shrunk.getPixel(x, 50)); maxStep = maxOf(maxStep, Math.abs(c - prev)); prev = c }
-        assertTrue("no hard bar: biggest step $maxStep", maxStep < 45)
-        // the vertical axis fits: top and bottom rows in the middle are the picture itself
-        assertEquals(sand, shrunk.getPixel(150, 0)); assertEquals(sand, shrunk.getPixel(150, 99))
+        for (factor in listOf(null, 1f, 1.5f)) {
+            val stage = factor?.let { stageFor(bgx, 300f, 100f, it) }
+            if (factor == 1.5f) assertTrue(stage!!.shrunk)
+            back.setStage(stage)
+            val image = drawn(back, 300, 100)
+            for (y in 0 until image.height) for (x in 0 until image.width)
+                assertEquals("The clamped cover has no blur bands or empty pixels", sand, image.getPixel(x, y))
+        }
     }
 
-    @Test fun aTallShrinkHasBlurAtTopAndBottom() {
+    @Test fun aTallShrunkStageKeepsTheWholeWindowSharpAndOpaque() {
         val ctx = setUp(Theme.LIGHT)
         val bgx = flatBackdrop("flat-b")
-        BackdropScenes.flat(bgx, sand, Sprites.dir(ctx))
-        preload(ctx, bgx)
+        BackdropScenes.flat(bgx, sand, Sprites.dir(ctx)); preload(ctx, bgx)
         val back = ArenaBackdrop(ctx)
         back.request(bgx, false)
-        val st = stageFor(bgx, 100f, 300f, 2f)
-        assertTrue(st.shrunk)
-        back.setStage(st)
-        val bmp = drawn(back, 100, 300)
-        assertEquals(sand, bmp.getPixel(50, 150))
-        assertTrue(r(bmp.getPixel(50, 2)) < 160 && r(bmp.getPixel(50, 297)) < 160)
+        val stage = stageFor(bgx, 100f, 300f, 2f)
+        assertTrue(stage.shrunk)
+        back.setStage(stage)
+        val image = drawn(back, 100, 300)
+        for (y in 0 until image.height) for (x in 0 until image.width) assertEquals(sand, image.getPixel(x, y))
     }
 
     @Test fun jolt_moves_the_picture_and_the_blur_fills_the_gap() {
@@ -358,31 +334,19 @@ class R803Shots {
         assertTrue((0 until 300 step 30).all { x -> (up.getPixel(x, 199) ushr 24) == 255 })
     }
 
-    @Test fun joltOfAFadedLandscapeCropKeepsTheSharpPictureThatSticksOutAboveThePanel() {
+    @Test fun smallJoltsKeepTheClampedLandscapeCropsSparePictureAtBothEdges() {
         val ctx = setUp(Theme.LIGHT)
         val bgx = flatBackdrop("flat-e")
-        BackdropScenes.flat(bgx, sand, Sprites.dir(ctx))
-        preload(ctx, bgx)
+        BackdropScenes.flat(bgx, sand, Sprites.dir(ctx)); preload(ctx, bgx)
         val back = ArenaBackdrop(ctx)
         back.request(bgx, false)
-        // a landscape panel, window 1.5 x wider than the picture: the picture takes x 50..250 (blur + a fade at both sides) and
-        // sticks out above the panel (it starts at y -33), ending at the panel's bottom
-        val st = stageFor(bgx, 300f, 100f, 1.5f)
-        assertTrue(st.shrunk)
-        back.setStage(st)
-        assertEquals(sand, drawn(back, 300, 100).getPixel(150, 0))
-        for (jolt in listOf(6f, 3f, -6f)) { // 6 % of the panel's height, down and up
+        val stage = stageFor(bgx, 300f, 100f, 1.5f)
+        assertTrue(stage.shrunk)
+        back.setStage(stage)
+        for (jolt in listOf(0f, 6f, 3f, -6f)) {
             back.jolt = jolt
-            val bmp = drawn(back, 300, 100)
-            // the sharp picture spans screen rows (-33 + jolt) .. (100 + jolt), clipped to the panel
-            val bottom = 100 + jolt.toInt()
-            for (y in 0 until 100) {
-                val c = bmp.getPixel(150, y)
-                if (y < bottom - 1) assertEquals("jolt $jolt: sharp picture at row $y", sand, c)
-                else if (y > bottom) assertTrue("jolt $jolt: blur under the picture at row $y (r=${r(c)})", r(c) < 160)
-            }
-            // never transparent
-            assertTrue((0 until 100 step 5).all { y -> (bmp.getPixel(150, y) ushr 24) == 255 })
+            val image = drawn(back, 300, 100)
+            for (y in 0 until 100) assertEquals("The cover crop retains enough real picture for this jolt", sand, image.getPixel(150, y))
         }
     }
 
@@ -569,28 +533,45 @@ class R803Shots {
         assertEquals(blue, drawn(rig.back, 300, 100).getPixel(150, 50))
     }
 
-    @Test fun theOutgoingPictureKeepsItsOwnCropAndTheNewOneItsStage() {
+    @Test fun theOutgoingPictureKeepsItsOwnVisibleCropDuringTheFade() {
         val ctx = setUp(Theme.LIGHT)
-        val a = flatBackdrop("flat-fh"); val bb = flatBackdrop("flat-fi")
-        BackdropScenes.flat(a, sand, Sprites.dir(ctx)); BackdropScenes.flat(bb, blue, Sprites.dir(ctx))
-        preload(ctx, a); preload(ctx, bb)
+        val a = flatBackdrop("flat-fh"); val next = flatBackdrop("flat-fi")
+        val stripes = FakeSprites.Img(a.w, a.h)
+        for (y in 0 until a.h) for (x in 0 until a.w)
+            stripes.px[y * a.w + x] = when { x < a.w / 3 -> sand; x < 2 * a.w / 3 -> 0xFF30A070.toInt(); else -> 0xFF8040C0.toInt() }
+        FakeSprites.write(stripes, Backdrops.file(Sprites.dir(ctx), a))
+        BackdropScenes.flat(next, blue, Sprites.dir(ctx)); preload(ctx, a); preload(ctx, next)
         val t = longArrayOf(0)
-        val back = ArenaBackdrop(ctx)
-        back.clock = { t[0] }
-        back.reduceMotion = { true }
+        val back = ArenaBackdrop(ctx).apply { clock = { t[0] }; reduceMotion = { true } }
         back.request(a, false)
-        back.setStage(stageFor(a, 300f, 100f, 1.5f)) // A is shrunk: blur at both sides
+        val own = stageFor(a, 300f, 100f, .7f)
+        back.setStage(own)
+        val before = drawn(back, 300, 100)
+        back.setStage(stageFor(a, 300f, 100f, 1.5f))
+        val otherCrop = drawn(back, 300, 100)
+        assertFalse("The fixture distinguishes the two cover crops", before.sameAs(otherCrop))
+        back.setStage(own); drawn(back, 300, 100)
         back.reduceMotion = { false }
-        back.request(bb, false)
-        back.setStage(stageFor(bb, 300f, 100f, 1f)) // B fits: picture everywhere
-        drawn(back, 300, 100) // start
-        t[0] = 40 // B at about 10 %: A's blurred side is still dark underneath, not B's picture
+        back.request(next, false)
+        back.setStage(stageFor(next, 300f, 100f, 1.5f))
+        drawn(back, 300, 100)
+        t[0] = 40
         val early = drawn(back, 300, 100)
-        val side = early.getPixel(2, 50)
-        // under B's 10 %: A's blur (red about 110) mixed with B's blue picture: red below 120, far from sand's 200
-        assertTrue("A's blur still under the side (r=${r(side)})", r(side) < 125)
+        // Infer the common fade opacity from one flat stripe, then check the entire old viewport.
+        // Moving the outgoing crop to the new stage would move its stripe boundaries and fail this.
+        val alpha = (r(early.getPixel(2, 50)) - r(before.getPixel(2, 50))).toFloat() /
+            (r(blue) - r(before.getPixel(2, 50)))
+        assertTrue(alpha > 0f && alpha < 1f)
+        for (y in 0 until 100 step 13) for (x in 0 until 300 step 7) {
+            val old = before.getPixel(x, y); val actual = early.getPixel(x, y)
+            for (shift in listOf(16, 8, 0)) {
+                val expected = ((old shr shift and 255) * (1f - alpha) + (blue shr shift and 255) * alpha)
+                assertTrue("The outgoing viewport stays fixed throughout the fade", kotlin.math.abs((actual shr shift and 255) - expected) <= 4f)
+            }
+        }
         t[0] = 500
-        assertEquals(blue, drawn(back, 300, 100).getPixel(2, 50))
+        val final = drawn(back, 300, 100)
+        for (x in 0 until 300 step 7) assertEquals(blue, final.getPixel(x, 50))
     }
 
     @Test fun aResizeInTheMiddleOfAFadeEndsIt() {

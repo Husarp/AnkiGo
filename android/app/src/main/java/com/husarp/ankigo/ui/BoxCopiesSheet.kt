@@ -61,8 +61,9 @@ internal class BoxCopiesSheet(
         })
         head.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         sortBox = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        head.addView(sortBox, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(ctx, 8) })
+
         sheet.addView(head, LinearLayout.LayoutParams(-1, -2))
+        sheet.addView(MotionHorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(sortBox) }, LinearLayout.LayoutParams(-1, -2))
 
         list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         sheet.addView(MaxHeightScroll(ctx, maxListPx).apply {

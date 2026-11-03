@@ -355,7 +355,7 @@ class GameTest {
     }
 
     @Test fun defeatingLevelsUpThenThePlayerChoosesEvolution() {
-        val s = TestData.state(data, 1, 15, listOf("tackle")) // Leafling 15, evolves at 16
+        val s = TestData.state(data, 1, 15, listOf("tackle")).apply { main!!.bondPoints = 125 } // Leafling 15, evolves at 16
         val g = game(state = s)
         s.caught += 19
         val need = Progression.xpToNext(data, s.main!!)

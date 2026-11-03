@@ -116,8 +116,8 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
      */
     open fun onTabReselected() {}
 
-    /** PLAN 222: the user left the app and came back to this page: it starts at its top page, like a tab reselect. */
-    open fun onAppReturned() = onTabReselected()
+    /** PLAN 448: a brief app switch preserves the page and its windows. */
+    open fun onAppReturned() {} // Returning from another app preserves open sheets and navigation.
 
     /** Scrolls [v] (a ScrollView or a ListView) back to its top at once; anything else is left alone. */
     protected fun scrollToTop(v: View?) {
@@ -166,8 +166,10 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
      * Runs an action through GameRepo (saves + notifies), shows its message, re-renders. PLAN 191: a page is not a battle, so what the
      * action did to the fight on (an item on the main, a team edit that changed it) is kept for the battle to play ([GameRepo.runOffscreen]).
      */
-    fun act(f: (Game) -> ActionResult): ActionResult {
+    // Rebuild any source detail window before opening the result popup, so it stays on top.
+    fun act(beforeReport: (ActionResult) -> Unit = {}, f: (Game) -> ActionResult): ActionResult {
         val r = GameRepo.runOffscreen(this, f)
+        beforeReport(r)
         report(r.message, r.events)
         requestRender()
         return r

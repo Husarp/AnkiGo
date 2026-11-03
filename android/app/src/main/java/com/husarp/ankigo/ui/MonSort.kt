@@ -35,6 +35,7 @@ enum class SortKey(
     DEX_NUMBER("Pokédex number", false),
     CAUGHT_DATE("Caught date", true),
     FIRST_SEEN("First seen", true),
+    RECENTLY_EVOLVED("Recently evolved", true),
 }
 
 /** Which stats a stat-based sort uses: species base stats, the Pokémon at Lv 100, as it is now, or at [SortSpec.level]. */
@@ -93,7 +94,7 @@ data class SortSpec(
 object MonSort {
     /** The keys that make sense for a Pokédex species (no moves, no catch date). */
     val dexKeys: List<SortKey> = listOf(
-        SortKey.DEX_NUMBER, SortKey.NAME, SortKey.LEVEL, SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.FIRST_SEEN,
+        SortKey.DEX_NUMBER, SortKey.NAME, SortKey.LEVEL, SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.FIRST_SEEN, SortKey.RECENTLY_EVOLVED,
     )
 
     /** Whether [SortKey.VS_WILD] has a wild Pokémon to compare with (the UI greys the option when not). */
@@ -186,6 +187,7 @@ object MonSort {
         SortKey.VS_WILD -> attackScore(data, mon, spec, state.battle?.wild)
         SortKey.NAME -> null
         SortKey.DEX_NUMBER -> (data.species[mon.species]?.baseNum ?: mon.species).toDouble()
+        SortKey.RECENTLY_EVOLVED -> mon.evolvedAt.takeIf { it > 0 }?.toDouble()
         SortKey.CAUGHT_DATE -> mon.caughtAt.takeIf { it > 0 }?.toDouble()
         SortKey.FIRST_SEEN -> state.firstSeen(mon.species)?.takeIf { it > 0 }?.toDouble()
     }
@@ -201,6 +203,7 @@ object MonSort {
     fun speciesValue(data: GameData?, state: GameState?, sp: Species, spec: SortSpec): Double? = when (spec.key) {
         SortKey.DEX_NUMBER -> sp.baseNum.toDouble()
         SortKey.NAME, SortKey.STRONGEST_ATTACK, SortKey.VS_WILD, SortKey.CAUGHT_DATE -> null
+        SortKey.RECENTLY_EVOLVED -> state?.mons?.filter { it.species == sp.num && it.evolvedAt > 0 }?.maxOfOrNull { it.evolvedAt }?.toDouble()
         SortKey.FIRST_SEEN -> state?.firstSeen(sp.num)?.takeIf { it > 0 }?.toDouble()
         SortKey.LEVEL -> state?.mons?.filter { it.species == sp.num }?.maxOfOrNull { it.level }?.toDouble()
         SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL ->

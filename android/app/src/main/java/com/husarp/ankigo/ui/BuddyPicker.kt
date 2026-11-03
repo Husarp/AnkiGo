@@ -4,7 +4,7 @@ import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.shownName
 
 internal object BuddyPicker {
-    enum class Sort { LEVEL, NAME, RECENT }
+    enum class Sort { LEVEL, NAME, RECENT, EVOLVED }
     enum class Place { ALL, TEAM, BOX }
     data class Filters(val place: Place = Place.ALL, val favourites: Boolean = false, val shiny: Boolean = false, val types: TypeFilter = TypeFilter()) {
         val active get() = place != Place.ALL || favourites || shiny || types.active
@@ -17,6 +17,7 @@ internal object BuddyPicker {
         val order=when(sort) {
             Sort.LEVEL -> compareByDescending<Mon> { it.level }.then(byName)
             Sort.NAME -> byName
+            Sort.EVOLVED -> compareByDescending<Mon> { it.evolvedAt }.then(byName)
             Sort.RECENT -> compareByDescending<Mon> { it.caughtAt }.then(byName)
         }
         return mons.distinctBy { it.uid }.filter { filters.matches(it, team, typesOf) }.filter { it.shownName.contains(query.trim(),ignoreCase=true) || it.name.contains(query.trim(),ignoreCase=true) }

@@ -47,6 +47,16 @@ object DetailSections {
 
     fun memory(ctx: Context): DetailOpen = DetailOpen(storeOf(ctx))
 
+    /** Sort only the tagged section cards; headers and fixed actions keep their places. */
+    internal fun applyOrder(col: LinearLayout) {
+        val order = try { AppPrefs.detailOrder(col.context) } catch (e: RuntimeException) { DetailOrder.default }
+        val cards = (0 until col.childCount).map { col.getChildAt(it) }.filter { it.tag is DetailSection }
+        if (cards.isEmpty()) return
+        val start = col.indexOfChild(cards.first())
+        cards.forEach { col.removeView(it) }
+        cards.sortedBy { order.indexOf(it.tag as DetailSection) }.forEachIndexed { i, v -> col.addView(v, start + i) }
+    }
+
     // ---------- the section bar ----------
 
     /**
@@ -57,6 +67,7 @@ object DetailSections {
     fun section(a: Context, mem: DetailOpen, s: DetailSection, summary: CharSequence?, title: String = s.title, onFirstOpen: (() -> Unit)? = null,
                 titleLevel: Int? = null, boosts: IntArray? = null, forceOpen: Boolean = false, body: () -> View): View {
         val card = LinearLayout(a).apply {
+            tag = s
             orientation = LinearLayout.VERTICAL
             background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 14, a)
         }
@@ -78,6 +89,7 @@ object DetailSections {
                     DetailSection.MOVES -> R.drawable.ic_swords
                     DetailSection.MATCHUPS -> R.drawable.ic_compare
                     DetailSection.TRAINING -> R.drawable.ic_bolt
+                    DetailSection.BOND -> R.drawable.ic_heart
                     else -> R.drawable.ic_info
                 })
                 setColorFilter(Ui.c(a, R.color.ag_mauve))
@@ -437,7 +449,7 @@ object DetailSections {
 
     internal fun divider(a: Context): View = View(a).apply { setBackgroundColor(Ui.c(a, R.color.ag_s0)); alpha = 0.6f }
 
-    /** Nature (+ what it does), IVs, EVs and friendship of one of your Pokémon (R18-G: the held item is in the Holding row under the bars now). */
+    /** Nature (+ what it does), IVs, EVs of one of your Pokémon (R18-G: the held item is in the Holding row under the bars now). */
     fun training(a: Context, mon: Mon, compact: Boolean): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         col.addView(fact(a, "Nature", StatInfo.NATURE, mon.nature.label, DetailMath.natureEffect(mon.nature), compact))
@@ -447,8 +459,6 @@ object DetailSections {
         val evTotal = mon.evs.total
         col.addView(fact(a, "EVs", StatInfo.EV, "$evTotal / ${Tuning.EV_TOTAL_CAP}",
             if (evTotal == 0) "none yet" else DetailFormat.perStat(mon.evs, long = true, skipZero = true), compact))
-        col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
-        col.addView(fact(a, "Friendship", StatInfo.FRIENDSHIP, DetailFormat.friendship(mon.friendship), null, compact))
         return col
     }
 

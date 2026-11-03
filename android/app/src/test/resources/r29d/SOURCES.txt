@@ -1,0 +1,5 @@
+Pokémon front sprites from PokeAPI/sprites, pinned to the app Pokémon sprite revision 0dc105d5b12416932f29b594078282ab4be045f5.
+https://github.com/PokeAPI/sprites/tree/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon
+133: Eevee; 10103: Alolan Vulpix; 10101: Alolan Sandshrew; 10176: Galarian Darumaka; 739: Crabrawler; 974: Cetoddle; 840: Applin.
+Used only by native Paparazzi screenshot fixtures. Pokémon artwork belongs to its respective owners.
+281: Kirlia; 215: Sneasel.

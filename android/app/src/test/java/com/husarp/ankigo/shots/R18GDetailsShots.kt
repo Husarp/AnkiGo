@@ -143,7 +143,7 @@ class R18GDetailsShots {
         val old = st.mon("t1")!!
         val m = Mon(old.uid, old.species, old.name, 23, 120, Stats(28, 12, 9, 20, 25, 18), Stats(0, 12, 0, 0, 0, 24),
             Nature.HASTY, 'M', false, "Static", mutableListOf("tackle", "thunderbolt", "quickattack", "thunderwave"), 1,
-            friendship = 142, heldItem = "amulet-coin", caughtAt = 1_760_000_000_000L, defeats = 57)
+            friendship = 142, bondPoints = 284, heldItem = "amulet-coin", caughtAt = 1_760_000_000_000L, defeats = 57)
         m.hp = (StatCalc.maxHp(gd, m) * 0.85).toInt()
         st.mons[st.mons.indexOf(old)] = m
         return m
@@ -188,14 +188,14 @@ class R18GDetailsShots {
 
     @Test fun expShareHolderWithEightEvolutions() {
         DetailSections.storeOf = { MapStore(emptySet()) }
-        dialog("eevee", listOf(0f), setup = { st.settings.xpShareUid = "t6"; st.bag.clear() }, check = { ctx, scene ->
+        dialog("eevee", listOf(0f), setup = { st.settings.xpShareUid = "t6"; st.bag.clear(); st.mons.filter { it.species == 133 }.forEach { it.bondPoints = 250 } }, check = { ctx, scene ->
             val t = strings(scene)
             assertEquals("the Exp. Share shows once (no tag under the types)", 1, t.count { it == "Exp. Share" })
             assertTrue("It and your Main each get half the XP" in t)
             assertFalse("Nothing" in t)
             // 279A: every branch gets its own readable row and grey condition.
             val labels = listOf("Water Stone", "Thunder Stone", "Fire Stone", "Leaf Stone", "Ice Stone",
-                "Friendship 160\nin the daytime", "Friendship 160\nat night", "Friendship 160\nknows a Fairy move")
+                "Bond ♥3\nin the daytime", "Bond ♥3\nat night", "Bond ♥3\nknows a Fairy move")
             val cells = labels.map { l -> texts(scene).single { it.text.toString() == l } }
             val tops = cells.map { top(it, scene) }.distinct().sorted()
             assertEquals("eight separate target rows", 8, tops.size)
@@ -262,7 +262,7 @@ class R18GDetailsShots {
         // Atk, Def, SpA, SpD, Spe, HP, Total, HP and XP, Nature, IVs, EVs, Friendship, Holding, Evolution, Wins
         val said = rows.map { (it.tag as StatInfoText).title }
         listOf("HP (Hit points)", "Attack", "Defense", "Special Attack", "Special Defense", "Speed", "Total", "HP and XP", "Nature", "IV (Individual value)",
-            "EV (Effort value)", "Friendship", "Holding", "Wins").forEach { assertTrue("$it opens an explanation; there are $said", it in said) }
+            "EV (Effort value)", "Holding", "Wins").forEach { assertTrue("$it opens an explanation; there are $said", it in said) }
         rows.forEach { assertTrue("${(it.tag as StatInfoText).title}: ${it.height} px tall", it.height >= Ui.dp(ctx, 48)) }
         assertTrue("whole rows, not the 32 dp label: ${rows.map { it.width }}", rows.all { it.width > Ui.dp(ctx, 90) })
     }
@@ -284,7 +284,7 @@ class R18GDetailsShots {
             val info = DialogShots.capture { (water.parent as View).performClick() } ?: error("no evolution info")
             val infoScene = DialogShots.scene(water.context, info)
             paparazzi.snapshot(infoScene, "r27e-info-${if (water.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
-            assertTrue("Evolve" in strings(infoScene))
+            assertTrue("Hold to evolve" in strings(infoScene))
             val close = views(infoScene).single { it.contentDescription == "Close" }
             assertTrue("fixed close outside scrolling text", scrolls(infoScene).none { views(it).contains(close) })
             val body = texts(infoScene).single { it.text.contains("The Shop sells") }.parent as View
@@ -293,7 +293,7 @@ class R18GDetailsShots {
             assertFalse(strings(infoScene).any { "open your Bag" in it })
             val secondDialog = DialogShots.capture { info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!.performClick() }
             assertNull("first tap stays in the same dialog", secondDialog)
-            assertTrue(strings(infoScene).contains("Tap again to evolve"))
+            assertTrue(strings(infoScene).contains("Hold to evolve"))
             assertTrue(strings(infoScene).any { "can't be undone" in it })
             assertEquals("first tap hasn't evolved", 133, mon.species)
             paparazzi.snapshot(infoScene, "r27e-confirm-${if (water.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
@@ -310,16 +310,16 @@ class R18GDetailsShots {
 
         }) { ctx ->
             val mon = st.mons.first { it.species == 133 }
-            mon.friendship = 0
+            mon.bondPoints = 125
             MonDetail.show(TeamPage(ctx, NoHost), gd, mon)
         }
     }
 
-    @Test fun evolutionActionRunsOnlyAfterSecondTap() {
+    @Test fun evolutionActionRequiresHoldOrAccessibilityLongClick() {
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         val mon = st.mons.first { it.species == 133 }
-        mon.friendship = 0
+        mon.bondPoints = 125
         st.bag["water-stone"] = 1
         var choices = 0
         val tree = com.husarp.ankigo.ui.EvolutionRows(ctx, gd,
@@ -331,9 +331,9 @@ class R18GDetailsShots {
         val info = DialogShots.capture { (label.parent as View).performClick() } ?: error("no info")
         val button = info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!
         assertNull(DialogShots.capture { button.performClick() })
-        assertEquals("Tap again to evolve", button.text.toString())
+        assertEquals("Hold to evolve", button.text.toString())
         assertEquals(0, choices)
-        button.performClick()
+        button.performLongClick()
         assertEquals(1, choices)
     }
 
@@ -367,7 +367,7 @@ class R18GDetailsShots {
         val scene = DialogShots.scene(ctx, d)
         measureAndLayout(scene, ctx, 412, 869)
         val off = ArrayList<String>()
-        for (title in listOf("Nature", "IVs", "EVs", "Friendship", "Caught", "Ability")) {
+        for (title in listOf("Nature", "IVs", "EVs", "Caught", "Ability")) {
             // the title of a fact row: a 70 dp column ("Friendship" is also an evolution method label)
             val t = texts(scene).first { it.text.toString() == title && it.layoutParams?.width == Ui.dp(ctx, 70) }
             val row = t.parent as ViewGroup
@@ -452,7 +452,7 @@ class R18GDetailsShots {
         val names = listOf("Ratty2", "Ratty3", "Ratty4", "Ratty5").map { n -> texts(v).single { it.text.toString() == n } }
         assertEquals("279A: one row per Pokémon", listOf(1, 1, 1, 1), names.groupBy { top(it, v) }.toSortedMap().values.map { it.size })
         // every method text hangs under its own name, never over the next line's name
-        val methods = listOf("Water Stone", "Thunder Stone", "Friendship 160\nat night", "Fire Stone").map { m -> texts(v).single { it.text.toString() == m } }
+        val methods = listOf("Water Stone", "Thunder Stone", "Bond ♥3\nat night", "Fire Stone").map { m -> texts(v).single { it.text.toString() == m } }
         names.zip(methods).forEach { (n, m) -> assertTrue("${n.text}: condition beside the name", top(m, v) < top(n, v) + n.height && top(m, v) + m.height > top(n, v)) }
         assertRowConditions(c, v)
     }

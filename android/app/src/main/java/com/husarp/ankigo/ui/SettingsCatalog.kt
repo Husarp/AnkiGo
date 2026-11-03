@@ -45,6 +45,7 @@ object SettingsCatalog {
     val all: List<SettingInfo> = listOf(
         s("tabBarStyle", L, "Theme & colours", "Bottom tab bar", "Choose a bottom tab bar with a bold name, sliding box, top line or selected name only"),
         // Look
+        s("detailSectionsOrder", L, "Pokémon details", "Details sections order", "Arrange details sections with drag handles or arrows, or reset their default order"),
         s("achievementPopup", L, "Types & notifications", "Achievement pop-ups", "Choose a pop-up, a small note or no message when you earn an achievement"),
         s("theme", L, "Theme & colours", "Theme", "Use a light or dark app, or follow your phone's theme"),
         s("accent", L, "Theme & colours", "Accent", "Choose the colour of app buttons, ticks and highlights"),
@@ -205,6 +206,7 @@ s("catchAsk", G, "When you beat a wild Pokémon", "Ask me", "Catch new species; 
         s("diagnostics", DI, "", "Diagnostics", "Inspect phone access and collect a diagnostic log to help investigate problems"),
 
         // About
+        s("bondArtworkLicence", A, "", "Bond artwork licence", "Read the source terms for the filling Love Ball artwork"),
         s("ankidroidStatus", A, "", "AnkiDroid", "See the connected AnkiDroid app, its version and whether AnkiGo can access it"),
         s("about", A, "", "About", "See the AnkiGo version, credits and software licences"),
     )

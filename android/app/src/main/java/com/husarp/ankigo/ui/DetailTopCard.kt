@@ -32,6 +32,7 @@ internal object DetailTopCard {
 
     /** The card with its [parts] one under the other, a thin line between them. */
     private fun card(a: Context, parts: List<View>): View = LinearLayout(a).apply {
+        tag = DetailSection.EVOLUTION
         orientation = LinearLayout.VERTICAL
         background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 14, a)
         setPadding(Ui.dp(a, 14), 0, Ui.dp(a, 14), 0)
@@ -125,8 +126,7 @@ internal object DetailTopCard {
                 val evolve: ((com.husarp.ankigo.game.Evolution) -> Unit)? =
                     if (state != null && mon != null && page != null && state.mon(mon.uid) != null) {
                         { e ->
-                            val result = page.act { g -> g.chooseEvolution(mon.uid, e.to) }
-                            if (result.ok) onEvolved?.invoke()
+                            page.act(beforeReport = { result -> if (result.ok) onEvolved?.invoke() }) { g -> g.chooseEvolution(mon.uid, e.to) }
                         }
                     } else null
                 addView(EvolutionRows(a, data, EvoLine.of(data, sp).root, sp, seen, onSpecies, state, mon, evolve), LinearLayout.LayoutParams(-1, -2))

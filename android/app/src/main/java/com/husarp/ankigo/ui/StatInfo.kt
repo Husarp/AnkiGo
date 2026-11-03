@@ -26,9 +26,10 @@ object StatInfo {
         "Hidden bonus from 0 to 31 per stat, set when the Pokémon is found and never changes. Higher means a bit more of that stat.")
     val EV = StatInfoText("EV (Effort value)",
         "Grows with every win, defeat or catch (Power items add more). Up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in all; every 4 EV is worth about 1 stat point at Lv 100.")
-    val FRIENDSHIP = StatInfoText("Friendship",
-        "Grows by ${Tuning.FRIENDSHIP_GAIN.first} to ${Tuning.FRIENDSHIP_GAIN.last} with each win you make while it is your main (a Soothe Bell makes it ×${Tuning.SOOTHE_BELL}), up to ${Tuning.FRIENDSHIP_MAX}. " +
-            "Some Pokémon evolve once it is high enough, usually ${Tuning.DEFAULT_MIN_FRIENDSHIP}. It also makes Return stronger and Frustration weaker.")
+    val BOND = StatInfoText("Bond",
+        "Earn +1 point per answered card while fighting and +3 per win. A Soothe Bell multiplies points by 1.5. " +
+            "♥1–♥5 start at 50 / 125 / 250 / 500 / 800 points. Normal evolutions need ♥2 and their usual requirement; Bond evolutions need ♥3 or ♥4. " +
+            "Each level adds +1 coin per defeated Pokémon and +5% XP. At ♥4/♥5, a lethal attack has a 5%/10% chance to leave 1 HP. No decay.")
     val NATURE = StatInfoText("Nature", "Raises one stat by 10 % and lowers another by 10 %. Five natures change nothing. The arrows mark the two stats.")
     val NATURE_UP = StatInfoText("▲ Raised stat", "This nature gives this stat +10 %.")
     val NATURE_DOWN = StatInfoText("▼ Lowered stat", "This nature gives this stat −10 %.")
@@ -40,12 +41,12 @@ object StatInfo {
         "HP is how much damage it can take before it faints. XP grows with every win or catch (the Exp. Share holder gets half of it); " +
             "when the bar is full the Pokémon goes up a level. At Lv ${Tuning.MAX_LEVEL} it gains none.")
     val WINS = StatInfoText("Wins",
-        "Every wild Pokémon you beat while this one is your main, knocked out or caught. Each win gives it XP, EVs and friendship.")
+        "Every wild Pokémon you beat while this one is your main, knocked out or caught. Each win gives it XP, EVs and Bond points.")
     val HOLDING = StatInfoText("Holding",
         "A Pokémon holds one item at a time; tap the item to read what it does. The Exp. Share counts as held too: its holder gets half " +
             "of each win's XP and your main the other half (nothing is shared while the holder is your main). Give or take items from Options.")
     val EVOLUTION = StatInfoText("Evolution",
-        "What this Pokémon evolves from and into, and what it takes: a level, an item such as a stone, friendship or a Linking Cord. " +
+        "What this Pokémon evolves from and into, and what it takes: a level, an item such as a stone, Bond or a Linking Cord. " +
             "A tap on one you have seen opens its Pokédex entry; the others show as ???.")
 
     /** Compare row keys ("hp", "base_atk", "total", "ivs", "nature", "level"...) to their text, null when none. */
@@ -62,5 +63,5 @@ object StatInfo {
     }
 
     /** All texts, for the tests. */
-    fun all(): List<StatInfoText> = Stat.entries.map(::of) + listOf(TOTAL, IV, EV, FRIENDSHIP, NATURE, NATURE_UP, NATURE_DOWN, LEVEL, BARS, WINS, HOLDING, EVOLUTION)
+    fun all(): List<StatInfoText> = Stat.entries.map(::of) + listOf(TOTAL, IV, EV, BOND, NATURE, NATURE_UP, NATURE_DOWN, LEVEL, BARS, WINS, HOLDING, EVOLUTION)
 }

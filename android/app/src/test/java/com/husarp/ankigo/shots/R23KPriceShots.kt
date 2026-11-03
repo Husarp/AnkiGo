@@ -26,10 +26,10 @@ class R23KPriceShots {
             val (page, stage) = ShopCardKit.page(ctx, com.husarp.ankigo.ui.CardKeys.special(ShopPlan.Tile.Item("great-ball")), day = day)
             val price = ShopPlan.price(page.data, day, "great-ball")
             assertFalse(texts(page.itemWindow!!.view).any { it.text.toString().contains("↑") || it.text.toString().contains("↓") })
-            val buy = texts(page.itemWindow!!.view).first { it.text == "Buy" }
+            val buy = texts(page.itemWindow!!.view).first { it.text == "Hold to buy" }
             buy.parent.let { it as View }.performClick()
             stage.render()
-            assertTrue(ShopCardKit.texts(stage).contains("Sure?"))
+            assertTrue(ShopCardKit.texts(stage).contains("Hold to buy"))
             assertTrue(ShopCardKit.texts(stage).contains("×1"))
             stage
         }

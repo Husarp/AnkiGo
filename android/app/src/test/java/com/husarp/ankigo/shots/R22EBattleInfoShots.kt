@@ -38,7 +38,7 @@ class R22EBattleInfoShots {
             val board = ConditionBoard().apply { syncFrom(st.battle) }
             val list = ConditionList(ctx, 8f)
             list.build(ConditionSections.of(board, ConditionMarks.Slot.FIELD, "Wild", st.main!!.name), Ui.dp(ctx, 340), Ui.dp(ctx, 240))
-            assertTrue(list.spoken.contains("Swift Swim"))
+            assertTrue(list.spoken.contains("Fire moves ×0.5"))
             assertTrue(list.spoken.contains("Water moves ×1.5"))
             paparazzi.snapshot(list, "r22e-rain-explanation-${theme.name.lowercase()}")
         }

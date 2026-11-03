@@ -1,10 +1,14 @@
 package com.husarp.ankigo.shots
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Rect
 import android.view.View
 import android.view.ViewGroup
 import app.cash.paparazzi.Paparazzi
+import com.husarp.ankigo.gfx.SpriteView
 import com.husarp.ankigo.Anki
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.StudyActivity
@@ -60,16 +64,37 @@ class StudyStatusShots {
 
     private fun field(o: Any, name: String): Any = o.javaClass.getDeclaredField(name).let { it.isAccessible = true; it.get(o)!! }
     private fun rectIn(arena: ArenaView, v: View): Rect = Rect(0, 0, v.width, v.height).also { arena.offsetDescendantRectToMyCoords(v, it) }
-    private fun art(r: Rect): Rect {
-        val w = r.width() * 0.85f; val h = r.height() * 0.85f
-        val x = r.left + r.width() * 0.075f; val y = r.top + r.height() * 0.15f
-        return Rect(x.toInt(), y.toInt(), (x + w).toInt(), (y + h).toInt())
+    private data class Art(val pixels: IntArray, val width: Int, val height: Int, val bounds: Rect)
+    /** Draw the actual alpha mask, including padding, feet and native parent transforms. */
+    private fun art(arena: ArenaView, sprite: SpriteView): Art {
+        val bitmap = Bitmap.createBitmap(arena.width, arena.height, Bitmap.Config.ARGB_8888)
+        val matrix = Matrix()
+        var view: View = sprite
+        while (view !== arena) {
+            matrix.postConcat(view.matrix)
+            matrix.postTranslate(view.left.toFloat(), view.top.toFloat())
+            view = view.parent as View
+        }
+        sprite.draw(Canvas(bitmap).apply { concat(matrix) })
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        val bounds = Rect(bitmap.width, bitmap.height, 0, 0)
+        for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) if ((pixels[y * bitmap.width + x] ushr 24) > 24) {
+            bounds.left = minOf(bounds.left, x); bounds.top = minOf(bounds.top, y)
+            bounds.right = maxOf(bounds.right, x + 1); bounds.bottom = maxOf(bounds.bottom, y + 1)
+        }
+        assertTrue("Sprite has real visible pixels", !bounds.isEmpty)
+        bitmap.recycle()
+        return Art(pixels, arena.width, arena.height, bounds)
     }
     private fun hits(a: Rect, b: Rect, slack: Int) = a.left < b.right - slack && b.left < a.right - slack && a.top < b.bottom - slack && b.top < a.bottom - slack
 
-    private fun overlap(a: Rect, b: Rect): Int {
-        val w = minOf(a.right, b.right) - maxOf(a.left, b.left); val h = minOf(a.bottom, b.bottom) - maxOf(a.top, b.top)
-        return if (w > 0 && h > 0) w * h else 0
+    private fun overlap(card: Rect, art: Art): Int {
+        var covered = 0
+        for (y in card.top.coerceAtLeast(0) until card.bottom.coerceAtMost(art.height))
+            for (x in card.left.coerceAtLeast(0) until card.right.coerceAtMost(art.width))
+                if ((art.pixels[y * art.width + x] ushr 24) > 24) covered++
+        return covered
     }
 
     @Test fun geometry() {
@@ -90,14 +115,14 @@ class StudyStatusShots {
             val after = listOf(eCard.height, pCard.height, eCard.top, pCard.top)
             val tag = size.name
             if (before != after) problems += "$tag: card moved with a status: $before -> $after"
-            val eArt = art(rectIn(arena, field(arena, "enemyHolder") as View)); val pArt = art(rectIn(arena, field(arena, "playerHolder") as View))
+            val ePixels = art(arena, arena.enemySprite); val pPixels = art(arena, arena.playerSprite)
+            val eArt = ePixels.bounds; val pArt = pPixels.bounds
             for ((name, rowName, card) in listOf(Triple("wild", "eStatus", eCard), Triple("ours", "pStatus", pCard))) {
                 val row = field(arena, rowName) as View
                 val r = rectIn(arena, row); val c = rectIn(arena, card)
                 if (r.left < c.left - 1 || r.right > c.right + 1 || r.top < c.top - 1 || r.bottom > c.bottom + 1) problems += "$tag: $name row $r outside card $c"
-                // R9 D12: the badge sits in the name line and the sprite boxes got the old row's height back, so there is nothing to compare with the
-                // card "before its row"; the card may only touch the transparent edge of a sprite's box (the 85 % box, in the narrow 96 dp strip), never a big part of it
-                for ((what, art) in listOf("wild sprite" to eArt, "our sprite" to pArt)) {
+                // Measure overlap with actual visible art, not a generic percentage of the holder.
+                for ((what, art) in listOf("wild sprite" to ePixels, "our sprite" to pPixels)) {
                     val now = overlap(c, art)
                     if (now > c.width() * c.height() * 0.15f) problems += "$tag: $name card covers $what by $now px2 of its ${c.width() * c.height()}"
                 }

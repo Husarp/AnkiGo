@@ -53,6 +53,8 @@ class Backdrop(
     val wildGround: StandPoint = wild,
     /** Uniform artwork zoom around wildGround; independent of sprite scale. */
     val groundZoom: Float = 1f,
+    /** Maximum crop height as a share of the artwork; tall hosts zoom further to retain measured footing. */
+    val groundMaxHeight: Float = 1f,
 )
 
 /**

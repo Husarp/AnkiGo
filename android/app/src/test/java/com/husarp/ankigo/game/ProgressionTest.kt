@@ -353,6 +353,7 @@ class ProgressionTest {
 
     @Test fun rewardDefeatMakesEvolutionReadyWithoutEvolving() {
         val (s, m) = st(1, 15)
+        m.bondPoints = 125
         val e = ev()
         Progression.rewardDefeat(data, s, m, TestData.mon(data, 150, 50, uid = "wild"), noon, Random(1), e)
         assertEquals(1, m.species)
@@ -363,7 +364,7 @@ class ProgressionTest {
 
     @Test fun rewardDefeatMakesFriendshipReadyWithoutEvolving() {
         val (s, m) = st(172, 5)
-        m.friendship = 159
+        m.bondPoints = 249
         val e = ev()
         Progression.rewardDefeat(data, s, m, wild16(1), noon, Random(1), e)
         assertEquals(172, m.species)
@@ -373,7 +374,7 @@ class ProgressionTest {
 
     @Test fun rewardDefeatHolderWaitsForChoice() {
         val (s, m) = st(16, 5)
-        val h = TestData.mon(data, 1, 15, uid = "holder")
+        val h = TestData.mon(data, 1, 15, uid = "holder").apply { bondPoints = 125 }
         s.mons += h
         s.settings.xpShareUid = h.uid
         val e = ev()
@@ -388,8 +389,8 @@ class ProgressionTest {
             Evolution(12, EvoKind.ITEM, item = "thunder-stone"), Evolution(13, EvoKind.FRIENDSHIP, time = "day", minFriendship = 160))
         val d = TestData.data(listOf(TestData.species(10, evolutions = evolutions), TestData.species(11), TestData.species(12), TestData.species(13)))
         val s = TestData.state(d, 10, 20)
-        val m = s.main!!
-        m.friendship = 160
+        val m = s.main!!.apply { bondPoints = 125 }
+        m.bondPoints = 250
         s.bag["water-stone"] = 1; s.bag["thunder-stone"] = 1
         assertEquals(listOf(11, 12, 13), Progression.readyEvolutions(d, s, m, noon).map { it.to })
         assertEquals(listOf(11, 12), Progression.readyEvolutions(d, s, m, midnight).map { it.to })
@@ -406,7 +407,7 @@ class ProgressionTest {
         val d = TestData.data(listOf(TestData.species(10, evolutions = listOf(
             Evolution(11, EvoKind.ITEM, item = "water-stone"), Evolution(12, EvoKind.ITEM, item = "water-stone"))),
             TestData.species(11), TestData.species(12)))
-        val s = TestData.state(d, 10)
+        val s = TestData.state(d, 10).apply { main!!.bondPoints = 125 }
         s.bag["water-stone"] = 1
         assertTrue(Game(d, s, Random(1)) { noon }.chooseEvolution(s.main!!.uid, 12).ok)
         assertEquals(12, s.main!!.species)
@@ -419,7 +420,7 @@ class ProgressionTest {
             TestData.species(11), TestData.species(12), TestData.species(20)))
         for (suppression in listOf("embargo", "magicroom")) for (target in listOf(11, 12)) {
             val s = TestData.state(d, 10, 20)
-            val m = s.main!!
+            val m = s.main!!.apply { bondPoints = 125 }
             m.heldItem = "everstone"
             s.bag["water-stone"] = 1
             s.battle = Battle(TestData.mon(d, 20, 20, uid = "wild"), Tier.NORMAL)
@@ -436,7 +437,7 @@ class ProgressionTest {
     @Test fun explicitLevelAndFriendshipEvolutionSettleAchievementsImmediately() {
         for ((species, target) in listOf(1 to 2, 172 to 25)) {
             val (s, m) = st(species, 16)
-            m.friendship = 255
+            m.bondPoints = 500
             Achievements.onReady(s, data, noon - 1)
             assertTrue(s.achTiers["evolutions"].orEmpty().isEmpty())
             val choice = Game(data, s, Random(1)) { noon }.chooseEvolution(m.uid, target)
@@ -449,6 +450,7 @@ class ProgressionTest {
 
     @Test fun explicitEvolutionRechecksAndCannotRepeat() {
         val (s, m) = st(1, 16)
+        m.bondPoints = 125
         val game = Game(data, s, Random(1)) { noon }
         assertFalse(game.chooseEvolution(m.uid, 3).ok)
         assertTrue(game.chooseEvolution(m.uid, 2).ok)
@@ -461,6 +463,7 @@ class ProgressionTest {
 
     @Test fun levelEvolutionDueAndNot() {
         val (s, m) = st(1, 15)
+        m.bondPoints = 125
         assertNull(Progression.levelEvolution(data, s, m, noon))
         m.level = 16
         assertEquals(2, Progression.levelEvolution(data, s, m, noon)?.to)
@@ -470,10 +473,11 @@ class ProgressionTest {
 
     @Test fun everstoneBlocksAll() {
         val (s, m) = st(1, 16)
+        m.bondPoints = 125
         m.heldItem = "everstone"
         assertNull(Progression.levelEvolution(data, s, m, noon))
         val (_, f) = st(172, 5)
-        f.heldItem = "everstone"; f.friendship = 300
+        f.heldItem = "everstone"; f.friendship = 300; f.bondPoints = 500
         assertNull(Progression.friendshipEvolution(data, s, f, noon))
         val (_, sp) = st(25, 5)
         sp.heldItem = "everstone"
@@ -487,6 +491,7 @@ class ProgressionTest {
             TestData.species(12, "Dark", types = listOf(Type.DARK)),
         ))
         val s = TestData.state(d, 10, 30, listOf("tackle", "mimic"))
+        s.main!!.bondPoints = 125
         return Triple(d, s, s.main!!)
     }
 
@@ -518,13 +523,16 @@ class ProgressionTest {
         val (d, s, m) = custom(Evolution(11, EvoKind.LEVEL, level = 20, condition = "with an Atk stat > its Def stat"))
         // species 10 has equal base atk/def, so make the IVs decide
         val high = Mon(m.uid, 10, m.name, 30, 0, Stats(15, 31, 0, 15, 15, 15), Stats.ZERO, Nature.HARDY, 'M', false, "x", m.moves, 1)
+        high.bondPoints = 125
         s.mons[0] = high
         assertNotNull(Progression.levelEvolution(d, s, high, noon))
         val (d2, s2, _) = custom(Evolution(11, EvoKind.LEVEL, level = 20, condition = "with an Atk stat < its Def stat"))
         val low = Mon("main", 10, "Base", 30, 0, Stats(15, 31, 0, 15, 15, 15), Stats.ZERO, Nature.HARDY, 'M', false, "x", mutableListOf("tackle"), 1)
+        low.bondPoints = 125
         assertNull(Progression.levelEvolution(d2, s2, low, noon))
         val (d3, s3, _) = custom(Evolution(11, EvoKind.LEVEL, level = 20, condition = "with an Atk stat equal to its Def stat"))
         val eq = Mon("main", 10, "Base", 30, 0, Stats(15, 15, 15, 15, 15, 15), Stats.ZERO, Nature.HARDY, 'M', false, "x", mutableListOf("tackle"), 1)
+        eq.bondPoints = 125
         assertNotNull(Progression.levelEvolution(d3, s3, eq, noon))
         assertNull(Progression.levelEvolution(d3, s3, high, noon))
     }
@@ -550,21 +558,21 @@ class ProgressionTest {
 
     @Test fun friendshipEvolutionThresholdAndTime() {
         val (s, m) = st(172, 5)
-        m.friendship = 159
+        m.bondPoints = 249
         assertNull(Progression.friendshipEvolution(data, s, m, noon))
-        m.friendship = 160
+        m.bondPoints = 250
         assertEquals(25, Progression.friendshipEvolution(data, s, m, noon)?.to)
         val (d, s2, m2) = custom(Evolution(11, EvoKind.FRIENDSHIP, time = "day", minFriendship = 220))
-        m2.friendship = 200
+        m2.bondPoints = 499
         assertNull(Progression.friendshipEvolution(d, s2, m2, noon))
-        m2.friendship = 220
+        m2.bondPoints = 500
         assertEquals(11, Progression.friendshipEvolution(d, s2, m2, noon)?.to)
         assertNull(Progression.friendshipEvolution(d, s2, m2, midnight))
     }
 
     @Test fun friendshipEvolutionNeedsFairyMove() {
         val (s, m) = st(133, 20, listOf("tackle"))
-        m.friendship = 200
+        m.bondPoints = 250
         assertNull(Progression.friendshipEvolution(data, s, m, noon))
         m.moves += "moonblast"
         assertEquals(700, Progression.friendshipEvolution(data, s, m, noon)?.to)
@@ -574,13 +582,16 @@ class ProgressionTest {
 
     @Test fun itemEvolutions() {
         val (_, pika) = st(25, 20)
+        pika.bondPoints = 125
         assertEquals(26, Progression.itemEvolution(data, pika, "thunder-stone")?.to)
         assertNull(Progression.itemEvolution(data, pika, "moon-stone"))
         assertNull(Progression.itemEvolution(data, pika, "linking-cord"))
         val (_, blink) = st(64, 20)
+        blink.bondPoints = 125
         assertEquals(65, Progression.itemEvolution(data, blink, "linking-cord")?.to)
         assertNull(Progression.itemEvolution(data, blink, "thunder-stone"))
         val (_, eevee) = st(133, 20)
+        eevee.bondPoints = 125
         assertEquals(134, Progression.itemEvolution(data, eevee, "water-stone")?.to)
         assertEquals(135, Progression.itemEvolution(data, eevee, "thunder-stone")?.to)
     }
@@ -604,6 +615,7 @@ class ProgressionTest {
 
     @Test fun plainStonesIgnoreTheClock() {
         val (_, pika) = st(25, 20)
+        pika.bondPoints = 125
         for (h in listOf(3, 10, 22)) {
             assertEquals(26, Progression.itemEvolution(data, pika, "thunder-stone", at(h))?.to)
             assertNull(Progression.itemEvolutionTimeNeeded(data, pika, "thunder-stone", at(h)))

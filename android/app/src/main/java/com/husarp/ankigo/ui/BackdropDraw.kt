@@ -47,7 +47,7 @@ internal object BackdropDraw {
     fun stageCrop(bg: Backdrop, stage: Stage): Crop {
         val u = (bg.wild.x * bg.w - stage.cropX) / stage.cropW
         val v = (bg.wild.y * bg.h - stage.cropY) / stage.cropH
-        val zoom = max(1f, bg.groundZoom)
+        val zoom = max(max(1f, bg.groundZoom), stage.cropH / (bg.h * bg.groundMaxHeight.coerceIn(.01f, 1f)))
         val shrink = min(1f, min(bg.w * zoom / stage.cropW, bg.h * zoom / stage.cropH))
         val cw = stage.cropW / zoom * shrink
         val ch = stage.cropH / zoom * shrink

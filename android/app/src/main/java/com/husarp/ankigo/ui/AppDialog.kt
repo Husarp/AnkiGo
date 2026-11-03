@@ -66,8 +66,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
                 setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
                 addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
                 setDimAmount(0.48f)
-                val wDp = (this@AppDialog.context.resources.configuration.screenWidthDp - 2 * sideMarginDp).coerceIn(0, AppDialogRules.MAX_WIDTH_DP)
-                setLayout(Ui.dp(this@AppDialog.context, wDp), ViewGroup.LayoutParams.WRAP_CONTENT)
+                setLayout(cardWidthPx(), ViewGroup.LayoutParams.WRAP_CONTENT)
             }
             setCancelable(cancelable)
             setCanceledOnTouchOutside(cancelable)
@@ -75,12 +74,19 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
             setOnCancelListener { cancelListener?.onCancel(this@AppDialog) }
         }
 
+    /** Use the same pixel budget as the window, including when app density overrides screen dp. */
+    internal fun cardWidthPx(): Int {
+        val dm = context.resources.displayMetrics
+        return (dm.widthPixels - Ui.dp(context, 2 * sideMarginDp))
+            .coerceIn(0, Ui.dp(context, AppDialogRules.MAX_WIDTH_DP))
+    }
+
     val window: Window? get() = dlg.window
     val isShowing: Boolean get() = made?.isShowing == true
 
     fun show() {
         joinStack()
-        try { dlg.window?.setWindowAnimations(UiMotion.windowStyle(context)); dlg.show() } catch (e: RuntimeException) { leftStack(); throw e }
+        try { dlg.window?.setWindowAnimations(UiMotion.windowStyle(context)); dlg.show(); dlg.window?.setLayout(cardWidthPx(), ViewGroup.LayoutParams.WRAP_CONTENT) } catch (e: RuntimeException) { leftStack(); throw e }
         AwayWindows.track(this) { it.dismiss() }
     }
     override fun dismiss() { leftStack(); made?.window?.setWindowAnimations(UiMotion.windowStyle(context)); made?.dismiss() }
@@ -150,7 +156,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
                     background = RippleDrawable(ink(0x22, Ui.c(ctx, R.color.ag_text)), null, ColorDrawable(Color.BLACK))
                     setOnClickListener { dismiss() }
                 }, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
-                val largeLabel = headerContext != null && ctx.resources.configuration.fontScale >= 1.4f
+                val largeLabel = headerContext != null
                 if (largeLabel) {
                     addView(LinearLayout(ctx).apply {
                         orientation = LinearLayout.VERTICAL

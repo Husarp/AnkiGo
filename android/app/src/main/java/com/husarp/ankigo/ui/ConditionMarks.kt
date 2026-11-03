@@ -496,3 +496,16 @@ internal object ConditionSpot {
     private const val TOASTS_SHARE = 0.4f
     private const val EPS = 0.01f
 }
+
+/** PLAN 458 C: stages are one tap target; other conditions keep their individual chips. */
+internal object ConditionSummary {
+    fun groups(marks: List<ConditionMarks.Mark>): List<List<ConditionMarks.Mark>> {
+        val (stages, others) = marks.partition { it.key.startsWith("stat.") }
+        return (if (stages.isEmpty()) emptyList() else listOf(stages)) + others.map { listOf(it) }
+    }
+
+    fun textSp(widthDp: Float, heightDp: Float, panelScale: Float, floorSp: Float): Float {
+        val scale = min(widthDp * panelScale / 360f, heightDp * panelScale / 604f).coerceIn(0f, 1f)
+        return max(floorSp, max(8f, 10.5f * scale) / panelScale.coerceAtLeast(0.01f))
+    }
+}

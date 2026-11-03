@@ -203,6 +203,7 @@ class HealingTest {
         assertEquals(1, main.species)
         assertTrue(main.hp < maxHp(main))
         assertEquals(listOf(HealReason.LEVEL_UP, HealReason.DEFEAT), e.of<GameEvent.Healed>().map { it.reason })
+        main.bondPoints = 125 // This scenario tests the evolution heal after meeting its Bond requirement.
         val choice = g.chooseEvolution(main.uid, 2)
         assertTrue(choice.ok)
         assertEquals(1, choice.events.of<GameEvent.Evolved>().size)

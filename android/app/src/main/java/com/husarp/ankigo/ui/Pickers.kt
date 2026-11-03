@@ -1,5 +1,6 @@
 package com.husarp.ankigo.ui
 
+import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.lookNum
 import android.content.Context
 import android.graphics.Color
@@ -67,6 +68,17 @@ object Pickers {
         show(AppDialog.Builder(a).setTitle(title).setMessage(message)
             .setPositiveButton(yes) { _, _ -> onYes() }
             .setNegativeButton("Cancel", null).create())
+    }
+
+    /** One deliberate hold, with all action information kept beside the button. */
+    fun hold(a: Context, title: String, message: String, action: String, onYes: () -> Unit) {
+        val dialog = AppDialog.Builder(a).setTitle(title).setMessage(message)
+            .setPositiveButton("Hold to ${action.lowercase()}", null)
+            .setNegativeButton("Cancel", null).create()
+        dialog.button(AppDialog.BUTTON_POSITIVE)!!.let { button ->
+            HoldToConfirm.bind(button, action.lowercase()) { dialog.dismiss(); onYes() }
+        }
+        show(dialog)
     }
 
     /**
@@ -143,6 +155,11 @@ object Pickers {
     /** Pick one of [mons]; [sub] is the second line of each row (HP, "can evolve"...). */
     fun pickMon(a: Context, title: String, data: GameData, mons: List<Mon>, sub: (Mon) -> String, onPick: (Mon) -> Unit) {
         rows(a, title, mons.size, { Bits.monRow(a, data, mons[it], sub(mons[it])) }) { onPick(mons[it]) }
+    }
+
+    /** Evolution item targets deliberately reveal only the owned name. */
+    fun pickMonNames(a: Context, title: String, mons: List<Mon>, onPick: (Mon) -> Unit) {
+        rows(a, title, mons.size, { Bits.monNameRow(a, mons[it]) }) { onPick(mons[it]) }
     }
 
     /** Pick one of the bag items [ids] (icon, name, note, ×owned). */
@@ -261,6 +278,14 @@ object Bits {
             addView(bodyText(ctx, Items.name(item), def?.note))
             addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { text = right })
         }
+    }
+
+    /** Evolution target picker: only the owned Pokémon’s name, without revealing its result. */
+    fun monNameRow(ctx: Context, mon: Mon): View = Ui.text(ctx, 15f, 800, R.color.ag_text).apply {
+        text = mon.shownName
+        gravity = Gravity.CENTER_VERTICAL
+        minHeight = Ui.dp(ctx, 48)
+        setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 8), Ui.dp(ctx, 16), Ui.dp(ctx, 8))
     }
 
     /** Dialog row for a Pokémon: sprite, "Name  Lv N" and a second line. */

@@ -4,6 +4,7 @@ import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.Battle
 import com.husarp.ankigo.game.BattleField
 import com.husarp.ankigo.game.BattleSide
+import com.husarp.ankigo.game.Bond
 import com.husarp.ankigo.game.DailyGoal
 import com.husarp.ankigo.game.DayLog
 import com.husarp.ankigo.game.FieldRules
@@ -164,10 +165,11 @@ object SaveCodec {
         stats("ivs", m.ivs); stats("evs", m.evs)
         kv("nature", m.nature.name); kv("gender", m.gender.toString()); kv("shiny", m.shiny); kv("ability", m.ability)
         list("moves", m.moves)
-        kv("hp", m.hp); kv("friendship", m.friendship); kv("heldItem", m.heldItem); kv("caughtAt", m.caughtAt)
+        kv("hp", m.hp); kv("friendship", m.friendship); kv("heldItem", m.heldItem); kv("caughtAt", m.caughtAt); kv("evolvedAt", m.evolvedAt)
         kv("defeats", m.defeats); kv("tier", m.tier.name)
         kv("nickname", m.nickname); kv("ankimonId", m.ankimonId); kv("favourite", m.favourite)
         kv("look", m.look); kv("restFrac", m.restFrac)
+        kv("bondPoints", m.bondPoints); kv("bondHalf", m.bondHalf)
     }
 
     /** R19-P (PLAN 281): one waiting question; the wild Pokémon of a catch question is written whole. */
@@ -265,10 +267,12 @@ object SaveCodec {
             shiny = o.bool("shiny", false), ability = o.str("ability", ""),
             moves = (o.strList("moves") ?: emptyList()).toMutableList(),
             hp = o.int("hp", 1), friendship = o.int("friendship", 0), heldItem = o.strOrNull("heldItem"),
-            caughtAt = o.long("caughtAt", 0), defeats = o.int("defeats", 0),
+            caughtAt = o.long("caughtAt", 0), evolvedAt = o.long("evolvedAt", 0), defeats = o.int("defeats", 0),
             tier = enumOr(o.strOrNull("tier"), Tier.NORMAL),
             nickname = o.strOrNull("nickname"), ankimonId = o.strOrNull("ankimonId"),
             favourite = o.bool("favourite", false), look = o.intOrNull("look"),
+            bondPoints = o.int("bondPoints", Bond.fromLegacy(o.int("friendship", 0))).coerceIn(0, Bond.MAX_POINTS),
+            bondHalf = o.int("bondHalf", 0).coerceIn(0, 1),
             restFrac = o.int("restFrac", 0).coerceIn(0, Tuning.BENCH_REST_DIVISOR - 1),
         )
     }

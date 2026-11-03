@@ -141,8 +141,12 @@ class R707Shots {
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         // Select an unbundled scene explicitly and remove any copied screenshot cache.
-        GameRepo.state!!.battle!!.wild.uid = ""
-        assertEquals("beach", wildPicture().id)
+        val wild = GameRepo.state!!.battle!!.wild
+        wild.uid = (0..1000).map { "remote-$it" }.first { uid ->
+            val types = GameRepo.data!!.sp(wild.species).types
+            BackdropCatalog.pick(types, BackdropCatalog.seed(uid)).source == com.husarp.ankigo.ui.BackdropSource.SHOWDOWN
+        }
+        assertEquals(com.husarp.ankigo.ui.BackdropSource.SHOWDOWN, wildPicture().source)
         Backdrops.file(Sprites.dir(ctx), wildPicture()).parentFile!!.deleteRecursively()
         var asked = 0
         Backdrops.get = { _, _ -> asked++; null }

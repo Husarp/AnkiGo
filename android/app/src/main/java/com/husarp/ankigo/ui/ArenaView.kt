@@ -431,7 +431,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         pStatus.onTap = { showStatusBubble(it) }
         // R19-K: a tap on a chip, on "+N" or on an info box lists the conditions (the boxes take the tap only while there is something to list)
         marks.onTap = { showConditionList(it) }
-        marks.onStatTap = { showConditionList(it.slot, stat = it.key) }
+        marks.onStagesTap = { showConditionList(it, stat = "summary") }
         enemyBlock.setOnClickListener { showConditionList(ConditionMarks.Slot.WILD) }
         playerCard.setOnClickListener { showConditionList(ConditionMarks.Slot.OURS) }
         enemyBlock.isClickable = false
@@ -1449,8 +1449,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         conditionList?.let { showConditionList(listSlot ?: ConditionMarks.Slot.WILD, reopen = true, stat = listStat) }
     }
 
-    /** Text size of a chip (design sp, raised to the panel's floor): the boxes' small text; it does not grow with a big box, so more chips fit a row. */
-    private fun chipSp() = TextMath.at(10.5f, floorSp)
+    /** PLAN 458 C: scale with the visible window, retaining the 8 sp and panel text floors. */
+    private fun chipSp() = ConditionSummary.textSp(width / Ui.dp(context, 1f), height / Ui.dp(context, 1f), panelScale, floorSp)
 
     private fun boxOf(v: View): ConditionSpot.R = ConditionSpot.R(v.left.toFloat(), v.top.toFloat(), v.left + v.width * v.scaleX, v.top + v.height * v.scaleY)
 
@@ -1488,7 +1488,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val wild = conditions.of(ConditionMarks.Slot.WILD)
         val ours = conditions.of(ConditionMarks.Slot.OURS)
         val field = conditions.of(ConditionMarks.Slot.FIELD)
-        fun widths(ms: List<ConditionMarks.Mark>) = FloatArray(ms.size) { m.width(ms[it]) }
+        fun widths(ms: List<ConditionMarks.Mark>): FloatArray = ConditionSummary.groups(ms).map {
+            if (it.first().key.startsWith("stat.")) m.summaryWidth(it) else m.width(it.single())
+        }.toFloatArray()
         val all = ConditionSpot.all(scene, if (wildOn) boxOf(enemyBlock) else null, if (ourOn) boxOf(playerCard) else null,
             widths(wild), widths(ours), widths(field), ConditionSpot.Sizes(m.gap, m.lift, m.height, m::moreWidth))
         marks.setRow(ConditionMarks.Slot.WILD, all.wild, wild, m)
@@ -1528,10 +1530,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val maxW = (width - 2 * sx).coerceAtLeast(1)
         val maxH = (height - sy - sb).coerceAtLeast(1)
         val list = ConditionList(context, floorSp)
-        val sections = if (stat != null) ConditionSections.stat(conditions, slot, stat, enemyName, pName.text.toString()) else ConditionSections.of(conditions, slot, enemyName, pName.text.toString())
+        val sections = if (stat == "summary") listOf(ConditionSections.Section(null, conditions.of(slot).filter { it.key.startsWith("stat.") })).filter { it.marks.isNotEmpty() }
+        else if (stat != null) ConditionSections.stat(conditions, slot, stat, enemyName, pName.text.toString()) else ConditionSections.of(conditions, slot, enemyName, pName.text.toString())
         if (sections.isEmpty()) return
-        if (stat != null) list.buildStat(sections, maxW, maxH) { hideConditionList() }
-        else list.build(sections, maxW, maxH)
+        if (stat != null && stat != "summary") list.buildStat(sections, maxW, maxH) { hideConditionList() }
+        else list.build(sections, min(maxW, Ui.dp(context, 288)), maxH)
         val lw = min(list.measuredWidth, maxW)
         val lh = min(list.measuredHeight, maxH)
         // by the row that was tapped (below it, else above it), else by the box; kept inside the room the frame leaves
@@ -1540,7 +1543,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val below = anchor.bottom + 4 * d
         val y = (if (below + lh <= height - sb) below else anchor.top - 4 * d - lh).toInt().coerceIn(sy, (height - sb - lh).coerceAtLeast(sy))
         popLayer.addView(list, LayoutParams(lw, lh, Gravity.TOP or Gravity.LEFT).also { it.setMargins(x, y, 0, 0) })
-        if (stat == null) list.setOnClickListener { hideConditionList() }
+        if (stat == null || stat == "summary") list.dismissOnTap { hideConditionList() }
         conditionList = list
         listSlot = slot
         listStat = stat

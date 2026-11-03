@@ -78,8 +78,12 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             early && continueOnPanel -> NextFight.earlyTilesIndex(events)
             else -> CatchTilesPlan.resultIndex(events)
         }
+        val hasDailyGift = events.any { it is GameEvent.DailyGift }
         events.forEachIndexed { i, e ->
             if (i == at) queue.addLast(Item.Tiles(summary!!))
+            // The gift card also announces that the goal was reached. Keep a standalone goal notice
+            // if no gift could be drawn; found items and all other news still play normally.
+            if (hasDailyGift && e is GameEvent.Info && e.text == "Daily goal reached!") return@forEachIndexed
             queue.addLast(Item.Ev(e))
         }
         if (at == events.size) queue.addLast(Item.Tiles(summary!!))
@@ -596,13 +600,15 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 panel.floatAtCoins("+${e.amount}")
                 return 0
             }
-            is GameEvent.DailyGift -> { // R14-B2-D: the goal moment's gift (it replaced the money bonus): its own log line, the Bag count may have changed
+            is GameEvent.DailyGift -> { // The goal moment's gift: refresh the Bag count without a second reward alert.
                 // The queued gift screen already describes this reward.
                 if (st != null) panel.setBalls(BattlePanelView.ballCount(st), true)
                 return d(900)
             }
             is GameEvent.ItemFound -> {
-                log(LogKind.SYS, "ITEM", "Found ${em(aOrAn(Items.name(e.item)))}!")
+                val text = "Found ${em(aOrAn(Items.name(e.item)))}!"
+                if (AchievementPopup.hasItemCard(e)) panel.sayBattle(text)
+                else log(LogKind.SYS, "ITEM", text)
                 if (st != null) panel.setBalls(BattlePanelView.ballCount(st), true)
                 return d(900)
             }
@@ -626,7 +632,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             is GameEvent.Duplicate -> return playDuplicate(e)
             is GameEvent.Info -> {
                 if (arena.ballShown && e.text.endsWith("broke free!")) return breakFree(e.text)
-                log(LogKind.SYS, if (e.text.startsWith("Daily goal")) "GOAL" else "INFO", e.text)
+                log(LogKind.SYS, if (e.text.startsWith("Daily goal")) "GOAL" else if (e.text.startsWith("Bond grew!")) "BOND ♥" else "INFO", e.text)
                 return d(800)
             }
         }

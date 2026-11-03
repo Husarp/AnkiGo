@@ -36,7 +36,7 @@ enum class BoxFilter(val label: String, val none: String? = null) {
 }
 
 /** The sort toggle of the copies sheet: highest level first, or latest caught first. */
-enum class CopySort(val label: String) { LEVEL("Level"), RECENT("Recent") }
+enum class CopySort(val label: String) { LEVEL("Level"), RECENT("Recent"), EVOLVED("Recently evolved") }
 
 /** PLAN 282 / R19: singles stay plain; groups keep their count with either visual cue. */
 data class BoxDupePlan(val cards: Int, val sprites: Int, val count: Int) {
@@ -90,6 +90,7 @@ object BoxTiles {
     /** The copies in the sheet's order. Both sorts break ties by level / latest caught so the order is stable. */
     fun order(members: List<Mon>, sort: CopySort): List<Mon> = when (sort) {
         CopySort.LEVEL -> members.sortedWith(compareBy<Mon>({ -it.level }, { if (it.shiny) 0 else 1 }, { -it.caughtAt }))
+        CopySort.EVOLVED -> members.sortedWith(compareByDescending<Mon> { it.evolvedAt }.thenBy { it.uid })
         CopySort.RECENT -> members.sortedWith(compareBy<Mon>({ -it.caughtAt }, { -it.level }))
     }
 

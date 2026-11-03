@@ -129,12 +129,13 @@ class R10W2StreakTagsShots {
     private fun mainTeamShare(): com.husarp.ankigo.game.Mon {
         val m = st.mon("t1")!!          // main, in the team, holds a Lucky Egg
         st.settings.xpShareUid = m.uid
+        m.bondPoints = 125
         return m
     }
 
     private fun teamFavEvolveShiny(): com.husarp.ankigo.game.Mon {
         val m = TestData.mon(gd, 25, 30, listOf("tackle", "thunderbolt"), "x9")   // thunder stone in the bag: can evolve
-        m.favourite = true; m.shiny = true
+        m.favourite = true; m.shiny = true; m.bondPoints = 125
         st.mons += m; st.team += m.uid
         return m
     }

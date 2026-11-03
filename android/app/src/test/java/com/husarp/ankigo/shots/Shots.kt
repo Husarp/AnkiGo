@@ -130,14 +130,15 @@ object Shots {
         }
     }
 
-    /** Paparazzi rule that writes plain PNGs named after the snapshot into [outDir] (no goldens, never fails on diffs). */
-    fun rule(): Paparazzi = Paparazzi(
+    /** Paparazzi rule writing PNGs to [outDir]; opt into native device pixels for placement audits. */
+    fun rule(useDeviceResolution: Boolean = false): Paparazzi = Paparazzi(
         deviceConfig = device(Size.PHONE, Theme.LIGHT),
         theme = "GameTheme",
         renderingMode = SessionParams.RenderingMode.NORMAL,
         showSystemUi = false,
         maxPercentDifference = 100.0,
         snapshotHandler = fileHandler(outDir),
+        useDeviceResolution = useDeviceResolution,
         renderExtensions = setOf(BalancedFirstFrame),
     )
 

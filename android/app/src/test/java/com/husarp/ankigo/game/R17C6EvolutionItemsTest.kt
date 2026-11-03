@@ -58,7 +58,7 @@ class R17C6EvolutionItemsTest {
         val d = world()
         for ((i, p) in pairs.withIndex()) {
             val s = TestData.state(d, 1000 + i * 2, 20)
-            val mon = s.main!!
+            val mon = s.main!!.apply { bondPoints = 125 }
             Economy.give(s, p.first)
             assertTrue(p.first, ItemUse.canUse(d, s, p.first, mon))
             val r = ItemUse.use(d, s, p.first, mon.uid, TestData.rng(), 0)
@@ -131,7 +131,7 @@ class R17C6EvolutionItemsTest {
             val item = e.item ?: continue
             if (e.kind != EvoKind.ITEM && e.kind != EvoKind.TRADE) continue
             if (!d.species.containsKey(e.to)) continue
-            val mon = TestData.state(d, sp.num, 50).main!!
+            val mon = TestData.state(d, sp.num, 50).main!!.apply { bondPoints = 125 }
             e.gender?.let { mon.gender = it }   // Nidorina -> Nidoqueen is for females only
             assertNotNull("${sp.name} with $item", Progression.itemEvolutionAnyTime(d, mon, item)); checked++
         }
@@ -153,7 +153,7 @@ class R17C6EvolutionItemsTest {
             val sp = d.species.values.firstOrNull { s -> s.evolutions.any { it.kind == EvoKind.ITEM && it.item == id } }
             assertNotNull("a species that evolves with $id", sp)
             sp!!
-            val mon = TestData.state(d, sp.num, 50).main!!
+            val mon = TestData.state(d, sp.num, 50).main!!.apply { bondPoints = 125 }
             assertNotNull("${sp.name} with $id", Progression.itemEvolutionAnyTime(d, mon, id))
         }
     }

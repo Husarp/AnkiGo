@@ -160,8 +160,8 @@ class R16JTabTopShots {
         assertEquals(StatsSection.ACHIEVEMENTS, getField(page, "section"))
     }
 
-    // PLAN 412 supersedes Settings reset on app return; Stats still closes its sheet (PLAN 222).
-    @Test fun comingBackKeepsSettingsSectionAndClosesStatsSheet() {
+    // PLAN 448: both pages retain their open state across app switches.
+    @Test fun comingBackKeepsSettingsSectionAndStatsSheet() {
         val ctx = setup()
         val settings = SettingsPage(ShotCtx(ctx), NoHost)
         layout(ctx, pageScreen(ctx, settings))
@@ -175,7 +175,6 @@ class R16JTabTopShots {
         layout(ctx, screen)
         setField(stats, "sheetOpen", true)
         stats.onAppReturned()
-        assertEquals("the Show sheet is closed", false, getField(stats, "sheetOpen"))
-        assertEquals(View.GONE, (getField(stats, "sheetLayer") as View).visibility)
+        assertEquals("the Show sheet stays open", true, getField(stats, "sheetOpen"))
     }
 }

@@ -2,7 +2,8 @@ package com.husarp.ankigo.ui
 
 import java.lang.ref.WeakReference
 
-/** Extra windows are transient when returning from another app. Weak references never keep a closed screen alive. */
+/** Explicit cleanup registry for extra windows. App return preserves them (PLAN 448).
+ * Weak references never keep a closed screen alive. */
 internal object AwayWindows {
     private val close = ArrayList<() -> Unit>()
 

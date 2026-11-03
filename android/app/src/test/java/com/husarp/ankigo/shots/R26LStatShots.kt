@@ -15,11 +15,10 @@ class R26LStatShots {
         val once = StatTypography.format(raw)
         val twice = StatTypography.format(once) as android.text.Spanned
         org.junit.Assert.assertEquals(raw, twice.toString())
-        val sizes = twice.getSpans(0, twice.length, android.text.style.RelativeSizeSpan::class.java)
+        val sizes = twice.getSpans(0, twice.length, android.text.style.ReplacementSpan::class.java)
         org.junit.Assert.assertEquals(1, sizes.size)
-        org.junit.Assert.assertEquals(0.75f, sizes.single().sizeChange, 0f)
         org.junit.Assert.assertEquals(raw.indexOf('→'), twice.getSpanStart(sizes.single()))
-        val fractions = twice.getSpans(0, twice.length, android.text.style.MetricAffectingSpan::class.java).filter { it !is android.text.style.RelativeSizeSpan }
+        val fractions = twice.getSpans(0, twice.length, android.text.style.MetricAffectingSpan::class.java).filter { it !is android.text.style.ReplacementSpan }
         org.junit.Assert.assertEquals(2, fractions.size)
         for (span in fractions) org.junit.Assert.assertEquals("2/3", twice.subSequence(twice.getSpanStart(span), twice.getSpanEnd(span)).toString())
     }
@@ -51,9 +50,9 @@ class R26LStatShots {
             for (sign in listOf(1, -1)) for (start in listOf(1, 4)) {
                 val metrics = ChipMetrics(ctx, 11f)
                 val marks = (start..start+2).map { n -> ConditionMarks.Mark("$n", ConditionMarks.Slot.OURS, ConditionMarks.def("stat.atk")!!, sign * n, n.toLong()) }
-                val w = marks.sumOf { metrics.width(it).toDouble() }.toFloat() + 2 * metrics.gap
+                val w = metrics.summaryWidth(marks)
                 addView(ConditionMarksView(ctx).apply {
-                    setRow(ConditionMarks.Slot.OURS, ConditionSpot.Placed(ConditionSpot.R(0f, 0f, w, metrics.height), ConditionRow.Fit(3, 0, w), true), marks, metrics)
+                    setRow(ConditionMarks.Slot.OURS, ConditionSpot.Placed(ConditionSpot.R(0f, 0f, w, metrics.height), ConditionRow.Fit(1, 0, w), true), marks, metrics)
                 }, LinearLayout.LayoutParams(-1, (metrics.height + 8).toInt()))
             }
             addView(FloatTextView(ctx, FloatText(true, "Attack up 6", FloatKind.STAT_UP, "ATK", 6), 0f))

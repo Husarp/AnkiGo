@@ -3,6 +3,24 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.3.0
+- Bond grows from ♥0 to ♥5 as your Pokémon fights alongside you: one point per answered card and three per win, with no decay. Heart levels add coins and XP; at ♥4 and ♥5 your partner can sometimes survive a knockout with 1 HP.
+- Evolution needs ♥2 alongside its normal requirements; Bond evolutions need ♥3 or ♥4. Existing friendship converts to Bond, up to ♥4. A filling Love Ball shows your progress in the new Bond section.
+- Hold to confirm Evolve, Buy, Refresh, Release, Teach, Use, Revive and Throw for one second. A left-to-right fill shows progress; release early to cancel. Relevant warnings stay beside the action.
+- Evolution items show the Pokémon that use them in a compact grid, keeping unknown species and evolution results a surprise. Ready requirements have a small green up arrow.
+- Recently evolved sorting helps find your latest evolutions in the Box, Pokédex and Pokémon pickers.
+- Pokémon details sections can be reordered, with drag handles, accessible arrows and Reset. @ Settings → Look → Pokémon details
+- Shop deals vary from 20% to 40% off in 5% steps. A green discount pill sits beside the price, and each day/night offer keeps its discount.
+- Battle stages use one compact summary chip per side. Tap it for every changed stat and its factor. Smaller explanation windows briefly describe each condition, and drawn value arrows align with the digits.
+### Fixes
+- Crabrawler can use an Ice Stone even when downloaded data still contains its old evolution method.
+- Evolution celebrations open above the refreshed Pokémon details.
+- Item explanations, Use-on pickers and Species info fit narrow windows and larger text.
+- Achievement details open cleanly, use bare icons and omit the redundant save-progress sentence.
+- Dialogs and sheets stay open through brief app switches while their Activity remains alive.
+- Both Pokémon stand on the intended ground in the four new beaches and thirteen other corrected battle backgrounds.
+- Glass battle boxes line up with the background, and the new beaches use matching automatic frame colours.
+- Battle alerts avoid repeating daily-goal gifts, found-item cards and successful TM teaching; errors retain their explanations.
 ## 1.2.1
 - Battle rewards show the wild Pokémon’s rarity ball dropping and wobbling before XP streams out.
 - Tabs change directly, keeping the selected tab’s box animation.
