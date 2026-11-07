@@ -12,7 +12,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** Native item sheets: source-only grid, branching sources, caught visibility and adaptive columns. */
+/** Native item sheets: source-only grid, branching sources, seen visibility and adaptive columns. */
 class R29DEvolutionItemShots {
     @get:Rule val paparazzi = Shots.rule()
 
@@ -21,7 +21,7 @@ class R29DEvolutionItemShots {
             (if (v is ViewGroup) (0 until v.childCount).flatMap { grids(v.getChildAt(it)) } else emptyList())
 
     private fun render(item: String, count: Int, caughtCount: Int = count, bag: Boolean = true) {
-        for (width in listOf(320, 412)) for (theme in Theme.entries) {
+        for (width in listOf(360, 412, 800)) for (theme in Theme.entries) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Variant("p$width", width, 892).device(theme))
             FakeGame.scenario = FakeGame.Scenario.MID_GAME
             FakeGame.withSprites = true
@@ -61,7 +61,8 @@ class R29DEvolutionItemShots {
             GameRepo::class.java.getDeclaredMethod("rebuild").apply { isAccessible = true }.invoke(GameRepo)
             val (_, screen) = ShopCardKit.page(ctx, if (bag) CardKeys.bagItem(item) else "special:item:$item", bag = bag, setup = {
                 GameRepo.state!!.apply {
-                    caught.clear(); caught += (4000 until 4000 + caughtCount); caught += listOf(5000, 5001)
+                    seen.clear(); seen += (4000 until 4000 + caughtCount)
+                    caught.clear(); caught += listOf(5000, 5001)
                     this.bag.clear(); this.bag[item] = 1
                     shopItems.clear(); shopItems += item
                 }
@@ -74,20 +75,23 @@ class R29DEvolutionItemShots {
             if (item == "razor-claw") assertTrue(text.toString(), "night only" in text)
             if (item == "dawn-stone") assertTrue(text.toString(), "male only" in text)
             val grid = grids(screen).singleOrNull()
-            if (caughtCount == 0) {
-                assertNull(grid)
-                assertTrue("Evolves $count unknown Pokémon" in text)
-                assertFalse(text.any { it.startsWith("…and") || it.startsWith("Evolves ???") })
-            } else {
-                assertNotNull(grid)
-                assertEquals(caughtCount, grid!!.childCount)
-                assertEquals(if (width == 320) 3 else 4, grid.columnCount)
-                for (i in 0 until caughtCount) {
-                    assertEquals(1, text.count { it == names[i] })
-                    val cell = grid.getChildAt(i)
-                    assertTrue("cell fits grid", cell.left >= 0 && cell.right <= grid.width)
-                    if (i >= grid.columnCount) assertTrue(cell.top > grid.getChildAt(i % grid.columnCount).top)
-                }
+            assertNotNull(grid)
+            assertEquals(count, grid!!.childCount)
+            assertEquals(grid.width / com.husarp.ankigo.ui.Ui.dp(ctx, 68), grid.columnCount)
+            assertEquals(count - caughtCount, text.count { it == "???" })
+            assertFalse(text.contains("Use on…"))
+            for (i in 0 until count) {
+                val cell = grid.getChildAt(i)
+                assertEquals(i < caughtCount, cell.isClickable)
+                val sprite = (cell as ViewGroup).getChildAt(0) as android.widget.ImageView
+                assertEquals(com.husarp.ankigo.ui.Ui.dp(ctx, 64), sprite.width)
+                assertEquals(com.husarp.ankigo.ui.Ui.dp(ctx, 64), sprite.height)
+                assertEquals(i >= caughtCount, sprite.background != null)
+                assertEquals(i >= caughtCount, sprite.colorFilter != null)
+                if (i >= caughtCount) assertFalse(cell.performClick())
+                assertEquals(if (i < caughtCount) 1 else 0, text.count { it == names[i] })
+                assertTrue("cell fits grid", cell.left >= 0 && cell.right <= grid.width)
+                if (i >= grid.columnCount) assertTrue(cell.top > grid.getChildAt(i % grid.columnCount).top)
             }
             paparazzi.snapshot(screen, "r29d-$item-${if (bag) "bag" else "shop"}-$caughtCount-p$width-${theme.name.lowercase()}", 1000)
             if (grid != null) {
@@ -95,7 +99,7 @@ class R29DEvolutionItemShots {
                 for (dpWidth in listOf(400, 280, 400)) {
                     grid.measure(View.MeasureSpec.makeMeasureSpec((dpWidth * dm.density).toInt(), View.MeasureSpec.EXACTLY),
                         View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
-                    assertEquals(if (dpWidth >= 360) 4 else 3, grid.columnCount)
+                    assertEquals(dpWidth / 68, grid.columnCount)
                 }
             }
         }
@@ -105,6 +109,6 @@ class R29DEvolutionItemShots {
     @Test fun genderRestrictionRemainsVisible() = render("dawn-stone", 1)
     @Test fun iceStoneGrid() = render("ice-stone", 6)
     @Test fun branchingSourceAppearsOnceInShop() = render("tart-apple", 1, bag = false)
-    @Test fun partialKnowledgeHidesSourcesEvenWhenResultsAreCaught() = render("ice-stone", 6, 2)
-    @Test fun noKnownSourceShowsNoResultSpecies() = render("ice-stone", 6, 0)
+    @Test fun partialKnowledgeShowsSilhouettesEvenWhenResultsAreCaught() = render("ice-stone", 6, 2)
+    @Test fun noKnownSourceStillShowsEverySourceSilhouette() = render("ice-stone", 6, 0)
 }

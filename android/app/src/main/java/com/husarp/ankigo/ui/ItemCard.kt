@@ -91,8 +91,8 @@ internal object ItemCard {
         val move = spec.move?.let { page.data.move(it) }
         val sources = if (isTm) emptyList() else ItemInfo.evoPairs(page.data, spec.item.orEmpty()).map { it.fromNum }.distinct()
         val line = if (isTm) null else if (sources.isNotEmpty()) {
-            if (sources.none { it in page.state.caught }) "Evolves ${sources.size} unknown Pokémon"
-            else ItemInfo.short(page.data, spec.item.orEmpty(), page.state.caught)
+            if (sources.none { it in page.state.seen || it in page.state.caught }) "Evolves ${sources.size} unknown Pokémon"
+            else ItemInfo.short(page.data, spec.item.orEmpty(), page.state.seen + page.state.caught)
         } else ItemInfo.line(page.data, spec.item.orEmpty(), page.state.caught)
         val lead: View = if (isTm) tmLead(ctx, move) else Bits.itemTile(ctx, spec.item.orEmpty(), 48)
         val titles = LinearLayout(ctx).apply {
@@ -149,31 +149,38 @@ internal object ItemCard {
             val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty(), page.state.caught)
             if (!isTm) {
                 if (pairs.isNotEmpty()) addView(factBlock(ctx, "Evolves", ""), below)
-                val known = page.state.caught
+                val known = page.state.seen + page.state.caught
                 fun species(num: Int): View = LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                     val sp = data.sp(num)
-                    addView(TileSprite(ctx).apply { Ui.staticSprite(ctx, num, false, this) }, LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)))
-                    addView(Ui.text(ctx, 12f, 800, R.color.ag_text).apply { text = sp.name; gravity = Gravity.CENTER })
+                    val seen = num in known
+                    addView(TileSprite(ctx).apply {
+                        sizeStep = ListSpriteSize.LAST
+                        Ui.staticSprite(ctx, num, false, this)
+                        if (!seen) {
+                            setColorFilter(android.graphics.Color.BLACK, android.graphics.PorterDuff.Mode.SRC_IN)
+                            background = Ui.rounded(android.graphics.Color.rgb(45, 45, 55), 8, ctx)
+                        }
+                    }, LinearLayout.LayoutParams(dp(ctx, 64f), dp(ctx, 64f)))
+                    addView(Ui.text(ctx, 12f, 800, R.color.ag_text).apply { text = if (seen) sp.name else "???"; gravity = Gravity.CENTER })
                     val rules = pairs.filter { it.fromNum == num }
                     val restrictions = if (rules.any { it.time == null && it.gender == null }) emptyList() else rules.mapNotNull { pair ->
                         listOfNotNull(pair.time?.let { "$it only" }, when (pair.gender) {
                             'F' -> "female only"; 'M' -> "male only"; else -> null
                         }).takeIf { it.isNotEmpty() }?.joinToString(", ")
                     }.distinct()
-                    if (restrictions.isNotEmpty()) addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
+                    if (seen && restrictions.isNotEmpty()) addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
                         text = restrictions.joinToString(" / "); gravity = Gravity.CENTER
                     })
-                    contentDescription = "${sp.name}. Opens details"
-                    setOnClickListener { DexDetail.show(page, sp) }
+                    contentDescription = if (seen) "${sp.name}. Opens Evolution details" else "???"
+                    if (seen) setOnClickListener { DexDetail.show(page, sp, focusEvolution = true) }
                 }
                 val sources = pairs.map { it.fromNum }.distinct()
-                val visible = sources.filter { it in known }
-                if (visible.isNotEmpty()) addView(object : GridLayout(ctx) {
+                if (sources.isNotEmpty()) addView(object : GridLayout(ctx) {
                     private var appliedColumns = 0
-                    init { for (num in visible) addView(species(num)) }
+                    init { for (num in sources) addView(species(num)) }
                     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-                        val columns = if (View.MeasureSpec.getSize(widthMeasureSpec) >= dp(ctx, 360f)) 4 else 3
+                        val columns = (View.MeasureSpec.getSize(widthMeasureSpec) / dp(ctx, 68f)).coerceAtLeast(1)
                         if (columns != appliedColumns) {
                             // Clear the previous column bound before remapping after a window resize.
                             columnCount = GridLayout.UNDEFINED
@@ -188,10 +195,6 @@ internal object ItemCard {
                         }
                         super.onMeasure(widthMeasureSpec, heightMeasureSpec)
                     }
-                }, below)
-                val unknown = sources.count { it !in known }
-                if (unknown > 0) addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub0).apply {
-                    text = if (visible.isEmpty()) "Evolves $unknown unknown Pokémon" else "…and $unknown unknown"
                 }, below)
             }
             for (f in facts.filterNot { pairs.isNotEmpty() && it.title == "What it does" }) addView(factBlock(ctx, f.title, f.text), LinearLayout.LayoutParams(below))

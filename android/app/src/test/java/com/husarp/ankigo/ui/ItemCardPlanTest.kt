@@ -67,7 +67,7 @@ class ItemCardPlanTest {
         assertEquals("Throw", BagAct.of(ItemKind.BALL)!!.label)
         assertEquals("Use", BagAct.of(ItemKind.ESCAPE)!!.label)
         assertEquals("Use on…", BagAct.of(ItemKind.HEAL)!!.label)
-        assertEquals("Use on…", BagAct.of(ItemKind.EVOLUTION)!!.label)
+        assertNull(BagAct.of(ItemKind.EVOLUTION))
         assertEquals("Give to another Pokémon", BagAct.of(ItemKind.HELD)!!.label)
         assertEquals("Revive", BagAct.of(ItemKind.FOSSIL)!!.label)
         assertEquals("Teach…", BagAct.TEACH.label)
