@@ -513,10 +513,12 @@ object BattleEngine {
                 CoreRules.chargeRise(this, p, move) // Skull Bash / Meteor Beam / Electro Shot raise a stat on their first turn, charged or not
                 if (!skip) return
             }
+            val from = out.size
             val failed = perform(p, move)
             s.lastMove = move.id
             s.lastMoveFailed = failed
             rulesEach { it.afterMove(this, p, move, failed) }
+            markMoveEffects(from)
         }
 
         /**
@@ -528,9 +530,20 @@ object BattleEngine {
          */
         fun useMove(p: Boolean, move: Move): Boolean {
             if (mon(p).hp <= 0 || mon(!p).hp <= 0) return false
+            val from = out.size
             val failed = perform(p, move)
             rulesEach { it.afterCalledMove(this, p, move) } // R17C FIX-A: the clean-up of the move itself (a called Spit Up ends the stockpile)
+            markMoveEffects(from)
             return !failed
+        }
+
+        /** Presentation boundaries include after-move hooks, but never the next action or round residuals. */
+        private fun markMoveEffects(from: Int) {
+            for (i in from until out.size) {
+                val attack = out[i] as? GameEvent.Attack ?: continue
+                val count = out.subList(i + 1, out.size).takeWhile { it is GameEvent.Effect }.size
+                out[i] = attack.copy(moveEffectCount = count)
+            }
         }
 
         /** The move itself: its Attack event first, the effects it caused after it. True = it failed or missed. */

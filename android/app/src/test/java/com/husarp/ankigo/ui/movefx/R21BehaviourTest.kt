@@ -43,9 +43,9 @@ class R21BehaviourTest {
         val st = RecStage()
         val s = MoveFx.script(st, plan(MoveLook.DRAIN), true, 3)!!
         MoveFx.build(s, MoveLook.DRAIN)
-        s.advance(740f)
-        assertTrue(s.procs.any { it.s == 740f && it.e == 1380f })
-        s.advance(1450f)
+        s.advance(540f)
+        assertTrue(s.procs.any { it.s == 540f && it.e == 980f })
+        s.advance(1050f)
         assertTrue(s.particles.any { it.img == "circle_02" && it.x0 == st.attackerX })
         val multi = MoveFx.script(st, plan(MoveLook.MULTI_HIT), true, 3)!!
         MoveFx.build(multi, MoveLook.MULTI_HIT)

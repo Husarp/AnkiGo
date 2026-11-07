@@ -48,9 +48,9 @@ class ArenaMoveStageTest {
     }
 
     @Test fun theWaitCoversTheLooksEndAndTheHitsAfterTime() {
-        assertEquals(1000L, g.waitMs(1000, 400, 1.0))      // the look is longer than impact + 500
-        assertEquals(900L, g.waitMs(500, 400, 1.0))        // impact + 500
-        assertEquals(650L, g.waitMs(500, 400, 0.5))        // the fast pace: impact + 250
+        assertEquals(1000L, g.waitMs(1000, 400, 1.0))      // the look is longer than impact + 350
+        assertEquals(750L, g.waitMs(500, 400, 1.0))        // impact + 350
+        assertEquals(575L, g.waitMs(500, 400, 0.5))        // the fast pace: impact + 175
         assertEquals(401L, g.waitMs(0, 400, 0.0))          // never zero time after the hit
     }
 }
