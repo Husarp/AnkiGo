@@ -489,7 +489,10 @@ class R18GDetailsShots {
 
     @Test fun dexEntryOfASpeciesThatDoesNotEvolve() {
         DetailSections.storeOf = { MapStore(emptySet()) }
-        dialog("dex-single", listOf(0f), check = { _, scene -> assertTrue("Does not evolve" in strings(scene)) }) { ctx -> DexDetail.show(DexPage(ctx, NoHost), gd.sp(150)) }
+        dialog("dex-single", listOf(0f), check = { _, scene -> assertTrue("Does not evolve" in strings(scene)) }) { ctx ->
+            GameRepo.state!!.defeatedSpecies += 150
+            DexDetail.show(DexPage(ctx, NoHost), gd.sp(150))
+        }
     }
 
     @Test fun theLevelTitleHasItsPlainText() {

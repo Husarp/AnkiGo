@@ -59,9 +59,11 @@ class R4X2Shots {
     @Test fun unknownMoves() = paparazzi.shootWith("r4x2-unknown", listOf(Size.PHONE, Size.SPLIT)) { ctx ->
         val b = BattleShotKit.bound(ctx)
         GameRepo.state!!.caught.remove(GameRepo.state!!.battle!!.wild.species)
+        GameRepo.state!!.mons.removeAll { it.species == GameRepo.state!!.battle!!.wild.species }
         val scene = window(ctx)
         val t = texts(scene)
-        assertEquals("every move is still unknown", 2, t.count { it == "?" })
+        assertFalse("no empty Moves section", t.any { it.equals("Moves", true) })
+        assertEquals(0, t.count { it == "?" })
         assertFalse(t.any { it == "IV" || it == "EV" || it.contains("Nature") })
         FrameLayout(ctx).apply { addView(b.root, FrameLayout.LayoutParams(-1, -1)); addView(scene, FrameLayout.LayoutParams(-1, -1)) }
     }
@@ -83,6 +85,7 @@ class R4X2Shots {
         val st = GameRepo.state!!
         val battle = st.battle!!
         st.caught.remove(battle.wild.species)
+        st.mons.removeAll { it.species == battle.wild.species }
         battle.tier = Tier.LEGENDARY
         battle.wild.shiny = true
         battle.wild.gender = 'F'
@@ -90,8 +93,8 @@ class R4X2Shots {
         val scene = window(ctx)
         val t = texts(scene)
         assertTrue(t.contains("Water Gun"))
-        assertTrue(t.contains("Legendary"))
-        assertEquals("the other move stays unknown", 1, t.count { it == "?" })
+        assertFalse(t.contains("Legendary"))
+        assertEquals("unused slots are omitted", 0, t.count { it == "?" })
         assertFalse("an unused move is not named", t.contains("Tackle"))
         scene
     }

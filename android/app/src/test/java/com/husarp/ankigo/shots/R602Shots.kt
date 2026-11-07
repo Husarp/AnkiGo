@@ -122,11 +122,12 @@ class R602Shots {
         assertTrue("Stats shows the full level label", t.contains("Level ${GameRepo.state!!.battle!!.wild.level}"))
         assertTrue(t.none { it.contains("· Lv ") && it.startsWith("#") })
         assertTrue(t.contains("EVOLUTION") && t.none { it.equals("Holding", ignoreCase = true) })
-        assertEquals("every move is still unknown", 2, t.count { it == "?" })
+        assertEquals("known species has no hidden moves", 0, t.count { it == "?" })
+        assertTrue(t.contains("Water Gun") && t.contains("Tackle"))
     }) { ctx ->
         BattleShotKit.bound(ctx)
         val species = GameRepo.state!!.battle!!.wild.species
-        GameRepo.state!!.caught.remove(species)
+        GameRepo.state!!.caught += species
         withInfo(species)
         assertTrue(BattleDetails.showWild(ctx))
     }

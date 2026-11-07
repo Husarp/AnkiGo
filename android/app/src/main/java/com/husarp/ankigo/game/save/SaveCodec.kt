@@ -49,6 +49,7 @@ object SaveCodec {
             list("tms", state.tms.sorted())
             kv("cash", state.cash); kv("trainerLevel", state.trainerLevel); kv("trainerXp", state.trainerXp)
             list("seen", state.seen.sorted()); list("caught", state.caught.sorted())
+            list("defeatedSpecies", state.defeatedSpecies.sorted())
             key("battle"); state.battle.let { if (it == null) value(null) else writeBattle(this, it) }
             kv("nextSpecies", state.nextSpecies); kv("nextTier", state.nextTier.name); kv("nextShiny", state.nextShiny); kv("nextSeed", state.nextSeed)
             kv("day", state.day); kv("reviewsToday", state.reviewsToday); kv("cashToday", state.cashToday); kv("cashFracNum", state.cashFracNum); kv("cashFracDen", state.cashFracDen)
@@ -436,6 +437,7 @@ object SaveCodec {
         s.cash = o.int("cash", 0); s.trainerLevel = o.int("trainerLevel", 1); s.trainerXp = o.int("trainerXp", 0)
         o.intList("seen")?.let { s.seen += it }
         o.intList("caught")?.let { s.caught += it }
+        o.intList("defeatedSpecies")?.let { s.defeatedSpecies += it.filter { num -> num > 0 } }
         s.battle = o.optJSONObject("battle")?.let { readBattle(it) }
         s.nextSpecies = o.intOrNull("nextSpecies")
         s.nextTier = enumOr(o.strOrNull("nextTier"), Tier.NORMAL)

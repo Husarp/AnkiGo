@@ -16,6 +16,7 @@ class R6CompareTest {
 
     private fun state(vararg uids: String): GameState {
         val s = GameState(createdAt = 1L, starterChosen = true)
+        s.defeatedSpecies += data.species.keys
         uids.forEach { s.mons += TestData.mon(data, 25, 20, listOf("tackle"), it) }
         return s
     }

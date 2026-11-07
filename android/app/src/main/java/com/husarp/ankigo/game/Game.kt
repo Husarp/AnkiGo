@@ -209,6 +209,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 Economy.onWin(state, events, bondLevel)
             }
             Outcome.DEFEAT -> {
+                state.defeatedSpecies += battle.wild.species
                 Progression.rewardDefeat(data, state, main, battle.wild, now, rng, events)
                 Healing.healMain(data, main, HealReason.DEFEAT, events) // after XP, level-ups and evolution
                 Trainer.addDefeatXp(state, battle.tier, events)

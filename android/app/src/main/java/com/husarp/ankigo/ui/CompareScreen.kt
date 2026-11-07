@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.ViewCompat
+import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Mon
@@ -58,7 +59,7 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     }
 
     public override fun render() {
-        val data = CompareTable.build(data, state, picks, evolved, sameLevel)
+        val data = CompareTable.build(data, state, picks, evolved, sameLevel, GameRepo.wildMoves.used(state.battle))
         if (evolved || sameLevel != null) sameLevel = data.rowOrNull("level")?.cells
             ?.mapNotNull { (it as? Cell.Text)?.value }?.maxOrNull() ?: sameLevel
         full = data

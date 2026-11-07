@@ -20,7 +20,10 @@ class CompareModesTest {
 
     private fun mon(sp: Int, lvl: Int, uid: String): Mon = TestData.mon(data, sp, lvl, listOf("tackle"), uid)
     private fun state(vararg mons: Mon): GameState =
-        GameState(createdAt = 1L, starterChosen = true).also { s -> mons.forEach { s.mons += it } }
+        GameState(createdAt = 1L, starterChosen = true).also { s ->
+            s.defeatedSpecies += data.species.keys
+            mons.forEach { s.mons += it }
+        }
 
     private fun table(picks: List<ComparePick>, vararg mons: Mon) = CompareTable.build(data, state(*mons), picks, false)
     private fun owned(vararg uids: String) = uids.map { ComparePick.Owned(it) }

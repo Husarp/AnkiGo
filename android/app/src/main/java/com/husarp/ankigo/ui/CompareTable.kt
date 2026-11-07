@@ -7,6 +7,8 @@ import com.husarp.ankigo.game.Evolution
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.MoveText
 import com.husarp.ankigo.game.Species
+import com.husarp.ankigo.game.SpeciesKnowledge
+import com.husarp.ankigo.game.WildInfo
 import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Stats
@@ -167,7 +169,7 @@ object CompareTable {
         return Cell.Text(n.label, sub = listOf(eff))
     }
 
-    fun build(data: GameData, state: GameState, picks: List<ComparePick>, evolved: Boolean, sameLevel: Int? = null): CompareData {
+    fun build(data: GameData, state: GameState, picks: List<ComparePick>, evolved: Boolean, sameLevel: Int? = null, usedWildMoves: Set<String> = emptySet()): CompareData {
         val columns = picks.mapNotNull { p ->
             when (p) {
                 is ComparePick.Owned -> state.mon(p.uid)?.let { m -> data.species[m.species]?.let { sp -> Triple(p, m, sp) } }
@@ -175,15 +177,16 @@ object CompareTable {
             }
         }.map { (pick, mon, sp) ->
             val fin = finalForm(data, sp)
-            val shown = if (evolved) fin.species else sp
-            val changed = evolved && fin.species.num != sp.num
+            val shown = if (evolved && (mon != null || SpeciesKnowledge.known(data, state, sp.num))) fin.species else sp
+            val changed = shown.num != sp.num
             val note = when {
+                mon == null && !SpeciesKnowledge.known(data, state, shown.num) -> null
                 !evolved -> null
                 !changed -> "already final"
                 fin.branches > 1 -> "from ${sp.name} · first of ${fin.branches}"
                 else -> "from ${sp.name}"
             }
-            val hidden = changed && !EvoLine.isSeen(shown, state.seen + state.caught)
+            val hidden = (changed || mon == null) && !EvoLine.isSeen(shown, state.seen + state.caught) && !SpeciesKnowledge.known(data, state, shown.num)
             val name = if (mon != null && !mon.nickname.isNullOrBlank()) mon.shownName else if (hidden) "???" else shown.name // an unseen final form stays "???" (PLAN 128)
             CompareColumn(pick, mon, shown, sp, name, mon?.shiny == true, note, hidden)
         }
@@ -222,6 +225,10 @@ object CompareTable {
         }
         rows += numeric("base_total", "Total", columns.map { it.shown.base.total })
 
+        val observed = columns.map { c ->
+            state.battle?.takeIf { it.wild.species == c.shown.num && !SpeciesKnowledge.known(data, state, c.shown.num) }
+                ?.let { WildInfo.of(data, state, it, usedWildMoves) }?.moves.orEmpty().mapNotNull { it.id }
+        }
         if (anyOwned) {
             rows += CompareRow("nature", "Nature", owned.map { m -> m?.let(::natureCell) ?: Cell.Text(DASH) }, section = "Build")
             val ivSums = owned.map { it?.ivs?.total }
@@ -233,11 +240,14 @@ object CompareTable {
                         sub = listOf(iv.take(3).joinToString(" · "), iv.drop(3).joinToString(" · ")), value = m.ivs.total)
                 }
             }, numeric = true)
-            rows += CompareRow("moves", "Moves", owned.map { m ->
-                if (m == null) Cell.Text(DASH) else Cell.Moves(m.moves.map { id ->
+        }
+        if (anyOwned || observed.any { it.isNotEmpty() }) {
+            rows += CompareRow("moves", "Moves", owned.mapIndexed { i, m ->
+                val ids = m?.moves ?: observed[i]
+                if (ids.isEmpty()) Cell.Text(DASH) else Cell.Moves(ids.map { id ->
                     val mv = data.move(id)
                     if (mv == null) MoveCell(id, null, DASH, id)
-                    else MoveCell(mv.name, mv.type, if (MoveText.showsPower(mv)) mv.power.toString() else DASH, id) // R17C-FIX12: a variable-power move shows a dash, not the parser's 60
+                    else MoveCell(mv.name, mv.type, if (MoveText.showsPower(mv)) mv.power.toString() else DASH, id)
                 })
             }, section = "Moves")
         }
@@ -255,6 +265,21 @@ object CompareTable {
             else Cell.Text(EvoLine.shownName(fin.species, state.seen + state.caught), sub = if (fin.branches > 1) listOf("first of ${fin.branches}") else emptyList())
         })
 
-        return CompareData(columns, rows)
+        val allowed = columns.map { it.mon != null || SpeciesKnowledge.known(data, state, it.shown.num) }
+        val visibleRows = ArrayList<CompareRow>()
+        var heading: String? = null
+        for (row in rows) {
+            if (row.section != null) heading = row.section
+            val cells = row.cells.mapIndexed { i, cell ->
+                if (allowed[i] || row.key == "types") cell
+                else if (row.key == "moves" && observed[i].isNotEmpty()) cell
+                else Cell.Text(DASH)
+            }
+            if (cells.all { it is Cell.Text && it.empty }) continue
+            val best = if (row.numeric) bestIndexes(cells.map { (it as? Cell.Text)?.value }) else emptySet()
+            visibleRows += row.copy(cells = cells.mapIndexed { i, c -> if (row.numeric && c is Cell.Text) c.copy(best = i in best) else c }, section = heading)
+            heading = null
+        }
+        return CompareData(columns, visibleRows)
     }
 }

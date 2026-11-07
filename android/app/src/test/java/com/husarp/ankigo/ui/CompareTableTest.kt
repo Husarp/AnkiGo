@@ -24,7 +24,8 @@ class CompareTableTest {
 
     private fun state(vararg mons: Mon): GameState {
         val s = GameState(createdAt = 1L, starterChosen = true)
-        s.seen += data.species.keys   // everything met, so evolution names show (R11-D hides unseen ones)
+        s.seen += data.species.keys
+        s.defeatedSpecies += data.species.keys // known entries for the full comparison tests
         mons.forEach { s.mons += it }
         return s
     }
@@ -268,6 +269,7 @@ class CompareTableTest {
 
     @Test fun unseenFormsInTheEvolutionLineShowQuestionMarks() {
         val st = GameState(createdAt = 1L, starterChosen = true)
+        st.caught += 25
         st.seen += 25   // only Sparkmouse (the middle form) is met
         val t = CompareTable.build(data, st, listOf(ComparePick.Dex(25)), false)
         val l = t.row("evo").cells[0] as Cell.Evo
@@ -279,6 +281,7 @@ class CompareTableTest {
 
     @Test fun anUnseenFinalFormStaysHiddenInFullyEvolved() {
         val st = GameState(createdAt = 1L, starterChosen = true)
+        st.caught += 25
         st.seen += 25
         val col = CompareTable.build(data, st, listOf(ComparePick.Dex(25)), true).columns[0]
         assertEquals("???", col.name)
