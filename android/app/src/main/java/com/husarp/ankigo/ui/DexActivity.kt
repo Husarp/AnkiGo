@@ -162,7 +162,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             BoxViews.quickChip(ctx, "Favourites", filter.favouritesOnly, heart = true) { setFavouritesOnly(!filter.favouritesOnly) } to filter.favouritesOnly,
         )
         rowBox.addView(FilterRow.make(ctx, TileViews.legendChip(ctx, dex = true), sortPill,
-            FilterRowText.activePieces(filter.typeFilter, null, filter.gens),
+            FilterRowText.withRarity(FilterRowText.activePieces(filter.typeFilter, null, filter.gens), filter.rarities),
             onOpen = { openSortSheet() }, quick = quick), LinearLayout.LayoutParams(-1, -2))
     }
 
@@ -175,7 +175,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
 
     /** The empty state's "Clear filters": every Pokédex filter off, also All / Owned / Seen / Not owned and the search text. */
     private fun clearFilters() {
-        filter = filter.withTypeFilter(TypeFilter()).copy(wishlistOnly = false, favouritesOnly = false, gens = emptySet(), owned = DexOwned.ALL, query = "")
+        filter = filter.withTypeFilter(TypeFilter()).copy(wishlistOnly = false, favouritesOnly = false, gens = emptySet(), owned = DexOwned.ALL, query = "", rarities = RarityFilter())
         SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, filter.typeFilter)
         search.setText("") // its watcher re-filters with the empty query
         redraw()
@@ -211,6 +211,9 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             onChange = { spec, _ -> if (spec != filter.spec()) setSort(spec) },
             dex = SortSheet.DexPart(filter.wishlistOnly, gens, filter.gens) { wish, picked -> setSheetFilters(wish, picked) },
             type = SortSheet.TypePart(filter.typeFilter) { setTypeFilter(it) },
+            rarity = SortSheet.RarityPart(filter.rarities) {
+                filter = filter.copy(rarities = it); redraw(); list.setSelection(0)
+            },
         )
     }
 

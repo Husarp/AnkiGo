@@ -281,8 +281,11 @@ internal class SortSheet(
     /** The type filter (Box and Pokédex); null = no Type section. */
     private val type: TypePart? = null,
     private val shows: ShowsPart? = null,
+    private val rarity: RarityPart? = null,
 ) {
     /** Independent Box requirements; empty means All. */
+    class RarityPart(var filter: RarityFilter, val set: (RarityFilter) -> Unit)
+
     class ShowsPart(var picked: Set<BoxFilter>, val set: (Set<BoxFilter>) -> Unit)
 
     /** The "Group duplicates" switch row of the Box (hidden while picking for Compare). */
@@ -359,7 +362,7 @@ internal class SortSheet(
 
     /** Anything on in this sheet that "Clear" would switch off (a type mode alone filters nothing). */
     private fun anyFilterOn(): Boolean =
-        shows?.picked?.isNotEmpty() == true || showIndex != 0 || dex?.wishlistOnly == true || dex?.picked?.isNotEmpty() == true || type?.filter?.active == true
+        shows?.picked?.isNotEmpty() == true || showIndex != 0 || dex?.wishlistOnly == true || dex?.picked?.isNotEmpty() == true || type?.filter?.active == true || rarity?.filter?.active == true
 
     /** "Clear": every filter off (Show = All, wishlist, generations, types and the mode back to Any of); the sort and "Group duplicates" stay. */
     private fun clearFilters() {
@@ -367,6 +370,7 @@ internal class SortSheet(
         shows?.let { it.picked = emptySet(); it.set(it.picked) }
         dex?.let { it.wishlistOnly = false; it.picked = emptySet(); it.set(false, emptySet()) }
         type?.let { it.filter = TypeFilter(); it.set(it.filter) }
+        rarity?.let { it.filter = RarityFilter(); it.set(it.filter) }
         changed()
     }
 
@@ -454,6 +458,22 @@ internal class SortSheet(
                 body.addView(f, LinearLayout.LayoutParams(-1, -2))
                 if (dex.picked.isEmpty()) body.addView(help("None picked: every generation shows."))
             }
+        }
+        rarity?.let { r ->
+            body.addView(section("Rarity mark"))
+            body.addView(help("Match any selected mark. None picked: every Pokémon shows."))
+            val f = flow()
+            for (option in RarityFilter.options) {
+                val label = RarityFilter.label(option)
+                f.addView(BoxViews.chip(ctx, label, option in r.filter.picked) {
+                    r.filter = r.filter.toggle(option); r.set(r.filter); changed()
+                }.apply {
+                    text = RarityMark.label(ctx, label, option.mark!!)
+                    contentDescription = label
+                    isSelected = option in r.filter.picked
+                })
+            }
+            body.addView(f, LinearLayout.LayoutParams(-1, -2))
         }
         if (type != null) typeSection(type)
         if (group != null) body.addView(

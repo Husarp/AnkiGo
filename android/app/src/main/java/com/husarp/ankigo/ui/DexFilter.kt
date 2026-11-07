@@ -67,6 +67,7 @@ data class DexFilter(
     val typeMatch: TypeMatch = TypeMatch.ANY,
     /** R18 253: only species of which you own at least one Pokémon marked favourite (the "Favourites" quick chip). */
     val favouritesOnly: Boolean = false,
+    val rarities: RarityFilter = RarityFilter(),
 ) {
     /**
      * @param all every species to consider (usually the enabled gens)
@@ -87,6 +88,7 @@ data class DexFilter(
                 (!wishlistOnly || sp.num in wishlist) &&
                 (!favouritesOnly || sp.num in favourites) &&
                 typeFilter.matches(sp.types) &&
+                rarities.matches(com.husarp.ankigo.game.Encounters.tierOf(sp), sp.base.total) &&
                 when (owned) {
                     DexOwned.ALL -> true
                     DexOwned.OWNED -> sp.num in lastCaught
@@ -125,10 +127,10 @@ data class DexFilter(
         if (q.startsWith("0")) "%03d".format(num).startsWith(q) else num.toString().startsWith(q)
 
     /** Anything beyond the defaults (the empty state offers "Clear filters" while this is on). */
-    val active get() = owned != DexOwned.ALL || gens.isNotEmpty() || types.isNotEmpty() || wishlistOnly || favouritesOnly || query.isNotBlank()
+    val active get() = owned != DexOwned.ALL || gens.isNotEmpty() || types.isNotEmpty() || wishlistOnly || favouritesOnly || query.isNotBlank() || rarities.active
 
     /** How many of the filters that live in the sort sheet are on (wishlist, generations, types), for the sort chip's description. */
-    val sheetActive get() = (if (wishlistOnly) 1 else 0) + (if (gens.isNotEmpty()) 1 else 0) + (if (types.isNotEmpty()) 1 else 0)
+    val sheetActive get() = (if (wishlistOnly) 1 else 0) + (if (gens.isNotEmpty()) 1 else 0) + (if (types.isNotEmpty()) 1 else 0) + (if (rarities.active) 1 else 0)
 
     companion object {
         /**

@@ -27,6 +27,7 @@ object FilterRowText {
     sealed class Piece {
         class Sym(val type: Type) : Piece()
         class Txt(val s: String) : Piece()
+        class Mark(val rarity: com.husarp.ankigo.game.PokemonRarity) : Piece()
     }
 
     /** "Water + Ice · All of" (symbols before the names), 3 and more types "3 types · Any of". Nothing picked = no pieces. */
@@ -68,7 +69,18 @@ object FilterRowText {
     }
 
     /** The label as plain words (the chip's description): "Water + Ice · All of · Favourites". */
-    fun plain(pieces: List<Piece>): String = pieces.joinToString("") { if (it is Piece.Txt) it.s else "" }
+    fun plain(pieces: List<Piece>): String = pieces.joinToString("") { when (it) { is Piece.Txt -> it.s; is Piece.Mark -> RarityFilter.label(it.rarity); else -> "" } }
+
+    fun withRarity(pieces: List<Piece>, filter: RarityFilter): List<Piece> {
+        if (!filter.active) return pieces
+        val out = pieces.toMutableList()
+        if (out.isNotEmpty()) out += Piece.Txt(" · ")
+        filter.picked.sortedBy { it.ordinal }.forEachIndexed { i, r ->
+            if (i > 0) out += Piece.Txt(" / ")
+            out += Piece.Mark(r)
+        }
+        return out
+    }
 
     private fun orList(n: List<String>): String = if (n.size < 2) n.joinToString("") else n.dropLast(1).joinToString(", ") + " or " + n.last()
 
@@ -125,6 +137,7 @@ object FilterRowText {
             subject(adjectives, f.typeFilter),
             if (f.wishlistOnly) "on your wishlist" else null,
             if (f.favouritesOnly) "with a favourite copy" else null,
+            if (f.rarities.active) "with rarity mark ${f.rarities.picked.sortedBy { it.ordinal }.joinToString(" or ") { RarityFilter.label(it) }}" else null,
             if (f.gens.isNotEmpty()) "in ${gensLabel(f.gens)}" else null,
             if (q.isEmpty()) null else if (q.all { it.isDigit() }) "numbered “$q”" else "named “$q”",
         )
@@ -296,6 +309,7 @@ internal class ActiveChip(ctx: Context, pieces: List<FilterRowText.Piece>, onOpe
         val size = Ui.dp(ctx, 13)
         for (p in pieces) when (p) {
             is FilterRowText.Piece.Txt -> sb.append(p.s)
+            is FilterRowText.Piece.Mark -> sb.append(RarityMark.label(ctx, RarityFilter.label(p.rarity), p.rarity.mark!!))
             is FilterRowText.Piece.Sym -> sb.append("￼").also {
                 sb.setSpan(IconSpan(TypeChips.tinted(ctx, p.type, TypeChips.ink(ctx, p.type)), size, Ui.dp(ctx, 4)), sb.length - 1, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }

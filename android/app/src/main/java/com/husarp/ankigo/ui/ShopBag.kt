@@ -82,7 +82,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
             }, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 4) })
         }
         into.addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { text = category })
-        val owned = (state.bag.filter { it.value > 0 }.keys + state.mons.mapNotNull { it.heldItem }).filter { !heldOnly || holders(it).isNotEmpty() }
+        val owned = (state.bag.filter { it.value > 0 }.keys + state.mons.mapNotNull { it.heldItem }).distinct().filter { !heldOnly || holders(it).isNotEmpty() }
         var any = false
         fun section(title: String, ids: List<String>) {
             if (ids.isEmpty() || category != "All items" && category != title) return

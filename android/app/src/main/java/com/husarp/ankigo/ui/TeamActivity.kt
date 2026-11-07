@@ -68,6 +68,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     // The Box lists every owned Pokémon (team members carry a mark); copies of a species collapse into one "×N" tile.
     private var boxFilter = SortPrefs.loadShows(base) // R18 249: the Show choice is remembered for the Box
+    private var boxRarity = SortPrefs.loadBoxRarity(base)
     private var boxTypes = SortPrefs.loadType(base, SortPrefs.TypeWhere.BOX) // PLAN 192 (X8): the type filter is remembered for the Box
     private var grouped = AppPrefs.boxGrouped(base)
     private var boxSort = SortPrefs.load(base, SortPrefs.Where.BOX) // PLAN 48/55: remembered for the Box
@@ -184,7 +185,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         picks.keepOwned { st.mon(it) != null }
         val team = st.teamMons()
         val mons = BoxTiles.filter(st.mons, boxFilter, st.team, st.settings.xpShareUid, ::canEvolve, boxTypes, ::typesOf).filter { mon ->
-            BoxSearch.matches(data, mon, boxQuery)
+            boxRarity.matches(mon.tier, data.species[mon.species]?.base?.total ?: 0) && BoxSearch.matches(data, mon, boxQuery)
         }
         shown = mons.size
         // while picking for Compare every copy is its own tile
@@ -441,7 +442,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         if (tiles.isEmpty()) {
             // X9 (192E): say why the box shows nothing and offer "Clear filters" while a filter is on; a really empty box has no button
             boxHeader.addView(EmptyState(this, 28) { clearBoxFilters() }.also {
-                it.set(if (boxQuery.isNotBlank()) "No Pokémon match your search." else FilterRowText.emptyBox(boxFilter, boxTypes), boxQuery.isNotBlank() || boxFilter.isNotEmpty() || boxTypes.active)
+                it.set(if (boxQuery.isNotBlank()) "No Pokémon match your search." else if (boxRarity.active) "No Pokémon match the selected rarity marks and filters." else FilterRowText.emptyBox(boxFilter, boxTypes), boxQuery.isNotBlank() || boxFilter.isNotEmpty() || boxTypes.active || boxRarity.active)
             })
         }
     }
@@ -462,7 +463,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             BoxViews.quickChip(ctx, "Shiny", BoxFilter.SHINY in boxFilter) { toggleBoxFilter(BoxFilter.SHINY) } to (BoxFilter.SHINY in boxFilter),
             BoxViews.quickChip(ctx, "In team", BoxFilter.IN_TEAM in boxFilter) { toggleBoxFilter(BoxFilter.IN_TEAM) } to (BoxFilter.IN_TEAM in boxFilter),
         )
-        return FilterRow.make(ctx, TileViews.legendChip(ctx, dex = false), sortPill, FilterRowText.activePieces(boxTypes, boxFilter),
+        return FilterRow.make(ctx, TileViews.legendChip(ctx, dex = false), sortPill, FilterRowText.withRarity(FilterRowText.activePieces(boxTypes, boxFilter), boxRarity),
             onOpen = { openSortSheet() }, quick = quick)
     }
 
@@ -473,7 +474,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private fun typesOf(mon: Mon): List<Type> = data.species[mon.species]?.types ?: emptyList()
 
     /** How many filters are on (the Show choice, the type filter): the sort chip's description says so. */
-    private fun boxFiltersOn(): Int = boxFilter.size + (if (boxTypes.active) 1 else 0)
+    private fun boxFiltersOn(): Int = boxFilter.size + (if (boxTypes.active) 1 else 0) + (if (boxRarity.active) 1 else 0)
 
     private fun setBoxFilter(f: BoxFilter) {
         setBoxFilters(if (f == BoxFilter.ALL) emptySet() else setOf(f))
@@ -498,11 +499,19 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         boxList.setSelection(0)
     }
 
-    /** The empty state's "Clear filters": every Box filter off (Show = All, types and mode), the sort and grouping stay. */
+    private fun setBoxRarity(f: RarityFilter) {
+        boxRarity = f
+        SortPrefs.saveBoxRarity(this, f)
+        requestRender()
+        boxList.setSelection(0)
+    }
+
+    /** The empty state's "Clear filters": every Box filter off; the sort and grouping stay. */
     private fun clearBoxFilters() {
         boxSearch.setText("")
         setBoxFilter(BoxFilter.ALL)
         setBoxTypes(TypeFilter())
+        setBoxRarity(RarityFilter())
         requestRender()
     }
 
@@ -521,12 +530,13 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         return SortSheet(
             this, SortText.boxKeys, boxSort, MonSort.vsWildAvailable(state), null, 0,
             if (pickOn) null else SortSheet.GroupToggle(grouped) { on -> grouped = on; AppPrefs.setBoxGrouped(this, on); requestRender() },
-            count = { BoxTiles.filter(state.mons, boxFilter, state.team, state.settings.xpShareUid, ::canEvolve, boxTypes, ::typesOf).size },
+            count = { boxRarity.apply(data, BoxTiles.filter(state.mons, boxFilter, state.team, state.settings.xpShareUid, ::canEvolve, boxTypes, ::typesOf)).count { BoxSearch.matches(data, it, boxQuery) } },
             onChange = { spec, _ ->
                 if (spec != boxSort) setBoxSort(spec)
             },
             type = SortSheet.TypePart(boxTypes) { setBoxTypes(it) },
             shows = SortSheet.ShowsPart(boxFilter) { setBoxFilters(it) },
+            rarity = SortSheet.RarityPart(boxRarity) { setBoxRarity(it) },
         )
     }
 

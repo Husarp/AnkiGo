@@ -28,11 +28,16 @@ object SortPrefs {
     // ---- R18 249: the rest of the filters is kept too (not the search text: it always starts empty) ----
 
     private const val DEX_FILTER_KEY = "dexFilter"
+    fun loadBoxRarity(ctx: Context): RarityFilter = RarityFilter.decode(prefs(ctx).getString("rarity.box", null))
+    fun saveBoxRarity(ctx: Context, filter: RarityFilter) {
+        prefs(ctx).edit().putString("rarity.box", filter.encode()).apply()
+    }
+
     private const val BOX_SHOW_KEY = "show.box"
 
     /** The Pokédex filters kept besides the type filter: "OWNED;1,2,3;1;0" = owner (ALL / OWNED / SEEN / NOT_OWNED), generations, wishlist only, favourites only. */
     fun encodeDex(f: DexFilter): String =
-        "${f.owned.name};${f.gens.sorted().joinToString(",")};${if (f.wishlistOnly) 1 else 0};${if (f.favouritesOnly) 1 else 0}"
+        "${f.owned.name};${f.gens.sorted().joinToString(",")};${if (f.wishlistOnly) 1 else 0};${if (f.favouritesOnly) 1 else 0}" + if (f.rarities.active) ";${f.rarities.encode()}" else ""
 
     /** [base] with the kept Pokédex filters from [s]; null, unknown or garbled parts keep their default (All, no gens, off, off). */
     fun decodeDex(s: String?, base: DexFilter = DexFilter()): DexFilter {
@@ -41,7 +46,7 @@ object SortPrefs {
         val gens = parts.getOrNull(1).orEmpty().let { g ->
             if (g.isEmpty()) emptySet() else g.split(',').map { it.toIntOrNull()?.takeIf { n -> n > 0 } ?: return@let emptySet<Int>() }.toSet()
         }
-        return base.copy(owned = owned, gens = gens, wishlistOnly = parts.getOrNull(2) == "1", favouritesOnly = parts.getOrNull(3) == "1")
+        return base.copy(owned = owned, gens = gens, wishlistOnly = parts.getOrNull(2) == "1", favouritesOnly = parts.getOrNull(3) == "1", rarities = RarityFilter.decode(parts.getOrNull(4)))
     }
 
     fun loadDexFilter(p: SharedPreferences, base: DexFilter): DexFilter = decodeDex(p.getString(DEX_FILTER_KEY, null), base)

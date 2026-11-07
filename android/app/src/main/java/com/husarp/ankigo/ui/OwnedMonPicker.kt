@@ -22,6 +22,7 @@ internal object OwnedMonPicker {
     internal fun content(page: GamePage, eligible: (Mon) -> Boolean, picked: (Mon) -> Unit): View {
         var spec = SortPrefs.load(page, SortPrefs.Where.BOX)
         var types = TypeFilter()
+        var rarity = RarityFilter()
         var filters = emptySet<BoxFilter>()
         var query = ""
         var shown = emptyList<Mon>()
@@ -33,7 +34,8 @@ internal object OwnedMonPicker {
         fun matches(): List<Mon> = BoxTiles.filter(page.state.mons.filter(eligible), filters, page.state.team,
             page.state.settings.xpShareUid, { MonTags.canEvolve(page.data, page.state, it) }, types,
             { page.data.sp(it.species).types }).filter {
-            it.shownName.contains(query.trim(), true) || it.name.contains(query.trim(), true)
+            rarity.matches(it.tier, page.data.sp(it.species).base.total) &&
+                (it.shownName.contains(query.trim(), true) || it.name.contains(query.trim(), true))
         }
         fun render() {
             shown = MonSort.sort(page.data, page.state, matches(), spec)
@@ -42,7 +44,8 @@ internal object OwnedMonPicker {
         fun sheet() = SortSheet(page, SortText.boxKeys, spec, MonSort.vsWildAvailable(page.state), null, 0, null,
             count = { matches().size }, onChange = { next, _ -> spec = next; render() },
             type = SortSheet.TypePart(types) { types = it; render() },
-            shows = SortSheet.ShowsPart(filters) { filters = it; render() })
+            shows = SortSheet.ShowsPart(filters) { filters = it; render() },
+            rarity = SortSheet.RarityPart(rarity) { rarity = it; render() })
         controls.addView(Ui.text(page, 14f, 900, com.husarp.ankigo.R.color.ag_mauve).apply {
             text = "Sort & filter"; minHeight = Ui.dp(page, 48)
             setOnClickListener { sheet().show() }

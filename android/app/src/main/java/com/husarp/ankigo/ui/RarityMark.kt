@@ -18,11 +18,13 @@ object RarityMark {
     fun name(ctx: Context, text: CharSequence, tier: Tier?, baseTotal: Int): CharSequence {
         val index = tier(tier, baseTotal) ?: return text
         if (!enabled(ctx)) return text
-        return SpannableStringBuilder("\uFFFC ").apply {
+        return label(ctx, text, index)
+    }
+    fun label(ctx: Context, text: CharSequence, index: Int): CharSequence =
+        SpannableStringBuilder("\uFFFC ").apply {
             setSpan(Mark(index, AchStyle.tierColor(ctx, index)), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             append(text)
         }
-    }
     /** Uses the current paint so the mark follows font scaling and FitName's smaller text. */
     class Mark(private val tier: Int, private val color: Int) : ReplacementSpan() {
         override fun getSize(paint: Paint, text: CharSequence, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int =
