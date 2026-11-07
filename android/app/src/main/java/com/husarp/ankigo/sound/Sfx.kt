@@ -111,6 +111,24 @@ object Sfx {
     /** A complete WAV file (44-byte header + PCM). */
     fun wav(id: SoundId): ByteArray = wav(samples(id))
 
+    /** Generated and bundled PCM files can have different sample rates and extra WAV chunks. */
+    fun durationMs(wav: ByteArray): Long {
+        fun u32(at: Int): Long = (0..3).sumOf { (wav[at + it].toLong() and 255) shl (it * 8) }
+        var at = 12
+        var byteRate = 0L
+        var dataBytes = 0L
+        while (at <= wav.size - 8) {
+            val size = u32(at + 4)
+            if (size > wav.size - at - 8) break
+            when (String(wav, at, 4, Charsets.US_ASCII)) {
+                "fmt " -> if (size >= 16) byteRate = u32(at + 16)
+                "data" -> dataBytes += size
+            }
+            at += (8 + size + size % 2).toInt()
+        }
+        return if (byteRate > 0) (dataBytes * 1000 / byteRate).coerceAtLeast(1) else 1
+    }
+
     fun wav(pcm: ShortArray): ByteArray {
         val data = pcm.size * 2
         val out = java.io.ByteArrayOutputStream(44 + data)

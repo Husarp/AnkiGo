@@ -294,7 +294,7 @@ object GameSound {
         io.execute {
             try {
                 start(c) // makes and loads the files if that has not happened yet (also when the group is off)
-                val duration = ((File(c.cacheDir, "sfx/${id.file}").length() - 44).coerceAtLeast(0) * 1000 / (Sfx.RATE * 2)).coerceAtLeast(1)
+                val duration = Sfx.durationMs(File(c.cacheDir, "sfx/${id.file}").readBytes())
                 main.postDelayed({ previewNow(c, id) {
                     onPlaying(true)
                     main.postDelayed({ onPlaying(false) }, duration)

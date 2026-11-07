@@ -6,6 +6,13 @@ import java.io.File
 import java.security.MessageDigest
 
 class R30TSoundsTest {
+    @Test fun previewDurationUsesTheRecordingRateInsteadOfTheGeneratedRate() {
+        val expected = mapOf(SoundId.AGAIN to 325L, SoundId.HARD to 210L, SoundId.GOOD to 180L, SoundId.EASY to 320L)
+        for ((id, duration) in expected) assertEquals(duration, Sfx.durationMs(File("src/main/assets/${id.asset}").readBytes()))
+        assertEquals(1000L, Sfx.durationMs(Sfx.wav(ShortArray(Sfx.RATE))))
+        assertEquals(1L, Sfx.durationMs(byteArrayOf()))
+    }
+
     @Test fun chosenRecordingsAreBundledUnchangedWithDistinctCacheNamesAndLicences() {
         val expected = mapOf(
             SoundId.AGAIN to "20b325e8ad016a0c3e400515844059bc57c95ef0afbb571c2c60b99a871a7395",
