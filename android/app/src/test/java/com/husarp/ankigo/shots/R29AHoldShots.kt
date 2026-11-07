@@ -28,7 +28,7 @@ class R29AHoldShots {
             paparazzi.snapshot(stage, "a-buy-${theme.name.lowercase()}")
             val buy = all(stage).single { it.contentDescription?.startsWith("Hold to buy.") == true }
             for (percent in listOf(0, 25, 50, 75, 100)) {
-                buy.foreground.level = percent * 100
+                buy.background.level = percent * 100
                 paparazzi.snapshot(stage, "a-hold-buy-${theme.name.lowercase()}-$percent")
             }
             page.closeCard(); page.onGone()
@@ -58,7 +58,7 @@ class R29AHoldShots {
                 assertEquals("Hold to evolve", go.text.toString())
                 paparazzi.snapshot(sheet, "a-evolve-sheet-${theme.name.lowercase()}")
                 for (percent in listOf(0, 25, 50, 75, 100)) {
-                    go.foreground.level = percent * 100
+                    go.background.level = percent * 100
                     paparazzi.snapshot(sheet, "a-hold-evolve-${theme.name.lowercase()}-$percent")
                 }
                 assertTrue(go.performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_LONG_CLICK, null)); assertEquals(1, evolved)
@@ -186,7 +186,7 @@ class R29AHoldShots {
             .apply { isAccessible = true }
         focus.invoke(button.viewTreeObserver, false)
         assertTrue(pending.isEmpty())
-        assertEquals(0, button.foreground.level)
+        assertEquals(0, button.background.level)
         advance(1000); assertEquals(1, count)
         focus.invoke(button.viewTreeObserver, true)
         touch(MotionEvent.ACTION_DOWN); advance(1000); assertEquals(2, count)

@@ -37,22 +37,20 @@ class R24EShopBagShots {
             page.closeCard()
             page.openBag(); stage.render()
             paparazzi.snapshot(stage, "r24e-bag-$width-$scale-${theme.name.lowercase()}")
-            val rows = all(stage).filter { it.tag == "bag-filters" }.map { it as LinearLayout }
-            assertEquals(2, rows.size)
-            assertEquals(listOf(5, 6), rows.map { it.childCount })
-            rows.forEach { row ->
-                assertTrue(row.width > 0)
-                for (i in 0 until row.childCount) {
-                    val control = row.getChildAt(i)
-                    assertTrue(control.right <= row.width)
-                    assertTrue(control.bottom <= row.height)
-                    if (control is android.widget.TextView) {
-                        val layout = control.layout!!
-                        assertTrue("Filter text must fit its control", layout.getLineBottom(layout.lineCount - 1) <= control.height - control.paddingTop - control.paddingBottom)
-                    }
-                    assertTrue(control.width >= Ui.dp(ctx, 48))
-                    assertTrue(control.height >= Ui.dp(ctx, 48))
-                }
+            assertFalse(all(stage).any { it.tag == "bag-categories" })
+            val results = all(stage).single { it.tag == "bag-results" }
+            val body = all(stage).single { it.tag == "bag-body" }
+            assertEquals(body.width, results.width)
+            ShopCardKit.findDesc(stage, "Expand categories")!!.performClick(); stage.render()
+            paparazzi.snapshot(stage, "r24e-bag-open-$width-$scale-${theme.name.lowercase()}")
+            val list = all(stage).single { it.tag == "bag-categories" } as LinearLayout
+            assertEquals(9, list.childCount)
+            assertEquals("All items category", list.getChildAt(0).contentDescription)
+            for (i in 0 until list.childCount) {
+                val control = list.getChildAt(i)
+                assertTrue(control.width >= Ui.dp(ctx, 48))
+                assertTrue(control.height >= Ui.dp(ctx, 48))
+                assertTrue(control.right <= list.width)
             }
             ShopCardKit.findDesc(stage, "Balls category")!!.performClick(); stage.render()
             assertTrue(ShopCardKit.findDesc(stage, "Balls category")!!.isSelected)

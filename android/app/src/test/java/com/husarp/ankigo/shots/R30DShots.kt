@@ -58,9 +58,9 @@ class R30DShots {
             val page = all(content).filterIsInstance<View>().mapNotNull { it.context as? ShopPage }.first()
             ShopPage::class.java.getDeclaredMethod("render").apply { isAccessible = true }.invoke(page)
             val texts = all(content).filterIsInstance<TextView>().map { it.text.toString() }
-            assertTrue(texts.contains("Bag")); assertTrue(texts.contains("All items"))
+            assertTrue(texts.contains("Bag")); assertTrue(texts.any { it.contains("All items") })
             assertFalse(texts.contains("Shop")); assertFalse(texts.any { it.startsWith("Bag ·") })
-            assertNotNull(all(content).firstOrNull { it.contentDescription == "Healing category" })
+            assertNotNull(all(content).firstOrNull { it.contentDescription == "Expand categories" })
             val stage = FrameLayout(c).apply {
                 addView(panel, FrameLayout.LayoutParams(-1, -1))
                 addView(View(c).apply { setBackgroundColor(0x77000000) }, FrameLayout.LayoutParams(-1, -1))

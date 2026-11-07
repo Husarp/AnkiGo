@@ -4,6 +4,9 @@ import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.Paint
+import android.graphics.Outline
+import android.widget.TextView
+import android.view.ViewGroup
 import android.graphics.PixelFormat
 import android.graphics.drawable.Drawable
 import android.view.KeyEvent
@@ -27,15 +30,43 @@ internal object HoldToConfirm {
                  override fun post(task: Runnable, delayMillis: Long) { view.postDelayed(task, delayMillis) }
                  override fun remove(task: Runnable) { view.removeCallbacks(task) }
              }, confirm: () -> Unit) {
+        val ctx = view.context
+        val ink = Ui.c(ctx, R.color.ag_hold_ink)
+        fun tint(v: View) {
+            if (v is TextView) v.setTextColor(ink)
+            if (v is ViewGroup) for (i in 0 until v.childCount) tint(v.getChildAt(i))
+        }
+        tint(view)
+        if (!view.isEnabled) view.alpha = .45f
+        val hintHeight = Ui.dp(ctx, 30)
+        view.minimumHeight = maxOf(view.minimumHeight, Ui.dp(ctx, 56)) + hintHeight
+        if (view is TextView) view.minHeight = maxOf(view.minHeight, Ui.dp(ctx, 56)) + hintHeight
+        view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom + hintHeight)
         val fill = object : Drawable() {
             override fun onLevelChange(level: Int): Boolean { invalidateSelf(); return true }
-            val paint = Paint().apply { color = Ui.c(view.context, R.color.ag_green); alpha = 85 }
-            override fun draw(canvas: Canvas) { canvas.drawRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.left + bounds.width() * level / 10000f, bounds.bottom.toFloat(), paint) }
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+            override fun draw(canvas: Canvas) {
+                val radius = Ui.dp(ctx, 12).toFloat()
+                val bottom = (bounds.bottom - hintHeight).toFloat()
+                paint.color = Ui.c(ctx, R.color.ag_hold_idle)
+                canvas.drawRoundRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bottom, radius, radius, paint)
+                val save = canvas.save()
+                canvas.clipRect(bounds.left, bounds.top, bounds.left + bounds.width() * level / 10000, bounds.bottom)
+                paint.color = Ui.c(ctx, R.color.ag_hold_fill)
+                canvas.drawRoundRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bottom, radius, radius, paint)
+                canvas.restoreToCount(save)
+                paint.color = Ui.c(ctx, R.color.ag_sub0)
+                paint.textSize = 12 * ctx.resources.displayMetrics.scaledDensity
+                paint.textAlign = Paint.Align.CENTER
+                canvas.drawText("Press and hold · 1 second", bounds.exactCenterX(), bounds.bottom - Ui.dp(ctx, 5).toFloat(), paint)
+            }
+            override fun getOutline(outline: Outline) { outline.setRoundRect(bounds, Ui.dp(ctx, 12).toFloat()) }
             override fun setAlpha(alpha: Int) { paint.alpha = alpha }
             override fun setColorFilter(filter: ColorFilter?) { paint.colorFilter = filter }
             @Deprecated("Deprecated in Java") override fun getOpacity() = PixelFormat.TRANSLUCENT
         }
-        view.foreground = fill
+        // The fill stays behind the fixed label, including at 100%.
+        view.background = fill
         view.clipToOutline = true
         var animator: ValueAnimator? = null
         var active = false
