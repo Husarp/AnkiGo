@@ -7,23 +7,29 @@ import org.junit.Test
 
 class R28LStatsTest {
     private val today = "2026-11-01"
-    @Test fun answerSplitIsOnlyTodayEvenWithOldPeriodAndGrain() {
+    @Test fun answerSplitUsesTodayCalendarWeekAndCalendarMonth() {
+        val today = "2026-11-07"
         val history = mapOf(today to DayLog(buttons = intArrayOf(40, 1, 2, 3, 4)),
-            "2026-10-31" to DayLog(buttons = intArrayOf(0, 100, 200, 300, 400)))
-        for (p in ChartPeriod.entries) {
+            "2026-11-02" to DayLog(buttons = intArrayOf(80, 10, 20, 30, 40)),
+            "2026-11-01" to DayLog(buttons = intArrayOf(0, 100, 200, 300, 400)),
+            "2026-10-31" to DayLog(buttons = intArrayOf(0, 1000, 2000, 3000, 4000)),
+            "2026-11-08" to DayLog(buttons = intArrayOf(0, 1000, 2000, 3000, 4000)))
+        for ((p, total, first) in listOf(Triple(ChartPeriod.D1, 10.0, today),
+            Triple(ChartPeriod.D7, 110.0, "2026-11-02"), Triple(ChartPeriod.D30, 1110.0, "2026-11-01"))) {
             val s = ChartData.build(ChartMetric.BUTTONS, p, "Old deck", StatsSnapshot(), history, today, ChartGrain.MONTH)
-            assertEquals(10.0, s.total, 0.0)
-            assertEquals(listOf(1.0, 2.0, 3.0, 4.0), s.bars.single().values)
-            assertEquals(today, s.bars.single().startDay)
-            assertEquals(10.0, s.perDayAvg, 0.0)
+            assertEquals(total, s.total, 0.0)
+            assertEquals(first, s.bars.first().startDay)
+            assertEquals(today, s.bars.last().endDay)
+            assertEquals(total / s.bars.size, s.perDayAvg, 0.0)
             assertFalse(s.deckApplies)
             assertEquals(listOf(10, 20, 30, 40), StatsChartMath.legend(s).map { it.percent })
         }
-        assertFalse(ChartMetric.BUTTONS.usesPeriod)
+        assertTrue(ChartMetric.BUTTONS.usesPeriod)
+        assertEquals(listOf("Today", "This week", "This month"), StatsChartMath.periods(ChartMetric.BUTTONS).map { StatsChartMath.periodLabel(ChartMetric.BUTTONS, it) })
         assertTrue(ChartData.grains(ChartMetric.BUTTONS, ChartPeriod.D365).isEmpty())
     }
     @Test fun yesterdayDoesNotFillEmptyToday() {
-        val s = ChartData.build(ChartMetric.BUTTONS, ChartPeriod.D30, null, StatsSnapshot(),
+        val s = ChartData.build(ChartMetric.BUTTONS, ChartPeriod.D1, null, StatsSnapshot(),
             mapOf("2026-10-31" to DayLog(buttons = intArrayOf(0, 2, 3, 4, 5))), today)
         assertTrue(s.empty)
         assertEquals(0.0, s.total, 0.0)

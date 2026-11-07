@@ -19,7 +19,9 @@ import com.husarp.ankigo.game.Progression
 // R14 batch 2 (PLAN 181): a tap on a row opens its card ([ItemCard]); the card's button starts what a tap used to do at once.
 // R15 (PLAN 210): the card is the item WINDOW ([ItemWindow]) over the list, and the button closes it just before it opens a picker or a confirm (an answer that is only a message keeps it open).
 
-internal class BagActions(private val s: GamePage, private val mons: MonActions, private val host: CardHost) {
+internal class BagActions(private val s: GamePage, private val mons: MonActions, private val host: CardHost,
+                          private val onBattleEvents: ((List<GameEvent>) -> Unit)? = null,
+                          private val fightAvailable: () -> Boolean = { true }) {
     private val data get() = s.data
     private val state get() = s.state
 
@@ -141,7 +143,12 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     private fun itemSpec(id: String): ItemCard.Spec {
         val kind = Items.def(id)?.kind
         val none = state.count(id) <= 0 // Y5: a window kept open after a trade took the last ball
-        val act = BagAct.of(kind)?.let { a -> ItemCard.Act(a.label, a.usableNow(state) && !none, if (none) { if (holders(id).isNotEmpty()) "No free copies" else "You have none" } else a.offFight) { tap(id) { host.closeCard() } } }
+        val act = BagAct.of(kind)?.let { a ->
+            val waiting = a.fightOnly && !fightAvailable()
+            ItemCard.Act(a.label, a.usableNow(state) && !none && !waiting,
+                if (none) { if (holders(id).isNotEmpty()) "No free copies" else "You have none" }
+                else if (waiting) "Tap next battle first" else a.offFight) { tap(id) { host.closeCard() } }
+        }
         val offer = if (kind == ItemKind.BALL) BallTrade.offer(state, id) else null
         val trade = offer?.let { o ->
             val confirming = host.open.confirming && offer.canTrade
@@ -171,6 +178,9 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
      */
     private fun tap(item: String, close: () -> Unit) {
         val def = Items.def(item) ?: return
+        if (BagAct.of(def.kind)?.fightOnly == true && !fightAvailable()) {
+            Ui.toast(s, "Tap next battle first"); return
+        }
         when (def.kind) {
             ItemKind.HEAL -> {
                 val team = state.teamMons()
@@ -215,8 +225,10 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         close()
         val choose: (String, String?) -> Unit = { regular, special ->
             Pickers.hold(s, "Throw ${Catching.throwName(regular, special)}?", Items.MISS_RULE, "Throw") {
+                if (!fightAvailable()) return@hold
                 val events = GameRepo.act(s) { it.throwBall(regular, special) }
-                s.report(ballMessage(events, wild.name), events)
+                if (onBattleEvents != null) onBattleEvents.invoke(events)
+                else s.report(ballMessage(events, wild.name), events)
                 s.requestRender()
             }
         }
@@ -236,9 +248,11 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         if (battle == null) { Ui.toast(s, "No wild Pokémon to escape from"); return }
         close()
         Pickers.hold(s, "Use ${Items.name(item)}?", "The wild ${battle.wild.name} leaves and a new one appears.", "Use") {
+            if (!fightAvailable()) return@hold
             val events = GameRepo.act(s) { it.escape(item) }
             val fled = events.filterIsInstance<GameEvent.Fled>().firstOrNull()
-            s.report(if (fled != null) "${fled.name} left." else "Used ${Items.name(item)}.", events)
+            if (onBattleEvents != null) onBattleEvents.invoke(events)
+            else s.report(if (fled != null) "${fled.name} left." else "Used ${Items.name(item)}.", events)
             s.requestRender()
         }
     }

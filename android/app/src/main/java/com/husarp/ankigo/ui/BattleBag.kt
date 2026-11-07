@@ -12,81 +12,26 @@ import com.husarp.ankigo.game.*
 
 /** One inventory window shared by both battle hosts. Actions retain the engine's existing turn rules. */
 internal object BattleBag {
-    fun show(ctx: Context, onEvents: (List<GameEvent>) -> Unit) {
-        val st = GameRepo.state ?: return
-        val data = GameRepo.data ?: return
-        val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0) }
+    fun show(ctx: Context, fightAvailable: () -> Boolean = { true }, onEvents: (List<GameEvent>) -> Unit) {
+        if (GameRepo.state == null || GameRepo.data == null) return
         lateinit var dialog: AppDialog
-        fun use(id: String, mon: Mon?) {
-            val result = GameRepo.run(ctx) { it.useItem(id, mon?.uid) }
-            Ui.toast(ctx, result.message); onEvents(result.events)
+        val host = object : PageHost {
+            override val hostActivity get() = ctx as? android.app.Activity
+            override fun closePage() = dialog.dismiss()
+            override fun startForResult(intent: android.content.Intent, onResult: (Int, android.content.Intent?) -> Unit) {
+                com.husarp.ankigo.overlay.ResultActivity.launch(ctx, intent, onResult)
+            }
         }
-        var any = false
-        for ((title, kind) in listOf("Balls" to ItemKind.BALL, "Healing" to ItemKind.HEAL, "Evolution" to ItemKind.EVOLUTION, "Held" to ItemKind.HELD, "Fossils" to ItemKind.FOSSIL, "Escape" to ItemKind.ESCAPE)) {
-            val ids = (st.bag.filter { it.value > 0 }.keys + st.mons.mapNotNull { it.heldItem }).filter { Items.def(it)?.kind == kind }.sortedBy { if (kind == ItemKind.BALL) Catching.ballChance(it).toString().padStart(3, '0') else Items.name(it) }
-            if (ids.isEmpty()) continue
-            any = true
-            body.addView(Bits.sect(ctx, title, "${ids.sumOf { id -> st.count(id) + st.mons.count { it.heldItem == id } }} items"))
-            if (kind == ItemKind.BALL) body.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = Items.MISS_RULE })
-            BagTiles.rows(body, ids.map { id ->
-                val held = st.mons.count { it.heldItem == id }
-                val enabled = st.count(id) > 0 && (kind != ItemKind.BALL && kind != ItemKind.ESCAPE || st.battle?.wild?.hp?.let { it > 0 } == true)
-                val note = if (st.count(id) <= 0) "No free copies · Held" else if (!enabled) "No wild Pokémon" else if (kind == ItemKind.BALL) { if (id in Tuning.OLD_BALLS) Items.specialNote(id) else "${Catching.ballChance(id)}% to catch" } else ItemInfo.plain(ItemInfo.line(data, id, st.caught))
-                BagTiles.tile(ctx, Bits.itemTile(ctx, id), Items.name(id), note + if (held > 0 && st.count(id) > 0) " · Held" else "", "×${st.count(id) + held}").apply {
-                    alpha = if (enabled) 1f else .45f
-                    isEnabled = enabled
-                    setOnClickListener {
-                        dialog.dismiss()
-                        when (kind) {
-                            ItemKind.BALL -> {
-                                val choose: (String, String?) -> Unit = { regular, special ->
-                                    Pickers.hold(ctx, "Throw ${Catching.throwName(regular, special)}?", Items.MISS_RULE, "Throw") {
-                                        onEvents(GameRepo.act(ctx) { it.throwBall(regular, special) })
-                                    }
-                                }
-                                if (id in Tuning.OLD_BALLS) BallThrowUi.show(ctx, st, choose)
-                                else BallThrowUi.special(ctx, st, id, choose)
-                            }
-                            ItemKind.ESCAPE -> Pickers.hold(ctx, "Use ${Items.name(id)}?", "The wild Pokémon leaves and a new one appears.", "Use") { onEvents(GameRepo.act(ctx) { it.escape(id) }) }
-                            ItemKind.FOSSIL -> Pickers.hold(ctx, "Revive fossil?", "Use ${Items.name(id)} to revive an ancient Pokémon at Lv 5?", "Revive") { use(id, null) }
-                            else -> pick(ctx, data, st, id) { mon ->
-                                if (kind == ItemKind.EVOLUTION || kind == ItemKind.HEAL) Pickers.hold(ctx, "Use ${Items.name(id)}?", "Use on ${mon.shownName}?", "Use") { use(id, mon) }
-                                else use(id, mon)
-                            }
-                        }
-                    }
-                }
-            })
+        val page = ShopPage(ctx, host, bagOnly = true, onBattleEvents = onEvents, fightAvailable = fightAvailable)
+        val frame = android.widget.FrameLayout(ctx).apply {
+            addView(page.root, android.widget.FrameLayout.LayoutParams(-1, Ui.dp(ctx,
+                minOf(480, (resources.displayMetrics.heightPixels / resources.displayMetrics.density * .65f).toInt()))))
         }
-        if (st.tms.isNotEmpty()) {
-            any = true
-            body.addView(Bits.sect(ctx, "TMs"))
-            BagTiles.rows(body, st.tms.sorted().map { move ->
-                val m = data.move(move)
-                BagTiles.tile(ctx, Bits.tmTile(ctx, m?.type), Items.tmName(data, move), m?.type?.label.orEmpty(), "").apply {
-                    setOnClickListener {
-                        dialog.dismiss()
-                        pick(ctx, data, st, move, tm = true) { mon ->
-                            fun teach(index: Int?) {
-                                val warning = index?.let { LinkedMoves.replacementWarning(data, mon.moves, it, move) }
-                                val forgotten = index?.let { data.move(mon.moves[it])?.name ?: mon.moves[it] }
-                                val message = if (forgotten == null) "Teach ${m?.name ?: move} to ${mon.shownName}?"
-                                    else "${mon.shownName} will forget $forgotten and learn ${m?.name ?: move}."
-                                Pickers.hold(ctx, "Teach a TM", message + (warning?.let { "\n\n$it" } ?: ""), "Teach") {
-                                    val r = GameRepo.run(ctx) { ItemUse.teachTm(it.data, it.state, move, mon.uid, index) }
-                                    tmResult(r, { Ui.toast(ctx, it) }, onEvents)
-                                }
-
-                            }
-                            if (mon.moves.size < 4) teach(null)
-                            else Pickers.pickMove(ctx, "Forget a move for ${m?.name ?: move}?", data, mon) { teach(it) }
-                        }
-                    }
-                }
-            })
+        dialog = AppDialog.Builder(ctx).setView(frame).setNegativeButton("Close", null).create()
+        dialog.setOnDismissListener {
+            page.onHide(); page.onGone()
         }
-        if (!any) body.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Your bag is empty. Items drop while you study, and the shop sells more." })
-        dialog = AppDialog.Builder(ctx).setTitle("Use item").setView(BagScroll(ctx).apply { addView(body) }).setNegativeButton("Close", null).create()
+        page.onShow()
         Pickers.show(dialog)
     }
 

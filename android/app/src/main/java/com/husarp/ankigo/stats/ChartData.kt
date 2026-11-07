@@ -36,7 +36,7 @@ enum class ChartMetric(
     SECONDS_PER_CARD("Seconds per card", ChartGroup.STUDY, "speed", ChartKind.TIME, "s / card", "s / card", listOf("Seconds per card"), false),
     RETENTION("Retention", ChartGroup.STUDY, "check", ChartKind.TIME, "%", "% kept", listOf("Retention"), false),
     NEW_CARDS("New cards", ChartGroup.STUDY, "plus", ChartKind.TIME, "cards", "new cards", listOf("New cards"), true),
-    BUTTONS("Answer buttons · today", ChartGroup.STUDY, "gamepad", ChartKind.TIME, "answers", "answers", listOf("Again", "Hard", "Good", "Easy"), false),
+    BUTTONS("Answer buttons", ChartGroup.STUDY, "gamepad", ChartKind.TIME, "answers", "answers", listOf("Again", "Hard", "Good", "Easy"), false),
     /** AnkiGo's own answer count; not in the metric list (Reviews already falls back to it when AnkiDroid isn't there). */
     ANSWERS("Answers", ChartGroup.STUDY, "bars", ChartKind.TIME, "answers", "answers", listOf("Answers"), false),
     CARD_STATES("Card states", ChartGroup.STUDY, "book", ChartKind.CATEGORY, "cards", "cards", listOf("Cards"), true),
@@ -58,7 +58,7 @@ enum class ChartMetric(
     val listed: Boolean get() = this in setOf(REVIEWS, TIME, NEW_CARDS, BUTTONS, CARD_STATES, DUE, STREAK_CALENDAR)
 
     /** A period applies (CATEGORY charts are a picture of now). */
-    val usesPeriod: Boolean get() = kind != ChartKind.CATEGORY && this != BUTTONS
+    val usesPeriod: Boolean get() = kind != ChartKind.CATEGORY
 
     companion object {
         /** The metric list as the mockup groups it: every [ChartGroup] with its listed metrics, in display order. */
@@ -69,12 +69,12 @@ enum class ChartMetric(
 
 /** The chart periods: the last [days] days (DUE: the next [days] days). [defaultGrain] is the bar size used unless the user picks another. */
 enum class ChartPeriod(val days: Int, val defaultGrain: ChartGrain) {
-    D7(7, ChartGrain.DAY), D30(30, ChartGrain.DAY), D90(90, ChartGrain.WEEK), D365(365, ChartGrain.MONTH);
+    D1(1, ChartGrain.DAY), D7(7, ChartGrain.DAY), D30(30, ChartGrain.DAY), D90(90, ChartGrain.WEEK), D365(365, ChartGrain.MONTH);
 
     /** The bar sizes that make sense for this period (the first and last bar of a week or month grain can be partial). */
     val grains: List<ChartGrain>
         get() = when (this) {
-            D7 -> listOf(ChartGrain.DAY)
+            D1, D7 -> listOf(ChartGrain.DAY)
             D30 -> listOf(ChartGrain.DAY, ChartGrain.WEEK)
             D90 -> listOf(ChartGrain.DAY, ChartGrain.WEEK, ChartGrain.MONTH)
             D365 -> listOf(ChartGrain.WEEK, ChartGrain.MONTH)
@@ -127,9 +127,10 @@ data class ChartSeries(
 }
 
 object ChartData {
-    /** DUE looks ahead 7 or 30 days only; everything else keeps the asked period. */
+    /** DUE offers 7/30 days; Buttons offers today/current week/current month. */
     fun effectivePeriod(metric: ChartMetric, period: ChartPeriod): ChartPeriod =
-        if (metric == ChartMetric.DUE && period.days > 30) ChartPeriod.D30 else period
+        if (metric == ChartMetric.BUTTONS && period !in listOf(ChartPeriod.D1, ChartPeriod.D7, ChartPeriod.D30)) ChartPeriod.D1
+        else if (metric == ChartMetric.DUE && period.days > 30) ChartPeriod.D30 else period
 
     /** The bar sizes the "Per day" filter offers for [metric] and [period]; empty for a CATEGORY or HEATMAP chart (no bar size). */
     fun grains(metric: ChartMetric, period: ChartPeriod): List<ChartGrain> =
@@ -143,7 +144,7 @@ object ChartData {
 
     /** How many weeks the streak calendar grid holds for [period] (whole weeks, Monday first, ending with the current week; 7 and 30 days draw only their days). */
     fun heatmapWeeks(period: ChartPeriod): Int = when (period) {
-        ChartPeriod.D7 -> 4
+        ChartPeriod.D1, ChartPeriod.D7 -> 4
         ChartPeriod.D30 -> 6
         ChartPeriod.D90 -> 13
         ChartPeriod.D365 -> 53
@@ -207,7 +208,14 @@ object ChartData {
         val plan = plan(metric, p, d, snap, history, today)
         val answerFallback = metric == ChartMetric.REVIEWS && snap.stats == null && d == null
         val forward = metric == ChartMetric.DUE
-        val days = if (metric == ChartMetric.BUTTONS) listOf(t) else if (forward) (1..p.days).map { t.plusDays(it.toLong()) } else (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
+        val days = if (metric == ChartMetric.BUTTONS) {
+            val first = when (p) {
+                ChartPeriod.D7 -> t.minusDays((t.dayOfWeek.value - 1).toLong())
+                ChartPeriod.D30 -> t.withDayOfMonth(1)
+                else -> t
+            }
+            (0..java.time.temporal.ChronoUnit.DAYS.between(first, t).toInt()).map { first.plusDays(it.toLong()) }
+        } else if (forward) (1..p.days).map { t.plusDays(it.toLong()) } else (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
         val perDay = days.map { it to plan.value(it.toString()) }
 
         val bars = buckets(days, g, p).map { grp ->

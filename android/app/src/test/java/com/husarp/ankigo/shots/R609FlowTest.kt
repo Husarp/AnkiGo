@@ -5,6 +5,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import app.cash.paparazzi.Paparazzi
+import com.husarp.ankigo.GameRepo
+import org.junit.Assert.assertSame
 import com.husarp.ankigo.StudyActivity
 import com.husarp.ankigo.game.CashKind
 import com.husarp.ankigo.game.GameEvent
@@ -319,5 +321,67 @@ class R609FlowTest {
         flush(c)
         assertFalse(events(act).holding)
         assertNotEquals("Continue, next battle", rowText(act))
+    }
+
+    private fun heldTeamAction(action: (com.husarp.ankigo.game.Game, com.husarp.ankigo.game.GameState) -> com.husarp.ankigo.game.ActionResult) {
+        for (reduced in listOf(false, true)) {
+            val c = ctx()
+            c.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", reduced).commit()
+            val st = GameRepo.state!!
+            st.team.remove("t6")
+            st.battle!!.apply { answers = 0; rounds = 0; buttons.clear() }
+            val panel = BattlePanelView(c)
+            val player = EventPlayer(panel)
+            measure(panel, 412, 869)
+            player.enqueue(defeatBatch())
+            player.pauseHeldResult()
+            val battle = st.battle
+            val r = action(GameRepo.game!!, st)
+            assertTrue(r.message, r.ok)
+            assertFalse(r.events.any { it is GameEvent.Counted || it is GameEvent.Encounter })
+            player.enqueue(r.events)
+            player.pauseHeldResult()
+            assertSame(battle, st.battle)
+            assertTrue("team action retained Continue, reduced=$reduced", player.holding)
+            assertTrue(panel.tilesShown)
+            assertTrue(player.continueBattle())
+            assertFalse(player.holding)
+            player.clear()
+        }
+    }
+    @Test fun makeMainOnResultRetainsContinue() = heldTeamAction { g, s -> g.requestMain(s.team[1], cardShowing = false) }
+    @Test fun makeBoxMainOnResultRetainsContinue() = heldTeamAction { g, _ -> g.requestMain("b1", cardShowing = false) }
+    @Test fun addToTeamOnResultRetainsContinue() = heldTeamAction { g, _ -> g.toTeam("b1") }
+    @Test fun swapIntoTeamOnResultRetainsContinue() = heldTeamAction { g, s -> g.swapIntoTeam("b1", s.team.first(), cardShowing = false) }
+    @Test fun moveInTeamOnResultRetainsContinue() = heldTeamAction { g, s -> g.moveInTeam(s.team[1], -1, cardShowing = false) }
+    @Test fun sendMainToBoxOnResultRetainsContinue() = heldTeamAction { g, s -> g.toBox(s.team.first(), cardShowing = false) }
+    @Test fun cycleMainOnResultRetainsContinue() = heldTeamAction { g, _ -> g.cycleMain(cardShowing = false) }
+    @Test fun releaseMainOnResultRetainsContinue() = heldTeamAction { g, s -> g.release(s.team.first(), cardShowing = false) }
+    @Test fun earlyHoldSurvivesReducedMotionSwitchBeforeTilesExist() {
+        val c = ctx()
+        val panel = BattlePanelView(c)
+        val player = EventPlayer(panel)
+        measure(panel, 412, 869)
+        panel.holdEarly()
+        val main = GameRepo.state!!.main!!
+        player.enqueue(listOf(GameEvent.MainChanged(main.uid, main.name)))
+        assertTrue("switch must not clear an early hold", player.holding)
+    }
+
+    @Test fun teamPagePendingSwitchOnResultRetainsContinue() {
+        val c = ctx()
+        val st = GameRepo.state!!
+        st.battle!!.apply { answers = 0; rounds = 0; buttons.clear() }
+        val panel = BattlePanelView(c)
+        val player = EventPlayer(panel)
+        measure(panel, 412, 869)
+        player.enqueue(defeatBatch())
+        player.pauseHeldResult()
+        val result = GameRepo.runOffscreen(c) { it.requestMain(st.team[1], cardShowing = false) }
+        assertTrue(result.ok)
+        assertTrue(player.playPending())
+        assertTrue(player.holding)
+        assertTrue(panel.tilesShown)
+        assertFalse(player.playPending())
     }
 }

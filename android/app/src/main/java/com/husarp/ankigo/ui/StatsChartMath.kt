@@ -204,7 +204,7 @@ object StatsChartMath {
         ChartMetric.DUE -> "Nothing due in this period."
         ChartMetric.MONEY -> "No money earned in this period yet."
         ChartMetric.XP -> "No XP earned in this period yet."
-        ChartMetric.BUTTONS -> "No answers counted today yet."
+        ChartMetric.BUTTONS -> "No answers counted in this period yet."
         else -> "No ${m.noun} in this period yet." // reviews, new cards, answers, catches, battles won, misses, calendar reviews
     }
 
@@ -236,7 +236,7 @@ object StatsChartMath {
             ChartMetric.RETENTION -> "kept (not Again)"
             else -> if (m == ChartMetric.REVIEWS && s.source.startsWith("AnkiGo")) "answers (AnkiGo)" else ChartData.valueText(m, s.total).substringAfter(' ')
         }
-        return if (m == ChartMetric.BUTTONS) listOf(StatTile(v(s.total), "answers today"))
+        return if (m == ChartMetric.BUTTONS) listOf(StatTile(v(s.total), "answers · ${periodLabel(m, s.period).lowercase(Locale.US)}"))
         else listOf(StatTile(v(s.total), totalLabel), StatTile(v(s.perDayAvg), "per calendar day · ${s.period.days} days"))
     }
 
@@ -251,9 +251,15 @@ object StatsChartMath {
 
     /** The periods the chip offers: DUE looks ahead 7 or 30 days only. */
     fun periods(metric: ChartMetric): List<ChartPeriod> =
-        if (metric == ChartMetric.DUE) listOf(ChartPeriod.D7, ChartPeriod.D30) else ChartPeriod.values().toList()
+        if (metric == ChartMetric.BUTTONS) listOf(ChartPeriod.D1, ChartPeriod.D7, ChartPeriod.D30)
+        else if (metric == ChartMetric.DUE) listOf(ChartPeriod.D7, ChartPeriod.D30) else ChartPeriod.values().filter { it != ChartPeriod.D1 }
 
     fun periodLabel(metric: ChartMetric, p: ChartPeriod): String {
+        if (metric == ChartMetric.BUTTONS) return when (p) {
+            ChartPeriod.D7 -> "This week"
+            ChartPeriod.D30 -> "This month"
+            else -> "Today"
+        }
         val ahead = metric == ChartMetric.DUE
         return when (p) {
             ChartPeriod.D365 -> if (ahead) "Next year" else "Last year"
@@ -263,7 +269,7 @@ object StatsChartMath {
 
     /** The chart's title: "Reviews per day", "Card states". */
     fun title(s: ChartSeries): String =
-        if (s.metric == ChartMetric.REVIEWS && s.source.startsWith("AnkiGo")) "Answers per ${s.grain.name.lowercase(Locale.US)} · AnkiGo" else if (s.metric == ChartMetric.BUTTONS) "Today’s answers" else if (s.kind == ChartKind.TIME) "${s.metric.label} ${s.grain.label.lowercase(Locale.US)}" else s.metric.label
+        if (s.metric == ChartMetric.REVIEWS && s.source.startsWith("AnkiGo")) "Answers per ${s.grain.name.lowercase(Locale.US)} · AnkiGo" else if (s.metric == ChartMetric.BUTTONS) "Answer buttons" else if (s.kind == ChartKind.TIME) "${s.metric.label} ${s.grain.label.lowercase(Locale.US)}" else s.metric.label
 
     /** The small hint on the right of the title (R18 item 234: the calendar has none, its bottom-left line says it). */
     fun hint(s: ChartSeries): String = when (s.kind) {

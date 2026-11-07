@@ -21,13 +21,16 @@ class R22RBagTest {
         Pickers.interceptApp = { dialog = it }
         try {
             var called = false
-            BattleBag.show(ctx) { called = true }
-            paparazzi.snapshot(dialog!!.content(), "r22r-battle-bag")
-            val views = all(dialog!!.content())
-            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("20% to catch") })
-            assertTrue(views.filterIsInstance<TextView>().any { it.text.toString().contains("runs away") })
-            assertFalse(views.filterIsInstance<TextView>().any { it.text.toString() == "0% to catch" })
-            views.first { it.contentDescription?.toString()?.startsWith("Poké Ball,") == true }.performClick()
+            val page = ShopPage(ctx, NoHost, bagOnly = true, onBattleEvents = { called = true })
+            val stage = ShopCardKit.Stage(ctx, page, page.root).render()
+            paparazzi.snapshot(stage, "r22r-battle-bag")
+            all(stage).first { it.contentDescription?.toString()?.startsWith("Poké Ball,") == true }.performClick()
+            stage.render()
+            val item = page.itemWindow!!.view
+            val texts = all(item).filterIsInstance<TextView>().map { it.text.toString() }
+            assertTrue(texts.any { "20%" in it.replace(" ", "") })
+            assertTrue(texts.any { "runs away" in it })
+            (all(item).filterIsInstance<TextView>().first { it.text.toString() == "Throw" }.parent as View).performClick()
             assertFalse("Picking a regular ball must wait for the combined throw", called)
             assertEquals(2, GameRepo.state!!.count("poke-ball"))
             all(dialog!!.content()).filterIsInstance<TextView>().first { it.text.toString().startsWith("Heal Ball ×") }.performClick()
@@ -39,7 +42,7 @@ class R22RBagTest {
             assertTrue(called)
             assertEquals(0, GameRepo.state!!.count("heal-ball"))
             assertEquals(1, GameRepo.state!!.count("poke-ball"))
-        } finally { Pickers.interceptApp = null }
+        } finally { Pickers.interceptApp = null; ItemWindow.interceptShow = null }
     }
     @Test fun teamFirstAndMoreOpensSearchAndFilters() {
         val ctx = Shots.files(paparazzi.context); FakeGame.install(ctx)
@@ -55,7 +58,7 @@ class R22RBagTest {
             assertTrue(more.any { it is android.widget.EditText })
             assertTrue(more.filterIsInstance<TextView>().any { it.text.toString() == "Highest level" })
             assertTrue(more.filterIsInstance<TextView>().any { it.text.toString() == "Favourites" })
-        } finally { Pickers.interceptApp = null }
+        } finally { Pickers.interceptApp = null; ItemWindow.interceptShow = null }
     }
     @Test fun noWildDisablesBallsAndFullHpCannotBePicked() {
         val ctx = Shots.files(paparazzi.context); FakeGame.install(ctx)
@@ -64,14 +67,21 @@ class R22RBagTest {
         var dialog: AppDialog? = null
         Pickers.interceptApp = { dialog = it }
         try {
-            BattleBag.show(ctx) { fail("Disabled ball acted") }
-            val ball = all(dialog!!.content()).first { it.contentDescription?.toString()?.startsWith("Poké Ball,") == true }
-            assertFalse(ball.isEnabled)
-            assertTrue(ball.contentDescription.toString().contains("No wild Pokémon"))
+            val page = ShopPage(ctx, NoHost, bagOnly = true, onBattleEvents = { fail("Disabled ball acted") })
+            val stage = ShopCardKit.Stage(ctx, page, page.root).render()
+            all(stage).first { it.contentDescription?.toString()?.startsWith("Poké Ball,") == true }.performClick()
+            stage.render()
+            val throwButton = all(page.itemWindow!!.view).filterIsInstance<TextView>().first { it.text.toString() == "Throw" }
+            val action = throwButton.parent as View
+            assertEquals(0.5f, action.alpha, 0f)
+            val before = state.count("poke-ball")
+            action.performClick()
+            assertEquals(before, state.count("poke-ball"))
+            assertTrue(all(page.itemWindow!!.view).filterIsInstance<TextView>().any { "Balls are thrown from a fight" in it.text.toString() })
             BattleBag.pick(ctx, GameRepo.data!!, state, "super-potion") { fail("Full HP Pokémon picked") }
             val full = all(dialog!!.content()).filterIsInstance<TextView>().first { it.text.toString() == "Full HP" }
             assertFalse((full.parent.parent.parent as View).isClickable)
-        } finally { Pickers.interceptApp = null }
+        } finally { Pickers.interceptApp = null; ItemWindow.interceptShow = null }
     }
 
 }

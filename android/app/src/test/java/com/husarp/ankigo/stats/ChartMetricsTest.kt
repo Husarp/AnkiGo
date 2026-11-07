@@ -34,7 +34,7 @@ class ChartMetricsTest {
 
     @Test fun theMetricListIsGroupedLikeTheMockup() {
         assertEquals(listOf("Study"), ChartMetric.menu.map { it.first.label })
-        assertEquals(listOf("Cards studied", "Time studied", "New cards", "Answer buttons · today", "Card states", "Due forecast", "Streak calendar"), ChartMetric.menu.single().second.map { it.label })
+        assertEquals(listOf("Cards studied", "Time studied", "New cards", "Answer buttons", "Card states", "Due forecast", "Streak calendar"), ChartMetric.menu.single().second.map { it.label })
     }
 
     @Test fun gameMilestonesAreOutsidePicker() {
@@ -175,7 +175,7 @@ class ChartMetricsTest {
             listOf("Wed 14 Oct · 10 answers", "Again · 1 · 10 %", "Hard · 2 · 20 %", "Good · 3 · 30 %", "Easy · 4 · 40 %"),
             s.bars.last().detail,
         )
-        assertEquals(1, s.bars.size) // no part lines for an empty bar
+        assertEquals(3, s.bars.size) // calendar week starts on Monday
     }
 
     @Test fun timeBarsUseMinutesAndHoursAndSplitInAppFromLive() {
@@ -302,7 +302,7 @@ class ChartMetricsTest {
         assertEquals(110.0, s.total, 0.0)
         assertTrue(s.source.startsWith("AnkiDroid"))
         assertEquals(listOf("Sun 11 Oct · 100 cards", "Daily goal reached (100)"), s.detailFor(date(3)))
-        assertEquals(listOf(4, 6, 13, 53), ChartPeriod.values().map { ChartData.heatmapWeeks(it) })
+        assertEquals(listOf(4, 4, 6, 13, 53), ChartPeriod.values().map { ChartData.heatmapWeeks(it) })
         assertEquals(13, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D90).heatmap!!.columns.size)
         assertEquals(53, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D365).heatmap!!.columns.size)
         assertTrue(build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D90).empty)
