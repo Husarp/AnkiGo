@@ -106,7 +106,7 @@ class R29BondTest {
         val m = state().main!!; val out = events(); m.bondPoints = 49
         Bond.add(m, 1, out)
         assertEquals(50, m.bondPoints)
-        assertTrue((out.single() as GameEvent.Info).text.contains("♥1"))
+        assertTrue((out.single() as GameEvent.Info).text.contains("Level 1"))
         out.clear(); Bond.add(m, 1, out); assertTrue(out.isEmpty())
         m.bondPoints = 799; Bond.add(m, 3, out)
         assertEquals(800, m.bondPoints); assertEquals(1, out.size)
@@ -149,7 +149,7 @@ class R29BondTest {
             assertNull(Progression.itemEvolutionAnyTime(d, m, item))
             assertFalse(Game(d, s).chooseEvolution(m.uid, 26).ok)
             val blocked = ItemUse.use(d, s, item, m.uid, Random(1), noon)
-            assertFalse(blocked.ok); assertTrue(blocked.message.contains("♥2")); assertEquals(1, s.count(item))
+            assertFalse(blocked.ok); assertTrue(blocked.message.contains("Level 2")); assertEquals(1, s.count(item))
             m.bondPoints = 125
             assertEquals(26, Progression.itemEvolution(d, m, item, noon)?.to)
             m.heldItem = "everstone"; assertNull(Progression.itemEvolution(d, m, item, noon))

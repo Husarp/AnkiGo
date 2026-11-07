@@ -71,7 +71,8 @@ object DetailSections {
             orientation = LinearLayout.VERTICAL
             background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 14, a)
         }
-        val sum = Ui.text(a, 11f, 800, R.color.ag_sub0).apply {
+        val sum = Ui.text(a, if (s == DetailSection.BOND) 14f else 11f, if (s == DetailSection.BOND) 900 else 800,
+            if (s == DetailSection.BOND) R.color.ag_bond_level else R.color.ag_sub0).apply {
             text = summary; maxLines = 1; ellipsize = TextUtils.TruncateAt.END; gravity = Gravity.END
         }
         val chevron = ImageView(a).apply {

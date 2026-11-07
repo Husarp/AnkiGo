@@ -65,7 +65,7 @@ class EvoLine(val root: EvoNode, val current: Species) {
         }
 
         fun explanation(data: GameData, e: Evolution): String = buildList {
-            add("Reach Bond ♥${Bond.requiredLevel(e)} (${Bond.thresholds[Bond.requiredLevel(e)]} points). Earn +1 point per card while fighting and +3 per win.")
+            add("Reach Level ${Bond.requiredLevel(e)} Bond (${Bond.thresholds[Bond.requiredLevel(e)]} points). Earn +1 point per card while fighting and +3 per win.")
             when (e.kind) {
                 EvoKind.LEVEL -> add("Reach level ${e.level ?: 1}.")
                 EvoKind.FRIENDSHIP -> add("Build your Bond by fighting together. A held Soothe Bell multiplies Bond points by 1.5.")
@@ -88,7 +88,7 @@ class EvoLine(val root: EvoNode, val current: Species) {
         fun method(data: GameData, e: Evolution): String {
             val base = when (e.kind) {
                 EvoKind.LEVEL -> if (e.level != null) "Lv ${e.level}" else "Level up"
-                EvoKind.FRIENDSHIP -> "Bond ♥${Bond.requiredLevel(e)}"
+                EvoKind.FRIENDSHIP -> "Level ${Bond.requiredLevel(e)} Bond"
                 EvoKind.ITEM -> e.item?.let { Items.name(it) } ?: "an item"
                 EvoKind.TRADE -> Items.name(e.item ?: "linking-cord")
                 EvoKind.LEVEL_MOVE -> "knows ${e.move?.let { data.move(it)?.name ?: it } ?: "a move"}"

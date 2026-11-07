@@ -22,6 +22,7 @@
     <color name="ag_sky">#00a2e3</color>
     <color name="ag_lav">#6a80ff</color>
     <color name="ag_mauve">#842ef4</color>
+    <color name="ag_bond_level">#a93479</color>
     <color name="ag_pink">#ed6dcb</color>
     <color name="ag_lime">#88980d</color>
     <!-- Switch (settings): off track fill, off outline + knob, on knob -->

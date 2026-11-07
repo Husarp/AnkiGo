@@ -17,7 +17,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-/** Bundled, real filling Love Ball artwork. All levels at 320/360/412 dp, light/dark, font 1.3; also default-font ♥3. */
+/** Bundled, real filling Love Ball artwork. All levels at 320/360/412 dp, light/dark, font 1.3; also default-font Level 3. */
 class R29BondShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
     private fun all(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
@@ -76,8 +76,8 @@ class R29BondShots {
                 assertFalse((ball.drawable as android.graphics.drawable.BitmapDrawable).isFilterBitmap)
                 assertTrue(card.bottom <= col.height - col.paddingBottom)
                 val content = texts(card).joinToString("\n") { it.text }
-                assertTrue(content.contains("♥$level")); assertFalse(content.contains("No decay"))
-                if (level == 3) assertTrue(content.contains("120 / 250 points to ♥4"))
+                assertTrue(content.contains("Level $level")); assertFalse(content.contains("No decay"))
+                if (level == 3) assertTrue(content.contains("120 / 250 points to Level 4"))
                 if (level == 5) { assertTrue(content.contains("Max Bond")); assertFalse(content.contains("Next ·")) }
             }
         }

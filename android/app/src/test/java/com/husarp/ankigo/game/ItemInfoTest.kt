@@ -189,7 +189,7 @@ class ItemInfoTest {
         assertTrue(fact("power-band", "What it does").contains("each win"))
         assertEquals("Main: ×1.5 Bond points", ItemInfo.short(data, "soothe-bell"))
         assertEquals("Main holds it: ×1.5 Bond points", ItemInfo.line(data, "soothe-bell"))
-        assertTrue(fact("soothe-bell", "What it does").contains("**×1.5 Bond points**") && fact("soothe-bell", "What it does").contains("♥0–♥5"))
+        assertTrue(fact("soothe-bell", "What it does").contains("**×1.5 Bond points**") && fact("soothe-bell", "What it does").contains("Level 0–Level 5"))
         assertEquals("Main: +8 Speed EVs", ItemInfo.short(data, "power-anklet"))
         assertEquals("Main: +8 Sp. Atk EVs", ItemInfo.short(data, "power-lens"))
         assertTrue(fact("power-band", "What it does").contains("**8 extra Sp. Def EVs**"))

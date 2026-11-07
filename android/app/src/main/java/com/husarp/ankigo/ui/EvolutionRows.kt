@@ -138,7 +138,6 @@ internal class EvolutionRows(
                 if (!met) colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) })
                 importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LayoutParams(Ui.dp(a, 24), Ui.dp(a, 24)))
-            else if (e.kind == EvoKind.FRIENDSHIP) condition.addView(Ui.text(a, 18f, 800, if (met) R.color.ag_pink else R.color.ag_sub0).apply { text = "♥" })
             condition.addView(Ui.text(a, 11f, 800, if (met) R.color.ag_green else R.color.ag_sub0).apply {
                 text = EvolutionRowText.condition(data, e, mon?.takeIf { parent?.num == it.species })
             }, LayoutParams(0, -2, 1f).apply { marginStart = Ui.dp(a, 4) })
@@ -239,10 +238,11 @@ internal class EvolutionRows(
 internal object EvolutionRowText {
     fun condition(data: GameData, e: Evolution, mon: Mon? = null): String {
         val method = EvoLine.method(data, e)
+            .let { if (e.kind == EvoKind.FRIENDSHIP) "Needs $it" else it }
             .replace(Regex("^Lv "), "Level ")
             .replace(", day", "\nin the daytime").replace(", night", "\nat night")
             .replace(", Fairy-type move", "\nknows a Fairy move")
-        return method + if (mon != null && !Bond.allows(mon, e)) "\nNeeds ♥${Bond.requiredLevel(e)}" else ""
+        return method + if (e.kind != EvoKind.FRIENDSHIP && mon != null && !Bond.allows(mon, e)) "\nNeeds Level ${Bond.requiredLevel(e)} Bond" else ""
     }
 
     fun explanation(data: GameData, e: Evolution, parent: Species?, seen: Set<Int>, state: GameState?, mon: Mon?): String {
@@ -259,7 +259,7 @@ internal object EvolutionRowText {
         val bond = "Level ${Bond.requiredLevel(e)} Bond" +
             (if (applies && Bond.allows(mon!!, e)) " ✓" else "") + "\n\n" +
             (if (applies && mon!!.heldItem == "everstone") "Everstone held — take it off to evolve.\n\n" else "")
-        val details = EvoLine.explanation(data, e).split("\n\n").filterNot { it.startsWith("Reach Bond") }.joinToString("\n\n")
+        val details = EvoLine.explanation(data, e).split("\n\n").filterNot { it.startsWith("Reach Level") }.joinToString("\n\n")
         // The item paragraph already explains availability; retain all extra restrictions from the existing rules text.
         return if (item == null) bond + extra + details else extra + bond + inventory + details.split("\n\n").filterNot { it.startsWith("Have ") || it.startsWith("When ready") }.joinToString("\n\n")
     }

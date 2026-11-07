@@ -32,7 +32,7 @@ class R30NShots {
             paparazzi.snapshot(view, "n-$name-${theme.name.lowercase()}", 300)
             if (view is BattlePanelView) {
                 val card = checkNotNull(alert)
-                assertEquals("Reached Bond level 5", card.main.text.toString())
+                assertEquals("Reached Level 5 Bond", card.main.text.toString())
                 assertFalse(card.truncated)
                 assertTrue(card.main.lineCount in 1..2)
             }
@@ -96,9 +96,9 @@ class R30NShots {
         panel.measure(View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY))
         panel.layout(0, 0, dm.widthPixels, dm.heightPixels)
-        panel.setLog(LogKind.SYS, "BOND ♥", "Bond grew! Eevee reached ♥5. 10% chance to survive a KO with 1 HP", pop = false)
-        assertEquals(ToastKind.BOND, ToastKind.of(LogKind.SYS, "BOND ♥"))
-        assertEquals("Reached Bond level 5" to null, ToastText.split(ToastKind.BOND, "Bond grew! Eevee reached ♥5. bonus"))
+        panel.setLog(LogKind.SYS, "BOND", "Bond grew! Eevee reached Level 5. 10% chance to survive a KO with 1 HP", pop = false)
+        assertEquals(ToastKind.BOND, ToastKind.of(LogKind.SYS, "BOND"))
+        assertEquals("Reached Level 5 Bond" to null, ToastText.split(ToastKind.BOND, "Bond grew! Eevee reached Level 5. bonus"))
         panel
     }
 }

@@ -247,7 +247,7 @@ object Progression {
         }
     }
 
-    /** Bond evolution due now (♥3/♥4, time, gender, minimum level, Fairy move for Sylveon). Everstone blocks. */
+    /** Bond evolution due now (Level 3/Level 4, time, gender, minimum level, Fairy move for Sylveon). Everstone blocks. */
     fun friendshipEvolution(data: GameData, state: GameState, mon: Mon, now: Long): Evolution? {
         if (state.activeHeldItem(mon) == EVERSTONE) return null
         return data.sp(mon.species).evolutions.firstOrNull { e ->

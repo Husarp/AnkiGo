@@ -370,7 +370,7 @@ object ItemInfo {
         "macho-brace" -> "Your **main** gets **double EVs** from each win, defeat or catch (as always, up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
             "It does nothing on a Pokémon that is not your main."
         "soothe-bell" -> "Your active fighter earns **×${nice(Tuning.SOOTHE_BELL)} Bond points** while answering cards and finishing fights. " +
-            "Half points carry over, including through saves. Bond levels ♥0–♥5 unlock evolutions and bonuses. It does nothing on the bench."
+            "Half points carry over, including through saves. Level 0–Level 5 Bond unlocks evolutions and bonuses. It does nothing on the bench."
         else -> POWER_STATS[item]?.let {
             "Your **main** gets **8 extra $it EVs** from each win, defeat or catch, on top of the usual EVs (up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
                 "It does nothing on a Pokémon that is not your main."

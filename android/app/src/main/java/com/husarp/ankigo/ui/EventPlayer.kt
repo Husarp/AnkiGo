@@ -632,7 +632,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             is GameEvent.Duplicate -> return playDuplicate(e)
             is GameEvent.Info -> {
                 if (arena.ballShown && e.text.endsWith("broke free!")) return breakFree(e.text)
-                log(LogKind.SYS, if (e.text.startsWith("Daily goal")) "GOAL" else if (e.text.startsWith("Bond grew!")) "BOND ♥" else "INFO", e.text)
+                log(LogKind.SYS, if (e.text.startsWith("Daily goal")) "GOAL" else if (e.text.startsWith("Bond grew!")) "BOND" else "INFO", e.text)
                 return d(800)
             }
         }

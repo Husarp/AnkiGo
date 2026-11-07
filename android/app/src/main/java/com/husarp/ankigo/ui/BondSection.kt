@@ -15,7 +15,7 @@ object BondSection {
         R.drawable.bond_3, R.drawable.bond_4, R.drawable.bond_5)
     private val names = listOf("Getting acquainted", "A new connection", "Finding trust", "Growing close", "Trusted partners", "Inseparable")
 
-    fun summary(mon: Mon): String = "♥${Bond.level(mon.bondPoints)}"
+    fun summary(mon: Mon): String = "Level ${Bond.level(mon.bondPoints)}"
 
     fun body(a: Context, mon: Mon): View = LinearLayout(a).apply {
         orientation = LinearLayout.VERTICAL
@@ -29,20 +29,26 @@ object BondSection {
             gravity = Gravity.CENTER_VERTICAL
             DetailParts.tapRow(this, StatInfo.BOND)
             clipChildren = false
-            addView(ImageView(a).apply {
-                setImageResource(balls[level])
-                (drawable as? android.graphics.drawable.BitmapDrawable)?.isFilterBitmap = false
-                scaleType = ImageView.ScaleType.FIT_CENTER
-                importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LinearLayout.LayoutParams(Ui.dp(a, 72), Ui.dp(a, 72)))
             addView(LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(Ui.text(a, 18f, 900, R.color.ag_pink).apply { text = "♥$level · ${names[level]}" })
-                addView(line(if (next == null) "Max Bond" else "$points total points", true))
-            }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 12) })
+                gravity = Gravity.CENTER_HORIZONTAL
+                addView(ImageView(a).apply {
+                    setImageResource(balls[level])
+                    (drawable as? android.graphics.drawable.BitmapDrawable)?.isFilterBitmap = false
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }, LinearLayout.LayoutParams(Ui.dp(a, 72), Ui.dp(a, 72)))
+                addView(Ui.text(a, 14f, 900, R.color.ag_bond_level).apply { text = "Level $level"; gravity = Gravity.CENTER },
+                    LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 4) })
+            }, LinearLayout.LayoutParams(-2, -2))
+            addView(LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(Ui.text(a, 18f, 900, R.color.ag_text).apply { text = names[level] })
+                addView(line(if (next == null) "Max Bond" else "$points total points", true), Form.lp(a, 5))
+            }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 14) })
         }, LinearLayout.LayoutParams(-1, -2))
         val start = Bond.thresholds[level]
-        val progress = if (next == null) "Max Bond · $points points" else "${points - start} / ${next - start} points to ♥${level + 1}"
+        val progress = if (next == null) "Max Bond · $points points" else "${points - start} / ${next - start} points to Level ${level + 1}"
         addView(line(progress), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
         addView(BarView(a).apply {
             set(if (next == null) 1f else (points - start).toFloat() / (next - start), Ui.c(a, R.color.ag_pink), false)

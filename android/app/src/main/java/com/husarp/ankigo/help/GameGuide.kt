@@ -140,7 +140,7 @@ object GameGuide {
             "Pokémon grow with XP up to level ${Tuning.MAX_LEVEL}, and some evolve.",
             listOf(
                 "Level: some Pokémon become ready to evolve when they reach a level.",
-                "Bond: earn +1 point per answered card while fighting and +3 per win. ♥1–♥5 start at 50 / 125 / 250 / 500 / 800 points. Normal evolutions need ♥2 plus their usual requirement; Bond evolutions need ♥3 or ♥4. Each level adds +1 coin per defeated Pokémon and +5% XP. At ♥4/♥5, a lethal attack has a 5%/10% chance to leave 1 HP. A Soothe Bell makes points ×1.5.",
+                "Bond: earn +1 point per answered card while fighting and +3 per win. Level 1–Level 5 start at 50 / 125 / 250 / 500 / 800 points. Normal evolutions need Level 2 plus their usual requirement; Bond evolutions need Level 3 or Level 4. Each level adds +1 coin per defeated Pokémon and +5% XP. At Level 4/Level 5, a lethal attack has a 5%/10% chance to leave 1 HP. A Soothe Bell makes points ×1.5.",
                 "Item: stones and similar items evolve the Pokémon that need them. Open the item in your bag and use it.",
                 "A green mark shows when a Pokémon is ready to evolve. Evolution never happens automatically: open its details and choose Evolve for the branch you want. Required items are used up. Some branches also need a particular time of day, gender, learned move or other condition; the evolution options show what is missing. Trade evolutions use a Linking Cord unless they require another item. An active Everstone in its hold stops evolving.",
                 "Evolving heals the Pokémon fully.",

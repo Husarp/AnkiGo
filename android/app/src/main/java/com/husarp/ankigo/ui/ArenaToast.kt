@@ -62,7 +62,7 @@ enum class ToastKind(@DrawableRes val icon: Int, val neutral: Boolean = false) {
     companion object {
         /** The kind for a [BattlePanelView.setLog] line: its pill word first ("FAST", "ITEM" ...), the log kind and the text for the rest. */
         fun of(kind: LogKind, pill: String, text: String = ""): ToastKind = when (pill.trim().uppercase()) {
-            "BOND ♥" -> BOND
+            "BOND" -> BOND
             "FAST" -> FAST
             "OK" -> NEW_CARD_OK
             "UNDO" -> UNDO
@@ -86,8 +86,8 @@ object ToastText {
      */
     fun split(kind: ToastKind, text: String): Pair<String, String?> {
         if (kind == ToastKind.BOND) {
-            val level = Regex("reached ♥([0-5])").find(text)?.groupValues?.get(1)
-            if (level != null) return "Reached Bond level $level" to null
+            val level = Regex("reached Level ([0-5])").find(text)?.groupValues?.get(1)
+            if (level != null) return "Reached Level $level Bond" to null
         }
         if (kind != ToastKind.CAUGHT_UP) return text to null
         val i = text.indexOf(": ")
