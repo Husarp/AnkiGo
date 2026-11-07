@@ -11,7 +11,6 @@ import android.widget.LinearLayout
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.Report
-import com.husarp.ankigo.data.AnkimonFiles
 import com.husarp.ankigo.data.DataStore
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
@@ -45,7 +44,7 @@ object AnkimonImportFlow {
     /** What the background read found. */
     private sealed class Read {
         class Ok(val save: AnkimonSave, val formBase: Map<Int, Int>) : Read() {
-            /** The cache copy the save was read from; it lives until kept or discarded (null in tests). */
+            /** The cache copy the save was read from; it lives until discarded (null in tests). */
             var file: File? = null
             fun discard() { file?.delete() }
         }
@@ -189,7 +188,7 @@ object AnkimonImportFlow {
             return
         }
         if (first.summary() == "nothing new" && other.summary() == "nothing new") {
-            keepCopy(app, read, "Couldn't keep a copy for exporting back") // the PC's newest state is already in the game
+            read.discard()
             info(c, "Nothing new in this file", "Everything in it is already in your game." + (notInFileLine(first.notInFile)?.let { "\n\n$it" } ?: ""))
             onDone(false)
             return
@@ -298,21 +297,9 @@ object AnkimonImportFlow {
             onDone(false)
             return
         }
-        keepCopy(app, read, "Imported, but couldn't keep a copy for exporting back")
+        read.discard()
         Ui.toast(app, "Imported: ${report.added} new, ${report.upgraded} upgraded")
         onDone(true)
     }
 
-    /**
-     * Keeps the cache copy as the file the export builds on ([AnkimonFiles.keep], atomic) and deletes the cache copy,
-     * off the main thread. A failure only shows [failToast]; it never fails the import.
-     */
-    private fun keepCopy(app: Context, read: Read.Ok, failToast: String) {
-        val file = read.file ?: return
-        Thread {
-            val ok = AnkimonFiles.keep(app, file)
-            file.delete()
-            if (!ok) main.post { Ui.toast(app, failToast) }
-        }.apply { name = "ankimon-keep"; isDaemon = true }.start()
-    }
 }

@@ -193,7 +193,7 @@ object ReminderRules {
             val goal = facts.goalFor(todayKey) // the facts may be from an earlier day: today's weekday goal
 
             // Streak about to end: the goal was reached yesterday and not yet today
-            if (prefs.streakOn && !off(ReminderKind.STREAK) && facts.streakDays > 0 && facts.lastGoalDay == yesterdayKey && goal > 0 &&
+            if (prefs.streakOn && !off(ReminderKind.STREAK) && facts.streakDays > 0 && (facts.streakThroughDay ?: facts.lastGoalDay) == yesterdayKey && goal > 0 &&
                 reviews < goal && !sentToday(ReminderKind.STREAK) && timeIsNow(prefs.streakTime)
             ) post(streak(facts.streakDays, reviews, goal))
 
@@ -219,7 +219,7 @@ object ReminderRules {
 
     /** The streak as the game counts it: the stored one while the goal was reached today or yesterday, else none. */
     private fun aliveStreak(facts: ReminderFacts, todayKey: String, yesterdayKey: String): Int =
-        if (facts.valid && (facts.lastGoalDay == todayKey || facts.lastGoalDay == yesterdayKey)) facts.streakDays else 0
+        if (facts.valid && ((facts.streakThroughDay ?: facts.lastGoalDay) == todayKey || (facts.streakThroughDay ?: facts.lastGoalDay) == yesterdayKey)) facts.streakDays else 0
 
     private fun cardsDue(total: Int, counted: List<DueDeck>, facts: ReminderFacts, todayKey: String, yesterdayKey: String): Notice {
         val names = counted.filter { it.due > 0 }.sortedByDescending { it.due }

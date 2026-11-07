@@ -1074,9 +1074,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         setCombo(st.cardStreak, false)
         val g = GameRepo.game
         val now = System.currentTimeMillis()
-        val live = st.lastGoalDay != null && g != null &&
-            (st.lastGoalDay == g.dayKey(now) || st.lastGoalDay == g.dayKey(now - 86_400_000L))
-        setStreak(if (live) st.streakDays else 0)
+        setStreak(if (g != null) com.husarp.ankigo.game.StudyStats.streak(st, g.dayKey(now)).current else 0)
         setCoins(st.cash, false)
         setItemCountdown(st.itemCountdown)
         setBalls(ballCount(st), false)

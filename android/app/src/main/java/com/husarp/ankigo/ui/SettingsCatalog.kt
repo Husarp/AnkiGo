@@ -197,7 +197,6 @@ s("catchAsk", G, "When you beat a wild Pokémon", "Ask me", "Catch new species; 
         s("importSave", D, "Save & backups", "Import save…", "Load game progress from a save file, backing up your current game first"),
         s("restoreBackup", D, "Save & backups", "Restore a backup…", "Restore an earlier game save while keeping a backup of your current game"),
         s("ankimonImport", D, "Ankimon PC sync", "Import Ankimon save (.db)…", "Add Pokémon from your PC Ankimon save, backing up your current game first"),
-        s("ankimonExport", D, "Ankimon PC sync", "Export for Ankimon PC…", "Write a game save that Ankimon on your PC can read"),
 
         // Updates
         s("checkUpdates", U, "", "Check for updates", "Check for app updates when AnkiGo opens or you return to it"),

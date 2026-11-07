@@ -84,7 +84,7 @@ internal enum class BagAct(val label: String, val fightOnly: Boolean, val offFig
             ItemKind.HEAL, ItemKind.EVOLUTION -> USE_ON
             ItemKind.HELD -> GIVE
             ItemKind.FOSSIL -> REVIVE
-            null -> null
+            ItemKind.AUTO, null -> null
         }
     }
 

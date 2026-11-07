@@ -384,7 +384,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             SettingsSection.SOUND -> soundSummary(this)
             SettingsSection.DOWNLOADS -> SettingsSummary.downloads(DataStore.size(this), Sprites.size(this),
                 SettingsJobs.everythingBusy || SettingsJobs.data.running || FirstRunJob.job.running)
-            SettingsSection.ANKIMON -> "Import a PC save · export one back"
+            SettingsSection.ANKIMON -> "Bring Pokémon from your PC save"
             SettingsSection.SAVE -> loaded.let { SettingsSummary.save(it?.savedAt, it?.seq) { t -> dateFmt.format(Date(t)) } }
             SettingsSection.UPDATES -> SettingsSummary.updates(Updates.current(this))
             SettingsSection.DIAGNOSTICS -> "LIVE watch, checks and the report"
@@ -1295,13 +1295,9 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val ankimon = Form.secondary(this, "Import Ankimon save (.db)…") { startAnkimonImport() }
         Form.enable(ankimon, st != null)
         btns.addView(ankimon)
-        val ankimonOut = Form.secondary(this, "Export for Ankimon PC…") { startAnkimonExport() }
-        Form.enable(ankimonOut, st != null)
-        btns.addView(ankimonOut, Form.lp(this, 8))
-        btns.addView(Form.body(this, "Import your PC save here (it only adds, and your current game is kept as a backup first). " +
-            "Export writes a file for Ankimon's Game → Import Save File… on the PC.",
+        btns.addView(Form.body(this, "Import your PC save here (it only adds, and your current game is kept as a backup first).",
             12, R.color.ag_sub0), Form.lp(this, 8))
-        if (st == null) btns.addView(Form.body(this, "Both need the game to be loaded.", 12, R.color.ag_sub0), Form.lp(this, 4))
+        if (st == null) btns.addView(Form.body(this, "Load the game before importing.", 12, R.color.ag_sub0), Form.lp(this, 4))
         btns.addView(com.husarp.ankigo.help.HelpViews.ankimonGuide(this), Form.lp(this, 14))
         box.addView(btns)
         return box
@@ -1322,11 +1318,6 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         AnkimonImportFlow.start(this, { i, cb -> host.startForResult(i, cb) },
             ui = { live?.get()?.takeIf { it.alive } },
             onDone = { imported -> if (imported) live?.get()?.takeIf { it.alive }?.render() })
-    }
-
-    /** Ankimon (PC) export: warning -> "save as" picker -> build + write + check. Same rotation-safe dialogs as the import. */
-    private fun startAnkimonExport() {
-        AnkimonExportFlow.start(this, { i, cb -> host.startForResult(i, cb) }, ui = { live?.get()?.takeIf { it.alive } })
     }
 
     private fun startImport() {

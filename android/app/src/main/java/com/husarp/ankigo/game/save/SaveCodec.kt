@@ -15,6 +15,7 @@ import com.husarp.ankigo.game.PendingAsk
 import com.husarp.ankigo.game.Nature
 import com.husarp.ankigo.game.Outcome
 import com.husarp.ankigo.game.Settings
+import com.husarp.ankigo.game.StreakFreeze
 import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.Tier
 import com.husarp.ankigo.game.Tuning
@@ -57,6 +58,8 @@ object SaveCodec {
             kv("cardStreak", state.cardStreak); kv("bestCardStreak", state.bestCardStreak)
             kv("streakDays", state.streakDays); kv("lastGoalDay", state.lastGoalDay); kv("totalReviews", state.totalReviews)
             kv("bestStreakDays", state.bestStreakDays)
+            kv("streakThroughDay", state.streakThroughDay); kv("battleFreezeDay", state.battleFreezeDay)
+            list("shopPurchases", state.shopPurchases.sorted())
             key("history"); obj {
                 for ((k, v) in state.history.toSortedMap()) {
                     key(k)
@@ -449,6 +452,10 @@ object SaveCodec {
         s.streakDays = o.int("streakDays", 0); s.lastGoalDay = o.strOrNull("lastGoalDay")
         s.totalReviews = o.long("totalReviews", 0)
         s.bestStreakDays = o.int("bestStreakDays", s.streakDays)
+        s.streakThroughDay = o.strOrNull("streakThroughDay")
+        s.battleFreezeDay = o.strOrNull("battleFreezeDay")
+        o.strList("shopPurchases")?.let { s.shopPurchases += it }
+        s.bag[StreakFreeze.ITEM]?.let { s.bag[StreakFreeze.ITEM] = it.coerceIn(0, StreakFreeze.CAP) }
         readHistory(o.optJSONObject("history"), s)
         o.intList("badges")?.let { s.badges += it }
         s.shopDay = o.strOrNull("shopDay")

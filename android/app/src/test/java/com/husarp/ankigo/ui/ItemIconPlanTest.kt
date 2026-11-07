@@ -34,7 +34,7 @@ class ItemIconPlanTest {
     @Test fun everyCatalogueItemGetsSpriteOrDrawnAndDrawnOnesAreRealItems() {
         for (id in Items.ALL.keys) {
             val spec = ItemIconPlan.of(id)
-            assertTrue(id, spec is ItemIconSpec.Sprite || spec == ItemIconSpec.Drawn(id))
+            assertTrue(id, spec is ItemIconSpec.Sprite || spec == ItemIconSpec.Drawn(id) || (id == "streak-freeze" && spec == ItemIconSpec.TypeIcon(Type.ICE)))
         }
         assertTrue(ItemIconPlan.DRAWN.all { it in Items.ALL })
         assertEquals(ItemIconSpec.Drawn("cracked-pot"), ItemIconPlan.of("cracked-pot"))
@@ -60,7 +60,7 @@ class ItemIconPlanTest {
     @Test fun everyCatalogueItemHasAKindSymbolMatchingItsKind() {
         val expect = mapOf(
             ItemKind.EVOLUTION to ItemSymbol.GEM, ItemKind.HELD to ItemSymbol.TAG, ItemKind.FOSSIL to ItemSymbol.FOSSIL,
-            ItemKind.HEAL to ItemSymbol.BOTTLE, ItemKind.BALL to ItemSymbol.BALL, ItemKind.ESCAPE to ItemSymbol.ESCAPE,
+            ItemKind.HEAL to ItemSymbol.BOTTLE, ItemKind.BALL to ItemSymbol.BALL, ItemKind.ESCAPE to ItemSymbol.ESCAPE, ItemKind.AUTO to ItemSymbol.BAG,
         )
         assertEquals(ItemKind.entries.toSet(), expect.keys)
         for ((id, def) in Items.ALL) assertEquals(id, expect[def.kind], ItemIconPlan.symbolOf(id))

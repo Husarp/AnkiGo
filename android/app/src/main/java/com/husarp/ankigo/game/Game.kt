@@ -36,7 +36,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.redo.clear()
         Shop.ensureToday(data, state)
         refreshNext() // the daily goal count restarted: the predicted next one changes with it
-        return listOf(GameEvent.DayChanged(today))
+        return listOf(GameEvent.DayChanged(today)) + StreakFreeze.rollover(state, today)
     }
 
     /** Answers per battle round: always [Tuning.CARDS_PER_ROUND]; tests lower it to shorten fights. */
@@ -113,9 +113,10 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         // Daily goal: once a day, the first time the count reaches it (also if the goal was lowered during the day).
         if (state.reviewsToday >= DailyGoal.today(state) && state.lastGoalDay != state.day) {
-            val streakBefore = if (state.lastGoalDay == previousDay(state.day)) state.streakDays else 0 // goal days in a row before today
+            val streakBefore = if ((state.streakThroughDay ?: state.lastGoalDay) == previousDay(state.day)) state.streakDays else 0 // goal days in a row before today
             state.streakDays = streakBefore + 1
             state.lastGoalDay = state.day
+            state.streakThroughDay = state.day
             state.bestStreakDays = maxOf(state.bestStreakDays, state.streakDays)
             events += GameEvent.Info("Daily goal reached!")
             DailyGift.give(data, state, events) // R14-B2-D: once a day, this moment never repeats on a day (lastGoalDay is saved): one gift into the Bag, no money
@@ -206,14 +207,14 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 state.defeats++
                 state.catchWins++
                 Trainer.addDefeatXp(state, battle.tier, events)
-                Economy.onWin(state, events, bondLevel)
+                Economy.onWin(state, events, bondLevel, rng)
             }
             Outcome.DEFEAT -> {
                 Progression.rewardDefeat(data, state, main, battle.wild, now, rng, events)
                 Healing.healMain(data, main, HealReason.DEFEAT, events) // after XP, level-ups and evolution
                 Trainer.addDefeatXp(state, battle.tier, events)
                 state.defeats++
-                Economy.onWin(state, events, bondLevel)
+                Economy.onWin(state, events, bondLevel, rng)
                 plan.duplicate?.let { events += GameEvent.Duplicate(battle.wild.name, battle.wild.level, it.bestLevel, DuplicateResult.DEFEATED) }
                 if (plan.ask != null) askToCatch(battle, now, events) // R19-P (PLAN 281): paid as a defeat; "Catch / Catch and replace / Don't catch" waits
             }
@@ -300,8 +301,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     private val NOTHING_WAITING get() = "Nothing is waiting for an answer."
 
     /**
-     * Releases [old] and puts [new] in its place (R19-P). The release is [release]'s: the held item goes to the Bag, the Ankimon export
-     * removes it. [keepPlace]: the Team slot (the main too), the favourite heart and the Exp. Share go to [new]; else they go with [old]
+     * Releases [old] and puts [new] in its place (R19-P). The release is [release]'s: the held item goes to the Bag and the ID is remembered for imports.
+     * [keepPlace]: the Team slot (the main too), the favourite heart and the Exp. Share go to [new]; else they go with [old]
      * and a team left empty takes [new]. A changed main is the usual team change ([changed]) but costs no wild hit: nothing was switched
      * out, a better copy came in.
      */
@@ -332,8 +333,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     }
 
     /**
-     * Auto-release duplicates, after the wild one was caught: lets the replaced copy go like a manual release (the Ankimon
-     * export removes it), or keeps both when it may not go. The copy is checked again here; it is never in the team.
+     * Auto-release duplicates, after the wild one was caught: lets the replaced copy go like a manual release, or keeps both
+     * when it may not go. The copy is checked again here; it is never in the team.
      */
     private fun swapDuplicate(dup: Duplicates.Verdict, wild: Mon, caught: Mon, events: MutableList<GameEvent>) {
         val old = dup.release?.takeIf { it in state.mons && Duplicates.keepReason(data, state, it) == null }
@@ -458,7 +459,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             state.defeats++
             state.catchWins++
             Trainer.addDefeatXp(state, battle.tier, events)
-            Economy.onWin(state, events, bondLevel)
+            Economy.onWin(state, events, bondLevel, rng)
         } else {
             state.main?.let { main ->
                 val ab = SimpleView.of(data, battle, main).ability(true)
@@ -842,7 +843,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return changed("${mon.name} was released.", old, oldMon)
     }
 
-    /** The Ankimon export removes released Pokémon from the PC save: remember the id (newest 5 000 kept). */
+    /** Remember released IDs for import matching (newest 5 000 kept). */
     private fun rememberReleased(id: String) {
         val set = state.releasedAnkimon
         set.remove(id)
@@ -854,7 +855,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * R10 B21 "Release duplicates": releases the lower-level copies [Duplicates.releasePlan] picks, in one action (one save), but ONLY
      * those the player [confirmed] (the uids the dialog showed) that are still in a fresh plan (still not the keeper, still unprotected):
      * a Pokémon that arrived or changed while the dialog was open is never released unasked. Each goes the way [release] does it (and is
-     * remembered for the Ankimon export). The keeper, the main, the team and every protected copy stay, so no species loses its last
+     * remembered for later imports). The keeper, the main, the team and every protected copy stay, so no species loses its last
      * copy. Nothing left to release: not ok, nothing changes.
      */
     fun releaseDuplicates(confirmed: Set<String>): ActionResult {

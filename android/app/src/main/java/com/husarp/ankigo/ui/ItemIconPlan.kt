@@ -29,7 +29,7 @@ object ItemIconPlan {
         ItemKind.HEAL -> ItemSymbol.BOTTLE
         ItemKind.BALL -> ItemSymbol.BALL
         ItemKind.ESCAPE -> ItemSymbol.ESCAPE
-        null -> ItemSymbol.BAG
+        ItemKind.AUTO, null -> ItemSymbol.BAG
     }
 
     /**
@@ -46,7 +46,8 @@ object ItemIconPlan {
 
     /** The icon of a bag / shop item. [noSprite] = ids known to have no sprite file (default [DRAWN]; tests pass made-up ones). */
     fun of(itemId: String, noSprite: Set<String> = DRAWN): ItemIconSpec =
-        if (itemId in noSprite) ItemIconSpec.Drawn(itemId) else ItemIconSpec.Sprite("$itemId.png")
+        if (itemId == com.husarp.ankigo.game.StreakFreeze.ITEM) ItemIconSpec.TypeIcon(Type.ICE)
+        else if (itemId in noSprite) ItemIconSpec.Drawn(itemId) else ItemIconSpec.Sprite("$itemId.png")
 
     /** The icon of a TM for [move] (Showdown move id): its move's type; a move missing from the data gets the drawn plain TM disc. */
     fun tm(data: GameData, move: String): ItemIconSpec =

@@ -42,7 +42,7 @@ internal object ItemCard {
     )
 
     /** The Shop purchase: [price] checks affordability; amounts stay on the Shop list. Owned TMs cannot be bought twice. */
-    class Buy(val price: ShopPlan.Price, val owned: Boolean, val onBuy: () -> Unit)
+    class Buy(val price: ShopPlan.Price, val owned: Boolean, val limited: Boolean = false, val onBuy: () -> Unit)
 
     /** The Bag's action button. [offLine] is the small line of a button that cannot be used now ([enabled] false); a tap on it says the same in a toast. */
     class Act(val label: String, val enabled: Boolean, val offLine: String?, val onTap: () -> Unit)
@@ -116,6 +116,10 @@ internal object ItemCard {
                 }
                 addView(MotionScrollView(ctx).apply { addView(holders) }, LinearLayout.LayoutParams(-1, dp(ctx, minOf(spec.holders.size, 3) * 28f)))
             }, LinearLayout.LayoutParams(0, -2, 0.85f))
+            spec.buy?.takeIf { it.limited || isTm }?.let { buy ->
+                addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = if (buy.owned) "Sold out" else "1 left" })
+                if (buy.owned) alpha = 0.45f
+            }
             closeAll?.let { addView(it, LinearLayout.LayoutParams(-2, -2)) }
             addView(closeButton(ctx, onClose), LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)).also { it.marginStart = dp(ctx, 4f); it.marginEnd = -dp(ctx, 8f) })
         }
@@ -348,9 +352,9 @@ internal object ItemCard {
     /** Purchases require a deliberate hold; quantities and prices remain visible. */
     private fun buyView(page: GamePage, spec: Spec, b: Buy): View {
         val ctx: Context = page
-        if (b.owned) return Ui.text(ctx, 14f, 900, R.color.ag_green).apply { text = "✓ Owned"; gravity = Gravity.CENTER; minimumHeight = dp(ctx, 44f) }
+        if (b.owned) return Ui.text(ctx, 14f, 900, R.color.ag_green).apply { text = "Sold out"; alpha = 0.45f; gravity = Gravity.CENTER; minimumHeight = dp(ctx, 44f) }
         val open = (page as CardHost).open
-        val quantity = if (spec.item == null) 1 else open.quantity
+        val quantity = if (spec.item == null || b.limited) 1 else open.quantity
         val total = b.price.now.toLong() * quantity
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
         val go = button(ctx, Bits.blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f), Ui.c(ctx, R.color.ag_text), "Hold to buy")
@@ -360,7 +364,7 @@ internal object ItemCard {
         go.getChildAt(0).layoutParams = LinearLayout.LayoutParams(-2, -2)
         go.addView(ShopViews.price(ctx, ShopPlan.Price(total.toInt())), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(ctx, 8f) })
         row.addView(go, LinearLayout.LayoutParams(0, -2, 0.85f))
-        if (spec.item != null) row.addView(button(ctx, Ui.c(ctx, R.color.ag_mantle), Ui.c(ctx, R.color.ag_text), "×$quantity").apply {
+        if (spec.item != null && !b.limited) row.addView(button(ctx, Ui.c(ctx, R.color.ag_mantle), Ui.c(ctx, R.color.ag_text), "×$quantity").apply {
             contentDescription = "Quantity $quantity. Cycle 1, 3, 5"
             setOnClickListener { open.cycleQuantity(); page.requestRender() }
         }, LinearLayout.LayoutParams(0, -2, 0.15f).also { it.marginStart = dp(ctx, 6f) })

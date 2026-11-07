@@ -7,7 +7,7 @@ import kotlin.random.Random
 
 // TICKET T07 owns this file. Public signatures are fixed (other tickets call them); add private helpers freely.
 
-enum class ItemKind { BALL, HEAL, EVOLUTION, HELD, ESCAPE, FOSSIL }
+enum class ItemKind { BALL, HEAL, EVOLUTION, HELD, ESCAPE, FOSSIL, AUTO }
 
 /** An item that does something in AnkiGo. Normal prices come from GameData.price (Tuning overrides, then PokeAPI). */
 data class ItemDef(
@@ -115,6 +115,7 @@ object Items {
     /** The catalogue (Ankimon effects only; battle held items are left out with the simpler engine). */
     val ALL: Map<String, ItemDef> = buildList {
         addAll(balls())
+        add(ItemDef(StreakFreeze.ITEM, ItemKind.AUTO, note = "Protects one missed daily goal automatically"))
         HEALS.forEach { (id, hp) ->
             val cures = id == FULL_RESTORE
             add(ItemDef(id, ItemKind.HEAL, heal = hp, cures = cures,
@@ -147,14 +148,16 @@ object Items {
     fun tmName(data: GameData, move: String): String = "TM " + (data.move(move)?.name ?: move)
 
     /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; the Master Ball and [RETIRED] items are not sold). */
-    fun shopPool(data: GameData): List<String> = ALL.keys.filter { it !in RETIRED && data.price(it) > 0 }.sorted()
+    fun shopPool(data: GameData): List<String> = ALL.keys.filter { it !in RETIRED && it != StreakFreeze.ITEM && data.price(it) > 0 }.sorted()
 
     /** Ankimon random-item pool: catalogue items except balls and the [RETIRED] items. */
-    fun dropPool(): List<String> = ALL.values.filter { it.kind != ItemKind.BALL && it.id !in RETIRED }.map { it.id }.sorted()
+    fun dropPool(): List<String> = ALL.values.filter { it.kind != ItemKind.BALL && it.kind != ItemKind.AUTO && it.id !in RETIRED }.map { it.id }.sorted()
 }
 
 object Economy {
-    fun give(state: GameState, item: String, n: Int = 1) { state.bag[item] = state.count(item) + n }
+    fun give(state: GameState, item: String, n: Int = 1) {
+        state.bag[item] = (state.count(item) + n).let { if (item == StreakFreeze.ITEM) it.coerceAtMost(StreakFreeze.CAP) else it }
+    }
 
     /** Removes one; false if none. */
     fun take(state: GameState, item: String): Boolean {
@@ -203,7 +206,8 @@ object Economy {
      * win is worth 10, 5, 3.33, 2.5, 2 ... coins. Its money counts toward the day's tiers like an answer's, and Amulet Coin / Luck
      * Incense doubles the paid coins the same way. Emits Cash(DEFEAT) when at least one whole coin was paid.
      */
-    fun onWin(state: GameState, events: MutableList<GameEvent>, bondLevel: Int = Bond.level(state.main?.bondPoints ?: 0)) {
+    fun onWin(state: GameState, events: MutableList<GameEvent>, bondLevel: Int = Bond.level(state.main?.bondPoints ?: 0), rng: Random = Random.Default) {
+        StreakFreeze.battleDrop(state, rng, events)
         earn(state, Tuning.CASH_PER_WIN, CashKind.DEFEAT, events)
         // Flat earned bonus, after the daily curve and money items; practice still pays no coins.
         val bonus = Bond.coins(bondLevel)
@@ -262,6 +266,17 @@ object Shop {
         "power-weight" to 2000, "power-bracer" to 2000, "power-belt" to 2000,
         "power-lens" to 2000, "power-band" to 2000, "power-anklet" to 2000,
     )
+    fun limited(item: String): Boolean = item in weekendPrices || item == "everstone" || item == StreakFreeze.ITEM
+
+    private fun offerKey(state: GameState, item: String): String {
+        val date = parse(state.day)
+        val offer = if (item in weekendPrices && date != null && date.dayOfWeek == DayOfWeek.SUNDAY) date.minusDays(1).toString() else state.day
+        return "$offer:$item"
+    }
+
+    fun soldOut(state: GameState, item: String): Boolean = limited(item) && offerKey(state, item) in state.shopPurchases
+    fun freezeOnSale(state: GameState): Boolean = state.count(StreakFreeze.ITEM) < StreakFreeze.CAP
+
     /** 3 + trainerLevel / 5 (Ankimon). */
     fun slots(trainerLevel: Int): Int = Tuning.SHOP_BASE_SLOTS + trainerLevel / Tuning.SHOP_SLOTS_PER_LEVELS
 
@@ -284,6 +299,8 @@ object Shop {
             }
             return
         }
+        // Keep Saturday's allowance through Sunday; rerolls never touch these keys.
+        state.shopPurchases.retainAll((weekendPrices.keys + listOf("everstone", StreakFreeze.ITEM)).map { offerKey(state, it) }.toSet())
         state.shopRefreshes = 0
         val (items, tms) = stockFor(data, state.day, state.trainerLevel)
         setStock(state, items, tms)
@@ -411,7 +428,8 @@ object Shop {
         return if (deal != null && deal.item == item) deal.price else dailyPrice(data, day, item)
     }
 
-    fun priceOf(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis()): Int = priceOf(data, state.day, item, now)
+    fun priceOf(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis()): Int =
+        if (item == StreakFreeze.ITEM) StreakFreeze.price(state) else priceOf(data, state.day, item, now)
 
     /**
      * The dot on the Shop tab: true when the tab hasn't been opened on game day [today] ([lastSeenDay] = the game day it was last
@@ -439,9 +457,12 @@ object Shop {
     /** Buys [quantity] copies of [item] atomically at [priceOf]: from today's stock, the always-on-sale [basics], today's deal or today's weekend item. */
     fun buy(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis(), quantity: Int = 1): ActionResult {
         if (quantity !in setOf(1, 3, 5)) return ActionResult(false, "Invalid quantity")
-        val onSale = (item in state.shopItems && item !in weekendPrices) || item in Tuning.SHOP_BASICS || dealFor(data, state.day, now)?.item == item ||
+        if (limited(item) && quantity != 1) return ActionResult(false, "Only one per offer")
+        if (soldOut(state, item)) return ActionResult(false, "Sold out")
+        if (item == StreakFreeze.ITEM && !freezeOnSale(state)) return ActionResult(false, "You already hold 3 freezes")
+        val onSale = (item == StreakFreeze.ITEM && freezeOnSale(state)) || (item in state.shopItems && item !in weekendPrices) || item in Tuning.SHOP_BASICS || dealFor(data, state.day, now)?.item == item ||
             weekendFor(data, state.day)?.item == item
-        if (!onSale || data.price(item) <= 0 || item in Items.RETIRED) return ActionResult(false, "Not in today's shop")
+        if (!onSale || (item != StreakFreeze.ITEM && data.price(item) <= 0) || item in Items.RETIRED) return ActionResult(false, "Not in today's shop")
         val total = priceOf(data, state, item, now).toLong() * quantity
         if (total > Int.MAX_VALUE) return ActionResult(false, "Not enough money")
         val price = total.toInt()
@@ -449,6 +470,7 @@ object Shop {
         state.cash -= price
         StudyStats.addSpent(state, price)
         Economy.give(state, item, quantity)
+        if (limited(item)) state.shopPurchases += offerKey(state, item)
         val label = if (quantity == 1) Items.name(item) else "$quantity × ${Items.name(item)}"
         return ActionResult(true, "Bought $label for ${money(price)}", spent(data, state, price, now))
     }
@@ -578,7 +600,7 @@ object ItemUse {
             ItemKind.EVOLUTION -> mon != null && Progression.itemEvolution(data, mon, item, now, state.activeHeldItem(mon)) != null
             ItemKind.HELD -> mon != null && mon.heldItem != item
             ItemKind.FOSSIL -> data.species.containsKey(def.fossil)
-            ItemKind.BALL, ItemKind.ESCAPE -> false
+            ItemKind.BALL, ItemKind.ESCAPE, ItemKind.AUTO -> false
         }
     }
 
@@ -593,6 +615,7 @@ object ItemUse {
         if (state.count(item) <= 0) return ActionResult(false, "You have no $name.")
         val events = mutableListOf<GameEvent>()
         when (def.kind) {
+            ItemKind.AUTO -> return ActionResult(false, "Used automatically when a daily goal is missed.")
             ItemKind.BALL, ItemKind.ESCAPE -> return ActionResult(false, BATTLE_ONLY)
             ItemKind.HEAL -> {
                 val mon = target(state, targetUid, true) ?: return ActionResult(false, "No Pokémon to heal.")

@@ -624,6 +624,11 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 log(LogKind.SYS, "TRAINER", "Trainer level ${em(e.level.toString())}!")
                 return d(900)
             }
+            is GameEvent.StreakSaved -> {
+                log(LogKind.SYS, "STREAK", com.husarp.ankigo.game.StreakFreeze.title(e) + ". " + com.husarp.ankigo.game.StreakFreeze.detail(e))
+                if (st != null) panel.renderFooter(st)
+                return d(900)
+            }
             is GameEvent.DayChanged -> {
                 log(LogKind.SYS, "NEW DAY", "A new day begins: the daily goal starts again.")
                 if (st != null) panel.renderFooter(st)

@@ -144,7 +144,7 @@ object StudyStats {
     /** Current streak: the stored one while the goal was reached today or yesterday, else 0. Best never drops below it. */
     fun streak(state: GameState, today: String): Streak {
         val t = parse(today)
-        val last = state.lastGoalDay
+        val last = state.streakThroughDay ?: state.lastGoalDay
         val alive = t != null && last != null && (last == today || last == t.minusDays(1).toString())
         val current = if (alive) state.streakDays else 0
         return Streak(current, max(state.bestStreakDays, current))

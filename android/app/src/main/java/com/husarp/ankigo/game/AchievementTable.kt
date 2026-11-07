@@ -69,7 +69,7 @@ object AchievementTable {
         a: Long, b: Long, c: Long,
     ) = AchRow(id, group, title, desc, metric, listOf(a, b, c), icon)
 
-    /** A one-off that is today's Ankimon badge [badge] (same meaning, same id for the import/export). */
+    /** A one-off that is today's Ankimon badge [badge] (same meaning, same id for the import). */
     private fun badge(badge: Int, id: String, title: String, desc: String, icon: String) =
         AchRow(id, "Badges", title, desc, null, listOf(1L), icon, ankimonBadge = badge)
 

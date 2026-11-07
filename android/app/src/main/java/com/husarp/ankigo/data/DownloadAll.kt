@@ -98,7 +98,7 @@ internal object DownloadAll {
     // ---- the plan ----
 
     /** The item icons the game can show: the catalogue except the five items PokeAPI has no picture for ([ItemIconPlan.DRAWN]; TM discs are drawn too). */
-    fun catalogueItems(): List<String> = Items.ALL.keys.filter { it !in ItemIconPlan.DRAWN }.sorted()
+    fun catalogueItems(): List<String> = Items.ALL.keys.filter { ItemIconPlan.of(it) is com.husarp.ankigo.ui.ItemIconSpec.Sprite }.sorted()
 
     /**
      * Every job: pictures first (small and seen everywhere), then item icons, backgrounds and cries, the animations last (the big part;

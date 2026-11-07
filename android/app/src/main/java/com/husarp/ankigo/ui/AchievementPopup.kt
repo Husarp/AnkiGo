@@ -99,6 +99,8 @@ object AchievementPopup {
     private var shownItems: List<ItemFind> = emptyList()
     private var pendingGifts: List<GiftPop> = emptyList()
     private var shownGift: GiftPop? = null
+    private var pendingSaves: List<GameEvent.StreakSaved> = emptyList()
+    private var shownSave: GameEvent.StreakSaved? = null
     private var front: WeakReference<Activity>? = null
     private var dialog: Dialog? = null
     private var shown: List<AchCelebration> = emptyList()
@@ -119,17 +121,19 @@ object AchievementPopup {
     /** Daily gifts waiting for a screen (tests). */
     internal fun waitingGifts(): List<GiftPop> = pendingGifts
 
-    internal fun reset() { playback.clear(); dismissNote(); pending.clear(); shown = emptyList(); pendingItems = emptyList(); shownItems = emptyList(); pendingGifts = emptyList(); shownGift = null; front = null; dialog = null }
+    internal fun reset() { playback.clear(); dismissNote(); pending.clear(); shown = emptyList(); pendingItems = emptyList(); shownItems = emptyList(); pendingGifts = emptyList(); shownGift = null; pendingSaves = emptyList(); shownSave = null; front = null; dialog = null }
 
     /** The events of one action: what is worth a celebration is queued and shown (see the file comment). */
     fun offer(events: List<GameEvent>) {
         val items = AchPageMath.celebrations(events)
         val finds = PopupMath.finds(events)
         val gifts = PopupMath.gifts(events)
-        if (items.isEmpty() && finds.isEmpty() && gifts.isEmpty()) return
+        val saves = events.filterIsInstance<GameEvent.StreakSaved>()
+        if (items.isEmpty() && finds.isEmpty() && gifts.isEmpty() && saves.isEmpty()) return
         pending += items.filter { n -> pending.none { it.rowId == n.rowId && it.tier == n.tier } }
         pendingItems = PopupMath.merge(pendingItems, finds)
         pendingGifts = pendingGifts + gifts
+        pendingSaves = pendingSaves + saves
         schedule()
     }
 
@@ -147,12 +151,13 @@ object AchievementPopup {
                 pending.addAll(0, shown); shown = emptyList()
                 pendingItems = PopupMath.merge(shownItems, pendingItems); shownItems = emptyList()
                 shownGift?.let { pendingGifts = listOf(it) + pendingGifts }; shownGift = null
+                shownSave?.let { pendingSaves = listOf(it) + pendingSaves }; shownSave = null
             }
         }
     }
 
     private fun schedule() {
-        if ((pending.isEmpty() && pendingItems.isEmpty() && pendingGifts.isEmpty()) || front?.get() == null) return
+        if ((pending.isEmpty() && pendingItems.isEmpty() && pendingGifts.isEmpty() && pendingSaves.isEmpty()) || front?.get() == null) return
         handler.removeCallbacks(showNow)
         handler.postDelayed(showNow, DELAY_MS)
     }
@@ -160,7 +165,7 @@ object AchievementPopup {
     private fun tryShow() {
         val a = front?.get() ?: return
         if (waitingForPlayback) { schedule(); return }
-        if ((pending.isEmpty() && pendingItems.isEmpty() && pendingGifts.isEmpty()) || dialog?.isShowing == true || note != null || a.isFinishing || a.isDestroyed || a.isInPictureInPictureMode) return
+        if ((pending.isEmpty() && pendingItems.isEmpty() && pendingGifts.isEmpty() && pendingSaves.isEmpty()) || dialog?.isShowing == true || note != null || a.isFinishing || a.isDestroyed || a.isInPictureInPictureMode) return
         if (pending.isNotEmpty() && mode(a) != 0) {
             val batch = pending.toList(); pending.clear()
             if (mode(a) == 2) { schedule(); return }
@@ -186,8 +191,13 @@ object AchievementPopup {
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0.45f)
         }
-        fun finish() { if (dialog === d) { dialog = null; shown = emptyList(); shownItems = emptyList(); shownGift = null }; d.dismiss(); schedule() } // a tap closes it; more waiting? the next batch follows
-        if (pending.isNotEmpty()) {
+        fun finish() { if (dialog === d) { dialog = null; shown = emptyList(); shownItems = emptyList(); shownGift = null; shownSave = null }; d.dismiss(); schedule() } // a tap closes it; more waiting? the next batch follows
+        if (pendingSaves.isNotEmpty()) {
+            val saved = pendingSaves.first()
+            pendingSaves = pendingSaves.drop(1)
+            shownSave = saved
+            d.setContentView(streakLayer(a, saved) { finish() })
+        } else if (pending.isNotEmpty()) {
             val batch = pending.toList()
             pending.clear()
             shown = batch
@@ -214,6 +224,22 @@ object AchievementPopup {
     }
 
     // ---- the popup's look (shots render this view) ----
+
+    internal fun streakLayer(ctx: Context, saved: GameEvent.StreakSaved, close: () -> Unit): View {
+        val freeze = com.husarp.ankigo.game.StreakFreeze
+        val card = cardBox(ctx).apply {
+            addView(ShopViews.itemArt(ctx, freeze.ITEM, 56))
+            addView(Ui.text(ctx, 20f, 900, R.color.ag_text).apply { text = freeze.title(saved); gravity = Gravity.CENTER })
+            addView(Ui.text(ctx, 14f, 800, R.color.ag_text).apply { text = freeze.detail(saved); gravity = Gravity.CENTER }, Form.lp(ctx, 10))
+            addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = freeze.protectedDays(saved); gravity = Gravity.CENTER }, Form.lp(ctx, 6))
+            addView(Form.secondary(ctx, "Nice") { close() }, Form.lp(ctx, 14))
+        }
+        return FrameLayout(ctx).apply {
+            setOnClickListener { close() }
+            card.isClickable = true
+            addView(cardScroll(ctx, card), FrameLayout.LayoutParams(-1, -2, Gravity.CENTER).also { it.setMargins(Ui.dp(ctx, 28), Ui.dp(ctx, 12), Ui.dp(ctx, 28), Ui.dp(ctx, 12)) })
+        }
+    }
 
     /**
      * The full-window layer: the card in the middle (scrolls when the window is short), a tap outside it = [onNice]. [onSee] gets the id of the
