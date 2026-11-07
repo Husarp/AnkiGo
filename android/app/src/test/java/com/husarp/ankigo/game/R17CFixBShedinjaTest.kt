@@ -12,7 +12,7 @@ import kotlin.random.Random
  * R17C-FIX item 1 (HIGH): the mainline Shedinja rule. A species with base HP 1 has 1 max HP at any level, IV and EV (so its Wonder Guard,
  * which only super-effective moves and Struggle get through, can be beaten). Every reader of the max HP still works at 1: the stat range,
  * newly made Pokémon, levelling, the defeat heal, the bench rest, healing items, the faster-start wild HP and the HP bar numbers.
- * (The Ankimon import / export rows are in game.ankimon.R17CFixBShedinjaAnkimonTest.)
+ * (The Ankimon import cases are in game.ankimon.R17CFixBShedinjaAnkimonTest.)
  */
 class R17CFixBShedinjaTest {
     private val now = 1_790_000_000_000L

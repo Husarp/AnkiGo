@@ -20,8 +20,7 @@ import org.junit.Test
 
 /**
  * R17C-FIX items 1 and 17.
- * 1: a Shedinja (base HP 1, 1 max HP) imported from Ankimon gets 1 HP, and the file the export writes has 1 in its stats / hp / current_hp
- *    and passes the export's own checks. (This is a Shedinja-rule change of the numbers written for such a Pokémon; every other row is the same.)
+ * 1: a Shedinja (base HP 1, 1 max HP) imported from Ankimon gets 1 HP.
  * 17: an Ankimon import that changes the Main in a fight does not run the rule sets' onLeave (no Regenerator heal for the old Main), where
  *    a switch the player makes does.
  */
@@ -53,23 +52,6 @@ class R17CFixBShedinjaAnkimonTest {
         assertEquals(292, m.species)
         assertEquals(1, StatCalc.maxHp(data, m))
         assertEquals(1, m.hp)
-    }
-
-    @Test fun theExportWritesOneHpForAShedinjaAndPassesItsOwnChecks() {
-        val state = TestData.state(data, 292, 40, listOf("tackle"))
-        state.main!!.evs = Stats.ZERO.copy(hp = 252)
-        val result = AnkimonExport.build(data, state, null, AnkimonRefs.NONE, NOW)   // verify() runs inside build and would throw
-        assertTrue(AnkimonExport.verify(result).isEmpty())
-        val image = SqliteReader(result.bytes).image()
-        val table = image.table("captured_pokemon")!!
-        val col = table.columns.indexOf("data")
-        val o = JSONObject(table.rows.map { it.values[col] as String }.single())
-        assertEquals(292, o.getInt("id"))
-        assertEquals(1, o.getJSONObject("stats").getInt("hp"))
-        assertEquals(1, o.getInt("hp"))
-        assertEquals(1, o.getInt("current_hp"))
-        assertEquals(40, o.getInt("level"))
-        assertEquals(1, o.getJSONObject("base_stats").getInt("hp"))   // Ankimon's own base stats are untouched
     }
 
     // ---- item 17 -----------------------------------------------------------------------------------------------

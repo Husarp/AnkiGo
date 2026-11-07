@@ -5,8 +5,7 @@ import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 
 // TICKET T51 owns this file. SQLite's value rules in one place: records, affinity, comparison, json_extract.
-// Shared by SqliteWriter and SqliteCheck. Everything the code can't reproduce with certainty THROWS
-// (IllegalArgumentException) instead of guessing: a refused export beats a file that real SQLite would call damaged.
+// SQLite value handling used by the schema parser. Invalid values throw IllegalArgumentException.
 
 internal object SqlValues {
     // ---- varints and records (https://www.sqlite.org/fileformat2.html "Record Format") ------------------------------

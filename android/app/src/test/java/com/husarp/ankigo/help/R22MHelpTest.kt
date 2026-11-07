@@ -59,10 +59,10 @@ class R22MHelpTest {
         assertTrue(HelpSettingsLinks.find("In AnkiDroid open Settings → Sync and raise Network timeout.").isEmpty())
         assertTrue(HelpSettingsLinks.find("In AnkiDroid open Settings → Study.").isEmpty())
     }
-    @Test fun quotedCatchPathUsesOneLinkAndExportUsesTheRow() {
+    @Test fun quotedCatchPathUsesOneLinkAndImportUsesTheRow() {
         val source = "Settings → Game → \"When you beat a wild Pokémon\""
         val links = HelpSettingsLinks.find(source)
         assertEquals(1, links.size); assertEquals(source.length, links.single().end)
-        assertEquals("ankimonExport", HelpSettingsLinks.find("Settings → Ankimon PC sync → Export for Ankimon PC…").single().setting)
+        assertEquals("ankimonImport", HelpSettingsLinks.find("Settings → Ankimon PC sync → Import Ankimon save (.db)…").single().setting)
     }
 }

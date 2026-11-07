@@ -19,7 +19,7 @@ class R18FixTextsTest {
     }
 
     @Test fun noPlaceBuildsAPluralByHand() {
-        for (f in listOf("ui/EventPlayer.kt", "ui/BattleLogActivity.kt", "live/LiveSession.kt", "ui/AnkimonExportFlow.kt")) {
+        for (f in listOf("ui/EventPlayer.kt", "ui/BattleLogActivity.kt", "live/LiveSession.kt")) {
             val t = src(f)
             assertFalse("$f has a hand-made \"coins\"", Regex("\\$\\{?[A-Za-z.()]+}? coins\"").containsMatchIn(t))
         }

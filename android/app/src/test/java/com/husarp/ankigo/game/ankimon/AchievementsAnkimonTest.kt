@@ -10,7 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** R4-03: an Ankimon import must not fire achievement celebrations; the export is not touched by achievements. */
+/** R4-03: an Ankimon import must not fire achievement celebrations. */
 class AchievementsAnkimonTest {
     private val data = TestData.world()
     private val NOW = 1_800_000_000_000L
@@ -70,31 +70,4 @@ class AchievementsAnkimonTest {
         assertTrue(AchievementTable.ROWS.all { it.id in s.achTiers })
     }
 
-    @Test fun theExportWritesTheSameFileWhateverTheAchievementsAre() {
-        val refs = AnkimonRefs.fromFiles { name ->
-            when (name) {
-                "items.csv" -> "id,identifier,category_id,cost,fling_power,fling_effect_id\n4,poke-ball,34,200,,\n17,potion,27,200,,\n"
-                "moves.json" -> """{"tackle":{"num":33},"thunderbolt":{"num":85}}"""
-                else -> null
-            }
-        }
-        val img = AnkimonSchema.fresh()
-        img.table("badges")!!.insert(mapOf("badge_id" to "b1", "achieved" to 1L))
-        val kept = SqliteWriter.write(img)
-
-        val plain = looked()
-        val rich = looked()
-        rich.badges += setOf(1, 2, 7, 16)
-        rich.badgeAt[7] = 111L
-        rich.counters["DAMAGE_DEALT"] = 99_999
-        rich.achTiers["answers"] = mutableListOf(1L, 2L, 3L)
-        rich.achSince = 5L
-
-        val a = AnkimonExport.build(data, plain, kept, refs, NOW)
-        val b = AnkimonExport.build(data, rich, kept, refs, NOW)
-        assertEquals(emptyList<String>(), AnkimonExport.verify(b))
-        assertTrue(a.bytes.contentEquals(b.bytes)) // badges, dates and counters are not in the Ankimon file
-        val badges = SqliteReader(b.bytes).image().table("badges")!!
-        assertEquals(1, badges.rows.size) // the table is exactly the one the PC save had
-    }
 }

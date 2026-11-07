@@ -37,7 +37,7 @@ object HelpContent {
     const val ANSWERS_NOT_DETECTED = "answers-not-detected"
     const val WIDGET_NOT_UPDATING = "widget-not-updating"
     const val BATTLE_POPS_UP = "battle-pops-up"
-    const val ANKIMON_IMPORT_EXPORT = "ankimon-import-export"
+    const val ANKIMON_IMPORT = "ankimon-import"
 
     private const val WIKI = "https://github.com/ankidroid/Anki-Android/wiki"
     private const val MANUAL = "https://docs.ankidroid.org/"
@@ -192,8 +192,8 @@ object HelpContent {
             ),
         ),
         HelpPage(
-            ANKIMON_IMPORT_EXPORT, "Ankimon: import and export",
-            "Bring your PC Ankimon save to the phone, and back.",
+            ANKIMON_IMPORT, "Ankimon: import",
+            "Bring your PC Ankimon save to the phone.",
             listOf(
                 see("You play Ankimon on the PC and want the same Pokémon in AnkiGo, or you can't find Export in Ankimon."),
                 why(
@@ -203,9 +203,7 @@ object HelpContent {
                 HelpSection(
                     SectionKind.DO,
                     text = "Follow the steps below. The same steps are in Settings → ${AnkimonGuide.SECTION_TITLE}.",
-                    steps = AnkimonGuide.steps.map { it.title + ": " + it.detail } +
-                        "Going back to the PC: AnkiGo → Settings → ${AnkimonGuide.SECTION_TITLE} → Export for Ankimon PC…, " +
-                        "then in Anki use Ankimon → Game → Import Save File… and restart Anki.",
+                    steps = AnkimonGuide.steps.map { it.title + ": " + it.detail },
                 ),
                 check("The preview before importing shows how many Pokémon it adds. After importing, your Pokémon and Pokédex are in AnkiGo."),
             ),

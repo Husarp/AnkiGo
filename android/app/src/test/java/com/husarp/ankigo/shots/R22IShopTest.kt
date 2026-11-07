@@ -92,7 +92,7 @@ class R22IShopTest {
         assertFalse("thunderbolt" in GameRepo.state!!.tms)
         (ShopCardKit.findText(stage) { it == "Hold to buy" }!!.parent as View).performLongClick(); stage.render()
         assertTrue("thunderbolt" in GameRepo.state!!.tms)
-        assertTrue(ShopCardKit.texts(stage).contains("✓ Owned"))
+        assertTrue(ShopCardKit.texts(stage).contains("Sold out"))
     }
     @Test fun insufficientMoneyDoesNotArmConfirmation() {
         val ctx = setup()

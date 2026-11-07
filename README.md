@@ -38,7 +38,7 @@ Nothing in the game needs a tap while you learn.
 
 ### Bring your Ankimon save
 
-- Move your Pokémon from Ankimon on the PC to AnkiGo, and back again. You see what changes before anything does, and
+- Move your Pokémon from Ankimon on the PC to AnkiGo. You see what changes before anything does, and
   your current game is backed up first.
 
 ## What you need

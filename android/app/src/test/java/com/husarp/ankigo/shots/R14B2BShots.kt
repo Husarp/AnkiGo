@@ -245,10 +245,10 @@ class R14B2BShots {
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")), setup = ::someDontKnowThunderbolt).second }
     }
 
-    @Test fun anOwnedTmSaysOwnedInsteadOfBuy() {
+    @Test fun anOwnedTmSaysSoldOutInsteadOfBuy() {
         shoot("shop-tm-owned", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen ->
             val t = texts((screen as ShopCardKit.Stage).page.itemWindow!!.view)
-            assertTrue("✓ Owned" in t)
+            assertTrue("Sold out" in t)
             assertTrue("You own this TM" in t)
             assertTrue("Hold to buy" !in t)
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")), setup = { st.tms += "thunderbolt" }).second }

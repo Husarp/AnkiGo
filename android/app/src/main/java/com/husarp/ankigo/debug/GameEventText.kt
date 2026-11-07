@@ -20,6 +20,7 @@ object GameEventText {
         is GameEvent.Cash -> "Cash +${e.amount} total=${e.total} ${e.kind}"
         is GameEvent.ItemFound -> "ItemFound ${Items.name(e.item)} (now ${e.count})"
         is GameEvent.BadgeEarned -> "BadgeEarned #${e.id} ${e.title}"
+        is GameEvent.StreakSaved -> com.husarp.ankigo.game.StreakFreeze.title(e) + ": " + com.husarp.ankigo.game.StreakFreeze.detail(e)
         is GameEvent.DailyGift -> "DailyGift ${DailyGift.name(null, e.item, e.tm, e.count)} streak=${e.streakDays}"
         is GameEvent.AchievementReached -> "AchievementReached ${e.id.filter { it.isLetterOrDigit() || it == '-' }.take(48)} tier=${e.tier} ${e.title} ${e.tierName}"
         is GameEvent.TrainerLevelUp -> "TrainerLevelUp level=${e.level}"

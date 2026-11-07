@@ -322,7 +322,7 @@ class DuplicateReleaseTest {
 
     private fun assertSame(a: Any?, b: Any?) = assertTrue("not the same object", a === b)
 
-    @Test fun releasedPokemonAreRememberedForTheAnkimonExport() {
+    @Test fun releasedPokemonIdsSurviveTheLocalSave() {
         val s = busy()
         game(s).releasePlanned()
         // "a" came from Ankimon (ankimonId), the others have none: their uid is remembered, as release() does

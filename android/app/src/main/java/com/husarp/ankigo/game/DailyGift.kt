@@ -94,7 +94,9 @@ object DailyGift {
      * and adds [GameEvent.DailyGift]. Never touches the money. Returns the gift (null = nothing to give, no event).
      */
     fun give(data: GameData, state: GameState, events: MutableList<GameEvent>): Gift? {
-        val gift = draw(data, state.day, state.streakDays, state.tms) ?: return null
+        val gift = if (state.count(StreakFreeze.ITEM) < StreakFreeze.CAP &&
+            Random(("freeze-gift:${state.day}").hashCode()).nextInt(100) < 2) Gift(StreakFreeze.ITEM, null, 1)
+        else draw(data, state.day, state.streakDays, state.tms) ?: return null
         if (gift.tm != null) state.tms += gift.tm else Economy.give(state, gift.item!!, gift.count)
         events += GameEvent.DailyGift(gift.item, gift.tm, gift.count, state.streakDays)
         return gift

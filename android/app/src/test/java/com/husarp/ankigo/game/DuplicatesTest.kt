@@ -225,7 +225,7 @@ class DuplicatesTest {
         assertNull(s.mon("d"))                                      // released
         assertEquals(listOf(30), s.mons.filter { it.species == 16 }.map { it.level }) // one Birdie left: the better one
         assertEquals(2, s.mons.size)                                // main + the swapped-in one
-        assertTrue("ank-7" in s.releasedAnkimon)                    // the Ankimon export removes it, as after a manual release
+        assertTrue("ank-7" in s.releasedAnkimon)                    // remembered like a manual release
         assertEquals(1, s.catches); assertEquals("main", s.team.first())
     }
 

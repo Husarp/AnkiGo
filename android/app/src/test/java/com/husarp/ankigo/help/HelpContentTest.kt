@@ -20,7 +20,7 @@ class HelpContentTest {
         assertEquals(8, ids.size)
         listOf(
             HelpContent.PICTURES_DONT_SHOW, HelpContent.MOVE_COLLECTION, HelpContent.PICTURES_MISSING, HelpContent.PICTURES_SYNC,
-            HelpContent.ANSWERS_NOT_DETECTED, HelpContent.WIDGET_NOT_UPDATING, HelpContent.BATTLE_POPS_UP, HelpContent.ANKIMON_IMPORT_EXPORT,
+            HelpContent.ANSWERS_NOT_DETECTED, HelpContent.WIDGET_NOT_UPDATING, HelpContent.BATTLE_POPS_UP, HelpContent.ANKIMON_IMPORT,
         ).forEach { assertNotNull(it, HelpContent.page(it)) }
     }
 
@@ -56,7 +56,7 @@ class HelpContentTest {
     }
 
     @Test fun ankimonPageUsesTheGuideStepsAndNotes() {
-        val p = HelpContent.page(HelpContent.ANKIMON_IMPORT_EXPORT)!!
+        val p = HelpContent.page(HelpContent.ANKIMON_IMPORT)!!
         val steps = p.section(SectionKind.DO)!!.steps.joinToString("\n")
         for (s in AnkimonGuide.steps) assertTrue(steps.contains(s.title))
         assertEquals(AnkimonGuide.notes, p.notes)

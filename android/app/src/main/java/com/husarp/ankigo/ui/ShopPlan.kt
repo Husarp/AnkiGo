@@ -23,6 +23,9 @@ internal object ShopPlan {
         return Price(now, deal?.oldPrice, deal?.percent)
     }
 
+    fun price(data: GameData, state: com.husarp.ankigo.game.GameState, item: String): Price =
+        if (item == com.husarp.ankigo.game.StreakFreeze.ITEM) Price(Shop.priceOf(data, state, item)) else price(data, state.day, item)
+
     /** A TM costs [Tuning.TM_PRICE], never discounted. */
     fun tmPrice(): Price = Price(Tuning.TM_PRICE)
 

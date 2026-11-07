@@ -2,9 +2,6 @@ package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.TestData
-import com.husarp.ankigo.game.ankimon.AnkimonExport
-import com.husarp.ankigo.game.ankimon.AnkimonRefs
-import com.husarp.ankigo.game.ankimon.AnkimonSchema
 import com.husarp.ankigo.game.save.SaveCodec
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -97,30 +94,6 @@ class TileMarksTest {
         val back = SaveCodec.decode(o.toString())
         assertTrue(back.viewedMons.isEmpty())
         assertEquals(1, back.mons.size) // everything else loads as before
-    }
-
-    @Test fun neverWrittenIntoTheAnkimonFile() {
-        val refs = AnkimonRefs.fromFiles { name ->
-            when (name) {
-                "items.csv" -> "id,identifier,category_id,cost,fling_power,fling_effect_id\n4,poke-ball,34,200,,\n"
-                "moves.json" -> """{"tackle":{"num":33}}"""
-                "pokemon.csv" -> "id,identifier,species_id,height,weight,base_experience,order,is_default\n"
-                else -> null
-            }
-        }
-        fun exported(viewed: Boolean): String {
-            val st = TestData.state(data, 25, 10)
-            val mon = st.mons[0]; mon.ankimonId = "v-1"; mon.level = 40
-            if (viewed) st.viewedMons += mon.uid
-            val img = AnkimonSchema.fresh()
-            val row = """{"name":"sparkmouse","id":25,"level":10,"xp":0,"attacks":["tackle"],"individual_id":"v-1"}"""
-            img.table("captured_pokemon")!!.insert(mapOf("individual_id" to "v-1", "is_main" to 1L, "data" to row))
-            AnkimonExport.edit(data, st, img, refs, 1_800_000_000_000L, false)
-            val t = img.table("captured_pokemon")!!
-            return t.rows.single().values[t.columns.indexOf("data")] as String
-        }
-        assertEquals(exported(false), exported(true))
-        assertFalse(exported(true).contains("viewed"))
     }
 
     @Test fun holdsAnItemAndCanEvolveFilters() {

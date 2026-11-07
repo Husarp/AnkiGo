@@ -252,6 +252,10 @@ object Ui {
         view.clearColorFilter()
         view.alpha = 1f
         view.scaleType = ImageView.ScaleType.FIT_CENTER
+        if (item == com.husarp.ankigo.game.StreakFreeze.ITEM) {
+            view.setImageDrawable(TypeChips.tinted(ctx, Type.ICE, TypeChips.ink(ctx, Type.ICE)))
+            return
+        }
         val have = if (ItemIconPlan.of(item) is ItemIconSpec.Drawn) null else Sprites.itemBitmap(ctx, item)
         if (have != null) {
             view.setImageDrawable(pixelBitmap(ctx, have))

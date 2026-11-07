@@ -117,7 +117,7 @@ object WidgetLogic {
         val today = if (s.day == dayKey) s.reviewsToday else 0
         val goal = DailyGoal.forDay(s, dayKey)
         val yesterday = runCatching { LocalDate.parse(dayKey).minusDays(1).toString() }.getOrDefault("")
-        val last = s.lastGoalDay
+        val last = s.streakThroughDay ?: s.lastGoalDay
         val streak = if (last != null && last != dayKey && last != yesterday) 0 else s.streakDays
         val hour = Instant.ofEpochMilli(now).atZone(zone).hour
         return WidgetSnapshot(

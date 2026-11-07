@@ -393,12 +393,15 @@ class GameState(
     var bestCardStreak: Int = 0,
     var streakDays: Int = 0,             // days in a row with the daily goal reached, ending at lastGoalDay
     var lastGoalDay: String? = null,
+    var streakThroughDay: String? = null, // last earned or protected day; protected days add no progress
+    var battleFreezeDay: String? = null,
     var bestStreakDays: Int = 0,         // longest goal streak ever
     val history: MutableMap<String, DayLog> = mutableMapOf(), // game day "yyyy-MM-dd" -> that day's log (kept 400 days)
     var totalReviews: Long = 0,
     val badges: MutableSet<Int> = mutableSetOf(),
     var shopDay: String? = null,
     var shopRefreshes: Int = 0,
+    val shopPurchases: MutableSet<String> = mutableSetOf(), // offer key, independent of price and rerolls
     val shopItems: MutableList<String> = mutableListOf(),
     val shopTms: MutableList<String> = mutableListOf(),
     val redo: MutableMap<Long, Int> = mutableMapOf(), // card id -> answers to ignore after an AnkiDroid undo
@@ -411,7 +414,7 @@ class GameState(
     var evolutions: Int = 0,
     val ballCatches: MutableMap<String, Int> = mutableMapOf(), // wild catches per ball id ("auto" = the auto rule's catch); fossils, the starter and imports don't count
     val seenAt: MutableMap<Int, Long> = mutableMapOf(),        // species -> epoch ms it was first seen (set once; old species have none)
-    val releasedAnkimon: MutableSet<String> = linkedSetOf(), // ankimonId ?: uid of Pokémon released here (newest 5 000): the export removes them from the PC save
+    val releasedAnkimon: MutableSet<String> = linkedSetOf(), // ankimonId ?: uid of Pokémon released here (newest 5 000): kept for later import matching
     val viewedMons: MutableSet<String> = linkedSetOf(),        // uids of Pokémon whose details the player has opened: their NEW mark on the Box tile / Team row is gone (R4-V5); AnkiGo save and backups only, never the Ankimon file
     val counters: MutableMap<String, Long> = mutableMapOf(),   // achievement counters (Achievements.Counter key -> count) for what the rest of the save can't tell; AnkiGo save and backups only (R4-03)
     val achTiers: MutableMap<String, MutableList<Long>> = mutableMapOf(), // achievement id -> epoch ms each tier was reached, in order; an id with an empty list = looked at, nothing reached yet (see Achievements.check)
@@ -427,13 +430,13 @@ class GameState(
     /** Species the starter alone put into [seen] / [caught] (its own, and the form it evolved into): not counted by the Pokédex rows until met / caught for real. */
     val starterSeen: MutableSet<Int> = linkedSetOf(),
     val starterCaught: MutableSet<Int> = linkedSetOf(),
-    /** PLAN 206: the uid of the team member a switch is waiting for: it comes in right after the next counted answer ([Game.requestMain]). Null = no switch queued; old saves have none; never exported to Ankimon. */
+    /** PLAN 206: the uid of the team member a switch is waiting for: it comes in right after the next counted answer ([Game.requestMain]). Null = no switch queued; old saves have none. */
     var pendingMain: String? = null,
     /** PLAN 206: the queued switch came from [Game.cycleMain]: the answer rotates the first three as the cycle does, not [Game.setMain]'s move to the front. Meaningful only with [pendingMain]. */
     var pendingCycle: Boolean = false,
     /** PLAN 313: a team edit that changes the Main waits with the switch, including replacement from the Box. */
     var pendingTeam: List<String>? = null,
-    /** R19-P (PLAN 281): the catch / release questions waiting for the player ([AskMe]); empty in an old save, answered exactly once, never exported to Ankimon. */
+    /** R19-P (PLAN 281): the catch / release questions waiting for the player ([AskMe]); empty in an old save, answered exactly once. */
     val asks: MutableList<PendingAsk> = mutableListOf(),
     val settings: Settings = Settings(),
 ) {

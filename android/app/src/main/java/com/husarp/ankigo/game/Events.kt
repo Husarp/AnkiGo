@@ -25,6 +25,8 @@ sealed class GameEvent {
     data class TrainerLevelUp(val level: Int) : GameEvent()
     data class DayChanged(val day: String) : GameEvent()
 
+    data class StreakSaved(val days: Int, val used: Int, val left: Int, val from: String, val through: String) : GameEvent()
+
     /**
      * R14-B2-D (PLAN 125 / R10 X3): the daily gift, sent once a day when the daily goal is reached (it replaces the old money bonus). Exactly one of
      * [item] (an item id, [count] of it, already in the Bag) and [tm] (a TM's move id, already in the TMs) is set. [streakDays] = the goal streak

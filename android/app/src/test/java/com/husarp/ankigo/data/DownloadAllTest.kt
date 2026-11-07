@@ -92,9 +92,10 @@ class DownloadAllTest {
     @Test fun itemCatalogueIsTheGameCatalogueWithoutThePicturelessOnes() {
         val ids = DownloadAll.catalogueItems()
         assertEquals(ids.sorted(), ids)
+        assertFalse("streak-freeze" in ids)
         for (id in listOf("poke-ball", "master-ball", "thunder-stone", "lucky-egg", "helix-fossil", "potion", "poke-doll")) assertTrue(id, id in ids)
         for (id in ItemIconPlan.DRAWN) assertFalse("$id has no PokeAPI picture", id in ids)
-        assertEquals(Items.ALL.keys.count { it !in ItemIconPlan.DRAWN }, ids.size)
+        assertEquals(Items.ALL.keys.count { ItemIconPlan.of(it) is com.husarp.ankigo.ui.ItemIconSpec.Sprite }, ids.size)
     }
 
     @Test fun everyBackgroundOfTheCatalogueIsInThePlan() {

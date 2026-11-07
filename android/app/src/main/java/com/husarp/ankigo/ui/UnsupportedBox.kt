@@ -71,8 +71,8 @@ object UnsupportedBox {
             AppDialog.Builder(ctx).setTitle(u.name.replaceFirstChar { it.uppercase() } + " · Lv " + u.level)
                 .setMessage(
                     "AnkiGo doesn't support this Pokémon yet (${u.reason}).\n\n" +
-                        "It can't battle, join your team or be released for now. It is kept safe, and when you export back to Ankimon " +
-                        "it goes back unchanged. When AnkiGo learns it, it turns into a normal Pokémon on its own.",
+                        "It can't battle, join your team or be released for now. It is kept safe. " +
+                        "When AnkiGo learns it, it turns into a normal Pokémon on its own.",
                 )
                 .setPositiveButton("OK", null).create(),
         )

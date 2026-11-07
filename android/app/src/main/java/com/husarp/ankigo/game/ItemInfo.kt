@@ -51,6 +51,7 @@ object ItemInfo {
         }
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {
+            ItemKind.AUTO -> "Protects goal streak"
             ItemKind.BALL -> when {
                 isMaster(item) -> "Always catches"
                 item == "repeat-ball" -> "Returns ${Tuning.REPEAT_RETURN_MISS_PERCENT}% / ${Tuning.REPEAT_RETURN_CATCH_PERCENT}%"
@@ -88,6 +89,7 @@ object ItemInfo {
         if (item in AbilityAdaptations.berries) return berryLine(item)
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {
+            ItemKind.AUTO -> "Protects one missed daily goal"
             ItemKind.BALL -> when {
                 isMaster(item) -> "Always catches · can't be bought"
                 isOldBall(item) -> Items.specialSummary(item)
@@ -112,6 +114,11 @@ object ItemInfo {
     fun facts(data: GameData?, item: String, caught: Set<Int>? = null): List<ItemFact> {
         val def = Items.def(item) ?: return listOf(ItemFact(WHAT, NO_DESCRIPTION))
         return when (def.kind) {
+            ItemKind.AUTO -> listOf(
+                ItemFact(WHAT, "**One freeze protects one missed daily goal.** Hold up to **3**. Daily gift: **2%**. Shop: one per game day, **2,000 / 3,000 / 4,000 coins** with 0 / 1 / 2 held. At 3 held it is unavailable from all sources."),
+                ItemFact(HOW, "Used automatically at the configured day cutoff. A whole gap needs one freeze per missed day; if there are not enough, the streak ends and none are spent. Protected days preserve the count without adding goal days or rewards."),
+                ItemFact(FIGHT, "Rewarded battle win: **0.2%**, at most one per game day. Practice gives none. It has no manual battle action."),
+            )
             ItemKind.BALL -> ballFacts(item)
             ItemKind.HEAL -> {
                 val all = def.heal == Int.MAX_VALUE
@@ -384,6 +391,7 @@ object ItemInfo {
 
     /** Where and how the item is used (one sentence). */
     fun howToUse(item: String): String = when (Items.def(item)?.kind) {
+        ItemKind.AUTO -> "Used automatically when a daily goal is missed. No manual activation."
         ItemKind.BALL -> if (isOldBall(item)) Items.specialNote(item) else "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
         ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"
         ItemKind.EVOLUTION -> if (item in Items.RETIRED) "No Pokémon in AnkiGo evolves with it, so it can't be used."

@@ -82,7 +82,7 @@ object AnkimonMerge {
         val nameIndex = nameIndex(data)
         val notInFile = notInFile(state, save)
 
-        // A phone-caught Pokémon that was exported to the PC comes back under its uid (see AnkimonExport): match both.
+        // An incoming file may identify a legacy phone Pokémon by its uid: match both IDs.
         val byAnkimonId = HashMap<String, Mon>()
         for (m in state.mons) byAnkimonId.putIfAbsent(m.ankimonId ?: m.uid, m)
         val takenUids = state.mons.mapTo(HashSet()) { it.uid }
@@ -179,8 +179,8 @@ object AnkimonMerge {
 
     /**
      * R9-W5 (the wave-4 edge): species the file really has are real finds, no longer the starter's gift alone (R9-W4-B). Its other
-     * Pokémon always count; its Pokédex lists count unless the file holds this game's starter itself (exported to Ankimon earlier, its
-     * lists may name the starter's species only because of it; also when it was released here since: an exported phone Pokémon keeps
+     * Pokémon always count; its Pokédex lists count unless the file holds this game's starter itself (a legacy phone ID, so its
+     * lists may name the starter's species only because of it; also when it was released here since: a legacy phone Pokémon keeps
      * its uid as its Ankimon id). The starter itself stays a gift. True if a set changed (the tiers this
      * reaches are dated quietly, like the rest of the import).
      */
@@ -250,13 +250,13 @@ object AnkimonMerge {
     /**
      * Pokémon on the phone that were on the PC once but that [save] doesn't have (released or traded on the PC, or an
      * older file). The import never removes them; the preview says so. "Once on the PC": imported from Ankimon, or caught
-     * on the phone no later than the newest phone catch the file holds (the file came after an export that had it).
+     * on the phone no later than the newest phone catch the file holds (the file already holds that legacy phone ID).
      */
     internal fun notInFile(state: GameState, save: AnkimonSave): Int {
         val inFile = save.mons.mapTo(HashSet()) { it.individualId }
-        val lastExported = state.mons.filter { it.ankimonId == null && it.uid in inFile }.maxOfOrNull { it.caughtAt }
+        val lastLegacyPhoneCatch = state.mons.filter { it.ankimonId == null && it.uid in inFile }.maxOfOrNull { it.caughtAt }
         return state.mons.count { m ->
-            (m.ankimonId ?: m.uid) !in inFile && (m.ankimonId != null || (lastExported != null && m.caughtAt <= lastExported))
+            (m.ankimonId ?: m.uid) !in inFile && (m.ankimonId != null || (lastLegacyPhoneCatch != null && m.caughtAt <= lastLegacyPhoneCatch))
         }
     }
 
@@ -464,9 +464,10 @@ object AnkimonMerge {
     internal fun itemKey(name: String): String? {
         val plain = Normalizer.normalize(name, Normalizer.Form.NFD).filter { Character.getType(it) != Character.NON_SPACING_MARK.toInt() }
         val id = plain.trim().lowercase().replace(' ', '-').replace('_', '-').filter { it in 'a'..'z' || it in '0'..'9' || it == '-' }
+        if (Items.def(id)?.kind == com.husarp.ankigo.game.ItemKind.AUTO) return null
         if (Items.def(id) != null) return id
         val bare = id.replace("-", "")
-        return Items.ALL.keys.firstOrNull { it.replace("-", "") == bare }
+        return Items.ALL.keys.firstOrNull { Items.def(it)?.kind != com.husarp.ankigo.game.ItemKind.AUTO && it.replace("-", "") == bare }
     }
 
     /** A TM item is named after its move ("thunderbolt"); older exports may write "TM24 Thunderbolt". */

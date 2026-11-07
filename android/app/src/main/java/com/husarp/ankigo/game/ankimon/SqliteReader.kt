@@ -3,7 +3,7 @@ package com.husarp.ankigo.game.ankimon
 import java.io.File
 import java.nio.charset.Charset
 
-// TICKET T19 owns this file; T51 added image() and moved the CREATE TABLE parsing to SqlSchema.
+// Read-only Ankimon database reader; CREATE TABLE parsing lives in SqlSchema.
 
 /** The bytes are not a readable SQLite 3 database (wrong header, cut off, damaged, or a kind of table we don't read). */
 class SqliteFormatException(message: String) : java.io.IOException(message)
@@ -33,8 +33,6 @@ class SqliteReader(private val b: ByteArray) {
 
     private class TableInfo(val name: String, val root: Int, val sql: String?)
 
-    /** One `sqlite_master` row (the root page stays here: the writer gives every b-tree new pages). */
-    private class MasterRow(val type: String?, val name: String?, val tblName: String?, val root: Int, val sql: String?)
 
     private val pageSize: Int
     private val usable: Int
@@ -43,7 +41,6 @@ class SqliteReader(private val b: ByteArray) {
     private var payloadBudget = 0L                            // see walkTable
     private val master = LinkedHashMap<String, TableInfo>() // lower-case name -> table
     private val tableOrder = mutableListOf<String>()        // names as declared, type = table, not sqlite_*
-    private val masterRows = mutableListOf<MasterRow>()     // every sqlite_master row, in file order
 
     init {
         if (b.size < 100) throw SqliteFormatException("Not a SQLite file (too short)")
@@ -101,68 +98,6 @@ class SqliteReader(private val b: ByteArray) {
             }
             out
         }
-    }
-
-    /**
-     * The whole database as plain values (see [SqliteImage]): every `sqlite_master` row in file order and every row of every
-     * table, internal ones (sqlite_sequence, sqlite_stat1) included. Records shorter than their table (columns added later
-     * by ALTER TABLE ADD COLUMN) are completed with the column's DEFAULT, as SQLite itself reads them.
-     * Throws [SqliteFormatException] for what can't be copied faithfully: WITHOUT ROWID and virtual tables, a row with more
-     * values than columns, a default that is an expression and is needed to complete a row, more than [maxRows] rows
-     * in all, tables that share their pages, a damaged file.
-     */
-    fun image(maxRows: Int = 500_000): SqliteImage = guard {
-        val objects = ArrayList<SqlObject>()
-        val tables = LinkedHashMap<String, SqlTable>()
-        var rowsLeft = maxRows
-        var payloads = 0L // healthy tables never share a byte, so all payloads together fit in the file
-        for (m in masterRows) {
-            val type = m.type
-            val name = m.name
-            val tbl = m.tblName
-            if (type == null || name == null || tbl == null) bad("A row of sqlite_master is damaged")
-            objects += SqlObject(type, name, tbl, m.sql)
-            if (type != "table") continue
-            val t = readTable(m, rowsLeft)
-            rowsLeft -= t.rows.size
-            payloads += b.size + 4096L - payloadBudget
-            if (payloads > b.size + 4096L) bad("The tables overlap (damaged file)")
-            if (tables.put(name.lowercase(), t) != null) bad("Table $name is listed twice")
-        }
-        SqliteImage(objects, tables, pageSize, u32(60).toInt(), u32(68).toInt())
-    }
-
-    private fun readTable(m: MasterRow, rowsLeft: Int): SqlTable {
-        val name = m.name!!
-        val def = SqlSchema.parseTable(m.sql)
-        if (def.withoutRowid) bad("Table $name is WITHOUT ROWID, which can't be copied")
-        val stored = def.storedColumns
-        val alias = def.storedAlias
-        val pads = arrayOfNulls<Any>(stored.size)
-        val padded = BooleanArray(stored.size)
-        fun pad(i: Int): Any? {
-            if (!padded[i]) {
-                val c = stored[i]
-                if (c.hasDefault) {
-                    if (c.defaultProblem != null) bad("A row of $name is shorter than the table and ${c.name} has a ${c.defaultProblem}")
-                    pads[i] = try { SqlValues.apply(c.default, c.affinity) } catch (e: IllegalArgumentException) { bad("Default of $name.${c.name}: ${e.message}") }
-                }
-                padded[i] = true
-            }
-            return pads[i]
-        }
-        val rows = ArrayList<SqlRow>()
-        walkTable(m.root, minOf(rowsLeft, Int.MAX_VALUE - 1) + 1) { rowid, rec ->
-            if (rows.size >= rowsLeft) bad("The database has more rows than the limit")
-            if (rec.size > stored.size) bad("A row of $name has more values than the table has columns")
-            val v = ArrayList<Any?>(stored.size)
-            for (i in stored.indices) {
-                val x = if (i == alias) rowid else if (i < rec.size) rec[i] else pad(i)
-                v += if (stored[i].affinity == SqlSchema.Affinity.REAL && x is Long) x.toDouble() else x
-            }
-            rows += SqlRow(rowid, v)
-        }
-        return SqlTable(name, stored.map { it.name }, alias, rows)
     }
 
     // ---- error safety net ---------------------------------------------------------------------------------------
@@ -224,7 +159,6 @@ class SqliteReader(private val b: ByteArray) {
             val name = r.getOrNull(1) as? String
             val root = (r.getOrNull(3) as? Long)?.toInt() ?: 0
             val sql = r.getOrNull(4) as? String
-            masterRows += MasterRow(type, name, r.getOrNull(2) as? String, root, sql)
             if (type == "table" && !name.isNullOrBlank() && !name.startsWith("sqlite_", ignoreCase = true)) {
                 if (master.putIfAbsent(name.lowercase(), TableInfo(name, root, sql)) == null) tableOrder += name
             }

@@ -40,6 +40,7 @@ data class ReminderFacts(
     val shopTomorrow: List<String> = emptyList(),
     /** Full path of the cached picture of the current main Pokémon (the notification's large icon); null = none cached (no icon). */
     val mainSprite: String? = null,
+    val streakThroughDay: String? = null,
 ) {
     val valid: Boolean get() = day.isNotEmpty()
 
@@ -62,6 +63,7 @@ data class ReminderFacts(
                 goalWeek = DailyGoal.cleanTable(state.settings.goalByWeekday),
                 streakDays = state.streakDays,
                 lastGoalDay = state.lastGoalDay,
+                streakThroughDay = state.streakThroughDay,
                 shopToday = worthHaving(data, state, today),
                 shopTomorrow = worthHaving(data, state, tomorrow),
                 mainSprite = mainSprite,
@@ -97,6 +99,7 @@ data class ReminderFacts(
             goalWeek = DailyGoal.cleanTable(p.getString("goalWeek", null)?.split(',')?.mapNotNull { it.toIntOrNull() }),
             streakDays = p.getInt("streakDays", 0),
             lastGoalDay = p.getString("lastGoalDay", null),
+            streakThroughDay = p.getString("streakThroughDay", null),
             shopToday = split(p.getString("shopToday", null)),
             shopTomorrow = split(p.getString("shopTomorrow", null)),
             mainSprite = p.getString("mainSprite", null)?.takeIf { it.isNotEmpty() },
@@ -107,6 +110,7 @@ data class ReminderFacts(
                 .putString("day", f.day).putInt("dayStartHour", f.dayStartHour).putInt("reviewsToday", f.reviewsToday)
                 .putInt("dailyGoal", f.dailyGoal).putString("goalWeek", f.goalWeek?.joinToString(",")).putInt("streakDays", f.streakDays).putString("lastGoalDay", f.lastGoalDay)
                 .putString("shopToday", f.shopToday.joinToString(",")).putString("shopTomorrow", f.shopTomorrow.joinToString(","))
+                .putString("streakThroughDay", f.streakThroughDay)
                 .putString("mainSprite", f.mainSprite)
                 .apply()
         }

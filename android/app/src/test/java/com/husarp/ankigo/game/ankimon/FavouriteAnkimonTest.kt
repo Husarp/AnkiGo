@@ -9,19 +9,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Favourites and Ankimon (R2-02): kept on re-import, never written into the Ankimon file. */
+/** Favourites and Ankimon (R2-02): kept on re-import. */
 class FavouriteAnkimonTest {
     private val NOW = 1_800_000_000_000L
     private val data: GameData = TestData.world()
-
-    private val refs = AnkimonRefs.fromFiles { name ->
-        when (name) {
-            "items.csv" -> "id,identifier,category_id,cost,fling_power,fling_effect_id\n4,poke-ball,34,200,,\n"
-            "moves.json" -> """{"tackle":{"num":33}}"""
-            "pokemon.csv" -> "id,identifier,species_id,height,weight,base_experience,order,is_default\n"
-            else -> null
-        }
-    }
 
     private fun am(level: Int) = AnkimonMon(
         individualId = "fav-1", isMain = true, id = 25, name = "Sparkmouse", nickname = null, level = level, xp = 0,
@@ -45,26 +36,6 @@ class FavouriteAnkimonTest {
         assertTrue(mon.favourite)
         merge(state, 25) // same file again
         assertTrue(state.mons.single().favourite)
-    }
-
-    private fun exported(favourite: Boolean): String {
-        val state = GameState()
-        merge(state, 10)
-        val img = AnkimonSchema.fresh()
-        val row = """{"name":"sparkmouse","id":25,"level":10,"xp":0,"attacks":["tackle"],"individual_id":"fav-1"}"""
-        img.table("captured_pokemon")!!.insert(mapOf("individual_id" to "fav-1", "is_main" to 1L, "data" to row))
-        state.mons.single().apply { level = 40; this.favourite = favourite } // something that makes the row be rewritten
-        AnkimonExport.edit(data, state, img, refs, NOW, false)
-        val t = img.table("captured_pokemon")!!
-        return t.rows.single().values[t.columns.indexOf("data")] as String
-    }
-
-    @Test fun exportOfAFavouriteIsTheSameRowAsOfANonFavourite() {
-        val plain = exported(false)
-        val fav = exported(true)
-        assertTrue(plain.contains("\"level\": 40") || plain.contains("\"level\":40"))
-        assertEquals(plain, fav)
-        assertTrue(!fav.contains("favourite")) // Ankimon's own is_favorite is not touched either
     }
 
     @Test fun favouriteSurvivesABackupRestoreOfTheWholeState() {

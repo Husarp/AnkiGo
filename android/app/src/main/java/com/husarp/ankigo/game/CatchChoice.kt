@@ -2,7 +2,7 @@ package com.husarp.ankigo.game
 
 /**
  * R10-X2: the one "When you beat a wild Pokémon" list. Each option is a pair of existing settings, so the save format
- * (and the Ankimon export, which reads autoMode 1-3) does not change. Pure, no Android.
+ * (autoMode 1-3 in existing saves) does not change. Pure, no Android.
  *
  * R19-P (PLAN 281): "Ask me" is a third setting next to the pair, [Settings.askMe]; it always sits on autoMode 3 with the swap off, so an
  * old app or the Ankimon side reads it as "Catch only new species" (the closest thing it knows).

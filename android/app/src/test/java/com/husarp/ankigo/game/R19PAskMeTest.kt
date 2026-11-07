@@ -1,7 +1,5 @@
 package com.husarp.ankigo.game
 
-import com.husarp.ankigo.game.ankimon.AnkimonExport
-import com.husarp.ankigo.game.ankimon.AnkimonRefs
 import com.husarp.ankigo.game.save.SaveCodec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -220,7 +218,7 @@ class R19PAskMeTest {
         val r = g.answerCatch("wild", AskChoice.REPLACE)
         assertTrue(r.ok); assertTrue(s.asks.isEmpty())
         assertNull(s.mon("d")); assertEquals(listOf(30), s.mons.filter { it.species == 16 }.map { it.level })
-        assertTrue("ank-9" in s.releasedAnkimon)                    // the Ankimon export removes it
+        assertTrue("ank-9" in s.releasedAnkimon)                    // remembered for later import matching
         assertEquals(1, s.count("everstone"))                       // its held item went to the Bag
     }
 
@@ -445,25 +443,5 @@ class R19PAskMeTest {
         assertEquals(PendingAsk.Kind.REPLACE, g.nextAsk()!!.kind)
     }
 
-    // ---------------------------------------------------------------- the Ankimon export does not change
 
-    @Test fun theAnkimonExportIsTheSameWithAndWithoutAskMe() {
-        val refs = AnkimonRefs.fromFiles { name ->
-            when (name) {
-                "items.csv" -> "id,identifier,category_id,cost,fling_power,fling_effect_id\n" +
-                    "4,poke-ball,34,200,,\n3,great-ball,34,600,,\n17,potion,27,200,,\n50,rare-candy,26,10000,30,\n208,lucky-egg,16,10000,30,7\n"
-                "moves.json" -> """{"tackle":{"num":33},"thunderbolt":{"num":85},"slash":{"num":163},"doubleedge":{"num":38},"bodyslam":{"num":34}}"""
-                "pokemon.csv" -> "id,identifier,species_id,height,weight,base_experience,order,is_default\n10033,venusaur-mega,3,24,1555,,1,0\n"
-                else -> null
-            }
-        }
-        val plain = state(ask = false)
-        val asking = state(ask = true)
-        game(asking).faint(mon(16, 30, "wild"))                       // a waiting question in the state ...
-        game(plain).faint(mon(16, 30, "wild"))                        // ... against the same fight paid as a plain defeat
-        assertEquals(1, asking.asks.size); assertTrue(plain.asks.isEmpty())
-        val a = AnkimonExport.build(data, asking, null, refs, 1_800_000_000_000L)
-        val b = AnkimonExport.build(data, plain, null, refs, 1_800_000_000_000L)
-        assertTrue("the export is byte for byte the same", a.bytes.contentEquals(b.bytes))
-    }
 }

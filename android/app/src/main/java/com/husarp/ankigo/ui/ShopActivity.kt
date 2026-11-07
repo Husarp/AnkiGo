@@ -14,6 +14,7 @@ import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.Items
+import com.husarp.ankigo.game.StreakFreeze
 import com.husarp.ankigo.game.Shop
 import com.husarp.ankigo.sound.GameSound
 import com.husarp.ankigo.sound.SoundId
@@ -47,6 +48,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     private val dealClock = android.os.Handler(android.os.Looper.getMainLooper())
     private val updateDeal = object : Runnable {
         override fun run() {
+            rollDay()
             requestRender()
             val now = System.currentTimeMillis()
             dealClock.postDelayed(this, 60_000L - now % 60_000L)
@@ -159,8 +161,9 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     internal fun rollDay() {
         if (GameRepo.status == GameRepo.Status.READY && GameRepo.state != null && GameRepo.data != null) {
             GameRepo.run(this) { g ->
-                g.tick()
+                val events = g.tick()
                 Shop.ensureToday(g.data, g.state)
+                events
             }
         }
     }
@@ -208,6 +211,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         return when (key) {
             CardKeys.DEAL -> Shop.dealFor(data, st.day)?.let { itemSpec(it.item) }
             CardKeys.WEEKEND -> Shop.weekendFor(data, st.day)?.let { if (it.isTm) tmSpec(it.id) else itemSpec(it.id) }
+            "streak-freeze" -> if (Shop.freezeOnSale(st)) itemSpec(StreakFreeze.ITEM) else null
             else -> (Shop.basics().map { ShopPlan.Tile.Item(it) }.firstOrNull { CardKeys.basic(it) == key }
                 ?: ShopPlan.specials(st.shopItems, st.shopTms).firstOrNull { CardKeys.special(it) == key })?.let { tileSpec(it) }
         }
@@ -219,7 +223,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     }
 
     /** A Shop item with its current price for affordability and the two-tap purchase action. */
-    private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state.day, item), false) { buyItem(item) })
+    private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state, item), Shop.soldOut(state, item), Shop.limited(item)) { buyItem(item) })
 
     /** A Shop TM with Buy, or "✓ Owned" once it is yours. */
     private fun tmSpec(move: String) = ItemCard.Spec(null, move, buy = ItemCard.Buy(ShopPlan.tmPrice(), move in state.tms) { buyTm(move) })
@@ -238,12 +242,18 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
             val price = ShopPlan.price(data, st.day, deal.item, dealNow)
             val name = Items.name(deal.item)
             ShopViews.dealCard(ctx, deal.item, name, price, ShopPlan.dealEndsText(dealNow),
-                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught)), night = Shop.isNight(dealNow)) { openCard(CardKeys.DEAL) }
+                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught)), night = Shop.isNight(dealNow), stock = stock(deal.item)) { openCard(CardKeys.DEAL) }
         }
 
         // the weekend special (Saturday and Sunday only)
         val weekendOffer = Shop.weekendFor(data, st.day)?.let { weekendCard(it) }
         content.addView(ShopViews.offers(ctx, dailyOffer, weekendOffer), LinearLayout.LayoutParams(-1, -2))
+
+        if (Shop.freezeOnSale(st)) content.addView(
+            ShopViews.tile(ctx, ShopViews.itemArt(ctx, StreakFreeze.ITEM, 64), "Streak Freeze",
+                priceView(ShopPlan.price(data, st, StreakFreeze.ITEM), 14f), "Streak Freeze, ${stock(StreakFreeze.ITEM)}",
+                sub = "In Bag: ${st.count(StreakFreeze.ITEM)} / 3 · used automatically", stock = stock(StreakFreeze.ITEM)) { openCard("streak-freeze") },
+            LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 8) })
 
         content.addView(Bits.sect(ctx, "Basics"))
         // always in stock: the basics at their normal price
@@ -281,11 +291,11 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
 
     private fun tile(t: ShopPlan.Tile, key: String): View = when (t) {
         is ShopPlan.Tile.Item -> {
-            val price = ShopPlan.price(data, state.day, t.id)
+            val price = ShopPlan.price(data, state, t.id)
             val name = Items.name(t.id)
             val short = ItemInfo.plain(ItemInfo.short(data, t.id, state.caught))
             ShopViews.tile(this, ShopViews.itemArt(this, t.id, 64), name, priceView(price, 14f),
-                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, $short", price)), sub = short) { openCard(key) }
+                ItemCardPlan.detailsLabel(ShopPlan.describe("$name, $short", price)), sub = short, stock = stock(t.id)) { openCard(key) }
         }
         is ShopPlan.Tile.Tm -> tmTile(t.move, key)
     }
@@ -303,7 +313,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         val bottom = if (owned) ShopViews.owned(this) else priceView(price, 14f)
         return ShopViews.tile(this, Bits.tmTile(this, m?.type, 64), name, bottom,
             ItemCardPlan.detailsLabel(ShopPlan.describe(listOfNotNull(name, m?.type?.label).joinToString(", "), price, owned)),
-            subView = m?.let { Ui.typeChip(this, it.type) }) { openCard(key) }
+            subView = m?.let { Ui.typeChip(this, it.type) }, stock = if (owned) "Sold out" else "1 left") { openCard(key) }
     }
 
     /** The weekend special: an exclusive held item at its fixed price, until Sunday night. */
@@ -319,12 +329,14 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
             val price = ShopPlan.price(data, state.day, w.id)
             val name = Items.name(w.id)
             ShopViews.weekendCard(ctx, ShopViews.itemArt(ctx, w.id, 48), name, ShopPlan.weekendEndsText(w.endsDay, state.settings.dayStartHour), priceView(price, 17f),
-                ItemCardPlan.detailsLabel(ShopPlan.describe(name, price))) { openCard(CardKeys.WEEKEND) }
+                ItemCardPlan.detailsLabel(ShopPlan.describe(name, price)), stock = stock(w.id)) { openCard(CardKeys.WEEKEND) }
         }
     }
 
+    private fun stock(item: String): String? = if (Shop.limited(item)) { if (Shop.soldOut(state, item)) "Sold out" else "1 left" } else null
+
     private fun buyItem(item: String) {
-        val quantity = open.quantity
+        val quantity = if (Shop.limited(item)) 1 else open.quantity
         open.bought()
         if (act { g -> Shop.buy(g.data, g.state, item, quantity = quantity) }.ok) { GameSound.ui(this, SoundId.BUY); window?.purchase(appBar.pill ?: appBar) }
     }

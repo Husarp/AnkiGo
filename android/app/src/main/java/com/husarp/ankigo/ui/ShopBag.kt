@@ -38,6 +38,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         "Held" to listOf(ItemKind.HELD),
         "Fossils" to listOf(ItemKind.FOSSIL),
         "Escape" to listOf(ItemKind.ESCAPE),
+        "Streak protection" to listOf(ItemKind.AUTO),
     )
 
     /** Fills [into] with the bag sections. */
@@ -195,6 +196,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
             Ui.toast(s, "Tap next battle first"); return
         }
         when (def.kind) {
+            ItemKind.AUTO -> Unit
             ItemKind.HEAL -> {
                 val team = state.teamMons()
                 if (team.isEmpty()) return

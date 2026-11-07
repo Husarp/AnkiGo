@@ -121,7 +121,7 @@ class GameTest {
         assertEquals(Shop.slots(s.trainerLevel) + Shop.dailyBalls(s.day).size, s.shopItems.size)
         // these live on
         assertEquals(cash, s.cash); assertEquals(streak, s.cardStreak); assertEquals(77, s.itemCountdown)
-        assertEquals(4, s.streakDays); assertEquals(12L, s.totalReviews)
+        assertEquals(0, s.streakDays); assertEquals(12L, s.totalReviews)
         assertTrue(g.tick().isEmpty()) // once per day
     }
 

@@ -39,7 +39,7 @@ class HelpShots {
 
     @Test fun problemMove() = paparazzi.shootPage("help-page-move", listOf(Variants.PHONE)) { screen(it, HelpRoute.Problem(HelpContent.MOVE_COLLECTION)) }
 
-    @Test fun problemAnkimon() = paparazzi.shootPage("help-page-ankimon", listOf(Variants.PHONE, long)) { screen(it, HelpRoute.Problem(HelpContent.ANKIMON_IMPORT_EXPORT)) }
+    @Test fun problemAnkimon() = paparazzi.shootPage("help-page-ankimon", listOf(Variants.PHONE, long)) { screen(it, HelpRoute.Problem(HelpContent.ANKIMON_IMPORT)) }
 
     @Test fun problemAnswers() = paparazzi.shootPage("help-page-answers", listOf(Variants.PHONE)) { screen(it, HelpRoute.Problem(HelpContent.ANSWERS_NOT_DETECTED)) }
 

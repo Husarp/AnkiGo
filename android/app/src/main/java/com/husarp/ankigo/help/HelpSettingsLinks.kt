@@ -10,7 +10,6 @@ internal object HelpSettingsLinks {
     data class Link(val start: Int, val end: Int, val setting: String)
     private val paths = linkedMapOf(
         "Settings → Ankimon PC sync → Import Ankimon save (.db)…" to "ankimonImport",
-        "Settings → Ankimon PC sync → Export for Ankimon PC…" to "ankimonExport",
         "Settings → Battle panel & windows → On leaving" to "leaveMode",
         "Settings → Game → \"When you beat a wild Pokémon\"" to "catchNew",
         "Settings → Game → When you beat a wild Pokémon" to "catchNew",
