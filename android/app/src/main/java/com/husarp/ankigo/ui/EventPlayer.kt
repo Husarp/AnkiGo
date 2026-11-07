@@ -866,7 +866,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         arena.setPlayerStatus(null)
         arena.clearConditions()   // R19-K: the new fight starts with none
         arena.setBackdrop(sp?.types.orEmpty(), BackdropCatalog.seed(e.wildUid), BackdropCatalog.isLegendary(sp))   // R8-03: one of the pictures for this wild Pokémon's type, random per encounter
-        arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty(), e.tier)
+        arena.setEnemyInfo(bare(e.name), e.level, e.shiny, sp?.types.orEmpty(), e.tier, sp?.base?.total ?: 0)
         arena.setEnemyHp(e.hp, e.maxHp, false)
         arena.setNewTag(e.newSpecies)
         if (sp != null) {

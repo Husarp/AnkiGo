@@ -433,7 +433,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             cell.img.colorFilter = greyed
             cell.img.alpha = 0.55f
         }
-        cell.name.text = if (seen) sp.name else "???"
+        cell.name.text = if (seen) RarityMark.name(this, sp.name, com.husarp.ankigo.game.Encounters.tierOf(sp), sp.base.total) else "???"
         cell.name.setTextColor(Ui.c(this, when { caught -> R.color.ag_sub1; seen -> R.color.ag_sub0; else -> R.color.ag_ov }))
         f.setOnClickListener {
             when {

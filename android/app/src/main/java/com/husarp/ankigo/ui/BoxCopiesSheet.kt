@@ -56,7 +56,8 @@ internal class BoxCopiesSheet(
         val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val titles = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         titles.addView(Ui.text(ctx, 17f, 900, R.color.ag_text).apply {
-            text = "${page.data.sp(tile.best.species).name} ×${tile.count}"
+            val sp = page.data.sp(tile.best.species)
+            text = RarityMark.name(ctx, "${sp.name} ×${tile.count}", com.husarp.ankigo.game.Encounters.tierOf(sp), sp.base.total)
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
         })
         head.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))

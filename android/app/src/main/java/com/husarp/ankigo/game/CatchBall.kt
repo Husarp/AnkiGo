@@ -6,21 +6,13 @@ package com.husarp.ankigo.game
  */
 object CatchBall {
     /** Base stat total from which a plain Pokémon gets the Great Ball. */
-    const val GREAT_BASE_TOTAL = 500
+    const val GREAT_BASE_TOTAL = PokemonRarity.GREAT_BASE_TOTAL
 
     /**
-     * The ball item id for a wild [sp]: Mythical -> Master Ball; Legendary -> Ultra Ball; Starter, Ultra Beast, Baby, and Normal with a
-     * base stat total of [GREAT_BASE_TOTAL] or more -> Great Ball; everyone else -> Poké Ball. A species with no tier, a Mega or a G-Max
-     * follows the Normal rule by base total. No species data (null) -> Poké Ball.
+     * Mythical -> Master Ball; Ultra Beast and Legendary -> Ultra Ball; Baby and Starter, plus Normal with a base stat
+     * total of [GREAT_BASE_TOTAL] or more -> Great Ball; everyone else -> Poké Ball. No tier, Mega and G-Max follow the Normal rule.
+     * Missing species data -> Poké Ball. Uses the same ladder as the name marks.
      */
-    fun forAuto(sp: Species?): String {
-        if (sp == null) return "poke-ball"
-        return when (Encounters.tierOf(sp)) {
-            Tier.MYTHICAL -> "master-ball"
-            Tier.LEGENDARY -> "ultra-ball"
-            Tier.STARTER, Tier.ULTRA, Tier.BABY -> "great-ball"
-            Tier.NORMAL, Tier.MEGA, Tier.GMAX, null ->
-                if (sp.base.total >= GREAT_BASE_TOTAL) "great-ball" else "poke-ball"
-        }
-    }
+    fun forAuto(sp: Species?): String =
+        if (sp == null) "poke-ball" else PokemonRarity.of(Encounters.tierOf(sp), sp.base.total).ball
 }

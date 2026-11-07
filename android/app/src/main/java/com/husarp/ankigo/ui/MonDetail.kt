@@ -84,7 +84,7 @@ object MonDetail {
         img.contentDescription = "Show the picture full screen"
         val spriteDp = if (compact) 64 else 96
         val nameText = Ui.text(a, if (compact) 18f else 20f, 900, R.color.ag_text).apply {
-            text = RarityMark.name(a, styledName(a, mon), mon.tier)
+            text = RarityMark.name(a, styledName(a, mon), mon.tier, sp.base.total)
             maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             // leave room for the pencil (and the sprite and the heart when they sit beside the text) in the dialog's real width
             // (R18-G: the heart is 48 dp to touch now, so the old 88 % guess, which was 10 dp short of it, no longer leaves a name room)
@@ -106,7 +106,7 @@ object MonDetail {
                 setPadding(Ui.dp(a, 15), Ui.dp(a, 15), Ui.dp(a, 15), Ui.dp(a, 15))
                 setOnClickListener {
                     MonActions(page).rename(mon) {
-                        GameRepo.state?.mon(mon.uid)?.let { m -> nameText.text = RarityMark.name(a, styledName(a, m), m.tier) }
+                        GameRepo.state?.mon(mon.uid)?.let { m -> nameText.text = RarityMark.name(a, styledName(a, m), m.tier, data.sp(m.species).base.total) }
                     }
                 }
             }

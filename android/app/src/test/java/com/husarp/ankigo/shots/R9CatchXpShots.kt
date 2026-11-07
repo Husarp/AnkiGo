@@ -83,4 +83,23 @@ class R9CatchXpShots {
     @Test fun afterTheLastLanding() = paparazzi.shootWith("r9cx-after", listOf(Size.PHONE), offsetMillis = 400) { ctx -> full(ctx, scene(plan.bannerEnd + 100f, 70)) }
     @Test fun click300Small() = paparazzi.shootWith("r9cx-click300-small", listOf(Size.FLOATBATTLE), offsetMillis = 400) { ctx -> small(ctx, scene(300f, 20)) }
     @Test fun midFlightSmall() = paparazzi.shootWith("r9cx-mid-small", listOf(Size.FLOATBATTLE), offsetMillis = 400) { ctx -> small(ctx, scene(1000f, 45)) }
+    @Test fun ultraBeastAutoCatch() = paparazzi.shootWith("r30c-ultra-beast-auto-catch", listOf(Size.PHONE), offsetMillis = 400) { ctx ->
+        full(ctx) { arena ->
+            scene(300f, 20)(arena)
+            val sp = com.husarp.ankigo.game.TestData.species(793)
+            val ball = com.husarp.ankigo.game.CatchBall.forAuto(sp)
+            org.junit.Assert.assertEquals("ultra-ball", ball)
+            arena.dropBall(ball, 1)
+            val ballView = getField(arena, "ball") as android.widget.ImageView
+            org.junit.Assert.assertEquals("item:ultra-ball", ballView.getTag(com.husarp.ankigo.R.id.ag_tag_sprite))
+            // Optional local art for the review PNG; ordinary fixtures use the generic ball badge.
+            System.getenv("ANKIGO_REAL_DATA")?.let { java.io.File(it, "ultra-ball.png") }?.takeIf { it.isFile }?.let {
+                val bitmap = it.inputStream().use { input -> requireNotNull(android.graphics.BitmapFactory.decodeStream(input)) }
+                ballView.setImageDrawable(com.husarp.ankigo.ui.Ui.pixelBitmap(ctx, bitmap))
+            }
+            arena.showBanner("Gotcha!", "Nihilego was caught", "New in your Pokédex", numberAbove = true)
+            settle(arena, 1f)
+        }
+    }
+
 }

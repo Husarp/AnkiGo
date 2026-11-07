@@ -1066,9 +1066,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         if (!shown) { enemyName = ""; if (bubbleFor === eStatus) hideStatusBubble() }
     }
 
-    fun setEnemyInfo(name: String, level: Int, shiny: Boolean, types: List<Type>, tier: com.husarp.ankigo.game.Tier? = null) {
+    fun setEnemyInfo(name: String, level: Int, shiny: Boolean, types: List<Type>, tier: com.husarp.ankigo.game.Tier? = null, baseTotal: Int = 0) {
         enemyName = name
         enemyRarity = tier
+        enemyBaseTotal = baseTotal
         enemyNameInk = if (shiny) {
             SpannableStringBuilder(name).also {
                 val at = it.length
@@ -1077,7 +1078,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
                 it.setSpan(RelativeSizeSpan(12f / 14f), at, it.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
         } else name
-        eName.text = RarityMark.name(context, enemyNameInk, tier)
+        eName.text = RarityMark.name(context, enemyNameInk, tier, baseTotal)
         eLvl = level
         eLevel.text = "Lv $level"; eLevel.setTextColor(levelColor(level))
         enemyTypes = types
@@ -1612,12 +1613,13 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     // ---------------------------------------------------------------- player side
 
-    fun setPlayerInfo(uid: String?, name: String, level: Int, tier: com.husarp.ankigo.game.Tier? = null) {
+    fun setPlayerInfo(uid: String?, name: String, level: Int, tier: com.husarp.ankigo.game.Tier? = null, baseTotal: Int = 0) {
         playerUid = uid
         playerLevel = level
         playerNameInk = name
         playerRarity = tier
-        pName.text = RarityMark.name(context, name, tier)
+        playerBaseTotal = baseTotal
+        pName.text = RarityMark.name(context, name, tier, baseTotal)
         pLvl = level
         pLevel.text = "Lv $level"; pLevel.setTextColor(levelColor(level))
     }
@@ -1629,15 +1631,17 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         pLevel.text = "Lv $level"; pLevel.setTextColor(levelColor(level))
     }
 
+    private var enemyBaseTotal = 0
+    private var playerBaseTotal = 0
     private var enemyRarity: com.husarp.ankigo.game.Tier? = null
     private var enemyNameInk: CharSequence = ""
     private var playerNameInk = ""
     private fun refreshRarity() {
-        eName.text = RarityMark.name(context, enemyNameInk, enemyRarity)
-        pName.text = RarityMark.name(context, playerNameInk, playerRarity)
+        eName.text = RarityMark.name(context, enemyNameInk, enemyRarity, enemyBaseTotal)
+        pName.text = RarityMark.name(context, playerNameInk, playerRarity, playerBaseTotal)
     }
     private var playerRarity: com.husarp.ankigo.game.Tier? = null
-    fun setPlayerName(name: String) { playerNameInk = name; pName.text = RarityMark.name(context, name, playerRarity) }
+    fun setPlayerName(name: String) { playerNameInk = name; pName.text = RarityMark.name(context, name, playerRarity, playerBaseTotal) }
 
     /** Our types use the same chips / symbols as the wild card, and tint the type-colour look. */
     fun setPlayerTypes(types: List<Type>) {

@@ -54,7 +54,7 @@ object BattleDetails {
         img.setOnClickListener { SpriteViewer.show(ctx, battle.wild.lookNum(data), info.shiny) } // R10-B1: full-screen viewer
         img.contentDescription = "Show the picture full screen"
         val name = Ui.text(ctx, if (compact) 18f else 20f, 900, R.color.ag_text).apply {
-            text = RarityMark.name(ctx, nameLine(ctx, info), info.tier); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            text = RarityMark.name(ctx, nameLine(ctx, info), info.tier, info.base.total); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             if (!compact) gravity = Gravity.CENTER
         }
         val num = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply {

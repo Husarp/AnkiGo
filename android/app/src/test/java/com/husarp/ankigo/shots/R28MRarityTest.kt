@@ -24,19 +24,23 @@ class R28MRarityTest {
     @Test fun mappingAndPreferencePreserveNameStyling() {
         val ctx = Shots.files(paparazzi.context)
         assertTrue(RarityMark.enabled(ctx))
-        assertEquals(listOf(null, 1, 2, 3, 4, null, null, null), Tier.entries.map { RarityMark.tier(it) })
+        assertEquals(listOf(null, 1, 2, 3, 4, 0, null, null), Tier.entries.map { RarityMark.tier(it, 499) })
+        for (tier in listOf(Tier.NORMAL, Tier.MEGA, Tier.GMAX, null)) {
+            assertNull(RarityMark.tier(tier, 499))
+            assertEquals(0, RarityMark.tier(tier, 500))
+        }
         val original = android.text.SpannableString("♀ ★ Nickname").apply {
             setSpan(ForegroundColorSpan(123), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        val marked = RarityMark.name(ctx, original, Tier.MYTHICAL) as Spanned
+        val marked = RarityMark.name(ctx, original, Tier.MYTHICAL, 499) as Spanned
         assertEquals(1, marked.getSpans(0, marked.length, RarityMark.Mark::class.java).size)
         val gender = marked.getSpans(0, marked.length, ForegroundColorSpan::class.java).single()
         assertEquals(2, marked.getSpanStart(gender))
         assertEquals(123, gender.foregroundColor)
-        assertSame(original, RarityMark.name(ctx, original, Tier.NORMAL))
+        assertSame(original, RarityMark.name(ctx, original, Tier.NORMAL, 499))
         RarityMark.setEnabled(ctx, false)
         assertFalse(RarityMark.enabled(ctx))
-        assertSame(original, RarityMark.name(ctx, original, Tier.MYTHICAL))
+        assertSame(original, RarityMark.name(ctx, original, Tier.MYTHICAL, 499))
     }
 
     @Test fun detailsRenameKeepsRarityMark() {
@@ -94,9 +98,9 @@ class R28MRarityTest {
                     setBackgroundColor(Ui.c(ctx, com.husarp.ankigo.R.color.ag_base))
                     setPadding(24, 24, 24, 24)
                 }
-                listOf(Tier.NORMAL to "Pikachu", Tier.STARTER to "Bulbasaur", Tier.BABY to "Pichu", Tier.ULTRA to "Nihilego", Tier.LEGENDARY to "Mewtwo", Tier.MYTHICAL to "Mew").forEach { (tier, name) ->
+                listOf(Triple(Tier.NORMAL, "Pikachu", 320), Triple(Tier.NORMAL, "Snorlax", 540), Triple(Tier.STARTER, "Bulbasaur", 318), Triple(Tier.BABY, "Pichu", 205), Triple(Tier.ULTRA, "Nihilego", 570), Triple(Tier.LEGENDARY, "Mewtwo", 680), Triple(Tier.MYTHICAL, "Mew", 600)).forEach { (tier, name, total) ->
                     gallery.addView(Ui.text(ctx, 20f, 900, com.husarp.ankigo.R.color.ag_text).apply {
-                        text = RarityMark.name(ctx, name, tier)
+                        text = RarityMark.name(ctx, name, tier, total)
                         setPadding(0, 12, 0, 12)
                     })
                 }
@@ -121,4 +125,62 @@ class R28MRarityTest {
             }
         }
     }
+    @Test fun dotInBoxDexAndDetails() {
+        paparazzi.shootPage("r30c-dot-box-details", listOf(Variants.PHONE)) { ctx ->
+            val mon = GameRepo.state!!.mons.single { it.uid == "b8" } // Starter in the Box
+            mon.tier = Tier.STARTER
+            val dialog = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), GameRepo.data!!, mon) }!!
+            assertEquals(1, markCount(dialog.content()))
+            DialogShots.scene(ctx, dialog)
+        }
+        paparazzi.shootPage("r30c-dot-box-copies", listOf(Variants.PHONE)) { ctx ->
+            val data = GameRepo.data!!
+            val mons = GameRepo.state!!.mons.filter { it.species == 1 }
+            val tile = BoxTiles.build(data, mons, true).single()
+            val sheet = BoxCopiesSheet(TeamPage(ctx, NoHost), tile, {}, { _, _, _ -> }).build(600)
+            sheet.also { assertTrue(markCount(it) > 0) }
+        }
+        paparazzi.shootPage("r30c-dot-team", listOf(Variants.PHONE)) { ctx ->
+            GameRepo.state!!.mons.single { it.uid == "t2" }.tier = Tier.STARTER
+            val page = TeamPage(ctx, NoHost).apply { preset(TeamSection.TEAM) }
+            pageScreen(ctx, page).also {
+                GamePage::class.java.getDeclaredMethod("doRender").apply { isAccessible = true }.invoke(page)
+                it.measure(android.view.View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.widthPixels, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.heightPixels, android.view.View.MeasureSpec.EXACTLY))
+                it.layout(0, 0, it.measuredWidth, it.measuredHeight)
+                assertTrue(markCount(it) > 0)
+            }
+        }
+        paparazzi.shootPage("r30c-dot-dex", listOf(Variants.PHONE)) { ctx ->
+            val page = DexPage(ctx, NoHost)
+            setField(page, "filter", DexFilter(query = "Leafling"))
+            pageScreen(ctx, page).also {
+                GamePage::class.java.getDeclaredMethod("doRender").apply { isAccessible = true }.invoke(page)
+                it.measure(android.view.View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.widthPixels, android.view.View.MeasureSpec.EXACTLY),
+                    android.view.View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.heightPixels, android.view.View.MeasureSpec.EXACTLY))
+                it.layout(0, 0, it.measuredWidth, it.measuredHeight)
+                assertTrue(markCount(it) > 0)
+            }
+        }
+    }
+
+    @Test fun strongBattleMarkSurvivesRefreshRenameAndSetting() {
+        val ctx = Shots.files(paparazzi.context)
+        FakeGame.install(ctx)
+        val arena = BattlePanelView(ctx).arena
+        arena.setEnemyInfo("Strong", 50, false, emptyList(), Tier.NORMAL, 500)
+        arena.setPlayerInfo("test", "Strong", 50, Tier.GMAX, 500)
+        assertEquals(2, markCount(arena))
+        arena.setPlayerName("Renamed")
+        val refresh = ArenaView::class.java.getDeclaredMethod("refreshRarity").apply { isAccessible = true }
+        refresh.invoke(arena)
+        assertEquals(2, markCount(arena))
+        RarityMark.setEnabled(ctx, false)
+        refresh.invoke(arena)
+        assertEquals(0, markCount(arena))
+        RarityMark.setEnabled(ctx, true)
+        refresh.invoke(arena)
+        assertEquals(2, markCount(arena))
+    }
+
 }

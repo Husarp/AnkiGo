@@ -570,7 +570,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val r1 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val nameMarks = NameMarksRow(ctx)
         nameMarks.addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply {
-            text = mon.shownName
+            text = RarityMark.name(ctx, mon.shownName, mon.tier, data.sp(mon.species).base.total)
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(-2, -2))
