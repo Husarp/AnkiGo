@@ -79,7 +79,7 @@ class ReminderOpenActivity : Activity() {
         try {
             if (kind != null) getSystemService(NotificationManager::class.java)?.cancel(ReminderNotifier.id(kind))
             val dest = if (kind != null && ReminderActions.opensShop(kind)) Dest.SHOP else Dest.STUDY
-            startActivity(Nav.intent(this, dest).addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+            startActivity(Nav.intent(this, dest).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         } catch (e: Exception) {
             Report.fail("REMIND", "opening AnkiGo from a reminder", e)
         }

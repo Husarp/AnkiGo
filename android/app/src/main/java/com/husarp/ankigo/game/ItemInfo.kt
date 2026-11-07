@@ -173,7 +173,15 @@ object ItemInfo {
     fun ownLine(item: String, count: Int): String =
         if (count > 0) "You own **$count ${plural(Items.name(item), count)}**" else "You don't own any **${plural(Items.name(item), 2)}** yet"
 
-    /** "You **own** this TM" / "You don't own this TM yet". */
+    /** Owned totals include copies held by Pokémon. */
+    fun ownLine(state: GameState, item: String): String {
+        val holders = state.itemHolders(item)
+        val total = state.ownedItemCount(item)
+        return ownLine(item, total) + if (holders.isEmpty()) "" else
+            " · ${holders.size} held by ${holders.take(2).joinToString(", ") { it.shownName }}" +
+                if (holders.size > 2) " and ${holders.size - 2} more" else ""
+    }
+
     fun tmOwnLine(owned: Boolean): String = if (owned) "You **own** this TM" else "You don't own this TM yet"
 
     /** [name] for [n] of it: "Great Ball" (1) / "Great Balls" (2); "Power Lens" -> "Power Lenses"; "Deep Sea Tooth" -> "Deep Sea Teeth"; mass nouns stay as they are. */
@@ -351,7 +359,7 @@ object ItemInfo {
         "macho-brace" -> "Your **main** gets **double EVs** from each win, defeat or catch (as always, up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
             "It does nothing on a Pokémon that is not your main."
         "soothe-bell" -> "Your active fighter earns **×${nice(Tuning.SOOTHE_BELL)} Bond points**: normally +1 per answered card while fighting and +3 per win, defeat or catch. " +
-            "Half points carry over, including through saves. Bond levels ♥0–♥5 unlock evolutions and bonuses, with no decay. It does nothing on the bench."
+            "Half points carry over, including through saves. Bond levels ♥0–♥5 unlock evolutions and bonuses. It does nothing on the bench."
         else -> POWER_STATS[item]?.let {
             "Your **main** gets **8 extra $it EVs** from each win, defeat or catch, on top of the usual EVs (up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
                 "It does nothing on a Pokémon that is not your main."

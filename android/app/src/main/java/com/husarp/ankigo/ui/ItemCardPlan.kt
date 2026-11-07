@@ -73,7 +73,7 @@ internal enum class BagAct(val label: String, val fightOnly: Boolean, val offFig
     THROW("Throw", true, "Balls are thrown from a fight"),
     USE("Use", true, "Used in a fight"),
     USE_ON("Use on…", false, null),
-    GIVE("Give to…", false, null),
+    GIVE("Give to another Pokémon", false, null),
     REVIVE("Revive", false, null),
     TEACH("Teach…", false, null);
 

@@ -76,7 +76,7 @@ class R29BondShots {
                 assertFalse((ball.drawable as android.graphics.drawable.BitmapDrawable).isFilterBitmap)
                 assertTrue(card.bottom <= col.height - col.paddingBottom)
                 val content = texts(card).joinToString("\n") { it.text }
-                assertTrue(content.contains("♥$level")); assertTrue(content.contains("No decay"))
+                assertTrue(content.contains("♥$level")); assertFalse(content.contains("No decay"))
                 if (level == 3) assertTrue(content.contains("120 / 250 points to ♥4"))
                 if (level == 5) { assertTrue(content.contains("Max Bond")); assertFalse(content.contains("Next ·")) }
             }

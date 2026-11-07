@@ -1,8 +1,11 @@
 package com.husarp.ankigo.ui
 
 import android.app.Activity
+import android.app.ActivityManager
+import android.content.pm.ActivityInfo
 import android.content.Context
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
@@ -104,9 +107,8 @@ object AppLook {
 abstract class AgActivity : Activity() {
     private var lookGeneration = -1
 
-    /** PLAN 222: true on screens opened from a tab (Diagnostics, Updates, Help, Battle log, Compare) that close when the user comes back to the app. */
+    /** Legacy PLAN 222 declaration; leaving or a system overlay no longer closes a screen. */
     open val closesWhenLeft: Boolean = false
-    private var seenLeaves = leaves
 
     /** False on trampolines and the first-run screen: no floating update banner there. */
     open val showsUpdateBanner: Boolean = true
@@ -131,11 +133,8 @@ abstract class AgActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        keepTaskInRecents()
         UiMotion.arrive(this)
-        if (seenLeaves != leaves) {
-            seenLeaves = leaves
-            onAppReturned()
-        }
         Updates.onResume(this)   // every screen: check at launch and every return, carry on a waiting install
         updateOverlay?.banner?.resetAway()
         if (lookGeneration != AppLook.generation) {
@@ -144,32 +143,29 @@ abstract class AgActivity : Activity() {
         }
     }
 
+    /** Also repairs an existing task rooted by an excluded bridge in an older version. Helpers stay excluded. */
+    private fun keepTaskInRecents() {
+        try {
+            val info = packageManager.getActivityInfo(componentName, 0)
+            if (info.flags and ActivityInfo.FLAG_EXCLUDE_FROM_RECENTS != 0) return
+            getSystemService(ActivityManager::class.java)?.appTasks
+                ?.firstOrNull {
+                    val task = it.taskInfo
+                    val id = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) task.taskId else task.id
+                    id == taskId
+                }?.setExcludeFromRecents(false)
+        } catch (e: Exception) {
+            com.husarp.ankigo.Report.fail("LIFE", "restore task in Recents", e)
+        }
+    }
+
     override fun onPause() {
         Updates.onPause(this)
         super.onPause()
     }
 
-    /** Home / Recents / another app: the user left AnkiGo (not called when AnkiGo opens a picker or share sheet itself). */
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        leaves++
-    }
-
-    override fun onRestart() {
-        super.onRestart()
-        if (seenLeaves != leaves) {
-            seenLeaves = leaves
-            onAppReturned()
-        }
-    }
-
     /** PLAN 448 supersedes the return reset: keep the owner Activity and its open windows. */
     open fun onAppReturned() {}
-
-    private companion object {
-        /** How many times the user left the app (process-wide; each screen compares it with the count it last saw). */
-        var leaves = 0
-    }
 
     /** Picture-in-picture is too small for the banner. */
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {

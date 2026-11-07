@@ -3,7 +3,7 @@ package com.husarp.ankigo.game
 // R6-07 (items 19, 20): the pure parts of the "Achievement unlocked" / "Item found" popups: their title lines and which found items
 // a batch of events brings. Pure, no Android.
 
-/** An item found in a fight, for the popup. [total] is how many of it the bag holds now (the event's count). */
+/** An item found in a fight, for the popup. [total] includes copies held by owned Pokémon (the event's count). */
 class ItemFind(val item: String, val total: Int)
 
 /** R14-B2-D: a daily gift for the popup: [count] of [item], or the TM of the move [tm]; [streakDays] = the goal streak it came with. */

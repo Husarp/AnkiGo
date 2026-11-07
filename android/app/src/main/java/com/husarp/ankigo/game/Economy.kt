@@ -177,7 +177,7 @@ object Economy {
             val pool = Items.dropPool()
             val item = pool[rng.nextInt(pool.size)]
             give(state, item)
-            events += GameEvent.ItemFound(item, state.count(item))
+            events += GameEvent.ItemFound(item, state.ownedItemCount(item))
             Badges.award(state, 6, events)
             state.itemCountdown = rollCountdown(rng)
         }
@@ -668,6 +668,21 @@ object ItemUse {
         mon.heldItem = null
         Economy.give(state, held)
         return ActionResult(true, "Took ${Items.name(held)} back from ${mon.name}")
+    }
+
+    /** Moves one copy atomically; a stale picker cannot take a different item or lose a copy. */
+    fun giveHeld(state: GameState, item: String, fromUid: String?, toUid: String): ActionResult {
+        if (Items.def(item)?.kind != ItemKind.HELD) return ActionResult(false, "This item can't be held.")
+        val target = state.mon(toUid) ?: return ActionResult(false, "Pokémon not found.")
+        val source = fromUid?.let { state.mon(it) ?: return ActionResult(false, "Pokémon not found.") }
+        if (source != null && source.heldItem != item) return ActionResult(false, "That Pokémon no longer holds this item.")
+        if (target.heldItem == item) return ActionResult(false, "${target.name} already holds ${Items.name(item)}.")
+        if (source == null && !Economy.take(state, item)) return ActionResult(false, "No free copies in the Bag.")
+        val old = target.heldItem
+        source?.heldItem = null
+        target.heldItem = item
+        if (old != null) Economy.give(state, old)
+        return ActionResult(true, "${target.name} now holds ${Items.name(item)}" + if (old == null) "" else " (${Items.name(old)} went back to the Bag)")
     }
 
     /** Teaches an owned TM (not used up) to a Pokémon whose species can learn it; [replaceIndex] when it knows 4 moves. */

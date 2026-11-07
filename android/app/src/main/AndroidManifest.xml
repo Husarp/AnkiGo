@@ -68,6 +68,8 @@
              Don't restart on resize so live detection and the battle animation keep running. -->
         <activity
             android:name=".ui.GameActivity"
+            android:excludeFromRecents="false"
+            android:autoRemoveFromRecents="false"
             android:theme="@style/GameTheme"
             android:exported="true"
             android:launchMode="singleTop"
@@ -82,18 +84,19 @@
 
         <activity android:name=".ui.FirstRunActivity" android:theme="@style/GameTheme" android:exported="false" />
         <activity android:name=".study.FilterActivity" android:theme="@style/GameTheme" android:exported="false" />
-        <activity android:name=".ui.TeamActivity" android:theme="@style/GameTheme" android:exported="false" />
-        <activity android:name=".ui.DexActivity" android:theme="@style/GameTheme" android:exported="false" />
-        <activity android:name=".ui.ShopActivity" android:theme="@style/GameTheme" android:exported="false" />
-        <activity android:name=".ui.SettingsActivity" android:theme="@style/GameTheme" android:exported="false" />
-        <activity android:name=".ui.StatsActivity" android:theme="@style/GameTheme" android:exported="false" />
-        <activity android:name=".help.HelpActivity" android:theme="@style/GameTheme" android:exported="false" />
-        <activity android:name=".ui.BattleLogActivity" android:theme="@style/GameTheme" android:exported="false" />
-        <activity android:name=".ui.CompareActivity" android:theme="@style/GameTheme" android:exported="false" />
+        <activity android:name=".ui.TeamActivity" android:theme="@style/GameTheme" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".ui.DexActivity" android:theme="@style/GameTheme" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".ui.ShopActivity" android:theme="@style/GameTheme" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".ui.SettingsActivity" android:theme="@style/GameTheme" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".ui.StatsActivity" android:theme="@style/GameTheme" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".help.HelpActivity" android:theme="@style/GameTheme" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".ui.BattleLogActivity" android:theme="@style/GameTheme" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
+        <activity android:name=".ui.CompareActivity" android:theme="@style/GameTheme" android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
 
         <!-- The old Study tab: no UI any more (the deck list is the home screen's Study view); forwards old PendingIntents and shortcuts. -->
         <activity
             android:name=".ui.StudyDecksActivity"
+            android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:noHistory="true"
@@ -149,6 +152,7 @@
         <!-- Runs a file picker for a screen shown in a floating window (no Activity of its own there). -->
         <activity
             android:name=".overlay.ResultActivity"
+            android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:exported="false" />
@@ -169,7 +173,7 @@
             android:name=".DiagnosticsActivity"
             android:theme="@style/GameTheme"
             android:label="Diagnostics"
-            android:exported="false" />
+            android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
 
         <!-- Live watch: meant for the bottom half of a split screen next to AnkiDroid.
              Don't restart on resize so the watch keeps its state. -->
@@ -183,7 +187,7 @@
             android:name=".StudyActivity"
             android:theme="@style/GameTheme"
             android:windowSoftInputMode="adjustResize"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:exported="false" />
 
         <!-- Settings → Updates: check for updates, GET UPDATE, GITHUB. -->
@@ -191,7 +195,7 @@
             android:name=".update.UpdatesActivity"
             android:theme="@style/GameTheme"
             android:label="Updates"
-            android:exported="false" />
+            android:exported="false" android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden" />
 
         <receiver android:name=".ui.WidgetPinReceiver" android:exported="false" />
         <activity android:name=".ui.WidgetLookActivity" android:theme="@style/GameTheme" android:exported="true">
@@ -257,6 +261,7 @@
         <!-- ... a tap on a reminder notification and "Study now": no UI; takes the notification away, opens the Study tab (Shop for the shop news). -->
         <activity
             android:name=".remind.ReminderOpenActivity"
+            android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true"
             android:noHistory="true"

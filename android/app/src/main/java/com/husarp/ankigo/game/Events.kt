@@ -16,6 +16,7 @@ sealed class GameEvent {
 
     /** Money paid: [amount] just now, [total] in the wallet afterwards, [kind] = what for (sum the amounts for "earned"). */
     data class Cash(val amount: Int, val total: Int, val kind: CashKind = CashKind.ANSWER) : GameEvent()
+    /** Total owned after the drop, including held copies. */
     data class ItemFound(val item: String, val count: Int) : GameEvent()
     data class BadgeEarned(val id: Int, val title: String) : GameEvent()
 

@@ -36,7 +36,7 @@ class R22IShopTest {
         assertEquals(cash - 3 * com.husarp.ankigo.game.Shop.priceOf(GameRepo.data!!, state, "potion"), state.cash)
         assertFalse(page.open.buying)
     }
-    @Test fun heldItemWithNoFreeCopiesIsVisibleAndCannotBeGivenAgain() {
+    @Test fun heldItemWithNoFreeCopiesCanBeTakenOffOrTransferred() {
         val ctx = setup()
         val (page, stage) = ShopCardKit.page(ctx, CardKeys.bagItem("amulet-coin"), bag = true, setup = {
             val state = GameRepo.state!!
@@ -45,13 +45,15 @@ class R22IShopTest {
         })
         val text = ShopCardKit.texts(stage)
         assertTrue(text.toString(), text.contains("Held by"))
-        assertTrue(text.contains("No free copies"))
+        assertTrue(text.contains("Take off"))
+        assertTrue(text.contains("Give to another Pokémon"))
         assertTrue(text.contains("All"))
         assertTrue(text.contains("Held"))
         paparazzi.snapshot(stage, "r22i-held")
         GameRepo.state!!.mons.forEach { it.heldItem = "amulet-coin" }
         stage.render()
-        assertTrue(ShopCardKit.texts(stage).contains("No free copies"))
+        assertTrue(ShopCardKit.texts(stage).contains("Take off"))
+        assertTrue(ShopCardKit.texts(stage).contains("Give to another Pokémon"))
         paparazzi.snapshot(stage, "r22i-held-many")
         page.closeCard(); stage.render()
         tap(stage, "Held"); stage.render()

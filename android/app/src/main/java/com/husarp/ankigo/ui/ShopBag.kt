@@ -14,6 +14,7 @@ import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
+import com.husarp.ankigo.game.ownedItemCount
 
 // TICKET T14 owns this file: the Bag tab of the Shop screen (owned items grouped, then TMs) and what a tap does.
 // R14 batch 2 (PLAN 181): a tap on a row opens its card ([ItemCard]); the card's button starts what a tap used to do at once.
@@ -86,7 +87,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         fun section(title: String, ids: List<String>) {
             if (ids.isEmpty() || category != "All items" && category != title) return
             any = true
-            val n = ids.sumOf { state.count(it) + holders(it).size }
+            val n = ids.sumOf { state.ownedItemCount(it) }
             into.addView(Bits.sect(ctx, title, "$n item${if (n == 1) "" else "s"}"))
             BagTiles.rows(into, ids.distinct().sortedBy { Items.name(it) }.map { itemRow(it) }, columns = 2)
         }
@@ -108,7 +109,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     /** Square inventory tile; a tap opens the existing item window. */
     private fun itemRow(id: String): View {
         val ctx = s
-        val n = state.count(id) + holders(id).size
+        val n = state.ownedItemCount(id)
         val line = ItemInfo.plain(ItemInfo.line(data, id, state.caught))
         val row = BagTiles.tile(ctx, ShopViews.itemArt(ctx, id, 80), Items.name(id), line + if (holders(id).isNotEmpty()) " · Held" else "", "×$n", large = true)
         if (holders(id).isNotEmpty()) row.background = Ui.rounded(Bits.blend(Ui.c(ctx, R.color.ag_mauve), Ui.c(ctx, R.color.ag_card), 0.12f), 12, ctx)
@@ -143,7 +144,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     private fun itemSpec(id: String): ItemCard.Spec {
         val kind = Items.def(id)?.kind
         val none = state.count(id) <= 0 // Y5: a window kept open after a trade took the last ball
-        val act = BagAct.of(kind)?.let { a ->
+        val act = BagAct.of(kind)?.takeUnless { kind == ItemKind.HELD }?.let { a ->
             val waiting = a.fightOnly && !fightAvailable()
             ItemCard.Act(a.label, a.usableNow(state) && !none && !waiting,
                 if (none) { if (holders(id).isNotEmpty()) "No free copies" else "You have none" }

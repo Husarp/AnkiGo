@@ -97,6 +97,8 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         gravity = Gravity.CENTER_VERTICAL
         background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
         visibility = GONE
+        minimumHeight = dpi(56)
+        setPadding(dpi(8), dpi(4), dpi(8), dpi(4))
     }
     private val switchIcon = ImageView(ctx)
     private var switchIconKey: String? = null
@@ -358,7 +360,9 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         column.addView(footer, LinearLayout.LayoutParams(-1, -2))
 
         scaler.addView(column, LayoutParams(-1, -1))
-        switchNotice.addView(switchIcon, LinearLayout.LayoutParams(dpi(32), dpi(32)))
+        switchIcon.scaleType = ImageView.ScaleType.FIT_CENTER
+        switchIcon.setPadding(dpi(4), dpi(4), dpi(4), dpi(4))
+        switchNotice.addView(switchIcon, LinearLayout.LayoutParams(dpi(48), dpi(48)))
         switchNotice.addView(ImageView(context).apply {
             setImageResource(R.drawable.ic_swap)
             imageTintList = android.content.res.ColorStateList.valueOf(Ui.c(context, R.color.ag_mauve))

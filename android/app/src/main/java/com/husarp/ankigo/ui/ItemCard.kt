@@ -21,6 +21,7 @@ import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Move
 import com.husarp.ankigo.game.MoveText
+import com.husarp.ankigo.game.itemHolders
 
 /**
  * PLAN 168 / 181 / 200 / 199 (R14 batch 2), PLAN 210 (R15-A): the item card, one design for the Shop and the Bag (mockup docs/design/round14-shop.html
@@ -85,6 +86,7 @@ internal object ItemCard {
     /** The header: bare icon, name, the one line (an item only) and the close button ([onClose]; 48 dp to touch, the glyph is smaller). */
     fun header(page: GamePage, spec: Spec, closeAll: View? = null, onClose: () -> Unit): View {
         val ctx: Context = page
+        val holders = spec.item?.let { page.state.itemHolders(it) }.orEmpty()
         val isTm = spec.item == null
         val move = spec.move?.let { page.data.move(it) }
         val sources = if (isTm) emptyList() else ItemInfo.evoPairs(page.data, spec.item.orEmpty()).map { it.fromNum }.distinct()
@@ -103,18 +105,18 @@ internal object ItemCard {
             gravity = Gravity.CENTER_VERTICAL
             addView(lead)
             addView(titles, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(ctx, 10f) })
-            if (spec.holders.isNotEmpty()) addView(LinearLayout(ctx).apply {
+            if (holders.isNotEmpty()) addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(Ui.text(ctx, 11f, 800, R.color.ag_mauve).apply { text = "Held by"; gravity = Gravity.END })
-                val holders = LinearLayout(ctx).apply {
+                val holderRows = LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
-                    for (mon in spec.holders) addView(LinearLayout(ctx).apply {
+                    for (mon in holders) addView(LinearLayout(ctx).apply {
                         gravity = Gravity.CENTER_VERTICAL
                         addView(TileSprite(ctx).apply { Ui.staticSprite(ctx, mon.species, mon.shiny, this) }, LinearLayout.LayoutParams(dp(ctx, 28f), dp(ctx, 28f)))
                         addView(Ui.text(ctx, 11f, 800, R.color.ag_text).apply { text = mon.nickname?.takeIf { it.isNotBlank() } ?: mon.name }, LinearLayout.LayoutParams(0, -2, 1f))
                     })
                 }
-                addView(MotionScrollView(ctx).apply { addView(holders) }, LinearLayout.LayoutParams(-1, dp(ctx, minOf(spec.holders.size, 3) * 28f)))
+                addView(MotionScrollView(ctx).apply { addView(holderRows) }, LinearLayout.LayoutParams(-1, dp(ctx, minOf(holders.size, 3) * 28f)))
             }, LinearLayout.LayoutParams(0, -2, 0.85f))
             closeAll?.let { addView(it, LinearLayout.LayoutParams(-2, -2)) }
             addView(closeButton(ctx, onClose), LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)).also { it.marginStart = dp(ctx, 4f); it.marginEnd = -dp(ctx, 8f) })
@@ -207,7 +209,7 @@ internal object ItemCard {
         val isTm = spec.item == null
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            val own = if (isTm) ItemInfo.tmOwnLine(spec.move in state.tms) else ItemInfo.ownLine(spec.item.orEmpty(), state.count(spec.item.orEmpty()) + spec.holders.size)
+            val own = if (isTm) ItemInfo.tmOwnLine(spec.move in state.tms) else ItemInfo.ownLine(state, spec.item.orEmpty())
             addView(Ui.text(ctx, 13.5f, 700, R.color.ag_sub0).apply { text = styled(ctx, own) }, Form.lp(ctx, 0))
 
             val trade = spec.trade
@@ -217,6 +219,7 @@ internal object ItemCard {
                 spec.act?.let { row.addView(actView(ctx, it), LinearLayout.LayoutParams(0, -2, 1f)) }
                 if (row.childCount > 0) addView(row, Form.lp(ctx, 10))
             }
+            spec.item?.let { item -> HeldItemActions.buttons(page, item)?.let { addView(it, Form.lp(ctx, 8)) } }
             if (trade != null) addView(if (trade.confirming) confirmView(ctx, trade) else tradeButton(ctx, trade), Form.lp(ctx, if (trade.confirming) 10 else 8))
         }
     }
@@ -371,7 +374,7 @@ internal object ItemCard {
     }
 
     /** The Bag's action: mauve with the label; a button that cannot be used now is faded with its reason as a small line (a tap says it as a toast). */
-    private fun actView(ctx: Context, a: Act): View {
+    internal fun actView(ctx: Context, a: Act): View {
         val base = Ui.c(ctx, R.color.ag_base)
         return button(ctx, Ui.c(ctx, R.color.ag_mauve), base, a.label, if (a.enabled) null else a.offLine).apply {
             if (!a.enabled) alpha = 0.5f
