@@ -138,7 +138,8 @@ class R17C6EvolutionItemsTest {
         println("REAL R17C-6: $checked item / trade-item evolutions checked")
         assertTrue(checked > 60)
         for (id in ids) {
-            assertEquals("price of $id", prices.getValue(id), d.price(id))
+            assertEquals("source price of $id", prices.getValue(id), d.itemPrices[id])
+            assertEquals("Shop price of $id", Tuning.SHOP_PRICE[id] ?: prices.getValue(id), d.price(id))
             assertEquals(id, prices.getValue(id) > 0, id in Items.shopPool(d))
         }
         // every catalogue evolution item is used by some species (a dead item would be sold or found for nothing). Apart: the Linking Cord

@@ -52,7 +52,7 @@ class R17C7RealDataTest {
         d!!
         val field = d.moves.values.filter { it.weather != null || it.terrain != null || it.pseudoWeather != null }
         assertTrue("the data has them: ${field.size}", field.size >= 15)
-        for (m in field) assertTrue("${m.id} (weather ${m.weather} terrain ${m.terrain} pseudo ${m.pseudoWeather}) is not built", m.id in FieldRules.handles || m.id in CoreRules.NEVER_PICKED || m.id == "plasmafists")
+        for (m in field) assertTrue("${m.id} (weather ${m.weather} terrain ${m.terrain} pseudo ${m.pseudoWeather}) is not built", BattleRules.ALL.any { m.id in it.handles } || m.id in CoreRules.NEVER_PICKED || m.id == "plasmafists")
         // the data carries what the rules read
         assertEquals("raindance", d.move("raindance")!!.weather)
         assertEquals("snowscape", d.move("chillyreception")!!.weather)

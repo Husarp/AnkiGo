@@ -35,7 +35,8 @@ class R17C2RealDataTest {
         assertTrue("forms with a different yield: ${differing.size}", differing.isNotEmpty())
         // a yield that survives the cache the game starts from
         assertEquals(d.sp(25).evYield, Parsers.decodeCache(Parsers.encodeCache(d)).sp(25).evYield)
-        assertEquals(4000, d.price("soothe-bell")) // PokeAPI's price: it can be sold
+        assertEquals(4000, d.itemPrices["soothe-bell"]) // PokeAPI source price stays intact.
+        assertEquals(2500, d.price("soothe-bell")) // PLAN 342 Shop override.
         assertTrue("soothe-bell" in Items.shopPool(d))
     }
 

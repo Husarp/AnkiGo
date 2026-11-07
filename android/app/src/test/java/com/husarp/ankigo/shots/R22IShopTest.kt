@@ -59,25 +59,28 @@ class R22IShopTest {
         tap(stage, "Held"); stage.render()
         assertTrue(ShopCardKit.texts(stage).any { it == "Amulet Coin" })
     }
-    @Test fun evolutionShowsOnlyCaughtSpritesAndOneUnknownCount() {
+    @Test fun evolutionShowsSeenSourcesAndIndividualUnknownSilhouettes() {
         val ctx = setup()
         val (_, stage) = ShopCardKit.page(ctx, CardKeys.bagItem("thunder-stone"), bag = true, setup = {
             val state = GameRepo.state!!
             state.bag["thunder-stone"] = 1
             state.caught.clear(); state.caught += 25
+            state.seen.clear(); state.seen += 25
         })
         val text = ShopCardKit.texts(stage)
-        assertFalse(text.toString(), text.any { it.contains("???") })
-        assertTrue(text.toString(), text.contains("…and 1 unknown"))
-        assertTrue(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(25).name}. Opens details")!!.isClickable)
+        assertTrue(text.toString(), text.any { it == "???" })
+        assertFalse(ShopCardKit.findDesc(stage, "???")!!.isClickable)
+        assertFalse(text.toString(), text.any { it.startsWith("…and") })
+        assertTrue(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(25).name}. Opens Evolution details")!!.isClickable)
         paparazzi.snapshot(stage, "r22i-evolution")
-        GameRepo.state!!.caught += listOf(26, 133, 135)
+        GameRepo.state!!.caught += listOf(26, 135)
+        GameRepo.state!!.seen += 133 // Seen-only sources are tappable too.
         stage.render()
         val allKnown = ShopCardKit.texts(stage)
-        assertFalse(allKnown.any { it.startsWith("…and") })
+        assertFalse(allKnown.any { it.startsWith("…and") || it == "???" })
         assertFalse(allKnown.any { it == "⟶" })
-        for (num in listOf(25, 133)) assertTrue(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(num).name}. Opens details")!!.isClickable)
-        for (num in listOf(26, 135)) assertNull(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(num).name}. Opens details"))
+        for (num in listOf(25, 133)) assertTrue(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(num).name}. Opens Evolution details")!!.isClickable)
+        for (num in listOf(26, 135)) assertNull(ShopCardKit.findDesc(stage, "${GameRepo.data!!.sp(num).name}. Opens Evolution details"))
         paparazzi.snapshot(stage, "r22i-evolution-known")
     }
 

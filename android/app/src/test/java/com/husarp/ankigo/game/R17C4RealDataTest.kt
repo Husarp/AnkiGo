@@ -39,7 +39,7 @@ class R17C4RealDataTest {
         for (id in MovePower.VARIABLE_POWER - "spitup") {
             val m = d.move(id)!!
             val h = BattleEngine.newHit(SimpleView(d, a, t), true, a, BattleSide(), t, BattleSide(), m)
-            assertTrue("$id has no rule for its power", MovePower.basePower(h) != null || MovePower.fixedDamage(h) != null)
+            assertTrue("$id has no rule for its power", BattleRules.ALL.any { it.basePower(h) != null || it.fixedDamage(h) != null })
             assertFalse("$id still shows a power number", MoveText.showsPower(m))
         }
         assertNotNull(d.move("spitup")) // R17C-5's move: it only must not show the flat 60
@@ -79,7 +79,7 @@ class R17C4RealDataTest {
             val m = d.move(id)!!
             val lines = MovePower.describe(m)
             assertEquals(id, 1, lines.size)
-            assertTrue(MoveText.describe(m).contains(lines[0]))
+            assertTrue("$id description: ${MoveText.describe(m)}", MoveText.describe(m).contains(StageText.explain(lines[0])))
         }
     }
 

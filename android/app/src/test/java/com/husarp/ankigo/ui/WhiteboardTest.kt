@@ -150,7 +150,7 @@ class WhiteboardTest {
             more.performClick()
             paparazzi.snapshot(field("root"), name = "whiteboard-extended-${theme.name}")
             stroke(board); assertEquals(1, board.strokeCount)
-            com.husarp.ankigo.shots.call(activity, "cardConfirmed", prepared)
+            com.husarp.ankigo.shots.call(activity, "cardConfirmed", prepared, true)
             assertEquals("confirmation keeps handwriting", 1, board.strokeCount)
             // A repeated note is still a new scheduled presentation and must get a clean board.
             com.husarp.ankigo.shots.call(activity, "showCard", prepared, true)

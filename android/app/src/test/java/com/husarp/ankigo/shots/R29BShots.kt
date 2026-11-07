@@ -20,22 +20,22 @@ class R29BShots {
     private fun shoot(name: String, build: (Context) -> View) = paparazzi.shootPage("b-$name", phone, build = build)
     @Test fun unknownItem() = shoot("unknown-item") { c ->
         val p = ShopPage(c,NoHost)
-        GameRepo.state!!.caught.clear()
+        GameRepo.state!!.caught.clear(); GameRepo.state!!.seen.clear()
         val w = ItemWindow(p) {}
         w.update(ItemCard.Spec("thunder-stone"))
         val text = labels(w.view)
-        assertTrue(text.toString(), text.any { it == "Evolves 2 unknown Pokémon" })
+        assertEquals(text.toString(), 2, text.count { it == "???" })
+        assertFalse(all(w.view).filter { it.contentDescription == "???" }.any { it.isClickable })
         assertFalse(text.toString(), text.any { "4 unknown Pokémon" in it })
         assertFalse(text.any { it.startsWith("…and") })
         w.view
     }
-    @Test fun useOnNamesOnly() = shoot("use-on") { c ->
+    @Test fun evolutionItemHasNoUseOnAction() = shoot("evolution-item") { c ->
         ShopCardKit.install()
         val (_,stage)=ShopCardKit.page(c,CardKeys.bagItem("thunder-stone"),bag=true,setup={ GameRepo.state!!.apply { bag["thunder-stone"]=2; mons.forEach { it.bondPoints=500 } } })
-        val dialog=DialogShots.capture { ShopCardKit.tap(ShopCardKit.findText(stage) { it=="Use on…" }) }!!
-        val scene = DialogShots.scene(c,dialog)
-        assertFalse(labels(scene).any { "→" in it || "⟶" in it })
-        scene
+        assertFalse("Use on…" in labels(stage))
+        assertFalse(labels(stage).any { "→" in it || "⟶" in it })
+        stage
     }
     @Test fun boxAndSort() {
         shoot("box-recently-evolved") { c ->

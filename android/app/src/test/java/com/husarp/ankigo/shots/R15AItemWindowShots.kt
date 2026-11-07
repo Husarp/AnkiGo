@@ -147,10 +147,10 @@ class R15AItemWindowShots {
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt"))).second }
     }
 
-    @Test fun theWindowOfAnEvolutionItemInTheBagHasUse() {
+    @Test fun theWindowOfAnEvolutionItemInTheBagHasNoUseAction() {
         shoot("win-evo", listOf(P412), check = { _, screen ->
             val t = texts(screen)
-            assertTrue("Use on…" in t)
+            assertFalse("Use on…" in t)
             assertTrue("You own 1 Tart Apple" in t.map { ItemInfo.plain(it) })
         }) { ctx -> bagPage(ctx, CardKeys.bagItem("tart-apple")).second }
     }

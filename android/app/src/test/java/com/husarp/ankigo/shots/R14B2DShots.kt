@@ -54,7 +54,7 @@ class R14B2DShots {
             val v = gift(ctx, GiftPop("poke-ball", null, 3, 6)) { nice++ }
             val t = texts(v)
             assertTrue(t.toString(), t.any { it.equals("Daily gift", ignoreCase = true) } && "3 Poké Balls" in t && "Nice" in t)
-            assertTrue(t.toString(), "Goal streak: 6 days · rarer gifts as it grows, up to 30 days" in t)
+            assertFalse(t.toString(), t.any { it.contains("Goal streak:") || it.contains("rarer gifts") })
             assertTrue(t.toString(), t.any { it.contains("catch", ignoreCase = true) }) // the item's own line
             fun tap(s: String) { var x: View? = findText(v, s); while (x != null && !x.isClickable) x = x.parent as? View; x!!.performClick() }
             tap("Nice"); assertEquals(1, nice)
@@ -66,7 +66,8 @@ class R14B2DShots {
         paparazzi.shootPage("r14b2d-gift-day1", listOf(Variants.PHONE)) { ctx ->
             val v = gift(ctx, GiftPop("great-ball", null, 1, 1))
             val t = texts(v)
-            assertTrue(t.toString(), "Great Ball" in t && "Reach your goal tomorrow too for rarer gifts" in t)
+            assertTrue(t.toString(), "Great Ball" in t)
+            assertFalse(t.toString(), t.any { it.contains("Goal streak:") || it.contains("rarer gifts") })
             assertFalse("a single one is just its name", t.any { it.startsWith("1 ") })
             v
         }
@@ -76,7 +77,8 @@ class R14B2DShots {
         paparazzi.shootPage("r14b2d-gift-tm", listOf(Variants.PHONE, SMALL)) { ctx ->
             val v = gift(ctx, GiftPop(null, "thunderbolt", 1, 12))
             val t = texts(v)
-            assertTrue(t.toString(), "TM Thunderbolt" in t && t.any { it.equals("Daily gift", ignoreCase = true) } && "Goal streak: 12 days · rarer gifts as it grows, up to 30 days" in t)
+            assertTrue(t.toString(), "TM Thunderbolt" in t && t.any { it.equals("Daily gift", ignoreCase = true) })
+            assertFalse(t.toString(), t.any { it.contains("Goal streak:") || it.contains("rarer gifts") })
             v
         }
     }
@@ -84,7 +86,8 @@ class R14B2DShots {
     @Test fun giftOnALongStreak() {
         paparazzi.shootPage("r14b2d-gift-long", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
             val v = gift(ctx, GiftPop("ultra-ball", null, 1, 45))
-            assertTrue(texts(v).toString(), texts(v).any { it.startsWith("Goal streak: 45 days") })
+            assertTrue("Ultra Ball" in texts(v))
+            assertFalse(texts(v).toString(), texts(v).any { it.contains("Goal streak:") || it.contains("rarer gifts") })
             v
         }
     }
