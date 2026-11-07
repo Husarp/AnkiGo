@@ -9,7 +9,6 @@ import kotlin.random.Random
 // TICKET T05 owns this file. Public signatures are fixed (other tickets call them); add private helpers freely.
 
 object Progression {
-    private const val EVERSTONE = "everstone"
     private const val LINKING_CORD = "linking-cord"
 
     /** Ankimon: ceil(base_experience * level / 7), at least 1. */
@@ -182,6 +181,8 @@ object Progression {
         if (state.activeHeldItem(main) == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
         if (holder != null && state.activeHeldItem(holder) == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
 
+        mainXp = everstoneXp(data, state, main, mainXp)
+        if (holder != null) holderXp = everstoneXp(data, state, holder, holderXp)
         mainXp = Bond.bonusXp(mainXp, main.bondPoints)
         if (holder != null) holderXp = Bond.bonusXp(holderXp, holder.bondPoints)
         events += GameEvent.Defeated(wild.species, wild.name, Tuning.studyXp(xp, state.practiceRewards))
@@ -189,7 +190,7 @@ object Progression {
         main.defeats++
 
         gainXp(data, state, main, NaturePerks.rewardXp(state, main, mainXp), events)
-        if (holder != null) gainXp(data, state, holder, Tuning.studyXp(holderXp, state.practiceRewards), events)
+        if (holder != null) gainXp(data, state, holder, NaturePerks.sharedXp(state, holder, holderXp), events)
 
     }
 
@@ -208,16 +209,21 @@ object Progression {
         var holderXp = half
         if (state.activeHeldItem(main) == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
         if (holder != null && state.activeHeldItem(holder) == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
+        mainXp = everstoneXp(data, state, main, mainXp)
+        if (holder != null) holderXp = everstoneXp(data, state, holder, holderXp)
         mainXp = Bond.bonusXp(mainXp, main.bondPoints)
         if (holder != null) holderXp = Bond.bonusXp(holderXp, holder.bondPoints)
         winBonus(data, state, main, wild, rng, events)
         gainXp(data, state, main, NaturePerks.rewardXp(state, main, mainXp), events)
-        if (holder != null) gainXp(data, state, holder, Tuning.studyXp(holderXp, state.practiceRewards), events)
+        if (holder != null) gainXp(data, state, holder, NaturePerks.sharedXp(state, holder, holderXp), events)
     }
+
+    private fun everstoneXp(data: GameData, state: GameState, mon: Mon, xp: Int): Int =
+        if (mon.level < Tuning.MAX_LEVEL && state.activeHeldItem(mon) == "everstone" && data.sp(mon.species).evolutions.isEmpty())
+            (xp.toLong() * 115 / 100).toInt() else xp
 
     /** Every currently available branch, without choosing one for the player. */
     fun readyEvolutions(data: GameData, state: GameState, mon: Mon, now: Long): List<Evolution> {
-        if (state.activeHeldItem(mon) == EVERSTONE) return emptyList()
         return data.sp(mon.species).evolutions.filter { e ->
             data.species.containsKey(e.to) && Bond.allows(mon, e) && timeOk(e, now) && genderOk(e, mon) && when (e.kind) {
                 EvoKind.LEVEL -> e.level != null && mon.level >= e.level && conditionOk(data, state, e, mon)
@@ -235,9 +241,8 @@ object Progression {
         else -> null
     }
 
-    /** Level-based evolution that is due now (LEVEL with time/gender/condition, LEVEL_MOVE), or null. Everstone blocks. */
+    /** Level-based evolution that is due now (LEVEL with time/gender/condition, LEVEL_MOVE), or null. */
     fun levelEvolution(data: GameData, state: GameState, mon: Mon, now: Long): Evolution? {
-        if (state.activeHeldItem(mon) == EVERSTONE) return null
         return data.sp(mon.species).evolutions.firstOrNull { e ->
             data.species.containsKey(e.to) && Bond.allows(mon, e) && when (e.kind) {
                 EvoKind.LEVEL -> e.level != null && mon.level >= e.level
@@ -247,9 +252,8 @@ object Progression {
         }
     }
 
-    /** Bond evolution due now (♥3/♥4, time, gender, minimum level, Fairy move for Sylveon). Everstone blocks. */
+    /** Bond evolution due now (♥3/♥4, time, gender, minimum level, Fairy move for Sylveon). */
     fun friendshipEvolution(data: GameData, state: GameState, mon: Mon, now: Long): Evolution? {
-        if (state.activeHeldItem(mon) == EVERSTONE) return null
         return data.sp(mon.species).evolutions.firstOrNull { e ->
             e.kind == EvoKind.FRIENDSHIP && data.species.containsKey(e.to) &&
                 Bond.allows(mon, e) && mon.level >= (e.level ?: 0) && genderOk(e, mon) && timeOk(e, now) &&
@@ -260,7 +264,7 @@ object Progression {
     /**
      * The evolution [item] triggers on [mon] at [now], or null: ITEM with that item; TRADE with that held item; a TRADE
      * without an item, or OTHER, with "linking-cord"; a day/night-bound one (Razor Claw, Razor Fang, Oval Stone) only at
-     * that time (Ankimon evolution_time_allows). Everstone blocks.
+     * that time (Ankimon evolution_time_allows).
      */
     fun itemEvolution(data: GameData, mon: Mon, item: String, now: Long = System.currentTimeMillis(), heldItem: String? = mon.heldItem): Evolution? =
         itemEvolutions(data, mon, item, heldItem).firstOrNull { timeOk(it, now) }
@@ -273,7 +277,6 @@ object Progression {
     fun itemEvolutionAnyTime(data: GameData, mon: Mon, item: String, heldItem: String? = mon.heldItem): Evolution? = itemEvolutions(data, mon, item, heldItem).firstOrNull()
 
     private fun itemEvolutions(data: GameData, mon: Mon, item: String, heldItem: String?): List<Evolution> {
-        if (heldItem == EVERSTONE) return emptyList()
         return data.sp(mon.species).evolutions.filter { e ->
             data.species.containsKey(e.to) && Bond.allows(mon, e) && genderOk(e, mon) && when (e.kind) {
                 EvoKind.ITEM -> e.item == item

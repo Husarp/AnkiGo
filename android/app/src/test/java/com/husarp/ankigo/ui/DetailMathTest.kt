@@ -39,7 +39,7 @@ class DetailMathTest {
 
     @Test fun natureText() {
         assertEquals("Raises Speed, lowers Sp. Atk", DetailMath.natureEffect(Nature.JOLLY))
-        assertEquals("Neutral", DetailMath.natureEffect(Nature.SERIOUS))
+        assertEquals("Neutral · " + com.husarp.ankigo.game.NaturePerks.description(Nature.SERIOUS), DetailMath.natureEffect(Nature.SERIOUS))
     }
 
     @Test fun sixDistinctStatColours() {

@@ -617,8 +617,9 @@ class EconomyTest {
         s.main!!.heldItem = "everstone"
         Economy.give(s, "razor-claw")
         val r = ItemUse.use(d, s, "razor-claw", "main", TestData.rng(), clock(22))
-        assertFalse(r.ok); assertEquals("It won't have any effect.", r.message)
-        assertEquals(1, s.count("razor-claw"))
+        assertTrue(r.ok)
+        assertEquals("everstone", s.main!!.heldItem)
+        assertEquals(0, s.count("razor-claw"))
     }
 
     @Test fun wrongStoneKeepsItem() {

@@ -33,10 +33,10 @@ class ReminderFactsTest {
         assertEquals(listOf("water-stone"), ReminderFacts.worthHaving(data, s, listOf("water-stone")))
     }
 
-    @Test fun aPokemonHoldingAnEverstoneDoesNotNeedTheStone() {
+    @Test fun aPokemonHoldingAnEverstoneStillNeedsTheEvolutionStone() {
         val s = state()
         s.main!!.heldItem = "everstone"
-        assertEquals(emptyList<String>(), ReminderFacts.worthHaving(data, s, listOf("thunder-stone")))
+        assertEquals(listOf("thunder-stone"), ReminderFacts.worthHaving(data, s, listOf("thunder-stone")))
     }
 
     @Test fun timeBoundEvolutionItemsStillCountAtAnyTimeOfDay() {

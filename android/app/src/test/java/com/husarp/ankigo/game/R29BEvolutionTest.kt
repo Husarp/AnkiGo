@@ -39,11 +39,8 @@ class R29BEvolutionTest {
             assertTrue("${sp.name} ready with $item", e in Progression.readyEvolutions(data, st, mon, now))
             assertTrue(ItemUse.canUse(data,st,item,mon,now))
             mon.heldItem = "everstone"
-            assertFalse(ItemUse.canUse(data,st,item,mon,now))
-            assertFalse(e in Progression.readyEvolutions(data, st, mon, now))
-            assertFalse(ItemUse.use(data, st, item, mon.uid, Random(1), now, e.to).ok)
-            assertEquals(2, st.count(item))
-            mon.heldItem = null
+            assertTrue(ItemUse.canUse(data,st,item,mon,now))
+            assertTrue(e in Progression.readyEvolutions(data, st, mon, now))
             e.gender?.let { required ->
                 mon.gender = if (required == 'M') 'F' else 'M'
                 assertFalse(e in Progression.readyEvolutions(data, st, mon, now))

@@ -124,7 +124,7 @@ class ItemInfoTest {
         assertEquals("Evolves Applin into Flapple", ItemInfo.line(data, "tart-apple"))
         assertEquals("Evolves **Applin** into **Flapple**.", fact("tart-apple", "What it does"))
         assertEquals("Evolves **Applin** into **Appletun**.", fact("sweet-apple", "What it does"))
-        assertTrue(fact("tart-apple", "How to use").contains("**Everstone**"))
+        assertFalse(fact("tart-apple", "How to use").contains("Everstone"))
         assertFalse(ItemInfo.facts(data, "tart-apple").any { it.title == "In a fight" })
     }
 
@@ -180,8 +180,8 @@ class ItemInfoTest {
     @Test fun otherHeldItemsSayWhoTheyWorkFor() {
         assertEquals("×1.5 XP", ItemInfo.short(data, "lucky-egg"))
         assertTrue(fact("lucky-egg", "What it does").contains("Exp. Share"))
-        assertEquals("Never evolves", ItemInfo.short(data, "everstone"))
-        assertTrue(fact("everstone", "What it does").contains("level, Bond, stone or trade"))
+        assertEquals("Final form: +15% XP", ItemInfo.short(data, "everstone"))
+        assertTrue(fact("everstone", "What it does").contains("Single-stage species qualify too"))
         assertEquals("Main: ×2 EVs", ItemInfo.short(data, "macho-brace"))
         assertTrue(fact("macho-brace", "What it does").contains("252") && fact("macho-brace", "What it does").contains("510"))
         assertTrue(fact("macho-brace", "What it does").contains("each win"))   // R17C-2: not only defeats

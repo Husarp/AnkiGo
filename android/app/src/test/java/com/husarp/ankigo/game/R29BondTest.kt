@@ -152,7 +152,7 @@ class R29BondTest {
             assertFalse(blocked.ok); assertTrue(blocked.message.contains("♥2")); assertEquals(1, s.count(item))
             m.bondPoints = 125
             assertEquals(26, Progression.itemEvolution(d, m, item, noon)?.to)
-            m.heldItem = "everstone"; assertNull(Progression.itemEvolution(d, m, item, noon))
+            m.heldItem = "everstone"; assertEquals(26, Progression.itemEvolution(d, m, item, noon)?.to)
         }
     }
 
@@ -170,7 +170,7 @@ class R29BondTest {
             m.moves.remove("moonblast"); assertNull(Progression.friendshipEvolution(d, s, m, noon))
             m.moves += "moonblast"; m.level = 19; assertNull(Progression.friendshipEvolution(d, s, m, noon))
             m.level = 20; m.gender = 'M'; assertNull(Progression.friendshipEvolution(d, s, m, noon))
-            m.gender = 'F'; m.heldItem = "everstone"; assertTrue(Progression.readyEvolutions(d, s, m, noon).isEmpty())
+            m.gender = 'F'; m.heldItem = "everstone"; assertEquals(listOf(e), Progression.readyEvolutions(d, s, m, noon))
         }
     }
 
