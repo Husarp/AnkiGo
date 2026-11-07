@@ -94,32 +94,23 @@ internal object ItemCard {
             if (sources.none { it in page.state.seen || it in page.state.caught }) "Evolves ${sources.size} unknown Pokémon"
             else ItemInfo.short(page.data, spec.item.orEmpty(), page.state.seen + page.state.caught)
         } else ItemInfo.line(page.data, spec.item.orEmpty(), page.state.caught)
-        val lead: View = if (isTm) tmLead(ctx, move) else Bits.itemTile(ctx, spec.item.orEmpty(), 48)
-        val titles = LinearLayout(ctx).apply {
+        val lead: View = if (isTm) tmLead(ctx, move) else Bits.itemTile(ctx, spec.item.orEmpty(), 72)
+        val column = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            addView(Ui.text(ctx, 16f, 900, R.color.ag_text).apply { text = nameOf(page, spec) })
-            if (line != null) addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = line }, Form.lp(ctx, 1))
-        }
-        return LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
             addView(lead)
-            addView(titles, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(ctx, 10f) })
-            if (holders.isNotEmpty()) addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(Ui.text(ctx, 11f, 800, R.color.ag_mauve).apply { text = "Held by"; gravity = Gravity.END })
-                val holderRows = LinearLayout(ctx).apply {
-                    orientation = LinearLayout.VERTICAL
-                    for (mon in holders) addView(LinearLayout(ctx).apply {
-                        gravity = Gravity.CENTER_VERTICAL
-                        addView(TileSprite(ctx).apply { Ui.staticSprite(ctx, mon.species, mon.shiny, this) }, LinearLayout.LayoutParams(dp(ctx, 28f), dp(ctx, 28f)))
-                        addView(Ui.text(ctx, 11f, 800, R.color.ag_text).apply { text = mon.nickname?.takeIf { it.isNotBlank() } ?: mon.name }, LinearLayout.LayoutParams(0, -2, 1f))
-                    })
-                }
-                addView(MotionScrollView(ctx).apply { addView(holderRows) }, LinearLayout.LayoutParams(-1, dp(ctx, minOf(holders.size, 3) * 28f)))
-            }, LinearLayout.LayoutParams(0, -2, 0.85f))
-            closeAll?.let { addView(it, LinearLayout.LayoutParams(-2, -2)) }
-            addView(closeButton(ctx, onClose), LinearLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f)).also { it.marginStart = dp(ctx, 4f); it.marginEnd = -dp(ctx, 8f) })
+            addView(Ui.text(ctx, 20f, 900, R.color.ag_text).apply { text = nameOf(page, spec); gravity = Gravity.CENTER })
+            if (line != null) addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = line; gravity = Gravity.CENTER }, Form.lp(ctx, 3))
+            if (holders.isNotEmpty()) addView(MotionScrollView(ctx).apply {
+                addView(Ui.text(ctx, 12f, 800, R.color.ag_mauve).apply {
+                    text = "Held by " + holders.joinToString(", ") { it.nickname?.takeIf(String::isNotBlank) ?: it.name }
+                    gravity = Gravity.CENTER
+                })
+            }, LinearLayout.LayoutParams(-1, dp(ctx, minOf(holders.size, 3) * 20f)).also { it.topMargin = dp(ctx, 4f) })
+        }
+        return FrameLayout(ctx).apply {
+            addView(column, FrameLayout.LayoutParams(-1, -2).also { it.marginStart = dp(ctx, 32f); it.marginEnd = dp(ctx, 32f) })
+            addView(closeButton(ctx, onClose), FrameLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f), Gravity.TOP or Gravity.END))
         }
     }
 
@@ -147,6 +138,18 @@ internal object ItemCard {
             orientation = LinearLayout.VERTICAL
             if (move != null) addView(moveBlock(ctx, page, move), below)
             val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty(), page.state.caught)
+            if (spec.item !in Items.RETIRED && Items.def(spec.item.orEmpty())?.kind == com.husarp.ankigo.game.ItemKind.EVOLUTION) {
+                val bondMet = page.state.mons.any { mon -> pairs.any { it.fromNum == mon.species } && com.husarp.ankigo.game.Bond.level(mon.bondPoints) >= 2 }
+                addView(factBlock(ctx, "Requirements", "Level 2 Bond" + if (bondMet) " ✓" else ""), below)
+                addView(LinearLayout(ctx).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(Bits.itemTile(ctx, spec.item.orEmpty(), 28))
+                    addView(Ui.text(ctx, 13f, 800, R.color.ag_text).apply {
+                        val n = page.state.count(spec.item.orEmpty())
+                        text = "1 ${Items.name(spec.item.orEmpty())} · $n in your Bag" + if (n > 0) " ✓" else ""
+                    }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(ctx, 8f) })
+                }, below)
+            }
             if (!isTm) {
                 if (pairs.isNotEmpty()) addView(factBlock(ctx, "Evolves", ""), below)
                 val known = page.state.seen + page.state.caught
@@ -198,6 +201,7 @@ internal object ItemCard {
                 }, below)
             }
             for (f in facts.filterNot { pairs.isNotEmpty() && it.title == "What it does" }) addView(factBlock(ctx, f.title, f.text), LinearLayout.LayoutParams(below))
+            if (!isTm) addView(factBlock(ctx, "Where to find", ItemInfo.whereToFind(data, spec.item.orEmpty())), LinearLayout.LayoutParams(below))
             if (isTm) addView(whoButton(ctx, page, spec.move.orEmpty(), nameOf(page, spec)), Form.lp(ctx, 0))
         }
     }

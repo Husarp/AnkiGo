@@ -208,8 +208,8 @@ internal class EvolutionRows(
             val text = EvolutionRowText.explanation(data, e, parent, seen, state, mon)
             val paragraphs = text.split("\n\n").filter { it.isNotBlank() }
             val sections = if (item == null) listOf("Requirements" to paragraphs.joinToString("\n\n")) else
-                listOf("How to use" to paragraphs.firstOrNull().orEmpty(), "Where to find" to paragraphs.getOrNull(1).orEmpty(),
-                    "Requirements" to paragraphs.drop(2).joinToString("\n\n"))
+                listOf("Requirements" to paragraphs.drop(2).joinToString("\n\n"),
+                    "How to use" to paragraphs.firstOrNull().orEmpty(), "Where to find" to paragraphs.getOrNull(1).orEmpty())
             sections.filter { it.second.isNotBlank() }.forEach { (heading, paragraph) ->
                 addView(ItemCard.factBlock(a, heading, ""), LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
                 addView(Ui.text(a, 13.5f, 700, R.color.ag_sub1).apply {
@@ -248,17 +248,19 @@ internal object EvolutionRowText {
     fun explanation(data: GameData, e: Evolution, parent: Species?, seen: Set<Int>, state: GameState?, mon: Mon?): String {
         val item = Progression.evolutionItem(e)
         val extra = if (item != null) {
-            (state?.let {
-                if (it.ownedItemCount(item) == 0) "You don't have a ${Items.name(item)}."
-                else ItemInfo.plain(ItemInfo.ownLine(it, item)) + "." +
-                    if (mon != null && parent?.num == mon.species) " Hold Evolve for one second to evolve." else ""
-            } ?: "Requires ${Items.name(item)}.") +
-                "\n\nThe Shop sells evolution items on some days; they also drop while you study.\n\n"
+            "Open a Pokémon’s Evolution section. Hold Evolve for one second to evolve; one ${Items.name(item)} is used up." +
+                "\n\n${ItemInfo.whereToFind(data, item)}\n\n"
         } else ""
-        val bond = if (mon != null && parent?.num == mon.species)
-            "Bond now: ♥${Bond.level(mon.bondPoints)} · ${mon.bondPoints} points. Needs ♥${Bond.requiredLevel(e)}.\n\n" else ""
-        val details = EvoLine.explanation(data, e)
+        val inventory = if (item == null) "" else (state?.let {
+            if (it.count(item) == 0) "You don't have a ${Items.name(item)} in your Bag."
+            else ItemInfo.plain(ItemInfo.ownLine(it, item)) + " ✓"
+        } ?: "Requires 1 ${Items.name(item)}.") + "\n\n"
+        val applies = mon != null && parent?.num == mon.species
+        val bond = "Level ${Bond.requiredLevel(e)} Bond" +
+            (if (applies && Bond.allows(mon!!, e)) " ✓" else "") + "\n\n" +
+            (if (applies && mon!!.heldItem == "everstone") "Everstone held — take it off to evolve.\n\n" else "")
+        val details = EvoLine.explanation(data, e).split("\n\n").filterNot { it.startsWith("Reach Bond") }.joinToString("\n\n")
         // The item paragraph already explains availability; retain all extra restrictions from the existing rules text.
-        return if (item == null) bond + extra + details else extra + bond + details.split("\n\n").filterNot { it.startsWith("Have ") || it.startsWith("When ready") }.joinToString("\n\n")
+        return if (item == null) bond + extra + details else extra + bond + inventory + details.split("\n\n").filterNot { it.startsWith("Have ") || it.startsWith("When ready") }.joinToString("\n\n")
     }
 }

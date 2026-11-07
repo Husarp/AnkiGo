@@ -48,13 +48,13 @@ object BondSection {
             set(if (next == null) 1f else (points - start).toFloat() / (next - start), Ui.c(a, R.color.ag_pink), false)
             contentDescription = progress
         }, LinearLayout.LayoutParams(-1, Ui.dp(a, 7)).also { it.topMargin = Ui.dp(a, 6) })
-        if (next != null) addView(line("Next · ♥${level + 1}: ${Bond.unlock(level + 1)}"),
-            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
-        val tough = Bond.toughChance(points)
-        addView(line("Current bonuses\n+${Bond.coins(level)} coins / defeated Pokémon · +${Bond.xpPercent(level)}% XP" +
-            if (tough > 0) "\n$tough% chance to survive a KO with 1 HP" else ""),
-            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
-        addView(line("+1 point / card while fighting · +3 / win\nSoothe Bell: ×1.5 points", true),
-            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
+        addView(ItemCard.factBlock(a, "Current perks", ""), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
+        if (level == 0) addView(line("No perks yet"))
+        else {
+            addView(line("+${Bond.coins(level)} coins per defeated Pokémon"))
+            addView(line("+${Bond.xpPercent(level)}% XP from wins and catches"), Form.lp(a, 6))
+            val tough = Bond.toughChance(points)
+            if (tough > 0) addView(line("$tough% chance to survive a KO with 1 HP"), Form.lp(a, 6))
+        }
     }
 }

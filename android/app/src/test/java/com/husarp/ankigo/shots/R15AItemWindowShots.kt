@@ -55,15 +55,15 @@ class R15AItemWindowShots {
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx)
             ShopCardKit.install()
-            // PLAN 338: item and TM headers keep their slots, with no icon backdrop.
+            // R30: centered item hero; the TM keeps its bare disc slot.
             val page = com.husarp.ankigo.ui.ShopPage(ctx, NoHost)
             for (spec in listOf(com.husarp.ankigo.ui.ItemCard.Spec("great-ball"),
                 com.husarp.ankigo.ui.ItemCard.Spec(null, move = "thunderbolt"))) {
                 val header = com.husarp.ankigo.ui.ItemCard.header(page, spec) {} as ViewGroup
-                val icon = header.getChildAt(0)
+                val icon = (header.getChildAt(0) as ViewGroup).getChildAt(0)
                 assertNull("bare item/TM header icon", icon.background)
-                assertEquals(Ui.dp(ctx, 48), icon.layoutParams.width)
-                assertEquals(Ui.dp(ctx, 48), icon.layoutParams.height)
+                assertEquals(Ui.dp(ctx, if (spec.item == null) 48 else 72), icon.layoutParams.width)
+                assertEquals(Ui.dp(ctx, if (spec.item == null) 48 else 72), icon.layoutParams.height)
             }
             val view = build(ctx)
             val frame = FrameLayout(ctx).apply { addView(view, FrameLayout.LayoutParams(-1, -1)) }
@@ -147,10 +147,11 @@ class R15AItemWindowShots {
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt"))).second }
     }
 
-    @Test fun theWindowOfAnEvolutionItemInTheBagHasUse() {
+    @Test fun theWindowOfAnEvolutionItemInTheBagShowsRequirementsInsteadOfUse() {
         shoot("win-evo", listOf(P412), check = { _, screen ->
             val t = texts(screen)
-            assertTrue("Use on…" in t)
+            assertFalse("Use on…" in t)
+            assertTrue("Level 2 Bond" in t)
             assertTrue("You own 1 Tart Apple" in t.map { ItemInfo.plain(it) })
         }) { ctx -> bagPage(ctx, CardKeys.bagItem("tart-apple")).second }
     }

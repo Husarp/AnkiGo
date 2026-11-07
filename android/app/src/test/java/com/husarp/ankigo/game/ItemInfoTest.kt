@@ -124,7 +124,8 @@ class ItemInfoTest {
         assertEquals("Evolves Applin into Flapple", ItemInfo.line(data, "tart-apple"))
         assertEquals("Evolves **Applin** into **Flapple**.", fact("tart-apple", "What it does"))
         assertEquals("Evolves **Applin** into **Appletun**.", fact("sweet-apple", "What it does"))
-        assertTrue(fact("tart-apple", "How to use").contains("**Everstone**"))
+        assertTrue(fact("tart-apple", "How to use").contains("**Evolve**"))
+        assertTrue(fact("tart-apple", "How to use").contains("**Level 2 Bond**"))
         assertFalse(ItemInfo.facts(data, "tart-apple").any { it.title == "In a fight" })
     }
 

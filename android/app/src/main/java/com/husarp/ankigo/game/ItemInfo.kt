@@ -132,7 +132,7 @@ object ItemInfo {
                 ItemFact(HOW, "You can't use it. If you already own one, it stays in the Bag."),
             ) else listOf(
                 ItemFact(WHAT, evolutionWhat(data, item, caught)),
-                ItemFact(HOW, "Use it from the Bag on a Pokémon that evolves with it. A Pokémon holding an **Everstone** won't evolve."),
+                ItemFact(HOW, "Open a Pokémon from this item’s Evolves list, then hold **Evolve** in its Evolution section. Requires **Level 2 Bond** and one item, which is used up. Evolution cannot be undone."),
             )
             ItemKind.HELD -> listOf(
                 ItemFact(WHAT, heldWhat(item)),
@@ -149,6 +149,17 @@ object ItemInfo {
                 ItemFact(HOW, "Use it from the Bag."),
             )
         }
+    }
+
+    fun whereToFind(data: GameData?, item: String): String = when {
+        item in Items.RETIRED -> "Not sold or found any more."
+        isMaster(item) -> "Earned from the top tier of the Best streak achievement."
+        isOldBall(item) -> "Shop on some days."
+        Items.def(item)?.kind == ItemKind.BALL -> "Daily gift · Shop on some days."
+        item in Tuning.SHOP_BASICS -> "Found while studying · Always in the Shop."
+        item in Shop.weekendPrices -> "Found while studying · Weekend Shop on some weekends."
+        data != null && data.price(item) > 0 -> "Found while studying · Shop on some days."
+        else -> "Found while studying. Not sold in the Shop."
     }
 
     /** The full text of an opened TM card: what a TM is, and how it is taught. */
@@ -358,7 +369,7 @@ object ItemInfo {
         "everstone" -> "A Pokémon holding it **never evolves**: not by level, Bond, stone or trade. Take it back to let the Pokémon evolve."
         "macho-brace" -> "Your **main** gets **double EVs** from each win, defeat or catch (as always, up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
             "It does nothing on a Pokémon that is not your main."
-        "soothe-bell" -> "Your active fighter earns **×${nice(Tuning.SOOTHE_BELL)} Bond points**: normally +1 per answered card while fighting and +3 per win, defeat or catch. " +
+        "soothe-bell" -> "Your active fighter earns **×${nice(Tuning.SOOTHE_BELL)} Bond points** while answering cards and finishing fights. " +
             "Half points carry over, including through saves. Bond levels ♥0–♥5 unlock evolutions and bonuses. It does nothing on the bench."
         else -> POWER_STATS[item]?.let {
             "Your **main** gets **8 extra $it EVs** from each win, defeat or catch, on top of the usual EVs (up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
@@ -373,10 +384,10 @@ object ItemInfo {
 
     /** Where and how the item is used (one sentence). */
     fun howToUse(item: String): String = when (Items.def(item)?.kind) {
-        ItemKind.BALL -> if (item == "repeat-ball") Items.specialNote(item) else "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
+        ItemKind.BALL -> if (isOldBall(item)) Items.specialNote(item) else "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
         ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"
         ItemKind.EVOLUTION -> if (item in Items.RETIRED) "No Pokémon in AnkiGo evolves with it, so it can't be used."
-            else "Use it from the Bag on a Pokémon that evolves with it."
+            else "Open a Pokémon’s Evolution section and hold Evolve. Requires Level 2 Bond and one item, which is used up."
         ItemKind.HELD -> "Give it to a Pokémon from the Bag. A Pokémon holds one item at a time."
         ItemKind.ESCAPE -> "Use it from the Bag to leave the wild Pokémon in battle and meet a new one."
         ItemKind.FOSSIL -> "Use it from the Bag to revive an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}."
