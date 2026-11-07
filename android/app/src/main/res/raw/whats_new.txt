@@ -3,6 +3,10 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.3.1
+- Cards come faster: AnkiGo prepares the next cards while you study, so a ready card can appear while your answer is still saving in AnkiDroid. A card already on screen stays until you answer it.
+- A lag log records study timings (no card text) to find any pauses that remain; share it from the summary. @ Settings → Diagnostics
+
 ## 1.3.0
 - Bond grows from ♥0 to ♥5 as your Pokémon fights alongside you: one point per answered card and three per win, with no decay. Heart levels add coins and XP; at ♥4 and ♥5 your partner can sometimes survive a knockout with 1 HP.
 - Evolution needs ♥2 alongside its normal requirements; Bond evolutions need ♥3 or ♥4. Existing friendship converts to Bond, up to ♥4. A filling Love Ball shows your progress in the new Bond section.
