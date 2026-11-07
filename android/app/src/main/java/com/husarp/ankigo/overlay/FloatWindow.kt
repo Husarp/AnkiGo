@@ -308,12 +308,17 @@ class FloatWindow(
 
     /** Window root: focus handling for the keyboard, Back key, and re-clamping after rotation / split-screen resize. */
     private inner class Root(ctx: Context) : FrameLayout(ctx) {
+        private val buttonSounds = com.husarp.ankigo.sound.ButtonSounds.Gesture()
         override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+            val soundSerial = com.husarp.ankigo.sound.GameSound.uiSerial
+            buttonSounds.touch(this, ev)
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> setFocusable(true)
                 MotionEvent.ACTION_OUTSIDE -> setFocusable(false)
             }
-            return super.dispatchTouchEvent(ev)
+            val handled = super.dispatchTouchEvent(ev)
+            if (ev.actionMasked == MotionEvent.ACTION_UP) buttonSounds.completed(soundSerial)
+            return handled
         }
 
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {

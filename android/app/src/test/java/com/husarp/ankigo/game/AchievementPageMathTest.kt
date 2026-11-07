@@ -176,8 +176,8 @@ class AchievementPageMathTest {
     @Test fun theWholeTableTotalsItsTiers() {
         val data = TestData.world()
         val views = Achievements.view(TestData.state(data), data)
-        assertEquals(AchievementTable.ROWS.filter { !it.oneOff }.sumOf { it.tiers.size }, AchPageMath.tiersTotal(views)) // five tiered rows stop at Epic
-        assertEquals(AchievementTable.ROWS.count { !it.oneOff } * 5 - 10, AchPageMath.tiersTotal(views))
+        assertEquals(AchievementTable.ROWS.filter { !it.oneOff }.sumOf { it.tiers.size }, AchPageMath.tiersTotal(views)) // four tiered rows stop at Epic; Types caught stops at Rare
+        assertEquals(AchievementTable.ROWS.count { !it.oneOff } * 5 - 11, AchPageMath.tiersTotal(views))
     }
 
     // ---- ladder and texts ----

@@ -89,6 +89,7 @@ object BattleEngine {
         val r = Round(data, battle, main, multiplier.coerceAtLeast(0.0), enemyPower.coerceAtLeast(0.0), rng, moveChoice)
         r.play(enemyActs, mainActs, forceStrongest)
         battle.rounds++
+        NaturePerks.completedRound(battle, main)
         return r.events
     }
 

@@ -174,6 +174,7 @@ object SaveCodec {
         kv("nickname", m.nickname); kv("ankimonId", m.ankimonId); kv("favourite", m.favourite)
         kv("look", m.look); kv("restFrac", m.restFrac)
         kv("bondPoints", m.bondPoints); kv("bondHalf", m.bondHalf)
+        kv("natureXpCarry", m.natureXpCarry); kv("natureBondCarry", m.natureBondCarry)
     }
 
     /** R19-P (PLAN 281): one waiting question; the wild Pokémon of a catch question is written whole. */
@@ -211,6 +212,7 @@ object SaveCodec {
         key("player"); writeSide(this, b.player)
         key("enemy"); writeSide(this, b.enemy)
         kv("tally", b.tally); kv("answers", b.answers); kv("override", b.override?.name); kv("rounds", b.rounds)
+        kv("natureMainUid", b.natureMainUid); kv("natureMainRounds", b.natureMainRounds)
         kv("startedAt", b.startedAt); kv("wildMaxHp", b.wildMaxHp)
         kv("againStreak", b.againStreak); kv("pressuredRounds", b.pressuredRounds)
         kv("failedThrows", b.failedThrows)
@@ -277,6 +279,8 @@ object SaveCodec {
             favourite = o.bool("favourite", false), look = o.intOrNull("look"),
             bondPoints = o.int("bondPoints", Bond.fromLegacy(o.int("friendship", 0))).coerceIn(0, Bond.MAX_POINTS),
             bondHalf = o.int("bondHalf", 0).coerceIn(0, 1),
+            natureXpCarry = o.int("natureXpCarry", 0).coerceIn(0, 199),
+            natureBondCarry = o.int("natureBondCarry", 0).coerceIn(0, 99),
             restFrac = o.int("restFrac", 0).coerceIn(0, Tuning.BENCH_REST_DIVISOR - 1),
         )
     }
@@ -334,7 +338,9 @@ object SaveCodec {
             player = readSide(o.optJSONObject("player")), enemy = readSide(o.optJSONObject("enemy")),
             tally = o.int("tally", 0), answers = o.int("answers", 0),
             override = o.strOrNull("override")?.let { n -> Outcome.entries.firstOrNull { it.name == n } },
-            rounds = o.int("rounds", 0), startedAt = o.long("startedAt", 0),
+            rounds = o.int("rounds", 0),
+            natureMainUid = o.strOrNull("natureMainUid"), natureMainRounds = o.int("natureMainRounds", 0).coerceAtLeast(0),
+            startedAt = o.long("startedAt", 0),
             wildMaxHp = o.intOrNull("wildMaxHp")?.coerceAtLeast(1),
             failedThrows = o.int("failedThrows", 0).coerceAtLeast(0), // old saves: 0
             buttons = (o.intList("buttons") ?: emptyList()).map { it.coerceIn(0, Tuning.BUTTON_OK) }.toMutableList(), // old saves: none, Game.onAnswer restores them from the tally; R19-T: 5 = the OK of a new card

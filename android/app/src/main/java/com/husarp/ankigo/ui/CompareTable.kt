@@ -166,7 +166,7 @@ object CompareTable {
     private fun natureCell(m: Mon): Cell.Text {
         val n = m.nature
         val eff = if (n.plus == null || n.minus == null) "neutral" else "+${STAT_LABELS[n.plus.ordinal]} −${STAT_LABELS[n.minus.ordinal]}"
-        return Cell.Text(n.label, sub = listOf(eff))
+        return Cell.Text(n.label, sub = listOfNotNull(eff, com.husarp.ankigo.game.NaturePerks.description(n)))
     }
 
     fun build(data: GameData, state: GameState, picks: List<ComparePick>, evolved: Boolean, sameLevel: Int? = null, usedWildMoves: Set<String> = emptySet()): CompareData {

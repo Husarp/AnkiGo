@@ -75,6 +75,7 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
     override fun onActivityDestroyed(activity: Activity) { BattleScreen.setVisible(activity, false); Report.log("LIFE", "${activity.javaClass.simpleName} closed") }
     override fun onActivityCreated(activity: Activity, state: Bundle?) { Report.log("LIFE", "${activity.javaClass.simpleName} opened" + if (state != null) " (restored)" else "") }
     override fun onActivityResumed(activity: Activity) {
+        com.husarp.ankigo.sound.ButtonSounds.install(activity.window)
         Report.log("LIFE", "${activity.javaClass.simpleName} resumed")
         if (GameRepo.status == GameRepo.Status.READY) GameRepo.act(activity) { it.tick() }
         AppToast.resumed(activity); AchievementPopup.resumed(activity)

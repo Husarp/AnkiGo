@@ -188,7 +188,7 @@ object Progression {
         winBonus(data, state, main, wild, rng, events)
         main.defeats++
 
-        gainXp(data, state, main, Tuning.studyXp(mainXp, state.practiceRewards), events)
+        gainXp(data, state, main, NaturePerks.rewardXp(state, main, mainXp), events)
         if (holder != null) gainXp(data, state, holder, Tuning.studyXp(holderXp, state.practiceRewards), events)
 
     }
@@ -211,7 +211,7 @@ object Progression {
         mainXp = Bond.bonusXp(mainXp, main.bondPoints)
         if (holder != null) holderXp = Bond.bonusXp(holderXp, holder.bondPoints)
         winBonus(data, state, main, wild, rng, events)
-        gainXp(data, state, main, Tuning.studyXp(mainXp, state.practiceRewards), events)
+        gainXp(data, state, main, NaturePerks.rewardXp(state, main, mainXp), events)
         if (holder != null) gainXp(data, state, holder, Tuning.studyXp(holderXp, state.practiceRewards), events)
     }
 

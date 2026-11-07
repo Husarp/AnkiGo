@@ -232,7 +232,7 @@ class CompareTableTest {
         val nat = t.row("nature").cells
         assertEquals("Timid", (nat[0] as Cell.Text).text)
         assertEquals(listOf("+Spe −Atk"), (nat[0] as Cell.Text).sub)
-        assertEquals(listOf("neutral"), (nat[1] as Cell.Text).sub)
+        assertEquals(listOf("neutral", "+3% reward XP after a win with the same Main for 6+ completed rounds"), (nat[1] as Cell.Text).sub)
         val iv0 = t.row("ivs").cells[0] as Cell.Text
         assertEquals("97 / 186", iv0.text)
         assertEquals(listOf("31 · 20 · 10", "5 · 0 · 31"), iv0.sub)

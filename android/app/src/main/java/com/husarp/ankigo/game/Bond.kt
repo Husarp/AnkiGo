@@ -21,12 +21,18 @@ object Bond {
     fun fromLegacy(friendship: Int): Int = friendship.coerceIn(0, 250) * 2
 
     /** Soothe Bell retains its ×1.5 effect; half points carry between answers/wins and through saves. */
-    fun add(mon: Mon, points: Int, events: MutableList<GameEvent>, sootheBell: Boolean = false) {
+    fun add(mon: Mon, points: Int, events: MutableList<GameEvent>, sootheBell: Boolean = false, studyAnswer: Boolean = false) {
         if (points <= 0 || mon.bondPoints >= MAX_POINTS) return
         val before = level(mon.bondPoints)
         val halves = points * (if (sootheBell) 3 else 2) + mon.bondHalf
-        mon.bondPoints = (mon.bondPoints + halves / 2).coerceAtMost(MAX_POINTS)
+        val bonus = if (studyAnswer && mon.nature == Nature.DOCILE) {
+            val hundredths = points * 4 + mon.natureBondCarry
+            mon.natureBondCarry = hundredths % 100
+            hundredths / 100
+        } else 0
+        mon.bondPoints = (mon.bondPoints + halves / 2 + bonus).coerceAtMost(MAX_POINTS)
         mon.bondHalf = if (mon.bondPoints == MAX_POINTS) 0 else halves % 2
+        if (mon.bondPoints == MAX_POINTS) mon.natureBondCarry = 0
         val after = level(mon.bondPoints)
         if (after > before) events += GameEvent.Info("Bond grew! ${mon.shownName} reached ♥$after. ${unlock(after)}")
     }
