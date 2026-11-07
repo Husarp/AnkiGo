@@ -6,6 +6,10 @@ import kotlin.math.sin
 internal object BehaviourFx {
     private val green = 0xFF5FE08B.toInt()
     private val white = 0xFFFFFFFF.toInt()
+    const val HEAL_AT = 150f
+    const val DRAIN_HIT_AT = 460f
+    const val DRAIN_HEAL_AT = 990f
+    private const val HEAL_GLOW_MS = 600f
 
     private fun ring(s: FxScript, at: FxPt, time: Float, life: Float = 700f) {
         s.at(time) { s.particle("circle_02", green, at.x, at.y, s0 = 20f, s1 = 96f, life = life, a0 = .9f, add = true) }
@@ -21,7 +25,7 @@ internal object BehaviourFx {
         } }
         // Green light and rising plus signs, with no words or move names in the arena.
         val tint = FxColor.identity()
-        s.tween(start, 1000f) { p, _ ->
+        s.tween(start, HEAL_GLOW_MS) { p, _ ->
             val light = sin(p * Math.PI.toFloat())
             tint[6] = 1f + .25f * light; tint[9] = 24f * light
             s.attacker.set(filter = if (p < 1f) tint else null)
@@ -42,8 +46,8 @@ internal object BehaviourFx {
     }
 
     fun heal(s: FxScript): FxTimes {
-        healing(s, 150f)
-        return FxTimes(2000f, 1000f, 1150f)
+        healing(s, HEAL_AT)
+        return FxTimes(2000f, HEAL_AT, HEAL_AT + HEAL_GLOW_MS)
     }
 
     fun drain(s: FxScript): FxTimes {
@@ -59,12 +63,12 @@ internal object BehaviourFx {
                 c.ellipse(pos.x, pos.y, 7f * s.u, 7f * s.u, 0f, white, .9f)
             }
         }
-        orb(150f, 420f, false)
-        s.at(570f) { s.burst("star_04", s.plan.palette.glow, s.space.fromTarget(0f, 0f), 8, 90f, 380f, 18f, 4f, true) }
-        s.hit(570f, 300f)
-        orb(740f, 640f, true)
-        healing(s, 1390f)
-        return FxTimes(3240f, 570f, 2390f)
+        orb(100f, 360f, false)
+        s.at(DRAIN_HIT_AT) { s.burst("star_04", s.plan.palette.glow, s.space.fromTarget(0f, 0f), 8, 90f, 380f, 18f, 4f, true) }
+        s.hit(DRAIN_HIT_AT, 300f)
+        orb(540f, 440f, true)
+        healing(s, DRAIN_HEAL_AT)
+        return FxTimes(2840f, DRAIN_HIT_AT, DRAIN_HEAL_AT + HEAL_GLOW_MS)
     }
 
     /** Preparation is its own event, so weather/item skips never play it. No displacement or target reaction. */

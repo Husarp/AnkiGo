@@ -88,10 +88,10 @@ class ArenaMoveStage(
             Pair(holderLeft + viewW / 2f, holderTop + viewH + bottomInset - drawnH / 2f)
 
         /**
-         * How long the event player waits after an animated attack: the look's own end, but at least [impactMs] plus 500 ms of the
-         * pace [factor] (the floats and the HP bar need that long after the hit).
+         * How long the event player waits after an animated attack: the look's own end, but at least [impactMs] plus 350 ms of the
+         * pace [factor] (the number pops before the next move; the HP bar and fading particles may overlap its wind-up).
          */
         fun waitMs(doneMs: Long, impactMs: Long, factor: Double): Long =
-            maxOf(doneMs, impactMs + maxOf(1L, (500 * factor).toLong()))
+            maxOf(doneMs, impactMs + maxOf(1L, (350 * factor).toLong()))
     }
 }

@@ -6,6 +6,32 @@ import kotlin.random.Random
 
 class R23ZbHitEventsTest {
     private val data = TestData.world()
+    @Test fun moveEffectCountExcludesRoundResiduals() {
+        val user = TestData.mon(data, 19, 30, listOf("recover")).also { it.hp = 10 }
+        val target = TestData.mon(data, 150, 60, listOf("recover"))
+        val battle = Battle(user, Tier.NORMAL)
+        battle.enemy.status = "psn"
+        val events = BattleEngine.playRound(data, battle, target, 1.0, true, Random(1), mainActs = false)
+        val at = events.indexOfFirst { it is GameEvent.Attack }
+        val attack = events[at] as GameEvent.Attack
+        assertEquals(1, attack.moveEffectCount)
+        assertEquals(EffectKind.HEAL, (events[at + 1] as GameEvent.Effect).kind)
+        assertTrue(events.drop(at + 2).any { it is GameEvent.Effect && it.kind == EffectKind.STATUS_DAMAGE })
+    }
+
+    @Test fun afterMoveStatEffectsBelongToTheMoveToo() {
+        val move = Move("tailwind", "Tailwind", Type.FLYING, Category.STATUS, 0, null, target = "allySide")
+        val world = GameData(data.species, data.moves + (move.id to move), data.growth, data.itemPrices)
+        val user = TestData.mon(world, 19, 30, listOf(move.id)).also { it.ability = "windrider" }
+        val target = TestData.mon(world, 150, 60, listOf("recover"))
+        val events = BattleEngine.switchHit(world, Battle(user, Tier.NORMAL), target, Random(1))
+        val at = events.indexOfFirst { it is GameEvent.Attack }
+        val attack = events[at] as GameEvent.Attack
+        val effects = events.drop(at + 1).take(attack.moveEffectCount).filterIsInstance<GameEvent.Effect>()
+        assertTrue(effects.any { it.kind == EffectKind.FIELD })
+        assertTrue(effects.any { it.kind == EffectKind.STAT_CHANGE && it.stat == "atk" })
+    }
+
     @Test fun recordedHitsAreExactAndStopAtFaint() {
         for (hp in listOf(1, 200)) for (seed in 1..20) {
             val user = TestData.mon(data, 19, 25, listOf("bulletseed"))

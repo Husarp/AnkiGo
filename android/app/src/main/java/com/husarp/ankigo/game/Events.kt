@@ -68,6 +68,8 @@ sealed class GameEvent {
         val multiHit: Boolean = false, val recoilMove: Boolean = false,
         /** Actual target HP after each hit and its immediate effects (berries can heal between hits). */
         val hitTargetHps: List<Int> = emptyList(),
+        /** Presentation only: following effects emitted inside this move, before a called move or end-of-round effects. */
+        val moveEffectCount: Int = 0,
     ) : GameEvent()
 
     /** The wild one did nothing because the round went well (Ankimon: Splash). */

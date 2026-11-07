@@ -21,6 +21,7 @@ import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.sound.GameSound
 import com.husarp.ankigo.ui.movefx.BehaviourFx
 import com.husarp.ankigo.ui.movefx.MoveFxCatalog
+import com.husarp.ankigo.ui.movefx.MoveLook
 import com.husarp.ankigo.ui.PanelText.em
 import java.util.Locale
 import kotlin.math.max
@@ -472,7 +473,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 log(kind(lastButton), label(lastButton), "charging ${e.answers}/${e.of} — the next answer attacks")
                 return d(450)
             }
-            is GameEvent.RoundStart -> { fightOver = false; mult = e.multiplier; wildMult = e.enemyPower; return if (AppPrefs.flyingTurnDots(ctx)) panel.flyTurnDots(d(500)) else 0 }
+            is GameEvent.RoundStart -> { fightOver = false; mult = e.multiplier; wildMult = e.enemyPower; return if (AppPrefs.flyingTurnDots(ctx)) panel.flyTurnDots(d(250)) else 0 }
 
             is GameEvent.Attack -> return playAttack(e)
             is GameEvent.Splash -> {
@@ -773,6 +774,9 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             wildMult = 1.0
             log(LogKind.AGAIN, "WILD", sb.toString())
         }
+        val moveEffects = queue.take(e.moveEffectCount).mapNotNull { (it as? Item.Ev)?.e as? GameEvent.Effect }
+            .takeWhile { it.into == 0 && it.kind != EffectKind.CHARGE }
+        var look: MoveLook? = null
         val recoil = queue.takeWhile { (it as? Item.Ev)?.e is GameEvent.Effect }
             .filterIsInstance<Item.Ev>().firstOrNull {
                 val effect = it.e as GameEvent.Effect
@@ -785,57 +789,60 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 multiHit = e.multiHit || move?.multihit != null || e.hits > 1,
                 recoil = e.recoilMove || move?.recoil != null || e.moveId == Tuning.STRUGGLE || recoil != null,
                 hits = e.hits.coerceAtLeast(0), showRecoil = recoil != null)
+            look = plan.look
             arena.playMove(plan, e.byPlayer, react = e.damage > 0, speed = (1.0 / factor).toFloat())
         } else null
         if (run == null) {
             sound(e)
             if (e.category == Category.SPECIAL && e.moveId != "recover") arena.lean(e.byPlayer, d(com.husarp.ankigo.ui.movefx.FxLean.TOTAL_MS))   // R18-C: special / status lean, physical lunges
             else if (e.category == Category.PHYSICAL) arena.lunge(e.byPlayer, d(350))
-            after(300) { afterHit(e) }
-            return d(800)
+            val shownAttack = MoveEffectPlayback.beforeEffects(e, moveEffects)
+            after(300) { afterHit(shownAttack, immediateFloats = true) }
+            val effects = MoveEffectPlayback.timeline(moveEffects, d(300), d(300), d(300), factor)
+            moveEffects.forEach { effect -> queue.removeAll { it is Item.Ev && it.e === effect } }
+            effects.forEach { timed -> atMs(timed.atMs) { play(timed.effect, immediateFloats = true) } }
+            return maxOf(d(650), (effects.lastOrNull()?.atMs ?: 0L) + d(350))
         }
         sound(e, run.impactMs)
         val hitEffects = queue.takeWhile { (it as? Item.Ev)?.e is GameEvent.Effect }
             .filterIsInstance<Item.Ev>().filter {
                 (it.e as GameEvent.Effect).hitIndex in 0 until e.hits && e.multiHit
             }
-        hitEffects.forEach { queue.remove(it) }
-        fun hitEffectsAt(index: Int) {
-            hitEffects.filter { (it.e as GameEvent.Effect).hitIndex == index }
-                .forEach { play(it.e, immediateFloats = true) }
-        }
-        val recoilEffect = recoil?.e as? GameEvent.Effect
-        // The final attack HP can include later healing (e.g. Shell Bell). Recoil's own event
-        // gives the exact HP immediately before its loss, without adding that loss to later HP.
-        val shownAttack = MoveHitPlayback.beforeRecoil(e, recoilEffect)
+        val effectsToPlay = queue.takeWhile { (it as? Item.Ev)?.e is GameEvent.Effect }
+            .filterIsInstance<Item.Ev>().filter { item ->
+                moveEffects.any { it === item.e } || item === recoil || item in hitEffects
+            }
+        effectsToPlay.forEach { queue.remove(it) }
+        val selectedEffects = effectsToPlay.map { it.e as GameEvent.Effect }
+        val shownAttack = MoveEffectPlayback.beforeEffects(
+            MoveHitPlayback.beforeRecoil(e, recoil?.e as? GameEvent.Effect), selectedEffects)
         val hits = MoveHitPlayback.hits(shownAttack)
         if (hits.isEmpty()) atMs(run.impactMs) {
-            afterHit(shownAttack, animated = true)
-            hitEffects.forEach { play(it.e, immediateFloats = true) }
+            afterHit(shownAttack, animated = true, immediateFloats = true)
         }
         else hits.forEachIndexed { index, hit ->
             atMs(d(BehaviourFx.hitTime(index).toLong())) {
-                afterHit(hit, animated = true, updateUser = index == hits.lastIndex)
-                hitEffectsAt(index)
+                afterHit(hit, animated = true, updateUser = index == hits.lastIndex &&
+                    selectedEffects.none { it.onPlayer == e.byPlayer && it.hitIndex >= 0 })
             }
         }
-        // Move recoil is already an exact HP event. Play its number with the flash, once.
-        if (recoil != null) {
-            queue.remove(recoil)
-            atMs(d(BehaviourFx.RECOIL_AT.toLong())) { play(recoil.e, immediateFloats = true) }
-        }
-        val lastHitMs = if (hits.isNotEmpty()) d(BehaviourFx.hitTime(hits.lastIndex).toLong()) else run.impactMs
-        val lastNumberMs = if (recoil != null) maxOf(lastHitMs, d(BehaviourFx.RECOIL_AT.toLong())) else lastHitMs
+        val hitTimes = hits.indices.map { d(BehaviourFx.hitTime(it).toLong()) }
+        val lastHitMs = hitTimes.lastOrNull() ?: run.impactMs
+        val healMs = if (look == MoveLook.DRAIN) d(BehaviourFx.DRAIN_HEAL_AT.toLong()) else lastHitMs
+        val effects = MoveEffectPlayback.timeline(selectedEffects, run.impactMs, healMs,
+            d(BehaviourFx.RECOIL_AT.toLong()), factor, hitTimes)
+        effects.forEach { timed -> atMs(timed.atMs) { play(timed.effect, immediateFloats = true) } }
+        val lastNumberMs = maxOf(lastHitMs, effects.lastOrNull()?.atMs ?: 0L)
         return ArenaMoveStage.Geo.waitMs(run.doneMs, lastNumberMs, factor)
     }
 
     /** The hit has landed: the target's shake and flash (plain path only), the floating numbers and the HP bars. */
-    private fun afterHit(e: GameEvent.Attack, animated: Boolean = false, updateUser: Boolean = true) {
+    private fun afterHit(e: GameEvent.Attack, animated: Boolean = false, updateUser: Boolean = true, immediateFloats: Boolean = false) {
         val onPlayer = !e.byPlayer
         if (!animated && !e.missed && !e.failed && e.damage > 0) {
             arena.hit(onPlayer, d(380))
         }
-        floats(e, immediate = animated && e.multiHit)
+        floats(e, immediate = immediateFloats || (animated && e.multiHit))
         // HP of the target, and of the user (drain, recoil, heal)
         if (e.byPlayer) {
             if (e.targetMaxHp > 0) arena.setEnemyHp(e.targetHp, e.targetMaxHp, true)
