@@ -67,4 +67,7 @@
     <!-- App icon (PLAN 148, round 14): the plain off-white background layer of the adaptive launcher icon -->
     <color name="ic_launcher_background">#F6F3EC</color>
     <color name="ag_scrollbar">#737373</color>
+    <color name="ag_hold_idle">#842ef4</color>
+    <color name="ag_hold_fill">#001106</color>
+    <color name="ag_hold_ink">#eff1f5</color>
 </resources>

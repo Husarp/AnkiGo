@@ -11,13 +11,13 @@ import com.husarp.ankigo.sound.SoundId
 import com.husarp.ankigo.sound.SoundPrefs
 
 /**
- * Settings -> Sound (pick 84B): three cards (Study buttons, Battle, Pokémon cries), each with its switches, a small ▶ to hear a group
+ * Settings -> Sound (pick 84B): three cards (Study buttons, Battle, Pokémon cries), each with its switches, a large bare ▶ to hear a group
  * and its own volume slider, then the quiet-on-card-audio rule and a test row. Prefs live in [SoundPrefs].
  */
 internal fun soundCard(ctx: Context): View {
     SoundPrefs.migrateVolumes(ctx)
     fun group(title: String, sub: String?, g: SoundGroup, hear: SoundId?) =
-        Form.soundRow(ctx, title, sub, SoundPrefs.groupOn(ctx, g), hear?.let { id -> { GameSound.preview(ctx, id)?.let { Ui.toast(ctx, it) } } }) {
+        Form.soundRow(ctx, title, sub, SoundPrefs.groupOn(ctx, g), hear?.let { id -> { playing -> GameSound.preview(ctx, id, playing)?.let { Ui.toast(ctx, it) } } }) {
             SoundPrefs.setGroupOn(ctx, g, it)
         }
     fun volume(title: String, ch: SoundChannel) =
@@ -34,7 +34,7 @@ internal fun soundCard(ctx: Context): View {
     val battle = card(R.drawable.ic_flame, "Battle", listOf(
         group("Battle effects", "Hits, faint, catch, level up, misses", SoundGroup.BATTLE, SoundId.HIT),
         Form.soundRow(ctx, "Move type sounds", "Soft sound for each move type, together with the hit", SoundPrefs.typeSounds(ctx),
-            { GameSound.preview(ctx, SoundId.TYPE_WATER)?.let { Ui.toast(ctx, it) } }) { SoundPrefs.setTypeSounds(ctx, it) },
+            { playing -> GameSound.preview(ctx, SoundId.TYPE_WATER, playing)?.let { Ui.toast(ctx, it) } }) { SoundPrefs.setTypeSounds(ctx, it) },
         group("Status & moments", "Burn, poison, shiny, evolution, XP, cash, goals", SoundGroup.MOMENTS, SoundId.STAT_UP),
         volume("Battle effects volume", SoundChannel.BATTLE),
     ))

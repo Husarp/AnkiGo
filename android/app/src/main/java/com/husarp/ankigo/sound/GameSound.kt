@@ -33,7 +33,7 @@ object GameSound {
     private val effects = ConcurrentHashMap<SoundId, Int>()          // sound -> SoundPool id
     private val ready = ConcurrentHashMap.newKeySet<Int>()           // SoundPool ids that finished loading
     /** A sound waiting for its file to load: its volume, the uptime it is too late after, and the check to pass right before it starts. */
-    private class Waiting(val volume: Float, val deadline: Long, val allowed: () -> Boolean)
+    private class Waiting(val volume: Float, val deadline: Long, val allowed: () -> Boolean, val onStarted: (() -> Unit)? = null)
     private val waiting = ConcurrentHashMap<Int, Waiting>()          // SoundPool id -> sound waiting for the load
     private val cries = LinkedHashMap<Int, Int>()                    // species -> SoundPool id, oldest first
     private val lastAt = ConcurrentHashMap<Any, Long>()
@@ -97,7 +97,9 @@ object GameSound {
             if (status != 0) return@setOnLoadCompleteListener
             ready.add(id)
             val want = waiting.remove(id)
-            if (want != null && SystemClock.uptimeMillis() <= want.deadline && want.allowed()) sp.play(id, want.volume, want.volume, 1, 0, 1f)
+            if (want != null && SystemClock.uptimeMillis() <= want.deadline && want.allowed()) {
+                if (sp.play(id, want.volume, want.volume, 1, 0, 1f) != 0) main.post { want.onStarted?.invoke() }
+            }
         }
         pool = p
         return p
@@ -229,7 +231,7 @@ object GameSound {
             }
         }
         if (id in ready) p.play(id, volume, volume, 1, 0, 1f)
-        else waiting[id] = Waiting(volume, SystemClock.uptimeMillis() + CRY_WAIT_MS) { allowedNow(c, cue) }
+        else waiting[id] = Waiting(volume, SystemClock.uptimeMillis() + CRY_WAIT_MS, { allowedNow(c, cue) })
     }
 
     /** Downloads the cry of [species] and of the next encounter in the background (once each; only when downloads are allowed). */
@@ -279,7 +281,7 @@ object GameSound {
      * The ▶ on a settings row: plays [id] at the volume of its channel, also when its group is switched off. Returns why nothing
      * can be heard (volume 0, phone silent), else null.
      */
-    fun preview(ctx: Context, id: SoundId): String? {
+    fun preview(ctx: Context, id: SoundId, onPlaying: (Boolean) -> Unit = {}): String? {
         val c = app(ctx)
         val channel = id.group.channel
         if (SoundPrefs.volume(c, channel) <= 0) return "Volume is 0"
@@ -287,7 +289,11 @@ object GameSound {
         io.execute {
             try {
                 start(c) // makes and loads the files if that has not happened yet (also when the group is off)
-                main.postDelayed({ previewNow(c, id) }, 150)
+                val duration = ((File(c.cacheDir, "sfx/${id.file}").length() - 44).coerceAtLeast(0) * 1000 / (Sfx.RATE * 2)).coerceAtLeast(1)
+                main.postDelayed({ previewNow(c, id) {
+                    onPlaying(true)
+                    main.postDelayed({ onPlaying(false) }, duration)
+                } }, 150)
             } catch (t: Throwable) {
                 Report.fail(TAG, "preview of $id", t)
             }
@@ -295,13 +301,15 @@ object GameSound {
         return null
     }
 
-    private fun previewNow(c: Context, id: SoundId) {
+    private fun previewNow(c: Context, id: SoundId, onStarted: () -> Unit) {
         try {
             val p = pool ?: return
             val sp = effects[id] ?: return
             val v = SoundRules.volume(SoundPrefs.volume(c, id.group.channel))
-            if (sp in ready) p.play(sp, v, v, 1, 0, 1f)
-            else waiting[sp] = Waiting(v, SystemClock.uptimeMillis() + CRY_WAIT_MS) { ringerNormal(c) && SoundPrefs.volume(c, id.group.channel) > 0 } // played by the load listener; a preview ignores the group switch
+            if (sp in ready) {
+                if (p.play(sp, v, v, 1, 0, 1f) != 0) onStarted()
+            } else waiting[sp] = Waiting(v, SystemClock.uptimeMillis() + CRY_WAIT_MS,
+                { ringerNormal(c) && SoundPrefs.volume(c, id.group.channel) > 0 }, onStarted) // played by the load listener; a preview ignores the group switch
         } catch (t: Throwable) {
             Report.fail(TAG, "preview of $id", t)
         }

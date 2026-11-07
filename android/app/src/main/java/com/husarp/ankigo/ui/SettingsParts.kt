@@ -240,11 +240,8 @@ internal object Form {
         })
     }
 
-    /**
-     * A switch row with an optional small round ▶ "hear it" button ([onPlay]) next to the switch (mockup `.s39-r`). The ▶ is a 28 dp
-     * circle inside a 48 dp touch area; it does not toggle the switch.
-     */
-    fun soundRow(ctx: Context, title: String, sub: String?, checked: Boolean, onPlay: (() -> Unit)?, onChange: (Boolean) -> Unit): LinearLayout {
+    /** A 60 × 64 dp bare play target beside the independent group switch. */
+    fun soundRow(ctx: Context, title: String, sub: String?, checked: Boolean, onPlay: (((Boolean) -> Unit) -> Unit)?, onChange: (Boolean) -> Unit): LinearLayout {
         val sw = MotionSwitch(ctx).apply {
             isChecked = checked
             Ui.tintSwitch(this)
@@ -253,17 +250,42 @@ internal object Form {
         val right = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            if (onPlay != null) addView(FrameLayout(ctx).apply {
+            if (onPlay != null) addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
                 contentDescription = "Hear $title"
-                isClickable = true
-                setOnClickListener { onPlay() }
-                addView(android.widget.ImageView(ctx).apply {
+                val icon = android.widget.ImageView(ctx).apply {
                     setImageResource(R.drawable.ic_play)
                     setColorFilter(Ui.c(ctx, R.color.ag_mauve), android.graphics.PorterDuff.Mode.SRC_IN)
-                    setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8))
-                    background = null
-                }, FrameLayout.LayoutParams(Ui.dp(ctx, 28), Ui.dp(ctx, 28), Gravity.CENTER))
-            }, LinearLayout.LayoutParams(Ui.dp(ctx, 44), Ui.dp(ctx, 48)))
+                }
+                val caption = Ui.text(ctx, 10f, 800, R.color.ag_mauve).apply { text = "Tap to play" }
+                addView(icon, LinearLayout.LayoutParams(Ui.dp(ctx, 24), Ui.dp(ctx, 24)))
+                addView(caption)
+                var generation = 0
+                setOnClickListener {
+                    val request = ++generation
+                    onPlay { playing ->
+                        if (request == generation) {
+                            isActivated = playing
+                            caption.text = if (playing) "♪ Playing…" else "Tap to play"
+                            caption.setTextColor(Ui.c(ctx, if (playing) R.color.ag_green else R.color.ag_mauve))
+                            icon.visibility = if (playing) View.GONE else View.VISIBLE
+                            background = if (playing) Ui.rounded(android.graphics.Color.TRANSPARENT, 0, ctx).apply {
+                                setStroke(Ui.dp(ctx, 2), Ui.c(ctx, R.color.ag_green))
+                            } else null
+                            contentDescription = if (playing) "Playing $title" else "Hear $title"
+                        }
+                    }
+                }
+                addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                    override fun onViewAttachedToWindow(v: View) {}
+                    override fun onViewDetachedFromWindow(v: View) {
+                        generation++; isActivated = false; caption.text = "Tap to play"
+                        caption.setTextColor(Ui.c(ctx, R.color.ag_mauve)); icon.visibility = View.VISIBLE; background = null
+                        contentDescription = "Hear $title"
+                    }
+                })
+            }, LinearLayout.LayoutParams(Ui.dp(ctx, 60), Ui.dp(ctx, 64)))
             addView(sw)
         }
         return row(ctx, title, sub, right, onClick = { sw.toggle() })

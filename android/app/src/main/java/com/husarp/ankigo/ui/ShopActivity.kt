@@ -337,7 +337,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     /** "Refresh shop · [coin] 100": the accent button with the refresh icon (greyed, with a toast on tap, when the money is not enough). */
     private fun refreshButton(): View {
         val ctx = this
-        val ink = Ui.c(ctx, R.color.ag_base)
+        val ink = Ui.c(ctx, R.color.ag_hold_ink)
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
