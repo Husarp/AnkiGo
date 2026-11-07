@@ -167,7 +167,7 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
      * action did to the fight on (an item on the main, a team edit that changed it) is kept for the battle to play ([GameRepo.runOffscreen]).
      */
     // Rebuild any source detail window before opening the result popup, so it stays on top.
-    fun act(beforeReport: (ActionResult) -> Unit = {}, f: (Game) -> ActionResult): ActionResult {
+    open fun act(beforeReport: (ActionResult) -> Unit = {}, f: (Game) -> ActionResult): ActionResult {
         val r = GameRepo.runOffscreen(this, f)
         beforeReport(r)
         report(r.message, r.events)

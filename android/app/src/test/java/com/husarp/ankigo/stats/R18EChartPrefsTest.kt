@@ -45,6 +45,18 @@ class R18EChartPrefsTest {
         assertNull(dec(m = "CARD_STATES", g = "DAY").grain) // a picture of now has no bar size
     }
 
+    @Test fun answerButtonsRestoreOnlyTheirThreePeriods() {
+        assertEquals(listOf(ChartPeriod.D1, ChartPeriod.D7, ChartPeriod.D30), ChartPrefs.periodsFor(ChartMetric.BUTTONS))
+        for (p in ChartPrefs.periodsFor(ChartMetric.BUTTONS)) {
+            assertEquals(p, dec(m = "BUTTONS", p = p.name, g = "MONTH").period)
+            assertNull(dec(m = "BUTTONS", p = p.name, g = "MONTH").grain)
+        }
+        assertEquals(ChartPeriod.D1, dec(m = "BUTTONS", p = "D365").period)
+        assertEquals(ChartPeriod.D1, dec(m = "BUTTONS").period)
+        assertFalse(ChartPeriod.D1 in ChartPrefs.periodsFor(ChartMetric.REVIEWS))
+        assertEquals(ChartPeriod.D30, dec(m = "REVIEWS", p = "D1").period)
+    }
+
     @Test fun aMissingDeckFallsBackToAllDecksOnceTheListIsLoaded() {
         val c = dec(d = "Gone deck")
         assertEquals("Gone deck", c.deck)                                          // not loaded yet: kept

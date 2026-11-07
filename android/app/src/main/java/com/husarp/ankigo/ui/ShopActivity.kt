@@ -9,6 +9,9 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
+import com.husarp.ankigo.game.ActionResult
+import com.husarp.ankigo.game.Game
+import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Shop
@@ -30,7 +33,9 @@ internal interface CardHost {
     fun closeCard()
 }
 
-internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), CardHost {
+internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Boolean = false,
+                             private val onBattleEvents: ((List<GameEvent>) -> Unit)? = null,
+                             private val fightAvailable: () -> Boolean = { true }) : GamePage(base, host), CardHost {
     override val tab = BottomNav.Tab.SHOP
 
     private lateinit var appBar: AppBar
@@ -38,7 +43,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     private lateinit var scroll: ScrollView
     private lateinit var tabShop: TextView
     private lateinit var tabBag: TextView
-    private var showBag = false
+    private var showBag = bagOnly
     private val dealClock = android.os.Handler(android.os.Looper.getMainLooper())
     private val updateDeal = object : Runnable {
         override fun run() {
@@ -53,7 +58,18 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         showBag = true
         requestRender()
     }
-    private val bag by lazy { BagActions(this, MonActions(this), this) }
+    private val bag by lazy { BagActions(this, MonActions(this), this, onBattleEvents, fightAvailable) }
+
+    override fun act(beforeReport: (ActionResult) -> Unit,
+                     f: (Game) -> ActionResult): ActionResult {
+        val play = onBattleEvents ?: return super.act(beforeReport, f)
+        val result = GameRepo.run(this, f)
+        beforeReport(result)
+        report(if (result.ok && result.events.any { it is GameEvent.MoveLearned }) "" else result.message, result.events)
+        play(result.events)
+        requestRender()
+        return result
+    }
 
     // the open item: its key survives a re-render (Buy keeps its window open with the new count) but not leaving the page
     override val open = OpenCard()
@@ -92,7 +108,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
     override fun buildBar(): View {
         // PLAN 237: start with the real amount (the game is usually loaded when you switch to this tab), or no pill until render() knows it: never "0"
         val first = ShopPlan.firstPill(GameRepo.status == GameRepo.Status.READY, GameRepo.state?.cash)
-        appBar = Ui.appBar(this, "Shop", first, pillIconRes = R.drawable.ic_money)
+        appBar = Ui.appBar(this, if (bagOnly) "Bag" else "Shop", first, pillIconRes = R.drawable.ic_money)
         appBar.setPill(first)
         // "?" opens the guide chapter about money (R3-V3b)
         appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) { openMoneyHelp() }
@@ -121,7 +137,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), Ui.dp(ctx, 12))
-            addView(tabs, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 4) })
+            if (!bagOnly) addView(tabs, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 4) })
             addView(content)
         }
         scroll = MotionScrollView(ctx).apply { addView(col) }
@@ -133,6 +149,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
 
     override fun onShow() {
         super.onShow()
+        if (bagOnly) return
         rollDay()
         dealClock.removeCallbacks(updateDeal)
         dealClock.postDelayed(updateDeal, 60_000L - System.currentTimeMillis() % 60_000L)
@@ -156,7 +173,7 @@ internal class ShopPage(base: Context, host: PageHost) : GamePage(base, host), C
 
     override fun render() {
         val st = state
-        markSeen()
+        if (!bagOnly) markSeen()
         appBar.setPill(Bits.fmt(st.cash))
         val bagCount = st.bag.values.sum() + st.tms.size + st.mons.count { it.heldItem != null }
         tabShop.text = "Shop"

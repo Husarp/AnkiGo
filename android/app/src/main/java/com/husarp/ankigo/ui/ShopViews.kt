@@ -144,7 +144,7 @@ internal object ShopViews {
         offerCard(ctx, if (night) "DEAL OF THE NIGHT" else "DEAL OF THE DAY", ends,
             itemArt(ctx, item, 48), name, line,
             price(ctx, price),
-            if (night) R.color.ag_mauve else R.color.ag_peach, description, onTap)
+            if (night) R.color.ag_blue else R.color.ag_peach, description, onTap)
 
     /** Compact offer with a filled title band separated from its item and price. */
     private fun offerCard(ctx: Context, title: String, ends: String, lead: View, name: String,

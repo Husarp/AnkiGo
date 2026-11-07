@@ -403,7 +403,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             run {
                 val m = AppMenu(anchor)
                     .item(9, "Compact view", R.drawable.ic_book, sub = if (compactStudy()) "On" else "Off", dividerAfter = true)
-                    .item(0, "Pokémon", R.drawable.ic_team, enabled = events.idle).item(1, "Bag / Shop", R.drawable.ic_shop, enabled = events.idle)
+                    .item(0, "Pokémon", R.drawable.ic_team, enabled = events.idle).item(1, "Bag", R.drawable.ic_ball, enabled = events.idle)
                     .item(2, "Pokédex", R.drawable.ic_dex, enabled = events.idle).item(3, "Settings", R.drawable.ic_settings, enabled = events.idle).item(4, "Battle log", R.drawable.ic_swords, enabled = events.idle)
                 // one-off catch <-> defeat for this fight, only while a wild Pokémon is on stage; the label says what a tap does
                 val will = if (GameRepo.state?.battle != null && !events.holding) try { GameRepo.game?.willCatch() } catch (t: Throwable) { null } else null
@@ -414,7 +414,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                 m.item(7, "View settings", R.drawable.ic_palette, enabled = events.idle)   // R10 B19
                 m.show { i ->
                     if (i == 9) { prefs.edit().putBoolean("compactView", !compactStudy()).apply(); layout(); showButtons() }
-                    else if (i == 8) throwBall()
+                    else if (i == 8 || i == 1) throwBall()
                     else if (i == 5) toggleCatch()
                     else if (i == 6) switchPokemon()
                     else if (i == 7) openViewSettings()
@@ -1754,7 +1754,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     private fun throwBall() {
         if (!events.idle) return
-        com.husarp.ankigo.ui.BattleBag.show(this) { result ->
+        com.husarp.ankigo.ui.BattleBag.show(this, fightAvailable = { !events.holding }) { result ->
             record(result); events.enqueue(result); LiveSession.refreshWidgetsFor(this, result)
         }
     }

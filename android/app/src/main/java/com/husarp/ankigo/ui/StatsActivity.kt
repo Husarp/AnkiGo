@@ -438,7 +438,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     /** Period, deck and bar-size chips. A chip that doesn't apply to this metric is dimmed (the deck one) or left out (period / bar size of a picture of now). */
     private fun filterChips(series: ChartSeries): View {
         val row = StatsSheets.FlowLayout(this)
-        if (metric == ChartMetric.BUTTONS) row.addView(note("Today · AnkiGo answers"))
+        if (metric == ChartMetric.BUTTONS) row.addView(note("AnkiGo answers"))
         if (metric.usesPeriod) {
             row.addView(chip(if (metric == ChartMetric.STREAK_CALENDAR && calendarYear != null) "Year" else StatsChartMath.periodLabel(metric, series.period), true) { anchor ->
                 val menu = AppMenu(anchor)
@@ -649,7 +649,8 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         sheetOpen = false
         if (m != metric) {
             metric = m
-            if (period !in StatsChartMath.periods(m)) period = ChartPeriod.D30
+            if (m == ChartMetric.BUTTONS) period = ChartPeriod.D1
+            else if (period !in StatsChartMath.periods(m)) period = ChartPeriod.D30
             grain = null
             saveChoice()
             resetPicks()

@@ -924,7 +924,7 @@ class GameActivity : AgActivity() {
 
     /** Optional: pick a ball to throw at the wild Pokémon, with each ball's chance. */
     private fun showBallDialog() {
-        BattleBag.show(this) { handleEvents(it) }
+        BattleBag.show(this, fightAvailable = { player?.holding != true }) { handleEvents(it) }
     }
 
     /** The ⋯ entry that flips catch <-> defeat for this fight: its label says what a tap will do; null when no wild Pokémon is on stage. */

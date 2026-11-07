@@ -296,7 +296,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         fun take(i: Item) { if (i is Item.Ev) events += i.e else if (i is Item.Act) acts += i.block else if (i is Item.Tiles) result = i.summary }
         take(first)
         while (queue.isNotEmpty()) take(queue.removeFirst())
-        panel.releaseEarlyHold()   // R9 C5: the early hold of a batch that is skipped goes; the result below decides again
+        // Team and item updates must retain Continue, including while animations are disabled.
+        if (!holding || NextFight.releasesHold(events) || result != null) panel.releaseEarlyHold()
         panel.cancelAnimations()
         events.forEach { panel.observeStudyEvent(it) }
         panel.renderAll()
