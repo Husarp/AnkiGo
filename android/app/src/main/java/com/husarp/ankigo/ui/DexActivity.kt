@@ -412,6 +412,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     private fun bindCell(f: SquareFrame, sp: Species?) {
         val cell = f.tag as Cell
         cell.sp = sp
+        RarityFrame.bind(f, sp?.takeIf { it.num in state.seen || it.num in state.caught }?.let { com.husarp.ankigo.game.Encounters.tierOf(it) })
         if (sp == null) {
             f.visibility = View.INVISIBLE
             f.setOnClickListener(null)
