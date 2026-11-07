@@ -16,7 +16,7 @@ class CatchBallTest {
 
     @Test fun starterIsAGreatBallEvenWithSmallStats() = assertEquals("great-ball", CatchBall.forAuto(TestData.species(1, base = total(318))))
 
-    @Test fun ultraBeastIsAGreatBall() = assertEquals("great-ball", CatchBall.forAuto(TestData.species(793, base = total(300))))
+    @Test fun ultraBeastIsAnUltraBall() = assertEquals("ultra-ball", CatchBall.forAuto(TestData.species(793, base = total(300))))
 
     @Test fun babyIsAGreatBall() = assertEquals("great-ball", CatchBall.forAuto(TestData.species(172, base = total(205), isBaby = true)))
 

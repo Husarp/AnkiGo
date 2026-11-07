@@ -891,7 +891,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         content.addView(Form.sect(this, "Battle panel"))
         content.addView(Form.cardOf(this, listOf(
             pokemonSizeRow(),
-            Form.switchRow(this, "Pokémon rarity marks", "Show achievement tier gems beside names in battle info boxes and Pokémon details. Baby: blue diamond; Ultra Beast: purple hexagon; Legendary: gold sparkle; Mythical: red star. Normal and Starter have no mark. Names keep their normal colour.",
+            Form.switchRow(this, "Pokémon rarity marks", "Show rarity marks beside Pokémon names. Round dot: Starter or Normal, Mega and G-Max with base stat total 500+; Baby: blue diamond (Great Ball). Ultra Beast: purple hexagon; Legendary: gold sparkle (Ultra Ball). Mythical: red star (Master Ball). Plain Pokémon have no mark (Poké Ball). Balls shown on auto-catch follow this ladder; no Bag items are used. Names keep their normal colour.",
                 RarityMark.enabled(this)) { RarityMark.setEnabled(this, it) },
             Form.switchRow(this, "Stat card under its own Pokémon", "Without a background picture. Off: the classic layout, each card on the opposite side",
                 AppPrefs.cardsUnderOwn(this)) { AppPrefs.setCardsUnderOwn(this, it) },
