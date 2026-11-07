@@ -29,6 +29,17 @@ object StatusInfo {
             "Frozen: can't move; ${pct(Tuning.FREEZE_THAW)} thaw chance each time it tries. Fire hits or thawing moves thaw it."),
     )
 
+    /** Compact battle-card text; detailed guide text retains ability exceptions. */
+    fun effect(status: String): String = when (status) {
+        "par" -> "${pct(Tuning.PARA_SKIP)} missed moves; Speed halved."
+        "brn" -> "Loses ¹⁄₁₆ HP/round; physical damage halved."
+        "psn" -> "Loses ⅛ max HP each round."
+        "tox" -> "Poison damage rises each round, up to ¹⁵⁄₁₆ HP."
+        "slp" -> "Usually can't move; Rest lasts ${SideMoves.REST_SLEEP} tries."
+        "frz" -> "Can't move; ${pct(Tuning.FREEZE_THAW)} thaw chance per try."
+        else -> ""
+    }
+
     /** Info for an engine status, or null when there is none to show. */
     fun of(status: String?): Info? = all.firstOrNull { it.status == status }
 }

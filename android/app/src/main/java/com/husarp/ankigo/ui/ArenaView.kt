@@ -86,6 +86,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // the bubbles closed by the touch that began a tap: a click on the same trigger straight after means "close", not "open again"
     private var touchClosedStatus: StatusRow? = null
     private var touchClosedList: ConditionMarks.Slot? = null
+    private var touchClosedStat: String? = null
     private var touchClosedAt = 0L
     private val dismissal = BubbleDismiss.Armed(onTouch = { x, y -> if (!touchOnList(x, y)) closeBubblesFromTouch() }, onBack = { closeBubbles() })
     private val eHpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0)
@@ -429,9 +430,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         bubble.setOnClickListener { hideStatusBubble() }
         eStatus.onTap = { showStatusBubble(it) }
         pStatus.onTap = { showStatusBubble(it) }
-        // R19-K: a tap on a chip, on "+N" or on an info box lists the conditions (the boxes take the tap only while there is something to list)
+        // Chips inspect their own condition; info boxes open the full conditions list.
         marks.onTap = { showConditionList(it) }
-        marks.onStagesTap = { showConditionList(it, stat = "summary") }
+        marks.onMarkTap = { showConditionList(it.slot, stat = it.key) }
         enemyBlock.setOnClickListener { showConditionList(ConditionMarks.Slot.WILD) }
         playerCard.setOnClickListener { showConditionList(ConditionMarks.Slot.OURS) }
         enemyBlock.isClickable = false
@@ -1337,7 +1338,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun setPlayerStatus(status: String?) { if (status != playerStatus) { playerStatus = status; statusChanged(pStatus) } }
 
     private fun statusChanged(row: StatusRow) {
-        if (bubbleFor === row) hideStatusBubble()
+        if (bubbleFor === row) { hideStatusBubble(); hideConditionList() }
         updateCards()
     }
 
@@ -1379,7 +1380,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      */
     private fun showStatusBubble(row: StatusRow) {
         // R19-K (PLAN 287): the touch that began this tap already closed the bubble (it closes on any tap); on the same badge that means "close", not "open again"
-        val showing = (bubble.visibility == VISIBLE && bubbleFor === row) || (touchClosedStatus === row && SystemClock.uptimeMillis() - touchClosedAt < SWALLOW_MS)
+        val showing = (bubbleFor === row) || (touchClosedStatus === row && SystemClock.uptimeMillis() - touchClosedAt < SWALLOW_MS)
         hideStatusBubble()
         hideConditionList()
         val info = StatusInfo.of(row.status)
@@ -1387,29 +1388,25 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         if (showing || info == null || badge == null || width <= 0 || height <= 0) return
         val d = Ui.dp(context, 1f)
         val margin = (6 * d).toInt()
-        val maxW = min(width - 2 * margin, (230 * d).toInt())
+        val maxW = min(width - 2 * margin, Ui.dp(context, 328))
         if (maxW <= 0) return
-        bubble.text = StatusBubble.text(context, info.line)
-        TextFloor.set(bubble, 11f, floorSp)
-        bubble.maxWidth = maxW
-        bubble.prepare(false, 0f)
-        bubble.measure(MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-        val bw = bubble.measuredWidth
-        val bh = bubble.measuredHeight
+        val list = ConditionList(context, floorSp)
+        val wild = row === eStatus
+        list.buildStatus(info, if (wild) "Wild ${enemyName.removePrefix("Wild ")}" else "Your ${pName.text}", maxW, height - margin * 2) { hideConditionList() }
+        val bw = list.measuredWidth
+        val bh = list.measuredHeight
         val r = android.graphics.Rect(0, 0, badge.width, badge.height)
         offsetDescendantRectToMyCoords(badge, r)
-        val cx = (r.left + r.right) / 2
-        val x = (cx - bw / 2).coerceIn(margin.coerceAtMost(width - bw).coerceAtLeast(0), (width - margin - bw).coerceAtLeast(0))
-        val up = r.top - bh - d < 2 * d
-        val y = (if (up) r.bottom + d else r.top - bh - d).toInt().coerceIn(0, (height - bh).coerceAtLeast(0))
-        bubble.prepare(up, (cx - x).toFloat())
-        (bubble.layoutParams as LayoutParams).also { it.width = bw; it.height = bh; it.gravity = Gravity.TOP or Gravity.LEFT; it.setMargins(x, y, 0, 0) }
+        val x = (r.centerX() - bw / 2).coerceIn(margin, (width - margin - bw).coerceAtLeast(margin))
+        val y = (if (r.top - bh - d >= margin) r.top - bh - d else r.bottom + d).toInt().coerceIn(margin, (height - margin - bh).coerceAtLeast(margin))
+        popLayer.addView(list, LayoutParams(bw, bh).also { it.leftMargin = x; it.topMargin = y })
+        conditionList = list
+        listSlot = if (wild) ConditionMarks.Slot.WILD else ConditionMarks.Slot.OURS
         bubbleFor = row
-        bubble.visibility = VISIBLE
-        bubble.bringToFront()
-        requestLayout()
-        postDelayed(hideBubble, 3000)
+        postDelayed(hideList, LIST_MS)
+        announceForAccessibility(list.spoken)
         watchForClose()
+        requestLayout()
     }
 
     private fun hideStatusBubble() {
@@ -1446,7 +1443,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         playerCard.isClickable = any
         if (!any) hideConditionList()
         placeMarks()
-        conditionList?.let { showConditionList(listSlot ?: ConditionMarks.Slot.WILD, reopen = true, stat = listStat) }
+        if (bubbleFor == null) conditionList?.let { showConditionList(listSlot ?: ConditionMarks.Slot.WILD, reopen = true, stat = listStat) }
     }
 
     /** PLAN 458 C: scale with the visible window, retaining the 8 sp and panel text floors. */
@@ -1488,14 +1485,18 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val wild = conditions.of(ConditionMarks.Slot.WILD)
         val ours = conditions.of(ConditionMarks.Slot.OURS)
         val field = conditions.of(ConditionMarks.Slot.FIELD)
-        fun widths(ms: List<ConditionMarks.Mark>): FloatArray = ConditionSummary.groups(ms).map {
-            if (it.first().key.startsWith("stat.")) m.summaryWidth(it) else m.width(it.single())
-        }.toFloatArray()
-        val all = ConditionSpot.all(scene, if (wildOn) boxOf(enemyBlock) else null, if (ourOn) boxOf(playerCard) else null,
-            widths(wild), widths(ours), widths(field), ConditionSpot.Sizes(m.gap, m.lift, m.height, m::moreWidth))
-        marks.setRow(ConditionMarks.Slot.WILD, all.wild, wild, m)
-        marks.setRow(ConditionMarks.Slot.OURS, all.ours, ours, m)
-        marks.setRow(ConditionMarks.Slot.FIELD, all.field, field, m)
+        val taken = ArrayList<ConditionSpot.R>()
+        fun put(slot: ConditionMarks.Slot, card: ConditionSpot.R?, below: Boolean, ms: List<ConditionMarks.Mark>) {
+            val rects = ConditionFlow.place(scene, card, below, ms.map { m.width(it) }.toFloatArray(),
+                ms.count { it.key.startsWith("stat.") }, m.gap, m.lift, m.height, taken)
+            marks.setFlow(slot, rects, ms, m)
+            taken += rects.map { it.grow(m.lift * 0.5f) }
+        }
+        if (wildOn) put(ConditionMarks.Slot.WILD, boxOf(enemyBlock), true, wild)
+        else marks.setFlow(ConditionMarks.Slot.WILD, emptyList(), emptyList(), m)
+        if (ourOn) put(ConditionMarks.Slot.OURS, boxOf(playerCard), false, ours)
+        else marks.setFlow(ConditionMarks.Slot.OURS, emptyList(), emptyList(), m)
+        put(ConditionMarks.Slot.FIELD, null, true, field)
         onMarksPlaced()
     }
 
@@ -1513,11 +1514,11 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     internal fun conditionListShown(): ConditionList? = conditionList
 
     /**
-     * A tap on a chip row, its "+N" or an info box: every condition of the fight with its turns left, in a bubble by the row (the tapped side's
-     * section first). Another tap anywhere, Back, or about 8 s closes it. [reopen] = the content changed under an open list: drawn again, no toggle.
+     * A chip opens its compact card; an info box opens the complete list. A tap, Back, or about 8 s closes it.
+     * [reopen] refreshes the content without toggling.
      */
     private fun showConditionList(slot: ConditionMarks.Slot, reopen: Boolean = false, stat: String? = null) {
-        val toggle = !reopen && (conditionList != null && listSlot == slot || (touchClosedList == slot && SystemClock.uptimeMillis() - touchClosedAt < SWALLOW_MS))
+        val toggle = !reopen && (conditionList != null && listSlot == slot && listStat == stat || (touchClosedList == slot && touchClosedStat == stat && SystemClock.uptimeMillis() - touchClosedAt < SWALLOW_MS))
         hideConditionList()
         if (toggle || conditions.size == 0 || width <= 0 || height <= 0) return
         hideStatusBubble()
@@ -1530,15 +1531,21 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val maxW = (width - 2 * sx).coerceAtLeast(1)
         val maxH = (height - sy - sb).coerceAtLeast(1)
         val list = ConditionList(context, floorSp)
-        val sections = if (stat == "summary") listOf(ConditionSections.Section(null, conditions.of(slot).filter { it.key.startsWith("stat.") })).filter { it.marks.isNotEmpty() }
-        else if (stat != null) ConditionSections.stat(conditions, slot, stat, enemyName, pName.text.toString()) else ConditionSections.of(conditions, slot, enemyName, pName.text.toString())
-        if (sections.isEmpty()) return
-        if (stat != null && stat != "summary") list.buildStat(sections, maxW, maxH) { hideConditionList() }
-        else list.build(sections, min(maxW, Ui.dp(context, 288)), maxH)
+        val selected = conditions.of(slot).firstOrNull { it.key == stat }
+        val sections = ConditionSections.of(conditions, slot, enemyName, pName.text.toString())
+        if (sections.isEmpty() || stat != null && selected == null) return
+        if (selected != null) {
+            val owner = when (slot) {
+                ConditionMarks.Slot.WILD -> "Wild ${enemyName.removePrefix("Wild ")}".trim()
+                ConditionMarks.Slot.OURS -> "Your ${pName.text}"
+                ConditionMarks.Slot.FIELD -> "The field"
+            }
+            list.buildMark(selected, owner, maxW, maxH) { hideConditionList() }
+        } else list.build(sections, min(maxW, Ui.dp(context, 328)), maxH)
         val lw = min(list.measuredWidth, maxW)
         val lh = min(list.measuredHeight, maxH)
         // by the row that was tapped (below it, else above it), else by the box; kept inside the room the frame leaves
-        val anchor = marks.rowOf(slot)?.bounds ?: boxOf(if (slot == ConditionMarks.Slot.OURS) playerCard else enemyBlock).let { RectF(it.l, it.t, it.r, it.b) }
+        val anchor = marks.rowOf(slot)?.let { row -> row.chips.firstOrNull { it.mark?.key == stat }?.rect ?: row.bounds } ?: boxOf(if (slot == ConditionMarks.Slot.OURS) playerCard else enemyBlock).let { RectF(it.l, it.t, it.r, it.b) }
         val x = (anchor.centerX() - lw / 2f).toInt().coerceIn(sx, (width - sx - lw).coerceAtLeast(sx))
         val below = anchor.bottom + 4 * d
         val y = (if (below + lh <= height - sb) below else anchor.top - 4 * d - lh).toInt().coerceIn(sy, (height - sb - lh).coerceAtLeast(sy))
@@ -1560,6 +1567,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         conditionList = null
         listSlot = null
         listStat = null
+        bubbleFor = null
         watchForClose()
     }
 
@@ -1571,8 +1579,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** A new touch began (not yet seen by the view it lands on): the open bubbles close; a click on their own trigger straight after toggles instead of reopening. */
     private fun closeBubblesFromTouch() {
         if (!bubbleOpen()) return
-        touchClosedStatus = if (bubble.visibility == VISIBLE) bubbleFor else null
+        touchClosedStatus = bubbleFor
         touchClosedList = listSlot
+        touchClosedStat = listStat
         touchClosedAt = SystemClock.uptimeMillis()
         closeBubbles()
     }

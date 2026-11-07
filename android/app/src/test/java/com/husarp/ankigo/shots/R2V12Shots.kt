@@ -183,8 +183,9 @@ class R2V12Shots {
             // (a snapshot detaches the view, which closes the bubble, so it is read straight after the tap)
             for (enemy in listOf(true, false)) {
                 val row = field(arena, if (enemy) "eStatus" else "pStatus") as View
-                val bubble = field(arena, "bubble") as View
                 row.performClick()
+                val bubble = arena.conditionListShown()
+                if (bubble == null) { problems += "$tag: no card after a badge tap"; continue }
                 val lp = bubble.layoutParams as FrameLayout.LayoutParams
                 val br = Rect(lp.leftMargin, lp.topMargin, lp.leftMargin + lp.width, lp.topMargin + lp.height)
                 if (bubble.visibility != View.VISIBLE) problems += "$tag: no bubble after a tap on the ${if (enemy) "wild" else "our"} badge"
@@ -192,7 +193,7 @@ class R2V12Shots {
                 else if (lp.width < 40 || lp.height < 20) problems += "$tag: bubble $br too small"
                 // a second tap on the same badge closes it
                 row.performClick()
-                if (bubble.visibility == View.VISIBLE) problems += "$tag: the second tap did not close the bubble"
+                if (arena.conditionListShown() != null) problems += "$tag: the second tap did not close the card"
             }
             out.append("$tag: ok  cards ${eCard.height}/${pCard.height} px  rows $eR $pR\n")
         }

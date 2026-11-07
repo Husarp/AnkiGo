@@ -58,38 +58,30 @@ class R29IStatTests {
         }
     }
 
-    @Test fun stageSummaryIsOneChipAndOneTapTargetWithCorrectHiddenCount() {
+    @Test fun everyStageIsItsOwnChipAndTapTarget() {
         val ctx = paparazzi.context
-        for (count in listOf(1, 3, 5, 7)) for (slot in listOf(com.husarp.ankigo.ui.ConditionMarks.Slot.OURS, com.husarp.ankigo.ui.ConditionMarks.Slot.WILD)) {
-            val stages = com.husarp.ankigo.ui.ConditionMarks.STAT_KEYS.take(count).mapIndexed { index, key ->
-                com.husarp.ankigo.ui.ConditionMarks.Mark(key, slot, com.husarp.ankigo.ui.ConditionMarks.def("stat.$key")!!, if (index % 2 == 0) 1 else -6, index.toLong())
+        for (slot in com.husarp.ankigo.ui.ConditionMarks.Slot.entries) {
+            val stages = com.husarp.ankigo.ui.ConditionMarks.STAT_KEYS.mapIndexed { i, key ->
+                com.husarp.ankigo.ui.ConditionMarks.Mark(key, slot, com.husarp.ankigo.ui.ConditionMarks.def("stat.$key")!!, if (i % 2 == 0) 1 else -6, i.toLong())
             }
-            val m = com.husarp.ankigo.ui.ChipMetrics(ctx, 8f)
-            val width = m.summaryWidth(stages)
-            val fit = com.husarp.ankigo.ui.ConditionRow.Fit(1, 0, width)
-            val placed = com.husarp.ankigo.ui.ConditionSpot.Placed(com.husarp.ankigo.ui.ConditionSpot.R(0f, 0f, width, m.height), fit, true)
+            val m = com.husarp.ankigo.ui.ChipMetrics(ctx, 10.5f)
+            var x = 0f
+            val rects = stages.map { mark ->
+                val w = m.width(mark)
+                com.husarp.ankigo.ui.ConditionSpot.R(x, 0f, x + w, m.height).also { x += w + m.gap }
+            }
             val view = com.husarp.ankigo.ui.ConditionMarksView(ctx)
-            view.setRow(slot, placed, stages, m)
-            view.layout(0, 0, width.toInt() + 1, m.height.toInt() + 1)
-            assertEquals(1, view.chipRects().size)
-            assertEquals(stages, view.rowOf(slot)!!.chips.single().stages)
-            val labels = mutableListOf<String>()
-            view.draw(object : Canvas() {
-                override fun drawText(text: String, x: Float, y: Float, paint: Paint) {
-                    labels += text
-                    assertTrue("text stays inside its summary", x >= 0f && x + paint.measureText(text) <= width + 0.01f)
-                }
-            })
-            assertEquals(stages.take(2).map { it.def.word } + if (count > 2) listOf("+${count - 2}") else emptyList(), labels)
-            var taps = 0
-            view.onStagesTap = { assertEquals(slot, it); taps++ }
+            view.setFlow(slot, rects, stages, m)
+            view.layout(0, 0, x.toInt() + 1, m.height.toInt() + 1)
+            assertEquals(7, view.chipRects().size)
+            val tapped = mutableListOf<String>()
+            view.onMarkTap = { tapped += it.key }
             val t = android.os.SystemClock.uptimeMillis()
-            for (action in listOf(android.view.MotionEvent.ACTION_DOWN, android.view.MotionEvent.ACTION_UP)) {
-                val event = android.view.MotionEvent.obtain(t, t + action * 40L, action, width / 2f, m.height / 2f, 0)
-                view.onTouchEvent(event)
-                event.recycle()
+            for (r in view.chipRects()) for (action in listOf(0, 1)) {
+                val e = android.view.MotionEvent.obtain(t, t + action * 40L, action, r.centerX(), r.centerY(), 0)
+                view.onTouchEvent(e); e.recycle()
             }
-            assertEquals(1, taps)
+            assertEquals(stages.map { it.key }, tapped)
         }
     }
 

@@ -70,7 +70,7 @@ class R19Fix2UiTest {
         val x = Ui.dp(c, 10f)
         val y = Ui.dp(c, 70f)
         fun row(slot: ConditionMarks.Slot, top: Float) {
-            v.setRow(slot, ConditionSpot.Placed(ConditionSpot.R(x, top, x + 50, top + m.height), ConditionRow.Fit(0, 1, 50f), true), emptyList(), m)
+            v.setFlow(slot, listOf(ConditionSpot.R(x, top, x + 50, top + m.height)), listOf(ConditionMarks.Mark("confusion", slot, ConditionMarks.def("confusion")!!, 3, 1)), m)
         }
         row(ConditionMarks.Slot.WILD, y)
         val mid = y + m.height / 2

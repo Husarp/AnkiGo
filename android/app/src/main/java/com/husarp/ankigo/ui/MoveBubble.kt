@@ -327,6 +327,12 @@ internal class MoveBubble(ctx: Context, private val look: MoveBubbleLook) : View
                 letterSpacing = -0.014f
                 maxLines = 1
                 if (c.damageTone == DamageTone.MUTED) TextFloor.set(this, 17f, 0f)
+                if (d == "Charging") context.getDrawable(ConditionIcons.of("charging")!!)?.mutate()?.let { icon ->
+                    val side = Ui.dp(context, 17)
+                    icon.setTint(currentTextColor); icon.setBounds(0, 0, side, side)
+                    setCompoundDrawables(icon, null, null, null)
+                    compoundDrawablePadding = Ui.dp(context, 5)
+                }
             }.also { addView(it) }
         }
         for (chip in c.chips) chipViews += chipView(chip).also { addView(it) }

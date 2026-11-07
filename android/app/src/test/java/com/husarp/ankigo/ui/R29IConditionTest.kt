@@ -14,15 +14,15 @@ class R29IConditionTest {
         }
     }
 
-    @Test fun stagesFormOneGroupAndOtherConditionsKeepTheirOrder() {
+    @Test fun stagesAndEffectsEachHaveTheirOwnGroup() {
         for (count in listOf(1, 3, 5, 7)) {
             val stages = ConditionMarks.STAT_KEYS.take(count).map { mark("stat.$it") }
             val confusion = mark("confusion", 3)
             val seed = mark("leechseed")
             val groups = ConditionSummary.groups(listOf(confusion) + stages + seed)
-            assertEquals(3, groups.size)
-            assertEquals(stages, groups.first())
-            assertEquals(listOf(confusion, seed), groups.drop(1).map { it.single() })
+            assertEquals(count + 2, groups.size)
+            assertEquals(stages, groups.take(count).map { it.single() })
+            assertEquals(listOf(confusion, seed), groups.drop(count).map { it.single() })
         }
         assertTrue(ConditionSummary.groups(emptyList()).isEmpty())
     }
@@ -43,6 +43,6 @@ class R29IConditionTest {
         assertTrue(ConditionExplanation.effect(mark("stat.atk", -2)).contains("×1/2"))
         assertTrue(ConditionExplanation.effect(mark("stat.accuracy", -2)).contains("×3/5"))
         assertTrue(ConditionExplanation.effect(mark("stat.evasion", 2)).contains("harder to hit"))
-        assertTrue(ConditionExplanation.effect(mark("stat.def", 6)).contains("Until switching, fainting or a new opponent"))
+        assertEquals("Defense ×4.", ConditionExplanation.effect(mark("stat.def", 6)))
     }
 }

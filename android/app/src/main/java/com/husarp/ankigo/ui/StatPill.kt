@@ -83,7 +83,7 @@ internal class StatPillView(ctx: Context, val stat: String, val stages: Int) : V
     private val ink = StatPill.ink(up, StatPill.isDark(ctx))
     private val fill = StatPill.background(ctx, up)
     private val label = StatPill.shortName(stat) ?: stat
-    private val unit = d * StatPill.CHIP_SCALE
+    private val unit = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12f, ctx.resources.displayMetrics) / 25f
 
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Ui.font(ctx, 800)

@@ -19,8 +19,8 @@ class R17C1FloatTextsTest {
 
     @Test fun aStartingConditionShowsItsLabelOnce() {
         for (kind in listOf(EffectKind.VOLATILE, EffectKind.FIELD, EffectKind.BLOCKED)) {
-            assertEquals(listOf(FloatText(false, "Confused", FloatKind.INFO)), floats(fx(kind, onPlayer = false, stat = "confusion", stages = 1, label = "Confused")))
-            assertEquals(listOf(FloatText(true, "Rain", FloatKind.INFO)), floats(fx(kind, stat = "rain", stages = 0, label = "Rain"))) // 0 counts as shown
+            assertEquals(listOf(FloatText(false, "Confused", FloatKind.INFO, condition = "confusion")), floats(fx(kind, onPlayer = false, stat = "confusion", stages = 1, label = "Confused")))
+            assertEquals(listOf(FloatText(true, "Rain", FloatKind.INFO, condition = "rain")), floats(fx(kind, stat = "rain", stages = 0, label = "Rain"))) // 0 counts as shown
         }
     }
 
@@ -40,8 +40,8 @@ class R17C1FloatTextsTest {
     @Test fun cantMoveReasonsThatAreNotStatuses() {
         val want = mapOf("flinch" to "Flinched", "attract" to "In love", "recharge" to "Recharging", "confusion" to "Confused", "truant" to "Loafing")
         for ((key, text) in want) {
-            assertEquals(listOf(FloatText(true, text, FloatKind.STATUS)), floats(fx(EffectKind.CANT_MOVE, stat = key)))
-            assertEquals(listOf(FloatText(false, text, FloatKind.STATUS)), floats(fx(EffectKind.CANT_MOVE, onPlayer = false, stat = key)))
+            assertEquals(listOf(FloatText(true, text, FloatKind.STATUS, condition = if (key == "truant") null else if (key == "recharge") "mustrecharge" else key)), floats(fx(EffectKind.CANT_MOVE, stat = key)))
+            assertEquals(listOf(FloatText(false, text, FloatKind.STATUS, condition = if (key == "truant") null else if (key == "recharge") "mustrecharge" else key)), floats(fx(EffectKind.CANT_MOVE, onPlayer = false, stat = key)))
         }
         // the status ones are as before
         assertEquals(listOf(FloatText(true, "Fast asleep", FloatKind.STATUS, "slp")), floats(fx(EffectKind.CANT_MOVE, stat = "slp")))
