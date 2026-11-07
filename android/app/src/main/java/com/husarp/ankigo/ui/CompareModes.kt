@@ -185,6 +185,7 @@ object CompareModes {
             if (row.section != null) heading = row.section
             if (!rows.visible(row.key) || (group != null && !CompareGroups.shows(row.key, group))) continue
             val cells = idx.map { row.cells[it] }
+            if (cells.all { it is Cell.Text && it.empty }) continue
             val marked = if (row.numeric) {
                 val best = CompareTable.bestIndexes(cells.map { (it as? Cell.Text)?.value })
                 cells.mapIndexed { i, c -> if (c is Cell.Text) c.copy(best = i in best) else c }

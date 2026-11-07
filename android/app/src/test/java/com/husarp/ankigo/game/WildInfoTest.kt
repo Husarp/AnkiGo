@@ -20,7 +20,7 @@ class WildInfoTest {
         val b = battle(tier = Tier.LEGENDARY)
         b.wild.shiny = true
         b.wild.gender = 'F'
-        val s = TestData.state(data)
+        val s = TestData.state(data).also { it.caught += 92 }
         val i = WildInfo.of(data, s, b, emptySet())!!
         assertEquals("Spooky", i.name)
         assertEquals(92, i.dexNum)
@@ -36,20 +36,19 @@ class WildInfoTest {
         assertFalse(fields.any { it in setOf("ivs", "evs", "nature", "ability", "heldItem") })
     }
 
-    @Test fun unusedMovesStayHiddenAsQuestionMarks() {
+    @Test fun unusedMovesAreOmitted() {
         val i = WildInfo.of(data, TestData.state(data), battle(), setOf("Lick"))!!
-        assertEquals(4, i.moves.size)
+        assertEquals(1, i.moves.size)
         assertEquals(WildMoveSlot("lick", "Lick"), i.moves[0])
-        assertTrue(i.moves.drop(1).all { it.id == null && it.name == null })
+        assertTrue(i.moves.all { it.id != null && it.name != null })
         val none = WildInfo.of(data, TestData.state(data), battle(), emptySet())!!
-        assertTrue(none.moves.all { it.id == null })
-        assertEquals(4, none.moves.size)
+        assertTrue(none.moves.isEmpty())
     }
 
-    @Test fun usedMovesComeFirstAndALoneStruggleShowsNothing() {
+    @Test fun everyUsedMoveShowsIncludingStruggle() {
         val i = WildInfo.of(data, TestData.state(data), battle(), setOf("Shadow Ball", "Hypnosis", "Struggle"))!!
-        assertEquals(listOf("Hypnosis", "Shadow Ball", null, null), i.moves.map { it.name }) // wild.moves order, then "?"
-        assertEquals(4, i.moves.size)
+        assertEquals(setOf("Hypnosis", "Shadow Ball", "Struggle"), i.moves.map { it.name }.toSet())
+        assertEquals(3, i.moves.size)
     }
 
     @Test fun caughtOrJustSeen() {
@@ -110,7 +109,8 @@ class WildInfoTest {
     @Test fun statsAtItsLevelIgnoreItsRealIvsNatureAndEvs() {
         val b = battle()
         val sp = data.sp(92)
-        val shown = WildInfo.of(data, TestData.state(data), b, emptySet())!!.stats
+        val state = TestData.state(data).also { it.caught += 92 }
+        val shown = WildInfo.of(data, state, b, emptySet())!!.stats!!
         assertEquals(WildInfo.statsAt(sp.base, 12), shown)
         // the numbers follow the formulas with IV 15, 0 EVs and a neutral nature
         assertEquals(StatCalc.hp(sp.base.hp, 15, 0, 12), shown.hp)
@@ -119,7 +119,25 @@ class WildInfoTest {
         // other IVs / EVs / nature on the real wild Pokémon change nothing in what is shown
         val other = battle()
         other.wild.evs = Stats(252, 252, 6, 0, 0, 0)
-        assertEquals(shown, WildInfo.of(data, TestData.state(data), other, emptySet())!!.stats)
+        assertEquals(shown, WildInfo.of(data, state, other, emptySet())!!.stats)
+    }
+
+    @Test fun unknownSpeciesHasNoStatsOrMatchups() {
+        val info = WildInfo.of(data, TestData.state(data), battle(), emptySet())!!
+        assertFalse(info.known)
+        assertNull(info.base)
+        assertNull(info.stats)
+        assertNull(info.matchups)
+    }
+
+    @Test fun defeatedSpeciesShowsStatsMatchupsAndAllMoves() {
+        val state = TestData.state(data).also { it.defeatedSpecies += 92 }
+        val info = WildInfo.of(data, state, battle(), emptySet())!!
+        assertTrue(info.known)
+        assertEquals(WildDex.DEFEATED, info.dex)
+        assertEquals(data.sp(92).base, info.base)
+        assertEquals(TypeMatchups.of(data.sp(92).types), info.matchups)
+        assertEquals(4, info.moves.size)
     }
 
     @Test fun statsGrowWithTheLevel() {

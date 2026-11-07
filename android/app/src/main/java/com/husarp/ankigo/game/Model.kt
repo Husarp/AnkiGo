@@ -377,6 +377,7 @@ class GameState(
     var trainerXp: Int = 0,              // progress inside the trainer level
     val seen: MutableSet<Int> = mutableSetOf(),
     val caught: MutableSet<Int> = mutableSetOf(),
+    val defeatedSpecies: MutableSet<Int> = mutableSetOf(), // ever defeated; absent in older saves
     var battle: Battle? = null,
     var nextSpecies: Int? = null,        // pre-rolled next encounter (widget silhouette, sprite prefetch)
     var nextTier: Tier = Tier.NORMAL,

@@ -9,7 +9,9 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.shownName
+import com.husarp.ankigo.game.WildInfo
 import com.husarp.ankigo.game.Wishlist
+import com.husarp.ankigo.game.SpeciesKnowledge
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
@@ -36,18 +38,19 @@ object DexDetail {
         val data = a.data
         val state = a.state
         val caught = sp.num in state.caught
+        val known = SpeciesKnowledge.known(data, state, sp.num)
         val mine = copies(state.mons, sp.num)
         val col = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(a, 20), Ui.dp(a, 6), Ui.dp(a, 20), Ui.dp(a, 6))
         }
         val img = ImageView(a)
-        MonPreview.show(a, sp.num, false, img, idle = true)
+        MonPreview.show(a, sp.num, false, img, idle = true, silhouette = !known && sp.num !in state.seen)
         img.setOnClickListener { SpriteViewer.show(a, sp.num, false) } // R10-B1: full-screen viewer
         img.contentDescription = "Show the picture full screen"
         col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, if (DetailParts.compact(a)) 72 else 96), Ui.dp(a, if (DetailParts.compact(a)) 72 else 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
-        col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply { text = RarityMark.name(a, sp.name, com.husarp.ankigo.game.Encounters.tierOf(sp), sp.base.total); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
-        col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
+        col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply { text = if (known) RarityMark.name(a, sp.name, com.husarp.ankigo.game.Encounters.tierOf(sp), sp.base.total) else if (sp.num in state.seen) sp.name else "???"; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
+        if (known) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
             text = "#%03d · Gen %d · %s".format(sp.baseNum, sp.gen, if (caught) "caught" else "seen")
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(-1, -2))
@@ -56,54 +59,64 @@ object DexDetail {
         })
 
         val compact = DetailParts.compact(a)
-        // R18-G (PLAN 243B): the evolution line is in the card under the types (the same as in your Pokémon's details, without Holding)
-        col.addView(DetailTopCard.evolutionOnly(a, data, sp, state.seen + state.caught, compact, { other -> show(a, other) }, forceOpen = focusEvolution),
-            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
-        // sections that open on tap (DetailOpen); a species has no Training of its own; its Moves are the level-up learnset (R10-B4)
-        val mem = DetailSections.memory(a)
-        col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${sp.base.total}", title = "Base stats") {
-            LinearLayout(a).apply {
-                orientation = LinearLayout.VERTICAL
-                DetailFormat.allAbilities(sp)?.let { addView(DetailSections.fact(a, "Abilities", null, it, null, compact)) }
-                addView(DetailParts.statHint(a))
-                addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply {
-                    text = "Grey, right: lowest to highest at Lv 100."
-                    setPadding(0, 0, 0, Ui.dp(a, 2))
-                })
-                Stat.entries.forEach { s ->
-                    val row = DetailParts.statRow(a, s, sp.base[s], DetailMath.fraction(sp.base[s], BASE_MAX), 0, null, compact, wholeRow = true) as LinearLayout
-                    val r = StatCalc.range(sp.base[s], s)
-                    row.addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = if (r.first == r.last) "${r.first}" else "${r.first}\u2013${r.last}"; gravity = Gravity.END; maxLines = 1 },
-                        LinearLayout.LayoutParams(Ui.dp(a, 58), -2))
-                    addView(row)
-                }
-                addView(DetailParts.totalRow(a, sp.base.total, null, wholeRow = true))
-            }
-        })
-        val learn = sp.levelMoves.distinct()
-        if (learn.isNotEmpty()) {
-            col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${learn.size} moves") {
-                DetailSections.moves(a, data, learn.map { it.move }, compact, levels = learn.map { DetailFormat.learnLevel(it.level) })
-            })
-        }
-        col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, sp.name) })
-        if (mine.isNotEmpty()) col.addView(DetailSections.section(a, mem, DetailSection.BOND,
-            mine.joinToString(" · ") { BondSection.summary(it) }) {
-            LinearLayout(a).apply {
-                orientation = LinearLayout.VERTICAL
-                for (mon in mine) {
-                    addView(Ui.text(a, 13f, 900, R.color.ag_text).apply {
-                        text = "${mon.shownName} · Lv ${mon.level} · ${if (mon.uid in state.team) "In team" else "In box"}"
+        if (known) {
+            // R18-G (PLAN 243B): the evolution line is in the card under the types (the same as in your Pokémon's details, without Holding)
+            col.addView(DetailTopCard.evolutionOnly(a, data, sp, state.seen + state.caught, compact, { other -> show(a, other) }, forceOpen = focusEvolution),
+                LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
+            // sections that open on tap (DetailOpen); a species has no Training of its own; its Moves are the level-up learnset (R10-B4)
+            val mem = DetailSections.memory(a)
+            col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${sp.base.total}", title = "Base stats") {
+                LinearLayout(a).apply {
+                    orientation = LinearLayout.VERTICAL
+                    DetailFormat.allAbilities(sp)?.let { addView(DetailSections.fact(a, "Abilities", null, it, null, compact)) }
+                    addView(DetailParts.statHint(a))
+                    addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply {
+                        text = "Grey, right: lowest to highest at Lv 100."
+                        setPadding(0, 0, 0, Ui.dp(a, 2))
                     })
-                    addView(BondSection.body(a, mon))
+                    Stat.entries.forEach { s ->
+                        val row = DetailParts.statRow(a, s, sp.base[s], DetailMath.fraction(sp.base[s], BASE_MAX), 0, null, compact, wholeRow = true) as LinearLayout
+                        val r = StatCalc.range(sp.base[s], s)
+                        row.addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply { text = if (r.first == r.last) "${r.first}" else "${r.first}\u2013${r.last}"; gravity = Gravity.END; maxLines = 1 },
+                            LinearLayout.LayoutParams(Ui.dp(a, 58), -2))
+                        addView(row)
+                    }
+                    addView(DetailParts.totalRow(a, sp.base.total, null, wholeRow = true))
                 }
+            })
+            val learn = sp.levelMoves.distinct()
+            if (learn.isNotEmpty()) {
+                col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${learn.size} moves") {
+                    DetailSections.moves(a, data, learn.map { it.move }, compact, levels = learn.map { DetailFormat.learnLevel(it.level) })
+                })
             }
-        })
-        col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), null, null, compact))
-
+            col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, sp.name) })
+            if (mine.isNotEmpty()) col.addView(DetailSections.section(a, mem, DetailSection.BOND,
+                mine.joinToString(" · ") { BondSection.summary(it) }) {
+                LinearLayout(a).apply {
+                    orientation = LinearLayout.VERTICAL
+                    for (mon in mine) {
+                        addView(Ui.text(a, 13f, 900, R.color.ag_text).apply {
+                            text = "${mon.shownName} · Lv ${mon.level} · ${if (mon.uid in state.team) "In team" else "In box"}"
+                        })
+                        addView(BondSection.body(a, mon))
+                    }
+                }
+            })
+            col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), null, null, compact))
+        } else {
+            val battle = state.battle?.takeIf { it.wild.species == sp.num }
+            val moves = battle?.let { WildInfo.of(data, state, it, GameRepo.wildMoves.used(it)) }
+                ?.moves.orEmpty().mapNotNull { it.id }
+            if (moves.isNotEmpty()) {
+                col.addView(DetailSections.section(a, DetailSections.memory(a), DetailSection.MOVES, "${moves.size} ${if (moves.size == 1) "move" else "moves"}") {
+                    DetailSections.moves(a, data, moves, compact)
+                })
+            }
+        }
         DetailSections.applyOrder(col)
-        col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))
-        col.addView(line(a, "Owned", mine.size.toString()))
+        if (known) col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))
+        if (known) col.addView(line(a, "Owned", mine.size.toString()))
         lateinit var dlg: AppDialog
         var optionsButton: View? = null
         if (mine.isNotEmpty()) {
@@ -151,7 +164,7 @@ object DexDetail {
         col.addView(star, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         col.addView(hint, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
-        dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusSection = DetailSection.EVOLUTION.takeIf { focusEvolution })), true).setDetailsFooter(optionsButton, contextLabel = "Species info").apply {
+        dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusSection = DetailSection.EVOLUTION.takeIf { focusEvolution && known })), true).setDetailsFooter(optionsButton, contextLabel = "Species info").apply {
             if (mine.isNotEmpty()) {
                 // Highest-level copy first, without a picker; Options and Close stay in the footer.
                 col.addView(DetailParts.secondaryButton(a, "My Pokémon") { openMon(a, data, mine[0]) }.apply {

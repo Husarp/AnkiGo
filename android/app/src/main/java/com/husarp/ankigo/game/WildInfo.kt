@@ -26,14 +26,14 @@ class WildMoveLog {
     fun used(battle: Battle?): Set<String> = if (battle != null && battle === bound) names.toSet() else emptySet()
 }
 
-/** One move slot of the wild Pokémon: [id] is null while the move is still unknown ("?"). */
+/** One visible move of the wild Pokémon. Unused moves of unknown species are omitted. */
 data class WildMoveSlot(val id: String?, val name: String?)
 
 /** What the player already knows of the wild species. */
-enum class WildDex { SEEN, CAUGHT }
+enum class WildDex { SEEN, DEFEATED, CAUGHT }
 
 /**
- * The facts of the info window. Only things a player may see: IVs, nature, EVs, ability, held item and unused moves of an uncaught species are
+ * The facts of the info window. Only things a player may see: IVs, nature, EVs, ability, held item and unused moves of an unknown species are
  * not in here, so no screen can show them by mistake.
  */
 data class WildInfo(
@@ -45,12 +45,14 @@ data class WildInfo(
     val types: List<Type>,
     val tier: Tier,
     val dex: WildDex,
-    val base: Stats,
-    /** Its stats at its level, from the species base stats with the same fixed assumption for every wild one (see [statsAt]). */
-    val stats: Stats,
-    val matchups: TypeMatchups,
+    val base: Stats?,
+    /** Null until known; otherwise stats at its level with the fixed assumption for every wild one (see [statsAt]). */
+    val stats: Stats?,
+    val matchups: TypeMatchups?,
     val moves: List<WildMoveSlot>,
 ) {
+    val known: Boolean get() = dex != WildDex.SEEN
+
     companion object {
         /** IV assumed for every stat of every wild Pokémon in the window (the middle of 0..31): its real IVs never show. */
         const val ASSUMED_IV = 15
@@ -73,15 +75,20 @@ data class WildInfo(
             val wild = battle.wild
             val sp = data.species[wild.species] ?: return null
             val used = usedMoves.map { it.lowercase() }.toSet()
-            val known = wild.moves.mapNotNull { id -> data.move(id)?.takeIf { wild.species in state.caught || it.name.lowercase() in used } }
-                .distinctBy { it.id }.map { WildMoveSlot(it.id, it.name) }
-            // known moves first, then one "?" for each of the rest: the slot order of the real list never shows
-            val unknown = List((wild.moves.size - known.size).coerceAtLeast(0)) { WildMoveSlot(null, null) }
+            val known = SpeciesKnowledge.known(data, state, wild.species)
+            val moves = (if (known) wild.moves.mapNotNull(data::move) else emptyList()) +
+                data.moves.values.filter { it.name.lowercase() in used }
+            val visible = moves.distinctBy { it.id }.map { WildMoveSlot(it.id, it.name) }
             return WildInfo(
                 name = wild.name, dexNum = sp.baseNum, level = wild.level, gender = wild.gender, shiny = wild.shiny,
                 types = sp.types, tier = battle.tier,
-                dex = if (wild.species in state.caught) WildDex.CAUGHT else WildDex.SEEN,
-                base = sp.base, stats = statsAt(sp.base, wild.level), matchups = TypeMatchups.of(sp.types), moves = known + unknown,
+                dex = when {
+                    wild.species in state.caught -> WildDex.CAUGHT
+                    known -> WildDex.DEFEATED
+                    else -> WildDex.SEEN
+                },
+                base = sp.base.takeIf { known }, stats = if (known) statsAt(sp.base, wild.level) else null,
+                matchups = if (known) TypeMatchups.of(sp.types) else null, moves = visible,
             )
         }
     }

@@ -34,7 +34,7 @@ object BattleDetails {
 
     /**
      * Tap on the wild Pokémon in a battle (PLAN 93): a read-only info window on top of the battle, from [WildInfo] (so never IVs,
-     * nature, EVs or unused moves of an uncaught species). Close returns to the battle, which keeps running underneath. False when there is nothing to show.
+     * nature, EVs or unused moves of an unknown species). Close returns to the battle, which keeps running underneath. False when there is nothing to show.
      */
     fun showWild(ctx: Context, focusMove: String? = null): Boolean {
         val data = GameRepo.data ?: return false
@@ -54,7 +54,7 @@ object BattleDetails {
         img.setOnClickListener { SpriteViewer.show(ctx, battle.wild.lookNum(data), info.shiny) } // R10-B1: full-screen viewer
         img.contentDescription = "Show the picture full screen"
         val name = Ui.text(ctx, if (compact) 18f else 20f, 900, R.color.ag_text).apply {
-            text = RarityMark.name(ctx, nameLine(ctx, info), info.tier, info.base.total); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            text = if (info.known) RarityMark.name(ctx, nameLine(ctx, info), info.tier, info.base.total) else info.name; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             if (!compact) gravity = Gravity.CENTER
         }
         val num = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply {
@@ -70,14 +70,14 @@ object BattleDetails {
                 addView(LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
                     addView(name, LinearLayout.LayoutParams(-2, -2))
-                    addView(num, LinearLayout.LayoutParams(-2, -2))
+                    if (info.known) addView(num, LinearLayout.LayoutParams(-2, -2))
                     addView(types, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
                 }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12) })
             }, LinearLayout.LayoutParams(-1, -2))
         } else {
             col.addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 96), Ui.dp(ctx, 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
             col.addView(name, LinearLayout.LayoutParams(-1, -2))
-            col.addView(num, LinearLayout.LayoutParams(-1, -2))
+            if (info.known) col.addView(num, LinearLayout.LayoutParams(-1, -2))
             col.addView(types, LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = Ui.dp(ctx, 4) })
         }
 
@@ -86,24 +86,31 @@ object BattleDetails {
         val sp = data.sp(battle.wild.species)
         val mem = DetailSections.memory(ctx)
         val seen = st.seen + st.caught
-        // R18-G (PLAN 243B): its evolution line is in the card under the types, as in the Pokédex entry (the line shows ??? for what you have not seen)
-        col.addView(DetailTopCard.evolutionOnly(ctx, data, sp, seen, compact, null), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10) })
-        col.addView(DetailSections.section(ctx, mem, DetailSection.STATS, "Total ${info.stats.total}", titleLevel = info.level, boosts = battle.enemy.boosts) {
-            DetailSections.statsBody(ctx, info.stats, info.level, null, sp, compact, battle.enemy.boosts)
-        })
-        // A caught species reveals its actual current moves; otherwise only used moves are known.
-        val known = info.moves.mapNotNull { it.id }
-        val unknown = info.moves.count { it.id == null }
-        col.addView(DetailSections.section(ctx, mem, DetailSection.MOVES, "${known.size} of ${info.moves.size} known", forceOpen = focusMove != null) {
-            LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(Ui.text(ctx, 11f, 700, R.color.ag_ov).apply { text = if (info.dex == WildDex.CAUGHT) "You have caught this species: all its current moves are known." else "A move shows once it has used it in this fight." })
-                addView(DetailSections.moves(ctx, data, known, compact, unknown, focusMove = focusMove))
-            }
-        })
-        col.addView(DetailSections.section(ctx, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(info.matchups)) { DetailSections.matchups(ctx, info.types, info.name) })
-        col.addView(DetailSections.infoSection(ctx, mem, data, sp, emptyList(), null, null, compact,
-            lines = listOf("Tier" to info.tier.label, "Pokédex" to if (info.dex == WildDex.CAUGHT) "Caught" else "Seen, not caught yet")))
+        if (info.known) {
+            col.addView(DetailTopCard.evolutionOnly(ctx, data, sp, seen, compact, null), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10) })
+            val stats = requireNotNull(info.stats)
+            col.addView(DetailSections.section(ctx, mem, DetailSection.STATS, "Total ${stats.total}", titleLevel = info.level, boosts = battle.enemy.boosts) {
+                DetailSections.statsBody(ctx, stats, info.level, null, sp, compact, battle.enemy.boosts)
+            })
+        }
+        val moves = info.moves.mapNotNull { it.id }
+        if (moves.isNotEmpty()) {
+            col.addView(DetailSections.section(ctx, mem, DetailSection.MOVES, "${moves.size} ${if (moves.size == 1) "move" else "moves"}", forceOpen = focusMove != null) {
+                LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(Ui.text(ctx, 11f, 700, R.color.ag_ov).apply {
+                        text = if (info.known) "You have defeated or caught this species: all its current moves are known."
+                            else "Only moves it has used in this fight are shown."
+                    })
+                    addView(DetailSections.moves(ctx, data, moves, compact, focusMove = focusMove))
+                }
+            })
+        }
+        if (info.known) {
+            col.addView(DetailSections.section(ctx, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(requireNotNull(info.matchups))) { DetailSections.matchups(ctx, info.types, info.name) })
+            col.addView(DetailSections.infoSection(ctx, mem, data, sp, emptyList(), null, null, compact,
+                lines = listOf("Tier" to info.tier.label, "Pokédex" to if (info.dex == WildDex.CAUGHT) "Caught" else "Defeated or caught in another form")))
+        }
         DetailSections.applyOrder(col)
         AppDialog.Builder(ctx).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(ctx, col, focusMove)), true)
             .setDetailsFooter(contextLabel = "Wild Pokémon").showCard()
