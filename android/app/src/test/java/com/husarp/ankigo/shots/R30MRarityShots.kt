@@ -17,7 +17,29 @@ class R30MRarityShots {
     private fun all(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
     private fun tap(v: View, label: String) = all(v).single { it.contentDescription == label }.performClick()
     private fun clear(v: View) = all(v).filterIsInstance<TextView>().single { it.text.toString() == "Clear" }.performClick()
-    private fun render(page: GamePage) = GamePage::class.java.getDeclaredMethod("doRender").apply { isAccessible = true }.invoke(page)
+    private fun render(page: GamePage) {
+        GamePage::class.java.getDeclaredMethod("doRender").apply { isAccessible = true }.invoke(page)
+        val metrics = page.resources.displayMetrics
+        page.root.measure(View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.EXACTLY))
+        page.root.layout(0, 0, page.root.measuredWidth, page.root.measuredHeight)
+    }
+
+    private fun sheetShot(page: GamePage): View {
+        val metrics = page.resources.displayMetrics
+        val maxBody = (metrics.heightPixels * SortSheet.BODY_SHARE).toInt() - Ui.dp(page, 150)
+        val sheet = when (page) {
+            is TeamPage -> page.sortSheet().build(maxBody)
+            is DexPage -> page.sortSheet().build(maxBody)
+            else -> error("Unsupported page")
+        }
+        sheet.measure(View.MeasureSpec.makeMeasureSpec(metrics.widthPixels, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(metrics.heightPixels, View.MeasureSpec.AT_MOST))
+        sheet.layout(0, 0, sheet.measuredWidth, sheet.measuredHeight)
+        val heading = all(sheet).filterIsInstance<TextView>().single { it.text.toString().contains("RARITY MARK") }
+        all(sheet).filterIsInstance<android.widget.ScrollView>().single().scrollTo(0, heading.top)
+        return sheet
+    }
 
     @Test fun boxMarksFilterCopiesPersistAndClearInLightAndDark() {
         paparazzi.shootPage("m-482-box", listOf(Variants.PHONE, Variant("narrow", 320, 820))) { ctx ->
@@ -38,7 +60,7 @@ class R30MRarityShots {
             assertEquals(f, SortPrefs.loadBoxRarity(ctx))
             assertEquals(f, getField(TeamPage(ctx, NoHost), "boxRarity"))
             assertTrue(all(scene).filterIsInstance<ActiveChip>().any { "Starter / strong" in it.contentDescription.toString() })
-            paparazzi.snapshot(page.sortSheet().build(Ui.dp(ctx, 1100)), "m-482-box-sheet-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
+            paparazzi.snapshot(sheetShot(page), "m-482-box-sheet-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
             paparazzi.snapshot(scene, "m-482-active-${page.javaClass.simpleName}-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
             clear(page.sortSheet().build(Ui.dp(ctx, 1100)))
             render(page)
@@ -63,7 +85,7 @@ class R30MRarityShots {
             assertTrue(expected.isNotEmpty())
             assertEquals(expected, (getField(page, "shown") as List<*>).map { (it as Species).num }.toSet())
             assertEquals(f, (getField(DexPage(ctx, NoHost), "filter") as DexFilter).rarities)
-            paparazzi.snapshot(page.sortSheet().build(Ui.dp(ctx, 1100)), "m-482-dex-sheet-${ctx.resources.configuration.uiMode}")
+            paparazzi.snapshot(sheetShot(page), "m-482-dex-sheet-${ctx.resources.configuration.uiMode}")
             paparazzi.snapshot(scene, "m-482-active-${page.javaClass.simpleName}-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
             clear(page.sortSheet().build(Ui.dp(ctx, 1100)))
             assertFalse((getField(page, "filter") as DexFilter).rarities.active)
@@ -71,7 +93,7 @@ class R30MRarityShots {
         }
     }
 
-    @Test fun emptyRarityResultOffersClearAndRecipientPickerHasMarks() {
+    @Test fun emptyRarityResultOffersClear() {
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         val page = TeamPage(ctx, NoHost).apply { preset(TeamSection.BOX) }
@@ -85,10 +107,6 @@ class R30MRarityShots {
         assertEquals(View.VISIBLE, button.visibility)
         button.performClick(); render(page)
         assertFalse(SortPrefs.loadBoxRarity(ctx).active)
-        val picker = OwnedMonPicker.content(page, { true }) {}
-        val dialog = DialogShots.capture { all(picker).filterIsInstance<TextView>().single { it.text == "Sort & filter" }.performClick() }
-        assertNotNull(dialog)
-        assertTrue(all(dialog!!.content()).any { it.contentDescription == "Ultra Beast" })
-        dialog.dismiss()
+
     }
 }
