@@ -354,11 +354,11 @@ object DetailSections {
     }
 
     /** The ScrollView of a details window: like [Bits.scroll], and it lets an open move text close on a tap anywhere. */
-    internal fun scroll(ctx: Context, child: View, focusMove: String? = null): android.widget.ScrollView = TapWatchScroll(ctx).apply {
+    internal fun scroll(ctx: Context, child: View, focusMove: String? = null, focusSection: DetailSection? = null): android.widget.ScrollView = TapWatchScroll(ctx).apply {
         addView(child)
-        if (focusMove != null) addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+        if (focusMove != null || focusSection != null) addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
             override fun onLayoutChange(v: View, l: Int, t: Int, r: Int, b: Int, ol: Int, ot: Int, or: Int, ob: Int) {
-                val target = child.findViewWithTag<View>("detail-move:$focusMove") ?: return
+                val target = child.findViewWithTag<View>(focusSection ?: "detail-move:$focusMove") ?: return
                 removeOnLayoutChangeListener(this)
                 val rect = android.graphics.Rect()
                 target.getDrawingRect(rect)

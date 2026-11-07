@@ -8,6 +8,7 @@ import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Wishlist
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
@@ -31,10 +32,11 @@ object DexDetail {
     /** Opens one of your Pokémon's details (the tests swap it to see which copy "My Pokémon" opens). */
     internal var openMon: (GamePage, GameData, Mon) -> Unit = { a, data, m -> MonDetail.show(a, data, m) }
 
-    fun show(a: GamePage, sp: Species) {
+    fun show(a: GamePage, sp: Species, focusEvolution: Boolean = false) {
         val data = a.data
         val state = a.state
         val caught = sp.num in state.caught
+        val mine = copies(state.mons, sp.num)
         val col = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(Ui.dp(a, 20), Ui.dp(a, 6), Ui.dp(a, 20), Ui.dp(a, 6))
@@ -55,7 +57,7 @@ object DexDetail {
 
         val compact = DetailParts.compact(a)
         // R18-G (PLAN 243B): the evolution line is in the card under the types (the same as in your Pokémon's details, without Holding)
-        col.addView(DetailTopCard.evolutionOnly(a, data, sp, state.seen + state.caught, compact) { other -> show(a, other) },
+        col.addView(DetailTopCard.evolutionOnly(a, data, sp, state.seen + state.caught, compact, { other -> show(a, other) }, forceOpen = focusEvolution),
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         // sections that open on tap (DetailOpen); a species has no Training of its own; its Moves are the level-up learnset (R10-B4)
         val mem = DetailSections.memory(a)
@@ -85,11 +87,22 @@ object DexDetail {
             })
         }
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, sp.name) })
+        if (mine.isNotEmpty()) col.addView(DetailSections.section(a, mem, DetailSection.BOND,
+            mine.joinToString(" · ") { BondSection.summary(it) }) {
+            LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                for (mon in mine) {
+                    addView(Ui.text(a, 13f, 900, R.color.ag_text).apply {
+                        text = "${mon.shownName} · Lv ${mon.level} · ${if (mon.uid in state.team) "In team" else "In box"}"
+                    })
+                    addView(BondSection.body(a, mon))
+                }
+            }
+        })
         col.addView(DetailSections.infoSection(a, mem, data, sp, emptyList(), null, null, compact))
 
         DetailSections.applyOrder(col)
         col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))
-        val mine = copies(state.mons, sp.num)
         col.addView(line(a, "Owned", mine.size.toString()))
         lateinit var dlg: AppDialog
         var optionsButton: View? = null
@@ -138,7 +151,7 @@ object DexDetail {
         col.addView(star, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         col.addView(hint, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
 
-        dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(a, col)), true).setDetailsFooter(optionsButton, contextLabel = "Species info").apply {
+        dlg = AppDialog.Builder(a).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusSection = DetailSection.EVOLUTION.takeIf { focusEvolution })), true).setDetailsFooter(optionsButton, contextLabel = "Species info").apply {
             if (mine.isNotEmpty()) {
                 // Highest-level copy first, without a picker; Options and Close stay in the footer.
                 col.addView(DetailParts.secondaryButton(a, "My Pokémon") { openMon(a, data, mine[0]) }.apply {

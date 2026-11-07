@@ -81,7 +81,8 @@ internal enum class BagAct(val label: String, val fightOnly: Boolean, val offFig
         fun of(kind: ItemKind?): BagAct? = when (kind) {
             ItemKind.BALL -> THROW
             ItemKind.ESCAPE -> USE
-            ItemKind.HEAL, ItemKind.EVOLUTION -> USE_ON
+            ItemKind.HEAL -> USE_ON
+            ItemKind.EVOLUTION -> null
             ItemKind.HELD -> GIVE
             ItemKind.FOSSIL -> REVIVE
             null -> null

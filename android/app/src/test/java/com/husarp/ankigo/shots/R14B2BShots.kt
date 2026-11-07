@@ -23,6 +23,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -450,7 +451,7 @@ class R14B2BShots {
             assertTrue("You own 2 Super Potions" in t.map { ItemInfo.plain(it) })
         }) { ctx -> bagPage(ctx, CardKeys.bagItem("super-potion")).second }
         shoot("bag-amulet", listOf(P412), check = { _, screen -> assertTrue("Give to…" in texts(screen)) }) { ctx -> bagPage(ctx, CardKeys.bagItem("amulet-coin")).second }
-        shoot("bag-evo", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen -> assertTrue("Use on…" in texts(screen)) }) { ctx -> bagPage(ctx, CardKeys.bagItem("tart-apple")).second }
+        shoot("bag-evo", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen -> assertFalse("Use on…" in texts(screen)) }) { ctx -> bagPage(ctx, CardKeys.bagItem("tart-apple")).second }
         shoot("bag-fossil", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen -> assertTrue("Revive" in texts(screen)) }) { ctx -> bagPage(ctx, CardKeys.bagItem("helix-fossil")).second }
         shoot("bag-escape", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen ->
             val t = texts(screen)

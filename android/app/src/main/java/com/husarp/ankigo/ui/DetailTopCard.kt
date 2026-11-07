@@ -26,9 +26,9 @@ internal object DetailTopCard {
         card(a, listOf(holding(a, data, state, mon, page, give), evolution(a, data, sp, seen, compact, onSpecies, state, mon, page, onEvolved)))
 
     /** The Pokédex entry's / wild Pokémon's card: the Evolution only (a species holds nothing). */
-    fun evolutionOnly(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?): View =
+    fun evolutionOnly(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?, forceOpen: Boolean = false): View =
         card(a, listOf(evolution(a, data, sp, seen, compact, onSpecies,
-            state = com.husarp.ankigo.GameRepo.state.takeIf { com.husarp.ankigo.GameRepo.data === data })))
+            state = com.husarp.ankigo.GameRepo.state.takeIf { com.husarp.ankigo.GameRepo.data === data }, forceOpen = forceOpen)))
 
     /** The card with its [parts] one under the other, a thin line between them. */
     private fun card(a: Context, parts: List<View>): View = LinearLayout(a).apply {
@@ -119,8 +119,8 @@ internal object DetailTopCard {
     /**
      * The collapsible evolution tree; owned Pokémon can choose ready branches from their requirement info.
      */
-    private fun evolution(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?, state: GameState? = null, mon: Mon? = null, page: GamePage? = null, onEvolved: (() -> Unit)? = null): View {
-        return DetailSections.section(a, DetailSections.memory(a), DetailSection.EVOLUTION, null) {
+    private fun evolution(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?, state: GameState? = null, mon: Mon? = null, page: GamePage? = null, onEvolved: (() -> Unit)? = null, forceOpen: Boolean = false): View {
+        return DetailSections.section(a, DetailSections.memory(a), DetailSection.EVOLUTION, null, forceOpen = forceOpen) {
             LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 val evolve: ((com.husarp.ankigo.game.Evolution) -> Unit)? =

@@ -19,6 +19,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -242,9 +243,8 @@ class R15AItemWindowShots {
 
     @Test fun aButtonThatEndsOnlyInAMessageKeepsTheWindowOpenAndShowsIt() {
         shoot("message-only", listOf(P412), themes = listOf(Theme.LIGHT)) { ctx ->
-            // an evolution item and a TM that nobody can use: the answer is a toast, so there is nothing to close the window for
+            // A TM that nobody can use answers with a toast and keeps its window.
             for ((key, button, message) in listOf(
-                Triple(CardKeys.bagItem("tart-apple"), "Use on…", "No Pokémon can use Tart Apple right now"),
                 Triple(CardKeys.bagTm("thunderbolt"), "Teach…", "None of your Pokémon can learn"))) {
                 val (p, stage) = bagPage(ctx, key) { st.mons.clear(); st.team.clear() }
                 assertNotNull("$button: the window is open", p.itemWindow)
@@ -256,7 +256,9 @@ class R15AItemWindowShots {
                 stage.render()
                 assertNotNull("$button: still open after a render", p.itemWindow)
             }
-            bagPage(ctx, CardKeys.bagItem("tart-apple")) { st.mons.clear(); st.team.clear() }.second
+            bagPage(ctx, CardKeys.bagItem("tart-apple")) { st.mons.clear(); st.team.clear() }.second.also {
+                assertFalse("evolution items have no Use on action", "Use on…" in texts(it))
+            }
         }
     }
 
