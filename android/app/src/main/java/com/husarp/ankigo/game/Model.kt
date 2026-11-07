@@ -234,6 +234,8 @@ class Mon(
     var evolvedAt: Long = 0,
     var bondPoints: Int = 0,        // earned Bond points; separate from legacy Ankimon friendship
     var bondHalf: Int = 0,          // Soothe Bell fractional carry (0 or 1 half point)
+    var natureXpCarry: Int = 0,     // 1/200 of reward XP, local to this Pokémon
+    var natureBondCarry: Int = 0,   // hundredths of Bond, local to this Pokémon
 )
 
 /**
@@ -317,6 +319,8 @@ class Battle(
     var againStreak: Int = 0, // capped: one boost per uninterrupted streak
     var pressuredRounds: Int = 0, // rounds without Good/Easy; OK-only rounds pause
     val field: BattleField = BattleField(),      // R17C-1: weather, terrain, rooms, side conditions (an old save has none)
+    var natureMainUid: String? = null,
+    var natureMainRounds: Int = 0,
 ) {
     /** R17C-4: the Main's team (Pokémon with a uid), for Beat Up (one hit per member with HP). [Game] fills it before each round; never saved, empty = just the Main. */
     var team: List<Mon> = emptyList()

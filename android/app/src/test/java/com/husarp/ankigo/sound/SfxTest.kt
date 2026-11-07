@@ -10,7 +10,7 @@ import kotlin.math.abs
 
 class SfxTest {
     /** The six original battle sounds; the soft ones ([SoftSound]) are checked by the tests of [SoftSfx]. */
-    private val LEGACY = SoundId.entries.filter { it.soft == null && TypeSfx.type(it) == null }
+    private val LEGACY = SoundId.entries.filter { it.soft == null && TypeSfx.type(it) == null && it != SoundId.DEFAULT_TAP }
 
     private fun peak(s: ShortArray) = s.maxOf { abs(it.toInt()) } / 32767.0
 
@@ -52,7 +52,7 @@ class SfxTest {
 
     @Test fun soundsDiffer() {
         // R9-W4-A: the answer buttons and Show answer are the tab tick, so those five are the same sound as TAB
-        val tabLike = setOf(SoundId.AGAIN, SoundId.HARD, SoundId.GOOD, SoundId.EASY, SoundId.SHOW_ANSWER)
+        val tabLike = setOf(SoundId.DEFAULT_TAP, SoundId.AGAIN, SoundId.HARD, SoundId.GOOD, SoundId.EASY, SoundId.SHOW_ANSWER)
         val all = (SoundId.entries - tabLike).map { Sfx.samples(it).toList() }
         assertEquals(all.size, all.toSet().size)
         for (id in tabLike) assertEquals("$id", Sfx.samples(SoundId.TAB).toList(), Sfx.samples(id).toList())
@@ -82,7 +82,7 @@ class SfxTest {
         // redesigned sounds (R7-X1: the quiet tab/menu/ball/shop ticks) carry -v2 so a cached old file is never played
         // R9-W4-A: the XP ping and the answer buttons + Show answer (now the tab tick) too
         val v2 = setOf(SoundId.TAB, SoundId.MENU, SoundId.BALL_BTN, SoundId.BUY, SoundId.XP_ABSORB, SoundId.AGAIN, SoundId.HARD, SoundId.GOOD, SoundId.EASY, SoundId.SHOW_ANSWER)
-        assertTrue(SoundId.entries.all { it.file.endsWith(if (it in v2) "-v2.wav" else "-v1.wav") })
+        assertTrue(SoundId.entries.all { it.file.endsWith(if (it == SoundId.DEFAULT_TAP || it.asset != null) "-r30.wav" else if (it in v2) "-v2.wav" else "-v1.wav") })
         assertEquals(SoundId.entries.size, SoundId.entries.map { it.file }.toSet().size)
     }
 }

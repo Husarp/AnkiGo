@@ -126,7 +126,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         events += ensureEncounter()
         val battle = state.battle ?: return events
-        if (main.hp > 0 && battle.wild.hp > 0) Bond.add(main, Bond.CARD_POINTS, events, state.activeHeldItem(main) == "soothe-bell")
+        if (main.hp > 0 && battle.wild.hp > 0) Bond.add(main, Bond.CARD_POINTS, events, state.activeHeldItem(main) == "soothe-bell", studyAnswer = !state.practiceRewards)
         // R10-B22: who attacks depends on each answer, not on the point sum. A battle saved before keeps only the sum: restore the buttons from it.
         if (battle.buttons.size != battle.answers) { battle.buttons.clear(); battle.buttons += RoundRule.restore(battle.answers, battle.tally) }
         // R19-T (PLAN 284): the OK of a new card (PLAN 155) is one of the round's answers, a neutral move: it fills a dot and counts toward the
@@ -541,6 +541,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         if (main != null && main.uid != oldMain) {
             val battle = state.battle
             if (battle != null && !free) SecretAchievements.switch(state, battle)
+            battle?.natureMainUid = main.uid
+            battle?.natureMainRounds = 0
             battle?.team = state.teamMons()
             battle?.switchOutMain(data, oldMon) // R17C-1: the rule sets' onLeave, then a fresh side for the new main
             events += GameEvent.MainChanged(main.uid, main.name)

@@ -134,6 +134,7 @@ object Ui {
 
     /** A TextView in Nunito. Font padding is off so heights match the mockup's CSS line boxes. */
     fun text(ctx: Context, sizeSp: Float, weight: Int, @ColorRes colorRes: Int): TextView = object : TextView(ctx) {
+        override fun performClick(): Boolean = com.husarp.ankigo.sound.ButtonSounds.click(this) { super.performClick() }
         override fun setText(text: CharSequence?, type: TextView.BufferType?) {
             super.setText(text?.let { StatTypography.format(it) }, type)
         }

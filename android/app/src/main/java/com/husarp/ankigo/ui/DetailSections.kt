@@ -223,7 +223,7 @@ object DetailSections {
                 val start = line.length; line.append(text)
                 line.setSpan(android.text.style.ForegroundColorSpan(Ui.c(a, color)), start, line.length, 0)
             }
-            if (nature.plus == null || nature.minus == null) line.append(" (no change)")
+            if (nature.plus == null || nature.minus == null) line.append(" (no change)").append(com.husarp.ankigo.game.NaturePerks.description(nature)?.let { " · $it" } ?: "")
             else {
                 fun short(s: Stat) = when (s) { Stat.ATK -> "Atk"; Stat.DEF -> "Def"; Stat.SPE -> "Spe"; else -> DetailMath.statName(s) }
                 part("  ▲ ${short(nature.plus)} +10%", R.color.ag_green)

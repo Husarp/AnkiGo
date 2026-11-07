@@ -1,7 +1,7 @@
 package com.husarp.ankigo.game
 
 // R4-03 / PLAN 79: THE list of achievements. Changing the list (titles, thresholds, new rows) is an edit of this file only.
-// Rules for an edit: an id is stable and never reused (saves remember dates by id); a tiered row has 5 thresholds, or 3 when it
+// Rules for an edit: an id is stable and never reused (saves remember dates by id); a tiered row has 5 thresholds, 2 for Types caught, or 3 when it
 // is easy (it saturates fast; capped at Epic, see [tiered3]), strictly ascending; a one-off has 1. A row that is new to a save is looked at silently the first time (no flood of
 // celebrations), see Achievements.check. What a row counts is a Metric (Achievements.kt).
 //
@@ -22,7 +22,7 @@ class AchRow(
     val title: String,
     val desc: String,                 // short: "Cards you answer while AnkiGo is running"
     val metric: Metric?,
-    val tiers: List<Long>,            // thresholds, ascending; 5 for a tiered row (3 when easy), 1 for a one-off
+    val tiers: List<Long>,            // thresholds, ascending; 5 for a tiered row (2 or 3 when easy), 1 for a one-off
     val icon: String,                 // key the page draws later
     val ankimonBadge: Int? = null,    // Ankimon badges.json id of a one-off that is today's badge (5-10, 16-20)
     val tierBadges: List<Int> = emptyList(),
@@ -39,14 +39,15 @@ object AchievementTable {
      * once by Achievements.migrate (GameState.achLadder remembers the version); a new game starts at [LADDER].
      */
     // R23 part 4: remove ten rows, cap three more ladders at Epic; preserve unknown saved ids.
-    const val LADDER = 4
+    // R30: Types caught has Common at 9 and Rare at 18.
+    const val LADDER = 5
 
     /** R14-B2 fix Y2: the threshold of the tier of row [id] that gives [item] as its reward (the days of the "Best streak" tier that gives the Master Ball), so texts can't drift from the rule. Null when no tier does. */
     fun rewardThreshold(id: String, item: String): Long? =
         ROWS.firstOrNull { it.id == id }?.let { r -> r.rewards.entries.firstOrNull { it.value == item }?.let { r.tiers[it.key] } }
 
-    /** R9-B2: per row whose ladder was shortened in version 2: new tier t = old tier REMAP[id][t] (the new thresholds are a subset of the old ones). */
-    val REMAP: Map<String, List<Int>> = mapOf("types" to listOf(1, 2, 4), "highest-level" to listOf(1, 2, 4))
+    /** R9-B2: per row whose ladder was shortened in version 2: new tier t = old tier REMAP[id][t] (10 types maps to Common (now 9), 18 to Rare; highest-level keeps its subset). */
+    val REMAP: Map<String, List<Int>> = mapOf("types" to listOf(2, 4), "highest-level" to listOf(1, 2, 4))
 
     /** Tier names; the index is the tier id 0..4 (ids are stable, the names may change). A 3-tier row tops out at Epic. */
     val TIER_NAMES = listOf("Common", "Rare", "Epic", "Legendary", "Mythical")
@@ -102,7 +103,7 @@ object AchievementTable {
 
         // ---- Collection ----
         tiered("catches", "Collection", "Pokémon caught", "Every catch, duplicates too", Metric.CATCHES, "ball", 10, 100, 500, 2_000, 5_000),
-        tiered3("types", "Collection", "Types caught", "Different types among your Pokémon (18 in all)", Metric.TYPES_CAUGHT, "types", 6, 10, 18),
+        AchRow("types", "Collection", "Types caught", "Different types among your Pokémon (18 in all)", Metric.TYPES_CAUGHT, listOf(9L, 18L), "types"),
         tiered3("ball-catches", "Collection", "Ball catches", "Catches with a thrown ball (not the auto-catch rule)", Metric.BALL_CATCHES, "ball-catch", 1, 10, 50),
 
         // ---- Economy ----

@@ -330,6 +330,13 @@ object Achievements {
             state.achTiers[id] = kept.map { old[it] }.toMutableList()
             kept.forEachIndexed { t, o -> if (o in oldInferred) state.achInferred += inferredKey(id, t) }
         }
+        if (state.achLadder in 2..4) state.achTiers["types"]?.let { old ->
+            val remap = listOf(1, 2).filter { it < old.size }
+            val inferred = remap.map { inferredKey("types", it) in state.achInferred }
+            state.achTiers["types"] = remap.map { old[it] }.toMutableList()
+            state.achInferred.removeAll { it.startsWith("types/") }
+            inferred.forEachIndexed { t, flag -> if (flag) state.achInferred += inferredKey("types", t) }
+        }
         if (state.achLadder < 3) log(fixLifetimeTotals(state))
         for (id in listOf("ball-catches", "tms", "items-found")) {
             state.achTiers[id]?.let { while (it.size > 3) it.removeAt(it.lastIndex) }

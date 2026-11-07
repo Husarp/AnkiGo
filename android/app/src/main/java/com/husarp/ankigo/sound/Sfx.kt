@@ -30,8 +30,9 @@ enum class SoundId(val file: String, val group: SoundGroup) {
     // R9-C3: one orb of the XP animation landing (a reward sound, like the cash one)
     XP_ABSORB("xp_absorb-v2.wav", SoundGroup.MOMENTS),
     // buttons (PLAN 84)
-    AGAIN("again-v2.wav", SoundGroup.ANSWER_BUTTONS), HARD("hard-v2.wav", SoundGroup.ANSWER_BUTTONS),
-    GOOD("good-v2.wav", SoundGroup.ANSWER_BUTTONS), EASY("easy-v2.wav", SoundGroup.ANSWER_BUTTONS),
+    DEFAULT_TAP("default-tap-r30.wav", SoundGroup.MENUS),
+    AGAIN("again-r30.wav", SoundGroup.ANSWER_BUTTONS), HARD("hard-r30.wav", SoundGroup.ANSWER_BUTTONS),
+    GOOD("good-r30.wav", SoundGroup.ANSWER_BUTTONS), EASY("easy-r30.wav", SoundGroup.ANSWER_BUTTONS),
     SHOW_ANSWER("show_answer-v2.wav", SoundGroup.SHOW_ANSWER),
     TAB("tab-v2.wav", SoundGroup.MENUS), MENU("menu-v2.wav", SoundGroup.MENUS), BALL_BTN("ball_btn-v2.wav", SoundGroup.MENUS),
     BUY("buy-v2.wav", SoundGroup.SHOP),
@@ -54,6 +55,11 @@ enum class SoundId(val file: String, val group: SoundGroup) {
     TYPE_STEEL("type-steel-a-v1.wav", SoundGroup.BATTLE),
     TYPE_FAIRY("type-fairy-a-v1.wav", SoundGroup.BATTLE);
 
+    val asset: String? get() = when (this) {
+        AGAIN, HARD, GOOD, EASY -> "sounds/${name.lowercase()}.wav"
+        else -> null
+    }
+
     /** The soft event recipe, or null for the original battle and move-type recipes. */
     val soft: SoftSound? get() = SoftSound.entries.firstOrNull { it.name == name }
 }
@@ -75,6 +81,7 @@ object Sfx {
     }
 
     fun samples(id: SoundId): ShortArray {
+        if (id == SoundId.DEFAULT_TAP) return SoftSfx.samples(SoftSound.SHOW_ANSWER)
         TypeSfx.type(id)?.let { return TypeSfx.samples(it) }
         id.soft?.let { return SoftSfx.samples(it) }
         val b = Buf(when (id) {

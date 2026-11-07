@@ -78,7 +78,7 @@ object GameSound {
             val f = File(dir, id.file)
             if (!f.isFile || f.length() < 100) {
                 val tmp = File(dir, "${id.file}.${System.nanoTime()}.tmp")
-                tmp.writeBytes(Sfx.wav(id))
+                tmp.writeBytes(id.asset?.let { c.assets.open(it).use { stream -> stream.readBytes() } } ?: Sfx.wav(id))
                 if (!tmp.renameTo(f)) { tmp.delete(); continue }
             }
             effects[id] = p.load(f.path, 1)
@@ -132,7 +132,11 @@ object GameSound {
      * A button click ([SoundId.AGAIN], [SoundId.TAB], ...): plays when its group is on, its channel volume is above 0, the phone's
      * ringer is normal and [muted] is false. The first click after a start may stay silent while the files load. Never throws, never blocks.
      */
+    var uiSerial: Long = 0
+        private set
+
     fun ui(ctx: Context, id: SoundId, muted: Boolean = false) {
+        uiSerial++
         try {
             val c = app(ctx)
             val cue = Cue.Effect(id)
@@ -280,6 +284,7 @@ object GameSound {
      * can be heard (volume 0, phone silent), else null.
      */
     fun preview(ctx: Context, id: SoundId): String? {
+        uiSerial++
         val c = app(ctx)
         val channel = id.group.channel
         if (SoundPrefs.volume(c, channel) <= 0) return "Volume is 0"

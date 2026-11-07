@@ -282,6 +282,7 @@ object SheetKit {
      * `dialog.cancel()` (= the same as a tap outside: the cancel and the dismiss listeners both run), with the selected window exit animation.
      */
     fun dialog(dialog: Dialog, content: View): View {
+        dialog.window?.let { com.husarp.ankigo.sound.ButtonSounds.install(it) }
         dialog.window?.setWindowAnimations(UiMotion.windowStyle(dialog.context, sheet = true))
         return host(dialog.context, content,
         { dialog.window?.setWindowAnimations(UiMotion.windowStyle(dialog.context, sheet = true)); dialog.cancel() },

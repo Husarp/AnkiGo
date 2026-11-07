@@ -1,0 +1,13 @@
+Answer button sounds (R30, selected 2026-11-07). CC0 1.0 Universal.
+Again: Kenney, Digital Audio, pep_sound_1.ogg (set C Again).
+Good: Kenney, Digital Audio, power_up_6.ogg (set C Easy).
+https://kenney.nl/assets/digital-audio
+https://github.com/Boyquotes/kenney-digital-audio-for-godot/tree/185a77e
+Hard: Kenney, Interface Sounds 1.0, select_006.wav (set A Again).
+Easy: Kenney, Interface Sounds 1.0, confirmation_003.wav (set A Easy).
+https://kenney.nl/assets/interface-sounds
+https://github.com/Calinou/kenney-interface-sounds/tree/4596a49
+Prepared mono PCM16 44.1 kHz, filtered, trimmed, faded and gain matched.
+Original licence evidence: Kenney-Digital-CC0.txt, Kenney-Interface-CC0.txt.
+https://creativecommons.org/publicdomain/zero/1.0/
+The default UI tap is the existing app's generated answer tick.

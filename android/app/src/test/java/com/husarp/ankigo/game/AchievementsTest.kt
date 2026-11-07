@@ -52,7 +52,7 @@ class AchievementsTest {
     @Test fun tieredRowsHaveFiveAscendingThresholdsAndOneOffsOne() { // R9-B2: 3 when easy (exactly "types" and "highest-level")
         for (r in AchievementTable.ROWS) {
             if (r.ankimonBadge == null) {
-                assertEquals(r.id, if (r.oneOff) 1 else if (r.id in setOf("types", "highest-level", "ball-catches", "tms", "items-found")) 3 else 5, r.tiers.size)
+                assertEquals(r.id, if (r.oneOff) 1 else if (r.id == "types") 2 else if (r.id in setOf( "highest-level", "ball-catches", "tms", "items-found")) 3 else 5, r.tiers.size)
                 assertTrue(r.id, r.metric != null)
                 assertTrue(r.id, r.tiers.zipWithNext().all { (a, b) -> a < b })
                 assertTrue(r.id, r.tiers.first() >= 1)

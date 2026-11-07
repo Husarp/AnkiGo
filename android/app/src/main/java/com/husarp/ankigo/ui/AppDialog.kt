@@ -85,6 +85,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     val isShowing: Boolean get() = made?.isShowing == true
 
     fun show() {
+        dlg.window?.let { com.husarp.ankigo.sound.ButtonSounds.install(it) }
         joinStack()
         try { dlg.window?.setWindowAnimations(UiMotion.windowStyle(context)); dlg.show(); dlg.window?.setLayout(cardWidthPx(), ViewGroup.LayoutParams.WRAP_CONTENT) } catch (e: RuntimeException) { leftStack(); throw e }
         AwayWindows.track(this) { it.dismiss() }

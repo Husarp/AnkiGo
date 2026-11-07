@@ -50,7 +50,7 @@ object DetailMath {
     fun natureEffect(n: Nature): String {
         val p = n.plus
         val m = n.minus
-        return if (p == null || m == null) "Neutral" else "Raises ${statName(p)}, lowers ${statName(m)}"
+        return if (p == null || m == null) (com.husarp.ankigo.game.NaturePerks.description(n)?.let { "Neutral · $it" } ?: "Neutral") else "Raises ${statName(p)}, lowers ${statName(m)}"
     }
 
     @ColorRes fun statColor(s: Stat): Int = when (s) {
