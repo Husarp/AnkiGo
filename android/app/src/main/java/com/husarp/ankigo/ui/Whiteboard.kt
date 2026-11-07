@@ -7,13 +7,10 @@
 // Copyright (c) 2021 Nicolai Weitkemper <kontakt@nicolaiweitkemper.de>
 package com.husarp.ankigo.ui
 
-import com.husarp.ankigo.ui.MotionHorizontalScrollView
-
 import android.content.Context
 import android.graphics.*
 import android.view.MotionEvent
 import android.view.View
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import com.husarp.ankigo.R
 import kotlin.math.abs
@@ -46,6 +43,11 @@ internal class Whiteboard(ctx: Context) : View(ctx) {
     private var y = 0f
     var ink = Ui.c(ctx, R.color.ag_text)
     var erasing = false
+    var drawingEnabled = true
+        set(value) {
+            field = value
+            if (!value) { cancelStroke(); parent?.requestDisallowInterceptTouchEvent(false); invalidate() }
+        }
     internal val strokeCount get() = strokes.size
     private fun pen() = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ink; style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND; strokeCap = Paint.Cap.ROUND
@@ -64,6 +66,7 @@ internal class Whiteboard(ctx: Context) : View(ctx) {
         canvas.restoreToCount(layer)
     }
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!drawingEnabled) return false
         if (event.pointerCount > 1 || event.actionMasked == MotionEvent.ACTION_CANCEL) {
             cancelStroke(); parent?.requestDisallowInterceptTouchEvent(false); invalidate(); return true
         }
@@ -89,26 +92,36 @@ internal class Whiteboard(ctx: Context) : View(ctx) {
     override fun performClick(): Boolean { super.performClick(); return true }
 }
 
-/** Compact tools; the only visibility switch lives in Card actions. */
+/** Compact tools with independent drawing, colour and visibility controls. */
 internal class WhiteboardTools(ctx: Context, val board: Whiteboard) : LinearLayout(ctx) {
     companion object { const val PREF = "whiteboardOn" }
     private val prefs = ctx.getSharedPreferences("study", 0)
     var onChanged: ((Boolean) -> Unit)? = null
     val isOn get() = board.visibility == View.VISIBLE
-    private val colour = button("●") { palette() }.apply { textSize = 26f }
-    private val eraser = button("Eraser") { board.erasing = !board.erasing; refresh() }
+    private val colour = button("Colour") { palette() }.apply {
+        text = "●"; textSize = 22f; translationX = -Ui.dp(ctx, 6).toFloat()
+        // The dot hugs Pen's upper corner; the full 40 x 48 dp cell is independently tappable.
+        gravity = android.view.Gravity.START or android.view.Gravity.TOP
+        setPadding(0, Ui.dp(ctx, 1), 0, 0)
+    }
+    private val pen = button("Pen") {
+        board.drawingEnabled = !board.drawingEnabled || board.erasing
+        board.erasing = false; refresh()
+    }
+    private val eraser = button("Eraser") {
+        val selected = board.drawingEnabled && board.erasing
+        board.drawingEnabled = !selected; board.erasing = !selected; refresh()
+    }
     init {
         setBackgroundColor(Ui.c(ctx, R.color.ag_base))
-        val tools = LinearLayout(ctx)
-        addView(MotionHorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(tools) }, LayoutParams(-1, -2))
-        tools.addView(button("Undo") { board.undo() }.apply {
-            val arrow = context.getDrawable(R.drawable.ic_undo)!!.mutate()
-            arrow.setTint(Ui.c(context, R.color.ag_text)); arrow.setBounds(0, 0, Ui.dp(context, 16), Ui.dp(context, 16))
-            setCompoundDrawables(arrow, null, null, null); compoundDrawablePadding = Ui.dp(context, 4)
-        })
-        tools.addView(eraser.apply { toolIcon(this, R.drawable.ic_whiteboard_eraser, 18) })
-        tools.addView(button("Clear") { board.clear() }.apply { toolIcon(this, R.drawable.ic_close, 16) })
-        tools.addView(colour)
+        gravity = android.view.Gravity.CENTER_VERTICAL
+        addView(pen.apply { toolIcon(this, R.drawable.ic_pencil, 18, true) }, LayoutParams(Ui.dp(ctx, 56), Ui.dp(ctx, 48)))
+        addView(colour, LayoutParams(Ui.dp(ctx, 40), Ui.dp(ctx, 48)))
+        addView(eraser.apply { toolIcon(this, R.drawable.ic_whiteboard_eraser, 18, true) }, LayoutParams(Ui.dp(ctx, 64), Ui.dp(ctx, 48)))
+        addView(button("Undo") { board.undo() }.apply { toolIcon(this, R.drawable.ic_undo, 22) }, LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
+        addView(button("Clear") { board.clear() }.apply { toolIcon(this, R.drawable.ic_close, 22) }, LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
+        addView(View(ctx), LayoutParams(0, 1, 1f))
+        addView(button("Off") { setBoardOn(false) }.apply { toolIcon(this, R.drawable.ic_whiteboard_off, 22) }, LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
         setBoardOn(prefs.getBoolean(PREF, true)); refresh()
     }
     internal fun colours(): List<Pair<String, Int>> {
@@ -117,12 +130,20 @@ internal class WhiteboardTools(ctx: Context, val board: Whiteboard) : LinearLayo
             "Green" to Ui.c(context, R.color.ag_green), "Orange" to Ui.c(context, R.color.ag_peach),
             (if (dark) "White" else "Black") to (if (dark) Color.WHITE else Color.BLACK))
     }
-    private fun toolIcon(view: android.widget.TextView, icon: Int, size: Int) {
+    private fun toolIcon(view: android.widget.TextView, icon: Int, size: Int, labelled: Boolean = false) {
         val drawable = context.getDrawable(icon)!!.mutate()
         drawable.setTint(Ui.c(context, R.color.ag_text))
         drawable.setBounds(0, 0, Ui.dp(context, size), Ui.dp(context, size))
-        view.setCompoundDrawables(drawable, null, null, null)
-        view.compoundDrawablePadding = Ui.dp(context, 4)
+        if (labelled) {
+            view.setCompoundDrawables(null, drawable, null, null)
+            view.compoundDrawablePadding = Ui.dp(context, 1)
+            view.setPadding(0, Ui.dp(context, 5), 0, 0)
+        } else {
+            view.text = ""
+            view.background = null
+            view.setCompoundDrawables(null, drawable, null, null)
+            view.setPadding(0, Ui.dp(context, 13), 0, 0)
+        }
     }
     internal fun paletteContent(onPick: () -> Unit = {}): View = android.widget.GridLayout(context).apply {
         columnCount = 3
@@ -140,7 +161,7 @@ internal class WhiteboardTools(ctx: Context, val board: Whiteboard) : LinearLayo
                         if (value == board.ink) setStroke(Ui.dp(context, 2), Ui.c(context, R.color.ag_text))
                     }
                 }, android.widget.FrameLayout.LayoutParams(Ui.dp(context, 32), Ui.dp(context, 32), android.view.Gravity.CENTER))
-                setOnClickListener { board.ink = value; board.erasing = false; refresh(); onPick() }
+                setOnClickListener { board.ink = value; board.erasing = false; board.drawingEnabled = true; refresh(); onPick() }
             }, android.widget.GridLayout.LayoutParams().apply { width = Ui.dp(context, 48); height = Ui.dp(context, 48) })
         }
     }
@@ -159,15 +180,20 @@ internal class WhiteboardTools(ctx: Context, val board: Whiteboard) : LinearLayo
     private fun refresh() {
         colour.setTextColor(board.ink)
         colour.contentDescription = "Whiteboard colour: " + (colours().firstOrNull { it.second == board.ink }?.first ?: "Text")
-        eraser.isSelected = board.erasing
-        eraser.text = if (board.erasing) "Eraser ✓" else "Eraser"
-        eraser.contentDescription = "Eraser, " + if (board.erasing) "selected" else "off"
+        listOf(pen to (board.drawingEnabled && !board.erasing), eraser to (board.drawingEnabled && board.erasing)).forEach { (view, selected) ->
+            view.isSelected = selected
+            view.contentDescription = "${view.text}, " + if (selected) "selected" else "off"
+            view.background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Ui.c(context, if (selected) R.color.ag_s0 else R.color.ag_base))
+                cornerRadius = Ui.dp(context, 10).toFloat()
+            }
+        }
     }
-    private fun button(label: String, action: () -> Unit) = StudyUi.label(context, label, 13, R.color.ag_text, 700).apply {
+    private fun button(label: String, action: () -> Unit) = StudyUi.label(context, label, 11, R.color.ag_text, 700).apply {
         gravity = android.view.Gravity.CENTER
-        minWidth = Ui.dp(context, 48); minHeight = Ui.dp(context, 48)
-        setPadding(Ui.dp(context, 10), 0, Ui.dp(context, 10), 0)
+        minHeight = Ui.dp(context, 48)
         contentDescription = "Whiteboard $label"
+        isFocusable = true
         setOnClickListener { action() }
     }
     internal fun setBoardOn(on: Boolean) {
@@ -195,9 +221,11 @@ internal class WhiteboardPaper(ctx: Context, private val card: View, private val
         paper.addView(card, LayoutParams(-1, -1)); paper.addView(board, LayoutParams(-1, -1))
         document.addView(paper); document.addView(more, LinearLayout.LayoutParams(-1, Ui.dp(ctx, 56)))
         scroll.isFillViewport = true; scroll.addView(document); addView(scroll, LayoutParams(-1, -1))
-        listOf("↑" to "Jump to top", "↓" to "Jump to last ink or card end").forEachIndexed { index, (text, label) ->
-            jumps.addView(StudyUi.label(ctx, text, 24, R.color.ag_text, 700).apply {
-                gravity = android.view.Gravity.CENTER; contentDescription = label
+        listOf(R.drawable.ic_whiteboard_up to "Jump to top", R.drawable.ic_whiteboard_down to "Jump to last ink or card end").forEachIndexed { index, (icon, label) ->
+            jumps.addView(android.widget.ImageView(ctx).apply {
+                setImageResource(icon); imageTintList = android.content.res.ColorStateList.valueOf(Ui.c(ctx, R.color.ag_text))
+                setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 12), Ui.dp(ctx, 12), Ui.dp(ctx, 12))
+                contentDescription = label
                 setBackgroundColor(Ui.c(ctx, R.color.ag_base))
                 setOnClickListener {
                     val bottom = if (index == 0) 0 else board.inkBottom

@@ -74,6 +74,106 @@ class WhiteboardTest {
         assertEquals(View.VISIBLE, reopened.visibility)
         tools.setBoardOn(false)
     }
+    private fun all(v: View): List<View> = listOf(v) + if (v is android.view.ViewGroup)
+        (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
+
+    @Test fun toolsToggleExclusivelyAndOffUsesExistingPreferenceAndCallback() {
+        val c = com.husarp.ankigo.shots.Shots.files(paparazzi.context)
+        val b = Whiteboard(c); val tools = WhiteboardTools(c, b)
+        tools.setBoardOn(true)
+        fun tool(label: String) = all(tools).filterIsInstance<android.widget.TextView>().single { it.text == label }
+        val pen = tool("Pen"); val eraser = tool("Eraser")
+        assertTrue(pen.isSelected); assertFalse(eraser.isSelected)
+        pen.performClick(); assertFalse(b.drawingEnabled); assertFalse(pen.isSelected)
+        stroke(b); assertEquals(0, b.strokeCount)
+        eraser.performClick(); assertTrue(b.drawingEnabled); assertTrue(b.erasing); assertTrue(eraser.isSelected)
+        pen.performClick(); assertTrue(b.drawingEnabled); assertFalse(b.erasing); assertFalse(eraser.isSelected)
+        eraser.performClick(); eraser.performClick()
+        assertFalse(b.drawingEnabled); assertFalse(eraser.isSelected); assertFalse(pen.isSelected)
+        all(tools.paletteContent()).first { it.contentDescription == "Whiteboard colour: Blue" }.performClick()
+        assertTrue(b.drawingEnabled); assertFalse(b.erasing); assertTrue(pen.isSelected)
+        var notified: Boolean? = null
+        tools.onChanged = { notified = it }
+        all(tools).single { it.contentDescription == "Whiteboard Off" }.performClick()
+        assertEquals(false, notified); assertFalse(tools.isOn)
+        assertFalse(c.getSharedPreferences("study", 0).getBoolean(WhiteboardTools.PREF, true))
+        assertFalse(WhiteboardTools(c, Whiteboard(c)).isOn)
+    }
+
+    @Test fun disabledToolPassesSingleFingerDragToPaperScrollAndCancelsPendingStroke() {
+        val c = com.husarp.ankigo.shots.Shots.files(paparazzi.context)
+        val b = Whiteboard(c)
+        val paper = WhiteboardPaper(c, View(c).apply { isClickable = true }, b)
+        all(paper).filterIsInstance<android.widget.TextView>().single { it.text == "+ More room" }.performClick()
+        paper.measure(View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(800, View.MeasureSpec.EXACTLY))
+        paper.layout(0, 0, 720, 800)
+        val down = MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, 100f, 600f, 0)
+        assertTrue(b.onTouchEvent(down)); down.recycle()
+        b.drawingEnabled = false
+        for ((index, action) in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP).withIndex()) {
+            val event = MotionEvent.obtain(0, index * 30L, action, 100f, 600f - index * 140f, 0)
+            assertFalse(b.onTouchEvent(event))
+            paper.dispatchTouchEvent(event); event.recycle()
+        }
+        assertEquals(0, b.strokeCount)
+        val scroll = all(paper).filterIsInstance<MotionScrollView>().single()
+        assertTrue("One finger scrolls the paper with both tools off", scroll.scrollY > 0)
+        b.drawingEnabled = true
+        stroke(b); assertEquals(1, b.strokeCount)
+    }
+
+    @Test fun compactToolbarAndExtendedPaperAtBothWidthsAndThemes() {
+        for (width in listOf(360, 412)) for (theme in com.husarp.ankigo.shots.Theme.entries) {
+            paparazzi.unsafeUpdateConfig(deviceConfig = com.husarp.ankigo.shots.Variant("phone", width, 800).device(theme))
+            val c = com.husarp.ankigo.shots.Shots.files(paparazzi.context)
+            val b = Whiteboard(c); val tools = WhiteboardTools(c, b)
+            tools.setBoardOn(true)
+            val paper = WhiteboardPaper(c, StudyUi.label(c, "What powers photosynthesis?", 20, com.husarp.ankigo.R.color.ag_text, 700).apply {
+                gravity = android.view.Gravity.CENTER
+                setBackgroundColor(Ui.c(c, com.husarp.ankigo.R.color.ag_card))
+            }, b)
+            tools.onChanged = { paper.setBoardOn(it) }
+            all(paper).filterIsInstance<android.widget.TextView>().single { it.text == "+ More room" }.performClick()
+            val root = android.widget.LinearLayout(c).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setBackgroundColor(Ui.c(c, com.husarp.ankigo.R.color.ag_base))
+                addView(tools, android.widget.LinearLayout.LayoutParams(-1, -2))
+                addView(paper, android.widget.LinearLayout.LayoutParams(-1, 0, 1f))
+            }
+            paparazzi.snapshot(root, name = "k-whiteboard-${width}-${theme.name.lowercase()}")
+            assertEquals(Ui.dp(c, 48), tools.height)
+            val pen = all(tools).filterIsInstance<android.widget.TextView>().single { it.text == "Pen" }
+            val dot = all(tools).single { it.contentDescription?.startsWith("Whiteboard colour:") == true }
+            assertTrue(pen.width - Ui.dp(c, 6) >= Ui.dp(c, 40))
+            assertTrue(dot.width >= Ui.dp(c, 40)); assertTrue(dot.height >= Ui.dp(c, 40))
+            assertTrue(dot.x < pen.right)
+            assertTrue(all(tools).filterIsInstance<android.widget.TextView>().filter { it != dot && it.text.isNotEmpty() }.all { it.text == "Pen" || it.text == "Eraser" })
+            assertTrue(all(tools).filter { it.isClickable }.all { it.right <= tools.width })
+            var colourTaps = 0
+            dot.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) colourTaps++
+                true
+            }
+            fun tap(x: Float) {
+                for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                    val event = MotionEvent.obtain(0, 0, action, x, tools.height / 2f, 0)
+                    tools.dispatchTouchEvent(event); event.recycle()
+                }
+            }
+            tap(dot.x + Ui.dp(c, 2).toFloat())
+            assertEquals(1, colourTaps); assertTrue(b.drawingEnabled)
+            var penTaps = 0
+            pen.setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) penTaps++
+                true
+            }
+            tap(pen.x + Ui.dp(c, 20))
+            assertEquals(1, penTaps); assertEquals(1, colourTaps)
+            pen.performClick(); assertFalse(b.drawingEnabled)
+            paparazzi.snapshot(root, name = "k-scroll-${width}-${theme.name.lowercase()}")
+        }
+    }
+
     @Test fun leavingAppDismissesColourDropdown() {
         AwayWindows.dismissAll()
         val c = com.husarp.ankigo.shots.Shots.files(paparazzi.context)
@@ -112,8 +212,8 @@ class WhiteboardTest {
     }
 
     @Test fun studyOverlayStaysInsideCardAndBelowCalmCoverInBothThemes() {
-        for (theme in com.husarp.ankigo.shots.Theme.values()) {
-            paparazzi.unsafeUpdateConfig(deviceConfig = com.husarp.ankigo.shots.Variant("phone", 360, 800).device(theme))
+        for (width in listOf(360, 412)) for (theme in com.husarp.ankigo.shots.Theme.values()) {
+            paparazzi.unsafeUpdateConfig(deviceConfig = com.husarp.ankigo.shots.Variant("phone", width, 800).device(theme))
             val c = com.husarp.ankigo.shots.Shots.files(paparazzi.context)
             com.husarp.ankigo.shots.FakeGame.install(c)
             val activity = com.husarp.ankigo.shots.attach(com.husarp.ankigo.StudyActivity(), com.husarp.ankigo.shots.ShotCtx(c))
@@ -131,9 +231,9 @@ class WhiteboardTest {
             val prepared = com.husarp.ankigo.study.Prepared(com.husarp.ankigo.study.StudyLoop.Key(10L, 0), emptyMap(), card)
             com.husarp.ankigo.shots.call(activity, "showCard", prepared, true)
             (com.husarp.ankigo.shots.getField(activity, "whiteboardTools") as WhiteboardTools).setBoardOn(true)
-            paparazzi.snapshot(field("root"), name = "whiteboard-${theme.name}")
+            paparazzi.snapshot(field("root"), name = "k-study-${width}-${theme.name.lowercase()}")
             val menu = activity.actionSheetContent {}
-            paparazzi.snapshot(menu, name = "d-whiteboard-menu-${theme.name}")
+            paparazzi.snapshot(menu, name = "k-menu-${width}-${theme.name.lowercase()}")
             fun all(v: View): List<View> = listOf(v) + if (v is android.view.ViewGroup)
                 (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
             val title = all(menu).filterIsInstance<android.widget.TextView>().single { it.text == "Whiteboard" }
@@ -148,7 +248,7 @@ class WhiteboardTest {
             val more = findMore(field("root"))!!
             assertTrue("More room is visible on the first layout", more.getGlobalVisibleRect(android.graphics.Rect()))
             more.performClick()
-            paparazzi.snapshot(field("root"), name = "whiteboard-extended-${theme.name}")
+            paparazzi.snapshot(field("root"), name = "k-study-extended-${width}-${theme.name.lowercase()}")
             stroke(board); assertEquals(1, board.strokeCount)
             com.husarp.ankigo.shots.call(activity, "cardConfirmed", prepared, true)
             assertEquals("confirmation keeps handwriting", 1, board.strokeCount)
