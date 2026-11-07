@@ -50,7 +50,7 @@ import java.lang.ref.WeakReference
 //
 // R14-B2-D: the "Daily gift" popup (the gift of the once-a-day goal moment, [GameEvent.DailyGift]) goes through the same queue: after the
 // achievements of a batch, before the found items; one gift per popup. It shows the item's picture (or the TM disc), its name with the count
-// in words, what the item does and the goal-streak line. An achievement tier with a reward (the Master Ball) says so on its popup.
+// in words, what the item does. An achievement tier with a reward (the Master Ball) says so on its popup.
 
 object AchievementPopup {
     internal val modes = listOf("Pop-up", "Small note", "Off")
@@ -309,7 +309,7 @@ object AchievementPopup {
 
     /**
      * The full-window layer of the "Item found" popup (shots render this view): one item = a big picture, its name, what it does and how many
-     * the bag holds now; several = a list. A tap outside the card or on "Nice" calls [onNice].
+     * are owned now (including held copies); several = a list. A tap outside the card or on "Nice" calls [onNice].
      */
     fun itemLayer(ctx: Context, finds: List<ItemFind>, onNice: () -> Unit): View {
         val frame = FrameLayout(ctx).apply { isClickable = true; setOnClickListener { onNice() } }
@@ -356,7 +356,7 @@ object AchievementPopup {
 
     /**
      * R14-B2-D: the full-window layer of the "Daily gift" popup (shots render this view): the item's picture (or the TM disc), the name with its
-     * count in words ("3 Poké Balls", "Great Ball", "TM Thunderbolt"), what it does, and the goal-streak line. A tap outside the card or on
+     * count in words ("3 Poké Balls", "Great Ball", "TM Thunderbolt"), what it does. A tap outside the card or on
      * "Nice" calls [onNice]. [data] null = no game data (the TM shows its move id and no type colour). [caught] (R18-H, PLAN 238): the Pokédex's caught species, so a stone does not name a Pokémon you never caught.
      */
     fun giftLayer(ctx: Context, data: GameData?, gift: GiftPop, onNice: () -> Unit, caught: Set<Int>? = null): View {
@@ -377,7 +377,6 @@ object AchievementPopup {
             else -> data?.let { ItemInfo.plain(ItemInfo.moveEffect(it, gift.tm.orEmpty())) }?.takeIf { it.isNotBlank() } ?: ItemInfo.tmHowToUse()
         }
         box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = what; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
-        box.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = DailyGift.streakLine(gift.streakDays); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 10) })
         box.addView(Ui.text(ctx, 14f, 900, R.color.ag_crust).apply {
             text = "Nice"; gravity = Gravity.CENTER; minHeight = Ui.dp(ctx, 48)
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 14, ctx); isClickable = true; setOnClickListener { onNice() }

@@ -145,6 +145,7 @@ ${if (io) IoScript.CSS else ""}
 $css
 </style>
 <style>
+${if (dark) "html,body,body.card,body.nightMode,body.night_mode{background:#202124!important;color:#e8eaed!important;color-scheme:dark}" else ""}
 /* Keep the study frame padding around the note's CSS. */
 body{margin:0;padding:14px 18px${if (side == "q") ";padding-bottom:30px" else ""}}
 </style>

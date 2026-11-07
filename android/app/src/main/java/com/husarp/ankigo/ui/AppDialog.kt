@@ -34,6 +34,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     private var sideMarginDp = 16
     private var title: CharSequence? = null
     private var infoHeader: View? = null
+    private var itemInfo = false
     private var message: CharSequence? = null
     private var customView: View? = null
     private var customScrollsItself = false
@@ -100,8 +101,8 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     internal fun joinStack() = WindowStack.add(this)
     private fun leftStack() = WindowStack.remove(this)
     override fun stackChanged(stacked: Boolean) {
-        closeAllView?.visibility = if (stacked && !detailsFooter) View.VISIBLE else View.GONE
-        (closeAllView?.parent as? View)?.visibility = if (!detailsFooter && (stacked || closeAtTop)) View.VISIBLE else View.GONE
+        closeAllView?.visibility = if (stacked && !detailsFooter && !itemInfo) View.VISIBLE else View.GONE
+        (closeAllView?.parent as? View)?.visibility = if (!detailsFooter && !itemInfo && (stacked || closeAtTop)) View.VISIBLE else View.GONE
     }
     private fun updateStackControl() = stackChanged(WindowStack.stacked(context))
 
@@ -344,6 +345,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
         }
         /** Fixed game-window header; the explanation below remains scrollable. */
         fun setInfoHeader(title: String, item: String? = null) = apply {
+            d.itemInfo = item != null
             d.infoHeader = LinearLayout(ctx).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 12), Ui.dp(ctx, 16), Ui.dp(ctx, 8))

@@ -206,8 +206,11 @@ internal class EvolutionRows(
             setPadding(Ui.dp(a, 24), 0, Ui.dp(a, 24), Ui.dp(a, 8))
             val item = Progression.evolutionItem(e)
             val text = EvolutionRowText.explanation(data, e, parent, seen, state, mon)
-            text.split("\n\n").filter { it.isNotBlank() }.forEachIndexed { index, paragraph ->
-                val heading = if (item == null) "Requirements" else when (index) { 0 -> "How to use"; 1 -> "Where to find"; else -> "Requirements" }
+            val paragraphs = text.split("\n\n").filter { it.isNotBlank() }
+            val sections = if (item == null) listOf("Requirements" to paragraphs.joinToString("\n\n")) else
+                listOf("How to use" to paragraphs.firstOrNull().orEmpty(), "Where to find" to paragraphs.getOrNull(1).orEmpty(),
+                    "Requirements" to paragraphs.drop(2).joinToString("\n\n"))
+            sections.filter { it.second.isNotBlank() }.forEach { (heading, paragraph) ->
                 addView(ItemCard.factBlock(a, heading, ""), LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
                 addView(Ui.text(a, 13.5f, 700, R.color.ag_sub1).apply {
                     setLineSpacing(0f, 1.1f)
@@ -246,8 +249,8 @@ internal object EvolutionRowText {
         val item = Progression.evolutionItem(e)
         val extra = if (item != null) {
             (state?.let {
-                if (it.count(item) == 0) "You don't have a ${Items.name(item)}."
-                else "You own ${it.count(item)} ${Items.name(item)}." +
+                if (it.ownedItemCount(item) == 0) "You don't have a ${Items.name(item)}."
+                else ItemInfo.plain(ItemInfo.ownLine(it, item)) + "." +
                     if (mon != null && parent?.num == mon.species) " Hold Evolve for one second to evolve." else ""
             } ?: "Requires ${Items.name(item)}.") +
                 "\n\nThe Shop sells evolution items on some days; they also drop while you study.\n\n"

@@ -68,7 +68,7 @@ class ItemCardPlanTest {
         assertEquals("Use", BagAct.of(ItemKind.ESCAPE)!!.label)
         assertEquals("Use on…", BagAct.of(ItemKind.HEAL)!!.label)
         assertEquals("Use on…", BagAct.of(ItemKind.EVOLUTION)!!.label)
-        assertEquals("Give to…", BagAct.of(ItemKind.HELD)!!.label)
+        assertEquals("Give to another Pokémon", BagAct.of(ItemKind.HELD)!!.label)
         assertEquals("Revive", BagAct.of(ItemKind.FOSSIL)!!.label)
         assertEquals("Teach…", BagAct.TEACH.label)
         assertNull("an item the catalogue does not know has no button", BagAct.of(null))

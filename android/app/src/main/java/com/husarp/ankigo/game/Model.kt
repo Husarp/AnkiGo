@@ -481,3 +481,7 @@ internal fun GameState.activeHeldItem(mon: Mon): String? {
     val side = when (mon.uid) { main?.uid -> fight.player; fight.wild.uid -> fight.enemy; else -> return mon.heldItem }
     return mon.heldItem.takeUnless { (side.volatiles["embargo"] ?: 0) > 0 || (fight.field.rooms["magicroom"] ?: 0) > 0 }
 }
+
+/** Inventory totals include copies assigned to an owned Pokémon; count() remains the spendable Bag quantity. */
+fun GameState.itemHolders(item: String): List<Mon> = mons.filter { it.heldItem == item }
+fun GameState.ownedItemCount(item: String): Int = count(item) + itemHolders(item).size

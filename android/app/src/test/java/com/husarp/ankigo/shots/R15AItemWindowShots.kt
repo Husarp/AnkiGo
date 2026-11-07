@@ -9,6 +9,7 @@ import android.widget.TextView
 import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.game.ItemInfo
+import com.husarp.ankigo.ui.AppDialog
 import com.husarp.ankigo.ui.CardKeys
 import com.husarp.ankigo.ui.ItemWindow
 import com.husarp.ankigo.ui.Pickers
@@ -211,16 +212,23 @@ class R15AItemWindowShots {
         }
     }
 
-    @Test fun aButtonThatOpensAPickerClosesTheWindowFirst() {
+    @Test fun consumingItemPickersCloseTheWindowWhileHeldTransfersKeepIt() {
         shoot("closes-first", listOf(P412), themes = listOf(Theme.LIGHT)) { ctx ->
-            // Use on… (a potion), Give to… (the amulet), Teach… (a TM), Revive (the fossil), Throw (a ball in a fight)
+            // Use on… (a potion), Give to another Pokémon (the amulet), Teach… (a TM), Revive (the fossil), Throw (a ball in a fight)
             for (uid in listOf("t2", "t3", "t5", "t6")) st.mon(uid)!!.moves.apply { clear(); add("tackle") } // some Pokémon that can still learn Thunderbolt
-            for ((key, button) in listOf(CardKeys.bagItem("super-potion") to "Use on…", CardKeys.bagItem("amulet-coin") to "Give to…",
+            for ((key, button) in listOf(CardKeys.bagItem("super-potion") to "Use on…", CardKeys.bagItem("amulet-coin") to "Give to another Pokémon",
                 CardKeys.bagTm("thunderbolt") to "Teach…", CardKeys.bagItem("helix-fossil") to "Revive", CardKeys.bagItem("poke-ball") to "Throw")) {
                 val (p, stage) = bagPage(ctx, key)
                 assertNotNull("$button: the window is open", p.itemWindow)
                 val (dialog, windowThen) = openedWith(p) { ShopCardKit.tap(ShopCardKit.findText(stage) { it == button }) }
                 assertNotNull("$button opens its picker or confirm", dialog)
+                if (button == "Give to another Pokémon") {
+                    assertEquals(true, windowThen)
+                    assertNotNull(p.itemWindow)
+                    (dialog as AppDialog).dismiss()
+                    p.onGone()
+                    continue
+                }
                 assertEquals("$button: the window was already gone when the dialog was shown", false, windowThen)
                 assertNull("$button: no window afterwards", p.itemWindow)
                 stage.render()

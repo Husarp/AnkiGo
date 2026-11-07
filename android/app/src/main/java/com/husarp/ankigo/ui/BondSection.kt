@@ -54,7 +54,7 @@ object BondSection {
         addView(line("Current bonuses\n+${Bond.coins(level)} coins / defeated Pokémon · +${Bond.xpPercent(level)}% XP" +
             if (tough > 0) "\n$tough% chance to survive a KO with 1 HP" else ""),
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
-        addView(line("+1 point / card while fighting · +3 / win\nSoothe Bell: ×1.5 points · No decay", true),
+        addView(line("+1 point / card while fighting · +3 / win\nSoothe Bell: ×1.5 points", true),
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
     }
 }

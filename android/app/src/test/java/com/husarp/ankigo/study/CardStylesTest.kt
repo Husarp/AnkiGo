@@ -27,11 +27,11 @@ class CardStylesTest {
         assertTrue(html.indexOf("ag-note-style") > html.indexOf(".ag-placeholder svg"))
     }
 
-    @Test fun authoredNightColoursAreNotOverriddenByMoreSpecificAppRules() {
+    @Test fun nightFrameOverridesDeckDefaultsWhileKeepingAuthoredMarkup() {
         val html = page(true).html
         assertTrue(html.contains(css))
         assertTrue(html.contains("card card2 chrome nightMode night_mode"))
-        assertFalse(html.contains("body.nightMode{"))
+        assertTrue(html.contains("background:#202124!important;color:#e8eaed!important"))
         assertTrue(html.contains("background:#202124")) // fallback stays available without note CSS
     }
 

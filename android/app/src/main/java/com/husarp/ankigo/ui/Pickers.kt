@@ -1,6 +1,7 @@
 package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.shownName
+import com.husarp.ankigo.game.ownedItemCount
 import com.husarp.ankigo.game.lookNum
 import android.content.Context
 import android.graphics.Color
@@ -164,7 +165,10 @@ object Pickers {
 
     /** Pick one of the bag items [ids] (icon, name, note, ×owned). */
     fun pickItem(a: Context, title: String, state: GameState, ids: List<String>, onPick: (String) -> Unit) {
-        rows(a, title, ids.size, { Bits.itemRow(a, ids[it], state.count(ids[it]).let { n -> "×$n" }) }) { onPick(ids[it]) }
+        rows(a, title, ids.size, { Bits.itemRow(a, ids[it], state.count(ids[it]).let { n ->
+            val total = state.ownedItemCount(ids[it])
+            if (total == n) "×$n" else "×$total · $n free"
+        }) }) { onPick(ids[it]) }
     }
 
     /** Pick one of the Pokémon's moves (returns its index 0..3). */

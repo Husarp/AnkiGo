@@ -11,7 +11,7 @@ class StudyDecksActivity : AgActivity() {
     override val showsUpdateBanner = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        startActivity(Nav.intent(this, Dest.STUDY))
+        startActivity(Nav.intent(this, Dest.STUDY).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
         finish()
     }
 }
