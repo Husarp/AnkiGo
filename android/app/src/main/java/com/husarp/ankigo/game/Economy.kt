@@ -47,7 +47,7 @@ object Items {
         "Combine with a regular ball: no catch bonus. The Repeat Ball returns with ${Tuning.REPEAT_RETURN_MISS_PERCENT}% chance on a miss, ${Tuning.REPEAT_RETURN_CATCH_PERCENT}% on a catch. The regular ball is always used up."
     else when (id) {
         "heal-ball" -> "Combine with a regular ball: HP IV +${Tuning.HEAL_IV_BONUS}, capped at ${Tuning.BALL_IV_CAP}."
-        "luxury-ball" -> "Combine with a regular ball: every IV +${Tuning.LUXURY_IV_BONUS}, capped at ${Tuning.BALL_IV_CAP}. Bond stays earned."
+        "luxury-ball" -> "Combine with a regular ball: every IV +${Tuning.LUXURY_IV_BONUS}, capped at ${Tuning.BALL_IV_CAP}."
         else -> "Combine with a regular ball: up to +${Tuning.SPECIAL_BONUS} percentage points (max ${Tuning.BALL_CHANCE_CAP}%). " + when (id) {
             "net-ball" -> "Against Water or Bug Pokémon."
             "dive-ball" -> "Against Water Pokémon."

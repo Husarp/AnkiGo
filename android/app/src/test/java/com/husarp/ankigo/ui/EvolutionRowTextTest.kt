@@ -12,7 +12,8 @@ class EvolutionRowTextTest {
         assertEquals("Bond ♥3\nat night", EvolutionRowText.condition(data, e))
         val mon = TestData.mon(data, 133, 20).apply { bondPoints = 124 }
         val text = EvolutionRowText.explanation(data, e, data.sp(133), setOf(133), null, mon)
-        assertTrue(text.contains("♥1 · 124 points. Needs ♥3"))
+        assertTrue(text.contains("Level 3 Bond"))
+        assertFalse(text.contains("124 points"))
         assertTrue(text.contains("18:00–06:00"))
         assertFalse(EvolutionRowText.explanation(data, e, data.sp(135), setOf(135), null, mon).contains("Bond now:"))
     }

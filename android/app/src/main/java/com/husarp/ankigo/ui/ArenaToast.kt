@@ -33,6 +33,7 @@ import kotlin.math.max
 enum class ToastKind(@DrawableRes val icon: Int, val neutral: Boolean = false) {
     /** Anything else about the app (an info line, a hint). */
     NEWS(R.drawable.ic_info),
+    BOND(R.drawable.ic_heart),
     /** A neutral note (nothing happened in the battle: a redo that does not count ...). */
     NOTE(R.drawable.ic_info, neutral = true),
     /** Answers played fast / the summary of a skipped pile of events. */
@@ -61,6 +62,7 @@ enum class ToastKind(@DrawableRes val icon: Int, val neutral: Boolean = false) {
     companion object {
         /** The kind for a [BattlePanelView.setLog] line: its pill word first ("FAST", "ITEM" ...), the log kind and the text for the rest. */
         fun of(kind: LogKind, pill: String, text: String = ""): ToastKind = when (pill.trim().uppercase()) {
+            "BOND ♥" -> BOND
             "FAST" -> FAST
             "OK" -> NEW_CARD_OK
             "UNDO" -> UNDO
@@ -83,6 +85,10 @@ object ToastText {
      * the colon becomes the small second line (as in the design page). Every other line is one text.
      */
     fun split(kind: ToastKind, text: String): Pair<String, String?> {
+        if (kind == ToastKind.BOND) {
+            val level = Regex("reached ♥([0-5])").find(text)?.groupValues?.get(1)
+            if (level != null) return "Reached Bond level $level" to null
+        }
         if (kind != ToastKind.CAUGHT_UP) return text to null
         val i = text.indexOf(": ")
         return if (i > 0 && i + 2 < text.length) text.substring(0, i) to text.substring(i + 2) else text to null
@@ -295,7 +301,7 @@ internal class ToastCard(ctx: Context, val item: ToastQueue.Item, look: ToastLoo
         // under the panel's text floor the text is raised: the icon, the paddings and the corners grow with it
         val k = TextMath.at(look.textSp, floor) / look.textSp
         fun px(v: Float) = Ui.dp(ctx, v * k).toInt()
-        setPadding(px(look.padStartDp), px(look.padVDp), px(look.padEndDp), px(look.padVDp))
+        setPadding(px(look.padStartDp), px(if (item.kind == ToastKind.BOND) 8f else look.padVDp), px(look.padEndDp), px(if (item.kind == ToastKind.BOND) 8f else look.padVDp))
         background = GradientDrawable().apply {
             setColor(ColorUtils.setAlphaComponent(Ui.c(ctx, R.color.ag_card), 0xF7))
             cornerRadius = Ui.dp(ctx, look.radiusDp * k)
@@ -303,14 +309,16 @@ internal class ToastCard(ctx: Context, val item: ToastQueue.Item, look: ToastLoo
         }
         elevation = Ui.dp(ctx, 3f)
         addView(ImageView(ctx).apply {
-            setImageResource(item.kind.icon)
-            setColorFilter(Ui.c(ctx, if (item.kind.neutral) R.color.ag_sub1 else R.color.ag_mauve), android.graphics.PorterDuff.Mode.SRC_IN)
+            if (item.kind == ToastKind.BOND) {
+                com.husarp.ankigo.GameRepo.state?.main?.let { Ui.staticSprite(ctx, it.species, it.shiny, this) }
+            } else setImageResource(item.kind.icon)
+            if (item.kind != ToastKind.BOND) setColorFilter(Ui.c(ctx, if (item.kind.neutral) R.color.ag_sub1 else R.color.ag_mauve), android.graphics.PorterDuff.Mode.SRC_IN)
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LayoutParams(px(look.iconDp), px(look.iconDp)).also { it.marginEnd = px(look.gapDp) })
+        }, LayoutParams(px(if (item.kind == ToastKind.BOND) 40f else look.iconDp), px(if (item.kind == ToastKind.BOND) 40f else look.iconDp)).also { it.marginEnd = px(look.gapDp) })
         val column = LinearLayout(ctx).apply { orientation = VERTICAL }
-        main = Ui.text(ctx, look.textSp, 800, R.color.ag_text).apply {
-            TextFloor.set(this, look.textSp, floor)
-            maxLines = look.mainLines
+        main = Ui.text(ctx, if (item.kind == ToastKind.BOND) 13f else look.textSp, 800, R.color.ag_text).apply {
+            TextFloor.set(this, if (item.kind == ToastKind.BOND) 13f else look.textSp, floor)
+            maxLines = if (item.kind == ToastKind.BOND) 2 else look.mainLines
             ellipsize = TextUtils.TruncateAt.END
             setLineSpacing(0f, 1.2f)
             text = PanelText.rich(ctx, item.text)
