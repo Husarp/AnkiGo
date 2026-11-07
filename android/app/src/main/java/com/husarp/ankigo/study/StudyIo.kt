@@ -37,6 +37,7 @@ object StudyIo {
         host?.let { return it }
         val app = ctx.applicationContext
         Anki.load(app)
+        com.husarp.ankigo.debug.LagLog.init(app)
         val io = ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, LinkedBlockingQueue()) { r -> Thread(r, "ankigo-study-io").apply { isDaemon = true } }
         val prefs = app.getSharedPreferences("study", 0)
         return AnswerHost(AnkiProvider(app), FileJournalStore(File(app.filesDir, FILE)), AndroidEnv(app), io, tryNotTop = { prefs.getBoolean(NOT_TOP_PREF, true) }).also {

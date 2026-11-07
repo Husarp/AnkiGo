@@ -48,12 +48,14 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
     private val bg = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private lateinit var header: TextView
+    private lateinit var lagSummary: TextView
     private lateinit var logView: TextView
     private lateinit var logScroll: ScrollView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Report.init(this)
+        com.husarp.ankigo.debug.LagLog.init(this)
         Anki.load(this)
         title = "Diagnostics"
         setContentView(buildContent())
@@ -85,6 +87,26 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             setPadding(Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 4), Ui.dp(this@DiagnosticsActivity, 12), Ui.dp(this@DiagnosticsActivity, 12))
         }
         root.addView(MotionScrollView(this).apply { isFillViewport = false; addView(body, ViewGroup.LayoutParams(-1, -2)) }, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        lagSummary = Ui.text(this, 12f, 600, R.color.ag_sub1).apply {
+            text = com.husarp.ankigo.debug.LagRecorder.summary("")
+            setLineSpacing(0f, 1.15f)
+        }
+        body.addView(Ui.card(this).apply {
+            addView(Ui.text(this@DiagnosticsActivity, 15f, 800, R.color.ag_text).apply { text = "Lag log" })
+            addView(Form.switchRow(this@DiagnosticsActivity, "Record study lag", null,
+                getSharedPreferences("study", 0).getBoolean(com.husarp.ankigo.debug.LagLog.PREF, true)) { on ->
+                com.husarp.ankigo.debug.LagLog.enable(this@DiagnosticsActivity, on)
+            })
+            addView(lagSummary)
+            addView(LinearLayout(this@DiagnosticsActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(Form.secondary(this@DiagnosticsActivity, "Share lag log") { shareLagLog() }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(Form.secondary(this@DiagnosticsActivity, "Clear") {
+                    com.husarp.ankigo.debug.LagLog.clear { refreshLagSummary() }
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+            })
+        }, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(this, 8) })
 
         // status card
         header = Ui.text(this, 12f, 700, R.color.ag_sub1).apply { setLineSpacing(0f, 1.15f) }
@@ -170,6 +192,37 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
     override fun onResume() {
         super.onResume()
         refreshHeader(log = false)
+        refreshLagSummary()
+    }
+
+    private fun refreshLagSummary() {
+        com.husarp.ankigo.debug.LagLog.snapshot { text ->
+            val summary = com.husarp.ankigo.debug.LagRecorder.summary(text)
+            main.post { if (!isFinishing && !isDestroyed) lagSummary.text = summary }
+        }
+    }
+
+    private fun shareLagLog() {
+        com.husarp.ankigo.debug.LagLog.snapshot { text ->
+            val result = runCatching {
+                val dir = File(cacheDir, "logs").apply { mkdirs() }
+                val file = File(dir, "ankigo-lag.txt")
+                file.writeText("AnkiGo study lag log\n" + com.husarp.ankigo.debug.LagRecorder.summary(text) + "\n\n" + text)
+                androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
+            }
+            main.post {
+                if (!isFinishing && !isDestroyed) result.fold(
+                    onSuccess = { uri ->
+                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri)
+                            .putExtra(Intent.EXTRA_SUBJECT, "AnkiGo lag log").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        send.clipData = ClipData.newRawUri("Lag log", uri)
+                        runCatching { startActivity(Intent.createChooser(send, "Share lag log")) }
+                            .onFailure { Ui.toast(this, "The lag log couldn't be shared") }
+                    },
+                    onFailure = { Ui.toast(this, "The lag log couldn't be shared") },
+                )
+            }
+        }
     }
 
     override fun onPause() {

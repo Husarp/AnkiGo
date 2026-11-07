@@ -45,7 +45,7 @@ sealed class Cmd<out T> {
     data class Show<T>(val card: Prepared<T>, val predicted: Boolean) : Cmd<T>()
 
     /** The predicted card on screen is the real one: refresh buttons / next times from [card], keep the side the user is on (R18-A: "Show answer" is never held, so the user may be on either side). */
-    data class Confirm<T>(val card: Prepared<T>) : Cmd<T>()
+    data class Confirm<T>(val card: Prepared<T>, val onTop: Boolean = true) : Cmd<T>()
 
     /** No card to show yet (nothing predicted): the usual waiting state. */
     object ShowWaiting : Cmd<Nothing>()
@@ -61,39 +61,10 @@ sealed class Cmd<out T> {
 }
 
 /**
- * The card slot of the study screen: which card is shown and whether AnkiDroid has confirmed it. Main thread only, pure.
- *
- * ```
- *  LOADING(token)              waiting for a load
- *  CONFIRMED(card, token)      AnkiDroid's real top card: answers and card actions act on it
- *  PREDICTED(card, token, afterSeq, held?)  the card expected after answer [afterSeq]; the confirm runs behind that write
- *  FINISHED / ERROR(msg)
- * ```
- * Every load result carries the token it was asked with; a result for an old token changes nothing. A swap always lands on the
- * question side. A prepared card (the prediction) is kept only for the card it was made for and only while that card is CONFIRMED,
- * and is used by the very next answer, only when [check] says it is safe (R10-X1, [PredictRule]); else that answer waits for the
- * real card. Card actions (bury, suspend, flag, move, delete, edit) only on [actionCard], which is null unless CONFIRMED.
- *
- * R18-A (278, "it lags while an answer is saved"): everything that needs AnkiDroid's CONFIRMATION waits for the confirming read,
- * and that read sits on the one io thread BEHIND the answer's write, which can take seconds in a slow phase (kernel throttling of
- * AnkiDroid's storage). So nothing the user does may wait for it:
- *  - "Show answer" on a PREDICTED card is never held: the answer side is in the prepared card. If the prediction turns out wrong, the
- *    swap puts the real card on its question side (PredictRule keeps that rare: a prediction is only shown when it is safe). An answer
- *    already made on that card is written to that card (never to another one) by the not-first path below, or not written, and told.
- *  - A tap on a PREDICTED card is answered at once when [maxAhead] allows and the card after it is prepared, safe to show ([PredictRule.check])
- *    and a main-queue card ([PredictRule.aheadOk]: the cards answered before it come back as learning cards, which may jump in front of a
- *    learning card read behind them):
- *    the answer is queued behind the earlier one, the card after it shows, and only the LAST answer's load confirms. The write of every
- *    answer still checks that its card is first in AnkiDroid's queue right before it is written ([AnswerQueue]); a card that is not (the
- *    prediction was wrong) is not written the usual way (PLAN 195's not-first path decides) and the final load swaps the screen to the real card.
- *    Else (the cap is reached, nothing safe to show next) the tap is held as before and acts when AnkiDroid confirms that card.
- * R19-R (278b): when [PredictRule] says LEARNING_DUE (a learning card came due while the card was on screen) the answer used to wait for the
- * real next card, behind the write. If the due learning card (due by the tap or within the write slack) is the unique earliest one ([PredictRule.firstLearning]) and was prepared by id
- * ([preparedLearning]), that card is predicted instead: shown at once, the confirm behind the write swaps it if it was wrong. Only after an
- * answer on a CONFIRMED card: an answer made ahead keeps the rule above (no learning card ahead, [PredictRule.aheadOk]), and a tap on the
- * predicted learning card itself is held until it is confirmed (nothing is prepared behind it).
- * Up to [maxAhead] + 1 cards after the confirmed one are prepared (queue order, [Cmd.Prepare]) so the chain of answers has cards to show.
- * [maxAhead] = 0 is the old behaviour (every tap on a predicted card is held).
+ * A short prepared queue, with token guards for every asynchronous result. A displayed prediction stays until answered:
+ * a different scheduler top becomes the NEXT candidate, never a replacement. Its answer keeps the displayed id/state and
+ * AnswerQueue's NOT_TOP verification/waiting path. Confirmation can refresh buttons on the same card only.
+ * Unsafe predictions and exhausted preparation still wait behind the write; maxAhead bounds speculative answers.
  */
 class NextCard<T>(
     private val deckId: Long,
@@ -109,7 +80,7 @@ class NextCard<T>(
 ) {
     sealed class Slot<out T> {
         data class Loading(val token: Int) : Slot<Nothing>()
-        data class Confirmed<T>(val card: Prepared<T>, val token: Int) : Slot<T>()
+        data class Confirmed<T>(val card: Prepared<T>, val token: Int, val onTop: Boolean = true) : Slot<T>()
         data class Predicted<T>(val card: Prepared<T>, val token: Int, val afterSeq: Long, val held: Held? = null) : Slot<T>()
         object Finished : Slot<Nothing>()
         data class Error(val message: String) : Slot<Nothing>()
@@ -131,7 +102,7 @@ class NextCard<T>(
     private var ahead = 0 // R18-A: answers made on unconfirmed cards since the last confirmed one
     private val burst = ArrayList<Long>() // R18-A: ids of the cards answered since the last confirmed one (their learning steps are not "due cards")
 
-    /** For the STUDY line: predictions shown / confirmed / swapped away, answers with nothing prepared, held taps dropped. */
+    /** For the STUDY line: predictions shown / confirmed / disagreed with, answers with nothing prepared, held taps dropped on leaving. */
     var predicted = 0
         private set
     var hits = 0
@@ -169,11 +140,11 @@ class NextCard<T>(
             (if (waits.isEmpty()) "" else waits.joinToString(", ", " (", ")") { "${it.first} ${it.second}" }) +
             (if (predictedLearning > 0) ", predicted learning $predictedLearning" else "") +
             (if (answeredAhead > 0) ", answered before the confirm $answeredAhead" else "") +
-            (if (heldDropped > 0) ", held taps dropped $heldDropped" else "")
+            (if (heldDropped > 0) ", held taps dropped on leaving $heldDropped" else "")
     }
 
     /** The card the card actions may act on: only a CONFIRMED one. */
-    fun actionCard(): Prepared<T>? = (slot as? Slot.Confirmed<T>)?.card
+    fun actionCard(): Prepared<T>? = (slot as? Slot.Confirmed<T>)?.takeIf { it.onTop }?.card
 
     /** The seq of the answer whose write the shown predicted card is waiting behind, else null. */
     fun waitingFor(): Long? = (slot as? Slot.Predicted<T>)?.afterSeq
@@ -205,7 +176,18 @@ class NextCard<T>(
         if (token != this.token) return emptyList()
         when (val s = slot) {
             is Slot.Loading -> {}
-            is Slot.Predicted -> { misses++; lastSwap = PredictRule.swapCause(answered, s.card.key, p, queue); dropHeld() } // the prediction was wrong: swap, the held tap is dropped
+            is Slot.Predicted -> {
+                if (s.card.key == p.key) return confirmed(token, p.key, queue)
+                misses++
+                lastSwap = PredictRule.swapCause(answered, s.card.key, p, queue)
+                forgetChain()
+                slot = Slot.Confirmed(s.card, token, onTop = false)
+                val remaining = queue.filter { it != s.card.key }
+                if (remaining.firstOrNull() == p.key) chain = Chain(s.card.key, token, arrayListOf(p))
+                val commands = listOf<Cmd<T>>(Cmd.Confirm(s.card, onTop = false))
+                return if (s.held != null) commands + answerOn(s.card, s.held.ease, s.held.tookMs)
+                else commands + prepareNext(p, remaining, 1).take(maxAhead)
+            }
             else -> return emptyList()
         }
         forgetChain()
@@ -225,7 +207,7 @@ class NextCard<T>(
     fun confirmed(token: Int, key: StudyLoop.Key, queue: List<StudyLoop.Key>, next: Prepared<T>? = null, refresh: (T) -> T = { it }): List<Cmd<T>> {
         if (token != this.token) return emptyList()
         val s = slot as? Slot.Predicted<T> ?: return emptyList()
-        if (s.card.key != key) { misses++; return reload() } // never happens with LoadPlan; never act on the wrong card if it does
+        if (s.card.key != key) return emptyList() // inconsistent result: never replace the display or discard its tap
         hits++
         val card = s.card.copy(view = refresh(s.card.view))
         slot = Slot.Confirmed(card, token)
@@ -239,7 +221,7 @@ class NextCard<T>(
     /** Nothing is due any more. */
     fun finished(token: Int): List<Cmd<T>> {
         if (!pending(token)) return emptyList()
-        dropHeld()
+        retainPrediction()?.let { return it }
         forgetChain()
         slot = Slot.Finished
         return listOf(Cmd.ShowFinished)
@@ -247,10 +229,18 @@ class NextCard<T>(
 
     fun failed(token: Int, message: String): List<Cmd<T>> {
         if (!pending(token)) return emptyList()
-        dropHeld()
+        retainPrediction()?.let { return it }
         forgetChain()
         slot = Slot.Error(message)
         return listOf(Cmd.ShowError(message))
+    }
+
+    private fun retainPrediction(): List<Cmd<T>>? {
+        val s = slot as? Slot.Predicted<T> ?: return null
+        forgetChain()
+        slot = Slot.Confirmed(s.card, token, onTop = false)
+        val commands = listOf<Cmd<T>>(Cmd.Confirm(s.card, onTop = false))
+        return if (s.held == null) commands else commands + answerOn(s.card, s.held.ease, s.held.tookMs)
     }
 
     /**
@@ -288,7 +278,7 @@ class NextCard<T>(
                 s.held != null -> emptyList()
                 // R18-A: answered at once, behind the write of the earlier answer(s), while the card after it can be shown safely
                 ahead < maxAhead -> makeAnswer(s.card, ease, tookMs, onPredicted = true) ?: hold(s, ease, tookMs)
-                else -> hold(s, ease, tookMs)
+                else -> { lastWait = "ahead limit"; hold(s, ease, tookMs) }
             }
             else -> emptyList()
         }
@@ -298,6 +288,18 @@ class NextCard<T>(
     private fun hold(s: Slot.Predicted<T>, ease: Int, tookMs: Long): List<Cmd<T>> {
         slot = s.copy(held = Held(ease, tookMs))
         return listOf(Cmd.ShowHeld(ease))
+    }
+
+    /** Persist an accepted tap before an explicit reload, Activity destruction or leaving the screen. */
+    fun releaseHeld(): List<Cmd<T>> {
+        val s = slot as? Slot.Predicted<T> ?: return emptyList()
+        val tap = s.held ?: return emptyList()
+        val id = s.card.before["_id"]?.toLongOrNull() ?: return emptyList()
+        if (!AnswerState.usable(s.card.before)) return emptyList()
+        slot = s.copy(held = null)
+        lastWait = "leaving with held answer"
+        return listOf(Cmd.Enqueue(QueuedAnswer(newSeq(), deckId, s.card.key.nid, s.card.key.ord, id,
+            s.card.before, tap.ease, tap.tookMs, now())))
     }
 
     private fun pending(token: Int) = token == this.token && (slot is Slot.Loading || slot is Slot.Predicted<*>)
@@ -338,7 +340,10 @@ class NextCard<T>(
         val seen = made?.let { unburst(it) }
         val why = if (seen == null) null else check(card, seen, at + depth * PredictRule.SLACK_MS)
         val guess = made?.takeIf { why == PredictRule.Why.SAFE && (!onPredicted || PredictRule.aheadOk(it)) }   // R18-A: after an answer made ahead only a main-queue card may be shown ahead
-        if (onPredicted && guess == null) return null
+        if (onPredicted && guess == null) {
+            lastWait = if (why == PredictRule.Why.SAFE) "learning card after ahead answer" else why?.label ?: NOTHING
+            return null
+        }
         // R19-R (278b): a learning card came due: instead of the wait, the due card itself when it is certainly the first (never after an answer made ahead: just returned above)
         val learn = if (seen != null && guess == null && why == PredictRule.Why.LEARNING_DUE) c?.learn?.takeIf { PredictRule.firstLearning(card, seen, it, at) } else null
         val shown = if (freshNext) null else guess ?: learn

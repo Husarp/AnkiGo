@@ -290,8 +290,9 @@ class R18AWriteLagTest {
         assertEquals(AnswerOutcome.Reason.NOT_TOP, (r.s.terminal(a3) as AnswerOutcome.NotWritten).reason)
         assertEquals("nothing was written to a card that was not first", 0, r.fake.notTopWrites)
         assertEquals(1, r.s.p.nc.misses)
-        val swapTo = r.s.log.first { it.second.startsWith("show:C:") && it.first > t }
-        assertEquals("the real first card is shown, on its question: ${swapTo.second}", "show:C:${card(7)}", swapTo.second)
+        val shown = r.s.log.indexOfFirst { it.second == "show:P:${card(7)}" && it.first > t }
+        val retainedTap = r.s.log.indexOfFirst { it.second == "enqueue:3:${card(4)}" }
+        assertTrue("the real next card follows the retained card's answer", retainedTap >= 0 && shown > retainedTap)
         r.s.check()
     }
 
@@ -308,8 +309,9 @@ class R18AWriteLagTest {
         assertEquals("cards 1, 2 and 3 were written, each once and in order; card 7 (first) was not touched", listOf(1L, 2L, 3L), r.fake.revlog.take(3).map { it.cardId })
         assertTrue("card 7 was not written before it was shown", r.fake.revlog.indexOfFirst { it.cardId == 7L } >= 3)
         for (i in 0..2) assertTrue("answer ${i + 1} saved: ${r.s.terminal(r.s.made[i])}", r.s.terminal(r.s.made[i]) is AnswerOutcome.Saved)
-        val swapTo = r.s.log.first { it.second.startsWith("show:C:") && it.first > t }
-        assertEquals("the real first card comes on its question", "show:C:${card(7)}", swapTo.second)
+        val shown = r.s.log.indexOfFirst { it.second == "show:P:${card(7)}" && it.first > t }
+        val retainedTap = r.s.log.indexOfFirst { it.second == "enqueue:3:${card(4)}" }
+        assertTrue("the scheduler's real next card appears after the shown card is answered", retainedTap >= 0 && shown > retainedTap)
         r.s.check(allowNotTopWrites = true)
     }
 

@@ -93,6 +93,10 @@ object StudyTiming {
         return Plan(act, millis)
     }
 
+    /** A late disagreement ends the confirmation wait for answers, while card actions still require the scheduler top. */
+    fun waitsForConfirmation(predicted: Boolean, reconciled: Boolean, act: Act?): Boolean =
+        predicted && act != null && act != Act.SHOW_ANSWER && act != Act.REMINDER && (!reconciled || act == Act.BURY)
+
     /** The part of the countdown still to run, 0..1. */
     fun left(totalMs: Long, startedAt: Long, now: Long) = if (totalMs <= 0) 0f else (1f - (now - startedAt).coerceAtLeast(0).toFloat() / totalMs).coerceIn(0f, 1f)
 

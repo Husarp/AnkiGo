@@ -1,6 +1,6 @@
 package com.husarp.ankigo.study
 
-/** Due searches are hints for recovery, never authority to reorder scheduler cards. */
+/** Due searches prioritize learning/review entries already supplied by the scheduler. */
 object DueOrder {
     val COLS = arrayOf("note_id", "ord", "queue", "due")
 
@@ -13,9 +13,16 @@ object DueOrder {
         return valid.firstOrNull { it["queue"] in setOf("1", "3", "4") } ?: valid.firstOrNull()
     }
 
-    /** Search results can detect a stale empty queue, but must never override the scheduler's order. */
+    /** Only real scheduler entries may move ahead of new cards. Searches never supply answer metadata. */
     fun <T> prioritize(scheduled: List<T>, due: List<Map<String, String?>>, expand: () -> List<T>, key: (T) -> StudyLoop.Key): List<T> {
-        if (scheduled.isNotEmpty() || first(due) == null) return scheduled
-        return expand()
+        val ranks = due.mapNotNull { row ->
+            val nid = row["note_id"]?.toLongOrNull() ?: return@mapNotNull null
+            val ord = row["ord"]?.toIntOrNull() ?: return@mapNotNull null
+            val rank = when (row["queue"]) { "1", "3", "4" -> 0; "2" -> 1; else -> return@mapNotNull null }
+            StudyLoop.Key(nid, ord) to rank
+        }.toMap()
+        if (ranks.isEmpty()) return scheduled
+        val real = if (scheduled.any { key(it) in ranks }) scheduled else expand()
+        return real.sortedBy { ranks[key(it)] ?: 2 }
     }
 }

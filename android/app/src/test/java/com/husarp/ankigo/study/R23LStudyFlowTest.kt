@@ -34,10 +34,10 @@ class R23LStudyFlowTest {
         assertNull(DueOrder.first(listOf(row(1, 0), row(2, -1))))
     }
 
-    @Test fun schedulerOrderIsKeptWhenSearchSuggestsADueReview() {
+    @Test fun realScheduledDueReviewPrecedesNew() {
         val queue = listOf(key(1), key(2), key(3))
         val next = DueOrder.prioritize(queue, listOf(row(2, 2)), { error("unnecessary expanded read") }) { it }
-        assertEquals(queue, next)
+        assertEquals(listOf(key(2), key(1), key(3)), next)
     }
 
     @Test fun emptySchedulerCanBeReadAgainWhenSearchReportsDueCards() {

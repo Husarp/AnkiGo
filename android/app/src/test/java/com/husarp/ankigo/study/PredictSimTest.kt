@@ -68,6 +68,7 @@ class PredictSimTest {
         val nc = if (rule) NextCard<String>(1, { ++id }, { m.nowMs }, maxAhead = ahead, check = PredictRule::check) else NextCard<String>(1, { ++id }, { m.nowMs }, maxAhead = ahead)
         class W(val key: StudyLoop.Key, val ease: Int, val tapAt: Long)
         val writes = ArrayDeque<W>()
+        val waiting = ArrayList<W>()
         var ioFreeAt = 0L // answers ahead: the writes run one after the other; this is when the last one ended
         val io = ArrayDeque<() -> Unit>()
         var answers = 0
@@ -80,15 +81,24 @@ class PredictSimTest {
                     while (writes.isNotEmpty()) {
                         val w = writes.removeFirst()
                         val card = m.byKey(w.key)
-                        if (ahead == 0) { m.answer(card, w.ease); continue }
+                        if (ahead == 0) {
+                            if (m.order().first() === card) m.answer(card, w.ease) else { wrongWrites++; waiting += w }
+                            continue
+                        }
                         // answers ahead: the write starts when the one before it ended (or at the tap) and ends up to 4.5 s later, whatever the user did meanwhile
                         ioFreeAt = maxOf(ioFreeAt, w.tapAt) + rng.nextLong(0, 4_500)
                         val now = m.nowMs
                         m.nowMs = ioFreeAt
-                        if (m.order().first() !== card) wrongWrites++ else m.answer(card, w.ease)
+                        if (m.order().first() !== card) { wrongWrites++; waiting += w } else m.answer(card, w.ease)
                         m.nowMs = maxOf(now, ioFreeAt)
                     }
-                    val q = m.order().take(maxOf(3, ahead + 2))
+                    while (true) {
+                        val top = m.order().firstOrNull() ?: break
+                        val held = waiting.firstOrNull { it.key.nid == top.id } ?: break
+                        waiting.remove(held)
+                        m.answer(top, held.ease)
+                    }
+                    val q = m.order().filterNot { c -> waiting.any { it.key.nid == c.id } }.take(maxOf(3, ahead + 2))
                     val keys = q.map { StudyLoop.Key(it.id, 0) }
                     cmds(when (val step = LoadPlan.decide(keys, c.predicted)) {
                         LoadPlan.Step.Finished -> nc.finished(c.token)
@@ -110,6 +120,7 @@ class PredictSimTest {
             cmds(nc.tapAnswer(listOf(1, 1, 2, 3, 3, 3, 4)[rng.nextInt(7)], 1000))
         }
         assertTrue("seed $seed: the deck is finished", nc.slot is NextCard.Slot.Finished)
+        assertTrue("seed $seed: every refused answer was written when its card was first", waiting.isEmpty())
         return Run(answers, nc.predicted, nc.misses, nc.withheld.values.sum() + nc.noPrediction, nc.answeredAhead, wrongWrites)
     }
 

@@ -17,6 +17,7 @@ class AnswerHostTest {
 
     private class Env : AnswerHost.Env {
         val posted = LinkedBlockingQueue<Runnable>()   // the main thread's queue
+        val posts = AtomicInteger()
         val log = CopyOnWriteArrayList<String>()
         val expects = AtomicInteger(); val cancels = AtomicInteger()
         val pins = CopyOnWriteArrayList<Boolean>()   // the `pinned` flag of every expect, in order
@@ -30,7 +31,7 @@ class AnswerHostTest {
         @Volatile var onSettle: ((QueuedAnswer) -> Unit)? = null
         /** What the game decides for replayed answers; default: none of them is in the save yet, so each gets its game step now. */
         @Volatile var onRestored: ((List<QueuedAnswer>, () -> Unit) -> Unit)? = null
-        override fun post(r: Runnable) { posted += r }
+        override fun post(r: Runnable) { posted += r; posts.incrementAndGet() }
         override fun elapsed() = System.nanoTime() / 1_000_000L
         override fun expect(before: Map<String, String?>, pinned: Boolean) { expects.incrementAndGet(); pins += pinned; onExpect?.invoke(before, pinned) }
         override fun cancel(before: Map<String, String?>) { cancels.incrementAndGet(); onCancel?.invoke(before) }
@@ -149,7 +150,7 @@ class AnswerHostTest {
             r.host.enqueue(a, "front", screen)
             val order = CopyOnWriteArrayList<String>()
             val postedWhenLoadRan = AtomicInteger(-1)
-            r.host.submit(null, Runnable { postedWhenLoadRan.set(r.env.posted.size); order += "load" })
+            r.host.submit(null, Runnable { postedWhenLoadRan.set(r.env.posts.get()); order += "load" })
             assertTrue(gate.inWrite.await(10, TimeUnit.SECONDS))
             Thread.sleep(300)
             assertTrue("the load must not run while the write is in flight", order.isEmpty())
@@ -480,6 +481,11 @@ class AnswerHostTest {
             val screen = Screen(); w.host.start(); w.host.register(screen)
             for (i in 1..3) w.fake.plan("answer", F.THROW_BEFORE) // never applied
             w.whileAway = { w.host.discard(w.answer.seq) }
+            val pinAtTap = w.env.onGame
+            w.env.onGame = { answer ->
+                Thread.sleep(100) // expose a failed write racing the tap's expectation, without production delays
+                pinAtTap?.invoke(answer)
+            }
             w.host.enqueue(w.answer, "front", screen)
             w.env.pumpUntil { screen.outcomes.isNotEmpty() }
             assertEquals(AnswerOutcome.Reason.DISCARDED, (screen.outcomes.single().first as AnswerOutcome.NotWritten).reason)
@@ -627,4 +633,20 @@ class AnswerHostTest {
     }
 
     private companion object { const val AWAY_MS = 300_000L }
+    @Test fun aGameStepFailureStillWritesTheJournalledAnswer() {
+        val r = Rig()
+        try {
+            val screen = Screen(); r.host.start(); r.host.register(screen)
+            r.env.onGame = { throw IllegalStateException("fake game failure") }
+            val answer = entry(r.host, r.fake)
+            try { r.host.enqueue(answer, "front", screen); fail("the game failure must reach its caller") }
+            catch (_: IllegalStateException) {}
+            r.env.pumpUntil { screen.outcomes.isNotEmpty() }
+            assertTrue(screen.outcomes.single().first is AnswerOutcome.Saved)
+            assertEquals(1, r.fake.revlog.size)
+            assertEquals(0, r.host.queue.size)
+            assertTrue(AnswerJournal.decode(r.store.text).answers.isEmpty())
+        } finally { r.close() }
+    }
+
 }

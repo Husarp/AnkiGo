@@ -48,6 +48,13 @@ object Anki {
     val permission get() = "$pkg.permission.READ_WRITE_DATABASE"
     fun uri(path: String): Uri = Uri.parse("content://$authority/$path")
 
+    private fun providerQuery(ctx: Context, target: Uri, cols: Array<String>?, selection: String?, args: Array<String>?, order: String?): Cursor? =
+        com.husarp.ankigo.debug.LagLog.provider("query:${target.path}") { ctx.contentResolver.query(target, cols, selection, args, order) }
+    private fun providerUpdate(ctx: Context, target: Uri, values: ContentValues, selection: String?, args: Array<String>?): Int =
+        com.husarp.ankigo.debug.LagLog.provider("update:${target.path}") { ctx.contentResolver.update(target, values, selection, args) }
+    private fun providerInsert(ctx: Context, target: Uri, values: ContentValues): Uri? =
+        com.husarp.ankigo.debug.LagLog.provider("insert:${target.path}") { ctx.contentResolver.insert(target, values) }
+
     fun load(ctx: Context) {
         pkg = ctx.getSharedPreferences("spike", 0).getString("pkg", null)
             ?: installed(ctx).firstOrNull()?.pkg ?: "com.ichi2.anki"
@@ -76,73 +83,79 @@ object Anki {
 
     /** Reads every row as column->string map. */
     fun rows(c: Cursor?): List<Map<String, String?>> {
-        if (c == null) return emptyList()
-        c.use {
-            val out = ArrayList<Map<String, String?>>()
-            while (it.moveToNext()) {
-                val m = LinkedHashMap<String, String?>()
-                for (i in 0 until it.columnCount) m[it.getColumnName(i)] = if (it.isNull(i)) null else try {
-                    it.getString(i)
-                } catch (e: Exception) {
-                    "<${e.javaClass.simpleName}>"
+        return com.husarp.ankigo.debug.LagLog.provider("rows") {
+            if (c == null) return@provider emptyList()
+            c.use {
+                val out = ArrayList<Map<String, String?>>()
+                while (it.moveToNext()) {
+                    val m = LinkedHashMap<String, String?>()
+                    for (i in 0 until it.columnCount) m[it.getColumnName(i)] = if (it.isNull(i)) null else try {
+                        it.getString(i)
+                    } catch (e: Exception) {
+                        "<${e.javaClass.simpleName}>"
+                    }
+                    out.add(m)
                 }
-                out.add(m)
+                return@provider out
             }
-            return out
         }
     }
 
     fun decks(ctx: Context): List<Deck> {
-        val c = ctx.contentResolver.query(uri("decks"), null, null, null, null) ?: return emptyList()
-        val out = ArrayList<Deck>()
-        c.use {
-            while (it.moveToNext()) {
-                val counts = it.str("deck_count")?.let { s -> JSONArray(s) }
-                out.add(
-                    Deck(
-                        it.lng("deck_id"), it.str("deck_name") ?: "?",
-                        counts?.optInt(0) ?: -1, counts?.optInt(1) ?: -1, counts?.optInt(2) ?: -1,
-                        it.str("deck_dyn") == "1" || it.str("deck_dyn") == "true",
-                    ),
-                )
+        return com.husarp.ankigo.debug.LagLog.provider("decks") {
+            val c = providerQuery(ctx, uri("decks"), null, null, null, null) ?: return@provider emptyList()
+            val out = ArrayList<Deck>()
+            c.use {
+                while (it.moveToNext()) {
+                    val counts = it.str("deck_count")?.let { s -> JSONArray(s) }
+                    out.add(
+                        Deck(
+                            it.lng("deck_id"), it.str("deck_name") ?: "?",
+                            counts?.optInt(0) ?: -1, counts?.optInt(1) ?: -1, counts?.optInt(2) ?: -1,
+                            it.str("deck_dyn") == "1" || it.str("deck_dyn") == "true",
+                        ),
+                    )
+                }
             }
+            return@provider out
         }
-        return out
     }
 
     fun selectDeck(ctx: Context, deckId: Long): Int {
         val v = ContentValues(); v.put("deck_id", deckId)
-        return ctx.contentResolver.update(uri("selected_deck"), v, null, null)
+        return providerUpdate(ctx, uri("selected_deck"), v, null, null)
     }
 
-    fun selectedDeck(ctx: Context): List<Map<String, String?>> = rows(ctx.contentResolver.query(uri("selected_deck"), null, null, null, null))
+    fun selectedDeck(ctx: Context): List<Map<String, String?>> = rows(providerQuery(ctx, uri("selected_deck"), null, null, null, null))
 
     /** The selected deck with its counts (one deck, not the whole list like [decks]); null when there are none. */
     fun selectedDeckInfo(ctx: Context): Deck? = selectedDeck(ctx).firstOrNull()?.let { Deck.from(it) }
 
     fun nextCards(ctx: Context, deckId: Long, limit: Int = 1): List<Review> {
-        val c = ctx.contentResolver.query(uri("schedule"), null, "limit=?, deckID=?", arrayOf(limit.toString(), deckId.toString()), null)
-            ?: return emptyList()
-        val out = ArrayList<Review>()
-        c.use {
-            while (it.moveToNext()) {
-                val times = it.str("next_review_times")?.let { s -> JSONArray(s) }
-                val media = it.str("media_files")?.let { s -> JSONArray(s) }
-                out.add(
-                    Review(
-                        it.lng("note_id"), it.lng("ord").toInt(), it.lng("button_count").toInt(),
-                        (0 until (times?.length() ?: 0)).map { i -> times!!.optString(i) },
-                        (0 until (media?.length() ?: 0)).map { i -> media!!.optString(i) },
-                    ),
-                )
+        return com.husarp.ankigo.debug.LagLog.provider("nextCards") {
+            val c = providerQuery(ctx, uri("schedule"), null, "limit=?, deckID=?", arrayOf(limit.toString(), deckId.toString()), null)
+                ?: return@provider emptyList()
+            val out = ArrayList<Review>()
+            c.use {
+                while (it.moveToNext()) {
+                    val times = it.str("next_review_times")?.let { s -> JSONArray(s) }
+                    val media = it.str("media_files")?.let { s -> JSONArray(s) }
+                    out.add(
+                        Review(
+                            it.lng("note_id"), it.lng("ord").toInt(), it.lng("button_count").toInt(),
+                            (0 until (times?.length() ?: 0)).map { i -> times!!.optString(i) },
+                            (0 until (media?.length() ?: 0)).map { i -> media!!.optString(i) },
+                        ),
+                    )
+                }
             }
+            return@provider out
         }
-        return out
     }
 
     /** question/answer HTML (+ whatever extra columns this version knows). */
     fun card(ctx: Context, nid: Long, ord: Int, cols: Array<String> = CARD_DEFAULT_COLS): Map<String, String?>? =
-        rows(ctx.contentResolver.query(uri("notes/$nid/cards/$ord"), cols, null, null, null)).firstOrNull()
+        rows(providerQuery(ctx, uri("notes/$nid/cards/$ord"), cols, null, null, null)).firstOrNull()
 
     /** Extended stats columns if supported, else null + logs which failed. */
     fun cardStats(ctx: Context, nid: Long, ord: Int): Map<String, String?>? = try {
@@ -152,10 +165,12 @@ object Anki {
     }
 
     fun note(ctx: Context, nid: Long): Note? {
-        val c = ctx.contentResolver.query(uri("notes/$nid"), null, null, null, null) ?: return null
-        c.use {
-            if (!it.moveToFirst()) return null
-            return Note(nid, it.lng("mid"), (it.str("flds") ?: "").split('\u001f'), it.str("tags") ?: "")
+        return com.husarp.ankigo.debug.LagLog.provider("note") {
+            val c = providerQuery(ctx, uri("notes/$nid"), null, null, null, null) ?: return@provider null
+            c.use {
+                if (!it.moveToFirst()) return@provider null
+                return@provider Note(nid, it.lng("mid"), (it.str("flds") ?: "").split('\u001f'), it.str("tags") ?: "")
+            }
         }
     }
 
@@ -170,31 +185,35 @@ object Anki {
 
     private val modelCache = java.util.concurrent.ConcurrentHashMap<String, Cached<Model>>()
     fun model(ctx: Context, mid: Long): Model? {
-        modelCache["$pkg/$mid"]?.takeIf { it.fresh() }?.let { return it.value }
-        val c = ctx.contentResolver.query(uri("models/$mid"), null, null, null, null) ?: return null
-        c.use {
-            if (!it.moveToFirst()) return null
-            val names = (it.str("field_names") ?: "").let { s ->
-                try {
-                    JSONArray(s).let { a -> (0 until a.length()).map { i -> a.getString(i) } }
-                } catch (_: Exception) {
-                    s.split('\u001f')
+        return com.husarp.ankigo.debug.LagLog.provider("model") {
+            modelCache["$pkg/$mid"]?.takeIf { it.fresh() }?.let { return@provider it.value }
+            val c = providerQuery(ctx, uri("models/$mid"), null, null, null, null) ?: return@provider null
+            c.use {
+                if (!it.moveToFirst()) return@provider null
+                val names = (it.str("field_names") ?: "").let { s ->
+                    try {
+                        JSONArray(s).let { a -> (0 until a.length()).map { i -> a.getString(i) } }
+                    } catch (_: Exception) {
+                        s.split('\u001f')
+                    }
                 }
+                val m = Model(mid, it.str("name") ?: "?", it.str("css") ?: "", names, it.lng("type").toInt())
+                modelCache["$pkg/$mid"] = Cached(m)
+                return@provider m
             }
-            val m = Model(mid, it.str("name") ?: "?", it.str("css") ?: "", names, it.lng("type").toInt())
-            modelCache["$pkg/$mid"] = Cached(m)
-            return m
         }
     }
 
     private val templateCache = java.util.concurrent.ConcurrentHashMap<String, Cached<List<com.husarp.ankigo.study.TtsRules.Template>>>()
     /** The card templates (question/answer format) of a note type; only read for cards that have speech. */
     fun templates(ctx: Context, mid: Long): List<com.husarp.ankigo.study.TtsRules.Template> {
-        templateCache["$pkg/$mid"]?.takeIf { it.fresh() }?.let { return it.value }
-        val rows = rows(ctx.contentResolver.query(uri("models/$mid/templates"), null, null, null, null))
-        val out = rows.map { com.husarp.ankigo.study.TtsRules.Template(it["ord"]?.toIntOrNull() ?: 0, it["question_format"] ?: "", it["answer_format"] ?: "") }
-        if (out.isNotEmpty()) templateCache["$pkg/$mid"] = Cached(out)
-        return out
+        return com.husarp.ankigo.debug.LagLog.provider("templates") {
+            templateCache["$pkg/$mid"]?.takeIf { it.fresh() }?.let { return@provider it.value }
+            val rows = rows(providerQuery(ctx, uri("models/$mid/templates"), null, null, null, null))
+            val out = rows.map { com.husarp.ankigo.study.TtsRules.Template(it["ord"]?.toIntOrNull() ?: 0, it["question_format"] ?: "", it["answer_format"] ?: "") }
+            if (out.isNotEmpty()) templateCache["$pkg/$mid"] = Cached(out)
+            return@provider out
+        }
     }
 
     /** ease 1..4. Returns update count (AnkiDroid swallows errors and still returns 1, so callers verify). */
@@ -211,17 +230,17 @@ object Anki {
         }
         val v = ContentValues()
         v.put("note_id", nid); v.put("ord", ord); v.put("answer_ease", ease); v.put("time_taken", timeTakenMs)
-        return ctx.contentResolver.update(uri("schedule"), v, null, null)
+        return providerUpdate(ctx, uri("schedule"), v, null, null)
     }
 
     fun bury(ctx: Context, nid: Long, ord: Int): Int {
         val v = ContentValues(); v.put("note_id", nid); v.put("ord", ord); v.put("buried", 1)
-        return ctx.contentResolver.update(uri("schedule"), v, null, null)
+        return providerUpdate(ctx, uri("schedule"), v, null, null)
     }
 
     fun suspend(ctx: Context, nid: Long, ord: Int): Int {
         val v = ContentValues(); v.put("note_id", nid); v.put("ord", ord); v.put("suspended", 1)
-        return ctx.contentResolver.update(uri("schedule"), v, null, null)
+        return providerUpdate(ctx, uri("schedule"), v, null, null)
     }
 
     /** Deletes the whole note (all its cards) — the API has no single-card delete. */
@@ -235,7 +254,7 @@ object Anki {
     fun createDeck(ctx: Context, name: String, desc: String? = null): Long {
         val v = ContentValues(); v.put("deck_name", name)
         if (!desc.isNullOrBlank()) v.put("deck_desc", desc)
-        val made = ctx.contentResolver.insert(uri("decks"), v) ?: throw IllegalStateException("AnkiDroid returned no deck")
+        val made = providerInsert(ctx, uri("decks"), v) ?: throw IllegalStateException("AnkiDroid returned no deck")
         return made.lastPathSegment?.toLongOrNull() ?: throw IllegalStateException("AnkiDroid returned no deck id")
     }
 
@@ -245,7 +264,7 @@ object Anki {
      */
     fun moveCard(ctx: Context, nid: Long, ord: Int, deckId: Long): Int {
         val v = ContentValues(); v.put("deck_id", deckId)
-        return ctx.contentResolver.update(uri("notes/$nid/cards/$ord"), v, null, null)
+        return providerUpdate(ctx, uri("notes/$nid/cards/$ord"), v, null, null)
     }
 
     /**
@@ -254,19 +273,19 @@ object Anki {
      */
     fun updateNoteFields(ctx: Context, nid: Long, fields: List<String>): Int {
         val v = ContentValues(); v.put("flds", fields.joinToString("\u001f"))
-        return ctx.contentResolver.update(uri("notes/$nid"), v, null, null)
+        return providerUpdate(ctx, uri("notes/$nid"), v, null, null)
     }
 
     /** One projected note search instead of a provider round trip for every note/card. Includes subdecks. */
     fun deckTags(ctx: Context, deckName: String): List<String> {
-        val cursor = ctx.contentResolver.query(uri("notes"), arrayOf("tags"),
+        val cursor = providerQuery(ctx, uri("notes"), arrayOf("tags"),
             "deck:${com.husarp.ankigo.study.StudyFilter.quote(deckName)}", null, null)
         // The notes endpoint returns null for an empty search (documented provider behaviour).
         return com.husarp.ankigo.study.StudyTags.parse(rows(cursor).mapNotNull { it["tags"] })
     }
 
     fun searchCards(ctx: Context, query: String, cols: Array<String>): List<Map<String, String?>> =
-        rows(ctx.contentResolver.query(uri("cards"), cols, query, null, null))
+        rows(providerQuery(ctx, uri("cards"), cols, query, null, null))
 
     /**
      * How many cards match the Anki search [query] (AnkiDroid 2.24+, FlashCardsContract cards URI). With the projection
@@ -275,13 +294,13 @@ object Anki {
      * SecurityException; both are for the caller to handle. No provider -> 0.
      */
     fun countCards(ctx: Context, query: String): Int =
-        ctx.contentResolver.query(uri("cards"), arrayOf("_id"), query, null, null)?.use { it.count } ?: 0
+        com.husarp.ankigo.debug.LagLog.provider("countCards") { providerQuery(ctx, uri("cards"), arrayOf("_id"), query, null, null)?.use { it.count } ?: 0 }
 
     fun cardById(ctx: Context, id: Long): Map<String, String?>? =
-        rows(ctx.contentResolver.query(uri("cards/$id"), CardState.COLS, null, null, null)).firstOrNull()
+        rows(providerQuery(ctx, uri("cards/$id"), CardState.COLS, null, null, null)).firstOrNull()
 
     fun deckOptions(ctx: Context, id: Long): String =
-        rows(ctx.contentResolver.query(uri("decks/$id"), arrayOf("deck_id", "options"), null, null, null)).firstOrNull()?.get("options") ?: "{}"
+        rows(providerQuery(ctx, uri("decks/$id"), arrayOf("deck_id", "options"), null, null, null)).firstOrNull()?.get("options") ?: "{}"
 
     fun studySupported(ctx: Context): Boolean {
         val version = installed(ctx).firstOrNull { it.pkg == pkg } ?: return false
@@ -293,7 +312,7 @@ object Anki {
     } ?: false
     fun flag(ctx: Context, nid: Long, ord: Int, value: Int): Boolean {
         val v = ContentValues().apply { put("flags", value) }
-        ctx.contentResolver.update(uri("notes/$nid/cards/$ord"), v, null, null)
+        providerUpdate(ctx, uri("notes/$nid/cards/$ord"), v, null, null)
         return cardStats(ctx, nid, ord)?.get("flags")?.toIntOrNull() == value
     }
     fun reviewIntent(deckId: Long) = android.content.Intent("android.intent.action.VIEW").apply {
@@ -313,7 +332,7 @@ object Anki {
      */
     fun revlogProbe(ctx: Context, sqlTail: String): List<Map<String, String?>> {
         val proj = arrayOf("_id", "guid", "mid", "mod", "usn", "tags", "flds", "sfld", "csum", "flags", "data")
-        return rows(ctx.contentResolver.query(uri("notes_v2"), proj, "0 UNION $sqlTail", null, null))
+        return rows(providerQuery(ctx, uri("notes_v2"), proj, "0 UNION $sqlTail", null, null))
     }
 
     fun reviewsTodayViaRevlog(ctx: Context): Int? = try {

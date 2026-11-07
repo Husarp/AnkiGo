@@ -124,6 +124,7 @@ class AnswerHost(
 
     private class Meta(val front: String?, @Volatile var owner: StudyListener?)
 
+    private val queuedAt = ConcurrentHashMap<Long, Long>()
     private val metas = ConcurrentHashMap<Long, Meta>() // in memory only; never persisted
     private val listeners = ArrayList<StudyListener>()
     private val orphans = ArrayList<AnswerOutcome>()
@@ -142,10 +143,25 @@ class AnswerHost(
         override fun journalFailed(reason: String) = env.log("the answer journal could not be written: $reason")
         override fun note(text: String) = env.log(text)
         override fun answerTimed(answer: QueuedAnswer, attempt: Int, ms: Long) {
+            com.husarp.ankigo.debug.LagLog.record("WRITE", "card" to answer.cardId, "seq" to answer.seq, "attempt" to attempt, "ms" to ms)
             env.log("answer write: seq ${answer.seq} deck ${answer.deckId} card ${answer.cardId} attempt $attempt, ANSWER $ms ms")
+        }
+        override fun notTop(answer: QueuedAnswer) {
+            com.husarp.ankigo.debug.LagLog.record("NOT_TOP", "card" to answer.cardId, "seq" to answer.seq)
         }
         override fun outcome(o: AnswerOutcome) {
             val at = env.elapsed()
+            val status = when (o) {
+                is AnswerOutcome.Saved -> "written"
+                is AnswerOutcome.AlreadySaved -> "already_written"
+                is AnswerOutcome.NotWritten -> o.reason.name
+                is AnswerOutcome.Waiting -> "NOT_TOP_waiting"
+                is AnswerOutcome.Retrying -> "retry"
+            }
+            com.husarp.ankigo.debug.LagLog.record("ANSWER", "card" to o.answer.cardId, "seq" to o.answer.seq, "status" to status,
+                "ms" to (queuedAt[o.answer.seq]?.let { at - it } ?: (wallNow() - o.answer.madeAt)).coerceAtLeast(0),
+                "attempt" to when (o) { is AnswerOutcome.Retrying -> o.attempt; is AnswerOutcome.Saved -> o.attempts; else -> 0 })
+            if (o.isTerminal) queuedAt.remove(o.answer.seq)
             val writeMs = if (o.isTerminal || o is AnswerOutcome.Waiting) at - drainStart else -1L
             if (writeMs >= 0) drainStart = at   // R18-A: answers made ahead are written one after the other in one drain: each one's time starts where the one before it ended
             env.post(Runnable { onOutcome(o, writeMs, at) })
@@ -156,7 +172,7 @@ class AnswerHost(
 
     private val drainTask = Runnable {
         drainStart = env.elapsed()
-        try { queue.drain() } catch (e: Exception) { env.log("writing the answers failed: ${e.javaClass.simpleName} ${e.message}") }
+        try { com.husarp.ankigo.debug.LagLog.study { queue.drain() } } catch (e: Exception) { env.log("writing the answers failed: ${e.javaClass.simpleName} ${e.message}") }
     }
 
     // ---------------------------------------------------------------- start
@@ -220,6 +236,8 @@ class AnswerHost(
      */
     fun enqueue(a: QueuedAnswer, front: String?, owner: StudyListener?): Boolean {
         val meta = Meta(front, owner)
+        queuedAt[a.seq] = env.elapsed()
+        com.husarp.ankigo.debug.LagLog.record("QUEUED", "card" to a.cardId, "seq" to a.seq)
         metas[a.seq] = meta
         val journalAt = env.elapsed()
         val persisted = queue.enqueue(a) // the journal first, then the entry can run
@@ -228,10 +246,13 @@ class AnswerHost(
         count++
         state = Unresolved(count, since, 0, null, false, a.seq)
         broadcast()
-        execute(drainTask) // before any load the caller queues next
-        env.gameStep(a, front) { events, gameMs ->
-            val (screen, mine) = route(meta)
-            screen?.gameDone(a, events, -1, gameMs, mine)
+        try {
+            env.gameStep(a, front) { events, gameMs ->
+                val (screen, mine) = route(meta)
+                screen?.gameDone(a, events, -1, gameMs, mine)
+            }
+        } finally {
+            execute(drainTask) // after the tap's expectation is installed, before any load the caller queues next
         }
         return persisted
     }

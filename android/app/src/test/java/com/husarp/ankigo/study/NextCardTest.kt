@@ -188,35 +188,38 @@ class NextCardTest {
         assertEquals("and nothing is predicted", Cmd.ShowWaiting, r.nc.tapAnswer(3, 1)[1])
     }
 
-    @Test fun aSwapLandsOnTheQuestionSideAndDropsTheHeldTapQuietly() {
-        val r = ready(); r.nc.tapAnswer(3, 1); r.nc.tapAnswer(4, 900) // held on card 2
-        val cmds = r.nc.swapped(2, card(1), queue(1, 5, 6)) // Again: card 1 came back first
-        assertEquals(Cmd.Show(card(1), predicted = false), cmds[0])
-        assertEquals(Cmd.Prepare(key(5), key(1), 2), cmds[1])
-        assertEquals(NextCard.Slot.Confirmed(card(1), 2), r.nc.slot)
-        assertTrue(cmds.none { it is Cmd.Enqueue })
-        assertEquals(1, r.nc.misses); assertEquals(1, r.nc.heldDropped); assertEquals(0, r.nc.hits)
+    @Test fun aMismatchKeepsTheHeldAnswerBoundToTheDisplayedCard() {
+        val r = ready(); r.nc.tapAnswer(3, 1); r.nc.tapAnswer(4, 900)
+        val cmds = r.nc.swapped(2, card(1), queue(1, 5, 6))
+        assertEquals(Cmd.Confirm(card(2), onTop = false), cmds[0])
+        val answer = cmds.filterIsInstance<Cmd.Enqueue>().single().answer
+        assertEquals(2L, answer.cardId); assertEquals(4, answer.ease); assertEquals(900L, answer.tookMs)
+        assertEquals(Cmd.Show(card(1), predicted = true), cmds[2])
+        assertEquals(1, r.nc.misses); assertEquals(0, r.nc.heldDropped)
     }
 
-    @Test fun loadedWhileAPredictionShowsCountsAsASwapToo() {
+    @Test fun loadedSamePredictionConfirmsAndPreservesTheTap() {
         val r = ready(); r.nc.tapAnswer(3, 1); r.nc.tapAnswer(4, 900)
-        r.nc.loaded(2, card(2), queue(2, 3)) // even the same card: no held tap may survive a swap
-        assertEquals(NextCard.Slot.Confirmed(card(2), 2), r.nc.slot)
-        assertEquals(1, r.nc.heldDropped)
+        val cmds = r.nc.loaded(2, card(2), queue(2, 3))
+        assertEquals(2L, cmds.filterIsInstance<Cmd.Enqueue>().single().answer.cardId)
+        assertEquals(0, r.nc.heldDropped); assertEquals(1, r.nc.hits)
     }
 
-    @Test fun aConfirmForTheWrongCardNeverActsItReloads() {
+    @Test fun anInconsistentConfirmNeverChangesTheDisplayOrTap() {
         val r = ready(); r.nc.tapAnswer(3, 1); r.nc.tapAnswer(4, 900)
-        val cmds = r.nc.confirmed(2, key(9), queue(9, 2))
-        assertEquals(listOf<Cmd<String>>(Cmd.Load(3, null)), cmds)
-        assertEquals(NextCard.Slot.Loading(3), r.nc.slot); assertEquals(1, r.nc.heldDropped)
+        val before = r.nc.slot
+        assertTrue(r.nc.confirmed(2, key(9), queue(9, 2)).isEmpty())
+        assertEquals(before, r.nc.slot); assertEquals(0, r.nc.heldDropped)
     }
 
-    @Test fun finishedOrFailedWhilePredictedDropsTheHeldTap() {
-        val r = ready(); r.nc.tapAnswer(3, 1); r.nc.tapAnswer(4, 900)
-        assertEquals(listOf<Cmd<String>>(Cmd.ShowFinished), r.nc.finished(2)); assertEquals(1, r.nc.heldDropped)
-        val r2 = ready(); r2.nc.tapAnswer(3, 1); r2.nc.tapAnswer(4, 900)
-        r2.nc.failed(2, "x"); assertEquals(1, r2.nc.heldDropped); assertNull(r2.nc.actionCard())
+    @Test fun finishedOrFailedWhilePredictedPreservesTheHeldAnswer() {
+        for (failed in listOf(false, true)) {
+            val r = ready(); r.nc.tapAnswer(3, 1); r.nc.tapAnswer(4, 900)
+            val cmds = if (failed) r.nc.failed(2, "x") else r.nc.finished(2)
+            assertEquals(Cmd.Confirm(card(2), onTop = false), cmds.first())
+            assertEquals(2L, cmds.filterIsInstance<Cmd.Enqueue>().single().answer.cardId)
+            assertEquals(0, r.nc.heldDropped)
+        }
     }
 
     @Test fun reloadWhilePredictedDropsTheHeldTapAndTheNextConfirmIsIgnored() {
@@ -307,7 +310,7 @@ class NextCardTest {
 
     // ---- fuzz: whatever order events arrive in, no answer acts on an unconfirmed card or the wrong one
 
-    @Test fun randomEventOrdersNeverAnswerAnUnconfirmedOrWrongCard() {
+    @Test fun randomEventOrdersKeepAnswersBoundToTheShownCard() {
         for (seed in 1..300) {
             val rng = Random(seed)
             var seq = 0L
@@ -317,12 +320,12 @@ class NextCardTest {
             fun run(cmds: List<Cmd<String>>) {
                 for (c in cmds) when (c) {
                     is Cmd.Show -> shown = c.card.key to !c.predicted
-                    is Cmd.Confirm -> shown = c.card.key to true
+                    is Cmd.Confirm -> shown = c.card.key to c.onTop
                     Cmd.ShowWaiting, Cmd.ShowFinished, is Cmd.ShowError -> shown = null
                     is Cmd.Load -> tokenAsked = c.token
                     is Cmd.Enqueue -> {
                         val s = shown
-                        assertTrue("seed $seed: answer acted on ${s}", s != null && s.second && s.first == c.answer.key)
+                        assertTrue("seed $seed: answer acted on ${s}", s != null && s.first == c.answer.key)
                     }
                     else -> {}
                 }
@@ -393,7 +396,7 @@ class NextCardTest {
         assertEquals("predicted 0 (hit 0, swap 0), waited 0", r.nc.tally())
         r.nc.tapAnswer(3, 1); r.nc.confirmed(2, r.key(2), listOf(r.key(2), r.key(3)), next = r.card(3)) // hit; card 3 predicted for card 2
         r.nc.tapAnswer(3, 1); r.nc.swapped(3, r.card(8), listOf(r.key(8), r.key(3))) // swap
-        r.nc.prepared(r.key(8), 3, r.card(3)); r.why = PredictRule.Why.LEARNING_DUE
+        r.why = PredictRule.Why.LEARNING_DUE
         r.nc.tapAnswer(3, 1); r.nc.loaded(4, r.card(3), listOf(r.key(3))) // held back
         r.nc.tapAnswer(3, 1) // nothing prepared (the last card)
         assertEquals("predicted 2 (hit 1, swap 1), waited 2 (learning card due 1, nothing prepared 1)", r.nc.tally())
@@ -421,11 +424,14 @@ class NextCardTest {
         assertEquals(NextCard.Slot.Confirmed(card(2, "c2*"), 2), r.nc.slot)
     }
 
-    @Test fun aSwapOfAPredictedCardAlwaysShowsTheQuestionOfTheRealCard() {
+    @Test fun aMismatchPreparesTheRealCardForTheFollowingTurn() {
         val r = ready(); r.nc.tapAnswer(3, 1)
         val cmds = r.nc.swapped(2, card(5), queue(5, 6))
-        assertEquals("the new card shows its question", Cmd.Show(card(5), predicted = false), cmds[0])
-        assertTrue(cmds.none { it is Cmd.Confirm })
-        assertEquals(NextCard.Slot.Confirmed(card(5), 2), r.nc.slot)
+        assertTrue(cmds.none { it is Cmd.Show })
+        assertEquals(Cmd.Confirm(card(2), onTop = false), cmds.first())
+        assertEquals(NextCard.Slot.Confirmed(card(2), 2, onTop = false), r.nc.slot)
+        assertNull(r.nc.actionCard())
+        assertEquals(Cmd.Show(card(5), predicted = true), r.nc.tapAnswer(3, 1)[1])
     }
+
 }

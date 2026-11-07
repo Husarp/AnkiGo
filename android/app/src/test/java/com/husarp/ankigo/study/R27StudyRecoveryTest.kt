@@ -19,9 +19,9 @@ class R27StudyRecoveryTest {
         assertEquals(1, result.retries)
     }
 
-    @Test fun dueLearningBehindTheSchedulerTopMustNeverBeDisplayedFirst() {
+    @Test fun realScheduledDueLearningPrecedesNewCards() {
         val actual = listOf(key(1), key(9))
-        assertEquals(actual, DueOrder.prioritize(actual, listOf(due(9)), { error("no expansion needed") }) { it })
+        assertEquals(listOf(key(9), key(1)), DueOrder.prioritize(actual, listOf(due(9)), { error("no expansion needed") }) { it })
     }
 
     @Test fun missingLearningSearchResultDoesNotBlockTheRealSchedulerTop() {

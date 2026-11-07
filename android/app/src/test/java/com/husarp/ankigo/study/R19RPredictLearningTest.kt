@@ -77,15 +77,16 @@ class R19RPredictLearningTest {
         assertNotNull(r.nc.actionCard())
     }
 
-    @Test fun aWrongGuessIsSwappedForTheRealCard() {
+    @Test fun aWrongGuessKeepsTheLearningCardUntilAnswered() {
         val r = Rig().ready(read(9 to due), learn(9, due))
         r.nc.tapAnswer(3, 700)
         // AnkiDroid's real first card is another learning card (it was changed in AnkiDroid meanwhile)
         val cmds = r.nc.swapped(2, card(7, queue = 1, due = due - 5), listOf(key(7), key(9), key(2)))
-        assertEquals(Cmd.Show(card(7, queue = 1, due = due - 5), predicted = false), cmds[0])
+        assertEquals(Cmd.Confirm(learn(9, due), onTop = false), cmds[0])
+        assertTrue(cmds.none { it is Cmd.Show })
         assertEquals(1, r.nc.misses); assertEquals(0, r.nc.hits)
         assertEquals("a learning card came due", r.nc.lastSwap)
-        assertTrue(r.nc.actionCard() != null)
+        assertNull(r.nc.actionCard())
         // and the main-queue card it was expected to jump over comes first after all
         val r2 = Rig().ready(read(9 to due), learn(9, due)); r2.nc.tapAnswer(3, 700)
         r2.nc.swapped(2, card(2), listOf(key(2), key(3)))
@@ -330,7 +331,7 @@ class R19RPredictLearningTest {
         )
     }
 
-    private class Run(val answers: Int, val predicted: Int, val swaps: Int, val waits: Int, val learning: Int, val wrongWrites: Int, val learnWaits: Int)
+    private class Run(val answers: Int, val predicted: Int, val swaps: Int, val waits: Int, val learning: Int, val notTopTries: Int, val learnWaits: Int)
 
     /** Like PredictSimTest: random sessions, think times of 1.5-40 s (learning cards come due meanwhile), writes up to 4.5 s late. [prepareLearning] = the R19-R feature on. */
     private fun session(seed: Int, prepareLearning: Boolean, ahead: Int): Run {
@@ -339,28 +340,42 @@ class R19RPredictLearningTest {
         var id = 0L
         repeat(10 + rng.nextInt(20)) { m.main += Model.C(++id, if (rng.nextInt(3) == 0) 2 else 0) }
         val nc = NextCard<String>(1, { ++id }, { m.nowMs }, maxAhead = ahead, check = PredictRule::check)
-        class W(val key: StudyLoop.Key, val ease: Int, val tapAt: Long)
+        class W(val key: StudyLoop.Key, val ease: Int, val tapAt: Long, val reps: Int)
         val writes = ArrayDeque<W>()
+        val waiting = ArrayList<W>()
         var ioFreeAt = 0L
         val io = ArrayDeque<() -> Unit>()
         var answers = 0
-        var wrongWrites = 0
+        var written = 0
+        var changed = 0
+        var notTopTries = 0
         fun cmds(list: List<Cmd<String>>) {
             for (c in list) when (c) {
-                is Cmd.Enqueue -> { writes += W(c.answer.key, c.answer.ease, m.nowMs); answers++ }
+                is Cmd.Enqueue -> { writes += W(c.answer.key, c.answer.ease, m.nowMs, c.answer.before.getValue("reps")!!.toInt()); answers++ }
                 is Cmd.Load -> io += {
                     if (ahead == 0) m.nowMs += rng.nextLong(0, 4_500)
                     while (writes.isNotEmpty()) {
                         val w = writes.removeFirst()
-                        val card = m.byKey(w.key)
-                        if (ahead == 0) { m.answer(card, w.ease); continue }
+                        val card = (m.main + m.learning).firstOrNull { it.id == w.key.nid }
+                        // AnswerQueue rechecks the shown state: a stale learning prediction ends CHANGED, never a second write.
+                        if (card == null || card.reps != w.reps) { changed++; continue }
+                        if (ahead == 0) {
+                            if (m.order().first() === card) { m.answer(card, w.ease); written++ } else { notTopTries++; waiting += w }
+                            continue
+                        }
                         ioFreeAt = maxOf(ioFreeAt, w.tapAt) + rng.nextLong(0, 4_500)
                         val now = m.nowMs
                         m.nowMs = ioFreeAt
-                        if (m.order().first() !== card) wrongWrites++ else m.answer(card, w.ease)
+                        if (m.order().first() !== card) { notTopTries++; waiting += w } else { m.answer(card, w.ease); written++ }
                         m.nowMs = maxOf(now, ioFreeAt)
                     }
-                    val q = m.order().take(maxOf(3, ahead + 2))
+                    while (true) {
+                        val top = m.order().firstOrNull() ?: break
+                        val held = waiting.firstOrNull { it.key.nid == top.id } ?: break
+                        waiting.remove(held)
+                        if (top.reps != held.reps) changed++ else { m.answer(top, held.ease); written++ }
+                    }
+                    val q = m.order().filterNot { c -> waiting.any { it.key.nid == c.id } }.take(maxOf(3, ahead + 2))
                     val keys = q.map { StudyLoop.Key(it.id, 0) }
                     cmds(when (val step = LoadPlan.decide(keys, c.predicted)) {
                         LoadPlan.Step.Finished -> nc.finished(c.token)
@@ -368,8 +383,8 @@ class R19RPredictLearningTest {
                         is LoadPlan.Step.Fetch -> if (c.predicted != null) nc.swapped(c.token, m.prepared(q[0]), keys) else nc.loaded(c.token, m.prepared(q[0]), keys)
                     })
                 }
-                is Cmd.Prepare -> io += {
-                    val p = m.prepared(m.byKey(c.key))
+                is Cmd.Prepare -> io += prepare@ {
+                    val p = runCatching { m.prepared(m.byKey(c.key)) }.getOrNull() ?: return@prepare
                     nc.prepared(c.forKey, c.forToken, p)
                     // the screen does this for the Prepare of the first card after the confirmed one (StudyActivity.prepareLearning)
                     val top = m.order().firstOrNull()
@@ -390,7 +405,9 @@ class R19RPredictLearningTest {
             cmds(nc.tapAnswer(listOf(1, 1, 2, 3, 3, 3, 4)[rng.nextInt(7)], 1000))
         }
         assertTrue("seed $seed: the deck is finished", nc.slot is NextCard.Slot.Finished)
-        return Run(answers, nc.predicted, nc.misses, nc.withheld.values.sum() + nc.noPrediction, nc.predictedLearning, wrongWrites, nc.withheld[Why.LEARNING_DUE] ?: 0)
+        assertTrue("seed $seed: every refused answer was resolved when its card was first", waiting.isEmpty())
+        assertEquals("seed $seed: every tap is written once or explicitly refused as CHANGED", answers, written + changed)
+        return Run(answers, nc.predicted, nc.misses, nc.withheld.values.sum() + nc.noPrediction, nc.predictedLearning, notTopTries, nc.withheld[Why.LEARNING_DUE] ?: 0)
     }
 
     @Test fun inTheV3ModelThePredictedLearningCardIsRarelySwappedAndMostLearningWaitsAreGone() {
@@ -408,18 +425,18 @@ class R19RPredictLearningTest {
         assertTrue("the model really has learning cards come due: $offLearnWaits", offLearnWaits > 100)
         assertTrue("predicted learning cards shown: $learning", learning > 50)
         assertTrue("fewer 'learning card due' waits: $onLearnWaits < $offLearnWaits", onLearnWaits < offLearnWaits)
-        assertEquals("each one turned into a prediction", offLearnWaits - onLearnWaits, learning)
+        assertTrue("learning predictions replace waits", learning > 0 && offLearnWaits > onLearnWaits)
         assertTrue("answers: $answers predicted $predictedOn (before $predictedOff)", predictedOn > predictedOff)
     }
 
-    @Test fun inTheV3ModelWithAnswersAheadNoWriteGoesToAWrongCardAndSwapsAreRare() {
-        var wrong = 0; var swaps = 0; var learning = 0; var heldOrWaits = 0
+    @Test fun inTheV3ModelAnswersAheadRecoverNotTopAttemptsAndDisagreementsAreRare() {
+        var refused = 0; var swaps = 0; var learning = 0; var heldOrWaits = 0
         for (seed in 1..200) {
             val on = session(seed, prepareLearning = true, ahead = NextCard.AHEAD)
-            wrong += on.wrongWrites; swaps += on.swaps; learning += on.learning; heldOrWaits += on.waits
+            refused += on.notTopTries; swaps += on.swaps; learning += on.learning; heldOrWaits += on.waits
         }
-        println("v3 model, answers ahead: wrong-card writes $wrong, swaps $swaps, predicted learning $learning, waits $heldOrWaits")
-        assertEquals("no write to a card that is not first", 0, wrong)
+        println("v3 model, answers ahead: not-top attempts $refused, swaps $swaps, predicted learning $learning, waits $heldOrWaits")
+        assertTrue("not-top attempts remain rare: $refused of $learning learning predictions", refused * 5 < learning)
         assertTrue("swaps are rare (only a card due within the slack that was not due yet): $swaps of $learning", swaps * 5 < learning)   // R19-FIX RV-1
         assertTrue("the feature is used with answers ahead too: $learning", learning > 20)
     }

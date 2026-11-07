@@ -102,10 +102,26 @@ class R16LDiagnosticsShots {
         assertTrue("log box lies inside the page's scrolling content", log.parent.parent === page || log.parent === page.getChildAt(0))
         // the log sits right under the status card (its buttons, then the box), above the option groups
         val body = page.getChildAt(0) as ViewGroup
-        assertEquals(2, body.indexOfChild(log))
+        assertEquals(3, body.indexOfChild(log))
         assertTrue("log above the groups", body.indexOfChild(log) < body.indexOfChild(group(headers(content).first())))
         // the log opens at its end
         val inner = (getField(a, "logView") as TextView)
         assertEquals(inner.height - log.height, log.scrollY)
     }
+    @Test fun lagLogIsAtTheTopWithSummaryAndShareClearControls() {
+        val content = page(setup()).second as ViewGroup
+        val body = (content.getChildAt(1) as ScrollView).getChildAt(0) as ViewGroup
+        val texts = ArrayList<String>()
+        fun walk(v: View) {
+            if (v is TextView) texts += v.text.toString()
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(body.getChildAt(0))
+        assertTrue(texts.contains("Lag log"))
+        assertTrue(texts.contains("Record study lag"))
+        assertTrue(texts.contains("Share lag log"))
+        assertTrue(texts.contains("Clear"))
+        assertTrue(texts.any { it.contains("Median") && it.contains("90th") })
+    }
+
 }

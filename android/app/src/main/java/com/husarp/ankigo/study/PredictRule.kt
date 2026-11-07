@@ -28,6 +28,7 @@ package com.husarp.ankigo.study
 object PredictRule {
     enum class Why(val label: String) {
         SAFE("safe"),
+        WAITING_DISABLED("waiting answers disabled"),
         LEARNING_DUE("learning card due"),
         OLD("old read"),
         UNREAD("learning cards unread"),

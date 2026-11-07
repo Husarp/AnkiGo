@@ -20,7 +20,7 @@ class StudySimTest {
     private fun StudySim.top(i: Int = 0) = fake.queueOf(deck)[i]
     private fun StudySim.outcomeOf(m: QueuedAnswer) = terminal(m)
     private fun StudySim.name(c: FakeAnki.Card) = "c${c.nid}/${c.ord}"
-    private fun StudySim.shownName() = shows.last().substring(2)
+    private fun StudySim.shownName() = shows.last().substring(2).removeSuffix("*")
 
     // ---- normal runs
 
@@ -78,14 +78,15 @@ class StudySimTest {
 
     // ---- predictions that miss
 
-    @Test fun anAgainCardComingBackFirstSwapsToItAndDropsTheHeldTapWithNothingWrittenToThePredictedCard() {
+    @Test fun anAgainCardComingBackFirstKeepsTheHeldTapAndReportsItsNotTopOutcome() {
         val s = sim(4) { it.againAt = 0 }
         val c1 = s.top(0); val c2 = s.top(1)
         s.fake.plan("answer", F.SLOW)
         s.fake.duringWrite = { s.flip(); s.tap(4); s.fake.duringWrite = null } // held on the predicted card 2
         s.tap(1); s.pump()
         assertEquals(listOf(c1.id), s.fake.revlog.map { it.cardId }); assertEquals(3, c2.reps)
-        assertEquals(1, s.p.nc.misses); assertEquals(1, s.p.nc.heldDropped)
+        assertEquals(1, s.p.nc.misses); assertEquals(0, s.p.nc.heldDropped)
+        assertEquals(Reason.NOT_TOP, (s.outcomeOf(s.made[1]) as AnswerOutcome.NotWritten).reason)
         assertEquals("the swap lands on the question side", "question", s.side)
         assertEquals(s.name(c1), s.shownName()); assertFalse(s.displayed!!.predicted)
         assertEquals(c1.key, s.displayed!!.key)
@@ -94,21 +95,25 @@ class StudySimTest {
         s.check()
     }
 
-    @Test fun aSiblingBuriedByTheAnswerSwapsToTheRealNextCard() {
+    @Test fun aSiblingBuriedByTheAnswerStaysUntilItsTapThenTheRealNextCardShows() {
         val s = sim(3, ords = 2) { it.buryOnAnswer = true }
         val n1a = s.top(0); val n1b = s.top(1); val n2a = s.top(2)
         s.tap(3)
         assertEquals("the sibling is what was predicted", s.name(n1b), s.shownName())
         s.pump()
+        assertEquals(n1b.key, s.displayed!!.key)
+        s.tap(3); s.pump()
         assertEquals(n2a.key, s.displayed!!.key); assertFalse(s.displayed!!.predicted)
         assertEquals(1, s.p.nc.misses); assertEquals(-3, n1b.queue)
         assertEquals(listOf(n1a.id), s.fake.revlog.map { it.cardId })
         s.check()
     }
 
-    @Test fun aLearningCardComingDueBeforeTheWriteSwapsToIt() {
+    @Test fun aLearningCardComingDueBeforeTheWriteFollowsTheDisplayedPrediction() {
         val s = sim(5) { f -> f.afterApply = { _, _ -> f.moveToTop(f.queueOf(deck).last()) } }
-        val last = s.top(4)
+        val last = s.top(4); val prepared = s.top(1)
+        s.tap(3); s.pump()
+        assertEquals(prepared.key, s.displayed!!.key)
         s.tap(3); s.pump()
         assertEquals(last.key, s.displayed!!.key); assertEquals(1, s.p.nc.misses)
         s.check()
@@ -199,7 +204,7 @@ class StudySimTest {
         assertEquals(listOf(s.made[0].seq), seenJournal)
         val o = s.outcomeOf(s.made[0]) as AnswerOutcome.NotWritten
         assertEquals(Reason.DISCARDED, o.reason); assertEquals(1, s.cancels.values.sum())
-        assertEquals("the screen carries on after the user gives up", s.fake.queueOf(deck)[0].key, s.displayed!!.key)
+        assertEquals("the displayed prediction stays after giving up on the preceding write", s.fake.cards.values.toList()[1].key, s.displayed!!.key)
         s.check()
     }
 
@@ -219,7 +224,7 @@ class StudySimTest {
 
     // ---- not written, and told
 
-    @Test fun aCardEditedElsewhereWhileQueuedIsChangedNotWrittenAndShownAgain() {
+    @Test fun aCardEditedElsewhereWhileQueuedIsChangedWithoutReplacingTheDisplayedPrediction() {
         val s = sim(4)
         val c1 = s.top(0)
         s.tap(3)
@@ -227,8 +232,8 @@ class StudySimTest {
         s.pump()
         val o = s.outcomeOf(s.made[0]) as AnswerOutcome.NotWritten
         assertEquals(Reason.CHANGED, o.reason); assertEquals(0, s.fake.revlog.size)
-        assertEquals("the card comes back on the question side with its new state", c1.key, s.displayed!!.key)
-        assertEquals("question", s.side); assertFalse(s.displayed!!.predicted)
+        assertEquals("the next card stays on screen", s.fake.cards.values.toList()[1].key, s.displayed!!.key)
+        assertEquals("question", s.side)
         assertEquals(1, s.p.nc.misses)
         s.check()
     }
@@ -245,7 +250,7 @@ class StudySimTest {
         s.check()
     }
 
-    @Test fun aCardThatIsNotOnTopAnyMoreIsNeverWrittenAndTheRightCardIsShown() {
+    @Test fun aCardThatIsNotOnTopAnyMoreIsNeverWrittenAndTheDisplayedPredictionStays() {
         val s = sim(4)
         val c1 = s.top(0); val c4 = s.top(3)
         s.tap(3)
@@ -253,7 +258,7 @@ class StudySimTest {
         s.pump()
         assertEquals(Reason.NOT_TOP, (s.outcomeOf(s.made[0]) as AnswerOutcome.NotWritten).reason)
         assertEquals(0, s.fake.revlog.size); assertEquals(0, c1.reps - 3)
-        assertEquals(c4.key, s.displayed!!.key)
+        assertEquals(s.fake.cards.values.toList()[1].key, s.displayed!!.key)
         assertEquals(0, s.gameSteps.values.sum())
         s.check()
     }

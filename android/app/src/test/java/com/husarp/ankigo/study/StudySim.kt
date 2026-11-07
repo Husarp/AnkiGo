@@ -16,7 +16,7 @@ val QueuedAnswer.id: Long get() = tookMs
  * The ground truth is kept apart from the code under test and [check] tests the invariants against it.
  */
 class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemStore(), val maxAhead: Int = 0, val tryNotTop: Boolean = false) {
-    class Shown(val key: StudyLoop.Key, val predicted: Boolean)
+    class Shown(val key: StudyLoop.Key, val predicted: Boolean, val reconciled: Boolean = !predicted)
 
     // ---- ground truth (survives a death)
     val made = ArrayList<QueuedAnswer>() // every answer the reducer accepted, in tap order
@@ -133,14 +133,14 @@ class StudySim(val fake: FakeAnki, val deckId: Long, val store: MemStore = MemSt
                 val a = c.answer
                 if (maxAhead == 0 && p.queue.size != 0) violations += "answer ${a.seq} made while another answer was unresolved" // R18-A: with maxAhead > 0 answers are made ahead of the write on purpose
                 val d = displayed
-                if (d == null || (d.predicted && maxAhead == 0) || d.key != a.key) violations += "answer ${a.seq} acted on ${if (d == null) "no card" else if (d.predicted) "a predicted card" else "another card"}"
+                if (d == null || (d.predicted && !d.reconciled && maxAhead == 0) || d.key != a.key) violations += "answer ${a.seq} acted on ${if (d == null) "no card" else if (d.predicted) "a predicted card" else "another card"}"
                 p.queue.enqueue(a)
                 made += a
                 val proc = p
                 proc.io += { proc.queue.drain() }
             }
             is Cmd.Show -> { displayed = Shown(c.card.key, c.predicted); side = "question"; shows += (if (c.predicted) "P:" else "C:") + c.card.view; if (!c.predicted) timeline += "confirm:${c.card.view}" }
-            is Cmd.Confirm -> { displayed = Shown(c.card.key, false); shows += "K:" + c.card.view; timeline += "confirm:${c.card.view}" }
+            is Cmd.Confirm -> { displayed = Shown(c.card.key, !c.onTop, reconciled = true); shows += "K:" + c.card.view; timeline += "confirm:${c.card.view}" }
             Cmd.ShowWaiting -> displayed = null
             is Cmd.ShowHeld -> heldShown++
             Cmd.ShowFinished -> { finished = true; displayed = null }

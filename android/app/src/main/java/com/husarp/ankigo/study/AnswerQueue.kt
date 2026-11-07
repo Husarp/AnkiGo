@@ -74,6 +74,9 @@ interface AnswerHooks {
     /** The write call alone took [ms] (the "ANSWER n ms" of the STUDY line), also when it threw. */
     fun answerTimed(answer: QueuedAnswer, attempt: Int, ms: Long) {}
 
+    /** The displayed card differs from the scheduler top immediately before its write. */
+    fun notTop(answer: QueuedAnswer) {}
+
     /** Progress and the end of each answer, exactly one terminal outcome per answer. */
     fun outcome(o: AnswerOutcome)
 
@@ -324,6 +327,7 @@ class AnswerQueue(
                 top = provider.top(a.deckId, 1).firstOrNull()
             }
             if (top != key) {
+                guard { hooks.notTop(a) }
                 note("answer top changed: seq ${a.seq} deck ${a.deckId} shown ${key.nid}/${key.ord}, scheduler $top; selection refreshed")
                 if (notTopOff || !tryNotTop()) return Step.Done(AnswerOutcome.NotWritten(a, AnswerOutcome.Reason.NOT_TOP, "the card is no longer first in AnkiDroid's queue"))
                 return notTopTry(s, top)

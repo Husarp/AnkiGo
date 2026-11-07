@@ -90,12 +90,12 @@ class R18APredictedFlipShots {
             val (act, root) = screen(ctx, flipped = true)
             val before = buttons(act)
             assertEquals("the four answer buttons", 4, before.size)
-            call(act, "cardConfirmed", card(10))
+            call(act, "cardConfirmed", card(10), true)
             assertEquals(true, getField(act, "flipped")); assertEquals(false, getField(act, "predictedNow")); assertEquals(false, getField(act, "locked"))
             val after = buttons(act)
             assertEquals(4, after.size)
             assertTrue("a finger on a button is not taken away: the row was not rebuilt", before.indices.all { before[it] === after[it] })
-            call(act, "cardConfirmed", card(10, listOf("<1m", "7m", "2d", "5d")))
+            call(act, "cardConfirmed", card(10, listOf("<1m", "7m", "2d", "5d")), true)
             val changed = buttons(act)
             assertEquals("new times, new row", 4, changed.size)
             assertNotSame(before[0], changed[0])
@@ -105,4 +105,19 @@ class R18APredictedFlipShots {
             root
         }
     }
+    @Test fun lateDisagreementKeepsTheShownAnswerAndItsButtons() {
+        paparazzi.shootWith("r30a-retained-answer", listOf(Size.PHONE)) { ctx ->
+            val (act, root) = screen(ctx, flipped = true)
+            val before = buttons(act)
+            call(act, "perform", listOf(com.husarp.ankigo.study.Cmd.Confirm(card(10), onTop = false)))
+            assertEquals(true, getField(act, "flipped"))
+            assertEquals(true, getField(act, "predictedNow"))
+            assertEquals(10L, (getField(act, "card") as Anki.Review).nid)
+            val after = buttons(act)
+            assertTrue(before.indices.all { before[it] === after[it] })
+            assertTrue(after.all { it.isEnabled })
+            root
+        }
+    }
+
 }

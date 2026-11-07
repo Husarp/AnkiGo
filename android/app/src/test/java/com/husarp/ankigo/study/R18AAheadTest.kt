@@ -142,14 +142,15 @@ class R18AAheadTest {
         assertEquals(PredictRule.Why.LEARNING_DUE, PredictRule.check(card(2, read), card(3, read), r.clock))
     }
 
-    @Test fun aSwapAfterAnswersAheadShowsTheRealCardsQuestionAndNothingIsHeld() {
+    @Test fun aMismatchAfterAnswersAheadKeepsTheDisplayAndUpdatesTheFollowingQueue() {
         val r = Rig().ready()
-        r.nc.tapAnswer(3, 1); r.nc.tapAnswer(3, 1)         // card 3 shown ahead, token 3
-        val cmds = r.nc.swapped(3, card(8), queue(8, 3, 4))  // a learning card came due: AnkiDroid's first card is 8
-        assertEquals(Cmd.Show(card(8), predicted = false), cmds[0])
-        assertEquals(NextCard.Slot.Confirmed(card(8), 3), r.nc.slot)
+        r.nc.tapAnswer(3, 1); r.nc.tapAnswer(3, 1)
+        val cmds = r.nc.swapped(3, card(8), queue(8, 3, 4))
+        assertEquals(Cmd.Confirm(card(3), onTop = false), cmds[0])
+        assertTrue(cmds.none { it is Cmd.Show })
+        assertEquals(NextCard.Slot.Confirmed(card(3), 3, onTop = false), r.nc.slot)
         assertEquals(1, r.nc.misses); assertEquals(0, r.nc.hits)
-        assertEquals("a card after a swap is prepared from the fresh read", listOf<Cmd<String>>(Cmd.Prepare(key(3), key(8), 3), Cmd.Prepare(key(4), key(3), 3)), cmds.drop(1))
+        assertEquals(listOf<Cmd<String>>(Cmd.Prepare(key(4), key(8), 3)), cmds.drop(1))
     }
 
     @Test fun theConfirmOfTheLastAnswerAheadFreshensTheChain() {

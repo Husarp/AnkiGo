@@ -110,4 +110,14 @@ class StudyTimingTest {
         assertFalse(run(media = true)); assertFalse(run(dialog = true))
         assertFalse(run(audio = true)); assertTrue(run(audio = true, wait = false)); assertTrue(run(wait = true, audio = false))
     }
+    @Test fun reconciledPredictionAllowsAutomaticAnswersButStillHoldsBury() {
+        for (act in StudyTiming.Act.entries) {
+            val isAnswer = act in listOf(StudyTiming.Act.AGAIN, StudyTiming.Act.HARD, StudyTiming.Act.GOOD)
+            assertEquals(isAnswer || act == StudyTiming.Act.BURY, StudyTiming.waitsForConfirmation(true, false, act))
+            assertEquals(act == StudyTiming.Act.BURY, StudyTiming.waitsForConfirmation(true, true, act))
+            assertFalse(StudyTiming.waitsForConfirmation(false, true, act))
+        }
+        assertFalse(StudyTiming.waitsForConfirmation(true, false, null))
+    }
+
 }
