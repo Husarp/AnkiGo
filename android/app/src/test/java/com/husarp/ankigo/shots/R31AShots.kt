@@ -3,6 +3,7 @@ package com.husarp.ankigo.shots
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.husarp.ankigo.GameRepo
@@ -108,10 +109,12 @@ class R31AShots {
         val page = TeamPage(ctx, NoHost)
         val before = state.count("soothe-bell")
         val section = DetailTopCard.heldItem(page, data, mon, page)!!
+        val host = FrameLayout(page).apply { addView(section) }
         all(section).single { it.contentDescription == "Take off" }.performClick()
         assertNull(mon.heldItem)
         assertEquals(before + 1, state.count("soothe-bell"))
         assertEquals(View.GONE, section.visibility)
+        assertTrue("Took Soothe Bell from ${mon.shownName}" in texts(host))
         assertNull(DetailTopCard.heldItem(page, data, mon, page))
     }
 
