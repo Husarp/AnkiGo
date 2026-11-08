@@ -62,7 +62,7 @@ sealed class Cmd<out T> {
 
 /**
  * A short prepared queue, with token guards for every asynchronous result. A displayed prediction stays until answered:
- * a different scheduler top becomes the NEXT candidate, never a replacement. Its answer keeps the displayed id/state and
+ * a different scheduler top becomes the NEXT candidate, except for an unrevealed new card checked on return. Its answer keeps the displayed id/state and
  * AnswerQueue's NOT_TOP verification/waiting path. Confirmation can refresh buttons on the same card only.
  * Unsafe predictions and exhausted preparation still wait behind the write; maxAhead bounds speculative answers.
  */
@@ -148,6 +148,29 @@ class NextCard<T>(
 
     /** The seq of the answer whose write the shown predicted card is waiting behind, else null. */
     fun waitingFor(): Long? = (slot as? Slot.Predicted<T>)?.afterSeq
+
+    data class ReturnCheck(val key: StudyLoop.Key, val token: Int)
+
+    /** Only a return to an unanswered NEW question may replace the displayed card. No load/wait or answer is emitted. */
+    fun returnCheck(answerRevealed: Boolean): ReturnCheck? {
+        if (answerRevealed) return null
+        val card = when (val s = slot) {
+            is Slot.Confirmed -> s.card
+            is Slot.Predicted -> if (s.held == null) s.card else null
+            else -> null
+        } ?: return null
+        return if (card.before["queue"] == "0") ReturnCheck(card.key, token) else null
+    }
+
+    /** The return's fresh scheduler top, prepared and checked as usual. The abandoned new card remains untouched in AnkiDroid. */
+    fun returned(check: ReturnCheck, p: Prepared<T>?, queue: List<StudyLoop.Key>, answerRevealed: Boolean): List<Cmd<T>> {
+        if (returnCheck(answerRevealed) != check || p == null || p.key == check.key || queue.firstOrNull() != p.key ||
+            p.before["queue"] !in setOf("1", "2", "3", "4")) return emptyList()
+        forgetChain()
+        token++
+        slot = Slot.Confirmed(p, token)
+        return listOf<Cmd<T>>(Cmd.Show(p, predicted = false)) + prepareNext(p, queue, 1)
+    }
 
     /** The screen starts, resumes, Retry, or a card was edited: forget everything and ask again. */
     fun reload(): List<Cmd<T>> {
