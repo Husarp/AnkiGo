@@ -83,6 +83,7 @@ internal object HoldToConfirm {
         fun start() {
             if (active || !view.isEnabled || !allowed()) return
             fired = false; active = true
+            fill.level = 1
             view.parent?.requestDisallowInterceptTouchEvent(true)
             // A real delay keeps confirmation deliberate even when system animations are disabled.
             completion = Runnable { if (active) finish() }.also { timer.post(it, DURATION_MS) }
@@ -92,15 +93,15 @@ internal object HoldToConfirm {
                 addUpdateListener {
                     if (!view.isEnabled || !allowed()) resetHold()
                     else {
-                        fill.level = ((it.animatedValue as Float) * 10000).toInt()
+                        fill.level = ((it.animatedValue as Float) * 10000).toInt().coerceAtLeast(1)
                     }
                 }
                 start()
             }
         }
-        view.contentDescription = "Hold to $label. Hold for one second, or use the accessibility long-click action."
+        view.contentDescription = label.replaceFirstChar { it.uppercase() }
         view.isFocusable = true
-        view.setOnClickListener { Ui.toast(view.context, "Hold for one second to $label") }
+        view.setOnClickListener { }
         view.setOnLongClickListener { fired = false; finish(); true }
         view.setAccessibilityDelegate(object : View.AccessibilityDelegate() {
             override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {

@@ -55,11 +55,11 @@ class R24BShopShots {
             stage.measure(android.view.View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, 360), android.view.View.MeasureSpec.EXACTLY),
                 android.view.View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, 780), android.view.View.MeasureSpec.EXACTLY))
             stage.layout(0, 0, stage.measuredWidth, stage.measuredHeight)
-            val buy = ShopCardKit.findText(stage) { it == "Hold to buy" }!!
+            val buy = ShopCardKit.findText(stage) { it == "Buy" }!!
             val button = buy.parent as LinearLayout
             assertEquals(LinearLayout.HORIZONTAL, button.orientation)
             assertEquals(2, button.childCount)
-            assertEquals("56 dp action plus 30 dp hold hint", Ui.dp(ctx, 56) + Ui.dp(ctx, 30), button.height)
+            assertEquals("56 dp action without instruction space", Ui.dp(ctx, 56), button.height)
             val price = button.getChildAt(1)
             assertTrue("Price ${price.width}/${price.right} must fit Buy ${button.width}/${button.paddingRight}", price.width > 0 && price.right <= button.width - button.paddingRight)
             assertFalse(ShopCardKit.texts(stage).any { it.contains("↑") || it.contains("↓") })

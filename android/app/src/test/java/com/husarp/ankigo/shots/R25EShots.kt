@@ -39,6 +39,7 @@ class R25EShots {
                 assertTrue(WindowStack.stacked(a))
                 close(second)
                 assertFalse(WindowStack.stacked(a))
+                first.dismiss()
                 val fresh = AppDialog.Builder(a).setTitle("Fresh").setCloseAtTop().create()
                 try { fresh.joinStack(); noCloseAll(fresh); assertFalse(WindowStack.stacked(a)) } finally { fresh.dismiss() }
             } finally { first.dismiss(); second.dismiss(); third.dismiss() }
@@ -57,7 +58,7 @@ class R25EShots {
         } finally { first.dismiss(); other.dismiss() }
     }
 
-    @Test fun itemSheetParticipatesAndCloseAllNotifiesOwnerOnce() {
+    @Test fun itemSheetSurvivesDetailsCloseAndNotifiesOwnerOnce() {
         val a = Shots.files(paparazzi.context)
         FakeGame.install(a)
         val page = ShopPage(a, NoHost)
@@ -70,6 +71,9 @@ class R25EShots {
             detail.joinStack()
             noCloseAll(detail)
             close(detail)
+            assertTrue(item.isShowing)
+            assertEquals(0, closed)
+            WindowStack.closeCurrent(page)
             assertFalse(item.isShowing)
             assertEquals(1, closed)
             item.dismiss(); detail.dismiss()

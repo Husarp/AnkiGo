@@ -34,7 +34,7 @@ import org.junit.Test
  * R4-V1 (PLAN 88 + 108, Adam's pick 1): navigation as picked. The battle card at the top of the Pokémon tab's Team section
  * (live while on screen: it holds LiveSession only then; tap = the full battle, Back returns to the tab; Pop out through the
  * home screen), the four icon tabs with the accent square on the selected one, "Pokémon" + coins on every section, the plain
- * Stats switch without a back arrow, the Shop's "Hold to refresh" button. Shots: r4v1-*.
+ * Stats switch without a back arrow, the Shop's "Refresh" button. Shots: r4v1-*.
  */
 class R4V1Shots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
@@ -331,14 +331,14 @@ class R4V1Shots {
         val ctx = Shots.files(paparazzi.context).also { FakeGame.install(it) }
         st.cash = 5000
         val (_, screen) = shopPage(ctx)
-        val btn = findText(screen) { it.startsWith("Hold to refresh") }
+        val btn = findText(screen) { it.startsWith("Refresh") }
         assertNotNull(texts(screen).toString(), btn)
-        assertEquals("Hold to refresh · ${com.husarp.ankigo.ui.CoinText.MARK}100", btn!!.text.toString())
+        assertEquals("Refresh · ${com.husarp.ankigo.ui.CoinText.MARK}100", btn!!.text.toString())
         var row: View? = btn
         while (row != null && !row.isClickable) row = row.parent as? View
         assertEquals("a full-strength button when the money is there", 1f, row!!.alpha, 0f)
         val (_, poor) = shopPage(ctx.also { st.cash = 20 })
-        var weak: View? = findText(poor) { it.startsWith("Hold to refresh") }
+        var weak: View? = findText(poor) { it.startsWith("Refresh") }
         while (weak != null && !weak.isClickable) weak = weak.parent as? View
         assertTrue("greyed out without the money", weak!!.alpha < 1f)
     }

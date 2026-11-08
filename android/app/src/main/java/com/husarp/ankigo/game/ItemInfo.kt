@@ -139,7 +139,7 @@ object ItemInfo {
                 ItemFact(HOW, "You can't use it. If you already own one, it stays in the Bag."),
             ) else listOf(
                 ItemFact(WHAT, evolutionWhat(data, item, caught)),
-                ItemFact(HOW, "Open a Pokémon from this item’s Evolves list, then hold **Evolve** in its Evolution section. Requires **Level 2 Bond** and one item, which is used up. Evolution cannot be undone."),
+                ItemFact(HOW, "Open a Pokémon from this item’s Evolves list, then choose **Evolve** in its Evolution section. Requires **Level 2 Bond** and one item, which is used up. Evolution cannot be undone."),
             )
             ItemKind.HELD -> listOf(
                 ItemFact(WHAT, heldWhat(item)),
@@ -396,7 +396,7 @@ object ItemInfo {
         ItemKind.BALL -> if (isOldBall(item)) Items.specialNote(item) else "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
         ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"
         ItemKind.EVOLUTION -> if (item in Items.RETIRED) "No Pokémon in AnkiGo evolves with it, so it can't be used."
-            else "Open a Pokémon’s Evolution section and hold Evolve. Requires Level 2 Bond and one item, which is used up."
+            else "Open a Pokémon’s Evolution section and choose Evolve. Requires Level 2 Bond and one item, which is used up."
         ItemKind.HELD -> "Give it to a Pokémon from the Bag. A Pokémon holds one item at a time."
         ItemKind.ESCAPE -> "Use it from the Bag to leave the wild Pokémon in battle and meet a new one."
         ItemKind.FOSSIL -> "Use it from the Bag to revive an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}."

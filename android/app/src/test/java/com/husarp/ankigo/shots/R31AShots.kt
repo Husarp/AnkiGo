@@ -37,7 +37,7 @@ class R31AShots {
         assertTrue("Evolution · Jolteon" in texts(content))
         assertTrue("✓ Level 16" in texts(content)); assertTrue("✓ Level 2 Bond" in texts(content))
         val button = dialog.button(AppDialog.BUTTON_POSITIVE)!!
-        assertEquals("Hold to evolve", button.text.toString())
+        assertEquals("Evolve", button.text.toString())
         assertEquals(Ui.dp(ctx, 56), button.minHeight)
         button.performClick(); assertEquals(0, evolved)
         button.performLongClick(); assertEquals(1, evolved)
@@ -149,12 +149,12 @@ class R31AShots {
         LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             for (label in listOf("Evolve", "Buy", "Refresh", "Release", "Teach", "Use", "Revive", "Throw")) {
-                val button = TextView(ctx).apply { text = "Hold to ${label.lowercase()}"; gravity = android.view.Gravity.CENTER }
+                val button = TextView(ctx).apply { text = label; gravity = android.view.Gravity.CENTER }
                 val bottom = button.paddingBottom
                 HoldToConfirm.bind(button, label.lowercase()) {}
                 assertEquals(bottom, button.paddingBottom)
                 assertEquals(Ui.dp(ctx, 56), button.minHeight)
-                assertEquals("Hold to ${label.lowercase()}", button.text.toString())
+                assertEquals(label, button.text.toString())
                 button.background.level = 5000
                 addView(button, LinearLayout.LayoutParams(-1, -2).apply { topMargin = Ui.dp(ctx, 8) })
             }

@@ -141,7 +141,7 @@ object GameGuide {
             listOf(
                 "Level: some Pokémon become ready to evolve when they reach a level.",
                 "Bond: earn +1 point per answered card while fighting and +3 per win. Level 1–Level 5 start at 50 / 125 / 250 / 500 / 800 points. Normal evolution: Level 2 Bond plus the usual requirement. Bond evolution: Level 3 Bond or Level 4 Bond. Each level adds +1 coin per defeated Pokémon and +5% XP. At Level 4/Level 5, a lethal attack has a 5%/10% chance to leave 1 HP. A Soothe Bell makes points ×1.5.",
-                "Item: Use Fire Stone, Use Metal Coat and similar requirements use one item from your Bag. Open the Pokémon’s Evolution section and hold Evolve.",
+                "Item: Use Fire Stone, Use Metal Coat and similar requirements use one item from your Bag. Open the Pokémon’s Evolution section and choose Evolve.",
                 "A green mark shows when a Pokémon is ready to evolve. Evolution never happens automatically: open its details and choose Evolve for the branch you want. Required items are used up. Some branches also need a particular time of day, gender, learned move or other condition; the evolution options show what is missing. Trade evolutions use a Linking Cord unless they require another item.",
                 "Evolving heals the Pokémon fully.",
             ),

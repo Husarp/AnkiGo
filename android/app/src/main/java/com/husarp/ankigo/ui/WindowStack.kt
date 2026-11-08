@@ -31,5 +31,18 @@ internal object WindowStack {
         current.lastOrNull()?.stackChanged(current.size >= 2)
     }
     fun stacked(context: Context) = windows(context).size >= 2
+    fun closeCurrent(context: Context) = windows(context).lastOrNull()?.closeFromStack()
+    fun pokemonWindow(context: Context): AppDialog? {
+        for (window in windows(context).asReversed()) {
+            // An item is a separate origin; an evolution explanation belongs to the Pokémon below it.
+            if (window !is AppDialog || window.itemInfo && !window.evolutionInfo) return null
+            if (window.pokemonDetails) return window
+        }
+        return null
+    }
+    fun uncover(window: StackWindow) {
+        val current = windows(window.stackContext)
+        current.drop(current.indexOf(window) + 1).asReversed().forEach { it.closeFromStack() }
+    }
     fun closeAll(context: Context) = windows(context).asReversed().forEach { it.closeFromStack() }
 }

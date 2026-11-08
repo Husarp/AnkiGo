@@ -64,7 +64,7 @@ object MonDetail {
         }
     }
 
-    fun show(a: Context, data: GameData, mon: Mon, focusMove: String? = null) {
+    fun show(a: Context, data: GameData, mon: Mon, focusMove: String? = null, replaceDetails: Boolean = false) {
         // opened = seen: the NEW mark of its Box tile / Team row goes away (R4-V5)
         GameRepo.state?.let { st -> if (TileMarks.isNew(st, mon)) GameRepo.act(a) { it.markViewed(mon.uid) } }
         val page = a as? GamePage
@@ -171,8 +171,7 @@ object MonDetail {
         DetailTopCard.expShare(a, data, state, mon)?.let { col.addView(it) }
         DetailTopCard.heldItem(a, data, mon, page)?.let { col.addView(it) }
         col.addView(DetailTopCard.forMon(a, data, state, mon, sp, seen, compact, page, if (page != null) { s -> DexDetail.show(page, s) } else null, onEvolved = {
-            dlg.dismiss()
-            show(a, data, mon)
+            show(a, data, mon, replaceDetails = true)
         }),
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
         val others = DetailFormat.otherAbilities(sp, mon.ability)
@@ -195,7 +194,7 @@ object MonDetail {
             lines = listOf("Caught" to if (mon.caughtAt > 0) date(mon.caughtAt) else "–")))
 
         DetailSections.applyOrder(col)
-        if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusMove)), true).setDetailsFooter().showCard(); return }
+        if (page == null) { AppDialog.Builder(a).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusMove)), true).setDetailsFooter().setPokemonDetails(replaceDetails).showCard(); return }
         lateinit var more: View
         more = DetailParts.secondaryButton(a, "Options") {
             // the menu hangs on this button, so the details close only once a row was tapped
@@ -203,7 +202,7 @@ object MonDetail {
         }
         // "Options" is pinned under the scrolling details (AppDialog footer, below the details), compact or not
         dlg = AppDialog.Builder(a).setTitle("Details")
-            .setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusMove)), true).setDetailsFooter(more).create()
+            .setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusMove)), true).setDetailsFooter(more).setPokemonDetails(replaceDetails).create()
         Pickers.show(dlg)
     }
 

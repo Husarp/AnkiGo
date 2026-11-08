@@ -362,7 +362,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
                 setImageResource(R.drawable.ic_sync)
                 setColorFilter(ink, android.graphics.PorterDuff.Mode.SRC_IN)
             }, LinearLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18)).also { it.marginEnd = Ui.dp(ctx, 7) })
-            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = TextUtils.concat("Hold to refresh · ", CoinText.of(this, "${Shop.refreshPrice(state)}")); maxLines = 2; gravity = Gravity.CENTER })
+            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = TextUtils.concat("Refresh · ", CoinText.of(this, "${Shop.refreshPrice(state)}")); maxLines = 2; gravity = Gravity.CENTER })
             HoldToConfirm.bind(this, "refresh shop", allowed = { state.cash >= Shop.refreshPrice(state) }) { reroll() }
         }
     }

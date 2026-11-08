@@ -164,9 +164,9 @@ internal class EvolutionRows(
             if (bag) ShopActivity.openBag(a) else Nav.open(a, Dest.SHOP)
         }
         if (onEvolve != null && mon != null && parent?.num == mon.species) {
-            val dialog = AppDialog.Builder(a).setInfoHeader(EvolutionRowText.title(data, e, seen), Progression.evolutionItem(e)).setView(body)
+            val dialog = AppDialog.Builder(a).setInfoHeader(EvolutionRowText.title(data, e, seen), Progression.evolutionItem(e)).setEvolutionInfo().setView(body)
                 .setNegativeButton("Close", null)
-            dialog.setPositiveButton("Hold to evolve", null)
+            dialog.setPositiveButton("Evolve", null)
             val window = dialog.create()
             info = window
             window.button(AppDialog.BUTTON_POSITIVE)!!.apply {
@@ -187,6 +187,7 @@ internal class EvolutionRows(
         }
         val dialog = AppDialog.Builder(a)
             .setInfoHeader(EvolutionRowText.title(data, e, seen), Progression.evolutionItem(e))
+            .setEvolutionInfo()
             .setView(body).create()
         info = dialog
         bubble = dialog
@@ -197,6 +198,7 @@ internal class EvolutionRows(
         internal fun explanationDialog(a: Context, data: GameData, e: Evolution, parent: Species?, seen: Set<Int>,
                                        state: GameState?, mon: Mon?, open: (Boolean) -> Unit): AppDialog =
             AppDialog.Builder(a).setInfoHeader(EvolutionRowText.title(data, e, seen), Progression.evolutionItem(e))
+                .setEvolutionInfo()
                 .setView(explanationContent(a, data, e, parent, seen, state, mon, open)).create()
 
         internal fun explanationContent(a: Context, data: GameData, e: Evolution, parent: Species?, seen: Set<Int>,
@@ -288,7 +290,7 @@ internal object EvolutionRowText {
     fun explanation(data: GameData, e: Evolution, parent: Species?, seen: Set<Int>, state: GameState?, mon: Mon?): String {
         val item = Progression.evolutionItem(e)
         val extra = if (item != null) {
-            "Open a Pokémon’s Evolution section. Hold Evolve for one second to evolve; one ${Items.name(item)} is used up." +
+            "Open a Pokémon’s Evolution section and choose Evolve; one ${Items.name(item)} is used up." +
                 "\n\n${ItemInfo.whereToFind(data, item)}\n\n"
         } else ""
         val inventory = if (item == null) "" else (state?.let {

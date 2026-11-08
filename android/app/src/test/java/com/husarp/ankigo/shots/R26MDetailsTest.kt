@@ -18,7 +18,7 @@ class R26MDetailsTest {
     private fun texts(v: View) = all(v).filterIsInstance<TextView>().map { it.text.toString() }
     private fun tap(v: View, text: String) = all(v).filterIsInstance<TextView>().first { it.text.toString() == text }.performClick()
 
-    @Test fun backAndCloseHaveDifferentScope() {
+    @Test fun backAndCloseEachRemoveOnlyTheCurrentWindow() {
         val ctx = Shots.files(paparazzi.context)
         val other = android.content.ContextWrapper(ctx)
         fun card(c: android.content.Context) = AppDialog.Builder(c).setTitle("Details").setMessage("Nested details").setDetailsFooter().create()
@@ -43,8 +43,13 @@ class R26MDetailsTest {
         assertEquals(0, parentClosed); assertEquals(0, childClosed)
         val next = card(ctx); next.joinStack()
         tap(next.content(), "Close")
-        assertEquals(1, parentClosed); assertEquals(1, childClosed); assertEquals(0, otherClosed)
+        assertEquals(0, parentClosed); assertEquals(0, childClosed); assertEquals(0, otherClosed)
+        assertTrue(WindowStack.stacked(ctx))
+        WindowStack.closeCurrent(ctx)
+        assertEquals(0, parentClosed); assertEquals(1, childClosed)
         assertFalse(WindowStack.stacked(ctx))
+        WindowStack.closeCurrent(ctx)
+        assertEquals(1, parentClosed)
         WindowStack.closeAll(other)
         assertEquals(1, otherClosed)
     }

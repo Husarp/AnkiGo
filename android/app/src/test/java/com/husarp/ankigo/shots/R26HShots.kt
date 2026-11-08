@@ -25,7 +25,7 @@ class R26HShots {
             FakeGame.install(ctx); ShopCardKit.install()
             val (_, stage) = ShopCardKit.page(ctx, null, day = "2026-10-31")
             paparazzi.snapshot(stage, "r26h-shop-${theme.name}-$scale")
-            assertFalse(all(stage).filterIsInstance<TextView>().any { it.text == "Hold to buy" })
+            assertFalse(all(stage).filterIsInstance<TextView>().any { it.text == "Buy" })
             val weekend = all(stage).filterIsInstance<TextView>().single { it.text == "WEEKEND SPECIAL" }.parent as View
             assertTrue(all(weekend).filterIsInstance<TextView>().any { it.text.startsWith("Ends in ") })
             assertFalse(all(stage).filterIsInstance<TextView>().any { it.text == "Weekend only · until Sunday night" })

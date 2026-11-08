@@ -39,8 +39,8 @@ class R30YFlameShots {
             }
             val tile = title(screen)!!.parent as ViewGroup
             val icon = (0 until tile.childCount).map { tile.getChildAt(it) }.filterIsInstance<android.widget.ImageView>().first()
-            assertNull("The Best streak tile keeps the original flame colours", icon.colorFilter)
-            assertTrue(icon.drawable is android.graphics.drawable.BitmapDrawable)
+            assertNotNull("The Best streak outline uses the achievement tier colour", icon.colorFilter)
+            assertTrue(icon.drawable is android.graphics.drawable.VectorDrawable)
             screen
         }
     }

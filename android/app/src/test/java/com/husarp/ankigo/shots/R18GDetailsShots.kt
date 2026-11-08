@@ -280,7 +280,7 @@ class R18GDetailsShots {
             val info = DialogShots.capture { (water.parent as View).performClick() } ?: error("no evolution info")
             val infoScene = DialogShots.scene(water.context, info)
             paparazzi.snapshot(infoScene, "r27e-info-${if (water.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
-            assertTrue("Hold to evolve" in strings(infoScene))
+            assertTrue("Evolve" in strings(infoScene))
             val close = views(infoScene).single { it.contentDescription == "Close" }
             assertTrue("fixed close outside scrolling text", scrolls(infoScene).none { views(it).contains(close) })
             val body = texts(infoScene).single { it.text.contains(com.husarp.ankigo.game.ItemInfo.whereToFind(gd, "water-stone")) }.parent as View
@@ -289,7 +289,7 @@ class R18GDetailsShots {
             assertFalse(strings(infoScene).any { "open your Bag" in it })
             val secondDialog = DialogShots.capture { info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!.performClick() }
             assertNull("first tap stays in the same dialog", secondDialog)
-            assertTrue(strings(infoScene).contains("Hold to evolve"))
+            assertTrue(strings(infoScene).contains("Evolve"))
             assertTrue(strings(infoScene).any { "can't be undone" in it })
             assertEquals("first tap hasn't evolved", 133, mon.species)
             paparazzi.snapshot(infoScene, "r27e-confirm-${if (water.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
@@ -327,7 +327,7 @@ class R18GDetailsShots {
         val info = DialogShots.capture { (label.parent as View).performClick() } ?: error("no info")
         val button = info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!
         assertNull(DialogShots.capture { button.performClick() })
-        assertEquals("Hold to evolve", button.text.toString())
+        assertEquals("Evolve", button.text.toString())
         assertEquals(0, choices)
         button.performLongClick()
         assertEquals(1, choices)

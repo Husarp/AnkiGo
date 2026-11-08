@@ -56,7 +56,7 @@ class R30OShots {
             assertTrue(Shop.buy(data, GameRepo.state!!, item).ok)
             stage.render()
             assertTrue(texts(page.itemWindow!!.view).contains("Sold out"))
-            assertFalse(texts(page.itemWindow!!.view).contains("Hold to buy"))
+            assertFalse(texts(page.itemWindow!!.view).contains("Buy"))
             paparazzi.snapshot(stage, "o-weekend-soldout-card-${theme.name.lowercase()}")
             page.closeCard(); stage.render()
             assertTrue(all(stage).any { it.alpha == 0.45f && it.contentDescription?.contains("Sold out") == true })

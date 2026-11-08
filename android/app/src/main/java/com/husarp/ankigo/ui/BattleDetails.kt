@@ -113,7 +113,7 @@ object BattleDetails {
         }
         DetailSections.applyOrder(col)
         AppDialog.Builder(ctx).setTitle("Details").setView(DetailsFade.wrap(DetailSections.scroll(ctx, col, focusMove)), true)
-            .setDetailsFooter(contextLabel = "Wild Pokémon").showCard()
+            .setDetailsFooter(contextLabel = "Wild Pokémon").setPokemonDetails().showCard()
         return true
     }
 

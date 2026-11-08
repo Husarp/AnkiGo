@@ -301,12 +301,7 @@ class AchievementsView(private val page: GamePage) {
         }
         card.addView(ImageView(page).apply {
             setImageResource(if (hidden) R.drawable.ic_ach_lock else AchStyle.icon(v.icon))
-            if (v.icon == "flame" && !hidden) {
-                if (v.tier < 0) {
-                    colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) })
-                    imageAlpha = StreakFlameRules.DEAD_ALPHA
-                }
-            } else setColorFilter(color)
+            setColorFilter(color)
         }, LinearLayout.LayoutParams(dp(34), dp(34)))
         card.addView(Ui.text(page, 11f, 800, if (v.tier < 0) R.color.ag_sub0 else R.color.ag_text).apply {
             text = if (hidden) "???" else v.title; gravity = Gravity.CENTER; maxLines = 3; ellipsize = TextUtils.TruncateAt.END

@@ -43,6 +43,7 @@ object Pickers {
      * dialog becomes an overlay window when there is no Activity).
      */
     fun show(dialog: AppDialog) {
+        if (dialog.reusePokemonWindow()) return
         interceptApp?.let { dialog.joinStack(); it(dialog); return }
         if (Ui.findActivity(dialog.context) == null) {
             dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
@@ -74,7 +75,7 @@ object Pickers {
     /** One deliberate hold, with all action information kept beside the button. */
     fun hold(a: Context, title: String, message: String, action: String, onYes: () -> Unit) {
         val dialog = AppDialog.Builder(a).setTitle(title).setMessage(message)
-            .setPositiveButton("Hold to ${action.lowercase()}", null)
+            .setPositiveButton(action, null)
             .setNegativeButton("Cancel", null).create()
         dialog.button(AppDialog.BUTTON_POSITIVE)!!.let { button ->
             HoldToConfirm.bind(button, action.lowercase()) { dialog.dismiss(); onYes() }

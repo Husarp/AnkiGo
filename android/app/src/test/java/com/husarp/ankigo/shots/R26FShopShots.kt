@@ -35,7 +35,7 @@ class R26FShopShots {
             val unit = ShopPlan.price(data, day, "potion").now
             for (q in listOf(1, 3, 5, 1)) {
                 stage.render()
-                val buy = ShopCardKit.findText(stage) { it == "Hold to buy" }!!
+                val buy = ShopCardKit.findText(stage) { it == "Buy" }!!
                 val amounts = all(buy.parent as View).filterIsInstance<TextView>().map { it.text.toString() }
                 assertTrue("Quantity $q: $amounts", Bits.fmt(unit * q) in amounts)
                 paparazzi.snapshot(stage, "r26f-quantity-$q-${theme.name.lowercase()}")

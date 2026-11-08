@@ -50,7 +50,7 @@ class EvolutionRowTextTest {
         val state = TestData.state(data, 133, 20).apply { bag["thunder-stone"] = 1 }
         val text = EvolutionRowText.explanation(data, Evolution(135, EvoKind.ITEM, item = "thunder-stone"),
             data.sp(133), setOf(133), state, state.main)
-        assertTrue(text.contains("Hold Evolve for one second"))
+        assertTrue(text.contains("choose Evolve"))
         assertFalse(text.contains("tap again"))
         assertFalse(text.contains("open your Bag"))
         assertTrue(text.contains("Shop"))
