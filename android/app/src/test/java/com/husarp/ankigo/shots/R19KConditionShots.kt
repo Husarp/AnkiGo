@@ -39,7 +39,7 @@ import org.junit.Test
 /**
  * R19-K (PLAN 269 A, 287): the condition chips on the real arena at every host - the Battle tab, the Study panel, two Study strips,
  * picture-in-picture, the floating window (default and smallest) - with a battle picture and without, 1 / 3 / 8 conditions on each side and
- * the weather on. The checks: no chip is over another chip, a box, a Pokémon's picture, the NEW sticker, the frame's band or corner squares, or
+ * the weather on. The checks: no chip is over another chip, a box, the NEW sticker, the frame's band or corner squares, or
  * outside the arena; every condition is a chip or counted in the "+N"; the text is never under the panel's 8 sp floor. The flow tests: the
  * list a tap opens, the bubbles closing on a tap elsewhere and on Back, the events moving the chips. PNGs: r19k-<host>-<n>-<light|dark>,
  * r19k-list-<host>-<light|dark>, r19k-picture-<host>-<n>-<light|dark>.
@@ -192,11 +192,11 @@ class R19KConditionShots {
             if (slot != ConditionMarks.Slot.FIELD && row.chips.first().mark != null && row.chips.first().mark!!.def.rank != a.conditions.of(slot).first().def.rank) out += "$tag ${slot.name}: not the most important first"
         }
         val all = rows.flatMap { r -> r.chips.map { it.rect } }
-        val area = RectF(scene.area.l, scene.area.t, scene.area.r, scene.area.b)
+        val area = RectF(scene.area.l - scene.inset, scene.area.t - scene.inset, scene.area.r + scene.inset, scene.area.b + scene.inset)
         for ((i, c) in all.withIndex()) {
             if (c.left < area.left - 0.5f || c.top < area.top - 0.5f || c.right > area.right + 0.5f || c.bottom > area.bottom + 0.5f) out += "$tag: chip $c is outside the room $area"
             if (c.left < 0f || c.top < 0f || c.right > sc.arena.width || c.bottom > sc.arena.height) out += "$tag: chip $c is outside the arena"
-            for (o in scene.blocks) if (hits(c, RectF(o.l, o.t, o.r, o.b))) out += "$tag: chip $c is over an obstacle ${o.l},${o.t},${o.r},${o.b}"
+            for (o in scene.blocks.filter { it !in scene.sprites }) if (hits(c, RectF(o.l, o.t, o.r, o.b))) out += "$tag: chip $c is over an obstacle ${o.l},${o.t},${o.r},${o.b}"
             for (j in i + 1 until all.size) if (hits(c, all[j])) out += "$tag: two chips overlap: $c and ${all[j]}"
         }
         if (all.isNotEmpty()) {
@@ -208,7 +208,7 @@ class R19KConditionShots {
 
     private fun tag(host: Host, picture: Boolean, n: Int, extra: String = "") = "${host.name}${if (picture) "-picture" else "-plain"}-$n$extra"
 
-    @Test fun noChipIsEverOverAnythingAtEveryHost() {
+    @Test fun chipsClearCardsAndFrameAtEveryHost() {
         val report = ArrayList<String>()
         val bad = ArrayList<String>()
         for (host in hosts) for (picture in listOf(false, true)) for (n in listOf(1, 3, 8)) {

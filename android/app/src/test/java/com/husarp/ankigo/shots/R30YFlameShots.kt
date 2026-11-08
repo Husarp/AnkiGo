@@ -32,11 +32,20 @@ class R30YFlameShots {
             val screen = pageScreen(ctx, page)
             page.achievementsView().setTab("Study")
             call(page, "render")
+            fun title(v: View): TextView? {
+                if (v is TextView && v.text.toString() == "Best streak") return v
+                if (v is ViewGroup) for (i in 0 until v.childCount) title(v.getChildAt(i))?.let { return it }
+                return null
+            }
+            val tile = title(screen)!!.parent as ViewGroup
+            val icon = (0 until tile.childCount).map { tile.getChildAt(it) }.filterIsInstance<android.widget.ImageView>().first()
+            assertNull("The Best streak tile keeps the original flame colours", icon.colorFilter)
+            assertTrue(icon.drawable is android.graphics.drawable.BitmapDrawable)
             screen
         }
     }
 
-    @Test fun vectorAndInactiveState() {
+    @Test fun originalArtworkAndInactiveState() {
         paparazzi.shootWith("y-states", listOf(Size.PHONE)) { ctx ->
             LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
@@ -48,8 +57,9 @@ class R30YFlameShots {
                 }
                 val bitmap = StreakFlame.stillBitmap(ctx, 32)!!
                 assertEquals(32, bitmap.width)
-                assertTrue((0 until 32).any { x -> (0 until 32).any { y -> bitmap.getPixel(x, y) == Ui.c(ctx, R.color.ag_red) } })
-                assertEquals(0f to 0f, AchStyle.nudge(R.drawable.ic_flame))
+                val colors = (0 until 32).flatMap { x -> (0 until 32).map { y -> bitmap.getPixel(x, y) } }.filter { android.graphics.Color.alpha(it) > 0 }.toSet()
+                assertTrue("The original flame keeps its multicolour artwork", colors.size > 8)
+                assertEquals(0f to 0f, AchStyle.nudge(R.drawable.streak_flame_still))
             }
         }
     }
