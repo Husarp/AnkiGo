@@ -110,11 +110,7 @@ internal object ItemCard {
         }
         return FrameLayout(ctx).apply {
             addView(column, FrameLayout.LayoutParams(-1, -2).also { it.marginStart = dp(ctx, 32f); it.marginEnd = dp(ctx, 32f) })
-            spec.buy?.takeIf { it.limited || isTm }?.let { buy ->
-                addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = if (buy.owned) "Sold out" else "1 left" },
-                    FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.END).also { it.marginEnd = dp(ctx, 48f) })
-                if (buy.owned) column.alpha = 0.45f
-            }
+            if (spec.buy?.owned == true) column.alpha = 0.45f
             addView(closeButton(ctx, onClose), FrameLayout.LayoutParams(dp(ctx, 48f), dp(ctx, 48f), Gravity.TOP or Gravity.END))
         }
     }
@@ -228,7 +224,7 @@ internal object ItemCard {
                 spec.act?.let { row.addView(actView(ctx, it), LinearLayout.LayoutParams(0, -2, 1f)) }
                 if (row.childCount > 0) addView(row, Form.lp(ctx, 10))
             }
-            spec.item?.let { item -> HeldItemActions.buttons(page, item)?.let { addView(it, Form.lp(ctx, 8)) } }
+            if (spec.buy == null) spec.item?.let { item -> HeldItemActions.buttons(page, item)?.let { addView(it, Form.lp(ctx, 8)) } }
             if (trade != null) addView(if (trade.confirming) confirmView(ctx, trade) else tradeButton(ctx, trade), Form.lp(ctx, if (trade.confirming) 10 else 8))
         }
     }

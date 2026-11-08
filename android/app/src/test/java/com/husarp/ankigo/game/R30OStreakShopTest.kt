@@ -92,10 +92,9 @@ class R30OStreakShopTest {
         assertEquals(s.shopPurchases, back.shopPurchases)
     }
 
-    @Test fun freezePricesCapAndOnePurchasePerGameDaySurviveRestart() {
-        val s = streak(0).apply { cash = 50_000 }
+    @Test fun freezePricesCapAndRepeatPurchasesSurviveRestart() {
+        var s = streak(0).apply { cash = 50_000 }
         for (held in 0..2) {
-            s.day = "2026-11-${10 + held}"
             assertEquals(2000 + held * 1000, Shop.priceOf(data, s, StreakFreeze.ITEM))
             val before = s.cash
             assertFalse(Shop.buy(data, s, StreakFreeze.ITEM, quantity = 3).ok)
@@ -103,8 +102,8 @@ class R30OStreakShopTest {
             assertTrue(Shop.buy(data, s, StreakFreeze.ITEM).ok)
             assertEquals(before - 2000 - held * 1000, s.cash)
             val back = SaveCodec.decode(SaveCodec.encode(s))
-            assertFalse(Shop.buy(data, back, StreakFreeze.ITEM).ok)
-            assertTrue(Shop.soldOut(back, StreakFreeze.ITEM))
+            assertFalse(Shop.soldOut(back, StreakFreeze.ITEM))
+            s = back
         }
         s.day = "2026-11-14"
         s.shopItems += StreakFreeze.ITEM
@@ -195,7 +194,7 @@ class R30OStreakShopTest {
         assertTrue(Shop.buy(data, s, "everstone").ok)
         repeat(2) { assertTrue(Shop.buy(data, s, "potion", quantity = 5).ok) }
         assertEquals(10, s.count("potion"))
-        assertEquals(Shop.weekendPrices.keys + setOf("everstone", StreakFreeze.ITEM), Items.ALL.keys.filter { Shop.limited(it) }.toSet())
+        assertEquals(Shop.weekendPrices.keys + setOf("everstone"), Items.ALL.keys.filter { Shop.limited(it) }.toSet())
         s.shopTms += "thunderbolt"
         assertTrue(Shop.buyTm(data, s, "thunderbolt").ok)
         assertFalse(Shop.buyTm(data, s, "thunderbolt").ok)

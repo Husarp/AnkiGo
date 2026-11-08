@@ -1,6 +1,5 @@
 package com.husarp.ankigo.ui
 
-import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.Paint
@@ -29,7 +28,7 @@ internal object HoldToConfirm {
              timer: Timer = object : Timer {
                  override fun post(task: Runnable, delayMillis: Long) { view.postDelayed(task, delayMillis) }
                  override fun remove(task: Runnable) { view.removeCallbacks(task) }
-             }, confirm: () -> Unit) {
+             }, uptime: () -> Long = { android.os.SystemClock.uptimeMillis() }, confirm: () -> Unit) {
         val ctx = view.context
         val ink = Ui.c(ctx, R.color.ag_hold_ink)
         fun tint(v: View) {
@@ -68,14 +67,14 @@ internal object HoldToConfirm {
         // The fill stays behind the fixed label, including at 100%.
         view.background = fill
         view.clipToOutline = true
-        var animator: ValueAnimator? = null
+        var frame: Runnable? = null
         var active = false
         var fired = false
         var completion: Runnable? = null
         fun resetHold() {
             active = false
             completion?.let { timer.remove(it) }; completion = null
-            animator?.cancel(); animator = null
+            frame?.let { timer.remove(it) }; frame = null
             fill.level = 0
             view.parent?.requestDisallowInterceptTouchEvent(false)
         }
@@ -91,17 +90,16 @@ internal object HoldToConfirm {
             view.parent?.requestDisallowInterceptTouchEvent(true)
             // A real delay keeps confirmation deliberate even when system animations are disabled.
             completion = Runnable { if (active) finish() }.also { timer.post(it, DURATION_MS) }
-            animator = ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = DURATION_MS
-                interpolator = android.view.animation.LinearInterpolator()
-                addUpdateListener {
-                    if (!view.isEnabled || !allowed()) resetHold()
-                    else {
-                        fill.level = ((it.animatedValue as Float) * 10000).toInt()
-                    }
+            // Hold progress measures real time, even with system animations disabled or scaled.
+            val began = uptime()
+            frame = object : Runnable {
+                override fun run() {
+                    if (!active) return
+                    if (!view.isEnabled || !allowed()) { resetHold(); return }
+                    fill.level = ((uptime() - began).coerceIn(0L, DURATION_MS) * 10000 / DURATION_MS).toInt()
+                    timer.post(this, 16L)
                 }
-                start()
-            }
+            }.also { timer.post(it, 16L) }
         }
         view.contentDescription = "Hold to $label. Hold for one second, or use the accessibility long-click action."
         view.isFocusable = true

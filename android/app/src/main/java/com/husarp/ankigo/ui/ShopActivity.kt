@@ -223,7 +223,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     }
 
     /** A Shop item with its current price for affordability and the two-tap purchase action. */
-    private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state, item), Shop.soldOut(state, item), Shop.limited(item)) { buyItem(item) })
+    private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state, item), Shop.soldOut(state, item), Shop.limited(item) || item == StreakFreeze.ITEM) { buyItem(item) })
 
     /** A Shop TM with Buy, or "✓ Owned" once it is yours. */
     private fun tmSpec(move: String) = ItemCard.Spec(null, move, buy = ItemCard.Buy(ShopPlan.tmPrice(), move in state.tms) { buyTm(move) })
@@ -249,22 +249,20 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         val weekendOffer = Shop.weekendFor(data, st.day)?.let { weekendCard(it) }
         content.addView(ShopViews.offers(ctx, dailyOffer, weekendOffer), LinearLayout.LayoutParams(-1, -2))
 
+        content.addView(Bits.sect(ctx, "Basics"))
         if (Shop.freezeOnSale(st)) content.addView(
             ShopViews.tile(ctx, ShopViews.itemArt(ctx, StreakFreeze.ITEM, 64), "Streak Freeze",
-                priceView(ShopPlan.price(data, st, StreakFreeze.ITEM), 14f), "Streak Freeze, ${stock(StreakFreeze.ITEM)}",
+                priceView(ShopPlan.price(data, st, StreakFreeze.ITEM), 14f), "Streak Freeze, ${st.count(StreakFreeze.ITEM)} held",
                 sub = "In Bag: ${st.count(StreakFreeze.ITEM)} / 3 · used automatically", stock = stock(StreakFreeze.ITEM)) { openCard("streak-freeze") },
             LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 8) })
 
-        content.addView(Bits.sect(ctx, "Basics"))
         // always in stock: the basics at their normal price
         tileRows(Shop.basics().map { ShopPlan.Tile.Item(it) }, cols, CardKeys::basic)
-        tileRows(st.shopItems.filter { Items.def(it)?.kind == com.husarp.ankigo.game.ItemKind.BALL }
-            .map { ShopPlan.Tile.Item(it) }, cols, CardKeys::special)
 
         // today's specials: title and "new in N h", then the "Refresh shop" button (a real button, so it is easy to find; PLAN 108), then the tiles
         content.addView(Bits.sect(ctx, "Today's specials", "New in ${ShopPlan.countdown(minutesLeft)}"))
         content.addView(refreshButton(), LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 10) })
-        val specials = ShopPlan.specials(st.shopItems.filter { Items.def(it)?.kind != com.husarp.ankigo.game.ItemKind.BALL }, emptyList())
+        val specials = ShopPlan.specials(st.shopItems, emptyList())
         if (specials.isEmpty()) content.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Nothing in the shop yet." })
         tileRows(specials, cols, CardKeys::special)
         if (st.shopTms.isNotEmpty()) {
@@ -336,7 +334,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     private fun stock(item: String): String? = if (Shop.limited(item)) { if (Shop.soldOut(state, item)) "Sold out" else "1 left" } else null
 
     private fun buyItem(item: String) {
-        val quantity = if (Shop.limited(item)) 1 else open.quantity
+        val quantity = if (Shop.limited(item) || item == StreakFreeze.ITEM) 1 else open.quantity
         open.bought()
         if (act { g -> Shop.buy(g.data, g.state, item, quantity = quantity) }.ok) { GameSound.ui(this, SoundId.BUY); window?.purchase(appBar.pill ?: appBar) }
     }

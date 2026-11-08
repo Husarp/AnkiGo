@@ -117,7 +117,6 @@ object ItemInfo {
             ItemKind.AUTO -> listOf(
                 ItemFact(WHAT, "**One freeze protects one missed daily goal.** Hold up to **3**. At 3 held it is unavailable from all sources."),
                 ItemFact(HOW, "Used automatically at the configured day cutoff. A whole gap needs one freeze per missed day; if there are not enough, the streak ends and none are spent. Protected days preserve the count without adding goal days or rewards."),
-                ItemFact(FIGHT, "Rewarded battle win: **0.2%**, at most one per game day. Practice gives none. It has no manual battle action."),
             )
             ItemKind.BALL -> ballFacts(item)
             ItemKind.HEAL -> {
@@ -159,7 +158,7 @@ object ItemInfo {
     }
 
     fun whereToFind(data: GameData?, item: String): String = when {
-        item == StreakFreeze.ITEM -> "Daily gift (2%) · Rewarded battle wins · Shop, once per game day. Unavailable from all sources while holding 3."
+        item == StreakFreeze.ITEM -> "Daily gift (2%) · Rewarded battle wins (0.2%, at most one per game day; practice gives none) · Shop, until you hold 3. Every next freeze costs more: 2,000 / 3,000 / 4,000 coins as you hold 0 / 1 / 2. Unavailable from all sources while holding 3."
         item in Items.RETIRED -> "Not sold or found any more."
         isMaster(item) -> "Earned from the top tier of the Best streak achievement."
         isOldBall(item) -> "Shop on some days."
