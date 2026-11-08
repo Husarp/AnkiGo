@@ -3,6 +3,29 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.5.0
+- Matchups are discoveries. A wild Pokémon's Matchups section appears after your first attack. Each attacking type stays “???” until you see it hit that species; your own Pokémon learn the same way when they get hit. Forms share discoveries. Catching or defeating a Pokémon still reveals its stats, without filling in unseen matchups.
+- Level 3 Bond reveals every matchup of that species, including its forms and wild encounters. A small alert tells you when it happens. Pokémon already at Level 3 or higher get this knowledge when your save opens.
+- Bond details put current and next-level perks side by side, with coin and XP pictures, more space beneath the progress bar and text that fits on one line.
+- Evolution details name the evolution at the top and show checked requirements with consistent wording. Green evolution arrows mark the rows; Pokémon with no further evolution say “Does not evolve” without an expandable section. Held items have their own section.
+- Close and Back have clearer jobs: Close dismisses the current window. Following a Pokémon link within details changes that same window; its Back arrow returns to the previous Pokémon.
+- Streak Freezes live in Shop Basics. Buy them one at a time until you hold three, including several on the same day, for 2,000 / 3,000 / 4,000 coins as your supply grows. Their smaller icon combines a shield and snowflake, and their description explains where to find them.
+- Shop windows focus on buying. Limited offers have no quantity selector or repeated stock label inside the window; after purchase, Buy becomes “Sold out”. Daily balls appear in Today's specials, leaving Basics for permanent stock.
+- Answer buttons statistics offers This week, This month and This year, with the filters aligned left. Charts hide options that do not apply, and Settings categories describe what you can change inside them.
+- Achievements put Economy and Special above Item collections, update several icons, and remove the Pokémon caught achievement. Only eligible one-time achievements show an “Earned with” Pokémon, in the footer; tiered achievements have no Pokémon footer.
+- A greener daily goal bar fills green when reached, with a gentle glow, a few leaves and a firefly. Sub-tabs gain icons, nature changes use double arrows, and How the game works groups every section on a card.
+### Fixes
+- Evolving a Pokémon at Level 3 Bond or higher reveals its new species’ matchups immediately.
+- Battle condition chips stay beneath their Pokémon's info box and wrap when needed, with squarer corners and clearer stat arrows.
+- The animated streak flame returns to the study bar, widgets and statistics. The Best streak achievement uses an outline from the same flame.
+- Returning to an unanswered new card checks for learning or review cards that have become due and shows those first. Cards stay put while you are looking at them.
+- Hold buttons show their fill even when system animations are turned off. Their labels use plain actions such as Evolve, Refresh and Buy, without the repeated hold instruction.
+- Team cards lose rarity frames and the ordinary green mark; special rarity marks remain beside names. Box and Pokédex frames stay.
+- Taking, giving or moving a held item shows a message naming the item and Pokémon. The Bag tab no longer includes an item count.
+- Box's Shiny filter moves into Sort & filter, and quick filter chips toggle off when tapped again.
+- Unknown Pokémon in evolution-item lists keep their silhouettes without an extra grey background.
+- Tapping a Pokémon's battle alert or Exp. Share XP card opens that Pokémon's details.
+
 ## 1.4.0
 - Rarity marks and filters now follow one clear ladder. Starters and Pokémon with at least 500 total base stats get a round dot; Baby Pokémon, Ultra Beasts, Legendary and Mythical Pokémon keep their own marks. Filter the Box or Pokédex by one or several marks in Sort & filter. Auto-catch animations show a Great Ball for the dot and Baby marks, an Ultra Ball for Ultra Beasts and Legendary Pokémon, and a Master Ball for Mythical Pokémon.
 - Held items can be taken off or given to another Pokémon from their item window. Choose the holder when several Pokémon have the same item, then pick a recipient in the Box with its usual search, sorting and filters. Groups open their copies so you can choose one; Back cancels. Replaced items return to the Bag. Item totals include held copies and show who holds them.
