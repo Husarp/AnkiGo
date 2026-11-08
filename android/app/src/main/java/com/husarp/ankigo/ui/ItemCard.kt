@@ -151,7 +151,7 @@ internal object ItemCard {
                     addView(Bits.itemTile(ctx, spec.item.orEmpty(), 28))
                     addView(Ui.text(ctx, 13f, 800, R.color.ag_text).apply {
                         val n = page.state.count(spec.item.orEmpty())
-                        text = "1 ${Items.name(spec.item.orEmpty())} · $n in your Bag" + if (n > 0) " ✓" else ""
+                        text = "Use ${Items.name(spec.item.orEmpty())} · $n in your Bag" + if (n > 0) " ✓" else ""
                     }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(ctx, 8f) })
                 }, below)
             }

@@ -96,7 +96,7 @@ class R29BShots {
         val p=TeamPage(c,NoHost)
         AppPrefs.setDetailOpen(p,"evolution",true)
         val details=DialogShots.capture { MonDetail.show(p,d,mon) }!!
-        val condition=all(details.content()).single { it.contentDescription?.toString()=="Explain Thunder Stone" }
+        val condition=all(details.content()).single { it.contentDescription?.toString()=="Explain Use Thunder Stone" }
         val requirement=DialogShots.capture { condition.performClick() }!!
         assertTrue(requirement.button(AppDialog.BUTTON_POSITIVE)!!.isEnabled)
         paparazzi.snapshot(DialogShots.scene(c,requirement), "b-evolution-ready-${c.resources.configuration.uiMode}")

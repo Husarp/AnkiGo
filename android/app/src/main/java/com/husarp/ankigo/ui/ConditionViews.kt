@@ -112,9 +112,9 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
     /** Every chip rectangle on screen (tests, obstacles for the toasts). */
     fun chipRects(): List<RectF> = rows.values.flatMap { r -> r.chips.map { it.rect } }
 
-    fun setFlow(slot: ConditionMarks.Slot, rects: List<ConditionSpot.R>, marks: List<ConditionMarks.Mark>, m: ChipMetrics) {
+    fun setFlow(slot: ConditionMarks.Slot, rects: List<ConditionSpot.R>, marks: List<ConditionMarks.Mark>, m: ChipMetrics, more: Int = 0) {
         if (rects.isEmpty()) rows.remove(slot)
-        else rows[slot] = Row(slot, marks.zip(rects).map { (mark, r) -> Chip(RectF(r.l, r.t, r.r, r.b), mark, 0) })
+        else rows[slot] = Row(slot, rects.mapIndexed { i, r -> Chip(RectF(r.l, r.t, r.r, r.b), marks.getOrNull(i), if (i == marks.size) more else 0) })
         metrics = m
         invalidate()
     }
@@ -139,6 +139,13 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
             val base = m.baseline(c.rect.top)
             val mk = c.mark
             if (mk != null) drawMark(canvas, mk, c.rect, m, base)
+            else {
+                val text = "+${c.more}"
+                val previous = m.num.color
+                m.num.color = Ui.c(context, R.color.ag_text)
+                canvas.drawText(text, c.rect.centerX() - m.num.measureText(text) / 2f, base, m.num)
+                m.num.color = previous
+            }
         }
     }
 

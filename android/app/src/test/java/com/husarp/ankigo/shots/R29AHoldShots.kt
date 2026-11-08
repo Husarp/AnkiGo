@@ -51,7 +51,7 @@ class R29AHoldShots {
             var dialog: AppDialog? = null
             Pickers.interceptApp = { dialog = it }
             try {
-                all(rows).single { it.contentDescription?.startsWith("Explain Thunder Stone") == true }.performClick()
+                all(rows).single { it.contentDescription?.startsWith("Explain Use Thunder Stone") == true }.performClick()
                 val sheet = dialog!!.content()
                 assertEquals("This can't be undone.", all(sheet).filterIsInstance<TextView>().last { it.text.toString().contains("undone") }.text.toString())
                 val go = dialog!!.button(AppDialog.BUTTON_POSITIVE)!!
@@ -67,7 +67,7 @@ class R29AHoldShots {
             val unavailable = EvolutionRows(ctx, data, EvoLine.of(data, root).root, root, setOf(133), null, state, state.main) {}
             assertFalse(all(unavailable).any { it.contentDescription == "Ready to evolve" })
             val missing = DialogShots.capture {
-                all(unavailable).single { it.contentDescription?.startsWith("Explain Thunder Stone") == true }.performClick()
+                all(unavailable).single { it.contentDescription?.startsWith("Explain Use Thunder Stone") == true }.performClick()
             }!!
             assertFalse(missing.button(AppDialog.BUTTON_POSITIVE)!!.isEnabled)
             assertTrue(all(missing.content()).filterIsInstance<TextView>().any { it.text.toString() == "This can't be undone." })

@@ -471,14 +471,14 @@ object WidgetRender {
         fun chips(x: Float, y: Float, maxX: Float, s: WidgetSnapshot) {
             var cx = x
             val items = listOf(
-                Triple(R.drawable.ic_flame, if (s.streak > 0) R.color.ag_red else R.color.ag_sub0, if (s.streak == 1) "1 day" else "${s.streak} days"),
+                Triple(R.drawable.streak_flame_still, if (s.streak > 0) R.color.ag_red else R.color.ag_sub0, if (s.streak == 1) "1 day" else "${s.streak} days"),
                 Triple(R.drawable.ic_money, R.color.ag_yellow, "%,d".format(s.cash)),
                 Triple(R.drawable.ic_ball, R.color.ag_sub1, "${s.balls}"),
             )
             for ((ic, tone, text) in items) {
                 val w = 7f + (if (ic == R.drawable.ic_money) 17f else 13f) + 4f + paint(11f, 800, tone).measureText(text) + 7f
                 if (cx + w > maxX) break
-                cx += chip(cx, y, ic, tone, text, streak = ic == R.drawable.ic_flame && s.streak > 0) + 6f
+                cx += chip(cx, y, ic, tone, text, streak = ic == R.drawable.streak_flame_still && s.streak > 0) + 6f
             }
         }
 
@@ -616,7 +616,7 @@ object WidgetRender {
             fun streak(x: Float, y: Float, width: Float, size: Float) {
                 if (s.streak <= 0) return
                 val (t,p) = fitted("${s.streak}", (width-size-5).coerceAtLeast(8f), size*.85f, 6f, 900, R.color.ag_red)
-                if (!flame(x, y, size)) icon(R.drawable.ic_flame, x, y, size, col(R.color.ag_red))
+                if (!flame(x, y, size)) icon(R.drawable.streak_flame_still, x, y, size, col(R.color.ag_red))
                 line(t, x+size+4, y, size, p)
             }
             fun due(x: Float, y: Float, width: Float, size: Float, unit: Boolean = true) {

@@ -84,15 +84,15 @@ class EvoLine(val root: EvoNode, val current: Species) {
             add("When ready, choose Evolve in your Pokémon's Evolution section.")
         }.joinToString("\n\n")
 
-        /** "Lv 16", "Thunder Stone", "Linking Cord", "Friendship", "knows Mimic" (+ day/night, other conditions). */
+        /** Short requirement labels shared by every evolution list. */
         fun method(data: GameData, e: Evolution): String {
             val base = when (e.kind) {
-                EvoKind.LEVEL -> if (e.level != null) "Lv ${e.level}" else "Level up"
+                EvoKind.LEVEL -> if (e.level != null) "Level ${e.level}" else "Level up"
                 EvoKind.FRIENDSHIP -> "Level ${Bond.requiredLevel(e)} Bond"
-                EvoKind.ITEM -> e.item?.let { Items.name(it) } ?: "an item"
-                EvoKind.TRADE -> Items.name(e.item ?: "linking-cord")
+                EvoKind.ITEM -> "Use ${e.item?.let { Items.name(it) } ?: "an item"}"
+                EvoKind.TRADE -> "Use ${Items.name(e.item ?: "linking-cord")}"
                 EvoKind.LEVEL_MOVE -> "knows ${e.move?.let { data.move(it)?.name ?: it } ?: "a move"}"
-                EvoKind.OTHER -> "Linking Cord"
+                EvoKind.OTHER -> "Use Linking Cord"
             }
             val extra = listOfNotNull(
                 e.time,

@@ -168,13 +168,9 @@ object MonDetail {
         val state = GameRepo.state
         val seen = state?.let { it.seen + it.caught }.orEmpty()
         lateinit var dlg: AppDialog
-        // R18-G (PLAN 243B + 239): the card under the bars: Holding (item, Exp. Share; "Give item" where there are Options), then Evolution
-        val give: (() -> Unit)? = if (page != null) ({
-            // like Options → "Give item…": the details close once a picker really opens (nothing to give = just the toast)
-            if (state != null && HoldingPlan.giveable(state, mon).isNotEmpty()) dlg.dismiss()
-            MonActions(page).giveItem(mon)
-        }) else null
-        col.addView(DetailTopCard.forMon(a, data, state, mon, sp, seen, compact, page, give, if (page != null) { s -> DexDetail.show(page, s) } else null, onEvolved = {
+        DetailTopCard.expShare(a, data, state, mon)?.let { col.addView(it) }
+        DetailTopCard.heldItem(a, data, mon, page)?.let { col.addView(it) }
+        col.addView(DetailTopCard.forMon(a, data, state, mon, sp, seen, compact, page, if (page != null) { s -> DexDetail.show(page, s) } else null, onEvolved = {
             dlg.dismiss()
             show(a, data, mon)
         }),

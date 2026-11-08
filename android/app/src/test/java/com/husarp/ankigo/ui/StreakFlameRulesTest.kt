@@ -10,9 +10,9 @@ class StreakFlameRulesTest {
         assertEquals(Picture.ANIMATED, StreakFlameRules.picture(34, false, false, true))
     }
 
-    @Test fun supportedAndroidAnimates() {
-        assertEquals(Picture.ANIMATED, StreakFlameRules.picture(26, false, false, true))
-        assertEquals(Picture.ANIMATED, StreakFlameRules.picture(27, false, false, true))
+    @Test fun oldAndroidGetsStill() {
+        assertEquals(Picture.STILL, StreakFlameRules.picture(26, false, false, true))
+        assertEquals(Picture.STILL, StreakFlameRules.picture(27, false, false, true))
     }
 
     @Test fun reducedMotionRendererDeadAndFailureGetStill() {

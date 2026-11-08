@@ -9,11 +9,11 @@ class EvolutionRowTextTest {
 
     @Test fun friendshipShowsThresholdAndPlainTime() {
         val e = Evolution(135, EvoKind.FRIENDSHIP, minFriendship = 160, time = "night")
-        assertEquals("Needs Level 3 Bond\nat night", EvolutionRowText.condition(data, e))
+        assertEquals("Level 3 Bond\nat night", EvolutionRowText.condition(data, e))
         val mon = TestData.mon(data, 133, 20).apply { bondPoints = 124 }
-        assertEquals("Needs Level 3 Bond\nat night", EvolutionRowText.condition(data, e, mon))
+        assertEquals("Level 3 Bond\nat night", EvolutionRowText.condition(data, e, mon))
         mon.bondPoints = 250
-        assertEquals("Needs Level 3 Bond\nat night", EvolutionRowText.condition(data, e, mon))
+        assertEquals("Level 3 Bond\nat night", EvolutionRowText.condition(data, e, mon))
         mon.bondPoints = 124
         val text = EvolutionRowText.explanation(data, e, data.sp(133), setOf(133), null, mon)
         assertTrue(text.contains("Level 3 Bond"))
@@ -25,7 +25,7 @@ class EvolutionRowTextTest {
     @Test fun normalRowShowsBondGateAlongsideTheUsualRequirement() {
         val e = Evolution(135, EvoKind.LEVEL, level = 16)
         val mon = TestData.mon(data, 133, 40).apply { bondPoints = 124 }
-        assertEquals("Level 16\nNeeds Level 2 Bond", EvolutionRowText.condition(data, e, mon))
+        assertEquals("Level 16\nLevel 2 Bond", EvolutionRowText.condition(data, e, mon))
         mon.bondPoints = 125
         assertEquals("Level 16", EvolutionRowText.condition(data, e, mon))
     }
@@ -66,9 +66,37 @@ class EvolutionRowTextTest {
         assertFalse(text.contains("take it off"))
     }
 
+    @Test fun requirementsTrackEachGateAndMaskAnUnknownTarget() {
+        val e = Evolution(135, EvoKind.LEVEL, level = 26, time = "day", gender = 'F')
+        val st = TestData.state(data, 133, 20)
+        val mon = st.main!!.apply { bondPoints = 124; gender = 'M' }
+        val noon = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 12) }.timeInMillis
+        fun checks() = EvolutionRowText.requirements(data, e, data.sp(133), st, mon, noon).associate { it.label to it.met }
+        assertEquals(mapOf("Level 2 Bond" to false, "Level 26" to false, "in the daytime" to true, "Female Pokémon" to false), checks())
+        mon.bondPoints = 125; mon.level = 26; mon.gender = 'F'
+        assertTrue(checks().values.all { it })
+        assertEquals("Evolution · ???", EvolutionRowText.title(data, e, emptySet()))
+        assertEquals("Evolution · Jolteon", EvolutionRowText.title(data, e, setOf(135)))
+        assertFalse(EvolutionRowText.requirements(data, e, data.sp(135), st, mon, noon).first().met)
+    }
+
+    @Test fun itemRequirementsUseTheSameLabelAndCheckBagAvailability() {
+        val st = TestData.state(data, 133, 20).apply { bag.clear() }
+        val mon = st.main!!.apply { bondPoints = 125; heldItem = "metal-coat" }
+        for (e in listOf(Evolution(135, EvoKind.ITEM, item = "fire-stone"), Evolution(135, EvoKind.TRADE, item = "metal-coat"))) {
+            val item = Progression.evolutionItem(e)!!
+            val label = "Use ${Items.name(item)}"
+            assertEquals(label, EvolutionRowText.condition(data, e, mon))
+            fun requirement() = EvolutionRowText.requirements(data, e, data.sp(133), st, mon).single { it.label == label }
+            assertFalse(requirement().met)
+            st.bag[item] = 1
+            assertTrue(requirement().met)
+        }
+    }
+
     @Test fun tradeUsesActualAnkiGoItemAndDayClockIsExplained() {
         val e = Evolution(135, EvoKind.TRADE, time = "day")
-        assertEquals("Linking Cord\nin the daytime", EvolutionRowText.condition(data, e))
+        assertEquals("Use Linking Cord\nin the daytime", EvolutionRowText.condition(data, e))
         val text = EvolutionRowText.explanation(data, e, null, emptySet(), null, null)
         assertTrue(text.contains("Linking Cord"))
         assertTrue(text.contains("06:00–18:00"))

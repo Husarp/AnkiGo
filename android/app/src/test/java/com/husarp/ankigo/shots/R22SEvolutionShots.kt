@@ -66,7 +66,7 @@ class R22SEvolutionShots {
             assertEquals(9, rows.childCount)
             val labels = views(rows).filterIsInstance<TextView>()
             assertEquals(8, labels.count { it.text.toString() == "???" })
-            assertEquals(8, labels.count { it.text.toString() == "Thunder Stone" })
+            assertEquals(8, labels.count { it.text.toString() == "Use Thunder Stone" })
             labels.forEach { assertTrue("text has space: ${it.text}", it.width > 0 && it.height >= it.layout.height) }
             paparazzi.snapshot(rows, "r22s-eight-branches-${theme.name}-$scale")
         }

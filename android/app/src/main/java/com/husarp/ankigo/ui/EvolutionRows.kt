@@ -164,7 +164,7 @@ internal class EvolutionRows(
             if (bag) ShopActivity.openBag(a) else Nav.open(a, Dest.SHOP)
         }
         if (onEvolve != null && mon != null && parent?.num == mon.species) {
-            val dialog = AppDialog.Builder(a).setInfoHeader(EvolutionRowText.condition(data, e), Progression.evolutionItem(e)).setView(body)
+            val dialog = AppDialog.Builder(a).setInfoHeader(EvolutionRowText.title(data, e, seen), Progression.evolutionItem(e)).setView(body)
                 .setNegativeButton("Close", null)
             dialog.setPositiveButton("Hold to evolve", null)
             val window = dialog.create()
@@ -186,7 +186,7 @@ internal class EvolutionRows(
             return
         }
         val dialog = AppDialog.Builder(a)
-            .setInfoHeader(EvolutionRowText.condition(data, e), Progression.evolutionItem(e))
+            .setInfoHeader(EvolutionRowText.title(data, e, seen), Progression.evolutionItem(e))
             .setView(body).create()
         info = dialog
         bubble = dialog
@@ -196,7 +196,7 @@ internal class EvolutionRows(
     companion object {
         internal fun explanationDialog(a: Context, data: GameData, e: Evolution, parent: Species?, seen: Set<Int>,
                                        state: GameState?, mon: Mon?, open: (Boolean) -> Unit): AppDialog =
-            AppDialog.Builder(a).setInfoHeader(EvolutionRowText.condition(data, e), Progression.evolutionItem(e))
+            AppDialog.Builder(a).setInfoHeader(EvolutionRowText.title(data, e, seen), Progression.evolutionItem(e))
                 .setView(explanationContent(a, data, e, parent, seen, state, mon, open)).create()
 
         internal fun explanationContent(a: Context, data: GameData, e: Evolution, parent: Species?, seen: Set<Int>,
@@ -206,9 +206,20 @@ internal class EvolutionRows(
             val item = Progression.evolutionItem(e)
             val text = EvolutionRowText.explanation(data, e, parent, seen, state, mon)
             val paragraphs = text.split("\n\n").filter { it.isNotBlank() }
-            val sections = if (item == null) listOf("Requirements" to paragraphs.joinToString("\n\n")) else
-                listOf("Requirements" to paragraphs.drop(2).joinToString("\n\n"),
-                    "How to use" to paragraphs.firstOrNull().orEmpty(), "Where to find" to paragraphs.getOrNull(1).orEmpty())
+            addView(ItemCard.factBlock(a, "Requirements", ""), LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
+            EvolutionRowText.requirements(data, e, parent, state, mon).forEach { requirement ->
+                addView(Ui.text(a, 13.5f, 800, if (requirement.met) R.color.ag_green else R.color.ag_sub1).apply {
+                    this.text = "${if (requirement.met) "✓" else "•"} ${requirement.label}"
+                    setPadding(0, Ui.dp(a, 5), 0, Ui.dp(a, 5))
+                }, LayoutParams(-1, -2))
+            }
+            val details = (if (item == null) paragraphs else paragraphs.drop(2)).filterNot {
+                it.startsWith("Level ") && it.contains("Bond") || it.startsWith("You own ") ||
+                    it.startsWith("You don't have ") || it.startsWith("Requires 1 ")
+            }.joinToString("\n\n")
+            val sections = if (item == null) listOf("How to evolve" to details) else
+                listOf("How to use" to listOf(paragraphs.firstOrNull().orEmpty(), details).filter { it.isNotBlank() }.joinToString("\n\n"),
+                    "Where to find" to paragraphs.getOrNull(1).orEmpty())
             sections.filter { it.second.isNotBlank() }.forEach { (heading, paragraph) ->
                 addView(ItemCard.factBlock(a, heading, ""), LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
                 addView(Ui.text(a, 13.5f, 700, R.color.ag_sub1).apply {
@@ -236,13 +247,42 @@ internal class EvolutionRows(
 }
 
 internal object EvolutionRowText {
+    data class Requirement(val label: String, val met: Boolean)
+
+    fun title(data: GameData, e: Evolution, seen: Set<Int>): String =
+        "Evolution · ${data.species[e.to]?.let { EvoLine.shownName(it, seen) } ?: "???"}"
+
+    fun requirements(data: GameData, e: Evolution, parent: Species?, state: GameState?, mon: Mon?,
+                     now: Long = System.currentTimeMillis()): List<Requirement> = buildList {
+        val current = mon?.takeIf { parent?.num == it.species }
+        add(Requirement("Level ${Bond.requiredLevel(e)} Bond", current?.let { Bond.allows(it, e) } == true))
+        e.level?.let { level -> add(Requirement("Level $level", current != null && current.level >= level)) }
+        Progression.evolutionItem(e)?.let { item ->
+            add(Requirement("Use ${Items.name(item)}", state != null && state.count(item) > 0))
+        }
+        e.move?.let { move -> add(Requirement("knows ${data.move(move)?.name ?: move}", current != null && move in current.moves)) }
+        e.moveType?.let { type -> add(Requirement("knows a ${type.label} move", current?.moves?.any { data.move(it)?.type == type } == true)) }
+        e.time?.let { time -> add(Requirement(if (time == "day") "in the daytime" else "at night",
+            if (time == "day") Progression.isDay(now) else !Progression.isDay(now))) }
+        e.gender?.let { gender -> add(Requirement(if (gender == 'M') "Male Pokémon" else "Female Pokémon", current?.gender == gender)) }
+        e.condition?.replace("during the day", "")?.replace("at night", "")?.trim()?.takeIf { it.isNotEmpty() && e.kind != EvoKind.OTHER }?.let { condition ->
+            val met = current != null && when (condition) {
+                "with an Atk stat > its Def stat" -> StatCalc.stats(data, current).let { it.atk > it.def }
+                "with an Atk stat < its Def stat" -> StatCalc.stats(data, current).let { it.atk < it.def }
+                "with an Atk stat equal to its Def stat" -> StatCalc.stats(data, current).let { it.atk == it.def }
+                "with a Dark-type in the party" -> state?.teamMons()?.any { it.uid != current.uid && Type.DARK in data.sp(it.species).types } == true
+                else -> false
+            }
+            add(Requirement(condition.replaceFirstChar { it.uppercase() }, met))
+        }
+    }
+
     fun condition(data: GameData, e: Evolution, mon: Mon? = null): String {
         val method = EvoLine.method(data, e)
-            .let { if (e.kind == EvoKind.FRIENDSHIP) "Needs $it" else it }
             .replace(Regex("^Lv "), "Level ")
             .replace(", day", "\nin the daytime").replace(", night", "\nat night")
             .replace(", Fairy-type move", "\nknows a Fairy move")
-        return method + if (e.kind != EvoKind.FRIENDSHIP && mon != null && !Bond.allows(mon, e)) "\nNeeds Level ${Bond.requiredLevel(e)} Bond" else ""
+        return method + if (e.kind != EvoKind.FRIENDSHIP && mon != null && !Bond.allows(mon, e)) "\nLevel ${Bond.requiredLevel(e)} Bond" else ""
     }
 
     fun explanation(data: GameData, e: Evolution, parent: Species?, seen: Set<Int>, state: GameState?, mon: Mon?): String {

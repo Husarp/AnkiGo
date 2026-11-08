@@ -370,7 +370,7 @@ internal object ConditionSpot {
     class Placed(val rect: R, val fit: ConditionRow.Fit, val leftAligned: Boolean)
 
     /** The arena [w] x [h] px, its frame's safe area ([safe], px) and what every spot keeps clear of ([obstacles], already padded). */
-    class Scene(val w: Float, val h: Float, val safe: FrameSafe?, val obstacles: List<R>, val inset: Float = 0f) {
+    class Scene(val w: Float, val h: Float, val safe: FrameSafe?, val obstacles: List<R>, val inset: Float = 0f, val sprites: List<R> = emptyList()) {
         /** The room inside the frame's bands (and [inset] px in from the arena's edge, so a chip never touches it). */
         val area: R = (safe?.takeIf { !it.none }?.let { R(it.edge, it.top, w - it.edge, h - it.edge) } ?: R(0f, 0f, w, h)).let { R(it.l + inset, it.t + inset, it.r - inset, it.b - inset) }
 

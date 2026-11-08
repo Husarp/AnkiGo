@@ -31,7 +31,7 @@ internal fun soundCard(ctx: Context): View {
         group("Shop", null, SoundGroup.SHOP, SoundId.BUY),
         volume("UI sounds volume", SoundChannel.BUTTONS),
     ))
-    val battle = card(R.drawable.ic_flame, "Battle", listOf(
+    val battle = card(R.drawable.streak_flame_still, "Battle", listOf(
         group("Battle effects", "Hits, faint, catch, level up, misses", SoundGroup.BATTLE, SoundId.HIT),
         Form.soundRow(ctx, "Move type sounds", "Soft sound for each move type, together with the hit", SoundPrefs.typeSounds(ctx),
             { playing -> GameSound.preview(ctx, SoundId.TYPE_WATER, playing)?.let { Ui.toast(ctx, it) } }) { SoundPrefs.setTypeSounds(ctx, it) },

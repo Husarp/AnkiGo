@@ -121,7 +121,7 @@ class R602Shots {
         // PLAN 405: the full level label is below the Stats title; evolution stays under the types.
         assertTrue("Stats shows the full level label", t.contains("Level ${GameRepo.state!!.battle!!.wild.level}"))
         assertTrue(t.none { it.contains("· Lv ") && it.startsWith("#") })
-        assertTrue(t.contains("EVOLUTION") && t.none { it.equals("Holding", ignoreCase = true) })
+        assertTrue(t.contains("DOES NOT EVOLVE") && t.none { it.equals("Holding", ignoreCase = true) })
         assertEquals("known species has no hidden moves", 0, t.count { it == "?" })
         assertTrue(t.contains("Water Gun") && t.contains("Tackle"))
     }) { ctx ->

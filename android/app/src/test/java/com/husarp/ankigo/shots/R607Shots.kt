@@ -72,7 +72,7 @@ class R607Shots {
     }
 
     @Test fun flameIsCentredInItsMedal() {
-        val (dx, dy) = AchStyle.nudge(com.husarp.ankigo.R.drawable.ic_flame)
+        val (dx, dy) = AchStyle.nudge(com.husarp.ankigo.R.drawable.streak_flame_still)
         assertEquals(0f, dx, 0.01f)
         assertEquals(0f, dy, 0.01f)
         assertEquals(0f to 0f, AchStyle.nudge(com.husarp.ankigo.R.drawable.ic_star))

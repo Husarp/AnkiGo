@@ -66,7 +66,7 @@ class R30U2Shots {
                 }
                 assertFalse(all(scene).filterIsInstance<TextView>().any { it.text.contains('♥') })
                 if (mode == "requirement") assertTrue(all(scene).filterIsInstance<TextView>().any {
-                    it.text.toString().startsWith("Needs Level 3 Bond")
+                    it.text.toString().startsWith("Level 3 Bond")
                 })
                 dialog.dismiss()
             } finally { DetailSections.storeOf = oldStore }
