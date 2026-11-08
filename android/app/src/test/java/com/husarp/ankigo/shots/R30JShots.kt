@@ -88,7 +88,7 @@ class R30JShots {
             val go = dialog.button(AppDialog.BUTTON_POSITIVE)!!
             for (percent in listOf(0, 50, 100)) {
                 go.background.level = percent * 100
-                assertEquals("Hold to evolve", go.text.toString())
+                assertEquals("Evolve", go.text.toString())
                 paparazzi.snapshot(dialog.content(), "j-476-hold-$percent-${theme.name.lowercase()}")
             }
             dialog.dismiss()

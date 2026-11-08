@@ -174,7 +174,7 @@ object DexDetail {
                     setPadding(Ui.dp(a, 10), 0, Ui.dp(a, 10), 0)
                 })
             }
-        }.create()
+        }.setPokemonDetails().create()
         Pickers.show(dlg)
     }
 

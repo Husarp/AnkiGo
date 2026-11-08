@@ -34,7 +34,10 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     private var sideMarginDp = 16
     private var title: CharSequence? = null
     private var infoHeader: View? = null
-    private var itemInfo = false
+    internal var itemInfo = false
+        private set
+    internal var evolutionInfo = false
+        private set
     private var message: CharSequence? = null
     private var customView: View? = null
     private var customScrollsItself = false
@@ -53,13 +56,21 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     private val buttons = LinkedHashMap<Int, Btn>()
     private val buttonViews = HashMap<Int, TextView>()
     private var built: View? = null
+    internal var pokemonDetails = false
+        private set
+    private var replacePokemon = false
+    private var pokemonHost: AppDialog? = null
+    private val pokemonPages = mutableListOf<AppDialog>()
 
     /** The platform dialog, made on first use (the content alone can be built and shot without a window). */
     private var made: Dialog? = null
     private val dlg: Dialog get() = made ?: makeDialog().also { made = it }
 
     private fun makeDialog(): Dialog =
-        Dialog(context).apply {
+        object : Dialog(context) {
+            @Deprecated("Deprecated in Java")
+            override fun onBackPressed() { if (pokemonDetails) goBack() else super.onBackPressed() }
+        }.apply {
             requestWindowFeature(Window.FEATURE_NO_TITLE)
             setContentView(content())
             window?.apply {
@@ -70,7 +81,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
             }
             setCancelable(cancelable)
             setCanceledOnTouchOutside(cancelable)
-            setOnDismissListener { leftStack(); dismissListener?.onDismiss(this@AppDialog) }
+            setOnDismissListener { leftStack(); pokemonPages.clear(); dismissListener?.onDismiss(this@AppDialog) }
             setOnCancelListener { cancelListener?.onCancel(this@AppDialog) }
         }
 
@@ -81,8 +92,35 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
             .coerceIn(0, Ui.dp(context, AppDialogRules.MAX_WIDTH_DP))
     }
 
-    val window: Window? get() = dlg.window
-    val isShowing: Boolean get() = made?.isShowing == true
+    val window: Window? get() = pokemonHost?.window ?: dlg.window
+    val isShowing: Boolean get() = pokemonHost?.isShowing ?: (made?.isShowing == true)
+
+    internal fun reusePokemonWindow(): Boolean {
+        if (!pokemonDetails) return false
+        val host = WindowStack.pokemonWindow(context) ?: run { pokemonPages += this; return false }
+        WindowStack.uncover(host)
+        pokemonHost = host
+        if (replacePokemon) host.pokemonPages.removeLastOrNull()
+        host.pokemonPages += this
+        host.refreshPokemonPage()
+        return true
+    }
+
+    private fun refreshPokemonPage() {
+        made?.let { dialog ->
+            dialog.setContentView(content())
+            dialog.window?.setLayout(cardWidthPx(), ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+    }
+
+    /** The arrow and system Back share the same history; Close discards the whole window. */
+    internal fun goBack() {
+        pokemonHost?.let { it.goBack(); return }
+        if (pokemonPages.size > 1) {
+            pokemonPages.removeAt(pokemonPages.lastIndex)
+            refreshPokemonPage()
+        } else dismiss()
+    }
 
     fun show() {
         dlg.window?.let { com.husarp.ankigo.sound.ButtonSounds.install(it) }
@@ -90,8 +128,16 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
         try { dlg.window?.setWindowAnimations(UiMotion.windowStyle(context)); dlg.show(); dlg.window?.setLayout(cardWidthPx(), ViewGroup.LayoutParams.WRAP_CONTENT) } catch (e: RuntimeException) { leftStack(); throw e }
         AwayWindows.track(this) { it.dismiss() }
     }
-    override fun dismiss() { leftStack(); made?.window?.setWindowAnimations(UiMotion.windowStyle(context)); made?.dismiss() }
-    override fun cancel() { leftStack(); made?.window?.setWindowAnimations(UiMotion.windowStyle(context)); made?.cancel() }
+    override fun dismiss() {
+        pokemonHost?.let { it.dismiss(); return }
+        leftStack(); pokemonPages.clear()
+        made?.window?.setWindowAnimations(UiMotion.windowStyle(context)); made?.dismiss()
+    }
+    override fun cancel() {
+        pokemonHost?.let { it.cancel(); return }
+        leftStack(); pokemonPages.clear()
+        made?.window?.setWindowAnimations(UiMotion.windowStyle(context)); made?.cancel()
+    }
 
     fun setOnDismissListener(l: DialogInterface.OnDismissListener?) { dismissListener = l }
     fun setOnCancelListener(l: DialogInterface.OnCancelListener?) { cancelListener = l }
@@ -103,10 +149,11 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     override fun stackChanged(stacked: Boolean) = Unit
 
     /** The button view of [which] (`BUTTON_POSITIVE` / `BUTTON_NEGATIVE` / `BUTTON_NEUTRAL`), or null when the dialog has none; for enabling / disabling it. */
-    fun button(which: Int): TextView? { content(); return buttonViews[which] }
+    fun button(which: Int): TextView? { ownContent(); return buttonViews[which] }
 
     /** The card with all its parts; built once. Screenshot tests put it in a scene; [show] puts it in the window. */
-    internal fun content(): View = built ?: build().also { built = it }
+    internal fun content(): View = pokemonHost?.content() ?: (pokemonPages.lastOrNull() ?: this).ownContent()
+    private fun ownContent(): View = built ?: build().also { built = it }
 
     // ---------- building the card ----------
 
@@ -144,7 +191,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
                     setPadding(Ui.dp(ctx, 13), Ui.dp(ctx, 13), Ui.dp(ctx, 13), Ui.dp(ctx, 13))
                     contentDescription = "Back to previous screen"
                     background = RippleDrawable(ink(0x22, Ui.c(ctx, R.color.ag_text)), null, ColorDrawable(Color.BLACK))
-                    setOnClickListener { dismiss() }
+                    setOnClickListener { goBack() }
                 }, LinearLayout.LayoutParams(Ui.dp(ctx, 48), Ui.dp(ctx, 48)))
                 val largeLabel = headerContext != null
                 if (largeLabel) {
@@ -207,7 +254,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
                 setPadding(Ui.dp(ctx, 20), Ui.dp(ctx, 4), Ui.dp(ctx, 20), Ui.dp(ctx, 4))
             }
             footer?.let { row.addView(it, LinearLayout.LayoutParams(0, -2, 1f).also { p -> p.marginEnd = Ui.dp(ctx, 8) }) }
-            row.addView(makeButton(ctx, BUTTON_POSITIVE, Btn("Close", DialogInterface.OnClickListener { _, _ -> WindowStack.closeAll(context) })),
+            row.addView(makeButton(ctx, BUTTON_POSITIVE, Btn("Close", null)),
                 LinearLayout.LayoutParams(0, -2, 1f))
             card.addView(row, LinearLayout.LayoutParams(-1, -2))
         }
@@ -328,7 +375,10 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
         fun setTopAction(v: View) = apply { d.topAction = v; d.closeAtTop = true }
         /** Pinned bare back arrow beside the title; dismisses to the originating screen. */
         fun setBackAtTop() = apply { d.backAtTop = true }
-        /** Details keep Close in their fixed footer; Back always dismisses only this card. */
+        /** Pokémon links reuse one window, keeping previous pages for Back. */
+        fun setPokemonDetails(replace: Boolean = false) = apply { d.pokemonDetails = true; d.replacePokemon = replace }
+        fun setEvolutionInfo() = apply { d.evolutionInfo = true }
+        /** Details keep Close in their fixed footer. */
         fun setDetailsFooter(options: View? = null, contextLabel: String? = null) = apply {
             d.detailsFooter = true; d.footer = options; d.backAtTop = true; d.headerContext = contextLabel
         }

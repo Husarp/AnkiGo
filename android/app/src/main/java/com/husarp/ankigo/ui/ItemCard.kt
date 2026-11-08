@@ -363,7 +363,7 @@ internal object ItemCard {
         val quantity = if (spec.item == null || b.limited) 1 else open.quantity
         val total = b.price.now.toLong() * quantity
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        val go = button(ctx, Bits.blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f), Ui.c(ctx, R.color.ag_text), "Hold to buy")
+        val go = button(ctx, Bits.blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f), Ui.c(ctx, R.color.ag_text), "Buy")
         go.alpha = if (page.state.cash >= total) 1f else 0.45f
         go.orientation = LinearLayout.HORIZONTAL
         go.getChildAt(0).layoutParams = LinearLayout.LayoutParams(-2, -2)

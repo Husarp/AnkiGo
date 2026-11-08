@@ -280,6 +280,6 @@ class AchievementPageMathTest {
         // battle rows use the app's own swords
         assertEquals(com.husarp.ankigo.R.drawable.ic_swords, AchStyle.icon("crossed-swords"))
         assertEquals(com.husarp.ankigo.R.drawable.ic_ball, AchStyle.icon("ball"))
-        assertEquals(com.husarp.ankigo.R.drawable.streak_flame_still, AchStyle.icon("flame"))
+        assertEquals(com.husarp.ankigo.R.drawable.ic_ach_streak_flame, AchStyle.icon("flame"))
     }
 }

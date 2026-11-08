@@ -21,12 +21,12 @@ class R29AHoldShots {
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx); ShopCardKit.install()
             val (page, stage) = ShopCardKit.page(ctx, null)
-            assertTrue(all(stage).any { it.contentDescription?.startsWith("Hold to refresh shop") == true })
+            assertTrue(all(stage).any { it.contentDescription?.startsWith("Refresh shop") == true })
             paparazzi.snapshot(stage, "a-shop-${theme.name.lowercase()}")
             page.openCard(CardKeys.basic(ShopPlan.Tile.Item("potion"))); stage.render()
-            assertTrue(all(stage).filterIsInstance<TextView>().any { it.text.toString() == "Hold to buy" })
+            assertTrue(all(stage).filterIsInstance<TextView>().any { it.text.toString() == "Buy" })
             paparazzi.snapshot(stage, "a-buy-${theme.name.lowercase()}")
-            val buy = all(stage).single { it.contentDescription?.startsWith("Hold to buy.") == true }
+            val buy = all(stage).single { it.contentDescription?.startsWith("Buy") == true }
             for (percent in listOf(0, 25, 50, 75, 100)) {
                 buy.background.level = percent * 100
                 paparazzi.snapshot(stage, "a-hold-buy-${theme.name.lowercase()}-$percent")
@@ -55,7 +55,7 @@ class R29AHoldShots {
                 val sheet = dialog!!.content()
                 assertEquals("This can't be undone.", all(sheet).filterIsInstance<TextView>().last { it.text.toString().contains("undone") }.text.toString())
                 val go = dialog!!.button(AppDialog.BUTTON_POSITIVE)!!
-                assertEquals("Hold to evolve", go.text.toString())
+                assertEquals("Evolve", go.text.toString())
                 paparazzi.snapshot(sheet, "a-evolve-sheet-${theme.name.lowercase()}")
                 for (percent in listOf(0, 25, 50, 75, 100)) {
                     go.background.level = percent * 100
@@ -108,7 +108,7 @@ class R29AHoldShots {
             val dialog = DialogShots.capture { Pickers.hold(ctx, action, message, action) { count++ } }!!
             assertTrue(all(dialog.content()).filterIsInstance<TextView>().any { it.text.toString() == message })
             val button = dialog.button(AppDialog.BUTTON_POSITIVE)!!
-            assertEquals("Hold to ${action.lowercase()}", button.text.toString())
+            assertEquals(action, button.text.toString())
             button.performClick(); assertEquals(0, count)
             button.performLongClick(); assertEquals(1, count)
         }
