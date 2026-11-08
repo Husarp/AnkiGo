@@ -50,9 +50,13 @@ class R26LStatShots {
             for (sign in listOf(1, -1)) for (start in listOf(1, 4)) {
                 val metrics = ChipMetrics(ctx, 11f)
                 val marks = (start..start+2).map { n -> ConditionMarks.Mark("$n", ConditionMarks.Slot.OURS, ConditionMarks.def("stat.atk")!!, sign * n, n.toLong()) }
-                val w = metrics.summaryWidth(marks)
+                var x = 0f
+                val rects = marks.map { mark ->
+                    val w = metrics.width(mark)
+                    ConditionSpot.R(x, 0f, x + w, metrics.height).also { x += w + metrics.gap }
+                }
                 addView(ConditionMarksView(ctx).apply {
-                    setRow(ConditionMarks.Slot.OURS, ConditionSpot.Placed(ConditionSpot.R(0f, 0f, w, metrics.height), ConditionRow.Fit(1, 0, w), true), marks, metrics)
+                    setFlow(ConditionMarks.Slot.OURS, rects, marks, metrics)
                 }, LinearLayout.LayoutParams(-1, (metrics.height + 8).toInt()))
             }
             addView(FloatTextView(ctx, FloatText(true, "Attack up 6", FloatKind.STAT_UP, "ATK", 6), 0f))

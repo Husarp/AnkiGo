@@ -1451,7 +1451,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         box.addView(Ui.text(this, 14f, 800, R.color.ag_text).apply { text = "AnkiGo ${Updates.current(this@SettingsPage)}" })
         box.addView(Form.body(this,
             "Pokémon and Pokémon names © Nintendo / Creatures / GAME FREAK. Data: PokeAPI, Pokémon Showdown. " +
-                "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). Secret achievement icons: Tabler Icons © 2020–2026 Paweł Kuna (MIT, https://tabler.io/icons). " +
+                "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). Battle condition and secret achievement icons: Tabler Icons © 2020–2026 Paweł Kuna (MIT, https://tabler.io/icons). " +
                 "Bond artwork: filling Love Ball from PokéAPI sprites (© The Pokémon Company), recoloured and enlarged for AnkiGo. Source terms: Bond artwork licence below. " +
                 "Attack effects: Kenney Particle Pack (CC0) and Pokémon Showdown effect images (CC0); Ember and Vine Whip pixel art drawn for AnkiGo. " +
                 "Streak flame: animated Noto Emoji by Google (CC BY 4.0, resized; animation modified for AnkiGo). " +

@@ -252,13 +252,12 @@ class R19KConditionShots {
         }
     }
 
-    @Test fun eightConditionsShowTheMostImportantAndAPlusNOnTheBattleTab() {
+    @Test fun eightConditionsKeepEveryNamedChipOnTheBattleTab() {
         paparazzi.unsafeUpdateConfig(deviceConfig = device(412, 869, Theme.LIGHT))
         val sc = setup(Shots.files(paparazzi.context), hosts[0], 8, picture = false)
         for (row in sc.arena.markRows().filter { it.slot != ConditionMarks.Slot.FIELD }) {
-            val plus = row.chips.last()
-            assertNull("${row.slot}: the +N is the last chip", plus.mark)
-            assertTrue("${row.slot}: some chips and a +N", plus.more in 1..7 && row.chips.size - 1 + plus.more == 8)
+            assertEquals(8, row.chips.size)
+            assertTrue(row.chips.all { it.mark != null && it.more == 0 })
         }
     }
 
@@ -281,26 +280,26 @@ class R19KConditionShots {
         assertTrue(a.bubbleOpen())
     }
 
-    @Test fun stageSummaryTapExplainsEveryChangedStatOnThatSide() {
+    @Test fun stageChipTapExplainsOnlyTheSelectedStatOnThatSide() {
         for (host in listOf(hosts[0], hosts[3], hosts[6])) for (theme in Theme.entries) for (slot in listOf(ConditionMarks.Slot.OURS, ConditionMarks.Slot.WILD)) {
             paparazzi.unsafeUpdateConfig(deviceConfig = device(host.w, host.h, theme))
             val ctx = Shots.files(paparazzi.context)
             val sc = setup(ctx, host, 1, picture = false)
             val b = GameRepo.state!!.battle!!
             b.player.boosts[0] = if (host == hosts[6]) 0 else 1; b.player.boosts[1] = -2
-            // One summary remains the tap target even when both Attack and Defense change.
+            // Each stat remains independently tappable when both Attack and Defense change.
             b.enemy.boosts[0] = if (host == hosts[0]) 3 else 0; b.enemy.boosts[1] = -1
             sc.arena.syncConditions(b)
             layoutScene(sc)
-            val chip = sc.arena.markRows().first { it.slot == slot }.chips.single { it.stages.isNotEmpty() }
+            val chip = sc.arena.markRows().first { it.slot == slot }.chips.first { it.mark!!.key.startsWith("stat.") }
             val c = chip.rect
             val t = android.os.SystemClock.uptimeMillis()
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, c.centerX(), c.centerY(), 0))
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t + 40, MotionEvent.ACTION_UP, c.centerX(), c.centerY(), 0))
             val spoken = sc.arena.conditionListShown()!!.spoken
             val own = sc.arena.conditions.of(slot).filter { it.key.startsWith("stat.") }
-            assertEquals(own.map { it.key }, chip.stages.map { it.key })
-            for (mark in own) assertTrue(spoken, spoken.contains(com.husarp.ankigo.ui.ConditionExplanation.line(mark)))
+            assertTrue(chip.stages.isEmpty())
+            for (mark in own) assertEquals(mark.key == chip.mark!!.key, spoken.contains(com.husarp.ankigo.ui.ConditionExplanation.line(mark)))
             val otherSlot = if (slot == ConditionMarks.Slot.OURS) ConditionMarks.Slot.WILD else ConditionMarks.Slot.OURS
             for (mark in sc.arena.conditions.of(otherSlot).filter { it.key.startsWith("stat.") })
                 assertFalse("the other side is excluded: $spoken", spoken.contains(com.husarp.ankigo.ui.ConditionExplanation.line(mark)))
@@ -313,7 +312,7 @@ class R19KConditionShots {
             fun labels(v: View): List<String> = (if (v is android.widget.TextView) listOf(v.text.toString()) else emptyList()) +
                 ((v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).flatMap { labels(g.getChildAt(it)) } } ?: emptyList())
             val texts = labels(card)
-            assertFalse("no owner header", texts.any { it.contains("Wild ") || it.contains("Your ") })
+            assertTrue("owner anchors the card", texts.any { it.contains("Wild ") || it.contains("Your ") })
             assertFalse("no close button", texts.any { it == "×" || it == "✕" })
             assertTrue("still explains the multiplier", texts.any { it.contains("×") })
             val tap = android.os.SystemClock.uptimeMillis()
@@ -485,7 +484,7 @@ class R19KConditionShots {
         val up = MotionEvent.obtain(0, 10, MotionEvent.ACTION_UP, x, y, 0)
         a.dispatchTouchEvent(up); up.recycle()
         assertTrue(a.bubbleOpen())
-        assertNull(a.conditionListShown())
+        assertTrue(a.conditionListShown()!!.spoken.contains("Asleep"))
     }
 
     @Test fun pressedChipFeedbackShots() {

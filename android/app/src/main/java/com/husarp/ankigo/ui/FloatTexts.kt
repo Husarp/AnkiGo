@@ -15,7 +15,7 @@ enum class FloatKind { DAMAGE, BIG_DAMAGE, MISS, NO_EFFECT, NOT_VERY, SUPER, CRI
  * (R19-C: [text] is then only the spoken line, "Attack up 2").
  * PLAN 217: a STATUS_DAMAGE float carries the status key ("brn" / "psn" / "tox") in [stat]; the view colours it like that status' badge.
  */
-data class FloatText(val onPlayer: Boolean, val text: String, val kind: FloatKind, val stat: String? = null, val stages: Int = 0)
+data class FloatText(val onPlayer: Boolean, val text: String, val kind: FloatKind, val stat: String? = null, val stages: Int = 0, val condition: String? = null)
 
 /** [crits] = whether "Critical!" is shown (only when the engine has crits on). */
 data class FloatContext(val crits: Boolean = Tuning.CRITS)
@@ -72,7 +72,7 @@ object FloatTexts {
 
     private fun effect(e: GameEvent.Effect): List<FloatText> {
         val p = e.onPlayer
-        val named = if (e.label != null && e.amount > 0 && e.kind in NAMED_WITH_AMOUNT) listOf(FloatText(p, e.label, FloatKind.INFO)) else emptyList()
+        val named = if (e.label != null && e.amount > 0 && e.kind in NAMED_WITH_AMOUNT) listOf(FloatText(p, e.label, FloatKind.INFO, condition = e.stat)) else emptyList()
         return named + when (e.kind) {
             EffectKind.STATUS_APPLIED -> statusName(e.status)?.let { listOf(FloatText(p, it, FloatKind.STATUS)) } ?: emptyList()
             EffectKind.STATUS_CURED -> {
@@ -89,10 +89,10 @@ object FloatTexts {
                     "par" -> listOf(FloatText(p, "Fully paralyzed", FloatKind.STATUS, key))
                     "frz" -> listOf(FloatText(p, "Frozen solid", FloatKind.STATUS, key))
                     // R17C-1: the reasons that are not a status (keys of CoreRules / Abilities)
-                    "flinch" -> listOf(FloatText(p, "Flinched", FloatKind.STATUS))
-                    "attract" -> listOf(FloatText(p, "In love", FloatKind.STATUS))
-                    "recharge" -> listOf(FloatText(p, "Recharging", FloatKind.STATUS))
-                    "confusion" -> listOf(FloatText(p, "Confused", FloatKind.STATUS))
+                    "flinch" -> listOf(FloatText(p, "Flinched", FloatKind.STATUS, condition = "flinch"))
+                    "attract" -> listOf(FloatText(p, "In love", FloatKind.STATUS, condition = "attract"))
+                    "recharge" -> listOf(FloatText(p, "Recharging", FloatKind.STATUS, condition = "mustrecharge"))
+                    "confusion" -> listOf(FloatText(p, "Confused", FloatKind.STATUS, condition = "confusion"))
                     "truant" -> listOf(FloatText(p, "Loafing", FloatKind.STATUS))
                     else -> listOf(FloatText(p, "Can't move", FloatKind.STATUS))
                 }
@@ -118,7 +118,7 @@ object FloatTexts {
             } else emptyList()
             // R17C-1: a lasting condition, the field or a stopped move says its short label once, when it starts (stages >= 0); the end shows nothing
             EffectKind.VOLATILE, EffectKind.FIELD, EffectKind.BLOCKED ->
-                if (e.label != null && e.stages >= 0) listOf(FloatText(p, e.label, FloatKind.INFO)) else emptyList()
+                if (e.label != null && e.stages >= 0) listOf(FloatText(p, e.label, FloatKind.INFO, condition = e.stat)) else emptyList()
             EffectKind.RESIDUAL -> if (e.amount > 0) listOf(FloatText(p, loss(e.amount), FloatKind.DAMAGE)) else emptyList()
             // R17C-9a: an ability at work says its name (label); any other plain line has no float
             EffectKind.OTHER -> e.label?.let { listOf(FloatText(p, it, FloatKind.INFO)) } ?: emptyList()

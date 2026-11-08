@@ -12,6 +12,6 @@ internal object FieldExplanation {
         val battle = state.battle ?: return ""
         val main = state.main ?: return ""
         val view = SimpleView.of(data, battle, main)
-        return if (view.weather() == null) "Weather effects are suppressed by Cloud Nine or Air Lock." else ""
+        return if (view.weather() == null) "Cloud Nine or Air Lock suppresses this weather." else ""
     }
 }

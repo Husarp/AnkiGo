@@ -37,6 +37,8 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
     /** PLAN 172: "can't move" floats carry the status key; its badge is drawn in front of the text. */
     private val statusKey = if (ft.kind == FloatKind.STATUS && ft.stat in setOf("slp", "frz", "par")) ft.stat else null
     private val statusBadge = statusKey?.let { StatusBadge(ctx, it) }
+    private val conditionIcon = ft.condition?.let { ConditionIcons.of(it) }?.let { ctx.getDrawable(it)?.mutate()?.apply { setTint(fillColor) } }
+    private val hasIcon = statusBadge != null || conditionIcon != null
     private val tiltDeg = if (badge) 0f else Look.tilt(ft.text)
 
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -83,13 +85,13 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
         contentW = when {
             badge -> badgePad + chevW + 3f * d + tw + badgePad
             burst -> burstFit!!.w
-            statusBadge != null -> tw + FloatFrame.SKEW * th + 2f * strokePx + th * 1.4f + 2f * room
+            hasIcon -> tw + FloatFrame.SKEW * th + 2f * strokePx + th * 1.4f + 2f * room
             else -> tw + FloatFrame.SKEW * th + 2f * strokePx + 2f * room
         }
         contentH = when {
             badge -> badgeH
             burst -> burstFit!!.h
-            statusBadge != null -> th * 1.3f + 2f * strokePx + 2f * room
+            hasIcon -> th * 1.3f + 2f * strokePx + 2f * room
             else -> th + 2f * strokePx + 2f * room
         }
         isClickable = false
@@ -115,7 +117,7 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
                     FloatFrame.Ink(cx + chevW / 2f + 3f * d + tw / 2f, 0f, tw, th)), contentW, contentH, d)
             }
             else -> {
-                val left = if (statusBadge != null) room else (contentW - (tw + FloatFrame.SKEW * th)) / 2f - strokePx
+                val left = if (hasIcon) room else (contentW - (tw + FloatFrame.SKEW * th)) / 2f - strokePx
                 minOf(left, (contentW - (tw + FloatFrame.SKEW * th)) / 2f - strokePx, (contentH - th) / 2f - strokePx)
             }
         }
@@ -148,13 +150,14 @@ internal class FloatTextView(ctx: Context, val ft: FloatText, floorSp: Float) : 
             }
             else -> {
                 var tx = -(tw + FloatFrame.SKEW * th) / 2f
-                if (statusBadge != null) {
+                if (hasIcon) {
                     val b = (th * 1.3f).toInt()
                     tx = -contentW / 2f + room + strokePx + th * 1.4f
-                    statusBadge.layout(0, 0, b, b)
+                    statusBadge?.layout(0, 0, b, b)
                     canvas.save()
                     canvas.translate(-contentW / 2f + room + strokePx, -b / 2f)
-                    statusBadge.draw(canvas)
+                    statusBadge?.draw(canvas)
+                    conditionIcon?.let { it.setBounds(0, 0, b, b); it.draw(canvas) }
                     canvas.restore()
                 }
                 text.style = Paint.Style.STROKE

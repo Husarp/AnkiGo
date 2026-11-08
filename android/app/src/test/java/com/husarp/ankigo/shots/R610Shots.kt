@@ -43,7 +43,7 @@ class R610Shots {
             val frame = android.widget.FrameLayout(ctx).apply { addView(p, android.widget.FrameLayout.LayoutParams(-1, -1)) }
             paparazzi.snapshot(frame, "$name-pre", 0)
             (field(p.arena, "pStatus") as View).performClick()
-            val bubble = field(p.arena, "bubble") as View
+            val bubble = p.arena.conditionListShown()!!
             assertEquals(View.VISIBLE, bubble.visibility)
             for (card in listOf("enemyCard", "playerCard", "enemyBlock")) {
                 val c = field(p.arena, card) as View

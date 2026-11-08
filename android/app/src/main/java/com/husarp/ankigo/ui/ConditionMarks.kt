@@ -42,6 +42,8 @@ object ConditionMarks {
 
     /** The lasting conditions of one Pokémon (`BattleSide.volatiles`), most important first. Round-long ones (flinch, Protect ...) have no chip. */
     private val VOLATILES: List<Def> = listOf(
+        v("embargo", "Embargo", Group.HINDER, Num.TURNS, 8),
+        v("perishsong", "Perish Song", Group.HINDER, Num.TURNS, 7),
         v("switchtrap", "Trapped", Group.HINDER, Num.TURNS, 9),
         v("confusion", "Confused", Group.HINDER, Num.TURNS, 10),
         v("attract", "In love", Group.HINDER, Num.NONE, 11),
@@ -90,6 +92,7 @@ object ConditionMarks {
         s("reflect", "Reflect", 50), s("lightscreen", "Light Screen", 51), s("auroraveil", "Aurora Veil", 52),
         s("safeguard", "Safeguard", 53), s("mist", "Mist", 54), s("tailwind", "Tailwind", 55), s("wish", "Wish", 56),
         s("mp.fs", "Future Sight", 57),
+        Def("happyhour", Kind.SIDE, "Happy Hour", Group.BOOST, Num.NONE, 73),
     )
 
     private fun f(key: String, kind: Kind, word: String, group: Group, rank: Int, noTurns: String) = Def(key, kind, word, group, Num.TURNS, rank, noTurns)
@@ -497,11 +500,11 @@ internal object ConditionSpot {
     private const val EPS = 0.01f
 }
 
-/** PLAN 458 C: stages are one tap target; other conditions keep their individual chips. */
+/** Stats first, then effects; each mark has its own chip. */
 internal object ConditionSummary {
     fun groups(marks: List<ConditionMarks.Mark>): List<List<ConditionMarks.Mark>> {
         val (stages, others) = marks.partition { it.key.startsWith("stat.") }
-        return (if (stages.isEmpty()) emptyList() else listOf(stages)) + others.map { listOf(it) }
+        return (stages + others).map { listOf(it) }
     }
 
     fun textSp(widthDp: Float, heightDp: Float, panelScale: Float, floorSp: Float): Float {

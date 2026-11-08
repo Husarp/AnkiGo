@@ -185,15 +185,16 @@ class R9W3BoxesShots {
         assertTrue("$tag: our box ${playerCard.height / d} dp", playerCard.height / d <= tops.second)
         if (pic) assertTrue("$tag: the boxes cover no Pokemon (the plan is clear)", arena.stagePlanNow!!.clear)
         // the status badge: a tap opens the bubble, anchored on it, inside the arena (a snapshot closes it, so it is read straight after the tap)
-        val row: View = field(arena, "eStatus"); val bubble: View = field(arena, "bubble")
+        val row: View = field(arena, "eStatus")
         row.performClick()
+        val bubble = arena.conditionListShown()!!
         assertEquals("$tag: bubble after a tap on the badge", View.VISIBLE, bubble.visibility)
         val lp = bubble.layoutParams as FrameLayout.LayoutParams
         val badge = Rect(0, 0, (row as ViewGroup).getChildAt(0).width, row.getChildAt(0).height).also { arena.offsetDescendantRectToMyCoords(row.getChildAt(0), it) }
         assertTrue("$tag: bubble in the arena", lp.leftMargin >= 0 && lp.topMargin >= 0 && lp.leftMargin + lp.width <= arena.width && lp.topMargin + lp.height <= arena.height)
         assertTrue("$tag: bubble over the badge (${badge.centerX()} in ${lp.leftMargin}..${lp.leftMargin + lp.width})", badge.centerX() >= lp.leftMargin && badge.centerX() <= lp.leftMargin + lp.width)
         row.performClick()
-        assertEquals("$tag: second tap closes it", View.GONE, bubble.visibility)
+        assertTrue("$tag: second tap closes it", arena.conditionListShown() == null)
     }
 
     private fun run(host: String, size: Size, build: (Context, Boolean) -> Scene, pic: Boolean, long: Boolean) {
