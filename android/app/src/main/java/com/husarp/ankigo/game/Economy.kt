@@ -697,7 +697,7 @@ object ItemUse {
     }
 
     /** Moves one copy atomically; a stale picker cannot take a different item or lose a copy. */
-    fun giveHeld(state: GameState, item: String, fromUid: String?, toUid: String): ActionResult {
+    fun giveHeld(data: GameData, state: GameState, item: String, fromUid: String?, toUid: String, now: Long = System.currentTimeMillis()): ActionResult {
         if (Items.def(item)?.kind != ItemKind.HELD) return ActionResult(false, "This item can't be held.")
         val target = state.mon(toUid) ?: return ActionResult(false, "Pokémon not found.")
         val source = fromUid?.let { state.mon(it) ?: return ActionResult(false, "Pokémon not found.") }
@@ -709,7 +709,9 @@ object ItemUse {
         target.heldItem = item
         ItemCollections.record(state, Metric.EQUIPMENT_KINDS, item)
         if (old != null) Economy.give(state, old)
-        return ActionResult(true, "${target.name} now holds ${Items.name(item)}" + if (old == null) "" else " (${Items.name(old)} went back to the Bag)")
+        val events = mutableListOf<GameEvent>()
+        Achievements.settle(data, state, now, events)
+        return ActionResult(true, "${target.name} now holds ${Items.name(item)}" + (if (old == null) "" else " (${Items.name(old)} went back to the Bag)"), events)
     }
 
     /** Teaches an owned TM (not used up) to a Pokémon whose species can learn it; [replaceIndex] when it knows 4 moves. */

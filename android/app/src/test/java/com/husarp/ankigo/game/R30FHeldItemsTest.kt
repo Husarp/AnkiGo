@@ -23,7 +23,7 @@ class R30FHeldItemsTest {
     }
     @Test fun givingFromHolderIsAtomicAndReturnsRecipientsOldItem() {
         val s = state(); s.mons[1].heldItem = "everstone"
-        assertTrue(ItemUse.giveHeld(s, "soothe-bell", s.mons[0].uid, "other").ok)
+        assertTrue(ItemUse.giveHeld(data, s, "soothe-bell", s.mons[0].uid, "other").ok)
         val restored = SaveCodec.decode(SaveCodec.encode(s))
         assertNull(restored.mons[0].heldItem)
         assertEquals("soothe-bell", restored.mon("other")!!.heldItem)
@@ -35,7 +35,7 @@ class R30FHeldItemsTest {
         val s = state(); s.mons[1].heldItem = "soothe-bell"; s.bag["soothe-bell"] = 2
         assertEquals(4, s.ownedItemCount("soothe-bell"))
         assertTrue(ItemInfo.plain(ItemInfo.ownLine(s, "soothe-bell")).contains("2 held by"))
-        assertTrue(ItemUse.giveHeld(s, "soothe-bell", "other", "third").ok)
+        assertTrue(ItemUse.giveHeld(data, s, "soothe-bell", "other", "third").ok)
         assertEquals("soothe-bell", s.mons[0].heldItem)
         assertNull(s.mon("other")!!.heldItem)
         assertEquals("soothe-bell", s.mon("third")!!.heldItem)
@@ -66,15 +66,15 @@ class R30FHeldItemsTest {
         val s = state()
         for ((from, to) in listOf("other" to "third", s.mons[0].uid to "missing", s.mons[0].uid to s.mons[0].uid)) {
             val before = SaveCodec.encode(s)
-            assertFalse(ItemUse.giveHeld(s, "soothe-bell", from, to).ok)
+            assertFalse(ItemUse.giveHeld(data, s, "soothe-bell", from, to).ok)
             assertEquals(before, SaveCodec.encode(s))
         }
     }
     @Test fun givingAFreeCopyRequiresInventoryAndPreservesTheTotal() {
         val s = state()
-        assertFalse(ItemUse.giveHeld(s, "soothe-bell", null, "other").ok)
+        assertFalse(ItemUse.giveHeld(data, s, "soothe-bell", null, "other").ok)
         s.bag["soothe-bell"] = 1
-        assertTrue(ItemUse.giveHeld(s, "soothe-bell", null, "other").ok)
+        assertTrue(ItemUse.giveHeld(data, s, "soothe-bell", null, "other").ok)
         assertEquals(0, s.count("soothe-bell")); assertEquals(2, s.ownedItemCount("soothe-bell"))
     }
 }

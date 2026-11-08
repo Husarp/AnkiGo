@@ -97,21 +97,37 @@ class R30XCollectionsTest {
         val source = s.main!!.apply { heldItem = "everstone" }
         val target = TestData.mon(data, 54, 20, uid = "target").apply { heldItem = "soothe-bell" }
         s.mons += target
-        assertFalse(ItemUse.giveHeld(s, "everstone", source.uid, "missing").ok)
+        assertFalse(ItemUse.giveHeld(data, s, "everstone", source.uid, "missing").ok)
         assertEquals(0L, value(s, Metric.EQUIPMENT_KINDS))
-        assertTrue(ItemUse.giveHeld(s, "everstone", source.uid, target.uid).ok)
+        assertTrue(ItemUse.giveHeld(data, s, "everstone", source.uid, target.uid).ok)
         assertNull(source.heldItem)
         assertEquals("everstone", target.heldItem)
         assertEquals(1, s.count("soothe-bell"))
         assertEquals(1L, value(s, Metric.EQUIPMENT_KINDS))
-        assertFalse(ItemUse.giveHeld(s, "everstone", null, target.uid).ok)
-        assertTrue(ItemUse.giveHeld(s, "soothe-bell", null, source.uid).ok)
-        assertTrue(ItemUse.giveHeld(s, "everstone", target.uid, source.uid).ok)
+        assertFalse(ItemUse.giveHeld(data, s, "everstone", null, target.uid).ok)
+        assertTrue(ItemUse.giveHeld(data, s, "soothe-bell", null, source.uid).ok)
+        assertTrue(ItemUse.giveHeld(data, s, "everstone", target.uid, source.uid).ok)
         assertEquals(2L, value(s, Metric.EQUIPMENT_KINDS))
         assertEquals(1, s.ownedItemCount("everstone"))
         assertEquals(1, s.ownedItemCount("soothe-bell"))
         val restored = SaveCodec.decode(SaveCodec.encode(s))
         assertEquals(2L, value(restored, Metric.EQUIPMENT_KINDS))
+    }
+
+    @Test fun completingEquipmentThroughBoxGivingAwardsImmediatelyOnce() {
+        val s = state()
+        Achievements.onReady(s, data, now)
+        for (item in ItemCollections.kinds.getValue(Metric.EQUIPMENT_KINDS) - "everstone") {
+            ItemCollections.record(s, Metric.EQUIPMENT_KINDS, item)
+        }
+        Economy.give(s, "everstone")
+        val result = ItemUse.giveHeld(data, s, "everstone", null, s.main!!.uid, now)
+        assertTrue(result.ok)
+        assertEquals(listOf("well-equipped"), result.events.filterIsInstance<GameEvent.AchievementReached>().map { it.id })
+        assertEquals(listOf(now), s.achTiers["well-equipped"])
+        assertTrue(ItemUse.takeHeld(s, s.main!!.uid).ok)
+        val again = ItemUse.giveHeld(data, s, "everstone", null, s.main!!.uid, now + 1)
+        assertTrue(again.events.none { it is GameEvent.AchievementReached && it.id == "well-equipped" })
     }
 
     @Test fun berriesCountPlayerActivationNotWildOrSuppressedHeldItems() {

@@ -21,7 +21,7 @@ internal object HeldItemActions {
             addView(ItemCard.actView(page, ItemCard.Act("Give to another Pokémon", true, null) {
                 source(page, item) { mon ->
                     BoxMonPicker.show(page, "Give ${Items.name(item)} to…", { it.heldItem != item }) { target ->
-                        page.act { g -> ItemUse.giveHeld(g.state, item, mon?.uid, target.uid) }
+                        page.act { g -> ItemUse.giveHeld(g.data, g.state, item, mon?.uid, target.uid) }
                     }
                 }
             }), Form.lp(page, 6))

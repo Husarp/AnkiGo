@@ -24,6 +24,7 @@ import com.husarp.ankigo.Anki
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.PokemonRarity
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.StatCalc

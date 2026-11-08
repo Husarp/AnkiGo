@@ -46,7 +46,7 @@ class R30MIntegrationTest {
         val first = state.mons[0]
         val target = state.mons[2]
         target.heldItem = "everstone"
-        assertTrue(page.act { ItemUse.giveHeld(it.state, "soothe-bell", first.uid, target.uid) }.ok)
+        assertTrue(page.act { ItemUse.giveHeld(it.data, it.state, "soothe-bell", first.uid, target.uid) }.ok)
         assertEquals(1, received.size)
         assertTrue(GameRepo.takePendingFightEvents().isEmpty())
         var restored = SaveCodec.decode(SaveCodec.encode(state))
