@@ -86,7 +86,7 @@ internal class ItemWindow(private val page: GamePage, private val onClosed: () -
         this.spec = spec
         headBox.removeAllViews(); headBox.addView(ItemCard.header(page, spec, onClose = ::cancelByUser), LinearLayout.LayoutParams(-1, -2))
         bodyBox.removeAllViews(); bodyBox.addView(ItemCard.body(page, spec), LinearLayout.LayoutParams(-1, -2))
-        footBox.removeAllViews(); footBox.addView(ItemCard.footer(page, spec), LinearLayout.LayoutParams(-1, -2))
+        footBox.removeAllViews(); footBox.addView(ItemCard.footer(page, spec, view), LinearLayout.LayoutParams(-1, -2))
         title = if (spec.item == null) Items.tmName(page.data, spec.move.orEmpty()) else Items.name(spec.item)
         dialog?.window?.setTitle(title)
     }

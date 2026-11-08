@@ -35,12 +35,13 @@ class FilterRowTest {
     }
 
     @Test fun onlyWhatTheSheetFiltersShowsAndQuickChipFiltersAreNotRepeated() {
-        // R18 253: Favourites, Shiny and In team are lit quick chips, not part of the "Filters" chip
-        for (q in listOf(BoxFilter.FAVOURITES, BoxFilter.SHINY, BoxFilter.IN_TEAM)) {
+        // R18 253: Favourites and In team are lit quick chips, not part of the "Filters" chip
+        for (q in listOf(BoxFilter.FAVOURITES, BoxFilter.IN_TEAM)) {
             assertTrue("$q has a quick chip", q.hasQuickChip)
             assertTrue("$q alone: no chip", FilterRowText.activePieces(TypeFilter(), q).isEmpty())
         }
         assertEquals("Water · Only", plain(tf(TypeMatch.ONLY, Type.WATER), BoxFilter.FAVOURITES))
+        assertEquals("Shiny", plain(TypeFilter(), BoxFilter.SHINY))
         // the sheet-only Show choices are named
         assertEquals("Can evolve now", plain(TypeFilter(), BoxFilter.CAN_EVOLVE))
         assertEquals("Holds an item", plain(TypeFilter(), BoxFilter.HOLDS_ITEM))

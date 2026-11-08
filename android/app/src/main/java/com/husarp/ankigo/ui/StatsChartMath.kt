@@ -251,14 +251,15 @@ object StatsChartMath {
 
     /** The periods the chip offers: DUE looks ahead 7 or 30 days only. */
     fun periods(metric: ChartMetric): List<ChartPeriod> =
-        if (metric == ChartMetric.BUTTONS) listOf(ChartPeriod.D1, ChartPeriod.D7, ChartPeriod.D30)
+        if (metric == ChartMetric.BUTTONS) listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D365)
         else if (metric == ChartMetric.DUE) listOf(ChartPeriod.D7, ChartPeriod.D30) else ChartPeriod.values().filter { it != ChartPeriod.D1 }
 
     fun periodLabel(metric: ChartMetric, p: ChartPeriod): String {
         if (metric == ChartMetric.BUTTONS) return when (p) {
             ChartPeriod.D7 -> "This week"
             ChartPeriod.D30 -> "This month"
-            else -> "Today"
+            ChartPeriod.D365 -> "This year"
+            else -> "This week"
         }
         val ahead = metric == ChartMetric.DUE
         return when (p) {

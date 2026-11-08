@@ -46,13 +46,13 @@ class R18EChartPrefsTest {
     }
 
     @Test fun answerButtonsRestoreOnlyTheirThreePeriods() {
-        assertEquals(listOf(ChartPeriod.D1, ChartPeriod.D7, ChartPeriod.D30), ChartPrefs.periodsFor(ChartMetric.BUTTONS))
+        assertEquals(listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D365), ChartPrefs.periodsFor(ChartMetric.BUTTONS))
         for (p in ChartPrefs.periodsFor(ChartMetric.BUTTONS)) {
             assertEquals(p, dec(m = "BUTTONS", p = p.name, g = "MONTH").period)
             assertNull(dec(m = "BUTTONS", p = p.name, g = "MONTH").grain)
         }
-        assertEquals(ChartPeriod.D1, dec(m = "BUTTONS", p = "D365").period)
-        assertEquals(ChartPeriod.D1, dec(m = "BUTTONS").period)
+        assertEquals(ChartPeriod.D7, dec(m = "BUTTONS", p = "D1").period)
+        assertEquals(ChartPeriod.D7, dec(m = "BUTTONS").period)
         assertFalse(ChartPeriod.D1 in ChartPrefs.periodsFor(ChartMetric.REVIEWS))
         assertEquals(ChartPeriod.D30, dec(m = "REVIEWS", p = "D1").period)
     }

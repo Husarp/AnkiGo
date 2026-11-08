@@ -33,7 +33,7 @@ import org.junit.Test
 
 /*
  * R18-F (PLAN 249, 253): the Pokédex and Box filters are kept per screen (rebuilding the page brings them back, the search text starts
- * empty); the quick chips toggle in place (lit while on), Favourites is new in the Pokédex, the Box has Favourites / Shiny / In team, and
+ * empty); the quick chips toggle in place (lit while on), Favourites is new in the Pokédex, the Box has Favourites / In team and Shiny in its sheet, and
  * the "Filters" chip no longer has a clear button. Shots: r18f-dex-rows, r18f-box-rows, r18f-dex-page, r18f-box-page (-light / -dark).
  */
 class R18FFilterShots {
@@ -121,18 +121,19 @@ class R18FFilterShots {
             p.preset(TeamSection.BOX, filter = BoxFilter.ALL, group = true, sort = SortSpec.of(SortKey.LEVEL), types = TypeFilter())
             p.root
             var row = boxRow(p)
-            assertEquals(listOf("Favourites", "Shiny", "In team"), chips(row).map { it.text.toString() }.filter { it in setOf("Favourites", "Shiny", "In team") })
-            assertTrue("none lit", listOf("Favourites", "Shiny", "In team").none { chip(row, it).isSelected })
+            assertEquals(listOf("Favourites", "In team"), chips(row).map { it.text.toString() }.filter { it in setOf("Favourites", "Shiny", "In team") })
+            assertTrue("none lit", listOf("Favourites", "In team").none { chip(row, it).isSelected })
             chip(row, "In team").performClick()
             assertEquals(setOf(BoxFilter.IN_TEAM), getField(p, "boxFilter")); row = boxRow(p)
             assertTrue(chip(row, "In team").isSelected); assertEquals("In team, on", chip(row, "In team").contentDescription.toString())
             assertTrue("no filters chip: In team is the lit chip", all(row).none { it is ActiveChip })
-            chip(row, "Shiny").performClick() // independent requirements combine
+            tap(p.sortSheet().build(maxBody(ctx)), "Shiny") // independent requirements combine
             assertEquals(setOf(BoxFilter.IN_TEAM, BoxFilter.SHINY), getField(p, "boxFilter")); row = boxRow(p)
-            assertTrue(chip(row, "Shiny").isSelected && chip(row, "In team").isSelected)
-            chip(row, "Shiny").performClick() // tap again = off
+            assertTrue(chip(row, "In team").isSelected)
+            assertTrue(all(row).filterIsInstance<ActiveChip>().single().contentDescription.toString().contains("Shiny"))
+            tap(p.sortSheet().build(maxBody(ctx)), "Shiny") // tap again = off
             assertEquals(setOf(BoxFilter.IN_TEAM), getField(p, "boxFilter")); row = boxRow(p)
-            assertTrue(chip(row, "In team").isSelected && !chip(row, "Shiny").isSelected)
+            assertTrue(chip(row, "In team").isSelected)
             View(ctx)
         }
     }
@@ -144,7 +145,7 @@ class R18FFilterShots {
             assertEquals(setOf(BoxFilter.CAN_EVOLVE), getField(p, "boxFilter"))
             val row = boxRow(p)
             assertTrue("Can evolve now" in all(row).filterIsInstance<ActiveChip>().single().contentDescription.toString())
-            assertTrue("no quick chip is lit", listOf("Favourites", "Shiny", "In team").none { chip(row, it).isSelected })
+            assertTrue("no quick chip is lit", listOf("Favourites", "In team").none { chip(row, it).isSelected })
             tap(p.sortSheet().build(maxBody(ctx)), "Clear")
             assertEquals(emptySet<BoxFilter>(), getField(p, "boxFilter"))
             View(ctx)
@@ -216,11 +217,11 @@ class R18FFilterShots {
     @Test fun theBoxShowComesBackWhenThePageIsBuiltAgain() {
         paparazzi.shootPage("r18f-box-kept", listOf(w412), themes = listOf(Theme.LIGHT)) { ctx ->
             val p = TeamPage(ctx, NoHost); p.root
-            chip(boxRow(p), "Shiny").performClick()
+            tap(p.sortSheet().build(maxBody(ctx)), "Shiny")
             val p2 = TeamPage(ctx, NoHost)
             assertEquals(setOf(BoxFilter.SHINY), getField(p2, "boxFilter"))
             p2.root
-            assertTrue(chip(boxRow(p2), "Shiny").isSelected)
+            assertTrue(all(boxRow(p2)).filterIsInstance<ActiveChip>().single().contentDescription.toString().contains("Shiny"))
             p2.onTabReselected() // item 222 on the Box: back to the top, same filters
             assertEquals(setOf(BoxFilter.SHINY), getField(p2, "boxFilter"))
             // sheet-only choices are kept too; Clear in the sheet is kept

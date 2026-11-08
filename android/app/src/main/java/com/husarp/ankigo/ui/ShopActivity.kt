@@ -178,9 +178,8 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         val st = state
         if (!bagOnly) markSeen()
         appBar.setPill(Bits.fmt(st.cash))
-        val bagCount = st.bag.values.sum() + st.tms.size + st.mons.count { it.heldItem != null }
         tabShop.text = "Shop"
-        tabBag.text = "Bag · $bagCount"
+        tabBag.text = "Bag"
         for ((t, on) in listOf(tabShop to !showBag, tabBag to showBag)) {
             t.setTextColor(Ui.c(this, if (on) R.color.ag_text else R.color.ag_sub0))
             t.background = if (on) Ui.rounded(Ui.c(this, R.color.ag_card), 10, this) else null

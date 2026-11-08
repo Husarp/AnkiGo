@@ -55,7 +55,7 @@ object FilterRowText {
 
     /**
      * The label pieces of the active chip, filters joined with " · ". R18 253: only what the SHEET filters (types, generations, and the Box
-     * "Show" choices that have no quick chip); a filter with a quick chip (Wishlist, Favourites, Shiny, In team) is the lit chip itself and
+     * "Show" choices that have no quick chip); a filter with a quick chip (Wishlist, Favourites, In team) is the lit chip itself and
      * is not repeated here. [show] = the Box "Show" choice that is on (null = All). Empty = no active chip.
      */
     fun activePieces(types: TypeFilter, show: BoxFilter? = null, gens: Set<Int> = emptySet()): List<Piece> {

@@ -7,14 +7,15 @@ import org.junit.Test
 
 class R28LStatsTest {
     private val today = "2026-11-01"
-    @Test fun answerSplitUsesTodayCalendarWeekAndCalendarMonth() {
+    @Test fun answerSplitUsesCalendarWeekMonthAndYear() {
         val today = "2026-11-07"
         val history = mapOf(today to DayLog(buttons = intArrayOf(40, 1, 2, 3, 4)),
             "2026-11-02" to DayLog(buttons = intArrayOf(80, 10, 20, 30, 40)),
             "2026-11-01" to DayLog(buttons = intArrayOf(0, 100, 200, 300, 400)),
             "2026-10-31" to DayLog(buttons = intArrayOf(0, 1000, 2000, 3000, 4000)),
+            "2025-12-31" to DayLog(buttons = intArrayOf(0, 10000, 20000, 30000, 40000)),
             "2026-11-08" to DayLog(buttons = intArrayOf(0, 1000, 2000, 3000, 4000)))
-        for ((p, total, first) in listOf(Triple(ChartPeriod.D1, 10.0, today),
+        for ((p, total, first) in listOf(Triple(ChartPeriod.D365, 11110.0, "2026-01-01"),
             Triple(ChartPeriod.D7, 110.0, "2026-11-02"), Triple(ChartPeriod.D30, 1110.0, "2026-11-01"))) {
             val s = ChartData.build(ChartMetric.BUTTONS, p, "Old deck", StatsSnapshot(), history, today, ChartGrain.MONTH)
             assertEquals(total, s.total, 0.0)
@@ -25,14 +26,14 @@ class R28LStatsTest {
             assertEquals(listOf(10, 20, 30, 40), StatsChartMath.legend(s).map { it.percent })
         }
         assertTrue(ChartMetric.BUTTONS.usesPeriod)
-        assertEquals(listOf("Today", "This week", "This month"), StatsChartMath.periods(ChartMetric.BUTTONS).map { StatsChartMath.periodLabel(ChartMetric.BUTTONS, it) })
+        assertEquals(listOf("This week", "This month", "This year"), StatsChartMath.periods(ChartMetric.BUTTONS).map { StatsChartMath.periodLabel(ChartMetric.BUTTONS, it) })
         assertTrue(ChartData.grains(ChartMetric.BUTTONS, ChartPeriod.D365).isEmpty())
     }
-    @Test fun yesterdayDoesNotFillEmptyToday() {
+    @Test fun oldTodayMigratesToCurrentWeek() {
         val s = ChartData.build(ChartMetric.BUTTONS, ChartPeriod.D1, null, StatsSnapshot(),
             mapOf("2026-10-31" to DayLog(buttons = intArrayOf(0, 2, 3, 4, 5))), today)
-        assertTrue(s.empty)
-        assertEquals(0.0, s.total, 0.0)
+        assertEquals(ChartPeriod.D7, s.period)
+        assertEquals(14.0, s.total, 0.0)
     }
     @Test fun timeHasOneCombinedSeriesAndCoverageNote() {
         val s = ChartData.build(ChartMetric.TIME, ChartPeriod.D7, null,

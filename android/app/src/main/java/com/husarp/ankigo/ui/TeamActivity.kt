@@ -30,6 +30,7 @@ import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.SwitchQueue
 import com.husarp.ankigo.game.Type
+import com.husarp.ankigo.game.Tier
 
 // The Pokémon tab (the Team tab until round 4): one screen with three sections (Team / Box / Pokedex), a Compare picking
 // mode and a team Edit mode. Team = battle card + team rows (a ScrollView). Box = a ListView of 6-cell rows (recycled).
@@ -466,7 +467,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     /**
      * PLAN 192 (X10, Adam's version): the ONE row under the tabs, never scrolling: the "?" legend, the sort & filter button (the sheet
      * holds ALL filters), the active-filter chip while a sheet filter is on (types, Show choices without a quick chip; a tap opens the
-     * sheet, whose Clear turns them off), then the quick chips (R18 253: Favourites, Shiny, In team), as many as fit, lit ones first.
+     * sheet, whose Clear turns them off), then the quick chips (Favourites, In team), as many as fit, lit ones first.
      * Show stays one choice: a lit chip turns it off (Show = All), another chip switches to its filter.
      */
     private fun boxControls(): View {
@@ -476,7 +477,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         sortPill = SortViews.sortChip(ctx, shownSpec, boxFiltersOn()) { openSortSheet() }
         val quick = listOf(
             BoxViews.quickChip(ctx, "Favourites", BoxFilter.FAVOURITES in boxFilter, heart = true) { toggleBoxFilter(BoxFilter.FAVOURITES) } to (BoxFilter.FAVOURITES in boxFilter),
-            BoxViews.quickChip(ctx, "Shiny", BoxFilter.SHINY in boxFilter) { toggleBoxFilter(BoxFilter.SHINY) } to (BoxFilter.SHINY in boxFilter),
             BoxViews.quickChip(ctx, "In team", BoxFilter.IN_TEAM in boxFilter) { toggleBoxFilter(BoxFilter.IN_TEAM) } to (BoxFilter.IN_TEAM in boxFilter),
         )
         return FilterRow.make(ctx, TileViews.legendChip(ctx, dex = false), sortPill, FilterRowText.withRarity(FilterRowText.activePieces(boxTypes, boxFilter), boxRarity),
@@ -585,7 +585,6 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             setOnClickListener { if (pickOn) togglePick(pick) else MonDetail.show(ctx, data, mon) }
             setOnLongClickListener { actions.menu(mon, it); true }
         }
-        RarityFrame.bind(row, PokemonRarity.of(mon.tier, data.sp(mon.species).base.total), 14)
         val img = ImageView(ctx)
         MonPreview.show(ctx, mon.lookNum(data), mon.shiny, img)
         // the red NEW sticker sits on the sprite's top-left corner until the Pokémon's details were opened (6A)
@@ -602,7 +601,8 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         val r1 = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val nameMarks = NameMarksRow(ctx)
         nameMarks.addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply {
-            text = RarityMark.name(ctx, mon.shownName, mon.tier, data.sp(mon.species).base.total)
+            text = if (mon.tier == Tier.NORMAL) mon.shownName
+                else RarityMark.name(ctx, mon.shownName, mon.tier, data.sp(mon.species).base.total)
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(-2, -2))

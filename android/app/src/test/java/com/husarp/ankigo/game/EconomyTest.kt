@@ -670,11 +670,11 @@ class EconomyTest {
         Economy.give(s, "lucky-egg"); Economy.give(s, "everstone")
         assertFalse(ItemUse.use(data, s, "lucky-egg", null, TestData.rng(), 0).ok) // needs a target
         val a = ItemUse.use(data, s, "lucky-egg", "main", TestData.rng(), 0)
-        assertTrue(a.ok); assertEquals("Sparkmouse now holds Lucky Egg", a.message)
+        assertTrue(a.ok); assertEquals("Gave Lucky Egg to Sparkmouse", a.message)
         assertEquals("lucky-egg", s.main!!.heldItem); assertEquals(0, s.count("lucky-egg"))
         assertFalse(ItemUse.canUse(data, s, "lucky-egg", s.main))
         val b = ItemUse.use(data, s, "everstone", "main", TestData.rng(), 0)
-        assertTrue(b.ok); assertTrue(b.message.contains("Lucky Egg went back to the bag"))
+        assertTrue(b.ok); assertTrue(b.message.contains("Lucky Egg went back to the Bag"))
         assertEquals("everstone", s.main!!.heldItem)
         assertEquals(1, s.count("lucky-egg")); assertEquals(0, s.count("everstone"))
     }
