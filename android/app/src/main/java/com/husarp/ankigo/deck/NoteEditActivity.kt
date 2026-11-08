@@ -192,6 +192,7 @@ class NoteEditActivity : AgActivity() {
     /** Edit / Preview pill (as the other screens' segmented controls: the picked one lifts onto `ag_card`). */
     private fun segment(label: String, onTap: () -> Unit) = Ui.text(this, 12.5f, 900, R.color.ag_sub0).apply {
         text = label; gravity = Gravity.CENTER; maxLines = 1
+        com.husarp.ankigo.ui.SubtabIcons.apply(this, if (label == "Edit") R.drawable.ic_edit else R.drawable.ic_ach_eye)
         setPadding(0, Ui.dp(context, 11), 0, Ui.dp(context, 11))
         setOnClickListener { onTap() }
     }

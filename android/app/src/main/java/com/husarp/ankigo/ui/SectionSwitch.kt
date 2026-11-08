@@ -57,12 +57,12 @@ internal object SectionSwitch {
         }
     }
 
-    /** A part of the plain segmented control: just the label, 42 dp tall in a 48 dp control; the selected one is raised on the card colour. */
+    /** A part of the plain segmented control: icon beside the label, 42 dp tall in a 48 dp control; the selected one is raised on the card colour. */
     private fun segment(ctx: Context, s: Seg, on: Boolean): LinearLayout = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER
         minimumHeight = Ui.dp(ctx, 42)
         background = if (on) Ui.rounded(Ui.c(ctx, R.color.ag_card), 10, ctx) else null
-        addView(Ui.text(ctx, 12f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply { text = s.label; maxLines = 1 })
+        addView(Ui.text(ctx, 12f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply { text = s.label; maxLines = 1; SubtabIcons.apply(this, s.icon) })
     }
 }

@@ -326,6 +326,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             val on = filter.owned == key
             segBox.addView(Ui.text(ctx, 12f, 900, if (on) R.color.ag_text else R.color.ag_sub0).apply {
                 text = label
+                SubtabIcons.apply(this, when (key) { DexOwned.ALL -> R.drawable.ic_grid; DexOwned.OWNED -> R.drawable.ic_ball; DexOwned.SEEN -> R.drawable.ic_ach_eye; else -> R.drawable.ic_ach_lock }, above = true)
                 gravity = Gravity.CENTER
                 maxLines = 2 // four segments: with a big system font "Not owned" wraps to two lines, and a word that is still too wide shrinks (R19 252)
                 addOnLayoutChangeListener { v, l, _, r, _, ol, _, or, _ -> if (r - l != or - ol) shrinkToWords(v as TextView) }

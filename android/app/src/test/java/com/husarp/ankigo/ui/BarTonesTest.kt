@@ -47,6 +47,11 @@ class BarTonesTest {
         assertEquals(BarFill(0x44, 0x55), BarTones.resolve(BarMeaning.GOAL, BarStyle.GRADIENT, gp, 0.3f))
     }
 
+    @Test fun reachedGoalIsSolidGreenInEveryStyle() {
+        for (style in BarStyle.entries) for (fraction in listOf(1f, 1.5f, 3f))
+            assertEquals(BarFill(gp.goal!!.green), BarTones.resolve(BarMeaning.GOAL, style, gp, fraction))
+    }
+
     @Test fun otherMeaningsIgnoreFraction() {
         assertEquals(BarFill(0x11), BarTones.resolve(BarMeaning.XP, BarStyle.MEANING, gp, 0.3f))
     }

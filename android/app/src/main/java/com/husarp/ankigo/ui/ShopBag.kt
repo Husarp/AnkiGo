@@ -58,6 +58,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
             val label = if (held) "Held" else "All"
             scope.addView(Ui.text(ctx, 13f, 900, if (heldOnly == held) R.color.ag_base else R.color.ag_sub0).apply {
                 text = label; contentDescription = label; gravity = android.view.Gravity.CENTER
+                SubtabIcons.apply(this, if (held) R.drawable.ic_heart else R.drawable.ic_item_bag)
                 minimumHeight = Ui.dp(ctx, 48); isSelected = heldOnly == held
                 if (isSelected) background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx)
                 setOnClickListener { heldOnly = held; s.requestRender() }

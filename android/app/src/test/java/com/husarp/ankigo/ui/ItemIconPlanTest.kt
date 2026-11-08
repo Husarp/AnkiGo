@@ -10,6 +10,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ItemIconPlanTest {
+    @Test fun freezeUsesItsOwnDrawnShield() {
+        assertEquals(ItemIconSpec.Drawn("streak-freeze"), ItemIconPlan.of("streak-freeze"))
+    }
+
     private val data = TestData.world()
 
     @Test fun tmGetsItsMovesType() {
@@ -34,7 +38,7 @@ class ItemIconPlanTest {
     @Test fun everyCatalogueItemGetsSpriteOrDrawnAndDrawnOnesAreRealItems() {
         for (id in Items.ALL.keys) {
             val spec = ItemIconPlan.of(id)
-            assertTrue(id, spec is ItemIconSpec.Sprite || spec == ItemIconSpec.Drawn(id) || (id == "streak-freeze" && spec == ItemIconSpec.TypeIcon(Type.ICE)))
+            assertTrue(id, spec is ItemIconSpec.Sprite || spec == ItemIconSpec.Drawn(id))
         }
         assertTrue(ItemIconPlan.DRAWN.all { it in Items.ALL })
         assertEquals(ItemIconSpec.Drawn("cracked-pot"), ItemIconPlan.of("cracked-pot"))

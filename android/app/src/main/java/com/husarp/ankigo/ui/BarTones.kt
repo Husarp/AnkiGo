@@ -30,15 +30,18 @@ data class BarFill(val color: Int, val gradientTo: Int? = null)
 
 object BarTones {
     /** (meaning, style) -> fill. By meaning: XP sky, goal red-orange-green by [fraction] (peach without a goal palette), collection teal, other = accent. Accent: all accent. Gradient: accent to pink. */
-    fun resolve(meaning: BarMeaning, style: BarStyle, p: BarPalette, fraction: Float = 0f): BarFill = when (style) {
-        BarStyle.ACCENT -> BarFill(p.accent)
-        BarStyle.GRADIENT -> BarFill(p.accent, p.pink)
-        BarStyle.MEANING -> BarFill(when (meaning) {
-            BarMeaning.XP -> p.sky
-            BarMeaning.GOAL -> p.goal?.let { GoalTone.color(fraction, it) } ?: p.peach
-            BarMeaning.COLLECTION -> p.teal
-            BarMeaning.PROGRESS -> p.accent
-        })
+    fun resolve(meaning: BarMeaning, style: BarStyle, p: BarPalette, fraction: Float = 0f): BarFill {
+        if (meaning == BarMeaning.GOAL && GoalGlow.reached(fraction) && p.goal != null) return BarFill(p.goal.green)
+        return when (style) {
+            BarStyle.ACCENT -> BarFill(p.accent)
+            BarStyle.GRADIENT -> BarFill(p.accent, p.pink)
+            BarStyle.MEANING -> BarFill(when (meaning) {
+                BarMeaning.XP -> p.sky
+                BarMeaning.GOAL -> p.goal?.let { GoalTone.color(fraction, it) } ?: p.peach
+                BarMeaning.COLLECTION -> p.teal
+                BarMeaning.PROGRESS -> p.accent
+            })
+        }
     }
 
     fun palette(ctx: Context) = BarPalette(

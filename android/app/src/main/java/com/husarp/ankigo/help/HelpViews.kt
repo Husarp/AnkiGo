@@ -555,12 +555,37 @@ internal object HelpViews {
         }
     }
 
-    /** What an open chapter shows: its sentence, its pictures, then its points. */
+    /** Lesson sections and native visuals on cards, followed by the existing exact-rule folds. */
     fun chapterBody(ctx: Context, ch: GuideChapter): List<View> {
         val out = ArrayList<View>()
-        out += Ui.text(ctx, 14f, 800, R.color.ag_text).apply { text = ch.intro; setLineSpacing(0f, 1.15f) }
+        fun card(): LinearLayout = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 14, ctx)
+            setPadding(dp(ctx, 14), dp(ctx, 14), dp(ctx, 14), dp(ctx, 14))
+        }
+        fun heading(label: String, icon: Int, size: Float = 16f): View = LinearLayout(ctx).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(ImageView(ctx).apply {
+                setImageResource(icon); setColorFilter(Ui.c(ctx, R.color.ag_mauve))
+            }, LinearLayout.LayoutParams(dp(ctx, 20), dp(ctx, 20)).also { it.marginEnd = dp(ctx, 10) })
+            addView(Ui.text(ctx, size, 900, R.color.ag_text).apply { text = label }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        out += card().apply {
+            addView(heading(ch.title, chapterIcon(ch.id), 23f))
+            addView(rich(ctx, ch.intro, 14f, 700, R.color.ag_sub1), lp(ctx, 10))
+        }
+        GuideLessons.sections(ch).forEach { section ->
+            out += card().apply {
+                addView(heading(section.title, section.icon))
+                section.lines.forEach { addView(rich(ctx, it, 14f, 600, R.color.ag_text), lp(ctx, 9)) }
+            }
+        }
+        val battleVisuals = ch.id == GameGuide.BATTLES || ch.id == GameGuide.MOVES
+        val visualSection = card().apply {
+            addView(heading(if (battleVisuals) "Read the battle panel" else "At a glance", if (battleVisuals) R.drawable.ic_heart else chapterIcon(ch.id)))
+        }
         var group: LeftFlow? = null
-        fun flush() { group?.let { out += it }; group = null }
+        fun flush() { group?.let { visualSection.addView(it, lp(ctx, 10)) }; group = null }
         for (v in ch.visuals) {
             if (isInline(v)) {
                 val g = group ?: LeftFlow(ctx, dp(ctx, 8)).also { group = it }
@@ -568,13 +593,13 @@ internal object HelpViews {
             } else {
                 flush()
                 if (v.id in listOf(GuideVisualId.HP_BAR, GuideVisualId.XP_BAR, GuideVisualId.LEVEL_COLOURS)) {
-                    val box = (out.lastOrNull() as? LinearLayout)?.takeIf { it.tag == "bar-group" }
+                    val box = (visualSection.getChildAt(visualSection.childCount - 1) as? LinearLayout)?.takeIf { it.tag == "bar-group" }
                         ?: LinearLayout(ctx).apply {
                             tag = "bar-group"; orientation = LinearLayout.VERTICAL
                             setPadding(dp(ctx, 10), dp(ctx, 12), dp(ctx, 10), dp(ctx, 12))
-                        }.also { out += it }
+                        }.also { visualSection.addView(it, lp(ctx, 10)) }
                     box.addView(blockVisual(ctx, v), lp(ctx, if (box.childCount == 0) 0 else 10))
-                } else out += blockVisual(ctx, v)
+                } else visualSection.addView(blockVisual(ctx, v), lp(ctx, 10))
             }
         }
         flush()
@@ -583,13 +608,10 @@ internal object HelpViews {
             addView(Ui.text(ctx, 13f, 900, R.color.ag_mauve).apply { text = "•" }, LinearLayout.LayoutParams(dp(ctx, 14), -2))
             addView(rich(ctx, p, 13f, 600, R.color.ag_sub1), LinearLayout.LayoutParams(0, -2, 1f))
         }
-        val short = GuideLessons.shortPoints(ch)
-        short.forEach { out += bullet(it) }
+        if (ch.visuals.isNotEmpty()) out += visualSection
+        out += card().apply { addView(heading("Exact rules", R.drawable.ic_book)) }
         GuideLessons.details(ch).forEach { (title, points) ->
-            val fold = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(ctx, 10), dp(ctx, 6), dp(ctx, 10), dp(ctx, 10))
-            }
+            val fold = card()
             val head = Ui.text(ctx, 13f, 800, R.color.ag_text).apply {
                 text = "$title  ›"; minimumHeight = dp(ctx, 44); gravity = Gravity.CENTER_VERTICAL
             }

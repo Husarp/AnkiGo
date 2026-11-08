@@ -110,7 +110,7 @@ object BondSection {
                 perk(R.drawable.coin_stack, "+${Bond.coins(l)} coins", "per defeated Pokémon")
                 perk(R.drawable.ic_bolt, "+${Bond.xpPercent(l)}% XP", "wins and catches", R.color.ag_sky)
             }
-            if (l >= 3) perk(R.drawable.ic_types, "All species matchups revealed", tint = R.color.ag_sky)
+            if (l >= 3) perk(R.drawable.ic_compare, "All species matchups revealed", tint = R.color.ag_sky)
             val tough = Bond.toughChance(Bond.thresholds[l])
             if (tough > 0) perk(R.drawable.ic_ach_shield, "$tough% chance to survive a KO with 1 HP", tint = R.color.ag_green)
             if (l in 2..4) perk(R.drawable.ic_evolve, when (l) {

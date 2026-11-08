@@ -215,6 +215,7 @@ class AchievementsView(private val page: GamePage) {
             }
             t.addView(Ui.text(page, 13.5f, 800, if (on) R.color.ag_text else R.color.ag_sub0).apply {
                 text = n
+                SubtabIcons.apply(this, SubtabIcons.achievement(n))
                 gravity = Gravity.CENTER
                 maxLines = 1
                 minHeight = dp(45)

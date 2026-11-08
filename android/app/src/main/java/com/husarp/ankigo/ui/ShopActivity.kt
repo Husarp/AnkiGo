@@ -180,6 +180,8 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         appBar.setPill(Bits.fmt(st.cash))
         tabShop.text = "Shop"
         tabBag.text = "Bag"
+        SubtabIcons.apply(tabShop, R.drawable.ic_shop)
+        SubtabIcons.apply(tabBag, R.drawable.ic_item_bag)
         for ((t, on) in listOf(tabShop to !showBag, tabBag to showBag)) {
             t.setTextColor(Ui.c(this, if (on) R.color.ag_text else R.color.ag_sub0))
             t.background = if (on) Ui.rounded(Ui.c(this, R.color.ag_card), 10, this) else null
