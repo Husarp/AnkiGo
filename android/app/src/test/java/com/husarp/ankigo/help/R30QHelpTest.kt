@@ -10,5 +10,7 @@ class R30QHelpTest {
         assertTrue(text.contains("any form counts"))
         assertTrue(text.contains("Battle effectiveness tags still"))
         assertTrue(text.contains("Bond is only for your own Pokémon"))
+        assertTrue(text.contains("Each attacking type starts as ???"))
+        assertTrue(text.contains("Catching or defeating reveals no extra matchups"))
     }
 }

@@ -30,7 +30,7 @@ class WildInfoTest {
         assertEquals(listOf(Type.GHOST, Type.POISON), i.types)
         assertEquals(Tier.LEGENDARY, i.tier)
         assertEquals(data.sp(92).base, i.base) // base stats of the species, not the wild one's own (IV-based) stats
-        assertEquals(TypeMatchups.of(listOf(Type.GHOST, Type.POISON)), i.matchups)
+        assertNull(i.matchups) // catching alone never opens this encounter's Matchups
         // by construction there is no field for IVs, nature, EVs, ability or held item
         val fields = WildInfo::class.java.declaredFields.map { it.name }
         assertFalse(fields.any { it in setOf("ivs", "evs", "nature", "ability", "heldItem") })
@@ -130,13 +130,13 @@ class WildInfoTest {
         assertNull(info.matchups)
     }
 
-    @Test fun defeatedSpeciesShowsStatsMatchupsAndAllMoves() {
+    @Test fun defeatedSpeciesShowsStatsAndAllMovesButMatchupsWaitForAnAttack() {
         val state = TestData.state(data).also { it.defeatedSpecies += 92 }
         val info = WildInfo.of(data, state, battle(), emptySet())!!
         assertTrue(info.known)
         assertEquals(WildDex.DEFEATED, info.dex)
         assertEquals(data.sp(92).base, info.base)
-        assertEquals(TypeMatchups.of(data.sp(92).types), info.matchups)
+        assertNull(info.matchups)
         assertEquals(4, info.moves.size)
     }
 

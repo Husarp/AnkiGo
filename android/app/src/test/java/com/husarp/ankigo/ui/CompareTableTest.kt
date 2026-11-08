@@ -26,6 +26,7 @@ class CompareTableTest {
         val s = GameState(createdAt = 1L, starterChosen = true)
         s.seen += data.species.keys
         s.defeatedSpecies += data.species.keys // known entries for the full comparison tests
+        data.species.values.forEach { s.seenMatchups[it.baseNum] = Type.entries.toMutableSet() }
         mons.forEach { s.mons += it }
         return s
     }

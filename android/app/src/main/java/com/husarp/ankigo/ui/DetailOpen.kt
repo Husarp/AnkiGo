@@ -69,7 +69,7 @@ object DetailFormat {
 
     /** What the Matchups row says when closed: "weak to Rock ×4", "weak to Water, Ground ×2 +1", "no weaknesses". */
     fun matchupSummary(m: TypeMatchups): String {
-        val top = m.weakTo.firstOrNull() ?: return "no weaknesses"
+        val top = m.weakTo.firstOrNull() ?: return if (m.unknownCount > 0) "${com.husarp.ankigo.game.Type.entries.size - m.unknownCount}/${com.husarp.ankigo.game.Type.entries.size} types seen" else "no weaknesses"
         val same = m.weakTo.filter { it.mult == top.mult }
         val names = same.take(2).joinToString(", ") { it.type.label }
         val more = (m.weakTo.size - minOf(2, same.size)).let { if (it > 0) " +$it" else "" }

@@ -18,6 +18,7 @@ import com.husarp.ankigo.game.Settings
 import com.husarp.ankigo.game.StreakFreeze
 import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.Tier
+import com.husarp.ankigo.game.Type
 import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.UnsupportedMon
 import org.json.JSONArray
@@ -51,6 +52,9 @@ object SaveCodec {
             kv("cash", state.cash); kv("trainerLevel", state.trainerLevel); kv("trainerXp", state.trainerXp)
             list("seen", state.seen.sorted()); list("caught", state.caught.sorted())
             list("defeatedSpecies", state.defeatedSpecies.sorted())
+            key("seenMatchups"); obj {
+                for ((num, types) in state.seenMatchups.toSortedMap()) list(num.toString(), types.sortedBy { it.ordinal }.map { it.name })
+            }
             key("battle"); state.battle.let { if (it == null) value(null) else writeBattle(this, it) }
             kv("nextSpecies", state.nextSpecies); kv("nextTier", state.nextTier.name); kv("nextShiny", state.nextShiny); kv("nextSeed", state.nextSeed)
             kv("day", state.day); kv("reviewsToday", state.reviewsToday); kv("cashToday", state.cashToday); kv("cashFracNum", state.cashFracNum); kv("cashFracDen", state.cashFracDen)
@@ -208,7 +212,7 @@ object SaveCodec {
 
     private fun writeBattle(w: W, b: Battle) = w.obj {
         key("wild"); writeMon(this, b.wild)
-        kv("tier", b.tier.name)
+        kv("tier", b.tier.name); kv("playerAttacked", b.playerAttacked)
         key("player"); writeSide(this, b.player)
         key("enemy"); writeSide(this, b.enemy)
         kv("tally", b.tally); kv("answers", b.answers); kv("override", b.override?.name); kv("rounds", b.rounds)
@@ -338,7 +342,7 @@ object SaveCodec {
             player = readSide(o.optJSONObject("player")), enemy = readSide(o.optJSONObject("enemy")),
             tally = o.int("tally", 0), answers = o.int("answers", 0),
             override = o.strOrNull("override")?.let { n -> Outcome.entries.firstOrNull { it.name == n } },
-            rounds = o.int("rounds", 0),
+            rounds = o.int("rounds", 0), playerAttacked = o.bool("playerAttacked", false),
             natureMainUid = o.strOrNull("natureMainUid"), natureMainRounds = o.int("natureMainRounds", 0).coerceAtLeast(0),
             startedAt = o.long("startedAt", 0),
             wildMaxHp = o.intOrNull("wildMaxHp")?.coerceAtLeast(1),
@@ -447,6 +451,14 @@ object SaveCodec {
         o.intList("seen")?.let { s.seen += it }
         o.intList("caught")?.let { s.caught += it }
         o.intList("defeatedSpecies")?.let { s.defeatedSpecies += it.filter { num -> num > 0 } }
+        o.optJSONObject("seenMatchups")?.let { map ->
+            for (key in map.keys()) {
+                val num = key.toIntOrNull()?.takeIf { it > 0 } ?: continue
+                val values = map.optJSONArray(key) ?: continue
+                val types = (0 until values.length()).mapNotNull { i -> Type.entries.firstOrNull { it.name == values.optString(i) } }.toMutableSet()
+                if (types.isNotEmpty()) s.seenMatchups[num] = types
+            }
+        }
         s.battle = o.optJSONObject("battle")?.let { readBattle(it) }
         s.nextSpecies = o.intOrNull("nextSpecies")
         s.nextTier = enumOr(o.strOrNull("nextTier"), Tier.NORMAL)

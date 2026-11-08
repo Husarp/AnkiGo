@@ -162,6 +162,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * a Main that fainted is healed at once and the wild one is lost (Ankimon), then the next encounter starts if the fight is over.
      */
     private fun settleFight(battle: Battle, main: Mon, events: MutableList<GameEvent>) {
+        MatchupKnowledge.observe(data, state, battle, main, events)
         if (battle.field.player[RemainingMoves.ESCAPED] == 1) {
             state.battle = null
             events += ensureEncounter()

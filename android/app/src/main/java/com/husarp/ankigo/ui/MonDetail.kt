@@ -19,7 +19,8 @@ import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Tuning
-import com.husarp.ankigo.game.TypeMatchups
+import com.husarp.ankigo.game.MatchupKnowledge
+import com.husarp.ankigo.game.GameState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -189,7 +190,8 @@ object MonDetail {
             }
         })
         col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves", forceOpen = focusMove != null) { DetailSections.moves(a, data, mon.moves, compact, focusMove = focusMove) })
-        col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, mon.shownName) })
+        val matchups = MatchupKnowledge.of(data, GameRepo.state ?: GameState(), sp.num)
+        col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(matchups)) { DetailSections.matchups(a, sp.types, mon.shownName, matchups) })
         col.addView(DetailSections.section(a, mem, DetailSection.TRAINING, mon.nature.label) { DetailSections.training(a, mon, compact) })
         col.addView(DetailSections.section(a, mem, DetailSection.BOND, BondSection.summary(mon)) { BondSection.body(a, mon) })
         col.addView(DetailSections.infoSection(a, mem, data, sp,

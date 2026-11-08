@@ -321,6 +321,7 @@ class Battle(
     val field: BattleField = BattleField(),      // R17C-1: weather, terrain, rooms, side conditions (an old save has none)
     var natureMainUid: String? = null,
     var natureMainRounds: Int = 0,
+    var playerAttacked: Boolean = false, // Matchups appear after the first attack in this encounter
 ) {
     /** R17C-4: the Main's team (Pokémon with a uid), for Beat Up (one hit per member with HP). [Game] fills it before each round; never saved, empty = just the Main. */
     var team: List<Mon> = emptyList()
@@ -382,6 +383,7 @@ class GameState(
     val seen: MutableSet<Int> = mutableSetOf(),
     val caught: MutableSet<Int> = mutableSetOf(),
     val defeatedSpecies: MutableSet<Int> = mutableSetOf(), // ever defeated; absent in older saves
+    val seenMatchups: MutableMap<Int, MutableSet<Type>> = mutableMapOf(), // national Pokédex number -> observed attacking types
     var battle: Battle? = null,
     var nextSpecies: Int? = null,        // pre-rolled next encounter (widget silhouette, sprite prefetch)
     var nextTier: Tier = Tier.NORMAL,

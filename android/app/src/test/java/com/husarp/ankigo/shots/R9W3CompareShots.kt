@@ -59,6 +59,7 @@ class R9W3CompareShots {
             AppLook.setTypeStyle(ctx, style)
             // These layout scenarios compare known entries; unknown cells have separate coverage.
             GameRepo.state!!.defeatedSpecies += picks.filterIsInstance<ComparePick.Dex>().map { it.species }
+            GameRepo.data!!.species.values.forEach { GameRepo.state!!.seenMatchups[it.baseNum] = Type.entries.toMutableSet() }
             val p = ComparePage(ctx, NoHost, picks)
             p.fit = fit
             val screen = pageScreen(ctx, p)
@@ -93,6 +94,7 @@ class R9W3CompareShots {
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         CompareStore.saveMode(ctx, CompareMode.VS_REFERENCE); CompareStore.saveRows(ctx, onlyMatchups)
+        GameRepo.data!!.species.values.forEach { GameRepo.state!!.seenMatchups[it.baseNum] = Type.entries.toMutableSet() }
         val p = ComparePage(ctx, NoHost, three)
         pageScreen(ctx, p); p.render()
         val dm = ctx.resources.displayMetrics

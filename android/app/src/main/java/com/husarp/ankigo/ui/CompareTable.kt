@@ -8,6 +8,7 @@ import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.MoveText
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.SpeciesKnowledge
+import com.husarp.ankigo.game.MatchupKnowledge
 import com.husarp.ankigo.game.WildInfo
 import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
@@ -32,7 +33,7 @@ sealed class Cell {
     }
     data class TypeChips(val types: List<Type>) : Cell()
     data class Moves(val moves: List<MoveCell>) : Cell()
-    data class Matchups(val entries: List<Matchup>) : Cell()
+    data class Matchups(val entries: List<Matchup>, val unknownCount: Int = 0) : Cell()
     /** The evolution line, [mark] = index of the picked Pokémon in [names]; [note] explains a branch. */
     data class Evo(val names: List<String>, val mark: Int, val note: String? = null) : Cell() {
         val line: String get() = names.joinToString(" → ")
@@ -252,10 +253,13 @@ object CompareTable {
             }, section = "Moves")
         }
 
-        val m = columns.map { matchups(it.shown.types) }
-        rows += CompareRow("weak", "Weak against", m.map { Cell.Matchups(it.first) }, section = "Matchups")
-        rows += CompareRow("resist", "Resists", m.map { Cell.Matchups(it.second) })
-        rows += CompareRow("immune", "Immune to", m.map { Cell.Matchups(it.third) })
+        val m = columns.map { MatchupKnowledge.of(data, state, it.shown.num) }
+        rows += CompareRow("weak", "Weak against", m.map { Cell.Matchups(it.weakTo) }, section = "Matchups")
+        rows += CompareRow("resist", "Resists", m.map { Cell.Matchups(it.resists) })
+        rows += CompareRow("immune", "Immune to", m.map { Cell.Matchups(it.immune) })
+        if (m.any { it.normal.isNotEmpty() }) rows += CompareRow("normal", "Normal damage", m.map { if (it.normal.isEmpty()) Cell.Text(DASH) else Cell.Matchups(it.normal) })
+        if (m.any { it.unknownCount > 0 }) rows += CompareRow("unseen_matchups", "Not yet seen", m.map { if (it.unknownCount == 0) Cell.Text(DASH) else Cell.Matchups(emptyList(), it.unknownCount) })
+        val matchupAllowed = columns.map { MatchupKnowledge.available(data, state, it.shown.num, owned = it.mon != null) }
 
         val lines = columns.map { evolutionLine(data, it.picked, state.seen + state.caught) }
         rows += CompareRow("evo", "Line", lines, section = "Evolution")
@@ -271,7 +275,10 @@ object CompareTable {
         for (row in rows) {
             if (row.section != null) heading = row.section
             val cells = row.cells.mapIndexed { i, cell ->
-                if (allowed[i] || row.key == "types") cell
+                if (row.key in setOf("weak", "resist", "immune", "normal", "unseen_matchups")) {
+                    if (matchupAllowed[i]) cell else Cell.Text(DASH)
+                }
+                else if (allowed[i] || row.key == "types") cell
                 else if (row.key == "moves" && observed[i].isNotEmpty()) cell
                 else Cell.Text(DASH)
             }
