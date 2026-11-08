@@ -36,7 +36,7 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
     private val padH = textPx * 0.7f
     val padV = textPx * 0.28f
     val height: Float = padV * 2f + fm.descent - fm.ascent
-    val radius: Float = height * 0.42f
+    val radius: Float = Ui.dp(ctx, 4).toFloat()
 
     /** Space between two chips of a row. */
     val gap: Float = textPx * 0.5f
@@ -97,7 +97,6 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
     internal fun markAt(x: Float, y: Float): ConditionMarks.Mark? = slotAt(x, y)?.let { rows[it]?.chips?.minByOrNull { c -> touchDistance(c.rect, x, y) }?.mark }
     private val rows = LinkedHashMap<ConditionMarks.Slot, Row>()
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private var downSlot: ConditionMarks.Slot? = null
 
     init {
@@ -123,15 +122,12 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
 
     override fun onDraw(canvas: Canvas) {
         val m = metrics ?: return
-        line.strokeWidth = max(1f, m.textPx * 0.07f)
-        line.color = m.stroke()
         for (row in rows.values) for (c in row.chips) {
             fill.color = c.mark?.let {
                 if (it.key.startsWith("stat.")) StatPill.background(context, it.value > 0)
                 else m.fill(it.def.group)
             } ?: m.moreFill()
             canvas.drawRoundRect(c.rect, m.radius, m.radius, fill)
-            if (c.mark?.key?.startsWith("stat.") != true) canvas.drawRoundRect(c.rect, m.radius, m.radius, line)
             if (downMark != null && downMark?.id == c.mark?.id) {
                 fill.color = ColorUtils.setAlphaComponent(context.getColor(R.color.ag_text), 32)
                 canvas.drawRoundRect(c.rect, m.radius, m.radius, fill)
@@ -143,7 +139,7 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
     }
 
     private fun drawMark(canvas: Canvas, mk: ConditionMarks.Mark, rect: RectF, m: ChipMetrics, base: Float) {
-        var x0 = rect.left + (rect.width() - m.width(mk)) / 2f + m.textPx * 0.7f
+        var x0 = rect.left + (rect.width() - m.width(mk)) / 2f + m.textPx * 0.6f
         if (m.iconWidth(mk.key) > 0f) {
             val fieldIcon = FieldIcons.of(mk.key).takeUnless { mk.key == "magicroom" }
             val icon = ConditionIcons.of(mk.key)!!
@@ -158,14 +154,10 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
         m.word.color = if (mk.key.startsWith("stat.")) StatPill.ink(mk.value > 0, StatPill.isDark(context)) else Ui.c(context, R.color.ag_text)
         if (mk.key.startsWith("stat.")) {
             canvas.drawText(mk.def.word, x0, base, m.word)
-            val path = android.graphics.Path().also { StatPill.chevrons(it, StatPill.count(mk.value), mk.value > 0) }
-            canvas.save()
-            val unit = m.textPx / 25f
-            canvas.translate(x0 + m.word.measureText(mk.def.word) + m.textPx * 0.3f, rect.centerY() - StatPill.boxHeight(StatPill.count(mk.value)) * unit / 2f)
-            canvas.scale(unit, unit)
-            val stroke = Paint(m.word).apply { style = Paint.Style.STROKE; strokeWidth = StatPill.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
-            canvas.drawPath(path, stroke)
-            canvas.restore()
+            val x = x0 + m.word.measureText(mk.def.word) + m.textPx * 0.2f
+            StageChevron.draw(canvas, RectF(x, rect.centerY() - m.textPx * 0.65f,
+                rect.right - m.textPx * 0.35f, rect.centerY() + m.textPx * 0.65f),
+                StatPill.count(mk.value), mk.value > 0, m.word.color)
         } else canvas.drawText(mk.word, x0, base, m.word)
         mk.number?.let { canvas.drawText(" · $it", x0 + m.word.measureText(mk.word), base, m.num) }
     }

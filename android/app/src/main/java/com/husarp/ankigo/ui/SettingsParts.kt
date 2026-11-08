@@ -64,13 +64,41 @@ internal object Form {
         v.alpha = if (on) 1f else 0.45f
     }
 
+    internal fun sectionIcon(title: String): Int = when (title) {
+        "Play" -> R.drawable.ic_game
+        "Sound & data", "Card pictures & sound" -> R.drawable.ic_sound
+        "Help & app" -> R.drawable.ic_help
+        "Advanced", "Fix a problem" -> R.drawable.ic_bug
+        "When you beat a wild Pokémon", "Battle", "Battle panel", "Battle look" -> R.drawable.ic_swords
+        "Always catch" -> R.drawable.ic_ball
+        "Difficulty" -> R.drawable.ic_practice_alert
+        "Pokémon", "Box", "Pokémon details" -> R.drawable.ic_dex
+        "Theme & colours", "Bright scenes", "Dark scenes", "Colours & background" -> R.drawable.ic_palette
+        "Types & notifications", "Study & game reminders" -> R.drawable.ic_bell
+        "Text & size", "Pokémon size", "Panel height" -> R.drawable.ic_resize
+        "Study cards & decks", "Study & accessibility" -> R.drawable.ic_study
+        "Timing", "Time", "Remind every", "Remind at", "From", "To", "Not more often than" -> R.drawable.ic_clock
+        "Answer controls", "Info boxes & bars", "Arena & layout", "Buddy layout & movement" -> R.drawable.ic_layout
+        "When you leave AnkiGo" -> R.drawable.ic_open
+        "Pop out opens", "Small battle windows", "Floating screens" -> R.drawable.ic_pip
+        "Storage used" -> R.drawable.ic_save
+        "Downloads & cache" -> R.drawable.ic_download
+        "Facing" -> R.drawable.ic_turn
+        "Remind when at least", "Count", "At most" -> R.drawable.ic_stats
+        "Decks" -> R.drawable.ic_book
+        "Goal" -> R.drawable.ic_ach_target
+        "Quiet hours" -> R.drawable.ic_moon
+        "Playback & test" -> R.drawable.ic_play
+        else -> R.drawable.ic_star
+    }
+
     /** Mockup `.sect`: small uppercase grey title, optional right-hand note. */
     fun sect(ctx: Context, title: String, right: String? = null): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 14), Ui.dp(ctx, 4), Ui.dp(ctx, 8))
         addView(android.widget.ImageView(ctx).apply {
-            setImageResource(R.drawable.ic_star); setColorFilter(Ui.c(ctx, R.color.ag_mauve))
+            setImageResource(sectionIcon(title)); setColorFilter(Ui.c(ctx, R.color.ag_mauve))
         }, LinearLayout.LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.marginEnd = Ui.dp(ctx, 6) })
         addView(Ui.text(ctx, 12f, 900, R.color.ag_mauve).apply {
             text = title.uppercase()

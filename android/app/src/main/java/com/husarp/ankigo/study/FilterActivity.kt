@@ -182,7 +182,7 @@ class FilterActivity : AgActivity() {
             card.addView(CheckBox(this).apply { text = "Free study · all matching cards, including cards not due"; minimumHeight = Ui.dp(context, 48); isChecked = d.free; setOnCheckedChangeListener { _, on -> change(d.copy(free = on)) } })
             content.addView(card, StudyUi.spaced(this, 8))
         }
-        heading("3 · Keep this setup", R.drawable.ic_star)
+        heading("3 · Keep this setup", R.drawable.ic_bookmark)
         row("☆ Star this filter\nSave a frozen copy.") {
             val name = EditText(this).apply { setText(label); hint = "Filter name" }
             AppDialog.Builder(this).setTitle("Star a frozen copy").setView(name).setPositiveButton("Star") { _, _ ->

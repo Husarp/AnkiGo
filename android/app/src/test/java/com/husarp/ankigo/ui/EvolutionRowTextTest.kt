@@ -9,11 +9,11 @@ class EvolutionRowTextTest {
 
     @Test fun friendshipShowsThresholdAndPlainTime() {
         val e = Evolution(135, EvoKind.FRIENDSHIP, minFriendship = 160, time = "night")
-        assertEquals("Needs Level 3 Bond\nat night", EvolutionRowText.condition(data, e))
+        assertEquals("Level 3 Bond\nat night", EvolutionRowText.condition(data, e))
         val mon = TestData.mon(data, 133, 20).apply { bondPoints = 124 }
-        assertEquals("Needs Level 3 Bond\nat night", EvolutionRowText.condition(data, e, mon))
+        assertEquals("Level 3 Bond\nat night", EvolutionRowText.condition(data, e, mon))
         mon.bondPoints = 250
-        assertEquals("Needs Level 3 Bond\nat night", EvolutionRowText.condition(data, e, mon))
+        assertEquals("Level 3 Bond\nat night", EvolutionRowText.condition(data, e, mon))
         mon.bondPoints = 124
         val text = EvolutionRowText.explanation(data, e, data.sp(133), setOf(133), null, mon)
         assertTrue(text.contains("Level 3 Bond"))
@@ -25,7 +25,7 @@ class EvolutionRowTextTest {
     @Test fun normalRowShowsBondGateAlongsideTheUsualRequirement() {
         val e = Evolution(135, EvoKind.LEVEL, level = 16)
         val mon = TestData.mon(data, 133, 40).apply { bondPoints = 124 }
-        assertEquals("Level 16\nNeeds Level 2 Bond", EvolutionRowText.condition(data, e, mon))
+        assertEquals("Level 16\nLevel 2 Bond", EvolutionRowText.condition(data, e, mon))
         mon.bondPoints = 125
         assertEquals("Level 16", EvolutionRowText.condition(data, e, mon))
     }

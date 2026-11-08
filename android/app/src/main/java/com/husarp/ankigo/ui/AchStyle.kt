@@ -22,7 +22,7 @@ object AchStyle {
     val ICONS: Map<String, Int> = mapOf(
         // Study
         "cards" to R.drawable.ic_stats, "flame" to R.drawable.ic_flame, "combo" to R.drawable.ic_game, "calendar" to R.drawable.ic_calendar,
-        "days" to R.drawable.ic_book, "clock" to R.drawable.ic_clock, "new-card" to R.drawable.ic_ach_cards, "good" to R.drawable.ic_check,
+        "days" to R.drawable.ic_calendar, "clock" to R.drawable.ic_clock, "new-card" to R.drawable.ic_ach_cards, "good" to R.drawable.ic_check,
         "easy" to R.drawable.ic_ach_easy, "target" to R.drawable.ic_ach_target,
         // Battle: the app's own swords
         "crossed-swords" to R.drawable.ic_swords, "sword" to R.drawable.ic_swords, "heart-broken" to R.drawable.ic_ach_heart_broken,
@@ -31,7 +31,7 @@ object AchStyle {
         // Collection: the app's ball
         "ball" to R.drawable.ic_ball, "dex-caught" to R.drawable.ic_dex, "dex" to R.drawable.ic_ach_eye, "sparkle" to R.drawable.ic_ach_sparkle,
         "legendary" to R.drawable.ic_ach_crown, "types" to R.drawable.ic_palette, "evolve" to R.drawable.ic_ach_evolve,
-        "trophy" to R.drawable.ic_ach_trophy, "level" to R.drawable.ic_ach_levels, "xp" to R.drawable.ic_star, "ball-throw" to R.drawable.ic_ball,
+        "trophy" to R.drawable.ic_ach_trophy, "level" to R.drawable.ic_ach_levels, "xp" to R.drawable.ic_bolt, "ball-throw" to R.drawable.ic_ball,
         "ball-catch" to R.drawable.ic_ach_ballcheck,
         "collection-pantry-complete" to R.drawable.ic_ach_collection_pantry_complete,
         "collection-regular-throws" to R.drawable.ic_ach_collection_regular_throws,
@@ -54,8 +54,8 @@ object AchStyle {
         "secret-glow-up" to R.drawable.ic_ach_secret_glow_up,
         // Special (Ankimon badges)
         "badge-ball" to R.drawable.ic_ball, "badge-normal" to R.drawable.ic_dex, "badge-baby" to R.drawable.ic_heart_outline,
-        "badge-ultra" to R.drawable.ic_bolt, "badge-legendary" to R.drawable.ic_ach_crown, "badge-mythical" to R.drawable.ic_ach_sparkle,
-        "badge-level" to R.drawable.ic_up, "badge-item" to R.drawable.ic_gift, "badge-evolve" to R.drawable.ic_ach_evolve,
+        "badge-ultra" to R.drawable.ic_ach_sparkle, "badge-legendary" to R.drawable.ic_ach_crown, "badge-mythical" to R.drawable.ic_ach_sparkle,
+        "badge-level" to R.drawable.ic_up, "badge-item" to R.drawable.ic_item_tag, "badge-evolve" to R.drawable.ic_ach_evolve,
         "badge-fossil" to R.drawable.ic_ach_fossil, "badge-heal" to R.drawable.ic_ach_potion,
     )
 

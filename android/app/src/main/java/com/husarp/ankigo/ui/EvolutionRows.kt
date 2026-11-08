@@ -128,10 +128,11 @@ internal class EvolutionRows(
                 minimumHeight = Ui.dp(a, 40)
                 setPadding(Ui.dp(a, 6), Ui.dp(a, 5), Ui.dp(a, 6), Ui.dp(a, 5))
             }
-            if (met) condition.addView(Ui.text(a, 16f, 900, R.color.ag_green).apply {
-                text = "↑"
-                contentDescription = "Ready to evolve"
-            }, LayoutParams(Ui.dp(a, 20), -2))
+            condition.addView(ImageView(a).apply {
+                setImageResource(R.drawable.ic_evolve)
+                setColorFilter(Ui.c(a, R.color.ag_green))
+                contentDescription = if (met) "Ready to evolve" else "Evolution requirements"
+            }, LayoutParams(Ui.dp(a, 18), Ui.dp(a, 18)))
             val item = Progression.evolutionItem(e)
             if (item != null) condition.addView(ImageView(a).apply {
                 Ui.itemIcon(a, item, this)
@@ -238,11 +239,10 @@ internal class EvolutionRows(
 internal object EvolutionRowText {
     fun condition(data: GameData, e: Evolution, mon: Mon? = null): String {
         val method = EvoLine.method(data, e)
-            .let { if (e.kind == EvoKind.FRIENDSHIP) "Needs $it" else it }
             .replace(Regex("^Lv "), "Level ")
             .replace(", day", "\nin the daytime").replace(", night", "\nat night")
             .replace(", Fairy-type move", "\nknows a Fairy move")
-        return method + if (e.kind != EvoKind.FRIENDSHIP && mon != null && !Bond.allows(mon, e)) "\nNeeds Level ${Bond.requiredLevel(e)} Bond" else ""
+        return method + if (e.kind != EvoKind.FRIENDSHIP && mon != null && !Bond.allows(mon, e)) "\nLevel ${Bond.requiredLevel(e)} Bond" else ""
     }
 
     fun explanation(data: GameData, e: Evolution, parent: Species?, seen: Set<Int>, state: GameState?, mon: Mon?): String {

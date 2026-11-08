@@ -248,7 +248,7 @@ internal object ItemCard {
             Ui.decorateHeading(this, title)
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, TITLE_SP)
             letterSpacing = 0.06f
-            val icon = when (title) { "Evolves" -> R.drawable.ic_evolve; "In a fight" -> R.drawable.ic_swords; "How to use" -> R.drawable.ic_item_bag; else -> R.drawable.ic_info }
+            val icon = when (title) { "Requirements" -> R.drawable.ic_check; "Where to find" -> R.drawable.ic_map; "Evolves" -> R.drawable.ic_evolve; "In a fight" -> R.drawable.ic_swords; "How to use" -> R.drawable.ic_item_bag; else -> R.drawable.ic_info }
             androidx.core.content.ContextCompat.getDrawable(ctx, icon)?.mutate()?.let {
                 it.setTint(Ui.c(ctx, R.color.ag_mauve)); it.setBounds(0, 0, dp(ctx, 16f), dp(ctx, 16f))
                 setCompoundDrawablesRelative(it, null, null, null)

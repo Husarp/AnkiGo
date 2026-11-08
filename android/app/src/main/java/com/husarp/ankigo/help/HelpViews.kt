@@ -386,7 +386,7 @@ internal object HelpViews {
         GameGuide.BATTLES -> R.drawable.ic_swords
         GameGuide.MOVES -> R.drawable.ic_kind_special
         GameGuide.LEVELS -> R.drawable.ic_evolve
-        GameGuide.TYPES -> R.drawable.ic_type_fire
+        GameGuide.TYPES -> R.drawable.ic_palette
         GameGuide.STATS -> R.drawable.ic_stats
         GameGuide.CATCHING -> R.drawable.ic_ball
         GameGuide.MONEY -> R.drawable.ic_money
