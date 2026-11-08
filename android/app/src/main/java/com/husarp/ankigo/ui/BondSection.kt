@@ -59,6 +59,7 @@ object BondSection {
         else {
             addView(line("+${Bond.coins(level)} coins per defeated Pokémon"))
             addView(line("+${Bond.xpPercent(level)}% XP from wins and catches"), Form.lp(a, 6))
+            if (level >= 3) addView(line("All species matchups revealed"), Form.lp(a, 6))
             val tough = Bond.toughChance(points)
             if (tough > 0) addView(line("$tough% chance to survive a KO with 1 HP"), Form.lp(a, 6))
         }

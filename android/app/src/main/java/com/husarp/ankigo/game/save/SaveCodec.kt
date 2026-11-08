@@ -52,6 +52,7 @@ object SaveCodec {
             kv("cash", state.cash); kv("trainerLevel", state.trainerLevel); kv("trainerXp", state.trainerXp)
             list("seen", state.seen.sorted()); list("caught", state.caught.sorted())
             list("defeatedSpecies", state.defeatedSpecies.sorted())
+            list("bondMatchups", state.bondMatchups.sorted())
             key("seenMatchups"); obj {
                 for ((num, types) in state.seenMatchups.toSortedMap()) list(num.toString(), types.sortedBy { it.ordinal }.map { it.name })
             }
@@ -451,6 +452,7 @@ object SaveCodec {
         o.intList("seen")?.let { s.seen += it }
         o.intList("caught")?.let { s.caught += it }
         o.intList("defeatedSpecies")?.let { s.defeatedSpecies += it.filter { num -> num > 0 } }
+        o.intList("bondMatchups")?.let { s.bondMatchups += it.filter { num -> num > 0 } }
         o.optJSONObject("seenMatchups")?.let { map ->
             for (key in map.keys()) {
                 val num = key.toIntOrNull()?.takeIf { it > 0 } ?: continue

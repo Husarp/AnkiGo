@@ -37,10 +37,16 @@ object Bond {
         if (after > before) events += GameEvent.Info("Bond grew! ${mon.shownName} reached Level $after. ${unlock(after)}")
     }
 
+    fun add(data: GameData, state: GameState, mon: Mon, points: Int, events: MutableList<GameEvent>, sootheBell: Boolean = false, studyAnswer: Boolean = false) {
+        val before = level(mon.bondPoints)
+        add(mon, points, events, sootheBell, studyAnswer)
+        if (before < 3 && level(mon.bondPoints) >= 3 && mon in state.mons) MatchupKnowledge.reveal(data, state, mon, events)
+    }
+
     fun unlock(level: Int): String = when (level) {
         1 -> "+1 coin per win · +5% XP"
         2 -> "Normal evolutions, with their usual requirement"
-        3 -> "First Bond evolutions"
+        3 -> "First Bond evolutions · All species matchups revealed"
         4 -> "Higher Bond evolutions · 5% chance to survive a KO with 1 HP"
         5 -> "10% chance to survive a KO with 1 HP"
         else -> "Start"

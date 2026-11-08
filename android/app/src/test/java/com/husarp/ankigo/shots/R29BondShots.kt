@@ -77,6 +77,7 @@ class R29BondShots {
                 assertTrue(card.bottom <= col.height - col.paddingBottom)
                 val content = texts(card).joinToString("\n") { it.text }
                 assertTrue(content.contains("Level $level")); assertFalse(content.contains("No decay"))
+                assertEquals(level >= 3, content.contains("All species matchups revealed"))
                 if (level == 3) assertTrue(content.contains("120 / 250 points to Level 4"))
                 if (level == 5) { assertTrue(content.contains("Max Bond")); assertFalse(content.contains("Next ·")) }
             }

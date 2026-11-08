@@ -383,6 +383,7 @@ class GameState(
     val seen: MutableSet<Int> = mutableSetOf(),
     val caught: MutableSet<Int> = mutableSetOf(),
     val defeatedSpecies: MutableSet<Int> = mutableSetOf(), // ever defeated; absent in older saves
+    val bondMatchups: MutableSet<Int> = mutableSetOf(), // national Pokédex numbers whose matchups Bond revealed
     val seenMatchups: MutableMap<Int, MutableSet<Type>> = mutableMapOf(), // national Pokédex number -> observed attacking types
     var battle: Battle? = null,
     var nextSpecies: Int? = null,        // pre-rolled next encounter (widget silhouette, sprite prefetch)

@@ -16,6 +16,11 @@ private const val RELEASED_KEPT = 5_000 // how many released Ankimon ids the gam
  */
 class Game(val data: GameData, val state: GameState, val rng: Random = Random.Default, val clock: () -> Long = { System.currentTimeMillis() }) {
 
+    // Reveal before any screen reads the save; keep its alerts for the battle host, not a widget tick.
+    private val loadEvents = mutableListOf<GameEvent>().also { events ->
+        state.mons.filter { Bond.level(it.bondPoints) >= 3 }.forEach { MatchupKnowledge.reveal(data, state, it, events) }
+    }
+
     /** Game day key "yyyy-MM-dd" for [now]; a day starts at settings.dayStartHour (phone time zone). */
     fun dayKey(now: Long = clock()): String =
         Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault())
@@ -127,7 +132,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         events += ensureEncounter()
         val battle = state.battle ?: return events
-        if (main.hp > 0 && battle.wild.hp > 0) Bond.add(main, Bond.CARD_POINTS, events, state.activeHeldItem(main) == "soothe-bell", studyAnswer = !state.practiceRewards)
+        if (main.hp > 0 && battle.wild.hp > 0) Bond.add(data, state, main, Bond.CARD_POINTS, events, state.activeHeldItem(main) == "soothe-bell", studyAnswer = !state.practiceRewards)
         // R10-B22: who attacks depends on each answer, not on the point sum. A battle saved before keeps only the sum: restore the buttons from it.
         if (battle.buttons.size != battle.answers) { battle.buttons.clear(); battle.buttons += RoundRule.restore(battle.answers, battle.tally) }
         // R19-T (PLAN 284): the OK of a new card (PLAN 155) is one of the round's answers, a neutral move: it fills a dot and counts toward the
@@ -362,8 +367,10 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
     /** Starts a wild encounter if there is none (and a main exists). */
     fun ensureEncounter(): List<GameEvent> {
-        if (state.battle != null) return emptyList()
-        val main = state.main ?: return emptyList()
+        val events = loadEvents.toList()
+        loadEvents.clear()
+        if (state.battle != null) return events
+        val main = state.main ?: return events
         val now = clock()
         // Ankimon rolls the wild one when it appears, with that moment's state; the seed only fixes the random draws.
         val encounterSeed = state.nextSeed
@@ -383,7 +390,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.nextSeed = rng.nextLong()
         refreshNext()
 
-        return listOf(
+        return events + listOf(
             GameEvent.Encounter(
                 wild.species, wild.name, wild.level, wild.shiny, roll.tier,
                 wild.hp, encounterHp, willCatch(), newSpecies, wild.uid,

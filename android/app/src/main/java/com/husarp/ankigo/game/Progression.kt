@@ -162,7 +162,7 @@ object Progression {
         var friend = Tuning.FRIENDSHIP_GAIN.random(rng)
         if (state.activeHeldItem(main) == "soothe-bell") friend = (friend * Tuning.SOOTHE_BELL).toInt()
         main.friendship = min(Tuning.FRIENDSHIP_MAX, main.friendship + friend)
-        Bond.add(main, Bond.WIN_POINTS, events, state.activeHeldItem(main) == "soothe-bell")
+        Bond.add(data, state, main, Bond.WIN_POINTS, events, state.activeHeldItem(main) == "soothe-bell")
     }
 
     /**

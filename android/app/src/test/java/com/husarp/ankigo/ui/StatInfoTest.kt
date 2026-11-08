@@ -24,6 +24,7 @@ class StatInfoTest {
         assertTrue(StatInfo.EV.text.contains("every win"))
         assertTrue(StatInfo.BOND.text.contains("50 / 125 / 250 / 500 / 800"))
         assertTrue(StatInfo.BOND.text.contains("Soothe Bell") && !StatInfo.BOND.text.contains("No decay"))
+        assertTrue(StatInfo.BOND.text.contains("Level 3 reveals all matchups"))
         assertTrue(StatInfo.BOND in StatInfo.all())
         assertTrue(StatInfo.of(Stat.SPE).text.contains("first"))
     }
