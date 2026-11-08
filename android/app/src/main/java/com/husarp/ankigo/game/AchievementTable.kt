@@ -53,7 +53,7 @@ object AchievementTable {
     val TIER_NAMES = listOf("Common", "Rare", "Epic", "Legendary", "Mythical")
 
     /** The page's groups, in page order (every row's group is one of these, and ROWS follow this order). */
-    val GROUPS = listOf("Study", "Battle", "Collection", "Item collections", "Economy", "Special", "Badges", "Secret")
+    val GROUPS = listOf("Study", "Battle", "Collection", "Economy", "Special", "Item collections", "Badges", "Secret")
 
     fun tierName(tier: Int): String = TIER_NAMES.getOrElse(tier) { "Tier ${tier + 1}" }
 
@@ -90,7 +90,7 @@ object AchievementTable {
         // External (fed by stats/AchievementFeed.kt): the thresholds of Study time are minutes: 1 h, 10 h, 50 h, 200 h, 500 h.
         tiered("study-time", "Study", "Study time", "Hours spent answering, measured by AnkiGo", Metric.STUDY_MINUTES, "clock", 60, 600, 3_000, 12_000, 30_000),
         tiered("new-cards", "Study", "New cards learned", "Cards answered for the very first time", Metric.NEW_CARDS, "new-card", 50, 500, 2_000, 5_000, 10_000),
-        tiered("goals", "Study", "Daily goal reached", "Days you reached the daily goal (not in a row)", Metric.GOALS_REACHED, "target", 5, 30, 100, 300, 1_000),
+        tiered("goals", "Study", "Daily goal reached", "Days you reached the daily goal (not in a row)", Metric.GOALS_REACHED, "secret-one-shot", 5, 30, 100, 300, 1_000),
 
         // ---- Battle (battle and progress) ----
         tiered("defeats", "Battle", "Battles won", "Wild Pokémon your main knocked out or caught", Metric.DEFEATS, "crossed-swords", 10, 100, 1_000, 5_000, 15_000),
@@ -102,17 +102,8 @@ object AchievementTable {
         tiered("evolutions", "Battle", "Evolutions", "Times one of your Pokémon evolved", Metric.EVOLUTIONS, "evolve", 1, 10, 50, 150, 400),
 
         // ---- Collection ----
-        tiered("catches", "Collection", "Pokémon caught", "Every catch, duplicates too", Metric.CATCHES, "ball", 10, 100, 500, 2_000, 5_000),
         AchRow("types", "Collection", "Types caught", "Different types among your Pokémon (18 in all)", Metric.TYPES_CAUGHT, listOf(9L, 18L), "types"),
         tiered3("ball-catches", "Collection", "Ball catches", "Catches with a thrown ball (not the auto-catch rule)", Metric.BALL_CATCHES, "ball-catch", 1, 10, 50),
-
-        // ---- Item collections: one-time cosmetic awards ----
-        AchRow("pantry-complete", "Item collections", "Pantry complete", "Buy 8 food & drink kinds", Metric.PANTRY_KINDS, listOf(8L), "collection-pantry-complete"),
-        AchRow("regular-throws", "Item collections", "Regular throws", "Use 3 regular ball kinds", Metric.REGULAR_BALL_KINDS, listOf(3L), "collection-regular-throws"),
-        AchRow("special-throws", "Item collections", "Special throws", "Use 10 special ball kinds", Metric.SPECIAL_BALL_KINDS, listOf(10L), "collection-special-throws"),
-        AchRow("berry-sampler", "Item collections", "Berry sampler", "Trigger all 8 berries", Metric.BERRY_KINDS, listOf(8L), "collection-berry-sampler"),
-        AchRow("well-equipped", "Item collections", "Well equipped", "Equip 12 lasting items", Metric.EQUIPMENT_KINDS, listOf(12L), "collection-well-equipped"),
-        AchRow("stone-stories", "Item collections", "Stone stories", "Use 10 evolution stones", Metric.STONE_KINDS, listOf(10L), "collection-stone-stories"),
 
         // ---- Economy ----
         tiered("money-earned", "Economy", "Money earned", "Coins earned from answers and won battles", Metric.MONEY_EARNED, "coin", 2_000, 20_000, 100_000, 365_000, 1_000_000),
@@ -123,6 +114,14 @@ object AchievementTable {
         tiered("shinies", "Special", "Shinies caught", "Shiny Pokémon caught", Metric.SHINIES, "sparkle", 1, 3, 10, 25, 50),
         tiered("legendary-mythical", "Special", "Legendary & Mythical caught", "Legendary or Mythical species caught", Metric.LEGENDARY_MYTHICAL, "legendary", 1, 3, 10, 25, 50),
         tiered("comebacks", "Special", "Comebacks", "Wins with your main under 10% HP", Metric.COMEBACKS, "heart", 1, 10, 50, 200, 500),
+
+        // ---- Item collections: one-time cosmetic awards ----
+        AchRow("pantry-complete", "Item collections", "Pantry complete", "Buy 8 food & drink kinds", Metric.PANTRY_KINDS, listOf(8L), "collection-pantry-complete"),
+        AchRow("regular-throws", "Item collections", "Regular throws", "Use 3 regular ball kinds", Metric.REGULAR_BALL_KINDS, listOf(3L), "collection-regular-throws"),
+        AchRow("special-throws", "Item collections", "Special throws", "Use 10 special ball kinds", Metric.SPECIAL_BALL_KINDS, listOf(10L), "collection-special-throws"),
+        AchRow("berry-sampler", "Item collections", "Berry sampler", "Trigger all 8 berries", Metric.BERRY_KINDS, listOf(8L), "collection-berry-sampler"),
+        AchRow("well-equipped", "Item collections", "Well equipped", "Equip 12 lasting items", Metric.EQUIPMENT_KINDS, listOf(12L), "collection-well-equipped"),
+        AchRow("stone-stories", "Item collections", "Stone stories", "Use 10 evolution stones", Metric.STONE_KINDS, listOf(10L), "collection-stone-stories"),
 
         // ---- Badges: today's one-off Ankimon badges (5-10, 16-20; 11 leech and 14/15 eggs are not awarded) ----
         badge(7, "first-catch", "First Pokémon caught", "Your very first catch", "badge-ball"),

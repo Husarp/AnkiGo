@@ -416,8 +416,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         GameSound.onEvent(panel.context, e, muted(), arena.ballShown, factor, delayMs)
     }
     /** A battle line: across the bar when it is about the whole battle; a move or a line about one side is on the bar / the arena already, so it is only spoken. */
-    private fun log(kind: LogKind, pill: String, text: String) {
-        if (logWhole) panel.setLog(kind, pill, text) else panel.sayBattle(text)
+    private fun log(kind: LogKind, pill: String, text: String, uid: String? = null) {
+        if (logWhole || uid != null) panel.setLog(kind, pill, text, uid = uid) else panel.sayBattle(text)
     }
 
     private fun label(b: Int) = when (b) { 1 -> "AGAIN"; 2 -> "HARD"; 3 -> "GOOD"; 4 -> "EASY"; else -> "OK" }
@@ -529,16 +529,16 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                     if (e.level > arena.playerLevel) arena.setPlayerLevel(e.level)   // PLAN 138: the XP bar's loop already changed it, level by level
                     arena.setPlayerHp(e.hp, e.maxHp, true)
                 }
-                log(LogKind.SYS, "LEVEL UP", "${em(e.name)} grew to Lv ${em(e.level.toString())}!")
+                log(LogKind.SYS, "LEVEL UP", "${em(e.name)} grew to Lv ${em(e.level.toString())}!", e.uid)
                 return d(1000)
             }
             is GameEvent.MoveLearned -> {
                 val forgot = e.forgot?.let { " It forgot ${moveName(it)}." } ?: ""
-                log(LogKind.SYS, "MOVE", "${em(e.name)} learned ${em(moveName(e.move))}!$forgot")
+                log(LogKind.SYS, "MOVE", "${em(e.name)} learned ${em(moveName(e.move))}!$forgot", e.uid)
                 return d(900)
             }
             is GameEvent.MoveSkipped -> {
-                log(LogKind.SYS, "MOVE", "${em(e.name)} kept its moves and skipped ${em(moveName(e.move))}.")
+                log(LogKind.SYS, "MOVE", "${em(e.name)} kept its moves and skipped ${em(moveName(e.move))}.", e.uid)
                 return d(800)
             }
             is GameEvent.Evolved -> return playEvolved(e)
@@ -582,7 +582,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             }
             is GameEvent.SwitchQueued -> {
                 // PLAN 206 / R18-B (227): nothing to animate and no line on the bar (it keeps its segments): a card toast says it (R19-H, PLAN 257)
-                panel.toast(ToastKind.SWITCH, if (e.uid != null) SwitchQueue.queuedText(e.name) else SwitchQueue.cancelledText(e.name))
+                panel.toast(ToastKind.SWITCH, if (e.uid != null) SwitchQueue.queuedText(e.name) else SwitchQueue.cancelledText(e.name), uid = e.uid)
                 return 0
             }
             is GameEvent.SwitchHit -> {
@@ -640,7 +640,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             is GameEvent.Duplicate -> return playDuplicate(e)
             is GameEvent.Info -> {
                 if (arena.ballShown && e.text.endsWith("broke free!")) return breakFree(e.text)
-                log(LogKind.SYS, if (e.text.startsWith("Daily goal")) "GOAL" else if (e.text.startsWith("Bond grew!")) "BOND" else "INFO", e.text)
+                log(LogKind.SYS, if (e.text.startsWith("Daily goal")) "GOAL" else if (e.text.startsWith("Bond grew!")) "BOND" else "INFO", e.text, e.uid)
                 return d(800)
             }
         }
@@ -1018,9 +1018,9 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     /** Sprite flashes white three times, swaps to the new back sprite at the middle flash. */
     private fun playEvolved(e: GameEvent.Evolved): Long {
-        log(LogKind.SYS, "EVOLVE", "What? ${em(e.from)} is evolving…")
+        log(LogKind.SYS, "EVOLVE", "What? ${em(e.from)} is evolving…", e.uid)
         if (e.uid != arena.playerUid) {
-            after(500) { log(LogKind.SYS, "EVOLVE", "${em(e.from)} evolved into ${em(e.to)}!") }
+            after(500) { log(LogKind.SYS, "EVOLVE", "${em(e.from)} evolved into ${em(e.to)}!", e.uid) }
             return d(1400)
         }
         arena.flashPlayer(d(900), 3)
@@ -1037,7 +1037,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 arena.setPlayerHp(mon.hp, maxHpOf(e.uid), true)
             }
         }
-        after(900) { log(LogKind.SYS, "EVOLVE", "${em(e.from)} evolved into ${em(e.to)}!") }
+        after(900) { log(LogKind.SYS, "EVOLVE", "${em(e.from)} evolved into ${em(e.to)}!", e.uid) }
         return d(1900)
     }
 

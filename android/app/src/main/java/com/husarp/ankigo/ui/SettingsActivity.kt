@@ -369,29 +369,6 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     private val dateFmt get() = SimpleDateFormat("d MMM yyyy, HH:mm", Locale.getDefault())
 
-    private fun summaryOf(s: SettingsSection): String {
-        val st = loaded?.settings
-        val study = getSharedPreferences("study", 0)
-        return when (s) {
-            SettingsSection.LOOK -> SettingsSummary.look(AppPrefs.theme(this), AppPrefs.accent(this), AppPrefs.uiScale(this))
-            SettingsSection.GAME -> if (st == null) "The game isn't loaded" else SettingsSummary.game(st.gens, com.husarp.ankigo.game.DailyGoal.forSettings(st, loaded?.day), st.goalByWeekday != null)
-            SettingsSection.STUDY -> SettingsSummary.study(study.getBoolean("inAnkiDroid", false), study.getBoolean("swipe", false), study.getInt("zoom", 100))
-            SettingsSection.WIDGETS -> OpenOnPrefs.summary(OpenOnPrefs.choice(this))
-            SettingsSection.BACKGROUNDS -> "${BackdropCatalog.ALL.count { it.id !in BackdropPrefs.disabled(this) }} of ${BackdropCatalog.ALL.size} enabled"
-            SettingsSection.BATTLE -> SettingsSummary.battle(AppPrefs.leaveMode(this), AppPrefs.statsBarSmall(this), AppPrefs.compactCards(this), AppPrefs.cardsUnderOwn(this))
-            SettingsSection.REMINDERS -> SettingsSummary.reminders(com.husarp.ankigo.remind.ReminderStore.load(this))
-            SettingsSection.HELP -> "How the game works · fix a problem"
-            SettingsSection.SOUND -> soundSummary(this)
-            SettingsSection.DOWNLOADS -> SettingsSummary.downloads(DataStore.size(this), Sprites.size(this),
-                SettingsJobs.everythingBusy || SettingsJobs.data.running || FirstRunJob.job.running)
-            SettingsSection.ANKIMON -> "Bring Pokémon from your PC save"
-            SettingsSection.SAVE -> loaded.let { SettingsSummary.save(it?.savedAt, it?.seq) { t -> dateFmt.format(Date(t)) } }
-            SettingsSection.UPDATES -> SettingsSummary.updates(Updates.current(this))
-            SettingsSection.DIAGNOSTICS -> "LIVE watch, checks and the report"
-            SettingsSection.ABOUT -> "AnkiGo ${Updates.current(this)} · credits"
-        }
-    }
-
     private lateinit var homeBox: LinearLayout
     private lateinit var resultsBox: LinearLayout
 
@@ -402,7 +379,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         SettingsSection.GROUPS.forEachIndexed { i, group ->
             homeBox.addView(Form.sect(this, SettingsSection.GROUP_TITLES[i]), Form.lp(this, 0))
             homeBox.addView(SettingsHome.group(this, group.map { s ->
-                SettingsHome.row(this, s, summaryOf(s)) { choose(s) }
+                SettingsHome.row(this, s, s.subtitle) { choose(s) }
             }), Form.lp(this, 0))
         }
         homeBox.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply { text = "AnkiGo ${Updates.current(this@SettingsPage)}"; gravity = Gravity.CENTER }, Form.lp(this, 16))

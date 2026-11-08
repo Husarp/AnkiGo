@@ -243,7 +243,7 @@ internal object AbilityAdaptations : BattleRules {
     fun onWin(state: GameState, rng: kotlin.random.Random, events: MutableList<GameEvent>) {
         val main = state.main ?: return
         val ab = state.battle?.player?.notes?.get(Abilities.OVERRIDE) ?: BattleView.normalizeAbility(main.ability)
-        if (ab == "pickup" && rng.nextInt(100) < 10) { Economy.give(state, "potion"); events += GameEvent.Info("Pickup found a Potion!") }
-        if (ab == "honeygather" && rng.nextInt(100) < 10) { state.cash += 5; events += GameEvent.Info("Honey Gather found 5 coins!") }
+        if (ab == "pickup" && rng.nextInt(100) < 10) { Economy.give(state, "potion"); events += GameEvent.Info("Pickup found a Potion!", main.uid) }
+        if (ab == "honeygather" && rng.nextInt(100) < 10) { state.cash += 5; events += GameEvent.Info("Honey Gather found 5 coins!", main.uid) }
     }
 }

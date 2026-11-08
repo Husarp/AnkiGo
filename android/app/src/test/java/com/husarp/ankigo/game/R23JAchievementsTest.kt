@@ -17,8 +17,8 @@ class R23JAchievementsTest {
 
     @Test fun finalTableAndHiddenSecrets() {
         val s = state()
-        assertEquals(49, AchievementTable.ROWS.size)
-        assertEquals(122, AchievementTable.ROWS.sumOf { it.tiers.size })
+        assertEquals(48, AchievementTable.ROWS.size)
+        assertEquals(117, AchievementTable.ROWS.sumOf { it.tiers.size })
         for (id in listOf("damage-dealt", "damage-taken", "damage-blocked", "misses", "super-effective", "dex-caught", "dex-seen", "balls-thrown", "money-spent", "items-used")) assertNull(AchievementTable.row(id))
         for (id in listOf("ball-catches", "tms", "items-found")) assertEquals(3, AchievementTable.row(id)!!.tiers.size)
         val secrets = Achievements.view(s, data).filter { it.group == "Secret" }

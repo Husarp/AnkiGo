@@ -215,7 +215,7 @@ class R29BondTest {
         assertEquals(51, m.bondPoints)
         assertEquals(Progression.xpForDefeat(data.sp(16), 20), out.filterIsInstance<GameEvent.XpGained>().single { it.uid == m.uid }.xp)
         assertEquals(Tuning.CASH_PER_WIN, out.filterIsInstance<GameEvent.Cash>().filter { it.kind == CashKind.DEFEAT }.sumOf { it.amount })
-        assertEquals(1, out.filterIsInstance<GameEvent.Info>().count { it.text.startsWith("Bond grew!") })
+        assertEquals(m.uid, out.filterIsInstance<GameEvent.Info>().single { it.text.startsWith("Bond grew!") }.uid)
     }
 
     @Test fun aSuppressedSootheBellUsesTheBaseCardAndWinAmounts() {

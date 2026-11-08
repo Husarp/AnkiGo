@@ -69,18 +69,18 @@ class AchievementsTest {
     }
 
     // R4-V2b: Adam's list edits
-    private val DROPPED = listOf("combo", "good", "easy", "damage-dealt", "damage-taken", "damage-blocked", "misses", "super-effective", "dex-caught", "dex-seen", "balls-thrown", "money-spent", "items-used")
+    private val DROPPED = listOf("catches", "combo", "good", "easy", "damage-dealt", "damage-taken", "damage-blocked", "misses", "super-effective", "dex-caught", "dex-seen", "balls-thrown", "money-spent", "items-used")
     private val BY_GROUP = mapOf(
         "Study" to listOf("answers", "streak-days", "cards-day", "days-studied", "study-time", "new-cards", "goals"),
         "Battle" to listOf("defeats", "total-xp", "total-levels", "highest-level", "evolutions"),
-        "Collection" to listOf("catches", "types", "ball-catches"),
+        "Collection" to listOf("types", "ball-catches"),
         "Economy" to listOf("money-earned", "tms", "items-found"),
         "Special" to listOf("shinies", "legendary-mythical", "comebacks"),
     )
 
     @Test fun theDroppedRowsAreGoneAndTheirIdsStayFree() {
         for (id in DROPPED) assertNull(id, AchievementTable.row(id))
-        assertEquals(21, AchievementTable.ROWS.count { !it.oneOff })
+        assertEquals(20, AchievementTable.ROWS.count { !it.oneOff })
         assertEquals(28, AchievementTable.ROWS.count { it.oneOff })
         // their counters stay in the engine
         assertTrue(Metric.entries.containsAll(listOf(Metric.BEST_COMBO, Metric.GOOD_PRESSES, Metric.EASY_PRESSES)))
@@ -91,7 +91,7 @@ class AchievementsTest {
     }
 
     @Test fun everyRowIsInItsGroupAndTheSixGroupsComeInOrder() {
-        assertEquals(listOf("Study", "Battle", "Collection", "Item collections", "Economy", "Special", "Badges", "Secret"), AchievementTable.GROUPS)
+        assertEquals(listOf("Study", "Battle", "Collection", "Economy", "Special", "Item collections", "Badges", "Secret"), AchievementTable.GROUPS)
         for ((g, ids) in BY_GROUP) assertEquals(g, ids, AchievementTable.ROWS.filter { it.group == g }.map { it.id })
         assertTrue(AchievementTable.ROWS.filter { it.group == "Badges" }.all { it.ankimonBadge != null })
         assertEquals(11, AchievementTable.ROWS.count { it.group == "Badges" })
@@ -570,21 +570,19 @@ class AchievementsTest {
         assertEquals(listOf(2), reached(check(s, NOW + 1), "answers").map { it.tier })
     }
 
-    @Test fun reachedTiersNeverGoDownWhenAValueDrops() {
-        // (R13 Part F: "total-levels" no longer drops with a release; "catches" still reads the Pokémon you own when that is more)
+    @Test fun removedCatchesProgressIsIgnoredWithoutRewardsOrLostBadges() {
         val s = looked()
-        repeat(120) { s.mons += TestData.mon(data, 19, 10, uid = "big$it") } // an import: 121 owned -> Common (10) and Rare (100)
-        val first = check(s)
-        assertEquals(listOf(0, 1), reached(first, "catches").map { it.tier })
-        s.mons.removeAll { it.uid.startsWith("big") }                      // released
-        assertEquals(1L, Achievements.value(Metric.CATCHES, s, data))
-        assertTrue(check(s, NOW + 1).none { it is GameEvent.AchievementReached })
+        s.achTiers["catches"] = mutableListOf(NOW, NOW)
+        s.achInferred += "catches/1"
+        s.catches = 5_000
+        val cash = s.cash
+        val badges = s.badges.toSet()
+        val events = check(s)
+        assertTrue(reached(events, "catches").isEmpty())
+        assertTrue(Achievements.view(s, data).none { it.id == "catches" })
         assertEquals(listOf(NOW, NOW), s.achTiers["catches"])
-        val view = Achievements.view(s, data).single { it.id == "catches" }
-        assertEquals(1, view.tier)
-        assertEquals("Rare", view.tierName)
-        assertEquals(1L, view.value)
-        assertEquals(500L, view.next)
+        assertEquals(cash, s.cash)
+        assertEquals(badges, s.badges)
     }
 
     @Test fun aBadgeOneOffIsReachedWhenTheBadgeIsInTheSetAndSendsNoSecondEvent() {
@@ -649,7 +647,7 @@ class AchievementsTest {
         assertEquals("Study", v.group)
         assertEquals(listOf(NOW), v.dates)
         assertFalse(v.oneOff)
-        val none = Achievements.view(s, data).single { it.id == "catches" }
+        val none = Achievements.view(s, data).single { it.id == "defeats" }
         assertEquals(-1, none.tier); assertNull(none.tierName); assertEquals(10L, none.next); assertEquals(emptyList<Long>(), none.dates)
     }
 

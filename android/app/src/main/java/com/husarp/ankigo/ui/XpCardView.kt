@@ -18,7 +18,7 @@ import com.husarp.ankigo.gfx.SpriteView
  * from [XpCard.barFrom] to [XpCard.barTo]; on a level-up the bar fills to the top, restarts, and the text becomes
  * "Level up! Lv 16" with a sparkle. [slim] is the one-line version for small windows; [micro] (slim too) drops the name and
  * says just "Lv 16!", for a window with only a narrow free spot. The arena slides it in and out;
- * it never takes touches.
+ * a tap opens that Pokémon’s details.
  */
 internal class XpCardView(ctx: Context, val card: XpCard, val slim: Boolean, floorSp: Float, val micro: Boolean = false) : LinearLayout(ctx) {
     val sprite = SpriteView(ctx).apply { scaleDp = 1f }
@@ -32,7 +32,7 @@ internal class XpCardView(ctx: Context, val card: XpCard, val slim: Boolean, flo
         gravity = Gravity.CENTER_VERTICAL
         background = Ui.rounded((Ui.c(ctx, R.color.ag_card) and 0x00FFFFFF) or (0xF2 shl 24), if (slim) 8 else 12, ctx)
         elevation = Ui.dp(ctx, 3f)
-        isClickable = false
+        setOnClickListener { BattleDetails.show(context, card.uid) }
         val pad = if (micro) 3 else if (slim) 4 else 6
         val padY = if (micro) 2 else pad
         setPadding(Ui.dp(ctx, pad + 2), Ui.dp(ctx, padY), Ui.dp(ctx, pad + 2), Ui.dp(ctx, padY))
@@ -52,8 +52,6 @@ internal class XpCardView(ctx: Context, val card: XpCard, val slim: Boolean, flo
         contentDescription = "${card.name} gained ${card.xp} XP" + if (card.levelUp) ", level ${card.levelTo}" else ""
         bar.setMeaning(BarMeaning.XP, card.barFrom, false)
     }
-
-    override fun onTouchEvent(event: MotionEvent?): Boolean = false
 
     /** The bar's runs: one for a plain gain; per level crossed the loop of [XpLoop] (fill to the end, hold, empty, on). */
     private val segs = XpLoop.segments(card.levelFrom, card.barFrom, card.levelTo, card.barTo)

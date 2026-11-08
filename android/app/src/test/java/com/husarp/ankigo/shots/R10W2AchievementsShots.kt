@@ -283,9 +283,9 @@ class R10W2AchievementsShots {
     @Test fun tabsStayWhileTheSheetIsOpenedAndClosed() {
         shoot("sheet", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT)) { ctx ->
             val screen = page(ctx) { it.setTab("Collection") }
-            tap(screen, "Pokémon caught")
+            tap(screen, "Ball catches")
             assertEquals("Collection", lastPage!!.achievementsView().tab())
-            assertTrue("Common · 10" in texts(screen))
+            assertTrue("Common · 1" in texts(screen))
             screen
         }
     }

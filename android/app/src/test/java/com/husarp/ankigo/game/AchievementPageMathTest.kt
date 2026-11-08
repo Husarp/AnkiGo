@@ -154,7 +154,8 @@ class AchievementPageMathTest {
     }
 
     @Test fun seeItFindsTheRowsTabAndWhetherTheFilterShowsIt() {
-        assertEquals("Collection", AchPageMath.tabOf("catches"))
+        assertEquals("Collection", AchPageMath.tabOf("ball-catches"))
+        assertNull(AchPageMath.tabOf("catches"))
         assertNull(AchPageMath.tabOf("no-such-row"))
         val two = twoGroupViews()
         assertTrue(AchPageMath.shows(AchPageMath.groups(two, AchFilter.CLOSE, NOW, SINCE), "catches"))
@@ -218,7 +219,7 @@ class AchievementPageMathTest {
 
     @Test fun everyRowHasASourceAndTheKindsAreRight() {
         fun src(id: String) = AchPageMath.source(AchievementTable.row(id)!!)
-        assertEquals(AchSource.SAVE, src("catches"))
+        assertEquals(AchSource.SAVE, src("highest-level"))
         assertEquals(AchSource.SAVE, src("cards-day"))
         assertEquals(AchSource.HISTORY, src("money-earned"))
         assertEquals(AchSource.HISTORY, src("days-studied"))
@@ -254,17 +255,18 @@ class AchievementPageMathTest {
 
     @Test fun celebrationsCoverTiersOneOffsAndBadgeTiersWithoutDoubles() {
         val events = listOf(
-            GameEvent.AchievementReached("catches", 1, "Pokémon caught", "Rare"),
-            GameEvent.AchievementReached("catches", 2, "Pokémon caught", "Epic"),
+            GameEvent.AchievementReached("ball-catches", 1, "Ball catches", "Rare"),
+            GameEvent.AchievementReached("ball-catches", 2, "Ball catches", "Epic"),
             GameEvent.BadgeEarned(7, "First Pokémon caught"),
             GameEvent.BadgeEarned(2, "200 cards in one day"), // the 2nd tier of "cards-day"
             GameEvent.BadgeEarned(3, "300 cards in one day"), // no row
-            GameEvent.AchievementReached("catches", 2, "Pokémon caught", "Epic"), // a double
+            GameEvent.AchievementReached("ball-catches", 2, "Ball catches", "Epic"), // a double
+            GameEvent.AchievementReached("catches", 1, "Pokémon caught", "Rare"), // retired ids are ignored
             GameEvent.Info("x"),
         )
         val c = AchPageMath.celebrations(events)
-        assertEquals(listOf("catches" to 1, "catches" to 2, "first-catch" to -1, "cards-day" to 1), c.map { it.rowId to it.tier })
-        assertEquals(listOf<Long?>(100L, 500L, null, 200L), c.map { it.threshold })
+        assertEquals(listOf("ball-catches" to 1, "ball-catches" to 2, "first-catch" to -1, "cards-day" to 1), c.map { it.rowId to it.tier })
+        assertEquals(listOf<Long?>(10L, 50L, null, 200L), c.map { it.threshold })
         assertEquals(listOf("Rare!", "Epic!", "Achievement!", "Rare!"), c.map { it.word })
         assertEquals(listOf(3), AchPageMath.unmappedBadges(events).map { it.id })
         assertTrue(AchPageMath.celebrations(emptyList()).isEmpty())

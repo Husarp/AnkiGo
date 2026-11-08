@@ -33,6 +33,24 @@ enum class SettingsSection(val title: String, @DrawableRes val icon: Int, @Color
     DIAGNOSTICS("Diagnostics", R.drawable.ic_bug, R.color.ag_sub0),
     ABOUT("About", R.drawable.ic_info, R.color.ag_sub1);
 
+    val subtitle: String get() = when (this) {
+        LOOK -> "How the game looks"
+        GAME -> "Goals, Pokémon and game rules"
+        STUDY -> "How you study your cards"
+        BATTLE -> "Battle layout and floating windows"
+        BACKGROUNDS -> "Scenes behind your battles"
+        WIDGETS -> "Home screen widgets and shortcuts"
+        REMINDERS -> "When to remind you to study"
+        SOUND -> "Sound effects and Pokémon cries"
+        DOWNLOADS -> "Game data and Pokémon pictures"
+        ANKIMON -> "Bring Pokémon from your PC save"
+        SAVE -> "Protect and restore your progress"
+        HELP -> "How the game works and troubleshooting"
+        UPDATES -> "What's new in AnkiGo"
+        DIAGNOSTICS -> "Checks, live watch and reports"
+        ABOUT -> "App information and credits"
+    }
+
     val opens: Boolean get() = this != HELP && this != UPDATES && this != DIAGNOSTICS
 
     companion object {

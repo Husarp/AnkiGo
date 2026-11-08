@@ -68,7 +68,7 @@ class R22KAchievementsTest {
     @Test fun noteGroupsAchievementsAndOpensOnTap() {
         val ctx = setup()
         var tapped = false
-        val batch = listOf(AchCelebration("answers", "Answers given", 0, "Common", 500), AchCelebration("catches", "Pokémon caught", 1, "Rare", 100))
+        val batch = listOf(AchCelebration("answers", "Answers given", 0, "Common", 500), AchCelebration("evolutions", "Evolutions", 1, "Rare", 100))
         val note = AchievementPopup.noteCard(ctx, batch) { tapped = true }
         assertTrue("2 achievements" in text(note))
         assertTrue(note.isClickable)

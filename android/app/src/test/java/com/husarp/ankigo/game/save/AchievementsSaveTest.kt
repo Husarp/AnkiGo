@@ -62,6 +62,7 @@ class AchievementsSaveTest {
     @Test fun savedDatesOfADroppedRowAreKeptAndNeverShown() {
         // R4-V2b: "combo", "good" and "easy" left the list; a save that has dates for them keeps them, round-trips and loads fine
         val s = played()
+        s.achTiers["catches"] = mutableListOf(1_700_000_000_000L, 1_700_000_100_000L)
         s.achTiers["combo"] = mutableListOf(1_700_000_000_000L, 1_700_000_100_000L)
         s.achTiers["good"] = mutableListOf(1_700_000_200_000L)
         s.achTiers["easy"] = mutableListOf()
@@ -72,7 +73,8 @@ class AchievementsSaveTest {
         Achievements.check(back, data, NOW, mutableListOf(), silent = true)
         assertEquals(mutableListOf(1_700_000_200_000L), back.achTiers["good"]) // check() leaves unknown ids alone
         val shown = Achievements.view(back, data).map { it.id }
-        assertTrue(shown.none { it in listOf("combo", "good", "easy") })
+        assertEquals(s.achTiers["catches"], back.achTiers["catches"])
+        assertTrue(shown.none { it in listOf("catches", "combo", "good", "easy") })
         assertEquals(AchievementTable.ROWS.map { it.id }, shown)
     }
 

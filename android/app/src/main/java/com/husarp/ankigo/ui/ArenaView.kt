@@ -2060,7 +2060,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /**
      * Queues the XP card of a team member (pick 9A): it slides in at the top right, clear of both Pokémon’s chips, stays a moment
      * and slides away. [loadSprite] puts the mini sprite in. Cards play one after another; with no
-     * room even for the slim card (tiny window) it is skipped. It sits on no sprite and no stat card, and takes no touches.
+     * room even for the slim card (tiny window) it is skipped. It sits on no sprite and no stat card; tapping it opens that Pokémon’s details.
      */
     fun showXpCard(card: XpCard, loadSprite: (SpriteView) -> Unit) {
         if (xpQueue.size >= 8) return
