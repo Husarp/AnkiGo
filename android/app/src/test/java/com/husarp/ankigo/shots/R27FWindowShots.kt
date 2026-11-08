@@ -37,7 +37,7 @@ class R27FWindowShots {
             assertFalse(views(scroll).contains(close))
             val text = all.filterIsInstance<TextView>().joinToString("\n") { it.text }
             assertTrue(text.contains("Fire Stone"))
-            assertTrue(text.contains("The Shop sells evolution items"))
+            assertTrue(text.contains(com.husarp.ankigo.game.ItemInfo.whereToFind(data, "fire-stone")))
             FrameLayout(ctx).apply {
                 addView(DialogShots.scene(ctx, details))
                 addView(DialogShots.scene(ctx, dialog))

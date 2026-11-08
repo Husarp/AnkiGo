@@ -287,7 +287,7 @@ class R18GDetailsShots {
             assertTrue("Hold to evolve" in strings(infoScene))
             val close = views(infoScene).single { it.contentDescription == "Close" }
             assertTrue("fixed close outside scrolling text", scrolls(infoScene).none { views(it).contains(close) })
-            val body = texts(infoScene).single { it.text.contains("The Shop sells") }.parent as View
+            val body = texts(infoScene).single { it.text.contains(com.husarp.ankigo.game.ItemInfo.whereToFind(gd, "water-stone")) }.parent as View
             assertEquals(Ui.dp(body.context, 24), body.paddingLeft)
             assertEquals(Ui.dp(body.context, 24), body.paddingRight)
             assertFalse(strings(infoScene).any { "open your Bag" in it })
@@ -304,7 +304,7 @@ class R18GDetailsShots {
             val missingScene = DialogShots.scene(fire.context, missing)
             assertFalse("unmet branch disables action", missing.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!.isEnabled)
             assertTrue(strings(missingScene).any { "You don't have a Fire Stone" in it })
-            assertTrue(strings(missingScene).any { "The Shop sells" in it })
+            assertTrue(strings(missingScene).any { com.husarp.ankigo.game.ItemInfo.whereToFind(gd, "fire-stone") in it })
             assertFalse(strings(missingScene).any { "open your Bag" in it })
             paparazzi.snapshot(missingScene, "r27e-missing-${if (fire.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
 

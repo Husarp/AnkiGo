@@ -264,6 +264,9 @@ internal object Form {
                 var generation = 0
                 setOnClickListener {
                     val request = ++generation
+                    isActivated = false; caption.text = "Tap to play"
+                    caption.setTextColor(Ui.c(ctx, R.color.ag_mauve)); icon.visibility = View.VISIBLE; background = null
+                    contentDescription = "Hear $title"
                     onPlay { playing ->
                         if (request == generation) {
                             isActivated = playing

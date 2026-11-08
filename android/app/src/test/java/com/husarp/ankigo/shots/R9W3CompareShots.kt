@@ -57,6 +57,8 @@ class R9W3CompareShots {
         paparazzi.shootPage(name, phone) { ctx ->
             CompareStore.saveMode(ctx, mode); CompareStore.saveRows(ctx, rows)
             AppLook.setTypeStyle(ctx, style)
+            // These layout scenarios compare known entries; unknown cells have separate coverage.
+            GameRepo.state!!.defeatedSpecies += picks.filterIsInstance<ComparePick.Dex>().map { it.species }
             val p = ComparePage(ctx, NoHost, picks)
             p.fit = fit
             val screen = pageScreen(ctx, p)

@@ -250,10 +250,12 @@ class ShopRefreshTest {
         assertTrue(r.message, r.ok)
         assertEquals("Bought ${Items.name(sp.item!!)} for $expected coins", r.message)
         assertEquals(100_000 - expected, s.cash)
-        // on the Sunday it is still there, and several can be bought
+        // Saturday and Sunday share the same allowance.
         s.day = sat.plusDays(1).toString(); Shop.ensureToday(data, s); s.shopItems.remove(sp.item)
-        assertTrue(Shop.buy(data, s, sp.item!!).ok)
-        assertEquals(2, s.count(sp.item!!))
+        val cash = s.cash
+        assertEquals(ActionResult(false, "Sold out"), Shop.buy(data, s, sp.item!!))
+        assertEquals(1, s.count(sp.item!!))
+        assertEquals(cash, s.cash)
         // On Monday the reserved item cannot be bought.
         s.day = sat.plusDays(2).toString(); Shop.ensureToday(data, s); s.shopItems.remove(sp.item)
         assertEquals(ActionResult(false, "Not in today's shop"), Shop.buy(data, s, sp.item!!))

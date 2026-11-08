@@ -189,6 +189,7 @@ class R10DetailsShots {
                 setGen(25, 8); MonDetail.show(TeamPage(ctx, NoHost), gd, st.mon("t1")!!)
             }
             shoot("info-dex-standalone$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(150)) }) { ctx ->
+                st.defeatedSpecies += 150
                 setGen(150, 9); DexDetail.show(DexPage(ctx, NoHost), gd.sp(150))
             }
             shoot("info-dex-branch$sx", variants, scale, 1f, after = { _, scene -> checkGeneration(scene, gd.sp(133)) }) { ctx ->

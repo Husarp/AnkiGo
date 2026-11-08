@@ -44,7 +44,8 @@ class R22IShopTest {
             state.mons.first().heldItem = "amulet-coin"
         })
         val text = ShopCardKit.texts(stage)
-        assertTrue(text.toString(), text.contains("Held by"))
+        val holderName = GameRepo.state!!.mons.first().let { it.nickname?.takeIf(String::isNotBlank) ?: it.name }
+        assertTrue(text.toString(), text.contains("Held by $holderName"))
         assertTrue(text.contains("Take off"))
         assertTrue(text.contains("Give to another Pokémon"))
         assertTrue(text.contains("All"))

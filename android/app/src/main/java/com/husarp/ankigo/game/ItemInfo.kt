@@ -115,7 +115,7 @@ object ItemInfo {
         val def = Items.def(item) ?: return listOf(ItemFact(WHAT, NO_DESCRIPTION))
         return when (def.kind) {
             ItemKind.AUTO -> listOf(
-                ItemFact(WHAT, "**One freeze protects one missed daily goal.** Hold up to **3**. Daily gift: **2%**. Shop: one per game day, **2,000 / 3,000 / 4,000 coins** with 0 / 1 / 2 held. At 3 held it is unavailable from all sources."),
+                ItemFact(WHAT, "**One freeze protects one missed daily goal.** Hold up to **3**. At 3 held it is unavailable from all sources."),
                 ItemFact(HOW, "Used automatically at the configured day cutoff. A whole gap needs one freeze per missed day; if there are not enough, the streak ends and none are spent. Protected days preserve the count without adding goal days or rewards."),
                 ItemFact(FIGHT, "Rewarded battle win: **0.2%**, at most one per game day. Practice gives none. It has no manual battle action."),
             )
@@ -159,6 +159,7 @@ object ItemInfo {
     }
 
     fun whereToFind(data: GameData?, item: String): String = when {
+        item == StreakFreeze.ITEM -> "Daily gift (2%) · Rewarded battle wins · Shop, once per game day. Unavailable from all sources while holding 3."
         item in Items.RETIRED -> "Not sold or found any more."
         isMaster(item) -> "Earned from the top tier of the Best streak achievement."
         isOldBall(item) -> "Shop on some days."

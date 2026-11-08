@@ -23,4 +23,16 @@ class R30NItemTextTest {
         assertFalse(ItemInfo.whereToFind(null, "master-ball").contains("Shop"))
         assertTrue(ItemInfo.whereToFind(null, "chipped-pot").contains("Not sold or found"))
     }
+    @Test fun freezeSourcesMatchTheEconomyWithoutShopPricesInTheExplanation() {
+        for (data in listOf(null, TestData.world())) {
+            val source = ItemInfo.whereToFind(data, StreakFreeze.ITEM)
+            assertTrue(source.contains("Daily gift"))
+            assertTrue(source.contains("Rewarded battle wins"))
+            assertTrue(source.contains("Shop, once per game day"))
+            assertFalse(source.contains("Not sold"))
+            val facts = ItemInfo.facts(data, StreakFreeze.ITEM).joinToString("\n") { it.text }
+            assertFalse(facts.contains("coins"))
+            assertTrue(facts.contains("Hold up to **3**"))
+        }
+    }
 }

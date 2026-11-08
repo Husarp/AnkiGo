@@ -222,12 +222,13 @@ class R4V2Shots {
         }
     }
 
-    @Test fun detailThreeTierRow() { // R9-B2: an easy row stops at Epic: no Legendary / Mythical step
-        paparazzi.shootPage("r9b2-detail-types", listOf(Variants.PHONE)) { ctx ->
+    @Test fun detailTypesHaveTwoTiers() {
+        paparazzi.shootPage("r30-detail-types", listOf(Variants.PHONE)) { ctx ->
             val screen = page(ctx, open = "types")
             val t = texts(screen)
-            assertTrue(t.toString(), "Common · 6" in t && "Rare · 10" in t && "Epic · 18" in t)
-            assertTrue(t.toString(), t.drop(t.indexOf("Common · 6")).none { it.contains("Legendary") || it.contains("Mythical") }) // the sheet only (the page behind has other rows)
+            assertTrue(t.toString(), "Common · 9" in t && "Rare · 18" in t)
+            // Only the detail sheet: the page behind has other achievement ladders.
+            assertTrue(t.toString(), t.drop(t.indexOf("Common · 9")).none { it.contains("Epic") || it.contains("Legendary") || it.contains("Mythical") })
             screen
         }
     }
