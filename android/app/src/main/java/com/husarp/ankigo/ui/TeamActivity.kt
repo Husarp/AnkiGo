@@ -564,6 +564,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             setOnClickListener { if (pickOn) togglePick(pick) else MonDetail.show(ctx, data, mon) }
             setOnLongClickListener { actions.menu(mon, it); true }
         }
+        RarityFrame.bind(row, mon.tier, 14)
         val img = ImageView(ctx)
         MonPreview.show(ctx, mon.lookNum(data), mon.shiny, img)
         // the red NEW sticker sits on the sprite's top-left corner until the Pokémon's details were opened (6A)
@@ -752,6 +753,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private fun bindCell(f: SquareFrame, tile: BoxTile?) {
         val cell = f.tag as Cell
         cell.uid = tile?.best?.uid
+        RarityFrame.bind(f, tile?.best?.tier, 10)
         if (tile == null) {
             f.visibility = View.INVISIBLE
             f.setOnClickListener(null)
