@@ -83,15 +83,16 @@ object BottomNav {
             val icon = ImageView(activity).apply {
                 setImageResource(tab.icon)
                 setColorFilter(tint, PorterDuff.Mode.SRC_IN)
-                layoutParams = FrameLayout.LayoutParams(Ui.dp(activity, if (style == TabBarStyle.E1 && on) 28 else 20), Ui.dp(activity, if (style == TabBarStyle.E1 && on) 28 else 20), Gravity.CENTER)
+                layoutParams = FrameLayout.LayoutParams(Ui.dp(activity, if (style == TabBarStyle.E1) 28 else 20), Ui.dp(activity, if (style == TabBarStyle.E1) 28 else 20), Gravity.CENTER)
             }
             val pillBox = FrameLayout(activity).apply {
-                layoutParams = LinearLayout.LayoutParams(Ui.dp(activity, 38), Ui.dp(activity, if (style == TabBarStyle.E1 && on) 28 else 24))
+                layoutParams = LinearLayout.LayoutParams(Ui.dp(activity, 38), Ui.dp(activity, if (style == TabBarStyle.E1) 28 else 24))
                 addView(icon)
             }
-            val label = Ui.text(activity, if (style == TabBarStyle.A3 && on) 12f else 10f, if (style == TabBarStyle.A3 && on) 900 else 800, R.color.ag_sub0).apply {
+            val label = Ui.text(activity, if (style == TabBarStyle.A3) 12f else 10f, if (style == TabBarStyle.A3) 900 else 800, R.color.ag_sub0).apply {
                 text = tab.label
-                if (style == TabBarStyle.E1 && !on) visibility = View.GONE
+                if (style == TabBarStyle.A3 && !on) { scaleX = 10f / 12f; scaleY = scaleX }
+                if (style == TabBarStyle.E1 && !on) alpha = 0f
                 setTextColor(tint)
                 gravity = Gravity.CENTER
                 maxLines = 1
@@ -125,6 +126,11 @@ object BottomNav {
             }
             row.addView(item)
         }
+        if (style == TabBarStyle.E1) for (i in 0 until row.childCount) {
+            val icon = ((row.getChildAt(i) as LinearLayout).getChildAt(0) as FrameLayout).getChildAt(0)
+            icon.scaleX = if (i == current.ordinal) 1f else 20f / 28f
+            icon.scaleY = icon.scaleX
+        }
         fitLabels(activity, labels)
         bar.clipChildren = false
         bar.orientation = LinearLayout.VERTICAL
@@ -157,32 +163,42 @@ object BottomNav {
         }
         internal fun arriveFrom(tab: Tab) {
             if (tab == current) return
+            departing = tab
             val start = tab.ordinal.toFloat()
             val from = tone(context, tab)
             val duration = when (style) {
-                TabBarStyle.A3, TabBarStyle.C1 -> 140L
+                TabBarStyle.A3, TabBarStyle.E1 -> 200L
+                TabBarStyle.C1 -> 140L
                 TabBarStyle.D3 -> 130L
-                TabBarStyle.E1 -> 160L
             }
             UiMotion.run(this, duration, { f ->
                 position = if (style == TabBarStyle.C1) start + (current.ordinal - start) * f else current.ordinal.toFloat()
                 colour = if (style == TabBarStyle.C1) android.animation.ArgbEvaluator().evaluate(f, from, tone(context, current)) as Int else tone(context, current)
                 reveal = f
-                val item = getChildAt(current.ordinal) as? LinearLayout
-                val label = item?.getChildAt(1)
-                val icon = (item?.getChildAt(0) as? FrameLayout)?.getChildAt(0)
-                when (style) {
-                    TabBarStyle.A3 -> { label?.scaleX = .84f + .16f * f; label?.scaleY = .84f + .16f * f }
-                    TabBarStyle.E1 -> {
-                        icon?.scaleX = (20f + 8f * f) / 28f; icon?.scaleY = (20f + 8f * f) / 28f
-                        label?.alpha = f; label?.translationY = Ui.dp(context, 3f) * (1f - f)
+                for (i in listOf(tab.ordinal, current.ordinal)) {
+                    val item = getChildAt(i) as? LinearLayout
+                    val label = item?.getChildAt(1)
+                    val icon = (item?.getChildAt(0) as? FrameLayout)?.getChildAt(0)
+                    val selected = if (i == current.ordinal) f else 1f - f
+                    when (style) {
+                        TabBarStyle.A3 -> {
+                            label?.scaleX = (10f + 2f * selected) / 12f
+                            label?.scaleY = (10f + 2f * selected) / 12f
+                        }
+                        TabBarStyle.E1 -> {
+                            icon?.scaleX = (20f + 8f * selected) / 28f
+                            icon?.scaleY = (20f + 8f * selected) / 28f
+                            label?.alpha = selected
+                            label?.translationY = Ui.dp(context, 3f) * (1f - selected)
+                        }
+                        else -> Unit
                     }
-                    else -> Unit
                 }
                 invalidate()
             })
         }
         private var reveal = 1f
+        private var departing: Tab? = null
 
         override fun dispatchDraw(canvas: Canvas) {
             val cell = (width - paddingLeft - paddingRight) / 5f
@@ -194,10 +210,16 @@ object BottomNav {
                         (height - paddingBottom).toFloat(), Ui.dp(context, 6f), Ui.dp(context, 6f), paint)
                 }
                 TabBarStyle.D3 -> {
-                    paint.color = (colour and 0x00ffffff) or (((.35f + .65f * reveal) * 255).toInt() shl 24)
-                    val half = (cell / 2f - Ui.dp(context, 4)) * (.15f + .85f * reveal)
-                    canvas.drawRoundRect(left + cell / 2f - half, -Ui.dp(context, 1f), left + cell / 2f + half,
-                        Ui.dp(context, 2f), Ui.dp(context, 3f), Ui.dp(context, 3f), paint)
+                    fun line(position: Float, ink: Int, amount: Float) {
+                        if (amount <= 0f) return
+                        paint.color = (ink and 0x00ffffff) or ((amount * 255).toInt() shl 24)
+                        val center = paddingLeft + cell * (position + .5f)
+                        val half = (cell / 2f - Ui.dp(context, 4)) * amount
+                        canvas.drawRoundRect(center - half, -Ui.dp(context, 1f), center + half,
+                            Ui.dp(context, 2f), Ui.dp(context, 3f), Ui.dp(context, 3f), paint)
+                    }
+                    departing?.let { line(it.ordinal.toFloat(), tone(context, it), 1f - reveal) }
+                    line(position, colour, reveal)
                 }
                 else -> Unit
             }

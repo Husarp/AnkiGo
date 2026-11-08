@@ -508,7 +508,8 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         val tabBar = Form.row(this, "Bottom tab bar", TabBarStyle.get(this).label, null) {
             Pickers.show(AppDialog.Builder(this).setTitle("Bottom tab bar")
                 .setItems(TabBarStyle.entries.map {
-                    it.label + if (it == TabBarStyle.C1) " (default)" else ""
+                    it.label + (if (it == TabBarStyle.C1) " (default)" else "") +
+                        (if (it == TabBarStyle.get(this)) " — selected" else "")
                 }.toTypedArray()) { _, index ->
                     AppLook.setTabBarStyle(this, TabBarStyle.entries[index]); looked()
                 }.setNegativeButton("Cancel", null).create())
