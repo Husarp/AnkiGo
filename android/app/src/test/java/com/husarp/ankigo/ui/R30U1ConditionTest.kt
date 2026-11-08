@@ -21,7 +21,7 @@ class R30U1ConditionTest {
 
     @Test fun bothOwnersAndTheFieldFitWithoutCoveringCardsOrEachOther() {
         val wild = ConditionSpot.R(10f, 20f, 150f, 70f)
-        val ours = ConditionSpot.R(190f, 400f, 350f, 470f)
+        val ours = ConditionSpot.R(190f, 200f, 350f, 270f)
         val scene = ConditionSpot.Scene(360f, 500f, null, listOf(wild, ours), 4f)
         val taken = mutableListOf<ConditionSpot.R>()
         for ((card, below) in listOf(wild to true, ours to false, null to true)) {

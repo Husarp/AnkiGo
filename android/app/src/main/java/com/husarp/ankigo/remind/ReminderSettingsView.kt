@@ -64,7 +64,7 @@ object ReminderSettingsView {
 internal enum class ReminderTopic(val title: String, val icon: Int) {
     DUE("Cards due", R.drawable.ic_book),
     GOAL("Own goal", R.drawable.ic_flag),
-    STREAK("Streak about to end", R.drawable.ic_flame),
+    STREAK("Streak about to end", R.drawable.streak_flame_still),
     DAILY("Daily goal not reached", R.drawable.ic_check),
     SHOP("Shop news", R.drawable.ic_shop),
     QUIET("Quiet hours", R.drawable.ic_moon);

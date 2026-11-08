@@ -21,7 +21,7 @@ object AchStyle {
     /** The drawable of every `icon` key in AchievementTable (a test checks that every key of the table is here). */
     val ICONS: Map<String, Int> = mapOf(
         // Study
-        "cards" to R.drawable.ic_stats, "flame" to R.drawable.ic_flame, "combo" to R.drawable.ic_game, "calendar" to R.drawable.ic_calendar,
+        "cards" to R.drawable.ic_stats, "flame" to R.drawable.streak_flame_still, "combo" to R.drawable.ic_game, "calendar" to R.drawable.ic_calendar,
         "days" to R.drawable.ic_book, "clock" to R.drawable.ic_clock, "new-card" to R.drawable.ic_ach_cards, "good" to R.drawable.ic_check,
         "easy" to R.drawable.ic_ach_easy, "target" to R.drawable.ic_ach_target,
         // Battle: the app's own swords
@@ -196,7 +196,10 @@ class AchMedal(ctx: Context, private val sizeDp: Int) : View(ctx) {
             val h = s * if (bare) 0.45f else 0.27f
             val ox = nudge.first * h / 12f; val oy = nudge.second * h / 12f // the icon box is 2h wide for 24 viewport units
             it.setBounds((cx - h + ox).toInt(), (cy - h + oy).toInt(), (cx + h + ox).toInt(), (cy + h + oy).toInt())
-            it.setTint(if (locked) AchStyle.mix(color, ground, 0.8f) else color)
+            if (icon is android.graphics.drawable.BitmapDrawable) {
+                it.alpha = if (locked) StreakFlameRules.DEAD_ALPHA else 255
+                it.colorFilter = if (locked) android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) }) else null
+            } else it.setTint(if (locked) AchStyle.mix(color, ground, 0.8f) else color)
             it.draw(canvas)
         }
         if (locked || special || bare) return

@@ -688,7 +688,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      * where the whole turned sticker is inside the panel and clear of the HP numbers ([NewTagRule]). A translation and a tilt on the same
      * view, so a fresh layout (the box moved, rescaled, the panel resized) always starts from today's margins and picks again.
      */
-    private fun updateNewTag() {
+    private fun updateNewTag(avoidChips: Boolean = false) {
         newTag.rotation = -NewTagRule.TILT; newTag.translationX = 0f; newTag.translationY = 0f
         if (newTag.visibility != VISIBLE || newTag.width <= 0 || enemyBlock.width <= 0 || width <= 0 || height <= 0) return
         val d = Ui.dp(context, 1f)
@@ -696,7 +696,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val box = NewTagRule.Box(enemyBlock.left.toFloat(), enemyBlock.top.toFloat(), enemyBlock.left + enemyBlock.width * k, enemyBlock.top + enemyBlock.height * k)
         val edge = if (stagePlanNow != null) frameInsetDp * d else 0f
         val s = NewTagRule.place(box, width.toFloat(), height.toFloat(), edge, 4f * d * k, 3f * d * k,
-            newTag.width.toFloat(), newTag.height.toFloat(), newTag.scaleX, hpNumbersRect(k, d))
+            newTag.width.toFloat(), newTag.height.toFloat(), newTag.scaleX, hpNumbersRect(k, d),
+            if (avoidChips) marks.chipRects().map { NewTagRule.Box(it.left, it.top, it.right, it.bottom).grow(d) } else emptyList())
         if (NewTagRule.keepsTodaysSpot(s)) return   // today's spot, exactly as placeNewTag left it (a pushed-in top-left one is applied below)
         newTag.rotation = s.angle
         newTag.translationX = s.x - newTag.left
@@ -1444,6 +1445,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         playerCard.isClickable = any
         if (!any) hideConditionList()
         placeMarks()
+        requestLayout()
         if (bubbleFor == null) conditionList?.let { showConditionList(listSlot ?: ConditionMarks.Slot.WILD, reopen = true, stat = listStat) }
     }
 
@@ -1455,48 +1457,113 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun artR(holder: View, spr: SpriteView, m: Int): ConditionSpot.R? =
         if (holder.visibility != VISIBLE || holder.width <= 0) null else artBox(holder, spr, m).let { ConditionSpot.R(it.l.toFloat(), it.t.toFloat(), it.r.toFloat(), it.b.toFloat()) }
 
-    /** What a chip keeps clear of, in this arena's px: both boxes, both pictures (with a little room), the NEW sticker, the frame's corners. */
+    /** Cards, sprite edges, the NEW sticker and frame corners used for chip wrapping and field placement, in this arena's px. */
     private fun markScene(): ConditionSpot.Scene {
         val d = Ui.dp(context, 1f)
         val safe = frameSafe()?.let { FrameSafe(it.edge * d, it.top * d, it.corner * d) }
         val out = ArrayList<ConditionSpot.R>()
+        val sprites = ArrayList<ConditionSpot.R>()
         val room = d * 0.5f
         if (enemyBlock.visibility == VISIBLE && enemyBlock.width > 0) out += boxOf(enemyBlock).grow(room)
         if (playerCard.visibility == VISIBLE && playerCard.width > 0) out += boxOf(playerCard).grow(room)
-        artR(enemyHolder, enemySprite, (3 * d).toInt())?.let { out += it }
-        artR(playerHolder, playerSprite, (3 * d).toInt())?.let { out += it }
+        artR(enemyHolder, enemySprite, (3 * d).toInt())?.let { out += it; sprites += it }
+        artR(playerHolder, playerSprite, (3 * d).toInt())?.let { out += it; sprites += it }
         if (newTag.visibility == VISIBLE && newTag.width > 0) {
             val r = RectF(0f, 0f, newTag.width.toFloat(), newTag.height.toFloat())
             newTag.matrix.mapRect(r)
             r.offset(newTag.left.toFloat(), newTag.top.toFloat())
             out += ConditionSpot.R(r.left, r.top, r.right, r.bottom).grow(d)
         }
-        return ConditionSpot.Scene(width.toFloat(), height.toFloat(), safe, out, inset = 2f * d)
+        return ConditionSpot.Scene(width.toFloat(), height.toFloat(), safe, out, inset = 2f * d, sprites = sprites)
     }
 
     internal var onMarksPlaced: () -> Unit = {}
 
-    /** Puts the rows: the wild one's under its box, ours above its box, the field's in a corner; each only in free room ([ConditionSpot.all]). */
+    /** Puts both owners' chips under their boxes, reserving room at the arena's bottom; the field uses free space. */
     private fun placeMarks() {
         if (width <= 0 || height <= 0 || (conditions.size == 0 && marks.shownRows.isEmpty())) return
         val m = ChipMetrics(context, chipSp())
-        val scene = markScene()
+        var scene = markScene()
         val wildOn = enemyBlock.visibility == VISIBLE && enemyBlock.width > 0
         val ourOn = playerCard.visibility == VISIBLE && playerCard.width > 0
         val wild = conditions.of(ConditionMarks.Slot.WILD)
         val ours = conditions.of(ConditionMarks.Slot.OURS)
         val field = conditions.of(ConditionMarks.Slot.FIELD)
+        fun ownerFlow(card: View, ms: List<ConditionMarks.Mark>): ConditionFlow.OwnerFlow {
+            val box = boxOf(card)
+            val budget = maxOf(m.height, minOf(scene.area.h / 3f, scene.area.h - card.height * card.scaleY - m.lift))
+            val other = (if (card === enemyBlock) playerCard else enemyBlock).takeIf { it.visibility == VISIBLE && it.width > 0 }?.let { boxOf(it) }
+            // When both chip bands share a height, the left owner keeps its lines out of the right owner's column.
+            val right = if ((if (card === enemyBlock) ours.isNotEmpty() else wild.isNotEmpty()) && other != null && other.l > box.l && other.b < box.b + budget + m.lift && box.b < other.b + budget + m.lift)
+                minOf(scene.area.r, other.l - m.gap) else scene.area.r
+            return ConditionFlow.owner(box, right, ms.map { m.width(it) }.toFloatArray(),
+                ms.count { it.key.startsWith("stat.") }, m.gap, m.lift, m.height, scene.sprites, budget,
+                blocks = listOfNotNull(other?.grow(Ui.dp(context, .5f))) + scene.blocks.drop(scene.obstacles.size), moreWidth = m::moreWidth)
+        }
+        fun reserve(card: View, ms: List<ConditionMarks.Mark>) {
+            if (card.visibility != VISIBLE || ms.isEmpty()) return
+            val widest = ms.maxOf { m.width(it) }
+            val shift = kotlin.math.ceil((widest - (scene.area.r - card.left)).coerceAtLeast(0f).toDouble()).toInt()
+            if (shift > 0) {
+                card.offsetLeftAndRight(-shift)
+                if (card === enemyBlock) newTag.offsetLeftAndRight(-shift)
+            }
+            repeat(ms.size + 1) {
+                val rects = ownerFlow(card, ms).rects
+                if (rects.isEmpty()) {
+                    val original = card.left
+                    val box = boxOf(card)
+                    val other = (if (card === enemyBlock) playerCard else enemyBlock).takeIf { it.visibility == VISIBLE && it.width > 0 }?.let { boxOf(it) }
+                    val cardArea = ConditionSpot.R(scene.area.l - scene.inset, scene.area.t - scene.inset, scene.area.r + scene.inset, scene.area.b + scene.inset)
+                    val candidates = listOf(scene.area.l, scene.area.r - box.w) + listOfNotNull(other?.let { it.r + m.gap }, other?.let { it.l - m.gap - box.w })
+                    var best = original
+                    var score = Float.MAX_VALUE
+                    fun covered(r: ConditionSpot.R, art: ConditionSpot.R) = maxOf(0f, minOf(r.r, art.r) - maxOf(r.l, art.l)) * maxOf(0f, minOf(r.b, art.b) - maxOf(r.t, art.t))
+                    for (x in candidates.distinct()) {
+                        card.offsetLeftAndRight(kotlin.math.round(x).toInt() - card.left)
+                        val moved = boxOf(card)
+                        val flow = ownerFlow(card, ms).rects
+                        if (!moved.inside(cardArea) || other?.let { moved.hits(it) } == true || flow.isEmpty() || flow.any { !it.inside(scene.area) }) continue
+                        val overlap = scene.sprites.sumOf { art -> (8f * covered(moved, art) + flow.sumOf { covered(it, art).toDouble() }).toDouble() }.toFloat()
+                        val cost = overlap + kotlin.math.abs(card.left - original) * .01f
+                        if (cost < score) { best = card.left; score = cost }
+                    }
+                    card.offsetLeftAndRight(best - card.left)
+                    if (best != original) {
+                        if (card === enemyBlock) newTag.offsetLeftAndRight(best - original)
+                        return@repeat
+                    }
+                }
+                val overflow = if (rects.isEmpty()) m.height + m.gap else (rects.last().b - scene.area.b).coerceAtLeast(0f)
+                if (overflow <= 0f) return
+                val dy = -minOf(kotlin.math.ceil(overflow.toDouble()).toInt(), (card.top - kotlin.math.ceil(scene.area.t.toDouble()).toInt()).coerceAtLeast(0))
+                if (dy == 0) return
+                card.offsetTopAndBottom(dy)
+                if (card === enemyBlock) newTag.offsetTopAndBottom(dy)
+            }
+        }
+        repeat(3) {
+            reserve(enemyBlock, wild)
+            reserve(playerCard, ours)
+        }
+        updateNewTag()
+        updateStatusTouch()
+        scene = markScene()
         val taken = ArrayList<ConditionSpot.R>()
+        fun putOwner(slot: ConditionMarks.Slot, card: View, ms: List<ConditionMarks.Mark>, on: Boolean) {
+            val flow = if (on) ownerFlow(card, ms) else ConditionFlow.OwnerFlow(emptyList(), 0, 0)
+            marks.setFlow(slot, flow.rects, ms.take(flow.shown), m, flow.more)
+            taken += flow.rects.map { it.grow(m.lift * .5f) }
+        }
+        putOwner(ConditionMarks.Slot.WILD, enemyBlock, wild, wildOn)
+        putOwner(ConditionMarks.Slot.OURS, playerCard, ours, ourOn)
+        updateNewTag(avoidChips = true)
+        scene = markScene()
         fun put(slot: ConditionMarks.Slot, card: ConditionSpot.R?, below: Boolean, ms: List<ConditionMarks.Mark>) {
             val rects = ConditionFlow.place(scene, card, below, ms.map { m.width(it) }.toFloatArray(),
                 ms.count { it.key.startsWith("stat.") }, m.gap, m.lift, m.height, taken)
             marks.setFlow(slot, rects, ms, m)
-            taken += rects.map { it.grow(m.lift * 0.5f) }
         }
-        if (wildOn) put(ConditionMarks.Slot.WILD, boxOf(enemyBlock), true, wild)
-        else marks.setFlow(ConditionMarks.Slot.WILD, emptyList(), emptyList(), m)
-        if (ourOn) put(ConditionMarks.Slot.OURS, boxOf(playerCard), false, ours)
-        else marks.setFlow(ConditionMarks.Slot.OURS, emptyList(), emptyList(), m)
         put(ConditionMarks.Slot.FIELD, null, true, field)
         onMarksPlaced()
     }

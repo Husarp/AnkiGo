@@ -28,7 +28,7 @@ internal object StatsSheets {
         "gamepad" -> R.drawable.ic_game
         "book" -> R.drawable.ic_book
         "calendar" -> R.drawable.ic_calendar
-        "flame" -> R.drawable.ic_flame
+        "flame" -> R.drawable.streak_flame_still
         "coin" -> R.drawable.ic_coin
         "ball" -> R.drawable.ic_ball
         "swords" -> R.drawable.ic_swords

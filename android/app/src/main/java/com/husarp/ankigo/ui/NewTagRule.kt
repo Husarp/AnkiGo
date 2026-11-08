@@ -71,7 +71,7 @@ object NewTagRule {
      */
     fun place(
         box: Box, panelW: Float, panelH: Float, edge: Float, overX: Float, overY: Float,
-        tagW: Float, tagH: Float, scale: Float, avoid: Box?,
+        tagW: Float, tagH: Float, scale: Float, avoid: Box?, extraAvoid: List<Box> = emptyList(),
     ): Spot {
         var best: Spot? = null
         var bestPenalty = Float.MAX_VALUE
@@ -89,8 +89,9 @@ object NewTagRule {
             val bounds = Box(x + rel.l, y + rel.t, x + rel.r, y + rel.b)
             val out = bounds.outside(panelW, panelH)
             val hit = if (avoid == null) 0f else bounds.overlap(avoid)
-            if (out <= EPS && hit <= EPS) return Spot(corner, ang, x, y, bounds, true)
-            val penalty = out + 4f * hit
+            val chips = extraAvoid.sumOf { bounds.overlap(it).toDouble() }.toFloat()
+            if (out <= EPS && hit <= EPS && chips <= EPS) return Spot(corner, ang, x, y, bounds, true)
+            val penalty = out + 4f * hit + 1000f * chips
             if (penalty < bestPenalty - EPS) { bestPenalty = penalty; best = Spot(corner, ang, x, y, bounds, false) }
         }
         // nowhere free: the least bad corner, pushed back inside the panel where the sticker is small enough
