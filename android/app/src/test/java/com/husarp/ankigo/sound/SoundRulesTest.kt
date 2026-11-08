@@ -42,7 +42,7 @@ class SoundRulesTest {
         assertEquals(SoundId.CATCH, effect(GameEvent.Caught("u", 1, "B", 5, false, null, false, true), ball = true))
         assertEquals(SoundId.LEVEL_UP, effect(GameEvent.LevelUp("u", "A", 6, 20, 20)))
         assertNull(SoundRules.cueFor(GameEvent.Cash(5, 10)))
-        assertNull(SoundRules.cueFor(GameEvent.Defeated(1, "B", 5)))
+        assertEquals(SoundId.WOBBLE, effect(GameEvent.Defeated(1, "B", 5)))
         assertNull(SoundRules.cueFor(GameEvent.Counted(3, 2, 1, 1, false)))
         assertNull(SoundRules.cueFor(GameEvent.Info("hi")))
     }
