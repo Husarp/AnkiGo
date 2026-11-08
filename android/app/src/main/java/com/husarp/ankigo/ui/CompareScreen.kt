@@ -155,8 +155,9 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
             val lit = i == on
             row.addView(Ui.text(this, sp, 900, if (lit) R.color.ag_text else R.color.ag_sub0).apply {
                 text = label
+                SubtabIcons.apply(this, when (label) { "Stats" -> R.drawable.ic_stats; "Base stats" -> R.drawable.ic_dex; "Current levels" -> R.drawable.ic_ach_levels; else -> R.drawable.ic_compare })
                 gravity = Gravity.CENTER
-                maxLines = 1
+                maxLines = 2
                 setPadding(dp(2), dp(11), dp(2), dp(11))
                 background = if (lit) Ui.rounded(c(R.color.ag_card), 10, this@ComparePage) else null
                 setOnClickListener { pick(i) }
@@ -197,7 +198,11 @@ class ComparePage(base: Context, host: PageHost, private val picks: List<Compare
     }
 
     private fun groupChips(data: CompareData, shown: CompareGroup): List<View> =
-        if (!CompareGroups.switchable(data)) emptyList() else CompareGroup.entries.map { g -> BoxViews.chip(this, groupLabel(g), g == shown) { setGroup(g) } }
+        if (!CompareGroups.switchable(data)) emptyList() else CompareGroup.entries.map { g ->
+            BoxViews.chip(this, groupLabel(g), g == shown) { setGroup(g) }.apply {
+                SubtabIcons.apply(this, if (g == CompareGroup.STATS) R.drawable.ic_stats else R.drawable.ic_dex)
+            }
+        }
 
     private fun chipViews(data: CompareData, st: CompareState): List<View> {
         val out = ArrayList<View>()

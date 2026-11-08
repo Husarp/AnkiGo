@@ -12,6 +12,21 @@ internal object GuideLessons {
         else -> ch.points.take(4).filter { it.length <= 180 }
     }
 
+    data class Section(val title: String, val icon: Int, val lines: List<String>)
+
+    fun sections(ch: GuideChapter): List<Section> = when (ch.id) {
+        GameGuide.BATTLES -> listOf(
+            Section("Answer to attack", com.husarp.ankigo.R.drawable.ic_swords, shortPoints(ch).take(3)),
+            Section("Win XP together", com.husarp.ankigo.R.drawable.ic_ach_levels, shortPoints(ch).drop(3)),
+        )
+        GameGuide.MOVES -> listOf(
+            Section("Rounds and timing", com.husarp.ankigo.R.drawable.ic_clock, listOf(ch.points[1])),
+            Section("Stages change stats", com.husarp.ankigo.R.drawable.ic_stats, listOf(ch.points[0].substringBefore("Factors below").trim())),
+            Section("A faster move can interrupt", com.husarp.ankigo.R.drawable.ic_bolt, listOf(ch.points[3])),
+        )
+        else -> listOf(Section("The essentials", HelpViews.chapterIcon(ch.id), shortPoints(ch).ifEmpty { ch.points.take(1) }))
+    }
+
     fun details(ch: GuideChapter): List<Pair<String, List<String>>> {
         if (ch.id == GameGuide.BATTLES) return listOf(
             "Answer power and OK" to ch.points.slice(1..6),

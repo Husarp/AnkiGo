@@ -321,6 +321,7 @@ internal object LookChoosers {
         labels.forEachIndexed { i, label ->
             val c = Ui.text(ctx, 13f, 900, R.color.ag_sub0).apply {
                 text = label
+                SubtabIcons.navigation(labels)?.let { SubtabIcons.apply(this, it[i], labels.size > 2) }
                 gravity = Gravity.CENTER
                 maxLines = 3
                 ellipsize = TextUtils.TruncateAt.END

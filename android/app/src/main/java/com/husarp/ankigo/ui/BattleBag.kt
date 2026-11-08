@@ -85,7 +85,7 @@ internal object BattleBag {
             }
             if (more) {
                 val tabs = LinearLayout(ctx)
-                for (label in listOf("Team", "Box", "Favourites")) tabs.addView(Ui.text(ctx, 13f, 900, R.color.ag_mauve).apply { text = label; tabLabels += label to this; setPadding(12, 16, 12, 16); setOnClickListener { tab = label; render() } })
+                for (label in listOf("Team", "Box", "Favourites")) tabs.addView(Ui.text(ctx, 13f, 900, R.color.ag_mauve).apply { text = label; SubtabIcons.apply(this, when (label) { "Team" -> R.drawable.ic_team; "Box" -> R.drawable.ic_grid; else -> R.drawable.ic_star }); tabLabels += label to this; setPadding(12, 16, 12, 16); setOnClickListener { tab = label; render() } })
                 body.addView(tabs)
                 body.addView(EditText(ctx).apply { hint = "Search by name"; setSingleLine(); addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}

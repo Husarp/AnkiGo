@@ -241,9 +241,9 @@ class BarView(ctx: Context) : View(ctx) {
     private val sparkTick = object : Runnable {
         override fun run() {
             if (!sparkRunning) return
-            val ok = GoalSparks.keepTicking(sparkLevel, isAttachedToWindow, isShown, windowVisibility == VISIBLE, sparksStill())
-            sparkDrawable?.refresh()
-            if (!ok) { stopTicker(); if (sparkLevel == 0 || !isAttachedToWindow || !isShown) stopSparks(); return }
+            val ok = GoalSparks.keepTicking(sparkLevel, isAttachedToWindow, sparksOnScreen(), windowVisibility == VISIBLE, sparksStill())
+            if (ok) sparkDrawable?.refresh()
+            if (!ok) { stopTicker(); if (sparkLevel == 0 || !isAttachedToWindow || !sparksOnScreen()) stopSparks(); return }
             postOnAnimationDelayed(this, SPARK_FRAME_MS)
         }
     }
@@ -260,10 +260,15 @@ class BarView(ctx: Context) : View(ctx) {
         refreshSparks()
     }
 
+    private val sparkVisibleRect = android.graphics.Rect()
+    private fun sparksOnScreen() = isShown && getGlobalVisibleRect(sparkVisibleRect)
+    private val sparkLayout = android.view.ViewTreeObserver.OnGlobalLayoutListener { refreshSparks() }
+    private val sparkScroll = android.view.ViewTreeObserver.OnScrollChangedListener { refreshSparks() }
+
     private fun sparksStill() = !ValueAnimator.areAnimatorsEnabled() || context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false)
 
     private fun refreshSparks() {
-        val want = sparkLevel > 0 && isAttachedToWindow && windowVisibility == VISIBLE && isShown
+        val want = sparkLevel > 0 && isAttachedToWindow && windowVisibility == VISIBLE && sparksOnScreen()
         if (!want) { stopSparks(); return }
         if (sparkDrawable == null) {
             val host = (parent as? ViewGroup)?.let { it.parent as? ViewGroup ?: it } ?: return
@@ -287,6 +292,8 @@ class BarView(ctx: Context) : View(ctx) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        viewTreeObserver.addOnGlobalLayoutListener(sparkLayout)
+        viewTreeObserver.addOnScrollChangedListener(sparkScroll)
         refreshSparks()
     }
 
@@ -301,7 +308,7 @@ class BarView(ctx: Context) : View(ctx) {
     }
 
     /**
-     * Draws the golden outline + glow round the bar and the sparks over its top edge, into the host's coordinates; computed at
+     * Draws the green outline + glow round the bar and the sparks over its top edge, into the host's coordinates; computed at
      * draw time, so a moved bar is followed. The glow may reach as far as the host has room round the bar.
      */
     private inner class SparkDrawable(private val host: ViewGroup) : Drawable() {
@@ -369,6 +376,18 @@ class BarView(ctx: Context) : View(ctx) {
                         val xy = floatArrayOf(-b,-a,b,-a,b,-b,a,-b,a,b,b,b,b,a,-b,a,-b,b,-a,b,-a,-b,-b,-b)
                         p.moveTo(xy[0],xy[1]); for (i in 2 until xy.size step 2) p.lineTo(xy[i],xy[i+1]); p.close()
                     }
+                    6 -> {
+                        val xy = floatArrayOf(0f,-1f,.24f,-.42f,.84f,-.8f,.6f,-.04f,1f,.16f,.28f,.4f,0f,1f,-.28f,.4f,-1f,.16f,-.6f,-.04f,-.84f,-.8f,-.24f,-.42f)
+                        p.moveTo(xy[0] * size, xy[1] * size)
+                        for (i in 2 until xy.size step 2) p.lineTo(xy[i] * size, xy[i + 1] * size)
+                        p.close()
+                    }
+                    5 -> {
+                        p.moveTo(-size, size)
+                        p.cubicTo(-size * 1.1f, -size * .7f, size * .3f, -size, size, -size)
+                        p.cubicTo(size, size * .4f, size * .3f, size * 1.1f, -size, size)
+                        p.close()
+                    }
                     4 -> {
                         for (i in 0 until 10) {
                             val a = -Math.PI/2 + i*Math.PI/5
@@ -395,6 +414,8 @@ class BarView(ctx: Context) : View(ctx) {
     }
 
     override fun onDetachedFromWindow() {
+        viewTreeObserver.removeOnGlobalLayoutListener(sparkLayout)
+        viewTreeObserver.removeOnScrollChangedListener(sparkScroll)
         stopSparks()
         anim?.cancel()
         ghostAnim?.cancel()

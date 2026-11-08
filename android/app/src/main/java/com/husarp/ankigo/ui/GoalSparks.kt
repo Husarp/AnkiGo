@@ -1,22 +1,19 @@
 package com.husarp.ankigo.ui
 
-/**
- * Small sparks rising from the daily goal bar once the goal is passed (round 5, pick 111C, sparks only). Pure maths; the
- * mockup's `drawBar` branch C (docs/design/round5.html) with the shine and the glow left out. Sizes are in dp for a bar that
- * is [BAR_DP] tall; [BarView] scales them with the bar's real height (the battle panel shrinks its bar in small windows).
- */
+/** Sparse reached-goal celebration: C's soft firefly and lobed leaf mixed with two tiny D leaves. Sizes are in dp
+ * for an 8 dp bar; reduced motion uses a fixed frame. */
 object GoalSparks {
     /** The bar height (dp) the sizes below are written for. */
     const val BAR_DP = 8f
 
-    const val COLOR_ODD = 0xFFFFD447.toInt()
-    const val COLOR_EVEN = 0xFFFB8F2B.toInt()
+    const val COLOR_ODD = 0xFFB9DFA0.toInt()
+    const val COLOR_EVEN = 0xFF78B878.toInt()
 
     /** Whether the sparks ticker may schedule another frame: sparks wanted, bar attached, shown and its window visible, and motion allowed. */
     fun keepTicking(level: Int, attached: Boolean, shown: Boolean, windowVisible: Boolean, reducedMotion: Boolean): Boolean =
         level > 0 && attached && shown && windowVisible && !reducedMotion
 
-    private val COUNTS = intArrayOf(0, 3, 6, 10)
+    private val COUNTS = intArrayOf(0, 4, 4, 4)
 
     /** One spark: [x] is a fraction of the bar width (0..1), [rise] how far above the bar's top edge (dp), [radius] in dp, [alpha] 0..1. */
     class Spark(val x: Float, val rise: Float, val radius: Float, val alpha: Float, val color: Int, val shape: Int = 0, val rotation: Float = 0f)
@@ -42,17 +39,16 @@ object GoalSparks {
         val lv = level.coerceIn(1, 3)
         val up = 10f + 5f * lv
         return List(n) { i ->
-            val speed = 0.8 + 0.3 * frac(i * 0.53)
-            val base = if (tMs == null) i.toDouble() / n else tMs / 1000.0 * speed   // double: uptime in ms gets big
+            val base = if (tMs == null) 0.35 else tMs / (6400.0 + i * 450)
             val q = frac(base + i.toDouble() / n).toFloat()
             Spark(
-                x = frac(i * 0.618).toFloat(),
+                x = (0.12 + i * 0.24 + kotlin.math.sin(q * Math.PI * 2) * .025).toFloat(),
                 rise = q * up,
-                radius = floatArrayOf(3f, 1.7f, 2.4f, 2.6f, 2.6f, 3.4f)[i % 6],
-                shape = intArrayOf(1, 0, 2, 3, 4, 1)[i % 6],
-                rotation = .5f * (q * 2 + i) * 180f / Math.PI.toFloat(),
-                alpha = 1f - q,
-                color = if (i % 2 == 1) COLOR_ODD else COLOR_EVEN,
+                radius = if (i == 3) 1.3f else 2.4f,
+                shape = when (i) { 3 -> 0; 2 -> 6; else -> 5 },
+                rotation = i * 47f + q * 80f,
+                alpha = (kotlin.math.sin(q * Math.PI) * .65).toFloat(),
+                color = if (i == 3) COLOR_ODD else COLOR_EVEN,
             )
         }
     }

@@ -6,4 +6,5 @@
     <item name="ag_tag_base_sp" type="id" />
     <!-- View tag key: the idle-float controller of a details picture (MonPreview), so no static map holds the view. -->
     <item name="ag_tag_idle_float" type="id" />
+    <item name="ag_tag_subtab_padding" type="id" />
 </resources>

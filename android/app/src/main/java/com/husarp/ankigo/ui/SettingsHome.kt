@@ -118,8 +118,7 @@ internal object SettingsHome {
         val tile = ImageView(ctx).apply {
             setImageResource(s.icon)
             setColorFilter(tone, PorterDuff.Mode.SRC_IN)
-            setPadding(Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8), Ui.dp(ctx, 8))
-            background = Ui.rounded((tone and 0x00FFFFFF) or 0x2E000000, 11, ctx)
+            setPadding(0, 0, 0, 0)
         }
         val chevron = ImageView(ctx).apply {
             setImageResource(R.drawable.ic_back)
@@ -134,7 +133,7 @@ internal object SettingsHome {
         val row = Form.row(ctx, "", null, null, onClick)
         row.removeAllViews()
         row.minimumHeight = Ui.dp(ctx, 60)
-        row.addView(tile, Form.lp(Ui.dp(ctx, 38), Ui.dp(ctx, 38)))
+        row.addView(tile, Form.lp(Ui.dp(ctx, 22), Ui.dp(ctx, 22)))
         row.addView(texts, Form.lp(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).also { it.marginStart = Ui.dp(ctx, 12) })
         row.addView(chevron, Form.lp(Ui.dp(ctx, 18), Ui.dp(ctx, 18)).also { it.marginStart = Ui.dp(ctx, 8) })
         row.contentDescription = "${s.title}. $summary"

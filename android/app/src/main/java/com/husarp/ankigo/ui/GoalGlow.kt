@@ -1,14 +1,13 @@
 package com.husarp.ankigo.ui
 
 /**
- * The golden outline and warm glow round the daily goal bar once the goal is reached (round 8, mockup 111 option C in
- * docs/design/round5.html: the outline + glow that round 5 left out). Pure maths; sizes are in dp for a bar that is
+ * The green outline and soft glow round the daily goal bar once the goal is reached (R31, daily goal design 513). Pure maths; sizes are in dp for a bar that is
  * [GoalSparks.BAR_DP] tall and [BarView] scales them like the sparks. Static: no animation of its own.
  */
 object GoalGlow {
-    /** Outline colour (mockup `rgba(255,170,60)`) and glow colour (`rgba(255,150,40)`). */
-    const val OUTLINE_COLOR = 0xFFFFAA3C.toInt()
-    const val HALO_COLOR = 0xFFFF9628.toInt()
+    /** Muted green outline and halo, shared by both themes. */
+    const val OUTLINE_COLOR = 0xFF78B878.toInt()
+    const val HALO_COLOR = 0xFF65B96C.toInt()
 
     /** The outline: 2 dp wide, sitting just outside the bar. */
     const val OUTLINE_WIDTH = 2f
