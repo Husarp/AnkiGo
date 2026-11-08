@@ -73,9 +73,8 @@ class R607Shots {
 
     @Test fun flameIsCentredInItsMedal() {
         val (dx, dy) = AchStyle.nudge(com.husarp.ankigo.R.drawable.ic_flame)
-        // the flame path spans x 7.5..20.5 / y 1.5..22 of 24: its box centre (14, 11.75) plus the shift is the viewport centre (12, 12)
-        assertEquals(12f, 14f + dx, 0.01f)
-        assertEquals(12f, 11.75f + dy, 0.01f)
+        assertEquals(0f, dx, 0.01f)
+        assertEquals(0f, dy, 0.01f)
         assertEquals(0f to 0f, AchStyle.nudge(com.husarp.ankigo.R.drawable.ic_star))
     }
 

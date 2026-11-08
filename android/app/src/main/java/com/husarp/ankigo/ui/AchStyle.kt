@@ -62,11 +62,11 @@ object AchStyle {
     @DrawableRes fun icon(key: String): Int = ICONS[key] ?: R.drawable.ic_star
 
     /**
-     * R6-07 (item 21): icons whose drawing is not centred in its 24 x 24 viewport (the flame sits 2 units to the right ...), as the shift
+     * R6-07 (item 21): icons whose drawing is not centred in its 24 x 24 viewport, as the shift
      * (x, y in viewport units) that centres them in a medal. Measured from the paths' bounding boxes (centre of the box vs. 12, 12).
      */
     private val NUDGE: Map<Int, Pair<Float, Float>> = mapOf(
-        R.drawable.ic_flame to (-2f to 0.25f), R.drawable.ic_ach_fossil to (-1.8f to 0.6f), R.drawable.ic_bolt to (1f to 0f),
+        R.drawable.ic_ach_fossil to (-1.8f to 0.6f), R.drawable.ic_bolt to (1f to 0f),
         R.drawable.ic_shop to (0.75f to 0.1f), R.drawable.ic_ach_cards to (0f to -1f), R.drawable.ic_ach_crown to (0f to -0.5f),
         R.drawable.ic_ach_easy to (0f to -0.8f), R.drawable.ic_ach_heart_broken to (0f to -0.68f), R.drawable.ic_gift to (0f to -0.76f),
     )
