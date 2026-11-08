@@ -71,12 +71,12 @@ class R27BTest {
         val col = android.widget.LinearLayout(ctx).apply { orientation = 1 }
         val stats = DetailSections.statsBody(ctx, StatCalc.stats(sp, mon), mon.level, Nature.QUIET, sp, true)
         col.addView(stats)
-        val nature = all(stats).filterIsInstance<TextView>().first { it.text.startsWith("Nature:") }.text.toString()
-        assertEquals("Nature: Quiet", nature)
-        val natureLines = all(stats).filterIsInstance<TextView>().map { it.text.toString() }
+        assertFalse(all(stats).filterIsInstance<TextView>().any { it.text.startsWith("Nature:") })
+        val training = DetailSections.training(ctx, Mon(mon.uid, mon.species, mon.name, mon.level, 0, mon.ivs, mon.evs, Nature.QUIET, mon.gender, false, mon.ability, mon.moves, mon.hp), true)
+        val natureLines = all(training).filterIsInstance<TextView>().map { it.text.toString() }
+        assertTrue("Nature" in natureLines)
         assertTrue("SpA +10%" in natureLines)
         assertTrue("Spe −10%" in natureLines)
-        assertFalse(nature.contains(","))
         val e = Evolution(sp.num, EvoKind.ITEM, item = "fire-stone")
         st.bag.clear()
         val missing = EvolutionRows.explanationContent(ctx, data, e, sp, setOf(sp.num), st, mon) {}

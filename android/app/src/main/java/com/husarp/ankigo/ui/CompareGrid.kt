@@ -519,7 +519,7 @@ internal class CompareGrid(
                         }, 900).also { tv -> scale?.ink?.let { tv.setTextColor(it) } }, LinearLayout.LayoutParams(-2, -2)) // an equal value shows nothing (no "±0"); on a strong fill it takes the fill's ink
                     }
                     scale?.fill?.let { box.setBackgroundColor(it) }
-                    for (s in cell.sub) box.addView(small(s, if ((s.startsWith("raised") || s.startsWith("adjusted"))) R.color.ag_mauve else R.color.ag_sub0), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
+                    for (s in cell.sub) box.addView(small(s, if ((s.startsWith("raised") || s.startsWith("adjusted"))) R.color.ag_mauve else R.color.ag_sub0).apply { if (row.key == "nature") text = NatureChanges.effectText(ctx, s) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = dp(1) })
                 }
             }
             is Cell.TypeChips -> {
@@ -555,14 +555,17 @@ internal class CompareGrid(
                 }
             }
             is Cell.Matchups -> {
-                if (cell.unknownCount > 0 || cell.entries.any { it.mult == 1.0 }) box.addView(MatchupTiles.build(ctx, cell.entries, cell.unknownCount))
-                else if (cell.entries.isEmpty()) box.addView(dash())
+                if ((cell.entries + cell.hidden).any { it.mult == 1.0 }) box.addView(MatchupTiles.build(ctx, cell.entries, cell.unknownCount))
+                else if (cell.entries.isEmpty() && cell.hidden.isEmpty()) box.addView(dash())
                 else {
                     // R9-W3-A (D8-V1): one box per multiplier of this row; pill only (the row label says the words)
                     val room = colPx - 2 * pad
                     val name = table.columns.getOrNull(i)?.name ?: ""
-                    MatchupGroups.of(cell.entries).forEachIndexed { k, (g, types) ->
-                        box.addView(MatchupBoxes.box(ctx, g, types, name, compact = true, roomPx = room, textSp = look.subSp + 1f, chipFit = { chip, w -> fitChip(chip, w) }),
+                    val entries = cell.entries + cell.hidden
+                    val groups = cell.group?.let { listOf(it to entries.map { e -> e.type }) } ?: MatchupGroups.of(entries)
+                    groups.forEachIndexed { k, (g, types) ->
+                        val visible = types.filter { t -> cell.entries.any { it.type == t } }
+                        box.addView(MatchupBoxes.box(ctx, g, visible, name, unknownCount = types.size - visible.size, compact = true, roomPx = room, textSp = look.subSp + 1f, chipFit = { chip, w -> fitChip(chip, w) }),
                             LinearLayout.LayoutParams(-1, -2).also { if (k > 0) it.topMargin = dp(3) })
                     }
                 }

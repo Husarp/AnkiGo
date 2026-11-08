@@ -30,6 +30,15 @@ internal object StageChevron {
 }
 
 internal object NatureChanges {
+    fun effectText(a: Context, text: String): CharSequence {
+        val minus = text.indexOf('−')
+        if (!text.startsWith("+") || minus < 0) return text
+        return android.text.SpannableString(text).apply {
+            setSpan(android.text.style.ForegroundColorSpan(StatPill.ink(true, StatPill.isDark(a))), 0, minus, 0)
+            setSpan(android.text.style.ForegroundColorSpan(Ui.c(a, R.color.ag_red)), minus, length, 0)
+        }
+    }
+
     fun line(a: Context, nature: Nature): View {
         val plus = nature.plus; val minus = nature.minus
         if (plus == null || minus == null) return Ui.text(a, 12f, 700, R.color.ag_sub1).apply {
@@ -38,7 +47,7 @@ internal object NatureChanges {
         return FlowRow(a, Ui.dp(a, 14), centered = false).apply {
             for ((stat, up) in listOf(plus to true, minus to false)) addView(LinearLayout(a).apply {
                 gravity = Gravity.CENTER_VERTICAL
-                val color = StatPill.ink(up, StatPill.isDark(a))
+                val color = if (up) StatPill.ink(true, StatPill.isDark(a)) else Ui.c(a, R.color.ag_red)
                 addView(object : View(a) {
                     override fun onDraw(c: Canvas) = StageChevron.draw(c,
                         RectF(0f, 0f, width.toFloat(), height.toFloat()), 2, up, color)
