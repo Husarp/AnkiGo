@@ -167,7 +167,6 @@ internal object ItemCard {
                         Ui.staticSprite(ctx, num, false, this)
                         if (!seen) {
                             setColorFilter(android.graphics.Color.BLACK, android.graphics.PorterDuff.Mode.SRC_IN)
-                            background = Ui.rounded(android.graphics.Color.rgb(45, 45, 55), 8, ctx)
                         }
                     }, LinearLayout.LayoutParams(dp(ctx, 64f), dp(ctx, 64f)))
                     addView(Ui.text(ctx, 12f, 800, R.color.ag_text).apply { text = if (seen) sp.name else "???"; gravity = Gravity.CENTER })
@@ -212,7 +211,7 @@ internal object ItemCard {
     }
 
     /** The footer that stays in view: the "You own" line, the action row, and in the Bag a ball's Trade button (or its confirm). */
-    fun footer(page: GamePage, spec: Spec): View {
+    fun footer(page: GamePage, spec: Spec, messageHost: View? = null): View {
         val ctx: Context = page
         val state = page.state
         val isTm = spec.item == null
@@ -228,7 +227,7 @@ internal object ItemCard {
                 spec.act?.let { row.addView(actView(ctx, it), LinearLayout.LayoutParams(0, -2, 1f)) }
                 if (row.childCount > 0) addView(row, Form.lp(ctx, 10))
             }
-            spec.item?.let { item -> HeldItemActions.buttons(page, item)?.let { addView(it, Form.lp(ctx, 8)) } }
+            spec.item?.let { item -> HeldItemActions.buttons(page, item, messageHost)?.let { addView(it, Form.lp(ctx, 8)) } }
             if (trade != null) addView(if (trade.confirming) confirmView(ctx, trade) else tradeButton(ctx, trade), Form.lp(ctx, if (trade.confirming) 10 else 8))
         }
     }

@@ -32,7 +32,7 @@ class R22SEvolutionShots {
         ShopPage::class.java.getDeclaredMethod("render").apply { isAccessible = true }.invoke(page)
         val labels = views(screen).filterIsInstance<TextView>().map { it.text.toString() }
         assertFalse(labels.contains("DEAL OF THE DAY"))
-        assertTrue(labels.any { it.startsWith("Bag ·") })
+        assertTrue("Bag" in labels)
         page.onGone()
     }
 

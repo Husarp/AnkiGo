@@ -34,7 +34,7 @@ class R30ZShots {
         GameRepo::class.java.getDeclaredMethod("rebuild").apply { isAccessible = true }.invoke(GameRepo)
     }
 
-    @Test fun actualBoxDexAndTeamFrames() {
+    @Test fun actualBoxDexFramesAndPlainTeamCards() {
         for (section in TeamSection.entries) {
             paparazzi.shoot("z-${section.name.lowercase()}", listOf(Size.PHONE)) { ctx ->
                 specialWorld()
@@ -44,7 +44,7 @@ class R30ZShots {
                 root.measure(View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, 412), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, 869), View.MeasureSpec.EXACTLY))
                 root.layout(0, 0, Ui.dp(ctx, 412), Ui.dp(ctx, 869))
                 val frames = all(root).filter { v -> generateSequence(v) { it.parent as? View }.all { it.visibility == View.VISIBLE } }.mapNotNull { it.foreground as? RarityFrame.Frame }
-                assertEquals("$section has the three special frames", 3, frames.size)
+                assertEquals("$section frames", if (section == TeamSection.TEAM) 0 else 3, frames.size)
                 frames.forEach { it.frozenTimeMs = 784L }
                 object : FrameLayout(ctx) {
                     override fun dispatchDraw(canvas: Canvas) {

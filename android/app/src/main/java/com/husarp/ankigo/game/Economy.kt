@@ -674,8 +674,8 @@ object ItemUse {
                 if (old != null) Economy.give(state, old)
                 mon.heldItem = item
                 ItemCollections.record(state, Metric.EQUIPMENT_KINDS, item)
-                val back = if (old != null) " (${Items.name(old)} went back to the bag)" else ""
-                return used(data, state, now, events, "${mon.name} now holds $name$back")
+                val back = if (old != null) "; ${Items.name(old)} went back to the Bag" else ""
+                return used(data, state, now, events, "Gave $name to ${mon.shownName}$back")
             }
         }
     }
@@ -693,7 +693,7 @@ object ItemUse {
         val held = mon.heldItem ?: return ActionResult(false, "${mon.name} holds nothing.")
         mon.heldItem = null
         Economy.give(state, held)
-        return ActionResult(true, "Took ${Items.name(held)} back from ${mon.name}")
+        return ActionResult(true, "Took ${Items.name(held)} from ${mon.shownName}")
     }
 
     /** Moves one copy atomically; a stale picker cannot take a different item or lose a copy. */
@@ -711,7 +711,7 @@ object ItemUse {
         if (old != null) Economy.give(state, old)
         val events = mutableListOf<GameEvent>()
         Achievements.settle(data, state, now, events)
-        return ActionResult(true, "${target.name} now holds ${Items.name(item)}" + (if (old == null) "" else " (${Items.name(old)} went back to the Bag)"), events)
+        return ActionResult(true, (if (source == null) "Gave ${Items.name(item)} to ${target.shownName}" else "Swapped ${Items.name(item)} from ${source.shownName} to ${target.shownName}") + (if (old == null) "" else "; ${Items.name(old)} went back to the Bag"), events)
     }
 
     /** Teaches an owned TM (not used up) to a Pokémon whose species can learn it; [replaceIndex] when it knows 4 moves. */

@@ -201,7 +201,7 @@ class R10W2ShopShots {
 
     @Test fun theBagSwitchIsStillThereAndOwnedTmsSayOwned() {
         shoot("bag", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT), check = { _, screen ->
-            assertTrue("Bag · ${st.bag.values.sum() + st.tms.size + st.mons.count { it.heldItem != null }}" in texts(screen))
+            assertTrue("Bag" in texts(screen))
             assertTrue("the Bag replaced the shop", "TODAY'S SPECIALS" !in texts(screen))
         }) { ctx ->
             val (p, screen) = shopTab(ctx, WEEKDAY)

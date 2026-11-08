@@ -127,9 +127,9 @@ data class ChartSeries(
 }
 
 object ChartData {
-    /** DUE offers 7/30 days; Buttons offers today/current week/current month. */
+    /** DUE offers 7/30 days; Buttons offers current week/month/year. */
     fun effectivePeriod(metric: ChartMetric, period: ChartPeriod): ChartPeriod =
-        if (metric == ChartMetric.BUTTONS && period !in listOf(ChartPeriod.D1, ChartPeriod.D7, ChartPeriod.D30)) ChartPeriod.D1
+        if (metric == ChartMetric.BUTTONS && period !in listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D365)) ChartPeriod.D7
         else if (metric == ChartMetric.DUE && period.days > 30) ChartPeriod.D30 else period
 
     /** The bar sizes the "Per day" filter offers for [metric] and [period]; empty for a CATEGORY or HEATMAP chart (no bar size). */
@@ -212,6 +212,7 @@ object ChartData {
             val first = when (p) {
                 ChartPeriod.D7 -> t.minusDays((t.dayOfWeek.value - 1).toLong())
                 ChartPeriod.D30 -> t.withDayOfMonth(1)
+                ChartPeriod.D365 -> t.withDayOfYear(1)
                 else -> t
             }
             (0..java.time.temporal.ChronoUnit.DAYS.between(first, t).toInt()).map { first.plusDays(it.toLong()) }

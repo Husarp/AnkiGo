@@ -86,7 +86,7 @@ class R29DEvolutionItemShots {
                 val sprite = (cell as ViewGroup).getChildAt(0) as android.widget.ImageView
                 assertEquals(com.husarp.ankigo.ui.Ui.dp(ctx, 64), sprite.width)
                 assertEquals(com.husarp.ankigo.ui.Ui.dp(ctx, 64), sprite.height)
-                assertEquals(i >= caughtCount, sprite.background != null)
+                assertNull(sprite.background)
                 assertEquals(i >= caughtCount, sprite.colorFilter != null)
                 if (i >= caughtCount) assertFalse(cell.performClick())
                 assertEquals(if (i < caughtCount) 1 else 0, text.count { it == names[i] })
