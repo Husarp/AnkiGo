@@ -9,7 +9,7 @@ object CompareRowText {
         "level", "types",
         "hp", "atk", "def", "spa", "spd", "spe", "total",
         "base_hp", "base_atk", "base_def", "base_spa", "base_spd", "base_spe", "base_total",
-        "nature", "ivs", "moves", "weak", "resist", "immune", "normal", "unseen_matchups", "evo", "becomes",
+        "nature", "ivs", "moves", "weak", "resist", "immune", "normal", "strong", "evo", "becomes",
     )
 
     /** The full name and the one-sentence explanation of row [key]; a key nobody knows says its [label] and nothing more. */
@@ -36,8 +36,8 @@ object CompareRowText {
         "weak" -> "Weak against" to "Attack types that hit it for double damage or more."
         "resist" -> "Resists" to "Attack types that hit it for half damage or less."
         "immune" -> "Immune to" to "Attack types that cannot hurt it at all."
-        "normal" -> "Normal damage" to "Attack types seen dealing normal damage to this species."
-        "unseen_matchups" -> "Not yet seen" to "Attack types whose effect on this species is still unknown."
+        "normal" -> "Normal damage" to "Attack types that deal normal damage to this species."
+        "strong" -> "Strong against" to "Types its own-type moves hit for double damage."
         "evo" -> "Evolution line" to "The family it belongs to, in the order it evolves."
         "becomes" -> "Becomes" to "The last form it can evolve into."
         else -> label to ""

@@ -341,7 +341,7 @@ object Shop {
 
     // ---- always in stock, deal of the day, weekend special (R10 T5; all derived from the game day, nothing is saved) ----
 
-    /** Potions remain on sale every day; balls come from the daily draw. */
+    /** Poké Balls and Potions remain on sale every day; Great / Ultra come from the daily draw. */
     fun basics(): List<String> = Tuning.SHOP_BASICS
 
     /** A date-seeded offer; the exact percentage survives price rounding. Nothing is persisted. */

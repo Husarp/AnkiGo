@@ -36,10 +36,15 @@ class R31JMatchupShots {
             false, false, false, 10, 20, 10, 20,
         )))
     }
-    private fun checkTiles(v: View, count: Int) {
-        assertEquals(count, texts(v).count { it == "???" })
+    private fun checkTiles(v: View, count: Int, species: List<Int> = listOf(54)) {
+        val state = GameRepo.state!!
+        val extra = species.sumOf { num ->
+            TypeMatchups.of(GameRepo.data!!.sp(num).types).strongAgainst.count { it.type !in MatchupKnowledge.seen(GameRepo.data!!, state, num) }
+        }
+        val expected = if (count == 0) 0 else count + extra
+        assertEquals(expected, texts(v).count { it == "???" })
         val tiles = views(v).filter { it.contentDescription == "Matchup not yet seen in battle" }
-        assertEquals(count, tiles.size)
+        assertEquals(expected, tiles.size)
         assertTrue(tiles.all { !it.isClickable })
     }
 
@@ -49,13 +54,13 @@ class R31JMatchupShots {
         wild(ctx).also { assertFalse(texts(it).any { s -> s.equals("Matchups", true) }); assertFalse(texts(it).any { s -> s.contains("weak to") }) }
     }
 
-    @Test fun firstMissShowsEighteenDarkTilesWithoutStatsOrWeaknessSummary() = paparazzi.shoot("j-wild-first-miss", listOf(Size.PHONE)) { ctx ->
+    @Test fun firstMissShowsGroupedDarkTilesWithoutStatsOrWeaknessSummary() = paparazzi.shoot("j-wild-first-miss", listOf(Size.PHONE)) { ctx ->
         openMatchups(); unknownWild()
         GameRepo.state!!.battle!!.playerAttacked = true
         wild(ctx).also {
             checkTiles(it, 18)
             assertTrue(texts(it).contains("0/18 types seen"))
-            assertFalse(texts(it).any { s -> s.startsWith("Stats", true) || s.contains("weak to") || s == "Strong against" })
+            assertFalse(texts(it).any { s -> s.startsWith("Stats", true) || s.contains("weak to") })
         }
     }
 
@@ -66,7 +71,7 @@ class R31JMatchupShots {
             assertTrue(texts(it).contains("weak to Grass ×2"))
             assertTrue(texts(it).contains("Normal ×1"))
             assertFalse(texts(it).contains("Electric"))
-            assertFalse(texts(it).contains("Strong against"))
+            assertTrue(texts(it).contains("Strong against"))
         }
     }
 
@@ -88,7 +93,7 @@ class R31JMatchupShots {
         val mon = GameRepo.state!!.main!!
         GameRepo.state!!.viewedMons += mon.uid
         DialogShots.scene(ctx, DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), GameRepo.data!!, mon) }!!).also {
-            checkTiles(it, 17)
+            checkTiles(it, 17, listOf(mon.species))
             assertTrue(texts(it).contains("Water ×1"))
             assertFalse(texts(it).any { s -> s.contains("weak to Ground") })
         }
@@ -103,7 +108,7 @@ class R31JMatchupShots {
         openMatchups()
         GameRepo.state!!.seenMatchups[92] = mutableSetOf(Type.NORMAL, Type.FIRE)
         DialogShots.scene(ctx, DialogShots.capture { DexDetail.show(DexPage(ctx, NoHost), GameRepo.data!!.sp(92)) }!!).also {
-            checkTiles(it, 16)
+            checkTiles(it, 16, listOf(92))
             assertTrue(texts(it).contains("Normal"))
             assertTrue(texts(it).contains("Fire ×1"))
             assertTrue(texts(it).contains("Immune to"))
@@ -116,11 +121,11 @@ class R31JMatchupShots {
         val state = GameRepo.state!!
         val picks = listOf(ComparePick.Owned("t1"), ComparePick.Dex(54))
         val table = CompareTable.build(GameRepo.data!!, state, picks, false)
-        CompareStore.saveRows(ctx, RowChoice(table.rows.map { it.key }.filter { it !in setOf("types", "weak", "resist", "immune", "normal", "unseen_matchups") }.toSet()))
+        CompareStore.saveRows(ctx, RowChoice(table.rows.map { it.key }.filter { it !in setOf("types", "weak", "resist", "immune", "normal", "strong") }.toSet()))
         val page = ComparePage(ctx, NoHost, picks)
         pageScreen(ctx, page).also {
             page.render()
-            checkTiles(it, 33)
+            checkTiles(it, 33, listOf(state.main!!.species, 54))
             assertFalse(texts(it).contains("Ground"))
         }
     }

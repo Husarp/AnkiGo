@@ -88,7 +88,7 @@ internal object MatchupBoxes {
      */
     fun box(
         ctx: Context, group: MatchupGroup, types: List<Type>, name: String,
-        compact: Boolean, roomPx: Int? = null, textSp: Float = 12.5f, chipFit: (TextView, Int) -> Unit = { _, _ -> },
+        compact: Boolean, roomPx: Int? = null, textSp: Float = 12.5f, chipFit: (TextView, Int) -> Unit = { _, _ -> }, unknownCount: Int = 0,
     ): View {
         fun dp(v: Float) = Ui.dp(ctx, v).toInt()
         val dark = TypeChips.isDark(ctx)
@@ -98,7 +98,8 @@ internal object MatchupBoxes {
         val barW = if (compact) dp(3f) else 0
         val padStart = barW + dp(if (compact) 3f else 8f)
         val padEnd = dp(if (compact) 3f else 8f)
-        val message = MatchupGroups.toast(group, types, name)
+        val message = if (types.isEmpty()) "${group.label}: $unknownCount matchups not yet seen in battle"
+            else MatchupGroups.toast(group, types, name) + if (unknownCount > 0) " $unknownCount matchups not yet seen in battle." else ""
 
         val box = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -155,6 +156,7 @@ internal object MatchupBoxes {
             if (innerW != null) chipFit(chip, innerW)
             flow.addView(chip)
         }
+        repeat(unknownCount) { flow.addView(MatchupTiles.unknown(ctx).also { chip -> if (innerW != null) chipFit(chip, innerW) }) }
         box.addView(flow, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(5f) })
         return box
     }

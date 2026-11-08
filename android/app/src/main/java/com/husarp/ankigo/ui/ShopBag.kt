@@ -20,7 +20,7 @@ import com.husarp.ankigo.game.ownedItemCount
 // R14 batch 2 (PLAN 181): a tap on a row opens its card ([ItemCard]); the card's button starts what a tap used to do at once.
 // R15 (PLAN 210): the card is the item WINDOW ([ItemWindow]) over the list, and the button closes it just before it opens a picker or a confirm (an answer that is only a message keeps it open).
 
-internal class BagActions(private val s: GamePage, private val mons: MonActions, private val host: CardHost,
+internal class BagActions(private val s: ShopPage, private val mons: MonActions, private val host: CardHost,
                           private val onBattleEvents: ((List<GameEvent>) -> Unit)? = null,
                           private val fightAvailable: () -> Boolean = { true }) {
     private val data get() = s.data
@@ -29,6 +29,8 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
     private var heldOnly = false
     private var category = "All items"
     private var categoriesOpen = false
+    fun collapseCategories() { categoriesOpen = false }
+
     private fun holders(id: String) = state.mons.filter { it.heldItem == id }
 
     private val groups = listOf(
@@ -65,18 +67,19 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }
         into.addView(scope)
-        into.addView(Ui.text(ctx, 13f, 800, R.color.ag_mauve).apply {
+        val toggle = Ui.text(ctx, 13f, 800, R.color.ag_mauve).apply {
             text = "${if (categoriesOpen) "‹" else "☷"}  $category · ${count(category)}  ${if (categoriesOpen) "Hide categories" else "Categories ›"}"
             contentDescription = if (categoriesOpen) "Collapse categories" else "Expand categories"
             minimumHeight = Ui.dp(ctx, 48); gravity = android.view.Gravity.CENTER_VERTICAL
             setOnClickListener { categoriesOpen = !categoriesOpen; s.requestRender() }
-        })
+        }
+        into.addView(toggle)
         val body = LinearLayout(ctx).apply { tag = "bag-body"; isBaselineAligned = false }
         into.addView(body, LinearLayout.LayoutParams(-1, -2))
         val categories = listOf("All items" to null, "Balls" to "poke-ball", "Healing" to "potion",
             "Evolution" to "water-stone", "Held" to "amulet-coin", "Fossils" to "helix-fossil",
             "Escape" to "fluffy-tail", "Other" to "rare-candy", "TMs" to "tm")
-        if (categoriesOpen) body.addView(LinearLayout(ctx).apply {
+        if (categoriesOpen) s.categories(toggle, LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; tag = "bag-categories"
             for ((label, item) in categories) addView(LinearLayout(ctx).apply {
                 gravity = android.view.Gravity.CENTER_VERTICAL
@@ -94,16 +97,16 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
                 setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4))
                 setOnClickListener { category = label; s.requestRender() }
             }, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 3) })
-        }, LinearLayout.LayoutParams(0, -2, .46f).also { it.marginEnd = Ui.dp(ctx, 6) })
+        }) { categoriesOpen = false; s.requestRender() }
         val results = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; tag = "bag-results" }
-        body.addView(results, LinearLayout.LayoutParams(0, -2, if (categoriesOpen) .54f else 1f))
+        body.addView(results, LinearLayout.LayoutParams(-1, -2))
         var any = false
         fun section(title: String, ids: List<String>) {
             if (ids.isEmpty() || category != "All items" && category != title) return
             any = true
             val n = ids.sumOf { state.ownedItemCount(it) }
             results.addView(Bits.sect(ctx, title, "$n item${if (n == 1) "" else "s"}"))
-            BagTiles.rows(results, ids.distinct().sortedBy { Items.name(it) }.map { itemRow(it) }, columns = if (categoriesOpen) 1 else 2)
+            BagTiles.rows(results, ids.distinct().sortedBy { Items.name(it) }.map { itemRow(it) }, columns = 2)
         }
         for ((title, kinds) in groups) section(title, owned.filter { Items.def(it)?.kind in kinds })
         // anything the catalogue doesn't know
@@ -112,7 +115,7 @@ internal class BagActions(private val s: GamePage, private val mons: MonActions,
         if (!heldOnly && (category == "All items" || category == "TMs") && state.tms.isNotEmpty()) {
             any = true
             results.addView(Bits.sect(ctx, "TMs", "${state.tms.size} owned"))
-            BagTiles.rows(results, state.tms.sortedBy { data.move(it)?.name ?: it }.map { tmRow(it) }, columns = if (categoriesOpen) 1 else 2)
+            BagTiles.rows(results, state.tms.sortedBy { data.move(it)?.name ?: it }.map { tmRow(it) }, columns = 2)
         }
         if (!any) results.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply {
             text = if (category != "All items") "No items in this category." else if (heldOnly) "None of your Pokémon holds an item." else "Your bag is empty. Items drop while you study, and the shop sells more."

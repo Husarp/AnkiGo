@@ -35,8 +35,8 @@ class ShopRefreshTest {
 
     // ---- always in stock ----
 
-    @Test fun onlyPotionsAreAlwaysInStock() {
-        assertEquals(listOf("potion"), Shop.basics())
+    @Test fun pokeBallsAndPotionsAreAlwaysInStock() {
+        assertEquals(listOf("poke-ball", "potion"), Shop.basics())
     }
 
     @Test fun basicsAreBuyableEveryDayAtTheDailyPriceWhateverTheStockIs() {

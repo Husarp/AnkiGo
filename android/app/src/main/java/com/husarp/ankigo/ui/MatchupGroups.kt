@@ -30,6 +30,23 @@ object MatchupGroups {
         of(m.weakTo + m.resists + m.immune) +
             (if (m.strongAgainst.isEmpty()) emptyList() else listOf(MatchupGroup.STRONG_AGAINST to m.strongAgainst.map { it.type }))
 
+    /** Keep undiscovered entries in their real section; only seen types may supply chip labels or tap text. */
+    fun sections(types: List<Type>, known: TypeMatchups): Map<String, Cell.Matchups> {
+        val all = TypeMatchups.of(types)
+        val seen = (known.weakTo + known.resists + known.immune + known.normal).map { it.type }.toSet()
+        val complete = known.unknownCount == 0 && known.normal.isEmpty()
+        fun cell(entries: List<Matchup>, group: MatchupGroup? = null): Cell.Matchups = Cell.Matchups(
+            entries.filter { complete || it.type in seen },
+            entries.filter { !complete && it.type !in seen }, group,
+        )
+        val defensive = all.weakTo + all.resists + all.immune
+        val normal = Type.entries.filter { t -> defensive.none { it.type == t } }.map { Matchup(it, 1.0) }
+        return linkedMapOf(
+            "weak" to cell(all.weakTo), "resist" to cell(all.resists), "immune" to cell(all.immune),
+            "normal" to cell(normal), "strong" to cell(all.strongAgainst, MatchupGroup.STRONG_AGAINST),
+        )
+    }
+
     /** "A", "A and B", "A, B and C". */
     fun list(names: List<String>): String = when (names.size) {
         0 -> ""

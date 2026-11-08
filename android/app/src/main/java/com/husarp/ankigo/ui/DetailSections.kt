@@ -205,7 +205,7 @@ object DetailSections {
     // ---------- Stats ----------
 
     /**
-     * The Stats section body: six stat bars with battle changes, grey species bases, Total, then the nature summary. Your Pokémon's details and the wild Pokémon's window build the same block.
+     * The Stats section body: six stat bars with battle changes, grey species bases, Total. Your Pokémon's details and the wild Pokémon's window build the same block.
      */
     fun statsBody(a: Context, stats: Stats, level: Int, nature: Nature?, sp: Species, compact: Boolean, boosts: IntArray? = null): View = LinearLayout(a).apply {
         orientation = LinearLayout.VERTICAL
@@ -222,12 +222,7 @@ object DetailSections {
             addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), 0, sp.base[s], compact, wholeRow = true, stage = if (s == Stat.HP) 0 else boosts?.getOrNull(s.ordinal - 1) ?: 0))
         }
         addView(DetailParts.totalRow(a, stats.total, sp.base.total, wholeRow = true))
-        if (nature != null) addView(LinearLayout(a).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, Ui.dp(a, 10), 0, 0)
-            addView(Ui.text(a, 12f, 700, R.color.ag_sub1).apply { text = "Nature: ${nature.label}" })
-            addView(NatureChanges.line(a, nature), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
-        })
+
     }
 
     // ---------- Moves ----------
@@ -416,19 +411,23 @@ object DetailSections {
      */
     fun matchups(a: Context, types: List<com.husarp.ankigo.game.Type>, name: String, known: TypeMatchups = TypeMatchups.of(types)): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        MatchupGroups.details(known).forEach { (g, ts) ->
-            col.addView(MatchupBoxes.box(a, g, ts, name, compact = false), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
-        }
-        if (known.normal.isNotEmpty()) {
-            col.addView(Ui.text(a, 12.5f, 900, R.color.ag_sub1).apply { text = "Normal damage ×1" },
-                LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
-            col.addView(MatchupTiles.build(a, known.normal, 0))
-        }
-        if (known.unknownCount > 0) {
-            col.addView(Ui.text(a, 12f, 700, R.color.ag_sub0).apply { text = "Not yet seen in battle" },
-                LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
-            col.addView(MatchupTiles.build(a, emptyList(), known.unknownCount),
-                LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+        for ((key, cell) in MatchupGroups.sections(types, known)) {
+            if (key == "normal") {
+                if (cell.entries.isNotEmpty() || cell.hidden.isNotEmpty()) {
+                    col.addView(Ui.text(a, 12.5f, 900, R.color.ag_sub1).apply { text = "Normal damage ×1" },
+                        LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
+                    col.addView(MatchupTiles.build(a, cell.entries, cell.unknownCount))
+                }
+            } else {
+                val entries = cell.entries + cell.hidden
+                if (entries.isEmpty()) continue
+                val groups = cell.group?.let { listOf(it to entries.map { e -> e.type }) } ?: MatchupGroups.of(entries)
+                for ((g, ts) in groups) {
+                    val visible = ts.filter { t -> cell.entries.any { it.type == t } }
+                    col.addView(MatchupBoxes.box(a, g, visible, name, compact = false, unknownCount = ts.size - visible.size),
+                        LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+                }
+            }
         }
         return col
     }

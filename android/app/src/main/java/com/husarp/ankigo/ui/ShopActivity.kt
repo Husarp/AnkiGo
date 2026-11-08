@@ -39,6 +39,49 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
                              private val fightAvailable: () -> Boolean = { true }) : GamePage(base, host), CardHost {
     override val tab = BottomNav.Tab.SHOP
 
+    private class CategoryLayer(ctx: Context) : android.widget.FrameLayout(ctx) {
+        var anchor: View? = null
+        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+            super.onLayout(changed, left, top, right, bottom)
+            val toggle = anchor ?: return
+            val drawer = getChildAt(1) ?: return
+            val rect = android.graphics.Rect(0, 0, toggle.width, toggle.height)
+            (parent as android.view.ViewGroup).offsetDescendantRectToMyCoords(toggle, rect)
+            val y = rect.bottom.coerceIn(0, height)
+            val x = Ui.dp(context, 12)
+            val w = minOf(Ui.dp(context, 208), (width - x * 2).coerceAtLeast(0))
+            drawer.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(height - y, View.MeasureSpec.AT_MOST))
+            drawer.layout(x, y, x + w, y + drawer.measuredHeight)
+        }
+    }
+    private lateinit var categoryLayer: CategoryLayer
+
+    override fun wrapRoot(column: View): View = android.widget.FrameLayout(this).apply {
+        addView(column, android.widget.FrameLayout.LayoutParams(-1, -1))
+        categoryLayer = CategoryLayer(this@ShopPage).apply { visibility = View.GONE }
+        addView(categoryLayer, android.widget.FrameLayout.LayoutParams(-1, -1))
+    }
+
+    internal fun categories(anchor: View, list: View, close: () -> Unit) {
+        categoryLayer.removeAllViews()
+        categoryLayer.anchor = anchor
+        categoryLayer.visibility = View.VISIBLE
+        categoryLayer.addView(View(this).apply {
+            contentDescription = "Close categories"; setOnClickListener { close() }
+        }, android.widget.FrameLayout.LayoutParams(-1, -1))
+        val drawer = MotionScrollView(this).apply {
+            tag = "bag-category-drawer"
+            background = Ui.rounded(Ui.c(this@ShopPage, R.color.ag_card), 12, this@ShopPage)
+            elevation = Ui.dp(this@ShopPage, 8).toFloat()
+            isClickable = true
+            addView(list)
+        }
+        categoryLayer.addView(drawer, android.widget.FrameLayout.LayoutParams(Ui.dp(this, 208), -2, Gravity.TOP or Gravity.START).apply {
+            marginStart = Ui.dp(this@ShopPage, 12)
+        })
+    }
+
     private lateinit var appBar: AppBar
     private lateinit var content: LinearLayout
     private lateinit var scroll: ScrollView
@@ -97,6 +140,11 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     }
 
     override fun onHide() {
+        bag.collapseCategories()
+        if (::categoryLayer.isInitialized) {
+            categoryLayer.visibility = View.GONE
+            categoryLayer.removeAllViews()
+        }
         dealClock.removeCallbacks(updateDeal)
         super.onHide()
     }
@@ -147,7 +195,11 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     }
 
     /** PLAN 218: Shop / Bag are a switch at the top, not sub-pages: the shown one stays and scrolls to its top. */
-    override fun onTabReselected() = scrollToTop(scroll)
+    override fun onTabReselected() {
+        bag.collapseCategories()
+        requestRender()
+        scrollToTop(scroll)
+    }
 
     override fun onShow() {
         super.onShow()
@@ -186,6 +238,8 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
             t.setTextColor(Ui.c(this, if (on) R.color.ag_text else R.color.ag_sub0))
             t.background = if (on) Ui.rounded(Ui.c(this, R.color.ag_card), 10, this) else null
         }
+        categoryLayer.visibility = View.GONE
+        categoryLayer.removeAllViews()
         content.removeAllViews()
         if (showBag) bag.fill(content) else fillShop()
         syncWindow()

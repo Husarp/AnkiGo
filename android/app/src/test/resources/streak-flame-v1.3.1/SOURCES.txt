@@ -1,0 +1,6 @@
+Reference: released Git tag v1.3.1, android/app/src/main/res/raw/streak_flame.webp
+Noto fire artwork by Google, CC BY 4.0; existing app asset attribution applies.
+frames.txt: SHA-256 of each complete ANMF payload, original duration in milliseconds, full WebP digest.
+frame-{0,24,48,72}.png: decoded RGBA frames at 0, 1200, 2400 and 3600 ms, extracted with Pillow without rescaling.
+Paparazzi shows those sampled reference frames because layoutlib does not play AnimatedImageDrawable.
+R32AFlameAssetTest compares all 96 current encoded frames to the released reference, including exact metadata.
