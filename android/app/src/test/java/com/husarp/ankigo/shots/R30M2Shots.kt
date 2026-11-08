@@ -63,14 +63,16 @@ class R30M2Shots {
             assertTrue(texts(scene).any { it.equals("Next · 4", true) })
         }
     }
-    @Test fun pickedNaturePerksAppearInOwnedStats() {
+    @Test fun pickedNaturePerksStayInTrainingWithoutRepeatingInStats() {
         for (nature in listOf(Nature.HARDY, Nature.DOCILE)) paparazzi.shoot("m2-468-details-${nature.name.lowercase()}", listOf(Size.PHONE)) { ctx ->
             val state = GameRepo.state!!
             val m = state.main!!
             val mon = Mon(m.uid, m.species, m.name, m.level, m.xp, m.ivs, m.evs, nature,
                 m.gender, m.shiny, m.ability, m.moves, m.hp)
             state.mons[state.mons.indexOf(m)] = mon
-            for (section in DetailSection.entries) AppPrefs.setDetailOpen(ctx, section.key, section == DetailSection.STATS)
+            val stats = DetailSections.statsBody(ctx, StatCalc.stats(GameRepo.data!!, mon), mon.level, nature, GameRepo.data!!.sp(mon.species), false)
+            assertFalse(texts(stats).any { it.contains("Nature") || it.contains(NaturePerks.description(nature)!!) })
+            for (section in DetailSection.entries) AppPrefs.setDetailOpen(ctx, section.key, section == DetailSection.TRAINING)
             val dlg = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), GameRepo.data!!, mon) }!!
             val scene = DialogShots.scene(ctx, dlg)
             assertTrue(texts(scene).any { it.contains(NaturePerks.description(nature)!!) })
@@ -79,8 +81,9 @@ class R30M2Shots {
                 View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY))
             scene.layout(0, 0, scene.measuredWidth, scene.measuredHeight)
             fun all(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
-            val stats = all(scene).single { it.tag == DetailSection.STATS }
-            all(scene).filterIsInstance<android.widget.ScrollView>().first { all(it).contains(stats) }.scrollTo(0, stats.top)
+            val training = all(scene).single { it.tag == DetailSection.TRAINING }
+            assertTrue(texts(training).any { it.contains(NaturePerks.description(nature)!!) })
+            all(scene).filterIsInstance<android.widget.ScrollView>().first { all(it).contains(training) }.scrollTo(0, training.top)
             scene
         }
     }

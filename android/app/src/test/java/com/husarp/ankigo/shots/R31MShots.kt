@@ -82,7 +82,7 @@ class R31MShots {
             shot(a, view, "m-506-${theme.name.lowercase()}")
         }
     }
-    @Test fun natureStatsAndTrainingUseTheSameSemanticChanges() {
+    @Test fun natureChangesAppearInTrainingWithoutRepeatingInStats() {
         for (theme in Theme.entries) {
             val a = context(theme, 760); val m = mon()
             val view = LinearLayout(a).apply {
@@ -92,8 +92,11 @@ class R31MShots {
                 })
                 addView(section(a, DetailSection.TRAINING) { DetailSections.training(a, m, false) })
             }
-            assertEquals(2, all(view).count { it.contentDescription == "Def +10%" })
-            assertEquals(2, all(view).count { it.contentDescription == "Atk −10%" })
+            val stats = all(view).single { it.tag == DetailSection.STATS }
+            val training = all(view).single { it.tag == DetailSection.TRAINING }
+            assertFalse(all(stats).any { it.contentDescription?.toString()?.contains("10%") == true })
+            assertEquals(1, all(training).count { it.contentDescription == "Def +10%" })
+            assertEquals(1, all(training).count { it.contentDescription == "Atk −10%" })
             assertFalse(texts(view).any { it.contains("▲") || it.contains("▼") })
             shot(a, view, "m-509-${theme.name.lowercase()}")
             for (nature in Nature.entries) {
