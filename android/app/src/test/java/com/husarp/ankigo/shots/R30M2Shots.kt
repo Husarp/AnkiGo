@@ -59,8 +59,8 @@ class R30M2Shots {
         val dlg = DialogShots.capture { DexDetail.show(DexPage(ctx, NoHost), GameRepo.data!!.sp(mon.species)) }!!
         DialogShots.scene(ctx, dlg).also { scene ->
             assertTrue(texts(scene).any { it.equals("Bond", true) })
-            assertTrue(texts(scene).any { it.equals("Current perks", true) })
-            assertFalse(texts(scene).any { it.contains("Next ·") })
+            assertTrue(texts(scene).any { it.equals("Current · 3", true) })
+            assertTrue(texts(scene).any { it.equals("Next · 4", true) })
         }
     }
     @Test fun pickedNaturePerksAppearInOwnedStats() {
