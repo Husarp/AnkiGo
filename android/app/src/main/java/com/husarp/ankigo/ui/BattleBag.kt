@@ -66,7 +66,7 @@ internal object BattleBag {
                 for (mon in mons) {
                     val ok = if (tm) item in data.sp(mon.species).tmMoves && item !in mon.moves else ItemUse.canUse(data, st, item, mon)
                     val max = StatCalc.maxHp(data, mon)
-                    val hint = if (ok) if (Items.def(item)?.kind == ItemKind.EVOLUTION) "" else Bits.hpText(data, mon) else if (Items.def(item)?.kind == ItemKind.HEAL && mon.hp >= max) "Full HP" else Progression.itemEvolutionTimeNeeded(data, mon, item)?.let { "Needs $it" } ?: when {
+                    val hint = if (ok) if (Items.def(item)?.kind == ItemKind.EVOLUTION) "" else Bits.hpText(data, mon) else if (Items.def(item)?.kind == ItemKind.HEAL && mon.hp >= max) "Full HP" else Progression.itemEvolutionTimeNeeded(data, mon, item)?.let { if (it == "day") "In the daytime" else "At night" } ?: when {
                         tm -> "Cannot learn this move"
                         Items.def(item)?.kind == ItemKind.EVOLUTION -> "No evolution with this item"
                         Items.def(item)?.kind == ItemKind.HELD -> "Already holds ${Items.name(item)}"

@@ -10,5 +10,5 @@ object DetailOrder {
         if (remove(section)) add(to.coerceIn(0, size), section)
     }
 
-    fun label(section: DetailSection): String = if (section == DetailSection.EVOLUTION) "Holding & Evolution" else section.title
+    fun label(section: DetailSection): String = section.title
 }

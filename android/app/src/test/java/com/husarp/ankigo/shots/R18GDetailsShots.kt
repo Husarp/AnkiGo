@@ -62,7 +62,7 @@ class R18GDetailsShots {
 
     private class MapStore(private val open: Set<String>) : DetailOpenStore {
         private val m = HashMap<String, Boolean>()
-        override fun get(key: String): Boolean? = m[key] ?: (key == "evolution" || key in open)
+        override fun get(key: String): Boolean? = m[key] ?: (key == "evolution" || key == "held-item" || key in open)
         override fun set(key: String, open: Boolean) { m[key] = open }
     }
 
@@ -157,8 +157,8 @@ class R18GDetailsShots {
         dialog("pikachu", listOf(0f, 0.34f, 0.67f, 1f), check = { ctx, scene ->
             val t = strings(scene)
             // 239B: the item, its Bag text, once (not a tag under the types, not a Training row any more)
-            assertTrue("Holding" in t)
-            assertEquals("the item shows once", 1, t.count { it == "Amulet Coin" })
+            assertTrue("HELD ITEM" in t)
+            assertEquals("the item shows once", 1, texts(scene).count { it.visibility == View.VISIBLE && it.text.toString() == "Amulet Coin" })
             assertTrue("Main holds it: ×2 money" in t)
             assertFalse("no Held item row in Training", "Held item" in t)
             // PLAN 405: the full level stays visible on its own row, retaining its band colour.
@@ -194,8 +194,8 @@ class R18GDetailsShots {
             assertTrue("It and your Main each get half the XP" in t)
             assertFalse("Nothing" in t)
             // 279A: every branch gets its own readable row and grey condition.
-            val labels = listOf("Water Stone", "Thunder Stone", "Fire Stone", "Leaf Stone", "Ice Stone",
-                "Needs Level 3 Bond\nin the daytime", "Needs Level 3 Bond\nat night", "Needs Level 3 Bond\nknows a Fairy move")
+            val labels = listOf("Use Water Stone", "Use Thunder Stone", "Use Fire Stone", "Use Leaf Stone", "Use Ice Stone",
+                "Level 3 Bond\nin the daytime", "Level 3 Bond\nat night", "Level 3 Bond\nknows a Fairy move")
             val cells = labels.map { l -> texts(scene).single { it.text.toString() == l } }
             val tops = cells.map { top(it, scene) }.distinct().sorted()
             assertEquals("eight separate target rows", 8, tops.size)
@@ -210,27 +210,23 @@ class R18GDetailsShots {
         DetailSections.storeOf = { MapStore(emptySet()) }
         dialog("nothing", listOf(0f), setup = { st.bag["lucky-egg"] = 1 }, check = { ctx, scene ->
             val t = strings(scene)
-            assertTrue("Nothing" in t && "Give item" in t)
-            assertTrue("EVOLUTION" in t && "Does not evolve" in t)
-            val give = texts(scene).single { it.text.toString() == "Give item" }
-            assertTrue(give.isClickable && give.height >= Ui.dp(ctx, 48))
-            // "Give item" opens the picker of Options → "Give item…" and the details close
-            val picker = DialogShots.capture { give.performClick() }
-            assertNotNull("the picker opens", picker)
+            assertFalse("HELD ITEM" in t)
+            assertFalse("Nothing" in t || "Give item" in t)
+            assertTrue("DOES NOT EVOLVE" in t)
+            assertFalse("EVOLUTION" in t)
+            assertTrue("Options" in t)
         }) { ctx -> MonDetail.show(TeamPage(ctx, NoHost), gd, st.mon("t4")!!) }
     }
 
-    @Test fun nothingToGiveSaysSo() {
-        // an empty bag of held items: the toast text of Options, and the details stay (no picker)
+    @Test fun emptyHeldItemSectionIsAbsentWithAnEmptyBag() {
         paparazzi.unsafeUpdateConfig(deviceConfig = PHONE.device(Theme.LIGHT))
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         DetailSections.storeOf = { MapStore(emptySet()) }
         val d = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), gd, st.mon("t4")!!) } ?: error("no dialog")
         val scene = DialogShots.scene(ctx, d)
-        val picker = DialogShots.capture { texts(scene).single { it.text.toString() == "Give item" }.performClick() }
-        assertNull("no picker without a held item in the bag", picker)
-        assertEquals("the toast of Options → Give item…", "No held items in the bag", Ui.lastToast)
+        assertFalse("HELD ITEM" in strings(scene))
+        assertTrue("Options" in strings(scene))
     }
 
     @Test fun anItemLineOpensItsItemWindow() {
@@ -262,7 +258,7 @@ class R18GDetailsShots {
         // Atk, Def, SpA, SpD, Spe, HP, Total, HP and XP, Nature, IVs, EVs, Friendship, Holding, Evolution, Wins
         val said = rows.map { (it.tag as StatInfoText).title }
         listOf("HP (Hit points)", "Attack", "Defense", "Special Attack", "Special Defense", "Speed", "Total", "HP and XP", "Nature", "IV (Individual value)",
-            "EV (Effort value)", "Holding", "Wins").forEach { assertTrue("$it opens an explanation; there are $said", it in said) }
+            "EV (Effort value)", "Wins").forEach { assertTrue("$it opens an explanation; there are $said", it in said) }
         rows.forEach { assertTrue("${(it.tag as StatInfoText).title}: ${it.height} px tall", it.height >= Ui.dp(ctx, 48)) }
         assertTrue("whole rows, not the 32 dp label: ${rows.map { it.width }}", rows.all { it.width > Ui.dp(ctx, 90) })
     }
@@ -276,8 +272,8 @@ class R18GDetailsShots {
         }, check = { _, scene ->
             assertFalse("no separate ready section", "Ready to evolve" in strings(scene))
             assertEquals(0, strings(scene).count { it == "Evolve" })
-            val water = texts(scene).single { it.text.toString() == "Water Stone" }
-            val fire = texts(scene).single { it.text.toString() == "Fire Stone" }
+            val water = texts(scene).single { it.text.toString() == "Use Water Stone" }
+            val fire = texts(scene).single { it.text.toString() == "Use Fire Stone" }
             assertEquals(Ui.c(water.context, com.husarp.ankigo.R.color.ag_green), water.currentTextColor)
             assertEquals(Ui.c(fire.context, com.husarp.ankigo.R.color.ag_sub0), fire.currentTextColor)
             val mon = st.mons.first { it.species == 133 }
@@ -303,7 +299,7 @@ class R18GDetailsShots {
             val missing = DialogShots.capture { (fire.parent as View).performClick() } ?: error("no unmet info")
             val missingScene = DialogShots.scene(fire.context, missing)
             assertFalse("unmet branch disables action", missing.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!.isEnabled)
-            assertTrue(strings(missingScene).any { "You don't have a Fire Stone" in it })
+            assertTrue("• Use Fire Stone" in strings(missingScene))
             assertTrue(strings(missingScene).any { com.husarp.ankigo.game.ItemInfo.whereToFind(gd, "fire-stone") in it })
             assertFalse(strings(missingScene).any { "open your Bag" in it })
             paparazzi.snapshot(missingScene, "r27e-missing-${if (fire.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
@@ -327,7 +323,7 @@ class R18GDetailsShots {
             assertEquals(134, e.to)
             choices++
         }
-        val label = texts(tree).single { it.text.toString() == "Water Stone" }
+        val label = texts(tree).single { it.text.toString() == "Use Water Stone" }
         val info = DialogShots.capture { (label.parent as View).performClick() } ?: error("no info")
         val button = info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!
         assertNull(DialogShots.capture { button.performClick() })
@@ -344,7 +340,7 @@ class R18GDetailsShots {
         FakeGame.install(ctx)
         val v = com.husarp.ankigo.ui.DetailTopCard.evolutionOnly(ctx, gd, gd.sp(25), st.seen + st.caught, false, null)
         measureAndLayout(v, ctx, 412, 869)
-        val label = texts(v).first { it.text.toString() == "Thunder Stone" }
+        val label = texts(v).first { it.text.toString() == "Use Thunder Stone" }
         assertTrue((label.parent as View).isClickable)
         assertNotNull((label.parent as View).background)
         assertEquals(0, label.paintFlags and android.graphics.Paint.UNDERLINE_TEXT_FLAG)
@@ -452,7 +448,7 @@ class R18GDetailsShots {
         val names = listOf("Ratty2", "Ratty3", "Ratty4", "Ratty5").map { n -> texts(v).single { it.text.toString() == n } }
         assertEquals("279A: one row per Pokémon", listOf(1, 1, 1, 1), names.groupBy { top(it, v) }.toSortedMap().values.map { it.size })
         // every method text hangs under its own name, never over the next line's name
-        val methods = listOf("Water Stone", "Thunder Stone", "Needs Level 3 Bond\nat night", "Fire Stone").map { m -> texts(v).single { it.text.toString() == m } }
+        val methods = listOf("Use Water Stone", "Use Thunder Stone", "Level 3 Bond\nat night", "Use Fire Stone").map { m -> texts(v).single { it.text.toString() == m } }
         names.zip(methods).forEach { (n, m) -> assertTrue("${n.text}: condition beside the name", top(m, v) < top(n, v) + n.height && top(m, v) + m.height > top(n, v)) }
         assertRowConditions(c, v)
     }
@@ -489,7 +485,7 @@ class R18GDetailsShots {
 
     @Test fun dexEntryOfASpeciesThatDoesNotEvolve() {
         DetailSections.storeOf = { MapStore(emptySet()) }
-        dialog("dex-single", listOf(0f), check = { _, scene -> assertTrue("Does not evolve" in strings(scene)) }) { ctx ->
+        dialog("dex-single", listOf(0f), check = { _, scene -> assertTrue("DOES NOT EVOLVE" in strings(scene)) }) { ctx ->
             GameRepo.state!!.defeatedSpecies += 150
             DexDetail.show(DexPage(ctx, NoHost), gd.sp(150))
         }

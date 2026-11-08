@@ -65,7 +65,7 @@ object DetailSections {
      * [titleLevel]: a second row carries the full level and right-aligned battle changes, open or folded.
      */
     fun section(a: Context, mem: DetailOpen, s: DetailSection, summary: CharSequence?, title: String = s.title, onFirstOpen: (() -> Unit)? = null,
-                titleLevel: Int? = null, boosts: IntArray? = null, forceOpen: Boolean = false, body: () -> View): View {
+                titleLevel: Int? = null, boosts: IntArray? = null, forceOpen: Boolean = false, expandable: Boolean = true, body: () -> View): View {
         val card = LinearLayout(a).apply {
             tag = s
             orientation = LinearLayout.VERTICAL
@@ -91,6 +91,7 @@ object DetailSections {
                     DetailSection.MATCHUPS -> R.drawable.ic_compare
                     DetailSection.TRAINING -> R.drawable.ic_bolt
                     DetailSection.BOND -> R.drawable.ic_heart
+                    DetailSection.HELD_ITEM -> R.drawable.ic_item_bag
                     else -> R.drawable.ic_info
                 })
                 setColorFilter(Ui.c(a, R.color.ag_mauve))
@@ -129,8 +130,10 @@ object DetailSections {
             chevron.rotation = if (open) 90f else 0f
             bar.contentDescription = "${if (titleLevel != null) DetailFormat.levelTitle(title, titleLevel) else title}, ${if (open) "open" else "closed"}"
         }
-        apply(forceOpen || mem.isOpen(s))
-        bar.setOnClickListener {
+        apply(expandable && (forceOpen || mem.isOpen(s)))
+        chevron.visibility = if (expandable) View.VISIBLE else View.GONE
+        if (!expandable) bar.contentDescription = title
+        if (expandable) bar.setOnClickListener {
             // A focused move can open this window without changing the saved fold preference.
             if (holder.visibility == View.VISIBLE && !mem.isOpen(s)) apply(false)
             else apply(mem.toggle(s))

@@ -6,13 +6,13 @@ import com.husarp.ankigo.game.*
 
 /** Shared by every item window, including details and Shop. All mutations go through the saving repository. */
 internal object HeldItemActions {
-    fun buttons(page: GamePage, item: String): View? {
+    fun buttons(page: GamePage, item: String, onChanged: () -> Unit = {}): View? {
         if (Items.def(item)?.kind != ItemKind.HELD || page.state.ownedItemCount(item) == 0) return null
         return LinearLayout(page).apply {
             orientation = LinearLayout.VERTICAL
             addView(ItemCard.actView(page, ItemCard.Act("Take off", page.state.itemHolders(item).isNotEmpty(), "No Pokémon holds this item") {
                 source(page, item) { mon ->
-                    if (mon != null) page.act { g ->
+                    if (mon != null) page.act(beforeReport = { if (it.ok) onChanged() }) { g ->
                         if (g.state.mon(mon.uid)?.heldItem != item) ActionResult(false, "That Pokémon no longer holds this item.")
                         else ItemUse.takeHeld(g.state, mon.uid)
                     }
@@ -21,7 +21,7 @@ internal object HeldItemActions {
             addView(ItemCard.actView(page, ItemCard.Act("Give to another Pokémon", true, null) {
                 source(page, item) { mon ->
                     BoxMonPicker.show(page, "Give ${Items.name(item)} to…", { it.heldItem != item }) { target ->
-                        page.act { g -> ItemUse.giveHeld(g.data, g.state, item, mon?.uid, target.uid) }
+                        page.act(beforeReport = { if (it.ok) onChanged() }) { g -> ItemUse.giveHeld(g.data, g.state, item, mon?.uid, target.uid) }
                     }
                 }
             }), Form.lp(page, 6))

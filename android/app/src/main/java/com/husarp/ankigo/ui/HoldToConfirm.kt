@@ -38,16 +38,14 @@ internal object HoldToConfirm {
         }
         tint(view)
         if (!view.isEnabled) view.alpha = .45f
-        val hintHeight = Ui.dp(ctx, 30)
-        view.minimumHeight = maxOf(view.minimumHeight, Ui.dp(ctx, 56)) + hintHeight
-        if (view is TextView) view.minHeight = maxOf(view.minHeight, Ui.dp(ctx, 56)) + hintHeight
-        view.setPadding(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom + hintHeight)
+        view.minimumHeight = maxOf(view.minimumHeight, Ui.dp(ctx, 56))
+        if (view is TextView) view.minHeight = maxOf(view.minHeight, Ui.dp(ctx, 56))
         val fill = object : Drawable() {
             override fun onLevelChange(level: Int): Boolean { invalidateSelf(); return true }
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
             override fun draw(canvas: Canvas) {
                 val radius = Ui.dp(ctx, 12).toFloat()
-                val bottom = (bounds.bottom - hintHeight).toFloat()
+                val bottom = bounds.bottom.toFloat()
                 paint.color = Ui.c(ctx, R.color.ag_hold_idle)
                 canvas.drawRoundRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bottom, radius, radius, paint)
                 val save = canvas.save()
@@ -55,10 +53,7 @@ internal object HoldToConfirm {
                 paint.color = Ui.c(ctx, R.color.ag_hold_fill)
                 canvas.drawRoundRect(bounds.left.toFloat(), bounds.top.toFloat(), bounds.right.toFloat(), bottom, radius, radius, paint)
                 canvas.restoreToCount(save)
-                paint.color = Ui.c(ctx, R.color.ag_sub0)
-                paint.textSize = 12 * ctx.resources.displayMetrics.scaledDensity
-                paint.textAlign = Paint.Align.CENTER
-                canvas.drawText("Press and hold · 1 second", bounds.exactCenterX(), bounds.bottom - Ui.dp(ctx, 5).toFloat(), paint)
+
             }
             override fun getOutline(outline: Outline) { outline.setRoundRect(bounds, Ui.dp(ctx, 12).toFloat()) }
             override fun setAlpha(alpha: Int) { paint.alpha = alpha }

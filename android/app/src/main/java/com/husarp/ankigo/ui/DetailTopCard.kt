@@ -14,50 +14,34 @@ import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.Species
 
-/**
- * R18-G (PLAN 243B + 239B / 239S1, docs/design/round17-details.html): the grey card right under the HP and XP bars of the Pokémon details.
- * Evolution can fold. Your Pokémon's card holds the Holding row (its item and the Exp. Share) and, under a thin line, the Evolution; the
- * Pokédex entry and the wild Pokémon's window have the Evolution only. Tapping a condition explains it.
- */
+/** Evolution and held-item sections for Pokémon details. */
 internal object DetailTopCard {
-    /** Your Pokémon's card: Holding, then Evolution. [give] = the "Give item" action (null = no Options in this window, so no button). */
     fun forMon(a: Context, data: GameData, state: GameState?, mon: Mon, sp: Species, seen: Set<Int>, compact: Boolean,
-               page: GamePage?, give: (() -> Unit)?, onSpecies: ((Species) -> Unit)?, onEvolved: (() -> Unit)? = null): View =
-        card(a, listOf(holding(a, data, state, mon, page, give), evolution(a, data, sp, seen, compact, onSpecies, state, mon, page, onEvolved)))
+               page: GamePage?, onSpecies: ((Species) -> Unit)?, onEvolved: (() -> Unit)? = null): View =
+        evolution(a, data, sp, seen, compact, onSpecies, state, mon, page, onEvolved)
 
-    /** The Pokédex entry's / wild Pokémon's card: the Evolution only (a species holds nothing). */
     fun evolutionOnly(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?, forceOpen: Boolean = false): View =
-        card(a, listOf(evolution(a, data, sp, seen, compact, onSpecies,
-            state = com.husarp.ankigo.GameRepo.state.takeIf { com.husarp.ankigo.GameRepo.data === data }, forceOpen = forceOpen)))
+        evolution(a, data, sp, seen, compact, onSpecies,
+            state = com.husarp.ankigo.GameRepo.state.takeIf { com.husarp.ankigo.GameRepo.data === data }, forceOpen = forceOpen)
 
-    /** The card with its [parts] one under the other, a thin line between them. */
-    private fun card(a: Context, parts: List<View>): View = LinearLayout(a).apply {
-        tag = DetailSection.EVOLUTION
-        orientation = LinearLayout.VERTICAL
-        background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 14, a)
-        setPadding(Ui.dp(a, 14), 0, Ui.dp(a, 14), 0)
-        parts.forEachIndexed { i, v ->
-            if (i > 0) addView(DetailSections.divider(a), LinearLayout.LayoutParams(-1, 1))
-            addView(v, LinearLayout.LayoutParams(-1, -2))
+    fun heldItem(a: Context, data: GameData, mon: Mon, page: GamePage?): View? {
+        val item = mon.heldItem ?: return null
+        lateinit var section: View
+        section = DetailSections.section(a, DetailSections.memory(a), DetailSection.HELD_ITEM, com.husarp.ankigo.game.Items.name(item)) {
+            LinearLayout(a).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(holdLine(a, HoldingPlan.lines(data, mon, null, null).single(), page))
+                if (page != null) HeldItemActions.buttons(page, item) {
+                    if (mon.heldItem != item) section.visibility = View.GONE
+                }?.let { addView(it, LinearLayout.LayoutParams(-1, -2)) }
+            }
         }
+        return section
     }
 
-    // ---------- Holding ----------
-
-    /** The Holding row: its title at the left (the whole row opens [StatInfo.HOLDING]), one line per thing it holds at the right. */
-    private fun holding(a: Context, data: GameData, state: GameState?, mon: Mon, page: GamePage?, give: (() -> Unit)?): View {
-        val lines = HoldingPlan.lines(data, mon, state?.settings?.xpShareUid, state?.team?.firstOrNull())
-        val things = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        lines.forEach { things.addView(holdLine(a, it, page), LinearLayout.LayoutParams(-1, -2)) }
-        if (lines.isEmpty()) things.addView(nothing(a, HoldingPlan.showGive(lines, give != null), give), LinearLayout.LayoutParams(-1, -2))
-        return LinearLayout(a).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = HoldingPlan.TITLE }, LinearLayout.LayoutParams(Ui.dp(a, 70), -2))
-            addView(things, LinearLayout.LayoutParams(0, -2, 1f))
-            DetailParts.tapRow(this, StatInfo.HOLDING)
-        }
-    }
+    fun expShare(a: Context, data: GameData, state: GameState?, mon: Mon): View? =
+        HoldingPlan.lines(data, mon, state?.settings?.xpShareUid, state?.team?.firstOrNull())
+            .firstOrNull { it.kind == HoldLine.Kind.EXP_SHARE }?.let { holdLine(a, it, null) }
 
     /** One thing it holds: icon, name, the small line under it; the item also has a chevron and opens its item window ([page] null = no window). */
     private fun holdLine(a: Context, line: HoldLine, page: GamePage?): View = LinearLayout(a).apply {
@@ -90,23 +74,6 @@ internal object DetailTopCard {
         } else contentDescription = "${line.name}, ${line.sub}"
     }
 
-    /** "Nothing", and when [showGive] the mauve "Give item" text button (48 dp to touch) at the right. */
-    private fun nothing(a: Context, showGive: Boolean, give: (() -> Unit)?): View = LinearLayout(a).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = Ui.dp(a, DetailFormat.TAP_MIN_DP)
-        addView(Ui.text(a, 14f, 900, R.color.ag_sub0).apply { text = HoldingPlan.NOTHING }, LinearLayout.LayoutParams(0, -2, 1f))
-        if (showGive && give != null) addView(Ui.text(a, 13f, 900, R.color.ag_mauve).apply {
-            text = HoldingPlan.GIVE
-            gravity = Gravity.CENTER
-            minHeight = Ui.dp(a, DetailFormat.TAP_MIN_DP)
-            setPadding(Ui.dp(a, 8), 0, 0, 0)
-            isClickable = true
-            contentDescription = "Give an item to hold"
-            setOnClickListener { give() }
-        }, LinearLayout.LayoutParams(-2, -2))
-    }
-
     /** The item's window, the same as a tap on it in the Bag (its texts; nothing to buy or use here). */
     private fun openItem(page: GamePage, item: String) {
         val w = ItemWindow(page) { }
@@ -120,7 +87,10 @@ internal object DetailTopCard {
      * The collapsible evolution tree; owned Pokémon can choose ready branches from their requirement info.
      */
     private fun evolution(a: Context, data: GameData, sp: Species, seen: Set<Int>, compact: Boolean, onSpecies: ((Species) -> Unit)?, state: GameState? = null, mon: Mon? = null, page: GamePage? = null, onEvolved: (() -> Unit)? = null, forceOpen: Boolean = false): View {
-        return DetailSections.section(a, DetailSections.memory(a), DetailSection.EVOLUTION, null, forceOpen = forceOpen) {
+        val line = EvoLine.of(data, sp)
+        val canEvolve = sp.evolutions.any { data.species.containsKey(it.to) }
+        return DetailSections.section(a, DetailSections.memory(a), DetailSection.EVOLUTION, null,
+            title = if (canEvolve) "Evolution" else "Does not evolve", forceOpen = forceOpen, expandable = canEvolve) {
             LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 val evolve: ((com.husarp.ankigo.game.Evolution) -> Unit)? =
@@ -129,7 +99,7 @@ internal object DetailTopCard {
                             page.act(beforeReport = { result -> if (result.ok) onEvolved?.invoke() }) { g -> g.chooseEvolution(mon.uid, e.to) }
                         }
                     } else null
-                addView(EvolutionRows(a, data, EvoLine.of(data, sp).root, sp, seen, onSpecies, state, mon, evolve), LinearLayout.LayoutParams(-1, -2))
+                addView(EvolutionRows(a, data, line.root, sp, seen, onSpecies, state, mon, evolve), LinearLayout.LayoutParams(-1, -2))
             }
         }
     }

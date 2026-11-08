@@ -51,8 +51,8 @@ class EvoLineTest {
         val line = EvoLine.of(branched, branched.sp(1001))
         assertEquals(null, line.root.via)
         val mouse = line.root.children.single()
-        assertEquals("Lv 16", EvoLine.method(branched, mouse.via!!))
-        assertEquals(listOf("Thunder Stone", "Level 3 Bond, night"), mouse.children.map { EvoLine.method(branched, it.via!!) })
+        assertEquals("Level 16", EvoLine.method(branched, mouse.via!!))
+        assertEquals(listOf("Use Thunder Stone", "Level 3 Bond, night"), mouse.children.map { EvoLine.method(branched, it.via!!) })
     }
 
     @Test fun aSpeciesWithoutALineIsStandalone() {
@@ -96,8 +96,8 @@ class EvoLineTest {
     @Test fun methodTexts() {
         val d = TestData.data(emptyList())
         assertEquals("Level up", EvoLine.method(d, Evolution(1, EvoKind.LEVEL)))
-        assertEquals("Lv 30, day", EvoLine.method(d, Evolution(1, EvoKind.LEVEL, level = 30, time = "day")))
-        assertEquals("Linking Cord", EvoLine.method(d, Evolution(1, EvoKind.TRADE)))
+        assertEquals("Level 30, day", EvoLine.method(d, Evolution(1, EvoKind.LEVEL, level = 30, time = "day")))
+        assertEquals("Use Linking Cord", EvoLine.method(d, Evolution(1, EvoKind.TRADE)))
         assertEquals("knows Mimic", EvoLine.method(d, Evolution(1, EvoKind.LEVEL_MOVE, move = "mimic")))
     }
 

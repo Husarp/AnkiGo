@@ -642,7 +642,7 @@ object ItemUse {
             ItemKind.EVOLUTION -> {
                 val mon = target(state, targetUid, false) ?: return ActionResult(false, "Choose a Pokémon first.")
                 if (data.sp(mon.species).evolutions.any { Progression.evolutionItem(it) == item && !Bond.allows(mon, it) })
-                    return ActionResult(false, "${mon.name} needs Level 2 Bond before evolving.")
+                    return ActionResult(false, "Level 2 Bond required before evolving ${mon.name}.")
                 val evo = (if (evolutionTo == null) Progression.itemEvolution(data, mon, item, now, state.activeHeldItem(mon)) else
                     Progression.readyEvolutions(data, state, mon, now).firstOrNull { it.to == evolutionTo && Progression.evolutionItem(it) == item }) ?: return ActionResult(
                     false,
