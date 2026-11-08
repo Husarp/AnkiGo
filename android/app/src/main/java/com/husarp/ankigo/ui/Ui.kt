@@ -348,7 +348,7 @@ object Ui {
  */
 class Chip(ctx: Context, @DrawableRes iconRes: Int, @ColorRes toneRes: Int, customIcon: View? = null, plain: Boolean = false) : LinearLayout(ctx) {
     private val icon: View = customIcon?.apply {
-        // 16 dp (the Noto emoji has inner padding, so 13 looks small); the -2 dp margins keep the chip as tall as with 13
+        // 16 dp streak flame; the -2 dp margins keep the chip as tall as with 13
         layoutParams = LayoutParams(Ui.dp(ctx, 16), Ui.dp(ctx, 16)).also { it.topMargin = -Ui.dp(ctx, 2); it.bottomMargin = -Ui.dp(ctx, 2); it.marginStart = -Ui.dp(ctx, 1) }
     } ?: ImageView(ctx).apply {
         setImageResource(iconRes)

@@ -1463,7 +1463,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 "Game rules from Ankimon (GPL-3). Font: Nunito (SIL OFL). Some icons: Material Symbols by Google (Apache 2.0). Secret achievement icons: Tabler Icons © 2020–2026 Paweł Kuna (MIT, https://tabler.io/icons). " +
                 "Bond artwork: filling Love Ball from PokéAPI sprites (© The Pokémon Company), recoloured and enlarged for AnkiGo. Source terms: Bond artwork licence below. " +
                 "Attack effects: Kenney Particle Pack (CC0) and Pokémon Showdown effect images (CC0); Ember and Vine Whip pixel art drawn for AnkiGo. " +
-                "Streak flame: animated Noto Emoji by Google (CC BY 4.0, resized; animation modified for AnkiGo). " +
+                "Streak flame: Phosphor Fire by Phosphor Icons (MIT, https://phosphoricons.com). " +
                 "Battle backgrounds: Pokémon Showdown's (art by Smogon artists) and scenes made for AnkiGo, included in the app or downloaded when needed. " +
                 "Pictures, cries and game data come from AnkiGo's own copy on GitHub first and from the original sites second.", 12, R.color.ag_sub0), Form.lp(this, 6))
         box.addView(Form.row(this, "Bond artwork licence", "PokéAPI · Love Ball", null) {
