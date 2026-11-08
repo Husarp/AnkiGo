@@ -435,7 +435,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         addView(ImageView(this@StatsPage).apply { setImageResource(icon); setColorFilter(c(tone)) }, FrameLayout.LayoutParams(dp(iconDp), dp(iconDp), Gravity.CENTER))
     }
 
-    /** Period, deck and bar-size chips. A chip that doesn't apply to this metric is dimmed (the deck one) or left out (period / bar size of a picture of now). */
+    /** Period, deck and bar-size chips. Options that don't apply to this metric are left out. */
     private fun filterChips(series: ChartSeries): View {
         val row = StatsSheets.FlowLayout(this)
         if (metric == ChartMetric.BUTTONS) row.addView(note("AnkiGo answers"))
@@ -453,7 +453,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 }
             })
         }
-        row.addView(chip(if (series.deckApplies) deck ?: "All decks" else "All decks", series.deckApplies, 150) { anchor ->
+        if (series.deckApplies) row.addView(chip(deck ?: "All decks", true, 150) { anchor ->
             val menu = AppMenu(anchor).header("Deck")
             menu.item(0, "All decks", if (deck == null) R.drawable.ic_check else R.drawable.ic_blank)
             for ((i, d) in decks.withIndex()) menu.item(i + 1, d, if (d == deck) R.drawable.ic_check else R.drawable.ic_blank)

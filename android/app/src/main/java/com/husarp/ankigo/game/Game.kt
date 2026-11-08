@@ -466,7 +466,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 val ab = SimpleView.of(data, battle, main).ability(true)
                 if (ab == "ballfetch" && main.heldItem == null && battle.field.player.putIfAbsent("ab.ballfetch", 1) == null) {
                     Economy.give(state, ball)
-                    events += GameEvent.Info("Ball Fetch returned the ${Items.name(ball)}!")
+                    events += GameEvent.Info("Ball Fetch returned the ${Items.name(ball)}!", main.uid)
                 }
             }
             events += GameEvent.Info("${battle.wild.name} broke free!")   // the ball opens (its own animation and sound) ...
@@ -516,7 +516,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         state.cash = Tuning.START_CASH
         state.day = dayKey()
         Shop.ensureToday(data, state)
-        val events = mutableListOf<GameEvent>(GameEvent.Info("${mon.name} is your partner!"))
+        val events = mutableListOf<GameEvent>(GameEvent.Info("${mon.name} is your partner!", mon.uid))
         events += ensureEncounter()
         Achievements.check(state, data, now, events, silent = true) // every row is looked at once now: later tiers come with their celebration
         return events

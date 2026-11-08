@@ -24,11 +24,11 @@ class R25CAchievementsTest {
         val st = GameRepo.state!!
         st.achTiers.clear(); st.badges.clear()
         st.achTiers["answers"] = mutableListOf(123L)
-        st.achTiers["catches"] = mutableListOf(124L)
+        st.achTiers["evolutions"] = mutableListOf(124L)
         assertTrue(AchievementNotice.unseen(ctx, "answers"))
         AchievementNotice.seen(ctx, "answers")
         assertFalse(AchievementNotice.unseen(ctx, "answers"))
-        assertTrue(AchievementNotice.unseen(ctx, "catches"))
+        assertTrue(AchievementNotice.unseen(ctx, "evolutions"))
         st.achTiers["answers"]!!.add(125L)
         assertTrue(AchievementNotice.unseen(ctx, "answers"))
         AnkiStatsStore.enabled = false
@@ -52,7 +52,7 @@ class R25CAchievementsTest {
 
             page.achievementsView().open("answers"); call(page, "render")
             assertFalse(AchievementNotice.unseen(ctx, "answers"))
-            assertTrue(AchievementNotice.unseen(ctx, "catches"))
+            assertTrue(AchievementNotice.unseen(ctx, "evolutions"))
             assertFalse(descendants(screen).filterIsInstance<TextView>().any { it.text.contains("Counted since the update") })
             paparazzi.snapshot(screen, "r25c-read-detail")
             page.achievementsView().close()

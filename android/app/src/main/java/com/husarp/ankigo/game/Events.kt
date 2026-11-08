@@ -172,7 +172,7 @@ sealed class GameEvent {
     data class SwitchQueued(val uid: String?, val name: String) : GameEvent()
 
     /** Generic message for item use etc. */
-    data class Info(val text: String) : GameEvent()
+    data class Info(val text: String, val uid: String? = null) : GameEvent()
 }
 
 /** Result of a between-battle action (shop, bag, team). */

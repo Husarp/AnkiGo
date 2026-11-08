@@ -130,7 +130,7 @@ class R607Shots {
             v
         }
         paparazzi.shootPage("r607-ach-three", listOf(Variants.PHONE, SMALL)) { ctx ->
-            val v = dim(ctx, AchievementPopup.layer(ctx, listOf(one("streak-days", 2), one("catches", 1), one("answers", 3)), {}, {}))
+            val v = dim(ctx, AchievementPopup.layer(ctx, listOf(one("streak-days", 2), one("evolutions", 1), one("answers", 3)), {}, {}))
             assertTrue(texts(v).toString(), "3 achievements unlocked" in texts(v))
             v
         }

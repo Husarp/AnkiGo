@@ -34,7 +34,7 @@ object Bond {
         mon.bondHalf = if (mon.bondPoints == MAX_POINTS) 0 else halves % 2
         if (mon.bondPoints == MAX_POINTS) mon.natureBondCarry = 0
         val after = level(mon.bondPoints)
-        if (after > before) events += GameEvent.Info("Bond grew! ${mon.shownName} reached Level $after. ${unlock(after)}")
+        if (after > before) events += GameEvent.Info("Bond grew! ${mon.shownName} reached Level $after. ${unlock(after)}", mon.uid)
     }
 
     fun unlock(level: Int): String = when (level) {

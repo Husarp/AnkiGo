@@ -17,8 +17,8 @@ class PopupQueueTest {
     }
 
     @Test fun oneBatchWithBothFillsBothQueues() {
-        AchievementPopup.offer(listOf(GameEvent.ItemFound("potion", 1), GameEvent.AchievementReached("catches", 1, "Pokémon caught", "Rare")))
-        assertEquals(listOf("catches"), AchievementPopup.waiting().map { it.rowId })
+        AchievementPopup.offer(listOf(GameEvent.ItemFound("potion", 1), GameEvent.AchievementReached("evolutions", 1, "Evolutions", "Rare")))
+        assertEquals(listOf("evolutions"), AchievementPopup.waiting().map { it.rowId })
         assertEquals(listOf("potion"), AchievementPopup.waitingItems().map { it.item })
     }
 

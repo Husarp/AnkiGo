@@ -36,6 +36,24 @@ class WildInfoTest {
         assertFalse(fields.any { it in setOf("ivs", "evs", "nature", "ability", "heldItem") })
     }
 
+    @Test fun defeatedCaughtAndOwnedSpeciesRevealAllSixStats() {
+        for (knowledge in listOf("defeated", "caught", "owned")) {
+            val state = TestData.state(data)
+            when (knowledge) {
+                "defeated" -> state.defeatedSpecies += 92
+                "caught" -> state.caught += 92
+                else -> state.mons += TestData.mon(data, 92, 30, uid = "owned")
+            }
+            val b = battle()
+            val info = WildInfo.of(data, state, b, emptySet())!!
+            assertTrue(knowledge, info.known)
+            assertEquals(data.sp(92).base, info.base)
+            assertEquals(WildInfo.statsAt(data.sp(92).base, b.wild.level), info.stats)
+            assertEquals(TypeMatchups.of(data.sp(92).types), info.matchups)
+            assertEquals(b.wild.moves.toSet(), info.moves.map { it.id }.toSet())
+        }
+    }
+
     @Test fun unusedMovesAreOmitted() {
         val i = WildInfo.of(data, TestData.state(data), battle(), setOf("Lick"))!!
         assertEquals(1, i.moves.size)

@@ -686,19 +686,19 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
      * ([ToastKind.of]); `{{...}}` in [text] turns mauve. [pop] false = no sliding. Lines about a move or one side are not shown here (the
      * halves and the arena show them): they go to [sayBattle].
      */
-    fun setLog(kind: LogKind, pill: String, text: String, pop: Boolean = true) {
+    fun setLog(kind: LogKind, pill: String, text: String, pop: Boolean = true, uid: String? = null) {
         val k = ToastKind.of(kind, pill, text)
         val (main, sub) = ToastText.split(k, text)
-        toast(k, main, sub, pop)
+        toast(k, main, sub, pop, uid)
     }
 
     /**
-     * R19-H: a small card toast, top-right of the arena, sliding in from the right edge for about 2.5 s; a tap closes it. One at a time:
+     * R19-H: a small card toast, top-right of the arena, sliding in from the right edge for about 2.5 s; a tap opens the subject Pokémon’s details when supplied, otherwise closes it. One at a time:
      * more wait in a short row, an equal one within a few seconds is merged ([ToastQueue]). [sub] = a small second line (only where there is
      * room). `{{...}}` in [text] turns mauve. Other code (a switch's free hit ...) calls this with a [ToastKind].
      */
-    fun toast(kind: ToastKind, text: String, sub: String? = null, pop: Boolean = true) {
-        toasts.show(kind, text, sub, pop)
+    fun toast(kind: ToastKind, text: String, sub: String? = null, pop: Boolean = true, uid: String? = null) {
+        toasts.show(kind, text, sub, pop, uid)
         refreshSwitchNotice()
     }
 

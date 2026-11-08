@@ -47,9 +47,9 @@ class StarterAchievementTest {
         val (_, s) = fresh()
         repeat(9) { i -> s.mons += TestData.mon(data, 19, 10, uid = "c$i") }
         assertEquals(9L, v(s, Metric.CATCHES))
-        assertEquals(0, Achievements.reachedTiers(AchievementTable.ROWS.first { it.id == "catches" }, s, data))
+        assertTrue(AchievementTable.row("catches") == null)
         s.mons += TestData.mon(data, 19, 10, uid = "c9")
-        assertEquals(1, Achievements.reachedTiers(AchievementTable.ROWS.first { it.id == "catches" }, s, data))
+        assertEquals(10L, v(s, Metric.CATCHES))
     }
 
     @Test fun aLaterCatchOfTheStarterSpeciesCountsAndSoDoesMeetingIt() {

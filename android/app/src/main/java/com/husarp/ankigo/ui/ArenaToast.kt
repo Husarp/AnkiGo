@@ -24,7 +24,7 @@ import kotlin.math.max
  * R19-H (PLAN 257, pick A "Card toast", from the LEFT): the old whole-bar lines (Played fast, New card OK, Redo after undo, Undo in
  * AnkiDroid, Caught up, Daily gift, Item found, Badge, Trainer level, New day, Daily goal / Info lines, Switching after this card) are
  * small cards at the top-right of the arena, above your Pokémon: they slide in from the left edge, stay about 2.5 s, slide out; a tap
- * closes one. The action bar keeps its segments. Everything here that is not a View is pure (unit-tested): [ToastKind], [ToastText],
+ * opens the subject Pokémon’s details when supplied, otherwise closes it. The action bar keeps its segments. Everything here that is not a View is pure (unit-tested): [ToastKind], [ToastText],
  * [ToastQueue], [ToastLook], [ToastSpot]. The panel raises one with [BattlePanelView.toast] (or [BattlePanelView.setLog], which maps
  * its kind / pill to a [ToastKind]).
  */
@@ -105,8 +105,8 @@ object ToastText {
  */
 class ToastQueue(private val maxPending: Int = MAX_PENDING) {
     /** [pop] false = it comes and goes without sliding. */
-    data class Item(val kind: ToastKind, val text: String, val sub: String? = null, val pop: Boolean = true) {
-        val key: String get() = kind.name + "|" + text
+    data class Item(val kind: ToastKind, val text: String, val sub: String? = null, val pop: Boolean = true, val uid: String? = null) {
+        val key: String get() = kind.name + "|" + text + (uid?.let { "|$it" } ?: "")
     }
 
     enum class Offer { SHOW, QUEUED, REPLACED, MERGED }
@@ -377,8 +377,8 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
     internal fun pending(): List<ToastQueue.Item> = queue.pending()
 
     /** Raises a toast; returns what the queue did with it. */
-    fun show(kind: ToastKind, text: String, sub: String? = null, pop: Boolean = true): ToastQueue.Offer {
-        val item = ToastQueue.Item(kind, text, sub, pop)
+    fun show(kind: ToastKind, text: String, sub: String? = null, pop: Boolean = true, uid: String? = null): ToastQueue.Offer {
+        val item = ToastQueue.Item(kind, text, sub, pop, uid)
         val offer = queue.offer(item, clock())
         when (offer) {
             ToastQueue.Offer.SHOW -> present(item, resume = false)
@@ -471,7 +471,10 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
         val top = area.top + spot.top
         addView(c, LayoutParams(c.measuredWidth, c.measuredHeight, Gravity.TOP or Gravity.START).also { it.leftMargin = cardLeft; it.topMargin = top })
         c.layout(cardLeft, top, cardLeft + c.measuredWidth, top + c.measuredHeight)   // we may be inside a layout pass: this card would wait for the next one
-        c.setOnClickListener { dismiss() }
+        c.setOnClickListener {
+            dismiss()
+            item.uid?.let { BattleDetails.show(context, it) }
+        }
         card = c
         onChanged()
         leaving = false

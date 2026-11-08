@@ -263,7 +263,7 @@ class R4FixBShots {
 
     @Test fun manyAchievementsOfferSeeItForTheFirstAndNice() {
         val c = ctx()
-        val items = listOf(one("defeats", 2), one("catches", 1), one("answers", 3))
+        val items = listOf(one("defeats", 2), one("evolutions", 1), one("answers", 3))
         var nice = 0; var seen = "none"
         val layer = com.husarp.ankigo.ui.AchievementPopup.layer(c, items, onNice = { nice++ }, onSee = { seen = it ?: "list" })
         val t = texts(layer)
@@ -278,7 +278,7 @@ class R4FixBShots {
 
     @Test fun manyAchievementsShots() {
         paparazzi.shoot("r4fixb-popup-many", listOf(Size.PHONE, Size.FLOAT, Size.SPLIT)) { c ->
-            val layer = com.husarp.ankigo.ui.AchievementPopup.layer(c, listOf(one("defeats", 2), one("catches", 1), one("answers", 3)), onNice = {}, onSee = {})
+            val layer = com.husarp.ankigo.ui.AchievementPopup.layer(c, listOf(one("defeats", 2), one("evolutions", 1), one("answers", 3)), onNice = {}, onSee = {})
             FrameLayout(c).apply { addView(layer, FrameLayout.LayoutParams(-1, -1)); setBackgroundColor(android.graphics.Color.argb(150, 0, 0, 0)) }
         }
     }

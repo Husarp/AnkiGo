@@ -7,6 +7,7 @@ import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.TestData
 import com.husarp.ankigo.game.save.SaveCodec
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,9 +37,12 @@ class AchievementsAnkimonTest {
 
     @Test fun anImportReachesTiersWithDatesAndNoEvents() {
         val s = looked()
-        assertEquals(emptyList<Long>(), s.achTiers["catches"])
-        merge(s, save(12, level = 30)) // 13 Pokémon owned: "catches" Common (10); their 12 * 30 levels were not gained here (R13 Part F)
-        assertEquals(listOf(NOW), s.achTiers["catches"])
+        assertFalse(s.achTiers.containsKey("catches"))
+        s.achTiers["catches"] = mutableListOf(NOW - 5000) // legacy progress is preserved, never extended
+        assertEquals(emptyList<Long>(), s.achTiers["highest-level"])
+        merge(s, save(12, level = 30)) // Highest level Common (25); the imported levels and XP were not earned here.
+        assertEquals(listOf(NOW - 5000), s.achTiers["catches"])
+        assertEquals(listOf(NOW), s.achTiers["highest-level"])
         assertEquals(emptyList<Long>(), s.achTiers["total-levels"])
         assertEquals(emptyList<Long>(), s.achTiers["total-xp"])
         val later = mutableListOf<GameEvent>()

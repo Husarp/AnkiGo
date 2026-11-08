@@ -68,11 +68,11 @@ class R4V2Shots {
         st.achTiers.clear(); st.badgeAt.clear(); st.achSince = 0
         Achievements.check(st, d, NOW - 60 * DAY, mutableListOf(), silent = true) // every reached tier dated "the start of tracking"
         // a few real dates so the sheet shows both kinds
-        st.achTiers["catches"] = mutableListOf(NOW - 70 * DAY, NOW - 40 * DAY).also { it.addAll(st.achTiers["catches"]!!.drop(2)) }
+        st.achTiers["defeats"] = mutableListOf(NOW - 70 * DAY, NOW - 40 * DAY).also { it.addAll(st.achTiers["defeats"]!!.drop(2)) }
         st.achTiers["answers"]?.let { if (it.size > 2) it[2] = NOW - 3 * DAY }
         st.achTiers["dex-caught"]?.let { if (it.size > 1) it[1] = NOW - 9 * DAY }
         st.achTiers["first-catch"] = mutableListOf(NOW - 80 * DAY)
-        st.achInferred.removeAll(listOf("catches/0", "catches/1", "answers/2", "dex-caught/1", "first-catch/0").toSet()) // R4 fix A3: these dates are real ones
+        st.achInferred.removeAll(listOf("defeats/0", "defeats/1", "answers/2", "dex-caught/1", "first-catch/0").toSet()) // R4 fix A3: these dates are real ones
     }
 
     private fun page(ctx: Context, section: StatsSection = StatsSection.ACHIEVEMENTS, open: String? = null, filter: AchFilter = AchFilter.ALL): View {
@@ -167,7 +167,7 @@ class R4V2Shots {
 
     @Test fun pageInTinyAndLandscapeWindows() {
         paparazzi.shoot("r4v2-page", listOf(Size.SPLIT_TINY, Size.LAND, Size.TABLET)) { ctx -> page(ctx) }
-        paparazzi.shoot("r4v2-detail-catches", listOf(Size.SPLIT_TINY, Size.LAND, Size.TABLET)) { ctx -> page(ctx, open = "catches") }
+        paparazzi.shoot("r4v2-detail-catches", listOf(Size.SPLIT_TINY, Size.LAND, Size.TABLET)) { ctx -> page(ctx, open = "defeats") }
     }
 
     @Test fun filters() {
@@ -210,10 +210,10 @@ class R4V2Shots {
 
     @Test fun detailCurrentTier() {
         paparazzi.shootPage("r4v2-detail-catches", listOf(Variants.PHONE, Variants.SPLIT, SMALL)) { ctx ->
-            val screen = page(ctx, open = "catches")
+            val screen = page(ctx, open = "defeats")
             val t = texts(screen)
-            assertTrue(t.toString(), "Pokémon caught" in t)
-            assertTrue("Common · 10" in t && "Rare · 100" in t && "Epic · 500" in t)
+            assertTrue(t.toString(), "Battles won" in t)
+            assertTrue("Common · 10" in t && "Rare · 100" in t && "Epic · 1,000" in t)
             assertTrue("Reached 4 Aug 2026" in t || t.any { it.startsWith("Reached ") })
             assertTrue(t.any { it.contains("to go") })
             assertTrue("next after Epic" in t && "locked until Legendary" in t)
@@ -294,7 +294,7 @@ class R4V2Shots {
                 call(p, "render")
             }
             assertFalse("Common · 10" in texts(screen))
-            tapText("Pokémon caught")
+            tapText("Battles won")
             assertTrue("Common · 10" in texts(screen))
             screen
         }
@@ -327,7 +327,7 @@ class R4V2Shots {
     @Test fun popupSingleEveryTier() {
         paparazzi.shootPage("r4v2-popup-epic", listOf(Variants.PHONE, SMALL)) { ctx -> scene(ctx, listOf(one("defeats", 2))) }
         paparazzi.shoot("r4v2-popup-epic", listOf(Size.SPLIT_TINY, Size.LAND, Size.TABLET)) { ctx -> scene(ctx, listOf(one("defeats", 2))) }
-        for (t in listOf(0, 1, 3, 4)) paparazzi.shootPage("r4v2-popup-tier$t", listOf(SMALL)) { ctx -> scene(ctx, listOf(one("catches", t))) }
+        for (t in listOf(0, 1, 3, 4)) paparazzi.shootPage("r4v2-popup-tier$t", listOf(SMALL)) { ctx -> scene(ctx, listOf(one("defeats", t))) }
         paparazzi.shootPage("r4v2-popup-oneoff", listOf(SMALL), themes = listOf(Theme.LIGHT)) { ctx ->
             val v = scene(ctx, listOf(AchCelebration("first-catch", "First Pokémon caught", -1, "Special", null)))
             assertTrue(texts(v).toString(), "Badge!" in texts(v) && "Nice" in texts(v) && "See it" in texts(v))
@@ -358,7 +358,7 @@ class R4V2Shots {
 
     @Test fun popupMany() {
         paparazzi.shootPage("r4v2-popup-many", listOf(Variants.PHONE, SMALL)) { ctx ->
-            val items = listOf(one("defeats", 2), one("catches", 1), one("answers", 3), AchCelebration("first-evolution", "Evolved a Pokémon", -1, "Special", null), one("shinies", 0))
+            val items = listOf(one("defeats", 2), one("defeats", 1), one("answers", 3), AchCelebration("first-evolution", "Evolved a Pokémon", -1, "Special", null), one("shinies", 0))
             val v = scene(ctx, items)
             assertTrue("5 achievements unlocked" in texts(v))
             assertTrue("See it" in texts(v) && "Nice" in texts(v))
@@ -366,28 +366,28 @@ class R4V2Shots {
             v
         }
         paparazzi.shoot("r4v2-popup-many", listOf(Size.SPLIT_TINY)) { ctx ->
-            scene(ctx, listOf(one("defeats", 2), one("catches", 1), one("answers", 3), AchCelebration("first-evolution", "Evolved a Pokémon", -1, "Special", null)))
+            scene(ctx, listOf(one("defeats", 2), one("defeats", 1), one("answers", 3), AchCelebration("first-evolution", "Evolved a Pokémon", -1, "Special", null)))
         }
-        paparazzi.shootPage("r4v2-popup-two", listOf(SMALL), themes = listOf(Theme.LIGHT)) { ctx -> scene(ctx, listOf(one("defeats", 2), one("catches", 1))) }
+        paparazzi.shootPage("r4v2-popup-two", listOf(SMALL), themes = listOf(Theme.LIGHT)) { ctx -> scene(ctx, listOf(one("defeats", 2), one("defeats", 1))) }
     }
 
     // ---------- the hook ----------
 
     @Test fun eventsAreQueuedUntilAScreenIsInFront() {
         AchievementPopup.reset()
-        AchievementPopup.offer(listOf(GameEvent.AchievementReached("catches", 1, "Pokémon caught", "Rare"), GameEvent.BadgeEarned(7, "First Pokémon caught"), GameEvent.BadgeEarned(3, "x")))
-        assertEquals(listOf("catches", "first-catch"), AchievementPopup.waiting().map { it.rowId })
-        AchievementPopup.offer(listOf(GameEvent.AchievementReached("catches", 1, "Pokémon caught", "Rare"))) // already waiting: not twice
+        AchievementPopup.offer(listOf(GameEvent.AchievementReached("defeats", 1, "Battles won", "Rare"), GameEvent.BadgeEarned(7, "First Pokémon caught"), GameEvent.BadgeEarned(3, "x")))
+        assertEquals(listOf("defeats", "first-catch"), AchievementPopup.waiting().map { it.rowId })
+        AchievementPopup.offer(listOf(GameEvent.AchievementReached("defeats", 1, "Battles won", "Rare"))) // already waiting: not twice
         assertEquals(2, AchievementPopup.waiting().size)
         AchievementPopup.offer(listOf(GameEvent.Info("nothing"))); assertEquals(2, AchievementPopup.waiting().size)
     }
 
     @Test fun seeItAsksForTheAchievementsTabWithTheId() {
         val ctx = Shots.files(paparazzi.context)
-        val i = Nav.achievementIntent(ctx, "catches")
+        val i = Nav.achievementIntent(ctx, "defeats")
         assertEquals(StatsActivity::class.java.name, i.component?.className)
         assertEquals("ACHIEVEMENTS", i.getStringExtra(StatsActivity.EXTRA_SECTION))
-        assertEquals("catches", i.getStringExtra(Nav.EXTRA_ACHIEVEMENT))
+        assertEquals("defeats", i.getStringExtra(Nav.EXTRA_ACHIEVEMENT))
         assertFalse(Nav.achievementIntent(ctx, null).hasExtra(Nav.EXTRA_ACHIEVEMENT))
     }
 }

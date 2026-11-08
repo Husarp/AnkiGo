@@ -75,7 +75,7 @@ class R29CWindowShots {
                 use.dismiss()
 
                 val achievement = AchievementDetail.layer(ctx,
-                    Achievements.view(state, data).first { it.id == "catches" }, state.achSince, ZoneId.of("UTC")) {}
+                    Achievements.view(state, data).first { it.id == "evolutions" }, state.achSince, ZoneId.of("UTC")) {}
                 paparazzi.snapshot(achievement, "c-achievement-$suffix")
                 fits(achievement)
                 assertFalse(all(achievement).filterIsInstance<TextView>().any {
@@ -111,7 +111,7 @@ class R29CWindowShots {
         FakeGame.install(ctx)
         val page = StatsPage(ctx, NoHost, StatsSection.ACHIEVEMENTS)
         val screen = pageScreen(ctx, page)
-        page.openAchievement("catches")
+        page.openAchievement("evolutions")
         val render = StatsPage::class.java.getDeclaredMethod("render").apply { isAccessible = true }
         render.invoke(page)
         paparazzi.snapshot(screen, "c-achievement-before-return")
