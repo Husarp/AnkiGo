@@ -40,12 +40,12 @@ object Ui {
     fun onAccent(ctx: Context): Int = AppDialogRules.onFill(c(ctx, R.color.ag_mauve), c(ctx, R.color.ag_crust), TypeInk::contrast)
 
     /** Coloured caps with a bare section icon, shared by page and sheet headings. */
-    fun decorateHeading(view: TextView, title: String) {
+    fun decorateHeading(view: TextView, title: String, iconRes: Int? = null) {
         val ctx = view.context
         view.text = title.uppercase(java.util.Locale.ROOT)
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         view.setTextColor(c(ctx, R.color.ag_mauve))
-        val icon = when {
+        val icon = iconRes ?: when {
             title.contains("sound", true) -> R.drawable.ic_sound
             title.contains("stat", true) -> R.drawable.ic_stats
             title.contains("type", true) || title.contains("filter", true) -> R.drawable.ic_filter

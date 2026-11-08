@@ -67,7 +67,7 @@ internal object StatsSheets {
 
         val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         for ((group, metrics) in ChartMetric.menu) {
-            body.addView(Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply { Ui.decorateHeading(this, group.label); letterSpacing = 0.06f },
+            body.addView(Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply { Ui.decorateHeading(this, group.label, when (group.label) { "Study" -> R.drawable.ic_study; "Game" -> R.drawable.ic_game; "Collection" -> R.drawable.ic_dex; else -> null }); letterSpacing = 0.06f },
                 LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10); it.bottomMargin = Ui.dp(ctx, 2) })
             val flow = FlowLayout(ctx)
             for (m in metrics) flow.addView(chip(ctx, m, m == current, onPick))

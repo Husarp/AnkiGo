@@ -89,7 +89,8 @@ object DetailSections {
                     DetailSection.STATS -> R.drawable.ic_stats
                     DetailSection.MOVES -> R.drawable.ic_swords
                     DetailSection.MATCHUPS -> R.drawable.ic_compare
-                    DetailSection.TRAINING -> R.drawable.ic_bolt
+                    DetailSection.TRAINING -> R.drawable.ic_stats
+                    DetailSection.EVOLUTION -> R.drawable.ic_evolve
                     DetailSection.BOND -> R.drawable.ic_heart
                     DetailSection.HELD_ITEM -> R.drawable.ic_item_bag
                     else -> R.drawable.ic_info
@@ -183,7 +184,7 @@ object DetailSections {
         TagKind.CAN_EVOLVE -> R.drawable.ic_evolve
         TagKind.NEW -> R.drawable.ic_ach_sparkle
         TagKind.SHINY -> R.drawable.ic_star
-        TagKind.REGIONAL -> R.drawable.ic_flag
+        TagKind.REGIONAL -> R.drawable.ic_dex
         TagKind.HELD -> R.drawable.ic_star // never drawn: a held item shows its own icon
     }
 
@@ -221,20 +222,11 @@ object DetailSections {
             addView(DetailParts.statRow(a, s, stats[s], DetailMath.fraction(stats[s], max), 0, sp.base[s], compact, wholeRow = true, stage = if (s == Stat.HP) 0 else boosts?.getOrNull(s.ordinal - 1) ?: 0))
         }
         addView(DetailParts.totalRow(a, stats.total, sp.base.total, wholeRow = true))
-        if (nature != null) addView(Ui.text(a, 12f, 700, R.color.ag_sub1).apply {
-            val line = android.text.SpannableStringBuilder("Nature: ${nature.label}")
-            fun part(text: String, color: Int) {
-                val start = line.length; line.append(text)
-                line.setSpan(android.text.style.ForegroundColorSpan(Ui.c(a, color)), start, line.length, 0)
-            }
-            if (nature.plus == null || nature.minus == null) line.append(" (no change)").append(com.husarp.ankigo.game.NaturePerks.description(nature)?.let { " · $it" } ?: "")
-            else {
-                fun short(s: Stat) = when (s) { Stat.ATK -> "Atk"; Stat.DEF -> "Def"; Stat.SPE -> "Spe"; else -> DetailMath.statName(s) }
-                part("  ▲ ${short(nature.plus)} +10%", R.color.ag_green)
-                part("   ▼ ${short(nature.minus)} −10%", R.color.ag_red)
-            }
-            text = line
-            setPadding(0, Ui.dp(a, 8), 0, 0)
+        if (nature != null) addView(LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, Ui.dp(a, 10), 0, 0)
+            addView(Ui.text(a, 12f, 700, R.color.ag_sub1).apply { text = "Nature: ${nature.label}" })
+            addView(NatureChanges.line(a, nature), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
         })
     }
 
@@ -467,7 +459,10 @@ object DetailSections {
     /** Nature (+ what it does), IVs, EVs of one of your Pokémon (R18-G: the held item is in the Holding row under the bars now). */
     fun training(a: Context, mon: Mon, compact: Boolean): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(fact(a, "Nature", StatInfo.NATURE, mon.nature.label, DetailMath.natureEffect(mon.nature), compact))
+        col.addView(fact(a, "Nature", StatInfo.NATURE, mon.nature.label, null, compact).also { row ->
+            val values = (row as LinearLayout).getChildAt(1) as LinearLayout
+            values.addView(NatureChanges.line(a, mon.nature), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+        })
         col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
         col.addView(fact(a, "IVs", StatInfo.IV, DetailFormat.ivTotal(mon.ivs), DetailFormat.perStat(mon.ivs), compact))
         col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))

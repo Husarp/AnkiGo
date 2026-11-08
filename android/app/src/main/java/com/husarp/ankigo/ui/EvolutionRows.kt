@@ -128,10 +128,11 @@ internal class EvolutionRows(
                 minimumHeight = Ui.dp(a, 40)
                 setPadding(Ui.dp(a, 6), Ui.dp(a, 5), Ui.dp(a, 6), Ui.dp(a, 5))
             }
-            if (met) condition.addView(Ui.text(a, 16f, 900, R.color.ag_green).apply {
-                text = "↑"
-                contentDescription = "Ready to evolve"
-            }, LayoutParams(Ui.dp(a, 20), -2))
+            condition.addView(ImageView(a).apply {
+                setImageResource(R.drawable.ic_evolve)
+                setColorFilter(Ui.c(a, R.color.ag_green))
+                contentDescription = if (met) "Ready to evolve" else "Evolution requirements"
+            }, LayoutParams(Ui.dp(a, 18), Ui.dp(a, 18)))
             val item = Progression.evolutionItem(e)
             if (item != null) condition.addView(ImageView(a).apply {
                 Ui.itemIcon(a, item, this)

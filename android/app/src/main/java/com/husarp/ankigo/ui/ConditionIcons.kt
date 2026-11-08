@@ -106,6 +106,6 @@ internal object ConditionIcons {
         "bide", "mp.bide" -> R.drawable.ic_condition_mp_bide
         "mp.rollout" -> R.drawable.ic_condition_mp_rollout
         "mp.rage" -> R.drawable.ic_condition_mp_rage
-        else -> if (key.startsWith("stat.")) R.drawable.ic_swords else null
+        else -> if (key == "stat.atk") R.drawable.ic_swords else if (key.startsWith("stat.")) R.drawable.ic_stats else null
     }
 }
