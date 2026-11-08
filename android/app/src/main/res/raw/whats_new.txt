@@ -3,6 +3,43 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.4.0
+- Rarity marks and filters now follow one clear ladder. Starters and Pokémon with at least 500 total base stats get a round dot; Baby Pokémon, Ultra Beasts, Legendary and Mythical Pokémon keep their own marks. Filter the Box or Pokédex by one or several marks in Sort & filter. Auto-catch animations show a Great Ball for the dot and Baby marks, an Ultra Ball for Ultra Beasts and Legendary Pokémon, and a Master Ball for Mythical Pokémon.
+- Held items can be taken off or given to another Pokémon from their item window. Choose the holder when several Pokémon have the same item, then pick a recipient in the Box with its usual search, sorting and filters. Groups open their copies so you can choose one; Back cancels. Replaced items return to the Bag. Item totals include held copies and show who holds them.
+- Evolution items show every Pokémon they can evolve, with larger sprites that fit the window. Unknown Pokémon stay silhouettes. Tap a known Pokémon to open its Evolution details; your remembered section choices stay as you left them. The extra Use on button is gone.
+- Bond in species details shows each owned copy, including partners in the team and Pokémon in the Box.
+- Faster battles bring healing numbers, HP changes, stat changes and conditions together with the move. Returning drain orbs and healing glows line up with the heal, and shorter pauses keep turns moving.
+- Battle Bag opens as its own floating inventory. Item actions keep the existing battle rules, and balls and escape items wait while the next-battle button is still showing.
+- Answer buttons statistics offers Today, This week and This month, and remembers your choice.
+- Deal of the night has a blue frame that suits the night offer.
+- Streak Freezes automatically protect one missed goal day each. Hold up to three; find them in daily gifts or rewarded battles, or buy one per game day for 2,000, 3,000 or 4,000 coins as your supply grows. A gap needs enough freezes to cover every missed day.
+- Shop limits show “1 left” on limited offers and “Sold out” after purchase. Weekend items share one allowance across Saturday and Sunday; Everstone and freezes allow one purchase per game day, and each TM can be owned once.
+- Bag categories open as a side list with icons and counts. They start collapsed so your items have the full width, including in the floating battle Bag.
+- Whiteboard tools let you toggle Pen or Eraser off to scroll with one finger. The colour dot opens the palette separately, and Off turns the whiteboard off from its toolbar.
+- Sound previews have larger play buttons and show when a preview is playing. Again, Hard, Good and Easy each have the selected sound; other buttons without a dedicated sound use the familiar answer tick.
+- Neutral natures gain small perks. Hardy earns 3% extra win XP after staying Main for the whole fight of six or more rounds. Docile earns 4% extra Bond from counted study answers while fighting. Serious has steadier damage rolls of 90–100%; Quirky has a wider 80–105% range. Bashful earns 4% extra XP as the Exp. Share recipient.
+- Everstone now gives its holder 15% extra battle XP when its species has no further evolution, including single-stage Pokémon. It works for Main and Exp. Share holders and allows you to evolve while holding it.
+- Wild Pokémon details reveal stats and matchups after you defeat or catch that species. Before then, you see its identity, types and moves used in the current fight. Forms share the unlock; the Pokédex and comparison screens follow the same rule. Battle effectiveness hints stay visible.
+- Item windows put the item picture and requirements first, with checks for met requirements and clearer instructions. Bond shows current perks, and its level-up alert is smaller.
+- Bond levels now read “Level 3” beneath the filling ball and on the right when the section is folded. Evolution requirements use the same full-word labels.
+- Battle conditions have separate named stat chips and condition icons. They share one row when they fit, with effects below when needed. Tap a chip or status badge for a compact explanation.
+- Item collection achievements reward buying all eight food and drink kinds, throwing the three regular and ten special ball kinds, triggering all eight berries, equipping twelve lasting items, and using ten evolution stones. Each counts distinct kinds from this update onward.
+- Streak flames have a new look shared by achievements, the study bar and widgets, with gentle motion while active.
+- Special Pokémon frames show slow, occasional edge sparkles in the Box, Pokédex and Team. Ultra Beasts, Legendary and Mythical Pokémon each have their own colour; unseen Pokédex entries keep their rarity hidden.
+- Types caught now has two achievement tiers: Common at 9 types and Rare at all 18. Existing qualifying achievement dates are kept.
+- Ankimon saves can still be imported from the PC. Exporting from AnkiGo back to Ankimon has been removed; AnkiGo save backups remain available.
+### Fixes
+- Changing Main or editing the team after a battle keeps the next-battle button waiting.
+- Animated home-screen widgets carry their pictures with them, with a complete still picture when animation is unavailable.
+- Brief app switches and window resizing preserve open screens more reliably; normal app screens stay eligible for Recents.
+- Unstyled cards use a dark background in night mode.
+- All windows omit the top Close all link. Details keep Back for one step and the bottom Close for the whole stack. Item explanations show one Requirements heading; Bond guidance drops the redundant decay wording.
+- Daily gifts no longer show the streak explanation line.
+- The switch-Main button gives the target Pokémon more room.
+- Bag category totals count each owned copy once, including held items.
+- Hold-to-confirm buttons keep their labels and show a stronger fill throughout the hold.
+- Ball wobble sounds are restored after defeating a Pokémon and line up with the catch animation at both battle speeds.
+
 ## 1.3.1
 - Cards come faster: AnkiGo prepares the next cards while you study, so a ready card can appear while your answer is still saving in AnkiDroid. A card already on screen stays until you answer it.
 - A lag log records study timings (no card text) to find any pauses that remain; share it from the summary. @ Settings → Diagnostics
