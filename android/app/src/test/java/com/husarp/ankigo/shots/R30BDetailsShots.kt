@@ -52,8 +52,11 @@ class R30BDetailsShots {
             bar.performClick()
             assertEquals("Evolution, closed", bar.contentDescription)
             assertTrue(saved.values.none { it })
-            val normal = DialogShots.capture { DexDetail.show(page, data.sp(source)) }!!
+            DexDetail.show(page, data.sp(source))
+            val normal = WindowStack.pokemonWindow(page)!!
+            assertSame(dialog, normal)
             assertTrue(views(normal.content()).any { it.contentDescription == "Evolution, closed" })
+            normal.dismiss()
         } finally { DetailSections.storeOf = original }
     }
 
@@ -87,8 +90,11 @@ class R30BDetailsShots {
             assertTrue(text.contains("Level 0")); assertTrue(text.contains("Level 3"))
             assertTrue(text.contains("Box friend")); assertTrue(text.contains("In box")); assertTrue(text.contains("In team"))
             state.mons.removeAll { it.species == mon.species }
-            val unowned = DialogShots.capture { DexDetail.show(page, data.sp(mon.species)) }!!
+            DexDetail.show(page, data.sp(mon.species))
+            val unowned = WindowStack.pokemonWindow(page)!!
+            assertSame(dialog, unowned)
             assertFalse(views(unowned.content()).any { it.tag == DetailSection.BOND })
+            unowned.dismiss()
         } finally { DetailSections.storeOf = original }
     }
 }

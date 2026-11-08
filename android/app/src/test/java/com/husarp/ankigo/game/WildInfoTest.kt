@@ -49,7 +49,9 @@ class WildInfoTest {
             assertTrue(knowledge, info.known)
             assertEquals(data.sp(92).base, info.base)
             assertEquals(WildInfo.statsAt(data.sp(92).base, b.wild.level), info.stats)
-            assertEquals(TypeMatchups.of(data.sp(92).types), info.matchups)
+            assertNull("$knowledge reveals stats without discovering matchups", info.matchups)
+            b.playerAttacked = true
+            assertEquals(18, WildInfo.of(data, state, b, emptySet())!!.matchups!!.unknownCount)
             assertEquals(b.wild.moves.toSet(), info.moves.map { it.id }.toSet())
         }
     }

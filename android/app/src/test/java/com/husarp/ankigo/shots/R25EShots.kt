@@ -104,7 +104,8 @@ class R25EShots {
             val state = TestData.state(data, 1, 5).apply { caught.clear(); caught.add(1) }
             var tapped = 0
             val rows = EvolutionRows(a, data, EvoLine.of(data, root).root, root, setOf(1, 2), { tapped = it.num }, state)
-            val images = views(rows).filterIsInstance<ImageView>().take(3)
+            val images = views(rows).filterIsInstance<ImageView>().filter { it.layoutParams.width == Ui.dp(a, 32) }
+            assertEquals(3, images.size)
             assertNull(images[0].colorFilter)
             assertNotNull(images[1].colorFilter)
             assertNotNull(images[2].colorFilter)

@@ -196,7 +196,8 @@ class R10SortShots {
             val row = TeamPage::class.java.getDeclaredMethod("boxControls").apply { isAccessible = true }.invoke(p) as View
             val t = texts(row)
             assertFalse("no separate Filters chip: $t", "Filters" in t)
-            assertTrue("quick chips stay: $t", "Favourites" in t && "Shiny" in t)
+            assertTrue("quick chips stay: $t", "Favourites" in t && "In team" in t)
+            assertFalse("Shiny is sheet-only: $t", "Shiny" in t)
             screen
         }
     }

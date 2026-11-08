@@ -76,6 +76,11 @@ class R9CompareWrapShots {
         paparazzi.shootPage(name, variants) { ctx ->
             CompareStore.saveMode(ctx, mode); CompareStore.saveRows(ctx, onlyMatchups)
             AppLook.setTypeStyle(ctx, style)
+            val state = com.husarp.ankigo.GameRepo.state!!
+            state.defeatedSpecies += picks.filterIsInstance<ComparePick.Dex>().map { it.species }
+            com.husarp.ankigo.GameRepo.data!!.species.values.forEach {
+                state.seenMatchups[it.baseNum] = com.husarp.ankigo.game.Type.entries.toMutableSet()
+            }
             val p = ComparePage(ctx, NoHost, picks)
             p.fit = fit
             val screen = pageScreen(ctx, p)

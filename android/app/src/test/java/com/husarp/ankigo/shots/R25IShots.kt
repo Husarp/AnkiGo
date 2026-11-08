@@ -15,16 +15,15 @@ class R25IShots {
     private fun views(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { views(v.getChildAt(it)) } else emptyList()
     private fun text(v: View, label: String) = views(v).filterIsInstance<TextView>().single { it.text.toString() == label }
 
-    @Test fun speciesOptionsAndCloseStayPinnedAndCloseTheStack() {
+    @Test fun speciesOptionsAndCloseStayPinnedAndCloseOnlyTheCurrentWindow() {
         for (theme in Theme.entries) for (width in listOf(320, 360)) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Variant("w$width", width, 640).device(theme))
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx)
             val page = DexPage(ctx, NoHost)
-            val parent = AppDialog.Builder(page).setTitle("Previous details").setCloseAtTop().create()
+            val parent = AppDialog.Builder(page).setTitle("Previous details").setCloseAtTop().create().also { it.joinStack() }
             val d = DialogShots.capture { DexDetail.show(page, GameRepo.data!!.sp(25)) }!!
             try {
-                parent.joinStack(); d.joinStack()
                 val root = d.content()
                 val action = text(root, "Options")
                 val myPokemon = text(root, "My Pokémon")
@@ -48,7 +47,7 @@ class R25IShots {
                 try {
                     fresh.joinStack()
                     assertFalse(views(fresh.content()).filterIsInstance<TextView>().any { it.text.toString() == "Close all" })
-                    assertFalse(WindowStack.stacked(page))
+                    assertTrue("The previous window stays open", WindowStack.stacked(page))
                 } finally { fresh.dismiss() }
             } finally { d.dismiss(); parent.dismiss() }
         }

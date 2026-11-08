@@ -47,7 +47,7 @@ class R31ISettingsStatsAlertsTest {
                 val grains = ChartData.grains(metric, series.period)
                 assertEquals(label, grains.isNotEmpty(), series.grain.label in labels)
                 val expected = (if (metric.usesPeriod) 1 else 0) + (if (series.deckApplies) 1 else 0) +
-                    (if (grains.isNotEmpty()) 1 else 0) + (if (metric == ChartMetric.BUTTONS) 1 else 0)
+                    (if (grains.isNotEmpty()) 1 else 0)
                 assertEquals(label, expected, row.childCount)
                 if (deck != null && period == ChartPeriod.D30 && metric in listOf(ChartMetric.TIME, ChartMetric.REVIEWS, ChartMetric.CARD_STATES, ChartMetric.STREAK_CALENDAR))
                     paparazzi.snapshot(row, "i-options-${metric.name.lowercase()}-${theme.name.lowercase()}")

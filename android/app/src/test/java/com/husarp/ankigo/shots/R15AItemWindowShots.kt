@@ -209,7 +209,8 @@ class R15AItemWindowShots {
             assertSame("the same window, drawn again", w, p.itemWindow)
             assertEquals("no second window", 1, ShopCardKit.windowsShown)
             assertTrue(ItemInfo.plain(ItemInfo.ownLine("great-ball", n0 + 1)) in texts(stage))
-            assertTrue("the list behind counts the bag again: $bag0 to ${bagTab.text}", bagTab.text.toString() != bag0)
+            assertEquals("Bag", bag0)
+            assertEquals("Bag stays without a count after purchase", bag0, bagTab.text.toString())
             // and again: still one window
             ShopCardKit.tap(ShopCardKit.allText(stage, { it.text.toString() == "Buy" }).single()); stage.render()
             (ShopCardKit.allText(stage, { it.text.toString() == "Buy" }).single().parent as View).performLongClick(); stage.render()

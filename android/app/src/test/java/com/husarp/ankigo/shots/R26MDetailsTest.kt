@@ -139,7 +139,7 @@ class R26MDetailsTest {
             st.achTiers["first-baby"] = mutableListOf(1793491200000L)
             val v = Achievements.view(st, data).first { it.ankimonBadge == 18 }
             val sheet = AchievementDetail.sheet(ctx, v, 0, ZoneId.of("UTC"))
-            assertTrue(texts(sheet).contains(baby.shownName))
+            assertTrue(texts(sheet).contains("Earned with ${baby.shownName}"))
             assertEquals(1, texts(sheet).count { it.contains("1 Nov 2026") })
             assertFalse(texts(sheet).any { it.contains("caught on", true) || it.contains("Ankimon badges") })
             sheet

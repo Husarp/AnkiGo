@@ -58,6 +58,6 @@ class R18FPrefsTest {
     }
 
     @Test fun onlyTheSheetOnlyShowChoicesHaveNoQuickChip() {
-        assertEquals(setOf(BoxFilter.FAVOURITES, BoxFilter.SHINY, BoxFilter.IN_TEAM), BoxFilter.entries.filter { it.hasQuickChip }.toSet())
+        assertEquals(setOf(BoxFilter.FAVOURITES, BoxFilter.IN_TEAM), BoxFilter.entries.filter { it.hasQuickChip }.toSet())
     }
 }

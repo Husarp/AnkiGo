@@ -70,6 +70,9 @@ class R31EShopTest {
     }
 
     @Test fun freezeSourcesAndPricesLiveInWhereToFind() {
+        val guide = com.husarp.ankigo.help.GameGuide.chapters().flatMap { it.points }.joinToString(" ")
+        assertTrue(guide.contains("Streak Freeze can be bought one at a time until you hold 3"))
+        assertFalse(guide.contains("Streak Freeze allows one purchase per game day"))
         assertFalse(ItemInfo.facts(data, StreakFreeze.ITEM).any { it.title == "In a fight" })
         val sources = ItemInfo.whereToFind(data, StreakFreeze.ITEM)
         for (text in listOf("0.2%", "practice gives none", "Every next freeze costs more", "2,000 / 3,000 / 4,000", "holding 3")) {

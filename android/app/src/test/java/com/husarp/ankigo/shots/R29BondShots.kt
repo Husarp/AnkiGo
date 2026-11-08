@@ -77,7 +77,7 @@ class R29BondShots {
                 assertTrue(card.bottom <= col.height - col.paddingBottom)
                 val content = texts(card).joinToString("\n") { it.text }
                 assertTrue(content.contains("Level $level")); assertFalse(content.contains("No decay"))
-                assertEquals(level >= 3, content.contains("All species matchups revealed"))
+                assertEquals(level >= 2, content.contains("All species matchups revealed"))
                 if (level == 3) assertTrue(content.contains("120 / 250 points to Level 4"))
                 if (level == 5) { assertTrue(content.contains("Max Bond")); assertFalse(content.contains("Next ·")) }
             }
@@ -120,7 +120,7 @@ class R29BondShots {
         AppPrefs.setDetailOrder(ctx, DetailOrder.default)
         val editor = DetailOrderSettings.Editor(ctx, AppPrefs.detailOrder(ctx))
         texts(editor).single { it.contentDescription == "Move Bond up" }.performClick()
-        assertEquals(4, editor.order.indexOf(DetailSection.BOND))
+        assertEquals(DetailOrder.default.indexOf(DetailSection.BOND) - 1, editor.order.indexOf(DetailSection.BOND))
         assertEquals(DetailOrder.default, AppPrefs.detailOrder(ctx)) // draft only
         assertTrue(texts(editor).single { it.contentDescription == "Drag Bond" }.isLongClickable)
         editor.move(DetailSection.BOND, 0) // the drop handler uses this same path

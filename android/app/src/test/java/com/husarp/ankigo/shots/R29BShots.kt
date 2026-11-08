@@ -107,10 +107,12 @@ class R29BShots {
         Pickers.interceptApp={ it.joinStack(); opened+=it }
         try { assertTrue(requirement.button(AppDialog.BUTTON_POSITIVE)!!.performAccessibilityAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_LONG_CLICK,null)) } finally { Pickers.interceptApp=null }
         assertEquals(26,mon.species)
-        assertTrue("Details refresh precedes the celebration",opened.size>=2)
+        assertSame("Evolution refresh reuses the original window", details, WindowStack.pokemonWindow(p))
+        assertTrue(labels(details.content()).any { it.contains("Raichu") })
+        assertTrue("The celebration still opens",opened.isNotEmpty())
         val popup=opened.last()
         assertTrue(labels(popup.content()).any { "evolved into Raichu!" in it })
-        val refreshed=opened[opened.lastIndex-1]
+        val refreshed=details
         FrameLayout(c).apply {
             addView(DialogShots.scene(c,refreshed),FrameLayout.LayoutParams(-1,-1))
             addView(DialogShots.scene(c,popup),FrameLayout.LayoutParams(-1,-1))

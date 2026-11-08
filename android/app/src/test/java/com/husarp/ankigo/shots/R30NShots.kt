@@ -73,7 +73,7 @@ class R30NShots {
             addView(content, FrameLayout.LayoutParams(-1, -2, Gravity.CENTER))
         }
     }
-    @Test fun bondShowsOnlyCurrentPerksAtEveryLevel() = scene("490-current-perks") { ctx ->
+    @Test fun bondShowsCurrentAndNextPerksAtEveryLevel() = scene("490-current-perks") { ctx ->
         LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Ui.c(ctx, R.color.ag_card))
@@ -83,8 +83,9 @@ class R30NShots {
                 mon.bondPoints = Bond.thresholds[level]
                 val body = BondSection.body(ctx, mon)
                 val t = texts(body).joinToString("\n")
-                assertFalse(t.contains("Next ·")); assertFalse(t.contains("slot")); assertFalse(t.contains("evolution", true))
-                assertTrue(t.contains("CURRENT PERKS", true))
+                assertEquals(level < 5, t.contains("NEXT ·"))
+                assertFalse(t.contains("slot")); assertFalse(t.contains("Level 6"))
+                assertTrue(t.contains("CURRENT · $level"))
                 if (level == 0) assertFalse(t.contains("+0")) else assertTrue(t.contains("+${level * 5}% XP"))
                 if (level in listOf(0, 3, 5)) addView(body, Form.lp(ctx, 16))
             }

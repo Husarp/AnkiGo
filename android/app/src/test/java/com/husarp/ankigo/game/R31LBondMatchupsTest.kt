@@ -100,6 +100,22 @@ class R31LBondMatchupsTest {
         assertTrue(reveals(Game(data, restored).ensureEncounter()).isEmpty())
     }
 
+    @Test fun evolutionRevealsTheNewSpeciesAtLevelThreeWithoutWaitingForReload() {
+        for (points in listOf(125, 250, 800)) for (kind in listOf(EvoKind.LEVEL, EvoKind.ITEM)) {
+            val s = state(); val mon = s.main!!.apply { bondPoints = points }
+            s.seenMatchups[25] = Type.entries.toMutableSet()
+            val events = mutableListOf<GameEvent>()
+            Progression.evolve(data, s, mon, Evolution(26, kind, level = 20, item = if (kind == EvoKind.ITEM) "thunder-stone" else null), Random(1), events, now)
+            assertEquals(26, mon.species)
+            assertEquals(if (points >= 250) 0 else 18, MatchupKnowledge.of(data, s, 26).unknownCount)
+            assertEquals(if (points >= 250) 1 else 0, reveals(events).size)
+            if (points >= 250) assertEquals(mon.uid, reveals(events).single().uid)
+            assertEquals(0, MatchupKnowledge.of(data, s, 25).unknownCount)
+            val restored = SaveCodec.decode(SaveCodec.encode(s))
+            assertTrue(reveals(Game(data, restored).ensureEncounter()).isEmpty())
+        }
+    }
+
     @Test fun lowerBondAndWildBondDoNotMigrate() {
         val s = state(); s.main!!.bondPoints = 249; s.battle!!.wild.bondPoints = 800
         val game = Game(data, s)

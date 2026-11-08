@@ -292,9 +292,16 @@ class R19KConditionShots {
             sc.arena.syncConditions(b)
             layoutScene(sc)
             val row = sc.arena.markRows().firstOrNull { it.slot == slot }
-            if (row == null) {
-                assertEquals("Only the smallest floating host may lack safe chip space", hosts[6], host)
-                assertTrue(tapCard(sc, wild = slot == ConditionMarks.Slot.WILD))
+            val chip = row?.chips?.firstOrNull { it.mark?.key?.startsWith("stat.") == true }
+            if (chip == null) {
+                assertTrue("Only cramped hosts may use the full-list fallback", host in listOf(hosts[3], hosts[6]))
+                val more = row?.chips?.singleOrNull { it.more > 0 }
+                if (more != null) {
+                    val c = more.rect
+                    val t = android.os.SystemClock.uptimeMillis()
+                    sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, c.centerX(), c.centerY(), 0))
+                    sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t + 40, MotionEvent.ACTION_UP, c.centerX(), c.centerY(), 0))
+                } else assertTrue(tapCard(sc, wild = slot == ConditionMarks.Slot.WILD))
                 layoutScene(sc)
                 val list = sc.arena.conditionListShown()!!
                 for (mark in sc.arena.conditions.all()) {
@@ -305,7 +312,6 @@ class R19KConditionShots {
                 paparazzi.snapshot(sc.root, "r25h-stat-fallback-${host.name}-${slot.name.lowercase()}-${theme.name.lowercase()}")
                 continue
             }
-            val chip = row.chips.first { it.mark!!.key.startsWith("stat.") }
             val c = chip.rect
             val t = android.os.SystemClock.uptimeMillis()
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, c.centerX(), c.centerY(), 0))

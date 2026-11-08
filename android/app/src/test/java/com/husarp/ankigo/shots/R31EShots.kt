@@ -17,7 +17,7 @@ class R31EShots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
     private fun all(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
     private fun texts(v: View) = all(v).filterIsInstance<TextView>().map { it.text.toString() }
-    private fun hold(v: View, label: String) = all(v).single { it.contentDescription?.startsWith("Hold to $label.") == true }
+    private fun hold(v: View, label: String) = all(v).single { it.contentDescription == label.replaceFirstChar { c -> c.uppercase() } }
     private fun fillShots(root: View, button: View, name: String) {
         val description = button.contentDescription
         for (level in listOf(0, 5000, 10000)) {
@@ -157,7 +157,7 @@ class R31EShots {
             val state = TestData.state(data, 133, 20).apply { bag["thunder-stone"] = 1; main!!.bondPoints = 500 }
             val rows = EvolutionRows(ctx, data, EvoLine.of(data, root).root, root, setOf(133, 135), null, state, state.main) {}
             val dialog = DialogShots.capture {
-                all(rows).single { it.contentDescription?.startsWith("Explain Thunder Stone") == true }.performClick()
+                all(rows).single { it.contentDescription?.startsWith("Explain Use Thunder Stone") == true }.performClick()
             }!!
             fillShots(dialog.content(), dialog.button(AppDialog.BUTTON_POSITIVE)!!, "e-evolve-${theme.name.lowercase()}")
             dialog.dismiss()

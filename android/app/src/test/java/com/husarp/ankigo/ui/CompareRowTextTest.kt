@@ -13,6 +13,7 @@ class CompareRowTextTest {
         val data = TestData.world()
         val st = GameState(createdAt = 1L, starterChosen = true)
         st.mons += TestData.mon(data, 25, 20, listOf("tackle"), "a")
+        st.seenMatchups[25] = mutableSetOf(com.husarp.ankigo.game.Type.NORMAL)
         val table = CompareTable.build(data, st, listOf(ComparePick.Owned("a"), ComparePick.Dex(3)), false)
         for (row in table.rows) {
             assertTrue("${row.key} is in KEYS", row.key in CompareRowText.KEYS)

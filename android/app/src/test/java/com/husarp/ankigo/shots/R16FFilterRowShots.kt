@@ -148,7 +148,7 @@ class R16FFilterRowShots {
             val box = boxRow(boxPage(ctx))
             layoutRow(ctx, box, 360)
             assertTrue("no active chip", all(box).none { it is ActiveChip })
-            assertTrue("Favourites and Shiny fit at 360: ${texts(box)}", listOf("?", "Favourites", "Shiny").all { it in texts(box) })
+            assertTrue("Favourites and In team fit at 360: ${texts(box)}", listOf("?", "Favourites", "In team").all { it in texts(box) })
             assertTrue("the funnel sort button", texts(box).any { it.startsWith("Level") })
             val dex = dexRow(dexPage(ctx, DexFilter()).also { it.root })
             layoutRow(ctx, dex, 360)
@@ -180,16 +180,18 @@ class R16FFilterRowShots {
             var row = boxRow(p)
             fun chip(t: String) = all(row).filterIsInstance<TextView>().first { it.text.toString() == t }
             assertTrue("Favourites is on: a lit quick chip, still there", chip("Favourites").isSelected)
-            assertFalse("Shiny is off", chip("Shiny").isSelected)
-            // Shiny combines with Favourites; the type filter stays
-            chip("Shiny").performClick()
-            assertEquals(setOf(BoxFilter.FAVOURITES, BoxFilter.SHINY), getField(p, "boxFilter"))
+            assertFalse("In team is off", chip("In team").isSelected)
+            // In team combines with Favourites; the type filter stays
+            chip("In team").performClick()
+            assertEquals(setOf(BoxFilter.FAVOURITES, BoxFilter.IN_TEAM), getField(p, "boxFilter"))
             assertEquals(tf(TypeMatch.ANY, 1), getField(p, "boxTypes"))
             render(p); row = boxRow(p)
-            assertTrue(chip("Shiny").isSelected); assertTrue(chip("Favourites").isSelected)
+            assertTrue(chip("In team").isSelected); assertTrue(chip("Favourites").isSelected)
             // a lit chip tapped again removes only itself
-            chip("Shiny").performClick()
+            chip("In team").performClick()
             assertEquals(setOf(BoxFilter.FAVOURITES), getField(p, "boxFilter"))
+            tap(p.sortSheet().build(maxBody(ctx)), "Shiny")
+            assertEquals(setOf(BoxFilter.FAVOURITES, BoxFilter.SHINY), getField(p, "boxFilter"))
             // the sheet's Clear turns the sheet filters (the types) off, the sort and the grouping stay
             render(p); row = boxRow(p)
             assertTrue("the chip names the type filter", all(row).any { it is ActiveChip })

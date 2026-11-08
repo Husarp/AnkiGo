@@ -314,6 +314,7 @@ object Progression {
         state.evolutions++
         if (state.battle != null) Achievements.bump(state, Metric.GLOW_UP)
         events += GameEvent.Evolved(mon.uid, from, sp.name, sp.num)
+        if (Bond.level(mon.bondPoints) >= 3 && mon in state.mons) MatchupKnowledge.reveal(data, state, mon, events)
         for (m in sp.levelMoves.filter { it.level == 0 }.map { it.move }.distinct()) learnMove(data, mon, m, events)
         Badges.award(state, 16, events, pokemon = mon, data = data)
         AchievementPokemon.record(state, "evolutions", mon, data)
