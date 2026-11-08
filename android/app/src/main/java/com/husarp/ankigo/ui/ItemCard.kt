@@ -84,7 +84,7 @@ internal object ItemCard {
         if (spec.item == null) Items.tmName(page.data, spec.move.orEmpty()) else Items.name(spec.item)
 
     /** The header: bare icon, name, the one line (an item only) and the close button ([onClose]; 48 dp to touch, the glyph is smaller). */
-    fun header(page: GamePage, spec: Spec, closeAll: View? = null, onClose: () -> Unit): View {
+    fun header(page: GamePage, spec: Spec, onClose: () -> Unit): View {
         val ctx: Context = page
         val holders = spec.item?.let { page.state.itemHolders(it) }.orEmpty()
         val isTm = spec.item == null

@@ -34,8 +34,7 @@ class R26MDetailsTest {
         val p = Spy(ctx) { parentClosed++ }; val q = Spy(ctx) { childClosed++ }; val r = Spy(other) { otherClosed++ }
         WindowStack.add(p); WindowStack.add(q); WindowStack.add(r)
         val top = card(ctx); top.joinStack()
-        val closeAll = all(top.content()).filterIsInstance<TextView>().first { it.text.toString() == "Close all" }
-        assertEquals(View.GONE, (closeAll.parent as View).visibility)
+        assertFalse(texts(top.content()).contains("Close all"))
         all(top.content()).first { it.contentDescription == "Back to previous screen" }.performClick()
         assertTrue(WindowStack.stacked(ctx))
         assertEquals(0, parentClosed); assertEquals(0, childClosed)

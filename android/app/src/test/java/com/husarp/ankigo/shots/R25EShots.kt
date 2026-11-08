@@ -13,29 +13,34 @@ import org.junit.Test
 class R25EShots {
     @get:Rule val paparazzi = Shots.rule()
     private fun views(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { views(v.getChildAt(it)) } else emptyList()
-    private fun closeAll(d: AppDialog) = views(d.content()).filterIsInstance<TextView>().single { it.text.toString() == "Close all" }
+    private fun noCloseAll(d: AppDialog) = assertFalse(views(d.content()).filterIsInstance<TextView>().any { it.text.toString() == "Close all" })
+    private fun close(d: AppDialog) = views(d.content()).filterIsInstance<TextView>().single { it.text.toString() == "Close" }.performClick()
 
-    @Test fun stackKeepsSingleCloseAndOffersCloseAll() {
+    @Test fun stackKeepsBackAndFooterCloseWithoutTopCloseAll() {
         for (theme in Theme.entries) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.SMALL, theme))
             val a = Shots.files(paparazzi.context)
-            val first = AppDialog.Builder(a).setTitle("Pokémon details").setCloseAtTop().create()
-            val second = AppDialog.Builder(a).setTitle("Species details").setCloseAtTop().create()
+            val first = AppDialog.Builder(a).setTitle("Pokémon details").setDetailsFooter().create()
+            val second = AppDialog.Builder(a).setTitle("Species details").setDetailsFooter().create()
             val third = AppDialog.Builder(a).setTitle("Move details").setBackAtTop().create()
             try {
                 first.joinStack()
-                assertEquals(View.GONE, closeAll(first).visibility)
+                noCloseAll(first)
                 second.joinStack()
-                assertEquals(View.VISIBLE, closeAll(second).visibility)
-                paparazzi.snapshot(second.content(), "r25e-close-all-${theme.name}")
-                second.button(AppDialog.BUTTON_POSITIVE)!!.performClick()
-                assertEquals(View.GONE, closeAll(first).visibility)
-                second.joinStack(); third.joinStack()
+                noCloseAll(second)
+                assertTrue(WindowStack.stacked(a))
+                paparazzi.snapshot(second.content(), "r25e-footer-close-${theme.name}")
+                close(second)
+                assertFalse(WindowStack.stacked(a))
+                noCloseAll(first)
+                first.joinStack(); second.joinStack(); third.joinStack()
                 third.cancel() // Back/cancel removes one only
-                assertEquals(View.VISIBLE, closeAll(second).visibility)
-                closeAll(second).performClick()
+                noCloseAll(second)
+                assertTrue(WindowStack.stacked(a))
+                close(second)
+                assertFalse(WindowStack.stacked(a))
                 val fresh = AppDialog.Builder(a).setTitle("Fresh").setCloseAtTop().create()
-                try { fresh.joinStack(); assertEquals(View.GONE, closeAll(fresh).visibility) } finally { fresh.dismiss() }
+                try { fresh.joinStack(); noCloseAll(fresh); assertFalse(WindowStack.stacked(a)) } finally { fresh.dismiss() }
             } finally { first.dismiss(); second.dismiss(); third.dismiss() }
         }
     }
@@ -47,8 +52,8 @@ class R25EShots {
         val other = AppDialog.Builder(b).setTitle("Other page").setCloseAtTop().create()
         try {
             first.joinStack(); other.joinStack()
-            assertEquals(View.GONE, closeAll(first).visibility)
-            assertEquals(View.GONE, closeAll(other).visibility)
+            noCloseAll(first)
+            noCloseAll(other)
         } finally { first.dismiss(); other.dismiss() }
     }
 
@@ -58,13 +63,13 @@ class R25EShots {
         val page = ShopPage(a, NoHost)
         var closed = 0
         val item = ItemWindow(page) { closed++ }
-        val detail = AppDialog.Builder(page).setTitle("Species").setCloseAtTop().create()
+        val detail = AppDialog.Builder(page).setTitle("Species").setDetailsFooter().create()
         ItemWindow.interceptShow = { }
         try {
             item.update(ItemCard.Spec("potion")); item.show()
             detail.joinStack()
-            assertEquals(View.VISIBLE, closeAll(detail).visibility)
-            closeAll(detail).performClick()
+            noCloseAll(detail)
+            close(detail)
             assertFalse(item.isShowing)
             assertEquals(1, closed)
             item.dismiss(); detail.dismiss()

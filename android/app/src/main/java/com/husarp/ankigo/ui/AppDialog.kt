@@ -53,7 +53,6 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     private val buttons = LinkedHashMap<Int, Btn>()
     private val buttonViews = HashMap<Int, TextView>()
     private var built: View? = null
-    private var closeAllView: View? = null
 
     /** The platform dialog, made on first use (the content alone can be built and shot without a window). */
     private var made: Dialog? = null
@@ -101,11 +100,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     override fun closeFromStack() = dismiss()
     internal fun joinStack() = WindowStack.add(this)
     private fun leftStack() = WindowStack.remove(this)
-    override fun stackChanged(stacked: Boolean) {
-        closeAllView?.visibility = if (stacked && !detailsFooter && !itemInfo) View.VISIBLE else View.GONE
-        (closeAllView?.parent as? View)?.visibility = if (!detailsFooter && !itemInfo && (stacked || closeAtTop)) View.VISIBLE else View.GONE
-    }
-    private fun updateStackControl() = stackChanged(WindowStack.stacked(context))
+    override fun stackChanged(stacked: Boolean) = Unit
 
     /** The button view of [which] (`BUTTON_POSITIVE` / `BUTTON_NEGATIVE` / `BUTTON_NEUTRAL`), or null when the dialog has none; for enabling / disabling it. */
     fun button(which: Int): TextView? { content(); return buttonViews[which] }
@@ -122,28 +117,21 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
             background = Ui.rounded(Ui.c(ctx, R.color.ag_card), 20, ctx)
             maxHeightPx = ctx.resources.displayMetrics.heightPixels - Ui.dp(ctx, 48)
         }
-        val controls = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), 0)
+        if (closeAtTop && !detailsFooter && !itemInfo) {
+            val controls = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 8), Ui.dp(ctx, 12), 0)
+            }
+            controls.addView(makeButton(ctx, DialogInterface.BUTTON_POSITIVE, Btn("Close", null)).also {
+                buttonViews[DialogInterface.BUTTON_POSITIVE] = it
+            }, LinearLayout.LayoutParams(-2, -2))
+            topAction?.let { action ->
+                controls.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
+                controls.addView(action, LinearLayout.LayoutParams(-2, -2))
+            }
+            card.addView(controls, LinearLayout.LayoutParams(-1, -2))
         }
-        if (closeAtTop) controls.addView(makeButton(ctx, DialogInterface.BUTTON_POSITIVE, Btn("Close", null)).also {
-            buttonViews[DialogInterface.BUTTON_POSITIVE] = it
-        }, LinearLayout.LayoutParams(-2, -2))
-        controls.addView(Ui.text(ctx, 13f, 800, R.color.ag_mauve).apply {
-            text = "Close all"
-            minHeight = Ui.dp(ctx, 48)
-            gravity = Gravity.CENTER
-            setPadding(Ui.dp(ctx, 12), 0, Ui.dp(ctx, 12), 0)
-            setOnClickListener { WindowStack.closeAll(context) }
-            closeAllView = this
-        }, LinearLayout.LayoutParams(-2, -2))
-        topAction?.let { action ->
-            controls.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
-            controls.addView(action, LinearLayout.LayoutParams(-2, -2))
-        }
-        card.addView(controls, LinearLayout.LayoutParams(-1, -2))
-        updateStackControl()
         val hasBody = message != null || customView != null || items != null
         if (backAtTop) {
             card.addView(LinearLayout(ctx).apply {
