@@ -33,6 +33,7 @@ object GameEventText {
         is GameEvent.Splash -> "Splash ${e.name}"
         is GameEvent.Effect -> "Effect on ${if (e.onPlayer) "mine" else "wild"} ${e.kind}: ${e.text} hp=${e.hp}/${e.maxHp}" + (e.status?.let { " status=$it" } ?: "")
         is GameEvent.Fainted -> "Fainted ${if (e.player) "mine" else "wild"} ${e.name}"
+        is GameEvent.BerryActivated -> "BerryActivated ${Items.name(e.item)}"
         is GameEvent.BallThrow -> "BallThrow ${Items.name(e.ball)} chance=${e.chance}% ${if (e.success) "caught" else "missed"} left=${e.left} throw=${e.number}"
         is GameEvent.Caught -> "Caught ${e.name} #${e.species} Lv ${e.level} ball=${e.ball?.let(Items::name) ?: "auto"}" +
             flag(e.shiny, "shiny") + flag(e.newSpecies, "new") + (if (e.toTeam) " to-team" else " to-box")

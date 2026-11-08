@@ -16,6 +16,8 @@ enum class Metric(val counted: Boolean, val external: Boolean = false) {
     // R23 part 4: one-off secrets, awarded by the existing action paths.
     ONE_SHOT(true), LAST_BREATH(true), COMBO_20(true), REVOLVING_DOOR(true), PERFECT_THROW(true),
     DAVID_GOLIATH(true), NIGHT_OWL(true), EASY_STREET(true), DEJA_VU(true), GLOW_UP(true), BULLY(true),
+    PANTRY_KINDS(false), REGULAR_BALL_KINDS(false), SPECIAL_BALL_KINDS(false),
+    BERRY_KINDS(false), EQUIPMENT_KINDS(false), STONE_KINDS(false),
     // ---- derived from the save ----
     CATCHES(false),           // wild catches, or the Pokémon you own when that is more (imports)
     ANSWERS(false),           // GameState.totalReviews
@@ -93,6 +95,7 @@ object Achievements {
 
     /** The number [metric] stands at now. Derived ones read the save; counted ones read GameState.counters. */
     fun value(metric: Metric, state: GameState, data: GameData): Long = when (metric) {
+        in ItemCollections.kinds -> ItemCollections.value(state, metric)
         Metric.CATCHES -> max(state.catches, state.mons.size - ownedStarter(state)).toLong()
         Metric.ANSWERS -> state.totalReviews
         Metric.DEFEATS -> state.defeats.toLong()
@@ -214,7 +217,12 @@ object Achievements {
             is GameEvent.Effect -> if (e.onPlayer) { hp = e.hp; maxHp = e.maxHp }
             is GameEvent.Healed -> { hp = e.hp; maxHp = e.maxHp }
             is GameEvent.MainChanged, is GameEvent.MainHealed -> hp = -1
-            is GameEvent.BallThrow -> bump(state, Metric.BALLS_THROWN)
+            is GameEvent.BerryActivated -> ItemCollections.record(state, Metric.BERRY_KINDS, e.item)
+            is GameEvent.BallThrow -> {
+                bump(state, Metric.BALLS_THROWN)
+                ItemCollections.record(state, Metric.REGULAR_BALL_KINDS, e.ball)
+                e.special?.let { ItemCollections.record(state, Metric.SPECIAL_BALL_KINDS, it) }
+            }
             is GameEvent.Defeated -> if (low(hp, maxHp)) bump(state, Metric.COMEBACKS)
             is GameEvent.Caught -> {
                 if (e.shiny) bump(state, Metric.SHINIES)

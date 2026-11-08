@@ -451,6 +451,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         logWhole = ActionBarModel.scope(e) == LineScope.WHOLE
         if (e !is GameEvent.Attack && e !is GameEvent.Encounter) sound(e)   // an attack sounds from [playAttack]: with its animation, when the hit lands; a new wild one's cry when it comes in
         when (e) {
+            is GameEvent.BerryActivated -> return 0
             is GameEvent.Counted -> {
                 if (e.neutral) {   // PLAN 155 / R19-T (284): the OK of a new card: counted, a grey dot (the Charge / round events follow), no float, no power; the combo stays as it was
                     panel.setGoal(e.reviewsToday, st?.let { DailyGoal.today(it) } ?: 100, true)

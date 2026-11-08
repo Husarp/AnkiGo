@@ -1,0 +1,6 @@
+PLAN 491 collection achievement icons
+Lucide: utensils (ISC / inherited Feather MIT; lucide-icons.txt).
+Tabler, Paweł Kuna: pokeball, shield-check, diamond (MIT; tabler-icons.txt).
+Phosphor Icons: sparkle, cherries (MIT; phosphor-icons.txt).
+Converted SVG outlines to Android vectors, normalized to 2/24 stroke.
+Cherries modified with a small outlined stem leaf. Runtime tint supplied by achievement style.

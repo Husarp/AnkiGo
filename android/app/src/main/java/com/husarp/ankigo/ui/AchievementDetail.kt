@@ -69,6 +69,8 @@ internal object AchievementDetail {
         if (v.oneOff) body.addView(oneOffLine(ctx, v, achSince, zone), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         else for (s in AchPageMath.ladder(v)) body.addView(step(ctx, v, s, achSince, zone), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 8) })
         if (v.tier >= 0 && AchievementPokemon.applies(v)) body.addView(witness(ctx, v), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
+        if (v.group == "Item collections") body.addView(note(ctx, "Distinct kinds counted from this release; earlier purchases, uses and activations are not included."),
+            LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 12) })
         AchievementTable.row(v.id)?.let { row ->
             if (AchPageMath.source(row) != com.husarp.ankigo.game.AchSource.SINCE_UPDATE && row.ankimonBadge == null) {
                 val text = AchPageMath.sourceNote(row, "")
@@ -158,7 +160,7 @@ internal object AchievementDetail {
         val earned = v.tier >= 0
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         row.addView(Ui.text(ctx, 14f, 900, if (earned) R.color.ag_green else R.color.ag_sub0).apply {
-            text = if (earned) AchPageMath.reachedText(v.dates.firstOrNull(), achSince, zone, 0 in v.inferred).replace("Reached", "Earned") else "Not earned yet"
+            text = if (earned) AchPageMath.reachedText(v.dates.firstOrNull(), achSince, zone, 0 in v.inferred).replace("Reached", "Earned") else if (v.group == "Item collections") "${v.value} / ${v.tiers.single()} kinds · Not earned yet" else "Not earned yet"
         })
         return row
     }

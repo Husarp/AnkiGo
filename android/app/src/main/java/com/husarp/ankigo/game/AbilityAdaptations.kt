@@ -210,6 +210,7 @@ internal object AbilityAdaptations : BattleRules {
         if (r.mon(p).hp > r.maxHp(p) / divisor) return
         r.mon(p).heldItem = null; r.side(p).notes["consumeditem"] = item
         berryEffect(r, p, item)
+        if (p) r.events += GameEvent.BerryActivated(item)
         if (r.ability(p) == "cheekpouch" && !SideMoves.healBlocked(r, p)) r.heal(p, maxOf(1, r.maxHp(p) / 3), "Cheek Pouch restored HP!", label = "Cheek Pouch")
         if (r.ability(p) == "cudchew") {
             val sequence = (r.side(p).volatiles["ab.chewSequence"] ?: 0) + 1
