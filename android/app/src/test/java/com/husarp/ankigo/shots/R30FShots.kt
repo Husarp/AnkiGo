@@ -25,7 +25,7 @@ class R30FShots {
     private val data get() = GameRepo.data!!
     private val pages = mutableListOf<GamePage>()
     private var afterShot: (() -> Unit)? = null
-    @After fun clean() { pages.forEach { it.onGone() }; Pickers.interceptApp = null; ItemWindow.interceptShow = null; BattleShotKit.reset() }
+    @After fun clean() { pages.forEach { it.onGone() }; Pickers.interceptApp = null; BoxMonPicker.interceptShow = null; ItemWindow.interceptShow = null; BattleShotKit.reset() }
     private fun scene(name: String, build: (Context) -> View) {
         for (theme in Theme.entries) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Variant("p360", 360, 820).device(theme))
@@ -91,29 +91,38 @@ class R30FShots {
         }
         AppDialogShots.scene(ctx, d)
     }
-    @Test fun givingSelectsSourceThenReusesTheBoxSortAndFilterSheet() = scene("485-give-picker") { ctx ->
+    @Test fun givingSelectsSourceThenOpensTheRealBox() = scene("485-give-picker") { ctx ->
         prepare()
         val (w, _) = window(ctx)
         var dialog: AppDialog? = null
+        var box: TeamPage? = null
+        var picker: android.app.Dialog? = null
         Pickers.interceptApp = { dialog = it }
+        BoxMonPicker.interceptShow = { d, p ->
+            (p.root.parent as? ViewGroup)?.removeView(p.root)
+            picker = d; box = p
+        }
         all(w.view).first { it.contentDescription == "Give to another Pokémon" }.performClick()
         val source = checkNotNull(dialog)
         val sources = all(source.content()).filterIsInstance<ListView>().single()
         val before = state.ownedItemCount("soothe-bell")
         sources.performItemClick(sources.adapter.getView(1, null, sources), 1, 1)
-        val recipients = checkNotNull(dialog)
-        assertNotSame(source, recipients)
-        assertTrue("Sort & filter" in texts(recipients.content()))
-        assertEquals(before, state.ownedItemCount("soothe-bell")) // selecting a source alone never removes it
-        val list = all(recipients.content()).filterIsInstance<ListView>().single()
-        assertEquals(state.mons.size - 2, list.adapter.count)
+        val page = checkNotNull(box)
+        pages += page
+        page.preset(TeamSection.BOX, group = false, sort = SortSpec.of(SortKey.LEVEL))
+        assertNull(page.tab)
+        TeamPage::class.java.getDeclaredMethod("render").apply { isAccessible = true }.invoke(page)
+        assertTrue("Give Soothe Bell to…" in texts(page.root))
+        assertEquals(before, state.ownedItemCount("soothe-bell"))
         afterShot = {
-            list.performItemClick(list.adapter.getView(0, null, list), 0, 0)
+            val target = state.mons[2]
+            all(page.root).first { it.contentDescription?.startsWith("${target.shownName}, level") == true }.performClick()
             assertNull(state.mons[1].heldItem)
-            assertEquals("soothe-bell", state.mons[0].heldItem)
+            assertEquals("soothe-bell", target.heldItem)
             assertEquals(before, state.ownedItemCount("soothe-bell"))
+            picker!!.dismiss(); page.onGone(); BoxMonPicker.interceptShow = null
         }
-        AppDialogShots.scene(ctx, recipients)
+        page.root
     }
     @Test fun cancelingThePickerAndPausingThePagePreserveItemsAndTheItemWindow() = scene("485-475-bag") { ctx ->
         prepare()

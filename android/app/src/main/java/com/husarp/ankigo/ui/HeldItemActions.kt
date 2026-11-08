@@ -20,7 +20,7 @@ internal object HeldItemActions {
             }), LinearLayout.LayoutParams(-1, -2))
             addView(ItemCard.actView(page, ItemCard.Act("Give to another Pokémon", true, null) {
                 source(page, item) { mon ->
-                    OwnedMonPicker.show(page, "Give ${Items.name(item)} to…", { it.heldItem != item }) { target ->
+                    BoxMonPicker.show(page, "Give ${Items.name(item)} to…", { it.heldItem != item }) { target ->
                         page.act { g -> ItemUse.giveHeld(g.state, item, mon?.uid, target.uid) }
                     }
                 }

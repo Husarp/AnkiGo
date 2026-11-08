@@ -29,6 +29,7 @@ internal class BoxCopiesSheet(
     private val tile: BoxTile,
     private val onOpen: (Mon) -> Unit,
     private val onMenu: (Mon, View, () -> Unit) -> Unit,
+    private val eligible: ((Mon) -> Boolean)? = null,
 ) {
     var sort = CopySort.LEVEL
         private set
@@ -100,9 +101,11 @@ internal class BoxCopiesSheet(
             minimumHeight = Ui.dp(ctx, 56)
             setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4))
             background = RippleDrawable(ColorStateList.valueOf(Ui.c(ctx, R.color.ag_mantle)), Ui.rounded(Color.TRANSPARENT, 12, ctx), null)
-            alpha = if (mon.hp <= 0) 0.55f else 1f
-            setOnClickListener { dismiss(); onOpen(mon) }
-            setOnLongClickListener { onMenu(mon, it) { dismiss() }; true }
+            val canPick = eligible?.invoke(mon) != false
+            isEnabled = canPick
+            alpha = if (!canPick) 0.35f else if (mon.hp <= 0) 0.55f else 1f
+            setOnClickListener { if (canPick) { dismiss(); onOpen(mon) } }
+            if (eligible == null) setOnLongClickListener { onMenu(mon, it) { dismiss() }; true }
         }
         val img = ImageView(ctx)
         Ui.staticSprite(ctx, mon.lookNum(page.data), mon.shiny, img)
@@ -143,6 +146,7 @@ internal class BoxCopiesSheet(
 
     /** Shows the sheet at the bottom of the screen (an overlay window when the page lives in the floating card). */
     fun show() {
+        interceptShow?.let { it(this); return }
         val dialog = Dialog(ctx).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
         dismiss = { dialog.dismiss() }
         val maxList = (ctx.resources.displayMetrics.heightPixels * LIST_SHARE).toInt()
@@ -162,6 +166,8 @@ internal class BoxCopiesSheet(
     companion object {
         /** The list takes at most this share of the screen height. */
         const val LIST_SHARE = 0.5f
+
+        internal var interceptShow: ((BoxCopiesSheet) -> Unit)? = null
 
         fun show(page: GamePage, tile: BoxTile, onOpen: (Mon) -> Unit, onMenu: (Mon, View, () -> Unit) -> Unit) =
             BoxCopiesSheet(page, tile, onOpen, onMenu).show()
