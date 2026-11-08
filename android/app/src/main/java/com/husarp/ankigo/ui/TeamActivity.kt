@@ -36,7 +36,14 @@ import com.husarp.ankigo.game.Type
 // Tap = details, long-press = the actions menu. Edit mode shows up/down arrows on the team rows (no drag and drop:
 // framework Views have no easy drag list).
 class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : GamePage(base, host), PickHost {
-    override val tab = BottomNav.Tab.POKEMON
+    override val tab get() = if (recipient == null) BottomNav.Tab.POKEMON else null
+
+    internal class Recipient(val title: String, val eligible: (Mon) -> Boolean, val picked: (Mon) -> Unit)
+    private var recipient: Recipient? = null
+    internal fun pickRecipient(request: Recipient) {
+        recipient = request
+        section = TeamSection.BOX
+    }
 
     private lateinit var appBar: AppBar
     private lateinit var switchBox: LinearLayout
@@ -90,6 +97,11 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     override fun buildBar(): View {
+        recipient?.let { request ->
+            appBar = Ui.appBar(this, request.title, null, back = true, onBack = { host.closePage() })
+            appBar.titleView.apply { maxLines = 2; textSize = 20f }
+            return appBar
+        }
         // the coins on every section; the counts sit in the sections. R18 RV-6: start with the real amount (never a "0" that jumps)
         val first = ShopPlan.firstPill(GameRepo.status == GameRepo.Status.READY, GameRepo.state?.cash)
         appBar = Ui.appBar(this, "Pokémon", first, pillIconRes = R.drawable.ic_money)
@@ -237,7 +249,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     }
 
     internal fun showSection(s: TeamSection) {
-        if (s == section) return
+        if (recipient != null || s == section) return
         boxVisitOpen = false
         section = s
         editing = false
@@ -264,6 +276,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     /** The Team / Box / Pokédex tabs: three equal tabs with an icon over each label, the selected one on an accent rounded square. */
     private fun drawSwitch() {
+        if (recipient != null) { switchBox.visibility = View.GONE; return }
         SectionSwitch.draw(this, switchBox, TeamSection.entries.map { SectionSwitch.Seg(it.label, it.icon) }, section.ordinal, SectionSwitch.Style.TABS) { showSection(TeamSection.entries[it]) }
     }
 
@@ -312,12 +325,14 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     /** Tap on your Pokémon in a battle: open [uid]'s details once, after the next render. */
     fun showDetailsOnce(uid: String) {
+        if (recipient != null) return
         detailsOnce.ask(uid)
         requestRender()
     }
 
     /** Compare from a Pokémon's actions menu: picking mode on, with [uid] already ticked. */
     override fun startPickWith(uid: String) {
+        if (recipient != null) return
         pickOn = true
         editing = false
         picks.clear()
@@ -542,6 +557,11 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
 
     /** A group tile (hold or tap): the sheet with all copies. A copy's details / actions work as everywhere else. */
     private fun openCopies(tile: BoxTile) {
+        val request = recipient
+        if (request != null) {
+            BoxCopiesSheet(this, tile, request.picked, { _, _, _ -> }, request.eligible).show()
+            return
+        }
         BoxCopiesSheet.show(this, tile,
             onOpen = { MonDetail.show(this, data, it) },
             onMenu = { mon, anchor, done -> actions.menu(mon, anchor, done) })
@@ -786,10 +806,22 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         cell.glow.visibility = if (TileMark.SHINY in marks) View.VISIBLE else View.GONE
         // the tick badge takes the bottom-left corner while picking: the strip starts after it
         (cell.strip.layoutParams as FrameLayout.LayoutParams).leftMargin = Ui.dp(this, if (pickOn) 22 else 4)
-        f.alpha = if (mon.hp <= 0) 0.55f else 1f
+        val request = recipient
+        val eligible = request == null || tile.members.any(request.eligible)
+        f.isEnabled = eligible
+        f.alpha = if (!eligible) 0.35f else if (mon.hp <= 0) 0.55f else 1f
         f.contentDescription = (listOfNotNull(
             mon.shownName, "level ${mon.level}", if (tile.isGroup) "${tile.count} copies" else null,
         ) + marks.map { it.label.lowercase() }).joinToString(", ")
+        if (request != null) {
+            f.setOnClickListener {
+                if (eligible) {
+                    if (tile.isGroup) openCopies(tile) else if (request.eligible(mon)) request.picked(mon)
+                }
+            }
+            f.setOnLongClickListener(null)
+            return
+        }
         f.setOnClickListener { if (pickOn) togglePick(pick) else if (tile.isGroup) openCopies(tile) else MonDetail.show(this, data, mon) }
         f.setOnLongClickListener { if (tile.isGroup && !pickOn) openCopies(tile) else actions.menu(mon, it); true }
     }
