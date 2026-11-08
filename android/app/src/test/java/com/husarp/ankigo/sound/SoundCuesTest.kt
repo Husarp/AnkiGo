@@ -63,7 +63,46 @@ class SoundCuesTest {
     }
 
     @Test fun ballThrowWobblesThreeTimes() {
-        assertEquals(listOf("THROW" to 0L, "WOBBLE" to 600L, "WOBBLE" to 1100L, "WOBBLE" to 1600L), cues(GameEvent.BallThrow("poke-ball", 40, false, 3)))
+        assertEquals(listOf("THROW" to 0L, "WOBBLE" to 780L, "WOBBLE" to 1115L, "WOBBLE" to 1375L), cues(GameEvent.BallThrow("poke-ball", 40, false, 3)))
+    }
+
+    @Test fun defeatBallRequestsTheSameWobblesAsAutoCatch() {
+        val defeat = SoundRules.cuesFor(GameEvent.Defeated(1, "B", 5))
+        val caught = SoundRules.cuesFor(GameEvent.Caught("u", 1, "B", 5, false, null, false, true))
+        assertEquals(listOf("WOBBLE" to 780L, "WOBBLE" to 1115L, "WOBBLE" to 1375L), cues(GameEvent.Defeated(1, "B", 5)))
+        assertEquals(caught.filterIsInstance<Cue.Effect>().filter { it.id == SoundId.WOBBLE }.map { it.delayMs }, defeat.map { it.delayMs })
+    }
+
+    @Test fun successfulAndFailedThrowsRequestTheSameWobbles() {
+        assertEquals(cues(GameEvent.BallThrow("poke-ball", 40, false, 3)), cues(GameEvent.BallThrow("poke-ball", 40, true, 3)))
+    }
+
+    @Test fun wobbleSoundsTrackTheAnimatedRotationPeaksAtBothPaces() {
+        val wobbles = SoundRules.cuesFor(GameEvent.Defeated(1, "B", 5))
+        for (pace in listOf(1.0, 0.5)) {
+            wobbles.zip(listOf(.08, .30, .52)).forEach { (cue, peak) ->
+                // Invert ArenaView's AccelerateDecelerateInterpolator to find the wall-clock peak.
+                val at = (450 + 1800 * kotlin.math.acos(1 - 2 * peak) / kotlin.math.PI) * pace
+                assertEquals(at, SoundRules.scaledDelay(cue.delayMs, pace).toDouble(), 5.0)
+            }
+        }
+    }
+
+    @Test fun wobbleSoundsRespectBattleSettingsAndQuietRules() {
+        val events = listOf(GameEvent.Defeated(1, "B", 5), GameEvent.BallThrow("poke-ball", 40, false, 3),
+            GameEvent.Caught("u", 1, "B", 5, false, null, false, true))
+        for (event in events) {
+            val wobbles = SoundRules.cuesFor(event).filterIsInstance<Cue.Effect>().filter { it.id == SoundId.WOBBLE }
+            assertEquals(3, wobbles.size)
+            for (cue in wobbles) {
+                assertTrue(SoundRules.shouldPlay(cue, SoundContext(volumes = mapOf(SoundChannel.BATTLE to 30))))
+                assertFalse(SoundRules.shouldPlay(cue, SoundContext(groupsOff = setOf(SoundGroup.BATTLE))))
+                assertFalse(SoundRules.shouldPlay(cue, SoundContext(volumes = mapOf(SoundChannel.BATTLE to 0))))
+                assertFalse(SoundRules.shouldPlay(cue, SoundContext(muted = true)))
+                assertFalse(SoundRules.shouldPlay(cue, SoundContext(ringerNormal = false)))
+                assertFalse(SoundRules.shouldPlay(cue, SoundContext(skipping = true)))
+            }
+        }
     }
 
     @Test fun breakFreeOnlyWithABall() {
@@ -75,7 +114,7 @@ class SoundCuesTest {
     @Test fun caughtWithAndWithoutAThrownBall() {
         val caught = GameEvent.Caught("u", 1, "B", 5, false, null, false, true)
         assertEquals(listOf("CATCH" to 0L), cues(caught, ball = true))
-        assertEquals(listOf("WOBBLE" to 600L, "WOBBLE" to 1100L, "WOBBLE" to 1600L, "CATCH" to 2250L), cues(caught, ball = false))
+        assertEquals(listOf("WOBBLE" to 780L, "WOBBLE" to 1115L, "WOBBLE" to 1375L, "CATCH" to 2250L), cues(caught, ball = false))
     }
 
     @Test fun encounterCryAndShiny() {
@@ -110,7 +149,6 @@ class SoundCuesTest {
         assertTrue(cues(GameEvent.Cash(5, 10, CashKind.ANSWER)).isEmpty())
         assertTrue(cues(GameEvent.Cash(50, 60, CashKind.DAILY_BONUS)).isEmpty())
         assertTrue(cues(GameEvent.Info("Something else")).isEmpty())
-        assertTrue(cues(GameEvent.Defeated(1, "B", 5)).isEmpty())
         assertTrue(cues(GameEvent.Counted(3, 2, 1, 1, false)).isEmpty())
         assertTrue(cues(GameEvent.Splash("X")).isEmpty())
         assertTrue(cues(GameEvent.MoveSkipped("u", "A", "Tackle")).isEmpty())

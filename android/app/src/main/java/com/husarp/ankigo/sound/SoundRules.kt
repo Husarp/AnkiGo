@@ -43,8 +43,8 @@ object SoundRules {
     /** Visual delays of [com.husarp.ankigo.ui.EventPlayer]: the hit lands 300 ms after the lunge starts, the wild one has entered after 450 ms. */
     private const val HIT_DELAY_MS = 300L
     private const val ENTER_DELAY_MS = 450L
-    /** A ball drops for 450 ms, then wobbles for 1.8 s: three wobbles inside that, and the banner at 2250 ms. */
-    private val WOBBLE_MS = longArrayOf(600, 1100, 1600)
+    /** ArenaView: 450 ms drop + 1800 ms wobble; rotation peaks at fractions .08/.30/.52 after accelerate-decelerate easing. */
+    private val WOBBLE_MS = longArrayOf(780, 1115, 1375)
     private const val BALL_DONE_MS = 2250L
     private const val EVO_DONE_MS = 900L
 
@@ -69,6 +69,7 @@ object SoundRules {
         is GameEvent.Effect -> listOfNotNull(effect(e))
         is GameEvent.Fainted -> listOf(fx(SoundId.FAINT))
         is GameEvent.BallThrow -> listOf(fx(SoundId.THROW)) + WOBBLE_MS.map { fx(SoundId.WOBBLE, it) }
+        is GameEvent.Defeated -> WOBBLE_MS.map { fx(SoundId.WOBBLE, it) }
         is GameEvent.Caught ->
             if (ballShown) listOf(fx(SoundId.CATCH))
             else WOBBLE_MS.map { fx(SoundId.WOBBLE, it) } + fx(SoundId.CATCH, BALL_DONE_MS)
