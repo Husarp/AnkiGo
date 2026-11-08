@@ -81,7 +81,7 @@ class AchievementsTest {
     @Test fun theDroppedRowsAreGoneAndTheirIdsStayFree() {
         for (id in DROPPED) assertNull(id, AchievementTable.row(id))
         assertEquals(21, AchievementTable.ROWS.count { !it.oneOff })
-        assertEquals(22, AchievementTable.ROWS.count { it.oneOff })
+        assertEquals(28, AchievementTable.ROWS.count { it.oneOff })
         // their counters stay in the engine
         assertTrue(Metric.entries.containsAll(listOf(Metric.BEST_COMBO, Metric.GOOD_PRESSES, Metric.EASY_PRESSES)))
         assertTrue(AchievementTable.ROWS.none { it.metric in listOf(Metric.BEST_COMBO, Metric.GOOD_PRESSES, Metric.EASY_PRESSES) })
@@ -91,7 +91,7 @@ class AchievementsTest {
     }
 
     @Test fun everyRowIsInItsGroupAndTheSixGroupsComeInOrder() {
-        assertEquals(listOf("Study", "Battle", "Collection", "Economy", "Special", "Badges", "Secret"), AchievementTable.GROUPS)
+        assertEquals(listOf("Study", "Battle", "Collection", "Item collections", "Economy", "Special", "Badges", "Secret"), AchievementTable.GROUPS)
         for ((g, ids) in BY_GROUP) assertEquals(g, ids, AchievementTable.ROWS.filter { it.group == g }.map { it.id })
         assertTrue(AchievementTable.ROWS.filter { it.group == "Badges" }.all { it.ankimonBadge != null })
         assertEquals(11, AchievementTable.ROWS.count { it.group == "Badges" })

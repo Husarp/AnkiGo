@@ -98,6 +98,7 @@ sealed class GameEvent {
     data class Fainted(val player: Boolean, val name: String) : GameEvent()
 
     /** A ball was thrown (optional tap). [success] = it caught the wild Pokémon. [number] = which throw of this fight it was (1 = the first; 0 = not known, an event made without a fight). */
+    data class BerryActivated(val item: String) : GameEvent()
     data class BallThrow(val ball: String, val chance: Int, val success: Boolean, val left: Int, val number: Int = 0, val special: String? = null) : GameEvent()
 
     /** The wild Pokémon joined the collection. [newSpecies] = first of its kind (new Pokédex entry). */

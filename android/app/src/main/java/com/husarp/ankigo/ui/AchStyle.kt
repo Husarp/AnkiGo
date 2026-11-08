@@ -33,6 +33,12 @@ object AchStyle {
         "legendary" to R.drawable.ic_ach_crown, "types" to R.drawable.ic_palette, "evolve" to R.drawable.ic_ach_evolve,
         "trophy" to R.drawable.ic_ach_trophy, "level" to R.drawable.ic_ach_levels, "xp" to R.drawable.ic_star, "ball-throw" to R.drawable.ic_ball,
         "ball-catch" to R.drawable.ic_ach_ballcheck,
+        "collection-pantry-complete" to R.drawable.ic_ach_collection_pantry_complete,
+        "collection-regular-throws" to R.drawable.ic_ach_collection_regular_throws,
+        "collection-special-throws" to R.drawable.ic_ach_collection_special_throws,
+        "collection-berry-sampler" to R.drawable.ic_ach_collection_berry_sampler,
+        "collection-well-equipped" to R.drawable.ic_ach_collection_well_equipped,
+        "collection-stone-stories" to R.drawable.ic_ach_collection_stone_stories,
         // Economy
         "coin" to R.drawable.ic_ach_money, "bag" to R.drawable.ic_shop, "potion" to R.drawable.ic_ach_potion, "tm" to R.drawable.ic_ach_tm, "gift" to R.drawable.ic_gift,
         "secret-one-shot" to R.drawable.ic_ach_secret_one_shot,
@@ -81,6 +87,7 @@ object AchStyle {
         "badge-mythical", "badge-item" -> R.color.ag_mauve
         "badge-evolve" -> R.color.ag_green
         "badge-fossil" -> R.color.ag_peach
+        "collection-pantry-complete", "collection-regular-throws", "collection-special-throws", "collection-berry-sampler", "collection-well-equipped", "collection-stone-stories" -> R.color.ag_teal
         else -> R.color.ag_sub0
     })
 

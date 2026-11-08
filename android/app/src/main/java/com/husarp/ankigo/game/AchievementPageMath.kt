@@ -184,6 +184,7 @@ object AchPageMath {
         if (row.ankimonBadge != null) return AchSource.BADGE
         val m = row.metric ?: return AchSource.BADGE
         return when {
+            m in ItemCollections.kinds -> AchSource.SINCE_UPDATE
             m.external -> AchSource.EXTERNAL
             !m.counted -> AchSource.SAVE
             m in BACKFILLED -> AchSource.HISTORY

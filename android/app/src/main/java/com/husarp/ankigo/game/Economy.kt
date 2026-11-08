@@ -471,6 +471,7 @@ object Shop {
         StudyStats.addSpent(state, price)
         Economy.give(state, item, quantity)
         if (limited(item)) state.shopPurchases += offerKey(state, item)
+        ItemCollections.record(state, Metric.PANTRY_KINDS, item)
         val label = if (quantity == 1) Items.name(item) else "$quantity × ${Items.name(item)}"
         return ActionResult(true, "Bought $label for ${money(price)}", spent(data, state, price, now))
     }
@@ -654,6 +655,7 @@ object ItemUse {
                 val from = mon.name
                 Economy.take(state, item)
                 Progression.evolve(data, state, mon, evo, rng, events, now)
+                ItemCollections.record(state, Metric.STONE_KINDS, item)
                 return used(data, state, now, events, "$from evolved into ${mon.name}!")
             }
             ItemKind.FOSSIL -> {
@@ -671,6 +673,7 @@ object ItemUse {
                 Economy.take(state, item)
                 if (old != null) Economy.give(state, old)
                 mon.heldItem = item
+                ItemCollections.record(state, Metric.EQUIPMENT_KINDS, item)
                 val back = if (old != null) " (${Items.name(old)} went back to the bag)" else ""
                 return used(data, state, now, events, "${mon.name} now holds $name$back")
             }
