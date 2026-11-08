@@ -120,7 +120,7 @@ class R17C2RewardsTest {
         assertTrue(e.none { it is GameEvent.Evolved })
     }
 
-    @Test fun anEverstoneStopsTheFriendshipEvolutionOfACatchWin() {
+    @Test fun catchWinStillRequiresExplicitEvolutionWhileHoldingEverstone() {
         val (s, m) = st(172, 5)
         m.friendship = 159; m.heldItem = "everstone"
         Progression.rewardCatch(data, s, m, wild16(1), noon, Random(1), ev())

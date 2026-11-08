@@ -221,7 +221,7 @@ object BattleEngine {
         val weather = rulesProduct { it.weatherMod(h) }
         if (weather != 1.0) dmg = floor(dmg * weather).toInt()
         if (crit) dmg = floor(dmg * Tuning.CRIT_MULT).toInt()
-        val roll = forceRoll ?: rng.nextInt(Tuning.ROLL_MIN, 101)
+        val roll = forceRoll ?: NaturePerks.damageRoll(attacker.nature, rng)
         dmg = dmg * roll / 100
         if (!struggle && h.type in h.aTypes) dmg = floor(dmg * (rulesFirst { it.stab(h) } ?: Tuning.STAB)).toInt()
         dmg = floor(dmg * eff).toInt()

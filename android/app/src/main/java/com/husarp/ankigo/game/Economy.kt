@@ -95,7 +95,7 @@ object Items {
         "lucky-egg" to "Holder gets ×1.5 XP",
         "amulet-coin" to "Main holds it: ×2 money",
         "luck-incense" to "Main holds it: ×2 money",
-        "everstone" to "Holder never evolves",
+        "everstone" to "+15% battle XP with no evolution branch",
         "macho-brace" to "Main holds it: ×2 EVs",
         "power-weight" to "Main holds it: +8 HP EVs",
         "power-bracer" to "Main holds it: +8 Attack EVs",

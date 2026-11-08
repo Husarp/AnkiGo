@@ -395,7 +395,7 @@ class ProgressionTest {
         assertEquals(listOf(11, 12, 13), Progression.readyEvolutions(d, s, m, noon).map { it.to })
         assertEquals(listOf(11, 12), Progression.readyEvolutions(d, s, m, midnight).map { it.to })
         m.heldItem = "everstone"
-        assertTrue(Progression.readyEvolutions(d, s, m, noon).isEmpty())
+        assertEquals(listOf(11, 12, 13), Progression.readyEvolutions(d, s, m, noon).map { it.to })
         m.heldItem = null
         assertTrue(Game(d, s, Random(1)) { noon }.chooseEvolution(m.uid, 12).ok)
         assertEquals(12, m.species)
@@ -414,7 +414,7 @@ class ProgressionTest {
         assertEquals(0, s.count("water-stone"))
     }
 
-    @Test fun explicitEvolutionRespectsSuppressedEverstoneForEveryBranch() {
+    @Test fun explicitEvolutionWorksWithEverstoneForEveryBranch() {
         val d = TestData.data(listOf(TestData.species(10, evolutions = listOf(
             Evolution(11, EvoKind.LEVEL, level = 5), Evolution(12, EvoKind.ITEM, item = "water-stone"))),
             TestData.species(11), TestData.species(12), TestData.species(20)))
@@ -424,7 +424,7 @@ class ProgressionTest {
             m.heldItem = "everstone"
             s.bag["water-stone"] = 1
             s.battle = Battle(TestData.mon(d, 20, 20, uid = "wild"), Tier.NORMAL)
-            assertTrue(Progression.readyEvolutions(d, s, m, noon).isEmpty())
+            assertEquals(listOf(11, 12), Progression.readyEvolutions(d, s, m, noon).map { it.to })
             if (suppression == "embargo") s.battle!!.player.volatiles[suppression] = 5
             else s.battle!!.field.rooms[suppression] = 5
             assertEquals(listOf(11, 12), Progression.readyEvolutions(d, s, m, noon).map { it.to })
@@ -471,17 +471,17 @@ class ProgressionTest {
         assertNull(Progression.levelEvolution(data, s, noEvo, noon))
     }
 
-    @Test fun everstoneBlocksAll() {
+    @Test fun everstoneAllowsAllEvolutionKinds() {
         val (s, m) = st(1, 16)
         m.bondPoints = 125
         m.heldItem = "everstone"
-        assertNull(Progression.levelEvolution(data, s, m, noon))
+        assertNotNull(Progression.levelEvolution(data, s, m, noon))
         val (_, f) = st(172, 5)
         f.heldItem = "everstone"; f.friendship = 300; f.bondPoints = 500
-        assertNull(Progression.friendshipEvolution(data, s, f, noon))
+        assertNotNull(Progression.friendshipEvolution(data, s, f, noon))
         val (_, sp) = st(25, 5)
-        sp.heldItem = "everstone"
-        assertNull(Progression.itemEvolution(data, sp, "thunder-stone"))
+        sp.heldItem = "everstone"; sp.bondPoints = 125
+        assertNotNull(Progression.itemEvolution(data, sp, "thunder-stone"))
     }
 
     private fun custom(vararg evo: Evolution): Triple<GameData, GameState, Mon> {
@@ -609,8 +609,8 @@ class ProgressionTest {
         assertNull(Progression.itemEvolution(d2, m2, "oval-stone", at(22)))
         assertEquals("day", Progression.itemEvolutionTimeNeeded(d2, m2, "oval-stone", at(22)))
         m2.heldItem = "everstone"
-        assertNull(Progression.itemEvolutionTimeNeeded(d2, m2, "oval-stone", at(22))) // Everstone blocks outright
-        assertNull(Progression.itemEvolution(d2, m2, "oval-stone", at(10)))
+        assertEquals("day", Progression.itemEvolutionTimeNeeded(d2, m2, "oval-stone", at(22)))
+        assertNotNull(Progression.itemEvolution(d2, m2, "oval-stone", at(10)))
     }
 
     @Test fun plainStonesIgnoreTheClock() {

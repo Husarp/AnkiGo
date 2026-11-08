@@ -74,7 +74,7 @@ object ItemInfo {
             ItemKind.HELD -> when (item) {
                 "lucky-egg" -> "×${nice(Tuning.LUCKY_EGG)} XP"
                 "amulet-coin", "luck-incense" -> "Main: ×2 money"
-                "everstone" -> "Never evolves"
+                "everstone" -> "Final form: +15% XP"
                 "macho-brace" -> "Main: ×2 EVs"
                 "soothe-bell" -> "Main: ×${nice(Tuning.SOOTHE_BELL)} Bond points"
                 else -> POWER_STATS[item]?.let { "Main: +8 $it EVs" } ?: NO_DESCRIPTION
@@ -100,7 +100,7 @@ object ItemInfo {
             ItemKind.HELD -> when (item) {
                 "lucky-egg" -> "Holder gets ×${nice(Tuning.LUCKY_EGG)} XP"
                 "amulet-coin", "luck-incense" -> "Main holds it: ×2 money"
-                "everstone" -> "Holder never evolves"
+                "everstone" -> "+15% battle XP with no evolution branch"
                 "macho-brace" -> "Main holds it: ×2 EVs"
                 "soothe-bell" -> "Main holds it: ×${nice(Tuning.SOOTHE_BELL)} Bond points"
                 else -> POWER_STATS[item]?.let { "Main holds it: +8 $it EVs" } ?: NO_DESCRIPTION
@@ -143,7 +143,7 @@ object ItemInfo {
             )
             ItemKind.HELD -> listOf(
                 ItemFact(WHAT, heldWhat(item)),
-                ItemFact(HOW, HOLD_RULE),
+                ItemFact(HOW, if (item == "everstone") "$HOLD_RULE It stays held until taken off or replaced and is not consumed. Evolution remains your choice and is allowed while holding it." else HOLD_RULE),
             )
             ItemKind.ESCAPE -> listOf(
                 ItemFact(WHAT, "Makes the wild Pokémon go away, and a new one appears. You get **no XP** and **no money** for it."),
@@ -374,7 +374,7 @@ object ItemInfo {
         "lucky-egg" -> "The Pokémon holding it gets **×${nice(Tuning.LUCKY_EGG)} XP** from wins and catches. It works for your **main** and for the **Exp. Share** holder."
         "amulet-coin", "luck-incense" -> "While your **main** holds it, the money you earn for answers and wins is **doubled**, all day. " +
             "The slower pay after each ${Tuning.CASH_TIER} coins still applies, so you keep getting double at every step. It does nothing on a Pokémon that is not your main."
-        "everstone" -> "A Pokémon holding it **never evolves**: not by level, Bond, stone or trade. Take it back to let the Pokémon evolve."
+        "everstone" -> "A holder whose current species has **no evolution branch** earns **15% more Pokémon XP** from wins and catches that award XP. Single-stage species qualify too. Apply ×1.15 after Exp. Share splits XP and after other held-item XP multipliers; round down, then apply the usual Bond bonus and practice reduction. Applies to the main or Exp. Share recipient who holds it. No effect on trainer XP, EVs, Bond points, coins, candies or level-100 Pokémon. Embargo and Magic Room suppress this effect for a fighter affected by them. Evolution remains your choice and is allowed while holding it."
         "macho-brace" -> "Your **main** gets **double EVs** from each win, defeat or catch (as always, up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
             "It does nothing on a Pokémon that is not your main."
         "soothe-bell" -> "Your active fighter earns **×${nice(Tuning.SOOTHE_BELL)} Bond points** while answering cards and finishing fights. " +

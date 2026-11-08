@@ -81,7 +81,7 @@ class EvoLine(val root: EvoNode, val current: Species) {
                     "with an Atk stat equal to its Def stat", "with a Dark-type in the party")
                 add(it.replaceFirstChar { c -> c.uppercase() } + if (checked) "." else " (this extra condition is not checked in AnkiGo).")
             }
-            add("When ready, choose Evolve in your Pokémon's Evolution section. An Everstone blocks evolution.")
+            add("When ready, choose Evolve in your Pokémon's Evolution section.")
         }.joinToString("\n\n")
 
         /** "Lv 16", "Thunder Stone", "Linking Cord", "Friendship", "knows Mimic" (+ day/night, other conditions). */

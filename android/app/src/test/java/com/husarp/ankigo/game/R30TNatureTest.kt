@@ -87,7 +87,7 @@ class R30TNatureTest {
                 repeat(100) { Bond.add(m, 1, mutableListOf(), studyAnswer = true) }
                 assertEquals(100, m.bondPoints)
             }
-            if (n in listOf(Nature.HARDY, Nature.DOCILE)) assertTrue(DetailMath.natureEffect(n).contains(NaturePerks.description(n)!!))
+            if (n in listOf(Nature.HARDY, Nature.DOCILE, Nature.SERIOUS, Nature.BASHFUL, Nature.QUIRKY)) assertTrue(DetailMath.natureEffect(n).contains(NaturePerks.description(n)!!))
             else assertNull(NaturePerks.description(n))
         }
     }
