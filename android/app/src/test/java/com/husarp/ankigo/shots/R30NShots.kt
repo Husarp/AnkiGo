@@ -64,7 +64,8 @@ class R30NShots {
         assertFalse(ready.contains("Everstone"))
         mon.heldItem = "everstone"
         val content = EvolutionRows.explanationContent(ctx, data, e, data.sp(mon.species), state.seen, state, mon) {}
-        assertTrue(texts(content).any { it.contains("Everstone held") })
+        assertFalse(texts(content).any { it.contains("Everstone") })
+        assertTrue(texts(content).any { it.contains("Level 2 Bond ✓") })
         mon.bondPoints = 0
         assertFalse(EvolutionRowText.explanation(data, e, data.sp(mon.species), state.seen, state, mon).contains("Level 2 Bond ✓"))
         FrameLayout(ctx).apply {

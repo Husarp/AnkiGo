@@ -291,7 +291,21 @@ class R19KConditionShots {
             b.enemy.boosts[0] = if (host == hosts[0]) 3 else 0; b.enemy.boosts[1] = -1
             sc.arena.syncConditions(b)
             layoutScene(sc)
-            val chip = sc.arena.markRows().first { it.slot == slot }.chips.first { it.mark!!.key.startsWith("stat.") }
+            val row = sc.arena.markRows().firstOrNull { it.slot == slot }
+            if (row == null) {
+                assertEquals("Only the smallest floating host may lack safe chip space", hosts[6], host)
+                assertTrue(tapCard(sc, wild = slot == ConditionMarks.Slot.WILD))
+                layoutScene(sc)
+                val list = sc.arena.conditionListShown()!!
+                for (mark in sc.arena.conditions.all()) {
+                    val expected = if (mark.key.startsWith("stat.")) com.husarp.ankigo.ui.ConditionExplanation.line(mark) else mark.spoken
+                    assertTrue("${host.name}: $expected is in ${list.spoken}", list.spoken.contains(expected))
+                }
+                assertTrue(list.left >= 0 && list.right <= sc.arena.width && list.top >= 0 && list.bottom <= sc.arena.height)
+                paparazzi.snapshot(sc.root, "r25h-stat-fallback-${host.name}-${slot.name.lowercase()}-${theme.name.lowercase()}")
+                continue
+            }
+            val chip = row.chips.first { it.mark!!.key.startsWith("stat.") }
             val c = chip.rect
             val t = android.os.SystemClock.uptimeMillis()
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, c.centerX(), c.centerY(), 0))
@@ -308,7 +322,6 @@ class R19KConditionShots {
             val card = sc.arena.conditionListShown()!!
             assertTrue("card fits arena width", card.left >= 0 && card.right <= sc.arena.width)
             assertTrue("card fits arena height", card.top >= 0 && card.bottom <= sc.arena.height)
-            paparazzi.snapshot(sc.root, "r25h-stat-${host.name}-${slot.name.lowercase()}-${theme.name.lowercase()}")
             fun labels(v: View): List<String> = (if (v is android.widget.TextView) listOf(v.text.toString()) else emptyList()) +
                 ((v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).flatMap { labels(g.getChildAt(it)) } } ?: emptyList())
             val texts = labels(card)
@@ -319,6 +332,13 @@ class R19KConditionShots {
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(tap, tap, MotionEvent.ACTION_DOWN, card.left + card.width / 2f, card.top + card.height / 2f, 0))
             sc.arena.dispatchTouchEvent(MotionEvent.obtain(tap, tap + 40, MotionEvent.ACTION_UP, card.left + card.width / 2f, card.top + card.height / 2f, 0))
             assertNull(sc.arena.conditionListShown())
+            // Snapshot detaches the arena and closes its popup; exercise touch before capture.
+            val reopen = android.os.SystemClock.uptimeMillis()
+            sc.arena.dispatchTouchEvent(MotionEvent.obtain(reopen, reopen, MotionEvent.ACTION_DOWN, c.centerX(), c.centerY(), 0))
+            sc.arena.dispatchTouchEvent(MotionEvent.obtain(reopen, reopen + 40, MotionEvent.ACTION_UP, c.centerX(), c.centerY(), 0))
+            layoutScene(sc)
+            assertNotNull(sc.arena.conditionListShown())
+            paparazzi.snapshot(sc.root, "r25h-stat-${host.name}-${slot.name.lowercase()}-${theme.name.lowercase()}")
         }
     }
 

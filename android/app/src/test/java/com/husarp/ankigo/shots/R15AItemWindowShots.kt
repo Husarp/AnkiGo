@@ -9,7 +9,7 @@ import android.widget.TextView
 import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.game.ItemInfo
-import com.husarp.ankigo.ui.AppDialog
+import com.husarp.ankigo.ui.BoxMonPicker
 import com.husarp.ankigo.ui.CardKeys
 import com.husarp.ankigo.ui.ItemWindow
 import com.husarp.ankigo.ui.Pickers
@@ -100,7 +100,12 @@ class R15AItemWindowShots {
         var dialog: Any? = null
         var windowThen: Boolean? = null
         Pickers.interceptApp = { dialog = it; windowThen = p.itemWindow != null || p.open.key != null }
-        try { act() } finally { Pickers.interceptApp = null }
+        BoxMonPicker.interceptShow = { box, recipient ->
+            dialog = box; windowThen = p.itemWindow != null || p.open.key != null
+            assertNull("recipient visit has no bottom tabs", recipient.tab)
+            recipient.onGone()
+        }
+        try { act() } finally { Pickers.interceptApp = null; BoxMonPicker.interceptShow = null }
         return dialog to windowThen
     }
 
@@ -227,7 +232,7 @@ class R15AItemWindowShots {
                 if (button == "Give to another Pokémon") {
                     assertEquals(true, windowThen)
                     assertNotNull(p.itemWindow)
-                    (dialog as AppDialog).dismiss()
+                    (dialog as android.app.Dialog).dismiss()
                     p.onGone()
                     continue
                 }
