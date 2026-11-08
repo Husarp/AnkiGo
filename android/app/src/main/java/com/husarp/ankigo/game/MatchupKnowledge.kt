@@ -23,7 +23,7 @@ object MatchupKnowledge {
         val base = data.species[mon.species]?.baseNum ?: mon.species
         state.bondMatchups += base
         val seen = state.seenMatchups.getOrPut(base) { mutableSetOf() }
-        if (seen.addAll(Type.entries)) events += GameEvent.Info("You know ${mon.shownName}'s matchups now")
+        if (seen.addAll(Type.entries)) events += GameEvent.Info("You know ${mon.shownName}'s matchups now", mon.uid)
     }
 
     /** Record before rewards/evolution or the next encounter can change either participant. */

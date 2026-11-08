@@ -22,6 +22,7 @@ class R31LBondMatchupsTest {
         assertEquals(3, Bond.level(s.main!!.bondPoints))
         assertEquals(Type.entries.toSet(), MatchupKnowledge.seen(data, s, 25))
         assertEquals("You know ${s.main!!.shownName}'s matchups now", reveals(events).single().text)
+        assertEquals(s.main!!.uid, reveals(events).single().uid)
         assertTrue(events.filterIsInstance<GameEvent.Info>().any { it.text.startsWith("Bond grew!") })
         assertTrue(MatchupKnowledge.seen(data, s, 16).isEmpty())
         assertTrue(reveals(game.onAnswer(Answer(2, 3, now))).isEmpty())
@@ -61,7 +62,7 @@ class R31LBondMatchupsTest {
             assertEquals(0, MatchupKnowledge.of(data, restored, 54).unknownCount)
             assertEquals(18, MatchupKnowledge.of(data, restored, 25).unknownCount)
             game.tick() // widget/day bookkeeping must not consume the battle alert
-            assertEquals(1, reveals(game.ensureEncounter()).size)
+            assertEquals("boxed", reveals(game.ensureEncounter()).single().uid)
             assertTrue(game.ensureEncounter().isEmpty())
             val reloaded = SaveCodec.decode(SaveCodec.encode(restored))
             assertTrue(reveals(Game(data, reloaded).ensureEncounter()).isEmpty())

@@ -61,7 +61,7 @@ class R31NShots {
             paparazzi.snapshot(scene, "n-508-$suffix")
             fits(body)
             val words = texts(body).map { it.text.toString() }
-            for (word in listOf("Level 3", "+3 coins", "+15% XP", "+4 coins", "+20% XP", "5% chance to survive a KO with 1 HP", "Higher Bond evolutions")) assertTrue(word, word in words)
+            for (word in listOf("Level 3", "All species matchups revealed", "+3 coins", "+15% XP", "+4 coins", "+20% XP", "5% chance to survive a KO with 1 HP", "Higher Bond evolutions")) assertTrue(word, word in words)
             val bar = nodes(body).filterIsInstance<BarView>().single()
             val column = bar.parent as LinearLayout
             assertEquals(Ui.dp(ctx, 28), (column.getChildAt(3).layoutParams as LinearLayout.LayoutParams).topMargin)
@@ -100,6 +100,7 @@ class R31NShots {
             val words = texts(body).map { it.text.toString() }
             assertEquals(level < 5, words.any { it.startsWith("NEXT") })
             assertFalse(words.any { it.contains("Level 6") || it.contains("NEXT · 6") })
+            assertEquals(if (level >= 3) if (level < 5) 2 else 1 else if (level == 2) 1 else 0, words.count { it == "All species matchups revealed" })
             if (level == 0) assertTrue("No perks yet" in words)
             if (level == 5) assertTrue("10% chance to survive a KO with 1 HP" in words)
         }
