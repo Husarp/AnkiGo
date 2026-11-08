@@ -353,9 +353,9 @@ class EconomyTest {
 
     private fun days(n: Int) = (0 until n).map { java.time.LocalDate.of(2026, 1, 1).plusDays(it.toLong()).toString() }
 
-    @Test fun ultraBallDailyChanceIsThreePercent() {
+    @Test fun ultraBallDailyChanceIsFifteenPercent() {
         val ultraDays = days(730).count { Shop.ultraBallDay(it) }
-        assertTrue("$ultraDays of 730", ultraDays in 8..40)   // about 22 expected
+        assertTrue("$ultraDays of 730", ultraDays in 80..140)   // about 110 expected
         assertEquals("date-seeded: the same answer every time", days(60).map { Shop.ultraBallDay(it) }, days(60).map { Shop.ultraBallDay(it) })
     }
 

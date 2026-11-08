@@ -74,6 +74,8 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
     /** Bar + body (+ the not-ready cover), built on first use. Add it to the host's layout. */
     val root: View by lazy(LazyThreadSafetyMode.NONE) { buildRoot() }
 
+    protected open fun wrapRoot(column: View): View = column
+
     private fun buildRoot(): View {
         val bar = buildBar()
         val body = buildBody()
@@ -98,7 +100,7 @@ abstract class GamePage(base: Context, val host: PageHost) : ContextWrapper(base
             addView(middle, LinearLayout.LayoutParams(-1, 0, 1f))
         }
         if (needsGame) GameRepo.load(this) { requestRender() }
-        return column
+        return wrapRoot(column)
     }
 
     /** The page is visible and in front: listen to GameRepo and draw. */

@@ -260,7 +260,7 @@ object Tuning {
     const val SHOP_ROUND_SMALL = 10
     const val SHOP_ROUND_LARGE = 50
     const val SPECIAL_SHOP_PERCENT = 50
-    val REGULAR_SHOP_WEIGHTS = linkedMapOf("poke-ball" to 80, "great-ball" to 17, "ultra-ball" to 3)
+    val REGULAR_SHOP_WEIGHTS = linkedMapOf("great-ball" to 85, "ultra-ball" to 15)
     // Half-percent units allow exact 8.5% weights.
     val SPECIAL_SHOP_WEIGHTS = linkedMapOf("net-ball" to 38, "dive-ball" to 38, "nest-ball" to 38,
         "dusk-ball" to 17, "timer-ball" to 17, "quick-ball" to 17, "repeat-ball" to 17,
@@ -343,7 +343,7 @@ object Tuning {
     const val TM_PRICE = 1000
     const val REROLL_PRICE = 100
     const val REROLL_PRICE_STEP = 100
-    val SHOP_BASICS = listOf("potion") // always on sale at their normal price; not part of the daily draw
+    val SHOP_BASICS = listOf("poke-ball", "potion") // always on sale at their normal price; not part of the daily draw
     val DEAL_PERCENTS = listOf(20, 25, 30, 35, 40) // date-seeded, independently drawn for each day/night offer
 
     // ---- Healing (AnkiGo's own rules, PLAN 80; Ankimon has none of these). Whole HP, never above max HP. ----

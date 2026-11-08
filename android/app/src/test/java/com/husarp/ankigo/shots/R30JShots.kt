@@ -95,7 +95,7 @@ class R30JShots {
         }
     }
 
-    @Test fun bagSideListReclaimsSpaceAndCountsEachOwnedCopyOnce() {
+    @Test fun bagSideListOverlaysItemsAndCountsEachOwnedCopyOnce() {
         for (theme in Theme.entries) for (width in listOf(320, 360)) {
             val c = ctx(theme, width)
             val st = GameRepo.state!!
@@ -104,9 +104,9 @@ class R30JShots {
             st.mons.first().heldItem = "amulet-coin"; st.bag["amulet-coin"] = 1
             st.tms.add("thunderbolt")
             val page = ShopPage(c, NoHost, bagOnly = true)
-            val bag = BagActions(page, MonActions(page), page)
-            val body = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Ui.c(c, R.color.ag_base)) }
-            fun render() { body.removeAllViews(); bag.fill(body) }
+            val body = page.root
+            page.onShow()
+            fun render() { call(page, "render") }
             fun snap(state: String) = paparazzi.snapshot(body, "j-477-bag-$width-$state-${theme.name.lowercase()}")
             render(); snap("collapsed")
             assertFalse(all(body).any { it.tag == "bag-categories" })
@@ -115,7 +115,7 @@ class R30JShots {
             val categories = all(body).single { it.tag == "bag-categories" } as LinearLayout
             assertEquals(9, categories.childCount)
             assertEquals(listOf("All items", "13"), all(categories.getChildAt(0)).filterIsInstance<TextView>().map { it.text.toString() }.takeLast(2))
-            assertTrue(all(body).single { it.tag == "bag-results" }.width < body.width)
+            assertEquals(all(body).single { it.tag == "bag-body" }.width, all(body).single { it.tag == "bag-results" }.width)
             all(body).single { it.contentDescription == "Healing category" }.performClick(); render()
             assertTrue(all(body).filterIsInstance<TextView>().any { it.text == "Potion" })
             assertFalse(all(body).filterIsInstance<TextView>().any { it.text == "Poké Ball" })

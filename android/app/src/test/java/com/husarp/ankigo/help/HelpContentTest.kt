@@ -156,7 +156,7 @@ class HelpContentTest {
         val money = chapterText(GameGuide.MONEY)
         assertTrue(money.contains("${Tuning.SHOP_BASE_SLOTS} items"))
         assertTrue(money.contains("${Tuning.REROLL_PRICE}") && money.contains("${Tuning.TM_PRICE}"))
-        assertTrue(money.contains("Poké 80%") && money.contains("Great 17%") && money.contains("Ultra 3%") && money.contains("Master Ball is never sold"))   // R13 Part C
+        assertTrue(money.contains("Poké Balls and Potions are always on sale in Basics") && money.contains("Great 85%") && money.contains("Ultra 15%") && money.contains("Master Ball is never sold"))   // R13 Part C
     }
 
     @Test fun moneyAndHealingUseThePendingNumbersInOnePlace() {

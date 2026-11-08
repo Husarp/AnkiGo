@@ -161,6 +161,7 @@ object ItemInfo {
         item == StreakFreeze.ITEM -> "Daily gift (2%) · Rewarded battle wins (0.2%, at most one per game day; practice gives none) · Shop, until you hold 3. Every next freeze costs more: 2,000 / 3,000 / 4,000 coins as you hold 0 / 1 / 2. Unavailable from all sources while holding 3."
         item in Items.RETIRED -> "Not sold or found any more."
         isMaster(item) -> "Earned from the top tier of the Best streak achievement."
+        item == "poke-ball" -> "Daily gift · Always in the Shop, in Basics."
         isOldBall(item) -> "Shop on some days."
         Items.def(item)?.kind == ItemKind.BALL -> "Daily gift · Shop on some days."
         item in Tuning.SHOP_BASICS -> "Found while studying · Always in the Shop."
