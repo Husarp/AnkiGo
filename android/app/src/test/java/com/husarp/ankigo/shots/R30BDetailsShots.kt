@@ -84,7 +84,7 @@ class R30BDetailsShots {
             scroll.scrollTo(0, bond.top)
             paparazzi.snapshot(scene, "r30b-dex-owned-bond", 1000)
             val text = views(bond).filterIsInstance<TextView>().joinToString("\n") { it.text }
-            assertTrue(text.contains("♥0")); assertTrue(text.contains("♥3"))
+            assertTrue(text.contains("Level 0")); assertTrue(text.contains("Level 3"))
             assertTrue(text.contains("Box friend")); assertTrue(text.contains("In box")); assertTrue(text.contains("In team"))
             state.mons.removeAll { it.species == mon.species }
             val unowned = DialogShots.capture { DexDetail.show(page, data.sp(mon.species)) }!!

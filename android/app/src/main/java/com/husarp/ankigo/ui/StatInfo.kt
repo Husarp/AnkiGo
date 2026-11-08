@@ -28,8 +28,8 @@ object StatInfo {
         "Grows with every win, defeat or catch (Power items add more). Up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in all; every 4 EV is worth about 1 stat point at Lv 100.")
     val BOND = StatInfoText("Bond",
         "Earn +1 point per answered card while fighting and +3 per win. A Soothe Bell multiplies points by 1.5. " +
-            "♥1–♥5 start at 50 / 125 / 250 / 500 / 800 points. Normal evolutions need ♥2 and their usual requirement; Bond evolutions need ♥3 or ♥4. " +
-            "Each level adds +1 coin per defeated Pokémon and +5% XP. At ♥4/♥5, a lethal attack has a 5%/10% chance to leave 1 HP.")
+            "Level 1–Level 5 start at 50 / 125 / 250 / 500 / 800 points. Normal evolutions need Level 2 and their usual requirement; Bond evolutions need Level 3 or Level 4. " +
+            "Each level adds +1 coin per defeated Pokémon and +5% XP. At Level 4/Level 5, a lethal attack has a 5%/10% chance to leave 1 HP.")
     val NATURE = StatInfoText("Nature", "Raises one stat by 10 % and lowers another by 10 %. Five natures change nothing. The arrows mark the two stats.")
     val NATURE_UP = StatInfoText("▲ Raised stat", "This nature gives this stat +10 %.")
     val NATURE_DOWN = StatInfoText("▼ Lowered stat", "This nature gives this stat −10 %.")

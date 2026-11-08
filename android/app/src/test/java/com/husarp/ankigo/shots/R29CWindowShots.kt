@@ -48,7 +48,7 @@ class R29CWindowShots {
                 paparazzi.snapshot(scene, "c-species-$suffix")
                 fits(scene)
                 all(scene).filterIsInstance<TextView>().filter {
-                    it.text.toString() in setOf(data.sp(25).name, data.sp(26).name, "Thunder Stone", "Bond ♥3")
+                    it.text.toString() in setOf(data.sp(25).name, data.sp(26).name, "Thunder Stone", "Needs Level 3 Bond")
                 }.forEach { assertTrue("Evolution names and requirements stay readable", it.layout.lineCount <= 2) }
                 val label = all(scene).filterIsInstance<TextView>().single { it.text.toString() == "Species info" }
                 for (line in 0 until label.layout.lineCount)

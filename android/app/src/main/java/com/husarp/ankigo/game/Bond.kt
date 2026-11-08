@@ -17,7 +17,7 @@ object Bond {
     fun toughChance(points: Int): Int = when (level(points)) { 4 -> 5; 5 -> 10; else -> 0 }
     fun toughRoll(points: Int, roll: Int): Boolean = roll in 0 until toughChance(points)
 
-    /** Keep the legacy value itself in Mon for Ankimon/Return. Old max (including oversized saves) is exactly ♥4. */
+    /** Keep the legacy value itself in Mon for Ankimon/Return. Old max (including oversized saves) is exactly Level 4. */
     fun fromLegacy(friendship: Int): Int = friendship.coerceIn(0, 250) * 2
 
     /** Soothe Bell retains its ×1.5 effect; half points carry between answers/wins and through saves. */
@@ -34,7 +34,7 @@ object Bond {
         mon.bondHalf = if (mon.bondPoints == MAX_POINTS) 0 else halves % 2
         if (mon.bondPoints == MAX_POINTS) mon.natureBondCarry = 0
         val after = level(mon.bondPoints)
-        if (after > before) events += GameEvent.Info("Bond grew! ${mon.shownName} reached ♥$after. ${unlock(after)}")
+        if (after > before) events += GameEvent.Info("Bond grew! ${mon.shownName} reached Level $after. ${unlock(after)}")
     }
 
     fun unlock(level: Int): String = when (level) {
