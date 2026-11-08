@@ -56,6 +56,16 @@ class EvolutionRowTextTest {
         assertTrue(text.contains("Shop"))
     }
 
+    @Test fun heldEverstoneDoesNotAddObsoleteEvolutionRestriction() {
+        val state = TestData.state(data, 133, 20)
+        val mon = state.main!!.apply { heldItem = "everstone"; bondPoints = 125 }
+        val text = EvolutionRowText.explanation(data, Evolution(135, EvoKind.ITEM, item = "thunder-stone"),
+            data.sp(133), setOf(133), state, mon)
+        assertTrue(text.contains("Level 2 Bond ✓"))
+        assertFalse(text.contains("Everstone"))
+        assertFalse(text.contains("take it off"))
+    }
+
     @Test fun tradeUsesActualAnkiGoItemAndDayClockIsExplained() {
         val e = Evolution(135, EvoKind.TRADE, time = "day")
         assertEquals("Linking Cord\nin the daytime", EvolutionRowText.condition(data, e))

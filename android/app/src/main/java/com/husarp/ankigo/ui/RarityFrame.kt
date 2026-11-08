@@ -12,7 +12,7 @@ import android.view.Choreographer
 import android.view.View
 import android.view.ViewTreeObserver
 import androidx.core.graphics.PathParser
-import com.husarp.ankigo.game.Tier
+import com.husarp.ankigo.game.PokemonRarity
 
 /** PLAN 483, option 1C. Magic UI SparklesText (https://github.com/magicuidesign/magicui), MIT;
  * notice in assets/licences/magicui-LICENSE.txt.
@@ -21,11 +21,10 @@ import com.husarp.ankigo.game.Tier
 internal object RarityFrame {
     data class Effect(val color: Int, val stars: Int, val intensity: Float)
 
-    // R30-c's species ladder is not on this branch yet: use the existing encounter tiers.
-    fun effect(tier: Tier?, dark: Boolean): Effect? = when (tier) {
-        Tier.ULTRA -> Effect(if (dark) 0xffc191fa.toInt() else 0xff842ef4.toInt(), 3, 1f)
-        Tier.LEGENDARY -> Effect(if (dark) 0xffffa770.toInt() else 0xffff6004.toInt(), 5, 1.3f)
-        Tier.MYTHICAL -> Effect(if (dark) 0xffff5b59.toInt() else 0xffd20934.toInt(), 7, 1.65f)
+    fun effect(rarity: PokemonRarity?, dark: Boolean): Effect? = when (rarity) {
+        PokemonRarity.ULTRA -> Effect(if (dark) 0xffc191fa.toInt() else 0xff842ef4.toInt(), 3, 1f)
+        PokemonRarity.LEGENDARY -> Effect(if (dark) 0xffffa770.toInt() else 0xffff6004.toInt(), 5, 1.3f)
+        PokemonRarity.MYTHICAL -> Effect(if (dark) 0xffff5b59.toInt() else 0xffd20934.toInt(), 7, 1.65f)
         else -> null
     }
 
@@ -41,9 +40,9 @@ internal object RarityFrame {
     }
     private fun ease(t: Float) = t * t * (3 - 2 * t)
 
-    fun bind(view: View, tier: Tier?, cornerDp: Int = 12) {
+    fun bind(view: View, rarity: PokemonRarity?, cornerDp: Int = 12) {
         val dark = view.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        val effect = effect(tier, dark)
+        val effect = effect(rarity, dark)
         val old = view.foreground as? Frame
         if (effect == null) {
             old?.dispose()

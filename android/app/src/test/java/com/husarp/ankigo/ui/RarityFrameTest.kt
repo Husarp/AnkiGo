@@ -1,20 +1,20 @@
 package com.husarp.ankigo.ui
 
-import com.husarp.ankigo.game.Tier
+import com.husarp.ankigo.game.PokemonRarity
 import org.junit.Assert.*
 import org.junit.Test
 
 class RarityFrameTest {
     @Test fun onlySpecialTiersHaveFramesInBothThemes() {
         for (dark in listOf(false, true)) {
-            val effects = Tier.entries.associateWith { RarityFrame.effect(it, dark) }
-            assertEquals(setOf(Tier.ULTRA, Tier.LEGENDARY, Tier.MYTHICAL), effects.filterValues { it != null }.keys)
+            val effects = PokemonRarity.entries.associateWith { RarityFrame.effect(it, dark) }
+            assertEquals(setOf(PokemonRarity.ULTRA, PokemonRarity.LEGENDARY, PokemonRarity.MYTHICAL), effects.filterValues { it != null }.keys)
             assertNull(RarityFrame.effect(null, dark))
             assertEquals(listOf(3, 5, 7), effects.values.filterNotNull().map { it.stars })
             assertEquals(listOf(1f, 1.3f, 1.65f), effects.values.filterNotNull().map { it.intensity })
-            assertEquals(if (dark) 0xffc191fa.toInt() else 0xff842ef4.toInt(), effects[Tier.ULTRA]!!.color)
-            assertEquals(if (dark) 0xffffa770.toInt() else 0xffff6004.toInt(), effects[Tier.LEGENDARY]!!.color)
-            assertEquals(if (dark) 0xffff5b59.toInt() else 0xffd20934.toInt(), effects[Tier.MYTHICAL]!!.color)
+            assertEquals(if (dark) 0xffc191fa.toInt() else 0xff842ef4.toInt(), effects[PokemonRarity.ULTRA]!!.color)
+            assertEquals(if (dark) 0xffffa770.toInt() else 0xffff6004.toInt(), effects[PokemonRarity.LEGENDARY]!!.color)
+            assertEquals(if (dark) 0xffff5b59.toInt() else 0xffd20934.toInt(), effects[PokemonRarity.MYTHICAL]!!.color)
         }
     }
 

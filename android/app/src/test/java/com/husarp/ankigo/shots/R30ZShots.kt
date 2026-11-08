@@ -60,8 +60,8 @@ class R30ZShots {
     @Test fun clippedHiddenDetachedAndReducedMotionStopAndVisibleCardsShareClock() {
         var checked = false
         paparazzi.shoot("z-visibility", listOf(Size.PHONE), listOf(Theme.LIGHT), offsetMillis = 0) { ctx ->
-            val first = View(ctx).apply { RarityFrame.bind(this, Tier.ULTRA) }
-            val second = View(ctx).apply { RarityFrame.bind(this, Tier.MYTHICAL) }
+            val first = View(ctx).apply { RarityFrame.bind(this, PokemonRarity.ULTRA) }
+            val second = View(ctx).apply { RarityFrame.bind(this, PokemonRarity.MYTHICAL) }
             val a = first.foreground as RarityFrame.Frame
             val b = second.foreground as RarityFrame.Frame
             object : FrameLayout(ctx) {
@@ -106,12 +106,12 @@ class R30ZShots {
     @Test fun recycledCardsLoseTheirOldEffect() {
         paparazzi.shoot("z-recycled", listOf(Size.PHONE), listOf(Theme.LIGHT)) { ctx ->
             View(ctx).apply {
-                RarityFrame.bind(this, Tier.MYTHICAL)
+                RarityFrame.bind(this, PokemonRarity.MYTHICAL)
                 assertNotNull(foreground)
-                RarityFrame.bind(this, Tier.NORMAL)
+                RarityFrame.bind(this, PokemonRarity.PLAIN)
                 assertNull(foreground)
-                RarityFrame.bind(this, Tier.ULTRA)
-                assertEquals(RarityFrame.effect(Tier.ULTRA, false), (foreground as RarityFrame.Frame).effect)
+                RarityFrame.bind(this, PokemonRarity.ULTRA)
+                assertEquals(RarityFrame.effect(PokemonRarity.ULTRA, false), (foreground as RarityFrame.Frame).effect)
                 RarityFrame.bind(this, null)
                 assertNull(foreground)
             }

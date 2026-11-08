@@ -257,8 +257,7 @@ internal object EvolutionRowText {
         } ?: "Requires 1 ${Items.name(item)}.") + "\n\n"
         val applies = mon != null && parent?.num == mon.species
         val bond = "Level ${Bond.requiredLevel(e)} Bond" +
-            (if (applies && Bond.allows(mon!!, e)) " ✓" else "") + "\n\n" +
-            (if (applies && mon!!.heldItem == "everstone") "Everstone held — take it off to evolve.\n\n" else "")
+            (if (applies && Bond.allows(mon!!, e)) " ✓" else "") + "\n\n"
         val details = EvoLine.explanation(data, e).split("\n\n").filterNot { it.startsWith("Reach Level") }.joinToString("\n\n")
         // The item paragraph already explains availability; retain all extra restrictions from the existing rules text.
         return if (item == null) bond + extra + details else extra + bond + inventory + details.split("\n\n").filterNot { it.startsWith("Have ") || it.startsWith("When ready") }.joinToString("\n\n")

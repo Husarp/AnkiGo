@@ -17,6 +17,8 @@ class R30M2SaveTest {
         state.shopPurchases += "2026-11-07:everstone"
         state.defeatedSpecies += 54
         state.main!!.apply { heldItem = "soothe-bell"; natureXpCarry = 137; natureBondCarry = 79 }
+        ItemCollections.record(state, Metric.EQUIPMENT_KINDS, "everstone")
+        ItemCollections.record(state, Metric.PANTRY_KINDS, "sweet-heart")
         state.achLadder = 4
         state.achTiers["types"] = mutableListOf(11L, 22L, 33L)
         state.achInferred += "types/2"
@@ -24,6 +26,8 @@ class R30M2SaveTest {
         assertTrue(Achievements.migrate(restored))
         assertEquals(listOf(22L, 33L), restored.achTiers["types"])
         assertTrue("types/1" in restored.achInferred)
+        assertEquals(1L, Achievements.value(Metric.EQUIPMENT_KINDS, restored, data))
+        assertEquals(1L, Achievements.value(Metric.PANTRY_KINDS, restored, data))
         assertEquals(17, restored.streakDays)
         assertEquals(state.lastGoalDay, restored.lastGoalDay)
         assertEquals(state.streakThroughDay, restored.streakThroughDay)

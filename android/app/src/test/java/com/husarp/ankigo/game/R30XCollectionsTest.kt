@@ -92,6 +92,28 @@ class R30XCollectionsTest {
         assertEquals(1L, value(s, Metric.STONE_KINDS))
     }
 
+    @Test fun boxGivingRecordsOnlySuccessfulDistinctEquipmentKinds() {
+        val s = state()
+        val source = s.main!!.apply { heldItem = "everstone" }
+        val target = TestData.mon(data, 54, 20, uid = "target").apply { heldItem = "soothe-bell" }
+        s.mons += target
+        assertFalse(ItemUse.giveHeld(s, "everstone", source.uid, "missing").ok)
+        assertEquals(0L, value(s, Metric.EQUIPMENT_KINDS))
+        assertTrue(ItemUse.giveHeld(s, "everstone", source.uid, target.uid).ok)
+        assertNull(source.heldItem)
+        assertEquals("everstone", target.heldItem)
+        assertEquals(1, s.count("soothe-bell"))
+        assertEquals(1L, value(s, Metric.EQUIPMENT_KINDS))
+        assertFalse(ItemUse.giveHeld(s, "everstone", null, target.uid).ok)
+        assertTrue(ItemUse.giveHeld(s, "soothe-bell", null, source.uid).ok)
+        assertTrue(ItemUse.giveHeld(s, "everstone", target.uid, source.uid).ok)
+        assertEquals(2L, value(s, Metric.EQUIPMENT_KINDS))
+        assertEquals(1, s.ownedItemCount("everstone"))
+        assertEquals(1, s.ownedItemCount("soothe-bell"))
+        val restored = SaveCodec.decode(SaveCodec.encode(s))
+        assertEquals(2L, value(restored, Metric.EQUIPMENT_KINDS))
+    }
+
     @Test fun berriesCountPlayerActivationNotWildOrSuppressedHeldItems() {
         for (item in ItemCollections.kinds.getValue(Metric.BERRY_KINDS)) {
             val s = state(); val main = s.main!!

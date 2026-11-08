@@ -707,6 +707,7 @@ object ItemUse {
         val old = target.heldItem
         source?.heldItem = null
         target.heldItem = item
+        ItemCollections.record(state, Metric.EQUIPMENT_KINDS, item)
         if (old != null) Economy.give(state, old)
         return ActionResult(true, "${target.name} now holds ${Items.name(item)}" + if (old == null) "" else " (${Items.name(old)} went back to the Bag)")
     }
