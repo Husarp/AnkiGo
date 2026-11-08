@@ -266,7 +266,7 @@ object Shop {
         "power-weight" to 2000, "power-bracer" to 2000, "power-belt" to 2000,
         "power-lens" to 2000, "power-band" to 2000, "power-anklet" to 2000,
     )
-    fun limited(item: String): Boolean = item in weekendPrices || item == "everstone" || item == StreakFreeze.ITEM
+    fun limited(item: String): Boolean = item in weekendPrices || item == "everstone"
 
     private fun offerKey(state: GameState, item: String): String {
         val date = parse(state.day)
@@ -300,7 +300,7 @@ object Shop {
             return
         }
         // Keep Saturday's allowance through Sunday; rerolls never touch these keys.
-        state.shopPurchases.retainAll((weekendPrices.keys + listOf("everstone", StreakFreeze.ITEM)).map { offerKey(state, it) }.toSet())
+        state.shopPurchases.retainAll((weekendPrices.keys + listOf("everstone")).map { offerKey(state, it) }.toSet())
         state.shopRefreshes = 0
         val (items, tms) = stockFor(data, state.day, state.trainerLevel)
         setStock(state, items, tms)
@@ -457,7 +457,7 @@ object Shop {
     /** Buys [quantity] copies of [item] atomically at [priceOf]: from today's stock, the always-on-sale [basics], today's deal or today's weekend item. */
     fun buy(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis(), quantity: Int = 1): ActionResult {
         if (quantity !in setOf(1, 3, 5)) return ActionResult(false, "Invalid quantity")
-        if (limited(item) && quantity != 1) return ActionResult(false, "Only one per offer")
+        if ((limited(item) || item == StreakFreeze.ITEM) && quantity != 1) return ActionResult(false, "Only one per offer")
         if (soldOut(state, item)) return ActionResult(false, "Sold out")
         if (item == StreakFreeze.ITEM && !freezeOnSale(state)) return ActionResult(false, "You already hold 3 freezes")
         val onSale = (item == StreakFreeze.ITEM && freezeOnSale(state)) || (item in state.shopItems && item !in weekendPrices) || item in Tuning.SHOP_BASICS || dealFor(data, state.day, now)?.item == item ||

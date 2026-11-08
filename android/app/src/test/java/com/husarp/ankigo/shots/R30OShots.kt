@@ -25,7 +25,7 @@ class R30OShots {
             assertTrue(texts(stage).contains("Streak Freeze"))
             paparazzi.snapshot(stage, "o-freeze-shop-${theme.name.lowercase()}")
             page.openCard("streak-freeze"); stage.render()
-            assertTrue(texts(stage).contains("1 left"))
+            assertFalse(texts(page.itemWindow!!.view).contains("1 left"))
             assertFalse(all(page.itemWindow!!.view).any { it.contentDescription?.startsWith("Quantity ") == true })
             paparazzi.snapshot(stage, "o-freeze-buy-${theme.name.lowercase()}")
             page.closeCard()

@@ -123,8 +123,8 @@ internal object ShopViews {
         }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8); it.marginEnd = Ui.dp(ctx, 6) })
         addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; gravity = Gravity.END
-            stock?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it }) }
-            addView(bottom)
+            stock?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it; gravity = Gravity.END }, LinearLayout.LayoutParams(-1, -2)) }
+            addView(bottom, LinearLayout.LayoutParams(-2, -2))
         })
         if (stock == "Sold out") alpha = 0.45f
     }
@@ -187,14 +187,17 @@ internal object ShopViews {
                 addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
                 addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = detail })
                 if (large) {
-                    stock?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it }) }
-                    addView(price)
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL; gravity = Gravity.END
+                        stock?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it; gravity = Gravity.END }, LinearLayout.LayoutParams(-1, -2)) }
+                        addView(price, LinearLayout.LayoutParams(-2, -2))
+                    }, LinearLayout.LayoutParams(-1, -2))
                 }
             }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8); it.marginEnd = Ui.dp(ctx, 6) })
             if (!large) addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.END
-                stock?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it }) }
-                addView(price)
+                stock?.let { addView(Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { text = it; gravity = Gravity.END }, LinearLayout.LayoutParams(-1, -2)) }
+                addView(price, LinearLayout.LayoutParams(-2, -2))
             })
         }
         return LinearLayout(ctx).apply {
