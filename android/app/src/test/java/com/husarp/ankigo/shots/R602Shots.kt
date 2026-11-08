@@ -126,6 +126,7 @@ class R602Shots {
         assertTrue(t.contains("Water Gun") && t.contains("Tackle"))
     }) { ctx ->
         BattleShotKit.bound(ctx)
+        GameRepo.state!!.battle!!.playerAttacked = true
         val species = GameRepo.state!!.battle!!.wild.species
         GameRepo.state!!.caught += species
         withInfo(species)

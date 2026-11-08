@@ -58,7 +58,7 @@ class R30QWildInfoShots {
             wild(ctx).also { scene ->
                 val text = texts(scene)
                 assertTrue(text.any { it.startsWith("Stats", true) })
-                assertTrue(text.any { it.equals("Matchups", true) })
+                assertFalse(text.any { it.equals("Matchups", true) })
                 assertTrue(text.any { it.equals("Info", true) })
                 assertTrue(text.contains("Water Gun"))
                 assertTrue(text.contains("Tackle"))
@@ -90,7 +90,7 @@ class R30QWildInfoShots {
         val dlg = DialogShots.capture { DexDetail.show(DexPage(ctx, NoHost), GameRepo.data!!.sp(54)) }!!
         DialogShots.scene(ctx, dlg).also { scene ->
             assertTrue(texts(scene).any { it.equals("Base stats", true) })
-            assertTrue(texts(scene).any { it.equals("Matchups", true) })
+            assertFalse(texts(scene).any { it.equals("Matchups", true) })
             assertTrue(texts(scene).any { it.equals("Info", true) })
         }
     }

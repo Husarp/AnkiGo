@@ -422,10 +422,21 @@ object DetailSections {
      * Immune to ×0), then "Strong against" (its own attacks ×2) last; empty groups are left out. A tap on a box says what it means for
      * [name]. The chips carry no ×N any more: the box does.
      */
-    fun matchups(a: Context, types: List<com.husarp.ankigo.game.Type>, name: String): View {
+    fun matchups(a: Context, types: List<com.husarp.ankigo.game.Type>, name: String, known: TypeMatchups = TypeMatchups.of(types)): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        MatchupGroups.details(TypeMatchups.of(types)).forEach { (g, ts) ->
+        MatchupGroups.details(known).forEach { (g, ts) ->
             col.addView(MatchupBoxes.box(a, g, ts, name, compact = false), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+        }
+        if (known.normal.isNotEmpty()) {
+            col.addView(Ui.text(a, 12.5f, 900, R.color.ag_sub1).apply { text = "Normal damage ×1" },
+                LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
+            col.addView(MatchupTiles.build(a, known.normal, 0))
+        }
+        if (known.unknownCount > 0) {
+            col.addView(Ui.text(a, 12f, 700, R.color.ag_sub0).apply { text = "Not yet seen in battle" },
+                LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
+            col.addView(MatchupTiles.build(a, emptyList(), known.unknownCount),
+                LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
         }
         return col
     }

@@ -88,7 +88,7 @@ data class WildInfo(
                     else -> WildDex.SEEN
                 },
                 base = sp.base.takeIf { known }, stats = if (known) statsAt(sp.base, wild.level) else null,
-                matchups = if (known) TypeMatchups.of(sp.types) else null, moves = visible,
+                matchups = if (battle.playerAttacked || MatchupKnowledge.bonded(data, state, wild.species)) MatchupKnowledge.of(data, state, wild.species) else null, moves = visible,
             )
         }
     }

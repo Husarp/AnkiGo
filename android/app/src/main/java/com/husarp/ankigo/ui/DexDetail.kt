@@ -15,7 +15,7 @@ import com.husarp.ankigo.game.SpeciesKnowledge
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stat
 import com.husarp.ankigo.game.StatCalc
-import com.husarp.ankigo.game.TypeMatchups
+import com.husarp.ankigo.game.MatchupKnowledge
 
 // TICKET T14 owns this file: the dialog of one seen/caught Pokédex entry.
 
@@ -90,7 +90,6 @@ object DexDetail {
                     DetailSections.moves(a, data, learn.map { it.move }, compact, levels = learn.map { DetailFormat.learnLevel(it.level) })
                 })
             }
-            col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(TypeMatchups.of(sp.types))) { DetailSections.matchups(a, sp.types, sp.name) })
             if (mine.isNotEmpty()) col.addView(DetailSections.section(a, mem, DetailSection.BOND,
                 mine.joinToString(" · ") { BondSection.summary(it) }) {
                 LinearLayout(a).apply {
@@ -113,6 +112,10 @@ object DexDetail {
                     DetailSections.moves(a, data, moves, compact)
                 })
             }
+        }
+        if (MatchupKnowledge.available(data, state, sp.num, owned = mine.isNotEmpty())) {
+            val matchups = MatchupKnowledge.of(data, state, sp.num)
+            col.addView(DetailSections.section(a, DetailSections.memory(a), DetailSection.MATCHUPS, DetailFormat.matchupSummary(matchups)) { DetailSections.matchups(a, sp.types, sp.name, matchups) })
         }
         DetailSections.applyOrder(col)
         if (known) col.addView(DetailParts.header(a, R.drawable.ic_dex, "In your collection", compact))

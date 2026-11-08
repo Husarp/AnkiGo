@@ -555,7 +555,8 @@ internal class CompareGrid(
                 }
             }
             is Cell.Matchups -> {
-                if (cell.entries.isEmpty()) box.addView(dash())
+                if (cell.unknownCount > 0 || cell.entries.any { it.mult == 1.0 }) box.addView(MatchupTiles.build(ctx, cell.entries, cell.unknownCount))
+                else if (cell.entries.isEmpty()) box.addView(dash())
                 else {
                     // R9-W3-A (D8-V1): one box per multiplier of this row; pill only (the row label says the words)
                     val room = colPx - 2 * pad

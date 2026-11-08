@@ -4,7 +4,7 @@ package com.husarp.ankigo.game
 
 /** One matchup entry: [type] hits for [mult] (4, 2, 0.5, 0.25 or 0). */
 data class Matchup(val type: Type, val mult: Double) {
-    val label: String get() = when (mult) { 4.0 -> "×4"; 2.0 -> "×2"; 0.5 -> "×½"; 0.25 -> "×¼"; 0.0 -> "×0"; else -> "×$mult" }
+    val label: String get() = when (mult) { 4.0 -> "×4"; 2.0 -> "×2"; 0.5 -> "×½"; 0.25 -> "×¼"; 0.0 -> "×0"; 1.0 -> "×1"; else -> "×$mult" }
 }
 
 /**
@@ -16,8 +16,20 @@ data class TypeMatchups(
     val resists: List<Matchup>,
     val immune: List<Matchup>,
     val strongAgainst: List<Matchup>,
+    val normal: List<Matchup> = emptyList(),
+    val unknownCount: Int = 0,
 ) {
     companion object {
+        fun discovered(types: List<Type>, seen: Set<Type>): TypeMatchups {
+            val all = of(types)
+            return TypeMatchups(
+                all.weakTo.filter { it.type in seen }, all.resists.filter { it.type in seen },
+                all.immune.filter { it.type in seen }, emptyList(),
+                Type.entries.filter { it in seen && TypeChart.eff(it, types) == 1.0 }.map { Matchup(it, 1.0) },
+                Type.entries.count { it !in seen },
+            )
+        }
+
         fun of(types: List<Type>): TypeMatchups {
             val all = Type.entries.map { Matchup(it, TypeChart.eff(it, types)) }
             val weak = all.filter { it.mult > 1.0 }.sortedWith(compareByDescending<Matchup> { it.mult }.thenBy { it.type.ordinal })

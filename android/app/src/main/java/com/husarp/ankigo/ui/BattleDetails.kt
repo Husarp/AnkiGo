@@ -106,8 +106,10 @@ object BattleDetails {
                 }
             })
         }
+        info.matchups?.let { matchups ->
+            col.addView(DetailSections.section(ctx, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(matchups)) { DetailSections.matchups(ctx, info.types, info.name, matchups) })
+        }
         if (info.known) {
-            col.addView(DetailSections.section(ctx, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(requireNotNull(info.matchups))) { DetailSections.matchups(ctx, info.types, info.name) })
             col.addView(DetailSections.infoSection(ctx, mem, data, sp, emptyList(), null, null, compact,
                 lines = listOf("Tier" to info.tier.label, "Pokédex" to if (info.dex == WildDex.CAUGHT) "Caught" else "Defeated or caught in another form")))
         }
