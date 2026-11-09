@@ -514,7 +514,10 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 }.setNegativeButton("Cancel", null).create())
         }
         val bars = BarStyle.entries
-        val barStyle = Form.stackRow(this, "Progress bars", "XP blue, goals orange, Pokédex teal; or all in the accent, or a gradient.",
+        val barStyle = if (Multicolor.enabled(this)) Form.stackRow(this, "Progress bars",
+            "XP blue, goals orange (green when reached), Pokédex teal, other progress green.",
+            Ui.text(this, 13f, 800, R.color.ag_sub1).apply { text = "By meaning · Multicolor" })
+        else Form.stackRow(this, "Progress bars", "XP blue, goals orange, Pokédex teal; or all in the accent, or a gradient.",
             Form.segmented(this, bars.map { it.label }, bars.indexOf(AppPrefs.barStyle(this))) { i ->
                 AppLook.setBarStyle(this, bars[i]); looked()
             })

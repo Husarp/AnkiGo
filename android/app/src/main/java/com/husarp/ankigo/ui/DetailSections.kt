@@ -95,11 +95,12 @@ object DetailSections {
                     DetailSection.HELD_ITEM -> R.drawable.ic_item_bag
                     else -> R.drawable.ic_info
                 })
-                setColorFilter(Ui.c(a, R.color.ag_mauve))
+                setColorFilter(Multicolor.color(a, Multicolor.section(s)))
             }, LinearLayout.LayoutParams(Ui.dp(a, 16), Ui.dp(a, 16)).also { it.marginEnd = Ui.dp(a, 6) })
             addView(FlowRow(a, Ui.dp(a, 4), centered = false).apply {
                 addView(Ui.text(a, 12f, 900, R.color.ag_mauve).apply {
                     text = title.uppercase()
+                    if (Multicolor.enabled(a)) setTextColor(Ui.c(a, R.color.ag_text))
                 })
             }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(sum, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 10) })

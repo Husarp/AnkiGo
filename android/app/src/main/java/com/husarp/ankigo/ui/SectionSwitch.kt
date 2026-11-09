@@ -35,8 +35,9 @@ internal object SectionSwitch {
 
     /** A tab: icon over label, 52 dp tall (46 in a short window); the selected one is on a 20 % accent rounded square (the bottom bar's look), in the accent colour. */
     private fun tab(ctx: Context, s: Seg, on: Boolean): LinearLayout {
-        val accent = Ui.c(ctx, R.color.ag_mauve)
-        val ink = if (on) accent else Ui.c(ctx, R.color.ag_sub0)
+        val accent = Multicolor.color(ctx, Multicolor.place(s.label))
+        val ink = if (on && Multicolor.enabled(ctx)) Multicolor.ink(ctx, Multicolor.place(s.label),
+            Bits.blend(accent, Ui.c(ctx, R.color.ag_mantle), .20f)) else if (on) accent else Ui.c(ctx, R.color.ag_sub0)
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -46,7 +47,9 @@ internal object SectionSwitch {
             background = if (on) Ui.rounded((accent and 0x00FFFFFF) or 0x33000000, 11, ctx) else null
             addView(ImageView(ctx).apply {
                 setImageResource(s.icon)
-                setColorFilter(ink, PorterDuff.Mode.SRC_IN)
+                setColorFilter(if (Multicolor.enabled(ctx)) Multicolor.icon(ctx, Multicolor.place(s.label),
+                    if (on) Bits.blend(accent, Ui.c(ctx, R.color.ag_mantle), .20f) else Ui.c(ctx, R.color.ag_mantle))
+                    else ink, PorterDuff.Mode.SRC_IN)
             }, LinearLayout.LayoutParams(Ui.dp(ctx, 20), Ui.dp(ctx, 20)))
             addView(Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply {
                 text = s.label

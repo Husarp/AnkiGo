@@ -82,7 +82,9 @@ object BottomNav {
             val tint = if (on) col else idle
             val icon = ImageView(activity).apply {
                 setImageResource(tab.icon)
-                setColorFilter(tint, PorterDuff.Mode.SRC_IN)
+                setColorFilter(if (Multicolor.enabled(activity)) Multicolor.icon(activity, Multicolor.tab(tab),
+                    if (on) Bits.blend(col, Ui.c(activity, R.color.ag_mantle), .20f) else Ui.c(activity, R.color.ag_mantle))
+                    else tint, PorterDuff.Mode.SRC_IN)
                 layoutParams = FrameLayout.LayoutParams(Ui.dp(activity, if (style == TabBarStyle.E1 && on) 28 else 20), Ui.dp(activity, if (style == TabBarStyle.E1 && on) 28 else 20), Gravity.CENTER)
             }
             val pillBox = FrameLayout(activity).apply {
@@ -92,7 +94,8 @@ object BottomNav {
             val label = Ui.text(activity, if (style == TabBarStyle.A3 && on) 12f else 10f, if (style == TabBarStyle.A3 && on) 900 else 800, R.color.ag_sub0).apply {
                 text = tab.label
                 if (style == TabBarStyle.E1 && !on) visibility = View.GONE
-                setTextColor(tint)
+                setTextColor(if (on && Multicolor.enabled(activity)) Multicolor.ink(activity, Multicolor.tab(tab),
+                    Bits.blend(col, Ui.c(activity, R.color.ag_mantle), .20f)) else tint)
                 gravity = Gravity.CENTER
                 maxLines = 1
                 labels += this
@@ -136,7 +139,7 @@ object BottomNav {
         return bar
     }
 
-    private fun tone(ctx: Context, tab: Tab) = ctx.getColor(when (tab) {
+    internal fun tone(ctx: Context, tab: Tab): Int = if (Multicolor.enabled(ctx)) Multicolor.color(ctx, Multicolor.tab(tab)) else ctx.getColor(when (tab) {
         Tab.STUDY -> R.color.ag_blue
         Tab.POKEMON -> R.color.ag_green
         Tab.SHOP -> R.color.ag_peach

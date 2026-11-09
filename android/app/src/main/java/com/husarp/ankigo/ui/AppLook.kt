@@ -14,7 +14,7 @@ import com.husarp.ankigo.R
 import com.husarp.ankigo.update.UpdateOverlay
 import com.husarp.ankigo.update.Updates
 
-/** Accent colour choices (Settings → Look): each is one of the palette's own colours, so light and dark both fit. */
+/** Accent choices (Settings → Look); Multicolor assigns palette C colours by purpose. */
 enum class Accent(val label: String, @ColorRes val res: Int) {
     MAUVE("Mauve", R.color.ag_mauve),
     BLUE("Blue", R.color.ag_blue),
@@ -22,6 +22,7 @@ enum class Accent(val label: String, @ColorRes val res: Int) {
     GREEN("Green", R.color.ag_green),
     PEACH("Peach", R.color.ag_peach),
     PINK("Pink", R.color.ag_pink),
+    MULTICOLOR("Multicolor", R.color.ag_green),
 }
 
 /**
@@ -41,7 +42,9 @@ object AppLook {
 
     /** The colour resource that stands in for `ag_mauve` (the chosen accent). */
     @ColorRes
-    fun accentRes(ctx: Context): Int = (accentCache ?: AppPrefs.accent(ctx).also { accentCache = it }).res
+    fun accentRes(ctx: Context): Int = accent(ctx).res
+
+    internal fun accent(ctx: Context): Accent = accentCache ?: AppPrefs.accent(ctx).also { accentCache = it }
 
     fun setTheme(ctx: Context, mode: ThemeMode) {
         AppPrefs.putLook(ctx, "theme", mode.name)

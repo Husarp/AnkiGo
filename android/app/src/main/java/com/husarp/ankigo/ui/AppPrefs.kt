@@ -192,9 +192,9 @@ object AppPrefs {
     fun theme(ctx: Context): ThemeMode =
         ThemeMode.entries.firstOrNull { it.name == prefs(ctx).getString("theme", null) } ?: ThemeMode.SYSTEM
 
-    /** Accent colour (Settings → Look). Default: mauve, the mockup's accent. Change it through [AppLook.setAccent]. */
+    /** Accent colour (Settings → Look). Default: green. Change it through [AppLook.setAccent]. */
     fun accent(ctx: Context): Accent =
-        Accent.entries.firstOrNull { it.name == prefs(ctx).getString("accent", null) } ?: Accent.MAUVE
+        Accent.entries.firstOrNull { it.name == prefs(ctx).getString("accent", null) } ?: Accent.GREEN
 
     /** Progress bar colours (Settings → Look): by meaning (default), accent or gradient. Change it through [AppLook.setBarStyle]; read by [BarTones]. */
     fun barStyle(ctx: Context): BarStyle =

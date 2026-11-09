@@ -245,9 +245,9 @@ internal object Form {
                 cell.addView(View(ctx).apply {
                     background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
                 }, FrameLayout.LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32), Gravity.CENTER))
-                if (on) cell.addView(android.widget.ImageView(ctx).apply {
-                    setImageResource(R.drawable.ic_check)
-                    setColorFilter(Ui.c(ctx, R.color.ag_crust), android.graphics.PorterDuff.Mode.SRC_IN)
+                if (on || label == Accent.MULTICOLOR.label) cell.addView(android.widget.ImageView(ctx).apply {
+                    setImageResource(if (on) R.drawable.ic_check else R.drawable.ic_palette)
+                    setColorFilter(if (label == Accent.MULTICOLOR.label) Multicolor.onFill(color) else Ui.c(ctx, R.color.ag_crust), android.graphics.PorterDuff.Mode.SRC_IN)
                 }, FrameLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18), Gravity.CENTER))
                 addView(cell, lp(0, Ui.dp(ctx, 48), 1f))
             }
@@ -428,8 +428,10 @@ internal object Form {
     /** Recolours a chip made by [toggleChip] after its state changed. */
     fun setChip(chip: TextView, on: Boolean) {
         val ctx = chip.context
-        chip.setTextColor(Ui.c(ctx, if (on) R.color.ag_crust else R.color.ag_text))
-        Ui.touchPill(chip, Ui.rounded(Ui.c(ctx, if (on) R.color.ag_mauve else R.color.ag_mantle), 12, ctx), 32, 4)
+        val fill = Multicolor.color(ctx, Multicolor.place(chip.text.toString()))
+        chip.setTextColor(if (on && Multicolor.enabled(ctx)) Multicolor.onFill(fill)
+            else Ui.c(ctx, if (on) R.color.ag_crust else R.color.ag_text))
+        Ui.touchPill(chip, Ui.rounded(if (on) fill else Ui.c(ctx, R.color.ag_mantle), 12, ctx), 32, 4)
     }
 }
 
