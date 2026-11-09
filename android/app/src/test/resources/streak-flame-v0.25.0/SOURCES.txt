@@ -1,0 +1,4 @@
+Reference: Git tag v0.25.0, android/app/src/main/res/raw/streak_flame.webp
+Google Noto Emoji, CC BY 4.0. Existing app attribution retained.
+frames.txt records original frame payload hashes and durations; production doubles durations only.
+frame-0.png: first frame decoded directly from the released v0.25.0 asset using Pillow.
