@@ -36,7 +36,7 @@ object CompareRowText {
         "weak" -> "Weak against" to "Attack types that hit it for double damage or more."
         "resist" -> "Resists" to "Attack types that hit it for half damage or less."
         "immune" -> "Immune to" to "Attack types that cannot hurt it at all."
-        "normal" -> "Normal damage" to "Attack types that deal normal damage to this species."
+        "normal" -> "Other types" to "All other types deal ×1 damage."
         "strong" -> "Strong against" to "Types its own-type moves hit for double damage."
         "evo" -> "Evolution line" to "The family it belongs to, in the order it evolves."
         "becomes" -> "Becomes" to "The last form it can evolve into."

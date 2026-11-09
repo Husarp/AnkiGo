@@ -26,17 +26,12 @@ internal object DetailTopCard {
 
     fun heldItem(a: Context, data: GameData, mon: Mon, page: GamePage?): View? {
         val item = mon.heldItem ?: return null
-        lateinit var section: View
-        section = DetailSections.section(a, DetailSections.memory(a), DetailSection.HELD_ITEM, com.husarp.ankigo.game.Items.name(item)) {
+        return DetailSections.section(a, DetailSections.memory(a), DetailSection.HELD_ITEM, com.husarp.ankigo.game.Items.name(item)) {
             LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(holdLine(a, HoldingPlan.lines(data, mon, null, null).single(), page))
-                if (page != null) HeldItemActions.buttons(page, item) {
-                    if (mon.heldItem != item) section.visibility = View.GONE
-                }?.let { addView(it, LinearLayout.LayoutParams(-1, -2)) }
             }
         }
-        return section
     }
 
     fun expShare(a: Context, data: GameData, state: GameState?, mon: Mon): View? =

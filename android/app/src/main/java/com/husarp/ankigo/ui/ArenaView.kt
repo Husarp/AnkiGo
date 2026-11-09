@@ -1394,7 +1394,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         if (maxW <= 0) return
         val list = ConditionList(context, floorSp)
         val wild = row === eStatus
-        list.buildStatus(info, if (wild) "Wild ${enemyName.removePrefix("Wild ")}" else "Your ${pName.text}", maxW, height - margin * 2) { hideConditionList() }
+        list.buildStatus(info, if (wild) "Wild ${enemyName.removePrefix("Wild ")}" else "Your ${playerNameInk}", maxW, height - margin * 2) { hideConditionList() }
         val bw = list.measuredWidth
         val bh = list.measuredHeight
         val r = android.graphics.Rect(0, 0, badge.width, badge.height)
@@ -1600,12 +1600,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val maxH = (height - sy - sb).coerceAtLeast(1)
         val list = ConditionList(context, floorSp)
         val selected = conditions.of(slot).firstOrNull { it.key == stat }
-        val sections = ConditionSections.of(conditions, slot, enemyName, pName.text.toString())
+        val sections = ConditionSections.of(conditions, slot, enemyName, playerNameInk)
         if (sections.isEmpty() || stat != null && selected == null) return
         if (selected != null) {
             val owner = when (slot) {
                 ConditionMarks.Slot.WILD -> "Wild ${enemyName.removePrefix("Wild ")}".trim()
-                ConditionMarks.Slot.OURS -> "Your ${pName.text}"
+                ConditionMarks.Slot.OURS -> "Your ${playerNameInk}"
                 ConditionMarks.Slot.FIELD -> "The field"
             }
             list.buildMark(selected, owner, maxW, maxH) { hideConditionList() }

@@ -256,8 +256,8 @@ object CompareTable {
         }
 
         val m = columns.map { MatchupGroups.sections(it.shown.types, MatchupKnowledge.of(data, state, it.shown.num)) }
-        for ((key, label) in listOf("weak" to "Weak against", "resist" to "Resists", "immune" to "Immune to", "normal" to "Normal damage", "strong" to "Strong against")) {
-            rows += CompareRow(key, label, m.map { it.getValue(key) }, section = if (key == "weak") "Matchups" else null)
+        for ((key, label) in listOf("weak" to "Weak against", "resist" to "Resists", "immune" to "Immune to", "normal" to "Other types", "strong" to "Strong against")) {
+            rows += CompareRow(key, label, m.map { if (key == "normal") Cell.Text("All other types deal ×1 damage.") else it.getValue(key) }, section = if (key == "weak") "Matchups" else null)
         }
         val matchupAllowed = columns.map { MatchupKnowledge.available(data, state, it.shown.num, owned = it.mon != null) }
 

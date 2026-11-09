@@ -41,7 +41,12 @@ class R31JMatchupShots {
         val extra = species.sumOf { num ->
             TypeMatchups.of(GameRepo.data!!.sp(num).types).strongAgainst.count { it.type !in MatchupKnowledge.seen(GameRepo.data!!, state, num) }
         }
-        val expected = if (count == 0) 0 else count + extra
+        val neutralUnseen = species.sumOf { num ->
+            val matchups = TypeMatchups.of(GameRepo.data!!.sp(num).types)
+            val nonNeutral = (matchups.weakTo + matchups.resists + matchups.immune).map { it.type }.toSet()
+            Type.entries.count { it !in nonNeutral && it !in MatchupKnowledge.seen(GameRepo.data!!, state, num) }
+        }
+        val expected = if (count == 0) 0 else count - neutralUnseen + extra
         assertEquals(expected, texts(v).count { it == "???" })
         val tiles = views(v).filter { it.contentDescription == "Matchup not yet seen in battle" }
         assertEquals(expected, tiles.size)
@@ -69,7 +74,7 @@ class R31JMatchupShots {
         wild(ctx).also {
             checkTiles(it, 16)
             assertTrue(texts(it).contains("weak to Grass ×2"))
-            assertTrue(texts(it).contains("Normal ×1"))
+            assertTrue(texts(it).contains("All other types deal ×1 damage."))
             assertFalse(texts(it).contains("Electric"))
             assertTrue(texts(it).contains("Strong against"))
         }
@@ -94,7 +99,7 @@ class R31JMatchupShots {
         GameRepo.state!!.viewedMons += mon.uid
         DialogShots.scene(ctx, DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), GameRepo.data!!, mon) }!!).also {
             checkTiles(it, 17, listOf(mon.species))
-            assertTrue(texts(it).contains("Water ×1"))
+            assertTrue(texts(it).contains("All other types deal ×1 damage."))
             assertFalse(texts(it).any { s -> s.contains("weak to Ground") })
         }
     }
@@ -110,7 +115,7 @@ class R31JMatchupShots {
         DialogShots.scene(ctx, DialogShots.capture { DexDetail.show(DexPage(ctx, NoHost), GameRepo.data!!.sp(92)) }!!).also {
             checkTiles(it, 16, listOf(92))
             assertTrue(texts(it).contains("Normal"))
-            assertTrue(texts(it).contains("Fire ×1"))
+            assertTrue(texts(it).contains("All other types deal ×1 damage."))
             assertTrue(texts(it).contains("Immune to"))
             assertFalse(texts(it).any { s -> s.contains("weak to Ground") })
         }

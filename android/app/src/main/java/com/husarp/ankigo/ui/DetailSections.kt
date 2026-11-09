@@ -413,11 +413,8 @@ object DetailSections {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         for ((key, cell) in MatchupGroups.sections(types, known)) {
             if (key == "normal") {
-                if (cell.entries.isNotEmpty() || cell.hidden.isNotEmpty()) {
-                    col.addView(Ui.text(a, 12.5f, 900, R.color.ag_sub1).apply { text = "Normal damage ×1" },
-                        LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
-                    col.addView(MatchupTiles.build(a, cell.entries, cell.unknownCount))
-                }
+                col.addView(Ui.text(a, 12.5f, 900, R.color.ag_sub1).apply { text = "All other types deal ×1 damage." },
+                    LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
             } else {
                 val entries = cell.entries + cell.hidden
                 if (entries.isEmpty()) continue
