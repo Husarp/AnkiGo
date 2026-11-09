@@ -26,7 +26,7 @@ class R25DSettingsTest {
                 pageScreen(c, page).also { root ->
                     page.open(section)
                     if (section == SettingsSection.LOOK) {
-                        (texts(root).first { it.text == "AnkiDroid dark blue" }.parent as View).performClick()
+                        texts(root).first { it.text == "AnkiDroid dark blue" }.performClick()
                         assertEquals(ShowAnswerColor.ANKIDROID, ShowAnswerColor.get(c))
                         assertTrue(texts(root).any { it.text == "THEME & COLOURS" })
                         assertTrue(texts(root).any { it.text == "TEXT & SIZE" })

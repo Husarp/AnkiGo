@@ -212,17 +212,9 @@ internal object Form {
             addView(control, lp(ctx, 2))
         }
 
-    /** Equal-width pills, one selected (mauve = the accent). Drawn with [toggleChip], so no platform radio buttons. */
+    /** Equal-width, centred choices; every segment grows to the tallest wrapped label. */
     fun segmented(ctx: Context, labels: List<String>, selected: Int, onPick: (Int) -> Unit): LinearLayout =
-        LinearLayout(ctx).apply {
-            val box = this
-            fun draw(index: Int) {
-                SectionSwitch.draw(ctx, box, labels.map { SectionSwitch.Seg(it, R.drawable.ic_blank) }, index) {
-                    draw(it); onPick(it)
-                }
-            }
-            draw(selected)
-        }
+        LookChoosers.segmented(ctx, labels, selected, onPick) as LinearLayout
 
     /** Round colour swatches (the palette's own colours, not the chosen accent); the picked one has a ring and a tick. */
     fun swatches(ctx: Context, colors: List<Pair<String, Int>>, selected: Int, onPick: (Int) -> Unit): LinearLayout =

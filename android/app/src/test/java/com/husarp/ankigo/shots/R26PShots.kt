@@ -51,7 +51,7 @@ class R26PShots {
             @Suppress("UNCHECKED_CAST")
             val jobs = getField(UiMotion, "jobs") as Map<View, ValueAnimator>
             val animator = jobs[row]!!
-            assertEquals(when(style) { TabBarStyle.D3 -> 130L; TabBarStyle.E1 -> 160L; else -> 140L }, animator.duration)
+            assertEquals(when(style) { TabBarStyle.D3 -> 130L; TabBarStyle.A3, TabBarStyle.E1 -> 200L; else -> 140L }, animator.duration)
             val item = row.getChildAt(4) as LinearLayout
             assertTrue(item.isSelected)
             assertEquals(Ui.c(ctx, R.color.ag_teal), (item.getChildAt(1) as android.widget.TextView).currentTextColor)
