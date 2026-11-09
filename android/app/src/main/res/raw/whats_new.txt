@@ -3,6 +3,26 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.6.0
+- Restored the older streak flame animation at half speed.
+- Added a colour picker with 22 choices, including Multicolor for varied accents and colourful Pokémon detail icons. Green is the default.
+- Centred Settings choices with equal button sizes, marked the selected tab-bar style, and smoothed tab-label transitions.
+- Updated Held and Bag icons, and outlined the money icon with coin details.
+- Daily-goal particles now drift from varied positions at varied times, with subtle changes in size, colour and number.
+- Type matchups keep their usual sections, with dark ??? tiles for matchups you have not discovered yet. Neutral damage is explained in one sentence.
+- Nature shows the lowered stat in red and appears in Training without repeating in Stats.
+- Held items appear first by default; Give and Take off are available after tapping the item.
+- Bond perk lines fit together while headings and progress keep their size.
+- Fixed stray placeholder characters in condition-owner names.
+- Baby Pokémon, Starters and Pokémon with base stats totalling 500 or more share a blue diamond and the Great filter. Other ordinary Pokémon have no mark. Details spell out each marked group.
+- Poké Balls are always available in Basics alongside Potions. Daily ball offers feature Great, Ultra and special balls.
+- Bag categories open over your items. Tap outside or tap the selected category to slide the list closed. Item counts are larger and category counts have more padding.
+- Weekend specials show the item description. Removed the Shop’s help button.
+- Historical charts offer rolling windows: Last 7, 30, 100 or 300 days.
+- Reduced avoidable waits around prepared study cards, scheduler confirmation, deck-name lookup and rapid tab changes. Slow AnkiDroid operations can still require a wait when preparation runs out.
+- Moved animated-flame decoding off the main thread and reduced repeated animation allocations and redraws.
+- Diagnostics has one Share log action with a lag summary and one Clear action for both logs.
+- Rewrote How the game works for clarity and made recurring status effects say “per round”.
 ## 1.5.0
 - Matchups are discoveries. A wild Pokémon's Matchups section appears after your first attack. Each attacking type stays “???” until you see it hit that species; your own Pokémon learn the same way when they get hit. Forms share discoveries. Catching or defeating a Pokémon still reveals its stats, without filling in unseen matchups.
 - Level 3 Bond reveals every matchup of that species, including its forms and wild encounters. A small alert tells you when it happens. Pokémon already at Level 3 or higher get this knowledge when your save opens.
