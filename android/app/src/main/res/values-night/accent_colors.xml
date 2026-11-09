@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App accent swatches: at least 3:1 on the theme’s cards and mantle. -->
+    <color name="ag_accent_green">#96e290</color>
+    <color name="ag_accent_peach">#ffa770</color>
+    <color name="ag_accent_pink">#f5b0e2</color>
+    <color name="ag_accent_red">#ff5b59</color>
+    <color name="ag_accent_coral">#ff927d</color>
+    <color name="ag_accent_rose">#f88aab</color>
+    <color name="ag_accent_fuchsia">#ef86d6</color>
+    <color name="ag_accent_purple">#b59aee</color>
+    <color name="ag_accent_indigo">#9ca6f5</color>
+    <color name="ag_accent_cyan">#75dbed</color>
+    <color name="ag_accent_jade">#7fdbb2</color>
+    <color name="ag_accent_lime">#c3dc76</color>
+    <color name="ag_accent_olive">#cac77c</color>
+    <color name="ag_accent_yellow">#f0d36d</color>
+    <color name="ag_accent_amber">#efbc65</color>
+    <color name="ag_accent_orange">#f2a46d</color>
+    <color name="ag_accent_brown">#d3a487</color>
+    <color name="ag_accent_slate">#b0c1d5</color>
+</resources>

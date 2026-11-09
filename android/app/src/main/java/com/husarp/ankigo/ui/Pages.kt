@@ -251,6 +251,16 @@ abstract class PageActivity : AgActivity(), PageHost {
         })
     }
 
+    /** Repaint the bar while the app-colour picker remains open over Settings. */
+    internal fun refreshAccent() {
+        val tab = page.tab ?: return
+        val column = page.root.parent as? LinearLayout ?: return
+        if (column.childCount < 2) return
+        val params = column.getChildAt(1).layoutParams
+        column.removeViewAt(1)
+        column.addView(BottomNav.create(this, tab), 1, params)
+    }
+
     override fun onStart() {
         super.onStart()
         BattleScreen.setVisible(this, true) // the floating battle window stays hidden over AnkiGo's own screens

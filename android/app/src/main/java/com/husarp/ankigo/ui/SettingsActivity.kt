@@ -488,16 +488,16 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
 
     private fun lookCard(): View {
         val themes = ThemeMode.entries
-        val accents = Accent.entries
         val theme = Form.stackRow(this, "Theme", null, Form.segmented(this, themes.map { it.label }, themes.indexOf(AppPrefs.theme(this))) { i ->
             AppLook.setTheme(this, themes[i]); looked()
         })
-        val current = AppPrefs.accent(this)
-        val accent = Form.stackRow(this, "Accent", null,
-            Form.swatches(this, accents.map { it.label to getColor(it.res) }, accents.indexOf(current)) { i ->
-                AppLook.setAccent(this, accents[i]); looked()
-            },
-            right = Ui.text(this, 13f, 800, R.color.ag_sub1).apply { text = current.label })
+        val accent = AccentPicker.row(this) {
+            dialog?.dismiss()
+            dialog = AccentPicker.dialog(this) {
+                render()
+                (host as? PageActivity)?.refreshAccent()
+            }.also { Pickers.show(it) }
+        }
         val scales = AppLook.SCALES
         val size = Form.stepperRow(this, "Interface size", "Text, cards and Pokémon get bigger or smaller together.",
             scales.indexOf(AppPrefs.uiScale(this)).coerceAtLeast(0), 0, scales.lastIndex, 1, { "${scales[it]} %" }) { i ->
