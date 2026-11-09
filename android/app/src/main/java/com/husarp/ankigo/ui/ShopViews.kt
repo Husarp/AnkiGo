@@ -140,9 +140,9 @@ internal object ShopViews {
         weekend?.let { addView(it, LinearLayout.LayoutParams(-1, -2)) }
     }
 
-    fun weekendCard(ctx: Context, lead: View, name: String, note: String, right: View, description: String, stock: String? = null, onTap: () -> Unit): View =
-        offerCard(ctx, "WEEKEND SPECIAL", note, lead, name, "Weekend exclusive", right,
-            R.color.ag_teal, description, stock, onTap)
+    fun weekendCard(ctx: Context, lead: View, name: String, note: String, right: View, description: String, stock: String? = null, line: String = description, onTap: () -> Unit): View =
+        offerCard(ctx, "WEEKEND SPECIAL", note, lead, name, line, right,
+            R.color.ag_teal, description, stock, onTap, detailMaxLines = 2)
 
     fun dealCard(ctx: Context, item: String, name: String, price: ShopPlan.Price, ends: String, description: String,
                  line: String = ItemInfo.effect(item), night: Boolean = false, stock: String? = null, onTap: () -> Unit): View =
@@ -153,7 +153,7 @@ internal object ShopViews {
 
     /** Compact offer with a filled title band separated from its item and price. */
     private fun offerCard(ctx: Context, title: String, ends: String, lead: View, name: String,
-                          detail: String, price: View, accentRes: Int, description: String, stock: String?, onTap: () -> Unit): View {
+                          detail: String, price: View, accentRes: Int, description: String, stock: String?, onTap: () -> Unit, detailMaxLines: Int = Int.MAX_VALUE): View {
         val accent = Ui.c(ctx, accentRes)
         val card = Ui.c(ctx, R.color.ag_card)
         val ink = if (TypeChips.isDark(ctx)) accent else Bits.blend(0xFF000000.toInt(), accent, 0.35f)
@@ -185,7 +185,11 @@ internal object ShopViews {
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
-                addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = detail })
+                addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
+                    text = detail
+                    maxLines = detailMaxLines
+                    if (detailMaxLines == 2) ellipsize = android.text.TextUtils.TruncateAt.END
+                })
                 if (large) {
                     addView(LinearLayout(ctx).apply {
                         orientation = LinearLayout.VERTICAL; gravity = Gravity.END
