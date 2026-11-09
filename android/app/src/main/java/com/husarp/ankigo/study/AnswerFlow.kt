@@ -255,6 +255,16 @@ class CountsGate {
 class DeckNames(private val read: () -> Map<Long, String>) {
     @Volatile private var names: Map<Long, String>? = null
     private val missed = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+    private val pending = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>()
+
+    fun cached(id: Long): String? = names?.get(id)
+
+    /** Name lookup must not hold a card's HTML preparation behind the full deck tree. */
+    fun request(id: Long, submit: (() -> Unit) -> Unit) {
+        if (cached(id) != null || !pending.add(id)) return
+        try { submit { try { name(id) } finally { pending.remove(id) } } }
+        catch (e: Exception) { pending.remove(id); throw e }
+    }
 
     fun name(id: Long): String? {
         names?.get(id)?.let { return it }

@@ -2,11 +2,19 @@ package com.husarp.ankigo.study
 
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
+import java.util.concurrent.CompletableFuture
 
 /** Content-only worker, independent of ordered answer writes. Retrieval never waits on a preparation. */
 class PrepareAhead<T>(private val io: ExecutorService, private val now: () -> Long, private val maxAgeMs: Long = 5_000) {
     private data class Entry<T>(val card: Prepared<T>, val at: Long)
     private val jobs = LinkedHashMap<StudyLoop.Key, Future<Entry<T>>>()
+
+    /** Content already read for the displayed queue is also reusable by a later state-checked load. */
+    @Synchronized fun remember(card: Prepared<T>, at: Long) {
+        jobs.remove(card.key)?.cancel(false)
+        while (jobs.size >= 3) jobs.remove(jobs.keys.first())?.cancel(false)
+        jobs[card.key] = CompletableFuture.completedFuture(Entry(card, at))
+    }
 
     @Synchronized fun start(key: StudyLoop.Key, read: () -> Prepared<T>) {
         jobs[key]?.let { job ->

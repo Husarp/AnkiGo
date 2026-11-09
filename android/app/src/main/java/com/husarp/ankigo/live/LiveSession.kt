@@ -46,6 +46,7 @@ object LiveSession {
     /** Created by the first start. Once it exists its snapshot means something (it is what the game saves). */
     @Volatile private var detector: LiveDetector? = null
     private val holders: MutableSet<Any> = Collections.newSetFromMap(IdentityHashMap())
+    private val watchStop = WatchStop({ r, ms -> handler.postDelayed(r, ms); Unit }, { handler.removeCallbacks(it) }) { stopIfUnused() }
     private val sinks = ArrayList<Sink>()
     private val pauseListeners = ArrayList<(Boolean) -> Unit>()
     private var lastStatus: Pair<Boolean, String>? = null
@@ -99,17 +100,22 @@ object LiveSession {
      */
     fun hold(ctx: Context, owner: Any) {
         app = ctx.applicationContext
+        watchStop.cancel()
         holders += owner
         start()
     }
 
     /**
-     * [owner] no longer needs it. When nobody holds it any more: stop the detector, flush pending catch-up answers,
-     * copy the snapshot into the state and save it.
+     * [owner] no longer needs it. Allow a short tab handoff before stopping and saving the detector.
      */
     fun release(ctx: Context, owner: Any) {
         app = ctx.applicationContext
         if (!holders.remove(owner) || holders.isNotEmpty()) return
+        watchStop.schedule()
+    }
+
+    private fun stopIfUnused() {
+        if (holders.isNotEmpty()) return
         lastStatus = null
         val d = detector ?: return  // never started: nothing to stop or save
         d.stop()

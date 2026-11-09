@@ -153,15 +153,15 @@ class R18AAheadTest {
         assertEquals(listOf<Cmd<String>>(Cmd.Prepare(key(4), key(8), 3)), cmds.drop(1))
     }
 
-    @Test fun theConfirmOfTheLastAnswerAheadFreshensTheChain() {
+    @Test fun theConfirmOfTheLastAnswerAheadReusesTheMatchingPrefixAndFreshensTheRest() {
         val r = Rig().ready()
         r.nc.tapAnswer(3, 1); r.nc.tapAnswer(3, 1)
         val cmds = r.nc.confirmed(3, key(3), queue(3, 4, 5, 6), refresh = { "$it*" })
         assertEquals(Cmd.Confirm(card(3).copy(view = "c3*")), cmds[0])
-        assertEquals("the cards after it are read again, not trusted from before", listOf<Cmd<String>>(Cmd.Prepare(key(4), key(3), 3), Cmd.Prepare(key(5), key(4), 3), Cmd.Prepare(key(6), key(5), 3)), cmds.drop(1))
+        assertEquals("card 4 still matches the fresh queue; only the rest needs preparation", listOf<Cmd<String>>(Cmd.Prepare(key(5), key(4), 3), Cmd.Prepare(key(6), key(5), 3)), cmds.drop(1))
         assertEquals(1, r.nc.hits); assertTrue(r.nc.actionCard() != null)
-        // and the run of answers starts again from nothing
-        assertEquals(Cmd.ShowWaiting, r.nc.tapAnswer(3, 1)[1])
+        assertEquals("no empty-player gap after confirmation", Cmd.Show(card(4), true), r.nc.tapAnswer(3, 1)[1])
+        assertEquals("the unprepared suffix still waits", listOf<Cmd<String>>(Cmd.ShowHeld(3)), r.nc.tapAnswer(3, 1))
     }
 
     @Test fun reloadOrLeavingForgetsTheChainAndTheCount() {
