@@ -5,6 +5,11 @@ object SchedulerCardRead {
     class Changed : IllegalStateException("AnkiDroid is updating its study queue.")
     data class Result<R, T>(val card: Prepared<T>?, val queue: List<R>, val checks: Int)
 
+    /** An already displayed prediction needs fresh scheduler metadata, without reading its HTML/note/media again. */
+    fun <R, T> load(initial: List<R>, predicted: StudyLoop.Key?, key: (R) -> StudyLoop.Key,
+        fetch: () -> Result<R, T>): Result<R, T> =
+        if (predicted != null && initial.firstOrNull()?.let(key) == predicted) Result(null, initial, 0) else fetch()
+
     /** A change during HTML/media preparation is resolved before anything reaches the screen. */
     fun <R, T> confirmed(
         initial: List<R>, read: () -> List<R>, key: (R) -> StudyLoop.Key,

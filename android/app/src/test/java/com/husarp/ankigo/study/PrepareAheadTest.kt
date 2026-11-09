@@ -72,4 +72,31 @@ class PrepareAheadTest {
             assertNull(ahead.take(key(2), card(2).before))
         } finally { ahead.close() }
     }
+
+    @Test fun alreadyPreparedQueueContentIsReusedOnlyWithFreshMatchingState() {
+        val io = Executors.newSingleThreadExecutor()
+        var now = 0L
+        val ahead = PrepareAhead<String>(io, { now })
+        try {
+            ahead.remember(card(2), 0)
+            assertEquals(card(2), ahead.take(key(2), card(2).before))
+            assertNull("consumed once", ahead.take(key(2), card(2).before))
+            ahead.remember(card(2), 0)
+            assertNull(ahead.take(key(2), card(2).before + ("reps" to "3")))
+            ahead.remember(card(2), 0); now = 5001
+            assertNull("a slow earlier read must not acquire a new lifetime", ahead.take(key(2), card(2).before))
+        } finally { ahead.close() }
+    }
+
+    @Test fun rememberedContentStaysBoundedAndReloadClearsIt() {
+        val io = Executors.newSingleThreadExecutor()
+        val ahead = PrepareAhead<String>(io, { 0 })
+        try {
+            for (n in 1L..4) ahead.remember(card(n), 0)
+            assertNull(ahead.take(key(1), card(1).before))
+            assertEquals(card(2), ahead.take(key(2), card(2).before))
+            ahead.clear()
+            assertNull(ahead.take(key(4), card(4).before))
+        } finally { ahead.close() }
+    }
 }
