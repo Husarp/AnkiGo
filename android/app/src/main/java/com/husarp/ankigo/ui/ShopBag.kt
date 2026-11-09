@@ -60,7 +60,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
             val label = if (held) "Held" else "All"
             scope.addView(Ui.text(ctx, 13f, 900, if (heldOnly == held) R.color.ag_base else R.color.ag_sub0).apply {
                 text = label; contentDescription = label; gravity = android.view.Gravity.CENTER
-                SubtabIcons.apply(this, if (held) R.drawable.ic_heart else R.drawable.ic_item_bag)
+                SubtabIcons.apply(this, if (held) R.drawable.ic_held else R.drawable.ic_item_bag)
                 minimumHeight = Ui.dp(ctx, 48); isSelected = heldOnly == held
                 if (isSelected) background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx)
                 setOnClickListener { heldOnly = held; s.requestRender() }
@@ -88,6 +88,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
                 val ink = if (isSelected) R.color.ag_base else R.color.ag_text
                 val icon = when (item) {
                     null -> Ui.text(ctx, 20f, 900, ink).apply { text = "☷"; gravity = android.view.Gravity.CENTER }
+                    "amulet-coin" -> MonTags.icon(ctx, MonTag(TagKind.HELD, "Held"), 24).apply { setColorFilter(Ui.c(ctx, ink)) }
                     "tm" -> Bits.tmTile(ctx, null, 24)
                     else -> Bits.itemTile(ctx, item, 24)
                 }

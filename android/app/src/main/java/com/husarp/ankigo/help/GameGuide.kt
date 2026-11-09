@@ -245,7 +245,7 @@ object GameGuide {
                 "TMs are never used up: you keep them and can teach their move again.",
             ),
             listOf(
-                GuideVisual(GuideVisualId.ITEM_ICON, "potion", "Healing"), GuideVisual(GuideVisualId.ITEM_ICON, "lucky-egg", "Held"),
+                GuideVisual(GuideVisualId.ITEM_ICON, "potion", "Healing"), GuideVisual(GuideVisualId.TAG, "HELD", "Held"),
                 GuideVisual(GuideVisualId.ITEM_ICON, "helix-fossil", "Fossil"), GuideVisual(GuideVisualId.TAG, "HELD", "Holding an item"),
             ),
         ),

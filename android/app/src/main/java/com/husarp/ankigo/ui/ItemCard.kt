@@ -17,6 +17,7 @@ import androidx.annotation.ColorRes
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.BallTrade
 import com.husarp.ankigo.game.Category
+import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Move
@@ -200,7 +201,7 @@ internal object ItemCard {
                     }
                 }, below)
             }
-            for (f in facts.filterNot { pairs.isNotEmpty() && it.title == "What it does" }) addView(factBlock(ctx, f.title, f.text), LinearLayout.LayoutParams(below))
+            for (f in facts.filterNot { pairs.isNotEmpty() && it.title == "What it does" }) addView(factBlock(ctx, f.title, f.text, spec.item?.let { Items.def(it)?.kind == ItemKind.HELD } == true), LinearLayout.LayoutParams(below))
             if (!isTm) addView(factBlock(ctx, "Where to find", ItemInfo.whereToFind(data, spec.item.orEmpty())), LinearLayout.LayoutParams(below))
             if (isTm) addView(whoButton(ctx, page, spec.move.orEmpty(), nameOf(page, spec)), Form.lp(ctx, 0))
         }
@@ -237,13 +238,13 @@ internal object ItemCard {
     // ---- the text blocks ----
 
     /** One block: its title (PLAN 236: 12.5 sp, caps, letter-spaced, in the accent colour; [Ui.c] turns ag_mauve into the chosen accent) and its text (13.5 sp, bold parts in the text colour). */
-    internal fun factBlock(ctx: Context, title: String, text: String): View = LinearLayout(ctx).apply {
+    internal fun factBlock(ctx: Context, title: String, text: String, held: Boolean = false): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         addView(Ui.text(ctx, TITLE_SP, 900, R.color.ag_mauve).apply {
             Ui.decorateHeading(this, title)
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, TITLE_SP)
             letterSpacing = 0.06f
-            val icon = when (title) { "Requirements" -> R.drawable.ic_check; "Where to find" -> R.drawable.ic_map; "Evolves" -> R.drawable.ic_evolve; "In a fight" -> R.drawable.ic_swords; "How to use" -> R.drawable.ic_item_bag; else -> R.drawable.ic_info }
+            val icon = when (title) { "Requirements" -> R.drawable.ic_check; "Where to find" -> R.drawable.ic_map; "Evolves" -> R.drawable.ic_evolve; "In a fight" -> R.drawable.ic_swords; "How to use" -> if (held) R.drawable.ic_held else R.drawable.ic_item_bag; else -> R.drawable.ic_info }
             androidx.core.content.ContextCompat.getDrawable(ctx, icon)?.mutate()?.let {
                 it.setTint(Ui.c(ctx, R.color.ag_mauve)); it.setBounds(0, 0, dp(ctx, 16f), dp(ctx, 16f))
                 setCompoundDrawablesRelative(it, null, null, null)

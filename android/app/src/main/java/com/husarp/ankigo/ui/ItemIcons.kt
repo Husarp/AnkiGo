@@ -20,7 +20,7 @@ import com.husarp.ankigo.game.Type
 object ItemIcons {
     @DrawableRes
     fun symbol(k: ItemSymbol): Int = when (k) {
-        ItemSymbol.GEM -> R.drawable.ic_item_gem; ItemSymbol.TAG -> R.drawable.ic_item_tag; ItemSymbol.FOSSIL -> R.drawable.ic_item_fossil
+        ItemSymbol.GEM -> R.drawable.ic_item_gem; ItemSymbol.TAG -> R.drawable.ic_held; ItemSymbol.FOSSIL -> R.drawable.ic_item_fossil
         ItemSymbol.BOTTLE -> R.drawable.ic_item_bottle; ItemSymbol.BALL -> R.drawable.ic_item_ball; ItemSymbol.ESCAPE -> R.drawable.ic_item_escape
         ItemSymbol.BAG -> R.drawable.ic_item_bag
     }

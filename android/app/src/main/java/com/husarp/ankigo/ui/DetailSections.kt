@@ -92,7 +92,7 @@ object DetailSections {
                     DetailSection.TRAINING -> R.drawable.ic_stats
                     DetailSection.EVOLUTION -> R.drawable.ic_evolve
                     DetailSection.BOND -> R.drawable.ic_heart
-                    DetailSection.HELD_ITEM -> R.drawable.ic_item_bag
+                    DetailSection.HELD_ITEM -> R.drawable.ic_held
                     else -> R.drawable.ic_info
                 })
                 setColorFilter(Ui.c(a, R.color.ag_mauve))
@@ -185,7 +185,7 @@ object DetailSections {
         TagKind.NEW -> R.drawable.ic_ach_sparkle
         TagKind.SHINY -> R.drawable.ic_star
         TagKind.REGIONAL -> R.drawable.ic_dex
-        TagKind.HELD -> R.drawable.ic_star // never drawn: a held item shows its own icon
+        TagKind.HELD -> R.drawable.ic_held // a specific held item shows its own icon
     }
 
     /** The mark colour of a tag, the same as on the tiles (Main peach, Team mauve, Exp. Share teal, Favourite pink). */
@@ -197,7 +197,7 @@ object DetailSections {
         TagKind.FAINTED -> R.color.ag_red
         TagKind.CAN_EVOLVE -> R.color.ag_green
         TagKind.NEW -> R.color.ag_sky
-        TagKind.HELD -> R.color.ag_s0
+        TagKind.HELD -> R.color.ag_teal
         TagKind.SHINY -> R.color.ag_yellow
         TagKind.REGIONAL -> R.color.ag_lav
     }
