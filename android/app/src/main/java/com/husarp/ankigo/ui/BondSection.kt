@@ -3,7 +3,6 @@ package com.husarp.ankigo.ui
 import android.content.Context
 import android.view.Gravity
 import android.view.View
-import android.view.ViewGroup
 import android.widget.TextView
 import android.util.TypedValue
 import android.widget.ImageView
@@ -21,11 +20,10 @@ object BondSection {
     fun summary(mon: Mon): String = "Level ${Bond.level(mon.bondPoints)}"
 
     private class FittedBody(a: Context) : LinearLayout(a) {
-        private fun texts(v: View): List<TextView> = if (v is TextView) listOf(v)
-            else if (v is ViewGroup) (0 until v.childCount).flatMap { texts(v.getChildAt(it)) } else emptyList()
+        val perkLabels = mutableListOf<TextView>()
 
         override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            val labels = texts(this)
+            val labels = perkLabels
             labels.forEach { it.setSingleLine(true); it.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f) }
             // Measure again after each shared reduction: weighted columns and wrap-content ball labels both change width.
             repeat(12) {
@@ -80,14 +78,18 @@ object BondSection {
             set(if (next == null) 1f else (points - start).toFloat() / (next - start), Ui.c(a, R.color.ag_pink), false)
             contentDescription = progress
         }, LinearLayout.LayoutParams(-1, Ui.dp(a, 7)).also { it.topMargin = Ui.dp(a, 6) })
+        fun perkLine(value: String, sub: Boolean = false) = line(value, sub).also { perkLabels += it }
         fun perks(l: Int, title: String): View = LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             addView(ItemCard.factBlock(a, title, "").apply {
-                if (l != level) ((this as LinearLayout).getChildAt(0) as TextView).apply {
-                    val icon = a.getDrawable(R.drawable.ic_evolve)!!.mutate()
-                    icon.setTint(Ui.c(a, R.color.ag_mauve))
-                    icon.setBounds(0, 0, Ui.dp(a, 16), Ui.dp(a, 16))
-                    setCompoundDrawablesRelative(icon, null, null, null)
+                ((this as LinearLayout).getChildAt(0) as TextView).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    if (l != level) {
+                        val icon = a.getDrawable(R.drawable.ic_evolve)!!.mutate()
+                        icon.setTint(Ui.c(a, R.color.ag_mauve))
+                        icon.setBounds(0, 0, Ui.dp(a, 16), Ui.dp(a, 16))
+                        setCompoundDrawablesRelative(icon, null, null, null)
+                    }
                 }
             }, LinearLayout.LayoutParams(-1, -2))
             fun perk(icon: Int, value: String, sub: String? = null, tint: Int? = null) {
@@ -100,12 +102,12 @@ object BondSection {
                     }, LinearLayout.LayoutParams(Ui.dp(a, 18), Ui.dp(a, 18)))
                     addView(LinearLayout(a).apply {
                         orientation = LinearLayout.VERTICAL
-                        addView(line(value), LinearLayout.LayoutParams(-1, -2))
-                        if (sub != null) addView(line(sub, true), LinearLayout.LayoutParams(-1, -2))
+                        addView(perkLine(value), LinearLayout.LayoutParams(-1, -2))
+                        if (sub != null) addView(perkLine(sub, true), LinearLayout.LayoutParams(-1, -2))
                     }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 8) })
                 }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 10) })
             }
-            if (l == 0) addView(line("No perks yet"), Form.lp(a, 10))
+            if (l == 0) addView(perkLine("No perks yet"), Form.lp(a, 10))
             else {
                 perk(R.drawable.coin_stack, "+${Bond.coins(l)} coins", "per defeated Pokémon")
                 perk(R.drawable.ic_bolt, "+${Bond.xpPercent(l)}% XP", "wins and catches", R.color.ag_sky)
@@ -120,8 +122,8 @@ object BondSection {
             }, tint = R.color.ag_green)
         }
         addView(LinearLayout(a).apply {
-            addView(perks(level, "Current · $level"), LinearLayout.LayoutParams(0, -2, 1f))
-            if (next != null) addView(perks(level + 1, "Next · ${level + 1}"),
+            addView(perks(level, "Current perks"), LinearLayout.LayoutParams(0, -2, 1f))
+            if (next != null) addView(perks(level + 1, "Next · Level ${level + 1}"),
                 LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 18) })
         }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 28) })
     }

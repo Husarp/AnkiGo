@@ -29,7 +29,8 @@ class R32BMatchupSectionsTest {
         val state = TestData.state(data)
         val table = CompareTable.build(data, state, listOf(ComparePick.Owned("main")), false)
         assertNull(table.rowOrNull("unseen_matchups"))
-        for (key in listOf("weak", "resist", "immune", "normal", "strong")) {
+        assertEquals("All other types deal ×1 damage.", (table.row("normal").cells[0] as Cell.Text).text)
+        for (key in listOf("weak", "resist", "immune", "strong")) {
             assertTrue((table.row(key).cells[0] as Cell.Matchups).entries.isEmpty())
         }
     }
