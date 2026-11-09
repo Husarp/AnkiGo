@@ -250,7 +250,7 @@ class BarView(ctx: Context) : View(ctx) {
 
     /**
      * Sparks above the bar for the goal's flame [level] (0 = none, else [GoalTone.flameLevel]'s 1..3). They are drawn in the
-     * overlay of the bar's grandparent (so no layout changes and nothing takes touches) and animate only while the bar is
+     * overlay of the window root (so no layout changes and nothing takes touches) and animate only while the bar is
      * attached and shown; with reduced motion they stand still.
      */
     fun setGoalSparks(level: Int) {
@@ -271,7 +271,7 @@ class BarView(ctx: Context) : View(ctx) {
         val want = sparkLevel > 0 && isAttachedToWindow && windowVisibility == VISIBLE && sparksOnScreen()
         if (!want) { stopSparks(); return }
         if (sparkDrawable == null) {
-            val host = (parent as? ViewGroup)?.let { it.parent as? ViewGroup ?: it } ?: return
+            val host = rootView as? ViewGroup ?: return
             sparkHost = host
             sparkDrawable = SparkDrawable(host).also { host.overlay.add(it) }
         }
