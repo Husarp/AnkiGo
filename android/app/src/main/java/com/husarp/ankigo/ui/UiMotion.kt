@@ -83,7 +83,7 @@ object UiMotion {
         return Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888).also { view.draw(Canvas(it)) }
     }
     /** Close the live layer now; only a non-interactive drawable can remain during its exit. */
-    fun depart(view: View, close: () -> Unit) {
+    fun depart(view: View, sideways: Boolean = false, close: () -> Unit) {
         val old = picture(view)
         val host = view.rootView as? ViewGroup
         val point = IntArray(2); val base = IntArray(2)
@@ -95,8 +95,9 @@ object UiMotion {
         val ghost = BitmapDrawable(view.resources, old)
         host.overlay.add(ghost)
         run(host, SHEET_MS, { f ->
-            val y = top + (h * f).toInt()
-            ghost.setBounds(left, y, left+w, y+h)
+            val x = if (sideways) left - ((left + w) * f).toInt() else left
+            val y = if (sideways) top else top + (h * f).toInt()
+            ghost.setBounds(x, y, x+w, y+h)
         }, { host.overlay.remove(ghost); old.recycle() })
     }
     fun axis(view: View, forward: Boolean, change: () -> Unit) {

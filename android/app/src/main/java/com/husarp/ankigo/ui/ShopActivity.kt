@@ -68,7 +68,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         categoryLayer.anchor = anchor
         categoryLayer.visibility = View.VISIBLE
         categoryLayer.addView(View(this).apply {
-            contentDescription = "Close categories"; setOnClickListener { close() }
+            contentDescription = "Close categories"; setOnClickListener { closeCategories(close) }
         }, android.widget.FrameLayout.LayoutParams(-1, -1))
         val drawer = MotionScrollView(this).apply {
             tag = "bag-category-drawer"
@@ -80,6 +80,11 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         categoryLayer.addView(drawer, android.widget.FrameLayout.LayoutParams(Ui.dp(this, 208), -2, Gravity.TOP or Gravity.START).apply {
             marginStart = Ui.dp(this@ShopPage, 12)
         })
+    }
+
+    internal fun closeCategories(close: () -> Unit) {
+        val drawer = categoryLayer.getChildAt(1)
+        if (drawer == null) close() else UiMotion.depart(drawer, sideways = true, close = close)
     }
 
     private lateinit var appBar: AppBar
