@@ -149,7 +149,9 @@ class NextCard<T>(
     /** The seq of the answer whose write the shown predicted card is waiting behind, else null. */
     fun waitingFor(): Long? = (slot as? Slot.Predicted<T>)?.afterSeq
 
-    data class ReturnCheck(val key: StudyLoop.Key, val token: Int)
+    data class ReturnCheck(val key: StudyLoop.Key, val token: Int) {
+        fun mayRead(generation: Int, visit: Int, currentVisit: Int) = token == generation && visit == currentVisit
+    }
 
     /** Only a return to an unanswered NEW question may replace the displayed card. No load/wait or answer is emitted. */
     fun returnCheck(answerRevealed: Boolean): ReturnCheck? {

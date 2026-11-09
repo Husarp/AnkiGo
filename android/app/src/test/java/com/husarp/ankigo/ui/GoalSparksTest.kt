@@ -5,6 +5,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GoalSparksTest {
+    @Test fun liveFramesReuseParticlesWithoutSharingThemBetweenBarsOrSnapshots() {
+        val live = GoalSparks.MutableFrame()
+        val first = live.at(1, 0L)
+        val particles = first.toList()
+        val snapshot = GoalSparks.frame(1, 0L)
+        val other = GoalSparks.MutableFrame().at(1, 0L)
+        for (level in 1..3) for (time in listOf(333L, 6400L, 3_000_000_000L, null)) {
+            val next = live.at(level, time)
+            val expected = GoalSparks.frame(level, time)
+            org.junit.Assert.assertSame(first, next)
+            next.forEachIndexed { i, spark ->
+                org.junit.Assert.assertSame(particles[i], spark)
+                assertEquals(expected[i].rise, spark.rise, 0f)
+                assertEquals(expected[i].alpha, spark.alpha, 0f)
+                assertEquals(expected[i].rotation, spark.rotation, 0f)
+                org.junit.Assert.assertNotSame(other[i], spark)
+            }
+        }
+        assertEquals(0f, snapshot[0].rise, 0f)
+        assertEquals(0f, other[0].rise, 0f)
+        assertTrue(live.at(0, 100L).isEmpty())
+        org.junit.Assert.assertSame(first, live.at(3, 100L))
+    }
+
     private fun levelAt(percent: Int) = GoalTone.flameLevel(percent / 100f)
     private fun sparksAt(percent: Int) = GoalSparks.count(levelAt(percent))
 

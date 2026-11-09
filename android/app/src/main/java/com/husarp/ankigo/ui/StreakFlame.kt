@@ -9,6 +9,9 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.ImageDecoder
 import android.graphics.drawable.AnimatedImageDrawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import java.util.concurrent.Executors
 import android.view.View
 import android.widget.ImageView
 import com.husarp.ankigo.R
@@ -18,7 +21,14 @@ import com.husarp.ankigo.R
  * screen; the original still artwork (drawable-nodpi/streak_flame_still.png) on API 26-27, with reduced motion, in the screenshot
  * renderer or when decoding fails. [alive] = false (streak 0) shows the still frame grey and faded. Size it with layout params.
  */
-class StreakFlame(ctx: Context) : ImageView(ctx) {
+class StreakFlame internal constructor(ctx: Context,
+    private val decodeImage: (android.content.res.Resources) -> android.graphics.drawable.Drawable?,
+    private val decodeIo: java.util.concurrent.Executor,
+    private val deliver: (Runnable) -> Unit = { main.post(it); Unit },
+) : ImageView(ctx) {
+    constructor(ctx: Context) : this(ctx, { res ->
+        ImageDecoder.decodeDrawable(ImageDecoder.createSource(res, R.raw.streak_flame))
+    }, decoder)
     private var anim: AnimatedImageDrawable? = null
     private var triedDecode = false
     private var decodeFailed = false
@@ -50,7 +60,7 @@ class StreakFlame(ctx: Context) : ImageView(ctx) {
         imageAlpha = StreakFlameRules.alpha(alive)
         colorFilter = if (alive) null else GREY
         if (picture() == StreakFlameRules.Picture.ANIMATED) {
-            if (anim == null && !triedDecode) decode()
+            if (anim == null && !triedDecode && isAttachedToWindow && windowVisible && isShown) decode()
             val a = anim
             if (a != null) { if (drawable !== a) { setImageDrawable(a); stillShown = false } } else setStill()
         } else {
@@ -62,12 +72,23 @@ class StreakFlame(ctx: Context) : ImageView(ctx) {
 
     private fun setStill() { if (!stillShown) { setImageResource(R.drawable.streak_flame_still); stillShown = true } }
 
-    private fun decode() {
+    /** Keep the still frame usable while the animated image is decoded once on the worker. */
+    internal fun decode() {
+        if (triedDecode) return
         triedDecode = true
-        try {
-            val d = ImageDecoder.decodeDrawable(ImageDecoder.createSource(resources, R.raw.streak_flame))
-            if (d is AnimatedImageDrawable) { d.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE; anim = d } else decodeFailed = true
-        } catch (_: Throwable) { decodeFailed = true }
+        val res = resources
+        decodeIo.execute {
+            val d = com.husarp.ankigo.debug.LagLog.work("streak decode") {
+                runCatching {
+                    decodeImage(res)?.also { if (it is AnimatedImageDrawable) it.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE }
+                }.getOrNull()
+            }
+            deliver(Runnable {
+                anim = d as? AnimatedImageDrawable
+                decodeFailed = anim == null
+                refresh()
+            })
+        }
     }
 
     private fun stop() { try { anim?.stop() } catch (_: Throwable) {} }
@@ -95,15 +116,17 @@ class StreakFlame(ctx: Context) : ImageView(ctx) {
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
         windowVisible = visibility == VISIBLE
-        sync()
+        if (isAttachedToWindow) refresh() else sync()
     }
 
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
-        sync()
+        if (isAttachedToWindow) refresh() else sync()
     }
 
     companion object {
+        private val main by lazy { Handler(Looper.getMainLooper()) }
+        private val decoder = Executors.newSingleThreadExecutor { r -> Thread(r, "streak-decode").apply { isDaemon = true } }
         private val GREY = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(0f) })
         private val stills = LinkedHashMap<Int, Bitmap>()
 

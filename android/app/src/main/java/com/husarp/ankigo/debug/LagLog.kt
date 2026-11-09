@@ -47,7 +47,17 @@ object LagLog {
         }
     }
 
-    /** One outstanding main-Looper ping. A long stall is sampled on the watchdog, while the main thread is still blocked. */
+    /** Names costly UI/game work even when a watchdog sample lands between its frames. */
+    fun <T> work(name: String, block: () -> T): T {
+        if (recorder?.enabled != true || studies == 0 && scope.get() != true) return block()
+        val start = SystemClock.elapsedRealtime()
+        return try { block() } finally {
+            val ms = SystemClock.elapsedRealtime() - start
+            if (ms >= 16) record("WORK", "name" to name, "ms" to ms, "thread" to Thread.currentThread().name)
+        }
+    }
+
+    /** One outstanding main-Looper ping. Sample stacks at 100 ms and again over 700 ms while main is still blocked. */
     @Synchronized fun start(ctx: Context) {
         init(ctx)
         studies++
@@ -80,7 +90,7 @@ object LagLog {
                     main.post(ack)
                 } else {
                     val gap = now - sent
-                    if (gap >= 700 && !stacked) {
+                    if ((gap >= 100 && !stacked) || (gap > 700 && !longLogged)) {
                         stacked = true
                         record("STACK", "ping" to pingId, "ms" to gap, "main" to mainThread.stackTrace.joinToString(" | "))
                     }

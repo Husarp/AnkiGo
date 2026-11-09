@@ -60,6 +60,8 @@ internal object RarityFrame {
         private val density = view.resources.displayMetrics.density
         private val corner = cornerDp * density
         private var observer: ViewTreeObserver? = null
+        private var lit = false
+        private val prefs = view.context.getSharedPreferences("study", 0)
         internal var frozenTimeMs: Long? = null
 
         init {
@@ -80,14 +82,19 @@ internal object RarityFrame {
         }
         override fun onPreDraw(): Boolean { refresh(); return true }
         internal fun refresh(enabled: Boolean = ValueAnimator.areAnimatorsEnabled()) {
-            if (enabled && frozenTimeMs == null && view.isAttachedToWindow && view.windowVisibility == View.VISIBLE &&
+            if (enabled && !prefs.getBoolean("reduceMotion", false) && frozenTimeMs == null && view.isAttachedToWindow && view.windowVisibility == View.VISIBLE &&
                 view.isShown && view.getGlobalVisibleRect(visibleRect) && !visibleRect.isEmpty) Clock.add(this)
             else Clock.remove(this)
         }
         internal fun tick() {
             refresh()
-            if (this in Clock.active) view.invalidate()
+            if (this in Clock.active) {
+                val next = (0 until effect.stars).any { envelope(elapsed(Clock.timeMs, it)) > 0f }
+                if (next || lit) view.invalidate()
+                lit = next
+            }
         }
+        private fun elapsed(time: Long, i: Int) = time + i * 2340L + (view.id.coerceAtLeast(0) % 17) * 137L
         override fun draw(canvas: Canvas) {
             val b = bounds
             val inset = .75f * density
@@ -96,15 +103,17 @@ internal object RarityFrame {
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = density
             canvas.drawRoundRect(b.left + inset, b.top + inset, b.right - inset, b.bottom - inset, corner, corner, paint)
-            if (frozenTimeMs == null && !ValueAnimator.areAnimatorsEnabled()) return
+            lit = false
+            if (frozenTimeMs == null && (!ValueAnimator.areAnimatorsEnabled() || prefs.getBoolean("reduceMotion", false))) return
             val time = frozenTimeMs ?: Clock.timeMs
             paint.style = Paint.Style.FILL
             val side = 8 * density * effect.intensity
             for (i in 0 until effect.stars) {
                 // The page's placements and 390 ms stagger, slowed 2x and spread 3x further apart.
-                val elapsed = time + i * 2340L + (view.id.coerceAtLeast(0) % 17) * 137L
+                val elapsed = elapsed(time, i)
                 val alpha = envelope(elapsed)
                 if (alpha <= 0f) continue
+                lit = true
                 val p = anchors[i]
                 val save = canvas.save()
                 // Inset enough to keep the whole star within the card's clipped bounds.
@@ -143,13 +152,10 @@ internal object RarityFrame {
             }
         }
         override fun doFrame(frameTimeNanos: Long) {
-            posted = false
             timeMs = frameTimeNanos / 1_000_000
             active.toList().forEach { it.tick() }
-            if (active.isNotEmpty() && !posted) {
-                posted = true
-                Choreographer.getInstance().postFrameCallback(this)
-            }
+            posted = active.isNotEmpty()
+            if (posted) Choreographer.getInstance().postFrameCallbackDelayed(this, 32L)
         }
     }
 

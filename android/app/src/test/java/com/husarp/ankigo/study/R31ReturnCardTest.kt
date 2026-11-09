@@ -27,6 +27,45 @@ class R31ReturnCardTest {
     private fun apply(sim: StudySim, ticket: NextCard.ReturnCheck, read: SchedulerCardRead.Result<StudyLoop.Key, String>, revealed: Boolean = false): List<Cmd<String>> =
         sim.p.nc.returned(ticket, read.card, read.queue, revealed).also { sim.cmds(it) }
 
+    @Test fun queuedReturnReadIsSkippedBeforeProviderIoWhenItsCardWasAnswered() {
+        val sim = newSession(slow = true)
+        val ticket = sim.p.nc.returnCheck(false)!!
+        var generation = ticket.token
+        var returnReads = 0
+        sim.p.io += {
+            if (ticket.mayRead(generation, 1, 1)) { returnReads++; read(sim.fake) }
+        }
+        sim.tap(3)
+        generation = (sim.p.nc.slot as NextCard.Slot.Loading).token
+        sim.pump()
+        assertEquals("a stale return must not delay the answer behind another slow provider read", 0, returnReads)
+        assertEquals(1, sim.fake.count("answer"))
+        assertEquals(sim.fake.card(ticket.key)!!.id, sim.fake.revlog.single().cardId)
+        sim.check()
+    }
+
+    @Test fun repeatedVisitsSkipRetiredReadsAndKeepOnlyTheCurrentReadOnTheIoQueue() {
+        val sim = newSession(slow = true)
+        val ticket = sim.p.nc.returnCheck(false)!!
+        var visit = 1
+        val started = mutableListOf<Int>()
+        for (requested in 1..4) {
+            sim.p.io += {
+                if (ticket.mayRead(ticket.token, requested, visit)) { started += requested; read(sim.fake) }
+            }
+            visit++ // each pause retires the last visit, even though the same NEW card stays on screen
+        }
+        sim.p.io += {
+            if (ticket.mayRead(ticket.token, 5, visit)) { started += 5; read(sim.fake) }
+        }
+        val original = sim.displayed
+        sim.pump()
+        assertEquals(listOf(5), started)
+        assertSame(original, sim.displayed)
+        assertTrue(sim.made.isEmpty()); assertEquals(0, sim.fake.count("answer"))
+        sim.check()
+    }
+
     private fun dueFirst(slow: Boolean) {
         for (queue in 1..4) {
             val sim = newSession(slow)

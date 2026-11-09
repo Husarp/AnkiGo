@@ -177,7 +177,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 }
                 is Item.Ev -> try {
                     dirty = true
-                    play(item.e)
+                    com.husarp.ankigo.debug.LagLog.work("battle ${item.e.javaClass.simpleName}") { play(item.e) }
                 } catch (t: Throwable) {
                     Report.fail("PANEL", "event ${item.e.javaClass.simpleName}", t)
                     0L
