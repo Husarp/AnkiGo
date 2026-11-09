@@ -18,13 +18,13 @@ object StatusInfo {
         Info("par", "PAR", "Paralysed",
             "Paralysed: ${pct(Tuning.PARA_SKIP)} missed moves; Speed halved."),
         Info("brn", "BRN", "Burned",
-            "Burned: loses 1/16 max HP/round; physical damage halved. Magic Guard/Guts can change this."),
+            "Burned: loses 1/16 of max HP per round; physical damage halved. Magic Guard/Guts can change this."),
         Info("psn", "PSN", "Poisoned",
-            "Poisoned: loses 1/8 max HP/round; Magic Guard prevents this."),
+            "Poisoned: loses 1/8 of max HP per round; Magic Guard prevents this."),
         Info("tox", "PSN", "Badly poisoned",
-            "Badly poisoned: loses 1/16 more max HP/round, up to 15/16; Magic Guard prevents this."),
+            "Badly poisoned: loses an extra 1/16 of max HP per round, up to 15/16 of max HP; Magic Guard prevents this."),
         Info("slp", "SLP", "Asleep",
-            "Asleep: usually can't move; ${pct(Tuning.WAKE_CHANCE)} wake chance/try. After Rest it sleeps through exactly ${SideMoves.REST_SLEEP} tries. Uproar wakes it."),
+            "Asleep: usually can't move; ${pct(Tuning.WAKE_CHANCE)} wake chance per try. After Rest it sleeps through exactly ${SideMoves.REST_SLEEP} tries. Uproar wakes it."),
         Info("frz", "FRZ", "Frozen",
             "Frozen: can't move; ${pct(Tuning.FREEZE_THAW)} thaw chance each time it tries. Fire hits or thawing moves thaw it."),
     )
@@ -32,9 +32,9 @@ object StatusInfo {
     /** Compact battle-card text; detailed guide text retains ability exceptions. */
     fun effect(status: String): String = when (status) {
         "par" -> "${pct(Tuning.PARA_SKIP)} missed moves; Speed halved."
-        "brn" -> "Loses ¹⁄₁₆ HP/round; physical damage halved."
-        "psn" -> "Loses ⅛ max HP each round."
-        "tox" -> "Poison damage rises each round, up to ¹⁵⁄₁₆ HP."
+        "brn" -> "Loses 1/16 of max HP per round; physical damage halved."
+        "psn" -> "Loses 1/8 of max HP per round."
+        "tox" -> "Poison damage rises per round, up to 15/16 of max HP."
         "slp" -> "Usually can't move; Rest lasts ${SideMoves.REST_SLEEP} tries."
         "frz" -> "Can't move; ${pct(Tuning.FREEZE_THAW)} thaw chance per try."
         else -> ""

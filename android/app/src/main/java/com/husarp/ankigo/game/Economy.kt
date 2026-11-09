@@ -31,7 +31,7 @@ object Items {
         "repeat-ball" -> "Returns ${Tuning.REPEAT_RETURN_MISS_PERCENT}% miss / ${Tuning.REPEAT_RETURN_CATCH_PERCENT}% catch"
         "heal-ball" -> "HP IV +${Tuning.HEAL_IV_BONUS} (max ${Tuning.BALL_IV_CAP})"
         "luxury-ball" -> "All IVs +${Tuning.LUXURY_IV_BONUS} (max ${Tuning.BALL_IV_CAP})"
-        "timer-ball" -> "+${Tuning.TIMER_BONUS_PER_ROUND}%/round, max +${Tuning.SPECIAL_BONUS}%"
+        "timer-ball" -> "+${Tuning.TIMER_BONUS_PER_ROUND}% per round, max +${Tuning.SPECIAL_BONUS}%"
         else -> "+${Tuning.SPECIAL_BONUS}% " + when (id) {
             "net-ball" -> "on Water/Bug"
             "dive-ball" -> "on Water"
