@@ -10,6 +10,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import app.cash.paparazzi.Paparazzi
 import com.husarp.ankigo.GameRepo
+import com.husarp.ankigo.game.Game
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.Shop
@@ -115,6 +116,12 @@ internal object ShopCardKit {
         st.shopTms.clear(); st.shopTms += listOf("thunderbolt", "watergun", "earthquake")
         st.cash = cash
         setup()
+        // Dated stock must survive live day ticks and screenshot callbacks.
+        p.onHide()
+        val at = java.time.LocalDate.parse(day).atStartOfDay(java.time.ZoneId.systemDefault())
+            .plusHours(st.settings.dayStartHour.coerceIn(0, 23).toLong()).plusMinutes(30).toInstant().toEpochMilli()
+        GameRepo::class.java.getDeclaredField("current").apply { isAccessible = true }
+            .set(GameRepo, Game(GameRepo.data!!, st, clock = { at }))
         if (bag) setField(p, "showBag", true)
         key?.let { p.openCard(it) }
         return p to stage.render()

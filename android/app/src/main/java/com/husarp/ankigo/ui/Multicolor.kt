@@ -32,6 +32,18 @@ internal object Multicolor {
         DetailSection.HELD_ITEM -> Tone.PURPLE
     }
 
+    /** Adam's exact C lighter colours for detail section icons in both themes. */
+    fun sectionColor(ctx: Context, section: DetailSection): Int = if (!enabled(ctx)) Ui.c(ctx, R.color.ag_mauve) else when (section) {
+        DetailSection.HELD_ITEM -> 0xff9d79db.toInt()
+        DetailSection.EVOLUTION -> 0xff3fb05c.toInt()
+        DetailSection.STATS -> 0xff5893e4.toInt()
+        DetailSection.MOVES -> 0xffde7930.toInt()
+        DetailSection.MATCHUPS -> 0xffdf6e74.toInt()
+        DetailSection.TRAINING -> 0xffc19706.toInt()
+        DetailSection.BOND -> 0xffd36d9f.toInt()
+        DetailSection.INFO -> 0xff1daca8.toInt()
+    }
+
     fun tab(tab: BottomNav.Tab): Tone = when (tab) {
         BottomNav.Tab.STUDY -> Tone.BLUE
         BottomNav.Tab.POKEMON -> Tone.GREEN

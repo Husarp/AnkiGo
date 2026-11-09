@@ -25,14 +25,20 @@ class R31NShots {
         v.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.AT_MOST))
         v.layout(0, 0, v.measuredWidth, v.measuredHeight)
     }
+    private fun perks(v: View): List<TextView> = texts((v as ViewGroup).getChildAt(3))
+        .filter { it.text.isNotBlank() && !it.text.startsWith("CURRENT") && !it.text.startsWith("NEXT") }
     private fun fits(v: View) {
-        val labels = texts(v)
-        assertEquals("One size throughout Bond body", 1, labels.map { it.textSize }.distinct().size)
+        val labels = perks(v)
+        assertTrue(labels.isNotEmpty())
+        assertEquals("One shared size for perk lines", 1, labels.map { it.textSize }.distinct().size)
         labels.forEach {
             assertEquals("${it.text}: one line", 1, it.layout.lineCount)
             assertEquals("${it.text}: no ellipsis", 0, it.layout.getEllipsisCount(0))
             assertTrue("${it.text}: width", it.layout.getLineWidth(0) <= it.width - it.compoundPaddingLeft - it.compoundPaddingRight + 1)
             assertTrue("${it.text}: height", it.layout.height <= it.height - it.compoundPaddingTop - it.compoundPaddingBottom)
+        }
+        texts(v).filter { it.text.startsWith("CURRENT") || it.text.startsWith("NEXT") }.forEach {
+            assertEquals("Title retains its size", Ui.text(v.context, ItemCard.TITLE_SP, 900, R.color.ag_text).textSize, it.textSize, .1f)
         }
     }
     private fun memory() = DetailOpen(object : DetailOpenStore {
@@ -67,9 +73,11 @@ class R31NShots {
             assertEquals(Ui.dp(ctx, 28), (column.getChildAt(3).layoutParams as LinearLayout.LayoutParams).topMargin)
             // Re-measuring the same section must grow text again when space becomes available.
             measure(body, Ui.dp(ctx, 220), Ui.dp(ctx, 1000)); fits(body)
-            val small = texts(body).first().textSize
+            val small = perks(body).first().textSize
+            val nameSize = texts(body).first { it.text == "Growing close" }.textSize
             measure(body, Ui.dp(ctx, 500), Ui.dp(ctx, 1000)); fits(body)
-            assertTrue(texts(body).first().textSize > small)
+            assertTrue(perks(body).first().textSize > small)
+            assertEquals(nameSize, texts(body).first { it.text == "Growing close" }.textSize, .1f)
 
             FakeGame.withSprites = false; FakeGame.install(ctx)
             File("/tmp/r31k-sprites/25.png").copyTo(File(Sprites.dir(ctx), "static/25.png").also { it.parentFile!!.mkdirs() }, overwrite = true)

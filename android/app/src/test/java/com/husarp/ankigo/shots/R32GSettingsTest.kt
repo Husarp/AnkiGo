@@ -29,7 +29,7 @@ class R32GSettingsTest {
             ThemeMode.entries.map { it.label }, BarStyle.entries.map { it.label }, TypeStyle.entries.map { it.label },
             MatchupChips.entries.map { it.label }, listOf("Today", "A", "B"), AchievementPopup.modes,
             ShowAnswerColor.entries.map { it.label }, OpenOn.entries.map { it.label }, DotsPlace.entries.map { it.label },
-            InfoBoxStyle.entries.map { it.label }
+            InfoBoxStyle.entries.map { it.label }, listOf("All", "Team", "Box")
         )
         for (width in listOf(320, 360, 412)) for (scale in listOf(1f, 2f)) for (theme in Theme.entries) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Variant("phone", width, 1100).device(theme).copy(fontScale = scale))
@@ -44,6 +44,11 @@ class R32GSettingsTest {
                 val row = Form.segmented(ctx, labels, 0) { picked = it }
                 page.addView(row, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 8) })
                 layout(row, Ui.dp(ctx, width - 48))
+                val naturalHeight = row.measuredHeight
+                row.measure(View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, width - 48), View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, 800), View.MeasureSpec.AT_MOST))
+                row.layout(0, 0, row.measuredWidth, row.measuredHeight)
+                assertEquals("Bounded parents leave room for the rest of the dialog", naturalHeight, row.measuredHeight)
                 val cells = (0 until row.childCount).map { row.getChildAt(it) as TextView }
                 assertTrue(cells.maxOf { it.width } - cells.minOf { it.width } <= 1)
                 assertEquals(1, cells.map { it.height }.distinct().size)

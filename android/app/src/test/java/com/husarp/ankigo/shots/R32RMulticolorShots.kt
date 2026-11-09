@@ -92,7 +92,7 @@ class R32RMulticolorShots {
                 val icon = bar.getChildAt(0) as ImageView
                 val title = all(bar.getChildAt(1)).filterIsInstance<TextView>().single()
                 assertEquals(section.title.uppercase(), title.text.toString())
-                val colour = Multicolor.color(a, Multicolor.section(section))
+                val colour = Multicolor.sectionColor(a, section)
                 assertEquals(Ui.c(a, R.color.ag_text), title.currentTextColor)
                 assertEquals(colour, (icon.colorFilter as android.graphics.PorterDuffColorFilter).color)
                 assertNull("Bare section icons", icon.background)

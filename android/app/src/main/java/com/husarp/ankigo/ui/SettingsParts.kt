@@ -214,7 +214,12 @@ internal object Form {
 
     /** Equal-width, centred choices; every segment grows to the tallest wrapped label. */
     fun segmented(ctx: Context, labels: List<String>, selected: Int, onPick: (Int) -> Unit): LinearLayout =
-        LookChoosers.segmented(ctx, labels, selected, onPick) as LinearLayout
+        (LookChoosers.segmented(ctx, labels, selected, onPick) as LinearLayout).apply {
+            for (i in 0 until childCount) (getChildAt(i) as TextView).apply {
+                setCompoundDrawablesRelative(null, null, null, null)
+                compoundDrawablePadding = 0
+            }
+        }
 
     /** Round colour swatches (the palette's own colours, not the chosen accent); the picked one has a ring and a tick. */
     fun swatches(ctx: Context, colors: List<Pair<String, Int>>, selected: Int, onPick: (Int) -> Unit): LinearLayout =

@@ -53,32 +53,32 @@ object GoalSparks {
         private val sparks = ArrayList<Spark>(6)
 
         fun at(level: Int, tMs: Long?): List<Spark> {
-        sparks.clear()
-        if (count(level) == 0) return emptyList()
-        val t = tMs ?: STILL_MS
-        val bucket = Math.floorDiv(t, SPAWN_INTERVAL_MS)
-        val up = maxRise(level)
-        for (index in bucket - 5..bucket) {
-            val age = t - spawnTime(index)
-            val duration = lifetime(index)
-            if (age < 0 || age >= duration) continue
-            val q = age.toFloat() / duration
-            val kind = random(index, 3)
-            val shape = when { kind < .25f -> 0; kind < .5f -> 6; else -> 5 }
-            val baseColor = if (random(index, 4) < .5f) COLOR_ODD else COLOR_EVEN
-            val shade = if (random(index, 5) < .3f) .92f else 1f
-            fun channel(shift: Int) = (((baseColor ushr shift) and 255) * shade).toInt()
-            val spark = pool[sparks.size]
-            spark.x = random(index, 6)
-            spark.rise = q * up
-            spark.radius = (if (shape == 0) 1.3f else 2.4f) * (.9f + .2f * random(index, 7))
-            spark.shape = shape
-            spark.rotation = random(index, 8) * 360f + q * 80f
-            spark.alpha = (kotlin.math.sin(q * Math.PI) * .65).toFloat()
-            spark.color = (255 shl 24) or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
-            sparks.add(spark)
+            sparks.clear()
+            if (count(level) == 0) return emptyList()
+            val t = tMs ?: STILL_MS
+            val bucket = Math.floorDiv(t, SPAWN_INTERVAL_MS)
+            val up = maxRise(level)
+            for (index in bucket - 5..bucket) {
+                val age = t - spawnTime(index)
+                val duration = lifetime(index)
+                if (age < 0 || age >= duration) continue
+                val q = age.toFloat() / duration
+                val kind = random(index, 3)
+                val shape = when { kind < .25f -> 0; kind < .5f -> 6; else -> 5 }
+                val baseColor = if (random(index, 4) < .5f) COLOR_ODD else COLOR_EVEN
+                val shade = if (random(index, 5) < .3f) .92f else 1f
+                fun channel(shift: Int) = (((baseColor ushr shift) and 255) * shade).toInt()
+                val spark = pool[sparks.size]
+                spark.x = random(index, 6)
+                spark.rise = q * up
+                spark.radius = (if (shape == 0) 1.3f else 2.4f) * (.9f + .2f * random(index, 7))
+                spark.shape = shape
+                spark.rotation = random(index, 8) * 360f + q * 80f
+                spark.alpha = (kotlin.math.sin(q * Math.PI) * .65).toFloat()
+                spark.color = (255 shl 24) or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
+                sparks.add(spark)
+            }
+            return sparks
         }
-        return sparks
     }
-}
 }

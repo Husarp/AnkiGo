@@ -68,7 +68,7 @@ class R31AShots {
         assertEquals(DetailSection.HELD_ITEM, section.tag)
         assertTrue("Soothe Bell" in texts(section))
         assertTrue(texts(section).any { "Bond" in it })
-        assertTrue("Take off" in texts(section)); assertTrue("Give to another Pokémon" in texts(section))
+        assertFalse("Take off" in texts(section)); assertFalse("Give to another Pokémon" in texts(section))
         val bar = (section as ViewGroup).getChildAt(0)
         bar.performClick()
         assertFalse(DetailSections.memory(page).isOpen(DetailSection.HELD_ITEM))
@@ -100,7 +100,7 @@ class R31AShots {
         DialogShots.scene(ctx, dialog)
     }
 
-    @Test fun takingOffTheItemHidesItsSectionAndReturnsItToTheBag() {
+    @Test fun takingOffThroughTheItemWindowRemovesTheSectionAndReturnsItToTheBag() {
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         val data = GameRepo.data!!; val state = GameRepo.state!!
@@ -109,12 +109,15 @@ class R31AShots {
         val page = TeamPage(ctx, NoHost)
         val before = state.count("soothe-bell")
         val section = DetailTopCard.heldItem(page, data, mon, page)!!
-        val host = FrameLayout(page).apply { addView(section) }
-        all(section).single { it.contentDescription == "Take off" }.performClick()
+        var opened: ItemWindow? = null
+        val prior = ItemWindow.interceptShow
+        try {
+            ItemWindow.interceptShow = { opened = it }
+            all(section).single { it.contentDescription?.contains("Tap for what it does") == true }.performClick()
+            all(checkNotNull(opened).view).single { it.contentDescription == "Take off" }.performClick()
+        } finally { ItemWindow.interceptShow = prior }
         assertNull(mon.heldItem)
         assertEquals(before + 1, state.count("soothe-bell"))
-        assertEquals(View.GONE, section.visibility)
-        assertTrue("Took Soothe Bell from ${mon.shownName}" in texts(host))
         assertNull(DetailTopCard.heldItem(page, data, mon, page))
     }
 

@@ -85,7 +85,8 @@ class R30NShots {
                 val t = texts(body).joinToString("\n")
                 assertEquals(level < 5, t.contains("NEXT ·"))
                 assertFalse(t.contains("slot")); assertFalse(t.contains("Level 6"))
-                assertTrue(t.contains("CURRENT · $level"))
+                assertTrue(t.contains("CURRENT PERKS"))
+                if (level < 5) assertTrue(t.contains("NEXT · LEVEL ${level + 1}"))
                 if (level == 0) assertFalse(t.contains("+0")) else assertTrue(t.contains("+${level * 5}% XP"))
                 if (level in listOf(0, 3, 5)) addView(body, Form.lp(ctx, 16))
             }

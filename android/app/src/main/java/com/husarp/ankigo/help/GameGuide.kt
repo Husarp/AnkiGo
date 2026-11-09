@@ -186,7 +186,6 @@ object GameGuide {
                 "Wishlist: open a Pokémon you have seen but not caught in the Pokédex to add it. Your catch rule always keeps wishlisted Pokémon.",
                 "Discoveries: defeat or catch a species to unlock its stats and other details; any form counts. Wild Matchups appear after your first attack, or immediately with Bond Level 3. Each type starts as ??? and is remembered when your move hits that species, or one you own is hit by that type. A catch or defeat alone reveals no matchups. Bond Level 3 reveals all matchups for that species and its forms.",
                 "Shiny Pokémon: each wild encounter has a 1 in ${Tuning.SHINY_ODDS} chance to be shiny.",
-
             ),
             listOf(
                 GuideVisual(GuideVisualId.ITEM_ICON, "poke-ball"), GuideVisual(GuideVisualId.ITEM_ICON, "great-ball"),
@@ -215,7 +214,6 @@ object GameGuide {
                 "Purchase limits: weekend items allow one purchase per weekend; Everstone allows one per game day across all offers. TMs stay yours forever. Buy Streak Freezes one at a time up to the limit; each costs more as you hold more. Refreshing never restores a sold-out item.",
                 "Shop reminder: a dot on the Shop tab means you have not looked at the new day’s offers yet.",
                 "Worth buying: save for evolution items your Pokémon need, better balls for Pokémon you want, or a held item that helps your team. Check Healing before stocking up on potions.",
-
             ),
             listOf(
                 GuideVisual(GuideVisualId.ITEM_ICON, "amulet-coin", "Main: ×2 money"), GuideVisual(GuideVisualId.ITEM_ICON, "luck-incense", "Main: ×2 money"),

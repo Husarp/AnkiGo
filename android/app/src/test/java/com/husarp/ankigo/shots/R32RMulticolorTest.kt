@@ -85,7 +85,7 @@ class R32RMulticolorTest {
                 val card = DetailSections.section(ctx, mem, section, null) { View(ctx) } as LinearLayout
                 val bar = card.getChildAt(0) as LinearLayout
                 val icon = bar.getChildAt(0) as ImageView
-                assertEquals(Multicolor.color(ctx, Multicolor.section(section)), (icon.colorFilter as PorterDuffColorFilter).color)
+                assertEquals(Color.parseColor(listOf("#9d79db", "#3fb05c", "#5893e4", "#de7930", "#df6e74", "#c19706", "#d36d9f", "#1daca8")[section.ordinal]), (icon.colorFilter as PorterDuffColorFilter).color)
                 assertEquals(Ui.c(ctx, R.color.ag_text), all(bar.getChildAt(1)).filterIsInstance<TextView>().single().currentTextColor)
             }
             val tabs = LinearLayout(ctx)

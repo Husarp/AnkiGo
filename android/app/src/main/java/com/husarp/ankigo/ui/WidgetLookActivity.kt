@@ -281,6 +281,16 @@ class WidgetLookActivity : AgActivity() {
         body.addView(LookChoosers.segmented(this,listOf("Level","Name","Recently caught","Recently evolved"),0) { sort=BuddyPicker.Sort.values()[it]; update() })
         body.addView(Form.segmented(this,listOf("All","Team","Box"),0) { filters=filters.copy(place=BuddyPicker.Place.values()[it]); update() })
         body.addView(MotionHorizontalScrollView(this).apply { isHorizontalScrollBarEnabled=false; addView(chips) })
+        if (resources.configuration.screenHeightDp < 480) {
+            // In a split window the filters scroll separately, leaving room to choose a Pokémon.
+            val controls = StudyUi.column(this)
+            while (body.childCount > 0) {
+                val child = body.getChildAt(0)
+                body.removeViewAt(0)
+                controls.addView(child)
+            }
+            body.addView(MotionScrollView(this).apply { addView(controls) }, StudyUi.lp(-1, 0, 1f))
+        }
         list.choiceMode=android.widget.ListView.CHOICE_MODE_SINGLE
         val empty=StudyUi.label(this,"No Pokémon match",14,R.color.ag_sub1)
         body.addView(empty)

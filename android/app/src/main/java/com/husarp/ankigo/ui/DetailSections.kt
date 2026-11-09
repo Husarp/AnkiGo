@@ -95,7 +95,7 @@ object DetailSections {
                     DetailSection.HELD_ITEM -> R.drawable.ic_held
                     else -> R.drawable.ic_info
                 })
-                setColorFilter(Multicolor.color(a, Multicolor.section(s)))
+                setColorFilter(Multicolor.sectionColor(a, s))
             }, LinearLayout.LayoutParams(Ui.dp(a, 16), Ui.dp(a, 16)).also { it.marginEnd = Ui.dp(a, 6) })
             addView(FlowRow(a, Ui.dp(a, 4), centered = false).apply {
                 addView(Ui.text(a, 12f, 900, R.color.ag_mauve).apply {

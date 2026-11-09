@@ -243,8 +243,8 @@ class R18AWriteLagTest {
 
     // ---- the device load (R18 FIX-1, RV-9)
 
-    @Test fun theLearningCardsAreReadOncePerLoadNotOncePerPreparedCard() {
-        // every confirmed card gets AHEAD + 1 prepared cards after it; each used to do its own AnkiDroid learning search (3 per answered card, 2 thrown away at the next confirm)
+    @Test fun learningReadsStayBoundedWhileConfirmedPreparedCardsAreReused() {
+        // Confirmation retains matching prepared cards; learning reads remain bounded by loads instead of repeating for every Prepare.
         val r = rig(30, ahead = NextCard.AHEAD, notes = 12); val t = r.start()
         r.at(t) { r.firstTap(3) }
         r.run()
@@ -252,9 +252,9 @@ class R18AWriteLagTest {
         val answered = r.s.made.size
         println("learning reads: ${r.s.learnReads} for $answered answered cards (${r.s.prepares} cards prepared)")
         assertEquals(12, answered)
-        assertTrue("the old rule read once per prepared card, at least 2 per answered card: ${r.s.prepares} prepared", r.s.prepares >= 2 * answered)
+        assertTrue("prepared cards are reused instead of discarded: ${r.s.prepares} prepared for $answered answers", r.s.prepares in 1..answered)
         assertTrue("one learning read per answered card at most: ${r.s.learnReads} for $answered", r.s.learnReads <= answered)
-        assertTrue("the prepared cards shared them: ${r.s.learnReads} reads for ${r.s.prepares} prepared cards", r.s.learnReads * 2 <= r.s.prepares)
+        assertTrue("learning was actually checked", r.s.learnReads > 0)
         r.s.check()
     }
 

@@ -5,7 +5,7 @@ import org.junit.Test
 
 class R32PTextTest {
     @Test fun timerBallUsesPerRound() {
-        assertEquals("+${com.husarp.ankigo.game.Tuning.TIMER_BONUS_PER_ROUND}% per round, max +${com.husarp.ankigo.game.Tuning.SPECIAL_BONUS}%", com.husarp.ankigo.game.Items.specialSummary("timer-ball"))
+        assertEquals("+${com.husarp.ankigo.game.Tuning.TIMER_BONUS_PER_ROUND}% per round; ≤${com.husarp.ankigo.game.Tuning.SPECIAL_BONUS}%", com.husarp.ankigo.game.Items.specialSummary("timer-ball"))
     }
 
     @Test fun recurringEffectsUseReadableFractionsPerRound() {

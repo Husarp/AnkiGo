@@ -38,7 +38,7 @@ class R24CWidgetPickerShots {
             parent = parent.parent
         }
         list.viewTreeObserver.addOnGlobalLayoutListener {
-            assertTrue("List has room below the filters", list.height > 0)
+            assertTrue("List has at least one row below the filters: ${list.height}", list.height >= Ui.dp(ctx, 64))
             assertTrue("Cancel remains visible", cancel.bottom > 0)
         }
         android.widget.FrameLayout(ctx).apply {

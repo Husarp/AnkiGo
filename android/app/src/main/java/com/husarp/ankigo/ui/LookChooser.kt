@@ -307,7 +307,16 @@ internal object LookChoosers {
      * look). The labels may take up to three lines, so a big system font does not cut them; the bar grows with its tallest label.
      */
     fun segmented(ctx: Context, labels: List<String>, selected: Int, onPick: (Int) -> Unit): View {
-        val row = LinearLayout(ctx).apply {
+        val row = object : LinearLayout(ctx) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                // Match-parent cells equalise heights, but must not consume a dialog's whole height budget.
+                val height = if (View.MeasureSpec.getMode(heightMeasureSpec) == View.MeasureSpec.AT_MOST) {
+                    super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                    View.MeasureSpec.makeMeasureSpec(minOf(measuredHeight, View.MeasureSpec.getSize(heightMeasureSpec)), View.MeasureSpec.EXACTLY)
+                } else heightMeasureSpec
+                super.onMeasure(widthMeasureSpec, height)
+            }
+        }.apply {
             orientation = LinearLayout.HORIZONTAL
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 12, ctx)
             setPadding(Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3), Ui.dp(ctx, 3))
