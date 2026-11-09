@@ -11,7 +11,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 
-class R32MRarityShots {
+class R32NRarityShots {
     @get:Rule val paparazzi = Shots.rule()
     private fun texts(v: View): List<TextView> = (if (v is TextView) listOf(v) else emptyList()) +
         if (v is ViewGroup) (0 until v.childCount).flatMap { texts(v.getChildAt(it)) } else emptyList()
@@ -19,9 +19,17 @@ class R32MRarityShots {
 
     @Test fun ownedDetailsShowEverySpecialRarityWithMarkAndNoOrdinaryFact() {
         for ((tier, label) in listOf(Tier.BABY to "Baby", Tier.ULTRA to "Ultra Beast", Tier.LEGENDARY to "Legendary",
-            Tier.MYTHICAL to "Mythical", Tier.STARTER to "", Tier.NORMAL to "")) {
-            paparazzi.shoot("m-563-owned-${tier.name.lowercase()}", listOf(Size.PHONE, Size.FLOAT)) { ctx ->
-                val mon = GameRepo.state!!.mons.first().apply { this.tier = tier }
+            Tier.MYTHICAL to "Mythical", Tier.STARTER to "Starter", Tier.NORMAL to "Strong", Tier.NORMAL to "")) {
+            paparazzi.shoot("n-563-owned-${label.ifEmpty { "plain" }.replace(" ", "-").lowercase()}", listOf(Size.PHONE, Size.FLOAT)) { ctx ->
+                val mon = GameRepo.state!!.mons.first().apply {
+                    species = when (label) {
+                        "Strong" -> 130
+                        "Starter" -> 1
+                        "Baby" -> 172
+                        else -> 25
+                    }
+                    this.tier = tier
+                }
                 RarityMark.setEnabled(ctx, false)
                 val dlg = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), GameRepo.data!!, mon) }!!
                 val body = dlg.content()
@@ -37,34 +45,35 @@ class R32MRarityShots {
     }
 
     @Test fun dexAndWildRarityFollowKnowledgeForSeenAndUnseenSpecies() {
+        for ((num, label) in listOf(1 to "Starter", 172 to "Baby", 130 to "Strong", 150 to "Legendary"))
         for (known in listOf(false, true)) for (seen in listOf(false, true)) {
-            paparazzi.shoot("m-563-knowledge-$known-$seen", listOf(Size.PHONE)) { ctx ->
+            paparazzi.shoot("n-563-knowledge-$num-$known-$seen", listOf(Size.PHONE)) { ctx ->
                 val st = GameRepo.state!!
                 val data = GameRepo.data!!
-                val sp = data.species.values.first { it.isLegendary }
+                val sp = data.sp(num)
                 st.mons.removeAll { it.species == sp.num }
                 st.caught.remove(sp.num); st.defeatedSpecies.remove(sp.num); st.seen.remove(sp.num)
                 if (seen) st.seen += sp.num
                 if (known) st.defeatedSpecies += sp.num
                 val dex = DialogShots.capture { DexDetail.show(DexPage(ctx, NoHost), sp) }!!
-                assertEquals(known, texts(dex.content()).any { it.text.toString() == "\uFFFC Legendary" })
-                paparazzi.snapshot(DialogShots.scene(ctx, dex), "m-563-dex-$known-$seen-${ctx.resources.configuration.uiMode}")
+                assertEquals(known, texts(dex.content()).any { it.text.toString() == "\uFFFC $label" })
+                paparazzi.snapshot(DialogShots.scene(ctx, dex), "n-563-dex-$num-$known-$seen-${ctx.resources.configuration.uiMode}")
                 dex.dismiss()
                 val battle = st.battle!!
-                battle.wild.species = sp.num; battle.tier = Tier.LEGENDARY
+                battle.wild.species = sp.num; battle.tier = Encounters.tierOf(sp) ?: Tier.NORMAL
                 val wild = DialogShots.capture { assertTrue(BattleDetails.showWild(ctx)) }!!
-                assertEquals(known, texts(wild.content()).any { it.text.toString() == "\uFFFC Legendary" })
+                assertEquals(known, texts(wild.content()).any { it.text.toString() == "\uFFFC $label" })
                 DialogShots.scene(ctx, wild)
             }
         }
     }
 
-    @Test fun savedCommonBoxSelectionClearsAndKeepsOtherSelections() {
+    @Test fun savedCommonBoxSelectionMigratesAndKeepsOtherSelections() {
         val ctx = Shots.files(paparazzi.context)
         val p = ctx.getSharedPreferences("ankigo_ui", 0)
         p.edit().putString("rarity.box", "COMMON").apply()
-        assertFalse(SortPrefs.loadBoxRarity(ctx).active)
+        assertEquals(setOf(PokemonRarity.GREAT), SortPrefs.loadBoxRarity(ctx).picked)
         p.edit().putString("rarity.box", "COMMON,LEGENDARY").apply()
-        assertEquals(setOf(PokemonRarity.LEGENDARY), SortPrefs.loadBoxRarity(ctx).picked)
+        assertEquals(setOf(PokemonRarity.GREAT, PokemonRarity.LEGENDARY), SortPrefs.loadBoxRarity(ctx).picked)
     }
 }

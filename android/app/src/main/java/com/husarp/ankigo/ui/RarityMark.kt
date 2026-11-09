@@ -34,7 +34,12 @@ object RarityMark {
         val index = rarity.mark ?: return
         val ctx = parent.context
         parent.addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply {
-            text = label(ctx, RarityFilter.label(rarity), index)
+            val word = if (rarity == PokemonRarity.GREAT) when (tier) {
+                Tier.BABY -> "Baby"
+                Tier.STARTER -> "Starter"
+                else -> "Strong"
+            } else RarityFilter.label(rarity)
+            text = label(ctx, word, index)
             if (centered) gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(-1, -2))
     }

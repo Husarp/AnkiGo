@@ -88,7 +88,7 @@ object SettingsCatalog {
         s("floatScreens", B, "Floating screens", "Floating screens in split screen", "Open Team, Pokédex, Shop and Settings in small windows above AnkiDroid in split screen"),
         s("overlay", B, "Floating screens", "Display over other apps", "Allow AnkiGo to display floating windows above other apps"),
         s("pokemonSize", B, "Battle panel", "Pokémon size", "Resize both battling Pokémon from 80 to 130 percent without covering their info boxes"),
-        s("pokemonRarityMark", B, "Battle panel", "Pokémon rarity marks", "Marks for Baby, Ultra Beast, Legendary and Mythical; ordinary Pokémon have no mark. Starters and base stats 500+ still use Great Balls on auto-catch"),
+        s("pokemonRarityMark", B, "Battle panel", "Pokémon rarity marks", "Blue diamond (Great): Baby, Starters and base stats 500+; Ultra Beast, Legendary and Mythical keep their marks. Other Pokémon have no mark"),
         s("cardsUnderOwn", B, "Battle panel", "Stat card under its own Pokémon", "Put each stat card below its own Pokémon when background pictures are off"),
         s("xpAnimation", B, "Battle panel", "XP animation", "Show sparks flying into your Pokémon when it gains experience points"),
         s("flyingTurnDots", B, "Battle panel", "Flying turn dots", "Animate the turn dots moving into the Pokémon about to attack"),

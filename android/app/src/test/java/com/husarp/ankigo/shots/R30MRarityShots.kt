@@ -42,27 +42,27 @@ class R30MRarityShots {
     }
 
     @Test fun boxMarksFilterCopiesPersistAndClearInLightAndDark() {
-        paparazzi.shootPage("m-482-box", listOf(Variants.PHONE, Variant("narrow", 320, 820))) { ctx ->
+        paparazzi.shootPage("n-482-box", listOf(Variants.PHONE, Variant("narrow", 320, 820))) { ctx ->
             GameRepo.state!!.mons.filter { it.species == 172 }.forEach { it.tier = Tier.BABY }
             val page = TeamPage(ctx, NoHost).apply { preset(TeamSection.BOX) }
             val scene = pageScreen(ctx, page)
             render(page)
             RarityMark.setEnabled(ctx, false)
             val sheet = page.sortSheet().build(Ui.dp(ctx, 1100))
-            val labels = all(sheet).filterIsInstance<TextView>().filter { it.contentDescription == "Baby" }
+            val labels = all(sheet).filterIsInstance<TextView>().filter { it.contentDescription == "Great" }
             assertEquals(1, labels.size)
             labels.forEach { assertEquals(1, (it.text as Spanned).getSpans(0, it.text.length, RarityMark.Mark::class.java).size) }
-            assertTrue(tap(sheet, "Baby"))
+            assertTrue(tap(sheet, "Great"))
             render(page)
-            val f = RarityFilter(setOf(PokemonRarity.BABY))
+            val f = RarityFilter(setOf(PokemonRarity.GREAT))
             val expected = f.apply(page.data, page.state.mons)
             assertTrue(expected.isNotEmpty())
             assertEquals(expected.size, getField(page, "shown"))
             assertEquals(f, SortPrefs.loadBoxRarity(ctx))
             assertEquals(f, getField(TeamPage(ctx, NoHost), "boxRarity"))
-            assertTrue(all(scene).filterIsInstance<ActiveChip>().any { "Baby" in it.contentDescription.toString() })
-            paparazzi.snapshot(sheetShot(page), "m-482-box-sheet-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
-            paparazzi.snapshot(scene, "m-482-active-${page.javaClass.simpleName}-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
+            assertTrue(all(scene).filterIsInstance<ActiveChip>().any { "Great" in it.contentDescription.toString() })
+            paparazzi.snapshot(sheetShot(page), "n-482-box-sheet-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
+            paparazzi.snapshot(scene, "n-482-active-${page.javaClass.simpleName}-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
             clear(page.sortSheet().build(Ui.dp(ctx, 1100)))
             render(page)
             assertEquals(page.state.mons.size, getField(page, "shown"))
@@ -72,22 +72,22 @@ class R30MRarityShots {
     }
 
     @Test fun dexMarksCombinePersistAndClear() {
-        paparazzi.shootPage("m-482-dex", listOf(Variants.PHONE)) { ctx ->
+        paparazzi.shootPage("n-482-dex", listOf(Variants.PHONE)) { ctx ->
             val page = DexPage(ctx, NoHost)
             val scene = pageScreen(ctx, page)
             render(page)
             val sheet = page.sortSheet().build(Ui.dp(ctx, 1100))
-            assertTrue(tap(sheet, "Baby"))
+            assertTrue(tap(sheet, "Great"))
             assertTrue(tap(sheet, "Legendary"))
             render(page)
-            val f = RarityFilter(setOf(PokemonRarity.BABY, PokemonRarity.LEGENDARY))
+            val f = RarityFilter(setOf(PokemonRarity.GREAT, PokemonRarity.LEGENDARY))
             assertEquals(f, (getField(page, "filter") as DexFilter).rarities)
             val expected = page.data.species.values.filter { it.gen in page.state.settings.gens && f.matches(Encounters.tierOf(it), it.base.total) }.map { it.num }.toSet()
             assertTrue(expected.isNotEmpty())
             assertEquals(expected, (getField(page, "shown") as List<*>).map { (it as Species).num }.toSet())
             assertEquals(f, (getField(DexPage(ctx, NoHost), "filter") as DexFilter).rarities)
-            paparazzi.snapshot(sheetShot(page), "m-482-dex-sheet-${ctx.resources.configuration.uiMode}")
-            paparazzi.snapshot(scene, "m-482-active-${page.javaClass.simpleName}-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
+            paparazzi.snapshot(sheetShot(page), "n-482-dex-sheet-${ctx.resources.configuration.uiMode}")
+            paparazzi.snapshot(scene, "n-482-active-${page.javaClass.simpleName}-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
             clear(page.sortSheet().build(Ui.dp(ctx, 1100)))
             assertFalse((getField(page, "filter") as DexFilter).rarities.active)
             scene

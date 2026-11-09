@@ -111,14 +111,14 @@ class R31FShots {
         card
     }
 
-    @Test fun teamCardsHaveNoFramesOrPlainRarityIcon() = scene("514-team") { ctx ->
+    @Test fun teamCardsHaveNoFramesAndStrongPokemonHaveDiamonds() = scene("514-team") { ctx ->
         state.mons.take(3).forEachIndexed { i, mon -> mon.tier = listOf(Tier.NORMAL, Tier.ULTRA, Tier.MYTHICAL)[i] }
         val p = TeamPage(ctx, NoHost); p.preset(TeamSection.TEAM)
         val screen = pageScreen(ctx, p); call(p, "render")
         val col = getField(p, "teamCol") as ViewGroup
         assertTrue(all(col).none { it.foreground is RarityFrame.Frame })
         val plain = state.mons.first { it.tier == Tier.NORMAL && GameRepo.data!!.sp(it.species).base.total >= 500 }
-        assertFalse(text(col, plain.shownName).text is android.text.Spanned)
+        assertTrue(text(col, "\uFFFC ${plain.shownName}").text is android.text.Spanned)
         assertTrue(all(col).filterIsInstance<TextView>().any { it.text is android.text.Spanned && it.text.toString().contains(state.mons[1].shownName) })
         screen
     }

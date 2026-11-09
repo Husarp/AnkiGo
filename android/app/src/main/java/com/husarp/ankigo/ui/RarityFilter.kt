@@ -17,15 +17,15 @@ data class RarityFilter(val picked: Set<PokemonRarity> = emptySet()) {
     companion object {
         val options = PokemonRarity.entries.filter { it.mark != null }
         fun label(rarity: PokemonRarity): String = when (rarity) {
-            PokemonRarity.PLAIN, PokemonRarity.COMMON -> "Plain"
-            PokemonRarity.BABY -> "Baby"
+            PokemonRarity.PLAIN -> "Plain"
+            PokemonRarity.GREAT -> "Great"
             PokemonRarity.ULTRA -> "Ultra Beast"
             PokemonRarity.LEGENDARY -> "Legendary"
             PokemonRarity.MYTHICAL -> "Mythical"
         }
-        // Retired COMMON selections are dropped; a lone old dot becomes an unfiltered list.
+        // Old dot and Baby selections now share the blue-diamond Great Ball group.
         fun decode(s: String?) = RarityFilter(s.orEmpty().split(',').mapNotNull { name ->
-            options.firstOrNull { it.name == name }
+            if (name == "COMMON" || name == "BABY") PokemonRarity.GREAT else options.firstOrNull { it.name == name }
         }.toSet())
     }
 }
