@@ -152,8 +152,9 @@ class R32RMulticolorShots {
             val look = SettingsPage(lookCtx, NoHost)
             val lookView = pageScreen(lookCtx, look)
             look.open(SettingsSection.LOOK)
-            val swatch = all(lookView).single { it.contentDescription == "Multicolor, selected" }
-            assertTrue(swatch.isClickable)
+            val swatch = all(lookView).filterIsInstance<TextView>().single { it.text == "Pick" }
+            val picker = AppDialogShots.capture { swatch.performClick() }!!
+            assertTrue(all(picker.content()).single { it.contentDescription == "Multicolor, selected" }.isClickable)
             assertEquals("Settings is fully visible", 1f, look.root.alpha, 0f)
             assertEquals(0f, look.root.translationX, 0f)
             paparazzi.snapshot(lookView, "r-settings-look-${theme.name.lowercase()}", 1000)
