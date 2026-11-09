@@ -148,12 +148,14 @@ internal object BoxViews {
      * before the label (pink when off, the chip's ink colour when on).
      */
     fun chip(ctx: Context, label: String, on: Boolean, heart: Boolean = false, onClick: () -> Unit): TextView {
-        val ink = Ui.c(ctx, if (on) R.color.ag_crust else R.color.ag_sub1)
+        val fill = Multicolor.color(ctx, if (heart) Multicolor.Tone.PINK else Multicolor.place(label))
+        val ink = if (on && Multicolor.enabled(ctx)) Multicolor.onFill(fill)
+            else Ui.c(ctx, if (on) R.color.ag_crust else R.color.ag_sub1)
         return Ui.text(ctx, 12f, 800, R.color.ag_sub1).apply {
             text = label
             maxLines = 1
             setTextColor(ink)
-            Ui.touchPill(this, Ui.rounded(if (on) Ui.c(ctx, R.color.ag_mauve) else Ui.c(ctx, R.color.ag_mantle), 10, ctx), 28, 10)
+            Ui.touchPill(this, Ui.rounded(if (on) fill else Ui.c(ctx, R.color.ag_mantle), 10, ctx), 28, 10)
             if (heart) {
                 val d = ctx.getDrawable(R.drawable.ic_heart)!!.mutate()
                 d.setTint(if (on) ink else Ui.c(ctx, R.color.ag_pink))

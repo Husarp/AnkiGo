@@ -51,7 +51,10 @@ object BarTones {
     )
 
     /** The fill for [meaning] in the player's chosen style. */
-    fun fill(ctx: Context, meaning: BarMeaning, fraction: Float = 0f): BarFill = resolve(meaning, AppPrefs.barStyle(ctx), palette(ctx), fraction)
+    fun fill(ctx: Context, meaning: BarMeaning, fraction: Float = 0f): BarFill =
+        if (Multicolor.enabled(ctx)) BarFill(Multicolor.color(ctx,
+            if (meaning == BarMeaning.GOAL && GoalGlow.reached(fraction)) Multicolor.Tone.GREEN else Multicolor.bar(meaning)))
+        else resolve(meaning, AppPrefs.barStyle(ctx), palette(ctx), fraction)
 }
 
 /** Fills this bar [fraction] (0..1) in the colour or gradient its [meaning] has in the chosen style. */

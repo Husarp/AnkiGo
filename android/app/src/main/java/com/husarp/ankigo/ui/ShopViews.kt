@@ -153,10 +153,13 @@ internal object ShopViews {
 
     /** Compact offer with a filled title band separated from its item and price. */
     private fun offerCard(ctx: Context, title: String, ends: String, lead: View, name: String,
+
                           detail: String, price: View, accentRes: Int, description: String, stock: String?, onTap: () -> Unit, detailMaxLines: Int = Int.MAX_VALUE): View {
-        val accent = Ui.c(ctx, accentRes)
+        val accent = Multicolor.color(ctx, Multicolor.resource(accentRes), accentRes)
+
         val card = Ui.c(ctx, R.color.ag_card)
-        val ink = if (TypeChips.isDark(ctx)) accent else Bits.blend(0xFF000000.toInt(), accent, 0.35f)
+        val ink = if (Multicolor.enabled(ctx)) Multicolor.ink(ctx, Multicolor.resource(accentRes), Bits.blend(accent, card, .22f))
+            else if (TypeChips.isDark(ctx)) accent else Bits.blend(0xFF000000.toInt(), accent, 0.35f)
         fun shape(fill: Int, stroke: Int = 0) = GradientDrawable().apply {
             setColor(fill)
             cornerRadius = Ui.dp(ctx, 12f)

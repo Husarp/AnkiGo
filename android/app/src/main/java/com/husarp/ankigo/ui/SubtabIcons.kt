@@ -8,7 +8,8 @@ internal object SubtabIcons {
     fun apply(view: TextView, icon: Int, above: Boolean = false) {
         val ctx = view.context
         val drawable = ctx.getDrawable(icon)!!.mutate()
-        drawable.setTint(if (view.currentTextColor == Ui.c(ctx, R.color.ag_base) || view.currentTextColor == Ui.c(ctx, R.color.ag_crust)) view.currentTextColor else Ui.c(ctx, R.color.ag_mauve))
+        val filled = view.currentTextColor == Ui.c(ctx, R.color.ag_base) || view.currentTextColor == Ui.c(ctx, R.color.ag_crust)
+        drawable.setTint(if (filled) view.currentTextColor else Multicolor.color(ctx, Multicolor.place(view.text.toString())))
         val size = Ui.dp(ctx, 16)
         drawable.setBounds(0, 0, size, size)
         view.compoundDrawablePadding = Ui.dp(ctx, 6)
