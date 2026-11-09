@@ -53,6 +53,50 @@ class R16LDiagnosticsShots {
 
     private fun title(header: View): String = ((header as ViewGroup).getChildAt(0) as TextView).text.toString()
 
+    @Test fun r32vDiagnostics() {
+        paparazzi.shootPage("v-diagnostics", widths) { ctx ->
+            val (a, content) = page(ctx)
+            (getField(a, "lagSummary") as TextView).text =
+                "69 cards · tap → card\nMedian 101 ms · 90th 144 ms · max 5505 ms\n" +
+                "Waits: learning card due: 4, nothing prepared: 2, old read: 1\n" +
+                "Stalls >100 ms: 2 · >700 ms: 0\n" +
+                "Slowest provider calls: update:/schedule 5186 ms, note 3102 ms, decks 2769 ms"
+            content
+        }
+    }
+
+    @Test fun clearButtonClearsBothLogsAndTheVisibleLog() {
+        val ctx = setup()
+        com.husarp.ankigo.Report.init(ctx)
+        com.husarp.ankigo.debug.LagLog.init(ctx)
+        com.husarp.ankigo.Report.log("test", "report to clear")
+        com.husarp.ankigo.debug.LagLog.record("TEST", "value" to "lag to clear")
+        val (a, content) = page(ctx)
+        fun find(v: View): TextView? {
+            if (v is TextView && v.text.toString() == "Clear") return v
+            if (v is ViewGroup) for (i in 0 until v.childCount) find(v.getChildAt(i))?.let { return it }
+            return null
+        }
+        find(content)!!.performClick()
+        assertEquals("", (getField(a, "logView") as TextView).text.toString())
+        assertEquals("", com.husarp.ankigo.Report.all())
+        val done = java.util.concurrent.CountDownLatch(1)
+        var lag = "not cleared"
+        com.husarp.ankigo.debug.LagLog.snapshot { lag = it; done.countDown() }
+        assertTrue(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        assertEquals("", lag)
+    }
+
+    @Test fun sharedLogStartsWithSummaryAndKeepsBothCompleteLogs() {
+        val report = "old report\n" + "entry\n".repeat(10000) + "latest report\n"
+        val lag = "lag event\n"
+        val text = DiagnosticsActivity.sharedLog("device header", report, lag)
+        assertTrue(text.startsWith("AnkiGo study lag summary\n"))
+        assertTrue(text.indexOf("Median") < text.indexOf("device header"))
+        assertTrue(text.contains(report))
+        assertTrue(text.endsWith(lag))
+    }
+
     @Test fun foldedWithLongLog() {
         paparazzi.shootPage("r16l-folded", widths) { ctx -> page(ctx).second }
     }
@@ -108,7 +152,7 @@ class R16LDiagnosticsShots {
         val inner = (getField(a, "logView") as TextView)
         assertEquals(inner.height - log.height, log.scrollY)
     }
-    @Test fun lagLogIsAtTheTopWithSummaryAndShareClearControls() {
+    @Test fun lagLogIsPaddedWithOneSharedToolbar() {
         val content = page(setup()).second as ViewGroup
         val body = (content.getChildAt(1) as ScrollView).getChildAt(0) as ViewGroup
         val texts = ArrayList<String>()
@@ -116,11 +160,16 @@ class R16LDiagnosticsShots {
             if (v is TextView) texts += v.text.toString()
             if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
         }
-        walk(body.getChildAt(0))
+        walk(body)
         assertTrue(texts.contains("Lag log"))
         assertTrue(texts.contains("Record study lag"))
-        assertTrue(texts.contains("Share lag log"))
-        assertTrue(texts.contains("Clear"))
+        assertEquals(1, texts.count { it == "Share log" })
+        assertEquals(1, texts.count { it == "Clear" })
+        assertEquals(1, texts.count { it == "Full screen" })
+        assertFalse(texts.contains("Share lag log"))
+        assertFalse(texts.contains("Clear log"))
+        val card = body.getChildAt(0) as ViewGroup
+        assertTrue(card.paddingLeft > 0 && card.paddingRight > 0)
         assertTrue(texts.any { it.contains("Median") && it.contains("90th") })
     }
 

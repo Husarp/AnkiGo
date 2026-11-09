@@ -7,7 +7,6 @@ import android.app.Activity
 import com.husarp.ankigo.ui.AppDialog
 import android.appwidget.AppWidgetManager
 import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
 import android.graphics.Typeface
@@ -38,7 +37,9 @@ import com.husarp.ankigo.update.Updates
 class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
     override val closesWhenLeft = true // PLAN 222
     companion object {
-        private const val COPY_MAX = 400_000
+        internal fun sharedLog(header: String, report: String, lag: String): String =
+            "AnkiGo study lag summary\n" + com.husarp.ankigo.debug.LagRecorder.summary(lag) +
+                "\n\n" + header + "\n" + report + "\n\nStudy lag log\n" + lag
 
         /** R18 256: the log box is 35 % of the window, at least 200 dp, and never taller than the window minus [RESERVED_DP] for the bars and buttons. Pure. */
         fun logHeightDp(windowDp: Float): Float = minOf(maxOf(200f, windowDp * 0.35f), maxOf(0f, windowDp - RESERVED_DP))
@@ -93,19 +94,13 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             setLineSpacing(0f, 1.15f)
         }
         body.addView(Ui.card(this).apply {
+            setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 12), Ui.dp(context, 10))
             addView(Ui.text(this@DiagnosticsActivity, 15f, 800, R.color.ag_text).apply { text = "Lag log" })
             addView(Form.switchRow(this@DiagnosticsActivity, "Record study lag", null,
                 getSharedPreferences("study", 0).getBoolean(com.husarp.ankigo.debug.LagLog.PREF, true)) { on ->
                 com.husarp.ankigo.debug.LagLog.enable(this@DiagnosticsActivity, on)
             })
             addView(lagSummary)
-            addView(LinearLayout(this@DiagnosticsActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                addView(Form.secondary(this@DiagnosticsActivity, "Share lag log") { shareLagLog() }, LinearLayout.LayoutParams(0, -2, 1f))
-                addView(Form.secondary(this@DiagnosticsActivity, "Clear") {
-                    com.husarp.ankigo.debug.LagLog.clear { refreshLagSummary() }
-                }, LinearLayout.LayoutParams(0, -2, 1f))
-            })
         }, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(this, 8) })
 
         // status card
@@ -115,8 +110,8 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
         val gap = Ui.dp(this, 6)
         // right under the status card, the log: its buttons, then a box about 70 % of the window tall (at least 320 dp) that scrolls inside the page
         val logActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf<Pair<String, () -> Unit>>("Full screen" to { showFullLog() }, "Share log…" to { pickRange() },
-            "Clear log" to { Report.clear(); logView.text = "" }).forEachIndexed { i, (label, f) ->
+        listOf<Pair<String, () -> Unit>>("Full screen" to { showFullLog() }, "Share log" to { shareLog() },
+            "Clear" to { clearLogs() }).forEachIndexed { i, (label, f) ->
             logActions.addView(Form.secondary(this, label, onPage = true) { f() }.apply { textSize = 12f; minHeight = Ui.dp(context, 48) },
                 LinearLayout.LayoutParams(0, -1, 1f).also { if (i > 0) it.marginStart = gap })
         }
@@ -202,25 +197,18 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
         }
     }
 
-    private fun shareLagLog() {
-        com.husarp.ankigo.debug.LagLog.snapshot { text ->
-            val result = runCatching {
-                val dir = File(cacheDir, "logs").apply { mkdirs() }
-                val file = File(dir, "ankigo-lag.txt")
-                file.writeText("AnkiGo study lag log\n" + com.husarp.ankigo.debug.LagRecorder.summary(text) + "\n\n" + text)
-                androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
-            }
-            main.post {
-                if (!isFinishing && !isDestroyed) result.fold(
-                    onSuccess = { uri ->
-                        val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri)
-                            .putExtra(Intent.EXTRA_SUBJECT, "AnkiGo lag log").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        send.clipData = ClipData.newRawUri("Lag log", uri)
-                        runCatching { startActivity(Intent.createChooser(send, "Share lag log")) }
-                            .onFailure { Ui.toast(this, "The lag log couldn't be shared") }
-                    },
-                    onFailure = { Ui.toast(this, "The lag log couldn't be shared") },
-                )
+    private fun clearLogs() {
+        Report.clear()
+        logView.text = ""
+        com.husarp.ankigo.debug.LagLog.clear { refreshLagSummary() }
+    }
+
+    private fun shareLog() {
+        val head = logHeader("Everything")
+        com.husarp.ankigo.debug.LagLog.snapshot { lag ->
+            bg.execute {
+                val text = sharedLog(head, Report.all(), lag)
+                main.post { if (!isFinishing && !isDestroyed) shareFile("Everything", text) }
             }
         }
     }
@@ -521,43 +509,6 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
 
     // ---------- the log (R13 Part E) ----------
 
-    /** "Share log…": which part of the log (Last hour / Today / Yesterday / Pick a day / Everything), then Share or Copy. */
-    private fun pickRange() {
-        val kinds = com.husarp.ankigo.debug.LogRange.Kind.entries
-        AppDialog.Builder(this).setTitle("Share log").setItems(kinds.map { it.label }.toTypedArray()) { _, i ->
-            if (kinds[i] == com.husarp.ankigo.debug.LogRange.Kind.DAY) pickDay() else prepare(kinds[i], null)
-        }.setNegativeButton("Cancel", null).showCard()
-    }
-
-    private fun pickDay() = bg.execute {
-        val days = com.husarp.ankigo.debug.LogRange.days(Report.all())
-        main.post {
-            if (isFinishing) return@post
-            if (days.isEmpty()) { Ui.toast(this, "The log has no dated lines yet"); return@post }
-            AppDialog.Builder(this).setTitle("Pick a day").setItems(days.map { it.toString() }.toTypedArray()) { _, i ->
-                prepare(com.husarp.ankigo.debug.LogRange.Kind.DAY, days[i])
-            }.setNegativeButton("Cancel", null).showCard()
-        }
-    }
-
-    /** Builds the chosen range (with the header) off the main thread, then offers Share (a .txt attachment) or Copy. */
-    private fun prepare(kind: com.husarp.ankigo.debug.LogRange.Kind, day: java.time.LocalDate?) {
-        val name = if (kind == com.husarp.ankigo.debug.LogRange.Kind.DAY) day.toString() else kind.label
-        val head = logHeader(name)
-        bg.execute {
-            val body = com.husarp.ankigo.debug.LogRange.filter(Report.all(), com.husarp.ankigo.debug.LogRange.window(kind, java.time.LocalDateTime.now(), day))
-            val text = head + "\n" + body
-            val lines = body.lineSequence().count { it.isNotEmpty() }
-            main.post {
-                if (isFinishing) return@post
-                AppDialog.Builder(this).setTitle("Log: $name").setMessage("$lines lines, ${(text.length + 1023) / 1024} KB")
-                    .setPositiveButton("Share") { _, _ -> shareFile(name, text) }
-                    .setNeutralButton("Copy") { _, _ -> copy(text) }
-                    .setNegativeButton("Cancel", null).showCard()
-            }
-        }
-    }
-
     /** App version, Android, device, AnkiDroid (the status card's lines) and the main settings, on top of a shared log. */
     private fun logHeader(range: String): String {
         val study = getSharedPreferences("study", 0).all.filterKeys { ':' !in it && !it.endsWith(".q") }.toSortedMap()
@@ -579,18 +530,12 @@ class DiagnosticsActivity : com.husarp.ankigo.ui.AgActivity() {
             val uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.files", file)
             val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_STREAM, uri)
                 .putExtra(Intent.EXTRA_SUBJECT, "AnkiGo log: $range").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            send.clipData = ClipData.newRawUri("AnkiGo log", uri)
             startActivity(Intent.createChooser(send, "Share log"))
             Report.log("C12b", "log shared: $range, ${text.length} chars")
         } catch (e: Exception) {
             Report.fail("C12b", "sharing the log", e)
             Ui.toast(this, "The log couldn't be shared: ${e.javaClass.simpleName}")
         }
-    }
-
-    /** The clipboard takes a few hundred KB at most (Android's limit for one transfer): a longer range is copied from its end. */
-    private fun copy(text: String) {
-        val cut = text.length > COPY_MAX
-        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("AnkiGo log", if (cut) text.takeLast(COPY_MAX) else text))
-        Ui.toast(this, if (cut) "Copied the last ${COPY_MAX / 1000} KB (use Share for all of it)" else "Log copied")
     }
 }
