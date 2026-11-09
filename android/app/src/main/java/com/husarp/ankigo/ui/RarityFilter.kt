@@ -18,14 +18,14 @@ data class RarityFilter(val picked: Set<PokemonRarity> = emptySet()) {
         val options = PokemonRarity.entries.filter { it.mark != null }
         fun label(rarity: PokemonRarity): String = when (rarity) {
             PokemonRarity.PLAIN -> "Plain"
-            PokemonRarity.COMMON -> "Starter / strong"
-            PokemonRarity.BABY -> "Baby"
+            PokemonRarity.GREAT -> "Great"
             PokemonRarity.ULTRA -> "Ultra Beast"
             PokemonRarity.LEGENDARY -> "Legendary"
             PokemonRarity.MYTHICAL -> "Mythical"
         }
+        // Old dot and Baby selections now share the blue-diamond Great Ball group.
         fun decode(s: String?) = RarityFilter(s.orEmpty().split(',').mapNotNull { name ->
-            options.firstOrNull { it.name == name }
+            if (name == "COMMON" || name == "BABY") PokemonRarity.GREAT else options.firstOrNull { it.name == name }
         }.toSet())
     }
 }

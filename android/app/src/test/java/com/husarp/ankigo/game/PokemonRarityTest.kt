@@ -15,8 +15,8 @@ class PokemonRarityTest {
             Tier.ULTRA -> 2 to "ultra-ball"
             Tier.LEGENDARY -> 3 to "ultra-ball"
             Tier.MYTHICAL -> 4 to "master-ball"
-            Tier.STARTER -> 0 to "great-ball"
-            else -> if (sp.base.total >= 500) 0 to "great-ball" else null to "poke-ball"
+            Tier.STARTER -> 1 to "great-ball"
+            else -> if (sp.base.total >= 500) 1 to "great-ball" else null to "poke-ball"
         }
         assertEquals("${sp.name} mark", expected.first, RarityMark.tier(tier, sp.base.total))
         assertEquals("${sp.name} ball", expected.second, CatchBall.forAuto(sp))
@@ -31,12 +31,12 @@ class PokemonRarityTest {
                 Tier.ULTRA -> 2
                 Tier.LEGENDARY -> 3
                 Tier.MYTHICAL -> 4
-                Tier.STARTER -> 0
-                else -> if (total >= 500) 0 else null
+                Tier.STARTER -> 1
+                else -> if (total >= 500) 1 else null
             }
             val expectedBall = when (expectedMark) {
                 null -> "poke-ball"
-                0, 1 -> "great-ball"
+                1 -> "great-ball"
                 2, 3 -> "ultra-ball"
                 else -> "master-ball"
             }
@@ -57,6 +57,6 @@ class PokemonRarityTest {
         ))
         assertTrue("Full species data loaded", data.species.size >= 1025)
         data.species.values.forEach(::check)
-        println("R30-c ladder checked for ${data.species.size} species/forms")
+        println("R32-n ladder checked for ${data.species.size} species/forms")
     }
 }

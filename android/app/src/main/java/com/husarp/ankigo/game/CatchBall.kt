@@ -11,7 +11,7 @@ object CatchBall {
     /**
      * Mythical -> Master Ball; Ultra Beast and Legendary -> Ultra Ball; Baby and Starter, plus Normal with a base stat
      * total of [GREAT_BASE_TOTAL] or more -> Great Ball; everyone else -> Poké Ball. No tier, Mega and G-Max follow the Normal rule.
-     * Missing species data -> Poké Ball. Uses the same ladder as the name marks.
+     * Missing species data -> Poké Ball. Uses the shared ladder; Starters / base total 500+ keep a Great Ball without a name mark.
      */
     fun forAuto(sp: Species?): String =
         if (sp == null) "poke-ball" else PokemonRarity.of(Encounters.tierOf(sp), sp.base.total).ball
