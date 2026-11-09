@@ -15,7 +15,7 @@ class R18EChartPrefsTest {
 
     @Test fun aSavedChoiceComesBackWhole() {
         val c = dec("TIME", "D90", "My deck", "WEEK")
-        assertEquals(ChartPrefs.Choice(ChartMetric.TIME, ChartPeriod.D90, "My deck", ChartGrain.WEEK), c)
+        assertEquals(ChartPrefs.Choice(ChartMetric.TIME, ChartPeriod.D100, "My deck", ChartGrain.WEEK), c)
         // every field survives a name round trip
         val back = dec(c.metric.name, c.period.name, c.deck, c.grain?.name)
         assertEquals(c, back)
@@ -45,8 +45,8 @@ class R18EChartPrefsTest {
         assertNull(dec(m = "CARD_STATES", g = "DAY").grain) // a picture of now has no bar size
     }
 
-    @Test fun answerButtonsRestoreOnlyTheirThreePeriods() {
-        assertEquals(listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D365), ChartPrefs.periodsFor(ChartMetric.BUTTONS))
+    @Test fun answerButtonsRestoreTheirRollingPeriods() {
+        assertEquals(listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D100, ChartPeriod.D300), ChartPrefs.periodsFor(ChartMetric.BUTTONS))
         for (p in ChartPrefs.periodsFor(ChartMetric.BUTTONS)) {
             assertEquals(p, dec(m = "BUTTONS", p = p.name, g = "MONTH").period)
             assertNull(dec(m = "BUTTONS", p = p.name, g = "MONTH").grain)
@@ -55,6 +55,14 @@ class R18EChartPrefsTest {
         assertEquals(ChartPeriod.D7, dec(m = "BUTTONS").period)
         assertFalse(ChartPeriod.D1 in ChartPrefs.periodsFor(ChartMetric.REVIEWS))
         assertEquals(ChartPeriod.D30, dec(m = "REVIEWS", p = "D1").period)
+    }
+
+    @Test fun calendarChoicesMigrateToRollingPeriods() {
+        for (metric in listOf("BUTTONS", "REVIEWS", "TIME", "NEW_CARDS", "STREAK_CALENDAR")) {
+            for ((old, current) in listOf("D7" to ChartPeriod.D7, "D30" to ChartPeriod.D30, "D365" to ChartPeriod.D300, "D90" to ChartPeriod.D100)) {
+                assertEquals(current, dec(m = metric, p = old).period)
+            }
+        }
     }
 
     @Test fun aMissingDeckFallsBackToAllDecksOnceTheListIsLoaded() {

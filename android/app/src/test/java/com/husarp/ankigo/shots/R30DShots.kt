@@ -107,7 +107,7 @@ class R30DShots {
 
     @Test fun answerButtonPeriods() {
         AnkiStatsStore.enabled = false
-        for (theme in Theme.entries) for (p in listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D365)) {
+        for (theme in Theme.entries) for (p in ChartPrefs.periodsFor(ChartMetric.BUTTONS)) {
             val c = ctx(theme, 1500)
             val today = LocalDate.parse(GameRepo.game!!.dayKey())
             GameRepo.state!!.apply {

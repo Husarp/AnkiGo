@@ -69,15 +69,15 @@ enum class ChartMetric(
 
 /** The chart periods: the last [days] days (DUE: the next [days] days). [defaultGrain] is the bar size used unless the user picks another. */
 enum class ChartPeriod(val days: Int, val defaultGrain: ChartGrain) {
-    D1(1, ChartGrain.DAY), D7(7, ChartGrain.DAY), D30(30, ChartGrain.DAY), D90(90, ChartGrain.WEEK), D365(365, ChartGrain.MONTH);
+    D1(1, ChartGrain.DAY), D7(7, ChartGrain.DAY), D30(30, ChartGrain.DAY), D90(90, ChartGrain.WEEK), D365(365, ChartGrain.MONTH), D100(100, ChartGrain.WEEK), D300(300, ChartGrain.MONTH);
 
     /** The bar sizes that make sense for this period (the first and last bar of a week or month grain can be partial). */
     val grains: List<ChartGrain>
         get() = when (this) {
             D1, D7 -> listOf(ChartGrain.DAY)
             D30 -> listOf(ChartGrain.DAY, ChartGrain.WEEK)
-            D90 -> listOf(ChartGrain.DAY, ChartGrain.WEEK, ChartGrain.MONTH)
-            D365 -> listOf(ChartGrain.WEEK, ChartGrain.MONTH)
+            D90, D100 -> listOf(ChartGrain.DAY, ChartGrain.WEEK, ChartGrain.MONTH)
+            D365, D300 -> listOf(ChartGrain.WEEK, ChartGrain.MONTH)
         }
 }
 
@@ -127,9 +127,9 @@ data class ChartSeries(
 }
 
 object ChartData {
-    /** DUE offers 7/30 days; Buttons offers current week/month/year. */
+    /** DUE offers 7/30 days; historical charts offer rolling study-day windows. */
     fun effectivePeriod(metric: ChartMetric, period: ChartPeriod): ChartPeriod =
-        if (metric == ChartMetric.BUTTONS && period !in listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D365)) ChartPeriod.D7
+        if (metric == ChartMetric.BUTTONS && period !in ChartPrefs.periodsFor(metric)) ChartPeriod.D7
         else if (metric == ChartMetric.DUE && period.days > 30) ChartPeriod.D30 else period
 
     /** The bar sizes the "Per day" filter offers for [metric] and [period]; empty for a CATEGORY or HEATMAP chart (no bar size). */
@@ -147,6 +147,8 @@ object ChartData {
         ChartPeriod.D1, ChartPeriod.D7 -> 4
         ChartPeriod.D30 -> 6
         ChartPeriod.D90 -> 13
+        ChartPeriod.D100 -> 16
+        ChartPeriod.D300 -> 44
         ChartPeriod.D365 -> 53
     }
 
@@ -208,15 +210,7 @@ object ChartData {
         val plan = plan(metric, p, d, snap, history, today)
         val answerFallback = metric == ChartMetric.REVIEWS && snap.stats == null && d == null
         val forward = metric == ChartMetric.DUE
-        val days = if (metric == ChartMetric.BUTTONS) {
-            val first = when (p) {
-                ChartPeriod.D7 -> t.minusDays((t.dayOfWeek.value - 1).toLong())
-                ChartPeriod.D30 -> t.withDayOfMonth(1)
-                ChartPeriod.D365 -> t.withDayOfYear(1)
-                else -> t
-            }
-            (0..java.time.temporal.ChronoUnit.DAYS.between(first, t).toInt()).map { first.plusDays(it.toLong()) }
-        } else if (forward) (1..p.days).map { t.plusDays(it.toLong()) } else (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
+        val days = if (forward) (1..p.days).map { t.plusDays(it.toLong()) } else (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
         val perDay = days.map { it to plan.value(it.toString()) }
 
         val bars = buckets(days, g, p).map { grp ->
