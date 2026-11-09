@@ -19,14 +19,14 @@ class R32FShots {
 
     @Test fun guideMoneyIsAnOutlineInBothThemes() {
         paparazzi.shootWith("f-guide-money", listOf(Size.PHONE)) { ctx ->
-            assertEquals(R.drawable.ic_help_money, HelpViews.chapterIcon(GameGuide.MONEY))
+            assertEquals(R.drawable.ic_ach_money, HelpViews.chapterIcon(GameGuide.MONEY))
             val drawable = ctx.getDrawable(HelpViews.chapterIcon(GameGuide.MONEY))!!
             assertTrue(drawable is VectorDrawable)
             val bitmap = android.graphics.Bitmap.createBitmap(240, 240, android.graphics.Bitmap.Config.ARGB_8888)
             drawable.setBounds(0, 0, 240, 240)
             drawable.draw(android.graphics.Canvas(bitmap))
-            assertEquals("Coin interior has no fill", 0, Color.alpha(bitmap.getPixel(60, 120)))
-            assertTrue("Outline remains visible", Color.alpha(bitmap.getPixel(20, 120)) > 0)
+            assertEquals("Coin interior has no fill", 0, Color.alpha(bitmap.getPixel(80, 90)))
+            assertTrue("Outline remains visible", Color.alpha(bitmap.getPixel(35, 120)) > 0)
             val activity = attach(Activity(), ctx)
             val host = object : PageHost {
                 override val hostActivity: Activity get() = activity
