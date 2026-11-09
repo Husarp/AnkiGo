@@ -70,6 +70,7 @@ object BattleDetails {
                 addView(LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
                     addView(name, LinearLayout.LayoutParams(-2, -2))
+                    if (info.known) RarityMark.detail(this, info.tier, requireNotNull(info.base).total)
                     if (info.known) addView(num, LinearLayout.LayoutParams(-2, -2))
                     addView(types, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
                 }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12) })
@@ -77,6 +78,7 @@ object BattleDetails {
         } else {
             col.addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 96), Ui.dp(ctx, 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
             col.addView(name, LinearLayout.LayoutParams(-1, -2))
+            if (info.known) RarityMark.detail(col, info.tier, requireNotNull(info.base).total, centered = true)
             if (info.known) col.addView(num, LinearLayout.LayoutParams(-1, -2))
             col.addView(types, LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = Ui.dp(ctx, 4) })
         }

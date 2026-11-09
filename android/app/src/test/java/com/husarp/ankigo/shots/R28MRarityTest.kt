@@ -24,10 +24,10 @@ class R28MRarityTest {
     @Test fun mappingAndPreferencePreserveNameStyling() {
         val ctx = Shots.files(paparazzi.context)
         assertTrue(RarityMark.enabled(ctx))
-        assertEquals(listOf(null, 1, 2, 3, 4, 0, null, null), Tier.entries.map { RarityMark.tier(it, 499) })
+        assertEquals(listOf(null, 1, 2, 3, 4, null, null, null), Tier.entries.map { RarityMark.tier(it, 499) })
         for (tier in listOf(Tier.NORMAL, Tier.MEGA, Tier.GMAX, null)) {
             assertNull(RarityMark.tier(tier, 499))
-            assertEquals(0, RarityMark.tier(tier, 500))
+            assertNull(RarityMark.tier(tier, 500))
         }
         val original = android.text.SpannableString("♀ ★ Nickname").apply {
             setSpan(ForegroundColorSpan(123), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -60,7 +60,7 @@ class R28MRarityTest {
         texts(rename.content()).single { it.text.toString() == "Save" }.performClick()
         assertEquals("New nickname", GameRepo.state!!.mon(mon.uid)!!.nickname)
         assertTrue(texts(dialog.content()).any { it.text.toString().contains("New nickname") })
-        assertEquals(1, markCount(dialog.content()))
+        assertEquals(2, markCount(dialog.content()))
     }
 
     @Test fun settingIsVisibleAndSearchable() {
@@ -111,7 +111,7 @@ class R28MRarityTest {
                 try {
                     mon.tier = Tier.ULTRA
                     val dialog = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), data, mon) }!!
-                    assertEquals(if (on) 1 else 0, markCount(dialog.content()))
+                    assertEquals(if (on) 2 else 1, markCount(dialog.content()))
                     paparazzi.snapshot(DialogShots.scene(ctx, dialog), "m-details-$suffix")
                 } finally { mon.tier = tierBefore }
                 val battle = GameRepo.state!!.battle!!
@@ -119,18 +119,18 @@ class R28MRarityTest {
                 try {
                     battle.tier = Tier.BABY
                     val dialog = DialogShots.capture { assertTrue(BattleDetails.showWild(ctx)) }!!
-                    assertEquals(if (on) 1 else 0, markCount(dialog.content()))
+                    assertEquals(if (on) 2 else 1, markCount(dialog.content()))
                     paparazzi.snapshot(DialogShots.scene(ctx, dialog), "m-wild-details-$suffix")
                 } finally { battle.tier = wildTierBefore }
             }
         }
     }
-    @Test fun dotInBoxDexAndDetails() {
+    @Test fun ordinaryPokemonHaveNoMarkInBoxDexAndDetails() {
         paparazzi.shootPage("r30c-dot-box-details", listOf(Variants.PHONE)) { ctx ->
             val mon = GameRepo.state!!.mons.single { it.uid == "b8" } // Starter in the Box
             mon.tier = Tier.STARTER
             val dialog = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), GameRepo.data!!, mon) }!!
-            assertEquals(1, markCount(dialog.content()))
+            assertEquals(0, markCount(dialog.content()))
             DialogShots.scene(ctx, dialog)
         }
         paparazzi.shootPage("r30c-dot-box-copies", listOf(Variants.PHONE)) { ctx ->
@@ -138,7 +138,7 @@ class R28MRarityTest {
             val mons = GameRepo.state!!.mons.filter { it.species == 1 }
             val tile = BoxTiles.build(data, mons, true).single()
             val sheet = BoxCopiesSheet(TeamPage(ctx, NoHost), tile, {}, { _, _, _ -> }).build(600)
-            sheet.also { assertTrue(markCount(it) > 0) }
+            sheet.also { assertEquals(0, markCount(it)) }
         }
         paparazzi.shootPage("r30c-dot-team", listOf(Variants.PHONE)) { ctx ->
             GameRepo.state!!.mons.single { it.uid == "t2" }.tier = Tier.STARTER
@@ -148,7 +148,7 @@ class R28MRarityTest {
                 it.measure(android.view.View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.widthPixels, android.view.View.MeasureSpec.EXACTLY),
                     android.view.View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.heightPixels, android.view.View.MeasureSpec.EXACTLY))
                 it.layout(0, 0, it.measuredWidth, it.measuredHeight)
-                assertTrue(markCount(it) > 0)
+                assertEquals(0, markCount(it))
             }
         }
         paparazzi.shootPage("r30c-dot-dex", listOf(Variants.PHONE)) { ctx ->
@@ -159,7 +159,7 @@ class R28MRarityTest {
                 it.measure(android.view.View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.widthPixels, android.view.View.MeasureSpec.EXACTLY),
                     android.view.View.MeasureSpec.makeMeasureSpec(ctx.resources.displayMetrics.heightPixels, android.view.View.MeasureSpec.EXACTLY))
                 it.layout(0, 0, it.measuredWidth, it.measuredHeight)
-                assertTrue(markCount(it) > 0)
+                assertEquals(0, markCount(it))
             }
         }
     }
@@ -170,17 +170,17 @@ class R28MRarityTest {
         val arena = BattlePanelView(ctx).arena
         arena.setEnemyInfo("Strong", 50, false, emptyList(), Tier.NORMAL, 500)
         arena.setPlayerInfo("test", "Strong", 50, Tier.GMAX, 500)
-        assertEquals(2, markCount(arena))
+        assertEquals(0, markCount(arena))
         arena.setPlayerName("Renamed")
         val refresh = ArenaView::class.java.getDeclaredMethod("refreshRarity").apply { isAccessible = true }
         refresh.invoke(arena)
-        assertEquals(2, markCount(arena))
+        assertEquals(0, markCount(arena))
         RarityMark.setEnabled(ctx, false)
         refresh.invoke(arena)
         assertEquals(0, markCount(arena))
         RarityMark.setEnabled(ctx, true)
         refresh.invoke(arena)
-        assertEquals(2, markCount(arena))
+        assertEquals(0, markCount(arena))
     }
 
 }

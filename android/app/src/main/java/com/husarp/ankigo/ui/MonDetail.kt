@@ -123,6 +123,7 @@ object MonDetail {
             val side = LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(nameRow, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = -Ui.dp(a, 4) })
+                RarityMark.detail(this, mon.tier, sp.base.total)
                 addView(numText, LinearLayout.LayoutParams(-2, -2))
                 addView(typeRow, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 4) })
             }
@@ -140,6 +141,7 @@ object MonDetail {
                 if (page != null) addView(heartButton(a, page, mon), FrameLayout.LayoutParams(Ui.dp(a, HEART_DP), Ui.dp(a, HEART_DP), Gravity.END or Gravity.TOP))
             }, LinearLayout.LayoutParams(-1, -2))
             col.addView(nameRow, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = -Ui.dp(a, 8) })
+            RarityMark.detail(col, mon.tier, sp.base.total, centered = true)
             col.addView(numText, LinearLayout.LayoutParams(-1, -2))
             col.addView(typeRow, LinearLayout.LayoutParams(-2, -2).also {
                 it.gravity = Gravity.CENTER_HORIZONTAL

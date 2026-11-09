@@ -1,8 +1,8 @@
 package com.husarp.ankigo.game
 
-/** PLAN 464: one presentation ladder for name marks and the ball shown on an auto-catch. */
+/** Shared presentation ladder. Starters / base total 500+ have no mark but still use a Great Ball (PLAN 562). */
 enum class PokemonRarity(val mark: Int?, val ball: String) {
-    PLAIN(null, "poke-ball"), COMMON(0, "great-ball"), BABY(1, "great-ball"),
+    PLAIN(null, "poke-ball"), COMMON(null, "great-ball"), BABY(1, "great-ball"),
     ULTRA(2, "ultra-ball"), LEGENDARY(3, "ultra-ball"), MYTHICAL(4, "master-ball");
 
     companion object {

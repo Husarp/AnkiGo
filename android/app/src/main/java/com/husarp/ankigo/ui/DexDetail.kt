@@ -50,6 +50,7 @@ object DexDetail {
         img.contentDescription = "Show the picture full screen"
         col.addView(img, LinearLayout.LayoutParams(Ui.dp(a, if (DetailParts.compact(a)) 72 else 96), Ui.dp(a, if (DetailParts.compact(a)) 72 else 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
         col.addView(Ui.text(a, 20f, 900, R.color.ag_text).apply { text = if (known) RarityMark.name(a, sp.name, com.husarp.ankigo.game.Encounters.tierOf(sp), sp.base.total) else if (sp.num in state.seen) sp.name else "???"; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
+        if (known) RarityMark.detail(col, com.husarp.ankigo.game.Encounters.tierOf(sp), sp.base.total, centered = true)
         if (known) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
             text = "#%03d · Gen %d · %s".format(sp.baseNum, sp.gen, if (caught) "caught" else "seen")
             gravity = Gravity.CENTER

@@ -20,7 +20,7 @@ class RarityFilterTest {
         .apply(data.species.values.toList(), emptyMap(), emptySet(), (1..9).toSet()).map { it.num }.toSet()
 
     @Test fun everyMarkUsesTheSameLadderForSpeciesAndCopies() {
-        val expected = mapOf(PokemonRarity.COMMON to setOf(1, 21), PokemonRarity.BABY to setOf(172),
+        val expected = mapOf(PokemonRarity.BABY to setOf(172),
             PokemonRarity.ULTRA to setOf(793), PokemonRarity.LEGENDARY to setOf(150), PokemonRarity.MYTHICAL to setOf(151))
         for ((r, nums) in expected) {
             val filter = RarityFilter(setOf(r))
@@ -32,22 +32,26 @@ class RarityFilterTest {
     }
 
     @Test fun selectedMarksCombineWithOrAndOtherFiltersWithAnd() {
-        val f = RarityFilter(setOf(PokemonRarity.COMMON, PokemonRarity.MYTHICAL))
-        assertEquals(setOf(1, 21, 151), dex(f))
+        val f = RarityFilter(setOf(PokemonRarity.BABY, PokemonRarity.MYTHICAL))
+        assertEquals(setOf(172, 151), dex(f))
         assertTrue(dex(f, setOf(Type.WATER)).isEmpty())
-        assertEquals(setOf(PokemonRarity.MYTHICAL), f.toggle(PokemonRarity.COMMON).picked)
-        assertFalse(f.toggle(PokemonRarity.COMMON).toggle(PokemonRarity.MYTHICAL).active)
-        val owned = DexFilter(owned = DexOwned.OWNED, rarities = f).apply(data.species.values.toList(), mapOf(21 to 1L), emptySet(), (1..9).toSet())
-        assertEquals(listOf(21), owned.map { it.num })
+        assertEquals(setOf(PokemonRarity.MYTHICAL), f.toggle(PokemonRarity.BABY).picked)
+        assertFalse(f.toggle(PokemonRarity.BABY).toggle(PokemonRarity.MYTHICAL).active)
+        val owned = DexFilter(owned = DexOwned.OWNED, rarities = f).apply(data.species.values.toList(), mapOf(172 to 1L), emptySet(), (1..9).toSet())
+        assertEquals(listOf(172), owned.map { it.num })
     }
 
-    @Test fun higherRaritiesDoNotLeakIntoStrongDot() {
-        val dot = RarityFilter(setOf(PokemonRarity.COMMON))
-        for (tier in listOf(Tier.BABY, Tier.ULTRA, Tier.LEGENDARY, Tier.MYTHICAL)) assertFalse(dot.matches(tier, 700))
-        assertFalse(dot.matches(Tier.NORMAL, 499))
-        assertTrue(dot.matches(Tier.NORMAL, 500))
-        assertTrue(dot.matches(Tier.MEGA, 500))
-        assertTrue(dot.matches(Tier.GMAX, 500))
+    @Test fun retiredDotIsRemovedFromSavedBoxAndDexFilters() {
+        assertEquals(listOf(PokemonRarity.BABY, PokemonRarity.ULTRA, PokemonRarity.LEGENDARY, PokemonRarity.MYTHICAL), RarityFilter.options)
+        assertFalse(RarityFilter.decode("COMMON").active)
+        assertEquals(data.species.keys, dex(RarityFilter.decode("COMMON")))
+        assertEquals(mons, RarityFilter.decode("COMMON").apply(data, mons))
+        assertEquals(setOf(PokemonRarity.BABY), RarityFilter.decode("COMMON,BABY").picked)
+        val migrated = SortPrefs.decodeDex("OWNED;1,7;1;0;COMMON,MYTHICAL")
+        assertEquals(setOf(PokemonRarity.MYTHICAL), migrated.rarities.picked)
+        assertEquals(DexOwned.OWNED, migrated.owned)
+        assertTrue(migrated.wishlistOnly)
+        assertFalse(SortPrefs.decodeDex("ALL;;0;0;COMMON").rarities.active)
     }
 
     @Test fun savedSelectionsAreCompatibleWithOldAndUnknownValues() {
@@ -61,7 +65,7 @@ class RarityFilterTest {
         assertFalse(SortPrefs.decodeDex("ALL;;0;0").rarities.active)
         assertTrue(DexFilter(rarities = filter).active)
         assertEquals(1, DexFilter(rarities = filter).sheetActive)
-        assertTrue(FilterRowText.emptyDex(DexFilter(rarities = filter)).contains("Starter / strong"))
+        assertTrue(FilterRowText.emptyDex(DexFilter(rarities = filter)).contains("Baby"))
         assertEquals("Baby", FilterRowText.plain(FilterRowText.withRarity(emptyList(), RarityFilter(setOf(PokemonRarity.BABY)))))
     }
 }

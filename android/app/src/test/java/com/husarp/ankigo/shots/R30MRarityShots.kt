@@ -43,23 +43,24 @@ class R30MRarityShots {
 
     @Test fun boxMarksFilterCopiesPersistAndClearInLightAndDark() {
         paparazzi.shootPage("m-482-box", listOf(Variants.PHONE, Variant("narrow", 320, 820))) { ctx ->
+            GameRepo.state!!.mons.filter { it.species == 172 }.forEach { it.tier = Tier.BABY }
             val page = TeamPage(ctx, NoHost).apply { preset(TeamSection.BOX) }
             val scene = pageScreen(ctx, page)
             render(page)
             RarityMark.setEnabled(ctx, false)
             val sheet = page.sortSheet().build(Ui.dp(ctx, 1100))
-            val labels = all(sheet).filterIsInstance<TextView>().filter { it.contentDescription == "Starter / strong" || it.contentDescription == "Mythical" }
-            assertEquals(2, labels.size)
+            val labels = all(sheet).filterIsInstance<TextView>().filter { it.contentDescription == "Baby" }
+            assertEquals(1, labels.size)
             labels.forEach { assertEquals(1, (it.text as Spanned).getSpans(0, it.text.length, RarityMark.Mark::class.java).size) }
-            assertTrue(tap(sheet, "Starter / strong"))
+            assertTrue(tap(sheet, "Baby"))
             render(page)
-            val f = RarityFilter(setOf(PokemonRarity.COMMON))
+            val f = RarityFilter(setOf(PokemonRarity.BABY))
             val expected = f.apply(page.data, page.state.mons)
             assertTrue(expected.isNotEmpty())
             assertEquals(expected.size, getField(page, "shown"))
             assertEquals(f, SortPrefs.loadBoxRarity(ctx))
             assertEquals(f, getField(TeamPage(ctx, NoHost), "boxRarity"))
-            assertTrue(all(scene).filterIsInstance<ActiveChip>().any { "Starter / strong" in it.contentDescription.toString() })
+            assertTrue(all(scene).filterIsInstance<ActiveChip>().any { "Baby" in it.contentDescription.toString() })
             paparazzi.snapshot(sheetShot(page), "m-482-box-sheet-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
             paparazzi.snapshot(scene, "m-482-active-${page.javaClass.simpleName}-${ctx.resources.displayMetrics.widthPixels}-${ctx.resources.configuration.uiMode}")
             clear(page.sortSheet().build(Ui.dp(ctx, 1100)))

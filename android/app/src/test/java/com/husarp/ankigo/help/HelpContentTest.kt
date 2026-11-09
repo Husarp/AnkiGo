@@ -140,6 +140,8 @@ class HelpContentTest {
         assertTrue(stats.contains("${Tuning.EV_STAT_CAP}") && stats.contains("${Tuning.EV_TOTAL_CAP}"))
         val catching = chapterText(GameGuide.CATCHING)
         assertTrue(catching.contains("base stat total 500+"))
+        assertTrue(catching.contains("Only Baby, Ultra Beast, Legendary and Mythical Pokémon have rarity marks"))
+        assertFalse(catching.contains("round dot"))
         assertTrue(catching.contains("Ultra Beast hexagon and Legendary sparkle → Ultra Ball"))
         assertTrue(catching.contains("uses no balls from your Bag"))
         assertTrue(catching.contains("Poké Ball ${Tuning.BALL_CHANCE["poke-ball"]}%"))
