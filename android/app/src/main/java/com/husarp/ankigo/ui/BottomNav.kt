@@ -97,7 +97,7 @@ object BottomNav {
 
                 if (style == TabBarStyle.A3 && !on) { scaleX = 10f / 12f; scaleY = scaleX }
                 if (style == TabBarStyle.E1 && !on) alpha = 0f
-(                setTextColor(if (on && Multicolor.enabled(activity)) Multicolor.ink(activity, Multicolor.tab(tab),
+                setTextColor(if (on && Multicolor.enabled(activity)) Multicolor.ink(activity, Multicolor.tab(tab),
                     Bits.blend(col, Ui.c(activity, R.color.ag_mantle), .20f)) else tint)
 
                 gravity = Gravity.CENTER

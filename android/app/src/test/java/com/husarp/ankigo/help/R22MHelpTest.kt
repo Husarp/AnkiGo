@@ -35,7 +35,7 @@ class R22MHelpTest {
         val text = GameGuide.chapters().first { it.id == GameGuide.LEVELS }.points.joinToString(" ")
         assertTrue(text.contains("Evolution never happens automatically"))
         assertTrue(text.contains("choose Evolve"))
-        assertTrue(text.contains("Required items are used up"))
+        assertTrue(text.contains("The item is consumed"))
         assertFalse(text.contains("evolve after a win"))
     }
     @Test fun shopGuideMatchesTheCurrentPriceControls() {

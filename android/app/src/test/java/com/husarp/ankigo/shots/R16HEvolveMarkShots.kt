@@ -85,7 +85,7 @@ class R16HEvolveMarkShots {
         paparazzi.shootPage("r16h-guide", listOf(NARROW)) { ctx ->
             val ch = GameGuide.chapter(GameGuide.LEVELS)!!
             assertFalse(ch.points.joinToString(" ").contains("tag"))
-            assertTrue(ch.points.any { it.startsWith("A green mark shows when a Pokémon is ready to evolve.") })
+            assertTrue(ch.points.any { it.startsWith("Ready to evolve: the green mark means an evolution is available.") })
             LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundColor(Ui.c(ctx, R.color.ag_base))

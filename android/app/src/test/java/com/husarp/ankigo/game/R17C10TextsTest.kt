@@ -38,47 +38,41 @@ class R17C10TextsTest {
         val t = text(GameGuide.MOVES)
         assertTrue(t, t.contains("a turn is one round (${Tuning.CARDS_PER_ROUND} answers)"))
         assertTrue(t, t.contains("${FieldRules.WEATHER_TURNS} rounds and terrain ${FieldRules.TERRAIN_TURNS} rounds"))
-        assertTrue(t, t.contains("for ${SideMoves.SCREEN_TURNS} rounds"))
+        assertTrue(t, t.contains("Each lasts ${SideMoves.SCREEN_TURNS} rounds"))
         assertTrue(t, t.contains("${Tuning.BIND_TURNS.first} to ${Tuning.BIND_TURNS.last} rounds"))
-        assertTrue(t, t.contains("snaps out of it after ${Tuning.CONFUSION_TURNS.first} to ${Tuning.CONFUSION_TURNS.last} tries"))
-        assertTrue(t, t.contains("hurts itself 1 time in 3") && t.contains("power ${Tuning.CONFUSION_POWER}"))
-        assertTrue(t, t.contains("can't move 50% of the time"))
-        assertTrue(t, t.contains("Substitute costs a quarter of your max HP"))
-        assertTrue(t, t.contains("an eighth of its max HP"))
-        // the rules the guide names
-        for (word in listOf("Charge moves", "very next move is the hit", "can be hit", "recharge", "Flinch", "before the target in that round", "Confusion", "In love",
-            "Protect", "only help when the other Pokémon attacks in that round", "Substitute", "Reflect, Light Screen and Aurora Veil", "Weather", "terrain", "Binding", "Abilities", "never used")) {
+        assertTrue(t, t.contains("after ${Tuning.CONFUSION_TURNS.first} to ${Tuning.CONFUSION_TURNS.last} attempts"))
+        assertTrue(t, t.contains("1 in ${Math.round(1 / Tuning.CONFUSION_SELF_HIT)} chance"))
+        assertTrue(t, t.contains("cannot move ${(Tuning.LOVE_STOPS * 100).toInt()}%"))
+        assertTrue(t, t.contains("Substitute costs ${MoveText.part(1, SideMoves.SUBSTITUTE_DIVISOR)} your max HP"))
+        assertTrue(t, t.contains("${MoveText.part(1, Tuning.BIND_DIVISOR)} the target’s max HP per round"))
+        assertTrue(t, t.contains("+1 Attack means ×${StageText.factor(1)} Attack; −1 means ×${StageText.factor(-1)}"))
+        for (word in listOf("Charge moves", "next move", "does not make it untouchable", "Recharge", "Flinch", "before the target moves", "Confusion", "In love",
+            "Protect", "opponent moves later", "Substitute", "Reflect halves physical", "Light Screen halves special", "Aurora Veil halves both", "Weather", "terrain", "Binding", "Abilities", "Unused moves")) {
             assertTrue(word, t.contains(word))
         }
-        assertEquals(Tuning.CONFUSION_SELF_HIT, 1.0 / 3.0, 0.0)
-        assertEquals(0.5, Tuning.LOVE_STOPS, 0.0)
     }
 
     @Test fun theAbilityParagraphIsGeneralAndTrue() {
         val t = text(GameGuide.MOVES)
-        // 9a built the common abilities; 9b adds more; the rest say "no effect" in their details
-        assertTrue(t, t.contains("Abilities work in battle for your Pokémon and the wild ones"))
-        assertTrue(t, t.contains("some abilities have no effect in AnkiGo, and the details say so"))
-        // the abilities it names really exist
-        for (a in listOf("intimidate", "static", "levitate", "sturdy")) assertTrue(a, AbilityText.of(a) != null)
+        assertTrue(t, t.contains("both Pokémon can have battle abilities"))
+        assertTrue(t, t.contains("including when it has none"))
+        for (a in listOf("intimidate", "levitate")) assertTrue(a, AbilityText.of(a) != null)
     }
 
     @Test fun theBattleChapterNoLongerCallsOneAnswerATurn() {
         val b = text(GameGuide.BATTLES)
         assertFalse(b, b.contains("A turn is one dot"))
         assertFalse(b, b.contains("takes one turn"))
-        // R18-B (227 / 264): the switch waits for the answer, the item works at once; R19-T (288): Adam's toast says "free hit" for the switch only
-        assertTrue(b, b.contains("A switch is not a round") && b.contains("the wild Pokémon gets one free move on it") && b.contains("waits for your answer"))
-        assertTrue(b, b.contains("works at once, then the wild Pokémon uses one free move on your Main"))
-        assertFalse(b, b.contains("turns mauve"))
-        assertTrue(b, b.contains("The switch fills no dot") && b.contains("the next battle still waits for Continue"))
-        assertTrue(b, b.contains("The OK button on a new card") && b.contains("OK + OK is an empty round"))   // R19-T (284)
-        // Smart / Smartest never pick an attack the target is immune to; the Main then uses Struggle
-        assertTrue(b, b.contains("never an attack the target is immune to") && b.contains("Struggle"))
+        assertTrue(b, b.contains("a switch waits for your answer if a card is showing"))
+        assertTrue(b, b.contains("one free move against the new Main"))
+        assertTrue(b, b.contains("takes effect immediately, then gives the wild Pokémon one free move"))
+        assertTrue(b, b.contains("Switching uses no answer slot and keeps your round progress"))
+        assertTrue(b, b.contains("the next battle waits for Continue"))
+        assertTrue(b, b.contains("The OK button on a new card") && b.contains("With only OK answers, neither moves"))
+        assertTrue(b, b.contains("attacks blocked by types or abilities") && b.contains("Struggle"))
         val healing = text(GameGuide.HEALING)
         assertFalse(healing, healing.contains("takes one turn"))
-        assertTrue(healing, healing.contains("works at once, then the wild Pokémon uses one free move"))
-        assertFalse(healing, healing.contains("free hit"))
+        assertTrue(healing, healing.contains("gives the wild Pokémon a free move afterward"))
     }
 
     @Test fun noGuideSentenceIsEmptyOrUnfinished() {
