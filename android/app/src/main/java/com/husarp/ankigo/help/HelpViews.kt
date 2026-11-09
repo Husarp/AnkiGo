@@ -389,7 +389,7 @@ internal object HelpViews {
         GameGuide.TYPES -> R.drawable.ic_palette
         GameGuide.STATS -> R.drawable.ic_stats
         GameGuide.CATCHING -> R.drawable.ic_ball
-        GameGuide.MONEY -> R.drawable.ic_help_money
+        GameGuide.MONEY -> R.drawable.ic_ach_money
         GameGuide.HEALING -> R.drawable.ic_heart
         else -> R.drawable.ic_item_bag
     }
