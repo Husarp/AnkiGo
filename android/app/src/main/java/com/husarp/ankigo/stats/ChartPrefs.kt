@@ -24,16 +24,17 @@ object ChartPrefs {
 
     /** The periods a metric offers (Due forecast looks ahead 7 or 30 days only). */
     fun periodsFor(metric: ChartMetric): List<ChartPeriod> =
-        if (metric == ChartMetric.BUTTONS) listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D365)
-        else if (metric == ChartMetric.DUE) listOf(ChartPeriod.D7, ChartPeriod.D30) else ChartPeriod.values().filter { it != ChartPeriod.D1 }
+        if (metric == ChartMetric.DUE) listOf(ChartPeriod.D7, ChartPeriod.D30)
+        else listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D100, ChartPeriod.D300)
 
     /**
      * The choice from the saved strings. An unknown, removed or unlisted metric = Reviews; an unknown period, or one the metric
-     * doesn't offer = This week for Buttons, otherwise 30 days; an unknown or unoffered grain = null (the period's default).
+     * doesn't offer = 7 days for Buttons, otherwise 30 days; an unknown or unoffered grain = null (the period's default).
      */
     fun decode(metric: String?, period: String?, deck: String?, grain: String?): Choice {
         val m = ChartMetric.values().firstOrNull { it.name == metric && it.listed } ?: ChartMetric.REVIEWS
-        val p = ChartPeriod.values().firstOrNull { it.name == period }?.takeIf { it in periodsFor(m) } ?: if (m == ChartMetric.BUTTONS) ChartPeriod.D7 else ChartPeriod.D30
+        val migrated = when (period) { "D365" -> "D300"; "D90" -> "D100"; else -> period }
+        val p = ChartPeriod.values().firstOrNull { it.name == migrated }?.takeIf { it in periodsFor(m) } ?: if (m == ChartMetric.BUTTONS) ChartPeriod.D7 else ChartPeriod.D30
         val g = ChartGrain.values().firstOrNull { it.name == grain }?.takeIf { it in ChartData.grains(m, p) }
         return Choice(m, p, deck?.takeIf { it.isNotEmpty() }, g)
     }

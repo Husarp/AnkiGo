@@ -107,7 +107,7 @@ class ChartDataTest {
         val s = build(ChartMetric.BUTTONS, ChartPeriod.D7, history = h)
         assertEquals(listOf("Again", "Hard", "Good", "Easy"), s.seriesNames)
         assertEquals(listOf(1.0, 2.0, 3.0, 4.0), s.bars.last().values)       // the unknown button (index 0) is left out
-        assertEquals(3, s.bars.size) // calendar week starts on Monday
+        assertEquals(7, s.bars.size) // rolling window includes today
         assertEquals(15.0, s.total, 0.0)
         assertEquals(10.0, s.best, 0.0); assertEquals(today, s.bestDay)
     }

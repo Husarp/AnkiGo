@@ -6,6 +6,7 @@ import com.husarp.ankigo.stats.ChartData
 import com.husarp.ankigo.stats.ChartGrain
 import com.husarp.ankigo.stats.ChartKind
 import com.husarp.ankigo.stats.ChartMetric
+import com.husarp.ankigo.stats.ChartPrefs
 import com.husarp.ankigo.stats.ChartPeriod
 import com.husarp.ankigo.stats.ChartSeries
 import com.husarp.ankigo.stats.StatsText
@@ -251,22 +252,10 @@ object StatsChartMath {
 
     /** The periods the chip offers: DUE looks ahead 7 or 30 days only. */
     fun periods(metric: ChartMetric): List<ChartPeriod> =
-        if (metric == ChartMetric.BUTTONS) listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D365)
-        else if (metric == ChartMetric.DUE) listOf(ChartPeriod.D7, ChartPeriod.D30) else ChartPeriod.values().filter { it != ChartPeriod.D1 }
+        ChartPrefs.periodsFor(metric)
 
-    fun periodLabel(metric: ChartMetric, p: ChartPeriod): String {
-        if (metric == ChartMetric.BUTTONS) return when (p) {
-            ChartPeriod.D7 -> "This week"
-            ChartPeriod.D30 -> "This month"
-            ChartPeriod.D365 -> "This year"
-            else -> "This week"
-        }
-        val ahead = metric == ChartMetric.DUE
-        return when (p) {
-            ChartPeriod.D365 -> if (ahead) "Next year" else "Last year"
-            else -> "${if (ahead) "Next" else "Last"} ${p.days} days"
-        }
-    }
+    fun periodLabel(metric: ChartMetric, p: ChartPeriod): String =
+        "${if (metric == ChartMetric.DUE) "Next" else "Last"} ${p.days} days"
 
     /** The chart's title: "Reviews per day", "Card states". */
     fun title(s: ChartSeries): String =

@@ -170,14 +170,14 @@ class R31FShots {
         host
     }
 
-    @Test fun answerButtonsUseYearAndLeftAlignedFilters() = scene("532-answer-buttons") { ctx ->
+    @Test fun answerButtonsUseRollingPeriodAndLeftAlignedFilters() = scene("532-answer-buttons") { ctx ->
         state.history.clear()
         state.history[state.day] = DayLog(buttons = intArrayOf(0, 2, 3, 8, 4))
-        val p = StatsPage(ctx, NoHost); p.preset(metric = ChartMetric.BUTTONS, period = ChartPeriod.D365)
+        val p = StatsPage(ctx, NoHost); p.preset(metric = ChartMetric.BUTTONS, period = ChartPeriod.D300)
         val screen = pageScreen(ctx, p); call(p, "render")
-        val year = text(screen, "This year")
-        val filters = year.parent as ViewGroup
-        assertSame(year, filters.getChildAt(0))
+        val period = text(screen, "Last 300 days")
+        val filters = period.parent as ViewGroup
+        assertSame(period, filters.getChildAt(0))
         assertTrue(all(filters).filterIsInstance<TextView>().none { it.text.toString() == "AnkiGo answers" || it.text.toString() == "Today" })
         screen
     }
