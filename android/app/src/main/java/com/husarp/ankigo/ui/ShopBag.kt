@@ -94,8 +94,11 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
                 addView(icon, LinearLayout.LayoutParams(Ui.dp(ctx, 24), Ui.dp(ctx, 24)))
                 addView(Ui.text(ctx, 12f, 800, ink).apply { text = label }, LinearLayout.LayoutParams(0, -2, 1f))
                 addView(Ui.text(ctx, 11f, 800, ink).apply { text = "${count(label)}" })
-                setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4))
-                setOnClickListener { category = label; s.requestRender() }
+                setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 16), Ui.dp(ctx, 4))
+                setOnClickListener {
+                    if (category == label) s.closeCategories { categoriesOpen = false; s.requestRender() }
+                    else { category = label; s.requestRender() }
+                }
             }, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 3) })
         }) { categoriesOpen = false; s.requestRender() }
         val results = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; tag = "bag-results" }
