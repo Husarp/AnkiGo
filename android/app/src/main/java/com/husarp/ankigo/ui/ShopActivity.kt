@@ -165,8 +165,8 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         val first = ShopPlan.firstPill(GameRepo.status == GameRepo.Status.READY, GameRepo.state?.cash)
         appBar = Ui.appBar(this, if (bagOnly) "Bag" else "Shop", first, pillIconRes = R.drawable.ic_money)
         appBar.setPill(first)
-        // "?" opens the guide chapter about money (R3-V3b)
-        appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) { openMoneyHelp() }
+        // Bag keeps its guide shortcut; the Shop has no help action.
+        if (bagOnly) appBar.addAction(R.drawable.ic_help, "Help: how money works", R.color.ag_mauve) { openMoneyHelp() }
         return appBar
     }
 
@@ -387,7 +387,8 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
             val price = ShopPlan.price(data, state.day, w.id)
             val name = Items.name(w.id)
             ShopViews.weekendCard(ctx, ShopViews.itemArt(ctx, w.id, 48), name, ShopPlan.weekendEndsText(w.endsDay, state.settings.dayStartHour), priceView(price, 17f),
-                ItemCardPlan.detailsLabel(ShopPlan.describe(name, price)), stock = stock(w.id)) { openCard(CardKeys.WEEKEND) }
+                ItemCardPlan.detailsLabel(ShopPlan.describe(name, price)), stock = stock(w.id),
+                line = ItemInfo.plain(ItemInfo.short(data, w.id, state.caught))) { openCard(CardKeys.WEEKEND) }
         }
     }
 
