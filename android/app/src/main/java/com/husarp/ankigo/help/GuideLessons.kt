@@ -6,8 +6,8 @@ internal object GuideLessons {
         GameGuide.BATTLES -> listOf(
             ch.points[0],
             "Good and Easy power your Main's attack; Again and Hard power the wild Pokémon's attack.",
-            "Both can attack in the same round. Only Good and Easy answers keep you safe.",
-            "Win to earn XP. An Exp. Share holder shares it; Lucky Egg boosts it.",
+            "Both can attack in the same round. With only Good and Easy, the wild Pokémon gets no move.",
+            "Defeat or catch a wild Pokémon to earn XP. Exp. Share helps another Pokémon grow; Lucky Egg boosts XP.",
         )
         else -> ch.points.take(4).filter { it.length <= 180 }
     }
@@ -30,7 +30,7 @@ internal object GuideLessons {
     fun details(ch: GuideChapter): List<Pair<String, List<String>>> {
         if (ch.id == GameGuide.BATTLES) return listOf(
             "Answer power and OK" to ch.points.slice(1..6),
-            "Switching and items · a switch costs one hit" to ch.points.slice(7..9),
+            "Switching and items · when the wild Pokémon gets a free move" to ch.points.slice(7..9),
             "Move choice · Smart is the default" to ch.points.slice(10..11),
             "XP and held items" to ch.points.drop(12),
         )

@@ -6,13 +6,13 @@ import org.junit.Test
 class R30QHelpTest {
     @Test fun guideExplainsKnowledgeUnlockAndBattleTags() {
         val text = GameGuide.chapters().flatMap { it.points }.joinToString(" ")
-        assertTrue(text.contains("Until you defeat or catch a species"))
+        assertTrue(text.contains("defeat or catch a species"))
         assertTrue(text.contains("any form counts"))
-        assertTrue(text.contains("Battle effectiveness tags still"))
-        assertTrue(text.contains("Bond is only for your own Pokémon"))
-        assertTrue(text.contains("Level 3 Bond"))
-        assertTrue(text.contains("Existing Level 3+ Bonds reveal them on save load"))
-        assertTrue(text.contains("Each attacking type starts as ???"))
-        assertTrue(text.contains("Catching or defeating reveals no extra matchups"))
+        assertTrue(text.contains("Wild Matchups appear after your first attack"))
+        assertTrue(text.contains("your Main earns"))
+        assertTrue(text.contains("Bond Level 3"))
+        assertTrue(text.contains("species and its forms"))
+        assertTrue(text.contains("Each type starts as ???"))
+        assertTrue(text.contains("A catch or defeat alone reveals no matchups"))
     }
 }

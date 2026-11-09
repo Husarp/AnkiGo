@@ -650,7 +650,7 @@ class MoveChoiceTest {
         val ch = GameGuide.chapter(GameGuide.BATTLES)!!
         val text = (listOf(ch.intro) + ch.points).joinToString(" ")
         assertTrue(text.contains("Move choice"))
-        assertTrue(text.contains("yours and the wild one alike"))
+        assertTrue(text.contains("applies to both Pokémon"))
         assertTrue(text.contains("${(Tuning.SMART_DAMAGE_SHARE * 100).toInt()}%"))
         assertTrue(text.contains("±${Tuning.SMART_ACC_EVA_LIMIT}"))
         assertTrue(text.contains("Random") && text.contains("Smartest"))

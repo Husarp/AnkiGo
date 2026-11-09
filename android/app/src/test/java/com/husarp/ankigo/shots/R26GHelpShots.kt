@@ -27,10 +27,10 @@ class R26GHelpShots {
         }
         views(fold).filterIsInstance<TextView>().first().performClick()
         val text = views(fold).filterIsInstance<TextView>().map { it.text.toString() }
-        assertTrue(text.any { it.contains("one randomly chosen gift per game day") })
+        assertTrue(text.any { it.contains("one random gift per game day") })
         assertTrue(text.any { it.contains("TMs go into your TM collection") })
-        assertTrue(text.any { it.contains("common 75%, uncommon 22% or rare 3%") })
-        assertTrue(text.any { it.contains("common 40%, uncommon 40% and rare 20% after 30 days") })
+        assertTrue(text.any { it.contains("common 75%, uncommon 22%, rare 3%") })
+        assertTrue(text.any { it.contains("After 30 goals in a streak: common 40%, uncommon 40%, rare 20%") })
         LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; addView(fold) }
     }
 }
