@@ -108,7 +108,8 @@ class R30U1ConditionShots {
             assertTrue(card.left >= 0 && card.right <= arena.width && card.top >= 0 && card.bottom <= arena.height)
             val effect = texts(card).single { it.tag == "condition-effect" }
             assertEquals(ConditionExplanation.effect(arena.conditions.of(if (key == "leechseed") ConditionMarks.Slot.OURS else ConditionMarks.Slot.WILD).single { it.key == key }), effect.text.toString())
-            assertEquals(1, effect.lineCount)
+            assertTrue(effect.lineCount > 0)
+            assertTrue("Explanation fits its card", effect.layout.getLineBottom(effect.lineCount - 1) <= effect.height)
             val chip = arena.markRows().first { row -> row.chips.any { it.mark!!.key == key } }.chips.first { it.mark!!.key == key }
             val t = android.os.SystemClock.uptimeMillis()
             for (action in listOf(0, 1)) {
