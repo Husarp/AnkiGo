@@ -69,7 +69,9 @@ object StudyIo {
             val step = {
                 val t0 = SystemClock.elapsedRealtime()
                 if (front != null) BattleLog.front(before.id, front) // the Battle log shows the card's front
-                val events = LiveSession.ownAnswer(app, before, StudyRules.gameButton(answer.buttons, answer.ease), answer.neutral)
+                val events = com.husarp.ankigo.debug.LagLog.work("answer game step") {
+                    LiveSession.ownAnswer(app, before, StudyRules.gameButton(answer.buttons, answer.ease), answer.neutral)
+                }
                 done(events, SystemClock.elapsedRealtime() - t0)
             }
             if (GameRepo.game == null) GameRepo.load(app) { step() } else step()

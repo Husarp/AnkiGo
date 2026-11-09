@@ -59,10 +59,14 @@ class LagRecorder(private val file: File, private val limit: Int = 5000) : AutoC
             val calls = rows.filter { it[1] == "PROVIDER" }.groupBy { it.value("call") ?: "unknown" }
                 .map { (call, entries) -> call to (entries.mapNotNull { it.value("ms")?.toLongOrNull() }.maxOrNull() ?: 0) }
                 .sortedByDescending { it.second }.take(5)
+            val work = rows.filter { it[1] == "WORK" }.groupBy { it.value("name") ?: "unknown" }
+                .map { (name, entries) -> name to (entries.mapNotNull { it.value("ms")?.toLongOrNull() }.maxOrNull() ?: 0) }
+                .sortedByDescending { it.second }.take(5)
             return "${cards.size} cards · tap → card\nMedian ${percentile(0.5)} · 90th ${percentile(0.9)} · max ${times.lastOrNull()?.let { "$it ms" } ?: "—"}\n" +
                 "Waits: ${if (waits.isEmpty()) "none" else waits.entries.joinToString { "${it.key}: ${it.value}" }}\n" +
                 "Stalls >100 ms: ${stalls.count { it > 100 }} · >700 ms: ${stalls.count { it > 700 }}\n" +
-                "Slowest provider calls: ${if (calls.isEmpty()) "none" else calls.joinToString { "${it.first} ${it.second} ms" }}"
+                "Slowest provider calls: ${if (calls.isEmpty()) "none" else calls.joinToString { "${it.first} ${it.second} ms" }}" +
+                if (work.isEmpty()) "" else "\nSlowest work: ${work.joinToString { "${it.first} ${it.second} ms" }}"
         }
     }
 }

@@ -79,6 +79,33 @@ class R30LagQueueTest {
         } finally { io.shutdownNow(); io.awaitTermination(3, TimeUnit.SECONDS) }
     }
 
+    @Test fun aReturnReadBehindASlowWriteCannotHoldTheNextTapOrReplaceItsCard() {
+        val nc = nc()
+        nc.reload(); nc.loaded(1, card(1), (1L..4L).map(::key))
+        nc.prepared(key(1), 1, card(2).copy(before = card(2).before + ("queue" to "0")))
+        nc.prepared(key(2), 1, card(3))
+        val first = nc.tapAnswer(3, 50).filterIsInstance<Cmd.Enqueue>().single().answer
+        val ticket = nc.returnCheck(false)!!
+        val provider = SlowAnkiDroid()
+        val answers = queue(provider)
+        val io = Executors.newSingleThreadExecutor()
+        try {
+            answers.enqueue(first)
+            val write = io.submit { answers.drain() }
+            assertTrue(provider.entered.await(3, TimeUnit.SECONDS))
+            val read = io.submit<List<StudyLoop.Key>> { provider.top(1, 4) }
+            val commands = nc.tapAnswer(4, 75)
+            assertFalse(write.isDone)
+            assertFalse(read.isDone)
+            assertEquals(card(3), commands.filterIsInstance<Cmd.Show<String>>().single().card)
+            val second = commands.filterIsInstance<Cmd.Enqueue>().single().answer
+            assertEquals(2L, second.cardId); assertEquals(4, second.ease); assertEquals(75L, second.tookMs)
+            read.get(5, TimeUnit.SECONDS)
+            assertTrue(nc.returned(ticket, card(7), listOf(key(7), key(2)), false).isEmpty())
+            assertEquals(key(3), (nc.slot as NextCard.Slot.Predicted).card.key)
+        } finally { io.shutdownNow(); io.awaitTermination(3, TimeUnit.SECONDS) }
+    }
+
     @Test fun lateMismatchKeepsShownCardAndItsHeldTapGoesThrough195WaitingJournal() {
         val nc = nc(); ready(nc, 2)
         nc.tapAnswer(3, 50) // card 2 displayed

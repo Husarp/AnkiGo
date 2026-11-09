@@ -313,6 +313,8 @@ class BarView(ctx: Context) : View(ctx) {
      */
     private inner class SparkDrawable(private val host: ViewGroup) : Drawable() {
         private val r = android.graphics.Rect()
+        private val sparkPath = android.graphics.Path()
+        private val sparkFrame = GoalSparks.MutableFrame()
         /**
          * Pixels per spark-dp: the sizes are for an 8 dp bar and follow the bar's real height, but a taller bar (the 14 dp goal
          * bar outside the battle) does not make the sparks and the glow bigger.
@@ -355,14 +357,14 @@ class BarView(ctx: Context) : View(ctx) {
                 canvas.drawRoundRect(glowRect, r.height() / 2f + o, r.height() / 2f + o, glowPaint)
             }
             val t = if (sparksStill()) null else SystemClock.uptimeMillis()
-            for (sp in GoalSparks.frame(sparkLevel, t)) {
+            for (sp in sparkFrame.at(sparkLevel, t)) {
                 sparkPaint.color = sp.color
                 sparkPaint.alpha = (sp.alpha.coerceIn(0f, 1f) * 255f + 0.5f).toInt()
                 canvas.save()
                 canvas.translate(r.left + r.width() * sp.x, r.top - sp.rise * k)
                 canvas.rotate(sp.rotation)
                 val size = sp.radius * k
-                val p = android.graphics.Path()
+                val p = sparkPath.apply { rewind() }
                 when (sp.shape) {
                     0 -> canvas.drawCircle(0f, 0f, size, sparkPaint)
                     1 -> { // four curved rays
@@ -377,7 +379,7 @@ class BarView(ctx: Context) : View(ctx) {
                         p.moveTo(xy[0],xy[1]); for (i in 2 until xy.size step 2) p.lineTo(xy[i],xy[i+1]); p.close()
                     }
                     6 -> {
-                        val xy = floatArrayOf(0f,-1f,.24f,-.42f,.84f,-.8f,.6f,-.04f,1f,.16f,.28f,.4f,0f,1f,-.28f,.4f,-1f,.16f,-.6f,-.04f,-.84f,-.8f,-.24f,-.42f)
+                        val xy = LEAF_POINTS
                         p.moveTo(xy[0] * size, xy[1] * size)
                         for (i in 2 until xy.size step 2) p.lineTo(xy[i] * size, xy[i + 1] * size)
                         p.close()
@@ -492,6 +494,7 @@ class BarView(ctx: Context) : View(ctx) {
     }
 
     internal companion object {
+        private val LEAF_POINTS = floatArrayOf(0f,-1f,.24f,-.42f,.84f,-.8f,.6f,-.04f,1f,.16f,.28f,.4f,0f,1f,-.28f,.4f,-1f,.16f,-.6f,-.04f,-.84f,-.8f,-.24f,-.42f)
         /** Where the ghost of a drop starts: [from] (0..1), or 0 (no ghost) when it is not above where the fill is heading, [dest]. */
         fun ghostTop(from: Float, dest: Float): Float = from.coerceIn(0f, 1f).let { if (it <= dest) 0f else it }
 

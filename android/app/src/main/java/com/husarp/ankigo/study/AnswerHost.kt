@@ -240,7 +240,7 @@ class AnswerHost(
         com.husarp.ankigo.debug.LagLog.record("QUEUED", "card" to a.cardId, "seq" to a.seq)
         metas[a.seq] = meta
         val journalAt = env.elapsed()
-        val persisted = queue.enqueue(a) // the journal first, then the entry can run
+        val persisted = com.husarp.ankigo.debug.LagLog.work("answer journal") { queue.enqueue(a) } // the journal first, then the entry can run
         env.log("answer queued: seq ${a.seq} deck ${a.deckId} card ${a.cardId}, shown reps ${a.before["reps"]}, ease ${a.ease}, pending ${queue.size}, journal ${env.elapsed() - journalAt} ms")
         if (count == 0) since = env.elapsed()
         count++

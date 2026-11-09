@@ -7,6 +7,24 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class LagRecorderTest {
+    @Test fun shortStallStacksAndNamedWorkSurviveSharingWithoutDoubleCounting() {
+        val dir = Files.createTempDirectory("lag-short-stall").toFile()
+        try {
+            LagRecorder(dir.resolve("lag.txt")).use { log ->
+                log.record("STACK", "ping" to "short", "ms" to 150, "main" to "BarView.draw | PanelChipRow.onMeasure")
+                log.record("STALL", "ping" to "short", "ms" to 190)
+                log.record("WORK", "name" to "answer game step", "ms" to 45, "thread" to "main")
+                log.record("WORK", "name" to "answer game step", "ms" to 90, "thread" to "main")
+                log.record("WORK", "name" to "game save snapshot", "ms" to 120, "thread" to "main")
+                val text = snapshot(log)
+                assertTrue(text.contains("BarView.draw | PanelChipRow.onMeasure"))
+                val summary = LagRecorder.summary(text)
+                assertTrue(summary, summary.contains("Stalls >100 ms: 1 · >700 ms: 0"))
+                assertTrue(summary, summary.contains("Slowest work: game save snapshot 120 ms, answer game step 90 ms"))
+            }
+        } finally { dir.deleteRecursively() }
+    }
+
     private fun snapshot(log: LagRecorder): String {
         val done = CountDownLatch(1)
         var text = ""

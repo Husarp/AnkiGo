@@ -353,7 +353,7 @@ object GameRepo {
         val store = store(app)
         val day = st.day
         val encode = try {
-            store.prepareSnapshot(st)
+            com.husarp.ankigo.debug.LagLog.work("game save snapshot") { store.prepareSnapshot(st) }
         } catch (e: Exception) {
             Report.fail(TAG, "encoding the save", e)
             return null

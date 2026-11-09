@@ -166,7 +166,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private var typeInQuestion = false         // the question side on screen has a type-in field (TypeInRules)
     private var imeDp = 0                      // the soft keyboard's height now (0 = hidden); with a type-in card it switches to the keyboard layout (TypeInLayout)
     private var resumedNow = false
-    private var returnVisit = 0
+    @Volatile private var returnVisit = 0
     private var keyboardJob: Runnable? = null  // the pending "open the keyboard on a type-in card", cancelled when the card changes or the screen pauses
     private var autoFired = -1                 // the side whose auto-advance already acted
     private var frozenAt = -1L                 // the timer pill's value once the answer is shown (deck: stop timer on answer)
@@ -809,6 +809,10 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val at = SystemClock.elapsedRealtime()
         com.husarp.ankigo.debug.LagLog.record("RETURN_CHECK", "result" to "started", "card" to stats["_id"])
         io {
+            if (!ticket.mayRead(generation, visit, returnVisit)) {
+                com.husarp.ankigo.debug.LagLog.record("RETURN_CHECK", "result" to "skipped stale read", "ms" to SystemClock.elapsedRealtime() - at)
+                return@io
+            }
             val result = runCatching {
                 val (studyOk, flagsOk) = support.get()
                 check(studyOk) { "Studying here needs AnkiDroid 2.24 or newer." }
