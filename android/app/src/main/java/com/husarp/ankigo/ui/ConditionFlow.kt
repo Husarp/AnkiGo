@@ -25,30 +25,39 @@ internal object ConditionFlow {
         return out
     }
 
-    /** Owner rows stay below and left-aligned with their card, wrapping at sprite edges with room for one readable label. */
+    /** Each owner's rows are centred on its card, wrapping within the available lane. */
     fun anchored(card: ConditionSpot.R, right: Float, widths: FloatArray, stats: Int, gap: Float, lift: Float,
-                 height: Float, sprites: List<ConditionSpot.R>, blocks: List<ConditionSpot.R> = emptyList()): List<ConditionSpot.R> {
+                 height: Float, sprites: List<ConditionSpot.R>, blocks: List<ConditionSpot.R> = emptyList(),
+                 below: Boolean = true, left: Float = 0f): List<ConditionSpot.R> {
         if (widths.isEmpty()) return emptyList()
         val out = ArrayList<ConditionSpot.R>()
-        var y = card.b + lift
-        var x = card.l
-        fun limit(): Float {
-            var edge = right
-            for (art in sprites) if (y < art.b && y + height > art.t && art.r > card.l) {
-                edge = min(edge, max(card.l, art.l) + art.w * .15f)
+        val center = (card.l + card.r) / 2f
+        var y = if (below) card.b + lift else card.t - lift - height
+        var index = 0
+        while (index < widths.size) {
+            var l = left
+            var r = right
+            for (art in sprites) if (y < art.b && y + height > art.t) {
+                if (art.l >= center) r = min(r, art.l + art.w * .15f)
+                else if (art.r <= center) l = max(l, art.r - art.w * .15f)
             }
-            edge = max(card.l + widths.max(), edge).coerceAtMost(right)
-            for (block in blocks) if (y < block.b && y + height > block.t && block.r > card.l) {
-                edge = min(edge, block.l - gap)
+            for (block in blocks) if (y < block.b && y + height > block.t) {
+                if (block.l >= center) r = min(r, block.l - gap)
+                else if (block.r <= center) l = max(l, block.r + gap)
+                else return emptyList()
             }
-            return edge
-        }
-        val separateEffects = widths.sum() + gap * (widths.size - 1) > limit() - card.l
-        for ((i, w) in widths.withIndex()) {
-            if (x > card.l && (x + w > limit() || i == stats && separateEffects)) { x = card.l; y += height + gap }
-            if (x + w > limit()) return emptyList()
-            out += ConditionSpot.R(x, y, x + w, y + height)
-            x += w + gap
+            val available = min(card.w, 2f * min(center - l, r - center))
+            val lines = rows(widths.copyOfRange(index, widths.size), (stats - index).coerceAtLeast(0), available, gap)
+            val line = lines.firstOrNull() ?: return emptyList()
+            val lineWidth = line.sumOf { widths[index + it].toDouble() }.toFloat() + gap * (line.size - 1)
+            var x = center - lineWidth / 2f
+            for (i in line) {
+                val w = widths[index + i]
+                out += ConditionSpot.R(x, y, x + w, y + height)
+                x += w + gap
+            }
+            index += line.size
+            y += (height + gap) * if (below) 1 else -1
         }
         return out
     }
@@ -57,13 +66,13 @@ internal object ConditionFlow {
 
     /** Tiny windows retain the full list behind the existing +N chip instead of displacing the owner's card. */
     fun owner(card: ConditionSpot.R, right: Float, widths: FloatArray, stats: Int, gap: Float, lift: Float,
-              height: Float, sprites: List<ConditionSpot.R>, maxHeight: Float, blocks: List<ConditionSpot.R> = emptyList(), moreWidth: (Int) -> Float): OwnerFlow {
+              height: Float, sprites: List<ConditionSpot.R>, maxHeight: Float, blocks: List<ConditionSpot.R> = emptyList(), below: Boolean = true, left: Float = 0f, moreWidth: (Int) -> Float): OwnerFlow {
         for (n in widths.size downTo 0) {
             val more = widths.size - n
             val shownWidths = widths.take(n).toFloatArray() + if (more > 0) floatArrayOf(moreWidth(more)) else floatArrayOf()
-            val rects = anchored(card, right, shownWidths, min(stats, n), gap, lift, height, sprites, blocks)
+            val rects = anchored(card, right, shownWidths, min(stats, n), gap, lift, height, sprites, blocks, below, left)
             if (rects.isEmpty() && shownWidths.isNotEmpty()) continue
-            if (rects.isEmpty() || rects.last().b - rects.first().t <= maxHeight) return OwnerFlow(rects, n, more)
+            if (rects.isEmpty() || rects.maxOf { it.b } - rects.minOf { it.t } <= maxHeight) return OwnerFlow(rects, n, more)
         }
         return OwnerFlow(emptyList(), 0, widths.size)
     }

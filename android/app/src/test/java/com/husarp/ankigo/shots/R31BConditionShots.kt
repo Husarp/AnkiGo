@@ -208,10 +208,11 @@ class R31BConditionShots {
                     continue
                 }
                 if (card.top < 0) bad += "$tag card pushed outside arena: ${card.top}"
-                val top = card.top + card.height * card.scaleY
-                if (chips.first().rect.top < top || chips.first().rect.top > top + 20) bad += "$tag detached from card: $top -> ${chips.first().rect.top}"
+                val distance = if (slot == ConditionMarks.Slot.WILD) card.top - chips.first().rect.bottom
+                    else chips.first().rect.top - (card.top + card.height * card.scaleY)
+                if (distance < 0 || distance > 20) bad += "$tag detached from card: $distance"
                 for (line in chips.groupBy { it.rect.top }.values) {
-                    if (kotlin.math.abs(line.first().rect.left - card.left) > .5f) bad += "$tag row not left aligned"
+                    if (kotlin.math.abs((line.first().rect.left + line.last().rect.right) / 2f - (card.left + card.width * card.scaleX / 2f)) > .5f) bad += "$tag row not centred"
                 }
                 for (chip in chips) if (chip.rect.left < 0 || chip.rect.right > sc.arena.width + .5f || chip.rect.top < 0 || chip.rect.bottom > sc.arena.height + .5f) bad += "$tag outside arena: ${chip.rect} arena=${sc.arena.width}x${sc.arena.height}"
             }

@@ -6,8 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
-import android.text.SpannableStringBuilder
-import android.text.Spanned
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -18,7 +16,6 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
 import com.husarp.ankigo.R
-import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -207,20 +204,12 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
     override fun performClick(): Boolean { super.performClick(); return true }
 }
 
-/**
- * The list a tap on a chip row, its "+N" or an info box opens: every condition of the fight with its turns left, in sections (the tapped one
- * first). A bubble in the app's card style; it lays itself out in as many columns as the arena's height needs, and scrolls only when even the
- * smallest text in four columns is taller than the arena.
- */
+/** A chip's own compact explanation card, with a scrolling fallback for short arenas. */
 internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLayout(ctx) {
     private val m = ChipMetrics(ctx, TextMath.at(11f, floorSp))
     private val body = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
     private var scroll: ScrollView? = null
     private var sections: List<ConditionSections.Section> = emptyList()
-
-    /** The number of columns the last [build] used (tests). */
-    var columns = 1
-        private set
 
     /** True when the list is taller than the arena and scrolls (tests). */
     val scrolls: Boolean get() = scroll != null
@@ -242,100 +231,10 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
     private var statusSpoken: String? = null
     val spoken: String get() = statusSpoken ?: sections.joinToString(" ") { s -> (s.title?.let { "$it. " } ?: "") + s.marks.joinToString(". ") { ConditionExplanation.spoken(it) } + "." }
 
-    private class Item(val title: String?, val mark: ConditionMarks.Mark?)
-
-    private fun items(): List<Item> = sections.flatMap { s -> (if (s.title != null) listOf(Item(s.title, null)) else emptyList()) + s.marks.map { Item(null, it) } }
-
-    private fun line(i: Item, sp: Float): TextView = TextView(context).apply {
-        typeface = Ui.font(context, if (i.mark == null) 900 else 700)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, TextMath.at(if (i.mark == null) sp - 0.5f else sp, floorSp))
-        includeFontPadding = false
-        setLineSpacing(0f, 1.1f)
-        maxLines = Int.MAX_VALUE
-        val mk = i.mark
-        if (mk == null) { text = i.title; setTextColor(context.getColor(R.color.ag_sub1)) }
-        else {
-            val dot = "\uFFFC "
-            val s = SpannableStringBuilder(dot).append(ConditionExplanation.line(mk))
-            ConditionIcons.of(mk.key)?.let { res ->
-                context.getDrawable(res)?.mutate()?.let { icon ->
-                    val size = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, resources.displayMetrics).toInt()
-                    icon.setTint(m.hue(mk.def.group)); icon.setBounds(0, 0, size, size)
-                    s.setSpan(android.text.style.ImageSpan(icon, android.text.style.ImageSpan.ALIGN_BASELINE), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-                }
-            }
-            s.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), dot.length, dot.length + mk.def.word.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            text = s
-            setTextColor(context.getColor(R.color.ag_text))
-        }
-        setPadding(0, if (i.mark == null) Ui.dp(context, 3) else Ui.dp(context, 1), 0, Ui.dp(context, 1))
-    }
-
-    /** [all] cut into [cols] columns of about the same length; a section title never ends a column. */
-    private fun split(all: List<Item>, cols: Int): List<List<Item>> {
-        val per = ceil(all.size / cols.toDouble()).toInt().coerceAtLeast(1)
-        val out = ArrayList<MutableList<Item>>()
-        var cur = ArrayList<Item>()
-        for (it in all) {
-            if (cur.size >= per && out.size < cols - 1) { out += cur; cur = ArrayList() }
-            cur += it
-        }
-        out += cur
-        for (i in 0 until out.size - 1) { val c = out[i]; if (c.size > 1 && c.last().mark == null) out[i + 1].add(0, c.removeAt(c.size - 1)) }
-        return out
-    }
-
-    /** The columns of [all]: [cols] of them, text [sp], with complete explanations wrapping as needed; [colW] px wide each (0 = as wide as its text). */
-    private fun fill(all: List<Item>, cols: Int, sp: Float, colW: Int = 0) {
-        body.removeAllViews()
-        val parts = split(all, cols)
-        columns = parts.size
-        for ((n, part) in parts.withIndex()) {
-            val col = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
-            for (it in part) col.addView(line(it, sp), LinearLayout.LayoutParams(-2, -2))
-            body.addView(col, LinearLayout.LayoutParams(if (colW > 0) colW else -2, -2).also { lp -> if (n > 0) lp.marginStart = Ui.dp(context, 10) })
-        }
-    }
-
     private fun unscroll() {
         val sc = scroll ?: return
         sc.removeView(body); removeView(sc); scroll = null
         addView(body, LayoutParams(-2, -2))
-    }
-
-    /**
-     * Fills the list with [sections] and measures it so it fits [maxW] x [maxH] px: every line on one line, in as few columns (up to
-     * [MAX_COLUMNS]) as it takes, with the text from 11 sp down to 9 sp (never under the panel's floor) before a column has to be crowded.
-     * Nothing fits that way (a very small arena): columns of equal width at the smallest size, complete wrapped explanations; a list that is still
-     * taller than the arena scrolls.
-     */
-    fun build(sections: List<ConditionSections.Section>, maxW: Int, maxH: Int) {
-        dismissTaps = null
-        this.sections = sections
-        statusSpoken = null
-        unscroll()
-        val all = items()
-        val none = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-        val padW = paddingLeft + paddingRight
-        val padH = paddingTop + paddingBottom
-        fun measureBody() = body.measure(none, none)
-        for (sp in SIZES) for (cols in 1..MAX_COLUMNS) {
-            fill(all, cols, sp)
-            measureBody()
-            if (body.measuredWidth + padW <= maxW && body.measuredHeight + padH <= maxH) { measure(MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST)); return }
-        }
-        for (cols in 1..MAX_COLUMNS) {
-            val colW = ((maxW - padW - (cols - 1) * Ui.dp(context, 10)) / cols).coerceAtLeast(1)
-            fill(all, cols, SIZES.last(), colW = colW)
-            body.measure(MeasureSpec.makeMeasureSpec(maxW - padW, MeasureSpec.AT_MOST), none)
-            if (body.measuredHeight + padH <= maxH || cols == MAX_COLUMNS) break
-        }
-        if (body.measuredHeight + padH > maxH) {   // still taller than the arena: it scrolls
-            removeView(body)
-            scroll = MotionScrollView(context).apply { isVerticalScrollBarEnabled = false; overScrollMode = OVER_SCROLL_NEVER; addView(body, LayoutParams(-2, -2)) }
-            addView(scroll, LayoutParams(-2, -2))
-        }
-        measure(MeasureSpec.makeMeasureSpec(maxW, MeasureSpec.AT_MOST), MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))
     }
 
     private var dismissTaps: android.view.GestureDetector? = null
@@ -356,19 +255,19 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
 
     /** A compact anchored card for the selected stat or effect. */
     fun buildStat(sections: List<ConditionSections.Section>, maxW: Int, maxH: Int, close: () -> Unit) {
-        buildMark(sections.single().marks.single(), null, maxW, maxH, close)
+        buildMark(sections.single().marks.single(), null, maxW, maxH, close = close)
     }
 
-    fun buildMark(mark: ConditionMarks.Mark, owner: String?, maxW: Int, maxH: Int, close: () -> Unit) {
+    fun buildMark(mark: ConditionMarks.Mark, owner: String?, maxW: Int, maxH: Int, statValues: com.husarp.ankigo.game.Stats? = null, close: () -> Unit) {
         sections = listOf(ConditionSections.Section(owner, listOf(mark)))
-        statusSpoken = null
+        val values = ConditionStat.values(mark, statValues)
+        statusSpoken = values?.let { "${ConditionExplanation.spoken(mark)} $it. ${owner.orEmpty()}" }
         dismissOnTap(close)
         unscroll()
         body.removeAllViews()
-        columns = 1
         val stat = mark.key.startsWith("stat.")
         val name = if (stat) StatPill.longName(mark.key.removePrefix("stat.")) + " " + (if (mark.value > 0) "+" else "−") + kotlin.math.abs(mark.value) else mark.def.word
-        buildCard(name, ConditionExplanation.effect(mark), listOfNotNull(owner, mark.detail.takeIf { !stat && it.isNotBlank() }).joinToString(" · "),
+        buildCard(name, listOfNotNull(values, ConditionExplanation.effect(mark)).joinToString("\n"), listOfNotNull(owner, mark.detail.takeIf { !stat && it.isNotBlank() }).joinToString(" · "),
             ConditionIcons.of(mark.key)!!, if (stat) StatPill.ink(mark.value > 0, StatPill.isDark(context)) else m.hue(mark.def.group), maxW, maxH)
     }
 
@@ -415,10 +314,4 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         measure(MeasureSpec.makeMeasureSpec(cardW, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(maxH, MeasureSpec.AT_MOST))
     }
 
-    companion object {
-        const val MAX_COLUMNS = 4
-
-        /** The list's text sizes to try, in design sp. */
-        private val SIZES = floatArrayOf(11f, 10f, 9.5f, 9f)
-    }
 }
