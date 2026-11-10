@@ -331,15 +331,10 @@ internal object ItemCard {
         }
     }
 
-    /** The list behind "Who can learn it": your Pokémon that can learn [move] (name, level, "knows it" for those that already do); read only. */
+    /** The Pokédex narrowed to your compatible Pokémon; a pick opens its details. */
     fun showWho(page: GamePage, move: String, tmName: String) {
-        val mons = ItemInfo.whoCanLearn(page.data, page.state, move)
-        val col = LinearLayout(page).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(page, 12f), 0, dp(page, 8f), 0)
-            for (m in mons) addView(Bits.monRow(page, page.data, m, if (move in m.moves) ItemCardPlan.KNOWS_IT else ""))
-        }
-        Pickers.show(AppDialog.Builder(page).setTitle("${ItemCardPlan.WHO_TITLE}: $tmName").setView(Bits.scroll(page, col)).setPositiveButton("Close", null).create())
+        DexMonPicker.show(page, "${ItemCardPlan.WHO_TITLE}: $tmName",
+            { move in page.data.sp(it.species).tmMoves }) { MonDetail.show(page, page.data, it) }
     }
 
     // ---- the buttons ----

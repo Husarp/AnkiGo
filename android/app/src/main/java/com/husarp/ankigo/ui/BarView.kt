@@ -230,6 +230,7 @@ class BarView(ctx: Context) : View(ctx) {
     // ---- goal sparks: tiny sparks rising above the bar once the daily goal is passed (GoalSparks) ----
     private var sparkLevel = 0
     private var sparkHost: ViewGroup? = null
+    private var goalEffectHost: ViewGroup? = null
     private var sparkDrawable: SparkDrawable? = null
     private var sparkRunning = false
     private val sparkPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -250,12 +251,14 @@ class BarView(ctx: Context) : View(ctx) {
 
     /**
      * Sparks above the bar for the goal's flame [level] (0 = none, else [GoalTone.flameLevel]'s 1..3). They are drawn in the
-     * overlay of the window root (so no layout changes and nothing takes touches) and animate only while the bar is
+     * overlay of [host] (the window root by default), so a card host follows overscroll stretch. They animate only while the bar is
      * attached and shown; with reduced motion they stand still.
      */
-    fun setGoalSparks(level: Int) {
+    fun setGoalSparks(level: Int, host: ViewGroup? = null) {
         val l = level.coerceIn(0, 3)
-        if (l == sparkLevel) return
+        if (l == sparkLevel && host === goalEffectHost) return
+        if (host !== goalEffectHost) stopSparks()
+        goalEffectHost = host
         sparkLevel = l
         refreshSparks()
     }
@@ -271,7 +274,7 @@ class BarView(ctx: Context) : View(ctx) {
         val want = sparkLevel > 0 && isAttachedToWindow && windowVisibility == VISIBLE && sparksOnScreen()
         if (!want) { stopSparks(); return }
         if (sparkDrawable == null) {
-            val host = rootView as? ViewGroup ?: return
+            val host = goalEffectHost ?: (rootView as? ViewGroup) ?: return
             sparkHost = host
             sparkDrawable = SparkDrawable(host).also { host.overlay.add(it) }
         }

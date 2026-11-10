@@ -284,6 +284,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
         val able = candidates().filter { data.sp(it.species).tmMoves.contains(move) && move !in it.moves }
         if (able.isEmpty()) { Ui.toast(s, "None of your Pokémon can learn ${data.move(move)?.name ?: move}"); return }
         close()
-        Pickers.pickMon(s, "Teach ${Items.tmName(data, move)} to…", data, able, { mon -> "${mon.moves.size}/4 moves" }) { mons.teach(it, move) }
+        DexMonPicker.show(s, "Teach ${Items.tmName(data, move)} to…",
+            { data.sp(it.species).tmMoves.contains(move) && move !in it.moves }) { mons.teach(it, move) }
     }
 }

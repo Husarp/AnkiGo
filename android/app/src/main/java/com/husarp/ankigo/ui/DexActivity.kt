@@ -23,7 +23,14 @@ import com.husarp.ankigo.game.Species
 // Standalone it is a page of its own; given a [pickHost] it is embedded as the Pokédex section of the Pokémon tab (TeamPage
 // builds [embeddedBody], calls [renderEmbedded] and owns the bar). One ListView: header = hero card + progress + filters (segmented, search, the one filter row), rows = 4 cells each (recycled, so ~1000 entries scroll smoothly).
 class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = null) : GamePage(base, host) {
-    override val tab = BottomNav.Tab.POKEMON
+    override val tab get() = if (recipient == null) BottomNav.Tab.POKEMON else null
+
+    internal class Recipient(val title: String, val eligible: (Species) -> Boolean, val picked: (Species) -> Unit)
+    private var recipient: Recipient? = null
+    internal fun pickRecipient(request: Recipient) {
+        recipient = request
+        filter = DexFilter().withSort(filter.spec())
+    }
 
     private val embedded get() = pickHost != null
 
@@ -55,7 +62,9 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     }
 
     override fun buildBar(): View {
-        appBar = Ui.appBar(this, "Pokédex", "")
+        appBar = recipient?.let { Ui.appBar(this, it.title, null, back = true, onBack = { host.closePage() }) }
+            ?: Ui.appBar(this, "Pokédex", "")
+        if (recipient != null) appBar.titleView.apply { maxLines = 2; textSize = 20f }
         return appBar
     }
 
@@ -111,23 +120,24 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
 
     /** A filter changed: an embedded page draws itself (nobody listens for it), a standalone one asks to be drawn. */
     private fun redraw() {
-        SortPrefs.saveDexFilter(this, filter) // R18 249: every filter change goes through here
+        if (recipient == null) SortPrefs.saveDexFilter(this, filter) // R18 249: every filter change goes through here
         if (embedded) render() else requestRender()
     }
 
     override fun render() {
         val st = state
-        if (!embedded) appBar.setPill(pillText())
+        if (!embedded && recipient == null) appBar.setPill(pillText())
         val enabled = data.species.values.filter { it.gen in st.settings.gens }.sortedBy { it.num }
         // drop selections that no longer exist (a gen switched off in Settings)
         if (filter.gens.any { it !in st.settings.gens }) filter = filter.copy(gens = filter.gens.filter { it in st.settings.gens }.toSet())
         refilter()
 
         topBox.removeAllViews()
-        if (!Ui.shortWindow(this)) cachedHero()?.let { topBox.addView(it) } // no room for the "last caught" card in a short window
-        topBox.addView(progress(enabled, compact = Ui.shortWindow(this)))
+        if (recipient == null && !Ui.shortWindow(this)) cachedHero()?.let { topBox.addView(it) } // no room for the "last caught" card in a short window
+        if (recipient == null) topBox.addView(progress(enabled, compact = Ui.shortWindow(this)))
         segBox.removeAllViews()
-        segmented()
+        if (recipient == null) segmented()
+        segBox.visibility = if (recipient == null) View.VISIBLE else View.GONE
         drawRow()
     }
 
@@ -141,7 +151,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
 
     private fun filtered(): List<Species> {
         val st = state
-        return filter.apply(data.species.values.toList(), DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens, DexSortInfo(data, st), DexFilter.favouriteSpecies(st.mons),
+        return filter.apply(data.species.values.filter { recipient?.eligible?.invoke(it) != false }, DexFilter.lastCaught(st.mons), st.settings.wishlist, st.settings.gens, DexSortInfo(data, st), DexFilter.favouriteSpecies(st.mons),
             DexFilter.seenNotCaught(st.seen, st.caught))
     }
 
@@ -161,7 +171,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             BoxViews.quickChip(ctx, "★ Wishlist", filter.wishlistOnly) { setSheetFilters(!filter.wishlistOnly, filter.gens) } to filter.wishlistOnly,
             BoxViews.quickChip(ctx, "Favourites", filter.favouritesOnly, heart = true) { setFavouritesOnly(!filter.favouritesOnly) } to filter.favouritesOnly,
         )
-        rowBox.addView(FilterRow.make(ctx, TileViews.legendChip(ctx, dex = true), sortPill,
+        rowBox.addView(FilterRow.make(ctx, TileViews.legendChip(ctx, dex = true).apply { if (recipient != null) visibility = View.GONE }, sortPill,
             FilterRowText.withRarity(FilterRowText.activePieces(filter.typeFilter, null, filter.gens), filter.rarities),
             onOpen = { openSortSheet() }, quick = quick), LinearLayout.LayoutParams(-1, -2))
     }
@@ -176,7 +186,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     /** The empty state's "Clear filters": every Pokédex filter off, also All / Owned / Seen / Not owned and the search text. */
     private fun clearFilters() {
         filter = filter.withTypeFilter(TypeFilter()).copy(wishlistOnly = false, favouritesOnly = false, gens = emptySet(), owned = DexOwned.ALL, query = "", rarities = RarityFilter())
-        SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, filter.typeFilter)
+        if (recipient == null) SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, filter.typeFilter)
         search.setText("") // its watcher re-filters with the empty query
         redraw()
         list.setSelection(0)
@@ -185,7 +195,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     /** The type filter changed in the sheet: remembered for the Pokédex (X8), the grid follows. */
     private fun setTypeFilter(t: TypeFilter) {
         filter = filter.withTypeFilter(t)
-        SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, t)
+        if (recipient == null) SortPrefs.saveType(this, SortPrefs.TypeWhere.DEX, t)
         redraw()
         list.setSelection(0)
     }
@@ -194,7 +204,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
 
     private fun setSort(s: SortSpec) {
         filter = filter.withSort(s)
-        SortPrefs.save(this, SortPrefs.Where.DEX, s)
+        if (recipient == null) SortPrefs.save(this, SortPrefs.Where.DEX, s)
         redraw()
         list.setSelection(0)
     }
@@ -442,6 +452,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         cell.name.setTextColor(Ui.c(this, when { caught -> R.color.ag_sub1; seen -> R.color.ag_sub0; else -> R.color.ag_ov }))
         f.setOnClickListener {
             when {
+                recipient != null -> recipient?.let { if (it.eligible(sp)) it.picked(sp) }
                 !seen -> Ui.toast(this, "Not seen yet")
                 picking -> pickHost?.togglePick(pick)
                 else -> DexDetail.show(this, sp)
