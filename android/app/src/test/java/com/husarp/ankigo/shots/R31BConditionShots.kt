@@ -191,12 +191,54 @@ class R31BConditionShots {
         return sc
     }
 
+    private fun checkOverflow(arena: ArenaView, hostName: String, bad: MutableList<String>) {
+        arena.markRows().firstOrNull { row -> row.chips.any { it.more > 0 } }?.let { row ->
+            val chip = row.chips.first { it.more > 0 }
+            val marks: com.husarp.ankigo.ui.ConditionMarksView = field(arena, "marks")
+            val pixels = Bitmap.createBitmap(marks.width, marks.height, Bitmap.Config.ARGB_8888)
+            marks.draw(Canvas(pixels))
+            val r = chip.rect
+            val hasText = ((r.left + r.width() * .3f).toInt()..(r.right - r.width() * .3f).toInt()).any { x ->
+                ((r.top + r.height() * .25f).toInt()..(r.bottom - r.height() * .25f).toInt()).any { y -> pixels.getPixel(x, y) != marks.metrics!!.moreFill() }
+            }
+            if (!hasText) bad += "$hostName overflow label is blank"
+            pixels.recycle()
+            val now = android.os.SystemClock.uptimeMillis()
+            for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+                val event = MotionEvent.obtain(now, now + action * 40L, action, chip.rect.centerX(), chip.rect.centerY(), 0)
+                marks.onTouchEvent(event); event.recycle()
+            }
+            if (arena.conditionListShown() != null) bad += "$hostName overflow opened the retired list"
+            val menu: android.widget.PopupMenu? = field(arena, "conditionMenu")
+            if (menu == null || menu.menu.size() != chip.more) bad += "$hostName overflow missing condition choices"
+            else {
+                val first = menu.menu.getItem(0)
+                menu.menu.performIdentifierAction(first.itemId, 0)
+                if (arena.conditionListShown() == null) bad += "$hostName overflow choice cannot open its own card"
+                if (field<android.widget.PopupMenu?>(arena, "conditionMenu") != null) bad += "$hostName overflow menu stayed open"
+            }
+            arena.conditionListShown()?.performClick()
+        }
+    }
+
     @Test fun anchoredChipsAtEveryHostInBothThemes() {
         val bad = ArrayList<String>()
         for (host in hosts) for (theme in Theme.entries) for (picture in listOf(false, true)) for (n in listOf(2, 8)) {
             paparazzi.unsafeUpdateConfig(deviceConfig = device(host.w, host.h, theme))
             val sc = setup(Shots.files(paparazzi.context), host, n, picture)
-            paparazzi.snapshot(sc.root, "b-chips-${host.name}-$n-${if (picture) "picture" else "plain"}-${theme.name.lowercase()}", 1000)
+            var checkedOverflow = false
+            val wrapper = object : FrameLayout(sc.root.context) {
+                override fun dispatchDraw(canvas: Canvas) {
+                    if (!checkedOverflow) {
+                        checkedOverflow = true
+                        checkOverflow(sc.arena, host.name, bad)
+                    }
+                    super.dispatchDraw(canvas)
+                }
+            }
+            wrapper.addView(sc.root, FrameLayout.LayoutParams(-1, -1))
+            paparazzi.snapshot(wrapper, "b-chips-${host.name}-$n-${if (picture) "picture" else "plain"}-${theme.name.lowercase()}", 1000)
+            assertTrue("overflow checked while attached", checkedOverflow)
             for (slot in listOf(ConditionMarks.Slot.WILD, ConditionMarks.Slot.OURS)) {
                 val card: View = field(sc.arena, if (slot == ConditionMarks.Slot.WILD) "enemyBlock" else "playerCard")
                 val chips = sc.arena.markRows().singleOrNull { it.slot == slot }?.chips.orEmpty()
@@ -215,25 +257,6 @@ class R31BConditionShots {
                     if (kotlin.math.abs((line.first().rect.left + line.last().rect.right) / 2f - (card.left + card.width * card.scaleX / 2f)) > .5f) bad += "$tag row not centred"
                 }
                 for (chip in chips) if (chip.rect.left < 0 || chip.rect.right > sc.arena.width + .5f || chip.rect.top < 0 || chip.rect.bottom > sc.arena.height + .5f) bad += "$tag outside arena: ${chip.rect} arena=${sc.arena.width}x${sc.arena.height}"
-            }
-            sc.arena.markRows().firstOrNull { row -> row.chips.any { it.more > 0 } }?.let { row ->
-                val chip = row.chips.first { it.more > 0 }
-                val marks: com.husarp.ankigo.ui.ConditionMarksView = field(sc.arena, "marks")
-                val pixels = Bitmap.createBitmap(marks.width, marks.height, Bitmap.Config.ARGB_8888)
-                marks.draw(Canvas(pixels))
-                val r = chip.rect
-                val hasText = ((r.left + r.width() * .3f).toInt()..(r.right - r.width() * .3f).toInt()).any { x ->
-                    ((r.top + r.height() * .25f).toInt()..(r.bottom - r.height() * .25f).toInt()).any { y -> pixels.getPixel(x, y) != marks.metrics!!.moreFill() }
-                }
-                if (!hasText) bad += "${host.name} overflow label is blank"
-                pixels.recycle()
-                val now = android.os.SystemClock.uptimeMillis()
-                for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
-                    val event = MotionEvent.obtain(now, now + action * 40L, action, chip.rect.centerX(), chip.rect.centerY(), 0)
-                    marks.onTouchEvent(event); event.recycle()
-                }
-                if (sc.arena.conditionListShown() == null) bad += "${host.name} overflow cannot open full list"
-                sc.arena.conditionListShown()?.performClick()
             }
             val chips = sc.arena.markRects()
             val scene = sc.arena.markScenePublic()

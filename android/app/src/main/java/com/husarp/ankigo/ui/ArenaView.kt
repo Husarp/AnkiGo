@@ -80,6 +80,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     val conditions = ConditionBoard()
 
     private var conditionList: ConditionList? = null
+    private var conditionMenu: android.widget.PopupMenu? = null
     private var listSlot: ConditionMarks.Slot? = null
     private var listStat: String? = null
     private val hideList = Runnable { hideConditionList() }
@@ -1595,12 +1596,15 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
      */
     private fun showConditionList(slot: ConditionMarks.Slot, reopen: Boolean = false, stat: String? = null) {
         if (stat == null || stat == "summary") {
+            hideConditionList()
             val hidden = conditions.of(slot).filter { mark -> marks.rowOf(slot)?.chips?.none { it.mark?.id == mark.id } != false }
             if (hidden.isNotEmpty()) {
                 val anchor = if (slot == ConditionMarks.Slot.OURS) playerCard else enemyBlock
                 android.widget.PopupMenu(context, anchor).apply {
+                    conditionMenu = this
                     hidden.forEachIndexed { i, mark -> menu.add(0, i, i, mark.word) }
                     setOnMenuItemClickListener { item -> showConditionList(slot, stat = hidden[item.itemId].key); true }
+                    setOnDismissListener { if (conditionMenu === this) conditionMenu = null }
                 }.show()
             }
             return
@@ -1645,6 +1649,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun hideConditionList() {
+        conditionMenu?.dismiss()
+        conditionMenu = null
         removeCallbacks(hideList)
         conditionList?.let { popLayer.removeView(it) }
         conditionList = null
