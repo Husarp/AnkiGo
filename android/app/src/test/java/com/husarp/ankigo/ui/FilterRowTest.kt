@@ -107,6 +107,11 @@ class FilterRowTest {
     /** The numbers of a plan (sort width, active width, quick chips shown). */
     private fun FilterRowPlan.Plan.t() = Triple(sortW, activeW, quickShown)
 
+    @Test fun recipientRowWithoutLegendReservesNoLeadingGap() {
+        assertEquals(Triple(100, 0, 1), plan(avail = 196, legend = 0, quick = listOf(90)).t())
+        assertEquals(196, plan(avail = 196, legend = 0, sort = 262).sortW)
+    }
+
     @Test fun nothingOnShowsAsManyQuickChipsAsFit() {
         // legend 38 + gap + sort 100 = 144; then each quick chip: gap + width
         assertEquals(Triple(100, 0, 2), plan(avail = 336, quick = listOf(90, 60)).t())

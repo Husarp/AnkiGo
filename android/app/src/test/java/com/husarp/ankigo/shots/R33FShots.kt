@@ -31,7 +31,9 @@ class R33FShots {
             GameRepo.state!!.reviewsToday = 300
             val page = StatsPage(ctx, NoHost)
             val screen = pageScreen(ctx, page)
-            call(page, "render")
+            // Settle the queued page render before retaining views for attachment/transform checks.
+            call(page, "doRender")
+            page.onHide(); page.onGone()
             val bar = all(screen).filterIsInstance<BarView>().single { getField(it, "sparkLevel") as Int > 0 }
             val card = (bar.parent as View).parent as ViewGroup
             assertSame(card, getField(bar, "goalEffectHost"))
@@ -54,7 +56,6 @@ class R33FShots {
             card.translationY = 16f
             paparazzi.snapshot(screen, "f-589-stretch-${theme.name.lowercase()}")
             assertNull(getField(bar, "sparkDrawable"))
-            page.onGone()
         }
     }
 
@@ -90,6 +91,7 @@ class R33FShots {
                 assertTrue(shown().isNotEmpty())
                 assertTrue(shown().all { move in it.tmMoves && state.mons.any { m -> m.species == it.num } })
                 paparazzi.snapshot(p.root, "f-592-tm-dex-${theme.name.lowercase()}", 300)
+                assertFalse("No unknown-species legend after layout", all(p.root).filterIsInstance<TextView>().any { it.text.toString() == "?" })
                 val search = all(p.root).filterIsInstance<EditText>().single()
                 search.setText("no-such-pokemon")
                 assertTrue(shown().isEmpty())

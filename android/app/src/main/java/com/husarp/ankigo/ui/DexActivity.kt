@@ -171,7 +171,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             BoxViews.quickChip(ctx, "★ Wishlist", filter.wishlistOnly) { setSheetFilters(!filter.wishlistOnly, filter.gens) } to filter.wishlistOnly,
             BoxViews.quickChip(ctx, "Favourites", filter.favouritesOnly, heart = true) { setFavouritesOnly(!filter.favouritesOnly) } to filter.favouritesOnly,
         )
-        rowBox.addView(FilterRow.make(ctx, TileViews.legendChip(ctx, dex = true).apply { if (recipient != null) visibility = View.GONE }, sortPill,
+        rowBox.addView(FilterRow.make(ctx, if (recipient == null) TileViews.legendChip(ctx, dex = true) else null, sortPill,
             FilterRowText.withRarity(FilterRowText.activePieces(filter.typeFilter, null, filter.gens), filter.rarities),
             onOpen = { openSortSheet() }, quick = quick), LinearLayout.LayoutParams(-1, -2))
     }

@@ -169,7 +169,7 @@ object FilterRowPlan {
         val litTotal = quickW.indices.filter { lit(it) }.sumOf { gap + quickW[it] }
         val reserve = (if (activeW > 0) gap + activeMinW else 0) + litTotal
         val legendShown = litTotal == 0 || legendW + gap + minOf(sortMinW, sortW) + reserve <= avail
-        val lead = if (legendShown) legendW + gap else 0
+        val lead = if (legendShown && legendW > 0) legendW + gap else 0
         val sort = minOf(sortW, maxOf(avail - lead - reserve, minOf(sortMinW, sortW)))
         var x = lead + sort
         var active = 0
@@ -202,10 +202,10 @@ internal class FilterRow(ctx: Context) : ViewGroup(ctx) {
     private val gap = Ui.dp(ctx, 6)
     private var rowH = 0
 
-    fun set(legend: View, sort: View, active: ActiveChip?, quick: List<View>, quickLit: List<Boolean> = emptyList()) {
+    fun set(legend: View?, sort: View, active: ActiveChip?, quick: List<View>, quickLit: List<Boolean> = emptyList()) {
         removeAllViews()
         this.legend = legend; this.sort = sort; this.active = active; this.quick = quick; this.quickLit = quickLit
-        addView(legend); addView(sort)
+        legend?.let { addView(it) }; addView(sort)
         active?.let { addView(it) }
         quick.forEach { addView(it) }
     }
@@ -214,22 +214,22 @@ internal class FilterRow(ctx: Context) : ViewGroup(ctx) {
     fun shownQuick(): List<View> = quick.filter { it.visibility == VISIBLE }
 
     override fun onMeasure(widthSpec: Int, heightSpec: Int) {
-        val lg = legend ?: return setMeasuredDimension(0, 0)
-        val so = sort!!
+        val lg = legend
+        val so = sort ?: return setMeasuredDimension(0, 0)
         val unspec = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
         val avail = if (MeasureSpec.getMode(widthSpec) == MeasureSpec.UNSPECIFIED) Int.MAX_VALUE / 4 else MeasureSpec.getSize(widthSpec) - paddingLeft - paddingRight
-        lg.visibility = VISIBLE
-        lg.measure(unspec, unspec); so.measure(unspec, unspec)
+        lg?.visibility = VISIBLE
+        lg?.measure(unspec, unspec); so.measure(unspec, unspec)
         quick.forEach { it.visibility = VISIBLE; it.measure(unspec, unspec) }
         val ac = active
         ac?.measure(unspec, unspec)
         val plan = FilterRowPlan.plan(
-            avail, lg.measuredWidth, so.measuredWidth, minOf(so.measuredWidth, Ui.dp(context, SORT_MIN_DP)),
+            avail, lg?.measuredWidth ?: 0, so.measuredWidth, minOf(so.measuredWidth, Ui.dp(context, SORT_MIN_DP)),
             ac?.measuredWidth ?: 0, ac?.minWidthPx ?: 0, quick.map { it.measuredWidth }, gap, quickLit,
         )
         so.measure(MeasureSpec.makeMeasureSpec(plan.sortW, MeasureSpec.AT_MOST), unspec)
         ac?.measure(MeasureSpec.makeMeasureSpec(plan.activeW, MeasureSpec.EXACTLY), unspec)
-        if (!plan.legendShown) lg.visibility = GONE
+        if (!plan.legendShown) lg?.visibility = GONE
         quick.forEachIndexed { i, v -> if (!plan.shown.getOrElse(i) { false }) v.visibility = GONE }
         rowH = children().filter { it.visibility != GONE }.maxOf { it.measuredHeight }
         val used = children().filter { it.visibility != GONE }.sumOf { it.measuredWidth } + gap * (children().count { it.visibility != GONE } - 1)
@@ -256,7 +256,7 @@ internal class FilterRow(ctx: Context) : ViewGroup(ctx) {
          * The row of a screen: [legend], [sort] and, while a sheet filter is on ([pieces] not empty), the active chip (a tap opens the sheet
          * through [onOpen]), then the [quick] chips, each with whether it is lit (its filter is on).
          */
-        fun make(ctx: Context, legend: View, sort: View, pieces: List<FilterRowText.Piece>, onOpen: () -> Unit, quick: List<Pair<View, Boolean>>): FilterRow =
+        fun make(ctx: Context, legend: View?, sort: View, pieces: List<FilterRowText.Piece>, onOpen: () -> Unit, quick: List<Pair<View, Boolean>>): FilterRow =
             FilterRow(ctx).also { it.set(legend, sort, if (pieces.isEmpty()) null else ActiveChip(ctx, pieces, onOpen), quick.map { q -> q.first }, quick.map { q -> q.second }) }
     }
 }
