@@ -6,7 +6,8 @@ import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
-import android.graphics.RectF
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.view.Gravity
 import android.view.View
@@ -34,6 +35,7 @@ internal object AccentPicker {
         val grid = FlowRow(ctx, Ui.dp(ctx, 4), lineGapPx = Ui.dp(ctx, 8)).apply {
             setPadding(Ui.dp(ctx, 12), Ui.dp(ctx, 4), Ui.dp(ctx, 12), Ui.dp(ctx, 12))
         }
+        lateinit var dialog: AppDialog
         val marks = linkedMapOf<Accent, View>()
         val cells = linkedMapOf<Accent, View>()
         fun update() {
@@ -71,16 +73,17 @@ internal object AccentPicker {
                         AppLook.setAccent(ctx, accent)
                         changed()
                     }
-                    update()
+                    dialog.dismiss()
                 }
             }
             cells[accent] = cell
             grid.addView(cell, ViewGroup.MarginLayoutParams(Ui.dp(ctx, 76), -2))
         }
         update()
-        return AppDialog.Builder(ctx).setTitle("App colour")
-            .setMessage("Choose a colour to preview it.")
+        dialog = AppDialog.Builder(ctx).setTitle("App colour")
+            .setMessage("Choose an app colour.")
             .setView(grid).setNegativeButton("Close", null).create()
+        return dialog
     }
 
     /** The swatch itself is the picture: no tile, border or coloured box behind it. */
@@ -94,12 +97,13 @@ internal object AccentPicker {
             val color = ctx.getColor(accent.res)
             paint.style = Paint.Style.FILL
             if (accent == Accent.MULTICOLOR) {
-                val tones = Multicolor.Tone.entries
-                val oval = RectF(cx - r, cy - r, cx + r, cy + r)
-                tones.forEachIndexed { i, tone ->
-                    paint.color = if (TypeChips.isDark(ctx)) tone.dark else tone.light
-                    canvas.drawArc(oval, -90f + i * 45f, 45f, true, paint)
-                }
+                val tones = listOf(Multicolor.Tone.RED, Multicolor.Tone.ORANGE, Multicolor.Tone.AMBER,
+                    Multicolor.Tone.GREEN, Multicolor.Tone.TEAL, Multicolor.Tone.BLUE,
+                    Multicolor.Tone.PURPLE, Multicolor.Tone.PINK)
+                paint.shader = LinearGradient(cx - r, cy, cx + r, cy,
+                    tones.map { if (TypeChips.isDark(ctx)) it.dark else it.light }.toIntArray(), null, Shader.TileMode.CLAMP)
+                canvas.drawCircle(cx, cy, r, paint)
+                paint.shader = null
             } else {
                 paint.color = color
                 canvas.drawCircle(cx, cy, r, paint)

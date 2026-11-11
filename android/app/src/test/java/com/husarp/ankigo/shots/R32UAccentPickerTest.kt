@@ -69,26 +69,27 @@ class R32UAccentPickerTest {
             page.open(SettingsSection.LOOK)
             fun row() = Form.rowsIn(screen).single { Form.titleOf(it) == "Accent" }
             assertTrue(all(row()).filterIsInstance<TextView>().any { it.text == "Green" })
-            val dialog = AppDialogShots.capture {
+            var dialog = AppDialogShots.capture {
                 all(row()).filterIsInstance<TextView>().single { it.text == "Pick" }.performClick()
             }!!
             val body = dialog.content()
-            val choices = all(body).filter { it.isClickable && it.contentDescription?.toString() in
+            var choices = all(body).filter { it.isClickable && it.contentDescription?.toString() in
                 Accent.entries.flatMap { a -> listOf(a.label, "${a.label}, selected") } }
             assertEquals(22, choices.size)
             assertEquals(listOf("Green, selected"), choices.filter { it.isSelected }.map { it.contentDescription.toString() })
             for (accent in Accent.entries) {
-                val choice = choices.single { it.contentDescription.toString().substringBefore(",") == accent.label }
+                dialog = AppDialogShots.capture { all(row()).filterIsInstance<TextView>().single { it.text == "Pick" }.performClick() }!!
+                val choice = all(dialog.content()).single { it.isClickable && it.contentDescription?.toString()?.substringBefore(",") == accent.label }
                 assertNull("No tile behind a swatch", choice.background)
                 choice.performClick()
-                assertSame("One persistent picker", body, dialog.content())
                 assertEquals(accent, AppPrefs.accent(ctx))
-                assertEquals(listOf(choice), choices.filter { it.isSelected })
                 assertTrue("Current colour changes behind the dialog", all(row()).filterIsInstance<TextView>().any { it.text == accent.label })
                 val progress = Form.rowsIn(screen).single { Form.titleOf(it) == "Progress bars" }
                 assertEquals(accent == Accent.MULTICOLOR, all(progress).filterIsInstance<TextView>().any { it.text == "By meaning · Multicolor" })
             }
-            choices.single { it.contentDescription == "Multicolor" }.performClick()
+            dialog = AppDialogShots.capture { all(row()).filterIsInstance<TextView>().single { it.text == "Pick" }.performClick() }!!
+            all(dialog.content()).single { it.contentDescription == "Multicolor" }.performClick()
+            dialog = AppDialogShots.capture { all(row()).filterIsInstance<TextView>().single { it.text == "Pick" }.performClick() }!!
             paparazzi.snapshot(screen, "u-settings-row-$width-${theme.name.lowercase()}", 1000)
             val stage = FrameLayout(ctx).apply {
                 (screen.parent as? ViewGroup)?.removeView(screen)
@@ -96,6 +97,8 @@ class R32UAccentPickerTest {
                 addView(AppDialogShots.scene(ctx, dialog), FrameLayout.LayoutParams(-1, -1))
             }
             paparazzi.snapshot(stage, "u-picker-$width-${theme.name.lowercase()}", 1000)
+            choices = all(dialog.content()).filter { it.isClickable && it.contentDescription?.toString() in
+                Accent.entries.flatMap { a -> listOf(a.label, "${a.label}, selected") } }
             for (choice in choices) {
                 assertTrue("Touch width", choice.width >= Ui.dp(ctx, 48))
                 assertTrue("Touch height", choice.height >= Ui.dp(ctx, 48))

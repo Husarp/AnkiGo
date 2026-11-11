@@ -69,8 +69,6 @@ object BottomNav {
     fun create(activity: Activity, current: Tab): View {
         OpenOnPrefs.setLastTab(activity, current) // R18 263: "Open AnkiGo on: Last tab"
         val style = TabBarStyle.get(activity)
-        val col = tone(activity, current)
-        val idle = Ui.c(activity, R.color.ag_sub0)
         val bar = NavBar(activity)
         val labels = ArrayList<TextView>()
         val row = HighlightRow(activity, current, style).apply {
@@ -79,12 +77,9 @@ object BottomNav {
         }
         for (tab in Tab.entries) {
             val on = tab == current
-            val tint = if (on) col else idle
             val icon = ImageView(activity).apply {
                 setImageResource(tab.icon)
-                setColorFilter(if (Multicolor.enabled(activity)) Multicolor.icon(activity, Multicolor.tab(tab),
-                    if (on) Bits.blend(col, Ui.c(activity, R.color.ag_mantle), .20f) else Ui.c(activity, R.color.ag_mantle))
-                    else tint, PorterDuff.Mode.SRC_IN)
+                setColorFilter(iconInk(activity, tab, on), PorterDuff.Mode.SRC_IN)
                 layoutParams = FrameLayout.LayoutParams(Ui.dp(activity, if (style == TabBarStyle.E1) 28 else 20), Ui.dp(activity, if (style == TabBarStyle.E1) 28 else 20), Gravity.CENTER)
             }
             val pillBox = FrameLayout(activity).apply {
@@ -94,9 +89,8 @@ object BottomNav {
             val label = Ui.text(activity, if (style == TabBarStyle.A3) 12f else 10f, if (style == TabBarStyle.A3) 900 else 800, R.color.ag_sub0).apply {
                 text = tab.label
                 if (style == TabBarStyle.A3 && !on) { scaleX = 10f / 12f; scaleY = scaleX }
-                if (style == TabBarStyle.E1 && !on) alpha = 0f
-                setTextColor(if (on && Multicolor.enabled(activity)) Multicolor.ink(activity, Multicolor.tab(tab),
-                    Bits.blend(col, Ui.c(activity, R.color.ag_mantle), .20f)) else tint)
+                if (style == TabBarStyle.E1 && !on) { alpha = 0f; translationY = Ui.dp(activity, 3f) }
+                setTextColor(labelInk(activity, tab, on))
                 gravity = Gravity.CENTER
                 maxLines = 1
                 labels += this
@@ -153,7 +147,17 @@ object BottomNav {
         Tab.SETTINGS -> R.color.ag_teal
     })
 
-    /** Destination-owned motion: selection ink is final from the first frame. */
+    private fun iconInk(ctx: Context, tab: Tab, selected: Boolean): Int =
+        if (!selected) Ui.c(ctx, R.color.ag_sub0) else if (Multicolor.enabled(ctx))
+            Multicolor.icon(ctx, Multicolor.tab(tab), Bits.blend(tone(ctx, tab), Ui.c(ctx, R.color.ag_mantle), .20f))
+        else tone(ctx, tab)
+
+    private fun labelInk(ctx: Context, tab: Tab, selected: Boolean): Int =
+        if (!selected) Ui.c(ctx, R.color.ag_sub0) else if (Multicolor.enabled(ctx))
+            Multicolor.ink(ctx, Multicolor.tab(tab), Bits.blend(tone(ctx, tab), Ui.c(ctx, R.color.ag_mantle), .20f))
+        else tone(ctx, tab)
+
+    /** The destination starts with the departing bar's appearance and interpolates one selection. */
     internal class HighlightRow(ctx: Context, private val current: Tab, private val style: TabBarStyle) : LinearLayout(ctx) {
         internal var position = current.ordinal.toFloat()
             private set
@@ -169,20 +173,24 @@ object BottomNav {
             departing = tab
             val start = tab.ordinal.toFloat()
             val from = tone(context, tab)
-            val duration = when (style) {
-                TabBarStyle.A3, TabBarStyle.E1 -> 200L
-                TabBarStyle.C1 -> 140L
-                TabBarStyle.D3 -> 130L
-            }
-            UiMotion.run(this, duration, { f ->
+            val tabs = listOf(tab, current)
+            val items = tabs.map { getChildAt(it.ordinal) as? LinearLayout }
+            val labels = items.map { it?.getChildAt(1) as? TextView }
+            val icons = items.map { (it?.getChildAt(0) as? FrameLayout)?.getChildAt(0) as? ImageView }
+            val idle = Ui.c(context, R.color.ag_sub0)
+            val labelInks = tabs.map { labelInk(context, it, true) }
+            val iconInks = tabs.map { iconInk(context, it, true) }
+            val targetColour = tone(context, current)
+            UiMotion.run(this, 200L, { f ->
                 position = if (style == TabBarStyle.C1) start + (current.ordinal - start) * f else current.ordinal.toFloat()
-                colour = if (style == TabBarStyle.C1) android.animation.ArgbEvaluator().evaluate(f, from, tone(context, current)) as Int else tone(context, current)
+                colour = if (style == TabBarStyle.C1) Bits.blend(targetColour, from, f) else targetColour
                 reveal = f
-                for (i in listOf(tab.ordinal, current.ordinal)) {
-                    val item = getChildAt(i) as? LinearLayout
-                    val label = item?.getChildAt(1)
-                    val icon = (item?.getChildAt(0) as? FrameLayout)?.getChildAt(0)
-                    val selected = if (i == current.ordinal) f else 1f - f
+                for (i in tabs.indices) {
+                    val label = labels[i]
+                    val icon = icons[i]
+                    val selected = if (i == 1) f else 1f - f
+                    label?.setTextColor(Bits.blend(labelInks[i], idle, selected))
+                    icon?.setColorFilter(Bits.blend(iconInks[i], idle, selected), PorterDuff.Mode.SRC_IN)
                     when (style) {
                         TabBarStyle.A3 -> {
                             label?.scaleX = (10f + 2f * selected) / 12f
