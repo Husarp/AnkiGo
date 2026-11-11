@@ -3,6 +3,25 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.7.0
+- Blended the Multicolor swatch into a smooth rainbow. Choosing a colour closes the picker; only the selected tab stays colourful.
+- Smoothed tab-label transitions and the fill retracting when you release a hold-to-confirm button.
+- Sharpened the streak flame while keeping its familiar animation. Lightened the reached-goal green and kept goal particles inside the streak card during overscroll.
+- Centred battle condition chips on their Pokémon’s infobox, with opponent chips above it. Stat chips show the actual before-and-after numbers.
+- Removed the old combined conditions window; each condition keeps its own card. Battle type icons no longer open that window.
+- Moved neutral matchup information to the bottom and made unknown matchup tiles match known tiles.
+- Added clearer evolution requirement marks and a met count, plus full stat names with small icons.
+- Taking off a held item refreshes Pokémon details immediately. Long-press a move in teaching lists to open its details.
+- Removed Best vs wild sorting.
+- Fixed Peat Block evolution when downloaded data describes the item in the evolution conditions.
+- Poké Doll is now a permanent skip tool that levels up as you find more dolls. Higher levels shorten its cooldown, grant part of defeat rewards and double wishlist weight at Level 5. After skipping, catch or defeat a Pokémon to unlock it before the cooldown begins.
+- Find Poké Dolls through study and daily gifts; they are no longer sold. Existing dolls count toward its level.
+- Wishlisted species have twice the encounter weight within their rarity tier, or four times with a Level 5 Poké Doll.
+- Renamed Bag’s Held filters to Worn and matched the Buy quantity button’s height to Buy.
+- TM recipient lists now offer Pokédex search, filters and sorting.
+- Study’s Continue card shows separate blue New, red Learning and green Due counts.
+- Study counts refresh after answers, when learning cards become due, and when you return to the app. The daily goal and widget reset for the new day automatically, with a catch-up check when the app resumes.
+- Improved finding due learning cards when returning to a deck after a break. With only one deck, AnkiDroid can still hide a newly due learning card until its queue refreshes.
 ## 1.6.0
 - Restored the older streak flame animation at half speed.
 - Added a colour picker with 22 choices, including Multicolor for varied accents and colourful Pokémon detail icons. Green is the default.
