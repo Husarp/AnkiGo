@@ -22,6 +22,7 @@ import com.husarp.ankigo.ui.Backdrop
 import com.husarp.ankigo.ui.BackdropCatalog
 import com.husarp.ankigo.ui.BattlePanelView
 import com.husarp.ankigo.ui.BubbleDismiss
+import com.husarp.ankigo.ui.ConditionExplanation
 import com.husarp.ankigo.ui.ConditionMarks
 import com.husarp.ankigo.ui.EventPlayer
 import com.husarp.ankigo.ui.PanelFit
@@ -263,21 +264,24 @@ class R19KConditionShots {
 
     // ---------------------------------------------------------------- the list a tap opens
 
-    private fun tapCard(sc: Scene, wild: Boolean) = field<View>(sc.arena, if (wild) "enemyBlock" else "playerCard").performClick()
+    private fun tapCard(sc: Scene, wild: Boolean) {
+        val slot = if (wild) ConditionMarks.Slot.WILD else ConditionMarks.Slot.OURS
+        val mark = sc.arena.conditions.of(slot).first()
+        ArenaView::class.java.getDeclaredMethod("showConditionList", ConditionMarks.Slot::class.java, Boolean::class.javaPrimitiveType, String::class.java).apply {
+            isAccessible = true
+            invoke(sc.arena, slot, false, mark.key)
+        }
+    }
 
-    @Test fun aTapOnABoxOrOnPlusNListsEveryConditionWithItsTurns() {
+    @Test fun infoBoxesNeverOpenTheRetiredGenericConditionsWindow() {
         paparazzi.unsafeUpdateConfig(deviceConfig = device(412, 869, Theme.LIGHT))
         val sc = setup(Shots.files(paparazzi.context), hosts[0], 8, picture = false)
-        val a = sc.arena
-        assertTrue("the boxes take the tap while there are conditions", field<View>(a, "enemyBlock").isClickable)
-        assertTrue(tapCard(sc, wild = true))
-        val list = a.conditionListShown()!!
-        layoutScene(sc)
-        val text = list.spoken
-        for (m in a.conditions.all()) assertTrue("the list names ${m.word} with its turns: ${m.spoken}", text.contains(m.spoken))
-        assertTrue(text.contains("3 turns left")); assertTrue(text.contains("25 HP left")); assertTrue(text.contains("Stockpile 2, 2 layers"))
-        assertTrue("the list sits inside the arena", list.left >= 0 && list.top >= 0 && list.right <= a.width && list.bottom <= a.height)
-        assertTrue(a.bubbleOpen())
+        for (name in listOf("enemyBlock", "playerCard")) {
+            val card = field<View>(sc.arena, name)
+            assertFalse(card.isClickable)
+            assertFalse(card.performClick())
+            assertNull(sc.arena.conditionListShown())
+        }
     }
 
     @Test fun stageChipTapExplainsOnlyTheSelectedStatOnThatSide() {
@@ -294,22 +298,9 @@ class R19KConditionShots {
             val row = sc.arena.markRows().firstOrNull { it.slot == slot }
             val chip = row?.chips?.firstOrNull { it.mark?.key?.startsWith("stat.") == true }
             if (chip == null) {
-                assertTrue("Only cramped hosts may use the full-list fallback", host in listOf(hosts[3], hosts[6]))
-                val more = row?.chips?.singleOrNull { it.more > 0 }
-                if (more != null) {
-                    val c = more.rect
-                    val t = android.os.SystemClock.uptimeMillis()
-                    sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, c.centerX(), c.centerY(), 0))
-                    sc.arena.dispatchTouchEvent(MotionEvent.obtain(t, t + 40, MotionEvent.ACTION_UP, c.centerX(), c.centerY(), 0))
-                } else assertTrue(tapCard(sc, wild = slot == ConditionMarks.Slot.WILD))
-                layoutScene(sc)
-                val list = sc.arena.conditionListShown()!!
-                for (mark in sc.arena.conditions.all()) {
-                    val expected = if (mark.key.startsWith("stat.")) com.husarp.ankigo.ui.ConditionExplanation.line(mark) else mark.spoken
-                    assertTrue("${host.name}: $expected is in ${list.spoken}", list.spoken.contains(expected))
-                }
-                assertTrue(list.left >= 0 && list.right <= sc.arena.width && list.top >= 0 && list.bottom <= sc.arena.height)
-                paparazzi.snapshot(sc.root, "r25h-stat-fallback-${host.name}-${slot.name.lowercase()}-${theme.name.lowercase()}")
+                assertTrue("Only cramped hosts may use overflow", host in listOf(hosts[3], hosts[6]))
+                assertNotNull(row?.chips?.singleOrNull { it.more > 0 })
+                assertNull(sc.arena.conditionListShown())
                 continue
             }
             val c = chip.rect
@@ -382,25 +373,17 @@ class R19KConditionShots {
         assertTrue("our Pokémon's tap still works", tapped > 0)
     }
 
-    @Test fun theListAndItsBattleExplanationsStayInsideTheArenaWithScrollingWhenNeeded() {
-        val scrolled = ArrayList<String>()
+    @Test fun individualConditionCardsStayInsideEveryArena() {
         for (host in hosts) for (picture in listOf(false, true)) {
             paparazzi.unsafeUpdateConfig(deviceConfig = device(host.w, host.h, Theme.LIGHT))
             val sc = setup(Shots.files(paparazzi.context), host, 8, picture)
-            val a = sc.arena
             tapCard(sc, wild = true)
-            val list = a.conditionListShown()
-            assertNotNull("${host.name}: a list", list)
             layoutScene(sc)
-            val l = list!!
-            assertTrue("${host.name} picture=$picture: the list ${l.left},${l.top},${l.right},${l.bottom} is inside the arena ${a.width}x${a.height}",
-                l.left >= 0 && l.top >= 0 && l.right <= a.width && l.bottom <= a.height)
-            if (l.scrolls) scrolled += host.name + if (picture) "-picture" else ""
-            for (m in a.conditions.all()) assertTrue("${host.name}: ${m.spoken} is in the list", l.spoken.contains(m.spoken))
-            assertTrue("${host.name}: the rain explanation stays available", l.spoken.contains("Water moves ×1.5"))
+            val card = sc.arena.conditionListShown()!!
+            assertTrue(card.left >= 0 && card.top >= 0 && card.right <= sc.arena.width && card.bottom <= sc.arena.height)
+            val mark = sc.arena.conditions.of(ConditionMarks.Slot.WILD).first()
+            assertTrue(card.spoken.contains(ConditionExplanation.effect(mark)))
         }
-        println("R19-K lists that scroll: $scrolled")
-        assertTrue("long battle explanations scroll in constrained windows", scrolled.isNotEmpty())
     }
 
     @Test fun aTouchOnTheListDoesNotCloseItButOneOutsideDoes() {
@@ -603,7 +586,7 @@ class R19KConditionShots {
         shoot(hosts[4], 3, true, "r19k-picture-pip-3")
     }
 
-    @Test fun shotsTheList() {
+    @Test fun shotsIndividualCards() {
         shoot(hosts[0], 8, false, "r19k-list-battle") { tapCard(it, wild = true) }
         shoot(hosts[2], 8, false, "r19k-list-strip230") { tapCard(it, wild = false) }
         shoot(hosts[1], 8, false, "r19k-list-study") { tapCard(it, wild = false) }

@@ -14,7 +14,7 @@ import kotlin.math.min
  * - [ConditionBoard]: what is shown right now, kept in step with the played events and settled from the saved fight;
  * - [ConditionRow.fit]: the one-row plan ("Confused 3, Seeded, +2");
  * - [ConditionSpot]: where a side's row and the field chip sit - always in free room, never over anything.
- * The chips are drawn by [ConditionMarksView]; the list that opens on a tap is [ConditionList].
+ * The chips are drawn by [ConditionMarksView]; each opens its own [ConditionList] card.
  */
 
 /** The words, numbers and order of the condition chips. A key that is not here (a bookkeeping key of a rule set) never gets a chip. */

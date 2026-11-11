@@ -93,3 +93,21 @@ internal object ConditionExplanation {
 
     fun spoken(mark: ConditionMarks.Mark): String = if (mark.key.startsWith("stat.")) line(mark) else "${mark.spoken}. ${effect(mark)}"
 }
+
+/** The stat before and after this stage multiplier; accuracy/evasion have no numeric Pokémon stat. */
+internal object ConditionStat {
+    fun values(mark: ConditionMarks.Mark, stats: com.husarp.ankigo.game.Stats?): String? {
+        val key = mark.key.removePrefix("stat.")
+        val stat = when (key) {
+            "atk" -> com.husarp.ankigo.game.Stat.ATK
+            "def" -> com.husarp.ankigo.game.Stat.DEF
+            "spa" -> com.husarp.ankigo.game.Stat.SPA
+            "spd" -> com.husarp.ankigo.game.Stat.SPD
+            "spe" -> com.husarp.ankigo.game.Stat.SPE
+            else -> return null
+        }
+        val before = stats?.get(stat) ?: return null
+        val after = (before * com.husarp.ankigo.game.BattleEngine.stageMult(mark.value)).toInt().coerceAtLeast(1)
+        return "$before → $after"
+    }
+}

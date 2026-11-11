@@ -12,7 +12,7 @@ class R31BConditionTest {
             val flow = ConditionFlow.anchored(card, w - 2, widths, 7, 4f, 4f, 16f, listOf(art))
             assertEquals(12, flow.size)
             assertEquals(54f, flow.first().t, .01f)
-            for (line in flow.groupBy { it.t }.values) assertEquals(left, line.first().l, .01f)
+            for (line in flow.groupBy { it.t }.values) assertEquals((card.l + card.r) / 2f, (line.first().l + line.last().r) / 2f, .01f)
             for ((i, r) in flow.withIndex()) {
                 assertEquals(widths[i], r.w, .01f)
                 assertTrue(r.r <= w - 2)
@@ -29,7 +29,7 @@ class R31BConditionTest {
         assertEquals(10, flow.shown + flow.more)
         assertEquals(flow.shown + 1, flow.rects.size)
         assertTrue(flow.rects.last().b <= 90f)
-        assertEquals(10f, flow.rects.first().l, .01f)
+        assertEquals(55f, (flow.rects.first().l + flow.rects.first().r) / 2f, .01f)
     }
 
     @Test fun aSpriteUnderTheLeftEdgeStillHasABoundedOverlap() {
@@ -62,6 +62,6 @@ class R31BConditionTest {
         val card = ConditionSpot.R(10f, 0f, 110f, 40f)
         val fit = ConditionFlow.anchored(card, 110f, floatArrayOf(48f, 48f, 90f), 2, 4f, 3f, 16f, emptyList())
         assertEquals(listOf(43f, 43f, 63f), fit.map { it.t })
-        assertEquals(listOf(10f, 62f, 10f), fit.map { it.l })
+        assertEquals(listOf(10f, 62f, 15f), fit.map { it.l })
     }
 }

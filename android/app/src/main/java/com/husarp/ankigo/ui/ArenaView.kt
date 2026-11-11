@@ -80,6 +80,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     val conditions = ConditionBoard()
 
     private var conditionList: ConditionList? = null
+    private var conditionMenu: android.widget.PopupMenu? = null
     private var listSlot: ConditionMarks.Slot? = null
     private var listStat: String? = null
     private val hideList = Runnable { hideConditionList() }
@@ -430,11 +431,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         bubble.setOnClickListener { hideStatusBubble() }
         eStatus.onTap = { showStatusBubble(it) }
         pStatus.onTap = { showStatusBubble(it) }
-        // Chips inspect their own condition; info boxes open the full conditions list.
+        // Each chip inspects its own condition.
         marks.onTap = { showConditionList(it) }
         marks.onMarkTap = { showConditionList(it.slot, stat = it.key) }
-        enemyBlock.setOnClickListener { showConditionList(ConditionMarks.Slot.WILD) }
-        playerCard.setOnClickListener { showConditionList(ConditionMarks.Slot.OURS) }
         enemyBlock.isClickable = false
         playerCard.isClickable = false
 
@@ -1094,7 +1093,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         eTypes.removeAllViews()
         eIcons.removeAllViews()
         for (t in enemyTypes) {
-            eTypes.addView(TypeChips.chip(context, t, dark = insideDark()).also { it.maxLines = 1; sz(it, InfoBoxGeo.CHIP) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
+            eTypes.addView(TypeChips.chip(context, t, dark = insideDark()).also { it.maxLines = 1; it.setOnClickListener(null); it.isClickable = false; sz(it, InfoBoxGeo.CHIP) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
             eIcons.addView(typeSquare(t), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(2) })
         }
         buildPlayerTypes()
@@ -1104,7 +1103,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun buildPlayerTypes() {
         pTypes.removeAllViews(); pIcons.removeAllViews()
         for (t in playerTypes) {
-            pTypes.addView(TypeChips.chip(context, t, dark = insideDark()).also { it.maxLines = 1; sz(it, InfoBoxGeo.CHIP) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
+            pTypes.addView(TypeChips.chip(context, t, dark = insideDark()).also { it.maxLines = 1; it.setOnClickListener(null); it.isClickable = false; sz(it, InfoBoxGeo.CHIP) }, LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(3) })
             pIcons.addView(typeSquare(t), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = dpi(2) })
         }
     }
@@ -1441,8 +1440,6 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     private fun marksChanged() {
         val any = conditions.size > 0
-        enemyBlock.isClickable = any
-        playerCard.isClickable = any
         if (!any) hideConditionList()
         placeMarks()
         requestLayout()
@@ -1479,7 +1476,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     internal var onMarksPlaced: () -> Unit = {}
 
-    /** Puts both owners' chips under their boxes, reserving room at the arena's bottom; the field uses free space. */
+    /** Centres owner chips on their boxes: wild above, ours below; the field uses free space. */
     private fun placeMarks() {
         if (width <= 0 || height <= 0 || (conditions.size == 0 && marks.shownRows.isEmpty())) return
         val m = ChipMetrics(context, chipSp())
@@ -1498,7 +1495,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
                 minOf(scene.area.r, other.l - m.gap) else scene.area.r
             return ConditionFlow.owner(box, right, ms.map { m.width(it) }.toFloatArray(),
                 ms.count { it.key.startsWith("stat.") }, m.gap, m.lift, m.height, scene.sprites, budget,
-                blocks = listOfNotNull(other?.grow(Ui.dp(context, .5f))) + scene.blocks.drop(scene.obstacles.size), moreWidth = m::moreWidth)
+                blocks = listOfNotNull(other?.grow(Ui.dp(context, .5f))) + scene.blocks.drop(scene.obstacles.size),
+                below = card !== enemyBlock, left = scene.area.l, moreWidth = m::moreWidth)
         }
         fun reserve(card: View, ms: List<ConditionMarks.Mark>) {
             if (card.visibility != VISIBLE || ms.isEmpty()) return
@@ -1534,9 +1532,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
                         return@repeat
                     }
                 }
-                val overflow = if (rects.isEmpty()) m.height + m.gap else (rects.last().b - scene.area.b).coerceAtLeast(0f)
+                val above = card === enemyBlock
+                val overflow = if (rects.isEmpty()) m.height + m.gap else if (above)
+                    (scene.area.t - rects.minOf { it.t }).coerceAtLeast(0f) else (rects.maxOf { it.b } - scene.area.b).coerceAtLeast(0f)
                 if (overflow <= 0f) return
-                val dy = -minOf(kotlin.math.ceil(overflow.toDouble()).toInt(), (card.top - kotlin.math.ceil(scene.area.t.toDouble()).toInt()).coerceAtLeast(0))
+                val room = if (above) scene.area.b - boxOf(card).b else card.top - scene.area.t
+                val dy = minOf(kotlin.math.ceil(overflow.toDouble()).toInt(), room.toInt().coerceAtLeast(0)) * if (above) 1 else -1
                 if (dy == 0) return
                 card.offsetTopAndBottom(dy)
                 if (card === enemyBlock) newTag.offsetTopAndBottom(dy)
@@ -1581,11 +1582,33 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     internal fun conditionListShown(): ConditionList? = conditionList
 
+    private fun statValues(slot: ConditionMarks.Slot): com.husarp.ankigo.game.Stats? {
+        val data = com.husarp.ankigo.GameRepo.data ?: return null
+        val state = com.husarp.ankigo.GameRepo.state ?: return null
+        val battle = state.battle ?: return null
+        val main = state.main ?: return null
+        return com.husarp.ankigo.game.SimpleView.of(data, battle, main).stats(slot == ConditionMarks.Slot.OURS)
+    }
+
     /**
-     * A chip opens its compact card; an info box opens the complete list. A tap, Back, or about 8 s closes it.
+     * A chip opens its compact card; overflow offers the hidden conditions by name. A tap, Back, or about 8 s closes it.
      * [reopen] refreshes the content without toggling.
      */
     private fun showConditionList(slot: ConditionMarks.Slot, reopen: Boolean = false, stat: String? = null) {
+        if (stat == null || stat == "summary") {
+            hideConditionList()
+            val hidden = conditions.of(slot).filter { mark -> marks.rowOf(slot)?.chips?.none { it.mark?.id == mark.id } != false }
+            if (hidden.isNotEmpty()) {
+                val anchor = if (slot == ConditionMarks.Slot.OURS) playerCard else enemyBlock
+                android.widget.PopupMenu(context, anchor).apply {
+                    conditionMenu = this
+                    hidden.forEachIndexed { i, mark -> menu.add(0, i, i, mark.word) }
+                    setOnMenuItemClickListener { item -> showConditionList(slot, stat = hidden[item.itemId].key); true }
+                    setOnDismissListener { if (conditionMenu === this) conditionMenu = null }
+                }.show()
+            }
+            return
+        }
         val toggle = !reopen && (conditionList != null && listSlot == slot && listStat == stat || (touchClosedList == slot && touchClosedStat == stat && SystemClock.uptimeMillis() - touchClosedAt < SWALLOW_MS))
         hideConditionList()
         if (toggle || conditions.size == 0 || width <= 0 || height <= 0) return
@@ -1600,16 +1623,13 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val maxH = (height - sy - sb).coerceAtLeast(1)
         val list = ConditionList(context, floorSp)
         val selected = conditions.of(slot).firstOrNull { it.key == stat }
-        val sections = ConditionSections.of(conditions, slot, enemyName, playerNameInk)
-        if (sections.isEmpty() || stat != null && selected == null) return
-        if (selected != null) {
-            val owner = when (slot) {
-                ConditionMarks.Slot.WILD -> "Wild ${enemyName.removePrefix("Wild ")}".trim()
-                ConditionMarks.Slot.OURS -> "Your ${playerNameInk}"
-                ConditionMarks.Slot.FIELD -> "The field"
-            }
-            list.buildMark(selected, owner, maxW, maxH) { hideConditionList() }
-        } else list.build(sections, min(maxW, Ui.dp(context, 328)), maxH)
+        if (selected == null) return
+        val owner = when (slot) {
+            ConditionMarks.Slot.WILD -> "Wild ${enemyName.removePrefix("Wild ")}".trim()
+            ConditionMarks.Slot.OURS -> "Your ${playerNameInk}"
+            ConditionMarks.Slot.FIELD -> "The field"
+        }
+        list.buildMark(selected, owner, maxW, maxH, statValues = statValues(slot)) { hideConditionList() }
         val lw = min(list.measuredWidth, maxW)
         val lh = min(list.measuredHeight, maxH)
         // by the row that was tapped (below it, else above it), else by the box; kept inside the room the frame leaves
@@ -1618,7 +1638,6 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val below = anchor.bottom + 4 * d
         val y = (if (below + lh <= height - sb) below else anchor.top - 4 * d - lh).toInt().coerceIn(sy, (height - sb - lh).coerceAtLeast(sy))
         popLayer.addView(list, LayoutParams(lw, lh, Gravity.TOP or Gravity.LEFT).also { it.setMargins(x, y, 0, 0) })
-        if (stat == null || stat == "summary") list.dismissOnTap { hideConditionList() }
         conditionList = list
         listSlot = slot
         listStat = stat
@@ -1630,6 +1649,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun hideConditionList() {
+        conditionMenu?.dismiss()
+        conditionMenu = null
         removeCallbacks(hideList)
         conditionList?.let { popLayer.removeView(it) }
         conditionList = null
