@@ -43,7 +43,7 @@ object MatchupGroups {
         val normal = Type.entries.filter { t -> defensive.none { it.type == t } }.map { Matchup(it, 1.0) }
         return linkedMapOf(
             "weak" to cell(all.weakTo), "resist" to cell(all.resists), "immune" to cell(all.immune),
-            "normal" to cell(normal), "strong" to cell(all.strongAgainst, MatchupGroup.STRONG_AGAINST),
+            "strong" to cell(all.strongAgainst, MatchupGroup.STRONG_AGAINST), "normal" to cell(normal),
         )
     }
 
