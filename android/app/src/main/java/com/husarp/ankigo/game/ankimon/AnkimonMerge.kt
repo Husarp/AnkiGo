@@ -151,6 +151,15 @@ object AnkimonMerge {
         val raised = LinkedHashMap<String, Pair<Int, Int>>()
         for ((name, qty) in save.items) {
             val id = itemKey(name) ?: continue
+            if (id == com.husarp.ankigo.game.PokeDoll.ITEM) {
+                com.husarp.ankigo.game.PokeDoll.migrate(state)
+                val old = state.dollsFound
+                if (qty > old) {
+                    raised[id] = old to qty
+                    com.husarp.ankigo.game.PokeDoll.found(state, qty - old)
+                }
+                continue
+            }
             val old = state.count(id) // already includes an earlier name that mapped to the same item
             if (qty > old) { raised[id] = (raised[id]?.first ?: old) to qty; state.bag[id] = qty }
         }

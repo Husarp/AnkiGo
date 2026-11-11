@@ -147,8 +147,8 @@ object Items {
     /** "TM Thunderbolt" style name for a TM move id. */
     fun tmName(data: GameData, move: String): String = "TM " + (data.move(move)?.name ?: move)
 
-    /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; the Master Ball and [RETIRED] items are not sold). */
-    fun shopPool(data: GameData): List<String> = ALL.keys.filter { it !in RETIRED && it != StreakFreeze.ITEM && data.price(it) > 0 }.sorted()
+    /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; the Master Ball, Poké Doll and [RETIRED] items are not sold). */
+    fun shopPool(data: GameData): List<String> = ALL.keys.filter { it !in RETIRED && it != StreakFreeze.ITEM && it != PokeDoll.ITEM && data.price(it) > 0 }.sorted()
 
     /** Ankimon random-item pool: catalogue items except balls and the [RETIRED] items. */
     fun dropPool(): List<String> = ALL.values.filter { it.kind != ItemKind.BALL && it.kind != ItemKind.AUTO && it.id !in RETIRED }.map { it.id }.sorted()
@@ -156,13 +156,14 @@ object Items {
 
 object Economy {
     fun give(state: GameState, item: String, n: Int = 1) {
+        if (item == PokeDoll.ITEM) { PokeDoll.found(state, n); return }
         state.bag[item] = (state.count(item) + n).let { if (item == StreakFreeze.ITEM) it.coerceAtMost(StreakFreeze.CAP) else it }
     }
 
     /** Removes one; false if none. */
     fun take(state: GameState, item: String): Boolean {
         val n = state.count(item)
-        if (n <= 0) return false
+        if (n <= 0 || item == PokeDoll.ITEM) return false
         if (n == 1) state.bag.remove(item) else state.bag[item] = n - 1
         return true
     }
@@ -215,6 +216,21 @@ object Economy {
             state.cash += bonus
             state.cashToday += bonus
             events += GameEvent.Cash(bonus, state.cash, CashKind.DEFEAT)
+        }
+    }
+
+    /** A floored share of the normal payout, without win-only drops or fractional reward carry. */
+    fun onSkip(state: GameState, percent: Int, events: MutableList<GameEvent>) {
+        if (percent == 0 || (state.practiceRewards && !Tuning.PRACTICE_PAYS_MONEY)) return
+        val payout = GameState(mons = state.mons, team = state.team, battle = state.battle,
+            cashToday = state.cashToday, cashFracNum = state.cashFracNum, cashFracDen = state.cashFracDen)
+        earn(payout, Tuning.CASH_PER_WIN, CashKind.DEFEAT, mutableListOf())
+        val bonus = Bond.coins(Bond.level(state.main?.bondPoints ?: 0))
+        val coins = ((payout.cash.toLong() + bonus) * percent / 100).toInt()
+        state.cashToday += ((payout.cashToday.toLong() - state.cashToday + bonus) * percent / 100).toInt()
+        if (coins > 0) {
+            state.cash += coins
+            events += GameEvent.Cash(coins, state.cash, CashKind.DEFEAT)
         }
     }
 
@@ -289,7 +305,7 @@ object Shop {
      * Retired, unsold or weekend-only items are removed from existing stock.
      */
     fun ensureToday(data: GameData, state: GameState) {
-        state.shopItems.removeAll { data.price(it) <= 0 || it in Items.RETIRED || it in weekendPrices }
+        state.shopItems.removeAll { data.price(it) <= 0 || it in Items.RETIRED || it == PokeDoll.ITEM || it in weekendPrices }
         if (state.shopDay == state.day) {
             // Upgrade an already-open day's old ball offers without changing owned inventory or rerolled items/TMs.
             val balls = dailyBalls(state.day)
@@ -462,7 +478,7 @@ object Shop {
         if (item == StreakFreeze.ITEM && !freezeOnSale(state)) return ActionResult(false, "You already hold 3 freezes")
         val onSale = (item == StreakFreeze.ITEM && freezeOnSale(state)) || (item in state.shopItems && item !in weekendPrices) || item in Tuning.SHOP_BASICS || dealFor(data, state.day, now)?.item == item ||
             weekendFor(data, state.day)?.item == item
-        if (!onSale || (item != StreakFreeze.ITEM && data.price(item) <= 0) || item in Items.RETIRED) return ActionResult(false, "Not in today's shop")
+        if (!onSale || (item != StreakFreeze.ITEM && data.price(item) <= 0) || item in Items.RETIRED || item == PokeDoll.ITEM) return ActionResult(false, "Not in today's shop")
         val total = priceOf(data, state, item, now).toLong() * quantity
         if (total > Int.MAX_VALUE) return ActionResult(false, "Not enough money")
         val price = total.toInt()

@@ -11,6 +11,7 @@ import com.husarp.ankigo.game.FieldRules
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
 import com.husarp.ankigo.game.MoveChoice
+import com.husarp.ankigo.game.PokeDoll
 import com.husarp.ankigo.game.PendingAsk
 import com.husarp.ankigo.game.Nature
 import com.husarp.ankigo.game.Outcome
@@ -48,6 +49,7 @@ object SaveCodec {
             key("unsupported"); arr { state.unsupported.forEach { writeUnsupported(this, it) } }
             list("team", state.team)
             key("bag"); obj { for ((k, v) in state.bag.toSortedMap()) kv(k, v) }
+            kv("dollsFound", state.dollsFound); kv("dollLockedAt", state.dollLockedAt); kv("dollReadyAt", state.dollReadyAt)
             list("tms", state.tms.sorted())
             kv("cash", state.cash); kv("trainerLevel", state.trainerLevel); kv("trainerXp", state.trainerXp)
             list("seen", state.seen.sorted()); list("caught", state.caught.sorted())
@@ -447,6 +449,10 @@ object SaveCodec {
         s.team += (o.strList("team") ?: emptyList()).filter { it in known }
         if (s.team.isEmpty() && s.mons.isNotEmpty()) s.team += s.mons.first().uid
         o.optJSONObject("bag")?.let { b -> for (k in b.keys()) s.bag[k] = b.getInt(k) }
+        s.dollsFound = o.int("dollsFound", 0).coerceAtLeast(0)
+        s.dollLockedAt = if (o.has2("dollLockedAt")) o.getLong("dollLockedAt") else null
+        s.dollReadyAt = o.long("dollReadyAt", 0)
+        PokeDoll.migrate(s)
         o.strList("tms")?.let { s.tms += it }
         s.cash = o.int("cash", 0); s.trainerLevel = o.int("trainerLevel", 1); s.trainerXp = o.int("trainerXp", 0)
         o.intList("seen")?.let { s.seen += it }

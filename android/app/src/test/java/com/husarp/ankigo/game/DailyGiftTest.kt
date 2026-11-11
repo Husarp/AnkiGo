@@ -55,7 +55,7 @@ class DailyGiftTest {
 
     @Test fun thePoolsAreTheOnesInTheSpec() {
         assertEquals(listOf("poke-ball" to 3, "potion" to 2, "super-potion" to 1), Tuning.GIFT_COMMON)
-        assertEquals(listOf("great-ball" to 2, "hyper-potion" to 1, "poke-ball" to 5), Tuning.GIFT_UNCOMMON)
+        assertEquals(listOf("great-ball" to 2, "hyper-potion" to 1, "poke-ball" to 5, "poke-doll" to 1), Tuning.GIFT_UNCOMMON)
         assertEquals(listOf("ultra-ball" to 1), Tuning.GIFT_RARE_ITEMS)
         for ((item, n) in Tuning.GIFT_COMMON + Tuning.GIFT_UNCOMMON + Tuning.GIFT_RARE_ITEMS) {
             assertNotNull(item, Items.def(item)); assertTrue(n >= 1)
@@ -86,7 +86,7 @@ class DailyGiftTest {
             val g = DailyGift.draw(tmData(), day, 1)!!
             when {
                 g.tm != null || g.item in rareItems -> rare++
-                g.item == "great-ball" || g.item == "hyper-potion" || (g.item == "poke-ball" && g.count == 5) -> uncommon++
+                g.item == "great-ball" || g.item == "hyper-potion" || g.item == "poke-doll" || (g.item == "poke-ball" && g.count == 5) -> uncommon++
                 else -> { commonN++; assertTrue(g.item in common || (g.item == "poke-ball" && g.count == 3)) }
             }
         }
@@ -102,7 +102,7 @@ class DailyGiftTest {
         for (day in days(1000)) {
             val g = DailyGift.draw(tmData(), day, 30)!!
             if (g.tm != null || g.item in rareItems) rare++
-            else if (g.item == "great-ball" || g.item == "hyper-potion" || (g.item == "poke-ball" && g.count == 5)) uncommon++
+            else if (g.item == "great-ball" || g.item == "hyper-potion" || g.item == "poke-doll" || (g.item == "poke-ball" && g.count == 5)) uncommon++
         }
         assertTrue("uncommon $uncommon", uncommon in 350..450)
         assertTrue("rare $rare", rare in 160..240)
@@ -112,7 +112,7 @@ class DailyGiftTest {
         // one roll per day: a higher streak never moves a day to a COMMON tier it was not in
         fun rank(g: Gift): Int = when {
             g.tm != null || g.item == "ultra-ball" || g.item!!.endsWith("-stone") -> 2
-            g.item == "great-ball" || g.item == "hyper-potion" || (g.item == "poke-ball" && g.count == 5) -> 1
+            g.item == "great-ball" || g.item == "hyper-potion" || g.item == "poke-doll" || (g.item == "poke-ball" && g.count == 5) -> 1
             else -> 0
         }
         for (day in days(300)) {
@@ -192,7 +192,7 @@ class DailyGiftTest {
         }
         // a day of the uncommon tier with the pool empty gives a COMMON gift
         val g = days(400).map { DailyGift.draw(data, it, 30, uncommon = emptyList())!! }
-        assertFalse(g.any { it.item == "great-ball" || it.item == "hyper-potion" || (it.item == "poke-ball" && it.count == 5) })
+        assertFalse(g.any { it.item == "great-ball" || it.item == "hyper-potion" || it.item == "poke-doll" || (it.item == "poke-ball" && it.count == 5) })
     }
 
     @Test fun anItemTheCatalogueDoesNotHaveIsNeverGiven() {
@@ -270,7 +270,7 @@ class DailyGiftTest {
 
     @Test fun poolsInWordsForTheGuide() {
         assertEquals("3 Poké Balls, 2 Potions or a Super Potion", DailyGift.poolText(Tuning.GIFT_COMMON))
-        assertEquals("2 Great Balls, a Hyper Potion or 5 Poké Balls", DailyGift.poolText(Tuning.GIFT_UNCOMMON))
+        assertEquals("2 Great Balls, a Hyper Potion, 5 Poké Balls or a Poké Doll", DailyGift.poolText(Tuning.GIFT_UNCOMMON))
         assertEquals("an Ultra Ball", DailyGift.poolText(Tuning.GIFT_RARE_ITEMS))
         assertEquals("a Master Ball", DailyGift.withArticle("Master Ball"))
     }

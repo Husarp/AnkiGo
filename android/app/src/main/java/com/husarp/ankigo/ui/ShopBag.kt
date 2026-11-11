@@ -269,13 +269,21 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
     private fun escape(item: String, close: () -> Unit) {
         val battle = state.battle
         if (battle == null) { Ui.toast(s, "No wild Pokémon to escape from"); return }
+        if (item == com.husarp.ankigo.game.PokeDoll.ITEM) {
+            val now = GameRepo.game?.clock?.invoke() ?: System.currentTimeMillis()
+            com.husarp.ankigo.game.PokeDoll.blocker(state, now)?.let {
+                val root = s.itemWindow?.view?.rootView as? android.widget.FrameLayout
+                if (root != null) AppToast.show(root, it) else Ui.toast(s, it)
+                return
+            }
+        }
         close()
         Pickers.hold(s, "Use ${Items.name(item)}?", "The wild ${battle.wild.name} leaves and a new one appears.", "Use") {
             if (!fightAvailable()) return@hold
             val events = GameRepo.act(s) { it.escape(item) }
             val fled = events.filterIsInstance<GameEvent.Fled>().firstOrNull()
             if (onBattleEvents != null) onBattleEvents.invoke(events)
-            else s.report(if (fled != null) "${fled.name} left." else "Used ${Items.name(item)}.", events)
+            else s.report(if (fled != null) "${fled.name} left." else events.filterIsInstance<GameEvent.Info>().firstOrNull()?.text ?: "Used ${Items.name(item)}.", events)
             s.requestRender()
         }
     }

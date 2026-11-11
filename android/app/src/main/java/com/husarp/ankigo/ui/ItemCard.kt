@@ -139,6 +139,11 @@ internal object ItemCard {
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             if (move != null) addView(moveBlock(ctx, page, move), below)
+            if (spec.item == com.husarp.ankigo.game.PokeDoll.ITEM) {
+                val now = com.husarp.ankigo.GameRepo.game?.clock?.invoke() ?: System.currentTimeMillis()
+                for (fact in com.husarp.ankigo.game.PokeDoll.facts(page.state, now))
+                    addView(factBlock(ctx, fact.title, fact.text), below)
+            }
             val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty(), page.state.caught)
             if (spec.item !in Items.RETIRED && Items.def(spec.item.orEmpty())?.kind == com.husarp.ankigo.game.ItemKind.EVOLUTION) {
                 val bondMet = page.state.mons.any { mon -> pairs.any { it.fromNum == mon.species } && com.husarp.ankigo.game.Bond.level(mon.bondPoints) >= 2 }

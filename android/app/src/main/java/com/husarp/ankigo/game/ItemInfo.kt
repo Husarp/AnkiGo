@@ -79,7 +79,7 @@ object ItemInfo {
                 "soothe-bell" -> "Main: ×${nice(Tuning.SOOTHE_BELL)} Bond points"
                 else -> POWER_STATS[item]?.let { "Main: +8 $it EVs" } ?: NO_DESCRIPTION
             }
-            ItemKind.ESCAPE -> "Skip this wild one"
+            ItemKind.ESCAPE -> if (item == PokeDoll.ITEM) "Permanent skip tool" else "Skip this wild one"
             ItemKind.FOSSIL -> fossilName(data, def)?.let { "Revives $it" } ?: "Revives a Pokémon"
         }
     }
@@ -105,7 +105,7 @@ object ItemInfo {
                 "soothe-bell" -> "Main holds it: ×${nice(Tuning.SOOTHE_BELL)} Bond points"
                 else -> POWER_STATS[item]?.let { "Main holds it: +8 $it EVs" } ?: NO_DESCRIPTION
             }
-            ItemKind.ESCAPE -> "Skip this wild Pokémon"
+            ItemKind.ESCAPE -> if (item == PokeDoll.ITEM) "Permanent skip · levels up as you find dolls" else "Skip this wild Pokémon"
             ItemKind.FOSSIL -> "Revives ${fossilName(data, def) ?: "a Pokémon"} at Lv ${Tuning.FOSSIL_LEVEL}"
         }
     }
@@ -144,7 +144,11 @@ object ItemInfo {
                 ItemFact(WHAT, heldWhat(item)),
                 ItemFact(HOW, if (item == "everstone") "$HOLD_RULE It stays held until taken off or replaced and is not consumed. Evolution remains your choice and is allowed while holding it." else HOLD_RULE),
             )
-            ItemKind.ESCAPE -> listOf(
+            ItemKind.ESCAPE -> if (item == PokeDoll.ITEM) listOf(
+                ItemFact(WHAT, "Skips the wild Pokémon. **Never used up**. Find dolls to level it up: **1 / 5 / 15 / 30 / 50** found."),
+                ItemFact(HOW, "Use from the Bag. After a skip, catch or defeat a Pokémon to unlock it; then wait for its cooldown. The lock also lifts after 1 hour."),
+                ItemFact(FIGHT, "The wild Pokémon **doesn't attack**. Level 2: **10%** of defeat XP and coins; Level 4: **20%**. Level 5: wishlist weight **×2** (4 total)."),
+            ) else listOf(
                 ItemFact(WHAT, "Makes the wild Pokémon go away, and a new one appears. You get **no XP** and **no money** for it."),
                 ItemFact(HOW, "Use it from the Bag while a wild Pokémon is out."),
                 ItemFact(FIGHT, "The wild Pokémon **doesn't attack** you when you use it."),
@@ -158,6 +162,7 @@ object ItemInfo {
     }
 
     fun whereToFind(data: GameData?, item: String): String = when {
+        item == PokeDoll.ITEM -> "Daily gifts · Found while studying. Not sold in the Shop."
         item == StreakFreeze.ITEM -> "Daily gift (2%) · Rewarded battle wins (0.2%, at most one per game day; practice gives none) · Shop, until you hold 3. Every next freeze costs more: 2,000 / 3,000 / 4,000 coins as you hold 0 / 1 / 2. Unavailable from all sources while holding 3."
         item in Items.RETIRED -> "Not sold or found any more."
         isMaster(item) -> "Earned from the top tier of the Best streak achievement."
@@ -194,6 +199,7 @@ object ItemInfo {
 
     /** Owned totals include copies held by Pokémon. */
     fun ownLine(state: GameState, item: String): String {
+        if (item == PokeDoll.ITEM) return "**${state.dollsFound} dolls found** · permanent tool"
         val holders = state.itemHolders(item)
         val total = state.ownedItemCount(item)
         return ownLine(item, total) + if (holders.isEmpty()) "" else

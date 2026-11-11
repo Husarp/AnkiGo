@@ -376,6 +376,9 @@ class GameState(
     val unsupported: MutableList<UnsupportedMon> = mutableListOf(), // Ankimon Pokémon AnkiGo can't use yet (kept, shown greyed in the Box)
     val team: MutableList<String> = mutableListOf(),   // uids, max 6; team[0] is the main (the one that fights)
     val bag: MutableMap<String, Int> = mutableMapOf(), // item id -> count
+    var dollsFound: Int = 0,           // lifetime finds; one permanent Poké Doll stays in the Bag
+    var dollLockedAt: Long? = null,    // last skip while locked; null after a win or the one-hour fallback
+    var dollReadyAt: Long = 0,         // level cooldown ends at this game-clock timestamp
     val tms: MutableSet<String> = mutableSetOf(),      // owned TMs (Showdown move ids); never used up
     var cash: Int = 0,
     var trainerLevel: Int = 1,

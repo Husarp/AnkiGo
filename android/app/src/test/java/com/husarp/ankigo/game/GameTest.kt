@@ -1059,7 +1059,7 @@ class GameTest {
         val ev = g.escape("poke-doll")
         assertEquals(GameEvent.Fled("Duckling"), ev.of<GameEvent.Fled>().single())
         assertEquals(1, ev.of<GameEvent.Encounter>().size)
-        assertEquals(0, g.state.count("poke-doll"))
+        assertEquals(1, g.state.count("poke-doll"))
         assertNotSame(wild, g.state.battle!!.wild)
         assertEquals(0, g.state.catches + g.state.defeats)
     }
