@@ -245,7 +245,7 @@ object GameGuide {
                 "TMs: keep them forever and use them to teach their moves again. The Pokémon must be able to learn the move.",
             ),
             listOf(
-                GuideVisual(GuideVisualId.ITEM_ICON, "potion", "Healing"), GuideVisual(GuideVisualId.TAG, "HELD", "Held"),
+                GuideVisual(GuideVisualId.ITEM_ICON, "potion", "Healing"), GuideVisual(GuideVisualId.TAG, "HELD", "Worn"),
                 GuideVisual(GuideVisualId.ITEM_ICON, "helix-fossil", "Fossil"), GuideVisual(GuideVisualId.TAG, "HELD", "Holding an item"),
             ),
         ),

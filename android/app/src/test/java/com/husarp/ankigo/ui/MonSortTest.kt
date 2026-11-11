@@ -197,31 +197,9 @@ class MonSortTest {
         assertEquals("c", sort(listOf(a, b, c), SortSpec(SortKey.STRONGEST_ATTACK, basis = StatBasis.MAX_LEVEL)).last())
     }
 
-    @Test fun vsWildUsesTypeEffectivenessOfTheCurrentWildOne() {
-        val a = mon(3, 30, listOf("chop"), uid = "a")        // fighting hits normal x2
-        val b = mon(2, 30, listOf("thunderbolt"), uid = "b") // electric hits normal x1
-        val wild = mon(1, 10, uid = "wild")                  // normal
-        val st = state(a, b, wild = wild)
-        val spec = SortSpec(SortKey.VS_WILD, basis = StatBasis.BASE)
-        assertTrue(MonSort.vsWildAvailable(st))
-        assertEquals(50 * 1.5 * 120 * 2.0, MonSort.value(data, st, a, spec)!!, 1e-9)
-        assertEquals(90 * 1.5 * 100 * 1.0, MonSort.value(data, st, b, spec)!!, 1e-9)
-        assertEquals(listOf("a", "b"), sort(listOf(b, a), spec, st))
-        // a wild ghost resists fighting entirely
-        val ghost = TestData.data(species + TestData.species(9, "Boo", listOf(Type.GHOST)), TestData.MOVES + extraMoves)
-        val boo = TestData.mon(ghost, 9, 10, uid = "boo")
-        val st2 = state(a, b, wild = boo)
-        assertEquals(0.0, MonSort.value(data.let { ghost }, st2, a, spec)!!, 1e-9)
-    }
-
-    @Test fun vsWildWithoutABattleFallsBackToStrongestAttackAndIsFlagged() {
-        val a = mon(3, 30, listOf("chop"), uid = "a"); val b = mon(2, 30, listOf("thunderbolt"), uid = "b")
-        val st = state(a, b)
-        val spec = SortSpec(SortKey.VS_WILD, basis = StatBasis.BASE)
-        assertFalse(MonSort.vsWildAvailable(st))
-        assertEquals(SortKey.STRONGEST_ATTACK, MonSort.effectiveKey(spec, st))
-        assertEquals(sort(listOf(a, b), spec.copy(key = SortKey.STRONGEST_ATTACK), st), sort(listOf(a, b), spec, st))
-        assertEquals(SortKey.VS_WILD, MonSort.effectiveKey(spec, state(a, wild = mon(1, 5))))
+    @Test fun retiredWildSortMigratesToDefault() {
+        assertEquals(SortSpec.DEFAULT, SortSpec.decode("key=VS_WILD;basis=BASE;desc=1"))
+        assertFalse(SortKey.entries.any { it.name == "VS_WILD" })
     }
 
     // ---- groups ----

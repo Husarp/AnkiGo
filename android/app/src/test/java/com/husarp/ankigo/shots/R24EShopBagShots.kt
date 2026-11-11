@@ -55,7 +55,7 @@ class R24EShopBagShots {
             ShopCardKit.findDesc(stage, "Balls category")!!.performClick(); stage.render()
             assertTrue(ShopCardKit.findDesc(stage, "Balls category")!!.isSelected)
             assertFalse(ShopCardKit.texts(stage).contains("Potion"))
-            ShopCardKit.findDesc(stage, "Held")!!.performClick(); stage.render()
+            ShopCardKit.findDesc(stage, "Worn")!!.performClick(); stage.render()
             assertFalse(ShopCardKit.texts(stage).contains("Poké Ball"))
             ShopCardKit.findDesc(stage, "All items category")!!.performClick(); stage.render()
             ShopCardKit.findDesc(stage, "All")!!.performClick(); stage.render()

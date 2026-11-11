@@ -61,8 +61,8 @@ class SortTextTest {
 
     @Test fun usesBasisOnlyForStatAndAttackKeys() {
         val on = SortKey.entries.filter { SortText.usesBasis(it) }.toSet()
-        assertEquals(setOf(SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.STRONGEST_ATTACK, SortKey.VS_WILD), on)
-        assertTrue(SortText.dexKeys.none { it == SortKey.VS_WILD || it == SortKey.STRONGEST_ATTACK })
+        assertEquals(setOf(SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.STRONGEST_ATTACK), on)
+        assertTrue(SortText.dexKeys.none { it == SortKey.STRONGEST_ATTACK })
         assertEquals(SortKey.entries.toSet(), SortText.boxKeys.toSet())
     }
 

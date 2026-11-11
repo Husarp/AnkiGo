@@ -41,8 +41,8 @@ class R32EHeldIconShots {
             assertEquals(R.drawable.ic_held, ItemIcons.symbol(ItemSymbol.TAG))
             assertEquals(R.drawable.ic_held, DetailSections.markIcon(TagKind.HELD))
             val (page, stage) = ShopCardKit.page(ctx, null, bag = true)
-            ShopCardKit.findDesc(stage, "Held")!!.performClick(); stage.render()
-            val held = all(stage).filterIsInstance<TextView>().single { it.text.toString() == "Held" }
+            ShopCardKit.findDesc(stage, "Worn")!!.performClick(); stage.render()
+            val held = all(stage).filterIsInstance<TextView>().single { it.text.toString() == "Worn" }
             assertTrue(held.isSelected)
             assertEquals(Ui.dp(ctx, 16), held.compoundDrawablesRelative[0]!!.bounds.width())
             assertIcon(ctx, held.compoundDrawablesRelative[0], R.drawable.ic_held)
@@ -51,6 +51,8 @@ class R32EHeldIconShots {
             assertIcon(ctx, allScope.compoundDrawablesRelative[0], R.drawable.ic_item_bag)
             paparazzi.snapshot(stage, "e-bag-held-${theme.name.lowercase()}")
             all(stage).single { it.contentDescription == "Expand categories" }.performClick(); stage.render()
+            assertNotNull(ShopCardKit.findDesc(stage, "Worn category"))
+            assertNull(ShopCardKit.findDesc(stage, "Held category"))
             paparazzi.snapshot(stage, "e-bag-categories-${theme.name.lowercase()}")
             page.onGone()
             val dialog = AppDialogShots.capture {

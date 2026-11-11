@@ -37,7 +37,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
         "Balls" to listOf(ItemKind.BALL),
         "Healing" to listOf(ItemKind.HEAL),
         "Evolution" to listOf(ItemKind.EVOLUTION),
-        "Held" to listOf(ItemKind.HELD),
+        "Worn" to listOf(ItemKind.HELD),
         "Fossils" to listOf(ItemKind.FOSSIL),
         "Escape" to listOf(ItemKind.ESCAPE),
         "Streak protection" to listOf(ItemKind.AUTO),
@@ -57,7 +57,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
             if (!heldOnly && label in listOf("All items", "TMs")) state.tms.size else 0
         val scope = LinearLayout(ctx).apply { tag = "bag-scope" }
         for (held in listOf(false, true)) {
-            val label = if (held) "Held" else "All"
+            val label = if (held) "Worn" else "All"
             scope.addView(Ui.text(ctx, 13f, 900, if (heldOnly == held) R.color.ag_base else R.color.ag_sub0).apply {
                 text = label; contentDescription = label; gravity = android.view.Gravity.CENTER
                 SubtabIcons.apply(this, if (held) R.drawable.ic_held else R.drawable.ic_item_bag)
@@ -77,7 +77,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
         val body = LinearLayout(ctx).apply { tag = "bag-body"; isBaselineAligned = false }
         into.addView(body, LinearLayout.LayoutParams(-1, -2))
         val categories = listOf("All items" to null, "Balls" to "poke-ball", "Healing" to "potion",
-            "Evolution" to "water-stone", "Held" to "amulet-coin", "Fossils" to "helix-fossil",
+            "Evolution" to "water-stone", "Worn" to "amulet-coin", "Fossils" to "helix-fossil",
             "Escape" to "fluffy-tail", "Other" to "rare-candy", "TMs" to "tm")
         if (categoriesOpen) s.categories(toggle, LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; tag = "bag-categories"
@@ -88,7 +88,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
                 val ink = if (isSelected) R.color.ag_base else R.color.ag_text
                 val icon = when (item) {
                     null -> Ui.text(ctx, 20f, 900, ink).apply { text = "☷"; gravity = android.view.Gravity.CENTER }
-                    "amulet-coin" -> MonTags.icon(ctx, MonTag(TagKind.HELD, "Held"), 24).apply { setColorFilter(Ui.c(ctx, ink)) }
+                    "amulet-coin" -> MonTags.icon(ctx, MonTag(TagKind.HELD, "Worn"), 24).apply { setColorFilter(Ui.c(ctx, ink)) }
                     "tm" -> Bits.tmTile(ctx, null, 24)
                     else -> Bits.itemTile(ctx, item, 24)
                 }

@@ -206,7 +206,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
     internal fun sortSheet(): SortSheet {
         val gens = state.settings.gens.sorted()
         return SortSheet(
-            this, SortText.dexKeys, filter.spec(), false, null, 0, null,
+            this, SortText.dexKeys, filter.spec(), null, 0, null,
             count = { filtered().size },
             onChange = { spec, _ -> if (spec != filter.spec()) setSort(spec) },
             dex = SortSheet.DexPart(filter.wishlistOnly, gens, filter.gens) { wish, picked -> setSheetFilters(wish, picked) },

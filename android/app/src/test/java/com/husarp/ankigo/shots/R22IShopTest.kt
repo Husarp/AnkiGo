@@ -49,7 +49,7 @@ class R22IShopTest {
         assertTrue(text.contains("Take off"))
         assertTrue(text.contains("Give to another Pokémon"))
         assertTrue(text.contains("All"))
-        assertTrue(text.contains("Held"))
+        assertTrue(text.contains("Worn"))
         paparazzi.snapshot(stage, "r22i-held")
         GameRepo.state!!.mons.forEach { it.heldItem = "amulet-coin" }
         stage.render()
@@ -57,7 +57,7 @@ class R22IShopTest {
         assertTrue(ShopCardKit.texts(stage).contains("Give to another Pokémon"))
         paparazzi.snapshot(stage, "r22i-held-many")
         page.closeCard(); stage.render()
-        tap(stage, "Held"); stage.render()
+        tap(stage, "Worn"); stage.render()
         assertTrue(ShopCardKit.texts(stage).any { it == "Amulet Coin" })
     }
     @Test fun evolutionShowsSeenSourcesAndIndividualUnknownSilhouettes() {
