@@ -249,6 +249,9 @@ object Parsers {
         val gender = e.optString("gender", "").takeIf { it == "M" || it == "F" }?.get(0)
         fun ev(kind: EvoKind, level: Int? = null, item: String? = null, move: String? = null, moveType: Type? = null, minFriendship: Int? = null) =
             Evolution(to, kind, level, item, move, moveType, time, gender, minFriendship, cond)
+        // Showdown also describes Ursaluna's item in the condition of an "other" evolution.
+        if (to == 901 && type == "other" && cond?.startsWith("Peat Block", true) == true)
+            return ev(EvoKind.ITEM, item = "peat-block")
         return when (type) {
             // A useItem entry without evoItem would carry the item name in evoCondition (none does in the pinned data: Kleavor has evoItem "Black Augurite"
             // and its condition is a note like "in Legends: Arceus"); kept as a fallback, an unknown name just ends as an item no shop sells.

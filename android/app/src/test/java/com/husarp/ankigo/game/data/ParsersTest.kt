@@ -288,6 +288,28 @@ id,evolved_species_id,evolution_trigger_id,version_group_id,is_default,trigger_i
         assertEquals("at night", e.condition)
     }
 
+    @Test fun peatBlockConditionRequiresAndConsumesTheItemAfterParsingAndCaching() {
+        val dex = org.json.JSONObject(pokedex())
+        dex.remove("filler217"); dex.remove("filler901")
+        dex.put("ursaring", org.json.JSONObject("{" + dexEntry("ursaring", 217, "Ursaring", "\"evos\":[\"Ursaluna\"]") + "}").getJSONObject("ursaring"))
+        dex.put("ursaluna", org.json.JSONObject("{" + evolved(901, "Ursaluna", "Ursaring",
+            "\"evoType\":\"other\",\"evoCondition\":\"Peat Block when there's a full moon\"") + "}").getJSONObject("ursaluna"))
+        val parsed = Parsers.build(sources(pokedex = dex.toString()))
+        for (d in listOf(parsed, Parsers.decodeCache(Parsers.encodeCache(parsed)))) {
+            val state = com.husarp.ankigo.game.TestData.state(d, 217, 40)
+            val mon = state.main!!.apply { bondPoints = 500 }
+            val game = com.husarp.ankigo.game.Game(d, state)
+            assertFalse(game.chooseEvolution(mon.uid, 901).ok)
+            state.bag["linking-cord"] = 1
+            assertFalse(game.chooseEvolution(mon.uid, 901).ok)
+            state.bag["peat-block"] = 2
+            assertTrue(game.chooseEvolution(mon.uid, 901).ok)
+            assertEquals(901, mon.species)
+            assertEquals(1, state.count("peat-block"))
+            assertEquals(1, state.count("linking-cord"))
+        }
+    }
+
     @Test fun tradeWithAndWithoutItem() {
         assertEquals(EvoKind.TRADE, evo(13).kind); assertEquals("metal-coat", evo(13).item)
         assertEquals(EvoKind.TRADE, evo(14).kind); assertNull(evo(14).item)
