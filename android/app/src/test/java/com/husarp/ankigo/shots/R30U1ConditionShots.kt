@@ -62,7 +62,10 @@ class R30U1ConditionShots {
                 assertTrue(if (wrapped) tops.size >= 2 else tops.size == 1)
                 if (wrapped) {
                     assertTrue(row.chips.take(5).all { it.mark!!.key.startsWith("stat.") })
-                    assertTrue(row.chips.drop(5).all { it.rect.top > row.chips.first().rect.top })
+                    assertTrue(row.chips.drop(5).all {
+                        if (slot == ConditionMarks.Slot.WILD) it.rect.top < row.chips.first().rect.top
+                        else it.rect.top > row.chips.first().rect.top
+                    })
                 }
                 for (chip in row.chips) {
                     val r = chip.rect
@@ -107,7 +110,11 @@ class R30U1ConditionShots {
             val card = capturedCard!!
             assertTrue(card.left >= 0 && card.right <= arena.width && card.top >= 0 && card.bottom <= arena.height)
             val effect = texts(card).single { it.tag == "condition-effect" }
-            assertEquals(ConditionExplanation.effect(arena.conditions.of(if (key == "leechseed") ConditionMarks.Slot.OURS else ConditionMarks.Slot.WILD).single { it.key == key }), effect.text.toString())
+            val ours = key == "leechseed"
+            val mark = arena.conditions.of(if (ours) ConditionMarks.Slot.OURS else ConditionMarks.Slot.WILD).single { it.key == key }
+            val stats = com.husarp.ankigo.game.SimpleView.of(GameRepo.data!!, GameRepo.state!!.battle!!, GameRepo.state!!.main!!).stats(ours)
+            val values = ConditionStat.values(mark, stats)
+            assertEquals(listOfNotNull(values, ConditionExplanation.effect(mark)).joinToString("\n"), effect.text.toString())
             assertTrue(effect.lineCount > 0)
             assertTrue("Explanation fits its card", effect.layout.getLineBottom(effect.lineCount - 1) <= effect.height)
             val chip = arena.markRows().first { row -> row.chips.any { it.mark!!.key == key } }.chips.first { it.mark!!.key == key }

@@ -36,7 +36,7 @@ class R27JShots {
             val texts = views.filterIsInstance<TextView>()
             assertTrue(texts.any { it.text.toString() == "50 → 75" })
             assertTrue(texts.any { it.text.toString() == "60 → 40" })
-            assertTrue(texts.map { it.text.toString() }.containsAll(listOf("Atk", "Def", "Level 21")))
+            assertTrue(texts.map { it.text.toString() }.containsAll(listOf("Attack", "Defense", "Level 21")))
             val base = texts.single { it.text.toString() == "Base" }
             assertTrue(base.hasOnClickListeners())
             assertTrue(base.contentDescription.contains("species"))

@@ -299,7 +299,8 @@ class R18GDetailsShots {
             val missing = DialogShots.capture { (fire.parent as View).performClick() } ?: error("no unmet info")
             val missingScene = DialogShots.scene(fire.context, missing)
             assertFalse("unmet branch disables action", missing.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!.isEnabled)
-            assertTrue("• Use Fire Stone" in strings(missingScene))
+            val requirement = texts(missingScene).single { it.text.toString() == "Use Fire Stone" }
+            assertEquals("✗", texts(requirement.parent as View).first().text.toString())
             assertTrue(strings(missingScene).any { com.husarp.ankigo.game.ItemInfo.whereToFind(gd, "fire-stone") in it })
             assertFalse(strings(missingScene).any { "open your Bag" in it })
             paparazzi.snapshot(missingScene, "r27e-missing-${if (fire.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)

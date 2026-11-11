@@ -32,7 +32,7 @@ class R30MIntegrationTest {
         val bag = BagActions(page, MonActions(page), page, onBattleEvents = { received += it }, fightAvailable = { false })
         val body = LinearLayout(ctx)
         bag.fill(body)
-        val heldHeader = all(body).filterIsInstance<TextView>().single { it.text.toString() == "HELD" }
+        val heldHeader = all(body).filterIsInstance<TextView>().single { it.text.toString() == "WORN" }
         val headerWords = all(heldHeader.parent as View).filterIsInstance<TextView>().map { it.text.toString() }
         assertTrue(headerWords.toString(), "3 items" in headerWords)
         val held = bag.spec(CardKeys.bagItem("soothe-bell"))!!

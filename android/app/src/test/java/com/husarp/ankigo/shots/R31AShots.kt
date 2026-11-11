@@ -17,6 +17,12 @@ class R31AShots {
     @get:Rule val paparazzi = Shots.rule()
     private fun all(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
     private fun texts(v: View) = all(v).filterIsInstance<TextView>().map { it.text.toString() }
+    private fun requirement(content: View, label: String, met: Boolean) {
+        val text = all(content).filterIsInstance<TextView>().single { it.text.toString() == label }
+        val mark = (text.parent as ViewGroup).getChildAt(0) as TextView
+        assertEquals(if (met) "✓" else "✗", mark.text.toString())
+        assertEquals(if (met) "Met" else "Not met", mark.contentDescription)
+    }
     private fun shot(name: String, build: (Context) -> View) {
         for (theme in Theme.entries) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.SMALL, theme))
@@ -36,7 +42,7 @@ class R31AShots {
         val dialog = DialogShots.capture { all(rows).single { it.contentDescription == "Explain Level 16" }.performClick() }!!
         val content = dialog.content()
         assertTrue("Evolution · Jolteon" in texts(content))
-        assertTrue("✓ Level 16" in texts(content)); assertTrue("✓ Level 2 Bond" in texts(content))
+        requirement(content, "Level 16", true); requirement(content, "Level 2 Bond", true)
         val button = dialog.button(AppDialog.BUTTON_POSITIVE)!!
         assertEquals("Evolve", button.text.toString())
         assertEquals(Ui.dp(ctx, 56), button.minHeight)
@@ -53,7 +59,7 @@ class R31AShots {
         val dialog = EvolutionRows.explanationDialog(ctx, data, e, data.sp(mon.species), emptySet(), state, mon) {}
         val text = texts(dialog.content())
         assertTrue("Evolution · ???" in text)
-        assertTrue("✓ Level 2 Bond" in text); assertTrue("• Use Thunder Stone" in text)
+        requirement(dialog.content(), "Level 2 Bond", true); requirement(dialog.content(), "Use Thunder Stone", false)
         assertEquals(1, text.count { it.equals("Requirements", true) })
         assertTrue(text.any { "Shop" in it })
         DialogShots.scene(ctx, dialog)

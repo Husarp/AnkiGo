@@ -253,8 +253,10 @@ class R31GShots {
                 touch(MotionEvent.ACTION_DOWN)
                 assertTrue("$action starts filling on touch", button.background.level > 0)
                 assertEquals(0, confirmed)
+                val filling = button.background.level
                 touch(MotionEvent.ACTION_CANCEL)
-                assertEquals(0, button.background.level)
+                assertEquals("$action retracts from its current fill", filling, button.background.level)
+                assertEquals(0, confirmed)
                 button.performClick(); assertEquals(0, confirmed)
                 assertFalse(all(d.content()).any { "one second" in (it.contentDescription?.toString().orEmpty()) })
                 button.performLongClick(); assertEquals(1, confirmed)

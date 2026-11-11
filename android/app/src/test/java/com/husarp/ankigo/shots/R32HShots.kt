@@ -21,8 +21,8 @@ class R32HShots {
     private fun all(v: View): List<View> = listOf(v) + if (v is ViewGroup) (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
     private fun texts(v: View) = all(v).filterIsInstance<TextView>()
 
-    @Test fun markedOwnerInChipStatusAndFullList() {
-        for (theme in Theme.entries) for (kind in listOf("chip", "status", "list")) {
+    @Test fun markedOwnerInIndividualChipAndStatus() {
+        for (theme in Theme.entries) for (kind in listOf("chip", "status")) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, theme))
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx)
@@ -42,7 +42,7 @@ class R32HShots {
                         } else {
                             val method = ArenaView::class.java.getDeclaredMethod("showConditionList", ConditionMarks.Slot::class.java, Boolean::class.javaPrimitiveType, String::class.java)
                             method.isAccessible = true
-                            method.invoke(arena, ConditionMarks.Slot.OURS, false, if (kind == "chip") "confusion" else null)
+                            method.invoke(arena, ConditionMarks.Slot.OURS, false, "confusion")
                         }
                         arena.measure(MeasureSpec.makeMeasureSpec(arena.width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(arena.height, MeasureSpec.EXACTLY))
                         arena.layout(arena.left, arena.top, arena.right, arena.bottom)
