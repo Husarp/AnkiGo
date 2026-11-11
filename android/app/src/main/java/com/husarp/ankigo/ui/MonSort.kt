@@ -12,7 +12,6 @@ import com.husarp.ankigo.game.StatCalc
 import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.Type
-import com.husarp.ankigo.game.TypeChart
 import com.husarp.ankigo.game.shownName
 import java.util.IdentityHashMap
 
@@ -30,7 +29,6 @@ enum class SortKey(
     STAT("One stat", true),
     CHOSEN_TOTAL("Chosen stats", true),
     STRONGEST_ATTACK("Strongest attack", true),
-    VS_WILD("Best vs the wild one", true),
     NAME("Name", false),
     DEX_NUMBER("Pokédex number", false),
     CAUGHT_DATE("Caught date", true),
@@ -97,13 +95,6 @@ object MonSort {
         SortKey.DEX_NUMBER, SortKey.NAME, SortKey.LEVEL, SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.FIRST_SEEN, SortKey.RECENTLY_EVOLVED,
     )
 
-    /** Whether [SortKey.VS_WILD] has a wild Pokémon to compare with (the UI greys the option when not). */
-    fun vsWildAvailable(state: GameState): Boolean = state.battle != null
-
-    /** The key really used: [SortKey.VS_WILD] without a battle falls back to [SortKey.STRONGEST_ATTACK]. */
-    fun effectiveKey(spec: SortSpec, state: GameState): SortKey =
-        if (spec.key == SortKey.VS_WILD && !vsWildAvailable(state)) SortKey.STRONGEST_ATTACK else spec.key
-
     // ---- stats ----
 
     /** Stats from raw parts at [level]: the stat formulas of the game (StatCalc). */
@@ -151,14 +142,12 @@ object MonSort {
 
     /**
      * Damage score of the best damaging move of [mon]: power x STAB (1.5 when the move's type is one of its types) x accuracy/100
-     * (never-miss = 1) x attacking stat (Atk for physical, SpA for special, at [spec]'s basis); with [vsWild] also x the type
-     * effectiveness against the wild Pokémon's types. Power 0 on a damaging move counts as Tuning.UNKNOWN_POWER, as in battle.
+     * (never-miss = 1) x attacking stat (Atk for physical, SpA for special, at [spec]'s basis). Power 0 on a damaging move counts as Tuning.UNKNOWN_POWER, as in battle.
      * 0.0 when it knows no damaging move.
      */
-    fun attackScore(data: GameData, mon: Mon, spec: SortSpec, vsWild: Mon? = null): Double {
+    fun attackScore(data: GameData, mon: Mon, spec: SortSpec): Double {
         val sp = data.species[mon.species] ?: return 0.0
         val stats = statsFor(data, mon, spec) ?: return 0.0
-        val wildTypes = vsWild?.let { data.species[it.species]?.types }
         var best = 0.0
         // as in battle: move ids the data doesn't know are skipped, and with none left the fallback move (Tackle) is used
         val known = mon.moves.mapNotNull { data.move(it) }.ifEmpty { listOf(data.move(Tuning.FALLBACK_MOVE) ?: FALLBACK) }
@@ -168,8 +157,7 @@ object MonSort {
             val stab = if (m.type in sp.types) Tuning.STAB else 1.0
             val acc = (m.accuracy ?: 100) / 100.0
             val atk = (if (m.category == Category.PHYSICAL) stats.atk else stats.spa).toDouble()
-            val eff = wildTypes?.let { TypeChart.eff(m.type, it) } ?: 1.0
-            best = maxOf(best, power * stab * acc * atk * eff)
+            best = maxOf(best, power * stab * acc * atk)
         }
         return best
     }
@@ -180,11 +168,10 @@ object MonSort {
      * The number [spec] sorts the owned Pokémon [mon] by; null = no value (always sorted last). [SortKey.NAME] has no number
      * (see [nameOf]). Dates: caught date and first seen are epoch ms; an unknown date (<= 0 / never seen) is null.
      */
-    fun value(data: GameData, state: GameState, mon: Mon, spec: SortSpec): Double? = when (val k = effectiveKey(spec, state)) {
+    fun value(data: GameData, state: GameState, mon: Mon, spec: SortSpec): Double? = when (val k = spec.key) {
         SortKey.LEVEL -> mon.level.toDouble()
         SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL -> statsFor(data, mon, spec)?.let { statValue(it, spec.copy(key = k)) }
         SortKey.STRONGEST_ATTACK -> attackScore(data, mon, spec)
-        SortKey.VS_WILD -> attackScore(data, mon, spec, state.battle?.wild)
         SortKey.NAME -> null
         SortKey.DEX_NUMBER -> (data.species[mon.species]?.baseNum ?: mon.species).toDouble()
         SortKey.RECENTLY_EVOLVED -> mon.evolvedAt.takeIf { it > 0 }?.toDouble()
@@ -198,11 +185,11 @@ object MonSort {
     /**
      * The number [spec] sorts the Pokédex entry [sp] by (null = no value, sorted last whatever the direction). Under
      * [StatBasis.CURRENT] and for LEVEL the best owned copy counts (highest value); a species you don't own has none.
-     * Keys that need moves or a catch date ([SortKey.STRONGEST_ATTACK], [SortKey.VS_WILD], [SortKey.CAUGHT_DATE]) have no value here.
+     * Keys that need moves or a catch date ([SortKey.STRONGEST_ATTACK], [SortKey.CAUGHT_DATE]) have no value here.
      */
     fun speciesValue(data: GameData?, state: GameState?, sp: Species, spec: SortSpec): Double? = when (spec.key) {
         SortKey.DEX_NUMBER -> sp.baseNum.toDouble()
-        SortKey.NAME, SortKey.STRONGEST_ATTACK, SortKey.VS_WILD, SortKey.CAUGHT_DATE -> null
+        SortKey.NAME, SortKey.STRONGEST_ATTACK, SortKey.CAUGHT_DATE -> null
         SortKey.RECENTLY_EVOLVED -> state?.mons?.filter { it.species == sp.num && it.evolvedAt > 0 }?.maxOfOrNull { it.evolvedAt }?.toDouble()
         SortKey.FIRST_SEEN -> state?.firstSeen(sp.num)?.takeIf { it > 0 }?.toDouble()
         SortKey.LEVEL -> state?.mons?.filter { it.species == sp.num }?.maxOfOrNull { it.level }?.toDouble()

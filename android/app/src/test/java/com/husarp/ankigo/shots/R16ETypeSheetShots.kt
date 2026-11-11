@@ -59,7 +59,7 @@ class R16ETypeSheetShots {
     }
 
     private fun boxSheet(ctx: Context, p: TeamPage, h: Host): SortSheet = SortSheet(
-        p, SortText.boxKeys, h.spec, false, BoxFilter.entries.map { it.label }, h.show,
+        p, SortText.boxKeys, h.spec, BoxFilter.entries.map { it.label }, h.show,
         SortSheet.GroupToggle(h.grouped) { h.grouped = it },
         count = { BoxTiles.filter(st.mons, BoxFilter.entries[h.show], types = h.types, typesOf = { gd.sp(it.species).types }).size },
         onChange = { s, i -> h.spec = s; h.show = i },
@@ -174,7 +174,7 @@ class R16ETypeSheetShots {
             var types = TypeFilter(linkedSetOf(Type.FIRE), TypeMatch.ANY)
             var wish = false; var picked = emptySet<Int>()
             val sheet = SortSheet(
-                p, SortText.dexKeys, SortSpec.of(SortKey.DEX_NUMBER), false, null, 0, null, count = { 151 }, onChange = { _, _ -> },
+                p, SortText.dexKeys, SortSpec.of(SortKey.DEX_NUMBER), null, 0, null, count = { 151 }, onChange = { _, _ -> },
                 dex = SortSheet.DexPart(wish, listOf(1, 2, 3), picked) { w, g -> wish = w; picked = g },
                 type = SortSheet.TypePart(types) { types = it },
             ).build(maxBody(ctx))

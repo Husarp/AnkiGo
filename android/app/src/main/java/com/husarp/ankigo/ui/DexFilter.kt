@@ -30,7 +30,7 @@ enum class DexSort(val label: String, val naturalDescending: Boolean = false) {
         fun fromKey(k: SortKey): DexSort = when (k) {
             SortKey.RECENTLY_EVOLVED -> RECENTLY_EVOLVED; SortKey.DEX_NUMBER -> NUMBER; SortKey.NAME -> NAME; SortKey.LEVEL -> LEVEL; SortKey.TOTAL -> TOTAL; SortKey.STAT -> STAT
             SortKey.CHOSEN_TOTAL -> CHOSEN_TOTAL; SortKey.FIRST_SEEN -> FIRST_SEEN; SortKey.CAUGHT_DATE -> LAST_CAUGHT
-            SortKey.STRONGEST_ATTACK, SortKey.VS_WILD -> NUMBER
+            SortKey.STRONGEST_ATTACK -> NUMBER
         }
     }
 }

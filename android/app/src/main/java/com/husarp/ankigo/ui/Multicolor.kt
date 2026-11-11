@@ -56,7 +56,7 @@ internal object Multicolor {
         "Team", "In team", "Evolution", "Can evolve", "Owned", "Healing", "Economy" -> Tone.GREEN
         "Box", "Stats", "Statistics", "Level", "Recent", "Study", "Content", "TMs" -> Tone.BLUE
         "Shop", "Battle", "Attack" -> Tone.ORANGE
-        "Bag", "Held", "Held item", "Holds an item", "Achievements", "Badges", "Not owned" -> Tone.PURPLE
+        "Bag", "Worn", "Held", "Held item", "Holds an item", "Achievements", "Badges", "Not owned" -> Tone.PURPLE
         "Favourites", "Favorites", "Bond", "Special" -> Tone.PINK
         "Training", "Shiny", "Item collections", "Seen", "Current levels", "Fossils" -> Tone.AMBER
         "Defend", "Fainted", "Secret", "Balls" -> Tone.RED

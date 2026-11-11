@@ -33,14 +33,14 @@ object SortText {
 
     /** Keys that read stats or attacks, so the stat basis (Base / Max level / Current / At level) applies and a tile shows a value. */
     fun usesBasis(k: SortKey): Boolean = when (k) {
-        SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.STRONGEST_ATTACK, SortKey.VS_WILD -> true
+        SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.STRONGEST_ATTACK -> true
         else -> false
     }
 
     /** The keys of the Box and the Team picker, in the order the list and the sheet show them. */
     val boxKeys: List<SortKey> = listOf(
         SortKey.LEVEL, SortKey.NAME, SortKey.DEX_NUMBER, SortKey.CAUGHT_DATE, SortKey.FIRST_SEEN, SortKey.RECENTLY_EVOLVED,
-        SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.STRONGEST_ATTACK, SortKey.VS_WILD,
+        SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL, SortKey.STRONGEST_ATTACK,
     )
 
     /** The keys that make sense for a Pokédex species (no moves; "last caught" works from the owned copies). */
@@ -52,7 +52,7 @@ object SortText {
     /** A key's name in the small list and the sheet. */
     fun keyLabel(k: SortKey): String = when (k) {
         SortKey.LEVEL -> "Level"; SortKey.TOTAL -> "Total stats"; SortKey.STAT -> "One stat"; SortKey.CHOSEN_TOTAL -> "Chosen stats"
-        SortKey.STRONGEST_ATTACK -> "Strongest attack"; SortKey.VS_WILD -> "Best vs the wild one"; SortKey.NAME -> "Name"
+        SortKey.STRONGEST_ATTACK -> "Strongest attack"; SortKey.NAME -> "Name"
         SortKey.DEX_NUMBER -> "Pokédex no."; SortKey.CAUGHT_DATE -> "Last caught"; SortKey.FIRST_SEEN -> "First seen"; SortKey.RECENTLY_EVOLVED -> "Recently evolved"
     }
 
@@ -80,7 +80,7 @@ object SortText {
         val name = when (spec.key) {
             SortKey.LEVEL -> "Level"; SortKey.TOTAL -> "Total"; SortKey.STAT -> statLabel(spec.stat ?: Stat.HP)
             SortKey.CHOSEN_TOTAL -> chosenName(spec.chosenStats); SortKey.STRONGEST_ATTACK -> "Strongest attack"
-            SortKey.VS_WILD -> "Best vs wild"; SortKey.NAME -> "Name"; SortKey.DEX_NUMBER -> "No."
+            SortKey.NAME -> "Name"; SortKey.DEX_NUMBER -> "No."
             SortKey.CAUGHT_DATE -> "Last caught"; SortKey.FIRST_SEEN -> "First seen"; SortKey.RECENTLY_EVOLVED -> "Recently evolved"
         }
         return Triple(name, if (spec.descending) "↓" else "↑", if (usesBasis(spec.key)) basisSuffix(spec) else "")
@@ -125,7 +125,7 @@ object SortText {
         data: com.husarp.ankigo.game.GameData, state: com.husarp.ankigo.game.GameState, tiles: List<BoxTile>, spec: SortSpec,
     ): IdentityHashMap<BoxTile, String> {
         val out = IdentityHashMap<BoxTile, String>()
-        if (!usesBasis(MonSort.effectiveKey(spec, state))) return out
+        if (!usesBasis(spec.key)) return out
         for (t in tiles) {
             val rep = MonSort.sort(data, state, t.members, spec).firstOrNull() ?: continue
             tileValue(MonSort.value(data, state, rep, spec))?.let { out[t] = it }
@@ -270,7 +270,6 @@ internal class SortSheet(
     private val page: GamePage,
     private val keys: List<SortKey>,
     private var spec: SortSpec,
-    private val vsWildOk: Boolean,
     private val showLabels: List<String>?,
     private var showIndex: Int,
     private val group: GroupToggle?,
@@ -393,11 +392,9 @@ internal class SortSheet(
         body.addView(section("Sort by"))
         val keyFlow = flow()
         for (k in keys) {
-            val ok = k != SortKey.VS_WILD || vsWildOk
-            keyFlow.addView(BoxViews.chip(ctx, SortText.keyLabel(k).replace("Best vs the wild one", "Best vs wild"), k == spec.key) {
-                if (!ok) Ui.toast(ctx, "Needs a wild Pokémon in battle")
-                else if (k != spec.key) { spec = spec.copy(key = k, descending = k.naturalDescending); changed() } // the sheet keeps a direction the player chose
-            }.apply { if (!ok) alpha = 0.4f })
+            keyFlow.addView(BoxViews.chip(ctx, SortText.keyLabel(k), k == spec.key) {
+                if (k != spec.key) { spec = spec.copy(key = k, descending = k.naturalDescending); changed() } // the sheet keeps a direction the player chose
+            })
         }
         body.addView(keyFlow, LinearLayout.LayoutParams(-1, -2))
 

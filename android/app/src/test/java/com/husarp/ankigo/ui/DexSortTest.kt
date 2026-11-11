@@ -12,6 +12,10 @@ import org.junit.Test
 
 /** The new Pokédex sorts (PLAN 55): level, stats with a basis, chosen-stat total, first seen; each with All / Owned / Not owned. */
 class DexSortTest {
+    @Test fun retiredWildChoiceUsesDefaultNumberSort() {
+        assertEquals(DexSort.NUMBER, DexFilter().withSort(SortSpec.decode("key=VS_WILD;desc=1")).sort)
+    }
+
     // base stats: 1 hp 100 atk 40 | 2 hp 40 atk 100 | 3 hp 70 atk 70 | 4 hp 55 atk 55 | 5 hp 90 atk 20
     private val all = listOf(
         TestData.species(1, "Aa", listOf(Type.NORMAL), TestData.stats(100, 40, 50, 50, 50, 50)),
@@ -111,7 +115,6 @@ class DexSortTest {
         val back = DexFilter().withSort(SortSpec.decode(f.spec().encode()))
         assertEquals(DexSort.CHOSEN_TOTAL, back.sort); assertEquals(setOf(Stat.ATK, Stat.DEF), back.chosenStats)
         assertEquals(StatBasis.MAX_LEVEL, back.basis); assertEquals(false, back.descending)
-        assertEquals(DexSort.NUMBER, DexFilter().withSort(SortSpec.of(SortKey.VS_WILD)).sort) // no attacks in the Dex
         assertEquals(DexSort.LAST_CAUGHT, DexFilter().withSort(SortSpec.of(SortKey.CAUGHT_DATE)).sort)
     }
 }

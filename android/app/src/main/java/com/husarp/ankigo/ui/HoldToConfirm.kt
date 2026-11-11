@@ -66,11 +66,21 @@ internal object HoldToConfirm {
         var active = false
         var fired = false
         var completion: Runnable? = null
-        fun resetHold() {
+        fun resetHold(retract: Boolean = false) {
             active = false
             completion?.let { timer.remove(it) }; completion = null
             frame?.let { timer.remove(it) }; frame = null
-            fill.level = 0
+            val from = fill.level
+            if (retract && from > 0) {
+                val began = uptime()
+                frame = object : Runnable {
+                    override fun run() {
+                        val elapsed = (uptime() - began).coerceAtLeast(0L)
+                        fill.level = (from - elapsed * 10000 * 3 / DURATION_MS).coerceAtLeast(0L).toInt()
+                        if (fill.level > 0) timer.post(this, 16L) else frame = null
+                    }
+                }.also { timer.post(it, 16L) }
+            } else fill.level = 0
             view.parent?.requestDisallowInterceptTouchEvent(false)
         }
         fun finish() {
@@ -81,6 +91,7 @@ internal object HoldToConfirm {
         }
         fun start() {
             if (active || !view.isEnabled || !allowed()) return
+            resetHold()
             fired = false; active = true
             fill.level = 1
             view.parent?.requestDisallowInterceptTouchEvent(true)
@@ -110,15 +121,15 @@ internal object HoldToConfirm {
         view.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> start()
-                MotionEvent.ACTION_MOVE -> if (event.x < 0 || event.y < 0 || event.x >= view.width || event.y >= view.height) resetHold()
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> resetHold()
+                MotionEvent.ACTION_MOVE -> if (event.x < 0 || event.y < 0 || event.x >= view.width || event.y >= view.height) resetHold(retract = true)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> resetHold(retract = true)
             }
             true
         }
         view.setOnKeyListener { _, key, event ->
             if (key in listOf(KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_SPACE)) {
                 if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) start()
-                if (event.action == KeyEvent.ACTION_UP) resetHold()
+                if (event.action == KeyEvent.ACTION_UP) resetHold(retract = true)
                 true
             } else false
         }

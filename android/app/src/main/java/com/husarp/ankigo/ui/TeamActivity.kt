@@ -473,7 +473,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     private fun boxControls(): View {
         val ctx = this
         val st = state
-        val shownSpec = boxSort.copy(key = MonSort.effectiveKey(boxSort, st)) // no battle: "vs the wild one" works as "strongest attack"
+        val shownSpec = boxSort
         sortPill = SortViews.sortChip(ctx, shownSpec, boxFiltersOn()) { openSortSheet() }
         val quick = listOf(
             BoxViews.quickChip(ctx, "Favourites", BoxFilter.FAVOURITES in boxFilter, heart = true) { toggleBoxFilter(BoxFilter.FAVOURITES) } to (BoxFilter.FAVOURITES in boxFilter),
@@ -544,7 +544,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
     /** The sheet itself (tests build its view and click through it; there is no window to show a dialog in). */
     internal fun sortSheet(): SortSheet {
         return SortSheet(
-            this, SortText.boxKeys, boxSort, MonSort.vsWildAvailable(state), null, 0,
+            this, SortText.boxKeys, boxSort, null, 0,
             if (pickOn) null else SortSheet.GroupToggle(grouped) { on -> grouped = on; AppPrefs.setBoxGrouped(this, on); requestRender() },
             count = { boxRarity.apply(data, BoxTiles.filter(state.mons, boxFilter, state.team, state.settings.xpShareUid, ::canEvolve, boxTypes, ::typesOf)).count { BoxSearch.matches(data, it, boxQuery) } },
             onChange = { spec, _ ->

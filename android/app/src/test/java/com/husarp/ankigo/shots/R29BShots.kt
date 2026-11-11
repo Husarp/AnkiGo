@@ -44,7 +44,7 @@ class R29BShots {
         }
         shoot("box-sort") { c ->
             val p = TeamPage(c,NoHost)
-            SortSheet(p, SortText.boxKeys,SortSpec.of(SortKey.RECENTLY_EVOLVED),false,null,0,null,{ 12 },{ _,_ -> }).build(Ui.dp(c,580))
+            SortSheet(p, SortText.boxKeys,SortSpec.of(SortKey.RECENTLY_EVOLVED),null,0,null,{ 12 },{ _,_ -> }).build(Ui.dp(c,580))
         }
     }
     @Test fun dexAndSort() {
@@ -55,7 +55,7 @@ class R29BShots {
         }
         shoot("dex-sort") { c ->
             val p = DexPage(c,NoHost)
-            SortSheet(p,SortText.dexKeys,SortSpec.of(SortKey.RECENTLY_EVOLVED),false,null,0,null,{ 12 },{ _,_ -> }).build(Ui.dp(c,580))
+            SortSheet(p,SortText.dexKeys,SortSpec.of(SortKey.RECENTLY_EVOLVED),null,0,null,{ 12 },{ _,_ -> }).build(Ui.dp(c,580))
         }
     }
     @Test fun copies() = shoot("copies-sort") { c ->
