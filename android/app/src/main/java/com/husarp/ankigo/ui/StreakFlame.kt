@@ -17,7 +17,7 @@ import android.widget.ImageView
 import com.husarp.ankigo.R
 
 /**
- * The streak flame: Noto fire artwork by Google with the v0.25.0 animation at half speed (res/raw/streak_flame.webp, CC BY 4.0). Animated on API 28+ while it is on
+ * The streak flame: Noto fire artwork by Google at its original 512px resolution with the v0.25.0 loop at half speed (res/raw/streak_flame.webp, CC BY 4.0). Animated on API 28+ while it is on
  * screen; its first decoded frame (drawable-nodpi/streak_flame_still.png) on API 26-27, with reduced motion, in the screenshot
  * renderer or when decoding fails. [alive] = false (streak 0) shows the still frame grey and faded. Size it with layout params.
  */

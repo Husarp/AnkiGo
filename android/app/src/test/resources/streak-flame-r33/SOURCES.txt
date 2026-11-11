@@ -1,0 +1,4 @@
+https://fonts.gstatic.com/s/e/notoemoji/latest/1f525/512.webp
+Google Animated Noto Emoji, CC BY 4.0.
+Source SHA-256: 8c18972a71041700a1da4d9a1586640fb6d55eff4dc64efd29efde6a384a2ff5
+R33 preserves all 33 full-resolution frame payloads; only durations double to 60ms.
