@@ -66,7 +66,7 @@ class R25KTabBarShots {
         @Suppress("UNCHECKED_CAST")
         val jobs = getField(UiMotion, "jobs") as Map<android.view.View, ValueAnimator>
         val animator = jobs[restored]!!
-        assertEquals(140L, animator.duration)
+        assertEquals(200L, animator.duration)
         animator.currentPlayTime = 75
         assertTrue(restored.position > 0f && restored.position < 4f)
         assertNotEquals(Ui.c(ctx, R.color.ag_blue), restored.colour)
