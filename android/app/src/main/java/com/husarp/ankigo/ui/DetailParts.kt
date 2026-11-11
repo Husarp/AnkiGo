@@ -250,7 +250,20 @@ object DetailParts {
                 LinearLayout.LayoutParams(0, Ui.dp(a, 13), 1f).also { it.marginEnd = Ui.dp(a, 8) })
             return@apply
         }
+        label.text = if (stat == Stat.HP) "HP" else StatInfo.of(stat).title
         val line = LinearLayout(a).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        line.addView(ImageView(a).apply {
+            setImageResource(when (stat) {
+                Stat.HP -> R.drawable.ic_stat_heart
+                Stat.ATK -> R.drawable.ic_stat_swords
+                Stat.DEF -> R.drawable.ic_stat_shield
+                Stat.SPA -> R.drawable.ic_stat_sparkles
+                Stat.SPD -> R.drawable.ic_stat_shield_plus
+                Stat.SPE -> R.drawable.ic_stat_gauge
+            })
+            setColorFilter(Ui.c(a, DetailMath.statColor(stat)))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(Ui.dp(a, 14), Ui.dp(a, 14)).also { it.marginEnd = Ui.dp(a, 6) })
         line.addView(if (wholeRow) label else tapInfo(label, StatInfo.of(stat)), LinearLayout.LayoutParams(0, -2, 1f))
         val effective = kotlin.math.max(1, (value * com.husarp.ankigo.game.BattleEngine.stageMult(stage)).toInt())
         val numbers = Ui.text(a, 13f, 900, if (stage > 0) R.color.ag_green else if (stage < 0) R.color.ag_red else R.color.ag_text).apply {

@@ -37,12 +37,12 @@ class R32FShots {
         }
     }
 
-    @Test fun fallbackMatchesOlderFirstFrame() {
-        paparazzi.shootWith("f-older-flame", listOf(Size.PHONE)) { ctx ->
-            val animated = javaClass.getResourceAsStream("/streak-flame-v0.25.0/frame-0.png")!!.use { BitmapFactory.decodeStream(it) }!!
+    @Test fun fallbackMatchesFullResolutionFirstFrame() {
+        paparazzi.shootWith("f-full-resolution-flame", listOf(Size.PHONE)) { ctx ->
+            val animated = javaClass.getResourceAsStream("/streak-flame-r33/frame-0.png")!!.use { BitmapFactory.decodeStream(it) }!!
             val still = BitmapFactory.decodeResource(ctx.resources, R.drawable.streak_flame_still)!!
-            assertEquals(128, still.width)
-            assertEquals(128, still.height)
+            assertEquals(512, still.width)
+            assertEquals(512, still.height)
             assertTrue("Fallback is the animation's first frame", animated.sameAs(still))
             ImageView(ctx).apply { setImageBitmap(still); setBackgroundColor(Ui.c(ctx, R.color.ag_base)) }
         }

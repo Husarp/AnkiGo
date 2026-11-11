@@ -104,7 +104,7 @@ class R32RMulticolorTest {
                 AppLook.setBarStyle(ctx, style)
                 assertEquals(BarFill(Multicolor.color(ctx, Multicolor.bar(meaning))), BarTones.fill(ctx, meaning, .5f))
             }
-            assertEquals(BarFill(Multicolor.color(ctx, Multicolor.Tone.GREEN)), BarTones.fill(ctx, BarMeaning.GOAL, 1f))
+            assertEquals(BarFill(0xff5ebc75.toInt()), BarTones.fill(ctx, BarMeaning.GOAL, 1f))
             val offer = ShopViews.weekendCard(ctx, View(ctx), "Everstone", "Weekend", View(ctx), "Held item") {}
             val heading = all(offer).filterIsInstance<TextView>().single { it.text.toString() == "WEEKEND SPECIAL" }
             val band = Bits.blend(Multicolor.color(ctx, Multicolor.Tone.TEAL), Ui.c(ctx, R.color.ag_card), .22f)

@@ -209,11 +209,33 @@ internal class EvolutionRows(
             val item = Progression.evolutionItem(e)
             val text = EvolutionRowText.explanation(data, e, parent, seen, state, mon)
             val paragraphs = text.split("\n\n").filter { it.isNotBlank() }
-            addView(ItemCard.factBlock(a, "Requirements", ""), LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
-            EvolutionRowText.requirements(data, e, parent, state, mon).forEach { requirement ->
-                addView(Ui.text(a, 13.5f, 800, if (requirement.met) R.color.ag_green else R.color.ag_sub1).apply {
-                    this.text = "${if (requirement.met) "✓" else "•"} ${requirement.label}"
+            val requirements = EvolutionRowText.requirements(data, e, parent, state, mon)
+            fun heading(title: String, tone: Multicolor.Tone, count: String? = null): View = LinearLayout(a).apply {
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                addView(Ui.text(a, ItemCard.TITLE_SP, 900, R.color.ag_mauve).apply {
+                    this.text = title.uppercase()
+                    letterSpacing = 0.06f
+                    if (Multicolor.enabled(a)) setTextColor(Multicolor.ink(a, tone, Ui.c(a, R.color.ag_card)))
+                }, LayoutParams(0, -2, 1f))
+                if (count != null) addView(Ui.text(a, 11f, 800, R.color.ag_sub0).apply { this.text = count })
+            }
+            addView(heading("Requirements", Multicolor.Tone.GREEN, "${requirements.count { it.met }}/${requirements.size} met"),
+                LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
+            requirements.forEach { requirement ->
+                val ink = if (!requirement.met) Ui.c(a, R.color.ag_sub1) else if (Multicolor.enabled(a))
+                    Multicolor.ink(a, Multicolor.Tone.GREEN, Ui.c(a, R.color.ag_card)) else Ui.c(a, R.color.ag_green)
+                addView(LinearLayout(a).apply {
+                    gravity = android.view.Gravity.TOP
                     setPadding(0, Ui.dp(a, 5), 0, Ui.dp(a, 5))
+                    addView(Ui.text(a, 13.5f, 800, R.color.ag_sub1).apply {
+                        this.text = if (requirement.met) "✓" else "✗"
+                        setTextColor(ink)
+                        contentDescription = if (requirement.met) "Met" else "Not met"
+                    }, LayoutParams(Ui.dp(a, 28), -2))
+                    addView(Ui.text(a, 13.5f, 800, R.color.ag_sub1).apply {
+                        this.text = requirement.label
+                        setTextColor(ink)
+                    }, LayoutParams(0, -2, 1f))
                 }, LayoutParams(-1, -2))
             }
             val details = (if (item == null) paragraphs else paragraphs.drop(2)).filterNot {
@@ -223,8 +245,9 @@ internal class EvolutionRows(
             val sections = if (item == null) listOf("How to evolve" to details) else
                 listOf("How to use" to listOf(paragraphs.firstOrNull().orEmpty(), details).filter { it.isNotBlank() }.joinToString("\n\n"),
                     "Where to find" to paragraphs.getOrNull(1).orEmpty())
-            sections.filter { it.second.isNotBlank() }.forEach { (heading, paragraph) ->
-                addView(ItemCard.factBlock(a, heading, ""), LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
+            sections.filter { it.second.isNotBlank() }.forEach { (title, paragraph) ->
+                addView(heading(title, if (title == "Where to find") Multicolor.Tone.TEAL else Multicolor.Tone.BLUE),
+                    LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
                 addView(Ui.text(a, 13.5f, 700, R.color.ag_sub1).apply {
                     setLineSpacing(0f, 1.1f)
                     val linked = SpannableString(paragraph)

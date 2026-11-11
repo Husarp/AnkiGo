@@ -5,12 +5,12 @@ import org.junit.Test
 import java.io.File
 import java.security.MessageDigest
 
-/** The reference hashes were extracted from the released v0.25.0 asset, not regenerated artwork. */
+/** Original 512px Noto payload hashes; the released loop order and half-speed timing stay intact. */
 class R32AFlameAssetTest {
     private fun sha(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
-    @Test fun everyOlderFrameIsPreservedAtHalfSpeed() {
-        val reference = javaClass.getResource("/streak-flame-v0.25.0/frames.txt")!!.readText().lines()
+    @Test fun everyFullResolutionFrameIsPreservedAtHalfSpeed() {
+        val reference = javaClass.getResource("/streak-flame-r33/frames.txt")!!.readText().lines()
         val bytes = File("src/main/res/raw/streak_flame.webp").readBytes()
         fun uint(at: Int, count: Int) = (0 until count).sumOf { (bytes[at + it].toInt() and 255) shl (8 * it) }
         assertEquals("RIFF", String(bytes, 0, 4, Charsets.US_ASCII))
@@ -21,6 +21,10 @@ class R32AFlameAssetTest {
         while (offset < bytes.size) {
             val kind = String(bytes, offset, 4, Charsets.US_ASCII)
             val size = uint(offset + 4, 4)
+            if (kind == "VP8X") {
+                assertEquals("Full-resolution canvas width", 512, uint(offset + 12, 3) + 1)
+                assertEquals("Full-resolution canvas height", 512, uint(offset + 15, 3) + 1)
+            }
             if (kind == "ANMF") {
                 val ms = uint(offset + 20, 3)
                 duration += ms
@@ -36,6 +40,7 @@ class R32AFlameAssetTest {
         assertEquals(reference.filter { it.isNotBlank() && !it.startsWith("#") }, frames)
         assertEquals(33, frames.size)
         assertEquals(1980, duration)
+        assertTrue("Keep the original source encoding under 200 KB", bytes.size < 200_000)
         assertEquals("Each frame must actually move", 33, frames.map { it.substringAfterLast(' ') }.toSet().size)
     }
 }
