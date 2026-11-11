@@ -157,15 +157,18 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             val resume = StudyUi.row(act).apply {
                 background = StudyUi.gradient(context, R.color.ag_mauve, .24f, 16)
                 setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 12), Ui.dp(context, 10))
-                setOnClickListener { open(last) }; contentDescription = "Continue ${last.name}, ${last.total} due"
+                setOnClickListener { open(last) }; contentDescription = "Continue ${last.name}, New ${last.new}, Learning ${last.learn}, Due ${last.review}"
             }
             val text = StudyUi.column(act)
             text.addView(StudyUi.label(act, "CONTINUE", 11, R.color.ag_sub0, 900).apply { letterSpacing = .055f })
             text.addView(StudyUi.ellipsis(StudyUi.label(act, last.name.substringAfterLast("::"), 18, R.color.ag_text, 900)))
             val whenStudied = prefs.getLong("lastStudied:${last.id}", 0)
             val ago = ((System.currentTimeMillis() - whenStudied).coerceAtLeast(0) / 60000)
-            val recency = when { whenStudied == 0L -> ""; ago == 0L -> " · last studied just now"; ago < 60 -> " · last studied $ago min ago"; ago < 1440 -> " · last studied ${ago / 60} h ago"; else -> " · last studied ${ago / 1440} days ago" }
-            text.addView(StudyUi.label(act, "${last.total} due$recency", 12, R.color.ag_sub0), StudyUi.spaced(act, 2))
+            val countsWidth = DeckCounts.columnWidth(act, listOf(last))
+            text.addView(StudyUi.row(act).apply { DeckCounts.addHeader(this, act, countsWidth) }, StudyUi.spaced(act, 4))
+            text.addView(StudyUi.row(act).apply { DeckCounts.addTo(this, act, last, countsWidth) })
+            val recency = when { whenStudied == 0L -> ""; ago == 0L -> "last studied just now"; ago < 60 -> "last studied $ago min ago"; ago < 1440 -> "last studied ${ago / 60} h ago"; else -> "last studied ${ago / 1440} days ago" }
+            if (recency.isNotEmpty()) text.addView(StudyUi.label(act, recency, 12, R.color.ag_sub0), StudyUi.spaced(act, 2))
             resume.addView(text, StudyUi.lp(0, -2, 1f))
             resume.addView(StudyUi.iconButton(act, R.drawable.ic_play, "Continue ${last.name}") { open(last) }.apply {
                 setColorFilter(Ui.c(context, R.color.ag_base))
