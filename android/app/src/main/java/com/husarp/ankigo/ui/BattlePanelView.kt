@@ -281,7 +281,18 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
      * floating window, the Pokémon tab's card). Only a visible panel with an idle host; [refreshMain] does nothing when the main is
      * unchanged, so the changes that come with every answer cost one comparison.
      */
+    private var goalDay: String? = null
+    private fun refreshDay() {
+        GameRepo.state?.let { st ->
+            if (goalDay != st.day) {
+                goalDay = st.day
+                setGoal(st.reviewsToday, DailyGoal.today(st), false)
+                setStreak(com.husarp.ankigo.game.StudyStats.streak(st, st.day).current)
+            }
+        }
+    }
     private val gameWatch: () -> Unit = {
+        refreshDay()
         refreshSwitchNotice()
         if (isAttachedToWindow && isShown && windowVisibility == VISIBLE && hostIdle() && !onPendingFight()) refreshMain()
     }
@@ -306,6 +317,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         super.onAttachedToWindow()
         AppPrefs.watchPlayerFront(context, facingWatch)
         GameRepo.addListener(gameWatch)
+        refreshDay()
         post(takePending)
         refreshSwitchNotice()
     }
@@ -1074,6 +1086,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     }
 
     fun renderFooter(st: GameState) {
+        goalDay = st.day
         setGoal(st.reviewsToday, DailyGoal.today(st), false)
         setCombo(st.cardStreak, false)
         val g = GameRepo.game

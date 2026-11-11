@@ -190,6 +190,7 @@ class GameActivity : AgActivity() {
         syncLive()
         updateContinueVisibility()
         if (p.deckList && !deckListWasShown) home.refresh()
+        else if (!p.deckList) home.stopLiveCounts()
     }
 
     /** What the last layout decision means for the panel: its tool buttons (the Battle view's top bar has them). */
@@ -408,6 +409,7 @@ class GameActivity : AgActivity() {
     }
 
     override fun onPause() {
+        home.stopLiveCounts()
         super.onPause()
     }
 

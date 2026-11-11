@@ -140,6 +140,26 @@ class AnswerHostTest {
         fun close() { io.shutdownNow() }
     }
 
+    @Test fun deckCountsProbeWaitsForExistingWritesWithoutCreatingAHost() {
+        val field = StudyIo::class.java.getDeclaredField("host").apply { isAccessible = true }
+        val previous = field.get(StudyIo)
+        val fake = newFake(); val gate = Gate(fake); val r = Rig(fake, gate)
+        try {
+            field.set(StudyIo, null)
+            assertFalse(StudyIo.unresolvedNow())
+            assertNull("a deck-list refresh must not start the study journal", field.get(StudyIo))
+            field.set(StudyIo, r.host)
+            r.host.start()
+            val screen = Screen(); r.host.register(screen)
+            r.host.enqueue(entry(r.host, fake), "front", screen)
+            assertTrue(gate.inWrite.await(10, TimeUnit.SECONDS))
+            assertTrue(StudyIo.unresolvedNow())
+            gate.release.countDown()
+            r.env.pumpUntil { !StudyIo.unresolvedNow() }
+            assertEquals(1, fake.count("answer"))
+        } finally { gate.release.countDown(); r.close(); field.set(StudyIo, previous) }
+    }
+
     @Test fun aLoadQueuedBehindASlowWriteRunsOnlyAfterTheAnswerIsResolved() {
         val fake = newFake(); val gate = Gate(fake)
         val r = Rig(fake, gate)

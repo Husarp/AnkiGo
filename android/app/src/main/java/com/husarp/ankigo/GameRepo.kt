@@ -286,6 +286,7 @@ object GameRepo {
         scheduleSave(ctx)
         notifyListeners()
         widgetsFollowTheTeam(ctx)
+        StudyDayRefresh.schedule(ctx)
     }
 
     // ---- widgets ----
@@ -302,7 +303,7 @@ object GameRepo {
     private fun widgetSignature(ctx: Context?): String? {
         val s = held ?: return null
         val picked = if (ctx == null) emptySet() else try { widgetPicked(ctx) } catch (_: Throwable) { emptySet() }
-        return WidgetLogic.teamSignature(s, picked)
+        return WidgetLogic.teamSignature(s, picked) + "|day:${s.day}"
     }
 
     /** How the widgets are told to draw again (a test swaps it). The study widgets keep their card. */
