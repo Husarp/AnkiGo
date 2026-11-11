@@ -16,6 +16,8 @@ private const val RELEASED_KEPT = 5_000 // how many released Ankimon ids the gam
  */
 class Game(val data: GameData, val state: GameState, val rng: Random = Random.Default, val clock: () -> Long = { System.currentTimeMillis() }) {
 
+    init { PokeDoll.migrate(state) }
+
     // Reveal before any screen reads the save; keep its alerts for the battle host, not a widget tick.
     private val loadEvents = mutableListOf<GameEvent>().also { events ->
         state.mons.filter { Bond.level(it.bondPoints) >= 3 }.forEach { MatchupKnowledge.reveal(data, state, it, events) }
@@ -195,6 +197,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     private fun resolveWild(battle: Battle, main: Mon, events: MutableList<GameEvent>) {
         AbilityAdaptations.onWin(state, rng, events)
         val now = clock()
+        PokeDoll.won(state, now)
         AchievementPokemon.record(state, "defeats", main, data)
         if (main.hp > 0 && main.hp * 100 < StatCalc.maxHp(data, main) * Achievements.COMEBACK_PERCENT)
             AchievementPokemon.record(state, "comebacks", main, data)
@@ -457,6 +460,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             if (ball == "poke-ball" && battle.failedThrows == 0 && battle.wild.hp == battle.maxWildHp(data)) Achievements.bump(state, Metric.PERFECT_THROW)
             AbilityAdaptations.onWin(state, rng, events)
             val now = clock()
+            PokeDoll.won(state, now)
             Catching.addToCollection(data, state, battle.wild, battle.tier, ball, now, events, special)
             state.ballCatches.merge(ball, 1, Int::plus)
             state.main?.let { main ->
@@ -496,8 +500,21 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     fun escape(item: String): List<GameEvent> {
         val battle = state.battle ?: return emptyList()
         val runaway = state.main?.let { SimpleView.of(data, battle, it).ability(true) == "runaway" } == true
-        if (Items.def(item)?.kind != ItemKind.ESCAPE || (!runaway && !Economy.take(state, item))) return emptyList()
+        if (Items.def(item)?.kind != ItemKind.ESCAPE) return emptyList()
+        val now = clock()
+        if (item == PokeDoll.ITEM) {
+            PokeDoll.migrate(state)
+            if (state.dollsFound == 0) return emptyList()
+            PokeDoll.blocker(state, now)?.let { return listOf(GameEvent.Info(it)) }
+        } else if (!runaway && !Economy.take(state, item)) return emptyList()
         val events = mutableListOf<GameEvent>(GameEvent.Fled(battle.wild.name))
+        if (item == PokeDoll.ITEM) {
+            val percent = PokeDoll.rewardPercent(state.dollsFound)
+            Economy.onSkip(state, percent, events)
+            state.main?.let { Progression.rewardSkip(data, state, it, battle.wild, percent, events) }
+            PokeDoll.used(state, now)
+            StudyStats.record(state, events)
+        }
         state.battle = null
         events += ensureEncounter()
         Achievements.bump(state, Metric.ITEMS_USED)

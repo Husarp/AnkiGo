@@ -149,7 +149,7 @@ object DexDetail {
             star.text = if (on) "★  On your wishlist" else "☆  Add to wishlist"
             star.visibility = if (block != null) View.GONE else View.VISIBLE
             hint.text = when {
-                on -> "Always caught by the auto rule."
+                on -> "Always caught by the auto rule. Within its rarity tier: ×${com.husarp.ankigo.game.PokeDoll.wishlistWeight(a.state.dollsFound)} weight."
                 block == "owned" -> "You have it already."
                 block == "unseen" -> "Meet it in a battle to add it to your wishlist."
                 else -> ""

@@ -155,20 +155,20 @@ object Encounters {
 
     /**
      * Picks from the rolled tier's [pool]. AnkiGo's own small addition inside Ankimon's rules (Ankimon has no wishlist weighting):
-     * a wishlisted species weighs [Tuning.WISHLIST_WEIGHT], every other 1; a wishlisted regional form counts for its base species.
+     * a wishlisted species weighs [Tuning.WISHLIST_WEIGHT] (doubled with a Level 5 Poké Doll), every other 1; a wishlisted regional form counts for its base species.
      * Tier roll, level gates, generations and capture requirements are untouched. With no wishlisted species in the pool this is
      * exactly `pool[rng.nextInt(pool.size)]`. Example (Normal pool, gens 1-8, wild Lv 20: 398 species): a wishlisted
      * species goes from 1 in 398 (0.25 %) to 2 in 399 (0.50 %) per Normal encounter (Lv 5: 338, Lv 50: 587, Lv 100: 696;
      * with gen 9: 395 / 459 / 668 / 795).
      */
-    internal fun pickFrom(data: GameData, pool: List<Int>, wishlist: Set<Int>, rng: Random): Int {
+    internal fun pickFrom(data: GameData, pool: List<Int>, wishlist: Set<Int>, rng: Random, weight: Int = Tuning.WISHLIST_WEIGHT): Int {
         if (wishlist.isEmpty()) return pool[rng.nextInt(pool.size)]
         val bases = wishlist.mapTo(HashSet()) { data.species[it]?.baseNum ?: it }
-        val extra = pool.count { it in bases } * (Tuning.WISHLIST_WEIGHT - 1)
+        val extra = pool.count { it in bases } * (weight - 1)
         if (extra == 0) return pool[rng.nextInt(pool.size)]
         var r = rng.nextInt(pool.size + extra)
         for (n in pool) {
-            r -= if (n in bases) Tuning.WISHLIST_WEIGHT else 1
+            r -= if (n in bases) weight else 1
             if (r < 0) return n
         }
         return pool.last()
@@ -195,7 +195,7 @@ object Encounters {
             tier = Tier.NORMAL
             species = pool(data, tier, state.settings, wildLevel, state.caught)
         }
-        val num = if (species.isEmpty()) 19 else pickFrom(data, species, state.settings.wishlist, rng)
+        val num = if (species.isEmpty()) 19 else pickFrom(data, species, state.settings.wishlist, rng, PokeDoll.wishlistWeight(state.dollsFound))
         // Regional form: FORM_SWAP_CHANCE per eligible form (Ankimon 7 %); no random number is used when there is none.
         val forms = eligibleForms(data, state.settings, num, wildLevel, state.caught)
         val picked = if (forms.isNotEmpty() && rng.nextDouble() < Tuning.FORM_SWAP_CHANCE * forms.size) forms[rng.nextInt(forms.size)] else num

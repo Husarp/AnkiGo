@@ -296,7 +296,7 @@ internal object AbilityText {
         "dancer" to "Copies an opposing dance move immediately, without using its normal action. Copies cannot loop.",
         "hospitality" to "On entry, heals itself by a quarter of max HP, once per fight.",
         "curiousmedicine" to "On entry, clears its own negative stat stages, once per fight.",
-        "runaway" to "The existing escape-item action succeeds without consuming a Poké Doll or Fluffy Tail, even when trapped.",
+        "runaway" to "The escape-item action works even when trapped. Fluffy Tail is not consumed; Poké Doll keeps its lock and cooldown.",
         "naturalcure" to "Cures its major status when switched out alive during a fight.",
         "magnetpull" to "Stops opposing Steel types from voluntarily switching while active. Ghost types are exempt.",
         "wimpout" to "When damage crosses half HP, offers the team switch picker once per fight if a conscious replacement exists.",

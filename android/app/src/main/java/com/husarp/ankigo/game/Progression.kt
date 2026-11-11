@@ -172,25 +172,13 @@ object Progression {
      * main.defeats++. Evolution is always an explicit choice in the details (including for the Exp. Share holder).
      */
     fun rewardDefeat(data: GameData, state: GameState, main: Mon, wild: Mon, now: Long, rng: Random, events: MutableList<GameEvent>) {
-        val wildSp = data.sp(wild.species)
-        val xp = xpForDefeat(wildSp, wild.level)
-        val holder = state.settings.xpShareUid?.let { state.mon(it) }?.takeIf { it.uid != main.uid }
-        val half = (xp * Tuning.XP_SHARE_PART).toInt()
-        var mainXp = if (holder != null) half else xp
-        var holderXp = half
-        if (state.activeHeldItem(main) == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
-        if (holder != null && state.activeHeldItem(holder) == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
-
-        mainXp = everstoneXp(data, state, main, mainXp)
-        if (holder != null) holderXp = everstoneXp(data, state, holder, holderXp)
-        mainXp = Bond.bonusXp(mainXp, main.bondPoints)
-        if (holder != null) holderXp = Bond.bonusXp(holderXp, holder.bondPoints)
+        val xp = xpForDefeat(data.sp(wild.species), wild.level)
+        val rewards = defeatXp(data, state, main, wild)
         events += GameEvent.Defeated(wild.species, wild.name, Tuning.studyXp(xp, state.practiceRewards))
         winBonus(data, state, main, wild, rng, events)
         main.defeats++
 
-        gainXp(data, state, main, NaturePerks.rewardXp(state, main, mainXp), events)
-        if (holder != null) gainXp(data, state, holder, NaturePerks.sharedXp(state, holder, holderXp), events)
+        applyRewardXp(data, state, main, rewards, 100, events)
 
     }
 
@@ -202,6 +190,16 @@ object Progression {
      * state.defeats, trainer XP) stays with Game (resolveWild / throwBall).
      */
     fun rewardCatch(data: GameData, state: GameState, main: Mon, wild: Mon, now: Long, rng: Random, events: MutableList<GameEvent>) {
+        val rewards = defeatXp(data, state, main, wild)
+        winBonus(data, state, main, wild, rng, events)
+        applyRewardXp(data, state, main, rewards, 100, events)
+    }
+
+    fun rewardSkip(data: GameData, state: GameState, main: Mon, wild: Mon, percent: Int, events: MutableList<GameEvent>) {
+        if (percent > 0) applyRewardXp(data, state, main, defeatXp(data, state, main, wild), percent, events)
+    }
+
+    private fun defeatXp(data: GameData, state: GameState, main: Mon, wild: Mon): List<Pair<Mon, Int>> {
         val xp = xpForDefeat(data.sp(wild.species), wild.level)
         val holder = state.settings.xpShareUid?.let { state.mon(it) }?.takeIf { it.uid != main.uid }
         val half = (xp * Tuning.XP_SHARE_PART).toInt()
@@ -209,13 +207,21 @@ object Progression {
         var holderXp = half
         if (state.activeHeldItem(main) == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
         if (holder != null && state.activeHeldItem(holder) == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
+
         mainXp = everstoneXp(data, state, main, mainXp)
         if (holder != null) holderXp = everstoneXp(data, state, holder, holderXp)
         mainXp = Bond.bonusXp(mainXp, main.bondPoints)
         if (holder != null) holderXp = Bond.bonusXp(holderXp, holder.bondPoints)
-        winBonus(data, state, main, wild, rng, events)
-        gainXp(data, state, main, NaturePerks.rewardXp(state, main, mainXp), events)
-        if (holder != null) gainXp(data, state, holder, NaturePerks.sharedXp(state, holder, holderXp), events)
+        return listOfNotNull(main to mainXp, holder?.let { it to holderXp })
+    }
+
+    private fun applyRewardXp(data: GameData, state: GameState, main: Mon, rewards: List<Pair<Mon, Int>>, percent: Int, events: MutableList<GameEvent>) {
+        for ((mon, xp) in rewards) {
+            val carry = mon.natureXpCarry
+            val amount = if (mon === main) NaturePerks.rewardXp(state, mon, xp) else NaturePerks.sharedXp(state, mon, xp)
+            if (percent != 100) mon.natureXpCarry = carry
+            gainXp(data, state, mon, (amount.toLong() * percent / 100).toInt(), events)
+        }
     }
 
     private fun everstoneXp(data: GameData, state: GameState, mon: Mon, xp: Int): Int =

@@ -210,7 +210,7 @@ class ItemInfoTest {
     // ---- escape, fossils, TMs ----
 
     @Test fun escapeItemsDoNotAttack() {
-        for (id in listOf("poke-doll", "fluffy-tail")) {
+        for (id in listOf("fluffy-tail")) {
             assertEquals("Skip this wild one", ItemInfo.short(data, id))
             assertEquals("Skip this wild Pokémon", ItemInfo.line(data, id))
             assertTrue(fact(id, "What it does").contains("**no XP**") && fact(id, "What it does").contains("**no money**"))

@@ -314,8 +314,8 @@ object Tuning {
     const val NON_LEVEL_EVO_MIN_LEVEL = 100
     /** Regional forms: a picked base species turns into one of its eligible forms with this chance PER eligible form (Ankimon 7 %). */
     const val FORM_SWAP_CHANCE = 0.07
-    /** Weight of a wishlisted species inside its rolled tier's pool (others 1). 1 = wishlisted species are met no more often (Ankimon). */
-    const val WISHLIST_WEIGHT = 1
+    /** Weight of a wishlisted species inside its rolled tier's pool (others 1). 2 = twice the weight; a Level 5 Poké Doll doubles it again to 4. */
+    const val WISHLIST_WEIGHT = 2
     const val DAILY_AVERAGE = 100
     const val DAY_START_HOUR = 4
     const val TRAINER_BONUS_FROM_LEVEL = 10 // trainer level above this adds the rare bonus once more
@@ -335,7 +335,7 @@ object Tuning {
     const val GIFT_RARE_FIRST = 3           // (common = the rest: 75 % on day 1, 40 % on day 30)
     const val GIFT_RARE_LAST = 20
     val GIFT_COMMON = listOf("poke-ball" to 3, "potion" to 2, "super-potion" to 1)    // item to count; each entry equally likely in its tier
-    val GIFT_UNCOMMON = listOf("great-ball" to 2, "hyper-potion" to 1, "poke-ball" to 5)
+    val GIFT_UNCOMMON = listOf("great-ball" to 2, "hyper-potion" to 1, "poke-ball" to 5, "poke-doll" to 1)
     val GIFT_RARE_ITEMS = listOf("ultra-ball" to 1)  // the rare tier also holds one evolution stone and one TM (see DailyGift)
     val ITEM_COUNTDOWN = 60..140         // reviews until the next random item
     const val SHOP_BASE_SLOTS = 3       // + trainer level / 5

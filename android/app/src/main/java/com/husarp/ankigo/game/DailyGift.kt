@@ -12,7 +12,7 @@ import kotlin.random.Random
 //   day 1: 75 / 22 / 3 %   day 15: ~58 / ~31 / ~11 %   day 30 and later: 40 / 40 / 20 %   (common / uncommon / rare)
 // Each entry of a tier is equally likely:
 //   common:   3 Poké Balls, 2 Potions, 1 Super Potion
-//   uncommon: 2 Great Balls, 1 Hyper Potion, 5 Poké Balls
+//   uncommon: 2 Great Balls, 1 Hyper Potion, 5 Poké Balls, 1 Poké Doll
 //   rare:     1 Ultra Ball, 1 evolution stone (a priced "-stone" evolution item), 1 TM the player
 //             does not own yet (a move of Shop.tmPool; if every TM is owned, or there are none: a stone instead)
 // Never a Master Ball, never an item the catalogue (Items.ALL) does not hold. A tier with nothing to give falls back to the tier below.
