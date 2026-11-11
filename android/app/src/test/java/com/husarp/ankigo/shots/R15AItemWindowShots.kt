@@ -105,7 +105,15 @@ class R15AItemWindowShots {
             assertNull("recipient visit has no bottom tabs", recipient.tab)
             recipient.onGone()
         }
-        try { act() } finally { Pickers.interceptApp = null; BoxMonPicker.interceptShow = null }
+        com.husarp.ankigo.ui.DexMonPicker.interceptShow = { dex, recipient ->
+            dialog = dex; windowThen = p.itemWindow != null || p.open.key != null
+            assertNull("recipient visit has no bottom tabs", recipient.tab)
+            recipient.onHide(); recipient.onGone()
+        }
+        try { act() } finally {
+            Pickers.interceptApp = null; BoxMonPicker.interceptShow = null
+            com.husarp.ankigo.ui.DexMonPicker.interceptShow = null
+        }
         return dialog to windowThen
     }
 

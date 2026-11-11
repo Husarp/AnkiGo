@@ -17,6 +17,8 @@ import com.husarp.ankigo.game.Shop
 import com.husarp.ankigo.game.TestData
 import com.husarp.ankigo.ui.AppPrefs
 import com.husarp.ankigo.ui.CardKeys
+import com.husarp.ankigo.ui.DexPage
+import com.husarp.ankigo.ui.DexMonPicker
 import com.husarp.ankigo.ui.ItemWindow
 import com.husarp.ankigo.ui.ShopPage
 import com.husarp.ankigo.ui.ShopPlan
@@ -477,16 +479,30 @@ class R14B2BShots {
         }) { ctx -> bagPage(ctx, CardKeys.bagTm("thunderbolt"), setup = ::someDontKnowThunderbolt).second }
     }
 
-    @Test fun whoCanLearnItListsYourPokemonAndMarksTheOnesThatKnowIt() {
+    @Test fun whoCanLearnItOpensTheFilteredPokedex() {
         shoot("who", listOf(Variant("p412", 412, 900)), check = { _, v ->
             val t = texts(v)
-            assertTrue(t.toString(), "knows it" in t)
-            assertTrue(t.any { it.startsWith("Lv") })
+            assertTrue(t.toString(), "Who can learn it: TM Thunderbolt" in t)
+            assertFalse("ownership tabs are irrelevant", "Not owned" in t)
         }) { ctx ->
             val (p, screen) = bagPage(ctx, CardKeys.bagTm("thunderbolt"), setup = ::someDontKnowThunderbolt)
-            val d = DialogShots.capture { ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Who can learn it" }) } ?: error("no list")
-            assertNotNull("the list is a read-only view: the window stays under it", p.itemWindow)
-            DialogShots.scene(ctx, d)
+            var picker: DexPage? = null
+            DexMonPicker.interceptShow = { _, dex ->
+                (dex.root.parent as? ViewGroup)?.removeView(dex.root)
+                picker = dex
+            }
+            try {
+                ShopCardKit.tap(ShopCardKit.findText(screen) { it == "Who can learn it" })
+                val dex = checkNotNull(picker)
+                call(dex, "render")
+                assertNull(dex.tab)
+                @Suppress("UNCHECKED_CAST")
+                val shown = getField(dex, "shown") as List<com.husarp.ankigo.game.Species>
+                assertEquals(com.husarp.ankigo.game.ItemInfo.whoCanLearn(p.data, p.state, "thunderbolt").map { it.species }.toSet(), shown.map { it.num }.toSet())
+                assertNotNull(p.itemWindow)
+                dex.onHide(); dex.onGone()
+                dex.root
+            } finally { DexMonPicker.interceptShow = null }
         }
     }
 
