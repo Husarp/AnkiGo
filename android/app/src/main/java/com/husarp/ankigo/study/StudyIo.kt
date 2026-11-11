@@ -32,6 +32,9 @@ object StudyIo {
 
     @Volatile private var host: AnswerHost? = null
 
+    /** Counts can wait for existing writes without creating a host or replaying its journal. */
+    fun unresolvedNow(): Boolean = host?.unresolvedNow() == true
+
     @Synchronized
     fun host(ctx: Context): AnswerHost {
         host?.let { return it }

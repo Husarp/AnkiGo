@@ -77,19 +77,20 @@ class R9W6FixShots {
         paparazzi.shootWith("r9w6fix-notwritten", listOf(Size.PHONE)) { ctx ->
             val act = screen(ctx)
             val pending = getField(act, "pending") as PendingAnswers
-            setField(act, "countsFirst", false)
+            val live = call(act, "getLiveCounts")!!
+            val revision = getField(live, "revision") as Int
             tickets(act)[9L] = pending.start() // a ticket this screen must leave alone (it is not seq 9's screen)
             Ui.lastToast = null
             call(act, "answerEnded", notWritten(9), AnswerHost.Info(false, -1L, 0L))
             assertEquals("the user is told, whoever's answer it was", AnswerNotes.notWritten(AnswerOutcome.Reason.NOT_TOP), Ui.lastToast)
-            assertEquals("the stand-in counts are not this session's business", false, getField(act, "countsFirst"))
+            assertEquals("a resolved write invalidates old counts", revision + 1, getField(live, "revision"))
             assertEquals("no ticket of this screen was touched", 1, pending.count)
 
-            // its own not-written answer also resets the counts and frees its ticket
+            // Its own not-written answer also refreshes the counts and frees its ticket.
             Ui.lastToast = null
             call(act, "answerEnded", notWritten(9), AnswerHost.Info(true, -1L, 0L))
             assertEquals(AnswerNotes.notWritten(AnswerOutcome.Reason.NOT_TOP), Ui.lastToast)
-            assertEquals(true, getField(act, "countsFirst"))
+            assertEquals(revision + 2, getField(live, "revision"))
             assertEquals(0, pending.count)
             blank(ctx)
         }

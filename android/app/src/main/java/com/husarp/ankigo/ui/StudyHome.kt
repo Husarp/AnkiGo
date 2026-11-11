@@ -2,6 +2,10 @@ package com.husarp.ankigo.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
+import com.husarp.ankigo.GameRepo
+import com.husarp.ankigo.study.LiveRefresh
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -40,6 +44,44 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     private var decks = emptyList<Anki.Deck>()
     private var expanded = DeckTree.decode(prefs.getStringSet("expandedDecks", null))
     private var generation = 0
+    private val main = Handler(Looper.getMainLooper())
+    private var countWake: Runnable? = null
+    private val gameChanged: () -> Unit = { liveCounts.invalidate() }
+    private val liveCounts = LiveRefresh<List<Anki.Deck>>(
+        now = { System.currentTimeMillis() },
+        schedule = { delay, f -> Runnable { f() }.also { countWake = it; main.postDelayed(it, delay) } },
+        cancel = { countWake?.let { main.removeCallbacks(it) }; countWake = null },
+        blocked = { com.husarp.ankigo.study.StudyIo.unresolvedNow() },
+        read = { done ->
+            val token = generation
+            io.execute {
+                val result = runCatching {
+                    if (!Anki.hasPermission(act)) error("Allow AnkiGo to use AnkiDroid first.")
+                    val at = System.currentTimeMillis()
+                    val all = Anki.decks(act)
+                    val learning = Anki.searchCards(act, "is:learn", arrayOf("queue", "due"))
+                    all to LiveRefresh.nextLearning(learning, at)
+                }
+                main.post {
+                    if (token == generation && !act.isDestroyed) {
+                        pull.setRefreshing(false)
+                        result.onFailure { showAccessProblem(it.message) }
+                        done(result.getOrNull()?.first, result.getOrNull()?.second)
+                    } else done(null, null)
+                }
+            }
+        },
+        show = { decks = it.sortedBy { d -> d.name }; pruneExpanded(); render() },
+    )
+
+    fun startLiveCounts() {
+        if (!loadsInBackground) return
+        generation++
+        GameRepo.addListener(gameChanged)
+        liveCounts.start()
+    }
+
+    fun stopLiveCounts() { generation++; GameRepo.removeListener(gameChanged); liveCounts.stop() }
 
     /** Off in screenshots: they fill [decks] themselves and a background read must not replace it. */
     internal var loadsInBackground = true
@@ -90,22 +132,14 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     /** PLAN 218: the Study tab was tapped while it is shown: the deck list goes back to its top. */
     fun scrollToTop() { deckScroll?.scrollTo(0, 0) }
 
-    fun onDestroy() { generation++; DeckFlows.detach(); io.shutdown() }
+    fun onDestroy() { stopLiveCounts(); generation++; DeckFlows.detach(); io.shutdown() }
 
     /** [byUser]: pulled down: the spinner shows. Otherwise (screen came back) a shown list stays until the new one is there. */
     fun refresh(byUser: Boolean = false) {
         if (!::content.isInitialized || act.isDestroyed || !loadsInBackground) return
-        val token = ++generation
         if (byUser) pull.setRefreshing(true)
         if (decks.isEmpty()) { content.removeAllViews(); content.addView(StudyUi.label(act, "Loading decks…")) }
-        io.execute {
-            val result = runCatching { if (!Anki.hasPermission(act)) error("Allow AnkiGo to use AnkiDroid first."); Anki.decks(act) }
-            act.runOnUiThread {
-                if (act.isDestroyed || token != generation) return@runOnUiThread
-                pull.setRefreshing(false)
-                result.onSuccess { decks = it.sortedBy { d -> d.name }; pruneExpanded(); render() }.onFailure { showAccessProblem(it.message) }
-            }
-        }
+        startLiveCounts()
     }
 
     fun showAccessProblem(message: String?) {

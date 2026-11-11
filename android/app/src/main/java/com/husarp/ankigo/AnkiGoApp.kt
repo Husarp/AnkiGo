@@ -45,6 +45,7 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
         registerActivityLifecycleCallbacks(this)
         GameRepo.addListener { if (backgroundRequested) main.post(leave) }
         GameRepo.addListener { GameFactsWriter.changed(this) } // the reminders' small snapshot of the game (PLAN 85)
+        StudyDayRefresh.schedule(this, force = true)
         ReminderScheduler.rearm(this) // the reminder alarm: Android forgets it after a force stop or an update
     }
     override fun onActivityStarted(activity: Activity) {
@@ -77,7 +78,7 @@ class AnkiGoApp : Application(), Application.ActivityLifecycleCallbacks {
     override fun onActivityResumed(activity: Activity) {
         com.husarp.ankigo.sound.ButtonSounds.install(activity.window)
         Report.log("LIFE", "${activity.javaClass.simpleName} resumed")
-        if (GameRepo.status == GameRepo.Status.READY) GameRepo.act(activity) { it.tick() }
+        StudyDayRefresh.refresh(this)
         AppToast.resumed(activity); AchievementPopup.resumed(activity)
     }
     override fun onActivityPaused(activity: Activity) { Report.log("LIFE", "${activity.javaClass.simpleName} paused"); AppToast.paused(activity); AchievementPopup.paused(activity) }

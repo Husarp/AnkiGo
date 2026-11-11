@@ -34,7 +34,7 @@ import kotlin.math.max
  */
 class EventPlayer(private val panel: BattlePanelView, private val continueOnPanel: Boolean = true) {
     private sealed class Item {
-        class Ev(val e: GameEvent) : Item()
+        class Ev(val e: GameEvent, val day: String? = GameRepo.state?.day) : Item()
         class Act(val block: () -> Unit) : Item()
         /** The catch result tiles of a fight that ended (PLAN 40); dropped when the animations are skipped. */
         class Tiles(val summary: CatchSummary) : Item()
@@ -48,6 +48,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     private var dirty = false      // something was played since the last redraw from the state
     private var factor = 1.0
     private var lastButton = 0
+    private var playingDay: String? = null
     private var mult = 1.0
     /**
      * PLAN 259: the fight is over on screen (the wild one fainted / was caught / fled, [clearStatuses]) until the next Encounter or round: an Effect
@@ -177,7 +178,10 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 }
                 is Item.Ev -> try {
                     dirty = true
-                    com.husarp.ankigo.debug.LagLog.work("battle ${item.e.javaClass.simpleName}") { play(item.e) }
+                    com.husarp.ankigo.debug.LagLog.work("battle ${item.e.javaClass.simpleName}") {
+                        playingDay = item.day
+                        try { play(item.e) } finally { playingDay = null }
+                    }
                 } catch (t: Throwable) {
                     Report.fail("PANEL", "event ${item.e.javaClass.simpleName}", t)
                     0L
@@ -455,14 +459,16 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         when (e) {
             is GameEvent.BerryActivated -> return 0
             is GameEvent.Counted -> {
+                // An old answer's playback may finish after the scheduled day reset.
+                val today = if (st != null && playingDay != null && playingDay != st.day) st.reviewsToday else e.reviewsToday
                 if (e.neutral) {   // PLAN 155 / R19-T (284): the OK of a new card: counted, a grey dot (the Charge / round events follow), no float, no power; the combo stays as it was
-                    panel.setGoal(e.reviewsToday, st?.let { DailyGoal.today(it) } ?: 100, true)
+                    panel.setGoal(today, st?.let { DailyGoal.today(it) } ?: 100, true)
                     panel.setCombo(e.cardStreak, true)
                     return 0
                 }
                 lastButton = e.button
                 if (!e.catchUp) floats(e)   // an Again answer: "Hesitated"
-                panel.setGoal(e.reviewsToday, st?.let { DailyGoal.today(it) } ?: 100, true)
+                panel.setGoal(today, st?.let { DailyGoal.today(it) } ?: 100, true)
                 panel.setCombo(e.cardStreak, true)
                 return 0
             }
