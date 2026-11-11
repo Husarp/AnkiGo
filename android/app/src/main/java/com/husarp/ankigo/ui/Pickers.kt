@@ -134,7 +134,7 @@ object Pickers {
     }
 
     /** A list of [n] custom rows ([bind] builds row i); picking one closes the dialog and calls [onPick]. */
-    fun rows(a: Context, title: String, n: Int, bind: (Int) -> View, onPick: (Int) -> Unit) {
+    fun rows(a: Context, title: String, n: Int, bind: (Int) -> View, onLongPick: ((Int) -> Unit)? = null, onPick: (Int) -> Unit) {
         lateinit var dlg: AppDialog
         val list = MotionListView(a).apply {
             divider = null
@@ -149,6 +149,7 @@ object Pickers {
                 override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View = bind(position).also { it.minimumHeight = Ui.dp(a, 48) }
             }
             setOnItemClickListener { _, _, p, _ -> dlg.dismiss(); onPick(p) }
+            if (onLongPick != null) setOnItemLongClickListener { _, _, p, _ -> onLongPick(p); true }
         }
         dlg = AppDialog.Builder(a).setTitle(title).setView(list).setNegativeButton("Cancel", null).create()
         show(dlg)
@@ -174,12 +175,19 @@ object Pickers {
 
     /** Pick one of the Pokémon's moves (returns its index 0..3). */
     fun pickMove(a: Context, title: String, data: GameData, mon: Mon, onPick: (Int) -> Unit) {
-        rows(a, title, mon.moves.size, { Bits.moveRow(a, data, mon.moves[it]) }, onPick)
+        rows(a, title, mon.moves.size, { Bits.moveRow(a, data, mon.moves[it]) },
+            onLongPick = { showMove(a, mon.moves[it]) }, onPick = onPick)
     }
 
     /** Pick one of the move ids (TMs). */
     fun pickMoveId(a: Context, title: String, data: GameData, moves: List<String>, onPick: (String) -> Unit) {
-        rows(a, title, moves.size, { Bits.moveRow(a, data, moves[it]) }) { onPick(moves[it]) }
+        rows(a, title, moves.size, { Bits.moveRow(a, data, moves[it]) },
+            onLongPick = { showMove(a, moves[it]) }) { onPick(moves[it]) }
+    }
+
+    private fun showMove(a: Context, move: String) {
+        val page = a as? GamePage ?: return
+        ItemWindow(page) { }.apply { update(ItemCard.Spec(null, move)); show() }
     }
 
     fun evolved(a: Context, ev: GameEvent.Evolved, shiny: Boolean) {

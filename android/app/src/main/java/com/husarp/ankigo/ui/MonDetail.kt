@@ -172,7 +172,8 @@ object MonDetail {
         val seen = state?.let { it.seen + it.caught }.orEmpty()
         lateinit var dlg: AppDialog
         DetailTopCard.expShare(a, data, state, mon)?.let { col.addView(it) }
-        DetailTopCard.heldItem(a, data, mon, page)?.let { col.addView(it) }
+        var heldSection = DetailTopCard.heldItem(a, data, mon, page)
+        heldSection?.let { col.addView(it) }
         col.addView(DetailTopCard.forMon(a, data, state, mon, sp, seen, compact, page, if (page != null) { s -> DexDetail.show(page, s) } else null, onEvolved = {
             show(a, data, mon, replaceDetails = true)
         }),
@@ -207,6 +208,21 @@ object MonDetail {
         // "Options" is pinned under the scrolling details (AppDialog footer, below the details), compact or not
         dlg = AppDialog.Builder(a).setTitle("Details")
             .setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusMove)), true).setDetailsFooter(more).setPokemonDetails(replaceDetails).create()
+        var heldItem = mon.heldItem
+        val changed: () -> Unit = {
+            val current = page.state.mon(mon.uid)
+            if (current != null && current.heldItem != heldItem) {
+                heldItem = current.heldItem
+                heldSection?.let { col.removeView(it) }
+                heldSection = DetailTopCard.heldItem(a, data, current, page)
+                heldSection?.let { col.addView(it) }
+                DetailSections.applyOrder(col)
+            }
+        }
+        col.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) { GameRepo.addListener(changed); changed() }
+            override fun onViewDetachedFromWindow(v: View) { GameRepo.removeListener(changed) }
+        })
         Pickers.show(dlg)
     }
 

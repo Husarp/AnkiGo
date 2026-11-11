@@ -157,6 +157,7 @@ internal object MatchupBoxes {
             flow.addView(chip)
         }
         repeat(unknownCount) { flow.addView(MatchupTiles.unknown(ctx).also { chip -> if (innerW != null) chipFit(chip, innerW) }) }
+        MatchupTiles.equalSizes(ctx, (0 until flow.childCount).map { flow.getChildAt(it) as TextView })
         box.addView(flow, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(5f) })
         return box
     }
