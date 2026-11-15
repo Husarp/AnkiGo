@@ -2,7 +2,6 @@ package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Shop
-import com.husarp.ankigo.game.Tuning
 import java.util.Calendar
 
 /**
@@ -26,8 +25,8 @@ internal object ShopPlan {
     fun price(data: GameData, state: com.husarp.ankigo.game.GameState, item: String): Price =
         if (item == com.husarp.ankigo.game.StreakFreeze.ITEM) Price(Shop.priceOf(data, state, item)) else price(data, state.day, item)
 
-    /** A TM costs [Tuning.TM_PRICE], never discounted. */
-    fun tmPrice(): Price = Price(Tuning.TM_PRICE)
+    /** A TM uses the same daily price in every tile and purchase window. */
+    fun tmPrice(day: String, move: String): Price = Price(Shop.tmPrice(day, move))
 
     /** One tile of "Today's specials": an item or a TM (the move id). */
     sealed class Tile {

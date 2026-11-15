@@ -61,7 +61,7 @@ class ShopRefreshTest {
             val (items, tms) = Shop.stockFor(data, day, level)
             assertTrue(items.none { it in Shop.basics() })
             val drawn = items.filter { Items.def(it)?.kind != ItemKind.BALL }
-            assertEquals(Shop.slots(level), drawn.size); assertEquals(Shop.slots(level), tms.size)
+            assertEquals(Shop.slots(level), drawn.size); assertEquals(Shop.tmSlots(level), tms.size)
             assertEquals(items.size, items.toSet().size)
             assertTrue(items.all { it in Items.shopPool(data) })
         }
@@ -73,7 +73,7 @@ class ShopRefreshTest {
             s.cash = 100_000
             assertTrue(Shop.reroll(data, s, Random(seed)).ok)
             assertTrue(s.shopItems.none { it in Shop.basics() })
-            assertEquals(5 + Shop.dailyBalls(s.day).size, s.shopItems.size)
+            assertEquals(4 + Shop.dailyBalls(s.day).size, s.shopItems.size)
         }
     }
 
@@ -265,7 +265,7 @@ class ShopRefreshTest {
         val s = state(saturdays.first().toString()); s.cash = 5000
         val listed = s.shopTms.first()
         assertTrue(Shop.buyTm(data, s, listed).ok)
-        assertEquals(4000, s.cash)
+        assertEquals(5000 - Shop.tmPrice(s.day, listed), s.cash)
         assertFalse(Shop.buyTm(data, s, listed).ok)
         s.shopTms.clear()
         assertFalse(Shop.buyTm(data, s, strongTms.first()).ok)
@@ -339,6 +339,6 @@ class ShopRefreshTest {
         assertTrue(Shop.buy(data, back, "potion").ok)
         val tm = back.shopTms.first()
         assertTrue(Shop.buyTm(data, back.also { it.cash = 2000 }, tm).ok)
-        assertEquals(1000, back.cash)
+        assertEquals(2000 - Shop.tmPrice(back.day, tm), back.cash)
     }
 }

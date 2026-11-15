@@ -338,8 +338,11 @@ object Tuning {
     val GIFT_UNCOMMON = listOf("great-ball" to 2, "hyper-potion" to 1, "poke-ball" to 5, "poke-doll" to 1)
     val GIFT_RARE_ITEMS = listOf("ultra-ball" to 1)  // the rare tier also holds one evolution stone and one TM (see DailyGift)
     val ITEM_COUNTDOWN = 60..140         // reviews until the next random item
-    const val SHOP_BASE_SLOTS = 3       // + trainer level / 5
-    const val SHOP_SLOTS_PER_LEVELS = 5
+    const val SHOP_BASE_SLOTS = 3
+    const val SHOP_BASE_TM_SLOTS = 2
+    const val SHOP_MAX_SLOTS = 5
+    const val SHOP_MAX_TM_SLOTS = 4
+    const val SHOP_SLOTS_PER_LEVELS = 10
     const val TM_PRICE = 1000
     const val REROLL_PRICE = 100
     const val REROLL_PRICE_STEP = 100

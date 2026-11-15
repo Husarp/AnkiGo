@@ -293,8 +293,10 @@ object Shop {
     fun soldOut(state: GameState, item: String): Boolean = limited(item) && offerKey(state, item) in state.shopPurchases
     fun freezeOnSale(state: GameState): Boolean = state.count(StreakFreeze.ITEM) < StreakFreeze.CAP
 
-    /** 3 + trainerLevel / 5 (Ankimon). */
-    fun slots(trainerLevel: Int): Int = Tuning.SHOP_BASE_SLOTS + trainerLevel / Tuning.SHOP_SLOTS_PER_LEVELS
+    /** Regular daily slots; balls are extra. */
+    fun slots(trainerLevel: Int): Int = (Tuning.SHOP_BASE_SLOTS + trainerLevel / Tuning.SHOP_SLOTS_PER_LEVELS).coerceAtMost(Tuning.SHOP_MAX_SLOTS)
+
+    fun tmSlots(trainerLevel: Int): Int = (Tuning.SHOP_BASE_TM_SLOTS + trainerLevel / Tuning.SHOP_SLOTS_PER_LEVELS).coerceAtMost(Tuning.SHOP_MAX_TM_SLOTS)
 
     /** Every move some species can learn by TM (and that exists in data.moves), sorted. */
     fun tmPool(data: GameData): List<String> =
@@ -331,9 +333,8 @@ object Shop {
 
     /** Item/TM rerolls preserve the date-seeded daily balls. */
     private fun draw(data: GameData, rng: Random, trainerLevel: Int, day: String): Pair<List<String>, List<String>> {
-        val n = slots(trainerLevel)
-        val items = dailyPool(data).shuffled(rng).take(n)
-        val tms = tmPool(data).shuffled(rng).take(n)
+        val items = dailyPool(data).shuffled(rng).take(slots(trainerLevel))
+        val tms = tmPool(data).shuffled(rng).take(tmSlots(trainerLevel))
         return dailyBalls(day) + items to tms
     }
 
@@ -429,7 +430,12 @@ object Shop {
 
     /** Date + item seeded, independent of stock and rerolls. Round half up using the varied price's band. */
     fun dailyPrice(data: GameData, day: String, item: String): Int {
-        val normal = data.price(item)
+        return variedPrice(data.price(item), day, item)
+    }
+
+    fun tmPrice(day: String, move: String): Int = variedPrice(Tuning.TM_PRICE, day, "tm:$move")
+
+    private fun variedPrice(normal: Int, day: String, item: String): Int {
         if (normal <= 0) return normal
         val pct = Random(("price:$day:$item").hashCode()).nextInt(-Tuning.SHOP_VARIATION_PERCENT, Tuning.SHOP_VARIATION_PERCENT + 1)
         val varied = normal.toLong() * (100 + pct)
@@ -492,12 +498,12 @@ object Shop {
         return ActionResult(true, "Bought $label for ${money(price)}", spent(data, state, price, now))
     }
 
-    /** TMs cost 1000, can be owned once, never used up. Today's TMs or today's weekend TM. */
+    /** TMs use the daily price, can be owned once, never used up. */
     fun buyTm(data: GameData, state: GameState, move: String, now: Long = System.currentTimeMillis()): ActionResult {
         if (move !in state.shopTms && weekendFor(data, state.day)?.tm != move) return ActionResult(false, "Not in today's shop")
         val name = Items.tmName(data, move)
         if (move in state.tms) return ActionResult(false, "You already own $name")
-        val price = Tuning.TM_PRICE
+        val price = tmPrice(state.day, move)
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
         StudyStats.addSpent(state, price)
@@ -505,8 +511,13 @@ object Shop {
         return ActionResult(true, "Bought $name for ${money(price)}", spent(data, state, price, now))
     }
 
-    fun refreshPrice(state: GameState): Int = (Tuning.REROLL_PRICE.toLong() +
-        (if (state.shopDay == state.day) state.shopRefreshes.toLong() else 0L) * Tuning.REROLL_PRICE_STEP).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    fun refreshPrice(state: GameState): Int {
+        val refreshes = if (state.shopDay == state.day) state.shopRefreshes.toLong() else 0L
+        val freeFirst = isWeekend(state.day)
+        if (freeFirst && refreshes == 0L) return 0
+        return (Tuning.REROLL_PRICE.toLong() + (refreshes - if (freeFirst) 1 else 0) *
+            Tuning.REROLL_PRICE_STEP).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
 
     /** Each successful refresh costs one more step, reset at the next game day. */
     fun reroll(data: GameData, state: GameState, rng: Random, now: Long = System.currentTimeMillis()): ActionResult {

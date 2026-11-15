@@ -45,7 +45,7 @@ class R23KPriceShots {
         panel.addView(ShopViews.price(ctx, ShopPlan.Price(660)))
         panel.addView(ShopViews.price(ctx, ShopPlan.Price(378, was = 540)))
         assertFalse(texts(panel).any { it.text.toString().contains("↑") || it.text.toString().contains("↓") })
-        val fixed = ShopViews.price(ctx, ShopPlan.tmPrice())
+        val fixed = ShopViews.price(ctx, ShopPlan.tmPrice("2026-10-13", "surf"))
         assertFalse(texts(fixed).any { it.text.toString().contains("↑") || it.text.toString().contains("↓") })
         panel.addView(fixed)
         paparazzi.snapshot(panel, name = "r23k-daily-prices")
