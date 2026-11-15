@@ -39,6 +39,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -444,7 +445,7 @@ class R18GDetailsShots {
         assertRowConditions(c, v)
     }
 
-    @Test fun branchesHaveOneRowEachWithConditionsBesideNames() {
+    @Test fun branchesKeepRequirementsWithinEachPokemonRow() {
         paparazzi.unsafeUpdateConfig(deviceConfig = PHONE.device(Theme.LIGHT))
         val c = Shots.files(paparazzi.context)
         val data = lineData(2 to Evolution(2, EvoKind.ITEM, item = "water-stone"), 3 to Evolution(3, EvoKind.ITEM, item = "thunder-stone"),
@@ -455,7 +456,16 @@ class R18GDetailsShots {
         assertEquals("279A: one row per Pokémon", listOf(1, 1, 1, 1), names.groupBy { top(it, v) }.toSortedMap().values.map { it.size })
         // every method text hangs under its own name, never over the next line's name
         val methods = views(v).filter { it.contentDescription?.startsWith("Explain ") == true }
-        names.zip(methods).forEach { (n, m) -> assertTrue("${n.text}: condition beside the name", top(m, v) < top(n, v) + n.height && top(m, v) + m.height > top(n, v)) }
+        names.zip(methods).forEach { (n, m) ->
+            val row = n.parent.parent as View
+            assertSame("${n.text}: requirements belong to this Pokémon", row, m.parent)
+            assertTrue("${n.text}: requirements fit within its row",
+                top(m, v) >= top(row, v) && top(m, v) + m.height <= top(row, v) + row.height)
+        }
+        names.zipWithNext().forEach { (n, next) ->
+            val row = n.parent.parent as View
+            assertTrue("requirements never cover the next Pokémon", top(row, v) + row.height <= top(next.parent.parent as View, v))
+        }
         assertRowConditions(c, v)
     }
 

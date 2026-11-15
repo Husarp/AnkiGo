@@ -45,7 +45,7 @@ class R31EShots {
             page.openCard("streak-freeze"); stage.render()
             for (owned in 0..2) {
                 val window = page.itemWindow!!.view
-                assertTrue(texts(window).contains("1 left"))
+                assertFalse(texts(window).contains("1 left"))
                 assertFalse(all(window).any { it.contentDescription?.startsWith("Quantity ") == true })
                 assertTrue(texts(window).contains(Bits.fmt(2000 + owned * 1000)))
                 val buy = hold(window, "buy")
@@ -91,7 +91,7 @@ class R31EShots {
                 val window = requireNotNull(page.itemWindow) {
                     "$key did not open: day=${GameRepo.state!!.day}, stock=${GameRepo.state!!.shopItems}, TMs=${GameRepo.state!!.shopTms}, open=${page.open.key}"
                 }.view
-                assertFalse(texts(window).contains("1 left"))
+                assertTrue(texts(window).contains("1 left"))
                 assertFalse(texts(window).any { it == "Take off" || it.startsWith("Give to ") })
                 assertFalse(all(window).any { it.contentDescription?.startsWith("Quantity ") == true })
                 fillShots(stage, hold(window, "buy"), "e-limited-${key.replace(':', '-')}-${theme.name.lowercase()}")

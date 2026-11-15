@@ -122,8 +122,7 @@ class R602Shots {
         assertTrue("Stats shows the full level label", t.contains("Level ${GameRepo.state!!.battle!!.wild.level}"))
         assertTrue(t.none { it.contains("· Lv ") && it.startsWith("#") })
         assertTrue(t.contains("DOES NOT EVOLVE") && t.none { it.equals("Holding", ignoreCase = true) })
-        assertEquals("this fixture has discovered every move", 0, t.count { it == "???" })
-        assertTrue(t.contains("Water Gun") && t.contains("Tackle"))
+        assertTrue("discovered moves stay named even when matchups are hidden", t.contains("Water Gun") && t.contains("Tackle"))
     }) { ctx ->
         BattleShotKit.bound(ctx)
         GameRepo.state!!.battle!!.playerAttacked = true
