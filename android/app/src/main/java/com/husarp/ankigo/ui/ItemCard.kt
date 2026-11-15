@@ -44,7 +44,7 @@ internal object ItemCard {
     )
 
     /** The Shop purchase: [price] checks affordability; amounts stay on the Shop list. Another copy can be bought after the owned TM is consumed. */
-    class Buy(val price: ShopPlan.Price, val owned: Boolean, val limited: Boolean = false, val onBuy: () -> Unit)
+    class Buy(val price: ShopPlan.Price, val owned: Boolean, val limited: Boolean = false, val remaining: Int? = null, val onBuy: () -> Unit)
 
     /** The Bag's action button. [offLine] is the small line of a button that cannot be used now ([enabled] false); a tap on it says the same in a toast. */
     class Act(val label: String, val enabled: Boolean, val offLine: String?, val onTap: () -> Unit)
@@ -361,7 +361,7 @@ internal object ItemCard {
         val ctx: Context = page
         if (b.owned) return Ui.text(ctx, 14f, 900, R.color.ag_green).apply { text = "Sold out"; alpha = 0.45f; gravity = Gravity.CENTER; minimumHeight = dp(ctx, 44f) }
         val open = (page as CardHost).open
-        val quantity = if (spec.item == null || b.limited) 1 else open.quantity
+        val quantity = if (spec.item == null || b.limited || open.quantity > (b.remaining ?: Int.MAX_VALUE)) 1 else open.quantity
         val total = b.price.now.toLong() * quantity
         val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val go = button(ctx, Bits.blend(Ui.c(ctx, R.color.ag_yellow), Ui.c(ctx, R.color.ag_mantle), 0.22f), Ui.c(ctx, R.color.ag_text), "Buy")
@@ -369,12 +369,19 @@ internal object ItemCard {
         go.orientation = LinearLayout.HORIZONTAL
         go.getChildAt(0).layoutParams = LinearLayout.LayoutParams(-2, -2)
         go.addView(ShopViews.price(ctx, ShopPlan.Price(total.toInt())), LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(ctx, 8f) })
+        b.remaining?.let { left ->
+            go.addView(Ui.text(ctx, 11f, 800, R.color.ag_text).apply { text = "$left left" },
+                LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(ctx, 8f) })
+        }
         HoldToConfirm.bind(go, "buy", allowed = { page.state.cash >= total }) { b.onBuy() }
         row.addView(go, LinearLayout.LayoutParams(0, -1, 0.85f))
         if (spec.item != null && !b.limited) row.addView(button(ctx, Ui.c(ctx, R.color.ag_mantle), Ui.c(ctx, R.color.ag_text), "×$quantity").apply {
             minimumHeight = go.minimumHeight
-            contentDescription = "Quantity $quantity. Cycle 1, 3, 5"
-            setOnClickListener { open.cycleQuantity(); page.requestRender() }
+            contentDescription = "Quantity $quantity. Cycle " + listOf(1, 3, 5).filter { it <= (b.remaining ?: Int.MAX_VALUE) }.joinToString(", ")
+            setOnClickListener {
+                do { open.cycleQuantity() } while (open.quantity > (b.remaining ?: Int.MAX_VALUE))
+                page.requestRender()
+            }
         }, LinearLayout.LayoutParams(0, -1, 0.15f).also { it.marginStart = dp(ctx, 6f) })
         return row
     }

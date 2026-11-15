@@ -68,7 +68,14 @@ class R34AShopTest {
         s.shopTms += listOf("watergun", "ember", "vinewhip", "thunderbolt", "earthquake")
         val back = SaveCodec.decode(SaveCodec.encode(s))
         Shop.ensureToday(data, back)
-        assertTrue(back.shopItems.containsAll(s.shopItems))
+        val date = LocalDate.parse(s.day)
+        val reserved = listOf(12, 22).mapNotNull { hour ->
+            val now = date.atTime(hour, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            Shop.dealFor(data, s.day, now)?.item
+        }
+        assertTrue(back.shopItems.containsAll(s.shopItems.filter { it !in reserved }))
+        assertTrue(reserved.none { it in back.shopItems })
+        assertEquals(6, back.shopItems.count { Items.def(it)?.kind != ItemKind.BALL })
         assertEquals(s.shopTms, back.shopTms)
         back.day = "2026-10-14"
         Shop.ensureToday(data, back)

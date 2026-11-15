@@ -163,7 +163,7 @@ object ItemInfo {
 
     fun whereToFind(data: GameData?, item: String): String = when {
         item == PokeDoll.ITEM -> "Daily gifts · Found while studying. Not sold in the Shop."
-        item == StreakFreeze.ITEM -> "Daily gift (2%) · Rewarded battle wins (0.2%, at most one per game day; practice gives none) · Shop, until you hold 3. Every next freeze costs more: 2,000 / 3,000 / 4,000 coins as you hold 0 / 1 / 2. Unavailable from all sources while holding 3."
+        item == StreakFreeze.ITEM -> "Daily gift (20% / 12% / 8% at 0 / 1 / 2 held) · Rewarded battle wins (2% / 1% / 0.5%, at most one per game day; practice gives none) · Shop, until you hold 3. Every next freeze costs more: 2,000 / 3,000 / 4,000 coins as you hold 0 / 1 / 2. Unavailable from all sources while holding 3."
         item in Items.RETIRED -> "Not sold or found any more."
         isMaster(item) -> "Earned from the top tier of the Best streak achievement."
         item == "poke-ball" -> "Daily gift · Always in the Shop, in Balls."

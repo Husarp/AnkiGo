@@ -346,6 +346,12 @@ object Tuning {
     const val TM_PRICE = 1000
     const val REROLL_PRICE = 100
     const val REROLL_PRICE_STEP = 100
+    // At 0 / 1 / 2 held: daily-goal gifts alone average 5 / 8.3 / 12.5 days.
+    // Five rewarded wins/day plus the gift average 3.6 / 6.1 / 9.7 days; at most one battle freeze/day.
+    val STREAK_FREEZE_GIFT_PERCENT = listOf(20, 12, 8)
+    val STREAK_FREEZE_WIN_PER_THOUSAND = listOf(20, 10, 5)
+    val STREAK_FREEZE_PRICES = listOf(2000, 3000, 4000)
+
     val SHOP_BASICS = listOf("poke-ball", "potion") // always on sale at their normal price; not part of the daily draw
     val DEAL_PERCENTS = listOf(20, 25, 30, 35, 40) // date-seeded, independently drawn for each day/night offer
 

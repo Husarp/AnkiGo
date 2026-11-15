@@ -440,7 +440,7 @@ class GameState(
     val badges: MutableSet<Int> = mutableSetOf(),
     var shopDay: String? = null,
     var shopRefreshes: Int = 0,
-    val shopPurchases: MutableSet<String> = mutableSetOf(), // offer key, independent of price and rerolls
+    val shopPurchases: MutableSet<String> = mutableSetOf(), // offer keys; daily specials include refresh and purchased unit
     val shopItems: MutableList<String> = mutableListOf(),
     val shopTms: MutableList<String> = mutableListOf(),
     val redo: MutableMap<Long, Int> = mutableMapOf(), // card id -> answers to ignore after an AnkiDroid undo
