@@ -30,6 +30,12 @@ internal class MonActions(private val s: GamePage) {
             if (extra) hasExtra = true
         }
 
+        if (mon.moveOffers.isNotEmpty()) add("Learn a new move…", R.drawable.ic_tm, sub = "${mon.moveOffers.size} waiting", tone = R.color.ag_blue) {
+            MoveOfferPrompt.show(s, data, mon) { move, accept, replaces ->
+                s.act { g -> g.state.mon(mon.uid)?.let { com.husarp.ankigo.game.Progression.answerMoveOffer(g.data, it, move, accept, replaces) }
+                    ?: ActionResult(false, "Pokémon not found.") }
+            }
+        }
         val idx = state.team.indexOf(mon.uid)
         val main = state.main
         // PLAN 206 / 191: in a fight "Make main" waits for the next answer, and the wild one attacks once; the row says so

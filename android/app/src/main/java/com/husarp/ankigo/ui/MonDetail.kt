@@ -152,6 +152,17 @@ object MonDetail {
         val tags = GameRepo.state?.let { MonTags.detailTags(data, it, mon) }.orEmpty()
         if (tags.isNotEmpty()) col.addView(DetailSections.marks(a, tags), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
 
+        if (mon.moveOffers.isNotEmpty()) col.addView(MoveOfferPrompt.mark(a, mon) {
+            MoveOfferPrompt.show(a, data, mon) { move, accept, replaces ->
+                val result = GameRepo.run(a) { g ->
+                    g.state.mon(mon.uid)?.let { Progression.answerMoveOffer(g.data, it, move, accept, replaces) }
+                        ?: com.husarp.ankigo.game.ActionResult(false, "Pokémon not found.")
+                }
+                if (result.ok) show(a, data, mon, replaceDetails = true) else Ui.toast(a, result.message)
+                result
+            }
+        }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 8) })
+
         // HP and XP, numbers; the two bars are one tap area (48 dp tall) that explains both (R18-G, PLAN 241)
         val maxHp = stats.hp
         val hpFrac = mon.hp.toFloat() / maxHp.coerceAtLeast(1)

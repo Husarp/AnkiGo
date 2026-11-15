@@ -170,6 +170,7 @@ internal object TileViews {
             TileMark.IN_TEAM -> BoxViews.teamMark(ctx)
             TileMark.MAIN -> BoxViews.icon(ctx, R.drawable.ic_swords, R.color.ag_peach)
             TileMark.EXP_SHARE -> BoxViews.icon(ctx, R.drawable.ic_exp_share, R.color.ag_teal)
+            TileMark.MOVE_OFFER -> BoxViews.icon(ctx, R.drawable.ic_tm, R.color.ag_blue)
             TileMark.NEW, TileMark.SHINY -> return null
         }
         icon.contentDescription = mark.label
