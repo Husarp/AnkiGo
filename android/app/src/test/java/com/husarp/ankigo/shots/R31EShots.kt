@@ -37,9 +37,9 @@ class R31EShots {
                 GameRepo.state!!.shopItems.apply { clear(); add("nest-ball"); add("everstone") }
             }
             val labels = texts(stage)
-            assertTrue(labels.indexOf("BASICS") < labels.indexOf("Streak Freeze"))
-            assertTrue(labels.indexOf("TODAY'S SPECIALS") < labels.indexOf("BASICS"))
-            assertTrue(labels.indexOf("Nest Ball") > labels.indexOf("TODAY'S SPECIALS"))
+            assertTrue(labels.indexOf("STREAK PROTECTION") < labels.indexOf("Streak Freeze"))
+            assertTrue(labels.indexOf("Streak Freeze") > labels.indexOf("TMS"))
+            assertTrue(labels.indexOf("Nest Ball") > labels.indexOf("BALLS"))
             paparazzi.snapshot(stage, "e-basics-${theme.name.lowercase()}")
             fillShots(stage, hold(stage, "refresh shop"), "e-refresh-${theme.name.lowercase()}")
             page.openCard("streak-freeze"); stage.render()

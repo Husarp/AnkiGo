@@ -2,11 +2,14 @@ package com.husarp.ankigo.ui
 
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Shop
+import com.husarp.ankigo.game.Items
+import com.husarp.ankigo.game.ItemKind
+import com.husarp.ankigo.game.StreakFreeze
 import java.util.Calendar
 
 /**
  * What the Shop tab shows, worked out without Views (R10 W11, so the rules are tested on the JVM): the price an item has today and the
- * price it would have without the deal, the tiles of "Today's specials", and the countdown to the next game day.
+ * price it would have without the deal, the sectioned stock, and the countdown to the next game day.
  * The game rules themselves (deal, weekend special, always in stock) are [Shop].
  */
 internal object ShopPlan {
@@ -28,7 +31,7 @@ internal object ShopPlan {
     /** A TM uses the same daily price in every tile and purchase window. */
     fun tmPrice(day: String, move: String): Price = Price(Shop.tmPrice(day, move))
 
-    /** One tile of "Today's specials": an item or a TM (the move id). */
+    /** One stock tile: an item or a TM (the move id). */
     sealed class Tile {
         /** What the tile shows, for the key of its card ([CardKeys]). */
         abstract val key: String
@@ -38,6 +41,22 @@ internal object ShopPlan {
 
     /** Today's items, then today's TMs, as one list of tiles in rows (the old separate TM list is gone). */
     fun specials(items: List<String>, tms: List<String>): List<Tile> = items.map { Tile.Item(it) } + tms.map { Tile.Tm(it) }
+
+    data class Section(val title: String, val tiles: List<Tile>)
+
+    /** Group existing stock only; permanent essentials share their item's section. */
+    fun sections(items: List<String>, tms: List<String>, freezeOnSale: Boolean): List<Section> {
+        val stock = (Shop.basics() + items).distinct()
+        val groups = listOf(
+            ItemKind.HEAL to "Healing", ItemKind.HELD to "Held items", ItemKind.BALL to "Balls",
+            ItemKind.EVOLUTION to "Evolution", ItemKind.ESCAPE to "Escape items", ItemKind.FOSSIL to "Fossils",
+        ).map { (kind, title) -> Section(title, stock.filter { Items.def(it)?.kind == kind }.map { Tile.Item(it) }) }
+        return (groups.take(3) + Section("TMs", tms.distinct().map { Tile.Tm(it) }) + groups.drop(3) +
+            Section("Other items", stock.filter { Items.def(it)?.kind == null || Items.def(it)?.kind == ItemKind.AUTO }
+                .filter { it != StreakFreeze.ITEM }.map { Tile.Item(it) }) +
+            Section("Streak protection", if (freezeOnSale) listOf(Tile.Item(StreakFreeze.ITEM)) else emptyList()))
+            .filter { it.tiles.isNotEmpty() }
+    }
 
     /** The small pill beside the price; never part of the item effect text. */
     fun ribbon(percent: Int): String = "−$percent%"

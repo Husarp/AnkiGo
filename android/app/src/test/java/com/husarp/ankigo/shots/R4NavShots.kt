@@ -180,7 +180,7 @@ class R4NavShots {
             st.cash = 5000
             call(p, "render")
             val shown = texts(screen)
-            assertTrue(shown.toString(), "TODAY'S SPECIALS" in shown)
+            assertTrue(shown.toString(), "HEALING" in shown)
             assertTrue("the bar says Shop", "Shop" in shown)
             assertTrue("coins in the bar pill", "5,000" in shown)
 
@@ -198,7 +198,7 @@ class R4NavShots {
             val bagTab = findText(p.root) { it.startsWith("Bag") }!!
             tap(bagTab)
             call(p, "render") // a standalone page draws on the next message-loop turn (the embedded one used to draw at once)
-            assertTrue("the Bag replaced the specials", "TODAY'S SPECIALS" !in texts(screen))
+            assertTrue("the Bag replaced the specials", !texts(screen).any { it.startsWith("Refresh ·") })
             screen
         }
     }

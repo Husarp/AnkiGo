@@ -145,8 +145,8 @@ class R10W2ShopShots {
         shoot("weekday", listOf(Variants.PHONE, TALL), check = { _, screen ->
             val t = texts(screen)
             assertTrue(t.toString(), (ShopCardKit.dealHeading() in t && t.any { it.matches(Regex("−(20|25|30|35|40)%")) }))
-            assertTrue("BASICS" in t)
-            assertTrue("TODAY'S SPECIALS" in t)
+            assertTrue("HEALING" in t)
+            assertTrue("BALLS" in t)
             assertTrue(t.any { it.startsWith("New in ") && it.endsWith(" min") })
             assertTrue("no weekend card on a Wednesday", t.none { it.startsWith("WEEKEND SPECIAL") })
             assertTrue("Poké Ball" in t && "Potion" in t)
@@ -202,7 +202,7 @@ class R10W2ShopShots {
     @Test fun theBagSwitchIsStillThereAndOwnedTmsSayOwned() {
         shoot("bag", listOf(Variants.PHONE), themes = listOf(Theme.LIGHT), check = { _, screen ->
             assertTrue("Bag" in texts(screen))
-            assertTrue("the Bag replaced the shop", "TODAY'S SPECIALS" !in texts(screen))
+            assertTrue("the Bag replaced the shop", !texts(screen).any { it.startsWith("Refresh ·") })
         }) { ctx ->
             val (p, screen) = shopTab(ctx, WEEKDAY)
             st.tms += "thunderbolt"
@@ -220,7 +220,7 @@ class R10W2ShopShots {
         shoot("weekday", listOf(W320), scale = 2f, check = { ctx, screen ->
             assertTrue(ctx.resources.configuration.fontScale == 2.0f)
             val t = texts(screen)
-            assertTrue((ShopCardKit.dealHeading() in t && t.any { it.matches(Regex("−(20|25|30|35|40)%")) }) && "BASICS" in t)
+            assertTrue((ShopCardKit.dealHeading() in t && t.any { it.matches(Regex("−(20|25|30|35|40)%")) }) && "HEALING" in t)
         }) { ctx -> shopTab(ctx, SATURDAY).second }
         shoot("weekday", listOf(Variants.PHONE), scale = 1.3f, themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, WEEKDAY).second }
         shoot("weekday", listOf(W320), themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, SATURDAY).second }

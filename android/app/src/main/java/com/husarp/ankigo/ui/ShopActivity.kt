@@ -293,7 +293,6 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     private fun fillShop() {
         val ctx = this
         val st = state
-        val cols = 1
         val minutesLeft = ShopPlan.minutesToNewDay(System.currentTimeMillis(), st.settings.dayStartHour)
 
         // The deal card keeps its unit and old prices; a tap opens the item window for confirmation.
@@ -305,32 +304,27 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
                 ItemCardPlan.detailsLabel(ShopPlan.describe("$name, ${ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught))}", price)), ItemInfo.plain(ItemInfo.line(data, deal.item, st.caught)), night = Shop.isNight(dealNow), stock = stock(deal.item)) { openCard(CardKeys.DEAL) }
         }
 
-        // the weekend special (Saturday and Sunday only)
-        val weekendOffer = Shop.weekendFor(data, st.day)?.let { weekendCard(it) }
-        content.addView(ShopViews.offers(ctx, dailyOffer, weekendOffer), LinearLayout.LayoutParams(-1, -2))
+        dailyOffer?.let { content.addView(it, LinearLayout.LayoutParams(-1, -2)) }
 
-        // today's specials: title and "new in N h", then the "Refresh shop" button (a real button, so it is easy to find; PLAN 108), then the tiles
-        content.addView(Bits.sect(ctx, "Today's specials", "New in ${ShopPlan.countdown(minutesLeft)}"))
-        content.addView(refreshButton(), LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 10) })
-        val specials = ShopPlan.specials(st.shopItems, emptyList())
-        if (specials.isEmpty()) content.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Nothing in the shop yet." })
-        tileRows(specials, cols, CardKeys::special)
-        if (st.shopTms.isNotEmpty()) {
-            content.addView(Bits.sect(ctx, "TMs"))
-            tileRows(st.shopTms.map { ShopPlan.Tile.Tm(it) }, cols, CardKeys::special)
+        for (section in ShopPlan.sections(st.shopItems, st.shopTms, Shop.freezeOnSale(st))) {
+            content.addView(Bits.sect(ctx, section.title))
+            if (section.title == "Streak protection") {
+                content.addView(
+                    ShopViews.tile(ctx, ShopViews.itemArt(ctx, StreakFreeze.ITEM, 64), "Streak Freeze",
+                        priceView(ShopPlan.price(data, st, StreakFreeze.ITEM), 14f), "Streak Freeze, ${st.count(StreakFreeze.ITEM)} held",
+                        sub = "In Bag: ${st.count(StreakFreeze.ITEM)} / 3 · used automatically", stock = stock(StreakFreeze.ITEM)) { openCard("streak-freeze") },
+                    LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 8) })
+            } else tileRows(section.tiles, 1) { tile ->
+                if (tile is ShopPlan.Tile.Item && tile.id in Shop.basics()) CardKeys.basic(tile) else CardKeys.special(tile)
+            }
         }
-
-        content.addView(Bits.sect(ctx, "Basics"))
-        if (Shop.freezeOnSale(st)) content.addView(
-            ShopViews.tile(ctx, ShopViews.itemArt(ctx, StreakFreeze.ITEM, 64), "Streak Freeze",
-                priceView(ShopPlan.price(data, st, StreakFreeze.ITEM), 14f), "Streak Freeze, ${st.count(StreakFreeze.ITEM)} held",
-                sub = "In Bag: ${st.count(StreakFreeze.ITEM)} / 3 · used automatically", stock = stock(StreakFreeze.ITEM)) { openCard("streak-freeze") },
-            LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 8) })
-
-        // always in stock: the basics at their normal price
-        tileRows(Shop.basics().map { ShopPlan.Tile.Item(it) }, cols, CardKeys::basic)
-
-
+        Shop.weekendFor(data, st.day)?.let { content.addView(weekendCard(it), LinearLayout.LayoutParams(-1, -2)) }
+        content.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply {
+            text = "New in ${ShopPlan.countdown(minutesLeft)}"
+            gravity = Gravity.CENTER
+            setPadding(0, Ui.dp(ctx, 12), 0, Ui.dp(ctx, 8))
+        })
+        content.addView(refreshButton(), LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 10) })
     }
 
     /** [tiles] in rows of [cols] equal tiles (the last row is filled up with blanks so its tiles keep the width); a tap on a tile opens its window. */

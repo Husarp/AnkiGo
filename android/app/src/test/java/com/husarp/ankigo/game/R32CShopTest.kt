@@ -40,7 +40,7 @@ class R32CShopTest {
         }
         assertEquals(22, state.count("poke-ball"))
         val sources = ItemInfo.whereToFind(data, "poke-ball")
-        assertTrue(sources.contains("Always in the Shop, in Basics"))
+        assertTrue(sources.contains("Always in the Shop, in Balls"))
         state.cash = 0
         val before = SaveCodec.encode(state)
         assertFalse(Shop.buy(data, state, "poke-ball").ok)

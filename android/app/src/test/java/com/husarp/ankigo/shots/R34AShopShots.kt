@@ -32,9 +32,10 @@ class R34AShopShots {
             }
             val texts = all(stage).filterIsInstance<TextView>().map { it.text.toString() }
             assertTrue(texts.contains("Refresh · Free"))
-            assertTrue(texts.containsAll(listOf("BASICS", "TMS", "TODAY'S SPECIALS")))
-            assertTrue(texts.indexOf("BASICS") > texts.indexOf("TMS"))
-            assertTrue(texts.indexOf("TMS") > texts.indexOf("TODAY'S SPECIALS"))
+            assertTrue(texts.containsAll(listOf("HEALING", "BALLS", "TMS")))
+            assertFalse(texts.contains("BASICS"))
+            assertTrue(texts.indexOf("BALLS") > texts.indexOf("HEALING"))
+            assertTrue(texts.indexOf("TMS") > texts.indexOf("BALLS"))
             val tm = GameRepo.state!!.shopTms.first()
             assertTrue(all(stage).any { it.contentDescription?.contains(String.format(java.util.Locale.US, "%,d", Shop.tmPrice("2026-11-07", tm))) == true })
             paparazzi.snapshot(stage, "a-shop-${theme.name.lowercase()}")
