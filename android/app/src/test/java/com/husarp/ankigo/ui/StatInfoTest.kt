@@ -20,7 +20,7 @@ class StatInfoTest {
     @Test fun rulesMatchTheGame() {
         assertTrue(StatInfo.IV.text.contains("0 to 31"))
         assertTrue(StatInfo.EV.text.contains("252") && StatInfo.EV.text.contains("510"))
-        assertTrue(StatInfo.NATURE.text.contains("10 %"))
+        assertTrue(StatInfo.NATURE.text.contains("10%"))
         assertTrue(StatInfo.EV.text.contains("every win"))
         assertTrue(StatInfo.BOND.text.contains("50 / 125 / 250 / 500 / 800"))
         assertTrue(StatInfo.BOND.text.contains("Soothe Bell") && !StatInfo.BOND.text.contains("No decay"))

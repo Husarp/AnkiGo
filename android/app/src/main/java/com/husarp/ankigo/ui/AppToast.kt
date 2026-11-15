@@ -128,12 +128,11 @@ object AppToast {
         lp.bottomMargin = Ui.dp(ctx, AppToastRules.bottomDp(hDp, keyboardOverlapDp(host)))
         showing[host] = shown
         host.addView(tv, lp)
-        if (still) {
-            tv.alpha = 1f
-        } else {
-            tv.alpha = 0f
+        // Keep item-use feedback solid over the daily-goal bar throughout its slide.
+        tv.alpha = 1f
+        if (!still) {
             tv.translationY = Ui.dp(ctx, AppToastRules.SLIDE_DP.toFloat())
-            tv.animate().alpha(1f).translationY(0f).setDuration(AppToastRules.FADE_MS).start()
+            tv.animate().translationY(0f).setDuration(AppToastRules.FADE_MS).start()
         }
         tv.postDelayed(hide, AppToastRules.showMs(text))
     }
@@ -147,7 +146,7 @@ object AppToast {
             ValueAnimator.areAnimatorsEnabled(), host.context.getSharedPreferences("study", 0).getBoolean("reduceMotion", false))
         if (animate && !still && tv.isAttachedToWindow) {
             tv.isClickable = false
-            tv.animate().alpha(0f).setDuration(AppToastRules.FADE_MS).withEndAction { host.removeView(tv) }.start()
+            tv.animate().translationY(Ui.dp(host.context, AppToastRules.SLIDE_DP.toFloat())).setDuration(AppToastRules.FADE_MS).withEndAction { host.removeView(tv) }.start()
         } else {
             host.removeView(tv)
         }

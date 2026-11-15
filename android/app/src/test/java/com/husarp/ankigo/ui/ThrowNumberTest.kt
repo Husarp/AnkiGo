@@ -53,7 +53,7 @@ class ThrowNumberTest {
         assertEquals(3, last.throwInfo!!.number)
         val tile = CatchTilesPlan.tiles(last) { it }.single { it.kind == CatchTilesPlan.Kind.THROW }
         assertEquals("Throw 3", tile.value)
-        assertEquals("Throw 3 · ${last.throwInfo!!.chance} %", CatchTilesPlan.rowTiles(last).single { it.kind == CatchTilesPlan.Kind.THROW }.value)
+        assertEquals("Throw 3 · ${last.throwInfo!!.chance}%", CatchTilesPlan.rowTiles(last).single { it.kind == CatchTilesPlan.Kind.THROW }.value)
     }
 
     @Test fun aFirstThrowCatchIsThrowOne() {

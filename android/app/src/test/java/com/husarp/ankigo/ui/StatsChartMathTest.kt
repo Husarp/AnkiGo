@@ -169,7 +169,7 @@ class StatsChartMathTest {
     @Test fun tilesOfRetentionArePercentAndNoBestDayWithoutData() {
         val h = mapOf(date(0) to log(buttons = listOf(0, 1, 1, 6, 2)))
         val tl = StatsChartMath.tiles(build(ChartMetric.RETENTION, ChartPeriod.D7, h))
-        assertEquals("90 %", tl[0].value); assertEquals("kept (not Again)", tl[0].label)
+        assertEquals("90%", tl[0].value); assertEquals("kept (not Again)", tl[0].label)
         val none = StatsChartMath.tiles(build(ChartMetric.REVIEWS, ChartPeriod.D7, emptyMap()))
         assertEquals(2, none.size)
     }

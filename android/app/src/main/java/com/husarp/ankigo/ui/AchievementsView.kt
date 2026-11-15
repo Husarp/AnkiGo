@@ -6,7 +6,6 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.AchFilter
@@ -34,7 +33,7 @@ class AchievementsView(private val page: GamePage) {
     private lateinit var layer: FrameLayout
 
     // the tab strip lives as long as the view, so its sideways scroll survives a render
-    private lateinit var tabScroll: HorizontalScrollView
+    private lateinit var tabScroll: MotionHorizontalScrollView
     private lateinit var tabRow: LinearLayout
     private lateinit var tabFrame: FrameLayout
     private var selectedTab: View? = null
@@ -77,7 +76,7 @@ class AchievementsView(private val page: GamePage) {
             pending?.let { pending = null; it() }
             if (revealTab) {
                 revealTab = false
-                selectedTab?.let { t -> tabScroll.scrollTo((t.left + t.width / 2 - tabScroll.width / 2).coerceAtLeast(0), 0) }
+                selectedTab?.let { t -> tabScroll.centerTab(t) }
             }
         }
         col.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> afterLayout() }
@@ -136,7 +135,7 @@ class AchievementsView(private val page: GamePage) {
         col.removeAllViews()
         rowViews.clear()
         col.addView(summary(views))
-        col.addView(tabs(AchPageMath.tabs(groups) + "Secret"), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(8); it.marginStart = -dp(16); it.marginEnd = -dp(16) })
+        col.addView(tabs(AchPageMath.tabs(groups)), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(8); it.marginStart = -dp(16); it.marginEnd = -dp(16) })
         col.addView(countRow(if (tab == "Secret") "Secret · 0 of 0 found" else AchPageMath.countLine(groups, tab)))
 
         val shown = if (tab == "Secret") emptyList() else AchPageMath.tabGroups(groups, tab)
@@ -211,7 +210,7 @@ class AchievementsView(private val page: GamePage) {
                 isSelected = on
                 contentDescription = if (on) "$n, selected tab" else "$n tab"
                 setPadding(dp(9), 0, dp(9), 0)
-                setOnClickListener { if (tab != n) { tab = n; revealTab = true; page.requestRender() } }
+                setOnClickListener { if (tab != n) { tab = n; revealTab = true; page.requestRender() } else tabScroll.centerTab(this) }
             }
             t.addView(Ui.text(page, 13.5f, 800, if (on) R.color.ag_text else R.color.ag_sub0).apply {
                 text = n

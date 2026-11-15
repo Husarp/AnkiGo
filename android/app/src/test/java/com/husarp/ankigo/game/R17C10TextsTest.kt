@@ -105,8 +105,8 @@ class R17C10TextsTest {
             "healbell" to status("healbell", "allyTeam"),
         )
         val data = TestData.data(emptyList(), moves)
-        assertEquals("May make the target **flinch** (30 %) if it moves first.", ItemInfo.moveEffect(data, "headbutt"))
-        assertEquals("May **confuse** the target (10 %).", ItemInfo.moveEffect(data, "psybeam"))
+        assertEquals("May make the target **flinch** (30%) if it moves first.", ItemInfo.moveEffect(data, "headbutt"))
+        assertEquals("May **confuse** the target (10%).", ItemInfo.moveEffect(data, "psybeam"))
         assertEquals("**Confuses** the target.", ItemInfo.moveEffect(data, "confuseray"))
         assertTrue(ItemInfo.moveEffect(data, "hyperbeam"), ItemInfo.moveEffect(data, "hyperbeam").contains("rest turn to **recharge**"))
         assertTrue(ItemInfo.moveEffect(data, "protect"), ItemInfo.moveEffect(data, "protect").contains("**Blocks** every move"))

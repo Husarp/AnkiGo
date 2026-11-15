@@ -118,6 +118,6 @@ class CollectionStatsTest {
         assertEquals(0, CollectionStats.percent(0, 0)); assertEquals(0, CollectionStats.percent(5, 0))
         assertEquals(33, CollectionStats.percent(1, 3)); assertEquals(67, CollectionStats.percent(2, 3))
         assertEquals(100, CollectionStats.percent(3, 3))
-        assertEquals("0 %", CollectionStats.percentText(0, 0)); assertEquals("50 %", CollectionStats.percentText(1, 2))
+        assertEquals("0%", CollectionStats.percentText(0, 0)); assertEquals("50%", CollectionStats.percentText(1, 2))
     }
 }

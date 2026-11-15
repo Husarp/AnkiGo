@@ -98,7 +98,7 @@ object StatsChartMath {
 
     /** The value text at the end of a category row ("41 %", "1.2k"). */
     fun categoryValue(metric: ChartMetric, v: Double): String =
-        if (metric == ChartMetric.DEX_PROGRESS) "${Math.round(v)} %" else compact(v)
+        if (metric == ChartMetric.DEX_PROGRESS) "${Math.round(v)}%" else compact(v)
 
     // ---------------------------------------------------------------- x axis labels
 
@@ -219,7 +219,7 @@ object StatsChartMath {
         )
         if (s.kind == ChartKind.CATEGORY) {
             val total = when (m) {
-                ChartMetric.DEX_PROGRESS -> StatTile("${Math.round(s.total)} %", "of the Pokédex caught")
+                ChartMetric.DEX_PROGRESS -> StatTile("${Math.round(s.total)}%", "of the Pokédex caught")
                 ChartMetric.PER_TYPE -> StatTile(num(s.total), "species caught")
                 ChartMetric.SHINIES_RARE -> StatTile(num(s.total), "Pokémon owned")
                 ChartMetric.CARD_STATES -> StatTile(num(s.total), "cards counted")
@@ -229,7 +229,7 @@ object StatsChartMath {
         }
         fun v(x: Double): String = when (m) {
             ChartMetric.TIME -> StatsText.duration(Math.round(x * 60_000.0))
-            ChartMetric.RETENTION -> "${Math.round(x)} %"
+            ChartMetric.RETENTION -> "${Math.round(x)}%"
             else -> num(x)
         }
         val totalLabel = when (m) {

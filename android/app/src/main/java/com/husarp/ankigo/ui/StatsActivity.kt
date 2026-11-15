@@ -546,7 +546,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         if (legend.isNotEmpty()) {
             val flow = StatsSheets.FlowLayout(this, 12)
             for (l in legend) flow.addView(Ui.text(this, 11f, 800, R.color.ag_sub1).apply {
-                text = l.name + (l.percent?.let { " $it %" } ?: "")
+                text = l.name + (l.percent?.let { " $it%" } ?: "")
                 maxLines = 1
                 compoundDrawablePadding = dp(5)
                 setCompoundDrawablesRelative(GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(tones[l.index % tones.size]); setBounds(0, 0, dp(8), dp(8)) }, null, null, null)

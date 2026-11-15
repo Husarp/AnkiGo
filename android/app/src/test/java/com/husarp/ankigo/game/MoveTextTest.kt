@@ -43,7 +43,7 @@ class MoveTextTest {
         assertEquals("Heals itself by a quarter of the damage dealt.", say(dmg().copy(drain = 2 to 8)))
         assertEquals("It takes a quarter of the damage dealt as recoil.", say(dmg().copy(recoil = 1 to 4)))
         assertEquals("It takes a third of the damage dealt as recoil.", say(dmg().copy(recoil = 33 to 99)))
-        assertEquals("It takes 33 % of the damage dealt as recoil.", say(dmg().copy(recoil = 33 to 100)))
+        assertEquals("It takes 33% of the damage dealt as recoil.", say(dmg().copy(recoil = 33 to 100)))
         assertEquals("It faints after using it.", say(dmg().copy(selfDestruct = true)))
         assertEquals("Heals itself by three quarters of the damage dealt.", say(dmg().copy(drain = 3 to 4)))
     }
@@ -73,20 +73,20 @@ class MoveTextTest {
     }
 
     @Test fun secondaryEffects() {
-        assertEquals("May burn the target (10 %).", say(dmg().copy(secondary = Secondary(10, status = "brn"))))
-        assertEquals("May put the target to sleep (30 %).", say(dmg().copy(secondary = Secondary(30, status = "slp"))))
-        assertEquals("May lower the target's Sp. Def by 1 stage (×2/3) (10 %).", say(dmg().copy(secondary = Secondary(10, boosts = mapOf("spd" to -1)))))
-        assertEquals("May raise its Attack by 1 stage (×1.5) (10 %).", say(dmg().copy(secondary = Secondary(10, selfBoosts = mapOf("atk" to 1)))))
+        assertEquals("May burn the target (10%).", say(dmg().copy(secondary = Secondary(10, status = "brn"))))
+        assertEquals("May put the target to sleep (30%).", say(dmg().copy(secondary = Secondary(30, status = "slp"))))
+        assertEquals("May lower the target's Sp. Def by 1 stage (×2/3) (10%).", say(dmg().copy(secondary = Secondary(10, boosts = mapOf("spd" to -1)))))
+        assertEquals("May raise its Attack by 1 stage (×1.5) (10%).", say(dmg().copy(secondary = Secondary(10, selfBoosts = mapOf("atk" to 1)))))
         // a sure effect: no "May", no "(100 %)"
         assertEquals("Raises its Attack by 1 stage (×1.5).", say(dmg().copy(secondary = Secondary(100, selfBoosts = mapOf("atk" to 1)))))
         assertEquals("Burns the target.", say(dmg().copy(secondary = Secondary(100, status = "brn"))))
         assertEquals("Lowers the target's Speed by 1 stage (×2/3).", say(dmg().copy(secondary = Secondary(100, boosts = mapOf("spe" to -1)))))
         // R17C-3: flinch is in the engine (only when you move first)
-        assertEquals("May make the target flinch (30 %) if it moves first.", say(dmg().copy(secondary = Secondary(30, flinch = true))))
+        assertEquals("May make the target flinch (30%) if it moves first.", say(dmg().copy(secondary = Secondary(30, flinch = true))))
         assertEquals("Makes the target flinch if it moves first.", say(dmg().copy(secondary = Secondary(100, flinch = true, volatileStatus = "flinch"))))
-        assertEquals("May confuse the target (20 %).", say(dmg().copy(secondary = Secondary(20, volatileStatus = "confusion"))))
+        assertEquals("May confuse the target (20%).", say(dmg().copy(secondary = Secondary(20, volatileStatus = "confusion"))))
         // a second secondary is rolled too (the fangs)
-        assertEquals("May burn the target (10 %). May make the target flinch (10 %) if it moves first.",
+        assertEquals("May burn the target (10%). May make the target flinch (10%) if it moves first.",
             say(dmg().copy(secondary = Secondary(10, status = "brn"), moreSecondaries = listOf(Secondary(10, flinch = true, volatileStatus = "flinch")))))
     }
 

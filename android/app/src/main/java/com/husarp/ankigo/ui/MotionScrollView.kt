@@ -27,6 +27,32 @@ open class MotionScrollView(ctx: Context) : android.widget.ScrollView(ctx) {
 
 open class MotionHorizontalScrollView(ctx: Context) : android.widget.HorizontalScrollView(ctx) {
     private val motion: ScrollbarMotion? = ScrollbarMotion()
+    private var centering: android.animation.ValueAnimator? = null
+
+    internal fun centerTab(tab: android.view.View) {
+        centering?.cancel()
+        val max = ((getChildAt(0)?.width ?: 0) + paddingLeft + paddingRight - width).coerceAtLeast(0)
+        val target = (tab.left + paddingLeft + tab.width / 2 - width / 2).coerceIn(0, max)
+        if (!UiMotion.enabled(context)) { scrollTo(target, 0); return }
+        centering = android.animation.ValueAnimator.ofInt(scrollX, target).apply {
+            duration = UiMotion.AXIS_MS
+            interpolator = UiMotion.curve
+            addUpdateListener { scrollTo(it.animatedValue as Int, 0) }
+            start()
+        }
+    }
+
+    override fun onInterceptTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) centering?.cancel()
+        return super.onInterceptTouchEvent(event)
+    }
+
+    override fun onDetachedFromWindow() {
+        centering?.cancel()
+        centering = null
+        super.onDetachedFromWindow()
+    }
+
     override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
         super.onScrollChanged(l, t, oldl, oldt)
         awakenScrollBars()

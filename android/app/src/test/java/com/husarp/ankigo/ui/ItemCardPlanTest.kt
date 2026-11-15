@@ -129,7 +129,7 @@ class ItemCardPlanTest {
     }
 
     @Test fun talkBackSaysTheTileOpensDetails() {
-        assertEquals("Great Ball, 50 % to catch, 700. Opens details", ItemCardPlan.detailsLabel("Great Ball, 50 % to catch, 700"))
+        assertEquals("Great Ball, 50% to catch, 700. Opens details", ItemCardPlan.detailsLabel("Great Ball, 50% to catch, 700"))
         assertTrue("no word of the old in-place card", !ItemCardPlan.detailsLabel("TM Thunderbolt").contains("fold") && !ItemCardPlan.detailsLabel("TM Thunderbolt").contains("in place"))
     }
 
