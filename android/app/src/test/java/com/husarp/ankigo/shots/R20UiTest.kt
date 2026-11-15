@@ -58,15 +58,15 @@ class R20UiTest {
         page.onGone()
     }
 
-    @Test fun weekendSpecialPrecedesTheOrdinaryStock() {
+    @Test fun weekendSpecialFollowsTheOrdinaryStock() {
         val c = ctx()
         GameRepo.state!!.day = "2026-10-31"
         val page = ShopPage(c, NoHost)
         val v = page.root; render(page)
         val ts = texts(v)
         assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL") >= 0)
-        assertTrue(ts.toString(), ts.indexOf("BASICS") >= 0)
-        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL") < ts.indexOf("BASICS"))
+        assertTrue(ts.toString(), ts.indexOf("HEALING") >= 0)
+        assertTrue(ts.toString(), ts.indexOf("WEEKEND SPECIAL") > ts.indexOf("HEALING"))
         page.onGone()
     }
 
