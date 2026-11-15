@@ -52,9 +52,9 @@ class R33CInfoboxShots {
                     for (slot in listOf(ConditionMarks.Slot.WILD, ConditionMarks.Slot.OURS)) {
                         val card = field(arena, if (slot == ConditionMarks.Slot.WILD) "enemyBlock" else "playerCard")
                         val row = arena.markRows().single { it.slot == slot }
-                        val center = card.left + card.width * card.scaleX / 2f
+                        val edge = card.left + if (slot == ConditionMarks.Slot.OURS) card.width * card.scaleX else 0f
                         for (line in row.chips.groupBy { it.rect.top }.values) {
-                            assertEquals("$size/$slot centered", center, (line.first().rect.left + line.last().rect.right) / 2f, 1f)
+                            assertEquals("$size/$slot outer edge", edge, if (slot == ConditionMarks.Slot.OURS) line.last().rect.right else line.first().rect.left, 1f)
                             assertTrue("$size/$slot side", if (slot == ConditionMarks.Slot.WILD) line.first().rect.bottom <= card.top else line.first().rect.top >= card.top + card.height * card.scaleY)
                         }
                         assertTrue(row.chips.all { it.rect.top >= 0 && it.rect.bottom <= arena.height })
@@ -71,7 +71,7 @@ class R33CInfoboxShots {
         assertTrue("rendered $name $size", acted)
     }
 
-    @Test fun centeredChipsAboveWildAndBelowPlayerAcrossWindowSizes() {
+    @Test fun outerChipsAboveWildAndBelowPlayerAcrossWindowSizes() {
         for (size in listOf(Size.PHONE, Size.SMALL, Size.SPLIT, Size.PIP)) for (theme in Theme.entries)
             shot(size, theme, "battle")
         for (theme in Theme.entries) shot(Size.SMALL, theme, "wrapped", wrapped = true)

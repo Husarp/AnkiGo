@@ -83,7 +83,7 @@ object BattleLog {
     private val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "ankigo-battle-log-flush").apply { isDaemon = true } }
     private val flush = DelayedFlush(3000, { ms, task -> timer.schedule({ worker.execute(task) }, ms, TimeUnit.MILLISECONDS) }) { runCatching { persist() } }
 
-    /** Short card fronts the study screen already has, by card id (for the next [answer] of that card). */
+    /** Worker-owned short fronts, ordered before the answer record. HTML stripping never runs on the tap. */
     private val fronts = LinkedHashMap<Long, String>()
 
     @Synchronized fun init(ctx: Context) {
@@ -97,19 +97,22 @@ object BattleLog {
     }
 
     /** The study screen knows the card's front: remember a short plain text of it for the answer that follows. */
+    internal var frontText: (String) -> String = ::plain
+
     fun front(cardId: Long, html: String) {
-        val t = plain(html)
-        if (t.isEmpty()) return
-        synchronized(fronts) {
-            fronts[cardId] = t
-            while (fronts.size > 8) fronts.remove(fronts.keys.first())
+        if (!started) return
+        worker.execute {
+            val t = frontText(html)
+            if (t.isNotEmpty()) {
+                fronts[cardId] = t
+                while (fronts.size > 8) fronts.remove(fronts.keys.first())
+            }
         }
     }
 
     fun answer(source: String, cardId: Long, button: Int) {
         if (!started) return
-        val front = synchronized(fronts) { fronts.remove(cardId) }
-        worker.execute { runCatching { builder.answer(source, cardId, button, front) } }
+        worker.execute { runCatching { builder.answer(source, cardId, button, fronts.remove(cardId)) } }
     }
 
     fun events(events: List<GameEvent>) {

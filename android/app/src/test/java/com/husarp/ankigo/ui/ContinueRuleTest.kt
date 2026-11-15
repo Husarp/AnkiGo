@@ -32,11 +32,11 @@ class ContinueRuleTest {
         assertTrue(ContinueRule.autoMayRun(holding = false))
     }
 
-    @Test fun aHiddenPanelNeverLeavesAHoldParked() {
-        // visibility never lets a flip / timer through: holding follows the hold alone, a hidden panel releases it at once
+    @Test fun aHiddenPanelKeepsContinuePending() {
+        // Visibility never lets a flip or timer release the gate.
         assertTrue(ContinueRule.holding(resultHolds = true))
         assertFalse(ContinueRule.holding(resultHolds = false))
-        assertTrue("type-in keyboard layout / summary: nobody could tap Continue", ContinueRule.mustRelease(resultHolds = true, panelVisible = false))
+        assertFalse("visibility is not a Continue tap", ContinueRule.mustRelease(resultHolds = true, panelVisible = false))
         assertFalse(ContinueRule.mustRelease(resultHolds = true, panelVisible = true))
         assertFalse(ContinueRule.mustRelease(resultHolds = false, panelVisible = false))
     }
@@ -46,8 +46,8 @@ class ContinueRuleTest {
             val holding = ContinueRule.holding(resultHolds = true)
             assertEquals(Act.CONTINUE, ContinueRule.onRequest(holding))
             assertFalse(ContinueRule.autoMayRun(holding))
-            // either the Continue is on screen, or the hold is released (then there is nothing parked)
-            assertTrue(visible || ContinueRule.mustRelease(true, visible))
+            // Window visibility never grants permission to continue.
+            assertFalse(ContinueRule.mustRelease(true, visible))
         }
     }
 

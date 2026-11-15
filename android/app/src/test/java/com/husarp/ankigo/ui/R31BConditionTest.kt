@@ -12,7 +12,7 @@ class R31BConditionTest {
             val flow = ConditionFlow.anchored(card, w - 2, widths, 7, 4f, 4f, 16f, listOf(art))
             assertEquals(12, flow.size)
             assertEquals(54f, flow.first().t, .01f)
-            for (line in flow.groupBy { it.t }.values) assertEquals((card.l + card.r) / 2f, (line.first().l + line.last().r) / 2f, .01f)
+            for (line in flow.groupBy { it.t }.values) assertEquals(minOf(card.r, w - 2), line.last().r, .01f)
             for ((i, r) in flow.withIndex()) {
                 assertEquals(widths[i], r.w, .01f)
                 assertTrue(r.r <= w - 2)
@@ -29,7 +29,7 @@ class R31BConditionTest {
         assertEquals(10, flow.shown + flow.more)
         assertEquals(flow.shown + 1, flow.rects.size)
         assertTrue(flow.rects.last().b <= 90f)
-        assertEquals(55f, (flow.rects.first().l + flow.rects.first().r) / 2f, .01f)
+        assertEquals(card.r, flow.rects.first().r, .01f)
     }
 
     @Test fun aSpriteUnderTheLeftEdgeStillHasABoundedOverlap() {
@@ -45,10 +45,37 @@ class R31BConditionTest {
     @Test fun theOtherInfoBoxIsAHardWrapBoundary() {
         val card = ConditionSpot.R(10f, 10f, 100f, 50f)
         val other = ConditionSpot.R(100f, 50f, 200f, 110f)
-        val flow = ConditionFlow.owner(card, 300f, FloatArray(6) { 70f }, 0, 4f, 4f, 16f, emptyList(), 36f, listOf(other)) { 24f }
+        val blocked = ConditionFlow.owner(card, 300f, FloatArray(6) { 70f }, 0, 4f, 4f, 16f, emptyList(), 36f, listOf(other)) { 24f }
+        assertTrue("the card must move instead of drifting its outer chip edge", blocked.rects.isEmpty())
+        val moved = ConditionSpot.R(6f, 10f, 96f, 50f)
+        val flow = ConditionFlow.owner(moved, 300f, FloatArray(6) { 70f }, 0, 4f, 4f, 16f, emptyList(), 36f, listOf(other)) { 24f }
+        assertEquals(moved.r, flow.rects.first().r, .01f)
         assertEquals(6, flow.shown + flow.more)
         assertTrue(flow.rects.isNotEmpty())
         assertTrue(flow.rects.all { !it.hits(other) })
+    }
+
+    @Test fun anObstructedOuterEdgeNeverDriftsIntoTheInnerLane() {
+        val card = ConditionSpot.R(100f, 100f, 240f, 150f)
+        for (below in listOf(false, true)) {
+            val block = if (below) ConditionSpot.R(220f, 150f, 300f, 190f)
+                else ConditionSpot.R(40f, 70f, 120f, 110f)
+            assertTrue(ConditionFlow.anchored(card, 320f, floatArrayOf(40f), 1,
+                4f, 4f, 16f, emptyList(), blocks = listOf(block), below = below).isEmpty())
+        }
+    }
+
+    @Test fun anInnerObstructionWrapsEveryRowAgainstTheFixedOuterEdge() {
+        val card = ConditionSpot.R(100f, 100f, 240f, 150f)
+        for (below in listOf(false, true)) {
+            val block = if (below) ConditionSpot.R(50f, 154f, 130f, 190f)
+                else ConditionSpot.R(210f, 70f, 300f, 110f)
+            val rows = ConditionFlow.anchored(card, 320f, FloatArray(3) { 40f }, 3,
+                4f, 4f, 16f, emptyList(), blocks = listOf(block), below = below).groupBy { it.t }.values
+            assertEquals(2, rows.size)
+            for (row in rows) assertEquals(if (below) card.r else card.l,
+                if (below) row.last().r else row.first().l, .01f)
+        }
     }
 
     @Test fun stickerAvoidsTheAnchoredChipBand() {
@@ -62,6 +89,6 @@ class R31BConditionTest {
         val card = ConditionSpot.R(10f, 0f, 110f, 40f)
         val fit = ConditionFlow.anchored(card, 110f, floatArrayOf(48f, 48f, 90f), 2, 4f, 3f, 16f, emptyList())
         assertEquals(listOf(43f, 43f, 63f), fit.map { it.t })
-        assertEquals(listOf(10f, 62f, 15f), fit.map { it.l })
+        assertEquals(listOf(10f, 62f, 20f), fit.map { it.l })
     }
 }

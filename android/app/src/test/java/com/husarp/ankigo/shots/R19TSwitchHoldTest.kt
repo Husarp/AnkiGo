@@ -25,7 +25,7 @@ import org.junit.Test
  * R19-T flow, through the real [EventPlayer], [BattlePanelView] and [com.husarp.ankigo.ui.ArenaView] (animations ON, so the events really
  * queue; Paparazzi's looper only moves inside [advance], as in R9NextFightFlowTest):
  *  - PLAN 285: a switch made while a won fight's result holds the next fight plays under the result; the next wild one stays out and
- *    the hold stays until Continue is tapped (a plain answer still releases it).
+ *    the hold stays until Continue is tapped, including when a plain answer arrives.
  *  - PLAN 288: the free hit of a switch raises the "Switched! Wild X gets a free move." card toast; an item's hit does not.
  */
 class R19TSwitchHoldTest {
@@ -121,11 +121,11 @@ class R19TSwitchHoldTest {
         assertNotEquals(View.VISIBLE, enemyHolder(panel).visibility)
     }
 
-    @Test fun anAnswerThatArrivesStillStartsTheNextFightAsBefore() {
+    @Test fun anAnswerThatArrivesStillWaitsForContinue() {
         val c = ctx()
         val (_, player) = heldResult(c)
         player.enqueue(listOf(GameEvent.Counted(3, 10, 5, 1, false), GameEvent.Charge(10, 1, 2)))
-        assertFalse("an answer is the 'next answer starts it' of old", player.holding)
+        assertTrue("an answer cannot replace Continue", player.holding)
     }
 
     @Test fun aPendingSwitchFromAnotherScreenPlaysUnderTheResultToo() {

@@ -13,7 +13,7 @@ object SwitchQueue {
     fun fightOn(state: GameState): Boolean {
         val battle = state.battle ?: return false
         val main = state.main ?: return false
-        return battle.wild.hp > 0 && main.hp > 0
+        return !battle.awaitingContinue && battle.wild.hp > 0 && main.hp > 0
     }
 
     /** Before the first answer there is no switch cost, even with the first card visible. */

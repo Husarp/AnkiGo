@@ -149,22 +149,23 @@ class R9NextFightFlowTest {
         assertTrue(player.holding); assertFalse(player.idle); assertFalse(panel.tilesShown)
     }
 
-    @Test fun aSmallWindowHasNoContinueAndNoEarlyHold() {
+    @Test fun aSmallWindowAlsoWaitsForContinue() {
         val panel = BattlePanelView(ctx())
         panel.setCompact(true)
         val player = EventPlayer(panel, continueOnPanel = false)
         player.enqueue(defeatBatch())
-        assertFalse(player.holding)
-        assertFalse(player.continueBattle())
+        assertTrue(player.holding)
+        assertTrue(player.continueBattle())
     }
 
-    @Test fun aFledWildOneAndAnEndWithoutANextFightKeepTodaysFlow() {
+    @Test fun aFledWildOneWaitsForContinueAndAnEndWithoutANextFightKeepsTodaysFlow() {
         val c = ctx()
         val panel = BattlePanelView(c)
         val player = EventPlayer(panel, continueOnPanel = false)
         measure(panel, 412, 869)
         player.enqueue(listOf(GameEvent.Counted(3, 10, 6, 1, false), GameEvent.Fled("Wildling"), encounter()))
-        assertFalse("a fled wild one is no result", player.holding)
+        assertTrue("escape still waits for Continue", player.holding)
+        player.continueBattle()
         advance(c, panel)
         assertTrue(player.idle)
         player.clear()
@@ -172,18 +173,17 @@ class R9NextFightFlowTest {
         player.enqueue(listOf(GameEvent.Counted(3, 10, 6, 1, false), GameEvent.Defeated(147, "Wildling", 40), GameEvent.XpGained("m", "Mainy", 40, 7, 0, 100)))
         assertFalse(player.holding)
         advance(c)
-        assertTrue("the tiles came at the end", panel.tilesShown)
-        assertTrue(player.holding)
+        assertFalse("no encounter means no pending Continue", player.holding)
     }
 
-    @Test fun anAnswerThatArrivesMeanwhileEndsTheEarlyHold() {
+    @Test fun anAnswerThatArrivesMeanwhileKeepsTheEarlyHold() {
         val panel = BattlePanelView(ctx())
         val player = EventPlayer(panel, continueOnPanel = false)
         measure(panel, 412, 869)
         player.enqueue(defeatBatch())
         assertTrue(player.holding)
-        player.enqueue(answer)   // answered in AnkiDroid meanwhile: nobody waits for a tap
-        assertFalse(player.holding)
+        player.enqueue(answer)
+        assertTrue(player.holding)
     }
 
     @Test fun theHoldIsToldOnceAndNeverFlickers() {
@@ -371,14 +371,15 @@ class R9NextFightFlowTest {
         assertEquals(false, getField(act, "flipped"))
     }
 
-    @Test fun aTapOnShowAnswerDuringTheRewardsContinuesAndLeavesTheCard() {
+    @Test fun aTapOnShowAnswerDuringTheRewardsWaitsForContinueAndLeavesTheCard() {
         val c = ctx()
         val act = study(c)
         val events = getField(act, "events") as EventPlayer
         events.enqueue(defeatBatch())
         assertFalse(events.idle); assertTrue(events.holding)
         call(act, "flip")   // the same function the button, the keys and the card's tap reach
-        assertFalse("it acted as Continue", events.holding)
+        assertTrue("only Continue can release it", events.holding)
+        events.continueBattle()
         assertEquals("the card did not flip", false, getField(act, "flipped"))
         assertEquals("the rewards are gone from the queue", emptyList<String>(), queueKinds(events))
         advance(c)

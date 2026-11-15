@@ -35,13 +35,10 @@ internal class CatchTilesView(ctx: Context) : LinearLayout(ctx) {
 
     private fun dpi(v: Int) = Ui.dp(context, v)
 
-    /**
-     * The result is held until a tap on Continue ([cont] given: the NEXT line gets a Continue pill and the tiles take the tap too);
-     * null = nothing to tap (the Study screen has its own button, small windows run on a timeout).
-     */
+    /** Only the explicit Continue pill acts; reward tiles and their surrounding space do not. */
     private fun setContinue(cont: (() -> Unit)?) {
-        setOnClickListener(cont?.let { c -> View.OnClickListener { c() } })
-        isClickable = cont != null
+        setOnClickListener(null)
+        isClickable = false
     }
 
     /** Fills the view with the big layout for [s]; [next] adds the NEXT line, [cont] its Continue tap (see [setContinue]). */

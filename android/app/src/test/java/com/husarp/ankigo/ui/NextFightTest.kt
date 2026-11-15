@@ -31,25 +31,25 @@ class NextFightTest {
         assertTrue(NextFight.holdsEarly(listOf(counted(), caught(), cash(), encounter()), hold))
     }
 
-    @Test fun aSmallWindowOrNoRoomNeverHolds() {
+    @Test fun aSmallWindowOrNoRoomStillWaitsForContinue() {
         val win = listOf(counted(), defeated(), encounter())
-        assertFalse(NextFight.holdsEarly(win, CatchTilesPlan.Mode.TIMED))
-        assertFalse(NextFight.holdsEarly(win, CatchTilesPlan.Mode.NONE))
+        assertTrue(NextFight.holdsEarly(win, CatchTilesPlan.Mode.TIMED))
+        assertTrue(NextFight.holdsEarly(win, CatchTilesPlan.Mode.NONE))
     }
 
     @Test fun noNextEncounterKeepsTodaysFlow() {
         assertFalse("end of the deck: nothing to continue to", NextFight.holdsEarly(listOf(counted(), defeated(), xp()), hold))
     }
 
-    @Test fun aFledWildOneIsNoResult() {
-        assertFalse(NextFight.holdsEarly(listOf(counted(), GameEvent.Fled("Made"), encounter()), hold))
+    @Test fun aFledWildOneAlsoWaitsForContinue() {
+        assertTrue(NextFight.holdsEarly(listOf(counted(), GameEvent.Fled("Made"), encounter()), hold))
         assertFalse(NextFight.holdsEarly(listOf(counted(), encounter()), hold))
         assertFalse(NextFight.holdsEarly(emptyList(), hold))
     }
 
-    @Test fun anAnswerOrAThrowBehindTheResultIsFastPlay() {
-        assertFalse(NextFight.holdsEarly(listOf(counted(), defeated(), encounter(), counted()), hold))
-        assertFalse(NextFight.holdsEarly(listOf(counted(), caught(), encounter(), GameEvent.BallThrow("poke-ball", 40, false, 3)), hold))
+    @Test fun anAnswerOrAThrowBehindTheResultCannotReleaseContinue() {
+        assertTrue(NextFight.holdsEarly(listOf(counted(), defeated(), encounter(), counted()), hold))
+        assertTrue(NextFight.holdsEarly(listOf(counted(), caught(), encounter(), GameEvent.BallThrow("poke-ball", 40, false, 3)), hold))
     }
 
     @Test fun anAnswerBeforeTheFightEndsDoesNotMatter() {

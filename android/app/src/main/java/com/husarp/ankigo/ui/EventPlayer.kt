@@ -70,11 +70,10 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     fun enqueue(events: List<GameEvent>) {
         if (events.isEmpty()) return
         AchievementPopup.playbackStarted(this)
-        if (NextFight.releasesHold(events)) releaseTiles()   // R19-T (PLAN 285): a switch made on the Continue screen plays under the result; only an answer starts the next fight
         val summary = CatchSummary.of(events, data = GameRepo.data) // the throw number comes with the BallThrow event (counted by the fight in the game state)
         // R9 C5: a won / caught fight with a next one behind it holds that one from now on (Continue shows at once, the rewards keep playing);
         // screens whose Continue sits under the result tiles queue the tiles right behind the fight's end so they show early too
-        val early = summary != null && NextFight.holdsEarly(events, panel.resultMode())
+        val early = NextFight.holdsEarly(events, panel.resultMode())
         val at = when {
             summary == null -> -1
             early && continueOnPanel -> NextFight.earlyTilesIndex(events)
@@ -90,7 +89,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         }
         if (at == events.size) queue.addLast(Item.Tiles(summary!!))
         for (e in events) if (e is GameEvent.Encounter) panel.prefetchBackdrop(e.species, e.wildUid)   // R9 C4: its picture loads while the rewards play
-        if (early) {
+        if (early || GameRepo.state?.battle?.awaitingContinue == true) {
             waitingMain = GameRepo.state?.main?.uid
             panel.holdEarly()
         }
@@ -216,12 +215,12 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     /**
      * "Continue" after a fight result (R6-09): the tiles go and the held next wild one makes its entrance; the card in front of the
-     * player is not touched. Returns false when no result holds (nothing happened). The next answer's events release the same way
-     * ([enqueue]), so an answer that arrives anyway never waits for a tap.
+     * player is not touched. Returns false when no result holds (nothing happened). Incoming answers retain the hold.
      */
     fun continueBattle(): Boolean {
         if (!panel.holdsNextFight) return false
         reselectForMain()
+        if (GameRepo.game != null) GameRepo.run(ctx) { it.state.battle?.awaitingContinue = false }
         if (!idle) { skipToNextFight(); return true }   // R9 C5: the rewards still play (Continue came at once): they end now
         releaseTiles()
         dirty = true   // nothing parked: the wild one is drawn from the saved game when the queue is done
@@ -308,7 +307,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         panel.renderAll()
         acts.forEach { it() }
         val lone = events.singleOrNull() as? GameEvent.Encounter   // Continue with reduced motion: just the new wild one
-        if (lone != null) {
+        if (lone != null && !holding) {
             logWhole = false
             log(LogKind.SYS, "NEW", "A wild ${em(bare(lone.name))}" + (if (lone.shiny) " ${em("(shiny!)")}" else "") + " appeared!")
         }
@@ -450,7 +449,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
 
     /** Starts the visuals of [e]; returns how long (ms) to wait before the next event. */
     private fun play(e: GameEvent, immediateFloats: Boolean = false): Long {
-        if (e is GameEvent.Encounter && panel.holdsNextFight && !answerWaiting()) { parked = e; return 0 }   // under the result tiles: the next answer starts it
+        if (e is GameEvent.Encounter && panel.holdsNextFight) { parked = e; return 0 }   // only Continue may release a prepared encounter
         val st = GameRepo.state
         val data = GameRepo.data
         panel.observeStudyEvent(e)

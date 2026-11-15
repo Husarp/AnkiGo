@@ -216,6 +216,7 @@ object SaveCodec {
     private fun writeBattle(w: W, b: Battle) = w.obj {
         key("wild"); writeMon(this, b.wild)
         kv("tier", b.tier.name); kv("playerAttacked", b.playerAttacked)
+        kv("awaitingContinue", b.awaitingContinue)
         key("player"); writeSide(this, b.player)
         key("enemy"); writeSide(this, b.enemy)
         kv("tally", b.tally); kv("answers", b.answers); kv("override", b.override?.name); kv("rounds", b.rounds)
@@ -345,6 +346,7 @@ object SaveCodec {
             player = readSide(o.optJSONObject("player")), enemy = readSide(o.optJSONObject("enemy")),
             tally = o.int("tally", 0), answers = o.int("answers", 0),
             override = o.strOrNull("override")?.let { n -> Outcome.entries.firstOrNull { it.name == n } },
+            awaitingContinue = o.bool("awaitingContinue", o.int("rounds", 0) == 0 && o.int("answers", 0) == 0 && o.int("failedThrows", 0) == 0),
             rounds = o.int("rounds", 0), playerAttacked = o.bool("playerAttacked", false),
             natureMainUid = o.strOrNull("natureMainUid"), natureMainRounds = o.int("natureMainRounds", 0).coerceAtLeast(0),
             startedAt = o.long("startedAt", 0),

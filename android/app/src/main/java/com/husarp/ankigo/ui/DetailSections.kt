@@ -115,7 +115,7 @@ object DetailSections {
             addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Level $titleLevel"; setTextColor(LevelTier.color(a, titleLevel)) })
             addView(FlowRow(a, Ui.dp(a, 4), centered = false, alignEnd = true).apply {
                 if (boosts != null) ConditionMarks.STAT_KEYS.forEachIndexed { i, key ->
-                    if (boosts.getOrElse(i) { 0 } != 0) addView(StatPillView(a, key, boosts[i]))
+                    if (boosts.getOrElse(i) { 0 } != 0) addView(StatPillView(a, key, boosts[i], battleStyle = true))
                 }
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }, LinearLayout.LayoutParams(-1, -2))

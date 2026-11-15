@@ -25,7 +25,7 @@ internal object ConditionFlow {
         return out
     }
 
-    /** Each owner's rows are centred on its card, wrapping within the available lane. */
+    /** Each owner's rows hug its outer card edge, wrapping within the available lane. */
     fun anchored(card: ConditionSpot.R, right: Float, widths: FloatArray, stats: Int, gap: Float, lift: Float,
                  height: Float, sprites: List<ConditionSpot.R>, blocks: List<ConditionSpot.R> = emptyList(),
                  below: Boolean = true, left: Float = 0f): List<ConditionSpot.R> {
@@ -46,11 +46,14 @@ internal object ConditionFlow {
                 else if (block.r <= center) l = max(l, block.r + gap)
                 else return emptyList()
             }
-            val available = min(card.w, 2f * min(center - l, r - center))
+            val start = if (below) max(card.l, l) else card.l
+            val end = if (below) card.r else min(card.r, r)
+            if (start < l || end > r) return emptyList()
+            val available = end - start
             val lines = rows(widths.copyOfRange(index, widths.size), (stats - index).coerceAtLeast(0), available, gap)
             val line = lines.firstOrNull() ?: return emptyList()
             val lineWidth = line.sumOf { widths[index + it].toDouble() }.toFloat() + gap * (line.size - 1)
-            var x = center - lineWidth / 2f
+            var x = if (below) end - lineWidth else start
             for (i in line) {
                 val w = widths[index + i]
                 out += ConditionSpot.R(x, y, x + w, y + height)

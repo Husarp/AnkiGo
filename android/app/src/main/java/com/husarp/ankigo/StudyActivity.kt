@@ -554,7 +554,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         panel.visibility = if (finished || GameRepo.game == null || kb) View.GONE else View.VISIBLE
         handleBar.visibility = if (finished || !plan.handle || GameRepo.game == null || kb) View.GONE else View.VISIBLE
         if (kb) gap.layoutParams = StudyUi.lp(-1, 0, 0f)
-        releaseHiddenHold()   // the panel just went (keyboard layout / summary) under a result: no Continue could be tapped
+        releaseHiddenHold()   // layout changes keep Continue pending
         if (!finished) {   // the answer row has one fixed height whatever it holds, so nothing above it moves between cards
             buttons.layoutParams = StudyUi.lp(-1, Ui.dp(this, if (kb) com.husarp.ankigo.study.TypeInLayout.BUTTON_DP else PanelHeight.buttonsDp(plan.answerRows)))
             buttons.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 8)); buttons.gravity = Gravity.CENTER_VERTICAL
@@ -1563,7 +1563,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     /** A fight result holds the next battle back and its panel is on screen: the answer row shows Continue ([ContinueRule]). */
     private fun holding() = ::panel.isInitialized && ContinueRule.holding(panel.holdsNextFight)
-    /** The panel is hidden (type-in keyboard layout, summary) while a result holds: nobody can tap Continue, so the hold goes at once and the card works as usual. */
+    /** Layout notices keep the same Continue gate, including while the battle panel is hidden. */
     private fun releaseHiddenHold() {
         if (!::panel.isInitialized || !::events.isInitialized) return
         // the row swaps back at once (not only through the posted onHoldChanged)
@@ -1576,9 +1576,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         showButtons(); syncTiming()
         return true
     }
-    /** A request to flip or answer (button, key, swipe, tap on the card, card script) while [holding]: it acts as Continue and the card stays. True = it did. */
+    /** A request to flip or answer while [holding] is consumed; only the Continue button releases the battle. */
     private fun heldContinue(): Boolean { releaseHiddenHold(); return heldContinueNow() }
-    private fun heldContinueNow() = finishArgs == null && ContinueRule.onRequest(holding()) == ContinueRule.Act.CONTINUE && continueBattle()   // PLAN 129: waiting to finish, only the Finish deck button acts
+    private fun heldContinueNow() = finishArgs == null && ContinueRule.onRequest(holding()) == ContinueRule.Act.CONTINUE   // PLAN 129: waiting to finish, only the Finish deck button acts
     /**
      * R19-N (PLAN 130, 130A): the calm card covers the next card while a result holds the next battle and the card was not seen yet
      * ([CalmCard.on]); the card's own clock, countdown, speech and keyboard wait for Continue. Called from [showButtons], which every change of
@@ -2027,13 +2027,13 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
         showButtons(); syncTiming()
     }
-    /** "Finish deck": ends a result's hold (like Continue) and opens the summary, behind the last answer's game step. Once: a second tap or a resume finds it done. */
+    /** "Finish deck": settles result animations, keeps Continue pending and opens the summary, behind the last answer's game step. Once: a second tap or a resume finds it done. */
     private fun finishDeck() {
         val args = finishArgs ?: return
         if (finishTapped || isDestroyed) return
         finishTapped = true
         Report.log("STUDY", "finish deck")
-        events.continueBattle()
+        events.pauseHeldResult()
         showButtons()   // the button is dimmed while the last game step finishes
         val token = generation
         pending.whenIdle { if (valid(token) && finishArgs === args) checkedSummary(args) }
