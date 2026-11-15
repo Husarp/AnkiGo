@@ -144,7 +144,7 @@ class R10W2ShopShots {
     @Test fun aWeekdayShowsTheDealTheBasicsAndTheSpecialsButNoWeekendCard() {
         shoot("weekday", listOf(Variants.PHONE, TALL), check = { _, screen ->
             val t = texts(screen)
-            assertTrue(t.toString(), (ShopCardKit.dealHeading() in t && t.any { it.matches(Regex("−(20|25|30|35|40) %")) }))
+            assertTrue(t.toString(), (ShopCardKit.dealHeading() in t && t.any { it.matches(Regex("−(20|25|30|35|40)%")) }))
             assertTrue("BASICS" in t)
             assertTrue("TODAY'S SPECIALS" in t)
             assertTrue(t.any { it.startsWith("New in ") && it.endsWith(" min") })
@@ -220,7 +220,7 @@ class R10W2ShopShots {
         shoot("weekday", listOf(W320), scale = 2f, check = { ctx, screen ->
             assertTrue(ctx.resources.configuration.fontScale == 2.0f)
             val t = texts(screen)
-            assertTrue((ShopCardKit.dealHeading() in t && t.any { it.matches(Regex("−(20|25|30|35|40) %")) }) && "BASICS" in t)
+            assertTrue((ShopCardKit.dealHeading() in t && t.any { it.matches(Regex("−(20|25|30|35|40)%")) }) && "BASICS" in t)
         }) { ctx -> shopTab(ctx, SATURDAY).second }
         shoot("weekday", listOf(Variants.PHONE), scale = 1.3f, themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, WEEKDAY).second }
         shoot("weekday", listOf(W320), themes = listOf(Theme.LIGHT)) { ctx -> shopTab(ctx, SATURDAY).second }
@@ -244,7 +244,7 @@ class R10W2ShopShots {
     @Test fun theDealCardCloseUp() {
         shoot("deal-card", listOf(CARD), check = { _, v ->
             val t = texts(v)
-            assertTrue(t.toString(), ("DEAL OF THE DAY" in t && t.any { it.matches(Regex("−(20|25|30|35|40) %")) }))
+            assertTrue(t.toString(), ("DEAL OF THE DAY" in t && t.any { it.matches(Regex("−(20|25|30|35|40)%")) }))
             assertTrue("Super Potion" in t)
             assertTrue("700" in t && "490" in t)
         }) { ctx ->
@@ -309,7 +309,7 @@ class R10W2ShopShots {
             val deal = Shop.dealFor(gd, WEEKDAY)!!
             assertTrue("no prices struck through in the popup", struck((v as ShopCardKit.Stage).page.itemWindow!!.view).isEmpty())
             assertTrue("the new price", Bits.fmt(deal.price) in t)
-            assertTrue("the deal card stays under the window", (ShopCardKit.dealHeading() in t && t.any { it.matches(Regex("−(20|25|30|35|40) %")) }))
+            assertTrue("the deal card stays under the window", (ShopCardKit.dealHeading() in t && t.any { it.matches(Regex("−(20|25|30|35|40)%")) }))
             assertTrue("Buy" in texts(v))
             assertTrue("×1" in texts(v))
             assertTrue("popup shows today's purchase price", Bits.fmt(deal.price) in texts((v as ShopCardKit.Stage).page.itemWindow!!.view))

@@ -192,7 +192,7 @@ class R18GDetailsShots {
             val t = strings(scene)
             assertEquals("the Exp. Share shows once (no tag under the types)", 1, t.count { it == "Exp. Share" })
             assertTrue("It and your Main each get half the XP" in t)
-            assertFalse("Nothing" in t)
+            assertTrue("the equipment slots are separate from Exp. Share", "Nothing" in t)
             // 279A: every branch gets its own readable row and grey condition.
             val labels = listOf("Use Water Stone", "Use Thunder Stone", "Use Fire Stone", "Use Leaf Stone", "Use Ice Stone",
                 "Level 3 Bond\nin the daytime", "Level 3 Bond\nat night", "Level 3 Bond\nknows a Fairy move")
@@ -210,22 +210,24 @@ class R18GDetailsShots {
         DetailSections.storeOf = { MapStore(emptySet()) }
         dialog("nothing", listOf(0f), setup = { st.bag["lucky-egg"] = 1 }, check = { ctx, scene ->
             val t = strings(scene)
-            assertFalse("HELD ITEM" in t)
-            assertFalse("Nothing" in t || "Give item" in t)
+            assertTrue("HELD ITEM" in t)
+            assertTrue("Nothing" in t)
+            assertFalse("Give item" in t)
             assertTrue("DOES NOT EVOLVE" in t)
             assertFalse("EVOLUTION" in t)
             assertTrue("Options" in t)
         }) { ctx -> MonDetail.show(TeamPage(ctx, NoHost), gd, st.mon("t4")!!) }
     }
 
-    @Test fun emptyHeldItemSectionIsAbsentWithAnEmptyBag() {
+    @Test fun emptyHeldItemSectionShowsNothingWithAnEmptyBag() {
         paparazzi.unsafeUpdateConfig(deviceConfig = PHONE.device(Theme.LIGHT))
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         DetailSections.storeOf = { MapStore(emptySet()) }
         val d = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), gd, st.mon("t4")!!) } ?: error("no dialog")
         val scene = DialogShots.scene(ctx, d)
-        assertFalse("HELD ITEM" in strings(scene))
+        assertTrue("HELD ITEM" in strings(scene))
+        assertTrue("Nothing" in strings(scene))
         assertTrue("Options" in strings(scene))
     }
 
@@ -474,8 +476,8 @@ class R18GDetailsShots {
             val t = strings(scene)
             assertTrue("the evolution is in the card under the types" , "EVOLUTION" in t)
             assertFalse("no Holding for a species", "Holding" in t)
-            assertEquals(1, t.count { it == "Abilities" })
-            assertTrue(t.indexOf("Abilities") < t.lastIndexOf("HP"))
+            assertEquals(1, t.count { it == "Possible abilities" })
+            assertTrue(t.indexOf("Possible abilities") < t.lastIndexOf("HP"))
         }) { ctx -> DexDetail.show(DexPage(ctx, NoHost), gd.sp(25)) }
     }
 

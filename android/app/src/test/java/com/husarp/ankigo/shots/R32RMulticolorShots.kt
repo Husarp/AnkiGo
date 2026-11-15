@@ -39,6 +39,13 @@ class R32RMulticolorShots {
         (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else emptyList()
 
     @Test fun detailsCollapsedAndHeldItemOpen() {
+        val source = File(System.getenv("ANKIGO_R32J_SPRITES") ?: "/tmp/ankigo-r31c-sprites")
+        val realData = File(System.getenv("ANKIGO_REAL_DATA") ?: "/tmp/r17c-data2")
+        org.junit.Assume.assumeTrue("Optional real sprite and data fixtures are unavailable",
+            listOf(1, 2, 3).all { File(source, "static/$it.png").length() > 500 } &&
+                File(source, "item/everstone.png").length() > 100 &&
+                listOf("pokedex.json", "moves.json", "learnsets.json", "pokemon_species.csv", "pokemon.csv", "pokemon_stats.csv",
+                    "pokemon_evolution.csv", "experience.csv", "items.csv").all { File(realData, it).isFile })
         for (theme in Theme.entries) for (open in listOf(false, true)) {
             // A taller frame exposes all eight headers when Held item is open.
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, theme).copy(screenHeight = (if (open) 1100 else 915) * 2))
@@ -124,7 +131,7 @@ class R32RMulticolorShots {
             val numbers = GameRepo.state!!.mons.map { it.species }.distinct()
             for (n in numbers) {
                 val sprite = File(source, "static/$n.png")
-                require(sprite.length() > 100) { "Real Box sprite required: $sprite" }
+                org.junit.Assume.assumeTrue("Optional real Box sprite is unavailable: $sprite", sprite.length() > 100)
                 File(Sprites.dir(ctx), "static/$n.png").also { it.parentFile!!.mkdirs(); sprite.copyTo(it, overwrite = true) }
             }
             val items = File(source, "item").listFiles().orEmpty().filter { it.extension == "png" }

@@ -50,7 +50,7 @@ class R11DeckColumnsShots {
                 val all = texts(root)
                 val header = listOf("New", "Lrn", "Due").map { n -> all.single { it.text.toString() == n && it.textSize < Ui.dp(ctx, 11) } }
                 for (d in decks) {
-                    val row = all.single { it.text.toString() == d.name }.parent.parent as ViewGroup // name label -> name row -> deck row
+                    val row = all.single { it.text.toString() == d.name && !(it.parent.parent as View).contentDescription.toString().startsWith("Continue ") }.parent.parent as ViewGroup // name label -> name row -> deck row
                     val inRow = texts(row)
                     val cells = listOf("New" to d.new, "Learn" to d.learn, "Review" to d.review).map { (k, n) -> inRow.single { it.contentDescription?.toString() == "$k $n" && it.text.toString() == DeckCounts.format(n) } }
                     for (i in 0..2) {

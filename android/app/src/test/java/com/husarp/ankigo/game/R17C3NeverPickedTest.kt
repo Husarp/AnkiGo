@@ -79,7 +79,7 @@ class R17C3NeverPickedTest {
     @Test fun theMoveTextSaysWhy() {
         assertEquals("Never used in AnkiGo battles: it needs a partner Pokémon.", MoveText.describe(data.move("helpinghand")!!))
         assertEquals("Never used in AnkiGo battles: it only works when Pokémon switch in or out.", MoveText.describe(data.move("batonpass")!!))
-        assertTrue(MoveText.describe(data.move("fling")!!).contains("Throws away its held item"))
+        assertTrue(MoveText.describe(data.move("fling")!!).contains("Throws away its first held item"))
         assertEquals("Never used in AnkiGo battles: AnkiGo has no PP.", MoveText.describe(data.move("spite")!!))
         assertEquals("Never used in AnkiGo battles: AnkiGo has no critical hits.", MoveText.describe(data.move("focusenergy")!!))
         assertTrue(MoveText.describe(data.move("perishsong")!!).contains("faint after three more turns"))

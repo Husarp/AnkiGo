@@ -38,7 +38,7 @@ class R31EShots {
             }
             val labels = texts(stage)
             assertTrue(labels.indexOf("BASICS") < labels.indexOf("Streak Freeze"))
-            assertTrue(labels.indexOf("Streak Freeze") < labels.indexOf("TODAY'S SPECIALS"))
+            assertTrue(labels.indexOf("TODAY'S SPECIALS") < labels.indexOf("BASICS"))
             assertTrue(labels.indexOf("Nest Ball") > labels.indexOf("TODAY'S SPECIALS"))
             paparazzi.snapshot(stage, "e-basics-${theme.name.lowercase()}")
             fillShots(stage, hold(stage, "refresh shop"), "e-refresh-${theme.name.lowercase()}")

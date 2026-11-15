@@ -38,7 +38,7 @@ class R32RMulticolorTest {
         prefs.edit().putString("accent", "unknown").commit()
         assertEquals(Accent.GREEN, AppPrefs.accent(ctx))
         assertEquals("Multicolor", Accent.MULTICOLOR.label)
-        assertEquals("System · Multicolor · 100 %", SettingsSummary.look(ThemeMode.SYSTEM, Accent.MULTICOLOR, 100))
+        assertEquals("System · Multicolor · 100%", SettingsSummary.look(ThemeMode.SYSTEM, Accent.MULTICOLOR, 100))
     }
 
     @Test fun liftedPaletteKeepsHueAndContrastOnBothSectionCards() {

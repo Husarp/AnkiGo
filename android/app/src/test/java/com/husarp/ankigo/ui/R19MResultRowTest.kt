@@ -21,7 +21,7 @@ class R19MResultRowTest {
     @Test fun realThrowStaysAndCompactIsShorter() {
         val full = CatchTilesPlan.rowTiles(sum(thrown = true))
         val small = CatchTilesPlan.rowTiles(sum(thrown = true), compact = true)
-        assertEquals("Throw 2 · 45 %", full[1].value)
+        assertEquals("Throw 2 · 45%", full[1].value)
         assertEquals("Throw 2", small[1].value)
         assertEquals("poke-ball", small[1].ball)
         assertEquals("Caught", CatchTilesPlan.rowTiles(sum(isNew = false), compact = true)[0].value)

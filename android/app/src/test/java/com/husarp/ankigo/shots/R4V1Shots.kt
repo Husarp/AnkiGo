@@ -333,11 +333,13 @@ class R4V1Shots {
         val (_, screen) = shopPage(ctx)
         val btn = findText(screen) { it.startsWith("Refresh") }
         assertNotNull(texts(screen).toString(), btn)
-        assertEquals("Refresh · ${com.husarp.ankigo.ui.CoinText.MARK}100", btn!!.text.toString())
+        val expected = if (com.husarp.ankigo.game.Shop.isWeekend(st.day)) "Refresh · Free"
+            else "Refresh · ${com.husarp.ankigo.ui.CoinText.MARK}100"
+        assertEquals(expected, btn!!.text.toString())
         var row: View? = btn
         while (row != null && !row.isClickable) row = row.parent as? View
         assertEquals("a full-strength button when the money is there", 1f, row!!.alpha, 0f)
-        val (_, poor) = shopPage(ctx.also { st.cash = 20 })
+        val (_, poor) = shopPage(ctx.also { st.cash = 20; st.shopDay = st.day; st.shopRefreshes = 1 })
         var weak: View? = findText(poor) { it.startsWith("Refresh") }
         while (weak != null && !weak.isClickable) weak = weak.parent as? View
         assertTrue("greyed out without the money", weak!!.alpha < 1f)

@@ -80,7 +80,7 @@ class R31NShots {
             assertEquals(nameSize, texts(body).first { it.text == "Growing close" }.textSize, .1f)
 
             FakeGame.withSprites = false; FakeGame.install(ctx)
-            File("/tmp/r31k-sprites/25.png").copyTo(File(Sprites.dir(ctx), "static/25.png").also { it.parentFile!!.mkdirs() }, overwrite = true)
+            FakeSprites.write(FakeSprites.blob(96, Ui.typeColor(Type.ELECTRIC)), File(Sprites.dir(ctx), "static/25.png"))
             Thread { Sprites.staticBitmap(ctx, 25, false) }.apply { start(); join() }
             assertNotNull(Sprites.staticBitmap(ctx, 25, false))
             for (id in listOf("first-catch", "defeats")) {

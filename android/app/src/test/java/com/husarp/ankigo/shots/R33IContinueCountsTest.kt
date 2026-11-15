@@ -22,7 +22,9 @@ class R33IContinueCountsTest {
 
     private fun checkCounts(built: StudyDeckKit.Built, deck: Anki.Deck) {
         val card = slot(built).getChildAt(0)
-        assertEquals("Continue ${deck.name}, New ${deck.new}, Learning ${deck.learn}, Due ${deck.review}", card.contentDescription)
+        val description = if (deck.total > 0) "Continue ${deck.name}, New ${deck.new}, Learning ${deck.learn}, Due ${deck.review}"
+            else "Continue ${deck.name}, no reviews left today"
+        assertEquals(description, card.contentDescription)
         val values = listOf(deck.new, deck.learn, deck.review)
         val descriptions = listOf("New ${deck.new}", "Learn ${deck.learn}", "Review ${deck.review}")
         val tones = listOf(R.color.ag_blue, R.color.ag_red, R.color.ag_green)
