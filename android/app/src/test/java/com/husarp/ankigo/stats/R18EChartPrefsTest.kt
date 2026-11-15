@@ -46,10 +46,10 @@ class R18EChartPrefsTest {
     }
 
     @Test fun answerButtonsRestoreTheirRollingPeriods() {
-        assertEquals(listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D100, ChartPeriod.D300), ChartPrefs.periodsFor(ChartMetric.BUTTONS))
+        assertEquals(listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D100, ChartPeriod.D365, ChartPeriod.D1000), ChartPrefs.periodsFor(ChartMetric.BUTTONS))
         for (p in ChartPrefs.periodsFor(ChartMetric.BUTTONS)) {
             assertEquals(p, dec(m = "BUTTONS", p = p.name, g = "MONTH").period)
-            assertNull(dec(m = "BUTTONS", p = p.name, g = "MONTH").grain)
+            assertEquals(ChartGrain.MONTH.takeIf { it in p.grains }, dec(m = "BUTTONS", p = p.name, g = "MONTH").grain)
         }
         assertEquals(ChartPeriod.D7, dec(m = "BUTTONS", p = "D1").period)
         assertEquals(ChartPeriod.D7, dec(m = "BUTTONS").period)
@@ -59,7 +59,7 @@ class R18EChartPrefsTest {
 
     @Test fun calendarChoicesMigrateToRollingPeriods() {
         for (metric in listOf("BUTTONS", "REVIEWS", "TIME", "NEW_CARDS", "STREAK_CALENDAR")) {
-            for ((old, current) in listOf("D7" to ChartPeriod.D7, "D30" to ChartPeriod.D30, "D365" to ChartPeriod.D300, "D90" to ChartPeriod.D100)) {
+            for ((old, current) in listOf("D7" to ChartPeriod.D7, "D30" to ChartPeriod.D30, "D365" to ChartPeriod.D365, "D300" to ChartPeriod.D365, "D90" to ChartPeriod.D100)) {
                 assertEquals(current, dec(m = metric, p = old).period)
             }
         }

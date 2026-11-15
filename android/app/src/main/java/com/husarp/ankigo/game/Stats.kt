@@ -12,8 +12,8 @@ import kotlin.math.max
 
 /** Records study into [GameState.history] and turns it into the numbers and heatmap of the Stats screen. */
 object StudyStats {
-    /** History older than this many days is dropped when recording. */
-    const val KEEP_DAYS = 400
+    /** Retain the full 1000-day Stats window when recording new history. */
+    const val KEEP_DAYS = 1000
 
     /**
      * Adds what [events] say to today's [DayLog]: Counted -> reviews; Defeated -> won; Caught -> caught (+ shinies when

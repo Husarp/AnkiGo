@@ -15,19 +15,19 @@ class R28LStatsTest {
             "2026-10-31" to DayLog(buttons = intArrayOf(0, 1000, 2000, 3000, 4000)),
             "2025-12-31" to DayLog(buttons = intArrayOf(0, 10000, 20000, 30000, 40000)),
             "2026-11-08" to DayLog(buttons = intArrayOf(0, 1000, 2000, 3000, 4000)))
-        for ((p, total, first) in listOf(Triple(ChartPeriod.D300, 11110.0, "2026-01-12"), Triple(ChartPeriod.D100, 11110.0, "2026-07-31"),
+        for ((p, total, first) in listOf(Triple(ChartPeriod.D365, 111110.0, "2025-11-08"), Triple(ChartPeriod.D100, 11110.0, "2026-07-31"),
             Triple(ChartPeriod.D7, 1110.0, "2026-11-01"), Triple(ChartPeriod.D30, 11110.0, "2026-10-09"))) {
             val s = ChartData.build(ChartMetric.BUTTONS, p, "Old deck", StatsSnapshot(), history, today, ChartGrain.MONTH)
             assertEquals(total, s.total, 0.0)
             assertEquals(first, s.bars.first().startDay)
             assertEquals(today, s.bars.last().endDay)
-            assertEquals(total / s.bars.size, s.perDayAvg, 0.0)
+            assertEquals(total / s.period.days, s.perDayAvg, 0.0)
             assertFalse(s.deckApplies)
             assertEquals(listOf(10, 20, 30, 40), StatsChartMath.legend(s).map { it.percent })
         }
         assertTrue(ChartMetric.BUTTONS.usesPeriod)
-        assertEquals(listOf("Last 7 days", "Last 30 days", "Last 100 days", "Last 300 days"), StatsChartMath.periods(ChartMetric.BUTTONS).map { StatsChartMath.periodLabel(ChartMetric.BUTTONS, it) })
-        assertTrue(ChartData.grains(ChartMetric.BUTTONS, ChartPeriod.D300).isEmpty())
+        assertEquals(listOf("Last 7 days", "Last 30 days", "Last 100 days", "Last 365 days", "Last 1000 days"), StatsChartMath.periods(ChartMetric.BUTTONS).map { StatsChartMath.periodLabel(ChartMetric.BUTTONS, it) })
+        assertEquals(ChartPeriod.D365.grains, ChartData.grains(ChartMetric.BUTTONS, ChartPeriod.D365))
     }
     @Test fun oldTodayMigratesToLastSevenDays() {
         val s = ChartData.build(ChartMetric.BUTTONS, ChartPeriod.D1, null, StatsSnapshot(),

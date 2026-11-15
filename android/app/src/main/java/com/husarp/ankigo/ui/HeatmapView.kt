@@ -18,6 +18,7 @@ import com.husarp.ankigo.game.StudyStats
 class HeatmapView(ctx: Context) : View(ctx) {
     private var days: List<HeatmapLayout.Day> = emptyList()
     private var mode = HeatmapLayout.Mode.WEEKS
+    private var blankDays: Set<String> = emptySet()
     private var todayKey: String? = null
     private var layout: HeatmapLayout.Result? = null
     private var layoutW = -1f
@@ -55,9 +56,10 @@ class HeatmapView(ctx: Context) : View(ctx) {
         set(v) { if (v != field) { field = v; invalidate() } }
     var onDayTap: ((String?) -> Unit)? = null
 
-    fun set(heatmap: StudyStats.Heatmap, today: String, noun: String = "Reviews", mode: HeatmapLayout.Mode = HeatmapLayout.Mode.WEEKS) {
+    fun set(heatmap: StudyStats.Heatmap, today: String, noun: String = "Reviews", mode: HeatmapLayout.Mode = HeatmapLayout.Mode.WEEKS, blankDays: Set<String> = emptySet()) {
         days = heatmap.columns.flatten().filterNotNull().map { HeatmapLayout.Day(it.day, it.level) }
         this.mode = mode
+        this.blankDays = blankDays
         todayKey = today
         layout = null
         contentDescription = "$noun in the last ${days.size} days: ${heatmap.total}"
@@ -97,6 +99,7 @@ class HeatmapView(ctx: Context) : View(ctx) {
         }
         val numMid = -(numberPaint.descent() + numberPaint.ascent()) / 2
         for (c in l.cells) {
+            if (c.day in blankDays) continue
             rect.set(c.x, c.y, c.x + c.w, c.y + c.h)
             cellPaint.color = levelColor(context, c.level)
             canvas.drawRoundRect(rect, c.radius, c.radius, cellPaint)

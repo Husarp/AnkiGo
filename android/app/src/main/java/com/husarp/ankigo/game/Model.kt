@@ -407,7 +407,7 @@ class GameState(
     var streakThroughDay: String? = null, // last earned or protected day; protected days add no progress
     var battleFreezeDay: String? = null,
     var bestStreakDays: Int = 0,         // longest goal streak ever
-    val history: MutableMap<String, DayLog> = mutableMapOf(), // game day "yyyy-MM-dd" -> that day's log (kept 400 days)
+    val history: MutableMap<String, DayLog> = mutableMapOf(), // game day "yyyy-MM-dd" -> that day's log (kept 1000 days)
     var totalReviews: Long = 0,
     val badges: MutableSet<Int> = mutableSetOf(),
     var shopDay: String? = null,

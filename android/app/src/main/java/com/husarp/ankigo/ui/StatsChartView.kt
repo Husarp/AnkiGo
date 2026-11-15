@@ -11,6 +11,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import com.husarp.ankigo.R
+import com.husarp.ankigo.stats.ChartGrain
 import com.husarp.ankigo.stats.ChartKind
 import com.husarp.ankigo.stats.ChartMetric
 import com.husarp.ankigo.stats.ChartSeries
@@ -18,8 +19,8 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-// TICKET R3-V1 (pick 1, look 1B): the Stats chart, drawn by hand. A TIME chart is bars over days / weeks / months (stacked when
-// the metric has parts), a CATEGORY chart is a list of labelled bars (rows). Tap a bar: it lights up and a small box says what
+// TICKET R3-V1 (pick 1, look 1B): the Stats chart, drawn by hand. TIME uses daily bars (stacked when the metric has parts)
+// or smooth daily-average trends over weeks / months / years; CATEGORY uses labelled rows. Tap: a small box says what
 // that exact day / period holds ([com.husarp.ankigo.stats.Bar.detail]); drag across to scrub (time charts); tap beside the
 // bars to close it. The streak calendar is the [HeatmapView]. All geometry and text decisions are in [StatsChartMath].
 
@@ -53,6 +54,12 @@ class StatsChartView(ctx: Context) : View(ctx) {
     private val tipEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = dp(1f); color = color(R.color.ag_s1) }
     private val rect = RectF()
     private val path = Path()
+    private val trend = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = dp(2f); strokeCap = Paint.Cap.ROUND }
+    private var axis = StatsChartMath.axis(ChartMetric.REVIEWS, 0.0)
+    private var axisTexts: List<String> = emptyList()
+    private var goals: List<Int> = emptyList()
+    private var labelPlan: List<AxisLabel> = emptyList()
+    private var labelWidth = -1
 
     private val plotHeight = dp(200f)
     private val rowHeight = dp(28f)
@@ -60,6 +67,10 @@ class StatsChartView(ctx: Context) : View(ctx) {
 
     fun set(s: ChartSeries, tones: List<Int>, selected: Int = -1) {
         series = s
+        goals = s.bars.mapNotNull { it.dailyGoal }
+        axis = StatsChartMath.axis(s.metric, max(peak(s), goals.maxOrNull()?.toDouble() ?: 0.0))
+        axisTexts = s.bars.map { StatsChartMath.axisText(s, it) }
+        labelWidth = -1
         this.tones = tones.ifEmpty { listOf(color(R.color.ag_mauve)) }
         this.selected = selected
         contentDescription = "${StatsChartMath.title(s)}: ${s.bars.size} bars"
@@ -87,7 +98,7 @@ class StatsChartView(ctx: Context) : View(ctx) {
     private fun tone(part: Int) = tones[part % tones.size]
 
     private fun peak(s: ChartSeries): Double =
-        s.bars.filter { it.hasData }.maxOfOrNull { b -> if (s.metric == ChartMetric.RETENTION) b.values.firstOrNull() ?: 0.0 else b.values.sum() } ?: 0.0
+        s.bars.filter { it.hasData }.maxOfOrNull { b -> if (s.grain != ChartGrain.DAY) b.values.maxOrNull() ?: 0.0 else if (s.metric == ChartMetric.RETENTION) b.values.firstOrNull() ?: 0.0 else b.values.sum() } ?: 0.0
 
     // plot box of a TIME chart
     private var plotL = 0f
@@ -97,8 +108,6 @@ class StatsChartView(ctx: Context) : View(ctx) {
 
     private fun drawBars(canvas: Canvas, s: ChartSeries) {
         val n = s.bars.size
-        val goals = s.bars.mapNotNull { it.dailyGoal }
-        val axis = StatsChartMath.axis(s.metric, max(peak(s), goals.maxOrNull()?.toDouble() ?: 0.0))
         plotL = axis.labels.maxOf { label.measureText(it) } + dp(10f)
         plotR = width - if (goals.isNotEmpty()) label.measureText("Goal ${goals.maxOrNull()}") + dp(10f) else dp(2f)
         plotT = dp(8f)
@@ -115,7 +124,7 @@ class StatsChartView(ctx: Context) : View(ctx) {
         }
 
         val slot = (plotR - plotL) / n
-        val barW = max(dp(1.5f), min(slot * 0.74f, dp(26f)))
+        val barW = min(slot * (if (n >= 100) 0.94f else 0.74f), dp(26f))
         val radius = min(dp(3f), barW / 2)
         val dim = selected >= 0
         if (dim) { // a soft column behind the chosen bar
@@ -124,7 +133,10 @@ class StatsChartView(ctx: Context) : View(ctx) {
             rect.set(cx - slot / 2, plotT - dp(4f), cx + slot / 2, plotB)
             canvas.drawRoundRect(rect, radius, radius, fill)
         }
-        for (i in 0 until n) {
+        val clip = canvas.clipBounds
+        val visible = StatsChartMath.visibleIndices(n, plotL, plotR, clip.left.toFloat(), clip.right.toFloat())
+        if (s.grain != ChartGrain.DAY) drawTrend(canvas, s, visible, axis.max, ph, dim)
+        else for (i in visible) {
             val bar = s.bars[i]
             if (!bar.hasData) continue
             val cx = StatsChartMath.slotCenter(i, n, plotL, plotR)
@@ -137,10 +149,13 @@ class StatsChartView(ctx: Context) : View(ctx) {
                 canvas.drawRoundRect(rect, dp(1f), dp(1f), fill)
                 continue
             }
-            canvas.save()
-            rect.set(cx - barW / 2, top, cx + barW / 2, plotB + radius)
-            path.reset(); path.addRoundRect(rect, radius, radius, Path.Direction.CW)
-            canvas.clipPath(path)
+            val rounded = barW >= dp(3f)
+            if (rounded) {
+                canvas.save()
+                rect.set(cx - barW / 2, top, cx + barW / 2, plotB + radius)
+                path.reset(); path.addRoundRect(rect, radius, radius, Path.Direction.CW)
+                canvas.clipPath(path)
+            }
             var y = plotB
             for ((part, v) in bar.values.withIndex()) {
                 if (v <= 0.0) continue
@@ -149,7 +164,7 @@ class StatsChartView(ctx: Context) : View(ctx) {
                 canvas.drawRect(cx - barW / 2, y - h, cx + barW / 2, y, fill)
                 y -= h
             }
-            canvas.restore()
+            if (rounded) canvas.restore()
         }
 
         // Goal segments follow the stored goal of each day, over even taller bars.
@@ -159,9 +174,9 @@ class StatsChartView(ctx: Context) : View(ctx) {
                 pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(5f), dp(4f)), 0f)
             }
             val goalPath = Path()
-            for ((i, b) in s.bars.withIndex()) b.dailyGoal?.let { g ->
+            for (i in visible) s.bars[i].dailyGoal?.let { g ->
                 val y = plotB - (g / axis.max).toFloat() * ph
-                if (i == 0) goalPath.moveTo(plotL, y) else goalPath.lineTo(plotL + i * slot, y)
+                if (i == visible.first) goalPath.moveTo(plotL + i * slot, y) else goalPath.lineTo(plotL + i * slot, y)
                 goalPath.lineTo(plotL + (i + 1) * slot, y)
             }
             goalPaint.style = Paint.Style.STROKE
@@ -173,8 +188,12 @@ class StatsChartView(ctx: Context) : View(ctx) {
         }
 
         // x labels
-        val texts = s.bars.map { StatsChartMath.axisText(s, it) }
-        val plan = StatsChartMath.labelPlan(n, plotL, plotR, dp(8f)) { label.measureText(texts[it]) }
+        val texts = axisTexts
+        if (labelWidth != width) {
+            labelWidth = width
+            labelPlan = StatsChartMath.labelPlan(n, plotL, plotR, dp(8f)) { label.measureText(texts[it]) }
+        }
+        val plan = labelPlan
         label.textAlign = Paint.Align.LEFT
         for (l in plan) {
             val w = label.measureText(texts[l.index])
@@ -184,6 +203,36 @@ class StatsChartView(ctx: Context) : View(ctx) {
         if (selected >= 0) {
             val cx = StatsChartMath.slotCenter(selected, n, plotL, plotR)
             drawTip(canvas, s, s.bars[selected].detail, tipLeft = { w -> StatsChartMath.tooltipLeft(cx, barW / 2 + dp(8f), w, width.toFloat(), dp(6f)) }, tipTop = { plotT })
+        }
+    }
+
+    private fun drawTrend(canvas: Canvas, s: ChartSeries, visible: IntRange, max: Double, ph: Float, dim: Boolean) {
+        for (part in s.seriesNames.indices) {
+            path.reset()
+            var previous = -1
+            var px = 0f
+            var py = 0f
+            for (i in visible) {
+                val b = s.bars[i]
+                if (!b.hasData) { previous = -1; continue }
+                val x = StatsChartMath.slotCenter(i, s.bars.size, plotL, plotR)
+                val y = plotB - ((b.values.getOrElse(part) { 0.0 } / max).toFloat().coerceIn(0f, 1f)) * ph
+                if (previous < 0) {
+                    path.moveTo(x, y)
+                    fill.color = tone(part); fill.alpha = if (dim) 105 else 255
+                    canvas.drawCircle(x, y, dp(2f), fill)
+                } else {
+                    val mid = (px + x) / 2
+                    path.cubicTo(mid, py, mid, y, x, y)
+                }
+                if (i == selected) {
+                    fill.color = tone(part); fill.alpha = 255
+                    canvas.drawCircle(x, y, dp(3.5f), fill)
+                }
+                previous = i; px = x; py = y
+            }
+            trend.color = tone(part); trend.alpha = if (dim) 140 else 255
+            canvas.drawPath(path, trend)
         }
     }
 

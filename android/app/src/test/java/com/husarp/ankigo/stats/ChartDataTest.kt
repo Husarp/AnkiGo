@@ -48,12 +48,12 @@ class ChartDataTest {
         val first = s.bars.first(); val last = s.bars.last()
         assertEquals("Jul 13", first.label)                  // the Monday of the first (cut) week
         assertEquals("2026-07-17", first.startDay); assertEquals("2026-07-19", first.endDay)
-        assertEquals(listOf(3.0), first.values)
+        assertEquals(listOf(1.0), first.values)
         assertEquals("Oct 12", last.label)
         assertEquals("2026-10-12", last.startDay); assertEquals(today, last.endDay)
-        assertEquals(listOf(3.0), last.values)
-        assertEquals(listOf(7.0), s.bars[1].values)          // a whole week
-        assertEquals(90.0, s.bars.sumOf { it.values[0] }, 0.0)
+        assertEquals(listOf(1.0), last.values)
+        assertEquals(listOf(1.0), s.bars[1].values)          // a whole week
+        assertEquals(14.0, s.bars.sumOf { it.values[0] }, 0.0)
         assertEquals(90.0, s.total, 0.0)
     }
 
@@ -62,10 +62,10 @@ class ChartDataTest {
         val s = build(ChartMetric.ANSWERS, ChartPeriod.D365, history = h)
         assertEquals(13, s.bars.size)
         assertEquals("Oct", s.bars.first().label); assertEquals("2025-10-15", s.bars.first().startDay); assertEquals("2025-10-31", s.bars.first().endDay)
-        assertEquals(listOf(34.0), s.bars.first().values)    // 17 days x 2
+        assertEquals(listOf(2.0), s.bars.first().values)    // mean of the partial month
         assertEquals("Oct", s.bars.last().label); assertEquals("2026-10-01", s.bars.last().startDay); assertEquals(today, s.bars.last().endDay)
-        assertEquals(listOf(28.0), s.bars.last().values)
-        assertEquals(listOf(60.0), s.bars[1].values)         // November: 30 days
+        assertEquals(listOf(2.0), s.bars.last().values)
+        assertEquals(listOf(2.0), s.bars[1].values)         // November daily mean
         assertEquals(730.0, s.total, 0.0)
         assertEquals(2.0, s.perDayAvg, 1e-9)
     }
@@ -210,11 +210,13 @@ class ChartDataTest {
         assertEquals("2026-10-15", s7.bars.first().startDay); assertEquals("2026-10-21", s7.bars.last().startDay)
         assertEquals(listOf("Thu", "Fri", "Sat", "Sun", "Mon", "Tue", "Wed"), s7.bars.map { it.label })
         assertEquals(28.0, s7.total, 0.0); assertEquals(4.0, s7.perDayAvg, 1e-9); assertEquals(7.0, s7.best, 0.0)
-        val s365 = build(ChartMetric.DUE, ChartPeriod.D365, snap)
-        assertEquals(ChartPeriod.D30, s365.period); assertEquals(30, s365.bars.size); assertEquals(465.0, s365.total, 0.0)
-        assertEquals(ChartPeriod.D30, ChartData.effectivePeriod(ChartMetric.DUE, ChartPeriod.D90))
+        val dueKey = SeriesKey(null, ChartMetric.DUE, 100, today)
+        val longSnap = snap.copy(series = mapOf(dueKey to SeriesData((1..100).associate { t.plusDays(it.toLong()).toString() to it }, 1)))
+        val s365 = ChartData.build(ChartMetric.DUE, ChartPeriod.D365, null, longSnap, emptyMap(), today, ChartGrain.DAY)
+        assertEquals(ChartPeriod.D100, s365.period); assertEquals(100, s365.bars.size); assertEquals(5050.0, s365.total, 0.0)
+        assertEquals(ChartPeriod.D100, ChartData.effectivePeriod(ChartMetric.DUE, ChartPeriod.D100))
         assertEquals(ChartPeriod.D90, ChartData.effectivePeriod(ChartMetric.REVIEWS, ChartPeriod.D90))
-        assertEquals(listOf(SeriesKey("D", ChartMetric.DUE, 30, today)), ChartData.seriesKeys(ChartMetric.DUE, ChartPeriod.D365, "D", today))
+        assertEquals(listOf(SeriesKey("D", ChartMetric.DUE, 100, today)), ChartData.seriesKeys(ChartMetric.DUE, ChartPeriod.D365, "D", today))
     }
 
     @Test fun dueWithoutAnkiDroidSaysWhy() {
