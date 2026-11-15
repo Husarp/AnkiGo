@@ -5,6 +5,11 @@ import com.husarp.ankigo.R
 /** Battle conditions, including action-only effects; Tabler outlines match the app icons. */
 internal object ConditionIcons {
     fun of(key: String): Int? = when (key) {
+        "heal.regen" -> R.drawable.ic_condition_healing
+        "heal.pending" -> R.drawable.ic_condition_delayed_heal
+        "heal.speed", "heal.slow" -> R.drawable.ic_field_tailwind
+        "heal.attack", "heal.weak" -> R.drawable.ic_condition_charge
+        "heal.defense" -> R.drawable.ic_condition_defensecurl
         "snack.rage", "snack.spa" -> R.drawable.ic_condition_charge
         "snack.spd" -> R.drawable.ic_condition_defensecurl
         "snack.shield" -> R.drawable.ic_condition_protect

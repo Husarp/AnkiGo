@@ -84,6 +84,7 @@ object ItemInfo {
     }
 
     fun short(data: GameData?, item: String, caught: Set<Int>? = null): String {
+        HealingItems.short[item]?.let { return it }
         specialShort(item)?.let { return it }
         if (item in AbilityAdaptations.berries) return when (item) {
             "oran-berry" -> "Held: heals 10 HP"
@@ -128,6 +129,7 @@ object ItemInfo {
 
     /** The row line (Bag rows, under the name of an opened card, the deal card; about 40 characters, no bold marks). */
     fun line(data: GameData?, item: String, caught: Set<Int>? = null): String {
+        HealingItems.summary[item]?.let { return it }
         specialLine(item)?.let { return it }
         if (item in AbilityAdaptations.berries) return berryLine(item)
         val def = Items.def(item) ?: return NO_DESCRIPTION
@@ -156,6 +158,20 @@ object ItemInfo {
     /** The full text of an opened card, in blocks. Never empty for a catalogue item; an unknown item gets one generic block. */
     fun facts(data: GameData?, item: String, caught: Set<Int>? = null): List<ItemFact> {
         val def = Items.def(item) ?: return listOf(ItemFact(WHAT, NO_DESCRIPTION))
+        HealingItems.text[item]?.let { text ->
+            val outside = when (item) {
+                "berry-juice", "sweet-heart" -> ""
+                else -> " Outside battle (Bag use), only the healing/cure applies; no stat changes."
+            }
+            val lasting = if (item in HealingItems.boosts) " The multiplier belongs to that Pokémon, survives switching and ends with the fight. Reusing the same item does not stack it." else ""
+            val timed = if (item == "berry-juice" || item == "sweet-heart") " Timed healing pauses on the bench, resumes when that Pokémon is active, and ends with the fight." + if (item == "berry-juice") " Reusing it refreshes its 4 turns." else " It heals before attacks; it cannot be reused while pending." else ""
+            val fight = if (item == "sweet-heart") FIGHT_RULE.replace("On your **main** in a fight it works **at once**, then", "Use it on your **main** in a fight and") else FIGHT_RULE
+            return listOf(
+                ItemFact(WHAT, text + outside + " Healing never goes above maximum HP."),
+                ItemFact(HOW, "Use from the Bag on one of your Pokémon. HP percentages round down, at least 1 HP per heal. It **can't** be used without healing or another useful effect."),
+                ItemFact(FIGHT, "$fight $MAIN_ONLY" + lasting + timed),
+            )
+        }
         specialText(item)?.let { text ->
             if (item in BattleItems.held) return listOf(
                 ItemFact(WHAT, text),
@@ -176,20 +192,7 @@ object ItemInfo {
                 ItemFact(HOW, "Used automatically at the configured day cutoff. A whole gap needs one freeze per missed day; if there are not enough, the streak ends and none are spent. Protected days preserve the count without adding goal days or rewards."),
             )
             ItemKind.BALL -> ballFacts(item)
-            ItemKind.HEAL -> {
-                val all = def.heal == Int.MAX_VALUE
-                // R17C-6: a status (burn, poison, paralysis, sleep, freeze) exists only on the main in a fight; Full Restore cures it, Max Potion does not.
-                listOf(
-                    ItemFact(WHAT, when {
-                        def.cures -> "Heals **all HP** of one of your Pokémon. In a fight it also **cures** your main's burn, poison, paralysis, sleep or freeze. A status ends with the fight anyway."
-                        all -> "Heals **all HP** of one of your Pokémon. It **doesn't** cure a status. Full Restore and Lumiose Galette can cure one; Awakening cures sleep only."
-                        else -> "Heals one of your Pokémon by **${def.heal} HP**, never above its maximum."
-                    }),
-                    ItemFact(HOW, if (def.cures) "Use it from the Bag. It **can't** be used on a Pokémon at full HP, except on your main when it has a status in a fight."
-                    else "Use it from the Bag. It **can't** be used on a Pokémon at full HP."),
-                    ItemFact(FIGHT, "$FIGHT_RULE $MAIN_ONLY"),
-                )
-            }
+            ItemKind.HEAL -> listOf(ItemFact(WHAT, def.note), ItemFact(HOW, "Use from the Bag."), ItemFact(FIGHT, "$FIGHT_RULE $MAIN_ONLY"))
             ItemKind.EVOLUTION -> if (item in Items.RETIRED) listOf(
                 ItemFact(WHAT, RETIRED_WHAT),
                 ItemFact(HOW, "You can't use it. If you already own one, it stays in the Bag."),
@@ -299,7 +302,7 @@ object ItemInfo {
 
     private fun nice(d: Double): String = if (d == Math.floor(d)) d.toInt().toString() else d.toString()
 
-    private fun healLine(def: ItemDef) = if (def.heal == Int.MAX_VALUE) "Heals all HP" else "Heals ${def.heal} HP"
+    private fun healLine(def: ItemDef) = "Heals ${def.heal}% max HP"
 
     private fun fossilName(data: GameData?, def: ItemDef): String? = def.fossil?.let { data?.species?.get(it)?.name }
 

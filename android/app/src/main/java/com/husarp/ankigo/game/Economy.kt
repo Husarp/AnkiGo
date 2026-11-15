@@ -13,10 +13,10 @@ enum class ItemKind { BALL, HEAL, EVOLUTION, HELD, ESCAPE, FOSSIL, AUTO }
 data class ItemDef(
     val id: String,              // PokeAPI item id, e.g. "thunder-stone"
     val kind: ItemKind,
-    val heal: Int = 0,           // HEAL: HP restored (Ankimon fixed amounts); Int.MAX_VALUE = full
+    val heal: Int = 0,           // HEAL: percent of max HP (timed items use their total outside battle)
     val fossil: Int? = null,     // FOSSIL: species revived
     val cures: Boolean = false,  // R17C-6, HEAL: also cures the Main's battle status (Full Restore)
-    val note: String = "",       // one short line for the shop/bag ("Heals 20 HP", "Holder gets x1.5 XP", "Evolves some Pokémon")
+    val note: String = "",       // one short line for the shop/bag ("Heals 25% max HP", "Holder gets x1.5 XP", "Evolves some Pokémon")
 )
 
 object Items {
@@ -62,13 +62,6 @@ object Items {
 
     /** PLAN 171: what a failed throw costs, said wherever a ball is chosen or explained. */
     const val MISS_RULE = "If it fails, the wild Pokémon runs away."
-
-    // Ankimon's fixed heal amounts (item_window.py hp_heal_items); max-potion / full-restore heal everything.
-    private val HEALS = listOf(
-        "potion" to 20, "sweet-heart" to 20, "berry-juice" to 20, "fresh-water" to 30, "soda-pop" to 50, "super-potion" to 60,
-        "energy-powder" to 60, "lemonade" to 70, "moomoo-milk" to 100, "hyper-potion" to 120, "energy-root" to 120,
-        "full-restore" to Int.MAX_VALUE, "max-potion" to Int.MAX_VALUE,
-    )
 
     private val EVOLUTION = listOf(
         "fire-stone", "water-stone", "thunder-stone", "leaf-stone", "moon-stone", "sun-stone", "shiny-stone", "dusk-stone",
@@ -116,10 +109,8 @@ object Items {
     val ALL: Map<String, ItemDef> = buildList {
         addAll(balls())
         add(ItemDef(StreakFreeze.ITEM, ItemKind.AUTO, note = "Protects one missed daily goal automatically"))
-        HEALS.forEach { (id, hp) ->
-            val cures = id == FULL_RESTORE
-            add(ItemDef(id, ItemKind.HEAL, heal = hp, cures = cures,
-                note = if (cures) "Heals all HP and cures a status" else if (hp == Int.MAX_VALUE) "Heals all HP" else "Heals $hp HP"))
+        HealingItems.percent.forEach { (id, percent) ->
+            add(ItemDef(id, ItemKind.HEAL, heal = percent, cures = id == FULL_RESTORE, note = HealingItems.text.getValue(id)))
         }
         BattleItems.snacks.forEach { (id, text) -> add(ItemDef(id, ItemKind.HEAL, note = text)) }
         add(ItemDef("awakening", ItemKind.HEAL, note = "Wakes a sleeping Pokémon in battle"))
@@ -664,25 +655,12 @@ object ItemUse {
     private fun target(state: GameState, uid: String?, defaultMain: Boolean): Mon? =
         if (uid != null) state.mon(uid) else if (defaultMain) state.main else null
 
-    /** R17C-6: the battle status ("brn" "psn" "tox" "par" "slp" "frz") of [mon] when it is the Main in a fight, else null (only the Main has a status, and only in a fight). */
-    private fun battleStatus(state: GameState, mon: Mon): String? =
-        if (mon.uid == state.main?.uid) state.battle?.player?.status else null
-
-    /** R17C-6: the status word of a cure line ("X's burn was healed."); sleep and freeze use the battle's own lines ("woke up", "thawed out"). */
-    private fun cureText(name: String, status: String): String = when (status) {
-        "slp" -> "$name woke up."
-        "frz" -> "$name thawed out."
-        "par" -> "$name's paralysis was healed."
-        "psn", "tox" -> "$name's poison was healed."
-        else -> "$name's burn was healed."
-    }
-
     /** Can [item] be used on [mon] right now (heal: hurt, or Full Restore with a status in a fight; evolution item: Progression.itemEvolution != null; held: anyone)? */
     fun canUse(data: GameData, state: GameState, item: String, mon: Mon?, now: Long = System.currentTimeMillis()): Boolean {
         val def = Items.def(item) ?: return false
         if (state.count(item) <= 0) return false
         return when (def.kind) {
-            ItemKind.HEAL -> if (item in BattleItems.snacks || item == "awakening") BattleItems.canUse(data, state, item, mon ?: state.main) else (mon ?: state.main)?.let { it.hp < StatCalc.maxHp(data, it) || (def.cures && battleStatus(state, it) != null) } ?: false
+            ItemKind.HEAL -> if (item in HealingItems.percent) HealingItems.canUse(data, state, item, mon ?: state.main) else BattleItems.canUse(data, state, item, mon ?: state.main)
             ItemKind.EVOLUTION -> mon != null && Progression.itemEvolution(data, mon, item, now, state.activeHeldItem(mon)) != null
             ItemKind.HELD -> mon != null && item !in mon.heldItems
             ItemKind.FOSSIL -> data.species.containsKey(def.fossil)
@@ -691,7 +669,7 @@ object ItemUse {
     }
 
     /**
-     * HEAL: heals the target (default the main) by the fixed amount (badge 20). EVOLUTION: evolves via
+     * HEAL: heals the target (default the main) by its percentage of max HP (badge 20). EVOLUTION: evolves via
      * Progression.itemEvolution/evolve. FOSSIL: revives the species at Lv 5 into the collection (badge 19).
      * HELD: gives it to the target (the old held item goes back to the bag). Uses up the item except HELD moves it.
      */
@@ -705,25 +683,8 @@ object ItemUse {
             ItemKind.BALL, ItemKind.ESCAPE -> return ActionResult(false, BATTLE_ONLY)
             ItemKind.HEAL -> {
                 val mon = target(state, targetUid, true) ?: return ActionResult(false, "No Pokémon to heal.")
-                if (item in BattleItems.snacks || item == "awakening") return BattleItems.use(data, state, item, mon, rng, now)
-                val missing = StatCalc.maxHp(data, mon) - mon.hp
-                // R17C-6: Full Restore also cures the Main's battle status; at full HP it still works when there is a status to cure.
-                val status = if (def.cures) battleStatus(state, mon) else null
-                if (missing <= 0 && status == null) return ActionResult(false, "${mon.name} is already healthy.")
-                val healed = minOf(missing, def.heal)
-                mon.hp += healed
-                var message = if (healed > 0) "$name healed ${mon.name} by $healed HP" else "$name cured ${mon.name}"
-                if (status != null) {
-                    val side = state.battle!!.player
-                    side.status = null; side.statusTurns = 0
-                    side.volatiles.remove(CoreRules.SLEEP_TURNS) // R17C-FIX6: Rest's fixed sleep length goes with the sleep, like every other cure
-                    events += GameEvent.Effect(true, cureText(mon.name, status), mon.hp, StatCalc.maxHp(data, mon), null, EffectKind.STATUS_CURED, status)
-                    if (healed > 0) message += " and cured its status"
-                }
-                Economy.take(state, item)
-                StudyStats.addHealItem(state)
-                Badges.award(state, 20, events, now, mon, data)
-                return used(data, state, now, events, message)
+                return if (item in HealingItems.percent) HealingItems.use(data, state, item, mon, now)
+                    else BattleItems.use(data, state, item, mon, rng, now)
             }
             ItemKind.EVOLUTION -> {
                 val mon = target(state, targetUid, false) ?: return ActionResult(false, "Choose a Pokémon first.")

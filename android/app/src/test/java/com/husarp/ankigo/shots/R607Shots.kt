@@ -143,7 +143,7 @@ class R607Shots {
             var nice = 0
             val v = dim(ctx, AchievementPopup.itemLayer(ctx, listOf(ItemFind("potion", 3)), { nice++ }))
             val t = texts(v)
-            assertTrue(t.toString(), t.any { it.equals("Item found", ignoreCase = true) } && "Potion" in t && "Heals 20 HP" in t && "You have 3" in t && "Nice" in t)
+            assertTrue(t.toString(), t.any { it.equals("Item found", ignoreCase = true) } && "Potion" in t && "Heals 25% max HP" in t && "You have 3" in t && "Nice" in t)
             fun tap(s: String) { var x: View? = findText(v, s); while (x != null && !x.isClickable) x = x.parent as? View; x!!.performClick() }
             tap("Nice"); assertEquals(1, nice)
             v
