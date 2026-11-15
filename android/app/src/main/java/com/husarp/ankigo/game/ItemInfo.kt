@@ -177,8 +177,8 @@ object ItemInfo {
 
     /** The full text of an opened TM card: what a TM is, and how it is taught. */
     fun tmFacts(): List<ItemFact> = listOf(
-        ItemFact(WHAT, "A **TM** (Technical Machine) teaches one move. Buy it **once**; it is **never used up**, so you can teach the move to every Pokémon of yours that can learn it."),
-        ItemFact(HOW, "Teach it from the Bag with **Teach…**. **Who can learn it** lists your Pokémon that can learn the move. If a Pokémon already knows 4 moves, you choose which one to forget."),
+        ItemFact(WHAT, "A **TM** (Technical Machine) teaches one move to one compatible Pokémon. Each TM is **single-use**: teaching **uses it up**. Each owned TM gives **1 use**."),
+        ItemFact(HOW, "Teach it from the Bag with **Teach…**. Teaching needs **Bond ♥2**. **Who can learn it** lists compatible Pokémon. If it already knows 4 moves, choose a **discovered** move to forget. Undiscovered moves cannot be replaced."),
     )
 
     /** What the TM's move does, in one or two short sentences (bold marks allowed), e.g. "10 % chance to **paralyze** the target."; "" when there is nothing to say. */
@@ -207,7 +207,7 @@ object ItemInfo {
                 if (holders.size > 2) " and ${holders.size - 2} more" else ""
     }
 
-    fun tmOwnLine(owned: Boolean): String = if (owned) "You **own** this TM" else "You don't own this TM yet"
+    fun tmOwnLine(owned: Boolean): String = if (owned) "You **own** this TM · **1 use**" else "You don't own this TM yet"
 
     /** [name] for [n] of it: "Great Ball" (1) / "Great Balls" (2); "Power Lens" -> "Power Lenses"; "Deep Sea Tooth" -> "Deep Sea Teeth"; mass nouns stay as they are. */
     fun plural(name: String, n: Int): String = when {
@@ -412,6 +412,6 @@ object ItemInfo {
     /** R13 Part C / R18-B: an item used on the main during a fight works at once, then the wild one uses one free move (Game.useItem); no dot is filled. */
     const val FIGHT_TURN = "On your main in a fight it works at once, then the wild Pokémon uses one free move (not before your first answer of the fight)."
 
-    /** What a TM does, for the popup: it teaches a move and is never used up. */
-    fun tmHowToUse(): String = "Teaches this move to a Pokémon that can learn it. A TM is never used up."
+    /** What a TM does, for the popup. */
+    fun tmHowToUse(): String = "Single-use: teaching uses up this TM. Requires Bond ♥2 and a compatible Pokémon. Only a discovered move can be replaced."
 }

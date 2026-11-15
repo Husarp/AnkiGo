@@ -177,6 +177,7 @@ object SaveCodec {
         stats("ivs", m.ivs); stats("evs", m.evs)
         kv("nature", m.nature.name); kv("gender", m.gender.toString()); kv("shiny", m.shiny); kv("ability", m.ability)
         list("moves", m.moves)
+        list("discoveredMoves", m.discoveredMoves.sorted())
         if (m.moveOffers.isNotEmpty()) {
             key("moveOffers"); arr { m.moveOffers.forEach { obj { kv("move", it.move); kv("level", it.level) } } }
         }
@@ -275,7 +276,7 @@ object SaveCodec {
     private inline fun <reified E : Enum<E>> enumOr(name: String?, d: E): E =
         enumValues<E>().firstOrNull { it.name == name } ?: d
 
-    private fun readMon(o: JSONObject): Mon {
+    private fun readMon(o: JSONObject, owned: Boolean = false): Mon {
         if (!o.has2("uid") || !o.has2("species") || !o.has2("level")) throw SaveFormatException("pokemon without uid/species/level")
         return Mon(
             uid = o.getString("uid"), species = o.getInt("species"), name = o.str("name", ""), level = o.getInt("level"),
@@ -299,6 +300,7 @@ object SaveCodec {
                     .distinctBy { it.move }.toMutableList()
             } ?: mutableListOf(),
             offeredMoves = (o.strList("offeredMoves") ?: emptyList()).toMutableSet(),
+            discoveredMoves = (o.strList("discoveredMoves") ?: if (owned) o.strList("moves").orEmpty().distinct().take(4) else emptyList()).toMutableSet(),
             restFrac = o.int("restFrac", 0).coerceIn(0, Tuning.BENCH_REST_DIVISOR - 1),
         )
     }
@@ -447,7 +449,7 @@ object SaveCodec {
         val s = GameState()
         s.schema = schema
         s.seq = o.long("seq", 0); s.savedAt = o.long("savedAt", 0); s.createdAt = o.long("createdAt", 0)
-        for (i in 0 until monsJson.length()) s.mons += readMon(monsJson.getJSONObject(i))
+        for (i in 0 until monsJson.length()) s.mons += readMon(monsJson.getJSONObject(i), owned = true)
         // "Not supported yet" Pokémon (an old save has none). An unreadable entry is skipped: its row is still in the kept Ankimon file.
         o.optJSONArray("unsupported")?.let { a ->
             for (i in 0 until a.length()) {

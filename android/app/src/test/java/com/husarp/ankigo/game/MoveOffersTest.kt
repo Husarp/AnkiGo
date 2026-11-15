@@ -79,6 +79,8 @@ class MoveOffersTest {
         val sp = data.sp(1).copy(tmMoves = setOf("bodyslam"))
         val d = GameData(data.species + (1 to sp), data.moves, data.growth, emptyMap())
         s.tms += "bodyslam"
+        m.bondPoints = Bond.thresholds[2]
+        m.discoveredMoves += m.moves
         learn(m, "bodyslam")
         assertTrue(ItemUse.teachTm(d, s, "bodyslam", m.uid, 0).ok)
         assertFalse(ItemUse.teachTm(d, s, "bodyslam", m.uid, 1).ok)

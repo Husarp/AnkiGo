@@ -535,10 +535,16 @@ internal class CompareGrid(
                 // R10-F (B10): a move shows its name and its type only; a tap opens the move's popup (name, type, category, power, accuracy, effect)
                 cell.moves.forEachIndexed { k, m ->
                     box.addView(LinearLayout(ctx).apply {
+                        if (m.id.isEmpty()) {
+                            background = Ui.rounded(android.graphics.Color.rgb(49, 50, 68), 8, ctx)
+                            setPadding(dp(10), dp(8), dp(10), dp(8))
+                            contentDescription = "Undiscovered move"
+                        }
                         orientation = LinearLayout.VERTICAL
                         gravity = Gravity.CENTER_HORIZONTAL
                         addView(Ui.text(ctx, look.subSp + 0.5f, 800, R.color.ag_text).apply {
                             text = m.name; maxLines = 2; gravity = Gravity.CENTER
+                            if (m.id.isEmpty()) setTextColor(android.graphics.Color.rgb(166, 173, 200))
                             hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
                             // a word is not broken in the middle: it shrinks (not below 7 sp) until it fits the column
                             setTextSize(TypedValue.COMPLEX_UNIT_PX, CompareLabelFit.sp(textSize, TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 7f, ctx.resources.displayMetrics),
@@ -549,7 +555,7 @@ internal class CompareGrid(
                         val mv = page.data.move(m.id)
                         if (mv != null) {
                             contentDescription = CompareMovePopup.said(mv) + ". Tap for details"
-                            setOnClickListener { CompareMovePopup.show(it, mv, cell.moves.mapNotNull { move -> page.data.move(move.id) }) }
+                            setOnClickListener { CompareMovePopup.show(it, mv, cell.moves.takeIf { moves -> moves.none { it.id.isEmpty() } }?.mapNotNull { move -> page.data.move(move.id) }) }
                         }
                     }, LinearLayout.LayoutParams(-2, -2).also { if (k > 0) it.topMargin = dp(6) })
                 }

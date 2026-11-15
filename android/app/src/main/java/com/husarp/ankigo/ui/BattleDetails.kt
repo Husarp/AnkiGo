@@ -96,15 +96,14 @@ object BattleDetails {
             })
         }
         val moves = info.moves.mapNotNull { it.id }
-        if (moves.isNotEmpty()) {
-            col.addView(DetailSections.section(ctx, mem, DetailSection.MOVES, "${moves.size} ${if (moves.size == 1) "move" else "moves"}", forceOpen = focusMove != null) {
+        if (info.moves.isNotEmpty()) {
+            col.addView(DetailSections.section(ctx, mem, DetailSection.MOVES, "${info.moves.size} ${if (info.moves.size == 1) "move" else "moves"}", forceOpen = focusMove != null) {
                 LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
                     addView(Ui.text(ctx, 11f, 700, R.color.ag_ov).apply {
-                        text = if (info.known) "You have defeated or caught this species: all its current moves are known."
-                            else "Only moves it has used in this fight are shown."
+                        text = "Moves are discovered when this Pokémon uses them in battle."
                     })
-                    addView(DetailSections.moves(ctx, data, moves, compact, focusMove = focusMove))
+                    addView(DetailSections.moves(ctx, data, moves, compact, unknown = info.moves.count { it.id == null }, focusMove = focusMove))
                 }
             })
         }

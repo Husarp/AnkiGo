@@ -200,7 +200,7 @@ object MonDetail {
                 addView(DetailSections.statsBody(a, stats, mon.level, mon.nature, sp, compact, state?.battle?.takeIf { state.main?.uid == mon.uid }?.player?.boosts))
             }
         })
-        col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves", forceOpen = focusMove != null) { DetailSections.moves(a, data, mon.moves, compact, focusMove = focusMove) })
+        col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${mon.moves.size} moves", forceOpen = focusMove != null) { DetailSections.moves(a, data, mon.moves.filter { it in mon.discoveredMoves }, compact, unknown = mon.moves.count { it !in mon.discoveredMoves }, focusMove = focusMove) })
         val matchups = MatchupKnowledge.of(data, GameRepo.state ?: GameState(), sp.num)
         col.addView(DetailSections.section(a, mem, DetailSection.MATCHUPS, DetailFormat.matchupSummary(matchups)) { DetailSections.matchups(a, sp.types, mon.shownName, matchups) })
         col.addView(DetailSections.section(a, mem, DetailSection.TRAINING, mon.nature.label) { DetailSections.training(a, mon, compact) })

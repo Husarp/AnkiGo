@@ -64,10 +64,14 @@ internal object BattleBag {
                 val source = if (!more) st.teamMons() else when (tab) { "Team" -> st.teamMons(); "Favourites" -> st.favouriteMons(); else -> st.boxMons() }
                 val mons = source.filter { it.shownName.contains(query, true) || it.name.contains(query, true) }.let { if (!more) it else when (sort) { 1 -> it.sortedByDescending { m -> m.level }; 2 -> it.sortedByDescending { m -> m.evolvedAt }; else -> it.sortedByDescending { m -> m.caughtAt } } }
                 for (mon in mons) {
-                    val ok = if (tm) item in data.sp(mon.species).tmMoves && item !in mon.moves else ItemUse.canUse(data, st, item, mon)
+                    val ok = if (tm) item in data.sp(mon.species).tmMoves && item !in mon.moves && com.husarp.ankigo.game.Bond.level(mon.bondPoints) >= 2 && (mon.moves.size < 4 || mon.moves.any { it in mon.discoveredMoves }) else ItemUse.canUse(data, st, item, mon)
                     val max = StatCalc.maxHp(data, mon)
                     val hint = if (ok) if (Items.def(item)?.kind == ItemKind.EVOLUTION) "" else Bits.hpText(data, mon) else if (Items.def(item)?.kind == ItemKind.HEAL && mon.hp >= max) "Full HP" else Progression.itemEvolutionTimeNeeded(data, mon, item)?.let { if (it == "day") "In the daytime" else "At night" } ?: when {
-                        tm -> "Cannot learn this move"
+                        tm -> when {
+                            com.husarp.ankigo.game.Bond.level(mon.bondPoints) < 2 -> "Needs Bond ♥2"
+                            mon.moves.size >= 4 && mon.moves.none { it in mon.discoveredMoves } -> "Discover a move in battle first"
+                            else -> "Cannot learn this move"
+                        }
                         Items.def(item)?.kind == ItemKind.EVOLUTION -> "No evolution with this item"
                         Items.def(item)?.kind == ItemKind.HELD -> "Already holds ${Items.name(item)}"
                         else -> "Cannot use this item"

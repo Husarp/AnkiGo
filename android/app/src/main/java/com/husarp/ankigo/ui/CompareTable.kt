@@ -229,8 +229,8 @@ object CompareTable {
         rows += numeric("base_total", "Total", columns.map { it.shown.base.total })
 
         val observed = columns.map { c ->
-            state.battle?.takeIf { it.wild.species == c.shown.num && !SpeciesKnowledge.known(data, state, c.shown.num) }
-                ?.let { WildInfo.of(data, state, it, usedWildMoves) }?.moves.orEmpty().mapNotNull { it.id }
+            state.battle?.takeIf { it.wild.species == c.shown.num }
+                ?.let { WildInfo.of(data, state, it, usedWildMoves) }?.moves.orEmpty()
         }
         if (anyOwned) {
             rows += CompareRow("nature", "Nature", owned.map { m -> m?.let(::natureCell) ?: Cell.Text(DASH) }, section = "Build")
@@ -246,10 +246,11 @@ object CompareTable {
         }
         if (anyOwned || observed.any { it.isNotEmpty() }) {
             rows += CompareRow("moves", "Moves", owned.mapIndexed { i, m ->
-                val ids = m?.moves ?: observed[i]
+                val ids = m?.moves?.map { it.takeIf { id -> id in m.discoveredMoves } } ?: observed[i].map { it.id }
                 if (ids.isEmpty()) Cell.Text(DASH) else Cell.Moves(ids.map { id ->
-                    val mv = data.move(id)
-                    if (mv == null) MoveCell(id, null, DASH, id)
+                    val mv = id?.let(data::move)
+                    if (id == null) MoveCell("???", null, DASH, "")
+                    else if (mv == null) MoveCell(id, null, DASH, id)
                     else MoveCell(mv.name, mv.type, if (MoveText.showsPower(mv)) mv.power.toString() else DASH, id)
                 })
             }, section = "Moves")

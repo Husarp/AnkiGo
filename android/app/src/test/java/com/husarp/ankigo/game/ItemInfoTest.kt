@@ -232,7 +232,7 @@ class ItemInfoTest {
     @Test fun aTmIsExplainedOnce() {
         val facts = ItemInfo.tmFacts()
         assertEquals(listOf("What it does", "How to use"), facts.map { it.title })
-        assertTrue(facts[0].text.contains("**once**") && facts[0].text.contains("**never used up**") && facts[0].text.contains("every Pokémon"))
+        assertTrue(facts[0].text.contains("**single-use**") && facts[0].text.contains("**uses it up**") && facts[0].text.contains("**1 use**"))
         assertTrue(facts[1].text.contains("**Teach…**") && facts[1].text.contains("Who can learn it") && facts[1].text.contains("4 moves"))
         assertFalse("the list is read-only: no teaching from it", facts[1].text.contains("or from **Who can learn it**"))
         assertTrue(facts.all { marksBalanced(it.text) })
@@ -273,7 +273,7 @@ class ItemInfoTest {
         assertEquals("You don't own any **Great Balls** yet", ItemInfo.ownLine("great-ball", 0))
         assertEquals("You own **3 Power Lenses**", ItemInfo.ownLine("power-lens", 3))
         assertEquals("You own **2 Fresh Water**", ItemInfo.ownLine("fresh-water", 2))
-        assertEquals("You **own** this TM", ItemInfo.tmOwnLine(true))
+        assertEquals("You **own** this TM · **1 use**", ItemInfo.tmOwnLine(true))
         assertEquals("You don't own this TM yet", ItemInfo.tmOwnLine(false))
     }
 
@@ -290,7 +290,9 @@ class ItemInfoTest {
         assertFalse(ItemInfo.howToUse("poke-ball").contains("good throw"))   // R17C-6: a throw catches by chance, not by skill
         assertEquals("Use it from the Bag to revive an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}.", ItemInfo.howToUse("helix-fossil"))
         assertEquals("", ItemInfo.howToUse("not-an-item"))
-        assertTrue(ItemInfo.tmHowToUse().contains("never used up"))
+        assertTrue(ItemInfo.tmHowToUse().contains("uses up this TM"))
+        assertTrue(ItemInfo.tmHowToUse().contains("Bond ♥2"))
+        assertTrue(ItemInfo.tmHowToUse().contains("discovered"))
         assertEquals("Heals 20 HP", ItemInfo.effect("potion"))
     }
 }

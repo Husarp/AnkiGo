@@ -317,6 +317,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
             } else tileRows(section.tiles, 1) { tile ->
                 if (tile is ShopPlan.Tile.Item && tile.id in Shop.basics()) CardKeys.basic(tile) else CardKeys.special(tile)
             }
+
         }
         Shop.weekendFor(data, st.day)?.let { content.addView(weekendCard(it), LinearLayout.LayoutParams(-1, -2)) }
         content.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply {

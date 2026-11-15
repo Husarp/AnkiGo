@@ -694,6 +694,8 @@ class EconomyTest {
     private fun tmState(vararg moves: String): GameState {
         val s = TestData.state(data, 25, 20, listOf("tackle", "thunderwave"))
         s.main!!.moves.clear(); s.main!!.moves.addAll(moves.toList())
+        s.main!!.bondPoints = Bond.thresholds[2]
+        s.main!!.discoveredMoves += moves.toList()
         return s
     }
 
@@ -708,7 +710,7 @@ class EconomyTest {
         val r = ItemUse.teachTm(tmData, s, "thunderbolt", "main", null)
         assertTrue(r.ok); assertEquals("Sparkmouse learned Thunderbolt", r.message)
         assertEquals(listOf("tackle", "thunderbolt"), s.main!!.moves)
-        assertTrue("thunderbolt" in s.tms) // never used up
+        assertFalse("thunderbolt" in s.tms) // consumed by teaching
         assertEquals(GameEvent.MoveLearned("main", "Sparkmouse", "Thunderbolt", null), r.events.single())
     }
 
@@ -724,7 +726,7 @@ class EconomyTest {
         assertTrue(r.ok); assertEquals("Sparkmouse forgot Lick and learned Thunderbolt", r.message)
         assertEquals(listOf("tackle", "growl", "thunderbolt", "watergun"), s.main!!.moves)
         assertEquals(GameEvent.MoveLearned("main", "Sparkmouse", "Thunderbolt", "Lick"), r.events.single())
-        assertTrue("thunderbolt" in s.tms)
+        assertFalse("thunderbolt" in s.tms)
     }
 
     @Test fun teachTmRejections() {
@@ -746,15 +748,19 @@ class EconomyTest {
         assertEquals(2500 - Shop.tmPrice(s.day, "thunderbolt"), s.cash); assertEquals(1, s.tms.count { it == "thunderbolt" })
     }
 
-    @Test fun oneTmTeachesEveryPokemonAndStays() {
+    @Test fun oneTmTeachesOnePokemonThenNeedsAnotherCopy() {
         val s = tmState("tackle")
         val other = TestData.mon(tmData, 25, 12, listOf("growl", "tackle", "lick", "watergun"), "other")
         s.mons += other
         s.tms += "thunderbolt"
         assertTrue(ItemUse.teachTm(tmData, s, "thunderbolt", "main", null).ok)
-        assertTrue("thunderbolt" in s.tms)
+        assertFalse("thunderbolt" in s.tms)
+        assertFalse(ItemUse.teachTm(tmData, s, "thunderbolt", "other", 1).ok)
+        s.tms += "thunderbolt"
+        other.bondPoints = Bond.thresholds[2]
+        other.discoveredMoves += other.moves
         assertTrue(ItemUse.teachTm(tmData, s, "thunderbolt", "other", 1).ok)
-        assertTrue("thunderbolt" in s.tms)
+        assertFalse("thunderbolt" in s.tms)
         assertEquals(listOf("growl", "thunderbolt", "lick", "watergun"), other.moves)
         assertTrue("thunderbolt" in s.main!!.moves)
     }

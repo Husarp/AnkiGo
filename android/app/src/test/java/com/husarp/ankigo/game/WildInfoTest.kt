@@ -52,23 +52,25 @@ class WildInfoTest {
             assertNull("$knowledge reveals stats without discovering matchups", info.matchups)
             b.playerAttacked = true
             assertEquals(18, WildInfo.of(data, state, b, emptySet())!!.matchups!!.unknownCount)
-            assertEquals(b.wild.moves.toSet(), info.moves.map { it.id }.toSet())
+            assertEquals(b.wild.moves.size, info.moves.size)
+            assertTrue(info.moves.all { it.id == null })
         }
     }
 
-    @Test fun unusedMovesAreOmitted() {
+    @Test fun unusedMovesShowUnknownSlots() {
         val i = WildInfo.of(data, TestData.state(data), battle(), setOf("Lick"))!!
-        assertEquals(1, i.moves.size)
+        assertEquals(4, i.moves.size)
         assertEquals(WildMoveSlot("lick", "Lick"), i.moves[0])
-        assertTrue(i.moves.all { it.id != null && it.name != null })
+        assertEquals(3, i.moves.count { it.id == null && it.name == null })
         val none = WildInfo.of(data, TestData.state(data), battle(), emptySet())!!
-        assertTrue(none.moves.isEmpty())
+        assertEquals(4, none.moves.size)
+        assertTrue(none.moves.all { it.id == null })
     }
 
-    @Test fun everyUsedMoveShowsIncludingStruggle() {
+    @Test fun onlyCurrentMoveSlotsShowEvenIfStruggleWasUsed() {
         val i = WildInfo.of(data, TestData.state(data), battle(), setOf("Shadow Ball", "Hypnosis", "Struggle"))!!
-        assertEquals(setOf("Hypnosis", "Shadow Ball", "Struggle"), i.moves.map { it.name }.toSet())
-        assertEquals(3, i.moves.size)
+        assertEquals(setOf("Hypnosis", "Shadow Ball"), i.moves.mapNotNull { it.name }.toSet())
+        assertEquals(4, i.moves.size)
     }
 
     @Test fun caughtOrJustSeen() {
@@ -78,12 +80,12 @@ class WildInfoTest {
         assertEquals(WildDex.CAUGHT, WildInfo.of(data, s, battle(), emptySet())!!.dex)
     }
 
-    @Test fun previouslyCaughtSpeciesShowsTheActualWildMovesFromTheStart() {
+    @Test fun previouslyCaughtSpeciesDoesNotRevealThisIndividualsMoves() {
         val state = TestData.state(data)
         state.caught += 92
         val b = battle(moves = listOf("shadowball", "hypnosis"))
         val info = WildInfo.of(data, state, b, emptySet())!!
-        assertEquals(listOf("shadowball", "hypnosis"), info.moves.map { it.id })
+        assertEquals(listOf(null, null), info.moves.map { it.id })
         state.mons.removeAll { it.species == 92 } // catch history survives releases
         assertEquals(info.moves, WildInfo.of(data, state, b, emptySet())!!.moves)
     }
@@ -150,7 +152,7 @@ class WildInfoTest {
         assertNull(info.matchups)
     }
 
-    @Test fun defeatedSpeciesShowsStatsAndAllMovesButMatchupsWaitForAnAttack() {
+    @Test fun defeatedSpeciesShowsStatsAndMoveSlotsButMatchupsWaitForAnAttack() {
         val state = TestData.state(data).also { it.defeatedSpecies += 92 }
         val info = WildInfo.of(data, state, battle(), emptySet())!!
         assertTrue(info.known)

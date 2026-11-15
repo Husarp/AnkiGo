@@ -241,6 +241,7 @@ class Mon(
     val moveOffers: MutableList<MoveOffer> = mutableListOf(),
     val offeredMoves: MutableSet<String> = mutableSetOf(), // one-time offers, including answers
     var heldItem2: String? = null,
+    val discoveredMoves: MutableSet<String> = mutableSetOf(), // observed in battle, local to this Pokémon
 )
 
 val Mon.heldItems: List<String> get() = listOfNotNull(heldItem, heldItem2).distinct()
@@ -406,7 +407,7 @@ class GameState(
     var dollsFound: Int = 0,           // lifetime finds; one permanent Poké Doll stays in the Bag
     var dollLockedAt: Long? = null,    // last skip while locked; null after a win or the one-hour fallback
     var dollReadyAt: Long = 0,         // level cooldown ends at this game-clock timestamp
-    val tms: MutableSet<String> = mutableSetOf(),      // owned TMs (Showdown move ids); never used up
+    val tms: MutableSet<String> = mutableSetOf(),      // owned TMs (Showdown move ids); one use each
     var cash: Int = 0,
     var trainerLevel: Int = 1,
     var trainerXp: Int = 0,              // progress inside the trainer level

@@ -228,6 +228,7 @@ class CompareTableTest {
     @Test fun natureIvsAndMovesOfOwnedMons() {
         val m = Mon("a", 25, "Sparkmouse", 20, 0, Stats(31, 20, 10, 5, 0, 31), Stats.ZERO, Nature.TIMID, 'F', false, "x",
             mutableListOf("thunderbolt", "growl", "nope"), 1)
+        m.discoveredMoves += m.moves
         val n = mon(2, 20, "b", listOf("tackle"))
         val t = CompareTable.build(data, state(m, n), listOf(ComparePick.Owned("a"), ComparePick.Owned("b")), false)
         val nat = t.row("nature").cells

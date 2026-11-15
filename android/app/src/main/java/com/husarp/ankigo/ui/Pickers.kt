@@ -175,8 +175,9 @@ object Pickers {
 
     /** Pick one of the Pokémon's moves (returns its index 0..3). */
     fun pickMove(a: Context, title: String, data: GameData, mon: Mon, onPick: (Int) -> Unit) {
-        rows(a, title, mon.moves.size, { Bits.moveRow(a, data, mon.moves[it]) },
-            onLongPick = { showMove(a, mon.moves[it]) }, onPick = onPick)
+        val indexes = mon.moves.indices.filter { mon.moves[it] in mon.discoveredMoves }
+        rows(a, title, indexes.size, { Bits.moveRow(a, data, mon.moves[indexes[it]]) },
+            onLongPick = { showMove(a, mon.moves[indexes[it]]) }) { onPick(indexes[it]) }
     }
 
     /** Pick one of the move ids (TMs). */

@@ -40,6 +40,8 @@ class TmShots {
         dialog("tm-dlg-moves") { ctx -> Pickers.pickMoveId(ctx, "Teach Sparkmouse", gd, listOf("bodyslam", "ember", "vinewhip")) {} }
         dialog("tm-dlg-forget") { ctx ->
             val mon = st.mon("t1")!!; mon.moves += "growl"
+            mon.bondPoints = com.husarp.ankigo.game.Bond.thresholds[2]
+            mon.discoveredMoves += mon.moves
             MonActions(TeamPage(ctx, NoHost)).teach(mon, "bodyslam")
         }
         dialog("tm-dlg-mon") { ctx ->

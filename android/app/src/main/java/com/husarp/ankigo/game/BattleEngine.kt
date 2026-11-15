@@ -506,6 +506,7 @@ object BattleEngine {
             }
             // R17C-3 (Adam's rule): a charge move charges on its first use; the user's very next action is the hit (CoreRules.forcedMove gives it),
             // and the charge is over after that action whatever it did
+            mon(p).discoveredMoves += move.id
             val hitTurn = s.charging == move.id
             s.charging = null
             if (!hitTurn && CoreRules.isCharge(move)) {
@@ -630,7 +631,7 @@ object BattleEngine {
             damage, hits, eff, crit, missed, failed, mon(!p).hp, maxHp(!p), mon(p).hp, maxHp(p),
             moveId = move.id, power = move.power, hitDamages = hitDamages, hitTargetHps = hitTargetHps,
             multiHit = move.multihit != null || hits > 1, recoilMove = move.recoil != null || move.id == Tuning.STRUGGLE || move.mindBlownRecoil || move.id == "chloroblast",
-        )
+        ).also { mon(p).discoveredMoves += move.id }
 
         /** R17C FIX-A: the type the move has in this hit (-ate abilities, Normalize, Weather Ball, Electrify ...): the Attack event animates it, not the move's own. */
         private fun effectiveType(p: Boolean, move: Move): Type = newHit(this, p, mon(p), side(p), mon(!p), side(!p), move).type

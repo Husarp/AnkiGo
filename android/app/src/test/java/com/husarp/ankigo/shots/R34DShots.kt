@@ -22,6 +22,7 @@ class R34DShots {
             FakeGame.install(ctx)
             val data = GameRepo.data!!; val state = GameRepo.state!!; val mon = state.main!!
             mon.moves.clear(); mon.moves += listOf("growl", "tackle", "vinewhip", "lick")
+            mon.discoveredMoves += mon.moves
             val before = mon.moves.toList()
             assertNull(DialogShots.capture {
                 Progression.learnMove(data, mon, "bodyslam", mutableListOf())
