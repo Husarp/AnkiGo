@@ -112,16 +112,16 @@ class StatsTest {
         assertEquals(1, g.state.history.getValue("2026-10-13").reviews)
     }
 
-    @Test fun historyOlderThan400DaysIsPruned() {
+    @Test fun historyOlderThan1000DaysIsPruned() {
         val s = GameState(day = "2026-10-13")
         val today = LocalDate.parse("2026-10-13")
-        s.history[today.minusDays(401).toString()] = DayLog(reviews = 5)
-        s.history[today.minusDays(400).toString()] = DayLog(reviews = 6)
+        s.history[today.minusDays(1001).toString()] = DayLog(reviews = 5)
+        s.history[today.minusDays(1000).toString()] = DayLog(reviews = 6)
         s.history[today.minusDays(10).toString()] = DayLog(reviews = 7)
         StudyStats.record(s, listOf(counted()))
-        assertNull(s.history[today.minusDays(401).toString()])
-        assertEquals(6, s.history.getValue(today.minusDays(400).toString()).reviews)
-        assertEquals(3, s.history.size) // the 400-day, the 10-day and today
+        assertNull(s.history[today.minusDays(1001).toString()])
+        assertEquals(6, s.history.getValue(today.minusDays(1000).toString()).reviews)
+        assertEquals(3, s.history.size) // the 1000-day, the 10-day and today
     }
 
     // ---- best streak ----

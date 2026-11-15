@@ -18,8 +18,8 @@ enum class ChartKind { TIME, CATEGORY, HEATMAP }
 /** The groups of the metric list (the "Show" sheet): Study, Game, Collection. */
 enum class ChartGroup(val label: String) { STUDY("Study"), GAME("Game"), COLLECTION("Collection") }
 
-/** How much time one bar covers: a day, a calendar week (Monday first) or a calendar month. [label] is the filter text. */
-enum class ChartGrain(val label: String) { DAY("Per day"), WEEK("Per week"), MONTH("Per month") }
+/** One point covers a day, calendar week (Monday first), month or year. [label] is the filter text. */
+enum class ChartGrain(val label: String) { DAY("Per day"), WEEK("Per week"), MONTH("Per month"), YEAR("Per year") }
 
 /**
  * What the chart can show. [label] and [group] are the metric list's text and group, [icon] a plain icon id the screen maps
@@ -69,7 +69,7 @@ enum class ChartMetric(
 
 /** The chart periods: the last [days] days (DUE: the next [days] days). [defaultGrain] is the bar size used unless the user picks another. */
 enum class ChartPeriod(val days: Int, val defaultGrain: ChartGrain) {
-    D1(1, ChartGrain.DAY), D7(7, ChartGrain.DAY), D30(30, ChartGrain.DAY), D90(90, ChartGrain.WEEK), D365(365, ChartGrain.MONTH), D100(100, ChartGrain.WEEK), D300(300, ChartGrain.MONTH);
+    D1(1, ChartGrain.DAY), D7(7, ChartGrain.DAY), D30(30, ChartGrain.DAY), D90(90, ChartGrain.WEEK), D365(365, ChartGrain.MONTH), D100(100, ChartGrain.WEEK), D300(300, ChartGrain.MONTH), D1000(1000, ChartGrain.MONTH);
 
     /** The bar sizes that make sense for this period (the first and last bar of a week or month grain can be partial). */
     val grains: List<ChartGrain>
@@ -77,7 +77,8 @@ enum class ChartPeriod(val days: Int, val defaultGrain: ChartGrain) {
             D1, D7 -> listOf(ChartGrain.DAY)
             D30 -> listOf(ChartGrain.DAY, ChartGrain.WEEK)
             D90, D100 -> listOf(ChartGrain.DAY, ChartGrain.WEEK, ChartGrain.MONTH)
-            D365, D300 -> listOf(ChartGrain.WEEK, ChartGrain.MONTH)
+            D365, D300 -> listOf(ChartGrain.DAY, ChartGrain.WEEK, ChartGrain.MONTH)
+            D1000 -> ChartGrain.values().toList()
         }
 }
 
@@ -93,7 +94,7 @@ data class Bar(
 )
 
 /**
- * Everything the chart screen needs. [period] is the period really used (DUE only knows 7 and 30), [grain] the bar size
+ * Everything the chart screen needs. [period] is the period really used (DUE reaches 100 days), [grain] the bar size
  * really used ([ChartData.effectiveGrain]; DAY for a CATEGORY or HEATMAP chart, which have no bar size). [total], [perDayAvg]
  * and [best] (a single day, on [bestDay]) are in [unit]; for RETENTION [total] is the period's percent, [perDayAvg] the mean
  * of the days that had answers. A CATEGORY chart has no days: [total] is the sum of the bars (DEX_PROGRESS: the overall caught
@@ -121,20 +122,21 @@ data class ChartSeries(
     val grain: ChartGrain = ChartGrain.DAY,
     val bestLabel: String? = null,
     val heatmap: StudyStats.Heatmap? = null,
+    val componentTotals: List<Double>? = null, // raw counts for the legend, even when bars hold daily means
 ) {
     /** The tap text of the bar that holds game date [day] (a HEATMAP cell's day, or any day of a time chart); empty when none does. */
     fun detailFor(day: String): List<String> = bars.firstOrNull { day >= it.startDay && day <= it.endDay }?.detail.orEmpty()
 }
 
 object ChartData {
-    /** DUE offers 7/30 days; historical charts offer rolling study-day windows. */
+    /** Due forecast reaches 100 days; historical charts keep their rolling study-day windows. */
     fun effectivePeriod(metric: ChartMetric, period: ChartPeriod): ChartPeriod =
         if (metric == ChartMetric.BUTTONS && period !in ChartPrefs.periodsFor(metric)) ChartPeriod.D7
-        else if (metric == ChartMetric.DUE && period.days > 30) ChartPeriod.D30 else period
+        else if (metric == ChartMetric.DUE && period.days > 100) ChartPeriod.D100 else period
 
     /** The bar sizes the "Per day" filter offers for [metric] and [period]; empty for a CATEGORY or HEATMAP chart (no bar size). */
     fun grains(metric: ChartMetric, period: ChartPeriod): List<ChartGrain> =
-        if (metric.kind != ChartKind.TIME || metric == ChartMetric.BUTTONS) emptyList() else effectivePeriod(metric, period).grains
+        if (metric.kind != ChartKind.TIME) emptyList() else effectivePeriod(metric, period).grains
 
     /** The bar size really used: [grain] when it is one of [grains], else the period's default (e.g. MONTH for 7 days -> DAY). */
     fun effectiveGrain(metric: ChartMetric, period: ChartPeriod, grain: ChartGrain?): ChartGrain {
@@ -150,6 +152,7 @@ object ChartData {
         ChartPeriod.D100 -> 16
         ChartPeriod.D300 -> 44
         ChartPeriod.D365 -> 53
+        ChartPeriod.D1000 -> 144
     }
 
     /**
@@ -161,7 +164,8 @@ object ChartData {
         val days = effectivePeriod(metric, period).days
         val d = deck?.takeIf { it.isNotBlank() }
         return when (metric) {
-            ChartMetric.REVIEWS, ChartMetric.DUE -> if (d == null) emptyList() else listOf(SeriesKey(d, metric, days, today))
+            ChartMetric.REVIEWS -> if (d != null || days > AnkiStatsReader.HISTORY_DAYS) listOf(SeriesKey(d, metric, days, today)) else emptyList()
+            ChartMetric.DUE -> if (d != null || days > 30) listOf(SeriesKey(d, metric, days, today)) else emptyList()
             ChartMetric.CARD_STATES -> if (d == null) emptyList() else listOf(SeriesKey(d, metric, 0, today))
             ChartMetric.NEW_CARDS -> listOf(SeriesKey(d, metric, days, today))
             ChartMetric.RETENTION -> if (days == 7 || days == 365) listOf(SeriesKey(null, metric, days, today)) else emptyList()
@@ -170,7 +174,7 @@ object ChartData {
     }
 
     /** How one metric reads its numbers: per game day, [comps] values (the components of a bar). */
-    private class Plan(val comps: Int, val value: (String) -> DoubleArray, val source: String, val deckApplies: Boolean, val loading: Boolean = false)
+    private class Plan(val comps: Int, val value: (String) -> DoubleArray, val source: String, val deckApplies: Boolean, val loading: Boolean = false, val known: (String) -> Boolean = { false })
 
     /**
      * The chart for [metric]. [grain] is the user's bar size (null or not offered for the period = the period's default),
@@ -190,7 +194,7 @@ object ChartData {
             ChartKind.HEATMAP -> return heatmap(metric, p, d, snap, history, today, t, goal, goalFor, calendarYear)
             ChartKind.TIME -> Unit
         }
-        val g = if (metric == ChartMetric.BUTTONS) ChartGrain.DAY else effectiveGrain(metric, p, grain)
+        val g = effectiveGrain(metric, p, grain)
         if (metric == ChartMetric.SECONDS_PER_CARD) {
             val days = (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
             fun average(dates: List<LocalDate>): Double? = StatsText.secondsPerCard(
@@ -216,10 +220,12 @@ object ChartData {
         val bars = buckets(days, g, p).map { grp ->
             val sum = DoubleArray(plan.comps)
             for (date in grp.dates) { val v = plan.value(date.toString()); for (i in v.indices) sum[i] += v[i] }
-            val values = finish(metric, sum)
-            val has = hasData(metric, sum)
+            val observed = grp.dates.count { plan.known(it.toString()) }
+            val totals = finish(metric, sum)
+            val values = if (g != ChartGrain.DAY && metric != ChartMetric.RETENTION && observed > 0) totals.map { it / observed } else totals
+            val has = observed > 0 && hasData(metric, sum)
             Bar(grp.label, grp.dates.first().toString(), grp.dates.last().toString(), values, hasData = has,
-                detail = if (plan.loading) emptyList() else barDetail(if (answerFallback) ChartMetric.ANSWERS else metric, grp.dates, sum, values, has, t),
+                detail = if (plan.loading) emptyList() else barDetail(if (answerFallback) ChartMetric.ANSWERS else metric, grp.dates, sum, totals, has, t, observed),
                 dailyGoal = if (metric == ChartMetric.REVIEWS && g == ChartGrain.DAY) (history[grp.dates.first().toString()]?.dailyGoal?.takeIf { it > 0 } ?: goalFor?.invoke(grp.dates.first().toString()) ?: goal).coerceAtLeast(1) else null)
         }
 
@@ -243,7 +249,7 @@ object ChartData {
         val source = if (retention) retentionSource(ankiRetention != null, withData.isNotEmpty()) else plan.source
         return ChartSeries(
             metric, p, d, bars, total, avg, bestPair?.second ?: 0.0, bestPair?.first?.toString(), if (answerFallback) "answers" else metric.unit, source,
-            plan.deckApplies, empty, plan.loading, grain = g,
+            plan.deckApplies, empty, plan.loading, grain = g, componentTotals = List(plan.comps) { i -> perDay.sumOf { it.second[i] } },
         )
     }
 
@@ -251,31 +257,31 @@ object ChartData {
 
     private fun plan(metric: ChartMetric, p: ChartPeriod, deck: String?, snap: StatsSnapshot, history: Map<String, DayLog>, today: String): Plan {
         fun game(source: String, pick: (DayLog) -> Int) =
-            Plan(1, { day -> doubleArrayOf((history[day]?.let(pick) ?: 0).toDouble()) }, source, false)
+            Plan(1, { day -> doubleArrayOf((history[day]?.let(pick) ?: 0).toDouble()) }, source, false, known = { it in history })
         return when (metric) {
             ChartMetric.REVIEWS -> when {
-                deck != null -> fromSeries(metric, p, deck, snap, today)
+                deck != null || (p.days > AnkiStatsReader.HISTORY_DAYS && (snap.stats != null || SeriesKey(null, metric, p.days, today) in snap.series)) -> fromSeries(metric, p, deck, snap, today)
                 snap.stats != null -> {
                     val st = snap.stats
                     val note = if (p.days > AnkiStatsReader.QUICK_DAYS && st.historyCheckedAt == 0L) "AnkiDroid · history still loading" else "AnkiDroid"
-                    Plan(1, { day -> doubleArrayOf(st.studied(day).toDouble()) }, note, true)
+                    Plan(1, { day -> doubleArrayOf(st.studied(day).toDouble()) }, note, true, known = { it in st.perDay })
                 }
                 else -> game("AnkiGo's own count: answers, not distinct cards (AnkiDroid isn't available)") { it.reviews }
             }
             ChartMetric.NEW_CARDS -> fromSeries(metric, p, deck, snap, today)
             ChartMetric.DUE -> when {
-                deck != null -> fromSeries(metric, p, deck, snap, today)
+                deck != null || p.days > 30 -> fromSeries(metric, p, deck, snap, today)
                 snap.stats != null -> {
                     val st = snap.stats
                     val t = LocalDate.parse(today)
                     val byDay = st.forecast.withIndex().associate { (i, n) -> t.plusDays(i + 1L).toString() to n }
-                    Plan(1, { day -> doubleArrayOf((byDay[day] ?: 0).toDouble()) }, "AnkiDroid", true)
+                    Plan(1, { day -> doubleArrayOf((byDay[day] ?: 0).toDouble()) }, "AnkiDroid", true, known = { it in byDay })
                 }
                 else -> Plan(1, { doubleArrayOf(0.0) }, StatsText.reason(snap.access, snap.message).ifBlank { "Reading AnkiDroid…" }, true, loading = snap.access == null)
             }
             ChartMetric.TIME -> Plan(
                 1, { day -> doubleArrayOf(snap.timeTotalOn(day) / 60_000.0) },
-                StatsText.TIMED_SOURCE, false,
+                StatsText.TIMED_SOURCE, false, known = { it in snap.timeByDay || it in snap.liveTimeByDay },
             )
             ChartMetric.RETENTION -> Plan(
                 2, { day ->
@@ -283,11 +289,11 @@ object ChartData {
                     // button 0 = an answer whose button is unknown (catch-up): counted, and not an Again
                     val answers = if (b == null) 0 else (0..4).sumOf { b[it] }
                     doubleArrayOf((answers - (b?.get(1) ?: 0)).toDouble(), answers.toDouble())
-                }, "", false,
+                }, "", false, known = { it in history },
             )
             ChartMetric.BUTTONS -> Plan(
                 4, { day -> DoubleArray(4) { i -> (history[day]?.buttons?.get(i + 1) ?: 0).toDouble() } },
-                "AnkiGo's own count (buttons pressed on answers it counted)", false,
+                "AnkiGo's own count (buttons pressed on answers it counted)", false, known = { it in history },
             )
             ChartMetric.ANSWERS -> game("AnkiGo's own count") { it.reviews }
             ChartMetric.XP -> game("AnkiGo") { it.xp }
@@ -304,7 +310,7 @@ object ChartData {
     private fun fromSeries(metric: ChartMetric, p: ChartPeriod, deck: String?, snap: StatsSnapshot, today: String): Plan {
         val data = snap.series[SeriesKey(deck, metric, p.days, today)]
         val failed = snap.access != null && snap.access != AnkiAccess.OK
-        return if (data != null) Plan(1, { day -> doubleArrayOf((data.perDay[day] ?: 0).toDouble()) }, "AnkiDroid", true)
+        return if (data != null) Plan(1, { day -> doubleArrayOf((data.perDay[day] ?: 0).toDouble()) }, "AnkiDroid", true, known = { it in data.perDay })
         else Plan(1, { doubleArrayOf(0.0) }, if (failed) StatsText.reason(snap.access, snap.message) else "Reading AnkiDroid…", true, loading = !failed)
     }
 
@@ -440,8 +446,11 @@ object ChartData {
         }
         val grid = StudyStats.heatmapFromCounts(counts, goal, end.toString(), weeks, first.toString(), goalFor)
         val bars = days.map { date ->
-            val n = counts.getValue(date.toString())
-            Bar(date.dayOfMonth.toString(), date.toString(), date.toString(), listOf(n.toDouble()), true, heatDetail(date, n, goalFor?.invoke(date.toString()) ?: goal, t))
+            val key = date.toString()
+            val n = counts.getValue(key)
+            val known = plan.known(key) || (calendarYear != null && key in history)
+            Bar(date.dayOfMonth.toString(), key, key, listOf(n.toDouble()), known,
+                if (known) heatDetail(date, n, goalFor?.invoke(key) ?: goal, t) else listOf("${dayText(date, t)} · no data recorded"))
         }
         val total = counts.values.sumOf { it.toDouble() }
         val best = bars.filter { it.values[0] > 0.0 }.maxByOrNull { it.values[0] }
@@ -468,8 +477,9 @@ object ChartData {
      * The lines of a time bar: "Tue 14 Oct · 43 reviews"; a stacked bar then lists every part with its value and percent
      * ("Again · 3 · 12 %"); a week or month bar ends with the average per day. RETENTION says how many answers it is made of.
      */
-    private fun barDetail(metric: ChartMetric, dates: List<LocalDate>, sum: DoubleArray, values: List<Double>, hasData: Boolean, today: LocalDate): List<String> {
+    private fun barDetail(metric: ChartMetric, dates: List<LocalDate>, sum: DoubleArray, values: List<Double>, hasData: Boolean, today: LocalDate, observed: Int): List<String> {
         val head = periodText(dates.first(), dates.last(), today)
+        if (!hasData && metric != ChartMetric.RETENTION) return listOf("$head · no data recorded")
         if (metric == ChartMetric.RETENTION) {
             return if (!hasData) listOf("$head · no answers counted")
             else listOf("$head · ${values[0].toInt()}% kept", "${num(sum[0])} of ${num(sum[1])} answers weren't Again")
@@ -479,7 +489,7 @@ object ChartData {
         if (values.size > 1 && total > 0.0) values.forEachIndexed { i, v ->
             lines += "${metric.seriesNames[i]} · ${partText(metric, v)} · ${Math.round(100.0 * v / total)}%"
         }
-        if (dates.size > 1 && total > 0.0) lines += "Average ${valueText(metric, total / dates.size)} a day"
+        if (dates.size > 1 && total > 0.0) lines += "Average ${valueText(metric, total / observed.coerceAtLeast(1))} a recorded day"
         return lines
     }
 
@@ -537,6 +547,7 @@ object ChartData {
         ChartGrain.DAY -> days.map { Group(dayLabel(it, p), listOf(it)) }
         ChartGrain.WEEK -> days.groupBy { it.with(DayOfWeek.MONDAY) }.map { (monday, ds) -> Group(monthShort(monday) + " " + monday.dayOfMonth, ds) }
         ChartGrain.MONTH -> days.groupBy { YearMonth.from(it) }.map { (m, ds) -> Group(m.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH), ds) }
+        ChartGrain.YEAR -> days.groupBy { it.year }.map { (y, ds) -> Group(y.toString(), ds) }
     }
 
     /** A week is labelled with its Monday ("Oct 5"), a 7 day chart with the weekday, a longer day chart with the day of the month. */

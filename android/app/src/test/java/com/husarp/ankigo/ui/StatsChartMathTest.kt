@@ -197,8 +197,8 @@ class StatsChartMathTest {
     }
 
     @Test fun menusAndTitles() {
-        assertEquals(listOf(ChartPeriod.D7, ChartPeriod.D30), StatsChartMath.periods(ChartMetric.DUE))
-        assertEquals(4, StatsChartMath.periods(ChartMetric.REVIEWS).size)
+        assertEquals(listOf(ChartPeriod.D7, ChartPeriod.D30, ChartPeriod.D100), StatsChartMath.periods(ChartMetric.DUE))
+        assertEquals(5, StatsChartMath.periods(ChartMetric.REVIEWS).size)
         assertEquals("Last 30 days", StatsChartMath.periodLabel(ChartMetric.REVIEWS, ChartPeriod.D30))
         assertEquals("Next 7 days", StatsChartMath.periodLabel(ChartMetric.DUE, ChartPeriod.D7))
         assertEquals("Last 365 days", StatsChartMath.periodLabel(ChartMetric.REVIEWS, ChartPeriod.D365))

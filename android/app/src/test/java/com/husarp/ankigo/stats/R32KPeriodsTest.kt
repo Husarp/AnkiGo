@@ -20,7 +20,7 @@ class R32KPeriodsTest {
                     assertEquals("$metric/$period/$today", first.toString(), series.bars.first().startDay)
                     assertEquals(today, series.bars.last().endDay)
                     if (metric == ChartMetric.BUTTONS) {
-                        assertEquals(period.days, series.bars.size)
+                        assertEquals(period.days, ChartData.build(metric, period, null, StatsSnapshot(), history, today, ChartGrain.DAY).bars.size)
                         assertEquals(2.0, series.total, 0.0)
                     }
                 }
@@ -41,8 +41,9 @@ class R32KPeriodsTest {
 
     @Test fun allHistoricalMenusOfferTheSameRollingWindows() {
         for (metric in ChartMetric.menu.flatMap { it.second }.filter { it.usesPeriod && it != ChartMetric.DUE }) {
-            assertEquals(listOf(7, 30, 100, 300), StatsChartMath.periods(metric).map { it.days })
-            assertEquals(listOf("Last 7 days", "Last 30 days", "Last 100 days", "Last 300 days"),
+            val days = if (metric == ChartMetric.STREAK_CALENDAR) listOf(7, 30, 100, 365) else listOf(7, 30, 100, 365, 1000)
+            assertEquals(days, StatsChartMath.periods(metric).map { it.days })
+            assertEquals(days.map { "Last $it days" },
                 StatsChartMath.periods(metric).map { StatsChartMath.periodLabel(metric, it) })
         }
         val due = ChartData.build(ChartMetric.DUE, ChartPeriod.D7, null, StatsSnapshot(), emptyMap(), "2026-01-01")

@@ -83,6 +83,28 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     private lateinit var sheetLayer: FrameLayout
     private val statsListener: () -> Unit = { requestRender() }
     private var refreshWanted = false
+    private val chartLoader = StatsChartLoader(deliver = { root.post(it) })
+    private var synchronousChart = false
+
+    private data class ChartDay(val reviews: Int, val won: Int, val caught: Int, val xp: Int, val cash: Int, val buttons: List<Int>, val goal: Int) {
+        fun log() = com.husarp.ankigo.game.DayLog(reviews = reviews, won = won, caught = caught, xp = xp, cash = cash, buttons = buttons.toIntArray(), dailyGoal = goal)
+    }
+    private data class ChartInput(val choice: ChartPrefs.Choice, val snap: StatsSnapshot, val history: Map<String, ChartDay>, val today: String,
+        val goal: Int, val weekdayGoals: List<Int>?, val year: Int?)
+
+    private fun longChart(snap: StatsSnapshot, today: String, goal: Int): ChartSeries {
+        val input = ChartInput(choice(), snap, state.history.mapValues { (_, d) ->
+            ChartDay(d.reviews, d.won, d.caught, d.xp, d.cash, d.buttons.toList(), d.dailyGoal)
+        }, today, goal, state.settings.goalByWeekday?.toList(), calendarYear.takeIf { metric == ChartMetric.STREAK_CALENDAR })
+        return chartLoader.load(input, {
+            val h = input.history.mapValues { it.value.log() }
+            val c = input.choice
+            ChartData.build(c.metric, c.period, c.deck, input.snap, h, input.today, c.grain, goal = input.goal,
+                goalFor = { h[it]?.dailyGoal?.takeIf { g -> g > 0 } ?: DailyGoal.pick(input.goal, input.weekdayGoals, it) }, calendarYear = input.year)
+        }, { requestRender() }) ?: ChartSeries(metric, ChartData.effectivePeriod(metric, period), deck, emptyList(), 0.0, 0.0, 0.0,
+            null, metric.unit, "Preparing chart…", deck != null || metric.fromAnkiDroid, true, loading = true,
+            grain = ChartData.effectiveGrain(metric, period, grain))
+    }
 
     // what the chart shows: saved on every change (R18 item 232) and read when the page opens; a tap's choice is kept over re-renders
     private var metric = ChartMetric.REVIEWS
@@ -130,6 +152,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         bar: Int = -1, sheet: Boolean = false, heatDay: String? = null, decks: List<String> = this.decks,
         section: StatsSection = this.section, calendarYear: Int? = null,
     ) {
+        synchronousChart = true
         this.section = section
         this.calendarYear = calendarYear
         this.metric = metric; this.period = period; this.deck = deck; this.grain = grain
@@ -219,6 +242,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     }
 
     override fun onGone() {
+        chartLoader.clear()
         AnkiStatsStore.removeListener(statsListener)
         super.onGone()
     }
@@ -269,7 +293,8 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val snap = AnkiStatsStore.snapshot
         val anki = snap.stats
         val collection = CollectionStats.of(data, state, System.currentTimeMillis())
-        val series = ChartData.build(metric, period, deck, snap, state.history, today, grain, goal = s.goal, collection = collection, goalFor = { state.history[it]?.dailyGoal?.takeIf { g -> g > 0 } ?: DailyGoal.forDay(state, it) }, calendarYear = calendarYear.takeIf { metric == ChartMetric.STREAK_CALENDAR })
+        val series = if (!synchronousChart && metric.usesPeriod && period.days >= 100) longChart(snap, today, state.settings.dailyAverage)
+        else ChartData.build(metric, period, deck, snap, state.history, today, grain, goal = s.goal, collection = collection, goalFor = { state.history[it]?.dailyGoal?.takeIf { g -> g > 0 } ?: DailyGoal.forDay(state, it) }, calendarYear = calendarYear.takeIf { metric == ChartMetric.STREAK_CALENDAR })
         AnkiStatsStore.requestSeries(this, ChartData.seriesKeys(metric, period, deck, today))
 
         content.addView(trainerCard())
@@ -533,6 +558,8 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         head.addView(Ui.text(this, 13f, 900, R.color.ag_text).apply { text = title ?: StatsChartMath.title(s); maxLines = 1; ellipsize = TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
         if (message == null && StatsChartMath.hint(s).isNotEmpty()) head.addView(Ui.text(this, 11f, 700, R.color.ag_sub0).apply { text = StatsChartMath.hint(s); maxLines = 1 }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = dp(8) })
         card.addView(head)
+        if (message == null && s.kind == ChartKind.TIME && s.grain != ChartGrain.DAY)
+            card.addView(note("Average per recorded day"), lp(4))
         val tones = tonesFor(s)
         if (message == null && s.bars.any { it.dailyGoal != null }) card.addView(Ui.text(this, 11f, 800, R.color.ag_sub1).apply {
             text = "Daily goal · faded: partly done · solid: goal met"
@@ -581,7 +608,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 ChartPeriod.D7 -> HeatmapLayout.Mode.STRIP
                 ChartPeriod.D30 -> HeatmapLayout.Mode.ROWS
                 else -> HeatmapLayout.Mode.WEEKS
-            })
+            }, blankDays = s.bars.filterNot { it.hasData }.map { it.startDay }.toSet())
             calendarYear?.let { contentDescription = "Reviews in $it: ${s.heatmap!!.total}" }
             selectedDay = heatDay
             onDayTap = { d -> heatDay = StatsChartMath.tapPick(heatDay, d, null); selectedDay = heatDay; fillHeatSlot(slot, s) }

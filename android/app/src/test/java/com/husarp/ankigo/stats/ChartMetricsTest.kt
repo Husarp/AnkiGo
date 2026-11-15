@@ -76,8 +76,8 @@ class ChartMetricsTest {
         assertEquals(listOf(ChartGrain.DAY), ChartData.grains(ChartMetric.XP, ChartPeriod.D7))
         assertEquals(listOf(ChartGrain.DAY, ChartGrain.WEEK), ChartData.grains(ChartMetric.XP, ChartPeriod.D30))
         assertEquals(listOf(ChartGrain.DAY, ChartGrain.WEEK, ChartGrain.MONTH), ChartData.grains(ChartMetric.XP, ChartPeriod.D90))
-        assertEquals(listOf(ChartGrain.WEEK, ChartGrain.MONTH), ChartData.grains(ChartMetric.XP, ChartPeriod.D365))
-        assertEquals(listOf(ChartGrain.DAY, ChartGrain.WEEK), ChartData.grains(ChartMetric.DUE, ChartPeriod.D365)) // DUE only looks 30 days ahead
+        assertEquals(listOf(ChartGrain.DAY, ChartGrain.WEEK, ChartGrain.MONTH), ChartData.grains(ChartMetric.XP, ChartPeriod.D365))
+        assertEquals(listOf(ChartGrain.DAY, ChartGrain.WEEK, ChartGrain.MONTH), ChartData.grains(ChartMetric.DUE, ChartPeriod.D365)) // DUE caps at 100 days
         for (m in listOf(ChartMetric.CARD_STATES, ChartMetric.STREAK_CALENDAR, ChartMetric.DEX_PROGRESS, ChartMetric.PER_TYPE, ChartMetric.SHINIES_RARE))
             assertTrue("$m", ChartData.grains(m, ChartPeriod.D30).isEmpty())
         assertEquals("Per day", ChartGrain.DAY.label); assertEquals("Per week", ChartGrain.WEEK.label); assertEquals("Per month", ChartGrain.MONTH.label)
@@ -90,11 +90,11 @@ class ChartMetricsTest {
         assertEquals(ChartGrain.DAY, g(ChartPeriod.D7, ChartGrain.MONTH))
         assertEquals(ChartGrain.DAY, g(ChartPeriod.D7, ChartGrain.WEEK))
         assertEquals(ChartGrain.DAY, g(ChartPeriod.D30, ChartGrain.MONTH))
-        assertEquals(ChartGrain.MONTH, g(ChartPeriod.D365, ChartGrain.DAY))
+        assertEquals(ChartGrain.DAY, g(ChartPeriod.D365, ChartGrain.DAY))
         assertEquals(ChartGrain.WEEK, g(ChartPeriod.D30, ChartGrain.WEEK))
         assertEquals(ChartGrain.DAY, g(ChartPeriod.D90, ChartGrain.DAY))
         assertEquals(ChartGrain.WEEK, g(ChartPeriod.D365, ChartGrain.WEEK))
-        assertEquals(ChartGrain.DAY, ChartData.effectiveGrain(ChartMetric.DUE, ChartPeriod.D365, ChartGrain.MONTH))
+        assertEquals(ChartGrain.MONTH, ChartData.effectiveGrain(ChartMetric.DUE, ChartPeriod.D365, ChartGrain.MONTH))
     }
 
     @Test fun monthForSevenDaysIsStillSevenDayBars() {
@@ -110,12 +110,12 @@ class ChartMetricsTest {
         assertEquals(ChartGrain.WEEK, s.grain)
         assertEquals(listOf("Sep 14", "Sep 21", "Sep 28", "Oct 5", "Oct 12"), s.bars.map { it.label })
         assertEquals("2026-09-15", s.bars.first().startDay); assertEquals("2026-09-20", s.bars.first().endDay) // the cut first week
-        assertEquals(listOf(180.0), s.bars.last().values)
+        assertEquals(listOf(60.0), s.bars.last().values)
         assertEquals(5, s.bars.size)
         assertEquals(listOf(7.0), s.bars[2].values)                                // Sun 4 Oct (date 10) is in the week of Mon 28 Sep
         assertEquals(187.0, s.total, 0.0)
-        assertEquals(listOf("12 – 14 Oct · 180 XP", "Average 60 XP a day"), s.bars.last().detail)
-        assertEquals(listOf("15 – 20 Sep · 0 XP"), s.bars.first().detail)
+        assertEquals(listOf("12 – 14 Oct · 180 XP", "Average 60 XP a recorded day"), s.bars.last().detail)
+        assertEquals(listOf("15 – 20 Sep · no data recorded"), s.bars.first().detail)
     }
 
     @Test fun ninetyDaysPerDayAndPerMonth() {
@@ -125,9 +125,9 @@ class ChartMetricsTest {
         val m = build(ChartMetric.XP, ChartPeriod.D90, history = h, grain = ChartGrain.MONTH)
         assertEquals(listOf("Jul", "Aug", "Sep", "Oct"), m.bars.map { it.label })
         assertEquals(listOf(310.0), m.bars[1].values)
-        assertEquals(listOf("August 2026 · 310 XP", "Average 10 XP a day"), m.bars[1].detail)
-        assertEquals(listOf("17 – 31 Jul · 0 XP"), m.bars[0].detail)
-        assertEquals(listOf("1 – 14 Oct · 28 XP", "Average 2 XP a day"), m.bars.last().detail)
+        assertEquals(listOf("August 2026 · 310 XP", "Average 310 XP a recorded day"), m.bars[1].detail)
+        assertEquals(listOf("17 – 31 Jul · no data recorded"), m.bars[0].detail)
+        assertEquals(listOf("1 – 14 Oct · 28 XP", "Average 28 XP a recorded day"), m.bars.last().detail)
     }
 
     @Test fun aYearPerWeekHasPartialEndsAndNamesTheOldYear() {
@@ -135,7 +135,7 @@ class ChartMetricsTest {
         val s = build(ChartMetric.ANSWERS, ChartPeriod.D365, history = h, grain = ChartGrain.WEEK)
         assertEquals(ChartGrain.WEEK, s.grain)
         assertEquals(53, s.bars.size)
-        assertEquals(730.0, s.bars.sumOf { it.values[0] }, 0.0)
+        assertEquals(106.0, s.bars.sumOf { it.values[0] }, 0.0)
         assertTrue(s.bars.first().detail.first().startsWith("15 – 19 Oct 2025 · "))   // Wed 15 Oct 2025 .. Sun 19 Oct 2025
         assertEquals("2026-10-12", s.bars.last().startDay)
     }
@@ -143,17 +143,17 @@ class ChartMetricsTest {
     @Test fun monthBarsOfAYearNameTheYearWhenNotThisOne() {
         val h = (0 until 365).associate { date(it) to log(reviews = 2) }
         val s = build(ChartMetric.ANSWERS, ChartPeriod.D365, history = h)
-        assertEquals(listOf("15 – 31 Oct 2025 · 34 answers", "Average 2 answers a day"), s.bars.first().detail)
-        assertEquals(listOf("November 2025 · 60 answers", "Average 2 answers a day"), s.bars[1].detail)
-        assertEquals(listOf("1 – 14 Oct · 28 answers", "Average 2 answers a day"), s.bars.last().detail)
+        assertEquals(listOf("15 – 31 Oct 2025 · 34 answers", "Average 2 answers a recorded day"), s.bars.first().detail)
+        assertEquals(listOf("November 2025 · 60 answers", "Average 2 answers a recorded day"), s.bars[1].detail)
+        assertEquals(listOf("1 – 14 Oct · 28 answers", "Average 2 answers a recorded day"), s.bars.last().detail)
     }
 
     @Test fun aWeekThatCrossesAMonthAndOneThatCrossesNewYear() {
         val h = mapOf(date(14) to log(xp = 8)) // Wed 30 Sep: in the week Mon 28 Sep .. Sun 4 Oct
         val s = build(ChartMetric.XP, ChartPeriod.D30, history = h, grain = ChartGrain.WEEK)
-        assertEquals(listOf("28 Sep – 4 Oct · 8 XP", "Average 1.1 XP a day"), s.bars[2].detail)
+        assertEquals(listOf("28 Sep – 4 Oct · 8 XP", "Average 8 XP a recorded day"), s.bars[2].detail)
         val ny = ChartData.build(ChartMetric.XP, ChartPeriod.D30, null, StatsSnapshot(), mapOf("2025-12-30" to log(xp = 70)), "2026-01-05", ChartGrain.WEEK)
-        assertEquals(listOf("29 Dec 2025 – 4 Jan 2026 · 70 XP", "Average 10 XP a day"), ny.bars.first { it.startDay <= "2025-12-30" && it.endDay >= "2025-12-30" }.detail)
+        assertEquals(listOf("29 Dec 2025 – 4 Jan 2026 · 70 XP", "Average 70 XP a recorded day"), ny.bars.first { it.startDay <= "2025-12-30" && it.endDay >= "2025-12-30" }.detail)
     }
 
     // ---------------------------------------------------------------- tap text of time bars
@@ -162,7 +162,7 @@ class ChartMetricsTest {
         val s = build(ChartMetric.REVIEWS, ChartPeriod.D7, StatsSnapshot(stats = anki(mapOf(date(0) to 43, date(1) to 1)), access = AnkiAccess.OK))
         assertEquals(listOf("Wed 14 Oct · 43 cards"), s.bars.last().detail)
         assertEquals(listOf("Tue 13 Oct · 1 card"), s.bars[5].detail)
-        assertEquals(listOf("Thu 8 Oct · 0 cards"), s.bars.first().detail)
+        assertEquals(listOf("Thu 8 Oct · no data recorded"), s.bars.first().detail)
         assertEquals(s.bars.last().detail, s.detailFor(today))
         assertEquals(s.bars[5].detail, s.detailFor(date(1)))
         assertTrue(s.detailFor("2020-01-01").isEmpty())
@@ -183,7 +183,7 @@ class ChartMetricsTest {
         val s = build(ChartMetric.TIME, ChartPeriod.D7, snap)
         assertEquals(listOf("Wed 14 Oct · 15 min"), s.bars.last().detail)
         assertEquals(listOf("Tue 13 Oct · 1h 15m"), s.bars[5].detail)
-        assertEquals(listOf("Mon 12 Oct · 0 min"), s.bars[4].detail)
+        assertEquals(listOf("Mon 12 Oct · no data recorded"), s.bars[4].detail)
     }
 
     @Test fun retentionBarsSayHowManyAnswersTheyAreMadeOf() {
@@ -199,7 +199,7 @@ class ChartMetricsTest {
         assertEquals(listOf("Wed 21 Oct · 7 cards due"), s.bars.last().detail)
         val weeks = build(ChartMetric.DUE, ChartPeriod.D30, StatsSnapshot(stats = anki(forecast = List(30) { 1 }), access = AnkiAccess.OK), grain = ChartGrain.WEEK)
         assertEquals(ChartGrain.WEEK, weeks.grain)
-        assertEquals(listOf("15 – 18 Oct · 4 cards due", "Average 1 card due a day"), weeks.bars.first().detail)
+        assertEquals(listOf("15 – 18 Oct · 4 cards due", "Average 1 card due a recorded day"), weeks.bars.first().detail)
     }
 
     @Test fun barsStillLoadingHaveNoTapText() {
@@ -212,7 +212,7 @@ class ChartMetricsTest {
         val s = build(ChartMetric.MONEY, ChartPeriod.D7, history = h)
         assertEquals(listOf("Wed 14 Oct · 12,345 coins earned"), s.bars.last().detail)
         val w = build(ChartMetric.MONEY, ChartPeriod.D30, history = h, grain = ChartGrain.WEEK)
-        assertEquals(listOf("12 – 14 Oct · 12,355 coins earned", "Average 4,118.3 coins earned a day"), w.bars.last().detail) // 3 days in the last week
+        assertEquals(listOf("12 – 14 Oct · 12,355 coins earned", "Average 6,177.5 coins earned a recorded day"), w.bars.last().detail) // 2 recorded days in the last week
     }
 
     // ---------------------------------------------------------------- card states
@@ -290,7 +290,7 @@ class ChartMetricsTest {
         assertEquals("AnkiGo's own count: answers, not distinct cards (AnkiDroid isn't available)", s.source)
         assertEquals(listOf("Wed 14 Oct · 60 cards", "Daily goal reached (50)"), s.detailFor(today))
         assertEquals(listOf("Tue 13 Oct · 20 cards", "40% of the daily goal (50)"), s.detailFor(date(1)))
-        assertEquals(listOf("Mon 12 Oct · 0 cards"), s.detailFor(date(2)))
+        assertEquals(listOf("Mon 12 Oct · no data recorded"), s.detailFor(date(2)))
         assertEquals(s.bars.last().detail, s.detailFor(today))
         assertEquals(s.bars.size, s.bars.map { it.startDay }.toSet().size)
     }
@@ -302,7 +302,7 @@ class ChartMetricsTest {
         assertEquals(110.0, s.total, 0.0)
         assertTrue(s.source.startsWith("AnkiDroid"))
         assertEquals(listOf("Sun 11 Oct · 100 cards", "Daily goal reached (100)"), s.detailFor(date(3)))
-        assertEquals(listOf(4, 4, 6, 13, 53, 16, 44), ChartPeriod.values().map { ChartData.heatmapWeeks(it) })
+        assertEquals(listOf(4, 4, 6, 13, 53, 16, 44, 144), ChartPeriod.values().map { ChartData.heatmapWeeks(it) })
         assertEquals(13, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D90).heatmap!!.columns.size)
         assertEquals(53, build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D365).heatmap!!.columns.size)
         assertTrue(build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D90).empty)

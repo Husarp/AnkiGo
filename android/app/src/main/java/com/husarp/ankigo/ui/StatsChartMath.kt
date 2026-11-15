@@ -56,6 +56,14 @@ object StatsChartMath {
     /** The middle of slot [i] of [n] in [start]..[end]. */
     fun slotCenter(i: Int, n: Int, start: Float, end: Float): Float = start + (i + 0.5f) * (end - start) / n
 
+    /** Only slots intersecting the visible canvas, plus neighbours for line continuity. */
+    fun visibleIndices(n: Int, start: Float, end: Float, clipStart: Float, clipEnd: Float): IntRange {
+        if (n <= 0 || end <= start || clipEnd <= start || clipStart >= end) return IntRange.EMPTY
+        val a = (indexAt(clipStart, n, start, end, true) - 1).coerceAtLeast(0)
+        val b = (indexAt(clipEnd, n, start, end, true) + 1).coerceAtMost(n - 1)
+        return a..b
+    }
+
     // ---------------------------------------------------------------- the y axis
 
     /**
@@ -104,9 +112,15 @@ object StatsChartMath {
 
     /** The text under a bar: a 7 day chart the weekday, a longer day chart "17 Sep", a week "Oct 5", a month "Oct". */
     fun axisText(s: ChartSeries, bar: Bar): String {
-        if (s.kind != ChartKind.TIME || s.grain != ChartGrain.DAY || s.period == ChartPeriod.D7) return bar.label
+        if (s.kind != ChartKind.TIME) return bar.label
         val d = runCatching { LocalDate.parse(bar.startDay) }.getOrNull() ?: return bar.label
-        return "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)}"
+        val year = if (s.period.days >= 365) " ${d.year}" else ""
+        return when (s.grain) {
+            ChartGrain.DAY -> if (s.period == ChartPeriod.D7) bar.label else "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)}$year"
+            ChartGrain.WEEK -> if (year.isEmpty()) bar.label else "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.SHORT, Locale.ENGLISH)}$year"
+            ChartGrain.MONTH -> bar.label + year
+            ChartGrain.YEAR -> d.year.toString()
+        }
     }
 
     /**
@@ -118,7 +132,9 @@ object StatsChartMath {
         if (n <= 0) return emptyList()
         if (n == 1) return listOf(AxisLabel(0, LabelAlign.CENTER))
         fun plan(idx: List<Int>) = idx.map { AxisLabel(it, if (it == 0) LabelAlign.START else if (it == n - 1) LabelAlign.END else LabelAlign.CENTER) }
-        for (k in (n - 2) downTo 0) {
+        val minWidth = (0 until n).minOf { width(it) }.coerceAtLeast(1f)
+        val most = ((end - start + gap) / (minWidth + gap)).toInt().coerceIn(2, n)
+        for (k in (most - 2) downTo 0) {
             val idx = if (k == n - 2) (0 until n).toList()
             else (0..k + 1).map { Math.round(it * (n - 1).toDouble() / (k + 1)).toInt() }.distinct()
             val p = plan(idx)
@@ -177,7 +193,7 @@ object StatsChartMath {
     /** The legend of a stacked chart: each part's share of everything in the period; null percents when nothing was counted. */
     fun legend(s: ChartSeries): List<LegendItem> {
         if (s.kind != ChartKind.TIME || s.seriesNames.size < 2) return emptyList()
-        val sums = s.seriesNames.indices.map { i -> s.bars.sumOf { it.values.getOrElse(i) { 0.0 } } }
+        val sums = s.componentTotals ?: s.seriesNames.indices.map { i -> s.bars.sumOf { it.values.getOrElse(i) { 0.0 } } }
         val all = sums.sum()
         return s.seriesNames.mapIndexed { i, n -> LegendItem(n, i, if (all > 0.0) Math.round(100.0 * sums[i] / all).toInt() else null) }
     }
@@ -250,7 +266,7 @@ object StatsChartMath {
 
     // ---------------------------------------------------------------- the menus
 
-    /** The periods the chip offers: DUE looks ahead 7 or 30 days only. */
+    /** The periods the chip offers, including the 100-day forecast. */
     fun periods(metric: ChartMetric): List<ChartPeriod> =
         ChartPrefs.periodsFor(metric)
 
@@ -258,13 +274,18 @@ object StatsChartMath {
         "${if (metric == ChartMetric.DUE) "Next" else "Last"} ${p.days} days"
 
     /** The chart's title: "Reviews per day", "Card states". */
-    fun title(s: ChartSeries): String =
-        if (s.metric == ChartMetric.REVIEWS && s.source.startsWith("AnkiGo")) "Answers per ${s.grain.name.lowercase(Locale.US)} · AnkiGo" else if (s.metric == ChartMetric.BUTTONS) "Answer buttons" else if (s.kind == ChartKind.TIME) "${s.metric.label} ${s.grain.label.lowercase(Locale.US)}" else s.metric.label
+    fun title(s: ChartSeries): String {
+        if (s.kind != ChartKind.TIME) return s.metric.label
+        val ownAnswers = s.metric == ChartMetric.REVIEWS && s.source.startsWith("AnkiGo")
+        if (s.grain != ChartGrain.DAY) return "${if (ownAnswers) "Answers · AnkiGo" else s.metric.label} · daily average"
+        if (ownAnswers) return "Answers per day · AnkiGo"
+        return if (s.metric == ChartMetric.BUTTONS) "Answer buttons" else "${s.metric.label} per day"
+    }
 
     /** The small hint on the right of the title (R18 item 234: the calendar has none, its bottom-left line says it). */
     fun hint(s: ChartSeries): String = when (s.kind) {
         ChartKind.HEATMAP -> ""
         ChartKind.CATEGORY -> "tap a bar for details"
-        ChartKind.TIME -> "tap a bar for its ${when (s.grain) { ChartGrain.DAY -> "day"; ChartGrain.WEEK -> "week"; ChartGrain.MONTH -> "month" }}"
+        ChartKind.TIME -> "tap ${if (s.grain == ChartGrain.DAY) "a bar" else "the line"} for its ${when (s.grain) { ChartGrain.DAY -> "day"; ChartGrain.WEEK -> "week"; ChartGrain.MONTH -> "month"; ChartGrain.YEAR -> "year" }}"
     }
 }
