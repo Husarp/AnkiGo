@@ -1515,11 +1515,14 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val wild = conditions.of(ConditionMarks.Slot.WILD)
         val ours = conditions.of(ConditionMarks.Slot.OURS)
         val field = conditions.of(ConditionMarks.Slot.FIELD)
-        fun ownerFlow(card: View, ms: List<ConditionMarks.Mark>, occupied: List<ConditionSpot.R> = emptyList()): ConditionFlow.OwnerFlow {
+        fun ownerFlow(card: View, ms: List<ConditionMarks.Mark>, occupied: List<ConditionSpot.R>? = null): ConditionFlow.OwnerFlow {
             val box = boxOf(card)
-            val obstacles = occupied.ifEmpty {
-                if (card === playerCard && wildOn && wild.isNotEmpty())
-                    ownerFlow(enemyBlock, wild).rects.map { it.grow(m.lift * .5f) } else emptyList()
+            val obstacles = occupied ?: when {
+                card === playerCard && wildOn && wild.isNotEmpty() ->
+                    ownerFlow(enemyBlock, wild, emptyList()).rects.map { it.grow(m.lift * .5f) }
+                card === enemyBlock && ourOn && ours.isNotEmpty() ->
+                    ownerFlow(playerCard, ours, emptyList()).rects.map { it.grow(m.lift * .5f) }
+                else -> emptyList()
             }
             var budget = maxOf(m.height, minOf(scene.area.h / 3f, scene.area.h - card.height * card.scaleY - m.lift))
             if (obstacles.isNotEmpty()) budget = minOf(budget, if (card === enemyBlock) box.t - scene.area.t - m.lift else scene.area.b - box.b - m.lift)
