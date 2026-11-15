@@ -164,7 +164,7 @@ class R15AItemWindowShots {
         shoot("win-evo", listOf(P412), check = { _, screen ->
             val t = texts(screen)
             assertFalse("Use on…" in t)
-            assertTrue("Level 2 Bond" in t)
+            assertTrue("Reach Level 2 Bond" in t)
             assertTrue("You own 1 Tart Apple" in t.map { ItemInfo.plain(it) })
         }) { ctx -> bagPage(ctx, CardKeys.bagItem("tart-apple")).second }
     }

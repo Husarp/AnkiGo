@@ -72,7 +72,7 @@ class EvolutionRowTextTest {
         val mon = st.main!!.apply { bondPoints = 124; gender = 'M' }
         val noon = java.util.Calendar.getInstance().apply { set(java.util.Calendar.HOUR_OF_DAY, 12) }.timeInMillis
         fun checks() = EvolutionRowText.requirements(data, e, data.sp(133), st, mon, noon).associate { it.label to it.met }
-        assertEquals(mapOf("Level 2 Bond" to false, "Level 26" to false, "in the daytime" to true, "Female Pokémon" to false), checks())
+        assertEquals(mapOf("Reach Level 2 Bond" to false, "Reach level 26" to false, "Evolve in the daytime" to true, "Be a female Pokémon" to false), checks())
         mon.bondPoints = 125; mon.level = 26; mon.gender = 'F'
         assertTrue(checks().values.all { it })
         assertEquals("Evolution · ???", EvolutionRowText.title(data, e, emptySet()))
@@ -101,4 +101,63 @@ class EvolutionRowTextTest {
         assertTrue(text.contains("Linking Cord"))
         assertTrue(text.contains("06:00–18:00"))
     }
+    @Test fun moveAndTypeRequirementsChangeOnlyWhenTheMoveIsKnown() {
+        val st = TestData.state(data, 133, 20)
+        val mon = st.main!!
+        val e = Evolution(135, EvoKind.LEVEL_MOVE, move = "moonblast", moveType = Type.FAIRY)
+        fun rows() = EvolutionRowText.requirements(data, e, data.sp(133), st, mon).drop(1)
+        assertEquals(listOf("Know the move Moonblast", "Know a Fairy-type move"), rows().map { it.label })
+        assertTrue(rows().none { it.met })
+        mon.moves.add("moonblast")
+        assertTrue(rows().all { it.met })
+    }
+
+    @Test fun tradeAndOtherKindsShowTheActualConsumableOnTheRight() {
+        val st = TestData.state(data, 133, 20)
+        for ((e, item) in listOf(
+            Evolution(135, EvoKind.TRADE) to "linking-cord",
+            Evolution(135, EvoKind.TRADE, item = "metal-coat") to "metal-coat",
+            Evolution(135, EvoKind.OTHER, condition = "in a special place") to "linking-cord",
+        )) {
+            st.bag.clear()
+            fun row() = EvolutionRowText.requirements(data, e, data.sp(133), st, st.main).last()
+            assertEquals(item, row().item)
+            assertEquals("Use ${Items.name(item)}", row().label)
+            assertFalse(row().met)
+            st.bag[item] = 1
+            assertTrue(row().met)
+        }
+    }
+
+    @Test fun statConditionsHaveVerbPhrasesAndEvaluateTheDisplayedComparison() {
+        val st = TestData.state(data, 133, 20)
+        val mon = st.main!!
+        val stats = StatCalc.stats(data, mon)
+        for ((condition, label, met) in listOf(
+            Triple("with an Atk stat > its Def stat", "Have Attack higher than Defense", stats.atk > stats.def),
+            Triple("with an Atk stat < its Def stat", "Have Attack lower than Defense", stats.atk < stats.def),
+            Triple("with an Atk stat equal to its Def stat", "Have equal Attack and Defense", stats.atk == stats.def),
+        )) {
+            val e = Evolution(135, EvoKind.LEVEL, level = 20, condition = condition)
+            val row = EvolutionRowText.requirements(data, e, data.sp(133), st, mon).last()
+            assertEquals(label, row.label)
+            assertEquals(met, row.met)
+        }
+    }
+
+    @Test fun darkPartyRequirementNeedsAnotherTeamMember() {
+        val d = TestData.data(listOf(TestData.species(133, types = listOf(Type.DARK)),
+            TestData.species(135), TestData.species(197, types = listOf(Type.DARK))))
+        val st = TestData.state(d, 133, 32)
+        val e = Evolution(135, EvoKind.LEVEL, level = 32, condition = "with a Dark-type in the party")
+        fun row() = EvolutionRowText.requirements(d, e, d.sp(133), st, st.main).last()
+        assertEquals("Have another Dark-type Pokémon in the party", row().label)
+        assertFalse(row().met)
+        val other = TestData.mon(d, 197, 20)
+        st.mons.add(other)
+        assertFalse(row().met)
+        st.team.add(other.uid)
+        assertTrue(row().met)
+    }
+
 }

@@ -195,7 +195,7 @@ class R18GDetailsShots {
             assertTrue("the equipment slots are separate from Exp. Share", "Nothing" in t)
             // 279A: every branch gets its own readable row and grey condition.
             val labels = listOf("Use Water Stone", "Use Thunder Stone", "Use Fire Stone", "Use Leaf Stone", "Use Ice Stone",
-                "Level 3 Bond\nin the daytime", "Level 3 Bond\nat night", "Level 3 Bond\nknows a Fairy move")
+                "Evolve in the daytime", "Evolve at night", "Know a Fairy-type move")
             val cells = labels.map { l -> texts(scene).single { it.text.toString() == l } }
             val tops = cells.map { top(it, scene) }.distinct().sorted()
             assertEquals("eight separate target rows", 8, tops.size)
@@ -451,7 +451,7 @@ class R18GDetailsShots {
         val names = listOf("Ratty2", "Ratty3", "Ratty4", "Ratty5").map { n -> texts(v).single { it.text.toString() == n } }
         assertEquals("279A: one row per Pokémon", listOf(1, 1, 1, 1), names.groupBy { top(it, v) }.toSortedMap().values.map { it.size })
         // every method text hangs under its own name, never over the next line's name
-        val methods = listOf("Use Water Stone", "Use Thunder Stone", "Level 3 Bond\nat night", "Use Fire Stone").map { m -> texts(v).single { it.text.toString() == m } }
+        val methods = views(v).filter { it.contentDescription?.startsWith("Explain ") == true }
         names.zip(methods).forEach { (n, m) -> assertTrue("${n.text}: condition beside the name", top(m, v) < top(n, v) + n.height && top(m, v) + m.height > top(n, v)) }
         assertRowConditions(c, v)
     }
