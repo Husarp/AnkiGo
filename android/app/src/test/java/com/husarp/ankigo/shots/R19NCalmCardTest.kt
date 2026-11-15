@@ -191,12 +191,14 @@ class R19NCalmCardTest {
         assertEquals("played at the show", false, getField(act, "avHeld"))
     }
 
-    @Test fun aKeyOrATapOnTheCardOnlyContinues() {
+    @Test fun aKeyOrATapOnTheCardWaitsForTheContinueButton() {
         val act = study(ctx())
         hold(act)
         call(act, "flip")
-        assertFalse(events(act).holding); assertFalse(calmOn(act))
+        assertTrue(events(act).holding); assertTrue(calmOn(act))
         assertEquals("the card did not flip", false, getField(act, "flipped"))
+        row(act).getChildAt(0).performClick()
+        assertFalse(events(act).holding); assertFalse(calmOn(act))
     }
 
     // ---------------------------------------------------------------- Continue
@@ -237,14 +239,14 @@ class R19NCalmCardTest {
 
     // ---------------------------------------------------------------- other ways out and other layouts
 
-    @Test fun aHiddenPanelReleasesTheHoldAndTheCardShows() {
+    @Test fun aHiddenPanelKeepsTheHoldAndTheCardWaits() {
         val c = ctx()
         val act = study(c)
         hold(act)
         assertTrue(calmOn(act))
         (getField(act, "panel") as BattlePanelView).visibility = View.GONE   // the type-in keyboard layout
         call(act, "releaseHiddenHold")
-        assertFalse(events(act).holding); assertFalse(calmOn(act)); assertNotEquals(0L, shownAt(act))
+        assertTrue(events(act).holding); assertTrue(calmOn(act)); assertEquals(0L, shownAt(act))
     }
 
     @Test fun theDecksLastAnswerLeavesNoPlaceholder() {
@@ -257,12 +259,12 @@ class R19NCalmCardTest {
         assertFalse(calmOn(act)); assertEquals("Finish deck, see the summary", rowText(act))
     }
 
-    @Test fun theStripAndMiniNeverHoldSoThereIsNoPlaceholder() {
+    @Test fun theStripAndMiniAlsoWaitForContinue() {
         val act = study(ctx(), strip = true)
         events(act).enqueue(defeatBatch())
         call(act, "showButtons")
-        assertFalse(events(act).holding); assertFalse(calmOn(act))
-        assertNotEquals("the clock keeps running as before", 0L, shownAt(act))
+        assertTrue(events(act).holding); assertTrue(calmOn(act))
+        assertEquals("the card clock waits for Continue", 0L, shownAt(act))
     }
 
     @Test fun aNewCardAfterTheHoldStartsItsClockAtTheShow() {

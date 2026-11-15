@@ -225,14 +225,14 @@ class R19TTurnsTest {
         assertFalse("nothing in a switch's events lets the hold go", NextFight.releasesHold(r.events))
     }
 
-    @Test fun onlyAnAnswerOrABallThrowReleasesAHeldFight() {
+    @Test fun neitherAnswersNorBallThrowsReleaseAHeldFight() {
         val switch = listOf(GameEvent.SwitchQueued("t1", "X"), GameEvent.MainChanged("t1", "X"),
             GameEvent.SwitchHit("Wild Ratty", "X", 10, 20), GameEvent.Effect(false, "x", 0, 0, null, EffectKind.STATUS_APPLIED, null, 0, 0))
         assertFalse(NextFight.releasesHold(switch))
         assertFalse(NextFight.releasesHold(emptyList()))
-        assertTrue(NextFight.releasesHold(listOf(GameEvent.Counted(3, 10, 1, 1, false), GameEvent.Charge(10, 1, 2))))
-        assertTrue("an OK is an answer too", NextFight.releasesHold(listOf(GameEvent.Counted(1, 0, 1, 0, false, true))))
-        assertTrue(NextFight.releasesHold(switch + GameEvent.Counted(3, 10, 1, 1, false)))
+        assertFalse(NextFight.releasesHold(listOf(GameEvent.Counted(3, 10, 1, 1, false), GameEvent.Charge(10, 1, 2))))
+        assertFalse("an OK also waits for Continue", NextFight.releasesHold(listOf(GameEvent.Counted(1, 0, 1, 0, false, true))))
+        assertFalse(NextFight.releasesHold(switch + GameEvent.Counted(3, 10, 1, 1, false)))
     }
 
     // ---------------------------------------------------------------- saves

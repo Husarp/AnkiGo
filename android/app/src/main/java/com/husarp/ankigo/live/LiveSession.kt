@@ -169,7 +169,7 @@ object LiveSession {
     fun practiceAnswer(ctx: Context, cardId: Long, button: Int, neutral: Boolean = false): List<GameEvent> {
         app = ctx.applicationContext
         flushCatchUp()
-        val events = act { g -> g.onPracticeAnswer(GameAnswer(cardId, button, System.currentTimeMillis(), false, neutral)) }
+        val events = act { g -> prepareAnswer(g) + g.onPracticeAnswer(GameAnswer(cardId, button, System.currentTimeMillis(), false, neutral)) }
         deliver(events)
         return events
     }
@@ -190,7 +190,7 @@ object LiveSession {
         val events = act { g ->
             saveSnapshotInto(g) // with the row: the save that holds this step also says the game counted it
             if (detector == null) { g.state.liveSnapshot = ahead.into(g.state.liveSnapshot); g.state.liveDay = g.dayKey() }
-            g.tick() + g.onAnswer(GameAnswer(row.id, button, System.currentTimeMillis(), false, neutral))
+            g.tick() + gameAnswer(g, GameAnswer(row.id, button, System.currentTimeMillis(), false, neutral))
         }
         deliver(events)
         return events
@@ -350,7 +350,7 @@ object LiveSession {
             return
         }
         flushCatchUp()
-        deliver(act { g -> saveSnapshotInto(g); g.tick() + g.onAnswer(a) })
+        deliver(act { g -> saveSnapshotInto(g); g.tick() + gameAnswer(g, a) })
         // The detector refreshes its map a moment after delivering; save the fresh one too.
         handler.removeCallbacks(snapshotLater)
         handler.postDelayed(snapshotLater, 1500)
@@ -375,7 +375,7 @@ object LiveSession {
         if (pendingCatchUp.isEmpty()) return
         val batch = pendingCatchUp.toList()
         pendingCatchUp.clear()
-        val events = act { g -> saveSnapshotInto(g); g.tick() + batch.flatMap { g.onAnswer(it) } }
+        val events = act { g -> saveSnapshotInto(g); g.tick() + batch.flatMap { gameAnswer(g, it) } }
         var won = 0; var caught = 0; var cash = 0
         for (ev in events) when (ev) {
             is GameEvent.Defeated -> won++
@@ -389,6 +389,13 @@ object LiveSession {
         sendLog(LogKind.SYS, "CAUGHT UP", text, redraw = true)
         refreshWidgetsFor(app, events)
     }
+
+    /** A missing fight is prepared dormant before an answer can charge or resolve it. */
+    private fun prepareAnswer(g: Game): List<GameEvent> =
+        if (g.state.battle != null) emptyList() else (g.tick() + g.ensureEncounter()).also(GameRepo::holdNextFight)
+
+    private fun gameAnswer(g: Game, answer: GameAnswer): List<GameEvent> =
+        prepareAnswer(g) + g.onAnswer(answer).also(GameRepo::holdNextFight)
 
     /** Runs a game action; a failure is logged (it must never crash a study session) and gives no events. */
     private fun act(f: (Game) -> List<GameEvent>): List<GameEvent> = try {

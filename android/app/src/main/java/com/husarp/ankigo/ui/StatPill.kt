@@ -76,7 +76,7 @@ object StatPill {
  * The pill as a view: rounded 9 dp tint, the short name in 12 sp bold, then the chevrons in columns of three (8 dp chevrons, 7 dp vertical pitch).
  * [stages] is signed (positive = rise). Read by TalkBack as "Attack up 2".
  */
-internal class StatPillView(ctx: Context, val stat: String, val stages: Int) : View(ctx) {
+internal class StatPillView(ctx: Context, val stat: String, val stages: Int, private val battleStyle: Boolean = false) : View(ctx) {
     private val d = ctx.resources.displayMetrics.density
     private val up = stages > 0
     private val n = StatPill.count(stages)
@@ -117,9 +117,14 @@ internal class StatPillView(ctx: Context, val stat: String, val stages: Int) : V
 
     override fun onDraw(canvas: Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
-        canvas.drawRoundRect(RectF(0f, 0f, w, h), 9f * d, 9f * d, bg)
+        canvas.drawRoundRect(RectF(0f, 0f, w, h), (if (battleStyle) 4f else 9f) * d, (if (battleStyle) 4f else 9f) * d, bg)
         val fm = text.fontMetrics
         canvas.drawText(label, padX, h / 2f - (fm.ascent + fm.descent) / 2f, text)
+        if (battleStyle) {
+            StageChevron.draw(canvas, RectF(padX + textW + gap, (h - boxH) / 2f,
+                w - padX, (h + boxH) / 2f), n, up, text.color)
+            return
+        }
         canvas.save()
         canvas.translate(padX + textW + gap, (h - boxH) / 2f)
         canvas.scale(unit, unit) // the scale carries the stroke width too (box units)

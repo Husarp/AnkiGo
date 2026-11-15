@@ -1505,7 +1505,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     internal var onMarksPlaced: () -> Unit = {}
 
-    /** Centres owner chips on their boxes: wild above, ours below; the field uses free space. */
+    /** Aligns owner chips to their outer box edges: wild above, ours below; the field uses free space. */
     private fun placeMarks() {
         if (width <= 0 || height <= 0 || (conditions.size == 0 && marks.shownRows.isEmpty())) return
         val m = ChipMetrics(context, chipSp())

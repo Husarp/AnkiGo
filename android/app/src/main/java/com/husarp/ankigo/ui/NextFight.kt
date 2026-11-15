@@ -14,26 +14,16 @@ object NextFight {
     /** C4: the most the entrance waits for the next background picture to load (ms); after that the wild one comes in anyway (it may move once, as before). */
     const val PICTURE_WAIT_MS = 1200L
 
-    /**
-     * C5: true when the batch [events] ends a fight with a next fight behind it and the panel will hold that fight ([mode] =
-     * [CatchTilesPlan.mode] for the panel as it is): Continue shows from now on, not only once the reward animations and the result
-     * tiles are done. No: a fled wild one, no next Encounter (end of the deck, nothing to continue to), a small window (timed tiles,
-     * no Continue) and an answer or a ball throw behind the result (fast play: the tiles would only flash by).
-     */
+    /** A prepared encounter after any fight ending waits for Continue in every window size. */
     fun holdsEarly(events: List<GameEvent>, mode: CatchTilesPlan.Mode): Boolean {
-        if (mode != CatchTilesPlan.Mode.HOLD) return false
-        val end = events.indexOfLast { it is GameEvent.Caught || it is GameEvent.Defeated }
-        if (end < 0) return false
-        if ((end + 1 until events.size).none { events[it] is GameEvent.Encounter }) return false
-        return (end + 1 until events.size).none { events[it] is GameEvent.Counted || events[it] is GameEvent.BallThrow }
+        val end = events.indexOfLast {
+            it is GameEvent.Caught || it is GameEvent.Defeated || it is GameEvent.Fled || it is GameEvent.MainHealed
+        }
+        return end >= 0 && (end + 1 until events.size).any { events[it] is GameEvent.Encounter }
     }
 
-    /**
-     * R19-T (PLAN 285): true when the batch [events] lets a held next fight go. Only an answer or a ball throw does ("the next answer
-     * starts it", [EventPlayer.enqueue]). A switch made on the Continue screen (MainChanged, a SwitchQueued note, the free hit) plays under
-     * the result tiles and the next fight still waits for the Continue tap.
-     */
-    fun releasesHold(events: List<GameEvent>): Boolean = events.any { it is GameEvent.Counted || it is GameEvent.BallThrow }
+    /** Incoming answers and offscreen actions never stand in for the Continue button. */
+    fun releasesHold(events: List<GameEvent>): Boolean = false
 
     /**
      * C5, screens whose Continue sits under the result tiles ([EventPlayer] with the panel's own Continue): where in [events] the tiles

@@ -134,7 +134,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         events += ensureEncounter()
         val battle = state.battle ?: return events
+        if (battle.awaitingContinue) return events
         if (main.hp > 0 && battle.wild.hp > 0) Bond.add(data, state, main, Bond.CARD_POINTS, events, "soothe-bell" in state.activeHeldItems(main), studyAnswer = !state.practiceRewards)
+
         // R10-B22: who attacks depends on each answer, not on the point sum. A battle saved before keeps only the sum: restore the buttons from it.
         if (battle.buttons.size != battle.answers) { battle.buttons.clear(); battle.buttons += RoundRule.restore(battle.answers, battle.tally) }
         // R19-T (PLAN 284): the OK of a new card (PLAN 155) is one of the round's answers, a neutral move: it fills a dot and counts toward the
@@ -406,11 +408,13 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val b = state.battle ?: return emptyList()
         if (state.main == null) return emptyList()
         if (b.wild.uid != wildUid || b.rounds != 0 || b.answers != 0 || b.failedThrows != 0 || b.buttons.isNotEmpty()) return emptyList()
+        val waiting = b.awaitingContinue
         val followingSeed = state.nextSeed
         state.nextSeed = b.encounterSeed ?: followingSeed
         state.battle = null
         val events = ensureEncounter()
         state.nextSeed = followingSeed
+        state.battle?.awaitingContinue = waiting
         refreshNext()
         return events
     }
@@ -442,6 +446,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      */
     fun throwBall(ball: String, special: String? = null): List<GameEvent> {
         val battle = state.battle ?: return emptyList()
+        if (battle.awaitingContinue) return emptyList()
         if (battle.wild.hp <= 0 || ball !in Tuning.BALL_CHANCE || state.count(ball) <= 0) return emptyList()
         if (special != null && (special !in Tuning.OLD_BALLS || state.count(special) <= 0)) return emptyList()
         Economy.take(state, ball)
@@ -499,6 +504,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     /** Optional tap: Poké Doll / Fluffy Tail: the wild one leaves, a new one appears. */
     fun escape(item: String): List<GameEvent> {
         val battle = state.battle ?: return emptyList()
+        if (battle.awaitingContinue) return emptyList()
         val runaway = state.main?.let { SimpleView.of(data, battle, it).ability(true) == "runaway" } == true
         if (Items.def(item)?.kind != ItemKind.ESCAPE) return emptyList()
         val now = clock()
@@ -567,14 +573,15 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val main = state.main
         if (main != null && main.uid != oldMain) {
             val battle = state.battle
-            if (battle != null && !free) SecretAchievements.switch(state, battle)
+            if (battle != null && !battle.awaitingContinue && !free) SecretAchievements.switch(state, battle)
             battle?.natureMainUid = main.uid
             battle?.natureMainRounds = 0
             battle?.team = state.teamMons()
-            battle?.switchOutMain(data, oldMon) // R17C-1: the rule sets' onLeave, then a fresh side for the new main
+            if (battle?.awaitingContinue == true) battle.player = BattleSide()
+            else battle?.switchOutMain(data, oldMon) // R17C-1: the rule sets' onLeave, then a fresh side for the new main
             events += GameEvent.MainChanged(main.uid, main.name)
             refreshNext() // the wild level follows the main's level
-            if (battle != null && battle.wild.hp > 0 && main.hp > 0 && !free) {
+            if (battle != null && !battle.awaitingContinue && battle.wild.hp > 0 && main.hp > 0 && !free) {
                 val entry = BattleEngine.Round(data, battle, main, 1.0, 1.0, rng)
                 Hazards.onEnter(entry, true)
                 entry.checkFaint(true)
@@ -588,7 +595,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 val hit = switchHit(battle, main)
                 events += hit
                 text = SwitchHitText.withHit(message, hit, named = main.name in message)
-            } else if (battle != null && main.hp <= 0 && battle.wild.hp > 0) {
+            } else if (battle != null && !battle.awaitingContinue && main.hp <= 0 && battle.wild.hp > 0) {
                 // A fainted Pokémon (an import, an old save) comes in during a fight: the normal faint settlement at once, no hit.
                 val settle = mutableListOf<GameEvent>()
                 settleFight(battle, main, settle)
@@ -619,6 +626,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * Counted for the stats and the achievements like any wild attack. Returns the events: the [GameEvent.SwitchHit] marker first.
      */
     private fun switchHit(battle: Battle, incoming: Mon, item: String? = null): List<GameEvent> {
+        if (battle.awaitingContinue) return emptyList()
         battle.team = state.teamMons()
         val hit = mutableListOf<GameEvent>(GameEvent.SwitchHit(battle.wild.name, incoming.name, incoming.hp, StatCalc.maxHp(data, incoming), item))
         hit += BattleEngine.switchHit(data, battle, incoming, rng, state.settings.moveChoice)

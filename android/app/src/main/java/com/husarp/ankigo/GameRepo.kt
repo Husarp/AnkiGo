@@ -202,7 +202,7 @@ object GameRepo {
         requireMain()
         val g = current ?: return emptyList()
         try {
-            return f(g).also { GameLog.events(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it); forgetPendingFight(it) }
+            return f(g).also { GameLog.events(it); holdNextFight(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it); forgetPendingFight(it) }
         } catch (e: Exception) {
             // A bug in one action must not take the whole app down while studying; the state stays as it is.
             Report.fail(TAG, "action failed", e)
@@ -223,8 +223,8 @@ object GameRepo {
             return f(g).also { result ->
                 com.husarp.ankigo.debug.SettingsText.diff(settingsBefore, com.husarp.ankigo.debug.SettingsText.of(g.state.settings)).forEach { Report.log("SETTINGS", "game $it") }
                 when (result) {
-                    is com.husarp.ankigo.game.ActionResult -> { GameLog.events(result.events); wildMoves.observe(result.events, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(result.events); if (host) forgetPendingFight(result.events) }
-                    is List<*> -> result.filterIsInstance<GameEvent>().let { GameLog.events(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it); if (host) forgetPendingFight(it) }
+                    is com.husarp.ankigo.game.ActionResult -> { GameLog.events(result.events); holdNextFight(result.events); wildMoves.observe(result.events, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(result.events); if (host) forgetPendingFight(result.events) }
+                    is List<*> -> result.filterIsInstance<GameEvent>().let { GameLog.events(it); holdNextFight(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it); if (host) forgetPendingFight(it) }
                 }
             }
         } catch (e: Exception) {
@@ -279,6 +279,10 @@ object GameRepo {
     /** An action of a battle host (or an answer from AnkiDroid) moved the fight on by itself: what waited no longer leads to the saved game, it is dropped. */
     private fun forgetPendingFight(events: List<GameEvent>) {
         if (!pendingFight.isEmpty && PendingFight.movesFightOn(events)) pendingFight.clear()
+    }
+
+    internal fun holdNextFight(events: List<GameEvent>) {
+        if (events.any { it is GameEvent.Encounter }) held?.battle?.awaitingContinue = true
     }
 
     private fun afterChange(ctx: Context) {

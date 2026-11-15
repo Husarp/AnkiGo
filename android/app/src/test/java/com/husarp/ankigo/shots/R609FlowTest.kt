@@ -109,15 +109,15 @@ class R609FlowTest {
         assertTrue(player.idle)
     }
 
-    @Test fun anAnswerThatArrivesAnywayStillReleases() {
+    @Test fun anAnswerThatArrivesAnywayStillWaitsForContinue() {
         val panel = BattlePanelView(ctx())
         val player = EventPlayer(panel)
         measure(panel, 412, 869)
         player.enqueue(defeatBatch())
         player.enqueue(answer)   // answered in AnkiDroid meanwhile
-        assertFalse(player.holding); assertFalse(panel.tilesShown)
-        assertNull(parked(player))
-        assertFalse("nothing left to continue", player.continueBattle())
+        assertTrue(player.holding); assertTrue(panel.tilesShown)
+        assertNotNull(parked(player))
+        assertTrue(player.continueBattle())
     }
 
     @Test fun leavingTheScreenKeepsTheHoldWithoutAnEntrance() {
@@ -132,13 +132,13 @@ class R609FlowTest {
         player.pauseHeldResult()   // repeated stops keep the same hold
     }
 
-    @Test fun aSmallWindowNeverHoldsSoThereIsNothingToContinue() {
+    @Test fun aSmallWindowAlsoWaitsForContinue() {
         val panel = BattlePanelView(ctx())
         panel.setCompact(true)
         val player = EventPlayer(panel)
         player.enqueue(defeatBatch())
-        assertFalse(player.holding)
-        assertFalse(player.continueBattle())
+        assertTrue(player.holding)
+        assertTrue(player.continueBattle())
     }
 
     @Test fun theHoldIsToldOnTheMainLooperAndOnlyWhenItChanges() {
@@ -162,7 +162,7 @@ class R609FlowTest {
 
     // ---------------------------------------------------------------- the tap target on the panel
 
-    @Test fun theTilesTakeTheContinueTapOnScreensWithoutAnAnswerRow() {
+    @Test fun onlyTheContinuePillActsOnScreensWithoutAnAnswerRow() {
         val c = ctx()
         val panel = BattlePanelView(c)
         val player = EventPlayer(panel)   // default: the panel carries Continue
@@ -170,9 +170,13 @@ class R609FlowTest {
         measure(panel, 412, 869)
         player.enqueue(defeatBatch())
         val tiles = getField(panel, "tiles") as View
-        assertTrue("the tiles are a tap target", tiles.isClickable)
+        assertFalse("the surrounding tiles cannot start a battle", tiles.isClickable)
         tiles.performClick()
-        assertFalse("the tap continued", panel.holdsNextFight)
+        assertTrue(panel.holdsNextFight)
+        fun descendants(v: View): List<View> = listOf(v) + if (v is ViewGroup)
+            (0 until v.childCount).flatMap { descendants(v.getChildAt(it)) } else emptyList()
+        descendants(tiles).single { it.contentDescription == "Continue, next battle" }.performClick()
+        assertFalse("the explicit Continue tap continued", panel.holdsNextFight)
     }
 
     @Test fun theStudyScreenKeepsItsContinueInTheAnswerRowNotOnTheTiles() {
@@ -253,7 +257,7 @@ class R609FlowTest {
         assertTrue("the answer buttons are back", answerRow(act).childCount >= 1 && rowText(act) != "Continue, next battle")
     }
 
-    @Test fun theHeldEncounterIsReleasedAfterGarbageCollectionWhenThePanelShrinks() {
+    @Test fun theHeldEncounterWaitsForContinueAfterGarbageCollectionWhenThePanelShrinks() {
         val c = ctx()
         val panel = BattlePanelView(c)
         val player = EventPlayer(panel)
@@ -262,28 +266,28 @@ class R609FlowTest {
         assertNotNull(parked(player))
         panel.setCompact(true)
         measure(panel, 320, 180)
-        assertFalse(player.holding)
+        assertTrue(player.holding)
         System.gc()
         flush(c, panel)
-        assertNull("the released encounter played", parked(player))
+        assertNotNull("the encounter stays parked", parked(player))
         assertTrue(player.idle)
     }
 
-    @Test fun aFlipRequestWhileAResultHoldsActsAsContinueAndLeavesTheCard() {
+    @Test fun aFlipRequestWhileAResultHoldsWaitsForContinueAndLeavesTheCard() {
         val c = ctx()
         val act = study(c)
         events(act).enqueue(defeatBatch())
         call(act, "flip")   // the same function the keys, the card's tap and the card's script reach
-        assertFalse(events(act).holding)
+        assertTrue(events(act).holding)
         assertEquals("the card did not flip", false, getField(act, "flipped"))
     }
 
-    @Test fun anAnswerRequestWhileAResultHoldsActsAsContinueAndAnswersNothing() {
+    @Test fun anAnswerRequestWhileAResultHoldsWaitsForContinueAndAnswersNothing() {
         val c = ctx()
         val act = study(c, flipped = true)
         events(act).enqueue(defeatBatch())
         call(act, "answer", 3)   // keys 1-4, a swipe and the card's script come through here
-        assertFalse(events(act).holding)
+        assertTrue(events(act).holding)
         assertFalse("nothing was answered", getField(act, "locked") as Boolean)
         assertEquals(0, (getField(act, "counts") as IntArray).sum())
     }
@@ -305,7 +309,7 @@ class R609FlowTest {
         assertTrue(events(act).holding)
     }
 
-    @Test fun aHiddenPanelReleasesTheHoldSoNoContinueComesLaterForAFlippedCard() {
+    @Test fun aHiddenPanelRetainsContinueAndConsumesCardRequests() {
         val c = ctx()
         val act = study(c)
         val panel = getField(act, "panel") as BattlePanelView
@@ -314,13 +318,12 @@ class R609FlowTest {
         assertTrue(events(act).holding)
         panel.visibility = View.GONE   // the type-in keyboard layout hides the panel under the result
         call(act, "releaseHiddenHold")
-        assertFalse("released at once", events(act).holding)
-        // a flip request now acts on the card, nothing is parked
-        assertFalse(call(act, "heldContinue") as Boolean)
+        assertTrue("visibility cannot start a battle", events(act).holding)
+        assertTrue(call(act, "heldContinue") as Boolean)
         panel.visibility = View.VISIBLE
         flush(c)
-        assertFalse(events(act).holding)
-        assertNotEquals("Continue, next battle", rowText(act))
+        assertTrue(events(act).holding)
+        assertEquals("Continue, next battle", rowText(act))
     }
 
     private fun heldTeamAction(action: (com.husarp.ankigo.game.Game, com.husarp.ankigo.game.GameState) -> com.husarp.ankigo.game.ActionResult) {

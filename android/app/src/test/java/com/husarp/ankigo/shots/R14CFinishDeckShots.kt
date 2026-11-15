@@ -161,7 +161,7 @@ class R14CFinishDeckShots {
             assertTrue("the hold stays until Finish deck", events(act).holding)
             measure(root, Size.PHONE, ctx)
             row(act).getChildAt(0).performClick()
-            assertFalse("Finish deck ended the hold", events(act).holding)
+            assertTrue("Finish deck keeps Continue pending", events(act).holding)
             assertTrue(finished(act))
             root
         }

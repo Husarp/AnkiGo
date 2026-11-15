@@ -3,8 +3,8 @@ package com.husarp.ankigo.ui
 /**
  * The "Continue" after a fight result (R6-09, pure). While the result tiles hold the next wild one back, no card may be answered
  * "outside a battle": the Study screen's answer row shows Continue instead of Show answer / the answer buttons, and every other
- * way to flip or answer (keys, swipes, taps on the card, the card's script) acts as Continue first and leaves the card alone.
- * Only the auto-advance countdown does not act: it waits until Continue was tapped.
+ * way to flip or answer (keys, swipes, taps on the card, the card's script) is consumed and leaves the card alone until Continue is tapped.
+ * The auto-advance countdown also waits until Continue was tapped.
  * Round 9 C5: the hold starts when the winning / catching batch arrives ([NextFight.holdsEarly]), not only once the reward animations and
  * the tiles are done; a Continue tap during the animations ends them ([EventPlayer.continueBattle]).
  */
@@ -31,15 +31,11 @@ object ContinueRule {
     /** The auto-advance countdown (show answer / answer by itself) runs only when no Continue is pending; it starts again in full after it. */
     fun autoMayRun(holding: Boolean): Boolean = !holding
 
-    /**
-     * Whether the Study screen is holding: exactly while a result holds the next fight, whatever the panel's visibility, so a flip, an
-     * answer or the auto timer can never get through while a hold stays parked. A hidden panel (the type-in keyboard layout, the
-     * summary) shows no Continue, so its hold is never left parked: it is released at once ([mustRelease]).
-     */
+    /** A hidden panel retains the same gate; the answer row can still show Continue. */
     fun holding(resultHolds: Boolean): Boolean = resultHolds
 
-    /** True = the result holds but the panel is not on screen: release the hold now (EventPlayer.continueBattle), nobody could tap Continue. */
-    fun mustRelease(resultHolds: Boolean, panelVisible: Boolean): Boolean = resultHolds && !panelVisible
+    /** Visibility changes never authorize a new battle. */
+    fun mustRelease(resultHolds: Boolean, panelVisible: Boolean): Boolean = false
 
     /** Text of the button and its second line. */
     const val LABEL = "Continue"

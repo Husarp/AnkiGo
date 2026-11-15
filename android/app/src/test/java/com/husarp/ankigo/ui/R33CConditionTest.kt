@@ -20,14 +20,14 @@ class R33CConditionTest {
         assertNull(ConditionStat.values(mark("atk", 1), null))
     }
 
-    @Test fun bothSidesCenterEveryWrappedRowAndOpponentStaysAbove() {
+    @Test fun bothSidesAlignEveryWrappedRowToTheirOuterEdgeAndOpponentStaysAbove() {
         val card = ConditionSpot.R(90f, 130f, 230f, 180f)
         for (below in listOf(false, true)) {
             val flow = ConditionFlow.owner(card, 380f, floatArrayOf(50f, 45f, 60f, 80f), 3,
                 4f, 5f, 18f, emptyList(), 90f, below = below, left = 4f) { 25f }
             assertEquals(4, flow.shown)
             for (line in flow.rects.groupBy { it.t }.values) {
-                assertEquals(160f, (line.first().l + line.last().r) / 2f, .01f)
+                assertEquals(if (below) card.r else card.l, if (below) line.last().r else line.first().l, .01f)
                 assertTrue(if (below) line.first().t >= card.b + 5 else line.first().b <= card.t - 5)
             }
         }

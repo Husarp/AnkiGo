@@ -732,29 +732,32 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     internal val tilesShown: Boolean get() = tilesOn
 
     /**
-     * True while a fight's result holds the next wild one back (it appears with the next answer's events or a Continue). Since round 9
+     * True while a fight's result holds the next wild one back (it appears only after Continue). Since round 9
      * C5 this starts when the winning batch arrives ([holdEarly]), before the result tiles show, so Continue is there at once.
      */
-    val holdsNextFight: Boolean get() = enemyHeld
+    val holdsNextFight: Boolean get() = enemyHeld || GameRepo.state?.battle?.awaitingContinue == true
 
     /** What [CatchTilesPlan.mode] says about a fight result in this window right now (no answer waiting); [NextFight.holdsEarly] asks it. */
     internal fun resultMode(): CatchTilesPlan.Mode = CatchTilesPlan.mode(!small && !legacy, fit.log, false)
 
     /** R9 C5: a won or caught fight with a next one behind it: hold the next wild one back from now on, so Continue shows while the rewards still play. */
     fun holdEarly() {
+        removeCallbacks(hideTilesRun)
         if (enemyHeld) return
         enemyHeld = true
+        GameRepo.state?.battle?.awaitingContinue = true
+        GameRepo.scheduleSave(context)
         holdChanged()
     }
 
     /** The early hold goes (the result will not hold after all, or it was not shown): nothing else changes; the result tiles, if they are up, keep their own hold. */
     fun releaseEarlyHold() {
-        if (!enemyHeld || tilesOn) return
+        if (!enemyHeld || tilesOn || GameRepo.state?.battle?.awaitingContinue == true) return
         enemyHeld = false
         holdChanged()
     }
 
-    /** The window became one that does not hold results (strip, mini, floating, no log) before the tiles came: the early hold goes. */
+    /** Unpersisted visual holds may follow the window; a prepared encounter keeps its saved gate. */
     private fun earlyHoldWindowChanged() {
         if (resultMode() != CatchTilesPlan.Mode.HOLD) releaseEarlyHold()
     }
@@ -767,17 +770,17 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
      */
     fun showCatchTiles(s: CatchSummary, answerWaiting: Boolean): CatchTilesPlan.Mode {
         val full = !small && !legacy
-        val mode = CatchTilesPlan.mode(full, fit.log, answerWaiting)
+        val mode = if (holdsNextFight) CatchTilesPlan.Mode.HOLD else CatchTilesPlan.mode(full, fit.log, answerWaiting)
         if (mode == CatchTilesPlan.Mode.NONE) { releaseEarlyHold(); return mode }   // an answer is waiting behind it: no tiles, so no hold either
         removeCallbacks(hideTilesRun)
         tilesSummary = s
         tilesOn = true
-        enemyHeld = mode == CatchTilesPlan.Mode.HOLD
-        tilesTimed = mode == CatchTilesPlan.Mode.TIMED
+        enemyHeld = holdsNextFight || mode == CatchTilesPlan.Mode.HOLD
+        tilesTimed = !enemyHeld && mode == CatchTilesPlan.Mode.TIMED
         layoutTiles()
         logBox.visibility = GONE
         tiles.visibility = VISIBLE
-        if (mode == CatchTilesPlan.Mode.TIMED) postDelayed(hideTilesRun, CatchTilesPlan.SMALL_MS)
+        if (tilesTimed) postDelayed(hideTilesRun, CatchTilesPlan.SMALL_MS)
         requestLayout()
         holdChanged()
         return mode
@@ -817,6 +820,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
      * says. A HOLD result in a small window gets the timeout and lets the parked next wild one appear; no room for it: it goes at once.
      */
     private fun resultWindowChanged() {
+        if (holdsNextFight) return
         val held = enemyHeld
         when (CatchResultShift.after(tilesTimed, !small && !legacy, fit.log)) {
             CatchResultShift.Do.KEEP -> {}
@@ -859,7 +863,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
             lp.height = -2
             lp.setMargins(dpi(10), dpi(8), dpi(10), 0)
         } else {
-            tiles.bindRow(s, next = full, rowH = logLp.height, radiusDp = if (legacy && logBox.flat) 0f else 12f, cont = cont)
+            tiles.bindRow(s, next = full || enemyHeld, rowH = logLp.height, radiusDp = if (legacy && logBox.flat) 0f else 12f, cont = cont)
             lp.height = logLp.height
             lp.setMargins(logLp.leftMargin, logLp.topMargin, logLp.rightMargin, logLp.bottomMargin)
         }
@@ -948,6 +952,12 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         val st = GameRepo.state ?: return
         val data = GameRepo.data ?: return
         arena.resetFx()
+        if (enemyHeld && st.battle?.awaitingContinue != true) hideCatchTiles()
+        if (st.battle?.awaitingContinue == true) {
+            enemyHeld = true
+            if (!tilesOn && onContinue != null) showCatchTiles(CatchSummary(true, "", null, null, emptyList(), 0, CatchSummary.NEXT_TEXT), false)
+            holdChanged()
+        }
         renderEnemy(st, data)
         renderPlayer(st, data)
         if (st.battle == null || enemyHeld) arena.clearConditionLooks()

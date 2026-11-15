@@ -350,6 +350,7 @@ class Battle(
     var natureMainUid: String? = null,
     var natureMainRounds: Int = 0,
     var playerAttacked: Boolean = false, // Matchups appear after the first attack in this encounter
+    var awaitingContinue: Boolean = false, // the next encounter is prepared but cannot act until Continue
 ) {
     /** R17C-4: the Main's team (Pokémon with a uid), for Beat Up (one hit per member with HP). [Game] fills it before each round; never saved, empty = just the Main. */
     var team: List<Mon> = emptyList()
