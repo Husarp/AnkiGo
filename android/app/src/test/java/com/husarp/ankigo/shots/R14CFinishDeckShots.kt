@@ -22,7 +22,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * PLAN 129: after the deck's last answer the Study screen stays on the battle panel, the answer row holds one "Finish deck" button and
+ * PLAN 129: after the deck's last answer the Study screen stays on the battle panel, the answer row offers "Finish deck" and "Next deck", and
  * only a tap on it opens the finished screen (once). Drives the real [StudyActivity] views by reflection (no onCreate), like R609FlowTest.
  * PNGs: r14c-finish-waiting, r14c-finish-held (a result holds), r14c-finish-summary.
  */
@@ -61,7 +61,10 @@ class R14CFinishDeckShots {
         return act to root
     }
 
-    private fun row(act: StudyActivity) = getField(act, "buttons") as ViewGroup
+    private fun row(act: StudyActivity): ViewGroup {
+        val buttons = getField(act, "buttons") as ViewGroup
+        return if (getField(act, "finishArgs") != null && buttons.getChildAt(0).contentDescription == null) buttons.getChildAt(0) as ViewGroup else buttons
+    }
     private fun rowText(act: StudyActivity) = row(act).getChildAt(0)?.contentDescription?.toString() ?: ""
     private fun events(act: StudyActivity) = getField(act, "events") as EventPlayer
     private fun panel(act: StudyActivity) = getField(act, "panel") as BattlePanelView
@@ -78,13 +81,13 @@ class R14CFinishDeckShots {
         paparazzi.snapshot(android.widget.FrameLayout(c), "r14c-flush", 300)
     }
 
-    @Test fun theLastAnswerLeavesThePanelAndOneFinishButton() {
+    @Test fun theLastAnswerLeavesThePanelAndFinishAndNextButtons() {
         paparazzi.shootWith("r14c-finish-waiting", listOf(Size.PHONE)) { ctx ->
             val (act, root) = screen(ctx)
             lastAnswerIn(act)
             assertFalse("the summary is not shown", finished(act))
             assertNull(getField(act, "lastSummary"))
-            assertEquals("one button, in the place of Show answer", 1, row(act).childCount)
+            assertEquals("Finish and Next deck replace Show answer", 2, row(act).childCount)
             assertEquals("Finish deck, see the summary", rowText(act))
             assertTrue(row(act).getChildAt(0).isEnabled)
             assertEquals("the battle panel stays", View.VISIBLE, panel(act).visibility)
@@ -154,7 +157,7 @@ class R14CFinishDeckShots {
             assertEquals("Continue, next battle", rowText(act))
             lastAnswerIn(act)
             assertEquals("Finish deck, see the summary", rowText(act))
-            assertEquals(1, row(act).childCount)
+            assertEquals(2, row(act).childCount)
             assertTrue("the hold stays until Finish deck", events(act).holding)
             measure(root, Size.PHONE, ctx)
             row(act).getChildAt(0).performClick()
@@ -217,7 +220,7 @@ class R14CFinishDeckShots {
             emptyLoad(after)
             assertFalse("not straight to the summary", finished(after))
             assertNotNull(getField(after, "finishArgs"))
-            assertEquals(1, row(after).childCount)
+            assertEquals(2, row(after).childCount)
             assertEquals("Finish deck, see the summary", rowText(after))
             row(after).getChildAt(0).performClick()
             assertTrue("the tap still opens it", finished(after))

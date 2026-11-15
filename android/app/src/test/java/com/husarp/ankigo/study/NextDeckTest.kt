@@ -47,6 +47,34 @@ class NextDeckTest {
         assertNull(pick(decks, "A::B"))   // only the ancestor has cards
     }
 
+    @Test fun continueKeepsTheCurrentDeckWhileAnyKindOfCardIsAvailable() {
+        val current = d("J::Kanji", 1)
+        val decks = listOf(current, d("J::Vocab", 12), d("Spanish", 9))
+        assertEquals(current, NextDeck.continueDeck(decks, current.id))
+    }
+
+    @Test fun continueUsesTheSameSiblingSuggestionAsTheFinishedDeck() {
+        val current = d("J::Kanji", 0)
+        val decks = listOf(current, d("J::Vocab", 12), d("Spanish", 9))
+        assertEquals(NextDeck.pick(decks, current.id, current.name), NextDeck.continueDeck(decks, current.id))
+        assertNull(NextDeck.continueDeck(decks.map { it.copy(total = 0) }, current.id))
+    }
+
+    @Test fun continueHandlesMissingOrDeletedLastDeckAndAnEmptyCollection() {
+        val due = d("Spanish", 4)
+        assertEquals(due, NextDeck.continueDeck(listOf(d("J", 0), due), 999))
+        assertNull(NextDeck.continueDeck(emptyList(), 999))
+    }
+
+    @Test fun aParentsRemainingWorkIsSuggestedWhenThereAreNoOtherDueDecks() {
+        val current = d("J::Kanji", 0)
+        val parent = d("J", 2)
+        val decks = listOf(parent, current, d("Spanish", 0))
+        assertEquals(parent, NextDeck.suggest(decks, current.id, current.name))
+        assertEquals(parent, NextDeck.continueDeck(decks, current.id))
+        assertNull(NextDeck.suggest(decks.map { it.copy(total = 0) }, current.id, current.name))
+    }
+
     @Test fun subPathOfTheCardsDeck() {
         assertEquals("Kanji", NextDeck.subPath("Japanese", "Japanese::Kanji"))
         assertEquals("Kanji › N5", NextDeck.subPath("Japanese", "Japanese::Kanji::N5"))

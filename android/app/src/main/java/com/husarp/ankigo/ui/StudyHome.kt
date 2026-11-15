@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import com.husarp.ankigo.GameRepo
 import com.husarp.ankigo.study.LiveRefresh
+import com.husarp.ankigo.study.NextDeck
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -186,16 +187,20 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
         content.removeAllViews(); resumeSlot.removeAllViews(); resumeSlot.visibility = View.GONE
         StudyStatus.warning(act)?.let { content.addView(warningCard(it), StudyUi.lp().also { lp -> lp.topMargin = Ui.dp(act, 4); lp.bottomMargin = Ui.dp(act, 8) }) }
         newDeckButton?.visibility = if (canManage()) View.VISIBLE else View.GONE
-        val last = decks.firstOrNull { it.id == prefs.getLong("lastDeck", 0) }
+        val lastId = prefs.getLong("lastDeck", 0)
+        val suggestion = NextDeck.continueDeck(decks.map { NextDeck.D(it.id, it.name, it.total) }, lastId)
+        val last = decks.firstOrNull { it.id == suggestion?.id } ?: decks.firstOrNull { it.id == lastId } ?: decks.firstOrNull()
         if (last != null) {
+            val available = suggestion != null
+            val continueStudy = { if (available) open(last) else Ui.toast(act, "No reviews left today. Try Custom study.") }
             val resume = StudyUi.row(act).apply {
-                background = StudyUi.gradient(context, R.color.ag_mauve, .24f, 16)
+                background = if (available) StudyUi.gradient(context, R.color.ag_mauve, .24f, 16) else Ui.rounded(Ui.c(context, R.color.ag_s0), 16, context)
                 setPadding(Ui.dp(context, 12), Ui.dp(context, 10), Ui.dp(context, 12), Ui.dp(context, 10))
-                setOnClickListener { open(last) }; contentDescription = "Continue ${last.name}, New ${last.new}, Learning ${last.learn}, Due ${last.review}"
+                setOnClickListener { continueStudy() }; contentDescription = if (available) "Continue ${last.name}, New ${last.new}, Learning ${last.learn}, Due ${last.review}" else "Continue ${last.name}, no reviews left today"
             }
             val text = StudyUi.column(act)
             text.addView(StudyUi.label(act, "CONTINUE", 11, R.color.ag_sub0, 900).apply { letterSpacing = .055f })
-            text.addView(StudyUi.ellipsis(StudyUi.label(act, last.name.substringAfterLast("::"), 18, R.color.ag_text, 900)))
+            text.addView(StudyUi.ellipsis(StudyUi.label(act, last.name.substringAfterLast("::"), 18, if (available) R.color.ag_text else R.color.ag_sub0, 900)))
             val whenStudied = prefs.getLong("lastStudied:${last.id}", 0)
             val ago = ((System.currentTimeMillis() - whenStudied).coerceAtLeast(0) / 60000)
             val countsWidth = DeckCounts.columnWidth(act, listOf(last))
@@ -204,10 +209,10 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             val recency = when { whenStudied == 0L -> ""; ago == 0L -> "last studied just now"; ago < 60 -> "last studied $ago min ago"; ago < 1440 -> "last studied ${ago / 60} h ago"; else -> "last studied ${ago / 1440} days ago" }
             if (recency.isNotEmpty()) text.addView(StudyUi.label(act, recency, 12, R.color.ag_sub0), StudyUi.spaced(act, 2))
             resume.addView(text, StudyUi.lp(0, -2, 1f))
-            resume.addView(StudyUi.iconButton(act, R.drawable.ic_play, "Continue ${last.name}") { open(last) }.apply {
+            resume.addView(StudyUi.iconButton(act, R.drawable.ic_play, "Continue ${last.name}") { continueStudy() }.apply {
                 setColorFilter(Ui.c(context, R.color.ag_base))
                 setPadding(Ui.dp(context, 12), Ui.dp(context, 12), Ui.dp(context, 12), Ui.dp(context, 12))
-                background = Ui.rounded(Ui.c(context, R.color.ag_mauve), 14, context)
+                background = Ui.rounded(Ui.c(context, if (available) R.color.ag_mauve else R.color.ag_sub0), 14, context)
             }, StudyUi.lp(Ui.dp(act, 46), Ui.dp(act, 46)).also { it.marginStart = Ui.dp(act, 10) })
             resumeSlot.addView(resume); resumeSlot.visibility = View.VISIBLE
         }

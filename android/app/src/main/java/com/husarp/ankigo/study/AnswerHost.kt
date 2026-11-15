@@ -35,6 +35,9 @@ class FileJournalStore(private val file: File) : JournalStore {
 
 /** A study screen's view of the host (all calls on the main thread). */
 interface StudyListener {
+    /** The background journal could not keep the answer; the provider write still follows. */
+    fun journalFailed() {}
+
     /** The answers still being saved changed; null = all resolved. Called once on register too. */
     fun unresolved(u: AnswerHost.Unresolved?)
 
@@ -42,7 +45,7 @@ interface StudyListener {
     fun outcome(o: AnswerOutcome, info: AnswerHost.Info)
 
     /**
-     * The game step of an answer is done (R10-B23: at the tap, not waiting for AnkiDroid; [absorbMs] is -1 now, nothing waits for
+     * The game step of an answer is done (after its journal, before AnkiDroid; [absorbMs] is -1 now, nothing waits for
      * the detector; [gameMs] = how long the step took). [mine] = this screen made the answer: only then do its events belong in the
      * screen's session summary.
      */
@@ -55,8 +58,9 @@ interface StudyListener {
  * real queue. It lives as long as the process, so a screen that is closed (or killed) never stops an answer from being written.
  * Screens register a [StudyListener] (main thread). Pure Kotlin: Android comes in through [Env] (tests use a fake and a real executor).
  *
- * The game step (R10-B23) runs at the TAP, in [enqueue], from the button and the card as shown: the battle never waits for
- * AnkiDroid. The write's end only settles it: saved / already saved -> [Env.settled] (the detector learns the card's real state,
+ * The game step uses the tapped button and shown card, after its journal is durable and before AnkiDroid.
+ * [enqueueAsync] keeps journal IO off the tap; [enqueue] is the synchronous boundary for durability on return.
+ * The write's end only settles it: saved / already saved -> [Env.settled] (the detector learns the card's real state,
  * the game is not touched), not written -> [Env.dropped] (the game keeps its result). Answers replayed from the journal after a
  * kill go through [Env.restored] first (the game counts the ones its save does not hold yet); nothing reaches AnkiDroid before.
  *
@@ -78,8 +82,9 @@ class AnswerHost(
     tryNotTop: () -> Boolean = { false },
     dayOf: (Long) -> String = AnswerQueue.LOCAL_DAY,
     wallNow: () -> Long = { System.currentTimeMillis() },
+    private val journalIo: ExecutorService = io,
 ) {
-    /** What the host needs from Android. [expect], [cancel] and [elapsed] may be called on any thread, the rest on the main thread. */
+    /** What the host needs from Android. [expect], [cancel], [elapsed], [log] and [post] may be called on any thread; game/UI callbacks run on main. */
     interface Env {
         /** Runs [r] on the main thread. */
         fun post(r: Runnable)
@@ -96,7 +101,7 @@ class AnswerHost(
         /** `LiveSession.cancelOwn`: the answer ended NOT written. */
         fun cancel(before: Map<String, String?>)
 
-        /** The game step of an answer, at the tap: the Battle log's front, `LiveSession.ownAnswer`. [done] gets its events and how long it took. */
+        /** The game step of the journaled answer: the Battle log's front, `LiveSession.ownAnswer`. [done] gets its events and how long it took. */
         fun gameStep(answer: QueuedAnswer, front: String?, done: (events: List<GameEvent>, gameMs: Long) -> Unit)
 
         /** Answers replayed from the journal: `LiveSession.ownRestored` (the game counts each one its save does not hold yet, once). [done] when that is decided. */
@@ -129,7 +134,8 @@ class AnswerHost(
     private val listeners = ArrayList<StudyListener>()
     private val orphans = ArrayList<AnswerOutcome>()
     private val owned = IdentityHashMap<Any, ArrayList<Future<*>>>()
-    private var count = 0 // main thread: answers made or restored and not resolved (not the waiting ones)
+    @Volatile private var count = 0 // main thread: answers made or restored and not resolved (not the waiting ones)
+    private val unresolvedSeqs = LinkedHashSet<Long>() // main thread; never take the journal lock to report state
     private val waitingSeqs = HashSet<Long>() // main thread (PLAN 195): answers waiting for their card; their end does not count down [count]
     private var since = 0L
     private var state: Unresolved? = null
@@ -190,6 +196,7 @@ class AnswerHost(
         if (r.count > 0 || r.waiting > 0) {
             env.log("replaying ${r.count} answer(s) from the journal" + if (r.waiting > 0) "; ${r.waiting} still wait for their card (PLAN 195)" else "")
             count = r.count
+            unresolvedSeqs += queue.pending().map { it.seq }
             since = env.elapsed()
             state = if (count == 0) null else Unresolved(count, since, 0, null, false, queue.pending().firstOrNull()?.seq ?: 0)
             waitingSeqs += queue.waitingAnswers().map { it.seq }
@@ -227,34 +234,74 @@ class AnswerHost(
 
     fun nextSeq() = queue.nextSeq()
 
-    /** Answers not resolved yet, as the io thread sees them (exact; the counts read checks it). */
-    fun unresolvedNow(): Boolean = queue.size > 0
+    /** Includes answers awaiting their journal; reading this never waits for storage's queue lock. */
+    fun unresolvedNow(): Boolean = count > 0 || queue.size > 0
 
     /**
      * Main thread. The answer is written in the background, in order, however long it takes; its game step runs right here, at the
      * tap (R10-B23). False = the journal file could not be written (the answer is still queued in memory).
      */
     fun enqueue(a: QueuedAnswer, front: String?, owner: StudyListener?): Boolean {
+        val meta = begin(a, front, owner)
+        val persisted = journal(a)
+        try { gameStep(a, meta) {} } finally { execute(drainTask) }
+        return persisted
+    }
+
+    /** PLAN 601: journal IO must not hold the tap or the next predicted card. Reserve the write's place before any later load. */
+    fun enqueueAsync(a: QueuedAnswer, front: String?, owner: StudyListener?) {
+        val meta = begin(a, front, owner)
+        val journaled = CountDownLatch(1)
+        val stepped = CountDownLatch(1)
+        journalIo.execute(Runnable {
+            val persisted = journal(a) { stepped.await() }
+            env.post(Runnable {
+                try {
+                    if (!persisted) route(meta).first?.journalFailed()
+                    gameStep(a, meta) { stepped.countDown() }
+                } catch (e: Exception) {
+                    env.log("answer game step failed: ${e.javaClass.simpleName} ${e.message}")
+                    val (screen, mine) = route(meta)
+                    try { screen?.gameDone(a, emptyList(), -1, -1, mine) }
+                    finally { stepped.countDown() }
+                }
+            })
+            journaled.countDown()
+        })
+        execute(Runnable {
+            journaled.await() // reserve the provider order before any later load, even while storage is slow
+            drainTask.run()
+        })
+    }
+
+    private fun begin(a: QueuedAnswer, front: String?, owner: StudyListener?): Meta {
+        require(a.ease in 1..4 && AnswerState.usable(a.before)) { "unusable answer" }
         val meta = Meta(front, owner)
         queuedAt[a.seq] = env.elapsed()
         com.husarp.ankigo.debug.LagLog.record("QUEUED", "card" to a.cardId, "seq" to a.seq)
         metas[a.seq] = meta
-        val journalAt = env.elapsed()
-        val persisted = com.husarp.ankigo.debug.LagLog.work("answer journal") { queue.enqueue(a) } // the journal first, then the entry can run
-        env.log("answer queued: seq ${a.seq} deck ${a.deckId} card ${a.cardId}, shown reps ${a.before["reps"]}, ease ${a.ease}, pending ${queue.size}, journal ${env.elapsed() - journalAt} ms")
         if (count == 0) since = env.elapsed()
         count++
+        unresolvedSeqs += a.seq
         state = Unresolved(count, since, 0, null, false, a.seq)
         broadcast()
-        try {
-            env.gameStep(a, front) { events, gameMs ->
+        return meta
+    }
+
+    private fun journal(a: QueuedAnswer, ready: () -> Unit = {}): Boolean {
+        val at = env.elapsed()
+        val persisted = com.husarp.ankigo.debug.LagLog.work("answer journal") { queue.enqueue(a, ready) }
+        env.log("answer queued: seq ${a.seq} deck ${a.deckId} card ${a.cardId}, shown reps ${a.before["reps"]}, ease ${a.ease}, pending ${queue.size}, journal ${env.elapsed() - at} ms")
+        return persisted
+    }
+
+    private fun gameStep(a: QueuedAnswer, meta: Meta, done: () -> Unit) {
+        env.gameStep(a, meta.front) { events, gameMs ->
+            try {
                 val (screen, mine) = route(meta)
                 screen?.gameDone(a, events, -1, gameMs, mine)
-            }
-        } finally {
-            execute(drainTask) // after the tap's expectation is installed, before any load the caller queues next
+            } finally { done() }
         }
-        return persisted
     }
 
     fun retryNow() = queue.retryNow()
@@ -311,7 +358,8 @@ class AnswerHost(
         if (o is AnswerOutcome.Waiting) { // PLAN 195: not written for now, not unresolved either: it ends later, told then
             count = (count - 1).coerceAtLeast(0)
             waitingSeqs += o.answer.seq
-            state = if (count == 0) null else Unresolved(count, since, 0, null, false, queue.pending().firstOrNull()?.seq ?: 0)
+            unresolvedSeqs.remove(o.answer.seq)
+            state = if (count == 0) null else Unresolved(count, since, 0, null, false, unresolvedSeqs.firstOrNull() ?: 0)
             env.log("answer ${o.answer.cardId} ${describe(o)}")
             broadcast()
             val (target, mine) = route(metas[o.answer.seq])
@@ -319,8 +367,9 @@ class AnswerHost(
             return
         }
         val late = waitingSeqs.remove(o.answer.seq)
+        unresolvedSeqs.remove(o.answer.seq)
         if (!late) count = (count - 1).coerceAtLeast(0)
-        state = if (count == 0) null else Unresolved(count, since, 0, null, false, queue.pending().firstOrNull()?.seq ?: 0)
+        state = if (count == 0) null else Unresolved(count, since, 0, null, false, unresolvedSeqs.firstOrNull() ?: 0)
         val meta = metas.remove(o.answer.seq)
         val (target, mine) = route(meta)
         env.log("answer ${o.answer.cardId} ${describe(o)}")
