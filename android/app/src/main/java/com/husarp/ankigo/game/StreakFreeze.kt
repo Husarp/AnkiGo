@@ -8,7 +8,7 @@ object StreakFreeze {
     const val ITEM = "streak-freeze"
     const val CAP = 3
 
-    fun price(state: GameState): Int = 2000 + state.count(ITEM).coerceIn(0, CAP - 1) * 1000
+    fun price(state: GameState): Int = Tuning.STREAK_FREEZE_PRICES[state.count(ITEM).coerceIn(0, CAP - 1)]
 
     /** Resolve only completed game days. An uncovered gap costs nothing and cannot be revived later. */
     fun rollover(state: GameState, today: String): List<GameEvent> {
@@ -30,7 +30,7 @@ object StreakFreeze {
     /** Only real rewarded wins; normal drops remain available when capped or already awarded today. */
     fun battleDrop(state: GameState, rng: Random, events: MutableList<GameEvent>) {
         if (state.practiceRewards || state.day.isEmpty() || state.battleFreezeDay == state.day || state.count(ITEM) >= CAP) return
-        if (rng.nextInt(1000) >= 2) return
+        if (rng.nextInt(1000) >= Tuning.STREAK_FREEZE_WIN_PER_THOUSAND[state.count(ITEM).coerceAtLeast(0)]) return
         Economy.give(state, ITEM)
         state.battleFreezeDay = state.day
         events += GameEvent.ItemFound(ITEM, state.count(ITEM))

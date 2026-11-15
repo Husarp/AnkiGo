@@ -124,7 +124,7 @@ class R30OStreakShopTest {
         assertEquals(3, SaveCodec.decode(encoded.toString()).count(StreakFreeze.ITEM))
     }
 
-    @Test fun giftReplacementIsRareDeterministicAndFallsBackAtCap() {
+    @Test fun giftReplacementIsDeterministicAndFallsBackAtCap() {
         var freezes = 0
         for (offset in 0..999) {
             val day = LocalDate.parse("2026-01-01").plusDays(offset.toLong()).toString()
@@ -139,7 +139,7 @@ class R30OStreakShopTest {
             assertEquals(expected, fallback)
             assertNotEquals(StreakFreeze.ITEM, fallback.item)
         }
-        assertTrue("2% over 1000 seeded days: $freezes", freezes in 8..35)
+        assertTrue("20% over 1000 seeded days: $freezes", freezes in 160..240)
     }
 
     @Test fun rewardedWinDropHasExactRollGateAndDailyCap() {
@@ -147,11 +147,11 @@ class R30OStreakShopTest {
             override fun nextBits(bitCount: Int) = 0
             override fun nextInt(until: Int): Int { assertEquals(1000, until); return value }
         }
-        for (roll in 0..2) {
+        for (roll in 19..20) {
             val s = streak(0); val ev = mutableListOf<GameEvent>()
             Economy.onWin(s, ev, 0, Roll(roll))
-            assertEquals(if (roll < 2) 1 else 0, s.count(StreakFreeze.ITEM))
-            if (roll < 2) {
+            assertEquals(if (roll < 20) 1 else 0, s.count(StreakFreeze.ITEM))
+            if (roll < 20) {
                 Economy.onWin(s, ev, 0, Roll(0)); assertEquals(1, s.count(StreakFreeze.ITEM))
                 val back = SaveCodec.decode(SaveCodec.encode(s))
                 Economy.onWin(back, ev, 0, Roll(0)); assertEquals(1, back.count(StreakFreeze.ITEM))
@@ -182,13 +182,13 @@ class R30OStreakShopTest {
         assertTrue(Shop.buy(d, s, Shop.weekendFor(d, s.day)!!.item!!).ok)
     }
 
-    @Test fun everstoneDealAndStockShareAllowanceAndConsumablesStayUnlimited() {
+    @Test fun everstoneDealKeepsAllowanceAcrossRefreshAndBasicsStayUnlimited() {
         val s = streak(0).apply { cash = 100_000 }
         var day = LocalDate.parse("2026-01-01")
         while (Shop.dealFor(data, day.toString())?.item != "everstone") day = day.plusDays(1)
-        s.day = day.toString(); s.shopItems += "everstone"
+        s.day = day.toString()
         assertTrue(Shop.buy(data, s, "everstone").ok)
-        Shop.reroll(data, s, Random(2)); s.shopItems += "everstone"
+        Shop.reroll(data, s, Random(2)); assertFalse("everstone" in s.shopItems)
         assertFalse(Shop.buy(data, s, "everstone").ok)
         s.day = day.plusDays(1).toString(); Shop.ensureToday(data, s); s.shopItems += "everstone"
         assertTrue(Shop.buy(data, s, "everstone").ok)

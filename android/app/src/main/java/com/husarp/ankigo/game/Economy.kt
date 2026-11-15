@@ -290,7 +290,26 @@ object Shop {
         return "$offer:$item"
     }
 
-    fun soldOut(state: GameState, item: String): Boolean = limited(item) && offerKey(state, item) in state.shopPurchases
+    /** Today's allowance belongs to this draw, not to the inventory or the item's price. */
+    fun specialLimit(item: String): Int? = when {
+        item in Tuning.SHOP_BASICS -> null
+        item == "great-ball" || item == "ultra-ball" -> 3
+        Items.def(item)?.kind == ItemKind.HEAL -> 5
+        Items.def(item)?.kind in setOf(ItemKind.EVOLUTION, ItemKind.FOSSIL, ItemKind.HELD) -> 1
+        else -> null
+    }
+
+    private fun specialKey(state: GameState, item: String) = "special:${state.day}:${state.shopRefreshes}:$item:"
+
+    fun remaining(state: GameState, item: String): Int? {
+        if (item in state.shopItems) specialLimit(item)?.let { limit ->
+            if (state.shopRefreshes == 0 && offerKey(state, item) in state.shopPurchases) return 0
+            return (limit - state.shopPurchases.count { it.startsWith(specialKey(state, item)) }).coerceAtLeast(0)
+        }
+        return if (limited(item)) { if (offerKey(state, item) in state.shopPurchases) 0 else 1 } else null
+    }
+
+    fun soldOut(state: GameState, item: String): Boolean = remaining(state, item) == 0
     fun freezeOnSale(state: GameState): Boolean = state.count(StreakFreeze.ITEM) < StreakFreeze.CAP
 
     /** Regular daily slots; balls are extra. */
@@ -315,6 +334,17 @@ object Shop {
                 state.shopItems.removeAll { Items.def(it)?.kind == ItemKind.BALL }
                 state.shopItems.addAll(0, balls)
             }
+            // Repair old saves without rerolling valid offers or resetting their allowances.
+            val reserved = dealItems(data, state.day) + Tuning.SHOP_BASICS
+            val oldRegular = state.shopItems.filter { Items.def(it)?.kind != ItemKind.BALL }
+            val regular = oldRegular.filter { it !in reserved }.distinct()
+            val replacements = dailyPool(data).filter { it !in reserved && it !in regular }
+                .shuffled(Random(("repair:${state.day}:${state.shopRefreshes}").hashCode()))
+                .take(oldRegular.size - regular.size)
+            state.shopItems.clear()
+            state.shopItems.addAll(balls + regular + replacements)
+            val tms = state.shopTms.distinct()
+            state.shopTms.clear(); state.shopTms.addAll(tms)
             return
         }
         // Keep Saturday's allowance through Sunday; rerolls never touch these keys.
@@ -333,7 +363,7 @@ object Shop {
 
     /** Item/TM rerolls preserve the date-seeded daily balls. */
     private fun draw(data: GameData, rng: Random, trainerLevel: Int, day: String): Pair<List<String>, List<String>> {
-        val items = dailyPool(data).shuffled(rng).take(slots(trainerLevel))
+        val items = dailyPool(data).filter { it !in dealItems(data, day) }.shuffled(rng).take(slots(trainerLevel))
         val tms = tmPool(data).shuffled(rng).take(tmSlots(trainerLevel))
         return dailyBalls(day) + items to tms
     }
@@ -389,6 +419,13 @@ object Shop {
      * when that pool is empty. Fixed within each day/night period, whatever is bought or rerolled; any number of buys at [Deal.price].
      */
     fun dealFor(data: GameData, day: String, now: Long = System.currentTimeMillis()): Deal? {
+        return dealForPeriod(data, day, isNight(now))
+    }
+
+    private fun dealItems(data: GameData, day: String): Set<String> =
+        listOfNotNull(dealForPeriod(data, day, false)?.item, dealForPeriod(data, day, true)?.item).toSet()
+
+    private fun dealForPeriod(data: GameData, day: String, night: Boolean): Deal? {
         val pool = dailyPool(data)
         if (pool.isEmpty()) return null
         val rng = Random(("deal:$day").hashCode())
@@ -396,8 +433,8 @@ object Shop {
         // Continue the existing seed after item selection; refreshes and purchases never reroll it.
         val dayPercent = Tuning.DEAL_PERCENTS[rng.nextInt(Tuning.DEAL_PERCENTS.size)]
         val nightPercent = Tuning.DEAL_PERCENTS[rng.nextInt(Tuning.DEAL_PERCENTS.size)]
-        val percent = if (isNight(now)) nightPercent else dayPercent
-        val item = pool[(dayIndex + if (isNight(now) && pool.size > 1) 1 else 0) % pool.size]
+        val percent = if (night) nightPercent else dayPercent
+        val item = pool[(dayIndex + if (night && pool.size > 1) 1 else 0) % pool.size]
         val normal = dailyPrice(data, day, item)
         return Deal(item, normal, dealPrice(normal, percent), percent)
     }
@@ -479,8 +516,10 @@ object Shop {
     /** Buys [quantity] copies of [item] atomically at [priceOf]: from today's stock, the always-on-sale [basics], today's deal or today's weekend item. */
     fun buy(data: GameData, state: GameState, item: String, now: Long = System.currentTimeMillis(), quantity: Int = 1): ActionResult {
         if (quantity !in setOf(1, 3, 5)) return ActionResult(false, "Invalid quantity")
-        if ((limited(item) || item == StreakFreeze.ITEM) && quantity != 1) return ActionResult(false, "Only one per offer")
+        if ((remaining(state, item) == 1 || item == StreakFreeze.ITEM) && quantity != 1) return ActionResult(false, "Only one per offer")
         if (soldOut(state, item)) return ActionResult(false, "Sold out")
+        val left = remaining(state, item)
+        if (left != null && quantity > left) return ActionResult(false, "$left left")
         if (item == StreakFreeze.ITEM && !freezeOnSale(state)) return ActionResult(false, "You already hold 3 freezes")
         val onSale = (item == StreakFreeze.ITEM && freezeOnSale(state)) || (item in state.shopItems && item !in weekendPrices) || item in Tuning.SHOP_BASICS || dealFor(data, state.day, now)?.item == item ||
             weekendFor(data, state.day)?.item == item
@@ -492,7 +531,10 @@ object Shop {
         state.cash -= price
         StudyStats.addSpent(state, price)
         Economy.give(state, item, quantity)
-        if (limited(item)) state.shopPurchases += offerKey(state, item)
+        if (item in state.shopItems && specialLimit(item) != null) {
+            val bought = specialLimit(item)!! - left!!
+            repeat(quantity) { state.shopPurchases += specialKey(state, item) + (bought + it) }
+        } else if (limited(item)) state.shopPurchases += offerKey(state, item)
         ItemCollections.record(state, Metric.PANTRY_KINDS, item)
         val label = if (quantity == 1) Items.name(item) else "$quantity × ${Items.name(item)}"
         return ActionResult(true, "Bought $label for ${money(price)}", spent(data, state, price, now))
@@ -527,6 +569,7 @@ object Shop {
         state.cash -= price
         StudyStats.addSpent(state, price)
         restock(data, state, rng)
+        state.shopPurchases.removeAll { it.startsWith("special:") }
         state.shopRefreshes++
         return ActionResult(true, "New stock for ${money(price)}", spent(data, state, price, now))
     }

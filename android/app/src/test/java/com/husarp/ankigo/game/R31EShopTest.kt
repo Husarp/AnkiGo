@@ -75,7 +75,7 @@ class R31EShopTest {
         assertFalse(guide.contains("Streak Freeze allows one purchase per game day"))
         assertFalse(ItemInfo.facts(data, StreakFreeze.ITEM).any { it.title == "In a fight" })
         val sources = ItemInfo.whereToFind(data, StreakFreeze.ITEM)
-        for (text in listOf("0.2%", "practice gives none", "Every next freeze costs more", "2,000 / 3,000 / 4,000", "holding 3")) {
+        for (text in listOf("2% / 1% / 0.5%", "practice gives none", "Every next freeze costs more", "2,000 / 3,000 / 4,000", "holding 3")) {
             assertTrue(text, sources.contains(text))
         }
         assertFalse(sources.contains("Shop, once per game day"))

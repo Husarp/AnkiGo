@@ -283,7 +283,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     }
 
     /** A Shop item with its current price for affordability and the two-tap purchase action. */
-    private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state, item), Shop.soldOut(state, item), Shop.limited(item) || item == StreakFreeze.ITEM) { buyItem(item) })
+    private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state, item), Shop.soldOut(state, item), Shop.remaining(state, item) == 1 || item == StreakFreeze.ITEM, remaining = Shop.remaining(state, item)) { buyItem(item) })
 
     /** A Shop TM with Buy, or "✓ Owned" once it is yours. */
     private fun tmSpec(move: String) = ItemCard.Spec(null, move, buy = ItemCard.Buy(ShopPlan.tmPrice(state.day, move), move in state.tms) { buyTm(move) })
@@ -386,10 +386,10 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         }
     }
 
-    private fun stock(item: String): String? = if (Shop.limited(item)) { if (Shop.soldOut(state, item)) "Sold out" else "1 left" } else null
+    private fun stock(item: String): String? = Shop.remaining(state, item)?.let { if (it == 0) "Sold out" else "$it left" }
 
     private fun buyItem(item: String) {
-        val quantity = if (Shop.limited(item) || item == StreakFreeze.ITEM) 1 else open.quantity
+        val quantity = if (Shop.remaining(state, item) == 1 || item == StreakFreeze.ITEM) 1 else open.quantity.takeIf { it <= (Shop.remaining(state, item) ?: Int.MAX_VALUE) } ?: 1
         open.bought()
         if (act { g -> Shop.buy(g.data, g.state, item, quantity = quantity) }.ok) { GameSound.ui(this, SoundId.BUY); window?.purchase(appBar.pill ?: appBar) }
     }
