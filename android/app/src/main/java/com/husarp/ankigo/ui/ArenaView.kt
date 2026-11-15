@@ -1515,24 +1515,23 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val wild = conditions.of(ConditionMarks.Slot.WILD)
         val ours = conditions.of(ConditionMarks.Slot.OURS)
         val field = conditions.of(ConditionMarks.Slot.FIELD)
-        fun ownerFlow(card: View, ms: List<ConditionMarks.Mark>, occupied: List<ConditionSpot.R>? = null): ConditionFlow.OwnerFlow {
+        fun ownerFlow(card: View, ms: List<ConditionMarks.Mark>): ConditionFlow.OwnerFlow {
             val box = boxOf(card)
-            val obstacles = occupied ?: when {
-                card === playerCard && wildOn && wild.isNotEmpty() ->
-                    ownerFlow(enemyBlock, wild, emptyList()).rects.map { it.grow(m.lift * .5f) }
-                card === enemyBlock && ourOn && ours.isNotEmpty() ->
-                    ownerFlow(playerCard, ours, emptyList()).rects.map { it.grow(m.lift * .5f) }
-                else -> emptyList()
-            }
             var budget = maxOf(m.height, minOf(scene.area.h / 3f, scene.area.h - card.height * card.scaleY - m.lift))
-            if (obstacles.isNotEmpty()) budget = minOf(budget, if (card === enemyBlock) box.t - scene.area.t - m.lift else scene.area.b - box.b - m.lift)
             val other = (if (card === enemyBlock) playerCard else enemyBlock).takeIf { it.visibility == VISIBLE && it.width > 0 }?.let { boxOf(it) }
+            // Facing chip bands share the space between vertically stacked boxes.
+            if (other != null && wild.isNotEmpty() && ours.isNotEmpty() && box.l < other.r + m.gap && other.l < box.r + m.gap) {
+                val upperBottom = if (card === playerCard) box.b else other.b
+                val lowerTop = if (card === enemyBlock) box.t else other.t
+                if (lowerTop > upperBottom) budget = minOf(budget,
+                    maxOf(m.height, (lowerTop - upperBottom - 2f * m.lift - m.gap) / 2f))
+            }
             // When both chip bands share a height, the left owner keeps its lines out of the right owner's column.
             val right = if ((if (card === enemyBlock) ours.isNotEmpty() else wild.isNotEmpty()) && other != null && other.l > box.l && other.b < box.b + budget + m.lift && box.b < other.b + budget + m.lift)
                 minOf(scene.area.r, other.l - m.gap) else scene.area.r
             return ConditionFlow.owner(box, right, ms.map { m.width(it) }.toFloatArray(),
                 ms.count { it.key.startsWith("stat.") }, m.gap, m.lift, m.height, scene.sprites, budget,
-                blocks = listOfNotNull(other?.grow(Ui.dp(context, .5f))) + scene.blocks.drop(scene.obstacles.size) + obstacles,
+                blocks = listOfNotNull(other?.grow(Ui.dp(context, .5f))) + scene.blocks.drop(scene.obstacles.size),
                 below = card !== enemyBlock, left = scene.area.l, moreWidth = m::moreWidth)
         }
         fun reserve(card: View, ms: List<ConditionMarks.Mark>) {
@@ -1589,7 +1588,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         scene = markScene()
         val taken = ArrayList<ConditionSpot.R>()
         fun putOwner(slot: ConditionMarks.Slot, card: View, ms: List<ConditionMarks.Mark>, on: Boolean) {
-            val flow = if (on) ownerFlow(card, ms, taken.takeIf { it.isNotEmpty() }) else ConditionFlow.OwnerFlow(emptyList(), 0, 0)
+            val flow = if (on) ownerFlow(card, ms) else ConditionFlow.OwnerFlow(emptyList(), 0, 0)
             marks.setFlow(slot, flow.rects, ms.take(flow.shown), m, flow.more)
             taken += flow.rects.map { it.grow(m.lift * .5f) }
         }
