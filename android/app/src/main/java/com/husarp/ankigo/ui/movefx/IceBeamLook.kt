@@ -100,8 +100,21 @@ internal object IceBeamFx {
  * frost marks, cracks. Everything random is drawn once in the constructor ([w], [h] in stage units for the callers). Drawn mirrored
  * when the target is on the left, so the side faces stay on the outer edge.
  */
-internal class IceCube(s: FxScript, private val k: Float) {
-    private val u = s.u
+internal class IceCube(private val u: Float, private val k: Float, private val script: FxScript? = null) {
+    constructor(s: FxScript, k: Float) : this(s.u, k, s)
+
+    private val random = kotlin.random.Random(603)
+    private fun rnd(lo: Float, hi: Float): Float = script?.rnd(lo, hi) ?: (lo + random.nextFloat() * (hi - lo))
+    private fun jag(x0: Float, y0: Float, x1: Float, y1: Float): FloatArray {
+        script?.let { return it.jag(x0, y0, x1, y1, 4, 7f * u) }
+        return FloatArray(10).also { out ->
+            for (i in 0..4) {
+                val p = i / 4f
+                out[i * 2] = FxMath.lerp(x0, x1, p) + if (i in 1..3) rnd(-7f, 7f) * u else 0f
+                out[i * 2 + 1] = FxMath.lerp(y0, y1, p) + if (i in 1..3) rnd(-2.1f, 2.1f) * u else 0f
+            }
+        }
+    }
     /** Front face size in stage units. */
     val w = 100f * k
     val h = 96f * k
@@ -111,10 +124,10 @@ internal class IceCube(s: FxScript, private val k: Float) {
     private val ddy = -17f * k * u
     private val fx = -pw / 2f - ddx / 2f
     private val fy = -ph / 2f - ddy / 2f
-    private val frost = Array(10) { floatArrayOf(s.rnd(0f, 1f), s.rnd(0f, 1f), s.rnd(5f, 12f), s.rnd(0f, PI.toFloat())) }
+    private val frost = Array(10) { floatArrayOf(rnd(0f, 1f), rnd(0f, 1f), rnd(5f, 12f), rnd(0f, PI.toFloat())) }
     private val cracks: Array<FloatArray> = Array(6) { r ->
-        val a = r / 6f * 2f * PI.toFloat() + s.rnd(-.3f, .3f)
-        s.jag(-6f * u, -4f * u, -6f * u + cos(a) * pw * .55f, -4f * u + sin(a) * ph * .55f, 4, 7f * u)
+        val a = r / 6f * 2f * PI.toFloat() + rnd(-.3f, .3f)
+        jag(-6f * u, -4f * u, -6f * u + cos(a) * pw * .55f, -4f * u + sin(a) * ph * .55f)
     }
 
     private val front = FloatArray(8)
@@ -143,10 +156,11 @@ internal class IceCube(s: FxScript, private val k: Float) {
 
     /** Draws the cube centred on ([cx], [cy]) at mockup ms [ms]; [dir] -1 mirrors it. */
     fun draw(c: FxCanvas, ms: Float, cx: Float, cy: Float, dir: Float) {
-        val sc = IceBeamFx.scaleAt(ms)
-        val alpha = IceBeamFx.alphaAt(ms)
-        val shine = (ms - 650f) / 500f
-        val crack = IceBeamFx.crackAt(ms)
+        drawLook(c, cx, cy, dir, IceBeamFx.scaleAt(ms), IceBeamFx.alphaAt(ms), (ms - 650f) / 500f, IceBeamFx.crackAt(ms))
+    }
+
+    /** The same cube held by a condition, with its own shine and thaw timing. */
+    fun drawLook(c: FxCanvas, cx: Float, cy: Float, dir: Float, sc: Float, alpha: Float, shine: Float, crack: Float) {
         c.save()
         c.translate(cx, cy)
         c.scale(dir * sc, sc)

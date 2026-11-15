@@ -60,6 +60,26 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val ball = ImageView(ctx).apply { visibility = GONE }
     private val enemyHolder = FrameLayout(ctx).apply { clipChildren = false; clipToPadding = false }
     private val playerHolder = FrameLayout(ctx).apply { clipChildren = false; clipToPadding = false }
+    // PLAN 603: full-arena bounds keep lasting looks outside the holders, under the cards.
+    private val conditionLooks = object : View(ctx) {
+        override fun onDraw(canvas: Canvas) {
+            drawConditionLook(canvas, enemyHolder, enemySprite)
+            drawConditionLook(canvas, playerHolder, playerSprite)
+        }
+    }
+
+    private fun drawConditionLook(canvas: Canvas, holder: View, sprite: SpriteView) {
+        if (holder.visibility != VISIBLE || sprite.visibility != VISIBLE || sprite.conditionLook?.state?.visible != true) return
+        val alpha = holder.alpha * sprite.alpha
+        if (alpha <= 0f) return
+        val save = canvas.save()
+        canvas.translate(holder.left.toFloat(), holder.top.toFloat())
+        canvas.concat(holder.matrix)
+        canvas.translate(sprite.left.toFloat(), sprite.top.toFloat())
+        canvas.concat(sprite.matrix)
+        sprite.drawConditionLook(canvas, alpha)
+        canvas.restoreToCount(save)
+    }
     private val platEnemy = View(ctx).apply { background = oval(Ui.c(ctx, R.color.ag_plat2)) }
     private val platPlayer = View(ctx).apply { background = oval(Ui.c(ctx, R.color.ag_plat)) }
     /** The arena's background (R7-07): the plain gradient or a downloaded battle picture; it is a [com.husarp.ankigo.ui.movefx.Joltable] too. */
@@ -384,6 +404,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         enemyHolder.addView(enemySprite, FrameLayout.LayoutParams(-1, -1))
         enemyHolder.addView(ball, FrameLayout.LayoutParams(dpi(48), dpi(48), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).also { it.bottomMargin = dpi(6) })
         playerHolder.addView(playerSprite, FrameLayout.LayoutParams(-1, -1))
+        enemySprite.conditionLayer = conditionLooks
+        playerSprite.conditionLayer = conditionLooks
         playerHolder.contentDescription = "Your Pokémon. Tap for its details"
         playerHolder.setOnClickListener { onPlayerTap() }
         playerHolder.setOnTouchListener { v, e -> // PLAN 34: a horizontal swipe turns the Pokémon; a tap still opens the details
@@ -417,6 +439,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         addView(platPlayer, LayoutParams(0, 0))
         addView(enemyHolder, LayoutParams(0, 0))
         addView(playerHolder, LayoutParams(0, 0))
+        addView(conditionLooks, LayoutParams(-1, -1))
         addView(moveFx, LayoutParams(-1, -1))
         cardLayer.addView(enemyBlock, LayoutParams(0, -2))
         cardLayer.addView(playerCard, LayoutParams(0, -2))
@@ -1333,10 +1356,16 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     internal var playerStatus: String? = null; private set
 
     /** Status badge (poison, burn, paralysis, sleep, freeze) on the wild card; null clears it. Raw engine ids ("tox" shows as poison). */
-    fun setEnemyStatus(status: String?) { if (status != enemyStatus) { enemyStatus = status; statusChanged(eStatus) } }
+    fun setEnemyStatus(status: String?) { enemySprite.setConditionStatus(status); if (status != enemyStatus) { enemyStatus = status; statusChanged(eStatus) } }
 
     /** Status badge on our card; null clears it. */
-    fun setPlayerStatus(status: String?) { if (status != playerStatus) { playerStatus = status; statusChanged(pStatus) } }
+    fun setPlayerStatus(status: String?) { playerSprite.setConditionStatus(status); if (status != playerStatus) { playerStatus = status; statusChanged(pStatus) } }
+
+    /** A departure ends the look at once; clearing a status during a fight plays thaw / wake. */
+    fun clearConditionLooks() {
+        enemySprite.setConditionStatus(null, immediate = true)
+        playerSprite.setConditionStatus(null, immediate = true)
+    }
 
     private fun statusChanged(row: StatusRow) {
         if (bubbleFor === row) { hideStatusBubble(); hideConditionList() }
@@ -1433,10 +1462,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun conditionEffect(e: GameEvent.Effect, b: Battle?) { if (conditions.applyEffect(e, b)) marksChanged() }
 
     /** The fight is over / a new one starts: no chips. */
-    fun clearConditions() { if (conditions.clear()) marksChanged() }
+    fun clearConditions() { clearConditionLooks(); if (conditions.clear()) marksChanged() }
 
     /** Our Pokémon left the field (switched out or fainted): its own conditions go; our side's and the field's stay. */
-    fun conditionsSwitched() { if (conditions.dropOurVolatiles()) marksChanged() }
+    fun conditionsSwitched() { playerSprite.setConditionStatus(null, immediate = true); if (conditions.dropOurVolatiles()) marksChanged() }
 
     private fun marksChanged() {
         val any = conditions.size > 0
@@ -1711,6 +1740,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // ---------------------------------------------------------------- player side
 
     fun setPlayerInfo(uid: String?, name: String, level: Int, tier: com.husarp.ankigo.game.Tier? = null, baseTotal: Int = 0) {
+        if (playerUid != uid) playerSprite.setConditionStatus(null, immediate = true)
         playerUid = uid
         playerLevel = level
         playerNameInk = name
@@ -2199,6 +2229,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     /** Sprite sinks 40 dp and fades (mockup `.faint`, 500 ms). */
     fun faint(player: Boolean, ms: Long) {
+        (if (player) playerSprite else enemySprite).setConditionStatus(null, immediate = true)
         val spr = if (player) playerSprite else enemySprite
         spr.animate().translationY(Ui.dp(context, 40f)).alpha(0f).setDuration(ms).setInterpolator(AccelerateInterpolator()).start()
     }
@@ -2565,6 +2596,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     /** Only the wild side back to rest (a new encounter is about to slide in). */
     fun resetEnemySide() {
+        enemySprite.setConditionStatus(null, immediate = true)
         stopXp()   // the XP number stood over this spot
         moveFx.clear()
         enemySprite.animate().cancel()

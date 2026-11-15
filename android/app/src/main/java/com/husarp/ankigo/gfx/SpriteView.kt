@@ -120,12 +120,26 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     internal var idleStarts = 0
         private set
 
+    internal var conditionLayer: View? = null
+    internal var conditionLook: com.husarp.ankigo.ui.movefx.ConditionLook? = null; private set
+
+    /** PLAN 603: only battle sprites receive a lasting status look. */
+    internal fun setConditionStatus(status: String?, immediate: Boolean = false) {
+        if (conditionLook == null && (status == "frz" || status == "slp")) {
+            conditionLook = com.husarp.ankigo.ui.movefx.ConditionLook(this) { invalidate(); conditionLayer?.invalidate() }.also {
+                if (isAttachedToWindow) it.attach() else it.refresh()
+            }
+        }
+        conditionLook?.set(status, immediate)
+    }
+
     private var image: SpriteImage? = null
     /** Empty rows of the image under its feet while [anchorFeet] (worked out when the image is set, never while drawing). */
     private var rowsBelow = 0
     private var frame = 0
     private var placeholderText: String? = null
     private var placeholderColor = 0
+    private var placeholderDrawable: com.husarp.ankigo.ui.SpritePlaceholder? = null
     private var ticking = false
     private var idleAnim: android.animation.ValueAnimator? = null
     /** 0..1 position in the idle cycle; 0 = the rest pose (what a snapshot or a not-yet-started animator draws). */
@@ -182,6 +196,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     fun setPlaceholder(text: String, color: Int) {
         placeholderText = text
         placeholderColor = color
+        placeholderDrawable = com.husarp.ankigo.ui.SpritePlaceholder(color)
         invalidate()
         onArtChange?.invoke()
     }
@@ -283,10 +298,51 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        conditionLook?.refresh()
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
+        val look = conditionLook
+        if (look == null || !look.state.visible) { drawPicture(canvas); return }
+        drawConditionContent(canvas, picture = true)
+    }
+
+    /** The arena's full-size layer lets the cube and shards extend past the sprite holder's feet. */
+    internal fun drawConditionLook(canvas: Canvas, opacity: Float) {
+        if (conditionLook?.state?.visible == true) drawConditionContent(canvas, picture = false, opacity = opacity)
+    }
+
+    private fun drawConditionContent(canvas: Canvas, picture: Boolean, opacity: Float = 1f) {
+        val look = conditionLook ?: return
+        val img = image
+        val s = if (img != null) scaleFor(img, width, height) else 1f
+        val bounds = if (img != null) visibleBounds(img) else null
+        val dw = if (img != null) (img.width * s).roundToInt().toFloat() else placeholderDiameter(width, height)
+        val dh = if (img != null) (img.height * s).roundToInt().toFloat() else dw
+        val left = (width - dw) / 2f
+        val top = height - dh + if (img != null) footInset(s) else 0
+        val l = left + (bounds?.get(0) ?: 0) * s
+        val t = top + (bounds?.get(1) ?: 0) * s
+        val r = if (bounds != null) left + bounds[2] * s else left + dw
+        val b = if (bounds != null) top + bounds[3] * s else top + dh
+        val save = canvas.save()
+        applyIdle(canvas)
+        look.pose(canvas, l, t, r, b)
+        if (picture) drawPicture(canvas, idle = false)
+        else look.draw(canvas, if (mirror) width - r else l, t, if (mirror) width - l else r, b, mirror, opacity)
+        canvas.restoreToCount(save)
+    }
+
+    private fun applyIdle(canvas: Canvas) {
+        if (idleAnim != null && idlePhase > 0f) {
+            val lift = idleLift(idlePhase)
+            canvas.translate(0f, -(IDLE_FLOAT_DP * resources.displayMetrics.density * lift).roundToInt().toFloat())
+            canvas.scale(1f, idleBreath(idlePhase), width / 2f, height.toFloat())
+        }
+    }
+
+    private fun drawPicture(canvas: Canvas, idle: Boolean = true) {
         val vw = width
         val vh = height
         val img = image
@@ -307,12 +363,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         paint.colorFilter = currentFilter()
         paint.isFilterBitmap = SMOOTH
         val save = canvas.save()
-        if (idleAnim != null && idlePhase > 0f) {
-            val lift = idleLift(idlePhase)
-            canvas.translate(0f, -(IDLE_FLOAT_DP * resources.displayMetrics.density * lift).roundToInt().toFloat())
-            // the feet (the visible bottom row) are the pivot, so they stay where they are while the body breathes
-            canvas.scale(1f, idleBreath(idlePhase), vw / 2f, (dst.bottom - footInset(s)).toFloat())
-        }
+        if (idle) applyIdle(canvas)
         if (mirror) canvas.scale(-1f, 1f, vw / 2f, vh / 2f)
         canvas.drawBitmap(bmp, src, dst, paint)
         canvas.restoreToCount(save)
@@ -323,7 +374,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         val f = flash
         val fx = fxMatrix
         val w = whiteout
-        if (f <= 0f && w <= 0f) return if (fx != null && fx.size == 20) ColorMatrixColorFilter(ColorMatrix(fx)) else null
+        if (f <= 0f && w <= 0f) return if (fx != null && fx.size == 20) ColorMatrixColorFilter(ColorMatrix(fx)) else if (conditionLook?.cold == true) com.husarp.ankigo.ui.movefx.ConditionLook.COLD else null
         // CSS brightness(2.2) saturate(.3) at full strength, blended from the identity.
         val sat = 1f + (0.3f - 1f) * f
         val b = 1f + (2.2f - 1f) * f
@@ -351,7 +402,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         val text = placeholderText ?: return
         val d = placeholderDiameter(vw, vh)
         if (d <= 0f) return
-        val drawable = com.husarp.ankigo.ui.SpritePlaceholder(placeholderColor)
+        val drawable = placeholderDrawable ?: return
         drawable.setBounds(((vw-d)/2).toInt(), (vh-d).toInt(), ((vw+d)/2).toInt(), vh)
         drawable.draw(canvas)
     }
@@ -426,10 +477,10 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     private var idlePausing = false
     private val idleRestart = Runnable { idlePausing = false; updateIdle() }
 
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); updateAnimation() }
-    override fun onDetachedFromWindow() { removeCallbacks(tick); ticking = false; super.onDetachedFromWindow(); updateIdle(detaching = true) }
-    override fun onVisibilityChanged(changedView: View, visibility: Int) { super.onVisibilityChanged(changedView, visibility); updateAnimation() }
-    override fun onWindowVisibilityChanged(visibility: Int) { super.onWindowVisibilityChanged(visibility); updateAnimation() }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); conditionLook?.attach(); updateAnimation() }
+    override fun onDetachedFromWindow() { removeCallbacks(tick); ticking = false; conditionLook?.detach(); super.onDetachedFromWindow(); updateIdle(detaching = true) }
+    override fun onVisibilityChanged(changedView: View, visibility: Int) { super.onVisibilityChanged(changedView, visibility); conditionLook?.refresh(); updateAnimation() }
+    override fun onWindowVisibilityChanged(visibility: Int) { super.onWindowVisibilityChanged(visibility); conditionLook?.refresh(); updateAnimation() }
 
     internal companion object {
         /** Gen-5 pixel art is at most 96 x 96; Showdown's 3D animations are often bigger. */
