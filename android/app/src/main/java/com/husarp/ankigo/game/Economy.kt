@@ -296,6 +296,7 @@ object Shop {
     /** Today's allowance belongs to this draw, not to the inventory or the item's price. */
     fun specialLimit(item: String): Int? = when {
         item in Tuning.SHOP_BASICS -> null
+        item == "old-gateau" -> 1
         item == "great-ball" || item == "ultra-ball" -> 3
         Items.def(item)?.kind == ItemKind.HEAL -> 5
         Items.def(item)?.kind in setOf(ItemKind.EVOLUTION, ItemKind.FOSSIL, ItemKind.HELD) -> 1
@@ -329,7 +330,7 @@ object Shop {
      * Retired, unsold or weekend-only items are removed from existing stock.
      */
     fun ensureToday(data: GameData, state: GameState) {
-        state.shopItems.removeAll { data.price(it) <= 0 || it in Items.RETIRED || it == PokeDoll.ITEM || it in AbilityAdaptations.berries || it in weekendPrices }
+        state.shopItems.removeAll { data.price(it) <= 0 || it in Items.RETIRED || it == PokeDoll.ITEM || it in AbilityAdaptations.berries || it in weekendPrices || !availableRare(it, state.day) }
         if (state.shopDay == state.day) {
             // Upgrade an already-open day's old ball offers without changing owned inventory or rerolled items/TMs.
             val balls = dailyBalls(state.day)
@@ -341,7 +342,7 @@ object Shop {
             val reserved = dealItems(data, state.day) + Tuning.SHOP_BASICS
             val oldRegular = state.shopItems.filter { Items.def(it)?.kind != ItemKind.BALL }
             val regular = oldRegular.filter { it !in reserved }.distinct()
-            val replacements = dailyPool(data).filter { it !in reserved && it !in regular }
+            val replacements = dailyPool(data).filter { it !in reserved && it !in regular && availableRare(it, state.day) }
                 .shuffled(Random(("repair:${state.day}:${state.shopRefreshes}").hashCode()))
                 .take(oldRegular.size - regular.size)
             state.shopItems.clear()
@@ -368,7 +369,6 @@ object Shop {
     private fun draw(data: GameData, rng: Random, trainerLevel: Int, day: String): Pair<List<String>, List<String>> {
         val items = dailyPool(data).filter { it !in dealItems(data, day) && availableRare(it, day) }.shuffled(rng).take(slots(trainerLevel))
         val tms = tmPool(data).shuffled(rng).take(tmSlots(trainerLevel))
-
         return dailyBalls(day) + items to tms
     }
 
@@ -437,7 +437,6 @@ object Shop {
 
     private fun dealForPeriod(data: GameData, day: String, night: Boolean): Deal? {
         val pool = dailyPool(data).filter { availableRare(it, day) }
-
         if (pool.isEmpty()) return null
         val rng = Random(("deal:$day").hashCode())
         val dayIndex = rng.nextInt(pool.size)
@@ -551,16 +550,21 @@ object Shop {
         return ActionResult(true, "Bought $label for ${money(price)}", spent(data, state, price, now))
     }
 
-    /** TMs use the daily price, one use each; another can be bought after use. */
+    fun tmRemaining(state: GameState, move: String): Int =
+        if (specialKey(state, "tm:$move") in state.shopPurchases) 0 else 1
+
+    /** TMs use the daily price, one use per copy and one purchase per offer. */
     fun buyTm(data: GameData, state: GameState, move: String, now: Long = System.currentTimeMillis()): ActionResult {
         if (move !in state.shopTms && weekendFor(data, state.day)?.tm != move) return ActionResult(false, "Not in today's shop")
         val name = Items.tmName(data, move)
+        if (tmRemaining(state, move) == 0) return ActionResult(false, "Sold out")
         if (move in state.tms) return ActionResult(false, "You already own $name")
         val price = tmPrice(state.day, move)
         if (state.cash < price) return ActionResult(false, "Not enough money (need ${money(price)})")
         state.cash -= price
         StudyStats.addSpent(state, price)
         state.tms += move
+        state.shopPurchases += specialKey(state, "tm:$move")
         return ActionResult(true, "Bought $name for ${money(price)}", spent(data, state, price, now))
     }
 

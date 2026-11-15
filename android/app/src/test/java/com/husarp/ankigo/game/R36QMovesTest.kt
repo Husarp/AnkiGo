@@ -108,14 +108,19 @@ class R36QMovesTest {
         assertFalse(ItemUse.teachTm(d, s, "thunderbolt", mon.uid, 1).ok)
     }
 
-    @Test fun consumedTmCanBeBoughtAgain() {
+    @Test fun consumedTmCanBeBoughtFromANewOffer() {
         val s = state(); s.main!!.bondPoints = Bond.thresholds[2]; s.main!!.discoveredMoves += "tackle"
-        s.shopDay = s.day; s.shopTms += "thunderbolt"; s.cash = 3000
+        s.shopDay = s.day; s.shopTms += "thunderbolt"; s.cash = 10000
+        val price = Shop.tmPrice(s.day, "thunderbolt")
         assertTrue(Shop.buyTm(data, s, "thunderbolt").ok)
         assertTrue(ItemUse.teachTm(tmData(), s, "thunderbolt", s.main!!.uid, 0).ok)
+        assertFalse(Shop.buyTm(data, s, "thunderbolt").ok)
+        val refresh = Shop.refreshPrice(s)
+        assertTrue(Shop.reroll(data, s, Random(0)).ok)
+        s.shopTms += "thunderbolt"
         assertTrue(Shop.buyTm(data, s, "thunderbolt").ok)
         assertEquals(setOf("thunderbolt"), s.tms)
-        assertEquals(1000, s.cash)
+        assertEquals(10000 - 2 * price - refresh, s.cash)
     }
 
     @Test fun fossilRevivalStartsWithAllMovesUndiscoveredAndSavePreservesThat() {

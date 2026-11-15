@@ -49,7 +49,7 @@ class R36NShopTest {
     }
 
     @Test fun limitsAreAtomicPersistAndResetWithOffer() {
-        for ((item, limit) in listOf("fire-stone" to 1, "helix-fossil" to 1, "oran-berry" to 1,
+        for ((item, limit) in listOf("fire-stone" to 1, "helix-fossil" to 1, "leftovers" to 1,
             "super-potion" to 5, "great-ball" to 3, "ultra-ball" to 3)) {
             var s = state()
             s.shopItems += item

@@ -136,7 +136,6 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val battle = state.battle ?: return events
         if (battle.awaitingContinue) return events
         if (main.hp > 0 && battle.wild.hp > 0) Bond.add(data, state, main, Bond.CARD_POINTS, events, "soothe-bell" in state.activeHeldItems(main), studyAnswer = !state.practiceRewards)
-
         // R10-B22: who attacks depends on each answer, not on the point sum. A battle saved before keeps only the sum: restore the buttons from it.
         if (battle.buttons.size != battle.answers) { battle.buttons.clear(); battle.buttons += RoundRule.restore(battle.answers, battle.tally) }
         // R19-T (PLAN 284): the OK of a new card (PLAN 155) is one of the round's answers, a neutral move: it fills a dot and counts toward the
@@ -580,7 +579,6 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             if (battle?.awaitingContinue == true) battle.player = BattleSide()
             else battle?.switchOutMain(data, oldMon) // R17C-1: the rule sets' onLeave, then a fresh side for the new main
             if (battle != null) BattleItems.sync(battle, main)
-
             events += GameEvent.MainChanged(main.uid, main.name)
             refreshNext() // the wild level follows the main's level
             if (battle != null && !battle.awaitingContinue && battle.wild.hp > 0 && main.hp > 0 && !free) {
@@ -668,7 +666,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val onMain = main != null && (targetUid ?: if (kind == ItemKind.HEAL) main.uid else null) == main.uid
         val turn = item != "old-gateau" && onMain && battle != null && (kind == ItemKind.HEAL || kind == ItemKind.EVOLUTION) && itemTakesATurn(battle, main!!)
         val r = ItemUse.use(data, state, item, targetUid, rng, clock(), evolutionTo)
-        if (r.ok && battle != null && state.battle === battle && state.main?.hp == 0) {
+        if (r.ok && battle != null && !battle.awaitingContinue && state.battle === battle && state.main?.hp == 0) {
             val settled = mutableListOf<GameEvent>()
             settleFight(battle, state.main!!, settled)
             return r.copy(events = r.events + settled)

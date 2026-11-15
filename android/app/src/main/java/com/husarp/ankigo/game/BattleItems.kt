@@ -31,9 +31,9 @@ internal object BattleItems : BattleRules {
         }
     }
     private fun active(v: BattleView, p: Boolean, effect: String) = v.conds(p)[key(v.mon(p), effect)] == 1
-    private fun item(v: BattleView, p: Boolean): String? = v.mon(p).heldItem.takeUnless {
+    private fun items(v: BattleView, p: Boolean): List<String> = if (
         v.ability(p) == "klutz" || (v.side(p).volatiles["embargo"] ?: 0) > 0 || (v.field.rooms["magicroom"] ?: 0) > 0
-    }
+    ) emptyList() else v.mon(p).heldItems
     fun canUse(data: GameData, state: GameState, item: String, mon: Mon?): Boolean {
         if (mon == null) return false
         val b = state.battle
@@ -97,10 +97,10 @@ internal object BattleItems : BattleRules {
         }
         return result
     }
-    override fun finalMod(h: Hit): Double = when (item(h.view, h.attackerIsMain)) {
-        "life-orb" -> 1.3
-        "expert-belt" -> if (rulesChain(TypeChart.eff(h.type, h.dTypes)) { rule, eff -> rule.effectiveness(h, eff) } > 1.0) 1.2 else 1.0
-        else -> 1.0
+    override fun finalMod(h: Hit): Double {
+        val held = items(h.view, h.attackerIsMain)
+        return (if ("life-orb" in held) 1.3 else 1.0) *
+            (if ("expert-belt" in held && rulesChain(TypeChart.eff(h.type, h.dTypes)) { rule, eff -> rule.effectiveness(h, eff) } > 1.0) 1.2 else 1.0)
     }
     override fun fixedFinalMod(h: Hit): Double = finalMod(h)
     override fun takeDamage(r: Round, tp: Boolean, h: Hit, damage: Int): Int {
@@ -111,29 +111,29 @@ internal object BattleItems : BattleRules {
             n = (n * 70 / 100).coerceAtLeast(1)
             r.fx(tp, "Shalour Sable weakened the hit by 30%!", EffectKind.BLOCKED)
         }
-        if (item(r, tp) == "rocky-helmet") n = (n * 80 / 100).coerceAtLeast(1)
-        if (item(r, tp) == "focus-sash" && r.mon(tp).hp > 0 && n >= r.mon(tp).hp) {
-            r.mon(tp).heldItem = null; r.side(tp).notes["consumeditem"] = "focus-sash"
+        if ("rocky-helmet" in items(r, tp)) n = (n * 80 / 100).coerceAtLeast(1)
+        if ("focus-sash" in items(r, tp) && r.mon(tp).hp > 0 && n >= r.mon(tp).hp) {
+            r.mon(tp).removeHeld("focus-sash"); r.side(tp).notes["consumeditem"] = "focus-sash"
             r.fx(tp, "${r.mon(tp).shownName} held on with its Focus Sash!", EffectKind.BLOCKED, label = "Focus Sash", hp = 1)
             n = r.mon(tp).hp - 1
         }
         return n
     }
     override fun afterDamage(r: Round, tp: Boolean, h: Hit, damage: Int) {
-        if (item(r, tp) == "rocky-helmet" && r.mon(!tp).hp > 0)
+        if ("rocky-helmet" in items(r, tp) && r.mon(!tp).hp > 0)
             r.hurt(!tp, (damage * 20 / 100).coerceAtLeast(1), "Rocky Helmet hurt the attacker!", label = "Rocky Helmet")
     }
     override fun afterHit(r: Round, p: Boolean, move: Move, damage: Int) {
-        if (item(r, p) == "shell-bell" && damage > 0 && r.mon(p).hp > 0 && !SideMoves.healBlocked(r, p))
+        if ("shell-bell" in items(r, p) && damage > 0 && r.mon(p).hp > 0 && !SideMoves.healBlocked(r, p))
             r.heal(p, (damage / 8).coerceAtLeast(1), "Shell Bell restored HP!", label = "Shell Bell")
     }
     override fun afterMove(r: Round, p: Boolean, move: Move, failed: Boolean) {
-        if (move.category != Category.STATUS && item(r, p) == "life-orb" && r.mon(p).hp > 0)
+        if (move.category != Category.STATUS && "life-orb" in items(r, p) && r.mon(p).hp > 0)
             r.hurt(p, (r.maxHp(p) / 10).coerceAtLeast(1), "Life Orb cost HP!", label = "Life Orb")
     }
     override fun afterCalledMove(r: Round, p: Boolean, move: Move) = afterMove(r, p, move, false)
     override fun endOfRound(r: Round) {
-        for (p in listOf(true, false)) if (item(r, p) == "leftovers" && r.mon(p).hp > 0 && !SideMoves.healBlocked(r, p))
+        for (p in listOf(true, false)) if ("leftovers" in items(r, p) && r.mon(p).hp > 0 && !SideMoves.healBlocked(r, p))
             r.heal(p, (r.maxHp(p) / 16).coerceAtLeast(1), "Leftovers restored HP!", label = "Leftovers")
     }
 }

@@ -286,7 +286,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state, item), Shop.soldOut(state, item), Shop.remaining(state, item) == 1 || item == StreakFreeze.ITEM, remaining = Shop.remaining(state, item)) { buyItem(item) })
 
     /** A Shop TM with Buy, or "✓ Owned" once it is yours. */
-    private fun tmSpec(move: String) = ItemCard.Spec(null, move, buy = ItemCard.Buy(ShopPlan.tmPrice(state.day, move), move in state.tms) { buyTm(move) })
+    private fun tmSpec(move: String) = ItemCard.Spec(null, move, buy = ItemCard.Buy(ShopPlan.tmPrice(state.day, move), move in state.tms || Shop.tmRemaining(state, move) == 0, remaining = Shop.tmRemaining(state, move)) { buyTm(move) })
 
     // ---- shop tab ----
 
@@ -317,7 +317,6 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
             } else tileRows(section.tiles, 1) { tile ->
                 if (tile is ShopPlan.Tile.Item && tile.id in Shop.basics()) CardKeys.basic(tile) else CardKeys.special(tile)
             }
-
         }
         Shop.weekendFor(data, st.day)?.let { content.addView(weekendCard(it), LinearLayout.LayoutParams(-1, -2)) }
         content.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply {
@@ -366,7 +365,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         val bottom = if (owned) ShopViews.owned(this) else priceView(price, 14f)
         return ShopViews.tile(this, Bits.tmTile(this, m?.type, 64), name, bottom,
             ItemCardPlan.detailsLabel(ShopPlan.describe(listOfNotNull(name, m?.type?.label).joinToString(", "), price, owned)),
-            subView = m?.let { Ui.typeChip(this, it.type) }, stock = if (owned) "Sold out" else "1 left") { openCard(key) }
+            subView = m?.let { Ui.typeChip(this, it.type) }, stock = if (owned || Shop.tmRemaining(state, move) == 0) "Sold out" else "1 left") { openCard(key) }
     }
 
     /** The weekend special: an exclusive held item at its fixed price, until Sunday night. */
