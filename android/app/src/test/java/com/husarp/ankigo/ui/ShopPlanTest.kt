@@ -47,8 +47,8 @@ class ShopPlanTest {
     }
 
     @Test fun aTmIsNeverDiscounted() {
-        val p = ShopPlan.tmPrice()
-        assertEquals(Tuning.TM_PRICE, p.now)
+        val p = ShopPlan.tmPrice("2026-10-13", "surf")
+        assertEquals(Shop.tmPrice("2026-10-13", "surf"), p.now)
         assertNull(p.was)
     }
 
@@ -102,7 +102,7 @@ class ShopPlanTest {
         assertEquals("Poké Ball, 200", ShopPlan.describe("Poké Ball", ShopPlan.Price(200)))
         assertEquals("Super Potion, deal, 490 instead of 700", ShopPlan.describe("Super Potion", ShopPlan.Price(490, 700)))
         assertEquals("Rare Candy, 4,800", ShopPlan.describe("Rare Candy", ShopPlan.Price(4800)))
-        assertEquals("TM Surf, owned", ShopPlan.describe("TM Surf", ShopPlan.tmPrice(), owned = true))
+        assertEquals("TM Surf, owned", ShopPlan.describe("TM Surf", ShopPlan.tmPrice("2026-10-13", "surf"), owned = true))
     }
 
     // ---- the dot on the Shop tab ----

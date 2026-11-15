@@ -232,8 +232,8 @@ class EconomyTest {
 
     @Test fun slotsByTrainerLevel() {
         assertEquals(3, Shop.slots(1))
-        assertEquals(4, Shop.slots(5))
-        assertEquals(5, Shop.slots(10))
+        assertEquals(3, Shop.slots(5))
+        assertEquals(4, Shop.slots(10))
     }
 
     @Test fun tmPoolIsUnionOfKnownMoves() {
@@ -247,7 +247,7 @@ class EconomyTest {
         val a = state(); val b = state()
         Shop.ensureToday(d, a); Shop.ensureToday(d, b)
         assertEquals("2026-10-13", a.shopDay)
-        assertEquals(3, drawn(a).size); assertEquals(3, a.shopTms.size)
+        assertEquals(3, drawn(a).size); assertEquals(2, a.shopTms.size)
         assertEquals(a.shopItems, b.shopItems)
         assertEquals(a.shopTms, b.shopTms)
         assertEquals(drawn(a).toSet().size, 3)
@@ -272,11 +272,11 @@ class EconomyTest {
         val s = state()
         s.trainerLevel = 10
         Shop.ensureToday(d, s)
-        assertEquals(5, drawn(s).size); assertEquals(5, s.shopTms.size)
+        assertEquals(4, drawn(s).size); assertEquals(3, s.shopTms.size)
         s.day = "2026-10-14"
         Shop.ensureToday(d, s)
         assertEquals("2026-10-14", s.shopDay)
-        assertEquals(5, drawn(s).size)
+        assertEquals(4, drawn(s).size)
     }
 
     @Test fun buyItem() {
@@ -301,13 +301,14 @@ class EconomyTest {
         val s = state()
         s.shopDay = s.day; s.shopTms += listOf("thunderbolt", "watergun")
         assertFalse(Shop.buyTm(data, s, "ember").ok)
-        s.cash = 999
-        assertEquals("Not enough money (need 1000 coins)", Shop.buyTm(data, s, "thunderbolt").message)
+        val price = Shop.tmPrice(s.day, "thunderbolt")
+        s.cash = price - 1
+        assertEquals("Not enough money (need $price coins)", Shop.buyTm(data, s, "thunderbolt").message)
         assertTrue("thunderbolt" !in s.tms)
         s.cash = 1500
         val ok = Shop.buyTm(data, s, "thunderbolt")
-        assertTrue(ok.ok); assertEquals("Bought TM Thunderbolt for 1000 coins", ok.message)
-        assertEquals(500, s.cash); assertTrue("thunderbolt" in s.tms)
+        assertTrue(ok.ok); assertEquals("Bought TM Thunderbolt for $price coins", ok.message)
+        assertEquals(1500 - price, s.cash); assertTrue("thunderbolt" in s.tms)
         s.cash = 5000
         val dup = Shop.buyTm(data, s, "thunderbolt")
         assertFalse(dup.ok); assertEquals(5000, s.cash)
@@ -328,7 +329,7 @@ class EconomyTest {
             assertTrue(Shop.reroll(d, s, TestData.rng(seed)).ok)
             assertEquals(1000 - seed * Tuning.REROLL_PRICE_STEP, s.cash)
             assertEquals(s.day, s.shopDay)
-            assertEquals(3, drawn(s).size); assertEquals(3, s.shopTms.size)
+            assertEquals(3, drawn(s).size); assertEquals(2, s.shopTms.size)
             if (s.shopItems != items || s.shopTms != tms) changed = true
         }
         assertTrue(changed)
@@ -740,9 +741,9 @@ class EconomyTest {
         val s = state()
         s.shopDay = s.day; s.shopTms += "thunderbolt"; s.cash = 2500
         assertTrue(Shop.buyTm(data, s, "thunderbolt").ok)
-        assertEquals(1500, s.cash)
+        assertEquals(2500 - Shop.tmPrice(s.day, "thunderbolt"), s.cash)
         assertFalse(Shop.buyTm(data, s, "thunderbolt").ok)
-        assertEquals(1500, s.cash); assertEquals(1, s.tms.count { it == "thunderbolt" })
+        assertEquals(2500 - Shop.tmPrice(s.day, "thunderbolt"), s.cash); assertEquals(1, s.tms.count { it == "thunderbolt" })
     }
 
     @Test fun oneTmTeachesEveryPokemonAndStays() {

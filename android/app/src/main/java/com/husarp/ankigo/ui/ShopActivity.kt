@@ -286,7 +286,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
     private fun itemSpec(item: String) = ItemCard.Spec(item, buy = ItemCard.Buy(ShopPlan.price(data, state, item), Shop.soldOut(state, item), Shop.limited(item) || item == StreakFreeze.ITEM) { buyItem(item) })
 
     /** A Shop TM with Buy, or "✓ Owned" once it is yours. */
-    private fun tmSpec(move: String) = ItemCard.Spec(null, move, buy = ItemCard.Buy(ShopPlan.tmPrice(), move in state.tms) { buyTm(move) })
+    private fun tmSpec(move: String) = ItemCard.Spec(null, move, buy = ItemCard.Buy(ShopPlan.tmPrice(state.day, move), move in state.tms) { buyTm(move) })
 
     // ---- shop tab ----
 
@@ -309,16 +309,6 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         val weekendOffer = Shop.weekendFor(data, st.day)?.let { weekendCard(it) }
         content.addView(ShopViews.offers(ctx, dailyOffer, weekendOffer), LinearLayout.LayoutParams(-1, -2))
 
-        content.addView(Bits.sect(ctx, "Basics"))
-        if (Shop.freezeOnSale(st)) content.addView(
-            ShopViews.tile(ctx, ShopViews.itemArt(ctx, StreakFreeze.ITEM, 64), "Streak Freeze",
-                priceView(ShopPlan.price(data, st, StreakFreeze.ITEM), 14f), "Streak Freeze, ${st.count(StreakFreeze.ITEM)} held",
-                sub = "In Bag: ${st.count(StreakFreeze.ITEM)} / 3 · used automatically", stock = stock(StreakFreeze.ITEM)) { openCard("streak-freeze") },
-            LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 8) })
-
-        // always in stock: the basics at their normal price
-        tileRows(Shop.basics().map { ShopPlan.Tile.Item(it) }, cols, CardKeys::basic)
-
         // today's specials: title and "new in N h", then the "Refresh shop" button (a real button, so it is easy to find; PLAN 108), then the tiles
         content.addView(Bits.sect(ctx, "Today's specials", "New in ${ShopPlan.countdown(minutesLeft)}"))
         content.addView(refreshButton(), LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 10) })
@@ -329,6 +319,16 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
             content.addView(Bits.sect(ctx, "TMs"))
             tileRows(st.shopTms.map { ShopPlan.Tile.Tm(it) }, cols, CardKeys::special)
         }
+
+        content.addView(Bits.sect(ctx, "Basics"))
+        if (Shop.freezeOnSale(st)) content.addView(
+            ShopViews.tile(ctx, ShopViews.itemArt(ctx, StreakFreeze.ITEM, 64), "Streak Freeze",
+                priceView(ShopPlan.price(data, st, StreakFreeze.ITEM), 14f), "Streak Freeze, ${st.count(StreakFreeze.ITEM)} held",
+                sub = "In Bag: ${st.count(StreakFreeze.ITEM)} / 3 · used automatically", stock = stock(StreakFreeze.ITEM)) { openCard("streak-freeze") },
+            LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 8) })
+
+        // always in stock: the basics at their normal price
+        tileRows(Shop.basics().map { ShopPlan.Tile.Item(it) }, cols, CardKeys::basic)
 
 
     }
@@ -367,7 +367,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         val owned = move in state.tms
         val m = data.move(move)
         val name = Items.tmName(data, move)
-        val price = ShopPlan.tmPrice()
+        val price = ShopPlan.tmPrice(state.day, move)
         val bottom = if (owned) ShopViews.owned(this) else priceView(price, 14f)
         return ShopViews.tile(this, Bits.tmTile(this, m?.type, 64), name, bottom,
             ItemCardPlan.detailsLabel(ShopPlan.describe(listOfNotNull(name, m?.type?.label).joinToString(", "), price, owned)),
@@ -380,7 +380,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         return if (w.isTm) {
             val owned = w.id in state.tms
             val name = Items.tmName(data, w.id)
-            val price = ShopPlan.tmPrice()
+            val price = ShopPlan.tmPrice(state.day, w.id)
             ShopViews.weekendCard(ctx, Bits.tmTile(ctx, data.move(w.id)?.type, 48), name, ShopPlan.weekendEndsText(w.endsDay, state.settings.dayStartHour),
                 if (owned) ShopViews.owned(ctx, 14f) else priceView(price, 17f), ItemCardPlan.detailsLabel(ShopPlan.describe(name, price, owned))) { openCard(CardKeys.WEEKEND) }
         } else {
@@ -416,12 +416,12 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 12, ctx)
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 8), Ui.dp(ctx, 14), Ui.dp(ctx, 8))
             alpha = if (state.cash >= Shop.refreshPrice(state)) 1f else 0.45f
-            contentDescription = "Refresh shop for ${CoinText.word(Shop.refreshPrice(state))}"
+            contentDescription = if (Shop.refreshPrice(state) == 0) "Refresh shop for Free" else "Refresh shop for ${CoinText.word(Shop.refreshPrice(state))}"
             addView(android.widget.ImageView(ctx).apply {
                 setImageResource(R.drawable.ic_sync)
                 setColorFilter(ink, android.graphics.PorterDuff.Mode.SRC_IN)
             }, LinearLayout.LayoutParams(Ui.dp(ctx, 18), Ui.dp(ctx, 18)).also { it.marginEnd = Ui.dp(ctx, 7) })
-            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = TextUtils.concat("Refresh · ", CoinText.of(this, "${Shop.refreshPrice(state)}")); maxLines = 2; gravity = Gravity.CENTER })
+            addView(Ui.text(ctx, 14f, 900, R.color.ag_base).apply { text = if (Shop.refreshPrice(state) == 0) "Refresh · Free" else TextUtils.concat("Refresh · ", CoinText.of(this, "${Shop.refreshPrice(state)}")); maxLines = 2; gravity = Gravity.CENTER })
             HoldToConfirm.bind(this, "refresh shop", allowed = { state.cash >= Shop.refreshPrice(state) }) { reroll() }
         }
     }

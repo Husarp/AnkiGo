@@ -30,7 +30,7 @@ class SpentHealStatsTest {
         s.shopDay = s.day; s.shopTms += listOf("thunderbolt")
         s.cash = 1500
         assertTrue(Shop.buyTm(data, s, "thunderbolt").ok)
-        assertEquals(Tuning.TM_PRICE, s.history.getValue(s.day).spent)
+        assertEquals(Shop.tmPrice(s.day, "thunderbolt"), s.history.getValue(s.day).spent)
     }
 
     @Test fun aRerollAddsItsPrice() {
