@@ -1589,7 +1589,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         scene = markScene()
         val taken = ArrayList<ConditionSpot.R>()
         fun putOwner(slot: ConditionMarks.Slot, card: View, ms: List<ConditionMarks.Mark>, on: Boolean) {
-            val flow = if (on) ownerFlow(card, ms, taken) else ConditionFlow.OwnerFlow(emptyList(), 0, 0)
+            val flow = if (on) ownerFlow(card, ms, taken.takeIf { it.isNotEmpty() }) else ConditionFlow.OwnerFlow(emptyList(), 0, 0)
             marks.setFlow(slot, flow.rects, ms.take(flow.shown), m, flow.more)
             taken += flow.rects.map { it.grow(m.lift * .5f) }
         }

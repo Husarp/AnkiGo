@@ -221,6 +221,34 @@ class R31BConditionShots {
         }
     }
 
+    @Test fun smallestPictureWindowKeepsBothConditionLists() {
+        val host = hosts.single { it.name == "float-170x130" }
+        for (n in listOf(2, 8)) {
+            paparazzi.unsafeUpdateConfig(deviceConfig = device(host.w, host.h, Theme.LIGHT))
+            val ctx = Shots.files(paparazzi.context)
+            val sc = setup(ctx, host, n, true)
+            paparazzi.snapshot(FrameLayout(ctx).apply { addView(sc.root, FrameLayout.LayoutParams(-1, -1)) },
+                "r36-smallest-picture-conditions-$n", 1000)
+            val rows = sc.arena.markRows()
+            val cards = listOf("enemyBlock", "playerCard").joinToString { name ->
+                val card: View = field(sc.arena, name)
+                "$name=${card.left},${card.top},${card.width * card.scaleX},${card.height * card.scaleY}"
+            }
+            val detail = "n=$n $cards rows=" + rows.joinToString { row ->
+                "${row.slot}:" + row.chips.joinToString { "${it.rect}/${it.more}" }
+            }
+            for (slot in listOf(ConditionMarks.Slot.WILD, ConditionMarks.Slot.OURS)) {
+                val chips = rows.singleOrNull { it.slot == slot }?.chips.orEmpty()
+                assertEquals(detail, n, chips.count { it.mark != null } + chips.sumOf { it.more })
+            }
+            val rects = sc.arena.markRects()
+            for ((i, rect) in rects.withIndex()) {
+                assertTrue(detail, rect.left >= 0 && rect.top >= 0 && rect.right <= sc.arena.width + .5f && rect.bottom <= sc.arena.height + .5f)
+                for (j in 0 until i) assertFalse(detail, RectF.intersects(rect, rects[j]))
+            }
+        }
+    }
+
     @Test fun anchoredChipsAtEveryHostInBothThemes() {
         val bad = ArrayList<String>()
         for (host in hosts) for (theme in Theme.entries) for (picture in listOf(false, true)) for (n in listOf(2, 8)) {
