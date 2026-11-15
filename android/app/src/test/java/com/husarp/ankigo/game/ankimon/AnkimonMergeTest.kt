@@ -153,6 +153,11 @@ class AnkimonMergeTest {
         assertEquals(StatCalc.maxHp(data, m), m.hp)
     }
 
+    @Test fun importedMovesAreDistinctAndCappedAtFour() {
+        val m = addOne(am("duplicate-moves", 1, attacks = listOf("tackle", "Tackle", "growl", "vinewhip", "absorb", "bodyslam")))
+        assertEquals(listOf("tackle", "growl", "vinewhip", "absorb"), m.moves)
+    }
+
     @Test fun movesFallBackToTheLastFourKnownLevelUpMovesThenTackle() {
         assertEquals(listOf("tackle", "growl", "vinewhip", "absorb"), addOne(am("a", 1, level = 20)).moves)
         assertEquals(listOf("bulletseed", "tackle", "doubleedge"), addOne(am("b", 2, level = 25, attacks = listOf("nope", "alsonope"))).moves)

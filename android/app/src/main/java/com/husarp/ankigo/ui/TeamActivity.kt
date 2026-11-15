@@ -608,7 +608,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         for (m in marks) {
             val mark: View = when (m) {
                 TileMark.SHINY -> BoxViews.icon(ctx, R.drawable.ic_star, R.color.ag_yellow).apply { contentDescription = "Shiny" }
-                TileMark.MAIN, TileMark.FAVOURITE, TileMark.EXP_SHARE -> TileViews.markIcon(ctx, m, 13)
+                TileMark.MAIN, TileMark.FAVOURITE, TileMark.EXP_SHARE, TileMark.MOVE_OFFER -> TileViews.markIcon(ctx, m, 13)
                 else -> null
             } ?: continue
             nameMarks.addView(mark, LinearLayout.LayoutParams(Ui.dp(ctx, 13), Ui.dp(ctx, 13)).also { it.marginStart = Ui.dp(ctx, 5) })
@@ -801,7 +801,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             when (m) {
                 TileMark.NEW -> cell.marksLeft.addView(TileViews.newSticker(this), LinearLayout.LayoutParams(-2, -2).also { it.marginEnd = Ui.dp(this, 4) })
                 TileMark.FAVOURITE -> cell.marksLeft.addView(TileViews.markIcon(this, m, 16)!!, LinearLayout.LayoutParams(Ui.dp(this, 16), Ui.dp(this, 16)))
-                TileMark.IN_TEAM, TileMark.MAIN, TileMark.EXP_SHARE -> cell.marksRight.addView(TileViews.markIcon(this, m, 16)!!, LinearLayout.LayoutParams(Ui.dp(this, 16), Ui.dp(this, 16)).also { it.marginStart = gap })
+                TileMark.IN_TEAM, TileMark.MAIN, TileMark.EXP_SHARE, TileMark.MOVE_OFFER -> cell.marksRight.addView(TileViews.markIcon(this, m, 16)!!, LinearLayout.LayoutParams(Ui.dp(this, 16), Ui.dp(this, 16)).also { it.marginStart = gap })
                 TileMark.SHINY -> Unit
             }
         }

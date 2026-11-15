@@ -134,7 +134,7 @@ data class MonMarks(val types: List<Type>, val isNew: Boolean, val tags: List<Mo
 }
 
 /**
- * The marks a Box / Pokédex tile shows (R4-V5, 6A in Adam's version): ONLY these six, in this order everywhere. Held item,
+ * The marks a Box / Pokédex tile shows (R4-V5, 6A in Adam's version): in this order everywhere. Held item,
  * can evolve, fainted and regional form are not on tiles (the details show them). Shiny is a golden glow behind the sprite on a
  * tile (a star icon on the Team row), never a ★ icon on a tile.
  */
@@ -145,6 +145,7 @@ enum class TileMark(val label: String, val legend: String) {
     IN_TEAM("In team", "In your team"),
     MAIN("Main", "Your main Pokémon (first in the team)"),
     EXP_SHARE("Exp. Share", "Holds the Exp. Share: gets half the XP"),
+    MOVE_OFFER("Move offer", "A new move is waiting: open Details to learn it or skip"),
 }
 
 object TileMarks {
@@ -166,6 +167,7 @@ object TileMarks {
         if (main != null && members.any { it.uid == main }) out += TileMark.MAIN
         val share = state.settings.xpShareUid
         if (share != null && members.any { it.uid == share }) out += TileMark.EXP_SHARE
+        if (members.any { it.moveOffers.isNotEmpty() }) out += TileMark.MOVE_OFFER
         return out
     }
 }

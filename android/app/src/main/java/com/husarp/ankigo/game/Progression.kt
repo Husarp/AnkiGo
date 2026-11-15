@@ -60,7 +60,7 @@ object Progression {
      * Each new level: stats recalculated, current HP goes up by the HP the level adds to max HP plus 25 % of the new max
      * (AnkiGo, PLAN 80; see [Healing.levelUpHp]; never above max, a Pokémon at 0 HP stays there), moves learned at exactly
      * that level go through [learnMove]. Emits XpGained, LevelUp (with the HP after the heal), Healed (the main only),
-     * MoveLearned/MoveSkipped. Returns levels gained.
+     * MoveLearned for free slots; full movesets keep offers for later. Returns levels gained.
      */
     fun gainXp(data: GameData, state: GameState, mon: Mon, xp: Int, events: MutableList<GameEvent>): Int {
         if (mon.level >= Tuning.MAX_LEVEL || xp <= 0) return 0
@@ -102,28 +102,39 @@ object Progression {
         return gained
     }
 
-    /**
-     * Automatic move learning (AnkiGo: Ankimon asks with a dialog; no taps during study):
-     * fewer than 4 moves -> add it (if not known); else replace the weakest move (score: status 0, power,
-     * UNKNOWN_POWER for fixed/level damage, x3 for multi-hit) only if the new one scores higher; else skip.
-     */
+    /** Add into a free slot; otherwise offer the new move once, using the old scoring rule to pick its replacement. */
     fun learnMove(data: GameData, mon: Mon, move: String, events: MutableList<GameEvent>) {
         val m = data.move(move) ?: return
-        if (move in mon.moves) return
+        if (move in mon.moves || move in mon.offeredMoves || mon.moveOffers.any { it.move == move }) return
         if (mon.moves.size < 4) {
             mon.moves += move
             events += GameEvent.MoveLearned(mon.uid, mon.name, m.name, null)
             return
         }
-        val scores = mon.moves.map { score(data.move(it)) }
-        val weakest = scores.indices.minByOrNull { scores[it] }!! // first index on ties
-        if (score(m) > scores[weakest]) {
-            val old = data.move(mon.moves[weakest])?.name ?: mon.moves[weakest]
-            mon.moves[weakest] = move
-            events += GameEvent.MoveLearned(mon.uid, mon.name, m.name, old)
-        } else {
-            events += GameEvent.MoveSkipped(mon.uid, mon.name, m.name)
-        }
+        mon.moveOffers += MoveOffer(move, mon.level)
+        mon.offeredMoves += move
+    }
+
+    /** First weakest slot on ties, as before. Re-evaluated after each answer so queued offers use the current moves. */
+    fun replacementIndex(data: GameData, mon: Mon): Int? =
+        mon.moves.indices.minByOrNull { score(data.move(mon.moves[it])) }
+
+    /** Only the head can be answered. The move shown in the prompt must still be the one being replaced. */
+    fun answerMoveOffer(data: GameData, mon: Mon, move: String, accept: Boolean, replaces: String?): ActionResult {
+        val offer = mon.moveOffers.firstOrNull() ?: return ActionResult(false, "No move offer waiting.")
+        if (offer.move != move) return ActionResult(false, "That move offer has changed.")
+        val name = data.move(move)?.name ?: move
+        val index = replacementIndex(data, mon)
+        val target = if (mon.moves.size >= 4) index?.let { mon.moves[it] } else null
+        if (accept && move !in mon.moves && target != replaces) return ActionResult(false, "The moves have changed. Open the offer again.")
+        if (accept && data.move(move) == null) return ActionResult(false, "Move data is unavailable.")
+        mon.moveOffers.removeAt(0)
+        mon.offeredMoves += move
+        if (!accept) return ActionResult(true, "Skipped $name", listOf(GameEvent.MoveSkipped(mon.uid, mon.name, name)))
+        if (move in mon.moves) return ActionResult(true, "${mon.name} already knows $name.")
+        if (target == null) mon.moves += move else mon.moves[index!!] = move
+        val old = target?.let { data.move(it)?.name ?: it }
+        return ActionResult(true, "${mon.name} learned $name", listOf(GameEvent.MoveLearned(mon.uid, mon.name, name, old)))
     }
 
     private fun score(m: Move?): Int {
@@ -445,7 +456,7 @@ object Catching {
         val mon = Mon(
             uid = java.util.UUID.randomUUID().toString(), species = wild.species, name = wild.name, level = wild.level, xp = 0,
             ivs = specialIvs(wild.ivs, special), evs = wild.evs, nature = wild.nature, gender = wild.gender, shiny = wild.shiny,
-            ability = wild.ability, moves = wild.moves.toMutableList(), hp = 1, friendship = 0, heldItem = null,
+            ability = wild.ability, moves = wild.moves.distinct().take(4).toMutableList(), hp = 1, friendship = 0, heldItem = null,
             caughtAt = now, defeats = 0, tier = tier,
         )
         mon.hp = StatCalc.maxHp(data, mon)

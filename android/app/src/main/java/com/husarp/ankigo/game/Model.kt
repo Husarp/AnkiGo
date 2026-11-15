@@ -205,6 +205,8 @@ enum class Tier(val label: String) {
     STARTER("Starter"), MEGA("Mega"), GMAX("G-Max"),
 }
 
+data class MoveOffer(val move: String, val level: Int)
+
 /** One Pokémon: owned (team/box) or the wild one in a battle. Mutable on purpose; only the main thread changes it. */
 class Mon(
     var uid: String,
@@ -236,6 +238,8 @@ class Mon(
     var bondHalf: Int = 0,          // Soothe Bell fractional carry (0 or 1 half point)
     var natureXpCarry: Int = 0,     // 1/200 of reward XP, local to this Pokémon
     var natureBondCarry: Int = 0,   // hundredths of Bond, local to this Pokémon
+    val moveOffers: MutableList<MoveOffer> = mutableListOf(),
+    val offeredMoves: MutableSet<String> = mutableSetOf(), // one-time offers, including answers
 )
 
 /**

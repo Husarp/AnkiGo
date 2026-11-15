@@ -179,45 +179,55 @@ class ProgressionTest {
         assertTrue(e.isEmpty())
     }
 
-    @Test fun learnMoveReplacesWeakest() {
+    @Test fun learnMoveOffersWeakestThenAccepts() {
         val (_, m) = st(1, 5, listOf("tackle", "growl", "vinewhip", "lick"))
         val e = ev()
         Progression.learnMove(data, m, "bodyslam", e) // growl (status 0) is the weakest
+        assertEquals(listOf("tackle", "growl", "vinewhip", "lick"), m.moves)
+        assertEquals(listOf(MoveOffer("bodyslam", 5)), m.moveOffers)
+        assertTrue(e.isEmpty())
+        val result = Progression.answerMoveOffer(data, m, "bodyslam", true, "growl")
+        assertTrue(result.ok)
         assertEquals(listOf("tackle", "bodyslam", "vinewhip", "lick"), m.moves)
-        val l = e.single() as GameEvent.MoveLearned
+        val l = result.events.single() as GameEvent.MoveLearned
         assertEquals("Growl", l.forgot); assertEquals("Body Slam", l.move)
     }
 
     @Test fun learnMoveTieReplacesEarliestSlot() {
         val (_, m) = st(1, 5, listOf("growl", "swordsdance", "tackle", "lick"))
         Progression.learnMove(data, m, "vinewhip", ev())
+        assertEquals(0, Progression.replacementIndex(data, m))
+        assertTrue(Progression.answerMoveOffer(data, m, "vinewhip", true, "growl").ok)
         assertEquals(listOf("vinewhip", "swordsdance", "tackle", "lick"), m.moves)
     }
 
-    @Test fun learnMoveSkipsWeaker() {
+    @Test fun learnMoveOffersWeakerAndStatusMovesToo() {
         val (_, m) = st(1, 5, listOf("bodyslam", "thunderbolt", "earthquake", "shadowball"))
         val e = ev()
         Progression.learnMove(data, m, "tackle", e)
         assertEquals(listOf("bodyslam", "thunderbolt", "earthquake", "shadowball"), m.moves)
-        assertEquals(GameEvent.MoveSkipped(m.uid, m.name, "Tackle"), e.single())
-        // a status move never beats an attack either
-        e.clear()
+        assertEquals(listOf("tackle"), m.moveOffers.map { it.move })
+        assertTrue(e.isEmpty())
         Progression.learnMove(data, m, "growl", e)
-        assertTrue(e.single() is GameEvent.MoveSkipped)
+        assertEquals(listOf("tackle", "growl"), m.moveOffers.map { it.move })
+        assertTrue(e.isEmpty())
     }
 
-    @Test fun learnMoveScoresSpecialAndMultihit() {
+    @Test fun learnMoveOffersSpecialAndMultihitWithoutSwapping() {
         // fixed damage counts as 60, multi-hit x3 (25 -> 75)
         val (_, m) = st(1, 5, listOf("tackle", "bodyslam", "thunderbolt", "earthquake"))
         Progression.learnMove(data, m, "dragonrage", ev()) // 60 > tackle 40
-        assertEquals("dragonrage", m.moves[0])
+        assertEquals("tackle", m.moves[0])
+        assertEquals("dragonrage", m.moveOffers.single().move)
         val (_, m2) = st(1, 5, listOf("tackle", "bodyslam", "thunderbolt", "earthquake"))
         Progression.learnMove(data, m2, "bulletseed", ev()) // 75 > 40
-        assertEquals("bulletseed", m2.moves[0])
+        assertEquals("tackle", m2.moves[0])
+        assertEquals("bulletseed", m2.moveOffers.single().move)
         val (_, m3) = st(1, 5, listOf("bodyslam", "thunderbolt", "earthquake", "shadowball"))
         val e = ev()
         Progression.learnMove(data, m3, "seismictoss", e) // 60 < 80
-        assertTrue(e.single() is GameEvent.MoveSkipped)
+        assertEquals("seismictoss", m3.moveOffers.single().move)
+        assertTrue(e.isEmpty())
     }
 
     // ---- EVs ----

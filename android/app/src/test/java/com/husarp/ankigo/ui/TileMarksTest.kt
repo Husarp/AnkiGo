@@ -17,14 +17,26 @@ class TileMarksTest {
     private fun ms(h: Int) = LocalDateTime.of(2026, 10, 14, h, 0).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
     private val now = ms(12)
 
-    @Test fun onlyTheSixKindsExistAndInOrder() {
-        assertEquals(listOf("NEW", "FAVOURITE", "SHINY", "IN_TEAM", "MAIN", "EXP_SHARE"), TileMark.entries.map { it.name })
+    @Test fun markKindsExistInOrder() {
+        assertEquals(listOf("NEW", "FAVOURITE", "SHINY", "IN_TEAM", "MAIN", "EXP_SHARE", "MOVE_OFFER"), TileMark.entries.map { it.name })
         val st = TestData.state(data, 19, 10)
         val m = st.mons[0]
         m.caughtAt = now; m.favourite = true; m.shiny = true; m.heldItem = "lucky-egg"; m.hp = 0
         st.settings.xpShareUid = m.uid
         // held item, fainted, can evolve: none of them is a tile mark; the Exp. Share holder is the sixth
         assertEquals(listOf(TileMark.NEW, TileMark.FAVOURITE, TileMark.SHINY, TileMark.IN_TEAM, TileMark.MAIN, TileMark.EXP_SHARE), TileMarks.of(st, listOf(m), now))
+    }
+
+    @Test fun moveOfferMarkSurvivesOpeningDetailsAndShowsOnGroupedCopies() {
+        val st = TestData.state(data, 19, 10); val m = st.main!!
+        val other = TestData.mon(data, 19, 10, uid = "other"); st.mons += other
+        m.moveOffers += com.husarp.ankigo.game.MoveOffer("bodyslam", 10)
+        st.viewedMons += m.uid
+        assertTrue(TileMark.MOVE_OFFER in TileMarks.of(st, listOf(m), now))
+        assertTrue(TileMark.MOVE_OFFER in TileMarks.of(st, listOf(other, m), now))
+        assertFalse(TileMark.MOVE_OFFER in TileMarks.of(st, listOf(other), now))
+        m.moveOffers.clear()
+        assertFalse(TileMark.MOVE_OFFER in TileMarks.of(st, listOf(m), now))
     }
 
     @Test fun expShareMarksOnlyTheHolderAndAGroupWithTheHolder() {

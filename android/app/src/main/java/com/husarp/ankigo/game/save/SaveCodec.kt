@@ -10,6 +10,7 @@ import com.husarp.ankigo.game.DayLog
 import com.husarp.ankigo.game.FieldRules
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.MoveOffer
 import com.husarp.ankigo.game.MoveChoice
 import com.husarp.ankigo.game.PokeDoll
 import com.husarp.ankigo.game.PendingAsk
@@ -176,6 +177,10 @@ object SaveCodec {
         stats("ivs", m.ivs); stats("evs", m.evs)
         kv("nature", m.nature.name); kv("gender", m.gender.toString()); kv("shiny", m.shiny); kv("ability", m.ability)
         list("moves", m.moves)
+        if (m.moveOffers.isNotEmpty()) {
+            key("moveOffers"); arr { m.moveOffers.forEach { obj { kv("move", it.move); kv("level", it.level) } } }
+        }
+        if (m.offeredMoves.isNotEmpty()) list("offeredMoves", m.offeredMoves.sorted())
         kv("hp", m.hp); kv("friendship", m.friendship); kv("heldItem", m.heldItem); kv("caughtAt", m.caughtAt); kv("evolvedAt", m.evolvedAt)
         kv("defeats", m.defeats); kv("tier", m.tier.name)
         kv("nickname", m.nickname); kv("ankimonId", m.ankimonId); kv("favourite", m.favourite)
@@ -278,7 +283,7 @@ object SaveCodec {
             nature = enumOr(o.strOrNull("nature"), Nature.HARDY),
             gender = o.strOrNull("gender")?.firstOrNull() ?: 'N',
             shiny = o.bool("shiny", false), ability = o.str("ability", ""),
-            moves = (o.strList("moves") ?: emptyList()).toMutableList(),
+            moves = (o.strList("moves") ?: emptyList()).distinct().take(4).toMutableList(),
             hp = o.int("hp", 1), friendship = o.int("friendship", 0), heldItem = o.strOrNull("heldItem"),
             caughtAt = o.long("caughtAt", 0), evolvedAt = o.long("evolvedAt", 0), defeats = o.int("defeats", 0),
             tier = enumOr(o.strOrNull("tier"), Tier.NORMAL),
@@ -288,6 +293,11 @@ object SaveCodec {
             bondHalf = o.int("bondHalf", 0).coerceIn(0, 1),
             natureXpCarry = o.int("natureXpCarry", 0).coerceIn(0, 199),
             natureBondCarry = o.int("natureBondCarry", 0).coerceIn(0, 99),
+            moveOffers = o.optJSONArray("moveOffers")?.let { a ->
+                (0 until a.length()).map { a.getJSONObject(it) }.map { MoveOffer(it.getString("move"), it.int("level", 1)) }
+                    .distinctBy { it.move }.toMutableList()
+            } ?: mutableListOf(),
+            offeredMoves = (o.strList("offeredMoves") ?: emptyList()).toMutableSet(),
             restFrac = o.int("restFrac", 0).coerceIn(0, Tuning.BENCH_REST_DIVISOR - 1),
         )
     }
