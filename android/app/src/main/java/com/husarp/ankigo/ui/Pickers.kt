@@ -134,7 +134,7 @@ object Pickers {
     }
 
     /** A list of [n] custom rows ([bind] builds row i); picking one closes the dialog and calls [onPick]. */
-    fun rows(a: Context, title: String, n: Int, bind: (Int) -> View, onLongPick: ((Int) -> Unit)? = null, onPick: (Int) -> Unit) {
+    fun rows(a: Context, title: String, n: Int, bind: (Int) -> View, onLongPick: ((Int) -> Unit)? = null, hint: String? = null, onPick: (Int) -> Unit) {
         lateinit var dlg: AppDialog
         val list = MotionListView(a).apply {
             divider = null
@@ -151,7 +151,7 @@ object Pickers {
             setOnItemClickListener { _, _, p, _ -> dlg.dismiss(); onPick(p) }
             if (onLongPick != null) setOnItemLongClickListener { _, _, p, _ -> onLongPick(p); true }
         }
-        dlg = AppDialog.Builder(a).setTitle(title).setView(list).setNegativeButton("Cancel", null).create()
+        dlg = AppDialog.Builder(a).setTitle(title).setMessage(hint).setView(list).setNegativeButton("Cancel", null).create()
         show(dlg)
     }
 
@@ -166,11 +166,11 @@ object Pickers {
     }
 
     /** Pick one of the bag items [ids] (icon, name, note, ×owned). */
-    fun pickItem(a: Context, title: String, state: GameState, ids: List<String>, onPick: (String) -> Unit) {
+    fun pickItem(a: Context, title: String, state: GameState, ids: List<String>, hint: String? = null, onPick: (String) -> Unit) {
         rows(a, title, ids.size, { Bits.itemRow(a, ids[it], state.count(ids[it]).let { n ->
             val total = state.ownedItemCount(ids[it])
             if (total == n) "×$n" else "×$total · $n free"
-        }) }) { onPick(ids[it]) }
+        }) }, hint = hint) { onPick(ids[it]) }
     }
 
     /** Pick one of the Pokémon's moves (returns its index 0..3). */

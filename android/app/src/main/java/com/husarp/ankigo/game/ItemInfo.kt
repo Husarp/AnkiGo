@@ -15,7 +15,7 @@ object ItemInfo {
     private const val FIGHT_RULE = "On your **main** in a fight it works **at once**, then the wild Pokémon uses one free move (your answers' dots don't change). " +
         "Before your **first answer** of a fight, also after \"Next battle\", the wild one doesn't attack."
     private const val MAIN_ONLY = "Used on a Pokémon on the bench, it never brings an attack."
-    private const val HOLD_RULE = "Give it to a Pokémon from the Bag. A Pokémon holds **one item**; the old one goes back to the Bag."
+    private const val HOLD_RULE = "Give it to a Pokémon from the Bag. A Pokémon holds **one item**, or **two different items at Bond ♥5**. A free slot fills first; when full, the first item goes back to the Bag."
     private const val THROW_RULE = "Throw it from a fight (the ball button) or from the Bag while a wild Pokémon is out. **Throwing is not a turn**: you are not attacked."
     private const val NO_DESCRIPTION = "No description."
     private const val MAX_PAIRS = 6
@@ -379,10 +379,10 @@ object ItemInfo {
     private fun heldWhat(item: String): String = if (item in AbilityAdaptations.berries) berryLine(item) + ". Activates automatically while held in battle. Gluttony, Ripen, Cheek Pouch and Cud Chew can improve it; Klutz and opposing Unnerve prevent activation." else when (item) {
         "lucky-egg" -> "The Pokémon holding it gets **×${nice(Tuning.LUCKY_EGG)} XP** from wins and catches. It works for your **main** and for the **Exp. Share** holder."
         "amulet-coin", "luck-incense" -> "While your **main** holds it, the money you earn for answers and wins is **doubled**, all day. " +
-            "The slower pay after each ${Tuning.CASH_TIER} coins still applies, so you keep getting double at every step. It does nothing on a Pokémon that is not your main."
+            "The slower pay after each ${Tuning.CASH_TIER} coins still applies, so you keep getting double at every step. Holding both money items still gives ×2. It does nothing on a Pokémon that is not your main."
         "everstone" -> "A holder whose current species has **no evolution branch** earns **15% more Pokémon XP** from wins and catches that award XP. Single-stage species qualify too. Apply ×1.15 after Exp. Share splits XP and after other held-item XP multipliers; round down, then apply the usual Bond bonus and practice reduction. Applies to the main or Exp. Share recipient who holds it. No effect on trainer XP, EVs, Bond points, coins, candies or level-100 Pokémon. Embargo and Magic Room suppress this effect for a fighter affected by them. Evolution remains your choice and is allowed while holding it."
         "macho-brace" -> "Your **main** gets **double EVs** from each win, defeat or catch (as always, up to ${Tuning.EV_STAT_CAP} per stat and ${Tuning.EV_TOTAL_CAP} in total). " +
-            "It does nothing on a Pokémon that is not your main."
+            "At Bond ♥5, a Power item's +8 is added before doubling. It does nothing on a Pokémon that is not your main."
         "soothe-bell" -> "Your active fighter earns **×${nice(Tuning.SOOTHE_BELL)} Bond points** while answering cards and finishing fights. " +
             "Half points carry over, including through saves. Level 0–Level 5 Bond unlocks evolutions and bonuses. It does nothing on the bench."
         else -> POWER_STATS[item]?.let {
@@ -403,7 +403,7 @@ object ItemInfo {
         ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"
         ItemKind.EVOLUTION -> if (item in Items.RETIRED) "No Pokémon in AnkiGo evolves with it, so it can't be used."
             else "Open a Pokémon’s Evolution section and choose Evolve. Requires Level 2 Bond and one item, which is used up."
-        ItemKind.HELD -> "Give it to a Pokémon from the Bag. A Pokémon holds one item at a time."
+        ItemKind.HELD -> "Give it to a Pokémon from the Bag. A Pokémon holds one item, or two different items at Bond ♥5."
         ItemKind.ESCAPE -> "Use it from the Bag to leave the wild Pokémon in battle and meet a new one."
         ItemKind.FOSSIL -> "Use it from the Bag to revive an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}."
         null -> ""

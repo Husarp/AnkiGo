@@ -241,7 +241,7 @@ object GameGuide {
                 "Item details: tap an item in the Shop or Bag to see its effect and how to use it.",
                 "Ball trades: in the Bag, trade ${Tuning.POKE_FOR_GREAT} Poké Balls for one Great Ball, or ${Tuning.GREAT_FOR_ULTRA} Great Balls for one Ultra Ball. Special balls cannot be traded.",
                 "Evolution items: use the item shown in a Pokémon’s Evolution section. Black Augurite, Peat Block and Metal Alloy come from random finds; the Shop does not sell them.",
-                "Held items: a Pokémon can hold one item. Giving another returns the old one to the Bag. Lucky Egg boosts XP, Macho Brace boosts EVs and Soothe Bell boosts Bond points. Embargo and Magic Room can temporarily stop held items from working in battle.",
+                "Held items: a Pokémon can hold one item, or two different items at Bond ♥5. A free slot fills first; when full, giving another returns the first item to the Bag. Lucky Egg boosts XP, Macho Brace boosts EVs and Soothe Bell boosts Bond points. Embargo and Magic Room can temporarily stop held items from working in battle.",
                 "Fossils: use one to revive an ancient Pokémon at level ${Tuning.FOSSIL_LEVEL}.",
                 "TMs: keep them forever and use them to teach their moves again. The Pokémon must be able to learn the move.",
             ),

@@ -44,7 +44,7 @@ object Duplicates {
         mon.favourite -> Keep.FAVOURITE
         mon.shiny -> Keep.SHINY
         mon.uid in state.team -> Keep.TEAM
-        mon.heldItem != null -> Keep.HOLDS_ITEM
+        mon.heldItems.isNotEmpty() -> Keep.HOLDS_ITEM
         Catching.isProtected(state.settings, data.sp(mon.species), mon.tier) -> Keep.PROTECTED_KIND
         state.settings.xpShareUid == mon.uid -> Keep.EXP_SHARE
         !mon.nickname.isNullOrBlank() -> Keep.NICKNAME

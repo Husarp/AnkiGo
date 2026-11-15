@@ -255,7 +255,7 @@ internal object MovePower : BattleRules {
             in POISON_DOUBLE -> h.dSide.status == "psn" || h.dSide.status == "tox"
             "facade" -> h.aSide.status in FACADE_STATUSES
             "brine" -> h.defender.hp * 2 <= h.view.maxHp(!p)
-            "acrobatics" -> h.attacker.heldItem == null
+            "acrobatics" -> h.attacker.heldItems.isEmpty()
             "wakeupslap" -> h.dSide.status == "slp" || AbilitiesMore.comatose(h.view, !p)
             "smellingsalts" -> h.dSide.status == "par"
             "assurance" -> rd != null && rd.damageTakenThisRound(!p) > 0
@@ -269,7 +269,7 @@ internal object MovePower : BattleRules {
         }
         return when {
             twice -> 2.0
-            m.id == "knockoff" && h.defender.heldItem != null -> 1.5
+            m.id == "knockoff" && h.defender.heldItems.isNotEmpty() -> 1.5
             else -> 1.0
         }
     }
@@ -325,7 +325,7 @@ internal object MovePower : BattleRules {
             in SNEAKY_MOVES -> r.movedThisRound(!p) || r.plannedMove(!p)?.damaging != true
             "dreameater" -> r.side(!p).status != "slp" && !AbilitiesMore.comatose(r, !p) // R17C-9b: Comatose counts as asleep
             "snore" -> r.side(p).status != "slp" && !AbilitiesMore.comatose(r, p)
-            "poltergeist" -> r.mon(!p).heldItem == null
+            "poltergeist" -> r.mon(!p).heldItems.isEmpty()
             "synchronoise" -> r.types(p).none { it in r.types(!p) }
             "lastresort" -> !lastResortReady(r, p)
             "endeavor" -> r.mon(!p).hp <= r.mon(p).hp
@@ -494,7 +494,7 @@ internal object MovePower : BattleRules {
             in FIRST_ACTION_MOVES -> isFirstAction(v, p)
             "dreameater" -> v.side(!p).status == "slp" || AbilitiesMore.comatose(v, !p)
             "snore" -> v.side(p).status == "slp" || AbilitiesMore.comatose(v, p)
-            "poltergeist" -> v.mon(!p).heldItem != null
+            "poltergeist" -> v.mon(!p).heldItems.isNotEmpty()
             "synchronoise" -> v.types(p).any { it in v.types(!p) }
             "lastresort" -> lastResortReady(v, p)
             "endeavor" -> v.mon(!p).hp > v.mon(p).hp

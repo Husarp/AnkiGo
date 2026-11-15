@@ -240,7 +240,30 @@ class Mon(
     var natureBondCarry: Int = 0,   // hundredths of Bond, local to this Pokémon
     val moveOffers: MutableList<MoveOffer> = mutableListOf(),
     val offeredMoves: MutableSet<String> = mutableSetOf(), // one-time offers, including answers
+    var heldItem2: String? = null,
 )
+
+val Mon.heldItems: List<String> get() = listOfNotNull(heldItem, heldItem2).distinct()
+val Mon.itemCapacity: Int get() = if (Bond.level(bondPoints) >= 5) 2 else 1
+fun Mon.canAddHeld(item: String): Boolean = item !in heldItems && heldItems.size < itemCapacity
+internal fun Mon.addHeld(item: String): Boolean {
+    if (!canAddHeld(item)) return false
+    if (heldItem == null) heldItem = item else heldItem2 = item
+    return true
+}
+internal fun Mon.removeHeld(item: String): Boolean {
+    if (item !in heldItems) return false
+    if (heldItem == item) { heldItem = heldItem2; heldItem2 = null } else heldItem2 = null
+    return true
+}
+/** Giving into a full set replaces slot one; the other item stays held, including after a Bond drop. */
+internal fun Mon.equipHeld(item: String): String? {
+    if (addHeld(item)) return null
+    val items = heldItems
+    heldItem = item
+    heldItem2 = items.getOrNull(1)
+    return items.firstOrNull()
+}
 
 /**
  * A Pokémon of an Ankimon save that AnkiGo can't use yet (species/form not in its data, or generation 9 switched off):
@@ -494,12 +517,13 @@ class GameState(
 data class Answer(val cardId: Long, val button: Int, val at: Long, val catchUp: Boolean = false, val neutral: Boolean = false)
 
 /** Battle suppression never removes an owned item. Benched Pokémon keep their item's effects. */
-internal fun GameState.activeHeldItem(mon: Mon): String? {
-    val fight = battle ?: return mon.heldItem
-    val side = when (mon.uid) { main?.uid -> fight.player; fight.wild.uid -> fight.enemy; else -> return mon.heldItem }
-    return mon.heldItem.takeUnless { (side.volatiles["embargo"] ?: 0) > 0 || (fight.field.rooms["magicroom"] ?: 0) > 0 }
+internal fun GameState.activeHeldItems(mon: Mon): List<String> {
+    val fight = battle ?: return mon.heldItems
+    val side = when (mon.uid) { main?.uid -> fight.player; fight.wild.uid -> fight.enemy; else -> return mon.heldItems }
+    return if ((side.volatiles["embargo"] ?: 0) > 0 || (fight.field.rooms["magicroom"] ?: 0) > 0) emptyList() else mon.heldItems
 }
+internal fun GameState.activeHeldItem(mon: Mon): String? = activeHeldItems(mon).firstOrNull()
 
 /** Inventory totals include copies assigned to an owned Pokémon; count() remains the spendable Bag quantity. */
-fun GameState.itemHolders(item: String): List<Mon> = mons.filter { it.heldItem == item }
+fun GameState.itemHolders(item: String): List<Mon> = mons.filter { item in it.heldItems }
 fun GameState.ownedItemCount(item: String): Int = count(item) + itemHolders(item).size

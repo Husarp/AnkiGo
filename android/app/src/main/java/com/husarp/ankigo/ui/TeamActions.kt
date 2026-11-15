@@ -7,6 +7,7 @@ import com.husarp.ankigo.game.ItemUse
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Looks
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.heldItems
 import com.husarp.ankigo.game.SwitchQueue
 import com.husarp.ankigo.game.Tuning
 import com.husarp.ankigo.game.quietUnlessHit
@@ -58,7 +59,7 @@ internal class MonActions(private val s: GamePage) {
             }
         }
         add("Give item…", R.drawable.ic_held, extra = true) { giveItem(mon) }
-        mon.heldItem?.let { held -> add("Take ${Items.name(held)}", R.drawable.ic_held, extra = true) { s.act { ItemUse.takeHeld(it.state, mon.uid) } } }
+        mon.heldItems.forEach { held -> add("Take ${Items.name(held)}", R.drawable.ic_held, extra = true) { s.act { ItemUse.takeHeld(it.state, mon.uid, held) } } }
         add("Use item…", R.drawable.ic_ball, extra = true) { useItem(mon) }
         add("Teach TM…", R.drawable.ic_tm, extra = true) { teachMenu(mon) }
         if (mon.uid != main?.uid) {
@@ -123,10 +124,10 @@ internal class MonActions(private val s: GamePage) {
     // ---- held items ----
 
     fun giveItem(mon: Mon) { // R18-G: also the Holding row of the details ("Give item")
-        val held = state.bag.keys.filter { Items.def(it)?.kind == ItemKind.HELD && state.count(it) > 0 && it != mon.heldItem }
+        val held = state.bag.keys.filter { Items.def(it)?.kind == ItemKind.HELD && state.count(it) > 0 && it !in mon.heldItems }
             .sortedBy { Items.name(it) }
         if (held.isEmpty()) { Ui.toast(s, "No held items in the bag"); return }
-        Pickers.pickItem(s, "Give to ${mon.shownName}", state, held) { giveItemTo(mon, it) }
+        Pickers.pickItem(s, "Give to ${mon.shownName}", state, held, hint = heldItemHint(mon)) { giveItemTo(mon, it) }
     }
 
     fun giveItemTo(mon: Mon, item: String) { useItem(mon, item) }

@@ -14,6 +14,8 @@ import com.husarp.ankigo.game.EvoLine
 import com.husarp.ankigo.game.Evolution
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.heldItems
+import com.husarp.ankigo.game.itemCapacity
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.Species
@@ -219,11 +221,11 @@ object MonDetail {
         // "Options" is pinned under the scrolling details (AppDialog footer, below the details), compact or not
         dlg = AppDialog.Builder(a).setTitle("Details")
             .setView(DetailsFade.wrap(DetailSections.scroll(a, col, focusMove)), true).setDetailsFooter(more).setPokemonDetails(replaceDetails).create()
-        var heldItem = mon.heldItem
+        var heldItems = mon.heldItems to mon.itemCapacity
         val changed: () -> Unit = {
             val current = page.state.mon(mon.uid)
-            if (current != null && current.heldItem != heldItem) {
-                heldItem = current.heldItem
+            if (current != null && (current.heldItems to current.itemCapacity) != heldItems) {
+                heldItems = current.heldItems to current.itemCapacity
                 heldSection?.let { col.removeView(it) }
                 heldSection = DetailTopCard.heldItem(a, data, current, page)
                 heldSection?.let { col.addView(it) }

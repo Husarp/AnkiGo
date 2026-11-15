@@ -134,7 +134,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
         events += ensureEncounter()
         val battle = state.battle ?: return events
-        if (main.hp > 0 && battle.wild.hp > 0) Bond.add(data, state, main, Bond.CARD_POINTS, events, state.activeHeldItem(main) == "soothe-bell", studyAnswer = !state.practiceRewards)
+        if (main.hp > 0 && battle.wild.hp > 0) Bond.add(data, state, main, Bond.CARD_POINTS, events, "soothe-bell" in state.activeHeldItems(main), studyAnswer = !state.practiceRewards)
         // R10-B22: who attacks depends on each answer, not on the point sum. A battle saved before keeps only the sum: restore the buttons from it.
         if (battle.buttons.size != battle.answers) { battle.buttons.clear(); battle.buttons += RoundRule.restore(battle.answers, battle.tally) }
         // R19-T (PLAN 284): the OK of a new card (PLAN 155) is one of the round's answers, a neutral move: it fills a dot and counts toward the
@@ -321,8 +321,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val oldMainMon = state.main
         val slot = state.team.indexOf(old.uid)
         val shared = state.settings.xpShareUid == old.uid
-        old.heldItem?.let { Economy.give(state, it) }
-        old.heldItem = null
+        old.heldItems.forEach { Economy.give(state, it) }
+        old.heldItem = null; old.heldItem2 = null
         if (keepPlace) {
             if (slot >= 0) {
                 state.team[slot] = new.uid
@@ -476,7 +476,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         } else {
             state.main?.let { main ->
                 val ab = SimpleView.of(data, battle, main).ability(true)
-                if (ab == "ballfetch" && main.heldItem == null && battle.field.player.putIfAbsent("ab.ballfetch", 1) == null) {
+                if (ab == "ballfetch" && main.heldItems.isEmpty() && battle.field.player.putIfAbsent("ab.ballfetch", 1) == null) {
                     Economy.give(state, ball)
                     events += GameEvent.Info("Ball Fetch returned the ${Items.name(ball)}!", main.uid)
                 }
@@ -862,8 +862,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         }
         val old = state.team.firstOrNull()
         val oldMon = state.main // released with the main: the switch hit still needs to know whether it had fainted
-        mon.heldItem?.let { Economy.give(state, it) }
-        mon.heldItem = null
+        mon.heldItems.forEach { Economy.give(state, it) }
+        mon.heldItem = null; mon.heldItem2 = null
         state.team.remove(uid)
         state.mons.remove(mon)
         if (state.settings.xpShareUid == uid) state.settings.xpShareUid = null
@@ -894,8 +894,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val oldMon = state.main
         for (uid in go) {
             val mon = state.mon(uid) ?: continue
-            mon.heldItem?.let { Economy.give(state, it) } // as in release(); a holder is protected, so this only guards a later change of the rule
-            mon.heldItem = null
+            mon.heldItems.forEach { Economy.give(state, it) } // as in release(); a holder is protected, so this only guards a later change of the rule
+            mon.heldItem = null; mon.heldItem2 = null
             state.team.remove(uid)
             state.mons.remove(mon)
             if (state.settings.xpShareUid == uid) state.settings.xpShareUid = null

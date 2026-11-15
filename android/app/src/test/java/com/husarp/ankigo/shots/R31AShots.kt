@@ -106,7 +106,7 @@ class R31AShots {
         DialogShots.scene(ctx, dialog)
     }
 
-    @Test fun takingOffThroughTheItemWindowRemovesTheSectionAndReturnsItToTheBag() {
+    @Test fun takingOffThroughTheItemWindowKeepsTheSlotHintAndReturnsItToTheBag() {
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
         val data = GameRepo.data!!; val state = GameRepo.state!!
@@ -124,14 +124,14 @@ class R31AShots {
         } finally { ItemWindow.interceptShow = prior }
         assertNull(mon.heldItem)
         assertEquals(before + 1, state.count("soothe-bell"))
-        assertNull(DetailTopCard.heldItem(page, data, mon, page))
+        assertNotNull(DetailTopCard.heldItem(page, data, mon, page))
     }
 
-    @Test fun noHeldItemHasNoSectionAndExpShareRemainsVisible() = shot("504-empty-held-item") { ctx ->
+    @Test fun noHeldItemShowsSlotHintAndExpShareRemainsVisible() = shot("504-empty-held-item") { ctx ->
         val data = GameRepo.data!!; val state = GameRepo.state!!
         val mon = state.mons[0].apply { heldItem = null }
         state.settings.xpShareUid = mon.uid
-        assertNull(DetailTopCard.heldItem(ctx, data, mon, null))
+        assertTrue("Second item at Bond ♥5" in texts(DetailTopCard.heldItem(ctx, data, mon, null)!!))
         val share = DetailTopCard.expShare(ctx, data, state, mon)!!
         assertTrue("Exp. Share" in texts(share))
         val evolution = DetailTopCard.forMon(ctx, data, state, mon, data.sp(mon.species), state.caught, false, null, null)

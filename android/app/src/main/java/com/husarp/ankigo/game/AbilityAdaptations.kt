@@ -27,14 +27,14 @@ internal object AbilityAdaptations : BattleRules {
                 Abilities.enter(r, p, r.ability(p))
             }
             "supremeoverlord" -> s.volatiles[ab] = team(r, p).count { it.hp <= 0 }.coerceAtMost(5)
-            "frisk" -> say(r, p, ab, ": ${r.mon(!p).heldItem?.let(Items::name) ?: "No held item"}.")
+            "frisk" -> say(r, p, ab, ": ${r.mon(!p).heldItems.takeIf { it.isNotEmpty() }?.joinToString(" and ", transform = Items::name) ?: "No held item"}.")
             "forewarn" -> { val moves = r.moves(!p); val power = moves.maxOfOrNull { it.power }; say(r, p, ab, ": ${moves.filter { it.power == power }.joinToString { it.name }.ifEmpty { "No moves" }}.") }
             "anticipation" -> { val moves = r.moves(!p).filter { it.ohko || (it.damaging && TypeChart.eff(it.type, r.types(p)) > 1.0) }; say(r, p, ab, ": ${moves.joinToString { it.name }.ifEmpty { "No threatening moves" }}.") }
         }
     }
 
     override fun onEnter(r: Round, p: Boolean) {
-        r.conds(p).putIfAbsent("ab.startedHeld.${r.mon(p).uid}", if (r.mon(p).heldItem != null) 1 else 0)
+        r.conds(p).putIfAbsent("ab.startedHeld.${r.mon(p).uid}", if (r.mon(p).heldItems.isNotEmpty()) 1 else 0)
         refreshIce(r, p)
         eat(r, p)
     }
@@ -160,9 +160,9 @@ internal object AbilityAdaptations : BattleRules {
         say(r, p, ab); r.boost(p, mapOf(stat to 1), byFoe = false)
     }
     private fun steal(r: Round, p: Boolean) {
-        if (r.mon(p).heldItem != null || Abilities.abVs(r, p) == "stickyhold") return
-        val item = r.mon(!p).heldItem ?: return
-        r.mon(p).heldItem = item; r.mon(!p).heldItem = null
+        if (Abilities.abVs(r, p) == "stickyhold") return
+        val item = r.mon(!p).heldItems.firstOrNull { r.mon(p).canAddHeld(it) } ?: return
+        r.mon(p).addHeld(item); r.mon(!p).removeHeld(item)
         say(r, p, r.ability(p), " stole ${Items.name(item)}!")
         lostItem(r, !p)
     }
@@ -189,7 +189,7 @@ internal object AbilityAdaptations : BattleRules {
         }
     }
     private fun lostItem(r: Round, p: Boolean) {
-        if (r.ability(p) == "unburden" && r.conds(p)["ab.startedHeld.${r.mon(p).uid}"] == 1 && r.mon(p).heldItem == null) r.conds(p)["ab.unburden.${r.mon(p).uid}"] = 1
+        if (r.ability(p) == "unburden" && r.conds(p)["ab.startedHeld.${r.mon(p).uid}"] == 1 && r.mon(p).heldItems.isEmpty()) r.conds(p)["ab.unburden.${r.mon(p).uid}"] = 1
     }
     private fun berryEffect(r: Round, p: Boolean, item: String) {
         val boost = if (r.ability(p) == "ripen") 2 else 1
@@ -202,13 +202,15 @@ internal object AbilityAdaptations : BattleRules {
         }
     }
     internal fun eat(r: Round, p: Boolean) {
-        val item = r.mon(p).heldItem ?: return
+        for (item in r.mon(p).heldItems) eatItem(r, p, item)
+    }
+    private fun eatItem(r: Round, p: Boolean, item: String) {
         if (r.mon(p).hp <= 0 || item !in berries || r.ability(p) == "klutz" || r.ability(!p) == "unnerve" ||
             (r.side(p).volatiles["embargo"] ?: 0) > 0 || (r.field.rooms["magicroom"] ?: 0) > 0) return
         val pinch = item !in setOf("oran-berry", "sitrus-berry")
         val divisor = if (pinch && r.ability(p) != "gluttony") 4 else 2
         if (r.mon(p).hp > r.maxHp(p) / divisor) return
-        r.mon(p).heldItem = null; r.side(p).notes["consumeditem"] = item
+        r.mon(p).removeHeld(item); r.side(p).notes["consumeditem"] = item
         berryEffect(r, p, item)
         if (p) r.events += GameEvent.BerryActivated(item)
         if (r.ability(p) == "cheekpouch" && !SideMoves.healBlocked(r, p)) r.heal(p, maxOf(1, r.maxHp(p) / 3), "Cheek Pouch restored HP!", label = "Cheek Pouch")

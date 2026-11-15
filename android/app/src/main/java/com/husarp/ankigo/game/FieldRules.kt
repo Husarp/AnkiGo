@@ -580,7 +580,7 @@ internal object FieldRules : BattleRules {
         WEATHER_MOVES[move.id]?.let { return v.field.weather != it }
         TERRAIN_MOVES[move.id]?.let { return v.field.terrain != it }
         return when (move.id) {
-            "magicroom" -> if (room(v, "magicroom")) v.mon(p).heldItem != null else v.mon(!p).heldItem != null
+            "magicroom" -> if (room(v, "magicroom")) v.mon(p).heldItems.isNotEmpty() else v.mon(!p).heldItems.isNotEmpty()
             TRICK_ROOM -> speedOf(v, p) != speedOf(v, !p) && !actsFirst(v, p) // only when it turns a slower move order around in your favour
             WONDER_ROOM, GRAVITY, MUD_SPORT, WATER_SPORT, ION_DELUGE -> !room(v, move.id)
             "defog" -> {

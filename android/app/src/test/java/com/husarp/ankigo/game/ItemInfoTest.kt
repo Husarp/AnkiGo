@@ -195,7 +195,7 @@ class ItemInfoTest {
         assertEquals("Main: +8 Sp. Atk EVs", ItemInfo.short(data, "power-lens"))
         assertTrue(fact("power-band", "What it does").contains("**8 extra Sp. Def EVs**"))
         for (id in Items.ALL.values.filter { it.kind == ItemKind.HELD }.map { it.id }) {
-            assertTrue(id, fact(id, "How to use").contains("**one item**") && fact(id, "How to use").contains("old one goes back"))
+            assertTrue(id, fact(id, "How to use").contains("**one item**") && fact(id, "How to use").contains("two different items at Bond ♥5") && fact(id, "How to use").contains("first item goes back"))
             assertFalse(id, ItemInfo.facts(data, id).any { it.title == "In a fight" })
         }
     }

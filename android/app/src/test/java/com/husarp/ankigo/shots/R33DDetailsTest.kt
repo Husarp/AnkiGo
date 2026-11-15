@@ -91,7 +91,7 @@ class R33DDetailsTest {
                         notifyChanges()
                         assertNull(mon.heldItem)
                         assertEquals(before + 1, state.count("soothe-bell"))
-                        assertFalse(all(scene).any { it.tag == DetailSection.HELD_ITEM })
+                        assertEquals(1, all(scene).count { it.tag == DetailSection.HELD_ITEM })
                         measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
                         layout(left, top, right, bottom)
                     }

@@ -12,8 +12,10 @@ import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.ItemUse
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.heldItems
 import com.husarp.ankigo.game.shownName
 import com.husarp.ankigo.game.Progression
+import com.husarp.ankigo.game.itemHolders
 import com.husarp.ankigo.game.ownedItemCount
 
 // TICKET T14 owns this file: the Bag tab of the Shop screen (owned items grouped, then TMs) and what a tap does.
@@ -31,7 +33,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
     private var categoriesOpen = false
     fun collapseCategories() { categoriesOpen = false }
 
-    private fun holders(id: String) = state.mons.filter { it.heldItem == id }
+    private fun holders(id: String) = state.itemHolders(id)
 
     private val groups = listOf(
         "Balls" to listOf(ItemKind.BALL),
@@ -46,7 +48,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
     /** Fills [into] with the bag sections. */
     fun fill(into: LinearLayout) {
         val ctx = s
-        val owned = (state.bag.filter { it.value > 0 }.keys + state.mons.mapNotNull { it.heldItem })
+        val owned = (state.bag.filter { it.value > 0 }.keys + state.mons.flatMap { it.heldItems })
             .distinct().filter { !heldOnly || holders(it).isNotEmpty() }
         fun ids(label: String) = owned.filter { id ->
             val kinds = groups.firstOrNull { it.first == label }?.second
@@ -221,11 +223,11 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
                 Pickers.pickMonNames(s, "${Items.name(item)} on…", ok) { mons.useItem(it, item) }
             }
             ItemKind.HELD -> {
-                val all = candidates().filter { it.heldItem != item }
+                val all = candidates().filter { item !in it.heldItems }
                 if (all.isEmpty()) { Ui.toast(s, "No Pokémon to give it to"); return }
                 close()
                 Pickers.pickMon(s, "Give ${Items.name(item)} to…", data, all, { mon ->
-                    mon.heldItem?.let { "holds ${Items.name(it)}" } ?: "holds nothing"
+                    heldItemHint(mon)
                 }) { mons.giveItemTo(it, item) }
             }
             ItemKind.FOSSIL -> {

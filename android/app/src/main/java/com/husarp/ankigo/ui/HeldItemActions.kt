@@ -14,14 +14,14 @@ internal object HeldItemActions {
             addView(ItemCard.actView(page, ItemCard.Act("Take off", page.state.itemHolders(item).isNotEmpty(), "No Pokémon holds this item") {
                 source(page, item) { mon ->
                     if (mon != null) move(page, messageHost ?: this, onChanged) { g ->
-                        if (g.state.mon(mon.uid)?.heldItem != item) ActionResult(false, "That Pokémon no longer holds this item.")
-                        else ItemUse.takeHeld(g.state, mon.uid)
+                        if (item !in g.state.mon(mon.uid)?.heldItems.orEmpty()) ActionResult(false, "That Pokémon no longer holds this item.")
+                        else ItemUse.takeHeld(g.state, mon.uid, item)
                     }
                 }
             }), LinearLayout.LayoutParams(-1, -2))
             addView(ItemCard.actView(page, ItemCard.Act("Give to another Pokémon", true, null) {
                 source(page, item) { mon ->
-                    BoxMonPicker.show(page, "Give ${Items.name(item)} to…", { it.heldItem != item }) { target ->
+                    BoxMonPicker.show(page, "Give ${Items.name(item)} to…", { item !in it.heldItems }) { target ->
                         move(page, messageHost ?: this, onChanged) { g -> ItemUse.giveHeld(g.data, g.state, item, mon?.uid, target.uid) }
                     }
                 }

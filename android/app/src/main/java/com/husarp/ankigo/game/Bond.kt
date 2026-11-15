@@ -48,7 +48,7 @@ object Bond {
         2 -> "Normal evolutions, with their usual requirement"
         3 -> "First Bond evolutions · All species matchups revealed"
         4 -> "Higher Bond evolutions · 5% chance to survive a KO with 1 HP"
-        5 -> "10% chance to survive a KO with 1 HP"
+        5 -> "Second held item · 10% chance to survive a KO with 1 HP"
         else -> "Start"
     }
 }
