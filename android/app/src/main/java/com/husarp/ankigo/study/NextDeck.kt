@@ -8,6 +8,17 @@ package com.husarp.ankigo.study
 object NextDeck {
     data class D(val id: Long, val name: String, val total: Int)
 
+    /** PLAN 622: keep the last deck while it has work; otherwise use the finished screen's suggestion. */
+    fun continueDeck(decks: List<D>, lastId: Long): D? {
+        val last = decks.firstOrNull { it.id == lastId }
+        return last?.takeIf { it.total > 0 } ?: suggest(decks, lastId, last?.name.orEmpty())
+    }
+
+    /** Prefer the existing relative/leaf order; a parent with its own work is still useful when nothing else is due. */
+    fun suggest(decks: List<D>, currentId: Long, currentName: String): D? =
+        pick(decks, currentId, currentName) ?: decks.filter { it.id != currentId && it.total > 0 }
+            .minWithOrNull { a, b -> compareParts(a.name, b.name) }
+
     fun pick(decks: List<D>, currentId: Long, currentName: String): D? {
         val inTree = decks.sortedWith { a, b -> compareParts(a.name, b.name) }
         fun under(name: String, root: String) = name.startsWith("$root::")

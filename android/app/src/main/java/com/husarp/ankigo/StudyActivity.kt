@@ -75,7 +75,7 @@ import com.husarp.ankigo.ui.*
 import org.json.JSONObject
 import java.util.concurrent.Executors
 
-/** Study through AnkiDroid's scheduler: the game counts an answer at the tap, its write to AnkiDroid follows in the background (R10-B23). */
+/** Study through AnkiDroid's scheduler: journal off the tap, then count the shown answer in the game before writing to AnkiDroid. */
 class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     /**
      * R9 wave 6: ONE process-wide study io thread (study/StudyIo.kt) runs scheduler calls and answer writes in order, and an
@@ -278,6 +278,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
     private val listener = object : StudyListener {
         override fun unresolved(u: AnswerHost.Unresolved?) { applyUnresolved(u) }
+        override fun journalFailed() { journalWarn() }
         override fun outcome(o: AnswerOutcome, info: AnswerHost.Info) { answerEnded(o, info) }
         override fun gameDone(answer: QueuedAnswer, events: List<GameEvent>, absorbMs: Long, gameMs: Long, mine: Boolean) { gameFinished(answer, events, absorbMs, gameMs, mine) }
     }
@@ -1013,7 +1014,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         while (timings.size >= 6) timings.remove(timings.keys.first())?.let { if (it.flush()) Report.log("STUDY", it.line()) }
         lagTap?.let { if (!it.held && !filtered) it.reason = nc.lastWait }
         val timing = AnswerTiming(SystemClock.elapsedRealtime(), AnswerTiming.ALL_PARTS)
-        timing.pollsAtTap = LiveSession.polls; timing.queueAtTap = host.queue.size
+        timing.pollsAtTap = LiveSession.polls; timing.queueAtTap = host.unresolved()?.count ?: 0
         timing.ahead = predictedNow   // R18-A: still true here = made on a card AnkiDroid has not confirmed yet (NextCard answered it ahead of the write)
         if (heldAt != 0L) { timing.heldMs = SystemClock.elapsedRealtime() - heldAt; heldAt = 0L }   // a held tap acting now waited this long for the confirm
         timing.wait = nc.lastWait   // R10-X1: why this answer's next card waits ("" = the prediction shows)
@@ -1023,7 +1024,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         liveCounts.invalidate()
         lastCounts = QueueCounts.afterAnswer(lastCounts, a.before["queue"]?.toIntOrNull())   // the stand-in counts, until the next exact read
         heldEase = 0
-        if (!host.enqueue(answer, question, listener)) journalWarn()   // the journal first; the write follows on the io thread, before the load queued after it
+        host.enqueueAsync(answer, question, listener)   // journal and provider IO are ordered off the tap; the next prediction can show now
     }
     /** The backup copy of an answer could not be written (storage full?): studying goes on and the answer is still written to AnkiDroid; the user hears it once per visit. */
     internal fun journalWarn() {
@@ -1433,7 +1434,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             is AnswerOutcome.Retrying, is AnswerOutcome.Waiting -> {}   // progress is told through unresolved()
         }
     }
-    /** The game step of an answer is done: at the tap, inside [AnswerHost.enqueue] (R10-B23; events from [LiveSession.ownAnswer]). Only this screen's own answers reach its summary. */
+    /** The game step of an answer is done: after its background journal, before the provider write (PLAN 601; events from [LiveSession.ownAnswer]). Only this screen's own answers reach its summary. */
     private fun gameFinished(a: QueuedAnswer, events: List<GameEvent>, absorbMs: Long, gameMs: Long, mine: Boolean) {
         if (!mine) return
         timings[a.seq]?.let { it.put(AnswerTiming.ABSORB, absorbMs); timingPart(it, AnswerTiming.GAME, gameMs) }
@@ -1647,8 +1648,17 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         buttons.removeAllViews(); updateSwipe()
         val enabled = !locked && !mediaBlocked
         val rowKind = ContinueRule.row(flipped, holding(), finishArgs != null)
-        if (rowKind == ContinueRule.Row.FINISH) {   // PLAN 129: the deck's last answer is in: one button in the place of Show answer
-            buttons.addView(StudyUi.answer(this, ContinueRule.FINISH_LABEL, null, R.color.ag_mauve, !finishTapped, ContinueRule.FINISH_HINT) { finishDeck() }, StudyUi.lp(-1, Ui.dp(this, 48)))
+        if (rowKind == ContinueRule.Row.FINISH) {
+            val next = finishArgs?.first?.let { NextDeck.suggest(it.map { d -> NextDeck.D(d.id, d.name, d.total) }, deckId, deckName) }
+            val finish = StudyUi.answer(this, ContinueRule.FINISH_LABEL, null, R.color.ag_mauve, !finishTapped, ContinueRule.FINISH_HINT) { finishDeck() }
+            if (next == null) buttons.addView(finish, StudyUi.lp(-1, Ui.dp(this, 48)))
+            else {
+                val row = StudyUi.row(this)
+                row.addView(finish, StudyUi.lp(0, Ui.dp(this, 48), 1f))
+                row.addView(StudyUi.answer(this, "Next deck", null, R.color.ag_mauve, !finishTapped, next.name.substringAfterLast("::")) { nextDeck(next) },
+                    StudyUi.lp(0, Ui.dp(this, 48), 1f).also { it.marginStart = Ui.dp(this, 6) })
+                buttons.addView(row, StudyUi.lp(-1, Ui.dp(this, 48)))
+            }
             return
         }
         if (rowKind == ContinueRule.Row.CONTINUE) {   // a fight result holds the next battle: no card is answered outside a battle
@@ -2015,7 +2025,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private fun restoreFinishWait(saved: Bundle) { answeredSinceCard = saved.getBoolean("finishWait") }
     /**
      * PLAN 129: the queue is empty after an own answer. The screen stays as it is (the battle panel, the last answer's events playing out);
-     * the card area says so calmly and the answer row holds one "Finish deck" button. Only that button opens the summary.
+     * the card area says so calmly and the row offers "Finish deck" and, when available, "Next deck". Finish opens the summary.
      */
     private fun waitForFinish(args: Triple<List<Anki.Deck>, Int, Int>) {
         finishArgs = args; finishTapped = false
@@ -2038,6 +2048,25 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val token = generation
         pending.whenIdle { if (valid(token) && finishArgs === args) checkedSummary(args) }
     }
+    private fun nextDeck(next: NextDeck.D) {
+        val args = finishArgs ?: return
+        if (finishTapped || isDestroyed || isFinishing) return
+        finishTapped = true
+        events.continueBattle()
+        showButtons()
+        val token = generation
+        pending.whenIdle {
+            if (valid(token) && !isFinishing && finishArgs === args) nextDeckStart(next)
+        }
+    }
+
+    internal var nextDeckStart: (NextDeck.D) -> Unit = { openNextDeck(it) }
+
+    private fun openNextDeck(next: NextDeck.D) {
+        Report.log("STUDY", "next deck: ${next.name} (id ${next.id})")
+        startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", next.id).putExtra("deckName", next.name)); finish()
+    }
+
     /** Async provider boundary, replaceable by view tests that do not attach an AnkiDroid provider. */
     internal var finishQueueCheck: ((Result<Boolean>) -> Unit) -> Unit = { done ->
         io {
@@ -2162,12 +2191,11 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         goalRow.addView(Ui.chip(this, com.husarp.ankigo.ui.StreakFlame(this).apply { alive = (st?.streakDays ?: 0) > 0 }, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
         summary.addView(goalRow, StudyUi.spaced(this, 6))
         summaryView = MotionScrollView(this).apply { addView(summary, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
-        val next = NextDeck.pick(decks.map { NextDeck.D(it.id, it.name, it.total) }, deckId, deckName)   // PLAN 147: a sibling subdeck first, never a parent
+        val next = NextDeck.suggest(decks.map { NextDeck.D(it.id, it.name, it.total) }, deckId, deckName)   // PLAN 621: the same suggestion as the end buttons and Study tab
         buttons.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 10))
         buttons.layoutParams = LinearLayout.LayoutParams(StudyUi.pageWidth(this), -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
         if (next != null) buttons.addView(StudyUi.finishedNextDeck(this, next.name, next.total) {
-            Report.log("STUDY", "next deck: ${next.name} (id ${next.id})")   // R13 Part E
-            startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", next.id).putExtra("deckName", next.name)); finish()
+            openNextDeck(next)
         })
         else if (!filtered) buttons.addView(StudyUi.finishedPrimary(this, "Custom study in AnkiDroid") { openAnki() })
         buttons.addView(StudyUi.secondary(this, "Back to decks") { Nav.open(this, Dest.STUDY); finish() }, StudyUi.spaced(this, 6)) // always the Study deck list, not the tab it was started from (PLAN 131)

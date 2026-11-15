@@ -180,7 +180,7 @@ class AnswerQueue(
     /** [count] answers back in the queue, [waiting] back on the waiting list (PLAN 195). */
     class Restored(val count: Int, val problem: String?, val waiting: Int = 0)
 
-    private class Slot(@Volatile var a: QueuedAnswer) {
+    private class Slot(@Volatile var a: QueuedAnswer, val ready: () -> Unit = {}) {
         var n = 0
         var attempted = false // hooks.expect was called in this process: a write of ours may exist
         var answerMs = -1L
@@ -198,6 +198,7 @@ class AnswerQueue(
     private val lock = ReentrantLock() // slots, journal, selection
     private val runLock = ReentrantLock() // at most one writer, whatever the callers do
     private val slots = ArrayList<Slot>()
+    @Volatile private var sizeNow = 0
     private val waiting = ArrayList<Slot>() // PLAN 195: refused while another card was first, kept for when theirs is first again
     @Volatile private var notTopOff = false // PLAN 195: a try answered ANOTHER card once: never again in this process
     private val seqs = AtomicLong(0)
@@ -215,7 +216,7 @@ class AnswerQueue(
     /** Everything the journal must hold: the queue and the waiting list (with its flag). Called with [lock] held. */
     private fun journal(extra: QueuedAnswer? = null): List<QueuedAnswer> = slots.map { it.a } + listOfNotNull(extra) + waiting.map { it.a }
 
-    val size: Int get() = lock.withLock { slots.size }
+    val size: Int get() = sizeNow
 
     /** A fresh, increasing sequence number for [QueuedAnswer.seq]. */
     fun nextSeq(): Long = seqs.incrementAndGet()
@@ -228,6 +229,7 @@ class AnswerQueue(
         val fresh = d.answers.filter { it.seq !in known }
         val (wait, now) = fresh.partition { it.waiting }
         slots.addAll(0, now.map { Slot(it.copy(restored = true)) })
+        sizeNow = slots.size
         waiting.addAll(wait.map { Slot(it.copy(restored = true)) })
         for (a in fresh) seqs.updateAndGet { maxOf(it, a.seq) }
         Restored(now.size, d.problem, wait.size).also { restoredOnce = it }
@@ -237,11 +239,12 @@ class AnswerQueue(
      * Adds an answer. The journal (all entries) is written FIRST, then the entry becomes visible to [drain]. A journal that cannot
      * be written does not refuse the answer: it stays queued in memory ([AnswerHooks.journalFailed]). Returns false then.
      */
-    fun enqueue(a: QueuedAnswer): Boolean = lock.withLock {
+    fun enqueue(a: QueuedAnswer, ready: () -> Unit = {}): Boolean = lock.withLock {
         require(a.ease in 1..4 && AnswerState.usable(a.before)) { "unusable answer" }
         seqs.updateAndGet { maxOf(it, a.seq) }
         val ok = persist(journal(a))
-        slots.add(Slot(a))
+        slots.add(Slot(a, ready))
+        sizeNow = slots.size
         ok
     }
 
@@ -283,6 +286,7 @@ class AnswerQueue(
     }
 
     private fun resolve(s: Slot): AnswerOutcome {
+        s.ready() // an asynchronously journaled answer installs its game expectation before any provider call
         waiter.clear()
         lock.withLock { if (dirty) persist(journal()) } // a told answer must not stay in the journal: try the failed rewrite again before this answer starts
         while (true) {
@@ -403,6 +407,7 @@ class AnswerQueue(
         if (s.late) return end(s, AnswerOutcome.NotWritten(s.a, AnswerOutcome.Reason.NOT_TOP, "AnkiDroid refused it even when its card was first ($reason)"))
         lock.withLock {
             slots.remove(s)
+            sizeNow = slots.size
             s.a = s.a.copy(waiting = true)
             waiting.add(s)
             persist(journal())
@@ -436,6 +441,7 @@ class AnswerQueue(
                 it.n = 0
                 it.a = it.a.copy(waiting = false, deckId = deckId)
                 slots.add(0, it)
+                sizeNow = slots.size
                 persist(journal()) // back in the queue BEFORE the write: a kill during it replays it as a normal answer (R first)
             }
         } ?: return false
@@ -464,6 +470,7 @@ class AnswerQueue(
         if (o is AnswerOutcome.NotWritten) guard { hooks.cancel(s.a.before) }
         val wasWaiting = lock.withLock {
             slots.remove(s)
+            sizeNow = slots.size
             val w = waiting.remove(s)
             persist(journal())
             w
