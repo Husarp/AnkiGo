@@ -134,7 +134,7 @@ object Pickers {
     }
 
     /** A list of [n] custom rows ([bind] builds row i); picking one closes the dialog and calls [onPick]. */
-    fun rows(a: Context, title: String, n: Int, bind: (Int) -> View, onLongPick: ((Int) -> Unit)? = null, hint: String? = null, onPick: (Int) -> Unit) {
+    fun rows(a: Context, title: String, n: Int, bind: (Int) -> View, onLongPick: ((Int) -> Unit)? = null, hint: String? = null, pokemonPicker: Boolean = false, onPick: (Int) -> Unit) {
         lateinit var dlg: AppDialog
         val list = MotionListView(a).apply {
             divider = null
@@ -151,18 +151,21 @@ object Pickers {
             setOnItemClickListener { _, _, p, _ -> dlg.dismiss(); onPick(p) }
             if (onLongPick != null) setOnItemLongClickListener { _, _, p, _ -> onLongPick(p); true }
         }
-        dlg = AppDialog.Builder(a).setTitle(title).setMessage(hint).setView(list).setNegativeButton("Cancel", null).create()
+        dlg = AppDialog.Builder(a).setTitle(title).setMessage(hint).setView(list).setNegativeButton("Cancel", null)
+            .apply { if (pokemonPicker) setPokemonPicker() }.create()
         show(dlg)
     }
 
     /** Pick one of [mons]; [sub] is the second line of each row (HP, "can evolve"...). */
     fun pickMon(a: Context, title: String, data: GameData, mons: List<Mon>, sub: (Mon) -> String, onPick: (Mon) -> Unit) {
-        rows(a, title, mons.size, { Bits.monRow(a, data, mons[it], sub(mons[it])) }) { onPick(mons[it]) }
+        rows(a, title, mons.size, { Bits.monRow(a, data, mons[it], sub(mons[it])) },
+            onLongPick = { MonDetail.show(a, data, mons[it]) }, pokemonPicker = true) { onPick(mons[it]) }
     }
 
     /** Evolution item targets deliberately reveal only the owned name. */
-    fun pickMonNames(a: Context, title: String, mons: List<Mon>, onPick: (Mon) -> Unit) {
-        rows(a, title, mons.size, { Bits.monNameRow(a, mons[it]) }) { onPick(mons[it]) }
+    fun pickMonNames(a: Context, title: String, data: GameData, mons: List<Mon>, onPick: (Mon) -> Unit) {
+        rows(a, title, mons.size, { Bits.monNameRow(a, mons[it]) },
+            onLongPick = { MonDetail.show(a, data, mons[it]) }, pokemonPicker = true) { onPick(mons[it]) }
     }
 
     /** Pick one of the bag items [ids] (icon, name, note, ×owned). */
@@ -204,7 +207,7 @@ object Pickers {
             text = "${ev.from} evolved into ${ev.to}!"
             gravity = Gravity.CENTER
         })
-        show(AppDialog.Builder(a).setTitle("Evolution").setView(col).setPositiveButton("Nice", null).create())
+        show(AppDialog.Builder(a).setTitle("Evolution").setView(col).setCancelable(false).setPositiveButton("Nice", null).create())
     }
 }
 

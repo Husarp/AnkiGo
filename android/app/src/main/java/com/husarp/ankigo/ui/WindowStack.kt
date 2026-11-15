@@ -34,8 +34,8 @@ internal object WindowStack {
     fun closeCurrent(context: Context) = windows(context).lastOrNull()?.closeFromStack()
     fun pokemonWindow(context: Context): AppDialog? {
         for (window in windows(context).asReversed()) {
-            // An item is a separate origin; an evolution explanation belongs to the Pokémon below it.
-            if (window !is AppDialog || window.itemInfo && !window.evolutionInfo) return null
+            // An item or Pokémon picker is a separate origin; an evolution explanation belongs to the Pokémon below it.
+            if (window !is AppDialog || window.itemInfo && !window.evolutionInfo || window.pokemonPicker) return null
             if (window.pokemonDetails) return window
         }
         return null

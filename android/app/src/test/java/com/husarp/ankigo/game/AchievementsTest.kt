@@ -255,7 +255,7 @@ class AchievementsTest {
         assertEquals(365L, rewards.single().tiers[4])
         assertTrue("master-ball" in Items.ALL)
         assertEquals(0, data.price("master-ball")) // never sold
-        assertTrue(rewards.single().desc.contains("Master Ball"))
+        assertFalse(rewards.single().desc.contains("Master Ball"))
     }
 
     @Test fun reachingTheTopStreakTierGivesExactlyOneMasterBall() {

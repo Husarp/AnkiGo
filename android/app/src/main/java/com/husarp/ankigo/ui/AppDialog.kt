@@ -36,6 +36,8 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
     private var infoHeader: View? = null
     internal var itemInfo = false
         private set
+    internal var pokemonPicker = false
+        private set
     internal var evolutionInfo = false
         private set
     private var message: CharSequence? = null
@@ -376,6 +378,7 @@ class AppDialog internal constructor(val context: Context) : DialogInterface, St
         /** Pinned bare back arrow beside the title; dismisses to the originating screen. */
         fun setBackAtTop() = apply { d.backAtTop = true }
         /** Pokémon links reuse one window, keeping previous pages for Back. */
+        internal fun setPokemonPicker() = apply { d.pokemonPicker = true }
         fun setPokemonDetails(replace: Boolean = false) = apply { d.pokemonDetails = true; d.replacePokemon = replace }
         fun setEvolutionInfo() = apply { d.evolutionInfo = true }
         /** Details keep Close in their fixed footer. */
