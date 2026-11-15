@@ -176,7 +176,7 @@ object SaveCodec {
         stats("ivs", m.ivs); stats("evs", m.evs)
         kv("nature", m.nature.name); kv("gender", m.gender.toString()); kv("shiny", m.shiny); kv("ability", m.ability)
         list("moves", m.moves)
-        kv("hp", m.hp); kv("friendship", m.friendship); kv("heldItem", m.heldItem); kv("caughtAt", m.caughtAt); kv("evolvedAt", m.evolvedAt)
+        kv("hp", m.hp); kv("friendship", m.friendship); kv("heldItem", m.heldItem); kv("heldItem2", m.heldItem2); kv("caughtAt", m.caughtAt); kv("evolvedAt", m.evolvedAt)
         kv("defeats", m.defeats); kv("tier", m.tier.name)
         kv("nickname", m.nickname); kv("ankimonId", m.ankimonId); kv("favourite", m.favourite)
         kv("look", m.look); kv("restFrac", m.restFrac)
@@ -280,6 +280,7 @@ object SaveCodec {
             shiny = o.bool("shiny", false), ability = o.str("ability", ""),
             moves = (o.strList("moves") ?: emptyList()).toMutableList(),
             hp = o.int("hp", 1), friendship = o.int("friendship", 0), heldItem = o.strOrNull("heldItem"),
+            heldItem2 = o.strOrNull("heldItem2")?.takeUnless { it == o.strOrNull("heldItem") },
             caughtAt = o.long("caughtAt", 0), evolvedAt = o.long("evolvedAt", 0), defeats = o.int("defeats", 0),
             tier = enumOr(o.strOrNull("tier"), Tier.NORMAL),
             nickname = o.strOrNull("nickname"), ankimonId = o.strOrNull("ankimonId"),

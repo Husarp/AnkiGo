@@ -259,8 +259,8 @@ object Economy {
         state.cashFracNum = num; state.cashFracDen = den
         if (paid <= 0) return
         val coins = paid.toInt()
-        val held = state.main?.let { state.activeHeldItem(it) }
-        val amount = if (held == "amulet-coin" || held == "luck-incense") coins * 2 else coins
+        val held = state.main?.let { state.activeHeldItems(it) }.orEmpty()
+        val amount = if ("amulet-coin" in held || "luck-incense" in held) coins * 2 else coins
         val bonusAmount = if (state.battle?.field?.player?.get("happyhour") == 1) amount * 2 else amount
         state.cashToday += coins
         state.cash += bonusAmount
@@ -615,7 +615,7 @@ object ItemUse {
         return when (def.kind) {
             ItemKind.HEAL -> (mon ?: state.main)?.let { it.hp < StatCalc.maxHp(data, it) || (def.cures && battleStatus(state, it) != null) } ?: false
             ItemKind.EVOLUTION -> mon != null && Progression.itemEvolution(data, mon, item, now, state.activeHeldItem(mon)) != null
-            ItemKind.HELD -> mon != null && mon.heldItem != item
+            ItemKind.HELD -> mon != null && item !in mon.heldItems
             ItemKind.FOSSIL -> data.species.containsKey(def.fossil)
             ItemKind.BALL, ItemKind.ESCAPE, ItemKind.AUTO -> false
         }
@@ -684,11 +684,10 @@ object ItemUse {
             }
             ItemKind.HELD -> {
                 val mon = target(state, targetUid, false) ?: return ActionResult(false, "Choose a Pokémon first.")
-                if (mon.heldItem == item) return ActionResult(false, "${mon.name} already holds $name.")
-                val old = mon.heldItem
+                if (item in mon.heldItems) return ActionResult(false, "${mon.name} already holds $name.")
                 Economy.take(state, item)
+                val old = mon.equipHeld(item)
                 if (old != null) Economy.give(state, old)
-                mon.heldItem = item
                 ItemCollections.record(state, Metric.EQUIPMENT_KINDS, item)
                 val back = if (old != null) "; ${Items.name(old)} went back to the Bag" else ""
                 return used(data, state, now, events, "Gave $name to ${mon.shownName}$back")
@@ -704,10 +703,10 @@ object ItemUse {
     }
 
     /** Takes the held item back into the bag. */
-    fun takeHeld(state: GameState, uid: String): ActionResult {
+    fun takeHeld(state: GameState, uid: String, item: String? = null): ActionResult {
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
-        val held = mon.heldItem ?: return ActionResult(false, "${mon.name} holds nothing.")
-        mon.heldItem = null
+        val held = item ?: mon.heldItems.firstOrNull() ?: return ActionResult(false, "${mon.name} holds nothing.")
+        if (!mon.removeHeld(held)) return ActionResult(false, "That Pokémon no longer holds this item.")
         Economy.give(state, held)
         return ActionResult(true, "Took ${Items.name(held)} from ${mon.shownName}")
     }
@@ -717,12 +716,11 @@ object ItemUse {
         if (Items.def(item)?.kind != ItemKind.HELD) return ActionResult(false, "This item can't be held.")
         val target = state.mon(toUid) ?: return ActionResult(false, "Pokémon not found.")
         val source = fromUid?.let { state.mon(it) ?: return ActionResult(false, "Pokémon not found.") }
-        if (source != null && source.heldItem != item) return ActionResult(false, "That Pokémon no longer holds this item.")
-        if (target.heldItem == item) return ActionResult(false, "${target.name} already holds ${Items.name(item)}.")
+        if (source != null && item !in source.heldItems) return ActionResult(false, "That Pokémon no longer holds this item.")
+        if (item in target.heldItems) return ActionResult(false, "${target.name} already holds ${Items.name(item)}.")
         if (source == null && !Economy.take(state, item)) return ActionResult(false, "No free copies in the Bag.")
-        val old = target.heldItem
-        source?.heldItem = null
-        target.heldItem = item
+        source?.removeHeld(item)
+        val old = target.equipHeld(item)
         ItemCollections.record(state, Metric.EQUIPMENT_KINDS, item)
         if (old != null) Economy.give(state, old)
         val events = mutableListOf<GameEvent>()

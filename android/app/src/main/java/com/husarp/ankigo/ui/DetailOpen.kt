@@ -7,6 +7,8 @@ import com.husarp.ankigo.game.ItemInfo
 import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.heldItems
+import com.husarp.ankigo.game.itemCapacity
 import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Stats
 import com.husarp.ankigo.game.Tuning
@@ -108,8 +110,8 @@ class HoldLine(val kind: Kind, val item: String?, val name: String, val sub: Str
 }
 
 /**
- * R18-G (PLAN 239, picks 239B + 239S1): what the Holding row of the details says, pure. A Pokémon holds at most one item
- * ([Mon.heldItem]); the game also says the [xpShareUid] Pokémon "holds the Exp. Share", so that is a second line. The item's small
+ * What the Holding row of the details says, pure. Bond ♥5 unlocks a second distinct item.
+ * The [xpShareUid] Pokémon also "holds the Exp. Share" independently of those slots. The item's small
  * line is the Bag's row text ([ItemInfo.line]). "Nothing" and the "Give item" button show only when there is no line at all.
  */
 object HoldingPlan {
@@ -124,7 +126,7 @@ object HoldingPlan {
     /** The lines of [mon]: its item first, then the Exp. Share when [mon] is the holder ([xpShareUid]); [mainUid] = the team's first. */
     fun lines(data: GameData?, mon: Mon, xpShareUid: String?, mainUid: String?): List<HoldLine> {
         val out = ArrayList<HoldLine>()
-        mon.heldItem?.let { out += HoldLine(HoldLine.Kind.ITEM, it, Items.name(it), ItemInfo.line(data, it)) }
+        mon.heldItems.forEach { out += HoldLine(HoldLine.Kind.ITEM, it, Items.name(it), ItemInfo.line(data, it)) }
         if (xpShareUid != null && xpShareUid == mon.uid) {
             out += HoldLine(HoldLine.Kind.EXP_SHARE, null, EXP_SHARE, if (mon.uid == mainUid) EXP_SHARE_MAIN_SUB else EXP_SHARE_SUB)
         }
@@ -136,7 +138,7 @@ object HoldingPlan {
 
     /** The held items in the bag that [mon] could be given (what Options → "Give item…" lists); empty = it says "No held items in the bag". */
     fun giveable(state: GameState, mon: Mon): List<String> =
-        state.bag.keys.filter { Items.def(it)?.kind == ItemKind.HELD && state.count(it) > 0 && it != mon.heldItem }
+        state.bag.keys.filter { Items.def(it)?.kind == ItemKind.HELD && state.count(it) > 0 && it !in mon.heldItems }
 }
 
 /**
@@ -153,4 +155,11 @@ object EvoGrid {
 
     /** How many lines [targets] cells take. */
     fun lines(targets: Int): Int = (targets + PER_ROW - 1) / PER_ROW
+}
+
+internal fun heldItemHint(mon: Mon): String {
+    val held = mon.heldItems.joinToString(" + ", transform = Items::name).ifEmpty { "Nothing" }
+    val slots = if (mon.itemCapacity == 2) "${mon.heldItems.size}/2 items" else "Second item at Bond ♥5"
+    val replace = if (mon.heldItems.size >= mon.itemCapacity) "; replaces ${Items.name(mon.heldItems.first())}" else ""
+    return "$held · $slots$replace"
 }

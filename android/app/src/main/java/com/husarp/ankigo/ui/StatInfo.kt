@@ -29,7 +29,7 @@ object StatInfo {
     val BOND = StatInfoText("Bond",
         "Earn +1 point per answered card while fighting and +3 per win. A Soothe Bell multiplies points by 1.5. " +
             "Level 1–Level 5 start at 50 / 125 / 250 / 500 / 800 points. Normal evolution: Level 2 Bond plus the usual requirement. Bond evolution: Level 3 Bond or Level 4 Bond. " +
-            "Level 3 reveals all matchups of that species, including wild Pokémon and forms. Each level adds +1 coin per defeated Pokémon and +5% XP. At Level 4/Level 5, a lethal attack has a 5%/10% chance to leave 1 HP.")
+            "Level 3 reveals all matchups of that species, including wild Pokémon and forms. Each level adds +1 coin per defeated Pokémon and +5% XP. Level 5 unlocks a second held item (never two of the same). At Level 4/Level 5, a lethal attack has a 5%/10% chance to leave 1 HP.")
     val NATURE = StatInfoText("Nature", "Raises one stat by 10 % and lowers another by 10 %. Five natures change nothing. The arrows mark the two stats.")
     val NATURE_UP = StatInfoText("▲ Raised stat", "This nature gives this stat +10 %.")
     val NATURE_DOWN = StatInfoText("▼ Lowered stat", "This nature gives this stat −10 %.")
@@ -43,7 +43,7 @@ object StatInfo {
     val WINS = StatInfoText("Wins",
         "Every wild Pokémon you beat while this one is your main, knocked out or caught. Each win gives it XP, EVs and Bond points.")
     val HOLDING = StatInfoText("Holding",
-        "A Pokémon holds one item at a time; tap the item to read what it does. The Exp. Share counts as held too: its holder gets half " +
+        "A Pokémon holds one item, or two different items at Bond ♥5; tap an item to read what it does. The Exp. Share uses no item slot: its holder gets half " +
             "of each win's XP and your main the other half (nothing is shared while the holder is your main). Give or take items from Options.")
     val EVOLUTION = StatInfoText("Evolution",
         "What this Pokémon evolves from and into, and what it takes: a level, an item such as a stone, Bond or a Linking Cord. " +

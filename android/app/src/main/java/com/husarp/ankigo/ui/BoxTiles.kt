@@ -3,6 +3,7 @@ package com.husarp.ankigo.ui
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.heldItems
 import com.husarp.ankigo.game.Type
 
 /** One cell of the Box grid: a single Pokémon, or a group of copies of one species ("×N"). Pure logic, no views. */
@@ -71,7 +72,7 @@ object BoxTiles {
             BoxFilter.FAVOURITES -> mons.filter { it.favourite }
             BoxFilter.SHINY -> mons.filter { it.shiny }
             BoxFilter.IN_TEAM -> mons.filter { it.uid in team }
-            BoxFilter.HOLDS_ITEM -> mons.filter { it.heldItem != null }
+            BoxFilter.HOLDS_ITEM -> mons.filter { it.heldItems.isNotEmpty() }
             BoxFilter.HOLDS_XP_SHARE -> mons.filter { xpShareUid != null && it.uid == xpShareUid }
             BoxFilter.CAN_EVOLVE -> mons.filter(canEvolve)
         }

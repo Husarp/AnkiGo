@@ -78,7 +78,7 @@ object MoveChooser {
         val everything = view.moves(p)
         // R17C-3: moves that mean nothing in a 1-vs-1 wild fight are never picked (CoreRules.NEVER_PICKED). With only such moves the Main
         // uses Struggle and the wild one uses one of them ("But nothing happened.")
-        val all = everything.filter { it.id !in CoreRules.NEVER_PICKED && !(p && it.id in CoreRules.MAIN_NEVER_PICKED && view.mon(!p).heldItem == null) }
+        val all = everything.filter { it.id !in CoreRules.NEVER_PICKED && !(p && it.id in CoreRules.MAIN_NEVER_PICKED && view.mon(!p).heldItems.isEmpty()) }
         if (all.isEmpty()) return if (p) BattleEngine.struggle(view.data) else everything[rng.nextInt(everything.size)]
         val known = all.filter { m -> rulesFirst { it.moveBlocked(view, p, m) } == null }
         if (choice == MoveChoice.RANDOM) {

@@ -429,7 +429,7 @@ internal object CoreRules : BattleRules {
 
     /** The Smart choice: a confusion / love move only while it can still work; a never-picked move never. Everything else: ask the engine's own rule. */
     override fun useful(v: BattleView, p: Boolean, move: Move): Boolean? {
-        if (move.id == "embargo") return v.mon(!p).heldItem != null && "embargo" !in v.side(!p).volatiles
+        if (move.id == "embargo") return v.mon(!p).heldItems.isNotEmpty() && "embargo" !in v.side(!p).volatiles
         if (move.id == "perishsong") return listOf(true, false).any { "perishsong" !in v.side(it).volatiles && v.ability(it) != "soundproof" }
         if (move.id in NEVER_PICKED) return false
         return when (move.volatileStatus) {

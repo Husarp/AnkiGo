@@ -12,6 +12,8 @@ import com.husarp.ankigo.game.EvoLine
 import com.husarp.ankigo.game.GameData
 import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.heldItems
+import com.husarp.ankigo.game.itemCapacity
 import com.husarp.ankigo.game.Species
 
 /** Evolution and held-item sections for Pokémon details. */
@@ -25,11 +27,20 @@ internal object DetailTopCard {
             state = com.husarp.ankigo.GameRepo.state.takeIf { com.husarp.ankigo.GameRepo.data === data }, forceOpen = forceOpen)
 
     fun heldItem(a: Context, data: GameData, mon: Mon, page: GamePage?): View? {
-        val item = mon.heldItem ?: return null
-        return DetailSections.section(a, DetailSections.memory(a), DetailSection.HELD_ITEM, com.husarp.ankigo.game.Items.name(item)) {
+        val lines = HoldingPlan.lines(data, mon, null, null)
+        val summary = lines.joinToString(" · ") { it.name }.ifEmpty { "Nothing" }
+        return DetailSections.section(a, DetailSections.memory(a), DetailSection.HELD_ITEM, summary) {
             LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(holdLine(a, HoldingPlan.lines(data, mon, null, null).single(), page))
+                val slots = maxOf(mon.itemCapacity, lines.size)
+                for (slot in 0 until slots) {
+                    if (slots > 1) addView(Ui.text(a, 11f, 800, R.color.ag_sub0).apply { text = "Item ${slot + 1}" }, Form.lp(a, if (slot == 0) 0 else 8))
+                    val line = lines.getOrNull(slot)
+                    if (line != null) addView(holdLine(a, line, page))
+                    else if (page != null) addView(DetailParts.secondaryButton(a, "Give item") { MonActions(page).giveItem(mon) })
+                    else addView(Ui.text(a, 13f, 700, R.color.ag_sub0).apply { text = "No item" })
+                }
+                if (mon.itemCapacity < 2) addView(Ui.text(a, 12f, 700, R.color.ag_sub0).apply { text = "Second item at Bond ♥5" }, Form.lp(a, 8))
             }
         }
     }

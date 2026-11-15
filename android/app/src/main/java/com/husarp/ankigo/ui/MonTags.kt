@@ -10,6 +10,7 @@ import com.husarp.ankigo.game.GameState
 import com.husarp.ankigo.game.Items
 import com.husarp.ankigo.game.ItemKind
 import com.husarp.ankigo.game.Mon
+import com.husarp.ankigo.game.heldItems
 import com.husarp.ankigo.game.Progression
 import com.husarp.ankigo.game.Type
 import java.time.Instant
@@ -53,7 +54,7 @@ object MonTags {
         // PLAN 280 / R19: details and compare follow the Box's previously seen IDs too.
         if (caughtToday(state, mon, now) && mon.uid !in state.viewedMons) out += MonTag(TagKind.NEW, "New")
         if (state.settings.xpShareUid == mon.uid) out += MonTag(TagKind.EXP_SHARE, "Exp. Share")
-        mon.heldItem?.let { out += MonTag(TagKind.HELD, "Holds ${Items.name(it)}", it) }
+        mon.heldItems.forEach { out += MonTag(TagKind.HELD, "Holds ${Items.name(it)}", it) }
         if (mon.shiny) out += MonTag(TagKind.SHINY, "★ Shiny")
         data.sp(mon.species).form?.let { out += MonTag(TagKind.REGIONAL, regionalLabel(it)) }
         return out

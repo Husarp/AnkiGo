@@ -133,15 +133,14 @@ object Progression {
     }
 
     /** Adds an EV yield of one win (Macho Brace x2, Power items +8 to their stat), caps 252 per stat / 510 total. */
-    fun addEvs(mon: Mon, yield: Stats, heldItem: String? = mon.heldItem) {
+    fun addEvs(mon: Mon, yield: Stats, heldItem: String?) = addEvs(mon, yield, listOfNotNull(heldItem))
+
+    fun addEvs(mon: Mon, yield: Stats, heldItems: List<String> = mon.heldItems) {
         val gain = yield.toList().toMutableList()
-        if (heldItem == "macho-brace") {
-            for (i in gain.indices) gain[i] *= 2
-        } else {
-            val idx = listOf("power-weight", "power-bracer", "power-belt", "power-lens", "power-band", "power-anklet")
-                .indexOf(heldItem)
-            if (idx >= 0) gain[idx] += 8
+        for ((idx, item) in listOf("power-weight", "power-bracer", "power-belt", "power-lens", "power-band", "power-anklet").withIndex()) {
+            if (item in heldItems) gain[idx] += 8
         }
+        if ("macho-brace" in heldItems) for (i in gain.indices) gain[i] *= 2
         val cur = mon.evs.toList().toMutableList()
         var total = cur.sum()
         for (i in cur.indices) {
@@ -157,12 +156,12 @@ object Progression {
      * A defeat, an auto catch and a ball catch all come through here, so they all give the same. The Exp. Share holder gets neither.
      */
     private fun winBonus(data: GameData, state: GameState, main: Mon, wild: Mon, rng: Random, events: MutableList<GameEvent>) {
-        addEvs(main, data.sp(wild.species).evYield, state.activeHeldItem(main))
+        addEvs(main, data.sp(wild.species).evYield, state.activeHeldItems(main))
         // Interchange/combat compatibility: this legacy value no longer gates evolutions or appears in details.
         var friend = Tuning.FRIENDSHIP_GAIN.random(rng)
-        if (state.activeHeldItem(main) == "soothe-bell") friend = (friend * Tuning.SOOTHE_BELL).toInt()
+        if ("soothe-bell" in state.activeHeldItems(main)) friend = (friend * Tuning.SOOTHE_BELL).toInt()
         main.friendship = min(Tuning.FRIENDSHIP_MAX, main.friendship + friend)
-        Bond.add(data, state, main, Bond.WIN_POINTS, events, state.activeHeldItem(main) == "soothe-bell")
+        Bond.add(data, state, main, Bond.WIN_POINTS, events, "soothe-bell" in state.activeHeldItems(main))
     }
 
     /**
@@ -205,8 +204,8 @@ object Progression {
         val half = (xp * Tuning.XP_SHARE_PART).toInt()
         var mainXp = if (holder != null) half else xp
         var holderXp = half
-        if (state.activeHeldItem(main) == "lucky-egg") mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
-        if (holder != null && state.activeHeldItem(holder) == "lucky-egg") holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
+        if ("lucky-egg" in state.activeHeldItems(main)) mainXp = (mainXp * Tuning.LUCKY_EGG).toInt()
+        if (holder != null && "lucky-egg" in state.activeHeldItems(holder)) holderXp = (holderXp * Tuning.LUCKY_EGG).toInt()
 
         mainXp = everstoneXp(data, state, main, mainXp)
         if (holder != null) holderXp = everstoneXp(data, state, holder, holderXp)
@@ -225,7 +224,7 @@ object Progression {
     }
 
     private fun everstoneXp(data: GameData, state: GameState, mon: Mon, xp: Int): Int =
-        if (mon.level < Tuning.MAX_LEVEL && state.activeHeldItem(mon) == "everstone" && data.sp(mon.species).evolutions.isEmpty())
+        if (mon.level < Tuning.MAX_LEVEL && "everstone" in state.activeHeldItems(mon) && data.sp(mon.species).evolutions.isEmpty())
             (xp.toLong() * 115 / 100).toInt() else xp
 
     /** Every currently available branch, without choosing one for the player. */
