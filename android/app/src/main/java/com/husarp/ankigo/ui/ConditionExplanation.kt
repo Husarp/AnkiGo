@@ -5,6 +5,7 @@ import com.husarp.ankigo.game.StageText
 /** Short descriptions of the implemented battle rules, available even without a loaded save. */
 internal object ConditionExplanation {
     val effects = mapOf(
+        "legendaryaura" to "Legendary aura: every stat ×1.5 for this fight",
         "happyhour" to "Doubles the coins earned from this fight.",
         "perishsong" to "Faints when the count ends; switch to escape.",
         "embargo" to "Its held item has no effect.",

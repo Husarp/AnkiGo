@@ -3,6 +3,7 @@ package com.husarp.ankigo.ui
 import com.husarp.ankigo.game.Battle
 import com.husarp.ankigo.game.EffectKind
 import com.husarp.ankigo.game.GameEvent
+import com.husarp.ankigo.game.Tier
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -23,7 +24,7 @@ object ConditionMarks {
     enum class Slot { WILD, OURS, FIELD }
 
     /** The colour family of a chip (the view picks the hue). */
-    enum class Group { HINDER, DRAIN, GUARD, BOOST, WEATHER, TERRAIN, ROOM }
+    enum class Group { HINDER, DRAIN, GUARD, BOOST, WEATHER, TERRAIN, ROOM, AURA }
 
     /** What the stored number means: turns left, nothing to show, an HP value, or layers (the chip says "Stockpile 2"). */
     enum class Num { TURNS, NONE, HP, LAYERS }
@@ -115,7 +116,8 @@ object ConditionMarks {
     val STAT_KEYS = listOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
     private val STAT_DEFS = STAT_KEYS.mapIndexed { i, key -> v("stat.$key", StatPill.shortName(key)!!, Group.BOOST, Num.NONE, -10 + i) }
 
-    private val BY_KEY: Map<String, Def> = (VOLATILES + SIDES + FIELDS + STAT_DEFS).associateBy { it.key }
+    private val AURA = v("legendaryaura", "Aura", Group.AURA, Num.NONE, 1)
+    private val BY_KEY: Map<String, Def> = (VOLATILES + SIDES + FIELDS + STAT_DEFS + AURA).associateBy { it.key }
     private val VOLATILE_KEYS: Set<String> = VOLATILES.map { it.key }.toSet()
     private val SIDE_KEYS: Set<String> = SIDES.map { it.key }.toSet()
 
@@ -176,7 +178,10 @@ object ConditionMarks {
         fun volatiles(map: Map<String, Int>, slot: Slot) { for ((k, value) in map) if (k in VOLATILE_KEYS) out += Triple(slot, BY_KEY.getValue(k), value) }
         fun sides(map: Map<String, Int>, slot: Slot) { for ((k, value) in map) if (k in SIDE_KEYS && value > 0) out += Triple(slot, BY_KEY.getValue(k), value) }
         fun stats(side: com.husarp.ankigo.game.BattleSide, slot: Slot) {
-            side.boosts.forEachIndexed { i, value -> if (value != 0) out += Triple(slot, STAT_DEFS[i], value) }
+            val aura = slot == Slot.WILD && (b.tier == Tier.LEGENDARY || b.tier == Tier.MYTHICAL) &&
+                (0 until 5).all { side.boosts[it] == 1 }
+            if (aura) out += Triple(slot, AURA, 1)
+            side.boosts.forEachIndexed { i, value -> if (value != 0 && !(aura && i < 5)) out += Triple(slot, STAT_DEFS[i], value) }
         }
         stats(b.enemy, Slot.WILD); stats(b.player, Slot.OURS)
         volatiles(b.enemy.volatiles, Slot.WILD); volatiles(b.player.volatiles, Slot.OURS)
@@ -280,7 +285,18 @@ class ConditionBoard {
         if (e.kind == EffectKind.STAT_CHANGE) {
             val key = "stat.${e.stat ?: return false}"
             val slot = if (e.onPlayer) ConditionMarks.Slot.OURS else ConditionMarks.Slot.WILD
-            val held = b?.let { ConditionMarks.fromBattle(it).firstOrNull { mark -> mark.first == slot && mark.second.key == key } }
+            val stats = b?.let { ConditionMarks.fromBattle(it).filter { mark -> mark.first == slot &&
+                (mark.second.key.startsWith("stat.") || mark.second.key == "legendaryaura") } }.orEmpty()
+            if (marks.containsKey(id(slot, "legendaryaura")) || stats.any { it.second.key == "legendaryaura" }) {
+                var changed = false
+                val wanted = stats.map { it.second.key }.toSet()
+                for (old in of(slot).filter { it.key.startsWith("stat.") || it.key == "legendaryaura" }) {
+                    if (old.key !in wanted && end(slot, old.key)) changed = true
+                }
+                for ((_, def, value) in stats) if (start(slot, def.key, value)) changed = true
+                return changed
+            }
+            val held = stats.firstOrNull { it.second.key == key }
             return if (held == null) end(slot, key) else start(slot, key, held.third)
         }
         val key = e.stat ?: return false

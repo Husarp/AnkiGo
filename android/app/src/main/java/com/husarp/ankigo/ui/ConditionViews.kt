@@ -5,6 +5,8 @@ import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.LinearGradient
+import android.graphics.Shader
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import android.view.Gravity
@@ -50,7 +52,10 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
 
     fun moreWidth(n: Int): Float = padH * 2f + num.measureText("+$n")
 
-    fun hue(g: ConditionMarks.Group): Int = ctx.getColor(when (g) {
+    val auraGold: Int = if (isDark(ctx)) 0xffffd36a.toInt() else 0xff946000.toInt()
+    val auraViolet: Int = if (isDark(ctx)) 0xffc7a0ff.toInt() else 0xff7940bd.toInt()
+
+    fun hue(g: ConditionMarks.Group): Int = if (g == ConditionMarks.Group.AURA) auraGold else ctx.getColor(when (g) {
         ConditionMarks.Group.HINDER -> R.color.ag_mauve
         ConditionMarks.Group.DRAIN -> R.color.ag_green
         ConditionMarks.Group.GUARD -> R.color.ag_blue
@@ -58,6 +63,7 @@ internal class ChipMetrics(private val ctx: Context, textSp: Float) {
         ConditionMarks.Group.WEATHER -> R.color.ag_sky
         ConditionMarks.Group.TERRAIN -> R.color.ag_teal
         ConditionMarks.Group.ROOM -> R.color.ag_lav
+        ConditionMarks.Group.AURA -> R.color.ag_lav
     })
 
     /** The chip's fill: the card colour washed with its hue (opaque, so it reads on any picture). */
@@ -124,7 +130,21 @@ internal class ConditionMarksView(ctx: Context) : View(ctx) {
                 if (it.key.startsWith("stat.")) StatPill.background(context, it.value > 0)
                 else m.fill(it.def.group)
             } ?: m.moreFill()
-            canvas.drawRoundRect(c.rect, m.radius, m.radius, fill)
+            if (c.mark?.def?.group == ConditionMarks.Group.AURA) {
+                fill.shader = LinearGradient(c.rect.left, c.rect.top, c.rect.right, c.rect.bottom,
+                    intArrayOf(m.auraGold, m.auraViolet), null, Shader.TileMode.CLAMP)
+                for (spread in listOf(0.18f, 0.09f)) {
+                    fill.alpha = if (spread > 0.1f) 35 else 65
+                    val halo = RectF(c.rect).apply { inset(-m.textPx * spread, -m.textPx * spread) }
+                    canvas.drawRoundRect(halo, m.radius, m.radius, fill)
+                }
+                fill.alpha = 255
+                canvas.drawRoundRect(c.rect, m.radius, m.radius, fill)
+                fill.shader = null; fill.alpha = 255
+                fill.color = m.fill(ConditionMarks.Group.AURA)
+                val inner = RectF(c.rect).apply { inset(m.textPx * 0.13f, m.textPx * 0.13f) }
+                canvas.drawRoundRect(inner, m.radius, m.radius, fill)
+            } else canvas.drawRoundRect(c.rect, m.radius, m.radius, fill)
             if (downMark != null && downMark?.id == c.mark?.id) {
                 fill.color = ColorUtils.setAlphaComponent(context.getColor(R.color.ag_text), 32)
                 canvas.drawRoundRect(c.rect, m.radius, m.radius, fill)

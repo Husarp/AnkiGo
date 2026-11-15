@@ -387,7 +387,11 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val fullHp = StatCalc.maxHp(data, wild)
         val encounterHp = Tuning.wildHp(fullHp, main.level, state.settings.fasterStart)
         wild.hp = encounterHp
-        state.battle = Battle(wild, roll.tier, startedAt = now, wildMaxHp = encounterHp.takeIf { it != fullHp }).also { it.encounterSeed = encounterSeed }
+        val aura = roll.tier == Tier.LEGENDARY || roll.tier == Tier.MYTHICAL
+        state.battle = Battle(wild, roll.tier, startedAt = now, wildMaxHp = encounterHp.takeIf { it != fullHp }).also {
+            it.encounterSeed = encounterSeed
+            if (aura) it.enemy.boosts.fill(1, 0, 5)
+        }
 
         // Seed of the one after this; the prediction (widget silhouette, sprite prefetch) follows the current state.
         state.nextSeed = rng.nextLong()

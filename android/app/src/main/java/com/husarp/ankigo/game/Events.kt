@@ -43,7 +43,9 @@ sealed class GameEvent {
         val species: Int, val name: String, val level: Int, val shiny: Boolean, val tier: Tier,
         val hp: Int, val maxHp: Int, val willCatch: Boolean, val newSpecies: Boolean,
         val wildUid: String = "",
-    ) : GameEvent()
+    ) : GameEvent() {
+        val auraText: String? get() = if (tier == Tier.LEGENDARY || tier == Tier.MYTHICAL) "$name's legendary aura surges!" else null
+    }
 
     /**
      * A round starts (RoundRule). [multiplier] scales the Main's damage and [mainActs] says whether it attacks at all (a round

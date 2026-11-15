@@ -5,6 +5,7 @@ import com.husarp.ankigo.R
 /** Battle conditions, including action-only effects; Tabler outlines match the app icons. */
 internal object ConditionIcons {
     fun of(key: String): Int? = when (key) {
+        "legendaryaura" -> R.drawable.ic_condition_legendaryaura
         "switchtrap" -> R.drawable.ic_condition_switchtrap
         "confusion" -> R.drawable.ic_condition_confusion
         "attract" -> R.drawable.ic_condition_attract
