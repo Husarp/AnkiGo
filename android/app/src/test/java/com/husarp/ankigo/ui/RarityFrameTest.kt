@@ -18,18 +18,28 @@ class RarityFrameTest {
         }
     }
 
-    @Test fun burstsAreTwiceAsSlowAndOneThirdAsFrequent() {
-        assertEquals(5600L, RarityFrame.BURST_MS)
-        assertEquals(16800L, RarityFrame.CYCLE_MS)
+    @Test fun burstsHaveIrregularFourToFiveSecondAverageAndOneToThreeGlints() {
         assertEquals(0f, RarityFrame.envelope(0), .001f)
         assertEquals(1f, RarityFrame.envelope(784), .001f)
         assertEquals(.5f, RarityFrame.envelope(392), .001f)
         assertEquals(.5f, RarityFrame.envelope(1204), .001f)
         assertEquals(0f, RarityFrame.envelope(1624), .001f)
-        assertEquals(0f, RarityFrame.envelope(5600), .001f)
-        assertEquals(0f, RarityFrame.envelope(16799), .001f)
-        assertEquals(RarityFrame.envelope(784), RarityFrame.envelope(16800 + 784), .001f)
-        val occupied = (0 until 16800).count { RarityFrame.envelope(it.toLong()) > 0 }
-        assertEquals(.29 / 3, occupied / 16800.0, .001)
+        val counts = mutableSetOf<Int>()
+        val schedules = mutableSetOf<List<Long>>()
+        for (seed in 0..30) {
+            val schedule = RarityFrame.schedule(seed)
+            schedules += schedule.toList()
+            val gaps = (schedule.toList() + RarityFrame.CYCLE_MS).zipWithNext { a, b -> b - a }
+            assertEquals(4500.0, gaps.average(), 0.0)
+            assertEquals(1000L, gaps.min())
+            assertEquals(7500L, gaps.max())
+            for (start in schedule) {
+                val lit = (0..6).count { RarityFrame.glintAlpha(start + 784, it, seed, schedule) > 0 }
+                assertTrue(lit in 1..3)
+                counts += lit
+            }
+        }
+        assertEquals(setOf(1, 2, 3), counts)
+        assertTrue("each tile has its own random gaps", schedules.size > 25)
     }
 }

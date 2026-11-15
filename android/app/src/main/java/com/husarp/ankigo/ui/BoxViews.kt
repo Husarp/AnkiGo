@@ -81,28 +81,35 @@ internal object BoxViews {
         tileBackground(frame, content.frontBackground ?: content.background ?: frame.background, content.picked)
     }
 
+    /** The foreground follows the front card instead of outlining the entire pile (PLAN 632). */
+    fun rarityBounds(view: View): Rect? {
+        val content = (view as? FrameLayout)?.getChildAt(0) as? TileContent ?: return null
+        return Rect(content.left, content.top, content.right, content.bottom)
+    }
+
     /** Keeps Compare's frame on the front card, including when only its tick changes. */
     fun tileBackground(frame: FrameLayout, front: Drawable?, picked: Boolean = false) {
         val content = frame.getChildAt(0) as? TileContent ?: return
         content.frontBackground = front
         content.picked = picked
-        content.background = if (content.plan.cards > 0 && !picked) {
+        val rarity = (frame.foreground as? RarityFrame.Frame)?.effect?.color
+        content.background = if (!picked && (content.plan.cards > 0 || rarity != null)) {
             (front?.constantState?.newDrawable()?.mutate() as? GradientDrawable)?.apply {
-                setStroke(Ui.dp(frame.context, 1), Ui.c(frame.context, R.color.ag_sub0))
+                setStroke(if (rarity == null) Ui.dp(frame.context, 1) else 0, Ui.c(frame.context, R.color.ag_sub0))
             } ?: front
         } else front
-        frame.background = if (content.plan.cards > 0) FannedCards(frame.context, content.plan.cards) else null
+        frame.background = if (content.plan.cards > 0) FannedCards(frame.context, content.plan.cards, rarity) else null
         frame.setPadding(0, 0, 0, 0)
     }
 
     /** PLAN 306 option C: exact lower fan geometry from the approved native design fixture. */
-    private class FannedCards(private val ctx: Context, private val cards: Int) : Drawable() {
+    private class FannedCards(private val ctx: Context, private val cards: Int, private val rarity: Int?) : Drawable() {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private fun card(canvas: Canvas, rect: RectF, fill: Int) {
             val radius = Ui.dp(ctx, 9f)
             paint.style = Paint.Style.FILL; paint.color = fill
             canvas.drawRoundRect(rect, radius, radius, paint)
-            paint.style = Paint.Style.STROKE; paint.color = Ui.c(ctx, R.color.ag_sub0)
+            paint.style = Paint.Style.STROKE; paint.color = rarity ?: Ui.c(ctx, R.color.ag_sub0)
             paint.strokeWidth = Ui.dp(ctx, 1f)
             canvas.drawRoundRect(rect, radius, radius, paint)
         }
@@ -113,11 +120,11 @@ internal object BoxViews {
             canvas.translate(bounds.left.toFloat(), bounds.top.toFloat())
             if (cards == 2) {
                 val rear = canvas.save()
-                canvas.rotate(-6f, w * .5f, h * .7f)
+                if (rarity == null) canvas.rotate(-6f, w * .5f, h * .7f)
                 card(canvas, RectF(8*d, 10*d, w-8*d, h-4*d), Ui.c(ctx, R.color.ag_s1))
                 canvas.restoreToCount(rear)
             }
-            canvas.rotate(5f, w * .5f, h * .7f)
+            if (rarity == null) canvas.rotate(5f, w * .5f, h * .7f)
             card(canvas, RectF(6*d, 8*d, w-8*d, h-6*d), Ui.c(ctx, R.color.ag_s0))
             canvas.restoreToCount(save)
         }

@@ -16,7 +16,7 @@ import com.husarp.ankigo.game.PokemonRarity
 
 /** PLAN 483, option 1C. Magic UI SparklesText (https://github.com/magicuidesign/magicui), MIT;
  * notice in assets/licences/magicui-LICENSE.txt.
- * Original star, rotation and burst envelope; twice the duration and one third the occupancy.
+ * PLAN 632: straight rarity edges and irregular, shared-clock glints.
  */
 internal object RarityFrame {
     data class Effect(val color: Int, val stars: Int, val intensity: Float)
@@ -28,15 +28,36 @@ internal object RarityFrame {
         else -> null
     }
 
-    const val BURST_MS = 5600L // original 2800 ms, including its quiet tail
-    const val CYCLE_MS = BURST_MS * 3
+    const val BURST_MS = 1624L
+    const val CYCLE_MS = 45000L
+    // Ten bursts per 45 seconds: short clusters mixed with longer pauses.
+    internal val starts = longArrayOf(0, 4500, 9500, 10500, 18000, 23000, 27500, 28500, 36000, 41000)
     fun envelope(timeMs: Long): Float {
-        val phase = (timeMs % CYCLE_MS).toFloat() / BURST_MS
-        return when {
-            phase < .14f -> ease(phase / .14f)
-            phase < .29f -> 1f - ease((phase - .14f) / .15f)
-            else -> 0f
-        }
+        val t = Math.floorMod(timeMs, CYCLE_MS)
+        if (t >= BURST_MS) return 0f
+        return if (t < 784) ease(t / 784f) else 1f - ease((t - 784) / 840f)
+    }
+    internal fun schedule(seed: Int): LongArray {
+        val gaps = mutableListOf(1000L, 1000L, 4500L, 5000L, 7500L, 5000L, 4500L, 7500L, 5000L, 4000L)
+        java.util.Collections.shuffle(gaps, java.util.Random(seed.toLong()))
+        var time = 0L
+        return LongArray(gaps.size) { i -> time.also { time += gaps[i] } }
+    }
+    internal fun burstStart(timeMs: Long, schedule: LongArray = starts): Long {
+        val t = Math.floorMod(timeMs, CYCLE_MS)
+        return schedule.last { it <= t }
+    }
+    internal fun glintAlpha(timeMs: Long, index: Int, seed: Int, schedule: LongArray = starts): Float {
+        val start = burstStart(timeMs, schedule)
+        val event = schedule.indexOf(start)
+        val cycle = Math.floorDiv(timeMs, CYCLE_MS)
+        val mixed = (seed.toLong() + cycle * 7919 + event * 104729L) * 0x5DEECE66DL
+        val count = 1 + Math.floorMod((mixed ushr 16).toInt(), 3)
+        val first = Math.floorMod((mixed ushr 24).toInt(), 7)
+        if ((index - first + 7) % 7 >= count) return 0f
+        val gap = (schedule.getOrNull(event + 1) ?: CYCLE_MS) - start
+        val duration = minOf(BURST_MS, gap)
+        return envelope((Math.floorMod(timeMs, CYCLE_MS) - start) * BURST_MS / duration)
     }
     private fun ease(t: Float) = t * t * (3 - 2 * t)
 
@@ -61,6 +82,9 @@ internal object RarityFrame {
         private val corner = cornerDp * density
         private var observer: ViewTreeObserver? = null
         private var lit = false
+        internal var phaseOffsetMs = java.util.Random().nextInt(CYCLE_MS.toInt()).toLong()
+        private val seed = System.identityHashCode(view)
+        internal var schedule = schedule(seed)
         private val prefs = view.context.getSharedPreferences("study", 0)
         internal var frozenTimeMs: Long? = null
 
@@ -89,14 +113,13 @@ internal object RarityFrame {
         internal fun tick() {
             refresh()
             if (this in Clock.active) {
-                val next = (0 until effect.stars).any { envelope(elapsed(Clock.timeMs, it)) > 0f }
+                val next = (0 until anchors.size).any { glintAlpha(Clock.timeMs + phaseOffsetMs, it, seed, schedule) > 0f }
                 if (next || lit) view.invalidate()
                 lit = next
             }
         }
-        private fun elapsed(time: Long, i: Int) = time + i * 2340L + (view.id.coerceAtLeast(0) % 17) * 137L
         override fun draw(canvas: Canvas) {
-            val b = bounds
+            val b = BoxViews.rarityBounds(view) ?: bounds
             val inset = .75f * density
             paint.color = effect.color
             paint.alpha = 255
@@ -105,13 +128,11 @@ internal object RarityFrame {
             canvas.drawRoundRect(b.left + inset, b.top + inset, b.right - inset, b.bottom - inset, corner, corner, paint)
             lit = false
             if (frozenTimeMs == null && (!ValueAnimator.areAnimatorsEnabled() || prefs.getBoolean("reduceMotion", false))) return
-            val time = frozenTimeMs ?: Clock.timeMs
+            val time = frozenTimeMs ?: (Clock.timeMs + phaseOffsetMs)
             paint.style = Paint.Style.FILL
             val side = 8 * density * effect.intensity
-            for (i in 0 until effect.stars) {
-                // The page's placements and 390 ms stagger, slowed 2x and spread 3x further apart.
-                val elapsed = elapsed(time, i)
-                val alpha = envelope(elapsed)
+            for (i in anchors.indices) {
+                val alpha = glintAlpha(time, i, seed, schedule)
                 if (alpha <= 0f) continue
                 lit = true
                 val p = anchors[i]
@@ -120,8 +141,8 @@ internal object RarityFrame {
                 val margin = side / 2
                 canvas.translate(b.left + margin + (b.width() - side) * p.first,
                     b.top + margin + (b.height() - side) * p.second)
-                val phase = (elapsed % CYCLE_MS).toFloat() / BURST_MS
-                canvas.rotate(if (phase < .14f) 75 + 45 * ease(phase / .14f) else 120 + 30 * ease(((phase - .14f) / .15f).coerceIn(0f, 1f)))
+                val progress = (Math.floorMod(time, CYCLE_MS) - burstStart(time, schedule)).toFloat() / BURST_MS
+                canvas.rotate(75 + 75 * progress)
                 canvas.scale(side / 21 * alpha, side / 21 * alpha)
                 canvas.translate(-10.5f, -10.5f)
                 paint.alpha = (alpha * 255).toInt()

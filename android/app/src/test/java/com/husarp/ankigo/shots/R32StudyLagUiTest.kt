@@ -77,6 +77,8 @@ class R32StudyLagUiTest {
             override fun invalidate() { redraws++; super.invalidate() }
         }.apply { RarityFrame.bind(this, PokemonRarity.MYTHICAL) }
         val frame = card.foreground as RarityFrame.Frame
+        frame.phaseOffsetMs = 0
+        frame.schedule = RarityFrame.starts
         var checked = false
         val root = object : FrameLayout(c) {
             override fun dispatchDraw(canvas: Canvas) {
