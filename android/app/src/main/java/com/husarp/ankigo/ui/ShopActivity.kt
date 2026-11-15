@@ -326,7 +326,7 @@ internal class ShopPage(base: Context, host: PageHost, private val bagOnly: Bool
         if (specials.isEmpty()) content.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply { text = "Nothing in the shop yet." })
         tileRows(specials, cols, CardKeys::special)
         if (st.shopTms.isNotEmpty()) {
-            content.addView(Bits.sect(ctx, "TMs"))
+            content.addView(Bits.sect(ctx, "TMs", "Single-use"))
             tileRows(st.shopTms.map { ShopPlan.Tile.Tm(it) }, cols, CardKeys::special)
         }
 

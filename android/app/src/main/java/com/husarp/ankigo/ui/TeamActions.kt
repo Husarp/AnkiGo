@@ -174,17 +174,20 @@ internal class MonActions(private val s: GamePage) {
 
     /** Teaches TM [move]; with 4 moves known it asks which one to forget. */
     fun teach(mon: Mon, move: String) {
+        if (com.husarp.ankigo.game.Bond.level(mon.bondPoints) < 2) { Ui.toast(s, "Teaching a TM needs Bond ♥2"); return }
+        if (mon.moves.size >= 4 && mon.moves.none { it in mon.discoveredMoves }) { Ui.toast(s, "Discover a move in battle before replacing it"); return }
         if (mon.moves.size < 4) {
-            Pickers.hold(s, "Teach a TM", "Teach ${data.move(move)?.name ?: move} to ${mon.shownName}?", "Teach") {
+            Pickers.hold(s, "Teach a TM", "Teach ${data.move(move)?.name ?: move} to ${mon.shownName}? This uses up the TM.", "Teach") {
                 s.act { ItemUse.teachTm(it.data, it.state, move, mon.uid, null) }
             }
         } else {
             val name = data.move(move)?.name ?: move
-            Pickers.pickMove(s, "${mon.shownName} knows 4 moves. Forget one for $name?", data, mon) { i ->
+            Pickers.pickMove(s, "${mon.shownName} knows 4 moves. Forget a discovered move for $name?", data, mon) { i ->
                 val warning = com.husarp.ankigo.game.LinkedMoves.replacementWarning(data, mon.moves, i, move)
+                    ?.let { if (mon.moves.any { id -> id !in mon.discoveredMoves }) "Forgetting this move breaks a linked-move combination. Teach anyway?" else it }
                 val teach = { s.act { ItemUse.teachTm(it.data, it.state, move, mon.uid, i) }; Unit }
                 val forgotten = data.move(mon.moves[i])?.name ?: mon.moves[i]
-                val message = "${mon.shownName} will forget $forgotten and learn $name." + (warning?.let { "\n\n$it" } ?: "")
+                val message = "${mon.shownName} will forget $forgotten and learn $name. This uses up the TM." + (warning?.let { "\n\n$it" } ?: "")
                 Pickers.hold(s, "Teach a TM", message, "Teach", teach)
             }
         }

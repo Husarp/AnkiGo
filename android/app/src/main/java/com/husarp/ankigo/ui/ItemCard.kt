@@ -43,7 +43,7 @@ internal object ItemCard {
         val holders: List<com.husarp.ankigo.game.Mon> = emptyList(),
     )
 
-    /** The Shop purchase: [price] checks affordability; amounts stay on the Shop list. Owned TMs cannot be bought twice. */
+    /** The Shop purchase: [price] checks affordability; amounts stay on the Shop list. Another copy can be bought after the owned TM is consumed. */
     class Buy(val price: ShopPlan.Price, val owned: Boolean, val limited: Boolean = false, val onBuy: () -> Unit)
 
     /** The Bag's action button. [offLine] is the small line of a button that cannot be used now ([enabled] false); a tap on it says the same in a toast. */

@@ -107,10 +107,10 @@ object DexDetail {
         } else {
             val battle = state.battle?.takeIf { it.wild.species == sp.num }
             val moves = battle?.let { WildInfo.of(data, state, it, GameRepo.wildMoves.used(it)) }
-                ?.moves.orEmpty().mapNotNull { it.id }
+                ?.moves.orEmpty()
             if (moves.isNotEmpty()) {
                 col.addView(DetailSections.section(a, DetailSections.memory(a), DetailSection.MOVES, "${moves.size} ${if (moves.size == 1) "move" else "moves"}") {
-                    DetailSections.moves(a, data, moves, compact)
+                    DetailSections.moves(a, data, moves.mapNotNull { it.id }, compact, unknown = moves.count { it.id == null })
                 })
             }
         }

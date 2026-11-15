@@ -696,6 +696,8 @@ class AchievementsTest {
         assertTrue(r.ok)
         assertEquals(1L, counter(s, Metric.ITEMS_USED))
         s.tms += "bodyslam"
+        main.bondPoints = Bond.thresholds[2]
+        main.discoveredMoves += main.moves
         val t = ItemUse.teachTm(data, s, "bodyslam", main.uid, 0, NOW)
         assertTrue(t.ok)
         assertEquals(1L, counter(s, Metric.TMS_TAUGHT))

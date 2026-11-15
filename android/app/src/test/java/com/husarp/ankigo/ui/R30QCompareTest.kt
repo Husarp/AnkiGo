@@ -35,15 +35,15 @@ class R30QCompareTest {
         assertEquals(listOf("types"), unknownOnly.rows.map { it.key })
     }
 
-    @Test fun onlyMovesUsedInCurrentBattleAppearInUnknownComparison() {
+    @Test fun allCurrentSlotsAppearButOnlyUsedMovesAreRevealed() {
         val state = TestData.state(data).also { it.seen += 54 }
         state.battle = Battle(TestData.mon(data, 54, 10, listOf("watergun", "tackle")), Tier.NORMAL)
         val table = CompareTable.build(data, state, picks, false, usedWildMoves = setOf("Water Gun"))
         assertEquals(listOf("types", "moves"), table.rows.map { it.key })
-        assertEquals(listOf("watergun"), (table.row("moves").cells[0] as Cell.Moves).moves.map { it.id })
+        assertEquals(listOf("watergun", ""), (table.row("moves").cells[0] as Cell.Moves).moves.map { it.id })
         assertTrue((table.row("moves").cells[1] as Cell.Text).empty)
         val mixed = CompareTable.build(data, state, listOf(ComparePick.Owned("main"), picks[0]), false, usedWildMoves = setOf("Water Gun"))
-        assertEquals(listOf("watergun"), (mixed.row("moves").cells[1] as Cell.Moves).moves.map { it.id })
+        assertEquals(listOf("watergun", ""), (mixed.row("moves").cells[1] as Cell.Moves).moves.map { it.id })
         assertTrue((mixed.row("weak").cells[1] as Cell.Text).empty)
         state.battle = null
         assertNull(CompareTable.build(data, state, picks, false, usedWildMoves = setOf("Water Gun")).rowOrNull("moves"))

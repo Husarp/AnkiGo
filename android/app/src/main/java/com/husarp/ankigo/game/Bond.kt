@@ -45,7 +45,7 @@ object Bond {
 
     fun unlock(level: Int): String = when (level) {
         1 -> "+1 coin per win · +5% XP"
-        2 -> "Normal evolutions, with their usual requirement"
+        2 -> "Normal evolutions, with their usual requirement · TM teaching"
         3 -> "First Bond evolutions · All species matchups revealed"
         4 -> "Higher Bond evolutions · 5% chance to survive a KO with 1 HP"
         5 -> "10% chance to survive a KO with 1 HP"

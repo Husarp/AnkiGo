@@ -492,7 +492,7 @@ object Shop {
         return ActionResult(true, "Bought $label for ${money(price)}", spent(data, state, price, now))
     }
 
-    /** TMs cost 1000, can be owned once, never used up. Today's TMs or today's weekend TM. */
+    /** TMs cost 1000, one use each; another can be bought after use. */
     fun buyTm(data: GameData, state: GameState, move: String, now: Long = System.currentTimeMillis()): ActionResult {
         if (move !in state.shopTms && weekendFor(data, state.day)?.tm != move) return ActionResult(false, "Not in today's shop")
         val name = Items.tmName(data, move)
@@ -730,7 +730,7 @@ object ItemUse {
         return ActionResult(true, (if (source == null) "Gave ${Items.name(item)} to ${target.shownName}" else "Swapped ${Items.name(item)} from ${source.shownName} to ${target.shownName}") + (if (old == null) "" else "; ${Items.name(old)} went back to the Bag"), events)
     }
 
-    /** Teaches an owned TM (not used up) to a Pokémon whose species can learn it; [replaceIndex] when it knows 4 moves. */
+    /** Consumes one owned TM after teaching; replacing a move requires it to be discovered. */
     fun teachTm(data: GameData, state: GameState, move: String, uid: String, replaceIndex: Int?, now: Long = System.currentTimeMillis()): ActionResult {
         val tm = Items.tmName(data, move)
         if (move !in state.tms) return ActionResult(false, "You don't own $tm.")
@@ -738,15 +738,18 @@ object ItemUse {
         val moveName = data.move(move)?.name ?: move
         if (move !in data.sp(mon.species).tmMoves) return ActionResult(false, "${mon.name} can't learn $moveName.")
         if (move in mon.moves) return ActionResult(false, "${mon.name} already knows $moveName.")
+        if (Bond.level(mon.bondPoints) < 2) return ActionResult(false, "Teaching a TM needs Bond ♥2.")
         var forgot: String? = null
         if (mon.moves.size < 4) {
             mon.moves += move
         } else {
             if (replaceIndex == null || replaceIndex !in 0..3) return ActionResult(false, "Choose a move to forget.")
             val old = mon.moves[replaceIndex]
+            if (old !in mon.discoveredMoves) return ActionResult(false, "Only a discovered move can be replaced.")
             forgot = data.move(old)?.name ?: old
             mon.moves[replaceIndex] = move
         }
+        state.tms -= move
         val text = if (forgot == null) "${mon.name} learned $moveName" else "${mon.name} forgot $forgot and learned $moveName"
         val events = mutableListOf<GameEvent>(GameEvent.MoveLearned(mon.uid, mon.name, moveName, forgot))
         AchievementPokemon.record(state, "tms", mon, data)

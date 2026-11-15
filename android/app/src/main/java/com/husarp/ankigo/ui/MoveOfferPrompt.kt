@@ -18,7 +18,7 @@ internal object MoveOfferPrompt {
         val offer = mon.moveOffers.firstOrNull() ?: return
         val move = data.move(offer.move)?.name ?: offer.move
         val old = if (mon.moves.size >= 4) Progression.replacementIndex(data, mon)?.let { mon.moves[it] } else null
-        val message = (old?.let { "It replaces ${data.move(it)?.name ?: it}." } ?: "It adds a move to the free slot.") +
+        val message = (old?.let { "It replaces ${if (it in mon.discoveredMoves) data.move(it)?.name ?: it else "???"}." } ?: "It adds a move to the free slot.") +
             "\n\nSkip gives up this offer for good. Closing this window leaves it waiting." +
             if (mon.moveOffers.size > 1) "\n\n${mon.moveOffers.size - 1} more waiting." else ""
         Pickers.show(AppDialog.Builder(a).setTitle("Learn $move?")

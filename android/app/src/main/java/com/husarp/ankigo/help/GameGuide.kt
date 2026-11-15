@@ -212,7 +212,7 @@ object GameGuide {
                 "Prices: item prices vary by up to ${Tuning.SHOP_VARIATION_PERCENT}% each day. Refresh keeps prices. TMs stay at a fixed price.",
                 "Weekend special: one rare held item is on sale on Saturday and Sunday. This is where to buy Lucky Egg, Amulet Coin, Luck Incense, Macho Brace, Soothe Bell and Power items. The offer stays the same all weekend.",
                 "Streak Freeze: keep up to ${com.husarp.ankigo.game.StreakFreeze.CAP}. Each protects one missed daily goal automatically. You need enough to cover every missed day in a gap; otherwise your streak ends and none are spent. Protected days give no gifts or goal progress. Find freezes in daily gifts, rewarded battles or the Shop.",
-                "Purchase limits: weekend items allow one purchase per weekend; Everstone allows one per game day across all offers. TMs stay yours forever. Buy Streak Freezes one at a time up to the limit; each costs more as you hold more. Refreshing never restores a sold-out item.",
+                "Purchase limits: weekend items allow one purchase per weekend; Everstone allows one per game day across all offers. Each TM has one use and is consumed when taught; you can buy another after use. Buy Streak Freezes one at a time up to the limit; each costs more as you hold more. Refreshing never restores a sold-out item.",
                 "Shop reminder: a dot on the Shop tab means you have not looked at the new day’s offers yet.",
                 "Worth buying: save for evolution items your Pokémon need, better balls for Pokémon you want, or a held item that helps your team. Check Healing before stocking up on potions.",
             ),
@@ -243,7 +243,7 @@ object GameGuide {
                 "Evolution items: use the item shown in a Pokémon’s Evolution section. Black Augurite, Peat Block and Metal Alloy come from random finds; the Shop does not sell them.",
                 "Held items: a Pokémon can hold one item. Giving another returns the old one to the Bag. Lucky Egg boosts XP, Macho Brace boosts EVs and Soothe Bell boosts Bond points. Embargo and Magic Room can temporarily stop held items from working in battle.",
                 "Fossils: use one to revive an ancient Pokémon at level ${Tuning.FOSSIL_LEVEL}.",
-                "TMs: keep them forever and use them to teach their moves again. The Pokémon must be able to learn the move.",
+                "TMs: single-use; teaching consumes the TM. The Pokémon must be compatible and have Bond ♥2. Only a discovered move can be replaced. Moves become discovered when used in battle.",
             ),
             listOf(
                 GuideVisual(GuideVisualId.ITEM_ICON, "potion", "Healing"), GuideVisual(GuideVisualId.TAG, "HELD", "Worn"),

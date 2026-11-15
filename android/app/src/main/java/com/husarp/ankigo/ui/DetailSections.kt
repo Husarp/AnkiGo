@@ -249,10 +249,10 @@ object DetailSections {
 
     /**
      * Each move: kind icon, name, type chip + kind, power and accuracy; the one-line legend of the icons under them. No PP (the battle has none).
-     * [unknown] = moves that are not known yet (the wild Pokémon's unused ones): a grey "?" line each, after the known ones.
+     * [unknown] = moves that are not known yet (the wild Pokémon's unused ones): a dark "???" tile each, after the known ones.
      * [levels] (R10-B4, the Pokédex entry's learnset) = one small label per id ("Lv 12") at the start of its row.
      */
-    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0, levels: List<String>? = null, focusMove: String? = null, knownMoves: List<String>? = ids.takeIf { levels == null }): View {
+    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0, levels: List<String>? = null, focusMove: String? = null, knownMoves: List<String>? = ids.takeIf { levels == null && unknown == 0 }): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
         val tap = MoveTap()
         if (ids.isEmpty() && unknown == 0) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "No moves" })
@@ -320,7 +320,11 @@ object DetailSections {
         repeat(unknown) { k ->
             if (ids.isNotEmpty() || k > 0) col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
             col.addView(Ui.text(a, 14f, 800, R.color.ag_sub0).apply {
-                text = "?"; contentDescription = "Unknown move"
+                text = "???"; contentDescription = "Undiscovered move"
+                gravity = Gravity.CENTER
+                minimumHeight = Ui.dp(a, 48)
+                setTextColor(android.graphics.Color.rgb(166, 173, 200))
+                background = Ui.rounded(android.graphics.Color.rgb(49, 50, 68), 8, a)
                 setPadding(0, Ui.dp(a, if (compact) 8 else 10), 0, Ui.dp(a, if (compact) 8 else 10))
             })
         }

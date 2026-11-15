@@ -118,7 +118,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
 
         if (!heldOnly && (category == "All items" || category == "TMs") && state.tms.isNotEmpty()) {
             any = true
-            results.addView(Bits.sect(ctx, "TMs", "${state.tms.size} owned"))
+            results.addView(Bits.sect(ctx, "TMs", "${state.tms.size} single-use TMs"))
             BagTiles.rows(results, state.tms.sortedBy { data.move(it)?.name ?: it }.map { tmRow(it) }, columns = 2)
         }
         if (!any) results.addView(Ui.text(ctx, 13f, 700, R.color.ag_sub0).apply {
@@ -139,12 +139,12 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
         return row
     }
 
-    /** TM tile retains its type disc; a TM is owned once. */
+    /** TM tile retains its type disc; each owned TM has one use. */
     private fun tmRow(move: String): View {
         val ctx = s
         val m = data.move(move)
-        val row = BagTiles.tile(ctx, Bits.tmTile(ctx, m?.type, 80), Items.tmName(data, move), m?.type?.label.orEmpty(), "", large = true)
-        row.contentDescription = ItemCardPlan.detailsLabel("${Items.tmName(data, move)}, ${m?.type?.label.orEmpty()}")
+        val row = BagTiles.tile(ctx, Bits.tmTile(ctx, m?.type, 80), Items.tmName(data, move), m?.type?.label.orEmpty(), "1 use", large = true)
+        row.contentDescription = ItemCardPlan.detailsLabel("${Items.tmName(data, move)}, ${m?.type?.label.orEmpty()}, 1 use")
         row.setOnClickListener { host.openCard(CardKeys.bagTm(move)) }
         return row
     }

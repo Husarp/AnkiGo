@@ -26,14 +26,14 @@ class WildMoveLog {
     fun used(battle: Battle?): Set<String> = if (battle != null && battle === bound) names.toSet() else emptySet()
 }
 
-/** One visible move of the wild Pokémon. Unused moves of unknown species are omitted. */
+/** One slot of the wild Pokémon; null id/name means undiscovered. */
 data class WildMoveSlot(val id: String?, val name: String?)
 
 /** What the player already knows of the wild species. */
 enum class WildDex { SEEN, DEFEATED, CAUGHT }
 
 /**
- * The facts of the info window. Only things a player may see: IVs, nature, EVs, ability, held item and unused moves of an unknown species are
+ * The facts of the info window. Only things a player may see: IVs, nature, EVs, ability, held item and undiscovered move identities are
  * not in here, so no screen can show them by mistake.
  */
 data class WildInfo(
@@ -76,9 +76,11 @@ data class WildInfo(
             val sp = data.species[wild.species] ?: return null
             val used = usedMoves.map { it.lowercase() }.toSet()
             val known = SpeciesKnowledge.known(data, state, wild.species)
-            val moves = (if (known) wild.moves.mapNotNull(data::move) else emptyList()) +
-                data.moves.values.filter { it.name.lowercase() in used }
-            val visible = moves.distinctBy { it.id }.map { WildMoveSlot(it.id, it.name) }
+            val visible = wild.moves.map { id ->
+                val move = data.move(id)
+                if (id in wild.discoveredMoves || move?.name?.lowercase() in used) WildMoveSlot(id, move?.name ?: id)
+                else WildMoveSlot(null, null)
+            }
             return WildInfo(
                 name = wild.name, dexNum = sp.baseNum, level = wild.level, gender = wild.gender, shiny = wild.shiny,
                 types = sp.types, tier = battle.tier,

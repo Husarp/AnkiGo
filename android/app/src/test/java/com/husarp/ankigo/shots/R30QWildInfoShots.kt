@@ -37,9 +37,13 @@ class R30QWildInfoShots {
             assertFalse("Hidden $label in $text", text.any { it.equals(label, true) || it.startsWith("$label ·", true) })
     }
 
-    @Test fun unknownHasNoEmptySections() = paparazzi.shoot("q-wild-unknown", listOf(Size.PHONE)) { ctx ->
+    @Test fun unknownHasMoveCountAndUnknownTiles() = paparazzi.shoot("q-wild-unknown", listOf(Size.PHONE)) { ctx ->
         unknown()
-        wild(ctx).also { scene -> locked(scene); assertFalse(texts(scene).any { it.equals("Moves", true) }) }
+        wild(ctx).also { scene ->
+            locked(scene)
+            assertTrue(texts(scene).any { it.equals("Moves", true) })
+            assertTrue(texts(scene).contains("???"))
+        }
     }
 
     @Test fun unknownShowsOnlyObservedMoves() = paparazzi.shoot("q-wild-used", listOf(Size.PHONE, Size.SPLIT)) { ctx ->
@@ -60,8 +64,9 @@ class R30QWildInfoShots {
                 assertTrue(text.any { it.startsWith("Stats", true) })
                 assertFalse(text.any { it.equals("Matchups", true) })
                 assertTrue(text.any { it.equals("Info", true) })
-                assertTrue(text.contains("Water Gun"))
-                assertTrue(text.contains("Tackle"))
+                assertFalse(text.contains("Water Gun"))
+                assertFalse(text.contains("Tackle"))
+                assertTrue(text.contains("???"))
                 assertFalse(text.any { it.equals("Bond", true) })
             }
         }

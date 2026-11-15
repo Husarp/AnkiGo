@@ -32,6 +32,7 @@ class R17CFixBCompareTest {
 
     private fun cells(moves: List<String>): List<MoveCell> {
         val m: Mon = TestData.mon(data, 25, 30, moves, "a")
+        m.discoveredMoves += moves
         val s = GameState(createdAt = 1L, starterChosen = true).also { it.seen += data.species.keys; it.mons += m }
         val t = CompareTable.build(data, s, listOf(ComparePick.Owned("a"), ComparePick.Dex(1)), false)
         return (t.row("moves").cells[0] as Cell.Moves).moves

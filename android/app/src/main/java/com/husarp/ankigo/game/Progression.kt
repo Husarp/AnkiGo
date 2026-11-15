@@ -458,6 +458,7 @@ object Catching {
             ivs = specialIvs(wild.ivs, special), evs = wild.evs, nature = wild.nature, gender = wild.gender, shiny = wild.shiny,
             ability = wild.ability, moves = wild.moves.distinct().take(4).toMutableList(), hp = 1, friendship = 0, heldItem = null,
             caughtAt = now, defeats = 0, tier = tier,
+            discoveredMoves = wild.discoveredMoves.toMutableSet(),
         )
         mon.hp = StatCalc.maxHp(data, mon)
         val previousTypes = Achievements.value(Metric.TYPES_CAUGHT, state, data)
