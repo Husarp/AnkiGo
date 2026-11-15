@@ -100,21 +100,21 @@ class ItemInfoTest {
     // ---- healing ----
 
     @Test fun healingItemsSayHowMuchAndWhatHappensInAFight() {
-        assertEquals("Heals 20 HP", ItemInfo.short(data, "potion"))
-        assertEquals("Heals 60 HP", ItemInfo.line(data, "super-potion"))
-        assertEquals("Heals all HP", ItemInfo.short(data, "max-potion"))
-        assertTrue(fact("potion", "What it does").contains("**20 HP**") && fact("potion", "What it does").contains("never above"))
+        assertEquals("Heals 25% max HP", ItemInfo.short(data, "potion"))
+        assertEquals("Heals 50% max HP", ItemInfo.line(data, "super-potion"))
+        assertEquals("Heals 100% max HP", ItemInfo.short(data, "max-potion"))
+        assertTrue(fact("potion", "What it does").contains("25% max HP") && fact("potion", "What it does").contains("never goes above"))
         assertTrue(fact("potion", "How to use").contains("**can't**"))
         val fight = fact("potion", "In a fight")
         assertTrue(fight.contains("**main**") && fight.contains("**at once**") && fight.contains("**first answer**") && fight.contains("uses one free move"))   // R18-B (264)
         assertFalse(fight.contains("one turn") || fight.contains("free hit") || fight.contains("free attack"))
         assertTrue(fight.contains("bench"))
         // R17C-6: Full Restore cures a status in a fight, Max Potion does not (the old "no status problems" text was false)
-        for (id in listOf("full-restore", "max-potion")) assertTrue(fact(id, "What it does").contains("**all HP**") && fact(id, "What it does").contains("status"))
+        for (id in listOf("full-restore", "max-potion")) assertTrue(fact(id, "What it does").contains("100% max HP"))
         for (id in listOf("full-restore", "max-potion")) assertFalse(id, fact(id, "What it does").contains("no status problems"))
-        assertTrue(fact("full-restore", "What it does").contains("**cures**"))
-        assertTrue(fact("max-potion", "What it does").contains("**doesn't** cure"))
-        assertEquals("All HP + status", ItemInfo.short(data, "full-restore"))
+        assertTrue(fact("full-restore", "What it does").contains("cures"))
+        assertTrue(fact("max-potion", "What it does").contains("does not cure"))
+        assertEquals("100% HP + status cure", ItemInfo.short(data, "full-restore"))
     }
 
     // ---- evolution items ----
@@ -291,6 +291,6 @@ class ItemInfoTest {
         assertEquals("Use it from the Bag to revive an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}.", ItemInfo.howToUse("helix-fossil"))
         assertEquals("", ItemInfo.howToUse("not-an-item"))
         assertTrue(ItemInfo.tmHowToUse().contains("never used up"))
-        assertEquals("Heals 20 HP", ItemInfo.effect("potion"))
+        assertEquals("Heals 25% max HP", ItemInfo.effect("potion"))
     }
 }

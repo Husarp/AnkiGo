@@ -38,15 +38,15 @@ class EconomyTest {
         assertEquals(26, Items.ALL.values.count { it.kind == ItemKind.HELD })
         assertEquals(2, Items.ALL.values.count { it.kind == ItemKind.ESCAPE })
         assertEquals(11, Items.ALL.values.count { it.kind == ItemKind.FOSSIL })
-        assertEquals(60, Items.def("super-potion")!!.heal)
-        assertEquals(Int.MAX_VALUE, Items.def("max-potion")!!.heal)
-        assertEquals(Int.MAX_VALUE, Items.def("full-restore")!!.heal)
+        assertEquals(50, Items.def("super-potion")!!.heal)
+        assertEquals(100, Items.def("max-potion")!!.heal)
+        assertEquals(100, Items.def("full-restore")!!.heal)
         assertEquals(140, Items.def("dome-fossil")!!.fossil)
         assertEquals("Catch chance 50 %. If it fails, the wild Pokémon runs away.", Items.def("great-ball")!!.note)   // PLAN 171
         assertEquals("Catch chance 100 %: it always catches.", Items.def("master-ball")!!.note)
         assertEquals(Items.specialNote("dive-ball"), Items.def("dive-ball")!!.note)
         assertTrue(Items.ALL.values.filter { it.kind == ItemKind.BALL && it.id != "master-ball" }.all { it.note.contains("used up") || it.note.endsWith(Items.MISS_RULE) })
-        assertEquals("Heals 60 HP", Items.def("super-potion")!!.note)
+        assertEquals("Heals 50% max HP.", Items.def("super-potion")!!.note)
         assertTrue(Items.ALL.values.all { it.note.isNotBlank() })
     }
 
@@ -341,7 +341,7 @@ class EconomyTest {
         assertEquals(200, data.price("poke-ball")); assertEquals(600, data.price("great-ball")); assertEquals(1200, data.price("ultra-ball"))   // R13 Part C
         assertEquals("never sold", 0, data.price("master-ball"))
         for (old in Tuning.OLD_BALLS) assertEquals(old, Tuning.SHOP_PRICE.getValue(old), data.price(old))
-        assertEquals("proposal overrides API", 300, data.price("super-potion"))
+        assertEquals("proposal overrides API", 250, data.price("super-potion"))
         val s = state()
         s.shopDay = s.day; s.shopItems += "great-ball"; s.cash = 1000
         assertEquals("Bought Great Ball for ${Shop.priceOf(data, s, "great-ball")} coins", Shop.buy(data, s, "great-ball").message)
@@ -530,7 +530,7 @@ class EconomyTest {
         val m = hurt(s, 50)
         Economy.give(s, "potion"); Economy.give(s, "max-potion")
         ItemUse.use(data, s, "potion", "main", TestData.rng(), 0)
-        assertEquals(StatCalc.maxHp(data, m) - 30, m.hp)
+        assertEquals(StatCalc.maxHp(data, m) - 50 + StatCalc.maxHp(data, m) / 4, m.hp)
         assertFalse("potion" in s.bag)
         val r = ItemUse.use(data, s, "max-potion", null, TestData.rng(), 0)
         assertTrue(r.ok); assertEquals(StatCalc.maxHp(data, m), m.hp) // no overflow with Int.MAX_VALUE
@@ -544,7 +544,7 @@ class EconomyTest {
         assertFalse(ItemUse.canUse(data, s, "potion", s.main)) // main is full
         assertTrue(ItemUse.canUse(data, s, "potion", other))
         assertTrue(ItemUse.use(data, s, "potion", "bird", TestData.rng(), 0).ok)
-        assertEquals(21, other.hp)
+        assertEquals(1 + StatCalc.maxHp(data, other) / 4, other.hp)
     }
 
     @Test fun itemNotInBagOrNotUsable() {

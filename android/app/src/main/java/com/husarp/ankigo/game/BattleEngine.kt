@@ -428,6 +428,7 @@ object BattleEngine {
             // R19-FIX (CX-3): a Pokémon that has not entered the fight yet does so BEFORE the moves are picked and the order is set: Imposter's
             // Ditto has transformed by then, so its first action is a real move of the copied set, with the copied speed and priority
             if ((enemyActs || mainActs) && wild.hp > 0 && main.hp > 0) enterBoth()
+            if (wild.hp > 0 && main.hp > 0) HealingItems.startOfRound(this)
             val playerMove: Move? = if (mainActs) MoveChooser.pick(moveChoice, this, true, rng) else null
             val enemyMove: Move? = if (enemyActs) {
                 if (forceStrongest) MoveChooser.pickStrongest(this, false, rng) else MoveChooser.pick(moveChoice, this, false, rng)

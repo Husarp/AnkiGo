@@ -48,7 +48,8 @@ class ItemTurnTest {
     @Test fun aPotionOnTheMainInAFightHealsThenTheWildOneAttacksOnce() {
         val g = game()
         val main = g.state.main!!
-        val healedTo = main.hp + 20
+        val amount = StatCalc.maxHp(data, main) / 4
+        val healedTo = main.hp + amount
         val r = g.useItem("potion", main.uid)
         assertTrue(r.ok)
         assertEquals(2, g.state.count("potion"))
@@ -58,7 +59,7 @@ class ItemTurnTest {
         assertEquals("the wild one uses one free move, the Main doesn't", 1, attacks.size)
         assertFalse(attacks.single().byPlayer)
         assertEquals(healedTo - attacks.single().damage, main.hp)
-        assertTrue(r.message, r.message.startsWith("Potion healed ${main.name} by 20 HP — the wild Ratty"))
+        assertTrue(r.message, r.message.startsWith("Potion healed ${main.name} by $amount HP — the wild Ratty"))
         // one turn, not a round: the round count and the answers waiting in the round stay
         assertEquals(1, g.state.battle!!.rounds); assertEquals(0, g.state.battle!!.answers)
     }

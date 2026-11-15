@@ -572,7 +572,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             battle?.natureMainRounds = 0
             battle?.team = state.teamMons()
             battle?.switchOutMain(data, oldMon) // R17C-1: the rule sets' onLeave, then a fresh side for the new main
-            if (battle != null) BattleItems.sync(battle, main)
+            if (battle != null) { BattleItems.sync(battle, main); HealingItems.sync(battle, main) }
             events += GameEvent.MainChanged(main.uid, main.name)
             refreshNext() // the wild level follows the main's level
             if (battle != null && battle.wild.hp > 0 && main.hp > 0 && !free) {

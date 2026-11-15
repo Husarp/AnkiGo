@@ -5,6 +5,13 @@ import com.husarp.ankigo.game.StageText
 /** Short descriptions of the implemented battle rules, available even without a loaded save. */
 internal object ConditionExplanation {
     val effects = mapOf(
+        "heal.regen" to "Berry Juice heals 10% max HP at the end of each remaining turn (4 turns after the initial 10%; 50% total). Pauses on the bench and ends with the fight.",
+        "heal.pending" to "Sweet Heart heals 0% immediately and 70% max HP at the start of this Pokémon's next turn, before attacks. Pauses on the bench and ends with the fight.",
+        "heal.speed" to "Soda Pop: Speed ×1.25 for this Pokémon until the fight ends, including after switching. Does not stack with itself.",
+        "heal.attack" to "Lemonade: Attack ×1.25 for this Pokémon until the fight ends, including after switching. Does not stack with itself.",
+        "heal.defense" to "Moomoo Milk: Defense ×1.25 for this Pokémon until the fight ends, including after switching. Does not stack with itself.",
+        "heal.slow" to "Energy Powder: Speed ×0.75 for this Pokémon until the fight ends, including after switching. Does not stack with itself.",
+        "heal.weak" to "Energy Root: Attack ×0.75 for this Pokémon until the fight ends, including after switching. Does not stack with itself.",
         "snack.rage" to "Attack, Defense, Sp. Atk, Sp. Def and Speed ×1.1 for this Pokémon until the fight ends, including after switching.",
         "snack.spd" to "Sp. Def ×1.25 for this Pokémon until the fight ends, including after switching.",
         "snack.spa" to "Sp. Atk ×1.25 for this Pokémon until the fight ends, including after switching.",

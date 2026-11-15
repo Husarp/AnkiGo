@@ -192,7 +192,7 @@ class R36RItemsTest {
             assertEquals(10, m.hp); assertEquals(enemyHp, r.mon(false).hp); assertEquals(held, m.heldItem)
         }
     }
-    @Test fun allNewItemsHaveExactTextsPriceAndSourcesWithoutChangingOldHeals() {
+    @Test fun allNewItemsHaveExactTextsPriceAndSources() {
         for (item in BattleItems.snacks.keys + BattleItems.held.keys + "awakening") {
             assertNotNull(Items.def(item)); assertTrue(data.price(item) > 0)
             assertTrue(item in Items.shopPool(data)); assertTrue(item in Items.dropPool())
@@ -201,8 +201,8 @@ class R36RItemsTest {
         }
         assertEquals("Pewter Crunchies", ItemInfo.plural("Pewter Crunchies", 3))
         assertEquals("Leftovers", ItemInfo.plural("Leftovers", 3))
-        assertEquals(20, Items.def("potion")!!.heal)
-        assertEquals(120, Items.def("hyper-potion")!!.heal)
+        assertEquals(25, Items.def("potion")!!.heal)
+        assertEquals(75, Items.def("hyper-potion")!!.heal)
     }
     @Test fun oldGateauStockIsVeryRareAndLimitedToOnePerOffer() {
         var eligible = 0

@@ -131,15 +131,15 @@ class R17C6FullRestoreTest {
     @Test fun theTextsSayWhatEachOneDoes() {
         fun fact(id: String, title: String) = ItemInfo.facts(data, id).first { it.title == title }.text
         val fr = fact("full-restore", "What it does")
-        assertTrue(fr, fr.contains("**all HP**") && fr.contains("**cures**") && !fr.contains("no status problems"))
-        assertTrue(fact("full-restore", "How to use").contains("except on your main when it has a status in a fight"))
+        assertTrue(fr, fr.contains("100% max HP") && fr.contains("cures") && !fr.contains("no status problems"))
+        assertTrue(fact("full-restore", "How to use").contains("another useful effect"))
         val mp = fact("max-potion", "What it does")
-        assertTrue(mp, mp.contains("**all HP**") && mp.contains("**doesn't** cure a status"))
-        assertEquals("All HP + status", ItemInfo.short(data, "full-restore"))
-        assertEquals("Heals all HP, cures a status", ItemInfo.line(data, "full-restore"))
-        assertEquals("Heals all HP", ItemInfo.short(data, "max-potion"))
-        assertEquals("Heals all HP and cures a status", Items.def("full-restore")!!.note)
-        assertEquals("Heals all HP", Items.def("max-potion")!!.note)
+        assertTrue(mp, mp.contains("100% max HP") && mp.contains("does not cure status"))
+        assertEquals("100% HP + status cure", ItemInfo.short(data, "full-restore"))
+        assertEquals("100% max HP + status cure", ItemInfo.line(data, "full-restore"))
+        assertEquals("Heals 100% max HP", ItemInfo.short(data, "max-potion"))
+        assertEquals("Heals 100% max HP and cures burn, poison, paralysis, sleep or freeze.", Items.def("full-restore")!!.note)
+        assertEquals("Heals 100% max HP; does not cure status.", Items.def("max-potion")!!.note)
         for (id in listOf("full-restore", "max-potion", "potion")) assertTrue(id, fact(id, "In a fight").contains("**at once**"))
     }
 }

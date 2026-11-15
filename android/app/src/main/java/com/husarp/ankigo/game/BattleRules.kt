@@ -269,7 +269,7 @@ internal interface BattleRules {
     val handles: Set<String> get() = emptySet()
 
     companion object {
-        private val DEFAULT: List<BattleRules> by lazy { listOf(CoreRules, RemainingMoves, MovePower, Hazards, SideMoves, FieldRules, MoveControl, Abilities, AbilitiesMore, AbilityAdaptations, BattleItems, BondRules) }
+        private val DEFAULT: List<BattleRules> by lazy { listOf(CoreRules, RemainingMoves, MovePower, Hazards, SideMoves, FieldRules, MoveControl, Abilities, AbilitiesMore, AbilityAdaptations, BattleItems, HealingItems, BondRules) }
 
         @Volatile private var injected: List<BattleRules>? = null
 
