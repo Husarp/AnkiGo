@@ -33,9 +33,9 @@ class EconomyTest {
 
     @Test fun catalogueShape() {
         assertEquals(14, Items.ALL.values.count { it.kind == ItemKind.BALL })
-        assertEquals(13, Items.ALL.values.count { it.kind == ItemKind.HEAL })
+        assertEquals(22, Items.ALL.values.count { it.kind == ItemKind.HEAL })
         assertEquals(41, Items.ALL.values.count { it.kind == ItemKind.EVOLUTION })
-        assertEquals(20, Items.ALL.values.count { it.kind == ItemKind.HELD })
+        assertEquals(26, Items.ALL.values.count { it.kind == ItemKind.HELD })
         assertEquals(2, Items.ALL.values.count { it.kind == ItemKind.ESCAPE })
         assertEquals(11, Items.ALL.values.count { it.kind == ItemKind.FOSSIL })
         assertEquals(60, Items.def("super-potion")!!.heal)

@@ -185,6 +185,7 @@ object MonDetail {
         val seen = state?.let { it.seen + it.caught }.orEmpty()
         lateinit var dlg: AppDialog
         DetailTopCard.expShare(a, data, state, mon)?.let { col.addView(it) }
+        if (page != null) col.addView(BagItemActions.feedButton(page, mon) { show(a, data, mon, replaceDetails = true) }, Form.lp(a, 8))
         var heldSection = DetailTopCard.heldItem(a, data, mon, page)
         heldSection?.let { col.addView(it) }
         col.addView(DetailTopCard.forMon(a, data, state, mon, sp, seen, compact, page, if (page != null) { s -> DexDetail.show(page, s) } else null, onEvolved = {

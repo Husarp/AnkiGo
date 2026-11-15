@@ -198,7 +198,7 @@ object BattleEngine {
             move.ohko -> defender.hp
             else -> null
         }
-        if (fixed != null) return DamageResult(if (eff > 0) fixed else 0, eff, false)
+        if (fixed != null) return DamageResult(if (eff > 0) floor(fixed * rulesProduct { it.fixedFinalMod(h) }).toInt() else 0, eff, false)
 
         val physical = h.physical
         val crit = forceCrit ?: (Tuning.CRITS && (move.willCrit || rng.nextDouble() < Tuning.CRIT_CHANCE[move.critRatio.coerceIn(0, 4)]))

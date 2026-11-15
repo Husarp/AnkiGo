@@ -15,7 +15,7 @@ internal typealias Round = BattleEngine.Round
  * - "any true": [blocks] [immune] [suppressWeather] [slowerFirst] [skipsCharge] [ignoresBurn] [ignoresStage]; "all must be true": [beforeMove] (stops at the first false);
  * - "chained" (each set gets the previous set's answer): [moveType] [effectiveness] [accuracy] [takeDamage] [stageChange] [types] [stats]
  *   [moves] [grounded] [ability] [secondaryChance] [indirectDamage] [drain];
- * - "multiplied": [powerMod] [attackMod] [defenseMod] [weatherMod] [finalMod] [speedMod] [wakeMod]; "added": [priority] [bracket];
+ * - "multiplied": [powerMod] [attackMod] [defenseMod] [weatherMod] [finalMod] [fixedFinalMod] [speedMod] [wakeMod]; "added": [priority] [bracket];
  * - "all run": [beforeHit] [afterHit] [afterMove] [afterCalledMove] [afterDamage] [afterStatus] [afterStageChange] [secondary] [onEnter] [endOfRound]
  *   [afterFreeHit] [onLeave].
  *
@@ -135,6 +135,9 @@ internal interface BattleRules {
 
     /** Multiplies the final damage (screens, Multiscale, Life Orb ...). */
     fun finalMod(h: Hit): Double = 1.0
+
+    /** The agreed held damage bonuses also apply to fixed-damage attacks. */
+    fun fixedFinalMod(h: Hit): Double = 1.0
 
     /** Any true = a burn of the attacker does not halve this physical hit's damage (Facade, Guts). R17C-4 added this hook. */
     fun ignoresBurn(h: Hit): Boolean = false
@@ -266,7 +269,7 @@ internal interface BattleRules {
     val handles: Set<String> get() = emptySet()
 
     companion object {
-        private val DEFAULT: List<BattleRules> by lazy { listOf(CoreRules, RemainingMoves, MovePower, Hazards, SideMoves, FieldRules, MoveControl, Abilities, AbilitiesMore, AbilityAdaptations, BondRules) }
+        private val DEFAULT: List<BattleRules> by lazy { listOf(CoreRules, RemainingMoves, MovePower, Hazards, SideMoves, FieldRules, MoveControl, Abilities, AbilitiesMore, AbilityAdaptations, BattleItems, BondRules) }
 
         @Volatile private var injected: List<BattleRules>? = null
 

@@ -153,6 +153,11 @@ object Tuning {
     )
     /** PLAN 342: proposal prices override PokeAPI costs; unspecified items retain their costs. */
     val SHOP_PRICE = mapOf(
+        "rage-candy-bar" to 3000, "big-malasada" to 700, "shalour-sable" to 900,
+        "lumiose-galette" to 800, "casteliacone" to 1200, "pewter-crunchies" to 1200,
+        "old-gateau" to 4000, "lava-cookie" to 400, "awakening" to 200,
+        "leftovers" to 4000, "shell-bell" to 4000, "rocky-helmet" to 6000,
+        "life-orb" to 5000, "expert-belt" to 4000, "focus-sash" to 2500,
         "poke-ball" to 200,
         "great-ball" to 600,
         "ultra-ball" to 1200,
