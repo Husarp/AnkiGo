@@ -102,11 +102,11 @@ class R18FFilterShots {
             val words = chipView.contentDescription.toString()
             assertTrue(words, "Gen 1–2" in words && "Only" in words && "Wishlist" !in words && "Favourites" !in words)
             assertTrue("lit chips stay", chip(row, "★ Wishlist").isSelected && chip(row, "Favourites").isSelected)
-            // the sheet's Clear: types and generations (and the wishlist switch it holds); the owner and the search stay
+            // the sheet's Clear: types and generations; the wishlist quick chip stays; the owner and the search stay
             setField(p, "filter", dexFilter(p).copy(owned = DexOwned.OWNED, query = "a"))
             tap(p.sortSheet().build(maxBody(ctx)), "Clear")
             val f = dexFilter(p)
-            assertEquals(TypeFilter(), f.typeFilter); assertTrue(f.gens.isEmpty()); assertFalse(f.wishlistOnly)
+            assertEquals(TypeFilter(), f.typeFilter); assertTrue(f.gens.isEmpty()); assertTrue("Wishlist quick chip is outside the sheet", f.wishlistOnly)
             assertEquals(DexOwned.OWNED, f.owned); assertEquals("a", f.query)
             assertTrue("Favourites is not in the sheet, so Clear keeps it", f.favouritesOnly)
             View(ctx)

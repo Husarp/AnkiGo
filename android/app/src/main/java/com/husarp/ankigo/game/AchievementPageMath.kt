@@ -20,10 +20,10 @@ enum class AchSource {
 }
 
 /**
- * One tier on the detail sheet's ladder. [state]: reached, the one being worked on, or locked. [lockedText] = "next after Epic" / "locked until Legendary".
+ * One tier on the detail sheet's ladder. [state]: reached, the one being worked on, or locked.
  * [reward] = the item id this tier puts in the Bag (R14-B2-D: the Master Ball for the top tier of "Best streak"), or null.
  */
-class AchStep(val tier: Int, val name: String, val threshold: Long, val state: State, val date: Long?, val lockedText: String?, val inferred: Boolean = false, val reward: String? = null) {
+class AchStep(val tier: Int, val name: String, val threshold: Long, val state: State, val date: Long?, val inferred: Boolean = false, val reward: String? = null) {
     enum class State { REACHED, CURRENT, LOCKED }
 }
 
@@ -145,12 +145,7 @@ object AchPageMath {
     /** Every tier of [v] with its state, in order. */
     fun ladder(v: AchView): List<AchStep> = v.tiers.mapIndexed { t, threshold ->
         val state = when { t <= v.tier -> AchStep.State.REACHED; t == v.tier + 1 -> AchStep.State.CURRENT; else -> AchStep.State.LOCKED }
-        val lockedText = when {
-            state != AchStep.State.LOCKED -> null
-            t == v.tier + 2 -> "next after ${AchievementTable.tierName(v.tier + 1)}"
-            else -> "locked until ${AchievementTable.tierName(t - 1)}"
-        }
-        AchStep(t, AchievementTable.tierName(t), threshold, state, v.dates.getOrNull(t), lockedText, t in v.inferred, rewardOf(v.id, t))
+        AchStep(t, AchievementTable.tierName(t), threshold, state, v.dates.getOrNull(t), t in v.inferred, rewardOf(v.id, t))
     }
 
     // ---- rewards (R14-B2-D) ----

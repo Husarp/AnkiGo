@@ -216,7 +216,7 @@ class R4V2Shots {
             assertTrue("Common · 10" in t && "Rare · 100" in t && "Epic · 1,000" in t)
             assertTrue("Reached 4 Aug 2026" in t || t.any { it.startsWith("Reached ") })
             assertTrue(t.any { it.contains("to go") })
-            assertTrue("next after Epic" in t && "locked until Legendary" in t)
+            assertFalse(t.any { it.startsWith("next after ") || it.startsWith("locked until ") })
             assertFalse(t.any { it.startsWith("Counted from your save") })
             screen
         }

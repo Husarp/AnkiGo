@@ -172,10 +172,10 @@ class R16ETypeSheetShots {
         paparazzi.shootPage("r16e-dex", widths) { ctx ->
             val p = TeamPage(ctx, NoHost); p.preset(TeamSection.BOX)
             var types = TypeFilter(linkedSetOf(Type.FIRE), TypeMatch.ANY)
-            var wish = false; var picked = emptySet<Int>()
+            var picked = emptySet<Int>()
             val sheet = SortSheet(
                 p, SortText.dexKeys, SortSpec.of(SortKey.DEX_NUMBER), null, 0, null, count = { 151 }, onChange = { _, _ -> },
-                dex = SortSheet.DexPart(wish, listOf(1, 2, 3), picked) { w, g -> wish = w; picked = g },
+                dex = SortSheet.DexPart(listOf(1, 2, 3), picked) { g -> picked = g },
                 type = SortSheet.TypePart(types) { types = it },
             ).build(maxBody(ctx))
             val t = texts(sheet)

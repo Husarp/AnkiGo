@@ -99,9 +99,9 @@ object DetailFormat {
         else -> "Lv $level"
     }
 
-    /** All abilities of a species (the Pokédex entry): "Static · Lightning Rod (hidden)"; null when none. */
+    /** All abilities of a species (the Pokédex entry): "Static · Lightning Rod (rare)"; null when none. */
     fun allAbilities(sp: Species): String? =
-        (sp.abilities + listOfNotNull(sp.hiddenAbility?.let { "$it (hidden)" })).takeIf { it.isNotEmpty() }?.joinToString(" · ")
+        (sp.abilities + listOfNotNull(sp.hiddenAbility?.let { "$it (rare)" })).takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
 
 /** R18-G (PLAN 239): one thing the Holding row of the details shows: the held item or the Exp. Share. [sub] is its small line. */

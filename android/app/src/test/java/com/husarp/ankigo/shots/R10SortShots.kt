@@ -128,7 +128,7 @@ class R10SortShots {
             val sheet = p.sortSheet().build(maxBody(ctx))
             val t = texts(sheet)
             assertTrue("title: $t", "Sort & filter" in t)
-            assertTrue("Only wishlist" in t); assertTrue("GENERATION" in t); assertTrue("SHOW" in t)
+            assertFalse("Only wishlist" in t); assertTrue("GENERATION" in t); assertFalse("SHOW" in t)
             assertTrue("Gen 1" in t && "Gen 2" in t)
             assertTrue("DIRECTION" in t)
             val shown = (getField(p, "shown") as List<*>).size
@@ -147,10 +147,6 @@ class R10SortShots {
             val gen2 = gd.species.values.count { it.gen == 2 }
             assertTrue(gen2 in 1 until all)
             assertEquals("Show $gen2 Pokémon", texts(sheet).first { it.startsWith("Show ") && it.endsWith("Pokémon") })
-            val sw = all(sheet).filterIsInstance<android.widget.Switch>().single()
-            sw.isChecked = true
-            val f = getField(p, "filter") as DexFilter
-            assertTrue(f.wishlistOnly)
             tap(sheet, "Clear")
             val r = getField(p, "filter") as DexFilter
             assertFalse(r.wishlistOnly); assertTrue(r.gens.isEmpty())
