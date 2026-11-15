@@ -81,7 +81,7 @@ object AchievementTable {
         // ---- Study ----
         tiered("answers", "Study", "Answers given", "Cards you answer while AnkiGo is running", Metric.ANSWERS, "cards", 500, 5_000, 25_000, 100_000, 250_000),
         // R14-B2-D: the top tier gives the one Master Ball (it is never sold).
-        tiered("streak-days", "Study", "Best streak", "Most days in a row with the daily goal reached · top tier: a Master Ball", Metric.BEST_STREAK_DAYS, "flame", 3, 7, 30, 100, 365,
+        tiered("streak-days", "Study", "Best streak", "Most days in a row with the daily goal reached", Metric.BEST_STREAK_DAYS, "flame", 3, 7, 30, 100, 365,
             rewards = mapOf(4 to "master-ball")),
         // Keeps the Ankimon badges 1, 2, 4, 12, 13 as its tiers; badge 3 (300 cards) is still given, it just has no tier here.
         tiered("cards-day", "Study", "Cards in one day", "Most answers in a single day", Metric.BEST_DAY, "calendar", 100, 200, 500, 1_000, 2_000,

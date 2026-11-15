@@ -218,7 +218,7 @@ internal class BagActions(private val s: ShopPage, private val mons: MonActions,
                 val ok = candidates().filter { ItemUse.canUse(data, state, item, it) || Progression.itemEvolutionTimeNeeded(data, it, item) != null } // time-blocked ones stay, hinted "(night)"
                 if (ok.isEmpty()) { Ui.toast(s, "No Pokémon can use ${Items.name(item)} right now"); return }
                 close()
-                Pickers.pickMonNames(s, "${Items.name(item)} on…", ok) { mons.useItem(it, item) }
+                Pickers.pickMonNames(s, "${Items.name(item)} on…", data, ok) { mons.useItem(it, item) }
             }
             ItemKind.HELD -> {
                 val all = candidates().filter { it.heldItem != item }

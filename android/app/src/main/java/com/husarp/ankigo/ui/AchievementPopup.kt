@@ -191,7 +191,7 @@ object AchievementPopup {
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(0.45f)
         }
-        fun finish() { if (dialog === d) { dialog = null; shown = emptyList(); shownItems = emptyList(); shownGift = null; shownSave = null }; d.dismiss(); schedule() } // a tap closes it; more waiting? the next batch follows
+        fun finish() { if (dialog === d) { dialog = null; shown = emptyList(); shownItems = emptyList(); shownGift = null; shownSave = null }; d.dismiss(); schedule() } // a button closes it; more waiting? the next batch follows
         if (pendingSaves.isNotEmpty()) {
             val saved = pendingSaves.first()
             pendingSaves = pendingSaves.drop(1)
@@ -216,7 +216,8 @@ object AchievementPopup {
             shownItems = batch
             d.setContentView(itemLayer(a, batch, onNice = { finish() }))
         }
-        d.setOnCancelListener { finish() }
+        d.setCancelable(false)
+        d.setCanceledOnTouchOutside(false)
         dialog = d
         d.window?.setWindowAnimations(UiMotion.windowStyle(a))
         d.show()
@@ -235,19 +236,19 @@ object AchievementPopup {
             addView(Form.secondary(ctx, "Nice") { close() }, Form.lp(ctx, 14))
         }
         return FrameLayout(ctx).apply {
-            setOnClickListener { close() }
+            isClickable = true
             card.isClickable = true
             addView(cardScroll(ctx, card), FrameLayout.LayoutParams(-1, -2, Gravity.CENTER).also { it.setMargins(Ui.dp(ctx, 28), Ui.dp(ctx, 12), Ui.dp(ctx, 28), Ui.dp(ctx, 12)) })
         }
     }
 
     /**
-     * The full-window layer: the card in the middle (scrolls when the window is short), a tap outside it = [onNice]. [onSee] gets the id of the
-     * achievement whose sheet opens (the one shown; with several, the first listed, or the row that was tapped). One item: big medal on a
+     * The full-window layer: the card in the middle (scrolls when the window is short), only its buttons dismiss it. [onSee] gets the id of the
+     * achievement whose sheet opens (the one shown; with several, the first listed). One item: big medal on a
      * burst, the tier word, the title; several: a list.
      */
     fun layer(ctx: Context, items: List<AchCelebration>, onNice: () -> Unit, onSee: (String?) -> Unit): View {
-        val frame = FrameLayout(ctx).apply { isClickable = true; setOnClickListener { onNice() } }
+        val frame = FrameLayout(ctx).apply { isClickable = true }
         val card = if (items.size == 1) single(ctx, items[0], onNice, onSee) else many(ctx, items, onNice, onSee)
         card.isClickable = true // a tap on the card itself is not a tap outside
         frame.addView(cardScroll(ctx, card), FrameLayout.LayoutParams(-1, -2, Gravity.CENTER).also { it.setMargins(Ui.dp(ctx, 28), Ui.dp(ctx, 12), Ui.dp(ctx, 28), Ui.dp(ctx, 12)) })
@@ -308,8 +309,6 @@ object AchievementPopup {
                 orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 background = Ui.rounded(Ui.c(ctx, R.color.ag_mantle), 14, ctx)
                 setPadding(Ui.dp(ctx, 10), Ui.dp(ctx, 8), Ui.dp(ctx, 12), Ui.dp(ctx, 8))
-                isClickable = true
-                setOnClickListener { onSee(c.rowId) }
             }
             row.addView(AchMedal(ctx, 38).apply { set(AchStyle.icon(AchievementTable.row(c.rowId)?.icon ?: ""), c.tier, special = c.tier < 0, ground = Ui.c(ctx, R.color.ag_mantle)) }, LinearLayout.LayoutParams(Ui.dp(ctx, 38), Ui.dp(ctx, 38)))
             val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
@@ -323,7 +322,7 @@ object AchievementPopup {
             list.addView(row, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 7) })
         }
         box.addView(list, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 6) })
-        // "See it" opens the sheet of the first one listed (every row opens its own); there is no "See all" without a sheet (Adam's pick 2F)
+        // "See it" opens the sheet of the first one listed.
         box.addView(buttons(ctx, "See it", onNice) { onSee(items.first().rowId) }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         return box
     }
@@ -335,10 +334,10 @@ object AchievementPopup {
 
     /**
      * The full-window layer of the "Item found" popup (shots render this view): one item = a big picture, its name, what it does and how many
-     * are owned now (including held copies); several = a list. A tap outside the card or on "Nice" calls [onNice].
+     * are owned now (including held copies); several = a list. Only the "Nice" button calls [onNice].
      */
     fun itemLayer(ctx: Context, finds: List<ItemFind>, onNice: () -> Unit): View {
-        val frame = FrameLayout(ctx).apply { isClickable = true; setOnClickListener { onNice() } }
+        val frame = FrameLayout(ctx).apply { isClickable = true }
         val box = cardBox(ctx)
         box.setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14))
         box.isClickable = true // a tap on the card itself is not a tap outside
@@ -382,11 +381,11 @@ object AchievementPopup {
 
     /**
      * R14-B2-D: the full-window layer of the "Daily gift" popup (shots render this view): the item's picture (or the TM disc), the name with its
-     * count in words ("3 Poké Balls", "Great Ball", "TM Thunderbolt"), what it does. A tap outside the card or on
-     * "Nice" calls [onNice]. [data] null = no game data (the TM shows its move id and no type colour). [caught] (R18-H, PLAN 238): the Pokédex's caught species, so a stone does not name a Pokémon you never caught.
+     * count in words ("3 Poké Balls", "Great Ball", "TM Thunderbolt"), what it does. Only the
+     * "Claim" button calls [onNice]. [data] null = no game data (the TM shows its move id and no type colour). [caught] (R18-H, PLAN 238): the Pokédex's caught species, so a stone does not name a Pokémon you never caught.
      */
     fun giftLayer(ctx: Context, data: GameData?, gift: GiftPop, onNice: () -> Unit, caught: Set<Int>? = null): View {
-        val frame = FrameLayout(ctx).apply { isClickable = true; setOnClickListener { onNice() } }
+        val frame = FrameLayout(ctx).apply { isClickable = true }
         val box = cardBox(ctx)
         box.setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14), Ui.dp(ctx, 14))
         box.isClickable = true // a tap on the card itself is not a tap outside
@@ -404,7 +403,7 @@ object AchievementPopup {
         }
         box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = what; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
         box.addView(Ui.text(ctx, 14f, 900, R.color.ag_crust).apply {
-            text = "Nice"; gravity = Gravity.CENTER; minHeight = Ui.dp(ctx, 48)
+            text = "Claim"; gravity = Gravity.CENTER; minHeight = Ui.dp(ctx, 48)
             background = Ui.rounded(Ui.c(ctx, R.color.ag_mauve), 14, ctx); isClickable = true; setOnClickListener { onNice() }
         }, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 14) })
         frame.addView(cardScroll(ctx, box), FrameLayout.LayoutParams(-1, -2, Gravity.CENTER).also { it.setMargins(Ui.dp(ctx, 28), Ui.dp(ctx, 12), Ui.dp(ctx, 28), Ui.dp(ctx, 12)) })

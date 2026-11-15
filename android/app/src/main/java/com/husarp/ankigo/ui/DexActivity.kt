@@ -430,6 +430,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         if (sp == null) {
             f.visibility = View.INVISIBLE
             f.setOnClickListener(null)
+            f.setOnLongClickListener(null)
             return
         }
         f.visibility = View.VISIBLE
@@ -450,6 +451,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         }
         cell.name.text = if (seen) RarityMark.name(this, sp.name, com.husarp.ankigo.game.Encounters.tierOf(sp), sp.base.total) else "???"
         cell.name.setTextColor(Ui.c(this, when { caught -> R.color.ag_sub1; seen -> R.color.ag_sub0; else -> R.color.ag_ov }))
+        f.setOnLongClickListener { if (seen) DexDetail.show(this, sp); true }
         f.setOnClickListener {
             when {
                 recipient != null -> recipient?.let { if (it.eligible(sp)) it.picked(sp) }

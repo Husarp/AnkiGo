@@ -102,10 +102,12 @@ internal class BoxCopiesSheet(
             setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4), Ui.dp(ctx, 4))
             background = RippleDrawable(ColorStateList.valueOf(Ui.c(ctx, R.color.ag_mantle)), Ui.rounded(Color.TRANSPARENT, 12, ctx), null)
             val canPick = eligible?.invoke(mon) != false
-            isEnabled = canPick
             alpha = if (!canPick) 0.35f else if (mon.hp <= 0) 0.55f else 1f
             setOnClickListener { if (canPick) { dismiss(); onOpen(mon) } }
-            if (eligible == null) setOnLongClickListener { onMenu(mon, it) { dismiss() }; true }
+            setOnLongClickListener {
+                if (eligible != null) MonDetail.show(page, data, mon) else onMenu(mon, it) { dismiss() }
+                true
+            }
         }
         val img = ImageView(ctx)
         Ui.staticSprite(ctx, mon.lookNum(page.data), mon.shiny, img)

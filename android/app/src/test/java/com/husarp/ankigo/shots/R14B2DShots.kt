@@ -53,11 +53,11 @@ class R14B2DShots {
             var nice = 0
             val v = gift(ctx, GiftPop("poke-ball", null, 3, 6)) { nice++ }
             val t = texts(v)
-            assertTrue(t.toString(), t.any { it.equals("Daily gift", ignoreCase = true) } && "3 Poké Balls" in t && "Nice" in t)
+            assertTrue(t.toString(), t.any { it.equals("Daily gift", ignoreCase = true) } && "3 Poké Balls" in t && "Claim" in t)
             assertFalse(t.toString(), t.any { it.contains("Goal streak:") || it.contains("rarer gifts") })
             assertTrue(t.toString(), t.any { it.contains("catch", ignoreCase = true) }) // the item's own line
             fun tap(s: String) { var x: View? = findText(v, s); while (x != null && !x.isClickable) x = x.parent as? View; x!!.performClick() }
-            tap("Nice"); assertEquals(1, nice)
+            tap("Claim"); assertEquals(1, nice)
             v
         }
     }
@@ -98,17 +98,17 @@ class R14B2DShots {
         return AchievementDetail.layer(ctx, v, 0L, ZoneId.of("UTC")) {}
     }
 
-    @Test fun theSheetSaysWhatTheTopTierGives() {
+    @Test fun theSheetKeepsTheTopTierRewardHidden() {
         paparazzi.shootPage("r14b2d-sheet-open", listOf(Variants.PHONE, SMALL)) { ctx ->
             val v = sheet(ctx, 100)
             val t = texts(v)
-            assertEquals(t.toString(), 1, t.count { it == "Reward: Master Ball" })
-            assertTrue(t.toString(), t.any { it.contains("top tier: a Master Ball") })
+            assertEquals(t.toString(), 0, t.count { it == "Reward: Master Ball" })
+            assertFalse(t.toString(), t.any { it.contains("top tier: a Master Ball") })
             v
         }
         paparazzi.shootPage("r14b2d-sheet-done", listOf(Variants.PHONE)) { ctx ->
             val v = sheet(ctx, 400)
-            assertEquals(texts(v).toString(), 1, texts(v).count { it == "Reward: Master Ball" })
+            assertEquals(texts(v).toString(), 0, texts(v).count { it == "Reward: Master Ball" })
             v
         }
     }

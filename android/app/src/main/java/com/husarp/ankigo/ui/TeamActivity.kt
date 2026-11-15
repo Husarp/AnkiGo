@@ -583,7 +583,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
             alpha = if (mon.hp <= 0) 0.55f else 1f
             layoutParams = LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(ctx, 6) }
             setOnClickListener { if (pickOn) togglePick(pick) else MonDetail.show(ctx, data, mon) }
-            setOnLongClickListener { actions.menu(mon, it); true }
+            setOnLongClickListener { if (pickOn) MonDetail.show(ctx, data, mon) else actions.menu(mon, it); true }
         }
         val img = ImageView(ctx)
         MonPreview.show(ctx, mon.lookNum(data), mon.shiny, img)
@@ -810,7 +810,7 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
         (cell.strip.layoutParams as FrameLayout.LayoutParams).leftMargin = Ui.dp(this, if (pickOn) 22 else 4)
         val request = recipient
         val eligible = request == null || tile.members.any(request.eligible)
-        f.isEnabled = eligible
+        f.isEnabled = true
         f.alpha = if (!eligible) 0.35f else if (mon.hp <= 0) 0.55f else 1f
         f.contentDescription = (listOfNotNull(
             mon.shownName, "level ${mon.level}", if (tile.isGroup) "${tile.count} copies" else null,
@@ -821,11 +821,11 @@ class TeamPage(base: Context, host: PageHost, start: TeamSection? = null) : Game
                     if (tile.isGroup) openCopies(tile) else if (request.eligible(mon)) request.picked(mon)
                 }
             }
-            f.setOnLongClickListener(null)
+            f.setOnLongClickListener { MonDetail.show(this, data, mon); true }
             return
         }
         f.setOnClickListener { if (pickOn) togglePick(pick) else if (tile.isGroup) openCopies(tile) else MonDetail.show(this, data, mon) }
-        f.setOnLongClickListener { if (tile.isGroup && !pickOn) openCopies(tile) else actions.menu(mon, it); true }
+        f.setOnLongClickListener { if (pickOn) MonDetail.show(this, data, mon) else if (tile.isGroup) openCopies(tile) else actions.menu(mon, it); true }
     }
 
     internal companion object {
