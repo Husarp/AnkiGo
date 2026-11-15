@@ -1517,15 +1517,19 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val field = conditions.of(ConditionMarks.Slot.FIELD)
         fun ownerFlow(card: View, ms: List<ConditionMarks.Mark>, occupied: List<ConditionSpot.R> = emptyList()): ConditionFlow.OwnerFlow {
             val box = boxOf(card)
+            val obstacles = occupied.ifEmpty {
+                if (card === playerCard && wildOn && wild.isNotEmpty())
+                    ownerFlow(enemyBlock, wild).rects.map { it.grow(m.lift * .5f) } else emptyList()
+            }
             var budget = maxOf(m.height, minOf(scene.area.h / 3f, scene.area.h - card.height * card.scaleY - m.lift))
-            if (occupied.isNotEmpty()) budget = minOf(budget, if (card === enemyBlock) box.t - scene.area.t - m.lift else scene.area.b - box.b - m.lift)
+            if (obstacles.isNotEmpty()) budget = minOf(budget, if (card === enemyBlock) box.t - scene.area.t - m.lift else scene.area.b - box.b - m.lift)
             val other = (if (card === enemyBlock) playerCard else enemyBlock).takeIf { it.visibility == VISIBLE && it.width > 0 }?.let { boxOf(it) }
             // When both chip bands share a height, the left owner keeps its lines out of the right owner's column.
             val right = if ((if (card === enemyBlock) ours.isNotEmpty() else wild.isNotEmpty()) && other != null && other.l > box.l && other.b < box.b + budget + m.lift && box.b < other.b + budget + m.lift)
                 minOf(scene.area.r, other.l - m.gap) else scene.area.r
             return ConditionFlow.owner(box, right, ms.map { m.width(it) }.toFloatArray(),
                 ms.count { it.key.startsWith("stat.") }, m.gap, m.lift, m.height, scene.sprites, budget,
-                blocks = listOfNotNull(other?.grow(Ui.dp(context, .5f))) + scene.blocks.drop(scene.obstacles.size) + occupied,
+                blocks = listOfNotNull(other?.grow(Ui.dp(context, .5f))) + scene.blocks.drop(scene.obstacles.size) + obstacles,
                 below = card !== enemyBlock, left = scene.area.l, moreWidth = m::moreWidth)
         }
         fun reserve(card: View, ms: List<ConditionMarks.Mark>) {

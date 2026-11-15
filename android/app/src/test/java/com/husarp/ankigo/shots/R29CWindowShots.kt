@@ -27,6 +27,10 @@ class R29CWindowShots {
             // Scrollable children can extend vertically, never past a window's right edge.
             assertTrue("${v.javaClass.simpleName} right=${v.right}, parent=${parent.width}", v.right <= parent.width)
             assertTrue("${v.javaClass.simpleName} left=${v.left}", v.left >= 0)
+            if (v.contentDescription?.startsWith("Explain ") == true && parent.clipToPadding) {
+                assertTrue("Requirement marks must not be clipped by tree indentation",
+                    v.left >= parent.paddingLeft && v.right <= parent.width - parent.paddingRight)
+            }
         }
     }
 

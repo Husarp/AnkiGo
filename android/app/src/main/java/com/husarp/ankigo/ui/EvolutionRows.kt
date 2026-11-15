@@ -93,6 +93,7 @@ internal class EvolutionRows(
             }
         }.apply {
             orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            clipToPadding = false
             minimumHeight = Ui.dp(a, 48)
             setPadding(Ui.dp(a, 6 + depth * 16), Ui.dp(a, 4), Ui.dp(a, 6), Ui.dp(a, 4))
             if (here) background = Ui.rounded(Bits.blend(Ui.c(a, R.color.ag_mauve), Ui.c(a, R.color.ag_mantle), .22f), 8, a)
