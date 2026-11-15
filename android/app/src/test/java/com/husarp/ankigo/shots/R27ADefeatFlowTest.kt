@@ -84,15 +84,21 @@ class R27ADefeatFlowTest {
         assertFalse(panel.arena.ballShown)
     }
     @Test fun continueDuringDefeatWobbleRemovesBallAndDoesNotReplayXp() {
-        val (panel, player) = setup()
-        val encounter = GameEvent.Encounter(1, "Next", 5, false, Tier.NORMAL, 10, 10, false, false, "next")
-        player.enqueue(listOf(GameEvent.Counted(3, 10, 6, 1, false)) + events() + encounter)
-        until(panel) { panel.arena.ballShown }
-        assertTrue(player.continueBattle())
-        until(panel) { player.idle }
-        assertNull(getField(player, "xpRun"))
-        assertFalse(panel.arena.ballShown)
+        val widgets = GameRepo.widgetRefresh
+        // Paparazzi has no appwidget service; this case checks the battle animation.
+        GameRepo.widgetRefresh = {}
+        try {
+            val (panel, player) = setup()
+            val encounter = GameEvent.Encounter(1, "Next", 5, false, Tier.NORMAL, 10, 10, false, false, "next")
+            player.enqueue(listOf(GameEvent.Counted(3, 10, 6, 1, false)) + events() + encounter)
+            until(panel) { panel.arena.ballShown }
+            assertTrue(player.continueBattle())
+            until(panel) { player.idle }
+            assertNull(getField(player, "xpRun"))
+            assertFalse(panel.arena.ballShown)
+        } finally { GameRepo.widgetRefresh = widgets }
     }
+
     @Test fun reducedMotionSettlesWithoutLeavingABallOrBurst() {
         val (panel, player) = setup()
         panel.context.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true).commit()
