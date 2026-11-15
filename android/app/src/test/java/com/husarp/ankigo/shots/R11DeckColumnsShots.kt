@@ -41,16 +41,25 @@ class R11DeckColumnsShots {
 
     private fun left(v: View, root: View): Int { var x = 0; var p: View? = v; while (p != null && p !== root) { x += p.left; p = p.parent as? View }; return x }
 
+    private fun inContinue(view: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current.contentDescription?.toString()?.startsWith("Continue ") == true) return true
+            current = current.parent as? View
+        }
+        return false
+    }
+
     @Test fun headerAndRowsLineUp() {
         paparazzi.shoot("r11-deck-columns", listOf(Size.PHONE), Theme.entries) { ctx ->
             var last: View? = null
             for (wDp in listOf(320, 360, 412, 800)) {
                 val root = StudyDeckKit.build(ctx, decks, lastDeck = 0)
                 lay(ctx, root, wDp, 869)
-                val all = texts(root)
+                val all = texts(root).filterNot(::inContinue)
                 val header = listOf("New", "Lrn", "Due").map { n -> all.single { it.text.toString() == n && it.textSize < Ui.dp(ctx, 11) } }
                 for (d in decks) {
-                    val row = all.single { it.text.toString() == d.name && !(it.parent.parent as View).contentDescription.toString().startsWith("Continue ") }.parent.parent as ViewGroup // name label -> name row -> deck row
+                    val row = all.single { it.text.toString() == d.name }.parent.parent as ViewGroup // name label -> name row -> deck row
                     val inRow = texts(row)
                     val cells = listOf("New" to d.new, "Learn" to d.learn, "Review" to d.review).map { (k, n) -> inRow.single { it.contentDescription?.toString() == "$k $n" && it.text.toString() == DeckCounts.format(n) } }
                     for (i in 0..2) {

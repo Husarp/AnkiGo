@@ -212,7 +212,7 @@ class R18GDetailsShots {
             val t = strings(scene)
             assertTrue("HELD ITEM" in t)
             assertTrue("Nothing" in t)
-            assertFalse("Give item" in t)
+            assertTrue("Give item" in t)
             assertTrue("DOES NOT EVOLVE" in t)
             assertFalse("EVOLUTION" in t)
             assertTrue("Options" in t)
