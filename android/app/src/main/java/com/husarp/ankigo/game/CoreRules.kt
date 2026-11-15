@@ -480,7 +480,7 @@ internal object CoreRules : BattleRules {
     private fun secondaryText(m: Move, s: Secondary): String? {
         if (s.chance <= 0) return null
         val sure = s.chance >= 100
-        val tag = if (sure) "" else " (${s.chance} %)"
+        val tag = if (sure) "" else " (${s.chance}%)"
         return when {
             s.flinch || s.volatileStatus == "flinch" ->
                 if (sure) "Makes the target flinch if it moves first." else "May make the target flinch$tag if it moves first."

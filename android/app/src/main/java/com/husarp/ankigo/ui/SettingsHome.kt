@@ -70,7 +70,7 @@ enum class SettingsSection(val title: String, @DrawableRes val icon: Int, @Color
 
 /** The one-line summaries under each section title on the Settings home. Pure text, no Android. */
 object SettingsSummary {
-    fun look(theme: ThemeMode, accent: Accent, scale: Int) = "${theme.label} · ${accent.label} · $scale %"
+    fun look(theme: ThemeMode, accent: Accent, scale: Int) = "${theme.label} · ${accent.label} · $scale%"
 
     /** "Gen 5", "Gens 1–8" (a straight run) or "Gens 1, 3, 9". */
     fun gens(gens: Iterable<Int>): String {

@@ -358,7 +358,7 @@ object ChartData {
                     "Ultra Beasts" to c.ultraBeasts, "Regional forms" to c.regionalForms,
                 ).map { (name, n) ->
                     Cat(name, n.toDouble(), listOfNotNull("$name · ${num(n.toDouble())}",
-                        if (c.owned > 0 && n > 0) "${CollectionStats.percent(n, c.owned)} % of your ${num(c.owned.toDouble())} Pokémon" else null))
+                        if (c.owned > 0 && n > 0) "${CollectionStats.percent(n, c.owned)}% of your ${num(c.owned.toDouble())} Pokémon" else null))
                 },
             ) { it.owned.toDouble() }
         }
@@ -385,8 +385,8 @@ object ChartData {
 
     /** "Gen 3 · 40 of 135 caught (30 %)" and "Seen 80 (59 %)". */
     private fun dexDetail(label: String, dp: DexProgress): List<String> = listOf(
-        "$label · ${num(dp.caught.toDouble())} of ${num(dp.total.toDouble())} caught (${dp.caughtPercent} %)",
-        "Seen ${num(dp.seen.toDouble())} (${dp.seenPercent} %)",
+        "$label · ${num(dp.caught.toDouble())} of ${num(dp.total.toDouble())} caught (${dp.caughtPercent}%)",
+        "Seen ${num(dp.seen.toDouble())} (${dp.seenPercent}%)",
     )
 
     /** The card states: all decks from the normal refresh's counts, one deck from the series cache (like the per-deck REVIEWS). */
@@ -411,7 +411,7 @@ object ChartData {
             val n = counts.getValue(st)
             Cat(st.label, n.toDouble(), listOfNotNull(
                 "${st.label} · ${num(n.toDouble())} ${if (n == 1) "card" else "cards"}",
-                if (sum > 0 && n > 0) "${CollectionStats.percent(n, sum)} % of the ${num(sum.toDouble())} cards counted" else null,
+                if (sum > 0 && n > 0) "${CollectionStats.percent(n, sum)}% of the ${num(sum.toDouble())} cards counted" else null,
             ))
         }
         return categorySeries(metric, p, deck, cats, sum.toDouble(), source, true)
@@ -458,7 +458,7 @@ object ChartData {
         return when {
             n <= 0 -> listOf(head)
             n >= g -> listOf(head, "Daily goal reached (${num(g.toDouble())})")
-            else -> listOf(head, "${CollectionStats.percent(n, g)} % of the daily goal (${num(g.toDouble())})")
+            else -> listOf(head, "${CollectionStats.percent(n, g)}% of the daily goal (${num(g.toDouble())})")
         }
     }
 
@@ -472,12 +472,12 @@ object ChartData {
         val head = periodText(dates.first(), dates.last(), today)
         if (metric == ChartMetric.RETENTION) {
             return if (!hasData) listOf("$head · no answers counted")
-            else listOf("$head · ${values[0].toInt()} % kept", "${num(sum[0])} of ${num(sum[1])} answers weren't Again")
+            else listOf("$head · ${values[0].toInt()}% kept", "${num(sum[0])} of ${num(sum[1])} answers weren't Again")
         }
         val total = values.sum()
         val lines = arrayListOf("$head · ${valueText(metric, total)}")
         if (values.size > 1 && total > 0.0) values.forEachIndexed { i, v ->
-            lines += "${metric.seriesNames[i]} · ${partText(metric, v)} · ${Math.round(100.0 * v / total)} %"
+            lines += "${metric.seriesNames[i]} · ${partText(metric, v)} · ${Math.round(100.0 * v / total)}%"
         }
         if (dates.size > 1 && total > 0.0) lines += "Average ${valueText(metric, total / dates.size)} a day"
         return lines
@@ -487,7 +487,7 @@ object ChartData {
     fun valueText(metric: ChartMetric, v: Double): String = when (metric) {
         ChartMetric.SECONDS_PER_CARD -> StatsText.averageText(v)
         ChartMetric.TIME -> StatsText.duration(Math.round(v * 60_000.0))
-        ChartMetric.RETENTION -> "${Math.round(v)} %"
+        ChartMetric.RETENTION -> "${Math.round(v)}%"
         else -> "${num(v)} ${nounFor(metric, v)}"
     }
 

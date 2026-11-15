@@ -54,7 +54,7 @@ enum class InfoBoxLook(val label: String, val sub: String) {
  */
 enum class HpBarLook(val label: String, val sub: String) {
     TODAY("Today", "Flat rounded bars on a grey track"),
-    PIXEL("Pixel", "Hard pixel edges, a cut-corner outline, filled in 5 % steps; matches the pixel sprites");
+    PIXEL("Pixel", "Hard pixel edges, a cut-corner outline, filled in 5% steps; matches the pixel sprites");
 
     companion object {
         /** The preference key (a [HpBarLook] name). */

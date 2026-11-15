@@ -62,11 +62,11 @@ class ItemInfoTest {
     // ---- balls ----
 
     @Test fun ballsSayTheChanceAndThatAMissRunsAway() {
-        assertEquals("20 % catch", ItemInfo.short(data, "poke-ball"))
-        assertEquals("50 % catch", ItemInfo.short(data, "great-ball"))
-        assertEquals("80 % catch", ItemInfo.short(data, "ultra-ball"))
-        assertEquals("20 % to catch · a miss: it runs away", ItemInfo.line(data, "poke-ball"))
-        for ((id, pct) in listOf("poke-ball" to "20 %", "great-ball" to "50 %", "ultra-ball" to "80 %")) {
+        assertEquals("20% catch", ItemInfo.short(data, "poke-ball"))
+        assertEquals("50% catch", ItemInfo.short(data, "great-ball"))
+        assertEquals("80% catch", ItemInfo.short(data, "ultra-ball"))
+        assertEquals("20% to catch · a miss: it runs away", ItemInfo.line(data, "poke-ball"))
+        for ((id, pct) in listOf("poke-ball" to "20%", "great-ball" to "50%", "ultra-ball" to "80%")) {
             val what = fact(id, "What it does")
             assertTrue(id, what.contains("**$pct**") && what.contains("**runs away**") && what.contains("used up"))
             assertTrue(id, fact(id, "How to use").contains("**Throwing is not a turn**"))
@@ -239,7 +239,7 @@ class ItemInfoTest {
     }
 
     @Test fun aMoveEffectIsOneShortLineWithBoldKeyWords() {
-        assertEquals("May **paralyze** the target (10 %).", ItemInfo.moveEffect(data, "thunderbolt"))
+        assertEquals("May **paralyze** the target (10%).", ItemInfo.moveEffect(data, "thunderbolt"))
         assertEquals("**Paralyzes** the target.", ItemInfo.moveEffect(data, "thunderwave"))
         assertEquals("", ItemInfo.moveEffect(data, "tackle"))
         assertEquals("", ItemInfo.moveEffect(data, "no-such-move"))

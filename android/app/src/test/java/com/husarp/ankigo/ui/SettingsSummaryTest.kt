@@ -8,8 +8,8 @@ import org.junit.Test
 
 class SettingsSummaryTest {
     @Test fun lookLine() {
-        assertEquals("System · Mauve · 100 %", SettingsSummary.look(ThemeMode.SYSTEM, Accent.MAUVE, 100))
-        assertEquals("Dark · Teal · 85 %", SettingsSummary.look(ThemeMode.DARK, Accent.TEAL, 85))
+        assertEquals("System · Mauve · 100%", SettingsSummary.look(ThemeMode.SYSTEM, Accent.MAUVE, 100))
+        assertEquals("Dark · Teal · 85%", SettingsSummary.look(ThemeMode.DARK, Accent.TEAL, 85))
     }
 
     @Test fun generations() {

@@ -56,7 +56,7 @@ object ItemInfo {
                 isMaster(item) -> "Always catches"
                 item == "repeat-ball" -> "Returns ${Tuning.REPEAT_RETURN_MISS_PERCENT}% / ${Tuning.REPEAT_RETURN_CATCH_PERCENT}%"
                 isOldBall(item) -> Items.specialSummary(item)
-                else -> "${Catching.ballChance(item)} % catch"
+                else -> "${Catching.ballChance(item)}% catch"
             }
             ItemKind.HEAL -> if (def.cures) "All HP + status" else healLine(def)
             ItemKind.EVOLUTION -> {
@@ -93,7 +93,7 @@ object ItemInfo {
             ItemKind.BALL -> when {
                 isMaster(item) -> "Always catches · can't be bought"
                 isOldBall(item) -> Items.specialSummary(item)
-                else -> "${Catching.ballChance(item)} % to catch · a miss: it runs away"
+                else -> "${Catching.ballChance(item)}% to catch · a miss: it runs away"
             }
             ItemKind.HEAL -> if (def.cures) "Heals all HP, cures a status" else healLine(def)
             ItemKind.EVOLUTION -> evolutionLine(data, item, caught)
@@ -246,7 +246,7 @@ object ItemInfo {
         val miss = "If it fails, the wild Pokémon **runs away** (no XP, no money)."
         return when {
             isMaster(item) -> listOf(
-                ItemFact(WHAT, "**Always catches** (100 %). The ball is used up. It **can't be bought**: you get one for the top tier of the \"Best streak\" achievement (a $MASTER_STREAK_DAYS-day streak of reaching your daily goal)."),
+                ItemFact(WHAT, "**Always catches** (100%). The ball is used up. It **can't be bought**: you get one for the top tier of the \"Best streak\" achievement (a $MASTER_STREAK_DAYS-day streak of reaching your daily goal)."),
                 ItemFact(HOW, THROW_RULE),
             )
             isOldBall(item) -> listOf(
@@ -263,7 +263,7 @@ object ItemInfo {
                 }
                 val article = if (pct == 80) "an" else "a"
                 listOf(
-                    ItemFact(WHAT, "Catches a wild Pokémon with $article **$pct %** chance. The ball is used up either way. $miss$extra"),
+                    ItemFact(WHAT, "Catches a wild Pokémon with $article **$pct%** chance. The ball is used up either way. $miss$extra"),
                     ItemFact(HOW, if (item == "ultra-ball") THROW_RULE else THROW_RULE + trade),
                 )
             }

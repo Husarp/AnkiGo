@@ -500,7 +500,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
         }
         val scales = AppLook.SCALES
         val size = Form.stepperRow(this, "Interface size", "Text, cards and Pokémon get bigger or smaller together.",
-            scales.indexOf(AppPrefs.uiScale(this)).coerceAtLeast(0), 0, scales.lastIndex, 1, { "${scales[it]} %" }) { i ->
+            scales.indexOf(AppPrefs.uiScale(this)).coerceAtLeast(0), 0, scales.lastIndex, 1, { "${scales[it]}%" }) { i ->
             pendingScale = scales[i]
             main.removeCallbacks(applyScale)
             main.postDelayed(applyScale, SCALE_DELAY_MS)

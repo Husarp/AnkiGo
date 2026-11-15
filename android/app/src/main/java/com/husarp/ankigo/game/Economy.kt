@@ -22,7 +22,7 @@ data class ItemDef(
 object Items {
     /** Regular balls and optional specials; IDs and inventory counts remain compatible with old saves. */
     private fun balls() = Tuning.BALL_CHANCE.map { (id, pct) ->
-        ItemDef(id, ItemKind.BALL, note = if (pct >= 100) "Catch chance $pct %: it always catches." else "Catch chance $pct %. $MISS_RULE")
+        ItemDef(id, ItemKind.BALL, note = if (pct >= 100) "Catch chance $pct%: it always catches." else "Catch chance $pct%. $MISS_RULE")
     } + Tuning.OLD_BALLS.map { id ->
         ItemDef(id, ItemKind.BALL, note = specialNote(id))
     }

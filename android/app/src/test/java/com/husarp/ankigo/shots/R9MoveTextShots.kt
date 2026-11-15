@@ -65,7 +65,7 @@ class R9MoveTextShots {
         val frame = android.widget.FrameLayout(ctx).apply { addView(root, android.widget.FrameLayout.LayoutParams(-1, -1)) }
         paparazzi.snapshot(frame, "r9movetext-tap-probe") // lays everything out
         val sv = findScroll(root)!!
-        fun open() = texts(root).count { it.visibility == View.VISIBLE && it.text.toString().endsWith("(10 %).") }
+        fun open() = texts(root).count { it.visibility == View.VISIBLE && it.text.toString().endsWith("(10%).") }
         assertEquals(1, open())
         fun tap(x: Float, y: Float) {
             val t = android.os.SystemClock.uptimeMillis()

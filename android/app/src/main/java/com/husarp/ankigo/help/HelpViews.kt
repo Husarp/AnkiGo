@@ -507,7 +507,7 @@ internal object HelpViews {
             val id = v.arg.orEmpty()
             val def = Items.def(id)
             val cap = v.caption.ifBlank {
-                Items.name(id) + if (def?.kind == ItemKind.BALL) if (id in com.husarp.ankigo.game.Tuning.OLD_BALLS) "\nSpecial" else "\n${Catching.ballChance(id)} %" else ""
+                Items.name(id) + if (def?.kind == ItemKind.BALL) if (id in com.husarp.ankigo.game.Tuning.OLD_BALLS) "\nSpecial" else "\n${Catching.ballChance(id)}%" else ""
             }
             cell(ctx, Bits.itemTile(ctx, id, 44), cap)
         }

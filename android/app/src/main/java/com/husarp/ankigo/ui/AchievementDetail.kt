@@ -84,7 +84,7 @@ internal object AchievementDetail {
 
     private fun witness(ctx: Context, v: AchView): View = LinearLayout(ctx).apply {
         orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
+        gravity = Gravity.CENTER
         val mon = v.pokemon.lastOrNull()
         if (mon != null) addView(ImageView(ctx).apply {
             Ui.staticSprite(ctx, mon.num, mon.shiny, this)
@@ -92,7 +92,8 @@ internal object AchievementDetail {
         }, LinearLayout.LayoutParams(Ui.dp(ctx, 32), Ui.dp(ctx, 32)))
         addView(Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply {
             text = if (mon == null) "Earned with · Pokémon not recorded" else "Earned with ${mon.name}"
-        }, LinearLayout.LayoutParams(0, -2, 1f).also { if (mon != null) it.marginStart = Ui.dp(ctx, 8) })
+            gravity = Gravity.CENTER
+        }, LinearLayout.LayoutParams(-2, -2).also { if (mon != null) it.marginStart = Ui.dp(ctx, 8) })
     }
 
     private fun hero(ctx: Context, v: AchView): View {

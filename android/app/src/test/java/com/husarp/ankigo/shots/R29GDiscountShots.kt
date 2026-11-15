@@ -26,10 +26,10 @@ class R29GDiscountShots {
                     "Ends in 2 h 53 min", ShopPlan.describe("Super Potion", price),
                     "Restores 60 HP", night) { tapped = true }
                 val labels = texts(card)
-                assertEquals(1, labels.count { it.text.toString() == "−$percent %" })
+                assertEquals(1, labels.count { it.text.toString() == "−$percent%" })
                 assertTrue(labels.any { it.text.toString() == "Restores 60 HP" })
                 assertFalse(labels.any { it.text.contains("% ·") })
-                val pill = labels.single { it.text.toString() == "−$percent %" }
+                val pill = labels.single { it.text.toString() == "−$percent%" }
                 val amount = labels.single { it.text.toString() == price.now.toString() }
                 val priceRow = pill.parent as LinearLayout
                 assertEquals(LinearLayout.HORIZONTAL, priceRow.orientation)

@@ -30,7 +30,7 @@ object CompareRowText {
         "base_spd" -> "Base Special Defense" to "Its special toughness before level, IVs and EVs."
         "base_spe" -> "Base Speed" to "Its speed before level, IVs and EVs."
         "base_total" -> "Base total" to "All six base stats added up; the species' strength."
-        "nature" -> "Nature" to "Raises one stat by 10 % and lowers another."
+        "nature" -> "Nature" to "Raises one stat by 10% and lowers another."
         "ivs" -> "IVs (Individual values)" to "Hidden bonus per stat, fixed when it was found."
         "moves" -> "Moves" to "The attacks it knows now, with their type."
         "weak" -> "Weak against" to "Attack types that hit it for double damage or more."

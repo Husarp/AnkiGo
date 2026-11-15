@@ -63,7 +63,7 @@ data class CollectionStats(
         fun percent(part: Int, total: Int): Int =
             if (total <= 0) 0 else Math.round(part * 100.0 / total).toInt().coerceIn(0, 100)
 
-        fun percentText(part: Int, total: Int): String = "${percent(part, total)} %"
+        fun percentText(part: Int, total: Int): String = "${percent(part, total)}%"
 
         /** Rarity rank of a tier: MYTHICAL > LEGENDARY > ULTRA > BABY > STARTER > NORMAL (Mega/G-Max fall back to NORMAL). */
         fun rarity(tier: Tier): Int = when (tier) {

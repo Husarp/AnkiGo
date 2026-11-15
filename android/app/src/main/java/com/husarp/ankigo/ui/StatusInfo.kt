@@ -12,7 +12,7 @@ import com.husarp.ankigo.game.Tuning
 object StatusInfo {
     class Info(val status: String, val label: String, val name: String, val line: String)
 
-    private fun pct(x: Double) = "${Math.round(x * 100)} %"
+    private fun pct(x: Double) = "${Math.round(x * 100)}%"
 
     val all: List<Info> = listOf(
         Info("par", "PAR", "Paralysed",

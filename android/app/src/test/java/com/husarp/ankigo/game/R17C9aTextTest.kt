@@ -38,11 +38,11 @@ class R17C9aTextTest {
     }
 
     @Test fun theNumbersInTheSentencesAreTheCodes() {
-        assertTrue(AbilityText.of("Static")!!.contains("${Abilities.CONTACT_CHANCE} %"))
-        assertTrue(AbilityText.of("Shed Skin")!!.contains("${Abilities.SHED_SKIN_CHANCE} %"))
-        assertTrue(AbilityText.of("Stench")!!.contains("${Abilities.STENCH_CHANCE} %"))
+        assertTrue(AbilityText.of("Static")!!.contains("${Abilities.CONTACT_CHANCE}%"))
+        assertTrue(AbilityText.of("Shed Skin")!!.contains("${Abilities.SHED_SKIN_CHANCE}%"))
+        assertTrue(AbilityText.of("Stench")!!.contains("${Abilities.STENCH_CHANCE}%"))
         assertTrue(AbilityText.of("Technician")!!.contains("${Abilities.TECHNICIAN_MAX_POWER}"))
-        assertTrue(AbilityText.of("Cursed Body")!!.contains("${Abilities.CURSED_BODY_TURNS} turns") && AbilityText.of("Cursed Body")!!.contains("${Abilities.CURSED_BODY_CHANCE} %"))
+        assertTrue(AbilityText.of("Cursed Body")!!.contains("${Abilities.CURSED_BODY_TURNS} turns") && AbilityText.of("Cursed Body")!!.contains("${Abilities.CURSED_BODY_CHANCE}%"))
         assertTrue(AbilityText.of("Drizzle")!!.contains("${FieldRules.WEATHER_TURNS} turns"))
     }
 

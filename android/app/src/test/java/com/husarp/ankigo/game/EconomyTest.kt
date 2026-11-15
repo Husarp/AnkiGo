@@ -42,8 +42,8 @@ class EconomyTest {
         assertEquals(Int.MAX_VALUE, Items.def("max-potion")!!.heal)
         assertEquals(Int.MAX_VALUE, Items.def("full-restore")!!.heal)
         assertEquals(140, Items.def("dome-fossil")!!.fossil)
-        assertEquals("Catch chance 50 %. If it fails, the wild Pokémon runs away.", Items.def("great-ball")!!.note)   // PLAN 171
-        assertEquals("Catch chance 100 %: it always catches.", Items.def("master-ball")!!.note)
+        assertEquals("Catch chance 50%. If it fails, the wild Pokémon runs away.", Items.def("great-ball")!!.note)   // PLAN 171
+        assertEquals("Catch chance 100%: it always catches.", Items.def("master-ball")!!.note)
         assertEquals(Items.specialNote("dive-ball"), Items.def("dive-ball")!!.note)
         assertTrue(Items.ALL.values.filter { it.kind == ItemKind.BALL && it.id != "master-ball" }.all { it.note.contains("used up") || it.note.endsWith(Items.MISS_RULE) })
         assertEquals("Heals 60 HP", Items.def("super-potion")!!.note)

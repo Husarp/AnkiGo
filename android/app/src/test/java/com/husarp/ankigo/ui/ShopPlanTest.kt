@@ -70,7 +70,7 @@ class ShopPlanTest {
     // ---- texts ----
 
     @Test fun theRibbonSaysTheDiscount() {
-        for (percent in Tuning.DEAL_PERCENTS) assertEquals("−$percent %", ShopPlan.ribbon(percent))
+        for (percent in Tuning.DEAL_PERCENTS) assertEquals("−$percent%", ShopPlan.ribbon(percent))
     }
 
     @Test fun endsAtMidnightOrAtTheDayStartHour() {

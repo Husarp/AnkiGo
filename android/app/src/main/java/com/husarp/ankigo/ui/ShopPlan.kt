@@ -41,7 +41,7 @@ internal object ShopPlan {
     fun specials(items: List<String>, tms: List<String>): List<Tile> = items.map { Tile.Item(it) } + tms.map { Tile.Tm(it) }
 
     /** The small pill beside the price; never part of the item effect text. */
-    fun ribbon(percent: Int): String = "−$percent %"
+    fun ribbon(percent: Int): String = "−$percent%"
 
     /** Whole minutes (at least 1) until the next game day starts ([dayStartHour], local time) from [now] (epoch ms). */
     fun minutesToNewDay(now: Long, dayStartHour: Int): Int {

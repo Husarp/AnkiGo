@@ -643,7 +643,7 @@ internal object FieldRules : BattleRules {
             "terrainpulse" -> "If it is on the ground, its type depends on the terrain (Electric, Grass, Fairy or Psychic) and it has double power in any terrain."
             "solarbeam", "solarblade" -> "In harsh sunlight it hits at once. In rain, a sandstorm, hail or snow its power is halved."
             "electroshot" -> "In rain it hits at once."
-            in RAIN_SURE_MOVES -> "Never misses in rain, but is only 50 % accurate in harsh sunlight."
+            in RAIN_SURE_MOVES -> "Never misses in rain, but is only 50% accurate in harsh sunlight."
             "blizzard" -> "Never misses in hail or snow."
             "hydrosteam" -> "In harsh sunlight it deals 1.5 times the damage instead of half."
             "expandingforce" -> "Deals 1.5 times the damage in Psychic Terrain if it is on the ground."

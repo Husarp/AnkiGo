@@ -172,7 +172,7 @@ class ChartMetricsTest {
         val h = mapOf(date(0) to log(buttons = listOf(9, 1, 2, 3, 4)))
         val s = build(ChartMetric.BUTTONS, ChartPeriod.D7, history = h)
         assertEquals(
-            listOf("Wed 14 Oct · 10 answers", "Again · 1 · 10 %", "Hard · 2 · 20 %", "Good · 3 · 30 %", "Easy · 4 · 40 %"),
+            listOf("Wed 14 Oct · 10 answers", "Again · 1 · 10%", "Hard · 2 · 20%", "Good · 3 · 30%", "Easy · 4 · 40%"),
             s.bars.last().detail,
         )
         assertEquals(7, s.bars.size) // rolling window includes today
@@ -189,7 +189,7 @@ class ChartMetricsTest {
     @Test fun retentionBarsSayHowManyAnswersTheyAreMadeOf() {
         val h = mapOf(date(0) to log(buttons = listOf(0, 1, 0, 1, 1)))
         val s = build(ChartMetric.RETENTION, ChartPeriod.D7, history = h)
-        assertEquals(listOf("Wed 14 Oct · 67 % kept", "2 of 3 answers weren't Again"), s.bars.last().detail)
+        assertEquals(listOf("Wed 14 Oct · 67% kept", "2 of 3 answers weren't Again"), s.bars.last().detail)
         assertEquals(listOf("Thu 8 Oct · no answers counted"), s.bars.first().detail)
     }
 
@@ -227,8 +227,8 @@ class ChartMetricsTest {
         assertEquals(3169.0, s.total, 0.0); assertEquals(2000.0, s.best, 0.0); assertEquals("Mature", s.bestLabel); assertNull(s.bestDay)
         assertEquals("cards", s.unit); assertEquals("AnkiDroid", s.source); assertTrue(s.deckApplies)
         assertFalse(s.empty); assertFalse(s.loading); assertTrue(s.bars.all { it.startDay.isEmpty() && it.endDay.isEmpty() })
-        assertEquals(listOf("Young · 1,000 cards", "32 % of the 3,169 cards counted"), s.bars[3].detail)
-        assertEquals(listOf("Buried · 1 card", "0 % of the 3,169 cards counted"), s.bars[6].detail)
+        assertEquals(listOf("Young · 1,000 cards", "32% of the 3,169 cards counted"), s.bars[3].detail)
+        assertEquals(listOf("Buried · 1 card", "0% of the 3,169 cards counted"), s.bars[6].detail)
         assertTrue(ChartData.seriesKeys(ChartMetric.CARD_STATES, ChartPeriod.D30, null, today).isEmpty())
     }
 
@@ -242,7 +242,7 @@ class ChartMetricsTest {
         val done = build(ChartMetric.CARD_STATES, ChartPeriod.D30, StatsSnapshot(stats = anki(counts = counts), series = mapOf(key to data)), deck = "Spanish")
         assertFalse(done.loading); assertEquals(50.0, done.total, 0.0)
         assertEquals(listOf(5.0, 0.0, 0.0, 15.0, 30.0, 0.0, 0.0), done.bars.map { it.values.single() })
-        assertEquals(listOf("Mature · 30 cards", "60 % of the 50 cards counted"), done.bars[4].detail)
+        assertEquals(listOf("Mature · 30 cards", "60% of the 50 cards counted"), done.bars[4].detail)
         val failed = build(ChartMetric.CARD_STATES, ChartPeriod.D30, StatsSnapshot(access = AnkiAccess.NO_PERMISSION), deck = "Spanish")
         assertFalse(failed.loading); assertTrue(failed.empty); assertEquals(StatsText.reason(AnkiAccess.NO_PERMISSION), failed.source)
     }
@@ -289,7 +289,7 @@ class ChartMetricsTest {
         assertEquals(grid.total, 85)
         assertEquals("AnkiGo's own count: answers, not distinct cards (AnkiDroid isn't available)", s.source)
         assertEquals(listOf("Wed 14 Oct · 60 cards", "Daily goal reached (50)"), s.detailFor(today))
-        assertEquals(listOf("Tue 13 Oct · 20 cards", "40 % of the daily goal (50)"), s.detailFor(date(1)))
+        assertEquals(listOf("Tue 13 Oct · 20 cards", "40% of the daily goal (50)"), s.detailFor(date(1)))
         assertEquals(listOf("Mon 12 Oct · 0 cards"), s.detailFor(date(2)))
         assertEquals(s.bars.last().detail, s.detailFor(today))
         assertEquals(s.bars.size, s.bars.map { it.startDay }.toSet().size)
@@ -331,7 +331,7 @@ class ChartMetricsTest {
 
     @Test fun oneReviewReadsInTheSingular() {
         val s = build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D7, history = mapOf(date(0) to log(reviews = 1)), goal = 50)
-        assertEquals(listOf("Wed 14 Oct · 1 card", "2 % of the daily goal (50)"), s.detailFor(today))
+        assertEquals(listOf("Wed 14 Oct · 1 card", "2% of the daily goal (50)"), s.detailFor(today))
     }
 
     // ---------------------------------------------------------------- collection charts
@@ -370,8 +370,8 @@ class ChartMetricsTest {
         assertEquals(50.0, s.total, 0.0)                                  // 3 of the 6 base species
         assertEquals(100.0, s.best, 0.0); assertEquals("Gen 2", s.bestLabel)
         assertEquals("%", s.unit); assertFalse(s.empty); assertFalse(s.deckApplies)
-        assertEquals(listOf("Gen 1 · 1 of 3 caught (33 %)", "Seen 2 (67 %)"), s.bars[0].detail)
-        assertEquals(listOf("Gen 4 · 0 of 1 caught (0 %)", "Seen 1 (100 %)"), s.bars[2].detail)
+        assertEquals(listOf("Gen 1 · 1 of 3 caught (33%)", "Seen 2 (67%)"), s.bars[0].detail)
+        assertEquals(listOf("Gen 4 · 0 of 1 caught (0%)", "Seen 1 (100%)"), s.bars[2].detail)
     }
 
     @Test fun pokemonPerTypeCountsCaughtSpeciesPerType() {
@@ -381,8 +381,8 @@ class ChartMetricsTest {
         assertEquals(3.0, s.total, 0.0)                                   // the 3 caught species; a dual type counts in two bars
         assertEquals(2.0, s.best, 0.0); assertEquals("Poison", s.bestLabel)
         assertEquals("species", s.unit)
-        assertEquals(listOf("Poison · 2 of 2 caught (100 %)", "Seen 2 (100 %)"), s.bars[3].detail)
-        assertEquals(listOf("Fire · 0 of 1 caught (0 %)", "Seen 0 (0 %)"), s.bars[0].detail)
+        assertEquals(listOf("Poison · 2 of 2 caught (100%)", "Seen 2 (100%)"), s.bars[3].detail)
+        assertEquals(listOf("Fire · 0 of 1 caught (0%)", "Seen 0 (0%)"), s.bars[0].detail)
     }
 
     @Test fun shiniesAndRareAreCountsOfOwnedPokemon() {
@@ -391,8 +391,8 @@ class ChartMetricsTest {
         assertEquals(listOf(2.0, 1.0, 1.0, 1.0, 1.0), s.bars.map { it.values.single() })
         assertEquals(6.0, s.total, 0.0)                                   // the Pokémon owned
         assertEquals(2.0, s.best, 0.0); assertEquals("Shinies", s.bestLabel)
-        assertEquals(listOf("Shinies · 2", "33 % of your 6 Pokémon"), s.bars[0].detail)
-        assertEquals(listOf("Ultra Beasts · 1", "17 % of your 6 Pokémon"), s.bars[3].detail)
+        assertEquals(listOf("Shinies · 2", "33% of your 6 Pokémon"), s.bars[0].detail)
+        assertEquals(listOf("Ultra Beasts · 1", "17% of your 6 Pokémon"), s.bars[3].detail)
         assertEquals("Pokémon", s.unit)
     }
 

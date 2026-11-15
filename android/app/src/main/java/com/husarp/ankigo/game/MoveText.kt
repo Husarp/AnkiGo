@@ -133,14 +133,14 @@ object MoveText {
             1 to 4 -> "a quarter of"
             3 to 4 -> "three quarters of"
             1 to 8 -> "an eighth of"
-            else -> "${Math.round(a * 100.0 / b)} % of"
+            else -> "${Math.round(a * 100.0 / b)}% of"
         }
     }
 
     private fun gcd(a: Int, b: Int): Int = if (b == 0) a else gcd(b, a % b)
 
     /** " (10 %)" for a chance below 100; "" for a sure effect. */
-    private fun chanceTag(chance: Int) = if (chance < 100) " ($chance %)" else ""
+    private fun chanceTag(chance: Int) = if (chance < 100) " ($chance%)" else ""
 
     private fun secondary(s: Secondary): List<String> {
         if (s.chance <= 0) return emptyList()
