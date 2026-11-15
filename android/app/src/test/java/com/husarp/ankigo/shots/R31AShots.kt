@@ -42,7 +42,7 @@ class R31AShots {
         val dialog = DialogShots.capture { all(rows).single { it.contentDescription == "Explain Level 16" }.performClick() }!!
         val content = dialog.content()
         assertTrue("Evolution · Jolteon" in texts(content))
-        requirement(content, "Level 16", true); requirement(content, "Level 2 Bond", true)
+        requirement(content, "Reach level 16", true); requirement(content, "Reach Level 2 Bond", true)
         val button = dialog.button(AppDialog.BUTTON_POSITIVE)!!
         assertEquals("Evolve", button.text.toString())
         assertEquals(Ui.dp(ctx, 56), button.minHeight)
@@ -59,7 +59,7 @@ class R31AShots {
         val dialog = EvolutionRows.explanationDialog(ctx, data, e, data.sp(mon.species), emptySet(), state, mon) {}
         val text = texts(dialog.content())
         assertTrue("Evolution · ???" in text)
-        requirement(dialog.content(), "Level 2 Bond", true); requirement(dialog.content(), "Use Thunder Stone", false)
+        requirement(dialog.content(), "Reach Level 2 Bond", true); requirement(dialog.content(), "Use Thunder Stone", false)
         assertEquals(1, text.count { it.equals("Requirements", true) })
         assertTrue(text.any { "Shop" in it })
         DialogShots.scene(ctx, dialog)

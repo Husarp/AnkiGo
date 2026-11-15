@@ -69,16 +69,17 @@ class R31MShots {
     private fun section(a: Context, kind: DetailSection, body: () -> View): View =
         DetailSections.section(a, DetailSections.memory(a), kind, null, forceOpen = true, body = body)
 
-    @Test fun evolutionRequirementsAlwaysHaveGreenChevronsAndShortText() {
+    @Test fun evolutionRequirementsUseConsistentMarkedRows() {
         for (theme in Theme.entries) {
             val a = context(theme, 420)
             val m = mon().apply { bondPoints = 0 }
             val state = GameRepo.state!!; state.mons += m; state.caught += listOf(1, 2, 3)
             val rows = EvolutionRows(a, data, EvoLine.of(data, data.sp(1)).root, data.sp(1), data.species.keys, null, state, m)
             val view = section(a, DetailSection.EVOLUTION) { rows }
-            assertEquals(2, all(rows).count { it.contentDescription == "Evolution requirements" })
+            assertEquals(4, all(rows).filterIsInstance<EvolutionRequirementRow>().size)
             assertFalse(texts(view).any { it.contains("Needs") })
-            assertTrue(texts(view).any { it.contains("Level 16") && it.contains("Level 2 Bond") })
+            assertTrue("Reach level 16" in texts(view))
+            assertEquals(2, texts(view).count { it == "Reach Level 2 Bond" })
             shot(a, view, "m-506-${theme.name.lowercase()}")
         }
     }

@@ -121,27 +121,15 @@ internal class EvolutionRows(
         }
         row.addView(names, LayoutParams(0, -2, 1f).apply { marginStart = Ui.dp(a, 6); marginEnd = Ui.dp(a, 6) })
         node.via?.let { e ->
-            val met = isReady(e, parent)
             val condition = LinearLayout(a).apply {
-                orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-                background = Ui.rounded(Ui.c(a, R.color.ag_s0), 5, a)
+                orientation = VERTICAL
                 minimumHeight = Ui.dp(a, 40)
+                background = Ui.rounded(Ui.c(a, R.color.ag_s0), 5, a)
                 setPadding(Ui.dp(a, 6), Ui.dp(a, 5), Ui.dp(a, 6), Ui.dp(a, 5))
+                EvolutionRowText.requirements(data, e, parent, state, mon).forEach {
+                    addView(EvolutionRequirementRow(a, it), LayoutParams(-1, -2))
+                }
             }
-            condition.addView(ImageView(a).apply {
-                setImageResource(R.drawable.ic_evolve)
-                setColorFilter(Ui.c(a, R.color.ag_green))
-                contentDescription = if (met) "Ready to evolve" else "Evolution requirements"
-            }, LayoutParams(Ui.dp(a, 18), Ui.dp(a, 18)))
-            val item = Progression.evolutionItem(e)
-            if (item != null) condition.addView(ImageView(a).apply {
-                Ui.itemIcon(a, item, this)
-                if (!met) colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(0f) })
-                importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
-            }, LayoutParams(Ui.dp(a, 24), Ui.dp(a, 24)))
-            condition.addView(Ui.text(a, 11f, 800, if (met) R.color.ag_green else R.color.ag_sub0).apply {
-                text = EvolutionRowText.condition(data, e, mon?.takeIf { parent?.num == it.species })
-            }, LayoutParams(0, -2, 1f).apply { marginStart = Ui.dp(a, 4) })
             condition.contentDescription = "Explain ${EvolutionRowText.condition(data, e, mon?.takeIf { parent?.num == it.species })}"
             condition.setOnClickListener { showExplanation(e, parent) }
             row.addView(condition, LayoutParams(0, -2, 1.35f))
@@ -210,33 +198,18 @@ internal class EvolutionRows(
             val text = EvolutionRowText.explanation(data, e, parent, seen, state, mon)
             val paragraphs = text.split("\n\n").filter { it.isNotBlank() }
             val requirements = EvolutionRowText.requirements(data, e, parent, state, mon)
-            fun heading(title: String, tone: Multicolor.Tone, count: String? = null): View = LinearLayout(a).apply {
+            fun heading(title: String, tone: Multicolor.Tone): View = LinearLayout(a).apply {
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 addView(Ui.text(a, ItemCard.TITLE_SP, 900, R.color.ag_mauve).apply {
                     this.text = title.uppercase()
                     letterSpacing = 0.06f
                     if (Multicolor.enabled(a)) setTextColor(Multicolor.ink(a, tone, Ui.c(a, R.color.ag_card)))
                 }, LayoutParams(0, -2, 1f))
-                if (count != null) addView(Ui.text(a, 11f, 800, R.color.ag_sub0).apply { this.text = count })
             }
-            addView(heading("Requirements", Multicolor.Tone.GREEN, "${requirements.count { it.met }}/${requirements.size} met"),
+            addView(heading("Requirements", Multicolor.Tone.GREEN),
                 LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 12) })
             requirements.forEach { requirement ->
-                val ink = if (!requirement.met) Ui.c(a, R.color.ag_sub1) else if (Multicolor.enabled(a))
-                    Multicolor.ink(a, Multicolor.Tone.GREEN, Ui.c(a, R.color.ag_card)) else Ui.c(a, R.color.ag_green)
-                addView(LinearLayout(a).apply {
-                    gravity = android.view.Gravity.TOP
-                    setPadding(0, Ui.dp(a, 5), 0, Ui.dp(a, 5))
-                    addView(Ui.text(a, 13.5f, 800, R.color.ag_sub1).apply {
-                        this.text = if (requirement.met) "✓" else "✗"
-                        setTextColor(ink)
-                        contentDescription = if (requirement.met) "Met" else "Not met"
-                    }, LayoutParams(Ui.dp(a, 28), -2))
-                    addView(Ui.text(a, 13.5f, 800, R.color.ag_sub1).apply {
-                        this.text = requirement.label
-                        setTextColor(ink)
-                    }, LayoutParams(0, -2, 1f))
-                }, LayoutParams(-1, -2))
+                addView(EvolutionRequirementRow(a, requirement), LayoutParams(-1, -2))
             }
             val details = (if (item == null) paragraphs else paragraphs.drop(2)).filterNot {
                 it.startsWith("Level ") && it.contains("Bond") || it.startsWith("You own ") ||
@@ -273,7 +246,7 @@ internal class EvolutionRows(
 }
 
 internal object EvolutionRowText {
-    data class Requirement(val label: String, val met: Boolean)
+    data class Requirement(val label: String, val met: Boolean, val item: String? = null)
 
     fun title(data: GameData, e: Evolution, seen: Set<Int>): String =
         "Evolution · ${data.species[e.to]?.let { EvoLine.shownName(it, seen) } ?: "???"}"
@@ -281,16 +254,16 @@ internal object EvolutionRowText {
     fun requirements(data: GameData, e: Evolution, parent: Species?, state: GameState?, mon: Mon?,
                      now: Long = System.currentTimeMillis()): List<Requirement> = buildList {
         val current = mon?.takeIf { parent?.num == it.species }
-        add(Requirement("Level ${Bond.requiredLevel(e)} Bond", current?.let { Bond.allows(it, e) } == true))
-        e.level?.let { level -> add(Requirement("Level $level", current != null && current.level >= level)) }
+        add(Requirement("Reach Level ${Bond.requiredLevel(e)} Bond", current?.let { Bond.allows(it, e) } == true))
+        e.level?.let { level -> add(Requirement("Reach level $level", current != null && current.level >= level)) }
         Progression.evolutionItem(e)?.let { item ->
-            add(Requirement("Use ${Items.name(item)}", state != null && state.count(item) > 0))
+            add(Requirement("Use ${Items.name(item)}", state != null && state.count(item) > 0, item))
         }
-        e.move?.let { move -> add(Requirement("knows ${data.move(move)?.name ?: move}", current != null && move in current.moves)) }
-        e.moveType?.let { type -> add(Requirement("knows a ${type.label} move", current?.moves?.any { data.move(it)?.type == type } == true)) }
-        e.time?.let { time -> add(Requirement(if (time == "day") "in the daytime" else "at night",
+        e.move?.let { move -> add(Requirement("Know the move ${data.move(move)?.name ?: move}", current != null && move in current.moves)) }
+        e.moveType?.let { type -> add(Requirement("Know a ${type.label}-type move", current?.moves?.any { data.move(it)?.type == type } == true)) }
+        e.time?.let { time -> add(Requirement(if (time == "day") "Evolve in the daytime" else "Evolve at night",
             if (time == "day") Progression.isDay(now) else !Progression.isDay(now))) }
-        e.gender?.let { gender -> add(Requirement(if (gender == 'M') "Male Pokémon" else "Female Pokémon", current?.gender == gender)) }
+        e.gender?.let { gender -> add(Requirement(if (gender == 'M') "Be a male Pokémon" else "Be a female Pokémon", current?.gender == gender)) }
         e.condition?.replace("during the day", "")?.replace("at night", "")?.trim()?.takeIf { it.isNotEmpty() && e.kind != EvoKind.OTHER }?.let { condition ->
             val met = current != null && when (condition) {
                 "with an Atk stat > its Def stat" -> StatCalc.stats(data, current).let { it.atk > it.def }
@@ -299,7 +272,14 @@ internal object EvolutionRowText {
                 "with a Dark-type in the party" -> state?.teamMons()?.any { it.uid != current.uid && Type.DARK in data.sp(it.species).types } == true
                 else -> false
             }
-            add(Requirement(condition.replaceFirstChar { it.uppercase() }, met))
+            val label = when (condition) {
+                "with an Atk stat > its Def stat" -> "Have Attack higher than Defense"
+                "with an Atk stat < its Def stat" -> "Have Attack lower than Defense"
+                "with an Atk stat equal to its Def stat" -> "Have equal Attack and Defense"
+                "with a Dark-type in the party" -> "Have another Dark-type Pokémon in the party"
+                else -> "Evolve $condition"
+            }
+            add(Requirement(label, met))
         }
     }
 

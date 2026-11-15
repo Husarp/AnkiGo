@@ -147,14 +147,13 @@ internal object ItemCard {
             val facts = if (isTm) ItemInfo.tmFacts() else ItemInfo.facts(data, spec.item.orEmpty(), page.state.caught)
             if (spec.item !in Items.RETIRED && Items.def(spec.item.orEmpty())?.kind == com.husarp.ankigo.game.ItemKind.EVOLUTION) {
                 val bondMet = page.state.mons.any { mon -> pairs.any { it.fromNum == mon.species } && com.husarp.ankigo.game.Bond.level(mon.bondPoints) >= 2 }
-                addView(factBlock(ctx, "Requirements", "Level 2 Bond" + if (bondMet) " ✓" else ""), below)
                 addView(LinearLayout(ctx).apply {
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(Bits.itemTile(ctx, spec.item.orEmpty(), 28))
-                    addView(Ui.text(ctx, 13f, 800, R.color.ag_text).apply {
-                        val n = page.state.count(spec.item.orEmpty())
-                        text = "Use ${Items.name(spec.item.orEmpty())} · $n in your Bag" + if (n > 0) " ✓" else ""
-                    }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = dp(ctx, 8f) })
+                    orientation = LinearLayout.VERTICAL
+                    addView(factBlock(ctx, "Requirements", ""))
+                    addView(EvolutionRequirementRow(ctx, EvolutionRowText.Requirement("Reach Level 2 Bond", bondMet)))
+                    val item = spec.item.orEmpty()
+                    addView(EvolutionRequirementRow(ctx, EvolutionRowText.Requirement(
+                        "Use ${Items.name(item)}", page.state.count(item) > 0, item)))
                 }, below)
             }
             if (!isTm) {
