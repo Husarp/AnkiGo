@@ -75,7 +75,8 @@ internal object ConditionFlow {
             val shownWidths = widths.take(n).toFloatArray() + if (more > 0) floatArrayOf(moreWidth(more)) else floatArrayOf()
             val rects = anchored(card, right, shownWidths, min(stats, n), gap, lift, height, sprites, blocks, below, left)
             if (rects.isEmpty() && shownWidths.isNotEmpty()) continue
-            if (rects.isEmpty() || rects.maxOf { it.b } - rects.minOf { it.t } <= maxHeight) return OwnerFlow(rects, n, more)
+            // Coordinate subtraction can round a single row slightly above its own height.
+            if (rects.isEmpty() || rects.maxOf { it.b } - rects.minOf { it.t } <= maxHeight + .01f) return OwnerFlow(rects, n, more)
         }
         return OwnerFlow(emptyList(), 0, widths.size)
     }

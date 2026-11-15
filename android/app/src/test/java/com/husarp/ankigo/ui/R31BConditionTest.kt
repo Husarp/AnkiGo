@@ -91,4 +91,14 @@ class R31BConditionTest {
         assertEquals(listOf(43f, 43f, 63f), fit.map { it.t })
         assertEquals(listOf(10f, 62f, 20f), fit.map { it.l })
     }
+    @Test fun aSingleRowDoesNotDisappearFromFloatRounding() {
+        val card = ConditionSpot.R(10f, 950f, 100f, 996f)
+        val flow = ConditionFlow.owner(card, 160f, floatArrayOf(30f, 30f), 2,
+            4f, 4f, 16.01f, emptyList(), 16.01f) { 24f }
+        assertEquals(2, flow.shown)
+        assertEquals(0, flow.more)
+        assertEquals(2, flow.rects.size)
+        assertEquals(1, flow.rects.map { it.t }.distinct().size)
+    }
+
 }
