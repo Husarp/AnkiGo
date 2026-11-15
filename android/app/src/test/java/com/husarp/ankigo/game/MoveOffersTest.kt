@@ -133,4 +133,33 @@ class MoveOffersTest {
         assertEquals(4, m.moves.size)
         assertEquals(1, m.moves.count { it == "bodyslam" })
     }
+
+    @Test fun skippedFreeSlotOfferStaysGoneAfterReload() {
+        val s = state(); val m = s.main!!
+        m.moves.clear(); m.moves += "tackle"
+        learn(m, "vinewhip")
+        assertEquals(listOf("tackle"), m.moves)
+        assertTrue(Progression.answerMoveOffer(data, m, "vinewhip", false, null).ok)
+        val loaded = SaveCodec.decode(SaveCodec.encode(s)).main!!
+        learn(loaded, "vinewhip")
+        assertEquals(listOf("tackle"), loaded.moves)
+        assertTrue(loaded.moveOffers.isEmpty())
+    }
+
+    @Test fun snapshotKeepsBothHeldItemsAndMoveOffersTogether() {
+        val s = state(); val m = s.main!!
+        m.bondPoints = 800
+        m.heldItem = "lucky-egg"; m.heldItem2 = "everstone"
+        learn(m, "bodyslam"); learn(m, "bulletseed")
+        val snapshot = SaveCodec.snapshot(s)
+        assertTrue(accept(m, "bodyslam").ok)
+        assertTrue(ItemUse.takeHeld(s, m.uid, "everstone").ok)
+        val loaded = SaveCodec.decode(snapshot()).main!!
+        assertEquals(listOf("lucky-egg", "everstone"), loaded.heldItems)
+        assertEquals(listOf("bodyslam", "bulletseed"), loaded.moveOffers.map { it.move })
+        assertTrue(accept(loaded, "bodyslam").ok)
+        assertEquals(listOf("lucky-egg", "everstone"), loaded.heldItems)
+        assertEquals(listOf("bulletseed"), loaded.moveOffers.map { it.move })
+    }
+
 }

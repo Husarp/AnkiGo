@@ -108,11 +108,11 @@ class ProgressionTest {
         assertEquals(7, m.level); assertEquals(10, m.xp)
         assertTrue(e.first() is GameEvent.XpGained)
         assertEquals(listOf(6, 7), e.of<GameEvent.LevelUp>().map { it.level })
-        assertEquals("Vine Whip", e.of<GameEvent.MoveLearned>().single().move) // learned at 7
-        assertTrue(m.moves.contains("vinewhip"))
+        assertEquals(listOf(MoveOffer("vinewhip", 7)), m.moveOffers)
+        assertFalse(m.moves.contains("vinewhip"))
         assertEquals(7, e.of<GameEvent.XpGained>().single().level)
         assertEquals(10, e.of<GameEvent.XpGained>().single().xpInLevel)
-        assertTrue(e.indexOfFirst { it is GameEvent.MoveLearned } > e.indexOfLast { it is GameEvent.LevelUp })
+        assertTrue(e.of<GameEvent.MoveLearned>().isEmpty())
         // R3-02: each level adds its HP and heals 25 % of the new max, so a Pokémon that was full is full at the new max
         assertTrue(StatCalc.maxHp(data, m) > hpBefore)
         assertEquals(StatCalc.maxHp(data, m), m.hp)
@@ -162,12 +162,17 @@ class ProgressionTest {
 
     // ---- learnMove ----
 
-    @Test fun learnMoveAddsWhenRoom() {
+    @Test fun learnMoveWaitsForConsentEvenWhenRoom() {
         val (_, m) = st(1, 5, listOf("tackle"))
         val e = ev()
         Progression.learnMove(data, m, "vinewhip", e)
+        assertEquals(listOf("tackle"), m.moves)
+        assertTrue(e.isEmpty())
+        assertEquals(listOf(MoveOffer("vinewhip", 5)), m.moveOffers)
+        val result = Progression.answerMoveOffer(data, m, "vinewhip", true, null)
+        assertTrue(result.ok)
         assertEquals(listOf("tackle", "vinewhip"), m.moves)
-        assertEquals(GameEvent.MoveLearned(m.uid, m.name, "Vine Whip", null), e.single())
+        assertEquals(GameEvent.MoveLearned(m.uid, m.name, "Vine Whip", null), result.events.single())
     }
 
     @Test fun learnMoveAlreadyKnownOrUnknownDoesNothing() {
@@ -651,10 +656,10 @@ class ProgressionTest {
         assertEquals(2, m.species); assertEquals("Leafbud", m.name)
         assertEquals(StatCalc.maxHp(data, m), m.hp)
         assertEquals(16, m.level)
-        val ei = e.indexOfFirst { it is GameEvent.Evolved }
-        val mi = e.indexOfFirst { it is GameEvent.MoveLearned }
-        assertTrue(ei in 0 until mi)
-        assertTrue("bulletseed" in m.moves)
+        assertTrue(e.any { it is GameEvent.Evolved })
+        assertTrue(e.of<GameEvent.MoveLearned>().isEmpty())
+        assertEquals(listOf("bulletseed"), m.moveOffers.map { it.move })
+        assertFalse("bulletseed" in m.moves)
         assertTrue(2 in s.seen && 2 in s.caught)
         assertEquals(1, s.evolutions)
         assertTrue(16 in s.badges)

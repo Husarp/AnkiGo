@@ -60,7 +60,7 @@ object Progression {
      * Each new level: stats recalculated, current HP goes up by the HP the level adds to max HP plus 25 % of the new max
      * (AnkiGo, PLAN 80; see [Healing.levelUpHp]; never above max, a Pokémon at 0 HP stays there), moves learned at exactly
      * that level go through [learnMove]. Emits XpGained, LevelUp (with the HP after the heal), Healed (the main only),
-     * MoveLearned for free slots; full movesets keep offers for later. Returns levels gained.
+     * New moves keep offers for later. Returns levels gained.
      */
     fun gainXp(data: GameData, state: GameState, mon: Mon, xp: Int, events: MutableList<GameEvent>): Int {
         if (mon.level >= Tuning.MAX_LEVEL || xp <= 0) return 0
@@ -102,15 +102,10 @@ object Progression {
         return gained
     }
 
-    /** Add into a free slot; otherwise offer the new move once, using the old scoring rule to pick its replacement. */
+    /** Offer every new move once; use the old scoring rule to pick a replacement when the moveset is full. */
     fun learnMove(data: GameData, mon: Mon, move: String, events: MutableList<GameEvent>) {
-        val m = data.move(move) ?: return
+        if (data.move(move) == null) return
         if (move in mon.moves || move in mon.offeredMoves || mon.moveOffers.any { it.move == move }) return
-        if (mon.moves.size < 4) {
-            mon.moves += move
-            events += GameEvent.MoveLearned(mon.uid, mon.name, m.name, null)
-            return
-        }
         mon.moveOffers += MoveOffer(move, mon.level)
         mon.offeredMoves += move
     }
