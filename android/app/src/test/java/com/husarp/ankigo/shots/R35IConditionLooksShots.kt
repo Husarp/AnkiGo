@@ -89,7 +89,7 @@ class R35IConditionLooksShots {
         val arena = panel.arena
         val player = EventPlayer(panel, continueOnPanel = false)
         val play = EventPlayer::class.java.getDeclaredMethod("play", GameEvent::class.java, Boolean::class.javaPrimitiveType).apply { isAccessible = true }
-        for (status in listOf("frz", "slp")) for (ours in listOf(true, false)) {
+        for (status in listOf("frz", "slp", "psn", "tox")) for (ours in listOf(true, false)) {
             val sprite = if (ours) arena.playerSprite else arena.enemySprite
             play.invoke(player, GameEvent.Effect(ours, "Condition starts", 20, 30, status = status), false)
             assertEquals(status, sprite.conditionLook!!.state.status)

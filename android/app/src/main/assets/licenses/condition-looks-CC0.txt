@@ -1,0 +1,24 @@
+Source: https://raw.githubusercontent.com/smogon/pokemon-showdown-client/1cf9b385a97ad5c77a25b91a1c799078827ec306/play.pokemonshowdown.com/src/battle-animations.ts
+
+Most of this file is: CC0 (public domain)
+  <http://creativecommons.org/publicdomain/zero/1.0/>
+
+This license DOES extend to all images in the fx/ folder, with the exception of icicle.png, lightning.png, and bone.png.
+
+icicle.png and lightning.png by Clint Bellanger are triple-licensed GPLv2/GPLv3/CC-BY-SA-3.0.
+  <http://opengameart.org/content/icicle-spell>
+  <http://opengameart.org/content/lightning-shock-spell>
+
+rocks.png, rock1.png, rock2.png by PO user "Gilad" is licensed GPLv3.
+
+This license DOES NOT extend to any images in the sprites/ folder.
+
+This license DOES NOT extend to any other files in this repository.
+
+
+heart.png attribution in the same file: by Pokemon Showdown user SailorCosmos.
+
+Bundled assets: condition_poison.png is fx/poisonwisp.png, unchanged.
+condition_heart.png is fx/heart.png, sampled to a 12x12 pixel grid and recoloured
+soft rose for the approved round35 option A design. Heart art: SailorCosmos.
+Both use the explicit CC0 fx/ grant above.

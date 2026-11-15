@@ -5,6 +5,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class DexCopiesTest {
+    @Test fun speciesLearnsetTitleExplainsWhoseMovesTheseAre() {
+        assertEquals("Moves it learns · 20", DexDetail.learnTitle(20))
+        assertEquals("Moves it learns · 1", DexDetail.learnTitle(1))
+    }
+
     private val data = TestData.world()
 
     @Test fun copiesOfOneSpeciesSortedByLevelDescShinyFirstOnTie() {

@@ -69,7 +69,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun drawConditionLook(canvas: Canvas, holder: View, sprite: SpriteView) {
-        if (holder.visibility != VISIBLE || sprite.visibility != VISIBLE || sprite.conditionLook?.state?.visible != true) return
+        if (holder.visibility != VISIBLE || sprite.visibility != VISIBLE || sprite.conditionLook?.visible != true) return
         val alpha = holder.alpha * sprite.alpha
         if (alpha <= 0f) return
         val save = canvas.save()
@@ -1456,16 +1456,21 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // ---------------------------------------------------------------- condition chips (R19-K, PLAN 269 A) and the bubbles that close (PLAN 287)
 
     /** Settles the chips to the saved fight [b] (null = no fight), as the panel is drawn from it. */
-    fun syncConditions(b: Battle?) { if (conditions.syncFrom(b)) marksChanged() }
+    fun syncConditions(b: Battle?) { if (conditions.syncFrom(b)) marksChanged(); syncLoveLooks() }
+
+    private fun syncLoveLooks() {
+        playerSprite.setConditionLove(conditions.of(ConditionMarks.Slot.OURS).any { it.key == "attract" })
+        enemySprite.setConditionLove(conditions.of(ConditionMarks.Slot.WILD).any { it.key == "attract" })
+    }
 
     /** An Effect line played: a condition starts or ends in step with it ([b] = the saved fight, for the turns). */
-    fun conditionEffect(e: GameEvent.Effect, b: Battle?) { if (conditions.applyEffect(e, b)) marksChanged() }
+    fun conditionEffect(e: GameEvent.Effect, b: Battle?) { if (conditions.applyEffect(e, b)) marksChanged(); syncLoveLooks() }
 
     /** The fight is over / a new one starts: no chips. */
     fun clearConditions() { clearConditionLooks(); if (conditions.clear()) marksChanged() }
 
     /** Our Pokémon left the field (switched out or fainted): its own conditions go; our side's and the field's stay. */
-    fun conditionsSwitched() { playerSprite.setConditionStatus(null, immediate = true); if (conditions.dropOurVolatiles()) marksChanged() }
+    fun conditionsSwitched() { playerSprite.setConditionStatus(null, immediate = true); if (conditions.dropOurVolatiles()) marksChanged(); syncLoveLooks() }
 
     private fun marksChanged() {
         val any = conditions.size > 0

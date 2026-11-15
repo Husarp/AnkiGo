@@ -125,12 +125,21 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
 
     /** PLAN 603: only battle sprites receive a lasting status look. */
     internal fun setConditionStatus(status: String?, immediate: Boolean = false) {
-        if (conditionLook == null && (status == "frz" || status == "slp")) {
+        if (status == "frz" || status == "slp" || status == "psn" || status == "tox") ensureConditionLook()
+        conditionLook?.set(status, immediate)
+    }
+
+    private fun ensureConditionLook() {
+        if (conditionLook == null) {
             conditionLook = com.husarp.ankigo.ui.movefx.ConditionLook(this) { invalidate(); conditionLayer?.invalidate() }.also {
                 if (isAttachedToWindow) it.attach() else it.refresh()
             }
         }
-        conditionLook?.set(status, immediate)
+    }
+
+    internal fun setConditionLove(loving: Boolean) {
+        if (loving) ensureConditionLook()
+        conditionLook?.setLove(loving)
     }
 
     private var image: SpriteImage? = null
@@ -304,13 +313,13 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
 
     override fun onDraw(canvas: Canvas) {
         val look = conditionLook
-        if (look == null || !look.state.visible) { drawPicture(canvas); return }
+        if (look == null || !look.visible) { drawPicture(canvas); return }
         drawConditionContent(canvas, picture = true)
     }
 
     /** The arena's full-size layer lets the cube and shards extend past the sprite holder's feet. */
     internal fun drawConditionLook(canvas: Canvas, opacity: Float) {
-        if (conditionLook?.state?.visible == true) drawConditionContent(canvas, picture = false, opacity = opacity)
+        if (conditionLook?.visible == true) drawConditionContent(canvas, picture = false, opacity = opacity)
     }
 
     private fun drawConditionContent(canvas: Canvas, picture: Boolean, opacity: Float = 1f) {
