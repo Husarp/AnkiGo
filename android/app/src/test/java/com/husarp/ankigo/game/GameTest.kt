@@ -1462,12 +1462,14 @@ class GameTest {
         assertTrue("main level ${state.main!!.level}", state.main!!.level >= 16)
         assertEquals(0, state.evolutions)
         assertEquals(1, state.main!!.species)
-        assertTrue("absorb" in state.main!!.moves)
+        assertFalse("absorb" in state.main!!.moves)
+        assertTrue(state.main!!.moveOffers.any { it.move == "absorb" })
         val choice = Game(data, state, Random(2)) { now }.chooseEvolution(state.main!!.uid, 2)
         assertTrue(choice.ok)
         assertEquals(1, state.evolutions)
         assertEquals(2, state.main!!.species)
-        assertTrue("bulletseed" in state.main!!.moves)
+        assertFalse("bulletseed" in state.main!!.moves)
+        assertTrue(state.main!!.moveOffers.any { it.move == "bulletseed" })
         assertTrue("defeats ${state.defeats}", state.defeats > 100)
     }
 

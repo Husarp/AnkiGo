@@ -59,7 +59,7 @@ object Progression {
      * Gives [xp] to [mon] (Ankimon): XP is progress inside the level; at most 10 levels per call; no XP at 100.
      * Each new level: stats recalculated, current HP goes up by the HP the level adds to max HP plus 25 % of the new max
      * (AnkiGo, PLAN 80; see [Healing.levelUpHp]; never above max, a Pokémon at 0 HP stays there), moves learned at exactly
-     * that level go through [learnMove]. Emits XpGained, LevelUp (with the HP after the heal), Healed (the main only),
+     * that level go through [learnMove]. Emits XpGained, LevelUp (with the HP after the heal), Healed (the main only).
      * New moves keep offers for later. Returns levels gained.
      */
     fun gainXp(data: GameData, state: GameState, mon: Mon, xp: Int, events: MutableList<GameEvent>): Int {
