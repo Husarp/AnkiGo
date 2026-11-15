@@ -119,7 +119,8 @@ class R30DShots {
             val stage = pageScreen(c, page)
             StatsPage::class.java.getDeclaredMethod("render").apply { isAccessible = true }.invoke(page)
             val texts = all(stage).filterIsInstance<TextView>().map { it.text.toString() }
-            assertTrue(texts.contains("Answer buttons"))
+            val title = if (p.defaultGrain == ChartGrain.DAY) "Answer buttons" else "Answer buttons · daily average"
+            assertTrue(texts.toString(), texts.contains(title))
             assertTrue(texts.contains(StatsChartMath.periodLabel(ChartMetric.BUTTONS, p)))
             paparazzi.snapshot(stage, "d-484-${p.name.lowercase()}-${theme.name.lowercase()}")
             page.onHide(); page.onGone()
