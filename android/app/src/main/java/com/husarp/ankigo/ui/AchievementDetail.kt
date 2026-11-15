@@ -131,8 +131,7 @@ internal object AchievementDetail {
                 body.addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = "${AchPageMath.fmtValue(v)} / ${AchPageMath.fmt(metric, s.threshold)} · ${AchPageMath.toGo(v)}" },
                     LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
             }
-            AchStep.State.LOCKED -> body.addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = s.lockedText },
-                LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 2) })
+            AchStep.State.LOCKED -> {}
         }
         s.reward?.let { reward -> // R14-B2-D: a tier with a reward says so, whatever its state ("Reward: Master Ball")
             body.addView(Ui.text(ctx, 11.5f, 900, if (locked) R.color.ag_sub0 else R.color.ag_mauve).apply { text = AchPageMath.rewardText(reward) },

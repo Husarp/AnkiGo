@@ -45,8 +45,8 @@ object SortText {
 
     /** The keys that make sense for a Pokédex species (no moves; "last caught" works from the owned copies). */
     val dexKeys: List<SortKey> = listOf(
-        SortKey.DEX_NUMBER, SortKey.NAME, SortKey.CAUGHT_DATE, SortKey.FIRST_SEEN, SortKey.RECENTLY_EVOLVED,
-        SortKey.LEVEL, SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL,
+        SortKey.DEX_NUMBER, SortKey.NAME, SortKey.CAUGHT_DATE, SortKey.FIRST_SEEN,
+        SortKey.TOTAL, SortKey.STAT, SortKey.CHOSEN_TOTAL,
     )
 
     /** A key's name in the small list and the sheet. */
@@ -241,7 +241,8 @@ internal object SortViews {
     /** The remembered Pokédex sort; nothing saved yet = [DEX_DEFAULT]. */
     fun loadDex(ctx: Context): SortSpec {
         val p = ctx.applicationContext.getSharedPreferences("ankigo_ui", Context.MODE_PRIVATE)
-        return if (p.contains(SortPrefs.Where.DEX.key)) SortPrefs.load(p, SortPrefs.Where.DEX) else DEX_DEFAULT
+        val saved = if (p.contains(SortPrefs.Where.DEX.key)) SortPrefs.load(p, SortPrefs.Where.DEX) else DEX_DEFAULT
+        return saved.copy(key = saved.key.takeIf { it in SortText.dexKeys } ?: SortKey.DEX_NUMBER, basis = StatBasis.BASE)
     }
 
     /**
@@ -261,7 +262,7 @@ internal object SortViews {
 /**
  * The one "Sort & filter" sheet (mockup 6A, R10 B3 + B14): direction on top, sort key, the stats to count, the stat basis (with a
  * level stepper for "At Lv N"), then what the host needs below: the Box's "Show" chips ([showLabels]) and "Group duplicates"
- * ([group]), the Pokédex's wishlist switch and generation chips ([dex]), then the "Type" section ([type]: the Any of / All of / Only
+ * ([group]), the Pokédex's generation chips ([dex]), then the "Type" section ([type]: the Any of / All of / Only
  * switch, one plain line, the 18 type chips; PLAN 192A + M1); a "Show N Pokémon" button closes it. Every change is applied at once
  * through [onChange] / the parts' callbacks (the page behind updates), so the button only closes. The head's "Clear" button clears every
  * filter in the sheet and keeps the sort and "Group duplicates".
@@ -290,11 +291,8 @@ internal class SortSheet(
     /** The "Group duplicates" switch row of the Box (hidden while picking for Compare). */
     class GroupToggle(var on: Boolean, val set: (Boolean) -> Unit)
 
-    /**
-     * The Pokédex's part: the "Only wishlist" switch and one chip per enabled generation ([gens]; none ticked = all, like
-     * [DexFilter.gens]). [set] gets every change (wishlist only, ticked gens); Clear sends (false, empty).
-     */
-    class DexPart(var wishlistOnly: Boolean, val gens: List<Int>, var picked: Set<Int>, val set: (Boolean, Set<Int>) -> Unit)
+    /** One chip per enabled generation; none ticked means all. Wishlist stays in the quick chip outside the sheet. */
+    class DexPart(val gens: List<Int>, var picked: Set<Int>, val set: (Set<Int>) -> Unit)
 
     /** The "Type" section's state: the filter now and [set], which gets every change (Clear sends the empty filter). */
     class TypePart(var filter: TypeFilter, val set: (TypeFilter) -> Unit)
@@ -361,20 +359,27 @@ internal class SortSheet(
 
     /** Anything on in this sheet that "Clear" would switch off (a type mode alone filters nothing). */
     private fun anyFilterOn(): Boolean =
-        shows?.picked?.isNotEmpty() == true || showIndex != 0 || dex?.wishlistOnly == true || dex?.picked?.isNotEmpty() == true || type?.filter?.active == true || rarity?.filter?.active == true
+        shows?.picked?.isNotEmpty() == true || showIndex != 0 || dex?.picked?.isNotEmpty() == true || type?.filter?.active == true || rarity?.filter?.active == true
 
-    /** "Clear": every filter off (Show = All, wishlist, generations, types and the mode back to Any of); the sort and "Group duplicates" stay. */
+    /** "Clear": every filter off (Show = All, generations, types and the mode back to Any of); the sort and "Group duplicates" stay. */
     private fun clearFilters() {
         showIndex = 0
         shows?.let { it.picked = emptySet(); it.set(it.picked) }
-        dex?.let { it.wishlistOnly = false; it.picked = emptySet(); it.set(false, emptySet()) }
+        dex?.let { it.picked = emptySet(); it.set(emptySet()) }
         type?.let { it.filter = TypeFilter(); it.set(it.filter) }
         rarity?.let { it.filter = RarityFilter(); it.set(it.filter) }
         changed()
     }
 
     private fun section(title: String): View = Ui.text(ctx, 11f, 900, R.color.ag_sub0).apply {
-        Ui.decorateHeading(this, title)
+        Ui.decorateHeading(this, title, when (title) {
+            "Direction", "Sort by" -> R.drawable.ic_sort_asc
+            "Which stat", "Stats that count", "Stat basis" -> R.drawable.ic_stats
+            "Show" -> R.drawable.ic_ach_eye
+            "Generation" -> R.drawable.ic_dex
+            "Rarity mark" -> R.drawable.ic_ach_sparkle
+            else -> R.drawable.ic_filter
+        })
         letterSpacing = 0.06f
         setPadding(Ui.dp(ctx, 2), Ui.dp(ctx, 10), 0, Ui.dp(ctx, 2))
     }
@@ -415,7 +420,7 @@ internal class SortSheet(
             }
             body.addView(f, LinearLayout.LayoutParams(-1, -2))
         }
-        if (SortText.usesBasis(spec.key)) {
+        if (dex == null && SortText.usesBasis(spec.key)) {
             body.addView(section("Stat basis"))
             body.addView(basisSwitch(), LinearLayout.LayoutParams(-1, -2))
             if (spec.basis == StatBasis.AT_LEVEL) body.addView(levelStepper(), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 4) })
@@ -442,15 +447,12 @@ internal class SortSheet(
             body.addView(f, LinearLayout.LayoutParams(-1, -2))
         }
         if (dex != null) {
-            body.addView(section("Show"))
-            body.addView(switchRow("Only wishlist", dex.wishlistOnly) { on -> dex.wishlistOnly = on; dex.set(on, dex.picked); changed() },
-                LinearLayout.LayoutParams(-1, -2))
             if (dex.gens.size >= 2) {
                 body.addView(section("Generation"))
                 val f = flow()
                 for (g in dex.gens) f.addView(BoxViews.chip(ctx, "Gen $g", g in dex.picked) {
                     dex.picked = if (g in dex.picked) dex.picked - g else dex.picked + g
-                    dex.set(dex.wishlistOnly, dex.picked); changed()
+                    dex.set(dex.picked); changed()
                 })
                 body.addView(f, LinearLayout.LayoutParams(-1, -2))
                 if (dex.picked.isEmpty()) body.addView(help("None picked: every generation shows."))

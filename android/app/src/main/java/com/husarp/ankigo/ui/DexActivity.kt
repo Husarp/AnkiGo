@@ -168,7 +168,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         rowBox.removeAllViews()
         sortPill = SortViews.sortChip(ctx, filter.spec(), filter.sheetActive) { openSortSheet() }
         val quick = listOf(
-            BoxViews.quickChip(ctx, "★ Wishlist", filter.wishlistOnly) { setSheetFilters(!filter.wishlistOnly, filter.gens) } to filter.wishlistOnly,
+            BoxViews.quickChip(ctx, "★ Wishlist", filter.wishlistOnly) { filter = filter.copy(wishlistOnly = !filter.wishlistOnly); setSheetFilters(filter.gens) } to filter.wishlistOnly,
             BoxViews.quickChip(ctx, "Favourites", filter.favouritesOnly, heart = true) { setFavouritesOnly(!filter.favouritesOnly) } to filter.favouritesOnly,
         )
         rowBox.addView(FilterRow.make(ctx, if (recipient == null) TileViews.legendChip(ctx, dex = true) else null, sortPill,
@@ -209,7 +209,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         list.setSelection(0)
     }
 
-    /** The one "Sort & filter" sheet (R10 B3, R16 192A): sort + direction, "Only wishlist", the generations, the types. Changes apply at once. */
+    /** The one "Sort & filter" sheet (R10 B3, R16 192A): sort + direction, the generations, the types. Changes apply at once. */
     private fun openSortSheet() = sortSheet().show()
 
     /** The sheet itself (tests build its view and click through it; there is no window to show a dialog in). */
@@ -219,7 +219,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
             this, SortText.dexKeys, filter.spec(), null, 0, null,
             count = { filtered().size },
             onChange = { spec, _ -> if (spec != filter.spec()) setSort(spec) },
-            dex = SortSheet.DexPart(filter.wishlistOnly, gens, filter.gens) { wish, picked -> setSheetFilters(wish, picked) },
+            dex = SortSheet.DexPart(gens, filter.gens) { picked -> setSheetFilters(picked) },
             type = SortSheet.TypePart(filter.typeFilter) { setTypeFilter(it) },
             rarity = SortSheet.RarityPart(filter.rarities) {
                 filter = filter.copy(rarities = it); redraw(); list.setSelection(0)
@@ -227,8 +227,8 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         )
     }
 
-    private fun setSheetFilters(wishlistOnly: Boolean, gens: Set<Int>) {
-        filter = filter.copy(wishlistOnly = wishlistOnly, gens = gens)
+    private fun setSheetFilters(gens: Set<Int>) {
+        filter = filter.copy(gens = gens)
         redraw()
         list.setSelection(0)
     }
@@ -275,7 +275,7 @@ class DexPage(base: Context, host: PageHost, internal val pickHost: PickHost? = 
         col.addView(Bits.typeRow(this, sp.types), LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(this, 4) })
         val caught = if (mon.caughtAt > 0) "Caught ${MonDetail.date(mon.caughtAt)} · " else ""
         col.addView(Ui.text(this, 12f, 700, R.color.ag_sub0).apply {
-            text = LevelTier.line(this@DexPage, caught, mon.level, " now\n${MonDetail.nextEvoLine(data, sp)}")
+            text = LevelTier.line(this@DexPage, caught, mon.level, " now")
             setLineSpacing(0f, 1.1f)
         }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(this, 4) })
         card.addView(col, LinearLayout.LayoutParams(0, -2, 1f))

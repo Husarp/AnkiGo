@@ -69,7 +69,7 @@ object DexDetail {
             col.addView(DetailSections.section(a, mem, DetailSection.STATS, "Total ${sp.base.total}", title = "Base stats") {
                 LinearLayout(a).apply {
                     orientation = LinearLayout.VERTICAL
-                    DetailFormat.allAbilities(sp)?.let { addView(DetailSections.fact(a, "Abilities", null, it, null, compact)) }
+                    if (sp.abilities.isNotEmpty() || sp.hiddenAbility != null) addView(possibleAbilities(a, sp))
                     addView(DetailParts.statHint(a))
                     addView(Ui.text(a, 11f, 700, R.color.ag_ov).apply {
                         text = "Grey, right: lowest to highest at Lv 100."
@@ -178,6 +178,34 @@ object DexDetail {
         }.setPokemonDetails().create()
         Pickers.show(dlg)
     }
+
+    internal fun possibleAbilities(a: android.content.Context, sp: Species): View = LinearLayout(a).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "Possible abilities" })
+        val choices = ChipFlow(a, Ui.dp(a, 6), 0)
+        fun ability(name: String) = Ui.text(a, 14f, 900, R.color.ag_mauve).apply {
+            text = name
+            setPadding(Ui.dp(a, 8), 0, Ui.dp(a, 8), 0)
+            gravity = Gravity.CENTER_VERTICAL
+            DetailParts.tapRow(this, StatInfoText(name, com.husarp.ankigo.game.AbilityText.of(name) ?: "This ability has no battle effect in AnkiGo."))
+        }
+        sp.abilities.forEach { choices.addView(ability(it)) }
+        sp.hiddenAbility?.let { name ->
+            choices.addView(LinearLayout(a).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(ability(name))
+                addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
+                    text = "rare"
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(Ui.dp(a, 8), 0, Ui.dp(a, 8), 0)
+                    DetailParts.tapRow(this, StatInfoText("Rare ability", RARE_ABILITY_TEXT))
+                })
+            })
+        }
+        addView(choices, LinearLayout.LayoutParams(-1, -2))
+    }
+
+    internal const val RARE_ABILITY_TEXT = "A hidden ability is a special alternative ability; it cannot be obtained in AnkiGo, where new Pokémon receive a random normal ability."
 
     private fun line(a: GamePage, label: String, value: String): LinearLayout = LinearLayout(a).apply {
         orientation = LinearLayout.HORIZONTAL

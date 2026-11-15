@@ -189,12 +189,8 @@ class AchievementPageMathTest {
         assertEquals(listOf("Common", "Rare", "Epic", "Legendary", "Mythical"), steps.map { it.name })
         assertEquals(listOf(10L, 100, 500, 2_000, 5_000), steps.map { it.threshold })
         assertEquals(listOf<Long?>(1L, 2L, null, null, null), steps.map { it.date })
-        assertEquals("next after Epic", steps[3].lockedText)
-        assertEquals("locked until Legendary", steps[4].lockedText)
-        assertNull(steps[2].lockedText)
         // nothing reached: the first tier is the current one
         assertEquals(AchStep.State.CURRENT, AchPageMath.ladder(view(tier = -1, value = 3)).first().state)
-        assertEquals("next after Common", AchPageMath.ladder(view(tier = -1, value = 3))[1].lockedText)
         // top tier: all reached
         assertTrue(AchPageMath.ladder(view(tier = 4, value = 9_000)).all { it.state == AchStep.State.REACHED })
     }
