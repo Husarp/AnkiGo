@@ -67,6 +67,7 @@ class R10CompareGridShots {
         "base_spe", "base_total", "nature", "ivs", "weak", "resist", "immune", "evo", "becomes"))
 
     private fun page(ctx: Context, mode: CompareMode, picks: List<ComparePick> = five, collapsed: SectionChoice = SectionChoice(), rows: RowChoice = RowChoice(), colours: Boolean = true): ComparePage {
+        GameRepo.state!!.mons.forEach { it.discoveredMoves += it.moves } // these cases inspect discovered move cells and their popups
         CompareStore.saveColours(ctx, colours)
         CompareStore.saveMode(ctx, mode); CompareStore.saveRows(ctx, rows); CompareStore.saveFit(ctx, CompareFit.AUTO)
         CompareStore.saveCollapsed(ctx, collapsed)

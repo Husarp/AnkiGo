@@ -113,6 +113,7 @@ class R28MRarityTest {
                     val dialog = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), data, mon) }!!
                     assertEquals(if (on) 2 else 1, markCount(dialog.content()))
                     paparazzi.snapshot(DialogShots.scene(ctx, dialog), "m-details-$suffix")
+                    dialog.dismiss()
                 } finally { mon.tier = tierBefore }
                 val battle = GameRepo.state!!.battle!!
                 val wildTierBefore = battle.tier
@@ -121,6 +122,7 @@ class R28MRarityTest {
                     val dialog = DialogShots.capture { assertTrue(BattleDetails.showWild(ctx)) }!!
                     assertEquals(if (on) 2 else 1, markCount(dialog.content()))
                     paparazzi.snapshot(DialogShots.scene(ctx, dialog), "m-wild-details-$suffix")
+                    dialog.dismiss()
                 } finally { battle.tier = wildTierBefore }
             }
         }

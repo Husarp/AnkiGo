@@ -194,7 +194,7 @@ class R30OStreakShopTest {
         assertTrue(Shop.buy(data, s, "everstone").ok)
         repeat(2) { assertTrue(Shop.buy(data, s, "potion", quantity = 5).ok) }
         assertEquals(10, s.count("potion"))
-        assertEquals(Shop.weekendPrices.keys + setOf("everstone"), Items.ALL.keys.filter { Shop.limited(it) }.toSet())
+        assertEquals(Shop.weekendPrices.keys + setOf("everstone", "old-gateau"), Items.ALL.keys.filter { Shop.limited(it) }.toSet())
         s.shopTms += "thunderbolt"
         assertTrue(Shop.buyTm(data, s, "thunderbolt").ok)
         assertFalse(Shop.buyTm(data, s, "thunderbolt").ok)

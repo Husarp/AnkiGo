@@ -60,7 +60,7 @@ internal class EvolutionRows(
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
                 val available = View.MeasureSpec.getSize(widthMeasureSpec) - paddingLeft - paddingRight
                 stacked = childCount == 3 && View.MeasureSpec.getMode(widthMeasureSpec) != View.MeasureSpec.UNSPECIFIED &&
-                    available < Ui.dp(a, 250f * resources.configuration.fontScale)
+                    available < Ui.dp(a, 360f * resources.configuration.fontScale)
                 if (!stacked) { super.onMeasure(widthMeasureSpec, heightMeasureSpec); return }
                 val icon = getChildAt(0)
                 val names = getChildAt(1)
@@ -72,7 +72,7 @@ internal class EvolutionRows(
                 names.measure(View.MeasureSpec.makeMeasureSpec(
                     (available - icon.measuredWidth - margins.marginStart - margins.marginEnd).coerceAtLeast(1),
                     View.MeasureSpec.EXACTLY), free)
-                condition.measure(View.MeasureSpec.makeMeasureSpec(available.coerceAtLeast(1), View.MeasureSpec.EXACTLY), free)
+                condition.measure(View.MeasureSpec.makeMeasureSpec((View.MeasureSpec.getSize(widthMeasureSpec) - Ui.dp(a, 12)).coerceAtLeast(1), View.MeasureSpec.EXACTLY), free)
                 setMeasuredDimension(View.MeasureSpec.getSize(widthMeasureSpec), resolveSize(
                     maxOf(minimumHeight, paddingTop + maxOf(icon.measuredHeight, names.measuredHeight) + gap +
                         condition.measuredHeight + paddingBottom), heightMeasureSpec))
@@ -89,7 +89,7 @@ internal class EvolutionRows(
                 val nameTop = paddingTop + (head - names.measuredHeight) / 2
                 names.layout(nameLeft, nameTop, nameLeft + names.measuredWidth, nameTop + names.measuredHeight)
                 val below = paddingTop + head + gap
-                condition.layout(paddingLeft, below, width - paddingRight, below + condition.measuredHeight)
+                condition.layout(Ui.dp(a, 6), below, width - Ui.dp(a, 6), below + condition.measuredHeight)
             }
         }.apply {
             orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL

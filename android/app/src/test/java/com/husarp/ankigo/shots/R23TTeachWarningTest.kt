@@ -29,6 +29,8 @@ class R23TTeachWarningTest {
         GameRepo::class.java.getDeclaredField("loadedData").apply { isAccessible = true }.set(GameRepo, data)
         val mon = GameRepo.state!!.mons.first()
         mon.moves.clear(); mon.moves += listOf("defensecurl", "rollout", "tackle", "growl")
+        mon.bondPoints = Bond.thresholds[2]
+        mon.discoveredMoves += mon.moves
         val before = mon.moves.toList()
         for ((index, affected) in listOf(0 to "Rollout", 1 to "Defense Curl")) {
             val picker = DialogShots.capture { MonActions(TeamPage(ctx, NoHost)).teach(mon, "bodyslam") }!!

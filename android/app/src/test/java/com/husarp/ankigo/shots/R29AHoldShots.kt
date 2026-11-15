@@ -46,7 +46,7 @@ class R29AHoldShots {
             val state = TestData.state(data, 133, 20).apply { bag["thunder-stone"] = 1; main!!.bondPoints = 500 }
             var evolved = 0
             val rows = EvolutionRows(ctx, data, EvoLine.of(data, root).root, root, setOf(133, 135), null, state, state.main) { evolved++ }
-            assertEquals(1, all(rows).count { it.contentDescription == "Ready to evolve" })
+            assertEquals(2, all(rows).filterIsInstance<TextView>().count { it.text.toString() == "✓" })
             paparazzi.snapshot(rows, "a-evolution-row-${theme.name.lowercase()}")
             var dialog: AppDialog? = null
             Pickers.interceptApp = { dialog = it }
@@ -93,7 +93,10 @@ class R29AHoldShots {
                 state.bag["thunder-stone"] = 1
                 val dialog = DialogShots.capture { MonDetail.show(TeamPage(ctx, NoHost), data, mon) }!!
                 val scene = DialogShots.scene(ctx, dialog)
-                assertTrue(all(scene).any { it.contentDescription == "Ready to evolve" })
+                assertTrue(all(scene).filterIsInstance<TextView>().any {
+                    it.text.toString() == "Use Thunder Stone" &&
+                        all(it.parent as View).filterIsInstance<TextView>().first().text.toString() == "✓"
+                })
                 paparazzi.snapshot(scene, "a-pokemon-details-${theme.name.lowercase()}")
                 dialog.dismiss()
             } finally { DetailSections.storeOf = previous }
@@ -141,6 +144,7 @@ class R29AHoldShots {
         FakeGame.install(ctx); ShopCardKit.install()
         val state = com.husarp.ankigo.GameRepo.state!!
         val mon = state.mons.first { it.species == 25 }
+        mon.bondPoints = Bond.thresholds[2]
         mon.moves.remove("thunderbolt")
         state.tms.add("thunderbolt")
         val before = mon.moves.toList()

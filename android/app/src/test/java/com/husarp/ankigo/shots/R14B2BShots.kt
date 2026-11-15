@@ -258,7 +258,7 @@ class R14B2BShots {
         shoot("shop-tm-owned", listOf(P412), themes = listOf(Theme.LIGHT), check = { _, screen ->
             val t = texts((screen as ShopCardKit.Stage).page.itemWindow!!.view)
             assertTrue("Sold out" in t)
-            assertTrue("You own this TM" in t)
+            assertTrue("You own this TM · 1 use" in t)
             assertTrue("Buy" !in t)
         }) { ctx -> ShopCardKit.page(ctx, CardKeys.special(ShopPlan.Tile.Tm("thunderbolt")), setup = { st.tms += "thunderbolt" }).second }
     }
@@ -474,7 +474,7 @@ class R14B2BShots {
             val t = texts(screen)
             assertTrue("Teach…" in t && "Who can learn it" in t)
             assertTrue("POWER" in t && "SPECIAL" in t)
-            assertTrue("You own this TM" in t)
+            assertTrue("You own this TM · 1 use" in t)
             assertTrue("no Buy in the Bag", "Buy" !in t)
         }) { ctx -> bagPage(ctx, CardKeys.bagTm("thunderbolt"), setup = ::someDontKnowThunderbolt).second }
     }

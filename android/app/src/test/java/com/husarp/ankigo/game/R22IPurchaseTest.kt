@@ -17,6 +17,12 @@ class R22IPurchaseTest {
             assertEquals(total - 1, state.cash)
             assertEquals(0, state.count(ball))
             state.cash = total
+            if (quantity > (Shop.remaining(state, ball) ?: Int.MAX_VALUE)) {
+                assertFalse(Shop.buy(data, state, ball, quantity = quantity).ok)
+                assertEquals(total, state.cash)
+                assertEquals(0, state.count(ball))
+                continue
+            }
             assertTrue(Shop.buy(data, state, ball, quantity = quantity).ok)
             assertEquals(0, state.cash)
             assertEquals(quantity, state.count(ball))

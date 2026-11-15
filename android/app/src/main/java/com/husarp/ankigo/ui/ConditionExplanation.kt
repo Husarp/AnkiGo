@@ -5,9 +5,9 @@ import com.husarp.ankigo.game.StageText
 /** Short descriptions of the implemented battle rules, available even without a loaded save. */
 internal object ConditionExplanation {
     val effects = mapOf(
-        "snack.rage" to "Attack, Defense, Sp. Atk, Sp. Def and Speed ×1.1 for this Pokémon until the fight ends, including after switching.",
-        "snack.spd" to "Sp. Def ×1.25 for this Pokémon until the fight ends, including after switching.",
-        "snack.spa" to "Sp. Atk ×1.25 for this Pokémon until the fight ends, including after switching.",
+        "snack.rage" to "All five battle stats ×1.1 until this fight ends; kept when switching.",
+        "snack.spd" to "Sp. Def ×1.25 until this fight ends; kept when switching.",
+        "snack.spa" to "Sp. Atk ×1.25 until this fight ends; kept when switching.",
         "snack.shield" to "The next damaging hit taken is 30% weaker; then this shield ends.",
         "happyhour" to "Doubles the coins earned from this fight.",
         "perishsong" to "Faints when the count ends; switch to escape.",

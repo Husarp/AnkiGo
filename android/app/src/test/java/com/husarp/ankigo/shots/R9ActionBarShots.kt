@@ -277,6 +277,7 @@ class R9ActionBarShots {
             val state = com.husarp.ankigo.GameRepo.state!!
             val mon = if (side == BarSide.MINE) state.main!! else state.battle!!.wild
             mon.moves.clear(); mon.moves.add("tackle")
+            mon.discoveredMoves += "tackle"
             val event = atk(side == BarSide.MINE, "Tackle", Type.NORMAL, Category.PHYSICAL, 5)
             com.husarp.ankigo.GameRepo.wildMoves.observe(listOf(event), state.battle)
             turn(panel, event)

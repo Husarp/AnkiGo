@@ -730,6 +730,7 @@ class GameTest {
         now += day(1)
         assertEquals(1, dayOf3())
         assertEquals(3, s.streakDays)
+        s.bag.remove(StreakFreeze.ITEM) // this case checks an unprotected missed day
         now += day(2) // a day missed
         assertEquals(1, dayOf3())
         assertEquals(1, s.streakDays); assertEquals("2026-10-17", s.lastGoalDay)

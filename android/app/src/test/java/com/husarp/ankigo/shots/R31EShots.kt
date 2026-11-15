@@ -45,7 +45,7 @@ class R31EShots {
             page.openCard("streak-freeze"); stage.render()
             for (owned in 0..2) {
                 val window = page.itemWindow!!.view
-                assertFalse(texts(window).contains("1 left"))
+                assertTrue(texts(window).contains("1 left"))
                 assertFalse(all(window).any { it.contentDescription?.startsWith("Quantity ") == true })
                 assertTrue(texts(window).contains(Bits.fmt(2000 + owned * 1000)))
                 val buy = hold(window, "buy")

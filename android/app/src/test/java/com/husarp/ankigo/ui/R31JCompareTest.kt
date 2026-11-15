@@ -31,7 +31,8 @@ class R31JCompareTest {
         state.battle = Battle(TestData.mon(data, 54, 20), Tier.NORMAL)
         state.seenMatchups[54] = mutableSetOf(Type.GRASS, Type.NORMAL)
         var table = CompareTable.build(data, state, picks, false)
-        assertTrue(table.rows.filter { it.key != "types" }.all { (it.cells[1] as? Cell.Text)?.empty == true })
+        assertTrue(table.rows.filter { it.key != "types" && it.key != "moves" }.all { (it.cells[1] as? Cell.Text)?.empty == true })
+        assertEquals(List(state.battle!!.wild.moves.size) { "???" }, (table.row("moves").cells[1] as Cell.Moves).moves.map { it.name })
         state.battle!!.playerAttacked = true
         table = CompareTable.build(data, state, picks, false)
         assertEquals(listOf(Matchup(Type.GRASS, 2.0)), entries(table, 1))

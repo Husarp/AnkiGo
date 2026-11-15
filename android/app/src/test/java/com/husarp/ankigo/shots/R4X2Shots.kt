@@ -62,20 +62,20 @@ class R4X2Shots {
         GameRepo.state!!.mons.removeAll { it.species == GameRepo.state!!.battle!!.wild.species }
         val scene = window(ctx)
         val t = texts(scene)
-        assertFalse("no empty Moves section", t.any { it.equals("Moves", true) })
-        assertEquals(0, t.count { it == "?" })
+        assertTrue("all move slots stay visible", t.any { it.equals("Moves", true) })
+        assertEquals(GameRepo.state!!.battle!!.wild.moves.size, t.count { it == "???" })
         assertFalse(t.any { it == "IV" || it == "EV" || it.contains("Nature") })
         FrameLayout(ctx).apply { addView(b.root, FrameLayout.LayoutParams(-1, -1)); addView(scene, FrameLayout.LayoutParams(-1, -1)) }
     }
 
-    @Test fun caughtSpeciesShowsEveryCurrentMoveImmediately() = paparazzi.shootWith("r22m-wild-known", listOf(Size.PHONE)) { ctx ->
+    @Test fun catchingAnotherCopyDoesNotRevealThisWildPokemonMoves() = paparazzi.shootWith("r22m-wild-known", listOf(Size.PHONE)) { ctx ->
         val st = GameRepo.state!!
         val wild = st.battle!!.wild
         st.caught += wild.species
         val scene = window(ctx)
         val t = texts(scene)
-        assertEquals(0, t.count { it == "?" })
-        for (id in wild.moves) assertTrue(id, GameRepo.data!!.move(id)!!.name in t)
+        assertEquals(wild.moves.size, t.count { it == "???" })
+        for (id in wild.moves) assertFalse(id, GameRepo.data!!.move(id)!!.name in t)
         assertFalse(t.any { it == "IV" || it == "EV" || it.contains("Nature") })
         scene
     }
@@ -94,7 +94,7 @@ class R4X2Shots {
         val t = texts(scene)
         assertTrue(t.contains("Water Gun"))
         assertFalse(t.contains("Legendary"))
-        assertEquals("unused slots are omitted", 0, t.count { it == "?" })
+        assertEquals("unused slots remain visible", battle.wild.moves.size - 1, t.count { it == "???" })
         assertFalse("an unused move is not named", t.contains("Tackle"))
         scene
     }

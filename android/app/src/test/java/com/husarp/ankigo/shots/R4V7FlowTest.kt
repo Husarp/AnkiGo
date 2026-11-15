@@ -39,14 +39,16 @@ class R4V7FlowTest {
         GameEvent.Cash(10, 20, CashKind.DEFEAT), encounter(),
     )
 
-    @Test fun aFightResultHoldsTheNextOneUntilTheNextAnswer() {
+    @Test fun aFightResultHoldsTheNextOneUntilContinue() {
         val panel = BattlePanelView(ctx())
         val player = EventPlayer(panel)
         player.enqueue(defeatBatch())
         assertTrue("tiles show after the fight", panel.tilesShown)
         assertTrue("next wild one waits", panel.holdsNextFight)
         player.enqueue(answer)
-        assertFalse("the next answer ends the tiles", panel.tilesShown)
+        assertTrue("an incoming answer keeps the result", panel.tilesShown)
+        assertTrue(panel.holdsNextFight)
+        assertTrue(player.continueBattle())
         assertFalse(panel.holdsNextFight)
     }
 
@@ -59,20 +61,25 @@ class R4V7FlowTest {
         assertFalse("clear() ends them", panel.tilesShown)
     }
 
-    @Test fun smallWindowShowsThemWithoutHolding() {
+    @Test fun smallWindowShowsThemAndKeepsContinuePending() {
         val panel = BattlePanelView(ctx())
         panel.setCompact(true)
         val player = EventPlayer(panel)
         player.enqueue(defeatBatch())
         assertTrue(panel.tilesShown)
-        assertFalse("a small window does not hold the next wild one", panel.holdsNextFight)
+        assertTrue("a small window waits for Continue too", panel.holdsNextFight)
+        assertTrue(player.continueBattle())
+        assertFalse(panel.holdsNextFight)
     }
 
-    @Test fun aPileOfAnswersGetsNoTiles() {
+    @Test fun batchedResultsStillWaitForContinue() {
         val panel = BattlePanelView(ctx())
         val player = EventPlayer(panel)
         player.enqueue(defeatBatch() + defeatBatch())
-        assertFalse(panel.tilesShown)
+        assertTrue(panel.tilesShown)
+        assertTrue(panel.holdsNextFight)
+        assertTrue(player.continueBattle())
+        assertFalse(panel.holdsNextFight)
         assertEquals(true, player.idle)
     }
 

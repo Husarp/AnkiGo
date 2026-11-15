@@ -273,7 +273,7 @@ class R4FixBShots {
         assertEquals("opens the first listed achievement's sheet", items[0].rowId, seen)
         tap(layer, "Nice"); assertEquals(1, nice)
         tap(layer, items[2].title)
-        assertEquals("a row stays tappable and opens its own", items[2].rowId, seen)
+        assertEquals("only a button leaves the reward window", items[0].rowId, seen)
     }
 
     @Test fun manyAchievementsShots() {
@@ -340,7 +340,7 @@ class R4FixBShots {
         v.layout(0, 0, v.measuredWidth, v.measuredHeight)
     }
 
-    @Test fun aHeldResultThatMeetsPictureInPictureTimesOutAndReleasesTheNextWildOne() {
+    @Test fun aHeldResultThatMeetsPictureInPictureKeepsContinuePending() {
         val c = ctx()
         c.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true).commit()
         val panel = BattlePanelView(c)
@@ -354,16 +354,18 @@ class R4FixBShots {
         panel.onHeldReleased = { released++ }
         panel.setCompact(true)                  // the window became picture-in-picture
         measure(panel, 320, 180)
-        assertTrue("the result stays, now on the small-window timeout", panel.tilesShown)
-        assertFalse("the next wild one is let go", panel.holdsNextFight)
+        assertTrue("the result stays pending in the small window", panel.tilesShown)
+        assertTrue("the next wild one still waits for Continue", panel.holdsNextFight)
         // the release is posted (never from inside a measure pass): the snapshot lets the main looper run it
         paparazzi.snapshot(FrameLayout(c).apply { addView(panel, FrameLayout.LayoutParams(-1, -1)) }, "r4fixb-b7-pip", 500)
-        assertEquals("its owner is told once", 1, released)
+        assertEquals("layout never releases the battle", 0, released)
         measure(panel, 320, 180)
-        assertEquals("a further layout pass changes nothing", 1, released)
+        assertEquals("a further layout pass changes nothing", 0, released)
+        assertTrue(player.continueBattle())
+        assertFalse(panel.holdsNextFight)
     }
 
-    @Test fun theReleasedNextWildOnePlaysItsEntranceAtOnce() {
+    @Test fun theParkedNextWildOnePlaysOnlyAfterContinue() {
         val c = ctx()
         c.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true).commit()
         val panel = BattlePanelView(c)
@@ -375,7 +377,9 @@ class R4FixBShots {
         panel.setCompact(true)
         measure(panel, 320, 180)
         paparazzi.snapshot(FrameLayout(c).apply { addView(panel, FrameLayout.LayoutParams(-1, -1)) }, "r4fixb-b7-pip-played", 500)
-        assertNull("it played now, not with the next answer", parked.get(player))
+        assertNotNull("resizing keeps the encounter parked", parked.get(player))
+        assertTrue(player.continueBattle())
+        assertNull("Continue releases the encounter", parked.get(player))
         assertTrue(player.idle)
     }
 
@@ -392,7 +396,7 @@ class R4FixBShots {
         assertTrue(panel.tilesShown); assertTrue(panel.holdsNextFight)
     }
 
-    @Test fun aResultThatHasNoRoomLeftGoesAtOnce() {
+    @Test fun aResultThatHasNoRoomLeftStillWaitsForContinue() {
         val c = ctx()
         c.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true).commit()
         val panel = BattlePanelView(c)
@@ -402,7 +406,8 @@ class R4FixBShots {
         assertTrue(panel.holdsNextFight)
         panel.setCompact(true)
         measure(panel, 120, 60)                 // so small that the log line steps out
-        assertFalse("no room for the tiles", panel.tilesShown)
+        assertTrue("even an undersized window keeps Continue pending", panel.holdsNextFight)
+        assertTrue(player.continueBattle())
         assertFalse(panel.holdsNextFight)
     }
 }

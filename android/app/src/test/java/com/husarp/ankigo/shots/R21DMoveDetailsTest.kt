@@ -80,6 +80,7 @@ class R21DMoveDetailsTest {
         try {
             val mon = GameRepo.state!!.main!!
             mon.moves.clear(); mon.moves.addAll(listOf("tackle", "thunderbolt", "quickattack", "thunderwave"))
+            mon.discoveredMoves += "thunderwave"
             val dialog = DialogShots.capture { MonDetail.show(ctx, GameRepo.data!!, mon, "thunderwave") }!!
             val scene = DialogShots.scene(ctx, dialog)
             paparazzi.snapshot(scene, "r21d-focused-move", 1000)

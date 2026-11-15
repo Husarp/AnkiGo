@@ -160,6 +160,7 @@ class R33DDetailsTest {
     @Test fun replacementMoveLongPressDoesNotForgetOrTeach() = paparazzi.shoot("d-teach-forget-preview", listOf(Size.PHONE)) { ctx ->
         val page = TeamPage(ctx, NoHost)
         val mon = GameRepo.state!!.main!!
+        mon.discoveredMoves += mon.moves.first()
         val before = mon.moves.toList()
         var selected = -1
         var window: ItemWindow? = null

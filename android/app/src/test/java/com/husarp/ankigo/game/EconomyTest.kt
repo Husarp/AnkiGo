@@ -387,7 +387,9 @@ class EconomyTest {
         s.shopDay = s.day; s.shopItems += listOf("net-ball", "potion")   // drawn before the update
         s.bag["net-ball"] = 4
         Shop.ensureToday(data, s)
-        assertEquals(Shop.dailyBalls(s.day) + "potion", s.shopItems)
+        assertEquals(Shop.dailyBalls(s.day), s.shopItems.filter { Items.def(it)?.kind == ItemKind.BALL })
+        assertEquals(Shop.dailyBalls(s.day).size + 1, s.shopItems.size)
+        assertTrue(s.shopItems.none { it in Shop.basics() || it == Shop.dealFor(data, s.day)?.item })
         assertEquals(4, s.count("net-ball"))
     }
 

@@ -90,7 +90,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         if (at == events.size) queue.addLast(Item.Tiles(summary!!))
         for (e in events) if (e is GameEvent.Encounter) panel.prefetchBackdrop(e.species, e.wildUid)   // R9 C4: its picture loads while the rewards play
         if (early || GameRepo.state?.battle?.awaitingContinue == true) {
-            waitingMain = GameRepo.state?.main?.uid
+            if (waitingMain == null) waitingMain = GameRepo.state?.main?.uid
             panel.holdEarly()
         }
         if (CatchAskPopup.waiting(events)) queue.addLast(Item.Act { CatchAskPopup.offer(panel.context) }) // R19-P (PLAN 281): "Ask me" / "Release the old one?" opens once the rewards played (not in a floating window or PiP: it waits)
@@ -220,6 +220,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     fun continueBattle(): Boolean {
         if (!panel.holdsNextFight) return false
         reselectForMain()
+        waitingMain = null
         if (GameRepo.game != null) GameRepo.run(ctx) { it.state.battle?.awaitingContinue = false }
         if (!idle) { skipToNextFight(); return true }   // R9 C5: the rewards still play (Continue came at once): they end now
         releaseTiles()

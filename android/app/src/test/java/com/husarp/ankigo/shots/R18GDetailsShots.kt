@@ -108,6 +108,9 @@ class R18GDetailsShots {
         return out
     }
 
+    private fun requirementBox(label: View): View =
+        generateSequence(label.parent as? View) { it.parent as? View }.first { it.isClickable }
+
     private fun texts(v: View) = views(v).filterIsInstance<TextView>()
     private fun strings(v: View) = texts(v).map { it.text.toString() }
 
@@ -277,9 +280,9 @@ class R18GDetailsShots {
             val water = texts(scene).single { it.text.toString() == "Use Water Stone" }
             val fire = texts(scene).single { it.text.toString() == "Use Fire Stone" }
             assertEquals(Ui.c(water.context, com.husarp.ankigo.R.color.ag_green), water.currentTextColor)
-            assertEquals(Ui.c(fire.context, com.husarp.ankigo.R.color.ag_sub0), fire.currentTextColor)
+            assertEquals(Ui.c(fire.context, com.husarp.ankigo.R.color.ag_sub1), fire.currentTextColor)
             val mon = st.mons.first { it.species == 133 }
-            val info = DialogShots.capture { (water.parent as View).performClick() } ?: error("no evolution info")
+            val info = DialogShots.capture { requirementBox(water).performClick() } ?: error("no evolution info")
             val infoScene = DialogShots.scene(water.context, info)
             paparazzi.snapshot(infoScene, "r27e-info-${if (water.context.resources.configuration.uiMode and 48 == 32) "dark" else "light"}", 1000)
             assertTrue("Evolve" in strings(infoScene))
@@ -298,7 +301,7 @@ class R18GDetailsShots {
             info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_NEGATIVE)!!.performClick()
             assertEquals("cancel preserves species", 133, mon.species)
             assertEquals("cancel preserves item", 1, st.count("water-stone"))
-            val missing = DialogShots.capture { (fire.parent as View).performClick() } ?: error("no unmet info")
+            val missing = DialogShots.capture { requirementBox(fire).performClick() } ?: error("no unmet info")
             val missingScene = DialogShots.scene(fire.context, missing)
             assertFalse("unmet branch disables action", missing.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!.isEnabled)
             val requirement = texts(missingScene).single { it.text.toString() == "Use Fire Stone" }
@@ -327,7 +330,7 @@ class R18GDetailsShots {
             choices++
         }
         val label = texts(tree).single { it.text.toString() == "Use Water Stone" }
-        val info = DialogShots.capture { (label.parent as View).performClick() } ?: error("no info")
+        val info = DialogShots.capture { requirementBox(label).performClick() } ?: error("no info")
         val button = info.button(com.husarp.ankigo.ui.AppDialog.BUTTON_POSITIVE)!!
         assertNull(DialogShots.capture { button.performClick() })
         assertEquals("Evolve", button.text.toString())
@@ -344,8 +347,8 @@ class R18GDetailsShots {
         val v = com.husarp.ankigo.ui.DetailTopCard.evolutionOnly(ctx, gd, gd.sp(25), st.seen + st.caught, false, null)
         measureAndLayout(v, ctx, 412, 869)
         val label = texts(v).first { it.text.toString() == "Use Thunder Stone" }
-        assertTrue((label.parent as View).isClickable)
-        assertNotNull((label.parent as View).background)
+        assertTrue(requirementBox(label).isClickable)
+        assertNotNull(requirementBox(label).background)
         assertEquals(0, label.paintFlags and android.graphics.Paint.UNDERLINE_TEXT_FLAG)
         val heading = texts(v).first { it.text.toString() == "EVOLUTION" }
         (heading.parent.parent as View).performClick()

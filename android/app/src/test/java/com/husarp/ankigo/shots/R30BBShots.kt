@@ -88,9 +88,10 @@ class R30BBShots {
         p.preset(TeamSection.BOX, group = false); draw(p)
         shot(p, "disabled-holder-$theme")
         val disabled = cell(p, holder)
-        assertFalse(disabled.isEnabled); assertEquals(0.35f, disabled.alpha)
+        assertTrue(disabled.isEnabled); assertEquals(0.35f, disabled.alpha)
         disabled.performClick(); assertNull(chosen)
-        assertFalse(disabled.performLongClick())
+        DialogShots.capture { assertTrue(disabled.performLongClick()) }!!.dismiss()
+        assertNull(chosen)
         val target = state.mons[1]
         val enabled = cell(p, target)
         enabled.performClick(); enabled.performClick()
@@ -108,14 +109,15 @@ class R30BBShots {
         BoxCopiesSheet.interceptShow = { copies = it }
         val group = cell(p, holder)
         assertTrue(group.isEnabled)
-        assertFalse(group.performLongClick())
+        DialogShots.capture { assertTrue(group.performLongClick()) }!!.dismiss()
+        assertNull(chosen)
         group.performClick(); assertNull(chosen)
         val body = checkNotNull(copies).build(Ui.dp(ctx, 400))
         paparazzi.snapshot(body, "bb-485-copies-$theme", 300)
         val rows = all(body).filter { it.minimumHeight == Ui.dp(ctx, 56) }
         assertEquals(2, rows.size)
         rows[0].performClick(); assertNull(chosen)
-        assertFalse(rows[0].isEnabled); assertEquals(0.35f, rows[0].alpha)
+        assertTrue(rows[0].isEnabled); assertEquals(0.35f, rows[0].alpha)
         rows[1].performClick(); assertSame(target, chosen)
     }
     @Test fun backAndSystemCancelPreserveTheSave() = scene { ctx, theme ->

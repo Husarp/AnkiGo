@@ -206,10 +206,20 @@ class R36RItemsTest {
     }
     @Test fun oldGateauStockIsVeryRareAndLimitedToOnePerOffer() {
         var eligible = 0
-        repeat(1000) { n -> if ("old-gateau" in Shop.stockFor(data, "day$n", 100).first) eligible++ }
-        assertTrue("$eligible", eligible in 1..35)
+        val firstDay = java.time.LocalDate.parse("2026-01-01")
+        val days = (0..4999).map { firstDay.plusDays(it.toLong()).toString() }
+        fun offers(day: String): List<String> {
+            val date = java.time.LocalDate.parse(day)
+            val deals = listOf(12, 22).mapNotNull { hour ->
+                val now = date.atTime(hour, 0).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                Shop.dealFor(data, day, now)?.item
+            }
+            return Shop.stockFor(data, day, 100).first + deals
+        }
+        for (day in days) if ("old-gateau" in offers(day)) eligible++
+        assertTrue("$eligible", eligible in 1..175)
         val s = state(); s.cash = 100000
-        s.day = (0..1000).map { "day$it" }.first { "old-gateau" in Shop.stockFor(data, it, 100).first }
+        s.day = days.first { "old-gateau" in offers(it) }
         s.shopItems += "old-gateau"
         assertFalse(Shop.buy(data, s, "old-gateau", quantity = 3).ok)
         assertTrue(Shop.buy(data, s, "old-gateau").ok)

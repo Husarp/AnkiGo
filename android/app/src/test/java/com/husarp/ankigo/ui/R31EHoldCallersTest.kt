@@ -8,7 +8,7 @@ class R31EHoldCallersTest {
     @Test fun everyHoldButtonUsesTheSharedAnimatedBinding() {
         val files = File("src/main/java").walkTopDown().filter { it.extension == "kt" }.toList()
         val callers = files.filter { it.name != "HoldToConfirm.kt" && it.readText().contains("HoldToConfirm.bind(") }
-        assertEquals(setOf("ItemCard.kt", "ShopActivity.kt", "EvolutionRows.kt", "Pickers.kt"), callers.map { it.name }.toSet())
+        assertEquals(setOf("ItemCard.kt", "ShopActivity.kt", "EvolutionRows.kt", "Pickers.kt", "BagItemActions.kt"), callers.map { it.name }.toSet())
         val labels = files.filter { it.name != "HoldToConfirm.kt" && it.readText().contains("\"Hold to ") }
         assertTrue("Hold actions use plain labels", labels.isEmpty())
         for (file in callers) assertEquals(file.name, 1, Regex("HoldToConfirm\\.bind\\(").findAll(file.readText()).count())
