@@ -158,6 +158,8 @@ class HelpContentTest {
         assertTrue(money.contains("${Tuning.SHOP_BASE_SLOTS} items") && money.contains("per ${Tuning.SHOP_SLOTS_PER_LEVELS} trainer levels"))
         assertTrue(money.contains("${Tuning.REROLL_PRICE} coins") && money.contains("costs ${Tuning.REROLL_PRICE_STEP} more"))
         assertTrue(money.contains("TMs start at ${Tuning.TM_PRICE}"))
+        assertTrue(money.contains("item and TM prices vary"))
+        assertFalse(money.contains("TMs stay at a fixed price"))
         assertTrue(money.contains("${Tuning.SPECIAL_SHOP_PERCENT}% chance"))
         assertTrue(money.contains("Poké Balls and Potions are always on sale"))
         assertTrue(money.contains("one Great or Ultra Ball"))

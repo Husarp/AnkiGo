@@ -209,7 +209,7 @@ object GameGuide {
                 "Poké Balls and Potions are always on sale in Balls and Healing.",
                 "Daily balls: one Great or Ultra Ball is on sale each game day, with a ${Tuning.SPECIAL_SHOP_PERCENT}% chance of a special ball alongside it. Refresh does not change these offers.",
                 "Daily deals: a daytime and a nighttime offer each discount an item by ${Tuning.DEAL_PERCENTS.first()}–${Tuning.DEAL_PERCENTS.last()}%. Check the Shop for the current offer and when it changes.",
-                "Prices: item prices vary by up to ${Tuning.SHOP_VARIATION_PERCENT}% each day. Refresh keeps prices. TMs stay at a fixed price.",
+                "Prices: item and TM prices vary by up to ${Tuning.SHOP_VARIATION_PERCENT}% each day. Refresh keeps prices.",
                 "Weekend special: one rare held item is on sale on Saturday and Sunday. This is where to buy Lucky Egg, Amulet Coin, Luck Incense, Macho Brace, Soothe Bell and Power items. The offer stays the same all weekend.",
                 "Streak Freeze: keep up to ${com.husarp.ankigo.game.StreakFreeze.CAP}. Each protects one missed daily goal automatically. You need enough to cover every missed day in a gap; otherwise your streak ends and none are spent. Protected days give no gifts or goal progress. Find freezes in daily gifts, rewarded battles or the Shop.",
                 "Purchase limits: weekend items allow one purchase per weekend; Everstone allows one per game day across all offers. TMs stay yours forever. Buy Streak Freezes one at a time up to the limit; each costs more as you hold more. Refreshing never restores a sold-out item.",
