@@ -572,6 +572,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             battle?.natureMainRounds = 0
             battle?.team = state.teamMons()
             battle?.switchOutMain(data, oldMon) // R17C-1: the rule sets' onLeave, then a fresh side for the new main
+            if (battle != null) BattleItems.sync(battle, main)
             events += GameEvent.MainChanged(main.uid, main.name)
             refreshNext() // the wild level follows the main's level
             if (battle != null && battle.wild.hp > 0 && main.hp > 0 && !free) {
@@ -646,13 +647,23 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * attacks as normal. The same moments as a switch are free of it ([itemTakesATurn]); items given to hold, TMs, fossils and items
      * used on another Pokémon never take a turn, and balls / escape items have their own rules ([throwBall], [escape]).
      */
+    fun feedBerry(item: String, uid: String): ActionResult {
+        tick()
+        return BerryFeeding.feed(data, state, item, uid, rng, clock())
+    }
+
     fun useItem(item: String, targetUid: String?, evolutionTo: Int? = null): ActionResult {
         val main = state.main
         val battle = state.battle
         val kind = Items.def(item)?.kind
         val onMain = main != null && (targetUid ?: if (kind == ItemKind.HEAL) main.uid else null) == main.uid
-        val turn = onMain && battle != null && (kind == ItemKind.HEAL || kind == ItemKind.EVOLUTION) && itemTakesATurn(battle, main!!)
+        val turn = item != "old-gateau" && onMain && battle != null && (kind == ItemKind.HEAL || kind == ItemKind.EVOLUTION) && itemTakesATurn(battle, main!!)
         val r = ItemUse.use(data, state, item, targetUid, rng, clock(), evolutionTo)
+        if (r.ok && battle != null && state.battle === battle && state.main?.hp == 0) {
+            val settled = mutableListOf<GameEvent>()
+            settleFight(battle, state.main!!, settled)
+            return r.copy(events = r.events + settled)
+        }
         if (!r.ok || !turn || battle == null || state.battle !== battle) return r
         val mon = state.main ?: return r
         if (mon.hp <= 0 || battle.wild.hp <= 0) return r

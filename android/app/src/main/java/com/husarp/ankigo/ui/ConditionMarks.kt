@@ -42,6 +42,10 @@ object ConditionMarks {
 
     /** The lasting conditions of one Pokémon (`BattleSide.volatiles`), most important first. Round-long ones (flinch, Protect ...) have no chip. */
     private val VOLATILES: List<Def> = listOf(
+        v("snack.rage", "Stats ×1.1", Group.BOOST, Num.NONE, 3),
+        v("snack.spd", "Sp. Def ×1.25", Group.BOOST, Num.NONE, 4),
+        v("snack.spa", "Sp. Atk ×1.25", Group.BOOST, Num.NONE, 5),
+        v("snack.shield", "Next hit −30%", Group.GUARD, Num.NONE, 2),
         v("embargo", "Embargo", Group.HINDER, Num.TURNS, 8),
         v("perishsong", "Perish Song", Group.HINDER, Num.TURNS, 7),
         v("switchtrap", "Trapped", Group.HINDER, Num.TURNS, 9),

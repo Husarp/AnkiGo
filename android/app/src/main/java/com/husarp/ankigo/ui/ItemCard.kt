@@ -229,6 +229,7 @@ internal object ItemCard {
                 spec.act?.let { row.addView(actView(ctx, it), LinearLayout.LayoutParams(0, -2, 1f)) }
                 if (row.childCount > 0) addView(row, Form.lp(ctx, 10))
             }
+            if (spec.buy == null) spec.item?.let { item -> BagItemActions.buttons(page, item)?.let { addView(it, Form.lp(ctx, 8)) } }
             if (spec.buy == null) spec.item?.let { item -> HeldItemActions.buttons(page, item, messageHost)?.let { addView(it, Form.lp(ctx, 8)) } }
             if (trade != null) addView(if (trade.confirming) confirmView(ctx, trade) else tradeButton(ctx, trade), Form.lp(ctx, if (trade.confirming) 10 else 8))
         }

@@ -26,7 +26,7 @@ object ItemInfo {
         "power-lens" to "Sp. Atk", "power-band" to "Sp. Def", "power-anklet" to "Speed",
     ).toMap()
     /** Names that stay as they are for any number: "2 Fresh Water", "3 Luck Incense". */
-    private val MASS = setOf("Fresh Water", "Moomoo Milk", "Energy Powder", "Berry Juice", "Lemonade", "Luck Incense", "Old Amber")
+    private val MASS = setOf("Fresh Water", "Moomoo Milk", "Energy Powder", "Berry Juice", "Lemonade", "Luck Incense", "Old Amber", "Pewter Crunchies", "Leftovers")
 
     private fun isMaster(id: String) = Tuning.BALL_CHANCE[id].let { it != null && it >= 100 }
     private fun isOldBall(id: String) = id in Tuning.OLD_BALLS
@@ -35,6 +35,47 @@ object ItemInfo {
     private fun berryStat(item: String): String = when (AbilityAdaptations.berries[item]) {
         "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Sp. Atk"; "spd" -> "Sp. Def"; "spe" -> "Speed"; else -> ""
     }
+    private fun specialShort(item: String): String? = when (item) {
+        "rage-candy-bar" -> "40% HP · stats ×1.1"
+        "big-malasada" -> "60% missing HP"
+        "shalour-sable" -> "Next hit −30%"
+        "lumiose-galette" -> "25% HP + status cure"
+        "casteliacone" -> "40% HP · Sp. Def ×1.25"
+        "pewter-crunchies" -> "40% HP · Sp. Atk ×1.25"
+        "old-gateau" -> "50% HP · no turn"
+        "lava-cookie" -> "50/50: +75% / −25% HP"
+        "awakening" -> "Wakes from sleep"
+        "leftovers" -> "Heals 1/16 HP/turn"
+        "shell-bell" -> "Heals 1/8 damage dealt"
+        "rocky-helmet" -> "−20% hit · 20% back"
+        "life-orb" -> "+30% damage · −10% HP"
+        "expert-belt" -> "+20% super-effective"
+        "focus-sash" -> "Survive one KO: 1 HP"
+        else -> null
+    }
+
+    private fun specialLine(item: String): String? = when (item) {
+        "rage-candy-bar" -> "40% HP · all five stats ×1.1 this fight"
+        "big-malasada" -> "Heals 60% of missing HP"
+        "shalour-sable" -> "No heal · next damaging hit −30%"
+        "lumiose-galette" -> "25% max HP + cures status"
+        "casteliacone" -> "40% HP · Sp. Def ×1.25 this fight"
+        "pewter-crunchies" -> "40% HP · Sp. Atk ×1.25 this fight"
+        "old-gateau" -> "50% max HP without using the turn"
+        "lava-cookie" -> "50/50 chance: +75% or −25% max HP"
+        "awakening" -> "Wakes a sleeping fighter · no HP healing"
+        "leftovers" -> "Heals 1/16 max HP per battle turn"
+        "shell-bell" -> "Heals 1/8 of actual HP damage dealt"
+        "rocky-helmet" -> "Hit damage −20% · reflects 20% of HP lost"
+        "life-orb" -> "Damage +30% · costs 10% max HP per attack"
+        "expert-belt" -> "Super-effective attacks deal +20% damage"
+        "focus-sash" -> "Survive one knockout hit with 1 HP; consumed"
+        else -> null
+    }
+
+    private fun specialText(item: String): String? = BattleItems.snacks[item] ?: BattleItems.held[item] ?:
+        if (item == "awakening") "Wakes your sleeping Pokémon in battle; restores 0 HP. Uses the normal item turn." else null
+
     private fun berryLine(item: String): String = when (item) {
         "oran-berry" -> "At half HP: heals 10 HP; consumed"
         "sitrus-berry" -> "At half HP: heals ¼ max HP; consumed"
@@ -43,6 +84,7 @@ object ItemInfo {
     }
 
     fun short(data: GameData?, item: String, caught: Set<Int>? = null): String {
+        specialShort(item)?.let { return it }
         if (item in AbilityAdaptations.berries) return when (item) {
             "oran-berry" -> "Held: heals 10 HP"
             "sitrus-berry" -> "Held: heals ¼ HP"
@@ -86,6 +128,7 @@ object ItemInfo {
 
     /** The row line (Bag rows, under the name of an opened card, the deal card; about 40 characters, no bold marks). */
     fun line(data: GameData?, item: String, caught: Set<Int>? = null): String {
+        specialLine(item)?.let { return it }
         if (item in AbilityAdaptations.berries) return berryLine(item)
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {
@@ -113,6 +156,20 @@ object ItemInfo {
     /** The full text of an opened card, in blocks. Never empty for a catalogue item; an unknown item gets one generic block. */
     fun facts(data: GameData?, item: String, caught: Set<Int>? = null): List<ItemFact> {
         val def = Items.def(item) ?: return listOf(ItemFact(WHAT, NO_DESCRIPTION))
+        specialText(item)?.let { text ->
+            if (item in BattleItems.held) return listOf(
+                ItemFact(WHAT, text),
+                ItemFact(HOW, "$HOLD_RULE Suppressed by Klutz, Embargo and Magic Room."),
+            )
+            val fight = if (item == "old-gateau") "Works at once without a wild attack, even after your first answer." else "$FIGHT_RULE $MAIN_ONLY"
+            val how = when (item) {
+                "awakening" -> "Use from the Bag on your sleeping main during a live fight."
+                "shalour-sable" -> "Use from the Bag on a Pokémon during a live fight. The shield follows that Pokémon through switches and ends after one damaging hit or when the fight ends."
+                else -> "Use from the Bag on a Pokémon. HP amounts round down, at least 1 HP. Healing never exceeds max HP."
+            }
+            return listOf(ItemFact(WHAT, text), ItemFact(HOW, how),
+                ItemFact(FIGHT, fight + if (item in BattleItems.boosts && item != "shalour-sable") " Outside a fight only the healing applies. The bonus belongs to that Pokémon, survives switching and ends with the fight. The same snack bonus does not stack." else ""))
+        }
         return when (def.kind) {
             ItemKind.AUTO -> listOf(
                 ItemFact(WHAT, "**One freeze protects one missed daily goal.** Hold up to **3**. At 3 held it is unavailable from all sources."),
@@ -125,7 +182,7 @@ object ItemInfo {
                 listOf(
                     ItemFact(WHAT, when {
                         def.cures -> "Heals **all HP** of one of your Pokémon. In a fight it also **cures** your main's burn, poison, paralysis, sleep or freeze. A status ends with the fight anyway."
-                        all -> "Heals **all HP** of one of your Pokémon. It **doesn't** cure a status: only a Full Restore does that."
+                        all -> "Heals **all HP** of one of your Pokémon. It **doesn't** cure a status. Full Restore and Lumiose Galette can cure one; Awakening cures sleep only."
                         else -> "Heals one of your Pokémon by **${def.heal} HP**, never above its maximum."
                     }),
                     ItemFact(HOW, if (def.cures) "Use it from the Bag. It **can't** be used on a Pokémon at full HP, except on your main when it has a status in a fight."
@@ -162,6 +219,10 @@ object ItemInfo {
     }
 
     fun whereToFind(data: GameData?, item: String): String = when {
+        item in AbilityAdaptations.berries -> "Found while studying · Never sold in the Shop."
+        item == "old-gateau" -> "Found while studying · Very rare Shop offer (eligible on 2% of days), at most one per offer."
+        item == "rage-candy-bar" -> "Found while studying · Rare Shop offer (eligible on 10% of days)."
+        item in BattleItems.snacks || item in BattleItems.held || item == "awakening" -> "Found while studying · Shop on some days."
         item == PokeDoll.ITEM -> "Daily gifts · Found while studying. Not sold in the Shop."
         item == StreakFreeze.ITEM -> "Daily gift (2%) · Rewarded battle wins (0.2%, at most one per game day; practice gives none) · Shop, until you hold 3. Every next freeze costs more: 2,000 / 3,000 / 4,000 coins as you hold 0 / 1 / 2. Unavailable from all sources while holding 3."
         item in Items.RETIRED -> "Not sold or found any more."
@@ -376,7 +437,7 @@ object ItemInfo {
         return "$head$shown$more.$time"
     }
 
-    private fun heldWhat(item: String): String = if (item in AbilityAdaptations.berries) berryLine(item) + ". Activates automatically while held in battle. Gluttony, Ripen, Cheek Pouch and Cud Chew can improve it; Klutz and opposing Unnerve prevent activation." else when (item) {
+    private fun heldWhat(item: String): String = if (item in AbilityAdaptations.berries) berryLine(item) + ". Or feed a free Bag berry to any Pokémon for +5 Bond points and a 15% chance of a small gift (20 XP, 5 coins or +1 random EV, within the usual caps). Activates automatically while held in battle. Gluttony, Ripen, Cheek Pouch and Cud Chew can improve it; Klutz and opposing Unnerve prevent activation." else when (item) {
         "lucky-egg" -> "The Pokémon holding it gets **×${nice(Tuning.LUCKY_EGG)} XP** from wins and catches. It works for your **main** and for the **Exp. Share** holder."
         "amulet-coin", "luck-incense" -> "While your **main** holds it, the money you earn for answers and wins is **doubled**, all day. " +
             "The slower pay after each ${Tuning.CASH_TIER} coins still applies, so you keep getting double at every step. It does nothing on a Pokémon that is not your main."
@@ -397,7 +458,7 @@ object ItemInfo {
     fun effect(item: String): String = line(null, item)
 
     /** Where and how the item is used (one sentence). */
-    fun howToUse(item: String): String = when (Items.def(item)?.kind) {
+    fun howToUse(item: String): String = if (item == "old-gateau") "Use it from the Bag. Heals 50% max HP without using the turn." else when (Items.def(item)?.kind) {
         ItemKind.AUTO -> "Used automatically when a daily goal is missed. No manual activation."
         ItemKind.BALL -> if (isOldBall(item)) Items.specialNote(item) else "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
         ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"

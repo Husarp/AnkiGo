@@ -121,6 +121,9 @@ object Items {
             add(ItemDef(id, ItemKind.HEAL, heal = hp, cures = cures,
                 note = if (cures) "Heals all HP and cures a status" else if (hp == Int.MAX_VALUE) "Heals all HP" else "Heals $hp HP"))
         }
+        BattleItems.snacks.forEach { (id, text) -> add(ItemDef(id, ItemKind.HEAL, note = text)) }
+        add(ItemDef("awakening", ItemKind.HEAL, note = "Wakes a sleeping Pokémon in battle"))
+        BattleItems.held.forEach { (id, text) -> add(ItemDef(id, ItemKind.HELD, note = text)) }
         EVOLUTION.forEach { add(ItemDef(it, ItemKind.EVOLUTION, note = if (it in RETIRED) "Does nothing here" else "Evolves Pokémon that evolve with it")) }
         AbilityAdaptations.berries.keys.forEach { add(ItemDef(it, ItemKind.HELD, note = when (it) {
             "oran-berry" -> "At half HP: heals 10 HP; consumed"
@@ -148,7 +151,7 @@ object Items {
     fun tmName(data: GameData, move: String): String = "TM " + (data.move(move)?.name ?: move)
 
     /** Ankimon daily-shop pool: catalogue items with price > 0 (balls included; the Master Ball, Poké Doll and [RETIRED] items are not sold). */
-    fun shopPool(data: GameData): List<String> = ALL.keys.filter { it !in RETIRED && it != StreakFreeze.ITEM && it != PokeDoll.ITEM && data.price(it) > 0 }.sorted()
+    fun shopPool(data: GameData): List<String> = ALL.keys.filter { it !in RETIRED && it != StreakFreeze.ITEM && it != PokeDoll.ITEM && it !in AbilityAdaptations.berries && data.price(it) > 0 }.sorted()
 
     /** Ankimon random-item pool: catalogue items except balls and the [RETIRED] items. */
     fun dropPool(): List<String> = ALL.values.filter { it.kind != ItemKind.BALL && it.kind != ItemKind.AUTO && it.id !in RETIRED }.map { it.id }.sorted()
@@ -282,7 +285,7 @@ object Shop {
         "power-weight" to 2000, "power-bracer" to 2000, "power-belt" to 2000,
         "power-lens" to 2000, "power-band" to 2000, "power-anklet" to 2000,
     )
-    fun limited(item: String): Boolean = item in weekendPrices || item == "everstone"
+    fun limited(item: String): Boolean = item in weekendPrices || item == "everstone" || item == "old-gateau"
 
     private fun offerKey(state: GameState, item: String): String {
         val date = parse(state.day)
@@ -305,7 +308,7 @@ object Shop {
      * Retired, unsold or weekend-only items are removed from existing stock.
      */
     fun ensureToday(data: GameData, state: GameState) {
-        state.shopItems.removeAll { data.price(it) <= 0 || it in Items.RETIRED || it == PokeDoll.ITEM || it in weekendPrices }
+        state.shopItems.removeAll { data.price(it) <= 0 || it in Items.RETIRED || it == PokeDoll.ITEM || it in AbilityAdaptations.berries || it in weekendPrices }
         if (state.shopDay == state.day) {
             // Upgrade an already-open day's old ball offers without changing owned inventory or rerolled items/TMs.
             val balls = dailyBalls(state.day)
@@ -332,7 +335,7 @@ object Shop {
     /** Item/TM rerolls preserve the date-seeded daily balls. */
     private fun draw(data: GameData, rng: Random, trainerLevel: Int, day: String): Pair<List<String>, List<String>> {
         val n = slots(trainerLevel)
-        val items = dailyPool(data).shuffled(rng).take(n)
+        val items = dailyPool(data).filter { availableRare(it, day) }.shuffled(rng).take(n)
         val tms = tmPool(data).shuffled(rng).take(n)
         return dailyBalls(day) + items to tms
     }
@@ -350,6 +353,12 @@ object Shop {
     }
 
     fun ultraBallDay(day: String): Boolean = "ultra-ball" in dailyBalls(day)
+
+    private fun availableRare(item: String, day: String): Boolean = when (item) {
+        "old-gateau" -> Random(("rare:$day:$item").hashCode()).nextInt(100) < 2
+        "rage-candy-bar" -> Random(("rare:$day:$item").hashCode()).nextInt(100) < 10
+        else -> true
+    }
 
     private fun dailyPool(data: GameData): List<String> = Items.shopPool(data).filter {
         it !in Tuning.SHOP_BASICS && it !in weekendPrices && Items.def(it)?.kind != ItemKind.BALL
@@ -388,7 +397,7 @@ object Shop {
      * when that pool is empty. Fixed within each day/night period, whatever is bought or rerolled; any number of buys at [Deal.price].
      */
     fun dealFor(data: GameData, day: String, now: Long = System.currentTimeMillis()): Deal? {
-        val pool = dailyPool(data)
+        val pool = dailyPool(data).filter { availableRare(it, day) }
         if (pool.isEmpty()) return null
         val rng = Random(("deal:$day").hashCode())
         val dayIndex = rng.nextInt(pool.size)
@@ -478,7 +487,7 @@ object Shop {
         if (item == StreakFreeze.ITEM && !freezeOnSale(state)) return ActionResult(false, "You already hold 3 freezes")
         val onSale = (item == StreakFreeze.ITEM && freezeOnSale(state)) || (item in state.shopItems && item !in weekendPrices) || item in Tuning.SHOP_BASICS || dealFor(data, state.day, now)?.item == item ||
             weekendFor(data, state.day)?.item == item
-        if (!onSale || (item != StreakFreeze.ITEM && data.price(item) <= 0) || item in Items.RETIRED || item == PokeDoll.ITEM) return ActionResult(false, "Not in today's shop")
+        if (!onSale || (item != StreakFreeze.ITEM && data.price(item) <= 0) || item in Items.RETIRED || item == PokeDoll.ITEM || item in AbilityAdaptations.berries || !availableRare(item, state.day)) return ActionResult(false, "Not in today's shop")
         val total = priceOf(data, state, item, now).toLong() * quantity
         if (total > Int.MAX_VALUE) return ActionResult(false, "Not enough money")
         val price = total.toInt()
@@ -613,7 +622,7 @@ object ItemUse {
         val def = Items.def(item) ?: return false
         if (state.count(item) <= 0) return false
         return when (def.kind) {
-            ItemKind.HEAL -> (mon ?: state.main)?.let { it.hp < StatCalc.maxHp(data, it) || (def.cures && battleStatus(state, it) != null) } ?: false
+            ItemKind.HEAL -> if (item in BattleItems.snacks || item == "awakening") BattleItems.canUse(data, state, item, mon ?: state.main) else (mon ?: state.main)?.let { it.hp < StatCalc.maxHp(data, it) || (def.cures && battleStatus(state, it) != null) } ?: false
             ItemKind.EVOLUTION -> mon != null && Progression.itemEvolution(data, mon, item, now, state.activeHeldItem(mon)) != null
             ItemKind.HELD -> mon != null && mon.heldItem != item
             ItemKind.FOSSIL -> data.species.containsKey(def.fossil)
@@ -636,6 +645,7 @@ object ItemUse {
             ItemKind.BALL, ItemKind.ESCAPE -> return ActionResult(false, BATTLE_ONLY)
             ItemKind.HEAL -> {
                 val mon = target(state, targetUid, true) ?: return ActionResult(false, "No Pokémon to heal.")
+                if (item in BattleItems.snacks || item == "awakening") return BattleItems.use(data, state, item, mon, rng, now)
                 val missing = StatCalc.maxHp(data, mon) - mon.hp
                 // R17C-6: Full Restore also cures the Main's battle status; at full HP it still works when there is a status to cure.
                 val status = if (def.cures) battleStatus(state, mon) else null
