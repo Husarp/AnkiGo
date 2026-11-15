@@ -950,6 +950,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         arena.resetFx()
         renderEnemy(st, data)
         renderPlayer(st, data)
+        if (st.battle == null || enemyHeld) arena.clearConditionLooks()
         arena.syncConditions(if (enemyHeld) null else st.battle)   // R19-K (PLAN 269): the condition chips follow the saved fight
         renderFooter(st)
         prefetch(st, data)
@@ -978,6 +979,7 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
         }
         val w = b.wild
         if (actionBattleUid != w.uid) {
+            arena.enemySprite.setConditionStatus(null, immediate = true)
             logBox.clearMoves()
             actionBattleUid = w.uid
         }
