@@ -12,6 +12,14 @@ object StageText {
         return (if (accuracy) { if (n < 0) aimDrops else aim } else { if (n < 0) drops else stats })[kotlin.math.abs(n)]
     }
 
+    /** Rounded percent change from the battle engine's actual multiplier. */
+    fun percent(stage: Int, accuracy: Boolean = false): String {
+        val n = stage.coerceIn(-6, 6)
+        val factor = if (accuracy) BattleEngine.accStageMult(n) else BattleEngine.stageMult(n)
+        val percent = kotlin.math.round((factor - 1) * 100).toInt()
+        return (if (percent > 0) "+" else if (percent < 0) "−" else "") + kotlin.math.abs(percent) + "%"
+    }
+
     fun amount(stage: Int, accuracy: Boolean = false): String =
         "${kotlin.math.abs(stage)} stage${if (kotlin.math.abs(stage) == 1) "" else "s"} (×${factor(stage, accuracy)})"
 

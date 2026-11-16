@@ -40,7 +40,7 @@ class R29IConditionTest {
     }
 
     @Test fun statExplanationsUseAimFactorsAndRetainExactStages() {
-        assertTrue(ConditionExplanation.line(mark("stat.atk", -2)).contains("Atk −2"))
+        assertTrue(ConditionExplanation.line(mark("stat.atk", -2)).contains("Attack −50%"))
         assertTrue(ConditionExplanation.effect(mark("stat.atk", -2)).contains("×1/2"))
         assertTrue(ConditionExplanation.effect(mark("stat.accuracy", -2)).contains("×3/5"))
         assertTrue(ConditionExplanation.effect(mark("stat.evasion", 2)).contains("harder to hit"))

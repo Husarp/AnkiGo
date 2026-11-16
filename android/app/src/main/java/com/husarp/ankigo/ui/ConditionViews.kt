@@ -286,7 +286,7 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         unscroll()
         body.removeAllViews()
         val stat = mark.key.startsWith("stat.")
-        val name = if (stat) StatPill.longName(mark.key.removePrefix("stat.")) + " " + (if (mark.value > 0) "+" else "−") + kotlin.math.abs(mark.value) else mark.def.word
+        val name = if (stat) StatPill.longName(mark.key.removePrefix("stat.")) + " " + com.husarp.ankigo.game.StageText.percent(mark.value, mark.key in listOf("stat.accuracy", "stat.evasion")) else mark.def.word
         buildCard(name, listOfNotNull(ConditionExplanation.effect(mark), values).joinToString("\n"), listOfNotNull(owner, mark.detail.takeIf { !stat && it.isNotBlank() }).joinToString(" · "),
             ConditionIcons.of(mark.key)!!, if (stat) StatPill.ink(mark.value > 0, StatPill.isDark(context)) else m.hue(mark.def.group), maxW, maxH, values)
     }

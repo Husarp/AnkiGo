@@ -104,6 +104,19 @@ object AnkiStatsStore {
         }
     }
 
+    /** Finish-deck totals need the latest local time even before the Stats tab has been visited. */
+    internal fun refreshTodayTime(ctx: Context, dayStartHour: Int, done: () -> Unit) {
+        if (!enabled) return
+        val app = ctx.applicationContext
+        io.execute {
+            val time = readTime(app, dayStartHour)
+            val live = readLiveTime(app, dayStartHour)
+            update { it.copy(timeByDay = time.time, liveTimeByDay = live.time, timedAnswersByDay =
+                (time.counts.keys + live.counts.keys).associateWith { day -> (time.counts[day] ?: 0L) + (live.counts[day] ?: 0L) }) }
+            main.post { done() }
+        }
+    }
+
     private fun work(app: Context, today: String, dayStartHour: Int, request: Triple<String, Int, String>) {
         val time = readTime(app, dayStartHour)
         val live = readLiveTime(app, dayStartHour)

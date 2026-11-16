@@ -135,6 +135,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val at = IntArray(2).also { v.getLocationOnScreen(it) }
         return ev.rawX >= at[0] && ev.rawX < at[0] + v.width && ev.rawY >= at[1] && ev.rawY < at[1] + v.height
     }
+    private var todayOpen = false
     private var sheetOpen = false
     private var section: StatsSection = start ?: StatsSection.STATISTICS
     private val achievements by lazy { AchievementsView(this) }
@@ -213,6 +214,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     internal fun showSection(s: StatsSection) {
         if (s == section) return
         section = s
+        todayOpen = false
         sheetOpen = false
         achievements.open(null)
         requestRender()
@@ -221,6 +223,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     /** The popup's "See it" (Nav.EXTRA_ACHIEVEMENT): shows Achievements with the sheet of [id] open (R4-V2). */
     internal fun openAchievement(id: String) {
         section = StatsSection.ACHIEVEMENTS
+        todayOpen = false
         sheetOpen = false
         achievements.open(id)
         requestRender()
@@ -302,6 +305,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
         content.addView(trainerCard())
         content.addView(streakCard(s), lp(14))
+        content.addView(todayEntry(today), lp(14))
         if (anki != null) content.addView(sectionCard(R.drawable.ic_book, "Study", R.color.ag_blue, null,
             if (anki.dailyCountsAvailable) "Cards today counts distinct AnkiDroid cards from the game-day reset. Learning repeats count once. The goal counts AnkiGo answers, including practice and catch-up. Undo keeps game progress and a redo adds none." else "Game-day card counts are unavailable from AnkiDroid. The chart shows AnkiGo answers, including learning repeats, practice and catch-up. Undo keeps game progress and a redo adds none.",
             tileGrid(listOfNotNull(if (anki.dailyCountsAvailable) "Cards today" to (if (today in anki.perDay) Bits.fmt(anki.studied(today)) else "…") else null, "Answers today" to Bits.fmt(s.reviewsToday), "Due now" to Bits.fmt(anki.dueNow)), R.color.ag_blue, 2)), lp(14))
@@ -335,6 +339,25 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         content.addView(sectionCard(R.drawable.ic_star, "Game · all time", R.color.ag_yellow, null, null,
             tiles(s, R.color.ag_yellow)), lp(14))
         syncSheet()
+    }
+
+    private fun todaySummary(day: String) = com.husarp.ankigo.game.TodaySummary(state, day, AnkiStatsStore.snapshot.timeTotalOn(day))
+
+    private fun todayEntry(day: String): View = Ui.card(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(14), dp(10), dp(10), dp(10))
+        val s = todaySummary(day)
+        addView(LinearLayout(this@StatsPage).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(Ui.text(context, 17f, 900, R.color.ag_text).apply { text = "Today" })
+            addView(Ui.text(context, 12f, 700, R.color.ag_sub0).apply { text = "${s.reviews} cards · ${StatsText.duration(s.studyMillis)} · +${Bits.fmt(s.log.cash)} coins" })
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        addView(Ui.text(this@StatsPage, 32f, 900, R.color.ag_mauve).apply {
+            text = "›"; gravity = Gravity.CENTER; includeFontPadding = false; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(40), dp(48)))
+        contentDescription = "Today’s stats, all decks"
+        setOnClickListener { todayOpen = true; sheetOpen = false; syncSheet() }
     }
 
     // ---- 0. trainer card (R6-06: moved here from the Pokémon tab) ----
@@ -658,15 +681,16 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     private fun syncSheet() {
         if (sheetOpen && sheetLayer.visibility == View.VISIBLE && sheetLayer.childCount > 0) return
         sheetLayer.removeAllViews()
-        if (!sheetOpen) { sheetLayer.visibility = View.GONE; return }
+        if (!sheetOpen && !todayOpen) { sheetLayer.visibility = View.GONE; return }
         sheetLayer.visibility = View.VISIBLE
         val scrim = View(this).apply {
             setBackgroundColor(Color.argb(122, 0, 0, 0))
-            setOnClickListener { sheetOpen = false; syncSheet() }
+            setOnClickListener { sheetOpen = false; todayOpen = false; syncSheet() }
         }
         sheetLayer.addView(scrim, FrameLayout.LayoutParams(-1, -1))
-        val sheet = StatsSheets.metricSheet(this, metric) { m -> pickMetric(m) }
-        SheetKit.layer(sheet as DragSheet, scrim) { sheetOpen = false; syncSheet() } // R9-W5-B: the handle drags it down to close
+        val sheet = if (todayOpen) TodayViews.sheet(this, todaySummary(GameRepo.game?.dayKey() ?: state.day)) { todayOpen = false; syncSheet() }
+        else StatsSheets.metricSheet(this, metric) { m -> pickMetric(m) }
+        SheetKit.layer(sheet as DragSheet, scrim) { sheetOpen = false; todayOpen = false; syncSheet() } // R9-W5-B: the handle drags it down to close
         sheetLayer.addView(sheet, FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM))
     }
 

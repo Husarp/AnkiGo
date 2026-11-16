@@ -233,6 +233,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private val initialLevels = linkedMapOf<String, Int>()
     private val foundItems = arrayListOf<String>()
     private var finished = false
+    private var summaryToday: Boolean? = null
     private var lastSummary: Triple<List<Anki.Deck>, Int, Int>? = null   // args of the summary on screen: a late own answer re-renders it
     // PLAN 129: the deck's last answer is in, the last battle plays on the study screen and "Finish deck" opens the summary (args of that summary; null = not waiting)
     private var finishArgs: Triple<List<Anki.Deck>, Int, Int>? = null
@@ -2180,6 +2181,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val n = counts.sum()
         val why = when { returnedCards > 0 -> "${returnedLine()} · Continue when ready."; learn > 0 -> "$learn learning cards come back in a few minutes."; fresh > 0 -> "Daily new-card limit reached · $fresh new cards left."; else -> "All available cards studied." }
         val st = GameRepo.state
+        if (!rerender && st != null) com.husarp.ankigo.stats.AnkiStatsStore.refreshTodayTime(this, st.settings.dayStartHour) {
+            if (finished && summaryToday == true && !isDestroyed && !isFinishing) lastSummary?.let { summary(it.first, it.second, it.third) }
+        }
         val summary = StudyUi.column(this).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
         val hero = StudyUi.row(this).apply {
             background = StudyUi.gradient(context, R.color.ag_green, .22f, 16)
@@ -2270,7 +2274,27 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         goalRow.addView(StudyUi.label(this, if (today >= goal) "Goal done · $today" else "$today / $goal", 12, R.color.ag_text, 900))
         goalRow.addView(Ui.chip(this, com.husarp.ankigo.ui.StreakFlame(this).apply { alive = (st?.streakDays ?: 0) > 0 }, R.color.ag_red).apply { setText("${st?.streakDays ?: 0} days") }, StudyUi.lp(-2).also { it.marginStart = Ui.dp(this, 6) })
         summary.addView(goalRow, StudyUi.spaced(this, 6))
-        summaryView = MotionScrollView(this).apply { addView(summary, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
+        val todayScope = summaryToday ?: getSharedPreferences("study", 0).getBoolean("finishToday", false).also { summaryToday = it }
+        val scoped = StudyUi.column(this)
+        val tabs = StudyUi.row(this)
+        com.husarp.ankigo.ui.SectionSwitch.draw(this, tabs, listOf(
+            com.husarp.ankigo.ui.SectionSwitch.Seg("This deck", R.drawable.ic_book),
+            com.husarp.ankigo.ui.SectionSwitch.Seg("Today", R.drawable.ic_calendar),
+        ), if (todayScope) 1 else 0) { pick ->
+            summaryToday = pick == 1
+            getSharedPreferences("study", 0).edit().putBoolean("finishToday", pick == 1).apply()
+            this@StudyActivity.summary(decks, learn, fresh)
+        }
+        for (i in 0 until tabs.childCount) tabs.getChildAt(i).isSelected = i == if (todayScope) 1 else 0
+        scoped.addView(tabs, StudyUi.spaced(this, 4).also { it.setMargins(Ui.dp(this, 12), 0, Ui.dp(this, 12), Ui.dp(this, 8)) })
+        if (todayScope && st != null) {
+            val day = GameRepo.game?.dayKey() ?: st.day
+            scoped.addView(com.husarp.ankigo.ui.TodayViews.body(this, com.husarp.ankigo.game.TodaySummary(st, day,
+                com.husarp.ankigo.stats.AnkiStatsStore.snapshot.timeTotalOn(day))).apply {
+                setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12))
+            })
+        } else scoped.addView(summary)
+        summaryView = MotionScrollView(this).apply { addView(scoped, FrameLayout.LayoutParams(StudyUi.pageWidth(context), -2, Gravity.CENTER_HORIZONTAL)); isVerticalScrollBarEnabled = false }.also { cardColumn.addView(it, StudyUi.lp(-1, 0, 1f)) }
         val next = NextDeck.suggest(decks.map { NextDeck.D(it.id, it.name, it.total) }, deckId, deckName)   // PLAN 621: the same suggestion as the end buttons and Study tab
         buttons.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 10))
         buttons.layoutParams = LinearLayout.LayoutParams(StudyUi.pageWidth(this), -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
