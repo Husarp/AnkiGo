@@ -32,10 +32,38 @@ class R23ZbBehaviourTest {
             if (count == 0) {
                 script.advance(BehaviourFx.FIRST_HIT)
                 assertTrue(script.particles.none { it.img == "slash_03" })
+                assertEquals(0, stage.count(true))
             }
             script.advance(times.done)
             assertTrue(times.done > BehaviourFx.hitTime(count - 1))
+            assertEquals(0f, stage.last(true)?.dx ?: 0f, .001f)
+        }
+    }
+
+    @Test fun multiHitStrikesAgainWithoutReturningHomeBetweenHits() {
+        for (count in listOf(1, 2, 4, 10)) for (reverse in listOf(false, true)) {
+            val stage = RecStage(reverse = reverse)
+            val p = plan(MoveLook.MULTI_HIT).copy(hitCount = count)
+            val script = MoveFx.script(stage, p, true, 7)!!
+            val times = MoveFx.build(script, p.look)
+            var strikeX = 0f
+            for (i in 0 until count) {
+                script.advance(BehaviourFx.hitTime(i))
+                val hit = stage.last(true)!!
+                if (i == 0) strikeX = hit.dx
+                assertTrue(kotlin.math.abs(hit.dx) > 100f)
+                assertEquals(strikeX, hit.dx, .001f)
+                if (i < count - 1) {
+                    script.advance(BehaviourFx.hitTime(i) + 100f)
+                    assertEquals(strikeX * .88f, stage.last(true)!!.dx, .001f)
+                    assertTrue(kotlin.math.abs(stage.last(true)!!.dx) > kotlin.math.abs(strikeX) * .8f)
+                }
+            }
+            script.advance(BehaviourFx.hitTime(count - 1) + 150f)
+            assertTrue(kotlin.math.abs(stage.last(true)!!.dx) < kotlin.math.abs(strikeX))
+            script.advance(times.done)
             assertEquals(0f, stage.last(true)!!.dx, .001f)
+            assertEquals(0f, stage.last(true)!!.dy, .001f)
         }
     }
 

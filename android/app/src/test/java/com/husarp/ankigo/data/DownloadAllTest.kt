@@ -30,8 +30,8 @@ class DownloadAllTest {
     private lateinit var layout: DownloadAll.Layout
 
     private val mons = listOf(TestData.species(1), TestData.species(4), TestData.species(7))
-    private val showdownBg = BackdropCatalog.byId("beach")!!        // Showdown's: bg/beach.png
-    private val ownBg = BackdropCatalog.byId("dragon-peak")!!        // Adam's, revision 2: bg/dragon-peak-2.webp
+    private val showdownBg = com.husarp.ankigo.ui.Backdrop("beach", com.husarp.ankigo.ui.BackdropSource.SHOWDOWN, "png", 700, 500, com.husarp.ankigo.ui.StandPoint(.3f,.8f,.44f), com.husarp.ankigo.ui.StandPoint(.7f,.5f,.32f), true, false)        // Showdown's: bg/beach.png
+    private val ownBg = com.husarp.ankigo.ui.Backdrop("dragon-peak", com.husarp.ankigo.ui.BackdropSource.OWN, "webp", 1264, 848, showdownBg.player, showdownBg.wild, true, false, rev = 2)        // Adam's, revision 2: bg/dragon-peak-2.webp
     private val items = listOf("poke-ball", "potion")
     private val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4)
     private val gif = "GIF89a-fake".toByteArray()
@@ -217,13 +217,13 @@ class DownloadAllTest {
         Sprites.download(File(File(sprites, "front"), "4"), SpriteUrls.battle(mons[1], SpriteKind.FRONT, false), get = none)
         Sprites.download(File(File(sprites, "back"), "4s"), SpriteUrls.battle(mons[1], SpriteKind.BACK, true), get = none)
         Sprites.download(File(File(sprites, "item"), "poke-ball"), listOf(SpriteUrls.item("poke-ball")), get = none)
-        Backdrops.fetchFile(sprites, BackdropCatalog.byId("city")!!, none)
+        Backdrops.fetchFile(sprites, com.husarp.ankigo.ui.Backdrop("city", showdownBg.source, "png", 753, 500, showdownBg.player, showdownBg.wild, true, false), none)
         CryStore(cries).fetch(4) { null }
         val later = System.currentTimeMillis()
         for (j in listOf(job(Kind.STATIC, false, 4), job(Kind.FRONT, false, 4), job(Kind.BACK, true, 4), job(Kind.ITEM, false, 0, "poke-ball"), job(Kind.CRY, false, 4))) {
             assertEquals("$j", Have.NOTE, DownloadAll.check(j, layout, later).state)
         }
-        val city = DownloadAll.plan(emptyList(), emptyList(), listOf(BackdropCatalog.byId("city")!!)).single()
+        val city = DownloadAll.plan(emptyList(), emptyList(), listOf(com.husarp.ankigo.ui.Backdrop("city", showdownBg.source, "png", 753, 500, showdownBg.player, showdownBg.wild, true, false))).single()
         assertEquals(Have.NOTE, DownloadAll.check(city, layout, later).state)
     }
 

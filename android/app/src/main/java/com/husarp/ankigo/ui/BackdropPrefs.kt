@@ -39,7 +39,13 @@ internal object BackdropPrefs {
                     }
                 }
                 val row = Form.row(ctx, bg.id.replace('-', ' ').replaceFirstChar { it.titlecase() }, "Allow this scene to appear as a battle background", sw) { sw.toggle() }
-                addView(Form.cardOf(ctx, listOf(image.apply { layoutParams = LinearLayout.LayoutParams(-1, Ui.dp(ctx, 210)) }, row)), Form.lp(ctx, 8))
+                val types = ChipFlow(ctx, Ui.dp(ctx, 6), Ui.dp(ctx, 4)).apply {
+                    setPadding(Ui.dp(ctx, 16), Ui.dp(ctx, 12), Ui.dp(ctx, 16), Ui.dp(ctx, 12))
+                    BackdropCatalog.typesFor(bg.id).forEach { addView(Ui.typeChip(ctx, it)) }
+                }
+                val eligibility = if (bg.id == BackdropCatalog.SHRINE)
+                    Form.body(ctx, "Legendary & Mythical Pokémon only") else types
+                addView(Form.cardOf(ctx, listOf(image.apply { layoutParams = LinearLayout.LayoutParams(-1, Ui.dp(ctx, 210)) }, row, eligibility)), Form.lp(ctx, 8))
             }
         }
     }
@@ -84,7 +90,7 @@ internal object BackdropPrefs {
             previewPool.execute {
                 if (token != generation) return@execute
                 val thumb = runCatching { app.assets.open("backdrop-thumbs/${bg.id}.webp").use { BitmapFactory.decodeStream(it) } }.getOrNull()
-                post { if (token == generation && drawable == null) setImageBitmap(thumb) }
+                post { if (token == generation && drawable == null) { setImageBitmap(thumb); (drawable as? android.graphics.drawable.BitmapDrawable)?.isFilterBitmap = false } }
             }
 
         }

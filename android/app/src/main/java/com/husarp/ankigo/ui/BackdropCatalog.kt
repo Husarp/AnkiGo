@@ -5,81 +5,51 @@ import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Tier
 import com.husarp.ankigo.game.Type
 
-/** Approved R23 backgrounds, their stand points and type pools. */
+/** Approved R51 backgrounds, their stand points and type pools. */
 internal object BackdropCatalog {
     private fun p(x: Float, y: Float, s: Float) = StandPoint(x, y, s)
 
-    private fun showdown(id: String, w: Int, player: StandPoint, wild: StandPoint) =
-        Backdrop(id, BackdropSource.SHOWDOWN, "png", w, 500, player, wild, crisp = true, dark = false, sharp = false) // R19-F2: today's drawing at every size
-
     private fun own(id: String, ext: String, w: Int, h: Int, player: StandPoint, wild: StandPoint, crisp: Boolean, dark: Boolean = false, rev: Int = 1, ground: StandPoint = wild, groundZoom: Float = 1f, groundMaxHeight: Float = 1f) =
-        Backdrop(id, BackdropSource.OWN, ext, w, h, player, wild, crisp, dark, rev, wildGround = ground, groundZoom = groundZoom, groundMaxHeight = groundMaxHeight)
+        Backdrop(id, BackdropSource.OWN, ext, w, h, player, wild, crisp, dark, rev, sharp = false, wildGround = ground, groundZoom = groundZoom, groundMaxHeight = groundMaxHeight)
 
-    // PLAN 460: feet measured on the actual ground, checked through ArenaView at 420 dpi.
-    // The four beaches share their broad foreground sand (R29f); the remaining scenes
-    // use their measured ground pads or clear floor. Sprite frame fractions are unchanged.
+    // R51: approved ≤50 KB art; native pixels are drawn without filtered or Lanczos scaling.
     val ALL: List<Backdrop> = listOf(
-        // R29: both feet on the foreground sand; height cap retains that footing in tall windows.
-        own("tropical-cove", "png", 1024, 685, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f),
-        own("coral-lagoon", "png", 1024, 683, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f),
-        own("sandbar-isle", "png", 1024, 685, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f),
-        own("reef-bay", "png", 1024, 683, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = false, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f),
-
-        // Pokémon Showdown (753 x 500, beach 700 x 500), pixel art
-        showdown("beach", 700, p(.30f, .77f, .44f), p(.71f, .46f, .32f)),
-        showdown("city", 753, p(.30f, .82f, .44f), p(.68f, .61f, .32f)),
-        showdown("dampcave", 753, p(.30f, .79f, .44f), p(.70f, .48f, .32f)),
-        showdown("desert", 753, p(.30f, .78f, .44f), p(.64f, .56f, .32f)),
-        showdown("earthycave", 753, p(.30f, .79f, .44f), p(.70f, .48f, .32f)),
-        showdown("forest", 753, p(.30f, .78f, .44f), p(.68f, .50f, .32f)),
-        showdown("icecave", 753, p(.30f, .79f, .44f), p(.70f, .48f, .32f)),
-        showdown("meadow", 753, p(.27f, .80f, .44f), p(.68f, .49f, .32f)),
-        showdown("mountain", 753, p(.30f, .79f, .44f), p(.68f, .48f, .32f)),
-        showdown("river", 753, p(.34f, .80f, .44f), p(.62f, .52f, .32f)),
-        showdown("route", 753, p(.25f, .81f, .44f), p(.70f, .48f, .32f)),
-        // Adam's batch 1 (1264 x 848 WebP, soft), sharpened in round 9 (rev 2; night-forest retouched + sharpened = rev 3)
-        own("dragon-peak", "webp", 1264, 848, p(.30f, .81f, .44f), p(.80f, .60f, .32f), crisp = true, rev = 2),
-        own("deep-sea-cave", "webp", 1264, 848, p(.30f, .815f, .44f), p(.80f, .615f, .32f), crisp = true, dark = true, rev = 2, ground = p(.83f, .60f, .32f), groundZoom = 1.08f),
-        own("night-forest", "webp", 1264, 848, p(.35f, .78f, .44f), p(.74f, .59f, .32f), crisp = true, dark = true, rev = 3),
-        own("factory", "webp", 1264, 848, p(.31f, .82f, .44f), p(.72f, .66f, .32f), crisp = false, rev = 2), // R19-F2: today's smoothed drawing
-        // Adam's batch 2 (WebP, soft; 1264 x 848 or 1376 x 768), sharpened in round 9 (rev 2)
-        own("canyon", "webp", 1375, 768, p(.33f, .74f, .46f), p(.73f, .47f, .33f), crisp = true, rev = 2),
-        own("cliff-clouds", "webp", 1376, 768, p(.30f, .76f, .46f), p(.80f, .53f, .33f), crisp = true, rev = 2),
-        own("crystal-storm", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 3),
-        own("flower-field", "webp", 1024, 687, p(.30f, .76f, .44f), p(.74f, .47f, .32f), crisp = true, dark = false, rev = 3),
-        own("haunted-mansion", "webp", 1264, 848, p(.30f, .79f, .44f), p(.695f, .605f, .30f), crisp = true, dark = true, rev = 2),
-        own("jungle", "webp", 1264, 848, p(.30f, .83f, .44f), p(.85f, .625f, .32f), crisp = true, rev = 2),
-        own("mine", "webp", 1264, 848, p(.32f, .72f, .44f), p(.76f, .50f, .32f), crisp = true, dark = true, rev = 2),
-        own("snow-aurora", "webp", 1376, 768, p(.32f, .79f, .46f), p(.79f, .58f, .33f), crisp = true, dark = true, rev = 2),
-        own("sunset-beach", "webp", 1376, 768, p(.30f, .76f, .46f), p(.80f, .53f, .33f), crisp = true, rev = 2),
-        // Adam's batch 3 (1024 x 687 WebP, de-dithered where needed and sharpened; stand points checked in every arena shape with the design page).
-        // The shrine is in no type list: only a Legendary / Mythical encounter gets it (rev 2 = the new picture; the dropped round-8 one was rev 1).
-        own(SHRINE, "webp", 1024, 687, p(.30f, .88f, .44f), p(.72f, .70f, .32f), crisp = true, rev = 2),
-        own("ruins-courtyard", "webp", 1024, 687, p(.30f, .84f, .44f), p(.71f, .62f, .32f), crisp = true),
-        own("dark-town", "webp", 1024, 687, p(.30f, .86f, .44f), p(.68f, .60f, .32f), crisp = true, dark = true),
-        // Adam's batch 4 (round 9 wave 4; 1024 x 687 WebP, sharpened; the checker de-dithered in the fighting-training and poison-marsh skies). Poison-marsh: the two feet stand on its two dark ovals.
-        own("dark-forest", "webp", 1024, 687, p(.28f, .84f, .44f), p(.70f, .58f, .32f), crisp = true, dark = true),
-        own("fire-savanna", "webp", 1024, 687, p(.30f, .84f, .44f), p(.66f, .64f, .32f), crisp = true),
-        own("ice-lake", "webp", 1024, 687, p(.30f, .86f, .44f), p(.68f, .62f, .32f), crisp = true),
-        own("fighting-training", "webp", 1024, 687, p(.30f, .84f, .44f), p(.64f, .58f, .32f), crisp = true),
-        own("poison-marsh", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 2),
-        // R23: approved new scenes (only 40 and 43 use palette-cleaned art).
-        // Stand points are scene-wide, never species-specific offsets.
-        own("forest-tech-b", "webp", 1024, 687, p(.29f, .72f, .44f), p(.79f, .51f, .32f), crisp = true, dark = false, rev = 1),
-        own("autumn-forest", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("toxic-cave", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("countryside-route", "webp", 1024, 687, p(.29f, .80f, .44f), p(.77f, .585f, .32f), crisp = true, dark = false, rev = 1),
-        own("windy-hilltop", "webp", 1024, 687, p(.29f, .79f, .44f), p(.78f, .66f, .32f), crisp = true, dark = false, rev = 1),
-        own("bamboo-dojo", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("coral-shallows", "webp", 1024, 687, p(.29f, .83f, .44f), p(.79f, .44f, .32f), crisp = true, dark = false, rev = 1),
-        own("snowy-pines", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("power-plant", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1),
-        own("desert-oasis", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 1, ground = p(.78f, .61f, .32f), groundZoom = 1.2f),
-        own("starry-plateau", "webp", 1024, 687, p(.29f, .79f, .44f), p(.76f, .61f, .32f), crisp = true, dark = true, rev = 1),
-        own("lava-field", "webp", 1024, 687, p(.30f, .75f, .44f), p(.79f, .475f, .32f), crisp = true, dark = false, rev = 1),
-        own("night-rooftops", "webp", 1024, 687, p(.29f, .80f, .44f), p(.79f, .49f, .32f), crisp = true, dark = true, rev = 1),
-        own("old-graveyard", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1, ground = p(.73f, .68f, .32f), groundZoom = 1.45f),
-        own("starry-plateau-galaxy", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 1),
+        own("sandbar-isle", "webp", 1024, 687, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = true, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f, rev = 51),
+        own("reef-bay", "webp", 1024, 687, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = true, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f, rev = 51),
+        own("canyon", "webp", 512, 344, p(.33f, .74f, .46f), p(.73f, .47f, .33f), crisp = true, rev = 51),
+        own("crystal-storm", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("haunted-mansion", "webp", 1024, 687, p(.30f, .79f, .44f), p(.695f, .605f, .30f), crisp = true, dark = true, rev = 51),
+        own("mine", "webp", 1024, 687, p(.32f, .72f, .44f), p(.76f, .50f, .32f), crisp = true, dark = true, rev = 51),
+        own("snow-aurora", "webp", 512, 344, p(.32f, .79f, .46f), p(.79f, .58f, .33f), crisp = true, dark = true, rev = 51),
+        own(SHRINE, "webp", 1024, 687, p(.30f, .88f, .44f), p(.72f, .70f, .32f), crisp = true, rev = 51),
+        own("dark-town", "webp", 1024, 687, p(.30f, .86f, .44f), p(.68f, .60f, .32f), crisp = true, dark = true, rev = 51),
+        own("dark-forest", "webp", 1024, 687, p(.28f, .84f, .44f), p(.70f, .58f, .32f), crisp = true, dark = true, rev = 51),
+        own("fire-savanna", "webp", 724, 486, p(.30f, .84f, .44f), p(.66f, .64f, .32f), crisp = true, rev = 51),
+        own("fighting-training", "webp", 1024, 687, p(.30f, .84f, .44f), p(.64f, .58f, .32f), crisp = true, rev = 51),
+        own("forest-tech-b", "webp", 512, 343, p(.29f, .72f, .44f), p(.79f, .51f, .32f), crisp = true, dark = false, rev = 51),
+        own("autumn-forest", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("countryside-route", "webp", 512, 344, p(.29f, .80f, .44f), p(.77f, .585f, .32f), crisp = true, dark = false, rev = 51),
+        own("windy-hilltop", "webp", 512, 344, p(.29f, .79f, .44f), p(.78f, .66f, .32f), crisp = true, dark = false, rev = 51),
+        own("bamboo-dojo", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("snowy-pines", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("power-plant", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("desert-oasis", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("starry-plateau", "webp", 512, 344, p(.29f, .79f, .44f), p(.76f, .61f, .32f), crisp = true, dark = true, rev = 51),
+        own("lava-field", "webp", 1024, 687, p(.30f, .82f, .44f), p(.79f, .475f, .32f), crisp = true, dark = false, rev = 51),
+        own("night-rooftops", "webp", 1024, 687, p(.29f, .80f, .44f), p(.79f, .49f, .32f), crisp = true, dark = true, rev = 51),
+        own("old-graveyard", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("starry-plateau-galaxy", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("dojo", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("graveyard", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("ruined-castle", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("snow-field", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("volcano-b", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("night-forest-2", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("normal-meadow", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("grass-glade", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("poison-swamp", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("flying-ridge", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("violet-plateau", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
     )
 
     private val BY_ID: Map<String, Backdrop> = ALL.associateBy { it.id }
@@ -87,35 +57,36 @@ internal object BackdropCatalog {
     fun byId(id: String): Backdrop? = BY_ID[id]
 
     private val OPTIONS: Map<Type, List<String>> = mapOf(
-        Type.NORMAL to listOf("meadow", "route", "flower-field", "sunset-beach"),
-        Type.FIRE to listOf("desert", "fire-savanna"),
-        Type.WATER to listOf("tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay", "beach", "river", "deep-sea-cave", "sunset-beach"),
-        Type.GRASS to listOf("forest", "meadow", "flower-field", "jungle"),
-        Type.ELECTRIC to listOf("city", "route", "crystal-storm"),
-        Type.ICE to listOf("icecave", "snow-aurora", "ice-lake"),
-        Type.FIGHTING to listOf("mountain", "route", "ruins-courtyard", "fighting-training"),
-        Type.POISON to listOf("dampcave", "forest", "poison-marsh"),
-        Type.GROUND to listOf("desert", "earthycave", "mine", "canyon", "fighting-training"),
-        Type.FLYING to listOf("mountain", "meadow", "cliff-clouds"),
-        Type.PSYCHIC to listOf("city", "forest", "ruins-courtyard"),
-        Type.BUG to listOf("forest-tech-b", "forest", "meadow", "night-forest", "jungle"),
-        Type.ROCK to listOf("mountain", "earthycave", "crystal-storm", "mine", "ruins-courtyard"),
-        Type.GHOST to listOf("dampcave", "night-forest", "haunted-mansion"),
-        Type.DRAGON to listOf("mountain", "dragon-peak", "canyon"),
-        Type.DARK to listOf("night-forest", "dark-town", "dark-forest"),
-        Type.STEEL to listOf("city", "earthycave", "factory", "mine"),
-        Type.FAIRY to listOf("forest-tech-b", "meadow", "forest", "flower-field"),
+        Type.NORMAL to listOf("normal-meadow", "countryside-route", "autumn-forest"),
+        Type.FIRE to listOf("fire-savanna", "lava-field", "volcano-b"),
+        Type.WATER to listOf("sandbar-isle", "reef-bay"),
+        Type.GRASS to listOf("grass-glade", "autumn-forest", "countryside-route"),
+        Type.ELECTRIC to listOf("crystal-storm", "power-plant"),
+        Type.ICE to listOf("snow-aurora", "snowy-pines", "snow-field"),
+        Type.FIGHTING to listOf("fighting-training", "bamboo-dojo", "dojo"),
+        Type.POISON to listOf("poison-swamp"),
+        Type.GROUND to listOf("mine", "canyon", "fighting-training", "desert-oasis"),
+        Type.FLYING to listOf("flying-ridge", "windy-hilltop", "night-rooftops"),
+        Type.PSYCHIC to listOf("violet-plateau", "starry-plateau", "starry-plateau-galaxy", "ruined-castle"),
+        Type.BUG to listOf("forest-tech-b", "night-forest-2", "grass-glade", "autumn-forest"),
+        Type.ROCK to listOf("crystal-storm", "mine", "canyon", "lava-field", "ruined-castle"),
+        Type.GHOST to listOf("haunted-mansion", "night-forest-2", "old-graveyard", "graveyard", "ruined-castle"),
+        Type.DRAGON to listOf("canyon", "starry-plateau-galaxy"),
+        Type.DARK to listOf("dark-town", "dark-forest", "night-forest-2", "night-rooftops"),
+        Type.STEEL to listOf("mine", "power-plant"),
+        Type.FAIRY to listOf("forest-tech-b", "grass-glade", "starry-plateau"),
     )
 
-    /** Adam will assign types later; until then these scenes join every type pool. */
     val GENERAL: Set<String> = setOf(
-        "autumn-forest", "toxic-cave", "countryside-route", "windy-hilltop", "bamboo-dojo",
-        "coral-shallows", "snowy-pines", "power-plant", "desert-oasis", "starry-plateau",
-        "lava-field", "night-rooftops", "old-graveyard", "starry-plateau-galaxy",
+        "autumn-forest", "countryside-route", "windy-hilltop", "bamboo-dojo", "snowy-pines", "power-plant", "desert-oasis", "starry-plateau", "lava-field", "night-rooftops", "old-graveyard", "starry-plateau-galaxy"
     )
 
     /** The pictures a type can get, in the order [pick] uses. */
-    fun options(type: Type): List<Backdrop> = (OPTIONS.getValue(type) + GENERAL).map { BY_ID.getValue(it) }
+    fun options(type: Type): List<Backdrop> =
+        OPTIONS.getValue(type).map { BY_ID.getValue(it) }
+
+    /** Settings uses the selection pools themselves so its type chips cannot drift from battle eligibility. */
+    fun typesFor(id: String): List<Type> = Type.entries.filter { type -> options(type).any { it.id == id } }
 
     /** The type the picture follows: the first, or the second when the first is Normal and there is one; Normal when there is none. */
     fun typeFor(types: List<Type>): Type {
@@ -125,21 +96,36 @@ internal object BackdropCatalog {
 
     /**
      * The special arena of a Legendary / Mythical encounter; in no type list. Round 9: the old shrine picture was dropped (D10), the new one
-     * (rev 2, batch 3) is in [ALL] again; without a catalog entry [pick] would give a Legendary its type's pictures.
+     * (batch 3, compact revision 51) is in [ALL] again; without a catalog entry [pick] would give a Legendary its type's pictures.
      */
     const val SHRINE = "legendary-shrine"
 
     /** True for a Legendary / Mythical encounter (by tier, so Ankimon's extra legendaries count; Ultra Beasts don't). */
     fun isLegendary(sp: Species?): Boolean = sp != null && Encounters.tierOf(sp).let { it == Tier.LEGENDARY || it == Tier.MYTHICAL }
 
-    /** The picture for a wild Pokémon with [types]; [legendary] gives the shrine when the catalog has one (round 9: the new one, rev 2); [seed] is fixed for one encounter (the wild one's uid hash), so the fight keeps it. */
+    /** The picture for a wild Pokémon with [types]; [legendary] gives the shrine when the catalog has one (the retained shrine artwork); [seed] is fixed for one encounter (the wild one's uid hash), so the fight keeps it. Uses a neutral countryside route if both type pools clash. */
     fun pick(types: List<Type>, seed: Int, legendary: Boolean = false): Backdrop =
-        pickEnabled(types, seed, legendary, emptySet())!!
+        pickEnabled(types, seed, legendary, emptySet()) ?: BY_ID.getValue("countryside-route")
+
+    private val FIRE_SCENES = setOf("fire-savanna", "lava-field", "volcano-b")
+    private val DESERT_SCENES = setOf("desert-oasis", "canyon")
+    private val ICE_SCENES = setOf("snow-aurora", "snowy-pines", "snow-field")
+
+    /** Both types can veto a clashing biome, even when the other type would allow it. */
+    private fun compatible(id: String, types: List<Type>): Boolean =
+        !(Type.WATER in types && id in FIRE_SCENES + DESERT_SCENES) &&
+        !(Type.ICE in types && id in FIRE_SCENES + DESERT_SCENES) &&
+        !(Type.FIRE in types && id in ICE_SCENES) &&
+        !(Type.GRASS in types && id in FIRE_SCENES) &&
+        !(Type.BUG in types && id in FIRE_SCENES)
 
     /** Disabled scenes never appear. With no eligible enabled scene, the arena uses its existing plain background. */
     fun pickEnabled(types: List<Type>, seed: Int, legendary: Boolean, disabled: Set<String>): Backdrop? {
         if (legendary && SHRINE !in disabled) BY_ID[SHRINE]?.let { return it }
-        val options = options(typeFor(types)).filter { it.id !in disabled }
+        val primary = options(typeFor(types)).filter { compatible(it.id, types) }
+        // A biome clash can rule out the entire primary pool (Fire/Water); try the other type then.
+        val eligible = primary.ifEmpty { types.flatMap { options(it) }.distinct().filter { compatible(it.id, types) } }
+        val options = eligible.filter { it.id !in disabled }
         return if (options.isEmpty()) null else options[Math.floorMod(seed, options.size)]
     }
 

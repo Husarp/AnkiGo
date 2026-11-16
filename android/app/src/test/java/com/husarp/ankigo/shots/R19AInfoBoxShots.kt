@@ -167,7 +167,7 @@ class R19AInfoBoxShots {
             val sc = build(ctx)
             val arena = sc.arena
             arena.setNewTag(true); arena.setEnemyCardShown(true)
-            val bg = BackdropCatalog.byId("forest")!!
+            val bg = BackdropCatalog.byId("grass-glade")!!
             if (picture) {
                 layoutRoot(sc.root, sc.wPx, sc.hPx)      // the first layout, before the picture
                 load(ctx, bg)
@@ -238,7 +238,7 @@ class R19AInfoBoxShots {
             val sc = build(ctx)
             val a = sc.arena
             a.setNewTag(true); a.setEnemyCardShown(true)
-            val bg = BackdropCatalog.byId("forest")!!
+            val bg = BackdropCatalog.byId("grass-glade")!!
             if (picture) { load(ctx, bg); field<ArenaBackdrop>(a, "backdrop").request(bg, false) }
             relayout(sc)                            // a box's optional parts follow the plan one layout later: lay out until it is steady
             relayout(sc)
@@ -277,7 +277,7 @@ class R19AInfoBoxShots {
             val icons: android.widget.LinearLayout = field(a, "eIcons")
             a.setEnemyInfo("Zapdos", 30, false, listOf(com.husarp.ankigo.game.Type.ELECTRIC, com.husarp.ankigo.game.Type.FLYING))
             if (picture) {
-                val bg = BackdropCatalog.byId("forest")!!
+                val bg = BackdropCatalog.byId("grass-glade")!!
                 load(ctx, bg); field<ArenaBackdrop>(a, "backdrop").request(bg, false)
             }
             relayout(sc); relayout(sc)

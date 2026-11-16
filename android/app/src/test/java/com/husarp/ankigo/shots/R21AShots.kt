@@ -122,7 +122,7 @@ class R21AShots {
         fun layout() { panel.requestLayout(); panel.measure(widthSpec, heightSpec); panel.layout(0, 0, panel.measuredWidth, panel.measuredHeight) }
         layout()
         val backdrop = getField(panel.arena, "backdrop")!!
-        setField(backdrop, "shown", BackdropCatalog.byId("beach"))
+        setField(backdrop, "shown", BackdropCatalog.byId("reef-bay"))
         layout()
         val frame = getField(panel, "frameDrawable") as BattleFrameDrawable
         assertEquals("water", frame.element)

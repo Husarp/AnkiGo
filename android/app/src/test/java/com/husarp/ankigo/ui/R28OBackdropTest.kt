@@ -14,12 +14,12 @@ class R28OBackdropTest {
             assertEquals(w/h,crop.w/crop.h,.001f)
         }
     }
-    @Test fun beachesAreWaterOnlyWithFixedWildFeetAndLosslessArt() {
-        for(id in listOf("tropical-cove","coral-lagoon","sandbar-isle","reef-bay")) {
+    @Test fun beachesAreWaterOnlyWithFixedWildFeetAndCompactArt() {
+        for(id in listOf("sandbar-isle","reef-bay")) {
             val bg=BackdropCatalog.byId(id)!!
             assertEquals(listOf(Type.WATER),Type.entries.filter { bg in BackdropCatalog.options(it) })
             assertEquals(.74f,bg.wild.x,0f);assertEquals(.54f,bg.wild.y,0f)
-            assertEquals("png",bg.ext);assertTrue(bg.groundZoom>=1f)
+            assertEquals("webp",bg.ext);assertTrue(bg.groundZoom>=1f)
         }
     }
 }

@@ -29,10 +29,10 @@ class BackdropsTest {
         return b
     }
 
-    private val forest = BackdropCatalog.byId("forest")!!        // Showdown, png
-    private val river = BackdropCatalog.byId("river")!!          // Showdown, png
+    private val forest = Backdrop("forest", BackdropSource.SHOWDOWN, "png", 753, 500, com.husarp.ankigo.ui.StandPoint(.3f,.8f,.44f), com.husarp.ankigo.ui.StandPoint(.7f,.5f,.32f), true, false)        // Showdown, png
+    private val river = Backdrop("river", BackdropSource.SHOWDOWN, "png", 753, 500, forest.player, forest.wild, true, false)          // Showdown, png
     private val reef = Backdrop("reef", BackdropSource.OWN, "png", 316, 212, forest.player, forest.wild, crisp = true, dark = false)   // own, png, not in the catalog (round 9 dropped the own PNGs)
-    private val alley = BackdropCatalog.byId("factory")!!        // own, webp, sharpened revision 2
+    private val alley = Backdrop("factory", BackdropSource.OWN, "webp", 1264, 848, forest.player, forest.wild, false, false, rev = 2)        // own, webp, sharpened revision 2
 
     @Before fun setUp() { dir = Files.createTempDirectory("ankigo-bg").toFile() }
     @After fun tearDown() { dir.deleteRecursively() }
@@ -53,7 +53,7 @@ class BackdropsTest {
         assertEquals(File(File(dir, "bg"), "forest.png"), f) // round 7's cached Showdown files keep their names
         assertTrue(f.path.startsWith(dir.path))
         assertEquals(File(File(dir, "bg"), "factory-2.webp"), Backdrops.file(dir, alley))
-        assertEquals(51, BackdropCatalog.ALL.map { Backdrops.file(dir, it) }.toSet().size)
+        assertEquals(36, BackdropCatalog.ALL.map { Backdrops.file(dir, it) }.toSet().size)
     }
 
     @Test fun newDownloadsNeedSpriteDownloadsAndTheSettingBothOn() {
@@ -189,13 +189,12 @@ class BackdropsTest {
 
     @Test fun aRetouchedPictureHasANewFileNameAndEveryOwnOneIsOne() {
         // round 9: Adam's 14 kept pictures were sharpened (rev 2); the retouched night-forest sharpened again (rev 3)
-        val nf = BackdropCatalog.byId("night-forest")!!
+        val nf = Backdrop("night-forest", BackdropSource.OWN, "webp", 1264, 848, forest.player, forest.wild, true, true, rev = 3)
         assertEquals(Mirror.ownUrl("bg-night-forest-3.webp"), Backdrops.url(nf))
         assertEquals(File(dir, "bg/night-forest-3.webp"), Backdrops.file(dir, nf))
-        assertEquals(Mirror.ownUrl("bg-canyon-2.webp"), Backdrops.url(BackdropCatalog.byId("canyon")!!))
-        // round 9 wave 3: the two new normal pictures are revision 1 (bg-<id>.webp); the new shrine is revision 2 (the dropped round-8 one was 1)
-        assertEquals(setOf("night-forest", "crystal-storm", "flower-field"), BackdropCatalog.ALL.filter { it.rev == 3 }.map { it.id }.toSet())
-        assertEquals(2, BackdropCatalog.byId("poison-marsh")!!.rev)
+        assertEquals(Mirror.ownUrl("bg-canyon-51.webp"), Backdrops.url(BackdropCatalog.byId("canyon")!!))
+        // R51 replaces every scene, including the five introduced in R50, with a fresh cache filename.
+        assertTrue(BackdropCatalog.ALL.all { it.rev == 51 })
         BackdropCatalog.ALL.filter { it.rev == 1 }.forEach {
             assertEquals(it.id, "${it.id}.${it.ext}", Backdrops.fileName(it))
             if (it.source == BackdropSource.OWN) assertEquals(it.id, Mirror.ownUrl("bg-${it.id}.${it.ext}"), Backdrops.url(it))
@@ -205,7 +204,7 @@ class BackdropsTest {
     }
 
     @Test fun downloadingARetouchedPictureDeletesTheOlderFilesOfThatId() {
-        val nf = BackdropCatalog.byId("night-forest")!!
+        val nf = Backdrop("night-forest", BackdropSource.OWN, "webp", 1264, 848, forest.player, forest.wild, true, true, rev = 3)
         val bgDir = File(dir, "bg").apply { mkdirs() }
         val old = File(bgDir, "night-forest.webp").apply { writeBytes(webp()) }
         val old2 = File(bgDir, "night-forest-2.webp").apply { writeBytes(webp()) }

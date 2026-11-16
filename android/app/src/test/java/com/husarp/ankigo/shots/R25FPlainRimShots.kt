@@ -47,7 +47,7 @@ class R25FPlainRimShots {
         }
         assertEquals(3, BattleFrameStyle.AUTOMATIC.t)
         assertEquals(0, BattleFrameStyle.AUTOMATIC.cornerUnits)
-        assertArrayEquals(intArrayOf(0xFF56738A.toInt(), 0xFFBED9DF.toInt(), 0xFF304D65.toInt()), SceneryRims.colors("icecave", false))
-        assertArrayEquals(intArrayOf(0xFF486174.toInt(), 0xFFA0B6BB.toInt(), 0xFF284155.toInt()), SceneryRims.colors("icecave", true))
+        assertArrayEquals(intArrayOf(0xFF56738A.toInt(), 0xFFBED9DF.toInt(), 0xFF304D65.toInt()), SceneryRims.colors("snow-field", false))
+        assertArrayEquals(intArrayOf(0xFF486174.toInt(), 0xFFA0B6BB.toInt(), 0xFF284155.toInt()), SceneryRims.colors("snow-field", true))
     }
 }

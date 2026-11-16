@@ -18,9 +18,9 @@ class R23BackdropPrefsTest {
     @Before fun reset() { ctx = ShotCtx(Shots.files(paparazzi.context)); ctx.getSharedPreferences("ankigo_ui", 0).edit().clear().commit() }
     @Test fun defaultOnAndChoicesPersist() {
         assertTrue(BackdropPrefs.disabled(ctx).isEmpty())
-        assertTrue(BackdropPrefs.setEnabled(ctx, "beach", false))
-        assertTrue("beach" in BackdropPrefs.disabled(ctx))
-        assertTrue(BackdropPrefs.setEnabled(ctx, "beach", true))
+        assertTrue(BackdropPrefs.setEnabled(ctx, "reef-bay", false))
+        assertTrue("reef-bay" in BackdropPrefs.disabled(ctx))
+        assertTrue(BackdropPrefs.setEnabled(ctx, "reef-bay", true))
         assertTrue(BackdropPrefs.disabled(ctx).isEmpty())
     }
     @Test fun staleIdsDoNotBypassLastEnabledGuard() {
@@ -48,11 +48,13 @@ class R23BackdropPrefsTest {
     @Test fun allBundledArtDecodesAndInstallsUnderItsRevision() {
         // Layoutlib supports opening assets, but does not implement AssetManager.list.
         val names = java.io.File("src/main/assets/backdrops").list()!!.toSet()
-        val bundledIds = BackdropCatalog.GENERAL + setOf("forest-tech-b", "crystal-storm", "flower-field", "poison-marsh", "tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay")
+        val bundledIds = setOf("sandbar-isle", "reef-bay", "crystal-storm", "forest-tech-b", "autumn-forest", "countryside-route", "windy-hilltop", "bamboo-dojo", "snowy-pines", "desert-oasis", "starry-plateau", "lava-field", "night-rooftops", "old-graveyard", "starry-plateau-galaxy")
+        assertEquals(BackdropCatalog.ALL.map { "${it.id}.webp" }.toSet(), java.io.File("src/main/assets/backdrop-thumbs").list()!!.toSet())
         assertEquals(bundledIds.map { Backdrops.fileName(BackdropCatalog.byId(it)!!) }.toSet(), names)
         for (bg in BackdropCatalog.ALL) {
             ctx.assets.open("backdrop-thumbs/${bg.id}.webp").use { assertNotNull(android.graphics.BitmapFactory.decodeStream(it)) }
             if (Backdrops.fileName(bg) !in names) continue
+            assertTrue("${bg.id} <= 60 KB", java.io.File("src/main/assets/backdrops", Backdrops.fileName(bg)).length() <= 60_000)
             val file=Backdrops.file(Sprites.dir(ctx),bg)
             file.delete()
             Backdrops.installBundled(ctx,Sprites.dir(ctx),bg)
