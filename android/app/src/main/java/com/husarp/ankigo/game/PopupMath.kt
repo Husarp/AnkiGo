@@ -37,5 +37,15 @@ object PopupMath {
     }
 
     /** The line under the item's name: what it does. */
-    fun description(item: String): String = ItemInfo.effect(item)
+    fun description(item: String, data: GameData? = null): String {
+        if (Items.def(item)?.kind != ItemKind.EVOLUTION || item in Items.RETIRED) return ItemInfo.effect(item)
+        val names = ItemInfo.evoPairs(data, item).map { it.from }.distinct()
+        if (names.isEmpty()) return ItemInfo.effect(item)
+        return "Evolves " + when (names.size) {
+            1 -> names[0]
+            2 -> names.joinToString(" and ")
+            3 -> names.dropLast(1).joinToString(", ") + " and " + names.last()
+            else -> names.take(2).joinToString(", ") + " and ${names.size - 2} more"
+        }
+    }
 }

@@ -95,7 +95,9 @@ class StatsChartMathTest {
     @Test fun sevenLabelsAllFitOnAWidePlot() {
         val p = StatsChartMath.labelPlan(7, 30f, 380f, 6f, w)
         assertEquals((0..6).toList(), p.map { it.index })
-        assertEquals(LabelAlign.START, p.first().align); assertEquals(LabelAlign.END, p.last().align)
+        assertTrue(p.all { it.align == LabelAlign.CENTER })
+        val centers = p.map { StatsChartMath.labelLeft(it, 7, 30f, 380f, w(it.index)) + w(it.index) / 2 }
+        centers.zipWithNext().forEach { (a, b) -> assertEquals(50f, b - a, .001f) }
     }
 
     @Test fun thirtyBarsShowTheEndsAndSomeBetweenWithoutTouching() {
@@ -203,7 +205,7 @@ class StatsChartMathTest {
         assertEquals("Next 7 days", StatsChartMath.periodLabel(ChartMetric.DUE, ChartPeriod.D7))
         assertEquals("Last 365 days", StatsChartMath.periodLabel(ChartMetric.REVIEWS, ChartPeriod.D365))
         val s = build(ChartMetric.BUTTONS, ChartPeriod.D30, emptyMap())
-        assertEquals("Answer buttons", StatsChartMath.title(s)); assertEquals("tap a bar for its day", StatsChartMath.hint(s))
+        assertEquals("Answer buttons", StatsChartMath.title(s)); assertEquals("", StatsChartMath.hint(s))
         assertEquals("", StatsChartMath.hint(build(ChartMetric.STREAK_CALENDAR, ChartPeriod.D30, emptyMap()))) // R18 234: the calendar has no top-right hint
         assertEquals("Card states", StatsChartMath.title(ChartData.build(ChartMetric.CARD_STATES, ChartPeriod.D30, null, StatsSnapshot(), emptyMap(), today)))
     }

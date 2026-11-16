@@ -2127,10 +2127,10 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val stack = StudyUi.row(this).apply { background = Ui.rounded(Ui.c(context, R.color.ag_s0), 5, context); clipToOutline = true }
         counts.forEachIndexed { i, value -> if (value > 0) stack.addView(View(this).apply { setBackgroundColor(Ui.c(context, tones[i])) }, StudyUi.lp(0, -1, value.toFloat())) }
         summary.addView(stack, StudyUi.spaced(this, 8).also { it.height = Ui.dp(this, 10) })
-        val legend = StudyUi.row(this)
-        counts.forEachIndexed { i, value -> legend.addView(StudyUi.label(this, "${listOf("Again", "Hard", "Good", "Easy")[i]} $value", 10.5f, R.color.ag_sub0, 800).apply { gravity = if(i == 0) Gravity.START else if(i == 3) Gravity.END else Gravity.CENTER }, StudyUi.lp(0, -2, 1f)) }
+        val legend = StudyUi.row(this).apply { isBaselineAligned = false; gravity = Gravity.TOP }
+        counts.forEachIndexed { i, value -> legend.addView(StudyUi.label(this, "${listOf("Again", "Hard", "Good", "Easy")[i]} $value", 10.5f, tones[i], 800).apply { gravity = if(i == 0) Gravity.START else if(i == 3) Gravity.END else Gravity.CENTER }, StudyUi.lp(0, -2, 1f)) }
         summary.addView(legend, StudyUi.spaced(this, 4))
-        summary.addView(StudyUi.section(this, "Battle results", "$met met"))
+        summary.addView(StudyUi.section(this, "Battle results", "$met met"), StudyUi.spaced(this, 4))
         if (rewardMons.isNotEmpty()) {
             val sprites = StudyUi.row(this).apply {
                 background = Ui.rounded(Ui.c(context, R.color.ag_card), 14, context)
