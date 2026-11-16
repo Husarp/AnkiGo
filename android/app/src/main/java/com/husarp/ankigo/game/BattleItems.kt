@@ -11,7 +11,7 @@ internal object BattleItems : BattleRules {
         "lumiose-galette" to "Heals 25% max HP and cures burn, poison, paralysis, sleep or freeze.",
         "casteliacone" to "Heals 40% max HP; Sp. Def ×1.25 this fight.",
         "pewter-crunchies" to "Heals 40% max HP; Sp. Atk ×1.25 this fight.",
-        "old-gateau" to "Heals 50% max HP without using the turn. Very rare in the Shop; one per offer.",
+        "old-gateau" to "Heals 50% max HP without a wild attack; your round and own attack are unchanged. Very rare in the Shop; one per offer.",
         "lava-cookie" to "50% chance to heal 75% max HP; 50% chance to lose 25% max HP (can faint).",
     )
     val held = linkedMapOf(

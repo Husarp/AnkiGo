@@ -2,6 +2,8 @@ package com.husarp.ankigo.game
 
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -11,11 +13,7 @@ import java.time.ZonedDateTime
 import java.util.TimeZone
 import kotlin.random.Random
 
-/**
- * R13 Part C: an item used on the Main in a fight takes one turn (one dot): the item works, then the wild one attacks the Main once at
- * Tuning.SWITCH_HIT_POWER, marked like a switch's attack ([GameEvent.SwitchHit] with the item). Free at the same moments as a switch;
- * never for another Pokémon, a held item, a ball or an escape item. Made-up species only (TestData.world).
- */
+/** An item works before one switch-style wild move; the player's round and own attack are preserved. */
 class ItemTurnTest {
     private val data = TestData.world()
     private val now = ZonedDateTime.of(2026, 10, 13, 12, 0, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli()
@@ -60,7 +58,7 @@ class ItemTurnTest {
         assertFalse(attacks.single().byPlayer)
         assertEquals(healedTo - attacks.single().damage, main.hp)
         assertTrue(r.message, r.message.startsWith("Potion healed ${main.name} by $amount HP — the wild Ratty"))
-        // one turn, not a round: the round count and the answers waiting in the round stay
+        // The extra wild move leaves the round count and pending answers alone.
         assertEquals(1, g.state.battle!!.rounds); assertEquals(0, g.state.battle!!.answers)
     }
 
@@ -78,10 +76,8 @@ class ItemTurnTest {
 
         val noFight = game(fight = false)
         val n = noFight.useItem("potion", "t0")
-        assertTrue(n.ok); assertTrue(n.events.none { it is GameEvent.SwitchHit })
-
-        val fresh = game(rounds = 0, answers = 0)   // nothing answered in this fight yet: like a switch, no attack
-        assertTrue(fresh.useItem("potion", "t0").events.none { it is GameEvent.SwitchHit })
+        assertTrue(n.ok); assertTrue(n.events.none { it is GameEvent.SwitchHit || it is GameEvent.Attack })
+        assertEquals(StatCalc.maxHp(data, noFight.state.main!!) / 2 + StatCalc.maxHp(data, noFight.state.main!!) / 4, noFight.state.main!!.hp)
 
         val oneAnswer = game(rounds = 0, answers = 1)   // one answer waiting in the round: it counts
         assertEquals(1, oneAnswer.useItem("potion", "t0").events.of<GameEvent.SwitchHit>().size)
@@ -89,6 +85,103 @@ class ItemTurnTest {
         val faintedWild = game()
         faintedWild.state.battle!!.wild.hp = 0
         assertTrue(faintedWild.useItem("potion", "t0").events.none { it is GameEvent.SwitchHit })
+    }
+
+    @Test fun itemsGiveTheWildOneAMoveEvenBeforeTheFirstAnswer() {
+        val g = game(rounds = 0)
+        val battle = g.state.battle!!
+        val r = g.useItem("potion", "t0")
+        assertTrue(r.ok)
+        assertEquals(1, r.events.of<GameEvent.SwitchHit>().size)
+        assertEquals(1, r.events.of<GameEvent.Attack>().size)
+        assertEquals(0, battle.rounds)
+        assertEquals(0, battle.answers)
+        assertEquals(0, battle.tally)
+    }
+
+    @Test fun theFreeHitCanKnockOutTheHealedPokemonAndRunsTheNormalFaintFlow() {
+        val g = game()
+        val main = g.state.main!!
+        val battle = g.state.battle!!
+        battle.wild.moves.clear(); battle.wild.moves += "dragonrage"
+        main.hp = 1
+        val healedTo = 1 + StatCalc.maxHp(data, main) / 4
+        val r = g.useItem("potion", main.uid)
+        assertTrue(r.ok)
+        assertEquals(healedTo, r.events.of<GameEvent.SwitchHit>().single().hp)
+        assertEquals(healedTo, r.events.of<GameEvent.Attack>().single().damage)
+        val attack = r.events.indexOfFirst { it is GameEvent.Attack }
+        val faint = r.events.indexOfFirst { it is GameEvent.Fainted && it.player }
+        val heal = r.events.indexOfFirst { it is GameEvent.MainHealed }
+        val encounter = r.events.indexOfFirst { it is GameEvent.Encounter }
+        assertTrue(attack < faint && faint < heal && heal < encounter)
+        assertEquals(StatCalc.maxHp(data, main), main.hp)
+        assertNotSame(battle, g.state.battle)
+        assertTrue(r.message, r.message.contains("fainted") && r.message.contains("wild one is lost"))
+    }
+
+    @Test fun oldGateauHealsWithoutAnAttackAtAnyPointInBattle() {
+        for (rounds in listOf(0, 1)) {
+            val g = game(rounds = rounds)
+            val main = g.state.main!!
+            main.hp = 1
+            val battle = g.state.battle!!
+            Economy.give(g.state, "old-gateau")
+            val r = g.useItem("old-gateau", null)
+            assertTrue(r.ok)
+            assertEquals(1 + StatCalc.maxHp(data, main) / 2, main.hp)
+            assertEquals(0, g.state.count("old-gateau"))
+            assertTrue(r.events.none { it is GameEvent.SwitchHit || it is GameEvent.Attack })
+            assertSame(battle, g.state.battle)
+        }
+    }
+
+    @Test fun theItemHitKeepsThePendingAnswersAndOwnAttackOnTheNextRound() {
+        val g = game(rounds = 2, answers = 1)
+        g.roundAnswers = 2
+        val battle = g.state.battle!!
+        battle.tally = 10; battle.buttons += 3
+        val result = g.useItem("potion", "t0")
+        assertTrue(result.ok)
+        assertEquals(2, battle.rounds)
+        assertEquals(1, battle.answers)
+        assertEquals(10, battle.tally)
+        assertEquals(listOf(3), battle.buttons)
+        assertTrue(result.events.none { it is GameEvent.RoundStart || it is GameEvent.Charge || it is GameEvent.Counted })
+        val events = g.onAnswer(Answer(2000L, 3, now))
+        assertEquals(1, events.of<GameEvent.RoundStart>().size)
+        assertEquals(1, events.of<GameEvent.Attack>().count { it.byPlayer })
+        assertEquals(3, battle.rounds)
+    }
+
+    @Test fun theFreeMoveDoesNotTickTimedHealingOrEndOfRoundDamage() {
+        for (item in listOf("berry-juice", "sweet-heart")) {
+            val g = game()
+            val battle = g.state.battle!!
+            battle.enemy.status = "psn"
+            val wildHp = battle.wild.hp
+            val mainHp = g.state.main!!.hp
+            val max = StatCalc.maxHp(data, g.state.main!!)
+            Economy.give(g.state, item)
+            val r = g.useItem(item, "t0")
+            val hit = r.events.of<GameEvent.SwitchHit>().single()
+            assertEquals(mainHp + if (item == "berry-juice") max / 10 else 0, hit.hp)
+            assertEquals(wildHp, battle.wild.hp)
+            assertEquals(if (item == "berry-juice") 4 else 1,
+                battle.field.player[if (item == "berry-juice") "heal.regen/t0" else "heal.pending/t0"])
+            assertTrue(r.events.none { it is GameEvent.Effect && it.kind in setOf(EffectKind.HEAL, EffectKind.STATUS_DAMAGE) })
+        }
+    }
+
+    @Test fun aResultWaitingForContinueGivesNoAttack() {
+        val g = game()
+        val battle = g.state.battle!!
+        battle.awaitingContinue = true
+        val r = g.useItem("potion", "t0")
+        assertTrue(r.ok)
+        assertTrue(r.events.none { it is GameEvent.SwitchHit || it is GameEvent.Attack })
+        assertTrue(battle.awaitingContinue)
+        assertSame(battle, g.state.battle)
     }
 
     @Test fun aHeldItemOrAnItemThatDidNothingTakesNoTurn() {
