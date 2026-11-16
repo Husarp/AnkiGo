@@ -38,25 +38,59 @@ class BackdropCatalogTest {
         val onlyLava = BackdropCatalog.ALL.map { it.id }.toSet() - "lava-field"
         assertNull(BackdropCatalog.pickEnabled(fish.types, 0, false, onlyLava))
     }
-    @Test fun eitherTypeCanVetoClashingBiomes() {
-        val fireAndDesert = setOf("desert", "desert-oasis", "canyon", "fire-savanna", "lava-field")
-        val frozen = setOf("icecave", "snow-aurora", "ice-lake", "snowy-pines")
-        for (other in Type.entries) for (types in listOf(listOf(Type.WATER, other), listOf(other, Type.WATER))) {
-            for (seed in -50..50) {
+    private fun assertBiomeVeto(type: Type, clashing: Set<String>) {
+        val allIds = BackdropCatalog.ALL.map { it.id }.toSet()
+        for (other in Type.entries) for (types in listOf(listOf(type, other), listOf(other, type))) {
+            for (seed in (-50..50).toList() + listOf(Int.MIN_VALUE, Int.MAX_VALUE)) {
                 val bg = BackdropCatalog.pickEnabled(types, seed, false, emptySet())
-                assertNotNull("$types has a compatible scene", bg)
-                assertTrue("$types ${bg!!.id}", bg.id !in fireAndDesert)
-                assertTrue(types.any { it in BackdropCatalog.typesFor(bg.id) })
+                if (types.toSet() == setOf(Type.FIRE, Type.ICE)) assertNull(bg)
+                else assertNotNull("$types has a compatible scene", bg)
+                if (bg != null) {
+                    assertTrue("$types ${bg.id}", bg.id !in clashing)
+                    assertTrue(types.any { it in BackdropCatalog.typesFor(bg.id) })
+                }
             }
-            val onlyClashing = BackdropCatalog.ALL.map { it.id }.toSet() - fireAndDesert
-            assertNull("$types", BackdropCatalog.pickEnabled(types, 0, false, onlyClashing))
+            for (id in clashing) {
+                assertNull("$types must veto $id even if it is the only enabled scene",
+                    BackdropCatalog.pickEnabled(types, 0, false, allIds - id))
+            }
         }
-        for (other in Type.entries) for (types in listOf(listOf(Type.ICE, other), listOf(other, Type.ICE))) {
-            for (seed in -25..25) assertTrue(BackdropCatalog.pickEnabled(types, seed, false, emptySet())?.id !in fireAndDesert)
+    }
+    @Test fun waterVetoesFireAndDesertInEitherTypeOrder() {
+        assertBiomeVeto(Type.WATER, setOf("desert", "desert-oasis", "canyon", "fire-savanna", "lava-field"))
+    }
+    @Test fun iceVetoesFireAndDesertInEitherTypeOrder() {
+        assertBiomeVeto(Type.ICE, setOf("desert", "desert-oasis", "canyon", "fire-savanna", "lava-field"))
+    }
+    @Test fun fireVetoesFrozenScenesInEitherTypeOrder() {
+        assertBiomeVeto(Type.FIRE, setOf("icecave", "snow-aurora", "ice-lake", "snowy-pines"))
+    }
+    @Test fun fireVetoesUnderwaterInEitherTypeOrder() {
+        assertBiomeVeto(Type.FIRE, setOf("deep-sea-cave"))
+    }
+    @Test fun grassVetoesBurningScenesInEitherTypeOrder() {
+        assertBiomeVeto(Type.GRASS, setOf("fire-savanna", "lava-field"))
+    }
+    @Test fun bugVetoesBurningScenesInEitherTypeOrder() {
+        assertBiomeVeto(Type.BUG, setOf("fire-savanna", "lava-field"))
+    }
+    @Test fun mutuallyClashingPoolsUseNeutralFallback() {
+        for (types in listOf(listOf(Type.FIRE, Type.ICE), listOf(Type.ICE, Type.FIRE))) {
+            for (seed in listOf(Int.MIN_VALUE, -1, 0, 1, Int.MAX_VALUE)) {
+                assertNull(BackdropCatalog.pickEnabled(types, seed, false, emptySet()))
+                assertEquals("route", BackdropCatalog.pick(types, seed).id)
+            }
         }
-        for (other in Type.entries) for (types in listOf(listOf(Type.FIRE, other), listOf(other, Type.FIRE))) {
-            for (seed in -25..25) assertTrue(BackdropCatalog.pickEnabled(types, seed, false, emptySet())?.id !in frozen)
-        }
+    }
+    @Test fun clashesTryCompatibleSecondaryScenesAndRespectDisabledChoices() {
+        val types = listOf(Type.FIRE, Type.WATER)
+        val expected = BackdropCatalog.options(Type.WATER).filter { it.id != "deep-sea-cave" }
+        assertEquals(expected.toSet(), expected.indices.map {
+            BackdropCatalog.pickEnabled(types, it, false, emptySet())
+        }.toSet())
+        assertNull(BackdropCatalog.pickEnabled(types, 0, false, expected.map { it.id }.toSet()))
+        assertEquals("beach", BackdropCatalog.pickEnabled(types, Int.MIN_VALUE, false,
+            BackdropCatalog.ALL.map { it.id }.toSet() - "beach")?.id)
     }
     @Test fun forestTechIsOnlyBugAndFairy() {
         assertEquals(setOf(Type.BUG, Type.FAIRY), Type.entries.filter { t -> BackdropCatalog.options(t).any { it.id == "forest-tech-b" } }.toSet())

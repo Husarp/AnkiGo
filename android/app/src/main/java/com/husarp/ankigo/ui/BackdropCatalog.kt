@@ -153,19 +153,23 @@ internal object BackdropCatalog {
     /** True for a Legendary / Mythical encounter (by tier, so Ankimon's extra legendaries count; Ultra Beasts don't). */
     fun isLegendary(sp: Species?): Boolean = sp != null && Encounters.tierOf(sp).let { it == Tier.LEGENDARY || it == Tier.MYTHICAL }
 
-    /** The picture for a wild Pokémon with [types]; [legendary] gives the shrine when the catalog has one (round 9: the new one, rev 2); [seed] is fixed for one encounter (the wild one's uid hash), so the fight keeps it. */
+    /** The picture for a wild Pokémon with [types]; [legendary] gives the shrine when the catalog has one (round 9: the new one, rev 2); [seed] is fixed for one encounter (the wild one's uid hash), so the fight keeps it. Uses a neutral route if both type pools clash. */
     fun pick(types: List<Type>, seed: Int, legendary: Boolean = false): Backdrop =
-        pickEnabled(types, seed, legendary, emptySet())!!
+        pickEnabled(types, seed, legendary, emptySet()) ?: BY_ID.getValue("route")
 
     private val FIRE_SCENES = setOf("fire-savanna", "lava-field")
     private val DESERT_SCENES = setOf("desert", "desert-oasis", "canyon")
     private val ICE_SCENES = setOf("icecave", "snow-aurora", "ice-lake", "snowy-pines")
 
+    private val UNDERWATER_SCENES = setOf("deep-sea-cave")
+
     /** Both types can veto a clashing biome, even when the other type would allow it. */
     private fun compatible(id: String, types: List<Type>): Boolean =
         !(Type.WATER in types && id in FIRE_SCENES + DESERT_SCENES) &&
         !(Type.ICE in types && id in FIRE_SCENES + DESERT_SCENES) &&
-        !(Type.FIRE in types && id in ICE_SCENES)
+        !(Type.FIRE in types && id in ICE_SCENES + UNDERWATER_SCENES) &&
+        !(Type.GRASS in types && id in FIRE_SCENES) &&
+        !(Type.BUG in types && id in FIRE_SCENES)
 
     /** Disabled scenes never appear. With no eligible enabled scene, the arena uses its existing plain background. */
     fun pickEnabled(types: List<Type>, seed: Int, legendary: Boolean, disabled: Set<String>): Backdrop? {
