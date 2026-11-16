@@ -123,7 +123,7 @@ internal object BackdropCatalog {
         "coral-shallows" to setOf(Type.WATER),
         "snowy-pines" to setOf(Type.ICE),
         "power-plant" to setOf(Type.ELECTRIC, Type.STEEL),
-        "desert-oasis" to setOf(Type.GROUND, Type.WATER),
+        "desert-oasis" to setOf(Type.GROUND),
         "starry-plateau" to setOf(Type.PSYCHIC, Type.FAIRY),
         "lava-field" to setOf(Type.FIRE, Type.ROCK),
         "night-rooftops" to setOf(Type.DARK, Type.FLYING),
@@ -157,10 +157,23 @@ internal object BackdropCatalog {
     fun pick(types: List<Type>, seed: Int, legendary: Boolean = false): Backdrop =
         pickEnabled(types, seed, legendary, emptySet())!!
 
+    private val FIRE_SCENES = setOf("fire-savanna", "lava-field")
+    private val DESERT_SCENES = setOf("desert", "desert-oasis", "canyon")
+    private val ICE_SCENES = setOf("icecave", "snow-aurora", "ice-lake", "snowy-pines")
+
+    /** Both types can veto a clashing biome, even when the other type would allow it. */
+    private fun compatible(id: String, types: List<Type>): Boolean =
+        !(Type.WATER in types && id in FIRE_SCENES + DESERT_SCENES) &&
+        !(Type.ICE in types && id in FIRE_SCENES + DESERT_SCENES) &&
+        !(Type.FIRE in types && id in ICE_SCENES)
+
     /** Disabled scenes never appear. With no eligible enabled scene, the arena uses its existing plain background. */
     fun pickEnabled(types: List<Type>, seed: Int, legendary: Boolean, disabled: Set<String>): Backdrop? {
         if (legendary && SHRINE !in disabled) BY_ID[SHRINE]?.let { return it }
-        val options = options(typeFor(types)).filter { it.id !in disabled }
+        val primary = options(typeFor(types)).filter { compatible(it.id, types) }
+        // A biome clash can rule out the entire primary pool (Fire/Water); try the other type then.
+        val eligible = primary.ifEmpty { types.flatMap { options(it) }.distinct().filter { compatible(it.id, types) } }
+        val options = eligible.filter { it.id !in disabled }
         return if (options.isEmpty()) null else options[Math.floorMod(seed, options.size)]
     }
 
