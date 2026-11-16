@@ -262,6 +262,32 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         return 0
     }
 
+    /** PLAN 706: visible-pixel box at a proposed view size, measured once when a moment starts. */
+    internal fun momentBounds(out: RectF, vw: Int = width, vh: Int = height) {
+        val img = image
+        if (img == null) {
+            val d = placeholderDiameter(vw, vh)
+            out.set((vw - d) / 2f, vh - d, (vw + d) / 2f, vh.toFloat())
+            return
+        }
+        val s = scaleFor(img, vw, vh)
+        val b = visibleBounds(img)
+        val left = (vw - (img.width * s).roundToInt()) / 2
+        val top = vh - (img.height * s).roundToInt() + footInset(s)
+        out.set(left + (b?.get(0) ?: 0) * s, top + (b?.get(1) ?: 0) * s,
+            left + (b?.get(2) ?: img.width) * s, top + (b?.get(3) ?: img.height) * s)
+        if (mirror) out.set(vw - out.right, out.top, vw - out.left, out.bottom)
+    }
+
+    internal val hasMomentPicture: Boolean get() = image != null
+
+    /** An evolution's already-loaded picture takes over without a second asynchronous request. */
+    internal fun takeMomentPicture(source: SpriteView) {
+        mirror = source.mirror
+        source.placeholderText?.let { setPlaceholder(it, source.placeholderColor) }
+        setImage(source.image)
+    }
+
     /** Device pixels per sprite pixel for this view ([scale], or [frameScale] in picture mode). */
     private fun scaleFor(img: SpriteImage, vw: Int, vh: Int): Float {
         val wanted = maxOf(1, floor(scaleDp * resources.displayMetrics.density).toInt())

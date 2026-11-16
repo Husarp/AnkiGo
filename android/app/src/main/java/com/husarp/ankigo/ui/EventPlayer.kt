@@ -495,6 +495,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 floats(e, immediateFloats)
                 if (!fightOver) { if (e.onPlayer) arena.setPlayerStatus(e.status) else arena.setEnemyStatus(e.status) }   // PLAN 259: after the win no badge comes back
                 if (!fightOver) arena.conditionEffect(e, st?.battle)   // R19-K (PLAN 269): a condition's chip starts / ends with its line
+                if (e.kind == EffectKind.STAT_CHANGE && e.stages != 0) arena.statMoment(e.onPlayer, e.stages > 0, d(BattleMoments.STAT_END.toLong()))
                 if (e.maxHp > 0) {
                     if (e.onPlayer) arena.setPlayerHp(e.hp, e.maxHp, true) else arena.setEnemyHp(e.hp, e.maxHp, true)
                 }
@@ -504,7 +505,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                     val run = arena.playMove(MoveFxCatalog.preparation(type), e.onPlayer, false, (1.0 / factor).toFloat())
                     if (run != null) return run.doneMs
                 }
-                return d(550)
+                return d(if (e.kind == EffectKind.STAT_CHANGE && e.stages != 0) BattleMoments.STAT_END.toLong() else 550)
             }
             is GameEvent.Fainted -> {
                 if (e.player) {
@@ -537,9 +538,10 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 if (e.uid == arena.playerUid) {
                     if (e.level > arena.playerLevel) arena.setPlayerLevel(e.level)   // PLAN 138: the XP bar's loop already changed it, level by level
                     arena.setPlayerHp(e.hp, e.maxHp, true)
+                    arena.levelUpMoment(d(BattleMoments.LEVEL_END.toLong()))
                 }
                 log(LogKind.SYS, "LEVEL UP", "${em(e.name)} grew to Lv ${em(e.level.toString())}!", e.uid)
-                return d(1000)
+                return d(if (e.uid == arena.playerUid) BattleMoments.LEVEL_END.toLong() else 1000)
             }
             is GameEvent.MoveLearned -> {
                 val forgot = e.forgot?.let { " It forgot ${moveName(it)}." } ?: ""
@@ -805,7 +807,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 recoil = e.recoilMove || move?.recoil != null || e.moveId == Tuning.STRUGGLE || recoil != null,
                 hits = e.hits.coerceAtLeast(0), showRecoil = recoil != null)
             look = plan.look
-            arena.playMove(plan, e.byPlayer, react = e.damage > 0, speed = (1.0 / factor).toFloat())
+            if (plan.look == MoveLook.HIT_TEMPLATE) null // PLAN 706: the category fallback gets the approved generic hit spark.
+            else arena.playMove(plan, e.byPlayer, react = e.damage > 0, speed = (1.0 / factor).toFloat())
         } else null
         if (run == null) {
             sound(e)
@@ -816,7 +819,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             val effects = MoveEffectPlayback.timeline(moveEffects, d(300), d(300), d(300), factor)
             moveEffects.forEach { effect -> queue.removeAll { it is Item.Ev && it.e === effect } }
             effects.forEach { timed -> atMs(timed.atMs) { play(timed.effect, immediateFloats = true) } }
-            return maxOf(d(650), (effects.lastOrNull()?.atMs ?: 0L) + d(350))
+            return maxOf(d(if (look == MoveLook.HIT_TEMPLATE && e.damage > 0) 1100 else 650), (effects.lastOrNull()?.atMs ?: 0L) + d(350))
         }
         sound(e, run.impactMs)
         val hitEffects = queue.takeWhile { (it as? Item.Ev)?.e is GameEvent.Effect }
@@ -928,23 +931,22 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         log(LogKind.SYS, "CATCH", "Throw: ${em(com.husarp.ankigo.game.Catching.throwName(e.ball, e.special))} · ${e.chance}%…")
         GameRepo.state?.let { panel.setBalls(BattlePanelView.ballCount(it), true) }
         arena.setEnemyCardShown(false)
-        arena.enemyIntoBall(d(350))
-        arena.dropBall(e.ball, d(450))
-        after(450) { arena.wobbleBall(d(1800)) }
+        arena.throwBall(e.ball, e.success, factor.toFloat())
         // A failed throw is followed by an Info "<name> broke free!" (see [breakFree]); a success by Caught.
-        return d(2250)
+        return d(BattleMoments.catchEnd(e.success).toLong())
     }
 
     /** The ball broke: the wild one pops back out. */
     private fun breakFree(text: String): Long {
         log(LogKind.AGAIN, "MISS", "Oh no! $text")
+        arena.catchBurst(false, factor.toFloat())
         arena.clearBall()
-        arena.enemyOutOfBall(d(350))
+        after(60) { arena.enemyOutOfBall(d(360)) }
         arena.setEnemyCardShown(true)
-        return d(900)
+        return d(800)
     }
 
-    /** Mockup frame B: ball drops (450 ms) and wobbles (1.8 s), stars twinkle, "Gotcha!" banner. */
+    /** Round 2 catch arc and three shakes, then the A burst, stars and "Gotcha!" banner. */
     private fun playCaught(e: GameEvent.Caught): Long {
         clearStatuses()   // PLAN 216: caught (auto-catch, or the ball already took it): the fight is over
         val hadBall = arena.ballShown
@@ -954,10 +956,8 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         arena.setEnemyCardShown(false)
         if (!hadBall) {
             log(LogKind.SYS, "CATCH", "Catching ${em(bare(e.name))}…")
-            arena.enemyIntoBall(d(350))
-            arena.dropBall(e.ball ?: CatchBall.forAuto(GameRepo.data?.species?.get(e.species)), d(450)) // PLAN 205: an auto-catch shows a ball by rarity (visual only)
-            after(450) { arena.wobbleBall(d(1800)) }
-            t = 2250
+            arena.throwBall(e.ball ?: CatchBall.forAuto(GameRepo.data?.species?.get(e.species)), true, factor.toFloat())
+            t = BattleMoments.CAUGHT.toLong()
         }
         if (xpEv != null) { catchWithXp(e, xpEv, swap, t); return PENDING }
         after(t) {
@@ -988,6 +988,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
     /** The click: "Gotcha!" + stars + the log line ([xp] = the player's XP in the line, CX-A). */
     private fun showGotcha(e: GameEvent.Caught, swap: GameEvent.Duplicate?, xp: Int?, numberAbove: Boolean = false) {
         val line2 = swap?.let { "Swapped for Lv ${it.level}" } ?: if (e.newSpecies) "New in your Pokédex" else null
+        arena.catchBurst(true, factor.toFloat())
         arena.showBanner("Gotcha!", "${bare(e.name)} was caught", line2, numberAbove)
         arena.showStars(true)
         val where = if (e.toTeam) "" else " It went to the box."
@@ -1027,29 +1028,50 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         }
     }
 
-    /** Sprite flashes white three times, swaps to the new back sprite at the middle flash. */
+    /** PLAN 706: prepare both forms, cover their visible bounds, then swap at the approved peak light. */
     private fun playEvolved(e: GameEvent.Evolved): Long {
         log(LogKind.SYS, "EVOLVE", "What? ${em(e.from)} is evolving…", e.uid)
         if (e.uid != arena.playerUid) {
             after(500) { log(LogKind.SYS, "EVOLVE", "${em(e.from)} evolved into ${em(e.to)}!", e.uid) }
             return d(1400)
         }
-        arena.flashPlayer(d(900), 3)
-        after(450) {
-            val data = GameRepo.data
-            val mon = GameRepo.state?.mon(e.uid)
-            // the new form, unless the Pokémon keeps a chosen look (still one of its line)
-            val sp = if (mon != null && data != null) mon.lookSpecies(data) else data?.species?.get(e.toSpecies)
-            if (sp != null && mon != null) {
-                PanelSprites.showMain(ctx, arena.playerSprite, sp, mon.shiny)
-                panel.notePlayerSprite(sp.num, mon.shiny)
-                arena.setPlayerName(e.to)
-                arena.setPlayerTypes(sp.types)   // the type look follows the new form (Round 10 W7)
-                arena.setPlayerHp(mon.hp, maxHpOf(e.uid), true)
-            }
+        val data = GameRepo.data
+        val mon = GameRepo.state?.mon(e.uid)
+        val sp = if (mon != null && data != null) mon.lookSpecies(data) else data?.species?.get(e.toSpecies)
+        if (sp == null || mon == null) return d(BattleMoments.EVOLVE_END.toLong())
+        val my = epoch
+        val next = com.husarp.ankigo.gfx.SpriteView(ctx).apply {
+            scaleDp = arena.playerSprite.scaleDp; byFrame = arena.playerSprite.byFrame
+            anchorFeet = arena.playerSprite.anchorFeet; sizeFactor = arena.playerSprite.sizeFactor
         }
-        after(900) { log(LogKind.SYS, "EVOLVE", "${em(e.from)} evolved into ${em(e.to)}!", e.uid) }
-        return d(1900)
+        var started = false
+        var preparing = true
+        fun start() {
+            if (started || my != epoch) return
+            started = true
+            next.onArtChange = null
+            // Stop the preparation's late download from changing the measured target mid-animation.
+            next.setTag(com.husarp.ankigo.R.id.ag_tag_sprite, Any())
+            arena.playerSprite.setTag(com.husarp.ankigo.R.id.ag_tag_sprite, Any())
+            arena.evolutionMoment(next, d(BattleMoments.EVOLVE_END.toLong())) {
+                if (my == epoch) {
+                    panel.notePlayerSprite(sp.num, mon.shiny)
+                    arena.setPlayerName(e.to); arena.setPlayerTypes(sp.types)
+                    arena.setPlayerHp(mon.hp, maxHpOf(e.uid), true)
+                }
+            }
+            after(900) { log(LogKind.SYS, "EVOLVE", "${em(e.from)} evolved into ${em(e.to)}!", e.uid) }
+            if (!next.hasMomentPicture) after(BattleMoments.EVOLVE_END.toLong()) {
+                PanelSprites.showMain(ctx, arena.playerSprite, sp, mon.shiny)
+            }
+            if (!preparing) resume(d(BattleMoments.EVOLVE_END.toLong()))
+        }
+        next.onArtChange = { if (next.hasMomentPicture) start() }
+        PanelSprites.showMain(ctx, next, sp, mon.shiny)
+        preparing = false
+        if (started) return d(BattleMoments.EVOLVE_END.toLong())
+        after(1200) { start() } // bounded preparation, matching the panel's placeholder fallback when art is unavailable
+        return PENDING
     }
 
     private companion object {

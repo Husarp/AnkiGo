@@ -172,6 +172,18 @@ class XpAbsorbFx(
         }
         close()
     }
+    private val smallShapes = Array(3) { kind -> Path().apply {
+        if (kind == 1) { moveTo(0f, -1f); lineTo(.62f, 0f); lineTo(0f, 1f); lineTo(-.62f, 0f) }
+        else {
+            val n = if (kind == 0) 10 else 8
+            for (i in 0 until n) {
+                val a = i * 2f * Math.PI.toFloat() / n - if (kind == 0) Math.PI.toFloat() / 2f else 0f
+                val r = if (i % 2 == 0) 1f else if (kind == 0) .45f else .18f
+                if (i == 0) moveTo(cos(a) * r, sin(a) * r) else lineTo(cos(a) * r, sin(a) * r)
+            }
+        }
+        close()
+    } }
     private val starPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     // the ball's glow (CX-A): a soft blue ring hugging the ball's edge (radius 1 = the ring's outer edge, the ball fills 70 % of it); the middle stays clear so the ball shows
     private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -190,6 +202,7 @@ class XpAbsorbFx(
         textAlign = Paint.Align.CENTER
     }
     private val label = "+$xp XP"
+    private val numberChars = CharArray(24)
     private val ink = Rect().also { text.getTextBounds(label, 0, label.length, it) }
     private val inkMid = (ink.top + ink.bottom) / 2f
     // room for the pop (x 1.16) and the tilt on each side
@@ -242,6 +255,13 @@ class XpAbsorbFx(
         } else {
             glow.alpha = (alpha * 255).toInt()
             canvas.drawCircle(0f, 0f, 1f, glow)
+            if (kind >= XpParticles.SMALL_STAR) {
+                val shape = smallShapes[kind - XpParticles.SMALL_STAR]
+                starPaint.color = 0xFF82D0FF.toInt(); starPaint.alpha = (alpha * 255).toInt()
+                canvas.drawPath(shape, starPaint)
+                canvas.scale(.55f, .55f); starPaint.color = 0xFFFFFFFF.toInt(); starPaint.alpha = (alpha * 255).toInt()
+                canvas.drawPath(shape, starPaint)
+            }
         }
         canvas.restore()
     }
@@ -249,7 +269,13 @@ class XpAbsorbFx(
     private fun drawNumber(canvas: Canvas, t: Float) {
         val a = XpParticles.numberAlpha(plan, t)
         if (a <= 0f) return
-        val shown = "+${XpParticles.count(plan, t, xp)} XP"
+        var value = XpParticles.count(plan, t, xp).coerceAtLeast(0)
+        numberChars[0] = '+'
+        var length = 1
+        do { numberChars[length++] = ('0'.code + value % 10).toChar(); value /= 10 } while (value > 0)
+        var lo = 1; var hi = length - 1
+        while (lo < hi) { val digit = numberChars[lo]; numberChars[lo++] = numberChars[hi]; numberChars[hi--] = digit }
+        numberChars[length++] = ' '; numberChars[length++] = 'X'; numberChars[length++] = 'P'
         val s = XpParticles.numberScale(plan, t)
         canvas.save()
         canvas.translate(spot.first, spot.second)
@@ -262,13 +288,13 @@ class XpAbsorbFx(
         text.color = FloatTextView.Look.OUTLINE
         text.alpha = (a * (FloatTextView.Look.OUTLINE ushr 24)).toInt()
         text.setShadowLayer(3f * d, 0f, 1.2f * d, ((a * 0x99).toInt() shl 24))
-        canvas.drawText(shown, 0f, baseline, text)
+        canvas.drawText(numberChars, 0, length, 0f, baseline, text)
         text.style = Paint.Style.FILL
         text.strokeWidth = 0f
         text.clearShadowLayer()
         text.color = 0xFFFFFFFF.toInt()
         text.alpha = (a * 255).toInt()
-        canvas.drawText(shown, 0f, baseline, text)
+        canvas.drawText(numberChars, 0, length, 0f, baseline, text)
         canvas.restore()
     }
 }
