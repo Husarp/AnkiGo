@@ -260,6 +260,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     @Volatile private var heldEase = 0            // a tap on a predicted card waits for its confirmation (0 = none); read by the io side too
     private var heldAt = 0L                       // R18-A: when that tap was held (the STUDY line says how long it waited)
     private var typedShown = ""                   // PLAN 175: what was typed in when the answer side opened (it shows again after a resume)
+    private var noteEdited = false
     private var keepAnswer: StudyRules.AnswerKeep? = null   // PLAN 175: the answer side to show again if the resume's reload finds the same card
     private var inFlight = 0                      // answers made on this screen and not resolved yet ("card N" counts them)
     private val tickets = HashMap<Long, PendingAnswers.Ticket>()   // by seq (this process only): the summary waits for the game step of each
@@ -632,7 +633,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         if (shownAt != 0L) shownAt = SystemClock.elapsedRealtime()
         if (::panel.isInitialized) { layout(); if (!finished) showButtons() }
         swipeOn = prefs.getBoolean("swipe", false); if (::swipe.isInitialized) updateSwipe()
-        if (::web.isInitialized && (finished || filtered && card != null && !locked && !predictedNow)) loadNext(answerKeep())
+        val edited = noteEdited; noteEdited = false
+        if (::web.isInitialized && (edited || finished || filtered && card != null && !locked && !predictedNow)) loadNext(answerKeep())
         else {
             if (returnVisit > 0 && !filtered && ::web.isInitialized) checkDueOnReturn()
             queueRecoveryToken?.takeIf { valid(it) }?.let { token ->
@@ -1986,13 +1988,17 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val change = startChange()
         com.husarp.ankigo.deck.DeckFlows.moveCard(this, c.nid, c.ord, { change.cancelled() }) { r -> change.finished(r.changed) }
     }
-    /** The note editor (its own page); coming back reloads the card, so an edit shows right away. */
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 697 && resultCode == RESULT_OK) noteEdited = true
+    }
+    /** A saved edit reloads on resume through the normal renderer, keeping the current side. */
     private fun editNote() {
         val c = card ?: return
         Report.log("STUDY", "edit note ${c.nid} (ord ${c.ord})")   // R13 Part E
-        startActivity(Intent(this, com.husarp.ankigo.deck.NoteEditActivity::class.java)
+        startActivityForResult(Intent(this, com.husarp.ankigo.deck.NoteEditActivity::class.java)
             .putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_NID, c.nid).putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_ORD, c.ord)
-            .putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_DECK, homeDeckId()))
+            .putExtra(com.husarp.ankigo.deck.NoteEditActivity.EXTRA_DECK, homeDeckId()), 697)
     }
     /** [select] false: the deck is not selected first (the "answer not saved" notice: the study io thread may be busy with that very answer). */
     private fun openAnki(select: Boolean = true) {

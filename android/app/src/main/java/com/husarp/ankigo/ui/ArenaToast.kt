@@ -303,7 +303,7 @@ internal class ToastCard(ctx: Context, val item: ToastQueue.Item, look: ToastLoo
         fun px(v: Float) = Ui.dp(ctx, v * k).toInt()
         setPadding(px(look.padStartDp), px(if (item.kind == ToastKind.BOND) 8f else look.padVDp), px(look.padEndDp), px(if (item.kind == ToastKind.BOND) 8f else look.padVDp))
         background = GradientDrawable().apply {
-            setColor(ColorUtils.setAlphaComponent(Ui.c(ctx, R.color.ag_card), 0xF7))
+            setColor(Ui.c(ctx, R.color.ag_card))
             cornerRadius = Ui.dp(ctx, look.radiusDp * k)
             setStroke(Ui.dp(ctx, 1f).toInt().coerceAtLeast(1), ColorUtils.setAlphaComponent(Ui.c(ctx, R.color.ag_text), 0x1A))
         }
@@ -521,7 +521,7 @@ internal class ArenaToastLayer(ctx: Context) : FrameLayout(ctx) {
         leaving = true
         c.isClickable = false
         if (item == null || still(item) || !c.isAttachedToWindow) { finish(); return }
-        c.animate().translationX((width - cardLeft).toFloat()).alpha(0f).setDuration(OUT_MS).setInterpolator(AccelerateInterpolator())
+        c.animate().translationX((width - cardLeft).toFloat()).setDuration(OUT_MS).setInterpolator(AccelerateInterpolator())
             .withEndAction { finish() }.start()
     }
 

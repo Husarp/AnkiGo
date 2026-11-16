@@ -30,6 +30,10 @@ class StudyRulesTest {
         assertFalse(keep.same(StudyLoop.Key(70, 0), row + ("reps" to "4")))   // answered (Again brings it back on top)
         assertFalse(keep.same(StudyLoop.Key(70, 0), row + ("due" to "200")))  // rescheduled
     }
+    @Test fun anEditedNoteKeepsItsAnswerSideAndTypedText() {
+        assertTrue(keep.same(StudyLoop.Key(70, 0), row + mapOf("mod" to "123", "question" to "Edited question", "answer" to "Edited answer")))
+        assertEquals("typed", keep.typed)
+    }
     @Test fun anotherCardOrNoRowShowsTheQuestion() {
         assertFalse(keep.same(StudyLoop.Key(70, 1), row))
         assertFalse(keep.same(StudyLoop.Key(71, 0), row))

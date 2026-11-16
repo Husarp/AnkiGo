@@ -302,6 +302,9 @@ object WidgetRender {
 
     /** The widget's current size in dp from its options (portrait: min width x max height; landscape: max width x min height). */
     fun sizeDp(ctx: Context, o: Bundle?, kind: Kind): Pair<Float, Float> {
+        // The non-resizable 1x1 icon always uses a square design canvas. The app's
+        // orientation (including PiP) need not match the launcher hosting the bitmap.
+        if (kind == Kind.STUDY_NOW) return kind.defW to kind.defH
         val land = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         val w = o?.getInt(if (land) AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH else AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
         val h = o?.getInt(if (land) AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT else AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0) ?: 0
