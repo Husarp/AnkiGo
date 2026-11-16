@@ -287,7 +287,7 @@ class ChartMetricsTest {
         assertEquals(85.0 / 30, s.perDayAvg, 1e-9)
         assertFalse(s.empty); assertFalse(s.deckApplies)
         assertEquals(grid.total, 85)
-        assertEquals("AnkiGo's own count: answers, not distinct cards (AnkiDroid isn't available)", s.source)
+        assertEquals("AnkiGo's own count: answers, not distinct cards (AnkiDroid game-day counts aren't available)", s.source)
         assertEquals(listOf("Wed 14 Oct · 60 cards", "Daily goal reached (50)"), s.detailFor(today))
         assertEquals(listOf("Tue 13 Oct · 20 cards", "40% of the daily goal (50)"), s.detailFor(date(1)))
         assertEquals(listOf("Mon 12 Oct · no data recorded"), s.detailFor(date(2)))

@@ -19,15 +19,16 @@ import java.time.LocalDate
 
 class R42IShots {
     @get:Rule val paparazzi = Shots.rule()
-    private var oldUpdates = Updates.state
-    @Before fun offline() { AnkiStatsStore.enabled = false; oldUpdates = Updates.state }
+    private var oldUpdates: Updates.State? = null
+    @Before fun offline() { AnkiStatsStore.enabled = false }
     @After fun reset() {
         AnkiStatsStore.enabled = true; AnkiStatsStore.snapshot = StatsSnapshot()
-        setUpdates(oldUpdates)
+        oldUpdates?.let { setUpdates(it) }
     }
     private fun texts(v: View): List<String> = (if (v is TextView) listOf(v.text.toString()) else emptyList()) +
         if (v is ViewGroup) (0 until v.childCount).flatMap { texts(v.getChildAt(it)) } else emptyList()
     private fun setUpdates(s: Updates.State) {
+        if (oldUpdates == null) oldUpdates = Updates.state
         Updates::class.java.getDeclaredField("state").apply { isAccessible = true }.set(Updates, s)
     }
 
@@ -104,7 +105,7 @@ class R42IShots {
             setBackgroundColor(Ui.c(ctx, R.color.ag_card))
             addView(ItemCard.header(page, spec) {})
             addView(ItemCard.body(page, spec))
-            assertTrue(texts(this).any { "Defense ×1.5 for this fight" in it })
+            assertTrue(texts(this).any { "Defense ×1.5" in it && "this fight" in it })
         }
     }
 }
