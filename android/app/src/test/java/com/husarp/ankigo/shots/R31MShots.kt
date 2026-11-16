@@ -96,8 +96,8 @@ class R31MShots {
             val stats = all(view).single { it.tag == DetailSection.STATS }
             val training = all(view).single { it.tag == DetailSection.TRAINING }
             assertFalse(all(stats).any { it.contentDescription?.toString()?.contains("10%") == true })
-            assertEquals(1, all(training).count { it.contentDescription == "Def +10%" })
-            assertEquals(1, all(training).count { it.contentDescription == "Atk −10%" })
+            assertEquals(1, all(training).count { it.contentDescription == "Defense +10%" })
+            assertEquals(1, all(training).count { it.contentDescription == "Attack −10%" })
             assertFalse(texts(view).any { it.contains("▲") || it.contains("▼") })
             shot(a, view, "m-509-${theme.name.lowercase()}")
             for (nature in Nature.entries) {

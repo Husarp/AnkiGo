@@ -87,7 +87,7 @@ class R33DDetailsTest {
                 override fun dispatchDraw(canvas: Canvas) {
                     if (!took) {
                         took = true
-                        all(item.view).single { it.contentDescription == "Take off" }.performClick()
+                        all(item.view).single { it.contentDescription?.toString()?.startsWith("Unequip ") == true }.performClick()
                         notifyChanges()
                         assertNull(mon.heldItem)
                         assertEquals(before + 1, state.count("soothe-bell"))

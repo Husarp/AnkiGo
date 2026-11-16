@@ -33,7 +33,7 @@ data class WildMoveSlot(val id: String?, val name: String?)
 enum class WildDex { SEEN, DEFEATED, CAUGHT }
 
 /**
- * The facts of the info window. Only things a player may see: IVs, nature, EVs, ability, held item and undiscovered move identities are
+ * The facts of the info window. Only things a player may see: IVs, EVs, ability, held item and undiscovered move identities are
  * not in here, so no screen can show them by mistake.
  */
 data class WildInfo(
@@ -50,6 +50,7 @@ data class WildInfo(
     val stats: Stats?,
     val matchups: TypeMatchups?,
     val moves: List<WildMoveSlot>,
+    val nature: Nature = Nature.HARDY,
 ) {
     val known: Boolean get() = dex != WildDex.SEEN
 
@@ -58,16 +59,16 @@ data class WildInfo(
         const val ASSUMED_IV = 15
 
         /**
-         * Stats at [level] from [base] with a neutral nature, 0 EVs and [ASSUMED_IV] in every stat: the same rule for every wild
-         * Pokémon, so the numbers carry no trace of the real IVs, nature or EVs.
+         * Stats at [level] from [base] with its visible nature, 0 EVs and [ASSUMED_IV] in every stat: the same rule for every wild
+         * Pokémon, so the numbers carry no trace of the real IVs or EVs.
          */
-        fun statsAt(base: Stats, level: Int): Stats = Stats(
+        fun statsAt(base: Stats, level: Int, nature: Nature = Nature.HARDY): Stats = Stats(
             StatCalc.hp(base.hp, ASSUMED_IV, 0, level),
-            StatCalc.other(base.atk, ASSUMED_IV, 0, level, 1.0),
-            StatCalc.other(base.def, ASSUMED_IV, 0, level, 1.0),
-            StatCalc.other(base.spa, ASSUMED_IV, 0, level, 1.0),
-            StatCalc.other(base.spd, ASSUMED_IV, 0, level, 1.0),
-            StatCalc.other(base.spe, ASSUMED_IV, 0, level, 1.0),
+            StatCalc.other(base.atk, ASSUMED_IV, 0, level, nature.mult(Stat.ATK)),
+            StatCalc.other(base.def, ASSUMED_IV, 0, level, nature.mult(Stat.DEF)),
+            StatCalc.other(base.spa, ASSUMED_IV, 0, level, nature.mult(Stat.SPA)),
+            StatCalc.other(base.spd, ASSUMED_IV, 0, level, nature.mult(Stat.SPD)),
+            StatCalc.other(base.spe, ASSUMED_IV, 0, level, nature.mult(Stat.SPE)),
         )
 
         /** Null while the wild species is not in the data. [usedMoves] = move names from [WildMoveLog.used]. */
@@ -83,13 +84,13 @@ data class WildInfo(
             }
             return WildInfo(
                 name = wild.name, dexNum = sp.baseNum, level = wild.level, gender = wild.gender, shiny = wild.shiny,
-                types = sp.types, tier = battle.tier,
+                types = sp.types, tier = battle.tier, nature = wild.nature,
                 dex = when {
                     wild.species in state.caught -> WildDex.CAUGHT
                     known -> WildDex.DEFEATED
                     else -> WildDex.SEEN
                 },
-                base = sp.base.takeIf { known }, stats = if (known) statsAt(sp.base, wild.level) else null,
+                base = sp.base.takeIf { known }, stats = if (known) statsAt(sp.base, wild.level, wild.nature) else null,
                 matchups = if (battle.playerAttacked || MatchupKnowledge.bonded(data, state, wild.species)) MatchupKnowledge.of(data, state, wild.species) else null, moves = visible,
             )
         }

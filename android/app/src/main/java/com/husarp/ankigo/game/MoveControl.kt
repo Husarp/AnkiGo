@@ -408,8 +408,8 @@ internal object MoveControl : BattleRules {
 
             "psychup" -> { System.arraycopy(r.side(tp).boosts, 0, r.side(p).boosts, 0, 7); note(r, p, "$n copied $tn's stat changes!", "psychup", "Copied"); true }
             "heartswap" -> { swapStages(r, p, 0..6); note(r, p, "$n switched stat changes with its target!", "heartswap", "Swapped"); true }
-            "powerswap" -> { swapStages(r, p, listOf(0, 2)); note(r, p, "$n switched all changes to its Attack and Sp. Atk with its target!", "powerswap", "Swapped"); true }
-            "guardswap" -> { swapStages(r, p, listOf(1, 3)); note(r, p, "$n switched all changes to its Defense and Sp. Def with its target!", "guardswap", "Swapped"); true }
+            "powerswap" -> { swapStages(r, p, listOf(0, 2)); note(r, p, "$n switched all changes to its Attack and Special Attack with its target!", "powerswap", "Swapped"); true }
+            "guardswap" -> { swapStages(r, p, listOf(1, 3)); note(r, p, "$n switched all changes to its Defense and Special Defense with its target!", "guardswap", "Swapped"); true }
             "speedswap" -> speedSwap(r, p)
             "powersplit" -> split(r, p, "atk", "spa", "$n shared its power with the target!", "Power split")
             "guardsplit" -> split(r, p, "def", "spd", "$n shared its guard with the target!", "Guard split")
@@ -936,17 +936,17 @@ internal object MoveControl : BattleRules {
             "throatchop" -> "The target can't use sound moves for $THROAT_CHOP_TURNS turns."
             "psychup" -> "Copies the target's stat changes."
             "heartswap" -> "Swaps all stat changes with the target."
-            "powerswap" -> "Swaps the Attack and Sp. Atk changes with the target."
-            "guardswap" -> "Swaps the Defense and Sp. Def changes with the target."
+            "powerswap" -> "Swaps the Attack and Special Attack changes with the target."
+            "guardswap" -> "Swaps the Defense and Special Defense changes with the target."
             "speedswap" -> "Swaps Speed stats with the target."
-            "powersplit" -> "The user and the target each get the average of their Attack stats and the average of their Sp. Atk stats."
-            "guardsplit" -> "The user and the target each get the average of their Defense stats and the average of their Sp. Def stats."
+            "powersplit" -> "The user and the target each get the average of their Attack stats and the average of their Special Attack stats."
+            "guardsplit" -> "The user and the target each get the average of their Defense stats and the average of their Special Defense stats."
             "powertrick" -> "Swaps its Attack and Defense stats. Using it again swaps them back."
-            "powershift" -> "Swaps its Attack with its Defense and its Sp. Atk with its Sp. Def. Using it again swaps them back."
+            "powershift" -> "Swaps its Attack with its Defense and its Special Attack with its Special Defense. Using it again swaps them back."
             "topsyturvy" -> "Turns all of the target's stat changes around: raises become drops and drops become raises."
             "acupressure" -> "Raises a random stat of its own by $ACUPRESSURE_RISE."
-            "venomdrench" -> "Lowers the Attack, Sp. Atk and Speed of a poisoned target by 1."
-            "rototiller" -> "Raises the Attack and Sp. Atk of every Grass type on the ground by 1, its own or the target's."
+            "venomdrench" -> "Lowers the Attack, Special Attack and Speed of a poisoned target by 1."
+            "rototiller" -> "Raises the Attack and Special Attack of every Grass type on the ground by 1, its own or the target's."
             "flowershield" -> "Raises the Defense of every Grass type by 1, its own or the target's."
             "charge" -> "Its next Electric move deals double damage."
             "defensecurl" -> "Rollout and Ice Ball deal double damage after it curls up."
@@ -966,7 +966,7 @@ internal object MoveControl : BattleRules {
             "roost" -> "It loses the Flying type until the end of the turn."
             "electrify" -> "The target's move this turn becomes Electric. Fails if the target has moved already."
             "psychoshift" -> "Gives its status problem to the target and cures its own."
-            "partingshot" -> "Lowers the target's Attack and Sp. Atk by 1. It does not switch out."
+            "partingshot" -> "Lowers the target's Attack and Special Attack by 1. It does not switch out."
             "powder" -> "The target's Fire move this turn fails, and it loses a quarter of its max HP."
             "magnetrise" -> "Makes itself immune to Ground moves for $MAGNET_RISE_TURNS turns."
             "telekinesis" -> "Lifts the target for $TELEKINESIS_TURNS turns: Ground moves miss it and every move except a one-hit KO hits it."

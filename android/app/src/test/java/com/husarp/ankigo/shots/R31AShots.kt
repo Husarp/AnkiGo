@@ -74,7 +74,7 @@ class R31AShots {
         assertEquals(DetailSection.HELD_ITEM, section.tag)
         assertTrue("Soothe Bell" in texts(section))
         assertTrue(texts(section).any { "Bond" in it })
-        assertFalse("Take off" in texts(section)); assertFalse("Give to another Pokémon" in texts(section))
+        assertFalse(texts(section).any { it.startsWith("Unequip ") }); assertFalse("Give to another Pokémon" in texts(section))
         val bar = (section as ViewGroup).getChildAt(0)
         bar.performClick()
         assertFalse(DetailSections.memory(page).isOpen(DetailSection.HELD_ITEM))
@@ -84,7 +84,7 @@ class R31AShots {
         bar.performClick()
         val evolution = DetailTopCard.forMon(page, data, state, mon, data.sp(mon.species), state.caught, false, page, null)
         assertFalse("Soothe Bell" in texts(evolution))
-        assertFalse("Take off" in texts(evolution))
+        assertFalse(texts(evolution).any { it.startsWith("Unequip ") })
         val dialog = AppDialog.Builder(page).setInfoHeader("Pokémon details").setView(LinearLayout(page).apply {
             orientation = LinearLayout.VERTICAL
             addView(section); addView(evolution)
@@ -120,7 +120,7 @@ class R31AShots {
         try {
             ItemWindow.interceptShow = { opened = it }
             all(section).single { it.contentDescription?.contains("Tap for what it does") == true }.performClick()
-            all(checkNotNull(opened).view).single { it.contentDescription == "Take off" }.performClick()
+            all(checkNotNull(opened).view).single { it.contentDescription?.toString()?.startsWith("Unequip ") == true }.performClick()
         } finally { ItemWindow.interceptShow = prior }
         assertNull(mon.heldItem)
         assertEquals(before + 1, state.count("soothe-bell"))

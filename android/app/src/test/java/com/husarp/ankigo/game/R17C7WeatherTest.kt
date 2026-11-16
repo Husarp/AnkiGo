@@ -227,7 +227,7 @@ class R17C7WeatherTest {
     @Test fun aSandstormRaisesRockSpDefAndSnowRaisesIceDefense() {
         val m = main()
         assertEquals(1 / 1.5, R17C7.ratio(m, 702, "plainspecial") { it.weather = "sand" }, 0.03)
-        assertEquals("only Sp. Def", 1.0, R17C7.ratio(m, 702, "plainphysical") { it.weather = "sand" }, 0.0)
+        assertEquals("only Special Defense", 1.0, R17C7.ratio(m, 702, "plainphysical") { it.weather = "sand" }, 0.0)
         assertEquals("a special move that hits Defense", 1.0, R17C7.ratio(m, 702, "psyshockish") { it.weather = "sand" }, 0.0)
         assertEquals("not for other types", 1.0, R17C7.ratio(m, 701, "plainspecial") { it.weather = "sand" }, 0.0)
         assertEquals(1 / 1.5, R17C7.ratio(m, 705, "plainphysical") { it.weather = "snow" }, 0.03)

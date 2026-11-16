@@ -63,11 +63,16 @@ object StatPill {
         for (i in 0 until n) {
             val column = i / 3
             val count = minOf(3, n - column * 3)
-            val y = (25f - (4f + (count - 1) * 7f)) / 2f + (i % 3) * 7f
+            val y = (25f - (if (count == 1) 12f else 4f + (count - 1) * 7f)) / 2f + (i % 3) * 7f
             val x = column * 11f
-            path.moveTo(x + 2f, y + if (up) 4f else 0f)
-            path.lineTo(x + 6f, y + if (up) 0f else 4f)
-            path.lineTo(x + 10f, y + if (up) 4f else 0f)
+            val headY = y + if (!up && count == 1) 8f else 0f
+            path.moveTo(x + 2f, headY + if (up) 4f else 0f)
+            path.lineTo(x + 6f, headY + if (up) 0f else 4f)
+            path.lineTo(x + 10f, headY + if (up) 4f else 0f)
+            if (count == 1) {
+                path.moveTo(x + 6f, headY + if (up) 0f else 4f)
+                path.lineTo(x + 6f, headY + if (up) 12f else -8f)
+            }
         }
     }
 }

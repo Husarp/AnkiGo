@@ -64,10 +64,10 @@ class MoveTextTest {
         assertEquals("Raises its Attack and Speed by 1 stage (×1.5).", say(status().copy(boosts = mapOf("spe" to 1, "atk" to 1))))
         assertEquals("Raises its Attack and Speed by 2 stages (×2) and Defense by 1 stage (×1.5).", say(status().copy(boosts = mapOf("atk" to 2, "def" to 1, "spe" to 2))))
         assertEquals("Lowers the target's Defense by 1 stage (×2/3).", say(status(target = "normal", acc = 100).copy(boosts = mapOf("def" to -1))))
-        assertEquals("Raises its Attack by 2 stages (×2). Lowers its Defense and Sp. Def by 1 stage (×2/3).", say(status().copy(boosts = mapOf("atk" to 2, "def" to -1, "spd" to -1))))
+        assertEquals("Raises its Attack by 2 stages (×2). Lowers its Defense and Special Defense by 1 stage (×2/3).", say(status().copy(boosts = mapOf("atk" to 2, "def" to -1, "spd" to -1))))
         assertEquals("Lowers the target's accuracy by 1 stage (×3/4).", say(status(target = "allAdjacentFoes", acc = 100).copy(boosts = mapOf("accuracy" to -1))))
         assertEquals("Raises its evasiveness by 1 stage (×4/3).", say(status().copy(boosts = mapOf("evasion" to 1))))
-        assertEquals("Raises its Sp. Atk by 1 stage (×1.5). Usually goes first.", say(status().copy(selfBoosts = mapOf("spa" to 1), priority = 1)))
+        assertEquals("Raises its Special Attack by 1 stage (×1.5). Usually goes first.", say(status().copy(selfBoosts = mapOf("spa" to 1), priority = 1)))
         // the user's own stat change after a hit
         assertEquals("Lowers its Defense by 1 stage (×2/3).", say(dmg().copy(selfBoosts = mapOf("def" to -1))))
     }
@@ -75,7 +75,7 @@ class MoveTextTest {
     @Test fun secondaryEffects() {
         assertEquals("May burn the target (10%).", say(dmg().copy(secondary = Secondary(10, status = "brn"))))
         assertEquals("May put the target to sleep (30%).", say(dmg().copy(secondary = Secondary(30, status = "slp"))))
-        assertEquals("May lower the target's Sp. Def by 1 stage (×2/3) (10%).", say(dmg().copy(secondary = Secondary(10, boosts = mapOf("spd" to -1)))))
+        assertEquals("May lower the target's Special Defense by 1 stage (×2/3) (10%).", say(dmg().copy(secondary = Secondary(10, boosts = mapOf("spd" to -1)))))
         assertEquals("May raise its Attack by 1 stage (×1.5) (10%).", say(dmg().copy(secondary = Secondary(10, selfBoosts = mapOf("atk" to 1)))))
         // a sure effect: no "May", no "(100 %)"
         assertEquals("Raises its Attack by 1 stage (×1.5).", say(dmg().copy(secondary = Secondary(100, selfBoosts = mapOf("atk" to 1)))))
@@ -109,8 +109,8 @@ class MoveTextTest {
         assertEquals("Charges on the first turn, then hits with its next move.", say(dmg("fly")))
         assertEquals("Charges on the first turn, then hits with its next move.", say(dmg("xcharge").copy(flags = setOf("charge"))))
         assertEquals("Charges on the first turn and raises its Defense by 1 stage (×1.5), then hits with its next move.", say(dmg("skullbash")))
-        assertEquals("Charges on the first turn and raises its Sp. Atk by 1 stage (×1.5), then hits with its next move.", say(dmg("meteorbeam")))
-        assertEquals("Raises its Sp. Atk, Sp. Def and Speed by 2 stages (×2). Charges on the first turn, then takes effect with its next move.",
+        assertEquals("Charges on the first turn and raises its Special Attack by 1 stage (×1.5), then hits with its next move.", say(dmg("meteorbeam")))
+        assertEquals("Raises its Special Attack, Special Defense and Speed by 2 stages (×2). Charges on the first turn, then takes effect with its next move.",
             say(status("geomancy").copy(boosts = mapOf("spa" to 2, "spd" to 2, "spe" to 2))))
     }
 

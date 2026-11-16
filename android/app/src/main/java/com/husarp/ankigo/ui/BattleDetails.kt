@@ -34,7 +34,7 @@ object BattleDetails {
 
     /**
      * Tap on the wild Pokémon in a battle (PLAN 93): a read-only info window on top of the battle, from [WildInfo] (so never IVs,
-     * nature, EVs or unused moves of an unknown species). Close returns to the battle, which keeps running underneath. False when there is nothing to show.
+     * EVs or unused moves of an unknown species). Close returns to the battle, which keeps running underneath. False when there is nothing to show.
      */
     fun showWild(ctx: Context, focusMove: String? = null): Boolean {
         val data = GameRepo.data ?: return false
@@ -58,7 +58,10 @@ object BattleDetails {
             if (!compact) gravity = Gravity.CENTER
         }
         val num = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply {
-            text = "#%03d".format(info.dexNum)
+            text = DetailFormat.numLine(info.dexNum, info.nature.label)
+            minimumHeight = Ui.dp(ctx, 48)
+            setOnClickListener { NatureChanges.show(ctx, info.nature) }
+            gravity = Gravity.CENTER_VERTICAL
             if (!compact) gravity = Gravity.CENTER
         }
         val types = Bits.typeRow(ctx, info.types)
@@ -71,7 +74,7 @@ object BattleDetails {
                     orientation = LinearLayout.VERTICAL
                     addView(name, LinearLayout.LayoutParams(-2, -2))
                     if (info.known) RarityMark.detail(this, info.tier, requireNotNull(info.base).total)
-                    if (info.known) addView(num, LinearLayout.LayoutParams(-2, -2))
+                    addView(num, LinearLayout.LayoutParams(-2, -2))
                     addView(types, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
                 }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 12) })
             }, LinearLayout.LayoutParams(-1, -2))
@@ -79,7 +82,7 @@ object BattleDetails {
             col.addView(img, LinearLayout.LayoutParams(Ui.dp(ctx, 96), Ui.dp(ctx, 96)).also { it.gravity = Gravity.CENTER_HORIZONTAL })
             col.addView(name, LinearLayout.LayoutParams(-1, -2))
             if (info.known) RarityMark.detail(col, info.tier, requireNotNull(info.base).total, centered = true)
-            if (info.known) col.addView(num, LinearLayout.LayoutParams(-1, -2))
+            col.addView(num, LinearLayout.LayoutParams(-1, -2))
             col.addView(types, LinearLayout.LayoutParams(-2, -2).also { it.gravity = Gravity.CENTER_HORIZONTAL; it.topMargin = Ui.dp(ctx, 4) })
         }
 
@@ -92,7 +95,7 @@ object BattleDetails {
             col.addView(DetailTopCard.evolutionOnly(ctx, data, sp, seen, compact, null), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 10) })
             val stats = requireNotNull(info.stats)
             col.addView(DetailSections.section(ctx, mem, DetailSection.STATS, "Total ${stats.total}", titleLevel = info.level, boosts = battle.enemy.boosts) {
-                DetailSections.statsBody(ctx, stats, info.level, null, sp, compact, battle.enemy.boosts)
+                DetailSections.statsBody(ctx, stats, info.level, info.nature, sp, compact, battle.enemy.boosts)
             })
         }
         val moves = info.moves.mapNotNull { it.id }

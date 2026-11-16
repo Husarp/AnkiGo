@@ -46,14 +46,14 @@ class R22IShopTest {
         val text = ShopCardKit.texts(stage)
         val holderName = GameRepo.state!!.mons.first().let { it.nickname?.takeIf(String::isNotBlank) ?: it.name }
         assertTrue(text.toString(), text.contains("Held by $holderName"))
-        assertTrue(text.contains("Take off"))
+        assertTrue(text.any { it.startsWith("Unequip ") })
         assertTrue(text.contains("Give to another Pokémon"))
         assertTrue(text.contains("All"))
         assertTrue(text.contains("Worn"))
         paparazzi.snapshot(stage, "r22i-held")
         GameRepo.state!!.mons.forEach { it.heldItem = "amulet-coin" }
         stage.render()
-        assertTrue(ShopCardKit.texts(stage).contains("Take off"))
+        assertTrue(ShopCardKit.texts(stage).any { it.startsWith("Unequip ") })
         assertTrue(ShopCardKit.texts(stage).contains("Give to another Pokémon"))
         paparazzi.snapshot(stage, "r22i-held-many")
         page.closeCard(); stage.render()

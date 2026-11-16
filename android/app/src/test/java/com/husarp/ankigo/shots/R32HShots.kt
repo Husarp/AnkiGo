@@ -76,13 +76,13 @@ class R32HShots {
         val mon = GameRepo.state!!.main!!.apply { heldItem = "soothe-bell" }
         val page = TeamPage(ctx, NoHost)
         val section = checkNotNull(DetailTopCard.heldItem(ctx, GameRepo.data!!, mon, page))
-        assertFalse(texts(section).any { it.text.contains("Take off") || it.text.contains("Give") })
+        assertFalse(texts(section).any { it.text.startsWith("Unequip ") || it.text.contains("Give") })
         val item = all(section).single { it.contentDescription?.contains("Tap for what it does") == true }
         var opened: ItemWindow? = null
         ItemWindow.interceptShow = { opened = it }
         item.performClick()
         val window = checkNotNull(opened)
-        assertTrue(all(window.view).any { it.contentDescription == "Take off" })
+        assertTrue(all(window.view).any { it.contentDescription?.toString()?.startsWith("Unequip ") == true })
         assertTrue(all(window.view).any { it.contentDescription == "Give to another Pokémon" })
         window.dismiss()
         FrameLayout(ctx).apply {

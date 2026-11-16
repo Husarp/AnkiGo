@@ -41,7 +41,7 @@ class R10MoreShots {
         for (uid in listOf("t1", "t2", "b1")) {
             val l = labels(menuOf(ctx, uid))
             for (x in extras) assertFalse("$uid collapsed shows $x", l.contains(x))
-            assertFalse("$uid collapsed shows Take", l.any { it.startsWith("Take ") })
+            assertFalse("$uid collapsed shows Take", l.any { it.startsWith("Unequip ") })
             assertEquals("$uid: More directly above Release", l.indexOf("Release…") - 1, l.indexOf("More"))
             assertFalse(l.contains("Less"))
         }
@@ -56,7 +56,7 @@ class R10MoreShots {
         m.expandMore()
         val l = labels(m)
         assertTrue(m.isMoreExpanded)
-        val take = l.indexOfFirst { it.startsWith("Take ") }
+        val take = l.indexOfFirst { it.startsWith("Unequip ") }
         assertTrue(take > 0)
         assertEquals(listOf("Less", "Give item…", l[take], "Use item…", "Teach TM…"), l.subList(l.indexOf("Less"), l.indexOf("Release…")).filter { it != "Show on Buddy widget" })
         assertEquals("Release…", l.last())
@@ -162,12 +162,12 @@ class R10MoreShots {
         for (open in listOf(false, true)) for (v in sizes) paparazzi.shootPage("r10more-synth-${if (open) "open" else "closed"}", listOf(v)) { ctx ->
             val m = AppMenu(View(ctx)).header("Sparkmouse  Lv 26")
                 .item(1, "Make main", R.drawable.ic_star)
-                .item(2, "Give item…", R.drawable.ic_gift, extra = true).item(3, "Take Lucky Egg", R.drawable.ic_gift, extra = true)
+                .item(2, "Give item…", R.drawable.ic_gift, extra = true).item(3, "Unequip Lucky Egg", R.drawable.ic_gift, extra = true)
                 .item(4, "Use item…", R.drawable.ic_ball, extra = true).item(5, "Teach TM…", R.drawable.ic_tm, extra = true)
                 .item(6, "Show on Buddy widget", R.drawable.ic_open, extra = true)
                 .item(7, "Rename…", R.drawable.ic_pencil).more(8)
                 .item(9, "Release…", R.drawable.ic_trash, danger = true)
-            if (open) assertEquals(listOf("Make main", "Rename…", "Less", "Give item…", "Take Lucky Egg", "Use item…", "Teach TM…", "Show on Buddy widget", "Release…"), labels(m).also { m.expandMore() }.let { labels(m) }.let { l -> listOf("Make main", "Rename…") + l.subList(l.indexOf("Less"), l.size) })
+            if (open) assertEquals(listOf("Make main", "Rename…", "Less", "Give item…", "Unequip Lucky Egg", "Use item…", "Teach TM…", "Show on Buddy widget", "Release…"), labels(m).also { m.expandMore() }.let { labels(m) }.let { l -> listOf("Make main", "Rename…") + l.subList(l.indexOf("Less"), l.size) })
             place(ctx, m, v, open)
         }
     }

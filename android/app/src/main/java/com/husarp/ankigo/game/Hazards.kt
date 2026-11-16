@@ -134,7 +134,7 @@ internal object Hazards : BattleRules {
         "toxicspikes" -> listOf("Scatters up to 2 layers of Toxic Spikes. A grounded Pokémon switching in is poisoned (badly with 2 layers). Poison types absorb them; Steel types are immune.")
         "stickyweb" -> listOf("Spreads a Sticky Web on the target's side. A grounded Pokémon switching in loses 1 Speed stage (×2/3).")
         "meanlook", "block", "spiderweb" -> listOf("Stops the target from switching for $TRAP_TURNS rounds. Ghost types can still switch.")
-        "octolock" -> listOf("Stops the target from switching for $TRAP_TURNS rounds and lowers its Defense and Sp. Def by 1 stage at each round's end. Ghost types can still switch.")
+        "octolock" -> listOf("Stops the target from switching for $TRAP_TURNS rounds and lowers its Defense and Special Defense by 1 stage at each round's end. Ghost types can still switch.")
         "fairylock" -> listOf("Stops both Pokémon from switching through the next round. Ghost types can still switch.")
         else -> emptyList()
     }

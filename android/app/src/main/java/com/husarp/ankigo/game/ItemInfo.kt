@@ -23,7 +23,7 @@ object ItemInfo {
     private val MASTER_STREAK_DAYS get() = AchievementTable.rewardThreshold("streak-days", "master-ball") ?: 0L
     private val POWER_STATS = listOf(
         "power-weight" to "HP", "power-bracer" to "Attack", "power-belt" to "Defense",
-        "power-lens" to "Sp. Atk", "power-band" to "Sp. Def", "power-anklet" to "Speed",
+        "power-lens" to "Special Attack", "power-band" to "Special Defense", "power-anklet" to "Speed",
     ).toMap()
     /** Names that stay as they are for any number: "2 Fresh Water", "3 Luck Incense". */
     private val MASS = setOf("Fresh Water", "Moomoo Milk", "Energy Powder", "Berry Juice", "Lemonade", "Luck Incense", "Old Amber", "Pewter Crunchies", "Leftovers")
@@ -33,7 +33,7 @@ object ItemInfo {
 
     /** The tile line (Shop tiles; about 18 characters, no bold marks): "20 % catch", "Heals 20 HP", "Evolves Applin", "Main: ×2 money". [data] null = no species names. */
     private fun berryStat(item: String): String = when (AbilityAdaptations.berries[item]) {
-        "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Sp. Atk"; "spd" -> "Sp. Def"; "spe" -> "Speed"; else -> ""
+        "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Special Attack"; "spd" -> "Special Defense"; "spe" -> "Speed"; else -> ""
     }
     private fun specialShort(item: String): String? = when (item) {
         "rage-candy-bar" -> "40% HP · stats ×1.1"
@@ -59,8 +59,8 @@ object ItemInfo {
         "big-malasada" -> "Heals 60% of missing HP"
         "shalour-sable" -> "No heal · next damaging hit −30%"
         "lumiose-galette" -> "25% max HP + cures status"
-        "casteliacone" -> "40% HP · Sp. Def ×1.25 this fight"
-        "pewter-crunchies" -> "40% HP · Sp. Atk ×1.25 this fight"
+        "casteliacone" -> "40% HP · Special Defense ×1.25 this fight"
+        "pewter-crunchies" -> "40% HP · Special Attack ×1.25 this fight"
         "old-gateau" -> "50% max HP without using the turn"
         "lava-cookie" -> "50/50 chance: +75% or −25% max HP"
         "awakening" -> "Wakes a sleeping fighter · no HP healing"
@@ -90,7 +90,7 @@ object ItemInfo {
             "oran-berry" -> "Held: heals 10 HP"
             "sitrus-berry" -> "Held: heals ¼ HP"
             "figy-berry" -> "Held: heals ⅓ HP"
-            else -> "Held: +1 ${berryStat(item)}"
+            else -> "Held: +1 ${berryStat(item).replace("Special Attack", "Sp. Atk").replace("Special Defense", "Sp. Def")}"
         }
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {
@@ -120,7 +120,7 @@ object ItemInfo {
                 "everstone" -> "Final form: +15% XP"
                 "macho-brace" -> "Main: ×2 EVs"
                 "soothe-bell" -> "Main: ×${nice(Tuning.SOOTHE_BELL)} Bond points"
-                else -> POWER_STATS[item]?.let { "Main: +8 $it EVs" } ?: NO_DESCRIPTION
+                else -> POWER_STATS[item]?.let { "Main: +8 ${it.replace("Special Attack", "Sp. Atk").replace("Special Defense", "Sp. Def")} EVs" } ?: NO_DESCRIPTION
             }
             ItemKind.ESCAPE -> if (item == PokeDoll.ITEM) "Permanent skip tool" else "Skip this wild one"
             ItemKind.FOSSIL -> fossilName(data, def)?.let { "Revives $it" } ?: "Revives a Pokémon"

@@ -187,8 +187,8 @@ internal object AbilitiesMore : BattleRules {
             "windrider" -> if ((r.conds(p)[SideMoves.TAILWIND] ?: 0) > 0) raise(r, p, ab, "atk")
             "tabletsofruin" -> Abilities.announce(r, p, ab, "$n's Tablets of Ruin weakened the Attack of all surrounding Pokémon!")
             "swordofruin" -> Abilities.announce(r, p, ab, "$n's Sword of Ruin weakened the Defense of all surrounding Pokémon!")
-            "vesselofruin" -> Abilities.announce(r, p, ab, "$n's Vessel of Ruin weakened the Sp. Atk of all surrounding Pokémon!")
-            "beadsofruin" -> Abilities.announce(r, p, ab, "$n's Beads of Ruin weakened the Sp. Def of all surrounding Pokémon!")
+            "vesselofruin" -> Abilities.announce(r, p, ab, "$n's Vessel of Ruin weakened the Special Attack of all surrounding Pokémon!")
+            "beadsofruin" -> Abilities.announce(r, p, ab, "$n's Beads of Ruin weakened the Special Defense of all surrounding Pokémon!")
             "neutralizinggas" -> { r.side(p).volatiles[GAS_ON] = 1; Abilities.announce(r, p, ab, "Neutralizing gas filled the area!") }
             "cloudnine", "airlock" -> Abilities.announce(r, p, ab, "The effects of the weather disappeared.")
             "slowstart" -> Abilities.announce(r, p, ab, "$n can't get it going!")

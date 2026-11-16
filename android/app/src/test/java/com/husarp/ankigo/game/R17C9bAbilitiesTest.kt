@@ -226,11 +226,11 @@ class R17C9bAbilitiesTest {
 
     @Test fun theRuinAbilitiesWeakenTheOtherSidesStat() {
         near("Tablets of Ruin: the foe's Attack", 0.75, R17C9b.ratio("", "Tablets of Ruin", "doubleedge"))
-        near("Tablets of Ruin: not the Sp. Atk", 1.0, R17C9b.ratio("", "Tablets of Ruin", "hyperbeam"))
-        near("Vessel of Ruin: the foe's Sp. Atk", 0.75, R17C9b.ratio("", "Vessel of Ruin", "hyperbeam"))
+        near("Tablets of Ruin: not the Special Attack", 1.0, R17C9b.ratio("", "Tablets of Ruin", "hyperbeam"))
+        near("Vessel of Ruin: the foe's Special Attack", 0.75, R17C9b.ratio("", "Vessel of Ruin", "hyperbeam"))
         near("Sword of Ruin: the target's Defense", 1.0 / 0.75, R17C9b.ratio("Sword of Ruin", "", "doubleedge"))
-        near("Sword of Ruin: not its Sp. Def", 1.0, R17C9b.ratio("Sword of Ruin", "", "hyperbeam"))
-        near("Beads of Ruin: the target's Sp. Def", 1.0 / 0.75, R17C9b.ratio("Beads of Ruin", "", "hyperbeam"))
+        near("Sword of Ruin: not its Special Defense", 1.0, R17C9b.ratio("Sword of Ruin", "", "hyperbeam"))
+        near("Beads of Ruin: the target's Special Defense", 1.0 / 0.75, R17C9b.ratio("Beads of Ruin", "", "hyperbeam"))
         near("it weakens the wild one's attacks on the Main too", 0.75, R17C9b.ratioFromWild("", "Tablets of Ruin", "doubleedge"))
     }
 
@@ -263,16 +263,16 @@ class R17C9bAbilitiesTest {
     @Test fun orichalcumPulseAndHadronEngineBoostInTheirField() {
         val sun = { b: Battle, _: Mon -> b.field.weather = "sun"; b.field.weatherTurns = 5 }
         near("Attack in the sun", 1.33, R17C9b.ratio("Orichalcum Pulse", "", "doubleedge", setup = sun))
-        near("not the Sp. Atk", 1.0, R17C9b.ratio("Orichalcum Pulse", "", "hyperbeam", setup = sun))
+        near("not the Special Attack", 1.0, R17C9b.ratio("Orichalcum Pulse", "", "hyperbeam", setup = sun))
         near("no sun", 1.0, R17C9b.ratio("Orichalcum Pulse", "", "doubleedge"))
         val terrain = { b: Battle, _: Mon -> b.field.terrain = "electric"; b.field.terrainTurns = 5 }
-        near("Sp. Atk in Electric Terrain", 1.33, R17C9b.ratio("Hadron Engine", "", "hyperbeam", setup = terrain))
+        near("Special Attack in Electric Terrain", 1.33, R17C9b.ratio("Hadron Engine", "", "hyperbeam", setup = terrain))
         near("not the Attack", 1.0, R17C9b.ratio("Hadron Engine", "", "doubleedge", setup = terrain))
     }
 
     @Test fun gorillaTacticsRaisesAttack() {
         near("Attack", 1.5, R17C9b.ratio("Gorilla Tactics", "", "doubleedge"))
-        near("not Sp. Atk", 1.0, R17C9b.ratio("Gorilla Tactics", "", "hyperbeam"))
+        near("not Special Attack", 1.0, R17C9b.ratio("Gorilla Tactics", "", "hyperbeam"))
     }
 
     @Test fun protosynthesisAndQuarkDriveRaiseTheHighestStat() {

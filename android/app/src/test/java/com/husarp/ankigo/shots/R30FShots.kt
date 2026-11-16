@@ -56,7 +56,7 @@ class R30FShots {
         prepare()
         val (w, view) = window(ctx)
         assertTrue(texts(view).any { it.contains("3 Soothe Bells") && it.contains("2 held by Pikachu, Eevee") })
-        assertTrue("Take off" in texts(view)); assertTrue("Give to another Pokémon" in texts(view))
+        assertTrue(texts(view).any { it.startsWith("Unequip ") }); assertTrue("Give to another Pokémon" in texts(view))
         assertFalse("Close all" in texts(view))
         w.stackChanged(true)
         assertFalse("Close all" in texts(view))
@@ -77,7 +77,7 @@ class R30FShots {
         val (w, _) = window(ctx)
         var dialog: AppDialog? = null
         Pickers.interceptApp = { dialog = it }
-        all(w.view).first { it.contentDescription == "Take off" }.performClick()
+        all(w.view).first { it.contentDescription?.toString()?.startsWith("Unequip ") == true }.performClick()
         val d = checkNotNull(dialog)
         assertTrue(texts(d.content()).any { it.contains("Which Pokémon") })
         val list = all(d.content()).filterIsInstance<ListView>().single()

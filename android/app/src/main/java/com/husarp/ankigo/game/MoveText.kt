@@ -11,7 +11,7 @@ object MoveText {
     /** The engine's own "this move targets the user" list (BattleEngine.SELF_TARGETS). */
     private val SELF_TARGETS = setOf("self", "adjacentAllyOrSelf", "allies", "allySide")
     private val BOOST_KEYS = listOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
-    private val BOOST_LABELS = listOf("Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed", "accuracy", "evasiveness")
+    private val BOOST_LABELS = listOf("Attack", "Defense", "Special Attack", "Special Defense", "Speed", "accuracy", "evasiveness")
 
     /** Status verbs, {} = who gets it: "Burns {}" on its own, "burn {}" after "May". */
     private val STATUS_THIRD = mapOf(
@@ -53,7 +53,7 @@ object MoveText {
                 lines += if (r.first == r.last) "Hits ${r.first} times." else "Hits ${r.first}–${r.last} times."
             }
             // R17C-1: which stats the damage formula uses
-            if (m.defensiveStat == "def") lines += "Hits the target's Defense instead of its Sp. Def."
+            if (m.defensiveStat == "def") lines += "Hits the target's Defense instead of its Special Defense."
             if (m.offensiveStat == "def") lines += "Uses its Defense instead of its Attack."
             if (m.offensiveFromTarget) lines += "Uses the target's Attack instead of its own."
             if (m.ignoreDefensive || m.ignoreEvasion) lines += "Ignores the target's stat changes."

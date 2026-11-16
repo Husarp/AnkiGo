@@ -19,9 +19,9 @@ internal object RemainingMoves : BattleRules {
         "healpulse" to "Heals the target by half its max HP, or three quarters with Mega Launcher.",
         "floralhealing" to "Heals the target by half its max HP, or two thirds in Grassy Terrain.",
         "purify" to "Cures the target's status, then heals itself by half its max HP.",
-        "memento" to "Lowers the target's Attack and Sp. Atk by 2, then the user faints.",
-        "gearup" to "Raises its Attack and Sp. Atk by 1 if its ability is Plus or Minus.",
-        "magneticflux" to "Raises its Defense and Sp. Def by 1 if its ability is Plus or Minus.",
+        "memento" to "Lowers the target's Attack and Special Attack by 2, then the user faints.",
+        "gearup" to "Raises its Attack and Special Attack by 1 if its ability is Plus or Minus.",
+        "magneticflux" to "Raises its Defense and Special Defense by 1 if its ability is Plus or Minus.",
         "happyhour" to "Doubles the money earned for the rest of this fight. Using it again does not stack.",
     )
     override val handles = texts.keys

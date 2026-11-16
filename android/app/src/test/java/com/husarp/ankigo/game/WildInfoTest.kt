@@ -31,9 +31,9 @@ class WildInfoTest {
         assertEquals(Tier.LEGENDARY, i.tier)
         assertEquals(data.sp(92).base, i.base) // base stats of the species, not the wild one's own (IV-based) stats
         assertNull(i.matchups) // catching alone never opens this encounter's Matchups
-        // by construction there is no field for IVs, nature, EVs, ability or held item
+        // Nature is visible; IVs, EVs, ability and held items remain hidden.
         val fields = WildInfo::class.java.declaredFields.map { it.name }
-        assertFalse(fields.any { it in setOf("ivs", "evs", "nature", "ability", "heldItem") })
+        assertFalse(fields.any { it in setOf("ivs", "evs", "ability", "heldItem") })
     }
 
     @Test fun defeatedCaughtAndOwnedSpeciesRevealAllSixStats() {
@@ -48,13 +48,37 @@ class WildInfoTest {
             val info = WildInfo.of(data, state, b, emptySet())!!
             assertTrue(knowledge, info.known)
             assertEquals(data.sp(92).base, info.base)
-            assertEquals(WildInfo.statsAt(data.sp(92).base, b.wild.level), info.stats)
+            assertEquals(WildInfo.statsAt(data.sp(92).base, b.wild.level, b.wild.nature), info.stats)
             assertNull("$knowledge reveals stats without discovering matchups", info.matchups)
             b.playerAttacked = true
             assertEquals(18, WildInfo.of(data, state, b, emptySet())!!.matchups!!.unknownCount)
             assertEquals(b.wild.moves.size, info.moves.size)
             assertTrue(info.moves.all { it.id == null })
         }
+    }
+
+    @Test fun wildNatureIsVisibleAndAffectsBattleStatsAndDisplayedEstimates() {
+        val original = TestData.mon(data, 92, 50)
+        fun wild(nature: Nature, iv: Int = 15) = Mon(original.uid, original.species, original.name, 50, 0,
+            Stats(iv, iv, iv, iv, iv, iv), Stats.ZERO, nature, 'M', false, "Testability", original.moves, original.hp)
+        val b = Battle(wild(Nature.NAIVE), Tier.NORMAL)
+        val state = TestData.state(data)
+        val neutral = SimpleView(data, state.main!!, wild(Nature.HARDY)).stats(false)
+        val changed = SimpleView.of(data, b, state.main!!).stats(false)
+        assertEquals(neutral.hp, changed.hp)
+        assertEquals(neutral.atk, changed.atk)
+        assertTrue(changed.spe > neutral.spe)
+        assertTrue(changed.spd < neutral.spd)
+        val unknown = WildInfo.of(data, state, b, emptySet())!!
+        assertEquals(Nature.NAIVE, unknown.nature)
+        assertNull(unknown.stats)
+        state.caught += 92
+        val info = WildInfo.of(data, state, b, emptySet())!!
+        val estimate = WildInfo.statsAt(data.sp(92).base, 50, Nature.HARDY)
+        assertTrue(info.stats!!.spe > estimate.spe)
+        assertTrue(info.stats!!.spd < estimate.spd)
+        val different = Battle(wild(Nature.NAIVE, 31).apply { evs = Stats(252, 252, 252, 252, 252, 252) }, Tier.NORMAL)
+        assertEquals(info.stats, WildInfo.of(data, state, different, emptySet())!!.stats)
     }
 
     @Test fun unusedMovesShowUnknownSlots() {
@@ -128,7 +152,7 @@ class WildInfoTest {
         assertTrue(log.used(restored).isEmpty())
     }
 
-    @Test fun statsAtItsLevelIgnoreItsRealIvsNatureAndEvs() {
+    @Test fun statsAtItsLevelIgnoreItsRealIvsAndEvs() {
         val b = battle()
         val sp = data.sp(92)
         val state = TestData.state(data).also { it.caught += 92 }
@@ -138,7 +162,7 @@ class WildInfoTest {
         assertEquals(StatCalc.hp(sp.base.hp, 15, 0, 12), shown.hp)
         assertEquals(StatCalc.other(sp.base.atk, 15, 0, 12, 1.0), shown.atk)
         assertEquals(StatCalc.other(sp.base.spe, 15, 0, 12, 1.0), shown.spe)
-        // other IVs / EVs / nature on the real wild Pokémon change nothing in what is shown
+        // Other hidden IVs / EVs on the real wild Pokémon change nothing in what is shown.
         val other = battle()
         other.wild.evs = Stats(252, 252, 6, 0, 0, 0)
         assertEquals(shown, WildInfo.of(data, state, other, emptySet())!!.stats)

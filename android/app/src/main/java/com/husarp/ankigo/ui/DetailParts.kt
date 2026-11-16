@@ -43,7 +43,7 @@ object DetailMath {
 
     fun statName(s: Stat): String = when (s) {
         Stat.HP -> "HP"; Stat.ATK -> "Attack"; Stat.DEF -> "Defense"
-        Stat.SPA -> "Sp. Atk"; Stat.SPD -> "Sp. Def"; Stat.SPE -> "Speed"
+        Stat.SPA -> "Special Attack"; Stat.SPD -> "Special Defense"; Stat.SPE -> "Speed"
     }
 
     /** "Raises Speed, lowers Sp. Atk", or "Neutral" for the five natures that change nothing. */

@@ -5,12 +5,12 @@ import kotlin.random.Random
 /** Item effects use the fight's saved field, keyed by holder, so switching never transfers a snack boost. */
 internal object BattleItems : BattleRules {
     val snacks = linkedMapOf(
-        "rage-candy-bar" to "Heals 40% max HP; Attack, Defense, Sp. Atk, Sp. Def and Speed ×1.1 this fight.",
+        "rage-candy-bar" to "Heals 40% max HP; Attack, Defense, Special Attack, Special Defense and Speed ×1.1 this fight.",
         "big-malasada" to "Heals 60% of missing HP.",
         "shalour-sable" to "No healing; the next damaging hit taken is 30% weaker this fight.",
         "lumiose-galette" to "Heals 25% max HP and cures burn, poison, paralysis, sleep or freeze.",
-        "casteliacone" to "Heals 40% max HP; Sp. Def ×1.25 this fight.",
-        "pewter-crunchies" to "Heals 40% max HP; Sp. Atk ×1.25 this fight.",
+        "casteliacone" to "Heals 40% max HP; Special Defense ×1.25 this fight.",
+        "pewter-crunchies" to "Heals 40% max HP; Special Attack ×1.25 this fight.",
         "old-gateau" to "Heals 50% max HP without using the turn. Very rare in the Shop; one per offer.",
         "lava-cookie" to "50% chance to heal 75% max HP; 50% chance to lose 25% max HP (can faint).",
     )

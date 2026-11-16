@@ -297,7 +297,7 @@ class R17C9aReactionTest {
             val b = R17C9.battle(R17C9.wild(wildAb, 801, "tackle")); R17C9.round(main, b, move)
             return if (idx >= 100) b.player.boosts[idx - 100] else b.enemy.boosts[idx]
         }
-        assertEquals("Psychic lowers Sp. Def", -1, stage("", "psychic", 3))
+        assertEquals("Psychic lowers Special Defense", -1, stage("", "psychic", 3))
         assertEquals("not with Shield Dust", 0, stage("Shield Dust", "psychic", 3))
         assertEquals("Flame Charge raises the user's Speed", 1, stage("Shield Dust", "flamecharge", 104))
         val b = R17C9.battle(R17C9.wild("Shield Dust", 801, "tackle")); R17C9.round(R17C9.main("", "firepunch"), b, "firepunch")

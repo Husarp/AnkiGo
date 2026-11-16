@@ -29,13 +29,13 @@ class R17C7RoomsTest {
     private val starts = listOf(
         Triple("trickroom", "Fastie twisted the dimensions!", "Trick Room"),
         Triple("gravity", "Gravity intensified!", "Gravity"),
-        Triple("wonderroom", "It created a bizarre area in which the Defense and Sp. Def stats are swapped!", "Wonder Room"),
+        Triple("wonderroom", "It created a bizarre area in which the Defense and Special Defense stats are swapped!", "Wonder Room"),
         Triple("mudsport", "Electricity's power was weakened!", "Mud Sport"),
         Triple("watersport", "Fire's power was weakened!", "Water Sport"),
     )
     private val ends = mapOf(
         "trickroom" to "The twisted dimensions returned to normal!", "gravity" to "Gravity returned to normal!",
-        "wonderroom" to "Wonder Room wore off, and the Defense and Sp. Def stats returned to normal!",
+        "wonderroom" to "Wonder Room wore off, and the Defense and Special Defense stats returned to normal!",
         "mudsport" to "The effects of Mud Sport have faded.", "watersport" to "The effects of Water Sport have faded.",
     )
 
@@ -204,7 +204,7 @@ class R17C7RoomsTest {
         val m = main()
         val physical = R17C7.ratio(m, BEEFY, "plainphysical") { it.rooms["wonderroom"] = 5 }
         val special = R17C7.ratio(m, BEEFY, "plainspecial") { it.rooms["wonderroom"] = 5 }
-        assertTrue("physical hits the high Sp. Def now: $physical", physical < 0.25)
+        assertTrue("physical hits the high Special Defense now: $physical", physical < 0.25)
         assertTrue("special hits the low Defense now: $special", special > 4.0)
         assertEquals("a Pokémon with equal defenses is not changed", 1.0, R17C7.ratio(m, SLOW, "plainphysical") { it.rooms["wonderroom"] = 5 }, 0.0)
         assertTrue("the wild one's hits on a Main with unequal defenses", R17C7.ratio(R17C7.mon(BEEFY, 100), SLOW, "plainphysical", byMain = false) { it.rooms["wonderroom"] = 5 } < 0.25)
