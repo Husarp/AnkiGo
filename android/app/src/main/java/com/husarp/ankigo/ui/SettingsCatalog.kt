@@ -49,6 +49,8 @@ object SettingsCatalog {
         s("achievementPopup", L, "Types & notifications", "Achievement pop-ups", "Choose a pop-up, a small note or no message when you earn an achievement"),
         s("theme", L, "Theme & colours", "Theme", "Use a light or dark app, or follow your phone's theme"),
         s("accent", L, "Theme & colours", "Accent", "Choose the colour of app buttons, ticks and highlights"),
+        s("goalBarFill", L, "Theme & colours", "Daily goal bar", "Classic or Ribbon striped fill with a mint glow and goal-done burst"),
+        s("xpBarFill", L, "Theme & colours", "XP bar", "Classic, Ripples, Waves, Pearl, Shimmer or Tide for trainer and Pokémon experience"),
         s("barStyle", L, "Theme & colours", "Progress bars", "Colour progress bars by purpose, with your accent or with a gradient"),
         s("typeStyle", L, "Types & notifications", "Show types as", "Show Pokémon types as names, icons or both"),
         s("matchupChips", L, "Types & notifications", "Matchup chips", "Show matchup type chips with a soft fill or a coloured outline"),

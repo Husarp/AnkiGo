@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12+ cloud backup and device transfer: only the game save (filesDir/game). -->
+<!-- Android 12+ cloud backup and device transfer: game save and UI choices. -->
 <data-extraction-rules>
     <cloud-backup>
         <include domain="file" path="game/" />
+        <include domain="sharedpref" path="ankigo_ui.xml" />
     </cloud-backup>
     <device-transfer>
         <include domain="file" path="game/" />
+        <include domain="sharedpref" path="ankigo_ui.xml" />
     </device-transfer>
 </data-extraction-rules>

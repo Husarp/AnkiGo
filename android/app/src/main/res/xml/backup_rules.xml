@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android backup (Android 11 and older): only the game save, never the downloaded data or sprites. -->
+<!-- Android backup (Android 11 and older): game save and UI choices, never downloaded data or sprites. -->
 <full-backup-content>
     <include domain="file" path="game/" />
+    <include domain="sharedpref" path="ankigo_ui.xml" />
 </full-backup-content>
