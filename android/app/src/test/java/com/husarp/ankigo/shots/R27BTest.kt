@@ -75,8 +75,8 @@ class R27BTest {
         val training = DetailSections.training(ctx, Mon(mon.uid, mon.species, mon.name, mon.level, 0, mon.ivs, mon.evs, Nature.QUIET, mon.gender, false, mon.ability, mon.moves, mon.hp), true)
         val natureLines = all(training).filterIsInstance<TextView>().map { it.text.toString() }
         assertTrue("Nature" in natureLines)
-        assertTrue("SpA +10%" in natureLines)
-        assertTrue("Spe −10%" in natureLines)
+        assertTrue("Special Attack +10%" in natureLines)
+        assertTrue("Speed −10%" in natureLines)
         val e = Evolution(sp.num, EvoKind.ITEM, item = "fire-stone")
         st.bag.clear()
         val missing = EvolutionRows.explanationContent(ctx, data, e, sp, setOf(sp.num), st, mon) {}

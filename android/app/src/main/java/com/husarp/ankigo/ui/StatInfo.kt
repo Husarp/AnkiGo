@@ -16,7 +16,7 @@ object StatInfo {
         Stat.HP -> StatInfoText("HP (Hit points)", "How much damage it can take before it faints. It is a number, never a percent.")
         Stat.ATK -> StatInfoText("Attack", "Power of physical moves. The target's Defense lowers the damage.")
         Stat.DEF -> StatInfoText("Defense", "Cuts the damage of physical moves against it.")
-        Stat.SPA -> StatInfoText("Special Attack", "Power of special moves. The target's Sp. Def lowers the damage.")
+        Stat.SPA -> StatInfoText("Special Attack", "Power of special moves. The target's Special Defense lowers the damage.")
         Stat.SPD -> StatInfoText("Special Defense", "Cuts the damage of special moves against it.")
         Stat.SPE -> StatInfoText("Speed", "Who attacks first in a round. Paralysis halves it.")
     }
@@ -44,7 +44,7 @@ object StatInfo {
         "Every wild Pokémon you beat while this one is your main, knocked out or caught. Each win gives it XP, EVs and Bond points.")
     val HOLDING = StatInfoText("Holding",
         "A Pokémon holds one item, or two different items at Bond ♥5; tap an item to read what it does. The Exp. Share uses no item slot: its holder gets half " +
-            "of each win's XP and your main the other half (nothing is shared while the holder is your main). Give or take items from Options.")
+            "of each win's XP and your main the other half (nothing is shared while the holder is your main). Equip or unequip items from Options.")
     val EVOLUTION = StatInfoText("Evolution",
         "What this Pokémon evolves from and into, and what it takes: a level, an item such as a stone, Bond or a Linking Cord. " +
             "A tap on one you have seen opens its Pokédex entry; the others show as ???.")

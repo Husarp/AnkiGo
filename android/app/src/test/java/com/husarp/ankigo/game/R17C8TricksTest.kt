@@ -178,8 +178,8 @@ class R17C8TricksTest {
         forced("powertrick") { rd(m, b) }
         val s1 = R17C8.view(m, b).stats(true)
         assertEquals("the real Defense became the Attack", s0.spd, s1.atk)
-        assertEquals("the Attack sits in the real Defense, which the room shows as Sp. Def", s0.atk, s1.spd)
-        assertEquals("the real Sp. Def is untouched and still shown as Defense", s0.def, s1.def)
+        assertEquals("the Attack sits in the real Defense, which the room shows as Special Defense", s0.atk, s1.spd)
+        assertEquals("the real Special Defense is untouched and still shown as Defense", s0.def, s1.def)
     }
 
     // ---------------------------------------------------------------- Charge, Defense Curl, Minimize, Tar Shot

@@ -92,7 +92,7 @@ class R31EShots {
                     "$key did not open: day=${GameRepo.state!!.day}, stock=${GameRepo.state!!.shopItems}, TMs=${GameRepo.state!!.shopTms}, open=${page.open.key}"
                 }.view
                 assertTrue(texts(window).contains("1 left"))
-                assertFalse(texts(window).any { it == "Take off" || it.startsWith("Give to ") })
+                assertFalse(texts(window).any { it.startsWith("Unequip ") || it.startsWith("Give to ") })
                 assertFalse(all(window).any { it.contentDescription?.startsWith("Quantity ") == true })
                 fillShots(stage, hold(window, "buy"), "e-limited-${key.replace(':', '-')}-${theme.name.lowercase()}")
                 hold(page.itemWindow!!.view, "buy").performLongClick(); stage.render()
@@ -112,7 +112,7 @@ class R31EShots {
                 GameRepo.state!!.main!!.heldItem = "amulet-coin"
             }
             bag.onHide()
-            assertTrue(texts(bag.itemWindow!!.view).contains("Take off"))
+            assertTrue(texts(bag.itemWindow!!.view).any { it.startsWith("Unequip ") })
             assertTrue(texts(bag.itemWindow!!.view).contains("Give to another Pokémon"))
             paparazzi.snapshot(bagStage, "e-bag-held-actions-${theme.name.lowercase()}")
             bag.closeCard(); bag.onGone()

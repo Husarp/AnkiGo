@@ -82,7 +82,7 @@ class R34EHeldItemsShots {
                 override fun dispatchDraw(canvas: Canvas) {
                     if (!removed) {
                         removed = true
-                        all(window.view).single { it.contentDescription == "Take off" }.performClick()
+                        all(window.view).single { it.contentDescription?.toString()?.startsWith("Unequip ") == true }.performClick()
                         (GameRepo::class.java.getDeclaredField("notifyRunnable").apply { isAccessible = true }.get(GameRepo) as Runnable).run()
                         assertEquals(listOf("lucky-egg"), mon.heldItems)
                         assertEquals(before + 1, s.count("everstone"))

@@ -400,7 +400,7 @@ class R17C9bReactionTest {
     }
 
     @Test fun theRuinAbilitiesAndTheAurasSayTheyAreThere() {
-        for ((ab, text) in listOf("Tablets of Ruin" to "Attack", "Sword of Ruin" to "Defense", "Vessel of Ruin" to "Sp. Atk", "Beads of Ruin" to "Sp. Def")) {
+        for ((ab, text) in listOf("Tablets of Ruin" to "Attack", "Sword of Ruin" to "Defense", "Vessel of Ruin" to "Special Attack", "Beads of Ruin" to "Special Defense")) {
             val b = R17C9b.battle(R17C9b.wild("", 801, "tackle"))
             val e = R17C9b.round(R17C9b.main(ab, "tackle"), b, "tackle")
             assertTrue(ab, e.lines().any { "weakened the $text of all surrounding Pokémon!" in it })

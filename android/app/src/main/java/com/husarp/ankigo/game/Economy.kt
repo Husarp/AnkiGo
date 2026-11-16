@@ -93,8 +93,8 @@ object Items {
         "power-weight" to "Main holds it: +8 HP EVs",
         "power-bracer" to "Main holds it: +8 Attack EVs",
         "power-belt" to "Main holds it: +8 Defense EVs",
-        "power-lens" to "Main holds it: +8 Sp. Atk EVs",
-        "power-band" to "Main holds it: +8 Sp. Def EVs",
+        "power-lens" to "Main holds it: +8 Special Attack EVs",
+        "power-band" to "Main holds it: +8 Special Defense EVs",
         "power-anklet" to "Main holds it: +8 Speed EVs",
         "soothe-bell" to "Main holds it: ×1.5 Bond points",
     )
@@ -120,7 +120,7 @@ object Items {
             "oran-berry" -> "At half HP: heals 10 HP; consumed"
             "sitrus-berry" -> "At half HP: heals ¼ max HP; consumed"
             "figy-berry" -> "At ¼ HP: heals ⅓ max HP; consumed"
-            else -> "At ¼ HP: +1 ${when (AbilityAdaptations.berries[it]) { "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Sp. Atk"; "spd" -> "Sp. Def"; else -> "Speed" }}; consumed"
+            else -> "At ¼ HP: +1 ${when (AbilityAdaptations.berries[it]) { "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Special Attack"; "spd" -> "Special Defense"; else -> "Speed" }}; consumed"
         })) }
         HELD.forEach { (id, note) -> add(ItemDef(id, ItemKind.HELD, note = note)) }
         listOf("poke-doll", "fluffy-tail").forEach { add(ItemDef(it, ItemKind.ESCAPE, note = "Skip this wild Pokémon")) }

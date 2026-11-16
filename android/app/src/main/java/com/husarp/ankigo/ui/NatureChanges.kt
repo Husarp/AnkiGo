@@ -10,7 +10,6 @@ import android.view.View
 import android.widget.LinearLayout
 import com.husarp.ankigo.R
 import com.husarp.ankigo.game.Nature
-import com.husarp.ankigo.game.Stat
 
 /** The selected stage-chevron geometry, shared by nature effects and arena chips. */
 internal object StageChevron {
@@ -39,10 +38,18 @@ internal object NatureChanges {
         }
     }
 
-    fun line(a: Context, nature: Nature): View {
+    fun show(a: Context, nature: Nature) {
+        AppDialog.Builder(a).setTitle(nature.label).setView(LinearLayout(a).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(Ui.dp(a, 24), Ui.dp(a, 12), Ui.dp(a, 24), Ui.dp(a, 16))
+            addView(line(a, nature, explanation = true))
+        }).showCard()
+    }
+
+    fun line(a: Context, nature: Nature, explanation: Boolean = false): View {
         val plus = nature.plus; val minus = nature.minus
         if (plus == null || minus == null) return Ui.text(a, 12f, 700, R.color.ag_sub1).apply {
-            text = DetailMath.natureEffect(nature)
+            text = if (explanation) "This nature changes no stats." else DetailMath.natureEffect(nature)
         }
         return FlowRow(a, Ui.dp(a, 14), centered = false).apply {
             for ((stat, up) in listOf(plus to true, minus to false)) addView(LinearLayout(a).apply {
@@ -52,9 +59,7 @@ internal object NatureChanges {
                     override fun onDraw(c: Canvas) = StageChevron.draw(c,
                         RectF(0f, 0f, width.toFloat(), height.toFloat()), 2, up, color)
                 }, LinearLayout.LayoutParams(Ui.dp(a, 16), Ui.dp(a, 18)))
-                val name = when (stat) {
-                    Stat.ATK -> "Atk"; Stat.DEF -> "Def"; Stat.SPA -> "SpA"; Stat.SPD -> "SpD"; Stat.SPE -> "Spe"; Stat.HP -> "HP"
-                }
+                val name = DetailMath.statName(stat)
                 val words = "$name ${if (up) "+" else "−"}10%"
                 addView(Ui.text(a, 12f, 800, R.color.ag_text).apply {
                     text = words; setTextColor(color)

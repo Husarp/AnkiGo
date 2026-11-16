@@ -67,7 +67,7 @@ object BattleEngine {
 
     internal val SELF_TARGETS = setOf("self", "adjacentAllyOrSelf", "allies", "allySide")
     internal val BOOST_KEYS = listOf("atk", "def", "spa", "spd", "spe", "accuracy", "evasion")
-    private val BOOST_LABELS = listOf("Attack", "Defense", "Sp. Atk", "Sp. Def", "Speed", "accuracy", "evasiveness")
+    private val BOOST_LABELS = listOf("Attack", "Defense", "Special Attack", "Special Defense", "Speed", "accuracy", "evasiveness")
 
     /**
      * Plays one Ankimon battle round between the main and the wild Pokémon (mutates HP and battle sides):

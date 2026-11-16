@@ -108,7 +108,7 @@ class R36RShots {
         page.state.bag["leftovers"] = 1
         val footer = ItemCard.footer(page, ItemCard.Spec("leftovers"))
         val labels = all(footer).filterIsInstance<TextView>().map { it.text.toString() }
-        assertTrue("Take off" in labels); assertTrue("Give to another Pokémon" in labels)
+        assertTrue("Unequip Leftovers" in labels); assertTrue("Give to another Pokémon" in labels)
         assertFalse(labels.any { it.startsWith("Sell") })
     }
     @Test fun snackConditionsHaveSmallIconsAndExplanations() {

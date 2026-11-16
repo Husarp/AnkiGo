@@ -11,7 +11,7 @@ internal object HeldItemActions {
         if (Items.def(item)?.kind != ItemKind.HELD || page.state.ownedItemCount(item) == 0) return null
         return LinearLayout(page).apply {
             orientation = LinearLayout.VERTICAL
-            addView(ItemCard.actView(page, ItemCard.Act("Take off", page.state.itemHolders(item).isNotEmpty(), "No Pokémon holds this item") {
+            addView(ItemCard.actView(page, ItemCard.Act("Unequip ${Items.name(item)}", page.state.itemHolders(item).isNotEmpty(), "No Pokémon holds this item") {
                 source(page, item) { mon ->
                     if (mon != null) move(page, messageHost ?: this, onChanged) { g ->
                         if (item !in g.state.mon(mon.uid)?.heldItems.orEmpty()) ActionResult(false, "That Pokémon no longer holds this item.")

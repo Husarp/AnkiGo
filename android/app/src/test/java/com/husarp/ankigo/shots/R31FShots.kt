@@ -162,7 +162,7 @@ class R31FShots {
         val window = ItemWindow(p) {}
         window.update(ItemCard.Spec("soothe-bell"))
         val host = FrameLayout(ctx).apply { addView(window.view, FrameLayout.LayoutParams(-1, -2, android.view.Gravity.BOTTOM)) }
-        all(window.view).first { it.contentDescription == "Take off" }.performClick()
+        all(window.view).first { it.contentDescription?.toString()?.startsWith("Unequip ") == true }.performClick()
         assertNull(state.mons.first().heldItem)
         assertEquals("Took Soothe Bell from Sparky", Ui.lastToast)
         window.update(ItemCard.Spec("soothe-bell"))

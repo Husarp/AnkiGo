@@ -60,7 +60,7 @@ class R17C9aTurnTest {
     @Test fun intimidateSetsOffDefiantCompetitiveRattledContrary() {
         fun stages(ab: String): List<Int> { val b = R17C9.battle(R17C9.wild(ab, 801, "tackle")); R17C9.round(R17C9.main("Intimidate", "tackle"), b, "tackle"); return b.enemy.boosts.toList() }
         assertEquals("Defiant: -1 then +2", 1, stages("Defiant")[0])
-        assertEquals("Competitive: Attack -1, Sp. Atk +2", listOf(-1, 2), stages("Competitive").slice(0..2 step 2))
+        assertEquals("Competitive: Attack -1, Special Attack +2", listOf(-1, 2), stages("Competitive").slice(0..2 step 2))
         assertEquals("Rattled: Speed +1", listOf(-1, 1), listOf(stages("Rattled")[0], stages("Rattled")[4]))
         assertEquals("Contrary: +1", 1, stages("Contrary")[0])
         assertEquals("Simple: -2", -2, stages("Simple")[0])
@@ -68,7 +68,7 @@ class R17C9aTurnTest {
 
     @Test fun downloadRaisesTheStatTheFoeIsWeakerIn() {
         fun stage(wildSp: Int): List<Int> { val b = R17C9.battle(R17C9.wild("", wildSp, "tackle")); R17C9.round(R17C9.main("Download", "tackle"), b, "tackle"); return b.player.boosts.toList() }
-        assertEquals("a low Sp. Def: Sp. Atk", listOf(0, 0, 1, 0, 0, 0, 0), stage(809))
+        assertEquals("a low Special Defense: Special Attack", listOf(0, 0, 1, 0, 0, 0, 0), stage(809))
         assertEquals("a low Defense: Attack", listOf(1, 0, 0, 0, 0, 0, 0), stage(810))
         assertEquals("equal: Attack", listOf(1, 0, 0, 0, 0, 0, 0), stage(801))
     }

@@ -193,7 +193,7 @@ class ItemInfoTest {
         assertTrue(fact("soothe-bell", "What it does").contains("**×1.5 Bond points**") && fact("soothe-bell", "What it does").contains("Level 0–Level 5"))
         assertEquals("Main: +8 Speed EVs", ItemInfo.short(data, "power-anklet"))
         assertEquals("Main: +8 Sp. Atk EVs", ItemInfo.short(data, "power-lens"))
-        assertTrue(fact("power-band", "What it does").contains("**8 extra Sp. Def EVs**"))
+        assertTrue(fact("power-band", "What it does").contains("**8 extra Special Defense EVs**"))
         for (id in Items.ALL.values.filter { it.kind == ItemKind.HELD }.map { it.id }) {
             assertTrue(id, fact(id, "How to use").contains("**one item**") && fact(id, "How to use").contains("two different items at Bond ♥5") && fact(id, "How to use").contains("first item goes back"))
             assertFalse(id, ItemInfo.facts(data, id).any { it.title == "In a fight" })

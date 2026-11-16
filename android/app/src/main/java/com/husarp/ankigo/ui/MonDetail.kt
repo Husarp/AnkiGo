@@ -116,6 +116,9 @@ object MonDetail {
             nameRow.addView(pencil, LinearLayout.LayoutParams(Ui.dp(a, 48), Ui.dp(a, 48)))
         }
         val numText = Ui.text(a, 12f, 800, R.color.ag_sub0).apply {
+            minimumHeight = Ui.dp(a, 48)
+            setOnClickListener { NatureChanges.show(a, mon.nature) }
+            gravity = Gravity.CENTER_VERTICAL
             text = DetailFormat.numLine(sp.baseNum, mon.nature.label) // the level is in the Stats title (R18-G, PLAN 254)
             if (!compact) gravity = Gravity.CENTER
         }

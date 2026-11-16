@@ -38,7 +38,7 @@ class R30MIntegrationTest {
         val held = bag.spec(CardKeys.bagItem("soothe-bell"))!!
         assertNull("Shared held controls replace the old Give action", held.act)
         val footer = ItemCard.footer(page, held)
-        assertEquals(1, all(footer).count { it.contentDescription == "Take off" })
+        assertEquals(1, all(footer).count { it.contentDescription?.toString()?.startsWith("Unequip ") == true })
         assertEquals(1, all(footer).count { it.contentDescription == "Give to another Pokémon" })
         assertNull("Evolution item removal survives the merge", bag.spec(CardKeys.bagItem("water-stone"))!!.act)
         assertFalse(bag.spec(CardKeys.bagItem("poke-ball"))!!.act!!.enabled)

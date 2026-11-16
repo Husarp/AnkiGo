@@ -131,7 +131,7 @@ class R17CFixARulesTest {
 
     @Test fun theNewMovesSpeakAndNothingSaysHasNoEffect() {
         val parting = MoveText.describe(data.move("partingshot")!!)
-        assertEquals("Lowers the target's Attack and Sp. Atk by 1 stage (×2/3). It does not switch out.", parting)
+        assertEquals("Lowers the target's Attack and Special Attack by 1 stage (×2/3). It does not switch out.", parting)
         assertTrue(MoveText.describe(data.move("powder")!!).contains("The target's Fire move this turn fails, and it loses a quarter of its max HP."))
         assertTrue(MoveText.describe(data.move("spectralthief")!!).contains("Steals the target's raised stats for itself before it hits."))
     }

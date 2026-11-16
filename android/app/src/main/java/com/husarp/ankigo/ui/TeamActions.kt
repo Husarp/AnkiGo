@@ -59,7 +59,7 @@ internal class MonActions(private val s: GamePage) {
             }
         }
         add("Give item…", R.drawable.ic_held, extra = true) { giveItem(mon) }
-        mon.heldItems.forEach { held -> add("Take ${Items.name(held)}", R.drawable.ic_held, extra = true) { s.act { ItemUse.takeHeld(it.state, mon.uid, held) } } }
+        mon.heldItems.forEach { held -> add("Unequip ${Items.name(held)}", R.drawable.ic_held, extra = true) { s.act { ItemUse.takeHeld(it.state, mon.uid, held) } } }
         add("Use item…", R.drawable.ic_ball, extra = true) { useItem(mon) }
         add("Teach TM…", R.drawable.ic_tm, extra = true) { teachMenu(mon) }
         if (mon.uid != main?.uid) {

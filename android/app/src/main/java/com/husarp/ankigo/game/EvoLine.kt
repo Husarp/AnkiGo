@@ -79,7 +79,7 @@ class EvoLine(val root: EvoNode, val current: Species) {
             e.condition?.replace("during the day", "")?.replace("at night", "")?.trim()?.takeIf { it.isNotEmpty() && e.kind != EvoKind.OTHER }?.let {
                 val checked = it in setOf("with an Atk stat > its Def stat", "with an Atk stat < its Def stat",
                     "with an Atk stat equal to its Def stat", "with a Dark-type in the party")
-                add(it.replaceFirstChar { c -> c.uppercase() } + if (checked) "." else " (this extra condition is not checked in AnkiGo).")
+                add(it.replace("Atk", "Attack").replace("Def", "Defense").replaceFirstChar { c -> c.uppercase() } + if (checked) "." else " (this extra condition is not checked in AnkiGo).")
             }
             add("When ready, choose Evolve in your Pokémon's Evolution section.")
         }.joinToString("\n\n")
@@ -99,7 +99,7 @@ class EvoLine(val root: EvoNode, val current: Species) {
                 e.moveType?.let { "${it.label}-type move" },
                 e.condition?.takeIf { e.kind != EvoKind.OTHER }?.replace("during the day", "")?.replace("at night", "")?.trim()?.takeIf { it.isNotEmpty() },
             )
-            return if (extra.isEmpty()) base else "$base, ${extra.joinToString(", ")}"
+            return if (extra.isEmpty()) base else "$base, ${extra.joinToString(", ").replace("Atk", "Attack").replace("Def", "Defense")}"
         }
     }
 }

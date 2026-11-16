@@ -243,7 +243,7 @@ object DetailSections {
         addView(ImageView(a).apply {
             setImageResource(kindIcon(c))
             setColorFilter(tone, PorterDuff.Mode.SRC_IN)
-        }, FrameLayout.LayoutParams(Ui.dp(a, sizeDp * 5 / 9), Ui.dp(a, sizeDp * 5 / 9), Gravity.CENTER))
+        }, FrameLayout.LayoutParams(Ui.dp(a, sizeDp * 2 / 3), Ui.dp(a, sizeDp * 2 / 3), Gravity.CENTER))
         contentDescription = kindName(c)
     }
 
@@ -455,15 +455,20 @@ object DetailSections {
         }, LinearLayout.LayoutParams(0, -2, 1f))
     }
 
+    internal fun natureRow(a: Context, nature: Nature, compact: Boolean): View =
+        fact(a, "Nature", StatInfo.NATURE, nature.label, null, compact).also { row ->
+            val values = (row as LinearLayout).getChildAt(1) as LinearLayout
+            values.addView(NatureChanges.line(a, nature), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
+            row.setOnClickListener { NatureChanges.show(a, nature) }
+            row.contentDescription = "${nature.label}. ${DetailMath.natureEffect(nature)}. Tap for details"
+        }
+
     internal fun divider(a: Context): View = View(a).apply { setBackgroundColor(Ui.c(a, R.color.ag_s0)); alpha = 0.6f }
 
     /** Nature (+ what it does), IVs, EVs of one of your Pokémon (R18-G: the held item is in the Holding row under the bars now). */
     fun training(a: Context, mon: Mon, compact: Boolean): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(fact(a, "Nature", StatInfo.NATURE, mon.nature.label, null, compact).also { row ->
-            val values = (row as LinearLayout).getChildAt(1) as LinearLayout
-            values.addView(NatureChanges.line(a, mon.nature), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(a, 6) })
-        })
+        col.addView(natureRow(a, mon.nature, compact))
         col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
         col.addView(fact(a, "IVs", StatInfo.IV, DetailFormat.ivTotal(mon.ivs), DetailFormat.perStat(mon.ivs), compact))
         col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))

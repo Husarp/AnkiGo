@@ -22,6 +22,14 @@ class EvolutionRowTextTest {
         assertFalse(EvolutionRowText.explanation(data, e, data.sp(135), setOf(135), null, mon).contains("Bond now:"))
     }
 
+    @Test fun levelRequirementIsOnlyInRequirementsAndInstructionsRemain() {
+        val e = Evolution(135, EvoKind.LEVEL, level = 55)
+        assertEquals(1, EvolutionRowText.requirements(data, e, data.sp(133), null, null).count { it.label == "Reach level 55" })
+        val text = EvolutionRowText.explanation(data, e, data.sp(133), setOf(133), null, null)
+        assertFalse(text.contains("Reach level 55"))
+        assertTrue(text.contains("When ready, choose Evolve"))
+    }
+
     @Test fun normalRowShowsBondGateAlongsideTheUsualRequirement() {
         val e = Evolution(135, EvoKind.LEVEL, level = 16)
         val mon = TestData.mon(data, 133, 40).apply { bondPoints = 124 }

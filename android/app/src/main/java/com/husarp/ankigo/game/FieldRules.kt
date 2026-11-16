@@ -85,7 +85,7 @@ internal object FieldRules : BattleRules {
                 val proof = if (key == "sand") types.any { it in SAND_PROOF_TYPES } || v.ability(true) in SAND_PROOF_ABILITIES
                     else types.any { it in HAIL_PROOF_TYPES } || v.ability(true) in HAIL_PROOF_ABILITIES
                 lines += if (proof) "$n takes no weather damage." else "$n loses ${max(1, v.maxHp(true) / RESIDUAL_DIVISOR)} HP (1/$RESIDUAL_DIVISOR max HP) at the end of each turn, except the weather's last turn."
-                if (key == "sand" && Type.ROCK in types) lines += "$n's Sp. Def ${times(DEFENSE_BOOST)}."
+                if (key == "sand" && Type.ROCK in types) lines += "$n's Special Defense ${times(DEFENSE_BOOST)}."
             }
             "snow" -> lines += if (Type.ICE in types) "$n's Defense ${times(DEFENSE_BOOST)}." else "$n gets no Defense boost; only Ice types do. Snow does no weather damage."
             "electric", "grassy", "misty", "psychic" -> {
@@ -100,7 +100,7 @@ internal object FieldRules : BattleRules {
             }
             "trickroom" -> lines += "$n ${if (actsFirst(v, true)) "moves first" else "moves second"} among moves with the same priority; the slower Pokémon goes first."
             "magicroom" -> lines += "Held items do nothing for either active Pokémon. $n keeps its item, and its effects return when Magic Room ends."
-            "wonderroom" -> lines += "$n's Defense and Sp. Def are swapped, as are the wild Pokémon's."
+            "wonderroom" -> lines += "$n's Defense and Special Defense are swapped, as are the wild Pokémon's."
             "gravity" -> lines += "Both Pokémon are on the ground. Move accuracy ${times(GRAVITY_ACCURACY)}. Fly, Bounce, Sky Drop, High Jump Kick, Jump Kick, Flying Press, Magnet Rise, Telekinesis and Splash can't be used."
             "mudsport" -> lines += "Both sides' Electric moves deal one third of their damage."
             "watersport" -> lines += "Both sides' Fire moves deal one third of their damage."
@@ -168,8 +168,8 @@ internal object FieldRules : BattleRules {
         Room("magicroom", { "Held items were disabled for five turns!" }, "Magic Room", "Magic Room wore off!"),
         Room(TRICK_ROOM, { "$it twisted the dimensions!" }, "Trick Room", "The twisted dimensions returned to normal!"),
         Room(GRAVITY, { "Gravity intensified!" }, "Gravity", "Gravity returned to normal!"),
-        Room(WONDER_ROOM, { "It created a bizarre area in which the Defense and Sp. Def stats are swapped!" }, "Wonder Room",
-            "Wonder Room wore off, and the Defense and Sp. Def stats returned to normal!"),
+        Room(WONDER_ROOM, { "It created a bizarre area in which the Defense and Special Defense stats are swapped!" }, "Wonder Room",
+            "Wonder Room wore off, and the Defense and Special Defense stats returned to normal!"),
         Room(MUD_SPORT, { "Electricity's power was weakened!" }, "Mud Sport", "The effects of Mud Sport have faded."),
         Room(WATER_SPORT, { "Fire's power was weakened!" }, "Water Sport", "The effects of Water Sport have faded."),
         Room(ION_DELUGE, { "A deluge of ions showers the battlefield!" }, "Ion Deluge", null),
@@ -617,7 +617,7 @@ internal object FieldRules : BattleRules {
             "raindance" -> "Makes it rain for $WEATHER_TURNS turns. Water moves deal 1.5 times the damage and Fire moves half."
             "sunnyday" -> "Makes the sun shine harshly for $WEATHER_TURNS turns. Fire moves deal 1.5 times the damage and Water moves half. Nobody can be frozen."
             "sandstorm" -> "Whips up a sandstorm for $WEATHER_TURNS turns. At the end of each turn everyone but Rock, Ground and Steel types loses a sixteenth of its max HP. " +
-                "Rock types get 1.5 times their Sp. Def."
+                "Rock types get 1.5 times their Special Defense."
             "hail" -> "Makes it hail for $WEATHER_TURNS turns. At the end of each turn everyone but Ice types loses a sixteenth of its max HP."
             "snowscape" -> "Makes it snow for $WEATHER_TURNS turns. Ice types get 1.5 times their Defense."
             "chillyreception" -> "Makes it snow for $WEATHER_TURNS turns, like Snowscape. It does not switch out."
@@ -630,7 +630,7 @@ internal object FieldRules : BattleRules {
             TRICK_ROOM -> "For $ROOM_TURNS turns the slower Pokémon moves first. Using it again ends it."
             GRAVITY -> "For $ROOM_TURNS turns every Pokémon is on the ground and every move is two thirds more accurate. Fly, Bounce, Sky Drop, High Jump Kick, " +
                 "Jump Kick, Flying Press, Magnet Rise, Telekinesis and Splash can't be used."
-            WONDER_ROOM -> "For $ROOM_TURNS turns the Defense and Sp. Def of every Pokémon are swapped. Using it again ends it."
+            WONDER_ROOM -> "For $ROOM_TURNS turns the Defense and Special Defense of every Pokémon are swapped. Using it again ends it."
             MUD_SPORT -> "For $ROOM_TURNS turns Electric moves deal a third of their damage."
             WATER_SPORT -> "For $ROOM_TURNS turns Fire moves deal a third of their damage."
             ION_DELUGE -> "For the rest of this turn Normal moves become Electric moves."

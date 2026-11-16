@@ -162,7 +162,7 @@ object GameGuide {
             STATS, "Stats, IVs, EVs and natures",
             "Pokémon of the same species can have different strengths. Check their stats before choosing your Main.",
             listOf(
-                "Six stats: HP is health. Attack and Defense affect physical moves; Sp. Atk and Sp. Def affect special moves. Speed helps decide who moves first.",
+                "Six stats: HP is health. Attack and Defense affect physical moves; Special Attack and Special Defense affect special moves. Speed helps decide who moves first.",
                 "IVs: a Pokémon’s natural stat potential. Higher is better. Training does not change IVs, but Heal Ball and Luxury Ball can improve them when catching.",
                 "Wild levels: usually ${-Tuning.WILD_LEVEL_SPREAD.first} below to ${Tuning.WILD_LEVEL_SPREAD.last} above your Main, within levels 1–${Tuning.MAX_LEVEL}. Wild Pokémon already have some EVs and keep them when caught.",
                 "EVs: stat training earned by your Main when you defeat or catch a wild Pokémon. Each stat can gain up to ${Tuning.EV_STAT_CAP} EVs, with ${Tuning.EV_TOTAL_CAP} total. Macho Brace boosts EV gains; Power items add EVs to a particular stat.",

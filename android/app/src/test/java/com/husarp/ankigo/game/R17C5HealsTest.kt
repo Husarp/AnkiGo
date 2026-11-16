@@ -486,7 +486,7 @@ class R17C5HealsTest {
         assertEquals("Its power is 100 times its stockpile, which it then ends. Fails with none.", say("spitup"))
         assertTrue(say("bellydrum"), "half" in say("bellydrum") && "Fails when its HP is half of its max HP or less." in say("bellydrum"))
         assertTrue(say("clangoroussoul"), "a third" in say("clangoroussoul") && "a third of its max HP or less" in say("clangoroussoul"))
-        assertEquals("Raises its Attack, Sp. Atk and Speed by 2 stages (×2). Pays half its max HP first. Fails when its HP is half of its max HP or less.", say("filletaway"))
+        assertEquals("Raises its Attack, Special Attack and Speed by 2 stages (×2). Pays half its max HP first. Fails when its HP is half of its max HP or less.", say("filletaway"))
         assertEquals("Sets every stat change of both Pokémon back to 0.", say("haze").removeSuffix(" Never misses."))
     }
 }
