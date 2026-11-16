@@ -52,8 +52,8 @@ internal object ShadowBallFx {
 
 /**
  * The special template ([MoveLook.ORB_TEMPLATE], fallback rule 3 and rule 2): Shadow Ball's orb and burst in the plan's colours
- * (the mockup's `o.tint` path), with the type kit's particles added to the burst when the type has one.
+ * (the mockup's `o.tint` path), with the type kit's particles added to the burst when the type has one. Grass uses [GrassOrbFx].
  */
 internal object OrbFx {
-    fun build(s: FxScript): FxTimes = ShadowBallFx.build(s, orb = true)
+    fun build(s: FxScript): FxTimes = if (s.plan.kit == FxKit.GRASS) GrassOrbFx.build(s) else ShadowBallFx.build(s, orb = true)
 }
