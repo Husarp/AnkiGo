@@ -69,14 +69,21 @@ class R27DShots {
                 val bounds = android.graphics.RectF(); path.computeBounds(bounds,true)
                 assertEquals(12.5f,bounds.centerY(),0.01f)
                 val measure = android.graphics.PathMeasure(path,false)
-                val centres = mutableListOf<Float>()
+                val outlines = mutableListOf<android.graphics.RectF>()
                 do {
                     val arrow = android.graphics.Path()
                     measure.getSegment(0f, measure.length, arrow,true)
-                    arrow.computeBounds(bounds,true); centres += bounds.centerY()
+                    arrow.computeBounds(bounds,true); outlines += android.graphics.RectF(bounds)
                 } while (measure.nextContour())
-                assertEquals(n, centres.size)
-                centres.chunked(3).forEach { assertEquals(12.5f,it.average().toFloat(),0.01f) }
+                val lone = n % 3 == 1
+                assertEquals(n + if (lone) 1 else 0, outlines.size)
+                // A lone arrow's head and shaft form one centred arrow; stacks remain head-only.
+                if (lone) {
+                    val shaft = outlines.removeAt(outlines.lastIndex)
+                    outlines.last().union(shaft.left, shaft.top)
+                    outlines.last().union(shaft.right, shaft.bottom)
+                }
+                outlines.chunked(3).forEach { group -> assertEquals(12.5f,group.map { it.centerY() }.average().toFloat(),0.01f) }
                 assertTrue(androidx.core.graphics.ColorUtils.calculateContrast(
                     StatPill.ink(n % 2 == 0, StatPill.isDark(ctx)), StatPill.background(ctx,n % 2 == 0)) >= 4.5)
 
