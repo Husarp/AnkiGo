@@ -96,7 +96,7 @@ class BackdropCatalogTest {
             "normal-meadow" to setOf(Type.NORMAL), "grass-glade" to setOf(Type.GRASS, Type.BUG, Type.FAIRY),
             "poison-swamp" to setOf(Type.POISON), "flying-ridge" to setOf(Type.FLYING), "violet-plateau" to setOf(Type.PSYCHIC))
         for ((id, types) in expected) assertEquals(id, types, BackdropCatalog.typesFor(id).toSet())
-        assertEquals(50, BackdropCatalog.byId("crystal-storm")!!.rev)
+        assertEquals(51, BackdropCatalog.byId("crystal-storm")!!.rev)
     }
     @Test fun keptOldScenesKeepTheirTypes() {
         assertEquals(listOf(Type.DARK), BackdropCatalog.typesFor("dark-town"))
@@ -181,7 +181,7 @@ class BackdropCatalogTest {
     @Test fun theNewShrineIsForLegendaryAndMythicalEncounters() {
         val shrine = BackdropCatalog.byId(BackdropCatalog.SHRINE)!!
         assertEquals("legendary-shrine", shrine.id)
-        assertEquals(50, shrine.rev)
+        assertEquals(51, shrine.rev)
         for (t in Type.values()) for (seed in listOf(0, 1, 7, -3, Int.MAX_VALUE)) {
             assertSame("$t $seed", shrine, BackdropCatalog.pick(listOf(t), seed, legendary = true))
             // not legendary: still one of the type's own pictures, never the shrine
@@ -202,9 +202,9 @@ class BackdropCatalogTest {
     }
 
     @Test fun newPicturesFileNamesAndStandPoints() {
-        assertEquals("legendary-shrine-50.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("legendary-shrine")!!))
-        assertEquals("ruined-castle-50.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("ruined-castle")!!))
-        assertEquals("dark-town-50.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("dark-town")!!))
+        assertEquals("legendary-shrine-51.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("legendary-shrine")!!))
+        assertEquals("ruined-castle-51.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("ruined-castle")!!))
+        assertEquals("dark-town-51.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("dark-town")!!))
         val town = BackdropCatalog.byId("dark-town")!!
         assertEquals(.68f, town.wild.x, 1e-6f) // a bit left of the rubble on the right
         assertTrue(town.dark)

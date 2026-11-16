@@ -5,51 +5,51 @@ import com.husarp.ankigo.game.Species
 import com.husarp.ankigo.game.Tier
 import com.husarp.ankigo.game.Type
 
-/** Approved R50 backgrounds, their stand points and type pools. */
+/** Approved R51 backgrounds, their stand points and type pools. */
 internal object BackdropCatalog {
     private fun p(x: Float, y: Float, s: Float) = StandPoint(x, y, s)
 
     private fun own(id: String, ext: String, w: Int, h: Int, player: StandPoint, wild: StandPoint, crisp: Boolean, dark: Boolean = false, rev: Int = 1, ground: StandPoint = wild, groundZoom: Float = 1f, groundMaxHeight: Float = 1f) =
         Backdrop(id, BackdropSource.OWN, ext, w, h, player, wild, crisp, dark, rev, sharp = false, wildGround = ground, groundZoom = groundZoom, groundMaxHeight = groundMaxHeight)
 
-    // R50: approved final art; native pixels are drawn without filtered or Lanczos scaling.
+    // R51: approved ≤50 KB art; native pixels are drawn without filtered or Lanczos scaling.
     val ALL: List<Backdrop> = listOf(
-        own("sandbar-isle", "webp", 512, 342, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = true, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f, rev = 50),
-        own("reef-bay", "webp", 512, 341, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = true, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f, rev = 50),
-        own("canyon", "webp", 512, 286, p(.33f, .74f, .46f), p(.73f, .47f, .33f), crisp = true, rev = 50),
-        own("crystal-storm", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 50),
-        own("haunted-mansion", "webp", 1264, 848, p(.30f, .79f, .44f), p(.695f, .605f, .30f), crisp = true, dark = true, rev = 50),
-        own("mine", "webp", 1024, 687, p(.32f, .72f, .44f), p(.76f, .50f, .32f), crisp = true, dark = true, rev = 50),
-        own("snow-aurora", "webp", 512, 344, p(.32f, .79f, .46f), p(.79f, .58f, .33f), crisp = true, dark = true, rev = 50),
-        own(SHRINE, "webp", 1024, 687, p(.30f, .88f, .44f), p(.72f, .70f, .32f), crisp = true, rev = 50),
-        own("dark-town", "webp", 1024, 687, p(.30f, .86f, .44f), p(.68f, .60f, .32f), crisp = true, dark = true, rev = 50),
-        own("dark-forest", "webp", 1024, 687, p(.28f, .84f, .44f), p(.70f, .58f, .32f), crisp = true, dark = true, rev = 50),
-        own("fire-savanna", "webp", 1024, 687, p(.30f, .84f, .44f), p(.66f, .64f, .32f), crisp = true, rev = 50),
-        own("fighting-training", "webp", 1024, 687, p(.30f, .84f, .44f), p(.64f, .58f, .32f), crisp = true, rev = 50),
-        own("forest-tech-b", "webp", 512, 343, p(.29f, .72f, .44f), p(.79f, .51f, .32f), crisp = true, dark = false, rev = 50),
-        own("autumn-forest", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 50),
-        own("countryside-route", "webp", 512, 344, p(.29f, .80f, .44f), p(.77f, .585f, .32f), crisp = true, dark = false, rev = 50),
-        own("windy-hilltop", "webp", 512, 344, p(.29f, .79f, .44f), p(.78f, .66f, .32f), crisp = true, dark = false, rev = 50),
-        own("bamboo-dojo", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 50),
-        own("snowy-pines", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 50),
-        own("power-plant", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 50),
-        own("desert-oasis", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 50),
-        own("starry-plateau", "webp", 512, 343, p(.29f, .79f, .44f), p(.76f, .61f, .32f), crisp = true, dark = true, rev = 50),
-        own("lava-field", "webp", 1024, 687, p(.30f, .82f, .44f), p(.79f, .475f, .32f), crisp = true, dark = false, rev = 50),
-        own("night-rooftops", "webp", 1024, 687, p(.29f, .80f, .44f), p(.79f, .49f, .32f), crisp = true, dark = true, rev = 50),
-        own("old-graveyard", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 50),
-        own("starry-plateau-galaxy", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 50),
-        own("dojo", "webp", 1264, 848, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 50),
-        own("graveyard", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 50),
-        own("ruined-castle", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 50),
-        own("snow-field", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 50),
-        own("volcano-b", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 50),
-        own("night-forest-2", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 50),
-        own("normal-meadow", "webp", 512, 343, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false),
-        own("grass-glade", "webp", 512, 343, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false),
-        own("poison-swamp", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true),
-        own("flying-ridge", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false),
-        own("violet-plateau", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false),
+        own("sandbar-isle", "webp", 1024, 687, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = true, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f, rev = 51),
+        own("reef-bay", "webp", 1024, 687, p(.29f, .94f, .44f), p(.74f, .54f, .32f), crisp = true, ground = p(.50f, .80f, .32f), groundZoom = 3f, groundMaxHeight = .40f, rev = 51),
+        own("canyon", "webp", 512, 344, p(.33f, .74f, .46f), p(.73f, .47f, .33f), crisp = true, rev = 51),
+        own("crystal-storm", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("haunted-mansion", "webp", 1024, 687, p(.30f, .79f, .44f), p(.695f, .605f, .30f), crisp = true, dark = true, rev = 51),
+        own("mine", "webp", 1024, 687, p(.32f, .72f, .44f), p(.76f, .50f, .32f), crisp = true, dark = true, rev = 51),
+        own("snow-aurora", "webp", 512, 344, p(.32f, .79f, .46f), p(.79f, .58f, .33f), crisp = true, dark = true, rev = 51),
+        own(SHRINE, "webp", 1024, 687, p(.30f, .88f, .44f), p(.72f, .70f, .32f), crisp = true, rev = 51),
+        own("dark-town", "webp", 1024, 687, p(.30f, .86f, .44f), p(.68f, .60f, .32f), crisp = true, dark = true, rev = 51),
+        own("dark-forest", "webp", 1024, 687, p(.28f, .84f, .44f), p(.70f, .58f, .32f), crisp = true, dark = true, rev = 51),
+        own("fire-savanna", "webp", 724, 486, p(.30f, .84f, .44f), p(.66f, .64f, .32f), crisp = true, rev = 51),
+        own("fighting-training", "webp", 1024, 687, p(.30f, .84f, .44f), p(.64f, .58f, .32f), crisp = true, rev = 51),
+        own("forest-tech-b", "webp", 512, 343, p(.29f, .72f, .44f), p(.79f, .51f, .32f), crisp = true, dark = false, rev = 51),
+        own("autumn-forest", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("countryside-route", "webp", 512, 344, p(.29f, .80f, .44f), p(.77f, .585f, .32f), crisp = true, dark = false, rev = 51),
+        own("windy-hilltop", "webp", 512, 344, p(.29f, .79f, .44f), p(.78f, .66f, .32f), crisp = true, dark = false, rev = 51),
+        own("bamboo-dojo", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("snowy-pines", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("power-plant", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("desert-oasis", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("starry-plateau", "webp", 512, 344, p(.29f, .79f, .44f), p(.76f, .61f, .32f), crisp = true, dark = true, rev = 51),
+        own("lava-field", "webp", 1024, 687, p(.30f, .82f, .44f), p(.79f, .475f, .32f), crisp = true, dark = false, rev = 51),
+        own("night-rooftops", "webp", 1024, 687, p(.29f, .80f, .44f), p(.79f, .49f, .32f), crisp = true, dark = true, rev = 51),
+        own("old-graveyard", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("starry-plateau-galaxy", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("dojo", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("graveyard", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("ruined-castle", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("snow-field", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("volcano-b", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("night-forest-2", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("normal-meadow", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("grass-glade", "webp", 512, 344, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("poison-swamp", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = true, rev = 51),
+        own("flying-ridge", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
+        own("violet-plateau", "webp", 1024, 687, p(.29f, .80f, .44f), p(.74f, .54f, .32f), crisp = true, dark = false, rev = 51),
     )
 
     private val BY_ID: Map<String, Backdrop> = ALL.associateBy { it.id }
@@ -96,7 +96,7 @@ internal object BackdropCatalog {
 
     /**
      * The special arena of a Legendary / Mythical encounter; in no type list. Round 9: the old shrine picture was dropped (D10), the new one
-     * (batch 3, compact revision 50) is in [ALL] again; without a catalog entry [pick] would give a Legendary its type's pictures.
+     * (batch 3, compact revision 51) is in [ALL] again; without a catalog entry [pick] would give a Legendary its type's pictures.
      */
     const val SHRINE = "legendary-shrine"
 

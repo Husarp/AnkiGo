@@ -33,13 +33,13 @@ class R50BackgroundSetTest {
         for (bg in BackdropCatalog.ALL) assertEquals(bg.id, bg.id == BackdropCatalog.SHRINE, BackdropCatalog.typesFor(bg.id).isEmpty())
     }
 
-    @Test fun bundledFilesAreWebpBelowSixtyThousandBytesWithNoOrphans() {
+    @Test fun bundledFilesAreWebpAtMostFiftyThousandBytesWithNoOrphans() {
         val bundled = File("src/main/assets/backdrops").listFiles()!!.toList()
         val names = BackdropCatalog.ALL.map { Backdrops.fileName(it) }.toSet()
         assertEquals(15, bundled.size)
         for (f in bundled) {
             assertTrue(f.name, f.name in names)
-            assertTrue(f.name, f.length() in 1..60_000)
+            assertTrue(f.name, f.length() in 1..50_000)
             val bytes = f.readBytes()
             assertEquals("RIFF", String(bytes, 0, 4, Charsets.US_ASCII))
             assertEquals("WEBP", String(bytes, 8, 4, Charsets.US_ASCII))
@@ -57,9 +57,9 @@ class R50BackgroundSetTest {
     }
 
     @Test fun changedPicturesCannotReuseOlderInstallsCachedFiles() {
-        for (bg in BackdropCatalog.ALL.filter { it.id !in setOf("normal-meadow", "grass-glade", "poison-swamp", "flying-ridge", "violet-plateau") }) {
-            assertEquals(bg.id, 50, bg.rev)
-            assertEquals("${bg.id}-50.webp", Backdrops.fileName(bg))
+        for (bg in BackdropCatalog.ALL) {
+            assertEquals(bg.id, 51, bg.rev)
+            assertEquals("${bg.id}-51.webp", Backdrops.fileName(bg))
         }
     }
 }

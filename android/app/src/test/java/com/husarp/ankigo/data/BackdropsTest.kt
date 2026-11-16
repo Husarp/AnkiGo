@@ -192,9 +192,9 @@ class BackdropsTest {
         val nf = Backdrop("night-forest", BackdropSource.OWN, "webp", 1264, 848, forest.player, forest.wild, true, true, rev = 3)
         assertEquals(Mirror.ownUrl("bg-night-forest-3.webp"), Backdrops.url(nf))
         assertEquals(File(dir, "bg/night-forest-3.webp"), Backdrops.file(dir, nf))
-        assertEquals(Mirror.ownUrl("bg-canyon-50.webp"), Backdrops.url(BackdropCatalog.byId("canyon")!!))
-        // round 9 wave 3: the two new normal pictures are revision 1 (bg-<id>.webp); the new shrine is revision 2 (the dropped round-8 one was 1)
-        assertTrue(BackdropCatalog.ALL.filter { it.id !in setOf("normal-meadow", "grass-glade", "poison-swamp", "flying-ridge", "violet-plateau") }.all { it.rev == 50 })
+        assertEquals(Mirror.ownUrl("bg-canyon-51.webp"), Backdrops.url(BackdropCatalog.byId("canyon")!!))
+        // R51 replaces every scene, including the five introduced in R50, with a fresh cache filename.
+        assertTrue(BackdropCatalog.ALL.all { it.rev == 51 })
         BackdropCatalog.ALL.filter { it.rev == 1 }.forEach {
             assertEquals(it.id, "${it.id}.${it.ext}", Backdrops.fileName(it))
             if (it.source == BackdropSource.OWN) assertEquals(it.id, Mirror.ownUrl("bg-${it.id}.${it.ext}"), Backdrops.url(it))

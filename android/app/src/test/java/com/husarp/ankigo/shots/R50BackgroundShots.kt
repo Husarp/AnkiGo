@@ -68,10 +68,29 @@ class R50BackgroundShots {
         }
     }
 
+    @Test fun forestTechGround() = battle("forest-tech-b")
+
     @Test fun windyHilltop() = battle("windy-hilltop")
     @Test fun lavaField() = battle("lava-field")
     @Test fun darkForest() = battle("dark-forest")
     @Test fun normalMeadow() = battle("normal-meadow")
+
+    @Test fun everyShippedSceneDecodesAtCatalogDimensionsUnderTheSizeCap() {
+        val ctx = Shots.files(paparazzi.context)
+        val dir = Sprites.dir(ctx)
+        for (bg in BackdropCatalog.ALL) {
+            val staged = System.getenv("ANKIGO_R50_ASSETS")?.let { File(it, "bg-${Backdrops.fileName(bg)}") }
+            if (staged != null && staged.isFile) staged.copyTo(Backdrops.file(dir, bg).apply { parentFile?.mkdirs() }, overwrite = true)
+            Backdrops.installBundled(ctx, dir, bg)
+            val file = Backdrops.file(dir, bg)
+            assumeTrue("Downloadable design art requires ANKIGO_R50_ASSETS", file.isFile)
+            assertTrue(bg.id, file.length() in 1..50_000)
+            val pic = Backdrops.fetchBlocking(dir, bg, false) { _, _ -> null }!!
+            assertEquals(bg.id, bg.w, pic.bitmap.width)
+            assertEquals(bg.id, bg.h, pic.bitmap.height)
+            assertTrue(bg.id, bg.crisp && !bg.sharp)
+        }
+    }
 
     @Test fun nativePixelsStayUnmixedWhenEnlarged() {
         val ctx = Shots.files(paparazzi.context)
