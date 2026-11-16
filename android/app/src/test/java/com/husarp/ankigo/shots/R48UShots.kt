@@ -76,9 +76,37 @@ class R48UShots {
             val entry = all(root).first { it.contentDescription == "Today’s stats, all decks" }
             entry.performClick()
             assertTrue(text(root).contains("+1,240")); assertTrue(text(root).contains("16 / 5"))
+            assertTrue(text(root).contains("Answers counted"))
             paparazzi.snapshot(root, "u-today-sheet-${theme.name.lowercase()}", 0)
             all(root).first { it.contentDescription == "Close Today" }.performClick()
             assertFalse(all(root).any { it.contentDescription == "Close Today" })
+        }
+    }
+    @Test fun todaySelectionAndReturnedCardOfferSurviveFreshQueueCounts() {
+        for (theme in Theme.entries) {
+            val c = ctx(theme)
+            val (a, root) = finish(c)
+            all(root).first { it.contentDescription == "Today" }.performClick()
+            assertTrue(text(root).contains("answers"))
+            val deck = Anki.Deck(2L, "Geography::Capitals", 0, 1, 0, false)
+            val review = Anki.Review(500, 0, 4, listOf("1m", "6m", "1d", "4d"), emptyList())
+            val read = StudyActivity.DueRefresh(listOf(deck), listOf(review), learn = 1)
+            call(a, "applyDueRefresh", read)
+            assertTrue(text(root).contains("Your day so far"))
+            assertEquals(true, getField(a, "summaryToday"))
+            assertTrue(text(root).contains("1 card is back · Continue"))
+            val summary = getField(a, "summaryView")
+            call(a, "applyDueRefresh", read)
+            assertSame(summary, getField(a, "summaryView"))
+            assertEquals(1, text(root).count { it == "1 card is back · Continue" })
+            all(root).first { it.contentDescription == "This deck" }.performClick()
+            assertTrue(text(root).contains("Done for today!"))
+            assertTrue(text(root).contains("1 card is back · Continue"))
+            val tones = listOf(R.color.ag_red, R.color.ag_peach, R.color.ag_green, R.color.ag_blue)
+            for ((i, label) in listOf("Again", "Hard", "Good", "Easy").withIndex()) {
+                val answer = all(root).filterIsInstance<TextView>().single { it.text.startsWith("$label ") }
+                assertEquals(Ui.c(c, tones[i]), answer.currentTextColor)
+            }
         }
     }
     @Test fun stageWindowsShowPercentWithoutChangingChipLabels() {

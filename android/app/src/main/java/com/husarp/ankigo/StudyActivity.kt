@@ -2174,6 +2174,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     }
 
     private fun summary(decks: List<Anki.Deck>, learn: Int, fresh: Int) {
+        val rerender = finished && lastSummary != null
         lastSummary = Triple(decks, learn, fresh); finishArgs = null; finishTapped = false; answeredSinceCard = false
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
         finished = true; card = null; locked = true; buttons.removeAllViews(); showNotice(false); syncTiming()

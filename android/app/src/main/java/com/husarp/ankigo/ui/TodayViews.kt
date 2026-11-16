@@ -29,7 +29,7 @@ internal object TodayViews {
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }, lp(4))
         val stats = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
-        for ((value, label) in listOf("${s.reviews}" to "cards", StatsText.duration(s.studyMillis) to "studied", s.correct to "correct")) {
+        for ((value, label) in listOf("${s.reviews}" to "answers", StatsText.duration(s.studyMillis) to "studied", s.correct to "correct")) {
             stats.addView(Ui.card(ctx).apply {
                 gravity = Gravity.CENTER
                 setPadding(Ui.dp(ctx, 4), Ui.dp(ctx, 12), Ui.dp(ctx, 4), Ui.dp(ctx, 12))
@@ -50,7 +50,7 @@ internal object TodayViews {
             rewards.addView(line)
         }
         if (sheet) {
-            row("Cards studied", "${s.reviews}", R.drawable.ic_book)
+            row("Answers counted", "${s.reviews}", R.drawable.ic_book)
             row("Study time", StatsText.duration(s.studyMillis), R.drawable.ic_clock)
             row("Correct answers", s.correct, R.drawable.ic_check)
         }

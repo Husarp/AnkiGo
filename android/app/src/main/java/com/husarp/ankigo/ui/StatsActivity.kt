@@ -351,7 +351,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         addView(LinearLayout(this@StatsPage).apply {
             orientation = LinearLayout.VERTICAL
             addView(Ui.text(context, 17f, 900, R.color.ag_text).apply { text = "Today" })
-            addView(Ui.text(context, 12f, 700, R.color.ag_sub0).apply { text = "${s.reviews} cards · ${StatsText.duration(s.studyMillis)} · +${Bits.fmt(s.log.cash)} coins" })
+            addView(Ui.text(context, 12f, 700, R.color.ag_sub0).apply { text = "${s.reviews} answers · ${StatsText.duration(s.studyMillis)} · +${Bits.fmt(s.log.cash)} coins" })
         }, LinearLayout.LayoutParams(0, -2, 1f))
         addView(Ui.text(this@StatsPage, 32f, 900, R.color.ag_mauve).apply {
             text = "›"; gravity = Gravity.CENTER; includeFontPadding = false; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
