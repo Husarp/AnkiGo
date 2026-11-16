@@ -3,6 +3,33 @@
 # "### Fixes" inside a block starts its bug fixes (folded under "Bugs & fixes").
 # Only versions up to the installed one are shown, so the newest block can be written before the version number is raised.
 
+## 1.8.0
+- New attack animations for Flamethrower, Thunderbolt, Water Gun, Shadow Ball, Earthquake, Psychic, Ice Beam, Vine Whip, Tackle and draining moves. Related moves share their family's look.
+- Frozen Pokémon stay inside a clear ice cube sized to them until they thaw. Sleeping, poisoned, paralysed, confused and in-love Pokémon have their own looks too.
+- Catching has a throw arc, shakes, a ball-coloured trail and caught or break-free bursts. Level-up, evolution, shiny entrances, stat changes and hits have new effects, and XP orbs gain small sparkle shapes.
+- Weather and terrain show on the battlefield, multi-hit moves strike repeatedly, and dark backgrounds gently dim the Pokémon.
+- A new pixel-art set of battle backgrounds, matched to Pokémon types and listed in Settings.
+- Open the battle log from Battle, Study or the floating battle menu.
+- Level-up moves ask before replacing a move. Unseen moves show as ??? until you see them used.
+- TMs have one use and need Bond ♥2. Bond ♥5 unlocks a second held-item slot.
+- Feed berries to raise Bond, with a chance of a small gift. Sell spare items for a few coins.
+- New battle snacks and held items: Leftovers, Shell Bell, Rocky Helmet, Life Orb, Expert Belt and Focus Sash.
+- Healing items heal a share of maximum HP; some heal over time or also boost a stat.
+- Legendary and Mythical Pokémon start with a +1 aura on every stat. Legendaries appear from trainer level 30, Mythicals from 50, and shiny odds are 1 in 400.
+- The Shop is one page with sections. Daily slots grow with your level, TM prices change daily, the first refresh is free on weekends, specials have purchase limits and Streak Freezes are easier to find.
+- Tap a move for its own window with Power and Accuracy explained. Natures and stat chips open clear windows with full stat names.
+- Smart catching keeps evolution material, and you can choose to be asked after every catch. Wild Pokémon show their nature.
+- Achievements give small permanent XP and coin bonuses, and total-level tiers are easier.
+- Stats charts reach up to 1000 days, and the finish-deck summary has This deck and Today tabs. A Next deck button appears when another deck has work.
+- Look settings offer an optional Ribbon daily-goal bar and five XP bar fills.
+- New pixel heart, favourite star, streak freeze and rank icons. Stacked rarity cards have coloured edges and glints.
+- Updates show the last check, release dates and the latest notes.
+### Fixes
+- Fewer pauses after tapping an answer.
+- A prepared battle waits for Continue before it starts.
+- Edited notes refresh, editor Preview works and the study widget keeps its size.
+- Alerts are no longer see-through and stay above the daily progress glow.
+- Today's card count matches everywhere, dual-type Pokémon no longer get clashing backgrounds, and hits reveal the right matchups.
 ## 1.7.0
 - Blended the Multicolor swatch into a smooth rainbow. Choosing a colour closes the picker; only the selected tab stays colourful.
 - Smoothed tab-label transitions and the fill retracting when you release a hold-to-confirm button.
