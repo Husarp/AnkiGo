@@ -233,27 +233,32 @@ class R9NextFightFlowTest {
     // ---------------------------------------------------------------- C5: Continue during the rewards
 
     @Test fun continueDuringTheRewardsEndsThemAndTheNextFightComes() {
-        val c = ctx()
-        val panel = BattlePanelView(c)
-        val player = EventPlayer(panel, continueOnPanel = false)
-        measure(panel, 412, 869)
-        val m = GameRepo.state!!.main!!
-        m.xp = 123   // the saved game: the XpGained event in the batch says 0 of 100, the save is what must show
-        player.enqueue(defeatBatch())
-        assertTrue(player.holding)
-        assertEquals("the rewards are queued", listOf("XpGained", "Cash", "Tiles", "Encounter"), queueKinds(player))
-        assertTrue("Continue did something", player.continueBattle())
-        // right now, before the looper runs anything: the rewards are gone from the queue, the saved game is drawn
-        assertEquals("only the next fight is left, and it is playing", emptyList<String>(), queueKinds(player))
-        assertFalse(player.holding); assertFalse(panel.tilesShown)
-        assertNull(parked(player))
-        assertEquals("the screen shows the saved game", m.xp.toFloat() / Progression.xpToNext(GameRepo.data!!, m), panel.arena.xpShown, 0.01f)
-        assertEquals(m.hp, panel.arena.playerHpShown)
-        advance(c, panel)
-        assertTrue("the next fight played to its end", player.idle)
-        assertFalse("nothing is held any more", panel.holdsNextFight)
-        assertFalse("the tiles never came", panel.tilesShown)
-        assertEquals("the next wild one is on stage", View.VISIBLE, enemyHolder(panel).visibility)
+        val widgets = GameRepo.widgetRefresh
+        // Paparazzi has no appwidget service; this case checks the battle animation.
+        GameRepo.widgetRefresh = {}
+        try {
+            val c = ctx()
+            val panel = BattlePanelView(c)
+            val player = EventPlayer(panel, continueOnPanel = false)
+            measure(panel, 412, 869)
+            val m = GameRepo.state!!.main!!
+            m.xp = 123   // the saved game: the XpGained event in the batch says 0 of 100, the save is what must show
+            player.enqueue(defeatBatch())
+            assertTrue(player.holding)
+            assertEquals("the rewards are queued", listOf("XpGained", "Cash", "Tiles", "Encounter"), queueKinds(player))
+            assertTrue("Continue did something", player.continueBattle())
+            // right now, before the looper runs anything: the rewards are gone from the queue, the saved game is drawn
+            assertEquals("only the next fight is left, and it is playing", emptyList<String>(), queueKinds(player))
+            assertFalse(player.holding); assertFalse(panel.tilesShown)
+            assertNull(parked(player))
+            assertEquals("the screen shows the saved game", m.xp.toFloat() / Progression.xpToNext(GameRepo.data!!, m), panel.arena.xpShown, 0.01f)
+            assertEquals(m.hp, panel.arena.playerHpShown)
+            advance(c, panel)
+            assertTrue("the next fight played to its end", player.idle)
+            assertFalse("nothing is held any more", panel.holdsNextFight)
+            assertFalse("the tiles never came", panel.tilesShown)
+            assertEquals("the next wild one is on stage", View.VISIBLE, enemyHolder(panel).visibility)
+        } finally { GameRepo.widgetRefresh = widgets }
     }
 
     @Test fun continueAfterACatchWorksToo() {

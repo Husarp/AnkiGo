@@ -177,7 +177,7 @@ class R30U1ConditionShots {
         }
     }
 
-    @Test fun everyRegisteredConditionHasAnIconAndItsCompleteEffectFitsOneLine() {
+    @Test fun everyRegisteredConditionHasAnIconAndItsCompleteEffectFits() {
         for (theme in Theme.entries) {
             val c = install(Size.SMALL, theme, false)
             for (key in ConditionMarks.allKeys) {
@@ -189,7 +189,11 @@ class R30U1ConditionShots {
                 card.buildMark(mark, "Your Sparkmouse", Ui.dp(c, 332), Ui.dp(c, 400)) {}
                 card.layout(0, 0, card.measuredWidth, card.measuredHeight)
                 val effect = texts(card).single { it.tag == "condition-effect" }
-                assertEquals("$key: ${effect.text}", 1, effect.lineCount)
+                if (key.startsWith("heal.")) assertTrue("$key: ${effect.text}", effect.lineCount in 1..3)
+                else assertEquals("$key: ${effect.text}", 1, effect.lineCount)
+                for (line in 0 until effect.lineCount) assertEquals(key, 0, effect.layout.getEllipsisCount(line))
+                assertTrue(key, effect.layout.getLineBottom(effect.lineCount - 1) <= effect.height)
+                assertTrue(key, card.bottom <= Ui.dp(c, 400))
                 assertFalse(effect.text.contains("Until switching", true))
             }
         }

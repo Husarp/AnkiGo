@@ -10,7 +10,8 @@ class R29IConditionTest {
         assertEquals(ConditionMarks.allKeys.filterNot { it.startsWith("stat.") }.toSet(), ConditionExplanation.effects.keys)
         for ((key, text) in ConditionExplanation.effects) {
             assertTrue(key, text.isNotBlank() && text.length <= 100)
-            assertTrue(key, text.endsWith('.'))
+            if (key == "legendaryaura") assertEquals("Legendary aura: every stat ×1.5 for this fight", text)
+            else assertTrue(key, text.endsWith('.'))
         }
     }
 

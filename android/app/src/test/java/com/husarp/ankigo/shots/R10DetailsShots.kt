@@ -129,7 +129,7 @@ class R10DetailsShots {
                 // level labels: Start (level 1 twice) and Lv 26; the made-up move rows are the same rows as the details
                 val t = texts(scene).map { it.text.toString() }
                 assertEquals(2, t.count { it == "Start" }); assertTrue("Lv 26" in t)
-                assertTrue("3 moves" in t)
+                assertTrue("MOVES IT LEARNS · 3" in t)
                 assertNotNull(find(scene, "My Pokémon")); assertNotNull(find(scene, "Options")); assertNotNull(find(scene, "Details"))
             }) { ctx -> DexDetail.show(DexPage(ctx, NoHost), gd.sp(25)) }
         }
