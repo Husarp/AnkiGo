@@ -284,7 +284,7 @@ class AnkiStatsTest {
         assertNull(AnkiStatsCodec.decode("{}"))
         assertNull(AnkiStatsCodec.decode("[1,2]"))
         assertNull(AnkiStatsCodec.decode(good.take(good.length / 2)))                       // cut off
-        assertNull(AnkiStatsCodec.decode(changed { put("v", 2) }))                          // another version
+        assertNull(AnkiStatsCodec.decode(changed { put("v", 1) }))                          // another version
         assertNull(AnkiStatsCodec.decode(changed { remove("v") }))
         assertNull(AnkiStatsCodec.decode(changed { remove("pkg") }))
         assertNull(AnkiStatsCodec.decode(changed { put("today", "oops") }))

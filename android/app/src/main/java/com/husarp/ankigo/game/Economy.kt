@@ -120,7 +120,7 @@ object Items {
             "oran-berry" -> "At half HP: heals 10 HP; consumed"
             "sitrus-berry" -> "At half HP: heals ¼ max HP; consumed"
             "figy-berry" -> "At ¼ HP: heals ⅓ max HP; consumed"
-            else -> "At ¼ HP: +1 ${when (AbilityAdaptations.berries[it]) { "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Special Attack"; "spd" -> "Special Defense"; else -> "Speed" }}; consumed"
+            else -> "At ¼ HP: ${when (AbilityAdaptations.berries[it]) { "atk" -> "Attack"; "def" -> "Defense"; "spa" -> "Special Attack"; "spd" -> "Special Defense"; else -> "Speed" }} ×1.5 for this fight; consumed"
         })) }
         HELD.forEach { (id, note) -> add(ItemDef(id, ItemKind.HELD, note = note)) }
         listOf("poke-doll", "fluffy-tail").forEach { add(ItemDef(it, ItemKind.ESCAPE, note = "Skip this wild Pokémon")) }

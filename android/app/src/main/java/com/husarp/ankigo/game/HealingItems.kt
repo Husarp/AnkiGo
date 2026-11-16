@@ -66,7 +66,8 @@ internal object HealingItems : BattleRules {
         val healed = minOf(max - mon.hp, if (pct == 0) 0 else amount(max, pct))
         mon.hp += healed
         val events = mutableListOf<GameEvent>()
-        var message = "${Items.name(item)} healed ${mon.name} by $healed HP"
+        var message = if (healed > 0) "${Items.name(item)} healed ${mon.name} by $healed HP" else "${Items.name(item)} used on ${mon.name}"
+        if (healed > 0 && state.main?.uid == mon.uid) events += GameEvent.Effect(true, message, mon.hp, max, b?.player?.status, EffectKind.HEAL, amount = healed)
         if (b != null) {
             boosts[item]?.let { b.field.player[key(mon, it)] = 1; message += "; ${text.getValue(item).substringAfter("; ")}" }
             when (item) {

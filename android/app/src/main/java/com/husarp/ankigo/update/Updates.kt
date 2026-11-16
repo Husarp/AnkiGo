@@ -37,10 +37,12 @@ object Updates {
     private const val TIMEOUT_MS = 10_000
     private const val PREFS = "updates"
     private const val KEY_CHECK = "checkUpdates"
+    private const val KEY_CHECKED_AT = "lastCheckedAt"
+    private const val KEY_CHECKED_MANUAL = "lastCheckedManual"
     private const val KEY_HIDDEN_DAY = "bannerHiddenDay"
 
     /** The newest Android version on GitHub. [page] is its release page. */
-    data class Latest(val version: String, val apkName: String, val apkUrl: String, val apkSize: Long, val page: String)
+    data class Latest(val version: String, val apkName: String, val apkUrl: String, val apkSize: Long, val page: String, val releasedOn: String? = null)
 
     sealed interface Phase {
         data object Idle : Phase
@@ -57,6 +59,8 @@ object Updates {
         val checking: Boolean = false,
         val message: String? = null,             // answer to a manual CHECK NOW
         val phase: Phase = Phase.Idle,
+        val lastCheckedAt: Long = 0L,
+        val lastCheckManual: Boolean = false,
     )
 
     @Volatile var state = State()
@@ -101,6 +105,8 @@ object Updates {
 
     /** A fresh start of the app (not a return, not a rotation): old APKs go. (The banner's day rule is not reset.) */
     fun onAppStart(ctx: Context) {
+        val prefs = ctx.getSharedPreferences(PREFS, 0)
+        if (state.lastCheckedAt == 0L) change { it.copy(lastCheckedAt = prefs.getLong(KEY_CHECKED_AT, 0L), lastCheckManual = prefs.getBoolean(KEY_CHECKED_MANUAL, false)) }
         marker(ctx).delete()   // a fresh start is not a return from the "install unknown apps" screen
         // an old failure, or an installer that was left without installing, doesn't carry over to a fresh start
         change { if (it.phase is Phase.Failed || it.phase == Phase.Installing) it.copy(phase = Phase.Idle) else it }
@@ -173,15 +179,17 @@ object Updates {
             } catch (e: Exception) {
                 Result.failure(e)
             }
+            val checkedAt = System.currentTimeMillis()
+            app.getSharedPreferences(PREFS, 0).edit().putLong(KEY_CHECKED_AT, checkedAt).putBoolean(KEY_CHECKED_MANUAL, manual).apply()
             res.onSuccess { (latest, page) ->
                 change {
-                    it.copy(checking = false, latest = latest, pageUrl = page,
+                    it.copy(checking = false, latest = latest, pageUrl = page, lastCheckedAt = checkedAt, lastCheckManual = manual,
                         message = if (!manual) it.message
                         else if (latest != null && UpdateLogic.isNewer(latest.version, cur)) "AnkiGo ${latest.version} is available."
                         else "You're up to date ($cur).")
                 }
             }.onFailure { e ->
-                change { it.copy(checking = false, message = if (manual) describe(e, download = false) else it.message) }
+                change { it.copy(checking = false, lastCheckedAt = checkedAt, lastCheckManual = manual, message = if (manual) describe(e, download = false) else it.message) }
             }
         }
     }
@@ -201,7 +209,7 @@ object Updates {
             }
             val release = UpdateLogic.Release(j.optString("html_url", RELEASES_PAGE), assets, j.optBoolean("draft"), j.optBoolean("prerelease"))
             val (rel, a, v) = UpdateLogic.newestApk(listOf(release)) ?: return null to RELEASES_PAGE
-            return Latest(v, a.name, a.url, a.size, rel.page) to rel.page
+            return Latest(v, a.name, a.url, a.size, rel.page, j.optString("published_at").takeIf { it.isNotBlank() }) to rel.page
         } finally { c.disconnect() }
     }
 

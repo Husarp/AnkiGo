@@ -6,7 +6,7 @@ import java.time.LocalDate
 // cached. Pure Kotlin: every AnkiDroid call is the `count` function the caller passes in (like AnkiStatsReader).
 
 /** What one on-demand read is about: the deck (null = all decks), the metric, the number of days and AnkiGo's game day. */
-data class SeriesKey(val deck: String?, val metric: ChartMetric, val days: Int, val today: String)
+data class SeriesKey(val deck: String?, val metric: ChartMetric, val days: Int, val today: String, val dayStartHour: Int = 4, val zoneId: String = java.time.ZoneId.systemDefault().id)
 
 /**
  * What a read found. For REVIEWS / NEW_CARDS / DUE: game date "yyyy-MM-dd" -> cards (DUE: the days after today). For the
@@ -46,7 +46,10 @@ object AnkiSeriesQueries {
     fun retentionAgain(days: Int) = "rated:$days:1 -introduced:$days"
 }
 
-class AnkiSeriesReader(private val count: (String) -> Int) {
+class AnkiSeriesReader(private val cardsOn: ((SeriesKey, String, Boolean) -> Int)?, private val dueOn: ((SeriesKey, String) -> Int)?, private val count: (String) -> Int) {
+    constructor(count: (String) -> Int) : this(null, null, count)
+    constructor(cardsOn: ((SeriesKey, String, Boolean) -> Int)?, count: (String) -> Int) : this(cardsOn, null, count)
+
     /** Reads [key]; exceptions from [count] go to the caller. Metrics that don't come from AnkiDroid give an empty map. */
     fun read(key: SeriesKey, fetchedAt: Long): SeriesData = SeriesData(
         when (key.metric) {
@@ -65,12 +68,15 @@ class AnkiSeriesReader(private val count: (String) -> Int) {
 
     private fun reviews(key: SeriesKey): Map<String, Int> {
         val t = LocalDate.parse(key.today)
-        return (0 until key.days).associate { k -> t.minusDays(k.toLong()).toString() to count(AnkiSeriesQueries.reviewsOn(key.deck, k)) }
+        return (0 until key.days).associate { k -> t.minusDays(k.toLong()).toString() to (cardsOn?.invoke(key, t.minusDays(k.toLong()).toString(), false) ?: count(AnkiSeriesQueries.reviewsOn(key.deck, k))) }
     }
 
     /** Cards introduced on day k ago = introduced:k+1 minus introduced:k (the cumulative counts); never below 0. */
     private fun newCards(key: SeriesKey): Map<String, Int> {
         val t = LocalDate.parse(key.today)
+        cardsOn?.let { read -> return (0 until key.days).associate { k ->
+            val day = t.minusDays(k.toLong()).toString(); day to read(key, day, true)
+        } }
         val cumulative = IntArray(key.days + 1)
         for (j in 1..key.days) cumulative[j] = count(AnkiSeriesQueries.introducedIn(key.deck, j))
         return (0 until key.days).associate { k -> t.minusDays(k.toLong()).toString() to (cumulative[k + 1] - cumulative[k]).coerceAtLeast(0) }
@@ -78,7 +84,7 @@ class AnkiSeriesReader(private val count: (String) -> Int) {
 
     private fun due(key: SeriesKey): Map<String, Int> {
         val t = LocalDate.parse(key.today)
-        return (1..key.days).associate { k -> t.plusDays(k.toLong()).toString() to count(AnkiSeriesQueries.dueIn(key.deck, k)) }
+        return (1..key.days).associate { k -> t.plusDays(k.toLong()).toString() to (dueOn?.invoke(key, t.plusDays(k.toLong()).toString()) ?: count(AnkiSeriesQueries.dueIn(key.deck, k))) }
     }
 
     companion object {
@@ -97,5 +103,5 @@ object AnkiSeriesCache {
 
     /** [cache] with [data] stored for [key]; reads made for another game day are dropped. */
     fun put(cache: Map<SeriesKey, SeriesData>, key: SeriesKey, data: SeriesData): Map<SeriesKey, SeriesData> =
-        cache.filterKeys { it.today == key.today } + (key to data)
+        cache.filterKeys { it.today == key.today && it.dayStartHour == key.dayStartHour && it.zoneId == key.zoneId } + (key to data)
 }

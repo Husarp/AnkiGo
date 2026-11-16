@@ -38,6 +38,7 @@ data class StatsSnapshot(
     val timedAnswersByDay: Map<String, Long> = emptyMap(),
     /** Per-deck / on-demand AnkiDroid reads for the chart ([AnkiSeriesCache]). */
     val series: Map<SeriesKey, SeriesData> = emptyMap(),
+    val dayStartHour: Int = 4,
 ) {
     /** Time studied on [day]: in AnkiGo's study screen + live detection. */
     fun timeTotalOn(day: String): Long = (timeByDay[day] ?: 0L) + (liveTimeByDay[day] ?: 0L)
@@ -47,6 +48,7 @@ data class StatsSnapshot(
 }
 
 object StatsText {
+    const val FORECAST_UNAVAILABLE = "Game-day due forecast unavailable from AnkiDroid."
     const val TIMED_SOURCE = "Counts study in AnkiGo plus answers timed live in AnkiDroid (split screen, floating). Excludes catch-up answers and time AnkiDroid did not share."
 
     fun secondsPerCard(ms: Long, answers: Long): Double? = if (answers > 0) ms / 1000.0 / answers else null

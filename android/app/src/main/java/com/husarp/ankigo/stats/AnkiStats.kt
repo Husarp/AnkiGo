@@ -65,10 +65,22 @@ data class AnkiStats(
     val retentionAnswered: Int,
     val retentionAgain: Int,
     val historyCheckedAt: Long,
+    val dailyCountsAvailable: Boolean = true,
+    val dayStartHour: Int = 4,
+    val zoneId: String = ZoneId.systemDefault().id,
+    val forecastAvailable: Boolean = true,
 ) {
     fun studied(day: String): Int = perDay[day] ?: 0
     fun buttonsIn(days: Int): List<Int> = buttons[days] ?: listOf(0, 0, 0, 0)
     fun newIn(days: Int): Int = introduced[days] ?: 0
+    /** Cached forecasts retain their original game-date anchor while the next refresh is in flight. */
+    fun forecastAfter(day: String, days: Int): List<Int>? {
+        if (!forecastAvailable || days < 1) return null
+        val offset = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(today), LocalDate.parse(day))
+        if (offset < 0 || offset + days > forecast.size) return null
+        return forecast.subList(offset.toInt(), offset.toInt() + days)
+    }
+
     val dueTomorrow: Int get() = forecast.firstOrNull() ?: 0
     val dueNext7: Int get() = forecast.take(7).sum()
 
@@ -90,10 +102,13 @@ data class AnkiStats(
  * that changes often; a HISTORY pass fills the per-day counts of days 7..364 (only the missing ones, or all of them again
  * once a week, because a sync from another device can add old reviews).
  *
- * Anki's day starts at its rollover hour (default 4:00); `prop:rated=-k` is mapped to the date k days before AnkiGo's game
- * day, which starts at the same default 4:00. Good enough: only a user who changed one of the two hours sees a shifted day.
+ * Production supplies [studiedOn] with exact game-day timestamp bounds. Anki's relative-day card searches use
+ * AnkiDroid's independent rollover hour and cannot implement a custom AnkiGo reset hour.
  */
-class AnkiStatsReader(private val count: (String) -> Int) {
+class AnkiStatsReader(private val studiedOn: ((String) -> Int)?, private val forecastOn: ((String) -> Int)?, private val count: (String) -> Int) {
+    constructor(count: (String) -> Int) : this(null, null, count)
+    constructor(studiedOn: ((String) -> Int)?, count: (String) -> Int) : this(studiedOn, null, count)
+
     /**
      * QUICK pass: counts, due, forecast, buttons, introduced, retention and the per-day counts of the last [QUICK_DAYS] days.
      * [prev] is kept (per-day history) only when it came from the same AnkiDroid package; days older than 365 are dropped.
@@ -102,7 +117,7 @@ class AnkiStatsReader(private val count: (String) -> Int) {
         val t = LocalDate.parse(today)
         val base = prev?.takeIf { it.pkg == pkg }
         val perDay = HashMap(base?.perDay ?: emptyMap())
-        for (k in 0 until QUICK_DAYS) perDay[t.minusDays(k.toLong()).toString()] = count(AnkiQueries.ratedOn(k))
+        for (k in 0 until QUICK_DAYS) perDay[t.minusDays(k.toLong()).toString()] = studiedOn?.invoke(t.minusDays(k.toLong()).toString()) ?: count(AnkiQueries.ratedOn(k))
         val counts = Counts(
             new = count(AnkiQueries.NEW), learning = count(AnkiQueries.LEARNING), relearning = count(AnkiQueries.RELEARNING),
             young = count(AnkiQueries.YOUNG), mature = count(AnkiQueries.MATURE),
@@ -113,7 +128,7 @@ class AnkiStatsReader(private val count: (String) -> Int) {
         val introduced = WINDOWS.associateWith { d -> count(AnkiQueries.introduced(d)) }
         val answered = count(AnkiQueries.RETENTION_ANSWERED)
         val again = count(AnkiQueries.RETENTION_AGAIN)
-        val forecast = (1..FORECAST_DAYS).map { count(AnkiQueries.due(it)) }
+        val forecast = (1..FORECAST_DAYS).map { forecastOn?.invoke(t.plusDays(it.toLong()).toString()) ?: count(AnkiQueries.due(it)) }
         return AnkiStats(
             pkg = pkg, fetchedAt = now, today = today, perDay = trim(perDay, t), buttons = buttons, introduced = introduced,
             counts = counts, dueNow = dueNow, forecast = forecast, retentionAnswered = answered, retentionAgain = again,
@@ -134,7 +149,7 @@ class AnkiStatsReader(private val count: (String) -> Int) {
         val perDay = HashMap(s.perDay)
         var done = 0
         for (k in days) {
-            perDay[t.minusDays(k.toLong()).toString()] = count(AnkiQueries.ratedOn(k))
+            perDay[t.minusDays(k.toLong()).toString()] = studiedOn?.invoke(t.minusDays(k.toLong()).toString()) ?: count(AnkiQueries.ratedOn(k))
             if (++done % PROGRESS_EVERY == 0 && done < days.size) onProgress(s.copy(perDay = trim(perDay, t)))
         }
         return s.copy(perDay = trim(perDay, t), historyCheckedAt = now)
@@ -182,10 +197,12 @@ class AnkiStatsReader(private val count: (String) -> Int) {
 
 /** [AnkiStats] <-> JSON for the cache file. Decoding never throws: anything unreadable or from another version is null. */
 object AnkiStatsCodec {
-    private const val VERSION = 1
+    private const val VERSION = 2
 
     fun encode(s: AnkiStats): String = JSONObject().apply {
         put("v", VERSION)
+        put("dailyCountsAvailable", s.dailyCountsAvailable); put("forecastAvailable", s.forecastAvailable)
+        put("dayStartHour", s.dayStartHour); put("zoneId", s.zoneId)
         put("pkg", s.pkg); put("fetchedAt", s.fetchedAt); put("today", s.today); put("historyCheckedAt", s.historyCheckedAt)
         put("perDay", JSONObject().also { o -> s.perDay.toSortedMap().forEach { (d, n) -> o.put(d, n) } })
         put("buttons", JSONObject().also { o -> TreeMap(s.buttons).forEach { (d, l) -> o.put(d.toString(), JSONArray(l)) } })
@@ -214,6 +231,8 @@ object AnkiStatsCodec {
                     dueNow = o.getInt("dueNow"), forecast = forecast,
                     retentionAnswered = retention[0], retentionAgain = retention[1],
                     historyCheckedAt = o.getLong("historyCheckedAt"),
+                    dailyCountsAvailable = o.getBoolean("dailyCountsAvailable"), forecastAvailable = o.getBoolean("forecastAvailable"),
+                    dayStartHour = o.getInt("dayStartHour"), zoneId = o.getString("zoneId"),
                 )
             }
         }
@@ -235,7 +254,7 @@ object AnkiGoTime {
 
     /** The game day of an instant: a day starts at [startHour] (phone time zone). */
     fun dayKey(epochMs: Long, startHour: Int, zone: ZoneId = ZoneId.systemDefault()): String =
-        Instant.ofEpochMilli(epochMs).atZone(zone).minusHours(startHour.coerceIn(0, 23).toLong()).toLocalDate().toString()
+        com.husarp.ankigo.game.StudyDay.key(epochMs, startHour, zone)
 
     /** Sum of [days] game days ending with [today] (inclusive). */
     fun lastDays(perDay: Map<String, Long>, today: String, days: Int): Long {

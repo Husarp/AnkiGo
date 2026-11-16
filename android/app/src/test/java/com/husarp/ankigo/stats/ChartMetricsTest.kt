@@ -287,7 +287,7 @@ class ChartMetricsTest {
         assertEquals(85.0 / 30, s.perDayAvg, 1e-9)
         assertFalse(s.empty); assertFalse(s.deckApplies)
         assertEquals(grid.total, 85)
-        assertEquals("AnkiGo's own count: answers, not distinct cards (AnkiDroid isn't available)", s.source)
+        assertEquals("AnkiGo's own count: answers, not distinct cards (AnkiDroid game-day counts aren't available)", s.source)
         assertEquals(listOf("Wed 14 Oct · 60 cards", "Daily goal reached (50)"), s.detailFor(today))
         assertEquals(listOf("Tue 13 Oct · 20 cards", "40% of the daily goal (50)"), s.detailFor(date(1)))
         assertEquals(listOf("Mon 12 Oct · no data recorded"), s.detailFor(date(2)))
@@ -437,4 +437,92 @@ class ChartMetricsTest {
             assertTrue("$m", s.empty); assertTrue("$m", s.bars.isEmpty())
         }
     }
+    @Test fun dueForecastUsesGameDatesAcrossDifferentSchedulerResetHours() {
+        val timing = AnkiSchedulerDay(java.time.LocalDate.parse("2026-11-01"), 4)
+        // At 03:30 on Nov 16 the game's day is Nov 16, while Anki's is still Nov 15.
+        assertEquals(listOf(16L), timing.dueDays("2026-11-17", 3))
+        // With a 05:00 game reset, Anki's next 04:00 rollover belongs to the previous game day.
+        assertEquals(listOf(17L), timing.dueDays("2026-11-17", 5))
+        val zone = java.time.ZoneId.of("Europe/Berlin")
+        val q = StudyDayQueries.due("2026-03-28", 3, zone, timing, listOf(12))
+        val start = com.husarp.ankigo.game.StudyDay.start("2026-03-28", 3, zone) / 1000
+        val end = com.husarp.ankigo.game.StudyDay.start("2026-03-29", 3, zone) / 1000
+        assertEquals(23 * 3600L, end - start)
+        assertTrue(q, "c.queue IN (2,3)" in q)
+        assertTrue(q, "c.queue IN (1,4)" in q)
+        assertTrue(q, ">= $start" in q && "< $end" in q)
+        assertTrue(q, "WHEN c.odue != 0 THEN c.odue" in q)
+        assertTrue(q, "c.odid IN (12)" in q)
+    }
+
+    @Test fun schedulerCreationDateUsesItsOriginalOffsetAndRejectsUnknownTiming() {
+        val now = java.time.Instant.parse("2026-11-16T03:30:00Z").toEpochMilli()
+        val created = java.time.Instant.parse("2026-11-01T00:30:00Z").epochSecond
+        val zone = java.time.ZoneId.of("UTC")
+        val row = mapOf("_id" to created.toString(), "guid" to "120", "mid" to "4", "mod" to "0")
+        assertEquals(java.time.LocalDate.parse("2026-10-31"), AnkiSchedulerDay.read(row, now, zone).createdDay)
+        assertEquals(java.time.LocalDate.parse("2026-11-01"), AnkiSchedulerDay.read(row + ("guid" to "-120"), now, zone).createdDay)
+        for (bad in listOf(row - "guid", row + ("mod" to "60"), row + ("mod" to "1073741824"), row + ("mid" to "99"))) {
+            assertTrue(bad.toString(), runCatching { AnkiSchedulerDay.read(bad, now, zone) }.isFailure)
+        }
+    }
+
+    @Test fun bothForecastReadersRequestAbsoluteGameDays() {
+        val dates = mutableListOf<String>()
+        val reader = AnkiStatsReader(studiedOn = { 0 }, forecastOn = { day -> dates += day; if (day == "2026-11-17") 7 else 0 }) { query ->
+            assertFalse(query, query.startsWith("prop:due=")); 0
+        }
+        val s = reader.quick(null, "test", "2026-11-16", 100)
+        assertEquals(7, s.forecast.first())
+        assertEquals(30, dates.size)
+        assertEquals("2026-11-17", dates.first()); assertEquals("2026-12-16", dates.last())
+        dates.clear()
+        val key = SeriesKey("Deck", ChartMetric.DUE, 7, "2026-11-16", 3)
+        val series = AnkiSeriesReader(cardsOn = null, dueOn = { k, day -> assertEquals(key, k); dates += day; 2 }) { error("Relative scheduler days are forbidden") }.read(key, 100)
+        assertEquals(7, dates.size)
+        assertEquals(2, series.perDay["2026-11-17"])
+    }
+
+    @Test fun unknownSchedulerTimingIsUnavailableRatherThanAZeroForecast() {
+        val a = anki().copy(forecastAvailable = false, dueNow = 42)
+        val s = build(ChartMetric.DUE, ChartPeriod.D7, StatsSnapshot(stats = a))
+        assertTrue(s.empty)
+        assertEquals(StatsText.FORECAST_UNAVAILABLE, com.husarp.ankigo.ui.StatsChartMath.emptyMessage(s, AnkiAccess.OK, null))
+        assertEquals(42, a.dueNow)
+        assertEquals(a, AnkiStatsCodec.decode(AnkiStatsCodec.encode(a)))
+    }
+
+    @Test fun rollingCardWindowsUseThreeAmForButtonsIntroductionsAndRetention() {
+        val zone = java.time.ZoneId.of("UTC")
+        val first = java.time.Instant.parse("2026-11-10T03:00:00Z").toEpochMilli()
+        val end = java.time.Instant.parse("2026-11-17T03:00:00Z").toEpochMilli()
+        for (query in listOf("rated:7", "rated:7:1", "introduced:7", "rated:7 -introduced:7", "rated:7:1 -introduced:7")) {
+            val sql = StudyDayQueries.window(query, "2026-11-16", 3, zone)!!
+            assertTrue(sql, "r.id >= $first" in sql && "r.id < $end" in sql)
+            if (":1" in query) assertTrue(sql, "r.ease = 1" in sql)
+            if (query.startsWith("introduced")) assertTrue(sql, "old.id < r.id" in sql)
+            if (" -introduced" in query) assertTrue(sql, "earlier.id < fresh.id" in sql)
+        }
+        assertNull(StudyDayQueries.window("is:due", "2026-11-16", 3, zone))
+        assertNull(StudyDayQueries.window("is:new", "2026-11-16", 3, zone))
+    }
+
+    @Test fun dstCanPlaceZeroOrTwoSchedulerRolloversInsideOneGameDay() {
+        val timing = AnkiSchedulerDay(java.time.LocalDate.parse("2026-03-01"), 2)
+        val zone = java.time.ZoneId.of("Europe/Berlin")
+        assertEquals(emptyList<Long>(), timing.dueDays("2026-03-28", 3, zone))
+        assertEquals(listOf(28L, 29L), timing.dueDays("2026-03-29", 3, zone))
+        assertTrue(StudyDayQueries.due("2026-03-29", 3, zone, timing).contains("IN (28,29)"))
+    }
+
+    @Test fun cachedForecastsKeepTheirDateAnchorDuringTheNextGameDaysRefresh() {
+        val old = anki(forecast = List(30) { if (it == 0) 11 else if (it == 1) 22 else 0 }).copy(today = date(1))
+        val s = build(ChartMetric.DUE, ChartPeriod.D7, StatsSnapshot(stats = old))
+        assertEquals(22.0, s.bars.first().values.single(), 0.0)
+        assertEquals(22, old.forecastAfter(today, 7)!!.first())
+        assertEquals(22, old.forecastAfter(today, 7)!!.sum())
+        assertNull(old.forecastAfter(java.time.LocalDate.parse(today).plusDays(30).toString(), 7))
+        assertNull(old.copy(forecastAvailable = false).forecastAfter(today, 7))
+    }
+
 }

@@ -14,7 +14,7 @@ import com.husarp.ankigo.R
  */
 object WhatsNew {
     data class Item(val text: String, val path: String? = null)
-    data class Version(val version: String, val items: List<Item>, val fixes: List<Item> = emptyList())
+    data class Version(val version: String, val items: List<Item>, val fixes: List<Item> = emptyList(), val releasedOn: String? = null)
 
     /** What the card does for an app start. */
     enum class Action { SHOW, NONE, MARK_SEEN }
@@ -49,6 +49,14 @@ object WhatsNew {
     fun upTo(all: List<Version>, current: String): List<Version> =
         all.filter { UpdateLogic.compare(it.version, current) <= 0 }.sortedWith { a, b -> UpdateLogic.compare(b.version, a.version) }
 
+    /** The Updates page keeps only the latest three installed-version note blocks. */
+    fun recent(all: List<Version>, current: String): List<Version> = upTo(all, current).take(3)
+
+    fun releaseDates(text: String): Map<String, String> = text.lineSequence().mapNotNull { line ->
+        val parts = line.trim().split(Regex("\\s+"))
+        if (parts.size == 2 && runCatching { java.time.LocalDate.parse(parts[1]) }.isSuccess) parts[0] to parts[1] else null
+    }.toMap()
+
     /** The blocks the user has not been told about: newer than [lastSeen] (null = all), up to [current]. */
     fun unseen(all: List<Version>, lastSeen: String?, current: String): List<Version> =
         upTo(all, current).filter { lastSeen == null || UpdateLogic.isNewer(it.version, lastSeen) }
@@ -69,8 +77,11 @@ object WhatsNew {
 
     // ---- Android side ----
 
-    fun load(ctx: Context): List<Version> =
-        runCatching { ctx.resources.openRawResource(R.raw.whats_new).bufferedReader().use { parse(it.readText()) } }.getOrDefault(emptyList())
+    fun load(ctx: Context): List<Version> = runCatching {
+        val dates = ctx.resources.openRawResource(R.raw.release_dates).bufferedReader().use { releaseDates(it.readText()) }
+        ctx.resources.openRawResource(R.raw.whats_new).bufferedReader().use { parse(it.readText()) }
+            .map { it.copy(releasedOn = dates[it.version]) }
+    }.getOrDefault(emptyList())
 
     fun lastSeen(ctx: Context): String? = ctx.getSharedPreferences(PREFS, 0).getString(KEY_SEEN, null)
 

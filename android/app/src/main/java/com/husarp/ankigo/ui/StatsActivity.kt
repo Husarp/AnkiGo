@@ -83,6 +83,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     private lateinit var sheetLayer: FrameLayout
     private val statsListener: () -> Unit = { requestRender() }
     private var refreshWanted = false
+    private var statsRequest: Triple<String, Int, String>? = null
     private val chartLoader = StatsChartLoader(deliver = { root.post(it) })
     private var synchronousChart = false
 
@@ -206,7 +207,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
     }
 
     /** PLAN 448: keep both the Show sheet and achievement details on app return. */
-    override fun onAppReturned() {} // Keep the current section and open sheet on a brief app switch.
+    override fun onAppReturned() { refreshWanted = true; requestRender() } // Keep the section and sheet, refresh their counts.
 
     /** Test hook and Nav: shows [s]. The chart state (metric, period, deck, grain) is kept while the page lives. */
     internal fun showSection(s: StatsSection) {
@@ -230,7 +231,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
 
     override fun onShow() {
         super.onShow()
-        AnkiStatsStore.cached(this) // the last numbers at once; the render is posted, so it sees them
+        AnkiStatsStore.cached(this, state.settings.dayStartHour) // the last numbers at once; the render is posted, so it sees them
         AnkiStatsStore.addListener(statsListener)
         refreshWanted = true
         loadDecks()
@@ -285,8 +286,10 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         content.removeAllViews()
         charts.clear(); closeHeat = null; heatRef = null
         val today = GameRepo.game?.dayKey() ?: state.day
-        if (refreshWanted) { // once per visit, when the game is ready (the store skips a refresh that just finished)
+        val request = Triple(today, state.settings.dayStartHour, ZoneId.systemDefault().id)
+        if (refreshWanted || statsRequest != request) { // refresh on a visit or a changed game-day boundary
             refreshWanted = false
+            statsRequest = request
             AnkiStatsStore.refresh(this, today, state.settings.dayStartHour)
         }
         val s = StudyStats.summary(state, today, WEEKS)
@@ -295,13 +298,13 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val collection = CollectionStats.of(data, state, System.currentTimeMillis())
         val series = if (!synchronousChart && metric.usesPeriod && period.days >= 100) longChart(snap, today, state.settings.dailyAverage)
         else ChartData.build(metric, period, deck, snap, state.history, today, grain, goal = s.goal, collection = collection, goalFor = { state.history[it]?.dailyGoal?.takeIf { g -> g > 0 } ?: DailyGoal.forDay(state, it) }, calendarYear = calendarYear.takeIf { metric == ChartMetric.STREAK_CALENDAR })
-        AnkiStatsStore.requestSeries(this, ChartData.seriesKeys(metric, period, deck, today))
+        AnkiStatsStore.requestSeries(this, ChartData.seriesKeys(metric, period, deck, today, state.settings.dayStartHour))
 
         content.addView(trainerCard())
         content.addView(streakCard(s), lp(14))
         if (anki != null) content.addView(sectionCard(R.drawable.ic_book, "Study", R.color.ag_blue, null,
-            "Cards today counts distinct AnkiDroid cards: a card answered twice counts once.",
-            tileGrid(listOf("Cards today" to Bits.fmt(anki.studied(today)), "Due now" to Bits.fmt(anki.dueNow)), R.color.ag_blue, 2)), lp(14))
+            if (anki.dailyCountsAvailable) "Cards today counts distinct AnkiDroid cards from the game-day reset. Learning repeats count once. The goal counts AnkiGo answers, including practice and catch-up. Undo keeps game progress and a redo adds none." else "Game-day card counts are unavailable from AnkiDroid. The chart shows AnkiGo answers, including learning repeats, practice and catch-up. Undo keeps game progress and a redo adds none.",
+            tileGrid(listOfNotNull(if (anki.dailyCountsAvailable) "Cards today" to (if (today in anki.perDay) Bits.fmt(anki.studied(today)) else "…") else null, "Answers today" to Bits.fmt(s.reviewsToday), "Due now" to Bits.fmt(anki.dueNow)), R.color.ag_blue, 2)), lp(14))
         // PLAN 367: summary first; keep the chart controls together directly above the chart.
         val message = StatsChartMath.emptyMessage(series, snap.access, snap.message)
         if (message == null) content.addView(tileRow(StatsChartMath.tiles(series)), lp(14)) // zeros would only mislead while loading
@@ -319,8 +322,10 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
             content.addView(years, lp(4))
         }
         content.addView(chartCard(series, message, snap, today, barSel) { barSel = it }, lp(8))
-        if (metric == ChartMetric.DUE && anki != null && deck == null)
-            content.addView(note("Tomorrow: ${Bits.fmt(anki.dueTomorrow)} · Next 7 days: ${Bits.fmt(anki.dueNext7)}"), lp(6))
+        if (metric == ChartMetric.DUE && anki != null && anki.forecastAvailable && deck == null) {
+            val next = anki.forecastAfter(today, 7)
+            content.addView(note("Tomorrow: ${next?.firstOrNull()?.let(Bits::fmt) ?: "…"} · Next 7 days: ${next?.sum()?.let(Bits::fmt) ?: "…"}"), lp(6))
+        }
 
 
         content.addView(sectionCard(R.drawable.ic_clock, "Study time", R.color.ag_green, null,
@@ -343,7 +348,7 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val identity = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         identity.addView(ImageView(this).apply { setImageResource(R.drawable.ic_trainer_rank); setColorFilter(c(R.color.ag_mauve)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(36), dp(44)).also { it.marginEnd = dp(8) })
-        identity.addView(Ui.text(this, 20f, 900, R.color.ag_text).apply { text = "Trainer level ${st.trainerLevel} · ${Trainer.rank(st)}" }, LinearLayout.LayoutParams(0, -2, 1f))
+        identity.addView(Ui.text(this, 20f, 900, R.color.ag_text).apply { text = "Level ${st.trainerLevel} · ${Trainer.rank(st)}" }, LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(identity, LinearLayout.LayoutParams(0, -2, 1f))
         // Keep achievements below the bar so the larger title has room even in split screen.
         // 48 dp touch height around the small chip
@@ -560,15 +565,9 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         card.addView(head)
         if (message == null && s.kind == ChartKind.TIME && s.grain != ChartGrain.DAY)
             card.addView(note("Average per recorded day"), lp(4))
+        if (message == null && s.metric == ChartMetric.REVIEWS && !s.source.startsWith("AnkiGo"))
+            card.addView(note("Distinct cards · learning repeats count once"), lp(4))
         val tones = tonesFor(s)
-        if (message == null && s.bars.any { it.dailyGoal != null }) card.addView(Ui.text(this, 11f, 800, R.color.ag_sub1).apply {
-            text = "Daily goal · faded: partly done · solid: goal met"
-            compoundDrawablePadding = dp(5)
-            setCompoundDrawablesRelative(getDrawable(R.drawable.ic_flag)?.mutate()?.apply {
-                setTint(c(R.color.ag_sub1)); setBounds(0, 0, dp(13), dp(13))
-            }, null, null, null)
-            setPadding(0, dp(4), 0, 0)
-        })
         val legend = if (message == null) StatsChartMath.legend(s) else emptyList()
         if (legend.isNotEmpty()) {
             val flow = StatsSheets.FlowLayout(this, 12)

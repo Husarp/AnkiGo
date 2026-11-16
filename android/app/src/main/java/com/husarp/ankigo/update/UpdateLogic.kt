@@ -11,6 +11,13 @@ import java.time.ZoneId
 object UpdateLogic {
     const val MIN_CHECK_GAP_MS = 5 * 60_000L
 
+    fun lastChecked(at: Long, manual: Boolean, format: (Long) -> String): String =
+        if (at <= 0) "Last checked: never" else "Last checked: ${format(at)} (${if (manual) "manual" else "auto"})"
+
+    fun releaseDate(date: String?): String = runCatching {
+        java.time.LocalDate.parse(date?.take(10)).format(java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy", java.util.Locale.ENGLISH))
+    }.getOrDefault("Release date unavailable")
+
     /** A release file as GitHub lists it. */
     data class Asset(val name: String, val url: String, val size: Long)
 

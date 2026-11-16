@@ -46,7 +46,7 @@ class R606Shots {
         p.preset(TeamSection.TEAM)
         val screen = pageScreen(ctx, p)
         call(p, "render")
-        assertTrue("no trainer card here", texts(p.root).none { it.startsWith("Trainer level") })
+        assertTrue("no trainer card here", texts(p.root).none { Regex("""^Level \d+ · """).containsMatchIn(it) })
         assertTrue("no Compare button in the bar", "Compare" !in descriptions(p.root))
         screen
     }
@@ -55,7 +55,7 @@ class R606Shots {
         val p = StatsPage(ctx, NoHost)
         val screen = pageScreen(ctx, p)
         call(p, "render")
-        assertTrue(texts(p.root).any { it.startsWith("Trainer level") })
+        assertTrue(texts(p.root).any { Regex("""^Level \d+ · """).containsMatchIn(it) })
         screen
     }
 

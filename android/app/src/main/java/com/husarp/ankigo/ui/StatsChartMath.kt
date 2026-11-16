@@ -200,6 +200,7 @@ object StatsChartMath {
 
     /** What to say instead of a chart (loading, AnkiDroid unreadable, nothing in the period); null when there is something to draw. */
     fun emptyMessage(s: ChartSeries, access: AnkiAccess?, message: String?): String? {
+        if (s.source == StatsText.FORECAST_UNAVAILABLE) return s.source
         if (s.loading) return s.source.ifBlank { "Reading AnkiDroid…" }
         if (!s.empty) return null
         val reason = StatsText.reason(access, message)

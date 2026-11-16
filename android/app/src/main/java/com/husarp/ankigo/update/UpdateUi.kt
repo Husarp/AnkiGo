@@ -262,6 +262,7 @@ class UpdateOverlay(ctx: Context, content: View) : FrameLayout(ctx) {
 
 /** Settings → Updates: cards with the auto-check switch, version + CHECK NOW, and the update status. */
 class UpdateSection(ctx: Context, private val cur: String = Updates.current(ctx), notes: List<WhatsNew.Version> = WhatsNew.load(ctx)) : UpdatesView(ctx) {
+    private val lastChecked = Form.body(ctx, "Last checked: never", 12f, R.color.ag_sub0)
     private val checkBtn = pillButton(ctx, "CHECK NOW", false, 13f, 40, 14) { Updates.checkNow(ctx) }
     private lateinit var getBtn: TextView
     private val statusCard = Ui.card(ctx).apply { setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 12), Ui.dp(ctx, 14), Ui.dp(ctx, 12)) }
@@ -278,7 +279,11 @@ class UpdateSection(ctx: Context, private val cur: String = Updates.current(ctx)
         val versionRow = Form.row(ctx, "Version $cur", null, checkBtn).apply {
             setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 4), Ui.dp(ctx, 10), Ui.dp(ctx, 4))
         }
-        addView(Form.cardOf(ctx, listOf(switchRow, versionRow)))
+        val checkedRow = LinearLayout(ctx).apply {
+            setPadding(Ui.dp(ctx, 14), Ui.dp(ctx, 4), Ui.dp(ctx, 14), Ui.dp(ctx, 12))
+            addView(lastChecked)
+        }
+        addView(Form.cardOf(ctx, listOf(switchRow, versionRow, checkedRow)))
         statusCard.addView(message)
         statusCard.addView(sub, Form.lp(ctx, 2))
         statusCard.addView(btnRow, Form.lp(ctx, 8))
@@ -291,12 +296,17 @@ class UpdateSection(ctx: Context, private val cur: String = Updates.current(ctx)
         }, Form.lp(ctx, 14))
     }
     override fun render(s: Updates.State) {
+        lastChecked.text = UpdateLogic.lastChecked(s.lastCheckedAt, s.lastCheckManual) { at ->
+            java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT).format(java.util.Date(at))
+        }
         val avail = Updates.available(s, cur)
         val failed = s.phase is Updates.Phase.Failed
         Form.enable(checkBtn, !s.checking)
         message.text = if (avail) "Update ${s.latest!!.version} · ${DisplayNumbers.size(s.latest.apkSize)}" else s.message ?: ""
         message.visibility = if (avail || s.message != null) View.VISIBLE else View.GONE
-        sub.visibility = if (avail && s.phase == Updates.Phase.Idle) View.VISIBLE else View.GONE
+        val date = UpdateLogic.releaseDate(s.latest?.releasedOn)
+        sub.text = if (date == "Release date unavailable") date else "Released $date"
+        sub.visibility = if (avail) View.VISIBLE else View.GONE
         btnRow.visibility = if (avail && !failed) View.VISIBLE else View.GONE
         Form.enable(getBtn, s.phase !is Updates.Phase.Downloading)
         progress.render(s)
