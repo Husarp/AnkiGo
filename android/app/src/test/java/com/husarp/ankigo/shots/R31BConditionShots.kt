@@ -182,7 +182,7 @@ class R31BConditionShots {
         val sc = host.build(ctx)
         val arena = sc.arena
         arena.setNewTag(true); arena.setEnemyCardShown(true)
-        val bg = BackdropCatalog.byId("forest")!!
+        val bg = BackdropCatalog.byId("grass-glade")!!
         layoutRoot(sc.root, sc.wPx, sc.hPx)
         if (picture) { load(ctx, bg); field<ArenaBackdrop>(arena, "backdrop").request(bg, false) }
         else arena.setPlainBackdrop()

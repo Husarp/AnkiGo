@@ -8,15 +8,15 @@ import org.junit.Test
 class BackdropCatalogTest {
     private val all get() = BackdropCatalog.ALL
     @Test fun approvedSetHasNoDroppedScenes() {
-        assertEquals(51, BackdropCatalog.ALL.size)
-        assertEquals(51, BackdropCatalog.ALL.map { it.id }.toSet().size)
+        assertEquals(36, BackdropCatalog.ALL.size)
+        assertEquals(36, BackdropCatalog.ALL.map { it.id }.toSet().size)
         for (id in listOf("stormy-plains", "psychic-lab", "volcanocave", "fairy-hill", "bamboo-dojo-v2")) assertNull(id, BackdropCatalog.byId(id))
-        assertEquals(11, BackdropCatalog.ALL.count { it.source == BackdropSource.SHOWDOWN })
-        assertEquals(14, BackdropCatalog.GENERAL.size)
+        assertEquals(0, BackdropCatalog.ALL.count { it.source == BackdropSource.SHOWDOWN })
+        assertEquals(12, BackdropCatalog.GENERAL.size)
     }
     @Test fun bundledBatchHasExplicitTypeEligibility() {
         assertEquals(setOf(Type.FIRE, Type.ROCK), BackdropCatalog.typesFor("lava-field").toSet())
-        assertEquals(listOf(Type.WATER), BackdropCatalog.typesFor("coral-shallows"))
+        assertEquals(listOf(Type.WATER), BackdropCatalog.typesFor("reef-bay"))
         for (id in BackdropCatalog.GENERAL) {
             val types = BackdropCatalog.typesFor(id)
             assertTrue(id, types.isNotEmpty() && types.size < Type.entries.size)
@@ -29,8 +29,7 @@ class BackdropCatalogTest {
     }
     @Test fun wishiwashiNeverGetsLavaEvenWhenOnlyLavaIsEnabled() {
         val fish = TestData.species(746, name = "Wishiwashi", types = listOf(Type.WATER))
-        val eligible = setOf("tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay", "beach", "river",
-            "deep-sea-cave", "sunset-beach", "coral-shallows")
+        val eligible = setOf("sandbar-isle", "reef-bay")
         assertEquals(eligible, BackdropCatalog.options(Type.WATER).map { it.id }.toSet())
         for (seed in (-100..100).toList() + listOf(Int.MIN_VALUE, Int.MAX_VALUE)) {
             assertTrue(BackdropCatalog.pick(fish.types, seed, BackdropCatalog.isLegendary(fish)).id in eligible)
@@ -57,28 +56,25 @@ class BackdropCatalogTest {
         }
     }
     @Test fun waterVetoesFireAndDesertInEitherTypeOrder() {
-        assertBiomeVeto(Type.WATER, setOf("desert", "desert-oasis", "canyon", "fire-savanna", "lava-field"))
+        assertBiomeVeto(Type.WATER, setOf("desert-oasis", "canyon", "fire-savanna", "lava-field", "volcano-b"))
     }
     @Test fun iceVetoesFireAndDesertInEitherTypeOrder() {
-        assertBiomeVeto(Type.ICE, setOf("desert", "desert-oasis", "canyon", "fire-savanna", "lava-field"))
+        assertBiomeVeto(Type.ICE, setOf("desert-oasis", "canyon", "fire-savanna", "lava-field", "volcano-b"))
     }
     @Test fun fireVetoesFrozenScenesInEitherTypeOrder() {
-        assertBiomeVeto(Type.FIRE, setOf("icecave", "snow-aurora", "ice-lake", "snowy-pines"))
-    }
-    @Test fun fireVetoesUnderwaterInEitherTypeOrder() {
-        assertBiomeVeto(Type.FIRE, setOf("deep-sea-cave"))
+        assertBiomeVeto(Type.FIRE, setOf("snow-aurora", "snowy-pines", "snow-field"))
     }
     @Test fun grassVetoesBurningScenesInEitherTypeOrder() {
-        assertBiomeVeto(Type.GRASS, setOf("fire-savanna", "lava-field"))
+        assertBiomeVeto(Type.GRASS, setOf("fire-savanna", "lava-field", "volcano-b"))
     }
     @Test fun bugVetoesBurningScenesInEitherTypeOrder() {
-        assertBiomeVeto(Type.BUG, setOf("fire-savanna", "lava-field"))
+        assertBiomeVeto(Type.BUG, setOf("fire-savanna", "lava-field", "volcano-b"))
     }
     @Test fun mutuallyClashingPoolsUseNeutralFallback() {
         for (types in listOf(listOf(Type.FIRE, Type.ICE), listOf(Type.ICE, Type.FIRE))) {
             for (seed in listOf(Int.MIN_VALUE, -1, 0, 1, Int.MAX_VALUE)) {
                 assertNull(BackdropCatalog.pickEnabled(types, seed, false, emptySet()))
-                assertEquals("route", BackdropCatalog.pick(types, seed).id)
+                assertEquals("countryside-route", BackdropCatalog.pick(types, seed).id)
             }
         }
     }
@@ -89,22 +85,24 @@ class BackdropCatalogTest {
             BackdropCatalog.pickEnabled(types, it, false, emptySet())
         }.toSet())
         assertNull(BackdropCatalog.pickEnabled(types, 0, false, expected.map { it.id }.toSet()))
-        assertEquals("beach", BackdropCatalog.pickEnabled(types, Int.MIN_VALUE, false,
-            BackdropCatalog.ALL.map { it.id }.toSet() - "beach")?.id)
+        assertEquals("reef-bay", BackdropCatalog.pickEnabled(types, Int.MIN_VALUE, false,
+            BackdropCatalog.ALL.map { it.id }.toSet() - "reef-bay")?.id)
     }
     @Test fun forestTechIsOnlyBugAndFairy() {
         assertEquals(setOf(Type.BUG, Type.FAIRY), Type.entries.filter { t -> BackdropCatalog.options(t).any { it.id == "forest-tech-b" } }.toSet())
     }
-    @Test fun replacementsKeepOldTypes() {
-        val expected = mapOf("crystal-storm" to setOf(Type.ELECTRIC, Type.ROCK), "flower-field" to setOf(Type.NORMAL, Type.GRASS, Type.FAIRY), "poison-marsh" to setOf(Type.POISON))
-        for ((id, types) in expected) assertEquals(id, types, Type.entries.filter { t -> BackdropCatalog.options(t).any { it.id == id } }.toSet())
-        assertEquals(3, BackdropCatalog.byId("crystal-storm")!!.rev)
-        assertEquals(3, BackdropCatalog.byId("flower-field")!!.rev)
-        assertEquals(2, BackdropCatalog.byId("poison-marsh")!!.rev)
+    @Test fun replacementsAndNewScenesHaveTheirAssignedTypes() {
+        val expected = mapOf("crystal-storm" to setOf(Type.ELECTRIC, Type.ROCK),
+            "normal-meadow" to setOf(Type.NORMAL), "grass-glade" to setOf(Type.GRASS, Type.BUG, Type.FAIRY),
+            "poison-swamp" to setOf(Type.POISON), "flying-ridge" to setOf(Type.FLYING), "violet-plateau" to setOf(Type.PSYCHIC))
+        for ((id, types) in expected) assertEquals(id, types, BackdropCatalog.typesFor(id).toSet())
+        assertEquals(50, BackdropCatalog.byId("crystal-storm")!!.rev)
     }
     @Test fun keptOldScenesKeepTheirTypes() {
-        assertEquals(listOf("night-forest", "dark-town", "dark-forest"), BackdropCatalog.options(Type.DARK).filter { it.id !in BackdropCatalog.GENERAL }.map { it.id })
-        assertEquals(listOf("city", "forest", "ruins-courtyard"), BackdropCatalog.options(Type.PSYCHIC).filter { it.id !in BackdropCatalog.GENERAL }.map { it.id })
+        assertEquals(listOf(Type.DARK), BackdropCatalog.typesFor("dark-town"))
+        assertEquals(listOf(Type.BUG, Type.FAIRY), BackdropCatalog.typesFor("forest-tech-b"))
+        assertEquals(listOf(Type.FIRE), BackdropCatalog.typesFor("fire-savanna"))
+        assertEquals(listOf(Type.FIGHTING, Type.GROUND), BackdropCatalog.typesFor("fighting-training"))
     }
     @Test fun seedsAreStableAndCoverEachPool() {
         for (t in Type.entries) {
@@ -147,12 +145,6 @@ class BackdropCatalogTest {
     }
 
 
-    @Test fun deepSeaCaveHasItsRound9StandPoints() {
-        val b = BackdropCatalog.byId("deep-sea-cave")!!
-        assertEquals(.30f, b.player.x, 1e-6f); assertEquals(.815f, b.player.y, 1e-6f)
-        assertEquals(.80f, b.wild.x, 1e-6f); assertEquals(.615f, b.wild.y, 1e-6f)
-    }
-
     @Test fun standPointsAreSane() {
         for (b in all) {
             for ((name, s) in listOf("player" to b.player, "wild" to b.wild)) {
@@ -179,9 +171,9 @@ class BackdropCatalogTest {
     }
 
     @Test fun theNewBackgroundsAreInTheirTypeLists() {
-        for (t in listOf(Type.ROCK, Type.FIGHTING, Type.PSYCHIC)) assertTrue("$t", "ruins-courtyard" in BackdropCatalog.options(t).map { it.id })
+        for (t in listOf(Type.ROCK, Type.GHOST, Type.PSYCHIC)) assertTrue("$t", "ruined-castle" in BackdropCatalog.options(t).map { it.id })
         assertTrue("dark-town" in BackdropCatalog.options(Type.DARK).map { it.id })
-        assertEquals(setOf(Type.ROCK, Type.FIGHTING, Type.PSYCHIC), Type.values().filter { t -> BackdropCatalog.options(t).any { it.id == "ruins-courtyard" } }.toSet())
+        assertEquals(setOf(Type.ROCK, Type.GHOST, Type.PSYCHIC), Type.values().filter { t -> BackdropCatalog.options(t).any { it.id == "ruined-castle" } }.toSet())
         assertEquals(setOf(Type.DARK), Type.values().filter { t -> BackdropCatalog.options(t).any { it.id == "dark-town" } }.toSet())
         for (t in Type.values()) assertTrue("$t", BackdropCatalog.options(t).none { it.id == BackdropCatalog.SHRINE })
     }
@@ -189,7 +181,7 @@ class BackdropCatalogTest {
     @Test fun theNewShrineIsForLegendaryAndMythicalEncounters() {
         val shrine = BackdropCatalog.byId(BackdropCatalog.SHRINE)!!
         assertEquals("legendary-shrine", shrine.id)
-        assertEquals(2, shrine.rev)
+        assertEquals(50, shrine.rev)
         for (t in Type.values()) for (seed in listOf(0, 1, 7, -3, Int.MAX_VALUE)) {
             assertSame("$t $seed", shrine, BackdropCatalog.pick(listOf(t), seed, legendary = true))
             // not legendary: still one of the type's own pictures, never the shrine
@@ -210,14 +202,14 @@ class BackdropCatalogTest {
     }
 
     @Test fun newPicturesFileNamesAndStandPoints() {
-        assertEquals("legendary-shrine-2.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("legendary-shrine")!!))
-        assertEquals("ruins-courtyard.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("ruins-courtyard")!!))
-        assertEquals("dark-town.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("dark-town")!!))
+        assertEquals("legendary-shrine-50.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("legendary-shrine")!!))
+        assertEquals("ruined-castle-50.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("ruined-castle")!!))
+        assertEquals("dark-town-50.webp", com.husarp.ankigo.data.Backdrops.fileName(BackdropCatalog.byId("dark-town")!!))
         val town = BackdropCatalog.byId("dark-town")!!
         assertEquals(.68f, town.wild.x, 1e-6f) // a bit left of the rubble on the right
         assertTrue(town.dark)
-        assertFalse(BackdropCatalog.byId("ruins-courtyard")!!.dark)
-        for (id in listOf("legendary-shrine", "ruins-courtyard", "dark-town")) {
+        assertTrue(BackdropCatalog.byId("ruined-castle")!!.dark)
+        for (id in listOf("legendary-shrine", "ruined-castle", "dark-town")) {
             val b = BackdropCatalog.byId(id)!!
             assertEquals(id, .44f, b.player.s, 1e-6f); assertEquals(id, .32f, b.wild.s, 1e-6f)
             assertTrue(id, b.crisp)

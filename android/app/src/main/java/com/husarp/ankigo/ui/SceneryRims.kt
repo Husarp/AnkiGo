@@ -22,68 +22,50 @@ internal object SceneryRims {
         "cosmic" to intArrayOf(0xFF484D78.toInt(), 0xFFA4B1D0.toInt(), 0xFF292D50.toInt()),
     )
     internal val groups = mapOf(
-        "jungle" to "jungle",
-        "forest" to "jungle",
-        "meadow" to "jungle",
-        "flower-field" to "jungle",
-        "route" to "jungle",
         "forest-tech-b" to "jungle",
         "autumn-forest" to "jungle",
         "countryside-route" to "jungle",
-        "beach" to "beach",
-        "tropical-cove" to "beach",
-        "coral-lagoon" to "beach",
         "sandbar-isle" to "beach",
         "reef-bay" to "beach",
-        "coral-shallows" to "beach",
-        "river" to "beach",
-        "sunset-beach" to "beach",
-        "deep-sea-cave" to "beach",
-        "earthycave" to "cave",
-        "dampcave" to "cave",
         "mine" to "cave",
-        "icecave" to "snow",
         "snow-aurora" to "snow",
-        "ice-lake" to "snow",
         "snowy-pines" to "snow",
-        "desert" to "desert",
         "canyon" to "desert",
         "desert-oasis" to "desert",
         "fire-savanna" to "fire",
         "lava-field" to "fire",
-        "city" to "city",
-        "factory" to "city",
         "power-plant" to "city",
-        "night-forest" to "night",
         "dark-forest" to "night",
         "haunted-mansion" to "night",
         "dark-town" to "night",
         "night-rooftops" to "night",
         "old-graveyard" to "night",
-        "mountain" to "mountain",
-        "dragon-peak" to "mountain",
-        "cliff-clouds" to "mountain",
         "windy-hilltop" to "mountain",
-        "ruins-courtyard" to "ruins",
         "legendary-shrine" to "ruins",
         "fighting-training" to "dojo",
         "bamboo-dojo" to "dojo",
-        "poison-marsh" to "marsh",
-        "toxic-cave" to "marsh",
         "crystal-storm" to "crystal",
         "starry-plateau" to "cosmic",
         "starry-plateau-galaxy" to "cosmic",
+        "normal-meadow" to "jungle",
+        "grass-glade" to "jungle",
+        "flying-ridge" to "mountain",
+        "violet-plateau" to "crystal",
+        "poison-swamp" to "marsh",
+        "dojo" to "dojo",
+        "graveyard" to "night",
+        "ruined-castle" to "ruins",
+        "snow-field" to "snow",
+        "volcano-b" to "fire",
+        "night-forest-2" to "night",
     )
     fun colors(scene: String?, dark: Boolean): IntArray {
         val key = when (scene) {
-            "forest", "forest-tech-b" -> "forest"
-            "coral-shallows", "dampcave" -> scene
+            "forest-tech-b" -> "forest-tech-b"
             else -> groups[scene] ?: "jungle"
         }
         val colors = when (key) {
-            "forest" -> intArrayOf(0xFF3B3D47.toInt(), 0xFF9C777B.toInt(), 0xFF1C2936.toInt())
-            "coral-shallows" -> intArrayOf(0xFFB39A6D.toInt(), 0xFFEFD7A1.toInt(), 0xFF816F55.toInt())
-            "dampcave" -> intArrayOf(0xFF40565B.toInt(), 0xFF91A4A1.toInt(), 0xFF263B40.toInt())
+            "forest-tech-b" -> intArrayOf(0xFF3B3D47.toInt(), 0xFF9C777B.toInt(), 0xFF1C2936.toInt())
             else -> palettes.getValue(key)
         }
         return if (!dark) colors else colors.map { c ->

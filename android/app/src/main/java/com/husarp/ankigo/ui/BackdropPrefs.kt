@@ -90,7 +90,7 @@ internal object BackdropPrefs {
             previewPool.execute {
                 if (token != generation) return@execute
                 val thumb = runCatching { app.assets.open("backdrop-thumbs/${bg.id}.webp").use { BitmapFactory.decodeStream(it) } }.getOrNull()
-                post { if (token == generation && drawable == null) setImageBitmap(thumb) }
+                post { if (token == generation && drawable == null) { setImageBitmap(thumb); (drawable as? android.graphics.drawable.BitmapDrawable)?.isFilterBitmap = false } }
             }
 
         }

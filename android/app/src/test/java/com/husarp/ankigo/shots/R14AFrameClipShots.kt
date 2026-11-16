@@ -91,7 +91,7 @@ class R14AFrameClipShots {
     }
 
     private fun showPicture(ctx: Context, arena: ArenaView) {
-        val bg = BackdropCatalog.byId("forest")!!
+        val bg = BackdropCatalog.byId("grass-glade")!!
         FakeSprites.write(scene(bg, 0.5f), Backdrops.file(Sprites.dir(ctx), bg))
         val pic = Backdrops.fetchBlocking(Sprites.dir(ctx), bg, false, noGet)!!
         Backdrops.finish(Backdrops.currentGeneration(), bg.id, pic)

@@ -63,7 +63,7 @@ class R9W3BoxesShots {
     }
 
     private fun picture(ctx: Context, arena: ArenaView) {
-        val bg = BackdropCatalog.byId("forest")!!
+        val bg = BackdropCatalog.byId("grass-glade")!!
         BackdropScenes.write(Sprites.dir(ctx), bg, 0.5f)
         val pic = Backdrops.fetchBlocking(Sprites.dir(ctx), bg, false, noGet)!!
         Backdrops.finish(Backdrops.currentGeneration(), bg.id, pic)

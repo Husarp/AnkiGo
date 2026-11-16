@@ -9,7 +9,7 @@ import org.junit.Test
 // docs/design/r9/arena.js (R9_SHAPES: on-screen size in dp, the panel's draw scale s, the floating window's 0.72 zoom): both Pokémon's
 // feet inside the arena, their frames (feet row up to the 0.82 art height, half a frame to each side) not cut off.
 class R9NewBackdropStageTest {
-    private val ids = listOf("legendary-shrine", "ruins-courtyard", "dark-town")
+    private val ids = listOf("legendary-shrine", "ruined-castle", "dark-town")
 
     // name, on-screen width, height (dp), draw scale s, zoom
     private val shapes = listOf(

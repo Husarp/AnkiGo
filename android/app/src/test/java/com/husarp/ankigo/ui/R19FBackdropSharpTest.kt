@@ -85,7 +85,7 @@ class R19FBackdropSharpTest {
     }
 
     @Test fun theCopyIsOnlyMadeForAReduction() {
-        val jungle = BackdropCatalog.byId("jungle")!! // a 1264 x 848 file
+        val jungle = Backdrop("legacy-jungle", BackdropSource.OWN, "webp", 1264, 848, StandPoint(.30f,.83f,.44f), StandPoint(.85f,.625f,.32f), true, false) // a 1264 x 848 file
         // a 412 x 400 dp arena at 1 px per dp: the picture is cut down to well under one screen px per file px
         assertNotNull(BackdropDraw.sharp(scaled(jungle, 412f, 400f, 1f), 412f, 400f, 1f, 1f, 1264, 848, 1f))
         // the same arena on a 420 dpi phone: about 1 screen px per file px, so the GPU draws it with no smoothing
@@ -96,7 +96,7 @@ class R19FBackdropSharpTest {
     }
 
     @Test fun theCopyShowsTheLayersRectangleInScreenPixels() {
-        val canyon = BackdropCatalog.byId("canyon")!!
+        val canyon = Backdrop("legacy-canyon", BackdropSource.OWN, "webp", 1375, 768, StandPoint(.33f,.74f,.46f), StandPoint(.73f,.47f,.33f), true, false)
         val d = 2.625f
         val w = 390f * d; val h = 180f * d // the picture-in-picture's virtual arena, drawn at 0.6157 on the screen
         val l = scaled(canyon, 390f, 180f, d)
@@ -167,19 +167,9 @@ class R19FBackdropSharpTest {
         assertTrue("the picture-in-picture reduces most of them ($some)", some >= 20)
     }
 
-    @Test fun catalogPicturesUseTheirApprovedFiltering() {
-        assertTrue(BackdropCatalog.ALL.filter { it.source == BackdropSource.SHOWDOWN || (it.ext != "png" && it.id != "factory") }.all { it.crisp })
-        assertFalse(BackdropCatalog.byId("factory")!!.crisp)
-    }
-
-    /** Showdown, factory and smooth PNG beaches keep their approved drawing. */
-    @Test fun originalAndSmoothScenesKeepTheirApprovedDrawing() {
-        val today = BackdropCatalog.ALL.filter { !it.sharp }
-        assertEquals(16, today.size)
-        assertTrue(today.filter { it.source == BackdropSource.SHOWDOWN }.size == 11 && today.any { it.id == "factory" })
-        assertEquals(35, BackdropCatalog.ALL.count { it.sharp && it.source == BackdropSource.OWN })
-        assertTrue(today.filter { it.source == BackdropSource.OWN }.all { !it.crisp })
-        // today's Showdown = nearest neighbour, factory and PNG beaches = filtered
-        assertTrue(today.filter { it.source == BackdropSource.SHOWDOWN }.all { it.crisp })
+    @Test fun catalogPicturesDrawNativePixelsWithoutFilteredReduction() {
+        assertTrue(BackdropCatalog.ALL.all { it.crisp && !it.sharp })
+        assertTrue(BackdropCatalog.ALL.any { it.w <= 512 })
+        assertTrue(BackdropCatalog.ALL.any { it.w >= 1024 })
     }
 }

@@ -58,7 +58,7 @@ class R10W2NewTagShots {
     }
 
     private fun showPicture(ctx: Context, arena: ArenaView) {
-        val bg: Backdrop = BackdropCatalog.byId("forest")!!
+        val bg: Backdrop = BackdropCatalog.byId("grass-glade")!!
         BackdropScenes.write(Sprites.dir(ctx), bg, 0.5f)
         val pic = Backdrops.fetchBlocking(Sprites.dir(ctx), bg, false, noGet)!!
         Backdrops.finish(Backdrops.currentGeneration(), bg.id, pic)
