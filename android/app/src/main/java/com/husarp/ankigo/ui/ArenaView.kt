@@ -85,6 +85,9 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     /** The arena's background (R7-07): the plain gradient or a downloaded battle picture; it is a [com.husarp.ankigo.ui.movefx.Joltable] too. */
     private val backdrop = ArenaBackdrop(ctx)
 
+    private val scenePaint = Paint()
+    private var sceneDim = 0f
+
     // ---- enemy info card (R9 D12: [buildCards] puts the parts together by [infoBoxStyle]) ----
     private val eName = FitName.make(ctx)
     private val eLevel = Ui.text(ctx, 12f, 800, R.color.ag_sub0).apply { maxLines = 1 }
@@ -404,6 +407,13 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             g.clipToPadding = false
         }
         background = backdrop   // the plain gradient, or a downloaded battle picture (R7-07)
+        backdrop.onLightChange = { dim ->
+            sceneDim = dim
+            val k = 1f - dim
+            scenePaint.colorFilter = if (dim == 0f) null else android.graphics.ColorMatrixColorFilter(
+                android.graphics.ColorMatrix().apply { setScale(k, k, k, 1f) })
+            invalidate()
+        }
         backdrop.onPictureChange = { shown -> setPlatformsShown(!shown); invalidateGlass(); requestLayout() }   // R8-04: another picture = other stand points
         backdrop.onSettled = { fireBackdropReady() }   // R9 C4: the next wild one waits for this
         enemySprite.onArtChange = { artChanged() }    // R8-FIX M2: a new image / placeholder can change what the cards must keep clear of
@@ -492,8 +502,17 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     private var popOnTop = false
 
-    override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean =
-        if (child === popLayer && !popOnTop) false else super.drawChild(canvas, child, drawingTime)
+    override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
+        if (child === popLayer && !popOnTop) return false
+        if (sceneDim == 0f || (child !== enemyHolder && child !== playerHolder && child !== conditionLooks &&
+                child !== moveFx && child !== fx && child !== fieldGround && child !== fieldEffects)) {
+            return super.drawChild(canvas, child, drawingTime)
+        }
+        val save = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), scenePaint)
+        val result = super.drawChild(canvas, child, drawingTime)
+        canvas.restoreToCount(save)
+        return result
+    }
 
     // ---------------------------------------------------------------- layout
 

@@ -12,7 +12,10 @@ import com.husarp.ankigo.game.Mon
 internal object BoxMonPicker {
     internal var interceptShow: ((Dialog, TeamPage) -> Unit)? = null
 
-    fun show(source: GamePage, title: String, eligible: (Mon) -> Boolean, picked: (Mon) -> Unit) {
+    fun show(source: GamePage, title: String, eligible: (Mon) -> Boolean, picked: (Mon) -> Unit) =
+        show(source, title, eligible, null, picked)
+
+    fun show(source: GamePage, title: String, eligible: (Mon) -> Boolean, message: String?, picked: (Mon) -> Unit) {
         val dialog = Dialog(source).apply { requestWindowFeature(Window.FEATURE_NO_TITLE) }
         val host = object : PageHost {
             override val hostActivity get() = source.host.hostActivity
@@ -29,7 +32,15 @@ internal object BoxMonPicker {
                 }
             })
         }
-        dialog.setContentView(page.root)
+        dialog.setContentView(if (message == null) page.root else android.widget.LinearLayout(source).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setBackgroundColor(Ui.c(source, com.husarp.ankigo.R.color.ag_base))
+            addView(Ui.text(source, 13f, 600, com.husarp.ankigo.R.color.ag_sub0).apply {
+                text = message
+                setPadding(Ui.dp(source, 16), Ui.dp(source, 12), Ui.dp(source, 16), Ui.dp(source, 8))
+            }, android.widget.LinearLayout.LayoutParams(-1, -2))
+            addView(page.root, android.widget.LinearLayout.LayoutParams(-1, 0, 1f))
+        })
         dialog.setCanceledOnTouchOutside(false)
         dialog.setOnDismissListener { page.onHide(); page.onGone() }
         dialog.window?.apply {

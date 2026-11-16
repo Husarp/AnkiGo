@@ -82,6 +82,8 @@ class R36RShots {
         var onPick: ((Mon) -> Unit)? = null
         BoxMonPicker.interceptShow = { dialog, recipient ->
             pages += recipient
+            val content = dialog.findViewById<View>(android.R.id.content)
+            assertTrue(all(content).filterIsInstance<TextView>().any { it.text.toString() == BerryFeeding.explanation })
             val request = getField(recipient, "recipient") as TeamPage.Recipient
             onPick = request.picked
             dialog.setOnDismissListener { recipient.onHide(); recipient.onGone() }
@@ -96,6 +98,7 @@ class R36RShots {
         Pickers.interceptApp = { picker = it }
         BagItemActions.feedButton(page, mon).performClick()
         assertNotNull(picker)
+        assertTrue(all(picker!!.content()).filterIsInstance<TextView>().any { it.text.toString() == BerryFeeding.explanation })
         picker!!.dismiss(); Pickers.interceptApp = null
         page.act { it.feedBerry("oran-berry", mon.uid) }
         val result = page.act { it.feedBerry("oran-berry", mon.uid) }

@@ -131,7 +131,7 @@ object ItemInfo {
     fun line(data: GameData?, item: String, caught: Set<Int>? = null): String {
         HealingItems.summary[item]?.let { return it }
         specialLine(item)?.let { return it }
-        if (item in AbilityAdaptations.berries) return berryLine(item)
+        if (item in AbilityAdaptations.berries) return berryLine(item) + ". " + BerryFeeding.explanation
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {
             ItemKind.AUTO -> "Protects one missed daily goal"
@@ -439,7 +439,7 @@ object ItemInfo {
         return "$head$shown$more.$time"
     }
 
-    private fun heldWhat(item: String): String = if (item in AbilityAdaptations.berries) berryLine(item) + (if (item in setOf("oran-berry", "sitrus-berry", "figy-berry")) "" else "; consumed") + ". Or feed a free Bag berry to any Pokémon for +5 Bond points and a 15% chance of a small gift (20 XP, 5 coins or +1 random EV, within the usual caps). Activates automatically while held in battle. Gluttony, Ripen, Cheek Pouch and Cud Chew can improve it; Klutz and opposing Unnerve prevent activation." else when (item) {
+    private fun heldWhat(item: String): String = if (item in AbilityAdaptations.berries) berryLine(item) + (if (item in setOf("oran-berry", "sitrus-berry", "figy-berry")) "" else "; consumed") + ". ${BerryFeeding.explanation} Activates automatically while held in battle. Gluttony, Ripen, Cheek Pouch and Cud Chew can improve it; Klutz and opposing Unnerve prevent activation." else when (item) {
         "lucky-egg" -> "The Pokémon holding it gets **×${nice(Tuning.LUCKY_EGG)} XP** from wins and catches. It works for your **main** and for the **Exp. Share** holder."
         "amulet-coin", "luck-incense" -> "While your **main** holds it, the money you earn for answers and wins is **doubled**, all day. " +
             "The slower pay after each ${Tuning.CASH_TIER} coins still applies, so you keep getting double at every step. Holding both money items still gives ×2. It does nothing on a Pokémon that is not your main."
