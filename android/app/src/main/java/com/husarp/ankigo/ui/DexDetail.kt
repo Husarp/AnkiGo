@@ -34,6 +34,8 @@ object DexDetail {
     /** Opens one of your Pokémon's details (the tests swap it to see which copy "My Pokémon" opens). */
     internal var openMon: (GamePage, GameData, Mon) -> Unit = { a, data, m -> MonDetail.show(a, data, m) }
 
+    internal fun learnTitle(count: Int) = "Moves it learns · $count"
+
     fun show(a: GamePage, sp: Species, focusEvolution: Boolean = false) {
         val data = a.data
         val state = a.state
@@ -87,7 +89,7 @@ object DexDetail {
             })
             val learn = sp.levelMoves.distinct()
             if (learn.isNotEmpty()) {
-                col.addView(DetailSections.section(a, mem, DetailSection.MOVES, "${learn.size} moves") {
+                col.addView(DetailSections.section(a, mem, DetailSection.MOVES, null, title = learnTitle(learn.size)) {
                     DetailSections.moves(a, data, learn.map { it.move }, compact, levels = learn.map { DetailFormat.learnLevel(it.level) })
                 })
             }
