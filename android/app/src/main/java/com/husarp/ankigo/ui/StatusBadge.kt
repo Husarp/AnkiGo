@@ -35,7 +35,10 @@ class StatusBadge(ctx: Context, val status: String, dark: Boolean = false) : Vie
         color = ink.color; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND
     }
     private val glyph = Path()
-    private val hole = Path()
+    private val burnIcon = if (status == "brn") ctx.getDrawable(R.drawable.ic_ach_streak_flame)!!.mutate().apply {
+        setTint(ink.color)
+        setBounds(3, 3, 21, 21)
+    } else null
     private val box = RectF(1f, 1f, 23f, 23f)
 
     init {
@@ -43,7 +46,6 @@ class StatusBadge(ctx: Context, val status: String, dark: Boolean = false) : Vie
         when (status) {
             "psn" -> drop(glyph)
             "tox" -> toxDrops(glyph)
-            "brn" -> flame(glyph, hole)
             "par" -> bolt(glyph)
         }
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -59,7 +61,7 @@ class StatusBadge(ctx: Context, val status: String, dark: Boolean = false) : Vie
         canvas.drawRoundRect(box, 5f, 5f, fill)
         when (status) {
             "psn", "tox", "par" -> canvas.drawPath(glyph, ink)
-            "brn" -> { canvas.drawPath(glyph, ink); canvas.drawPath(hole, fill) }
+            "brn" -> burnIcon?.draw(canvas)
             "slp" -> zz(canvas)
             "frz" -> snow(canvas)
         }
@@ -106,23 +108,6 @@ class StatusBadge(ctx: Context, val status: String, dark: Boolean = false) : Vie
         val big = Matrix().apply { preTranslate(-3.6f, 1.2f); preScale(0.8f, 0.8f); preTranslate(3f, 3f) }
         val small = Matrix().apply { preTranslate(4.4f, -2.4f); preScale(0.62f, 0.62f); preTranslate(7f, 7f) }
         p.addPath(one, big); p.addPath(one, small)
-    }
-
-    private fun flame(outer: Path, inner: Path) {
-        outer.moveTo(12.2f, 3.6f)
-        outer.cubicTo(12.8f, 7f, 17.2f, 9.2f, 17.2f, 14.2f)
-        outer.cubicTo(17.2f, 17.4f, 14.9f, 19.8f, 12f, 19.8f)
-        outer.cubicTo(9.1f, 19.8f, 6.8f, 17.4f, 6.8f, 14.2f)
-        outer.cubicTo(6.8f, 11.8f, 8f, 10.2f, 9.4f, 8.8f)
-        outer.cubicTo(9.6f, 10.6f, 10.4f, 11.4f, 11.2f, 11.8f)
-        outer.cubicTo(11f, 8.8f, 11.4f, 6f, 12.2f, 3.6f)
-        outer.close()
-        inner.moveTo(12f, 13f)
-        inner.cubicTo(12f, 13f, 14.3f, 15f, 14.3f, 16.6f)
-        inner.cubicTo(14.3f, 17.9f, 13.3f, 18.8f, 12f, 18.8f)
-        inner.cubicTo(10.7f, 18.8f, 9.7f, 17.9f, 9.7f, 16.6f)
-        inner.cubicTo(9.7f, 15f, 12f, 13f, 12f, 13f)
-        inner.close()
     }
 
     private fun bolt(p: Path) {

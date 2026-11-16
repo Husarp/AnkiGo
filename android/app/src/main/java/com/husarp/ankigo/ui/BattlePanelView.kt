@@ -877,7 +877,8 @@ class BattlePanelView(base: Context) : FrameLayout(TextSizes.battleContext(base)
     fun setGoal(today: Int, goal: Int, animate: Boolean) {
         val g = max(goal, 1)
         goalBar.setMeaning(BarMeaning.GOAL, min(1f, today.toFloat() / g), animate)
-        goalBar.setGoalSparks(GoalTone.flameLevel(today.toFloat() / g))
+        // Keep the glow below the toast and bubble layers, rather than in the window overlay.
+        goalBar.setGoalSparks(GoalTone.flameLevel(today.toFloat() / g), column)
         val sub = Ui.c(context, R.color.ag_sub0)
         val sb = SpannableStringBuilder()
         if (today >= g) {
