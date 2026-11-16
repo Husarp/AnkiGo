@@ -11,7 +11,7 @@ internal object BagItemActions {
             orientation = LinearLayout.VERTICAL
             if (item in AbilityAdaptations.berries) addView(ItemCard.actView(page, ItemCard.Act("Feed berry…", true, null) {
                 (page as? CardHost)?.closeCard()
-                BoxMonPicker.show(page, "Feed ${Items.name(item)} to…", { true }) { mon -> feed(page, item, mon) }
+                BoxMonPicker.show(page, "Feed ${Items.name(item)} to…", { true }, message = BerryFeeding.explanation) { mon -> feed(page, item, mon) }
             }), Form.lp(page, 0))
             if (page is CardHost && BagSell.allowed(item)) addView(sellView(page, item), Form.lp(page, 6))
         }.takeIf { it.childCount > 0 }
@@ -43,7 +43,10 @@ internal object BagItemActions {
     fun feedButton(page: GamePage, mon: Mon, onFed: () -> Unit = {}): View = ItemCard.actView(page, ItemCard.Act("Feed berry…", true, null) {
         val berries = page.state.bag.keys.filter { it in AbilityAdaptations.berries && page.state.count(it) > 0 }.sorted()
         if (berries.isEmpty()) Ui.toast(page, "No berry in the Bag.")
-        else Pickers.choose(page, "Feed ${mon.shownName}", berries.map { Items.name(it) }) { index -> feed(page, berries[index], mon, onFed) }
+        else Pickers.show(AppDialog.Builder(page).setTitle("Feed ${mon.shownName}")
+            .setMessage(BerryFeeding.explanation)
+            .setItems(berries.map { Items.name(it) }.toTypedArray()) { _, index -> feed(page, berries[index], mon, onFed) }
+            .setNegativeButton("Cancel", null).create())
     })
 
     private fun feed(page: GamePage, item: String, mon: Mon, onFed: () -> Unit = {}) {

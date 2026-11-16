@@ -66,6 +66,15 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
     private var stage: Stage? = null
     private var alphaValue = 255
 
+    private var lightFrom = 0f
+    var lightDim = 0f
+        private set
+    var onLightChange: (Float) -> Unit = {}
+    private fun updateLight(fraction: Float) {
+        val dim = BackdropLight.blend(lightFrom, BackdropLight.forScene(shown?.id), fraction)
+        if (dim != lightDim) { lightDim = dim; onLightChange(dim) }
+    }
+
     /** A fade is under way (or waiting for its first frame, [fadeStart] < 0); [old] is the outgoing picture, null = the gradient. */
     private var fading = false
     private var fadeStart = -1L
@@ -195,6 +204,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         requestGen++
         wanted = null
         shown = null
+        updateLight(1f)
         val had = cur != null
         cur?.release()
         cur = null
@@ -206,6 +216,8 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
 
     private fun apply(bg: Backdrop, loaded: BackdropPic) {
         wanted = null
+        // Preserve the visible light when another image interrupts the cross-fade.
+        lightFrom = lightDim
         shown = bg
         syncScale()
         val f = Frame(bg, loaded, stage)
@@ -222,6 +234,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
                 BackdropFade.Outgoing.SNAPSHOT -> freeze()
             }
         }
+        if (!fade) updateLight(1f)
         fading = fade
         fadeStart = -1L
         val prev = cur
@@ -430,6 +443,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
                 if (a >= 255) endFade() else again = true
             }
         }
+        updateLight(a / 255f)
         compose(canvas, a, BackdropDraw.jolt(jolt, bounds.height().toFloat()), joltX)
         if (again) invalidateSelf() // the next frame of the fade; none is asked for after the last
     }

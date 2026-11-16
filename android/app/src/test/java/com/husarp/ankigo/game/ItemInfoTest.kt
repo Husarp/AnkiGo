@@ -39,7 +39,7 @@ class ItemInfoTest {
             val short = ItemInfo.short(d, id)
             val line = ItemInfo.line(d, id)
             assertTrue("$id short '$short'", short.isNotBlank() && short != "No description." && short.length <= 22 && "**" !in short)
-            assertTrue("$id line '$line'", line.isNotBlank() && line != "No description." && line.length <= 44 && "**" !in line)
+            assertTrue("$id line '$line'", line.isNotBlank() && line != "No description." && (line.length <= 44 || id in AbilityAdaptations.berries) && "**" !in line)
             val facts = ItemInfo.facts(d, id)
             assertTrue("$id facts", facts.size in 2..3 && facts.all { it.text.isNotBlank() && it.text != "No description." })
             assertTrue("$id titles", facts.all { it.title in setOf("What it does", "How to use", "In a fight") })
@@ -50,6 +50,19 @@ class ItemInfoTest {
 
     @Test fun theCatalogueNotesAreTheStaticFallbackAndNeverSayCash() {
         for (d in Items.ALL.values) assertFalse("${d.id} '${d.note}'", d.note.contains("cash", true) || d.note.startsWith("Held:"))
+    }
+
+    @Test fun berriesExplainFeedingWithTheGameplayNumbersAndSource() {
+        val text = BerryFeeding.explanation
+        for (phrase in listOf("+${BerryFeeding.BOND_GAIN} Bond", "${BerryFeeding.GIFT_CHANCE}%", "${BerryFeeding.GIFT_XP} XP",
+                "${BerryFeeding.GIFT_COINS} coins", "+${BerryFeeding.GIFT_EV} random stat EV",
+                "${BerryFeeding.FEEDS_PER_DAY} feeds per Pokémon per game day", "only found or won", "never sold in the Shop")) {
+            assertTrue(phrase, text.contains(phrase))
+        }
+        for (id in AbilityAdaptations.berries.keys) {
+            assertTrue(id, ItemInfo.line(data, id).contains(text))
+            assertTrue(id, all(id).contains(text))
+        }
     }
 
     @Test fun anUnknownItemHasOneGenericBlock() {

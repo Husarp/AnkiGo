@@ -4,34 +4,42 @@ import java.time.LocalDate
 import kotlin.random.Random
 
 object BerryFeeding {
+    const val BOND_GAIN = 5
+    const val GIFT_CHANCE = 15
+    const val FEEDS_PER_DAY = 2
+    const val GIFT_XP = 20
+    const val GIFT_COINS = 5
+    const val GIFT_EV = 1
+    val explanation: String get() = "Feed: +$BOND_GAIN Bond points; $GIFT_CHANCE% gift chance: $GIFT_XP XP, $GIFT_COINS coins or +$GIFT_EV random stat EV (caps apply).\n$FEEDS_PER_DAY feeds per Pokémon per game day. Berries only found or won; never sold in the Shop."
+
     fun feed(data: GameData, state: GameState, item: String, uid: String, rng: Random, now: Long = System.currentTimeMillis()): ActionResult {
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         val day = LocalDate.parse(state.day).toEpochDay()
         val key = "berry-fed/$uid"
         val count = if (state.counters["$key/day"] == day) state.counters["$key/count"] ?: 0 else 0
-        if (count >= 2) return ActionResult(false, "${mon.shownName} isn't hungry right now.")
+        if (count >= FEEDS_PER_DAY) return ActionResult(false, "${mon.shownName} isn't hungry right now.")
         if (item !in AbilityAdaptations.berries || state.count(item) <= 0) return ActionResult(false, "No berry in the Bag.")
         Economy.take(state, item)
         state.counters["$key/day"] = day; state.counters["$key/count"] = count + 1
         val events = mutableListOf<GameEvent>()
-        Bond.add(data, state, mon, 5, events)
-        var message = "Fed ${Items.name(item)} to ${mon.shownName}. +5 Bond points."
-        if (rng.nextInt(100) < 15) when (rng.nextInt(3)) {
+        Bond.add(data, state, mon, BOND_GAIN, events)
+        var message = "Fed ${Items.name(item)} to ${mon.shownName}. +$BOND_GAIN Bond points."
+        if (rng.nextInt(100) < GIFT_CHANCE) when (rng.nextInt(3)) {
             0 -> {
                 if (mon.level < Tuning.MAX_LEVEL) {
-                    Progression.gainXp(data, state, mon, 20, events); message += " A gift: 20 XP!"
+                    Progression.gainXp(data, state, mon, GIFT_XP, events); message += " A gift: $GIFT_XP XP!"
                 } else {
-                    state.cash = (state.cash.toLong() + 5).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); message += " A gift: 5 coins!"
+                    state.cash = (state.cash.toLong() + GIFT_COINS).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); message += " A gift: $GIFT_COINS coins!"
                 }
             }
-            1 -> { val coins = minOf(5, Int.MAX_VALUE - state.cash); state.cash += coins; message += " A gift: $coins coins!" }
+            1 -> { val coins = minOf(GIFT_COINS, Int.MAX_VALUE - state.cash); state.cash += coins; message += " A gift: $coins coins!" }
             else -> {
                 val stat = Stat.entries[rng.nextInt(Stat.entries.size)]
                 val n = mon.evs[stat]
                 if (n < Tuning.EV_STAT_CAP && mon.evs.total < Tuning.EV_TOTAL_CAP) {
-                    mon.evs = mon.evs.with(stat, n + 1)
-                    message += " A gift: +1 ${stat.name} EV!"
-                } else { state.cash = (state.cash.toLong() + 5).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); message += " A gift: 5 coins!" }
+                    mon.evs = mon.evs.with(stat, n + GIFT_EV)
+                    message += " A gift: +$GIFT_EV ${stat.name} EV!"
+                } else { state.cash = (state.cash.toLong() + GIFT_COINS).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); message += " A gift: $GIFT_COINS coins!" }
             }
         }
         Achievements.bump(state, Metric.ITEMS_USED)
