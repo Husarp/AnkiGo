@@ -92,7 +92,7 @@ object FloatTexts {
                     "flinch" -> listOf(FloatText(p, "Flinched", FloatKind.STATUS, condition = "flinch"))
                     "attract" -> listOf(FloatText(p, "In love", FloatKind.STATUS, condition = "attract"))
                     "recharge" -> listOf(FloatText(p, "Recharging", FloatKind.STATUS, condition = "mustrecharge"))
-                    "confusion" -> listOf(FloatText(p, "Confused", FloatKind.STATUS, condition = "confusion"))
+                    "confusion" -> listOf(FloatText(p, "Hurt itself", FloatKind.STATUS, condition = "confusion"))
                     "truant" -> listOf(FloatText(p, "Loafing", FloatKind.STATUS))
                     else -> listOf(FloatText(p, "Can't move", FloatKind.STATUS))
                 }
