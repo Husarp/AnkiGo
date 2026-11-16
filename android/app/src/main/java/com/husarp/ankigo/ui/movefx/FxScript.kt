@@ -80,6 +80,12 @@ class FxScript(
     /** The seeded random source of this animation. */
     val random: Random = Random(seed)
 
+    val targetBody: FxBody = stage.targetBody
+
+    fun sceneJolt(dx: Float, dy: Float) { if (!stageReleased) stage.sceneJolt(space.x(dx), space.y(dy)) }
+    fun prepareFilter(attacker: Boolean, matrix: FloatArray) = stage.prepareFilter(attacker, matrix)
+    fun rotateTarget(degrees: Float) { if (react && !stageReleased) stage.rotateTarget(degrees * dir) }
+
     /** Size factor of the plan (sqrt of power / base power, 0.8..1.6). */
     val k: Float get() = plan.k
     /** Pixels per stage unit. */

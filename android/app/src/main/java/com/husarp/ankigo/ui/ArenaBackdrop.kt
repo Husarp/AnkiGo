@@ -136,6 +136,9 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         Backdrops.load(ctx, bg, download) { }
     }
 
+    override var joltX: Float = 0f
+        set(v) { if (v != field) { field = v; invalidateSelf() } }
+
     override var jolt: Float = 0f
         set(v) { if (v != field) { field = v; invalidateSelf() } }
 
@@ -379,7 +382,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
             val l = layout ?: return
             val save = canvas.save()
             canvas.translate(0f, jolt)
-            if (stage?.shrunk == true || jolt != 0f || l.anyFade) canvas.drawBitmap(pic.blur, blurMatrix, blurPaint)
+            if (stage?.shrunk == true || jolt != 0f || joltX != 0f || l.anyFade) canvas.drawBitmap(pic.blur, blurMatrix, blurPaint)
             if (!l.anyFade) {
                 drawPicture(canvas)
             } else {
@@ -427,12 +430,12 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
                 if (a >= 255) endFade() else again = true
             }
         }
-        compose(canvas, a, BackdropDraw.jolt(jolt, bounds.height().toFloat()))
+        compose(canvas, a, BackdropDraw.jolt(jolt, bounds.height().toFloat()), joltX)
         if (again) invalidateSelf() // the next frame of the fade; none is asked for after the last
     }
 
     /** The panel at incoming opacity [a] (255 = only the picture [cur]); the outgoing side is [snap], else [old], else the gradient. */
-    private fun compose(canvas: Canvas, a: Int, jolt: Float) {
+    private fun compose(canvas: Canvas, a: Int, jolt: Float, dx: Float = 0f) {
         val c = cur ?: return
         val b = bounds
         val save = canvas.save()
@@ -440,7 +443,7 @@ internal class ArenaBackdrop(private val ctx: Context) : Drawable(), Joltable {
         val o = old
         val sn = snap
         if (a < 255 && sn == null && o?.layout == null) gradient.draw(canvas) // gradient -> first picture (the gradient's bounds are absolute)
-        canvas.translate(b.left.toFloat(), b.top.toFloat())
+        canvas.translate(b.left.toFloat() + dx, b.top.toFloat())
         if (a >= 255) {
             c.draw(canvas, jolt)
         } else {

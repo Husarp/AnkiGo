@@ -36,6 +36,15 @@ internal class ConditionLookState {
         if (clearing && now - since >= duration()) { status = null; clearing = false }
     }
 
+    enum class FrozenPhase { HIDDEN, HOLD, CRACK, SHATTER }
+    fun frozenPhase(now: Long): FrozenPhase = when {
+        status != "frz" -> FrozenPhase.HIDDEN
+        !clearing -> FrozenPhase.HOLD
+        now - since >= duration() -> FrozenPhase.HIDDEN
+        now - since < 440L -> FrozenPhase.CRACK
+        else -> FrozenPhase.SHATTER
+    }
+
     fun duration(): Long = if (status == "frz") 1000L else 420L
 }
 
@@ -62,11 +71,10 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
     private val watch = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == "reduceMotion" || key == "attackAnimations") refresh()
     }
-    private val cube = IceCube(1f, 1f)
+    var stageUnit = 1f
     private val fx = FxCanvas(FxArt.of(view.context), 1f)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.DEFAULT_BOLD }
     private val zColor = if (view.resources.configuration.uiMode and 0x30 == 0x20) 0xFFA1AEFF.toInt() else 0xFF6A80FF.toInt()
-    private val shard = floatArrayOf(-5f, -4f, 7f, -5f, 2f, 7f)
     private val tick = object : Runnable {
         override fun run() {
             queued = false
@@ -78,7 +86,11 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
         }
     }
 
-    val cold: Boolean get() = enabled && state.status == "frz" && (!state.clearing || SystemClock.uptimeMillis() - state.since < 440L)
+    val cold: Boolean get() {
+        if (!enabled) return false
+        val phase = state.frozenPhase(SystemClock.uptimeMillis())
+        return phase == ConditionLookState.FrozenPhase.HOLD || phase == ConditionLookState.FrozenPhase.CRACK
+    }
     internal val running: Boolean get() = queued
 
     fun set(status: String?, immediate: Boolean = false) {
@@ -169,27 +181,11 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
         fx.begin()
         canvas.save()
         canvas.translate((l + r) / 2f, (t + b) / 2f)
+        if (state.frozenPhase(now) != ConditionLookState.FrozenPhase.HIDDEN) {
+            AiFrozenCube.draw(fx, r - l, b - t, stageUnit, ms, state.clearing, opacity)
+        }
         canvas.scale(size, size)
-        if (state.status == "frz") {
-            if (!state.clearing || ms < 440f) {
-                cube.drawLook(fx, 0f, 0f, if (mirrored) -1f else 1f, 1f, opacity,
-                    if (state.clearing) .5f else (ms % 4000f) / 4000f,
-                    if (state.clearing) (ms / 400f).coerceAtMost(1f) else 0f)
-            } else {
-                val p = ((ms - 440f) / 560f).coerceIn(0f, 1f)
-                fx.alpha = (1f - p) * opacity
-                if (mirrored) canvas.scale(-1f, 1f)
-                for (i in 0 until 18) {
-                    val a = i * 2.399f
-                    canvas.save()
-                    canvas.translate(cos(a) * (12f + i * 2f + p * 100f), sin(a) * 35f - p * 65f + 130f * p * p)
-                    canvas.rotate((a + p * 5f) * 180f / PI.toFloat())
-                    fx.fillPoly(shard, 0xFFBEEBFF.toInt(), .75f)
-                    fx.strokePoly(shard, 1.2f, 0xFFFFFFFF.toInt(), .95f)
-                    canvas.restore()
-                }
-            }
-        } else if (state.status == "slp") {
+        if (state.status == "slp") {
             val fade = if (state.clearing) (1f - ms / 350f).coerceAtLeast(0f) else 1f
             paint.color = zColor
             for (i in 0 until 3) {
@@ -261,6 +257,6 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
         private val BOLT_Y = floatArrayOf(-5f, 8f, 37f)
         private val BOLT_ANGLE = floatArrayOf(-14.3f, 17.2f, 65.9f)
         private val STAR = arrayOf("....#....", "...###...", "...###...", "#########", ".#######.", "..#####..", "..#####..", ".###.###.", ".#.....#.")
-        val COLD = ColorMatrixColorFilter(ColorMatrix(FxColor.chain(FxColor.saturate(.5f), FxColor.brightness(1.18f), FxColor.hueRotate(-8f))))
+        val COLD = ColorMatrixColorFilter(ColorMatrix(FxColor.chain(FxColor.hueRotate(60f), FxColor.saturate(.75f), FxColor.brightness(1.12f))))
     }
 }

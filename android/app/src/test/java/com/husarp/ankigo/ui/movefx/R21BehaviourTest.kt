@@ -42,7 +42,7 @@ class R21BehaviourTest {
     @Test fun drainReturnsLightToTheUserAndSwipesHaveFourLayeredImpacts() {
         val st = RecStage()
         val s = MoveFx.script(st, plan(MoveLook.DRAIN), true, 3)!!
-        MoveFx.build(s, MoveLook.DRAIN)
+        BehaviourFx.drain(s) // legacy procedural drain; AI timeline is covered in R53AiAttackTest
         s.advance(540f)
         assertTrue(s.procs.any { it.s == 540f && it.e == 980f })
         s.advance(1050f)

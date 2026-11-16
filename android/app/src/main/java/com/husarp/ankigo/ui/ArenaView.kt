@@ -77,6 +77,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         canvas.concat(holder.matrix)
         canvas.translate(sprite.left.toFloat(), sprite.top.toFloat())
         canvas.concat(sprite.matrix)
+        val other = if (sprite === playerSprite) enemySprite else playerSprite
+        val otherHolder = if (sprite === playerSprite) enemyHolder else playerHolder
+        sprite.conditionLook?.stageUnit = ArenaMoveStage.Geo.unit(
+            otherHolder.left + other.width / 2f, otherHolder.top + other.height + other.drawnBottomInset() - other.drawnHeight() / 2f,
+            holder.left + sprite.width / 2f, holder.top + sprite.height + sprite.drawnBottomInset() - sprite.drawnHeight() / 2f,
+            sprite.drawnHeight().toFloat())
         sprite.drawConditionLook(canvas, alpha)
         canvas.restoreToCount(save)
     }

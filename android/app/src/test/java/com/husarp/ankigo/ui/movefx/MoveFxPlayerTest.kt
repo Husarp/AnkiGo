@@ -44,6 +44,16 @@ class MoveFxPlayerTest {
         assertEquals(0f, a.dx, 0.5f); assertEquals(0f, a.dy, 0.5f)
     }
 
+    @Test fun aFrameThatSkipsPastTheWholeEffectStillReleasesTheStage() {
+        val r = run(MoveLook.SHADOW_BALL)
+        assertFalse(r.player.step(r.times.total + 500f))
+        assertTrue(r.script.stageReleased)
+        assertEquals(1, r.stage.restores)
+        assertEquals(r.stage.poses.size, r.stage.posesAtRestore)
+        r.player.end()
+        assertEquals(1, r.stage.restores)
+    }
+
     @Test fun endAfterDoneRestoresNothingMore() {
         val r = run()
         r.player.step(r.times.done + 5f)
@@ -94,6 +104,7 @@ class MoveFxPlayerTest {
         val r = run(MoveLook.EARTHQUAKE)
         var ms = 0f
         while (ms < r.times.total) { r.player.step(ms); ms += 8f }
+        r.player.step(r.times.total)
         assertTrue("it did jolt", r.stage.jolts > 0)
         assertEquals(r.stage.jolts, r.stage.joltsAtRestore)
         assertEquals(1, r.stage.restores)

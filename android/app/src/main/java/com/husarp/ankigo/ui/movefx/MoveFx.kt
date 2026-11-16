@@ -29,6 +29,7 @@ object MoveFx {
 
     /** Runs [look]'s builder on [script]; the registry of the looks. */
     internal fun build(script: FxScript, look: MoveLook): FxTimes {
+        if (look in AiAttackFx.looks) return AiAttackFx.build(script)
         if (FxLean.leans(look)) script.lean(0f)   // R18-C (PLAN 228): first in the timeline, so the look's own poses add to it
         return buildLook(script, look)
     }

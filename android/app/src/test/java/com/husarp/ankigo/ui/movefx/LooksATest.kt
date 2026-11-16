@@ -8,7 +8,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
 
-/** R7-04: Ember, Water Gun jet, Vine Whip and Ice Beam on a recording stage: timings, counts, mirroring, reactions, pure geometry. Pure JVM. */
+/** Legacy procedural builders (AI registry covered by R53AiAttackTest). R7-04: Ember, Water Gun jet, Vine Whip and Ice Beam on a recording stage: timings, counts, mirroring, reactions, pure geometry. Pure JVM. */
 class LooksATest {
     private val eps = 1e-2f
     private val unit = 2f
@@ -17,7 +17,14 @@ class LooksATest {
                     kit: FxKit = FxKit.NORMAL, seed: Long = 11L): Triple<RecStage, FxScript, FxTimes> {
         val stage = RecStage(unit, reverse)
         val s = MoveFx.script(stage, plan(look, kit, k), react, seed)!!
-        val t = MoveFx.build(s, look)
+        if (FxLean.leans(look)) s.lean(0f) // retain the legacy procedural casting pose
+        val t = when (look) {
+            MoveLook.EMBER -> EmberFx.build(s)
+            MoveLook.WATER_JET -> WaterJetFx.build(s)
+            MoveLook.VINE_WHIP -> VineWhipFx.build(s)
+            MoveLook.ICE_BEAM -> IceBeamFx.build(s)
+            else -> error("Legacy procedural look")
+        }
         return Triple(stage, s, t)
     }
 

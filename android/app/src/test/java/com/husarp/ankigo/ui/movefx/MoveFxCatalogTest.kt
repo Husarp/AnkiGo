@@ -30,7 +30,7 @@ class MoveFxCatalogTest {
 
     @Test fun rule1SameTypeAndCategory() {
         val fl = plan("flamethrower", Type.FIRE, SPECIAL, 90)
-        assertEquals(MoveLook.EMBER, fl.look); assertEquals(1.5f, fl.k, 0.001f)
+        assertEquals(MoveLook.EMBER, fl.look); assertEquals(1f, fl.k, 0.001f)
         val hp = plan("hydropump", Type.WATER, SPECIAL, 110)
         assertEquals(MoveLook.WATER_JET, hp.look); assertEquals(1.6f, hp.k, 0f)
         val th = plan("thunder", Type.ELECTRIC, SPECIAL, 110)

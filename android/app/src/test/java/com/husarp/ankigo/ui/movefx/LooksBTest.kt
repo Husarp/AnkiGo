@@ -7,7 +7,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** R7-08: Thunderbolt, Psychic + aura template, Shadow Ball + orb template, Earthquake on a recording stage. Pure JVM. */
+/** Legacy procedural builders and category templates; AI registry covered by R53AiAttackTest. R7-08: Thunderbolt, Psychic + aura template, Shadow Ball + orb template, Earthquake on a recording stage. Pure JVM. */
 class LooksBTest {
     private val eps = 1e-2f
     private val unit = 2f
@@ -33,7 +33,14 @@ class LooksBTest {
         val stage = JoltStage(unit, reverse)
         val p = MoveFxPlan(look, k, kit, palette)
         val s = MoveFx.script(stage, p, react, seed)!!
-        return Run(stage, s, MoveFx.build(s, look))
+        val times = when (look) {
+            MoveLook.THUNDERBOLT -> ThunderboltFx.build(s)
+            MoveLook.PSYCHIC -> PsychicFx.build(s)
+            MoveLook.SHADOW_BALL -> ShadowBallFx.build(s, orb = false)
+            MoveLook.EARTHQUAKE -> EarthquakeFx.build(s)
+            else -> MoveFx.build(s, look)
+        }
+        return Run(stage, s, times)
     }
 
     private inline fun frames(r: Run, to: Float, each: (Float) -> Unit = {}) {

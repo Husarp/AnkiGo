@@ -26,6 +26,24 @@ class ArenaMoveStage(
     private val onRestore: () -> Unit = {},
 ) : MoveFxStage {
 
+    override val targetBody: com.husarp.ankigo.ui.movefx.FxBody = android.graphics.RectF().let { box ->
+        target.visibleBody(box)
+        val left = targetX - target.width / 2f
+        val top = targetY - target.height - target.drawnBottomInset() + target.drawnHeight() / 2f
+        com.husarp.ankigo.ui.movefx.FxBody(left + box.centerX(), top + box.centerY(), box.width(), box.height())
+    }
+
+    override fun sceneJolt(dx: Float, dy: Float) {
+        if (released) return
+        (background() as? Joltable)?.let { it.joltX = dx; it.jolt = dy }
+    }
+
+    override fun prepareFilter(attacker: Boolean, matrix: FloatArray) {
+        (if (attacker) this.attacker else target).prepareFxFilter(matrix)
+    }
+
+    override fun rotateTarget(degrees: Float) { if (!released) target.rotation = degrees }
+
     /** True after the first [restore]: the sprites belong to whatever animates them next. */
     var released = false
         private set
@@ -56,8 +74,10 @@ class ArenaMoveStage(
             if (!turning(s)) s.scaleX = 1f
             s.scaleY = 1f
             s.fxMatrix = null
+            s.clearPreparedFxFilters()
         }
-        (background() as? Joltable)?.jolt = 0f
+        target.rotation = 0f
+        (background() as? Joltable)?.let { it.jolt = 0f; it.joltX = 0f }
         onRestore()
     }
 

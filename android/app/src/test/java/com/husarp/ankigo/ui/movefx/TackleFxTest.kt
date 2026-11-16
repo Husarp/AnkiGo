@@ -6,7 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Tackle and the physical template on a recording stage: timings, poses, reaction, direction. Pure JVM. */
+/** Legacy procedural Tackle (AI registry covered by R53AiAttackTest) and the physical template on a recording stage: timings, poses, reaction, direction. Pure JVM. */
 class TackleFxTest {
     private val eps = 1e-2f
     private val unit = 2f
@@ -16,7 +16,7 @@ class TackleFxTest {
         val stage = RecStage(unit, reverse)
         val p = plan(look, kit, k)
         val s = MoveFx.script(stage, p, react, seed)!!
-        val t = MoveFx.build(s, look)
+        val t = if (look == MoveLook.TACKLE) TackleFx.build(s) else MoveFx.build(s, look)
         return Triple(stage, s, t)
     }
 

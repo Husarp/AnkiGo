@@ -63,6 +63,13 @@ interface MoveFxStage {
     /** Pixels per mockup stage unit. */
     val unit: Float
 
+    /** Visible body in effect-layer pixels; a fallback for preview stages without sprite art. */
+    val targetBody: FxBody get() = FxBody(targetX, targetY, 70f * unit, 70f * unit)
+
+    fun sceneJolt(dx: Float, dy: Float) { jolt(dy) }
+    fun rotateTarget(degrees: Float) {}
+    fun prepareFilter(attacker: Boolean, matrix: FloatArray) {}
+
     /**
      * Sets a sprite's pose on top of its rest pose: offsets [dx], [dy] in px (screen axes), scale [sx], [sy] about its
      * bottom centre, [matrix] a 4 x 5 colour matrix (20 floats, android.graphics.ColorMatrix order) or null for none.
@@ -93,5 +100,8 @@ interface MoveFxEffect : FxEffect {
  * (set as ArenaView's background) implements it; R7-05's stage finds it as `arena.background as? Joltable`.
  */
 interface Joltable {
+    var joltX: Float
+        get() = 0f
+        set(value) {}
     var jolt: Float
 }

@@ -39,11 +39,11 @@ internal class MoveFxPlayer(
      * callback reaches a sprite another animation owns by now. False when the animation is over.
      */
     internal fun step(ms: Float): Boolean {
-        if (ms >= times.total) return false
         if (!script.stageReleased && ms >= times.done) {
             script.advance(times.done)
             script.releaseStage()
         }
+        if (ms >= times.total) return false
         script.advance(ms)
         return true
     }
