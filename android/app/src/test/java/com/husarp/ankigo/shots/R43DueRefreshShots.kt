@@ -102,8 +102,8 @@ class R43DueRefreshShots {
         val offer = row(act).getChildAt(1) as ViewGroup
         for (i in 0 until offer.childCount) {
             val label = offer.getChildAt(i) as TextView
-            assertNotNull(label.layout)
-            assertTrue("the offer's text must fit in the narrow split layout", label.layout.getLineBottom(label.lineCount - 1) + label.compoundPaddingTop + label.compoundPaddingBottom <= label.height)
+            val textLayout = requireNotNull(label.layout)
+            assertTrue("the offer's text must fit in the narrow split layout", textLayout.getLineBottom(textLayout.lineCount - 1) + label.compoundPaddingTop + label.compoundPaddingBottom <= label.height)
             assertTrue(label.bottom <= offer.height)
         }
         root
