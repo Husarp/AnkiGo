@@ -239,7 +239,7 @@ internal object CoreRules : BattleRules {
         dmg = maxOf(1, dmg * r.rng.nextInt(Tuning.ROLL_MIN, 101) / 100)
         r.fx(p, "It hurt itself in its confusion!", EffectKind.CANT_MOVE, CONFUSION)
         val lost = minOf(dmg, m.hp)
-        r.hurt(p, dmg, "${m.name} lost $lost HP.", EffectKind.RESIDUAL)
+        r.hurt(p, dmg, "${m.name} hurt itself in its confusion and lost $lost HP!", EffectKind.RESIDUAL)
     }
 
     /** After a hit: the target is bound (Wrap ...), the move's rest turn (Hyper Beam ...) and Glaive Rush's drawback. */

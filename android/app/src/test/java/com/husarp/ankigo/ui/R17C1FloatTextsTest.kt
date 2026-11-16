@@ -38,7 +38,7 @@ class R17C1FloatTextsTest {
     }
 
     @Test fun cantMoveReasonsThatAreNotStatuses() {
-        val want = mapOf("flinch" to "Flinched", "attract" to "In love", "recharge" to "Recharging", "confusion" to "Confused", "truant" to "Loafing")
+        val want = mapOf("flinch" to "Flinched", "attract" to "In love", "recharge" to "Recharging", "confusion" to "Hurt itself", "truant" to "Loafing")
         for ((key, text) in want) {
             assertEquals(listOf(FloatText(true, text, FloatKind.STATUS, condition = if (key == "truant") null else if (key == "recharge") "mustrecharge" else key)), floats(fx(EffectKind.CANT_MOVE, stat = key)))
             assertEquals(listOf(FloatText(false, text, FloatKind.STATUS, condition = if (key == "truant") null else if (key == "recharge") "mustrecharge" else key)), floats(fx(EffectKind.CANT_MOVE, onPlayer = false, stat = key)))
