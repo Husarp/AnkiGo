@@ -45,6 +45,17 @@ class R19JChargeTileTest {
         }
     }
 
+    @Test fun eventMoveWinsOverLaterLiveStateAndAmbiguousProse() {
+        val solarBlade = Move("solarblade", "Solar Blade", Type.GRASS, Category.PHYSICAL, 125, 100)
+        val later = Move("solarbeam", "Solar Beam", Type.GRASS, Category.SPECIAL, 120, 100)
+        for (player in listOf(true, false)) {
+            val model = ActionBarModel { later }
+            model.observe(charge(player, "Kartana absorbed light!").copy(chargeMove = solarBlade))
+            assertEquals("Solar Blade", move(model, player).move)
+            assertEquals(Category.PHYSICAL, move(model, player).category)
+        }
+    }
+
     @Test fun liveMoveDisambiguatesSharedSentences() {
         for (name in listOf("Solar Blade", "Shadow Force")) {
             val model = ActionBarModel { Move(name.lowercase().replace(" ", ""), name,

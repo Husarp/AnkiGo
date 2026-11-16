@@ -109,10 +109,10 @@ class RegionalFormsTest {
         val bird = TestData.species(144, "Frosty", isLegendary = true)
         val d = world(bird, formOf(bird, 10169, 8, "Galar"))
         val st = stateOf(d)
-        assertEquals(emptyList<Int>(), Encounters.eligibleForms(d, st.settings, 144, 49, st.caught))
-        assertEquals(listOf(10169), Encounters.eligibleForms(d, st.settings, 144, 50, st.caught))
+        assertEquals(emptyList<Int>(), Encounters.eligibleForms(d, st.settings, 144, 29, st.caught))
+        assertEquals(listOf(10169), Encounters.eligibleForms(d, st.settings, 144, 30, st.caught))
         assertEquals(Tier.LEGENDARY, Encounters.tierOf(d.sp(10169)))
-        assertEquals(50, Encounters.minLevel(d, d.sp(10169)))
+        assertEquals(30, Encounters.minLevel(d, d.sp(10169)))
     }
 
     @Test fun capturePrerequisitesUseTheBaseNumber() {
@@ -131,7 +131,7 @@ class RegionalFormsTest {
         val st = stateOf(d)
         val a = Random(77)
         val r = Encounters.roll(d, st, 20, a)
-        // the picks the roll made, replayed by hand: tier (nextDouble), species (nextInt over the pool), shiny (nextInt 4096)
+        // the picks the roll made, replayed by hand: tier (nextDouble), species (nextInt over the pool), shiny (nextInt 400)
         val b = Random(77)
         b.nextDouble()
         val pool = Encounters.pool(d, Tier.NORMAL, st.settings, 20, st.caught)

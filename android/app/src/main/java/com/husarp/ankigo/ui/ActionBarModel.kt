@@ -147,7 +147,7 @@ class ActionBarModel(
         when (e.kind) {
             EffectKind.CANT_MOVE -> { open = null; put(own, HalfState.Note(cantMove(e.stat ?: e.status, e.text))); return listOf(own) }
             EffectKind.CHARGE -> {
-                val known = chargeMove(e.onPlayer)
+                val known = e.chargeMove ?: chargeMove(e.onPlayer)
                 val fallback = chargeFromText(e.text)
                 val move = known ?: fallback.second
                 val who = e.text.substringBefore(fallback.first).trim().ifEmpty { "Pokémon" }

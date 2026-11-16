@@ -28,6 +28,25 @@ class R17C3ChargeTest {
 
     // ---------------------------------------------------------------- charge moves
 
+    @Test fun chargeEventsKeepTheirMoveAfterTheLiveChargeIsGoneOnEitherSide() {
+        for (player in listOf(true, false)) {
+            val m = main(if (player) "solarbeam" else "splash")
+            val b = R17C3.battle(wild(if (player) "splash" else "solarbeam"))
+            val events = R17C3.round(m, b, Random(1), enemyActs = !player, mainActs = player)
+            val charge = events.effects().single { it.kind == EffectKind.CHARGE }
+            assertEquals(player, charge.onPlayer)
+            assertEquals(data.move("solarbeam"), charge.chargeMove)
+            b.player.charging = null; b.enemy.charging = null
+            val model = com.husarp.ankigo.ui.ActionBarModel()
+            events.forEach { model.observe(it) }
+            val shown = (if (player) model.mine else model.theirs) as com.husarp.ankigo.ui.HalfState.Moved
+            assertEquals("Solar Beam", shown.move.move)
+            assertEquals(Type.GRASS, shown.move.type)
+            assertEquals(Category.SPECIAL, shown.move.category)
+            assertTrue(shown.move.charging)
+        }
+    }
+
     @Test fun theFirstUseOnlyChargesAndTheNextActionIsTheHit() {
         val m = main("skullbash"); val w = wild("splash"); val b = R17C3.battle(w)
         val hp = w.hp

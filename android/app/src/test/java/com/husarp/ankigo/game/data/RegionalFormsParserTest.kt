@@ -178,7 +178,7 @@ id,evolved_species_id,evolution_trigger_id,minimum_level,minimum_happiness
     }
 
     @Test fun legendaryBabyFlagsAndGrowthComeFromTheBaseSpeciesRow() {
-        assertTrue(data.sp(10169).isLegendary) // Galar form of a legendary: the Lv 50 gate applies
+        assertTrue(data.sp(10169).isLegendary) // Galar form of a legendary: the Lv 30 gate applies
         assertTrue(data.sp(10107).isBaby)
         assertEquals(1, data.sp(10169).growthRate)
         assertFalse(data.sp(10091).isLegendary)

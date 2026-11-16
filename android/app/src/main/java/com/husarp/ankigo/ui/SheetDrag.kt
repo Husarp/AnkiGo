@@ -21,9 +21,9 @@ import com.husarp.ankigo.R
 /** The thresholds of a drag-to-close sheet. Pure. */
 object SheetDrag {
     /** Released past this share of the sheet's height = close. */
-    const val CLOSE_FRACTION = 0.30f
+    const val CLOSE_FRACTION = 0.12f
     /** A downward fling faster than this (dp per second) closes at any distance; an upward one this fast always springs back. */
-    const val FLING_DP_PER_S = 800f
+    const val FLING_DP_PER_S = 400f
 
     /** The sheet only follows the finger downwards: never above its resting place. */
     fun offset(raw: Float): Float = raw.coerceAtLeast(0f)
@@ -79,6 +79,7 @@ class SheetDragger(private val sheet: View, private val scrim: View?, private va
     private var downY = 0f
     private var startY = 0f
     private var inHandle = false
+    private var contentPull = false
     private var dragging = false
     private var anim: ValueAnimator? = null
     private var closed = false // onClose runs at most once
@@ -103,6 +104,8 @@ class SheetDragger(private val sheet: View, private val scrim: View?, private va
         anim?.cancel()
         tracker?.recycle(); tracker = VelocityTracker.obtain()
         downY = ev.rawY; startY = ev.rawY; inHandle = ev.y < handleZonePx || onVisibleHandle(ev); dragging = false
+        // A content scroll that reaches the top keeps its gesture; only a fresh downward pull can dismiss.
+        contentPull = scroll == null || !scroll.canScrollVertically(-1)
         tracker!!.addMovement(ev)
     }
 
@@ -130,11 +133,12 @@ class SheetDragger(private val sheet: View, private val scrim: View?, private va
     }
 
     private fun canStart(ev: MotionEvent): Boolean =
-        ev.rawY - downY > slop && (inHandle || scroll == null || !scroll.canScrollVertically(-1))
+        ev.rawY - downY > slop && (inHandle || (contentPull && (scroll == null || !scroll.canScrollVertically(-1))))
 
     private fun move(ev: MotionEvent) {
         tracker?.addMovement(ev)
         if (!dragging) {
+            if (ev.rawY - downY < -slop) contentPull = false
             if (!canStart(ev)) return
             dragging = true; startY = ev.rawY // the drag starts where it was recognised: no jump
         }

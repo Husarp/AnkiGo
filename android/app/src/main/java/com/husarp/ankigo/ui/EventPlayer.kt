@@ -500,7 +500,7 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
                 }
                 if (e.into > 0 && !fightOver) playTransform(e)?.let { return it }   // R19-L (PLAN 271)
                 if (e.kind == EffectKind.CHARGE && AppPrefs.attackAnimations(ctx)) {
-                    val type = ActionBarModel.chargeFromText(e.text).second.type
+                    val type = e.chargeMove?.type ?: ActionBarModel.chargeFromText(e.text).second.type
                     val run = arena.playMove(MoveFxCatalog.preparation(type), e.onPlayer, false, (1.0 / factor).toFloat())
                     if (run != null) return run.doneMs
                 }

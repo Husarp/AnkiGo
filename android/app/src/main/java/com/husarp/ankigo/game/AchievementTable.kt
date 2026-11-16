@@ -97,7 +97,7 @@ object AchievementTable {
         // R13 Part F: a Lv 100 Pokémon gains no XP, so the top tiers mean raising many Pokémon to 100 (~0.8-1.25 M XP each): 10 M ≈ 10
         // raised ≈ 1-1.5 years of daily study (was 5 M / 20 M).
         tiered("total-xp", "Battle", "Total XP", "XP your Pokémon have gained with you", Metric.TOTAL_XP, "xp", 10_000, 100_000, 1_000_000, 3_000_000, 10_000_000),
-        tiered("total-levels", "Battle", "Total levels", "Levels your Pokémon have gained with you (not the levels they came with)", Metric.TOTAL_LEVELS, "level", 100, 1_000, 5_000, 15_000, 40_000),
+        tiered("total-levels", "Battle", "Total levels", "Levels your Pokémon have gained with you (not the levels they came with)", Metric.TOTAL_LEVELS, "level", 50, 250, 750, 2_000, 5_000),
         tiered3("highest-level", "Battle", "Highest level", "Level of your best Pokémon", Metric.HIGHEST_LEVEL, "trophy", 25, 50, 100),
         tiered("evolutions", "Battle", "Evolutions", "Times one of your Pokémon evolved", Metric.EVOLUTIONS, "evolve", 1, 10, 50, 150, 400),
 

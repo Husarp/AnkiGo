@@ -15,14 +15,20 @@ class SheetDragTest {
         assertEquals(25f, SheetDrag.offset(25f), 0f)
     }
 
-    @Test fun releasedPastThirtyPercentCloses() {
-        assertTrue(SheetDrag.shouldClose(h * 0.30f, h, 0f, d))
+    @Test fun releasedPastTwelvePercentCloses() {
+        assertTrue(SheetDrag.shouldClose(h * 0.12f, h, 0f, d))
         assertTrue(SheetDrag.shouldClose(h * 0.8f, h, 0f, d))
     }
 
-    @Test fun releasedBeforeThirtyPercentSpringsBack() {
-        assertFalse(SheetDrag.shouldClose(h * 0.29f, h, 0f, d))
+    @Test fun releasedBeforeTwelvePercentSpringsBack() {
+        assertFalse(SheetDrag.shouldClose(h * 0.11f, h, 0f, d))
         assertFalse(SheetDrag.shouldClose(h * 0.05f, h, 100f, d))
+    }
+
+    @Test fun aLightFlingAndShortPullNowClose() {
+        assertTrue(SheetDrag.shouldClose(40f, 600f, 450f, 1f))
+        assertTrue(SheetDrag.shouldClose(75f, 600f, 0f, 1f))
+        assertFalse(SheetDrag.shouldClose(65f, 600f, 350f, 1f))
     }
 
     @Test fun aFlingDownClosesAtAnyDistance() {

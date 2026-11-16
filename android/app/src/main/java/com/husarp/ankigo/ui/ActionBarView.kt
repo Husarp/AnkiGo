@@ -384,7 +384,7 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             tile = null; kind = null
             val s = state
             val mine = side == BarSide.MINE
-            val padV = if (oneLine) 3 else 6
+            val padV = if (s is HalfState.Moved && s.move.charging) 2 else if (oneLine) 3 else 6
             val side = Ui.dp(context, if (oneLine) 8 else 10)
             setPadding(if (paddingLeft > 0) paddingLeft else side, Ui.dp(context, padV), if (paddingRight > 0) paddingRight else side, Ui.dp(context, padV))
             isClickable = s is HalfState.Moved
@@ -395,9 +395,9 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
                     val txt = LinearLayout(context).apply {
                         orientation = VERTICAL
                         gravity = if (mine) Gravity.START else Gravity.END
-                        addView(Ui.text(context, 13.5f, 800, if (m.missed) R.color.ag_sub0 else R.color.ag_text).apply {
-                            text = m.move
-                            maxLines = 1
+                        addView(Ui.text(context, if (m.charging) 12f else 13.5f, 800, if (m.missed) R.color.ag_sub0 else R.color.ag_text).apply {
+                            text = if (m.charging) "${m.move} — charging" else m.move
+                            maxLines = if (m.charging && !oneLine) 2 else 1
                             ellipsize = TextUtils.TruncateAt.END
                             if (m.missed) paintFlags = paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
                         }, LayoutParams(-2, -2))
@@ -411,8 +411,8 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
                         addView(txt, LayoutParams(0, -2, 1f))
                         addView(t, LayoutParams(Ui.dp(context, tileDp), Ui.dp(context, tileDp)).also { it.marginStart = gap })
                     }
-                    contentDescription = "${if (mine) "Your" else "Wild"} last move: ${m.move}" +
-                        (if (m.missed) ", missed" else "") + ". ${if (m.charging) "Charging" else DetailSections.kindName(m.category)}" +
+                    contentDescription = "${if (mine) "Your" else "Wild"} last move: ${m.move}${if (m.charging) " — charging" else ""}" +
+                        (if (m.missed) ", missed" else "") + ". ${DetailSections.kindName(m.category)}" +
                         (m.type?.let { ", ${it.label} type" } ?: "") + ". Tap for details"
                 }
                 else -> {
@@ -434,15 +434,9 @@ internal class ActionBarView(ctx: Context) : FrameLayout(ctx) {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val chip = m.type?.let { Ui.typeChip(context, it) }
-            val word = Ui.text(context, 10f, 800, R.color.ag_sub0).apply { text = if (m.charging) "Charging" else DetailSections.kindName(m.category); maxLines = 1
-                // PLAN 266B: keep the type chip; a small clock replaces the usual kind word.
-                if (m.charging) {
-                    val clock = context.getDrawable(R.drawable.ic_clock)?.mutate()
-                    clock?.setTint(Ui.c(context, R.color.ag_peach))
-                    clock?.setBounds(0, 0, Ui.dp(context, 11), Ui.dp(context, 11))
-                    setCompoundDrawables(clock, null, null, null)
-                    compoundDrawablePadding = Ui.dp(context, 2)
-                } }.also { kind = it }
+            val word = Ui.text(context, 10f, 800, R.color.ag_sub0).apply {
+                text = DetailSections.kindName(m.category); maxLines = 1
+            }.also { kind = it }
             val gap = Ui.dp(context, 5)
             if (side == BarSide.MINE) {
                 chip?.let { addView(it, LayoutParams(-2, -2)) }
