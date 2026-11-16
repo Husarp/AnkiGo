@@ -107,15 +107,36 @@ internal object BackdropCatalog {
         Type.FAIRY to listOf("forest-tech-b", "meadow", "forest", "flower-field"),
     )
 
-    /** Adam will assign types later; until then these scenes join every type pool. */
+    /** The bundled R23 batch; eligibility is assigned below rather than shared by every type. */
     val GENERAL: Set<String> = setOf(
         "autumn-forest", "toxic-cave", "countryside-route", "windy-hilltop", "bamboo-dojo",
         "coral-shallows", "snowy-pines", "power-plant", "desert-oasis", "starry-plateau",
         "lava-field", "night-rooftops", "old-graveyard", "starry-plateau-galaxy",
     )
 
+    private val BATCH_TYPES: Map<String, Set<Type>> = mapOf(
+        "autumn-forest" to setOf(Type.GRASS, Type.BUG, Type.NORMAL),
+        "toxic-cave" to setOf(Type.POISON),
+        "countryside-route" to setOf(Type.NORMAL, Type.GRASS),
+        "windy-hilltop" to setOf(Type.FLYING),
+        "bamboo-dojo" to setOf(Type.FIGHTING),
+        "coral-shallows" to setOf(Type.WATER),
+        "snowy-pines" to setOf(Type.ICE),
+        "power-plant" to setOf(Type.ELECTRIC, Type.STEEL),
+        "desert-oasis" to setOf(Type.GROUND, Type.WATER),
+        "starry-plateau" to setOf(Type.PSYCHIC, Type.FAIRY),
+        "lava-field" to setOf(Type.FIRE, Type.ROCK),
+        "night-rooftops" to setOf(Type.DARK, Type.FLYING),
+        "old-graveyard" to setOf(Type.GHOST),
+        "starry-plateau-galaxy" to setOf(Type.PSYCHIC, Type.DRAGON),
+    )
+
     /** The pictures a type can get, in the order [pick] uses. */
-    fun options(type: Type): List<Backdrop> = (OPTIONS.getValue(type) + GENERAL).map { BY_ID.getValue(it) }
+    fun options(type: Type): List<Backdrop> =
+        (OPTIONS.getValue(type) + BATCH_TYPES.filterValues { type in it }.keys).map { BY_ID.getValue(it) }
+
+    /** Settings uses the selection pools themselves so its type chips cannot drift from battle eligibility. */
+    fun typesFor(id: String): List<Type> = Type.entries.filter { type -> options(type).any { it.id == id } }
 
     /** The type the picture follows: the first, or the second when the first is Normal and there is one; Normal when there is none. */
     fun typeFor(types: List<Type>): Type {

@@ -14,13 +14,29 @@ class BackdropCatalogTest {
         assertEquals(11, BackdropCatalog.ALL.count { it.source == BackdropSource.SHOWDOWN })
         assertEquals(14, BackdropCatalog.GENERAL.size)
     }
-    @Test fun newUntypedScenesAreAvailableToEveryType() {
+    @Test fun bundledBatchHasExplicitTypeEligibility() {
+        assertEquals(setOf(Type.FIRE, Type.ROCK), BackdropCatalog.typesFor("lava-field").toSet())
+        assertEquals(listOf(Type.WATER), BackdropCatalog.typesFor("coral-shallows"))
+        for (id in BackdropCatalog.GENERAL) {
+            val types = BackdropCatalog.typesFor(id)
+            assertTrue(id, types.isNotEmpty() && types.size < Type.entries.size)
+        }
         for (t in Type.entries) {
             val ids = BackdropCatalog.options(t).map { it.id }
-            assertTrue(t.name, ids.containsAll(BackdropCatalog.GENERAL))
             assertEquals(ids.size, ids.toSet().size)
             assertFalse(BackdropCatalog.SHRINE in ids)
         }
+    }
+    @Test fun wishiwashiNeverGetsLavaEvenWhenOnlyLavaIsEnabled() {
+        val fish = TestData.species(746, name = "Wishiwashi", types = listOf(Type.WATER))
+        val eligible = setOf("tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay", "beach", "river",
+            "deep-sea-cave", "sunset-beach", "coral-shallows", "desert-oasis")
+        assertEquals(eligible, BackdropCatalog.options(Type.WATER).map { it.id }.toSet())
+        for (seed in (-100..100).toList() + listOf(Int.MIN_VALUE, Int.MAX_VALUE)) {
+            assertTrue(BackdropCatalog.pick(fish.types, seed, BackdropCatalog.isLegendary(fish)).id in eligible)
+        }
+        val onlyLava = BackdropCatalog.ALL.map { it.id }.toSet() - "lava-field"
+        assertNull(BackdropCatalog.pickEnabled(fish.types, 0, false, onlyLava))
     }
     @Test fun forestTechIsOnlyBugAndFairy() {
         assertEquals(setOf(Type.BUG, Type.FAIRY), Type.entries.filter { t -> BackdropCatalog.options(t).any { it.id == "forest-tech-b" } }.toSet())
@@ -56,9 +72,10 @@ class BackdropCatalogTest {
         assertNull(BackdropCatalog.pickEnabled(listOf(Type.BUG), 0, false, onlyShrine))
         assertEquals(BackdropCatalog.SHRINE, BackdropCatalog.pickEnabled(listOf(Type.BUG), 0, true, onlyShrine)?.id)
     }
-    @Test fun aSingleGeneralSceneWorksForEveryType() {
+    @Test fun aSingleBatchSceneOnlyWorksForItsAssignedTypes() {
         val disabled = BackdropCatalog.ALL.map { it.id }.toSet() - "autumn-forest"
-        for (t in Type.entries) assertEquals("autumn-forest", BackdropCatalog.pickEnabled(listOf(t), -1, false, disabled)?.id)
+        for (t in Type.entries) assertEquals(if (t in setOf(Type.GRASS, Type.BUG, Type.NORMAL)) "autumn-forest" else null,
+            BackdropCatalog.pickEnabled(listOf(t), -1, false, disabled)?.id)
     }
     @Test fun legendaryAndTypeRulesRemain() {
         assertEquals(BackdropCatalog.SHRINE, BackdropCatalog.pick(listOf(Type.FIRE), 0, true).id)

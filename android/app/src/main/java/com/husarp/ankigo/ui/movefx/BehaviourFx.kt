@@ -131,15 +131,32 @@ internal object BehaviourFx {
     }
 
     fun multi(s: FxScript): FxTimes {
-        s.lunge(70f)
-        repeat(s.plan.hitCount.coerceAtLeast(0)) { i ->
+        val count = s.plan.hitCount.coerceAtLeast(0)
+        val hx = (s.space.towardX - 20f) * .86f
+        val hy = s.space.towardY * .86f
+        if (count > 0) {
+            s.tween(70f, 160f, FxEase.OUT2) { p, _ -> s.attacker.set(-22f * p, 6f * p) }
+            s.tween(230f, 150f, FxEase.IN2) { p, _ ->
+                s.attacker.set(FxMath.lerp(-22f, hx, p), FxMath.lerp(6f, hy, p))
+            }
+        }
+        repeat(count) { i ->
             val t = hitTime(i)
             impact(s, s.space.fromTarget(if (i % 2 == 0) -6f else 6f, (i % 3 - 1) * 5f),
                 t, slash = true, alternate = i % 2 == 1)
             s.hit(t, 210f, push = 4f)
+            if (i < count - 1) {
+                // Stay close to the target: a short retreat, then strike again at the next impact.
+                s.tween(t, 100f, FxEase.OUT2) { p, _ -> s.attacker.set(hx * (1f - .12f * p), hy * (1f - .12f * p)) }
+                s.tween(t + 100f, HIT_GAP - 100f, FxEase.IN2) { p, _ ->
+                    s.attacker.set(hx * (.88f + .12f * p), hy * (.88f + .12f * p))
+                }
+            } else {
+                s.tween(t, 300f, FxEase.INOUT) { p, _ -> s.attacker.set(hx * (1f - p), hy * (1f - p)) }
+            }
         }
         val last = hitTime((s.plan.hitCount - 1).coerceAtLeast(0))
-        return FxTimes(last + 520f, FIRST_HIT, maxOf(680f, last + 220f))
+        return FxTimes(last + 520f, FIRST_HIT, maxOf(680f, last + 300f))
     }
 
     fun recoil(s: FxScript): FxTimes {
