@@ -77,6 +77,7 @@ object SaveCodec {
                         v.buttons.forEach { value(it) }
                         value(v.spent); value(v.healItems)
                         value(v.dmgDealt); value(v.dmgTaken); value(v.dmgBlocked); value(v.misses); value(v.dailyGoal)
+                        if (v.foundItems.isNotEmpty()) obj { for ((item, count) in v.foundItems.toSortedMap()) kv(item, count) }
                     }
                 }
             }
@@ -396,7 +397,7 @@ object SaveCodec {
 
     /**
      * History is a day -> [reviews, won, caught, shinies, xp, cash, b0, b1, b2, b3, b4, spent, healItems, dmgDealt, dmgTaken,
-     * dmgBlocked, misses] object (b = counted answers per button, 0 unknown .. 4 Easy; spent = Shop money, healItems = healing
+     * dmgBlocked, misses, dailyGoal, optional found-item quantities] object (b = counted answers per button, 0 unknown .. 4 Easy; spent = Shop money, healItems = healing
      * items used; the last four = the day's battle numbers, R4-V11); an older, shorter array reads the missing numbers as 0. An old save has no history: today's count seeds today.
      */
     private fun readHistory(h: JSONObject?, s: GameState) {
@@ -410,6 +411,12 @@ object SaveCodec {
                 a.optInt(0), a.optInt(1), a.optInt(2), a.optInt(3), a.optInt(4), a.optInt(5),
                 IntArray(5) { a.optInt(6 + it) }, a.optInt(11), a.optInt(12),
                 a.optInt(13), a.optInt(14), a.optInt(15), a.optInt(16), a.optInt(17).coerceAtLeast(0),
+                foundItems = mutableMapOf<String, Int>().apply {
+                    a.optJSONObject(18)?.let { items -> for (item in items.keys()) {
+                        val count = items.optInt(item).coerceAtLeast(0)
+                        if (count > 0) put(item, count)
+                    } }
+                },
             )
         }
     }

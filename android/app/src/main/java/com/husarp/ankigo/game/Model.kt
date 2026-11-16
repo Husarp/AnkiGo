@@ -394,6 +394,7 @@ class DayLog(
     var spent: Int = 0, var healItems: Int = 0,
     var dmgDealt: Int = 0, var dmgTaken: Int = 0, var dmgBlocked: Int = 0, var misses: Int = 0,
     var dailyGoal: Int = 0, // 0 = legacy day, use current settings
+    val foundItems: MutableMap<String, Int> = mutableMapOf(), // earned quantities, independent of the current bag
 )
 
 class GameState(

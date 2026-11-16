@@ -19,28 +19,35 @@ object StudyStats {
      * Adds what [events] say to today's [DayLog]: Counted -> reviews; Defeated -> won; Caught -> caught (+ shinies when
      * shiny) and won (a catch is a won battle); XpGained -> xp (every Pokémon, so an Exp. Share holder counts too); Cash
      * -> cash; Counted also fills the per-button counts; Attack -> damage dealt / taken / blocked and misses (the rules of
-     * [Achievements.attackNumbers], the same the all-time achievement counters use). Ignored answers never produce Counted or
+     * [Achievements.attackNumbers], the same the all-time achievement counters use). ItemFound and DailyGift keep earned item quantities. Ignored answers never produce Counted or
      * Attack, so they are never counted. Called by Game.onAnswer and Game.throwBall only.
      */
     fun record(state: GameState, events: List<GameEvent>) {
         var reviews = 0; var won = 0; var caught = 0; var shinies = 0; var xp = 0; var cash = 0
         var dealt = 0; var taken = 0; var blocked = 0; var misses = 0
         val buttons = IntArray(5)
+        val foundItems = mutableMapOf<String, Int>()
         for (e in events) when (e) {
             is GameEvent.Counted -> { reviews++; buttons[e.button.coerceIn(0, 4)]++ }
             is GameEvent.Defeated -> won++
             is GameEvent.Caught -> { won++; caught++; if (e.shiny) shinies++ }
             is GameEvent.XpGained -> xp += e.xp
             is GameEvent.Cash -> cash += e.amount
+            is GameEvent.ItemFound -> foundItems[e.item] = (foundItems[e.item] ?: 0) + 1 // count is the bag total
+            is GameEvent.DailyGift -> {
+                val key = e.item ?: "tm:${e.tm}"
+                foundItems[key] = (foundItems[key] ?: 0) + e.count
+            }
             is GameEvent.Attack -> Achievements.attackNumbers(e).let { dealt += it.dealt.toInt(); taken += it.taken.toInt(); blocked += it.blocked.toInt(); misses += it.misses }
             else -> Unit
         }
-        if (reviews + won + caught + shinies + xp + cash + dealt + taken + blocked + misses == 0 || state.day.isEmpty()) return
+        if ((reviews + won + caught + shinies + xp + cash + dealt + taken + blocked + misses == 0 && foundItems.isEmpty()) || state.day.isEmpty()) return
         val log = state.history.getOrPut(state.day) { DayLog() }
         if (reviews > 0 && log.dailyGoal == 0) log.dailyGoal = DailyGoal.forSettings(state.settings, state.day)
         log.reviews += reviews; log.won += won; log.caught += caught; log.shinies += shinies; log.xp += xp; log.cash += cash
         log.dmgDealt += dealt; log.dmgTaken += taken; log.dmgBlocked += blocked; log.misses += misses
         for (i in buttons.indices) log.buttons[i] += buttons[i]
+        for ((item, count) in foundItems) log.foundItems[item] = (log.foundItems[item] ?: 0) + count
         prune(state)
     }
 

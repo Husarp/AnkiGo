@@ -99,7 +99,7 @@ internal object ConditionExplanation {
     }
 
     fun line(mark: ConditionMarks.Mark): String {
-        val detail = if (mark.key.startsWith("stat.")) mark.word else mark.line
+        val detail = if (mark.key.startsWith("stat.")) StatPill.longName(mark.key.removePrefix("stat.")) + " " + StageText.percent(mark.value, mark.key in listOf("stat.accuracy", "stat.evasion")) else mark.line
         return "$detail — ${effect(mark)}"
     }
 
