@@ -65,6 +65,17 @@ object XpParticles {
     const val HEAD = 0
     const val TRAIL_MARK = 1
     const val LAND = 2
+    const val SMALL_STAR = 3
+    const val DIAMOND = 4
+    const val CROSS = 5
+
+    /** Six of every fourteen heads; trails, paths, timing and orb sizes stay unchanged. */
+    fun headKind(index: Int): Int = when (index % 14) {
+        1, 9 -> SMALL_STAR
+        3, 8 -> DIAMOND
+        5, 12 -> CROSS
+        else -> HEAD
+    }
 
     /** One spark. Offsets are shares of the boxes' size; control points are polar (angle in radians, radius in units). */
     class Spark(
@@ -167,7 +178,8 @@ object XpParticles {
 
     /** Hands [emit] everything on screen at [tMs]: sparks (head + trail) in flight and the landing stars. [from] is the defeated one's box, [to] ours. */
     fun forEach(plan: Plan, tMs: Float, from: Box, to: Box, unit: Float, emit: Sink) {
-        for (s in plan.sparks) {
+        for (index in plan.sparks.indices) {
+            val s = plan.sparks[index]
             val lt = tMs - s.t0
             if (lt < 0f || lt > s.dur + plan.landMs) continue
             val p0x = from.cx + s.sx * from.w
@@ -189,7 +201,7 @@ object XpParticles {
                 val kk = max(0f, k - j * 0.035f)
                 emit.mark(TRAIL_MARK, bez(kk, p0x, p1x, p2x, p3x), bez(kk, p0y, p1y, p2y, p3y), SPARK_UNITS * s.size * (1f - j * 0.18f) * unit, 0.5f - j * 0.12f)
             }
-            emit.mark(HEAD, bez(k, p0x, p1x, p2x, p3x), bez(k, p0y, p1y, p2y, p3y), SPARK_UNITS * s.size * unit, min(1f, u * 8f) * 0.95f)
+            emit.mark(headKind(index), bez(k, p0x, p1x, p2x, p3x), bez(k, p0y, p1y, p2y, p3y), SPARK_UNITS * s.size * unit, min(1f, u * 8f) * 0.95f)
         }
     }
 

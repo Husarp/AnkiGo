@@ -172,6 +172,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val stars = PanelStars(ctx).apply { visibility = GONE }
     /** Canvas effects (the shiny star burst, round 5), on top of everything laid out here; draws only while one runs. */
     val fx = ArenaFxView(ctx)
+    private val momentBack = ArenaFxView(ctx)
+    private var catchThrowFx: FxEffect? = null
     /** The attack animation's own canvas layer (round 7), under the stat cards so they stay readable over dims and flashes. */
     private val moveFx = ArenaFxView(ctx)
     internal val fieldEffects = FieldEffectsView(ctx)
@@ -447,6 +449,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         addView(platPlayer, LayoutParams(0, 0))
         addView(fieldGround, LayoutParams(-1, -1))
         fieldEffects.invalidateGround = { fieldGround.invalidate() }
+        addView(momentBack, LayoutParams(-1, -1))
         addView(enemyHolder, LayoutParams(0, 0))
         addView(playerHolder, LayoutParams(0, 0))
         addView(conditionLooks, LayoutParams(-1, -1))
@@ -2050,6 +2053,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
             Keyframe.ofFloat(0.6f, -4 * d), Keyframe.ofFloat(0.8f, 3 * d), Keyframe.ofFloat(1f, 0f))
         launch(ObjectAnimator.ofPropertyValuesHolder(spr, shake).setDuration(ms).also { it.interpolator = LinearInterpolator() }) { spr.translationX = 0f }
         flash(spr, ms, 2)
+        if (!reduceMotion() && AppPrefs.attackAnimations(context)) momentEffect(BattleMomentFx.Kind.HIT, onPlayer, ms / 380f)?.let { fx.add(it) }
     }
 
     /** [times] white flashes over [ms]. */
@@ -2295,7 +2299,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private fun burstFx(player: Boolean): FxEffect? {
         val box = if (player) playerHolder else enemyHolder
         if (box.width <= 0 || box.height <= 0) return null
-        return ShinyBurstFx(box.left + box.width / 2f, ShinyBurst.centreY(box.top.toFloat(), box.height.toFloat()), ShinyBurst.scale(box.width.toFloat(), box.height.toFloat()))
+        return momentEffect(BattleMomentFx.Kind.SHINY, player)
     }
 
     /** Test-only: the Transform flash frozen at [atMs] (the picture's white and the sparkles; a still frame for the screenshot tests). */
@@ -2480,6 +2484,105 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     val ballShown: Boolean get() = ballOnField
 
+    private fun momentBox(player: Boolean): RectF {
+        val spr = if (player) playerSprite else enemySprite
+        val holder = if (player) playerHolder else enemyHolder
+        return RectF().also { spr.momentBounds(it); it.offset(holder.left + spr.left.toFloat(), holder.top + spr.top.toFloat()) }
+    }
+
+    private fun momentEffect(kind: BattleMomentFx.Kind, player: Boolean, factor: Float = 1f, front: Boolean = true): BattleMomentFx? {
+        val box = momentBox(player)
+        if (box.width() <= 0f || box.height() <= 0f) return null
+        val unit = maxOf(box.width(), box.height()) / if (player) 112f else 92f
+        return BattleMomentFx(context, kind, box.centerX(), box.centerY(), unit, factor, front)
+    }
+
+    fun levelUpMoment(ms: Long) {
+        if (!reduceMotion()) momentEffect(BattleMomentFx.Kind.LEVEL, true, ms / BattleMoments.LEVEL_END)?.let { fx.add(it) }
+    }
+
+    fun statMoment(player: Boolean, up: Boolean, ms: Long) {
+        if (reduceMotion()) return
+        val kind = if (up) BattleMomentFx.Kind.UP else BattleMomentFx.Kind.DOWN
+        val factor = ms / BattleMoments.STAT_END
+        momentEffect(kind, player, factor, false)?.let { momentBack.add(it) }
+        momentEffect(kind, player, factor)?.let { fx.add(it) }
+    }
+
+    /** Both forms are decoded before this runs; the plate encloses their union, including off-centre visible pixels. */
+    fun evolutionMoment(next: SpriteView, ms: Long, swap: () -> Unit) {
+        if (reduceMotion() || playerSprite.width <= 0 || !isAttachedToWindow) { playerSprite.takeMomentPicture(next); swap(); return }
+        val e = evolutionEffect(next, ms / BattleMoments.EVOLVE_END)
+        var swapped = false
+        val a = ValueAnimator.ofFloat(0f, BattleMoments.EVOLVE_END).setDuration(ms)
+        a.interpolator = LinearInterpolator()
+        a.addUpdateListener {
+            val t = it.animatedValue as Float
+            playerSprite.whiteout = BattleMoments.evolutionWhite(t)
+            if (!swapped && t >= BattleMoments.EVOLVE_SWAP) { swapped = true; playerSprite.takeMomentPicture(next); swap() }
+        }
+        fx.add(e)
+        launch(a) { playerSprite.whiteout = 0f }
+    }
+
+    private fun evolutionEffect(next: SpriteView, factor: Float): FxEffect {
+        val box = momentBox(true)
+        val other = RectF().also { next.momentBounds(it, playerSprite.width, playerSprite.height) }
+        other.offset(playerHolder.left + playerSprite.left.toFloat(), playerHolder.top + playerSprite.top.toFloat())
+        box.union(other)
+        val unit = maxOf(box.width(), box.height(), 1f) / 112f
+        return BattleMomentFx(context, BattleMomentFx.Kind.EVOLVE, box.centerX(), box.centerY(), unit, factor,
+            radiusX = BattleMoments.coverRadius(box.width() / unit / 2f), radiusY = BattleMoments.coverRadius(box.height() / unit / 2f))
+    }
+
+    private fun ballCentre(): Pair<Float, Float> {
+        val lp = ball.layoutParams as FrameLayout.LayoutParams
+        return enemyHolder.left + enemyHolder.width / 2f to enemyHolder.bottom - lp.bottomMargin - lp.height / 2f
+    }
+
+    /** Round 2: app item sprite, per-ball trail, arc, contact, bounce, two or three shakes. */
+    fun throwBall(item: String, success: Boolean, factor: Float) {
+        clearBall()
+        if (reduceMotion()) { enemySprite.alpha = 0f; dropBall(item, 1); ball.animate().cancel(); ball.translationY = 0f; return }
+        makeThrow(item, success, factor)?.let { catchThrowFx = it; fx.add(it) }
+    }
+
+    private fun makeThrow(item: String, success: Boolean, factor: Float): FxEffect? {
+        val target = momentBox(false); val from = momentBox(true)
+        if (target.height() <= 0f) { enemyIntoBall((350 * factor).toLong()); dropBall(item, (450 * factor).toLong()); return null }
+        ballOnField = true; Ui.itemIcon(context, item, ball); ball.alpha = 1f; ball.visibility = INVISIBLE
+        val floor = ballCentre()
+        val unit = maxOf(target.width(), target.height()) / 92f
+        val colors = BallTrail.colors(item)
+        return CatchThrowFx(context, ball, enemySprite, from.centerX() + 50f * unit, from.centerY() - 40f * unit,
+            target.centerX(), target.centerY() - 8f * unit, floor.first, floor.second, unit, success,
+            colors.main, colors.core, item == "ultra-ball", factor)
+    }
+
+    fun catchBurst(success: Boolean, factor: Float) {
+        if (reduceMotion()) return
+        catchBurstEffect(success, factor)?.let { fx.add(it) }
+    }
+
+    private fun catchBurstEffect(success: Boolean, factor: Float): FxEffect? {
+        val box = momentBox(false); if (box.height() <= 0f) return null
+        val floor = ballCentre(); val unit = maxOf(box.width(), box.height()) / 92f
+        return BattleMomentFx(context, if (success) BattleMomentFx.Kind.CAUGHT else BattleMomentFx.Kind.FREE,
+            floor.first, floor.second - 6f * unit, unit, factor)
+    }
+
+    internal fun momentStill(kind: BattleMomentFx.Kind, player: Boolean, atMs: Float) {
+        if (kind == BattleMomentFx.Kind.UP || kind == BattleMomentFx.Kind.DOWN) {
+            momentEffect(kind, player, front = false)?.let { momentBack.showStill(it, atMs) }
+        }
+        momentEffect(kind, player)?.let { fx.showStill(it, atMs) }
+    }
+    internal fun throwStill(item: String, success: Boolean, atMs: Float) {
+        makeThrow(item, success, 1f)?.let { fx.showStill(it, atMs) }
+    }
+    internal fun catchBurstStill(success: Boolean, atMs: Float) { catchBurstEffect(success, 1f)?.let { fx.showStill(it, atMs) } }
+    internal fun evolutionStill(next: SpriteView, atMs: Float) { fx.showStill(evolutionEffect(next, 1f), atMs) }
+
     /** Wild sprite shrinks into the ball (mockup `.gone`, 350 ms, bright flash). */
     fun enemyIntoBall(ms: Long) {
         val spr = enemySprite
@@ -2518,9 +2621,10 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     fun clearBall() {
+        catchThrowFx?.let { fx.stop(it) }; catchThrowFx = null
         ball.animate().cancel()
         ball.visibility = GONE
-        ball.translationY = 0f; ball.rotation = 0f; ball.alpha = 1f
+        ball.translationX = 0f; ball.translationY = 0f; ball.rotation = 0f; ball.alpha = 1f
         ballOnField = false
     }
 
@@ -2637,6 +2741,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         pXp.animate().cancel(); pXp.translationY = 0f
         stopAnimators()
         fx.clear()
+        momentBack.clear()
         moveFx.clear()
         xpFx = null
         xpFillSpec = null
@@ -2660,6 +2765,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     fun resetFx() {
         stopAnimators()
         fx.clear()
+        momentBack.clear()
         removeCallbacks(hideXpBar); xpArriving = false; updateCards()
         xpFillSpec = null   // the save is redrawn next: a late fill step must not undo it
         moveFx.clear()
