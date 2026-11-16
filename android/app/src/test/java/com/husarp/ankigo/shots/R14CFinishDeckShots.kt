@@ -48,7 +48,7 @@ class R14CFinishDeckShots {
     private fun screen(ctx: Context): Pair<StudyActivity, View> {
         ctx.getSharedPreferences("study", 0).edit().putBoolean("reduceMotion", true).commit()
         val act = attach(StudyActivity(), ShotCtx(ctx))
-        act.finishQueueCheck = { done -> done(Result.success(true)) }
+        act.finishQueueCheck = { done -> done(Result.success(StudyActivity.DueRefresh(decks, emptyList()))) }
         setField(act, "deckId", 2L); setField(act, "deckName", "Geography::Capitals")
         val root = act.buildContent()
         setField(act, "card", Anki.Review(10L, 0, 4, listOf("<1m", "6m", "1d", "4d"), emptyList()))
@@ -101,13 +101,13 @@ class R14CFinishDeckShots {
     @Test fun finishWaitsForTheLastMomentQueueCheck() {
         paparazzi.shootWith("r23l-finish-recheck", listOf(Size.PHONE)) { ctx ->
             val (act, root) = screen(ctx)
-            var complete: ((Result<Boolean>) -> Unit)? = null
+            var complete: ((Result<StudyActivity.DueRefresh>) -> Unit)? = null
             act.finishQueueCheck = { done -> complete = done }
             lastAnswerIn(act)
             row(act).getChildAt(0).performClick()
             assertFalse("no summary before the final provider read", finished(act))
             assertNotNull(complete)
-            complete!!(Result.success(true))
+            complete!!(Result.success(StudyActivity.DueRefresh(decks, emptyList())))
             assertTrue("only a freshly empty queue may finish", finished(act))
             root
         }

@@ -303,6 +303,19 @@ class NextCard<T>(
         chainOf(s, forToken).learn = card
     }
 
+    /** An idle queue read changes only what follows the displayed card, even when a learning card moved ahead of it. */
+    fun refreshQueue(forKey: StudyLoop.Key, forToken: Int, queue: List<StudyLoop.Key>): List<Cmd<T>> {
+        val s = slot as? Slot.Confirmed<T> ?: return emptyList()
+        if (forToken != token || s.token != forToken || s.card.key != forKey) return emptyList()
+        val following = listOf(forKey) + queue.filter { it != forKey }.distinct()
+        val previous = chain?.takeIf { it.base == forKey && it.token == forToken }
+        val kept = previous?.cards.orEmpty()
+            .withIndex().takeWhile { (i, p) -> following.getOrNull(i + 1) == p.key }.map { it.value }
+        val learning = previous?.learn?.takeIf { it.key in following }
+        chain = if (kept.isEmpty() && learning == null) null else Chain(forKey, forToken, ArrayList(kept), learning)
+        return prepareNext(s.card, following, kept.size + 1)
+    }
+
     /** Refresh only the learning cutoff read while the same question/answer stays displayed. No content or display changes. */
     fun refreshLearning(forKey: StudyLoop.Key, forToken: Int, read: PredictRule.LearnRead) {
         val s = slot as? Slot.Confirmed<T> ?: return

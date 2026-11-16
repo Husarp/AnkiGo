@@ -8,6 +8,7 @@ class LiveRefresh<T>(
     private val blocked: () -> Boolean = { false },
     private val read: (done: (T?, Long?) -> Unit) -> Unit,
     private val show: (T) -> Unit,
+    private val maxDelay: Long = MAX_DELAY,
 ) {
     private var active = false
     private var revision = 0
@@ -32,8 +33,8 @@ class LiveRefresh<T>(
             if (active) {
                 if (ticket == revision && !blocked()) {
                     if (value != null) show(value)
-                    val delay = nextDue?.let { (it - now()).coerceAtLeast(1) } ?: MAX_DELAY
-                    schedule(delay.coerceAtMost(MAX_DELAY), ::wake)
+                    val delay = nextDue?.let { (it - now()).coerceAtLeast(1) } ?: maxDelay
+                    schedule(delay.coerceAtMost(maxDelay), ::wake)
                 } else schedule(0, ::wake)
             }
         }
