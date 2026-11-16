@@ -35,15 +35,15 @@ object MatchupGroups {
         val all = TypeMatchups.of(types)
         val seen = (known.weakTo + known.resists + known.immune + known.normal).map { it.type }.toSet()
         val complete = known.unknownCount == 0 && known.normal.isEmpty()
-        fun cell(entries: List<Matchup>, group: MatchupGroup? = null): Cell.Matchups = Cell.Matchups(
-            entries.filter { complete || it.type in seen },
-            entries.filter { !complete && it.type !in seen }, group,
+        fun cell(entries: List<Matchup>, group: MatchupGroup? = null, revealed: Set<Type> = seen): Cell.Matchups = Cell.Matchups(
+            entries.filter { complete || it.type in revealed },
+            entries.filter { !complete && it.type !in revealed }, group,
         )
         val defensive = all.weakTo + all.resists + all.immune
         val normal = Type.entries.filter { t -> defensive.none { it.type == t } }.map { Matchup(it, 1.0) }
         return linkedMapOf(
             "weak" to cell(all.weakTo), "resist" to cell(all.resists), "immune" to cell(all.immune),
-            "strong" to cell(all.strongAgainst, MatchupGroup.STRONG_AGAINST), "normal" to cell(normal),
+            "strong" to cell(all.strongAgainst, MatchupGroup.STRONG_AGAINST, known.strongAgainst.map { it.type }.toSet()), "normal" to cell(normal),
         )
     }
 

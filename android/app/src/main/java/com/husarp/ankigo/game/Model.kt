@@ -378,6 +378,7 @@ class Settings(
     var fasterStart: Boolean = false, // off by default; saved as fasterStartV2 (the old fasterStart key is ignored, so old saves start off)
     var autoReleaseDuplicates: Boolean = false, // off by default (old saves too): a wild copy of an owned species is defeated, or swapped in when higher (see Duplicates)
     var moveChoice: MoveChoice = MoveChoice.SMART,      // Round 10 W9: how both sides pick their move; missing or unknown in a save = SMART
+    var askEveryCatch: Boolean = false,                // R39 (662): every automatic catch waits in the existing Ask-me queue
     var askMe: Boolean = false,                         // R19-P (PLAN 281): the catch option "Ask me" (with autoMode 3 and no swap; see CatchChoice); off in old saves
 )
 

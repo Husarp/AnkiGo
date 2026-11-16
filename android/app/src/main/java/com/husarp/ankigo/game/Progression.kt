@@ -388,6 +388,9 @@ object Catching {
             Outcome.DEFEAT -> return CatchPlan(if (protected) Outcome.CATCH else Outcome.DEFEAT)
             null -> {}
         }
+        if (settings.askEveryCatch && settings.autoMode == 3) return CatchPlan(Outcome.DEFEAT, askEvery = true)
+        if (CatchChoice.of(settings) == CatchChoice.NEW_AND_BETTER && needsEvolutionCopy(data, state, wild.species))
+            return CatchPlan(Outcome.CATCH)
         val special = wild.shiny || protected
         val asking = settings.askMe && settings.autoMode == 3 // R19-P (PLAN 281): "Ask me" is mode 3 plus a question; it never runs together with the swap
         // Auto-release duplicates: higher than the best copy = catch (and swap); not higher = defeat, unless it is special.
@@ -402,6 +405,19 @@ object Catching {
             2 -> if (special) Outcome.CATCH else Outcome.DEFEAT
             else -> if (special || wild.species !in state.caught) Outcome.CATCH else Outcome.DEFEAT
         })
+    }
+
+    /** One copy can cover a linear path; separate missing branches each need their own copy. Current ownership counts, not catch history. */
+    private fun needsEvolutionCopy(data: GameData, state: GameState, species: Int): Boolean {
+        val owned = state.mons.map { it.species }.toSet()
+        fun missing(num: Int, path: Set<Int>): Int {
+            if (num in path) return 0
+            val sp = data.species[num] ?: return 0
+            val branches = sp.evolutions.map { it.to }.distinct().sumOf { missing(it, path + num) }
+            return maxOf(if (num in owned) 0 else 1, branches)
+        }
+        val needed = data.sp(species).evolutions.map { it.to }.distinct().sumOf { missing(it, setOf(species)) }
+        return state.mons.count { it.species == species } < needed
     }
 
     /** Regular ball chance; a special cannot be thrown alone. */

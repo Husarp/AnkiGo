@@ -240,6 +240,7 @@ object SaveCodec {
         kv("autoReleaseDuplicates", s.autoReleaseDuplicates)
         kv("moveChoice", s.moveChoice.name)
         if (s.askMe) kv("askMe", true) // R19-P (PLAN 281): written only when on, so every other save is byte for byte what it was
+        if (s.askEveryCatch) kv("askEveryCatch", true)
         kv("autoMode", s.autoMode)
         kv("protectLegendary", s.protectLegendary); kv("protectMythical", s.protectMythical)
         kv("protectUltra", s.protectUltra); kv("protectStarter", s.protectStarter)
@@ -383,6 +384,7 @@ object SaveCodec {
         s.protectStarter = o.bool("protectStarter", s.protectStarter)
         s.protectRegional = o.bool("protectRegional", s.protectRegional)
         s.autoReleaseDuplicates = o.bool("autoReleaseDuplicates", false)
+        s.askEveryCatch = o.bool("askEveryCatch", false)
         s.askMe = o.bool("askMe", false) // R19-P: a save without the key is an old one
         com.husarp.ankigo.game.CatchChoice.normalize(s) // R10-X2: an old switch-on save with mode 1/2 keeps its mode, switch off
         s.moveChoice = MoveChoice.parse(o.strOrNull("moveChoice")) // missing or unknown = SMART (old saves too)

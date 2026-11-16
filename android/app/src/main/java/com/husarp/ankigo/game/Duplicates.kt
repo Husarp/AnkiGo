@@ -97,5 +97,6 @@ class ReleasePlan(val release: List<String>, val groups: List<Group>, val keptPr
 /**
  * [Catching.decide] with what goes with it: the duplicate verdict when [Duplicates] acted on this fight, else null; R19-P: [ask] = the
  * "Ask me" verdict when the fight ends with a question (the outcome is DEFEAT, paid as one; see [AskMe]).
+ * [askEvery] uses the same queue without requiring a better owned copy.
  */
-class CatchPlan(val outcome: Outcome, val duplicate: Duplicates.Verdict? = null, val ask: AskMe.Better? = null)
+class CatchPlan(val outcome: Outcome, val duplicate: Duplicates.Verdict? = null, val ask: AskMe.Better? = null, val askEvery: Boolean = false)

@@ -39,7 +39,7 @@ class R31JMatchupShots {
     private fun checkTiles(v: View, count: Int, species: List<Int> = listOf(54)) {
         val state = GameRepo.state!!
         val extra = species.sumOf { num ->
-            TypeMatchups.of(GameRepo.data!!.sp(num).types).strongAgainst.count { it.type !in MatchupKnowledge.seen(GameRepo.data!!, state, num) }
+            TypeMatchups.of(GameRepo.data!!.sp(num).types).strongAgainst.count { it.type !in MatchupKnowledge.of(GameRepo.data!!, state, num).strongAgainst.map { known -> known.type } }
         }
         val neutralUnseen = species.sumOf { num ->
             val matchups = TypeMatchups.of(GameRepo.data!!.sp(num).types)
