@@ -160,15 +160,15 @@ object ChartData {
      * `AnkiStatsStore.requestSeries`): per-deck REVIEWS / DUE / CARD_STATES, NEW_CARDS for any deck, the 7 and 365 day retention
      * windows (the 30 day one is part of every AnkiDroid refresh). Empty for the game's own metrics.
      */
-    fun seriesKeys(metric: ChartMetric, period: ChartPeriod, deck: String?, today: String): List<SeriesKey> {
+    fun seriesKeys(metric: ChartMetric, period: ChartPeriod, deck: String?, today: String, dayStartHour: Int = 4): List<SeriesKey> {
         val days = effectivePeriod(metric, period).days
         val d = deck?.takeIf { it.isNotBlank() }
         return when (metric) {
-            ChartMetric.REVIEWS -> if (d != null || days > AnkiStatsReader.HISTORY_DAYS) listOf(SeriesKey(d, metric, days, today)) else emptyList()
-            ChartMetric.DUE -> if (d != null || days > 30) listOf(SeriesKey(d, metric, days, today)) else emptyList()
-            ChartMetric.CARD_STATES -> if (d == null) emptyList() else listOf(SeriesKey(d, metric, 0, today))
-            ChartMetric.NEW_CARDS -> listOf(SeriesKey(d, metric, days, today))
-            ChartMetric.RETENTION -> if (days == 7 || days == 365) listOf(SeriesKey(null, metric, days, today)) else emptyList()
+            ChartMetric.REVIEWS -> if (d != null || days > AnkiStatsReader.HISTORY_DAYS) listOf(SeriesKey(d, metric, days, today, dayStartHour)) else emptyList()
+            ChartMetric.DUE -> if (d != null || days > 30) listOf(SeriesKey(d, metric, days, today, dayStartHour)) else emptyList()
+            ChartMetric.CARD_STATES -> if (d == null) emptyList() else listOf(SeriesKey(d, metric, 0, today, dayStartHour))
+            ChartMetric.NEW_CARDS -> listOf(SeriesKey(d, metric, days, today, dayStartHour))
+            ChartMetric.RETENTION -> if (days == 7 || days == 365) listOf(SeriesKey(null, metric, days, today, dayStartHour)) else emptyList()
             else -> emptyList()
         }
     }
@@ -212,7 +212,7 @@ object ChartData {
                 fastest?.first?.toString(), metric.unit, StatsText.TIMED_SOURCE, false, total == null, grain = g)
         }
         val plan = plan(metric, p, d, snap, history, today)
-        val answerFallback = metric == ChartMetric.REVIEWS && snap.stats == null && d == null
+        val answerFallback = metric == ChartMetric.REVIEWS && plan.source.startsWith("AnkiGo")
         val forward = metric == ChartMetric.DUE
         val days = if (forward) (1..p.days).map { t.plusDays(it.toLong()) } else (p.days - 1 downTo 0).map { t.minusDays(it.toLong()) }
         val perDay = days.map { it to plan.value(it.toString()) }
@@ -260,13 +260,13 @@ object ChartData {
             Plan(1, { day -> doubleArrayOf((history[day]?.let(pick) ?: 0).toDouble()) }, source, false, known = { it in history })
         return when (metric) {
             ChartMetric.REVIEWS -> when {
-                deck != null || (p.days > AnkiStatsReader.HISTORY_DAYS && (snap.stats != null || SeriesKey(null, metric, p.days, today) in snap.series)) -> fromSeries(metric, p, deck, snap, today)
-                snap.stats != null -> {
+                deck != null || (p.days > AnkiStatsReader.HISTORY_DAYS && (snap.stats?.dailyCountsAvailable == true || SeriesKey(null, metric, p.days, today, snap.dayStartHour) in snap.series)) -> fromSeries(metric, p, deck, snap, today)
+                snap.stats?.dailyCountsAvailable == true -> {
                     val st = snap.stats
                     val note = if (p.days > AnkiStatsReader.QUICK_DAYS && st.historyCheckedAt == 0L) "AnkiDroid · history still loading" else "AnkiDroid"
                     Plan(1, { day -> doubleArrayOf(st.studied(day).toDouble()) }, note, true, known = { it in st.perDay })
                 }
-                else -> game("AnkiGo's own count: answers, not distinct cards (AnkiDroid isn't available)") { it.reviews }
+                else -> game("AnkiGo's own count: answers, not distinct cards (AnkiDroid game-day counts aren't available)") { it.reviews }
             }
             ChartMetric.NEW_CARDS -> fromSeries(metric, p, deck, snap, today)
             ChartMetric.DUE -> when {
@@ -308,7 +308,7 @@ object ChartData {
 
     /** A per-deck (or NEW_CARDS) read from the snapshot's series cache; not there yet = loading, or the reason AnkiDroid can't be read. */
     private fun fromSeries(metric: ChartMetric, p: ChartPeriod, deck: String?, snap: StatsSnapshot, today: String): Plan {
-        val data = snap.series[SeriesKey(deck, metric, p.days, today)]
+        val data = snap.series[SeriesKey(deck, metric, p.days, today, snap.dayStartHour)]
         val failed = snap.access != null && snap.access != AnkiAccess.OK
         return if (data != null) Plan(1, { day -> doubleArrayOf((data.perDay[day] ?: 0).toDouble()) }, "AnkiDroid", true, known = { it in data.perDay })
         else Plan(1, { doubleArrayOf(0.0) }, if (failed) StatsText.reason(snap.access, snap.message) else "Reading AnkiDroid…", true, loading = !failed)
@@ -317,7 +317,7 @@ object ChartData {
     /** Percent kept for the period from AnkiDroid's retention search; only for 7, 30 and 365 days (the others are the game's). */
     private fun ankiRetention(p: ChartPeriod, snap: StatsSnapshot, today: String): Int? = when (p.days) {
         30 -> snap.stats?.retention30
-        7, 365 -> snap.series[SeriesKey(null, ChartMetric.RETENTION, p.days, today)]?.perDay?.let {
+        7, 365 -> snap.series[SeriesKey(null, ChartMetric.RETENTION, p.days, today, snap.dayStartHour)]?.perDay?.let {
             AnkiStats.retentionPercent(it[AnkiSeriesReader.ANSWERED] ?: 0, it[AnkiSeriesReader.AGAIN] ?: 0)
         }
         else -> null
@@ -402,7 +402,7 @@ object ChartData {
         val source: String
         when {
             deck != null -> {
-                counts = snap.series[SeriesKey(deck, metric, 0, today)]?.perDay?.let { m -> CardState.values().associateWith { m[it.name] ?: 0 } }
+                counts = snap.series[SeriesKey(deck, metric, 0, today, snap.dayStartHour)]?.perDay?.let { m -> CardState.values().associateWith { m[it.name] ?: 0 } }
                 source = "AnkiDroid"
             }
             snap.stats != null -> { counts = CardState.values().associateWith { it.of(snap.stats.counts) }; source = "AnkiDroid" }

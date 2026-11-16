@@ -25,8 +25,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
     /** Game day key "yyyy-MM-dd" for [now]; a day starts at settings.dayStartHour (phone time zone). */
     fun dayKey(now: Long = clock()): String =
-        Instant.ofEpochMilli(now).atZone(ZoneId.systemDefault())
-            .minusHours(state.settings.dayStartHour.coerceIn(0, 23).toLong()).toLocalDate().toString()
+        StudyDay.key(now, state.settings.dayStartHour)
 
     /** Day rollover if the day changed (daily counters, goal streak, shop). Safe to call often. */
     fun tick(): List<GameEvent> {

@@ -80,7 +80,7 @@ object ItemInfo {
         "oran-berry" -> "At half HP: heals 10 HP; consumed"
         "sitrus-berry" -> "At half HP: heals ¼ max HP; consumed"
         "figy-berry" -> "At ¼ HP: heals ⅓ max HP; consumed"
-        else -> "At ¼ HP: +1 ${berryStat(item)}; consumed"
+        else -> "At ¼ HP: ${berryStat(item)} ×1.5 for this fight; consumed"
     }
 
     fun short(data: GameData?, item: String, caught: Set<Int>? = null): String {
@@ -90,7 +90,7 @@ object ItemInfo {
             "oran-berry" -> "Held: heals 10 HP"
             "sitrus-berry" -> "Held: heals ¼ HP"
             "figy-berry" -> "Held: heals ⅓ HP"
-            else -> "Held: +1 ${berryStat(item)}"
+            else -> "Held: ${berryStat(item)} ×1.5 for this fight"
         }
         val def = Items.def(item) ?: return NO_DESCRIPTION
         return when (def.kind) {

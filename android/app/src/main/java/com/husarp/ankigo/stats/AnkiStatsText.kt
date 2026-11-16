@@ -38,6 +38,7 @@ data class StatsSnapshot(
     val timedAnswersByDay: Map<String, Long> = emptyMap(),
     /** Per-deck / on-demand AnkiDroid reads for the chart ([AnkiSeriesCache]). */
     val series: Map<SeriesKey, SeriesData> = emptyMap(),
+    val dayStartHour: Int = 4,
 ) {
     /** Time studied on [day]: in AnkiGo's study screen + live detection. */
     fun timeTotalOn(day: String): Long = (timeByDay[day] ?: 0L) + (liveTimeByDay[day] ?: 0L)

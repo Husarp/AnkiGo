@@ -97,7 +97,7 @@ class WhatsNewCard(ctx: Context) : LinearLayout(ctx) {
  * version to open it). [versions] = the bundled notes (any order); only versions up to [current] show. Hidden when there are none.
  */
 class WhatsNewList(ctx: Context, versions: List<WhatsNew.Version> = WhatsNew.load(ctx), private val current: String = Updates.current(ctx)) : LinearLayout(ctx) {
-    private val shown = WhatsNew.upTo(versions, current)
+    private val shown = WhatsNew.recent(versions, current)
 
     init {
         orientation = VERTICAL
@@ -118,7 +118,11 @@ class WhatsNewList(ctx: Context, versions: List<WhatsNew.Version> = WhatsNew.loa
             if (v.fixes.isNotEmpty()) addView(fixesBlock(ctx, v.fixes))
         }
         val head = LinearLayout(ctx).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = Ui.dp(ctx, 48) }
-        head.addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = v.version })
+        head.addView(LinearLayout(ctx).apply {
+            orientation = VERTICAL
+            addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = v.version })
+            addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = UpdateLogic.releaseDate(v.releasedOn) })
+        })
         val small = Ui.text(ctx, 12f, 700, R.color.ag_sub0)
         head.addView(small, LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 6) })
         val chev = ImageView(ctx).apply {
@@ -128,7 +132,7 @@ class WhatsNewList(ctx: Context, versions: List<WhatsNew.Version> = WhatsNew.loa
         }
         fun sync() {
             val isOpen = list.visibility == VISIBLE
-            small.text = if (v.version == current) "installed" else if (isOpen) "" else WhatsNew.changes(v.items.size + v.fixes.size)
+            small.text = listOfNotNull(if (UpdateLogic.compare(v.version, current) == 0) "Current" else null, WhatsNew.changes(v.items.size + v.fixes.size)).joinToString(" · ")
             chev.rotation = if (isOpen) 180f else 0f
             head.contentDescription = "${v.version}, ${if (isOpen) "open" else "folded"}"
         }

@@ -383,7 +383,8 @@ object BattleEngine {
         fun heal(p: Boolean, amount: Int, text: String, kind: EffectKind = EffectKind.HEAL, label: String? = null) {
             val before = mon(p).hp
             mon(p).hp = minOf(maxHp(p), before + amount)
-            fx(p, text, kind, amount = mon(p).hp - before, label = label)
+            val restored = mon(p).hp - before
+            if (restored > 0) fx(p, text, kind, amount = restored, label = label)
         }
 
         /**

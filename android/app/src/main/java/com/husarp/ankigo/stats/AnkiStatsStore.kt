@@ -48,13 +48,14 @@ object AnkiStatsStore {
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private var loaded = false
     @Volatile private var lastStartedAt = 0L
+    @Volatile private var latestRequest: Triple<String, Int, String>? = null
 
     /** [l] is called on the main thread after every change of [snapshot]. */
     fun addListener(l: () -> Unit) { listeners.addIfAbsent(l) }
     fun removeListener(l: () -> Unit) { listeners.remove(l) }
 
     /** The snapshot with the cached AnkiDroid numbers filled in (read from the cache file the first time, only if it is from the selected AnkiDroid). */
-    fun cached(ctx: Context): StatsSnapshot {
+    fun cached(ctx: Context, dayStartHour: Int = 4): StatsSnapshot {
         if (enabled && !loaded) {
             loaded = true
             if (snapshot.stats == null) {
@@ -62,7 +63,7 @@ object AnkiStatsStore {
                 try {
                     Anki.load(app)
                     val c = readCache(app)
-                    if (c != null && c.pkg == Anki.pkg) snapshot = snapshot.copy(stats = c)
+                    if (c != null && c.pkg == Anki.pkg && c.dayStartHour == dayStartHour && c.zoneId == java.time.ZoneId.systemDefault().id) snapshot = snapshot.copy(stats = c, dayStartHour = dayStartHour)
                 } catch (e: Exception) {
                     Report.fail("STATS", "reading the stats cache", e)
                 }
@@ -77,28 +78,35 @@ object AnkiStatsStore {
      */
     fun refresh(ctx: Context, today: String, dayStartHour: Int, force: Boolean = false) {
         if (!enabled || runCatching { LocalDate.parse(today) }.isFailure) return
+        val request = Triple(today, dayStartHour, java.time.ZoneId.systemDefault().id)
+        latestRequest = request
         val now = System.currentTimeMillis()
-        if (!force && snapshot.access == AnkiAccess.OK && now - lastStartedAt < MIN_GAP_MS) return
+        val changed = snapshot.dayStartHour != dayStartHour || snapshot.stats?.zoneId?.let { it != java.time.ZoneId.systemDefault().id } == true
+        if (changed) snapshot = StatsSnapshot(dayStartHour = dayStartHour)
+        if (!force && !changed && snapshot.stats?.today == today && snapshot.access == AnkiAccess.OK && now - lastStartedAt < MIN_GAP_MS) return
         if (!running.compareAndSet(false, true)) return
         lastStartedAt = now
         val app = ctx.applicationContext
         io.execute {
             try {
-                work(app, today, dayStartHour)
+                work(app, today, dayStartHour, request)
                 AchievementFeed.maybeFeed(app) // R4-07: study time + new cards learned -> achievements (throttled, own thread)
             } catch (t: Throwable) { // a background thread must never take the app down
                 Report.fail("STATS", "refresh", t)
                 update { it.copy(access = AnkiAccess.ERROR, message = failureText(t), historyRunning = false) }
             } finally {
                 running.set(false)
+                main.post {
+                    latestRequest?.takeIf { it != request }?.let { next -> refresh(app, next.first, next.second, force = true) }
+                }
             }
         }
     }
 
-    private fun work(app: Context, today: String, dayStartHour: Int) {
+    private fun work(app: Context, today: String, dayStartHour: Int, request: Triple<String, Int, String>) {
         val time = readTime(app, dayStartHour)
         val live = readLiveTime(app, dayStartHour)
-        update { it.copy(timeByDay = time.time, liveTimeByDay = live.time, timedAnswersByDay =
+        update { if (latestRequest != request) it else it.copy(timeByDay = time.time, liveTimeByDay = live.time, timedAnswersByDay =
             (time.counts.keys + live.counts.keys).associateWith { day -> (time.counts[day] ?: 0L) + (live.counts[day] ?: 0L) }) }
         Anki.load(app)
         val access = AnkiAccess.decide(
@@ -111,11 +119,17 @@ object AnkiStatsStore {
             return
         }
         val pkg = Anki.pkg
-        val prev = snapshot.stats?.takeIf { it.pkg == pkg }
+        val zone = java.time.ZoneId.of(request.third)
+        val prev = snapshot.stats?.takeIf { it.pkg == pkg && it.dayStartHour == dayStartHour && it.zoneId == zone.id }
         try {
-            AnkiStatsReader { q -> Anki.countCards(app, q) }.refresh(prev, pkg, today, System::currentTimeMillis) { stats, historyRunning ->
-                writeCache(app, stats)
-                update { it.copy(stats = stats, access = AnkiAccess.OK, message = null, historyRunning = historyRunning) }
+            val todayCount = try { exactCards(app, today, dayStartHour, zone) } catch (e: SecurityException) { throw e
+            } catch (e: Exception) { Report.fail("STATS", "exact game-day counts unavailable; using AnkiGo answers", e); null }
+            AnkiStatsReader(studiedOn = { day -> if (todayCount == null) 0 else if (day == today) todayCount else exactCards(app, day, dayStartHour, zone) }) { q -> Anki.countCards(app, q) }
+                .refresh(prev, pkg, today, System::currentTimeMillis) { result, historyRunning ->
+                val stats = result.copy(dayStartHour = dayStartHour, zoneId = zone.id, dailyCountsAvailable = todayCount != null,
+                    perDay = if (todayCount == null) emptyMap() else result.perDay, historyCheckedAt = if (todayCount == null) 0 else result.historyCheckedAt)
+                if (latestRequest == request) writeCache(app, stats)
+                update { if (latestRequest != request) it else it.copy(stats = stats, dayStartHour = dayStartHour, access = AnkiAccess.OK, message = if (todayCount == null) "Exact game-day card counts unavailable; showing AnkiGo answers" else null, historyRunning = historyRunning && todayCount != null) }
             }
         } catch (e: SecurityException) { // the permission was taken away while reading
             Report.fail("STATS", "AnkiDroid permission", e)
@@ -167,9 +181,12 @@ object AnkiStatsStore {
             return
         }
         try {
-            val data = AnkiSeriesReader { q -> Anki.countCards(app, q) }.read(key, System.currentTimeMillis())
+            val deckIds = key.deck?.let { name -> Anki.decks(app).filter { it.name == name || it.name.startsWith("$name::") }.map { it.id } }
+            val data = AnkiSeriesReader(cardsOn = { k, day, introduced ->
+                exactCards(app, day, k.dayStartHour, java.time.ZoneId.of(k.zoneId), deckIds, introduced)
+            }) { q -> Anki.countCards(app, q) }.read(key, System.currentTimeMillis())
             seriesFailedAt.remove(key)
-            update { it.copy(series = AnkiSeriesCache.put(it.series, key, data)) }
+            update { if (key.dayStartHour != it.dayStartHour || key.zoneId != java.time.ZoneId.systemDefault().id) it else it.copy(series = AnkiSeriesCache.put(it.series, key, data)) }
         } catch (e: SecurityException) {
             seriesFailedAt[key] = System.currentTimeMillis()
             Report.fail("STATS", "AnkiDroid permission", e)
@@ -179,6 +196,16 @@ object AnkiStatsStore {
             Report.fail("STATS", "reading a chart from AnkiDroid", e)
             update { it.copy(access = AnkiAccess.ERROR, message = failureText(e)) }
         }
+    }
+
+    /** Read-only compatibility path already used by Diagnostics; fail visibly if the provider closes it. */
+    private fun exactCards(app: Context, day: String, hour: Int, zone: java.time.ZoneId, deckIds: List<Long>? = null, introduced: Boolean = false): Int = try {
+        Anki.revlogProbe(app, StudyDayQueries.cards(day, hour, zone, deckIds, introduced))
+            .firstOrNull()?.get("_id")?.toIntOrNull()?.takeIf { it >= 0 }
+            ?: error("No count returned")
+    } catch (e: SecurityException) { throw e
+    } catch (e: Exception) {
+        throw IllegalStateException("AnkiDroid cannot provide counts for the game-day reset hour", e)
     }
 
     private fun failureText(t: Throwable): String = (t.message ?: t.javaClass.simpleName).take(60)

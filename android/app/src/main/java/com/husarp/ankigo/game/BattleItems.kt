@@ -64,6 +64,7 @@ internal object BattleItems : BattleRules {
             mon.hp < before -> "lost ${before - mon.hp} HP."
             else -> "used the item."
         }
+        if (mon.hp > before && state.main?.uid == mon.uid) events += GameEvent.Effect(true, message, mon.hp, max, b?.player?.status, EffectKind.HEAL, amount = mon.hp - before)
         if (b != null && b.wild.hp > 0) {
             boosts[item]?.let { effect ->
                 b.field.player[key(mon, effect)] = 1
