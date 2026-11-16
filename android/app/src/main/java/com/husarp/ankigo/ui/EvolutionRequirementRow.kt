@@ -16,6 +16,7 @@ internal class EvolutionRequirementRow(a: Context, requirement: EvolutionRowText
             Multicolor.ink(a, Multicolor.Tone.GREEN, Ui.c(a, R.color.ag_card)) else Ui.c(a, R.color.ag_green)
         val content = LinearLayout(a).apply {
             gravity = Gravity.TOP
+            isBaselineAligned = false
         }
         addView(content, LayoutParams(-2, -2))
         content.addView(Ui.text(a, 13.5f, 800, R.color.ag_sub1).apply {

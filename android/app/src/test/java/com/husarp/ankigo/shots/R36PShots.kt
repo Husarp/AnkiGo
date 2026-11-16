@@ -72,6 +72,7 @@ class R36PShots {
                     assertEquals(Ui.dp(ctx, 8), icon.left - text.right)
                     assertTrue(icon.right <= row.width)
                     assertTrue(text.width > 0)
+                    assertTrue("wrapped label stays inside its row", text.top >= 0 && text.bottom <= content.height)
                     assertEquals(if (met) "✓" else "✗", mark.text.toString())
                     if (width == 360 && label == "Use Syrupy Apple") {
                         assertEquals(1, text.lineCount)

@@ -114,7 +114,7 @@ class R30U1ConditionShots {
             val mark = arena.conditions.of(if (ours) ConditionMarks.Slot.OURS else ConditionMarks.Slot.WILD).single { it.key == key }
             val stats = com.husarp.ankigo.game.SimpleView.of(GameRepo.data!!, GameRepo.state!!.battle!!, GameRepo.state!!.main!!).stats(ours)
             val values = ConditionStat.values(mark, stats)
-            assertEquals(listOfNotNull(values, ConditionExplanation.effect(mark)).joinToString("\n"), effect.text.toString())
+            assertEquals(listOfNotNull(ConditionExplanation.effect(mark), values).joinToString("\n"), effect.text.toString())
             assertTrue(effect.lineCount > 0)
             assertTrue("Explanation fits its card", effect.layout.getLineBottom(effect.lineCount - 1) <= effect.height)
             val chip = arena.markRows().first { row -> row.chips.any { it.mark!!.key == key } }.chips.first { it.mark!!.key == key }
