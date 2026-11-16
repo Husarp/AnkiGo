@@ -10,13 +10,14 @@ package com.husarp.ankigo.study
  */
 class LearnCache(private val read: () -> PredictRule.LearnRead) {
     private var token = 0
+    private var revision = 0
     private var last: PredictRule.LearnRead? = null
 
-    /** The learning read for the Prepares of load [token]: the kept one, or a new read (kept when it worked). */
-    fun get(token: Int): PredictRule.LearnRead {
-        last?.let { if (this.token == token) return it }
+    /** Prepares share a read for this load and idle-queue [revision]; a changed queue needs a fresh cutoff. */
+    fun get(token: Int, revision: Int = 0): PredictRule.LearnRead {
+        last?.let { if (this.token == token && this.revision == revision) return it }
         val fresh = read()
-        if (fresh.due != null) { this.token = token; last = fresh } else last = null
+        if (fresh.due != null) { this.token = token; this.revision = revision; last = fresh } else last = null
         return fresh
     }
 }

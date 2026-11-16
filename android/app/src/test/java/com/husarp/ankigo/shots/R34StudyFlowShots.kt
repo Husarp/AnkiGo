@@ -26,7 +26,7 @@ class R34StudyFlowShots {
         val act = attach(StudyActivity(), ShotCtx(ctx))
         setField(act, "deckId", done.id); setField(act, "deckName", done.name)
         val root = act.buildContent()
-        act.finishQueueCheck = { it(Result.success(true)) }
+        act.finishQueueCheck = { it(Result.success(StudyActivity.DueRefresh(decks, emptyList()))) }
         call(act, "layout")
         (getField(act, "panel") as BattlePanelView).apply { setStudyLayout(false, false); renderAll() }
         call(act, "waitForFinish", Triple(decks, 0, 0))

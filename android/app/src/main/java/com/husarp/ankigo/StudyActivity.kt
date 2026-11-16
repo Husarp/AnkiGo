@@ -88,35 +88,25 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private val nc by lazy { NextCard<StudyCard>(deckId, { host.nextSeq() }, check = { answered, next, at ->
         if (!prefs.getBoolean(StudyIo.NOT_TOP_PREF, true)) PredictRule.Why.WAITING_DISABLED else PredictRule.check(answered, next, at)
     }, maxAhead = NextCard.AHEAD, freshNext = false, keepReadyOnLearning = true) }   // R30: predictions stay displayed until answered; late reads update only what follows
-    private val countsIo = Executors.newSingleThreadExecutor()   // R4 fix B1: only the deck counts' read runs here, so answers and card loads on [io] never wait behind it
+    private val countsIo = Executors.newSingleThreadExecutor()   // deck names for prepared content never hold up card loads
     private var countWake: Runnable? = null
-    private val liveCounts by lazy { com.husarp.ankigo.study.LiveRefresh<Anki.Deck>(
+    private val liveCounts by lazy { com.husarp.ankigo.study.LiveRefresh<DueRefresh>(
         now = { System.currentTimeMillis() },
         schedule = { delay, f -> Runnable { f() }.also { countWake = it; main.postDelayed(it, delay) } },
         cancel = { countWake?.let { main.removeCallbacks(it) }; countWake = null },
-        blocked = { host.unresolvedNow() },
-        read = { done -> countsIo.execute {
-            val result = runCatching { com.husarp.ankigo.debug.LagLog.study {
-                val at = System.currentTimeMillis()
-                val all = Anki.decks(this)
-                deckNames.remember(all.associate { it.id to it.name })
-                val due = Anki.searchCards(this, PredictRule.learnQuery(deckName), arrayOf("queue", "due"))
-                all.firstOrNull { it.id == deckId } to com.husarp.ankigo.study.LiveRefresh.nextLearning(due, at)
-            } }
-            main.post {
-                result.onFailure { Report.fail("STUDY", "reading live deck counts", it) }
-                done(result.getOrNull()?.first, result.getOrNull()?.second)
-            }
-        } },
-        show = { exact ->
-            lastCounts = exact
-            if (card != null && !finished) {
-                showQueueCounts(exact, stats["queue"]?.toIntOrNull())
-                fun js(s: JsApi.Snapshot) = s.copy(newCount = exact.new.coerceAtLeast(0), lrnCount = exact.learn.coerceAtLeast(0), revCount = exact.review.coerceAtLeast(0))
-                jsBase = js(jsBase); jsSnap?.let { jsSnap = js(it) }
+        blocked = { StudyIo.unresolvedNow() || finishTapped || locked && finishArgs == null && !finished },
+        read = { done ->
+            val token = generation
+            dueRefreshRead(finishArgs != null || finished) { result ->
+                if (resumedNow && valid(token)) result.onFailure { Report.fail("STUDY", "refreshing due cards", it) }
+                val value = result.getOrNull()?.takeIf { valid(token) }
+                done(value, value?.nextLearning)
             }
         },
+        show = { applyDueRefresh(it) },
+        maxDelay = 15_000L,
     ) }
+    private var preparationEpoch = 0
     private val audioIo = Executors.newSingleThreadExecutor { r -> Thread(r, "study-audio").apply { isDaemon = true } }
     private val contentIo = Executors.newSingleThreadExecutor { r -> Thread(r, "study-content").apply { isDaemon = true } }
     private val preparedAhead = PrepareAhead<StudyCard>(contentIo, { SystemClock.elapsedRealtime() })
@@ -202,7 +192,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     private var pageReady = false              // this side's page finished loading
     private var typeInQuestion = false         // the question side on screen has a type-in field (TypeInRules)
     private var imeDp = 0                      // the soft keyboard's height now (0 = hidden); with a type-in card it switches to the keyboard layout (TypeInLayout)
-    private var resumedNow = false
+    @Volatile private var resumedNow = false
     @Volatile private var returnVisit = 0
     private var keyboardJob: Runnable? = null  // the pending "open the keyboard on a type-in card", cancelled when the card changes or the screen pauses
     private var autoFired = -1                 // the side whose auto-advance already acted
@@ -247,6 +237,8 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     // PLAN 129: the deck's last answer is in, the last battle plays on the study screen and "Finish deck" opens the summary (args of that summary; null = not waiting)
     private var finishArgs: Triple<List<Anki.Deck>, Int, Int>? = null
     private var finishTapped = false
+    private var returnedCards = 0
+    private var summaryContinue: View? = null
     private var answeredSinceCard = false   // an own answer was made and no card has been confirmed since: a finished queue is the deck's end of this visit
     private var started = false
     private val pending = PendingAnswers()    // own answers whose game step has not run yet: the next card does not wait for them, the summary does
@@ -632,9 +624,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         if (shownAt != 0L) shownAt = SystemClock.elapsedRealtime()
         if (::panel.isInitialized) { layout(); if (!finished) showButtons() }
         swipeOn = prefs.getBoolean("swipe", false); if (::swipe.isInitialized) updateSwipe()
-        if (::web.isInitialized && (finished || filtered && card != null && !locked && !predictedNow)) loadNext(answerKeep())
+        if (::web.isInitialized && filtered && (finished || card != null && !locked && !predictedNow)) loadNext(answerKeep())
         else {
-            if (returnVisit > 0 && !filtered && ::web.isInitialized) checkDueOnReturn()
+            if (returnVisit > 0 && !filtered && !finished && finishArgs == null && ::web.isInitialized) checkDueOnReturn()
             queueRecoveryToken?.takeIf { valid(it) }?.let { token ->
                 queueRetry?.let { main.removeCallbacks(it) }; queueRetry = null
                 startLoad(token, null)
@@ -975,7 +967,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         audioPrev = audioNow; audioNow = false; voiceNote = null; ttsCard = TtsRules.NONE
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
         if (finished) buttons.removeAllViews() else if (waiting) disableButtons(buttons)
-        finished = false; lastSummary = null; finishArgs = null; finishTapped = false; locked = true; card = null; pageReady = false; jsSnap = null
+        finished = false; lastSummary = null; finishArgs = null; finishTapped = false; returnedCards = 0; summaryContinue = null; locked = true; card = null; pageReady = false; jsSnap = null
         predictedNow = false; heldEase = 0; heldAt = 0L; avHeld = false
         topBar.visibility = View.VISIBLE; summaryBar.visibility = View.GONE; cardSurface.visibility = View.VISIBLE
         web.visibility = View.VISIBLE; showNotice(false); updateSwipe(); applyCalm()
@@ -1125,7 +1117,6 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             check(studyOk) { "Studying here needs AnkiDroid 2.24 or newer. Companion mode is still available." }
             fun select() = host.ensureSelected(deckId) { Anki.selectDeck(app, deckId) }   // once per visit, again after a failure
             select()
-            var decks: List<Anki.Deck>? = null
             // Retry provider failures / stale empty queues; each attempt checks due-card priority again.
             fun readQueue() = QueueRead.read(
                 query = { dueQueue() },
@@ -1133,7 +1124,6 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                     val listStart = SystemClock.elapsedRealtime()
                     val all = Anki.decks(app)
                     deckNames.remember(all.associate { it.id to it.name })
-                    decks = all
                     listMs = SystemClock.elapsedRealtime() - listStart
                     val counts = all.firstOrNull { it.id == deckId }?.total
                     val learning = Anki.searchCards(app, DueOrder.query(deckName), DueOrder.COLS)
@@ -1156,8 +1146,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             val keys = reviews.map { StudyLoop.Key(it.nid, it.ord) }
             when (val step = LoadPlan.decide(keys, predicted)) {
                 LoadPlan.Step.Finished -> {
-                    // Nothing left to study: the whole deck list is needed (the "Next deck" button); it was read when the queue came back empty.
-                    val all = decks ?: Anki.decks(app).also { deckNames.remember(it.associate { d -> d.id to d.name }) }
+                    // Recheck after reading the remaining counts: a card crossing its cutoff becomes an offer at the deck end.
                     if (read.dueButEmpty) {
                         postMain {
                             if (valid(token)) retryQueue(token, "counts report due cards but schedule is empty")
@@ -1167,20 +1156,16 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                     val queryDeck = "deck:\"${deckName.replace("\"", "") }\""
                     val learn = Anki.searchCards(app, "$queryDeck is:learn", arrayOf("_id")).size
                     val fresh = Anki.searchCards(app, "$queryDeck is:new", arrayOf("_id")).size
-                    val lastRead = checkedCardQueue(dueQueue(), flagsOk)
-                    val last = lastRead.queue
-                    if (last.isNotEmpty()) {
-                        val p = lastRead.card ?: throw SchedulerCardRead.Changed()
-                        queueReviews = last
-                        val ioMs = ioDone()
-                        postMain {
-                            if (!isDestroyed && !isFinishing) perform(nc.loaded(token, p, last.map { StudyLoop.Key(it.nid, it.ord) }))
-                            noteLoad(ioMs, AnswerTiming.NONE)
-                        }
-                        return@runCatching
-                    }
+                    val last = dueQueue()
+                    val exact = Anki.decks(app)
                     val ioMs = ioDone()
-                    postMain { deckEmpty(token, Triple(all, learn, fresh)) { noteLoad(ioMs, "") } }
+                    postMain {
+                        if (valid(token)) {
+                            returnedCards = last.size
+                            lastCounts = exact.firstOrNull { it.id == deckId }
+                            deckEmpty(token, Triple(exact, learn, fresh)) { noteLoad(ioMs, "") }
+                        }
+                    }
                     return@runCatching
                 }
                 is LoadPlan.Step.Confirm -> {
@@ -1329,6 +1314,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     /** Prepare the short queue on the read worker, independently of answer writes. Results are token/card bound. */
     private fun startPrepare(c: Cmd.Prepare) {
         if (c.forToken != generation) return
+        val epoch = preparationEpoch
         val reviews = queueReviews
         val review = reviews.firstOrNull { it.nid == c.key.nid && it.ord == c.key.ord } ?: return
         contentIo.execute {
@@ -1336,15 +1322,15 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
             com.husarp.ankigo.debug.LagLog.study {
                 runCatching {
                     val at = SystemClock.elapsedRealtime()
-                    val p = prepare(review, support.get().second).copy(learning = preparationLearning.get(c.forToken))
+                    val p = prepare(review, support.get().second).copy(learning = preparationLearning.get(c.forToken, epoch))
                     preparedAhead.remember(p, at)
-                    postMain { if (valid(c.forToken)) nc.prepared(c.forKey, c.forToken, p) }
+                    postMain { if (valid(c.forToken) && epoch == preparationEpoch) nc.prepared(c.forKey, c.forToken, p) }
                     // Only real scheduler entries have answer metadata; absent learning cards wait for the next read.
                     val due = PredictRule.learningToPrepare(c.forKey, p)
                     val learning = reviews.firstOrNull { it.nid == due?.key?.nid && it.ord == due.key.ord }
                     if (learning != null) {
                         val learn = prepare(learning, support.get().second)
-                        postMain { if (valid(c.forToken)) nc.preparedLearning(c.forKey, c.forToken, learn) }
+                        postMain { if (valid(c.forToken) && epoch == preparationEpoch) nc.preparedLearning(c.forKey, c.forToken, learn) }
                     }
                 }.onFailure {
                     com.husarp.ankigo.debug.LagLog.record("PREPARE_FAILED", "note" to c.key.nid, "ord" to c.key.ord, "type" to it.javaClass.simpleName)
@@ -1457,7 +1443,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
     internal fun showQueueCounts(d: Anki.Deck?, queue: Int?) {
         queueCounts.removeAllViews()
         if (d == null) return   // no counts read yet on this screen: they follow the card
-        val current = when (queue) { 0 -> 0; 1, 3 -> 1; else -> 2 }
+        val current = when (queue) { null -> -1; 0 -> 0; 1, 3 -> 1; else -> 2 }
         listOf(d.new to R.color.ag_blue, d.learn to R.color.ag_red, d.review to R.color.ag_green).forEachIndexed { i, (number, color) ->
             queueCounts.addView(StudyUi.label(this, number.toString(), 14, color, 900).apply {
                 if (i == current) paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
@@ -1651,12 +1637,15 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         if (rowKind == ContinueRule.Row.FINISH) {
             val next = finishArgs?.first?.let { NextDeck.suggest(it.map { d -> NextDeck.D(d.id, d.name, d.total) }, deckId, deckName) }
             val finish = StudyUi.answer(this, ContinueRule.FINISH_LABEL, null, R.color.ag_mauve, !finishTapped, ContinueRule.FINISH_HINT) { finishDeck() }
-            if (next == null) buttons.addView(finish, StudyUi.lp(-1, Ui.dp(this, 48)))
+            if (next == null && returnedCards == 0) buttons.addView(finish, StudyUi.lp(-1, Ui.dp(this, 48)))
             else {
                 val row = StudyUi.row(this)
                 row.addView(finish, StudyUi.lp(0, Ui.dp(this, 48), 1f))
-                row.addView(StudyUi.answer(this, "Next deck", null, R.color.ag_mauve, !finishTapped, next.name.substringAfterLast("::")) { nextDeck(next) },
-                    StudyUi.lp(0, Ui.dp(this, 48), 1f).also { it.marginStart = Ui.dp(this, 6) })
+                val offer = if (returnedCards > 0) StudyUi.answer(this, "Continue", null, R.color.ag_mauve, !finishTapped, returnedLine()) { continueDeck() }.apply {
+                    contentDescription = "${returnedLine()} · Continue"
+                }
+                else StudyUi.answer(this, "Next deck", null, R.color.ag_mauve, !finishTapped, next!!.name.substringAfterLast("::")) { nextDeck(next) }
+                row.addView(offer, StudyUi.lp(0, Ui.dp(this, 48), 1f).also { it.marginStart = Ui.dp(this, 6) })
                 buttons.addView(row, StudyUi.lp(-1, Ui.dp(this, 48)))
             }
             return
@@ -2029,6 +2018,9 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
      */
     private fun waitForFinish(args: Triple<List<Anki.Deck>, Int, Int>) {
         finishArgs = args; finishTapped = false
+        lastCounts = args.first.firstOrNull { it.id == deckId }
+        showQueueCounts(lastCounts, null)
+        liveCounts.invalidate()
         summaryView?.let { cardColumn.removeView(it) }
         cardSurface.visibility = View.GONE; showNotice(false)
         summaryView = FrameLayout(this).apply {
@@ -2067,13 +2059,80 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         startActivity(Intent(this, StudyActivity::class.java).putExtra("deckId", next.id).putExtra("deckName", next.name)); finish()
     }
 
-    /** Async provider boundary, replaceable by view tests that do not attach an AnkiDroid provider. */
-    internal var finishQueueCheck: ((Result<Boolean>) -> Unit) -> Unit = { done ->
+    internal data class DueRefresh(
+        val decks: List<Anki.Deck>, val queue: List<Anki.Review>,
+        val learn: Int = 0, val fresh: Int = 0, val nextLearning: Long? = null,
+    ) {
+        val args get() = Triple(decks, learn, fresh)
+    }
+
+    /** All scheduler and count reads share the ordered study worker with answers. */
+    internal var dueRefreshRead: (Boolean, (Result<DueRefresh>) -> Unit) -> Unit = { end, done ->
+        val token = generation
         io {
-            val empty = runCatching { dueQueue().isEmpty() }
-            postMain { done(empty) }
+            val result = runCatching {
+                check(resumedNow && token == generation && !isFinishing && !isDestroyed) { "Study screen is hidden or changed." }
+                host.ensureSelected(deckId) { Anki.selectDeck(applicationContext, deckId) }
+                val at = System.currentTimeMillis()
+                val due = Anki.searchCards(applicationContext, PredictRule.learnQuery(deckName), arrayOf("queue", "due"))
+                val query = "deck:\"${deckName.replace("\"", "")}\""
+                val learn = if (end) Anki.searchCards(applicationContext, "$query is:learn", arrayOf("_id")).size else 0
+                val fresh = if (end) Anki.searchCards(applicationContext, "$query is:new", arrayOf("_id")).size else 0
+                val queue = dueQueue()
+                val decks = Anki.decks(applicationContext)
+                deckNames.remember(decks.associate { it.id to it.name })
+                DueRefresh(decks, queue, learn, fresh, com.husarp.ankigo.study.LiveRefresh.nextLearning(due, at))
+            }
+            postMain { done(result) }
         }
     }
+
+    private fun applyDueRefresh(read: DueRefresh) {
+        lastCounts = read.decks.firstOrNull { it.id == deckId }
+        if (finishArgs != null) {
+            finishArgs = read.args
+            returnedCards = read.queue.size
+            showQueueCounts(lastCounts, null)
+            finishLine()
+            showButtons()
+        } else if (finished) {
+            val changed = lastSummary != read.args || returnedCards != read.queue.size
+            returnedCards = read.queue.size
+            if (changed) summary(read.decks, read.learn, read.fresh)
+        } else if (card != null) {
+            val exact = lastCounts
+            showQueueCounts(exact, stats["queue"]?.toIntOrNull())
+            if (exact != null) {
+                fun js(s: JsApi.Snapshot) = s.copy(newCount = exact.new.coerceAtLeast(0), lrnCount = exact.learn.coerceAtLeast(0), revCount = exact.review.coerceAtLeast(0))
+                jsBase = js(jsBase); jsSnap?.let { jsSnap = js(it) }
+            }
+            val shown = nc.slot as? NextCard.Slot.Confirmed<StudyCard>
+            if (shown != null) {
+                queueReviews = read.queue
+                preparationEpoch++
+                perform(nc.refreshQueue(shown.card.key, shown.token, read.queue.map { StudyLoop.Key(it.nid, it.ord) }))
+            }
+        }
+    }
+
+    private fun returnedLine(): String {
+        val count = "$returnedCards${if (returnedCards >= NextCard.AHEAD + 2) "+" else ""}"
+        return "$count ${if (returnedCards == 1) "card is" else "cards are"} back"
+    }
+
+    private fun continueDeck() {
+        if (finishTapped || returnedCards == 0 || isDestroyed || isFinishing) return
+        finishTapped = true
+        events.continueBattle()
+        if (!finished) showButtons() else summaryContinue?.isEnabled = false
+        val token = generation
+        pending.whenIdle { if (valid(token) && !isFinishing) continueDeckStart() }
+    }
+
+    internal var continueDeckStart: () -> Unit = { loadNext() }
+
+    /** Async provider boundary, replaceable by view tests that do not attach an AnkiDroid provider. */
+    internal var finishQueueCheck: ((Result<DueRefresh>) -> Unit) -> Unit = { done -> dueRefreshRead(true, done) }
 
     /** Recheck after battle/save waits and the Finish deck tap, immediately before the summary. */
     private fun checkedSummary(args: Triple<List<Anki.Deck>, Int, Int>) {
@@ -2082,23 +2141,38 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         finishQueueCheck { result ->
             if (valid(token) && !isDestroyed && !isFinishing) {
                 result.fold(
-                    onSuccess = { empty ->
-                        if (empty) summary(args.first, args.second, args.third)
-                        else loadNext()
+                    onSuccess = { read ->
+                        liveCounts.invalidate()
+                        val offered = returnedCards > 0
+                        lastCounts = read.decks.firstOrNull { it.id == deckId }
+                        returnedCards = read.queue.size
+                        if (returnedCards > 0 && !offered) waitForFinish(read.args)
+                        else summary(read.decks, read.learn, read.fresh)
                     },
-                    onFailure = { finishTapped = false; showError(it.message ?: "Couldn't check the study queue. Retry.") },
+                    onFailure = {
+                        finishTapped = false
+                        val message = it.message ?: "Couldn't check the study queue. Retry."
+                        if (finishArgs == null) showError(message)
+                        else { finishLine("$message\nTap Finish deck to retry.", error = true); showButtons() }
+                    },
                 )
             }
         }
     }
+    private fun finishLine(text: String = ContinueRule.FINISH_LINE, error: Boolean = false) {
+        ((summaryView as? ViewGroup)?.getChildAt(0) as? TextView)?.apply {
+            this.text = text
+            setTextColor(Ui.c(this@StudyActivity, if (error) R.color.ag_red else R.color.ag_sub1))
+        }
+    }
+
     private fun summary(decks: List<Anki.Deck>, learn: Int, fresh: Int) {
-        val rerender = finished && lastSummary != null
-        lastSummary = Triple(decks, learn, fresh); finishArgs = null; answeredSinceCard = false
+        lastSummary = Triple(decks, learn, fresh); finishArgs = null; finishTapped = false; answeredSinceCard = false
         summaryView?.let { cardColumn.removeView(it) }; summaryView = null
         finished = true; card = null; locked = true; buttons.removeAllViews(); showNotice(false); syncTiming()
         topBar.visibility = View.GONE; summaryBar.visibility = View.VISIBLE; cardSurface.visibility = View.GONE
         val n = counts.sum()
-        val why = when { learn > 0 -> "$learn learning cards come back in a few minutes."; fresh > 0 -> "Daily new-card limit reached · $fresh new cards left."; else -> "All available cards studied." }
+        val why = when { returnedCards > 0 -> "${returnedLine()} · Continue when ready."; learn > 0 -> "$learn learning cards come back in a few minutes."; fresh > 0 -> "Daily new-card limit reached · $fresh new cards left."; else -> "All available cards studied." }
         val st = GameRepo.state
         val summary = StudyUi.column(this).apply { setPadding(Ui.dp(context, 12), 0, Ui.dp(context, 12), Ui.dp(context, 12)) }
         val hero = StudyUi.row(this).apply {
@@ -2194,25 +2268,16 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
         val next = NextDeck.suggest(decks.map { NextDeck.D(it.id, it.name, it.total) }, deckId, deckName)   // PLAN 621: the same suggestion as the end buttons and Study tab
         buttons.setPadding(Ui.dp(this, 12), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 10))
         buttons.layoutParams = LinearLayout.LayoutParams(StudyUi.pageWidth(this), -2).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        summaryContinue = null
+        if (returnedCards > 0) summaryContinue = StudyUi.finishedPrimary(this, "${returnedLine()} · Continue") { continueDeck() }.also {
+            buttons.addView(it, StudyUi.spaced(this, 6))
+        }
         if (next != null) buttons.addView(StudyUi.finishedNextDeck(this, next.name, next.total) {
             openNextDeck(next)
         })
         else if (!filtered) buttons.addView(StudyUi.finishedPrimary(this, "Custom study in AnkiDroid") { openAnki() })
         buttons.addView(StudyUi.secondary(this, "Back to decks") { Nav.open(this, Dest.STUDY); finish() }, StudyUi.spaced(this, 6)) // always the Study deck list, not the tab it was started from (PLAN 131)
         layout()
-        if (learn > 0 && !rerender) main.postDelayed({ recheckLearning() }, 30_000)
-    }
-    private fun recheckLearning() {
-        if (!finished || background || isDestroyed) return
-        val token = generation
-        io {
-            val available = runCatching { host.ensureSelected(deckId) { Anki.selectDeck(this, deckId) }; Anki.nextCards(this, deckId, 1).isNotEmpty() }.getOrDefault(false)
-            main.post {
-                if (!valid(token) || !finished || background) return@post
-                if (available) buttons.addView(StudyUi.finishedPrimary(this, "Continue · learning cards are ready") { loadNext() }, StudyUi.spaced(this, 6))
-                else main.postDelayed({ recheckLearning() }, 30_000)
-            }
-        }
     }
     private fun openUrl(url: String) { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } }
     private fun stopAudio() {
