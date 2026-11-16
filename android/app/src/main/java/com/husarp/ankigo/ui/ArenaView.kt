@@ -174,6 +174,14 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     val fx = ArenaFxView(ctx)
     /** The attack animation's own canvas layer (round 7), under the stat cards so they stay readable over dims and flashes. */
     private val moveFx = ArenaFxView(ctx)
+    internal val fieldEffects = FieldEffectsView(ctx)
+    private val fieldGround = object : View(ctx) {
+        override fun onDraw(canvas: Canvas) {
+            fieldEffects.wildRing.visible = enemyHolder.visibility == VISIBLE && enemySprite.visibility == VISIBLE
+            fieldEffects.playerRing.visible = playerHolder.visibility == VISIBLE && playerSprite.visibility == VISIBLE
+            fieldEffects.drawGround(canvas)
+        }
+    }
     /** "GOTCHA!" in the comic style of the floating battle texts (Round 3 pick 9C): heavy italic capitals, yellow, dark outline. */
     private val bannerTitle = OutlineTextView(ctx, Ui.dp(ctx, 2.5f), FloatTextView.Look.OUTLINE).apply {
         typeface = Ui.font(ctx, 900)
@@ -437,9 +445,12 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
         addView(platEnemy, LayoutParams(0, 0))
         addView(platPlayer, LayoutParams(0, 0))
+        addView(fieldGround, LayoutParams(-1, -1))
+        fieldEffects.invalidateGround = { fieldGround.invalidate() }
         addView(enemyHolder, LayoutParams(0, 0))
         addView(playerHolder, LayoutParams(0, 0))
         addView(conditionLooks, LayoutParams(-1, -1))
+        addView(fieldEffects, LayoutParams(-1, -1))
         addView(moveFx, LayoutParams(-1, -1))
         cardLayer.addView(enemyBlock, LayoutParams(0, -2))
         cardLayer.addView(playerCard, LayoutParams(0, -2))
@@ -1456,7 +1467,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     // ---------------------------------------------------------------- condition chips (R19-K, PLAN 269 A) and the bubbles that close (PLAN 287)
 
     /** Settles the chips to the saved fight [b] (null = no fight), as the panel is drawn from it. */
-    fun syncConditions(b: Battle?) { if (conditions.syncFrom(b)) marksChanged(); syncLoveLooks() }
+    fun syncConditions(b: Battle?) { if (conditions.syncFrom(b)) marksChanged(); syncLoveLooks(); syncFieldLooks(b) }
 
     private fun syncLoveLooks() {
         playerSprite.setConditionLove(conditions.of(ConditionMarks.Slot.OURS).any { it.key == "attract" })
@@ -1464,13 +1475,27 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     }
 
     /** An Effect line played: a condition starts or ends in step with it ([b] = the saved fight, for the turns). */
-    fun conditionEffect(e: GameEvent.Effect, b: Battle?) { if (conditions.applyEffect(e, b)) marksChanged(); syncLoveLooks() }
+    fun conditionEffect(e: GameEvent.Effect, b: Battle?) { if (conditions.applyEffect(e, b)) marksChanged(); syncLoveLooks(); syncFieldLooks(b) }
 
     /** The fight is over / a new one starts: no chips. */
-    fun clearConditions() { clearConditionLooks(); if (conditions.clear()) marksChanged() }
+    fun clearConditions() {
+        clearConditionLooks(); if (conditions.clear()) marksChanged()
+        fieldEffects.state.set(null, false, false, false); fieldEffects.changed()
+    }
+
+    private fun syncFieldLooks(b: Battle?) {
+        val field = conditions.of(ConditionMarks.Slot.FIELD)
+        val data = com.husarp.ankigo.GameRepo.data
+        val main = com.husarp.ankigo.GameRepo.state?.main
+        val suppressed = b?.field?.weather != null && data != null && main != null &&
+            com.husarp.ankigo.game.SimpleView.of(data, b, main).weather() == null
+        fieldEffects.state.set(field.firstOrNull { it.def.kind == ConditionMarks.Kind.WEATHER }?.key,
+            field.any { it.key == "psychic" }, field.any { it.key == "watersport" }, suppressed)
+        fieldEffects.changed()
+    }
 
     /** Our Pokémon left the field (switched out or fainted): its own conditions go; our side's and the field's stay. */
-    fun conditionsSwitched() { playerSprite.setConditionStatus(null, immediate = true); if (conditions.dropOurVolatiles()) marksChanged(); syncLoveLooks() }
+    fun conditionsSwitched() { playerSprite.setConditionStatus(null, immediate = true); if (conditions.dropOurVolatiles()) marksChanged(); syncLoveLooks(); syncFieldLooks(com.husarp.ankigo.GameRepo.state?.battle) }
 
     private fun marksChanged() {
         val any = conditions.size > 0
@@ -2555,11 +2580,46 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         super.onLayout(changed, l, t, r, b)
         updateNewTag()
         updateStatusTouch()
+        placeFieldRings()
         placeMarks()   // R19-K: the cards, pictures and the sticker are in place now
         if (banner.visibility == VISIBLE) {
             val was = bannerFit
             if (!placeBanner()) { banner.animate().cancel(); banner.visibility = GONE; return }   // the arena shrank: no clear spot any more
             if (bannerFit != was) { banner.scaleX = bannerFit; banner.scaleY = bannerFit }   // the arena changed size under the banner
+        }
+    }
+
+    private fun placeFieldRings() {
+        fieldEffects.groundTop = (min(enemyHolder.bottom, playerHolder.bottom).toFloat() / height.coerceAtLeast(1) - .08f).coerceIn(.25f, .7f)
+        placeFieldRing(fieldEffects.wildRing, enemyHolder)
+        placeFieldRing(fieldEffects.playerRing, playerHolder)
+        fieldGround.invalidate(); fieldEffects.invalidate()
+    }
+
+    private fun placeFieldRing(ring: FieldRing, holder: View) {
+        val unit = min(width / 180f, height / 160f).coerceAtLeast(.5f)
+        ring.x = holder.left + holder.width / 2f
+        ring.y = (holder.bottom - unit * 2f).coerceIn(unit * 2f, max(unit * 2f, height - unit * 3f))
+        ring.rx = min(holder.width * .58f, min(ring.x, width - ring.x) - unit * 2f).coerceAtLeast(0f)
+        ring.ry = min(holder.height * .1f, min(ring.y, height - ring.y) - unit).coerceAtLeast(0f)
+        keepRingClear(ring, enemyBlock, unit)
+        keepRingClear(ring, playerCard, unit)
+    }
+
+    private fun keepRingClear(ring: FieldRing, card: View, gap: Float) {
+        if (card.visibility != VISIBLE) return
+        val left = card.left.toFloat() - gap
+        val right = card.left + card.width * card.scaleX + gap
+        val top = card.top.toFloat() - gap
+        val bottom = card.top + card.height * card.scaleY + gap
+        if (ring.x + ring.rx < left || ring.x - ring.rx > right || ring.y + ring.ry < top || ring.y - ring.ry > bottom) return
+        if (ring.y < top) ring.ry = min(ring.ry, top - ring.y)
+        else if (ring.y > bottom) ring.ry = min(ring.ry, ring.y - bottom)
+        else if (ring.x < left) ring.rx = min(ring.rx, left - ring.x)
+        else if (ring.x > right) ring.rx = min(ring.rx, ring.x - right)
+        else {
+            // A crowded short stage can put the card over the holder's feet: use the clear ground just above it.
+            ring.y = max(gap * 2f, top - ring.ry - gap)
         }
     }
 
