@@ -55,7 +55,7 @@ import org.junit.Test
 /**
  * R9-W5-B: every bottom sheet shows the same handle at the top and drags down to close. For each sheet (the content of every Dialog sheet
  * of the app, through [SheetKit.host]; the layer sheets through [SheetKit.layer]): the handle is there, near the top; a pull on the handle past
- * 30 % closes (once, the dim fades), a shorter one springs back to 0, a fling closes at any distance; a scrolled list scrolls first and a pull
+ * 12 % closes (once, the dim fades), a shorter one springs back to 0, a fling closes at any distance; a scrolled list scrolls first and a pull
  * on a scroll at its top drags. PNGs: r9sheet-* (light + dark).
  */
 class R9SheetShots {
@@ -117,10 +117,10 @@ class R9SheetShots {
         // short pull: follows the finger, springs back, closes nothing
         run(ctx, make()).let { r ->
             val h = r.host.height.toFloat()
-            pull(r.root, handleY(ctx, r), listOf(20f, h * 0.10f, h * 0.20f), up = false)
-            assertEquals("follows the finger", h * 0.20f, r.host.translationY, h * 0.05f)
+            pull(r.root, handleY(ctx, r), listOf(20f, h * 0.06f, h * 0.10f), up = false)
+            assertEquals("follows the finger", h * 0.10f, r.host.translationY, h * 0.05f)
             assertTrue("the dim fades while it moves", r.dims.isNotEmpty() && r.dims.last() < SheetDrag.DIM)
-            touch(r.root, MotionEvent.ACTION_UP, handleY(ctx, r) + h * 0.20f, 1_000L, 1_400L)
+            touch(r.root, MotionEvent.ACTION_UP, handleY(ctx, r) + h * 0.10f, 1_000L, 1_400L)
             assertEquals("springs back", 0f, r.host.translationY, 0.5f)
             assertEquals(0, r.closed)
             assertEquals("the dim is back", SheetDrag.DIM, r.dims.last(), 0.001f)

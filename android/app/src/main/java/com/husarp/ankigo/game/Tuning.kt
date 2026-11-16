@@ -300,21 +300,21 @@ object Tuning {
 
     // ---- Encounters (legacy system, encounter_functions.py) ----
     val WILD_LEVEL_SPREAD = -1..5       // offsets from Main level
-    const val SHINY_ODDS = 4096
+    const val SHINY_ODDS = 400
     val DEFAULT_GENS = (1..8).toSet()
     /** Base tier percentages before today's progress, trainer bonus and level gates. */
     val BASE_TIERS = linkedMapOf(
-        Tier.NORMAL to 94.3, Tier.BABY to 2.0, Tier.ULTRA to 1.5, Tier.LEGENDARY to 0.5, Tier.MYTHICAL to 0.2,
+        Tier.NORMAL to 93.5, Tier.BABY to 2.0, Tier.ULTRA to 1.5, Tier.LEGENDARY to 1.0, Tier.MYTHICAL to 0.5,
         Tier.MEGA to 0.5, Tier.GMAX to 0.5, Tier.STARTER to 0.5,
     )
     /** Main level needed before a tier can appear. */
     val TIER_GATE = mapOf(
-        Tier.ULTRA to 30, Tier.LEGENDARY to 50, Tier.MEGA to 60, Tier.GMAX to 65, Tier.MYTHICAL to 75, Tier.STARTER to 80,
+        Tier.ULTRA to 30, Tier.LEGENDARY to 30, Tier.MEGA to 60, Tier.GMAX to 65, Tier.MYTHICAL to 50, Tier.STARTER to 80,
     )
     /** Ankimon forces the starter tier to 0% ("Comment to activate starters"). */
     const val STARTER_TIER_ENABLED = false
     /** Wild minimum level for rare kinds. */
-    val TIER_MIN_LEVEL = mapOf(Tier.MYTHICAL to 75, Tier.LEGENDARY to 50, Tier.ULTRA to 30, Tier.STARTER to 30)
+    val TIER_MIN_LEVEL = mapOf(Tier.MYTHICAL to 50, Tier.LEGENDARY to 30, Tier.ULTRA to 30, Tier.STARTER to 30)
     /** A wild form that evolves by anything but level only appears at this level (Ankimon). AnkiGo fix: not for baby-line basics. */
     const val NON_LEVEL_EVO_MIN_LEVEL = 100
     /** Regional forms: a picked base species turns into one of its eligible forms with this chance PER eligible form (Ankimon 7 %). */

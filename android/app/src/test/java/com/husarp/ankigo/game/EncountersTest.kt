@@ -13,6 +13,15 @@ class EncountersTest {
     private fun pct(reviews: Int, avg: Int = 100, trainer: Int = 1, main: Int = 100) =
         Encounters.tierPercentages(reviews, avg, trainer, main)
 
+    @Test fun baseOddsAndGatesMatchTheNewTuning() {
+        assertEquals(400, Tuning.SHINY_ODDS)
+        assertEquals(1.0, Tuning.BASE_TIERS.getValue(Tier.LEGENDARY), eps)
+        assertEquals(0.5, Tuning.BASE_TIERS.getValue(Tier.MYTHICAL), eps)
+        assertEquals(100.0, Tuning.BASE_TIERS.values.sum(), eps)
+        assertEquals(30, Tuning.TIER_GATE.getValue(Tier.LEGENDARY))
+        assertEquals(50, Tuning.TIER_GATE.getValue(Tier.MYTHICAL))
+    }
+
     // ---- tierPercentages ----
 
     @Test fun lowRatioIsAllNormal() {
@@ -28,35 +37,35 @@ class EncountersTest {
 
     @Test fun babyBucket() {
         val p = pct(40)
-        // baby 3.5, normal 92.8, ultra 1.5, leg .5, myth .2, mega .5, gmax .5; starter zeroed -> 99.5 before normalising
+        // baby 3.5, normal 92.0, ultra 1.5, leg 1, myth .5, mega .5, gmax .5; starter zeroed -> 99.5 before normalising
         assertEquals(3.5 / 99.5 * 100, p.getValue(Tier.BABY), 1e-9)
-        assertEquals(92.8 / 99.5 * 100, p.getValue(Tier.NORMAL), 1e-9)
+        assertEquals(92.0 / 99.5 * 100, p.getValue(Tier.NORMAL), 1e-9)
         assertEquals(100.0, p.values.sum(), 1e-9)
     }
 
     @Test fun ultraBucket() {
         val p = pct(60)
-        // 3.0 ultra, 92.8 normal, 2 baby, .5 leg, .2 myth, .5 mega, .5 gmax (starter 0) -> sum 99.5, then normalised
-        val total = 2.0 + 3.0 + 0.5 + 0.2 + 0.5 + 0.5 + 92.8
+        // 3.0 ultra, 92.0 normal, 2 baby, 1 leg, .5 myth, .5 mega, .5 gmax (starter 0) -> sum 99.5, then normalised
+        val total = 2.0 + 3.0 + 1.0 + 0.5 + 0.5 + 0.5 + 92.0
         assertEquals(3.0 / total * 100, p.getValue(Tier.ULTRA), 1e-9)
-        assertEquals(92.8 / total * 100, p.getValue(Tier.NORMAL), 1e-9)
+        assertEquals(92.0 / total * 100, p.getValue(Tier.NORMAL), 1e-9)
     }
 
     @Test fun highBucket() {
         val p = pct(80)
-        val total = 2.0 + 3.0 + 1.0 + 0.4 + 1.0 + 1.0 + 90.6
-        assertEquals(1.0 / total * 100, p.getValue(Tier.LEGENDARY), 1e-9)
-        assertEquals(0.4 / total * 100, p.getValue(Tier.MYTHICAL), 1e-9)
-        assertEquals(90.6 / total * 100, p.getValue(Tier.NORMAL), 1e-9)
+        val total = 2.0 + 3.0 + 1.5 + 0.7 + 1.0 + 1.0 + 89.8
+        assertEquals(1.5 / total * 100, p.getValue(Tier.LEGENDARY), 1e-9)
+        assertEquals(0.7 / total * 100, p.getValue(Tier.MYTHICAL), 1e-9)
+        assertEquals(89.8 / total * 100, p.getValue(Tier.NORMAL), 1e-9)
     }
 
     @Test fun levelGates() {
         assertEquals(0.0, pct(80, main = 29).getValue(Tier.ULTRA), eps)
         assertTrue(pct(80, main = 30).getValue(Tier.ULTRA) > 0)
-        assertEquals(0.0, pct(80, main = 49).getValue(Tier.LEGENDARY), eps)
-        assertTrue(pct(80, main = 50).getValue(Tier.LEGENDARY) > 0)
-        assertEquals(0.0, pct(80, main = 74).getValue(Tier.MYTHICAL), eps)
-        assertTrue(pct(80, main = 75).getValue(Tier.MYTHICAL) > 0)
+        assertEquals(0.0, pct(80, main = 29).getValue(Tier.LEGENDARY), eps)
+        assertTrue(pct(80, main = 30).getValue(Tier.LEGENDARY) > 0)
+        assertEquals(0.0, pct(80, main = 49).getValue(Tier.MYTHICAL), eps)
+        assertTrue(pct(80, main = 50).getValue(Tier.MYTHICAL) > 0)
         assertEquals(0.0, pct(80, main = 59).getValue(Tier.MEGA), eps)
         assertTrue(pct(80, main = 60).getValue(Tier.MEGA) > 0)
         assertEquals(0.0, pct(80, main = 64).getValue(Tier.GMAX), eps)
@@ -66,16 +75,16 @@ class EncountersTest {
     @Test fun gatedTierIsNotRedistributedBeforeNormalising() {
         // main 1: ultra/leg/myth/mega/gmax all 0; only normal + baby remain
         val p = pct(40, main = 1)
-        // baby 3.5 + normal 92.8 survive: 96.3 total (the gated 0.0 tiers are simply dropped by the normalising)
-        assertEquals(3.5 / 96.3 * 100, p.getValue(Tier.BABY), 1e-9)
-        assertEquals(92.8 / 96.3 * 100, p.getValue(Tier.NORMAL), 1e-9)
+        // baby 3.5 + normal 92.0 survive: 95.5 total (the gated 0.0 tiers are simply dropped by the normalising)
+        assertEquals(3.5 / 95.5 * 100, p.getValue(Tier.BABY), 1e-9)
+        assertEquals(92.0 / 95.5 * 100, p.getValue(Tier.NORMAL), 1e-9)
     }
 
     @Test fun trainerLevelBonus() {
         val without = pct(80, trainer = 10)
         val with = pct(80, trainer = 11)
-        // bucket 80 then +3.7 of rare boosts taken from normal: baby 2, ultra 4.5, leg 1.5, myth .6, mega 1.5, gmax 1.5, normal 86.9
-        val total = 2.0 + 4.5 + 1.5 + 0.6 + 1.5 + 1.5 + 86.9
+        // bucket 80 then +3.7 of rare boosts taken from normal: baby 2, ultra 4.5, leg 2, myth .9, mega 1.5, gmax 1.5, normal 86.1
+        val total = 2.0 + 4.5 + 2.0 + 0.9 + 1.5 + 1.5 + 86.1
         assertEquals((3.0 + 1.5) / total * 100, with.getValue(Tier.ULTRA), 1e-9)
         assertTrue(with.getValue(Tier.ULTRA) > without.getValue(Tier.ULTRA))
         assertTrue(with.getValue(Tier.NORMAL) < without.getValue(Tier.NORMAL))
@@ -121,8 +130,8 @@ class EncountersTest {
         assertEquals(Tier.NORMAL, t(773))
         assertNull(t(718, true)); assertNull(t(718, false))
         val data = TestData.data(listOf(TestData.species(772), TestData.species(1009)))
-        assertEquals(50, Encounters.minLevel(data, data.sp(772)))
-        assertEquals(50, Encounters.minLevel(data, data.sp(1009)))
+        assertEquals(30, Encounters.minLevel(data, data.sp(772)))
+        assertEquals(30, Encounters.minLevel(data, data.sp(1009)))
     }
 
     @Test fun zygardeNeverSpawns() {
@@ -133,7 +142,7 @@ class EncountersTest {
         val all = Tier.entries.flatMap { Encounters.pool(data, it, s, 100, setOf(716, 717)) }
         assertFalse(718 in all)
         assertEquals(listOf(150, 772, 1009), Encounters.pool(data, Tier.LEGENDARY, s, 100, setOf(151)).sorted())
-        assertTrue(Encounters.pool(data, Tier.LEGENDARY, s, 49, emptySet()).isEmpty())
+        assertTrue(Encounters.pool(data, Tier.LEGENDARY, s, 29, emptySet()).isEmpty())
     }
 
     @Test fun listSizes() {
@@ -154,8 +163,8 @@ class EncountersTest {
         assertEquals(1, Encounters.minLevel(world, world.sp(25)))   // prevo is a baby
         assertEquals(100, Encounters.minLevel(world, world.sp(26))) // stone evolution
         assertEquals(1, Encounters.minLevel(world, world.sp(19)))
-        assertEquals(50, Encounters.minLevel(world, world.sp(150)))
-        assertEquals(75, Encounters.minLevel(world, world.sp(151)))
+        assertEquals(30, Encounters.minLevel(world, world.sp(150)))
+        assertEquals(50, Encounters.minLevel(world, world.sp(151)))
         val ub = TestData.species(795, isLegendary = true)
         assertEquals(30, Encounters.minLevel(world, ub))
         assertEquals(100, Encounters.minLevel(world, world.sp(65))) // trade evolution, prevo not a baby
@@ -209,7 +218,7 @@ class EncountersTest {
         val s = Settings()
         assertFalse(150 in Encounters.pool(world, Tier.LEGENDARY, s, 100, emptySet()))
         assertTrue(150 in Encounters.pool(world, Tier.LEGENDARY, s, 100, setOf(151)))
-        assertFalse(150 in Encounters.pool(world, Tier.LEGENDARY, s, 49, setOf(151)))
+        assertFalse(150 in Encounters.pool(world, Tier.LEGENDARY, s, 29, setOf(151)))
     }
 
     @Test fun anyOfPrerequisiteFor1024() {
@@ -284,13 +293,13 @@ class EncountersTest {
         counts.values.forEach { assertTrue(it > 6000 / pool.size / 2) }
     }
 
-    @Test fun shinyRoughlyOneIn4096() {
+    @Test fun shinyRoughlyOneIn400() {
         val st = TestData.state(world, 25, 20)
         val rng = Random(2026)
         val n = 120_000
         val shiny = (1..n).count { Encounters.roll(world, st, 20, rng).shiny }
-        // expected ~29; loose bound
-        assertTrue("shiny count $shiny", shiny in 8..70)
+        // Expected 300; loose bound.
+        assertTrue("shiny count $shiny", shiny in 220..380)
     }
 
     // ---- makeWild ----

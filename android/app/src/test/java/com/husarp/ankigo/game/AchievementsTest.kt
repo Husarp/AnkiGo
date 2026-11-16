@@ -25,6 +25,24 @@ class AchievementsTest {
 
     @After fun restoreZone() = TimeZone.setDefault(savedZone)
 
+    @Test fun totalLevelsUsesTheShorterLadderAndKeepsEarnedDates() {
+        val s = state()
+        val row = AchievementTable.row("total-levels")!!
+        assertEquals(listOf(50L, 250L, 750L, 2_000L, 5_000L), row.tiers)
+        for ((i, threshold) in row.tiers.withIndex()) {
+            s.counters[Metric.TOTAL_LEVELS.name] = threshold - 1
+            assertEquals(i, Achievements.reachedTiers(row, s, data))
+            s.counters[Metric.TOTAL_LEVELS.name] = threshold
+            assertEquals(i + 1, Achievements.reachedTiers(row, s, data))
+        }
+        val dates = mutableListOf(NOW - 5, NOW - 4, NOW - 3, NOW - 2, NOW - 1)
+        s.achTiers[row.id] = dates.toMutableList()
+        s.counters[Metric.TOTAL_LEVELS.name] = 0
+        Achievements.check(s, data, NOW, mutableListOf(), silent = true)
+        assertEquals(dates, s.achTiers[row.id])
+        assertEquals(4, Achievements.view(s, data).single { it.id == row.id }.tier)
+    }
+
     private fun state() = TestData.state(data, 25, 20, listOf("tackle"))
 
     /** A state whose rows have all been looked at once (silently), as after the first answer; value changes after this are loud. */

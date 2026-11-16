@@ -95,6 +95,8 @@ sealed class GameEvent {
         val moveRecoil: Boolean = false,
         /** Presentation index within the preceding multi-hit attack; -1 for ordinary effects. */
         val hitIndex: Int = -1,
+        /** The move on its charge turn, captured before later battle actions change the live state. */
+        val chargeMove: Move? = null,
     ) : GameEvent()
 
     data class Fainted(val player: Boolean, val name: String) : GameEvent()
