@@ -79,7 +79,7 @@ internal object ConditionIcons {
         "mudsport" -> R.drawable.ic_field_mudsport
         "watersport" -> R.drawable.ic_field_watersport
         "iondeluge" -> R.drawable.ic_field_iondeluge
-        "brn" -> R.drawable.ic_condition_brn
+        "brn" -> R.drawable.ic_ach_streak_flame
         "psn" -> R.drawable.ic_condition_psn
         "tox" -> R.drawable.ic_condition_tox
         "par" -> R.drawable.ic_condition_par
