@@ -514,7 +514,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     override fun drawChild(canvas: Canvas, child: View, drawingTime: Long): Boolean {
         if (child === popLayer && !popOnTop) return false
         if (sceneDim == 0f || (child !== enemyHolder && child !== playerHolder && child !== conditionLooks &&
-                child !== moveFx && child !== fx && child !== fieldGround && child !== fieldEffects)) {
+                child !== moveFx && child !== fx && child !== momentBack && child !== fieldGround && child !== fieldEffects)) {
             return super.drawChild(canvas, child, drawingTime)
         }
         val save = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), scenePaint)

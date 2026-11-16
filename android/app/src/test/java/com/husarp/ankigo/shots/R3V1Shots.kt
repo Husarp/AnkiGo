@@ -32,7 +32,11 @@ class R3V1Shots {
     @get:Rule val paparazzi: Paparazzi = Shots.rule()
 
     @Before fun storeOff() { AnkiStatsStore.enabled = false; AnkiStatsStore.snapshot = StatsSnapshot() }
-    @After fun storeOn() { AnkiStatsStore.enabled = true; AnkiStatsStore.snapshot = StatsSnapshot() }
+    private val pages = mutableListOf<StatsPage>()
+    @After fun storeOn() {
+        pages.forEach { it.onHide(); it.onGone() }; pages.clear()
+        AnkiStatsStore.enabled = true; AnkiStatsStore.snapshot = StatsSnapshot()
+    }
 
     private val sizes = listOf(Variants.PHONE, Variants.SPLIT)
 
@@ -88,7 +92,7 @@ class R3V1Shots {
         paparazzi.shootPage(name, variants) { ctx: Context ->
             val today = prepare()
             AnkiStatsStore.snapshot = snapOf(today)
-            val page = StatsPage(ctx, NoHost)
+            val page = StatsPage(ctx, NoHost).also { pages += it }
             setup(page, today)
             pageScreen(ctx, page) as View
         }

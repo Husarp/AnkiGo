@@ -20,8 +20,10 @@ import java.time.LocalDate
 class R42IShots {
     @get:Rule val paparazzi = Shots.rule()
     private var oldUpdates: Updates.State? = null
+    private val pages = mutableListOf<StatsPage>()
     @Before fun offline() { AnkiStatsStore.enabled = false }
     @After fun reset() {
+        pages.forEach { it.onHide(); it.onGone() }; pages.clear()
         AnkiStatsStore.enabled = true; AnkiStatsStore.snapshot = StatsSnapshot()
         oldUpdates?.let { setUpdates(it) }
     }
@@ -43,7 +45,7 @@ class R42IShots {
         }
         val a = AnkiStats("test", 1, today, counts, emptyMap(), emptyMap(), Counts(), 42, List(30) { 1 }, 0, 0, 1)
         AnkiStatsStore.snapshot = StatsSnapshot(stats = a, access = AnkiAccess.OK)
-        val page = StatsPage(ctx, NoHost).apply { preset(period = ChartPeriod.D7) }
+        val page = StatsPage(ctx, NoHost).also { pages += it }.apply { preset(period = ChartPeriod.D7) }
         val screen = pageScreen(ctx, page)
         call(page, "render")
         val t = texts(screen)
@@ -101,7 +103,7 @@ class R42IShots {
         val stats = AnkiStats("test", 1, today, mapOf(today to 170), emptyMap(), emptyMap(), Counts(), 42, List(30) { 0 }, 0, 0, 1,
             dayStartHour = 3, forecastAvailable = false)
         AnkiStatsStore.snapshot = StatsSnapshot(stats = stats, access = AnkiAccess.OK, dayStartHour = 3)
-        val page = StatsPage(ctx, NoHost).apply { preset(metric = ChartMetric.DUE, period = ChartPeriod.D7) }
+        val page = StatsPage(ctx, NoHost).also { pages += it }.apply { preset(metric = ChartMetric.DUE, period = ChartPeriod.D7) }
         val screen = pageScreen(ctx, page); call(page, "render")
         val t = texts(screen)
         assertTrue(StatsText.FORECAST_UNAVAILABLE in t)
@@ -117,7 +119,7 @@ class R42IShots {
         val stats = AnkiStats("test", 1, oldDay, mapOf(oldDay to 170), emptyMap(), emptyMap(), Counts(), 42,
             List(30) { if (it == 0) 11 else if (it == 1) 22 else 0 }, 0, 0, 1, dayStartHour = 3)
         AnkiStatsStore.snapshot = StatsSnapshot(stats = stats, access = AnkiAccess.OK, dayStartHour = 3)
-        val page = StatsPage(ctx, NoHost).apply { preset(metric = ChartMetric.DUE, period = ChartPeriod.D7) }
+        val page = StatsPage(ctx, NoHost).also { pages += it }.apply { preset(metric = ChartMetric.DUE, period = ChartPeriod.D7) }
         val screen = pageScreen(ctx, page); call(page, "render")
         val t = texts(screen)
         assertTrue("…" in t)
@@ -136,7 +138,8 @@ class R42IShots {
             setBackgroundColor(Ui.c(ctx, R.color.ag_card))
             addView(ItemCard.header(page, spec) {})
             addView(ItemCard.body(page, spec))
-            assertTrue(texts(this).any { "Defense ×1.5" in it && "this fight" in it })
+            assertTrue(texts(this).any { "Defense ×1.5" in it && "fight" in it })
+            assertTrue(texts(this).any { BerryFeeding.explanation in it })
         }
     }
 }

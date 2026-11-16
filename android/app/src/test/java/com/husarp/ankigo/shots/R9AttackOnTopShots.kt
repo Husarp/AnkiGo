@@ -229,7 +229,9 @@ class R9AttackOnTopShots {
     }
 
     private fun holder(arena: ArenaView, player: Boolean) = (if (player) arena.playerSprite else arena.enemySprite).parent as View
-    private fun moveLayer(arena: ArenaView) = (0 until arena.childCount).map { arena.getChildAt(it) }.filterIsInstance<ArenaFxView>().first { it !== arena.fx }
+    private fun moveLayer(arena: ArenaView) = ArenaView::class.java.getDeclaredField("moveFx").let {
+        it.isAccessible = true; it.get(arena) as ArenaFxView
+    }
     private fun dp(arena: ArenaView, v: Float) = v * arena.resources.displayMetrics.density
 
     private fun assertAtRest(arena: ArenaView) {

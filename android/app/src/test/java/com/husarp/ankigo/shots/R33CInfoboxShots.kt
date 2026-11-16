@@ -94,7 +94,10 @@ class R33CInfoboxShots {
                 assertEquals(ConditionExplanation.effect(chip.mark!!) + "\n" + expected, effect.text.toString())
                 assertTrue(card.spoken.contains(expected))
                 val spans = effect.text as Spanned
-                assertEquals(1, spans.getSpans(0, spans.length, ReplacementSpan::class.java).size)
+                val arrows = spans.getSpans(0, spans.length, ReplacementSpan::class.java).filter {
+                    spans.subSequence(spans.getSpanStart(it), spans.getSpanEnd(it)).toString() == "→"
+                }
+                assertEquals(1, arrows.size)
             }
         }
     }

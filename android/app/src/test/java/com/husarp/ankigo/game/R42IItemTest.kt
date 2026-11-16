@@ -12,7 +12,7 @@ class R42IItemTest {
         for ((id, stat) in AbilityAdaptations.berries.filterValues { it != "hp" }) {
             if (id in setOf("oran-berry", "sitrus-berry", "figy-berry")) continue
             val text = listOf(ItemInfo.short(data, id), ItemInfo.line(data, id), Items.def(id)!!.note)
-            for (t in text) { assertTrue("$id/$stat: $t", "×1.5" in t); assertTrue(t, "fight" in t); assertFalse(t, "+1 " in t) }
+            for (t in text) { assertTrue("$id/$stat: $t", "×1.5" in t); assertTrue(t, "fight" in t); assertFalse(t, "+1 " in t.removeSuffix(". " + BerryFeeding.explanation)) }
         }
     }
 
