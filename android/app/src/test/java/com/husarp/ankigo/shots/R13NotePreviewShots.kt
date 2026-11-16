@@ -65,7 +65,7 @@ class R13NotePreviewShots {
 
     /**
      * Without the test sink the real page path runs: this renderer has no working WebView (its settings call throws, like a phone
-     * whose WebView can't be made), so it proves a failing page is caught and the preview says so instead of closing the app.
+     * whose WebView can't be made), so it proves both sides stay readable in the editor after a renderer failure.
      */
     @Test fun aPageThatCannotBeShownNeverClosesTheApp() {
         paparazzi.shootWith("r13-note-preview-failed", listOf(Size.PHONE)) { ctx ->
@@ -74,10 +74,15 @@ class R13NotePreviewShots {
             act.bind(NoteEditActivity.Loaded(NoteForEdit(7, "Basic", listOf("Front", "Back"), listOf("Q", "A")), "Geography", 2, "", false, basic))
             call(act, "showPreview", true)
             val card = getField(act, "previewCard") as android.view.ViewGroup
-            assertTrue((card.getChildAt(0) as android.widget.TextView).text.toString() == NoteEditActivity.PREVIEW_FAILED)
+            val scroll = card.getChildAt(0) as android.widget.ScrollView
+            val column = scroll.getChildAt(0) as android.view.ViewGroup
+            assertTrue((column.getChildAt(0) as android.widget.TextView).text.toString() == NoteEditActivity.PREVIEW_FAILED)
+            assertTrue((column.getChildAt(1) as android.widget.TextView).text.toString().contains("Q"))
             assertTrue(getField(act, "web") == null)
-            setField(act, "answerSide", true); call(act, "drawPreview")   // the Answer chip tries again, no crash either
+            setField(act, "answerSide", true); call(act, "drawPreview")   // the Answer chip uses the text fallback
             assertTrue(card.childCount == 1)
+            val answerColumn = (card.getChildAt(0) as android.widget.ScrollView).getChildAt(0) as android.view.ViewGroup
+            assertTrue((answerColumn.getChildAt(1) as android.widget.TextView).text.toString().contains("A"))
             root
         }
     }

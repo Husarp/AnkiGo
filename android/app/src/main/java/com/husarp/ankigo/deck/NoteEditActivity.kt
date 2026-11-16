@@ -55,7 +55,9 @@ class NoteEditActivity : AgActivity() {
         private const val KEY_TEXTS = "draftTexts"
         private const val KEY_STALE = "draftStale"
         private const val KEY_STATUS = "draftStatus"
-        internal const val PREVIEW_FAILED = "The preview can't be shown on this phone right now. Your text is still here."
+        private const val KEY_PREVIEW = "preview"
+        private const val KEY_ANSWER = "previewAnswer"
+        internal const val PREVIEW_FAILED = "Text preview: images and card styling are unavailable."
     }
 
     /** Everything the page needs once the note is read. */
@@ -89,6 +91,7 @@ class NoteEditActivity : AgActivity() {
     private var draftStatus: String? = null
     private var preview = false
     private var answerSide = false
+    private var textPreview = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +99,8 @@ class NoteEditActivity : AgActivity() {
         ord = intent.getIntExtra(EXTRA_ORD, 0)
         deckId = intent.getLongExtra(EXTRA_DECK, 0L)
         savedInstanceState?.let { b ->
+            preview = b.getBoolean(KEY_PREVIEW)
+            answerSide = b.getBoolean(KEY_ANSWER)
             val was = b.getStringArrayList(KEY_BEFORE); val typed = b.getStringArrayList(KEY_TEXTS)
             if (was != null && typed != null) { draft = NoteDraft.Saved(was, typed); draftStale = b.getBoolean(KEY_STALE); draftStatus = b.getString(KEY_STATUS) }
         }
@@ -116,6 +121,8 @@ class NoteEditActivity : AgActivity() {
      */
     override fun onSaveInstanceState(out: Bundle) {
         super.onSaveInstanceState(out)
+        out.putBoolean(KEY_PREVIEW, preview)
+        out.putBoolean(KEY_ANSWER, answerSide)
         val d = if (loaded != null) NoteDraft.toSave(before, texts()) else draft   // still loading: carry the waiting draft on
         if (d == null) return
         out.putStringArrayList(KEY_BEFORE, ArrayList(d.before)); out.putStringArrayList(KEY_TEXTS, ArrayList(d.texts))
@@ -255,6 +262,7 @@ class NoteEditActivity : AgActivity() {
             addView(StudyUi.label(context, DeckTexts.editWarning(l.cards), 12, R.color.ag_sub0, 700), StudyUi.lp(0, -2, 1f))
         }, StudyUi.spaced(this, 16))
         refreshSave()
+        if (preview) showPreview(true)
     }
 
     private fun fieldBackground(focused: Boolean) = GradientDrawable().apply {
@@ -323,21 +331,20 @@ class NoteEditActivity : AgActivity() {
 
     private fun drawPreview() {
         val l = loaded ?: return
-        sideChips.removeAllViews()
-        val hasTemplates = NotePreview.build(l.templates, l.cloze, l.note.fieldNames, texts(), ord) != null
-        if (hasTemplates) {
-            for ((i, label) in listOf("Question", "Answer").withIndex()) {
-                val on = (i == 1) == answerSide
-                sideChips.addView(StudyUi.smallButton(this, label, primary = on) { answerSide = i == 1; drawPreview() }.apply {
-                    if (!on) setTextColor(Ui.c(context, R.color.ag_sub1))
-                }, StudyUi.lp(-2).also { if (i > 0) it.marginStart = Ui.dp(this, 6) })
-            }
-        }
-        sideChips.visibility = if (hasTemplates) View.VISIBLE else View.GONE
-        previewSink?.let { it(previewHtml()); return }
-        // PLAN 161 (Preview closed the app; the cause could not be seen without the phone's crash log): nothing here may take the
-        // app down. A page that can't be built or shown is logged (the debug report names it) and the preview says so instead.
         try {
+            sideChips.removeAllViews()
+            val hasTemplates = NotePreview.build(l.templates, l.cloze, l.note.fieldNames, texts(), ord) != null
+            if (hasTemplates) {
+                for ((i, label) in listOf("Question", "Answer").withIndex()) {
+                    val on = (i == 1) == answerSide
+                    sideChips.addView(StudyUi.smallButton(this, label, primary = on) { answerSide = i == 1; drawPreview() }.apply {
+                        if (!on) setTextColor(Ui.c(context, R.color.ag_sub1))
+                    }, StudyUi.lp(-2).also { if (i > 0) it.marginStart = Ui.dp(this, 6) })
+                }
+            }
+            sideChips.visibility = if (hasTemplates) View.VISIBLE else View.GONE
+            previewSink?.let { it(previewHtml()); return }
+            if (textPreview) { previewFailed(); return }
             val html = previewHtml()
             val w = webView()
             if (w.parent == null) { previewCard.removeAllViews(); previewCard.addView(w, FrameLayout.LayoutParams(-1, -1)) }
@@ -348,13 +355,24 @@ class NoteEditActivity : AgActivity() {
         }
     }
 
-    /** PLAN 161: the page could not be shown: the WebView goes (it can't be used again), a short line takes its place. */
+    /** A failed renderer stays inside the editor: both sides remain readable from the unsaved fields. */
     private fun previewFailed() {
+        textPreview = true
         web?.let { (it.parent as? android.view.ViewGroup)?.removeView(it); runCatching { it.destroy() } }
         web = null
         previewCard.removeAllViews()
-        previewCard.addView(StudyUi.label(this, PREVIEW_FAILED, 13, R.color.ag_sub1, 800).apply {
-            gravity = Gravity.CENTER; setPadding(Ui.dp(context, 18), Ui.dp(context, 18), Ui.dp(context, 18), Ui.dp(context, 18))
+        val l = loaded ?: return
+        val values = texts()
+        val sides = runCatching { NotePreview.build(l.templates, l.cloze, l.note.fieldNames, values, ord) }.getOrNull()
+        val body = if (sides == null) NotePreview.fieldsOnly(l.note.fieldNames, values) else if (answerSide) sides.answer else sides.question
+        previewCard.addView(MotionScrollView(this).apply {
+            addView(StudyUi.column(context).apply {
+                setPadding(Ui.dp(context, 18), Ui.dp(context, 18), Ui.dp(context, 18), Ui.dp(context, 18))
+                addView(StudyUi.label(context, PREVIEW_FAILED, 12, R.color.ag_sub1))
+                addView(StudyUi.label(context, "", 16, R.color.ag_text).apply {
+                    text = android.text.Html.fromHtml(body, android.text.Html.FROM_HTML_MODE_LEGACY)
+                }, StudyUi.spaced(context, 12))
+            })
         }, FrameLayout.LayoutParams(-1, -1))
     }
 
@@ -382,12 +400,12 @@ class NoteEditActivity : AgActivity() {
         settings.javaScriptEnabled = true
         settings.allowFileAccess = false; settings.allowContentAccess = false
         setBackgroundColor(Color.TRANSPARENT)
-        // The card page calls these (sound buttons, tap to flip, long press menu); in a preview they do nothing.
+        // Preview flips stay in the editor; sound and study actions do nothing.
         addJavascriptInterface(object {
             @JavascriptInterface fun play(name: String) {}
             @JavascriptInterface fun speak(i: Int) {}
-            @JavascriptInterface fun flip() {}
-            @JavascriptInterface fun unflip() {}
+            @JavascriptInterface fun flip() { main.post { if (!isDestroyed && preview) { answerSide = true; drawPreview() } } }
+            @JavascriptInterface fun unflip() { main.post { if (!isDestroyed && preview) { answerSide = false; drawPreview() } } }
             @JavascriptInterface fun actions() {}
             @JavascriptInterface fun mathjax(s: String) {}
             @JavascriptInterface fun jsError(s: String) {}
