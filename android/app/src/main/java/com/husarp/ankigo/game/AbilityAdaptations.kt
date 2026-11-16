@@ -246,6 +246,9 @@ internal object AbilityAdaptations : BattleRules {
         val main = state.main ?: return
         val ab = state.battle?.player?.notes?.get(Abilities.OVERRIDE) ?: BattleView.normalizeAbility(main.ability)
         if (ab == "pickup" && rng.nextInt(100) < 10) { Economy.give(state, "potion"); events += GameEvent.Info("Pickup found a Potion!", main.uid) }
-        if (ab == "honeygather" && rng.nextInt(100) < 10) { state.cash += 5; events += GameEvent.Info("Honey Gather found 5 coins!", main.uid) }
+        if (ab == "honeygather" && rng.nextInt(100) < 10) {
+            val coins = Economy.rewardCash(state, 5, CashKind.DEFEAT, events)
+            if (coins > 0) events += GameEvent.Info("Honey Gather found $coins coins!", main.uid)
+        }
     }
 }

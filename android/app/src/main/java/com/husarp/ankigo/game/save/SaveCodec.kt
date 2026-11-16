@@ -53,6 +53,7 @@ object SaveCodec {
             kv("dollsFound", state.dollsFound); kv("dollLockedAt", state.dollLockedAt); kv("dollReadyAt", state.dollReadyAt)
             list("tms", state.tms.sorted())
             kv("cash", state.cash); kv("trainerLevel", state.trainerLevel); kv("trainerXp", state.trainerXp)
+            kv("achievementTrainerXpCarry", state.achievementTrainerXpCarry); kv("badgeCashCarry", state.badgeCashCarry)
             list("seen", state.seen.sorted()); list("caught", state.caught.sorted())
             list("defeatedSpecies", state.defeatedSpecies.sorted())
             list("bondMatchups", state.bondMatchups.sorted())
@@ -187,6 +188,7 @@ object SaveCodec {
         kv("nickname", m.nickname); kv("ankimonId", m.ankimonId); kv("favourite", m.favourite)
         kv("look", m.look); kv("restFrac", m.restFrac)
         kv("bondPoints", m.bondPoints); kv("bondHalf", m.bondHalf)
+        kv("achievementXpCarry", m.achievementXpCarry)
         kv("natureXpCarry", m.natureXpCarry); kv("natureBondCarry", m.natureBondCarry)
     }
 
@@ -294,6 +296,7 @@ object SaveCodec {
             favourite = o.bool("favourite", false), look = o.intOrNull("look"),
             bondPoints = o.int("bondPoints", Bond.fromLegacy(o.int("friendship", 0))).coerceIn(0, Bond.MAX_POINTS),
             bondHalf = o.int("bondHalf", 0).coerceIn(0, 1),
+            achievementXpCarry = o.int("achievementXpCarry", 0).coerceIn(0, 9999),
             natureXpCarry = o.int("natureXpCarry", 0).coerceIn(0, 199),
             natureBondCarry = o.int("natureBondCarry", 0).coerceIn(0, 99),
             moveOffers = o.optJSONArray("moveOffers")?.let { a ->
@@ -470,6 +473,8 @@ object SaveCodec {
         PokeDoll.migrate(s)
         o.strList("tms")?.let { s.tms += it }
         s.cash = o.int("cash", 0); s.trainerLevel = o.int("trainerLevel", 1); s.trainerXp = o.int("trainerXp", 0)
+        s.achievementTrainerXpCarry = o.int("achievementTrainerXpCarry", 0).coerceIn(0, 9999)
+        s.badgeCashCarry = o.int("badgeCashCarry", 0).coerceIn(0, 9999)
         o.intList("seen")?.let { s.seen += it }
         o.intList("caught")?.let { s.caught += it }
         o.intList("defeatedSpecies")?.let { s.defeatedSpecies += it.filter { num -> num > 0 } }

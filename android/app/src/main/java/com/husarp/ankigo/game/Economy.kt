@@ -207,9 +207,8 @@ object Economy {
         // Flat earned bonus, after the daily curve and money items; practice still pays no coins.
         val bonus = Bond.coins(bondLevel)
         if (bonus > 0 && (!state.practiceRewards || Tuning.PRACTICE_PAYS_MONEY)) {
-            state.cash += bonus
             state.cashToday += bonus
-            events += GameEvent.Cash(bonus, state.cash, CashKind.DEFEAT)
+            rewardCash(state, bonus, CashKind.DEFEAT, events)
         }
     }
 
@@ -223,8 +222,7 @@ object Economy {
         val coins = ((payout.cash.toLong() + bonus) * percent / 100).toInt()
         state.cashToday += ((payout.cashToday.toLong() - state.cashToday + bonus) * percent / 100).toInt()
         if (coins > 0) {
-            state.cash += coins
-            events += GameEvent.Cash(coins, state.cash, CashKind.DEFEAT)
+            rewardCash(state, coins, CashKind.DEFEAT, events)
         }
     }
 
@@ -257,8 +255,18 @@ object Economy {
         val amount = if ("amulet-coin" in held || "luck-incense" in held) coins * 2 else coins
         val bonusAmount = if (state.battle?.field?.player?.get("happyhour") == 1) amount * 2 else amount
         state.cashToday += coins
-        state.cash += bonusAmount
-        events += GameEvent.Cash(bonusAmount, state.cash, kind)
+        rewardCash(state, bonusAmount, kind, events)
+    }
+
+    /** Earned study/battle coins only; badge fractions survive actions, days and saves. */
+    fun rewardCash(state: GameState, base: Int, kind: CashKind, events: MutableList<GameEvent>): Int {
+        if (base <= 0 || (state.practiceRewards && !Tuning.PRACTICE_PAYS_MONEY)) return 0
+        val reward = PermanentBoosts.reward(base, PermanentBoosts.moneyBasisPoints(state), state.badgeCashCarry)
+        state.badgeCashCarry = reward.carry
+        val amount = minOf(reward.amount, (Int.MAX_VALUE.toLong() - state.cash).coerceAtLeast(0).toInt())
+        state.cash += amount
+        if (amount > 0) events += GameEvent.Cash(amount, state.cash, kind)
+        return amount
     }
 
     private const val MAX_FRAC_DEN = 1_000_000_000_000L
@@ -345,22 +353,44 @@ object Shop {
         // Keep Saturday's allowance through Sunday; rerolls never touch these keys.
         state.shopPurchases.retainAll((weekendPrices.keys + listOf("everstone")).map { offerKey(state, it) }.toSet())
         state.shopRefreshes = 0
-        val (items, tms) = stockFor(data, state.day, state.trainerLevel)
+        val (items, tms) = stockFor(data, state.day, state.trainerLevel, teamTypes(data, state), state.tms)
         setStock(state, items, tms)
     }
 
     /**
      * The date-seeded stock (items, TMs) of game day [day] for a trainer of [trainerLevel]: what [ensureToday] puts in
-     * the shop that day. Pure, so the reminders can look at tomorrow's shop. After a reroll the real stock is state.shopItems.
+     * the shop that day, using the team and owned TMs at draw time. Pure, so reminders can look ahead.
+     * Item offers are independent of the team; after a reroll the real stock is state.shopItems.
      */
-    fun stockFor(data: GameData, day: String, trainerLevel: Int): Pair<List<String>, List<String>> =
-        draw(data, Random(day.hashCode()), trainerLevel, day)
+    fun stockFor(data: GameData, day: String, trainerLevel: Int, teamTypes: List<List<Type>> = emptyList(),
+                 ownedTms: Set<String> = emptySet()): Pair<List<String>, List<String>> =
+        draw(data, Random(day.hashCode()), trainerLevel, day, teamTypes, ownedTms)
+
+    fun teamTypes(data: GameData, state: GameState): List<List<Type>> =
+        state.team.mapNotNull { state.mon(it)?.let { mon -> data.species[mon.species]?.types } }.filter { it.isNotEmpty() }
 
     /** Item/TM rerolls preserve the date-seeded daily balls. */
-    private fun draw(data: GameData, rng: Random, trainerLevel: Int, day: String): Pair<List<String>, List<String>> {
+    private fun draw(data: GameData, rng: Random, trainerLevel: Int, day: String, teamTypes: List<List<Type>>, ownedTms: Set<String>): Pair<List<String>, List<String>> {
         val items = dailyPool(data).filter { it !in dealItems(data, day) && availableRare(it, day) }.shuffled(rng).take(slots(trainerLevel))
-        val tms = tmPool(data).shuffled(rng).take(tmSlots(trainerLevel))
+        val tms = drawTms(data, rng, tmSlots(trainerLevel), teamTypes, ownedTms)
         return dailyBalls(day) + items to tms
+    }
+
+    /** Each slot has a 30% team-type draw, falling back to the ordinary draw if that type is exhausted. */
+    internal fun drawTms(data: GameData, rng: Random, slots: Int, teamTypes: List<List<Type>>, owned: Set<String>): List<String> {
+        val pool = tmPool(data).filter { it !in owned }.shuffled(rng)
+        val team = teamTypes.filter { it.isNotEmpty() }
+        val picked = mutableListOf<String>()
+        repeat(minOf(slots, pool.size)) {
+            val available = pool.filter { it !in picked }
+            val match = if (rng.nextInt(100) < 30 && team.isNotEmpty()) {
+                val types = team[rng.nextInt(team.size)]
+                val type = types[rng.nextInt(types.size)]
+                available.filter { data.move(it)?.type == type }.let { if (it.isEmpty()) null else it[rng.nextInt(it.size)] }
+            } else null
+            picked += match ?: available.first()
+        }
+        return picked
     }
 
     fun dailyBalls(day: String): List<String> {
@@ -504,7 +534,7 @@ object Shop {
     }
 
     private fun restock(data: GameData, state: GameState, rng: Random) {
-        val (items, tms) = draw(data, rng, state.trainerLevel, state.day)
+        val (items, tms) = draw(data, rng, state.trainerLevel, state.day, teamTypes(data, state), state.tms)
         setStock(state, items, tms)
     }
 
@@ -589,9 +619,11 @@ object Trainer {
 
     /** Trainer XP for a Defeat by tier (Normal 10, Baby 16, Ultra 30, Legendary 120, Mythical 160, else 0). Emits TrainerLevelUp. */
     fun addDefeatXp(state: GameState, tier: Tier, events: MutableList<GameEvent>) {
-        val gain = Tuning.studyXp(Tuning.TRAINER_XP[tier] ?: 0, state.practiceRewards)
-        if (gain <= 0) return
-        state.trainerXp += gain
+        val base = Tuning.studyXp(Tuning.TRAINER_XP[tier] ?: 0, state.practiceRewards)
+        if (base <= 0) return
+        val reward = PermanentBoosts.reward(base, PermanentBoosts.xpBasisPoints(state), state.achievementTrainerXpCarry)
+        state.achievementTrainerXpCarry = reward.carry
+        state.trainerXp = (state.trainerXp.toLong() + reward.amount).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         while (state.trainerXp >= xpForNext(state.trainerLevel)) {
             state.trainerXp -= xpForNext(state.trainerLevel)
             state.trainerLevel++

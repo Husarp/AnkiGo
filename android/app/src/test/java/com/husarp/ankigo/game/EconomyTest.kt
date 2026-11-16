@@ -145,14 +145,15 @@ class EconomyTest {
         s.cashToday = 1000; s.main!!.heldItem = "luck-incense"
         assertEquals(listOf(10,10),perAnswer(s,2))
         assertEquals(listOf(24,26),perWin(s,2))
-        val plain = state(); answers(plain,600)
-        val coin = state(); coin.main!!.heldItem = "amulet-coin"; answers(coin,600)
+        val plain = state().apply { itemCountdown = Int.MAX_VALUE }; answers(plain,600)
+        val coin = state().apply { itemCountdown = Int.MAX_VALUE }; coin.main!!.heldItem = "amulet-coin"; answers(coin,600)
         assertEquals(3000,plain.cash); assertEquals(6000,coin.cash)
         assertEquals(plain.cashToday,coin.cashToday)
     }
 
     @Test fun aWholeDayOfAnswersAddsUpToExactTierMoney() {
-        val s = state()
+        // Base curve only; item-found badges now add a separate permanent money bonus.
+        val s = state().apply { itemCountdown = Int.MAX_VALUE }
         answers(s,100); assertEquals(1000,s.cash)
         answers(s,200); assertEquals(2000,s.cash)
         answers(s,300); assertEquals(3000,s.cash)

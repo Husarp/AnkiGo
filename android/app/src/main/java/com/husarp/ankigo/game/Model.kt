@@ -236,6 +236,7 @@ class Mon(
     var evolvedAt: Long = 0,
     var bondPoints: Int = 0,        // earned Bond points; separate from legacy Ankimon friendship
     var bondHalf: Int = 0,          // Soothe Bell fractional carry (0 or 1 half point)
+    var achievementXpCarry: Int = 0, // basis-point remainder of permanent battle XP bonuses
     var natureXpCarry: Int = 0,     // 1/200 of reward XP, local to this Pokémon
     var natureBondCarry: Int = 0,   // hundredths of Bond, local to this Pokémon
     val moveOffers: MutableList<MoveOffer> = mutableListOf(),
@@ -411,6 +412,8 @@ class GameState(
     val tms: MutableSet<String> = mutableSetOf(),      // owned TMs (Showdown move ids); one use each
     var cash: Int = 0,
     var trainerLevel: Int = 1,
+    var achievementTrainerXpCarry: Int = 0, // basis-point remainder of permanent trainer XP bonuses
+    var badgeCashCarry: Int = 0,     // basis-point remainder of permanent earned-money bonuses
     var trainerXp: Int = 0,              // progress inside the trainer level
     val seen: MutableSet<Int> = mutableSetOf(),
     val caught: MutableSet<Int> = mutableSetOf(),

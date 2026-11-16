@@ -13,6 +13,7 @@ import com.husarp.ankigo.game.AchPageMath
 import com.husarp.ankigo.game.AchView
 import com.husarp.ankigo.game.Achievements
 import com.husarp.ankigo.game.AchievementTable
+import com.husarp.ankigo.game.PermanentBoosts
 import java.time.ZoneId
 
 // R22 (PLAN 180, list B): tier-tinted squares, three per row, under the existing summary and group tabs.
@@ -135,6 +136,10 @@ class AchievementsView(private val page: GamePage) {
         col.removeAllViews()
         rowViews.clear()
         col.addView(summary(views))
+        col.addView(Ui.text(page, 14f, 800, R.color.ag_green).apply {
+            text = PermanentBoosts.xpLabel(st) + "\n" + PermanentBoosts.moneyLabel(st)
+            setPadding(dp(2), dp(8), dp(2), 0)
+        })
         col.addView(tabs(AchPageMath.tabs(groups)), LinearLayout.LayoutParams(-1, -2).also { it.topMargin = dp(8); it.marginStart = -dp(16); it.marginEnd = -dp(16) })
         col.addView(countRow(if (tab == "Secret") "Secret · 0 of 0 found" else AchPageMath.countLine(groups, tab)))
 
