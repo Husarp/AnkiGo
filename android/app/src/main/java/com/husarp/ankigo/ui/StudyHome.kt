@@ -230,7 +230,11 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
                 val labels = StudyUi.column(act)
                 labels.addView(StudyUi.label(act, deck.name.substringAfterLast("::") + " ★", 14, R.color.ag_text, 800).apply {
                     val starred = android.text.SpannableString(text)
-                    starred.setSpan(android.text.style.ForegroundColorSpan(Ui.c(act, R.color.ag_yellow)), starred.length - 1, starred.length, 0)
+                    val star = act.getDrawable(R.drawable.ic_deck_favourite)!!.mutate().apply {
+                        setTint(Ui.c(act, R.color.ag_yellow))
+                        setBounds(0, 0, Ui.dp(act, 14), Ui.dp(act, 14))
+                    }
+                    starred.setSpan(android.text.style.ImageSpan(star, android.text.style.ImageSpan.ALIGN_BASELINE), starred.length - 1, starred.length, 0)
                     text = starred
                 })
                 val path = deck.name.substringBeforeLast("::", "").replace("::", " › ")
@@ -273,7 +277,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
             row.addView(zone, StudyUi.lp(Ui.dp(act, 48), -1))
             val name = StudyUi.row(act)
             name.addView(StudyUi.ellipsis(StudyUi.label(act, deck.name.substringAfterLast("::"), 14, R.color.ag_text, 800)), StudyUi.lp(0, -2, 1f))
-            if (deck.id in favouriteIds()) name.addView(StudyUi.icon(act, R.drawable.ic_star, R.color.ag_yellow), StudyUi.lp(Ui.dp(act, 16), Ui.dp(act, 16)))
+            if (deck.id in favouriteIds()) name.addView(StudyUi.icon(act, R.drawable.ic_deck_favourite, R.color.ag_yellow), StudyUi.lp(Ui.dp(act, 16), Ui.dp(act, 16)))
             if (deck.dyn) name.addView(StudyUi.label(act, "FILTERED", 9, R.color.ag_teal, 900).apply {
                 background = Ui.rounded((Ui.c(context, R.color.ag_teal) and 0x00ffffff) or 0x29000000, 5, context)
                 setPadding(Ui.dp(context, 5), Ui.dp(context, 1), Ui.dp(context, 5), Ui.dp(context, 1))
@@ -327,7 +331,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     fun deckMenu(deck: Anki.Deck, anchor: View): AppMenu {
         val menu = AppMenu(anchor)
         menu.item(MENU_STATUS, "Deck status", R.drawable.ic_stats)
-        menu.item(4, if (deck.id in favouriteIds()) "Remove from favourites" else "Add to favourites", R.drawable.ic_star)
+        menu.item(4, if (deck.id in favouriteIds()) "Remove from favourites" else "Add to favourites", R.drawable.ic_deck_favourite)
         if (canManage() && !deck.dyn) {
             menu.item(MENU_SUBDECK, "New subdeck…", R.drawable.ic_plus)
             menu.item(MENU_MOVE_ALL, "Move all cards…", R.drawable.ic_move)
@@ -355,7 +359,7 @@ internal class StudyHome(private val act: Activity, private val host: Host) {
     private fun favouriteIds(): List<Long> = prefs.getString("favouriteDecks", "").orEmpty().split(",").mapNotNull { it.toLongOrNull() }.distinct()
 
     private fun section(title: String, key: String) {
-        content.addView(StudyUi.section(act, title + if (prefs.getBoolean(key, false)) " ▸" else " ▾", iconRes = if (key == "favouritesCollapsed") R.drawable.ic_star else R.drawable.ic_book).apply {
+        content.addView(StudyUi.section(act, title + if (prefs.getBoolean(key, false)) " ▸" else " ▾", iconRes = if (key == "favouritesCollapsed") R.drawable.ic_deck_favourite else R.drawable.ic_book).apply {
             minimumHeight = Ui.dp(act, 48)
             contentDescription = "$title, ${if (prefs.getBoolean(key, false)) "collapsed" else "expanded"}"
             setOnClickListener { prefs.edit().putBoolean(key, !prefs.getBoolean(key, false)).apply(); render() }

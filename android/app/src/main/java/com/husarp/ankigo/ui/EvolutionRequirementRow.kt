@@ -14,17 +14,21 @@ internal class EvolutionRequirementRow(a: Context, requirement: EvolutionRowText
         setPadding(0, Ui.dp(a, 5), 0, Ui.dp(a, 5))
         val ink = if (!requirement.met) Ui.c(a, R.color.ag_sub1) else if (Multicolor.enabled(a))
             Multicolor.ink(a, Multicolor.Tone.GREEN, Ui.c(a, R.color.ag_card)) else Ui.c(a, R.color.ag_green)
-        addView(Ui.text(a, 13.5f, 800, R.color.ag_sub1).apply {
+        val content = LinearLayout(a).apply {
+            gravity = Gravity.TOP
+        }
+        addView(content, LayoutParams(-2, -2))
+        content.addView(Ui.text(a, 13.5f, 800, R.color.ag_sub1).apply {
             text = if (requirement.met) "✓" else "✗"
             setTextColor(ink)
             contentDescription = if (requirement.met) "Met" else "Not met"
-        }, LayoutParams(Ui.dp(a, 28), -2))
-        addView(Ui.text(a, 13.5f, 800, R.color.ag_sub1).apply {
+        }, LayoutParams(-2, -2).apply { marginEnd = Ui.dp(a, 6) })
+        content.addView(Ui.text(a, 13.5f, 800, R.color.ag_sub1).apply {
             text = requirement.label
             setTextColor(ink)
         }, LayoutParams(0, -2, 1f))
         requirement.item?.let { item ->
-            addView(ImageView(a).apply {
+            content.addView(ImageView(a).apply {
                 Ui.itemIcon(a, item, this)
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             }, LayoutParams(Ui.dp(a, 24), Ui.dp(a, 24)).apply { marginStart = Ui.dp(a, 8) })

@@ -45,11 +45,41 @@ class R36PShots {
         val rows = all(root).filterIsInstance<EvolutionRequirementRow>()
         assertTrue(rows.isNotEmpty())
         for (row in rows) {
-            val mark = row.getChildAt(0) as TextView
+            val content = row.getChildAt(0) as ViewGroup
+            val mark = content.getChildAt(0) as TextView
             assertTrue(mark.text.toString() in listOf("✓", "✗"))
-            val label = (row.getChildAt(1) as TextView).text.toString()
+            val label = (content.getChildAt(1) as TextView).text.toString()
             assertTrue(label, listOf("Reach ", "Use ", "Know ", "Evolve ", "Be ", "Have ").any { label.startsWith(it) })
-            if (row.childCount == 3) assertTrue(row.getChildAt(2) is ImageView)
+            if (content.childCount == 3) assertTrue(content.getChildAt(2) is ImageView)
+        }
+    }
+
+    @Test fun marksAndItemsHugTextIncludingWrappedRows() {
+        for (theme in Theme.entries) {
+            paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, theme))
+            val ctx = Shots.files(paparazzi.context)
+            for (width in listOf(160, 360)) for (met in listOf(false, true)) {
+                for (label in listOf("Use Syrupy Apple", "Use Syrupy Apple after reaching the required bond level")) {
+                    val row = EvolutionRequirementRow(ctx, EvolutionRowText.Requirement(label, met, "syrupy-apple"))
+                    row.measure(View.MeasureSpec.makeMeasureSpec(Ui.dp(ctx, width), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED))
+                    row.layout(0, 0, row.measuredWidth, row.measuredHeight)
+                    val content = row.getChildAt(0) as ViewGroup
+                    val mark = content.getChildAt(0) as TextView
+                    val text = content.getChildAt(1) as TextView
+                    val icon = content.getChildAt(2)
+                    assertEquals(Ui.dp(ctx, 6), text.left - mark.right)
+                    assertEquals(Ui.dp(ctx, 8), icon.left - text.right)
+                    assertTrue(icon.right <= row.width)
+                    assertTrue(text.width > 0)
+                    assertEquals(if (met) "✓" else "✗", mark.text.toString())
+                    if (width == 360 && label == "Use Syrupy Apple") {
+                        assertEquals(1, text.lineCount)
+                        assertTrue("item must follow the short text, leaving trailing room", icon.right < row.width - Ui.dp(ctx, 60))
+                    }
+                    if (width == 160 && label.length > 30) assertTrue(text.lineCount > 1)
+                }
+            }
         }
     }
 
@@ -115,13 +145,13 @@ class R36PShots {
             })
             checkRows(screen)
             val bond = all(screen).filterIsInstance<EvolutionRequirementRow>().single {
-                (it.getChildAt(1) as TextView).text.toString() == "Reach Level 2 Bond"
+                ((it.getChildAt(0) as ViewGroup).getChildAt(1) as TextView).text.toString() == "Reach Level 2 Bond"
             }
-            assertEquals(if (owned) "✓" else "✗", (bond.getChildAt(0) as TextView).text.toString())
+            assertEquals(if (owned) "✓" else "✗", ((bond.getChildAt(0) as ViewGroup).getChildAt(0) as TextView).text.toString())
             val row = all(screen).filterIsInstance<EvolutionRequirementRow>().single {
-                (it.getChildAt(1) as TextView).text.toString() == "Use Syrupy Apple"
+                ((it.getChildAt(0) as ViewGroup).getChildAt(1) as TextView).text.toString() == "Use Syrupy Apple"
             }
-            assertEquals(if (owned) "✓" else "✗", (row.getChildAt(0) as TextView).text.toString())
+            assertEquals(if (owned) "✓" else "✗", ((row.getChildAt(0) as ViewGroup).getChildAt(0) as TextView).text.toString())
             paparazzi.snapshot(screen, "p-item-syrupy-apple-${if (owned) "owned" else "missing"}-${theme.name.lowercase()}")
         }
     }
