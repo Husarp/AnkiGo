@@ -18,7 +18,7 @@ class ShopStockForTest {
             val s = TestData.state(data)
             s.day = day; s.trainerLevel = level
             Shop.ensureToday(data, s)
-            val (items, tms) = Shop.stockFor(data, day, level)
+            val (items, tms) = Shop.stockFor(data, day, level, Shop.teamTypes(data, s), s.tms)
             assertEquals("items $day L$level", s.shopItems.toList(), items)
             assertEquals("tms $day L$level", s.shopTms.toList(), tms)
             assertEquals(Shop.slots(level) + Shop.dailyBalls(day).size, items.size)   // regular plus optional special, outside ordinary item slots

@@ -68,7 +68,7 @@ object Progression {
         val isMain = state.main?.uid == mon.uid // only the main's heals are shown (Healed)
         val before = mon.xp
         val crossed = mutableListOf<Int>() // PLAN 138: the XP each level grown needed
-        mon.xp += xp
+        mon.xp = (mon.xp.toLong() + xp).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
         val later = mutableListOf<GameEvent>() // level events; XpGained goes first but needs the final numbers
         var gained = 0
         while (mon.level < Tuning.MAX_LEVEL && gained < Tuning.MAX_LEVELS_PER_GAIN) {
@@ -225,7 +225,12 @@ object Progression {
             val carry = mon.natureXpCarry
             val amount = if (mon === main) NaturePerks.rewardXp(state, mon, xp) else NaturePerks.sharedXp(state, mon, xp)
             if (percent != 100) mon.natureXpCarry = carry
-            gainXp(data, state, mon, (amount.toLong() * percent / 100).toInt(), events)
+            val base = (amount.toLong() * percent / 100).toInt()
+            if (mon.level < Tuning.MAX_LEVEL && base > 0) {
+                val reward = PermanentBoosts.reward(base, PermanentBoosts.xpBasisPoints(state), mon.achievementXpCarry)
+                mon.achievementXpCarry = reward.carry
+                gainXp(data, state, mon, reward.amount, events)
+            }
         }
     }
 
