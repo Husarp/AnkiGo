@@ -16,10 +16,11 @@ class R31MIconsTest {
         assertEquals(R.drawable.ic_game, AchStyle.icon("combo"))
         assertEquals(R.drawable.ic_palette, AchStyle.icon("types"))
     }
-    @Test fun attackKeepsSwordsWhileOtherStatPopupsUseStats() {
-        assertEquals(R.drawable.ic_swords, ConditionIcons.of("stat.atk"))
-        for (stat in listOf("def", "spa", "spd", "spe", "accuracy", "evasion"))
-            assertEquals(stat, R.drawable.ic_stats, ConditionIcons.of("stat.$stat"))
+    @Test fun eachStatPopupUsesItsOwnExistingIcon() {
+        val icons = mapOf("atk" to R.drawable.ic_stat_swords, "def" to R.drawable.ic_stat_shield,
+            "spa" to R.drawable.ic_stat_sparkles, "spd" to R.drawable.ic_stat_shield_plus,
+            "spe" to R.drawable.ic_stat_gauge, "accuracy" to R.drawable.ic_ach_target, "evasion" to R.drawable.ic_ach_eye)
+        icons.forEach { (stat, icon) -> assertEquals(stat, icon, ConditionIcons.of("stat.$stat")) }
         assertNull(ConditionIcons.of("unrecognized"))
     }
     @Test fun helpTypesChangesAndLevelsStays() {

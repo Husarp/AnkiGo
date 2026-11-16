@@ -39,6 +39,7 @@ object BattleLogCodec {
                 for (a in r.answers) sb.append("A\t${a.button}\t${if (a.catchUp) 1 else 0}\t${a.coins}\t${esc(a.card)}\n")
                 for (l in r.lines) sb.append("L\t${l.tone.name}\t${esc(l.text)}\n")
             }
+            for (e in b.entries) sb.append("E\t${e.round}\t${e.tone.name}\t${esc(e.text)}\n")
             for (l in b.result) sb.append("Z\t${l.tone.name}\t${esc(l.text)}\n")
         }
         return sb.toString()
@@ -61,6 +62,7 @@ object BattleLogCodec {
                     "R" -> round = LogRound(RoundKind.valueOf(f[1]), f[2].toDoubleOrNull(), f[3].toInt()).also { out.last().rounds += it }
                     "A" -> round!!.answers += LogAnswer(f[1].toInt(), unesc(f[4]), f[2] == "1", f[3].toInt())
                     "L" -> round!!.lines += LogLine(Tone.valueOf(f[1]), unesc(f[2]))
+                    "E" -> out.last().entries += BattleLogEntry(f[1].toInt(), Tone.valueOf(f[2]), unesc(f[3]))
                     "Z" -> out.last().result += LogLine(Tone.valueOf(f[1]), unesc(f[2]))
                 }
             }
@@ -117,8 +119,18 @@ object BattleLog {
 
     fun events(events: List<GameEvent>) {
         if (!started || events.isEmpty()) return
-        val copy = events.takeLast(500)
+        val copy = events.toList()
         worker.execute { runCatching { builder.feed(copy); flush.request() } }
+    }
+
+    fun alert(text: String) {
+        if (!started) return
+        worker.execute { runCatching { builder.alert(text); flush.request() } }
+    }
+
+    fun message(text: String) {
+        if (!started) return
+        worker.execute { runCatching { builder.message(text); flush.request() } }
     }
 
     /** Newest battle first; empty when nothing is logged (or the worker is stuck). Call it off the main thread. */

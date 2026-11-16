@@ -249,6 +249,7 @@ class GameActivity : AgActivity() {
         setPadding(Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 4), Ui.dp(this@GameActivity, 8), Ui.dp(this@GameActivity, 4))
         addView(topButton(R.drawable.ic_back, "Back", R.color.ag_text) { onBackPressed() })
         addView(Ui.text(this@GameActivity, 18f, 900, R.color.ag_text).apply { text = "Battle"; maxLines = 1; letterSpacing = -0.014f }, LinearLayout.LayoutParams(0, -2, 1f))
+        addView(topButton(R.drawable.ic_menu, "Current battle log") { CurrentBattleLogSheet.open(this@GameActivity) })
         addView(topButton(R.drawable.ic_pip, "Pop out: small battle window") { popOut() })
         addView(topButton(R.drawable.ic_more_vert, "Menu") { showMenu(it) })
     }
@@ -630,6 +631,7 @@ class GameActivity : AgActivity() {
         p.onMenu = { showMenu(it) }
         p.addToolButton(R.drawable.ic_pip, "Pop out: small battle window") { popOut() }
         p.addToolButton(R.drawable.ic_stats, "Stats") { openStats() }
+        p.addToolButton(R.drawable.ic_menu, "Current battle log") { CurrentBattleLogSheet.open(this) }
         p.onBalls = { showBallDialog() }
         p.arena.onPlayerTap = { openMainDetails() }
         p.arena.canTurn = { !inPip && player?.idle != false }
@@ -814,7 +816,7 @@ class GameActivity : AgActivity() {
                 5 -> openSwitchPopup()
                 12 -> showBallDialog()
                 6 -> openStats()
-                7 -> openStats(BattleLogActivity::class.java)
+                7 -> CurrentBattleLogSheet.open(this)
                 11 -> ViewSettingsSheet.open(this)
                 9 -> toggleCatch()
                 10 -> openStats(com.husarp.ankigo.help.HelpActivity::class.java)
@@ -904,7 +906,7 @@ class GameActivity : AgActivity() {
     private fun openSwitchPopup() {
         val data = GameRepo.data ?: return
         val st = GameRepo.state ?: return
-        GameRepo.game?.switchBlocker()?.let { Ui.toast(this, it); return }
+        GameRepo.game?.switchBlocker()?.let { BattleLog.alert(it); Ui.toast(this, it); return }
         SwitchPopup.show(this, data, st) { switchMain(it) }
     }
 

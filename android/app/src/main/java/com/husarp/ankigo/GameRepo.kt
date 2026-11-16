@@ -223,7 +223,7 @@ object GameRepo {
             return f(g).also { result ->
                 com.husarp.ankigo.debug.SettingsText.diff(settingsBefore, com.husarp.ankigo.debug.SettingsText.of(g.state.settings)).forEach { Report.log("SETTINGS", "game $it") }
                 when (result) {
-                    is com.husarp.ankigo.game.ActionResult -> { GameLog.events(result.events); holdNextFight(result.events); wildMoves.observe(result.events, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(result.events); if (host) forgetPendingFight(result.events) }
+                    is com.husarp.ankigo.game.ActionResult -> { result.battleMessage?.let(com.husarp.ankigo.ui.BattleLog::message); GameLog.events(result.events); if (result.battleAlert) com.husarp.ankigo.ui.BattleLog.alert(result.message); holdNextFight(result.events); wildMoves.observe(result.events, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(result.events); if (host) forgetPendingFight(result.events) }
                     is List<*> -> result.filterIsInstance<GameEvent>().let { GameLog.events(it); holdNextFight(it); wildMoves.observe(it, held?.battle); com.husarp.ankigo.ui.AchievementPopup.offer(it); if (host) forgetPendingFight(it) }
                 }
             }
