@@ -44,6 +44,8 @@ object MoveFxCatalog {
             else -> null
         }
         if (behaviour != null) return MoveFxPlan(behaviour, 1f, kits[t] ?: FxKit.valueOf(t.name), palette, hits.coerceAtLeast(0), showRecoil)
+        // Flamethrower shares the approved fire look with Ember and all Fire special moves.
+        if (moveId == "flamethrower") return MoveFxPlan(MoveLook.EMBER, 1f, FxKit.FIRE, FxPalettes.of(Type.FIRE))
         // The picked moves themselves.
         picks.firstOrNull { it.id == moveId }?.let { return MoveFxPlan(it.look, 1f, it.kit, FxPalettes.of(it.type)) }
         // Rule 1: same type and category as a pick.

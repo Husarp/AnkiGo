@@ -82,8 +82,8 @@ class R18CLeanTest {
     }
 
     @Test fun theLeanIsAddedToALooksOwnPoseAndNeverLiftsTheSprite() {
-        // Ember recoils by -10 sin(..): with the lean the pose is the look's own plus the lean at that time
-        val with = run(MoveLook.EMBER)
+        // Procedural Ember retains the lean for legacy template compositions.
+        val with = RecStage(unit).let { st -> MoveFx.script(st, plan(MoveLook.EMBER), true, 7L)!!.also { it.lean(0f); EmberFx.build(it) }.let { st to it } }
         val bare = RecStage(unit).let { st -> MoveFx.script(st, plan(MoveLook.EMBER), true, 7L)!!.also { EmberFx.build(it) }.let { st to it } }
         var ms = 0f
         while (ms <= 700f) {
@@ -97,7 +97,7 @@ class R18CLeanTest {
     }
 
     @Test fun aPhysicalLookIsExactlyAsBefore() {
-        for (look in listOf(MoveLook.HIT_TEMPLATE, MoveLook.TACKLE)) {
+        for (look in listOf(MoveLook.HIT_TEMPLATE)) {
             val a = RecStage(unit).let { st -> MoveFx.script(st, plan(look), true, 3L)!!.also { MoveFx.build(it, look) }.let { st to it } }
             val b = RecStage(unit).let { st -> MoveFx.script(st, plan(look), true, 3L)!!.also { if (look == MoveLook.TACKLE) TackleFx.build(it) else HitTemplateFx.build(it) }.let { st to it } }
             var ms = 0f

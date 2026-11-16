@@ -26,7 +26,7 @@ import kotlin.math.sqrt
  */
 class FxArt private constructor(private val ctx: Context) {
     private val bitmaps = ArtCache<Bitmap> { load(it) }
-    private val tints = HashMap<Int, ColorFilter>()
+    private val tints = android.util.SparseArray<ColorFilter>()
 
     /**
      * The bitmap for [key] (see the class), or null: no such art, or the background warm-up ([warmUp]) has not got to it yet (the
@@ -48,11 +48,17 @@ class FxArt private constructor(private val ctx: Context) {
     private var lastTint = 0
     private var lastFilter: ColorFilter? = null
 
+    init {
+        for (c in intArrayOf(0x4AA8FF, 0xFFA030, 0x78C8FF, 0xFF9020, 0xFFEC6E, 0xFFF096, 0xFFE040,
+            0xB050FF, 0xFF8CFF, 0x9A4CFF, 0xFF8AE6, 0xFF64DC, 0x96E1FF, 0xA0E6FF, 0xAEEAFF,
+            0x78FF64, 0xFFF4C0, 0x7DFF8A, 0x8DFF8D, 0x6DFF7A, 0x6EFF82)) tint(c)
+    }
+
     /** A colour filter that multiplies the colour channels with [color]'s RGB and keeps the alpha (the mockup's `tinted()`), shared per colour. */
     fun tint(color: Int): ColorFilter {
         val c = color or OPAQUE
         lastFilter?.let { if (c == lastTint) return it }   // consecutive particles share a colour: no map lookup, no boxing
-        val f = tints.getOrPut(c) { LightingColorFilter(c, 0) }
+        val f = tints[c] ?: LightingColorFilter(c, 0).also { tints.put(c, it) }
         lastTint = c; lastFilter = f
         return f
     }
@@ -81,7 +87,8 @@ class FxArt private constructor(private val ctx: Context) {
         return pixels(FxPixelArt.rows(set[i]), FxPixelArt.FLAME_PALETTE, 'x' in flips, 'y' in flips)
     }
 
-    private fun resource(name: String): Int? = when (name) {
+    private fun resource(name: String): Int? = AI_RESOURCES[name] ?: when (name) {
+        "aifx_glow" -> R.drawable.aifx_glow
         "circle_02" -> R.drawable.fxk_circle_02
         "circle_05" -> R.drawable.fxk_circle_05
         "dirt_01" -> R.drawable.fxk_dirt_01
@@ -185,10 +192,13 @@ class FxArt private constructor(private val ctx: Context) {
     }
 
     companion object {
+        private val AI_RESOURCES = AiSheet.entries.flatMap { it.frames.filterNotNull() }.associate { it.key to it.resource }
         private const val OPAQUE = 0xFF000000.toInt()
 
         /** Every art key the looks use: the textures, the two drawn pictures, the leaf and the flame frames (as drawn, and mirrored for a target on the left). */
         private val KEYS: List<String> = buildList {
+            addAll(AiSheet.keys)
+            add("aifx_glow")
             addAll(listOf(
                 "circle_02", "circle_05", "dirt_01", "dirt_02", "fire_01", "flame_05", "light_02", "magic_05", "slash_03", "smoke_01", "smoke_05",
                 "smoke_08", "spark_01", "spark_05", "star_01", "star_04", "star_06", "star_08", "twirl_01",

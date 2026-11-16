@@ -71,6 +71,30 @@ class FxCanvas internal constructor(private val art: FxArt, @JvmField val unit: 
         raw.drawBitmap(bmp, null, rect, paint)
     }
 
+    internal fun ai(sheet: AiSheet, frame: Int, x: Float, y: Float, scale: Float = 1f, a: Float = 1f,
+        add: Boolean = false, rot: Float = 0f, sx: Float = 1f, sy: Float = 1f,
+        w: Float = sheet.w, h: Float = sheet.h) {
+        if (a <= 0f) return
+        val f = sheet.frames[frame.coerceIn(0, sheet.frames.lastIndex)] ?: return
+        val bmp = art.bitmap(f.key) ?: return
+        raw.save()
+        raw.translate(x, y)
+        rotate(rot)
+        raw.scale(sx, sy)
+        alpha = a.coerceIn(0f, 1f); additive = add
+        bitmap(bmp, 0, (f.left - .5f) * w * scale, (f.top - .5f) * h * scale,
+            f.width * w * scale, f.height * h * scale)
+        raw.restore()
+        alpha = 1f; additive = false
+    }
+
+    internal fun soft(x: Float, y: Float, rx: Float, ry: Float, color: Int, a: Float) {
+        if (a <= 0f || rx <= 0f || ry <= 0f) return
+        alpha = a.coerceIn(0f, 1f); additive = true
+        tex("aifx_glow", color, x, y, rx * 2f, ry * 2f)
+        alpha = 1f; additive = false
+    }
+
     /**
      * Draws pixel art [bmp] with its left top at ([left], [top]), every art pixel [artPx] whole device pixels (get it from
      * [FxSpace.artPixels]), without smoothing and snapped to the device pixel grid (the mockup's `blit`). Not for rotated canvases.
@@ -209,6 +233,12 @@ class FxCanvas internal constructor(private val art: FxArt, @JvmField val unit: 
         rect.set(-rx, -ry, rx, ry)
         raw.drawOval(rect, paint)
         raw.restore()
+    }
+
+    internal fun ring(x: Float, y: Float, radius: Float, width: Float, color: Int, a: Float) {
+        reset(); paint.style = Paint.Style.STROKE; paint.strokeWidth = width
+        paint.color = color or OPAQUE; paint.alpha = a255(a)
+        raw.drawCircle(x, y, radius, paint)
     }
 
     /** Fills a rectangle. */

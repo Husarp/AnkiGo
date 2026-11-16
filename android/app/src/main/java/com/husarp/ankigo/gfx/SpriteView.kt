@@ -53,6 +53,15 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     var fxMatrix: FloatArray? = null
         set(v) { if (v != null || field != null) { field = v; invalidate() } }
 
+    private var preparedFxFilters: java.util.IdentityHashMap<FloatArray, android.graphics.ColorFilter>? = null
+
+    internal fun prepareFxFilter(matrix: FloatArray) {
+        val pool = preparedFxFilters ?: java.util.IdentityHashMap<FloatArray, android.graphics.ColorFilter>().also { preparedFxFilters = it }
+        pool[matrix] = ColorMatrixColorFilter(ColorMatrix(matrix))
+    }
+
+    internal fun clearPreparedFxFilters() { preparedFxFilters = null }
+
     /**
      * Round 8: true = the picture's lowest visible row (over all frames) sits on the view's bottom, so a Pokémon's feet stand on the
      * view's bottom edge even when its frames keep empty rows under them. False (the default) = the frame's bottom is the view's
@@ -298,6 +307,22 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     private var boundsFor: SpriteImage? = null
     private var bounds: IntArray? = null
 
+    /** The cached visible pixels mapped through exactly the sprite's drawing transform. */
+    internal fun visibleBody(out: android.graphics.RectF) {
+        val img = image
+        val scale = if (img != null) scaleFor(img, width, height) else 1f
+        val box = if (img != null) visibleBounds(img) else null
+        val dw = if (img != null) (img.width * scale).roundToInt().toFloat() else placeholderDiameter(width, height)
+        val dh = if (img != null) (img.height * scale).roundToInt().toFloat() else dw
+        val left = (width - dw) / 2f
+        val top = height - dh + if (img != null) footInset(scale) else 0
+        val l = left + (box?.get(0) ?: 0) * scale
+        val t = top + (box?.get(1) ?: 0) * scale
+        val r = if (box != null) left + box[2] * scale else left + dw
+        val b = if (box != null) top + box[3] * scale else top + dh
+        out.set(if (mirror) width - r else l, t, if (mirror) width - l else r, b)
+    }
+
     private fun placeholderDiameter(vw: Int, vh: Int): Float =
         min(min(vw, vh) * 0.8f, 72f * resources.displayMetrics.density).coerceAtLeast(0f)
 
@@ -388,7 +413,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
         val f = flash
         val fx = fxMatrix
         val w = whiteout
-        if (f <= 0f && w <= 0f) return if (fx != null && fx.size == 20) ColorMatrixColorFilter(ColorMatrix(fx)) else if (conditionLook?.cold == true) com.husarp.ankigo.ui.movefx.ConditionLook.COLD else null
+        if (f <= 0f && w <= 0f) return if (fx != null && fx.size == 20) preparedFxFilters?.get(fx) ?: ColorMatrixColorFilter(ColorMatrix(fx)) else if (conditionLook?.cold == true) com.husarp.ankigo.ui.movefx.ConditionLook.COLD else null
         // CSS brightness(2.2) saturate(.3) at full strength, blended from the identity.
         val sat = 1f + (0.3f - 1f) * f
         val b = 1f + (2.2f - 1f) * f
