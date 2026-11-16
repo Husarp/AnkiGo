@@ -115,7 +115,7 @@ object Items {
         BattleItems.snacks.forEach { (id, text) -> add(ItemDef(id, ItemKind.HEAL, note = text)) }
         add(ItemDef("awakening", ItemKind.HEAL, note = "Wakes a sleeping Pokémon in battle"))
         BattleItems.held.forEach { (id, text) -> add(ItemDef(id, ItemKind.HELD, note = text)) }
-        EVOLUTION.forEach { add(ItemDef(it, ItemKind.EVOLUTION, note = if (it in RETIRED) "Does nothing here" else "Evolves Pokémon that evolve with it")) }
+        EVOLUTION.forEach { add(ItemDef(it, ItemKind.EVOLUTION, note = if (it in RETIRED) "Does nothing here" else "Triggers an item evolution")) }
         AbilityAdaptations.berries.keys.forEach { add(ItemDef(it, ItemKind.HELD, note = when (it) {
             "oran-berry" -> "At half HP: heals 10 HP; consumed"
             "sitrus-berry" -> "At half HP: heals ¼ max HP; consumed"

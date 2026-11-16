@@ -161,9 +161,9 @@ class ItemInfoTest {
 
     @Test fun withoutSpeciesDataAnEvolutionItemStillReads() {
         assertEquals("Evolution item", ItemInfo.short(null, "thunder-stone"))
-        assertEquals("Evolves Pokémon that evolve with it", ItemInfo.line(null, "thunder-stone"))
+        assertEquals("Triggers an item evolution", ItemInfo.line(null, "thunder-stone"))
         assertTrue(fact("thunder-stone", "What it does", null).isNotBlank())
-        assertEquals("Evolves Pokémon that evolve with it", ItemInfo.effect("thunder-stone"))
+        assertEquals("Triggers an item evolution", ItemInfo.effect("thunder-stone"))
     }
 
     // ---- held items ----

@@ -125,13 +125,13 @@ object StatsChartMath {
 
     /**
      * Which bars get a label under them: all of them when they fit; else the most that fit without touching (each [gap] apart),
-     * always the first (left-aligned at [start]) and the last (right-aligned at [end]), the ones between evenly spread.
+     * all labels centred under their bars when they fit; sparse labels keep the first and last inside the plot.
      * [width] gives the text width of bar i.
      */
     fun labelPlan(n: Int, start: Float, end: Float, gap: Float, width: (Int) -> Float): List<AxisLabel> {
         if (n <= 0) return emptyList()
         if (n == 1) return listOf(AxisLabel(0, LabelAlign.CENTER))
-        fun plan(idx: List<Int>) = idx.map { AxisLabel(it, if (it == 0) LabelAlign.START else if (it == n - 1) LabelAlign.END else LabelAlign.CENTER) }
+        fun plan(idx: List<Int>) = idx.map { AxisLabel(it, if (idx.size == n) LabelAlign.CENTER else if (it == 0) LabelAlign.START else if (it == n - 1) LabelAlign.END else LabelAlign.CENTER) }
         val minWidth = (0 until n).minOf { width(it) }.coerceAtLeast(1f)
         val most = ((end - start + gap) / (minWidth + gap)).toInt().coerceIn(2, n)
         for (k in (most - 2) downTo 0) {
@@ -286,6 +286,6 @@ object StatsChartMath {
     fun hint(s: ChartSeries): String = when (s.kind) {
         ChartKind.HEATMAP -> ""
         ChartKind.CATEGORY -> "tap a bar for details"
-        ChartKind.TIME -> "tap ${if (s.grain == ChartGrain.DAY) "a bar" else "the line"} for its ${when (s.grain) { ChartGrain.DAY -> "day"; ChartGrain.WEEK -> "week"; ChartGrain.MONTH -> "month"; ChartGrain.YEAR -> "year" }}"
+        ChartKind.TIME -> if (s.grain == ChartGrain.DAY) "" else "tap the line for its ${when (s.grain) { ChartGrain.WEEK -> "week"; ChartGrain.MONTH -> "month"; ChartGrain.YEAR -> "year"; else -> "day" }}"
     }
 }

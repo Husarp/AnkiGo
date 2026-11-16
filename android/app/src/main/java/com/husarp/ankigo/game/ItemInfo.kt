@@ -376,7 +376,7 @@ object ItemInfo {
         if (item in Items.RETIRED) return "Does nothing here: no Pokémon uses it"
         if (item == LINKING_CORD) return "Evolves Pokémon that evolve by trade"
         val pairs = evoPairs(data, item)
-        if (pairs.isEmpty()) return "Evolves Pokémon that evolve with it"
+        if (pairs.isEmpty()) return "Triggers an item evolution"
         if (pairs.size == 1) {
             val p = pairs[0]
             val fromKnown = known(caught, p.fromNum)
@@ -429,7 +429,7 @@ object ItemInfo {
     private fun evolutionWhat(data: GameData?, item: String, caught: Set<Int>?): String {
         val pairs = evoPairs(data, item)
         val cord = item == LINKING_CORD
-        if (pairs.isEmpty()) return if (cord) "Evolves Pokémon that normally evolve **by trade**." else "Evolves the Pokémon that need it."
+        if (pairs.isEmpty()) return if (cord) "Evolves Pokémon that normally evolve **by trade**." else "Consumed when used for an item evolution."
         val times = pairs.map { it.time }.distinct()
         val common = times.singleOrNull()
         val entries = evoEntries(pairs, caught, common)

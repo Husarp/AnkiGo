@@ -593,8 +593,8 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
                 charts += this
             }, lp(8))
         }
-        val source = if (s.kind == ChartKind.HEATMAP && calendarYear != null) "${s.source}. Older days not retained by either source cannot be recovered." else if (s.kind == ChartKind.HEATMAP) StatsText.heatmapNote(snap, System.currentTimeMillis()) else s.source.takeIf { message == null && it.isNotBlank() }?.let { "Source: $it" }
-        if (!source.isNullOrBlank()) card.addView(note(source), lp(6))
+        val calendarNote = if (s.kind == ChartKind.HEATMAP && calendarYear != null) "Older days not retained by either source cannot be recovered." else if (s.kind == ChartKind.HEATMAP) StatsText.heatmapNote(snap, System.currentTimeMillis()) else null
+        if (!calendarNote.isNullOrBlank()) card.addView(note(calendarNote), lp(6))
         return card
     }
 
