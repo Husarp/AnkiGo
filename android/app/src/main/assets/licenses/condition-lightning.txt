@@ -1,0 +1,6 @@
+condition_lightning.png — Lightning by Clint Bellanger.
+Source: https://opengameart.org/content/lightning-shock-spell
+Reused from Pokémon Showdown:
+https://github.com/smogon/pokemon-showdown-client/blob/1cf9b385a97ad5c77a25b91a1c799078827ec306/play.pokemonshowdown.com/fx/lightning.png
+CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/
+Image unchanged; displayed smaller, rotated and intermittently flickered.

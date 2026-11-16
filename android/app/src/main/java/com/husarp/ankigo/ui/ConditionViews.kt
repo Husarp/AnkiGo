@@ -287,8 +287,8 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         body.removeAllViews()
         val stat = mark.key.startsWith("stat.")
         val name = if (stat) StatPill.longName(mark.key.removePrefix("stat.")) + " " + (if (mark.value > 0) "+" else "−") + kotlin.math.abs(mark.value) else mark.def.word
-        buildCard(name, listOfNotNull(values, ConditionExplanation.effect(mark)).joinToString("\n"), listOfNotNull(owner, mark.detail.takeIf { !stat && it.isNotBlank() }).joinToString(" · "),
-            ConditionIcons.of(mark.key)!!, if (stat) StatPill.ink(mark.value > 0, StatPill.isDark(context)) else m.hue(mark.def.group), maxW, maxH)
+        buildCard(name, listOfNotNull(ConditionExplanation.effect(mark), values).joinToString("\n"), listOfNotNull(owner, mark.detail.takeIf { !stat && it.isNotBlank() }).joinToString(" · "),
+            ConditionIcons.of(mark.key)!!, if (stat) StatPill.ink(mark.value > 0, StatPill.isDark(context)) else m.hue(mark.def.group), maxW, maxH, values)
     }
 
     fun buildStatus(info: StatusInfo.Info, owner: String, maxW: Int, maxH: Int, close: () -> Unit) {
@@ -300,12 +300,17 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
             StatusBadge.fillColor(context, info.status), maxW, maxH)
     }
 
-    private fun buildCard(name: String, effect: String, detail: String, icon: Int, hue: Int, maxW: Int, maxH: Int) {
+    private fun buildCard(name: String, effect: String, detail: String, icon: Int, hue: Int, maxW: Int, maxH: Int, values: String? = null) {
         val pad = Ui.dp(context, 14)
         setPadding(pad, pad, pad, pad)
         val cardW = min(maxW, Ui.dp(context, 328))
         fun label(value: String, sp: Float, color: Int, weight: Int = 700) = TextView(context).apply {
-            text = StatTypography.format(value)
+            text = StatTypography.format(value).let { formatted ->
+                if (values == null || !value.contains(values)) formatted else android.text.SpannableString(formatted).apply {
+                    val start = indexOf(values)
+                    if (start >= 0) setSpan(android.text.style.ForegroundColorSpan(hue), start, start + values.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
             typeface = Ui.font(context, weight)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, TextMath.at(sp, floorSp))
             setTextColor(color)

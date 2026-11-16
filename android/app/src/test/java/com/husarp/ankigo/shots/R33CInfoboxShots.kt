@@ -91,7 +91,7 @@ class R33CInfoboxShots {
                 val stats = com.husarp.ankigo.game.SimpleView.of(GameRepo.data!!, state.battle!!, state.main!!).stats(slot == ConditionMarks.Slot.OURS)
                 val expected = ConditionStat.values(chip.mark!!, stats)!!
                 val effect = texts(card).single { it.tag == "condition-effect" }
-                assertTrue(effect.text.toString().startsWith(expected))
+                assertEquals(ConditionExplanation.effect(chip.mark!!) + "\n" + expected, effect.text.toString())
                 assertTrue(card.spoken.contains(expected))
                 val spans = effect.text as Spanned
                 assertEquals(1, spans.getSpans(0, spans.length, ReplacementSpan::class.java).size)

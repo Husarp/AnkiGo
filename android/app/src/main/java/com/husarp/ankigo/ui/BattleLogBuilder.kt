@@ -4,6 +4,7 @@ import com.husarp.ankigo.game.CashKind
 import com.husarp.ankigo.game.DuplicateResult
 import com.husarp.ankigo.game.GameEvent
 import com.husarp.ankigo.game.Tuning
+import com.husarp.ankigo.game.SwitchQueue
 import java.util.Locale
 
 // TICKET R2-07: the Battle log. Pure Kotlin: game events (+ the answers that caused them) -> battles -> rounds.
@@ -14,6 +15,8 @@ enum class Tone { PLAIN, GOOD, BAD, SUB }
 
 /** One line of a round or of a result. */
 class LogLine(val tone: Tone, val text: String)
+
+data class BattleLogEntry(val round: Int, val tone: Tone, val text: String)
 
 /** One counted answer. [card] is the short front text or "card #id"; [coins] are what this answer earned (the defeat money joins the last answer). */
 class LogAnswer(val button: Int, val card: String, val catchUp: Boolean, var coins: Int = 0)
@@ -33,9 +36,19 @@ enum class Outcome(val label: String) {
 class LogBattle(val startedAt: Long, var wild: String?, var level: Int, var shiny: Boolean, var outcome: Outcome = Outcome.OPEN) {
     val rounds = ArrayList<LogRound>()
     val result = ArrayList<LogLine>()
+    val entries = ArrayList<BattleLogEntry>()
 
     /** Coins earned by the answers and the defeat of this battle (not the daily-goal bonus). */
     val coins: Int get() = rounds.sumOf { r -> r.answers.sumOf { it.coins } }
+
+    fun timeline(): List<BattleLogEntry> {
+        if (entries.isNotEmpty()) return entries.toList()
+        return buildList {
+            wild?.let { add(BattleLogEntry(0, Tone.PLAIN, "A wild ${it.removePrefix("Wild ")} appeared · Lv $level")) }
+            rounds.forEachIndexed { index, round -> round.lines.forEach { add(BattleLogEntry(index + 1, it.tone, it.text)) } }
+            result.forEach { add(BattleLogEntry(rounds.size, it.tone, it.text)) }
+        }
+    }
 
     fun copy(): LogBattle = LogBattle(startedAt, wild, level, shiny, outcome).also { b ->
         for (r in rounds) {
@@ -44,6 +57,7 @@ class LogBattle(val startedAt: Long, var wild: String?, var level: Int, var shin
             r.lines.mapTo(c.lines) { LogLine(it.tone, it.text) }
             b.rounds += c
         }
+        b.entries.addAll(entries)
         result.mapTo(b.result) { LogLine(it.tone, it.text) }
     }
 }
@@ -65,6 +79,7 @@ class BattleLogBuilder(
     private var wildHp: Int? = null
     private var playerHp: Int? = null
     private var resultOpen = false
+    private var roundNumber = battles.lastOrNull()?.let { it.entries.lastOrNull()?.round ?: it.rounds.size } ?: 0
     private var wildPower = 1.0 // R10-B22: the wild one's damage factor of the round being played
 
     fun answer(source: String, cardId: Long, button: Int, front: String?) {
@@ -74,7 +89,32 @@ class BattleLogBuilder(
 
     fun newestFirst(): List<LogBattle> = battles.asReversed().toList()
 
+    fun alert(text: String) = message("Battle alert · $text", Tone.BAD)
+
+    fun message(text: String, tone: Tone = Tone.PLAIN) {
+        val b = open() ?: return
+        if (b.entries.isEmpty()) b.entries.addAll(b.timeline())
+        b.entries += BattleLogEntry(roundNumber, tone, text)
+    }
+
     fun feed(e: GameEvent) {
+        battles.filter { it.entries.isEmpty() }.forEach { it.entries.addAll(it.timeline()) }
+        val before = battles.associateWith { b -> b.rounds.associateWith { it.lines.size } to b.result.size }
+        consume(e)
+        for (b in battles) {
+            val old = before[b]
+            if (e is GameEvent.Encounter && b === battles.last()) {
+                b.entries += BattleLogEntry(0, Tone.PLAIN, "A wild ${e.name.removePrefix("Wild ")} appeared · Lv ${e.level} · ${e.hp}/${e.maxHp} HP")
+                e.auraText?.let { b.entries += BattleLogEntry(0, Tone.PLAIN, it) }
+            }
+            for (r in b.rounds) for (line in r.lines.drop(old?.first?.get(r) ?: 0)) {
+                b.entries += BattleLogEntry(roundNumber.coerceAtLeast(1), line.tone, line.text)
+            }
+            for (line in b.result.drop(old?.second ?: 0)) b.entries += BattleLogEntry(roundNumber.coerceAtLeast(if (b.rounds.isEmpty()) 0 else 1), line.tone, line.text)
+        }
+    }
+
+    private fun consume(e: GameEvent) {
         when (e) {
             is GameEvent.Counted -> counted(e)
             is GameEvent.Ignored -> pending.removeFirstOrNull()
@@ -84,7 +124,7 @@ class BattleLogBuilder(
                 CashKind.DAILY_BONUS -> {} // no fight money: the panel log has its own line
             }
             is GameEvent.Encounter -> encounter(e)
-            is GameEvent.RoundStart -> { collecting().let { it.multiplier = e.multiplier; it.points = e.points }; wildPower = e.enemyPower }
+            is GameEvent.RoundStart -> { roundNumber++; collecting().let { it.multiplier = e.multiplier; it.points = e.points }; wildPower = e.enemyPower }
             is GameEvent.Attack -> attack(e)
             is GameEvent.Splash -> moves().lines += LogLine(Tone.SUB, "${e.name} did nothing (Splash)")
             is GameEvent.SwitchHit -> {
@@ -93,6 +133,11 @@ class BattleLogBuilder(
                 moves().lines += LogLine(Tone.PLAIN, "$why — the wild ${e.wildName.removePrefix("Wild ")} uses one free move!")
             }
             is GameEvent.Effect -> effect(e)
+            is GameEvent.Info -> if (open() != null) moves().lines.add(LogLine(Tone.PLAIN, e.text)) else resultLine(Tone.PLAIN, e.text)
+            is GameEvent.BerryActivated -> open()?.let { moves().lines += LogLine(Tone.PLAIN, "${com.husarp.ankigo.game.Items.name(e.item)} activated") }
+            is GameEvent.SwitchQueued -> open()?.let { moves().lines += LogLine(Tone.PLAIN, if (e.uid != null) SwitchQueue.queuedText(e.name) else SwitchQueue.cancelledText(e.name)) }
+            is GameEvent.MainChanged -> message("Switched to ${e.name}")
+            is GameEvent.ItemFound -> if (open() != null) moves().lines.add(LogLine(Tone.PLAIN, "Found ${com.husarp.ankigo.game.Items.name(e.item)}")) else resultLine(Tone.PLAIN, "Found ${com.husarp.ankigo.game.Items.name(e.item)}")
             is GameEvent.Fainted -> moves().lines += LogLine(if (e.player) Tone.BAD else Tone.GOOD, "${e.name} fainted")
             is GameEvent.BallThrow -> ball(e)
             is GameEvent.Defeated -> finish(Outcome.DEFEATED, LogLine(Tone.GOOD, "${e.name} was defeated · ${e.xp} XP"))
@@ -102,7 +147,7 @@ class BattleLogBuilder(
             is GameEvent.MainHealed -> finish(Outcome.LOST, LogLine(Tone.BAD, "${e.name} was healed to ${e.hp} HP · the wild one is lost"))
             is GameEvent.XpGained -> resultLine(Tone.PLAIN, "${e.name} +${e.xp} XP · Lv ${e.level}")
             is GameEvent.LevelUp -> resultLine(Tone.GOOD, "${e.name} grew to Lv ${e.level}")
-            is GameEvent.Healed -> resultLine(Tone.PLAIN, "${e.name} +${e.amount} HP")
+            is GameEvent.Healed -> if (open() != null) moves().lines.add(LogLine(Tone.PLAIN, "${e.name} +${e.amount} HP")) else resultLine(Tone.PLAIN, "${e.name} +${e.amount} HP")
             is GameEvent.Evolved -> resultLine(Tone.GOOD, "${e.from} evolved into ${e.to}")
             is GameEvent.MoveLearned -> resultLine(Tone.PLAIN, "${e.name} learned ${e.move}" + (e.forgot?.let { " (forgot $it)" } ?: ""))
             else -> {}
@@ -139,6 +184,7 @@ class BattleLogBuilder(
             if (cur != null) cur.outcome = Outcome.ENDED
             battles += LogBattle(now(), e.name, e.level, e.shiny)
         }
+        roundNumber = 0
         wildHp = e.hp; playerHp = null
         while (battles.count { it.outcome != Outcome.OPEN } > keep) battles.removeAt(0)
     }

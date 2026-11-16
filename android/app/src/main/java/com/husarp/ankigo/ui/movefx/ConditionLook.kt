@@ -25,7 +25,7 @@ internal class ConditionLookState {
     val visible: Boolean get() = status != null
 
     fun set(value: String?, now: Long, immediate: Boolean = false) {
-        val next = value?.takeIf { it == "frz" || it == "slp" || it == "psn" || it == "tox" || it == "attract" }
+        val next = value?.takeIf { it == "frz" || it == "slp" || it == "psn" || it == "tox" || it == "attract" || it == "par" || it == "confusion" }
         if (immediate) { status = next; clearing = false; since = now; return }
         if (next != null) {
             if (next != status || clearing) { status = next; clearing = false; since = now }
@@ -43,8 +43,12 @@ internal class ConditionLookState {
 internal class ConditionLook(private val view: View, private val redraw: () -> Unit) {
     val state = ConditionLookState()
     val loveState = ConditionLookState()
-    val visible: Boolean get() = state.visible || loveState.visible
+    val confusionState = ConditionLookState()
+    val visible: Boolean get() = state.visible || loveState.visible || confusionState.visible
     private var loving = false
+    private var confused = false
+    private val crackle = ConditionCrackle()
+    private val bolt = BitmapFactory.decodeResource(view.resources, com.husarp.ankigo.R.drawable.condition_lightning)
     private val bubble = BitmapFactory.decodeResource(view.resources, com.husarp.ankigo.R.drawable.condition_poison)
     private val heart = BitmapFactory.decodeResource(view.resources, com.husarp.ankigo.R.drawable.condition_heart)
     private val particleBounds = RectF()
@@ -68,6 +72,7 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
             queued = false
             state.advance(SystemClock.uptimeMillis())
             loveState.advance(SystemClock.uptimeMillis())
+            confusionState.advance(SystemClock.uptimeMillis())
             redraw()
             schedule()
         }
@@ -77,7 +82,7 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
     internal val running: Boolean get() = queued
 
     fun set(status: String?, immediate: Boolean = false) {
-        if (immediate && status == null) setLove(false, immediate = true)
+        if (immediate && status == null) { setLove(false, immediate = true); setConfused(false, immediate = true) }
         requested = status
         state.set(if (enabled) status else null, SystemClock.uptimeMillis(), immediate || !enabled)
         redraw()
@@ -87,6 +92,13 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
     fun setLove(value: Boolean, immediate: Boolean = false) {
         loving = value
         loveState.set(if (enabled && value) "attract" else null, SystemClock.uptimeMillis(), immediate || !enabled)
+        redraw()
+        if (!canRun()) stop() else schedule()
+    }
+
+    fun setConfused(value: Boolean, immediate: Boolean = false) {
+        confused = value
+        confusionState.set(if (enabled && value) "confusion" else null, SystemClock.uptimeMillis(), immediate || !enabled)
         redraw()
         if (!canRun()) stop() else schedule()
     }
@@ -104,6 +116,7 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
         uiPrefs.unregisterOnSharedPreferenceChangeListener(watch)
         stop()
         loveState.set(if (enabled && loving) "attract" else null, SystemClock.uptimeMillis(), immediate = true)
+        confusionState.set(if (enabled && confused) "confusion" else null, SystemClock.uptimeMillis(), immediate = true)
         // An exit interrupted by leaving the screen never appears on a different Pokémon later.
         state.set(if (enabled) requested else null, SystemClock.uptimeMillis(), immediate = true)
     }
@@ -114,6 +127,7 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
         if (was != enabled) {
             state.set(if (enabled) requested else null, SystemClock.uptimeMillis(), immediate = true)
             loveState.set(if (enabled && loving) "attract" else null, SystemClock.uptimeMillis(), immediate = true)
+            confusionState.set(if (enabled && confused) "confusion" else null, SystemClock.uptimeMillis(), immediate = true)
         }
         redraw()
         if (!canRun()) stop() else schedule()
@@ -147,6 +161,7 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
         val now = SystemClock.uptimeMillis()
         state.advance(now)
         loveState.advance(now)
+        confusionState.advance(now)
         if (!visible) return
         val ms = (now - state.since).toFloat()
         val size = max(r - l, b - t) * 1.12f / 96f
@@ -185,8 +200,41 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
             }
         }
         if (state.status == "psn" || state.status == "tox") particles(canvas, now, state, false, opacity)
+        if (state.status == "par" && !state.clearing && crackle.visible(now, state.since)) lightning(canvas, ms, opacity)
+        if (confusionState.visible) stars(canvas, now, opacity)
         if (loveState.visible) particles(canvas, now, loveState, true, opacity)
         canvas.restore()
+    }
+
+    private fun lightning(canvas: Canvas, ms: Float, opacity: Float) {
+        for (i in 0 until 3) {
+            canvas.save()
+            canvas.translate(BOLT_X[i], BOLT_Y[i])
+            canvas.rotate(BOLT_ANGLE[i])
+            particleBounds.set(-6f + sin(ms / 67f + i) * 1.2f, -17.5f, 6f + sin(ms / 67f + i) * 1.2f, 17.5f)
+            particlePaint.alpha = ((.5f + .45f * (.5f + .5f * sin(ms / 43f + i * 2.3f))) * opacity * 255).toInt().coerceIn(0, 255)
+            canvas.drawBitmap(bolt, null, particleBounds, particlePaint)
+            canvas.restore()
+        }
+    }
+
+    private fun stars(canvas: Canvas, now: Long, opacity: Float) {
+        val seconds = (now - confusionState.since) / 1000f
+        val fade = if (confusionState.clearing) (1f - seconds / .42f).coerceIn(0f, 1f) else 1f
+        paint.alpha = (fade * opacity * 255).toInt().coerceIn(0, 255)
+        for (i in 0 until 6) {
+            val angle = seconds * 2f * PI.toFloat() / 5.6f + i * PI.toFloat() / 3f
+            val x = kotlin.math.round(cos(angle) * 53f) - 9f
+            val y = kotlin.math.round(-59f + sin(angle) * 10f) - 9f
+            for (layer in 0..1) {
+                paint.color = if (layer == 0) 0xFFBD8518.toInt() else 0xFFF9D36A.toInt()
+                paint.alpha = (fade * opacity * 255).toInt().coerceIn(0, 255)
+                for (row in STAR.indices) for (col in STAR[row].indices) if (STAR[row][col] == '#') {
+                    val top = y + row * 2f + if (layer == 0) 1f else -1f
+                    canvas.drawRect(x + col * 2f, top, x + col * 2f + 2f, top + 2f, paint)
+                }
+            }
+        }
     }
 
     private fun particles(canvas: Canvas, now: Long, state: ConditionLookState, hearts: Boolean, opacity: Float) {
@@ -209,6 +257,10 @@ internal class ConditionLook(private val view: View, private val redraw: () -> U
     }
 
     companion object {
+        private val BOLT_X = floatArrayOf(-36f, 38f, 7f)
+        private val BOLT_Y = floatArrayOf(-5f, 8f, 37f)
+        private val BOLT_ANGLE = floatArrayOf(-14.3f, 17.2f, 65.9f)
+        private val STAR = arrayOf("....#....", "...###...", "...###...", "#########", ".#######.", "..#####..", "..#####..", ".###.###.", ".#.....#.")
         val COLD = ColorMatrixColorFilter(ColorMatrix(FxColor.chain(FxColor.saturate(.5f), FxColor.brightness(1.18f), FxColor.hueRotate(-8f))))
     }
 }

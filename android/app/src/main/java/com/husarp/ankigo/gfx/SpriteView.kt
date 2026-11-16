@@ -125,7 +125,7 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
 
     /** PLAN 603: only battle sprites receive a lasting status look. */
     internal fun setConditionStatus(status: String?, immediate: Boolean = false) {
-        if (status == "frz" || status == "slp" || status == "psn" || status == "tox") ensureConditionLook()
+        if (status == "frz" || status == "slp" || status == "psn" || status == "tox" || status == "par") ensureConditionLook()
         conditionLook?.set(status, immediate)
     }
 
@@ -140,6 +140,11 @@ class SpriteView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? = 
     internal fun setConditionLove(loving: Boolean) {
         if (loving) ensureConditionLook()
         conditionLook?.setLove(loving)
+    }
+
+    internal fun setConditionConfused(confused: Boolean) {
+        if (confused) ensureConditionLook()
+        conditionLook?.setConfused(confused)
     }
 
     private var image: SpriteImage? = null

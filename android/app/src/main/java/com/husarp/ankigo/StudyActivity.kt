@@ -442,7 +442,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                 val m = AppMenu(anchor)
                     .item(9, "Compact view", R.drawable.ic_book, sub = if (compactStudy()) "On" else "Off", dividerAfter = true)
                     .item(0, "Pokémon", R.drawable.ic_team, enabled = events.idle).item(1, "Bag", R.drawable.ic_ball, enabled = events.idle)
-                    .item(2, "Pokédex", R.drawable.ic_dex, enabled = events.idle).item(3, "Settings", R.drawable.ic_settings, enabled = events.idle).item(4, "Battle log", R.drawable.ic_swords, enabled = events.idle)
+                    .item(2, "Pokédex", R.drawable.ic_dex, enabled = events.idle).item(3, "Settings", R.drawable.ic_settings, enabled = events.idle).item(4, "Battle log", R.drawable.ic_menu)
                 // one-off catch <-> defeat for this fight, only while a wild Pokémon is on stage; the label says what a tap does
                 val will = if (GameRepo.state?.battle != null && !events.holding) try { GameRepo.game?.willCatch() } catch (t: Throwable) { null } else null
                 if (events.idle && will != null) m.item(5, com.husarp.ankigo.ui.CatchChoiceText.menuLabel(will), R.drawable.ic_ball)
@@ -456,7 +456,7 @@ class StudyActivity : com.husarp.ankigo.ui.AgActivity() {
                     else if (i == 5) toggleCatch()
                     else if (i == 6) switchPokemon()
                     else if (i == 7) openViewSettings()
-                    else if (i == 4) startActivity(Intent(this, BattleLogActivity::class.java))
+                    else if (i == 4) com.husarp.ankigo.ui.CurrentBattleLogSheet.open(this)
                     else Nav.open(this, listOf(Dest.TEAM, Dest.SHOP, Dest.DEX, Dest.SETTINGS)[i])
                 }
             }

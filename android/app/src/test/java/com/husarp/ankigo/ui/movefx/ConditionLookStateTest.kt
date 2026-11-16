@@ -32,7 +32,7 @@ class ConditionLookStateTest {
     }
 
     @Test fun repeatedClearsDoNotRestartTheExit() {
-        for (status in listOf("frz", "slp", "psn", "tox", "attract")) {
+        for (status in listOf("frz", "slp", "psn", "tox", "attract", "par", "confusion")) {
             val look = ConditionLookState()
             look.set(status, 0)
             look.set(null, 100)
@@ -44,7 +44,7 @@ class ConditionLookStateTest {
     }
 
     @Test fun departureAndDisabledAnimationsStopWithoutAnExit() {
-        for (status in listOf("frz", "slp", "psn", "tox", "attract")) {
+        for (status in listOf("frz", "slp", "psn", "tox", "attract", "par", "confusion")) {
             val look = ConditionLookState()
             look.set(status, 0)
             look.set(null, 100, immediate = true)
@@ -77,7 +77,7 @@ class ConditionLookStateTest {
     }
 
     @Test fun poisonAndLovePersistWithoutRestartingOnTheNextTurn() {
-        for (status in listOf("psn", "tox", "attract")) {
+        for (status in listOf("psn", "tox", "attract", "par", "confusion")) {
             val look = ConditionLookState()
             look.set(status, 10)
             look.advance(50000)
@@ -88,7 +88,7 @@ class ConditionLookStateTest {
     }
 
     @Test fun otherConditionsDoNotStartALook() {
-        for (status in listOf(null, "par", "brn")) {
+        for (status in listOf(null, "brn")) {
             val look = ConditionLookState()
             look.set(status, 0)
             assertFalse(look.visible)

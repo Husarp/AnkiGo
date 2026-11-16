@@ -178,7 +178,7 @@ sealed class GameEvent {
 }
 
 /** Result of a between-battle action (shop, bag, team). */
-data class ActionResult(val ok: Boolean, val message: String, val events: List<GameEvent> = emptyList())
+data class ActionResult(val ok: Boolean, val message: String, val events: List<GameEvent> = emptyList(), val battleAlert: Boolean = false, val battleMessage: String? = null)
 
 /**
  * What an [GameEvent.Effect] is, so the UI can show a short floating text instead of the log sentence.

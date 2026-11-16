@@ -669,7 +669,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val kind = Items.def(item)?.kind
         val onMain = main != null && (targetUid ?: if (kind == ItemKind.HEAL) main.uid else null) == main.uid
         val turn = item != "old-gateau" && onMain && battle != null && (kind == ItemKind.HEAL || kind == ItemKind.EVOLUTION) && itemTakesATurn(battle, main!!)
-        val r = ItemUse.use(data, state, item, targetUid, rng, clock(), evolutionTo)
+        val used = ItemUse.use(data, state, item, targetUid, rng, clock(), evolutionTo)
+        val r = if (battle != null) used.copy(battleAlert = !used.ok, battleMessage = used.message.takeIf { used.ok }) else used
         if (r.ok && battle != null && !battle.awaitingContinue && state.battle === battle && state.main?.hp == 0) {
             val settled = mutableListOf<GameEvent>()
             settleFight(battle, state.main!!, settled)
@@ -679,7 +680,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         val mon = state.main ?: return r
         if (mon.hp <= 0 || battle.wild.hp <= 0) return r
         val hit = switchHit(battle, mon, item)
-        return ActionResult(true, SwitchHitText.withHit(r.message, hit, named = mon.name in r.message), r.events + hit)
+        return ActionResult(true, SwitchHitText.withHit(r.message, hit, named = mon.name in r.message), r.events + hit, battleMessage = r.battleMessage)
     }
 
     /**
@@ -691,7 +692,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
 
     /** Puts [uid] first. A Pokémon from the box takes a free team place, or the last member's when the team is full. */
     internal fun setMain(uid: String): ActionResult {
-        if (uid != state.main?.uid) switchBlocker()?.let { return ActionResult(false, it) }
+        if (uid != state.main?.uid) switchBlocker()?.let { return ActionResult(false, it, battleAlert = true) }
         state.pendingTeam = null; state.pendingCycle = false
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         val old = state.team.firstOrNull()
@@ -727,7 +728,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * [onAnswer] (the own study screen and the companion / PiP mode alike).
      */
     fun requestMain(uid: String, cardShowing: Boolean = true): ActionResult {
-        if (uid != state.main?.uid) switchBlocker()?.let { return ActionResult(false, it) }
+        if (uid != state.main?.uid) switchBlocker()?.let { return ActionResult(false, it, battleAlert = true) }
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
         state.pendingTeam = null
         val main = state.main
@@ -763,8 +764,8 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
      * ([GameState.pendingCycle]).
      */
     fun cycleMain(cardShowing: Boolean = true): ActionResult {
-        switchBlocker()?.let { return ActionResult(false, it) }
-        cycleMainBlocker()?.let { return ActionResult(false, it) }
+        switchBlocker()?.let { return ActionResult(false, it, battleAlert = true) }
+        cycleMainBlocker()?.let { return ActionResult(false, it, battleAlert = state.battle != null) }
         if (cardShowing && SwitchQueue.waitsForAnswer(state)) {
             val r = requestMain(state.team[1], cardShowing = true)
             if (state.pendingMain != null) state.pendingCycle = true
@@ -819,7 +820,7 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     private fun editTeam(team: List<String>, message: String, cardShowing: Boolean = true): ActionResult {
         val old = state.team.firstOrNull()
         val incoming = team.firstOrNull()
-        if (incoming != old) switchBlocker()?.let { return ActionResult(false, it) }
+        if (incoming != old) switchBlocker()?.let { return ActionResult(false, it, battleAlert = true) }
         if (incoming != null && incoming != old && cardShowing && SwitchQueue.waitsForAnswer(state)) {
             state.pendingMain = incoming; state.pendingCycle = false; state.pendingTeam = team
             val name = state.mon(incoming)!!.name
@@ -874,9 +875,9 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
     }
 
     fun release(uid: String, cardShowing: Boolean = true): ActionResult {
-        if (uid == state.main?.uid) switchBlocker()?.let { return ActionResult(false, it) }
+        if (uid == state.main?.uid) switchBlocker()?.let { return ActionResult(false, it, battleAlert = true) }
         val mon = state.mon(uid) ?: return ActionResult(false, "Pokémon not found.")
-        if (state.main?.uid == uid && cardShowing && SwitchQueue.waitsForAnswer(state)) return ActionResult(false, "Switch to another Pokémon before releasing your Main during a fight.")
+        if (state.main?.uid == uid && cardShowing && SwitchQueue.waitsForAnswer(state)) return ActionResult(false, "Switch to another Pokémon before releasing your Main during a fight.", battleAlert = true)
         if (mon.favourite) return ActionResult(false, "Remove ${mon.shownName} from favourites first.")
         if (state.mons.size <= 1) return ActionResult(false, "You can't release your only Pokémon.")
         if (state.team.size == 1 && state.team[0] == uid) {

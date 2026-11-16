@@ -115,6 +115,13 @@ internal object ConditionIcons {
         "bide", "mp.bide" -> R.drawable.ic_condition_mp_bide
         "mp.rollout" -> R.drawable.ic_condition_mp_rollout
         "mp.rage" -> R.drawable.ic_condition_mp_rage
-        else -> if (key == "stat.atk") R.drawable.ic_swords else if (key.startsWith("stat.")) R.drawable.ic_stats else null
+        "stat.atk" -> R.drawable.ic_stat_swords
+        "stat.def" -> R.drawable.ic_stat_shield
+        "stat.spa" -> R.drawable.ic_stat_sparkles
+        "stat.spd" -> R.drawable.ic_stat_shield_plus
+        "stat.spe" -> R.drawable.ic_stat_gauge
+        "stat.accuracy" -> R.drawable.ic_ach_target
+        "stat.evasion" -> R.drawable.ic_ach_eye
+        else -> null
     }
 }
