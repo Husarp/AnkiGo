@@ -370,7 +370,19 @@ class StatsPage(base: Context, host: PageHost, start: StatsSection? = null) : Ga
         val card = Ui.card(this).apply { setPadding(dp(14), dp(12), dp(14), dp(12)) }
         val top = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val identity = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        identity.addView(ImageView(this).apply { setImageResource(R.drawable.ic_trainer_rank); setColorFilter(c(R.color.ag_mauve)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(36), dp(44)).also { it.marginEnd = dp(8) })
+        val rankIcon = when (Trainer.rankStage(st)) {
+            1 -> R.drawable.trainer_rank_1
+            2 -> R.drawable.trainer_rank_2
+            3 -> R.drawable.trainer_rank_3
+            4 -> R.drawable.trainer_rank_4
+            else -> R.drawable.trainer_rank_5
+        }
+        identity.addView(ImageView(this).apply {
+            val bitmap = android.graphics.BitmapFactory.decodeResource(resources, rankIcon,
+                android.graphics.BitmapFactory.Options().apply { inScaled = false })
+            setImageDrawable(Ui.pixelBitmap(this@StatsPage, bitmap))
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(36), dp(44)).also { it.marginEnd = dp(8) })
         identity.addView(Ui.text(this, 20f, 900, R.color.ag_text).apply { text = "Level ${st.trainerLevel} · ${Trainer.rank(st)}" }, LinearLayout.LayoutParams(0, -2, 1f))
         top.addView(identity, LinearLayout.LayoutParams(0, -2, 1f))
         // Keep achievements below the bar so the larger title has room even in split screen.

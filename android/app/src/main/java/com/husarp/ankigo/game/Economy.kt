@@ -631,6 +631,16 @@ object Trainer {
         }
     }
 
+    /** Eleven ranks spread evenly over five icon stages, with both endpoints included. */
+    fun rankStage(state: GameState): Int = when (rank(state)) {
+        "Novice Trainer", "Rookie" -> 1
+        "Skilled Trainer", "Veteran" -> 2
+        "Advanced Trainer", "Elite Trainer", "Elite" -> 3
+        "Master Trainer", "Champion" -> 4
+        "Grand Champion", "Legendary Trainer" -> 5
+        else -> 1
+    }
+
     /** Ankimon rank title from caught species, highest level, trainer level, shinies, badges (trainer_functions.py). */
     fun rank(state: GameState): String {
         val caught = state.caught.size
