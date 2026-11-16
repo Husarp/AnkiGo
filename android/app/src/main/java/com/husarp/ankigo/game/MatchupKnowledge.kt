@@ -5,8 +5,11 @@ object MatchupKnowledge {
     fun seen(data: GameData, state: GameState, species: Int): Set<Type> =
         state.seenMatchups[data.species[species]?.baseNum ?: species].orEmpty().toSet()
 
-    fun of(data: GameData, state: GameState, species: Int): TypeMatchups =
-        TypeMatchups.discovered(data.sp(species).types, seen(data, state, species))
+    fun of(data: GameData, state: GameState, species: Int): TypeMatchups {
+        val types = data.sp(species).types
+        val known = TypeMatchups.discovered(types, seen(data, state, species))
+        return if (bonded(data, state, species)) known.copy(strongAgainst = TypeMatchups.of(types).strongAgainst) else known
+    }
 
     fun available(data: GameData, state: GameState, species: Int, owned: Boolean = false): Boolean {
         if (owned || bonded(data, state, species)) return true

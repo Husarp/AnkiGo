@@ -14,6 +14,7 @@ package com.husarp.ankigo.game
  * added up, [Stats.total], max 186) than every copy you own. Equal is not better. Nature, gender and moves do not count.
  */
 object AskMe {
+    // R39 (662): "Ask on every catch" queues every automatic win here, including new species and protected kinds.
     /** Questions kept at most (each is a small Pokémon in the save). A longer queue drops the OLDEST: a catch question then counts as "Don't catch", a release question as "keep both". Nothing is ever caught or released unasked. */
     const val MAX_WAITING = 12
 

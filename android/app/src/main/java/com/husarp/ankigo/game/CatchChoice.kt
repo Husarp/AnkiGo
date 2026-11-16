@@ -1,18 +1,19 @@
 package com.husarp.ankigo.game
 
 /**
- * R10-X2: the one "When you beat a wild Pokémon" list. Each option is a pair of existing settings, so the save format
- * (autoMode 1-3 in existing saves) does not change. Pure, no Android.
+ * R10-X2: the one "When you beat a wild Pokémon" list. The original options pair existing settings; question modes add flags
+ * while keeping autoMode 3 for older readers. Pure, no Android.
  *
  * R19-P (PLAN 281): "Ask me" is a third setting next to the pair, [Settings.askMe]; it always sits on autoMode 3 with the swap off, so an
  * old app or the Ankimon side reads it as "Catch only new species" (the closest thing it knows).
  */
-enum class CatchChoice(val title: String, val explain: String, val autoMode: Int, val swap: Boolean, val ask: Boolean = false) {
+enum class CatchChoice(val title: String, val explain: String, val autoMode: Int, val swap: Boolean, val ask: Boolean = false, val askEvery: Boolean = false) {
     ALWAYS("Always catch", "Every wild Pokémon you beat is caught", 1, false),
     NEW_ONLY("Catch only new species", "Others are defeated: the same XP and coins. Default", 3, false),
-    NEW_AND_BETTER("Catch new species and better copies", "A higher-level copy replaces your old one", 3, true),
+    NEW_AND_BETTER("Catch new species and better copies", "Keeps one copy per missing evolution branch; after that, a higher-level copy replaces your old one", 3, true),
     DEFEAT("Defeat", "Catch only shinies and protected kinds", 2, false),
-    ASK_ME("Ask me", "A better copy of one you own waits for your answer", 3, false, ask = true);
+    ASK_ME("Ask me", "A better copy of one you own waits for your answer", 3, false, ask = true),
+    ASK_EVERY("Ask on every catch", "Every wild win asks Catch or Don't catch, even new species, shinies and protected kinds; balls and one-off choices stay immediate", 3, false, askEvery = true);
 
     companion object {
         /**
@@ -20,6 +21,7 @@ enum class CatchChoice(val title: String, val explain: String, val autoMode: Int
          * only counts with mode 3 and wins over the switch.
          */
         fun of(s: Settings): CatchChoice = when {
+            s.askEveryCatch && s.autoMode == 3 -> ASK_EVERY
             s.askMe && s.autoMode == 3 -> ASK_ME
             s.autoReleaseDuplicates && s.autoMode == 3 -> NEW_AND_BETTER
             s.autoMode == 1 -> ALWAYS
@@ -35,14 +37,17 @@ enum class CatchChoice(val title: String, val explain: String, val autoMode: Int
         fun normalize(s: Settings) {
             if (s.autoReleaseDuplicates && s.autoMode != 3) s.autoReleaseDuplicates = false
             if (s.askMe && s.autoMode != 3) s.askMe = false
-            if (s.askMe) s.autoReleaseDuplicates = false
+            if (s.askEveryCatch && s.autoMode != 3) s.askEveryCatch = false
+            if (s.askEveryCatch) s.askMe = false
+            if (s.askMe || s.askEveryCatch) s.autoReleaseDuplicates = false
         }
 
-        /** Writes all three fields of [choice]. */
+        /** Writes the mode, swap and question flags of [choice]. */
         fun apply(s: Settings, choice: CatchChoice) {
             s.autoMode = choice.autoMode
             s.autoReleaseDuplicates = choice.swap
             s.askMe = choice.ask
+            s.askEveryCatch = choice.askEvery
         }
     }
 }

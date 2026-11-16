@@ -120,9 +120,10 @@ class R19PAskMeTest {
     }
 
     @Test fun otherOptionsNeverAsk() {
-        for (c in CatchChoice.entries.filter { it != CatchChoice.ASK_ME }) {
+        for (c in CatchChoice.entries.filter { it != CatchChoice.ASK_ME && it != CatchChoice.ASK_EVERY }) {
             val s = state(); CatchChoice.apply(s.settings, c)
-            assertNull(c.name, Catching.plan(data, s, wild(16, 30)).ask)
+            val plan = Catching.plan(data, s, wild(16, 30))
+            assertNull(c.name, plan.ask); assertFalse(c.name, plan.askEvery)
         }
     }
 
@@ -134,7 +135,7 @@ class R19PAskMeTest {
         assertEquals(3, s.autoMode); assertFalse(s.autoReleaseDuplicates); assertTrue(s.askMe)
         assertEquals(CatchChoice.ASK_ME, CatchChoice.of(s))
         for (c in CatchChoice.entries) { val t = Settings(); CatchChoice.apply(t, c); assertEquals(c, CatchChoice.of(t)); assertEquals(c == CatchChoice.ASK_ME, t.askMe) }
-        assertEquals(listOf("Always catch", "Catch only new species", "Catch new species and better copies", "Defeat", "Ask me"), CatchChoice.entries.map { it.title })
+        assertEquals(listOf("Always catch", "Catch only new species", "Catch new species and better copies", "Defeat", "Ask me", "Ask on every catch"), CatchChoice.entries.map { it.title })
     }
 
     @Test fun normalizeKeepsWhatTheListShows() {

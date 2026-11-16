@@ -145,7 +145,7 @@ object CatchAskPopup {
         cmp.addView(sideCard(ctx, data, "Yours", m.yours, false, false, spriteDp), LinearLayout.LayoutParams(0, -2, 1f))
         col.addView(cmp, LinearLayout.LayoutParams(-1, -2))
         val gap = Ui.dp(ctx, 6)
-        val b1 = button(ctx, "Catch", "keep both", Style.PRIMARY, true, stacked = short) { onPick(AskChoice.CATCH) }
+        val b1 = button(ctx, "Catch", if (m.yours == null) "add to your collection" else "keep both", Style.PRIMARY, true, stacked = short) { onPick(AskChoice.CATCH) }
         val b2 = button(ctx, "Catch and replace", m.replaceSub, Style.SOFT, m.canReplace, stacked = short) { onPick(AskChoice.REPLACE) }
         val b3 = button(ctx, "Don't catch", "move on", Style.GREY, true, stacked = short) { onPick(AskChoice.DONT) }
         col.addView(b1, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 12) })
@@ -272,7 +272,8 @@ object CatchAskPlan {
             !allowed -> "a protected one stays"
             else -> "release your Lv ${yours.level} one"
         }
-        return Model("A better ${wild.name}!", wild, yours, levelUp, ivsUp, allowed, sub)
+        val title = if (better != null && !state.settings.askEveryCatch) "A better ${wild.name}!" else "Catch ${wild.name}?"
+        return Model(title, wild, yours, levelUp, ivsUp, allowed, sub)
     }
 
     fun levelText(mon: Mon): String = "Lv ${mon.level}"

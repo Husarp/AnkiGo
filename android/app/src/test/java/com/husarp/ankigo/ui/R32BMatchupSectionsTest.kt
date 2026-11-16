@@ -13,8 +13,9 @@ class R32BMatchupSectionsTest {
                 val expected = mapOf("weak" to all.weakTo, "resist" to all.resists, "immune" to all.immune, "strong" to all.strongAgainst)
                 for ((key, entries) in expected) {
                     val cell = sections.getValue(key)
-                    assertEquals(entries.filter { it.type in seen }, cell.entries)
-                    assertEquals(entries.filter { it.type !in seen }, cell.hidden)
+                    val revealed = if (key == "strong") emptySet() else seen
+                    assertEquals(entries.filter { it.type in revealed }, cell.entries)
+                    assertEquals(entries.filter { it.type !in revealed }, cell.hidden)
                 }
                 val defensive = sections.filterKeys { it != "strong" }.values
                 assertEquals(18, defensive.sumOf { it.entries.size + it.unknownCount })

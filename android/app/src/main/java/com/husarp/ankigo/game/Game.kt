@@ -227,13 +227,13 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
                 state.defeats++
                 Economy.onWin(state, events, bondLevel, rng)
                 plan.duplicate?.let { events += GameEvent.Duplicate(battle.wild.name, battle.wild.level, it.bestLevel, DuplicateResult.DEFEATED) }
-                if (plan.ask != null) askToCatch(battle, now, events) // R19-P (PLAN 281): paid as a defeat; "Catch / Catch and replace / Don't catch" waits
+                if (plan.ask != null || plan.askEvery) askToCatch(battle, now, events) // R19-P (PLAN 281): paid as a defeat; "Catch / Catch and replace / Don't catch" waits
             }
         }
     }
 
     /**
-     * R19-P (PLAN 281): "Ask me" met a better copy of a species you own. The fight is over and paid (the Defeated event, XP, coins), the wild
+     * R19-P (PLAN 281): A catch option needs the player’s answer. The fight is over and paid (the Defeated event, XP, coins), the wild
      * Pokémon itself is kept in [GameState.asks] until [answerCatch]; the Defeated event says so ([GameEvent.Defeated.ask]) for the screens.
      */
     private fun askToCatch(battle: Battle, now: Long, events: MutableList<GameEvent>) {
