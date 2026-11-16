@@ -53,8 +53,9 @@ class R23FDownloadsTest {
 
     @Test fun prefetchLoadsSavedBackgroundAndMissingBackgroundNeverDownloads() {
         val ctx = context()
-        val types = listOf(Type.WATER)
-        val seed = (0..1000).first { BackdropCatalog.pick(types, it, false).source == com.husarp.ankigo.ui.BackdropSource.SHOWDOWN }
+        val types = listOf(Type.GHOST)
+        val bundled = ctx.assets.list("backdrops").orEmpty().toSet()
+        val seed = (0..1000).first { Backdrops.fileName(BackdropCatalog.pick(types, it, false)) !in bundled }
         val bg = BackdropCatalog.pick(types, seed, false)
         png(Backdrops.file(Sprites.dir(ctx), bg))
         var asked = 0

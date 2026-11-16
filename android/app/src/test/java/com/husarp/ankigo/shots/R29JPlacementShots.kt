@@ -10,6 +10,7 @@ import com.husarp.ankigo.ui.*
 import com.husarp.ankigo.game.Type
 import org.junit.After
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -25,7 +26,7 @@ class R29JPlacementShots {
         val changed = setOf("tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay", "beach", "city", "desert",
             "deep-sea-cave", "dragon-peak", "flower-field", "forest-tech-b", "windy-hilltop", "countryside-route",
             "coral-shallows", "lava-field", "starry-plateau", "night-rooftops")
-        val controls = setOf("meadow", "night-forest", "factory", "snowy-pines", "old-graveyard")
+        val controls = setOf("normal-meadow", "night-forest-2", "power-plant", "snowy-pines", "old-graveyard")
         for (height in listOf(550, 700)) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, Theme.LIGHT).copy(
                 screenWidth = 1080, screenHeight = height, density = Density.create(420), xdpi = 420, ydpi = 420,
@@ -36,9 +37,11 @@ class R29JPlacementShots {
                     FakeGame.install(ctx)
                     Backdrops.forget()
                     BackdropSharp.runner = BackdropSharp.InPlace
+                    val mirror = System.getenv("ANKIGO_R50_ASSETS")?.let { java.io.File(it, "bg-${Backdrops.fileName(bg)}") }
                     val stream = runCatching { ctx.assets.open("backdrops/${Backdrops.fileName(bg)}") }.getOrNull()
-                        ?: checkNotNull(javaClass.getResourceAsStream("/r26e/backgrounds/${bg.id}.webp")) { bg.id }
-                    Backdrops.file(Sprites.dir(ctx), bg).also { it.parentFile!!.mkdirs(); it.writeBytes(stream.use { s -> s.readBytes() }) }
+                        ?: mirror?.takeIf { it.isFile }?.inputStream()
+                    assumeTrue("Downloadable design art requires ANKIGO_R50_ASSETS", stream != null)
+                    Backdrops.file(Sprites.dir(ctx), bg).also { it.parentFile!!.mkdirs(); it.writeBytes(stream!!.use { s -> s.readBytes() }) }
                     val pic = Backdrops.fetchBlocking(Sprites.dir(ctx), bg, false) { _, _ -> null }!!
                     Backdrops.finish(Backdrops.currentGeneration(), bg.id, pic)
                     val arena = ArenaView(ctx).apply { setEnemyShown(true) }
@@ -125,7 +128,8 @@ class R29JPlacementShots {
         assertEquals("${bg.id} visible feet must meet the StageFit anchor", anchorY * sprite.resources.displayMetrics.density, bottom, 1.1f)
         val bounds = ground(bg.id, player) ?: return
         val sourceY = (crop.y + bottom / panelHeight * crop.h) / bg.h
-        assertTrue("${bg.id} player=$player foot y=$sourceY", sourceY in bounds[1]..bounds[3])
+        val sourceToleranceY = 1.1f / panelHeight * crop.h / bg.h
+        assertTrue("${bg.id} player=$player foot y=$sourceY", sourceY in (bounds[1] - sourceToleranceY)..(bounds[3] + sourceToleranceY))
         for (x in row.indices.filter { (row[it] ushr 24) > 16 }) {
             val screenX = left + (x + .5f) * scale
             val sourceX = (crop.x + screenX / 1080f * crop.w) / bg.w

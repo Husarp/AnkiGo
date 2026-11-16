@@ -68,7 +68,7 @@ class R38YBattleLogTest {
         assertEquals(listOf("A wild Duck appeared · Lv 25", "Old move", "Battle alert · New alert", "New effect · HP 60/60"), old.entries.map { it.text })
     }
 
-    @Test fun successfulHealingItemsKeepTheirExistingTextEvenWhenTheyEmitNoBattleEvent() {
+    @Test fun successfulHealingItemsKeepTheirMessageAndLogTheFreeAttackSeparately() {
         val data = TestData.world()
         val state = TestData.state(data, 25, 20, listOf("tackle"))
         val g = Game(data, state)
@@ -77,11 +77,13 @@ class R38YBattleLogTest {
         Economy.give(state, "potion")
         val result = g.useItem("potion", state.main!!.uid)
         assertTrue(result.ok)
-        assertEquals(result.message, result.battleMessage)
+        assertTrue(result.message.startsWith(result.battleMessage!!))
         val b = log()
         b.message(result.battleMessage!!)
         b.feed(result.events)
-        assertTrue(b.battles.first().entries.any { it.text == result.message })
+        assertTrue(b.battles.first().entries.any { it.text == result.battleMessage })
+        assertTrue(b.battles.first().entries.any { it.text.contains("one free move") })
+        assertEquals(1, result.events.filterIsInstance<GameEvent.Attack>().count { !it.byPlayer })
         assertFalse(b.battles.first().entries.any { it.text.startsWith("Battle alert") })
     }
 

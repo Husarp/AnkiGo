@@ -140,9 +140,9 @@ class EffectKindsTest {
         val start = main.hp
         val d = round(main, Battle(mon(150, 60, "splash"), Tier.NORMAL), acts = false).fx(EffectKind.DRAIN).single()
         assertTrue(d.onPlayer); assertEquals(main.hp - start, d.amount); assertTrue(d.amount in 1..10)
-        // a full-HP user gains nothing: the amount is what really came back
+        // A full-HP user gains nothing and emits no heal event.
         val full = mon(1, 20, "absorb")
-        assertEquals(0, round(full, Battle(mon(150, 60, "splash"), Tier.NORMAL), acts = false).fx(EffectKind.DRAIN).single().amount)
+        assertTrue(round(full, Battle(mon(150, 60, "splash"), Tier.NORMAL), acts = false).fx(EffectKind.DRAIN).isEmpty())
 
         val rat = mon(19, 20, "doubleedge"); val h0 = rat.hp
         val r = round(rat, Battle(mon(150, 60, "splash"), Tier.NORMAL), acts = false).fx(EffectKind.RECOIL).single()

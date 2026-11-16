@@ -72,7 +72,7 @@ class R21AShots {
         }
         val bitmap = android.graphics.Bitmap.createBitmap(40, 40, android.graphics.Bitmap.Config.ARGB_8888)
         val automatic = BattleFrameDrawable(BattleFrameStyle.AUTOMATIC, 2).apply {
-            scenery = "beach"; element = "water"; setBounds(0, 0, 40, 40)
+            scenery = "sandbar-isle"; element = "water"; setBounds(0, 0, 40, 40)
         }
         automatic.draw(android.graphics.Canvas(bitmap))
         assertEquals(0xFFAB9264.toInt(), bitmap.getPixel(20, 0))
@@ -125,7 +125,7 @@ class R21AShots {
         setField(backdrop, "shown", BackdropCatalog.byId("reef-bay"))
         layout()
         val frame = getField(panel, "frameDrawable") as BattleFrameDrawable
-        assertEquals("water", frame.element)
+        assertEquals("water", frame.element?.lowercase())
         setField(backdrop, "shown", BackdropCatalog.byId("fire-savanna"))
         layout()
         assertEquals("fire", frame.element)

@@ -331,8 +331,8 @@ internal object AbilityText {
         "angerpoint" to "Once per fight, raises Attack by 2 stages (×2 from neutral) after a single opposing move removes at least a quarter of its max HP.",
         "merciless" to "Deals 1.5× move damage against poisoned or badly poisoned opponents.",
         "toxicdebris" to "After taking physical-move damage, poisons the attacker if it can be poisoned.",
-        "plus" to "Special Attack ×1.5 while another conscious teammate has Plus or Minus. Gear Up raises its Attack and Special Attack by 1 stage (×1.5 from neutral); Magnetic Flux raises its Defense and Special Defense by 1 stage (×1.5 from neutral).",
-        "minus" to "Special Attack ×1.5 while another conscious teammate has Plus or Minus. Gear Up raises its Attack and Special Attack by 1 stage (×1.5 from neutral); Magnetic Flux raises its Defense and Special Defense by 1 stage (×1.5 from neutral).",
+        "plus" to "Special Attack ×1.5 with a conscious Plus/Minus teammate. Gear Up raises Attack and Special Attack by 1 stage (×1.5 from neutral); Magnetic Flux raises Defense and Special Defense by 1 stage (×1.5 from neutral).",
+        "minus" to "Special Attack ×1.5 with a conscious Plus/Minus teammate. Gear Up raises Attack and Special Attack by 1 stage (×1.5 from neutral); Magnetic Flux raises Defense and Special Defense by 1 stage (×1.5 from neutral).",
     )
     private val ADAPTED: List<Row> = NO_EFFECT_GROUPS.values.flatMap { pairs ->
         pairs.split(' ').map { pair ->
@@ -361,7 +361,7 @@ internal object AbilityText {
     val noEffectByReason: Map<String, Set<String>> get() = emptyMap()
 
     /** The sentence for the ability [name] ("Static", "keeneye" ...), or null when it is no ability of the game. */
-    fun of(name: String?): String? = name?.let { BY_ID[BattleView.normalizeAbility(it)]?.text?.let { text -> if (text.contains(" stage")) "$text Temporary for this fight; stages stack up to ±6." else text } }
+    fun of(name: String?): String? = name?.let { BY_ID[BattleView.normalizeAbility(it)]?.text?.let { text -> if (text.contains(" stage")) "$text Stages last this fight (±6)." else text } }
 
     /** The display name of the ability with the id [id] ("keeneye" -> "Keen Eye"), or null when it has no row. */
     fun name(id: String): String? = BY_ID[id]?.name

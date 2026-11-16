@@ -56,7 +56,7 @@ class R804Shots {
         BattleShotKit.reset()
     }
 
-    private val ids = listOf("forest", "mine", "canyon", "night-forest")
+    private val ids = listOf("forest-tech-b", "mine", "canyon", "night-forest-2")
     private val noGet: HttpGet = { _, _ -> null }
 
     // ---- helpers -----------------------------------------------------------------------------------------------------------
@@ -256,6 +256,7 @@ class R804Shots {
         val ctx = setUp()
         val arena = ArenaView(ctx)
         arena.configure(0f, false, true)
+        arena.refreshXpVisibility() // configure is unchanged at these defaults; build the real cards before comparing modes.
         val platW: View = field(arena, "platEnemy")
         val wild: View = field(arena, "enemyHolder")
         val player: View = field(arena, "playerHolder")
@@ -270,7 +271,7 @@ class R804Shots {
         assertEquals("the big scale of the plain arena", 8f, arena.enemySprite.scaleDp, 0f)
 
         // a picture appears: a re-layout is asked for at once, and then the Pokémon stand on its spots
-        show(ctx, arena, bg("forest"))
+        show(ctx, arena, bg("forest-tech-b"))
         assertTrue("layout asked for", arena.isLayoutRequested)
         assertEquals(View.GONE, platW.visibility)
         layOut(arena, 380, 300)
@@ -330,7 +331,7 @@ class R804Shots {
         arena.setCompact(true); arena.setStudyStrip(true)
         val wildCard: View = field(arena, "enemyBlock")
         val playerCard: View = field(arena, "playerCard")
-        show(ctx, arena, bg("forest"))
+        show(ctx, arena, bg("forest-tech-b"))
         layOut(arena, 412, 146)
         val p = arena.stagePlanNow!!
         // R9 D1: a 146 dp strip gets small boxes from the start (60.5 % of the design size), still laid out at the design width; R9 D12: not under
@@ -360,7 +361,7 @@ class R804Shots {
         val ctx = setUp()
         val arena = ArenaView(ctx)
         arena.configure(0f, false, true)
-        show(ctx, arena, bg("forest"))
+        show(ctx, arena, bg("forest-tech-b"))
         layOut(arena, 412, 700)
         val p = arena.stagePlanNow!!
         assertTrue("a tall arena draws the cards bigger", p.k > 1f)
@@ -487,7 +488,7 @@ class R804Shots {
         val ctx = setUp()
         val arena = ArenaView(ctx)
         arena.configure(0f, false, true)
-        show(ctx, arena, bg("forest"))
+        show(ctx, arena, bg("forest-tech-b"))
         layOut(arena, 380, 300)
         val p0 = arena.stagePlanNow!!
         assertFalse("nothing asked for after a layout", arena.isLayoutRequested)

@@ -124,10 +124,14 @@ class R38YShots {
                 val card = ConditionList(c, 8f).apply { buildMark(mark, "Pikachu", Ui.dp(c, 328), Ui.dp(c, 200), Stats(200, 156, 101, 89, 117, 73)) {} }
                 val effect = texts(card).single { it.tag == "condition-effect" }
                 val values = ConditionStat.values(mark, Stats(200, 156, 101, 89, 117, 73))
+                val styled = effect.text as Spanned
+                assertTrue("the stat name keeps its icon and color", styled.getSpans(0, styled.length, StatProse.NameSpan::class.java).isNotEmpty())
                 assertTrue(effect.text.toString().startsWith(ConditionExplanation.effect(mark)))
                 if (values != null) {
                     assertEquals(ConditionExplanation.effect(mark) + "\n" + values, effect.text.toString())
-                    val span = (effect.text as Spanned).getSpans(0, effect.text.length, ForegroundColorSpan::class.java).single()
+                    val span = styled.getSpans(0, styled.length, ForegroundColorSpan::class.java).single()
+                    assertEquals(effect.text.toString().indexOf(values), styled.getSpanStart(span))
+                    assertEquals(values.length, styled.getSpanEnd(span) - styled.getSpanStart(span))
                     assertEquals(StatPill.ink(stage > 0, theme == Theme.DARK), span.foregroundColor)
                 }
                 column.addView(card, LinearLayout.LayoutParams(-1, -2).also { it.bottomMargin = Ui.dp(c, 6) })

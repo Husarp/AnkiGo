@@ -33,7 +33,7 @@ class R30QWildInfoShots {
     }
     private fun locked(scene: View) {
         val text = texts(scene)
-        for (label in listOf("Stats", "Base stats", "Matchups", "Bond", "Info", "Evolution", "?"))
+        for (label in listOf("Stats", "Base stats", "Matchups", "Bond", "Info", "Evolution"))
             assertFalse("Hidden $label in $text", text.any { it.equals(label, true) || it.startsWith("$label ·", true) })
     }
 
@@ -43,6 +43,7 @@ class R30QWildInfoShots {
             locked(scene)
             assertTrue(texts(scene).any { it.equals("Moves", true) })
             assertTrue(texts(scene).contains("???"))
+            assertTrue(texts(scene).contains("?"))
         }
     }
 

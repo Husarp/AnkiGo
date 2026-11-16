@@ -41,7 +41,8 @@ class R24DStatsShots {
             val picker = descendants(screen).single { it.contentDescription == "${metric.label}, tap to change the chart" }
             val content = picker.parent as LinearLayout
             val index = content.indexOfChild(picker)
-            assertEquals("summary precedes controls when available", if (empty) 2 else 3, index)
+            assertEquals("summary precedes controls when available", if (empty) 3 else 4, index)
+            assertTrue(descendants(content.getChildAt(2)).any { it.contentDescription == "Today’s stats, all decks" })
             assertEquals(Ui.dp(ctx, 14), (picker.layoutParams as LinearLayout.LayoutParams).topMargin)
             if (!empty) assertTrue(descendants(content.getChildAt(index - 1)).any { it is TextView && it.text.contains(if (metric == ChartMetric.RETENTION) "%" else "100") })
             assertTrue("filters follow picker", content.getChildAt(index + 1) is com.husarp.ankigo.ui.StatsSheets.FlowLayout)

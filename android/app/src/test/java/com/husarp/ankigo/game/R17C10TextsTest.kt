@@ -65,14 +65,14 @@ class R17C10TextsTest {
         assertFalse(b, b.contains("takes one turn"))
         assertTrue(b, b.contains("a switch waits for your answer if a card is showing"))
         assertTrue(b, b.contains("one free move against the new Main"))
-        assertTrue(b, b.contains("takes effect immediately, then gives the wild Pokémon one free move"))
+        assertTrue(b, b.contains("one free move right after item use, even before your first answer"))
         assertTrue(b, b.contains("Switching uses no answer slot and keeps your round progress"))
         assertTrue(b, b.contains("the next battle waits for Continue"))
         assertTrue(b, b.contains("The OK button on a new card") && b.contains("With only OK answers, neither moves"))
         assertTrue(b, b.contains("attacks blocked by types or abilities") && b.contains("Struggle"))
         val healing = text(GameGuide.HEALING)
         assertFalse(healing, healing.contains("takes one turn"))
-        assertTrue(healing, healing.contains("gives the wild Pokémon a free move afterward"))
+        assertTrue(healing, healing.contains("gives the wild Pokémon one free move afterward"))
     }
 
     @Test fun noGuideSentenceIsEmptyOrUnfinished() {

@@ -245,17 +245,17 @@ class R4NavShots {
             val team = TeamPage(ctx, NoHost)
             pageScreen(ctx, team)
             call(team, "render")
-            assertTrue("no trainer card on the Pokémon tab", texts(team.root).none { it.startsWith("Trainer level") })
+            assertTrue("no trainer card on the Pokémon tab", texts(team.root).none { it.startsWith("Level ") })
             assertTrue(texts(team.root).none { it.startsWith("Achievements") })
 
             val p = StatsPage(ctx, NoHost)
             val screen = pageScreen(ctx, p)
             call(p, "render")
-            assertTrue(texts(p.root).any { it.startsWith("Trainer level") })
+            assertTrue(texts(p.root).any { it.startsWith("Level ") })
             assertTrue(texts(p.root).any { it.startsWith("XP ") })
             tap(findText(p.root) { it.startsWith("Achievements") }!!)
             call(p, "render")
-            assertTrue("the Achievements section is showing", texts(p.root).none { it.startsWith("Trainer level") })
+            assertTrue("the Achievements section is showing", texts(p.root).none { it.startsWith("Level ") })
             screen
         }
     }

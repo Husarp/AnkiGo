@@ -28,7 +28,7 @@ class R26JSettingsShots {
                 if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
             }
             walk(page)
-            assertEquals(51, images.size)
+            assertEquals(36, images.size)
             assertEquals(0, requests)
             var firstLoaded = false
             var lastLoaded = false
@@ -105,11 +105,12 @@ class R26JSettingsShots {
         }
     }
 
-    @Test fun sharpBundledPreviews() {
+    @Test fun compactBundledPreviewsKeepTheirSceneAspectRatio() {
         for (bg in BackdropCatalog.ALL) {
             paparazzi.context.assets.open("backdrop-thumbs/${bg.id}.webp").use {
                 val bitmap = android.graphics.BitmapFactory.decodeStream(it)!!
-                assertTrue("${bg.id} is sharp", bitmap.width >= 600)
+                assertTrue("${bg.id} stays within the compact preview budget", bitmap.width in 1..256 && bitmap.height in 1..172)
+                assertEquals(bg.id, bg.w.toFloat() / bg.h, bitmap.width.toFloat() / bitmap.height, .02f)
             }
         }
     }

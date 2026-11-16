@@ -23,7 +23,7 @@ class R28OBeachShots {
         }
     }
     @Test fun beachesInBattle() {
-        val ids = listOf("tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay", "coral-shallows")
+        val ids = listOf("sandbar-isle", "reef-bay")
         for (id in ids) for (theme in Theme.entries) for (species in listOf("eevee", "snorlax")) {
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, theme))
             val ctx = Shots.files(paparazzi.context)

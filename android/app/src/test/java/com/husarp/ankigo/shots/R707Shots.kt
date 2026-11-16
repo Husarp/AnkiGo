@@ -11,6 +11,7 @@ import com.husarp.ankigo.ui.BackdropCatalog
 import com.husarp.ankigo.ui.AppPrefs
 import com.husarp.ankigo.ui.BattlePanelView
 import org.junit.After
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -142,11 +143,13 @@ class R707Shots {
         FakeGame.install(ctx)
         // Select an unbundled scene explicitly and remove any copied screenshot cache.
         val wild = GameRepo.state!!.battle!!.wild
+        wild.species = 92 // Ghost scenes include downloadable art; both Water scenes are now bundled.
+        val bundled = ctx.assets.list("backdrops").orEmpty().toSet()
         wild.uid = (0..1000).map { "remote-$it" }.first { uid ->
             val types = GameRepo.data!!.sp(wild.species).types
-            BackdropCatalog.pick(types, BackdropCatalog.seed(uid)).source == com.husarp.ankigo.ui.BackdropSource.SHOWDOWN
+            Backdrops.fileName(BackdropCatalog.pick(types, BackdropCatalog.seed(uid))) !in bundled
         }
-        assertEquals(com.husarp.ankigo.ui.BackdropSource.SHOWDOWN, wildPicture().source)
+        assertFalse(Backdrops.fileName(wildPicture()) in bundled)
         Backdrops.file(Sprites.dir(ctx), wildPicture()).parentFile!!.deleteRecursively()
         var asked = 0
         Backdrops.get = { _, _ -> asked++; null }

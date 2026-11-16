@@ -169,8 +169,26 @@ class ItemTurnTest {
             assertEquals(wildHp, battle.wild.hp)
             assertEquals(if (item == "berry-juice") 4 else 1,
                 battle.field.player[if (item == "berry-juice") "heal.regen/t0" else "heal.pending/t0"])
-            assertTrue(r.events.none { it is GameEvent.Effect && it.kind in setOf(EffectKind.HEAL, EffectKind.STATUS_DAMAGE) })
+            val heals = r.events.of<GameEvent.Effect>().filter { it.kind == EffectKind.HEAL }
+            assertEquals(if (item == "berry-juice") listOf(max / 10) else emptyList<Int>(), heals.map { it.amount })
+            assertTrue(heals.all { r.events.indexOf(it) < r.events.indexOf(hit) })
+            assertTrue(r.events.drop(r.events.indexOf(hit)).none { it is GameEvent.Effect && it.kind in setOf(EffectKind.HEAL, EffectKind.STATUS_DAMAGE) })
         }
+    }
+
+    @Test fun theImmediateFreeAttackConsumesTheOneHitSnackShield() {
+        val shielded = game(rounds = 0)
+        Economy.give(shielded.state, "shalour-sable")
+        val result = shielded.useItem("shalour-sable", "t0")
+        assertTrue(result.ok)
+        val hit = result.events.of<GameEvent.Attack>().single()
+        assertFalse(hit.byPlayer)
+        assertTrue(result.events.of<GameEvent.Effect>().any { it.text.contains("weakened the hit") })
+        assertFalse(shielded.state.battle!!.player.volatiles.containsKey("snack.shield"))
+        val plain = game(rounds = 0).useItem("potion", "t0").events.of<GameEvent.Attack>().single()
+        assertTrue("the shield reduces this free attack", hit.damage < plain.damage)
+        assertEquals(0, shielded.state.battle!!.rounds)
+        assertEquals(0, shielded.state.battle!!.answers)
     }
 
     @Test fun aResultWaitingForContinueGivesNoAttack() {

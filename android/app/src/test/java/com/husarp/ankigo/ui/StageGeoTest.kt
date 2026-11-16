@@ -67,7 +67,7 @@ class StageGeoTest {
     }
 
     @Test fun aReducedBoxIsUsedUnderTheScaleItsOptionalPartsAreReadableAt() {
-        val st = fit("forest", 412f, 146f)
+        val st = fit("forest-tech-b", 412f, 146f)
         // heights: full 75, reduced 65 (the XP number gone): the plan says which it drew, and a reduced plan used the short height
         val p = StageGeo.plan(412f, 146f, st, 160f, 59f, 160f, 75f, 1f, 1f, 0f, 0f, null, null, 60f, 65f, 10.5f, 8.5f)
         assertTrue("reduced in the strip (k ${p.k})", p.reduced)
@@ -75,7 +75,7 @@ class StageGeoTest {
         assertEquals(65f * p.k, p.playerCard.h, 0.01f)
         assertEquals(60f * p.k, p.wildCard.h, 0.01f)
         // a roomy panel keeps the full box
-        val big = StageGeo.plan(412f, 640f, fit("forest", 412f, 640f), 160f, 59f, 160f, 75f, 1.37f, 1f, 8f, 0f, null, null, 60f, 65f, 10.5f, 8.5f)
+        val big = StageGeo.plan(412f, 640f, fit("forest-tech-b", 412f, 640f), 160f, 59f, 160f, 75f, 1.37f, 1f, 8f, 0f, null, null, 60f, 65f, 10.5f, 8.5f)
         assertFalse(big.reduced)
         assertEquals(75f * big.k, big.playerCard.h, 0.01f)
     }
@@ -296,7 +296,7 @@ class StageGeoTest {
     }
 
     @Test fun theSpriteFramesStandOnTheFeetAtEveryScale() {
-        val st = fit("forest", 412f, 265f)
+        val st = fit("forest-tech-b", 412f, 265f)
         val p = StageGeo.plan(412f, 265f, st, 150f, 64f, 156f, 70f, 1f, wildArt = fullArt, playerArt = fullArt)
         assertEquals(st.playerFeetX, p.playerSprite.x + p.playerSprite.w / 2f, 0.01f)
         assertEquals(st.playerFeetY, p.playerSprite.bottom, 0.01f)

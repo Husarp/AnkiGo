@@ -33,8 +33,8 @@ class R32BShots {
         assertFalse(views(stats).filterIsInstance<TextView>().any { it.text.contains("Nature") || it.text.contains("10%") })
         val training = DetailSections.training(ctx, mon, false)
         val text = views(training).filterIsInstance<TextView>()
-        assertEquals(Ui.c(ctx, R.color.ag_red), text.single { it.text == "Special Attack −10%" }.currentTextColor)
-        assertEquals(StatPill.ink(true, StatPill.isDark(ctx)), text.single { it.text == "Attack +10%" }.currentTextColor)
+        assertEquals(Ui.c(ctx, R.color.ag_red), text.single { it.text.toString() == "Special Attack −10%" }.currentTextColor)
+        assertEquals(StatPill.ink(true, StatPill.isDark(ctx)), text.single { it.text.toString() == "Attack +10%" }.currentTextColor)
         val effect = NatureChanges.effectText(ctx, "+Atk −SpA") as android.text.Spanned
         val spans = effect.getSpans(0, effect.length, android.text.style.ForegroundColorSpan::class.java)
         assertEquals(Ui.c(ctx, R.color.ag_red), spans.single { effect.getSpanStart(it) == 5 }.foregroundColor)

@@ -115,8 +115,8 @@ class R19AInfoBoxTest {
     }
 
     @Test fun theBiggerStartIsAbout13TimesTodaysFullSizeAndNothingElseMoves() {
-        val off = plan("forest", 412f, 692f)
-        val on = plan("forest", 412f, 692f, InfoBoxPrefs.BIG)
+        val off = plan("forest-tech-b", 412f, 692f)
+        val on = plan("forest-tech-b", 412f, 692f, InfoBoxPrefs.BIG)
         assertEquals("today's full size in the Battle tab", 1.37f, off.k, 0.01f)
         assertTrue("about 1.3 times it (${on.k})", on.k > off.k * 1.15f && on.k <= off.k * InfoBoxPrefs.BIG + 0.01f)
         // where the boxes may shrink to before a Pokémon does is unchanged: only the start is higher

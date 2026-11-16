@@ -11,7 +11,16 @@ import kotlin.math.min
 
 // ROUND 8 R8-02: the stage rule's crop, feet and frame sizes (port of docs/design/backgrounds-stage-r8.html), golden values + properties.
 class StageFitTest {
-    private fun bg(id: String) = BackdropCatalog.byId(id)!!
+    // Frozen geometry goldens stay independent of artwork removals/resizing; catalog properties below use the current set.
+    private fun fixture(id: String, w: Int, h: Int, px: Float, py: Float, wx: Float, wy: Float, ps: Float = .44f, ws: Float = .32f) =
+        Backdrop(id, BackdropSource.OWN, "webp", w, h, StandPoint(px, py, ps), StandPoint(wx, wy, ws), crisp = true, dark = false)
+    private val goldens = listOf(
+        fixture("fixture-forest", 753, 500, .30f, .78f, .68f, .50f),
+        fixture("fixture-jungle", 1264, 848, .30f, .83f, .85f, .625f),
+        fixture("fixture-night-forest", 1264, 848, .35f, .78f, .74f, .59f),
+        fixture("fixture-canyon", 1375, 768, .33f, .74f, .73f, .47f, .46f, .33f),
+    ).associateBy { it.id }
+    private fun bg(id: String) = goldens[id] ?: BackdropCatalog.byId(id)!!
 
     private val shapes = listOf(0.5f, 0.6f, 1f, 1.25f, 1.4f, 2.2f, 2.6f, 3.5f)
 
@@ -52,26 +61,26 @@ class StageFitTest {
     }
 
     @Test fun goldenForest() =
-        golden(stage("forest", 1400f, 1000f), 1f, 26.50f, 0f, 700f, 500f, false, 398.8f, 780.0f, 440.0f, 971.1f, 500.0f, 320.0f)
+        golden(stage("fixture-forest", 1400f, 1000f), 1f, 26.50f, 0f, 700f, 500f, false, 398.8f, 780.0f, 440.0f, 971.1f, 500.0f, 320.0f)
 
     // round 9 D10: the catalog lost its 316 x 212 pixel-grid pictures and the wide set; these goldens come from a port of the page's maths (checked
     // against goldenForest and the old night-alley zoomed-window golden before the drop), so they pin StageFit for the pictures that are left.
     @Test fun goldenForestWideShrunk() =
-        golden(stage("forest", 2600f, 1000f), 1f, -8.56f, 106.30f, 770.12f, 296.20f, true, 791.56f, 957.80f, 742.74f, 1757.60f, 485.15f, 540.18f)
+        golden(stage("fixture-forest", 2600f, 1000f), 1f, -8.56f, 106.30f, 770.12f, 296.20f, true, 791.56f, 957.80f, 742.74f, 1757.60f, 485.15f, 540.18f)
 
     @Test fun goldenJungleTallShrunk() =
-        golden(stage("jungle", 600f, 1000f), 1f, 171.44f, -459.20f, 1059.84f, 1766.40f, true, 117.62f, 658.42f, 211.23f, 511.19f, 560.01f, 153.62f)
+        golden(stage("fixture-jungle", 600f, 1000f), 1f, 171.44f, -459.20f, 1059.84f, 1766.40f, true, 117.62f, 658.42f, 211.23f, 511.19f, 560.01f, 153.62f)
 
     @Test fun goldenNightForestZoomedWindow() =
-        golden(stage("night-forest", 1250f, 1000f, 0.72f), 1f, 234.64f, 161.92f, 857.60f, 686.08f, false, 302.82f, 728.08f, 543.84f, 1021.34f, 493.24f, 395.52f)
+        golden(stage("fixture-night-forest", 1250f, 1000f, 0.72f), 1f, 234.64f, 161.92f, 857.60f, 686.08f, false, 302.82f, 728.08f, 543.84f, 1021.34f, 493.24f, 395.52f)
 
     @Test fun goldenCanyon() =
-        golden(stage("canyon", 2200f, 1000f), 1f, 0.00f, 133.94f, 1375.00f, 625.00f, false, 726.00f, 695.01f, 565.25f, 1606.00f, 363.23f, 405.50f)
+        golden(stage("fixture-canyon", 2200f, 1000f), 1f, 0.00f, 133.94f, 1375.00f, 625.00f, false, 726.00f, 695.01f, 565.25f, 1606.00f, 363.23f, 405.50f)
 
     // ---------------------------------------------------------------- edge cases
 
     @Test fun noSizeNoStage() {
-        val b = bg("forest")
+        val b = bg("fixture-forest")
         assertNull(StageFit.fit(b, 0f, 100f))
         assertNull(StageFit.fit(b, 100f, 0f))
         assertNull(StageFit.fit(b, -5f, 100f))
@@ -84,8 +93,8 @@ class StageFitTest {
 
     @Test fun theUnitDoesNotMatter() {
         // the same shape in px, in dp or tiny: crop is in picture pixels, positions scale with the panel
-        val a = stage("forest", 1400f, 1000f)
-        val b = stage("forest", 14f, 10f)
+        val a = stage("fixture-forest", 1400f, 1000f)
+        val b = stage("fixture-forest", 14f, 10f)
         assertEquals(a.cropX, b.cropX, 0.001f)
         assertEquals(a.cropW, b.cropW, 0.001f)
         assertEquals(a.playerFeetX / 100f, b.playerFeetX, 0.001f)
@@ -166,7 +175,7 @@ class StageFitTest {
 
     @Test fun tallPanelsShowingABandDoNotBlowTheSpritesUp() {
         // jungle at 600x1000 is a band: the frame stays the picture's own share (clamp scales with ih / cropH)
-        val s = stage("jungle", 600f, 1000f)
+        val s = stage("fixture-jungle", 600f, 1000f)
         assertTrue(s.shrunk)
         assertTrue(s.playerFrame / 1000f < 0.30f)
         assertEquals(0.44f * 848f / s.cropH * 1000f, s.playerFrame, 0.05f)
@@ -193,7 +202,7 @@ class StageFitTest {
 
     @Test fun sameRatioSameCrop() {
         // 600 x 1000 and 6 x 10: identical crop; shapes decide, not sizes
-        assertFalse(stage("forest", 600f, 1000f).cropW == 0f)
+        assertFalse(stage("fixture-forest", 600f, 1000f).cropW == 0f)
         val a = stage("mine", 600f, 1000f)
         val b = stage("mine", 6f, 10f)
         assertEquals(a.cropX, b.cropX, 0.001f)

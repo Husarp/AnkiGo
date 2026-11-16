@@ -56,7 +56,7 @@ class R9BoxesShots {
         BattleShotKit.reset()
     }
 
-    private val ids = listOf("forest", "mine", "canyon", "night-forest")
+    private val ids = listOf("forest-tech-b", "mine", "canyon", "night-forest-2")
     private val noGet: HttpGet = { _, _ -> null }
 
     @Suppress("UNCHECKED_CAST")
@@ -351,7 +351,7 @@ class R9BoxesShots {
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(if (host == "battle") Size.PHONE else Size.SPLIT, theme))
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx)
-            val sc = build(ctx, bg("forest"))
+            val sc = build(ctx, bg("forest-tech-b"))
             sc.arena.setNewTag(true); sc.arena.setEnemyCardShown(true)
             val frame = FrameLayout(ctx).apply { addView(sc.root, FrameLayout.LayoutParams(-1, -1)) }
             paparazzi.snapshot(frame, "r9-boxes-newtag-$host-${theme.name.lowercase()}", 1000)
@@ -376,7 +376,7 @@ class R9BoxesShots {
         paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.SPLIT, Theme.LIGHT))
         val ctx = Shots.files(paparazzi.context)
         FakeGame.install(ctx)
-        val sc = studyShort(ctx, bg("forest"))
+        val sc = studyShort(ctx, bg("forest-tech-b"))
         val frame = FrameLayout(ctx).apply { addView(sc.root, FrameLayout.LayoutParams(-1, -1)) }
         paparazzi.snapshot(frame, "r9-boxes-feed", 1000)
         val arena = sc.arena

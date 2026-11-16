@@ -193,17 +193,17 @@ class R803Shots {
     // ---- shots ---------------------------------------------------------------------------------------------------------------
 
     @Test fun crop() = shoot("r8-03-crop", listOf(Size.PHONE)) { ctx ->
-        val forest = scene(ctx, "forest"); val peak = scene(ctx, "dragon-peak", 0.5f); val path = scene(ctx, "canyon")
+        val forest = scene(ctx, "forest-tech-b"); val peak = scene(ctx, "flying-ridge", 0.5f); val path = scene(ctx, "canyon")
         sheet(ctx,
-            row(ctx, cell(ctx, "forest (pixel art, 753 x 500) crop 380 x 210", 380, 210, Panel(ctx, forest, 1f))),
-            row(ctx, cell(ctx, "dragon-peak (soft, file at half size) crop 380 x 250", 380, 250, Panel(ctx, peak, 1f))),
-            row(ctx, cell(ctx, "canyon (wide, soft) crop 380 x 160", 380, 160, Panel(ctx, path, 1f))),
+            row(ctx, cell(ctx, "forest-tech-b (pixel art, 512 x 343) crop 380 x 210", 380, 210, Panel(ctx, forest, 1f))),
+            row(ctx, cell(ctx, "flying-ridge (pixel art, file at half size) crop 380 x 250", 380, 250, Panel(ctx, peak, 1f))),
+            row(ctx, cell(ctx, "canyon (pixel art) crop 380 x 160", 380, 160, Panel(ctx, path, 1f))),
             row(ctx, cell(ctx, "no stage yet: cover crop 380 x 150", 380, 150, Panel(ctx, forest, 1f, withStage = false))),
         )
     }
 
     @Test fun shrunk() = shoot("r8-03-shrunk", listOf(Size.PHONE)) { ctx ->
-        val reef = scene(ctx, "beach"); val forest = scene(ctx, "forest"); val garden = scene(ctx, "jungle"); val temple = scene(ctx, "crystal-storm")
+        val reef = scene(ctx, "sandbar-isle"); val forest = scene(ctx, "forest-tech-b"); val garden = scene(ctx, "grass-glade"); val temple = scene(ctx, "crystal-storm")
         sheet(ctx,
             row(ctx, cell(ctx, "wide: beach 380 x 110, blur left + right, edges fade", 380, 110, Panel(ctx, reef, 1.35f))),
             row(
@@ -216,14 +216,14 @@ class R803Shots {
     }
 
     @Test fun scaling() = shoot("r8-03-scaling", listOf(Size.SPLIT)) { ctx ->
-        val reef = scene(ctx, "beach", 0.2f); val path = scene(ctx, "canyon", 0.15f)
+        val reef = scene(ctx, "sandbar-isle", 0.2f); val path = scene(ctx, "canyon", 0.15f)
         sheet(ctx,
-            row(ctx, cell(ctx, "crisp (beach): nearest-neighbour", 190, 120, Panel(ctx, reef, 0.35f)), cell(ctx, "smooth (canyon): filtered", 190, 120, Panel(ctx, path, 0.35f))),
+            row(ctx, cell(ctx, "crisp (beach): nearest-neighbour", 190, 120, Panel(ctx, reef, 0.35f)), cell(ctx, "crisp (canyon): nearest-neighbour", 190, 120, Panel(ctx, path, 0.35f))),
         )
     }
 
     @Test fun tint() = shoot("r8-03-tint", listOf(Size.PHONE)) { ctx ->
-        val day = scene(ctx, "meadow"); val night = scene(ctx, "night-forest", 0.5f); val dayWebp = scene(ctx, "factory", 0.5f); val dark2 = scene(ctx, "haunted-mansion", 0.5f)
+        val day = scene(ctx, "normal-meadow"); val night = scene(ctx, "night-forest-2", 0.5f); val dayWebp = scene(ctx, "power-plant", 0.5f); val dark2 = scene(ctx, "haunted-mansion", 0.5f)
         sheet(ctx,
             row(ctx, cell(ctx, "meadow (day): dusk in the dark theme, blur too", 380, 120, Panel(ctx, day, 1.35f))),
             row(ctx, cell(ctx, "night-forest (dark picture): never tinted", 380, 120, Panel(ctx, night, 1.4f))),
@@ -232,7 +232,7 @@ class R803Shots {
     }
 
     @Test fun jolt() = shoot("r8-03-jolt", listOf(Size.PHONE)) { ctx ->
-        val forest = scene(ctx, "forest"); val reef = scene(ctx, "beach")
+        val forest = scene(ctx, "forest-tech-b"); val reef = scene(ctx, "sandbar-isle")
         sheet(ctx,
             row(ctx, cell(ctx, "crop, jolt +6 % (down): blur shows at the top", 185, 200, Panel(ctx, forest, 1f, jolt = 0.06f)), cell(ctx, "crop, jolt -6 % (up)", 185, 200, Panel(ctx, forest, 1f, jolt = -0.06f))),
             row(ctx, cell(ctx, "shrunk, jolt +6 %", 380, 110, Panel(ctx, reef, 1.35f, jolt = 0.06f))),
@@ -240,7 +240,7 @@ class R803Shots {
     }
 
     @Test fun plain() = shoot("r8-03-plain", listOf(Size.SPLIT)) { ctx ->
-        val missing = bg("river") // no file: the load finds nothing and the gradient stays
+        val missing = bg("graveyard") // no file: the load finds nothing and the gradient stays
         sheet(ctx, row(ctx, cell(ctx, "no picture: the plain gradient", 380, 150, Panel(ctx, missing, 1f))))
     }
 
@@ -710,7 +710,7 @@ class R803Shots {
             paparazzi.unsafeUpdateConfig(deviceConfig = Shots.device(Size.PHONE, theme))
             val ctx = Shots.files(paparazzi.context)
             FakeGame.install(ctx)
-            val a = scene(ctx, "beach"); val bb = scene(ctx, "jungle")
+            val a = scene(ctx, "sandbar-isle"); val bb = scene(ctx, "grass-glade")
             preload(ctx, a); preload(ctx, bb)
             val wPx = Ui.dp(ctx, 380); val hPx = Ui.dp(ctx, 200)
             var calls = 0
@@ -730,7 +730,7 @@ class R803Shots {
     @Test fun aMissingPictureTurnsThePanelPlainAndAsksOnlyWhenAllowed() {
         val ctx = setUp(Theme.LIGHT)
         // Missing-file checks also need a clean negative-cache marker directory.
-        Backdrops.file(Sprites.dir(ctx), bg("river")).parentFile!!.deleteRecursively()
+        Backdrops.file(Sprites.dir(ctx), bg("graveyard")).parentFile!!.deleteRecursively()
         Backdrops.installBundled(ctx, Sprites.dir(ctx), bg("canyon"))
         assertFalse("Unbundled scenes must not install a missing/empty asset", Backdrops.file(Sprites.dir(ctx), bg("canyon")).exists())
         var asked = 0
@@ -738,7 +738,7 @@ class R803Shots {
         val back = ArenaBackdrop(ctx)
         val v = View(ctx).apply { background = back }
         val frame = FrameLayout(ctx).apply { addView(v, FrameLayout.LayoutParams(300, 200)) }
-        back.request(bg("river"), false)
+        back.request(bg("graveyard"), false)
         paparazzi.snapshot(frame, "r8-03-check-nodownload", 100)
         assertEquals("downloads off: no request", 0, asked)
         assertFalse(back.showsPicture)

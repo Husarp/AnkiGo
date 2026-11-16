@@ -42,7 +42,7 @@ class R36RShots {
             val ctx = setup(theme); val (_, stage) = bag(ctx, item)
             assertTrue(ShopCardKit.texts(stage).contains(Items.name(item)))
             if (item == "oran-berry") assertTrue("Feed berry…" in ShopCardKit.texts(stage))
-            if (item == "old-gateau") assertTrue(ShopCardKit.texts(stage).any { it.contains("without using the turn") })
+            if (item == "old-gateau") assertTrue(ShopCardKit.texts(stage).any { it.contains("without a wild attack") })
             paparazzi.snapshot(stage, "r-item-$item-${theme.name.lowercase()}", 300)
         }
     }

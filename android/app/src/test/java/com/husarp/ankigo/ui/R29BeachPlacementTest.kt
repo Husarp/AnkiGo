@@ -9,7 +9,7 @@ class R29BeachPlacementTest {
         listOf(.5f, .6f, 1f, 1.25f, 1.4f, 2.2f, 2.6f, 3.5f).map { it * 400f to 400f }
 
     @Test fun bothFeetStayInsideMeasuredDrySandAtEveryTestShape() {
-        for (id in listOf("tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay")) {
+        for (id in listOf("sandbar-isle", "reef-bay")) {
             val bg = BackdropCatalog.byId(id)!!
             assertTrue(bg.groundZoom >= 1f)
             for ((w, h) in hosts) for (zoom in listOf(.72f, 1f, 1.5f)) {
@@ -20,7 +20,7 @@ class R29BeachPlacementTest {
                 assertEquals(message, w / h, crop.w / crop.h, .001f)
                 assertFalse(message, BackdropDraw.layout(bg.w, bg.h, crop, 96, 64, w, h).anyFade)
                 // Feet are fixed by StageFit; map them back through ArenaBackdrop's actual artwork crop.
-                // This rectangle was measured on the four real PNGs; the offline Python check also samples sand pixels.
+                // The two retained beaches keep this stand region; this checks geometry, not sand pixel colors.
                 for ((fx, fy) in listOf(stage.playerFeetX to stage.playerFeetY, stage.wildFeetX to stage.wildFeetY)) {
                     val x = (crop.x + fx / w * crop.w) / bg.w
                     val y = (crop.y + fy / h * crop.h) / bg.h
@@ -32,7 +32,7 @@ class R29BeachPlacementTest {
     }
 
     @Test fun normalBattleWindowsKeepTheMeasuredZoomWithoutTallHostMagnification() {
-        for (id in listOf("tropical-cove", "coral-lagoon", "sandbar-isle", "reef-bay")) {
+        for (id in listOf("sandbar-isle", "reef-bay")) {
             val bg = BackdropCatalog.byId(id)!!
             for ((w, h) in listOf(360f to 200f, 412f to 230f)) {
                 val stage = StageFit.fit(bg, w, h)!!

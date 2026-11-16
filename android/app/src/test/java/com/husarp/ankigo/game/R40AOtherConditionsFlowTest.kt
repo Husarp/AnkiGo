@@ -163,7 +163,7 @@ class R40AOtherConditionsFlowTest {
 
     @Test fun snackConditionsModifyStatsAndTheNextHitThenShieldDisappears() {
         for ((item, key) in BattleItems.boosts) {
-            val g = R40AFlow.game(40)
+            val g = R40AFlow.game(40, wildMove = "splash")
             Economy.give(g.state, item)
             assertTrue(g.useItem(item, g.state.main!!.uid).ok)
             assertTrue(item, R40AFlow.board(g).all().any { it.key == key })
@@ -174,6 +174,7 @@ class R40AOtherConditionsFlowTest {
                 "casteliacone" -> assertEquals((base.spd * 1.25).toInt(), view.stats(true).spd)
                 "pewter-crunchies" -> assertEquals((base.spa * 1.25).toInt(), view.stats(true).spa)
             }
+            g.state.battle!!.wild.moves.apply { clear(); add("tackle") }
             val events = R40AFlow.round(g, 2)
             if (item == "shalour-sable") {
                 assertFalse(R40AFlow.board(g).all().any { it.key == key })

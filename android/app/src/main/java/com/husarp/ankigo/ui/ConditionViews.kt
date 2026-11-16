@@ -325,7 +325,7 @@ internal class ConditionList(ctx: Context, private val floorSp: Float) : FrameLa
         }, LinearLayout.LayoutParams(Ui.dp(context, 20), Ui.dp(context, 20)).also { it.marginEnd = Ui.dp(context, 8) })
         title.addView(label(name, 15f, context.getColor(R.color.ag_text), 900))
         col.addView(title, LinearLayout.LayoutParams(-1, -2))
-        col.addView(label(effect, 11f, context.getColor(R.color.ag_text)).apply { text = StatProse.format(context, effect); tag = "condition-effect" },
+        col.addView(label(effect, 11f, context.getColor(R.color.ag_text)).apply { text = StatProse.format(context, text); tag = "condition-effect" },
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(context, 8) })
         if (detail.isNotBlank()) col.addView(label(detail, 10f, context.getColor(R.color.ag_sub0)),
             LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(context, 8) })

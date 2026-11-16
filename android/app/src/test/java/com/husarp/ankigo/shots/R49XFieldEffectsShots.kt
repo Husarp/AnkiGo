@@ -14,6 +14,7 @@ import com.husarp.ankigo.data.Sprites
 import com.husarp.ankigo.game.*
 import com.husarp.ankigo.ui.*
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
@@ -51,14 +52,15 @@ class R49XFieldEffectsShots {
         Backdrops.installBundled(ctx, Sprites.dir(ctx), bg)
         val cached = Backdrops.file(Sprites.dir(ctx), bg)
         if (!cached.isFile) {
-            val source = File("/home/coder/code/projects/AnkiGo/docs/design/plan-frames-assets")
-            val art = listOf("webp", "png", "jpg").map { File(source, "${bg.id}.$it") }.first { it.isFile }
-            cached.parentFile!!.mkdirs(); art.copyTo(cached, overwrite = true)
+            val art = System.getenv("ANKIGO_R50_ASSETS")?.let { File(it, "bg-${Backdrops.fileName(bg)}") }
+            assumeTrue("Downloadable design art requires ANKIGO_R50_ASSETS", art?.isFile == true)
+            cached.parentFile!!.mkdirs(); art!!.copyTo(cached, overwrite = true)
         }
         val pic = Backdrops.fetchBlocking(Sprites.dir(ctx), bg, false) { _, _ -> null }!!
         Backdrops.finish(Backdrops.currentGeneration(), bg.id, pic)
         val back = ArenaView::class.java.getDeclaredField("backdrop").let { it.isAccessible = true; it.get(panel.arena) as ArenaBackdrop }
         back.reduceMotion = { true }
+        back.plain() // discard the panel’s earlier queued request before installing this fixture
         back.request(bg, false)
         assertEquals(id, panel.arena.backdropScenery)
     }
@@ -99,7 +101,7 @@ class R49XFieldEffectsShots {
 
     @Test fun terrainStaysOnGroundAndGrassDoesNotMoveAtEveryBackground() {
         val ctx = context()
-        val examples = setOf("tropical-cove", "countryside-route", "factory", "deep-sea-cave", "route", "desert-oasis", "legendary-shrine", "night-forest")
+        val examples = setOf("sandbar-isle", "countryside-route", "power-plant", "normal-meadow", "desert-oasis", "legendary-shrine", "night-forest-2")
         for (bg in BackdropCatalog.ALL) {
             set("grassy")
             val panel = BattlePanelView(ctx).also { it.renderAll() }
@@ -199,7 +201,7 @@ class R49XFieldEffectsShots {
         for (size in listOf(Size.PIP, Size.SPLIT, Size.LAND)) {
             val ctx = context(Theme.DARK, size); set("misty")
             val panel = BattlePanelView(ctx).also { it.renderAll(); if (size == Size.PIP) it.setCompact(true) }
-            picture(ctx, panel, "tropical-cove")
+            picture(ctx, panel, "sandbar-isle")
             panel.arena.fieldEffects.stillMs = 1700f
             paparazzi.snapshot(panel, "x-misty-${size.name.lowercase()}", 0)
             val fx = panel.arena.fieldEffects

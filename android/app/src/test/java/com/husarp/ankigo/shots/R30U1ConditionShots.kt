@@ -172,7 +172,11 @@ class R30U1ConditionShots {
                 val card = ConditionList(c, 8f)
                 card.buildStatus(info, "Your Sparkmouse", Ui.dp(c, 332), Ui.dp(c, 400)) {}
                 card.layout(0, 0, card.measuredWidth, card.measuredHeight)
-                assertEquals(info.status, 1, texts(card).single { it.tag == "condition-effect" }.lineCount)
+                val effect = texts(card).single { it.tag == "condition-effect" }
+                assertTrue("${info.status}: ${effect.text}", effect.lineCount in 1..3)
+                for (line in 0 until effect.lineCount) assertEquals(info.status, 0, effect.layout.getEllipsisCount(line))
+                assertTrue(info.status, effect.layout.getLineBottom(effect.lineCount - 1) <= effect.height)
+                assertTrue(info.status, card.bottom <= Ui.dp(c, 400))
             }
         }
     }

@@ -36,7 +36,7 @@ class R28NSecretIconsTest {
             page.onGone()
             val col = AchievementsView::class.java.getDeclaredField("col").apply { isAccessible = true }.get(av) as LinearLayout
             assertTrue(all(col).filterIsInstance<TextView>().any { it.text == "No secret achievements yet" })
-            while (col.childCount > 3) col.removeViewAt(3)
+            while (col.childCount > 4) col.removeViewAt(4)
             all(col).filterIsInstance<TextView>().first { it.text.startsWith("Secret ·") }.text = "Secret · 11 of 11 found"
             val secrets = Achievements.view(state, GameRepo.data!!).filter { it.group == "Secret" }
             assertEquals(11, secrets.size)

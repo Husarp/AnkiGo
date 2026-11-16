@@ -72,7 +72,10 @@ class R17C6FullRestoreTest {
         assertTrue(r.ok)
         assertEquals(StatCalc.maxHp(data, main), main.hp)
         assertTrue(r.message, r.message.startsWith("Full Restore healed Sparkmouse by") && r.message.endsWith("and cured its status"))
-        assertEquals(StatCalc.maxHp(data, main), r.events.filterIsInstance<GameEvent.Effect>().single().hp)
+        val effects = r.events.filterIsInstance<GameEvent.Effect>()
+        assertEquals(listOf(EffectKind.HEAL, EffectKind.STATUS_CURED), effects.map { it.kind })
+        assertTrue(effects.all { it.hp == StatCalc.maxHp(data, main) })
+        assertEquals(StatCalc.maxHp(data, main) - 5, effects.first().amount)
     }
 
     @Test fun atFullHpItStillWorksWithAStatusInAFight() {
@@ -102,7 +105,11 @@ class R17C6FullRestoreTest {
         val r = ItemUse.use(data, g.state, "max-potion", main.uid, TestData.rng(), now)
         assertTrue(r.ok); assertEquals(StatCalc.maxHp(data, main), main.hp)
         assertEquals("brn", g.state.battle!!.player.status)
-        assertTrue(r.events.none { it is GameEvent.Effect })
+        val heal = r.events.filterIsInstance<GameEvent.Effect>().single()
+        assertEquals(EffectKind.HEAL, heal.kind)
+        assertEquals(StatCalc.maxHp(data, main), heal.hp)
+        assertEquals("brn", heal.status)
+        assertEquals(StatCalc.maxHp(data, main) - StatCalc.maxHp(data, main) / 2, heal.amount)
         // at full HP with a status, Max Potion and a Potion still can't be used
         assertFalse(ItemUse.canUse(data, g.state, "max-potion", main))
         assertFalse(ItemUse.canUse(data, g.state, "potion", main))

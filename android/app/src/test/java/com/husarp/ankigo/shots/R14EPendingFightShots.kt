@@ -87,7 +87,11 @@ class R14EPendingFightShots {
         assertEquals("potion", hitOf(r).item)
         assertEquals("the fight goes on", fight, GameRepo.fightId())
         val waiting = GameRepo.pendingFightEvents()
-        assertTrue(waiting.first() is GameEvent.SwitchHit)
+        val restored = waiting.first() as GameEvent.Effect
+        assertEquals(com.husarp.ankigo.game.EffectKind.HEAL, restored.kind)
+        assertTrue(restored.amount > 0)
+        assertEquals(hitOf(r).hp, restored.hp)
+        assertEquals(hitOf(r), waiting[1])
         assertTrue("the wild one's attack", waiting.any { it is GameEvent.Attack && !it.byPlayer })
         assertEquals("peeking takes nothing", waiting, GameRepo.pendingFightEvents())
         assertEquals(waiting, GameRepo.takePendingFightEvents(fight))
@@ -186,7 +190,8 @@ class R14EPendingFightShots {
         assertTrue(GameRepo.pendingFightEvents().isEmpty())
         assertFalse("a second look plays nothing", player.playPending())
         settle(b.root, "r14e-heal-playing", 300)
-        settle(b.root, "r14e-heal-done", 4000)
+        // Advance frames through the heal, marker and attack so their chained callbacks see each step’s time.
+        paparazzi.gif(b.root.parent as View, "r14e-heal-done", 300, 5000, 10)
         assertTrue(player.idle)
         assertEquals("the bar ends on the HP the saved game has", t1.hp, arena.playerHpShown)
         assertFalse(player.playPending())
