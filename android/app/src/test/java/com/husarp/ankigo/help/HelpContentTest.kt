@@ -118,6 +118,16 @@ class HelpContentTest {
 
     private fun chapterText(id: String) = GameGuide.chapter(id)!!.let { (listOf(it.intro) + it.points).joinToString(" ") }
 
+    @Test fun battleAndHealingGuidesExplainTheItemAttackAndOldGateauException() {
+        for (id in listOf(GameGuide.BATTLES, GameGuide.HEALING)) {
+            val text = chapterText(id)
+            assertTrue(text.contains("one free move"))
+            assertTrue(text.contains("even before your first answer"))
+            assertTrue(text.contains("Old Gateau"))
+            assertTrue(text.contains("round progress, answers and own attack stay unchanged"))
+        }
+    }
+
     @Test fun numbersOfTheOtherChaptersAreTheTuningConstants() {
         fun factor(d: Double) = d.toBigDecimal().stripTrailingZeros().toPlainString()
         val battles = chapterText(GameGuide.BATTLES)

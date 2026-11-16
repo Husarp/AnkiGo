@@ -12,8 +12,8 @@ data class ItemFact(val title: String, val text: String)
 object ItemInfo {
     // ---- PLAN 168 API (R14 batch 2) ----
 
-    private const val FIGHT_RULE = "On your **main** in a fight it works **at once**, then the wild Pokémon uses one free move (your answers' dots don't change). " +
-        "Before your **first answer** of a fight, also after \"Next battle\", the wild one doesn't attack."
+    private const val FIGHT_RULE = "Use it on your **main** in a live fight, then the wild Pokémon uses one free move **right away**, even before your first answer. " +
+        "Your round progress, answers and own attack are unchanged. No attack while a result waits for Continue."
     private const val MAIN_ONLY = "Used on a Pokémon on the bench, it never brings an attack."
     private const val HOLD_RULE = "Give it to a Pokémon from the Bag. A Pokémon holds **one item**, or **two different items at Bond ♥5**. A free slot fills first; when full, the first item goes back to the Bag."
     private const val THROW_RULE = "Throw it from a fight (the ball button) or from the Bag while a wild Pokémon is out. **Throwing is not a turn**: you are not attacked."
@@ -42,7 +42,7 @@ object ItemInfo {
         "lumiose-galette" -> "25% HP + status cure"
         "casteliacone" -> "40% HP · Sp. Def ×1.25"
         "pewter-crunchies" -> "40% HP · Sp. Atk ×1.25"
-        "old-gateau" -> "50% HP · no turn"
+        "old-gateau" -> "50% HP · no wild move"
         "lava-cookie" -> "50/50: +75% / −25% HP"
         "awakening" -> "Wakes from sleep"
         "leftovers" -> "Heals 1/16 HP/turn"
@@ -61,7 +61,7 @@ object ItemInfo {
         "lumiose-galette" -> "25% max HP + cures status"
         "casteliacone" -> "40% HP · Special Defense ×1.25 this fight"
         "pewter-crunchies" -> "40% HP · Special Attack ×1.25 this fight"
-        "old-gateau" -> "50% max HP without using the turn"
+        "old-gateau" -> "50% max HP without a wild attack"
         "lava-cookie" -> "50/50 chance: +75% or −25% max HP"
         "awakening" -> "Wakes a sleeping fighter · no HP healing"
         "leftovers" -> "Heals 1/16 max HP per battle turn"
@@ -74,7 +74,7 @@ object ItemInfo {
     }
 
     private fun specialText(item: String): String? = BattleItems.snacks[item] ?: BattleItems.held[item] ?:
-        if (item == "awakening") "Wakes your sleeping Pokémon in battle; restores 0 HP. Uses the normal item turn." else null
+        if (item == "awakening") "Wakes your sleeping Pokémon in battle; restores 0 HP. The wild Pokémon then uses one free move." else null
 
     private fun berryLine(item: String): String = when (item) {
         "oran-berry" -> "At half HP: heals 10 HP; consumed"
@@ -165,11 +165,10 @@ object ItemInfo {
             }
             val lasting = if (item in HealingItems.boosts) " The multiplier belongs to that Pokémon, survives switching and ends with the fight. Reusing the same item does not stack it." else ""
             val timed = if (item == "berry-juice" || item == "sweet-heart") " Timed healing pauses on the bench, resumes when that Pokémon is active, and ends with the fight." + if (item == "berry-juice") " Reusing it refreshes its 4 turns." else " It heals before attacks; it cannot be reused while pending." else ""
-            val fight = if (item == "sweet-heart") FIGHT_RULE.replace("On your **main** in a fight it works **at once**, then", "Use it on your **main** in a fight and") else FIGHT_RULE
             return listOf(
                 ItemFact(WHAT, text + outside + " Healing never goes above maximum HP."),
                 ItemFact(HOW, "Use from the Bag on one of your Pokémon. HP percentages round down, at least 1 HP per heal. It **can't** be used without healing or another useful effect."),
-                ItemFact(FIGHT, "$fight $MAIN_ONLY" + lasting + timed),
+                ItemFact(FIGHT, "$FIGHT_RULE $MAIN_ONLY" + lasting + timed),
             )
         }
         specialText(item)?.let { text ->
@@ -177,7 +176,7 @@ object ItemInfo {
                 ItemFact(WHAT, text),
                 ItemFact(HOW, "$HOLD_RULE Suppressed by Klutz, Embargo and Magic Room."),
             )
-            val fight = if (item == "old-gateau") "Works at once without a wild attack, even after your first answer." else "$FIGHT_RULE $MAIN_ONLY"
+            val fight = if (item == "old-gateau") "Heals without a wild attack. Your round progress, answers and own attack are unchanged." else "$FIGHT_RULE $MAIN_ONLY"
             val how = when (item) {
                 "awakening" -> "Use from the Bag on your sleeping main during a live fight."
                 "shalour-sable" -> "Use from the Bag on a Pokémon during a live fight. The shield follows that Pokémon through switches and ends after one damaging hit or when the fight ends."
@@ -198,7 +197,7 @@ object ItemInfo {
                 ItemFact(HOW, "You can't use it. If you already own one, it stays in the Bag."),
             ) else listOf(
                 ItemFact(WHAT, evolutionWhat(data, item, caught)),
-                ItemFact(HOW, "Open a Pokémon from this item’s Evolves list, then choose **Evolve** in its Evolution section. Requires **Level 2 Bond** and one item, which is used up. Evolution cannot be undone."),
+                ItemFact(HOW, "Open a Pokémon from this item’s Evolves list, then choose **Evolve** in its Evolution section. Requires **Level 2 Bond** and one item, which is used up. Evolution cannot be undone. $FIGHT_RULE $MAIN_ONLY"),
             )
             ItemKind.HELD -> listOf(
                 ItemFact(WHAT, heldWhat(item)),
@@ -461,20 +460,20 @@ object ItemInfo {
     fun effect(item: String): String = line(null, item)
 
     /** Where and how the item is used (one sentence). */
-    fun howToUse(item: String): String = if (item == "old-gateau") "Use it from the Bag. Heals 50% max HP without using the turn." else when (Items.def(item)?.kind) {
+    fun howToUse(item: String): String = if (item == "old-gateau") "Use it from the Bag. Heals 50% max HP without a wild attack; your round and own attack are unchanged." else when (Items.def(item)?.kind) {
         ItemKind.AUTO -> "Used automatically when a daily goal is missed. No manual activation."
         ItemKind.BALL -> if (isOldBall(item)) Items.specialNote(item) else "Throw it from the Bag at a wild Pokémon in battle. The ball is used up either way."
         ItemKind.HEAL -> "Use it from the Bag on one of your Pokémon. $FIGHT_TURN"
         ItemKind.EVOLUTION -> if (item in Items.RETIRED) "No Pokémon in AnkiGo evolves with it, so it can't be used."
-            else "Open a Pokémon’s Evolution section and choose Evolve. Requires Level 2 Bond and one item, which is used up."
+            else "Open a Pokémon’s Evolution section and choose Evolve. Requires Level 2 Bond and one item, which is used up. $FIGHT_TURN"
         ItemKind.HELD -> "Give it to a Pokémon from the Bag. A Pokémon holds one item, or two different items at Bond ♥5."
         ItemKind.ESCAPE -> "Use it from the Bag to leave the wild Pokémon in battle and meet a new one."
         ItemKind.FOSSIL -> "Use it from the Bag to revive an ancient Pokémon at Lv ${Tuning.FOSSIL_LEVEL}."
         null -> ""
     }
 
-    /** R13 Part C / R18-B: an item used on the main during a fight works at once, then the wild one uses one free move (Game.useItem); no dot is filled. */
-    const val FIGHT_TURN = "On your main in a fight it works at once, then the wild Pokémon uses one free move (not before your first answer of the fight)."
+    /** The wild one gets one move after item use on the main; the player keeps the round and own attack. */
+    const val FIGHT_TURN = "On your main in a live fight, the wild Pokémon uses one free move right after item use, even before your first answer. Your round progress, answers and own attack are unchanged. No attack while a result waits for Continue."
 
     /** What a TM does, for the popup. */
     fun tmHowToUse(): String = "Single-use: teaching uses up this TM. Requires Bond ♥2 and a compatible Pokémon. Only a discovered move can be replaced."

@@ -651,23 +651,22 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
         return ActionResult(true, "Evolved into ${mon.name}!", events)
     }
 
-    /**
-     * R13 Part C: uses [item] from the Bag ([ItemUse.use]). A healing or evolution item used on the Main in a fight takes one turn
-     * (no dot is filled, no round counted), like a switch: after it works the wild one attacks the Main once ([switchHit], marker with [item]); your next answer
-     * attacks as normal. The same moments as a switch are free of it ([itemTakesATurn]); items given to hold, TMs, fossils and items
-     * used on another Pokémon never take a turn, and balls / escape items have their own rules ([throwBall], [escape]).
-     */
     fun feedBerry(item: String, uid: String): ActionResult {
         tick()
         return BerryFeeding.feed(data, state, item, uid, rng, clock())
     }
 
+    /**
+     * An item used on the Main in a live fight works before the wild one's single free move ([switchHit]).
+     * The round's answers and own attack stay unchanged. Old Gateau, bench use and non-battle items are free.
+     */
     fun useItem(item: String, targetUid: String?, evolutionTo: Int? = null): ActionResult {
         val main = state.main
         val battle = state.battle
         val kind = Items.def(item)?.kind
-        val onMain = main != null && (targetUid ?: if (kind == ItemKind.HEAL) main.uid else null) == main.uid
-        val turn = item != "old-gateau" && onMain && battle != null && (kind == ItemKind.HEAL || kind == ItemKind.EVOLUTION) && itemTakesATurn(battle, main!!)
+        val onMain = main != null && main.hp > 0 && (targetUid ?: if (kind == ItemKind.HEAL) main.uid else null) == main.uid
+        val hitAfterUse = item != "old-gateau" && onMain && battle != null && !battle.awaitingContinue &&
+            (kind == ItemKind.HEAL || kind == ItemKind.EVOLUTION)
         val used = ItemUse.use(data, state, item, targetUid, rng, clock(), evolutionTo)
         val r = if (battle != null) used.copy(battleAlert = !used.ok, battleMessage = used.message.takeIf { used.ok }) else used
         if (r.ok && battle != null && !battle.awaitingContinue && state.battle === battle && state.main?.hp == 0) {
@@ -675,19 +674,12 @@ class Game(val data: GameData, val state: GameState, val rng: Random = Random.De
             settleFight(battle, state.main!!, settled)
             return r.copy(events = r.events + settled)
         }
-        if (!r.ok || !turn || battle == null || state.battle !== battle) return r
+        if (!r.ok || !hitAfterUse || battle == null || state.battle !== battle) return r
         val mon = state.main ?: return r
         if (mon.hp <= 0 || battle.wild.hp <= 0) return r
         val hit = switchHit(battle, mon, item)
         return ActionResult(true, SwitchHitText.withHit(r.message, hit, named = mon.name in r.message), r.events + hit, battleMessage = r.battleMessage)
     }
-
-    /**
-     * R13 Part C: an item on the Main takes its turn at the moments a switch takes one ([switchCostsAHit]): a wild one with HP left,
-     * a Main with HP, and something answered in this battle (before the first answer, also after "Next battle", it is free).
-     */
-    private fun itemTakesATurn(battle: Battle, main: Mon): Boolean =
-        main.hp > 0 && battle.wild.hp > 0 && (battle.rounds > 0 || battle.answers > 0)
 
     /** Puts [uid] first. A Pokémon from the box takes a free team place, or the last member's when the team is full. */
     internal fun setMain(uid: String): ActionResult {

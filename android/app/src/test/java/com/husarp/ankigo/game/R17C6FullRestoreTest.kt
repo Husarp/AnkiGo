@@ -49,12 +49,16 @@ class R17C6FullRestoreTest {
             g.state.battle!!.player.statusTurns = 3
             val r = g.useItem("full-restore", main.uid)
             assertTrue(key + r.message, r.ok)
-            assertEquals(StatCalc.maxHp(data, main), main.hp - 0)   // the item healed it fully (it was at half HP)
+            val attack = r.events.filterIsInstance<GameEvent.Attack>().single()
+            assertFalse(attack.byPlayer)
+            assertEquals(StatCalc.maxHp(data, main) - attack.damage, main.hp)
             assertNull(key, g.state.battle!!.player.status)
             assertEquals(0, g.state.battle!!.player.statusTurns)
             assertEquals(2, g.state.count("full-restore"))
             val fx = r.events.filterIsInstance<GameEvent.Effect>().single { it.kind == EffectKind.STATUS_CURED }
             assertTrue(fx.onPlayer); assertNull("the badge goes at once: the event carries no status", fx.status)
+            assertEquals(StatCalc.maxHp(data, main), fx.hp)
+            assertTrue(r.events.indexOf(fx) < r.events.indexOf(attack))
             assertEquals(key, fx.stat)
             assertEquals(text, fx.text)
         }
@@ -140,6 +144,6 @@ class R17C6FullRestoreTest {
         assertEquals("Heals 100% max HP", ItemInfo.short(data, "max-potion"))
         assertEquals("Heals 100% max HP and cures burn, poison, paralysis, sleep or freeze.", Items.def("full-restore")!!.note)
         assertEquals("Heals 100% max HP; does not cure status.", Items.def("max-potion")!!.note)
-        for (id in listOf("full-restore", "max-potion", "potion")) assertTrue(id, fact(id, "In a fight").contains("**at once**"))
+        for (id in listOf("full-restore", "max-potion", "potion")) assertTrue(id, fact(id, "In a fight").contains("uses one free move **right away**"))
     }
 }

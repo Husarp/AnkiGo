@@ -106,15 +106,37 @@ class ItemInfoTest {
         assertTrue(fact("potion", "What it does").contains("25% max HP") && fact("potion", "What it does").contains("never goes above"))
         assertTrue(fact("potion", "How to use").contains("**can't**"))
         val fight = fact("potion", "In a fight")
-        assertTrue(fight.contains("**main**") && fight.contains("**at once**") && fight.contains("**first answer**") && fight.contains("uses one free move"))   // R18-B (264)
+        assertTrue(fight.contains("**main**") && fight.contains("**right away**") && fight.contains("even before your first answer") && fight.contains("uses one free move"))
         assertFalse(fight.contains("one turn") || fight.contains("free hit") || fight.contains("free attack"))
         assertTrue(fight.contains("bench"))
+        assertTrue(fight.contains("round progress, answers and own attack are unchanged"))
+        assertTrue(fight.contains("No attack while a result waits for Continue"))
         // R17C-6: Full Restore cures a status in a fight, Max Potion does not (the old "no status problems" text was false)
         for (id in listOf("full-restore", "max-potion")) assertTrue(fact(id, "What it does").contains("100% max HP"))
         for (id in listOf("full-restore", "max-potion")) assertFalse(id, fact(id, "What it does").contains("no status problems"))
         assertTrue(fact("full-restore", "What it does").contains("cures"))
         assertTrue(fact("max-potion", "What it does").contains("does not cure"))
         assertEquals("100% HP + status cure", ItemInfo.short(data, "full-restore"))
+    }
+
+    @Test fun battleItemInstructionsPreserveTheRoundAndExplainOldGateau() {
+        for (def in Items.ALL.values.filter { it.kind == ItemKind.HEAL }) {
+            val facts = ItemInfo.facts(data, def.id)
+            val fight = facts.first { it.title == "In a fight" }.text
+            val how = ItemInfo.howToUse(def.id)
+            if (def.id == "old-gateau") {
+                assertTrue(fight.contains("without a wild attack"))
+                assertTrue(how.contains("without a wild attack"))
+                assertTrue(ItemInfo.line(data, def.id).contains("without a wild attack"))
+                assertFalse(ItemInfo.short(data, def.id).contains("turn"))
+            } else {
+                for (text in listOf(fight, how)) {
+                    assertTrue(def.id, text.contains("uses one free move"))
+                    assertTrue(def.id, text.contains("even before your first answer"))
+                    assertTrue(def.id, text.contains("round progress, answers and own attack are unchanged"))
+                }
+            }
+        }
     }
 
     // ---- evolution items ----
