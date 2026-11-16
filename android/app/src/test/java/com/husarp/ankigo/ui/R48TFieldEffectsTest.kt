@@ -18,7 +18,7 @@ class R48TFieldEffectsTest {
 
     @Test fun unselectedConditionsHaveNoArt() {
         val state = FieldEffectsState()
-        for (key in listOf("hail", "electric", "grassy", "misty", "trickroom", "gravity", "wonderroom", "magicroom", "mudsport", "iondeluge")) {
+        for (key in listOf("electric", "grassy", "misty", "trickroom", "gravity", "wonderroom", "magicroom", "mudsport", "iondeluge")) {
             state.set(key, false, false, false)
             assertFalse(key, state.active)
         }

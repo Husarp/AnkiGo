@@ -1490,7 +1490,8 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
         val suppressed = b?.field?.weather != null && data != null && main != null &&
             com.husarp.ankigo.game.SimpleView.of(data, b, main).weather() == null
         fieldEffects.state.set(field.firstOrNull { it.def.kind == ConditionMarks.Kind.WEATHER }?.key,
-            field.any { it.key == "psychic" }, field.any { it.key == "watersport" }, suppressed)
+            field.any { it.key == "psychic" }, field.any { it.key == "watersport" }, suppressed,
+            field.firstOrNull { it.def.kind == ConditionMarks.Kind.TERRAIN }?.key)
         fieldEffects.changed()
     }
 
@@ -2591,6 +2592,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
 
     private fun placeFieldRings() {
         fieldEffects.groundTop = (min(enemyHolder.bottom, playerHolder.bottom).toFloat() / height.coerceAtLeast(1) - .08f).coerceIn(.25f, .7f)
+        fieldEffects.terrainTop = (min(enemyHolder.bottom, playerHolder.bottom).toFloat() / height.coerceAtLeast(1)).coerceIn(0f, 1f)
         placeFieldRing(fieldEffects.wildRing, enemyHolder)
         placeFieldRing(fieldEffects.playerRing, playerHolder)
         fieldGround.invalidate(); fieldEffects.invalidate()

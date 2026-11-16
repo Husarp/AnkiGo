@@ -3,10 +3,15 @@ package com.husarp.ankigo.ui
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.RectF
 import android.os.SystemClock
 import android.view.View
+import com.husarp.ankigo.R
 import kotlin.math.min
 import kotlin.math.sin
 
@@ -14,6 +19,13 @@ import kotlin.math.sin
 internal class FieldEffectsView(ctx: Context) : View(ctx) {
     internal val state = FieldEffectsState()
     private val paint = Paint()
+    private val imagePaint = Paint().apply { isFilterBitmap = false }
+    private val imageRect = RectF()
+    private val hailCell = Rect()
+    private var hailArt: Bitmap? = null
+    private var terrainArt: Bitmap? = null
+    private var loadedTerrain: String? = null
+    internal val terrainOffsetSeconds = kotlin.random.Random.nextFloat() * 1000f
     private val study = ctx.getSharedPreferences("study", 0)
     private val ui = ctx.getSharedPreferences("ankigo_ui", 0)
     private val watcher = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> refresh() }
@@ -34,13 +46,14 @@ internal class FieldEffectsView(ctx: Context) : View(ctx) {
     }
     var invalidateGround: () -> Unit = {}
     var groundTop = 0.4f
+    var terrainTop = 0.4f
     val wildRing = FieldRing()
     val playerRing = FieldRing()
 
     init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
 
     private fun motion() = ValueAnimator.areAnimatorsEnabled() && !study.getBoolean("reduceMotion", false) && AppPrefs.attackAnimations(context)
-    private fun canRun() = attached && isShown && windowVisibility == VISIBLE && state.active && motion() && stillMs == null
+    private fun canRun() = attached && isShown && windowVisibility == VISIBLE && state.animated && motion() && stillMs == null
     private fun schedule() {
         if (!running && canRun()) { running = true; postDelayed(tick, 63L) }
     }
@@ -51,6 +64,16 @@ internal class FieldEffectsView(ctx: Context) : View(ctx) {
         schedule()
     }
     fun changed() {
+        if (state.weather == "hail" && hailArt == null) hailArt = BitmapFactory.decodeResource(resources, R.drawable.field_hail)
+        if (loadedTerrain != state.terrain) {
+            loadedTerrain = state.terrain
+            terrainArt = when (state.terrain) {
+                "electric" -> R.drawable.field_electric
+                "grassy" -> R.drawable.field_grassy
+                "misty" -> R.drawable.field_misty
+                else -> null
+            }?.let { BitmapFactory.decodeResource(resources, it) }
+        }
         if (!state.active) started = 0L else if (started == 0L) started = SystemClock.uptimeMillis()
         refresh()
     }
@@ -79,6 +102,7 @@ internal class FieldEffectsView(ctx: Context) : View(ctx) {
             "sun" -> sun(canvas, t)
             "sand" -> sand(canvas, t)
             "snow" -> snow(canvas, t)
+            "hail" -> hail(canvas, t)
         }
         canvas.restoreToCount(save)
     }
@@ -86,6 +110,7 @@ internal class FieldEffectsView(ctx: Context) : View(ctx) {
     fun drawGround(canvas: Canvas) {
         if (!state.active || width <= 0 || height <= 0) return
         val t = time()
+        terrain(canvas, t)
         if (state.psychic) {
             rings(canvas, wildRing, t, 0f)
             rings(canvas, playerRing, t, .43f)
@@ -99,6 +124,66 @@ internal class FieldEffectsView(ctx: Context) : View(ctx) {
                     3f + q * 16f, 1f + q * 4f, 0xffa5d9f3.toInt(), .75f * (1f - q))
             }
             canvas.restoreToCount(save)
+        }
+    }
+
+    private fun terrain(c: Canvas, t: Float) {
+        val art = terrainArt ?: return
+        val top = terrainTop * height
+        if (top >= height) return
+        val save = c.save()
+        c.clipRect(0f, top, width.toFloat(), height.toFloat())
+        when (state.terrain) {
+            "electric" -> {
+                val a = if (motion()) FieldEffectsState.electricAlpha(t + terrainOffsetSeconds) else .24f
+                imagePaint.alpha = (a * 255).toInt()
+                imageRect.set(0f, top, width.toFloat(), height.toFloat())
+                if (a > 0f) c.drawBitmap(art, null, imageRect, imagePaint)
+            }
+            "grassy" -> {
+                imagePaint.alpha = 215
+                imageRect.set(0f, top, width.toFloat(), height.toFloat())
+                c.drawBitmap(art, null, imageRect, imagePaint)
+            }
+            "misty" -> {
+                // Two slow, mirrored drifts, as in the selected preview.
+                val shift = sin(t * (kotlin.math.PI / 9).toFloat()) * width * .072f
+                imagePaint.alpha = 204
+                imageRect.set(-width * .15f + shift, top, width * 1.15f + shift, height.toFloat())
+                c.drawBitmap(art, null, imageRect, imagePaint)
+                val drift = sin(t * (kotlin.math.PI / 13).toFloat()) * width * .083f
+                c.translate(width.toFloat(), 0f); c.scale(-1f, 1f)
+                imagePaint.alpha = 140
+                imageRect.set(-width * .15f + drift, top - height * .0375f, width * 1.15f + drift, height - height * .0375f)
+                c.drawBitmap(art, null, imageRect, imagePaint)
+            }
+        }
+        c.restoreToCount(save)
+    }
+
+    private fun hail(c: Canvas, t: Float) {
+        val art = hailArt ?: return
+        imagePaint.alpha = 255
+        for (i in 0 until 34) {
+            val landing = (groundTop + (1f - groundTop) * noise(i + 1201)) * 158f
+            val speed = FieldEffectsState.hailSpeed(i)
+            val fall = (landing + 8f) / speed
+            val period = fall + FieldEffectsState.HAIL_SPLASH_SECONDS + .12f + noise(i + 1301) * .25f
+            val elapsed = phase(t / period + noise(i + 1401)) * period
+            val x = noise(i + 1501) * 176f + 2f
+            val radius = .65f + noise(i + 1601) * .35f
+            if (elapsed < fall) {
+                val y = -8f + elapsed * speed
+                val xx = x + (landing - y) * .18f
+                hailCell.set(i % 12 * 10, 0, i % 12 * 10 + 10, 10)
+                imageRect.set(xx - radius, y - radius, xx + radius, y + radius)
+                c.drawBitmap(art, hailCell, imageRect, imagePaint)
+            } else if (elapsed < fall + FieldEffectsState.HAIL_SPLASH_SECONDS) {
+                val q = (elapsed - fall) / FieldEffectsState.HAIL_SPLASH_SECONDS
+                val r = radius * (1f + q)
+                line(c, x - r, landing - r * (1f - q), x - r * .4f, landing, 0xffc5f4ff.toInt(), 1f - q)
+                line(c, x + r * .4f, landing, x + r, landing - r * (1f - q), 0xffc5f4ff.toInt(), 1f - q)
+            }
         }
     }
 
@@ -228,15 +313,28 @@ internal class FieldEffectsState {
         private set
     var waterSport = false
         private set
-    val active: Boolean get() = weather != null || psychic || waterSport
+    var terrain: String? = null
+        private set
+    val active: Boolean get() = weather != null || psychic || waterSport || terrain != null
+    val animated: Boolean get() = weather != null || psychic || waterSport || terrain == "electric" || terrain == "misty"
 
-    fun set(weather: String?, psychic: Boolean, waterSport: Boolean, suppressed: Boolean) {
-        this.weather = if (!suppressed && (weather == "rain" || weather == "sun" || weather == "sand" || weather == "snow")) weather else null
+    fun set(weather: String?, psychic: Boolean, waterSport: Boolean, suppressed: Boolean, terrain: String? = null) {
+        this.weather = if (!suppressed && (weather == "rain" || weather == "sun" || weather == "sand" || weather == "snow" || weather == "hail")) weather else null
         this.psychic = psychic
         this.waterSport = waterSport
+        this.terrain = terrain?.takeIf { it == "electric" || it == "grassy" || it == "misty" }
     }
 
     companion object {
+        const val HAIL_SPLASH_SECONDS = .09f
+        fun hailSpeed(i: Int): Float = 220f + noise(i + 1101) * 100f
+        fun electricAlpha(t: Float): Float {
+            val cycle = kotlin.math.floor(t / 6f).toInt()
+            val elapsed = t - cycle * 6f - (.6f + noise(cycle + 1701) * 2.7f)
+            val duration = .36f + noise(cycle + 1801) * .24f
+            if (elapsed < 0f || elapsed >= duration) return 0f
+            return .32f * sin(elapsed / duration * kotlin.math.PI.toFloat())
+        }
         fun noise(i: Int): Float {
             var n = i * 374761393 + 668265263
             n = (n xor (n ushr 13)) * 1274126177
