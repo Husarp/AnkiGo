@@ -1,0 +1,8 @@
+PLAN 694 / 671, round48-images (owner-approved, CC-free generated artwork).
+Electric: terr_e_B.png (gpt-image-2.5); grassy: terr_g_A.png and misty:
+terr_m_A.png (gpt-image-2). Original transparent textures, with the preview's
+35% top-edge alpha fade baked into the PNGs. No Pokemon artwork included.
+Hail: hail_C_0..11.png (gpt-image-2.5-flare), packed into twelve 10px cells.
+Streak Freeze: option D (gpt-image-2.5) cube reduced from 13x15 to 9x10
+nearest-neighbour pixels, in round40 option C's outline with its snowflake removed.
+All pixel assets render without bitmap filtering.
