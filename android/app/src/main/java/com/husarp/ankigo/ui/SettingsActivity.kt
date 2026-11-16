@@ -522,6 +522,12 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
             Form.segmented(this, bars.map { it.label }, bars.indexOf(AppPrefs.barStyle(this))) { i ->
                 AppLook.setBarStyle(this, bars[i]); looked()
             })
+        val goalFill = Form.stackRow(this, "Daily goal bar", null,
+            Form.segmented(this, GoalBarFill.entries.map { it.label }, GoalBarFill.entries.indexOf(BarTextures.goal(this))) {
+                BarTextures.putGoal(this, GoalBarFill.entries[it]); render()
+            })
+        val xpFill = Form.stackRow(this, "XP bar", "Trainer and Pokémon experience bars",
+            BarTextures.xpPicker(this) { render() })
         val typeStyles = TypeStyle.entries
         val typeStyle = Form.stackRow(this, "Show types as", "Type names, small type icons, or both.",
             Form.segmented(this, typeStyles.map { it.label }, typeStyles.indexOf(AppPrefs.typeStyle(this))) { i ->
@@ -547,7 +553,7 @@ class SettingsPage(base: Context, host: PageHost) : GamePage(base, host) {
                 ShowAnswerColor.put(this, ShowAnswerColor.entries[it])
             })
         val detailsOrder = Form.row(this, "Details sections order", "Drag to arrange Pokémon details sections", null) { DetailOrderSettings.show(this) }
-        return groupedCard(listOf(theme, accent, tabBar, barStyle, typeStyle, matchupChips, size,
+        return groupedCard(listOf(theme, accent, tabBar, barStyle, goalFill, xpFill, typeStyle, matchupChips, size,
             textSizeRow("app", "App text"), textSizeRow("battle", "Battle text"), textSizeRow("card", "Anki card text"),
             deckLook, answer, listSize, stacked, two, achievements, detailsOrder))
     }

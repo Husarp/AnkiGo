@@ -23,6 +23,35 @@ import com.husarp.ankigo.R
  * Set its height from the layout (default 8 dp, wrap_content); [set] eases the fill over 450 ms.
  */
 class BarView(ctx: Context) : View(ctx) {
+    private var meaning: BarMeaning? = null
+    private var targetFraction = 0f
+    internal var textureOverride: Int? = null
+    private var textureArt = 0
+    private var texture: BarTexture? = null
+    private val texturePrefs = ctx.applicationContext.getSharedPreferences("ankigo_ui", 0)
+    private val textureListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == BarTextures.XP_KEY || key == BarTextures.GOAL_KEY) {
+            updateTexture()
+            glowKey = 0L
+            refreshSparks()
+        }
+    }
+    internal fun setTextureMeaning(value: BarMeaning, fraction: Float) {
+        meaning = value
+        targetFraction = fraction
+        updateTexture()
+    }
+    private fun updateTexture() {
+        val art = textureOverride ?: BarTextures.art(context, meaning, targetFraction)
+        if (art != textureArt) {
+            textureArt = art
+            texture = if (art == 0) null else BarTexture(context, art)
+        }
+        invalidate()
+    }
+    private fun textureShader(height: Float): Shader? = texture?.let { it.fit(height); it.shader }
+    private fun ribbon() = BarTextures.goal(context) == GoalBarFill.RIBBON
+
     private val track = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Ui.c(ctx, R.color.ag_s0) }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
@@ -244,6 +273,7 @@ class BarView(ctx: Context) : View(ctx) {
             if (!sparkRunning) return
             val ok = GoalSparks.keepTicking(sparkLevel, isAttachedToWindow, sparksOnScreen(), windowVisibility == VISIBLE, sparksStill())
             if (ok) sparkDrawable?.refresh()
+            if (ribbon() && sparkDrawable?.ribbonAnimating() == false) { stopTicker(); return }
             if (!ok) { stopTicker(); if (sparkLevel == 0 || !isAttachedToWindow || !sparksOnScreen()) stopSparks(); return }
             postOnAnimationDelayed(this, SPARK_FRAME_MS)
         }
@@ -297,6 +327,8 @@ class BarView(ctx: Context) : View(ctx) {
         super.onAttachedToWindow()
         viewTreeObserver.addOnGlobalLayoutListener(sparkLayout)
         viewTreeObserver.addOnScrollChangedListener(sparkScroll)
+        texturePrefs.registerOnSharedPreferenceChangeListener(textureListener)
+        updateTexture()
         refreshSparks()
     }
 
@@ -318,6 +350,8 @@ class BarView(ctx: Context) : View(ctx) {
         private val r = android.graphics.Rect()
         private val sparkPath = android.graphics.Path()
         private val sparkFrame = GoalSparks.MutableFrame()
+        private val ribbonBurst by lazy { GoalRibbonBurst(context).also { it.start = SystemClock.uptimeMillis() } }
+        fun ribbonAnimating() = SystemClock.uptimeMillis() - ribbonBurst.start < 2500L
         /**
          * Pixels per spark-dp: the sizes are for an 8 dp bar and follow the bar's real height, but a taller bar (the 14 dp goal
          * bar outside the battle) does not make the sparks and the glow bigger.
@@ -341,8 +375,8 @@ class BarView(ctx: Context) : View(ctx) {
             r.set(0, 0, this@BarView.width, this@BarView.height)
             host.offsetDescendantRectToMyCoords(this@BarView, r)
             val glow = (GoalGlow.extent(sparkLevel) * k).toInt().coerceAtMost(room(r))
-            val pad = maxOf((GoalSparks.MAX_RADIUS * k).toInt(), glow) + 2
-            sparkRect.set(r.left - pad, r.top - maxOf((GoalSparks.maxRise(3) * k).toInt(), glow) - pad, r.right + pad, r.bottom + glow + 2)
+            val pad = maxOf((GoalSparks.MAX_RADIUS * k).toInt(), glow, if (ribbon()) (140 * resources.displayMetrics.density).toInt() else 0) + 2
+            sparkRect.set(r.left - pad, r.top - maxOf((GoalSparks.maxRise(3) * k).toInt(), glow) - pad, r.right + pad, r.bottom + maxOf(glow, if (ribbon()) pad else 0) + 2)
             bounds = sparkRect
             invalidateSelf()
         }
@@ -353,11 +387,17 @@ class BarView(ctx: Context) : View(ctx) {
             host.offsetDescendantRectToMyCoords(this@BarView, r)
             for (g in rings(room(r))) {
                 val o = g.outset * k
-                glowPaint.color = g.color
+                glowPaint.color = if (ribbon()) 0xff5aeba0.toInt() else g.color
                 glowPaint.alpha = (g.alpha.coerceIn(0f, 1f) * 255f + 0.5f).toInt()
                 glowPaint.strokeWidth = g.width * k
                 glowRect.set(r.left - o, r.top - o, r.right + o, r.bottom + o)
                 canvas.drawRoundRect(glowRect, r.height() / 2f + o, r.height() / 2f + o, glowPaint)
+            }
+            if (ribbon()) {
+                val burst = ribbonBurst
+                burst.draw(canvas, r.left.toFloat(), r.centerY().toFloat(), r.width().toFloat(),
+                    if (sparksStill()) 750L else SystemClock.uptimeMillis() - burst.start)
+                return
             }
             val t = if (sparksStill()) null else SystemClock.uptimeMillis()
             for (sp in sparkFrame.at(sparkLevel, t)) {
@@ -422,6 +462,7 @@ class BarView(ctx: Context) : View(ctx) {
         viewTreeObserver.removeOnGlobalLayoutListener(sparkLayout)
         viewTreeObserver.removeOnScrollChangedListener(sparkScroll)
         stopSparks()
+        texturePrefs.unregisterOnSharedPreferenceChangeListener(textureListener)
         anim?.cancel()
         ghostAnim?.cancel()
         ghostFrac = 0f
@@ -450,7 +491,11 @@ class BarView(ctx: Context) : View(ctx) {
         if (shown <= 0f) { drawLabel(canvas); return }
         val fw = PixelBar.fillPx(innerW, shown).toFloat()
         val g = gradient
-        if (g != null) {
+        val tex = textureShader(b - t)
+        if (tex != null) {
+            pxFill.shader = tex
+            pxFill.alpha = 255
+        } else if (g != null) {
             unitGradient.setScale(maxOf(fw, 1f), 1f)
             unitGradient.postTranslate(l, 0f)
             g.setLocalMatrix(unitGradient)
@@ -484,7 +529,11 @@ class BarView(ctx: Context) : View(ctx) {
         val fw = maxOf(w * shown, minOf(h, w))
         rect.set(0f, 0f, fw, h)
         val g = gradient
-        if (g != null) {
+        val tex = textureShader(h)
+        if (tex != null) {
+            fill.shader = tex
+            fill.alpha = 255
+        } else if (g != null) {
             unitGradient.setScale(fw, 1f)
             g.setLocalMatrix(unitGradient)
             fill.shader = g

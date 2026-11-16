@@ -59,6 +59,7 @@ object BarTones {
 
 /** Fills this bar [fraction] (0..1) in the colour or gradient its [meaning] has in the chosen style. */
 fun BarView.setMeaning(meaning: BarMeaning, fraction: Float, animate: Boolean, durationMs: Long = 450, easing: android.animation.TimeInterpolator = android.view.animation.PathInterpolator(.4f, 0f, .2f, 1f)) {
+    setTextureMeaning(meaning, fraction)
     val f = BarTones.fill(context, meaning, fraction)
     val to = f.gradientTo
     if (to != null) setGradient(f.color, to) else clearGradient()

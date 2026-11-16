@@ -164,7 +164,7 @@ class ArenaView(ctx: Context) : FrameLayout(ctx) {
     private val pIcons = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
     private var playerTypes: List<Type> = emptyList()
     private val pXpText = Ui.text(ctx, 11f, 800, R.color.ag_sub0).apply { maxLines = 1 }
-    private val pXp = BarView(ctx)
+    private val pXp = BarView(ctx).apply { setTextureMeaning(BarMeaning.XP, 0f) }
     private val pHpBox = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }   // compact cards: HP bar + "61 / 61 HP" side by side
     private val playerCard = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
