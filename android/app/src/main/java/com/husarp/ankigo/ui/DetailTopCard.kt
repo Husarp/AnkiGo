@@ -64,7 +64,7 @@ internal object DetailTopCard {
         addView(LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = line.name })
-            addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply { text = line.sub }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 2) })
+            addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply { text = StatProse.format(a, line.sub) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 2) })
         }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 8) })
         val item = line.item
         if (item != null && page != null) {

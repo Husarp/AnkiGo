@@ -24,12 +24,18 @@ class R23CUiMoveTextTest {
         else -> ""
     }
 
+    private fun detailText(ctx: android.content.Context, ids: List<String>, levels: List<String>? = null): String {
+        val rows = DetailSections.moves(ctx, data, ids, false, levels = levels)
+        val dialog = DialogShots.capture { rows.findViewWithTag<View>("detail-move:${curl.id}").performClick() }!!
+        return text(dialog.content()).also { dialog.dismiss() }
+    }
+
     @Test fun detailUsesKnownMovesWhileDexKeepsGenericText() {
         val ctx = Shots.files(paparazzi.context)
-        assertFalse(text(DetailSections.moves(ctx, data, listOf(curl.id), false)).contains("Rollout and"))
-        assertTrue(text(DetailSections.moves(ctx, data, listOf(curl.id, rollout.id), false)).contains("Rollout deals"))
-        assertFalse(text(DetailSections.moves(ctx, data, listOf(curl.id, rollout.id), false)).contains("Ice Ball"))
-        assertTrue(text(DetailSections.moves(ctx, data, listOf(curl.id), false, levels = listOf("Lv 1"))).contains("Rollout and"))
+        assertFalse(detailText(ctx, listOf(curl.id)).contains("Rollout and"))
+        assertTrue(detailText(ctx, listOf(curl.id, rollout.id)).contains("Rollout deals"))
+        assertFalse(detailText(ctx, listOf(curl.id, rollout.id)).contains("Ice Ball"))
+        assertTrue(detailText(ctx, listOf(curl.id), levels = listOf("Lv 1")).contains("Rollout and"))
     }
 
     @Test fun comparePopupUsesItsSuppliedMoveset() {

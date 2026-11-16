@@ -89,6 +89,8 @@ class WildInfoTest {
         val none = WildInfo.of(data, TestData.state(data), battle(), emptySet())!!
         assertEquals(4, none.moves.size)
         assertTrue(none.moves.all { it.id == null })
+        assertEquals(listOf(Category.PHYSICAL, Category.STATUS, Category.SPECIAL, Category.PHYSICAL), none.moves.map { it.outline?.category })
+        assertEquals(setOf("category"), MoveOutline::class.java.declaredFields.filterNot { java.lang.reflect.Modifier.isStatic(it.modifiers) }.map { it.name }.toSet())
     }
 
     @Test fun onlyCurrentMoveSlotsShowEvenIfStruggleWasUsed() {

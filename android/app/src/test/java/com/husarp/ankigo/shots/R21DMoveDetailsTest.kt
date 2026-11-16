@@ -83,12 +83,14 @@ class R21DMoveDetailsTest {
             mon.discoveredMoves += "thunderwave"
             val dialog = DialogShots.capture { MonDetail.show(ctx, GameRepo.data!!, mon, "thunderwave") }!!
             val scene = DialogShots.scene(ctx, dialog)
-            paparazzi.snapshot(scene, "r21d-focused-move", 1000)
+            val focused = DialogShots.capture { paparazzi.snapshot(scene, "r21d-focused-move", 1000) }!!
+            assertTrue(views(focused.content()).filterIsInstance<TextView>().any { it.text.startsWith("Paralyzes") })
+            focused.dismiss()
             val all = views(scene)
             val target = all.single { it.tag == "detail-move:thunderwave" }
             assertEquals(View.VISIBLE, (target.parent.parent.parent as View).visibility)
             val group = target.parent as ViewGroup
-            assertEquals(View.VISIBLE, group.getChildAt(1).visibility)
+            assertEquals(1, group.childCount)
             assertFalse(saved.getValue("moves"))
             val scroll = all.filterIsInstance<ScrollView>().first { views(it).contains(target) }
             assertTrue("scrolled down to move", scroll.scrollY > 0)

@@ -75,7 +75,7 @@ internal object ItemCard {
             out.append(p.text)
             if (p.bold) out.setSpan(Heavy(heavy, ink), at, out.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        return out
+        return StatProse.format(ctx, out)
     }
 
     // ---- the card, in three parts ----

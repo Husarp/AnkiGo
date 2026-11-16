@@ -178,9 +178,9 @@ class R39BShots {
                 target = "self", boosts = mapOf("spa" to 1, "spd" to 1))
             val moveData = TestData.data(data.species.values.toList(), TestData.MOVES + (calm.id to calm))
             val explained = DetailSections.moves(ctx, moveData, listOf(calm.id), true)
-            all(explained).single { it.contentDescription?.toString()?.startsWith("Calm Mind,") == true }.performClick()
-            assertTrue(texts(explained).any { it.contains("Special Attack") && it.contains("Special Defense") })
-            shot(ctx, AppDialog.Builder(ctx).setTitle("Moves").setView(explained).create(), "move-stat-prose", theme)
+            val moveWindow = DialogShots.capture { all(explained).single { it.contentDescription?.toString()?.startsWith("Calm Mind,") == true }.performClick() }!!
+            assertTrue(texts(moveWindow.content()).any { it.contains("Special Attack") && it.contains("Special Defense") })
+            shot(ctx, moveWindow, "move-stat-prose", theme)
             val page = TeamPage(ctx, NoHost)
             val item = ItemWindow(page) {}
             item.update(ItemCard.Spec("pewter-crunchies"))

@@ -118,7 +118,7 @@ internal object ShopViews {
         addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
-            sub?.let { addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = it }) }
+            sub?.let { addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply { text = StatProse.format(ctx, it) }) }
             subView?.let { addView(it, LinearLayout.LayoutParams(-2, -2)) }
         }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 8); it.marginEnd = Ui.dp(ctx, 6) })
         addView(LinearLayout(ctx).apply {
@@ -189,7 +189,7 @@ internal object ShopViews {
                 orientation = LinearLayout.VERTICAL
                 addView(Ui.text(ctx, 14f, 900, R.color.ag_text).apply { text = name })
                 addView(Ui.text(ctx, 11f, 700, R.color.ag_sub0).apply {
-                    text = detail
+                    text = StatProse.format(ctx, detail)
                     maxLines = detailMaxLines
                     if (detailMaxLines == 2) ellipsize = android.text.TextUtils.TruncateAt.END
                 })
