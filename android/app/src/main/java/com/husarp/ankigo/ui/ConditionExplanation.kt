@@ -16,6 +16,7 @@ internal object ConditionExplanation {
         "snack.spd" to "Sp. Def ×1.25 for this Pokémon until the fight ends, including after switching.",
         "snack.spa" to "Sp. Atk ×1.25 for this Pokémon until the fight ends, including after switching.",
         "snack.shield" to "The next damaging hit taken is 30% weaker; then this shield ends.",
+        "legendaryaura" to "Legendary aura: every stat ×1.5 for this fight",
         "happyhour" to "Doubles the coins earned from this fight.",
         "perishsong" to "Faints when the count ends; switch to escape.",
         "embargo" to "Its held item has no effect.",

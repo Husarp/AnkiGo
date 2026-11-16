@@ -309,10 +309,13 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
         acts.forEach { it() }
         val lone = events.singleOrNull() as? GameEvent.Encounter   // Continue with reduced motion: just the new wild one
         if (lone != null && !holding) {
-            logWhole = false
-            log(LogKind.SYS, "NEW", "A wild ${em(bare(lone.name))}" + (if (lone.shiny) " ${em("(shiny!)")}" else "") + " appeared!")
+            logWhole = lone.auraText != null
+            log(LogKind.SYS, "NEW", lone.auraText ?: ("A wild ${em(bare(lone.name))}" + (if (lone.shiny) " ${em("(shiny!)")}" else "") + " appeared!"))
         }
-        else if (events.isNotEmpty() && !onlyASwitch(events)) panel.setLog(LogKind.SYS, "FAST", summary(events))
+        else if (events.isNotEmpty() && !onlyASwitch(events)) {
+            val aura = events.filterIsInstance<GameEvent.Encounter>().lastOrNull()?.takeIf { !holding && result == null }?.auraText
+            panel.setLog(LogKind.SYS, "FAST", summary(events) + (aura?.let { "\n$it" } ?: ""))
+        }
         events.firstOrNull { it is GameEvent.SwitchHit && it.item == null }?.let { panel.toast(ToastKind.SWITCH, SwitchQueue.freeHitText(bare((it as GameEvent.SwitchHit).wildName))) }   // R19-T (PLAN 288): reduced motion explains the switch's hit too
         // One answer's fight result still shows its tiles (no animation needed); a pile of answers gets only the summary line.
         result?.let { r ->
@@ -898,10 +901,12 @@ class EventPlayer(private val panel: BattlePanelView, private val continueOnPane
             entered = true
             arena.setEnemyShown(true)
             arena.setEnemyCardShown(true)
+            GameRepo.state?.battle?.takeIf { it.wild.uid == e.wildUid }?.let { arena.syncConditions(it) }
             arena.enter(false, d(450))
             if (e.shiny) arena.shinyBurst(false, d(ShinyBurst.DELAY_MS))
             sound(e)
             log(LogKind.SYS, "NEW", "A wild ${em(bare(e.name))}" + (if (e.shiny) " ${em("(shiny!)")}" else "") + " appeared!")
+            e.auraText?.let { queue.addFirst(Item.Ev(GameEvent.Info(it))) }
             GameRepo.state?.let { s -> GameRepo.data?.let { panel.prefetch(s, it) } }
             if (!inline) resume(d(950))
         }

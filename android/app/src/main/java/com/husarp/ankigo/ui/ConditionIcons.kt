@@ -13,6 +13,7 @@ internal object ConditionIcons {
         "snack.rage", "snack.spa" -> R.drawable.ic_condition_charge
         "snack.spd" -> R.drawable.ic_condition_defensecurl
         "snack.shield" -> R.drawable.ic_condition_protect
+        "legendaryaura" -> R.drawable.ic_condition_legendaryaura
         "switchtrap" -> R.drawable.ic_condition_switchtrap
         "confusion" -> R.drawable.ic_condition_confusion
         "attract" -> R.drawable.ic_condition_attract
