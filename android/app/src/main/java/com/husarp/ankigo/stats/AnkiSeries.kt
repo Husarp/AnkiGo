@@ -46,8 +46,9 @@ object AnkiSeriesQueries {
     fun retentionAgain(days: Int) = "rated:$days:1 -introduced:$days"
 }
 
-class AnkiSeriesReader(private val cardsOn: ((SeriesKey, String, Boolean) -> Int)?, private val count: (String) -> Int) {
-    constructor(count: (String) -> Int) : this(null, count)
+class AnkiSeriesReader(private val cardsOn: ((SeriesKey, String, Boolean) -> Int)?, private val dueOn: ((SeriesKey, String) -> Int)?, private val count: (String) -> Int) {
+    constructor(count: (String) -> Int) : this(null, null, count)
+    constructor(cardsOn: ((SeriesKey, String, Boolean) -> Int)?, count: (String) -> Int) : this(cardsOn, null, count)
 
     /** Reads [key]; exceptions from [count] go to the caller. Metrics that don't come from AnkiDroid give an empty map. */
     fun read(key: SeriesKey, fetchedAt: Long): SeriesData = SeriesData(
@@ -83,7 +84,7 @@ class AnkiSeriesReader(private val cardsOn: ((SeriesKey, String, Boolean) -> Int
 
     private fun due(key: SeriesKey): Map<String, Int> {
         val t = LocalDate.parse(key.today)
-        return (1..key.days).associate { k -> t.plusDays(k.toLong()).toString() to count(AnkiSeriesQueries.dueIn(key.deck, k)) }
+        return (1..key.days).associate { k -> t.plusDays(k.toLong()).toString() to (dueOn?.invoke(key, t.plusDays(k.toLong()).toString()) ?: count(AnkiSeriesQueries.dueIn(key.deck, k))) }
     }
 
     companion object {

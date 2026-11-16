@@ -95,6 +95,37 @@ class R42IShots {
         screen
     }
 
+    @Test fun unknownForecastTimingShowsAnExplicitMessage() = paparazzi.shootPage("i-forecast-unavailable", listOf(Variant("phone", 412, 1300))) { ctx ->
+        val s = GameRepo.state!!; s.settings.dayStartHour = 3
+        val today = GameRepo.game!!.dayKey(); s.day = today
+        val stats = AnkiStats("test", 1, today, mapOf(today to 170), emptyMap(), emptyMap(), Counts(), 42, List(30) { 0 }, 0, 0, 1,
+            dayStartHour = 3, forecastAvailable = false)
+        AnkiStatsStore.snapshot = StatsSnapshot(stats = stats, access = AnkiAccess.OK, dayStartHour = 3)
+        val page = StatsPage(ctx, NoHost).apply { preset(metric = ChartMetric.DUE, period = ChartPeriod.D7) }
+        val screen = pageScreen(ctx, page); call(page, "render")
+        val t = texts(screen)
+        assertTrue(StatsText.FORECAST_UNAVAILABLE in t)
+        assertFalse(t.any { it.startsWith("Tomorrow:") || it == "Nothing due in this period." })
+        assertTrue("42" in t)
+        screen
+    }
+
+    @Test fun cachedYesterdayWaitsForTodaysCountWithoutShiftingTheForecast() = paparazzi.shootPage("i-stats-refreshing", listOf(Variant("phone", 412, 1300))) { ctx ->
+        val s = GameRepo.state!!; s.settings.dayStartHour = 3
+        val today = GameRepo.game!!.dayKey(); s.day = today; s.reviewsToday = 300
+        val oldDay = LocalDate.parse(today).minusDays(1).toString()
+        val stats = AnkiStats("test", 1, oldDay, mapOf(oldDay to 170), emptyMap(), emptyMap(), Counts(), 42,
+            List(30) { if (it == 0) 11 else if (it == 1) 22 else 0 }, 0, 0, 1, dayStartHour = 3)
+        AnkiStatsStore.snapshot = StatsSnapshot(stats = stats, access = AnkiAccess.OK, dayStartHour = 3)
+        val page = StatsPage(ctx, NoHost).apply { preset(metric = ChartMetric.DUE, period = ChartPeriod.D7) }
+        val screen = pageScreen(ctx, page); call(page, "render")
+        val t = texts(screen)
+        assertTrue("…" in t)
+        assertTrue("Tomorrow: 22 · Next 7 days: 22" in t)
+        assertFalse(t.any { it.startsWith("Tomorrow: 11") })
+        screen
+    }
+
     @Test fun berryItemCard() = paparazzi.shootPage("i-defense-berry", listOf(Variant("phone", 412, 869))) { ctx ->
         val page = ShopPage(ctx, NoHost, bagOnly = true)
         pageScreen(ctx, page)

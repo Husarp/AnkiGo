@@ -68,10 +68,19 @@ data class AnkiStats(
     val dailyCountsAvailable: Boolean = true,
     val dayStartHour: Int = 4,
     val zoneId: String = ZoneId.systemDefault().id,
+    val forecastAvailable: Boolean = true,
 ) {
     fun studied(day: String): Int = perDay[day] ?: 0
     fun buttonsIn(days: Int): List<Int> = buttons[days] ?: listOf(0, 0, 0, 0)
     fun newIn(days: Int): Int = introduced[days] ?: 0
+    /** Cached forecasts retain their original game-date anchor while the next refresh is in flight. */
+    fun forecastAfter(day: String, days: Int): List<Int>? {
+        if (!forecastAvailable || days < 1) return null
+        val offset = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(today), LocalDate.parse(day))
+        if (offset < 0 || offset + days > forecast.size) return null
+        return forecast.subList(offset.toInt(), offset.toInt() + days)
+    }
+
     val dueTomorrow: Int get() = forecast.firstOrNull() ?: 0
     val dueNext7: Int get() = forecast.take(7).sum()
 
@@ -96,8 +105,9 @@ data class AnkiStats(
  * Production supplies [studiedOn] with exact game-day timestamp bounds. Anki's relative-day card searches use
  * AnkiDroid's independent rollover hour and cannot implement a custom AnkiGo reset hour.
  */
-class AnkiStatsReader(private val studiedOn: ((String) -> Int)?, private val count: (String) -> Int) {
-    constructor(count: (String) -> Int) : this(null, count)
+class AnkiStatsReader(private val studiedOn: ((String) -> Int)?, private val forecastOn: ((String) -> Int)?, private val count: (String) -> Int) {
+    constructor(count: (String) -> Int) : this(null, null, count)
+    constructor(studiedOn: ((String) -> Int)?, count: (String) -> Int) : this(studiedOn, null, count)
 
     /**
      * QUICK pass: counts, due, forecast, buttons, introduced, retention and the per-day counts of the last [QUICK_DAYS] days.
@@ -118,7 +128,7 @@ class AnkiStatsReader(private val studiedOn: ((String) -> Int)?, private val cou
         val introduced = WINDOWS.associateWith { d -> count(AnkiQueries.introduced(d)) }
         val answered = count(AnkiQueries.RETENTION_ANSWERED)
         val again = count(AnkiQueries.RETENTION_AGAIN)
-        val forecast = (1..FORECAST_DAYS).map { count(AnkiQueries.due(it)) }
+        val forecast = (1..FORECAST_DAYS).map { forecastOn?.invoke(t.plusDays(it.toLong()).toString()) ?: count(AnkiQueries.due(it)) }
         return AnkiStats(
             pkg = pkg, fetchedAt = now, today = today, perDay = trim(perDay, t), buttons = buttons, introduced = introduced,
             counts = counts, dueNow = dueNow, forecast = forecast, retentionAnswered = answered, retentionAgain = again,
@@ -191,7 +201,7 @@ object AnkiStatsCodec {
 
     fun encode(s: AnkiStats): String = JSONObject().apply {
         put("v", VERSION)
-        put("dailyCountsAvailable", s.dailyCountsAvailable)
+        put("dailyCountsAvailable", s.dailyCountsAvailable); put("forecastAvailable", s.forecastAvailable)
         put("dayStartHour", s.dayStartHour); put("zoneId", s.zoneId)
         put("pkg", s.pkg); put("fetchedAt", s.fetchedAt); put("today", s.today); put("historyCheckedAt", s.historyCheckedAt)
         put("perDay", JSONObject().also { o -> s.perDay.toSortedMap().forEach { (d, n) -> o.put(d, n) } })
@@ -221,7 +231,7 @@ object AnkiStatsCodec {
                     dueNow = o.getInt("dueNow"), forecast = forecast,
                     retentionAnswered = retention[0], retentionAgain = retention[1],
                     historyCheckedAt = o.getLong("historyCheckedAt"),
-                    dailyCountsAvailable = o.getBoolean("dailyCountsAvailable"),
+                    dailyCountsAvailable = o.getBoolean("dailyCountsAvailable"), forecastAvailable = o.getBoolean("forecastAvailable"),
                     dayStartHour = o.getInt("dayStartHour"), zoneId = o.getString("zoneId"),
                 )
             }

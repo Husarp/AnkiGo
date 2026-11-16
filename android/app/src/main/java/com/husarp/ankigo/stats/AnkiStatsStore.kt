@@ -79,9 +79,10 @@ object AnkiStatsStore {
     fun refresh(ctx: Context, today: String, dayStartHour: Int, force: Boolean = false) {
         if (!enabled || runCatching { LocalDate.parse(today) }.isFailure) return
         val request = Triple(today, dayStartHour, java.time.ZoneId.systemDefault().id)
+        val previousRequest = latestRequest
         latestRequest = request
         val now = System.currentTimeMillis()
-        val changed = snapshot.dayStartHour != dayStartHour || snapshot.stats?.zoneId?.let { it != java.time.ZoneId.systemDefault().id } == true
+        val changed = snapshot.dayStartHour != dayStartHour || previousRequest?.third?.let { it != request.third } == true || snapshot.stats?.zoneId?.let { it != java.time.ZoneId.systemDefault().id } == true
         if (changed) snapshot = StatsSnapshot(dayStartHour = dayStartHour)
         if (!force && !changed && snapshot.stats?.today == today && snapshot.access == AnkiAccess.OK && now - lastStartedAt < MIN_GAP_MS) return
         if (!running.compareAndSet(false, true)) return
@@ -124,9 +125,12 @@ object AnkiStatsStore {
         try {
             val todayCount = try { exactCards(app, today, dayStartHour, zone) } catch (e: SecurityException) { throw e
             } catch (e: Exception) { Report.fail("STATS", "exact game-day counts unavailable; using AnkiGo answers", e); null }
-            AnkiStatsReader(studiedOn = { day -> if (todayCount == null) 0 else if (day == today) todayCount else exactCards(app, day, dayStartHour, zone) }) { q -> Anki.countCards(app, q) }
+            val timing = try { schedulerDay(app, zone) } catch (e: SecurityException) { throw e
+            } catch (e: Exception) { Report.fail("STATS", "game-day forecast unavailable", e); null }
+            AnkiStatsReader(studiedOn = { day -> if (todayCount == null) 0 else if (day == today) todayCount else exactCards(app, day, dayStartHour, zone) },
+                forecastOn = { day -> if (timing == null) 0 else exactDue(app, day, dayStartHour, zone, timing) }) { q -> gameDayCount(app, q, today, dayStartHour, zone, todayCount != null) }
                 .refresh(prev, pkg, today, System::currentTimeMillis) { result, historyRunning ->
-                val stats = result.copy(dayStartHour = dayStartHour, zoneId = zone.id, dailyCountsAvailable = todayCount != null,
+                val stats = result.copy(dayStartHour = dayStartHour, zoneId = zone.id, dailyCountsAvailable = todayCount != null, forecastAvailable = timing != null,
                     perDay = if (todayCount == null) emptyMap() else result.perDay, historyCheckedAt = if (todayCount == null) 0 else result.historyCheckedAt)
                 if (latestRequest == request) writeCache(app, stats)
                 update { if (latestRequest != request) it else it.copy(stats = stats, dayStartHour = dayStartHour, access = AnkiAccess.OK, message = if (todayCount == null) "Exact game-day card counts unavailable; showing AnkiGo answers" else null, historyRunning = historyRunning && todayCount != null) }
@@ -182,9 +186,11 @@ object AnkiStatsStore {
         }
         try {
             val deckIds = key.deck?.let { name -> Anki.decks(app).filter { it.name == name || it.name.startsWith("$name::") }.map { it.id } }
+            val zone = java.time.ZoneId.of(key.zoneId)
+            val timing = if (key.metric == ChartMetric.DUE) schedulerDay(app, zone) else null
             val data = AnkiSeriesReader(cardsOn = { k, day, introduced ->
                 exactCards(app, day, k.dayStartHour, java.time.ZoneId.of(k.zoneId), deckIds, introduced)
-            }) { q -> Anki.countCards(app, q) }.read(key, System.currentTimeMillis())
+            }, dueOn = { k, day -> exactDue(app, day, k.dayStartHour, zone, requireNotNull(timing), deckIds) }) { q -> gameDayCount(app, q, key.today, key.dayStartHour, zone) }.read(key, System.currentTimeMillis())
             seriesFailedAt.remove(key)
             update { if (key.dayStartHour != it.dayStartHour || key.zoneId != java.time.ZoneId.systemDefault().id) it else it.copy(series = AnkiSeriesCache.put(it.series, key, data)) }
         } catch (e: SecurityException) {
@@ -206,6 +212,22 @@ object AnkiStatsStore {
     } catch (e: SecurityException) { throw e
     } catch (e: Exception) {
         throw IllegalStateException("AnkiDroid cannot provide counts for the game-day reset hour", e)
+    }
+
+    private fun schedulerDay(app: Context, zone: java.time.ZoneId): AnkiSchedulerDay = try {
+        AnkiSchedulerDay.read(Anki.revlogProbe(app, AnkiSchedulerDay.QUERY).first(), System.currentTimeMillis(), zone)
+    } catch (e: SecurityException) { throw e
+    } catch (e: Exception) { throw IllegalStateException(StatsText.FORECAST_UNAVAILABLE, e) }
+
+    private fun exactDue(app: Context, day: String, hour: Int, zone: java.time.ZoneId, timing: AnkiSchedulerDay, deckIds: List<Long>? = null): Int =
+        Anki.revlogProbe(app, StudyDayQueries.due(day, hour, zone, timing, deckIds))
+            .firstOrNull()?.get("_id")?.toIntOrNull()?.takeIf { it >= 0 } ?: error(StatsText.FORECAST_UNAVAILABLE)
+
+    private fun gameDayCount(app: Context, query: String, today: String, hour: Int, zone: java.time.ZoneId, available: Boolean = true): Int {
+        val sql = StudyDayQueries.window(query, today, hour, zone) ?: return Anki.countCards(app, query)
+        if (!available) return 0
+        return Anki.revlogProbe(app, sql).firstOrNull()?.get("_id")?.toIntOrNull()?.takeIf { it >= 0 }
+            ?: error("Game-day study counts unavailable from AnkiDroid")
     }
 
     private fun failureText(t: Throwable): String = (t.message ?: t.javaClass.simpleName).take(60)

@@ -271,9 +271,10 @@ object ChartData {
             ChartMetric.NEW_CARDS -> fromSeries(metric, p, deck, snap, today)
             ChartMetric.DUE -> when {
                 deck != null || p.days > 30 -> fromSeries(metric, p, deck, snap, today)
+                snap.stats?.forecastAvailable == false -> Plan(1, { doubleArrayOf(0.0) }, StatsText.FORECAST_UNAVAILABLE, true)
                 snap.stats != null -> {
                     val st = snap.stats
-                    val t = LocalDate.parse(today)
+                    val t = LocalDate.parse(st.today)
                     val byDay = st.forecast.withIndex().associate { (i, n) -> t.plusDays(i + 1L).toString() to n }
                     Plan(1, { day -> doubleArrayOf((byDay[day] ?: 0).toDouble()) }, "AnkiDroid", true, known = { it in byDay })
                 }

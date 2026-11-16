@@ -48,6 +48,7 @@ data class StatsSnapshot(
 }
 
 object StatsText {
+    const val FORECAST_UNAVAILABLE = "Game-day due forecast unavailable from AnkiDroid."
     const val TIMED_SOURCE = "Counts study in AnkiGo plus answers timed live in AnkiDroid (split screen, floating). Excludes catch-up answers and time AnkiDroid did not share."
 
     fun secondsPerCard(ms: Long, answers: Long): Double? = if (answers > 0) ms / 1000.0 / answers else null

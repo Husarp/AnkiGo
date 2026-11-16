@@ -1,4 +1,5 @@
 # GitHub published_at dates, UTC: version date
+# For future bundled note versions, add the date from GitHub published_at.
 1.7.0 2026-11-11
 1.6.0 2026-11-09
 1.5.0 2026-11-08
