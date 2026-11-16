@@ -349,7 +349,7 @@ object AchievementPopup {
             val side = if (small) 56 else 84
             box.addView(pic, LinearLayout.LayoutParams(Ui.dp(ctx, side), Ui.dp(ctx, side)).also { it.topMargin = Ui.dp(ctx, if (small) 8 else 14) })
             box.addView(Ui.text(ctx, 22f, 900, R.color.ag_text).apply { text = Items.name(f.item); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 8) })
-            box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = PopupMath.description(f.item, GameRepo.data); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
+            box.addView(Ui.text(ctx, 14f, 800, R.color.ag_sub1).apply { text = StatProse.format(ctx, PopupMath.description(f.item, GameRepo.data)); gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 4) })
             val how = ItemInfo.howToUse(f.item)
             if (how.isNotEmpty()) box.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub0).apply { text = how; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 6) })
             box.addView(Ui.text(ctx, 12f, 900, R.color.ag_sub0).apply { text = "Now you have ${f.total}"; gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 6) })
@@ -364,7 +364,7 @@ object AchievementPopup {
                 row.addView(ImageView(ctx).also { Ui.itemIcon(ctx, f.item, it) }, LinearLayout.LayoutParams(Ui.dp(ctx, 38), Ui.dp(ctx, 38)))
                 val body = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
                 body.addView(Ui.text(ctx, 13.5f, 800, R.color.ag_text).apply { text = Items.name(f.item); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
-                body.addView(Ui.text(ctx, 11.5f, 700, R.color.ag_sub0).apply { text = "${PopupMath.description(f.item, GameRepo.data)} · Now you have ${f.total}"; maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END },
+                body.addView(Ui.text(ctx, 11.5f, 700, R.color.ag_sub0).apply { text = StatProse.format(ctx, "${PopupMath.description(f.item, GameRepo.data)} · Now you have ${f.total}"); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END },
                     LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 1) })
                 row.addView(body, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(ctx, 10) })
                 list.addView(row, LinearLayout.LayoutParams(-1, -2).also { it.topMargin = Ui.dp(ctx, 7) })

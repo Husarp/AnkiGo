@@ -154,7 +154,7 @@ object CompareMovePopup {
         val effect = MoveText.describe(m, knownMoves)
         if (effect.isNotBlank()) {
             card.addView(Ui.text(ctx, 12f, 700, R.color.ag_sub1).apply {
-                text = effect
+                text = StatProse.format(ctx, effect)
                 maxLines = 3
                 ellipsize = TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(ctx, 8) })

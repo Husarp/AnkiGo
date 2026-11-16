@@ -16,6 +16,8 @@ import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
 import com.husarp.ankigo.R
 import com.husarp.ankigo.data.DexText
+import com.husarp.ankigo.game.BattleView
+import com.husarp.ankigo.game.MoveOutline
 import com.husarp.ankigo.game.Category
 import com.husarp.ankigo.game.EvoLine
 import com.husarp.ankigo.game.GameData
@@ -249,12 +251,13 @@ object DetailSections {
 
     /**
      * Each move: kind icon, name, type chip + kind, power and accuracy; the one-line legend of the icons under them. No PP (the battle has none).
-     * [unknown] = moves that are not known yet (the wild Pokémon's unused ones): a dark "???" tile each, after the known ones.
+     * [unknown] = moves that are not known yet (the wild Pokémon's unused ones): a masked row each, after the known ones. Only category and metric labels remain visible.
      * [levels] (R10-B4, the Pokédex entry's learnset) = one small label per id ("Lv 12") at the start of its row.
      */
-    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0, levels: List<String>? = null, focusMove: String? = null, knownMoves: List<String>? = ids.takeIf { levels == null && unknown == 0 }): View {
+    fun moves(a: Context, data: GameData, ids: List<String>, compact: Boolean, unknown: Int = 0, levels: List<String>? = null,
+              focusMove: String? = null, knownMoves: List<String>? = ids.takeIf { levels == null && unknown == 0 },
+              outlines: List<MoveOutline?> = List(unknown) { null }, battle: BattleView? = null, byPlayer: Boolean = true): View {
         val col = LinearLayout(a).apply { orientation = LinearLayout.VERTICAL }
-        val tap = MoveTap()
         if (ids.isEmpty() && unknown == 0) col.addView(Ui.text(a, 12f, 800, R.color.ag_sub0).apply { text = "No moves" })
         ids.forEachIndexed { i, id ->
             val m = data.move(id)
@@ -262,6 +265,7 @@ object DetailSections {
             if (m == null) { col.addView(Ui.text(a, 13f, 800, R.color.ag_text).apply { text = id; setPadding(0, Ui.dp(a, 8), 0, Ui.dp(a, 8)) }); return@forEachIndexed }
             val showPower = MoveText.showsPower(m)
             val lvl = levels?.getOrNull(i)
+            val accuracy = MoveAccuracy.effective(m, battle, byPlayer)
             fun num(v: String, label: String) = LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -288,44 +292,62 @@ object DetailSections {
                     }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 3) })
                 }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 10) })
                 // only the numbers the move has (R9-B6); power alone gets a blank where "acc." would be, so the columns line up
-                if (showPower) addView(num(m.power.toString(), "power"), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
-                if (m.accuracy != null) addView(num(m.accuracy.toString(), "acc."), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
+                if (showPower) addView(num(m.power.toString(), "Power"), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
+                if (m.accuracy != null) addView(LinearLayout(a).apply {
+                    orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                    addView(MoveAccuracy.value(a, m.accuracy, accuracy))
+                    addView(Ui.text(a, 9f, 700, R.color.ag_sub0).apply { text = "Accuracy" })
+                }, LinearLayout.LayoutParams(Ui.dp(a, if (accuracy != null) 64 else 48), -2))
                 else if (showPower) addView(View(a), LinearLayout.LayoutParams(Ui.dp(a, 40), 1))
             }
-            val desc = Ui.text(a, 12f, 700, R.color.ag_text).apply {
-                text = MoveText.describe(m, knownMoves?.mapNotNull(data::move))
-                visibility = View.GONE
-                background = Ui.rounded(Bits.blend(Ui.c(a, R.color.ag_sub0), Ui.c(a, R.color.ag_mantle), 0.14f), 10, a)
-                setPadding(Ui.dp(a, 10), Ui.dp(a, 7), Ui.dp(a, 10), Ui.dp(a, 8))
-            }
             val said = listOfNotNull(m.name, m.type.label, kindName(m.category), if (showPower) "power ${m.power}" else null,
-                m.accuracy?.let { "accuracy $it" }).joinToString(", ")
+                m.accuracy?.let { base -> accuracy?.let { "original accuracy $base%, effective accuracy ${MoveAccuracy.percent(it)}" } ?: "accuracy $base" }).joinToString(", ")
             row.contentDescription = "$said. Tap for what it does"
-            row.setOnClickListener { tap.toggle(row, desc, said) }
+            row.setOnClickListener { MoveDetails.show(a, m, knownMoves?.mapNotNull(data::move), accuracy) }
             if (id == focusMove) row.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
                 override fun onViewAttachedToWindow(v: View) {
                     v.removeOnAttachStateChangeListener(this)
-                    tap.toggle(row, desc, said)
+                    row.performClick()
                 }
                 override fun onViewDetachedFromWindow(v: View) {}
             })
-            // a touch that starts on a row belongs to the row's click alone: the scroll's outside-tap must not also act on it
-            row.setOnTouchListener { _, ev -> if (ev.actionMasked == android.view.MotionEvent.ACTION_DOWN) tap.downOnRow(); false }
             col.addView(LinearLayout(a).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(row, LinearLayout.LayoutParams(-1, -2))
-                addView(desc, LinearLayout.LayoutParams(-1, -2).also { it.marginStart = Ui.dp(a, if (lvl != null) 38 + LEVEL_W else 38); it.bottomMargin = Ui.dp(a, 8) })
             })
         }
         repeat(unknown) { k ->
             if (ids.isNotEmpty() || k > 0) col.addView(divider(a), LinearLayout.LayoutParams(-1, 1))
-            col.addView(Ui.text(a, 14f, 800, R.color.ag_sub0).apply {
-                text = "???"; contentDescription = "Undiscovered move"
-                gravity = Gravity.CENTER
-                minimumHeight = Ui.dp(a, 48)
-                setTextColor(android.graphics.Color.rgb(166, 173, 200))
-                background = Ui.rounded(android.graphics.Color.rgb(49, 50, 68), 8, a)
-                setPadding(0, Ui.dp(a, if (compact) 8 else 10), 0, Ui.dp(a, if (compact) 8 else 10))
+            val outline = outlines.getOrNull(k)
+            col.addView(LinearLayout(a).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = Ui.dp(a, 56)
+                background = Ui.rounded(Ui.c(a, R.color.ag_s0), 8, a)
+                contentDescription = "Undiscovered move"
+                setPadding(0, Ui.dp(a, 8), Ui.dp(a, 6), Ui.dp(a, 8))
+                outline?.let { addView(kindTile(a, it.category, 28), LinearLayout.LayoutParams(Ui.dp(a, 28), Ui.dp(a, 28))) }
+                addView(LinearLayout(a).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(Ui.text(a, 14f, 800, R.color.ag_text).apply { text = "???" })
+                    addView(LinearLayout(a).apply {
+                        gravity = Gravity.CENTER_VERTICAL
+                        addView(MatchupTiles.unknown(a).apply {
+                            text = "?"; contentDescription = "Undiscovered type"
+                            setTextColor(Ui.c(a, R.color.ag_sub0))
+                            background = Ui.rounded(Ui.c(a, R.color.ag_mantle), 6, a)
+                        })
+                        outline?.let { addView(Ui.text(a, 10.5f, 800, R.color.ag_sub0).apply { text = kindName(it.category) },
+                            LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 6) }) }
+                    }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 3) })
+                }, LinearLayout.LayoutParams(0, -2, 1f).also { it.marginStart = Ui.dp(a, 10) })
+                fun masked(label: String) = LinearLayout(a).apply {
+                    orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                    addView(Ui.text(a, 13f, 900, R.color.ag_sub0).apply { text = "??" })
+                    addView(Ui.text(a, 9f, 700, R.color.ag_sub0).apply { text = label })
+                }
+                if (outline?.category != null && outline.category != Category.STATUS) addView(masked("Power"), LinearLayout.LayoutParams(Ui.dp(a, 40), -2))
+                if (outline != null) addView(masked("Accuracy"), LinearLayout.LayoutParams(Ui.dp(a, 48), -2))
             })
         }
         // legend
@@ -349,7 +371,7 @@ object DetailSections {
         this.text = text; minWidth = Ui.dp(a, LEVEL_W); maxLines = 1
     }
 
-    /** The ScrollView of a details window: like [Bits.scroll], and it lets an open move text close on a tap anywhere. */
+    /** The ScrollView of a details window, with optional scrolling to a focused row or section. */
     internal fun scroll(ctx: Context, child: View, focusMove: String? = null, focusSection: DetailSection? = null): android.widget.ScrollView = TapWatchScroll(ctx).apply {
         addView(child)
         if (focusMove != null || focusSection != null) addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
@@ -362,49 +384,6 @@ object DetailSections {
                 scrollTo(0, rect.top - paddingTop)
             }
         })
-    }
-
-    /**
-     * The one move whose "what it does" is open (at most one). Tapping its row again or another row, or any plain tap in the details
-     * (a [TapWatchScroll] ancestor calls [down] / [tapped]), closes it. No animation: the text just appears under the row.
-     */
-    private class MoveTap : TapWatchScroll.Watcher {
-        private var row: View? = null
-        private var desc: View? = null
-        private var said = ""
-        private var host: TapWatchScroll? = null
-        private var openAtDown: View? = null
-        private var onRow = false
-
-        /** Called by a row's touch listener on ACTION_DOWN (after [down] of this gesture). */
-        fun downOnRow() { onRow = true }
-
-        fun toggle(r: View, d: View, said: String) {
-            val wasThis = row === r
-            close()
-            if (wasThis) return
-            row = r; desc = d; this.said = said
-            openAtDown = null; onRow = false   // a new open starts clean: the gesture that opened it is not an outside tap
-            // listens for taps elsewhere only while a text is open
-            var p = r.parent
-            while (p != null && p !is TapWatchScroll) p = p.parent
-            host = (p as? TapWatchScroll)?.also { it.watchers += this }
-            d.visibility = View.VISIBLE
-            r.contentDescription = "$said, open. Tap to close"
-            r.announceForAccessibility((d as TextView).text)
-        }
-
-        fun close() {
-            val r = row ?: return
-            desc?.visibility = View.GONE
-            r.contentDescription = "$said. Tap for what it does"
-            host?.watchers?.remove(this); host = null
-            row = null; desc = null
-        }
-
-        override fun down() { openAtDown = row; onRow = false }
-        override fun tapped() { if (row != null && row === openAtDown && !onRow) close() }
-        override fun end() { openAtDown = null; onRow = false }
     }
 
     // ---------- Matchups ----------
@@ -451,7 +430,7 @@ object DetailSections {
         addView(LinearLayout(a).apply {
             orientation = LinearLayout.VERTICAL
             addView(Ui.text(a, 14f, 900, R.color.ag_text).apply { text = value })
-            if (!sub.isNullOrEmpty()) addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply { text = sub }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 2) })
+            if (!sub.isNullOrEmpty()) addView(Ui.text(a, 11f, 700, R.color.ag_sub0).apply { text = StatProse.format(a, sub) }, LinearLayout.LayoutParams(-2, -2).also { it.topMargin = Ui.dp(a, 2) })
         }, LinearLayout.LayoutParams(0, -2, 1f))
     }
 

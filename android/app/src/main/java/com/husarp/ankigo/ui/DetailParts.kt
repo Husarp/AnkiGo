@@ -172,7 +172,7 @@ object DetailParts {
     /** Popup with the explanation [i] (reuses the app's small info dialog). */
     fun showInfo(a: Context, i: StatInfoText) {
         val body = Ui.text(a, 14f, 700, R.color.ag_text).apply {
-            text = i.text
+            text = StatProse.format(a, i.text)
             setPadding(0, Ui.dp(a, 4), 0, 0)
         }
         Pickers.info(a, i.title, body)

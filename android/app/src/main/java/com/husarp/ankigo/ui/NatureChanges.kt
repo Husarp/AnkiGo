@@ -31,11 +31,11 @@ internal object StageChevron {
 internal object NatureChanges {
     fun effectText(a: Context, text: String): CharSequence {
         val minus = text.indexOf('−')
-        if (!text.startsWith("+") || minus < 0) return text
-        return android.text.SpannableString(text).apply {
+        if (!text.startsWith("+") || minus < 0) return StatProse.format(a, text)
+        return StatProse.format(a, android.text.SpannableString(text).apply {
             setSpan(android.text.style.ForegroundColorSpan(StatPill.ink(true, StatPill.isDark(a))), 0, minus, 0)
             setSpan(android.text.style.ForegroundColorSpan(Ui.c(a, R.color.ag_red)), minus, length, 0)
-        }
+        })
     }
 
     fun show(a: Context, nature: Nature) {
@@ -49,7 +49,7 @@ internal object NatureChanges {
     fun line(a: Context, nature: Nature, explanation: Boolean = false): View {
         val plus = nature.plus; val minus = nature.minus
         if (plus == null || minus == null) return Ui.text(a, 12f, 700, R.color.ag_sub1).apply {
-            text = if (explanation) "This nature changes no stats." else DetailMath.natureEffect(nature)
+            text = StatProse.format(a, if (explanation) "This nature changes no stats." else DetailMath.natureEffect(nature))
         }
         return FlowRow(a, Ui.dp(a, 14), centered = false).apply {
             for ((stat, up) in listOf(plus to true, minus to false)) addView(LinearLayout(a).apply {
@@ -62,7 +62,7 @@ internal object NatureChanges {
                 val name = DetailMath.statName(stat)
                 val words = "$name ${if (up) "+" else "−"}10%"
                 addView(Ui.text(a, 12f, 800, R.color.ag_text).apply {
-                    text = words; setTextColor(color)
+                    text = StatProse.format(a, words); setTextColor(color)
                 }, LinearLayout.LayoutParams(-2, -2).also { it.marginStart = Ui.dp(a, 4) })
                 contentDescription = words
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES

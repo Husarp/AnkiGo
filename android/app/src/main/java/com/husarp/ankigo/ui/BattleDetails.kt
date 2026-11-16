@@ -106,7 +106,9 @@ object BattleDetails {
                     addView(Ui.text(ctx, 11f, 700, R.color.ag_ov).apply {
                         text = "Moves are discovered when this Pokémon uses them in battle."
                     })
-                    addView(DetailSections.moves(ctx, data, moves, compact, unknown = info.moves.count { it.id == null }, focusMove = focusMove))
+                    addView(DetailSections.moves(ctx, data, moves, compact, unknown = info.moves.count { it.id == null }, focusMove = focusMove,
+                        outlines = info.moves.filter { it.id == null }.map { it.outline },
+                        battle = st.main?.let { com.husarp.ankigo.game.SimpleView.of(data, battle, it) }, byPlayer = false))
                 }
             })
         }

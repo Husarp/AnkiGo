@@ -112,7 +112,7 @@ object DexDetail {
                 ?.moves.orEmpty()
             if (moves.isNotEmpty()) {
                 col.addView(DetailSections.section(a, DetailSections.memory(a), DetailSection.MOVES, "${moves.size} ${if (moves.size == 1) "move" else "moves"}") {
-                    DetailSections.moves(a, data, moves.mapNotNull { it.id }, compact, unknown = moves.count { it.id == null })
+                    DetailSections.moves(a, data, moves.mapNotNull { it.id }, compact, unknown = moves.count { it.id == null }, outlines = moves.filter { it.id == null }.map { it.outline })
                 })
             }
         }

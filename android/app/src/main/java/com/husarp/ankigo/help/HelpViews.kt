@@ -112,7 +112,7 @@ internal object HelpViews {
             }
         }
         return Ui.text(ctx, sizeSp, weight, tone).apply {
-            setText(sb)
+            setText(com.husarp.ankigo.ui.StatProse.format(ctx, sb))
             if (links.isNotEmpty()) movementMethod = android.text.method.LinkMovementMethod.getInstance()
             setLineSpacing(0f, 1.18f)
         }
